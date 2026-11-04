@@ -14,9 +14,8 @@ import (
 // Context is the <jarvis-context> block a message to conversation p.SessionID starts with (the node asks on every
 // message, node/assistant_context.go): who the user is, whether this is the main conversation, and the snapshot.
 func (s *Service) Context(ctx context.Context, p ContextParams) ContextResult {
-	hello := s.hello(ctx)
 	text := prompts.RenderAssistantContext(prompts.AssistantContext{Snapshot: s.contextSnapshot(ctx), Owner: s.owner(ctx),
-		Main: p.SessionID != "" && p.SessionID == hello.Assistant.Main})
+		Main: s.isMain(ctx, p.SessionID)})
 	return ContextResult{Text: text}
 }
 
@@ -114,12 +113,16 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 	close(done)
 }
 
-// ProfileChanged makes the next message take a new snapshot (the time zone changed).
+// ProfileChanged makes the next message take a new snapshot (the time zone changed), and the settings be read again
+// (the hub's defaults for them changed, or someone changed them behind the assistant's back).
 func (s *Service) ProfileChanged(context.Context) {
 	cs := &s.live
 	cs.mu.Lock()
 	cs.snap, cs.at = nil, time.Time{}
 	cs.mu.Unlock()
+	s.prefs.mu.Lock()
+	s.prefs.at = time.Time{}
+	s.prefs.mu.Unlock()
 }
 
 // snapshotAgents sorts the agents by what they need: the hub's work state (docs/agent-work.md) says what a stopped one

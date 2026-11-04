@@ -13,11 +13,13 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// jarvis_settings: Persona changes its own settings for the user (docs/assistant.md「操作 Persona 自己」, 2026-11-01).
-// One tool over a registry: each setting says what it is, how to read it and how a change is made. Reads are free;
-// every change is a card on the phone that says what changes (before → after) and is applied only when approved.
-// What the card needs filled in (a password) is typed on the phone and never passes through the model. Some things
-// are never here: the hub's and devices' tokens, pairing, which machines the hub reaches, permission modes.
+// The hub's own settings jarvis_settings offers (docs/assistant.md「操作 Persona 自己」, 2026-11-01): the tool is the
+// assistant's (its own settings are its own: 关于我, its launcher, …), which lists these (app.call settings.list) and
+// hands the actions on them to the hub (app.tool jarvis_settings). One registry: each setting says what it is, how to
+// read it and how a change is made. Reads are free; every change is a card on the phone that says what changes (before
+// → after) and is applied only when approved. What the card needs filled in (a password) is typed on the phone and
+// never passes through the model. Some things are never here: the hub's and devices' tokens, pairing, which machines
+// the hub reaches, permission modes.
 
 // selfSetting is one thing Persona may change. A value setting has set; a list has add / remove.
 type selfSetting struct {
@@ -68,25 +70,6 @@ func (h *Hub) selfSettings() []selfSetting {
 			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
 				return h.textSetting(ctx, v, "AI 分身的规则", h.inboxAgentRules, "inbox.agent_rules")
 			}},
-		{key: "assistant.notes", title: "关于我",
-			about: "what Persona knows about the user (设置 › 助手 › 关于我), Markdown appended to the assistant's instructions; new conversations read it",
-			value: "a string (Markdown; the whole text)",
-			get:   func(ctx context.Context) (string, error) { return orNone(h.assistantNotes(ctx)), nil },
-			set:   h.setAssistantNotes},
-		{key: "assistant.main_tasks_quiet", title: "主对话派的任务只在主对话里通知",
-			about: "on (the default): tasks the main conversation opens (task_plan, agent_start) send no pushes, stay off the Live Activity and " +
-				"task badges, and the main conversation is told when one is done, waits for the user or fails instead; off: they notify like any agent. " +
-				"Applies to tasks opened from now on",
-			value: "true or false",
-			get: func(ctx context.Context) (string, error) {
-				return fmt.Sprint(h.mainTasksQuiet(ctx)), nil
-			},
-			set: h.setMainTasksQuiet},
-		{key: "assistant.launcher", title: "Persona 的启动器",
-			about: "which launcher (model) new Persona conversations start with by default",
-			value: "a launcher name from this setting's get",
-			get:   h.getAssistantLauncher,
-			set:   h.setAssistantLauncher},
 	}
 	if h.store != nil {
 		out = append(out, h.blockedClaudeDirsSetting())
@@ -114,21 +97,7 @@ func (h *Hub) toolJarvisSettings(ctx context.Context, m *Machine, sessionID stri
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", fmt.Errorf("invalid arguments: %w", err)
 	}
-	all := h.selfSettings()
-	if a.Action == "" || a.Action == "list" {
-		var b strings.Builder
-		b.WriteString("Settings you can read and (with the user's approval on the phone) change:\n")
-		for _, s := range all {
-			fmt.Fprintf(&b, "- %s (%s): %s. Actions: %s.", s.key, s.title, s.about, strings.Join(s.actions(), ", "))
-			if s.value != "" {
-				fmt.Fprintf(&b, " Value: %s.", s.value)
-			}
-			b.WriteByte('\n')
-		}
-		b.WriteString("Routines and follow-ups have their own tools (schedule_routine, schedule_followup); knowledge base tags are kb_update. " +
-			"Not changeable here: tokens, pairing, devices, the machines the hub reaches, permission modes.")
-		return b.String(), nil
-	}
+	all := h.selfSettings() // the list is the assistant's (it adds its own: settings.list)
 	var s *selfSetting
 	for i := range all {
 		if all[i].key == a.Key {
@@ -226,123 +195,6 @@ func (h *Hub) textSetting(ctx context.Context, v json.RawMessage, title string, 
 				return "", err
 			}
 			return title + " updated; it applies from the next items sorted.", nil
-		}}, nil
-}
-
-// ---- 关于我 and the launcher (the assistant's own settings, as 设置 › 助手 edits them) ----
-
-func (h *Hub) setAssistantNotes(ctx context.Context, v json.RawMessage) (*selfChange, error) {
-	var text string
-	if err := json.Unmarshal(v, &text); err != nil {
-		return nil, errors.New("value must be a string")
-	}
-	text = strings.TrimSpace(text)
-	before := h.assistantNotes(ctx)
-	if text == before {
-		return &selfChange{summary: "关于我没有变化"}, nil
-	}
-	if h.store == nil {
-		return nil, errors.New("no database on this hub")
-	}
-	return &selfChange{summary: fmt.Sprintf("改「关于我」：%s → %s", clipped(before), clipped(text)),
-		apply: func(ctx context.Context, _ map[string]string) (string, error) {
-			cfg := h.assistantConfigLegacy(ctx)
-			cfg.Notes = &text
-			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
-				return "", err
-			}
-			h.assistantUpdated()
-			return "关于我 updated; new conversations read it (this one keeps what it started with).", nil
-		}}, nil
-}
-
-func (h *Hub) setMainTasksQuiet(ctx context.Context, v json.RawMessage) (*selfChange, error) {
-	var on bool
-	if err := json.Unmarshal(v, &on); err != nil {
-		return nil, errors.New("value must be true or false")
-	}
-	before := h.mainTasksQuiet(ctx)
-	if on == before {
-		return &selfChange{summary: "「主对话派的任务只在主对话里通知」没有变化"}, nil
-	}
-	if h.store == nil {
-		return nil, errors.New("no database on this hub")
-	}
-	word := map[bool]string{true: "开", false: "关"}
-	return &selfChange{summary: fmt.Sprintf("「主对话派的任务只在主对话里通知」：%s → %s", word[before], word[on]),
-		apply: func(ctx context.Context, _ map[string]string) (string, error) {
-			cfg := h.assistantConfigLegacy(ctx)
-			cfg.MainTasksQuiet = &on
-			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
-				return "", err
-			}
-			h.assistantUpdated()
-			return fmt.Sprintf("assistant.main_tasks_quiet is %v for tasks opened from now on (existing ones keep theirs).", on), nil
-		}}, nil
-}
-
-func (h *Hub) assistantLaunchers(ctx context.Context) ([]proto.Launcher, error) {
-	m := h.localMachine(h.assistantConfig(ctx).MachineID)
-	if m == nil {
-		return nil, errors.New("the assistant's machine is not configured")
-	}
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	return h.machineLaunchers(cctx, m)
-}
-
-func (h *Hub) getAssistantLauncher(ctx context.Context) (string, error) {
-	now := h.assistantConfig(ctx).Launcher
-	ls, err := h.assistantLaunchers(ctx)
-	if err != nil {
-		return "now: " + now + " (the machine's launchers could not be listed: " + err.Error() + ")", nil
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "now: %s\navailable:\n", now)
-	for _, l := range ls {
-		fmt.Fprintf(&b, "- %s (model %s)\n", l.Name, orNone(l.Model))
-	}
-	return b.String(), nil
-}
-
-func (h *Hub) setAssistantLauncher(ctx context.Context, v json.RawMessage) (*selfChange, error) {
-	var name string
-	if err := json.Unmarshal(v, &name); err != nil || strings.TrimSpace(name) == "" {
-		return nil, errors.New("value must be a launcher name")
-	}
-	name = strings.TrimSpace(name)
-	before := h.assistantConfig(ctx).Launcher
-	if name == before {
-		return &selfChange{summary: "启动器没有变化"}, nil
-	}
-	ls, err := h.assistantLaunchers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	known := false
-	for _, l := range ls {
-		known = known || l.Name == name
-	}
-	if !known {
-		return nil, fmt.Errorf("no launcher %q on the assistant's machine (get lists them)", name)
-	}
-	if h.store == nil {
-		return nil, errors.New("no database on this hub")
-	}
-	record, err := h.modelRecord(ctx, "assistant")
-	if err != nil {
-		return nil, err
-	}
-	binding := record.Binding
-	binding.Provider = "launcher." + name
-	return &selfChange{summary: fmt.Sprintf("Persona 的默认启动器：%s → %s", before, name),
-		apply: func(ctx context.Context, _ map[string]string) (string, error) {
-			h.modelMu.Lock()
-			defer h.modelMu.Unlock()
-			if err := h.saveModelRecord(ctx, "assistant", record.Revision, binding); err != nil {
-				return "", err
-			}
-			return "New Persona conversations start with " + name + ".", nil
 		}}, nil
 }
 

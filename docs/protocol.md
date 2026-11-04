@@ -1024,7 +1024,7 @@ hub → node 请求：
 | `session.item` | `{session_id, item_id}` → `Item`（全文，不带图片） |
 | `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容 |
 | `session.close` | `{session_id}` |
-| `session.retire` | `{session_id}` → `{closed}`：做完的任务的 Agent 停着且以后能恢复时关掉它的窗格（同 `session.close`），没在运行时 `closed: false`；在工作、等用户、恢复不了的回 `code: not_retirable`；旧 node 报 unknown method（hub 当作拒绝）。见 `docs/todos.md`「做完的任务关掉 Agent」 |
+| `session.retire` | `{session_id}` → `{closed}`：做完的任务的 Agent 停着且以后能恢复时关掉它的窗格（同 `session.close`），没在运行时 `closed: false`；在工作、等用户、恢复不了的回 `code: not_retirable`；旧 node 报 unknown method（助手当作拒绝）。见 `docs/todos.md`「做完的任务关掉 Agent」 |
 | `file.upload.begin` | `{name, size}` → `{upload_id, chunk_bytes}`（超过上限报 `too_large`） |
 | `file.upload.chunk` | `{upload_id, offset, data}`（data 是 base64，offset 必须接着已收到的）→ `{received}`；出错整个上传作废 |
 | `file.upload.end` / `file.upload.abort` | `{upload_id}`；end 核对大小、改名 → `{path, name, size}` |
@@ -1127,7 +1127,7 @@ hub 要变成只是一条通道：助手（以后还有别的服务）是另一�
 ```jsonc
 {"id":"s1","method":"manager.hello","params":{"id":"assistant"}}
 {"id":"s1","result":{"name":"助手","role":"manager","managers":[{"id":"assistant","name":"助手","role":"manager","online":true}],
-                     "timezone":"Asia/Shanghai","owner":"","owner_notes":"","assistant":{"machine_id":"server","main":"…"},"done_delay_ms":60000}}
+                     "owner":"","owner_notes":"","assistant":{"machine_id":"server","machines":["server"]},"done_delay_ms":60000}}
 {"id":"s2","error":{"code":"stale_connection","message":"…"}}
 {"event":"managers","params":{"managers":[{"id":"assistant","name":"助手","role":"manager","online":false}]}}
 ```
@@ -1141,15 +1141,15 @@ hub 要变成只是一条通道：助手（以后还有别的服务）是另一�
 
 `manager.hello {id,host?,os?,arch?,deploy?,version?,apps?,…}`。`id` 必须与 token 一致，否则回 `wrong_identity` 并断开（4003）。
 名册里只记 `host`、`os`、`arch`、`deploy`（hub 起的助手报 `child`，别处的报 `external`）、`version`；`apps` 和机器摘要现在不处理。
-回答 `{name,role,managers:[{id,name,role,online}],timezone,owner,owner_notes,assistant:{machine_id,main,standby?},done_delay_ms}`：
+回答 `{name,role,managers:[{id,name,role,online}],owner,owner_notes,assistant:{machine_id,launcher?,machines,standby?},done_delay_ms}`：
 
 - `name`、`role`：hub 给这个身份记的名字和角色（以 hub 为准，hello 里报的角色不算）；
 - `managers`：hub 有 token 的所有管理者，`online` 是现在是否连着；
-- 其余是助手要的那份（`assistantwire.Hello`）：`owner` 是 hub.json 的 `assistant.owner`，`owner_notes` 是助手的备注（App 里改过的，否则 hub.json 的 `assistant.notes`），
-  `timezone` 是用户的时区（手机报的 IANA 名），没有就是空字符串；`assistant` 是助手的对话跑在哪台机器、主对话是哪段、`standby` 这台 hub 是互联组的成员（定时任务由中心跑）；
-  `done_delay_ms` 是 hub.json notify 的完成推送延迟（任务的 Agent 停多久才算停下）。
-- 助手记着这份回答。hub 在它可能变了的地方（`PUT /api/v1/assistant`、换主对话、`jarvis_settings` 改关于我、互联组换中心、机器列表变了）合并 200 毫秒后重算一次，和上次给的不同就发
-  `manager.updated`，参数就是新的这份（同上，不带 `name`、`role`、`managers`）。
+- 其余是助手要的那份（`assistantwire.Hello`）：hub.json 的 `assistant` 一节，是助手自己的设置的默认值（设置是助手的，见 `docs/assistant.md`「和 hub 的边界」）：`owner` 是 `assistant.owner`，`owner_notes` 是 `assistant.notes`，
+  `assistant.machine_id` 是 `assistant.machine`（hub 没有这台就是 hub 自己那台，再没有就是第一台），`assistant.launcher` 是 `assistant.launcher`；`machines` 是 hub 有的机器（助手存的机器不在里面就不用），
+  `standby` 这台 hub 是互联组的成员（定时任务由中心跑）；`done_delay_ms` 是 hub.json notify 的完成推送延迟（任务的 Agent 停多久才算停下）。用户的时区、主对话不在这里：是助手自己的设置，它在快照的 `profile` 里报给 hub。
+- 助手记着这份回答。hub 在它可能变了的地方（互联组换中心、机器列表变了）合并 200 毫秒后重算一次，和上次给的不同就发
+  `manager.updated`，参数就是新的这份（同上，不带 `name`、`role`、`managers`）；助手收到后重读自己的设置、报一份快照。
 
 同一条连接可以再握手一次（更新名册里的信息），不算替换。
 
@@ -1168,21 +1168,31 @@ hub 在内存里记着每个身份当前的连接（握手成功的那一条）�
 
 hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assistant_link.go`）用 hub 自己的函数回答助手的调用，同一个文件里用 `handleBusCall` 登记的处理函数只做编解码
 （参数解成那个方法自己的类型，解不了回 `invalid_params`），不另写一份逻辑。hub 不跑助手的代码（`go list -deps ./internal/hub` 里没有 `internal/assistant`），
-两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`）。方法和参数的意思见 `docs/assistant.md`「和 hub 的边界」。
+两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`），以及写字用的几个小函数（`server/internal/textfmt`）。方法和参数的意思见 `docs/assistant.md`「和 hub 的边界」；
+`app.call` 的知识库、交互队列、收件箱的方法（`kb.search`、`interactions.answer`、`inbox.draft`…）只收发数据，用它们的工具（`kb_*`、`interaction_answer`、`inbox_draft`）的规则和文字在助手。
 
-- 助手 → hub：`device.call`、`app.call` → 结果原样；`notify.request {notification}` → `{ok:true}`；`manager.snapshot` → `{ok,seq}`；单向事件 `ws.broadcast`（见下）。
+- 助手 → hub：`device.call`、`app.call` → 结果原样；`notify.request {notification}` → `{ok:true}`；`manager.snapshot` → `{ok,seq}`（快照带 `profile`：助手的设置里 hub 自己的功能要用的，hub 留最后一份）；单向事件 `ws.broadcast`（见下）。
+  2026-11-04 加的：`device.call` 交给 node 的 `assistant.prepare`、`assistant.warm`、`assistant.memory`、`assistant.compact`、`assistant.handoff`、`launchers.list`、`launchers.probe`（`devices.list` 多了 `kind`、`data_dir`），去掉 hub 自己答的 `assistant.start`；
+  `app.call` 的 `models.record`、`models.save`、`models.apply_picked`、`models.launchers`、`models.launcher_check`、`kb.dirs`、`connectors.signed_in`、`plugins.assistant`、`plugins.skills_need`、`settings.list`，去掉 `models.assistant_send`。
+  快照的 `todos` 是待办的报告（`assistantwire.TodoReport`，待办归助手，`docs/todos.md`「谁管什么」）：`{links:[{machine_id,session_id,todo_id,title,task?}],quiet:[{machine_id,session_id}]}`，
+  `links` 是未完成的待办上活跃的 Agent（`task`：从对话派出去的任务），`quiet` 是安静的任务的 Agent（未完成或完成不到 7 天的）；hub 照它给会话填 `todo`、`quiet`，给卡片填 `task_title`，挡住安静的推送，哪台机器的这几样变了就推那台的会话列表；`null`（读不出来）时留着上一份。
   hub 的错误带码回去，助手按码认回原来的错误：`no_device`（没有这台机器）、`machine_offline`、`node_closed`（node 的连接断了）、`stale_snapshot`、`model_paused`；node 自己回的 `rpc.Error` 原样。
 - hub → 助手，调用：`http.request`（下面的转发）、`manager.action`（App 回答了它的提问）、`assistant.tools {}` → `{tools:[…]}`（hub 在它每次连上时要一次、记着，断开后也留着）、
   `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`、`assistant.context {session_id}` → `{text,…}`（node 每条消息前要）、`assistant.tasks {}` → `{tasks:[…]}`、
-  `assistant.card_sent {card_id,item_id}` → `{sent}`（收件箱从消息卡片「发送」前问：发过的不再发）、`assistant.cards_sent {item_id,at,text?}` → `{}`（这个条目的回复发出去了，它的卡片记下、告诉 App）。
-- hub → 助手，单向事件：`conversation.started`、`conversation.renamed`、`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed`、`interaction.resolved`、`interaction.raised`（安静的任务的 Agent 在问，#1731）、`inbox.message`、
+  `assistant.card_sent {card_id,item_id}` → `{sent}`（收件箱从消息卡片「发送」前问：发过的不再发）、`assistant.cards_sent {item_id,at,text?}` → `{}`（这个条目的回复发出去了，它的卡片记下、告诉 App）、
+  `assistant.todo_handoff {todo_id,text?}` → `{found,title?,done_at?,text?}`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id`：待办在不在、完成没有，`text` 前面拼上生效的决策）、`assistant.todo_link {todo_id,machine_id,session_id,title?,cwd?,agent?}` → `{}`（交出去以后挂上；待办没了、完成了回错误）。
+  `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}`（飞书机器人、渠道插件、收件箱的 AI 分身开对话）、
+  `assistant.send_params {machine_id,session_id,params}` → `{params}`（发给它某段对话的消息跑在哪个启动器和模型上、新主对话第一条前面带的背景）、
+  `assistant.rename {machine_id,session_id,params}` → node 的回答（App 给它的对话改名）；这几个请求本身不对时回 `bad_request`，hub 回 App 400。
+- hub → 助手，单向事件（`conversation.started`、`conversation.renamed` 2026-11-04 去掉：开对话、改名都是助手自己做的）：`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed {machine_id, sessions, connected}`（node 报的那份会话列表，带 `spawn_from`：待办的随项目自动挂、派生跟随、herdr 标记都从它来；`connected` 是 node 这条连接开始的时间，变了说明 node 重连过，助手把 herdr 标记全发一次）、`interaction.resolved`（也用来记待办的决策）、`interaction.raised`（安静的任务的 Agent 在问，#1731）、`inbox.message`、`todos.space_renamed {machine_id,old,new}`（经 hub 改了工作区的名字）、
   `manager.updated`（上面的握手）、`manager.resync {}`（hub 还没有它的快照或只有不完整的一份，要它报整份：最多 5 秒一次）。助手按到达的顺序一条一条处理，`session.turn_ended` 另起（要问模型、等任务的 Agent 停下）。
 - 助手没连着时：转发的接口回 `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}`，助手的工具同样失败（`is_error`，同一句话），`assistant.context` 也失败（node 那条消息不带实时快照）；
   给它的事件不发（它连上后报整份快照，要的东西现问）。hub 留着它最后报的快照，会话列表照常显示标题和归档。
 
 **转发 App 的请求**：App 打到助手接口的请求（鉴权之后）由 hub 作为 `http.request` 交给助手，它的回答原样写回。助手接口是 `assistantwire.Routes`（助手那边有一个测试保证它服务的正是这些）：
-`POST /api/v1/assistant/conversations/{id}/archive`、`…/unarchive`、`…/route`、`…/today`，`GET …/{id}/feed`，`/api/v1/assistant/tasks…`、`/api/v1/assistant/runs`、`/api/v1/assistant/routines…`、
-`/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`POST /api/v1/todos/{id}/done-check`、`POST /api/v1/todos/{id}/retry`。`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/conversations`、记忆、`/api/v1/skills` 还是 hub 自己的。
+`POST /api/v1/assistant/conversations/{id}/archive`、`…/unarchive`、`…/route`、`…/today`、`…/compact`，`GET …/{id}/feed`，`/api/v1/assistant/tasks…`、`/api/v1/assistant/runs`、`/api/v1/assistant/routines…`、
+`/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`/api/v1/todos…`（待办的全部接口，含 `done-check`、`retry`、决策），以及（2026-11-04 起）`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/warm`、
+`GET /api/v1/assistant/memory`、`PUT/DELETE /api/v1/assistant/memory/{name}`、`POST /api/v1/assistant/conversations`、`POST /api/v1/assistant/main/new`。`/api/v1/skills` 还是 hub 自己的。
 
 ```jsonc
 // hub → 助手

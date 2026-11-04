@@ -24,7 +24,6 @@ import (
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -165,26 +164,6 @@ func goldenMachines(h *Hub) {
 	}
 }
 
-func TestGoldenAssistantClaudeMD(t *testing.T) {
-	instructions := func(h *Hub) string {
-		return strings.ReplaceAll(h.assistantClaudeMD(context.Background()), h.cfg.dir, "<hub>")
-	}
-	h := newTestHub(t)
-	goldenMachines(h)
-	h.cfg.Assistant.Owner = "示例用户"
-	h.cfg.Assistant.Notes = "  我在示例公司做后端。\n常用 skills：demo-skill。  "
-	h.kb.cfg.ExtraDirs = []string{"/home/me/notes", "/home/me/facts"}
-	golden(t, "assistant_claude_md.full", instructions(h))
-
-	bare := newTestHub(t)
-	m := newMachine(bare, MachineConfig{ID: "server", Name: "服务器", Kind: "local"})
-	bare.machines, bare.byID["server"] = []*Machine{m}, m
-	golden(t, "assistant_claude_md.bare", instructions(bare))
-	// lark-cli (docs/plan-lark-cli.md).
-	bare.cfg.Lark.CLI = &lark.CLIConfig{}
-	golden(t, "assistant_claude_md.lark_cli", instructions(bare))
-}
-
 var (
 	snapHeader = regexp.MustCompile(`^- 现在：\d{4}-\d\d-\d\d 周[日一二三四五六] \d\d:\d\d（([^）]+)）\n`)
 )
@@ -201,7 +180,7 @@ func normalSnapshot(t *testing.T, s string) string {
 
 func snapshotHub(t *testing.T, full bool) *Hub {
 	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
+	putAssistantSettings(t, h, assistant.Settings{Timezone: "Asia/Shanghai"})
 	goldenMachines(h)
 	h.connectors = connector.NewRegistry(nil)
 	if !full { // no live state: chats and calendar left out
@@ -257,7 +236,7 @@ func TestGoldenAssistantSnapshot(t *testing.T) {
 func TestGoldenAssistantContextMain(t *testing.T) {
 	store := testDB(t)
 	ctx := context.Background()
-	if err := store.PutSetting(ctx, "assistant", AssistantConfig{Main: "main-session"}); err != nil {
+	if err := store.PutSetting(ctx, "assistant", assistant.Settings{Main: "main-session", Timezone: "Asia/Shanghai"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.PutSetting(ctx, "assistant", nil) })
@@ -528,15 +507,4 @@ func TestGoldenInboxGroup(t *testing.T) {
 	}
 	goldenCall(t, "inbox_group.first", calls[0])
 	golden(t, "inbox_group.after_tool.user", calls[1].User)
-}
-
-func TestGoldenMainHandoff(t *testing.T) {
-	golden(t, "main_handoff", prompts.RenderMainHandoff(prompts.MainHandoff{FromID: "a1b2c3d4-0000-4000-8000-000000000001",
-		Until: "11月4日 21:30", Summary: "示例摘要：用户在整理周末出游计划，酒店已订好，还差火车票。",
-		Recent: []prompts.HandoffTurn{{Role: "user", Text: "示例问题：火车票买了吗"}, {Role: "assistant", Text: "示例回答：还没有，等你确认时间"}},
-		Text:   "今天有什么安排"}))
-	golden(t, "main_handoff.recent_only", prompts.RenderMainHandoff(prompts.MainHandoff{FromID: "a1b2c3d4-0000-4000-8000-000000000001",
-		Until: "11月4日 21:30", Recent: []prompts.HandoffTurn{{Role: "user", Text: "示例问题"}}, Text: "接着说"}))
-	golden(t, "main_handoff.empty", prompts.RenderMainHandoff(prompts.MainHandoff{FromID: "a1b2c3d4-0000-4000-8000-000000000001",
-		Until: "11月4日 21:30", Text: "你好"}))
 }

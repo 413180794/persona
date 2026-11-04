@@ -65,10 +65,18 @@ func (m *Machine) botmux() bool { return m.cfg.Botmux == nil || *m.cfg.Botmux }
 // configureNode hands the node its config directories and whether it lists botmux's sessions, before the first
 // session list. Older nodes do not know node.configure; they keep looking in ~/.claude only.
 func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
-	_ = peer.Call(ctx, "node.configure", map[string]any{"machine_id": m.cfg.ID, "codex": m.codexConfig(ctx),
-		"claude_dirs": m.claudeDirs(ctx), "claude_dirs_blocked": m.blockedClaudeDirs(ctx),
-		"keep_sessions": m.hub.keptSessions(ctx, m.cfg.ID), "botmux": m.botmux(), "claude_start_dir": m.cfg.ClaudeStartDir,
-		"herdr_autostart": m.herdrAutostart(ctx)}, nil)
+	params := map[string]any{"machine_id": m.cfg.ID, "codex": m.codexConfig(ctx), "claude_dirs": m.claudeDirs(ctx),
+		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux(), "claude_start_dir": m.cfg.ClaudeStartDir,
+		"herdr_autostart": m.herdrAutostart(ctx)}
+	// The sessions it lists however quiet are the assistant's to say (its profile); before it said, the node keeps
+	// what it has.
+	if keep, ok := m.hub.keptOn(m.cfg.ID); ok {
+		if keep == nil {
+			keep = []string{}
+		}
+		params["keep_sessions"] = keep
+	}
+	_ = peer.Call(ctx, "node.configure", params, nil)
 	m.sendManaged(ctx, func(ctx context.Context, method string, params, out any) error {
 		return peer.Call(ctx, method, params, out)
 	})

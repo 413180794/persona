@@ -331,7 +331,7 @@ func (h *Hub) conversationTitle(ctx context.Context, machine, session string) st
 	if !ok {
 		return ""
 	}
-	return conversationName(s, h.assistantConfig(ctx).Main)
+	return conversationName(s, h.assistantProfile().Main)
 }
 
 // marketChannels are the channels plugins in the markets would contribute, not installed (have lists the rest).

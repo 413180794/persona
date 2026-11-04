@@ -19,7 +19,8 @@ func newQuietService(t *testing.T) (*Service, *fakeHub) {
 	quietNoticeDelay = 30 * time.Millisecond
 	t.Cleanup(func() { quietNoticeDelay = old })
 	s, f := newTaskService(t)
-	f.hello.Assistant = Placement{MachineID: "server", Main: "conv1"}
+	f.hello.Assistant.MachineID = "server"
+	setSettings(t, s, func(v *Settings) { v.Main = "conv1" })
 	f.known["conv1"] = true
 	f.setSessions("server", proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle})
 	return s, f
@@ -163,14 +164,14 @@ func TestQuietNoticeWaitsForTheTurn(t *testing.T) {
 func TestNotQuietTasksAreNotTold(t *testing.T) {
 	for _, c := range []struct {
 		name string
-		set  func(*fakeHub)
+		set  func(*Settings)
 	}{
-		{"side conversation", func(f *fakeHub) { f.hello.Assistant.Main = "conv-main" }},
-		{"setting off", func(f *fakeHub) { f.quietOff = true }},
+		{"side conversation", func(v *Settings) { v.Main = "conv-main" }},
+		{"setting off", func(v *Settings) { v.MainTasksQuiet = new(false) }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, f := newQuietService(t)
-			c.set(f)
+			setSettings(t, s, c.set)
 			if todo := startedTask(t, s, f); todo.Quiet {
 				t.Fatal("quiet")
 			}
@@ -203,12 +204,12 @@ var errLauncherGone = errors.New("session.start: no such launcher")
 // off it stays an agent of its own.
 func TestAgentStartFromTheMainConversation(t *testing.T) {
 	args := json.RawMessage(`{"machine":"box","cwd":"/code/app","prompt":"看看 CI 为什么挂了"}`)
-	s, f := newQuietService(t)
+	s, _ := newQuietService(t)
 	res, err := s.runTool(context.Background(), "server", "conv1", "agent_start", args)
 	if err != nil {
 		t.Fatal(err)
 	}
-	todo := f.onlyTodo()
+	todo := onlyTodo(s)
 	if !todo.Quiet || todo.Origin != "conv1" || len(todo.Agents) != 1 || todo.Agents[0].SessionID != "s1" || todo.Title != "看看 CI 为什么挂了" {
 		t.Fatalf("todo = %+v", todo)
 	}
@@ -220,13 +221,15 @@ func TestAgentStartFromTheMainConversation(t *testing.T) {
 		conv string
 		off  bool
 	}{{"conv2", false}, {"conv1", true}} {
-		s, f := newQuietService(t)
-		f.quietOff = c.off
+		s, _ := newQuietService(t)
+		if c.off {
+			setSettings(t, s, func(v *Settings) { v.MainTasksQuiet = new(false) })
+		}
 		if _, err := s.runTool(context.Background(), "server", c.conv, "agent_start", args); err != nil {
 			t.Fatal(err)
 		}
-		if len(f.todos) != 0 || feedKinds(s, c.conv) != "" {
-			t.Fatalf("%s (off %v): todos %d, feed %q", c.conv, c.off, len(f.todos), feedKinds(s, c.conv))
+		if todoCount(s) != 0 || feedKinds(s, c.conv) != "" {
+			t.Fatalf("%s (off %v): todos %d, feed %q", c.conv, c.off, todoCount(s), feedKinds(s, c.conv))
 		}
 	}
 }

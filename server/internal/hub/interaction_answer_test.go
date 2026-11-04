@@ -45,10 +45,13 @@ func answerArgs(t *testing.T, v any) json.RawMessage {
 	return b
 }
 
-// A question another agent asks is answered for the user, and the history says the assistant answered it.
+// A question another agent asks is answered for the user (interaction_answer, the assistant's, through
+// interactions.get and interactions.answer), and the history says the assistant answered it. What may be answered and
+// how is the assistant's to check (assistant.TestInteractionAnswer…).
 func TestInteractionAnswerAnswersAQuestion(t *testing.T) {
 	h, m, ix := interactionAnswerHub(t)
 	p := h.interactions[ix.ID]
+	connectAssistant(t, h)
 	out, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
 		"answers": map[string]string{"发吗？": "发"},
@@ -73,185 +76,6 @@ func TestInteractionAnswerAnswersAQuestion(t *testing.T) {
 	}
 }
 
-// Only questions may be answered for the user; an approval is theirs alone.
-func TestInteractionAnswerRefusesApprovals(t *testing.T) {
-	for _, tc := range []struct {
-		kind string
-		ix   proto.Interaction
-	}{{
-		kind: "permission",
-		ix:   proto.Interaction{Kind: proto.IxPermission, ToolName: "Bash", Summary: "rm -rf"},
-	}, {
-		kind: "plan",
-		ix:   proto.Interaction{Kind: proto.IxPlan, Plan: "1. do it"},
-	}, {
-		kind: "screen",
-		ix:   proto.Interaction{Kind: proto.IxScreen},
-	}} {
-		h, m, _ := interactionAnswerHub(t)
-		ix := tc.ix
-		ix.ID, ix.MachineID, ix.SessionID = "ix_"+tc.kind, "mac", "abcdef12-agent"
-		ix.CreatedAt, ix.ExpiresAt = time.Now().UTC(), time.Now().Add(time.Hour).UTC()
-		h.interactions[ix.ID] = &pending{ix: ix, done: make(chan proto.Resolution, 1)}
-		_, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-			"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
-			"answers": map[string]string{"any": "yes"},
-		}))
-		if err == nil || !strings.Contains(err.Error(), tc.kind) || !strings.Contains(err.Error(), "only the user") {
-			t.Fatalf("%s: %v", tc.kind, err)
-		}
-	}
-}
-
-// The assistant never answers its own conversation's question.
-func TestInteractionAnswerRefusesAssistantConversation(t *testing.T) {
-	h, m, ix := interactionAnswerHub(t)
-	if _, err := answerTool(h, context.Background(), m, ix.SessionID, "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
-		"answers": map[string]string{"发吗？": "发"},
-	})); err == nil || !strings.Contains(err.Error(), "assistant conversation") {
-		t.Fatalf("own conversation: %v", err)
-	}
-	own := proto.Interaction{
-		ID: "ix_ask_user", MachineID: "mac", SessionID: "conv-assistant", Kind: proto.IxQuestion,
-		Questions: []proto.Question{{Question: "发吗？", Options: []proto.QuestionOption{{Label: "发"}}}},
-		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour).UTC(),
-	}
-	h.interactions[own.ID] = &pending{ix: own, done: make(chan proto.Resolution, 1)}
-	m.sessions = append(m.sessions, proto.Session{SessionID: "conv-assistant", Title: "Persona", Assistant: true, UpdatedAt: time.Now().UTC()})
-	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "mac", "session_id": "conv-assist", "interaction_id": own.ID,
-		"answers": map[string]string{"发吗？": "发"},
-	})); err == nil || !strings.Contains(err.Error(), "assistant conversation") {
-		t.Fatalf("ask_user: %v", err)
-	}
-}
-
-// The answers are checked against the question before anything is resolved.
-func TestInteractionAnswerValidatesAnswers(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		answers map[string]any
-		want    string
-	}{
-		{"a question left unanswered", map[string]any{}, "every question"},
-		{"a key that is not the question", map[string]any{"another question": "发"}, "not a question"},
-		{"an option that is not offered", map[string]any{"发吗？": "也许"}, "发, 不发"},
-		{"an answer with no option at all", map[string]any{"发吗？": ""}, "发, 不发"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h, m, ix := interactionAnswerHub(t)
-			_, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-				"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID, "answers": tc.answers,
-			}))
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("%v", err)
-			}
-			if _, still := h.interactions[ix.ID]; !still {
-				t.Fatal("a refused answer resolved the interaction")
-			}
-		})
-	}
-}
-
-// A single-choice question takes one label; a multi-select takes the labels the app shows, "A, B".
-func TestInteractionAnswerSingleAndMultiSelect(t *testing.T) {
-	h, m, ix := interactionAnswerHub(t)
-	multi := proto.Interaction{
-		ID: "ix_multi", MachineID: "mac", SessionID: "abcdef12-agent", Kind: proto.IxQuestion,
-		Questions: []proto.Question{{
-			Question: "哪几个？", MultiSelect: true,
-			Options: []proto.QuestionOption{{Label: "A"}, {Label: "B"}, {Label: "C"}},
-		}},
-		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour).UTC(),
-	}
-	p := &pending{ix: multi, done: make(chan proto.Resolution, 1)}
-	h.interactions[multi.ID] = p
-	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "mac", "session_id": "abcdef12", "interaction_id": multi.ID,
-		"answers": map[string]any{"哪几个？": []string{"A", "C"}},
-	})); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case r := <-p.done:
-		if r.Answers["哪几个？"] != "A, C" {
-			t.Fatalf("multi-select answer: %q", r.Answers["哪几个？"])
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the hook got no answer")
-	}
-
-	single := h.interactions[ix.ID]
-	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
-		"answers": map[string]any{"发吗？": []string{"发", "不发"}},
-	})); err == nil || !strings.Contains(err.Error(), "one option") {
-		t.Fatalf("two labels on a single-choice question: %v", err)
-	}
-	if _, still := h.interactions[single.ix.ID]; !still {
-		t.Fatal("a refused answer resolved the interaction")
-	}
-}
-
-// An expired question, one answered already and one that never existed each say which.
-func TestInteractionAnswerExpiredAnsweredAndUnknown(t *testing.T) {
-	h, m, _ := interactionAnswerHub(t)
-	expired := proto.Interaction{
-		ID: "ix_expired", MachineID: "mac", SessionID: "abcdef12-agent", Kind: proto.IxQuestion,
-		Questions: []proto.Question{{Question: "发吗？", Options: []proto.QuestionOption{{Label: "发"}}}},
-		CreatedAt: time.Now().Add(-2 * time.Hour).UTC(), ExpiresAt: time.Now().Add(-time.Hour).UTC(),
-	}
-	h.interactions[expired.ID] = &pending{ix: expired, done: make(chan proto.Resolution, 1)}
-	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "mac", "session_id": "abcdef12", "interaction_id": expired.ID,
-		"answers": map[string]string{"发吗？": "发"},
-	})); err == nil || !strings.Contains(err.Error(), "expired") {
-		t.Fatalf("expired: %v", err)
-	}
-
-	// Answered elsewhere: only the history knows it, and it says how it ended.
-	h.store.(*memStore).status["ix_gone"] = "resolved"
-	h.store.(*memStore).res["ix_gone"] = &proto.Resolution{Answers: map[string]string{"发吗？": "发"}}
-	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "mac", "session_id": "abcdef12", "interaction_id": "ix_gone",
-		"answers": map[string]string{"发吗？": "发"},
-	})); err == nil || !strings.Contains(err.Error(), "already answered") {
-		t.Fatalf("already answered: %v", err)
-	}
-
-	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "mac", "session_id": "abcdef12", "interaction_id": "ix_never",
-		"answers": map[string]string{"发吗？": "发"},
-	})); err == nil || !strings.Contains(err.Error(), "no pending interaction") {
-		t.Fatalf("never existed: %v", err)
-	}
-}
-
-// The machine and session named must be the interaction's own.
-func TestInteractionAnswerKeepsToItsTarget(t *testing.T) {
-	h, m, ix := interactionAnswerHub(t)
-	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "another", "session_id": "abcdef12", "interaction_id": ix.ID,
-		"answers": map[string]string{"发吗？": "发"},
-	})); err == nil {
-		t.Fatal("a different machine was accepted")
-	}
-	other := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
-	h.machines = append(h.machines, other)
-	h.byID["box"] = other
-	other.sessions = []proto.Session{{SessionID: "99999999-agent", Title: "别的", Cwd: "/code/other", UpdatedAt: time.Now().UTC()}}
-	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
-		"machine": "mac", "session_id": "99999999", "interaction_id": ix.ID,
-		"answers": map[string]string{"发吗？": "发"},
-	})); err == nil {
-		t.Fatal("a session that is not the interaction's was accepted")
-	}
-	if _, still := h.interactions[ix.ID]; !still {
-		t.Fatal("a refused answer resolved the interaction")
-	}
-}
-
 // agents_list carries what answering needs: the interaction's id and each question's options.
 func TestAgentsListShowsInteractionAndOptions(t *testing.T) {
 	h, m, ix := interactionAnswerHub(t)
@@ -272,6 +96,7 @@ func TestInteractionResolvedSaysWhoAnswered(t *testing.T) {
 	}{{"assistant", proto.AnsweredByAssistant}, {"app", ""}} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, m, ix := interactionAnswerHub(t)
+			connectAssistant(t, h)
 			app := &client{out: make(chan []byte, 64)}
 			h.clients[app] = struct{}{}
 			if tc.by == "" {
@@ -308,19 +133,80 @@ func TestInteractionResolvedSaysWhoAnswered(t *testing.T) {
 	}
 }
 
-// answerTool runs one of the assistant's tools that is the hub's (app.tool), as the assistant asks for it: interaction_answer.
+// answerTool runs one of the assistant's tools (connectAssistant) for conversation sessionID on m.
 func answerTool(h *Hub, ctx context.Context, m *Machine, sessionID, name string, args json.RawMessage) (string, error) {
-	params, _ := json.Marshal(map[string]any{"name": name, "arguments": args, "machine_id": m.cfg.ID, "session_id": sessionID})
-	raw, err := h.appTool(ctx, assistantwire.AppInteractions, params)
-	if err != nil {
-		return "", err
-	}
-	var r proto.ToolResult
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return "", err
-	}
+	r := h.callAssistantTool(ctx, m, sessionID, name, args)
 	if r.IsError {
 		return "", errors.New(textOf(r))
 	}
 	return textOf(r), nil
+}
+
+// interactionsCallFor is app.call interactions.<method> as the assistant makes it.
+func interactionsCallFor(t *testing.T, h *Hub, method string, params map[string]any) (map[string]any, error) {
+	t.Helper()
+	raw, _ := json.Marshal(params)
+	res, err := assistantLink{h}.AppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppInteractions, Method: method, Params: raw})
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := json.Unmarshal(res, &out); err != nil {
+		t.Fatal(err)
+	}
+	return out, nil
+}
+
+// interactions.get is the interaction while it is pending, else how it ended; interactions.answer resolves only a
+// pending question of the session named, as the assistant's answer.
+func TestInteractionsApp(t *testing.T) {
+	h, _, ix := interactionAnswerHub(t)
+	out, err := interactionsCallFor(t, h, assistantwire.InteractionsGet, map[string]any{"interaction_id": " " + ix.ID + " "})
+	if err != nil || out["ok"] != true || out["interaction"].(map[string]any)["id"] != ix.ID {
+		t.Fatalf("get, pending: %v %v", out, err)
+	}
+	h.store.(*memStore).status["ix_gone"] = "dismissed"
+	if out, err := interactionsCallFor(t, h, assistantwire.InteractionsGet, map[string]any{"interaction_id": "ix_gone"}); err != nil ||
+		out["ok"] != false || out["status"] != "dismissed" {
+		t.Fatalf("get, ended: %v %v", out, err)
+	}
+	if out, err := interactionsCallFor(t, h, assistantwire.InteractionsGet, map[string]any{"interaction_id": "ix_never"}); err != nil ||
+		out["ok"] != false || out["status"] != "" {
+		t.Fatalf("get, never was: %v %v", out, err)
+	}
+
+	perm := proto.Interaction{ID: "ix_perm", MachineID: "mac", SessionID: "abcdef12-agent", Kind: proto.IxPermission, ToolName: "Bash",
+		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour).UTC()}
+	h.interactions[perm.ID] = &pending{ix: perm, done: make(chan proto.Resolution, 1)}
+	for _, params := range []map[string]any{
+		{"machine_id": "mac", "session_id": "abcdef12-agent", "interaction_id": perm.ID, "answers": map[string]string{"x": "y"}},
+		{"machine_id": "mac", "session_id": "99999999-agent", "interaction_id": ix.ID, "answers": map[string]string{"发吗？": "发"}},
+		{"machine_id": "box", "session_id": "abcdef12-agent", "interaction_id": ix.ID, "answers": map[string]string{"发吗？": "发"}},
+	} {
+		if _, err := interactionsCallFor(t, h, assistantwire.InteractionsAnswer, params); err == nil {
+			t.Fatalf("answered %v", params)
+		}
+	}
+	if _, still := h.interactions[ix.ID]; !still {
+		t.Fatal("a refused answer resolved the interaction")
+	}
+
+	h.store.(*memStore).status["ix_gone"] = "resolved"
+	if out, err := interactionsCallFor(t, h, assistantwire.InteractionsAnswer, map[string]any{"machine_id": "mac", "session_id": "abcdef12-agent",
+		"interaction_id": "ix_gone", "answers": map[string]string{"发吗？": "发"}}); err != nil || out["ok"] != false || out["status"] != "resolved" {
+		t.Fatalf("answer, no longer pending: %v %v", out, err)
+	}
+	p := h.interactions[ix.ID]
+	if out, err := interactionsCallFor(t, h, assistantwire.InteractionsAnswer, map[string]any{"machine_id": "mac", "session_id": "abcdef12-agent",
+		"interaction_id": ix.ID, "answers": map[string]string{"发吗？": "发"}}); err != nil || out["ok"] != true {
+		t.Fatalf("answer: %v %v", out, err)
+	}
+	select {
+	case r := <-p.done:
+		if r.Answers["发吗？"] != "发" || r.AnsweredBy != proto.AnsweredByAssistant {
+			t.Fatalf("resolution: %+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the hook got no answer")
+	}
 }

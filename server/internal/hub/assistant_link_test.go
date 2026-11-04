@@ -76,9 +76,17 @@ func archive(t *testing.T, h *Hub, id string, on bool) int {
 
 // The hub's facts go to the assistant as events (over the bus); each helper returns once the assistant took it.
 
-func noteStarted(h *Hub, machine, id string, at time.Time, task string) {
-	h.asst().ConversationStarted(context.Background(), assistant.ConversationStarted{MachineID: machine, SessionID: id, Started: at, Task: task})
-	settleAssistant(h)
+// noteStarted is a conversation the assistant started at at (assistant.start), as it keeps it until its first turn
+// ends: it reads it when it starts again.
+func noteStarted(t *testing.T, h *Hub, machine, id string, at time.Time) {
+	t.Helper()
+	m := map[string]any{}
+	assistantSetting(t, h, "assistant.titles", &m)
+	m[id] = map[string]any{"machine_id": machine, "by": "pending", "started": at.UTC()}
+	if err := h.store.PutSetting(context.Background(), "assistant.titles", m); err != nil {
+		t.Fatal(err)
+	}
+	restartAssistant(t, h)
 }
 
 // turnEnded is a turn's end as the assistant takes it, waited for: the event's handler runs on its own there (it asks
@@ -88,9 +96,12 @@ func turnEnded(t *testing.T, h *Hub, machine, id string) {
 	assistantOf(t, h).svc.TurnEnded(context.Background(), assistant.SessionRef{MachineID: machine, SessionID: id})
 }
 
-func userRenamed(h *Hub, machine, id, title string) {
-	h.asst().ConversationRenamed(context.Background(), assistant.ConversationRenamed{MachineID: machine, SessionID: id, Title: title})
-	settleAssistant(h)
+// userRenamed is the user renaming a conversation in the app (assistant.rename, as renameSession asks).
+func userRenamed(t *testing.T, h *Hub, machine, id, title string) {
+	t.Helper()
+	if _, err := h.asst().Rename(context.Background(), machine, id, map[string]any{"title": title}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func userSpoke(h *Hub, machine, id string) {
@@ -152,13 +163,13 @@ func TestChangedMachines(t *testing.T) {
 }
 
 // The hub answers the assistant's device.call from the machine (its node's methods as they are) or from what it
-// holds about it, and its hello with the settings.
+// holds about it, and its hello with hub.json's defaults and the machines.
 func TestAssistantLinkDeviceCall(t *testing.T) {
 	h, n := conversationsHub(t)
 	link := assistantLink{h}
 	ctx := context.Background()
 	hello, err := link.Hello(ctx)
-	if err != nil || hello.Timezone != "Asia/Shanghai" || hello.Assistant != (assistant.Placement{MachineID: "server", Main: "main-0001"}) {
+	if err != nil || hello.Assistant.MachineID != "server" || !slices.Equal(hello.Assistant.Machines, []string{"server"}) || hello.Assistant.Standby {
 		t.Fatalf("hello: %+v %v", hello, err)
 	}
 	raw, err := link.DeviceCall(ctx, assistant.DeviceCall{Device: "server", Method: assistant.DeviceSessionsList})
@@ -250,7 +261,7 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 	link := assistantLink{h}
 	ctx := context.Background()
 	raw, err := link.DeviceCall(ctx, assistant.DeviceCall{Device: assistant.DeviceAll, Method: assistant.DeviceDevicesList})
-	if err != nil || string(raw) != `{"devices":[{"id":"server","name":"server","home":"/home/me","online":false,"reachable":true}],"phone_online":false}` {
+	if err != nil || string(raw) != `{"devices":[{"id":"server","name":"server","kind":"local","home":"/home/me","online":false,"reachable":true}],"phone_online":false}` {
 		t.Fatalf("devices.list: %s %v", raw, err)
 	}
 	raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppModels, Method: assistant.ModelsApply,
@@ -265,10 +276,11 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 	if raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppKB, Method: assistant.KBStatus}); err != nil || string(raw) != `{"ready":false}` {
 		t.Fatalf("kb.status: %s %v", raw, err)
 	}
-	raw, err = link.DeviceCall(ctx, assistant.DeviceCall{Device: "server", Method: assistant.DeviceAssistantStart,
-		Params: json.RawMessage(`{"text":"hi","permission_mode":"plan","purpose":"assistant"}`)})
-	if err != nil || !strings.Contains(string(raw), `"session_id":"s1"`) || n.lastSend(t)["permission_mode"] != "plan" || n.lastSend(t)["launcher"] != "claude" {
-		t.Fatalf("assistant.start prepares and starts the conversation with the purpose's model: %s %v %v", raw, err, n.lastSend(t))
+	// One of the hub's features starts a conversation: the assistant prepares its directory and starts it on the
+	// purpose's model.
+	s, err := h.asst().Start(ctx, assistant.StartParams{Text: "hi", PermissionMode: "plan", Purpose: "assistant"})
+	if err != nil || s.SessionID != "s1" || s.MachineID != "server" || n.lastSend(t)["permission_mode"] != "plan" || n.lastSend(t)["launcher"] != "claude" {
+		t.Fatalf("assistant.start prepares and starts the conversation with the purpose's model: %+v %v %v", s, err, n.lastSend(t))
 	}
 
 	c := &client{out: make(chan []byte, 16)}
@@ -283,13 +295,20 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 		t.Fatal("no event")
 	}
 
-	snap := assistant.Snapshot{Epoch: "e", Seq: 1, Tasks: []assistant.TaskView{{ID: "r", Label: "早报", RunMachineID: "server", RunSessionID: "trip-0002"}}}
+	snap := assistant.Snapshot{Epoch: "e", Seq: 1, Tasks: []assistant.TaskView{{ID: "r", Label: "早报", RunMachineID: "server", RunSessionID: "trip-0002"}},
+		Profile: &assistant.Profile{MachineID: "server", Main: "main-0001", Keep: []assistant.SessionRef{{MachineID: "server", SessionID: "main-0001"},
+			{MachineID: "server", SessionID: "trip-0002"}}}}
 	if _, err := link.Snapshot(ctx, snap); err != nil {
 		t.Fatal(err)
 	}
-	if kept := h.keptSessions(ctx, "server"); strings.Join(kept, " ") != "main-0001 trip-0002" {
+	if kept, ok := h.keptOn("server"); !ok || strings.Join(kept, " ") != "main-0001 trip-0002" {
 		t.Fatalf("the node keeps the main conversation and the tasks' own: %v", kept)
 	}
+	eventually(t, 5*time.Second, "the node told", func() bool {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		return strings.Join(n.kept, " ") == "main-0001 trip-0002"
+	})
 	if got := h.taskOfConversation(ctx, "server", "trip-0002"); got != "早报" {
 		t.Fatalf("the bot names a task's conversation: %q", got)
 	}

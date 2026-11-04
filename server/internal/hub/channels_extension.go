@@ -317,7 +317,7 @@ func (h *Hub) channelTarget(ctx context.Context, id string) (resolvedTarget, err
 			return resolvedTarget{}, errors.New("那段对话不见了：发 /main 回到主对话")
 		}
 		s.SessionID, s.MachineID = t.SessionID, m.cfg.ID
-		main := h.assistantConfig(ctx).Main
+		main := h.assistantProfile().Main
 		return resolvedTarget{m: m, session: s, label: conversationName(s, main), main: t.SessionID == main}, nil
 	}
 	return h.resolveBotTarget(ctx, botTarget{Kind: targetMain})
@@ -369,15 +369,10 @@ func (h *Hub) channelForward(ctx context.Context, id string, m channel.Message) 
 	run := &channel.Run{ID: id + "_" + m.ID, Channel: id, ReplyTo: m.ID, TargetKind: channel.TargetConversation, Label: rt.label,
 		Started: time.Now().UTC(), Probe: channel.Probe(in.Text, append(slices.Clone(in.Files), in.Forward, in.Quote)...)}
 	if rt.isNew {
-		start := h.startAssistant
-		if rt.main {
-			start = h.startMainWith
-		}
-		s, err := start(ctx, text, images, "", "", "")
+		s, err := h.startAssistantConversation(ctx, rt.main, text, images)
 		if err != nil {
 			return fmt.Errorf("没开成新对话：%w", err)
 		}
-		h.asst().ConversationStarted(ctx, assistantwire.ConversationStarted{MachineID: s.MachineID, SessionID: s.SessionID, Started: time.Now()})
 		if !rt.main { // /new: the chat goes on in it
 			c := &h.channels
 			c.mu.Lock()
@@ -399,7 +394,7 @@ func (h *Hub) channelForward(ctx context.Context, id string, m channel.Message) 
 		}
 		h.asst().UserSpoke(ctx, assistantwire.SessionRef{MachineID: rt.m.cfg.ID, SessionID: sid}) // unarchived, and its title the user's to keep
 		if rt.main {
-			if err := h.applyModel(ctx, "assistant", p); err != nil {
+			if err := h.assistantSend(ctx, rt.m, sid, p); err != nil {
 				return err
 			}
 		}
@@ -622,8 +617,7 @@ func (h *Hub) extensionMirror(machine, session string) {
 	if len(to) == 0 {
 		return
 	}
-	cfg := h.assistantConfig(ctx)
-	main := cfg.Main != "" && cfg.Main == session && cfg.MachineID == machine
+	main := h.isMainOn(machine, session)
 	task := h.taskOfConversation(ctx, machine, session)
 	if !main && task == "" {
 		return

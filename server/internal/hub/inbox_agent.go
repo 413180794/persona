@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -217,37 +215,22 @@ func (h *Hub) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	}
 }
 
-// startInboxAgent starts a headless conversation like the assistant's (same directory, so the same tools) with
-// the inbox agent's launcher.
+// startInboxAgent starts a headless conversation like the assistant's (same directory, so the same tools) on the
+// inbox agent's model (模型配置 › inbox.agent): the assistant starts it (assistant.start), untitled — the draft in
+// the inbox is its result.
 func (h *Hub) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, prompt string) (machineID, sessionID string, err error) {
-	ac := h.assistantConfig(ctx)
+	machine := h.assistantProfile().MachineID
 	if h.localMachine(cfg.Machine) != nil {
-		ac.MachineID = cfg.Machine
+		machine = cfg.Machine
 	}
-	if cfg.Launcher != "" {
-		ac.Launcher = cfg.Launcher
-	}
-	m := h.localMachine(ac.MachineID)
-	if m == nil {
+	if h.localMachine(machine) == nil {
 		return "", "", errors.New("no machine for the inbox agent")
 	}
-	var prep struct {
-		Cwd string `json:"cwd"`
-	}
-	if err := h.prepareAssistant(ctx, m, &prep.Cwd); err != nil {
+	s, err := h.asst().Start(ctx, assistantwire.StartParams{Text: prompt, Purpose: "inbox.agent", MachineID: machine, Untitled: true})
+	if err != nil {
 		return "", "", err
 	}
-	var res struct {
-		SessionID string `json:"session_id"`
-	}
-	params := map[string]any{"cwd": prep.Cwd, "text": prompt}
-	if err := h.applyModel(ctx, "inbox.agent", params); err != nil {
-		return "", "", err
-	}
-	if err := m.call(ctx, "assistant.send", params, &res); err != nil {
-		return "", "", err
-	}
-	return m.cfg.ID, res.SessionID, nil
+	return s.MachineID, s.SessionID, nil
 }
 
 // sweepInboxAgents fails agents that ended their turn without a draft, or ran past the timeout.
@@ -320,14 +303,6 @@ func (h *Hub) ownerName() string {
 	return "用户"
 }
 
-// placeholderRE: a blank a draft leaves for the user to fill in — 【…】, {{…}}.
-var placeholderRE = regexp.MustCompile(`【[^】\n]*】|\{\{[^}\n]*\}\}`)
-
-// draftPlaceholder is the first blank in a draft left to fill in; empty when it has none.
-func draftPlaceholder(text string) string {
-	return placeholderRE.FindString(text)
-}
-
 // inboxItemOfAgent is the item whose agent runs in conversation sessionID.
 func (b *inbox) itemOfAgent(sessionID string) *InboxItem {
 	if sessionID == "" {
@@ -361,19 +336,30 @@ func (h *Hub) isInboxAgent(sessionID string) bool {
 	return h.inbox.itemOfAgent(sessionID) != nil
 }
 
-// toolInboxDraft stores the agent's draft on its item.
-func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.RawMessage) (string, error) {
+// inboxDraftCall is the inbox's inbox.draft for the assistant (its inbox_draft tool, whose rules are the assistant's):
+// {session_id, text, note, changes} → {item_id, refused?}.
+func (h *Hub) inboxDraftCall(ctx context.Context, params json.RawMessage) (any, error) {
 	var a struct {
-		Text, Note string
-		Changes    []DocChange
+		SessionID string      `json:"session_id"`
+		Text      string      `json:"text"`
+		Note      string      `json:"note"`
+		Changes   []DocChange `json:"changes"`
 	}
-	if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Text) == "" {
-		return "", errors.New("text is required")
+	if err := json.Unmarshal(params, &a); err != nil {
+		return nil, err
 	}
-	// The user sends it with one tap: a blank left to fill in (【预计几点前】) would go out as it is.
-	if p := draftPlaceholder(a.Text); p != "" {
-		return "", fmt.Errorf("the draft leaves %s to fill in, and it goes out as it is: leave out what you could not find (say so in note) and submit again", p)
+	id, refused := h.inboxDraft(ctx, a.SessionID, a.Text, a.Note, a.Changes)
+	out := map[string]any{"item_id": id}
+	if refused != nil {
+		out["refused"] = refused
 	}
+	return out, nil
+}
+
+// inboxDraft keeps the draft of the agent in conversation sessionID on its item, with the moves of a document's rows
+// it proposes, and tells the assistant the item's message card. It is the item's id; "" when no item's agent runs
+// there. A change the item does not offer (a row it lists, one of the column's values) is refused, and nothing kept.
+func (h *Hub) inboxDraft(ctx context.Context, sessionID, text, note string, proposed []DocChange) (string, *DocChange) {
 	h.inbox.mu.Lock()
 	it := h.inbox.itemOfAgent(sessionID)
 	// An agent that answers before its start returned (an agent runtime that is already running starts a turn at
@@ -386,21 +372,19 @@ func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.Ra
 	}
 	if it == nil {
 		h.inbox.mu.Unlock()
-		return "", errors.New("this conversation was not started for an inbox item")
+		return "", nil
 	}
-	// Only moves the item offers (a row it lists, one of the column's values).
 	var changes []DocChange
-	for _, ch := range a.Changes {
-		if it.Doc != nil && docOffers(*it.Doc, ch) {
-			changes = append(changes, ch)
-		} else {
+	for _, ch := range proposed {
+		if it.Doc == nil || !docOffers(*it.Doc, ch) {
 			h.inbox.mu.Unlock()
-			return "", fmt.Errorf("change %+v is not one the item lists (ref, field and one of its values)", ch)
+			return it.ID, &ch
 		}
+		changes = append(changes, ch)
 	}
 	now := time.Now().UTC()
 	it.Agent.State, it.Agent.Error, it.Agent.Changes = AgentDrafted, "", changes
-	it.Agent.Draft, it.Agent.Note, it.Agent.DraftedAt = strings.TrimSpace(a.Text), clip(strings.TrimSpace(a.Note), 600), &now
+	it.Agent.Draft, it.Agent.Note, it.Agent.DraftedAt = text, note, &now
 	card := messageCardOf(it)
 	if it.DoneBy == "replied" { // the user answered it while the agent worked: no 发送 for a reply already out
 		card = nil
@@ -410,5 +394,5 @@ func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.Ra
 	if card != nil {
 		h.asst().InboxMessage(ctx, assistantwire.InboxMessage{ItemID: it.ID, Message: *card})
 	}
-	return "The draft is in the user's inbox; they will send it. You're done.", nil
+	return it.ID, nil
 }

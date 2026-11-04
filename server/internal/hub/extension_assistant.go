@@ -19,7 +19,7 @@ import (
 
 // The assistant extension point (docs/plugins.md「助手」): a plugin's skills go to the machine that runs the assistant
 // with assistant.prepare (the files only when that machine does not have them yet), and its instructions are added to
-// the assistant's CLAUDE.md.
+// the assistant's CLAUDE.md; the assistant asks for both (app.call plugins.assistant, assistant_apps.go).
 
 // pluginSkillMost is the most a plugin's skills may weigh, all files together.
 const extensionSkillMost = 8 << 20
@@ -126,28 +126,6 @@ func (ps *extensions) extensionInstructions() string {
 		}
 	}
 	return b.String()
-}
-
-// prepareAssistant tells m's node what it needs before a message to the assistant (assistantPrepare) and sets cwd to
-// the assistant's directory there. A plugin skill the node says it does not have goes with its files next time.
-func (h *Hub) prepareAssistant(ctx context.Context, m *Machine, cwd *string) error {
-	var prep struct {
-		Cwd  string   `json:"cwd"`
-		Need []string `json:"plugin_skills_need"`
-	}
-	if err := m.call(ctx, "assistant.prepare", h.assistantPrepare(ctx, m), &prep); err != nil {
-		return err
-	}
-	*cwd = prep.Cwd
-	if h.extensions == nil {
-		return nil
-	}
-	if v, ok := h.extensions.skillsSent.Load(m.cfg.ID); ok {
-		for _, n := range prep.Need {
-			v.(*sync.Map).Delete(n)
-		}
-	}
-	return nil
 }
 
 // assistantGates are the command gates of the plugins' assistant contributions (their gate files), each with the

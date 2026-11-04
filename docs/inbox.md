@@ -206,7 +206,7 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 | --- | --- | --- | --- |
 | 1 收集 | `inbox.triage_ai`（小模型） | 上面的分拣：每件新事分 action / fyi / noise 并写摘要 | `inbox_triage.go` |
 | 2 判断 | `inbox.judge_ai`（小模型） | 只看「需要你」、内容已分拣过的事：要不要交给 Agent（`handle`）、交给它做什么（`task`，一两句指令） | `inbox_agent.go` `judgeOne` |
-| 3 处理 | `inbox.agent.launcher`（Claude Code 启动器） | 无头 claude，在助手目录里跑（所以有助手的全部工具：飞书、邮件、Agents、读代码、上网），查清楚后调 MCP `inbox_draft` 交草稿和依据 | `startInboxAgent`、`toolInboxDraft` |
+| 3 处理 | `inbox.agent.launcher`（Claude Code 启动器） | 无头 claude，在助手目录里跑（所以有助手的全部工具：飞书、邮件、Agents、读代码、上网），查清楚后调 MCP `inbox_draft` 交草稿和依据 | `startInboxAgent`（经总线请助手开这段对话：`assistant.start`，不起标题）；`inbox_draft` 是助手的工具（`assistant/tools_apps.go` `toolInboxDraft`：要有正文、不许留【…】、裁剪），经总线的 `inbox.draft` 交给 hub 记到这件事上（`inboxDraft`：认对话、核对 `changes`、发消息卡片） |
 
 - 状态记在条目的 `agent` 里：`skipped`（模型 2 不交）→ `queued` → `running` → `drafted` / `failed`。
   每件只在内容变了（`last` 变了）时重新判断，新消息来了旧草稿作废、重新走一遍。

@@ -274,8 +274,7 @@ func newTestHub(t *testing.T) *Hub {
 		cfg: cfg, version: "test", logger: log.New(io.Discard, "", 0),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{},
 		interactions: map[string]*pending{}, calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
-		push:  newPusher(cfg.dir, nil, func(string, ...any) {}),
-		todos: newTodosState(),
+		push: newPusher(cfg.dir, nil, func(string, ...any) {}),
 	}
 	h.live = newLiveActivities(h)
 	h.push.hubID = h.hubID

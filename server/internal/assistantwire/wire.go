@@ -13,23 +13,29 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Hello is manager.hello's answer, and manager.updated's params (the answer again when it changed).
+// Hello is manager.hello's answer, and manager.updated's params (the answer again when it changed): hub.json's
+// assistant section, which the assistant takes as its defaults (its own settings are its own: Profile), and what the
+// hub knows that it needs.
 type Hello struct {
-	Timezone   string `json:"timezone"` // IANA name; "" is the hub's own zone
-	Owner      string `json:"owner"`
+	Owner string `json:"owner"`
+	// OwnerNotes is hub.json's assistant.notes: what the assistant knows about the user until 关于我 is edited.
 	OwnerNotes string `json:"owner_notes"`
-	// Assistant is where the hub's settings run the assistant (settings `assistant`, still shared with features
-	// outside this package, docs/assistant.md「和 hub 的边界」).
+	// Assistant is where the hub would run the assistant's conversations by default.
 	Assistant Placement `json:"assistant"`
 	// DoneDelayMS is how long a finished turn stays still before it counts as the end (hub.json notify): a task's
 	// agents are followed with the same patience as the hub's own pushes.
 	DoneDelayMS int64 `json:"done_delay_ms"`
 }
 
-// Placement is the machine the assistant's conversations live on and its main conversation.
+// Placement is the hub's defaults for where the assistant runs.
 type Placement struct {
-	MachineID string `json:"machine_id"` // "" when the hub has no machine
-	Main      string `json:"main,omitempty"`
+	// MachineID is hub.json's assistant.machine when the hub has it, else the hub's own machine, else the first one;
+	// "" when the hub has no machine.
+	MachineID string `json:"machine_id"`
+	// Launcher is hub.json's assistant.launcher ("" is claude).
+	Launcher string `json:"launcher,omitempty"`
+	// Machines are the machines the hub has: a machine the assistant saved that is none of them is not used.
+	Machines []string `json:"machines,omitempty"`
 	// Standby: this hub is a member of a mesh group, whose center runs the scheduled tasks (docs/mesh.md).
 	Standby bool `json:"standby,omitempty"`
 }
@@ -48,7 +54,6 @@ const (
 	DeviceSessionItems  = "session.items"  // {session_id, turns} → {items}
 	DeviceSessionRename = "session.rename" // {session_id, title} → {ok}
 	DeviceAssistantSend = "assistant.send" // {session_id, text, resume_only?, permission_mode?, …model} → {session_id}
-	DeviceNodeConfigure = "node.configure" // {keep_sessions} → {}
 	DeviceSessionSend   = "session.send"   // {session_id, text} → {}
 	DeviceSessionStart  = "session.start"  // {cwd, prompt, launcher?, model?, permission_mode?, tab_name?} → {session}
 
@@ -61,11 +66,6 @@ const (
 	DeviceSessionsList = "sessions.list"
 	// DeviceSessionGet: {session_id} → {session, ok}, one session as the node listed it.
 	DeviceSessionGet = "session.get"
-	// DeviceAssistantStart: {text, images?, launcher?, permission_mode?, effort?, purpose?} → {session}. A new
-	// conversation: the hub prepares the assistant's directory on the machine (its CLAUDE.md is still made from the
-	// hub's state) and applies the model configuration of purpose ("" = the assistant's) before the node's
-	// assistant.send.
-	DeviceAssistantStart = "assistant.start"
 )
 
 // DeviceAll is the device of the calls about every machine.
@@ -75,8 +75,10 @@ const DeviceAll = "*"
 type Device struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
+	Kind    string `json:"kind,omitempty"`     // local (the hub's own) | ssh | link …
 	SSHHost string `json:"ssh_host,omitempty"` // the hub machine's ssh alias for it
 	Home    string `json:"home,omitempty"`     // "" while it has not reported one
+	DataDir string `json:"data_dir,omitempty"` // its node's data directory ("" while not reported, or the default)
 	Online  bool   `json:"online"`
 	// Reachable: a call to it would go out now (its link is up; Online can lag a reconnect).
 	Reachable bool `json:"reachable"`
@@ -107,10 +109,6 @@ const (
 	ModelsJSON = "models.json"
 	// ModelsTabName: {prompt} → {name}, a herdr tab's name for an agent started with prompt ("" when none).
 	ModelsTabName = "models.tab_name"
-	// ModelsAssistantSend: {machine_id, session_id, params} → {params}: a message for one of the assistant's
-	// conversations with the launcher and model it runs on filled in, as the phone's messages get them (the hub's
-	// assistantSendModel: the main conversation and a task's own follow 模型配置 › 主对话, the others keep theirs).
-	ModelsAssistantSend = "models.assistant_send"
 
 	// AppKB is the hub's knowledge base (docs/knowledge.md).
 	AppKB = "kb"
@@ -125,8 +123,7 @@ const (
 	// that keep one (the chats waiting on the user, today's meetings), those that answered within a few seconds.
 	ConnectorsSnapshots = "connectors.snapshots"
 
-	// AppInteractions is the hub's interaction queue: its tool interaction_answer answers another agent's question for
-	// the user (app.tool).
+	// AppInteractions is the hub's interaction queue (InteractionsGet, InteractionsAnswer).
 	AppInteractions = "interactions"
 
 	// AppInbox is the hub's inbox (docs/inbox.md); AppSettings is Persona's own settings (jarvis_settings).
@@ -136,65 +133,40 @@ const (
 	InboxReplied = "inbox.replied"
 
 	// AppTool: {name, arguments, machine_id, session_id} → proto.ToolResult, one of the assistant's tools that is the
-	// app's to run (kb_*, interaction_answer, inbox_draft, jarvis_settings).
+	// app's to run (jarvis_settings).
 	AppTool = "app.tool"
-
-	// AppTodos is the hub's todos (docs/todos.md): a task the assistant hands out is a todo whose origin is the
-	// conversation.
-	AppTodos = "todos"
-	// TodosLoad: {} → {}, or why the todos can't be read.
-	TodosLoad = "todos.load"
-	// TodosCreate: {title, notes, origin, plan_id, if_quiet} → {todo}; if_quiet: only a todo that would be quiet
-	// (#1731), else {todo: null}.
-	TodosCreate = "todos.create"
-	// TodosLinkAgent: {todo_id, machine_id, session_id, title, cwd} → {}, the agent works for the todo from now on.
-	TodosLinkAgent = "todos.link_agent"
-	// TodosFail: {todo_id, reason} → {}, a todo whose agent did not start ends, with why.
-	TodosFail = "todos.fail"
-	// TodosAutoDone: {todo_id, reason, work} → {ok}, done by the assistant's judge unless the user changed it since
-	// work began.
-	TodosAutoDone = "todos.auto_done"
-	// TodosGet: {todo_id} → {todo, ok}.
-	TodosGet = "todos.get"
-	// TodosList: {origin} → {todos}, the todos opened from that conversation ("*": from any).
-	TodosList = "todos.list"
-	// TodosOfSession: {machine_id, session_id} → {todo, ok}, the open task the agent works for.
-	TodosOfSession = "todos.of_session"
-	// TodosRetry: {todo_id} → {todo, ok}, a task whose agent did not start reopened for another start (its error
-	// cleared); not ok when another hub sharing the store reopened it first (todo as it is then). todo is as the
-	// apps get it (all its fields, formatted).
-	TodosRetry = "todos.retry"
-	// TodosView: {todo_id} → {todo, ok}, the todo as the apps get it (all its fields, formatted).
-	TodosView = "todos.view"
 )
 
-// Todo is a todo as the hub's todos app has it (the fields the assistant reads).
-type Todo struct {
-	ID         string      `json:"id"`
-	Title      string      `json:"title"`
-	Notes      string      `json:"notes"`
-	DoneAt     *time.Time  `json:"done_at"`
-	CreatedAt  time.Time   `json:"created_at"`
-	UpdatedAt  time.Time   `json:"updated_at"`
-	Origin     string      `json:"origin,omitempty"`
-	PlanID     string      `json:"plan_id,omitempty"`
-	StartError string      `json:"start_error,omitempty"`
-	DoneBy     string      `json:"done_by,omitempty"`
-	DoneReason string      `json:"done_reason,omitempty"`
-	ReopenedAt *time.Time  `json:"reopened_at,omitempty"`
-	Agents     []TodoAgent `json:"agents"`
-	// Quiet: the main conversation opened it while the user wanted those told only there (#1731): the hub pushes
-	// nothing about it; the assistant tells the main conversation (quiet.go).
-	Quiet bool `json:"quiet,omitempty"`
-}
+// What the knowledge base, the interaction queue and the inbox offer the assistant: data in, data out. The tools on
+// them (kb_*, interaction_answer, inbox_draft) are the assistant's, with their rules and wording.
+const (
+	// KBSearch: {query, messages, limit} → {dir, hits: [kb.Hit]}, the lines with every word of query (the message
+	// archive's too when messages), at most limit (60 when 0); dir is where the knowledge base is.
+	KBSearch = "kb.search"
+	// KBList: {kind, tag, limit} → {items: [kb.Entry]}, the kind's entries (with the tag when one is given), ranked;
+	// at most limit, all when 0.
+	KBList = "kb.list"
+	// KBGet: {kind, id, recent} → {detail: kb.Detail}, one entry (a project by its name too); recent bounds a chat's
+	// latest messages (characters, 0: none).
+	KBGet = "kb.get"
+	// KBUpdate: {kind, id, update: kb.Update} → {id}, the entry changed (a project made when it is new).
+	KBUpdate = "kb.update"
 
-// TodoAgent is one agent that works or worked for a todo.
-type TodoAgent struct {
-	MachineID   string     `json:"machine_id"`
-	SessionID   string     `json:"session_id"`
-	ReleasedAt  *time.Time `json:"released_at,omitempty"`
-	DismissedAt *time.Time `json:"dismissed_at,omitempty"`
-}
+	// InteractionsGet: {interaction_id} → {interaction, ok}, the interaction while it is pending; when it is not (ok
+	// false), status says how it ended (resolved, dismissed, expired, cancelled; "" when there is no such interaction).
+	InteractionsGet = "interactions.get"
+	// InteractionsAnswer: {machine_id, session_id, interaction_id, answers: {question: answer}} → {ok, status}: the
+	// pending question of that session resolved with answers, answered by the assistant; ok false (with status as
+	// InteractionsGet's) when it is no longer pending. An interaction that is not a question, or not that session's,
+	// is an error.
+	InteractionsAnswer = "interactions.answer"
+
+	// InboxDraft: {session_id, text, note, changes: [{ref, field, value}]} → {item_id, refused?}: the draft (and the
+	// moves of a document's rows it proposes) on the item whose AI 分身 runs in that conversation. item_id is "" when
+	// there is none; refused is the first change the item does not offer (a row it lists, one of the column's values),
+	// and then nothing is kept.
+	InboxDraft = "inbox.draft"
+)
 
 // ModelBinding is what a purpose runs on: a provider (launcher.<name> for a launcher) with a model and effort.
 type ModelBinding struct {
@@ -246,8 +218,12 @@ type Snapshot struct {
 	// shows each like any agent's and sends the answer back (Handler.Action); one that leaves the list is withdrawn.
 	Interactions []proto.Interaction `json:"interactions"`
 	// Tasks are its scheduled tasks, as the hub's other parts need them (the model configuration's 「定时任务」, the
-	// Feishu bot naming a task's conversation, the conversations a node keeps listed); null while they could not be read.
+	// Feishu bot naming a task's conversation); null while they could not be read.
 	Tasks []TaskView `json:"tasks"`
+	// Todos is which todo each agent works for (TodoReport); null while the todos could not be read.
+	Todos *TodoReport `json:"todos"`
+	// Profile is its settings as the hub's own features need them; null while they could not be read.
+	Profile *Profile `json:"profile"`
 }
 
 // TaskView is one scheduled task in the snapshot.
@@ -265,11 +241,12 @@ type TaskView struct {
 
 // SessionView is what the assistant reports about one of its conversations, put on the session lists the apps get.
 type SessionView struct {
-	MachineID string   `json:"machine_id"`
-	SessionID string   `json:"session_id"`
-	Title     string   `json:"title,omitempty"` // 「MMDD | 类型 | 主题」 or the user's own (titles.go)
-	Archived  bool     `json:"archived,omitempty"`
-	Queued    []string `json:"queued,omitempty"` // messages from other conversations waiting for its turn to end
+	MachineID string `json:"machine_id"`
+	SessionID string `json:"session_id"`
+	// Title is 「MMDD | 类型 | 主题」 or the user's own (titles.go); the main conversation's is always 「Persona」.
+	Title    string   `json:"title,omitempty"`
+	Archived bool     `json:"archived,omitempty"`
+	Queued   []string `json:"queued,omitempty"` // messages from other conversations waiting for its turn to end
 }
 
 // ErrStaleSnapshot is manager.snapshot's stale_snapshot: a newer one came in first (two changes reported at once).
@@ -299,22 +276,6 @@ type ToolCall struct {
 type SessionRef struct {
 	MachineID string `json:"machine_id"`
 	SessionID string `json:"session_id"`
-}
-
-// ConversationStarted is conversation.started's params.
-type ConversationStarted struct {
-	MachineID string    `json:"machine_id"`
-	SessionID string    `json:"session_id"`
-	Started   time.Time `json:"started"`
-	// Task is the scheduled task's name when one started it: its title is 「MMDD | 定时 | Task」 from now on.
-	Task string `json:"task,omitempty"`
-}
-
-// ConversationRenamed is conversation.renamed's params.
-type ConversationRenamed struct {
-	MachineID string `json:"machine_id"`
-	SessionID string `json:"session_id"`
-	Title     string `json:"title"`
 }
 
 // ContextParams is assistant.context's params.
@@ -416,11 +377,78 @@ func CutOff(answer string) bool {
 	return false
 }
 
-// DeviceSessions is sessions.changed's params: the list as the node sent it.
+// DeviceSessions is sessions.changed's params: the list as the node sent it, and when the node's connection to the hub
+// began (a new one: the node may have restarted and forgotten what it was told, e.g. the herdr todo marks).
 type DeviceSessions struct {
 	MachineID string          `json:"machine_id"`
 	Sessions  []proto.Session `json:"sessions"`
+	Connected time.Time       `json:"connected,omitzero"`
 }
+
+// ---- the todos (the assistant's, docs/todos.md) ----
+
+// TodoReport is what the hub shows of the todos: the todo each agent works for now (the open todos' active links: the
+// session lists' todo, the task named on its agents' cards) and the agents kept quiet (#1731: no pushes, badges or Live
+// Activity; those of quiet tasks open or done in the last week). Small, whole every time.
+type TodoReport struct {
+	Links []TodoLink   `json:"links"`
+	Quiet []SessionRef `json:"quiet,omitempty"`
+}
+
+// TodoLink is one agent that works for an open todo.
+type TodoLink struct {
+	MachineID string `json:"machine_id"`
+	SessionID string `json:"session_id"`
+	TodoID    string `json:"todo_id"`
+	Title     string `json:"title"` // the todo's
+	// Task: the todo is a task an assistant conversation opened (its agents' cards name it: proto.Interaction.TaskTitle).
+	Task bool `json:"task,omitempty"`
+}
+
+// TodoHandoff is assistant.todo_handoff's params: an agent is handed work for a todo (POST /api/v1/sessions or
+// …/messages with todo_id); Text is what it is handed ("" when only the todo is wanted).
+type TodoHandoff struct {
+	TodoID string `json:"todo_id"`
+	Text   string `json:"text,omitempty"`
+}
+
+// TodoHandoffResult is assistant.todo_handoff's answer: the todo (Found false: no such todo) and Text with the todo's
+// decisions in effect before it (as it was without any, or when they could not be read).
+type TodoHandoffResult struct {
+	Found  bool       `json:"found"`
+	Title  string     `json:"title,omitempty"`
+	DoneAt *time.Time `json:"done_at,omitempty"`
+	Text   string     `json:"text,omitempty"`
+}
+
+// TodoLinkParams is assistant.todo_link's params: the agent handed work for a todo works for it from now on (a link
+// by hand; title, cwd and agent as the session has them).
+type TodoLinkParams struct {
+	TodoID    string `json:"todo_id"`
+	MachineID string `json:"machine_id"`
+	SessionID string `json:"session_id"`
+	Title     string `json:"title,omitempty"`
+	Cwd       string `json:"cwd,omitempty"`
+	Agent     string `json:"agent,omitempty"`
+}
+
+// TodoSpaceRenamed is todos.space_renamed's params: the hub renamed a workspace (PATCH …/spaces/{wid}); a todo linked
+// to it by its name follows.
+type TodoSpaceRenamed struct {
+	MachineID string `json:"machine_id"`
+	Old       string `json:"old"`
+	New       string `json:"new"`
+}
+
+const (
+	// MethodTodoHandoff: TodoHandoff → TodoHandoffResult (the hub calls it before an agent is handed work for a todo).
+	MethodTodoHandoff = "assistant.todo_handoff"
+	// MethodTodoLink: TodoLinkParams → {} (after the hand-off went through); an error says why it was not linked
+	// (db.ErrTodoNotFound / ErrTodoCompleted's words).
+	MethodTodoLink = "assistant.todo_link"
+	// EventTodoSpaceRenamed: TodoSpaceRenamed, one way.
+	EventTodoSpaceRenamed = "todos.space_renamed"
+)
 
 // ---- the bus ----
 
@@ -451,8 +479,6 @@ const (
 	MethodCardsSent = "assistant.cards_sent"
 
 	// The hub tells the assistant (one way).
-	EventConversationStarted = "conversation.started"
-	EventConversationRenamed = "conversation.renamed"
 	EventUserSpoke           = "session.user_spoke"
 	EventTurnStarted         = "session.turn_started"
 	EventTurnEnded           = "session.turn_ended"
@@ -460,7 +486,7 @@ const (
 	EventInteractionResolved = "interaction.resolved"
 	EventInteractionRaised   = "interaction.raised"
 	EventInboxMessage        = "inbox.message"
-	EventUpdated             = "manager.updated" // Hello again: the profile or where the assistant runs changed
+	EventUpdated             = "manager.updated" // Hello again: hub.json's assistant section or the machines changed
 	EventResync              = "manager.resync"  // {}: report the whole snapshot again
 )
 
@@ -517,6 +543,159 @@ var Routes = []string{
 	"POST /api/v1/task-plans/{id}/dismiss",
 	"GET /api/v1/task-trust",
 	"DELETE /api/v1/task-trust",
+	// The todos (the assistant's todos.go, docs/todos.md).
+	"GET /api/v1/todos",
+	"POST /api/v1/todos",
+	"PATCH /api/v1/todos/{id}",
+	"DELETE /api/v1/todos/{id}",
+	"PUT /api/v1/todos/{id}/spaces/{mid}/{space...}",
+	"DELETE /api/v1/todos/{id}/spaces/{mid}/{space...}",
+	"PUT /api/v1/todos/{id}/agents/{mid}/{sid}",
+	"DELETE /api/v1/todos/{id}/agents/{mid}/{sid}",
+	"GET /api/v1/todos/{id}/decisions",
+	"POST /api/v1/todos/{id}/decisions",
+	"PATCH /api/v1/todos/{id}/decisions/{did}",
 	"POST /api/v1/todos/{id}/done-check",
 	"POST /api/v1/todos/{id}/retry",
+	// Its settings and its main conversation (profile.go, start.go).
+	"GET /api/v1/assistant",
+	"PUT /api/v1/assistant",
+	"POST /api/v1/assistant/warm",
+	"GET /api/v1/assistant/memory",
+	"PUT /api/v1/assistant/memory/{name}",
+	"DELETE /api/v1/assistant/memory/{name}",
+	"POST /api/v1/assistant/conversations",
+	"POST /api/v1/assistant/conversations/{id}/compact",
+	"POST /api/v1/assistant/main/new",
+}
+
+// ---- the assistant's settings, and the conversations the hub's features start (docs/assistant.md「和 hub 的边界」) ----
+
+// Profile is the assistant's settings (settings `assistant`, its own) as the hub's own features need them, in every
+// snapshot: the Feishu bot and the channels talk to the main conversation on its machine, the model configuration's
+// 主对话 runs there, the hub reads times in the user's zone, and the nodes keep listing Keep. The hub keeps the last
+// one; before one came in it goes by hub.json's assistant section, its own time zone and no main conversation.
+type Profile struct {
+	MachineID string `json:"machine_id"` // where its conversations run
+	Main      string `json:"main,omitempty"`
+	// Launcher is the one it runs on when 模型配置 › 主对话 names none (its own setting, else hub.json's, else claude):
+	// that purpose's default.
+	Launcher string `json:"launcher"`
+	Timezone string `json:"timezone,omitempty"` // the user's (the phone reports it), IANA; "" while not known
+	// Keep are the conversations their machines list however long they are quiet: the main one, the main ones it
+	// replaced, scheduled tasks' own (node.configure keep_sessions: a busy machine's newest transcripts crowd them out).
+	Keep []SessionRef `json:"keep"`
+}
+
+// The hub asks the assistant (Handler) for what its own features need of the assistant's conversations.
+const (
+	// MethodStart: StartParams → {session}: a conversation the hub's features start (the Feishu bot, a channel, the
+	// inbox's AI 分身).
+	MethodStart = "assistant.start"
+	// MethodSendParams: SendParams → {params}: a message for one of its conversations (the phone's, the Feishu bot's
+	// and a channel's to the main one, one the node sends by itself) with the launcher and model it runs on, and what
+	// the old main conversation left before the text of the first one to a new main conversation started empty.
+	MethodSendParams = "assistant.send_params"
+	// MethodRename: RenameParams → the node's answer: the user renames one of its conversations in the app (the main
+	// one has no title to change, a Codex one only its tab); the new title is the user's from now on.
+	MethodRename = "assistant.rename"
+)
+
+// The node's methods the assistant calls for its directory, its conversations and its settings
+// (docs/protocol.md「hub ↔ node」), passed through by the hub's device.call like the others.
+const (
+	// DeviceAssistantPrepare: {dir, claude_md, connectors, clis, plugin_skills} → {cwd, plugin_skills_need}.
+	DeviceAssistantPrepare = "assistant.prepare"
+	// DeviceAssistantWarm: {cwd, launcher, …model} → {}: a process ready for the next new conversation.
+	DeviceAssistantWarm = "assistant.warm"
+	// DeviceAssistantMemory: {op, cwd, name?, content?} → the memory files (op list) or {}.
+	DeviceAssistantMemory = "assistant.memory"
+	// DeviceAssistantCompact: {session_id} → {}.
+	DeviceAssistantCompact = "assistant.compact"
+	// DeviceAssistantHandoff: {session_id} → {summary, recent}: what a main conversation leaves for the next one.
+	DeviceAssistantHandoff = "assistant.handoff"
+	// DeviceLaunchersList: {} → {launchers}, the node's own.
+	DeviceLaunchersList = "launchers.list"
+	// DeviceLaunchersProbe: {name} → {detail}.
+	DeviceLaunchersProbe = "launchers.probe"
+)
+
+// StartParams is assistant.start's params.
+type StartParams struct {
+	Text           string        `json:"text"`
+	Images         []proto.Image `json:"images,omitempty"`
+	Launcher       string        `json:"launcher,omitempty"`
+	PermissionMode string        `json:"permission_mode,omitempty"`
+	Effort         string        `json:"effort,omitempty"`
+	Purpose        string        `json:"purpose,omitempty"`    // the model configuration's purpose; "" is 主对话's
+	MachineID      string        `json:"machine_id,omitempty"` // "" is the assistant's machine
+	// Main: it becomes the main conversation (what the old one left goes before Text).
+	Main bool `json:"main,omitempty"`
+	// Untitled: not one of the conversations it names and lists as its own (the inbox's AI 分身: its result is the
+	// draft in the inbox).
+	Untitled bool `json:"untitled,omitempty"`
+}
+
+// SendParams is assistant.send_params's params: Params are the node's assistant.send / session.send params.
+type SendParams struct {
+	MachineID string         `json:"machine_id"`
+	SessionID string         `json:"session_id"`
+	Params    map[string]any `json:"params"`
+}
+
+// RenameParams is assistant.rename's params: Params are the app's ({title?, tab_name?}).
+type RenameParams struct {
+	MachineID string         `json:"machine_id"`
+	SessionID string         `json:"session_id"`
+	Params    map[string]any `json:"params"`
+}
+
+// CodeBadRequest is what the assistant refuses a request of the hub's with when the app's request itself is wrong
+// (the hub answers it 400 with the message).
+const CodeBadRequest = "bad_request"
+
+// What the hub's apps tell the assistant for its directory and its settings.
+const (
+	// ModelsRecord: {purpose} → {binding, revision}: what the purpose itself is set to (an empty binding inherits).
+	ModelsRecord = "models.record"
+	// ModelsSave: {purpose, revision, binding} → {}: an error when it changed since revision.
+	ModelsSave = "models.save"
+	// ModelsApplyPicked: {params} → {params}: a launcher (and model) picked for one message, checked and fingerprinted
+	// like a configured one; with no model the launcher's own default stays.
+	ModelsApplyPicked = "models.apply_picked"
+	// ModelsLaunchers: {machine_id} → {launchers}: the machine's launchers as the apps list them (its own but the
+	// hidden ones, and the hub's).
+	ModelsLaunchers = "models.launchers"
+	// ModelsLauncherCheck: {machine_id, launcher, model?} → {available, model_ok}: whether a message can still run on
+	// them (not a renamed launcher, not a model its gateway dropped); true when it can't be told.
+	ModelsLauncherCheck = "models.launcher_check"
+
+	// KBDirs: {} → {knowledge_dir, extra_dirs}: where the knowledge base keeps its files, and the user's other notes.
+	KBDirs = "kb.dirs"
+
+	// ConnectorsSignedIn: {} → {connectors, clis, lark_cli}: the connectors switched on and signed in (rate limited
+	// counts), their command lines (name → connector id), and whether hub.json sets up lark-cli.
+	ConnectorsSignedIn = "connectors.signed_in"
+
+	// AppPlugins is the hub's plugins (docs/plugins.md「助手」).
+	AppPlugins = "plugins"
+	// PluginsAssistant: {machine_id} → {instructions, skills}: the plugins' parts of the assistant's instructions, and
+	// their skills for that machine (files only with those it was not sent yet).
+	PluginsAssistant = "plugins.assistant"
+	// PluginsSkillsNeed: {machine_id, names} → {}: the machine's node lacks these skills (its assistant.prepare said
+	// plugin_skills_need): their files go next time.
+	PluginsSkillsNeed = "plugins.skills_need"
+
+	// SettingsList: {} → {settings: [Setting]}: the hub's own settings jarvis_settings offers; app.tool jarvis_settings
+	// runs get / set / add / remove on them (a change waits for the user's approval on the phone).
+	SettingsList = "settings.list"
+)
+
+// Setting is one of the hub's settings jarvis_settings offers.
+type Setting struct {
+	Key     string   `json:"key"`
+	Title   string   `json:"title"`
+	About   string   `json:"about"`
+	Value   string   `json:"value,omitempty"` // what set / add take, for the model
+	Actions []string `json:"actions"`
 }

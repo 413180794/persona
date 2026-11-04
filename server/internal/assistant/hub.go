@@ -19,8 +19,8 @@ import (
 
 // Hub is everything the assistant asks of the hub.
 type Hub interface {
-	// Hello is manager.hello's answer: the owner's profile and, for now, where the hub runs the assistant's
-	// conversations. BusHub keeps the last one and takes manager.updated.
+	// Hello is manager.hello's answer: hub.json's assistant section (the defaults of the assistant's own settings) and
+	// the machines. BusHub keeps the last one and takes manager.updated.
 	Hello(ctx context.Context) (Hello, error)
 	// DeviceCall is device.call {device, method, params}: a call to one of the user's machines (DeviceMethod*).
 	DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage, error)
@@ -42,8 +42,6 @@ type (
 	DeviceCall          = assistantwire.DeviceCall
 	Device              = assistantwire.Device
 	AppCall             = assistantwire.AppCall
-	Todo                = assistantwire.Todo
-	TodoAgent           = assistantwire.TodoAgent
 	ModelBinding        = assistantwire.ModelBinding
 	NotifyRequest       = assistantwire.NotifyRequest
 	Notification        = assistantwire.Notification
@@ -54,8 +52,6 @@ type (
 	SnapshotResult      = assistantwire.SnapshotResult
 	ToolCall            = assistantwire.ToolCall
 	SessionRef          = assistantwire.SessionRef
-	ConversationStarted = assistantwire.ConversationStarted
-	ConversationRenamed = assistantwire.ConversationRenamed
 	ContextParams       = assistantwire.ContextParams
 	ContextResult       = assistantwire.ContextResult
 	Action              = assistantwire.Action
@@ -69,20 +65,40 @@ type (
 	DeviceSessions      = assistantwire.DeviceSessions
 	HTTPRequest         = assistantwire.HTTPRequest
 	HTTPResponse        = assistantwire.HTTPResponse
+	Profile             = assistantwire.Profile
+	StartParams         = assistantwire.StartParams
+	SendParams          = assistantwire.SendParams
+	RenameParams        = assistantwire.RenameParams
+	Setting             = assistantwire.Setting
+)
+
+// The todos' (todos.go).
+type (
+	TodoReport        = assistantwire.TodoReport
+	TodoLink          = assistantwire.TodoLink
+	TodoHandoff       = assistantwire.TodoHandoff
+	TodoHandoffResult = assistantwire.TodoHandoffResult
+	TodoLinkParams    = assistantwire.TodoLinkParams
+	TodoSpaceRenamed  = assistantwire.TodoSpaceRenamed
 )
 
 const (
 	DeviceSessionItems       = assistantwire.DeviceSessionItems
 	DeviceSessionRename      = assistantwire.DeviceSessionRename
 	DeviceAssistantSend      = assistantwire.DeviceAssistantSend
-	DeviceNodeConfigure      = assistantwire.DeviceNodeConfigure
 	DeviceSessionSend        = assistantwire.DeviceSessionSend
 	DeviceSessionStart       = assistantwire.DeviceSessionStart
 	DeviceDevicesList        = assistantwire.DeviceDevicesList
 	DeviceInteractionsList   = assistantwire.DeviceInteractionsList
 	DeviceSessionsList       = assistantwire.DeviceSessionsList
 	DeviceSessionGet         = assistantwire.DeviceSessionGet
-	DeviceAssistantStart     = assistantwire.DeviceAssistantStart
+	DeviceAssistantPrepare   = assistantwire.DeviceAssistantPrepare
+	DeviceAssistantWarm      = assistantwire.DeviceAssistantWarm
+	DeviceAssistantMemory    = assistantwire.DeviceAssistantMemory
+	DeviceAssistantCompact   = assistantwire.DeviceAssistantCompact
+	DeviceAssistantHandoff   = assistantwire.DeviceAssistantHandoff
+	DeviceLaunchersList      = assistantwire.DeviceLaunchersList
+	DeviceLaunchersProbe     = assistantwire.DeviceLaunchersProbe
 	AppModels                = assistantwire.AppModels
 	ModelsComplete           = assistantwire.ModelsComplete
 	ModelsApply              = assistantwire.ModelsApply
@@ -92,7 +108,17 @@ const (
 	AppKB                    = assistantwire.AppKB
 	KBStatus                 = assistantwire.KBStatus
 	KBPrompt                 = assistantwire.KBPrompt
-	ModelsAssistantSend      = assistantwire.ModelsAssistantSend
+	ModelsRecord             = assistantwire.ModelsRecord
+	ModelsSave               = assistantwire.ModelsSave
+	ModelsApplyPicked        = assistantwire.ModelsApplyPicked
+	ModelsLaunchers          = assistantwire.ModelsLaunchers
+	ModelsLauncherCheck      = assistantwire.ModelsLauncherCheck
+	KBDirs                   = assistantwire.KBDirs
+	ConnectorsSignedIn       = assistantwire.ConnectorsSignedIn
+	AppPlugins               = assistantwire.AppPlugins
+	PluginsAssistant         = assistantwire.PluginsAssistant
+	PluginsSkillsNeed        = assistantwire.PluginsSkillsNeed
+	SettingsList             = assistantwire.SettingsList
 	AppConnectors            = assistantwire.AppConnectors
 	ConnectorsSnapshots      = assistantwire.ConnectorsSnapshots
 	AppInbox                 = assistantwire.AppInbox
@@ -100,17 +126,6 @@ const (
 	InboxReplied             = assistantwire.InboxReplied
 	AppSettings              = assistantwire.AppSettings
 	AppTool                  = assistantwire.AppTool
-	AppTodos                 = assistantwire.AppTodos
-	TodosLoad                = assistantwire.TodosLoad
-	TodosCreate              = assistantwire.TodosCreate
-	TodosLinkAgent           = assistantwire.TodosLinkAgent
-	TodosFail                = assistantwire.TodosFail
-	TodosAutoDone            = assistantwire.TodosAutoDone
-	TodosGet                 = assistantwire.TodosGet
-	TodosList                = assistantwire.TodosList
-	TodosOfSession           = assistantwire.TodosOfSession
-	TodosRetry               = assistantwire.TodosRetry
-	TodosView                = assistantwire.TodosView
 	MethodHello              = assistantwire.MethodHello
 	MethodDevice             = assistantwire.MethodDevice
 	MethodApp                = assistantwire.MethodApp
@@ -123,8 +138,10 @@ const (
 	MethodContext            = assistantwire.MethodContext
 	MethodAction             = assistantwire.MethodAction
 	MethodTasks              = assistantwire.MethodTasks
-	EventConversationStarted = assistantwire.EventConversationStarted
-	EventConversationRenamed = assistantwire.EventConversationRenamed
+	MethodStart              = assistantwire.MethodStart
+	MethodSendParams         = assistantwire.MethodSendParams
+	MethodRename             = assistantwire.MethodRename
+	CodeBadRequest           = assistantwire.CodeBadRequest
 	EventUserSpoke           = assistantwire.EventUserSpoke
 	EventTurnStarted         = assistantwire.EventTurnStarted
 	EventTurnEnded           = assistantwire.EventTurnEnded

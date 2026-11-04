@@ -314,7 +314,7 @@ func (h *Hub) resolveBotTarget(ctx context.Context, t botTarget) (resolvedTarget
 		}
 		return resolvedTarget{m: m, session: s, label: agentLabel(s) + " · " + m.cfg.Name}, nil
 	default:
-		cfg := h.assistantConfig(ctx)
+		cfg := h.assistantProfile()
 		m := h.localMachine(cfg.MachineID)
 		if m == nil {
 			return resolvedTarget{}, errors.New("助手所在的机器没有配置")
@@ -414,15 +414,10 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 		run.Ext["reaction"] = reaction
 	}
 	if rt.isNew {
-		start := h.startAssistant
-		if rt.main {
-			start = h.startMainWith
-		}
-		s, err := start(ctx, text, images, "", "", "")
+		s, err := h.startAssistantConversation(ctx, rt.main, text, images)
 		if err != nil {
 			return err
 		}
-		h.asst().ConversationStarted(ctx, assistantwire.ConversationStarted{MachineID: s.MachineID, SessionID: s.SessionID, Started: time.Now()})
 		run.MachineID, run.SessionID, run.TargetKind, run.Probe = s.MachineID, s.SessionID, targetJarvis, ""
 		if t.Kind == targetJarvis { // /new: the chat goes on in it
 			h.bots.mu.Lock()
@@ -446,7 +441,7 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 		if !t.agent() {
 			h.asst().UserSpoke(ctx, assistantwire.SessionRef{MachineID: rt.m.cfg.ID, SessionID: sid})
 			if rt.main {
-				if err := h.applyModel(ctx, "assistant", p); err != nil {
+				if err := h.assistantSend(ctx, rt.m, sid, p); err != nil {
 					return err
 				}
 			}

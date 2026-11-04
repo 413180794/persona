@@ -18,28 +18,23 @@ import (
 // cardHub has a task in conv1 and an inbox item about it (a GitHub-like review thread) whose agent is drafting.
 func cardHub(t *testing.T) (*Hub, *replierConnector, *InboxItem) {
 	t.Helper()
-	ctx := context.Background()
 	h := agentHub(t)
-	h.initTodos(ctx)
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
 	rc := &replierConnector{}
 	if err := h.addConnector(rc); err != nil {
 		t.Fatal(err)
 	}
-	todo, err := h.createTodo(ctx, "修角标", "", "conv1", "plan_1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	connectAssistant(t, h) // the cards are the assistant's, in conv1's feed
+	todo := taskIn(t, h, "conv1")
 	it := &InboxItem{ID: "example:1", Source: "example", Last: "m1", UpdatedAt: time.Now(),
 		Connector: &InboxConnector{Thread: "example-org/example-repo#12", CanReply: true},
 		Agent:     &InboxAgent{State: AgentRunning, SessionID: "s1", TodoID: todo.ID}}
 	h.inbox.items[it.ID] = it
-	connectAssistant(t, h) // the cards are the assistant's, in conv1's feed
 	return h, rc, it
 }
 
-// cards is conv1's feed after since, as the app reads it.
+// cards are the message cards of conv1's feed after since, as the app reads it (not its task's plan and card).
 func cards(t *testing.T, h *Hub, since time.Time) []assistant.FeedItem {
 	t.Helper()
 	path := "/api/v1/assistant/conversations/conv1/feed"
@@ -50,7 +45,13 @@ func cards(t *testing.T, h *Hub, since time.Time) []assistant.FeedItem {
 	if code := assistantGet(h, path, &got); code != http.StatusOK {
 		t.Fatalf("feed: %d", code)
 	}
-	return got.Items
+	var out []assistant.FeedItem
+	for _, it := range got.Items {
+		if it.Kind == "message" {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 func cardBody(t *testing.T, it assistant.FeedItem) assistantwire.MessageCard {
@@ -74,12 +75,9 @@ func cardSentAt(it assistant.FeedItem) *time.Time {
 // 发送 on a card: the reply goes out once, the card says so for good — on a reload, after the item opens again and
 // the AI 分身 drafts a new card, and to the clients at once.
 func TestMessageCardStaysSent(t *testing.T) {
-	ctx := context.Background()
 	h, rc, it := cardHub(t)
 	mux := h.routes()
-	if _, err := h.toolInboxDraft(ctx, "s1", json.RawMessage(`{"text":"确实是 bug，谢谢指出，修好了告诉你"}`)); err != nil {
-		t.Fatal(err)
-	}
+	draft(t, h, "确实是 bug，谢谢指出，修好了告诉你")
 	list := cards(t, h, time.Time{})
 	if len(list) != 1 || cardSentAt(list[0]) != nil {
 		t.Fatalf("feed = %+v", list)
@@ -125,9 +123,7 @@ func TestMessageCardStaysSent(t *testing.T) {
 	}
 
 	// A draft that arrives after the reply went out puts no new card in.
-	if _, err := h.toolInboxDraft(ctx, "s1", json.RawMessage(`{"text":"晚到的草稿"}`)); err != nil {
-		t.Fatal(err)
-	}
+	draft(t, h, "晚到的草稿")
 	if got := cards(t, h, time.Time{}); len(got) != 1 {
 		t.Fatalf("a card for a reply already out: %+v", got)
 	}
@@ -137,9 +133,7 @@ func TestMessageCardStaysSent(t *testing.T) {
 	it.DoneAt, it.DoneBy, it.Last = nil, "", "m2"
 	h.inbox.mu.Unlock()
 	time.Sleep(2 * time.Millisecond)
-	if _, err := h.toolInboxDraft(ctx, "s1", json.RawMessage(`{"text":"已经合了"}`)); err != nil {
-		t.Fatal(err)
-	}
+	draft(t, h, "已经合了")
 	got := cards(t, h, time.Time{})
 	if len(got) != 2 || got[0].ID != card.ID || cardSentAt(got[0]) == nil || cardSentAt(got[1]) != nil ||
 		cardBody(t, got[0]).Sent != "确实是 bug，谢谢指出（改过）" || cardBody(t, got[1]).Draft != "已经合了" {
@@ -149,12 +143,9 @@ func TestMessageCardStaysSent(t *testing.T) {
 
 // Taps that arrive together send one reply.
 func TestMessageCardSendsOnce(t *testing.T) {
-	ctx := context.Background()
 	h, rc, _ := cardHub(t)
 	mux := h.routes()
-	if _, err := h.toolInboxDraft(ctx, "s1", json.RawMessage(`{"text":"在修了"}`)); err != nil {
-		t.Fatal(err)
-	}
+	draft(t, h, "在修了")
 	card := cards(t, h, time.Time{})[0]
 	body, _ := json.Marshal(map[string]string{"text": "在修了", "card": card.ID})
 	var wg sync.WaitGroup
@@ -180,11 +171,8 @@ func TestMessageCardSendsOnce(t *testing.T) {
 // A card from before the hub recorded sends: its item was replied to after it came, so it reads as sent (with the
 // draft), and stays so when the item opens again.
 func TestMessageCardSentBeforeTheRecord(t *testing.T) {
-	ctx := context.Background()
 	h, _, it := cardHub(t)
-	if _, err := h.toolInboxDraft(ctx, "s1", json.RawMessage(`{"text":"在修了"}`)); err != nil {
-		t.Fatal(err)
-	}
+	draft(t, h, "在修了")
 	h.inbox.mu.Lock()
 	it.done(time.Now().Add(time.Second), "replied")
 	h.inbox.mu.Unlock()
@@ -206,9 +194,7 @@ func TestMessageCardSentBeforeTheRecord(t *testing.T) {
 	h2.inbox.mu.Unlock()
 	it2.DoneBy = ""
 	it2.DoneAt = nil
-	if _, err := h2.toolInboxDraft(ctx, "s1", json.RawMessage(`{"text":"在修了"}`)); err != nil {
-		t.Fatal(err)
-	}
+	draft(t, h2, "在修了")
 	h2.inbox.mu.Lock()
 	it2.done(time.Now(), "user")
 	h2.inbox.mu.Unlock()
@@ -217,23 +203,27 @@ func TestMessageCardSentBeforeTheRecord(t *testing.T) {
 	}
 }
 
-// The AI 分身's draft goes out with one tap: one that leaves a blank to fill in is sent back to it.
+// The AI 分身's draft goes out with one tap: one that leaves a blank to fill in is sent back to it (the assistant's
+// rule, assistant.TestInboxDraftRules), and nothing changes on the item.
 func TestInboxDraftRefusesPlaceholders(t *testing.T) {
-	ctx := context.Background()
 	h, _, it := cardHub(t)
-	for _, text := range []string{"修好了，【预计今晚 / 几点前】合进去", "MR 在 {{链接}}"} {
-		_, err := h.toolInboxDraft(ctx, "s1", json.RawMessage(`{"text":`+string(mustJSON(text))+`}`))
-		if err == nil || !strings.Contains(err.Error(), "fill in") {
-			t.Fatalf("%q: %v", text, err)
-		}
+	r := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: "inbox_draft", Arguments: json.RawMessage(`{"text":"修好了，【预计今晚 / 几点前】合进去"}`),
+		SessionID: "s1"})
+	if !r.IsError || !strings.Contains(textOf(r), "fill in") {
+		t.Fatalf("a draft with a blank: %s", textOf(r))
 	}
 	if it.Agent.State != AgentRunning || it.Agent.Draft != "" || len(cards(t, h, time.Time{})) != 0 {
 		t.Fatalf("a draft with a blank was taken: %+v", it.Agent)
 	}
-	if _, err := h.toolInboxDraft(ctx, "s1", json.RawMessage(`{"text":"修好了，合进去了"}`)); err != nil {
-		t.Fatal(err)
-	}
-	if draftPlaceholder("【通知】 不算吗") == "" || draftPlaceholder("周五前给你") != "" {
-		t.Fatal("draftPlaceholder")
+	draft(t, h, "修好了，合进去了")
+}
+
+// draft is the AI 分身 in conversation s1 handing in its draft (inbox_draft, through the assistant).
+func draft(t *testing.T, h *Hub, text string) {
+	t.Helper()
+	args, _ := json.Marshal(map[string]string{"text": text})
+	r := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: "inbox_draft", Arguments: args, SessionID: "s1"})
+	if r.IsError {
+		t.Fatalf("inbox_draft: %s", textOf(r))
 	}
 }

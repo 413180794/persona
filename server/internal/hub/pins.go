@@ -149,25 +149,7 @@ func (h *Hub) renameSpace(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if old != "" && old != name {
-		voided := false
-		dbErr := false
-		if h.store != nil {
-			var err error
-			voided, err = h.store.RenameTodoSpace(ctx, m.cfg.ID, old, name)
-			if err != nil {
-				dbErr = true
-				h.logf("rename space: migrate todo spaces in db from %s/%s to %s failed: %v", m.cfg.ID, old, name, err)
-			}
-		}
-		if !dbErr {
-			if voided {
-				h.logf("rename space: target space %s/%s already linked to another todo; voiding old link for %s", m.cfg.ID, name, old)
-				h.voidTodoSpaceInMemory(m.cfg.ID, old)
-			} else {
-				h.renameTodoSpaceInMemory(m.cfg.ID, old, name)
-			}
-			h.broadcast(map[string]any{"type": "todos"})
-		}
+		h.renameTodoSpace(m.cfg.ID, old, name) // a todo linked to it follows (the assistant's)
 	}
 	if old != "" && old != name && h.store != nil {
 		from, to := m.cfg.ID+"/"+old, m.cfg.ID+"/"+name

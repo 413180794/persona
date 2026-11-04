@@ -26,7 +26,7 @@ func newTaskService(t *testing.T) (*Service, *fakeHub) {
 	t.Helper()
 	f := newFakeHub()
 	f.sessions["box"] = nil
-	f.hello.Timezone = "Asia/Shanghai"
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	return newStorelessService(t, f), f
 }
 
@@ -63,8 +63,8 @@ func startedTask(t *testing.T, s *Service, f *fakeHub) Todo {
 	if _, err := s.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the link", func() bool { return len(f.onlyTodo().Agents) == 1 })
-	return f.onlyTodo()
+	waitFor(t, "the link", func() bool { return len(onlyTodo(s).Agents) == 1 })
+	return onlyTodo(s)
 }
 
 // A dropped link is retried once: the machine back by then, the task starts as usual; still down, the task ends.
@@ -84,8 +84,8 @@ func TestTaskStartRetriesADroppedLink(t *testing.T) {
 	if _, err := s.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the retried start to link", func() bool { return len(f.onlyTodo().Agents) == 1 })
-	if todo := f.onlyTodo(); todo.DoneAt != nil || todo.StartError != "" {
+	waitFor(t, "the retried start to link", func() bool { return len(onlyTodo(s).Agents) == 1 })
+	if todo := onlyTodo(s); todo.DoneAt != nil || todo.StartError != "" {
 		t.Fatalf("todo = %+v", todo)
 	}
 	if len(f.starts) != 1 {
@@ -97,8 +97,8 @@ func TestTaskStartRetriesADroppedLink(t *testing.T) {
 	if _, err := s2.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the todo to end", func() bool { return f2.onlyTodo().DoneAt != nil })
-	if todo := f2.onlyTodo(); !strings.Contains(todo.StartError, "offline") || len(todo.Agents) != 0 {
+	waitFor(t, "the todo to end", func() bool { return onlyTodo(s2).DoneAt != nil })
+	if todo := onlyTodo(s2); !strings.Contains(todo.StartError, "offline") || len(todo.Agents) != 0 {
 		t.Fatalf("todo = %+v", todo)
 	}
 	waitFor(t, "the receipt", func() bool { return strings.Contains(feedKinds(s2, "conv1"), "receipt") })
@@ -262,19 +262,19 @@ func TestAutoFinishLeavesAReopenedTask(t *testing.T) {
 	s, f := newTaskService(t)
 	f.judge = `{"verdict":"done","reason":"做完了"}`
 	reopened := time.Now().Add(-time.Minute)
-	f.todos["todo_r"] = &Todo{ID: "todo_r", Title: "修", Origin: "conv1", ReopenedAt: &reopened, CreatedAt: reopened.Add(-time.Hour),
-		Agents: []TodoAgent{{MachineID: "box", SessionID: "s9"}}}
+	putTodo(s, Todo{ID: "todo_r", Title: "修", Origin: "conv1", ReopenedAt: &reopened, CreatedAt: reopened.Add(-time.Hour),
+		Agents: []TodoAgent{{MachineID: "box", SessionID: "s9"}}})
 	f.setItems(proto.Item{Kind: proto.KindText, Role: "assistant", Text: "全部做完了，PR 已合并"})
-	f.todos["todo_h"] = &Todo{ID: "todo_h", Title: "自己记的事", CreatedAt: reopened}
-	s.autoFinishTask(f.todoNow("todo_r"), reopened.Add(-time.Second), true)
-	s.autoFinishTask(f.todoNow("todo_r"), time.Time{}, false)
-	s.autoFinishTask(f.todoNow("todo_h"), time.Now(), true)
-	if f.todoNow("todo_r").DoneAt != nil || f.todoNow("todo_h").DoneAt != nil || f.judged != 0 {
-		t.Fatalf("closed: %+v %+v, %d judgments", f.todoNow("todo_r"), f.todoNow("todo_h"), f.judged)
+	putTodo(s, Todo{ID: "todo_h", Title: "自己记的事", CreatedAt: reopened})
+	s.autoFinishTask(todoNow(s, "todo_r"), reopened.Add(-time.Second), true)
+	s.autoFinishTask(todoNow(s, "todo_r"), time.Time{}, false)
+	s.autoFinishTask(todoNow(s, "todo_h"), time.Now(), true)
+	if todoNow(s, "todo_r").DoneAt != nil || todoNow(s, "todo_h").DoneAt != nil || f.judged != 0 {
+		t.Fatalf("closed: %+v %+v, %d judgments", todoNow(s, "todo_r"), todoNow(s, "todo_h"), f.judged)
 	}
 	// Work after the reopen is judged, and closes it.
-	s.autoFinishTask(f.todoNow("todo_r"), time.Now(), true)
-	if got := f.todoNow("todo_r"); got.DoneAt == nil || got.DoneBy != db.DoneByAuto || f.judged != 1 {
+	s.autoFinishTask(todoNow(s, "todo_r"), time.Now(), true)
+	if got := todoNow(s, "todo_r"); got.DoneAt == nil || got.DoneBy != db.DoneByAuto || f.judged != 1 {
 		t.Fatalf("not closed after new work: %+v, %d judgments", got, f.judged)
 	}
 }

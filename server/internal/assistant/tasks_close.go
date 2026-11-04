@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 )
 
 // Closing the agents of finished tasks (docs/todos.md「做完的任务关掉 Agent」). Once a task opened from an assistant
-// conversation is done — by the user or by the hub's judge (tasks_done.go) — its agents that have stayed still for a
+// conversation is done — by the user or by the assistant's judge (done.go) — its agents that have stayed still for a
 // while are retired: the node closes their pane and the agent process with it (node retire.go). The todo keeps the
 // agents (machine, session id, directory) and the node keeps how each was started (launcher, model, modes), so reading
 // one goes on from its transcript, and a message to it — agent_send, a message on the task's card, the chat — resumes
@@ -24,11 +24,11 @@ import (
 var (
 	// taskCloseIdle is how long a done task's agent must have been still (and the task done) before it is closed.
 	taskCloseIdle = 3 * time.Minute
-	// taskCloseEvery is how often the hub looks for agents to close (tests shorten them).
+	// taskCloseEvery is how often the assistant looks for agents to close (tests shorten them).
 	taskCloseEvery = time.Minute
 	// taskCloseRetry is how long a node's refusal stands for an agent that did not change: a node updated meanwhile
-	// may close it now (a deploy restarts the hub first and the resident node once it is idle: the hub asks the old
-	// one, which does not know session.retire).
+	// may close it now (a deploy restarts the hub first and the resident node once it is idle: the old one is asked,
+	// which does not know session.retire).
 	taskCloseRetry = 10 * time.Minute
 )
 
@@ -42,7 +42,7 @@ type taskCloseRefusal struct {
 // changed.
 type taskCloseRefused map[[2]string]taskCloseRefusal
 
-func (h *Hub) taskCloseLoop(ctx context.Context) {
+func (s *Service) taskCloseLoop(ctx context.Context) {
 	t := time.NewTicker(taskCloseEvery)
 	defer t.Stop()
 	refused := taskCloseRefused{}
@@ -52,7 +52,7 @@ func (h *Hub) taskCloseLoop(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		h.closeDoneTaskAgents(ctx, refused)
+		s.closeDoneTaskAgents(ctx, refused)
 	}
 }
 
@@ -63,11 +63,11 @@ type doneTaskAgent struct {
 }
 
 // doneTaskAgents are the agents still linked to tasks that are done, except those that count for an open todo now.
-func (h *Hub) doneTaskAgents() []doneTaskAgent {
-	h.todos.mu.RLock()
-	defer h.todos.mu.RUnlock()
+func (s *Service) doneTaskAgents() []doneTaskAgent {
+	s.todos.mu.RLock()
+	defer s.todos.mu.RUnlock()
 	var out []doneTaskAgent
-	for _, t := range h.todos.todos {
+	for _, t := range s.todos.todos {
 		if t.Origin == "" || t.DoneAt == nil {
 			continue
 		}
@@ -75,7 +75,7 @@ func (h *Hub) doneTaskAgents() []doneTaskAgent {
 			if a.ReleasedAt != nil || a.DismissedAt != nil {
 				continue
 			}
-			if _, open := h.todos.activeBySession[[2]string{a.MachineID, a.SessionID}]; open {
+			if _, open := s.todos.activeBySession[[2]string{a.MachineID, a.SessionID}]; open {
 				continue
 			}
 			out = append(out, doneTaskAgent{todo: t.ID, machine: a.MachineID, session: a.SessionID, doneAt: *t.DoneAt})
@@ -116,56 +116,61 @@ func retirable(s proto.Session, doneAt, now time.Time) bool {
 
 // closeDoneTaskAgents retires the agents of done tasks that may be closed now (retirable); refused remembers the
 // sessions a node would not close.
-func (h *Hub) closeDoneTaskAgents(ctx context.Context, refused taskCloseRefused) {
-	h.todos.mu.RLock()
-	loaded := h.todos.loaded
-	h.todos.mu.RUnlock()
-	if !loaded {
+func (s *Service) closeDoneTaskAgents(ctx context.Context, refused taskCloseRefused) {
+	if !s.todosLoaded() {
+		return
+	}
+	agents := s.doneTaskAgents()
+	if len(agents) == 0 {
 		return
 	}
 	now := time.Now()
+	reachable := map[string]bool{}
+	for _, d := range s.devices(ctx) {
+		reachable[d.ID] = d.Reachable
+	}
 	lists := map[string]map[string]proto.Session{}
-	for _, a := range h.doneTaskAgents() {
-		m := h.localMachine(a.machine)
-		if m == nil || !m.reachable() {
+	for _, a := range agents {
+		if !reachable[a.machine] {
 			continue
 		}
 		list, ok := lists[a.machine]
 		if !ok {
 			list = map[string]proto.Session{}
-			for _, s := range h.decorated(m) {
-				list[s.SessionID] = s
+			got, _ := s.sessions(ctx, a.machine) // as the apps get them: the state and the cards waiting count
+			for _, c := range got {
+				list[c.SessionID] = c
 			}
 			lists[a.machine] = list
 		}
-		s, ok := list[a.session]
+		c, ok := list[a.session]
 		key := [2]string{a.machine, a.session}
-		if !ok || !retirable(s, a.doneAt, now) {
+		if !ok || !retirable(c, a.doneAt, now) {
 			continue
 		}
-		if r, ok := refused[key]; ok && r.updated.Equal(s.UpdatedAt) && now.Sub(r.at) < taskCloseRetry {
+		if r, ok := refused[key]; ok && r.updated.Equal(c.UpdatedAt) && now.Sub(r.at) < taskCloseRetry {
 			continue
 		}
 		var res struct {
 			Closed bool `json:"closed"`
 		}
 		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		err := m.call(cctx, "session.retire", map[string]any{"session_id": a.session}, &res)
+		err := s.call(cctx, a.machine, deviceSessionRetire, map[string]any{"session_id": a.session}, &res)
 		cancel()
 		var re *rpc.Error
 		switch {
 		case err == nil:
 			delete(refused, key)
 			if res.Closed {
-				h.logf("task %s: closed its finished agent %s/%s (resumes on the next message)", a.todo, a.machine, a.session)
+				s.logf("task %s: closed its finished agent %s/%s (resumes on the next message)", a.todo, a.machine, a.session)
 			}
 		case errors.As(err, &re): // the node refused (or is too old to know session.retire): not again for a while
 			if prev, ok := refused[key]; !ok || prev.why != err.Error() {
-				h.logf("task %s: agent %s/%s left open: %v", a.todo, a.machine, a.session, err)
+				s.logf("task %s: agent %s/%s left open: %v", a.todo, a.machine, a.session, err)
 			}
-			refused[key] = taskCloseRefusal{updated: s.UpdatedAt, at: now, why: err.Error()}
+			refused[key] = taskCloseRefusal{updated: c.UpdatedAt, at: now, why: err.Error()}
 		default:
-			h.logf("task %s: close agent %s/%s: %v", a.todo, a.machine, a.session, err)
+			s.logf("task %s: close agent %s/%s: %v", a.todo, a.machine, a.session, err)
 		}
 	}
 }

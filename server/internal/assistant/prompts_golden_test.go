@@ -38,7 +38,7 @@ func golden(t *testing.T, name, got string) {
 
 func TestGoldenSessionTitle(t *testing.T) {
 	f := newFakeHub()
-	f.hello.Timezone = "Asia/Shanghai"
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	f.replies = []string{"改个名字", "修复 | 搜索框和顶栏重叠"}
 	s := newTestService(t, f)
 	started := time.Date(2026, 11, 1, 2, 0, 0, 0, time.UTC)

@@ -255,7 +255,6 @@ func (h *Hub) routes() http.Handler {
 	h.channelRoutes(api)
 	h.agentRoutes(api)
 	h.inboxRoutes(api)
-	h.todoRoutes(api)
 	h.connectorRoutes(api)
 	h.translateRoutes(api)
 	h.extensionRoutes(api)
@@ -575,7 +574,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		}
 		t, err := h.getTodoForLink(r.Context(), p.TodoID)
 		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+			writeAssistantErr(w, err) // 503 assistant_offline while the assistant is not connected
 			return
 		}
 		if t == nil {

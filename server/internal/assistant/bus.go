@@ -72,7 +72,7 @@ func NewBusHub(o BusOptions) *BusHub {
 				"deploy": o.Deploy, "version": o.Version}
 		},
 		OnHello:   b.onHello,
-		OnRequest: b.request,
+		OnRequest: b.answer,
 		OnEvent: func(event string, params json.RawMessage) {
 			b.pending.Add(1)
 			select {
@@ -172,6 +172,7 @@ func (b *BusHub) Snapshot(ctx context.Context, s Snapshot) (SnapshotResult, erro
 // assistant's code checks it (errors.Is).
 type codedError struct {
 	msg  string
+	code string // the hub's (assistantwire.Code…)
 	kind error
 }
 
@@ -201,7 +202,18 @@ func busError(err error) error {
 	default:
 		return err
 	}
-	return &codedError{msg: re.Message, kind: kind}
+	return &codedError{msg: re.Message, code: re.Code, kind: kind}
+}
+
+// answer is request with the hub's coded errors given back their code: an answer the assistant could not give because
+// of the hub (a machine that is offline, a node link that dropped) reaches the app as the hub's own error would.
+func (b *BusHub) answer(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	out, err := b.request(ctx, method, params)
+	var ce *codedError
+	if errors.As(err, &ce) {
+		return nil, &rpc.Error{Code: ce.code, Message: ce.msg}
+	}
+	return out, err
 }
 
 // ---- what the hub asks of the assistant ----
@@ -263,6 +275,44 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		}
 		s.CardsSent(ctx, p)
 		return map[string]any{}, nil
+	case assistantwire.MethodTodoHandoff:
+		var p TodoHandoff
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return s.TodoHandoff(ctx, p)
+	case assistantwire.MethodTodoLink:
+		var p TodoLinkParams
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return map[string]any{}, s.TodoLink(ctx, p)
+	case assistantwire.MethodStart:
+		var p StartParams
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		sess, err := s.Start(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"session": sess}, nil
+	case assistantwire.MethodSendParams:
+		var p SendParams
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		params, err := s.SendParams(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"params": params}, nil
+	case assistantwire.MethodRename:
+		var p RenameParams
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return s.Rename(ctx, p)
 	}
 	return nil, &rpc.Error{Code: bus.CodeUnknownMethod, Message: "unknown method " + method}
 }
@@ -338,18 +388,6 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 	s := b.service()
 	decode := func(v any) error { return json.Unmarshal(ev.params, v) }
 	switch ev.name {
-	case assistantwire.EventConversationStarted:
-		var p ConversationStarted
-		if err := decode(&p); err != nil {
-			return err
-		}
-		s.ConversationStarted(ctx, p)
-	case assistantwire.EventConversationRenamed:
-		var p ConversationRenamed
-		if err := decode(&p); err != nil {
-			return err
-		}
-		s.ConversationRenamed(ctx, p)
 	case assistantwire.EventUserSpoke:
 		var p SessionRef
 		if err := decode(&p); err != nil {
@@ -398,9 +436,16 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		b.setHello(h)
-		s.ProfileChanged(ctx) // the live context is read again, in the profile's zone
+		s.ProfileChanged(ctx) // the live context and the settings are read again
+		s.Resync(ctx)         // and the hub gets the profile in effect now (the default machine may be another)
 	case assistantwire.EventResync:
 		go s.Resync(ctx)
+	case assistantwire.EventTodoSpaceRenamed:
+		var p TodoSpaceRenamed
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.TodoSpaceRenamed(ctx, p)
 	case "managers": // the bus's roster: nothing the assistant needs
 	default:
 		return fmt.Errorf("unknown event")

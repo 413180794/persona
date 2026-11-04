@@ -1,0 +1,472 @@
+package assistant
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The todos and the machines' session lists (sessions.changed, docs/todos.md「整组挂与自动挂」「派生跟随」「herdr 标记与对账」):
+// an online agent in a workspace linked to a todo, or spawned by an agent of one, joins it; the herdr panes of the
+// agents that work for open todos carry the persona_todo marks (the node keeps them, todo.sync_session_tokens); the
+// links keep the agents' titles and start errors for when they are gone from the lists. And what the hub shows of the
+// todos: the report in the snapshot (TodoReport).
+
+// Node methods the todos call through device.call.
+const (
+	deviceTodoTokens    = "todo.sync_session_tokens" // {tokens: {session_id: {name: value}}} → {}
+	deviceSessionRetire = "session.retire"           // {session_id} → {closed} (tasks_close.go)
+)
+
+// todosSessionsChanged: machine's node sent its session list.
+func (s *Service) todosSessionsChanged(ctx context.Context, d DeviceSessions) {
+	if !s.todosLoaded() { // read with the first snapshot; not on every list while the store can't be read
+		return
+	}
+	if s.autoLinkTodos(d.MachineID, d.Sessions) {
+		s.linksChanged(ctx)
+		s.todosChanged(ctx)
+	}
+	s.updateTodoAgentSnapshots(ctx, d.MachineID, d.Sessions)
+	s.nodeConnected(d.MachineID, d.Connected)
+	s.syncTodoTokens(d.MachineID, d.Sessions)
+}
+
+// pendingAutoLink is a link queued for the database.
+type pendingAutoLink struct {
+	todoID     string
+	machineID  string
+	sessionID  string
+	title      string
+	cwd        string
+	agent      string
+	startError string
+	source     string
+	via        string
+	linkedAt   time.Time
+}
+
+// autoLinkTodos links the online agents of machine that join a todo on their own: spawned by an agent of an open todo
+// (persona_from, the session's spawn_from), or in a workspace linked to one; never one that works for another todo
+// now, or that was ever on the todo (dismissed included). Memory first, so the report says it at once; the store
+// after, undone when it fails. True when any was linked.
+func (s *Service) autoLinkTodos(machine string, sessions []proto.Session) bool {
+	now := time.Now().UTC()
+	var pending []pendingAutoLink
+
+	s.todos.mu.Lock()
+	link := func(c proto.Session, target *Todo, source, via string) {
+		for _, a := range target.Agents {
+			if a.MachineID == machine && a.SessionID == c.SessionID {
+				return // it was on this todo before (active, released or dismissed): not again
+			}
+		}
+		target.Agents = append(target.Agents, TodoAgent{MachineID: machine, SessionID: c.SessionID, LinkedAt: now, Title: c.Title,
+			Cwd: c.Cwd, Agent: c.Agent, StartError: c.StartError, Source: source, Via: via})
+		s.todos.activeBySession[[2]string{machine, c.SessionID}] = target.ID
+		target.UpdatedAt = now
+		pending = append(pending, pendingAutoLink{todoID: target.ID, machineID: machine, sessionID: c.SessionID, title: c.Title,
+			cwd: c.Cwd, agent: c.Agent, startError: c.StartError, source: source, via: via, linkedAt: now})
+	}
+	for _, c := range sessions {
+		if c.Status == proto.StatusOffline {
+			continue
+		}
+		key := [2]string{machine, c.SessionID}
+
+		// 1. Spawned derivation: <todo_id>@<parent machine>/<parent session>
+		if todoID, parent, ok := strings.Cut(c.SpawnFrom, "@"); ok && s.todos.activeBySession[key] == "" {
+			if target, ok := s.todos.todos[todoID]; ok && target.DoneAt == nil {
+				link(c, target, "spawned", parent)
+			}
+		}
+
+		// 2. Space auto link
+		if s.todos.activeBySession[key] == "" {
+			if spKey := sessionSpaceKey(machine, c); spKey != "" {
+				if targetID, ok := s.todos.spacesByKey[spKey]; ok {
+					if target, ok := s.todos.todos[targetID]; ok && target.DoneAt == nil {
+						link(c, target, "space", spKey)
+					}
+				}
+			}
+		}
+	}
+	s.todos.mu.Unlock()
+
+	if len(pending) > 0 {
+		if st := s.todoDB(); st != nil {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				undone := false
+				for _, item := range pending {
+					inserted, _, err := st.AutoLinkTodoAgent(ctx, item.todoID, item.machineID, item.sessionID, item.title, item.cwd,
+						item.agent, item.startError, item.source, item.via, item.linkedAt)
+					if err == nil && inserted {
+						continue
+					}
+					// The store has it otherwise (an error, or a row memory did not know of: one just dismissed).
+					s.logf("todos: auto-link %s on %s/%s not kept (rolling back): %v", item.todoID, item.machineID, item.sessionID, err)
+					s.todos.mu.Lock()
+					key := [2]string{item.machineID, item.sessionID}
+					if curTid, ok := s.todos.activeBySession[key]; ok && curTid == item.todoID {
+						delete(s.todos.activeBySession, key)
+						if target, ok := s.todos.todos[item.todoID]; ok {
+							var kept []TodoAgent
+							for _, a := range target.Agents {
+								if a.MachineID == item.machineID && a.SessionID == item.sessionID && a.LinkedAt.Equal(item.linkedAt) {
+									continue
+								}
+								kept = append(kept, a)
+							}
+							target.Agents = kept
+							target.UpdatedAt = time.Now().UTC()
+						}
+						undone = true
+					}
+					s.todos.mu.Unlock()
+				}
+				if undone {
+					s.linksChanged(ctx)
+					s.todosChanged(ctx)
+				}
+			}()
+		}
+	}
+	return len(pending) > 0
+}
+
+// updateTodoAgentSnapshots keeps the title and start error of the agents that work for todos as their sessions now
+// say (written in the background, once per agent at a time).
+func (s *Service) updateTodoAgentSnapshots(ctx context.Context, machine string, list []proto.Session) {
+	type update struct{ sessionID, title, startError string }
+	var needUpdate []update
+	s.todos.mu.Lock()
+	for _, c := range list {
+		key := [2]string{machine, c.SessionID}
+		if s.todos.snapshotSyncing[key] {
+			continue // deduplicate in-flight writes
+		}
+		t := s.todos.todos[s.todos.activeBySession[key]]
+		if t == nil {
+			continue
+		}
+		for _, a := range t.Agents {
+			if a.MachineID == machine && a.SessionID == c.SessionID && a.ReleasedAt == nil {
+				titleChanged := c.Title != "" && c.Title != a.Title
+				if titleChanged || c.StartError != a.StartError {
+					newTitle := a.Title
+					if titleChanged {
+						newTitle = c.Title
+					}
+					s.todos.snapshotSyncing[key] = true
+					needUpdate = append(needUpdate, update{c.SessionID, newTitle, c.StartError})
+				}
+				break
+			}
+		}
+	}
+	s.todos.mu.Unlock()
+	if len(needUpdate) == 0 {
+		return
+	}
+	st := s.todoDB()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		changed := false
+		for _, item := range needUpdate {
+			key := [2]string{machine, item.sessionID}
+			var err error
+			if st != nil {
+				err = st.UpdateTodoAgentSnapshot(ctx, machine, item.sessionID, item.title, item.startError)
+			}
+			s.todos.mu.Lock()
+			delete(s.todos.snapshotSyncing, key)
+			if err == nil {
+				changed = true
+				if t := s.todos.todos[s.todos.activeBySession[key]]; t != nil {
+					for i := range t.Agents {
+						if t.Agents[i].MachineID == machine && t.Agents[i].SessionID == item.sessionID && t.Agents[i].ReleasedAt == nil {
+							if item.title != "" {
+								t.Agents[i].Title = item.title
+							}
+							t.Agents[i].StartError = item.startError
+							break
+						}
+					}
+					t.UpdatedAt = time.Now().UTC()
+				}
+			} else {
+				s.logf("todos: snapshot update %s/%s failed: %v", machine, item.sessionID, err)
+			}
+			s.todos.mu.Unlock()
+		}
+		if changed {
+			s.todosChanged(ctx)
+		}
+	}()
+}
+
+// ---- the herdr marks ----
+
+// nodeConnected forgets what machine's node was told when its connection to the hub is a new one: a node that
+// restarted has no marks (it only reconciles once told), so the next list sends them all again.
+func (s *Service) nodeConnected(machine string, at time.Time) {
+	ts := s.tokenSyncOf(machine)
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if !at.Equal(ts.connected) {
+		ts.connected, ts.told = at, false
+	}
+}
+
+// tokenSync is one machine's marks: its latest session list, what its node was last told, one send at a time.
+type tokenSync struct {
+	mu       sync.Mutex
+	sessions []proto.Session
+	dirty    bool
+	sending  bool
+	last     map[string]map[string]string
+	told     bool // the node has last (it was sent since its connection began)
+	// connected: when the node's connection began, as its last list said (nodeConnected).
+	connected time.Time
+}
+
+func (s *Service) tokenSyncOf(machine string) *tokenSync {
+	b := &s.todos
+	b.tokensMu.Lock()
+	defer b.tokensMu.Unlock()
+	if b.tokens == nil {
+		b.tokens = map[string]*tokenSync{}
+	}
+	ts := b.tokens[machine]
+	if ts == nil {
+		ts = &tokenSync{}
+		b.tokens[machine] = ts
+	}
+	return ts
+}
+
+// syncTodoTokens tells machine's node the marks its panes should carry, from its session list (nil: the last one its
+// node sent, or the hub's), when they changed; one send at a time per machine.
+func (s *Service) syncTodoTokens(machine string, sessions []proto.Session) {
+	ts := s.tokenSyncOf(machine)
+	ts.mu.Lock()
+	if sessions != nil {
+		ts.sessions = sessions
+	}
+	ts.dirty = true
+	if ts.sending {
+		ts.mu.Unlock()
+		return
+	}
+	ts.sending = true
+	ts.mu.Unlock()
+
+	go func() {
+		for {
+			ts.mu.Lock()
+			if !ts.dirty {
+				ts.sending = false
+				ts.mu.Unlock()
+				return
+			}
+			ts.dirty = false
+			list := ts.sessions
+			ts.mu.Unlock()
+			if list == nil { // no list from its node since the assistant started: the hub's
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				got, err := s.sessions(ctx, machine)
+				cancel()
+				if err != nil {
+					continue
+				}
+				list = got
+			}
+
+			expected := s.expectedTodoTokens(machine, list)
+
+			ts.mu.Lock()
+			// Nothing to mark and nothing told yet: nothing to say (a machine without herdr would refuse every list).
+			same := sameTokens(ts.last, expected) && (ts.told || len(expected) == 0)
+			ts.mu.Unlock()
+			if same {
+				continue
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err := s.call(ctx, machine, deviceTodoTokens, map[string]any{"tokens": expected}, nil)
+			cancel()
+
+			ts.mu.Lock()
+			if err != nil {
+				s.logf("todos: sync tokens to %s failed: %v", machine, err)
+				ts.told = false
+			} else {
+				ts.last, ts.told = cloneTokens(expected), true
+			}
+			ts.mu.Unlock()
+		}
+	}()
+}
+
+// syncLinkedTodoTokens: the links changed: the machines whose agents' links look different from the last time get
+// their marks again.
+func (s *Service) syncLinkedTodoTokens() {
+	now := map[[2]string]string{}
+	s.todos.mu.RLock()
+	for key, id := range s.todos.activeBySession {
+		if t := s.todos.todos[id]; t != nil && t.DoneAt == nil {
+			now[key] = t.ID + "\x00" + t.Title
+		}
+	}
+	s.todos.mu.RUnlock()
+	b := &s.todos
+	b.tokensMu.Lock()
+	machines := map[string]bool{}
+	for key, v := range now {
+		if b.linked[key] != v {
+			machines[key[0]] = true
+		}
+	}
+	for key := range b.linked {
+		if _, ok := now[key]; !ok {
+			machines[key[0]] = true
+		}
+	}
+	b.linked = now
+	b.tokensMu.Unlock()
+	for id := range machines {
+		s.syncTodoTokens(id, nil)
+	}
+}
+
+// expectedTodoTokens are the marks of machine's online herdr panes whose agents work for open todos, by session id
+// (#873).
+func (s *Service) expectedTodoTokens(machine string, list []proto.Session) map[string]map[string]string {
+	byID := make(map[string]proto.Session, len(list))
+	for _, c := range list {
+		byID[c.SessionID] = c
+	}
+	s.todos.mu.RLock()
+	defer s.todos.mu.RUnlock()
+	expected := make(map[string]map[string]string)
+	for key, todoID := range s.todos.activeBySession {
+		if key[0] != machine {
+			continue
+		}
+		t, ok := s.todos.todos[todoID]
+		if !ok || t.DoneAt != nil {
+			continue
+		}
+		c, ok := byID[key[1]]
+		if !ok || c.Status == proto.StatusOffline || c.PaneID == "" {
+			continue
+		}
+		// only herdr host panes receive metadata tokens
+		if c.SpaceKind != "" && c.SpaceKind != host.Herdr || host.ParsePane(c.PaneID).Kind != host.Herdr {
+			continue
+		}
+		expected[key[1]] = map[string]string{
+			"persona_todo":     t.Title,
+			"persona_todo_ref": fmt.Sprintf("%s@%s/%s", t.ID, machine, key[1]),
+		}
+	}
+	return expected
+}
+
+func sameTokens(a, b map[string]map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for id, m1 := range a {
+		m2, ok := b[id]
+		if !ok || len(m1) != len(m2) {
+			return false
+		}
+		for k, v1 := range m1 {
+			if v2, ok := m2[k]; !ok || v1 != v2 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func cloneTokens(m map[string]map[string]string) map[string]map[string]string {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]map[string]string, len(m))
+	for id, tokens := range m {
+		inner := make(map[string]string, len(tokens))
+		for k, v := range tokens {
+			inner[k] = v
+		}
+		out[id] = inner
+	}
+	return out
+}
+
+// ---- what the hub shows ----
+
+// quietKeep is how long after its task was done an agent of a quiet task stays quiet in the report (the hub's pushes
+// leave it out); older ones are dropped to keep the report small.
+const quietKeep = 7 * 24 * time.Hour
+
+// todoReport is the report for the snapshot; nil when the todos can't be read.
+func (s *Service) todoReport(ctx context.Context) *TodoReport {
+	if s.ensureTodosLoaded(ctx) != nil {
+		return nil
+	}
+	now := time.Now()
+	s.todos.mu.RLock()
+	defer s.todos.mu.RUnlock()
+	r := &TodoReport{Links: []TodoLink{}}
+	for key, id := range s.todos.activeBySession {
+		if t := s.todos.todos[id]; t != nil && t.DoneAt == nil {
+			r.Links = append(r.Links, TodoLink{MachineID: key[0], SessionID: key[1], TodoID: t.ID, Title: t.Title, Task: t.Origin != ""})
+		}
+	}
+	for key := range s.quietSessionsLocked(now) {
+		r.Quiet = append(r.Quiet, SessionRef{MachineID: key[0], SessionID: key[1]})
+	}
+	sort.Slice(r.Links, func(i, j int) bool {
+		return r.Links[i].MachineID+"/"+r.Links[i].SessionID < r.Links[j].MachineID+"/"+r.Links[j].SessionID
+	})
+	sort.Slice(r.Quiet, func(i, j int) bool {
+		return r.Quiet[i].MachineID+"/"+r.Quiet[i].SessionID < r.Quiet[j].MachineID+"/"+r.Quiet[j].SessionID
+	})
+	return r
+}
+
+// quietSessionsLocked are the agents (machine, session) of quiet tasks (#1731), done ones too (for quietKeep): a quiet
+// task's agent stays out of pushes and badges after the task is closed, unless it now works for another todo that is
+// not quiet. s.todos.mu is held (read).
+func (s *Service) quietSessionsLocked(now time.Time) map[[2]string]bool {
+	out := map[[2]string]bool{}
+	for _, t := range s.todos.todos {
+		if !t.Quiet || t.DoneAt != nil && now.Sub(*t.DoneAt) > quietKeep {
+			continue
+		}
+		for _, a := range t.Agents {
+			if a.DismissedAt == nil {
+				out[[2]string{a.MachineID, a.SessionID}] = true
+			}
+		}
+	}
+	for key, id := range s.todos.activeBySession {
+		if t := s.todos.todos[id]; out[key] && t != nil && !t.Quiet {
+			delete(out, key)
+		}
+	}
+	return out
+}

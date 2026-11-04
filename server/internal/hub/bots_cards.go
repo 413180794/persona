@@ -66,8 +66,6 @@ func (h *Hub) botInteraction(ix proto.Interaction) {
 
 // botDrives: the chat drives this conversation (its target now, a run on it, or a thread bound to it).
 func (h *Hub) botDrives(machine, session string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	for _, r := range h.channelRuns(feishuChannelID) {
 		if r.MachineID == machine && r.SessionID == session {
 			return true
@@ -92,8 +90,7 @@ func (h *Hub) botDrives(machine, session string) bool {
 		return false
 	}
 	if cur.Kind == targetMain {
-		cfg := h.assistantConfig(ctx)
-		return cfg.MachineID == machine && cfg.Main == session
+		return h.isMainOn(machine, session)
 	}
 	return cur.MachineID == machine && cur.SessionID == session
 }
@@ -615,8 +612,7 @@ func (h *Hub) botMirror(machine, session string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cfg := h.assistantConfig(ctx)
-	main := cfg.Main != "" && cfg.Main == session && cfg.MachineID == machine
+	main := h.isMainOn(machine, session)
 	task := h.taskOfConversation(ctx, machine, session)
 	switch {
 	case main && set.Features.Sync:

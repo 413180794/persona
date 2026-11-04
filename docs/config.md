@@ -299,6 +299,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   Markdown，写只有你这套环境才有的东西：代码在哪、用哪些 skills / CLI 访问工作数据、哪些目录不能碰。
 - 模型设置的日常入口是 **设置 › 模型供应商 / 模型配置**（`docs/model-config.md`）：前者管理连接和凭据，后者管理对话、分类、翻译、知识处理、`/agent`、定时任务等用途。旧 `ai`、`inbox.*_ai`、`kb.ai`、各启动器默认作为兼容基线保留；统一用途覆盖存 Postgres，不写回 `hub.json`。没有覆盖时保持原模型，不会因为打开设置而迁移成其他供应商。
 - `assistant.machine` / `assistant.launcher`：助手默认跑在哪台机器、用哪个启动器（默认 hub 自己那台、`claude`）；App 设置里改过以后以 App 为准。
+  `owner`、`notes`、`machine`、`launcher` 都是 hub 在握手时交给助手的默认值：改过的设置是助手自己的（settings `assistant`，只有它读写，`docs/assistant.md`「和 hub 的边界」）。
 - `assistant.external`（默认 `false`）：助手的进程（`personad assistant`，`docs/assistant.md`「进程」）由别人起。默认 hub 自己把它当子进程起起来、退出了再起，
   每次启动给它一个新的总线 token（经 stdin）；设成 `true` 后 hub 不起它，在要跑它的机器上先用 `personad hub assistant-token` 生成一个 token（打印一次；再生成一次就换掉旧的），再
   `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub 地址> personad assistant`。它读的 hub.json 和环境变量同 hub：数据库是 `database_url`（`PERSONA_DATABASE_URL` 优先），

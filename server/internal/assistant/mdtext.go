@@ -5,8 +5,7 @@ import (
 	"unicode/utf8"
 )
 
-// A copy of the hub's clipMarkdown (hub/mdtext.go): a receipt's summary is the agent's last reply cut for a client to
-// render.
+// A receipt's summary is the agent's last reply cut for a client to render.
 
 // clipMarkdown is md cut to at most about n characters for a client to render: on a line break when one falls in the
 // second half, and never inside a code span, emphasis, link or code block (an unpaired ** or ` would show as it is).

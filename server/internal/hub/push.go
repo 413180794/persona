@@ -631,13 +631,3 @@ func donePayload(machineID, machine, sessionID, title, text string) map[string]a
 }
 
 func (p *Pusher) clear(string) {}
-
-func firstLine(s string) string {
-	for _, l := range strings.Split(s, "\n") {
-		l = strings.TrimSpace(strings.TrimLeft(l, "# "))
-		if l != "" {
-			return l
-		}
-	}
-	return ""
-}

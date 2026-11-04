@@ -11,25 +11,35 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// fakeHub is the hub as the assistant sees it in unit tests: a profile, the machines with their sessions, a node on
+// fakeHub is the hub as the assistant sees it in unit tests: its hello, the machines with their sessions, a node on
 // each that starts and continues conversations (s1, s2…; resume_only refuses one it doesn't know, like a transcript
-// that was cleaned up), a model, and what the assistant pushed and reported.
+// that was cleaned up), a model, and what the assistant pushed and reported. settings are the assistant's own a test
+// service starts with (newTestService…).
 type fakeHub struct {
 	mu            sync.Mutex
 	hello         Hello
+	settings      *Settings
+	record        modelRecord                // 模型配置 › 主对话 (models.record / models.save)
+	launcherList  []proto.Launcher           // models.launchers
+	devices       []Device                   // devices.list answers these when set (else one per machine with sessions)
+	gone          map[string]bool            // launchers models.launcher_check says are gone
 	sessions      map[string][]proto.Session // by machine: the machines there are
 	items         []proto.Item               // session.items answers this
 	calls         []DeviceCall
 	known         map[string]bool  // conversations the nodes have
 	made          int              // conversations started, for the next id
-	sends         []map[string]any // assistant.send / assistant.start params, and {"rename": params}
-	kept          []string         // the last node.configure keep_sessions
+	sends         []map[string]any // assistant.send params, and {"rename": params}
+	prepared      []map[string]any // assistant.prepare params
 	launcher      string           // what the model configuration runs a purpose on ("" = claude)
 	kbReady       bool
+	kbDir         string
+	kbExtra       []string
+	larkCLI       bool
 	slowSnapshots time.Duration // the connectors' live states come this late (nothing: there are none)
 	replies       []string      // the model's answers, in turn (the last one again when they run out)
 	noModel       bool
@@ -46,20 +56,21 @@ type fakeHub struct {
 	failStart error
 	judged    int // models.json calls (the done judge)
 	judge     string
+	retired   []string // session.retire's session ids
+	retireErr error
+	tokens    map[string][]map[string]map[string]string // todo.sync_session_tokens, by machine, in order
 
-	// The hub's todos app. quietOff: 主对话派的任务只在主对话里通知 is off (tasks from the main conversation are quiet
-	// otherwise, #1731).
-	quietOff  bool
-	todos     map[string]*Todo
-	active    map[[2]string]string // (machine, session) → the open todo it works for
-	todosMade int
+	// The hub's other apps as a test answers them (answerApp), and the calls they got.
+	apps     map[string]appAnswer
+	appCalls []AppCall
 }
 
 type modelCall struct{ System, User string }
 
 func newFakeHub() *fakeHub {
+	// 主对话派的任务只在主对话里通知 is on by default (tasks from the main conversation are quiet, #1731).
 	return &fakeHub{sessions: map[string][]proto.Session{}, known: map[string]bool{}, offline: map[string]bool{},
-		todos: map[string]*Todo{}, active: map[[2]string]string{}}
+		tokens: map[string][]map[string]map[string]string{}, gone: map[string]bool{}}
 }
 
 // withMachine adds the assistant's machine "server" (no sessions yet).
@@ -87,9 +98,12 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, p)
 	if p.Device == DeviceAll && p.Method == DeviceDevicesList {
-		devices := []Device{}
-		for id := range f.sessions {
-			devices = append(devices, Device{ID: id, Name: id, Online: true, Reachable: true})
+		devices := f.devices
+		if devices == nil {
+			devices = []Device{}
+			for id := range f.sessions {
+				devices = append(devices, Device{ID: id, Name: id, Online: true, Reachable: true})
+			}
 		}
 		return json.Marshal(map[string]any{"devices": devices})
 	}
@@ -114,20 +128,18 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 	case DeviceSessionRename:
 		f.sends = append(f.sends, map[string]any{"rename": a})
 		return json.RawMessage(`{"ok":true}`), nil
-	case DeviceNodeConfigure:
-		f.kept = nil
-		for _, k := range a["keep_sessions"].([]any) {
-			f.kept = append(f.kept, k.(string))
+	case DeviceLaunchersProbe: // a launcher named after the agent it starts
+		name, _ := a["name"].(string)
+		agent := "claude"
+		for _, other := range []string{"codex", "gemini"} {
+			if strings.HasPrefix(name, other) {
+				agent = other
+			}
 		}
-		return json.RawMessage(`{}`), nil
-	case DeviceAssistantStart: // the hub applies the model configuration: the launcher it runs on
-		a["launcher"] = f.launcherLocked()
-		f.sends = append(f.sends, a)
-		f.made++
-		id := fmt.Sprintf("s%d", f.made)
-		f.known[id] = true
-		return json.Marshal(map[string]any{"session": proto.Session{SessionID: id, MachineID: p.Device, Launcher: f.launcherLocked(),
-			Assistant: true, Status: proto.StatusWorking}})
+		return json.Marshal(map[string]any{"detail": proto.LauncherDetail{Agent: agent}})
+	case DeviceAssistantPrepare:
+		f.prepared = append(f.prepared, a)
+		return json.Marshal(map[string]any{"cwd": "/home/me/.jarvis/assistant"})
 	case DeviceSessionStart:
 		if f.offline[p.Device] {
 			return nil, fmt.Errorf("%s: %w", p.Device, apierr.ErrOffline)
@@ -141,9 +153,27 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 	case DeviceSessionSend:
 		f.agentSent = append(f.agentSent, a)
 		return json.RawMessage(`{}`), nil
+	case deviceSessionRetire:
+		if f.retireErr != nil {
+			return nil, f.retireErr
+		}
+		f.retired = append(f.retired, a["session_id"].(string))
+		return json.RawMessage(`{"closed":true}`), nil
+	case deviceTodoTokens:
+		var t struct {
+			Tokens map[string]map[string]string `json:"tokens"`
+		}
+		_ = json.Unmarshal(p.Params, &t)
+		f.tokens[p.Device] = append(f.tokens[p.Device], t.Tokens)
+		return json.RawMessage(`{}`), nil
 	case DeviceAssistantSend:
 		f.sends = append(f.sends, a)
 		id, _ := a["session_id"].(string)
+		if id == "" { // a new conversation
+			f.made++
+			id = fmt.Sprintf("s%d", f.made)
+			f.known[id] = true
+		}
 		if a["resume_only"] == true && !f.known[id] {
 			return nil, fmt.Errorf("conversation %s is gone", id)
 		}
@@ -184,13 +214,55 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 		return json.Marshal(map[string]any{"text": reply})
 	case AppModels + " " + ModelsResolve:
 		return json.Marshal(ModelBinding{Provider: "launcher." + f.launcherLocked()})
-	case AppModels + " " + ModelsApply, AppModels + " " + ModelsAssistantSend:
+	case AppModels + " " + ModelsApply:
 		var a struct {
 			Params map[string]any `json:"params"`
 		}
 		_ = json.Unmarshal(p.Params, &a)
-		a.Params["launcher"] = f.launcherLocked()
+		if l, _ := a.Params["launcher"].(string); l == "" {
+			a.Params["launcher"] = f.launcherLocked()
+		}
 		return json.Marshal(map[string]any{"params": a.Params})
+	case AppModels + " " + ModelsApplyPicked: // checked and fingerprinted
+		var a struct {
+			Params map[string]any `json:"params"`
+		}
+		_ = json.Unmarshal(p.Params, &a)
+		a.Params["model_fingerprint"] = "picked"
+		return json.Marshal(map[string]any{"params": a.Params})
+	case AppModels + " " + ModelsRecord:
+		return json.Marshal(f.record)
+	case AppModels + " " + ModelsSave:
+		var a struct {
+			Revision int64        `json:"revision"`
+			Binding  ModelBinding `json:"binding"`
+		}
+		_ = json.Unmarshal(p.Params, &a)
+		if a.Revision != f.record.Revision {
+			return nil, errors.New("配置已被修改，请重新加载后保存")
+		}
+		f.record = modelRecord{Revision: a.Revision + 1, Binding: a.Binding}
+		return json.RawMessage(`{}`), nil
+	case AppModels + " " + ModelsLaunchers:
+		return json.Marshal(map[string]any{"launchers": f.launcherList})
+	case AppModels + " " + ModelsLauncherCheck:
+		var a struct {
+			Launcher string `json:"launcher"`
+			Model    string `json:"model"`
+		}
+		_ = json.Unmarshal(p.Params, &a)
+		return json.Marshal(map[string]any{"available": !f.gone[a.Launcher], "model_ok": !f.gone[a.Launcher+"/"+a.Model]})
+	case AppKB + " " + KBDirs:
+		return json.Marshal(map[string]any{"knowledge_dir": f.kbDir, "extra_dirs": f.kbExtra})
+	case AppConnectors + " " + ConnectorsSignedIn:
+		return json.Marshal(map[string]any{"connectors": []string{}, "clis": map[string]string{}, "lark_cli": f.larkCLI})
+	case AppPlugins + " " + PluginsAssistant:
+		return json.Marshal(map[string]any{"instructions": "", "skills": nil})
+	case AppSettings + " " + SettingsList:
+		return json.Marshal(map[string]any{"settings": []Setting{{Key: "inbox.rules", Title: "收件箱分拣规则", About: "the rules",
+			Value: "a string", Actions: []string{"get", "set"}}}})
+	case AppSettings + " " + AppTool:
+		return json.Marshal(proto.TextResult("the hub's: "+string(p.Params), false))
 	case AppKB + " " + KBStatus:
 		return json.Marshal(map[string]any{"ready": f.kbReady})
 	case AppInbox + " " + InboxReplied:
@@ -203,8 +275,14 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 			return nil, errors.New("no model")
 		}
 		return json.RawMessage(f.judge), nil
-	case AppTodos + " " + p.Method:
-		return f.todosCall(p.Method, p.Params)
+	}
+	if answer := f.apps[p.AppID+" "+p.Method]; answer != nil {
+		f.appCalls = append(f.appCalls, p)
+		out, err := answer(p.Params)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(out)
 	}
 	return nil, fmt.Errorf("unexpected %s %s", p.AppID, p.Method)
 }
@@ -361,138 +439,158 @@ func (m *memStore) PutSetting(_ context.Context, key string, v any) error {
 func newTestService(t *testing.T, f *fakeHub) *Service {
 	t.Helper()
 	st := &memStore{}
-	return New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf})
+	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf}))
 }
 
 // newStorelessService is an assistant on f with no database: its state lives in memory only.
 func newStorelessService(t *testing.T, f *fakeHub) *Service {
 	t.Helper()
-	return New(Options{Hub: f, Logf: t.Logf})
+	return withSettings(t, f, New(Options{Hub: f, Logf: t.Logf}))
 }
 
 // newServiceOn is an assistant on f with st as its database.
 func newServiceOn(t *testing.T, f *fakeHub, st Store) *Service {
 	t.Helper()
-	return New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf})
+	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf}))
 }
 
-func (f *fakeHub) keptNow() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]string(nil), f.kept...)
+// withSettings saves f.settings as s's own (none: s keeps what it has).
+func withSettings(t *testing.T, f *fakeHub, s *Service) *Service {
+	t.Helper()
+	if f.settings != nil {
+		setSettings(t, s, func(v *Settings) { *v = *f.settings })
+	}
+	return s
 }
 
-// todosCall is the hub's todos app, kept in memory: a todo, the agents linked to it, done (by the judge, or as a
-// task that did not start).
-func (f *fakeHub) todosCall(method string, params json.RawMessage) (json.RawMessage, error) {
-	var a struct {
-		TodoID    string    `json:"todo_id"`
-		Title     string    `json:"title"`
-		Notes     string    `json:"notes"`
-		Origin    string    `json:"origin"`
-		PlanID    string    `json:"plan_id"`
-		MachineID string    `json:"machine_id"`
-		SessionID string    `json:"session_id"`
-		Reason    string    `json:"reason"`
-		Work      time.Time `json:"work"`
-		IfQuiet   bool      `json:"if_quiet"`
+// setSettings changes s's own settings, and the hub is told (the snapshot's profile).
+func setSettings(t *testing.T, s *Service, fn func(*Settings)) {
+	t.Helper()
+	if _, err := s.updateSettings(context.Background(), func(v *Settings) error { fn(v); return nil }); err != nil {
+		t.Fatal(err)
 	}
-	_ = json.Unmarshal(params, &a)
-	now := time.Now().UTC()
-	quiet := a.Origin != "" && a.Origin == f.hello.Assistant.Main && !f.quietOff
-	switch method {
-	case TodosLoad:
-		return json.RawMessage(`{}`), nil
-	case TodosCreate:
-		if a.IfQuiet && !quiet {
-			return json.RawMessage(`{"todo":null}`), nil
-		}
-		f.todosMade++
-		t := &Todo{ID: fmt.Sprintf("todo_%d", f.todosMade), Title: a.Title, Notes: a.Notes, Origin: a.Origin, PlanID: a.PlanID,
-			Quiet: quiet, CreatedAt: now, UpdatedAt: now, Agents: []TodoAgent{}}
-		f.todos[t.ID] = t
-		return json.Marshal(map[string]any{"todo": t})
-	case TodosLinkAgent:
-		t := f.todos[a.TodoID]
-		if t == nil {
-			return nil, errors.New("todo not found")
-		}
-		t.Agents = append(t.Agents, TodoAgent{MachineID: a.MachineID, SessionID: a.SessionID})
-		f.active[[2]string{a.MachineID, a.SessionID}] = t.ID
-		return json.RawMessage(`{}`), nil
-	case TodosFail, TodosAutoDone:
-		t := f.todos[a.TodoID]
-		if t == nil {
-			return json.Marshal(map[string]any{"ok": false})
-		}
-		if method == TodosAutoDone && (t.DoneAt != nil || t.ReopenedAt != nil && !t.ReopenedAt.Before(a.Work)) {
-			return json.Marshal(map[string]any{"ok": false})
-		}
-		t.DoneAt, t.UpdatedAt = &now, now
-		if method == TodosFail {
-			t.StartError = a.Reason
-		} else {
-			t.DoneBy, t.DoneReason = "auto", a.Reason
-		}
-		for k, id := range f.active {
-			if id == t.ID {
-				delete(f.active, k)
-			}
-		}
-		return json.Marshal(map[string]any{"ok": true})
-	case TodosGet:
-		t := f.todos[a.TodoID]
-		if t == nil {
-			return json.Marshal(map[string]any{"ok": false})
-		}
-		return json.Marshal(map[string]any{"todo": t, "ok": true})
-	case TodosList:
-		list := []*Todo{}
-		for _, t := range f.todos {
-			if a.Origin == "*" && t.Origin != "" || t.Origin == a.Origin {
-				list = append(list, t)
-			}
-		}
-		return json.Marshal(map[string]any{"todos": list})
-	case TodosRetry:
-		t := f.todos[a.TodoID]
-		if t == nil {
-			return json.Marshal(map[string]any{"ok": false})
-		}
-		t.DoneAt, t.StartError, t.ReopenedAt, t.UpdatedAt = nil, "", &now, now
-		return json.Marshal(map[string]any{"todo": t, "ok": true})
-	case TodosView:
-		t := f.todos[a.TodoID]
-		return json.Marshal(map[string]any{"todo": t, "ok": t != nil})
-	case TodosOfSession:
-		t := f.todos[f.active[[2]string{a.MachineID, a.SessionID}]]
-		if t == nil || t.Origin == "" || t.DoneAt != nil {
-			return json.Marshal(map[string]any{"ok": false})
-		}
-		return json.Marshal(map[string]any{"todo": t, "ok": true})
-	}
-	return nil, fmt.Errorf("todos has no method %s", method)
+	s.settingsChanged(context.Background())
 }
 
-// todoNow is todo id as the todos app has it now.
-func (f *fakeHub) todoNow(id string) Todo {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if t := f.todos[id]; t != nil {
-		return *t
-	}
-	return Todo{}
+// todoNow is todo id as the assistant has it now ({} when there is none).
+func todoNow(s *Service, id string) Todo {
+	t, _ := s.todoNow(id)
+	return t
 }
 
 // onlyTodo is the one todo there is ({} when there is none, or more).
-func (f *fakeHub) onlyTodo() Todo {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if len(f.todos) != 1 {
+func onlyTodo(s *Service) Todo {
+	s.todos.mu.RLock()
+	defer s.todos.mu.RUnlock()
+	if len(s.todos.todos) != 1 {
 		return Todo{}
 	}
-	for _, t := range f.todos {
-		return *t
+	for _, t := range s.todos.todos {
+		return copyTodoLocked(t)
 	}
 	return Todo{}
+}
+
+// ---- the hub's knowledge base, interaction queue and inbox, as the tools on them call them (tools_apps.go) ----
+
+// appAnswer is a test's answer to an app method's params. It runs under the fake's lock.
+type appAnswer func(params json.RawMessage) (any, error)
+
+// answerApp has the hub answer app's method with answer.
+func (f *fakeHub) answerApp(app, method string, answer appAnswer) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.apps == nil {
+		f.apps = map[string]appAnswer{}
+	}
+	f.apps[app+" "+method] = answer
+}
+
+// appParams are the params of each call to app's method, in order.
+func (f *fakeHub) appParams(app, method string) []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []map[string]any
+	for _, c := range f.appCalls {
+		if c.AppID == app && c.Method == method {
+			var m map[string]any
+			_ = json.Unmarshal(c.Params, &m)
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// fakeQueue is the hub's interaction queue (interactions.get / interactions.answer): the pending interactions, how
+// the others ended, and the answers taken. raced are pending when read but answered by someone else (with that
+// status) before the assistant's answer comes.
+type fakeQueue struct {
+	pending  map[string]proto.Interaction
+	ended    map[string]string
+	raced    map[string]string
+	answered map[string]map[string]string
+}
+
+// withQueue gives the hub an interaction queue with ixs pending.
+func (f *fakeHub) withQueue(ixs ...proto.Interaction) *fakeQueue {
+	q := &fakeQueue{pending: map[string]proto.Interaction{}, ended: map[string]string{}, raced: map[string]string{},
+		answered: map[string]map[string]string{}}
+	for _, ix := range ixs {
+		q.pending[ix.ID] = ix
+	}
+	type call struct {
+		InteractionID string            `json:"interaction_id"`
+		Answers       map[string]string `json:"answers"`
+	}
+	f.answerApp(AppInteractions, assistantwire.InteractionsGet, func(params json.RawMessage) (any, error) {
+		var a call
+		_ = json.Unmarshal(params, &a)
+		if ix, ok := q.pending[a.InteractionID]; ok {
+			return map[string]any{"interaction": ix, "ok": true}, nil
+		}
+		return map[string]any{"ok": false, "status": q.ended[a.InteractionID]}, nil
+	})
+	f.answerApp(AppInteractions, assistantwire.InteractionsAnswer, func(params json.RawMessage) (any, error) {
+		var a call
+		_ = json.Unmarshal(params, &a)
+		if status, ok := q.raced[a.InteractionID]; ok {
+			return map[string]any{"ok": false, "status": status}, nil
+		}
+		if _, ok := q.pending[a.InteractionID]; !ok {
+			return map[string]any{"ok": false, "status": q.ended[a.InteractionID]}, nil
+		}
+		delete(q.pending, a.InteractionID)
+		q.answered[a.InteractionID] = a.Answers
+		return map[string]any{"ok": true}, nil
+	})
+	return q
+}
+
+// putTodo puts t among the assistant's todos as if read from its store (its open agents count for it).
+func putTodo(s *Service, t Todo) {
+	_ = s.ensureTodosLoaded(context.Background())
+	s.todos.mu.Lock()
+	defer s.todos.mu.Unlock()
+	if t.Agents == nil {
+		t.Agents = []TodoAgent{}
+	}
+	if t.Spaces == nil {
+		t.Spaces = []TodoSpace{}
+	}
+	s.todos.todos[t.ID] = &t
+	for _, a := range t.Agents {
+		if a.ReleasedAt == nil && a.DismissedAt == nil && t.DoneAt == nil {
+			s.todos.activeBySession[[2]string{a.MachineID, a.SessionID}] = t.ID
+		}
+	}
+	for _, sp := range t.Spaces {
+		s.todos.spacesByKey[spaceKey(sp.MachineID, sp.Space)] = t.ID
+	}
+}
+
+// todoCount is how many todos there are.
+func todoCount(s *Service) int {
+	s.todos.mu.RLock()
+	defer s.todos.mu.RUnlock()
+	return len(s.todos.todos)
 }

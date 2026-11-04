@@ -4,52 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
-	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/textfmt"
 )
 
-// Formatting for tool results and the hub's logs. The hub has the same small helpers for its own callers.
-
-func clip(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:n]) + "…"
-}
-
-func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-func ago(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "刚刚"
-	case d < time.Hour:
-		return fmt.Sprintf("%d 分钟前", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%d 小时前", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%d 天前", int(d.Hours()/24))
-	}
-}
-
-func short(id string) string {
-	if len(id) > 8 {
-		return id[:8]
-	}
-	return id
-}
-
-var stateNames = map[string]string{
-	proto.StateNeedsYou: "需要你", proto.StateWorking: "工作中", proto.StateUnread: "完成未看", proto.StateIdle: "空闲",
-	proto.StateOffline: "离线", proto.StateUnknown: "未知",
-}
+// Formatting for tool results and the hub's logs, the same the hub writes with (one copy, internal/textfmt).
+var (
+	clip       = textfmt.Clip
+	oneLine    = textfmt.OneLine
+	firstLine  = textfmt.FirstLine
+	ago        = textfmt.Ago
+	short      = textfmt.Short
+	agentLabel = textfmt.AgentLabel
+	stateNames = textfmt.StateNames
+)
 
 // transcriptText is a conversation's recent items for a model to read (agent_read, conversation_read): the
 // messages, tool calls in one line each, failed results, cut to the last 40 000 bytes.

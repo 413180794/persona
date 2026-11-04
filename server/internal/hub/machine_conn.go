@@ -249,6 +249,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	m.hub.pathConnected(p)
 	m.mu.Lock()
 	m.peer, m.info, m.online, m.err, m.lastSeen = c.peer, c.info, true, "", time.Now().UTC()
+	m.connectedAt = m.lastSeen
 	m.endWarmLocked()
 	m.streams = c.mux
 	m.via, m.path = c.via, ""
@@ -423,9 +424,6 @@ func (m *Machine) detach(err error, planned bool) {
 	m.mu.Lock()
 	m.peer, m.streams = nil, nil
 	m.active, m.transport = nil, ""
-	m.todoTokensMu.Lock()
-	m.lastTodoTokens = nil
-	m.todoTokensMu.Unlock()
 	if !planned && m.online && reconnectGrace > 0 && m.cfg.Kind != kindLink {
 		// A node the hub reaches itself that comes straight back (a resident node exec'ing a new binary, a relay
 		// replaced) is not news: the machine shows as it was for reconnectGrace, then offline as below if it is still
@@ -475,9 +473,6 @@ func (m *Machine) markOffline(err error) {
 	m.mu.Lock()
 	was := m.online
 	m.online = false
-	m.todoTokensMu.Lock()
-	m.lastTodoTokens = nil
-	m.todoTokensMu.Unlock()
 	if err != nil {
 		m.err = err.Error()
 	}

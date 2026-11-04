@@ -9,8 +9,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Which launcher and model a message for one of the assistant's conversations runs on (assistantSendModel): the
-// phone's messages, and the follow-ups the assistant runs (models.assistant_send).
+// Which launcher and model a message for one of the assistant's conversations runs on (the assistant's sendModel,
+// assistant/start.go): the phone's messages (assistant.send_params), the node's own, and the follow-ups the assistant
+// runs.
 
 // A follow-up the assistant scheduled for itself goes into its conversation on that conversation's launcher (#1518): the main conversation on 模型配置 › 主对话 (even when it last ran on another launcher), another
 // of its conversations on what it runs. On the Agents launcher (plain claude by default) a follow-up moved the main
@@ -19,7 +20,7 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 	h, _ := modelTestHub(t)
 	n := newAssistantNode(t, h)
 	ctx := context.Background()
-	if err := h.store.PutSetting(ctx, "assistant", AssistantConfig{MachineID: "server", Main: "main"}); err != nil {
+	if err := h.store.PutSetting(ctx, "assistant", assistant.Settings{MachineID: "server", Main: "main"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.conv", Effort: "high"}); err != nil {
@@ -42,7 +43,7 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 		assistant.Task{ID: "own", Prompt: "早报", Repeat: "daily", Time: "09:00", Enabled: true},
 		assistant.Task{ID: "r", Prompt: "早报", Repeat: "daily", Time: "09:00", Enabled: true, RunMachineID: "server", RunSessionID: "daily", RunLauncher: "conv"},
 		assistant.Task{ID: "fu_daily", Prompt: "会前准备", Repeat: "once", Enabled: true, MachineID: "server", SessionID: "daily", CreatedBy: "assistant"})
-	connectAssistant(t, h) // the follow-ups are the assistant's; the launcher and model they run on, the hub's
+	connectAssistant(t, h) // the follow-ups are the assistant's, the launcher and model they run on its decision
 	for _, c := range []struct{ task, session, launcher, model, effort string }{
 		{"fu_main", "main", "conv", "", "high"},
 		{"fu_side", "side", "side-l", "side-m", ""},
@@ -79,7 +80,7 @@ func TestAssistantModelIsWhatThePhonesMessageRunsOn(t *testing.T) {
 	h, _ := modelTestHub(t)
 	n := newAssistantNode(t, h)
 	ctx := context.Background()
-	if err := h.store.PutSetting(ctx, "assistant", AssistantConfig{MachineID: "server", Main: "main"}); err != nil {
+	if err := h.store.PutSetting(ctx, "assistant", assistant.Settings{MachineID: "server", Main: "main"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.conv", Effort: "high"}); err != nil {
@@ -88,13 +89,14 @@ func TestAssistantModelIsWhatThePhonesMessageRunsOn(t *testing.T) {
 	n.m.mu.Lock()
 	n.m.sessions = []proto.Session{{SessionID: "main", Launcher: "conv", Model: "picked-once", Assistant: true, Status: proto.StatusIdle}}
 	n.m.mu.Unlock()
+	connectAssistant(t, h)
 	params, _ := json.Marshal(map[string]any{"session_id": "main"})
 	got, err := n.m.onRequest(ctx, "assistant.model", params)
 	if err != nil {
 		t.Fatal(err)
 	}
-	phone := map[string]any{}
-	if err := h.assistantSendModel(ctx, n.m, "main", phone); err != nil {
+	phone, err := h.asst().SendParams(ctx, "server", "main", map[string]any{}) // what sendMessage asks
+	if err != nil {
 		t.Fatal(err)
 	}
 	p := got.(map[string]any)

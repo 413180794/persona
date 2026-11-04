@@ -586,21 +586,19 @@ func wireFeed(t *testing.T, add func(file, name, description, decoder string, in
 	r := proto.Resolution{Answers: map[string]string{"第一步放在哪里？": "放到独立仓库（推荐）\n先只迁一个", "示例插件叫什么？": "example-plugin"}}
 	// The record as the assistant writes it when the user answers a card of a conversation's task's agent.
 	h := newTestHub(t)
-	ctx := context.Background()
-	h.initTodos(ctx)
-	todo, err := h.createTodo(ctx, "示例任务", "", "conv_example", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := h.linkTodoAgent(ctx, todo.ID, "m1", "s1", "", "/code/example", "", ""); err != nil {
-		t.Fatal(err)
-	}
 	connectAssistant(t, h)
-	ix.MachineID, ix.SessionID = "m1", "s1"
+	taskIn(t, h, "conv_example")
+	ix.MachineID, ix.SessionID = "box", "s1"
 	h.taskAnswered(ix, r, "resolved")
-	written, _ := feed(h, "conv_example")
+	var written []assistant.FeedItem
+	all, _ := feed(h, "conv_example")
+	for _, f := range all {
+		if f.Kind == "answered" {
+			written = append(written, f)
+		}
+	}
 	if len(written) != 1 {
-		t.Fatalf("feed = %+v", written)
+		t.Fatalf("feed = %+v", all)
 	}
 	full := written[0].Body
 	legacy, _ := json.Marshal(map[string]string{"question": "使用 Bash", "answer": "批准了"})

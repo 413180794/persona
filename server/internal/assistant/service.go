@@ -40,6 +40,8 @@ type Service struct {
 	seq   uint64
 
 	titles    titleBook    // titles.go
+	prefs     settingsBook // profile.go
+	main      mainBook     // start.go
 	archived  archiveBook  // conversations.go
 	relays    relayBook    // conversations.go
 	quiet     quietBook    // quiet.go
@@ -47,6 +49,7 @@ type Service struct {
 	tasks     tasksState   // tasks.go
 	questions questions    // tools.go (ask_user)
 	live      contextState // context.go
+	todos     todoBook     // todos.go
 }
 
 var _ Handler = (*Service)(nil)
@@ -61,9 +64,12 @@ func New(o Options) *Service {
 		s.logf = func(string, ...any) {}
 	}
 	s.archiveRoutes()
+	s.profileRoutes()
+	s.startRoutes()
 	s.scheduleRoutes()
 	s.taskRoutes()
 	s.todayRoutes()
+	s.todoRoutes()
 	return s
 }
 
@@ -182,39 +188,12 @@ type startParams struct {
 	Purpose        string `json:"purpose,omitempty"` // the model configuration's purpose; "" is the assistant's
 }
 
-// startConversation starts a new conversation on the assistant's machine (DeviceAssistantStart).
-func (s *Service) startConversation(ctx context.Context, p startParams) (proto.Session, error) {
-	machine := s.hello(ctx).Assistant.MachineID
-	var res struct {
-		Session proto.Session `json:"session"`
-	}
-	err := s.call(ctx, machine, DeviceAssistantStart, p, &res)
-	if errors.Is(err, ErrNoDevice) {
-		return proto.Session{}, errors.New("assistant machine is not configured")
-	}
-	return res.Session, err
-}
-
 // applyModel fills params (a node call's) with what purpose runs on (ModelsApply).
 func (s *Service) applyModel(ctx context.Context, purpose string, params map[string]any) error {
 	var res struct {
 		Params map[string]any `json:"params"`
 	}
 	if err := s.appCall(ctx, AppModels, ModelsApply, map[string]any{"purpose": purpose, "params": params}, &res); err != nil {
-		return err
-	}
-	clear(params)
-	maps.Copy(params, res.Params)
-	return nil
-}
-
-// assistantSendModel puts into params (a message for one of the assistant's conversations, sid on machine) which
-// launcher and model run it, as the phone's messages get them (ModelsAssistantSend, the hub's assistantSendModel).
-func (s *Service) assistantSendModel(ctx context.Context, machine, sid string, params map[string]any) error {
-	var res struct {
-		Params map[string]any `json:"params"`
-	}
-	if err := s.appCall(ctx, AppModels, ModelsAssistantSend, map[string]any{"machine_id": machine, "session_id": sid, "params": params}, &res); err != nil {
 		return err
 	}
 	clear(params)
@@ -292,17 +271,22 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	for id, machine := range archived {
 		view(id, machine).Archived = true
 	}
-	queued, ok := s.queuedRelays()
-	snap.Partial = snap.Partial || !ok
-	if len(queued) > 0 {
-		here := s.hello(ctx).Assistant.MachineID // a conversation sent to is on the assistant's machine
-		for id, q := range queued {
-			view(id, here).Queued = q
-		}
-	}
-	snap.Interactions = s.pendingQuestions()
 	snap.Tasks = s.taskViews(ctx)
 	snap.Partial = snap.Partial || snap.Tasks == nil
+	snap.Todos = s.todoReport(ctx)
+	snap.Partial = snap.Partial || snap.Todos == nil
+	snap.Profile = s.profile(ctx, snap.Tasks)
+	snap.Partial = snap.Partial || snap.Profile == nil
+	here := s.settings(ctx).MachineID
+	queued, ok := s.queuedRelays()
+	snap.Partial = snap.Partial || !ok
+	for id, q := range queued {
+		view(id, here).Queued = q // a conversation sent to is on the assistant's machine
+	}
+	if p := snap.Profile; p != nil && p.Main != "" {
+		view(p.Main, p.MachineID).Title = mainTitle // never its first message, a model's name or a rename (#1313)
+	}
+	snap.Interactions = s.pendingQuestions()
 	snap.Sessions = make([]SessionView, 0, len(views))
 	for _, v := range views {
 		snap.Sessions = append(snap.Sessions, *v)
@@ -312,14 +296,6 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 }
 
 // ---- what the hub saw ----
-
-func (s *Service) ConversationStarted(_ context.Context, c ConversationStarted) {
-	s.titleNew(c.MachineID, c.SessionID, c.Started, c.Task)
-}
-
-func (s *Service) ConversationRenamed(_ context.Context, c ConversationRenamed) {
-	s.titleSet(c.MachineID, c.SessionID, c.Title, titleByUser)
-}
 
 // UserSpoke: the user is talking in the conversation again: back in the list, and it works for them, not for a chain
 // of conversations.
@@ -340,9 +316,11 @@ func (s *Service) TurnEnded(ctx context.Context, r SessionRef) {
 	s.titleAfterTurn(ctx, r.MachineID, r.SessionID)
 }
 
-// InteractionResolved: the user dealt with a card of a task's agent: the conversation keeps a record of it.
+// InteractionResolved: the user dealt with a card of a task's agent: the conversation keeps a record of it, and the
+// todo of the agent the calls made in it (its decisions).
 func (s *Service) InteractionResolved(ctx context.Context, r InteractionResolved) {
 	s.taskAnswered(ctx, r.Interaction, r.Resolution, r.Status)
+	s.cardDecisions(ctx, r.Interaction, r.Resolution, r.Status)
 }
 
 // InboxMessage: a message about a task, with the reply the inbox drafted, goes into the task's conversation.
@@ -361,9 +339,11 @@ func (s *Service) CardsSent(ctx context.Context, p CardsSentParams) {
 	s.markCardsSent(ctx, p.ItemID, p.At, p.Text, true)
 }
 
-// SessionsChanged: messages from other conversations go to those no longer running.
-func (s *Service) SessionsChanged(_ context.Context, d DeviceSessions) {
+// SessionsChanged: messages from other conversations go to those no longer running; the todos follow the list
+// (todo_sessions.go).
+func (s *Service) SessionsChanged(ctx context.Context, d DeviceSessions) {
 	s.drainRelays(d.MachineID, d.Sessions)
+	s.todosSessionsChanged(ctx, d)
 }
 
 func randomHex(n int) string {

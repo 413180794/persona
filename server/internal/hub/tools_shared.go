@@ -3,18 +3,27 @@ package hub
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"strings"
-	"time"
-	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/textfmt"
 )
 
 // What the hub's own features use of what used to be the assistant's tools (the assistant's are internal/assistant,
 // tools.go): MCP tool definitions, finding an agent by name (the channels, computer use), and the formatting both
-// write with.
+// write with (one copy, internal/textfmt).
+
+// The formatting the assistant writes with too.
+var (
+	clip       = textfmt.Clip
+	oneLine    = textfmt.OneLine
+	firstLine  = textfmt.FirstLine
+	ago        = textfmt.Ago
+	short      = textfmt.Short
+	agentLabel = textfmt.AgentLabel
+	stateNames = textfmt.StateNames
+)
 
 // mcpTool is one tool's definition from prompts/mcp.
 func mcpTool(name string) proto.Tool {
@@ -61,26 +70,6 @@ func (h *Hub) findAgent(machine, id string) (*Machine, proto.Session, error) {
 	return nil, proto.Session{}, fmt.Errorf("no agent %s (use agents_list)", id)
 }
 
-func agentLabel(s proto.Session) string {
-	title := s.Title
-	if title == "" || title == "Claude Code" {
-		title = path.Base(s.Cwd)
-	}
-	if s.SpaceName != "" {
-		slot := s.SlotName
-		if slot == "" || slot == title {
-			return s.SpaceName + " › " + title
-		}
-		return s.SpaceName + " › " + slot + "「" + title + "」"
-	}
-	return title
-}
-
-var stateNames = map[string]string{
-	proto.StateNeedsYou: "需要你", proto.StateWorking: "工作中", proto.StateUnread: "完成未看", proto.StateIdle: "空闲",
-	proto.StateOffline: "离线", proto.StateUnknown: "未知",
-}
-
 // compactJSON drops media / avatar noise and cuts long answers so they fit in the model's context.
 func compactJSON(raw json.RawMessage, max int) string {
 	var v any
@@ -116,40 +105,4 @@ func prune(v any) any {
 		}
 	}
 	return v
-}
-
-// ---- formatting ----
-
-func clip(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:n]) + "…"
-}
-
-func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-func ago(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "刚刚"
-	case d < time.Hour:
-		return fmt.Sprintf("%d 分钟前", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%d 小时前", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%d 天前", int(d.Hours()/24))
-	}
-}
-
-func short(id string) string {
-	if len(id) > 8 {
-		return id[:8]
-	}
-	return id
 }

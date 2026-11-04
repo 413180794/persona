@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -257,115 +258,90 @@ func clipRunes(s string, n int) string {
 
 // --- mail ---
 
-// --- assistant tools (definitions in prompts/mcp/kb) ---
+// --- the knowledge base as the assistant's app (app.call kb; its kb_* tools are the assistant's) ---
 
-func (h *Hub) runKBTool(name string, args json.RawMessage) (string, error) {
+var errNoKB = errors.New("no knowledge base")
+
+// kbCall answers the knowledge base's data methods (assistantwire.KBSearch…): what the engine finds, lists, reads and
+// changes, as it has it.
+func (h *Hub) kbCall(method string, params json.RawMessage) (any, error) {
 	e := h.kb.eng
 	if e == nil {
-		return "", errors.New("the knowledge base is off (hub.json kb.enabled)")
+		return nil, errNoKB
 	}
-	switch name {
-	case "kb_search":
-		a := struct {
-			Query    string `json:"query"`
-			Messages *bool  `json:"messages"`
-			Limit    int    `json:"limit"`
-		}{}
-		_ = json.Unmarshal(args, &a)
-		if a.Limit <= 0 {
-			a.Limit = 40
-		}
-		hits := e.Search(a.Query, a.Messages == nil || *a.Messages, min(a.Limit, 200))
-		if len(hits) == 0 {
-			return "No match in " + e.Store.Dir + ".", nil
-		}
-		var b strings.Builder
-		for _, hit := range hits {
-			fmt.Fprintf(&b, "%s: %s\n", hit.Path, hit.Line)
-		}
-		return b.String(), nil
-	case "kb_list":
+	switch method {
+	case assistantwire.KBSearch:
 		var a struct {
-			Kind, Tag string
-			Limit     int
+			Query    string `json:"query"`
+			Messages bool   `json:"messages"`
+			Limit    int    `json:"limit"`
 		}
-		_ = json.Unmarshal(args, &a)
-		list := e.List(a.Kind, a.Tag)
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
 		if a.Limit <= 0 {
-			a.Limit = 30
+			a.Limit = 60
 		}
-		if len(list) > a.Limit {
+		hits := e.Search(a.Query, a.Messages, a.Limit)
+		if hits == nil {
+			hits = []kb.Hit{}
+		}
+		return map[string]any{"dir": e.Store.Dir, "hits": hits}, nil
+	case assistantwire.KBList:
+		var a struct {
+			Kind  string `json:"kind"`
+			Tag   string `json:"tag"`
+			Limit int    `json:"limit"`
+		}
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
+		list := e.List(a.Kind, a.Tag)
+		if a.Limit > 0 && len(list) > a.Limit {
 			list = list[:a.Limit]
 		}
-		if len(list) == 0 {
-			return "Nothing yet.", nil
+		if list == nil {
+			list = []kb.Entry{}
 		}
-		var b strings.Builder
-		for _, x := range list {
-			fmt.Fprintf(&b, "- %s · %s [%s 相关%d] %s %s%s\n", x.ID, x.Name, orDash(x.Importance), x.Relevance,
-				strings.Join(x.Tags, ","), x.Extra, prefix(" — ", x.OneLine))
+		return map[string]any{"items": list}, nil
+	case assistantwire.KBGet:
+		var a struct {
+			Kind   string `json:"kind"`
+			ID     string `json:"id"`
+			Recent int    `json:"recent"`
 		}
-		return b.String(), nil
-	case "kb_get":
-		var a struct{ Kind, ID string }
-		_ = json.Unmarshal(args, &a)
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
 		if a.Kind == kb.KindProject {
 			if p := e.FindProject(a.ID); p != nil {
 				a.ID = p.Slug
 			}
 		}
-		d, err := e.Get(a.Kind, a.ID, 12000)
+		d, err := e.Get(a.Kind, a.ID, a.Recent)
 		if err != nil {
-			return "", fmt.Errorf("%s/%s: %w", a.Kind, a.ID, err)
+			return nil, err
 		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "Path: %s\n\nmeta.json:\n%s\n", d.Path, d.Meta)
-		if d.Summary != "" {
-			fmt.Fprintf(&b, "\nsummary.md:\n%s\n", d.Summary)
+		if len(d.Meta) > 0 && !json.Valid(d.Meta) { // a meta.json edited by hand into something else: its text, as it is
+			d.Meta, _ = json.Marshal(string(d.Meta))
 		}
-		if len(d.Log) > 0 {
-			fmt.Fprintf(&b, "\nlog.md (latest):\n%s\n", strings.Join(d.Log, "\n"))
-		}
-		if len(d.Moments) > 0 {
-			b.WriteString("\n公司圈 posts about it (full text: moments/posts/<id>.md):\n")
-			for _, m := range d.Moments {
-				fmt.Fprintf(&b, "- %s %s · %d comments · %s — %s\n", m.ID, m.At.In(h.userLocation()).Format("2006-01-02"), m.Comments, m.Note, m.Text)
-			}
-		}
-		if d.Recent != "" {
-			fmt.Fprintf(&b, "\nMessages, last 7 days:\n%s\n", d.Recent)
-		}
-		return b.String(), nil
-	case "kb_update":
+		return map[string]any{"detail": d}, nil
+	case assistantwire.KBUpdate:
 		var a struct {
-			Kind string `json:"kind"`
-			ID   string `json:"id"`
-			kb.Update
+			Kind   string    `json:"kind"`
+			ID     string    `json:"id"`
+			Update kb.Update `json:"update"`
 		}
-		if err := json.Unmarshal(args, &a); err != nil {
-			return "", err
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
 		}
 		id, err := e.Apply(a.Kind, a.ID, a.Update)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return "Saved " + a.Kind + "/" + id + ".", nil
+		return map[string]any{"id": id}, nil
 	}
-	return "", fmt.Errorf("unknown tool %s", name)
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
-}
-
-func prefix(p, s string) string {
-	if s == "" {
-		return ""
-	}
-	return p + s
+	return nil, fmt.Errorf("app %s has no method %s", assistantwire.AppKB, method)
 }
 
 // kbContextFor is what the knowledge base knows about an inbox item's chat and its projects, for the inbox agent

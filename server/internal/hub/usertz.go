@@ -1,28 +1,13 @@
 package hub
 
-import (
-	"context"
-	"time"
-)
+import "time"
 
-// The user's time zone is part of their profile (settings assistant's timezone, set from the phone): the hub reads
-// times in it, and passes it to the assistant in its hello (assistant_link.go).
+// The user's time zone is part of the assistant's settings (the phone reports it to the assistant, which reports it
+// in its profile, assistant_profile.go): the hub reads times in it.
 
-// userLocation is the phone's time zone (the app reports it), else the hub's.
+// userLocation is the user's time zone (the phone reports it to the assistant, which keeps it), else the hub's.
 func (h *Hub) userLocation() *time.Location {
-	h.mu.Lock()
-	tz := h.userTZ
-	h.mu.Unlock()
-	if tz == "" && h.store != nil {
-		var cfg AssistantConfig
-		if ok, _ := h.store.Setting(context.Background(), "assistant", &cfg); ok && cfg.Timezone != "" {
-			tz = cfg.Timezone
-			h.mu.Lock()
-			h.userTZ = tz
-			h.mu.Unlock()
-		}
-	}
-	if tz != "" {
+	if tz := h.assistantProfile().Timezone; tz != "" {
 		if loc, err := time.LoadLocation(tz); err == nil {
 			return loc
 		}

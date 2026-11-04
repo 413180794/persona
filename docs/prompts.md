@@ -12,7 +12,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 
 | 文件 | 是什么 | 谁用 |
 | --- | --- | --- |
-| `assistant/claude_md.md` | 助手目录 `~/.persona/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `hub/assistant.go` `assistantClaudeMD` |
+| `assistant/claude_md.md` | 助手目录 `~/.persona/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `assistant/start.go` `claudeMD`（照 hub 给的事实写：`devices.list`、`kb.dirs`、`connectors.signed_in`） |
 | `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `assistant/context.go` |
 | `assistant/turn_context.md` | 消息开头的 `<jarvis-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
@@ -20,7 +20,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；用判断模型 `inbox.judge` | `assistant/done.go` |
 | `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
 | `assistant/lost_tasks.md` | personad 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
-| `assistant/main_handoff.md` | 新建主对话后第一条消息前面的 `<jarvis-context>`：旧主对话的 id、最近一次压缩的摘要、之后的几条消息（`docs/assistant.md`「新建主对话」） | `hub/assistant_main.go` `startMain` |
+| `assistant/main_handoff.md` | 新建主对话后第一条消息前面的 `<jarvis-context>`：旧主对话的 id、最近一次压缩的摘要、之后的几条消息（`docs/assistant.md`「新建主对话」） | `assistant/start.go` `renderHandoff` `startMain` |
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
 | `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<jarvis-context>`：共用的记忆（目录、格式、当前索引），有 lark-connector skill 时说明飞书走 `lark-connector` 工具 | `node/assistant_runtime.go` |
@@ -48,7 +48,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `hub/tabname.go` |
 | `tools/translate*.md` | 翻译短文本 / 一封邮件 | `hub/translate.go` |
 | `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
-| `todo/decisions.md` | 交给 Agent 时消息前面的 `<jarvis-context>`：这个待办上现在生效的决策（`docs/todos.md`「决策记录」） | `hub/todo_decisions.go` |
+| `todo/decisions.md` | 交给 Agent 时消息前面的 `<jarvis-context>`：这个待办上现在生效的决策（`docs/todos.md`「决策记录」） | `assistant/todo_decisions.go` |
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
 | `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、有没有函数工具、重连时断之前说过的话） | `voice/session.go` |
 | `voice/delegated.md`、`report.md`、`handoff.md` | 语音里交给主对话的消息、做完后告诉语音模型的话、交出去时先回的那句 | `voice/session.go`、`delegate.go` |
@@ -121,4 +121,4 @@ MCP 工具的 golden 是 `hub/mcp_tools_golden_test.go`（助手有 / 没有飞�
 `hub/prompts_golden_test.go`、`assistant/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的 lark-connector、假的模型记下收到的
 system / user、临时目录的知识库），所以数据转换也一起测到。快照里「现在」那行的时钟换成占位后再比。
 2026-11-01 搬家前先用原来的代码生成了这些 golden，搬完后同样的输入逐字节一致。
-2026-11-04 助手的业务逻辑搬进 `server/internal/assistant`（`docs/assistant.md`「和 hub 的边界」）时，它写的提示词的 golden 跟着搬到 `assistant/testdata/prompts/`，文件原样挪过去，没有重新生成。
+2026-11-04 助手的业务逻辑搬进 `server/internal/assistant`（`docs/assistant.md`「和 hub 的边界」）时，它写的提示词的 golden 跟着搬到 `assistant/testdata/prompts/`，文件原样挪过去，没有重新生成。同一天助手的设置、主对话和开对话也搬过去后，`assistant_claude_md.*`、`main_handoff*` 的 golden 也原样挪到 `assistant/testdata/prompts/`（`assistant/claude_md_test.go`），逐字节一致。

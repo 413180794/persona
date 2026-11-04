@@ -17,7 +17,8 @@ import (
 // Tools only the assistant (the 对话 tab's headless Claude) gets: asking on the phone (headless claude has no
 // AskUserQuestion), pushing, waking itself up later, its conversations, the tasks it hands out, the coding agents the
 // hub already tracks, the knowledge base, the inbox's drafts, Feishu's /agent replies and Persona's own settings.
-// The hub lists them with its own and sends their calls here (Handler.Tool); the ones that are an app's to run go to
+// The hub lists them with its own and sends their calls here (Handler.Tool). Those on the hub's knowledge base,
+// interaction queue and inbox call those apps' data methods (tools_apps.go); one that is still an app's to run goes to
 // that app (AppTool).
 
 // toolNames are the tools only assistant conversations get; their descriptions and schemas are in prompts/mcp
@@ -45,14 +46,8 @@ func (s *Service) Tool(ctx context.Context, call ToolCall) proto.ToolResult {
 		args = json.RawMessage(`{}`)
 	}
 	switch call.Name {
-	case "inbox_draft":
-		return s.appTool(ctx, AppInbox, call, args)
-	case "interaction_answer":
-		return s.appTool(ctx, AppInteractions, call, args)
-	case "kb_search", "kb_list", "kb_get", "kb_update":
-		return s.appTool(ctx, AppKB, call, args)
 	case "jarvis_settings":
-		return s.appTool(ctx, AppSettings, call, args)
+		return s.toolJarvisSettings(ctx, call, args) // settings_tool.go
 	}
 	res, err := s.runTool(ctx, call.MachineID, call.SessionID, call.Name, args)
 	if err != nil {
@@ -77,6 +72,12 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		return s.toolAskUser(ctx, machine, self, args)
 	case "task_plan":
 		return s.toolTaskPlan(ctx, self, args)
+	case "kb_search", "kb_list", "kb_get", "kb_update":
+		return s.toolKB(ctx, name, args)
+	case "interaction_answer":
+		return s.toolInteractionAnswer(ctx, self, args)
+	case "inbox_draft":
+		return s.toolInboxDraft(ctx, self, args)
 	case "notify_user":
 		var a struct{ Title, Body string }
 		if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Title+a.Body) == "" {
@@ -384,21 +385,6 @@ func (s *Service) findAgent(ctx context.Context, machine, id string) (Device, pr
 	return Device{}, proto.Session{}, fmt.Errorf("no agent %s (use agents_list)", id)
 }
 
-func agentLabel(c proto.Session) string {
-	title := c.Title
-	if title == "" || title == "Claude Code" {
-		title = path.Base(c.Cwd)
-	}
-	if c.SpaceName != "" {
-		slot := c.SlotName
-		if slot == "" || slot == title {
-			return c.SpaceName + " › " + title
-		}
-		return c.SpaceName + " › " + slot + "「" + title + "」"
-	}
-	return title
-}
-
 func (s *Service) describeAgents(ctx context.Context, state, machine, query string) string {
 	if state == "" {
 		state = "active"
@@ -529,17 +515,6 @@ func (s *Service) toolAgentRead(ctx context.Context, machine, id string, turns i
 	return transcriptText(fmt.Sprintf("%s on %s (%s, %s)", agentLabel(c), m.Name, stateNames[c.State], c.Cwd), res.Items), nil
 }
 
-// firstLine is the first line of s with text, without a Markdown heading's #s.
-func firstLine(s string) string {
-	for _, l := range strings.Split(s, "\n") {
-		l = strings.TrimSpace(strings.TrimLeft(l, "# "))
-		if l != "" {
-			return l
-		}
-	}
-	return ""
-}
-
 // questionSummary is every question of an interaction with its options, so agents_list carries what answering one
 // (interaction_answer) needs without a second call: 发吗？（发 / 不发）.
 func questionSummary(ix proto.Interaction) string {
@@ -547,11 +522,7 @@ func questionSummary(ix proto.Interaction) string {
 	for _, q := range ix.Questions {
 		part := q.Question
 		if len(q.Options) > 0 {
-			labels := make([]string, len(q.Options))
-			for i, o := range q.Options {
-				labels[i] = o.Label
-			}
-			part += "（" + strings.Join(labels, ", ") + "）"
+			part += "（" + optionLabels(q) + "）"
 		}
 		parts = append(parts, part)
 	}

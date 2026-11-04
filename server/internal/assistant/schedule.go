@@ -757,7 +757,10 @@ func weekdayText(ds []int) string {
 }
 
 // Run runs what the assistant does on its own until ctx ends: the scheduled tasks.
-func (s *Service) Run(ctx context.Context) { s.scheduleLoop(ctx) }
+func (s *Service) Run(ctx context.Context) {
+	go s.taskCloseLoop(ctx) // the agents of finished tasks (tasks_close.go)
+	s.scheduleLoop(ctx)
+}
 
 // scheduleLoop starts due tasks. It sleeps until the next one is due (at most scheduleIdle, so a time zone change is
 // picked up) and wakes early when the list changes; the old 20-second poll ran follow-ups up to 20 seconds late
@@ -983,7 +986,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 			// conversation's launcher like a message from the phone does. On the task's category launcher (Agents
 			// then) it moved the main conversation onto another one (plain claude, not logged in there) for good (#1518).
 			params := map[string]any{"session_id": t.SessionID, "text": taskPrompt(t, due, now, loc, manual, kb, false), "permission_mode": t.PermissionMode}
-			err := s.assistantSendModel(ctx, t.MachineID, t.SessionID, params)
+			err := s.sendModel(ctx, t.MachineID, t.SessionID, params)
 			if err == nil {
 				err = s.call(ctx, m.ID, DeviceAssistantSend, params, nil)
 			}
@@ -996,7 +999,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 			s.logf("task %s into %s: %v; starting a new conversation", t.ID, t.SessionID, err)
 		}
 	}
-	here := s.hello(ctx).Assistant.MachineID
+	here := s.settings(ctx).MachineID
 	binding, err := s.resolveModel(ctx, "task."+t.ID)
 	if err != nil {
 		run.Status, run.Error = runFailed, err.Error()
@@ -1225,31 +1228,9 @@ func (s *Service) adoptConversation(id, machine, session, launcher string) {
 	go s.keepListed(context.Background())
 }
 
-// keepListed tells the assistant's machine which conversations to list however long they have been quiet: the main
-// conversation and scheduled tasks' own ones (node.configure keep_sessions). Otherwise a busy machine's 80 newest
-// transcripts crowd them out (2026-11-01: the main one, quiet for two days, was gone).
-func (s *Service) keepListed(ctx context.Context) {
-	here := s.hello(ctx).Assistant
-	keep := []string{}
-	if here.Main != "" {
-		keep = append(keep, here.Main)
-	}
-	// Scheduled tasks' own conversations too: a weekly one would drop out of the list in between, and with it the
-	// app's link to it and the check that its last run is still going (runTask).
-	sc := s.loadSchedule(ctx)
-	sc.mu.Lock()
-	for _, t := range sc.tasks {
-		if t.RunSessionID != "" && t.RunMachineID == here.MachineID && !slices.Contains(keep, t.RunSessionID) {
-			keep = append(keep, t.RunSessionID)
-		}
-	}
-	sc.mu.Unlock()
-	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	if err := s.call(cctx, here.MachineID, DeviceNodeConfigure, map[string]any{"keep_sessions": keep}, nil); err != nil && !errors.Is(err, ErrNoDevice) {
-		s.logf("assistant: keep main: %v", err)
-	}
-}
+// keepListed tells the hub the conversations their machines are to list however long they are quiet have changed
+// (the snapshot's profile: keptSessions); it configures the nodes.
+func (s *Service) keepListed(ctx context.Context) { s.publish(ctx) }
 
 // forgetConversation is 下次开新对话: the next run starts a new conversation (the old one stays in 对话).
 func (s *Service) forgetConversation(ctx context.Context, id string) (Task, bool, error) {
@@ -1337,7 +1318,7 @@ func (s *Service) taskViews(ctx context.Context) []TaskView {
 func (s *Service) tasksView(ctx context.Context, keep func(Task) bool) []Task {
 	sc := s.loadSchedule(ctx)
 	loc := s.location(ctx)
-	machine := s.hello(ctx).Assistant.MachineID
+	machine := s.settings(ctx).MachineID
 	now := time.Now()
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

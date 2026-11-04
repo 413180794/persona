@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -44,8 +45,10 @@ func TestSelfSettingsSourceTriageRules(t *testing.T) {
 	m := newMachine(h, MachineConfig{ID: "server", Name: "server"})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	list, err := h.toolJarvisSettings(ctx, m, "s1", json.RawMessage(`{"action":"list"}`))
-	if err != nil || !strings.Contains(list, "inbox.rules.example-chat (示例聊天的分拣规则)") || strings.Contains(list, "example-other") {
+	// The list is the assistant's, with the hub's settings it gets (settings.list).
+	raw, _, err := h.assistantAppCall(ctx, assistantwire.AppCall{AppID: assistantwire.AppSettings, Method: assistantwire.SettingsList})
+	list := string(raw)
+	if err != nil || !strings.Contains(list, `"key":"inbox.rules.example-chat","title":"示例聊天的分拣规则"`) || strings.Contains(list, "example-other") {
 		t.Fatalf("list: %v\n%s", err, list)
 	}
 	if got, err := h.toolJarvisSettings(ctx, m, "s1", json.RawMessage(`{"action":"get","key":"inbox.rules.example-chat"}`)); err != nil || got != "（无）" {

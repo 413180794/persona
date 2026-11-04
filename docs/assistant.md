@@ -26,11 +26,11 @@
 | 后台任务 / Monitor | 助手可以用 Bash 的 `run_in_background` 和 Monitor 盯事件，然后结束这一轮；命令跑完 / 事件来时 claude 自己开新一轮（node 把它当成工作中，跑完照常推送）。node 从 stream-json 的 `system/background_tasks_changed` 知道还有哪些在跑：有任务时不回收进程（最长 12 小时），任务列表记在 `node_sessions.tasks`；personad 重启（部署）会把它们连同进程一起杀掉，node 起来后给这些对话发一条说明，让助手决定要不要重开 |
 | 不用批准的工具 | 助手进程带 `--allowedTools mcp__jarvis`：Persona 自己的工具（notify_user、schedule_followup、agents_list、kb_*…）不再每次在手机上要批准；会替用户出面的（mail_send、手机写操作）hub 自己先问，飞书写操作由 Bash 闸门先问（见下「飞书：lark-connector skill」）。其他 Bash / Monitor 仍按会话的权限模式 |
 | Agents | `agents_list` / `agent_read` / `agent_send` / `agent_start`：直接用 hub 的会话状态（`decorated`）和 node 的 `session.items` / `session.send` / `session.start`，不走 ssh |
-| 代答提问 | `interaction_answer`：主人说「帮我回那个问题，选 A」时，助手替他把别的 Agent 的**提问类**交互答掉。只认 `kind: question` 且不是助手自己的对话——`permission` / `plan` / `screen` 一律拒绝并说明只有主人能在 App 里答（批准类不代答是硬边界）。答案逐题核对：每题都要答、键必须是题目原文、选项必须在列表里、单选只能一个，多选按 App 的格式拼成 `A, B`；自由文本拒收（那要在 App 里答，或用 `agent_send`）。过期、已答、已忽略、已取消、不存在各自给出对应错误（后四种查交互历史）。`Resolution.AnsweredBy = "assistant"` 随交互历史（`GET /api/v1/interactions/history`）和 `interaction_resolved` 广播带出去，App 据此标「Jarvis 代答」。`agents_list` 的「等你」行带上 `interaction_id` 和每道题的选项，助手不必再查一次（工具在助手那边，经 `app.tool` 交给 hub 的交互队列答：`hub/interaction_answer.go` `toolInteractionAnswer`，测试 `hub/interaction_answer_test.go`） |
+| 代答提问 | `interaction_answer`：主人说「帮我回那个问题，选 A」时，助手替他把别的 Agent 的**提问类**交互答掉。只认 `kind: question` 且不是助手自己的对话——`permission` / `plan` / `screen` 一律拒绝并说明只有主人能在 App 里答（批准类不代答是硬边界）。答案逐题核对：每题都要答、键必须是题目原文、选项必须在列表里、单选只能一个，多选按 App 的格式拼成 `A, B`；自由文本拒收（那要在 App 里答，或用 `agent_send`）。过期、已答、已忽略、已取消、不存在各自给出对应错误（后四种查交互历史）。`Resolution.AnsweredBy = "assistant"` 随交互历史（`GET /api/v1/interactions/history`）和 `interaction_resolved` 广播带出去，App 据此标「Jarvis 代答」。`agents_list` 的「等你」行带上 `interaction_id` 和每道题的选项，助手不必再查一次（工具和这些规则都在助手：`assistant/tools_apps.go` `toolInteractionAnswer`，测试 `assistant/tools_apps_test.go`；hub 只经 `interactions.get` 给出这条交互、不在等了就给交互历史里的结局，经 `interactions.answer` 把核对过的答案记成助手代答，`hub/interaction_answer.go`） |
 | 派发任务 | `task_plan`：把要 Agent 干的活交给用户，一个任务一个待办（`origin` = 这段对话）；只读的、用户记住过的直接开，其余在对话里成计划卡等用户「开始」，不阻塞这一轮。任务的进展在实时快照的「从对话开的任务」里，完成回执、答过的问题、直接对任务说的话进对话动态（[unified-entry.md](unified-entry.md)，`assistant/tasks.go`） |
 | Telegram | 装了 Telegram 扩展（私有扩展市场，#1704）才有：只读 MCP `telegram_chats` / `telegram_messages` / `telegram_search`；更灵活的读和写用扩展带的 telegram skill（Bash 里 `tg …`，即 `personad tool --cli telegram`，经 hub，写操作手机上确认），`tg` 只在 Telegram 登录着时在 PATH 上（`docs/connector-protocol.md`「命令行」） |
 | 飞书 | 主要用 lark-connector 自带的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；高频结构化的查询仍有 MCP `lark_chats` / `lark_messages` / `lark_search`（hub 的 lark-connector 客户端）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
-| 操作 Persona 自己 | `jarvis_settings`（先 `list`）：读写分拣规则（全局的 `inbox.rules`，和设置里声明了 `triage_rules` 的插件来源各自的 `inbox.rules.<插件>`，有就代替全局的）、AI 分身规则、关于我、默认启动器、「主对话派的任务只在主对话里通知」（`assistant.main_tasks_quiet`）、各台机器屏蔽的 Claude 配置目录（`agents.blocked_claude_dirs`），以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
+| 操作 Persona 自己 | `jarvis_settings`（先 `list`，助手自己的工具，`assistant/settings_tool.go`：关于我、默认启动器、`main_tasks_quiet` 是助手自己的设置，它自己读写、自己在手机上弹确认卡片；其余是 hub 的设置，清单经 `app.call settings.list` 拿，读写经 `app.tool jarvis_settings` 交给 hub，hub 自己弹卡片）：读写分拣规则（全局的 `inbox.rules`，和设置里声明了 `triage_rules` 的插件来源各自的 `inbox.rules.<插件>`，有就代替全局的）、AI 分身规则、关于我、默认启动器、「主对话派的任务只在主对话里通知」（`assistant.main_tasks_quiet`）、各台机器屏蔽的 Claude 配置目录（`agents.blocked_claude_dirs`），以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
 | 实时快照 | 每条发给助手的消息开头一个 `<jarvis-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，Persona 工具不再延迟加载 |
 | 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex、DSH 上时读写的也是这一份（下面「Codex」「Agent 运行时（DSH）」两节），换启动器记忆不丢 |
@@ -42,7 +42,8 @@
 - `ssh_host` 是 hub 那台机器的 ssh 别名，所以只有助手跑在 hub 本机（kind local）上时，才给其他 ssh 机器写 `ssh <别名> '<命令>'`。
 - 其余情况（助手在别的电脑上，或目标是 link 机器，根本没有 ssh），不给执行不了的命令，写明不能直接执行，要做事用 `agent_start` / `agent_send`。
 
-这份说明在 hub 准备助手时写进那台机器（`assistant.prepare`：新对话、App 打开新对话页的预热、AI 分身）。已经在跑的 claude 进程
+这份说明是助手准备自己的目录时写进那台机器的（`assistant.prepare`：新对话、App 打开新对话页的预热、AI 分身；`assistant/start.go` 的 `claudeMD` / `prepare`），
+写的依据是 hub 给的事实：`devices.list`（各台机器的 kind、ssh 别名、home、数据目录）、`kb.dirs`（知识库目录和别的笔记目录）、`connectors.signed_in`（登录着的连接器、它们的命令行、hub.json 配没配 lark-cli）、`plugins.assistant`（插件给助手的说明和 skill）。已经在跑的 claude 进程
 用的是它启动时读到的那份，要等它下次启动才读新的：闲置 20 分钟被回收后、或那台 node 的连接重建以后，下一条消息会起新进程。
 
 只有助手能拿到这些工具：node 给助手进程的 MCP 配置是内联 JSON，带 `JARVIS_ASSISTANT=1`、`JARVIS_SESSION_ID=<对话 id>`；
@@ -51,46 +52,65 @@
 ## 和 hub 的边界（2026-11-04，#1446）
 
 hub 只是通道：助手是自己的一个进程（`personad assistant`），经总线（`docs/protocol.md`「总线」）接到 hub。hub 转发 App 的请求、缓存助手报的快照、投递推送和给 App 的消息，自己不跑助手的代码：
-`go list -deps ./internal/hub` 里没有 `internal/assistant`，两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`）。
+`go list -deps ./internal/hub` 里没有 `internal/assistant`，两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`），以及写字用的几个小函数（`server/internal/textfmt`）。
 
-助手的业务逻辑都在 `server/internal/assistant`，这个包不 import hub：对话（归档、对话之间发消息、`conversation*` 工具）、对话标题、定时任务（调度、运行记录、`schedule_*` 工具、`/api/v1/assistant/tasks` 等路由）、派出去的任务（计划卡、对话动态、回执、自动完成的判断、`今天` 卡片、`/api/v1/task-plans`、`/api/v1/task-trust` 等路由）、它的全部 MCP 工具（`ask_user`、`notify_user`、`agents_*`、`task_plan`…）和每条消息开头的实时快照。
+助手的业务逻辑都在 `server/internal/assistant`，这个包不 import hub：它自己的设置（在哪台机器、启动器、时区、关于我、`main_tasks_quiet`，`GET/PUT /api/v1/assistant`、`jarvis_settings` 里这几项）、主对话（新建、压缩、旧的留下的背景、标题「Persona」、不能改名）、开对话（准备目录、写 CLAUDE.md、预热、记忆的接口、`POST /api/v1/assistant/conversations`）、每条消息跑在哪个启动器和模型上、对话（归档、对话之间发消息、`conversation*` 工具）、对话标题、定时任务（调度、运行记录、`schedule_*` 工具、`/api/v1/assistant/tasks` 等路由）、派出去的任务（计划卡、对话动态、回执、自动完成的判断、做完的任务关掉 Agent、`今天` 卡片、`/api/v1/task-plans`、`/api/v1/task-trust` 等路由）、待办（2026-11-04 从 hub 挪过来：存储、`/api/v1/todos…` 的全部路由、随项目自动挂和派生跟随、herdr 标记、决策记录，见 `docs/todos.md`「谁管什么」）、它的全部 MCP 工具（`ask_user`、`notify_user`、`agents_*`、`task_plan`…；用 hub 的知识库、交互队列、收件箱的 `kb_*`、`interaction_answer`、`inbox_draft` 也是，参数、规则和模型看到的文字在助手，hub 只给数据，`assistant/tools_apps.go`）和每条消息开头的实时快照。
 
 **助手找 hub 只经一个接口** `assistant.Hub`（`assistant/hub.go`），实现是总线的客户端 `assistant.BusHub`（`assistant/bus.go`）。每个方法就是总线上的一个方法：
 
 | 方法 | 参数 → 结果 | hub 用什么回答（`hub/assistant_link.go` 的 `assistantLink`） |
 | --- | --- | --- |
-| `manager.hello` | `{}` → `{timezone, owner, owner_notes, assistant:{machine_id, main, standby?}, done_delay_ms}` | `userTZName`、`ownerName`，settings `assistant`（`assistantConfigLegacy`），`standby` 是 `isMember`（这台 hub 是互联组的成员，定时任务由中心跑），`done_delay_ms` 是 hub.json notify 的完成推送延迟（任务的 Agent 停多久才算停下）；助手记住答案，这些值变了 hub 发 `manager.updated` |
-| `device.call` | `{device, method, params}` → 那台机器的结果 | node 自己的方法（`session.items`、`session.rename`、`session.send`、`session.start`、`assistant.send`、`node.configure`）原样交给那台的 node（`Machine.call`）；hub 自己答的：`devices.list` 和 `interactions.list`（`device` 写 `*`：各台机器、手机在不在线 / 各 Agent 在等用户做什么，`machinesNow`、`phoneClient`、`pendingInteractions`），`sessions.list` 是 App 拿到的那份会话列表（`decorated`），`session.get` 是 node 列出的那一条（`Machine.session`），`assistant.start` 是开一段新对话（`startAssistantOn`：hub 准备目录、按 `purpose` 套上模型配置，再发 node 的 `assistant.send`）。没有这台机器时报 `assistant.ErrNoDevice` |
-| `app.call` | `{app_id, method, params}` → 应用的结果 | `models`（hub 的模型配置，`docs/model-config.md`；助手有了自己的模型配置后去掉）：`models.complete`（`purposeModel(purpose).Complete`）、`models.json`（`…JSON`，自动完成的判断）、`models.apply`（`applyModel`）、`models.resolve`（`resolveModel`）、`models.tab_name`（`autoTabName`）、`models.assistant_send`（`assistantSendModel`：发给助手某段对话的消息跑在哪个启动器和模型上，和手机发的一样，跟进用）；`kb`：`kb.status`、`kb.prompt`（`kb.eng.Prompt`）；`connectors`：`connectors.snapshots`（登录了的连接器的实时状态：等用户的聊天、今天的会，快照和今天卡片用，`connectorSnapshots`）；`inbox`：`inbox.replied`（这些条目哪些已经回复、什么时候，消息卡片据此显示已发送）；`todos`（hub 的待办，`hub/assistant_todos.go`）：`todos.load / create / link_agent / fail / auto_done / get / list / of_session / retry / view`（`retry` 重开没开起来的任务、`view` 是 App 拿到的那份待办）；`app.tool {name, arguments, machine_id, session_id}` → `{content, is_error}`：`kb_*`（`runKBTool`）、`interactions` 的 `interaction_answer`（替用户答别的 Agent 的提问）、`inbox` 的 `inbox_draft`、`settings` 的 `jarvis_settings`，这几个工具的实现还在 hub |
+| `manager.hello` | `{}` → `{owner, owner_notes, assistant:{machine_id, launcher?, machines, standby?}, done_delay_ms}` | hub.json 的 `assistant` 一节，是助手自己的设置的默认值：`owner`、`owner_notes`（`assistant.notes`）、`assistant.machine_id`（hub.json 的 `assistant.machine`，hub 没有这台就是 hub 自己那台，再没有就是第一台，`defaultAssistantMachine`）、`assistant.launcher`；`machines` 是 hub 有的机器（助手存的机器不在里面就不用），`standby` 是 `isMember`（这台 hub 是互联组的成员，定时任务由中心跑），`done_delay_ms` 是 hub.json notify 的完成推送延迟（任务的 Agent 停多久才算停下）；助手记住答案，这些值变了 hub 发 `manager.updated` |
+| `device.call` | `{device, method, params}` → 那台机器的结果 | node 自己的方法（`session.items`、`session.rename`、`session.send`、`session.start`、`session.retire`、`todo.sync_session_tokens`、`assistant.prepare`、`assistant.send`、`assistant.warm`、`assistant.memory`、`assistant.compact`、`assistant.handoff`、`launchers.list`、`launchers.probe`）原样交给那台的 node（`Machine.call`）；hub 自己答的：`devices.list` 和 `interactions.list`（`device` 写 `*`：各台机器（id、名字、kind、ssh 别名、home、数据目录、在不在线）、手机在不在线 / 各 Agent 在等用户做什么，`machinesNow`、`phoneClient`、`pendingInteractions`），`sessions.list` 是 App 拿到的那份会话列表（`decorated`），`session.get` 是 node 列出的那一条（`Machine.session`）。没有这台机器时报 `assistant.ErrNoDevice` |
+| `app.call` | `{app_id, method, params}` → 应用的结果 | `models`（hub 的模型配置，`docs/model-config.md`；助手有了自己的模型配置后去掉）：`models.complete`（`purposeModel(purpose).Complete`）、`models.json`（`…JSON`，自动完成的判断）、`models.apply`（`applyModel`）、`models.resolve`（`resolveModel`）、`models.tab_name`（`autoTabName`）、`models.record` / `models.save`（某个用途自己存的那条和它的版本号，带版本号存：主对话的启动器）、`models.apply_picked`（这一条消息选的启动器和模型，和配置的一样检查、算指纹，`applyPickedModel`）、`models.launchers`（某台机器的启动器，和 App 看到的一样：它自己的去掉隐藏的，加上 hub 管的，`machineLaunchers`）、`models.launcher_check`（`{machine_id, launcher, model?}` → `{available, model_ok}`：这个启动器还在不在、模型它还给不给，`launcherAvailable` / `launcherHasModel`，判断不了算在）；`kb`（数据用 `internal/kb` 的类型；`kb_*` 工具的参数默认值、上限和模型看到的文字在助手，`assistant/tools_apps.go`）：`kb.status`、`kb.prompt`（`kb.eng.Prompt`）、`kb.dirs`（知识库目录和 hub.json 的别的笔记目录）、`kb.search {query, messages, limit}` → `{dir, hits}`（`Search`，`limit` 不给是 60）、`kb.list {kind, tag, limit}` → `{items}`（`List`，`limit` 0 是全部）、`kb.get {kind, id, recent}` → `{detail}`（`Get`，项目也能按名字找）、`kb.update {kind, id, update}` → `{id}`（`Apply`），这几个在 `hub/kb.go` 的 `kbCall`；`interactions`（hub 的交互队列，`hub/interaction_answer.go`）：`interactions.get {interaction_id}` → `{interaction, ok}`（不在等了 `ok` 是 false，`status` 是交互历史里的结局 resolved / dismissed / expired / cancelled，没有这条是空）、`interactions.answer {machine_id, session_id, interaction_id, answers}` → `{ok, status}`（把那个会话还在等的提问按 `answers` 答掉，记成助手代答；已经不在等了 `ok` 是 false；不是提问、不是那个会话的报错）；`connectors`：`connectors.snapshots`（登录了的连接器的实时状态：等用户的聊天、今天的会，快照和今天卡片用，`connectorSnapshots`）、`connectors.signed_in`（开着且登录着的连接器、它们的命令行、hub.json 配没配 lark-cli）；`plugins`：`plugins.assistant`（插件给助手的说明，和给这台机器的 skill：这台已经有的只带名字和摘要）、`plugins.skills_need`（node 说缺这些 skill，下次带上文件）；`settings`：`settings.list`（hub 自己的、`jarvis_settings` 能读写的设置）；`inbox`：`inbox.replied`（这些条目哪些已经回复、什么时候，消息卡片据此显示已发送）、`inbox.draft {session_id, text, note, changes}` → `{item_id, refused?}`（AI 分身的草稿和它提议的文档行状态记到在这段对话里跑的那件事上，`inboxDraft`；没有这件事 `item_id` 是空，`refused` 是这件事没列出的第一个改动，那样什么都不记；要有正文、不许留【…】、裁剪和 note 截断是助手的 `inbox_draft` 做的）；`app.tool {name, arguments, machine_id, session_id}` → `{content, is_error}`：只剩 `settings` 的 `jarvis_settings`，只管 hub 自己的设置（分拣规则、屏蔽的配置目录、邮箱），这一半还在 hub，助手自己的几项在助手（`assistant/settings_tool.go`） |
 | `notify.request` | `{notification:{id, kind:"assistant", title, body, subtitle, device_id, session_id, asked?}}` → `{ok}` | 推送，和 Agent 的一样按各设备的设置推（`notifyDone`）；`asked` 是 `notify_user` 自己要推的：也发到飞书机器人（`botPush`），这段对话这一轮结束时不再推「完成」（`notified`） |
 | `ws.broadcast` | `{message}`，单向 | 给 App 的实时更新，`message` 原样发出（`broadcast`）：`assistant_schedule`、`assistant_feed`、`task_plan` |
-| `manager.snapshot` | `{epoch, seq, at, partial?, sessions:[{machine_id, session_id, title?, archived?, queued?}], interactions:[…], tasks:[…]}` → `{ok, seq}` | hub 只留最新的一份（同一个 epoch 里 seq 不比上一份大的回 `stale_snapshot`），`decorated` 照它给会话列表填标题、归档、排队的消息，哪台机器的对话变了就推一次那台的会话列表；`interactions` 是助手在手机上问的（`ask_user`，无头的 Claude 没有 AskUserQuestion），hub 照旧当一张提问卡片显示、推送、到期（`waitInteraction`），答案经 `manager.action` 回给助手，从列表里消失的就撤下；`tasks` 读不出来时是 `null`：模型配置的「定时任务」用途、飞书机器人认出任务自己的对话、node 连上时要常驻列出的会话（`keptSessions`）读它 |
+| `manager.snapshot` | `{epoch, seq, at, partial?, sessions:[{machine_id, session_id, title?, archived?, queued?}], interactions:[…], tasks:[…], profile:{machine_id, main?, launcher, timezone?, keep:[{machine_id, session_id}]}, todos:{links:[{machine_id, session_id, todo_id, title, task?}], quiet:[{machine_id, session_id}]}}` → `{ok, seq}` | hub 只留最新的一份（同一个 epoch 里 seq 不比上一份大的回 `stale_snapshot`），`decorated` 照它给会话列表填标题（主对话的就是「Persona」）、归档、排队的消息，哪台机器的对话变了就推一次那台的会话列表；`interactions` 是助手在手机上问的（`ask_user`、`jarvis_settings` 改助手自己的设置，无头的 Claude 没有 AskUserQuestion），hub 照旧当一张卡片显示、推送、到期（`waitInteraction`），答案经 `manager.action` 回给助手，从列表里消失的就撤下；`tasks` 读不出来时是 `null`：模型配置的「定时任务」用途、飞书机器人认出任务自己的对话读它；`profile` 是助手的设置里 hub 自己的功能要用的（读不出来时是 `null`，hub 留着上一份），见下；`todos`（`assistantwire.TodoReport`）是每个 Agent 正在为哪个未完成的待办干活（`task` 是从对话派出去的任务）和安静的 Agent，`decorated` 照它填会话的 `todo`、`quiet`，`withTask` 照它在卡片上标任务名，`quietSession` 照它不推送（`hub/assistant_todos.go`）；读不出来时是 `null`（快照算不完整），hub 留着上一份；哪台机器的这几样变了也推一次那台的会话列表 |
 
 **hub 找助手只经** `assistant.Handler`（`assistant/handler.go`；hub 那头是 `assistantRemote`，同一组消息），每个方法是一条消息：App 的请求（助手的路由 `assistantwire.Routes`，经总线是 `http.request`，hub 原样转过去，调用方的角色放在 `X-Persona-Role`，客户端自己带的会被盖掉）、
-`assistant.tools`（hub 把它们和自己的工具一起列给助手的对话）、`assistant.tool`、`assistant.context`（node 每条消息前要的实时快照）、`manager.action`（用户回答了助手的提问）、`assistant.tasks`（收件箱的判断要链接到正在做的任务）、`assistant.card_sent`（消息卡片上的「发送」只发一次：hub 按卡片加锁，先问它这张发过没有）、`assistant.cards_sent`（某个收件箱条目的回复发出去了，卡片记下）、
-hub 看到的事（`conversation.started`、`conversation.renamed`、`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed`、`interaction.resolved` 用户处理了某个 Agent 的卡片、`interaction.raised` 安静的任务的 Agent 在问（#1731）、`inbox.message` 收件箱给某个任务的消息拟好了回复、`manager.updated` 握手的回答变了），
+`assistant.tools`（hub 把它们和自己的工具一起列给助手的对话）、`assistant.tool`、`assistant.context`（node 每条消息前要的实时快照）、`manager.action`（用户回答了助手的提问）、`assistant.tasks`（收件箱的判断要链接到正在做的任务）、`assistant.card_sent`（消息卡片上的「发送」只发一次：hub 按卡片加锁，先问它这张发过没有）、`assistant.cards_sent`（某个收件箱条目的回复发出去了，卡片记下）、`assistant.todo_handoff`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id` 时：这个待办在不在、完成没有，要交给 Agent 的话前面拼上生效的决策）、`assistant.todo_link`（交出去以后把这个 Agent 挂上待办）、
+`assistant.start`（hub 自己的功能要开一段助手的对话：飞书机器人、渠道插件发给主对话或 `/new` 的，收件箱的 AI 分身，`{text, images?, launcher?, permission_mode?, effort?, purpose?, machine_id?, main?, untitled?}` → `{session}`；AI 分身的带 `untitled`，不按助手的对话起标题）、
+`assistant.send_params`（`{machine_id, session_id, params}` → `{params}`：发给助手某段对话的消息跑在哪个启动器和模型上，新主对话空着开、第一条消息前面带上旧主对话留下的；手机发的、飞书机器人和渠道发给主对话的、node 自己发的（`assistant.model`）都问它；这台机器还没列出、又不是主对话的原样返回；请求本身不对的回 `bad_request`，hub 回 400）、
+`assistant.rename`（`{machine_id, session_id, params}` → node 的回答：App 给助手的对话改名，主对话不能改名回 `bad_request`，Codex 的只改助手记的标题，node 改名照旧由它发 `session.rename`）、
+hub 看到的事（`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed`（某台机器的会话列表：对话之间的消息、待办的随项目自动挂 / 派生跟随 / herdr 标记 / Agent 标题都从它来）、`interaction.resolved` 用户处理了某个 Agent 的卡片（任务的对话记一笔，挂在待办上的 Agent 的选项提问记成决策）、`todos.space_renamed` hub 改了工作区的名字、`interaction.raised` 安静的任务的 Agent 在问（#1731）、`inbox.message` 收件箱给某个任务的消息拟好了回复、`manager.updated` 握手的回答变了），
 以及 `manager.resync`（hub 还没有快照或只有一份不完整的：hub 刚起来、数据库没答）。hub 的错误带码过总线（`no_device`、`machine_offline`、`node_closed`、`stale_snapshot`、`model_paused`），助手认回原来的错误，判断照旧。App 看到的路由、事件、字段和推送都和以前一样。
 
-**状态**经助手自己的 `assistant.Store`（`assistant/store.go`）：settings 的 `assistant.titles`、`assistant.archived`、`assistant.relay`、`assistant.tasks`、`assistant.runs`、`tasks.trust`（旧的 `assistant.routines` / `assistant.followups` 照旧只在第一次读时搬），表 `task_plans`、`assistant_feed`。
+**状态**经助手自己的 `assistant.Store`（`assistant/store.go`）：settings 的 `assistant`（它自己的设置，见下）、`assistant.main_handoff`、`assistant.titles`、`assistant.archived`、`assistant.relay`、`assistant.tasks`、`assistant.runs`、`tasks.trust`（旧的 `assistant.routines` / `assistant.followups` 照旧只在第一次读时搬），表 `task_plans`、`assistant_feed`、`todos`、`todo_spaces`、`todo_agents`、`todo_decisions`。
 它就是 hub 的 Postgres，键和表都和以前一样、不迁数据；助手的进程自己连这个库（和 hub 读同一个 `database_url`），只有助手读写这些键和表，hub 不碰。
-定时任务的循环是助手自己的（`Service.Run`，第一次连上 hub、拿到握手的回答后才开始）；任务的对话要 node 常驻列出时，助手自己发 `device.call node.configure`，和以前 `keepMain` 发的时机一样。
+定时任务的循环和关掉做完的任务的 Agent 的循环是助手自己的（`Service.Run`，第一次连上 hub、拿到握手的回答后才开始）。
+
+**助手自己的设置**（settings `assistant`，2026-11-04 起只有助手读写，`assistant/profile.go`）：对话跑在哪台机器、启动器、用户的时区（手机经 `PUT /api/v1/assistant` 报）、关于我、主对话、换下来的旧主对话、`main_tasks_quiet`。
+hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和以前 hub 写的一样，不迁数据。助手读一次用 5 秒（只有它写，`manager.updated` 来了马上重读）。
+它每份快照都带 `profile`：hub 自己的功能要用的那部分，hub 留最后一份（`assistant_profile.go` 的 `assistantProfile`），变了就存一份在它自己的键 `hub.assistant_profile`（只有 hub 读写）：
+
+- 飞书机器人、渠道插件找主对话和助手的机器（`isMainOn`、`resolveBotTarget`），模型配置「主对话」用途跑在哪台、它的默认启动器（`launcher`：助手自己的，没有就是 hub.json 的，再没有是 claude），收件箱 AI 分身默认的机器，`/api/v1/skills`、启动器测试和额度挑的机器，`assistant.lark` 只给助手那台。
+- 用户的时区（`userLocation`，`hub/usertz.go`）：hub 读时间都按它。
+- `keep`：各台 node 不管多久没动都要列出的会话（主对话、换下来的旧主对话、定时任务自己的对话）。和上一份不一样的机器 hub 发一次 `node.configure keep_sessions`，第一份来时每台都发；node 连上时 hub 也带上（`configureNode`）。
+- **hub 重启后、助手还没报的那一两秒**：hub 按自己存的那份（`loadAssistantProfile`，在知识库、插件、连接器起来之前读）。知识库和开机就起的插件要用户的时区，飞书机器人要主对话，
+  只在内存里留的话这几秒是 hub 自己的时区、没有主对话：知识库每次重启都整份按 hub 的时区重排、两分钟后再排回来，插件一直用 hub 的时区到它重启，飞书这时发来的消息新开一个主对话把原来的顶掉。
+  设置挪进助手后的第一次启动还没有这份：从助手的设置（settings `assistant` 里的机器、主对话、时区）读一次，存成 hub 自己的，以后不再读；这时 `keep` 不知道，node 连上时不带 `keep_sessions`（node 留着它原来的）。
+  一份都没有（新装的 hub）：机器按 hub.json（没有就是 hub 自己那台），没有主对话，时区是 hub 自己的，启动器是 hub.json 的。
 
 **为什么照总线来画**：接口就是线上的消息，hub 那头的 `assistantLink` 是唯一的实现，总线上只多了编解码；hub 这边不再算助手的状态（标题、归档、排队、提问都是助手报什么就显示什么），也不再懂助手的语义（工具清单、提示词、提问的意思都在助手那边）。
 好处：谁管什么清楚了；助手崩了、卡住了不拖垮 hub（反过来也一样），可以单独重启、单独升级；助手可以跑在别处，以后可以接不止一个；hub 不再随助手的功能长出新的状态。
 
 **还留在 hub 的**（后续再挪）：
 
-- settings `assistant`（助手在哪台机器、主对话、启动器、时区、关于我、`main_tasks_quiet`）：飞书机器人、AI 分身、`/agent`、模型配置、`jarvis_settings` 都读写这一条，助手经 `manager.hello` 读。用户的时区（`userLocation`，`hub/usertz.go`）同理。
-- 主对话在列表里叫「Persona」（`mainTitle`），App 的重命名接口（`renameSession`，改完告诉助手），`GET/PUT /api/v1/assistant`、预热、记忆、新对话的接口和起对话（`POST /api/v1/assistant/conversations`；`startAssistant` / `prepareAssistant` 在 `device.call assistant.start` 后面：CLAUDE.md 还是用 hub 的状态写的）。收件箱的 AI 分身照旧直接用 `prepareAssistant` 在助手目录里起 Claude，不经过助手。
-- 待办本身（`todos.go`）：助手经 `app.call todos` 读写；交互卡片上标出任务（`withTask`）、收件箱拟的回复做成任务的卡片（`messageCardOf`）这两处只读待办，还在 hub（`hub/assistant_todos.go`）。
-- 只给助手用、但做的是 hub 的事的工具：`kb_*`、`inbox_draft`、`jarvis_settings` 经 `app.tool` 回到 hub 执行；飞书的工具是飞书插件（连接器）的，本来就不是助手的。
-- `clip`、`oneLine`、`agentLabel`、`findAgent` 这类小函数两边各一份（hub 的给飞书机器人、操控电脑用，`hub/tools_shared.go`）；飞书机器人用的 `conversationName` 也是。
+- App 的重命名接口（`renameSession`）还是 hub 的：助手的对话交给助手（`assistant.rename`），别的照旧。
+- 只给助手用、但做的是 hub 的事的工具：`jarvis_settings` 里 hub 自己的设置（分拣规则、屏蔽的配置目录、邮箱）经 `app.tool` 回到 hub 执行；飞书的工具是飞书插件（连接器）的，本来就不是助手的。
+- `findAgent`、`machineByName` 两边各一份（hub 的找 `*Machine`、给飞书机器人和操控电脑用，`hub/tools_shared.go`；助手的经总线问 `devices.list` / `sessions.list`）；飞书机器人用的 `conversationName` 也是。
+  `clip`、`oneLine`、`firstLine`、`ago`、`short`、`agentLabel`、`stateNames` 只有一份（`server/internal/textfmt`），两边各自用原来的小写名字指向它。
 
 和以前能看出来的差别：
 
 - 发给一段正在跑的对话的消息在它这一轮结束后送进去时，会话列表马上推一次（排队的那条消失）；以前要等那段对话开始工作的那次推送才一起变。
 - 助手没连着的时候（hub 刚起来、助手的进程在重启）：它的接口回 `503 assistant_offline`「助手暂时连不上，稍后再试」，它的工具同样失败；会话列表照常（hub 留着它最后报的快照），只是 hub 刚起来、助手还没报的那一两秒里助手对话没有标题。
 - `ws.broadcast` 的消息原样转发（加上 hub 给每条消息编的 `event_seq`），字段的顺序是助手写的顺序（以前 hub 重新编一次，键按字母排）。
+- 2026-11-04 设置和主对话挪过去之后，助手没连着时这些也回 `503 assistant_offline`：`GET/PUT /api/v1/assistant`、预热、记忆、新对话、压缩、新建主对话，手机发给助手对话的消息、给助手对话改名；
+  飞书机器人和渠道插件发给主对话的（以及开新对话）在飞书 / 渠道里回「助手暂时连不上」，收件箱的 AI 分身这一件记成失败（错误同一句）；node 自己发的消息问不到时用对话自己的启动器（和以前问老 hub 一样）。
+- 安卓先空着开新主对话、第一条消息从飞书或渠道发来时，这条也带上旧主对话留下的（以前只有手机发的带，飞书发的漏掉，背景一直挂着等手机的下一条）。
+- 定时任务换了自己的对话之后，换下来的旧主对话 node 也照样常驻列出（以前助手自己发的 `keep_sessions` 漏了它们，要等 node 重连）。
+- 待办挪到助手以后（2026-11-04）：助手没连着时待办的接口和带 `todo_id` 的新建 / 发消息回 503；随项目自动挂、派生跟随的 Agent 在下一次推送里才带上待办（以前同一次推送就带上）。细节见 `docs/todos.md`「谁管什么」。
 
 ## 进程（2026-11-04，#1446）
 
@@ -172,9 +192,9 @@ hub 看到的事（`conversation.started`、`conversation.renamed`、`session.us
 提示词都在 `server/internal/prompts/assistant/`（`docs/prompts.md`）：CLAUDE.md 是 `claude_md.md`，快照是 `snapshot.md`（主对话那句在 `context.md`），定时任务到点的消息是 `task_run.md`，默认的早报 / 晚间回顾是 `routine_*.md`。
 
 
-- **主对话**：第一段对话是主对话（hub settings `assistant.main`），Persona tab 默认打开它；快照开头写明「这是主对话」，提示词要求接着之前聊的往下做。
+- **主对话**：第一段对话是主对话（助手的 settings `assistant.main`），Persona tab 默认打开它；快照开头写明「这是主对话」，提示词要求接着之前聊的往下做。
   node 的会话列表里离线会话只列 7 天内最新的 80 个，忙的机器上安静两天的主对话就被挤掉了，侧边栏没有「主对话」（2026-11-01）。
-  hub 在 node 连上时、主对话换了时用 `node.configure` 的 `keep_sessions` 告诉 node，这几个会话不管多旧都列出来。
+  助手把这几个会话报在 profile 的 `keep` 里，hub 在 node 连上时、它们变了时用 `node.configure` 的 `keep_sessions` 告诉 node，不管多旧都列出来。
   其他页面交给 Persona 的东西（Agents 长按「交给 Persona」、知识库「问 Persona」）都以 `<jarvis-context>` 发进主对话。
 - **知识库**（`docs/knowledge.md`）：工具 `kb_search` / `kb_list` / `kb_get` / `kb_update`；快照带重点项目和会话；提示词要求把对话里得出的结论写回
   （项目进展写时间线、项目代码目录写 `dirs` 让 Agents 对上项目、给 Agent 派活前先读项目档案）。
@@ -183,11 +203,11 @@ hub 看到的事（`conversation.started`、`conversation.renamed`、`session.us
 - 「设置 › 模型配置 › 主对话」选的启动器（存在 `model_config.assistant`，旧的 settings `assistant.launcher` 兼容；#1291 起「设置 › 助手」不再有这个入口）管主对话和新对话：hub 给主对话发消息、App 没指定启动器时用它，
   node 发现和正在跑的不一样就用新启动器 `--resume` 接着原来的会话（2026-11-01 修：以前只影响新对话，主对话一直用最初的启动器，
   看起来「换了不生效」）。主对话每条消息都按这个设置，不看它上一轮在跑什么：#1355 一度改成沿用正在跑的，被一条跟进切到别的启动器后就一直回不来（#1518）。
-  助手用 `schedule_followup` 给自己定的跟进发回原对话时走同一套规则（主对话按设置，其他对话沿用自己的），不按 Agents 分类（`hub/send.go` 的 `assistantSendModel`）。定时任务自己的对话（早报等）也按「主对话」分类，在里面发消息、跟进发回来都和主对话一样每条按设置（#1544）。顶栏菜单里的「启动器」只换当前这一段对话的下一条消息；点开启动器还能选它模型列表里的模型（`/model` 那份），
+  助手用 `schedule_followup` 给自己定的跟进发回原对话时走同一套规则（主对话按设置，其他对话沿用自己的），不按 Agents 分类（`assistant/start.go` 的 `sendModel`，hub 经 `assistant.send_params` 问）。定时任务自己的对话（早报等）也按「主对话」分类，在里面发消息、跟进发回来都和主对话一样每条按设置（#1544）。顶栏菜单里的「启动器」只换当前这一段对话的下一条消息；点开启动器还能选它模型列表里的模型（`/model` 那份），
   随消息的 `model` 发出，hub 据此算执行指纹并让 node 重启进程；不选就是该启动器的默认模型。
 - **对话在忙时不换**（#1554）：进程正在回答或有后台任务时，启动器 / 模型变了也照样把这条消息交给正在跑的进程（会话状态仍记它实际在跑的），
   等它空闲后的第一条消息再重启换过去；以前直接拒收「模型配置已更新，请等当前任务结束后再发送」，助手又不断起新的后台任务时用户一直发不出去。
-  重启后 node 自己告诉对话「后台任务丢了」那条也先问 hub（`assistant.model`，和手机发的消息同一套 `assistantSendModel`），不再按会话上次跑的模型起进程。
+  重启后 node 自己告诉对话「后台任务丢了」那条也先问 hub（`assistant.model`，hub 转给助手的 `assistant.send_params`，和手机发的消息同一套），不再按会话上次跑的模型起进程。
 
 ## 坑
 
@@ -274,18 +294,17 @@ hub 看到的事（`conversation.started`、`conversation.renamed`、`session.us
 
 ### 新建主对话（2026-11-04，#1727）
 
-主对话用久了上下文很大，用户可以换一段新的：`POST /api/v1/assistant/main/new`（`hub/assistant_main.go`）。
+主对话用久了上下文很大，用户可以换一段新的：`POST /api/v1/assistant/main/new`（助手的路由，`assistant/start.go`）。
 
 1. 旧主对话正在回答或压缩时拒绝（409 `busy`）；App 带上它看到的主对话 id（`expect`），别的设备已经换过时拒绝（409 `main_changed`），不会把新的又换掉。
 2. 带背景（`carry: summary`，默认）：node 的 `assistant.handoff` 从旧对话的 transcript 里取最近一次压缩的摘要（Claude 的 `isCompactSummary` 行、Codex 的 `compacted` 行，最多 1.2 万字）
    和之后的几条文字消息（最多 12 条、6000 字，去掉 `<jarvis-context>`），存进 settings `assistant.main_handoff`。
-3. 清掉 `assistant.main`，旧 id 记进 `assistant.former_main`（最多 10 个，`keptSessions` 让 node 一直列出它们，安静多久都找得到），
-   改名「旧主对话 · 至 M月D日」（算用户起的，自动命名不覆盖），归档。助手要过一会儿才知道主对话换了（`assistantUpdated` 有 200 ms 合并），
-   这期间它拒绝归档「主对话」，hub 隔 200 ms 再试，最多 3 秒。
-4. 下一条发给主对话的消息开新的会话（App 的 `POST /api/v1/assistant/conversations` 带 `main:true`、飞书机器人和渠道插件发给主对话的，都走 `startMain`），
+3. 清掉 `assistant.main`，旧 id 记进 `assistant.former_main`（最多 10 个，在 profile 的 `keep` 里，hub 让 node 一直列出它们，安静多久都找得到），
+   改名「旧主对话 · 至 M月D日」（算用户起的，自动命名不覆盖），归档（都在助手里一步做完）。
+4. 下一条发给主对话的消息开新的会话（App 的 `POST /api/v1/assistant/conversations` 带 `main:true`、飞书机器人和渠道插件发给主对话的 `assistant.start` 带 `main`，都走助手的 `startMain`），
    `assistant/main_handoff.md` 把带过去的背景写成 `<jarvis-context kind="context" title="接上旧主对话">` 放在第一条消息前（App 里是一个上下文标签），用完就清掉；
    没带背景（`carry: none`）也写一句旧主对话的 id，助手要翻可以用 `conversation_read`。
-   安卓开新主对话是先用空的 `prompt` 建、再单独发消息：这时背景记上新会话的 id（`for`），等发给它的第一条消息（`POST …/messages`）再带上，不单独成一轮。
+   安卓开新主对话是先用空的 `prompt` 建、再单独发消息：这时背景记上新会话的 id（`for`），等发给它的第一条消息（`POST …/messages`，或飞书、渠道发来的，都经 `assistant.send_params`）再带上，不单独成一轮。
 
 为什么这样定：
 

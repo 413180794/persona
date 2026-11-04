@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -33,11 +34,13 @@ type Handler interface {
 	CardSent(ctx context.Context, p CardSentParams) (bool, error)
 	// CardsSent is assistant.cards_sent: the reply to an inbox item went out; the cards about it say so from now on.
 	CardsSent(ctx context.Context, p CardsSentParams)
-	// ConversationStarted is conversation.started: the hub started a conversation (the app's new conversation, the
-	// Feishu bot); it is named after its first turn.
-	ConversationStarted(ctx context.Context, c ConversationStarted)
-	// ConversationRenamed is conversation.renamed: the user renamed a conversation in the app.
-	ConversationRenamed(ctx context.Context, c ConversationRenamed)
+	// Start is assistant.start: one of the hub's features starts a conversation (the Feishu bot, a channel, the inbox's
+	// AI 分身).
+	Start(ctx context.Context, p StartParams) (proto.Session, error)
+	// SendParams is assistant.send_params: what a message for one of its conversations runs on, and its text.
+	SendParams(ctx context.Context, p SendParams) (map[string]any, error)
+	// Rename is assistant.rename: the user renames one of its conversations in the app (the node's answer).
+	Rename(ctx context.Context, p RenameParams) (json.RawMessage, error)
 	// UserSpoke is session.user_spoke: the user sent a message to a conversation.
 	UserSpoke(ctx context.Context, s SessionRef)
 	// TurnStarted is session.turn_started: a session on a machine started a turn.
@@ -50,12 +53,22 @@ type Handler interface {
 	InteractionRaised(ctx context.Context, r InteractionRaised)
 	// InboxMessage is inbox.message: the inbox's AI 分身 drafted a reply to a message about one of the user's tasks.
 	InboxMessage(ctx context.Context, m InboxMessage)
-	// ProfileChanged is manager.updated: the owner's profile changed (the time zone): what was read in the old one goes.
+	// ProfileChanged is manager.updated: hub.json's assistant section or the machines changed: what was read with the old
+	// ones goes, and the hub gets the profile again.
 	ProfileChanged(ctx context.Context)
 	// SessionsChanged is sessions.changed: a machine's node sent its session list.
 	SessionsChanged(ctx context.Context, d DeviceSessions)
 	// Resync is manager.resync: report the whole snapshot again (the hub has none, or a partial one).
 	Resync(ctx context.Context)
+
+	// The todos (todos.go).
+	// TodoHandoff is assistant.todo_handoff: an agent is about to be handed work for a todo: the todo, and the text
+	// with its decisions before it.
+	TodoHandoff(ctx context.Context, h TodoHandoff) (TodoHandoffResult, error)
+	// TodoLink is assistant.todo_link: the agent handed the work works for the todo from now on.
+	TodoLink(ctx context.Context, p TodoLinkParams) error
+	// TodoSpaceRenamed is todos.space_renamed: the hub renamed a workspace.
+	TodoSpaceRenamed(ctx context.Context, r TodoSpaceRenamed)
 }
 
 // roleFull is a device that may do everything (an answer-only watch may not).

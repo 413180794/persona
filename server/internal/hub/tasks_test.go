@@ -31,9 +31,6 @@ type taskNode struct {
 	gate chan struct{}
 	// items: what session.items answers (the agent's latest turn).
 	items []proto.Item
-	// retires: the sessions session.retire was asked to close; retireErr: what it answers instead.
-	retires   []string
-	retireErr error
 }
 
 func (tn *taskNode) calls() (starts, sends []map[string]any) {
@@ -75,12 +72,6 @@ func connectTaskNode(t *testing.T, h *Hub, id string) *taskNode {
 			tn.sends = append(tn.sends, p)
 		case "session.items":
 			return map[string]any{"items": tn.items}, nil
-		case "session.retire":
-			tn.retires = append(tn.retires, p["session_id"].(string))
-			if tn.retireErr != nil {
-				return nil, tn.retireErr
-			}
-			return map[string]any{"closed": true}, nil
 		}
 		return map[string]any{}, nil
 	}
@@ -97,7 +88,6 @@ func connectTaskNode(t *testing.T, h *Hub, id string) *taskNode {
 func newTaskHub(t *testing.T) (*Hub, *taskNode) {
 	t.Helper()
 	h := newTestHub(t)
-	h.initTodos(context.Background())
 	tn := connectTaskNode(t, h, "box")
 	old := taskSettleDelay
 	taskSettleDelay = func(NotifyConfig) time.Duration { return 0 }
@@ -175,16 +165,6 @@ func feedKinds(h *Hub, conv string) []string {
 	return out
 }
 
-func taskTodos(h *Hub) []Todo {
-	h.todos.mu.RLock()
-	defer h.todos.mu.RUnlock()
-	var out []Todo
-	for _, t := range h.todos.todos {
-		out = append(out, copyTodoLocked(t))
-	}
-	return out
-}
-
 // A read-only plan starts at once: a todo that remembers the conversation, its agent started with the prompt, and
 // the plan and the task in the conversation's feed.
 func TestTaskPlanReadOnlyStartsAtOnce(t *testing.T) {
@@ -258,7 +238,7 @@ func TestTaskStartFailedEndsTheTodo(t *testing.T) {
 	if starts, _ := tn.calls(); len(starts) != 1 {
 		t.Fatalf("a refused start was retried: %d starts", len(starts))
 	}
-	if _, ok := h.taskOf("box", "s1"); ok {
+	if _, ok := taskOfAgent(h, "box", "s1"); ok {
 		t.Fatal("a failed task still follows an agent")
 	}
 	// Reopening it by hand clears the failure.
@@ -444,10 +424,7 @@ func TestTaskRetryWithTheMachineOffline(t *testing.T) {
 	m.mu.Lock()
 	m.peer = nil
 	m.mu.Unlock()
-	plain, err := h.createTodo(context.Background(), "买牛奶", "", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	plain := plainTodo(t, h, "买牛奶")
 	if w := retryReq(h, plain.ID); w.Code != http.StatusConflict {
 		t.Fatalf("retry of a plain todo: %d %s", w.Code, w.Body)
 	}
@@ -461,7 +438,6 @@ func TestTaskRetryWithTheStore(t *testing.T) {
 	database := setupTestDB(t)
 	h := newTestHub(t)
 	h.store = database
-	h.initTodos(context.Background())
 	tn := connectTaskNode(t, h, "box")
 	connectAssistant(t, h)
 	tn.failStart = errors.New("claude did not become ready within 1m0s")

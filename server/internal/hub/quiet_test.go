@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -47,10 +47,9 @@ func TestQuietTasksFromTheMainConversation(t *testing.T) {
 	h := newTestHub(t)
 	h.store = database
 	ctx := context.Background()
-	if err := database.PutSetting(ctx, "assistant", AssistantConfig{MachineID: "box", Main: "conv1"}); err != nil {
+	if err := database.PutSetting(ctx, "assistant", assistant.Settings{MachineID: "box", Main: "conv1"}); err != nil {
 		t.Fatal(err)
 	}
-	h.initTodos(ctx)
 	connectTaskNode(t, h, "box")
 	connectAssistant(t, h)
 
@@ -79,8 +78,8 @@ func TestQuietTasksFromTheMainConversation(t *testing.T) {
 		t.Fatalf("GET = %v", got["main_tasks_quiet"])
 	}
 	m := h.localMachine("box")
-	if got, _ := h.toolJarvisSettings(ctx, m, "conv1", json.RawMessage(`{"action":"get","key":"assistant.main_tasks_quiet"}`)); got != "true" {
-		t.Fatalf("jarvis_settings get = %q", got)
+	if got := h.callAssistantTool(ctx, m, "conv1", "jarvis_settings", json.RawMessage(`{"action":"get","key":"assistant.main_tasks_quiet"}`)); got.Content[0].Text != "true" {
+		t.Fatalf("jarvis_settings get = %+v", got)
 	}
 	if got := call(http.MethodPut, `{"main_tasks_quiet":false}`); got["main_tasks_quiet"] != false || got["main"] != "conv1" {
 		t.Fatalf("PUT = %v", got)
@@ -92,12 +91,8 @@ func TestQuietTasksFromTheMainConversation(t *testing.T) {
 	if row, _ := database.GetTodo(ctx, quiet.ID); !row.Quiet {
 		t.Fatal("turning the setting off changed an existing task")
 	}
-	change, err := h.setMainTasksQuiet(ctx, json.RawMessage(`true`))
-	if err != nil || !strings.Contains(change.summary, "关 → 开") {
-		t.Fatalf("change %+v %v", change, err)
-	}
-	if _, err := change.apply(ctx, nil); err != nil || !h.mainTasksQuiet(ctx) {
-		t.Fatalf("apply: %v", err)
+	if got := call(http.MethodPut, `{"main_tasks_quiet":true}`); got["main_tasks_quiet"] != true {
+		t.Fatalf("PUT = %v, reported %+v", got, h.assistantProfile())
 	}
 
 	// s1 is the quiet task's agent, s2 the side conversation's: both working, s1 also asks something.

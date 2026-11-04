@@ -112,8 +112,7 @@ func (h *Hub) botCommand(ctx context.Context, api *feishubot.Client, set FeishuB
 
 // conversationsCard lists recent Persona conversations with a button to switch to each.
 func (h *Hub) conversationsCard(ctx context.Context) *feishubot.Card {
-	v := h.assistantState(ctx, false)
-	list := v.Conversations
+	list, main := h.assistantConversations()
 	sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt.After(list[j].UpdatedAt) })
 	c := feishubot.NewCard("最近的对话", feishubot.Blue, "最近的对话")
 	if len(list) == 0 {
@@ -123,7 +122,7 @@ func (h *Hub) conversationsCard(ctx context.Context) *feishubot.Card {
 		if i == 8 {
 			break
 		}
-		name := conversationName(s, v.Main)
+		name := conversationName(s, main)
 		line := "**" + feishubot.EscapeMarkdown(name) + "**"
 		if !s.UpdatedAt.IsZero() {
 			line += " · " + ago(s.UpdatedAt)
@@ -132,7 +131,7 @@ func (h *Hub) conversationsCard(ctx context.Context) *feishubot.Card {
 			line += "\n" + feishubot.EscapeMarkdown(clip(oneLine(s.LastText), 80))
 		}
 		kind := targetJarvis
-		if s.SessionID == v.Main {
+		if s.SessionID == main {
 			kind = targetMain
 		}
 		c.Markdown(line).Buttons(feishubot.Btn("在这里聊", feishubot.Default, map[string]any{"a": "switch", "k": kind, "m": s.MachineID, "s": s.SessionID, "t": name}))

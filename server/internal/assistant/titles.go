@@ -62,7 +62,7 @@ type titleBook struct {
 
 // isMain: id is the main conversation (the assistant's machine is not checked: session ids are unique).
 func (s *Service) isMain(ctx context.Context, id string) bool {
-	return id != "" && s.hello(ctx).Assistant.Main == id
+	return id != "" && s.settings(ctx).Main == id
 }
 
 // titlesLocked reads the book once; b.mu is held. A failed read leaves it unloaded (nothing is saved over it).

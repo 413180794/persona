@@ -183,7 +183,8 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
 
 - **Persona（主对话和其他对话）**：CLAUDE.md 里写明目录结构和「让上下文流动」的要求；MCP 工具 `kb_search`（全文）/ `kb_list`（排好序的列表）/
   `kb_get`（档案 + 最近 7 天消息）/ `kb_update`（建项目、改档案、打标、建关联、记时间线；手动打的标会锁住，压缩不再覆盖）；
-  实时快照里带最重要的 6 个项目、8 个会话。
+  实时快照里带最重要的 6 个项目、8 个会话。这四个工具是助手的（参数的默认值、上限和模型看到的文字在 `assistant/tools_apps.go`），
+  经总线调 hub 的 `kb.search` / `kb.list` / `kb.get` / `kb.update`，数据进、数据出（`docs/assistant.md`「和 hub 的边界」）。
 - **主对话**：hub settings `assistant.main` 记着它的会话 id（`POST /api/v1/assistant/conversations` 带 `main: true` 时设上，
   `PUT /api/v1/assistant {"main":"-"}` 清掉）；node 每条消息问快照时把会话 id 带给 `assistant.context`，主对话的快照开头多一句「这是主对话」。
 - **AI 分身**：交给 Agent 的提示词末尾附上这个会话和它前 3 个项目的档案（`<jarvis-context>`），并要求它把新结论用 `kb_update` 写回项目时间线。
@@ -215,7 +216,7 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
 | `GET /api/v1/kb/{kind}?tag=` | 排好序的列表（`items`）和常用标签（`tags`）；kind 是 projects / chats / people / docs / meetings / events |
 | `GET /api/v1/kb/{kind}/{id}` | `detail`（meta、summary、项目时间线、会话最近 7 天消息）；项目还带 `agents` |
 | `PUT /api/v1/kb/{kind}/{id}` | 改（字段同 `kb_update`）；项目不存在就新建 |
-| `GET /api/v1/kb-search?q=&messages=0` | 全文搜索（按行，MCP 和旧版 App 用） |
+| `GET /api/v1/kb-search?q=&messages=0` | 全文搜索（按行，旧版 App 用；助手的 `kb_search` 经总线的 `kb.search` 做同样的搜索） |
 | `GET /api/v1/kb-search?q=&results=1` | App 的搜索：按条目合并、排好序（`results`：`entry`、`count`、前 3 行 `hits`，`in_name`），见下面「搜索」 |
 | `GET /api/v1/kb/{kind}/{id}?q=` | 从搜索打开：多带 `matches`（这个条目里每一处命中；消息带 `day` 和前后各两条 `before` / `after`），最多 40 处 |
 | `GET /api/v1/kb/moments/{id}` | 一帖存档的公司圈（`post`、`markdown`：正文 + 全部评论），项目的「相关公司圈」点开用 |

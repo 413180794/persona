@@ -45,7 +45,7 @@ func (h *Hub) hasSkill(ctx context.Context, m *Machine, name string) bool {
 
 // serveSkills is GET /api/v1/skills: the skills of the machine that runs the assistant, read only.
 func (h *Hub) serveSkills(w http.ResponseWriter, r *http.Request) {
-	m := h.localMachine(h.assistantConfig(r.Context()).MachineID)
+	m := h.localMachine(h.assistantProfile().MachineID)
 	if m == nil {
 		writeErr(w, http.StatusConflict, errNoAssistantMachine)
 		return

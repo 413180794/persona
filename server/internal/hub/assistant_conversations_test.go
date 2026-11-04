@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -21,10 +22,9 @@ func conversationsHub(t *testing.T) (*Hub, *assistantNode) {
 	t.Helper()
 	h := newTestHub(t)
 	h.store = &settingsStore{vals: map[string][]byte{}}
-	h.userTZ = "Asia/Shanghai"
 	n := newAssistantNode(t, h)
 	n.m.info.Home = "/home/me"
-	if err := h.store.PutSetting(context.Background(), "assistant", AssistantConfig{MachineID: "server", Main: "main-0001"}); err != nil {
+	if err := h.store.PutSetting(context.Background(), "assistant", assistant.Settings{MachineID: "server", Main: "main-0001", Timezone: "Asia/Shanghai"}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
@@ -182,7 +182,7 @@ func TestConversationReadTool(t *testing.T) {
 func TestConversationRenameTool(t *testing.T) {
 	h, n := conversationsHub(t)
 	started := time.Now().Add(-20 * time.Hour) // a pending title older than a day is forgotten
-	noteStarted(h, "server", "trip-0002", started, "")
+	noteStarted(t, h, "server", "trip-0002", started)
 	want := started.In(h.userLocation()).Format("0102") + " | 研究 | 周末出游的酒店和路线安排比较"
 	out, isErr := tool(t, h, n, "trip-0002", "conversation_rename", `{"id":"trip-0002","kind":"研究","topic":"周末出游的酒店和路线安排比较表"}`)
 	if isErr || shown(h, "trip-0002").Title != want || !strings.Contains(out, "this conversation") {
@@ -203,7 +203,7 @@ func TestConversationRenameTool(t *testing.T) {
 		t.Fatal("the main conversation has no title")
 	}
 
-	userRenamed(h, "server", "code-0003", "我自己起的")
+	userRenamed(t, h, "server", "code-0003", "我自己起的")
 	if out, isErr = tool(t, h, n, "x", "conversation_rename", `{"id":"code-0003","kind":"修复","topic":"登录"}`); !isErr || !strings.Contains(out, "我自己起的") {
 		t.Fatalf("the user's title stays: %s", out)
 	}

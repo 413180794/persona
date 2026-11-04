@@ -31,6 +31,11 @@ func replies(t *testing.T, out ...string) (*ai.Client, func() []capturedCall) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		mu.Lock()
+		if in.System == "" && len(in.Messages) == 0 { // not a question (nothing asked): not counted
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": out[0]}}})
+			return
+		}
 		c := capturedCall{System: in.System}
 		if len(in.Messages) > 0 {
 			c.User = in.Messages[0].Content
@@ -54,7 +59,7 @@ func replies(t *testing.T, out ...string) (*ai.Client, func() []capturedCall) {
 // conversation from before (not noted) is left alone; the list the apps get shows the title.
 func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
+	putAssistantSettings(t, h, assistant.Settings{Timezone: "Asia/Shanghai"})
 	n := newAssistantNode(t, h)
 	n.m.info.Home = "/home/me"
 	n.items = []proto.Item{{Role: "user", Kind: proto.KindText, Text: "帮我查一下竞品的定价"},
@@ -63,7 +68,7 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	h.ai = model
 	connectAssistant(t, h)
 	started := time.Date(2026, 11, 1, 2, 0, 0, 0, time.UTC)
-	noteStarted(h, "server", "new", started, "")
+	noteStarted(t, h, "server", "new", started)
 
 	turnEnded(t, h, "server", "old") // from before: not noted, not named
 	if len(calls()) != 0 {
@@ -103,8 +108,8 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	}
 
 	// Renamed before its first turn ended: nothing replaces it.
-	noteStarted(h, "server", "early", started, "")
-	userRenamed(h, "server", "early", "我自己起的")
+	noteStarted(t, h, "server", "early", started)
+	userRenamed(t, h, "server", "early", "我自己起的")
 	turnEnded(t, h, "server", "early")
 	if got := shown(h, "early").Title; got != "我自己起的" || len(calls()) != 1 {
 		t.Fatalf("%q, %d calls", got, len(calls()))
@@ -122,7 +127,7 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 // A scheduled task's conversation is 「MMDD | 定时 | 任务名」 from its first run, with no model call, and keeps it.
 func TestATaskConversationIsTitledAfterTheTask(t *testing.T) {
 	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
+	putAssistantSettings(t, h, assistant.Settings{Timezone: "Asia/Shanghai"})
 	n := newAssistantNode(t, h)
 	model, calls := replies(t, "探索 | 不该用到")
 	h.ai = model
@@ -172,9 +177,9 @@ func TestTheMainConversationIsAlwaysPersona(t *testing.T) {
 	}
 
 	// Noted when it started (POST /assistant/conversations with main): not named when its first turn ends.
-	noteStarted(h, "server", "main-0001", time.Now(), "")
+	noteStarted(t, h, "server", "main-0001", time.Now())
 	turnEnded(t, h, "server", "main-0001")
-	if len(calls()) != 0 || shown(h, "main-0001").Title != "" {
+	if len(calls()) != 0 || shown(h, "main-0001").Title != "Persona" {
 		t.Fatalf("named the main conversation: %d calls, %q", len(calls()), shown(h, "main-0001").Title)
 	}
 	if by := titleBy(t, h, "main-0001"); by != "" {

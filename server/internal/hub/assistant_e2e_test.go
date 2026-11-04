@@ -37,8 +37,6 @@ func TestAssistantOverTheBus(t *testing.T) {
 	old := taskSettleDelay
 	taskSettleDelay = func(NotifyConfig) time.Duration { return 0 }
 	t.Cleanup(func() { taskSettleDelay = old })
-	h.userTZ = "Asia/Shanghai"
-	h.initTodos(ctx)
 	n := newAssistantNode(t, h) // the assistant's machine, "server"
 	n.m.info.Home = "/home/me"
 	now := time.Now().UTC()
@@ -46,7 +44,7 @@ func TestAssistantOverTheBus(t *testing.T) {
 		{SessionID: "side-2", Cwd: convDir, Title: "1030 | 探索 | 出游", UpdatedAt: now.Add(-time.Hour)}}
 	n.known["main-1"], n.known["side-2"] = true, true
 	box := connectTaskNode(t, h, "box") // where a task's agent runs
-	if err := store.PutSetting(ctx, "assistant", AssistantConfig{MachineID: "server", Main: "main-1"}); err != nil {
+	if err := store.PutSetting(ctx, "assistant", assistant.Settings{MachineID: "server", Main: "main-1", Timezone: "Asia/Shanghai"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.PutSetting(ctx, "assistant.tasks", []assistant.Task{{ID: "r1", Title: "早报", Prompt: "给我今天的早报",
@@ -187,8 +185,11 @@ func TestAssistantOverTheBus(t *testing.T) {
 	if r := mcp("notify_user", map[string]string{"title": "x", "body": "y"}); !r.IsError || !strings.Contains(textOf(r), "助手暂时连不上") {
 		t.Fatalf("offline tool: %+v", r)
 	}
-	if code, _ := do("GET", "/api/v1/assistant", ""); code != http.StatusOK {
-		t.Fatalf("GET /assistant offline: %d", code)
+	if code, body := do("GET", "/api/v1/assistant", ""); code != http.StatusServiceUnavailable || !strings.Contains(body, `"code":"assistant_offline"`) {
+		t.Fatalf("GET /assistant offline (its settings are its own): %d %s", code, body)
+	}
+	if code, _ := do("GET", "/api/v1/machines", ""); code != http.StatusOK {
+		t.Fatalf("the hub's own offline: %d", code)
 	}
 	if !shown(h, "side-2").Archived {
 		t.Fatal("the hub forgot its snapshot while it is away")

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -140,6 +141,26 @@ func (h *Hub) machineByID(id string) *Machine {
 
 // localMachine is machineByID (the name the request handlers use).
 func (h *Hub) localMachine(id string) *Machine { return h.machineByID(id) }
+
+// machineIDs are the ids localMachine knows: the machines now, and the hub.json entries another one absorbed (the
+// same computer: their id still reaches it), e.g. for the assistant, whose saved machine may be such an id.
+func (h *Hub) machineIDs() []string {
+	out := []string{}
+	for _, m := range h.machinesNow() {
+		out = append(out, m.cfg.ID)
+	}
+	var absorbed []string
+	f := &h.fleet
+	f.mu.Lock()
+	for from := range f.absorbed {
+		if !slices.Contains(out, from.cfg.ID) {
+			absorbed = append(absorbed, from.cfg.ID)
+		}
+	}
+	f.mu.Unlock()
+	slices.Sort(absorbed) // the same order every time: the hello is compared with the last one
+	return append(out, absorbed...)
+}
 
 // pathsOf is a machine's paths, best first by kind (the choice also looks at health and round trips).
 func (h *Hub) pathsOf(m *Machine) []*nodePath {

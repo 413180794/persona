@@ -45,6 +45,8 @@ type Machine struct {
 	browser   *proto.Browser
 	browserAt time.Time
 	online    bool
+	// connectedAt: when the node's current connection began (sessions.changed carries it to the assistant).
+	connectedAt time.Time
 	// warmUntil, warmed: shown as before a hub restart until then, while its node reconnects (warm.go); warmed is
 	// closed when that ends.
 	warmUntil time.Time
@@ -92,11 +94,6 @@ type Machine struct {
 	parked    string // why the run loop does not connect now (mesh_paths.go parkReason)
 	// svc: the connector of a computer of kind service (service.go).
 	svc serviceState
-
-	todoTokensMu      sync.Mutex
-	todoTokensDirty   bool
-	todoTokensSending bool
-	lastTodoTokens    map[string]map[string]string
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {
@@ -361,10 +358,12 @@ func (m *Machine) setSessions(list []proto.Session) {
 	}
 	m.sessions = list
 	m.lastSeen = time.Now().UTC()
+	connected := m.connectedAt
 	m.mu.Unlock()
 	m.hub.sessionsChanged(m)
-	// Messages from other conversations, for those no longer running.
-	m.hub.asst().SessionsChanged(context.Background(), assistantwire.DeviceSessions{MachineID: m.cfg.ID, Sessions: list})
+	// Messages from other conversations, for those no longer running; the todos' links and herdr marks.
+	m.hub.asst().SessionsChanged(context.Background(), assistantwire.DeviceSessions{MachineID: m.cfg.ID, Sessions: list,
+		Connected: connected})
 }
 
 func (m *Machine) sessionList() []proto.Session {
@@ -578,7 +577,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 	case "assistant.lark":
 		// The skills' gated commands' credentials go to the assistant's machine only (its process runs them); so does
 		// how to run lark-cli (its login stays on that machine, in lark-cli's own store).
-		if m.cfg.ID != m.hub.assistantConfig(ctx).MachineID {
+		if m.cfg.ID != m.hub.assistantProfile().MachineID {
 			return proto.AssistantLark{}, nil
 		}
 		return m.hub.assistantLark(ctx)
@@ -622,19 +621,13 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
 	case "assistant.model":
 		// Which launcher and model a message the node sends a conversation by itself runs on: the same as one from the
-		// phone (assistantSendModel), so the next message from the phone finds it on them (#1554).
+		// phone (the assistant's assistant.send_params), so the next message from the phone finds it on them (#1554).
+		// One not listed yet (the node just started) that is not the main one keeps its own, not 主对话's.
 		var p struct {
 			SessionID string `json:"session_id"`
 		}
 		_ = json.Unmarshal(params, &p)
-		out := map[string]any{}
-		if _, known := m.session(p.SessionID); !known && !m.hub.isMainConversation(ctx, m, p.SessionID) {
-			return out, nil // not listed yet (the node just started): another conversation keeps its own, not 主对话's
-		}
-		if err := m.hub.assistantSendModel(ctx, m, p.SessionID, out); err != nil {
-			return nil, err
-		}
-		return out, nil
+		return m.hub.asst().SendParams(ctx, m.cfg.ID, p.SessionID, map[string]any{})
 	case "assistant.context":
 		var p struct {
 			SessionID string `json:"session_id"`

@@ -540,7 +540,7 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 		}
 		m := h.localMachine(r.URL.Query().Get("machine")) // the id the app knows (mesh_ids.go)
 		if m == nil {
-			m = h.localMachine(h.assistantConfig(ctx).MachineID)
+			m = h.localMachine(h.assistantProfile().MachineID)
 		}
 		if m == nil {
 			writeErr(w, http.StatusBadRequest, errors.New("no machine to test on"))

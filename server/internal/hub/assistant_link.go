@@ -36,6 +36,7 @@ type assistantState struct {
 	seq      uint64
 	sessions map[string]assistantwire.SessionView // by session id; replaced, never written into
 	tasks    []assistantwire.TaskView             // nil while its schedule could not be read; replaced, never written into
+	profile  *assistantwire.Profile               // its settings (assistant_profile.go); nil before it reported them
 
 	resyncAt atomic.Int64 // when the hub last asked for the whole snapshot (UnixNano)
 
@@ -97,19 +98,18 @@ func (h *Hub) assistantReported() *assistantState {
 // assistantLink is the hub's side of assistantwire.Hub.
 type assistantLink struct{ h *Hub }
 
-func (l assistantLink) Hello(ctx context.Context) (assistantwire.Hello, error) {
+// Hello is hub.json's assistant section (the defaults of the assistant's own settings), the machines, and what of
+// the hub's own the assistant needs.
+func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	h := l.h
-	out := assistantwire.Hello{Timezone: h.userTZName()}
+	out := assistantwire.Hello{}
 	if h.cfg == nil {
 		return out, nil
 	}
-	cfg := h.assistantConfigLegacy(ctx)
 	out.Owner = strings.TrimSpace(h.cfg.Assistant.Owner)
 	out.OwnerNotes = strings.TrimSpace(h.cfg.Assistant.Notes)
-	if cfg.Notes != nil {
-		out.OwnerNotes = strings.TrimSpace(*cfg.Notes)
-	}
-	out.Assistant = assistantwire.Placement{MachineID: cfg.MachineID, Main: cfg.Main, Standby: h.isMember()}
+	out.Assistant = assistantwire.Placement{MachineID: h.defaultAssistantMachine(), Launcher: h.cfg.Assistant.Launcher, Standby: h.isMember()}
+	out.Assistant.Machines = h.machineIDs()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
 	return out, nil
 }
@@ -122,10 +122,10 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 			list := []assistantwire.Device{}
 			for _, m := range h.machinesNow() {
 				m.mu.Lock()
-				online, home := m.online, m.info.Home
+				online, home, dataDir := m.online, m.info.Home, m.info.DataDir
 				m.mu.Unlock()
-				list = append(list, assistantwire.Device{ID: m.cfg.ID, Name: m.cfg.Name, SSHHost: m.cfg.SSHHost, Home: home, Online: online,
-					Reachable: m.reachable()})
+				list = append(list, assistantwire.Device{ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, SSHHost: m.cfg.SSHHost, Home: home,
+					DataDir: dataDir, Online: online, Reachable: m.reachable()})
 			}
 			return json.Marshal(map[string]any{"devices": list, "phone_online": h.phoneClient() != nil})
 		case assistantwire.DeviceInteractionsList:
@@ -134,7 +134,7 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 	}
 	m := h.localMachine(p.Device)
 	if m == nil {
-		return nil, fmt.Errorf("%w %q", assistantwire.ErrNoDevice, p.Device)
+		return nil, noDevice(p.Device)
 	}
 	switch p.Method {
 	case assistantwire.DeviceSessionsList:
@@ -148,23 +148,6 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 		}
 		s, ok := m.session(a.SessionID)
 		return json.Marshal(map[string]any{"session": s, "ok": ok})
-	case assistantwire.DeviceAssistantStart:
-		var a struct {
-			Text           string        `json:"text"`
-			Images         []proto.Image `json:"images"`
-			Launcher       string        `json:"launcher"`
-			PermissionMode string        `json:"permission_mode"`
-			Effort         string        `json:"effort"`
-			Purpose        string        `json:"purpose"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		s, err := h.startAssistantOn(ctx, m, a.Text, a.Images, a.Launcher, a.PermissionMode, a.Effort, a.Purpose)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(map[string]any{"session": s})
 	}
 	var out json.RawMessage
 	if err := m.call(ctx, p.Method, p.Params, &out); err != nil {
@@ -175,6 +158,9 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 
 func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, error) {
 	h := l.h
+	if out, ok, err := h.assistantAppCall(ctx, p); ok { // assistant_apps.go
+		return out, err
+	}
 	switch p.AppID + " " + p.Method {
 	case assistantwire.AppModels + " " + assistantwire.ModelsComplete:
 		var a struct {
@@ -203,26 +189,6 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 			a.Params = map[string]any{}
 		}
 		if err := h.applyModel(ctx, a.Purpose, a.Params); err != nil {
-			return nil, err
-		}
-		return json.Marshal(map[string]any{"params": a.Params})
-	case assistantwire.AppModels + " " + assistantwire.ModelsAssistantSend:
-		var a struct {
-			MachineID string         `json:"machine_id"`
-			SessionID string         `json:"session_id"`
-			Params    map[string]any `json:"params"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		m := h.localMachine(a.MachineID)
-		if m == nil {
-			return nil, fmt.Errorf("%w %q", assistantwire.ErrNoDevice, a.MachineID)
-		}
-		if a.Params == nil {
-			a.Params = map[string]any{}
-		}
-		if err := h.assistantSendModel(ctx, m, a.SessionID, a.Params); err != nil {
 			return nil, err
 		}
 		return json.Marshal(map[string]any{"params": a.Params})
@@ -290,8 +256,22 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 			return nil, err
 		}
 		return json.Marshal(map[string]any{"replied": h.inboxRepliedAt(a.IDs)})
-	case assistantwire.AppTodos + " " + p.Method:
-		out, err := h.todosCall(ctx, p.Method, p.Params)
+	case assistantwire.AppInbox + " " + assistantwire.InboxDraft:
+		out, err := h.inboxDraftCall(ctx, p.Params)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(out)
+	case assistantwire.AppKB + " " + assistantwire.KBSearch, assistantwire.AppKB + " " + assistantwire.KBList,
+		assistantwire.AppKB + " " + assistantwire.KBGet, assistantwire.AppKB + " " + assistantwire.KBUpdate:
+		out, err := h.kbCall(p.Method, p.Params)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(out)
+	case assistantwire.AppInteractions + " " + assistantwire.InteractionsGet,
+		assistantwire.AppInteractions + " " + assistantwire.InteractionsAnswer:
+		out, err := h.interactionsCall(ctx, p.Method, p.Params)
 		if err != nil {
 			return nil, err
 		}
@@ -303,8 +283,8 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 	return nil, fmt.Errorf("app %s has no method %s", p.AppID, p.Method)
 }
 
-// appTool runs one of the assistant's tools that is the hub's to run: the knowledge base's, the inbox's drafts,
-// Persona's own settings.
+// appTool runs the one of the assistant's tools that is still the hub's to run: the hub's own settings
+// (jarvis_settings without the assistant's, settings_tool.go there).
 func (h *Hub) appTool(ctx context.Context, app string, params json.RawMessage) (json.RawMessage, error) {
 	var a struct {
 		Name      string          `json:"name"`
@@ -321,19 +301,6 @@ func (h *Hub) appTool(ctx context.Context, app string, params json.RawMessage) (
 	var res string
 	var err error
 	switch app + " " + a.Name {
-	case assistantwire.AppKB + " kb_search", assistantwire.AppKB + " kb_list", assistantwire.AppKB + " kb_get", assistantwire.AppKB + " kb_update":
-		res, err = h.runKBTool(a.Name, a.Arguments)
-	case assistantwire.AppInteractions + " interaction_answer":
-		var t struct {
-			Machine       string          `json:"machine"`
-			SessionID     string          `json:"session_id"`
-			InteractionID string          `json:"interaction_id"`
-			Answers       json.RawMessage `json:"answers"`
-		}
-		_ = json.Unmarshal(a.Arguments, &t)
-		res, err = h.toolInteractionAnswer(ctx, h.localMachine(a.MachineID), a.SessionID, t.Machine, t.SessionID, t.InteractionID, t.Answers)
-	case assistantwire.AppInbox + " inbox_draft":
-		res, err = h.toolInboxDraft(ctx, a.SessionID, a.Arguments)
 	case assistantwire.AppSettings + " jarvis_settings":
 		m := h.localMachine(a.MachineID)
 		if m == nil {
@@ -391,11 +358,24 @@ func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (as
 		a.mu.Unlock()
 		return assistantwire.SnapshotResult{}, assistantwire.ErrStaleSnapshot
 	}
-	old := a.sessions
+	old, oldProfile := a.sessions, a.profile
 	a.got, a.partial, a.epoch, a.seq, a.sessions, a.tasks = true, s.Partial, s.Epoch, s.Seq, views, s.Tasks
+	if s.Profile != nil {
+		a.profile = s.Profile
+	}
 	a.mu.Unlock()
+	if s.Profile != nil && !jsonSame(oldProfile, s.Profile) {
+		h.keepAssistantProfile(context.Background(), s.Profile)
+	}
+	h.keepChanged(oldProfile, s.Profile)
 	h.askOnPhone(s.Interactions)
-	for _, mid := range changedMachines(old, views) {
+	machines := changedMachines(old, views)
+	for _, mid := range h.takeTodoReport(s.Todos) { // the todos' (assistant_todos.go)
+		if !slices.Contains(machines, mid) {
+			machines = append(machines, mid)
+		}
+	}
+	for _, mid := range machines {
 		if m := h.localMachine(mid); m != nil {
 			h.sessionsChanged(m)
 		}
@@ -523,9 +503,9 @@ func (h *Hub) assistantHello(ctx context.Context) assistantwire.Hello {
 	return hello
 }
 
-// assistantUpdated tells the connected assistant its hello answer changed (manager.updated): the user's time zone or
-// notes, where it runs, its main conversation, this hub's mesh role, the machines. It is called wherever one of them
-// may have changed, often (every machine update): bursts are taken together, and only a different answer is sent.
+// assistantUpdated tells the connected assistant its hello answer changed (manager.updated): this hub's mesh role, the
+// machines (and with them the default machine). It is called wherever one of them may have changed, often (every
+// machine update): bursts are taken together, and only a different answer is sent.
 func (h *Hub) assistantUpdated() {
 	a := &h.assistant
 	if !a.updating.CompareAndSwap(false, true) {
@@ -673,14 +653,6 @@ func (a assistantRemote) ActiveTasks(ctx context.Context) []prompts.InboxTask {
 	return res.Tasks
 }
 
-func (a assistantRemote) ConversationStarted(_ context.Context, c assistantwire.ConversationStarted) {
-	a.notify(assistantwire.EventConversationStarted, c)
-}
-
-func (a assistantRemote) ConversationRenamed(_ context.Context, c assistantwire.ConversationRenamed) {
-	a.notify(assistantwire.EventConversationRenamed, c)
-}
-
 func (a assistantRemote) UserSpoke(_ context.Context, r assistantwire.SessionRef) {
 	a.notify(assistantwire.EventUserSpoke, r)
 }
@@ -707,6 +679,22 @@ func (a assistantRemote) InteractionRaised(_ context.Context, r assistantwire.In
 
 func (a assistantRemote) InboxMessage(_ context.Context, m assistantwire.InboxMessage) {
 	a.notify(assistantwire.EventInboxMessage, m)
+}
+
+// The todos' (assistant_todos.go).
+
+func (a assistantRemote) TodoHandoff(ctx context.Context, p assistantwire.TodoHandoff) (assistantwire.TodoHandoffResult, error) {
+	var res assistantwire.TodoHandoffResult
+	err := a.call(ctx, assistantwire.MethodTodoHandoff, p, &res)
+	return res, err
+}
+
+func (a assistantRemote) TodoLink(ctx context.Context, p assistantwire.TodoLinkParams) error {
+	return a.call(ctx, assistantwire.MethodTodoLink, p, nil)
+}
+
+func (a assistantRemote) TodoSpaceRenamed(_ context.Context, r assistantwire.TodoSpaceRenamed) {
+	a.notify(assistantwire.EventTodoSpaceRenamed, r)
 }
 
 // ---- the hub's own parts that tell the assistant, or ask it ----

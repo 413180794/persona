@@ -76,9 +76,9 @@ func (s *Service) ensureToday(ctx context.Context, conversation string) (FeedIte
 			}
 		}
 	}
-	if s.todosLoad(ctx) == nil {
+	if s.ensureTodosLoaded(ctx) == nil {
 		var mine []Todo
-		for _, t := range s.todos(ctx, conversation) {
+		for _, t := range s.todosOf(ctx, conversation) {
 			if t.Origin == conversation && t.DoneAt == nil {
 				mine = append(mine, t)
 			}

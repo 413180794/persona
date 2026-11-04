@@ -61,7 +61,10 @@ func TestBusForwardsTheAssistantRoutes(t *testing.T) {
 	}
 	<-got
 	for _, c := range [][2]string{{"POST", "/api/v1/task-plans/p1/start"}, {"GET", "/api/v1/task-trust"},
-		{"DELETE", "/api/v1/task-trust"}, {"POST", "/api/v1/todos/t1/done-check"}} {
+		{"DELETE", "/api/v1/task-trust"}, {"POST", "/api/v1/todos/t1/done-check"}, {"GET", "/api/v1/todos"},
+		{"PUT", "/api/v1/todos/t1/spaces/m1/group/alpha"}, {"GET", "/api/v1/assistant"}, {"PUT", "/api/v1/assistant"},
+		{"POST", "/api/v1/assistant/conversations"}, {"POST", "/api/v1/assistant/main/new"},
+		{"DELETE", "/api/v1/assistant/memory/note.md"}} {
 		if resp, _ := do(c[0], c[1], ""); resp.StatusCode != 201 {
 			t.Fatalf("%s %s: %d", c[0], c[1], resp.StatusCode)
 		}
@@ -69,9 +72,9 @@ func TestBusForwardsTheAssistantRoutes(t *testing.T) {
 			t.Fatalf("%s %s reached the assistant as %s %s", c[0], c[1], req.Method, req.Path)
 		}
 	}
-	// The hub's own routes stay the hub's, the assistant's settings and conversations among them (follow-ups).
-	for _, c := range [][2]string{{"GET", "/api/v1/assistant"}, {"GET", "/api/v1/skills"}, {"GET", "/api/v1/machines"},
-		{"GET", "/api/v1/todos"}, {"GET", "/api/v1/assistantx"}} {
+	// The hub's own routes stay the hub's.
+	for _, c := range [][2]string{{"GET", "/api/v1/skills"}, {"GET", "/api/v1/machines"},
+		{"GET", "/api/v1/todosx"}, {"GET", "/api/v1/assistantx"}} {
 		do(c[0], c[1], "")
 	}
 	select {
@@ -86,7 +89,7 @@ func TestBusForwardsTheAssistantRoutes(t *testing.T) {
 	if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(body, `"code":"assistant_offline"`) {
 		t.Fatalf("offline: %d %s", resp.StatusCode, body)
 	}
-	if resp, _ := do("GET", "/api/v1/assistant", ""); resp.StatusCode != 200 {
+	if resp, _ := do("GET", "/api/v1/machines", ""); resp.StatusCode != 200 {
 		t.Fatalf("the hub's own: %d", resp.StatusCode)
 	}
 }

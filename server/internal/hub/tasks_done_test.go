@@ -74,12 +74,6 @@ func runTurn(h *Hub, text string) {
 
 func receipts(h *Hub) int { return strings.Count(strings.Join(feedKinds(h, "conv1"), ","), "receipt") }
 
-func todoNow(h *Hub, id string) Todo {
-	h.todos.mu.RLock()
-	defer h.todos.mu.RUnlock()
-	return copyTodoLocked(h.todos.todos[id])
-}
-
 // The judge finds the work finished: the todo is done by the hub, with why, and works like one the user closed (the
 // agent no longer counts for it, the snapshot says it was closed by the hub).
 func TestTaskAutoDone(t *testing.T) {
@@ -98,13 +92,10 @@ func TestTaskAutoDone(t *testing.T) {
 			t.Errorf("judge input lacks %q: %s", want, in)
 		}
 	}
-	h.todos.mu.RLock()
-	_, active := h.todos.activeBySession[[2]string{"box", "s1"}]
-	h.todos.mu.RUnlock()
-	if active {
+	if _, active := h.todoLinkOf("box", "s1"); active {
 		t.Fatal("the agent still counts for a done todo")
 	}
-	if _, ok := h.taskOf("box", "s1"); ok {
+	if _, ok := taskOfAgent(h, "box", "s1"); ok {
 		t.Fatal("a done task is still followed")
 	}
 	if line := taskLine(h, todo); !strings.Contains(line, "）：已完成（hub 判断做完了，自动关的）") {
@@ -185,7 +176,7 @@ func TestTaskReopenedNotAutoDoneAgain(t *testing.T) {
 	if re.DoneAt != nil || re.DoneBy != "" || re.DoneReason != "" || re.ReopenedAt == nil {
 		t.Fatalf("reopened = %+v", re)
 	}
-	if _, ok := h.taskOf("box", "s1"); !ok {
+	if _, ok := taskOfAgent(h, "box", "s1"); !ok {
 		t.Fatal("a reopened task is not followed again")
 	}
 
@@ -197,10 +188,8 @@ func TestTaskReopenedNotAutoDoneAgain(t *testing.T) {
 	if got := todoNow(h, todo.ID); got.DoneAt != nil || js.calls.Load() != calls {
 		t.Fatalf("closed again by the same work: %+v (%d calls)", got, js.calls.Load()-calls)
 	}
-	// A judgment that began before the reopen and ends after it does not overrule the user either.
-	if ok, err := h.autoDoneTodo(context.Background(), todo.ID, "做完了", re.ReopenedAt.Add(-time.Second)); ok || err != nil {
-		t.Fatalf("a stale judgment closed it: %v %v", ok, err)
-	}
+	// (A judgment that began before the reopen and ends after it does not overrule the user either: the assistant's
+	// TestAutoDoneKeepsTheUsersChange.)
 
 	// The user sends it on; the agent works and stops again: judged again, and closed.
 	time.Sleep(5 * time.Millisecond)
@@ -254,10 +243,7 @@ func TestTaskDoneSkipAndCheck(t *testing.T) {
 
 	// A todo made by hand: never closed by the hub, whatever the model says.
 	stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"做完了"}`)
-	hand, err := h.createTodo(context.Background(), "自己记的事", "", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	hand := plainTodo(t, h, "自己记的事")
 	if err := h.linkTodoAgent(context.Background(), hand.ID, "box", "s2", "", "/code/app", "", ""); err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,7 +8,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -59,15 +60,18 @@ func TestNewMainConversation(t *testing.T) {
 		t.Fatalf("new main: %d %v", code, out)
 	}
 	settleAssistant(h)
-	cfg := h.assistantConfig(context.Background())
+	var cfg assistant.Settings
+	assistantSetting(t, h, "assistant", &cfg)
 	if cfg.Main != "" || len(cfg.Former) != 1 || cfg.Former[0].SessionID != "main-0001" || cfg.Former[0].MachineID != "server" {
 		t.Fatalf("config: %+v", cfg)
 	}
-	if !slices.Contains(n.kept, "main-0001") {
-		t.Fatalf("the node stops listing the old one: %v", n.kept)
-	}
+	eventually(t, 5*time.Second, "the node keeps listing the old one", func() bool {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		return slices.Contains(n.kept, "main-0001")
+	})
 	var old proto.Session
-	for _, s := range h.assistantState(context.Background(), true).Conversations {
+	for _, s := range assistantViewOf(t, h, "?archived=1").Conversations {
 		if s.SessionID == "main-0001" {
 			old = s
 		}
@@ -89,7 +93,7 @@ func TestNewMainConversation(t *testing.T) {
 		!strings.HasSuffix(first, "今天有什么安排") {
 		t.Fatalf("the first message:\n%s", first)
 	}
-	if got := h.assistantConfig(context.Background()).Main; got != "s1" {
+	if got := h.assistantProfile().Main; got != "s1" {
 		t.Fatalf("main: %q", got)
 	}
 	// Taken once: a later new main conversation starts with the message alone.

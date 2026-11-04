@@ -7,12 +7,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
@@ -101,8 +103,8 @@ func TestInboxDraftBeforeTheStartReturned(t *testing.T) {
 		it.Agent.SessionID = "session-r1"
 		h.inbox.mu.Unlock()
 	}()
-	if _, err := h.toolInboxDraft(context.Background(), "session-r1", json.RawMessage(`{"text":"好的"}`)); err != nil {
-		t.Fatal(err)
+	if id, refused := h.inboxDraft(context.Background(), "session-r1", "好的", "", nil); id != it.ID || refused != nil {
+		t.Fatalf("drafted on %q, refused %+v", id, refused)
 	}
 	if it.Agent.State != AgentDrafted || it.Agent.Draft != "好的" {
 		t.Fatalf("agent = %+v", it.Agent)
@@ -113,30 +115,46 @@ func TestInboxDraftBeforeTheStartReturned(t *testing.T) {
 	other := actionItem("y", time.Now())
 	other.Agent = &InboxAgent{State: AgentRunning}
 	h.inbox.items[other.ID] = other
-	if _, err := h.toolInboxDraft(context.Background(), "session-nobody", json.RawMessage(`{"text":"hi"}`)); err == nil {
+	if id, _ := h.inboxDraft(context.Background(), "session-nobody", "hi", "", nil); id != "" {
 		t.Fatal("a conversation no item gets drafted")
 	}
 }
 
-func TestInboxDraftTool(t *testing.T) {
+// inbox.draft (the assistant's inbox_draft, whose rules are the assistant's): the draft goes on the item whose agent
+// runs in the conversation, with the moves of a document's rows the item offers.
+func TestInboxDraft(t *testing.T) {
 	h := agentHub(t)
 	it := actionItem("x", time.Now())
 	it.Agent = &InboxAgent{State: AgentRunning, SessionID: "s1", Task: "t"}
 	h.inbox.items[it.ID] = it
 
-	if _, err := h.toolInboxDraft(context.Background(), "other", json.RawMessage(`{"text":"hi"}`)); err == nil {
-		t.Fatal("drafted from a conversation that is not an inbox agent")
+	if out := inboxDraftCall(t, h, map[string]any{"session_id": "other", "text": "hi"}); out["item_id"] != "" {
+		t.Fatalf("drafted from a conversation that is not an inbox agent: %v", out)
 	}
-	if _, err := h.toolInboxDraft(context.Background(), "s1", json.RawMessage(`{"text":"  "}`)); err == nil {
-		t.Fatal("accepted an empty draft")
+	// A change the item does not list is refused, and nothing is kept.
+	change := map[string]any{"ref": "r1", "field": "状态", "value": "完成"}
+	if out := inboxDraftCall(t, h, map[string]any{"session_id": "s1", "text": "好了", "changes": []any{change}}); out["item_id"] != it.ID ||
+		!reflect.DeepEqual(out["refused"], change) || it.Agent.State != AgentRunning || it.Agent.Draft != "" {
+		t.Fatalf("a change the item does not offer: %v, agent %+v", out, it.Agent)
 	}
-	if _, err := h.toolInboxDraft(context.Background(), "s1", json.RawMessage(`{"text":" 合了，MR 已经进主干 ","note":"agent_read 看到已合入"}`)); err != nil {
-		t.Fatal(err)
+	if out := inboxDraftCall(t, h, map[string]any{"session_id": "s1", "text": "合了，MR 已经进主干", "note": "agent_read 看到已合入"}); out["item_id"] != it.ID || out["refused"] != nil {
+		t.Fatalf("draft: %v", out)
 	}
-	if a := it.Agent; a.State != AgentDrafted || a.Draft != "合了，MR 已经进主干" || a.Note == "" || a.DraftedAt == nil {
+	if a := it.Agent; a.State != AgentDrafted || a.Draft != "合了，MR 已经进主干" || a.Note != "agent_read 看到已合入" || a.DraftedAt == nil {
 		t.Fatalf("agent = %+v", a)
 	}
-	if !h.isInboxAgent("s1") || h.isInboxAgent("s2") {
+	// A document item's own rows and values are taken with the draft.
+	doc := actionItem("doc", time.Now())
+	doc.Doc = &InboxDoc{Rows: []DocRow{{Ref: "r1", Status: []DocStatus{{Field: "状态", Options: []DocOption{{Name: "完成"}}}}}}}
+	doc.Agent = &InboxAgent{State: AgentRunning, SessionID: "s2", Task: "t"}
+	h.inbox.items[doc.ID] = doc
+	if out := inboxDraftCall(t, h, map[string]any{"session_id": "s2", "text": "好了", "changes": []any{change}}); out["item_id"] != doc.ID || out["refused"] != nil {
+		t.Fatalf("a change the item offers: %v", out)
+	}
+	if a := doc.Agent; a.State != AgentDrafted || len(a.Changes) != 1 || a.Changes[0] != (DocChange{Ref: "r1", Field: "状态", Value: "完成"}) {
+		t.Fatalf("doc agent = %+v", a)
+	}
+	if !h.isInboxAgent("s1") || h.isInboxAgent("s3") {
 		t.Fatal("isInboxAgent")
 	}
 	// The list carries the draft but none of the bookkeeping.
@@ -230,12 +248,8 @@ func TestInboxModelsLive(t *testing.T) {
 func TestInboxItemAboutATask(t *testing.T) {
 	ctx := context.Background()
 	h := agentHub(t)
-	h.initTodos(ctx)
 	connectAssistant(t, h) // the judge sees the tasks it is working on (assistant.tasks)
-	todo, err := h.createTodo(ctx, "修登录崩溃", "", "conv1", "plan_1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	todo := taskIn(t, h, "conv1")
 	model, calls := captureModel(t, `{"handle":true,"task":"回复修复进度","reason":"问进度","task_id":"`+todo.ID+`"}`)
 	h.triageAI = model
 	it := actionItem("lark:f1:12", time.Now())
@@ -267,16 +281,38 @@ func TestInboxItemAboutATask(t *testing.T) {
 
 	// The draft: the card goes into the task's conversation.
 	it.Agent.State, it.Agent.SessionID = AgentRunning, "s_agent"
-	if _, err := h.toolInboxDraft(ctx, "s_agent", json.RawMessage(`{"text":"测试已经过了，十点前提 PR"}`)); err != nil {
-		t.Fatal(err)
+	if out := textOf(h.asst().Tool(ctx, assistantwire.ToolCall{Name: "inbox_draft", Arguments: json.RawMessage(`{"text":"测试已经过了，十点前提 PR"}`),
+		SessionID: "s_agent"})); !strings.Contains(out, "in the user's inbox") {
+		t.Fatalf("inbox_draft: %s", out)
 	}
-	items, _ := feed(h, "conv1")
-	if len(items) != 1 || items[0].Kind != "message" || items[0].Ref != it.ID {
-		t.Fatalf("feed = %+v", items)
+	var items []assistant.FeedItem // its messages (the task's plan and card are there too)
+	all, _ := feed(h, "conv1")
+	for _, f := range all {
+		if f.Kind == "message" {
+			items = append(items, f)
+		}
+	}
+	if len(items) != 1 || items[0].Ref != it.ID {
+		t.Fatalf("feed = %+v", all)
 	}
 	var mb assistant.MessageCard
 	_ = json.Unmarshal(items[0].Body, &mb)
 	if mb.TodoID != todo.ID || mb.Draft != "测试已经过了，十点前提 PR" || mb.Sender != "陈晓" || mb.Chat != "客户端发版群" {
 		t.Fatalf("card = %+v", mb)
 	}
+}
+
+// inboxDraftCall is app.call inbox.draft as the assistant makes it.
+func inboxDraftCall(t *testing.T, h *Hub, params map[string]any) map[string]any {
+	t.Helper()
+	raw, _ := json.Marshal(params)
+	res, err := assistantLink{h}.AppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppInbox, Method: assistantwire.InboxDraft, Params: raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(res, &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }

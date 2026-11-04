@@ -25,7 +25,7 @@ import (
 
 // Tasks dispatched from an assistant conversation (docs/unified-entry.md, #930). The assistant hands the user a plan
 // (task_plan); read-only plans and kinds the user trusts start at once, the rest wait for the user's 开始 on the
-// plan card. A task is a todo (the hub's todos app) whose origin is the conversation; its agents are ordinary agents
+// plan card. A task is a todo (todos.go) whose origin is the conversation; its agents are ordinary agents
 // (the Agents page shows them as always). What the assistant adds to the conversation — the plan card, a started
 // task, an answered question, a receipt, a message sent straight to a task — is the conversation's feed, kept apart
 // from Claude's transcript.
@@ -262,7 +262,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 			return "", fmt.Errorf("task %d: unknown machine %q (machines: %s)", i+1, t.Machine, s.machineIDs(ctx))
 		}
 	}
-	if err := s.todosLoad(ctx); err != nil {
+	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return "", fmt.Errorf("todos are unavailable: %v", err)
 	}
 	now := time.Now().UTC()
@@ -286,7 +286,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		if len(titles) == 1 {
 			title = "有一件事等你开始"
 		}
-		here := s.hello(ctx).Assistant.MachineID
+		here := s.settings(ctx).MachineID
 		machineName := "Persona"
 		if m, ok := s.device(ctx, here); ok {
 			machineName = m.Name
@@ -384,7 +384,7 @@ var errPlanNotOpen = errors.New("this plan was already started or dismissed")
 // startPlan opens a todo for each task of the open plan id (edits, when given, replace the tasks' fields the user can
 // change) and starts their agents in the background; remember lets this kind start without asking next time.
 func (s *Service) startPlan(ctx context.Context, id string, edits []PlanTask, remember bool) (*TaskPlan, error) {
-	if err := s.todosLoad(ctx); err != nil {
+	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return nil, err
 	}
 	p, err := s.loadPlan(ctx, id)
@@ -484,7 +484,7 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 	}
 	if err == nil {
 		m, _ := s.machineByName(ctx, t.Machine)
-		err = s.linkTodoAgent(ctx, t.TodoID, m.ID, sid, t.Title, t.Cwd)
+		err = s.linkTodoAgent(ctx, t.TodoID, m.ID, sid, t.Title, t.Cwd, "")
 	}
 	if err == nil {
 		return
@@ -520,13 +520,13 @@ var (
 
 // retryTask starts again the agent of a task that did not start (#1396): the same task as its plan has it (machine,
 // directory, prompt, launcher, model, permission, title), in the same todo — reopened, its error and the plan's
-// cleared (app.call todos.retry) — so the task shows as starting where it was, not as a second one. A task already
+// cleared — so the task shows as starting where it was, not as a second one. A task already
 // starting again, or started since, is answered as it is: a double tap starts one agent. A machine that is offline is
 // refused before anything changes. A task that is open is not started again: one whose agent the model service cut
 // off is told to go on (continueTask).
-// The todo it answers is as the apps get it (todos.view).
+// The todo it answers is as the apps get it.
 func (s *Service) retryTask(ctx context.Context, todoID string) (json.RawMessage, error) {
-	if err := s.todosLoad(ctx); err != nil {
+	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return nil, err
 	}
 	cur, ok, err := s.todo(ctx, todoID)
@@ -578,15 +578,16 @@ func (s *Service) retryTask(ctx context.Context, todoID string) (json.RawMessage
 	if !m.Reachable {
 		return nil, fmt.Errorf("「%s」%w", m.Name, errMachineOffline)
 	}
-	var res struct {
-		Todo json.RawMessage `json:"todo"`
-		OK   bool            `json:"ok"`
-	}
-	if err := s.appCall(ctx, AppTodos, TodosRetry, map[string]any{"todo_id": todoID}, &res); err != nil {
+	reopened, ok, err := s.reopenFailedTodo(ctx, todoID)
+	if err != nil {
 		return nil, err
 	}
-	if !res.OK { // another hub sharing the store reopened it first
-		return res.Todo, nil
+	view, err := json.Marshal(reopened)
+	if err != nil {
+		return nil, err
+	}
+	if !ok { // another assistant sharing the store reopened it first
+		return view, nil
 	}
 	p.Tasks[i].Error = ""
 	if _, err := s.movePlan(ctx, p, planStarted); err != nil {
@@ -603,7 +604,7 @@ func (s *Service) retryTask(ctx context.Context, todoID string) (json.RawMessage
 		}()
 		s.startPlanTask(p.ID, p.Conversation, i, t, true)
 	}()
-	return res.Todo, nil
+	return view, nil
 }
 
 // continueText is what goes on a cut-off turn: what the chat's 重试 on an API error card sends.
@@ -661,21 +662,6 @@ func (s *Service) continueTask(ctx context.Context, cur Todo) (json.RawMessage, 
 		}
 	}()
 	return s.todoView(ctx, cur.ID)
-}
-
-// todoView is todo id as the apps get it (todos.view).
-func (s *Service) todoView(ctx context.Context, id string) (json.RawMessage, error) {
-	var res struct {
-		Todo json.RawMessage `json:"todo"`
-		OK   bool            `json:"ok"`
-	}
-	if err := s.appCall(ctx, AppTodos, TodosView, map[string]any{"todo_id": id}, &res); err != nil {
-		return nil, err
-	}
-	if !res.OK {
-		return nil, db.ErrTodoNotFound
-	}
-	return res.Todo, nil
 }
 
 // taskStartRetryDelay is how long a task waits before its one retry after a dropped link (tests shorten it).
@@ -736,18 +722,6 @@ func (s *Service) dismissPlan(ctx context.Context, id string) (*TaskPlan, error)
 }
 
 // ---- following a task's agents ----
-
-// taskOf is the task (a todo opened from an assistant conversation) the agent mid/sid works for.
-func (s *Service) taskOf(ctx context.Context, mid, sid string) (Todo, bool) {
-	var res struct {
-		Todo Todo `json:"todo"`
-		OK   bool `json:"ok"`
-	}
-	if err := s.appCall(ctx, AppTodos, TodosOfSession, map[string]any{"machine_id": mid, "session_id": sid}, &res); err != nil {
-		return Todo{}, false
-	}
-	return res.Todo, res.OK
-}
 
 // taskAgents are the sessions of t's active agents, as the clients see them (with state).
 func (s *Service) taskAgents(ctx context.Context, t Todo) []proto.Session {
@@ -871,7 +845,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 
 // routeToTask sends text straight to the agent of task todoID that most needs it, and keeps it in the conversation.
 func (s *Service) routeToTask(ctx context.Context, conversation, todoID, text string) (FeedItem, error) {
-	if err := s.todosLoad(ctx); err != nil {
+	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return FeedItem{}, err
 	}
 	t, ok, err := s.todo(ctx, todoID)
@@ -904,7 +878,7 @@ func (s *Service) routeToTask(ctx context.Context, conversation, todoID, text st
 	if _, ok := s.device(ctx, c.MachineID); !ok {
 		return FeedItem{}, errors.New("那台电脑不在线")
 	}
-	// An agent closed after its task was done (hub tasks_close.go) is resumed first: that can take minutes, and goes
+	// An agent closed after its task was done (tasks_close.go) is resumed first: that can take minutes, and goes
 	// on when the phone stops waiting, as a send from the chat does.
 	wait := 90 * time.Second
 	if c.Status == proto.StatusOffline {
@@ -1077,7 +1051,7 @@ func (s *Service) activeTasks(ctx context.Context) []prompts.InboxTask {
 // snapshotTasks are the tasks opened from assistant conversations that are going on or ended in the last day.
 func (s *Service) snapshotTasks(ctx context.Context) []prompts.SnapshotTask {
 	var list []Todo
-	for _, t := range s.todos(ctx, "*") {
+	for _, t := range s.todosOf(ctx, "*") {
 		if t.Origin != "" && (t.DoneAt == nil || time.Since(*t.DoneAt) < 24*time.Hour) && time.Since(t.UpdatedAt) < 7*24*time.Hour {
 			list = append(list, t)
 		}
@@ -1165,52 +1139,6 @@ func taskStateLabel(st string) string {
 	return map[string]string{"done": "已完成", "auto_done": "已完成（hub 判断做完了，自动关的）", "failed": "没开起来", "needs_you": "等用户",
 		"interrupted": "模型服务出错，中断了（没做完，等用户让它继续）", "unread": "做完了（用户还没看）", "working": "在做",
 		"followup": "停着", "not_started": "还没开始"}[st]
-}
-
-// ---- the hub's todos (app.call todos) ----
-
-// todosLoad: the todos can be read (an error says why not).
-func (s *Service) todosLoad(ctx context.Context) error {
-	return s.appCall(ctx, AppTodos, TodosLoad, map[string]any{}, nil)
-}
-
-// todo is todo id; an error when the todos can't be read.
-func (s *Service) todo(ctx context.Context, id string) (Todo, bool, error) {
-	var res struct {
-		Todo Todo `json:"todo"`
-		OK   bool `json:"ok"`
-	}
-	err := s.appCall(ctx, AppTodos, TodosGet, map[string]any{"todo_id": id}, &res)
-	return res.Todo, res.OK, err
-}
-
-// todos are the todos opened from conversation ("*": from any); none when they can't be read.
-func (s *Service) todos(ctx context.Context, conversation string) []Todo {
-	var res struct {
-		Todos []Todo `json:"todos"`
-	}
-	if err := s.appCall(ctx, AppTodos, TodosList, map[string]any{"origin": conversation}, &res); err != nil {
-		return nil
-	}
-	return res.Todos
-}
-
-func (s *Service) createTodo(ctx context.Context, title, notes, origin, planID string) (Todo, error) {
-	var res struct {
-		Todo Todo `json:"todo"`
-	}
-	err := s.appCall(ctx, AppTodos, TodosCreate, map[string]any{"title": title, "notes": notes, "origin": origin, "plan_id": planID}, &res)
-	return res.Todo, err
-}
-
-func (s *Service) linkTodoAgent(ctx context.Context, todoID, machine, sid, title, cwd string) error {
-	return s.appCall(ctx, AppTodos, TodosLinkAgent, map[string]any{"todo_id": todoID, "machine_id": machine, "session_id": sid,
-		"title": title, "cwd": cwd}, nil)
-}
-
-// failTodo ends a todo whose agent did not start: done, with why, and its agents no longer count for it.
-func (s *Service) failTodo(ctx context.Context, id, reason string) error {
-	return s.appCall(ctx, AppTodos, TodosFail, map[string]any{"todo_id": id, "reason": reason}, nil)
 }
 
 // ---- HTTP ----

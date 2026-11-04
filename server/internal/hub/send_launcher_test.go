@@ -17,7 +17,7 @@ import (
 // assistantStore answers the "assistant" setting with cfg, and keeps the others written to it (the assistant's).
 type assistantStore struct {
 	*memStore
-	cfg  AssistantConfig
+	cfg  assistant.Settings
 	mu   sync.Mutex
 	vals map[string][]byte
 }
@@ -56,7 +56,7 @@ func (s *assistantStore) PutSetting(_ context.Context, key string, v any) error 
 // conversations are left alone.
 func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	h := newTestHub(t)
-	h.store = &assistantStore{memStore: newMemStore(), cfg: AssistantConfig{MachineID: "box", Launcher: "ccc", Main: "main-1"}}
+	h.store = &assistantStore{memStore: newMemStore(), cfg: assistant.Settings{MachineID: "box", Launcher: "ccc", Main: "main-1"}}
 	m := newMachine(h, MachineConfig{ID: "box", Name: "box"})
 	h.byID["box"] = m
 	h.machines = append(h.machines, m)
@@ -251,6 +251,7 @@ func TestSendDropsAModelTheLauncherNoLongerOffers(t *testing.T) {
 			m.peer, m.online = hubPeer, true
 			m.sessions = []proto.Session{{SessionID: "side", Launcher: "l", Model: c.model, Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
 			m.mu.Unlock()
+			connectAssistant(t, h) // what a message to its conversation runs on is its decision
 			if code, out := call(t, h.routes(), "POST", "/api/v1/sessions/"+m.cfg.ID+"/side/messages", h.cfg.Token, `{"text":"hi"}`); code != 200 {
 				t.Fatalf("%d %v", code, out)
 			}

@@ -118,7 +118,7 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 		if p.ID == id {
 			p.CategoryID = modelCategoryID(id)
 			if p.Kind == "launcher" && p.ID != "agent.new" {
-				p.MachineID = h.assistantConfigLegacy(ctx).MachineID
+				p.MachineID = h.assistantProfile().MachineID
 			}
 			if h.cfg != nil {
 				if p.ID == "inbox.agent" && h.localMachine(h.cfg.Inbox.Agent.Machine) != nil {
@@ -246,9 +246,8 @@ func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, 
 		}
 		return ModelBinding{Provider: provider, Model: c.Model, Effort: c.ReasoningEffort}, "hub 配置", nil
 	}
-	if p.ID == "assistant" {
-		cfg := h.assistantConfigLegacy(ctx)
-		return ModelBinding{Provider: "launcher." + cfg.Launcher}, "助手默认", nil
+	if p.ID == "assistant" { // the assistant's own launcher (its settings, else hub.json's)
+		return ModelBinding{Provider: "launcher." + h.assistantProfile().Launcher}, "助手默认", nil
 	}
 	if p.Kind == "launcher" {
 		return ModelBinding{Provider: "launcher.claude"}, "默认", nil

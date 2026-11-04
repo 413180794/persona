@@ -96,7 +96,7 @@ func (s *Service) sendQuietNotice(id string) {
 	if n.state == "needs" && !s.taskWaits(ctx, n.todo) {
 		return // answered meanwhile (on the phone, the watch, another conversation)
 	}
-	here := s.hello(ctx).Assistant
+	here := s.settings(ctx)
 	if here.Main == "" || here.MachineID == "" {
 		s.logf("task %s: quiet notice: no main conversation", id)
 		return
@@ -158,7 +158,7 @@ func (s *Service) taskWaits(ctx context.Context, t Todo) bool {
 }
 
 // quietAgentTask: an agent agent_start opened from the main conversation is a quiet task while the user wants those
-// told only there: the hub makes the todo (if_quiet: none otherwise) and the agent is linked to it, so it goes like
+// told only there (quietTask): a todo is made and the agent is linked to it, so it goes like
 // a task_plan task (card, snapshot, receipt, notices). Without the setting it stays an agent of its own (false).
 func (s *Service) quietAgentTask(ctx context.Context, conversation string, m Device, cwd, prompt string, tab any, sid string) bool {
 	if sid == "" || !s.isMain(ctx, conversation) {
@@ -168,21 +168,19 @@ func (s *Service) quietAgentTask(ctx context.Context, conversation string, m Dev
 	if p := clip(oneLine(prompt), 40); p != "" {
 		title = p
 	}
-	var res struct {
-		Todo *Todo `json:"todo"`
+	if !s.quietTask(ctx, conversation) {
+		return false
 	}
-	if err := s.appCall(ctx, AppTodos, TodosCreate, map[string]any{"title": title, "notes": prompt, "origin": conversation, "if_quiet": true}, &res); err != nil {
+	todo, err := s.createTodo(ctx, title, prompt, conversation, "")
+	if err != nil {
 		s.logf("agent_start %s: todo: %v", short(sid), err)
 		return false
 	}
-	if res.Todo == nil || res.Todo.ID == "" {
-		return false
+	if err := s.linkTodoAgent(ctx, todo.ID, m.ID, sid, title, cwd, ""); err != nil {
+		s.logf("agent_start %s: link %s: %v", short(sid), todo.ID, err)
 	}
-	if err := s.linkTodoAgent(ctx, res.Todo.ID, m.ID, sid, title, cwd); err != nil {
-		s.logf("agent_start %s: link %s: %v", short(sid), res.Todo.ID, err)
-	}
-	if _, err := s.appendFeed(ctx, conversation, feedTask, res.Todo.ID, nil); err != nil {
-		s.logf("task %s: feed: %v", res.Todo.ID, err)
+	if _, err := s.appendFeed(ctx, conversation, feedTask, todo.ID, nil); err != nil {
+		s.logf("task %s: feed: %v", todo.ID, err)
 	}
 	return true
 }

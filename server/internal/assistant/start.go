@@ -1,0 +1,568 @@
+package assistant
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"path"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+// Starting the assistant's conversations (docs/assistant.md「进程」「新建主对话」): its directory on the machine is
+// prepared first (the CLAUDE.md written from what the hub tells it, the connectors' and plugins' skills), the model
+// configuration applied, then the node's assistant.send. The main conversation is one of them; putting it away for a
+// new one keeps what it left for the next one's first message.
+
+// errNoAssistantMachine: the hub has no machine for the assistant.
+var errNoAssistantMachine = errors.New("assistant machine is not configured")
+
+// mainTitle is the main conversation's title on the lists the apps get: it has no title of its own
+// (conversation_rename refuses it, the apps show the persona there), so neither its first message (the node's title for
+// a transcript without one) nor a model's name nor a rename shows up as one (#1313).
+const mainTitle = "Persona"
+
+var errRenameMain = errors.New("主对话没有标题可以改")
+
+// claudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md) for its machine here. Its machine
+// list is written from where the assistant actually runs: the ssh_host names are the hub machine's ssh aliases, which
+// work only for an assistant on the hub's own machine, and a link (or tailcat) machine has no ssh at all; from anywhere
+// else there is no command to give, only the Agents tools.
+func (s *Service) claudeMD(ctx context.Context, here string, larkCLI bool) string {
+	var dirs struct {
+		KnowledgeDir string   `json:"knowledge_dir"`
+		ExtraDirs    []string `json:"extra_dirs"`
+	}
+	if err := s.appCall(ctx, AppKB, KBDirs, map[string]any{}, &dirs); err != nil {
+		s.logf("assistant: knowledge base directories: %v", err)
+	}
+	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(s.hello(ctx).Owner), Notes: s.notes(ctx), ExtraDirs: dirs.ExtraDirs,
+		KnowledgeDir: dirs.KnowledgeDir, LarkCLI: larkCLI}
+	devices := s.devices(ctx)
+	if i := slices.IndexFunc(devices, func(d Device) bool { return d.ID == here }); i >= 0 {
+		d.OnHub = devices[i].Kind == "local"
+		if cwd := assistantCwd(devices[i]); cwd != "" {
+			d.StateDir = path.Dir(cwd)
+		}
+	}
+	for _, m := range devices {
+		local := m.ID == here
+		d.Machines = append(d.Machines, prompts.AssistantMachine{Name: m.Name, ID: m.ID, Local: local, SSHHost: m.SSHHost,
+			AgentsOnly: !local && !(d.OnHub && m.Kind == "ssh")})
+	}
+	return prompts.RenderAssistantClaudeMD(d)
+}
+
+// prepare tells machine's node what it needs before a message to the assistant (node assistant.prepare) and answers
+// the assistant's directory there: its CLAUDE.md with the plugins' parts, and the connectors signed in (rate limited
+// counts: still signed in), whose built-in skills it puts in the directory
+// (assistantskills.Requires) or takes out, and whose command lines it puts on the assistant's PATH (personad tool --cli <id>).
+// A plugin skill the node says it does not have goes with its files next time.
+func (s *Service) prepare(ctx context.Context, machine string) (string, error) {
+	var conns struct {
+		Connectors []string          `json:"connectors"`
+		CLIs       map[string]string `json:"clis"`
+		LarkCLI    bool              `json:"lark_cli"`
+	}
+	if err := s.appCall(ctx, AppConnectors, ConnectorsSignedIn, map[string]any{}, &conns); err != nil {
+		return "", err
+	}
+	var plugins struct {
+		Instructions string          `json:"instructions"`
+		Skills       json.RawMessage `json:"skills"`
+	}
+	if err := s.appCall(ctx, AppPlugins, PluginsAssistant, map[string]any{"machine_id": machine}, &plugins); err != nil {
+		return "", err
+	}
+	if len(plugins.Skills) == 0 {
+		plugins.Skills = json.RawMessage("null")
+	}
+	params := map[string]any{"dir": assistantDir, "claude_md": s.claudeMD(ctx, machine, conns.LarkCLI) + plugins.Instructions,
+		"connectors": conns.Connectors, "clis": conns.CLIs, "plugin_skills": plugins.Skills}
+	var prep struct {
+		Cwd  string   `json:"cwd"`
+		Need []string `json:"plugin_skills_need"`
+	}
+	if err := s.call(ctx, machine, DeviceAssistantPrepare, params, &prep); err != nil {
+		return "", err
+	}
+	if len(prep.Need) > 0 {
+		if err := s.appCall(ctx, AppPlugins, PluginsSkillsNeed, map[string]any{"machine_id": machine, "names": prep.Need}, nil); err != nil {
+			s.logf("assistant: plugin skills %v: %v", prep.Need, err)
+		}
+	}
+	return prep.Cwd, nil
+}
+
+// startOn starts a new conversation on machine: the directory prepared, the model configuration of p.Purpose ("" is
+// 主对话's) applied, then the node's assistant.send (headless: no herdr tab, streamed tokens, any launcher per message).
+func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (proto.Session, error) {
+	cwd, err := s.prepare(ctx, machine)
+	if err != nil {
+		return proto.Session{}, err
+	}
+	params := map[string]any{"cwd": cwd, "launcher": p.Launcher, "text": p.Text, "images": p.Images, "permission_mode": p.PermissionMode,
+		"effort": p.Effort}
+	purpose := p.Purpose
+	if purpose == "" {
+		purpose = "assistant"
+	}
+	if err := s.applyModel(ctx, purpose, params); err != nil {
+		return proto.Session{}, err
+	}
+	used, _ := params["launcher"].(string)
+	var res struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := s.call(ctx, machine, DeviceAssistantSend, params, &res); err != nil {
+		return proto.Session{}, err
+	}
+	sess := proto.Session{SessionID: res.SessionID, Cwd: cwd, Status: proto.StatusWorking, Launcher: used, PermissionMode: p.PermissionMode,
+		Effort: p.Effort, StartedByJarvis: true, UpdatedAt: time.Now().UTC()}
+	sess.MachineID, sess.Assistant, sess.State = machine, true, proto.StateWorking
+	return sess, nil
+}
+
+// start starts a conversation: on p.MachineID ("" the assistant's machine), or the main conversation.
+func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, error) {
+	if p.Main {
+		return s.startMain(ctx, p)
+	}
+	machine := p.MachineID
+	if machine == "" {
+		machine = s.settings(ctx).MachineID
+	}
+	sess, err := s.startOn(ctx, machine, p)
+	if errors.Is(err, ErrNoDevice) && p.MachineID == "" {
+		return proto.Session{}, errNoAssistantMachine
+	}
+	return sess, err
+}
+
+// startConversation starts a new conversation of the assistant's own (a scheduled task's, conversation_new's).
+func (s *Service) startConversation(ctx context.Context, p startParams) (proto.Session, error) {
+	return s.start(ctx, StartParams{Text: p.Text, PermissionMode: p.PermissionMode, Purpose: p.Purpose})
+}
+
+// Start is assistant.start: a conversation one of the hub's features starts (the Feishu bot, a channel, the inbox's AI
+// 分身). It is named after its first turn like the app's, unless it is untitled.
+func (s *Service) Start(ctx context.Context, p StartParams) (proto.Session, error) {
+	sess, err := s.start(ctx, p)
+	if err != nil {
+		return proto.Session{}, err
+	}
+	if !p.Untitled {
+		s.titleNew(sess.MachineID, sess.SessionID, time.Now(), "")
+	}
+	return sess, nil
+}
+
+// ---- the main conversation ----
+
+// mainHandoffKey is the setting with what the old main conversation left, until the next one takes it.
+const mainHandoffKey = "assistant.main_handoff"
+
+// maxFormerMains is how many earlier main conversations the assistant's machine keeps listing however quiet.
+const maxFormerMains = 10
+
+// mainHandoff is what a replaced main conversation left for the next one (node assistant.handoff).
+type mainHandoff struct {
+	From      string    `json:"from"`
+	MachineID string    `json:"machine_id"`
+	Until     time.Time `json:"until"`
+	// For: the new main conversation it waits in, started without a message (Android starts it empty, then sends).
+	For     string `json:"for,omitempty"`
+	Summary string `json:"summary,omitempty"`
+	Recent  []struct {
+		Role string `json:"role"`
+		Text string `json:"text"`
+	} `json:"recent,omitempty"`
+}
+
+// mainBook holds the main conversation still while it changes, and the handoff with no database.
+type mainBook struct {
+	mu      sync.Mutex
+	handoff mainHandoff
+}
+
+func (s *Service) loadHandoff(ctx context.Context) mainHandoff {
+	if st := s.store(); st != nil {
+		var h mainHandoff
+		if ok, err := st.Setting(ctx, mainHandoffKey, &h); err != nil || !ok {
+			return mainHandoff{}
+		}
+		return h
+	}
+	return s.main.handoff
+}
+
+func (s *Service) saveHandoff(ctx context.Context, h mainHandoff) error {
+	if st := s.store(); st != nil {
+		return st.PutSetting(ctx, mainHandoffKey, h)
+	}
+	s.main.handoff = h
+	return nil
+}
+
+// startMain starts a new main conversation with the user's first message: what the old one left goes before it
+// (prompts/assistant/main_handoff), once. Started without a message, it waits for the first one sent to it.
+func (s *Service) startMain(ctx context.Context, p StartParams) (proto.Session, error) {
+	s.main.mu.Lock()
+	defer s.main.mu.Unlock()
+	handoff := s.loadHandoff(ctx)
+	empty := strings.TrimSpace(p.Text) == "" && len(p.Images) == 0
+	if handoff.From != "" && !empty {
+		p.Text = s.renderHandoff(ctx, handoff, p.Text)
+	}
+	p.MachineID, p.Purpose, p.Main = "", "", false
+	sess, err := s.start(ctx, p)
+	if err != nil {
+		return proto.Session{}, err
+	}
+	if _, err := s.updateSettings(ctx, func(v *Settings) error {
+		*v = s.effective(ctx, *v)
+		v.Main = sess.SessionID
+		return nil
+	}); err != nil {
+		s.logf("assistant: save main: %v", err)
+	}
+	if handoff.From != "" {
+		next := mainHandoff{} // used
+		if empty {
+			next, next.For = handoff, sess.SessionID
+		}
+		if err := s.saveHandoff(ctx, next); err != nil {
+			s.logf("assistant: what the old main conversation left: %v", err)
+		}
+	}
+	s.settingsChanged(ctx)
+	return sess, nil
+}
+
+// newMain puts the main conversation away: what it left is kept for the next one (carry), it is no longer the main
+// one, renamed and archived. The next message to the main conversation starts a new one (startMain). It answers the
+// old conversation's id ("" when there was none) and whether anything of it is carried over.
+func (s *Service) newMain(ctx context.Context, carry bool, expect string) (string, bool, error) {
+	s.main.mu.Lock()
+	defer s.main.mu.Unlock()
+	cfg := s.settings(ctx)
+	old := cfg.Main
+	if expect != "" && expect != old {
+		return "", false, &rpc.Error{Code: "main_changed", Message: "主对话已经换过了，刷新后再试"}
+	}
+	if old == "" {
+		return "", false, nil
+	}
+	machine, c, found := s.findSession(ctx, old, cfg.MachineID)
+	if found && (c.Status == proto.StatusWorking || (c.Compaction != nil && c.Compaction.State == proto.CompactionRunning)) {
+		return "", false, &rpc.Error{Code: "busy", Message: "主对话正在回答或压缩，等它停下再新建"}
+	}
+	if !found {
+		machine = cfg.MachineID
+	}
+	now := time.Now().UTC()
+	handoff := mainHandoff{From: old, MachineID: machine, Until: now}
+	carried := false
+	if carry && found {
+		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		err := s.call(cctx, machine, DeviceAssistantHandoff, map[string]any{"session_id": old}, &handoff)
+		cancel()
+		handoff.From, handoff.MachineID, handoff.Until = old, machine, now
+		if err != nil {
+			s.logf("assistant: what the main conversation left: %v", err)
+		}
+		carried = handoff.Summary != "" || len(handoff.Recent) > 0
+	}
+	if err := s.saveHandoff(ctx, handoff); err != nil {
+		return "", false, err
+	}
+	if _, err := s.updateSettings(ctx, func(v *Settings) error {
+		*v = s.effective(ctx, *v)
+		v.Main = ""
+		v.Former = slices.DeleteFunc(v.Former, func(f FormerMain) bool { return f.SessionID == old })
+		v.Former = append([]FormerMain{{MachineID: machine, SessionID: old, Until: now}}, v.Former...)
+		if len(v.Former) > maxFormerMains {
+			v.Former = v.Former[:maxFormerMains]
+		}
+		return nil
+	}); err != nil {
+		return "", false, err
+	}
+	local := now.In(s.location(ctx))
+	s.titleSet(machine, old, fmt.Sprintf("旧主对话 · 至 %d月%d日", local.Month(), local.Day()), titleByUser)
+	if _, err := s.setArchived(ctx, machine, old, true, titleByUser); err != nil {
+		s.logf("assistant: archive the old main conversation %s: %v", short(old), err)
+	}
+	s.settingsChanged(ctx)
+	s.logf("assistant: main conversation %s put away (carried over: %v)", short(old), carried)
+	return old, carried, nil
+}
+
+// findSession is the session id on the machine preferred, else on any machine (false when none lists it).
+func (s *Service) findSession(ctx context.Context, id, preferred string) (string, proto.Session, bool) {
+	machines := []string{preferred}
+	for _, d := range s.devices(ctx) {
+		if d.ID != preferred {
+			machines = append(machines, d.ID)
+		}
+	}
+	for _, m := range machines {
+		if c, ok := s.session(ctx, m, id); ok {
+			return m, c, true
+		}
+	}
+	return "", proto.Session{}, false
+}
+
+// handoffFor is the text of a message to conversation sid: with what the old main conversation left before it when
+// sid is the new main one that was started empty and this is the first message to it.
+func (s *Service) handoffFor(ctx context.Context, sid, text string) string {
+	if sid == "" {
+		return text
+	}
+	s.main.mu.Lock()
+	defer s.main.mu.Unlock()
+	handoff := s.loadHandoff(ctx)
+	if handoff.From == "" || handoff.For != sid {
+		return text
+	}
+	if err := s.saveHandoff(ctx, mainHandoff{}); err != nil {
+		s.logf("assistant: clear what the old main conversation left: %v", err)
+		return text
+	}
+	return s.renderHandoff(ctx, handoff, text)
+}
+
+// renderHandoff puts what the old main conversation left before text (prompts/assistant/main_handoff).
+func (s *Service) renderHandoff(ctx context.Context, handoff mainHandoff, text string) string {
+	hp := prompts.MainHandoff{FromID: handoff.From, Summary: handoff.Summary, Text: text}
+	local := handoff.Until.In(s.location(ctx))
+	hp.Until = fmt.Sprintf("%d月%d日 %02d:%02d", local.Month(), local.Day(), local.Hour(), local.Minute())
+	for _, t := range handoff.Recent {
+		hp.Recent = append(hp.Recent, prompts.HandoffTurn{Role: t.Role, Text: t.Text})
+	}
+	return prompts.RenderMainHandoff(hp)
+}
+
+// ---- the routes ----
+
+func (s *Service) startRoutes() {
+	s.handle("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Prompt         string        `json:"prompt"`
+			Images         []proto.Image `json:"images"`
+			Launcher       string        `json:"launcher"`
+			PermissionMode string        `json:"permission_mode"`
+			Effort         string        `json:"effort"`
+			Main           bool          `json:"main"` // becomes the main conversation
+			// Purpose is the model purpose it runs under ("assistant" when empty; a plugin's /agent asks for its own);
+			// MachineID one of the hub's machines instead of the assistant's (docs/protocol.md「助手」).
+			Purpose   string `json:"purpose"`
+			MachineID string `json:"machine_id"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&in); err != nil {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 110*time.Second)
+		defer cancel()
+		if in.Purpose != "" {
+			if _, err := s.resolveModel(ctx, in.Purpose); err != nil {
+				apierr.Write(w, http.StatusBadRequest, fmt.Errorf("purpose %q: %w", in.Purpose, err))
+				return
+			}
+		}
+		if in.MachineID != "" {
+			if _, ok := s.device(ctx, in.MachineID); !ok {
+				apierr.Write(w, http.StatusBadRequest, fmt.Errorf("no machine %q", in.MachineID))
+				return
+			}
+		}
+		// The main conversation is the assistant's, on its machine.
+		sess, err := s.Start(ctx, StartParams{Text: in.Prompt, Images: in.Images, Launcher: in.Launcher, PermissionMode: in.PermissionMode,
+			Effort: in.Effort, Purpose: in.Purpose, MachineID: in.MachineID, Main: in.Main})
+		if err != nil {
+			apierr.Call(w, err)
+			return
+		}
+		apierr.WriteJSON(w, map[string]any{"session": sess})
+	})
+	s.handle("POST /api/v1/assistant/conversations/{id}/compact", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			MachineID string `json:"machine_id"` // "" is the assistant's machine
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
+		if in.MachineID == "" {
+			in.MachineID = s.settings(r.Context()).MachineID
+		}
+		if _, ok := s.device(r.Context(), in.MachineID); !ok {
+			apierr.Write(w, http.StatusBadRequest, fmt.Errorf("no machine %q", in.MachineID))
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), time.Minute) // a process may have to start first
+		defer cancel()
+		if err := s.call(ctx, in.MachineID, DeviceAssistantCompact, map[string]any{"session_id": r.PathValue("id")}, nil); err != nil {
+			apierr.Call(w, err)
+			return
+		}
+		apierr.WriteJSON(w, map[string]any{"ok": true})
+	})
+	s.handle("POST /api/v1/assistant/main/new", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Carry  string `json:"carry"`  // summary (default) | none
+			Expect string `json:"expect"` // the main conversation the app shows: refused when it is another by now
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
+		if in.Carry != "" && in.Carry != "summary" && in.Carry != "none" {
+			apierr.Write(w, http.StatusBadRequest, fmt.Errorf("carry %q: summary or none", in.Carry))
+			return
+		}
+		old, carried, err := s.newMain(r.Context(), in.Carry != "none", in.Expect)
+		if err != nil {
+			apierr.Call(w, err)
+			return
+		}
+		apierr.WriteJSON(w, map[string]any{"ok": true, "archived": old, "carried": carried})
+	})
+}
+
+// ---- what the hub asks about a message or a rename ----
+
+// badRequest is err as the refusal of a request that is wrong as it is (the hub answers it 400).
+func badRequest(err error) error {
+	return &rpc.Error{Code: CodeBadRequest, Message: err.Error()}
+}
+
+// SendParams is assistant.send_params: a message for conversation p.SessionID on p.MachineID, with what it runs on
+// filled in (sendModel) and, the first one to a new main conversation started empty, what the old one left before
+// its text. A conversation the machine does not list (yet) that is not the main one keeps what it runs on.
+func (s *Service) SendParams(ctx context.Context, p SendParams) (map[string]any, error) {
+	params := p.Params
+	if params == nil {
+		params = map[string]any{}
+	}
+	cfg := s.settings(ctx)
+	main := cfg.Main != "" && cfg.Main == p.SessionID && cfg.MachineID == p.MachineID
+	if !main {
+		if _, known := s.session(ctx, p.MachineID, p.SessionID); !known {
+			return params, nil
+		}
+	}
+	if err := s.sendModel(ctx, p.MachineID, p.SessionID, params); err != nil {
+		return nil, badRequest(err)
+	}
+	if text, ok := params["text"].(string); ok && main {
+		params["text"] = s.handoffFor(ctx, p.SessionID, text)
+	}
+	return params, nil
+}
+
+// sendModel puts into p (a message for one of the assistant's conversations, sid on machine) which launcher and model
+// run it: one picked in the chat's menu (sent with the message) wins; else the main conversation and a scheduled
+// task's own conversation (早报's, #1544) follow 模型配置 › 主对话, and the others keep what they run. Those two follow
+// the setting on every message, not what they ran last: once a run had moved one to another launcher, every later
+// message stayed there (#1518). A launcher or model that is gone falls back to the assistant's. A picked one is checked
+// and fingerprinted like a configured one. The phone's messages, the node's own and the follow-ups the assistant
+// schedules for itself (runTask) all go through here.
+func (s *Service) sendModel(ctx context.Context, machine, sid string, p map[string]any) error {
+	cfg := s.settings(ctx)
+	followsSetting := cfg.Main != "" && cfg.Main == sid && cfg.MachineID == machine || s.isTaskConversation(ctx, machine, sid)
+	l, _ := p["launcher"].(string)
+	if l == "" && !followsSetting {
+		if c, known := s.session(ctx, machine, sid); known {
+			l = c.Launcher // no launcher picked: the one this conversation runs
+			if l != "" {
+				p["launcher"] = l
+			}
+			if _, picked := p["model"]; !picked && c.Model != "" {
+				p["model"] = c.Model // and the model it runs, so no pick keeps it
+			}
+		}
+	}
+	// A launcher or model that is gone (a renamed managed launcher, a model the gateway dropped) fails every turn:
+	// fall back to the assistant's launcher and its default.
+	if l != "" {
+		model, _ := p["model"].(string)
+		var check struct {
+			Available bool `json:"available"`
+			ModelOK   bool `json:"model_ok"`
+		}
+		err := s.appCall(ctx, AppModels, ModelsLauncherCheck, map[string]any{"machine_id": machine, "launcher": l, "model": model}, &check)
+		switch {
+		case err != nil: // can't be told: as it is
+		case !check.Available:
+			l = s.launcherNow(ctx)
+			s.logf("[%s] %s: its launcher is gone, using %s", machine, short(sid), l)
+			p["launcher"] = l
+			delete(p, "model")
+		case model != "" && !check.ModelOK:
+			s.logf("[%s] %s: model %s is not in %s's list any more, using its default", machine, short(sid), model, l)
+			delete(p, "model")
+		}
+	}
+	if l != "" {
+		var res struct {
+			Params map[string]any `json:"params"`
+		}
+		if err := s.appCall(ctx, AppModels, ModelsApplyPicked, map[string]any{"params": p}, &res); err != nil {
+			return err
+		}
+		clear(p)
+		for k, v := range res.Params {
+			p[k] = v
+		}
+		return nil
+	}
+	return s.applyModel(ctx, "assistant", p)
+}
+
+// isTaskConversation: sid on machine is a scheduled task's own conversation.
+func (s *Service) isTaskConversation(ctx context.Context, machine, sid string) bool {
+	return slices.ContainsFunc(s.taskViews(ctx), func(t TaskView) bool { return t.RunSessionID == sid && t.RunMachineID == machine })
+}
+
+// Rename is assistant.rename: the user renames conversation p.SessionID in the app ({title?, tab_name?}). The main
+// conversation has no title to change; a Codex one keeps the assistant's title (its tab is still renamed). The node
+// renames; a new title is the user's from now on.
+func (s *Service) Rename(ctx context.Context, p RenameParams) (json.RawMessage, error) {
+	params := p.Params
+	if params == nil {
+		params = map[string]any{}
+	}
+	params["session_id"] = p.SessionID
+	title, _ := params["title"].(string)
+	if strings.TrimSpace(title) != "" && s.isMain(ctx, p.SessionID) {
+		return nil, badRequest(errRenameMain) // the apps show the persona there (#1313)
+	}
+	if c, _ := s.session(ctx, p.MachineID, p.SessionID); c.Agent == "codex" {
+		delete(params, "title") // only the assistant's title for Codex (its conversation_rename does the same)
+	}
+	out := json.RawMessage(`{"ok":true}`)
+	if params["title"] != nil || params["tab_name"] != nil {
+		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		if err := s.call(cctx, p.MachineID, DeviceSessionRename, params, &out); err != nil {
+			return nil, err
+		}
+	}
+	if strings.TrimSpace(title) != "" {
+		s.titleSet(p.MachineID, p.SessionID, title, titleByUser)
+	}
+	return out, nil
+}

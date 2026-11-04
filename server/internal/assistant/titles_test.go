@@ -35,7 +35,7 @@ func TestMakeTitle(t *testing.T) {
 	first, reply := "搜索的时候搜索框和顶栏叠在一起了，帮我看看", "是 safeAreaBar 和搜索框抽屉一起用导致的……"
 	model := func(replies ...string) (*Service, *fakeHub) {
 		f := newFakeHub()
-		f.hello.Timezone = "Asia/Shanghai"
+		f.settings = &Settings{Timezone: "Asia/Shanghai"}
 		f.replies = replies
 		return newTestService(t, f), f
 	}

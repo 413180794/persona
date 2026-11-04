@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/extension"
@@ -462,7 +463,7 @@ func TestExtensionsGetTheUserTimezone(t *testing.T) {
 		t.Fatalf("%d %v", code, out)
 	}
 	for _, tz := range []string{"", "Asia/Shanghai"} {
-		h.userTZ = tz
+		reportProfile(h, assistantwire.Profile{Timezone: tz})
 		s, err := h.extensions.spec(context.Background(), h.extensions.reg.Get("example-notes"), &hubExtension{id: "example-notes"})
 		if err != nil {
 			t.Fatal(err)
@@ -475,7 +476,8 @@ func TestExtensionsGetTheUserTimezone(t *testing.T) {
 }
 
 // A connector's command line (connector.Manifest.CLI, #1704) reaches the assistant's machine with the connectors
-// signed in, as its name and the connector it runs (assistant.prepare's clis): only while the connector is signed in.
+// signed in, as its name and the connector it runs (connectors.signed_in's clis, which the assistant passes on in
+// assistant.prepare): only while the connector is signed in.
 func TestAssistantGetsTheConnectorsCommandLines(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	mux := h.routes()
@@ -488,9 +490,16 @@ func TestAssistantGetsTheConnectorsCommandLines(t *testing.T) {
 	if code, out := call(t, mux, "POST", "/api/v1/plugins/-/install", master, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"])); code != 200 {
 		t.Fatalf("%d %v", code, out)
 	}
-	m := &Machine{cfg: MachineConfig{ID: "server"}}
 	clis := func() map[string]string {
-		return h.assistantPrepare(context.Background(), m)["clis"].(map[string]string)
+		raw, _, err := h.assistantAppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppConnectors,
+			Method: assistantwire.ConnectorsSignedIn})
+		var res struct {
+			CLIs map[string]string `json:"clis"`
+		}
+		if err != nil || json.Unmarshal(raw, &res) != nil {
+			t.Fatal(err)
+		}
+		return res.CLIs
 	}
 	if len(clis()) != 0 {
 		t.Fatal("not signed in yet, a command line:", clis())

@@ -51,7 +51,6 @@ type Hub struct {
 	store       Store      // nil in unit tests: nothing is persisted
 	workspaceMu sync.Mutex // serializes read-only workspace discovery and snapshot commits
 	modelMu     sync.Mutex // serializes legacy writes and test stores without a database CAS
-	mainMu      sync.Mutex // one change of the main conversation at a time (assistant_main.go)
 	ai          *ai.Client
 	// The inbox's own models (inbox_agent.go): 1 triages, 2 decides what the agent (3) should take on.
 	triageAI, judgeAI *ai.Client
@@ -86,7 +85,6 @@ type Hub struct {
 	calls         map[string]chan proto.ToolResult
 	seen          map[[2]string]time.Time // (machine, session) -> when the user last looked at it
 	stateSince    map[[2]string]stateMark // (machine, session) -> its state and when it entered it
-	userTZ        string                  // the phone's time zone (assistant settings)
 	wokeAt        map[string]time.Time    // device -> last silent push to wake it for a tool call
 	notified      map[string]time.Time    // assistant conversation -> when it last pushed with notify_user
 	kbAgentLogged map[string]time.Time    // agent -> when its result last went into a project timeline (kb.go)
@@ -101,9 +99,11 @@ type Hub struct {
 	ports portOpens // ports the user opened in the app (ports.go)
 	// assistant: what the assistant (internal/assistant, its own process on the bus) last reported (assistant_link.go).
 	assistant assistantState
-	deleted   deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
-	inbox     inbox       // the unified inbox (inbox.go)
-	kb        kbState     // the knowledge base under ~/.jarvis/data (kb.go)
+	// keepMu: one node.configure keep_sessions at a time (keepChanged, assistant_profile.go).
+	keepMu  sync.Mutex
+	deleted deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
+	inbox   inbox       // the unified inbox (inbox.go)
+	kb      kbState     // the knowledge base under ~/.jarvis/data (kb.go)
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots     botHub
 	channels channelsHub
@@ -119,7 +119,7 @@ type Hub struct {
 	mesh  meshState // the other hubs of the mesh group (mesh.go)
 	fleet fleet     // the machines and their paths, the members' computers among them (mesh_paths.go)
 
-	todos todosState
+	todoLinks todoLinks // what the assistant reports of its todos (assistant_todos.go)
 
 	connectors *connector.Registry // sources of the user's information (connectors.go)
 	// migrated are the hub's own connectors a plugin took over (connectors_migrate.go): id → the hub's, for when the plugin goes.
@@ -203,27 +203,6 @@ type Store interface {
 	RedeemPairToken(ctx context.Context, pairHash string, device db.DeviceToken, tokenHash string) (bool, error)
 	PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error
 	InboxItems(ctx context.Context, doneSince time.Time) ([][]byte, error)
-	ListTodos(ctx context.Context) ([]db.TodoRow, error)
-	ListAllTodoSpaces(ctx context.Context) ([]db.TodoSpaceRow, error)
-	ListAllTodoAgents(ctx context.Context) ([]db.TodoAgentRow, error)
-	GetTodo(ctx context.Context, id string) (*db.TodoRow, error)
-	CreateTodo(ctx context.Context, t db.TodoRow) error
-	UpdateTodo(ctx context.Context, id string, title *string, notes *string, done *bool, updatedAt time.Time) (*db.TodoRow, error)
-	FailTodo(ctx context.Context, id, startError string, at time.Time) (*db.TodoRow, error)
-	AutoDoneTodo(ctx context.Context, id, reason string, at, workSince time.Time) (*db.TodoRow, bool, error)
-	RetryTodo(ctx context.Context, id string, at time.Time) (*db.TodoRow, bool, error)
-	DeleteTodo(ctx context.Context, id string) error
-	LinkTodoSpace(ctx context.Context, todoID, machineID, space string, linkedAt time.Time) (string, error)
-	UnlinkTodoSpace(ctx context.Context, todoID, machineID, space string) error
-	RenameTodoSpace(ctx context.Context, machineID, oldSpace, newSpace string) (bool, error)
-	LinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError string, linkedAt time.Time) ([]string, error)
-	LinkTodoAgentWithSource(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) ([]string, error)
-	AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) (bool, []string, error)
-	UnlinkTodoAgent(ctx context.Context, todoID, machineID, sessionID string) error
-	UpdateTodoAgentSnapshot(ctx context.Context, machineID, sessionID, title, startError string) error
-	ListTodoDecisions(ctx context.Context, todoID string, all bool) ([]db.TodoDecisionRow, error)
-	InsertTodoDecision(ctx context.Context, r db.TodoDecisionRow) (bool, error)
-	SetTodoDecisionSupersedes(ctx context.Context, todoID, id, supersedesID string, at time.Time) (*db.TodoDecisionRow, error)
 	CreateTaskPlan(ctx context.Context, p db.TaskPlanRow) error
 	TaskPlan(ctx context.Context, id string) (*db.TaskPlanRow, error)
 	TaskPlans(ctx context.Context, conversation string) ([]db.TaskPlanRow, error)
@@ -287,7 +266,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		shutdown:  budget, cfg: cfg, version: b.Version, build: b, logger: log.New(os.Stderr, "", log.LstdFlags),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
-		todos: newTodosState(),
 	}
 	h.live = newLiveActivities(h)
 	h.upd = newUpdater(h)
@@ -358,7 +336,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	}
 	h.push.hubID = h.hubID
 	h.initAgents()
-	h.initTodos(ctx)
 	h.connectors = connector.NewRegistry(cfg.ConnectorGate)
 	for _, mc := range cfg.Machines {
 		m := newMachine(h, mc)
@@ -382,14 +359,14 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.superviseAssistant(ctx) // the assistant, its own process on the bus (assistant_process.go)
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
-	go h.taskCloseLoop(ctx) // the agents of finished tasks (tasks_close.go)
 	go h.workLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
 	go h.noLockLoop(ctx)         // 「插件开着时不自动锁屏」 said again to its Macs (computer_nolock.go)
 	go h.extensionLeaseLoop(ctx) // plugins' programs on computers keep running (extension_nodes.go)
 	h.extensions = newExtensions(cfg.dir, cfg.Extensions, h.logf)
-	h.startConnectors(ctx) // the plugins' connectors join here (attachPlugins)
+	h.loadAssistantProfile(ctx) // the user's zone and the main conversation before the assistant reports (assistant_profile.go)
+	h.startConnectors(ctx)      // the plugins' connectors join here (attachPlugins)
 	h.upd.start(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
 	h.startExtensions(ctx)
@@ -438,15 +415,12 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	h.mu.Unlock()
 	shown := h.assistantShown()
 	via := h.channelsOfConversations()
-	main := h.mainConversation(m.cfg.ID, list, dir)
 	for i := range list {
 		list[i].MachineID = m.cfg.ID
 		list[i].PendingInteractions = counts[list[i].SessionID]
 		list[i].Assistant = isAssistant(list[i], dir)
-		if list[i].Assistant && list[i].SessionID == main {
-			list[i].Title = mainTitle // never its first message, a model's name or a rename (#1313)
-		} else if t := shown[list[i].SessionID].Title; t != "" && list[i].Assistant {
-			list[i].Title = t // 「MMDD | 类型 | 主题」 or the user's own (assistant/titles.go)
+		if t := shown[list[i].SessionID].Title; t != "" && list[i].Assistant {
+			list[i].Title = t // 「MMDD | 类型 | 主题」, the user's own, 「Persona」 for the main one (assistant/titles.go)
 		}
 		if ch := via[[2]string{m.cfg.ID, list[i].SessionID}]; len(ch) > 0 {
 			list[i].Channels = ch // where its messages came from (docs/channels.md「来源标记」)
@@ -466,19 +440,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 			list[i].State = workState(list[i].State, list[i].Work)
 		}
 	}
-	h.todos.mu.RLock()
-	if h.todos.loaded {
-		quiet := h.quietSessionsLocked()
-		for i := range list {
-			if tid, ok := h.todos.activeBySession[[2]string{m.cfg.ID, list[i].SessionID}]; ok {
-				if t, ok := h.todos.todos[tid]; ok && t.DoneAt == nil {
-					list[i].Todo = &proto.TodoRef{ID: t.ID, Title: t.Title}
-				}
-			}
-			list[i].Quiet = quiet[[2]string{m.cfg.ID, list[i].SessionID}]
-		}
-	}
-	h.todos.mu.RUnlock()
+	h.decorateTodos(m.cfg.ID, list) // the todos the assistant reported (assistant_todos.go)
 	for i := range list {
 		list[i].SpawnFrom = "" // stripped before push to client (#762)
 	}
@@ -487,10 +449,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 }
 
 func (h *Hub) sessionsChanged(m *Machine) {
-	h.autoLinkTodos(m)
-	h.syncTodoTokensToNode(m)
 	list := h.decorated(m)
-	h.checkAndUpdateTodoSnapshots(m, list)
 	h.broadcastSessions(m, list)
 	h.syncScreenInteractions(m, list)
 	h.syncPlanInteractions(m)
@@ -991,14 +950,12 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		h.recordEnd(id, status, &kept)
 		h.finished(p)
 		go h.taskAnswered(p.ix, r, status)
-		go h.cardDecisions(p.ix, r, status)
 		return err
 	}
 	kept := redacted(p.ix, r)
 	h.recordEnd(id, status, &kept)
 	h.botResolution(p.ix, r)
 	go h.taskAnswered(p.ix, r, status)
-	go h.cardDecisions(p.ix, r, status)
 	select {
 	case p.done <- r:
 	default:
@@ -1081,7 +1038,7 @@ func (h *Hub) pendingInteractions() []proto.Interaction {
 		out = append(out, p.ix)
 	}
 	h.mu.Unlock()
-	for i := range out { // after h.mu: the task comes from the todos' lock
+	for i := range out { // after h.mu: the task comes from the assistant's report
 		out[i] = h.withTask(out[i])
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })

@@ -7,8 +7,8 @@ import (
 )
 
 // What a plugin's /agent asks of the hub: a chat's knowledge-base context (read only), a new conversation under a
-// purpose the hub knows on one of its machines (anything else is refused before starting), and the hub's own
-// lark_agent_reply out of the way while a plugin serves Feishu.
+// purpose the hub knows on one of its machines (the assistant's route: anything else is refused before starting), and
+// the hub's own lark_agent_reply out of the way while a plugin serves Feishu.
 func TestAgentAPIForExtensions(t *testing.T) {
 	h := newTestHub(t)
 	st, err := kb.NewStore(t.TempDir())
@@ -19,6 +19,7 @@ func TestAgentAPIForExtensions(t *testing.T) {
 	if err := st.PutChat(&kb.Chat{ID: "lark-7", Source: "lark", SourceID: "7", Kind: "group", Name: "示例群"}); err != nil {
 		t.Fatal(err)
 	}
+	connectAssistant(t, h)
 	mux := h.routes()
 	tok := h.cfg.Token
 	code, out := call(t, mux, "GET", "/api/v1/kb/chats/lark-7/context", tok, "")

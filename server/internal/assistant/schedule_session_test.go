@@ -59,15 +59,16 @@ func TestATaskRunsInItsOwnConversation(t *testing.T) {
 	if runs[0].SessionID != first.SessionID || runs[1].SessionID != first.SessionID || runs[1].Status != runOK {
 		t.Fatalf("both runs are recorded in that conversation: %+v", runs)
 	}
+	// The hub has its node keep listing the task's conversation however quiet (the profile's keep).
 	deadline := time.Now().Add(5 * time.Second)
-	for !slices.Contains(n.keptNow(), first.SessionID) {
+	for p := n.lastSnapshot().Profile; p == nil || !slices.Contains(p.Keep, SessionRef{MachineID: "server", SessionID: first.SessionID}); p = n.lastSnapshot().Profile {
 		if time.Now().After(deadline) {
-			t.Fatalf("the node keeps listing the task's conversation however quiet: %v", n.keptNow())
+			t.Fatalf("the hub is told to keep the task's conversation listed: %+v", p)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	if v := n.lastSnapshot().Tasks; len(v) != 1 || v[0].RunSessionID != first.SessionID {
-		t.Fatalf("and the hub is told (for when the node reconnects): %+v", v)
+		t.Fatalf("and the hub is told the task: %+v", v)
 	}
 }
 

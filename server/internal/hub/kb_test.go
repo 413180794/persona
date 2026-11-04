@@ -1,13 +1,17 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -22,17 +26,32 @@ func testKBHub(t *testing.T) *Hub {
 	return h
 }
 
+// The kb_* tools, the assistant's, on the hub's knowledge base (app.call kb.*): written, listed, read (a project by
+// its name), searched.
 func TestKBTools(t *testing.T) {
-	h := testKBHub(t)
+	h := newTestHub(t)
+	st, err := kb.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.kb.eng = &kb.Engine{Store: st, Owner: "我"}
 	e := h.kb.eng
 	c := &kb.Chat{ID: kb.ChatID("lark", "f1"), Source: "lark", SourceID: "f1", Kind: "group", Name: "发布群", Created: time.Now()}
 	_ = e.Store.PutChat(c)
 	_ = e.Store.AppendMessages(c, []kb.Line{{At: time.Now(), Sender: "张三", Text: "周五灰度 Jarvis"}})
 	_ = e.Store.PutSummary(kb.KindChat, c.ID, "# 发布群\n\n在推 Jarvis 发布")
+	connectAssistant(t, h)
+	tool := func(name, args string) string {
+		t.Helper()
+		r := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: name, Arguments: json.RawMessage(args)})
+		if r.IsError {
+			t.Fatalf("%s: %s", name, textOf(r))
+		}
+		return textOf(r)
+	}
 
-	out, err := h.runKBTool("kb_update", json.RawMessage(`{"kind":"projects","id":"Jarvis 发布","project_kind":"long","importance":"P0","relevance":95,"log":"定了周五灰度","chats":["lark-f1"],"dirs":["server:/code/jarvis"]}`))
-	if err != nil || !strings.Contains(out, "projects/jarvis-发布") {
-		t.Fatalf("update: %q %v", out, err)
+	if out := tool("kb_update", `{"kind":"projects","id":"Jarvis 发布","project_kind":"long","importance":"P0","relevance":95,"log":"定了周五灰度","chats":["lark-f1"],"dirs":["server:/code/jarvis"]}`); !strings.Contains(out, "projects/jarvis-发布") {
+		t.Fatalf("update: %q", out)
 	}
 	p, _ := e.Store.Project("jarvis-发布")
 	if p.Kind != "long" || !p.Locked || p.Importance != "P0" || len(p.Chats) != 1 || p.Dirs[0] != "server:/code/jarvis" {
@@ -41,17 +60,23 @@ func TestKBTools(t *testing.T) {
 	if c2, _ := e.Store.Chat("lark-f1"); len(c2.Projects) != 1 {
 		t.Fatalf("chat not linked back: %+v", c2)
 	}
-	if out, _ := h.runKBTool("kb_list", json.RawMessage(`{"kind":"projects"}`)); !strings.Contains(out, "Jarvis 发布 [P0 相关95]") {
+	if out := tool("kb_list", `{"kind":"projects"}`); !strings.Contains(out, "Jarvis 发布 [P0 相关95]") {
 		t.Fatalf("list: %q", out)
 	}
-	if out, _ := h.runKBTool("kb_get", json.RawMessage(`{"kind":"projects","id":"Jarvis 发布"}`)); !strings.Contains(out, "定了周五灰度") {
+	if out := tool("kb_get", `{"kind":"projects","id":"Jarvis 发布"}`); !strings.Contains(out, "定了周五灰度") {
 		t.Fatalf("get project by name: %q", out)
 	}
-	if out, _ := h.runKBTool("kb_get", json.RawMessage(`{"kind":"chats","id":"lark-f1"}`)); !strings.Contains(out, "周五灰度 Jarvis") || !strings.Contains(out, "在推 Jarvis 发布") {
+	// meta.json reads as the file has it.
+	meta, _ := os.ReadFile(filepath.Join(e.Store.Dir, "chats", "lark-f1", "meta.json"))
+	if out := tool("kb_get", `{"kind":"chats","id":"lark-f1"}`); !strings.Contains(out, "周五灰度 Jarvis") || !strings.Contains(out, "在推 Jarvis 发布") ||
+		len(meta) == 0 || !strings.Contains(out, "meta.json:\n"+string(meta)+"\n") {
 		t.Fatalf("get chat: %q", out)
 	}
-	if out, _ := h.runKBTool("kb_search", json.RawMessage(`{"query":"灰度"}`)); !strings.Contains(out, "messages/") {
+	if out := tool("kb_search", `{"query":"灰度"}`); !strings.Contains(out, "messages/") {
 		t.Fatalf("search: %q", out)
+	}
+	if out := tool("kb_search", `{"query":"没有这个词"}`); out != "No match in "+e.Store.Dir+"." {
+		t.Fatalf("search, nothing found: %q", out)
 	}
 	if got := e.ProjectsForDir("server", "/code/jarvis/server"); len(got) != 1 {
 		t.Fatalf("dir match: %v", got)
@@ -68,6 +93,16 @@ func TestKBTools(t *testing.T) {
 	}
 	if h.kbContextFor(&InboxItem{Lark: &InboxLark{FeedID: "nope"}}) != nil {
 		t.Fatal("context for an unknown chat")
+	}
+}
+
+// Without a knowledge base the hub's kb methods fail and the assistant's kb_* tools say it is off.
+func TestKBToolsWithoutAKnowledgeBase(t *testing.T) {
+	h := newTestHub(t)
+	connectAssistant(t, h)
+	r := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: "kb_search", Arguments: json.RawMessage(`{"query":"x"}`)})
+	if !r.IsError || textOf(r) != "the knowledge base is off (hub.json kb.enabled)" {
+		t.Fatalf("kb_search: %s", textOf(r))
 	}
 }
 

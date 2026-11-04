@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -83,60 +82,6 @@ func withoutControls(s string) string {
 	}, s)
 }
 
-// isMainConversation: sid on m is Persona's main conversation.
-func (h *Hub) isMainConversation(ctx context.Context, m *Machine, sid string) bool {
-	cfg := h.assistantConfig(ctx)
-	return cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID
-}
-
-// assistantSendModel puts into p (a message for one of the assistant's conversations, sid on m) which launcher and
-// model run it: one picked in the chat's menu (sent with the message) wins; else the main conversation and a scheduled
-// task's own conversation (早报's, #1544) follow 模型配置 › 主对话, and the others keep what they run. Those two follow
-// the setting on every message, not what they ran last: once a run had moved one to another launcher, every later
-// message stayed there (#1518). A launcher or model that is gone falls back to the assistant's. A picked one is checked
-// and fingerprinted like a configured one. The phone's messages (sendMessage) and the follow-ups the assistant
-// schedules for itself (runTask) both go through here.
-func (h *Hub) assistantSendModel(ctx context.Context, m *Machine, sid string, p map[string]any) error {
-	cfg := h.assistantConfig(ctx)
-	followsSetting := cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID || h.isTaskConversation(ctx, m.cfg.ID, sid)
-	l, _ := p["launcher"].(string)
-	if s, known := m.session(sid); l == "" && known && !followsSetting {
-		l = s.Launcher // no launcher picked: the one this conversation runs
-		if l != "" {
-			p["launcher"] = l
-		}
-		if _, picked := p["model"]; !picked && s.Model != "" {
-			p["model"] = s.Model // and the model it runs, so no pick keeps it
-		}
-	}
-	// A launcher or model that is gone (a renamed managed launcher, a model the gateway dropped) fails every turn:
-	// fall back to the assistant's launcher and its default.
-	if l != "" && !h.launcherAvailable(ctx, m, l) {
-		l = cfg.Launcher
-		if l == "" {
-			l = "claude"
-		}
-		h.logf("[%s] %s: its launcher is gone, using %s", m.cfg.ID, short(sid), l)
-		p["launcher"] = l
-		delete(p, "model")
-	}
-	if model, _ := p["model"].(string); model != "" && l != "" && !h.launcherHasModel(ctx, m, l, model) {
-		h.logf("[%s] %s: model %s is not in %s's list any more, using its default", m.cfg.ID, short(sid), model, l)
-		delete(p, "model")
-	}
-	if l != "" {
-		return h.applyPickedModel(ctx, p)
-	}
-	return h.applyModel(ctx, "assistant", p)
-}
-
-// isTaskConversation: sid on machine is a scheduled task's own conversation (its RunSessionID, as the assistant
-// reported its tasks).
-func (h *Hub) isTaskConversation(_ context.Context, machine, sid string) bool {
-	tasks, _ := h.assistantTasks()
-	return slices.ContainsFunc(tasks, func(t assistantwire.TaskView) bool { return t.RunSessionID == sid && t.RunMachineID == machine })
-}
-
 func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	p := map[string]any{}
 	if r.ContentLength != 0 {
@@ -156,7 +101,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		}
 		t, err := h.getTodoForLink(r.Context(), todoID)
 		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+			writeAssistantErr(w, err) // 503 assistant_offline while the assistant is not connected
 			return
 		}
 		if t == nil {
@@ -198,13 +143,12 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		h.asst().UserSpoke(r.Context(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: sid})
 	}
 	s, known := m.session(sid)
-	if h.isMainConversation(r.Context(), m, sid) || (known && (s.Assistant || isAssistant(s, m.assistantCwd()))) {
-		if err := h.assistantSendModel(r.Context(), m, sid, p); err != nil {
-			writeErr(w, 400, err)
+	if h.isMainOn(m.cfg.ID, sid) || (known && (s.Assistant || isAssistant(s, m.assistantCwd()))) {
+		// One of the assistant's conversations: it says what the message runs on (and, the first one to a new main
+		// conversation started empty, what the old one left before it).
+		if err := h.assistantSend(r.Context(), m, sid, p); err != nil {
+			writeAssistantErr(w, err)
 			return
-		}
-		if text, ok := p["text"].(string); ok && h.isMainConversation(r.Context(), m, sid) {
-			p["text"] = h.handoffFor(r.Context(), sid, text) // a new main conversation started empty (assistant_main.go)
 		}
 	} else if l, _ := p["launcher"].(string); l == "" && known && resumesWithoutLauncher(s) {
 		h.applyResumeLauncher(r.Context(), sid, p)

@@ -6,180 +6,86 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// interaction_answer, the assistant's tool for answering another agent's question for the user (docs/assistant.md):
-// the hub's to run, on its interaction queue (app.tool of the interactions app, assistantLink.appTool).
+// The interaction queue as the assistant's app (app.call interactions): one interaction as it is now, and a question
+// answered by the assistant. Its interaction_answer tool is the assistant's, with what may be answered and how
+// (docs/assistant.md).
 
-// toolInteractionAnswer answers another agent's question for the user (interaction_answer, docs/assistant.md). Only a
-// question may be answered here: a permission, a plan and a terminal dialog are the user's to decide, and the
-// assistant's own conversation is never answered by itself.
-func (h *Hub) toolInteractionAnswer(ctx context.Context, m *Machine, sessionID, machine, agentID, interactionID string, answers json.RawMessage) (string, error) {
-	am, s, err := h.findAgent(machine, agentID)
-	if err != nil {
-		return "", err
+// interactionsCall answers the interaction queue's methods (assistantwire.InteractionsGet, InteractionsAnswer).
+func (h *Hub) interactionsCall(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	var a struct {
+		MachineID     string            `json:"machine_id"`
+		SessionID     string            `json:"session_id"`
+		InteractionID string            `json:"interaction_id"`
+		Answers       map[string]string `json:"answers"`
 	}
-	if s.Assistant || s.SessionID == sessionID {
-		return "", fmt.Errorf("that interaction belongs to an assistant conversation; only the user answers it")
+	if err := json.Unmarshal(params, &a); err != nil {
+		return nil, err
 	}
+	id := strings.TrimSpace(a.InteractionID)
+	switch method {
+	case assistantwire.InteractionsGet:
+		h.mu.Lock()
+		p := h.interactions[id]
+		h.mu.Unlock()
+		if p == nil {
+			return map[string]any{"ok": false, "status": h.interactionOutcome(ctx, id)}, nil
+		}
+		return map[string]any{"interaction": p.ix, "ok": true}, nil
+	case assistantwire.InteractionsAnswer:
+		ok, err := h.answerQuestion(a.MachineID, a.SessionID, id, a.Answers)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return map[string]any{"ok": false, "status": h.interactionOutcome(ctx, id)}, nil
+		}
+		return map[string]any{"ok": true}, nil
+	}
+	return nil, fmt.Errorf("app %s has no method %s", assistantwire.AppInteractions, method)
+}
+
+// answerQuestion resolves the pending question id of machine's session with answers, as the assistant answered it;
+// false when it is no longer pending.
+func (h *Hub) answerQuestion(machine, session, id string, answers map[string]string) (bool, error) {
 	h.mu.Lock()
-	p := h.interactions[strings.TrimSpace(interactionID)]
+	p := h.interactions[id]
 	var ix proto.Interaction
 	if p != nil {
 		ix = p.ix
 	}
 	h.mu.Unlock()
 	if p == nil {
-		return "", h.answeredInteractionError(ctx, interactionID)
+		return false, nil
 	}
 	if ix.Kind != proto.IxQuestion {
-		return "", fmt.Errorf("interaction %s is a %s (approval), only the user can answer it in the app", ix.ID, ix.Kind)
+		return false, fmt.Errorf("interaction %s is a %s, not a question", id, ix.Kind)
 	}
-	if ix.MachineID != am.cfg.ID || ix.SessionID != s.SessionID {
-		return "", fmt.Errorf("interaction %s belongs to another agent: machine=%s session_id=%s", ix.ID, ix.MachineID, ix.SessionID)
+	if ix.MachineID != machine || ix.SessionID != session {
+		return false, fmt.Errorf("interaction %s is not machine=%s session_id=%s's", id, machine, session)
 	}
-	if time.Now().After(ix.ExpiresAt) {
-		return "", fmt.Errorf("interaction %s expired", ix.ID)
-	}
-	res, err := interactionAnswers(ix, answers)
-	if err != nil {
-		return "", err
-	}
-	res.AnsweredBy = proto.AnsweredByAssistant
-	if err := h.resolve(ix.ID, res); err != nil {
+	if err := h.resolve(id, proto.Resolution{Answers: answers, AnsweredBy: proto.AnsweredByAssistant}); err != nil {
 		if errors.Is(err, errNotPending) {
-			return "", h.answeredInteractionError(ctx, ix.ID)
+			return false, nil
 		}
-		return "", err
+		return false, err
 	}
-	var b strings.Builder
-	b.WriteString("Answered for the user:\n")
-	for _, q := range ix.Questions {
-		fmt.Fprintf(&b, "- %s → %s\n", q.Question, res.Answers[q.Question])
-	}
-	return strings.TrimRight(b.String(), "\n"), nil
+	return true, nil
 }
 
-// answeredInteractionError says how an interaction that is no longer pending ended: from the history, or that there
-// is none.
-func (h *Hub) answeredInteractionError(ctx context.Context, id string) error {
-	ix := strings.TrimSpace(id)
-	if h.store != nil {
-		if status, _, err := h.store.InteractionOutcome(context.Background(), ix); err == nil {
-			switch status {
-			case "resolved":
-				return fmt.Errorf("interaction %s was already answered", ix)
-			case "dismissed":
-				return fmt.Errorf("interaction %s was dismissed", ix)
-			case "expired":
-				return fmt.Errorf("interaction %s expired", ix)
-			case "cancelled":
-				return fmt.Errorf("interaction %s was cancelled", ix)
-			}
-		}
+// interactionOutcome is how an interaction that is no longer pending ended, from the history: resolved, dismissed,
+// expired, cancelled; "" when the history has none.
+func (h *Hub) interactionOutcome(ctx context.Context, id string) string {
+	if h.store == nil {
+		return ""
 	}
-	return fmt.Errorf("no pending interaction %s (use agents_list)", ix)
-}
-
-// interactionAnswers checks a question's answers against the questions themselves and builds the resolution: every
-// question answered, by the wording it was asked, with options it offers. A multi-select takes several labels and
-// becomes the app's own form, "A, B". Free text is refused: the user answers that in the app, or through agent_send.
-func interactionAnswers(ix proto.Interaction, args json.RawMessage) (proto.Resolution, error) {
-	var raw map[string]json.RawMessage
-	if len(args) == 0 || json.Unmarshal(args, &raw) != nil {
-		return proto.Resolution{}, fmt.Errorf("answers is required: an object of question → option label")
+	status, _, err := h.store.InteractionOutcome(ctx, id)
+	if err != nil {
+		return ""
 	}
-	asked := map[string]bool{}
-	for _, q := range ix.Questions {
-		asked[q.Question] = true
-	}
-	for k := range raw {
-		if !asked[k] {
-			return proto.Resolution{}, fmt.Errorf("%q is not a question this interaction asks; it asks: %s", k, askedQuestions(ix))
-		}
-	}
-	answers := make(map[string]string, len(ix.Questions))
-	for _, q := range ix.Questions {
-		v, ok := raw[q.Question]
-		if !ok {
-			return proto.Resolution{}, fmt.Errorf("every question needs an answer, %q has none (options: %s)", q.Question, optionLabels(q))
-		}
-		var one string
-		var many []string
-		if json.Unmarshal(v, &many) != nil {
-			if json.Unmarshal(v, &one) != nil {
-				return proto.Resolution{}, fmt.Errorf("%q takes an option label or an array of them (options: %s)", q.Question, optionLabels(q))
-			}
-			if !q.MultiSelect {
-				answers[q.Question] = one
-			} else {
-				many = []string{one}
-			}
-		}
-		if many != nil {
-			if !q.MultiSelect && len(many) > 1 {
-				return proto.Resolution{}, fmt.Errorf("%q takes one option; pick one of: %s", q.Question, optionLabels(q))
-			}
-			answers[q.Question] = strings.Join(many, ", ")
-		}
-		if err := checkOptions(q, answers[q.Question]); err != nil {
-			return proto.Resolution{}, err
-		}
-	}
-	return proto.Resolution{Answers: answers}, nil
-}
-
-// checkOptions refuses an answer whose labels are not the question's options, listing them.
-func checkOptions(q proto.Question, answer string) error {
-	offered := map[string]bool{}
-	for _, o := range q.Options {
-		offered[o.Label] = true
-	}
-	picked := 0
-	for _, label := range strings.Split(answer, ", ") {
-		if !offered[label] {
-			return fmt.Errorf("%q is not one of %q's options: %s", label, q.Question, optionLabels(q))
-		}
-		picked++
-	}
-	if picked == 0 {
-		return fmt.Errorf("%q needs an option: %s", q.Question, optionLabels(q))
-	}
-	if !q.MultiSelect && picked > 1 {
-		return fmt.Errorf("%q takes one option; pick one of: %s", q.Question, optionLabels(q))
-	}
-	return nil
-}
-
-func optionLabels(q proto.Question) string {
-	labels := make([]string, len(q.Options))
-	for i, o := range q.Options {
-		labels[i] = o.Label
-	}
-	return strings.Join(labels, ", ")
-}
-
-// questionSummary is every question of an interaction with its options, so agents_list carries what answering one
-// needs without a second call: 发吗？（发 / 不发）.
-func questionSummary(ix proto.Interaction) string {
-	parts := make([]string, 0, len(ix.Questions))
-	for _, q := range ix.Questions {
-		part := q.Question
-		if len(q.Options) > 0 {
-			part += "（" + optionLabels(q) + "）"
-		}
-		parts = append(parts, part)
-	}
-	return strings.Join(parts, " / ")
-}
-
-func askedQuestions(ix proto.Interaction) string {
-	qs := make([]string, len(ix.Questions))
-	for i, q := range ix.Questions {
-		qs[i] = q.Question
-	}
-	return strings.Join(qs, "; ")
+	return status
 }

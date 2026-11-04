@@ -6,9 +6,19 @@
 
 一件事常常要开好几个 Agent（不同电脑、不同工作区、不同标签页）。Agents 列表按项目、状态或电脑排列，看不出哪几个是在为同一件事干活，也看不出这件事整体到哪一步了、卡在哪、在等谁。通过待办将分散的 Agent 聚合到一项目标下，便于跟踪进度与协同。
 
+## 谁管什么（2026-11-04 起）
+
+待办是助手的（`server/internal/assistant` 的 `todos.go`、`todo_decisions.go`、`todo_sessions.go`、`tasks_close.go`；以前在 hub，见 `docs/assistant.md`「和 hub 的边界」）：
+
+- **助手**：存储（下面的四张表，还在 hub 的 Postgres 里、没有迁移，只有助手的进程读写）、下面「接口概要」里待办的全部接口、随项目自动挂和派生跟随、herdr 标记的对账、Agent 标题和启动错误的快照、决策记录、自动完成、做完的任务关掉 Agent。
+  hub 收到某台电脑的会话列表时发 `sessions.changed`，用户处理了卡片发 `interaction.resolved`，这几件事都从这两个事件来。
+- **hub**：只转发待办的接口（`assistantwire.Routes`，调用方的角色一起带过去，只读角色照旧 403），给 App 的会话列表、提问卡片、推送用助手在快照里报的那份（`todos`：每个 Agent 在为哪个未完成的待办干活、哪些 Agent 是安静的，`hub/assistant_todos.go`；安静的只报未完成或完成不到 7 天的安静任务的 Agent（`quietKeep`），让这份报告保持小，更早的任务的 Agent 再干活时照常推送）；
+  `POST /api/v1/sessions`、`POST /api/v1/sessions/{mid}/{sid}/messages` 带 `todo_id` 时先问助手这个待办在不在、完成没有、要交给 Agent 的话前面拼上决策（`assistant.todo_handoff`），交出去以后让助手挂上（`assistant.todo_link`）；经 hub 改工作区名字时告诉助手（`todos.space_renamed`）。协议见 `docs/protocol.md`「总线」。
+- **助手没连着时**（hub 刚起来、助手的进程在重启）：待办的接口回 `503 assistant_offline`「助手暂时连不上，稍后再试」，带 `todo_id` 的新建会话和发消息同样 503（不知道待办在不在）；会话列表上的待办、安静的标记照 hub 留着的最后一份显示（hub 刚起来、助手还没报的那一两秒里没有）；这期间 hub 不发事件，所以自动挂、标记对账、决策记录要等它连上以后的下一份会话列表或下一次回答，经 hub 改名的工作区不迁移。
+
 ## 数据模型
 
-服务端状态统一存储在 hub 的 Postgres 数据库中：
+服务端状态存储在 hub 的 Postgres 数据库中（读写的是助手，见上一节）：
 
 ### 1. todos 表
 - `id` (text, PK)：不透明字符串标识符（如 `todo_3f2a1b9c`）。
@@ -19,9 +29,9 @@
 - `updated_at` (timestamptz, NOT NULL)：最后修改时间。
 - `origin` (text, NOT NULL, DEFAULT '')：从哪段助手对话开的任务（会话 id），手动建的为空（[unified-entry.md](unified-entry.md)）。
 - `plan_id` (text, NOT NULL, DEFAULT '')：由哪个计划开的（`task_plans.id`）。
-- `done_by` (text, NOT NULL, DEFAULT '')：谁把它标成完成的：空 = 用户点的（或没开起来，见 `start_error`），`auto` = hub 判断任务做完后自动完成（见「自动完成」）。
+- `done_by` (text, NOT NULL, DEFAULT '')：谁把它标成完成的：空 = 用户点的（或没开起来，见 `start_error`），`auto` = 助手判断任务做完后自动完成（见「自动完成」）。
 - `done_reason` (text, NOT NULL, DEFAULT '')：自动完成时判断模型给的理由（如「已合并 PR 并发了 TestFlight」），用户点完成或重新打开时清空。
-- `reopened_at` (timestamptz)：用户最近一次把已完成的待办重新打开的时间；在它之后有新的一轮工作，hub 才会再判断要不要自动完成。
+- `reopened_at` (timestamptz)：用户最近一次把已完成的待办重新打开的时间；在它之后有新的一轮工作，助手才会再判断要不要自动完成。
 
 ### 2. todo_spaces 表
 记录整组挂到待办的项目工作区（herdr workspace）：
@@ -74,6 +84,8 @@
 
 ## 接口概要
 
+`/api/v1/todos…` 都是助手的接口，hub 原样转发（助手没连着时 `503 assistant_offline`）；最后两行是 hub 自己的接口，`todo_id` 那部分问助手。
+
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/todos` | 全部待办列表（`created_at` 降序），每个待办包含 `spaces` 列表和 `agents` 列表（过滤掉已移出行；活跃在前按 `linked_at` 降序，参与过在后按 `released_at` 降序） |
@@ -92,7 +104,7 @@
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | 发送消息，支持可选 `todo_id` 参数：发送成功后自动挂上待办；待办不存在 404，已完成 409，只读角色 403 |
 
 ### 会话装饰字段
-在会话列表（`GET /api/v1/sessions` 及 WebSocket 的 `sessions` 推送）中，hub 从内存索引中注入待办字段：
+在会话列表（`GET /api/v1/sessions` 及 WebSocket 的 `sessions` 推送）中，hub 按助手在快照里报的那份（`todos.links`）注入待办字段：
 ```jsonc
 "todo": {
   "id": "todo_weather",
@@ -104,12 +116,13 @@
 
 ### WebSocket 实时推送
 - `{"type":"todos"}`：当待办创建、修改、删除、整组挂/解除或 Agent 关联变化时广播，客户端收到后重新拉取 `GET /api/v1/todos`。
-- 会话变更推送：当待办或关联发生变化影响会话时，hub 重新计算受影响电脑上的会话列表并推送 `sessions` 事件。
+- 会话变更推送：当待办或关联发生变化影响会话时，助手报一份新的快照，hub 比对出哪台电脑的会话变了，重新推送那台的 `sessions` 事件。
 
 ### 状态码与角色控制
 - 缺少标题或参数格式错误：400 Bad Request。
 - 待办不存在：404 Not Found。旧 hub 未实现待办接口时返回 404，各端客户端据此隐藏待办入口，不弹错。
 - 关联到已完成的待办：409 Conflict。
+- 助手没连着：503 `assistant_offline`（待办的接口，以及带 `todo_id` 的新建和发消息）。
 - 只读角色（如配对的 Apple Watch，`role: "answer"`）：对待办所有写接口（POST / PATCH / DELETE / PUT）以及带 `todo_id` 的新建和发消息均返回 403 Forbidden。
 
 ## 整组挂与自动挂
@@ -122,21 +135,22 @@
 - 解除整组挂时，删去工作区关联，并物理删除该待办下 `source = "space"` 且 `via` 为该项目的 Agent 行（手动挂和派生的 Agent 保持不变）。
 
 ### 随项目自动挂
-hub 收到某台电脑的会话列表时，检查处于已整组挂项目中的在线 Agent：
+助手收到某台电脑的会话列表（`sessions.changed`）时，检查处于已整组挂项目中的在线 Agent：
 1. 该 Agent 当前没有其它活跃待办关联（自动规则不抢占其它待办中的 Agent）；
 2. 目标待办中此前未出现过该 Agent 的任何记录（活跃、参与过或曾被手动移出均算出现过，不再自动挂入）；
 满足条件时自动挂入该待办（`source = "space"`）。
-自动挂在收到会话时首先同步更新内存索引，保证同一次推送的会话列表中立即呈现关联，数据库写入在后台异步完成。
+自动挂先改助手的内存、马上报给 hub（hub 再推一次那台电脑的会话列表），数据库写入在后台完成，写不进去就撤回。
+以前 hub 自己挂，同一次推送的会话列表里就带着关联；现在要等助手报回来的下一次推送（隔一次总线来回）。
 待办标记完成后，自动挂机制停止生效；待办重新打开后恢复。
 
-经 hub 改名（与置顶、屏蔽共用改名接口）时，`todo_spaces` 中的空间名及 `todo_agents` 中对应的 `via` 字段一并迁移。改名先写库再改内存并广播 `{"type":"todos"}`。若改名后的目标名称已被其他待办关联（唯一索引冲突），该项目原有的待办挂靠作废并清理，并记录日志。
+经 hub 改名（与置顶、屏蔽共用改名接口）时，hub 告诉助手（`todos.space_renamed`），`todo_spaces` 中的空间名及 `todo_agents` 中对应的 `via` 字段一并迁移。助手先写库再改内存并广播 `{"type":"todos"}`。若改名后的目标名称已被其他待办关联（唯一索引冲突），该项目原有的待办挂靠作废并清理，并记录日志。助手没连着时这次改名不迁移（同「已知限制」第 1 条）。
 
 ## 派生跟随
 
 挂在待办上的 Agent 派出的子 Agent 自动挂入同一个待办，并追踪其来源层级：
 1. **父 Agent 标记**：处于未完成待办上的活跃 Agent，其 herdr pane 上带有 `persona_todo_ref` 标记，值为 `<todo_id>@<machine_id>/<session_id>`。
 2. **派活方传递标记**：派活方拉起子 Agent 后，读取自身 pane 上的标记，并将值通过 `persona_from` 标记写入子 Agent 的 pane。
-3. **node 上报与 hub 关联**：node 在发现会话时将 `persona_from` 填入会话的 `spawn_from` 字段上报给 hub；hub 解析待办 ID 与父 Agent，若待办未完成、子 Agent 无活跃关联且在该待办中无历史记录，则自动挂入该待办（`source = "spawned"`，`via = "<parent_machine>/<parent_session>"`）。父 Agent 是否在线或是否在同一台电脑均不影响跟随。
+3. **node 上报与助手关联**：node 在发现会话时将 `persona_from` 填入会话的 `spawn_from` 字段上报给 hub，hub 把会话列表原样交给助手（`sessions.changed`）；助手解析待办 ID 与父 Agent，若待办未完成、子 Agent 无活跃关联且在该待办中无历史记录，则自动挂入该待办（`source = "spawned"`，`via = "<parent_machine>/<parent_session>"`）。父 Agent 是否在线或是否在同一台电脑均不影响跟随。
 4. **孙子辈跟随**：子 Agent 挂入待办后，其 pane 同样由 node 打上 `persona_todo_ref`，后续进一步派生的孙子 Agent 依相同机制持续跟随。
 5. **消费标记**：子 Agent 成功获得活跃关联后，node 在周期对账中自动清除其 pane 上的 `persona_from` 标记，防止后续被误挂回。
 
@@ -156,7 +170,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
   - `persona_todo_ref`：`<todo_id>@<machine_id>/<session_id>`。
 - **清除标记**：当待办完成、待办被删除或 Agent 关联被解除时，node 清空对应的 `persona_todo` 和 `persona_todo_ref` 标记。
 - **来源与命名空间保护**：node 写入与清理标记一律使用 `--source persona`。对账操作仅针对 `persona_todo`、`persona_todo_ref` 和 `persona_from` 三个名字，绝不触碰用户或其它插件的 metadata。
-- **定期对账机制**：hub 将期望标记集合按会话 ID 下发（RPC 方法 `todo.sync_session_tokens`）；node 仅基于当前活着的会话与宿主实时报上来的 Agent 会话信息动态解析对应的 live pane，对比 herdr 当前标记与期望集合，补齐缺失标记、清理多余标记。两个会话映射到同一 pane 时只认当前存活者。node 每隔 30 秒执行一次对账检查，在 herdr 服务重启、pane ID 变更或热交接后，自动将标记恢复到正确的新 pane 上，已退出的旧会话不会污染当前 pane。
+- **定期对账机制**：助手将期望标记集合按会话 ID 下发（node 的 RPC 方法 `todo.sync_session_tokens`，经 `device.call`）：关联变了的电脑马上下发，没变的不重发；node 和 hub 的连接是新的一条时（`sessions.changed` 的 `connected` 变了：node 可能重启过，收到之前不动标记）新连接上的第一份会话列表再全发一次，和以前 hub 在 node 重连时立刻重发一样；node 仅基于当前活着的会话与宿主实时报上来的 Agent 会话信息动态解析对应的 live pane，对比 herdr 当前标记与期望集合，补齐缺失标记、清理多余标记。两个会话映射到同一 pane 时只认当前存活者。node 每隔 30 秒执行一次对账检查，在 herdr 服务重启、pane ID 变更或热交接后，自动将标记恢复到正确的新 pane 上，已退出的旧会话不会污染当前 pane。
 
 ## 状态计算规则
 
@@ -164,8 +178,8 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 | 优先级 | 状态 | 条件 |
 | :--- | :--- | :--- |
-| 0 | 没开起来 | 从对话开的任务 Agent 没启动起来，hub 把待办结束掉（`done_at` + `start_error`，#1077）；客户端显示失败、能移除，不算进行中 |
-| 1 | 已完成 | 用户点击了完成，或 hub 判断从对话派出去的任务已经做完（`done_at != null`；`done_by = "auto"` 时客户端标「自动完成」） |
+| 0 | 没开起来 | 从对话开的任务 Agent 没启动起来，助手把待办结束掉（`done_at` + `start_error`，#1077）；客户端显示失败、能移除，不算进行中 |
+| 1 | 已完成 | 用户点击了完成，或助手判断从对话派出去的任务已经做完（`done_at != null`；`done_by = "auto"` 时客户端标「自动完成」） |
 | 2 | 等你 | 有挂着的活跃 Agent 处于 `needs_you` 状态（等待用户回答提问、审批计划或授权） |
 | 2.5 | 中断了 | 有挂着的活跃 Agent 停着（`unread` / `idle`）且带 `turn_error`：这一轮被模型服务出错打断（连接中断、过载、限流、登录过期……），没做完（#1516）；红色，卡片上「继续」= 给它发「继续」 |
 | 3 | 待查看 | 有挂着的活跃 Agent 处于 `unread` 状态（任务完成，用户尚未查看） |
@@ -178,11 +192,11 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 ## 自动完成
 
-从助手对话派出去的任务（`task_plan` 开的待办，`origin` 不为空）做完以后由 hub 自动标成完成，不用用户逐个点；用户手建的待办（`origin` 为空）一律不自动完成，仍然是「用户点了完成」才算完成。
+从助手对话派出去的任务（`task_plan` 开的待办，`origin` 不为空）做完以后由助手自动标成完成，不用用户逐个点；用户手建的待办（`origin` 为空）一律不自动完成，仍然是「用户点了完成」才算完成。
 
-**什么时候判断**：任务的 Agent 全部停下（没有在工作、没有等用户回答、没有待处理的卡片）、hub 往对话里发 done 回执的同一处（`assistant/tasks.go` 的 `taskTurnEnded`，一段工作只发一次回执，也只判断一次）。
+**什么时候判断**：任务的 Agent 全部停下（没有在工作、没有等用户回答、没有待处理的卡片）、助手往对话里发 done 回执的同一处（`assistant/tasks.go` 的 `taskTurnEnded`，一段工作只发一次回执，也只判断一次）。
 
-**怎么判断**：Agent 停下不等于做完了：停在「没有全改完……」「等待审核」的都不该关。hub 用判断模型（模型配置里的「AI 分身判断器」`inbox.judge`，即 hub.json 的 `inbox.judge_ai`，没配时继承 `ai`）看三样东西：任务标题、派活时的要求（待办的 `notes`）、每个活跃 Agent 最近一轮的内容（经 `session.items` 读：这一轮里用户给它的话和它最后一条完整回复；读不到时用会话列表里截短的 `last_text`）。用户后来又给 Agent 发了新的要求时，要求以后来的为准（原来的已在之前几轮处理过）；后来的话只是确认、回答它的问题（「好」「👌」「按 A」）时仍以派活时的要求为准（#1116）。模型答五选一：
+**怎么判断**：Agent 停下不等于做完了：停在「没有全改完……」「等待审核」的都不该关。助手用判断模型（经 hub 的模型配置，`app.call models.json`；模型配置里的「AI 分身判断器」`inbox.judge`，即 hub.json 的 `inbox.judge_ai`，没配时继承 `ai`）看三样东西：任务标题、派活时的要求（待办的 `notes`）、每个活跃 Agent 最近一轮的内容（经 `session.items` 读：这一轮里用户给它的话和它最后一条完整回复；读不到时用会话列表里截短的 `last_text`）。用户后来又给 Agent 发了新的要求时，要求以后来的为准（原来的已在之前几轮处理过）；后来的话只是确认、回答它的问题（「好」「👌」「按 A」）时仍以派活时的要求为准（#1116）。模型答五选一：
 
 | 结论 | 含义 | 自动完成 |
 | --- | --- | --- |
@@ -195,12 +209,12 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 - 附带说明不影响完成：没截图的平台、没实测的环境、提醒用户的事都不算没做完；交付以后例行的等待（TestFlight 外部组的 Beta 审核、CI 重跑）也不算在等；处理 App Store / Mac App Store 审核意见、提交后在等审核结论的算 `waiting`。
 - 宁可不关：模型不可用、超时、回复不是合法 JSON、结论不是 `done`，都不动待办，只记日志；回执照发。
 - 被模型服务打断的一轮不判断（#1516）：任务的某个 Agent 停在 API 错误上（会话的 `turn_error`，也就是它最后一句是 Claude Code 的「API Error: …」等），回执写 `state: "interrupted"`（摘要「模型服务出错，中断了」，错误原文放 `error`），不调判断模型、不关待办；`done-check` 读到的最后一句是这种错误时直接答 `not_done`。
-- 便宜的线索：最后的回复里有 GitHub PR 链接且提到合并（merged / 已合并 / 合入），或提到 TestFlight 加构建号，hub 把这两个线索写进输入，只作提示，不能单凭它判完成。
+- 便宜的线索：最后的回复里有 GitHub PR 链接且提到合并（merged / 已合并 / 合入），或提到 TestFlight 加构建号，助手把这两个线索写进输入，只作提示，不能单凭它判完成。
 - 提示词在 `server/internal/prompts/assistant/task_done.md`、`task_done_input.md`（`docs/prompts.md`）。
 
 **能看出来、能撤销**：自动完成写 `done_at`、`done_by = "auto"`、`done_reason`。iOS / Mac / 网页的待办列表行和详情页在已完成的状态旁标「自动完成」，详情页显示理由；「重新打开」和手动完成的一样回到未完成，同时清掉 `done_by`、`done_reason`，记下 `reopened_at`。
 
-**重新打开以后**：用户重新打开过的待办，同一段工作不再被自动关：只有 `reopened_at` 之后任务的某个 Agent 又开始了一轮（用户再给它发消息、它又接着干），这一轮做完时才重新判断。hub 重启后不知道这一轮是什么时候开始的，这时对重新打开过的待办不判断（宁可不关）。写库时再核对一次（`done_at IS NULL` 且 `reopened_at` 早于这段工作的开始），用户在判断途中刚点了完成或重新打开的，以用户的为准。
+**重新打开以后**：用户重新打开过的待办，同一段工作不再被自动关：只有 `reopened_at` 之后任务的某个 Agent 又开始了一轮（用户再给它发消息、它又接着干），这一轮做完时才重新判断。助手重启后不知道这一轮是什么时候开始的，这时对重新打开过的待办不判断（宁可不关）。写库时再核对一次（`done_at IS NULL` 且 `reopened_at` 早于这段工作的开始），用户在判断途中刚点了完成或重新打开的，以用户的为准。
 
 **完成之后**：和用户点完成走同一条路：会话不再带待办字段，node 对账时清掉 `persona_todo` / `persona_todo_ref` 标记，整组挂和派生跟随停止，收件箱的 AI 分身不再把消息关联到它；助手的实时快照里这个任务标成「已完成（hub 判断做完了自动关的）」，24 小时后不再列出。
 
@@ -214,8 +228,8 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 ## 做完的任务关掉 Agent
 
-从助手对话派出去的任务（`origin` 不为空）完成以后——用户点的完成或 hub 的自动完成都算——它的 Agent 不再留在 herdr 里占一个标签页：
-hub 每分钟看一遍（`hub/tasks_close.go`），任务完成且 Agent 静止都满 3 分钟（`taskCloseIdle`，从完成时间和 Agent 最后一次活动里取较晚的算）就让 node 关掉它（`session.retire`，`node/retire.go`）：
+从助手对话派出去的任务（`origin` 不为空）完成以后——用户点的完成或助手的自动完成都算——它的 Agent 不再留在 herdr 里占一个标签页：
+助手每分钟看一遍（`assistant/tasks_close.go`，会话状态读 hub 给 App 的那份会话列表 `sessions.list`），任务完成且 Agent 静止都满 3 分钟（`taskCloseIdle`，从完成时间和 Agent 最后一次活动里取较晚的算）就让 node 关掉它（`session.retire`，`node/retire.go`）：
 关的是它的窗格（标签页里只有它时关整个标签页，和手机上「关闭」一样），Agent 进程随之退出。
 
 **保留什么**：待办里的 Agent 记录（机器、会话 id、目录）不动，不算 released；node 记的启动信息（启动器、目录、模型，hub 的 `node_sessions`）和会话记录都在。
@@ -232,7 +246,7 @@ hub 每分钟看一遍（`hub/tasks_close.go`），任务完成且 Agent 静止�
 恢复要等启动器起来，`route` 和聊天页的发送一样不跟着手机断开而取消，最多等 5 分钟。完成的待办不因为这条消息重新打开；恢复后再次静止满 3 分钟会再被关掉。
 
 **不关**：在工作、等用户（提问、计划、权限、任何对话框、待处理的卡片）、引擎看不出状态的；有排队的消息、后台 shell、在跑的子 Agent、`/loop`、在监听端口（开着开发服务器）的；还挂在别的未完成待办上的；助手对话；别的工具管的会话（外部 Codex app-server、runtime、daemon、pi）；不是 Persona 开的（不知道怎么恢复）；引擎不能新开标签页的（Orca、herdr-core）；Claude 没有会话记录、Codex / TRAEX 不知道启动器的。
-这些由 node 拒绝（`not_retirable`），hub 记下来，Agent 没变化时 10 分钟内不再问（`taskCloseRetry`，之后重试：node 可能已经升级了）；不认识 `session.retire` 的旧 node 同样当作拒绝，所以 hub 先升级、node 后升级也不会误关，node 升级后最多 10 分钟就接着关。
+这些由 node 拒绝（`not_retirable`），助手记下来，Agent 没变化时 10 分钟内不再问（`taskCloseRetry`，之后重试：node 可能已经升级了）；不认识 `session.retire` 的旧 node 同样当作拒绝，所以 hub 先升级、node 后升级也不会误关，node 升级后最多 10 分钟就接着关。
 没挂在任何任务上的 Agent（用户自己开的、`agent_start` 开的、herdr-leader 之类的巡检会话）不归这里管。
 
 ## 决策记录
@@ -240,10 +254,10 @@ hub 每分钟看一遍（`hub/tasks_close.go`），任务完成且 Agent 静止�
 长程任务里最贵的错误是 Agent 忘了用户已经拍过的板：重复问同一件事，或悄悄推翻之前的决定（#1618）。决策散在各个 Agent 的对话里，换一个 Agent 或压缩一次就丢了，所以按待办收在一处：
 
 - **一条决策** = 问题 + 选了什么 + 原因 + 时间 + 出处（哪个 Agent 问的、哪张卡片里答的）。
-- **自动记**：用户在 App 里答了 Claude Code 的选项提问（`question` 卡片，即 `AskUserQuestion`），而提问的 Agent 正挂在一个未完成的待办上时，每个答了的问题记一条（`source = "card"`）。授权、计划审批、终端对话框、忽略掉的卡片不记；同一张卡片重复上报只记一次。
+- **自动记**：用户在 App 里答了 Claude Code 的选项提问（`question` 卡片，即 `AskUserQuestion`），而提问的 Agent 正挂在一个未完成的待办上时，每个答了的问题记一条（`source = "card"`；hub 发 `interaction.resolved`，助手记，助手没连着时这次不记）。授权、计划审批、终端对话框、忽略掉的卡片不记；同一张卡片重复上报只记一次。
 - **手动记**：待办详情页「决策」里「记一条」。
 - **改判**：新决策可以标「取代」一条更早的（`supersedes_id`），旧的保留、划掉；只有没被任何一条取代的才算生效。写错了能用 PATCH 补标或撤销。只能取代同一个待办里更早的，所以不会绕成圈。
-- **交给 Agent**：`POST /api/v1/sessions` 的 `prompt`、`POST …/messages` 的 `text` 带 `todo_id` 时（各端「交给 Agent」都这么发），hub 把生效的决策拼成一段 `<jarvis-context kind="context" title="待办 · <标题> · 已定的决策">` 放在最前面（提示词 `server/internal/prompts/todo/decisions.md`），各端不用改；没有决策时原样发。读不出来（数据库出错）时照常发，只记日志。
+- **交给 Agent**：`POST /api/v1/sessions` 的 `prompt`、`POST …/messages` 的 `text` 带 `todo_id` 时（各端「交给 Agent」都这么发），hub 问助手（`assistant.todo_handoff`），助手把生效的决策拼成一段 `<jarvis-context kind="context" title="待办 · <标题> · 已定的决策">` 放在最前面（提示词 `server/internal/prompts/todo/decisions.md`），各端不用改；没有决策时原样发。读不出来（数据库出错）时照常发，只记日志。
 - 记一条、改判都会更新待办的 `updated_at` 并广播 `{"type":"todos"}`，客户端据此重新拉决策。
 
 还没做：Agent 侧按待办随时取决策的 MCP 工具（压缩后重拿）、安卓 / iOS 的决策列表。
@@ -288,3 +302,4 @@ hub 每分钟看一遍（`hub/tasks_close.go`），任务完成且 Agent 静止�
 2. **跨组多 hub 连接下的标记覆盖**：一台电脑的常驻 node 一次仅服务一个长连接通道。若同一台 node 被多个不同互联组的独立 hub 轮流或交替连接，后连接的 hub 下发的期望标记会覆盖前一个 hub 的标记。
 3. **空工作区改名不迁移**：经 hub 重命名工作区时，若该工作区内没有活跃会话，hub 无法解析出旧工作区名，`todo_spaces` 与置顶、屏蔽一样不会自动迁移。
 4. **`/clear` 会话重建**：当 Agent 在对话中执行 `/clear` 后，底层会新建一个 session uuid，新会话不会自动挂载到原待办上，原会话行依然留在列表中。
+5. **助手没连着时**：待办的接口、带 `todo_id` 的新建和发消息回 503；这期间经 hub 改名的工作区不迁移、答的卡片不记成决策（见「谁管什么」）。

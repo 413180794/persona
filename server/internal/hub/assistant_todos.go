@@ -2,273 +2,114 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
-	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The todos side of the tasks the assistant hands out (internal/assistant, tasks.go): a task is a todo whose origin
-// is the conversation. The assistant reaches the todos as an app (app.call todos, todosCall); the hub names the task
-// on an interaction its agent raises (withTask) and puts the inbox's drafts about a task into its conversation
-// (messageCardOf).
+// The todos are the assistant's (internal/assistant, todos.go; docs/todos.md): it keeps them and answers their routes,
+// which the hub relays (assistantwire.Routes). The hub shows what the assistant reports (the snapshot's TodoReport):
+// the todo on each agent's session (decorated), the task named on its agents' cards (withTask), which agents are
+// quiet (quietSession: no pushes, badges or Live Activity). An agent handed work for a todo through the hub's own
+// routes (POST /api/v1/sessions, …/messages with todo_id) is checked, given the todo's decisions and linked by the
+// assistant (assistant.todo_handoff, assistant.todo_link); a workspace the hub renames is told (todos.space_renamed).
 
-// todosCall answers the assistant's app.call todos.
-func (h *Hub) todosCall(ctx context.Context, method string, params json.RawMessage) (any, error) {
-	var a struct {
-		TodoID    string    `json:"todo_id"`
-		Title     string    `json:"title"`
-		Notes     string    `json:"notes"`
-		Origin    string    `json:"origin"`
-		PlanID    string    `json:"plan_id"`
-		MachineID string    `json:"machine_id"`
-		SessionID string    `json:"session_id"`
-		Cwd       string    `json:"cwd"`
-		Reason    string    `json:"reason"`
-		Work      time.Time `json:"work"`
-		// IfQuiet: make it only when it would be quiet (agent_start from the main conversation, #1731).
-		IfQuiet bool `json:"if_quiet"`
-	}
-	if len(params) > 0 {
-		if err := json.Unmarshal(params, &a); err != nil {
-			return nil, err
-		}
-	}
-	switch method {
-	case assistantwire.TodosLoad:
-		return map[string]any{}, h.ensureTodosLoaded(ctx)
-	case assistantwire.TodosCreate:
-		if a.IfQuiet && !(a.Origin != "" && h.isMain(ctx, a.Origin) && h.mainTasksQuiet(ctx)) {
-			return map[string]any{"todo": nil}, nil
-		}
-		t, err := h.createTodo(ctx, a.Title, a.Notes, a.Origin, a.PlanID)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"todo": t}, nil
-	case assistantwire.TodosLinkAgent:
-		return map[string]any{}, h.linkTodoAgent(ctx, a.TodoID, a.MachineID, a.SessionID, a.Title, a.Cwd, "", "")
-	case assistantwire.TodosFail:
-		return map[string]any{}, h.failTodo(ctx, a.TodoID, a.Reason)
-	case assistantwire.TodosAutoDone:
-		ok, err := h.autoDoneTodo(ctx, a.TodoID, a.Reason, a.Work)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"ok": ok}, nil
-	case assistantwire.TodosGet:
-		h.todos.mu.RLock()
-		tp := h.todos.todos[a.TodoID]
-		var t Todo
-		if tp != nil {
-			t = copyTodoLocked(tp)
-		}
-		h.todos.mu.RUnlock()
-		return map[string]any{"todo": t, "ok": tp != nil}, nil
-	case assistantwire.TodosList:
-		h.todos.mu.RLock()
-		list := []Todo{}
-		for _, t := range h.todos.todos {
-			if a.Origin == "*" && t.Origin != "" || a.Origin != "*" && t.Origin == a.Origin {
-				list = append(list, copyTodoLocked(t))
-			}
-		}
-		h.todos.mu.RUnlock()
-		return map[string]any{"todos": list}, nil
-	case assistantwire.TodosOfSession:
-		t, ok := h.taskOf(a.MachineID, a.SessionID)
-		return map[string]any{"todo": t, "ok": ok}, nil
-	case assistantwire.TodosView:
-		t, ok := h.todoNow(a.TodoID)
-		if !ok {
-			return map[string]any{"ok": false}, nil
-		}
-		return map[string]any{"todo": formatTodo(t), "ok": true}, nil
-	case assistantwire.TodosRetry:
-		return h.retryTodo(ctx, a.TodoID)
-	}
-	return nil, fmt.Errorf("app todos has no method %s", method)
+// todoLinks is the assistant's last TodoReport, by (machine, session); replaced, never written into.
+type todoLinks struct {
+	mu    sync.RWMutex
+	links map[[2]string]assistantwire.TodoLink
+	quiet map[[2]string]bool
 }
 
-// retryTodo reopens a task whose agent did not start, for its start again (todos.retry, the assistant's retryTask):
-// its error cleared, the same todo; not ok when another hub sharing the store reopened it first.
-func (h *Hub) retryTodo(ctx context.Context, id string) (any, error) {
-	if err := h.ensureTodosLoaded(ctx); err != nil {
-		return nil, err
+// takeTodoReport keeps the assistant's report (nil: it could not read the todos; the last one stands) and says the
+// machines whose sessions look different now.
+func (h *Hub) takeTodoReport(r *assistantwire.TodoReport) []string {
+	if r == nil {
+		return nil
 	}
-	cur, ok := h.todoNow(id)
-	if !ok {
-		return nil, db.ErrTodoNotFound
+	links := make(map[[2]string]assistantwire.TodoLink, len(r.Links))
+	for _, l := range r.Links {
+		links[[2]string{l.MachineID, l.SessionID}] = l
 	}
-	now := time.Now().UTC()
-	var out Todo
-	if h.store != nil {
-		row, ok, err := h.store.RetryTodo(ctx, id, now)
-		if err != nil {
-			return nil, err
-		}
-		if !ok { // another hub sharing the store reopened it first
-			cur, _ := h.todoNow(id)
-			return map[string]any{"todo": formatTodo(cur), "ok": false}, nil
-		}
-		out, _ = h.applyTodoRow(id, *row, nil)
-	} else {
-		row := db.TodoRow{ID: cur.ID, Title: cur.Title, Notes: cur.Notes, CreatedAt: cur.CreatedAt, UpdatedAt: now,
-			Origin: cur.Origin, PlanID: cur.PlanID, ReopenedAt: &now}
-		out, _ = h.applyTodoRow(id, row, nil)
+	quiet := make(map[[2]string]bool, len(r.Quiet))
+	for _, q := range r.Quiet {
+		quiet[[2]string{q.MachineID, q.SessionID}] = true
 	}
-	return map[string]any{"todo": formatTodo(out), "ok": true}, nil
-}
-
-// todoNow is a copy of todo id as the hub has it.
-func (h *Hub) todoNow(id string) (Todo, bool) {
-	h.todos.mu.RLock()
-	defer h.todos.mu.RUnlock()
-	t, ok := h.todos.todos[id]
-	if !ok {
-		return Todo{}, false
-	}
-	return copyTodoLocked(t), true
-}
-
-// taskOf is the task (a todo opened from an assistant conversation) the agent mid/sid works for.
-func (h *Hub) taskOf(mid, sid string) (Todo, bool) {
-	h.todos.mu.RLock()
-	defer h.todos.mu.RUnlock()
-	id, ok := h.todos.activeBySession[[2]string{mid, sid}]
-	if !ok {
-		return Todo{}, false
-	}
-	t := h.todos.todos[id]
-	if t == nil || t.Origin == "" || t.DoneAt != nil {
-		return Todo{}, false
-	}
-	return copyTodoLocked(t), true
-}
-
-// quietSessionsLocked are the agents (machine, session) of quiet tasks (#1731), done ones too: a quiet task's agent
-// stays out of pushes and badges after the task is closed, unless it now works for another todo that is not quiet.
-// h.todos.mu is held (read).
-func (h *Hub) quietSessionsLocked() map[[2]string]bool {
-	out := map[[2]string]bool{}
-	for _, t := range h.todos.todos {
-		if !t.Quiet {
-			continue
-		}
-		for _, a := range t.Agents {
-			if a.DismissedAt == nil {
-				out[[2]string{a.MachineID, a.SessionID}] = true
-			}
+	tl := &h.todoLinks
+	tl.mu.Lock()
+	oldLinks, oldQuiet := tl.links, tl.quiet
+	tl.links, tl.quiet = links, quiet
+	tl.mu.Unlock()
+	var out []string
+	add := func(key [2]string) {
+		if !slices.Contains(out, key[0]) {
+			out = append(out, key[0])
 		}
 	}
-	for key, id := range h.todos.activeBySession {
-		if t := h.todos.todos[id]; out[key] && t != nil && !t.Quiet {
-			delete(out, key)
+	for key, l := range links {
+		if oldLinks[key] != l {
+			add(key)
+		}
+	}
+	for key := range oldLinks {
+		if _, ok := links[key]; !ok {
+			add(key)
+		}
+	}
+	for key := range quiet {
+		if !oldQuiet[key] {
+			add(key)
+		}
+	}
+	for key := range oldQuiet {
+		if !quiet[key] {
+			add(key)
 		}
 	}
 	return out
 }
 
+// todoLinkOf is the open todo the agent mid/sid works for, as the assistant reported it.
+func (h *Hub) todoLinkOf(mid, sid string) (assistantwire.TodoLink, bool) {
+	tl := &h.todoLinks
+	tl.mu.RLock()
+	defer tl.mu.RUnlock()
+	l, ok := tl.links[[2]string{mid, sid}]
+	return l, ok
+}
+
+// decorateTodos puts on machine mid's sessions the todo each works for and whether it is quiet.
+func (h *Hub) decorateTodos(mid string, list []proto.Session) {
+	tl := &h.todoLinks
+	tl.mu.RLock()
+	defer tl.mu.RUnlock()
+	for i := range list {
+		key := [2]string{mid, list[i].SessionID}
+		if l, ok := tl.links[key]; ok {
+			list[i].Todo = &proto.TodoRef{ID: l.TodoID, Title: l.Title}
+		}
+		list[i].Quiet = tl.quiet[key]
+	}
+}
+
 // quietSession: mid/sid works (or worked) for a quiet task: the main conversation hears about it, nothing else does.
 func (h *Hub) quietSession(mid, sid string) bool {
-	h.todos.mu.RLock()
-	defer h.todos.mu.RUnlock()
-	return h.quietSessionsLocked()[[2]string{mid, sid}]
+	tl := &h.todoLinks
+	tl.mu.RLock()
+	defer tl.mu.RUnlock()
+	return tl.quiet[[2]string{mid, sid}]
 }
 
 // withTask names, on an interaction sent to clients, the task its agent works for (the watch and the cards show it).
 func (h *Hub) withTask(ix proto.Interaction) proto.Interaction {
-	if t, ok := h.taskOf(ix.MachineID, ix.SessionID); ok {
-		ix.TaskTitle = t.Title
+	if l, ok := h.todoLinkOf(ix.MachineID, ix.SessionID); ok && l.Task {
+		ix.TaskTitle = l.Title
 	}
 	return ix
-}
-
-// failTodo ends a todo whose agent did not start: done, with why, and its agents no longer count for it.
-func (h *Hub) failTodo(ctx context.Context, id, reason string) error {
-	if err := h.ensureTodosLoaded(ctx); err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	doneAt := now
-	if h.store != nil {
-		row, err := h.store.FailTodo(ctx, id, reason, now)
-		if err != nil {
-			return err
-		}
-		if row.DoneAt != nil {
-			doneAt = *row.DoneAt
-		}
-	}
-	affected := map[string]bool{}
-	h.todos.mu.Lock()
-	t := h.todos.todos[id]
-	if t != nil {
-		if t.DoneAt == nil {
-			t.DoneAt = &doneAt
-		}
-		t.StartError = reason
-		t.UpdatedAt = now
-		for _, a := range t.Agents {
-			key := [2]string{a.MachineID, a.SessionID}
-			if h.todos.activeBySession[key] == id {
-				delete(h.todos.activeBySession, key)
-				affected[a.MachineID] = true
-			}
-		}
-	}
-	h.todos.mu.Unlock()
-	if t == nil {
-		return db.ErrTodoNotFound
-	}
-	for mid := range affected {
-		if m := h.localMachine(mid); m != nil {
-			h.sessionsChanged(m)
-		}
-	}
-	h.broadcast(map[string]any{"type": "todos"})
-	return nil
-}
-
-// autoDoneTodo marks todo id done by the hub when it is still open and was not reopened after work began; false when
-// the user got there first (done it, reopened it) or it is gone.
-func (h *Hub) autoDoneTodo(ctx context.Context, id, reason string, work time.Time) (bool, error) {
-	now := time.Now().UTC()
-	var row db.TodoRow
-	if h.store != nil {
-		r, ok, err := h.store.AutoDoneTodo(ctx, id, reason, now, work)
-		if errors.Is(err, db.ErrTodoNotFound) {
-			return false, nil
-		}
-		if err != nil || !ok {
-			return false, err
-		}
-		row = *r
-	} else {
-		h.todos.mu.RLock()
-		t := h.todos.todos[id]
-		if t != nil {
-			row = db.TodoRow{ID: t.ID, Title: t.Title, Notes: t.Notes, CreatedAt: t.CreatedAt, Origin: t.Origin, PlanID: t.PlanID,
-				ReopenedAt: t.ReopenedAt}
-		}
-		h.todos.mu.RUnlock()
-		if t == nil {
-			return false, nil
-		}
-		row.DoneAt, row.DoneBy, row.DoneReason, row.UpdatedAt = &now, db.DoneByAuto, reason, now
-	}
-	_, ok := h.applyTodoRow(id, row, func(t *Todo) bool {
-		if t.UpdatedAt.After(row.UpdatedAt) { // the user changed it after the store did: theirs stands
-			return false
-		}
-		return h.store != nil || t.DoneAt == nil && (t.ReopenedAt == nil || t.ReopenedAt.Before(work))
-	})
-	return ok, nil
 }
 
 // messageCardOf is the card for an item whose draft is about a task; nil when it is about none. The inbox is locked.
@@ -278,4 +119,78 @@ func messageCardOf(it *InboxItem) *assistantwire.MessageCard {
 	}
 	return &assistantwire.MessageCard{TodoID: it.Agent.TodoID, Source: it.Source, Account: it.AccountName, Chat: it.Title, Sender: it.Sender,
 		Text: clip(strings.TrimSpace(it.Preview), 400), Draft: it.Agent.Draft}
+}
+
+// ---- handing an agent work for a todo (POST /api/v1/sessions, …/messages with todo_id) ----
+
+// TodoLinkInfo is the todo an agent is about to be handed work for.
+type TodoLinkInfo struct {
+	ID     string
+	Title  string
+	DoneAt *time.Time
+}
+
+// getTodoForLink is the todo todoID before an agent is handed work for it (assistant.todo_handoff); nil when there is
+// no such todo; an error when the assistant could not say (assistant_offline while it is not connected).
+func (h *Hub) getTodoForLink(ctx context.Context, todoID string) (*TodoLinkInfo, error) {
+	res, err := h.asst().TodoHandoff(ctx, assistantwire.TodoHandoff{TodoID: todoID})
+	if err != nil {
+		return nil, err
+	}
+	if !res.Found {
+		return nil, nil
+	}
+	return &TodoLinkInfo{ID: todoID, Title: res.Title, DoneAt: res.DoneAt}, nil
+}
+
+// withTodoDecisions puts the todo's decisions before text handed to an agent for it; text as it is without any (or
+// when the assistant could not say: the handoff goes on without them).
+func (h *Hub) withTodoDecisions(ctx context.Context, todoID, text string) string {
+	if strings.TrimSpace(text) == "" {
+		return text
+	}
+	res, err := h.asst().TodoHandoff(ctx, assistantwire.TodoHandoff{TodoID: todoID, Text: text})
+	if err != nil {
+		h.logf("decisions: todo %s: %v", todoID, err)
+		return text
+	}
+	if !res.Found || res.Text == "" {
+		return text
+	}
+	return res.Text
+}
+
+// linkTodoAgent: the agent mid/sid was handed work for todoID; it works for it from now on (assistant.todo_link). The
+// assistant reports the link (the session lists follow).
+func (h *Hub) linkTodoAgent(ctx context.Context, todoID, mid, sid, title, cwd, agent, _ string) error {
+	return h.asst().TodoLink(ctx, assistantwire.TodoLinkParams{TodoID: todoID, MachineID: mid, SessionID: sid, Title: title,
+		Cwd: cwd, Agent: agent})
+}
+
+// renameTodoSpace tells the assistant the hub renamed a workspace (a todo linked to it by name follows; not while the
+// assistant is not connected).
+func (h *Hub) renameTodoSpace(mid, old, name string) {
+	h.asst().TodoSpaceRenamed(context.Background(), assistantwire.TodoSpaceRenamed{MachineID: mid, Old: old, New: name})
+}
+
+// cleanPromptTitle is a title for an agent from the prompt it was started with: its first line past a
+// <jarvis-context>.
+func cleanPromptTitle(prompt string) string {
+	s := strings.TrimSpace(prompt)
+	if strings.HasPrefix(s, "<jarvis-context") {
+		if endIdx := strings.Index(s, "</jarvis-context>"); endIdx != -1 {
+			s = s[endIdx+len("</jarvis-context>"):]
+		} else if endTagIdx := strings.Index(s, ">"); endTagIdx != -1 {
+			s = s[endTagIdx+1:]
+		} else {
+			s = ""
+		}
+	}
+	for _, line := range strings.Split(s, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.Contains(trimmed, "<jarvis-context") {
+			return trimmed
+		}
+	}
+	return ""
 }

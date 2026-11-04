@@ -94,7 +94,7 @@ var errArchiveMain = errors.New("主对话不能归档")
 
 // setArchived archives (on) or brings back a conversation; by is who did it. It reports whether anything changed.
 func (s *Service) setArchived(ctx context.Context, machine, id string, on bool, by string) (bool, error) {
-	if on && s.hello(ctx).Assistant.Main == id {
+	if on && s.settings(ctx).Main == id {
 		return false, errArchiveMain
 	}
 	st := s.store()
@@ -160,7 +160,7 @@ func (s *Service) archiveRoutes() {
 				apierr.Write(w, http.StatusBadRequest, errors.New("invalid conversation id"))
 				return
 			}
-			machine := s.hello(r.Context()).Assistant.MachineID
+			machine := s.settings(r.Context()).MachineID
 			if _, err := s.setArchived(r.Context(), machine, id, op.on, titleByUser); err != nil {
 				status := http.StatusInternalServerError
 				if errors.Is(err, errArchiveMain) {
@@ -440,7 +440,7 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 
 // assistantConversation finds an assistant conversation by full id or prefix on the assistant's machine.
 func (s *Service) assistantConversation(ctx context.Context, id string) (proto.Session, error) {
-	list, err := s.sessions(ctx, s.hello(ctx).Assistant.MachineID)
+	list, err := s.sessions(ctx, s.settings(ctx).MachineID)
 	if errors.Is(err, ErrNoDevice) {
 		return proto.Session{}, errors.New("the assistant's machine is not configured")
 	}
@@ -474,7 +474,7 @@ func (s *Service) assistantConversation(ctx context.Context, id string) (proto.S
 
 // conversations are the assistant's conversations on its machine (archived ones too when asked) and the main one.
 func (s *Service) conversations(ctx context.Context, withArchived bool) (list []proto.Session, main string) {
-	here := s.hello(ctx).Assistant
+	here := s.settings(ctx)
 	all, _ := s.sessions(ctx, here.MachineID) // none on no machine
 	for _, c := range all {
 		if c.Assistant && (withArchived || !c.Archived) {
@@ -586,7 +586,7 @@ func (s *Service) toolConversationRead(ctx context.Context, args json.RawMessage
 	if err := s.call(ctx, c.MachineID, DeviceSessionItems, map[string]any{"session_id": c.SessionID, "turns": min(a.Turns, 10)}, &res); err != nil {
 		return "", err
 	}
-	head := fmt.Sprintf("「%s」 %s (%s)", conversationName(c, s.hello(ctx).Assistant.Main), c.SessionID, stateNames[c.State])
+	head := fmt.Sprintf("「%s」 %s (%s)", conversationName(c, s.settings(ctx).Main), c.SessionID, stateNames[c.State])
 	return transcriptText(head, res.Items), nil
 }
 
@@ -602,7 +602,7 @@ func (s *Service) toolConversationRename(ctx context.Context, self string, args 
 	if err != nil {
 		return "", err
 	}
-	if c.SessionID == s.hello(ctx).Assistant.Main {
+	if c.SessionID == s.settings(ctx).Main {
 		return "", errors.New("the main conversation is always shown as 主对话: it has no title to change")
 	}
 	if !slices.Contains(titleKinds, a.Kind) {
@@ -642,7 +642,7 @@ func (s *Service) toolConversationArchive(ctx context.Context, self string, args
 	if err != nil {
 		if !on { // an archived conversation may be long out of the node's list: the id alone will do
 			if id := strings.TrimSpace(a.ID); s.isArchived(id) {
-				_, err := s.setArchived(ctx, s.hello(ctx).Assistant.MachineID, id, false, titleByAssistant)
+				_, err := s.setArchived(ctx, s.settings(ctx).MachineID, id, false, titleByAssistant)
 				if err != nil {
 					return "", err
 				}
@@ -651,7 +651,7 @@ func (s *Service) toolConversationArchive(ctx context.Context, self string, args
 		}
 		return "", err
 	}
-	name := conversationName(c, s.hello(ctx).Assistant.Main)
+	name := conversationName(c, s.settings(ctx).Main)
 	changed, err := s.setArchived(ctx, c.MachineID, c.SessionID, on, titleByAssistant)
 	if err != nil {
 		return "", err
@@ -726,7 +726,7 @@ func (s *Service) toolConversationSend(ctx context.Context, self string, args js
 		return "", err
 	}
 	msg := relayMsg{From: self, FromTitle: from, Tool: "conversation_send", Text: a.Text, Hop: hop, At: time.Now().UTC()}
-	name := conversationName(c, s.hello(ctx).Assistant.Main)
+	name := conversationName(c, s.settings(ctx).Main)
 	back := ""
 	if s.unarchiveOnSend(c.MachineID, c.SessionID) {
 		back = " It was archived; it is back in the list."
@@ -749,7 +749,7 @@ func (s *Service) relayFrom(ctx context.Context, self string) (string, int, erro
 	}
 	name := "另一段对话"
 	if c, err := s.assistantConversation(ctx, self); err == nil {
-		name = conversationName(c, s.hello(ctx).Assistant.Main)
+		name = conversationName(c, s.settings(ctx).Main)
 	}
 	return name, s.hopOf(self) + 1, nil
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -113,19 +114,6 @@ func TestSelfSettingsRulesAndNotesPersist(t *testing.T) {
 	if _, err = change.apply(ctx, nil); err != nil || h.inboxRules(ctx) != "fallback" {
 		t.Fatalf("cleared rules: %v", err)
 	}
-	if err = h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.selected", Model: "chosen"}); err != nil {
-		t.Fatal(err)
-	}
-	change, err = h.setAssistantNotes(ctx, json.RawMessage(`"example notes"`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = change.apply(ctx, nil); err != nil {
-		t.Fatal(err)
-	}
-	if h.assistantNotes(ctx) != "example notes" || h.assistantConfigLegacy(ctx).Launcher == "selected" {
-		t.Fatal("notes changed legacy model inheritance")
-	}
 }
 
 func TestSelfSettingsToolOnlyForAssistant(t *testing.T) {
@@ -143,8 +131,10 @@ func TestSelfSettingsToolOnlyForAssistant(t *testing.T) {
 	if !found || !h.isAssistantTool(context.Background(), "jarvis_settings") {
 		t.Fatal("assistant lacks self settings")
 	}
-	out, err := h.toolJarvisSettings(context.Background(), nil, "", json.RawMessage(`{}`))
-	if err != nil || !strings.Contains(out, "inbox.rules") || strings.Contains(out, "- mail.accounts") {
-		t.Fatalf("list: %q %v", out, err)
+	// The list is the assistant's: its own settings and the hub's (settings.list).
+	res := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: "jarvis_settings", Arguments: json.RawMessage(`{}`)})
+	out := res.Content[0].Text
+	if res.IsError || !strings.Contains(out, "inbox.rules") || !strings.Contains(out, "- assistant.notes (关于我)") || strings.Contains(out, "- mail.accounts") {
+		t.Fatalf("list: %q", out)
 	}
 }

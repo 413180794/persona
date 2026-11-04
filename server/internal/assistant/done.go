@@ -232,16 +232,6 @@ func (s *Service) autoFinishTask(t Todo, work time.Time, worked bool) {
 	}
 }
 
-// autoDoneTodo marks todo id done by the assistant's judge when it is still open and was not reopened after work
-// began; false when the user got there first (done it, reopened it) or it is gone.
-func (s *Service) autoDoneTodo(ctx context.Context, id, reason string, work time.Time) (bool, error) {
-	var res struct {
-		OK bool `json:"ok"`
-	}
-	err := s.appCall(ctx, AppTodos, TodosAutoDone, map[string]any{"todo_id": id, "reason": reason, "work": work}, &res)
-	return res.OK, err
-}
-
 // doneCheckRoute: POST /api/v1/todos/{id}/done-check runs the judgment on a todo as it is and answers it; nothing is
 // written (for looking into why a task was or was not closed).
 func (s *Service) doneCheckRoute() {
@@ -250,7 +240,7 @@ func (s *Service) doneCheckRoute() {
 			apierr.Write(w, http.StatusForbidden, errors.New("read-only role cannot judge todos"))
 			return
 		}
-		if err := s.todosLoad(r.Context()); err != nil {
+		if err := s.ensureTodosLoaded(r.Context()); err != nil {
 			apierr.Write(w, http.StatusServiceUnavailable, errors.New("todos service unavailable"))
 			return
 		}

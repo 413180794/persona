@@ -74,7 +74,7 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 
 // quotaMachine: the one asked for when it has the launcher, else the hub's own machine, else the first online one.
 func (h *Hub) quotaMachine(ctx context.Context, has []string, want string) *Machine {
-	order := []string{want, h.assistantConfig(ctx).MachineID, h.localMachineID()}
+	order := []string{want, h.assistantProfile().MachineID, h.localMachineID()}
 	order = append(order, has...)
 	for _, id := range order {
 		if id == "" || !slices.Contains(has, id) {

@@ -217,17 +217,12 @@ func (f *fakeService) event(t *testing.T, prefix string) string {
 	}
 }
 
-// manager.hello: the hub answers with the identity, the user's profile as the hub has it and the managers, and puts
+// manager.hello: the hub answers with the identity, hub.json's assistant section and the managers, and puts
 // the connection in the roster; the other managers hear who is online.
 func TestBusHello(t *testing.T) {
-	h, srv, store := newBusHub(t)
-	ctx := context.Background()
+	h, srv, _ := newBusHub(t)
 	notes := "回答尽量简短"
-	if err := store.PutSetting(ctx, "assistant", AssistantConfig{Notes: &notes, Timezone: "Asia/Shanghai"}); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.PutSetting(context.Background(), "assistant", nil) })
-	h.cfg.Assistant.Owner = "主人"
+	h.cfg.Assistant.Owner, h.cfg.Assistant.Notes = "主人", notes
 	tok := busToken(t, h, "assistant", "助手")
 	deskTok := busToken(t, h, "desk", "工作")
 
@@ -237,7 +232,7 @@ func TestBusHello(t *testing.T) {
 	f.hello(t, &reply)
 	want := busHelloReply{Name: "助手", Role: bus.RoleManager,
 		Managers: []busManagerBrief{{ID: "assistant", Name: "助手", Role: bus.RoleManager, Online: true}, {ID: "desk", Name: "工作", Role: bus.RoleManager}},
-		Hello:    assistantwire.Hello{Timezone: "Asia/Shanghai", Owner: "主人", OwnerNotes: notes, DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds()}}
+		Hello:    assistantwire.Hello{Owner: "主人", OwnerNotes: notes, DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds()}}
 	if !jsonEqual(reply, want) {
 		t.Fatalf("hello answer %+v, want %+v", reply, want)
 	}

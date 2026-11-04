@@ -83,7 +83,7 @@ func taskByID(s *Service, id string) (Task, bool) {
 
 func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 	f := newFakeHub()
-	f.hello.Timezone = "Asia/Shanghai"
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	h := newStorelessService(t, f)
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	at := func(hh, mm int) time.Time { return time.Date(2026, 10, 26, hh, mm, 0, 0, loc) }
@@ -141,7 +141,7 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 // that takes a while to give up) records its failure after the 11:00 skip, and the task still says skipped (#556).
 func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {
 	f := newFakeHub()
-	f.hello.Timezone = "Asia/Shanghai"
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	h := newStorelessService(t, f)
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	at := func(hh, mm int) time.Time { return time.Date(2026, 10, 26, hh, mm, 0, 0, loc) }
@@ -176,7 +176,7 @@ func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {
 // turns it into one task every 30 minutes, with the launcher and mode the user picked, and later ones change nothing.
 func TestARunReschedulingItselfKeepsOneTask(t *testing.T) {
 	f := newFakeHub()
-	f.hello.Timezone = "Asia/Shanghai"
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	h := newStorelessService(t, f)
 	m := "server"
 	prompt := "按手册巡检一次，最后用 schedule_followup（new_conversation=true，at=30m，prompt 和本条相同）安排下一次。"
@@ -367,7 +367,7 @@ func TestTaskRoutes(t *testing.T) {
 
 func TestScheduleRoutineTool(t *testing.T) {
 	f := newFakeHub()
-	f.hello.Timezone = "Asia/Shanghai"
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	h := newStorelessService(t, f)
 	out, err := h.toolScheduleRoutine(context.Background(), json.RawMessage(`{"title":"周报","prompt":"起草周报","time":"17:00","weekdays":[5]}`))
 	if err != nil || !strings.Contains(out, "周五 17:00") {
@@ -486,7 +486,7 @@ func TestTasksMovedFromTheOldLists(t *testing.T) {
 	}
 	boot := func() *Service {
 		f := newFakeHub()
-		f.hello.Timezone = loc.String()
+		f.settings = &Settings{Timezone: loc.String()}
 		return newServiceOn(t, f, store)
 	}
 	h1 := boot()
@@ -520,7 +520,7 @@ func TestScheduleAcrossHubRestart(t *testing.T) {
 	at := func(h, m int) time.Time { return time.Date(2026, 10, 26, h, m, 0, 0, loc) }
 	boot := func() *Service {
 		f := newFakeHub()
-		f.hello.Timezone = "Asia/Shanghai"
+		f.settings = &Settings{Timezone: "Asia/Shanghai"}
 		return newServiceOn(t, f, store)
 	}
 	h1 := boot()

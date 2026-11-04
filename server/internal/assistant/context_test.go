@@ -13,7 +13,7 @@ import (
 // message up once there is an earlier snapshot to go on.
 func TestSnapshotIsNowAndDoesNotWait(t *testing.T) {
 	f := newFakeHub()
-	f.hello.Timezone = "Asia/Shanghai"
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	f.slowSnapshots = 4 * time.Second
 	s := newStorelessService(t, f)
 	ctx := context.Background()

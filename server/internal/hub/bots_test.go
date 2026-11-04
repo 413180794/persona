@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/channel"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -234,7 +235,7 @@ func newBotWorld(t *testing.T) *botWorld {
 	h := newTestHub(t)
 	st := newBotStore()
 	h.store = st
-	_ = st.PutSetting(context.Background(), "assistant", AssistantConfig{MachineID: "box", Main: "main-1"})
+	_ = st.PutSetting(context.Background(), "assistant", assistant.Settings{MachineID: "box", Main: "main-1"})
 	m := newMachine(h, MachineConfig{ID: "box", Name: "box", Kind: "local"})
 	h.byID["box"], h.machines = m, []*Machine{m}
 	node := &botNode{last: 10}
@@ -251,6 +252,7 @@ func newBotWorld(t *testing.T) *botWorld {
 	m.info.Home = "/home/u"
 	m.sessions = []proto.Session{{SessionID: "main-1", MachineID: "box", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusDone}}
 	m.mu.Unlock()
+	connectAssistant(t, h) // the main conversation is its to say, and what a message to it runs on
 	api := newFakeOpenAPI(t)
 	h.startBots(ctx)
 	mux := http.NewServeMux()
