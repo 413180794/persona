@@ -8,7 +8,7 @@ It serves machines, agents, conversations, interactions and the inbox, enough fo
 does not know are logged to stderr as MISSING. Timestamps are relative to when it starts. See docs/testing.md.
 """
 import base64, unicodedata
-import argparse, copy, hashlib, json, os, re, shutil, signal, socket, ssl, struct, subprocess, sys, tempfile, threading, time, uuid
+import argparse, copy, hashlib, json, os, re, shutil, signal, socket, ssl, struct, subprocess, sys, tempfile, threading, time, uuid, zlib
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
@@ -6154,12 +6154,56 @@ def png(w, h, rgb):
 # MOCK_SCREEN=fake (#1322): the live screen's 5900 goes to a Screen Sharing of the mock's own instead of this Mac's: it
 # signs in with VeNCrypt Plain (noVNC asks for an account and a password, as for macOS's), takes FAKE_SCREEN's account
 # and password (GET /mock/screen-password?p=… changes the password: the Mac's was changed), then shows one frame.
-FAKE_SCREEN = {"account": "me", "password": "mock-pass", "port": 0, "signins": [], "typed": ""}  # typed: keys after signing in
+FAKE_SCREEN = {"account": "me", "password": "mock-pass", "port": 0, "signins": [], "typed": "",  # typed: keys after signing in
+               "pointer": None, "clicks": [], "clipboard": "", "conns": [], "frames": 0}
+FAKE_W, FAKE_H = 480, 300
+
+
+def fake_frame(t=0):
+    """The mock Mac's desktop as rows of (r, g, b): a gradient, a window, and a box that moves with t (animated)."""
+    px = []
+    bx, by = 80 + (t * 7) % 300, 120 + (t * 3) % 120
+    for y in range(FAKE_H):
+        for x in range(FAKE_W):
+            if bx <= x < bx + 40 and by <= y < by + 40: px.append((255, 159, 10))
+            elif 60 <= x < 420 and 50 <= y < 250: px.append((236, 236, 238) if y < 74 else (250, 250, 252))
+            else: px.append((40 + y // 6, 90 + y // 8, 160))
+    return px
+
+
+def zrle_rect(px, W, x, y, w, h, z):
+    """ZRLE for (x, y, w, h) of px (rows of W): solid, packed palette or raw tiles, through the connection's zlib z."""
+    out = b""
+    for ty in range(y, y + h, 64):
+        for tx in range(x, x + w, 64):
+            tw, th = min(64, x + w - tx), min(64, y + h - ty)
+            tile = [px[(ty + j) * W + tx + i] for j in range(th) for i in range(tw)]
+            cols = list(dict.fromkeys(tile))
+            cp = lambda c: bytes([c[2], c[1], c[0]])
+            if len(cols) == 1:
+                out += b"\x01" + cp(cols[0])
+            elif len(cols) <= 16:
+                bits = 1 if len(cols) == 2 else 2 if len(cols) <= 4 else 4
+                out += bytes([len(cols)]) + b"".join(cp(c) for c in cols)
+                for j in range(th):
+                    acc = n = 0; row = b""
+                    for i in range(tw):
+                        acc = acc << bits | cols.index(tile[j * tw + i]); n += bits
+                        if n == 8: row += bytes([acc]); acc = n = 0
+                    if n: row += bytes([acc << (8 - n)])
+                    out += row
+            else:
+                out += b"\x00" + b"".join(cp(c) for c in tile)
+    comp = z.compress(out) + z.flush(zlib.Z_SYNC_FLUSH)
+    return struct.pack(">I", len(comp)) + comp
 
 
 def fake_screen_sharing():
-    """Listens on 127.0.0.1 and serves RFB 3.8 with VeNCrypt Plain; its port is FAKE_SCREEN["port"]."""
-    import socket
+    """Listens on 127.0.0.1 and serves RFB 3.8 as macOS's Screen Sharing offers it: Apple Remote Desktop's sign-in (30;
+    the AES through openssl) and VeNCrypt Plain; ZRLE when asked for, else Raw. Its port is FAKE_SCREEN["port"]."""
+    import socket, shutil, subprocess, random as _r
+
+    ard = bool(shutil.which("openssl"))
 
     def exact(c, n):
         b = b""
@@ -6169,41 +6213,78 @@ def fake_screen_sharing():
             b += got
         return b
 
+    def signed_in(c, user, pw):
+        ok = user == FAKE_SCREEN["account"] and pw == FAKE_SCREEN["password"]
+        FAKE_SCREEN["signins"].append({"account": user, "ok": ok})  # never the password
+        if not ok:
+            why = b"Authentication failed"
+            c.sendall(struct.pack(">I", 1) + struct.pack(">I", len(why)) + why)
+        return ok
+
     def serve(c):
+        lock = threading.Lock()
+        conn = {"sock": c, "lock": lock}
         try:
-            c.sendall(b"RFB 003.008\n"); exact(c, 12)
-            c.sendall(bytes([1, 19])); exact(c, 1)                      # one security type: VeNCrypt
-            c.sendall(bytes([0, 2])); exact(c, 2); c.sendall(bytes([0]))  # its version 0.2, agreed
-            c.sendall(bytes([1]) + struct.pack(">I", 256)); exact(c, 4)  # one subtype: Plain
-            ulen, plen = struct.unpack(">II", exact(c, 8))
-            user, pw = exact(c, ulen).decode(), exact(c, plen).decode()
-            ok = user == FAKE_SCREEN["account"] and pw == FAKE_SCREEN["password"]
-            FAKE_SCREEN["signins"].append({"account": user, "ok": ok})  # never the password
-            if not ok:
-                why = b"Authentication failed"
-                c.sendall(struct.pack(">I", 1) + struct.pack(">I", len(why)) + why); return
-            c.sendall(struct.pack(">I", 0)); exact(c, 1)                   # SecurityResult ok; ClientInit
-            w, h = 480, 300
+            c.sendall(b"RFB 003.889\n"); exact(c, 12)
+            types = [30, 19] if ard else [19]
+            c.sendall(bytes([len(types)] + types))
+            kind = exact(c, 1)[0]
+            if kind == 30:  # ARD: Diffie-Hellman, then the account and password sealed with AES-128 by its MD5
+                p = _r.getrandbits(1024) | (1 << 1023) | 1
+                y = _r.getrandbits(1000)
+                c.sendall(b"\x00\x02" + struct.pack(">H", 128) + p.to_bytes(128, "big") + pow(2, y, p).to_bytes(128, "big"))
+                sealed, theirs = exact(c, 128), exact(c, 128)
+                key = hashlib.md5(pow(int.from_bytes(theirs, "big"), y, p).to_bytes(128, "big")).digest()
+                block = subprocess.run(["openssl", "enc", "-d", "-aes-128-ecb", "-nopad", "-K", key.hex()],
+                                       input=sealed, capture_output=True).stdout
+                user, pw = block[:64].split(b"\0")[0].decode(errors="replace"), block[64:].split(b"\0")[0].decode(errors="replace")
+            elif kind == 19:  # VeNCrypt 0.2, Plain
+                c.sendall(bytes([0, 2])); exact(c, 2); c.sendall(bytes([0]))
+                c.sendall(bytes([1]) + struct.pack(">I", 256)); exact(c, 4)
+                ulen, plen = struct.unpack(">II", exact(c, 8))
+                user, pw = exact(c, ulen).decode(), exact(c, plen).decode()
+            else:
+                return
+            if not signed_in(c, user, pw): return
+            c.sendall(struct.pack(">I", 0)); exact(c, 1)  # SecurityResult ok; ClientInit
             fmt = struct.pack(">BBBBHHHBBB3x", 32, 24, 0, 1, 255, 255, 255, 16, 8, 0)
             name = b"Mock Mac"
-            c.sendall(struct.pack(">HH", w, h) + fmt + struct.pack(">I", len(name)) + name)
-            sent = False
-            while True:  # SetPixelFormat 20, SetEncodings 4 + 4n, FramebufferUpdateRequest 10, key 8, pointer 6
+            c.sendall(struct.pack(">HH", FAKE_W, FAKE_H) + fmt + struct.pack(">I", len(name)) + name)
+            FAKE_SCREEN["conns"].append(conn)
+            encodings, z, t, sent = [], zlib.compressobj(6), 0, False
+            frame = fake_frame()
+
+            def update(rects):
+                body = b""
+                for (x, y, w, h) in rects:
+                    if 16 in encodings:
+                        body += struct.pack(">HHHHi", x, y, w, h, 16) + zrle_rect(frame, FAKE_W, x, y, w, h, z)
+                    else:
+                        body += struct.pack(">HHHHi", x, y, w, h, 0) + b"".join(
+                            bytes([*frame[(y + j) * FAKE_W + x + i][::-1], 0]) for j in range(h) for i in range(w))
+                with lock:
+                    c.sendall(struct.pack(">BxH", 0, len(rects)) + body)
+                FAKE_SCREEN["frames"] += 1
+
+            while True:  # SetPixelFormat 20, SetEncodings 4 + 4n, FramebufferUpdateRequest 10, key 8, pointer 6, cut 8 + n
                 kind = exact(c, 1)[0]
                 if kind == 0: exact(c, 19)
-                elif kind == 2: exact(c, 1); n = struct.unpack(">H", exact(c, 2))[0]; exact(c, 4 * n)
+                elif kind == 2:
+                    exact(c, 1); n = struct.unpack(">H", exact(c, 2))[0]
+                    encodings = list(struct.unpack(">%di" % n, exact(c, 4 * n)))
                 elif kind == 3:
                     exact(c, 9)
-                    if sent: continue
-                    sent = True  # one frame: a desktop with a window on it, as the client's 32-bit little-endian RGB
-                    px = bytearray()
-                    for y in range(h):
-                        for x in range(w):
-                            inside = 60 <= x < 420 and 50 <= y < 250
-                            bar = inside and y < 74
-                            r, g, b = (236, 236, 238) if bar else (250, 250, 252) if inside else (40 + y // 6, 90 + y // 8, 160)
-                            px += bytes([r, g, b, 0])
-                    c.sendall(struct.pack(">BxH", 0, 1) + struct.pack(">HHHHi", 0, 0, w, h, 0) + bytes(px))
+                    if not sent:
+                        sent = True
+                        update([(0, 0, FAKE_W, FAKE_H)])
+                    elif os.environ.get("MOCK_SCREEN_ANIMATE") == "1":  # a box moving at ~30 frames a second
+                        time.sleep(1 / 30)
+                        old = (80 + (t * 7) % 300, 120 + (t * 3) % 120)
+                        t += 1
+                        frame = fake_frame(t)
+                        new = (80 + (t * 7) % 300, 120 + (t * 3) % 120)
+                        x0, y0 = min(old[0], new[0]), min(old[1], new[1])
+                        update([(x0, y0, min(FAKE_W - x0, abs(new[0] - old[0]) + 40), min(FAKE_H - y0, abs(new[1] - old[1]) + 40))])
                 elif kind == 4:  # a key: what is typed on the lock screen (一键解锁, #1507 a-2), Return as \n
                     down, _, key = struct.unpack(">BHI", exact(c, 7))
                     if down and key == 0xff0d: FAKE_SCREEN["typed"] += "\n"
@@ -6213,12 +6294,21 @@ def fake_screen_sharing():
                         for m in MACHINES:
                             if m.get("computer", {}).get("desktop") == "locked":
                                 m["computer"] = {**COMPUTER_STATES["ready"], "enabled": True}
-                elif kind == 5: exact(c, 5)
-                elif kind == 6: exact(c, 7); exact(c, struct.unpack(">I", exact(c, 4))[0])
+                elif kind == 5:  # the pointer, and where it went down and up
+                    mask, x, y = struct.unpack(">BHH", exact(c, 5))
+                    last = FAKE_SCREEN["pointer"] or (0, 0, 0)
+                    if (last[2] & 1) != (mask & 1): FAKE_SCREEN["clicks"].append({"down": bool(mask & 1), "x": x, "y": y})
+                    if mask & 4 and not last[2] & 4: FAKE_SCREEN["clicks"].append({"right": True, "x": x, "y": y})
+                    if mask & 24: FAKE_SCREEN["clicks"].append({"scroll": "up" if mask & 8 else "down", "x": x, "y": y})
+                    FAKE_SCREEN["pointer"] = (x, y, mask)
+                elif kind == 6:  # the client's clipboard
+                    exact(c, 3); n = struct.unpack(">I", exact(c, 4))[0]
+                    FAKE_SCREEN["clipboard"] = exact(c, n).decode("latin-1")
                 else: return
         except OSError:
             pass
         finally:
+            if conn in FAKE_SCREEN["conns"]: FAKE_SCREEN["conns"].remove(conn)
             c.close()
 
     srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -6230,6 +6320,15 @@ def fake_screen_sharing():
             c, _ = srv.accept()
             threading.Thread(target=serve, args=(c,), daemon=True).start()
     threading.Thread(target=accept, daemon=True).start()
+
+
+def fake_screen_clip(text):
+    """The mock Mac copies text: its clipboard goes to the connected clients (ServerCutText)."""
+    b = text.encode("latin-1", "replace")
+    for conn in list(FAKE_SCREEN["conns"]):
+        try:
+            with conn["lock"]: conn["sock"].sendall(bytes([3, 0, 0, 0]) + struct.pack(">I", len(b)) + b)
+        except OSError: pass
 
 
 if os.environ.get("MOCK_SCREEN") == "fake":
@@ -7372,8 +7471,10 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(GIT_PULL_STATE)
         if p == "/mock/screen-password":  # MOCK_SCREEN=fake: the Mac's password changed; who signed in how; what was typed
             if "p" in q: FAKE_SCREEN["password"] = q["p"][0]
-            if "clear" in q: FAKE_SCREEN["typed"] = ""
-            return self.send_json({"signins": FAKE_SCREEN["signins"], "typed": FAKE_SCREEN["typed"]})
+            if "clear" in q: FAKE_SCREEN.update(typed="", clicks=[], clipboard="")
+            if "clip" in q: fake_screen_clip(q["clip"][0])  # the Mac copied this
+            return self.send_json({"signins": FAKE_SCREEN["signins"], "typed": FAKE_SCREEN["typed"], "clicks": FAKE_SCREEN["clicks"],
+                                   "pointer": FAKE_SCREEN["pointer"], "clipboard": FAKE_SCREEN["clipboard"], "frames": FAKE_SCREEN["frames"]})
         if p == "/mock/churn":
             CHURN["rounds"] = 0
             threading.Thread(target=churn, args=(int(q.get("n", ["20"])[0]), int(q.get("ms", ["300"])[0]),

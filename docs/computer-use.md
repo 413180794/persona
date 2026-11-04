@@ -228,6 +228,35 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - HTTPS 或 localhost 打开时不补，用浏览器自己的。
 - **画面**：Cua Driver 在后台操作，不抢焦点，画面里是真实桌面。它画的 agent cursor 是最上层的一个窗口，看得到。
 
+### App 里的原生客户端（#1343，`apple/Persona/Screen/`）
+
+画中画小窗（`AVSampleBufferDisplayLayer`）要拿到每一帧，WebView 里的 noVNC 给不了，所以 App 自己说 RFB。网页照旧用 noVNC。
+
+- **连哪里**：hub 的 5900 转发（`RFBWebSocket`）：一条二进制 WebSocket，走 App 连 hub 的同一条路（`APIClient.url`：SSH 隧道时经隧道；`APIClient.session`：公网 TLS 的钉扎），带设备 token（`Authorization`）。
+- **登录**（`RFBAuth`）：
+  - macOS 的屏幕共享给的是 30（Apple Remote Desktop）、33、35、36。这里用 30：
+    1. 服务器给出生成元、素数和它的公钥。
+    2. 这边算出 DH 共享密钥，取它的 MD5 当 AES-128 的密钥（ECB）。
+    3. 账号、密码各占 64 字节，以 NUL 结尾，其余是随机数。封好的 128 字节先发，然后是这边的公钥。
+  - 大数运算是自己写的 Montgomery 模幂（`RFBBigUInt`），对照 Python 的 `pow`。
+  - mock 自己的屏幕共享还给 VeNCrypt 的 Plain（19 → 256），测试用；没有登录的（1）也认。
+  - 账号密码来自记住的（`ScreenCredentials`，#1322）。
+- **画面**（`RFBFramebuffer`）：
+  - 要 32 位、深度 24、小端、红在第 16 位的像素格式，内存里就是 BGRA，`CVPixelBuffer` 的 32BGRA 直接用。
+  - 编码按优先顺序是 ZRLE（16）、CopyRect（1）、Raw（0），还有 DesktopSize、Cursor、LastRect 三个伪编码。
+  - ZRLE 的 zlib 流整个连接一条，用 Compression 的 raw DEFLATE，跳过开头两字节的 zlib 头。
+  - ZRLE 的五种 tile 都认：raw、solid、packed palette、plain RLE、palette RLE。
+- **回去的**：指针（按键位：左、中、右，滚轮上下）、按键（keysym）、剪贴板（ClientCutText，RFB 只能带 Latin-1，别的字以后经 node）。
+- **测试**：
+  - `RFBClientTests`：
+    - 大数对照 Python；
+    - ARD 对照 Python 加 openssl 封出来的字节；
+    - ZRLE 对照 Python 的编码器，五种 tile 跨两个矩形共用一条流；
+    - 照一段脚本走完整个会话，逐字节核对发出去的；
+    - ARD 握手和登录被拒；
+    - 指针、按键、剪贴板的字节。
+  - mock 的 `MOCK_SCREEN=fake` 现在像 macOS 一样先给 ARD（DH 在 Python 里算，AES 用 openssl），按客户端要的给 ZRLE 或 Raw。它记下指针、点击、滚轮、剪贴板（`/mock/screen-password` 读，`?clip=…` 让它往客户端发剪贴板）。`MOCK_SCREEN_ANIMATE=1` 时画面里有个方块按大约每秒 30 帧移动，用来量帧率。
+
 ### App
 
 - **机器页「操控电脑」**：

@@ -1,0 +1,321 @@
+import CoreGraphics
+import Foundation
+
+/// Bytes to and from a Mac's Screen Sharing: the hub's port relay (RFBWebSocket), or a test's.
+nonisolated protocol RFBTransport: AnyObject, Sendable {
+    func send(_ bytes: [UInt8]) async throws
+    /// The next bytes that came; throws once it is closed.
+    func receive() async throws -> [UInt8]
+    func close()
+}
+
+/// The hub's relay of the Mac's 5900 (`/api/v1/machines/{mid}/ports/5900/connect`, docs/ports.md): one binary
+/// WebSocket message a TCP read or write, through the app's own way to the hub (APIClient: its SSH tunnel, its pinned
+/// session) and with its device token.
+nonisolated final class RFBWebSocket: RFBTransport, @unchecked Sendable {
+    private let task: URLSessionWebSocketTask
+
+    init(api: APIClient, machine: String) {
+        var comps = URLComponents(url: api.url("/api/v1/machines/\(machine)/ports/5900/connect"), resolvingAgainstBaseURL: false)!
+        comps.scheme = comps.scheme == "https" ? "wss" : "ws"
+        var req = URLRequest(url: comps.url!)
+        req.setValue("Bearer \(api.config.token)", forHTTPHeaderField: "Authorization")
+        req.timeoutInterval = 15
+        task = api.session.webSocketTask(with: req)
+        task.maximumMessageSize = 64 << 20
+        task.resume()
+    }
+
+    func send(_ bytes: [UInt8]) async throws { try await task.send(.data(Data(bytes))) }
+
+    func receive() async throws -> [UInt8] {
+        switch try await task.receive() {
+        case .data(let d): return [UInt8](d)
+        case .string(let s): return Array(s.utf8)
+        @unknown default: return []
+        }
+    }
+
+    func close() { task.cancel(with: .normalClosure, reason: nil) }
+}
+
+/// What came in, read a few bytes at a time.
+nonisolated final class RFBReader: @unchecked Sendable {
+    private let transport: RFBTransport
+    private var buffer: [UInt8] = []
+    private var at = 0
+
+    init(_ transport: RFBTransport) { self.transport = transport }
+
+    func bytes(_ n: Int) async throws -> [UInt8] {
+        while buffer.count - at < n {
+            let more = try await transport.receive()
+            if at > 0 {
+                buffer.removeFirst(at)
+                at = 0
+            }
+            buffer.append(contentsOf: more)
+        }
+        defer { at += n }
+        return Array(buffer[at..<(at + n)])
+    }
+
+    func u8() async throws -> UInt8 { try await bytes(1)[0] }
+    func u16() async throws -> Int { let b = try await bytes(2); return Int(b[0]) << 8 | Int(b[1]) }
+    func u32() async throws -> UInt32 {
+        let b = try await bytes(4)
+        return UInt32(b[0]) << 24 | UInt32(b[1]) << 16 | UInt32(b[2]) << 8 | UInt32(b[3])
+    }
+    func s32() async throws -> Int32 { Int32(bitPattern: try await u32()) }
+}
+
+/// The native client of a Mac's Screen Sharing (#1343): RFB 3.8 signed in with Apple Remote Desktop's account and
+/// password (or VeNCrypt Plain, or none), the screen kept in an RFBFramebuffer from Raw, CopyRect and ZRLE updates,
+/// and the pointer, keys and clipboard sent back. It reads on a task of its own; what it says comes through the
+/// callbacks, on that task (onFrame with the framebuffer at hand, to copy from before the next update).
+nonisolated final class RFBClient: @unchecked Sendable {
+    struct Credentials: Sendable, Equatable {
+        var account: String
+        var password: String
+    }
+
+    enum State: Sendable, Equatable {
+        case connecting
+        case signingIn
+        case live(width: Int, height: Int, name: String)
+        /// The Mac turned the sign-in down (its reason, when it gave one).
+        case refused(String)
+        case failed(String)
+        case closed
+    }
+
+    enum Failure: Error, Equatable {
+        case protocolError(String)
+        case refused(String)
+        case noCredentials
+    }
+
+    /// The Mac's cursor (the Cursor pseudo-encoding): BGRA pixels with the mask applied, and its hot spot.
+    struct Cursor: Sendable {
+        var width: Int, height: Int, hotX: Int, hotY: Int
+        var pixels: [UInt8]
+    }
+
+    private let transport: RFBTransport
+    private let reader: RFBReader
+    private let credentials: @Sendable () async -> Credentials?
+    private(set) var framebuffer = RFBFramebuffer(width: 1, height: 1)
+    private let zrle = RFBZRLE()
+    private var task: Task<Void, Never>?
+
+    var onState: @Sendable (State) -> Void = { _ in }
+    /// After each update: the framebuffer, and the part of it that changed.
+    var onFrame: @Sendable (RFBFramebuffer, CGRect) -> Void = { _, _ in }
+    var onCutText: @Sendable (String) -> Void = { _ in }
+    var onCursor: @Sendable (Cursor) -> Void = { _ in }
+
+    /// Encodings asked for, best first: ZRLE, CopyRect, Raw, then DesktopSize, Cursor and LastRect.
+    static let encodings: [Int32] = [16, 1, 0, -223, -239, -224]
+
+    init(transport: RFBTransport, credentials: @escaping @Sendable () async -> Credentials?) {
+        self.transport = transport
+        reader = RFBReader(transport)
+        self.credentials = credentials
+    }
+
+    func start() {
+        task = Task.detached { [self] in
+            onState(.connecting)
+            do {
+                try await handshake()
+                try await run()
+            } catch let Failure.refused(why) {
+                onState(.refused(why))
+            } catch {
+                onState(Task.isCancelled ? .closed : .failed(Self.describe(error)))
+            }
+            transport.close()
+        }
+    }
+
+    func close() {
+        task?.cancel()
+        transport.close()
+        onState(.closed)
+    }
+
+    // MARK: Out
+
+    /// The pointer at (x, y) of the Mac's screen, with these buttons down (bit 0 left, 1 middle, 2 right; 3, 4 the
+    /// wheel up and down).
+    func pointer(x: Int, y: Int, buttons: UInt8) {
+        let x = UInt16(clamping: max(0, x)), y = UInt16(clamping: max(0, y))
+        send([5, buttons, UInt8(x >> 8), UInt8(x & 0xff), UInt8(y >> 8), UInt8(y & 0xff)])
+    }
+
+    func key(_ keysym: UInt32, down: Bool) {
+        send([4, down ? 1 : 0, 0, 0] + RFBAuth.be32(keysym))
+    }
+
+    /// Text onto the Mac's clipboard (ClientCutText: Latin-1 is all RFB carries; anything else goes as "?").
+    func cutText(_ text: String) {
+        let bytes = text.unicodeScalars.map { $0.value < 256 ? UInt8($0.value) : UInt8(ascii: "?") }
+        send([6, 0, 0, 0] + RFBAuth.be32(UInt32(bytes.count)) + bytes)
+    }
+
+    private func send(_ bytes: [UInt8]) {
+        Task { try? await transport.send(bytes) }
+    }
+
+    // MARK: In
+
+    private func handshake() async throws {
+        let version = String(decoding: try await reader.bytes(12), as: UTF8.self)
+        guard version.hasPrefix("RFB ") else { throw Failure.protocolError("不是屏幕共享：\(version.prefix(12))") }
+        try await transport.send(Array("RFB 003.008\n".utf8))
+        let count = Int(try await reader.u8())
+        if count == 0 { throw Failure.protocolError(try await reason()) }
+        let offered = try await reader.bytes(count)
+        guard let type = RFBAuth.preferred.first(where: offered.contains) else {
+            throw Failure.protocolError("这台 Mac 的屏幕共享要的登录方式还不支持（\(offered.map(String.init).joined(separator: ", "))）")
+        }
+        try await transport.send([type])
+        switch type {
+        case RFBAuth.ard: try await ard()
+        case RFBAuth.veNCrypt: try await veNCrypt()
+        default: break
+        }
+        if try await reader.u32() != 0 { throw Failure.refused(try await reason()) }
+        try await transport.send([1]) // ClientInit: shared
+        let width = try await reader.u16(), height = try await reader.u16()
+        _ = try await reader.bytes(16) // its pixel format: the client asks for its own next
+        let name = String(decoding: try await reader.bytes(Int(try await reader.u32())), as: UTF8.self)
+        framebuffer = RFBFramebuffer(width: width, height: height)
+        // SetPixelFormat: 32 bits, depth 24, little-endian, true colour, 8 bits each, red at 16, green 8, blue 0.
+        try await transport.send([0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0])
+        var setEncodings: [UInt8] = [2, 0, 0, UInt8(Self.encodings.count)]
+        for e in Self.encodings { setEncodings += RFBAuth.be32(UInt32(bitPattern: e)) }
+        try await transport.send(setEncodings)
+        onState(.live(width: width, height: height, name: name))
+        try await request(incremental: false)
+    }
+
+    private func sign() async throws -> Credentials {
+        onState(.signingIn)
+        guard let c = await credentials() else { throw Failure.noCredentials }
+        return c
+    }
+
+    private func ard() async throws {
+        let generator = try await reader.bytes(2)
+        let length = try await reader.u16()
+        let prime = try await reader.bytes(length), serverKey = try await reader.bytes(length)
+        let c = try await sign()
+        let r = try RFBAuth.ard(generator: generator, prime: prime, serverKey: serverKey, account: c.account, password: c.password)
+        try await transport.send(r.sealed + r.publicKey)
+    }
+
+    private func veNCrypt() async throws {
+        let version = try await reader.bytes(2)
+        guard version == [0, 2] else { throw Failure.protocolError("VeNCrypt \(version)") }
+        try await transport.send([0, 2])
+        guard try await reader.u8() == 0 else { throw Failure.protocolError("VeNCrypt 0.2 被拒") }
+        let n = Int(try await reader.u8())
+        var subtypes: [UInt32] = []
+        for _ in 0..<n { subtypes.append(try await reader.u32()) }
+        guard subtypes.contains(RFBAuth.plain) else { throw Failure.protocolError("VeNCrypt 没有 Plain") }
+        try await transport.send(RFBAuth.be32(RFBAuth.plain))
+        let c = try await sign()
+        try await transport.send(RFBAuth.plainCredentials(account: c.account, password: c.password))
+    }
+
+    private func reason() async throws -> String {
+        let n = Int(try await reader.u32())
+        return String(decoding: try await reader.bytes(min(n, 4096)), as: UTF8.self)
+    }
+
+    private func request(incremental: Bool) async throws {
+        let w = UInt16(framebuffer.width), h = UInt16(framebuffer.height)
+        try await transport.send([3, incremental ? 1 : 0, 0, 0, 0, 0, UInt8(w >> 8), UInt8(w & 0xff), UInt8(h >> 8), UInt8(h & 0xff)])
+    }
+
+    private func run() async throws {
+        while !Task.isCancelled {
+            switch try await reader.u8() {
+            case 0: try await update()
+            case 1: // colour map entries: not for a true-colour format
+                _ = try await reader.bytes(1)
+                _ = try await reader.u16()
+                _ = try await reader.bytes(try await reader.u16() * 6)
+            case 2: break // bell
+            case 3:
+                _ = try await reader.bytes(3)
+                let n = Int(try await reader.u32())
+                let text = try await reader.bytes(n)
+                onCutText(String(text.map { Character(Unicode.Scalar($0)) }))
+            case let t: throw Failure.protocolError("不认识的消息 \(t)")
+            }
+        }
+    }
+
+    private func update() async throws {
+        _ = try await reader.bytes(1)
+        let count = try await reader.u16()
+        var dirty = CGRect.null
+        for _ in 0..<count {
+            let x = try await reader.u16(), y = try await reader.u16(), w = try await reader.u16(), h = try await reader.u16()
+            let encoding = try await reader.s32()
+            switch encoding {
+            case 0:
+                let data = try await reader.bytes(w * h * 4)
+                data.withUnsafeBytes { framebuffer.raw(x: x, y: y, w: w, h: h, $0) }
+            case 1:
+                let sx = try await reader.u16(), sy = try await reader.u16()
+                framebuffer.copy(x: x, y: y, w: w, h: h, from: sx, sy)
+            case 16:
+                let compressed = try await reader.bytes(Int(try await reader.u32()))
+                try zrle.draw(try zrle.inflate(compressed), x: x, y: y, w: w, h: h, into: framebuffer)
+            case -223:
+                framebuffer.resize(width: w, height: h)
+                dirty = CGRect(x: 0, y: 0, width: w, height: h)
+                continue
+            case -239:
+                let pixels = try await reader.bytes(w * h * 4), mask = try await reader.bytes((w + 7) / 8 * h)
+                onCursor(Self.cursor(width: w, height: h, hotX: x, hotY: y, pixels: pixels, mask: mask))
+                continue
+            case -224:
+                break
+            default:
+                throw Failure.protocolError("不认识的编码 \(encoding)")
+            }
+            if encoding == -224 { break }
+            dirty = dirty.union(CGRect(x: x, y: y, width: w, height: h))
+        }
+        if !dirty.isNull { onFrame(framebuffer, dirty) }
+        try await request(incremental: true)
+    }
+
+    /// The cursor's pixels, see-through where its mask says.
+    static func cursor(width: Int, height: Int, hotX: Int, hotY: Int, pixels: [UInt8], mask: [UInt8]) -> Cursor {
+        var out = pixels
+        let row = (width + 7) / 8
+        for y in 0..<height {
+            for x in 0..<width where mask[y * row + x / 8] & (0x80 >> UInt8(x % 8)) == 0 {
+                out[(y * width + x) * 4 + 3] = 0
+            }
+            for x in 0..<width where mask[y * row + x / 8] & (0x80 >> UInt8(x % 8)) != 0 {
+                out[(y * width + x) * 4 + 3] = 255
+            }
+        }
+        return Cursor(width: width, height: height, hotX: hotX, hotY: hotY, pixels: out)
+    }
+
+    private static func describe(_ error: Error) -> String {
+        switch error {
+        case Failure.protocolError(let s): return s
+        case Failure.noCredentials: return "没有登录这台 Mac 的屏幕共享"
+        case let e as URLError where e.code == .badServerResponse: return "hub 不让连这台的屏幕（插件没开，或这台设备只能看不能操作）"
+        default: return error.localizedDescription
+        }
+    }
+}
