@@ -23,7 +23,7 @@ import {
   type TaskPlan,
   type TodayBody,
 } from "../../lib/feed";
-import { isRemovable, makeSessionLookup, mostUrgentAgent, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
+import { dockAgents, isRemovable, makeSessionLookup, mostUrgentAgent, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
 import { navigate } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
 import { getState, useStore } from "../../lib/store";
@@ -31,6 +31,7 @@ import type { AgentState, Interaction, Session } from "../../lib/types";
 import { Button, Collapse, cx, Menu, StatusDot, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { InteractionCard } from "../chat/Interactions";
+import { sessionTitle } from "../../lib/format";
 
 // ── what a task is now ──
 
@@ -577,43 +578,70 @@ export function TaskQuestions({ conversation }: { conversation: string }) {
   );
 }
 
-/** The dock: a pill for each task going on (waiting first), then 全部. */
+/** The dock: 全部 N held at its left edge (it does not scroll), then a pill for each task going on (waiting first) and,
+ * in the main conversation, each agent going on that no task stands for (#1113), scrolling on their own (iOS TaskDock). */
 export function TaskDock({ conversation }: { conversation: string }) {
   const todos = useStore((s) => s.todos);
+  const sessions = useStore((s) => s.sessions);
+  const main = useStore((s) => s.assistant?.main);
   const lookup = useTaskLookup();
   const plans = useFeed((s) => s.plans);
   const [menuFor, setMenuFor] = useState<{ todo: Todo; el: HTMLElement } | null>(null);
+  const agents = useMemo(() => dockAgents(Object.values(sessions).flat(), todos, conversation, main), [sessions, todos, conversation, main]);
   const mine = todos.filter((t) => t.origin === conversation);
-  if (mine.length === 0) return null;
+  if (mine.length === 0 && agents.length === 0) return null;
   // Failed, done and stopped tasks are not in the dock.
   const rank: Partial<Record<TodoStatus, number>> = { needs_you: 0, working: 1, not_started: 1, unread: 2 };
   const going = mine
     .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
     .filter((x) => rank[x.st] !== undefined)
     .sort((a, b) => rank[a.st]! - rank[b.st]! || b.t.created_at.localeCompare(a.t.created_at));
+  const pill = "inline-flex h-8 max-w-[240px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[12.5px] font-semibold";
   return (
-    <div className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
-      {going.map(({ t, st }) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => openTask(t.id)}
-          onContextMenu={(e) => {
-            if (!isRemovable(st)) return;
-            e.preventDefault();
-            setMenuFor({ todo: t, el: e.currentTarget });
-          }}
-          className={cx("inline-flex h-8 max-w-[240px] shrink-0 items-center gap-2 rounded-full px-3 text-[12.5px] font-semibold", st === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
-        >
-          <TaskMark status={st} size={8} />
-          <span className="truncate">{t.title}</span>
-          {st === "needs_you" && <span className="shrink-0">等你</span>}
-        </button>
-      ))}
-      <button type="button" onClick={() => navigate({ name: "todos" })} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-field px-3 text-[12.5px] font-medium text-ink-2 hover:bg-hover">
-        <Icon name="layers" size={13} />
-        全部 {mine.length}
+    <div className="flex min-w-0 items-center gap-2">
+      <button
+        type="button"
+        data-testid="task-dock-board"
+        onClick={() => navigate({ name: "todos" })}
+        className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full bg-field px-3 text-[12.5px] font-medium text-ink-2 hover:bg-hover"
+      >
+        全部 {mine.length + agents.length}
       </button>
+      {(going.length > 0 || agents.length > 0) && (
+        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+          {going.map(({ t, st }) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => openTask(t.id)}
+              onContextMenu={(e) => {
+                if (!isRemovable(st)) return;
+                e.preventDefault();
+                setMenuFor({ todo: t, el: e.currentTarget });
+              }}
+              className={cx(pill, st === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
+            >
+              <TaskMark status={st} size={8} />
+              <span className="truncate">{t.title}</span>
+              {st === "needs_you" && <span className="shrink-0">等你</span>}
+            </button>
+          ))}
+          {agents.map(({ session: s, state }) => (
+            <button
+              key={`${s.machine_id}/${s.session_id}`}
+              type="button"
+              aria-label={`Agent ${sessionTitle(s)}，${state === "needs_you" ? "等你" : "在做"}`}
+              onClick={() => openPanel({ kind: "agent", mid: s.machine_id, sid: s.session_id })}
+              className={cx(pill, state === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
+            >
+              <StatusDot state={state} size={8} />
+              <Icon name="agent" size={13} className={cx("shrink-0", state !== "needs_you" && "text-ink-2")} />
+              <span className="truncate">{sessionTitle(s)}</span>
+              {state === "needs_you" && <span className="shrink-0">等你</span>}
+            </button>
+          ))}
+        </div>
+      )}
       {menuFor && (
         <Menu
           anchor={menuFor.el}

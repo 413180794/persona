@@ -186,6 +186,7 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 - 数据：`AppModel.goingAgents` 从已有的会话列表派生，只在胶囊要显示的内容变了时才更新，不新开轮询、不让坞跟着每次推送重画；
   筛选在 `DockAgent.shown`（`apple/Shared/Tasks.swift`），单元测试 `DockAgentTests`，界面测试 `TaskDockAgentTests`（`MOCK_TASKS_DOCK=pair` 两个胶囊，不设时六个）。
 - 对话流里不为手动 Agent 插卡片：它们不是从对话开的。
+- 网页端同样（#1275）：`dockAgents`（`web/src/lib/todos.ts`）筛选和排序，点胶囊在侧边面板打开这个 Agent 的对话（`AgentPanel`）；「全部 N」去待办页。
 - 第 4 步（#996 和这一步的 iOS）：
   - **按天分段**：`ChatLines.daySections` 在每天第一行上面加一行日期（今天 / 昨天 / 几月几日 周几），只在助手对话里。
   - **旧任务卡折叠**：不是今天的 `task` 条目画成一行（`TaskLine`：状态、标题、到哪了），点开是详情。

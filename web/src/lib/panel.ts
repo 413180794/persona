@@ -10,7 +10,9 @@ export type Panel =
   | { kind: "file"; mid: string; path: string; cwd?: string; line?: number }
   | { kind: "link"; url: string; title?: string }
   /** A task of the assistant's conversation: its agent's chat (docs/unified-entry.md). */
-  | { kind: "task"; todo: string };
+  | { kind: "task"; todo: string }
+  /** An agent the main conversation's dock shows that no task stands for (#1113): its chat. */
+  | { kind: "agent"; mid: string; sid: string };
 
 let current: Panel | null = null;
 const listeners = new Set<() => void>();

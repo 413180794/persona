@@ -7,7 +7,7 @@ import { Button, cx, IconButton, Menu, StatusDot, useMenu } from "../../ui/atoms
 import { ChatView } from "../chat/ChatView";
 import { PanelHeader } from "../SidePanel";
 import { place, removeTaskNow, useTaskState, useTodo } from "./Tasks";
-import { stateOf } from "../../lib/format";
+import { sessionTitle, stateOf } from "../../lib/format";
 
 export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => void }) {
   const todo = useTodo(todoId);
@@ -83,6 +83,31 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
         ) : (
           <div className="p-6 text-[13px] text-ink-2">正在开 Agent，开好以后这里就是它的对话。</div>
         )}
+      </div>
+    </>
+  );
+}
+
+/** An agent the main conversation's dock shows that no task stands for (#1113; iOS opens it in the task's sheet): its
+ * state, title and machine, over its own chat. */
+export function AgentPanel({ mid, sid, onClose }: { mid: string; sid: string; onClose: () => void }) {
+  const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid));
+  const machine = useStore((s) => s.machines.find((m) => m.id === mid)?.name ?? mid);
+  return (
+    <>
+      <PanelHeader
+        icon="agent"
+        title={
+          <span className="flex min-w-0 items-center gap-1.5">
+            {session && <StatusDot state={stateOf(session)} size={7} />}
+            <span className="truncate">{session ? sessionTitle(session) : "Agent"}</span>
+          </span>
+        }
+        subtitle={[machine, session?.agent].filter(Boolean).join(" · ")}
+        onClose={onClose}
+      />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ChatView key={`${mid}/${sid}`} mid={mid} sid={sid} />
       </div>
     </>
   );

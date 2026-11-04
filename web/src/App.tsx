@@ -122,7 +122,7 @@ function Shell() {
   const at = route.name === "session" ? `${route.mid}/${route.sid}` : route.name;
   useEffect(() => {
     const p = getPanel();
-    if (p && p.kind !== "link" && p.kind !== "task" && !(p.kind !== "file" && route.name === "session" && p.mid === route.mid && p.sid === route.sid)) closePanel();
+    if (p && p.kind !== "link" && p.kind !== "task" && p.kind !== "agent" && !(p.kind !== "file" && route.name === "session" && p.mid === route.mid && p.sid === route.sid)) closePanel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [at]);
 

@@ -6,6 +6,7 @@ import {
   TODO_STATUS_INFO,
   todoStatusLabel,
   buildTodoAgentGroups,
+  dockAgents,
   findTodoForSpace,
   formatAgentSource,
   formatTodoContext,
@@ -551,5 +552,66 @@ describe("自动完成 (docs/todos.md「自动完成」)", () => {
     const reopened = { ...base, done_at: null, done_by: "auto", reopened_at: "2026-11-04T09:00:00Z" };
     expect(isAutoDone(reopened)).toBe(false);
     expect(todoStatusLabel(reopened, todoStatus(reopened))).toBe("未开始");
+  });
+});
+
+describe("主对话任务坞里的手动 Agent (dockAgents)", () => {
+  const task = (id: string, agents: [string, string][], patch: Partial<Todo> = {}): Todo => ({
+    id,
+    title: id,
+    created_at: "2026-11-04T08:00:00Z",
+    updated_at: "2026-11-04T08:00:00Z",
+    origin: "main",
+    agents: agents.map(([machine_id, session_id]) => ({ machine_id, session_id, linked_at: "2026-11-04T08:00:00Z" })),
+    ...patch,
+  });
+
+  it("只在主对话里出现，其他对话没有", () => {
+    const s = [mockSession("mac-1", "a", "working")];
+    expect(dockAgents(s, [], "main", "main").map((x) => x.session.session_id)).toEqual(["a"]);
+    expect(dockAgents(s, [], "other", "main")).toEqual([]);
+    expect(dockAgents(s, [], "main", undefined)).toEqual([]);
+  });
+
+  it("只带在做和等你的，去掉 Persona 自己的对话", () => {
+    const s = [
+      mockSession("mac-1", "w", "working"),
+      mockSession("mac-1", "n", "needs_you"),
+      mockSession("mac-1", "u", "unread"),
+      mockSession("mac-1", "i", "idle"),
+      mockSession("mac-1", "o", "offline"),
+      mockSession("mac-1", "p", "working", { assistant: true }),
+    ];
+    expect(dockAgents(s, [], "main", "main").map((x) => x.session.session_id)).toEqual(["n", "w"]);
+  });
+
+  it("任务挂着的 Agent 不重复出现（不管哪段对话开的），任务完成或放开后才算手动的", () => {
+    const s = [mockSession("mac-1", "a", "working"), mockSession("mac-1", "b", "working"), mockSession("mac-1", "c", "working"), mockSession("mac-1", "d", "working")];
+    const todos = [
+      task("t1", [["mac-1", "a"]]),
+      task("t2", [["mac-1", "b"]], { origin: "other" }),
+      task("t3", [["mac-1", "c"]], { done_at: "2026-11-04T09:00:00Z" }),
+      { ...task("t4", []), agents: [{ machine_id: "mac-1", session_id: "d", linked_at: "x", released_at: "y" }] },
+    ];
+    expect(dockAgents(s, todos, "main", "main").map((x) => x.session.session_id)).toEqual(["c", "d"]);
+  });
+
+  it("hub 标了待办的：手动建的待办照样算手动的，任务（含列表还没刷新到的）不算", () => {
+    const s = [
+      mockSession("mac-1", "m", "working", { todo: { id: "hand", title: "手动" } }),
+      mockSession("mac-1", "t", "working", { todo: { id: "t1", title: "任务" } }),
+      mockSession("mac-1", "x", "working", { todo: { id: "not-yet", title: "新任务" } }),
+    ];
+    const todos = [task("hand", [], { origin: undefined }), task("t1", [])];
+    expect(dockAgents(s, todos, "main", "main").map((x) => x.session.session_id)).toEqual(["m"]);
+  });
+
+  it("等你的在前，同一状态按进入状态的时间新的在前", () => {
+    const s = [
+      mockSession("mac-1", "old", "working", { state_since: "2026-11-04T08:00:00Z" }),
+      mockSession("mac-1", "new", "working", { state_since: "2026-11-04T09:00:00Z" }),
+      mockSession("mac-1", "ask", "needs_you", { state_since: "2026-11-04T07:00:00Z" }),
+    ];
+    expect(dockAgents(s, [], "main", "main").map((x) => x.session.session_id)).toEqual(["ask", "new", "old"]);
   });
 });

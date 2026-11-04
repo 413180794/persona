@@ -9,7 +9,7 @@ import { FileViewerPanel } from "./session/FileViewer";
 import { GitPanel } from "./session/GitPanel";
 import { TerminalPanel } from "./session/TerminalPanel";
 import { LinkPanel } from "./link/LinkPanel";
-import { TaskPanel } from "./assistant/TaskPanel";
+import { AgentPanel, TaskPanel } from "./assistant/TaskPanel";
 
 const WIDTH_KEY = "jarvis.panelWidth";
 const MIN = 360;
@@ -72,7 +72,7 @@ export function SidePanel() {
 }
 
 function panelLabel(p: Panel) {
-  return p.kind === "terminal" ? "终端" : p.kind === "files" ? "文件" : p.kind === "git" ? "Git" : p.kind === "file" ? "文件" : p.kind === "task" ? "任务" : "链接";
+  return p.kind === "terminal" ? "终端" : p.kind === "files" ? "文件" : p.kind === "git" ? "Git" : p.kind === "file" ? "文件" : p.kind === "task" ? "任务" : p.kind === "agent" ? "Agent" : "链接";
 }
 
 function body(p: Panel) {
@@ -89,6 +89,8 @@ function body(p: Panel) {
       return <LinkPanel key={p.url} url={p.url} title={p.title} onClose={closePanel} />;
     case "task":
       return <TaskPanel key={p.todo} todoId={p.todo} onClose={closePanel} />;
+    case "agent":
+      return <AgentPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
   }
 }
 

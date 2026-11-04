@@ -487,3 +487,41 @@ export function formatAgentSource(
   return undefined;
 }
 
+
+/** An agent going on (等你 / 在做) that the main conversation's dock shows after its tasks (#1113, iOS DockAgent). */
+export interface DockAgent {
+  session: Session;
+  state: "needs_you" | "working";
+}
+
+/**
+ * What a conversation's dock shows after its tasks (docs/unified-entry.md「主对话的任务坞里的手动 Agent」): in the main
+ * conversation, every agent going on that no task stands for — the ones opened by hand on the Agents page — waiting
+ * for the user first, then the newest in its state; elsewhere nothing. Persona's own conversations are not agents. A
+ * task's agents (a task not done, from any conversation) are its pill already; an agent the hub tags with a todo shows
+ * only when that todo was made by hand, so a task the todo list has not caught up with stays out too.
+ */
+export function dockAgents(sessions: Session[], todos: Todo[], conversation: string, main: string | undefined): DockAgent[] {
+  if (!main || conversation !== main) return [];
+  const taskAgents = new Set<string>();
+  const manual = new Set<string>();
+  for (const t of todos) {
+    if (!t.origin) manual.add(t.id);
+    else if (!t.done_at) for (const a of t.agents ?? []) if (!a.released_at) taskAgents.add(`${a.machine_id}/${a.session_id}`);
+  }
+  const out: DockAgent[] = [];
+  for (const s of sessions) {
+    if (s.assistant) continue;
+    const state = stateOf(s);
+    if (state !== "needs_you" && state !== "working") continue;
+    if (taskAgents.has(`${s.machine_id}/${s.session_id}`)) continue;
+    if (s.todo && !manual.has(s.todo.id)) continue;
+    out.push({ session: s, state });
+  }
+  return out.sort(
+    (a, b) =>
+      (a.state === "needs_you" ? 0 : 1) - (b.state === "needs_you" ? 0 : 1) ||
+      (b.session.state_since ?? "").localeCompare(a.session.state_since ?? "") ||
+      `${a.session.machine_id}/${a.session.session_id}`.localeCompare(`${b.session.machine_id}/${b.session.session_id}`),
+  );
+}
