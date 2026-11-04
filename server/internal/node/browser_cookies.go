@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os/exec"
 	"sort"
 	"strings"
@@ -31,6 +32,12 @@ const (
 
 // cookieMark starts the line the script prints its result on.
 const cookieMark = "@@persona-cookies@@"
+
+// cookiesUnreadable is what the user is told when ego's side of a call failed.
+const cookiesUnreadable = "读不到这台 Mac 上 ego 的登录，点「再试一次」；还不行就在那台 Mac 上重新打开 ego lite"
+
+// cookieLog is where a failed script's error goes (the node's log; tests replace it).
+var cookieLog = log.Printf
 
 // cdpCookie is a cookie as CDP's Network.setCookies takes it.
 type cdpCookie struct {
@@ -125,28 +132,35 @@ func sitesOf(cs []rawCookie) []proto.BrowserCookieSite {
 }
 
 // cookieScript is the script for one call: optionally set cookies, optionally delete the cookies of some sites (or
-// all), then list what is there, and close the task space. Only names, domains, paths and times come back.
+// all), then list what is there, and close the task space. Only names, domains, paths and times come back. Nothing it
+// is given is null (a nil slice marshals as null: the list's first line read null.length, #1926), and what ego gives
+// back may be: no cookies at all, a cookie without a domain or path.
 func cookieScript(set []cdpCookie, clear []string, clearAll bool) string {
+	if set == nil {
+		set = []cdpCookie{}
+	}
+	if clear == nil {
+		clear = []string{}
+	}
 	setJSON, _ := json.Marshal(set)
 	clearJSON, _ := json.Marshal(clear)
 	var b strings.Builder
 	b.WriteString("const task = await taskSpace(" + jsString(cookieSpace) + ");\n")
 	b.WriteString("const page = task.page(\"p1\");\n")
 	b.WriteString("const __r = {};\n")
+	b.WriteString("const all = async () => { const r = await page.cdp(\"Network.getAllCookies\", {}); return ((r && r.cookies) || []).filter((c) => c && typeof c.domain === \"string\" && c.domain); };\n")
 	b.WriteString("try {\n")
-	b.WriteString("  const set = " + string(setJSON) + ";\n")
+	b.WriteString("  const set = " + string(setJSON) + " || [];\n")
 	b.WriteString("  for (let i = 0; i < set.length; i += 200) await page.cdp(\"Network.setCookies\", { cookies: set.slice(i, i + 200) });\n")
 	b.WriteString("  __r.set = set.length;\n")
-	b.WriteString("  const clear = " + string(clearJSON) + ", all = " + fmt.Sprint(clearAll) + ";\n")
-	b.WriteString("  if (all || clear.length) {\n")
+	b.WriteString("  const clear = " + string(clearJSON) + " || [], everything = " + fmt.Sprint(clearAll) + ";\n")
+	b.WriteString("  if (everything || clear.length) {\n")
 	b.WriteString("    const site = (d) => { d = d.replace(/^\\./, \"\").toLowerCase(); return clear.some((s) => d === s || d.endsWith(\".\" + s)); };\n")
-	b.WriteString("    const { cookies } = await page.cdp(\"Network.getAllCookies\", {});\n")
 	b.WriteString("    let n = 0;\n")
-	b.WriteString("    for (const c of cookies) if (all || site(c.domain)) { await page.cdp(\"Network.deleteCookies\", { name: c.name, domain: c.domain, path: c.path }); n++; }\n")
+	b.WriteString("    for (const c of await all()) if (everything || site(c.domain)) { await page.cdp(\"Network.deleteCookies\", { name: c.name || \"\", domain: c.domain, path: c.path || \"/\" }); n++; }\n")
 	b.WriteString("    __r.removed = n;\n")
 	b.WriteString("  }\n")
-	b.WriteString("  const { cookies } = await page.cdp(\"Network.getAllCookies\", {});\n")
-	b.WriteString("  __r.cookies = cookies.map((c) => ({ name: c.name, domain: c.domain, path: c.path, expires: c.expires, session: c.session }));\n")
+	b.WriteString("  __r.cookies = (await all()).map((c) => ({ name: c.name || \"\", domain: c.domain, path: c.path || \"/\", expires: typeof c.expires === \"number\" ? c.expires : 0, session: !!c.session }));\n")
 	b.WriteString("} catch (e) { __r.error = String(e && e.message || e); __r.code = e && e.code; }\n")
 	b.WriteString("try { await task.finish({ keep: [] }); } catch (e) {}\n")
 	b.WriteString("console.log(" + jsString(cookieMark) + " + JSON.stringify(__r));\n")
@@ -215,7 +229,10 @@ func cookiesCall(ctx context.Context, set []proto.BrowserCookie, clear []string,
 		if code == "EGO_TASK_SPACE_USER_IN_CONTROL" || strings.Contains(msg, "USER_IN_CONTROL") {
 			return nil, errors.New("你正在 ego 里接管 Persona 的任务空间：先交还，再导入")
 		}
-		return nil, fmt.Errorf("ego lite：%s", oneLine(msg, 2))
+		// What failed in the script is ours to look at, not the user's: a JavaScript error said nothing they could act
+		// on (#1926). The log has it; no cookie's name or value is in such a message.
+		cookieLog("browser cookies: ego script failed: %s", oneLine(msg, 2))
+		return nil, errors.New(cookiesUnreadable)
 	}
 	var cs []rawCookie
 	_ = json.Unmarshal(r["cookies"], &cs)

@@ -24,6 +24,7 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
   const [file, setFile] = useState<{ name: string; sites: CookieSite[]; bad: number } | null>(null);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [clearing, setClearing] = useState<string | "all" | null>(null);
+  const [tries, setTries] = useState(0); // 再试一次 reads the sites again
   const input = useRef<HTMLInputElement>(null);
   const path = `/machines/${enc(mid)}/browser/cookies`;
 
@@ -38,7 +39,7 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
     return () => {
       live = false;
     };
-  }, [path, online]);
+  }, [path, online, tries]);
 
   const pick = async (f: File | undefined) => {
     if (!f) return;
@@ -103,7 +104,10 @@ export function BrowserLogins({ mid, online }: { mid: string; online: boolean })
         {!online ? (
           <p className="px-4 py-5 text-[12.5px] text-ink-3">这台 Mac 在线时才能查看和导入。</p>
         ) : error ? (
-          <p className="px-4 py-5 text-[12.5px] text-red">{error}</p>
+          <div className="flex items-center gap-3 px-4 py-4">
+            <p className="min-w-0 flex-1 text-[12.5px] text-red">{error}</p>
+            <Button onClick={() => setTries((n) => n + 1)}>再试一次</Button>
+          </div>
         ) : !sites ? (
           <div className="flex h-20 items-center justify-center">
             <Loading label="正在读取" />

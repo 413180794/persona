@@ -342,6 +342,10 @@
 - **`task.cdp` 只放 Target / Browser**：cookie 要走页面的 `page.cdp("Network.setCookies" / "getAllCookies" / "deleteCookies")`，`Storage.getCookies` 会报「task.cdp only supports Target. and Browser. commands」。
 - **ego-browser 出错时的输出可能回显脚本**：cookie 值在脚本里，所以出错只报退出码，不把 stdout / stderr 带回 hub。
 - **「是不是用户本人」用 `byOwnDevice`**：hub.json 的配对 token 也是 full 角色，但它在 CLI 和助手的进程手里；凭据类的操作只认带设备 id 的 token。
+- **往 JS 里写 Go 的切片，nil 会变成 `null`**（2026-11-05，#1926）：列出、清除没有要导入的 cookie，`json.Marshal(nil 切片)` 写出 `const set = null`，
+  脚本第一行 `set.length` 就抛错，每台 Mac 的列表都出不来。实测只走了导入、单元测试又替换了 `runEgo`，所以没发现。
+  现在写进脚本的列表一律先换成空切片，脚本本身也对 `getAllCookies` 返回 null、cookie 的字段是 null 做防守；测试用 node 跑真实生成的脚本（`TestCookieScriptTakesNullsFromEgo`）。
+- **ego 脚本的 JS 报错别原样给用户**：换成「读不到这台 Mac 上 ego 的登录，点「再试一次」…」，原文只进 node 的日志（报错里只有属性名，没有 cookie 的值）。
 
 ## 新的 runtime 包要进 hub 镜像（2026-11-04，#1777）
 

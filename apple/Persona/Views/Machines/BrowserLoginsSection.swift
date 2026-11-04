@@ -90,7 +90,14 @@ struct BrowserLoginsSection: View {
         if !online {
             Text("这台 Mac 在线时才能查看和导入。").font(Theme.Font.secondary).foregroundStyle(.secondary)
         } else if let error {
-            Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                Button("再试一次") { Task { await load() } }
+                    .lineLimit(1)
+                    .themedButton()
+                    .accessibilityIdentifier("browser-logins-retry")
+            }
+            .padding(.vertical, Theme.Space.s)
         } else if let sites {
             if sites.isEmpty {
                 Text("ego lite 里还没有登录过的网站。导入另一台电脑或浏览器导出的 cookie 文件，助手就能用你的登录打开那些网站。")

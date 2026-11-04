@@ -6947,6 +6947,9 @@ def cookie_sites():
     return {"sites": [{"domain": d, "count": c, **({"expires": e} if e else {})} for d, (c, e) in sorted(MOCK_COOKIE_SITES.items())]}
 
 
+COOKIES_FAILED = [False]  # MOCK_COOKIES_FAIL: the first read has failed
+
+
 def cookie_call(method, q, body):
     """GET / POST / DELETE …/browser/cookies like the hub: the import's cookies are counted by site and dropped."""
     if method == "POST":
@@ -7854,6 +7857,10 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
         if p == "/api/v1/machines": return self.send_json({"machines": out_machines()})
         if p.startswith("/api/v1/machines/") and p.endswith("/browser/cookies") and MOCK_BROWSER:  # sign-ins in ego (#1304)
+            # MOCK_COOKIES_FAIL=1: the first read fails as a node says ego's script failed (#1926); 再试一次 then works.
+            if os.environ.get("MOCK_COOKIES_FAIL") and not COOKIES_FAILED[0]:
+                COOKIES_FAILED[0] = True
+                return self.send_json({"error": "读不到这台 Mac 上 ego 的登录，点「再试一次」；还不行就在那台 Mac 上重新打开 ego lite"}, 502)
             return self.send_json(*cookie_call("GET", q, None))
         if p.startswith("/api/v1/machines/") and p.endswith("/browser"):  # the plugin ego (MOCK_BROWSER)
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
@@ -7917,6 +7924,7 @@ class H(BaseHTTPRequestHandler):
             threading.Thread(target=replay_next, args=(n,), daemon=True).start()
             return self.send_json({"left": len(REPLAY["left"])})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
+            COOKIES_FAILED[0] = False  # MOCK_COOKIES_FAIL: the next read fails again
             # A test that died before putting them back: the start-up delay (MOCK_DELAY), no paging.
             NET["delay"], PAGING["on"] = float(os.environ.get("MOCK_DELAY", "0")), False
             for m in MACHINES:

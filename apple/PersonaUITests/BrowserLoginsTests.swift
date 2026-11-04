@@ -62,4 +62,28 @@ final class BrowserLoginsTests: XCTestCase {
         sure.tap()
         XCTAssertTrue(app.staticTexts["example.com"].waitForNonExistence(timeout: 10), "the site was not cleared")
     }
+
+    /// The node could not read ego's sign-ins (#1926; mock MOCK_COOKIES_FAIL=1, JARVIS_COOKIES_FAIL=1): a sentence and
+    /// 再试一次, which reads them again.
+    @MainActor func testAFailedReadSaysSoAndTriesAgain() throws {
+        guard ProcessInfo.processInfo.environment["JARVIS_COOKIES_FAIL"] == "1" else {
+            throw XCTSkip("needs the mock with MOCK_COOKIES_FAIL=1 (JARVIS_COOKIES_FAIL=1)")
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook"]
+        app.launchPinned()
+        let retry = app.buttons["browser-logins-retry"]
+        let page = app.scrollViews.firstMatch
+        XCTAssertTrue(retry.waitForExistence(timeout: 20), "no 再试一次")
+        for _ in 0..<8 where !retry.isHittable { page.swipeUp(velocity: .slow) }
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '读不到这台 Mac 上 ego 的登录'")).firstMatch.exists, "not said plainly")
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Cannot read'")).firstMatch.exists)
+        try shot(app, "failed")
+        retry.tap()
+        let site = app.descendants(matching: .any).matching(identifier: "browser-logins-site").firstMatch
+        XCTAssertTrue(site.waitForExistence(timeout: 10), "再试一次 did not read them again")
+        XCTAssertFalse(retry.exists)
+    }
 }
+
