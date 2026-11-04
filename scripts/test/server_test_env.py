@@ -39,7 +39,7 @@ def test_database_url(config_file):
     # Go's URL query parser decodes keys and picks the first value; validating the path alone misses overrides.
     if ";" in parsed.query or re.search(r"%(?![0-9A-Fa-f]{2})", parsed.query):
         raise ValueError("invalid server test database query")
-    pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True, errors="strict")
+    pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True, errors="strict") if parsed.query else []
     settings = {}
     for key, setting in pairs:
         if key not in DATABASE_QUERY_KEYS or key in settings:
@@ -87,7 +87,8 @@ def run_tests(config_file, command, environment=None):
         if not isinstance(value, str) or not value:
             raise ValueError("invalid Go build cache locations")
         environment[key] = value
-    with tempfile.TemporaryDirectory(prefix="persona-server-test-") as directory:
+    temp_dir = "/tmp" if os.path.isdir("/tmp") else None
+    with tempfile.TemporaryDirectory(prefix="pst-", dir=temp_dir) as directory:
         home = Path(directory).resolve()
         temporary = home / "tmp"
         temporary.mkdir()

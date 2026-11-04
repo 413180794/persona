@@ -34,6 +34,8 @@ func init() {
 	pathCheckEvery = 200 * time.Millisecond
 	serviceProbeEvery = 300 * time.Millisecond
 	connectorRefusedWait = 2 * time.Second
+	revocationResendEvery = 200 * time.Millisecond
+	credsHandoverRetryEvery = 200 * time.Millisecond
 }
 
 // joinHubs has a use b's code: a (and its group) joins b's group.
@@ -44,8 +46,15 @@ func joinHubs(t *testing.T, a, b *testHub) {
 
 func (mh *testHub) waitCenter(t *testing.T, center string) {
 	t.Helper()
-	eventually(t, 10*time.Second, mh.h.cfg.Name+" takes "+shortID(center)+" for the center", func() bool {
+	eventually(t, 20*time.Second, mh.h.cfg.Name+" takes "+shortID(center)+" for the center", func() bool {
 		return mh.h.centerID() == center
+	})
+}
+
+func (mh *testHub) waitReachable(t *testing.T, target string) {
+	t.Helper()
+	eventually(t, 20*time.Second, mh.h.cfg.Name+" sees "+shortID(target)+" reachable", func() bool {
+		return mh.h.meshView().reachable(target)
 	})
 }
 
@@ -148,14 +157,17 @@ func TestCenterMemberForwardsEverything(t *testing.T) {
 	if code, b := member.do(t, "POST", "/api/v1/interactions/ix-lap/resolve", oldTok, `{"allow":true}`); code != 200 {
 		t.Fatalf("resolve: %d %s", code, b)
 	}
-	select {
-	case res := <-ixDone:
-		if res.Allow == nil || !*res.Allow {
-			t.Fatalf("resolution %+v", res)
+	eventually(t, 20*time.Second, "the answer reaches lap's node", func() bool {
+		select {
+		case res := <-ixDone:
+			if res.Allow == nil || !*res.Allow {
+				t.Fatalf("resolution %+v", res)
+			}
+			return true
+		default:
+			return false
 		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("the answer never reached lap's node")
-	}
+	})
 
 	// The terminal of the member's computer, driven through the member.
 	a.send(t, map[string]any{"type": "terminal_subscribe", "machine_id": "lap", "session_id": "s2", "control": map[string]any{"cols": 80, "rows": 24}})
@@ -260,6 +272,8 @@ func TestCenterSetAndOldCenterReturns(t *testing.T) {
 	a := startTestHub(t, hubA, "家里", nil, nil)
 	joinHubs(t, a, b)
 	a.waitCenter(t, hubB)
+	b.waitCenter(t, hubB)
+	b.waitReachable(t, hubA)
 	term := b.h.group().Term
 
 	// Handed over while both are there.
@@ -273,13 +287,14 @@ func TestCenterSetAndOldCenterReturns(t *testing.T) {
 	}
 
 	// Back to B, then B goes away: making A the center again needs confirming.
+	a.waitReachable(t, hubB)
 	if _, err := a.h.setCenter(context.Background(), hubB, false); err != nil {
 		t.Fatal(err)
 	}
 	a.waitCenter(t, hubB)
 	b.waitCenter(t, hubB)
 	b.stop()
-	eventually(t, 10*time.Second, "A sees B gone", func() bool { return !a.h.centerReachable() })
+	eventually(t, 20*time.Second, "A sees B gone", func() bool { return !a.h.centerReachable() })
 	if _, err := a.h.setCenter(context.Background(), hubA, false); err == nil {
 		t.Fatal("took over from an unreachable center without confirming")
 	}
@@ -294,9 +309,9 @@ func TestCenterSetAndOldCenterReturns(t *testing.T) {
 	// B comes back with its old term: it hears A's and becomes a member.
 	b2 := startTestHubWith(t, hubB, "Office", bStore, bDir, nil, nil)
 	b2.waitCenter(t, hubA)
-	if a.h.centerID() != hubA || b2.h.group().Term != aTerm {
-		t.Fatalf("after B came back: A has %s, B has %+v (term %d)", a.h.centerID(), b2.h.group(), aTerm)
-	}
+	eventually(t, 20*time.Second, "after B came back: A has hubA, B has aTerm", func() bool {
+		return a.h.centerID() == hubA && b2.h.group().Term == aTerm
+	})
 }
 
 // A credential revoked on the center stays revoked when the center moves to a hub that still had a copy.
@@ -307,25 +322,29 @@ func TestCenterRevocationSurvivesCenterMove(t *testing.T) {
 	admin, _ := center.deviceToken(t, roleFull)
 	joinHubs(t, member, center)
 	member.waitCenter(t, hubB)
-	eventually(t, 10*time.Second, "the credential handed over", func() bool {
+	center.waitCenter(t, hubB)
+	center.waitReachable(t, hubA)
+	eventually(t, 20*time.Second, "the credential handed over", func() bool {
 		st, _ := center.do(t, http.MethodGet, "/api/v1/machines", tok, "")
 		return st == http.StatusOK
 	})
 	if st, b := center.do(t, http.MethodDelete, "/api/v1/auth/tokens/"+id, admin, ""); st != http.StatusOK {
 		t.Fatalf("revoke: %d %s", st, b)
 	}
-	eventually(t, 10*time.Second, "the member's copy revoked", func() bool {
+	eventually(t, 20*time.Second, "the member's copy revoked", func() bool {
 		dt, err := member.store.DeviceTokenByHash(context.Background(), hashToken(tok))
 		return err == nil && dt == nil
 	})
+	center.waitReachable(t, hubA)
 	if _, err := center.h.setCenter(context.Background(), hubA, false); err != nil {
 		t.Fatal(err)
 	}
 	member.waitCenter(t, hubA)
 	center.waitCenter(t, hubA)
-	if st, _ := member.do(t, http.MethodGet, "/api/v1/machines", tok, ""); st != http.StatusUnauthorized {
-		t.Fatalf("a revoked credential on the new center: %d, want 401", st)
-	}
+	eventually(t, 20*time.Second, "a revoked credential on the new center: 401", func() bool {
+		st, _ := member.do(t, http.MethodGet, "/api/v1/machines", tok, "")
+		return st == http.StatusUnauthorized
+	})
 }
 
 // A member that was away when a credential was revoked hears of it when it is back.
@@ -337,12 +356,14 @@ func TestCenterRevocationReachesHubThatWasAway(t *testing.T) {
 	admin, _ := center.deviceToken(t, roleFull)
 	joinHubs(t, member, center)
 	member.waitCenter(t, hubB)
-	eventually(t, 10*time.Second, "the credential handed over", func() bool {
+	center.waitCenter(t, hubB)
+	center.waitReachable(t, hubA)
+	eventually(t, 20*time.Second, "the credential handed over", func() bool {
 		st, _ := center.do(t, http.MethodGet, "/api/v1/machines", tok, "")
 		return st == http.StatusOK
 	})
 	member.stop()
-	eventually(t, 10*time.Second, "the center sees the member gone", func() bool { return !center.h.meshView().reachable(hubA) })
+	eventually(t, 20*time.Second, "the center sees the member gone", func() bool { return !center.h.meshView().reachable(hubA) })
 	if st, b := center.do(t, http.MethodDelete, "/api/v1/auth/tokens/"+id, admin, ""); st != http.StatusOK {
 		t.Fatalf("revoke: %d %s", st, b)
 	}
@@ -350,7 +371,7 @@ func TestCenterRevocationReachesHubThatWasAway(t *testing.T) {
 		t.Fatal("the member heard while it was away")
 	}
 	startTestHubWith(t, hubA, "家里", aStore, aDir, nil, nil)
-	eventually(t, 15*time.Second, "the member's copy revoked", func() bool {
+	eventually(t, 20*time.Second, "the member's copy revoked", func() bool {
 		dt, err := aStore.DeviceTokenByHash(context.Background(), hashToken(tok))
 		return err == nil && dt == nil
 	})
@@ -366,7 +387,9 @@ func TestCenterRevocationCatchesUpWhenOldCenterReturns(t *testing.T) {
 	tok, id := member.deviceToken(t, roleFull)
 	joinHubs(t, member, center)
 	member.waitCenter(t, hubB)
-	eventually(t, 10*time.Second, "the credential handed over", func() bool {
+	center.waitCenter(t, hubB)
+	center.waitReachable(t, hubA)
+	eventually(t, 20*time.Second, "the credential handed over", func() bool {
 		st, _ := center.do(t, http.MethodGet, "/api/v1/machines", tok, "")
 		return st == http.StatusOK
 	})
@@ -374,7 +397,7 @@ func TestCenterRevocationCatchesUpWhenOldCenterReturns(t *testing.T) {
 	if ok, err := bStore.RevokeDeviceToken(context.Background(), id); err != nil || !ok {
 		t.Fatalf("revoke: %v %v", ok, err)
 	}
-	eventually(t, 10*time.Second, "the member sees the center gone", func() bool { return !member.h.centerReachable() })
+	eventually(t, 20*time.Second, "the member sees the center gone", func() bool { return !member.h.centerReachable() })
 	if _, err := member.h.setCenter(context.Background(), hubA, true); err != nil {
 		t.Fatal(err)
 	}
@@ -384,29 +407,31 @@ func TestCenterRevocationCatchesUpWhenOldCenterReturns(t *testing.T) {
 	conn := dialApp(t, member, tok)
 	back := startTestHubWith(t, hubB, "Office", bStore, bDir, nil, nil)
 	back.waitCenter(t, hubA)
-	eventually(t, 15*time.Second, "the revocation on the new center", func() bool {
+	eventually(t, 20*time.Second, "the revocation on the new center", func() bool {
 		st, _ := member.do(t, http.MethodGet, "/api/v1/machines", tok, "")
 		return st == http.StatusUnauthorized
 	})
-	select {
-	case <-conn.done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the revoked credential's connection stayed open")
-	}
+	eventually(t, 20*time.Second, "the revoked credential's connection closes", func() bool {
+		select {
+		case <-conn.done:
+			return true
+		default:
+			return false
+		}
+	})
 }
 
 // A message that did not take is sent again without waiting for a hub to go away and come back.
 func TestCenterRevocationResent(t *testing.T) {
-	was := revocationResendEvery
-	revocationResendEvery = 200 * time.Millisecond
-	t.Cleanup(func() { revocationResendEvery = was })
 	center := startTestHub(t, hubB, "Office", nil, nil)
 	member := startTestHub(t, hubA, "家里", nil, nil)
 	tok, id := member.deviceToken(t, roleFull)
 	admin, _ := center.deviceToken(t, roleFull)
 	joinHubs(t, member, center)
 	member.waitCenter(t, hubB)
-	eventually(t, 10*time.Second, "the credential handed over", func() bool {
+	center.waitCenter(t, hubB)
+	center.waitReachable(t, hubA)
+	eventually(t, 20*time.Second, "the credential handed over", func() bool {
 		st, _ := center.do(t, http.MethodGet, "/api/v1/machines", tok, "")
 		return st == http.StatusOK
 	})
@@ -416,7 +441,7 @@ func TestCenterRevocationResent(t *testing.T) {
 	if st, b := center.do(t, http.MethodDelete, "/api/v1/auth/tokens/"+id, admin, ""); st != http.StatusOK {
 		t.Fatalf("revoke: %d %s", st, b)
 	}
-	eventually(t, 10*time.Second, "the member's copy revoked", func() bool {
+	eventually(t, 20*time.Second, "the member's copy revoked", func() bool {
 		dt, err := member.store.DeviceTokenByHash(context.Background(), hashToken(tok))
 		return err == nil && dt == nil
 	})

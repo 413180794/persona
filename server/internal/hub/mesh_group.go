@@ -235,6 +235,9 @@ func (h *Hub) meshSettling() time.Duration {
 	return max(0, meshSettle-time.Since(ms.started))
 }
 
+// credsHandoverRetryEvery is how soon a hub retries handing over device credentials if the center rejected or dropped the call.
+var credsHandoverRetryEvery = 30 * time.Second
+
 // handOverCredentials gives the center the device credentials this hub knows (once per center and term): the apps
 // paired with this hub keep working when their requests reach the center (plan 3「设备凭据」).
 func (h *Hub) handOverCredentials() {
@@ -275,7 +278,7 @@ func (h *Hub) handOverCredentials() {
 				ms.handedTo = ""
 			}
 			ms.mu.Unlock()
-			time.AfterFunc(30*time.Second, h.handOverCredentials)
+			time.AfterFunc(credsHandoverRetryEvery, h.handOverCredentials)
 		}
 	}()
 }

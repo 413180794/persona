@@ -18,6 +18,6 @@ rsync -a scripts/test/server_test_env.py "$H":"$D/server_test_env.py"
 RESOLVER=$(python3 scripts/persona_identity.py --service hub --prefix -)
 # The recovered service root is only for locating the database configuration, never the Go test environment.
 ssh "$H" "$RESOLVER
-cd ~/$D/server && export PATH=/usr/local/go/bin:\$PATH && \
+cd ~/$D/server && export PATH=\$PATH:/opt/homebrew/bin:/usr/local/go/bin && \
   python3 -I ../server_test_env.py --database-file \"\$PERSONA_HOME/hub.json\" -- \
   ${GOCMD:-go test -count=1 -p 1} ${*:-./...}"

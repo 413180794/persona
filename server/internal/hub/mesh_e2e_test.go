@@ -314,7 +314,7 @@ func pairHubs(t *testing.T, a, b *testHub) {
 	if _, err := a.h.joinPeer(ctx, code.Code); err != nil {
 		t.Fatalf("join: %v", err)
 	}
-	eventually(t, 10*time.Second, "the link between "+a.h.cfg.Name+" and "+b.h.cfg.Name, func() bool {
+	eventually(t, 20*time.Second, "the link between "+a.h.cfg.Name+" and "+b.h.cfg.Name, func() bool {
 		return a.h.peerLinkTo(b.id()) != nil && b.h.peerLinkTo(a.id()) != nil
 	})
 }

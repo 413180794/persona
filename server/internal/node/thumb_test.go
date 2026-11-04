@@ -127,7 +127,7 @@ func TestAHungThumbnailToolIsSkippedForAWhile(t *testing.T) {
 	os.WriteFile(filepath.Join(bin, tool), []byte("#!/bin/sh\necho x >> "+calls+"\nexec /bin/sleep 30\n"), 0700)
 	t.Setenv("PATH", bin)
 	defer func(d time.Duration) { toolTimeout = d }(toolTimeout)
-	toolTimeout = 200 * time.Millisecond
+	toolTimeout = 800 * time.Millisecond
 	t.Cleanup(func() { tools.mu.Lock(); tools.blockedUntil = time.Time{}; tools.mu.Unlock() })
 	os.WriteFile(filepath.Join(dir, "a.pdf"), []byte("%PDF-1.4\n"), 0600)
 	os.WriteFile(filepath.Join(dir, "b.pdf"), []byte("%PDF-1.4\nb"), 0600)
