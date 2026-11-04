@@ -15,6 +15,7 @@ import { AssistantSettings } from "./settings/AssistantSettings";
 import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
 import { Connectors } from "./settings/Connectors";
 import { TranslationSettings } from "./settings/TranslationSettings";
+import { Plugins } from "./settings/Plugins";
 import { modelPurpose, modelSummary, type ModelPurpose } from "../lib/model-config";
 
 // ── types (docs/launchers.md) ───────────────────────────
@@ -77,15 +78,24 @@ export function tokens(n: number): string {
 
 // ── page ────────────────────────────────────────────────
 
-type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "translate" | "devices";
-const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "translate", "devices"];
+type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "plugins" | "translate" | "devices";
+const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "plugins", "translate", "devices"];
+// The tab whose page opens one of its items, and the query parameter that names it.
+const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", plugins: "plugin" };
 
 export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const [tab, setTab] = useState<Tab>(() => {
     const t = new URLSearchParams(location.search).get("tab");
     return TABS.includes(t as Tab) ? (t as Tab) : "general";
   });
-  const [purpose, setPurpose] = useState<string | null>(() => new URLSearchParams(location.search).get("purpose"));
+  // The purpose (模型配置) or plugin (插件) the tab has open.
+  const [sub, setSub] = useState<string | null>(() => {
+    const q = new URLSearchParams(location.search);
+    const param = SUB[q.get("tab") as Tab];
+    return param ? q.get(param) : null;
+  });
+  // 插件 only on a hub with the plugin base (docs/plugins.md「hub 的接口」); a link to it still opens it.
+  const hasPlugins = useStore((s) => s.features.includes("plugin_manager"));
   const tabs: { k: Tab; label: string; icon: IconName }[] = [
     { k: "general", label: "通用", icon: "gear" },
     { k: "assistant", label: "助手", icon: "spark" },
@@ -94,13 +104,15 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     { k: "claude", label: "Claude Code", icon: "terminal" },
     { k: "codex", label: "Codex", icon: "terminal" },
     { k: "connectors", label: "连接器", icon: "link" },
+    ...(hasPlugins || tab === "plugins" ? [{ k: "plugins" as Tab, label: "插件", icon: "plugin" as IconName }] : []),
     { k: "translate", label: "翻译", icon: "translate" },
     { k: "devices", label: "设备", icon: "key" },
   ];
   const pick = (k: Tab, id: string | null = null) => {
     setTab(k);
-    setPurpose(id);
-    history.replaceState(null, "", k === "general" ? "/settings" : `/settings?tab=${k}${id ? `&purpose=${enc(id)}` : ""}`);
+    setSub(id);
+    const param = SUB[k];
+    history.replaceState(null, "", k === "general" ? "/settings" : `/settings?tab=${k}${id && param ? `&${param}=${enc(id)}` : ""}`);
   };
   return (
     <div className="flex h-full flex-col">
@@ -129,10 +141,11 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         <div key={tab} className="mx-auto max-w-[760px] px-5 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
           {tab === "general" && <General onConfigure={() => pick("model-config", "assistant")} />}
           {tab === "models" && <Models />}
-          {tab === "model-config" && <ModelConfiguration open={purpose} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
+          {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
           {tab === "assistant" && <AssistantSettings onConfigure={() => pick("model-config", "assistant")} />}
           {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
           {tab === "connectors" && <Connectors />}
+          {tab === "plugins" && <Plugins open={sub} onOpen={(id) => pick("plugins", id)} />}
           {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
           {tab === "devices" && <Devices />}
         </div>

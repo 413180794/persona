@@ -219,7 +219,8 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
   对象是单独一节），右上角「保存」整份提交，hub 拒绝的字段把原因显示在那一项下面、草稿留着；「密钥」每项只显示已设置 / 未设置，点开在单独的表单里输入（不回显），
   已设置的可以清除；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、主页、警告）。hub.json 来的只能看，不显示开关和表单。
 - 截图：`MOCK_PLUGINS=1` 的假 hub 有五个状态各不相同的示例插件；`-tab settings -openPlugins YES`（`-openPlugin <id>` 直接进详情）。
-  UI 测试 `PluginSettingsTests`（`TEST_RUNNER_JARVIS_PLUGINS_HUB`），单元测试 `PluginsModelTests`。Android、网页的插件页还没做。
+  UI 测试 `PluginSettingsTests`（`TEST_RUNNER_JARVIS_PLUGINS_HUB`），单元测试 `PluginsModelTests`。
+- 网页（#1207）：设置 › 插件，同样的列表和详情（`web/src/views/settings/Plugins.tsx`、`web/src/lib/plugins.ts`，`/settings?tab=plugins&plugin=<id>`），见 `docs/web.md`「设置」。Android 的插件页还没做。
 
 ## 进程插件协议（plugin protocol 1）
 

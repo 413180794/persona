@@ -139,7 +139,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
   ![网页版侧边栏的个人 Agent：按来源分组，带头像、未读数、搜索和筛选按钮](screenshots/web-personal-agents.png)
 
-- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：九个分类，和 App 的设置同一套接口。
+- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：九个分类（hub 带 `plugin_manager` 时十个），和 App 的设置同一套接口。
   「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Persona 助手的运行位置和统一模型配置入口、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
   「助手」（`settings/AssistantSettings.tsx`）：主动做事（进定时任务）、关于我（`PUT /assistant {notes}`，点保存或离开时存）、
   记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、运行在哪（只读）；
@@ -147,6 +147,12 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   每行「⋯」恢复默认（文字项清空也是 null）、推到所有在线机器，失败回滚；
   「连接器」（`settings/Connectors.tsx`）：邮箱（列表、添加 IMAP / 飞书邮箱、删除；Gmail 只能在手机上加：它的 Google 授权客户端是 iOS 类型，回调是只有 App 能接的自定义 scheme）、
   飞书（`/lark/status` 只读）；「这台 iPhone」只在手机上有；
+  「插件」（`settings/Plugins.tsx`，逻辑 `lib/plugins.ts`，`?tab=plugins`，`&plugin=<id>` 直接进详情；hub 的 features 有 `plugin_manager` 才出现，#1207）：
+  和 iOS 同一套（`docs/plugins.md`「App：设置 › 插件」）。列表是名字、状态圆点和文字、还缺什么 / 错误，标题旁写个数和几个要处理；详情是状态 · 版本 · 来源、描述、还缺、错误，
+  「启用」开关（立即 `PUT …/-/enabled`），按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，对象单独一组），改了底部浮出「还原 / 保存」，整份 `PUT …/-/config`，
+  hub 回 `invalid_config` 时把原因写在那一项下面、草稿留着，数字不是数时不能保存；有未保存的改动时点返回先问。密钥每项只显示已设置 / 未设置，点开在弹窗里输入（`type=password`，不回显），
+  已设置的可以清除（再点一次确认）；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
+  装、升级、卸载只在 hub 机器上（`personad plugin`）。截图用 `MOCK_PLUGINS=1` 的假 hub。
   「模型供应商」是全部接入（搜索；Persona 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
   测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses）；
   「模型配置」按 hub 的真实用途目录分组/搜索，编辑供应商、具体模型和支持的思考强度，显示继承与当前生效值。保存失败保留草稿，revision 冲突需重新加载（`docs/model-config.md`）；
@@ -345,6 +351,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | Claude Code 设置、Codex 设置 | 有 | #297 | |
 | 连接器：邮箱 | 有 | #297 | Gmail 只能在手机上加（Google 授权客户端是 iOS 类型） |
 | 连接器：飞书 | 有 | #297 | 只读状态 |
+| 插件（列表、开关、按 schema 的表单、只写的密钥） | 有 | #1207 | 安装、升级、卸载在 hub 机器上（同 iOS） |
 | 翻译 | 有 | #433 | 存在当前浏览器、不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上，网页没有；网页打开时按需翻 |
 | 设备（token 列表、撤销） | 有 | — | |
 | 扫码连新设备 | 另有 PR | — | #241 |

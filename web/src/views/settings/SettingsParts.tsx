@@ -36,12 +36,12 @@ export function Row({ label, hint, children, onClick, mono }: { label: React.Rea
   );
 }
 
-export function Pill({ children, tone }: { children: React.ReactNode; tone?: "accent" | "green" | "red" }) {
+export function Pill({ children, tone }: { children: React.ReactNode; tone?: "accent" | "green" | "red" | "orange" }) {
   return (
     <span
       className={cx(
         "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full px-1.5 text-[11px] font-medium",
-        tone === "accent" ? "bg-accent-tint text-accent-ink" : tone === "green" ? "bg-green-tint text-green" : tone === "red" ? "bg-red-tint text-red" : "bg-inset text-ink-2 shadow-hairline",
+        tone === "accent" ? "bg-accent-tint text-accent-ink" : tone === "green" ? "bg-green-tint text-green" : tone === "red" ? "bg-red-tint text-red" : tone === "orange" ? "bg-orange-tint text-orange" : "bg-inset text-ink-2 shadow-hairline",
       )}
     >
       {children}
