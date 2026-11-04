@@ -11,12 +11,13 @@
               "run_worker_first": ["/relay/*"] },
   // personaside.com is the address; the old one stays for builds and hubs that already have it written in (their
   // push relay and update URLs).
-  // origin.personaside.com: where an entry outside Cloudflare (the Hong Kong entry for mainland China) forwards to.
-  // Listed here because a deploy drops any custom domain that is not.
+  // personaside.com itself points at the Hong Kong entry for mainland China (docs/site.md), which forwards here through
+  // origin.personaside.com; it must not be a custom domain of this Worker, or a deploy takes the name back.
+  // jarvis.chirpet.com stays direct for builds and hubs that have it written in. A deploy drops any custom domain not
+  // listed here.
   "routes": [
-    { "pattern": "personaside.com", "custom_domain": true },
-    { "pattern": "jarvis.chirpet.com", "custom_domain": true },
-    { "pattern": "origin.personaside.com", "custom_domain": true }
+    { "pattern": "origin.personaside.com", "custom_domain": true },
+    { "pattern": "jarvis.chirpet.com", "custom_domain": true }
   ],
   "workers_dev": false
 }

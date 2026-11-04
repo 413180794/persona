@@ -242,3 +242,12 @@
 - 只改了 `site/`（域名、页面）用 `SITE_ONLY=1 ./scripts/release/publish.sh`：沿用线上已发布的产物重新部署，不发新版（#951）。
   这台机器下载线上的大文件常被重置连接，所以它的 curl 带 `--retry-all-errors`（默认的 `--retry` 不重试「Connection reset」）。
 - 换域名时旧域名要留着：已发出的 App 里写死了推送中继地址，已部署的 personad 也从旧域名的 `/dl/` 检查更新。
+
+## 国内访问加速（2026-11-04，#1134，`docs/site.md`）
+
+- 「CDN 节点在香港」不等于从大陆过去快：阿里云 CDN「全球不含中国内地」的香港节点，大陆建连 200–390ms；同在香港的函数计算、ECS 只要 37–38ms。先用 Globalping 的国内探针（三大运营商都有）测 ping 和 HTTPS 再决定。
+- 公司网络（这台 Mac、hub 机器）的国际出口带宽时好时坏：同一个 15MB 文件，同一个入口，一会儿 1 秒、一会儿 60 秒以上。测吞吐不要只用公司网络下结论。
+- Cloudflare 负载均衡按地区分流时，`location_strategy.mode` 默认 `pop`，按收到 DNS 查询的 Cloudflare 机房判断国家；国内的查询会被送到海外机房，永远判不成中国。要用 `resolver_ip`（`prefer_ecs: always`）。
+- 仅 DNS 的负载均衡记录让流量回到 Cloudflare 自己时，会 `error 1000`；要走 Cloudflare for SaaS，而域名本身在 Cloudflare 上时（O2O），自定义主机名只认指向 SaaS 区域的 CNAME，TXT 预验证不生效。
+- 阿里云函数计算的自定义域名必须 CNAME 到它，根域名绑不上（Cloudflare 把根域名 CNAME 展平成 A 记录）。
+- `wrangler deploy` 会让 Worker 的自定义域名和 `wrangler.jsonc` 的 `routes` 一致：用 API 额外挂的会被去掉，列着的会被重新占上。

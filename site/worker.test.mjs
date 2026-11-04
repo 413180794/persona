@@ -35,3 +35,32 @@ test("/relay/* goes to the relay with the proxy secret and the client address", 
   assert.equal(h.get("cookie"), null);
   assert.equal(seen.init.method, "POST");
 });
+
+function relayRequest(headers) {
+  return new Request("https://site.example/relay/v1/register", { method: "POST", body: "{}", headers });
+}
+
+async function forwardedFor(headers, env) {
+  let seen;
+  globalThis.fetch = async (url, init) => { seen = init.headers; return new Response("{}"); };
+  await worker.fetch(relayRequest(headers), { ASSETS: assets, RELAY_ORIGIN: "https://origin.example", RELAY_PROXY_SECRET: "s3cret", ...env });
+  return seen;
+}
+
+test("an entry with the edge secret passes the client's address on", async () => {
+  const h = await forwardedFor({ "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.7, 192.0.2.1", "x-persona-edge-secret": "edge" }, { EDGE_SECRET: "edge" });
+  assert.equal(h.get("x-forwarded-for"), "198.51.100.7");
+  assert.equal(h.get("x-persona-edge-secret"), null);
+});
+
+test("X-Forwarded-For is not believed without the right edge secret", async () => {
+  for (const [headers, env] of [
+    [{ "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.7" }, { EDGE_SECRET: "edge" }],
+    [{ "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.7", "x-persona-edge-secret": "wrong" }, { EDGE_SECRET: "edge" }],
+    [{ "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.7", "x-persona-edge-secret": "edge" }, {}],
+  ]) {
+    const h = await forwardedFor(headers, env);
+    assert.equal(h.get("x-forwarded-for"), "203.0.113.9");
+    assert.equal(h.get("x-persona-edge-secret"), null);
+  }
+});

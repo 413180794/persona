@@ -195,6 +195,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 文档 | 内容 |
 | --- | --- |
 | `docs/server.md` | personad 各模式、配置、部署、运维 |
+| `docs/site.md` | 官网：Worker 托管、国内经阿里云香港入口（nginx 转发到 Worker 的回源域名）、入口密钥和客户端地址、证书、为什么不用 CDN / 函数计算 / 负载均衡、以后转出注册商后改分线路 |
 | `docs/docker.md` | hub 的两种部署方式（原生二进制 / Docker）、用 Docker 跑 hub（NAS）：compose、镜像标签、PUID / PGID、环境变量、迁移 |
 | `docs/hub-update.md` | hub 的版本、检测更新和自动更新（方案）：skill 从二进制拿出来、一种二进制、签名的版本清单、自动发布和灰度、下载 → 校验 → 等空闲 → 重启 → 回滚、App 里怎么显示 |
 | `docs/push-relay.md` | 推送中继（端到端加密）：没有 APNs key 的 hub 经发布方的 `personad relay` 推送，正文用手机公钥加密、通知服务扩展解密；谁知道什么、防滥用、接口、部署 |
