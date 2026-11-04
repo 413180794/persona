@@ -204,10 +204,14 @@ struct LarkThreadView: View {
     private func send() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        text = ""
         let o = LarkOutgoing(text: t, replyTo: LarkReply.quote(root), thread: true, mentions: LarkMentions.mentions(in: t, picked: mentions))
-        mentions = []
-        withAnimation(Theme.Motion.standard) { outgoing.append(o) }
+        // One animation for the box shrinking back to a line and the row coming in: the list's bottom inset moves with
+        // the row, so the list does not drop first and then rise.
+        withAnimation(Theme.Motion.standard) {
+            text = ""
+            mentions = []
+            outgoing.append(o)
+        }
         Haptics.tap()
         deliver(o.id)
         following = true // the reply shows right above the box (larkFollowsEnd)

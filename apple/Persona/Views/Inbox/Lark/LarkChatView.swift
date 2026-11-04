@@ -461,7 +461,9 @@ struct LarkChatView: View {
     }
 
     @ViewBuilder private var jumpToLatestButton: some View {
-        if pager.hasNewer || !atBottom {
+        // Not while the list follows its end: it is on its way there (a row sent or arriving makes the content taller
+        // a moment before the list catches up).
+        if pager.hasNewer || !atBottom && !following {
             let n = unseenNew
             Button { Task { await jumpToLatest() } } label: {
                 HStack(spacing: Theme.Space.sm) {
@@ -1062,10 +1064,14 @@ struct LarkChatView: View {
                 model.toast = Toast("消息未发送，无法保存到本机，请检查存储空间", style: .error); return
             }
             if outbox === queue {
-                text = ""
-                replyTo = nil
-                mentions = []
-                attachments = []
+                // Animated like the rows the outbox just added: the box shrinking back to a line (and the quote bar
+                // going) moves the list's bottom inset with them, so the list does not drop first and then rise.
+                withAnimation(Theme.Motion.standard) {
+                    text = ""
+                    replyTo = nil
+                    mentions = []
+                    attachments = []
+                }
             }
             savingOutgoing = false
             Haptics.tap()
