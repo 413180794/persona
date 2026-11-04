@@ -1310,7 +1310,18 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         guard let (s, i, m) = current() else { return }
         show(s)
         if i != interactions { reader.willChange(); interactions = i }
-        if m != machines { reader.willChange(); machines = m }
+        if !Self.sameListing(m, machines) { reader.willChange(); machines = m }
+    }
+
+    /// The same machines as the list shows them: a machine's heartbeat (`lastSeen`, on every push of a busy hub) is
+    /// shown only on the machines page, and drew the whole list again each time (#1495).
+    nonisolated static func sameListing(_ a: [Machine], _ b: [Machine]) -> Bool {
+        a.count == b.count && zip(a, b).allSatisfy { x, y in
+            guard x.lastSeen != y.lastSeen else { return x == y }
+            var y = y
+            y.lastSeen = x.lastSeen
+            return x == y
+        }
     }
 
     /// The rows that changed get their agent; the list gets the new list only if its structure changed.
@@ -1433,7 +1444,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
         next += s.filter { urgent($0) && !listed.contains($0.id) }
         show(next)
         if i != interactions { reader.willChange(); interactions = i }
-        if m != machines { reader.willChange(); machines = m }
+        if !Self.sameListing(m, machines) { reader.willChange(); machines = m }
         if next == s { hold.landed() }
     }
 

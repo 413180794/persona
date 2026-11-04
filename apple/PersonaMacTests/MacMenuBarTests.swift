@@ -53,6 +53,29 @@ struct MacMenuBarTests {
         #expect(MacMenuBar.quickAnswers(rec)?.first?.resolution.answers == ["框架?": "Swift Testing (Recommended)"])
     }
 
+    // What the icon and the menu draw (#1495): a working agent's new last line or time leaves it equal, so neither is
+    // drawn again for it; a new title, a state change or a new question is a change.
+    @Test func theMenuChangesOnlyWithWhatItShows() throws {
+        var w = session("w", .working), n = session("n", .needsYou)
+        func shown(_ list: [Session], _ ix: [Interaction] = []) -> MacMenuBar.Shown {
+            MacMenuBar.shown(MacMenuBar.sections(list, muted: { _ in false }), paired: true, interactions: ix, machineName: { "Mac-" + $0 })
+        }
+        let before = shown([w, n])
+        #expect(before.needsYou.map(\.label) == ["t-n · Mac-m"])
+        #expect(before.working.map(\.label) == ["t-w · Mac-m"])
+        w.lastText = "a new line"
+        w.updatedAt = Date(timeIntervalSince1970: 2_000_000)
+        #expect(shown([w, n]) == before)
+        w.title = "renamed"
+        #expect(shown([w, n]) != before)
+        let ix = try JSON.decoder.decode(Interaction.self, from: Data(#"{"id":"p","machine_id":"m","session_id":"n","kind":"permission","tool_name":"Bash"}"#.utf8))
+        let asking = shown([session("w", .working), n], [ix])
+        #expect(asking != before)
+        #expect(asking.needsYou.first?.interaction?.id == "p")
+        n.state = .unread
+        #expect(shown([session("w", .working), n]).needsYou.isEmpty)
+    }
+
     @Test func titleShowsTheCount() {
         #expect(MacMenuBar.count(needsYou: 0) == nil)
         #expect(MacMenuBar.count(needsYou: 3) == "3")

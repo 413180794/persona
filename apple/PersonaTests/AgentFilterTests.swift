@@ -108,6 +108,24 @@ import Testing
         #expect(AgentsFeed.shape([a], searching: false) != AgentsFeed.shape([d], searching: false))
     }
 
+    // A machine's heartbeat (its last_seen, on every push of a busy hub) is not what the list shows: the list is not
+    // drawn again for it (#1495); its name, being online and its error are.
+    @Test func aHeartbeatLeavesTheListsMachinesAlone() throws {
+        let m = try JSON.decoder.decode(Machine.self, from: Data(#"{"id":"m","name":"MacBook","kind":"local","online":true,"last_seen":"2026-11-04T10:00:00Z"}"#.utf8))
+        var beat = m
+        beat.lastSeen = Date(timeIntervalSince1970: 1_800_000_000)
+        #expect(beat != m)
+        #expect(AgentsFeed.sameListing([beat], [m]))
+        var down = m
+        down.online = false
+        #expect(!AgentsFeed.sameListing([down], [m]))
+        #expect(!AgentsFeed.sameListing([down], [beat])) // a heartbeat with a change in it is a change
+        var renamed = m
+        renamed.name = "Mac Studio"
+        #expect(!AgentsFeed.sameListing([renamed], [m]))
+        #expect(!AgentsFeed.sameListing([m], [m, m]))
+    }
+
     /// A working agent's steps tick `rev` and `updatedAt` only: views about the agent that show neither (its chat, its
     /// row apart from the time) take that as no change; anything they show is one.
     @Test func ticksAreNoChangeForWhatShowsNeither() {

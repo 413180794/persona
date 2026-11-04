@@ -207,7 +207,7 @@ private struct MacShell: View {
                 // The Agents list's menu (filter, grouping, folding) right after it, in this group. As the list's own
                 // `.navigation` item it jumped in front of this button whenever a page in the detail column brought an
                 // item of its own (a space's ⋯, a machine's ⓘ): the window's toolbar is rebuilt then, list items first.
-                // Only while Agents shows: `agentsList` stays set after the list goes away.
+                // Only while Agents shows.
                 if shown == .agents, let actions = shell.agentsList {
                     AgentsListMenu(actions: actions)
                 }
@@ -230,6 +230,9 @@ private struct MacShell: View {
             }
         }
         .onChange(of: model.assistantCurrent) { shell.section = nil }
+        // Let go of the Agents list's menu actions with the section: their closures hold the list's state, and its
+        // AgentsFeed went on copying and sorting every agent on each push from every other section (#1495).
+        .onChange(of: shown) { _, now in if now != .agents { shell.agentsList = nil } }
     }
 
     @StoredValue(MacSection.sidebarHiddenKey) private var sidebarHidden = false

@@ -84,6 +84,10 @@
   App 主线程不参与；记得在动画组上（不是子动画上）设 `preferredFrameRateRange`，否则按屏幕刷新率跑（内建屏 120 Hz）。几个圆点要同相，就按 Core Animation 的时钟对齐
   （`beginTime` 取整秒）；按墙钟对齐不行，Mac 睡眠时 Core Animation 的时钟停、墙钟照走，睡醒后新加的圆点就错开了。
   每秒一次的 `.periodic` 计时按同样的代价算是 1/30，没单独量。查空闲开销：锁屏时起体验实例，`ps -o cputime` 量 20 秒，再 `sample` 看主线程。
+- `MenuBarExtra` 的标签或菜单读了推送会变的东西（`model.allSessions`），每次推送状态栏按钮都重新设图、量宽、重画，菜单整份重建，
+  不管显示的变没变；在 Mac 上停在哪一页都要付，约占每次推送主线程时间的四分之一（#1495）。让它们读一份只在显示的东西变了才换的快照（`MacMenuBarState`）。
+  同理，往 `MacShellState` 这种全局对象里放页面的闭包，页面走了要放掉：闭包抓着页面的 `@State`，页面的 feed 在别的分区照样跟着每次推送干活。
+  量推送开销用 `ps -M`（第一行是主线程）在推送前后相减；`PerfCount` 的 ms 只算推送到 run loop 空闲那一段，少算很多。
 - 想让切换侧栏分区不重建页面，把去过的页面留在 `ZStack` 里藏起来不行：隐藏的视图照样往窗口工具栏注册 `.toolbar` 项和 `.searchable`，
   两个页面各有一个搜索框就直接崩（`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`，2026-11-02）。
   系统 `TabView` 在 macOS 26 上是按标签页隔开工具栏的（StackOverflow 76032647 说的是 macOS 13），也保留各页状态；但它在工具栏正中放的

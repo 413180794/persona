@@ -115,6 +115,27 @@
     同样的缓动、最多 30 帧、所有圆点同相），同一条量法降到 0.1%。只量了 App 进程；锁屏时 WindowServer 不合成窗口，它那边的开销没量。
     同类没改的：Persona 形象（`AssistantAvatar`）在思考中、工作中、需要你时也是 `TimelineView(.animation)`，BeautifulUI 风格下工作中的
     `SpinningArc`、`repeatForever` 动画，在 Mac 上会不会同样整窗重排，没量。
+  - 每次推送的主线程开销（#1495，2026-11-04）：优化编译（`SWIFT_OPTIMIZATION_LEVEL=-O`、全模块）的隔离副本 + 假 hub（`MOCK_AGENTS=1`，137 个 Agent、19 个在工作），
+    每个分区先重启假 hub、进过一次 Agents 再切过去，`/mock/churn?n=20&ms=400` 推 20 轮（不带 `real=1`：它把工作中的 Agent 翻成做完，连跑几次就没有可推的了），
+    `ps -M` 第一行是主线程，推送前后相减。每轮主线程 ms（两次）：
+
+    | 停在 | 改前 | 改后 |
+    | --- | --- | --- |
+    | 知识库 | 13 / 8 | 8 / 7 |
+    | 设置 | 22 / 16 | 6 / 6 |
+    | 机器 | 32 / 32 | 33 / 27 |
+    | Persona | 48 / 39 | 46 / 33 |
+    | Agents | 68 / 66 | 46 / 37 |
+
+    改了三处：菜单栏图标和菜单读 `MacMenuBarState` 的快照（只在个数、标题、快捷回答变了时才换），原来读 `model.allSessions`，
+    每次推送状态栏按钮都重新设图、量宽、重画，菜单整份重建；窗口离开 Agents 分区时放掉 `MacShellState.agentsList`（它的闭包抓着列表的状态，
+    列表的 `AgentsFeed` 在别的分区照样每轮拷贝、排序全部 Agent；显示 › 全部折叠 / 全部展开因此只在 Agents 分区可用）；`AgentsFeed` 不为机器的心跳（`lastSeen`，列表不显示）重算列表，
+    设置页的「机器 N / M 在线」拆成自己的视图。剩下的大头：Agents 页每轮仍要一次 `AgentsList` 的 body（工作中的 Agent 换了顺序）和 `NSTableView` 重新算行高；
+    Persona 页是侧栏 `AssistantSidebar`（每轮 2 次，读全部会话）和对话页；机器页是 AppKit 布局（页面的 body 不算在内）。都是和 iOS 共用的页面，没在这里动。
+    同一量法、真按键切分区（`bring_to_front` 后 `foreground` 发 ⌘1…⌘6，每次 1.5 秒内的主线程 CPU，4 轮中位数）改前改后没有变化：
+    Persona 120、Agents 240、收件箱 190、知识库 110、机器 90、设置 100 ms。Agents 那一下的大头是 AppKit 的布局（采样里约三分之二在
+    `NSWindow layoutIfNeeded`：工具栏重排、`NSTableView` 自动行高），去掉工具栏的 Agents 菜单能省约 40 ms，让它常驻、离开时 `.hidden()` 藏起来省不了，没改。
+    `PerfCount` 的 ms 只算推送到 run loop 空闲那一段，比 `ps` 量的少得多（推送解码、合并、布局在它之外），比较前后要用 `ps`。
 
 ## 构建、运行、截图
 

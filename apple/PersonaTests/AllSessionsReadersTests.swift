@@ -19,7 +19,7 @@ struct AllSessionsReadersTests {
         "MacAgentCommands.swift": (1, "Agent › 下一个需要你的 is enabled while one needs you"),
         "MacAttention.swift": (3, "the Dock badge and notifications follow every agent (not a view)"),
         "MacDockMenu.swift": (1, "the Dock menu lists the agents"),
-        "MacMenuBar.swift": (2, "the menu bar extra lists the agents"),
+        "MacMenuBar.swift": (1, "the menu bar extra lists the agents (MacMenuBarState, not a view: the label and the menu read its snapshot)"),
         "MacQuickOpenPanel.swift": (1, "快速打开 searches every agent"),
         "TodoHandoffSheet.swift": (1, "hand-off to an Agent: the agents to pick from, as InboxActions does"),
         "TodosView.swift": (2, "the todo list shows each Agent's progress (its latest line), so it follows every Agent, like the Dock and the menu bar"),

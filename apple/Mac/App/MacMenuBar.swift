@@ -34,18 +34,76 @@ enum MacMenuBar {
 
     /// The number beside the icon.
     static func count(needsYou: Int) -> String? { needsYou > 0 ? "\(needsYou)" : nil }
+
+    /// One line of the menu: an agent by its title and machine, and for one that needs you what it asks.
+    struct Item: Equatable, Identifiable {
+        let key: SessionKey
+        let label: String
+        var interaction: Interaction?
+        var id: SessionKey { key }
+    }
+
+    /// The menu as it shows: only what it draws, so a push that changes nothing here (a working agent's last line,
+    /// its time, a machine's heartbeat) leaves it equal.
+    struct Shown: Equatable {
+        var paired = false
+        var needsYou: [Item] = []
+        var working: [Item] = []
+        var unread: [Item] = []
+        var isEmpty: Bool { needsYou.isEmpty && working.isEmpty && unread.isEmpty }
+    }
+
+    static func shown(_ s: Sections, paired: Bool, interactions: [Interaction], machineName: (String) -> String) -> Shown {
+        let asking = Dictionary(interactions.map { ($0.sessionKey, $0) }, uniquingKeysWith: { first, _ in first })
+        func item(_ x: Session, asks: Bool = false) -> Item {
+            Item(key: x.key, label: "\(x.displayTitle) · \(machineName(x.machineID))", interaction: asks ? asking[x.key] : nil)
+        }
+        return Shown(paired: paired, needsYou: s.needsYou.map { item($0, asks: true) },
+                     working: s.working.map { item($0) }, unread: s.unread.map { item($0) })
+    }
+}
+
+/// What the menu bar item draws, kept by the model's changes outside any view (`start`) and set only when it changes:
+/// a `MenuBarExtra` whose label or menu reads `model.allSessions` is drawn again by every push about any agent (the
+/// status item's image set and measured anew, the whole menu rebuilt; about a quarter of what each push cost the main
+/// thread on every page, #1495), though what it shows (how many need you, the agents' titles) rarely moves.
+@MainActor @Observable final class MacMenuBarState {
+    static let shared = MacMenuBarState()
+    /// The number beside the icon.
+    private(set) var needsYou = 0
+    /// The menu's items.
+    private(set) var shown = MacMenuBar.Shown()
+
+    func start(_ model: AppModel) { observe(model) }
+
+    private func observe(_ model: AppModel) {
+        let next = withObservationTracking {
+            MacMenuBar.shown(MacMenuBar.sections(model.allSessions, muted: { model.isMuted($0) }), paired: model.isPaired,
+                             interactions: model.pendingInteractions,
+                             machineName: names(model.machines))
+        } onChange: {
+            // Told before the change lands: read the new values on the next turn of the main queue.
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.observe(model) } }
+        }
+        if next.needsYou.count != needsYou { needsYou = next.needsYou.count }
+        if next != shown { shown = next }
+    }
+
+    private func names(_ machines: [Machine]) -> (String) -> String {
+        let byID = Dictionary(machines.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        return { byID[$0] ?? $0 }
+    }
 }
 
 /// The icon in the menu bar: the Persona mark and how many need you.
 struct MacMenuBarLabel: View {
-    @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("MacMenuBarLabel")
         #endif
-        let n = MacMenuBar.sections(model.allSessions, muted: { model.isMuted($0) }).needsYou.count
+        let n = MacMenuBarState.shared.needsYou
         HStack(spacing: Theme.Space.xxs) {
             Image(systemName: Theme.Icon.ai)
             if let c = MacMenuBar.count(needsYou: n) { Text(c).monospacedDigit() }
@@ -64,25 +122,28 @@ struct MacMenuBarMenu: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        let s = MacMenuBar.sections(model.allSessions, muted: { model.isMuted($0) })
-        if !model.isPaired {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("MacMenuBarMenu")
+        #endif
+        let s = MacMenuBarState.shared.shown
+        if !s.paired {
             Text("还没有连接 hub")
         } else if s.isEmpty {
             Text("没有需要你处理的")
         }
         if !s.needsYou.isEmpty {
             Section("需要你") {
-                ForEach(s.needsYou) { session in needsYouItem(session) }
+                ForEach(s.needsYou) { item in needsYouItem(item) }
             }
         }
         if !s.working.isEmpty {
             Section("正在工作") {
-                ForEach(s.working) { session in Button(label(session)) { open(session.key) } }
+                ForEach(s.working) { item in Button(item.label) { open(item.key) } }
             }
         }
         if !s.unread.isEmpty {
             Section("做完了，还没看") {
-                ForEach(s.unread) { session in Button(label(session)) { open(session.key) } }
+                ForEach(s.unread) { item in Button(item.label) { open(item.key) } }
             }
         }
         Divider()
@@ -91,29 +152,25 @@ struct MacMenuBarMenu: View {
             show()
             MacShellState.shared.newAgent = true
         }
-        .disabled(!model.isPaired)
+        .disabled(!s.paired)
         Divider()
         Button("退出 Persona") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 
-    private func label(_ s: Session) -> String {
-        "\(s.displayTitle) · \(model.machines.first { $0.id == s.machineID }?.name ?? s.machineID)"
-    }
-
     /// An agent that needs you: a submenu with the answers the phone's cards offer in one tap, and 打开对话.
-    @ViewBuilder private func needsYouItem(_ s: Session) -> some View {
-        if let ix = model.pendingInteractions.first(where: { $0.sessionKey == s.key }), let quick = MacMenuBar.quickAnswers(ix), !quick.isEmpty {
-            Menu(label(s)) {
+    @ViewBuilder private func needsYouItem(_ item: MacMenuBar.Item) -> some View {
+        if let ix = item.interaction, let quick = MacMenuBar.quickAnswers(ix), !quick.isEmpty {
+            Menu(item.label) {
                 Text(MacMenuBar.summary(ix))
                 ForEach(Array(quick.enumerated()), id: \.offset) { _, q in
                     Button(q.title) { Task { await model.resolve(ix, q.resolution) } }
                 }
                 Divider()
-                Button("打开对话") { open(s.key) }
+                Button("打开对话") { open(item.key) }
             }
         } else {
-            Button(label(s)) { open(s.key) }
+            Button(item.label) { open(item.key) }
         }
     }
 

@@ -175,6 +175,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         #endif
         AppModel.shared.start()
         MacAttentionWatcher.shared.start(AppModel.shared)
+        MacMenuBarState.shared.start(AppModel.shared)
         MacShellState.shared.watchKeyWindow()
         #if DEBUG
         MacSnapshot.scheduleIfAsked()

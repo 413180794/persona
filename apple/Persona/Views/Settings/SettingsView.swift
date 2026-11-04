@@ -101,10 +101,7 @@ struct SettingsView: View {
 
                 Section {
                     Group {
-                        NavigationLink(value: MachineListRoute()) {
-                            SettingsRow(title: "机器", symbol: Theme.Icon.machines, tint: Theme.Hue.blue,
-                                        value: "\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
-                        }
+                        NavigationLink(value: MachineListRoute()) { MachinesSettingsRow() }
                         NavigationLink(value: SettingsPage.devices) {
                             SettingsRow(title: "设备", symbol: Theme.Icon.credentials, tint: Theme.Hue.gray)
                         }
@@ -996,6 +993,17 @@ struct ClaudeSettingsView: View {
             Haptics.error()
             error = failed.joined(separator: "\n")
         }
+    }
+}
+
+/// 设置's 机器 row: N / M 在线. Its own view: the page read `model.machines` for it, and a machine's heartbeat (on every
+/// push of a busy hub) drew the whole page and its list again (#1495); now only this row.
+private struct MachinesSettingsRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        SettingsRow(title: "机器", symbol: Theme.Icon.machines, tint: Theme.Hue.blue,
+                    value: "\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
     }
 }
 
