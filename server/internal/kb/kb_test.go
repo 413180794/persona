@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 type fakeSource struct {
@@ -273,6 +274,25 @@ func TestSlug(t *testing.T) {
 	}
 	if s := SafeID("../a/b c"); s != "a_b_c" {
 		t.Fatal(s)
+	}
+}
+
+// A long id is cut to 120 bytes on a character boundary: half a character is not a name macOS can create.
+func TestSafeIDCutsWholeCharacters(t *testing.T) {
+	id := "lark-" + strings.Repeat("项目", 30) // the 120th byte falls inside a character
+	s := SafeID(id)
+	if !utf8.ValidString(s) || len(s) > 120 || len(s) < 117 || !strings.HasPrefix(id, s) {
+		t.Fatalf("SafeID(%q) = %q (%d bytes)", id, s, len(s))
+	}
+	if s := SafeID(strings.Repeat("a", 130)); s != strings.Repeat("a", 120) {
+		t.Fatalf("an ASCII id is cut at 120 bytes, got %d", len(s))
+	}
+	st, _ := NewStore(t.TempDir())
+	if err := st.PutItem(&Item{Kind: KindDoc, ID: id, Title: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	if it, ok := st.Item(KindDoc, id); !ok || it.Title != "t" {
+		t.Fatalf("the item did not read back: %v %v", it, ok)
 	}
 }
 

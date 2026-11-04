@@ -157,7 +157,8 @@ func SafeID(s string) string {
 	s = unsafeID.ReplaceAllString(s, "_")
 	s = strings.Trim(s, "._")
 	if len(s) > 120 {
-		s = s[:120]
+		// Cut back to a whole character: a name that is not valid UTF-8 cannot be created on macOS.
+		s = strings.ToValidUTF8(s[:120], "")
 	}
 	return s
 }
