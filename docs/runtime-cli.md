@@ -38,7 +38,7 @@ scripts/app/personactl.py call <命令> k=v …           # 任何 App 认识的
 | `reset` | `coldChats`（内存里不留对话，和启动后一样从磁盘缓存再到 hub 重新加载）、`dropChatCache`（磁盘缓存也清掉，= `-openChatsFresh YES`） | 新的界面树，路由不动，和刚启动一样。回答同 `state` |
 | `tree` | 元素过滤（下面） | `elements`：每个无障碍元素的 `id`（accessibilityIdentifier）、`label`、`value`、`traits`、`frame`（屏幕坐标，pt）、`visible`（点得到）、`onScreen`（frame 在屏幕里） |
 | `find` | 元素过滤、`index` | `count`、`element`（没有 `index` 时取第一个在屏幕上的） |
-| `wait` | 元素过滤、`gone`、`timeout`（10 s） | 每 100 ms 查一次，等到有（或没了）；超时报错 |
+| `wait` | 元素过滤、`gone`、`timeout`（10 s）、`stable` | 每 100 ms 查一次，等到有（或没了）；超时报错。`stable: true`：有了以后还要等它的 frame 300 ms 不变（启动后列表顶部要过一会儿才摆好，一有就量会量错），超时报 `not stable` 和最后的 frame |
 | `perf` | | `counts`：各视图 body 次数、事件数、主线程耗时（要 `-perfCounts YES` 启动，`LiveUpdateTests` 读的同一份） |
 | `refresh` | | 向 hub 拉一次（下拉刷新做的事） |
 | `wait-loaded` | `session`（`<机器>/<会话>`，不给就是屏幕上的：Agents 页打开的对话或助手的那个；只等，不会去打开它）、`timeout`（15 s） | 等这个对话第一次从 hub 拿到历史（或报错），行也重建完（300 ms 不变）；`items`、`rows`、`error`、`waited`（ms）。超时报错 |

@@ -167,13 +167,26 @@ extension RuntimeCLI {
     }
 
     /// Polls every 100 ms until an element matches (with `gone`, until none does), or `timeout` seconds (10) pass.
+    /// `stable`: until its frame has also stayed the same for 300 ms. After a launch the list's top comes into place
+    /// over a moment, and a test that measured the first match failed (`quick filters are not on screen`).
     private static func wait(_ a: Args) async -> Reply {
         let deadline = Date.now.addingTimeInterval(a["timeout"] as? Double ?? 10)
         let gone = a["gone"] as? Bool ?? false
+        let stable = !gone && a["stable"] as? Bool == true
+        var frame: CGRect?, since = Date.now
         while true {
             let e = pick(a)
-            if gone ? e == nil : e != nil { return ["element": e?.json ?? NSNull()] }
-            if Date.now > deadline { return fail(gone ? "still there" : "not found") }
+            if gone ? e == nil : e != nil {
+                guard stable, let e else { return ["element": e?.json ?? NSNull()] }
+                if e.frame != frame { frame = e.frame; since = Date.now }
+                else if Date.now.timeIntervalSince(since) >= 0.3 { return ["element": e.json] }
+            } else {
+                frame = nil
+            }
+            if Date.now > deadline {
+                if gone { return fail("still there") }
+                return fail(frame.map { "not stable: still moving at \($0)" } ?? "not found")
+            }
             try? await Task.sleep(for: .milliseconds(100))
         }
     }
