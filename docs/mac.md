@@ -195,7 +195,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
     这次改动之前已经换过凭据的 Mac 在列表里还标成 phone，只是标签，撤销后重新配对就对了（不改）。
 - 临时实现，等后面打磨：外层侧栏和页面自己的分栏是两层（六项是 HStack 里的一列，页面是第一栏空着的三栏分栏）；分页的 `TabView(.page)` 换成了默认样式 / 箭头翻页；
   `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；代码行只有整行选择；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
-  字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体：`Theme.Font` 每一级、Markdown 的基础字号乘 `Theme.Font.scale`（`AppModel.textSize` 设），图标框、行距、飞书正文按兼容层的 `UIFontMetrics`（Mac 自己的表 `macBody`，正文 12 / 13 / 14）换算，两边同一个比例（#833）。
+  字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体：`Theme.Font` 每一级（不小于 11：「小」时 caption / label / code 停在 11）、Markdown 的基础字号乘 `Theme.Font.scale`（`AppModel.textSize` 设），图标框、行距、飞书正文按兼容层的 `UIFontMetrics`（Mac 自己的表 `macBody`，正文 12 / 13 / 14）换算，两边同一个比例（#833）。
 
 ## SSH 隧道（Mac）
 

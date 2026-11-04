@@ -113,3 +113,4 @@
   `Font.system(size:relativeTo:)` 也一样。所以 小 / 标准 / 大 在 Mac 上只能自己乘：`Theme.Font` 的每一级在 Mac 上是读 `Theme.Font.scale` 的计算属性，
   Markdown 主题的基础字号也乘它（主题是点数，`PerTextScale` 按比例缓存），改设置后 `macLook` 用 `.id(model.textSize)` 让整窗重画（SwiftUI 不观察这个静态值）。
   在别处把 `Theme.Font.xxx` 存进 `static let` 会停在第一次的字号（`CompactList` 改成了计算属性）；兼容层的 `UIFontMetrics` 原来按 iOS 的 body 表（16 / 17 / 19）换算，一档 6–12%，和 Mac 的一点一档对不上，改成 Mac 自己的表。
+  按比例缩，「小」会把 11 pt 那几级（caption / label / code）压到约 10.2，违反 #779 用户定的「不小于 11」：`Theme.Font.pointSize` 在 Mac 上取 `max(级别 × scale, 11)`，只有这几级在「小」时停在 11，别的照比例。

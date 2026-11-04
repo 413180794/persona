@@ -47,6 +47,18 @@ struct MacTextSizeTests {
         #expect(near(Theme.Font.scale, 1))
     }
 
+    @Test func smallKeepsElevenPointsAtLeast() {
+        defer { TextSize.standard.applyToMacFonts() }
+        TextSize.small.applyToMacFonts()
+        for level in [Theme.Level.caption, .label, .code] { #expect(Theme.Font.pointSize(level) == 11) }
+        #expect(near(Theme.Font.pointSize(.body), 12))
+        #expect(near(Theme.Font.pointSize(.secondary), 12.0 * 12 / 13)) // 11.08: above the floor, keeps the ratio
+        TextSize.large.applyToMacFonts()
+        #expect(near(Theme.Font.pointSize(.caption), 11.0 * 14 / 13))
+        TextSize.standard.applyToMacFonts()
+        #expect(Theme.Font.pointSize(.label) == 11)
+    }
+
     @Test func markdownThemesAreMadeAgainForANewSize() {
         defer { TextSize.standard.applyToMacFonts() }
         var made = 0

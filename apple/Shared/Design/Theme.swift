@@ -161,8 +161,12 @@ nonisolated enum Theme {
         /// 小 / 标准 / 大 on the Mac: how much larger the text is than the sizes at 标准 (`Theme.textScale` of the
         /// app's text size: body 12 / 13 / 14). Set by `AppModel.textSize`, on the main thread.
         nonisolated(unsafe) static var scale: CGFloat = 1
+        /// Nothing is drawn under 11 pt (#779): at 小 the 11 pt levels (caption, label, code) stay 11, the rest go down.
+        static let smallest: CGFloat = 11
+        /// A level's point size at the current `scale`.
+        static func pointSize(_ level: Level) -> CGFloat { max(level.size * scale, smallest) }
         private static func sized(_ level: Level, _ weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
-            .system(size: level.size * scale, weight: weight, design: design)
+            .system(size: pointSize(level), weight: weight, design: design)
         }
         /// The home page's greeting, the welcome page (24 bold).
         static var display: SwiftUI.Font { sized(.display, .bold) }

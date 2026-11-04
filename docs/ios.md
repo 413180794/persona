@@ -505,7 +505,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - 字体 `Theme.Font` 只有这几级（默认字号下）：display 28 粗、title 22、heading 17 粗、body 17、secondary 15、caption 13、sectionHeader 13 粗（配次要色）、
     label 12、code 13 等宽。页面里不直接写 `.subheadline` 这类系统样式，也不写死 `.system(size:)`。
     Mac 上同样这几级，换成 Mac 的一套（#779，2026-11-03 用户选「正文 13」）：display 24 粗、title 18 半粗、heading 13 粗、body 13、secondary 12、caption 11、sectionHeader 11 粗、label 11、code 11 等宽，
-    系统字体按这几个字号乘 `Theme.Font.scale` 画（`Theme.Font` 里 `#if os(macOS)`；Mac 的系统文字样式不跟动态字体变，小 / 标准 / 大靠这个比例：正文 12 / 13 / 14，每档一点，#833；iPhone 上它恒为 1）；`Theme.Level.size` 跟着两套走，Markdown（回答、档案）的基础字号取 `Theme.Level.body.size`，不写死。
+    系统字体按这几个字号乘 `Theme.Font.scale` 画（`Theme.Font` 里 `#if os(macOS)`；Mac 的系统文字样式不跟动态字体变，小 / 标准 / 大靠这个比例：正文 12 / 13 / 14，每档一点，#833；不小于 11，「小」时 11 pt 那几级停在 11，`Theme.Font.pointSize`；iPhone 上它恒为 1）；`Theme.Level.size` 跟着两套走，Markdown（回答、档案）的基础字号取 `Theme.Level.body.size`，不写死。
   - 和 BeautifulUI 一样，层次主要靠字重和颜色：行标题是 body 大小加粗，分组头是 caption 大小加粗、次要色，比行标题小；
     Markdown 的一级标题是 title，其余标题是 heading，靠上方的空白分开；代码块是 code。
   - 间距 `Theme.Space` 是 4pt 网格（2 4 6 8 12 16 24 32），竖向的 `VStack(spacing:)` 都用它；横向间距在按钮文字旁边，没有统一改。
