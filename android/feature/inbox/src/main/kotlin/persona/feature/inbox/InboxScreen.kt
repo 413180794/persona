@@ -270,6 +270,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
     onHandOff: () -> Unit,
 ) {
     val item = record.item
+    val translated = rememberItemTranslation(record)
     var menu by remember { mutableStateOf(false) }
     if (menu) JActionSheet(title = item.title, onDismiss = { menu = false }, actions = listOf(
         JAction(if (done) "移回收件箱" else "已处理", PhIcons.Check, enabled = !busy, onClick = onDone),
@@ -279,13 +280,15 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
         start = if (busy) null else SwipeAction(if (done) "移回收件箱" else "已处理", PhIcons.Check, Status.Unread, onDone),
         end = SwipeAction("交给 AI", PhIcons.Robot, Status.Working, onHandOff),
     ) {
-        MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = item.title,
+        MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = translated?.subject?.ifBlank { null } ?: item.title,
+            titleIcon = translated?.let { PhIcons.Translate }, titleIconLabel = translated?.let { "已翻译" },
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
             position = position, avatar = rememberLarkAvatar(record.avatar, onlineSince),
             source = if (record.feedId != null || record.source == "lark") MessageSource.Lark else MessageSource.Mail,
             sourceLabel = if (record.feedId != null || record.source == "lark") "飞书" else "邮件",
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
-            time = item.updatedAt?.let(::displayTime), preview = item.summary?.takeIf { it.isNotBlank() } ?: item.preview,
+            time = item.updatedAt?.let(::displayTime),
+            preview = item.summary?.takeIf { it.isNotBlank() } ?: translated?.preview?.ifBlank { null } ?: item.preview,
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
             tags = listOfNotNull(kindLabel(record).takeIf { it.isNotBlank() }, record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") },
                 "${record.count} 条消息".takeIf { record.count > 0 }),

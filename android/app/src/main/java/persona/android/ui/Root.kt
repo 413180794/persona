@@ -148,6 +148,8 @@ fun PersonaRoot(
                             persona.core.designsystem.LocalPersonaName provides if (demo) "Persona" else persona.core.designsystem.LocalPersonaName.current,
                             // The demo serves its own Feishu chats, whatever the paired hub has.
                             persona.core.designsystem.LocalLarkFeatures provides if (demo) persona.core.contracts.LarkFeatures.All else persona.core.designsystem.LocalLarkFeatures.current,
+                            // The demo's mail and chats are made up: nothing to send to a hub for translating.
+                            persona.feature.inbox.LocalTranslator provides if (demo) null else persona.feature.inbox.LocalTranslator.current,
                         ) {
                             PersonaShell(displayed, openNavigation, services.copy(connection = displayed.connection, sessions = displayed.sessions, demo = displayed.demo != null), shell)
                         }

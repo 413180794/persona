@@ -118,6 +118,8 @@ data class InboxRecord(
     val avatar: AuthenticatedLarkImage? = null,
     val read: Boolean = false,
     val moment: InboxMomentRef? = null,
+    /** The hub's translations of a mail item, by target language, done as it came in (设置 › 翻译). */
+    val translations: Map<String, persona.core.contracts.api.ItemTranslation> = emptyMap(),
 ) {
     val isLark: Boolean get() = feedId != null || source == "lark"
 }
@@ -200,6 +202,8 @@ data class LarkMessage(
     val replyCount: Long = 0,
     val thread: LarkThreadSource? = null,
     val reactions: List<LarkReaction> = emptyList(),
+    /** False for what is not the sender's own text (recalled, encrypted): 设置 › 翻译 leaves it alone. */
+    val translatable: Boolean = true,
 )
 
 data class LarkQuote(val id: String, val sender: String, val text: String)

@@ -61,6 +61,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var connection: HubConnection
     @Inject lateinit var shell: AppServices
     @Inject lateinit var platformPairing: PlatformPairing
+    @Inject lateinit var translator: persona.feature.inbox.Translator
 
     /** A destination from a notification, deep link or share; resolved once session metadata allows. */
     private val openNavigation = mutableStateOf<((Router) -> ResolvedRoute?)?>(null)
@@ -112,6 +113,7 @@ class MainActivity : ComponentActivity() {
                 LocalDeveloperTools provides launchAdapter?.tools,
                 persona.core.designsystem.LocalChannels provides channels,
                 persona.core.designsystem.LocalLarkFeatures provides lark,
+                persona.feature.inbox.LocalTranslator provides translator,
                 LocalAppStyleStore provides app.appearance,
                 LocalGlassLevel provides glassLevel,
                 LocalPersonaDesign provides face,

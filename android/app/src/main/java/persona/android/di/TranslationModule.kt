@@ -16,6 +16,9 @@ import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.TranslateChat
 import persona.core.contracts.api.TranslationPrefs
 import persona.core.contracts.api.TranslationSettings
+import persona.core.hub.HttpTranslationTransport
+import persona.feature.inbox.Translator
+import persona.android.PersonaApp
 import javax.inject.Singleton
 
 @Module
@@ -23,6 +26,12 @@ import javax.inject.Singleton
 object TranslationModule {
     @Provides @Singleton fun translation(app: Application): TranslationSettings =
         StoredTranslationSettings(app.getSharedPreferences(StoredTranslationSettings.FILE, Context.MODE_PRIVATE))
+
+    /** The inbox's translations, on the selected group's hub (null while there is none, as for 模型配置). */
+    @Provides @Singleton fun translator(app: Application, settings: TranslationSettings, runtime: ConnectionRuntime): Translator =
+        Translator(settings.prefs, transport = {
+            runtime.scopedData.value?.let { HttpTranslationTransport(runtime.connectionFor(it)) }
+        }, scope = (app as PersonaApp).scope)
 }
 
 /**

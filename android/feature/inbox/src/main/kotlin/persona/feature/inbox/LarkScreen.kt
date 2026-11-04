@@ -419,6 +419,8 @@ internal fun LarkBubble(
     }
     val footer: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+            // 设置 › 翻译: under the bubble, as on iOS.
+            LarkTranslationLine(message, feedId)
             if (message.reactions.isNotEmpty() && onReact != null && onOpenReactionPicker != null) {
                 LarkReactionRow(
                     reactions = message.reactions,

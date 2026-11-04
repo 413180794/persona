@@ -855,6 +855,11 @@ class RealInboxRepository(
                     postText = it.optional("post_text"),
                 )
             },
+            translations = data.obj("translations")?.mapNotNull { (target, value) ->
+                (value as? JsonObject)?.let { t ->
+                    target to persona.core.contracts.api.ItemTranslation(t.string("subject"), t.string("preview"))
+                }
+            }?.toMap().orEmpty(),
         )
     }
 
@@ -911,7 +916,9 @@ class RealInboxRepository(
                 else -> LarkDelivery.Sent
             }, avatar = avatar(data.optional("sender_avatar"), window.transport),
             replyCount = maxOf(0L, data.number("reply_count") ?: 0L, data.number("thread_reply_count") ?: 0L),
-            thread = larkThreadSource(data, window.transport, window.feedId))
+            thread = larkThreadSource(data, window.transport, window.feedId),
+            // A recalled message shows a placeholder, an encrypted one its ciphertext: neither is the sender's text.
+            translatable = !data.flag("recalled") && (data["olk"] == null || data["olk"] is JsonNull))
     }
 }
 

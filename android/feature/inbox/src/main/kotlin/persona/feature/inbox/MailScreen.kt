@@ -70,6 +70,27 @@ private fun MailDetail(
     val composers = rememberReplyComposers(repository)
     val composer = composers.get(ReplyTarget.Inbox(route.itemId))
     val reply by composer.state.collectAsStateWithLifecycle()
+    // 设置 › 翻译: a mail not in the target language shows translated, with the way back to the original.
+    val translator = LocalTranslator.current
+    val translatePrefs = translator?.prefs?.collectAsStateWithLifecycle()?.value
+    var translation by remember { mutableStateOf<MailTranslation?>(null) }
+    var translating by remember { mutableStateOf(false) }
+    var translateError by remember { mutableStateOf<String?>(null) }
+    var showOriginal by remember { mutableStateOf(false) }
+    val shownTranslation = translation.takeUnless { showOriginal }
+    LaunchedEffect(message?.uid, message?.accountId, message?.mailbox, translatePrefs?.translatesMail, translatePrefs?.target) {
+        translation = null; translateError = null; showOriginal = false
+        val mail = message ?: return@LaunchedEffect
+        val prefs = translatePrefs?.takeIf { it.translatesMail } ?: return@LaunchedEffect
+        val body = mail.text.ifBlank { mailPlainText(mail.html) }
+        if (translator == null || !translator.isForeign(mail.subject + "\n" + body, prefs.target)) return@LaunchedEffect
+        translating = true
+        try { translation = translator.mail(mail.accountId, mail.uid, mail.mailbox, prefs.target) }
+        catch (e: CancellationException) { throw e }
+        // The hub's and the network's messages are not for people; the original stays readable.
+        catch (_: Exception) { translateError = "hub 暂时翻译不了，显示的是原文" }
+        finally { translating = false }
+    }
 
     LaunchedEffect(transport) {
         if (transport != null) {
@@ -165,7 +186,7 @@ private fun MailDetail(
         }
     }
 
-    JListPage(title = message?.subject?.ifBlank { "无主题" } ?: "邮件详情", onBack = ::leave,
+    JListPage(title = shownTranslation?.subject?.ifBlank { null } ?: message?.subject?.ifBlank { "无主题" } ?: "邮件详情", onBack = ::leave,
         refreshing = loading, onRefresh = { if (!busy && !reply.sending && transport != null) reload++ },
         actions = {
             message?.let { mail ->
@@ -276,8 +297,19 @@ private fun MailDetail(
                     },
                 )
             }
+            if (translatePrefs != null && (translating || translation != null || translateError != null)) item("translation") {
+                MailTranslationBar(translatePrefs.target, translating, translation != null, showOriginal, translateError,
+                    onToggle = { showOriginal = !showOriginal }, modifier = Modifier.padding(bottom = Tokens.Space.s))
+            }
             item("body") {
                 when {
+                    shownTranslation != null -> SelectionContainer {
+                        Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+                            Text(shownTranslation.text, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
+                            if (shownTranslation.clipped) Text("邮件很长，只翻译了前面一部分；全文看原文。", style = PersonaTheme.type.caption,
+                                color = PersonaTheme.palette.ink3)
+                        }
+                    }
                     mail.html.isNotBlank() -> {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(bottom = Tokens.Space.s),

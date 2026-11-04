@@ -59,6 +59,9 @@ fun MessageItem(
     onLongClick: (() -> Unit)? = null,
     selected: Boolean = false,
     avatar: Painter? = null,
+    /** A small mark after the title (the translate icon on a translated mail); none draws the title as always. */
+    titleIcon: PhIcon? = null,
+    titleIconLabel: String? = null,
     extra: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
@@ -82,7 +85,13 @@ fun MessageItem(
                 }
                 if (group != null) Text(sender, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1)
                 Spacer(Modifier.height(2.dp))
-                Text(title, style = if (prominent) type.bodyStrong else type.body, color = palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (titleIcon == null) Text(title, style = if (prominent) type.bodyStrong else type.body, color = palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                else Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, Modifier.weight(1f, fill = false), style = if (prominent) type.bodyStrong else type.body, color = palette.ink,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.width(Tokens.Space.xs))
+                    JIcon(titleIcon, titleIconLabel, size = Tokens.Space.l, tint = palette.ink3, decorative = titleIconLabel == null)
+                }
                 preview?.let {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (status == Status.Working) { JSpinner(Modifier.size(12.dp), stroke = 1.6.dp); Spacer(Modifier.width(6.dp)) }

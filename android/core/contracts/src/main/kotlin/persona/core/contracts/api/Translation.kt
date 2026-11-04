@@ -59,3 +59,18 @@ interface TranslationSettings {
 
 /** A Feishu chat to pick for translation (the pinned ones, then the recent ones). */
 data class LarkChatChoice(val id: String, val name: String, val avatar: String? = null, val isGroup: Boolean = true)
+
+/** A mail's translation (`POST /api/v1/translate/mail`): the hub reads the message itself. */
+data class MailTranslation(val subject: String, val text: String, val clipped: Boolean = false)
+
+/** The hub's translation of a mail item, done as it came in (`translations[target]` on the inbox item). */
+data class ItemTranslation(val subject: String, val preview: String)
+
+/** The hub's translations (`server/internal/hub/translate.go`), by its translation model. */
+interface TranslationTransport {
+    /** `POST /api/v1/translate {texts, target}`: short texts in order, "" where the model gave nothing. */
+    suspend fun translate(texts: List<String>, target: String): List<String>
+
+    /** `POST /api/v1/translate/mail {account_id, uid, mailbox, target}`. */
+    suspend fun translateMail(account: String, uid: Long, mailbox: String, target: String): MailTranslation
+}
