@@ -145,3 +145,6 @@
 
 - 逐像素截图（`android.sh shots` 的 `SHOTS_*`，`docs/android.md`「改前改后逐像素比对」）：Android 15 的 SystemUI 演示模式隐藏移动网络后约 5 秒会冒出一个卫星图标，演示命令和 `icon_blacklist` 都去不掉，只能等它出现后再截（每张图都带着它）；`adb root` 会重启 adbd，之前的 `adb reverse` 跟着没了，要先 root 再转发；macOS 的 `sips -Z` 直接改原图，看图前先拷一份；macOS 自带 bash 3.2 在 `set -u` 下展开空数组报错，写成 `${arr[@]+"${arr[@]}"}`。
 - 用 Homebrew 装的 Android SDK 在 `/opt/homebrew/share/android-commandlinetools`（不是 `~/Library/Android/sdk`），默认 Java 是 JDK 8：跑 `android.sh` 前设 `ANDROID_HOME` 为它、`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`。自建 AVD 用单独的 `ANDROID_AVD_HOME`，别动别人在跑的模拟器。准备清单（首次启动）挡着时，先跑一遍 `android.sh shots`，它会清数据、配对、跳过准备，之后用 `DebugEntryActivity --es debug.mockAddress …` 换到自己的假 hub。
+
+- 多 hub（#634）：新接一个按机器 id 调用的服务时，别用「当前配对」的连接（`ConnectionRuntime.scopedData` / `connectionFor`）。页面拿到的机器 id 来自合并列表，别的组的带 `~<组 id>`，发给选中组的 hub 只会「找不到机器」，主组和别的组恰好有同名机器时更糟：改到了另一台。
+  按 `GroupStacks.use(GroupKeys.namespaceOf(id))` 找组、在组里用 `inGroup(names)` 去掉后缀、把返回的机器再加上后缀；只有一台 hub 一份的（模型配置、语音、收件箱）才跟选中的组。

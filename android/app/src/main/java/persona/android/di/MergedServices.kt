@@ -94,6 +94,26 @@ internal fun mergedPreferences(stacks: GroupStacks): HubPreferences = object : H
         withPreferences(GroupKeys.namespaceOf(session.machineId)) { it.markSeen(GroupKeys.rawKey(session), version) }
 }
 
+/**
+ * Machine management (机器页, 引擎, Claude Code 设置) over every group (#634): each call goes to the group its machine id
+ * names ([routes]: that group's service, already speaking merged ids), so another group's machine is no longer asked of the
+ * selected group's hub. Hub-level services (模型配置, 语音) stay with the selected group, like the other hub-level pages.
+ */
+internal fun mergedMachineManagement(routes: MachineRoutes): MachineManagement = object : MachineManagement {
+    override suspend fun launchers(machineId: String) = routes.on(machineId) { it.launchers(machineId) }
+    override suspend fun reconnect(machineId: String) = routes.on(machineId) { it.reconnect(machineId) }
+    override suspend fun deploy(machineId: String) = routes.on(machineId) { it.deploy(machineId) }
+    override suspend fun setEngine(machineId: String, engine: String) = routes.on(machineId) { it.setEngine(machineId, engine) }
+    override suspend fun claudeSettings(machineId: String) = routes.on(machineId) { it.claudeSettings(machineId) }
+    override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
+        routes.on(machineId) { it.setClaudeSetting(machineId, key, value) }
+}
+
+/** Runs a call on the machine management of the group [machineId] names, in that group's lifetime (GroupStacks.use). */
+internal interface MachineRoutes {
+    suspend fun <T> on(machineId: String, call: suspend (MachineManagement) -> T): T
+}
+
 /** Terminal, files, chat actions and machine metrics for the shell: each call goes to its machine's group. */
 internal class MergedShellServices(private val stacks: GroupStacks) {
     private fun stack(machineId: String) = stacks.of(machineId) ?: throw IllegalStateException("终端暂不可用")

@@ -136,6 +136,44 @@ class GroupRoutingTest {
         assertEquals("s+s", merged.scope)
     }
 
+    /** A hub's machine management that records what it was asked (plain ids only), as a group's fake hub. */
+    private class FakeMachines(val hub: String) : MachineManagement {
+        val calls = mutableListOf<String>()
+        override suspend fun launchers(machineId: String) = emptyList<AgentLauncher>().also { calls += "launchers $machineId" }
+        override suspend fun reconnect(machineId: String) { calls += "reconnect $machineId" }
+        override suspend fun deploy(machineId: String) { calls += "deploy $machineId" }
+        override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId, "").also { calls += "engine $machineId $engine" }
+        override suspend fun claudeSettings(machineId: String) = emptyList<ClaudeSetting>().also { calls += "settings $machineId" }
+        override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
+            emptyList<ClaudeSetting>().also { calls += "set $machineId $key" }
+    }
+
+    @Test fun anotherGroupsMachineIsManagedOnItsOwnHub() = runBlocking<Unit> {
+        // #634: reconnect, deploy, engine and Claude Code settings went to the selected group's hub for every machine
+        val home = FakeMachines("home")
+        val work = FakeMachines("work")
+        val managed = mergedMachineManagement(object : MachineRoutes {
+            override suspend fun <T> on(machineId: String, call: suspend (MachineManagement) -> T): T =
+                if (other.owns(machineId)) call(work.inGroup(other)) else call(home.inGroup(primary))
+        })
+        managed.reconnect("macbook~g0a1b2c3d")
+        managed.deploy("macbook~g0a1b2c3d")
+        managed.launchers("macbook~g0a1b2c3d")
+        managed.claudeSettings("macbook~g0a1b2c3d")
+        managed.setClaudeSetting("macbook~g0a1b2c3d", "model", kotlinx.serialization.json.JsonPrimitive("opus"))
+        val changed = managed.setEngine("macbook~g0a1b2c3d", "orca")
+        assertEquals(listOf("reconnect macbook", "deploy macbook", "launchers macbook", "settings macbook", "set macbook model",
+            "engine macbook orca"), work.calls)
+        // the machine it hands back is the merged list's, so the page finds it again
+        assertEquals("macbook~g0a1b2c3d", changed.id)
+        // the primary group's machine with the same plain id stays on the primary hub, unchanged
+        managed.reconnect("macbook")
+        assertEquals(listOf("reconnect macbook"), home.calls)
+        assertEquals("macbook", managed.setEngine("macbook", "herdr").id)
+        val plain = FakeMachines("solo")
+        assertSame(plain, plain.inGroup(primary))
+    }
+
     @Test fun fleetsAddUpAndTheMostUrgentPhaseWins() {
         val one = FleetState(phase = "working", working = 2, items = listOf(FleetItem("a")))
         assertSame(one, mergeFleets(listOf(one), one))

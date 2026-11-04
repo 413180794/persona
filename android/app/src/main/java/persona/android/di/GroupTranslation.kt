@@ -9,6 +9,7 @@ import persona.feature.chat.ChatAppBindings
 import persona.feature.inbox.InboxSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import java.io.File
 
@@ -156,6 +157,21 @@ internal fun ChatRecoveryService.inGroup(names: GroupNames): ChatRecoveryService
             else -> result
         }
         override suspend fun reconnect(machineId: String) = source.reconnect(names.rawMachine(machineId))
+    }
+}
+
+/** One group's machine management as the merged pages use it: plain ids to its hub, the machine it returns suffixed. */
+internal fun MachineManagement.inGroup(names: GroupNames): MachineManagement {
+    if (names.plain) return this
+    val source = this
+    return object : MachineManagement {
+        override suspend fun launchers(machineId: String) = source.launchers(names.rawMachine(machineId))
+        override suspend fun reconnect(machineId: String) = source.reconnect(names.rawMachine(machineId))
+        override suspend fun deploy(machineId: String) = source.deploy(names.rawMachine(machineId))
+        override suspend fun setEngine(machineId: String, engine: String) = names.machine(source.setEngine(names.rawMachine(machineId), engine))
+        override suspend fun claudeSettings(machineId: String) = source.claudeSettings(names.rawMachine(machineId))
+        override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) =
+            source.setClaudeSetting(names.rawMachine(machineId), key, value)
     }
 }
 
