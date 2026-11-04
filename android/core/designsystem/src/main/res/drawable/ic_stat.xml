@@ -1,10 +1,11 @@
-<!-- The app icon's mark (iOS AppIcon): a ring around a four-point star and a small star, as a white silhouette. -->
+<!-- The app icon's character (团子, iOS AppIcon): the waving body with its eyes cut out and the three motion lines,
+     as a white silhouette. Paths are the icon's (web MochiFace / apple PersonaFace), in its 1024 px coordinates. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
-        android:pathData="M12,2.3a9.7,9.7 0,1 0,0 19.4a9.7,9.7 0,1 0,0 -19.4z" />
-    <path android:fillColor="#FFFFFFFF"
-        android:pathData="M12,6C12.5,9.5 14.5,11.5 18,12C14.5,12.5 12.5,14.5 12,18C11.5,14.5 9.5,12.5 6,12C9.5,11.5 11.5,9.5 12,6Z" />
-    <path android:fillColor="#FFFFFFFF"
-        android:pathData="M16.2,6.1C16.35,7.2 16.8,7.65 17.9,7.8C16.8,7.95 16.35,8.4 16.2,9.5C16.05,8.4 15.6,7.95 14.5,7.8C15.6,7.65 16.05,7.2 16.2,6.1Z" />
+    <group android:translateX="-3.1509" android:translateY="-2.8050" android:scaleX="0.027673" android:scaleY="0.027673">
+        <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+            android:pathData="M262 778C420 792 600 790 702 772C742 764 752 700 760 640C800 598 828 562 826 502C825 446 795 418 764 428C736 440 722 468 712 494C690 440 650 350 560 304C470 260 330 288 254 382C184 462 158 582 168 672C176 742 206 772 262 778ZM351 497a46 46 0 1 0 92 0a46 46 0 1 0 -92 0ZM507 480a46 46 0 1 0 92 0a46 46 0 1 0 -92 0Z" />
+        <path android:strokeColor="#FFFFFFFF" android:strokeWidth="44" android:strokeLineCap="round"
+            android:pathData="M792 352L818 298M838 384L884 340M864 428L924 408" />
+    </group>
 </vector>

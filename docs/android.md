@@ -203,9 +203,11 @@ plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-
 - Application ID 走配置：`~/.config/persona/config.json` 的 `android.application_id`，没写就用 `app.bundle_id`，再没有就是 `com.example.jarvis`。
 - 同一台手机上并排装两个版本（比如主线和新版对比）：直接调 Gradle，给不同的 `-PjarvisApplicationId` 和应用名 `-PjarvisAppLabel`（默认「Persona」），例如 `./gradlew -PjarvisApplicationId=<包名>.next -PjarvisAppLabel="Persona 新版" :app:assembleDebug`。两个版本都注册 `persona://` 和 `jarvis://` 的 `pair` / `open` 深链，扫配对码时系统会问用哪个 App 打开。配对的深链、扫码、「粘贴链接」和手动输入框都同时接受 `persona://pair` 和 `jarvis://pair`（判断统一走 `Pairing.isLink`），hub 生成的链接仍是 `jarvis://`（见 [rename.md](rename.md)）。85 MB 左右的 debug 包经 USB 流式安装时，个别手机会中途断开 adb，重装一次即可。
 - 明文 HTTP 仅用于本地或受信任网络；公网使用 HTTPS / WSS 和配对指纹钉扎，优先 IPv6。实际目标由 `HubHttpClient` 校验，见 [network.md](network.md)。
-- App 图标和 iOS 是同一张（`apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset/icon.png`）：自适应图标的前景是这张图缩进到 108 dp 画布中间的 72 dp 安全区
-  （`drawable/ic_launcher_fg.xml` 内缩 18 dp，图在 `drawable-nodpi/ic_launcher_art.png`），背景是图边缘的深棕 `#1B110D`，桌面裁成圆形还是圆角方形都不会切到圆环；
-  主题图标（Android 13+）用 iOS 的 tinted 版当遮罩。通知栏小图标 `ic_stat` 是同一个标志（圆环 + 四角星）的白色剪影，放在 `core/designsystem/src/main/res/drawable/`，所有通知（常驻、需要你、做完了、手机工具、锁屏测试）和磁贴都用它。iOS 换图标时这两张 PNG 要重新导出。
+- App 图标和 iOS 是同一张（`apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset/icon.png`，团子，#712）：自适应图标的前景是这张图放在 108 dp 画布中间的 72 dp 安全区，
+  四周用图边缘的纸色往外延伸铺满整个画布（`drawable-nodpi/ic_launcher_art.png`，648 px，`drawable/ic_launcher_fg.xml` 铺满不内缩），桌面裁成圆形还是圆角方形、视差移动都看不到接缝；
+  背景色 `launcher_bg` 是图边缘的米色 `#E5D4C2`，只在极少数启动器露出来。主题图标（Android 13+）用 iOS 的 tinted 版二值化后当遮罩（`ic_launcher_mono_art.png`，白色剪影，眼睛镂空）。
+  通知栏小图标 `ic_stat` 是团子的白色剪影（身体挖出两只眼睛，加三道挥手线；路径取自网页 `MochiFace` / iOS `PersonaFace`，1024 px 坐标缩到 24 dp），放在 `core/designsystem/src/main/res/drawable/`，
+  所有通知（常驻、需要你、做完了、手机工具、锁屏测试）和磁贴都用它。iOS 换图标时这两张 PNG 要重新导出（#1136 的做法：`magick icon.png -resize 432x432 -virtual-pixel edge -set option:distort:viewport 648x648-108-108 -distort SRT 0`）。
 - 装到真机：手机开 USB 调试连上电脑跑 `./scripts/app/android.sh`，或者把 APK 发到手机上直接装。
 
 ## 缓存体积预算
