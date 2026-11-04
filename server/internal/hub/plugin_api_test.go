@@ -12,10 +12,12 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/plugin"
 	pserve "github.com/nwverse/persona/server/internal/plugin/serve"
 )
@@ -27,7 +29,18 @@ func serveAPIPluginForTest() {
 	if err != nil {
 		os.Exit(1)
 	}
+	var sends atomic.Int32
+	var role atomic.Value
+	role.Store("")
 	go http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/role") {
+			_ = json.NewEncoder(w).Encode(map[string]any{"role": role.Load()})
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/send") {
+			_ = json.NewEncoder(w).Encode(map[string]any{"n": sends.Add(1)})
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/cached") {
 			w.Header().Set("Cache-Control", "private, max-age=3600")
 		}
@@ -35,7 +48,8 @@ func serveAPIPluginForTest() {
 			"auth": r.Header.Get("Authorization"), "forged": r.Header.Get("X-Persona-Forged")})
 	}))
 	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "example-feed", Version: "1.0.0",
-		Init: func(_ context.Context, _ plugin.InitializeParams, h *pserve.Hub) (map[string]any, error) {
+		Init: func(_ context.Context, ip plugin.InitializeParams, h *pserve.Hub) (map[string]any, error) {
+			role.Store(ip.Hub.Role)
 			go func() {
 				time.Sleep(300 * time.Millisecond)
 				_ = h.Notify("api.broadcast", map[string]any{"type": "examplefeed", "n": 1})
@@ -75,7 +89,8 @@ func apiPackage(t *testing.T) string {
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/feed"}, "http": true},
 		"activation_events": ["on_startup"],
 		"contributes": {
-			"api": [{"id": "feed", "prefix": "examplefeed", "features": ["example_feed"], "events": ["examplefeed"]},
+			"api": [{"id": "feed", "prefix": "examplefeed", "features": ["example_feed"], "events": ["examplefeed"],
+			         "receipts": [{"method": "POST", "path": "/rooms/*/send", "kind": "examplefeed_send"}]},
 			        {"id": "lark", "prefix": "lark"}, {"id": "mine", "prefix": "machines"}],
 			"assistant": [{"id": "feed", "skills": ["skills/example-feed"], "instructions": "assistant.md", "gate": "gate.json"}]}}`, runtime.GOOS+"-"+runtime.GOARCH)
 	_ = os.WriteFile(filepath.Join(dir, plugin.ManifestFile), []byte(manifest), 0o644)
@@ -131,6 +146,27 @@ func TestPluginAPI(t *testing.T) {
 		if got := w.Header().Values("Cache-Control"); w.Code != 200 || len(got) != 1 || got[0] != want {
 			t.Fatalf("%s: %d Cache-Control %q, want %q", path, w.Code, got, want)
 		}
+	}
+	if _, out := call(t, mux, "GET", "/api/v1/examplefeed/role", master, ""); out["role"] != "center" {
+		t.Fatalf("the hub's role at initialize: %v", out)
+	}
+	// A send it declared a receipt for: a retry with the same client_id gets the first answer without reaching it
+	// again, another body under that id is refused; the receipt is there to look up.
+	ops := &clientOpsStore{ops: map[string]db.ClientOp{}}
+	h.store = opsStore{Store: h.store, ops: ops}
+	for i := 0; i < 2; i++ {
+		if code, out := call(t, mux, "POST", "/api/v1/examplefeed/rooms/r1/send", master, `{"client_id": "c-1", "text": "hi"}`); code != 200 || out["n"] != float64(1) {
+			t.Fatalf("send %d: %d %v", i, code, out)
+		}
+	}
+	if code, _ := call(t, mux, "POST", "/api/v1/examplefeed/rooms/r1/send", master, `{"client_id": "c-1", "text": "another"}`); code != http.StatusConflict {
+		t.Fatalf("another body under the same id: %d", code)
+	}
+	if code, out := call(t, mux, "POST", "/api/v1/examplefeed/rooms/r1/send", master, `{"client_id": "c-2", "text": "hi"}`); code != 200 || out["n"] != float64(2) {
+		t.Fatalf("a new send: %d %v", code, out)
+	}
+	if len(ops.ops) != 2 {
+		t.Fatalf("receipts %d", len(ops.ops))
 	}
 	if _, out := call(t, mux, "GET", "/api/v1/machines", master, ""); out["path"] != nil || out["machines"] == nil {
 		t.Fatalf("the hub's own API is not a plugin's: %v", out)
@@ -223,4 +259,20 @@ func TestPluginKindDescriptions(t *testing.T) {
 	if got := triageInput(it); !strings.HasPrefix(got, "类型：Example Notes 里有人共享了一篇笔记给用户\n") {
 		t.Fatalf("%q", got)
 	}
+}
+
+// opsStore adds client-op receipts to a test store.
+type opsStore struct {
+	Store
+	ops *clientOpsStore
+}
+
+func (s opsStore) BeginClientOp(ctx context.Context, op db.ClientOp) (*db.ClientOp, bool, error) {
+	return s.ops.BeginClientOp(ctx, op)
+}
+func (s opsStore) ClientOp(ctx context.Context, id string) (*db.ClientOp, error) {
+	return s.ops.ClientOp(ctx, id)
+}
+func (s opsStore) FinishClientOp(ctx context.Context, id, state string, result json.RawMessage) error {
+	return s.ops.FinishClientOp(ctx, id, state, result)
 }

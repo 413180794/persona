@@ -2,7 +2,8 @@
 import { useSyncExternalStore } from "react";
 
 // Persona's main conversation is the front door (like the app, which opens on 助手): `/` and `/j` open it, `/j/<id>` is
-// one conversation, `/j/new` starts a one-off one, and 总览 lives at `/overview`.
+// one conversation, `/j/new` starts a one-off one, and 总览 lives at `/overview`. `/plugin/<id>/<ui>` is a plugin's page
+// (docs/plugins.md「UI 插槽」 nav_page).
 export type Route =
   | { name: "home" }
   | { name: "persona-new" }
@@ -18,7 +19,8 @@ export type Route =
   | { name: "machine"; mid: string }
   | { name: "settings" }
   | { name: "agents"; id?: string }
-  | { name: "todos"; id?: string };
+  | { name: "todos"; id?: string }
+  | { name: "plugin"; plugin: string; ui: string };
 
 export function parse(path: string): Route {
   const p = path.split("/").filter(Boolean).map(decodeURIComponent);
@@ -35,6 +37,7 @@ export function parse(path: string): Route {
   if (p[0] === "machines") return p[1] ? { name: "machine", mid: p[1] } : { name: "machines" };
   if (p[0] === "a") return { name: "agents", id: p[1] };
   if (p[0] === "settings") return { name: "settings" };
+  if (p[0] === "plugin" && p[1] && p[2]) return { name: "plugin", plugin: p[1], ui: p[2] };
   if (p[0] === "todos") {
     const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null;
     return { name: "todos", id: p[1] || q || undefined };
@@ -72,6 +75,8 @@ export function href(r: Route): string {
       return r.id ? `/a/${encodeURIComponent(r.id)}` : "/a";
     case "todos":
       return r.id ? `/todos?id=${encodeURIComponent(r.id)}` : "/todos";
+    case "plugin":
+      return `/plugin/${encodeURIComponent(r.plugin)}/${encodeURIComponent(r.ui)}`;
     default:
       return "/overview";
   }

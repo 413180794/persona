@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"github.com/nwverse/persona/server/internal/plugin"
 	"net/http"
 	"slices"
 	"strings"
@@ -21,8 +22,14 @@ var migratablePrefixes = []string{"lark"}
 
 // apiPlugin is the running plugin serving path, nil when none does.
 func (ps *plugins) apiPlugin(path string) *hubPlugin {
+	hp, _ := ps.apiRoute(path)
+	return hp
+}
+
+// apiRoute is apiPlugin with the contribution the path is under.
+func (ps *plugins) apiRoute(path string) (*hubPlugin, plugin.APIItem) {
 	if ps == nil || !strings.HasPrefix(path, "/api/v1/") {
-		return nil
+		return nil, plugin.APIItem{}
 	}
 	seg, _, _ := strings.Cut(strings.TrimPrefix(path, "/api/v1/"), "/")
 	for _, p := range ps.reg.List() {
@@ -34,17 +41,17 @@ func (ps *plugins) apiPlugin(path string) *hubPlugin {
 				continue
 			}
 			if hp := ps.get(p.Record.ID); hp != nil && hp.proc != nil && hp.proxy != nil {
-				return hp
+				return hp, a
 			}
 		}
 	}
-	return nil
+	return nil, plugin.APIItem{}
 }
 
 // pluginAPIs serves the requests for a plugin's part of the API; the rest goes to next (the hub's own routes, mux).
 func (h *Hub) pluginAPIs(next http.Handler, mux *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hp := h.plugins.apiPlugin(r.URL.Path)
+		hp, item := h.plugins.apiRoute(r.URL.Path)
 		if hp == nil {
 			next.ServeHTTP(w, r)
 			return
@@ -69,6 +76,14 @@ func (h *Hub) pluginAPIs(next http.Handler, mux *http.ServeMux) http.Handler {
 		p := principalOf(r.Context())
 		r.Header.Set("X-Persona-Device", p.ID)
 		r.Header.Set("X-Persona-Role", p.Role)
+		// A send it declared a receipt for: kept like the hub's own (GET /api/v1/ops/{id}), a retry reaches it once.
+		under := strings.TrimPrefix(r.URL.Path, "/api/v1/"+item.Prefix)
+		for _, rc := range item.Receipts {
+			if rc.Matches(r.Method, under) {
+				h.withReplyReceipt(rc.Kind, hp.servePluginHTTP)(w, r)
+				return
+			}
+		}
 		hp.servePluginHTTP(w, r)
 	})
 }

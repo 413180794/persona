@@ -9,6 +9,7 @@ import type { AgentState, Interaction, Session } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, StatusDot, useNow } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { MarkSeenDialog } from "./AgentMenus";
+import { OverviewCards } from "./plugins/PluginSlots";
 
 const KIND: Record<Interaction["kind"], string> = { question: "提问", plan: "计划待批准", permission: "需要授权", screen: "终端对话框" };
 
@@ -50,6 +51,9 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
               {!loaded ? "正在连上 hub…" : quiet ? "没有需要你处理的，所有 Agent 都在等你。" : [counts.needs && `${counts.needs} 个需要你`, counts.working && `${counts.working} 个在工作`, counts.unread && `${counts.unread} 个做完了还没看`].filter(Boolean).join("，") + "。"}
             </p>
           </div>
+
+          {/* the plugins' cards (docs/plugins.md「UI 插槽」 overview_card), under the agents' summary */}
+          <OverviewCards />
 
           {!loaded && <Loading label="加载中" />}
 

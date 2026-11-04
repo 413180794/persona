@@ -119,6 +119,34 @@ type APIItem struct {
 	Features []string `json:"features,omitempty"`
 	// Events are the types of the events it pushes to the apps (api.broadcast).
 	Events []string `json:"events,omitempty"`
+	// Receipts are its sends the hub keeps a receipt of (GET /api/v1/ops/{id}): a retry reaches the plugin once.
+	Receipts []APIReceipt `json:"receipts,omitempty"`
+}
+
+// APIReceipt is one route of a plugin's API with a send receipt: Method and Path (under the prefix, "*" one segment)
+// and the receipt's Kind. The receipt's id comes from the body's client_id, or the caller's X-Jarvis-Op-Id.
+type APIReceipt struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Kind   string `json:"kind"`
+}
+
+// Matches says whether a request (its path under the prefix) is the receipt's route.
+func (r APIReceipt) Matches(method, path string) bool {
+	if !strings.EqualFold(r.Method, method) {
+		return false
+	}
+	want := strings.Split(strings.Trim(r.Path, "/"), "/")
+	got := strings.Split(strings.Trim(path, "/"), "/")
+	if len(want) != len(got) {
+		return false
+	}
+	for i := range want {
+		if want[i] != "*" && want[i] != got[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // AssistantItem is a contribution to assistant: skills and a part of the assistant's instructions, in the package
@@ -320,6 +348,12 @@ var Points = map[string]Point{
 		for _, f := range append(slices.Clone(a.Features), a.Events...) {
 			if !namePattern.MatchString(f) {
 				return a.ID, fmt.Errorf("api %s: %q is not a feature or event name (a-z0-9_)", a.ID, f)
+			}
+		}
+		for _, rc := range a.Receipts {
+			if rc.Method != "POST" && rc.Method != "PUT" && rc.Method != "PATCH" && rc.Method != "DELETE" || !strings.HasPrefix(rc.Path, "/") ||
+				!regexp.MustCompile(`^[a-z][a-z0-9_]{0,47}$`).MatchString(rc.Kind) {
+				return a.ID, fmt.Errorf("api %s: receipt %+v: a write method, a path from /, a kind (a-z0-9_)", a.ID, rc)
 			}
 		}
 		return a.ID, nil

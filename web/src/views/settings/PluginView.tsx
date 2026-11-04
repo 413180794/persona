@@ -1,14 +1,17 @@
-// A plugin's View (docs/plugins.md「声明式 UI」), drawn with the web's design system: a plugin page in 设置 › 插件, or a
-// section on a launcher's page. Every kind of item (text, metric, progress, row, button, link, field, divider); a tone
-// becomes a role color; a button's confirm asks first, submit sends the fields' values, and what the press answers
-// (a new view, a word, a link) is carried out. Logic in lib/plugin-ui.ts.
+// A plugin's View (docs/plugins.md「声明式 UI」「UI 插槽」), drawn with the web's design system: a plugin page in
+// 设置 › 插件 or from the sidebar, a section on a launcher's or a machine's page, a card on 总览. Every kind of item
+// (text, metric, progress, row, button, link, field, divider, chart, stat_grid, segmented); an unknown one is left out.
+// A tone becomes a role color; a button's confirm asks first, submit sends the fields' values, a segmented acts when
+// chosen, and what the press answers (a new view, a word, a link) is carried out. A view with refresh_after is drawn
+// again while it is on screen. Logic in lib/plugin-ui.ts.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { errorText } from "../../lib/api";
+import { ApiError, errorText } from "../../lib/api";
 import { openLink } from "../../lib/links";
 import {
-  actUI, blocks, fieldValues, isHttps, isUnsupported, numberProblem, outcome, percent, renderUI, submitValues, toneOf, uiPlaces,
+  actUI, blocks, fieldValues, isHttps, isUnsupported, numberProblem, outcome, percent, refreshDelay, renderUI, submitValues, toneOf, uiPlaces,
   type UIAction, type UIContext, type UIItem, type UIPlace, type UISection, type UITone, type UIView,
 } from "../../lib/plugin-ui";
+import { PluginChart } from "../plugins/PluginChart";
 import { Button, cx, Dialog, EASE, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Pill, Switch } from "./SettingsParts";
@@ -21,10 +24,39 @@ const inputClass =
   "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 
 /**
- * Loads and draws one of a plugin's views. `embedded`: inside another page (a launcher's), lighter, and gone when the
- * plugin says the launcher is not its (404 unsupported) instead of showing an error.
+ * Draws again while the view is on screen (docs/plugins.md「刷新」): `delay` ms after it was last drawn, never while the
+ * page is hidden; coming back after the delay draws at once.
  */
-export function PluginUI({ plugin, ui, context, embedded, title, onUnsupported }: { plugin: string; ui: string; context?: UIContext; embedded?: boolean; title?: string; onUnsupported?: () => void }) {
+function useRefresh(delay: number, drawnAt: number, draw: () => void) {
+  const drawRef = useRef(draw);
+  drawRef.current = draw;
+  useEffect(() => {
+    if (!delay || !drawnAt) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      if (document.visibilityState !== "visible") return;
+      const left = drawnAt + delay - Date.now();
+      if (left <= 0) drawRef.current();
+      else timer = setTimeout(() => drawRef.current(), left);
+    };
+    arm();
+    document.addEventListener("visibilitychange", arm);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", arm);
+    };
+  }, [delay, drawnAt]);
+}
+
+/**
+ * Loads and draws one of a plugin's views. `embedded`: inside another page (a launcher's), lighter, and gone when the
+ * plugin says the launcher is not its (404 unsupported) instead of showing an error. `compact`: a card (总览), no
+ * chrome of its own, small charts. `bare`: no heading of its own (the page around it has one).
+ */
+export function PluginUI({
+  plugin, ui, context, embedded, compact, bare, title, onUnsupported, onMissing,
+}: { plugin: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string; onUnsupported?: () => void; onMissing?: () => void }) {
   const [view, setView] = useState<UIView | null>(null);
   const [error, setError] = useState("");
   const [unsupported, setUnsupported] = useState(false);
@@ -32,27 +64,39 @@ export function PluginUI({ plugin, ui, context, embedded, title, onUnsupported }
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [confirming, setConfirming] = useState<{ action: UIAction; destructive: boolean } | null>(null);
+  const [drawnAt, setDrawnAt] = useState(0);
   const stateRef = useRef<string | undefined>(undefined);
-  const ctxKey = `${context?.launcher ?? ""}\n${context?.machine ?? ""}`;
+  const ctxKey = `${context?.launcher ?? ""}\n${context?.machine ?? ""}\n${context?.size ?? ""}`;
 
   const show = (v: UIView) => {
     setView(v);
     setValues(fieldValues(v));
     stateRef.current = v.state;
     setError("");
+    setDrawnAt(Date.now());
   };
   const load = useCallback(() => {
     setLoading(true);
     renderUI(plugin, ui, context, stateRef.current)
       .then(show)
-      .catch((e) => (isUnsupported(e) ? (setUnsupported(true), onUnsupported?.()) : setError(errorText(e))))
+      .catch((e) => {
+        if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
+        else if (onMissing && e instanceof ApiError && e.status === 404) onMissing();
+        else {
+          setError(errorText(e));
+          setDrawnAt(Date.now()); // a failed refresh waits a whole interval too
+        }
+      })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plugin, ui, ctxKey]);
   useEffect(load, [load]);
+  useRefresh(refreshDelay(view), drawnAt, () => {
+    if (!busy) load();
+  });
 
-  const run = async (action: UIAction) => {
-    const sent = action.submit ? submitValues(view, values) : undefined;
+  const run = async (action: UIAction, extra?: Record<string, string>) => {
+    const sent = action.submit ? { ...submitValues(view, values), ...extra } : extra;
     if (sent && view) {
       const bad = view.sections.flatMap((s) => s.items).find((it) => it.type === "field" && it.kind === "number" && it.name && numberProblem(sent[it.name] ?? ""));
       if (bad) {
@@ -79,28 +123,46 @@ export function PluginUI({ plugin, ui, context, embedded, title, onUnsupported }
     if (action.confirm?.trim()) setConfirming({ action, destructive });
     else void run(action);
   };
+  // a segmented acts as soon as another choice is made: its own value goes along (the rest only when it submits)
+  const choose = (item: UIItem, value: string) => {
+    if (busy || !item.name || !item.action) return;
+    setValues((x) => ({ ...x, [item.name!]: value }));
+    void run(item.action, { [item.name]: value });
+  };
 
   if (unsupported) {
-    return embedded ? null : (
+    return embedded || compact ? null : (
       <p className="rounded-card bg-surface px-4 py-6 text-center text-[12.5px] text-ink-3 shadow-card">这个插件在这里没有要显示的内容。</p>
     );
   }
 
   const heading = view?.title || title;
+  const light = embedded || compact;
   return (
-    <div className={cx("flex flex-col", embedded ? "gap-3" : "gap-6")}>
-      {!embedded && heading && (
+    <div className={cx("flex flex-col", compact ? "gap-1" : embedded ? "gap-3" : "gap-6")}>
+      {!light && !bare && heading && (
         <div className="flex items-center gap-2 px-1">
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">{heading}</h2>
           {loading && view && <Spinner />}
         </div>
       )}
       {!view && !error && (
-        <div className={cx(embedded ? "py-2" : "rounded-card bg-surface px-4 py-3 shadow-card")}>
+        <div className={cx(compact ? "px-4 py-3" : embedded ? "py-2" : "rounded-card bg-surface px-4 py-3 shadow-card")}>
           <Loading />
         </div>
       )}
-      {error && (
+      {error && compact && (
+        <div className="flex items-center gap-2 px-4 py-2.5">
+          <p className="min-w-0 flex-1 truncate text-[12px] text-red" title={error}>
+            {view ? "没有更新：" : "插件没画出来："}
+            {error}
+          </p>
+          <Button tone="quiet" icon="retry" busy={loading} onClick={load}>
+            重试
+          </Button>
+        </div>
+      )}
+      {error && !compact && (
         <div className={cx("flex flex-col items-center gap-2 px-6 text-center", embedded ? "rounded-control bg-inset py-4 shadow-hairline" : "rounded-card bg-surface py-8 shadow-card")}>
           <span className="flex size-9 items-center justify-center rounded-[10px] bg-red-tint text-red">
             <Icon name="plugin" size={16} />
@@ -113,7 +175,7 @@ export function PluginUI({ plugin, ui, context, embedded, title, onUnsupported }
         </div>
       )}
       {view?.sections.map((s, i) => (
-        <Section key={i} section={s} embedded={embedded} values={values} setValue={(k, v) => setValues((x) => ({ ...x, [k]: v }))} busy={busy} onPress={press} />
+        <Section key={i} section={s} embedded={embedded} compact={compact} values={values} setValue={(k, v) => setValues((x) => ({ ...x, [k]: v }))} busy={busy} onPress={press} onChoose={choose} />
       ))}
       {confirming && (
         <Dialog
@@ -149,21 +211,24 @@ export function PluginUI({ plugin, ui, context, embedded, title, onUnsupported }
 interface SectionProps {
   section: UISection;
   embedded?: boolean;
+  compact?: boolean;
   values: Record<string, string>;
   setValue: (name: string, v: string) => void;
   busy: string;
   onPress: (a: UIAction, destructive?: boolean) => void;
+  onChoose: (item: UIItem, value: string) => void;
 }
 
-function Section({ section, embedded, ...rest }: SectionProps) {
+function Section({ section, embedded, compact, ...rest }: SectionProps) {
   const bs = blocks(section.items ?? []);
   return (
     <section style={{ animation: `fade-up 280ms ${EASE} both` }}>
-      {section.title && <h3 className={cx("mb-1.5 px-1 font-medium text-ink-3", embedded ? "text-[11.5px]" : "text-[12px]")}>{section.title}</h3>}
-      <div className={cx("overflow-hidden", embedded ? "rounded-control bg-inset shadow-hairline" : "rounded-card bg-surface shadow-card")}>
+      {section.title && <h3 className={cx("font-medium text-ink-3", compact ? "px-4 pt-1 text-[11.5px]" : embedded ? "mb-1.5 px-1 text-[11.5px]" : "mb-1.5 px-1 text-[12px]")}>{section.title}</h3>}
+      <div className={cx("overflow-hidden", compact ? "" : embedded ? "rounded-control bg-inset shadow-hairline" : "rounded-card bg-surface shadow-card")}>
         {bs.map((b, i) => {
-          // rows that follow each other read as a list: a hairline between them
-          const afterRow = i > 0 && b.kind === "item" && b.item.type === "row" && bs[i - 1].kind === "item" && (bs[i - 1] as { item: UIItem }).item.type === "row";
+          // rows that follow each other read as a list, and charts one under another as separate charts: a hairline between them
+          const prev = i > 0 && bs[i - 1].kind === "item" ? (bs[i - 1] as { item: UIItem }).item.type : "";
+          const afterRow = b.kind === "item" && ((b.item.type === "row" && prev === "row") || (b.item.type === "chart" && prev === "chart"));
           if (b.kind === "metrics") return <Metrics key={i} items={b.items} />;
           if (b.kind === "buttons")
             return (
@@ -175,12 +240,12 @@ function Section({ section, embedded, ...rest }: SectionProps) {
             );
           return (
             <div key={i} className={cx(afterRow && "border-t border-line")}>
-              <Item item={b.item} {...rest} />
+              <Item item={b.item} compact={compact} {...rest} />
             </div>
           );
         })}
       </div>
-      {section.footer && <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{section.footer}</p>}
+      {section.footer && <p className={cx("leading-relaxed text-ink-3", compact ? "px-4 pb-1 text-[11px]" : "mt-1.5 px-1 text-[11.5px]")}>{section.footer}</p>}
     </section>
   );
 }
@@ -215,8 +280,14 @@ function ItemButton({ item, busy, onPress }: { item: UIItem; busy: string; onPre
   );
 }
 
-function Item({ item: it, values, setValue, busy, onPress }: Omit<SectionProps, "section" | "embedded"> & { item: UIItem }) {
+function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: Omit<SectionProps, "section" | "embedded"> & { item: UIItem }) {
   switch (it.type) {
+    case "chart":
+      return <PluginChart item={it} compact={compact} />;
+    case "stat_grid":
+      return <StatGrid item={it} compact={compact} />;
+    case "segmented":
+      return <Segmented item={it} value={values[it.name ?? ""] ?? it.value ?? ""} busy={!!busy} pending={busy === it.action?.id} onChoose={(v) => onChoose(it, v)} />;
     case "text": {
       const style = it.style ?? "body";
       if (style === "code")
@@ -302,6 +373,70 @@ function Item({ item: it, values, setValue, busy, onPress }: Omit<SectionProps, 
     default:
       return null;
   }
+}
+
+// stat_grid: 2 a row when narrow, 3 when there is room, all in one row when wide (a container query: a card is narrow
+// on a wide page)
+const STAT_COLS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-2",
+  3: "grid-cols-2 @xs:grid-cols-3",
+  4: "grid-cols-2 @lg:grid-cols-4",
+  5: "grid-cols-2 @xs:grid-cols-3 @2xl:grid-cols-5",
+  6: "grid-cols-2 @xs:grid-cols-3 @2xl:grid-cols-6",
+};
+
+function StatGrid({ item, compact }: { item: UIItem; compact?: boolean }) {
+  const stats = (item.stats ?? []).slice(0, 6);
+  return (
+    <div className="@container">
+      <div className={cx("grid gap-x-4 gap-y-3 px-4", compact ? "py-2" : "py-3", STAT_COLS[stats.length] ?? STAT_COLS[6])}>
+        {stats.map((st, i) => {
+          const tone = toneOf(st.tone);
+          return (
+            <div key={i} className="min-w-0">
+              <div className="truncate text-[11.5px] text-ink-3">{st.label}</div>
+              <div className={cx("mt-0.5 truncate leading-tight font-semibold text-ink", compact ? "text-[18px]" : "text-[20px]")} title={st.value}>
+                {st.value}
+              </div>
+              {st.detail && <div className={cx("mt-0.5 truncate text-[11.5px] tabular-nums", tone === "neutral" ? "text-ink-3" : TEXT[tone])}>{st.detail}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** segmented: one of a few, acting as soon as it is chosen (the choice shows at once, the view follows). */
+function Segmented({ item, value, busy, pending, onChoose }: { item: UIItem; value: string; busy: boolean; pending: boolean; onChoose: (v: string) => void }) {
+  const choices = item.choices ?? [];
+  return (
+    <div className="flex items-center gap-2 px-4 py-2.5">
+      <div role="radiogroup" aria-label={item.label || item.name} className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline">
+        {choices.map((c) => {
+          const on = c.value === value;
+          return (
+            <button
+              key={c.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={busy && !on}
+              onClick={() => !on && onChoose(c.value)}
+              className={cx(
+                "flex h-7 shrink-0 items-center whitespace-nowrap rounded-[7px] px-2.5 text-[12px] transition-[background-color,color] duration-150 disabled:opacity-60",
+                on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
+              )}
+            >
+              {c.title || c.value}
+            </button>
+          );
+        })}
+      </div>
+      {pending && <Spinner />}
+    </div>
+  );
 }
 
 function Field({ item: it, value, onChange }: { item: UIItem; value: string; onChange: (v: string) => void }) {

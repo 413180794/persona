@@ -10,7 +10,10 @@ import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
 import { ago, baseName, sessionDeletable, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
-import { NAV_PAGES, otherConversations, sidebarActiveKey } from "../lib/persona-nav";
+import { NAV_PAGES, otherConversations, pluginNavKey, sidebarActiveKey } from "../lib/persona-nav";
+import { usePluginSlot } from "../lib/plugin-slots";
+import { toneOf } from "../lib/plugin-ui";
+import { BADGE_TONE, navIcon, pageRoute } from "./plugins/PluginSlots";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { reset, refresh, refreshTodos, useStore } from "../lib/store";
@@ -106,6 +109,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const counts = useCounts();
   const inbox = useInboxBadge();
   const larkHome = useLarkHome();
+  const pluginPages = usePluginSlot("nav_page");
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());
   const [hovered, setHovered] = useState<string | null>(null);
@@ -182,7 +186,17 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         />
         <div className="flex flex-col gap-px pt-1">
           <PersonaRow reg={reg} hover={setHovered} active={activeKey === "persona"} go={go} main={mainConversation} />
-          {NAV_PAGES.map((k) => <Fragment key={k}>{pages[k]}</Fragment>)}
+          {NAV_PAGES.map((k) => (
+            <Fragment key={k}>
+              {/* the plugins' pages (docs/plugins.md「UI 插槽」 nav_page): one row each, right before 设置 */}
+              {k === "settings" &&
+                pluginPages.map((u) => {
+                  const key = pluginNavKey(u.plugin, u.id);
+                  return <NavRow key={key} k={key} reg={reg} hover={setHovered} active={activeKey === key} to={pageRoute(u.plugin, u.id)} go={go} icon={navIcon(u.icon)} label={u.title} badge={u.badge?.text || undefined} badgeTone={BADGE_TONE[toneOf(u.badge?.tone)]} title={u.plugin_name ? `${u.title} · ${u.plugin_name}` : u.title} />;
+                })}
+              {pages[k]}
+            </Fragment>
+          ))}
         </div>
 
         {assistant && (
@@ -631,11 +645,14 @@ function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?
   return <button type="button" onClick={onClick} title={label} aria-label={label} className={cls}>{icon}</button>;
 }
 
-function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint }: { k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number; badgeTone?: "red"; hint?: string }) {
+const BADGE_CLASS = { red: "bg-red-tint text-red", orange: "bg-orange-tint text-orange", green: "bg-green-tint text-green", accent: "bg-accent-tint text-accent-ink" } as const;
+
+function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title }: { k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string }) {
   return (
     <a
       ref={reg(k)}
       href={href(to)}
+      title={title}
       onClick={go(to)}
       onMouseEnter={() => hover(k)}
       onFocus={() => hover(k)}
@@ -649,7 +666,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
       <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : "text-ink-2")}>{label}</span>
       {hint && <span className="text-[11px] text-ink-3 tabular-nums">{hint}</span>}
       {badge !== undefined && (
-        <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1 text-[10.5px] font-semibold tabular-nums", badgeTone === "red" ? "bg-red-tint text-red" : "bg-accent-tint text-accent-ink")} style={{ animation: `pop-in 250ms ${EASE} both` }} key={badge}>
+        <span className={cx("flex h-4.5 min-w-4.5 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1 text-[10.5px] font-semibold tabular-nums", BADGE_CLASS[badgeTone ?? "accent"])} style={{ animation: `pop-in 250ms ${EASE} both` }} key={badge}>
           {badge}
         </span>
       )}

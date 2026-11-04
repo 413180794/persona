@@ -41,6 +41,7 @@ import { Icon } from "../../ui/icons";
 import { MetricChart, type ChartSeries } from "./MetricChart";
 import { MachineDeploy } from "./MachineDeploy";
 import { ComputerSection } from "./ComputerSection";
+import { MachinePluginSections } from "../plugins/PluginSlots";
 
 interface MachineLauncher {
   name: string;
@@ -335,6 +336,9 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
           )}
         </div>
       </section>
+
+      {/* the plugins' sections (docs/plugins.md「UI 插槽」 machine_section), after the machine's own */}
+      <MachinePluginSections mid={mid} heading={(title, right) => <Heading title={title} right={right} />} />
     </Page>
   );
 }

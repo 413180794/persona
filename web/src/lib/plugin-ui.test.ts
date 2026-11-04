@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
-import { actUI, blocks, fieldValues, isHttps, isUnsupported, numberProblem, outcome, percent, renderUI, submitValues, toneOf, uiPlaces, type UIView } from "./plugin-ui";
+import {
+  actUI, applyBadge, barSpans, blocks, chartExtent, compactNumber, edgeLabels, fieldValues, isHttps, isUnsupported, labelWidth, linear, niceTicks, numberProblem, outcome,
+  percent, placesOf, pointText, readView, refreshDelay, renderUI, seriesColors, submitValues, thinLabels, toneOf, uiContext, uiIcon, uiPlaces, UI_VERSION, type UIPlace, type UIView,
+} from "./plugin-ui";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -90,14 +93,160 @@ describe("声明式 UI 的接口", () => {
     await actUI("p", "home", "refresh");
     const err = await renderUI("p", "unsupported", { launcher: "other" }).catch((e) => e);
     expect(isUnsupported(err)).toBe(true);
+    const ctx = (c?: object) => JSON.stringify(uiContext(c));
     expect(calls).toEqual([
       "GET /api/v1/plugins/-/ui?placement=launcher_section&launcher=work+cc&machine=mac+1",
       "GET /api/v1/plugins/-/ui?placement=plugin_page",
-      "POST /api/v1/plugins/a%20b/-/ui/home {}",
-      'POST /api/v1/plugins/p/-/ui/panel {"context":{"launcher":"work"},"state":"tab=1"}',
-      'POST /api/v1/plugins/p/-/ui/home {"state":"tab=1","action":"save","values":{"note":"x"}}',
-      'POST /api/v1/plugins/p/-/ui/home {"action":"refresh"}',
-      'POST /api/v1/plugins/p/-/ui/unsupported {"context":{"launcher":"other"}}',
+      `POST /api/v1/plugins/a%20b/-/ui/home {"context":${ctx()}}`,
+      `POST /api/v1/plugins/p/-/ui/panel {"context":${ctx({ launcher: "work" })},"state":"tab=1"}`,
+      `POST /api/v1/plugins/p/-/ui/home {"context":${ctx()},"state":"tab=1","action":"save","values":{"note":"x"}}`,
+      `POST /api/v1/plugins/p/-/ui/home {"context":${ctx()},"action":"refresh"}`,
+      `POST /api/v1/plugins/p/-/ui/unsupported {"context":${ctx({ launcher: "other" })}}`,
+    ]);
+  });
+});
+
+describe("UI 版本 2：读 View", () => {
+  it("skips item types it does not know and draws the rest; a section they emptied goes, unless it has a footer", () => {
+    const v = readView({
+      title: "用量",
+      state: "range=7d",
+      refresh_after: 600,
+      future: true,
+      sections: [
+        { items: [{ type: "hologram", text: "?" }, { type: "text", text: "hi" }] },
+        { title: "只剩未知的", items: [{ type: "hologram" }] },
+        { footer: "留着", items: [{ type: "hologram" }] },
+        { title: "空的", items: [] },
+        { items: [{ type: "chart", kind: "bar", series: [] }, { type: "chart", kind: "bar", series: [{ points: [{ label: "a", value: Number.NaN }] }] }, { type: "stat_grid" }, { type: "segmented", name: "r" }, "junk", null] },
+        { items: [{ type: "chart", kind: "line", series: [{ points: [{ label: "a", value: 1 }] }] }, { type: "stat_grid", stats: [{ label: "今天", value: "1" }] }] },
+      ],
+    });
+    expect(v.title).toBe("用量");
+    expect(v.state).toBe("range=7d");
+    expect(v.refresh_after).toBe(600);
+    expect(v.sections.map((s) => s.items.map((i) => i.type))).toEqual([["text"], [], [], ["chart", "stat_grid"]]);
+    expect(v.sections[1].footer).toBe("留着");
+    expect(v.sections[2].title).toBe("空的");
+  });
+  it("only a view that does not read at all is an error", () => {
+    expect(() => readView(null)).toThrow();
+    expect(() => readView({ sections: "x" })).toThrow();
+    expect(readView({ sections: [] }).sections).toEqual([]);
+  });
+  it("draws again after refresh_after, held to 30 s … a day", () => {
+    expect([undefined, 0, -5, 10, 30, 600, 999999, Number.NaN].map((r) => refreshDelay({ sections: [], refresh_after: r }))).toEqual([0, 0, 0, 30000, 30000, 600000, 86400000, 0]);
+    expect(refreshDelay(null)).toBe(0);
+  });
+  it("a segmented starts as chosen and goes along with a submit", () => {
+    const v: UIView = { sections: [{ items: [{ type: "segmented", name: "range", value: "7d", choices: [{ value: "1d" }, { value: "7d" }], action: { id: "range" } }, { type: "field", name: "note", label: "备注", kind: "text" }] }] };
+    expect(fieldValues(v)).toEqual({ note: "", range: "7d" });
+    expect(submitValues(v, { range: "1d" })).toEqual({ note: "", range: "1d" });
+  });
+});
+
+describe("UI 版本 2：上下文", () => {
+  it("says where it is drawn, for whom: time zone, language, platform, version", () => {
+    vi.stubGlobal("navigator", { language: "zh-CN" });
+    const c = uiContext({ machine: "m1", size: "compact" });
+    expect(c).toMatchObject({ platform: "web", ui_version: UI_VERSION, locale: "zh-CN", machine: "m1", size: "compact" });
+    expect(UI_VERSION).toBe(2);
+    expect(c.tz).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(uiContext()).not.toHaveProperty("launcher");
+    expect(uiContext({ launcher: "work" }).launcher).toBe("work");
+  });
+  it("lists every slot without a placement", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });
+    vi.stubGlobal("fetch", async (url: string) => (urls.push(url), new Response(JSON.stringify({ ui: "nope" }))));
+    expect(await uiPlaces("")).toEqual([]);
+    expect(urls).toEqual(["/api/v1/plugins/-/ui"]);
+  });
+});
+
+describe("UI 插槽", () => {
+  const list: UIPlace[] = [
+    { plugin: "g", id: "usage", title: "用量", placement: "nav_page", icon: "chart", badge: { text: "3", tone: "danger" } },
+    { plugin: "g", id: "today", title: "今天", placement: "overview_card", opens: "usage" },
+    { plugin: "g", id: "gpu", title: "显卡", placement: "machine_section" },
+    { plugin: "g", id: "x", title: "以后的", placement: "session_action" },
+  ];
+  it("sorts places by slot and ignores ones it does not know", () => {
+    expect(placesOf(list, "nav_page").map((u) => u.id)).toEqual(["usage"]);
+    expect(placesOf(list, "overview_card").map((u) => u.id)).toEqual(["today"]);
+    expect(placesOf(list, "machine_section").map((u) => u.id)).toEqual(["gpu"]);
+  });
+  it("draws an icon it does not know as the plugin's", () => {
+    expect(["chart", "money", "doc", "rocket", undefined, ""].map(uiIcon)).toEqual(["chart", "money", "doc", "plugin", "plugin", "plugin"]);
+  });
+  it("changes a badge in place from the plugin_ui event; null clears it", () => {
+    const a = applyBadge(list, { plugin: "g", id: "usage", badge: { text: "5", tone: "caution" } });
+    expect(a[0].badge).toEqual({ text: "5", tone: "caution" });
+    expect(a[1]).toBe(list[1]);
+    expect(applyBadge(a, { plugin: "g", id: "usage", badge: null })[0].badge).toBeNull();
+    expect(applyBadge(list, { plugin: "g", id: "usage", badge: { text: "3", tone: "danger" } })).toBe(list);
+    expect(applyBadge(list, { plugin: "other", id: "usage", badge: { text: "1" } })).toBe(list);
+  });
+});
+
+describe("图", () => {
+  it("writes numbers short", () => {
+    expect([0, 950, 999, 1000, 1200, 17000, 999950, 1_200_000, 3.4e9, -2500, 0.125, 12.34, 156.7].map(compactNumber)).toEqual([
+      "0", "950", "999", "1K", "1.2K", "17K", "1M", "1.2M", "3.4B", "-2.5K", "0.13", "12.3", "157",
+    ]);
+    expect(pointText({ label: "a", value: 1200000 }, "tokens")).toBe("1.2M tokens");
+    expect(pointText({ label: "a", value: 1.2, display: "¥1.20" }, "元")).toBe("¥1.20");
+    expect(pointText({ label: "a", value: 3 })).toBe("3");
+  });
+  it("scales and finds round ticks with zero in", () => {
+    expect(linear(0, 10, 100, 0)(5)).toBe(50);
+    expect(linear(3, 3, 0, 10)(3)).toBe(5);
+    expect(niceTicks(0, 3.1, 4)).toEqual({ lo: 0, hi: 4, ticks: [0, 1, 2, 3, 4] });
+    expect(niceTicks(20, 260, 4)).toEqual({ lo: 0, hi: 300, ticks: [0, 100, 200, 300] });
+    expect(niceTicks(-3, 7, 4).ticks).toEqual([-5, -2.5, 0, 2.5, 5, 7.5]);
+    expect(niceTicks(0, 0)).toMatchObject({ lo: 0, hi: 1 });
+    expect(niceTicks(0, 0.3, 4).ticks).toEqual([0, 0.1, 0.2, 0.3]);
+  });
+  it("stacks bars: positives on positives, negatives under, the outer end rounded", () => {
+    const series = [
+      { name: "a", points: [{ label: "x", value: 2 }, { label: "y", value: -1 }] },
+      { name: "b", points: [{ label: "x", value: 3 }, { label: "y", value: 4 }] },
+      { name: "c", points: [{ label: "x", value: 0 }, { label: "y", value: -2 }] },
+    ];
+    const spans = barSpans(series, true);
+    expect(spans[0].map((b) => [b.from, b.to, b.end])).toEqual([[0, 2, false], [2, 5, true], [5, 5, false]]);
+    expect(spans[1].map((b) => [b.from, b.to, b.end])).toEqual([[0, -1, false], [0, 4, true], [-1, -3, true]]);
+    expect(chartExtent(series, "bar", true)).toEqual([-3, 5]);
+    expect(chartExtent(series, "bar", false)).toEqual([-2, 4]);
+    expect(barSpans(series, false)[0].every((b) => b.from === 0 && b.end)).toBe(true);
+  });
+  it("thins labels so none overlap, and keeps the last", () => {
+    const labels = Array.from({ length: 30 }, (_, i) => `11-${String(i + 1).padStart(2, "0")}`);
+    for (const width of [120, 240, 400, 900]) {
+      const xs = labels.map((_, i) => (width / labels.length) * (i + 0.5));
+      const shown = thinLabels(labels, xs, width);
+      expect(shown[0]).toBe(0);
+      expect(shown[shown.length - 1]).toBe(29);
+      const spans = shown.map((i) => {
+        const w = labelWidth(labels[i], 10.5);
+        const a = Math.min(Math.max(0, xs[i] - w / 2), width - w);
+        return [a, a + w];
+      });
+      spans.forEach((s, j) => j && expect(spans[j - 1][1] + 8).toBeLessThanOrEqual(s[0]));
+      if (width === 900) expect(shown.length).toBe(15);
+    }
+    expect(thinLabels(["a", "b", "c"], [10, 50, 90], 100)).toEqual([0, 1, 2]);
+    expect(thinLabels([], [], 100)).toEqual([]);
+    expect(labelWidth("今天", 10)).toBe(20);
+  });
+  it("a compact chart writes only the first and last label", () => {
+    expect(edgeLabels(["10-29", "10-30", "11-04"], 200)).toEqual([0, 2]);
+    expect(edgeLabels(["很长很长很长的标签", "也很长很长很长很长"], 120)).toEqual([1]);
+    expect(edgeLabels(["a"], 100)).toEqual([0]);
+  });
+  it("colors series by tone, the rest in the series palette's order", () => {
+    expect(seriesColors([{ points: [] }, { tone: "positive", points: [] }, { points: [] }, { tone: "pink" as never, points: [] }, { points: [] }, { points: [] }, { points: [] }])).toEqual([
+      "var(--series-1)", "var(--green)", "var(--series-2)", "var(--ink-3)", "var(--series-3)", "var(--series-4)", "var(--series-1)",
     ]);
   });
 });

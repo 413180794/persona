@@ -4,6 +4,7 @@
 import { api, ApiError, enc } from "./api";
 import type { Machine } from "./types";
 import type { UIPlace } from "./plugin-ui";
+import { refreshPluginPlaces } from "./plugin-slots";
 
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
 export type JsonObject = { [k: string]: Json };
@@ -103,8 +104,10 @@ export const listPluginsInfo = () =>
     markets: !!r.markets,
   }));
 export const pluginDetail = (id: string) => api<HubPluginDetail>(`${base(id)}/`);
-export const setPluginEnabled = (id: string, enabled: boolean) => api<HubPluginDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled } });
-export const setPluginConfig = (id: string, config: JsonObject) => api<HubPluginDetail>(`${base(id)}/config`, { method: "PUT", json: { config } });
+/** After a change that can start, stop or reconfigure a plugin: its entries, cards and sections are asked for again. */
+export const changed = <T>(r: T): T => (refreshPluginPlaces(), r);
+export const setPluginEnabled = (id: string, enabled: boolean) => api<HubPluginDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled } }).then(changed);
+export const setPluginConfig = (id: string, config: JsonObject) => api<HubPluginDetail>(`${base(id)}/config`, { method: "PUT", json: { config } }).then(changed);
 export const setPluginSecret = (id: string, name: string, value: string) =>
   api<HubPluginDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "PUT", json: { value } });
 export const clearPluginSecret = (id: string, name: string) => api<HubPluginDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "DELETE" });

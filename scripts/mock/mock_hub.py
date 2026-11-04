@@ -6482,7 +6482,8 @@ _OUT = [0.4, 0.7, 0.2, 0.1, 0.9, 0.8, 0.3]
 
 def _chart(kind, series, title=None, stacked=False, unit="M tokens"):
     item = {"type": "chart", "kind": kind, "unit": unit, "series": [
-        {"name": name, **({"tone": tone} if tone else {}), "points": [{"label": d, "value": v, "display": "%.1fM" % v} for d, v in zip(_DAYS, vals)]}
+        {"name": name, **({"tone": tone} if tone else {}),
+         "points": [{"label": d, "value": v, **({"display": "%.1fM" % v} if unit.startswith("M") else {})} for d, v in zip(_DAYS, vals)]}
         for name, tone, vals in series]}
     if title: item["title"] = title
     if stacked: item["stacked"] = True
@@ -6701,7 +6702,14 @@ def markets_route(handler, p, body):
             state = req.get("state") or "range=7d"
             if (req.get("action") or "").startswith("range:"):
                 state = "range=" + req["action"].split(":", 1)[1]
+            elif req.get("action") == "range" and (req.get("values") or {}).get("range"):
+                state = "range=" + req["values"]["range"]  # the segmented (UI version 2)
             view = _slot_view(parts[7], state.split("=", 1)[1], machine)
+            if parts[7] == "usage" and (ctx.get("ui_version") or 1) >= 2:
+                # an app that draws UI version 2 gets the segmented instead of a row of buttons
+                rng = state.split("=", 1)[1]
+                view["sections"][0] = {"items": [{"type": "segmented", "name": "range", "value": rng, "action": {"id": "range"},
+                                                  "choices": [{"value": r, "title": t} for r, t in [("1d", "今天"), ("7d", "7 天"), ("30d", "30 天"), ("90d", "90 天")]]}]}
             if (ctx.get("ui_version") or 1) < 2:
                 view = _fit_v1(view)
             handler.send_json({"view": view}); return True

@@ -575,7 +575,11 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		if ps.h != nil {
 			build = ps.h.build.Number
 		}
-		params := plugin.InitializeParams{Hub: plugin.HubInfo{Build: build, ExtensionPoints: plugin.PointVersions()}, Plugin: info,
+		role := "center"
+		if ps.h != nil && ps.h.isMember() {
+			role = "member"
+		}
+		params := plugin.InitializeParams{Hub: plugin.HubInfo{Build: build, ExtensionPoints: plugin.PointVersions(), Role: role}, Plugin: info,
 			Config: ps.reg.Config(p), Secrets: secrets, Granted: p.Record.Granted, Active: map[string][]string{}}
 		if builtin && id == telegramPluginID && ps.h != nil {
 			params.Config = ps.h.telegramSettings()
@@ -811,4 +815,21 @@ func hubLocalURL(listen string) string {
 		host = "127.0.0.1"
 	}
 	return "http://" + net.JoinHostPort(host, port)
+}
+
+// roleChanged restarts the plugins that run something for the group's center (connectors, a part of the API): they
+// got this hub's role at initialize (plugin.HubInfo.Role), and a member leaves that work to the center.
+func (ps *plugins) roleChanged(ctx context.Context) {
+	if ps == nil {
+		return
+	}
+	for _, p := range ps.reg.List() {
+		if !p.Record.Enabled || p.Problem != "" || len(p.Manifest.Connectors()) == 0 && len(p.Manifest.APIs()) == 0 {
+			continue
+		}
+		if hp := ps.get(p.Record.ID); hp != nil && hp.proc != nil {
+			ps.logf("plugin %s: restarted for the hub's new role in its group", p.Record.ID)
+			ps.apply(ctx, p.Record.ID)
+		}
+	}
 }

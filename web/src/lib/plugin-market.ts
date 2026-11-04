@@ -4,7 +4,7 @@
 // permissions digest). The admin UI has the same routes under /api/v1/admin/plugins/-/ (its api.ts), the same words
 // (here).
 import { api, enc } from "./api";
-import type { HubPluginDetail, PluginPermission } from "./plugins";
+import { changed, type HubPluginDetail, type PluginPermission } from "./plugins";
 
 /** One market the hub reads (its token, if any, is never sent back). */
 export interface Market {
@@ -90,11 +90,11 @@ export const getCatalog = (q?: string, market?: string, refresh?: boolean) =>
   api<Catalog>(`${M}/catalog${catalogQuery(q, market, refresh)}`).then((c) => ({ ...c, markets: c.markets ?? [], plugins: c.plugins ?? [] }));
 export const previewFromMarket = (market: string, plugin: string) => api<MarketPreview>(`${M}/catalog/preview`, { method: "POST", json: { market, plugin } });
 export const installPreview = (pv: MarketPreview) =>
-  api<HubPluginDetail>(`${M}/install`, { method: "POST", json: { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest } });
+  api<HubPluginDetail>(`${M}/install`, { method: "POST", json: { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest } }).then(changed);
 export const upgradePreview = (id: string, pv: MarketPreview) =>
-  api<HubPluginDetail>(`/plugins/${enc(id)}/-/upgrade`, { method: "POST", json: { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest } });
+  api<HubPluginDetail>(`/plugins/${enc(id)}/-/upgrade`, { method: "POST", json: { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest } }).then(changed);
 /** Only one installed from a market (`origin` market:…); keepData leaves ~/.persona/plugins/data/<id>/. */
-export const uninstallPlugin = (id: string, keepData = false) => api<{ ok: boolean }>(`/plugins/${enc(id)}/-/${keepData ? "?keep_data=1" : ""}`, { method: "DELETE" });
+export const uninstallPlugin = (id: string, keepData = false) => api<{ ok: boolean }>(`/plugins/${enc(id)}/-/${keepData ? "?keep_data=1" : ""}`, { method: "DELETE" }).then(changed);
 
 // ── words and rules ─────────────────────────────────────
 

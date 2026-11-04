@@ -61,6 +61,10 @@ type HubInfo struct {
 	// ExtensionPoints are the extension points the hub has and the version of each (connectors: the connector
 	// protocol's).
 	ExtensionPoints map[string]int `json:"extension_points"`
+	// Role is the hub's place in a group of hubs (docs/mesh.md): "center" (alone, or the group's center: it serves
+	// the apps and drives the computers) or "member" (another hub is the center; work the center does for the group,
+	// like answering a chat service's realtime events, is not this one's). A change restarts the plugin.
+	Role string `json:"role,omitempty"`
 }
 
 // PluginInfo is the plugin as the hub installed it.

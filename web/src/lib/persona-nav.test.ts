@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_PAGES, otherConversations, sidebarActiveKey } from "./persona-nav";
+import { NAV_PAGES, otherConversations, pluginNavKey, sidebarActiveKey } from "./persona-nav";
 import { href, parse } from "./router";
 import type { Session } from "./types";
 
@@ -54,5 +54,16 @@ describe("Persona is the front door (#1239)", () => {
 
   it("orders the pages under Persona like the app", () => {
     expect(NAV_PAGES).toEqual(["home", "inbox", "messages", "todos", "routines", "kb", "machines", "settings"]);
+  });
+});
+
+describe("a plugin's page (docs/plugins.md「UI 插槽」 nav_page)", () => {
+  it("has its own link and lights its own sidebar row", () => {
+    expect(parse("/plugin/example-gateway/usage")).toEqual({ name: "plugin", plugin: "example-gateway", ui: "usage" });
+    expect(href({ name: "plugin", plugin: "a b", ui: "c/d" })).toBe("/plugin/a%20b/c%2Fd");
+    expect(parse(href({ name: "plugin", plugin: "a b", ui: "c/d" }))).toEqual({ name: "plugin", plugin: "a b", ui: "c/d" });
+    expect(parse("/plugin/only-one")).toEqual({ name: "home" });
+    expect(sidebarActiveKey({ name: "plugin", plugin: "g", ui: "usage" })).toBe(pluginNavKey("g", "usage"));
+    expect(pluginNavKey("g", "usage")).toBe("p:g/usage");
   });
 });

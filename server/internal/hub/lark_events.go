@@ -96,6 +96,11 @@ func (h *Hub) larkFollow(ctx context.Context, c *lark.Client) {
 		if h.isMember() {
 			return // the center's own Feishu connection serves the group (mesh_group.go)
 		}
+		if h.larkByPlugin() {
+			// The plugin serving Feishu has its own event stream: it pushes the chats, its connector's inbox and
+			// archive, /agent and the personal agents (agentsrc.updated); here they would go out twice.
+			return
+		}
 		h.larkLastEvent.Store(time.Now().Unix())
 		if ev.Type == "agent-bridge.updated" { // personal agents: refresh just those sessions, not the Feishu inbox
 			if primary && h.agents != nil {
@@ -103,11 +108,8 @@ func (h *Hub) larkFollow(ctx context.Context, c *lark.Client) {
 			}
 			return
 		}
-		if primary && !h.larkByPlugin() { // a plugin serving Feishu runs /agent itself
+		if primary {
 			h.larkAgentEvent(ev) // a /agent request starts at once, not with the coalesced refresh
-		}
-		if h.larkByPlugin() {
-			return // the plugin pushes these to the apps and tells its connector's inbox and archive (connectors_migrate.go)
 		}
 		mu.Lock()
 		defer mu.Unlock()

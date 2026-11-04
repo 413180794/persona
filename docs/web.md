@@ -11,7 +11,7 @@
 - **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.persona/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
   同源，所以没有 CORS，WebSocket 和图片也用同一个 token。没有这个目录时非 `/api/` 路径照旧 404。
   不是文件的路径都回 `index.html`（前端路由：`/`（Persona 主对话）、`/overview`（总览）、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/j/new`、`/history`、`/inbox`、`/inbox/<件>`、`/messages`、`/messages/<会话>`、`/routines`、
-  `/kb`、`/kb/<类型>/<条目>`、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`）；
+  `/kb`、`/kb/<类型>/<条目>`、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`、`/plugin/<插件>/<页面>`（插件的整页））；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
 - 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页。
 - 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `JARVIS_HUB_URL`（`eval "$(python3 ../scripts/persona_config.py env)"`）。
@@ -42,7 +42,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 ## 页面
 
 - **侧边栏**（宽屏常驻，窄屏是抽屉，两者同一份）：连接状态和在线电脑数、⌘K 搜索；第一项是 **Persona**（形象头像、加粗，打开主对话，主对话在工作 / 需要你时带状态点或件数），
-  下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 / 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；
+  下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 /（插件的页面，见「设置」里的「UI 插槽」）/ 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；
   标题右边「+」开一次性的新对话 `/j/new`）、个人 Agent、Agents（标题右边「+」是新建 Agent，⌘K 面板里也有）。
   **为什么默认落在 Persona**（#1239）：和 iOS 一致（App 打开是「助手」，Agents 是第二个 tab），主对话本身带任务坞和「需要你」（#930），
   要处理的事在这里就能看到、能交代；总览更像 Agents 的仪表盘，挪到 `/overview`。主对话只有一个入口：`/`、旧的 `/j`、`/persona`、`/j/<主对话 id>` 都选中 Persona 这一行，
@@ -202,6 +202,15 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   回答里的新 view 换上、`toast` 弹出、`open_url` 用网页的链接打开方式，什么都没有就重画；画不出来是空状态加「重试」。
   「模型供应商」的启动器详情里，hub 带 `plugin_manager` 时按 `GET /plugins/-/ui?placement=launcher_section&launcher=<名字>[&machine=<第一台在线的电脑>]` 每个插件加一节（标题是插件给的名字）；
   画的时候插件回 404 `{"code": "unsupported"}`（不写 `hosts` 的一节会列在每个启动器上，插件说这不是它的网关，#1339）就把这一节整个藏掉，不算出错、不显示错误。
+  **UI 插槽**（#1451，`docs/plugins.md`「UI 插槽」；列表和角标 `lib/plugin-slots.ts`，三处的画法 `views/plugins/PluginSlots.tsx`，图 `views/plugins/PluginChart.tsx`，逻辑 `lib/plugin-ui.ts`）：
+  hub 的 features 有 `plugin_ui_slots` 才问。`GET /plugins/-/ui`（不带 placement）一次拿齐，重连（hello）、在这里启用 / 停用 / 改设置 / 装 / 升级 / 卸载插件后、标签页隔一分钟以上回到前台时再拿；
+  `nav_page` 是侧边栏「机器」和「设置」之间一页一行（固定的八个图标换成网页的，不认识的画成插件图标；角标按 tone 上色，收到 `plugin_ui` 事件就地改，不重拉），点进 `/plugin/<插件>/<页面>`；
+  `overview_card` 是总览问候语下面一排卡片（一张占满，多张两列），紧凑画法（`context.size: compact`），点卡片空白处或标题打开 `opens`，卡片里的按钮、行、图照常能点；
+  `machine_section` 是机器页最后（启动器后面）每个插件一节，带 `context.machine`。每次画、每个动作都带 `context: {tz, locale, platform: "web", ui_version: 2, …}`；
+  不认识的条目跳过、被它们清空的一节拿掉（有 footer 的留着），只有整个 View 读不出来才显示出错。`chart` 是 SVG 柱状图（并排 / 堆叠，柱宽不超过 24px、圆角在自由端、堆叠段之间 2px 间隙）和折线图，
+  悬停或方向键看这个标签下每个系列的值，横轴标签隔几个写一个、不重叠，紧凑时只画首尾标签；没 tone 的系列按 `--series-1…4`（第一个是主色，避开 green / orange / red 三个角色色，深浅色两套）取色。
+  `stat_grid` 窄时一行 2 个、够宽 3 个、很宽一行放全；`segmented` 选了马上发 `ui.action`（`values: {name: 选的值}`）。`refresh_after` 只在页面可见、组件还在时按时重画，回到前台已经过点就马上画。
+  截图用 `MOCK_PLUGINS=1` 的假 hub（`example-gateway` 的用量页、今天的用量卡片、机器页的「网关调用」）。
   **插件市场**（`settings/PluginMarket.tsx`，逻辑 `lib/plugin-market.ts`，`docs/plugins.md`「插件市场」）：插件列表下面「插件市场」一组两行。
   「浏览插件市场」（`&plugin=-market`）：搜索（停顿 250 ms 后查 hub）、按市场筛选的 chip、重新读取全部，读不到的市场在顶上写原因；每行名字、版本、说明、市场、标签和状态（未安装 / 可升级到 x / 已装 x / hub 自带 / 装不了和原因）。
   点进是详情（`&plugin=-market/<市场>/<插件>`）：说明、标签、「它可以」、「提供」、「关于」；「安装」/「升级到 x」先 `POST …/catalog/preview`，弹出预览（权限、升级的 `旧 → 新`、权限变多时的红色提示和「新增」、剩几分钟，过期就不能点），
