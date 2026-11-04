@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/serve"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/streams"
 )
 
 // runTestPlugin is the test binary as a plugin's program on a computer (NODE_TEST_PLUGIN, from TestMain):
@@ -23,6 +26,14 @@ import (
 func runTestPlugin(mode string) {
 	if mode == "broken" {
 		os.Exit(3)
+	}
+	if mode == "http" { // no protocol: HTTP on its socket (/health for the host, / for a relayed request)
+		ln, err := net.Listen("unix", os.Getenv("PERSONA_PLUGIN_SOCKET"))
+		if err != nil {
+			os.Exit(4)
+		}
+		_ = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("notes on " + r.URL.Path)) }))
+		os.Exit(0)
 	}
 	var init extension.InitializeParams
 	_ = serve.Serve(context.Background(), os.Stdin, os.Stdout, serve.Program{ID: "notes", Version: os.Getenv("NODE_TEST_VERSION"),
@@ -323,5 +334,39 @@ func TestPluginProgramRefuses(t *testing.T) {
 	}
 	if err := put(t, n, proto.PluginNodeProgram{ID: "../x", Version: "1.0.0", Digest: prog.Digest}, pkg); err == nil {
 		t.Fatal("an id out of the plugins' directory")
+	}
+}
+
+// The hub's relay reaches a program serving HTTP here: plugin.node.dial opens a stream to its socket; a program
+// without http, or none running, is refused.
+func TestPluginProgramDial(t *testing.T) {
+	n, _ := pluginTestNode(t)
+	var sent []string
+	n.streams = streams.New(func(event string, _ any) error { sent = append(sent, event); return nil })
+	prog, pkg := testPackage(t, "1.0.0")
+	if err := put(t, n, prog, pkg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pluginCall(t, n, "plugin.node.dial", map[string]string{"id": "s1", "plugin": "notes"}); err == nil {
+		t.Fatal("dialed a program not running")
+	}
+	s := startParams("1.0.0", "http")
+	s.RPC, s.HTTP = false, true
+	if res, err := pluginCall(t, n, "plugin.node.start", s); err != nil || res.(proto.PluginNodeState).State != "running" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if _, err := pluginCall(t, n, "plugin.node.dial", map[string]string{"id": "s1", "plugin": "notes"}); err != nil {
+		t.Fatal(err)
+	}
+	if n.streams.Len() != 1 {
+		t.Fatal("no stream open")
+	}
+	n.streams.CloseAll()
+	rpcOnly := startParams("1.0.0", "rpc")
+	if _, err := pluginCall(t, n, "plugin.node.start", rpcOnly); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pluginCall(t, n, "plugin.node.dial", map[string]string{"id": "s2", "plugin": "notes"}); err == nil {
+		t.Fatal("dialed a program that serves no HTTP")
 	}
 }

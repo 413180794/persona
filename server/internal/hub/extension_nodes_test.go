@@ -4,15 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/coder/websocket"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/streams"
 )
 
 // extensionNodeMachine is a machine whose node answers plugin.node.* as one that runs plugins' programs does (or, old,
@@ -195,5 +201,123 @@ func TestPluginProgramsOnMachines(t *testing.T) {
 	}
 	if progs, _ := last["programs"].([]any); len(progs) != 0 || !strings.Contains(string(must(json.Marshal(last["installed"]))), "example-helper") {
 		t.Fatalf("%+v", last)
+	}
+}
+
+// extensionHTTPNode is a machine whose node answers plugin.node.dial by streaming to the program's HTTP server, here
+// addr (a dev server standing in for it), and says which plugins it was asked for.
+func extensionHTTPNode(t *testing.T, h *Hub, id, addr string) (*Machine, *[]string) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	h2nR, h2nW := io.Pipe()
+	n2hR, n2hW := io.Pipe()
+	hubSide, nodeSide := rpc.New("h", h2nW), rpc.New("n", n2hW)
+	hubMux, nodeMux := streams.New(hubSide.Notify), streams.New(nodeSide.Notify)
+	hubSide.OnEvent = func(e string, p json.RawMessage) { hubMux.Event(e, p) }
+	nodeSide.OnEvent = func(e string, p json.RawMessage) { nodeMux.Event(e, p) }
+	var mu sync.Mutex
+	var asked []string
+	nodeSide.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		if method != "plugin.node.dial" {
+			return map[string]any{}, nil
+		}
+		var p struct{ ID, Plugin string }
+		_ = json.Unmarshal(params, &p)
+		mu.Lock()
+		asked = append(asked, p.Plugin)
+		mu.Unlock()
+		c, err := net.DialTimeout("tcp", addr, 2*time.Second)
+		if err != nil {
+			return nil, &rpc.Error{Code: "not_running", Message: "not answering"}
+		}
+		if err := nodeMux.Open(p.ID); err != nil {
+			c.Close()
+			return nil, err
+		}
+		nodeMux.Start(p.ID, c)
+		return map[string]any{}, nil
+	}
+	go func() { _ = hubSide.Serve(ctx, n2hR) }()
+	go func() { _ = nodeSide.Serve(ctx, h2nR) }()
+	t.Cleanup(func() { cancel(); h2nW.Close(); n2hW.Close() })
+	m := newMachine(h, MachineConfig{ID: id, Name: id})
+	m.peer, m.online, m.streams, m.info = hubSide, true, hubMux, proto.NodeInfo{OS: "linux", Arch: "amd64"}
+	h.mu.Lock()
+	h.machines, h.byID[id] = append(h.machines, m), m
+	h.mu.Unlock()
+	return m, &asked
+}
+
+// An app's requests reach a plugin's program on the computer it runs on, through the hub: a page, a WebSocket both
+// ways; not on a machine it is not switched on for, not while that machine is away, not without the plugin's http.
+func TestAppsRequestsReachTheProgramOnAComputer(t *testing.T) {
+	ctx := context.Background()
+	h, _ := extensionTestHub(t)
+	h.cfg.Token = "test-token"
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	dev, _ := devServer(t)
+	box, asked := extensionHTTPNode(t, h, "box", dev.Listener.Addr().String())
+	extensionHTTPNode(t, h, "other", dev.Listener.Addr().String())
+
+	pkg := helperPackage(t)
+	raw, _ := os.ReadFile(filepath.Join(pkg, extension.ManifestFile))
+	_ = os.WriteFile(filepath.Join(pkg, extension.ManifestFile), []byte(strings.Replace(string(raw), `"machines": "computers"`, `"machines": "computers", "http": true`, 1)), 0o644)
+	reg := h.extensions.reg
+	pv, err := reg.Preview(ctx, "dir:"+pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.Install(ctx, pv.ID, pv.Digest, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.SetConfig(ctx, "example-helper", json.RawMessage(`{"computers": ["box"]}`), "test"); err != nil {
+		t.Fatal(err)
+	}
+	base := srv.URL + "/api/v1/plugins/example-helper/-/machines/"
+	get := func(url string) (int, string) {
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("Authorization", "Bearer test-token")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(b)
+	}
+	if code, body := get(base + "box/"); code != 200 || !strings.Contains(body, "<title>Dev</title>") || !strings.Contains(body, "host=plugin") {
+		t.Fatalf("%d %q", code, body)
+	}
+	if len(*asked) == 0 || (*asked)[0] != "example-helper" {
+		t.Fatalf("the node was asked for %v", *asked)
+	}
+
+	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	ws := "ws" + strings.TrimPrefix(base, "http") + "box/hmr"
+	c, _, err := websocket.Dial(wctx, ws, &websocket.DialOptions{HTTPHeader: http.Header{"Authorization": {"Bearer test-token"}}})
+	if err != nil {
+		t.Fatalf("websocket to the program: %v", err)
+	}
+	defer c.CloseNow()
+	if err := c.Write(wctx, websocket.MessageText, []byte("hi")); err != nil {
+		t.Fatal(err)
+	}
+	if _, got, err := c.Read(wctx); err != nil || string(got) != "echo:hi" {
+		t.Fatalf("%q %v", got, err)
+	}
+
+	if code, _ := get(base + "other/"); code != http.StatusNotFound {
+		t.Fatalf("a machine it is not switched on for: %d", code)
+	}
+	box.mu.Lock()
+	box.online = false
+	box.mu.Unlock()
+	if code, _ := get(base + "box/"); code != http.StatusConflict {
+		t.Fatalf("the machine away: %d", code)
+	}
+	if code, _ := get(srv.URL + "/api/v1/plugins/nobody/-/machines/box/"); code != http.StatusNotFound {
+		t.Fatalf("no such plugin: %d", code)
 	}
 }

@@ -561,6 +561,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | POST | `/api/v1/machines/{mid}/ports/{port}/open` | 用户在 App 里点开一个不在任何 Agent 名下的端口：有东西在听就放行 24 小时、回同上；没有 404；只读设备 403 |
 | GET | `/api/v1/machines/{mid}/ports/{port}/connect` | 端口转发：升级成 WebSocket，二进制消息就是一条 TCP 连接的字节（手机本地监听，浏览器每开一条连接就连一次）。端口必须是这台机器某个会话 `ports` 里的或点开过的，否则 403；没在听 404；只读设备 403；机器离线 503；一台机器同时超过 64 条 429 |
 | POST | `/api/v1/phone/runtime-cli` | `{cmd, args, timeout}`：让手机上的 DEBUG 包执行一条 Runtime CLI 命令（`docs/runtime-cli.md`「经 hub 连真机」），回 App 的原样回答 `{"ok": …}`。只给 `full` 设备凭据（只读设备 403）；没有登记了 `phone_runtime_cli` 的 App 在线 503 `phone_offline`（不唤醒）；`timeout` 秒内（最多 120）没回答 504；App 说这次调用失败 502。每次调用 hub 记一行日志（命令、调用方设备 id、状态、耗时），不记参数和回答 |
+| 任意 | `/api/v1/plugins/{id}/-/machines/{mid}/{path…}` | 插件在电脑 `mid` 上的程序的 HTTP（`node.http`，`docs/plugins.md`「在电脑上运行的程序」），WebSocket 也是：hub 经 `plugin.node.dial` 开流转发，去掉 `Authorization` 和 `token`；只给完整权限的设备；插件没在这台开 404，机器离线 409，程序不应答 502 |
 | 任意 | `/api/v1/plugins/{id}/{path…}` | 原样转发给插件的 `/{path…}`（`/-/` 开头的不转发）（WebSocket 也是），去掉 `Authorization` 和 `token`；只读设备 403。语音插件的契约见 `docs/plugins.md`「语音」 |
 
 **按路径读文件的边界**（`file`、`file/download`、`file/thumb`、`file/convert`、`stat`、`fs`，node 的 `pathguard.go`）：只给已认证的客户端（设备 token）。路径逐段解析符号链接，**每一段在看之前**先检查，所以经链接指过去的也拦得住、且根本不碰目标：
@@ -1038,6 +1039,7 @@ hub → node 请求：
 | `plugin.node.have` / `plugin.node.put.begin` / `.chunk` / `.commit` | 插件在这台电脑上的包（`docs/plugins.md`「在电脑上运行的程序」）：`{id, version, digest}` → `{have}`；`begin {id, version, digest, size}` → `{upload_id}`，`chunk {upload_id, offset, data}`（按顺序，1 MB），`commit {upload_id}`：校验 sha256、解包到 `~/.persona/plugins/<id>/<version>/` |
 | `plugin.node.start` / `plugin.node.stop` | `start {id, name, version, command, args?, env?, rpc, http?, keep, lease_seconds, init}` → `{id, version, state, error?}`：起它（和正在跑的完全一样就不动，只续租约；新版本 30 秒内没起来回退到上一版并报错）；`init` 是程序的 `initialize`（配置、发给电脑的密钥，不落盘）。`stop {id}` |
 | `plugin.node.sync` / `plugin.node.renew` / `plugin.node.status` | `sync {programs: [{id, version, digest}], installed: [id]}` → `{programs: [状态]}`：不在 `programs` 里的停掉、删包，不在 `installed` 里的连数据删；`renew {ids, lease_seconds}`；`status` → `{programs}` |
+| `plugin.node.dial` | `{id, plugin}` → `{}`：连上这个插件程序的 HTTP socket，开一条流 `id`（之后同 `port.dial` 用 `stream.*` 事件传字节）；程序没在跑或不开 HTTP 回 `code: not_running` |
 | `plugin.node.call` | `{id, method, params?}` → 程序的回答：插件协议的方法（hub 上的程序经 `nodes.call` 调）；程序没在跑回 `code: not_running` |
 | `port.dial` | `{id, port}` → `{}`：连上本机这个端口（扫描时它绑的地址，否则 127.0.0.1 再 ::1，只连本机），开一条流 `id`；没在听时报错 `code: port_gone`。之后两边用下面的 `stream.*` 事件传字节 |
 | 事件 `plugin.node.state` / `plugin.node.event` | node → hub：`{id, version, state, error?}`（起来了、租约到期停了），`{id, event, params}`（程序发的事件，hub 转给 hub 上的程序） |

@@ -8,10 +8,15 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -420,4 +425,88 @@ func (h *Hub) nodesCall(ctx context.Context, id string, params json.RawMessage) 
 		return nil, err
 	}
 	return out, nil
+}
+
+// serveNodeExtensionHTTP relays an app's request to plugin id's program on machine mid (its node.http): each request
+// opens a stream to the program's socket there (plugin.node.dial), WebSockets included. Only a device with full rights,
+// only a machine the plugin is switched on for, as the hub-side program's HTTP (/api/v1/plugins/{id}/…).
+func (h *Hub) serveNodeExtensionHTTP(w http.ResponseWriter, r *http.Request) {
+	if principalOf(r.Context()).Role != roleFull {
+		writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+		return
+	}
+	id, mid := r.PathValue("id"), r.PathValue("mid")
+	var p *extension.Extension
+	if h.extensions != nil {
+		p = h.extensions.reg.Get(id)
+	}
+	m := h.machineByID(mid)
+	if p == nil || p.Manifest.Node == nil || !p.Manifest.Node.HTTP || m == nil || !h.extensions.nodeRunsOn(r.Context(), p, m) {
+		writeErrCode(w, http.StatusNotFound, "not_found", fmt.Errorf("plugin %s serves nothing on machine %s", id, mid))
+		return
+	}
+	if !m.isOnline() {
+		writeErrCode(w, http.StatusConflict, extensionNodeOffline, fmt.Errorf("%s 离线", m.cfg.Name))
+		return
+	}
+	prefix := "/api/v1/plugins/" + id + "/-/machines/" + mid
+	dial := func(ctx context.Context, _, _ string) (net.Conn, error) { return dialNodeExtension(ctx, m, id) }
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Scheme, pr.Out.URL.Host = "http", "plugin"
+			pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, prefix)
+			if pr.Out.URL.Path == "" {
+				pr.Out.URL.Path = "/"
+			}
+			pr.Out.URL.RawPath = ""
+			if raw := strings.TrimPrefix(pr.In.URL.EscapedPath(), prefix); raw != "" && raw != pr.Out.URL.Path {
+				pr.Out.URL.RawPath = raw
+			}
+			// The hub has already checked the caller: the program never sees the app's credential.
+			q := pr.Out.URL.Query()
+			q.Del("token")
+			pr.Out.URL.RawQuery = q.Encode()
+			pr.Out.Header.Del("Authorization")
+			pr.Out.Host = "plugin"
+		},
+		// A stream a request (no pooling across them): each is a connection to the program on that machine.
+		Transport:     &http.Transport{DialContext: dial, DisableKeepAlives: true},
+		FlushInterval: -1,
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			w.Header().Set("Cache-Control", "no-store")
+			var re *rpc.Error
+			if errors.As(err, &re) && re.Code == "not_running" {
+				writeErrCode(w, http.StatusBadGateway, "not_running", fmt.Errorf("plugin %s is not running on %s", id, m.cfg.Name))
+				return
+			}
+			writeErr(w, http.StatusBadGateway, fmt.Errorf("plugin %s is not answering on %s: %w", id, m.cfg.Name, err))
+		},
+	}
+	w.Header().Del("Cache-Control")
+	proxy.ServeHTTP(w, r)
+}
+
+// dialNodeExtension opens a stream to plugin id's HTTP socket on m: one end of a pipe is the stream, the other the
+// connection the proxy talks over.
+func dialNodeExtension(ctx context.Context, m *Machine, id string) (net.Conn, error) {
+	mux := m.portStreams()
+	if mux == nil {
+		return nil, fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
+	}
+	if mux.Len() >= maxPortStreams {
+		return nil, errors.New("too many connections to this machine")
+	}
+	sid := "x" + strconv.FormatInt(streamSeq.Add(1), 10)
+	if err := mux.Open(sid); err != nil {
+		return nil, err
+	}
+	dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := m.call(dctx, "plugin.node.dial", map[string]string{"id": sid, "plugin": id}, nil); err != nil {
+		mux.Abort(sid, err)
+		return nil, err
+	}
+	stream, conn := net.Pipe()
+	mux.Start(sid, stream)
+	return conn, nil
 }

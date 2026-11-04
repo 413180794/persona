@@ -867,6 +867,9 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
   hub 上已经卸载的连数据一起删，只是在这台关掉的留数据。
 - **租约**：hub 每 10 分钟续一次（`plugin.node.renew`，30 分钟）；超过 30 分钟没续，node 停掉 `keep_running: "lease"` 的程序（状态 `lease_expired`），
   hub 回来再起；`always` 的不停。node 进程退出时程序都跟着退（`always` 也是，重启后等 hub 连上再起：密钥在 hub）。
+- **HTTP**：`node.http` 的程序在 `PERSONA_PLUGIN_SOCKET` 上开 HTTP，App 经 hub 访问 `/api/v1/plugins/{id}/-/machines/{机器 id}/{path…}`（WebSocket 也行）：
+  hub 每个请求开一条流（`plugin.node.dial`，同端口转发的 `internal/streams`）到那台电脑上程序的 socket，转发给程序的 `/{path…}`，去掉 `Authorization` 和 `token`；
+  只给完整权限的设备，只到插件开着的机器上；没这个插件或这台没开 404，机器离线 409，程序没在跑 / 不应答 502。
 - **调用和事件**：hub 上的程序调 `nodes.call {machine, method, params}`，转给那台电脑上程序的插件协议方法（只能调开着的机器上的）；
   电脑上的程序发的事件，hub 以 `node.event {machine_id, event, params}` 转给 hub 上的程序。电脑上的程序调 hub 的方法一律 `unknown_method`。
 - **状态**：插件列表里每个有 `node` 段的插件带 `nodes: [{machine_id, version, state, error?}]`，`state` 是 `running` / `starting` / `error` /

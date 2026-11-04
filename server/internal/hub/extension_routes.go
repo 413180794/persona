@@ -286,6 +286,8 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true})
 	})
 
+	// A plugin's program on a computer: the app's requests to it (extension_nodes.go).
+	api.HandleFunc("/api/v1/plugins/{id}/-/machines/{mid}/", h.serveNodeExtensionHTTP)
 	api.HandleFunc("/api/v1/plugins/{id}/", func(w http.ResponseWriter, r *http.Request) {
 		// A plugin can do anything the hub can (it may hold its token): not for an answer-only device.
 		if principalOf(r.Context()).Role != roleFull {

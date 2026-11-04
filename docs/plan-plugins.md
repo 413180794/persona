@@ -321,7 +321,8 @@ hub.json 的旧配置迁到插件：装上插件后在 设置 › 插件（或 `
 1. 清单的 `node` 段、校验、权限文案和摘要、包里带 node 程序：只动 hub，有测试。（已合，#1878）
 2. node 侧宿主和 `plugin.node.*`：下发（分块、摘要、去重）、起停、对账、租约，加上 hub 侧的重连钩子；用假 node 和真进程测试。
    （做完，见 `docs/plugins.md`「在电脑上运行的程序」：按平台一份确定性的包；`host` 的进程管理 hub 和 node 共用；node 上的程序属于进程，不属于某一条连接。）
-3. HTTP / WebSocket 转发：流能拨 unix socket。
+3. HTTP / WebSocket 转发：流能拨 unix socket。（做完：`/api/v1/plugins/{id}/-/machines/{mid}/…` 经 `plugin.node.dial`；
+   路径放在 hub 自己的 `/-/` 下，不占插件自己的路径。）
 4. App（iOS、Mac、网页）：每台机器的状态、加机器时的确认、权限页的新行；截图给用户看。
 5. cua / ego 换成内置的 node 程序，不改界面。
 6. iMessage 迁成插件，迁移 hub.json 里的配置。

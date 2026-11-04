@@ -95,7 +95,9 @@ async function shell(e: FetchEvent): Promise<Response> {
 
 async function asset(req: Request): Promise<Response> {
   const cache = await caches.open(ASSET_CACHE);
-  const hit = await cache.match(req);
+  // A hashed file is the same whoever asks: keepShell kept it with a plain fetch, the page asks for its module script
+  // with an Origin, and a server answering `Vary: Origin` (vite preview, a CORS proxy) would make that a miss.
+  const hit = await cache.match(req, { ignoreVary: true });
   if (hit) return hit;
   const r = await fetch(req);
   if (r.ok) await cache.put(req, r.clone()).then(() => trim(cache)).catch(() => {});

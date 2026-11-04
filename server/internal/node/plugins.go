@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -166,6 +167,15 @@ func (n *Node) handlePlugins(ctx context.Context, method string, params json.Raw
 		return map[string]bool{"ok": true}, nil
 	case "plugin.node.status":
 		return ph.status(), nil
+	case "plugin.node.dial":
+		var p struct {
+			ID     string `json:"id"` // the stream (internal/streams), the hub's
+			Plugin string `json:"plugin"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil || p.ID == "" {
+			return nil, errors.New("plugin.node.dial: need id and plugin")
+		}
+		return map[string]any{}, n.dialPlugin(ctx, ph, p.ID, p.Plugin)
 	case "plugin.node.call":
 		var p proto.PluginNodeCall
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -610,4 +620,31 @@ func (ph *pluginHost) expireLeases() {
 		r.proc.Stop()
 		ph.send("plugin.node.state", proto.PluginNodeState{ID: r.spec.ID, Version: r.spec.Version, State: pluginLeaseExpired})
 	}
+}
+
+// dialPlugin connects stream id to plugin's HTTP socket (a program running here with http): the hub relays the app's
+// requests to it, WebSockets included (hub/extension_nodes.go, /api/v1/plugins/{id}/-/machines/{mid}/…).
+func (n *Node) dialPlugin(ctx context.Context, ph *pluginHost, id, plugin string) error {
+	ph.mu.Lock()
+	r := ph.running[plugin]
+	ph.mu.Unlock()
+	if r == nil || r.expired || !r.spec.HTTP {
+		return &rpc.Error{Code: pluginNotRunning, Message: "plugin " + plugin + " serves no HTTP on this computer"}
+	}
+	if n.streams == nil {
+		return errors.New("plugin.node.dial: no streams on this connection")
+	}
+	var d net.Dialer
+	dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	c, err := d.DialContext(dctx, "unix", r.proc.Spec().Socket)
+	if err != nil {
+		return &rpc.Error{Code: pluginNotRunning, Message: "plugin " + plugin + " is not answering on this computer"}
+	}
+	if err := n.streams.Open(id); err != nil {
+		_ = c.Close()
+		return err
+	}
+	n.streams.Start(id, c)
+	return nil
 }
