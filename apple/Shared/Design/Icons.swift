@@ -147,6 +147,8 @@ extension Theme {
         static let collapseAll = "rectangle.compress.vertical"
         static let newConversation = "plus.bubble"
         static let keyboard = "keyboard"
+        /// Puts the keyboard away (the chat's composer, beside the mode chips).
+        static let dismissKeyboard = "keyboard.chevron.compact.down"
 
         // MARK: Navigation
 
