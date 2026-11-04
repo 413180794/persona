@@ -87,6 +87,9 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
   `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。
   UI 测试 `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` 要连这样的 mock；其余终端 UI 测试固定 `-terminalSize mirror`。
+- 设置 › 插件：`MOCK_PLUGINS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`；`TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>` 跑 `PluginSettingsTests`（列表、填表被 hub 拒绝、填密钥后变成运行中），
+  每轮前重启 mock（状态在内存里）。截图同上：`TEST_RUNNER_JARVIS_SHOTS`、`simctl ui … appearance`、`TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` 命名，两种界面风格都跑。
+  新模拟器第一次会弹通知授权，测试自己点掉。
 - Git 拉取：`MOCK_FILES=1 MOCK_GIT_PULL=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`；`TEST_RUNNER_JARVIS_GIT_HUB=http://127.0.0.1:<端口>` 跑 `GitPullUITests`，从落后 28 个提交到成功刷新、再次检查和失败后重试。
   `TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，分别用 `simctl ui <udid> appearance light|dark` 切换实际外观，两种界面风格都跑；`TEST_RUNNER_JARVIS_GIT_APPEARANCE` 仅用于截图命名。
   `GitPullTests` 使用 `FakeHub` 检查 POST 请求、结果解码、反馈与重复点击；服务端 `TestGitPull*` 使用隔离 HOME / Git 配置的临时本地远端，验证未 fetch 的最新提交、fast-forward、分叉、已修改 / 已暂存 / 未跟踪文件、已有 stash 和失败状态，不拉取真实工作区。

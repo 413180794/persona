@@ -216,6 +216,8 @@ extension Theme {
         static let hubUpdate = "arrow.down.to.line.circle"
         /// The assistant's skills (~/.jarvis/skills).
         static let skills = "puzzlepiece.extension"
+        /// A plugin of the hub's (设置 › 插件, docs/plugins.md).
+        static let plugins = "powerplug"
         static let phone = "iphone"
         static let watch = "applewatch"
         static let handoff = "iphone.and.arrow.forward"

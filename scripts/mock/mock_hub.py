@@ -5448,6 +5448,100 @@ def pins_route(handler, p):
     return True
 
 
+# ---------- MOCK_PLUGINS: the plugin base (docs/plugins.md「hub 的接口」) ----------
+# MOCK_PLUGINS=1 lists five made-up plugins, one of each state the app draws (needs setup, running, hub.json's,
+# switched off, incompatible), with feature plugin_manager; their pages, switches, settings and secrets work in memory.
+# The form of example-notes has every kind of field. A base_url that is not a URL is refused like the hub does.
+PLUGINS_MODE = os.environ.get("MOCK_PLUGINS", "")
+_NOTES_FORM = [
+    {"name": "base_url", "type": "string", "title": "服务地址", "format": "uri", "default": "https://notes.example.com", "required": True},
+    {"name": "folders", "type": "array", "title": "同步哪些文件夹", "items": {"name": "items", "type": "string"},
+     "description": "留空同步全部"},
+    {"name": "include_shared", "type": "boolean", "title": "包括别人共享给我的", "default": False},
+    {"name": "every_minutes", "type": "integer", "title": "多久同步一次（分钟）", "minimum": 5, "maximum": 1440, "default": 30},
+    {"name": "mode", "type": "string", "title": "同步方式", "default": "safe",
+     "enum": [{"value": "fast", "title": "只要新的"}, {"value": "safe", "title": "全部核对"}]},
+    {"name": "proxy", "type": "object", "title": "代理", "description": "这台 hub 访问不到服务时经代理", "fields": [
+        {"name": "host", "type": "string", "title": "主机", "format": "hostname"},
+        {"name": "port", "type": "integer", "title": "端口", "default": 8080}]},
+]
+_RUNS = {"key": "runs_code", "title": "在 hub 机器上运行程序", "detail": "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"}
+PLUGINS = {
+    "example-notes": {"id": "example-notes", "name": "Example Notes", "kind": "connectors", "status": "needs_setup", "version": "1.2.0",
+                      "source": "installed", "enabled": True, "description": "把 Example Notes 的笔记同步进知识库，并给助手一个搜索工具。",
+                      "contributes": {"connectors": ["examplenotes"]}, "needs_setup": ["密钥「API Key」"],
+                      "publisher": "example", "homepage": "https://example.com/persona-plugin", "origin": "dir:/opt/plugins/example-notes",
+                      "previous_version": "1.1.0", "form": {"fields": _NOTES_FORM}, "config": {"folders": ["工作", "读书"]},
+                      "secrets": [{"name": "api_key", "title": "API Key", "description": "在 Example Notes 的设置 › 开发者里生成", "required": True, "set": False},
+                                  {"name": "webhook_secret", "title": "Webhook 密钥", "set": True}],
+                      "permissions": [_RUNS, {"key": "network", "title": "访问网络", "detail": "notes.example.com（hub 暂不拦截别的地址）"},
+                                      {"key": "secrets", "title": "使用你填的密钥", "detail": "API Key、Webhook 密钥"}]},
+    "telegram": {"id": "telegram", "name": "Telegram", "kind": "connectors", "status": "running", "version": "202611041200", "source": "builtin",
+                 "enabled": True, "description": "Telegram 连接器（personad 自带）", "contributes": {"connectors": ["telegram"]},
+                 "form": {"fields": []}, "config": {}, "secrets": [], "permissions": [_RUNS]},
+    "voice": {"id": "voice", "name": "语音", "kind": "voice", "status": "running", "source": "hub.json", "enabled": True, "read_only": True,
+              "contributes": {"voice": ["voice"]}, "permissions": [_RUNS, {"key": "hub_api", "title": "完整使用 hub",
+              "detail": "拿到 hub 的地址和 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……"}]},
+    "example-quota": {"id": "example-quota", "name": "Example 额度", "kind": "quota", "status": "disabled", "version": "0.3.1", "source": "installed",
+                      "enabled": False, "description": "查 Example 网关的余额和用量。", "contributes": {},
+                      "warnings": ["contributes.quota: this hub has no such extension point (a newer hub's?); it does not take effect"],
+                      "form": {"fields": []}, "config": {}, "secrets": [], "permissions": [_RUNS]},
+    "example-weather": {"id": "example-weather", "name": "Example 天气", "kind": "connectors", "status": "incompatible", "version": "2.0.0",
+                        "source": "installed", "enabled": True, "error": "这个插件要 hub 的构建号 >=202612010000，这台是 202611041200",
+                        "contributes": {"connectors": ["exampleweather"]}, "form": {"fields": []}, "config": {}, "secrets": [], "permissions": [_RUNS]},
+}
+_PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings"]
+
+_features_without_plugins = features
+
+
+def features():
+    return _features_without_plugins() + (["plugins", "plugin_manager"] if PLUGINS_MODE else [])
+
+
+def _plugin_needs(pl):
+    missing = ["密钥「%s」" % s["title"] for s in pl.get("secrets", []) if s.get("required") and not s.get("set")]
+    if pl["enabled"] and pl["status"] in ("needs_setup", "running") and pl["source"] == "installed":
+        pl["status"] = "needs_setup" if missing else "running"
+    pl["needs_setup"] = missing or None
+    return pl
+
+
+def plugins_route(handler, p, body):
+    """MOCK_PLUGINS: GET /api/v1/plugins, a plugin's page and its switch, settings and secrets. False otherwise."""
+    if not PLUGINS_MODE or not p.startswith("/api/v1/plugins"): return False
+    if p == "/api/v1/plugins":
+        handler.send_json({"plugins": [{k: v for k, v in _plugin_needs(pl).items() if k in _PLUGIN_VIEW and v is not None}
+                                       for pl in sorted(PLUGINS.values(), key=lambda x: x["id"])], "can_install": True})
+        return True
+    parts = p.split("/")  # ['', 'api', 'v1', 'plugins', id, '-', ...]
+    if len(parts) < 6 or parts[5] != "-" or parts[4] not in PLUGINS:
+        handler.send_json({"error": "no such plugin", "code": "not_found"}, 404)
+        return True
+    pl, rest, method = PLUGINS[parts[4]], parts[6:], handler.command
+    req = json.loads(body or b"{}") if body else {}
+    if rest in ([], [""]) and method == "GET":
+        pass
+    elif rest == ["enabled"] and method == "PUT":
+        pl["enabled"] = bool(req.get("enabled"))
+        pl["status"] = "disabled" if not pl["enabled"] else ("needs_setup" if pl["source"] == "installed" else "running")
+    elif rest == ["config"] and method == "PUT":
+        cfg = req.get("config") or {}
+        url = cfg.get("base_url", "https://x")
+        if not str(url).startswith(("http://", "https://")):
+            handler.send_json({"error": "base_url: 要是一个网址", "code": "invalid_config", "field": "base_url", "message": "要是一个网址"}, 400)
+            return True
+        pl["config"] = cfg
+    elif len(rest) == 2 and rest[0] == "secrets" and method in ("PUT", "DELETE"):
+        for s in pl.get("secrets", []):
+            if s["name"] == rest[1]: s["set"] = method == "PUT"
+    else:
+        handler.send_json({"error": "not found"}, 404)
+        return True
+    handler.send_json({k: v for k, v in _plugin_needs(pl).items() if v is not None})
+    return True
+
+
 # ---------- MOCK_VOICE: the hub's voice plugin (docs/plugins.md「语音」, docs/android.md「语音对话」) ----------
 # MOCK_VOICE=1 serves a running voice plugin: /api/v1/plugins, its voices and models, the model configuration of
 # plugin.voice, and a socket that answers start with ready, then talks by a script (captions, a tool, audio). Modes for
@@ -5470,6 +5564,7 @@ VOICE_VOICES = {
 }
 # What --help lists after the options.
 MOCK_HELP = [
+    "MOCK_PLUGINS=1  设置 › 插件：五个示例插件（需要设置 / 运行中 / hub.json / 已停用 / 不兼容），表单、密钥、开关在内存里",
     "PORT=<端口>  监听端口，默认 18760；0 表示自动分配（启动时打印 mock hub on <地址>:<端口>）",
     "MOCK_HUB_ID=<id>  固定 hub_id（默认每次启动随机）：换 MOCK_* 开关重启后，已配对的 App 不用重新配对",
     "MOCK_VOICE=1|drop|bad-model|missing-model|old-hub|error|off|slow  语音插件和它的 WebSocket（docs/android.md「语音对话」）",
@@ -5722,6 +5817,7 @@ class H(BaseHTTPRequestHandler):
         if not p.startswith("/mock/") and self.bad_network(): return
         if p == "/api/v1/ws":
             return self.websocket()
+        if plugins_route(self, p, None): return
         if voice_route(self, p, q): return
         if pins_route(self, p): return
         if p == "/mock/ports": return self.send_json({"connects": PORT_LOG})
@@ -6141,6 +6237,7 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if pins_route(self, p): return
+        if plugins_route(self, p, self.last_body): return
         if p == "/mock/trainer/recall" and os.environ.get("MOCK_LARK_TRAINER"):
             req = json.loads(self.last_body or b"{}")
             if type(req.get("recalled")) is not bool:

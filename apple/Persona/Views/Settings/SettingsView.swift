@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var confirmUnpair = false
     @State private var showPair = false
     @State private var storage: Int64?
+    @State private var plugins: [HubPlugin]?
     @AppStorage(TranslationPrefs.enabledKey) private var translating = false
     @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
 
@@ -81,6 +82,21 @@ struct SettingsView: View {
                 }
 
                 ConnectorsSection()
+
+                // 插件 (docs/plugins.md): only with a hub that has the plugin base.
+                if model.hubFeatures.contains("plugin_manager") {
+                    Section {
+                        Group {
+                            NavigationLink(value: SettingsPage.plugins) {
+                                SettingsRow(title: "插件", symbol: Theme.Icon.plugins, tint: Theme.Hue.purple,
+                                            value: PluginText.listSummary(plugins), look: .oneLine)
+                            }
+                            .accessibilityIdentifier("settings-plugins")
+                        }
+                        .bareListRow()
+                    }
+                    .task(id: model.settingsPath.count) { plugins = (try? await model.api?.plugins()) ?? plugins }
+                }
 
                 Section {
                     Group {
@@ -182,7 +198,7 @@ struct SettingsView: View {
             // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
             // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器;
             // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (设备), `-openHubUpdate YES` (hub),
-            // `-openSkills YES` (Skills).
+            // `-openSkills YES` (Skills), `-openPlugins YES` (插件; `-openPlugin <id>` one of them).
             .onAppear(perform: openDebugPage)
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
@@ -234,6 +250,10 @@ struct SettingsView: View {
         }
         else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
+        else if d.bool(forKey: "openPlugins") || d.string(forKey: "openPlugin") != nil { // 设置 › 插件 (› one)
+            p.append(SettingsPage.plugins)
+            if let id = d.string(forKey: "openPlugin") { p.append(SettingsPage.plugin(id)) }
+        }
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
         else if d.bool(forKey: "openClaudeSettings") { p.append(SettingsPage.claude) } // with its 屏蔽的配置目录
         else if d.bool(forKey: "openConnectorMail") || d.bool(forKey: "addMail") { p.append(SettingsPage.mail) }
@@ -302,6 +322,9 @@ enum SettingsPage: Hashable {
     case hub, skills
     /// A connector of the hub's by its id (GET /api/v1/connectors): GitHub…
     case connector(String)
+    /// 设置 › 插件, and one plugin by its id (docs/plugins.md).
+    case plugins
+    case plugin(String)
     /// 设置 › hub › SSH 隧道 of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
     case sshTunnel(String)
 
@@ -357,6 +380,8 @@ private struct SettingsDestinations: ViewModifier {
         case .sshTunnel(let id): HubSSHTunnelPage(hubID: id)
         case .hub: HubSettingsPage()
         case .skills: SkillsPage()
+        case .plugins: PluginsView()
+        case .plugin(let id): PluginDetailView(id: id)
         }
     }
 

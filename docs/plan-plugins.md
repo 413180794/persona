@@ -53,8 +53,9 @@
 - [x] **1a：服务端底座**：`internal/plugin`（清单、schema 子集、权限、版本范围、包的暂存和解包、注册表）、`plugin/host`（进程宿主、按需激活、退避、超时、ping、HTTP、远端 socket）、
   `plugin/serve`（程序一侧）、`plugin/conformance`；迁移 `0291`；hub 的接口和 `personad plugin`；语音（hub.json）和 Telegram（内置）迁上来；
   `connector/serve` 认插件开头，`connector/proc` 能经插件进程说话（`Link`）；文档 `docs/plugins.md`、`docs/connector-protocol.md`。
-- [ ] **1b：App「设置 › 插件」**（单独的 PR，iOS 先做）：列表（名字、版本、状态、来源）、详情（权限、贡献）、按 `form.fields` 画的配置表单、
-  只写的密钥、开关；深浅色截图。Android、网页、管理界面的安装页放到后面。
+- [x] **1b：App「设置 › 插件」**（iOS，Mac 共用页面）：列表、详情（权限、贡献、关于）、按 `form.fields` 画的配置表单、只写的密钥、开关；
+  假 hub `MOCK_PLUGINS=1`、UI 测试和单元测试，默认 / BeautifulUI 风格 × 深浅色截图看过（`docs/plugins.md`「App：设置 › 插件」）。
+- [ ] Android、网页的插件页，管理界面的安装页。
 - [ ] 第 2 步：试点额度 + 模型供应商两个扩展点（`quota.query`、`provider.models`），把写死的供应商额度查询迁成插件。开始前先在这里补两个扩展点的接口。
 - [ ] 第 3 步：连接器、链接识别等散落的内部逻辑迁成私有插件，开源仓库里清干净。
 - [ ] 第 4 步：声明式 UI（`ui.render` / `ui.action`）和事件钩子（`event.*`，只通知）。
