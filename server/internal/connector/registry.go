@@ -79,6 +79,13 @@ func (r *Registry) SetEnabled(id string, on bool) error {
 	return nil
 }
 
+// StartOff marks a connector not registered yet as switched off, so adding it after Start does not run it first.
+func (r *Registry) StartOff(id string) {
+	r.mu.Lock()
+	r.off[id] = true
+	r.mu.Unlock()
+}
+
 // Enabled says whether a connector is switched on (every one is, until SetEnabled says otherwise).
 func (r *Registry) Enabled(id string) bool {
 	r.mu.RLock()
@@ -141,12 +148,36 @@ func (r *Registry) Add(c Connector) error {
 		return err
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if slices.ContainsFunc(r.list, func(o Connector) bool { return o.ID() == id }) {
+		r.mu.Unlock()
 		return fmt.Errorf("connector %q is registered twice", id)
 	}
 	r.list = append(r.list, c)
+	r.mu.Unlock()
+	r.startOne(c) // added after Start (a plugin installed or switched on): it runs at once, unless switched off
 	return nil
+}
+
+// Remove stops a connector and takes it out (a plugin switched off or removed). Its switches stay, for when it
+// comes back.
+func (r *Registry) Remove(id string) {
+	r.mu.Lock()
+	i := slices.IndexFunc(r.list, func(o Connector) bool { return o.ID() == id })
+	if i < 0 {
+		r.mu.Unlock()
+		return
+	}
+	c := r.list[i]
+	r.list = slices.Delete(r.list, i, i+1)
+	cancel := r.stop[id]
+	delete(r.stop, id)
+	r.mu.Unlock()
+	if reflect.TypeOf(c).Comparable() {
+		switchedOff.Delete(c)
+	}
+	if cancel != nil {
+		cancel()
+	}
 }
 
 // All are the connectors in the order added.

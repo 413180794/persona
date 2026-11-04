@@ -152,6 +152,7 @@ var Features = []string{
 	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",              // authenticated address discovery and capability-gated updates
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/plugins.md)
+	"plugin_manager",         // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/plugins.md)
 	"desktops",               // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
 	"sessions_delta",         // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
 	"connectors",             // GET /api/v1/connectors (docs/plan-connectors.md)

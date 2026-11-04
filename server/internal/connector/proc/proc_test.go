@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -15,6 +16,9 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/plugin/host"
+	pserve "github.com/nwverse/persona/server/internal/plugin/serve"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -182,10 +186,48 @@ func waitUntil(t *testing.T, what string, ok func() bool) {
 // The program runs under the hub: it says what it has, signs in a step at a time with its session kept by the hub,
 // archives, reads, and its changes reach the hub's Watch.
 func TestProgram(t *testing.T) {
+	sec := &memSecrets{}
+	exercise(t, New(program(t, sec)), sec)
+}
+
+// linked is the program run as a plugin by the plugin host, the connector reaching it through its Link (the hub's
+// way, docs/plugins.md); the hub's part (passing the program's calls and events to the connector) is done here.
+func linked(t *testing.T, s connector.Secrets) *Conn {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c *Conn
+	p := host.Start(context.Background(), host.Spec{ID: "example-plugin", Name: "Example", Command: exe, RPC: true,
+		Env: []string{"JARVIS_PROC_CHILD=1"}, CallTimeout: callTimeout, Logf: t.Logf,
+		Init: func(context.Context) (plugin.InitializeParams, error) {
+			return plugin.InitializeParams{Plugin: plugin.PluginInfo{ID: "example-plugin", Version: "1.0.0"},
+				Active: map[string][]string{"connectors": {"example"}}}, nil
+		},
+		Handle: func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+			if pserve.Contribution(params) != "example" {
+				return nil, errors.New("another connector's")
+			}
+			return c.Handle(ctx, strings.TrimPrefix(method, "connector."), params)
+		},
+		OnEvent: func(event string, params json.RawMessage) { c.Event(strings.TrimPrefix(event, "connector."), params) },
+	})
+	t.Cleanup(p.Stop)
+	cfg := Config{ID: "example", Name: "Example", Manifest: (&exampleProgram{}).Manifest(), Secrets: s, Logf: t.Logf,
+		Link: &Link{Proc: p, ID: "example"}}
+	c = New(cfg)
+	return c
+}
+
+func TestProgramAsPlugin(t *testing.T) {
+	sec := &memSecrets{}
+	exercise(t, linked(t, sec), sec)
+}
+
+func exercise(t *testing.T, c *Conn, sec *memSecrets) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sec := &memSecrets{}
-	c := New(program(t, sec))
 	if st := c.Status(ctx); st.State != connector.StateError {
 		t.Fatalf("before Run: %+v", st)
 	}
@@ -280,6 +322,24 @@ func TestProgram(t *testing.T) {
 	}
 	cancel()
 	waitUntil(t, "the program to stop", func() bool { return strings.Contains(c.Status(context.Background()).Error, "已停止") })
+}
+
+// As a plugin: signing in while it does not run says to switch it on; signing out runs it just for that.
+func TestPluginWhileStopped(t *testing.T) {
+	sec := &memSecrets{data: []byte("example session")}
+	c := linked(t, sec)
+	if p, err := c.LoginStep(context.Background(), "", nil); err != nil || !strings.Contains(p.Error, "先打开") {
+		t.Fatalf("login: %+v %v", p, err)
+	}
+	if err := c.Logout(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := sec.get(); d != nil {
+		t.Fatal("still signed in")
+	}
+	if st := c.cfg.Link.Proc; st.Ready() {
+		waitUntil(t, "it to stop again", func() bool { s, _ := st.Status(); return s == host.StateStopped })
+	}
 }
 
 // A program from another build is not started: the two must match.

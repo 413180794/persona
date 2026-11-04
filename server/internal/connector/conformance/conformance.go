@@ -8,21 +8,34 @@ package conformance
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Check runs c through the protocol and directly and compares what each declared capability gives back. c is
-// built and running as the test has it (its Run and Watch are not started again).
+// built and running as the test has it (its Run and Watch are not started again). It goes through both openings: the
+// connector protocol's own (init, bare method names) and the plugin protocol's (initialize, connector.*).
 func Check(t testing.TB, c connector.Connector) {
 	t.Helper()
 	if err := connector.Check(c); err != nil {
 		t.Fatalf("manifest: %v", err)
+	}
+	check(t, c, false)
+	check(t, c, true)
+}
+
+func check(t testing.TB, c connector.Connector, inPlugin bool) {
+	t.Helper()
+	opening := "connector protocol"
+	if inPlugin {
+		opening = "plugin protocol"
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -33,20 +46,59 @@ func Check(t testing.TB, c connector.Connector) {
 	hub := rpc.New("h", hubW)
 	hub.OnRequest = func(context.Context, string, json.RawMessage) (any, error) { return serve.SecretData{}, nil }
 	go func() { _ = hub.Serve(ctx, hubR) }()
+	// wire is a method's name and params in this opening's words.
+	wire := func(method string, params any) (string, any) {
+		if !inPlugin {
+			return method, params
+		}
+		p, err := plugin.Targeted(params, c.ID())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return serve.InPlugin(method), p
+	}
+	callRaw := func(method string, params any, out *json.RawMessage) error {
+		m, p := wire(method, params)
+		return hub.Call(ctx, m, p, out)
+	}
 	call := func(method string, params any) json.RawMessage {
 		t.Helper()
 		var raw json.RawMessage
-		if err := hub.Call(ctx, method, params, &raw); err != nil {
-			t.Fatalf("%s through the protocol: %v", method, err)
+		if err := callRaw(method, params, &raw); err != nil {
+			t.Fatalf("%s through the %s: %v", method, opening, err)
 		}
 		return raw
 	}
 
-	var man serve.Manifest
-	if err := json.Unmarshal(call(serve.MInit, serve.InitParams{Protocol: serve.Protocol}), &man); err != nil {
-		t.Fatal(err)
+	want := serve.ManifestOf(c)
+	if !inPlugin {
+		var man serve.Manifest
+		if err := json.Unmarshal(call(serve.MInit, serve.InitParams{Protocol: serve.Protocol}), &man); err != nil {
+			t.Fatal(err)
+		}
+		same(t, "manifest", want, man)
+	} else {
+		var res plugin.InitializeResult
+		init := plugin.InitializeParams{Protocol: plugin.Protocol, Plugin: plugin.PluginInfo{ID: "conformance", Version: "1.0.0"},
+			Active: map[string][]string{"connectors": {c.ID()}}}
+		if err := hub.Call(ctx, plugin.MInitialize, init, &res); err != nil {
+			t.Fatalf("initialize: %v", err)
+		}
+		var items []plugin.ConnectorItem
+		_ = json.Unmarshal(res.Contributes["connectors"], &items)
+		if res.Protocol != plugin.Protocol || res.ID != "conformance" || len(items) != 1 {
+			t.Fatalf("initialize answered %+v", res)
+		}
+		same(t, "manifest", serve.ItemOf(want), items[0])
+		var re *rpc.Error
+		if err := hub.Call(ctx, serve.InPlugin(serve.MStatus), map[string]string{"contribution": "nosuchconnector"}, nil); !errors.As(err, &re) ||
+			re.Code != plugin.CodeNoContribution {
+			t.Fatalf("a connector the program does not have: %v", err)
+		}
+		if err := hub.Call(ctx, plugin.MPing, struct{}{}, nil); err != nil {
+			t.Fatalf("ping: %v", err)
+		}
 	}
-	same(t, "manifest", serve.ManifestOf(c), man)
 
 	m := c.Manifest()
 	if m.Has(connector.CapStatus) {
@@ -68,7 +120,7 @@ func Check(t testing.TB, c connector.Connector) {
 			var through serve.DescribeResult
 			var throughErr string
 			var raw json.RawMessage
-			if err := hub.Call(ctx, serve.MDescribe, serve.CallParams{Name: act.Name, Args: json.RawMessage(`{}`)}, &raw); err != nil {
+			if err := callRaw(serve.MDescribe, serve.CallParams{Name: act.Name, Args: json.RawMessage(`{}`)}, &raw); err != nil {
 				throughErr = err.Error()
 			} else {
 				decode(t, raw, &through)
@@ -150,6 +202,6 @@ func same(t testing.TB, what string, direct, through any) {
 	a, _ := json.Marshal(direct)
 	b, _ := json.Marshal(through)
 	if string(a) != string(b) {
-		t.Errorf("%s differs through the protocol:\ndirect  %s\nthrough %s", what, a, b)
+		t.Errorf("%s differs through the wire:\ndirect  %s\nthrough %s", what, a, b)
 	}
 }

@@ -81,6 +81,8 @@ const usage = `usage:
   personad relay [config]   run the push relay (config ~/.persona/relay.json): pushes for hubs without the app's APNs
                            key, payloads sealed to the phone (docs/push-relay.md)
   personad voice            the built-in voice plugin: the hub runs it (hub.json plugins, docs/plugins.md「内置语音插件」)
+  personad plugin …         plugins on the hub's machine: list, install, upgrade, rollback, enable, disable, config,
+                           secret, uninstall (docs/plugins.md「命令行」; personad plugin for the details)
   personad sysmon [n]       print this machine's system info and n metric samples, with what they cost
   personad release manifest|check-next …
                            the publisher's release manifest and checks (scripts/release/publish.sh, docs/hub-update.md「发布」)
@@ -206,6 +208,8 @@ func main() {
 		os.Exit(tgcli.Main(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	case "voice":
 		err = voice.Run(ctx)
+	case "plugin":
+		err = hub.PluginCommand(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr)
 	case "sysmon":
 		n := 3
 		if len(os.Args) > 2 {

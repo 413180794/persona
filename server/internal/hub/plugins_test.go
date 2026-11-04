@@ -27,6 +27,10 @@ func TestMain(m *testing.M) {
 		servePluginForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "connector" {
+		serveConnectorPluginForTest()
+		return
+	}
 	os.Exit(dbtest.Main(m))
 }
 

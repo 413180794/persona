@@ -7,14 +7,18 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
 	"github.com/nwverse/persona/server/internal/connector/proc"
 	"github.com/nwverse/persona/server/internal/connector/telegram/spec"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/plugin/host"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -386,34 +390,49 @@ func (h *Hub) setConnectorFeed(ctx context.Context, id string, f connector.Feed,
 // restoreConnectorSwitches applies the user's switches before the connectors start. One the user never switched is
 // on, unless it was added to start off (addConnectorOff: Telegram waits for the user to turn it on and sign in).
 func (h *Hub) restoreConnectorSwitches(ctx context.Context) {
+	cs := h.connectorSettings(ctx)
+	for _, c := range h.connectors.All() {
+		h.restoreSwitchesOf(c, cs)
+	}
+}
+
+// connectorSettings are the user's connector switches and settings.
+func (h *Hub) connectorSettings(ctx context.Context) connectorSettings {
 	var cs connectorSettings
 	if h.store != nil {
 		if _, err := h.store.Setting(ctx, connectorSettingsKey, &cs); err != nil {
 			h.logf("connectors: settings: %v", err)
 		}
 	}
-	for _, c := range h.connectors.All() {
-		if raw, ok := cs.Options[c.ID()]; ok {
-			if o, ok := connector.As[connector.Options](c); ok {
-				if err := o.SetOptions(raw); err != nil {
-					h.logf("connectors: %s settings: %v", c.ID(), err)
-				}
+	return cs
+}
+
+// connectorOn says whether the user wants connector id on (their switch, or its default).
+func (h *Hub) connectorOn(cs connectorSettings, id string) bool {
+	on, chosen := cs.Switch[id]
+	if !chosen {
+		on = !h.connectorsOff[id]
+	}
+	return on
+}
+
+func (h *Hub) restoreSwitchesOf(c connector.Connector, cs connectorSettings) {
+	if raw, ok := cs.Options[c.ID()]; ok {
+		if o, ok := connector.As[connector.Options](c); ok {
+			if err := o.SetOptions(raw); err != nil {
+				h.logf("connectors: %s settings: %v", c.ID(), err)
 			}
 		}
-		for _, f := range []connector.Feed{connector.FeedArchive, connector.FeedInbox} {
-			if on, ok := (*cs.feeds(f))[c.ID()]; ok && !on {
-				if err := h.connectors.SetFeed(c.ID(), f, false); err != nil {
-					h.logf("connectors: %s %s: %v", c.ID(), f, err)
-				}
+	}
+	for _, f := range []connector.Feed{connector.FeedArchive, connector.FeedInbox} {
+		if on, ok := (*cs.feeds(f))[c.ID()]; ok && !on {
+			if err := h.connectors.SetFeed(c.ID(), f, false); err != nil {
+				h.logf("connectors: %s %s: %v", c.ID(), f, err)
 			}
 		}
-		on, chosen := cs.Switch[c.ID()]
-		if !chosen {
-			on = !h.connectorsOff[c.ID()]
-		}
-		if !on {
-			_ = h.connectors.SetEnabled(c.ID(), false)
-		}
+	}
+	if !h.connectorOn(cs, c.ID()) {
+		_ = h.connectors.SetEnabled(c.ID(), false)
 	}
 }
 
@@ -477,6 +496,7 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 // startConnectors registers the connectors, applies the user's switches and runs them.
 func (h *Hub) startConnectors(ctx context.Context) {
 	h.registerConnectors()
+	h.attachPlugins(ctx) // the plugins' connectors (Telegram's), after the hub's own: those ids are taken
 	h.restoreConnectorSwitches(ctx)
 	h.restoreGitHubSource(ctx)
 	h.githubMutes(ctx)
@@ -524,7 +544,6 @@ func (h *Hub) registerConnectors() {
 			h.logf("imessage connector: %v", err)
 		}
 	}
-	h.addTelegram()
 }
 
 // telegramProgram is jarvisd-telegram next to the running jarvisd ("" when there is none).
@@ -543,25 +562,65 @@ func telegramProgram() string {
 	return p
 }
 
-// addTelegram registers the Telegram connector where its program is (docs/plan-telegram.md): off until the user
-// turns it on and signs in from the app; the API credentials and the session are the user's, sealed in
-// connector_secrets. The program runs only when its build is the hub's.
-func (h *Hub) addTelegram() {
-	path := telegramProgram()
-	if path == "" {
-		return
+// telegramPluginID is the built-in plugin the Telegram connector runs in.
+const telegramPluginID = "telegram"
+
+// telegramManifest is the Telegram connector as a built-in plugin (docs/plan-telegram.md, docs/plugins.md): the
+// program at path, contributing the connector with what it declares (spec), known before it ever runs: switched
+// off, it still lists its capabilities and signs in and out. It runs while the connector is on.
+func telegramManifest(h *Hub, path string) *plugin.Manifest {
+	m := spec.Manifest()
+	item := plugin.ConnectorItem{ID: spec.ID, Name: spec.Name, Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted,
+		PollSeconds: int(m.Poll / time.Second), Kinds: m.Kinds}
+	for _, c := range m.Capabilities {
+		item.Capabilities = append(item.Capabilities, string(c))
 	}
-	if err := h.addConnectorOff(h.telegramConnector(path)); err != nil {
-		h.logf("telegram connector: %v", err)
+	items, _ := json.Marshal([]plugin.ConnectorItem{item})
+	return &plugin.Manifest{ManifestVersion: plugin.ManifestVersion, ID: telegramPluginID, Name: spec.Name, Version: h.version,
+		Description: "Telegram 连接器（personad 自带）", Engines: plugin.Engines{PluginProtocol: plugin.Protocol},
+		Runtime: &plugin.Runtime{Command: plugin.Command{Path: filepath.Base(path)}}, Contributes: map[string]json.RawMessage{"connectors": items}}
+}
+
+// telegramCheck holds the program to the hub's build: the two come from one build (`version -v` says the same).
+func telegramCheck(h *Hub, path string) func(context.Context) error {
+	want := fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number)
+	return func(ctx context.Context) error {
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("没有找到 %s 的程序（%s）", spec.Name, path)
+		}
+		vctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(vctx, path, "version", "-v").Output()
+		if err != nil {
+			return fmt.Errorf("%s 的程序运行不了：%v", spec.Name, err)
+		}
+		if got := strings.TrimSpace(string(out)); got != strings.TrimSpace(want) {
+			first := func(s string) string { line, _, _ := strings.Cut(s, "\n"); return line }
+			return fmt.Errorf("%s 的程序和 hub 不是同一个版本（%s / %s）", spec.Name, first(got), first(want))
+		}
+		return nil
 	}
 }
 
-// telegramConnector is the program at path as the hub's connector, with what it declares (spec) known before it
-// ever runs: switched off, it still lists its capabilities and signs in and out.
+// telegramConnector is the program at path as the hub's connector, run as the built-in plugin: what the plugin
+// registry does for it, for one that is not registered (tests).
 func (h *Hub) telegramConnector(path string) *proc.Conn {
-	return proc.New(proc.Config{ID: spec.ID, Name: spec.Name, Manifest: spec.Manifest(), Path: path, Secrets: h.secretsFor(spec.ID), Logf: h.logf,
-		Version:     fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number),
-		SettingsNow: h.telegramSettings})
+	ps := newPlugins(h.dataDirOrTemp(), nil, h.logf)
+	ps.h, ps.ctx = h, context.Background()
+	if err := ps.reg.AddBuiltin(telegramManifest(h, path), filepath.Dir(path), true); err != nil {
+		h.logf("telegram: %v", err)
+	}
+	p := ps.reg.Get(telegramPluginID)
+	hp := &hubPlugin{id: telegramPluginID}
+	s, err := ps.spec(context.Background(), p, hp)
+	if err != nil {
+		h.logf("telegram: %v", err)
+	}
+	pr := host.Start(context.Background(), s)
+	for _, l := range hp.links {
+		l.Proc = pr
+	}
+	return hp.conns[0]
 }
 
 // telegramSettings is what jarvisd-telegram gets at each start: the user's time zone by name, for the times the

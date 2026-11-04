@@ -1,0 +1,111 @@
+package db
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/nwverse/persona/server/internal/plugin"
+)
+
+// ---- plugins (docs/plugins.md) ----
+
+// Plugins are the registry's rows.
+func (d *DB) Plugins(ctx context.Context) ([]plugin.Record, error) {
+	rows, err := d.pool.Query(ctx, `SELECT id, source, origin, version, previous_version, manifest, granted, granted_digest, enabled,
+		config, remote, installed_at, updated_at FROM plugins ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []plugin.Record
+	for rows.Next() {
+		var r plugin.Record
+		var granted, remote []byte
+		if err := rows.Scan(&r.ID, &r.Source, &r.Origin, &r.Version, &r.PreviousVersion, &r.Manifest, &granted, &r.GrantedDigest, &r.Enabled,
+			&r.Config, &remote, &r.InstalledAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(granted, &r.Granted); err != nil {
+			return nil, err
+		}
+		if len(remote) > 0 && string(remote) != "null" {
+			r.Remote = &plugin.Remote{}
+			if err := json.Unmarshal(remote, r.Remote); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// PutPlugin writes a plugin's row.
+func (d *DB) PutPlugin(ctx context.Context, r plugin.Record) error {
+	granted, err := json.Marshal(r.Granted)
+	if err != nil {
+		return err
+	}
+	var remote []byte
+	if r.Remote != nil {
+		if remote, err = json.Marshal(r.Remote); err != nil {
+			return err
+		}
+	}
+	config := r.Config
+	if len(config) == 0 {
+		config = json.RawMessage(`{}`)
+	}
+	_, err = d.pool.Exec(ctx, `INSERT INTO plugins (id, source, origin, version, previous_version, manifest, granted, granted_digest, enabled,
+		config, remote, installed_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		ON CONFLICT (id) DO UPDATE SET source = $2, origin = $3, version = $4, previous_version = $5, manifest = $6, granted = $7,
+		granted_digest = $8, enabled = $9, config = $10, remote = $11, updated_at = $13`,
+		r.ID, r.Source, r.Origin, r.Version, r.PreviousVersion, []byte(r.Manifest), granted, r.GrantedDigest, r.Enabled,
+		[]byte(config), remote, r.InstalledAt, r.UpdatedAt)
+	return err
+}
+
+// DeletePlugin deletes a plugin's row and (cascading) its secrets.
+func (d *DB) DeletePlugin(ctx context.Context, id string) error {
+	_, err := d.pool.Exec(ctx, `DELETE FROM plugins WHERE id = $1`, id)
+	return err
+}
+
+// PluginSecrets are a plugin's sealed secrets by name.
+func (d *DB) PluginSecrets(ctx context.Context, id string) (map[string]string, error) {
+	rows, err := d.pool.Query(ctx, `SELECT name, sealed FROM plugin_secrets WHERE plugin = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var name, sealed string
+		if err := rows.Scan(&name, &sealed); err != nil {
+			return nil, err
+		}
+		out[name] = sealed
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) PutPluginSecret(ctx context.Context, id, name, sealed string) error {
+	_, err := d.pool.Exec(ctx, `INSERT INTO plugin_secrets (plugin, name, sealed, updated_at) VALUES ($1, $2, $3, now())
+		ON CONFLICT (plugin, name) DO UPDATE SET sealed = $3, updated_at = now()`, id, name, sealed)
+	return err
+}
+
+func (d *DB) DeletePluginSecret(ctx context.Context, id, name string) error {
+	_, err := d.pool.Exec(ctx, `DELETE FROM plugin_secrets WHERE plugin = $1 AND name = $2`, id, name)
+	return err
+}
+
+// AddPluginAudit records a change to a plugin.
+func (d *DB) AddPluginAudit(ctx context.Context, id, action, actor string, detail json.RawMessage) error {
+	if len(detail) == 0 {
+		detail = json.RawMessage(`{}`)
+	}
+	_, err := d.pool.Exec(ctx, `INSERT INTO plugin_audit (plugin, action, actor, detail) VALUES ($1, $2, $3, $4)`, id, action, actor, []byte(detail))
+	return err
+}
+
+var _ plugin.Store = (*DB)(nil)

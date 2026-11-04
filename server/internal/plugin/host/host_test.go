@@ -1,0 +1,346 @@
+package host
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/plugin/serve"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+// TestMain doubles as the plugin: HOST_TEST_PLUGIN=<mode> runs the test binary as one.
+func TestMain(m *testing.M) {
+	switch os.Getenv("HOST_TEST_PLUGIN") {
+	case "":
+		RestartFirst, RanAWhile, StopGrace, PingEvery, PingTimeout, HealthFirst = 50*time.Millisecond, time.Hour, time.Second, time.Hour, time.Second, 50*time.Millisecond
+		os.Exit(m.Run())
+	case "rpc":
+		_ = serve.Serve(context.Background(), os.Stdin, os.Stdout, demo())
+	case "badproto":
+		peer := rpc.New("p", os.Stdout)
+		peer.OnRequest = func(context.Context, string, json.RawMessage) (any, error) {
+			return plugin.InitializeResult{Protocol: 9, ID: "demo", Version: "1.0.0"}, nil
+		}
+		_ = peer.Serve(context.Background(), os.Stdin)
+	case "http":
+		ln, err := net.Listen("unix", os.Getenv("PERSONA_PLUGIN_SOCKET"))
+		if err != nil {
+			os.Exit(1)
+		}
+		_ = http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	}
+	os.Exit(0)
+}
+
+// demo is the test plugin: demo.echo, demo.env, demo.pid, demo.sleep, demo.exit, demo.ask (calls the hub back).
+func demo() serve.Program {
+	var init plugin.InitializeParams
+	var hub *serve.Hub
+	return serve.Program{ID: "demo", Version: "1.0.0",
+		Init: func(_ context.Context, p plugin.InitializeParams, h *serve.Hub) (map[string]any, error) {
+			init, hub = p, h
+			return map[string]any{"connectors": []map[string]any{{"id": "demo"}}}, nil
+		},
+		Namespaces: map[string]serve.Handler{"demo": func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+			switch method {
+			case "echo":
+				return params, nil
+			case "init":
+				return init, nil
+			case "env":
+				return os.Getenv("DEMO_ENV"), nil
+			case "leak":
+				return os.Getenv("HOST_TEST_HUB_SECRET"), nil
+			case "pid":
+				return os.Getpid(), nil
+			case "sleep":
+				time.Sleep(10 * time.Second)
+				return nil, nil
+			case "exit":
+				go func() { time.Sleep(10 * time.Millisecond); os.Exit(3) }()
+				return nil, nil
+			case "ask":
+				var out string
+				err := hub.Call(ctx, "demo.secret", map[string]any{}, &out)
+				return out, err
+			}
+			return nil, &rpc.Error{Code: plugin.CodeUnknownMethod, Message: method}
+		}},
+	}
+}
+
+func spec(t *testing.T, mode string) Spec {
+	self, _ := os.Executable()
+	return Spec{ID: "demo", Name: "Demo", Command: self, RPC: true, Env: []string{"HOST_TEST_PLUGIN=" + mode, "DEMO_ENV=yes"},
+		Init: func(context.Context) (plugin.InitializeParams, error) {
+			return plugin.InitializeParams{Plugin: plugin.PluginInfo{ID: "demo", Version: "1.0.0"}, Config: json.RawMessage(`{"a":1}`),
+				Secrets: map[string]string{"k": "v"}}, nil
+		},
+		Handle: func(_ context.Context, method string, _ json.RawMessage) (any, error) {
+			if method == "demo.secret" {
+				return "from the hub", nil
+			}
+			return nil, errors.New("no")
+		},
+		Logf: t.Logf}
+}
+
+func waitState(t *testing.T, p *Proc, want string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if s, _ := p.Status(); s == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	s, e := p.Status()
+	t.Fatalf("state %s (%s), want %s", s, e, want)
+}
+
+func pid(t *testing.T, p *Proc) int {
+	t.Helper()
+	var n int
+	if err := p.Call(context.Background(), "demo.pid", struct{}{}, &n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func alive(pid int) bool { return syscall.Kill(pid, 0) == nil }
+
+func TestStartedByCallsStopsWhenIdle(t *testing.T) {
+	t.Setenv("HOST_TEST_HUB_SECRET", "the hub's own")
+	s := spec(t, "rpc")
+	s.OnCall, s.Idle, s.CleanEnv = true, 300*time.Millisecond, true
+	p := Start(context.Background(), s)
+	defer p.Stop()
+	if st, _ := p.Status(); st != StateStopped {
+		t.Fatal("nothing needs it yet:", st)
+	}
+	var got map[string]any
+	if err := p.Call(context.Background(), "demo.echo", map[string]any{"x": 1}, &got); err != nil || got["x"] != float64(1) {
+		t.Fatal(got, err)
+	}
+	var init plugin.InitializeParams
+	if err := p.Call(context.Background(), "demo.init", struct{}{}, &init); err != nil {
+		t.Fatal(err)
+	}
+	if init.Protocol != plugin.Protocol || string(init.Config) != `{"a":1}` || init.Secrets["k"] != "v" {
+		t.Fatalf("%+v", init)
+	}
+	var env, asked string
+	_ = p.Call(context.Background(), "demo.env", struct{}{}, &env)
+	var leaked string
+	_ = p.Call(context.Background(), "demo.leak", struct{}{}, &leaked)
+	if leaked != "" {
+		t.Fatal("a clean environment has none of the hub's own variables:", leaked)
+	}
+	_ = p.Call(context.Background(), "demo.ask", struct{}{}, &asked)
+	if env != "yes" || asked != "from the hub" {
+		t.Fatal(env, asked)
+	}
+	if res, ok := p.Result(); !ok || string(res.Contributes["connectors"]) != `[{"id":"demo"}]` {
+		t.Fatal(res)
+	}
+	n := pid(t, p)
+	waitState(t, p, StateStopped)
+	time.Sleep(100 * time.Millisecond)
+	if alive(n) {
+		t.Fatal("the program is still there")
+	}
+	if pid(t, p) == n {
+		t.Fatal("a new run")
+	}
+}
+
+func TestHeldRunsWhileHeld(t *testing.T) {
+	p := Start(context.Background(), spec(t, "rpc"))
+	defer p.Stop()
+	if err := p.Call(context.Background(), "demo.echo", struct{}{}, nil); !errors.Is(err, ErrNotRunning) {
+		t.Fatal("not started by calls:", err)
+	}
+	release := p.Hold()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := p.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	n := pid(t, p)
+	release()
+	waitState(t, p, StateStopped)
+	time.Sleep(100 * time.Millisecond)
+	if alive(n) {
+		t.Fatal("released: it stops")
+	}
+}
+
+func TestRestartsAfterExitAndTimeouts(t *testing.T) {
+	s := spec(t, "rpc")
+	s.Startup, s.CallTimeout = true, 200*time.Millisecond
+	ups := 0
+	var mu sync.Mutex
+	s.OnUp = func() { mu.Lock(); ups++; mu.Unlock() }
+	p := Start(context.Background(), s)
+	defer p.Stop()
+	if err := p.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	first := pid(t, p)
+	_ = p.Call(context.Background(), "demo.exit", struct{}{}, nil)
+	waitState(t, p, StateError)
+	waitState(t, p, StateRunning)
+	second := pid(t, p)
+	if second == first {
+		t.Fatal("restarted")
+	}
+	for i := 0; i < StrikesToKill; i++ {
+		err := p.Call(context.Background(), "demo.sleep", struct{}{}, nil)
+		var re *rpc.Error
+		if !errors.As(err, &re) || re.Code != plugin.CodeTimeout {
+			t.Fatal(err)
+		}
+	}
+	waitState(t, p, StateError)
+	waitState(t, p, StateRunning)
+	if pid(t, p) == second {
+		t.Fatal("restarted after the timeouts")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if ups != 3 {
+		t.Fatal("up three times:", ups)
+	}
+}
+
+func TestRefusesWrongProtocolAndIdentity(t *testing.T) {
+	s := spec(t, "badproto")
+	s.Startup = true
+	p := Start(context.Background(), s)
+	waitState(t, p, StateError)
+	if _, why := p.Status(); !strings.Contains(why, "协议版本") {
+		t.Fatal(why)
+	}
+	p.Stop()
+
+	s = spec(t, "rpc")
+	s.Startup = true
+	s.Init = func(context.Context) (plugin.InitializeParams, error) {
+		return plugin.InitializeParams{Plugin: plugin.PluginInfo{ID: "other", Version: "1.0.0"}}, nil
+	}
+	p = Start(context.Background(), s)
+	waitState(t, p, StateError)
+	if _, why := p.Status(); !strings.Contains(why, `"demo"`) {
+		t.Fatal(why)
+	}
+	p.Stop()
+
+	s = spec(t, "rpc")
+	s.Startup = true
+	s.Accept = func(plugin.InitializeResult) error { return errors.New("not what was installed") }
+	p = Start(context.Background(), s)
+	waitState(t, p, StateError)
+	p.Stop()
+
+	s = spec(t, "rpc")
+	s.Startup = true
+	s.Check = func(context.Context) error { return errors.New("another build") }
+	p = Start(context.Background(), s)
+	waitState(t, p, StateError)
+	if _, why := p.Status(); why != "another build" {
+		t.Fatal(why)
+	}
+	p.Stop()
+}
+
+func TestHTTPOnly(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hst") // a unix socket path stays short
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	s := spec(t, "http")
+	sock := filepath.Join(dir, "demo.sock")
+	s.RPC, s.HTTP, s.Socket, s.Startup = false, true, sock, true
+	s.Env = append(s.Env, "PERSONA_PLUGIN_SOCKET="+sock)
+	_ = os.WriteFile(sock, nil, 0o600) // a stale one is removed before the start
+	p := Start(context.Background(), s)
+	waitState(t, p, StateRunning)
+	if !p.Healthy(context.Background()) || !p.Ready() {
+		t.Fatal("healthy")
+	}
+	if err := p.Call(context.Background(), "x.y", nil, nil); err == nil {
+		t.Fatal("no protocol")
+	}
+	end, err := p.BeginHTTP(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	end()
+	p.Stop()
+	if st, _ := p.Status(); st != StateStopped {
+		t.Fatal(st)
+	}
+}
+
+func TestElsewhere(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	sock := filepath.Join(dir, "rpc.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() { defer c.Close(); _ = serve.Serve(context.Background(), c, c, demo()) }()
+		}
+	}()
+	s := spec(t, "")
+	s.Command, s.RPCSocket, s.OnCall = "", sock, true
+	p := Start(context.Background(), s)
+	defer p.Stop()
+	var n int
+	if err := p.Call(context.Background(), "demo.pid", struct{}{}, &n); err != nil || n != os.Getpid() {
+		t.Fatal(n, err)
+	}
+
+	s = spec(t, "")
+	s.Command, s.RPCSocket, s.Startup = "", filepath.Join(dir, "none.sock"), true
+	q := Start(context.Background(), s)
+	defer q.Stop()
+	waitState(t, q, StateError)
+
+	s = spec(t, "")
+	s.Command, s.RPC, s.HTTP, s.Socket, s.Startup = "", false, true, filepath.Join(dir, "far.sock"), true
+	far := Start(context.Background(), s)
+	defer far.Stop()
+	waitState(t, far, StateError)
+	hl, err := net.Listen("unix", s.Socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hl.Close()
+	go http.Serve(hl, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
+	waitState(t, far, StateRunning)
+}

@@ -59,6 +59,7 @@
   它会留在 PR 的提交记录里（`refs/pull/<n>/head`，PR 合并后改不掉、删不了，只有 GitHub 支持能清），
   而且 squash 合并时 GitHub 会把和合并人不同的作者写成 `Co-authored-by` 带进 master 的提交信息（2026-11-02）。worktree 共用仓库级配置。
 - `gh pr merge <号> --squash --delete-branch` 连本地分支一起删；那个分支正在某个 worktree 里检出时，gh 2.99 把**整个 worktree 目录也删了**（2026-11-03，叠起来的 PR 在 `/tmp` 的临时 worktree 里 rebase，合并后目录没了）。
+- **别在 worktree 里用 `git stash` 做「先撤掉再对比」**：stash 列表是整个仓库共用的，`git stash` 没东西可存（比如只有未跟踪的新文件）时什么都不做，接着的 `git stash pop` 就把**别人**在别的 worktree 存的那条弹进你的目录（2026-11-04，一条安全快照的冲突和未跟踪文件全落进了新开的 worktree；pop 冲突时 git 保留了那条 stash，没丢）。要对比 master 的行为，另开一个 `git worktree add --detach` 或用 `git show origin/master:<文件>`；真的弹错了，只在自己的 worktree 里 `git reset --hard` 并删掉多出来的未跟踪目录，别动 `git stash list`。
   合并前先让那个 worktree 离开这个分支（`git checkout --detach`），或者合并用的 worktree 不检出 PR 的分支；里面有没提交的东西会一起丢。
 - `gh pr merge --delete-branch` 也可能在 GitHub 已合并之后，本地切回 master 时因 master 正在另一棵 worktree 中而退出失败（2026-11-03，#277）。先查 PR 的 `merged` / `merge_commit_sha`，不要把本地收尾错误当作合并失败反复重试；用主工作区执行合并或分开处理本地分支清理。
 

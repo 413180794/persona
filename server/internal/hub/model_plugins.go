@@ -24,8 +24,8 @@ func (h *Hub) pluginModelChoices(ctx context.Context, id string) (pluginModels, 
 	if h.plugins == nil {
 		return result, errors.New("未接入插件")
 	}
-	p := h.plugins.byID[strings.TrimPrefix(id, "plugin.")]
-	if p == nil || p.cfg.Kind != "voice" {
+	p := h.plugins.get(strings.TrimPrefix(id, "plugin."))
+	if p == nil || p.kind != "voice" || p.client == nil {
 		return result, errors.New("语音插件不存在")
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", "http://plugin/models", nil)

@@ -5,6 +5,10 @@
 // The hub calls the methods below; the program calls back for its secret (secrets.*: the hub binds them to this
 // program's connector) and tells the hub what changed (the changed event). Nothing here logs what crosses the pipe.
 // A write (actions.do) comes only once the hub's gate let it through; the program never starts one itself.
+//
+// A program answers two openings: init and the bare method names (connector protocol 2 on its own), and the plugin
+// protocol's initialize with the same methods in the connector namespace (connector.status, …; docs/plugins.md). The
+// hub starts its connector programs as plugins; the bare opening stays for one release.
 package serve
 
 import (
@@ -14,10 +18,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -48,6 +55,13 @@ const (
 	MSecretsDelete = "secrets.delete"
 	EChanged       = "changed" // ChangedEvent
 )
+
+// Namespace is the connector extension point's (docs/plugins.md): under the plugin protocol every method above is
+// Namespace + "." + method, with the connector's id as the contribution.
+const Namespace = "connector"
+
+// InPlugin is a method's name under the plugin protocol.
+func InPlugin(method string) string { return Namespace + "." + method }
 
 // Protocol is the version of this protocol (docs/connector-protocol.md): the hub sends it with init, the program
 // answers with its own in the manifest, and the hub refuses a program of another version.
@@ -123,7 +137,8 @@ type (
 		Data []byte `json:"data,omitempty"` // nil: nothing stored
 	}
 	ChangedEvent struct {
-		Scope string `json:"scope"`
+		Contribution string `json:"contribution,omitempty"` // under the plugin protocol: the connector's id
+		Scope        string `json:"scope"`
 	}
 )
 
@@ -139,6 +154,19 @@ const (
 // hub's store for this connector.
 type Build func(config json.RawMessage, secrets connector.Secrets) (connector.Connector, error)
 
+// Init is what a connector program is started with.
+type Init struct {
+	Config json.RawMessage
+	// Declared are, under the plugin protocol, the secrets the plugin's manifest declares and the user filled in (an
+	// API key), by name; the connector's own state still goes to the hub's store (secrets).
+	Declared map[string]string
+	// DataDir is the plugin's own directory for caches (plugin protocol only).
+	DataDir string
+}
+
+// BuildWith is Build with all a program is started with.
+type BuildWith func(init Init, secrets connector.Secrets) (connector.Connector, error)
+
 // Restarts of a failing Watch inside the program (the hub's Registry restarts the hub side).
 var (
 	watchFirst = 5 * time.Second
@@ -148,6 +176,11 @@ var (
 // Main serves build's connector on in / out until the hub closes them (the program then exits) or ctx ends. What the
 // connector logs goes to the standard logger (the program's stderr, which the hub keeps).
 func Main(ctx context.Context, in io.Reader, out io.Writer, build Build) error {
+	return MainWith(ctx, in, out, func(i Init, s connector.Secrets) (connector.Connector, error) { return build(i.Config, s) })
+}
+
+// MainWith is Main for a program that needs its declared secrets or data directory (a plugin's connector).
+func MainWith(ctx context.Context, in io.Reader, out io.Writer, build BuildWith) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	peer := rpc.New("c", out)
@@ -169,18 +202,49 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, c connector.Connect
 
 type server struct {
 	peer  *rpc.Peer
-	build Build
+	build BuildWith
 	ctx   context.Context
 	// running: c was handed over built and running (Serve); init only answers its manifest.
 	running bool
 
 	mu sync.Mutex
 	c  connector.Connector
+	// inPlugin: opened with initialize (the plugin protocol), not init. Atomic, like cid: the secrets read them
+	// while init holds mu (a connector may load its secret while it is built).
+	inPlugin atomic.Bool
+	// cid is the connector's id, for the secrets' calls under the plugin protocol: what initialize said is active
+	// until the connector is built, then its own.
+	cid atomic.Pointer[string]
 	// once runs each actions.do once by its request id.
 	once writes
 }
 
 func (s *server) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	if method == plugin.MInitialize {
+		return s.initialize(params)
+	}
+	if rest, ok := strings.CutPrefix(method, Namespace+"."); ok {
+		s.mu.Lock()
+		c := s.c
+		s.mu.Unlock()
+		if c != nil {
+			if want := contributionOf(params); want != "" && want != c.ID() {
+				return nil, &rpc.Error{Code: plugin.CodeNoContribution, Message: "no connector " + want}
+			}
+		}
+		if rest == MInit {
+			return nil, &rpc.Error{Code: CodeUnknownMethod, Message: "unknown method " + method}
+		}
+		method = rest
+	} else if method == plugin.MPing {
+		s.mu.Lock()
+		c := s.c
+		s.mu.Unlock()
+		if c == nil {
+			return nil, &rpc.Error{Code: CodeNotInitialized, Message: "not initialized"}
+		}
+		return struct{}{}, nil
+	}
 	if method == MInit {
 		var p InitParams
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -189,7 +253,7 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		if p.Protocol != Protocol {
 			return nil, &rpc.Error{Code: CodeWrongProtocol, Message: fmt.Sprintf("protocol %d, not %d", p.Protocol, Protocol)}
 		}
-		return s.init(p.Config)
+		return s.init(Init{Config: p.Config})
 	}
 	s.mu.Lock()
 	c := s.c
@@ -324,8 +388,49 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 	return nil, &rpc.Error{Code: CodeUnknownMethod, Message: "unknown method " + method}
 }
 
+// contributionOf is the contribution a namespaced call names ("" when it names none).
+func contributionOf(params json.RawMessage) string {
+	var t plugin.Target
+	_ = json.Unmarshal(params, &t)
+	return t.Contribution
+}
+
+// initialize opens the plugin protocol: the connector is built as with init, and the answer says this program is the
+// plugin the hub started (a first-party program is the hub's build: it takes the id and version it is given) and
+// contributes the connector.
+func (s *server) initialize(params json.RawMessage) (any, error) {
+	var p plugin.InitializeParams
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, err
+	}
+	if p.Protocol != plugin.Protocol {
+		return nil, &rpc.Error{Code: plugin.CodeWrongProtocol, Message: fmt.Sprintf("plugin protocol %d, not %d", p.Protocol, plugin.Protocol)}
+	}
+	s.mu.Lock()
+	if s.c == nil {
+		s.inPlugin.Store(true)
+		if ids := p.Active["connectors"]; len(ids) == 1 {
+			s.cid.Store(&ids[0])
+		}
+	}
+	s.mu.Unlock()
+	m, err := s.init(Init{Config: p.Config, Declared: p.Secrets, DataDir: p.Plugin.DataDir})
+	if err != nil {
+		return nil, err
+	}
+	item, _ := json.Marshal([]plugin.ConnectorItem{ItemOf(m)})
+	return plugin.InitializeResult{Protocol: plugin.Protocol, ID: p.Plugin.ID, Version: p.Plugin.Version,
+		Contributes: map[string]json.RawMessage{"connectors": item}}, nil
+}
+
+// ItemOf is a connector's manifest as a contribution to the connectors extension point.
+func ItemOf(m Manifest) plugin.ConnectorItem {
+	return plugin.ConnectorItem{ID: m.ID, Name: m.Name, Capabilities: m.Capabilities, Hosts: m.Hosts, AgentTools: m.AgentTools,
+		Unlisted: m.Unlisted, PollSeconds: m.PollSeconds, Kinds: m.Kinds}
+}
+
 // init builds the connector the first time and starts its Run and Watch; a second init answers the same.
-func (s *server) init(config json.RawMessage) (Manifest, error) {
+func (s *server) init(init Init) (Manifest, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.c != nil {
@@ -334,7 +439,7 @@ func (s *server) init(config json.RawMessage) (Manifest, error) {
 		}
 		return ManifestOf(s.c), nil
 	}
-	c, err := s.build(config, secrets{s.peer})
+	c, err := s.build(init, &secrets{s: s})
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -342,6 +447,8 @@ func (s *server) init(config json.RawMessage) (Manifest, error) {
 		return Manifest{}, err
 	}
 	s.c = c
+	id := c.ID()
+	s.cid.Store(&id)
 	if r, ok := c.(connector.Runner); ok {
 		go r.Run(s.ctx)
 	}
@@ -356,7 +463,7 @@ func (s *server) watch(e connector.Events) {
 	wait := watchFirst
 	for s.ctx.Err() == nil {
 		start := time.Now()
-		err := e.Watch(s.ctx, func(scope connector.Scope) { _ = s.peer.Notify(EChanged, ChangedEvent{Scope: string(scope)}) })
+		err := e.Watch(s.ctx, func(scope connector.Scope) { s.notifyChanged(scope) })
 		if s.ctx.Err() != nil {
 			return
 		}
@@ -438,19 +545,46 @@ func noCapability(c connector.Connector, what string) error {
 	return &rpc.Error{Code: CodeNoCapability, Message: fmt.Sprintf("%s has no %s", c.Name(), what)}
 }
 
-// secrets is the hub's store for this program's connector, over the pipe.
-type secrets struct{ peer *rpc.Peer }
+// notifyChanged tells the hub something changed, in the opening's words.
+func (s *server) notifyChanged(scope connector.Scope) {
+	s.mu.Lock()
+	c := s.c
+	s.mu.Unlock()
+	if s.inPlugin.Load() && c != nil {
+		_ = s.peer.Notify(InPlugin(EChanged), ChangedEvent{Contribution: c.ID(), Scope: string(scope)})
+		return
+	}
+	_ = s.peer.Notify(EChanged, ChangedEvent{Scope: string(scope)})
+}
 
-func (s secrets) Load(ctx context.Context) ([]byte, error) {
+// secrets is the hub's store for this program's connector, over the pipe.
+type secrets struct{ s *server }
+
+func (x *secrets) call(ctx context.Context, method string, params, out any) error {
+	if !x.s.inPlugin.Load() {
+		return x.s.peer.Call(ctx, method, params, out)
+	}
+	id := ""
+	if p := x.s.cid.Load(); p != nil {
+		id = *p
+	}
+	p, err := plugin.Targeted(params, id)
+	if err != nil {
+		return err
+	}
+	return x.s.peer.Call(ctx, InPlugin(method), p, out)
+}
+
+func (x *secrets) Load(ctx context.Context) ([]byte, error) {
 	var out SecretData
-	err := s.peer.Call(ctx, MSecretsLoad, struct{}{}, &out)
+	err := x.call(ctx, MSecretsLoad, struct{}{}, &out)
 	return out.Data, err
 }
 
-func (s secrets) Save(ctx context.Context, data []byte) error {
-	return s.peer.Call(ctx, MSecretsSave, SecretData{Data: data}, nil)
+func (x *secrets) Save(ctx context.Context, data []byte) error {
+	return x.call(ctx, MSecretsSave, SecretData{Data: data}, nil)
 }
 
-func (s secrets) Delete(ctx context.Context) error {
-	return s.peer.Call(ctx, MSecretsDelete, struct{}{}, nil)
+func (x *secrets) Delete(ctx context.Context) error {
+	return x.call(ctx, MSecretsDelete, struct{}{}, nil)
 }

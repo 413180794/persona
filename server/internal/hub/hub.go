@@ -112,7 +112,7 @@ type Hub struct {
 	devtok        devTokens   // device token lookups (devicetokens.go)
 	public        publicState // TLS identity, listener and advertised addresses (public.go)
 	sends         sendLog     // messages being / just sent, by client_msg_id (send.go)
-	plugins       *plugins    // processes that add to the app, relayed under /api/v1/plugins (plugins.go)
+	plugins       *plugins    // the plugin registry and what runs of it (plugins.go, docs/plugins.md)
 	admin         adminState  // the admin UI (admin.go, docs/admin.md)
 
 	mesh  meshState // the other hubs of the mesh group (mesh.go)
@@ -358,10 +358,10 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
-	h.startConnectors(ctx)
+	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
+	h.startConnectors(ctx) // the plugins' connectors join here (attachPlugins)
 	h.upd.start(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
-	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
 	h.startPlugins(ctx)
 	go h.adminStartup(ctx) // the admin UI's first-run setup code, while it has no password (admin_setupcode.go)
 	if err := h.startPublic(ctx); err != nil {

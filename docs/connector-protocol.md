@@ -4,6 +4,14 @@
 为什么这样设计、和在 hub 里跑的连接器什么关系，见 `docs/connectors.md`「二 · 4」。代码：程序一侧 `server/internal/connector/serve`，
 hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/connector/conformance`。
 
+**它现在是插件协议的 `connector` 命名空间**（#1101，`docs/plugins.md`「进程插件协议」）：连接器程序是一个贡献了 `connectors` 扩展点的插件，
+hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `connector.`（`status` → `connector.status`），参数里多一个 `contribution`（连接器的 id），
+参数、结果、硬性规定一个都不变。程序调 hub 的 `secrets.*` 和事件 `changed` 也一样加前缀、带 `contribution`。进程什么时候起、怎么停、
+怎么重启、配置和用户填的密钥怎么给，都是插件底座的事（`docs/plugins.md`）。
+
+`connector/serve` 同时认两种开头：插件协议的 `initialize` + `connector.*`（hub 现在只用这种），和下面原来的 `init` + 不带前缀的方法名（单独的连接器协议，
+保留一个发布周期，下一次改协议时删）。Go 写的连接器程序用 `serve.MainWith`，它在插件开头里还能拿到用户填的密钥（`Init.Declared`）和数据目录。
+
 ## 传输
 
 - 一行一条 JSON（`internal/rpc`，和 hub↔node 是同一套）：
@@ -96,5 +104,6 @@ hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/c
 ## 一致性测试
 
 `conformance.Check(t, c)` 把一个连接器放在协议的程序一侧（`serve.Serve`，经一对管道），对清单声明的每个能力既直接调、也经协议调，
-两边的结果编成 JSON 必须一字不差：字段在线上丢了、类型变了都会挂。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
+两边的结果编成 JSON 必须一字不差：字段在线上丢了、类型变了都会挂。两种开头各跑一遍（`init` + 原方法名，`initialize` + `connector.*`）；
+插件开头那一遍还查 `initialize` 回的贡献和清单一致、不认识的连接器回 `no_contribution`。程序整体是否守插件协议，由 `plugin/conformance` 查（`docs/plugins.md`「一致性测试」）。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
 线上的每个字段都有明确的 snake_case 名字。第三方的程序可以照着 `serve.Serve` 的接法，用同一份测试检查自己。

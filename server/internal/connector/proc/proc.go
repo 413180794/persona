@@ -1,7 +1,8 @@
-// Package proc is a connector that runs in a program of its own (connector/serve): the hub starts the program while
-// the connector runs, talks to it over its stdin / stdout (internal/rpc) and answers for it in the hub. It implements
-// every capability and declares what the program said it has (a proxy's manifest): the hub uses only those.
-// jarvisd-telegram is one: its dependencies would double jarvisd's size (docs/plan-telegram.md).
+// Package proc is a connector that runs in a program of its own (connector/serve) and answers for it in the hub. It
+// implements every capability and declares what the program said it has (a proxy's manifest): the hub uses only
+// those. The program is either a plugin's, run by the plugin host (Config.Link: the hub's way, docs/plugins.md), or
+// started here with the connector protocol's own opening (Config.Path). jarvisd-telegram is one: its dependencies
+// would double jarvisd's size (docs/plan-telegram.md).
 package proc
 
 import (
@@ -23,9 +24,30 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/plugin/host"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
+
+// Link is a plugin's process (plugin/host) as one of its connectors reaches it: calls go to the connector namespace
+// with the connector's id as the contribution; the process runs while the connector holds it.
+type Link struct {
+	Proc *host.Proc
+	ID   string // the contribution: the connector's id
+}
+
+func (l Link) call(ctx context.Context, method string, params, out any) error {
+	p, err := plugin.Targeted(params, l.ID)
+	if err != nil {
+		return err
+	}
+	err = l.Proc.Call(ctx, serve.InPlugin(method), p, out)
+	if errors.Is(err, host.ErrNotRunning) {
+		return fmt.Errorf("%w", errNotRunning)
+	}
+	return err
+}
 
 // Config is how to run the program.
 type Config struct {
@@ -47,6 +69,9 @@ type Config struct {
 	// Secrets is the hub's store for this connector: the program's secrets.* calls reach only this one.
 	Secrets connector.Secrets
 	Logf    func(string, ...any)
+	// Link, when set, is the plugin process the connector runs in: Path, Args, Env, Version and Settings are then the
+	// plugin host's business, and the hub passes the program's calls and events on (Handle, Event).
+	Link *Link
 }
 
 // Restarts of the program after it exits: doubling from the first to the last, back to the first once it ran a while.
@@ -130,8 +155,12 @@ func (c *Conn) setDown(why string) {
 }
 
 // Run keeps the program running until ctx ends: checks it is the hub's build, starts it, restarts it after a
-// backoff when it exits.
+// backoff when it exits. A linked one holds its plugin's process instead, which the plugin host runs.
 func (c *Conn) Run(ctx context.Context) {
+	if c.cfg.Link != nil {
+		c.runLinked(ctx)
+		return
+	}
 	wait := restartFirst
 	for ctx.Err() == nil {
 		start := time.Now()
@@ -166,6 +195,54 @@ func (c *Conn) Run(ctx context.Context) {
 	}
 }
 
+// runLinked holds the plugin's process while ctx lasts, refreshing the status and tools each time it comes up and
+// every so often while it is up.
+func (c *Conn) runLinked(ctx context.Context) {
+	p := c.cfg.Link.Proc
+	release := p.Hold()
+	defer release()
+	t := time.NewTicker(statusEvery)
+	defer t.Stop()
+	up := false
+	for {
+		changes := p.Changes()
+		switch ready := p.Ready(); {
+		case ready && !up:
+			up = true
+			c.refresh(ctx)
+		case !ready:
+			up = false
+			state, why := p.Status()
+			switch state {
+			case host.StateError:
+			case host.StateStarting:
+				why = c.cfg.Name + " 正在启动"
+			default:
+				why = c.cfg.Name + " 进程还没启动"
+			}
+			c.setDown(why)
+		}
+		select {
+		case <-ctx.Done():
+			c.setDown(c.cfg.Name + " 已停止")
+			return
+		case <-changes:
+		case <-t.C:
+			if up {
+				c.refresh(ctx)
+			}
+		}
+	}
+}
+
+// Handle answers a linked program's calls (connector.secrets.*, without the namespace), as fromProgram.
+func (c *Conn) Handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	return c.fromProgram(ctx, method, params)
+}
+
+// Event takes a linked program's event (changed, without the namespace).
+func (c *Conn) Event(event string, params json.RawMessage) { c.onEvent(event, params) }
+
 // keepUp refreshes the status every so often until the program exits or ctx ends.
 func (c *Conn) keepUp(ctx context.Context, ch *child) {
 	t := time.NewTicker(statusEvery)
@@ -184,14 +261,32 @@ func (c *Conn) keepUp(ctx context.Context, ch *child) {
 
 // refresh asks the running program for its status and tools.
 func (c *Conn) refresh(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+	if l := c.cfg.Link; l != nil {
+		if !l.Proc.Ready() {
+			return
+		}
+		var st connector.Status
+		if err := l.call(ctx, serve.MStatus, struct{}{}, &st); err != nil {
+			return
+		}
+		var tools, actions serve.ToolsResult
+		_ = l.call(ctx, serve.MTools, struct{}{}, &tools)
+		if c.Manifest().Has(connector.CapActions) {
+			_ = l.call(ctx, serve.MActions, struct{}{}, &actions)
+		}
+		c.mu.Lock()
+		c.status, c.tools, c.actions = st, tools.Tools, actions.Tools
+		c.mu.Unlock()
+		return
+	}
 	c.mu.Lock()
 	peer := c.peer
 	c.mu.Unlock()
 	if peer == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, callTimeout)
-	defer cancel()
 	var st connector.Status
 	if err := peer.Call(ctx, serve.MStatus, struct{}{}, &st); err != nil {
 		return
@@ -372,6 +467,15 @@ var errNotRunning = errors.New("not running")
 
 // call runs one method on the running program.
 func (c *Conn) call(ctx context.Context, method string, params, out any) error {
+	if l := c.cfg.Link; l != nil {
+		ctx, cancel := context.WithTimeout(ctx, callTimeout)
+		defer cancel()
+		err := l.call(ctx, method, params, out)
+		if errors.Is(err, errNotRunning) {
+			return fmt.Errorf("%s: %w", c.cfg.Name, errNotRunning)
+		}
+		return err
+	}
 	c.mu.Lock()
 	peer := c.peer
 	c.mu.Unlock()
@@ -402,6 +506,16 @@ func (c *Conn) Logout(ctx context.Context) error {
 	if !errors.Is(err, errNotRunning) {
 		c.refresh(ctx)
 		return err
+	}
+	if l := c.cfg.Link; l != nil {
+		release := l.Proc.Hold()
+		defer release()
+		wctx, cancel := context.WithTimeout(ctx, callTimeout)
+		defer cancel()
+		if err := l.Proc.Wait(wctx); err != nil {
+			return err
+		}
+		return c.call(ctx, serve.MLogout, struct{}{}, nil)
 	}
 	ch, err := c.spawn(ctx)
 	if err != nil {
