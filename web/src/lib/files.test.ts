@@ -149,6 +149,7 @@ describe("viewer", () => {
     expect(viewKind(file("clip.mp4", { stream: true, mime: "video/mp4" }))).toBe("binary");
     expect(viewKind(file("Report.docx", { stream: true }))).toBe("office");
     expect(viewKind(file("analysis.ipynb", { text: "{}", mime: "application/x-ipynb+json" }))).toBe("notebook");
+    expect(viewKind(file("report.html", { text: "<p>x</p>", mime: "text/html" }))).toBe("html");
     expect(viewKind(file("deck.pptx", { data: "AA==" }))).toBe("office");
     expect(viewKind(file("old.doc", { stream: true }))).toBe("office");
     expect(viewKind(file("notes.rtf", { text: "{\\rtf1 hi}" }))).toBe("office");

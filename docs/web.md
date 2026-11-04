@@ -290,6 +290,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   Markdown 单元走同一个 Markdown（公式、Mermaid），单元附件里的图在渲染后换上（react-markdown 不放 data: URL，先写成 `#nb-attachment=` 再替换）；代码单元按内核语言上色、带 `[n]:`；
   每个输出只显示一种：图片（PNG / JPEG / GIF / WebP / SVG）> HTML > Markdown > LaTeX（转成 `$$`）> JSON > 纯文本；相邻同名的 stdout / stderr 合并，stderr 红底；报错显示去掉 ANSI 颜色码的完整 traceback（横向滚动，不折行、不截断）；其他单个文本输出超过 2000 行截断并写剩几行。
   HTML 输出（pandas 表格等）放进 `sandbox=""` 的 srcdoc iframe，CSP 禁联网，配色跟随网页深浅色，高度按行数估、可拖。整个文件最多读 64 MB。
+- **HTML 预览**（#1413，`session/files/HtmlPreview.tsx`、`lib/html-preview.ts`；iOS / Mac 是 #1297）：.html / .htm / .xhtml 默认「预览」，可切「源码」。页面放进 srcdoc iframe，**任何时候都不给 `allow-same-origin`**（碰不到本页、存储和 token）；
+  默认禁脚本（sandbox 不给 `allow-scripts`）、禁联网（在 doctype 后面注入 CSP `default-src 'none'`，只放 data: / blob: 图片、内联样式）。工具条的「脚本」「联网」各自打开，只对这次打开的这个文件有效，旁边写当前状态；「重新加载」重开一次。
+  注入 `<base target="_blank">`，链接在新标签打开。页面引用的同目录文件（图片、样式表和其中的 `@import` / `url()` 字体图片、脚本、图标）经 hub 读出来放进页面本身（data: URL、内联 `<style>` / `<script>`，`lib/html-inline.ts`，用 DOMParser 解析，什么都不加载、不执行），隔离框仍不联网、无同源；最多 150 个、单个 10 MB、合计 40 MB，工具条写读入了几个、几个读不到。本机 dev server 的站点预览另算（端口转发那边）。整个文件最多读 16 MB，再大按源码显示。
 - **链接**：见下面「链接在页面里打开」。
 
 ### 链接在页面里打开

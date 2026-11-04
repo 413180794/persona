@@ -5553,6 +5553,38 @@ if os.environ.get("MOCK_NOTEBOOK"):  # a Jupyter notebook for the web's viewer (
            ]}
     MOCK_TREE.setdefault(MOCK_REPO + "/notebooks/", None)
     MOCK_TREE[MOCK_REPO + "/notebooks/收入分析.ipynb"] = json.dumps(_nb, ensure_ascii=False, indent=1)
+if os.environ.get("MOCK_HTML"):  # an HTML page for the web's sandboxed preview (#1413): styles, a script, a remote and a local picture
+    MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
+    MOCK_TREE[MOCK_REPO + "/reports/周报.html"] = """<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>天气 App 周报</title>
+<link rel="stylesheet" href="周报.css">
+<style>
+  body { font: 15px/1.6 -apple-system, "PingFang SC", sans-serif; margin: 0; color: #1f2328; background: #f6f8fa; }
+  header { background: linear-gradient(120deg, #1f3864, #1f6feb); color: #fff; padding: 28px 32px; }
+  header h1 { margin: 0; font-size: 26px; } header p { margin: 4px 0 0; opacity: .85; }
+  main { padding: 20px 32px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card b { display: block; font-size: 28px; color: #1f6feb; } .warn b { color: #cf222e; }
+  #js { grid-column: 1 / -1; padding: 10px 14px; border-radius: 8px; background: #fff8c5; }
+  img { max-width: 100%; }
+</style></head>
+<body>
+<header><h1>天气 App 周报</h1><p>第 45 周 · 示例数据</p></header>
+<main>
+  <div class="card">日活<b>+18%</b>比上周</div>
+  <div class="card">崩溃率<b>0.12%</b>目标 0.2% 以下</div>
+  <div class="card warn">差评<b>3</b>都和锁屏小组件有关</div>
+  <div id="js">脚本没有运行（默认禁用脚本）</div>
+  <div class="card"><img src="https://example.com/tracker.png" alt="远程图片（默认禁止联网）"></div>
+  <div class="card"><img src="chart.png" alt="同目录的图片"></div>
+  <div class="card"><a href="https://example.com/report">完整报告</a></div>
+</main>
+<script>document.getElementById("js").textContent = "脚本已运行：" + new Date(2026, 10, 4).toLocaleDateString("zh-CN");</script>
+</body></html>
+"""
+    # files beside it, read through the hub into the preview (#1413)
+    FILES["/Users/me/code/weather/reports/chart.png"] = _bar_png(480, 200)
+    FILES["/Users/me/code/weather/reports/周报.css"] = ".card.warn { outline: 3px solid #cf222e; } header::after { content: '（样式来自 周报.css）'; font-size: 13px; opacity: .8; }".encode()
 if os.environ.get("MOCK_OFFICE"):  # the Office viewer's files (#1345): rendered in the browser, or converted by "LibreOffice"
     MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
     MOCK_TREE[MOCK_REPO + "/reports/季度报告.docx"] = (MOCK_MIMES[".docx"], base64.b64encode(office_docx()).decode())

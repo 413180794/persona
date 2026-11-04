@@ -194,3 +194,10 @@
 
 - **react-markdown 默认滤掉 data: URL**（`defaultUrlTransform` 只放常见协议），笔记本单元附件 `attachment:x.png` 直接换成 data URL 会变成空 src：先改写成 `#nb-attachment=名字` 这种它放行的片段地址，渲染后在 layout effect 里换成真图。
 - **traceback 里全是 ANSI 颜色码**，而且按终端宽度排好了列：去掉颜色码后用 `white-space: pre` 横向滚动，折行（pre-wrap）会把 Traceback 那一行拆得乱七八糟。
+
+## HTML 预览（2026-11-04，#1413）
+
+- **CSP 的 meta 要放在 doctype 后面**：放在 `<!DOCTYPE html>` 前面，页面进怪异模式（布局变样）；放在它后面、`<html>` 前面就行，解析器会把开头的 `<meta>` 收进隐式的 `<head>`，排在页面自己加载的任何资源前面。
+- **srcdoc 沙盒里只能靠 CSP 断网**：sandbox 没有「禁止联网」的开关，不给脚本也照样加载 `<img src="https://…">`（跟踪像素）。要断网就得注入 `default-src 'none'`。
+
+- **沙盒里的页面要用同目录的文件，就由外面读好塞进去**（#1413）：srcdoc 框没有地址，`<img src="chart.png">` 解析到 `about:srcdoc` 下面，必然 404；放开联网也没用。外层页面（同源、带 token）经 `file/download` 读，转成 data URL / 内联样式和脚本再交给框；样式表里的 `url()` 要按样式表自己的目录解析，`@import` 递归拉进来。内联脚本里的 `</script` 要转义，不然提前结束元素。

@@ -35,6 +35,7 @@ import { Lightbox } from "../../chat/Steps";
 import { PanelHeader } from "../../SidePanel";
 import { BackHeader, Empty, FileGlyph, Segmented, useWindow } from "./parts";
 import { parseNotebook } from "../../../lib/notebook";
+import { HtmlPreview } from "./HtmlPreview";
 import { NotebookView } from "./NotebookView";
 import { OfficeView } from "./OfficeView";
 import { SheetView } from "./SheetView";
@@ -48,6 +49,7 @@ const COLOR_BYTES = 8 << 20;
 const PRETTY_BYTES = 8 << 20; // bigger JSON shows as read, not re-indented
 const MAX_TABLE_TEXT = 64 << 20; // a CSV is read whole up to this, then parsed
 const MAX_NOTEBOOK = 64 << 20; // a notebook is read whole up to this (its outputs' pictures are inside)
+const MAX_HTML = 16 << 20; // an HTML page is read whole up to this to preview
 const MAX_TABLE_BYTES = 200 << 20; // a workbook bigger than this is not opened in the browser
 
 // stream=1: a binary file comes described, its bytes from file/download by Range (docs/protocol.md「文件预览」); an
@@ -211,11 +213,12 @@ export function FileView({
   const [saving, setSaving] = useState(false);
 
   // JSON is indented from the whole text: read the rest first (as the app does), up to a cap.
-  const wantAll = (kind === "json" || kind === "notebook") && doc.next > 0 && (f?.size ?? 0) <= (kind === "notebook" ? MAX_NOTEBOOK : MAX_JSON);
+  const cap = kind === "notebook" ? MAX_NOTEBOOK : kind === "html" ? MAX_HTML : MAX_JSON;
+  const wantAll = (kind === "json" || kind === "notebook" || kind === "html") && doc.next > 0 && (f?.size ?? 0) <= cap;
   const { all } = doc;
   useEffect(() => {
-    if (wantAll) void all(kind === "notebook" ? MAX_NOTEBOOK : MAX_JSON);
-  }, [wantAll, all, kind]);
+    if (wantAll) void all(cap);
+  }, [wantAll, all, cap]);
   const notebook = useMemo(() => {
     if (kind !== "notebook" || doc.next > 0) return null;
     try {
@@ -275,6 +278,7 @@ export function FileView({
     <>
       {kind === "markdown" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "预览"], ["source", "源码"]]} />}
       {kind === "json" && json?.pretty != null && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "格式化"], ["source", "原文"]]} />}
+      {kind === "html" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "预览"], ["source", "源码"]]} />}
       {kind === "notebook" && notebook?.nb && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "笔记本"], ["source", "源文件"]]} />}
       {kind === "sheet" && typeof f?.text === "string" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "表格"], ["source", "源文件"]]} />}
       <IconButton icon="copy" label="拷贝路径" onClick={() => copyText(f?.path || path)} />
@@ -308,6 +312,15 @@ export function FileView({
     body = <ImageView file={f} src={inlineSrc(mid, f, cwd)} />;
   } else if (kind === "pdf") {
     body = <PdfView file={f} src={f.stream ? inlineSrc(mid, f, cwd) : ""} />;
+  } else if (kind === "html" && mode === "rendered" && !(doc.next > 0 && !wantAll)) {
+    body =
+      doc.next > 0 ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Loading label={`正在读取 · ${bytes(f.size)}`} />
+        </div>
+      ) : (
+        <HtmlPreview html={doc.text} title={f.name} mid={mid} path={f.path} />
+      );
   } else if (kind === "notebook" && mode === "rendered" && !notebook?.error && !(doc.next > 0 && !wantAll)) {
     body = notebook?.nb ? (
       <NotebookView nb={notebook.nb} />
@@ -338,7 +351,9 @@ export function FileView({
   } else {
     const shown = kind === "json" && mode === "rendered" && json?.pretty != null ? json.pretty : doc.text;
     const note =
-      kind === "notebook" && notebook?.error
+      kind === "html" && doc.next > 0 && !wantAll
+        ? "页面太大，按源码显示"
+        : kind === "notebook" && notebook?.error
         ? `${notebook.error}，按文本显示`
         : kind === "notebook" && doc.next > 0 && !wantAll
           ? "笔记本太大，按文本显示"
