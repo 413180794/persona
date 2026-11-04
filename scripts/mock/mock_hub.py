@@ -8681,7 +8681,7 @@ class H(BaseHTTPRequestHandler):
         listed = any(pp.get("port") == port for x in all_sessions() for pp in (x.get("ports") or []))
         # The live screen (#1184): macOS's Screen Sharing on this Mac's own 5900, for a Mac the plugin cua is on for.
         machine = next((m for m in MACHINES if m["id"] == mid), {})
-        listed = listed or (port == 5900 and machine.get("computer", {}).get("enabled"))
+        listed = listed or (port == 5900 and (machine.get("computer", {}).get("enabled") or machine.get("browser", {}).get("enabled")))  # cua or ego (#1507)
         if not listed: return self.send_json({"error": "port %d is not an agent's and was not opened" % port}, 403)
         try:
             to = FAKE_SCREEN["port"] if port == 5900 and FAKE_SCREEN["port"] else port

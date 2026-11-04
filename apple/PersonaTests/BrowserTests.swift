@@ -18,6 +18,15 @@ struct BrowserTests {
         #expect(try machine(",\"browser\":{\"enabled\":false}").browser?.checked == false, "not asked yet")
     }
 
+    /// The plugin ego on for a Mac with Screen Sharing shows its live screen, without the plugin cua (#1507).
+    @Test func egoShowsTheScreen() throws {
+        #expect(AppModel.showsScreen(try machine(",\"browser\":{\"enabled\":true,\"screen_sharing\":true}")))
+        #expect(!AppModel.showsScreen(try machine(",\"browser\":{\"enabled\":false,\"screen_sharing\":true}")))
+        #expect(!AppModel.showsScreen(try machine(",\"browser\":{\"enabled\":true,\"screen_sharing\":false}")))
+        #expect(AppModel.showsScreen(try machine(",\"computer\":{\"enabled\":true,\"screen_sharing\":true}")))
+        #expect(!AppModel.showsScreen(try machine("")))
+    }
+
     @Test func theStepsSayWhatIsLeft() {
         let setUp = BrowserGuide.setUpSteps(MachineBrowser(installed: true))
         #expect(setUp.map(\.id) == ["open", "import", "finish", "recheck"])

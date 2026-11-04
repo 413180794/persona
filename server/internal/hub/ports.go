@@ -130,10 +130,13 @@ func (h *Hub) openPort(w http.ResponseWriter, r *http.Request, m *Machine) {
 const screenPort = 5900
 
 // portAllowed: an agent on the machine listens on port, or the user opened it, or it is the screen of a Mac the
-// plugin cua is on for.
+// plugin cua or ego is on for (ego's first-run setup is done over it, #1507).
 func (h *Hub) portAllowed(m *Machine, port int) bool {
 	if port == screenPort {
 		if c := h.computerOf(m); c != nil && c.Enabled {
+			return true
+		}
+		if b := h.browserOf(m); b != nil && b.Enabled {
 			return true
 		}
 	}

@@ -192,7 +192,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 
 只经 hub 的隧道，不对外开新端口：
 - 客户端 ⇄ hub：WebSocket `GET /api/v1/machines/{mid}/ports/5900/connect?token=…`，二进制帧，原样 TCP 字节（[ports.md](ports.md) 的端口转发）。
-  - 插件对这台 Mac 打开时，hub 常设放行 5900（`portAllowed`），只放 5900，不用 Agent 在听、也不用手动 `open`。
+  - 插件 `cua` 或 `ego` 对这台 Mac 打开时，hub 常设放行 5900（`portAllowed`），只放 5900，不用 Agent 在听、也不用手动 `open`。ego 的首次设置要经它在手机上做（#1507 第 6 条），所以不要求同时开着 `cua`；页面先问 `computer`，没开再问 `browser`。
   - 接受 noVNC 可能带的 `binary` 子协议。
   - 只读的设备（手表那种）照旧 403。
 - hub ⇄ node：`port.dial`，node 只连本机的 `127.0.0.1:5900`。

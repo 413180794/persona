@@ -553,9 +553,13 @@ final class AppModel {
     }
 
     func machine(_ ref: MachineRef) -> Machine? { machines.first { $0.id == ref.id && $0.group == ref.group } }
-    /// Macs whose live screen can be shown: the plugin cua is on for them and Screen Sharing answers (docs/computer-use.md).
-    var screenMachines: [Machine] { machines.filter { $0.computer?.enabled == true && $0.computer?.screenSharing == true } }
-    func canShowScreen(_ ref: MachineRef) -> Bool { machine(ref)?.computer.map { $0.enabled && $0.screenSharing } ?? false }
+    /// Macs whose live screen can be shown: the plugin cua or ego is on for them and Screen Sharing answers
+    /// (docs/computer-use.md; ego's first-run setup is done over it, #1507).
+    var screenMachines: [Machine] { machines.filter(Self.showsScreen) }
+    func canShowScreen(_ ref: MachineRef) -> Bool { machine(ref).map(Self.showsScreen) ?? false }
+    nonisolated static func showsScreen(_ m: Machine) -> Bool {
+        (m.computer.map { $0.enabled && $0.screenSharing } ?? false) || (m.browser.map { $0.enabled && $0.screenSharing } ?? false)
+    }
     /// Brings up ref's live screen.
     func openScreen(_ ref: MachineRef) {
         guard api(ref.group) != nil else { toast = Toast("尚未连接 hub", style: .error); return }

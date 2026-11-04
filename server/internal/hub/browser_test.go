@@ -91,9 +91,15 @@ func TestEgoPlugin(t *testing.T) {
 	if h.browserTools() != nil {
 		t.Fatal("no tools before a Mac is on")
 	}
+	if h.portAllowed(mac, screenPort) {
+		t.Fatal("not on for this Mac: no live screen")
+	}
 	code, out := call(t, mux, "PUT", "/api/v1/machines/mac/browser", h.cfg.Token, `{"enabled": true}`)
 	if code != 200 || out["enabled"] != true || out["ready"] != true || out["set_up"] != true {
 		t.Fatalf("%d %v", code, out)
+	}
+	if !h.portAllowed(mac, screenPort) || h.portAllowed(mac, 5901) {
+		t.Fatal("on for this Mac: its live screen (5900) and only that, without the plugin cua (#1507)")
 	}
 	if got := toolNames(h.mcpTools(true)); !strings.Contains(got, "browser_run") || !strings.Contains(got, "browser_look") {
 		t.Fatal(got)
@@ -151,7 +157,7 @@ func TestEgoPlugin(t *testing.T) {
 	if err := h.plugins.reg.SetEnabled(ctx, egoPluginID, false, "test"); err != nil {
 		t.Fatal(err)
 	}
-	if mac.snapshot().Browser != nil || h.browserTools() != nil {
+	if mac.snapshot().Browser != nil || h.browserTools() != nil || h.portAllowed(mac, screenPort) {
 		t.Fatal("off again: nothing of it")
 	}
 }

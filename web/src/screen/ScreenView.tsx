@@ -55,15 +55,27 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
           setAccount((a) => a || accountOf(m.home));
         }
         if (m && !m.online) throw new Error(`${m.name} 离线，连上后再看。`);
-        const c = await api<Computer>(`/machines/${encodeURIComponent(target.mid)}/computer`, { token: target.token });
-        if (!c.enabled) throw new Error("这台 Mac 还没有打开「操控电脑」：在它的机器页打开。");
-        if (!c.screen_sharing) throw new Error("这台 Mac 的屏幕共享没开：在它的「系统设置 › 通用 › 共享」里打开「屏幕共享」。");
+        // The plugin cua or ego, on for this Mac, lets its screen through (#1507); each asked fresh, 404 while off.
+        const fresh = async (what: "computer" | "browser") => {
+          try {
+            return await api<Computer>(`/machines/${encodeURIComponent(target.mid)}/${what}`, { token: target.token });
+          } catch (e) {
+            if (e instanceof ApiError && e.status === 404) return null;
+            throw e;
+          }
+        };
+        const c = await fresh("computer");
+        const b = c?.enabled ? null : await fresh("browser");
+        const on = c?.enabled ? c : b?.enabled ? b : null;
+        if (!c && !b) throw new Error("操控电脑和浏览器（ego lite）的插件都没打开，或这台不是 Mac。");
+        if (!on) throw new Error("这台 Mac 还没有打开「操控电脑」或「浏览器」：在它的机器页打开。");
+        if (!on.screen_sharing) throw new Error("这台 Mac 的屏幕共享没开：在它的「系统设置 › 通用 › 共享」里打开「屏幕共享」。");
         if (!gone) {
           setPhase({ kind: "connecting" });
           setGo(true);
         }
       } catch (e) {
-        const why = e instanceof ApiError && e.status === 404 ? "操控电脑的插件没打开，或这台不是 Mac。"
+        const why = e instanceof ApiError && e.status === 404 ? "这台机器不在 hub 上，或不是 Mac。"
           : e instanceof ApiError && e.status === 401 ? (target.embedded ? "hub 没认这台设备的凭据：在 App 的「设置 › hub」里重新配对。" : "hub 没认这个凭据：在网页上重新登录 hub。")
           : errorText(e);
         if (!gone) setPhase({ kind: "blocked", why });

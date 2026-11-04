@@ -14,7 +14,7 @@ final class BrowserSectionTests: XCTestCase {
         }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
         let toggle = app.switches["browser-switch"].firstMatch
@@ -46,6 +46,16 @@ final class BrowserSectionTests: XCTestCase {
         XCTAssertTrue(importStep.label.contains("从 Chrome") && importStep.label.contains("钥匙串密码"), importStep.label)
         XCTAssertTrue(app.buttons["browser-open"].exists && app.buttons["browser-recheck"].exists && app.buttons["browser-screen"].exists)
         shot(app, "browser-setup")
+        if ProcessInfo.processInfo.environment["JARVIS_BROWSER_SCREEN"] == "1" {
+            // 看画面 opens that Mac's live screen with only the plugin ego on for it (#1507), up to its sign-in
+            // (MOCK_WEB, MOCK_SCREEN=fake).
+            app.buttons["browser-screen"].tap()
+            let signIn = app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
+            XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the live screen with ego only:\n\(app.debugDescription)")
+            shot(app, "browser-screen")
+            app.descendants(matching: .any)["screen-close"].firstMatch.tap()
+            XCTAssertTrue(app.buttons["browser-open"].waitForExistence(timeout: 10), "back on the machine page")
+        }
         app.buttons["browser-open"].tap()
         XCTAssertTrue(waitFor(status, "打开了 ego lite"), status.label)
         XCTAssertTrue(waitFor(status, "就绪", timeout: 30), "set up on the Mac: \(status.label)")
