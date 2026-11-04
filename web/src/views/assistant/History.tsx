@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { ago, stateOf } from "../../lib/format";
+import { plainMarkdown } from "../../lib/plain-markdown";
 import { href, navigate, onLinkClick, type Route } from "../../lib/router";
 import { refreshAssistant, useStore } from "../../lib/store";
 import type { AssistantInfo, Session } from "../../lib/types";
@@ -181,10 +182,6 @@ function markTone(id: string): string {
   return MARK_TONES[h % MARK_TONES.length];
 }
 
-function plain(text?: string): string {
-  return (text ?? "").replace(/[`*_#>|]/g, "").replace(/\s+/g, " ").trim();
-}
-
 function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?: boolean; now: number; onRename: (s: Conversation) => void; onArchive: (s: Conversation, on: boolean) => void }) {
   const menu = useMenu();
   const route: Route = { name: "jarvis", sid: s.session_id };
@@ -192,7 +189,7 @@ function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?
   const split = splitTitle(title);
   const st = stateOf(s);
   const flagged = st === "needs_you" || st === "working" || st === "unread";
-  const last = plain(s.last_text);
+  const last = plainMarkdown(s.last_text);
   const items: MenuItem[] = [
     ...(!main ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => onRename(s) }] : []),
     { key: "copy", label: "拷贝会话 ID", icon: "copy", onSelect: () => void copyText(s.session_id) },

@@ -204,6 +204,12 @@ button:disabled { cursor: default; }
 /* KaTeX's display math doesn't wrap: a wide matrix or equation scrolls in place instead of widening the column. */
 .prose-j .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: .1em 0; }
 .prose-sm { font-size: 13px; line-height: 1.65; }
+.prose-compact { font-size: 13px; line-height: 1.55; color: inherit; }
+.prose-compact :is(p, ul, ol, blockquote, pre, table, h1, h2, h3, h4, h5, h6) { margin: .2em 0; }
+.prose-compact :is(h1, h2, h3, h4, h5, h6) { font-size: 1em; line-height: inherit; letter-spacing: 0; color: inherit; }
+.prose-compact li { margin: 0; }
+.prose-compact hr { margin: .4em 0; }
+.prose-compact pre { padding: 6px 10px; font-size: 12px; line-height: 1.5; }
 
 /* 团子, the default persona (views/assistant/MochiFace.tsx): the app icon's colors, not the page's accent. */
 :root {

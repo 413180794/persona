@@ -799,15 +799,22 @@ func (m *Machine) taskTurnEnded(sid string) {
 	}
 	h.tasks.receipted[t.ID] = time.Now()
 	h.tasks.mu.Unlock()
-	body := receiptBody{Title: t.Title, State: "done", Summary: clip(strings.TrimSpace(last.LastText), 300), Machine: m.cfg.Name}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	// The whole last reply, as Markdown: the session list's last_text is one line cut at 200 characters.
+	text := strings.TrimSpace(last.LastText)
+	if lm := h.localMachine(last.MachineID); lm != nil {
+		if _, answer := lastTurn(ctx, lm, last.SessionID); answer != "" {
+			text = answer
+		}
+	}
+	body := receiptBody{Title: t.Title, State: "done", Summary: clipMarkdown(text, 600), Machine: m.cfg.Name}
 	if body.Summary == "" {
 		body.Summary = "完成了"
 	}
-	if pr := prLink.FindAllString(last.LastText, -1); len(pr) > 0 {
+	if pr := prLink.FindAllString(text, -1); len(pr) > 0 {
 		body.PR = pr[len(pr)-1]
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	if _, err := h.appendFeed(ctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 		h.logf("task %s: receipt: %v", t.ID, err)
 	}

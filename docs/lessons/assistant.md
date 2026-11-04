@@ -41,3 +41,7 @@
 - lark-cli 以用户身份发消息要应用开了 `im:message.send_as_user`，默认的应用没有（2026-11-04，#273）：`auth login --domain all` 拿到两百多个权限也没有它，
   `im +messages-send --as user` 回 `missing_scope`，提示的 `auth login --scope …` 也补不上（应用没开的权限用户授权不了）。机器人身份有 `im:message`，
   所以助手发消息、回复一律 `--as bot`，手机卡片按 `--as` 写身份。这次是手机上点了同意之后才在飞书那边失败的：闸门只能确认「要不要做」，做不做得成要看权限。
+- 会话的 `last_text` 是 node 截过的预览（空白全压成一个空格、只留 200 个字，`node/sessions.go` 的 `snippet`），不是能渲染的 Markdown（2026-11-04，#1508）：
+  任务完成卡片拿它当摘要，列表、标题挤成一行，`**`、反引号可能被截在中间，网页又按纯文本显示，用户看到一串符号。要原文的地方（完成卡片）
+  用 `session.items` 读 transcript 里最后一条回复（`lastTurn`），截断用 `clipMarkdown`（按行、不截在标记中间）；只显示一两行的地方
+  （任务进度行、推送）把 Markdown 去掉（hub `plainMarkdown`、网页 `lib/plain-markdown.ts`），别原样显示。

@@ -4,6 +4,7 @@ import { api, enc, errorText } from "../lib/api";
 import { ago, clock, shortPath, stateOf, tabLabel, uuid } from "../lib/format";
 import { launchAgent } from "../lib/new-agent";
 import { navigate } from "../lib/router";
+import { plainMarkdown } from "../lib/plain-markdown";
 import { useAgentSessions } from "../lib/sessions";
 import { refresh, refreshTodos, useStore } from "../lib/store";
 import {
@@ -390,7 +391,7 @@ function TodoListItem({
                 {urgent.agent.title || urgent.session.title || "Agent"} {urgentKicker}：
               </span>
             )}
-            {urgent.session.last_text}
+            {plainMarkdown(urgent.session.last_text)}
           </div>
         )}
       </div>
@@ -707,7 +708,7 @@ function TodoDetail({
                         {st === "needs_you" && (
                           <span className="font-medium text-red">{kicker}：</span>
                         )}
-                        {session.last_text}
+                        {plainMarkdown(session.last_text)}
                       </div>
                     ) : null}
                   </div>

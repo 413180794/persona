@@ -28,6 +28,8 @@ import {
 import { dockAgents, isRemovable, makeSessionLookup, mostUrgentAgent, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
 import { navigate } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
+import { plainMarkdown } from "../../lib/plain-markdown";
+import { Markdown } from "../../ui/Markdown";
 import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
 import { Button, Collapse, cx, Menu, StatusDot, toast } from "../../ui/atoms";
@@ -246,7 +248,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
       ? "有事等你回答"
       : status === "failed"
         ? `没开起来：${startFailure(todo, plans) ?? "原因不明"}`
-        : lead?.last_text?.trim() || (startError ? `没开起来：${startError}` : status === "not_started" ? "正在开 Agent" : "还没有动静");
+        : plainMarkdown(lead?.last_text) || (startError ? `没开起来：${startError}` : status === "not_started" ? "正在开 Agent" : "还没有动静");
   return (
     <div
       role="button"
@@ -446,7 +448,7 @@ function ReceiptCard({ item }: { item: FeedItem }) {
       <Icon name={failed ? "info" : "check"} size={18} stroke={2.4} className={failed ? "text-red" : "text-green"} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="text-[14.5px] font-semibold">{failed ? `${title}没开起来` : `${title} 完成`}</div>
-        {summary && <div className="line-clamp-4 text-[13px] text-ink-2">{summary}</div>}
+        {summary && <ReceiptSummary text={summary} plain={failed} />}
         <div className="mt-1 flex gap-2">
           {failed && todo && (
             <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo)}>
@@ -461,6 +463,16 @@ function ReceiptCard({ item }: { item: FeedItem }) {
           {!failed && item.ref && <Button onClick={() => openTask(item.ref!)}>看看</Button>}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** What the task's agent said last, as Markdown (a start error is plain text), in about four lines (#1508). */
+export function ReceiptSummary({ text, plain }: { text: string; plain?: boolean }) {
+  if (plain) return <div className="line-clamp-4 text-[13px] text-ink-2">{text}</div>;
+  return (
+    <div className="line-clamp-4 text-ink-2">
+      <Markdown text={text} compact />
     </div>
   );
 }
@@ -570,7 +582,7 @@ function MessageCard({ item, itemId }: { item: FeedItem; itemId: string }) {
         <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-2 rounded-control bg-field px-3 py-2 text-left text-[12.5px] hover:bg-hover">
           <TaskMark status={status} />
           <span className="font-semibold">{todo.title}</span>
-          <span className="min-w-0 flex-1 truncate text-ink-2">{mostUrgentAgent(todo, lookup)?.session?.last_text ?? TODO_STATUS_INFO[status].label}</span>
+          <span className="min-w-0 flex-1 truncate text-ink-2">{plainMarkdown(mostUrgentAgent(todo, lookup)?.session?.last_text) || TODO_STATUS_INFO[status].label}</span>
           <Icon name="chevronRight" size={13} className="text-ink-3" />
         </button>
       )}

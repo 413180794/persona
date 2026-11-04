@@ -613,6 +613,7 @@ func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string, w
 }
 
 func donePayload(machineID, machine, sessionID, title, text string) map[string]any {
+	text = plainMarkdown(text) // an agent's last words are Markdown; a notification shows them as they are
 	if text == "" {
 		text = "已完成"
 	}

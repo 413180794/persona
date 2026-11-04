@@ -32,6 +32,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.Instant
 import java.time.LocalDate
@@ -331,12 +337,35 @@ private fun ReceiptCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
         JIcon(if (failed) PhIcons.WarningCircle else PhIcons.CheckCircle, decorative = true, tint = tone.dot)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             Text(title + if (failed) "没开起来" else " 完成", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
-            summary?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis) }
+            summary?.let { if (failed) Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                else ReceiptSummary(it) }
             if (failed && todo != null) JButton("重试", { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Secondary,
                 size = JButtonSize.Small, icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
             if (!failed && todo != null) JButton("看看", { openTask(host, todo) }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
         }
     }
+}
+
+/** What the task's agent said last, its Markdown styled, in four lines (#1508). */
+@Composable
+private fun ReceiptSummary(md: String) {
+    val palette = PersonaTheme.palette
+    val type = PersonaTheme.type
+    val text = remember(md, palette, type) {
+        val styled = ReceiptMarkdown.parse(md)
+        buildAnnotatedString {
+            append(styled.text)
+            for (span in styled.spans) when (span.mark) {
+                ReceiptMarkdown.Mark.Strong -> addStyle(SpanStyle(fontWeight = type.bodyStrong.fontWeight), span.start, span.end)
+                ReceiptMarkdown.Mark.Emphasis -> addStyle(SpanStyle(fontStyle = FontStyle.Italic), span.start, span.end)
+                ReceiptMarkdown.Mark.Strike -> addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), span.start, span.end)
+                ReceiptMarkdown.Mark.Code -> addStyle(SpanStyle(fontFamily = type.code.fontFamily, background = palette.sunken), span.start, span.end)
+                ReceiptMarkdown.Mark.Link -> addLink(LinkAnnotation.Url(span.url.orEmpty(),
+                    TextLinkStyles(SpanStyle(color = palette.accent, textDecoration = TextDecoration.Underline))), span.start, span.end)
+            }
+        }
+    }
+    Text(text, style = type.callout, color = palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable

@@ -1089,7 +1089,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 //   忽略的写「忽略了」；计划审批带计划正文和拒绝理由 / 批准后的模式，工具批准带工具、摘要和原因，
 //   屏幕对话框带选中的选项和在选项里输入的文字，表单字段写「标签：值」。单段 4000 字、整条 12000 字、最多 20 个，超出截断。
 //   密码字段（Field.secret、屏幕的 secret、MCP 表单的 password / writeOnly、名字像口令 / token 的）只写「（已填写，不保存）」，值不落库。
-// receipt：{"title":"…","state":"done|failed","summary":"Agent 最后一段话","pr":"https://github.com/…/pull/N","machine":"…"}
+// receipt：{"title":"…","state":"done|failed","summary":"Agent 最后一条回复（Markdown，按行截到约 600 字，不截在标记中间）","pr":"https://github.com/…/pull/N","machine":"…"}
 // routed：{"text":"…"}
 // message：ref 是收件箱条目 id；AI 分身给一条和任务有关的消息起草了回复：
 //         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"原话（截断）","draft":"草稿"}；发送走收件箱的发送接口

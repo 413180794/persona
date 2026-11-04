@@ -367,9 +367,11 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const Markdown = memo(function Markdown({ text, small }: { text: string; small?: boolean }) {
+// `compact`: a few lines inside a card (a task's receipt): body size in the card's color, headings as bold body text,
+// tight blocks, so a parent's line-clamp shows as much as it can.
+export const Markdown = memo(function Markdown({ text, small, compact }: { text: string; small?: boolean; compact?: boolean }) {
   return (
-    <div className={`prose-j ${small ? "prose-sm" : ""}`}>
+    <div className={`prose-j ${small ? "prose-sm" : ""} ${compact ? "prose-compact" : ""}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents} urlTransform={markdownUrl}>
         {linkify(normalizeMath(text), { math: true })}
       </ReactMarkdown>
