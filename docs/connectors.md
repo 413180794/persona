@@ -114,6 +114,10 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
    HTTP client 一律用 `Egress.HTTPClient` 建：配了走代理、没配直连，填错了报错而不是悄悄直连。`github.proxy` 就是这样来的（#1106）；
    代理地址的解析在 `netproxy`，`google.proxy` 也用它。还没接上的：Telegram（MTProto 不是 HTTP）、子进程 / 第三方连接器（要把代理传给程序），见 #1106。
 
+> **微信（wechat-connector）是进程插件连接器的范例**，而且不写在 hub 里：连接器程序在 wechat-connector 自己的仓库，用插件协议 1 加连接器协议 v2 和 hub 说话，
+> Persona 仓库这边只补通用缺口。接入手册见 [wechat-connector.md](wechat-connector.md)；外部程序怎么用 `conformance.Program` 做一致性测试见
+> [plugins.md](plugins.md)「一致性测试」。
+
 ## 二、v2 设计
 
 对 v1 的评价是「能用、文档好，但不够优雅」。下面 8 条逐条看代码后的判断。改动大小按「小：一两个 PR、几百行，不碰 App」

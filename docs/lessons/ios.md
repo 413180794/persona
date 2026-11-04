@@ -730,3 +730,9 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - 后台执行的 intent（实时活动按钮、快捷指令、控制中心控件）参数若声明为非可选（如 `@Parameter var interactionID: String`），系统在后台拉起 App 进程执行 `perform()` 时如果由于跨构建升级、扩展与 App 元数据不一致或系统未还原参数，Swift AppIntents 会在读取 `wrappedValue` 时直接触发断言失败（`EXC_BREAKPOINT (SIGTRAP) SIGNAL 5`），导致 App 退出崩溃。
 - 后台 intent 参数一律声明为可选（`@Parameter var interactionID: String?`），提供无参 `init()`，并在 `perform()` 中先判空安全返回，切勿在锁屏或后台按钮上追问参数或抛出未捕获错误。
 
+## `@Observable` 的 `init`：存储属性初始化完前别读另一个可观察属性（2026-11-04，#1509）
+
+- 在 `@Observable` 类的 `init` 里，如果一个存储属性的计算读取了另一个刚刚赋值的存储属性（或调用了读取它们的方法），Swift 编译器可能会报错或在运行时触发未初始化的可观察状态访问。
+- 做法：在 `init` 里先用局部变量算好各个值，再分别赋给各个存储属性；所有存储属性初始化完成之前，不要读取自身的可观察属性或调用依赖它们的方法。
+
+

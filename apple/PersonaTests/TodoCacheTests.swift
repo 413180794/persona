@@ -220,4 +220,155 @@ struct TodoCacheTests {
         #expect(store.error == nil && pushes == 0)
     }
 
+    @Test func writeOperationsDiscardOldResponsesAndRollbacksAfterForget() async throws {
+        let store = TodoStore(cachedTodos: [], cacheWriter: nil, hubListChanged: {})
+        let hub = FakeHub()
+
+        // 1. create in-flight when forget happens
+        var createClient = hub.client
+        createClient.transport = { _ in
+            await MainActor.run { store.forget() }
+            return Data(#"{"todo":{"id":"created","title":"Created"}}"#.utf8)
+        }
+        _ = try await store.create(title: "Created", api: createClient)
+        #expect(store.todos.isEmpty)
+        #expect(store.byID["created"] == nil)
+
+        // 2. update in-flight when forget happens
+        var updateClient = hub.client
+        updateClient.transport = { _ in
+            await MainActor.run { store.forget() }
+            return Data(#"{"todo":{"id":"updated","title":"Updated"}}"#.utf8)
+        }
+        _ = try await store.update(id: "updated", title: "Updated", api: updateClient)
+        #expect(store.todos.isEmpty)
+        #expect(store.byID["updated"] == nil)
+
+        // 3. toggleDone in-flight when forget happens and PATCH fails (revert must not restore original)
+        let originalItem = TodoItem(id: "orig", title: "Original", doneAt: nil)
+        let storeWithItem = TodoStore(cachedTodos: [originalItem], cacheWriter: nil, hubListChanged: {})
+        var toggleClient = hub.client
+        toggleClient.transport = { _ in
+            await MainActor.run { storeWithItem.forget() }
+            throw APIError(status: 500, message: "Server error")
+        }
+        storeWithItem.toggleDone(originalItem, api: toggleClient)
+        // Give background Task a chance to hit the catch block
+        for _ in 0..<50 where !storeWithItem.todos.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(storeWithItem.todos.isEmpty)
+        #expect(storeWithItem.byID.isEmpty)
+
+        // 4. setSpace in-flight when forget happens and link fails (revert must not restore original)
+        let spaceStore = TodoStore(cachedTodos: [originalItem], cacheWriter: nil, hubListChanged: {})
+        var spaceClient = hub.client
+        spaceClient.transport = { _ in
+            await MainActor.run { spaceStore.forget() }
+            throw APIError(status: 500, message: "Link failure")
+        }
+        do {
+            _ = try await spaceStore.setSpace(todoID: "orig", space: .init(machineID: "m", space: "sp"), linked: true, api: spaceClient)
+        } catch {}
+        #expect(spaceStore.todos.isEmpty)
+        #expect(spaceStore.byID.isEmpty)
+    }
+
+    @Test func reloadDoesNotWaitForSlowPriorGenerationFetch() async throws {
+        let store = TodoStore(cachedTodos: [], cacheWriter: nil, hubListChanged: {})
+        let hub = FakeHub()
+
+        let slowFetchStarted = AsyncStream<Void>.makeStream()
+        let allowSlowFetchToFinish = AsyncStream<Void>.makeStream()
+
+        var slowClient = hub.client
+        slowClient.transport = { request in
+            if request.method == "GET" && request.path == "/api/v1/todos" {
+                slowFetchStarted.continuation.yield()
+                // Wait for explicit signal before finishing old fetch
+                for await _ in allowSlowFetchToFinish.stream { break }
+                return Data(#"{"todos":[{"id":"old","title":"Old"}]}"#.utf8)
+            }
+            return Data("{}".utf8)
+        }
+
+        // Start old reload
+        let oldTask = store.reload(api: slowClient)
+        for await _ in slowFetchStarted.stream { break }
+
+        // Switch hub
+        store.forget()
+        #expect(store.todos.isEmpty)
+
+        // New hub reload starts immediately without waiting for oldTask
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"new","title":"New"}]}"#)
+        let newTask = store.reload(api: hub.client)
+        await newTask.value
+
+        #expect(store.todos.map(\.id) == ["new"])
+        #expect(store.byID["new"]?.title == "New")
+
+        // Now allow old fetch to finish and verify it does not overwrite new hub's todos
+        allowSlowFetchToFinish.continuation.yield()
+        await oldTask.value
+
+        #expect(store.todos.map(\.id) == ["new"])
+        #expect(store.byID["new"]?.title == "New")
+        #expect(store.byID["old"] == nil)
+    }
+
+    @Test func loadingRemainsTrueWhenOldGenerationFetchCompletesDuringNewFetch() async throws {
+        let store = TodoStore(cachedTodos: [], cacheWriter: nil, hubListChanged: {})
+        let hub = FakeHub()
+
+        let oldFetchStarted = AsyncStream<Void>.makeStream()
+        let allowOldFetchToFinish = AsyncStream<Void>.makeStream()
+
+        var oldClient = hub.client
+        oldClient.transport = { request in
+            if request.method == "GET" && request.path == "/api/v1/todos" {
+                oldFetchStarted.continuation.yield()
+                for await _ in allowOldFetchToFinish.stream { break }
+                return Data(#"{"todos":[{"id":"old","title":"Old"}]}"#.utf8)
+            }
+            return Data("{}".utf8)
+        }
+
+        let oldTask = store.reload(api: oldClient)
+        for await _ in oldFetchStarted.stream { break }
+        #expect(store.loading == true)
+
+        store.forget()
+        #expect(store.loading == false)
+
+        let newFetchStarted = AsyncStream<Void>.makeStream()
+        let allowNewFetchToFinish = AsyncStream<Void>.makeStream()
+
+        var newClient = hub.client
+        newClient.transport = { request in
+            if request.method == "GET" && request.path == "/api/v1/todos" {
+                newFetchStarted.continuation.yield()
+                for await _ in allowNewFetchToFinish.stream { break }
+                return Data(#"{"todos":[{"id":"new","title":"New"}]}"#.utf8)
+            }
+            return Data("{}".utf8)
+        }
+
+        let newTask = store.reload(api: newClient)
+        for await _ in newFetchStarted.stream { break }
+        #expect(store.loading == true)
+
+        // Old fetch returns while new fetch is still in flight
+        allowOldFetchToFinish.continuation.yield()
+        await oldTask.value
+
+        // store.loading must remain true because old fetch generation mismatch did not clear loading
+        #expect(store.loading == true)
+
+        // New fetch finishes and clears loading
+        allowNewFetchToFinish.continuation.yield()
+        await newTask.value
+        #expect(store.loading == false)
+        #expect(store.todos.map(\.id) == ["new"])
+    }
 }

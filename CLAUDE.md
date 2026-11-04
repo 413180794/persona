@@ -246,6 +246,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/channels.md` | 渠道（channel）：所有和 Persona 对话的入口（App、微信、飞书机器人、飞书 /agent、语音）的盘点和统一抽象：渠道的接口和能力、hub 的统一管线（进对话、跟踪这一轮、答案发回、文字 / 卡片提问、去重、来源标记）、插件的 `channel` 扩展点和协议、兼容迁移、`/api/v1/channels`、设置 › 插件 › 渠道 |
 | `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
 | `docs/wechat.md` | 微信机器人（内置插件 `jarvisd-wechat`，腾讯 iLink）：扫码绑定，私聊机器人就是和主对话说话，回答发回微信，提问 / 批准用文字往返；插件只管和微信说话（`channel` 扩展点），其余走 hub 的渠道管线；和飞书机器人比 |
+| `docs/wechat-connector.md` | 微信（wechat-connector）连接器接入手册（#1420，计划中）：把个人微信当数据来源接进收件箱与知识库；架构、前置条件、安装、登录、设置项、隐私默认、发送的三道锁、闸门规则、已知限制、故障排查 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
 | `docs/computer-use.md` | 操控电脑：内置插件 `cua`（默认关、按机器开），助手经 hub → node → Cua Driver 看窗口、点按、截图（`computer_state` / `computer_run`），能力发现、会话、截图、写操作的日志和确认；一键安装和实时画面（屏幕共享经 hub 隧道）的方案 |
