@@ -28,6 +28,8 @@ final class VideoSendTests: XCTestCase {
     /// The video goes to the agent's machine and into the message as a card that plays in the system player.
     @MainActor func testAVideoGoesToTheAgentAsAFile() throws {
         let app = try launch(["-openSession", "macbook/" + widget, "-openAgentsFresh", "YES", "-openChatsFresh", "YES"])
+        // Wait for the chat: until it opens, the + on screen is the assistant's.
+        XCTAssertTrue(remoteCard(app).waitForExistence(timeout: 30), "the chat did not open:\n\(app.debugDescription)")
         try sendAVideo(app, "agent")
     }
 
@@ -40,7 +42,7 @@ final class VideoSendTests: XCTestCase {
     /// A video sent from elsewhere is only on the machine: a tap downloads it, then the system player opens.
     @MainActor func testAVideoOnlyOnTheMachineDownloadsFirst() throws {
         let app = try launch(["-openSession", "macbook/" + widget, "-openAgentsFresh", "YES", "-openChatsFresh", "YES"])
-        let card = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "video-card", "视频 录屏.mov")).firstMatch
+        let card = remoteCard(app)
         XCTAssertTrue(card.waitForExistence(timeout: 30), "no card for the sent video:\n\(app.debugDescription)")
         XCTAssertTrue((card.value as? String ?? "").contains("0:06"), "\(card.value ?? "")")
         shot(app, "video-card-remote")
@@ -49,6 +51,11 @@ final class VideoSendTests: XCTestCase {
     }
 
     // MARK: -
+
+    /// The card of the video the mock's chat already has (`MOCK_SENT_VIDEO`, sent from elsewhere).
+    @MainActor private func remoteCard(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "video-card", "视频 录屏.mov")).firstMatch
+    }
 
     @MainActor private func sendAVideo(_ app: XCUIApplication, _ name: String) throws {
         let hub = try hub
@@ -73,7 +80,8 @@ final class VideoSendTests: XCTestCase {
         XCTAssertTrue(text.hasPrefix("请看视频"), "an empty box sends a short note with it: \(text)")
         XCTAssertFalse(ready.exists, "the card leaves the box once sent")
 
-        let card = app.buttons.matching(NSPredicate(format: "identifier == %@", "video-card")).firstMatch
+        // Not the one the chat already had.
+        let card = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label != %@", "video-card", "视频 录屏.mov")).firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 20), "no card in the sent message:\n\(app.debugDescription)")
         XCTAssertTrue((card.value as? String ?? "").contains("0:06"), "\(card.value ?? "")")
         shot(app, "video-\(name)-sent")
@@ -83,17 +91,14 @@ final class VideoSendTests: XCTestCase {
 
     /// + › 照片, the made-up video, 添加.
     @MainActor private func pickTheVideo(_ app: XCUIApplication) throws {
-        let plus = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label IN %@", "shell-composer-add", ["添加", "Add"])).firstMatch
+        // An enabled one: offline, the box's + is there but greyed out.
+        let plus = app.buttons.matching(NSPredicate(format: "(identifier == %@ OR label IN %@) AND enabled == true", "shell-composer-add", ["添加", "Add"])).firstMatch
         XCTAssertTrue(plus.waitForExistence(timeout: 30), "no + button:\n\(app.debugDescription)")
         plus.tap()
         let photos = app.buttons["照片"].firstMatch
         XCTAssertTrue(photos.waitForExistence(timeout: 5), "no 照片 item:\n\(app.debugDescription)")
         photos.tap()
         let video = app.images.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS %@", "video", "视频")).firstMatch
-        if UITestStyle.isBeautiful, !video.waitForExistence(timeout: 10) {
-            shot(app, "beautiful-menu-untappable")
-            throw XCTSkip("BeautifulUI's composer menus take no taps on iOS 27 (#1005): 照片 never opens the picker")
-        }
         XCTAssertTrue(video.waitForExistence(timeout: 20), "no video in the picker:\n\(app.debugDescription)")
         shot(app, "video-picker")
         video.tap()

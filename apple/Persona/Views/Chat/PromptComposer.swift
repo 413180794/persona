@@ -89,7 +89,9 @@ struct PromptComposer: View {
                 .overlay(alignment: .bottomTrailing) { sharedButtons }
                 #endif
         }
-            .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
+            // The glass goes behind the bar, not around it: on iOS 27 a view with a glass effect takes no taps outside
+            // its shape, and the bar's menus hang above it (#1005).
+            .background { Color.clear.surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous)) }
             .onAppear { bar.selectedModelID = modelID }
             .onChange(of: modelID) { _, id in bar.selectedModelID = id }
             .onChange(of: bar.selectedModelID) { _, id in if id != modelID { pickModel(id) } }

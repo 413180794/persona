@@ -658,3 +658,13 @@ Claude Code 压缩一次写三样：`system/compact_boundary`（`compactMetadata
 设置 sheet 开着时换主题色（整树按 `look` 重建，sheet 留着），或换完后进出二级页，行图标就成了系统蓝，同一页的文字按钮和 × 却是新颜色。
 现在 RootView 在 `look` 变化时也把各窗口的 `tintColor` 设成主题色（`WindowTint`）；默认的液态玻璃主色本来就是系统蓝，默认外观一像素不变。
 复现：设置首页在屏幕上时 `scripts/app/personactl.py set-style --color coral`，取行图标的像素看是不是 `#007AFF`。经界面进「主题色」页选色再返回这条路在模拟器上不一定复现。
+
+## iOS 27：套了玻璃效果的视图，形状外面点不到（2026-11-03，#1005）
+
+- 现象：BeautifulUI 风格的输入框（`PromptComposer` → BeautifulUI `PromptBar`）的「+」「/」「@」、模型菜单画出来了，点菜单项没反应；
+  #519 加的 `BeautifulStyleTests/testCommandMenuTakesTaps` 在 iOS 27 模拟器上失败（iOS 26 上当时是过的）。
+- 根因：`PromptComposer` 给整个 `PromptBar` 套了 `.surface(…)`，在玻璃风格下就是 `glassEffect`；菜单画在输入框上方的零高度槽里、溢出到玻璃形状外面。
+  iOS 27 上一个视图套了 `glassEffect`（不管 `interactive` 与否），它形状外面的子内容就收不到点击。排查时依次试过：footer 加 `zIndex`（没用）、
+  `interactive: false`（没用）、去掉玻璃（好了）。
+- 修法：玻璃画在后面（`.background { Color.clear.surface(…) }`），不包住会溢出的内容；改前改后同一个画面逐像素比，输入框只有抗锯齿级的差别。
+- 推广：会往外溢出的菜单、气泡别放进 `glassEffect` / `.surface` 包住的视图里；玻璃用 background 画。
