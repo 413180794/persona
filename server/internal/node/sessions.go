@@ -1128,6 +1128,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		}
 		unknown = append(unknown, a)
 	}
+	n.notePanes(unknown)
 	n.mu.Unlock()
 	for _, a := range pi {
 		if id := n.piSession(a); id != "" {
@@ -1155,6 +1156,9 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			n.mu.Unlock()
 		}
 		if id == "" || liveTaken(m, id) {
+			if n.freshPane(a.PaneID) {
+				continue // its claude has not written sessions/<pid>.json yet; the newest transcript is an older session
+			}
 			id = n.guessSession(a, m)
 		}
 		if id != "" {
@@ -1226,10 +1230,14 @@ func liveTaken(m map[string]host.Agent, id string) bool {
 // for a few seconds: right after node starts the claudes' config directories are not all known yet, and a minute of
 // "no pid file" let a stale pane binding show another session after every redeploy (2026-10-31).
 func (n *Node) sessionFromProcess(pane string) string {
+	retry := panePIDRetry
+	if n.freshPane(pane) {
+		retry = 0 // its claude is about to write the file: look every refresh, so the pane shows within a second of it
+	}
 	n.mu.Lock()
 	c, ok := n.panePIDs[pane]
 	n.mu.Unlock()
-	if !ok || time.Since(c.checked) > time.Minute || (c.pid == 0 && time.Since(c.checked) > panePIDRetry) {
+	if !ok || time.Since(c.checked) > time.Minute || (c.pid == 0 && time.Since(c.checked) > retry) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		pids, err := n.paneProcesses(ctx, pane)
 		cancel()
@@ -1275,8 +1283,47 @@ func readClaudeSessionID(path string) string {
 	return f.SessionID
 }
 
-// panePIDRetry: how soon a pane whose claude had no sessions/<pid>.json is looked at again.
+// panePIDRetry: how soon a pane whose claude had no sessions/<pid>.json is looked at again; a fresh pane's
+// (freshPane) every refresh while its claude starts.
 const panePIDRetry = 5 * time.Second
+
+// freshPaneGrace: how long a claude pane that appeared after node started goes without a guessed session. A claude
+// writes its sessions/<pid>.json a few seconds after it starts (four or five on Windows), and until its first prompt it
+// has no transcript of its own: a guess then is the newest transcript in the directory, an older session, which the
+// pane showed for those seconds (2026-11-04, #1980). Past the grace a claude that never writes the file (older Claude
+// Code) is guessed as before.
+const freshPaneGrace = 20 * time.Second
+
+// notePanes remembers when each claude pane without a host session id was first seen, and forgets the panes gone. The
+// panes of the first call are there since before node started: zero, never fresh. Callers hold n.mu.
+func (n *Node) notePanes(unknown []host.Agent) {
+	first := n.paneSeen == nil
+	if first {
+		n.paneSeen = map[string]time.Time{}
+	}
+	now, here := time.Now(), make(map[string]bool, len(unknown))
+	for _, a := range unknown {
+		here[a.PaneID] = true
+		if _, ok := n.paneSeen[a.PaneID]; !ok && !first {
+			n.paneSeen[a.PaneID] = now
+		} else if !ok {
+			n.paneSeen[a.PaneID] = time.Time{}
+		}
+	}
+	for p := range n.paneSeen {
+		if !here[p] {
+			delete(n.paneSeen, p)
+		}
+	}
+}
+
+// freshPane: the pane's claude appeared after node started, less than freshPaneGrace ago.
+func (n *Node) freshPane(pane string) bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	t, ok := n.paneSeen[pane]
+	return ok && !t.IsZero() && time.Since(t) < freshPaneGrace
+}
 
 type panePID struct {
 	pid     int

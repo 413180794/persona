@@ -36,6 +36,10 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   → **窗格里 claude 进程的 `~/.claude/sessions/<pid>.json`**（Claude Code 自己维护，含当前 `sessionId`，`/clear` 后会更新；
   pid 用 `herdr pane process-info --pane <id>` 拿，缓存一分钟）→ 标题匹配 AI 标题 → 按 cwd 推项目目录
   （cwd 里非字母数字都换成 `-`，如 `/Users/me/code/jarvis` → `-Users-me-code-jarvis`）里最新的 `.jsonl`。
+- 最后两步是猜，对刚起的 claude 一定猜错：它几秒后才写出 `sessions/<pid>.json`（Windows 上四五秒），第一句话之前也没有自己的
+  `.jsonl`，「目录里最新的」是上一个会话，新标签页于是先显示成旧会话（#1980）。所以 node 启动之后才出现的 claude 窗格有 20 秒宽限
+  （`freshPaneGrace`）：这期间 pid 文件和窗格绑定都没有就不猜、先不列，pid 文件每次刷新都重看（平时没找到要隔 5 秒）；宽限过了照旧猜
+  （不写 pid 文件的老版本 Claude Code）。node 启动时已经在的窗格不算新的，照旧马上猜。
 - herdr 上报的 id 来自 claude integration 的 SessionStart hook，它按进程环境里的 `HERDR_PANE_ID` 记到窗格上。不在这个窗格里、却继承了
   这个变量的 claude 也会报进来：在 herdr 窗格里第一次起的 tmux 服务器（botmux 就是这样）把 `HERDR_*` 传给它之后起的每个 claude，
   herdr 的 main 标签于是显示成一个 botmux 会话，窗格里真正的 claude 列成离线（2026-11-04）。所以有终端里的 claude 跑着一个没有窗格认领的会话时，
