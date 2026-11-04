@@ -14,7 +14,7 @@ struct AppearanceSection: View {
         Section {
             Group {
                 NavigationLink(value: SettingsPage.persona) {
-                    SettingsRow(title: "形象", symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.name, look: .oneLine)
+                    SettingsRow(title: "形象", symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.cardTitle, look: .oneLine)
                 }
                 .accessibilityIdentifier("settings-persona")
                 NavigationLink(value: SettingsPage.themeColor) {

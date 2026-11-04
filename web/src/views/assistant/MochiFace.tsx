@@ -37,7 +37,7 @@ export function MochiFace({ size, state = "idle", className }: { size: number; s
   const look = state === "thinking" ? [22, -30] : state === "working" ? [-24, 12] : [0, 0];
   const lines = state === "idle" || state === "needs_you" ? [1, 1, 1] : state === "working" ? [1, 0.35, 0.35] : [];
   return (
-    <svg viewBox="0 0 1024 1024" width={size} height={size} aria-hidden className={cx("shrink-0", className)} style={{ width: size, height: size }}>
+    <svg viewBox="0 0 1024 1024" width={size} height={size} aria-hidden className={cx("shrink-0 rounded-full", className)} style={{ width: size, height: size }}>
       <defs>
         <linearGradient id={`${id}d`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" style={{ stopColor: "var(--mochi-disc-top)" }} />

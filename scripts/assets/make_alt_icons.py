@@ -137,9 +137,11 @@ def write_preview(name, icon_set):
         img.save(os.path.join(folder, out), optimize=True)
     write_json(os.path.join(folder, "Contents.json"), {
         "images": [
-            {"filename": "preview.png", "idiom": "universal", "scale": "3x"},
+            # No scale: one picture for every scale and platform. Marked 3x, the Mac (1x / 2x only) found no image and
+            # 设置's header showed an empty tile there; both views that draw it are resizable.
+            {"filename": "preview.png", "idiom": "universal"},
             {"appearances": [{"appearance": "luminosity", "value": "dark"}], "filename": "preview-dark.png",
-             "idiom": "universal", "scale": "3x"},
+             "idiom": "universal"},
         ],
         "info": {"author": "xcode", "version": 1},
     })
