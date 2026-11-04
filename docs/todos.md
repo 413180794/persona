@@ -219,6 +219,9 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 - Agent 的快捷菜单提供「关联到待办…」与「解除关联」。
 - 对话页右上角更多菜单与会话信息弹窗展示「待办：X」，点击可跳转。
 
+### 5. Siri 与快捷指令（iOS / macOS）
+- 「新建待办」（`AddTodoIntent`）：说「用 Persona 新建待办」或在快捷指令 / 操作按钮里用，标题必填、说明可选，后台直接写到 App 当前选中的 hub 组，不用打开 App。见 `docs/siri.md`。
+
 ## 设计取舍与理由
 
 1. **不做第二个飞书任务或提醒事项**：Persona 的待办专为驱动和跟踪 Agent 工作流设计，聚焦于「一件事分工给哪些 Agent、各自进展如何」，不做复杂的子任务、截止日、优先级树、日历提醒或多方协同步同。

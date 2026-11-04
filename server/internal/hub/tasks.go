@@ -93,6 +93,8 @@ type tasksState struct {
 	receipted map[string]time.Time
 	// retrying: the tasks whose agent is starting again after a failed start (one start at a time, #1396).
 	retrying map[string]bool
+	// cardSends: card id → the lock its 发送 holds (sendFromCard).
+	cardSends sync.Map
 }
 
 func newTasksState() tasksState {
@@ -193,13 +195,14 @@ func (h *Hub) appendFeedAt(ctx context.Context, conversation, kind, ref string, 
 
 const feedPage = 500
 
-// feed is a conversation's items after since, oldest first, and the plans they name.
+// feed is a conversation's items after since, oldest first (with the message cards sent after since: the client
+// has them, not that they went out), and the plans they name.
 func (h *Hub) feed(ctx context.Context, conversation string, since time.Time) ([]FeedItem, map[string]*TaskPlan, error) {
 	var items []FeedItem
 	if h.store == nil {
 		h.tasks.mu.Lock()
 		for _, it := range h.tasks.feed[conversation] {
-			if it.At.After(since) {
+			if at := cardSentAt(it); it.At.After(since) || it.Kind == feedMessage && at != nil && at.After(since) {
 				items = append(items, it)
 			}
 		}
@@ -213,6 +216,7 @@ func (h *Hub) feed(ctx context.Context, conversation string, since time.Time) ([
 			items = append(items, FeedItem{ID: r.ID, Conversation: r.Conversation, At: r.At, Kind: r.Kind, Ref: r.Ref, Body: r.Body})
 		}
 	}
+	h.settleCards(ctx, items)
 	plans := map[string]*TaskPlan{}
 	for _, it := range items {
 		if it.Kind == feedPlan && plans[it.Ref] == nil {
@@ -878,6 +882,11 @@ type messageBody struct {
 	Sender  string `json:"sender,omitempty"`
 	Text    string `json:"text"` // the message, clipped
 	Draft   string `json:"draft"`
+	// SentAt: the reply to the item went out (from this card or from the inbox, on any device) and Sent is what it
+	// said; set by markCardsSent, never cleared, so the card stays sent when the item opens again. A card sent before
+	// the hub recorded it has no Sent (the draft is what went out, as far as anyone knows).
+	SentAt *time.Time `json:"sent_at,omitempty"`
+	Sent   string     `json:"sent,omitempty"`
 }
 
 // messageCardOf is the card for an item whose draft is about a task; nil when it is about none. The inbox is locked.
@@ -904,6 +913,135 @@ func (h *Hub) messageCard(ctx context.Context, itemID string, body messageBody) 
 	if _, err := h.appendFeed(ctx, origin, feedMessage, itemID, body); err != nil {
 		h.logf("task %s: message card: %v", body.TodoID, err)
 	}
+}
+
+// markCardsSent records on the cards about an inbox item put in by at that its reply went out (text: what it said;
+// empty: not known) and tells the clients (tell), which draw them sent; the cards it changed.
+func (h *Hub) markCardsSent(ctx context.Context, itemID string, at time.Time, text string, tell bool) []FeedItem {
+	at = at.UTC()
+	patch, _ := json.Marshal(struct {
+		SentAt time.Time `json:"sent_at"`
+		Sent   string    `json:"sent,omitempty"`
+	}{at, text})
+	var out []FeedItem
+	if h.store == nil {
+		h.tasks.mu.Lock()
+		for c, list := range h.tasks.feed {
+			for i, it := range list {
+				if it.Kind != feedMessage || it.Ref != itemID || it.At.After(at) || cardSentAt(it) != nil {
+					continue
+				}
+				var body map[string]json.RawMessage
+				_ = json.Unmarshal(it.Body, &body)
+				if body == nil {
+					body = map[string]json.RawMessage{}
+				}
+				var p map[string]json.RawMessage
+				_ = json.Unmarshal(patch, &p)
+				for k, v := range p {
+					body[k] = v
+				}
+				it.Body, _ = json.Marshal(body)
+				h.tasks.feed[c][i] = it
+				out = append(out, it)
+			}
+		}
+		h.tasks.mu.Unlock()
+	} else {
+		rows, err := h.store.MarkFeedSent(ctx, feedMessage, itemID, at, patch)
+		if err != nil {
+			h.logf("inbox %s: mark the cards sent: %v", itemID, err)
+		}
+		for _, r := range rows {
+			out = append(out, FeedItem{ID: r.ID, Conversation: r.Conversation, At: r.At, Kind: r.Kind, Ref: r.Ref, Body: r.Body})
+		}
+	}
+	if tell {
+		for _, it := range out {
+			h.broadcast(map[string]any{"type": "assistant_feed", "conversation": it.Conversation, "item": it})
+		}
+	}
+	return out
+}
+
+// cardSentAt is when a message card's reply went out; nil while it has not.
+func cardSentAt(it FeedItem) *time.Time {
+	var b struct {
+		SentAt *time.Time `json:"sent_at"`
+	}
+	_ = json.Unmarshal(it.Body, &b)
+	return b.SentAt
+}
+
+// settleCards fills in the cards among items whose item was replied to after they were put in but which do not say
+// so: cards from before the hub recorded it on them (the reply went out, the card still offered 发送).
+func (h *Hub) settleCards(ctx context.Context, items []FeedItem) {
+	for _, it := range items {
+		if it.Kind != feedMessage || cardSentAt(it) != nil {
+			continue
+		}
+		h.inbox.mu.Lock()
+		var at *time.Time
+		if ib := h.inbox.items[it.Ref]; ib != nil && ib.DoneBy == "replied" && ib.DoneAt != nil && !ib.DoneAt.Before(it.At) {
+			t := *ib.DoneAt
+			at = &t
+		}
+		h.inbox.mu.Unlock()
+		if at == nil {
+			continue
+		}
+		for _, m := range h.markCardsSent(ctx, it.Ref, *at, "", false) {
+			for j := range items {
+				if items[j].ID == m.ID {
+					items[j] = m
+				}
+			}
+		}
+	}
+}
+
+// sendFromCard is 发送 on a message card (POST /api/v1/inbox/{id}/reply with card): the reply goes out once per
+// card however many taps, devices or retries ask — a card already sent answers with the item as it is (already).
+func (h *Hub) sendFromCard(ctx context.Context, cardID, itemID string, send func() (InboxItem, error)) (it InboxItem, already bool, err error) {
+	l, _ := h.tasks.cardSends.LoadOrStore(cardID, &sync.Mutex{})
+	mu := l.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+	card, err := h.feedItem(ctx, cardID)
+	if err != nil {
+		return InboxItem{}, false, err
+	}
+	if card != nil && card.Kind == feedMessage && card.Ref == itemID && cardSentAt(*card) != nil {
+		h.inbox.mu.Lock()
+		if ib := h.inbox.items[itemID]; ib != nil {
+			it = ib.listed()
+		}
+		h.inbox.mu.Unlock()
+		return it, true, nil
+	}
+	it, err = send()
+	return it, false, err
+}
+
+// feedItem is one feed item by its id; nil when there is none.
+func (h *Hub) feedItem(ctx context.Context, id string) (*FeedItem, error) {
+	if h.store == nil {
+		h.tasks.mu.Lock()
+		defer h.tasks.mu.Unlock()
+		for _, list := range h.tasks.feed {
+			for _, it := range list {
+				if it.ID == id {
+					return &it, nil
+				}
+			}
+		}
+		return nil, nil
+	}
+	r, err := h.store.FeedItem(ctx, id)
+	if err != nil || r == nil {
+		return nil, err
+	}
+	return &FeedItem{ID: r.ID, Conversation: r.Conversation, At: r.At, Kind: r.Kind, Ref: r.Ref, Body: r.Body}, nil
 }
 
 // inboxTasks are the tasks going on, as the inbox's judge and AI 分身 see them.

@@ -3,7 +3,9 @@ package persona.android.navigation
 import androidx.navigation3.runtime.NavKey
 import persona.core.domain.inbox.InboxItem
 import persona.core.navigation.*
+import persona.feature.inbox.InboxMomentRef
 import persona.feature.inbox.InboxRecord
+import persona.feature.inbox.LarkMomentRoute
 import persona.feature.inbox.LarkRoute
 import persona.feature.inbox.MailRoute
 import org.junit.Assert.assertEquals
@@ -49,10 +51,12 @@ class ShellRoutesTest {
     @Test fun inboxLinksOpenTheSourcePageOnlyOnceTheItemIsKnown() {
         val lark = InboxRecord(InboxItem("lark-item", kind = "dm"), feedId = "chat", startPosition = 42)
         val mail = InboxRecord(InboxItem("mail-item", kind = "mail"))
-        val records = listOf(lark, mail)
+        val moment = InboxRecord(InboxItem("moment-item", kind = "moment"), moment = InboxMomentRef(postId = "post-1"))
+        val records = listOf(lark, mail, moment)
 
         assertEquals(InboxDestination.Open(LarkRoute("chat", "lark-item", 42)), inboxDestination(InboxItemRoute("lark-item"), records, false))
         assertEquals(InboxDestination.Open(MailRoute("mail-item")), inboxDestination(InboxItemRoute("mail-item"), records, false))
+        assertEquals(InboxDestination.Open(LarkMomentRoute("post-1", "moment-item")), inboxDestination(InboxItemRoute("moment-item"), records, false))
         // Before the first refresh a missing item may still arrive; afterwards it is reported.
         assertNull(inboxDestination(InboxItemRoute("gone"), records, false))
         assertEquals(InboxDestination.Missing, inboxDestination(InboxItemRoute("gone"), records, true))

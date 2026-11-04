@@ -129,10 +129,10 @@ func TestInboxDraftTool(t *testing.T) {
 	if _, err := h.toolInboxDraft(context.Background(), "s1", json.RawMessage(`{"text":"  "}`)); err == nil {
 		t.Fatal("accepted an empty draft")
 	}
-	if _, err := h.toolInboxDraft(context.Background(), "s1", json.RawMessage(`{"text":" 合了，MR 在【链接】 ","note":"agent_read 看到已合入"}`)); err != nil {
+	if _, err := h.toolInboxDraft(context.Background(), "s1", json.RawMessage(`{"text":" 合了，MR 已经进主干 ","note":"agent_read 看到已合入"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if a := it.Agent; a.State != AgentDrafted || a.Draft != "合了，MR 在【链接】" || a.Note == "" || a.DraftedAt == nil {
+	if a := it.Agent; a.State != AgentDrafted || a.Draft != "合了，MR 已经进主干" || a.Note == "" || a.DraftedAt == nil {
 		t.Fatalf("agent = %+v", a)
 	}
 	if !h.isInboxAgent("s1") || h.isInboxAgent("s2") {

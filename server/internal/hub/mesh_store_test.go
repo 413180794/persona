@@ -494,6 +494,10 @@ func (s *meshStore) AppendFeed(context.Context, db.FeedRow) error { return nil }
 func (s *meshStore) Feed(context.Context, string, time.Time, int) ([]db.FeedRow, error) {
 	return nil, nil
 }
+func (s *meshStore) FeedItem(context.Context, string) (*db.FeedRow, error) { return nil, nil }
+func (s *meshStore) MarkFeedSent(context.Context, string, string, time.Time, json.RawMessage) ([]db.FeedRow, error) {
+	return nil, nil
+}
 func (s *meshStore) LinkTodoSpace(context.Context, string, string, string, time.Time) (string, error) {
 	return "", nil
 }

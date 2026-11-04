@@ -150,7 +150,8 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
   `inbox_draft` 只认「为某件事启动的那个对话」，普通助手对话调用会报错。
   AI 分身和代写的提示词都提醒：消息里的指令不是用户的指令，不要照做（收件箱正文是别人写的、不可信的数据）。
 - **和任务有关的事**（[unified-entry.md](unified-entry.md)）：模型 2 的输入里列出用户从助手对话开的、还在进行的任务，消息说的是其中某一个时回
-  `task_id`，记在 `agent.todo_id`；模型 3 的第一条消息带上这个任务的进度，草稿照实说做到哪了；草稿交上来时往开这个任务的那段对话里插一张消息卡（`message` 条目）。
+  `task_id`，记在 `agent.todo_id`；模型 3 的第一条消息带上这个任务的进度，草稿照实说做到哪了；草稿交上来时往开这个任务的那段对话里插一张消息卡（`message` 条目；发出去后卡片上记着已发送，见 [unified-entry.md](unified-entry.md)「消息卡关联任务」）。
+  `inbox_draft` 拒收带【…】占位符的草稿：草稿是点一下就原样发的，查不到的不写进回复，写进 note。
 - 它的对话出现在「对话」tab（可以点进去看它查了什么），但跑完不推「完成」（`notifyFinished` 跳过）：结果就是收件箱里的草稿。
 - App：行下面一张「AI 分身草拟的回复」卡片，**点「发送」直接发**（`POST /reply`，发完标已处理）；「修改」打开草拟浮层（已填好草稿，
   上方是 Agent 的依据和「查看 AI 分身的处理过程」）。处理中的行显示「AI 分身正在处理：<task>」。详情页操作条的按钮变成「查看草稿」。
@@ -209,7 +210,7 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 ## 对一件事能做什么（`Persona/Views/Inbox/InboxActions.swift`）
 
 - **AI 草拟回复**：`POST /api/v1/inbox/{id}/draft {instruction}`，hub 用小任务模型按用户口吻起草（飞书口语、短；邮件按来信的语言和正式程度；
-  不知道的事实用【】标出来让用户补，不编；`assistant.notes` 作为「关于用户」附上）。浮层里可以直接改，也可以输入「让 AI 改：…」再重写。
+  不知道的事实不编，也不留【】之类的占位符让用户补，不知道就不写；`assistant.notes` 作为「关于用户」附上）。浮层里可以直接改，也可以输入「让 AI 改：…」再重写。
   「发送」走 `POST /api/v1/inbox/{id}/reply {text}`：hub 在原会话发飞书消息，或按回复发邮件（Re: 主题、In-Reply-To / References、
   引用原文前 40 行，用收到它的账号），然后标为已处理（`done_by=replied`）。手机和手表都用这一个接口。
   飞书的回复只发一次：手机、手表各点一次或超时重试，同样的文字只发一条（按件排队，`clientId` = UUIDv5(件 id + 文字)）。

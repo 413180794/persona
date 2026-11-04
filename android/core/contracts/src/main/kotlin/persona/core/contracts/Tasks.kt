@@ -45,6 +45,12 @@ data class TaskPlan(
     @WireTime @SerialName("created_at") val createdAt: String? = null,
 )
 
+/** A message card's reply that went out: when, and what it said. */
+data class SentReply(val at: String, val text: String)
+
+/** A blank a draft leaves to fill in (【预计几点前】, {{链接}}): it would go out as it is. Null when it has none. */
+fun draftPlaceholder(text: String): String? = Regex("【[^】\n]*】|\\{\\{[^}\n]*\\}\\}").find(text)?.value
+
 /** An item the hub inserted into an assistant conversation, drawn among the transcript's lines by [at]. */
 @KeepGeneratedSerializer
 @Serializable(with = FeedItemSerializer::class)
@@ -63,6 +69,12 @@ data class FeedItem(
     /** A string field of the body (receipt's title / summary / pr, routed's text, message's chat / draft…). */
     fun field(name: String): String? = ((body as? JsonObject)?.get(name) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
     fun number(name: String): Int? = ((body as? JsonObject)?.get(name) as? JsonPrimitive)?.intOrNull
+
+    /**
+     * `message`: the reply went out — from this card or from the inbox, on any device (the hub records it on the
+     * card, #1519): when, and what it said (a card sent before the hub recorded it: its draft). Null while not sent.
+     */
+    val sent: SentReply? get() = field("sent_at")?.let { SentReply(it, field("sent")?.takeIf(String::isNotEmpty) ?: field("draft").orEmpty()) }
 
     /**
      * `answered`: every question of the card with the user's answer in full, newlines kept (#1231). A record from

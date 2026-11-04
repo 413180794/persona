@@ -22,6 +22,7 @@ import persona.core.contracts.TaskPlan
 import persona.core.contracts.TaskPlanEvent
 import persona.core.contracts.Todo
 import persona.core.contracts.TodosEvent
+import persona.core.contracts.draftPlaceholder
 import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.TasksApi
@@ -81,10 +82,14 @@ sealed interface AssistantExtra {
 object AssistantLines {
     /** Keeps one copy of each item, oldest first. */
     fun merge(list: List<FeedItem>, items: List<FeedItem>): List<FeedItem> {
-        val have = list.mapTo(HashSet()) { it.id }
+        val have = list.associateBy { it.id }
+        // One it has whose body changed (a message card sent) takes the new body.
+        val changed = items.filter { have[it.id]?.let { old -> old.body != it.body } == true }.associateBy { it.id }
         val fresh = items.filter { it.id !in have }
-        if (fresh.isEmpty()) return list
-        return (list + fresh).sortedWith(compareBy<FeedItem>({ time(it.at) ?: Instant.EPOCH }, { it.id }))
+        if (fresh.isEmpty() && changed.isEmpty()) return list
+        val kept = if (changed.isEmpty()) list else list.map { changed[it.id] ?: it }
+        if (fresh.isEmpty()) return kept
+        return (kept + fresh).sortedWith(compareBy<FeedItem>({ time(it.at) ?: Instant.EPOCH }, { it.id }))
     }
 
     /**
@@ -178,9 +183,8 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     /** Conversation → the task the next message goes straight to (「对「xx」说」). */
     val routes = MutableStateFlow<Map<String, String>>(emptyMap())
     val busy = MutableStateFlow<Set<String>>(emptySet())
-    /** Message cards (inbox item ids) put off with 稍后, and the ones sent from their card. */
+    /** Message cards (inbox item ids) put off with 稍后. */
     val later = MutableStateFlow<Set<String>>(emptySet())
-    val sent = MutableStateFlow<Set<String>>(emptySet())
     private val todayAsked = HashMap<String, LocalDate>()
 
     init {
@@ -299,8 +303,25 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
         return true
     }
 
-    fun sendMessage(itemId: String, text: String, onError: (Throwable) -> Unit) = act(itemId, onError) {
-        api.inboxReply(itemId, text); sent.update { it + itemId }
+    /**
+     * 发送 on a message card: the (edited) draft goes out through the inbox; the hub records it on the card, whose
+     * `assistant_feed` event draws it sent (put in at once here too). Taps while one is on its way, and on a card
+     * already sent, do nothing ([busy] under the card's id); a draft with a blank to fill in is not sent.
+     */
+    fun sendMessage(card: FeedItem, text: String, onError: (Throwable) -> Unit) {
+        val itemId = card.ref ?: return
+        val latest = { _feeds.value[card.conversation]?.firstOrNull { it.id == card.id } ?: card }
+        if (latest().sent != null) return
+        draftPlaceholder(text)?.let { onError(IllegalStateException("草稿里还有没填的「$it」")); return }
+        act(card.id, onError) {
+            api.inboxReply(itemId, text, card.id)
+            val now = latest()
+            if (now.sent == null) {
+                val body = JsonObject(((now.body as? JsonObject) ?: JsonObject(emptyMap())) +
+                    mapOf("sent_at" to JsonPrimitive(Instant.now().toString()), "sent" to JsonPrimitive(text)))
+                received(listOf(now.copy(body = body)))
+            }
+        }
     }
 
     fun putOff(itemId: String) = later.update { it + itemId }

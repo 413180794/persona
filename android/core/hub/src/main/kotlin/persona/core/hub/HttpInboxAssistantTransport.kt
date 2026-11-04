@@ -123,6 +123,22 @@ class HttpInboxAssistantTransport private constructor(
         return readMedia(ref, document = true)
     }
 
+    override suspend fun momentsPost(postId: String): JsonObject {
+        require(postId.isNotBlank())
+        return json(url("api", "v1", "lark", "moments", "posts", postId))
+    }
+
+    override suspend fun momentsComments(postId: String): JsonObject {
+        require(postId.isNotBlank())
+        return json(url("api", "v1", "lark", "moments", "posts", postId, "comments"))
+    }
+
+    override suspend fun urlPreview(messageId: String, url: String): JsonObject {
+        require(messageId.isNotBlank() && url.isNotBlank())
+        return json(this.url("api", "v1", "lark", "messages", messageId, "url-preview").newBuilder()
+            .addQueryParameter("url", url).build())
+    }
+
     override suspend fun media(ref: String): ByteArray = readMedia(ref, document = false)
 
     private suspend fun readMedia(ref: String, document: Boolean): ByteArray {

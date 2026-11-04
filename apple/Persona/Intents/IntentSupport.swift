@@ -12,6 +12,8 @@ nonisolated enum IntentText {
     static let machineKey = "newChat.machine"
     static func launcherKey(_ machine: String) -> String { "launcher.\(machine)" }
     static func cwdKey(_ machine: String) -> String { "cwd.\(machine)" }
+    /// The hub group the app has selected (`AppModel.hubGroupKey`): where the todos page reads and writes.
+    static let hubGroupKey = "hub.group"
 
     static func sent(to title: String) -> String {
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -73,6 +75,7 @@ nonisolated enum IntentPhrases {
     static let askClaude = "用 %@ 问 Claude"
     static let status = "%@ 状态"
     static let approve = "用 %@ 批准第一个"
+    static let addTodo = "用 %@ 新建待办"
 
     static func fill(_ template: String, appName: String) -> String {
         template.replacingOccurrences(of: "%@", with: appName)

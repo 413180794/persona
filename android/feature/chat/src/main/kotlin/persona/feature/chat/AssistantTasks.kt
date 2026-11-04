@@ -52,6 +52,7 @@ import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
 import persona.core.contracts.TaskPlan
 import persona.core.contracts.Todo
+import persona.core.contracts.draftPlaceholder
 import persona.core.designsystem.JButton
 import persona.core.designsystem.JButtonKind
 import persona.core.designsystem.JButtonSize
@@ -439,10 +440,11 @@ private fun TodayCard(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>
 @Composable
 private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>) {
     val itemId = item.ref ?: return
-    val sent by host.tasks.sent.collectAsStateWithLifecycle()
     val busy by host.tasks.busy.collectAsStateWithLifecycle()
     var draft by remember(item.id) { mutableStateOf(item.field("draft").orEmpty()) }
-    val done = itemId in sent
+    val sent = item.sent
+    val done = sent != null
+    val blank = if (done) null else draftPlaceholder(draft)
     val todo = todos.firstOrNull { it.id == item.field("todo_id") }
     JCard {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -465,14 +467,16 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
                 verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                 Text(if (done) "已以你的名义回复" else "按任务进度起草的回复", style = PersonaTheme.type.caption,
                     color = if (done) PersonaTheme.palette.done.text else PersonaTheme.palette.accent)
-                if (done) Text(draft, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
+                if (sent != null) Text(sent.text, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
                 else BasicTextField(draft, { draft = it }, Modifier.fillMaxWidth(),
                     textStyle = PersonaTheme.type.body.copy(color = PersonaTheme.palette.ink),
                     cursorBrush = SolidColor(PersonaTheme.palette.accent))
             }
+            if (blank != null) Text("草稿里还有没填的「$blank」，改掉或删掉再发送", style = PersonaTheme.type.caption,
+                color = PersonaTheme.palette.danger.text)
             if (!done) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                JButton("发送", { host.tasks.sendMessage(itemId, draft, host.onError) }, Modifier.weight(1f), size = JButtonSize.Medium,
-                    loading = itemId in busy)
+                JButton("发送", { host.tasks.sendMessage(item, draft, host.onError) }, Modifier.weight(1f), size = JButtonSize.Medium,
+                    enabled = blank == null && draft.isNotBlank(), loading = item.id in busy)
                 JButton("稍后", { host.tasks.putOff(itemId) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium)
             }
         }

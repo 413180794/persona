@@ -71,8 +71,8 @@ class HttpTasksApi internal constructor(
     override suspend fun mainConversation(): String? =
         (call(path("assistant"))["main"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.takeIf(String::isNotBlank)
 
-    override suspend fun inboxReply(itemId: String, text: String) {
-        call(path("inbox", itemId, "reply"), "POST", buildJsonObject { put("text", text) })
+    override suspend fun inboxReply(itemId: String, text: String, card: String?) {
+        call(path("inbox", itemId, "reply"), "POST", buildJsonObject { put("text", text); card?.let { put("card", it) } })
     }
 
     private fun plan(o: JsonObject): TaskPlan = JsonCodec.decodeFromJsonElement(o["plan"] ?: error("no plan in the answer"))

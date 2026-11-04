@@ -19,6 +19,7 @@ data class InboxItem(
     val doneAt: String? = null,
     /** What the item holds as listed (the hub's `version`): a bulk 已处理 sends it back. */
     val version: String? = null,
+    val notice: String? = null,
 ) {
     val triage: InboxTier get() = InboxTier.entries.firstOrNull { it.wire == tier } ?: InboxTier.Action
     val isTriaged: Boolean get() = !tier.isNullOrEmpty()
@@ -96,7 +97,8 @@ fun buildInboxList(
         fields.any { it?.contains(settings.query, ignoreCase = true) == true }
     val shown = items.filter { item ->
         (settings.source.isEmpty() || item.account == settings.source) &&
-            (settings.kind.isEmpty() || item.kind == settings.kind || settings.kind == "group" && item.kind == "bot") &&
+            (settings.kind.isEmpty() || item.kind == settings.kind || settings.kind == "group" && item.kind == "bot" ||
+                settings.kind == "mention" && item.kind == "moment" && item.notice?.startsWith("atIn") == true) &&
             matchesText(item.title, item.sender, item.preview, item.summary)
     }
     val bySession = sessions.associateBy { it.id }

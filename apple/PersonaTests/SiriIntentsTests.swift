@@ -61,4 +61,31 @@ struct SiriIntentsTests {
         #expect(PersonalAgentIntentText.sent(status: "failed", to: "甲", error: "boom") == "发给「甲」失败：boom")
         #expect(PersonalAgentIntentText.name(title: " ", id: "ob:x") == "ob:x")
     }
+
+    // MARK: 新建待办
+
+    @Test func addTodoPostsTrimmedTitleAndNotes() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/todos", json: #"{"todo":{"id":"todo_1","title":"买牛奶","agents":[]}}"#)
+        let todo = try await AddTodoFlow.add(hub.client, title: "  买牛奶 ", notes: " \n ")
+        #expect(todo.id == "todo_1")
+        let sent = hub.sent("POST", "/api/v1/todos")
+        #expect(sent.count == 1)
+        let body = try #require(sent.first?.body)
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(json["title"] as? String == "买牛奶")
+        #expect(json["notes"] == nil)
+    }
+
+    @Test func addTodoNeedsATitleAndExplainsAnOldHub() async throws {
+        let hub = FakeHub()
+        await #expect(throws: IntentFailureSentence.self) { try await AddTodoFlow.add(hub.client, title: "  ", notes: nil) }
+        #expect(hub.requests.isEmpty)
+        do {
+            _ = try await AddTodoFlow.add(hub.client, title: "x", notes: nil)
+            Issue.record("an old hub (no todos route) should fail")
+        } catch {
+            #expect(error.localizedDescription == TodoIntentText.oldHub)
+        }
+    }
 }

@@ -1,5 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { answeredItems, dayLabel, displayLines, getFeedState, mergeInto, quickResult, removeTask, retryKey, retryTask, setRoute, startFailure, type FeedItem, type TaskPlan } from "./feed";
+import {
+  answeredItems,
+  cardSent,
+  dayLabel,
+  displayLines,
+  draftPlaceholder,
+  getFeedState,
+  mergeInto,
+  quickResult,
+  removeTask,
+  retryKey,
+  retryTask,
+  sendMessage,
+  setRoute,
+  startFailure,
+  type FeedItem,
+  type TaskPlan,
+} from "./feed";
 import { getPanel, openPanel } from "./panel";
 import type { Todo } from "./todos";
 import type { ChatLine, Segment } from "./turns";
@@ -143,5 +160,69 @@ describe("an answered record (#1231)", () => {
   it("shows a record from before it by its line, and nothing for an empty one", () => {
     expect(answeredItems(answered({ question: "使用 Bash", answer: "批准了" }))).toEqual([{ question: "使用 Bash", answer: "批准了" }]);
     expect(answeredItems(answered({ items: [] }))).toEqual([]);
+  });
+});
+
+describe("a message card's 发送 (#1519)", () => {
+  const ok = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
+  afterEach(() => vi.unstubAllGlobals());
+  const card = (id: string, body: Record<string, unknown> = {}): FeedItem => ({
+    id, conversation: "c1", at: ago(5), kind: "message", ref: "example:1", body: { draft: "在修了", ...body },
+  });
+
+  it("reads sent from the card the hub keeps, with what went out (the draft for a card from before)", () => {
+    expect(cardSent(card("m"))).toBeUndefined();
+    expect(cardSent(card("m", { sent_at: "2026-11-04T10:23:00Z", sent: "修好了" }))).toEqual({ at: "2026-11-04T10:23:00Z", text: "修好了" });
+    expect(cardSent(card("m", { sent_at: "2026-11-04T10:23:00Z" }))?.text).toBe("在修了");
+  });
+
+  it("takes a card's new body when the hub sends it again (sent on another device)", () => {
+    const before = card("m");
+    const list = [before];
+    expect(mergeInto(list, [card("m")])).toBe(list); // the same: nothing redraws
+    const sent = card("m", { sent_at: "2026-11-04T10:23:00Z" });
+    expect(mergeInto(list, [sent])).toEqual([sent]);
+  });
+
+  it("finds a blank left to fill in", () => {
+    expect(draftPlaceholder("确实是 bug，【预计今晚 / 几点前】修好")).toBe("【预计今晚 / 几点前】");
+    expect(draftPlaceholder("MR 在 {{链接}}")).toBe("{{链接}}");
+    expect(draftPlaceholder("确实是 bug，修好了告诉你")).toBeUndefined();
+  });
+
+  it("sends once however many taps, with the card, and draws it sent", async () => {
+    let answer: (v: unknown) => void = () => {};
+    const fetcher = vi.fn((_url: string, init?: RequestInit) => (init?.method === "POST" ? new Promise((r) => (answer = r)) : Promise.resolve(ok({}))));
+    vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+    vi.stubGlobal("fetch", fetcher);
+    const c = card("m1");
+    const first = sendMessage(c, "修好了");
+    const second = sendMessage(c, "修好了");
+    expect(getFeedState().busy.m1).toBe(true);
+    answer(ok({ id: "example:1", done_by: "replied" }));
+    await Promise.all([first, second]);
+    const posts = fetcher.mock.calls.filter(([, init]) => init?.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(String(posts[0][0])).toMatch(/\/inbox\/example:1\/reply$/);
+    expect(JSON.parse(String(posts[0][1]?.body))).toEqual({ text: "修好了", card: "m1" });
+    const now = getFeedState().feeds.c1?.find((i) => i.id === "m1");
+    expect(now && cardSent(now)?.text).toBe("修好了");
+    // Sent: a tap from a stale copy does nothing.
+    await sendMessage(c, "修好了");
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+
+  it("does not send a draft with a blank, and can be tapped again after a failure", async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: false, status: 502, text: async () => JSON.stringify({ error: "github: rate limited" }) });
+    vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+    vi.stubGlobal("fetch", fetcher);
+    await expect(sendMessage(card("m2"), "【预计今晚 / 几点前】修好")).rejects.toThrow("【预计今晚 / 几点前】");
+    expect(fetcher).not.toHaveBeenCalled();
+    await expect(sendMessage(card("m2"), "今晚修好")).rejects.toThrow("rate limited");
+    expect(getFeedState().busy.m2).toBe(false);
+    expect(getFeedState().feeds.c1?.find((i) => i.id === "m2")).toBeUndefined();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(ok({})));
+    await sendMessage(card("m2"), "今晚修好");
+    expect(cardSent(getFeedState().feeds.c1!.find((i) => i.id === "m2")!)?.text).toBe("今晚修好");
   });
 });

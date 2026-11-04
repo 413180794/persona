@@ -947,6 +947,7 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 			ClientID        string      `json:"client_id"`
 			ExpectedUID     *uint32     `json:"expected_uid"`
 			ExpectedVersion *string     `json:"expected_version"`
+			Card            string      `json:"card"` // the message card it is sent from (sendFromCard)
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" && len(in.Changes) == 0 {
 			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
@@ -961,7 +962,16 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		it, err := h.replyInboxChecked(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.ClientID, in.ExpectedUID, in.ExpectedVersion, in.Changes...)
+		send := func() (InboxItem, error) {
+			return h.replyInboxChecked(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.ClientID, in.ExpectedUID, in.ExpectedVersion, in.Changes...)
+		}
+		var it InboxItem
+		var err error
+		if in.Card != "" {
+			it, _, err = h.sendFromCard(r.Context(), in.Card, r.PathValue("id"), send)
+		} else {
+			it, err = send()
+		}
 		switch {
 		case errors.Is(err, errMailReplyTargetChanged):
 			writeErrorBody(w, http.StatusConflict, map[string]any{"code": "mail_reply_target_changed", "error": "邮件回复对象已变化，请查看最新邮件后确认发送", "retryable": false, "delivered": "none"})

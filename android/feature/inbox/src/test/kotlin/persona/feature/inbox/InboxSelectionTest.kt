@@ -20,4 +20,10 @@ class InboxSelectionTest {
         assertFalse(isInboxItemSelected(null, "item", null))
         assertFalse(isInboxItemSelected(InboxRoute, "item", null))
     }
+
+    @Test fun momentSelectionUsesItemIdentity() {
+        assertTrue(isInboxItemSelected(LarkMomentRoute("post-1", "item"), "item", null))
+        assertFalse(isInboxItemSelected(LarkMomentRoute("post-1", "other-item"), "item", null))
+        assertFalse(isInboxItemSelected(LarkMomentRoute("post-1", null), "item", null))
+    }
 }

@@ -5,8 +5,10 @@
 import { useMemo, useState } from "react";
 import {
   answeredItems,
+  cardSent,
   dayLabel,
   dismissPlan,
+  draftPlaceholder,
   field,
   getFeedState,
   isToday,
@@ -35,7 +37,7 @@ import type { AgentState, Interaction, Session } from "../../lib/types";
 import { Button, Collapse, cx, Menu, StatusDot, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { InteractionCard } from "../chat/Interactions";
-import { sessionTitle } from "../../lib/format";
+import { clock, sessionTitle } from "../../lib/format";
 
 // ── what a task is now ──
 
@@ -370,7 +372,7 @@ export function FeedLineView({ item }: { item: FeedItem }) {
     case "today":
       return <TodayCard body={item.body as unknown as TodayBody} conversation={item.conversation} />;
     case "message":
-      return item.ref && !isLater ? <MessageCard item={item} itemId={item.ref} /> : null;
+      return item.ref && !isLater ? <MessageCard item={item} /> : null;
     default:
       return null;
   }
@@ -551,28 +553,26 @@ function useSayToPersona(conversation: string) {
 
 // ── message cards ──
 
-function MessageCard({ item, itemId }: { item: FeedItem; itemId: string }) {
+function MessageCard({ item }: { item: FeedItem }) {
   const todo = useTodo(field(item, "todo_id"));
   const lookup = useTaskLookup();
-  const sentHere = useFeed((s) => s.sent[itemId]);
+  const sent = cardSent(item);
+  const busy = useFeed((s) => !!s.busy[item.id]);
   const [text, setText] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const draft = text ?? field(item, "draft") ?? "";
+  const blank = sent ? undefined : draftPlaceholder(draft);
   const send = async () => {
-    setBusy(true);
     try {
-      await sendMessage(itemId, draft);
+      await sendMessage(item, draft);
       toast("已发送，标为已处理", "ok");
     } catch (e) {
       toast(`回复没发出去：${e instanceof Error ? e.message : e}`, "error");
-    } finally {
-      setBusy(false);
     }
   };
   const plans = useFeed((s) => s.plans);
   const status = todo ? statusOf(todo, lookup, plans) : undefined;
   return (
-    <div className="flex flex-col gap-2.5 rounded-card bg-surface p-4 shadow-card">
+    <div className="flex flex-col gap-2.5 rounded-card bg-surface p-4 shadow-card" data-testid="message-card">
       <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
         <Icon name={field(item, "source") === "mail" ? "mail" : "chat"} size={13} className="text-accent" />
         {[field(item, "sender"), field(item, "chat")].filter(Boolean).join(" · ")}
@@ -586,23 +586,25 @@ function MessageCard({ item, itemId }: { item: FeedItem; itemId: string }) {
           <Icon name="chevronRight" size={13} className="text-ink-3" />
         </button>
       )}
-      <div className={cx("flex flex-col gap-1 rounded-control p-3", sentHere ? "bg-green-tint" : "bg-accent-tint")}>
-        <span className={cx("flex items-center gap-1 text-[12px] font-semibold", sentHere ? "text-green" : "text-accent")}>
-          <Icon name={sentHere ? "check" : "pencil"} size={12} />
-          {sentHere ? "已以你的名义回复" : "按任务进度起草的回复"}
+      <div className={cx("flex flex-col gap-1 rounded-control p-3", sent ? "bg-green-tint" : "bg-accent-tint")}>
+        <span className={cx("flex items-center gap-1 text-[12px] font-semibold", sent ? "text-green" : "text-accent")}>
+          <Icon name={sent ? "check" : "pencil"} size={12} />
+          {sent ? "已以你的名义回复" : "按任务进度起草的回复"}
+          {sent && <span className="ml-auto font-normal text-ink-3">{clock(sent.at)}</span>}
         </span>
-        {!sentHere ? (
+        {!sent ? (
           <textarea value={draft} onChange={(e) => setText(e.target.value)} rows={Math.min(6, Math.max(2, draft.split("\n").length))} className="resize-none bg-transparent text-[14.5px] outline-none" />
         ) : (
-          <div className="text-[14.5px]">{draft}</div>
+          <div className="whitespace-pre-line text-[14.5px]">{sent.text}</div>
         )}
       </div>
-      {!sentHere && (
+      {blank && <div className="text-[12px] text-red">草稿里还有没填的「{blank}」，改掉或删掉再发送</div>}
+      {!sent && (
         <div className="flex gap-2">
-          <Button tone="accent" busy={busy} onClick={send} className="flex-1">
+          <Button tone="accent" busy={busy} disabled={!!blank || !draft.trim()} onClick={send} className="flex-1">
             发送
           </Button>
-          <Button disabled={busy} onClick={() => later(itemId)}>
+          <Button disabled={busy} onClick={() => later(item.ref!)}>
             稍后
           </Button>
         </div>

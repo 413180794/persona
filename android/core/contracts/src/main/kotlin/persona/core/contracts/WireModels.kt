@@ -133,7 +133,7 @@ data class InboxResponse(val items: List<InboxItem> = emptyList())
 data class InboxItem(
     val id: String,
     @WireEnum("lark", "mail", "unknown") val source: String = "unknown",
-    @WireEnum("dm", "mention", "group", "bot", "mail", "unknown") val kind: String = "unknown",
+    @WireEnum("dm", "mention", "group", "bot", "mail", "moment", "unknown") val kind: String = "unknown",
     val account: String = "",
     @SerialName("account_name") val accountName: String = "",
     val title: String = "", val sender: String? = null, val avatar: String? = null,
@@ -144,8 +144,19 @@ data class InboxItem(
     val summary: String? = null, val reason: String? = null, val read: Boolean? = null,
     @WireTime @SerialName("done_at") val doneAt: String? = null,
     @SerialName("done_by") val doneBy: String? = null,
-    val lark: InboxLark? = null, val mail: InboxMail? = null, val agent: InboxAgent? = null,
+    val lark: InboxLark? = null, val mail: InboxMail? = null, val moment: InboxMoment? = null,
+    val agent: InboxAgent? = null,
     val context: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = InboxMomentSerializer::class)
+data class InboxMoment(
+    @SerialName("post_id") val postId: String,
+    val notice: String? = null,
+    @SerialName("reply_to") val replyTo: String? = null,
+    @SerialName("my_post") val myPost: Boolean? = null,
+    @SerialName("post_text") val postText: String? = null,
 )
 
 @KeepGeneratedSerializer
@@ -230,6 +241,73 @@ data class LarkReplyTo(
 data class LarkReaction(val key: String, val count: Int = 0, val mine: Boolean? = null, val users: List<String>? = null)
 
 @KeepGeneratedSerializer
+@Serializable(with = LarkMomentsPostSerializer::class)
+data class LarkMomentsPost(
+    val id: String = "",
+    val userName: String? = null,
+    val userId: String? = null,
+    val userAvatarUrl: String? = null,
+    val content: LarkMomentsContent? = null,
+    val images: List<LarkMomentsImage>? = null,
+    val reactionGroups: List<LarkMomentsReactionGroup>? = null,
+    val reactionCount: Int? = null,
+    val commentCount: Int? = null,
+    val createTime: Double? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkMomentsImageSerializer::class)
+data class LarkMomentsImage(val url: String? = null, val width: Double? = null, val height: Double? = null)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkMomentsReactionGroupSerializer::class)
+data class LarkMomentsReactionGroup(val type: String = "", val count: Int = 0, val selfInvolved: Boolean = false)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkMomentsContentSerializer::class)
+data class LarkMomentsContent(val text: String? = null, val segments: List<LarkMomentsSegment>? = null)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkMomentsSegmentSerializer::class)
+data class LarkMomentsSegment(val kind: String? = null, val text: String? = null, val key: String? = null, val emojiKey: String? = null)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkMomentsCommentSerializer::class)
+data class LarkMomentsComment(
+    val id: String = "",
+    val userName: String? = null,
+    val userId: String? = null,
+    val userAvatarUrl: String? = null,
+    val content: LarkMomentsContent? = null,
+    val createTime: Double? = null,
+    val replyCommentId: String? = null,
+    val replyUserName: String? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkMomentsCommentsResponseSerializer::class)
+data class LarkMomentsCommentsResponse(val comments: List<LarkMomentsComment> = emptyList())
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkUrlPreviewSerializer::class)
+data class LarkUrlPreview(
+    val title: String? = null,
+    val host: String? = null,
+    val url: String? = null,
+    val card: LarkUrlPreviewCard? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = LarkUrlPreviewCardSerializer::class)
+data class LarkUrlPreviewCard(
+    val author: String? = null,
+    val avatarUrl: String? = null,
+    val body: String? = null,
+    val footer: String? = null,
+    val subtitle: String? = null,
+)
+
+@KeepGeneratedSerializer
 @Serializable(with = EndpointSerializer::class)
 data class Endpoint(
     val url: String,
@@ -286,6 +364,7 @@ object FleetStatsSerializer : WireSerializer<FleetStats>(FleetStats.generatedSer
 object FleetLoadSerializer : WireSerializer<FleetLoad>(FleetLoad.generatedSerializer())
 object InboxResponseSerializer : WireSerializer<InboxResponse>(InboxResponse.generatedSerializer())
 object InboxItemSerializer : WireSerializer<InboxItem>(InboxItem.generatedSerializer())
+object InboxMomentSerializer : WireSerializer<InboxMoment>(InboxMoment.generatedSerializer())
 object InboxLarkSerializer : WireSerializer<InboxLark>(InboxLark.generatedSerializer())
 object InboxMailSerializer : WireSerializer<InboxMail>(InboxMail.generatedSerializer())
 object MailAddressSerializer : WireSerializer<MailAddress>(MailAddress.generatedSerializer())
@@ -295,6 +374,15 @@ object LarkMessageSerializer : WireSerializer<LarkMessage>(LarkMessage.generated
 object LarkPartSerializer : WireSerializer<LarkPart>(LarkPart.generatedSerializer())
 object LarkReplyToSerializer : WireSerializer<LarkReplyTo>(LarkReplyTo.generatedSerializer())
 object LarkReactionSerializer : WireSerializer<LarkReaction>(LarkReaction.generatedSerializer())
+object LarkMomentsPostSerializer : WireSerializer<LarkMomentsPost>(LarkMomentsPost.generatedSerializer())
+object LarkMomentsImageSerializer : WireSerializer<LarkMomentsImage>(LarkMomentsImage.generatedSerializer())
+object LarkMomentsReactionGroupSerializer : WireSerializer<LarkMomentsReactionGroup>(LarkMomentsReactionGroup.generatedSerializer())
+object LarkMomentsContentSerializer : WireSerializer<LarkMomentsContent>(LarkMomentsContent.generatedSerializer())
+object LarkMomentsSegmentSerializer : WireSerializer<LarkMomentsSegment>(LarkMomentsSegment.generatedSerializer())
+object LarkMomentsCommentSerializer : WireSerializer<LarkMomentsComment>(LarkMomentsComment.generatedSerializer())
+object LarkMomentsCommentsResponseSerializer : WireSerializer<LarkMomentsCommentsResponse>(LarkMomentsCommentsResponse.generatedSerializer())
+object LarkUrlPreviewSerializer : WireSerializer<LarkUrlPreview>(LarkUrlPreview.generatedSerializer())
+object LarkUrlPreviewCardSerializer : WireSerializer<LarkUrlPreviewCard>(LarkUrlPreviewCard.generatedSerializer())
 object EndpointSerializer : WireSerializer<Endpoint>(Endpoint.generatedSerializer())
 object EndpointsResponseSerializer : WireSerializer<EndpointsResponse>(EndpointsResponse.generatedSerializer())
 object HealthSerializer : WireSerializer<Health>(Health.generatedSerializer())

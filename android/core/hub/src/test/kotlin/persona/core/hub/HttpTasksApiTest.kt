@@ -49,6 +49,17 @@ class HttpTasksApiTest {
         }
     }
 
+    @Test fun aCardsReplyNamesTheCard() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"id":"example:1","done_by":"replied"}"""))
+            api(server).inboxReply("example:1", "修好了", "feed_1")
+            val req = server.takeRequest()
+            assertEquals("POST", req.method)
+            assertTrue(req.path.orEmpty(), req.path.orEmpty().endsWith("/reply"))
+            assertEquals("""{"text":"修好了","card":"feed_1"}""", req.body.readUtf8())
+        }
+    }
+
     @Test fun removeDeletesTheTodo() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))

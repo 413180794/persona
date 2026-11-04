@@ -69,6 +69,18 @@ struct JarvisShortcuts: AppShortcutsProvider {
             shortTitle: "批准第一个",
             systemImageName: "checkmark.shield"
         )
+        AppShortcut(
+            intent: AddTodoIntent(),
+            phrases: [
+                "用 \(.applicationName) 新建待办",
+                "\(.applicationName) 记个待办",
+                "\(.applicationName) 加个待办",
+                "Add a to-do in \(.applicationName)",
+                "New \(.applicationName) to-do",
+            ],
+            shortTitle: "新建待办",
+            systemImageName: "checklist"
+        )
     }
 
     nonisolated static var shortcutTileColor: ShortcutTileColor { .tangerine }

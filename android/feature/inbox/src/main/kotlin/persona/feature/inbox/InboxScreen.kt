@@ -265,15 +265,16 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
         MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = item.title,
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
             position = position, avatar = rememberLarkAvatar(record.avatar),
-            source = if (record.feedId != null) MessageSource.Lark else MessageSource.Mail,
-            sourceLabel = if (record.feedId != null) "飞书" else "邮件",
+            source = if (record.feedId != null || record.source == "lark") MessageSource.Lark else MessageSource.Mail,
+            sourceLabel = if (record.feedId != null || record.source == "lark") "飞书" else "邮件",
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
             time = item.updatedAt?.let(::displayTime), preview = item.summary?.takeIf { it.isNotBlank() } ?: item.preview,
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
             tags = listOfNotNull(kindLabel(record).takeIf { it.isNotBlank() }, record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") },
                 "${record.count} 条消息".takeIf { record.count > 0 }),
             onClick = {
-                record.feedId?.let { navigator.navigate(LarkRoute(it, item.id, record.startPosition)) }
+                record.moment?.let { navigator.navigate(LarkMomentRoute(it.postId, item.id)) }
+                    ?: record.feedId?.let { navigator.navigate(LarkRoute(it, item.id, record.startPosition)) }
                     ?: navigator.navigate(MailRoute(item.id))
             }, onLongClick = { menu = true }, extra = {
                 record.localDelivery?.pendingStatus()?.let { PendingBadge(it) }
@@ -300,7 +301,7 @@ internal fun inboxSummary(inbox: InboxListResult, working: (InboxRow) -> Boolean
 }
 
 private fun kindLabel(kind: String) = when (kind) {
-    "mention" -> "@我"; "dm" -> "私聊"; "group" -> "群聊"; "bot" -> "机器人"; "mail" -> "邮件"; else -> ""
+    "mention" -> "@我"; "dm" -> "私聊"; "group" -> "群聊"; "bot" -> "机器人"; "mail" -> "邮件"; "moment" -> "removed"; else -> ""
 }
 
 /** The row's kind: an @ of everyone is 「@所有人」, a mail the user was only copied on is 「抄送」 (the old app's labels). */
@@ -308,6 +309,8 @@ internal fun kindLabel(record: InboxRecord): String = when {
     record.item.kind == "mention" && record.read -> "群聊"
     record.item.kind == "mention" && record.atAll -> "@所有人"
     record.item.kind == "mail" && record.mail?.direct == false -> "抄送"
+    record.moment != null || record.item.kind == "moment" ->
+        if (record.moment?.notice?.startsWith("atIn") == true) "@我" else "removed"
     else -> kindLabel(record.item.kind)
 }
 

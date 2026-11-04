@@ -820,10 +820,12 @@ class RealInboxRepository(
         val lark = data.obj("lark")
         val agent = data.obj("agent")
         val mail = data.obj("mail")
+        val moment = data.obj("moment")
         return InboxRecord(
             InboxItem(data.string("id"), data.string("account"), data.string("kind"), data.string("title"),
                 data.optional("sender"), data.string("preview"), data.optional("summary"), data.optional("tier"),
-                data.optional("updated_at"), data.optional("done_at"), data.optional("version")),
+                data.optional("updated_at"), data.optional("done_at"), data.optional("version"),
+                notice = moment?.optional("notice")),
             sourceLabel = data.optional("account_name") ?: if (data.string("source") == "lark") "飞书" else "邮件",
             feedId = lark?.optional("feed_id"), startPosition = lark?.number("start_position"), count = data.number("count")?.toInt() ?: 0,
             agent = agent?.let { InboxAgent(it.string("state"), it.string("draft"), it.optional("note") ?: it.string("reason"),
@@ -839,7 +841,36 @@ class RealInboxRepository(
             },
             // Only a Feishu chat has a picture on the hub; a mail row keeps its initial, as on iOS.
             avatar = if (data.string("source") == "lark") avatar(data.optional("avatar"), transport) else null,
+            moment = moment?.let {
+                InboxMomentRef(
+                    postId = it.string("post_id"),
+                    notice = it.optional("notice"),
+                    replyTo = it.optional("reply_to"),
+                    myPost = it.flag("my_post"),
+                    postText = it.optional("post_text"),
+                )
+            },
         )
+    }
+
+    override suspend fun momentsPost(postId: String): persona.core.contracts.LarkMomentsPost {
+        val transport = requireTransport()
+        val json = transport.momentsPost(postId)
+        return persona.core.contracts.JsonCodec.decodeFromJsonElement(persona.core.contracts.LarkMomentsPost.serializer(), json)
+    }
+
+    override suspend fun momentsComments(postId: String): List<persona.core.contracts.LarkMomentsComment> {
+        val transport = requireTransport()
+        val json = transport.momentsComments(postId)
+        return persona.core.contracts.JsonCodec.decodeFromJsonElement(persona.core.contracts.LarkMomentsCommentsResponse.serializer(), json).comments
+    }
+
+    override suspend fun urlPreview(messageId: String, url: String): persona.core.contracts.LarkUrlPreview? {
+        val transport = requireTransport()
+        return runCatching {
+            val json = transport.urlPreview(messageId, url)
+            persona.core.contracts.JsonCodec.decodeFromJsonElement(persona.core.contracts.LarkUrlPreview.serializer(), json)
+        }.getOrNull()
     }
     private fun avatar(ref: String?, transport: InboxAssistantTransport) =
         larkAvatar(ref, transport.scope) { sized -> images.get("${transport.scope}:$sized") { transport.media(sized) } }

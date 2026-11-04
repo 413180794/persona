@@ -258,17 +258,21 @@ func (h *Hub) replyInboxAs(ctx context.Context, id, text, clientID string, chang
 	if err != nil {
 		return InboxItem{}, err
 	}
+	now := time.Now()
 	if already {
 		h.inbox.mu.Lock()
 		out := it.listed()
 		h.inbox.mu.Unlock()
+		h.markCardsSent(ctx, id, now, text, true)
 		return out, nil
 	}
 	h.inbox.mu.Lock()
-	it.done(time.Now(), "replied")
+	it.done(now, "replied")
 	out := it.listed()
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, []*InboxItem{it})
+	// The item's cards in the assistant's conversations show it sent, wherever it was sent from.
+	h.markCardsSent(ctx, id, now, text, true)
 	return out, nil
 }
 

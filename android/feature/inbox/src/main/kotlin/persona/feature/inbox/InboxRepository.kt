@@ -74,6 +74,10 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
 
     /** Download authenticated media and return a content URI suitable for a read grant. */
     suspend fun downloadFile(file: LarkPart.File): String
+
+    suspend fun momentsPost(postId: String): persona.core.contracts.LarkMomentsPost = error("Moments post unavailable")
+    suspend fun momentsComments(postId: String): List<persona.core.contracts.LarkMomentsComment> = emptyList()
+    suspend fun urlPreview(messageId: String, url: String): persona.core.contracts.LarkUrlPreview? = null
 }
 
 data class InboxSnapshot(
@@ -107,9 +111,19 @@ data class InboxRecord(
     /** A Feishu chat's picture (the group's, or the other person's), at the thumbnail size. */
     val avatar: AuthenticatedLarkImage? = null,
     val read: Boolean = false,
+    val moment: InboxMomentRef? = null,
 ) {
     val isLark: Boolean get() = feedId != null || source == "lark"
 }
+
+/** A removed post reference on an inbox item. */
+data class InboxMomentRef(
+    val postId: String,
+    val notice: String? = null,
+    val replyTo: String? = null,
+    val myPost: Boolean = false,
+    val postText: String? = null,
+)
 
 /** Where a mail item's messages are: what 交给 AI tells the agent so it can read them with its mail tools. */
 data class InboxMailRef(

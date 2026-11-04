@@ -25,6 +25,9 @@ interface TasksApi {
     suspend fun today(conversation: String): FeedItem
     /** The main assistant conversation's id (GET /api/v1/assistant `main`), null when there is none. */
     suspend fun mainConversation(): String?
-    /** 发送 on a message card: the draft goes out through the inbox, which files the item as done. */
-    suspend fun inboxReply(itemId: String, text: String)
+    /**
+     * 发送 on a message card: the draft goes out through the inbox, which files the item as done and records it on
+     * the card ([card], the card's id: sent once per card however many taps or devices).
+     */
+    suspend fun inboxReply(itemId: String, text: String, card: String? = null)
 }

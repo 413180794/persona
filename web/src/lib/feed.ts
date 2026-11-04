@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import { api, enc } from "./api";
 import { onHubEvent, putTodo, refreshTodos } from "./store";
 import { deleteTodo, type Todo } from "./todos";
+import { itemPath } from "./inbox";
 import { closePanel, getPanel } from "./panel";
 import type { ChatLine } from "./turns";
 import type { Item } from "./types";
@@ -90,12 +91,11 @@ interface FeedState {
   /** Conversation → the task the next message goes to (「对「xx」说」). */
   routes: Record<string, string>;
   busy: Record<string, boolean>;
-  /** Message cards put off with 稍后, and the ones sent from their card. */
+  /** Message cards put off with 稍后. */
   later: Record<string, boolean>;
-  sent: Record<string, boolean>;
 }
 
-let st: FeedState = { feeds: {}, plans: {}, routes: {}, busy: {}, later: {}, sent: {} };
+let st: FeedState = { feeds: {}, plans: {}, routes: {}, busy: {}, later: {} };
 const listeners = new Set<() => void>();
 function set(patch: Partial<FeedState>) {
   st = { ...st, ...patch };
@@ -109,6 +109,7 @@ export function useFeed<T>(select: (s: FeedState) => T): T {
       return () => listeners.delete(l);
     },
     () => select(st),
+    () => select(st), // static rendering (tests)
   );
 }
 
@@ -116,12 +117,28 @@ export function getFeedState() {
   return st;
 }
 
-/** Puts items into a conversation's feed, oldest first, without repeats. */
+/** Puts items into a conversation's feed, oldest first, without repeats; one it has whose body changed (a message
+ *  card sent) takes the new body. */
 export function mergeInto(list: FeedItem[], items: FeedItem[]): FeedItem[] {
-  const have = new Set(list.map((i) => i.id));
+  const have = new Map(list.map((i) => [i.id, i]));
+  const changed = new Map(items.filter((i) => have.has(i.id) && JSON.stringify(i.body) !== JSON.stringify(have.get(i.id)!.body)).map((i) => [i.id, i]));
   const fresh = items.filter((i) => !have.has(i.id));
-  if (!fresh.length) return list;
-  return [...list, ...fresh].sort((a, b) => (a.at === b.at ? a.id.localeCompare(b.id) : Date.parse(a.at) - Date.parse(b.at)));
+  if (!fresh.length && !changed.size) return list;
+  const kept = changed.size ? list.map((i) => changed.get(i.id) ?? i) : list;
+  if (!fresh.length) return kept;
+  return [...kept, ...fresh].sort((a, b) => (a.at === b.at ? a.id.localeCompare(b.id) : Date.parse(a.at) - Date.parse(b.at)));
+}
+
+/** A message card whose reply went out — from this card or from the inbox, on any device (the hub records it on the
+ *  card): when, and what it said (a card sent before the hub recorded it: its draft). */
+export function cardSent(it: FeedItem): { at: string; text: string } | undefined {
+  const at = field(it, "sent_at");
+  return at ? { at, text: field(it, "sent") || field(it, "draft") || "" } : undefined;
+}
+
+/** A blank a draft leaves to fill in (【预计几点前】, {{链接}}): it would go out as it is. */
+export function draftPlaceholder(text: string): string | undefined {
+  return /【[^】\n]*】|\{\{[^}\n]*\}\}/.exec(text)?.[0];
 }
 
 function received(items: FeedItem[], plans?: Record<string, TaskPlan>) {
@@ -264,10 +281,26 @@ export async function sendRouted(conversation: string, text: string): Promise<bo
   return true;
 }
 
-/** 发送 on a message card: the (edited) draft goes out through the inbox, which files the item as done. */
-export async function sendMessage(itemId: string, text: string) {
-  await api(`/inbox/${itemId}/reply`, { method: "POST", json: { text } });
-  set({ sent: { ...st.sent, [itemId]: true } });
+/**
+ * 发送 on a message card: the (edited) draft goes out through the inbox, which files the item as done and records it
+ * on the card (the hub sends once per card, however many taps or devices). The card shows it sent once the hub says
+ * so; taps while it is on its way do nothing. A draft with a blank to fill in is not sent.
+ */
+export async function sendMessage(card: FeedItem, text: string) {
+  const itemId = card.ref;
+  const latest = () => st.feeds[card.conversation]?.find((i) => i.id === card.id) ?? card;
+  if (!itemId || st.busy[card.id] || cardSent(latest())) return;
+  const blank = draftPlaceholder(text);
+  if (blank) throw new Error(`草稿里还有没填的「${blank}」`);
+  set({ busy: { ...st.busy, [card.id]: true } });
+  try {
+    await api(`${itemPath(itemId)}/reply`, { method: "POST", json: { text, card: card.id } });
+    // The hub's assistant_feed event brings the card as it recorded it; this draws it sent without waiting.
+    const now = latest();
+    if (!cardSent(now)) received([{ ...now, body: { ...now.body, sent_at: new Date().toISOString(), sent: text } }]);
+  } finally {
+    set({ busy: { ...st.busy, [card.id]: false } });
+  }
 }
 
 export function later(itemId: string) {

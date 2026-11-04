@@ -42,13 +42,21 @@ private enum class ReaderDetent { Full, Peek, Hidden }
 @Composable
 internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -> Unit) {
     var target by remember { mutableStateOf<LarkLink?>(null) }
+    var momentPostId by remember { mutableStateOf<String?>(null) }
+    var momentLink by remember { mutableStateOf<String?>(null) }
     val parentOccluded = LocalLarkReadOccluded.current
     val scope = rememberCoroutineScope()
     // A web page over the page: no glass may sample its WebView, here or in the page around it (LocalWebSheets).
-    WebSheetShown(target != null)
+    WebSheetShown(target != null || momentPostId != null)
     CompositionLocalProvider(LocalLarkLinkOpener provides { url, source ->
-        larkWebUrl(url)?.let { target = LarkLink(it, source) }
-    }, LocalLarkReadOccluded provides (parentOccluded || target != null)) {
+        val postId = LarkMoments.postId(url)
+        if (postId != null) {
+            momentPostId = postId
+            momentLink = url
+        } else {
+            larkWebUrl(url)?.let { target = LarkLink(it, source) }
+        }
+    }, LocalLarkReadOccluded provides (parentOccluded || target != null || momentPostId != null)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             content()
             val pixels = with(LocalDensity.current) { maxHeight.toPx() }
@@ -87,6 +95,17 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
                     }
                 }
                 }
+            }
+            momentPostId?.let { pid ->
+                LarkMomentsSheet(
+                    postId = pid,
+                    link = momentLink,
+                    repository = repository,
+                    onDismiss = {
+                        momentPostId = null
+                        momentLink = null
+                    }
+                )
             }
         }
     }

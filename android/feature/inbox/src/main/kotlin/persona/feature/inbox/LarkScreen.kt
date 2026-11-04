@@ -346,7 +346,17 @@ internal fun LarkPartContent(part: LarkPart, repository: InboxRepository, onErro
     val scope = rememberCoroutineScope()
     var opening by remember { mutableStateOf(false) }
     when (part) {
-        is LarkPart.Text -> LarkLinkedText(part.text, part.source)
+        is LarkPart.Text -> {
+            val postId = LarkMoments.postId(part.text)
+            if (postId != null) {
+                val open = LocalLarkLinkOpener.current
+                LarkMomentsCard(postId = postId, url = part.text, repository = repository, onClick = {
+                    open?.invoke(part.text, part.source)
+                })
+            } else {
+                LarkLinkedText(part.text, part.source)
+            }
+        }
         is LarkPart.Card -> LarkInteractiveCard(part, repository, onError)
         is LarkPart.Image -> {
             var failed by remember(part.model) { mutableStateOf(false) }

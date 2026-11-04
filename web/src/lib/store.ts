@@ -98,12 +98,13 @@ const subscribe = (l: () => void) => {
 
 export function useStore<T>(select: (s: State) => T): T {
   const last = useRef<{ v: T } | null>(null);
-  return useSyncExternalStore(subscribe, () => {
+  const get = () => {
     const v = select(state);
     if (last.current && shallowEqual(last.current.v, v)) return last.current.v;
     last.current = { v };
     return v;
-  });
+  };
+  return useSyncExternalStore(subscribe, get, get); // the third: static rendering (tests)
 }
 
 // ── item stream (subscribed sessions) ───────────────────

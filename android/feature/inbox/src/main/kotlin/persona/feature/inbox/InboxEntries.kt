@@ -43,9 +43,18 @@ fun EntryProviderScope<NavKey>.inboxEntries(
             LarkScreen(source, route, navigator)
         }
     }
+    entry<LarkMomentRoute> { route ->
+        val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        CompositionLocalProvider(LocalInboxNavigator provides navigator) {
+            LarkMomentsScreen(source, route, navigator)
+        }
+    }
 }
 
 @Serializable @SerialName("jarvis.feature.inbox.MailRoute")
 data class MailRoute(val itemId: String) : NavKey
+
+@Serializable @SerialName("jarvis.feature.inbox.LarkMomentRoute")
+data class LarkMomentRoute(val postId: String, val itemId: String? = null) : NavKey
 
 val LocalMailTransport = staticCompositionLocalOf<persona.core.contracts.api.MailTransport?> { null }

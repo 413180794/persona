@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.InboxItemRoute
 import persona.core.navigation.LarkChatRoute
 import persona.feature.inbox.InboxRecord
+import persona.feature.inbox.LarkMomentRoute
 import persona.feature.inbox.LarkRoute
 import persona.feature.inbox.MailRoute
 
@@ -13,7 +14,11 @@ import persona.feature.inbox.MailRoute
  */
 internal fun inboxDestination(key: NavKey, records: List<InboxRecord>, loaded: Boolean): InboxDestination? = when (key) {
     is InboxItemRoute -> records.firstOrNull { it.item.id == key.itemId }?.let { record ->
-        InboxDestination.Open(record.feedId?.let { LarkRoute(it, record.item.id, record.startPosition) } ?: MailRoute(record.item.id))
+        InboxDestination.Open(
+            record.moment?.let { LarkMomentRoute(it.postId, record.item.id) }
+                ?: record.feedId?.let { LarkRoute(it, record.item.id, record.startPosition) }
+                ?: MailRoute(record.item.id)
+        )
     } ?: InboxDestination.Missing.takeIf { loaded }
     // A chat without a current item still opens at its latest messages.
     is LarkChatRoute -> records.firstOrNull { it.feedId == key.chatId }

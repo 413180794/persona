@@ -229,6 +229,8 @@ type Store interface {
 	UpdateTaskPlan(ctx context.Context, id, from, to string, tasks json.RawMessage, at time.Time) (bool, error)
 	AppendFeed(ctx context.Context, f db.FeedRow) error
 	Feed(ctx context.Context, conversation string, since time.Time, limit int) ([]db.FeedRow, error)
+	FeedItem(ctx context.Context, id string) (*db.FeedRow, error)
+	MarkFeedSent(ctx context.Context, kind, ref string, at time.Time, patch json.RawMessage) ([]db.FeedRow, error)
 }
 
 type pending struct {

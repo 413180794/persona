@@ -99,10 +99,32 @@ struct IntentsTests {
         #expect(IntentPhrases.fill(IntentPhrases.askClaude, appName: "Persona") == "用 Persona 问 Claude")
         #expect(IntentPhrases.fill(IntentPhrases.status, appName: "Persona") == "Persona 状态")
         #expect(IntentPhrases.fill(IntentPhrases.approve, appName: "Persona") == "用 Persona 批准第一个")
+        #expect(IntentPhrases.fill(IntentPhrases.addTodo, appName: "Persona") == "用 Persona 新建待办")
         // Every template needs the placeholder, otherwise Siri cannot address the app by name.
-        for template in [IntentPhrases.askClaude, IntentPhrases.status, IntentPhrases.approve] {
+        for template in [IntentPhrases.askClaude, IntentPhrases.status, IntentPhrases.approve, IntentPhrases.addTodo] {
             #expect(template.contains("%@"))
         }
+    }
+
+    // MARK: Todos
+
+    @Test func addTodoCleansTextAndSpeaksTheTitle() {
+        #expect(TodoIntentText.cleaned("  买牛奶 \n") == "买牛奶")
+        #expect(TodoIntentText.cleaned(" \n ") == nil)
+        #expect(TodoIntentText.cleaned(nil) == nil)
+        #expect(TodoIntentText.added("买牛奶") == "已记下待办：「买牛奶」")
+        #expect(TodoIntentText.added(String(repeating: "字", count: 80)).count == "已记下待办：「」".count + 61)
+    }
+
+    @Test func addTodoExplainsAnOldHub() {
+        #expect(TodoIntentText.failure(APIError(status: 404, message: "Not Found")) == TodoIntentText.oldHub)
+        #expect(TodoIntentText.failure(APIError(status: 401, message: "x")).contains("重新配对"))
+        #expect(TodoIntentText.failure(IntentFailure.notPaired).contains("还没配对"))
+    }
+
+    /// The intent reads the app's selected hub group under the same key the app writes.
+    @MainActor @Test func addTodoUsesTheAppsHubGroup() {
+        #expect(IntentText.hubGroupKey == AppModel.hubGroupKey)
     }
 
     // MARK: Errors

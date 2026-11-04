@@ -96,13 +96,44 @@ func (d *DB) AppendFeed(ctx context.Context, f FeedRow) error {
 	return err
 }
 
-// Feed lists a conversation's items after since (zero: from the start), oldest first, at most limit.
+// Feed lists a conversation's items after since (zero: from the start), oldest first, at most limit, and the
+// message cards sent after since (their body changed, not their time).
 func (d *DB) Feed(ctx context.Context, conversation string, since time.Time, limit int) ([]FeedRow, error) {
 	rows, err := d.pool.Query(ctx, `SELECT id, conversation, at, kind, ref, body FROM assistant_feed
-		WHERE conversation = $1 AND at > $2 ORDER BY at, id LIMIT $3`, conversation, since, limit)
+		WHERE conversation = $1 AND (at > $2 OR kind = 'message' AND (body->>'sent_at')::timestamptz > $2)
+		ORDER BY at, id LIMIT $3`, conversation, since, limit)
 	if err != nil {
 		return nil, err
 	}
+	return scanFeed(rows)
+}
+
+// FeedItem is one item by its id; nil when there is none.
+func (d *DB) FeedItem(ctx context.Context, id string) (*FeedRow, error) {
+	rows, err := d.pool.Query(ctx, `SELECT id, conversation, at, kind, ref, body FROM assistant_feed WHERE id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	out, err := scanFeed(rows)
+	if err != nil || len(out) == 0 {
+		return nil, err
+	}
+	return &out[0], nil
+}
+
+// MarkFeedSent merges patch into the body of the items of kind about ref put in at or before at that have no
+// sent_at yet, and returns them as they are now.
+func (d *DB) MarkFeedSent(ctx context.Context, kind, ref string, at time.Time, patch json.RawMessage) ([]FeedRow, error) {
+	rows, err := d.pool.Query(ctx, `UPDATE assistant_feed SET body = body || $4::jsonb
+		WHERE kind = $1 AND ref = $2 AND at <= $3 AND NOT body ? 'sent_at'
+		RETURNING id, conversation, at, kind, ref, body`, kind, ref, at, []byte(patch))
+	if err != nil {
+		return nil, err
+	}
+	return scanFeed(rows)
+}
+
+func scanFeed(rows pgx.Rows) ([]FeedRow, error) {
 	defer rows.Close()
 	var out []FeedRow
 	for rows.Next() {

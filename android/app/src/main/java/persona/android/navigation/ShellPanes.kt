@@ -2,6 +2,7 @@ package persona.android.navigation
 
 import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.*
+import persona.feature.inbox.LarkMomentRoute
 import persona.feature.inbox.LarkRoute
 import persona.feature.inbox.MailRoute
 import persona.platform.phonetools.PhoneToolsRoute
@@ -11,7 +12,7 @@ import persona.platform.phonetools.PhoneToolsRoute
  * open from their first page. The shell gives these the list-detail scene's detail role and nothing else does.
  */
 internal fun isDetailDestination(key: NavKey): Boolean = when (key) {
-    is ChatRoute, is InteractionRoute, is TerminalRoute, is LarkRoute, is MailRoute, is InboxItemRoute, is LarkChatRoute,
+    is ChatRoute, is InteractionRoute, is TerminalRoute, is LarkRoute, is LarkMomentRoute, is MailRoute, is InboxItemRoute, is LarkChatRoute,
     is SettingsPageRoute, PairingRoute, PhoneToolsRoute, MachinesRoute, is MachineDetailRoute,
     is EngineRoute, is ModelPurposeRoute, is PluginRoute, is PluginUiRoute, PluginMarketRoute, is PluginCatalogRoute,
     PluginMarketsRoute, is LauncherRoute -> true

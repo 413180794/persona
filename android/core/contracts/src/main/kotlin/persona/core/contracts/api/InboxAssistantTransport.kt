@@ -30,6 +30,9 @@ interface InboxAssistantTransport {
     suspend fun media(ref: String): ByteArray
     suspend fun readDocument(url: String): JsonObject = throw UnsupportedOperationException("Document reader unavailable")
     suspend fun documentMedia(ref: String): ByteArray = media(ref)
+    suspend fun momentsPost(postId: String): JsonObject = throw UnsupportedOperationException("Moments post unavailable")
+    suspend fun momentsComments(postId: String): JsonObject = throw UnsupportedOperationException("Moments comments unavailable")
+    suspend fun urlPreview(messageId: String, url: String): JsonObject = throw UnsupportedOperationException("URL preview unavailable")
 }
 
 interface InboxAssistantConnection {

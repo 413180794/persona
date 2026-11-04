@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -318,6 +319,14 @@ func (h *Hub) ownerName() string {
 	return "用户"
 }
 
+// placeholderRE: a blank a draft leaves for the user to fill in — 【…】, {{…}}.
+var placeholderRE = regexp.MustCompile(`【[^】\n]*】|\{\{[^}\n]*\}\}`)
+
+// draftPlaceholder is the first blank in a draft left to fill in; empty when it has none.
+func draftPlaceholder(text string) string {
+	return placeholderRE.FindString(text)
+}
+
 // inboxItemOfAgent is the item whose agent runs in conversation sessionID.
 func (b *inbox) itemOfAgent(sessionID string) *InboxItem {
 	if sessionID == "" {
@@ -360,6 +369,10 @@ func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.Ra
 	if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Text) == "" {
 		return "", errors.New("text is required")
 	}
+	// The user sends it with one tap: a blank left to fill in (【预计几点前】) would go out as it is.
+	if p := draftPlaceholder(a.Text); p != "" {
+		return "", fmt.Errorf("the draft leaves %s to fill in, and it goes out as it is: leave out what you could not find (say so in note) and submit again", p)
+	}
 	h.inbox.mu.Lock()
 	it := h.inbox.itemOfAgent(sessionID)
 	// An agent that answers before its start returned (an agent runtime that is already running starts a turn at
@@ -388,6 +401,9 @@ func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.Ra
 	it.Agent.State, it.Agent.Error, it.Agent.Changes = AgentDrafted, "", changes
 	it.Agent.Draft, it.Agent.Note, it.Agent.DraftedAt = strings.TrimSpace(a.Text), clip(strings.TrimSpace(a.Note), 600), &now
 	card := messageCardOf(it)
+	if it.DoneBy == "replied" { // the user answered it while the agent worked: no 发送 for a reply already out
+		card = nil
+	}
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, []*InboxItem{it})
 	if card != nil {

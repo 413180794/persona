@@ -2,6 +2,7 @@ package persona.android.navigation
 
 import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.*
+import persona.feature.inbox.LarkMomentRoute
 import persona.feature.inbox.LarkRoute
 import persona.feature.inbox.MailRoute
 import persona.platform.phonetools.PhoneToolsRoute
@@ -62,7 +63,7 @@ class ShellPanesTest {
         val chat = ChatRoute("machine", "session")
         listOf(
             chat, InteractionRoute(chat, "request"), TerminalRoute("machine", "session"), MachinesRoute, MachineDetailRoute("machine"),
-            LarkRoute("chat", "item", 1), MailRoute("item"), InboxItemRoute("item"), LarkChatRoute("chat"),
+            LarkRoute("chat", "item", 1), LarkMomentRoute("post-1", "item"), MailRoute("item"), InboxItemRoute("item"), LarkChatRoute("chat"),
         ).forEach { key -> assertEquals(key.toString(), key, detailOf(listOf(AgentsRoute, key))) }
         // Lists and pages that never sit beside a list mark nothing.
         listOf(AssistantRoute, AgentsRoute, InboxRoute, SettingsRoute).forEach { assertNull(detailOf(listOf(it))) }
