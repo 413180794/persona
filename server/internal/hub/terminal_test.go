@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -307,5 +308,74 @@ func TestTerminalControlNewestDeviceDrives(t *testing.T) {
 	awaitStates(t, phone, "taken")
 	if got := tn.await(t, 2); got[1] != "control 100x40 takeover=false" {
 		t.Fatalf("node got %q", got)
+	}
+}
+
+// An answer-only device may watch a terminal, not drive it: it never gets control, what it types never reaches the
+// computer, and asking for control does not take it from the device that has it.
+func TestAnswerRoleCannotDriveTerminal(t *testing.T) {
+	box := newMeshNode("uid-box", "box", "s1")
+	box.resident = true
+	mh := startTestHub(t, hubB, "Office", []MachineConfig{{ID: "box", Name: "Box", Kind: "ssh"}}, []*meshNode{box})
+	fullTok, _ := mh.deviceToken(t, roleFull)
+	answerTok, _ := mh.deviceToken(t, roleAnswer)
+	eventually(t, 10*time.Second, "box online", func() bool { return mh.machines(t, fullTok)["box"].Online })
+	subscribe := map[string]any{"type": "terminal_subscribe", "machine_id": "box", "session_id": "s1",
+		"control": map[string]any{"cols": 80, "rows": 24}, "takeover": true}
+	input := func(text string) map[string]any {
+		return map[string]any{"type": "terminal_input", "machine_id": "box", "session_id": "s1", "text": text}
+	}
+	// What an app sends is handled in order: the pong means what came before it has been.
+	settled := func(a *app, id string) {
+		t.Helper()
+		from := a.count()
+		a.send(t, map[string]any{"type": "ping", "id": id})
+		a.wait(t, "pong "+id, from, func(m map[string]any) bool { return m["type"] == "pong" && m["id"] == id })
+	}
+	controller := func() *client {
+		mh.h.terms.mu.Lock()
+		defer mh.h.terms.mu.Unlock()
+		if r := mh.h.terms.relays[[2]string{"box", "s1"}]; r != nil {
+			return r.controller
+		}
+		return nil
+	}
+
+	answer := dialApp(t, mh, answerTok)
+	answer.send(t, subscribe)
+	answer.wait(t, "being told it only watches", 0, func(m map[string]any) bool {
+		return m["type"] == "terminal_control" && m["state"] == "unsupported"
+	})
+	settled(answer, "1")
+	if controller() != nil {
+		t.Fatal("an answer-only device got control of the terminal")
+	}
+
+	// A full device drives the same terminal: its keys arrive, the answer-only device's before them did not.
+	full := dialApp(t, mh, fullTok)
+	full.send(t, subscribe)
+	full.wait(t, "control", 0, func(m map[string]any) bool { return m["type"] == "terminal_control" && m["state"] == "active" })
+	answer.send(t, input("typed-by-answer"))
+	settled(answer, "2")
+	full.send(t, input("typed-by-full"))
+	logged := func(text string) bool {
+		for _, e := range box.eventLog() {
+			if strings.Contains(e, text) {
+				return true
+			}
+		}
+		return false
+	}
+	eventually(t, 5*time.Second, "the full device's keys on the node", func() bool { return logged("typed-by-full") })
+	if logged("typed-by-answer") {
+		t.Fatalf("an answer-only device's keys reached the node: %v", box.eventLog())
+	}
+
+	// Asking again does not take it over.
+	driver := controller()
+	answer.send(t, subscribe)
+	settled(answer, "3")
+	if controller() != driver {
+		t.Fatal("an answer-only device took the terminal from the device driving it")
 	}
 }

@@ -995,6 +995,10 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	case "ping":
 		h.onAppPing(c, data)
 	case "terminal_subscribe":
+		if c.role != roleFull && msg.Control != nil { // driving a terminal is typing into it: an answer-only device only watches
+			msg.Control, msg.Takeover = nil, false
+			c.sendTerm(termControlMessage(msg.MachineID, msg.SessionID, "unsupported", nil, "这台设备只能看，不能接管"))
+		}
 		h.terminalSubscribe(ctx, c, msg.MachineID, msg.SessionID, msg.Epoch, msg.AfterSeq, msg.Control, msg.Takeover)
 	case "terminal_input":
 		h.terminalInput(c, msg.MachineID, msg.SessionID, msg.Text, msg.Control, msg.Scroll, msg.At)
