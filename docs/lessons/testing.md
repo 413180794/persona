@@ -10,6 +10,8 @@
   对纯 SwiftUI 的符号／文本／几何布局，使用公开 `ImageRenderer.render(rasterizationScale:renderer:)` 直接绘入测试自己的 CGContext，显式保持点到像素的缩放。保留非空、半径、边界和四位数溢出断言，并用已知尺寸／偏移的矩形校准；不因此改变生产界面或放宽阈值。
   参数化用例的 xcresult summary 按方法计数，不是参数展开次数；完整性用 test tree 的 Arguments 节点核对，每档数字都要确实执行。后处理计数错了只纠正读取，原脚本退出码和实际 XCTest 结果分开保留。
 
+- 兼容改名要把显示名称和持久身份分开验证（2026-11-04，#1189）：`persona-link` / `Persona Link` 上线后，压缩安装回归仍断言旧显示名称，完整发布因此退出 1。只更新显示契约，同时验证 `jarvis-link` 的真实文件、旧下载名、新旧可执行命令和安装器的实际调用；不能把兼容身份也盲改成新名字。脚本测试要分别 discover `scripts/test`、`release`、`deploy`、`mock`、`app`，只跑改名相关子集会漏掉其他目录的旧断言。原失败冻结与退出码保留，修复合并后用新构建号重跑。
+
 - 截图验证别靠 computer-use 点模拟器（Mac 锁屏时拿不到窗口，没锁时会抢用户的鼠标）：用 DEBUG 启动参数（`docs/ios.md`）直达页面再截图。
 - `xcodebuild test` 会启动不带 `-pairURL` 的 App 申请通知权限，之后这台模拟器的截图都会被授权弹窗挡住，跑完测试要重启模拟器再截图。
 - 新装（或换了签名重装）的 App 第一次带 `-pairURL` 启动就弹通知授权，弹框在的时候 App 一直不是活跃状态，收件箱不刷新：

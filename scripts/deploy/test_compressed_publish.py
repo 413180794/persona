@@ -158,12 +158,15 @@ class InstallNodeServiceTests(unittest.TestCase):
                     "TEST_DOWNLOADS": str(self.downloads), "TEST_OS": "Linux", "TEST_ARCH": "x86_64",
                     "JARVIS_DL": "https://example.invalid/dl", "JARVIS_SKIP_HERDR": "1"}
         self.calls = self.home / "link-calls"
+        self.identities = self.home / "link-identities"
 
     def publish(self, suffix="linux-amd64", link=True):
         sums = []
         binaries = {"jarvisd": b"#!/bin/sh\nprintf '%s\\n' test-version\n"}
         if link:  # a fake jarvis-link: says its version, writes down everything else it is asked
-            binaries["jarvis-link"] = b'#!/bin/sh\n[ "$1" = version ] && { echo test-link; exit 0; }\necho "$*" >> "$HOME/link-calls"\n'
+            binaries["jarvis-link"] = (b'#!/bin/sh\n[ "$1" = version ] && { echo test-link; exit 0; }\n'
+                                       b'printf "%s|%s\\n" "$(basename "$0")" "${PERSONA_LINK_NAME:-}" >> "$HOME/link-identities"\n'
+                                       b'echo "$*" >> "$HOME/link-calls"\n')
         for name, data in binaries.items():
             archive = name + "-" + suffix + ".gz"
             packed = gzip.compress(data, mtime=0)
@@ -179,14 +182,28 @@ class InstallNodeServiceTests(unittest.TestCase):
     def calls_made(self):
         return self.calls.read_text().splitlines() if self.calls.exists() else []
 
+    def assert_compatible_connector_commands(self):
+        bin_dir = self.home / ".jarvis/bin"
+        self.assertFalse((bin_dir / "jarvis-link").is_symlink())
+        for name in ("jarvis-link", "persona-link"):
+            with self.subTest(command=name):
+                command = bin_dir / name
+                self.assertTrue(os.access(command, os.X_OK))
+                result = subprocess.run([str(command), "version"], env=self.env, cwd=self.root,
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stdout.strip(), "test-link")
+
     def test_listen_installs_both_and_listens(self):
         self.publish()
         result = self.run_install("--node", "--listen")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(os.access(self.home / ".jarvis/bin/jarvisd", os.X_OK))
         self.assertTrue(os.access(self.home / ".jarvis/bin/jarvis-link", os.X_OK))
-        self.assertIn("jarvis-link test-link installed", result.stdout)
+        self.assertIn("persona-link test-link installed", result.stdout)
+        self.assert_compatible_connector_commands()
         self.assertEqual(self.calls_made(), ["install --listen"])
+        self.assertEqual(self.identities.read_text().splitlines(), ["jarvis-link|persona-link"])
 
     def test_pair_and_listen_imply_the_node_service(self):
         self.publish()
@@ -218,8 +235,11 @@ class InstallNodeServiceTests(unittest.TestCase):
         self.assertEqual(self.calls_made(), ["node install", "pair --listen"])
         self.calls.unlink()
         result = self.run_install("--listen", ":18700", "--addr", "mac.example.com")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.calls_made(), ["node install", "pair --listen :18700 --addr mac.example.com"])
-        self.assertIn("Jarvis Link", result.stdout)
+        self.assertIn("Persona Link", result.stdout)
+        self.assert_compatible_connector_commands()
+        self.assertEqual(self.identities.read_text().splitlines(), ["jarvis-link|persona-link"] * 4)
 
     def test_without_jarvis_link_published_the_node_service_fails_loudly(self):
         self.publish(link=False)
