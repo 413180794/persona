@@ -442,7 +442,7 @@ struct LarkChatView: View {
                     }, pickCover: { checkEncryption(openCovers: true) })
             }
             if !messageComposer, encryptionDraft != nil {
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 Button("前往消息，继续编辑加密草稿") { model.selectedTab = .feishu }
                     .font(Theme.Font.label).lineLimit(1)
                     .padding(.horizontal, Theme.Space.page)

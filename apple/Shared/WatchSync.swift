@@ -55,7 +55,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
         let all = (try? JSONEncoder().encode(WatchConfigs(configs: configs, names: names))) ?? Data()
         let data = (try? JSONEncoder().encode(first)) ?? Data()
         update(["config": data, "configs": all])
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled {
             WCSession.default.transferUserInfo(["config": data, "configs": all])
         }
@@ -65,7 +65,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
     func push(config: ServerConfig) {
         let data = (try? JSONEncoder().encode(config)) ?? Data()
         update(["config": data])
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         // Application context only keeps the latest state; user info is queued and delivered even if the watch app
         // was never opened, so a fresh install still gets paired.
         if WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled {
@@ -94,7 +94,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
 
     /// Throttled: application context is meant for state, not a stream.
     func push(summary: @autoclosure () -> WatchSummary) {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled else { return }
         pendingSummary = summary()
         let wait = 2 - Date.now.timeIntervalSince(lastSummaryPush)
@@ -172,7 +172,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard let transfer = RecordingTransfer(dictionary: file.metadata), let segment = transfer.segment else { return }
         // 回调返回时系统删除临时文件，必须先同步移动，再交给主线程更新索引。
         let dir = RecordingLibrary.directory.appendingPathComponent(transfer.id.uuidString, isDirectory: true)
@@ -208,7 +208,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
         WCSession.default.transferUserInfo(receipt.dictionary)
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
     nonisolated func sessionDidDeactivate(_ session: WCSession) { session.activate() }
     #endif

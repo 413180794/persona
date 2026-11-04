@@ -86,7 +86,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
                 }
                 WaitingBadge()
             }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             if LarkHomePreference.shared.shows {
                 button("消息", .feishu, id: "shell-feishu")
             }
@@ -189,7 +189,7 @@ private struct PagerPill: View {
 private struct WaitingBadge: View {
     @Environment(AppModel.self) private var model
     private var offset: CGSize {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if LarkHomePreference.shared.shows { return CGSize(width: -Theme.Space.s, height: -Theme.Space.l) }
         #endif
         return CGSize(width: Theme.Space.s, height: -Theme.Space.sm)
@@ -360,13 +360,13 @@ struct ShellNavigationClearance: View {
     static let line = " "
 
     var body: some View {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         PromptLine(active: active)
         #endif
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 private struct PromptLine: UIViewControllerRepresentable {
     var active: Bool
 

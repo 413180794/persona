@@ -52,7 +52,7 @@ struct ImageViewer: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             TabView(selection: $index) {
                 ForEach(images.indices, id: \.self) { i in
                     Group {
@@ -104,7 +104,7 @@ struct ImageViewer: View {
                 dismiss()
             }
         }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .statusBarHidden(!chrome)
         .persistentSystemOverlays(chrome ? .automatic : .hidden)
         #endif
@@ -226,7 +226,7 @@ struct ImageViewer: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// UIScrollView-backed zooming: native pinch, pan, bounce; double tap zooms to the tapped point;
 /// pulling down at the minimum zoom closes the viewer.
 struct ZoomableImage: UIViewRepresentable {

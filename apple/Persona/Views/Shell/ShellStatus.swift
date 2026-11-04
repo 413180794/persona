@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// The hub's link in the shell (docs/shell.md「连接状态和 toast」): 等待网络 / 连接中… / 更新中…, floating just under
 /// the top bar like a toast, in the toast window (`ToastWindow`): it takes no touches and moves nothing (#413). It used
 /// to take a row of room under the status bar through the window's safe area, and folding that row made SwiftUI lay

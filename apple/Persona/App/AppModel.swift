@@ -207,6 +207,14 @@ final class AppModel {
             registry = HubRegistry()
             registryUnreadable = true
         }
+        #if DEBUG && os(visionOS)
+        // `-openWelcome YES` just emptied the registry: known empty, even when the keychain cannot be read at all (an
+        // unsigned simulator build has no keychain entitlement, errSecMissingEntitlement), so `-demo.on YES` starts 体验模式.
+        if UserDefaults.standard.bool(forKey: "openWelcome"), registryUnreadable {
+            registry = HubRegistry()
+            registryUnreadable = false
+        }
+        #endif
         hubGroup = UserDefaults.standard.string(forKey: Self.hubGroupKey) ?? ""
         if let raw = UserDefaults.standard.string(forKey: "app.tab"), let tab = AppTab(rawValue: raw) {
             selectedTab = tab
@@ -239,7 +247,7 @@ final class AppModel {
         personas.onChange = { [weak self] in self?.applyPersonaPalette() }
         applyPersonaPalette()
         connection.onCaughtUp = { [weak self] in self?.flushOutbox() }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if registryUnreadable {
             NotificationCenter.default.addObserver(forName: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil,
                                                    queue: .main) { @Sendable _ in MainActor.assumeIsolated { AppModel.shared.retryRegistry() } }
@@ -345,7 +353,7 @@ final class AppModel {
     func start() {
         guard isPaired else { return }
         for link in links {
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             // Launched in the background (a push, a file from the watch): the socket waits for the app to open.
             link.live.suspended = UIApplication.shared.applicationState == .background
             #endif
@@ -1126,7 +1134,7 @@ final class AppModel {
         // Simulator automation (scripts/app/sim.sh) must not take the real iPhone's phone_* tool calls.
         let automation = UserDefaults.standard.string(forKey: "pairURL") != nil
         if automation { tools = [] }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         tools += RuntimeCLI.hubToolSpecs(features: link.features) // the runtime CLI over the hub, when switched on
         #endif
         if automation && tools.isEmpty { return }
@@ -1238,7 +1246,7 @@ final class AppModel {
         switch ev {
         case .hello(let hello):
             link(group)?.received(hello)
-            #if DEBUG && os(iOS)
+            #if DEBUG && (os(iOS) || os(visionOS))
             // Registered on connect, before this hello said whether the hub keeps the runtime CLI from the agents.
             if RuntimeCLI.overHub, let link = link(group) { registerPhone(link) }
             #endif
@@ -1396,7 +1404,7 @@ final class AppModel {
     // MARK: Phone tools
 
     private func runPhoneTool(callID: String, name: String, args: JSONValue, group: String) async {
-        #if DEBUG && os(iOS)
+        #if DEBUG && (os(iOS) || os(visionOS))
         if name == RuntimeCLI.hubTool {
             let (text, isError) = await RuntimeCLI.runFromHub(args)
             socket(group)?.send(["type": "tool_result", "call_id": callID, "content": [["type": "text", "text": text]], "is_error": isError])
@@ -1887,7 +1895,7 @@ final class AppModel {
     var colorScheme: ColorSchemeChoice = ColorSchemeChoice.current {
         didSet {
             UserDefaults.standard.set(colorScheme.rawValue, forKey: ColorSchemeChoice.key)
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             colorScheme.apply()
             // 纸色 / 蜜桃 on the home screen take the same look.
             Task { await appIcon.follow(colorScheme) }
@@ -2236,7 +2244,7 @@ final class AppModel {
 
 enum AppTab: String, Hashable {
     case assistant, chats, mail, settings
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     case feishu
     #endif
 }
@@ -2268,12 +2276,22 @@ struct Toast: Identifiable, Equatable {
     static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }
 }
 
+#if os(visionOS)
+/// No taptic engine on Apple Vision Pro: the system's own sounds and the hover effect are the feedback.
+enum Haptics {
+    static func tap() {}
+    static func success() {}
+    static func error() {}
+    static func attention() {}
+}
+#else
 enum Haptics {
     static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
     static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     static func error() { UINotificationFeedbackGenerator().notificationOccurred(.error) }
     static func attention() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
 }
+#endif
 
 /// One session's latest state, observed on its own (`AppModel.session(_:)`). Its `rev`, `updatedAt` and last line are
 /// as of its last other change: a push of only those (most of a working agent's) draws nothing that reads the cell

@@ -36,7 +36,16 @@ private struct Surface<S: Shape>: ViewModifier {
     func body(content: Content) -> some View {
         switch StyleSpec.current.surface {
         case .glass:
+            #if os(visionOS)
+            // visionOS has no Liquid Glass: its own glass material, the tint washed over it, and the system's
+            // look-at highlight on the panels that take a pinch.
+            content
+                .background { if let tint { shape.fill(tint) } }
+                .background(.regularMaterial, in: shape)
+                .hoverEffect(isEnabled: interactive)
+            #else
             content.glassEffect(glass, in: shape)
+            #endif
         case .puffy:
             // Clay: a puffy pastel slab — light from the top left, a soft shadow below in the color's wash.
             content.background {
@@ -67,12 +76,14 @@ private struct Surface<S: Shape>: ViewModifier {
         }
     }
 
+    #if !os(visionOS)
     private var glass: Glass {
         var g = Glass.regular
         if let tint { g = g.tint(tint) }
         if interactive { g = g.interactive() }
         return g
     }
+    #endif
 }
 
 extension View {
@@ -119,6 +130,9 @@ extension View {
             // cyan on the blue (about 3.2:1), the plain one turned solid blue in the active window (2026-11-02). Both
             // drawn here (`MacCapsuleButton`).
             buttonStyle(MacCapsuleButton(prominent: prominent))
+            #elseif os(visionOS)
+            // visionOS has no .glassProminent: its windows are glass already, and the system's prominent style is the filled one.
+            if prominent { buttonStyle(.borderedProminent).modifier(DimWhenDisabled()) } else { buttonStyle(.bordered) }
             #else
             if prominent { buttonStyle(.glassProminent).modifier(DimWhenDisabled()) } else { buttonStyle(.glass) }
             #endif

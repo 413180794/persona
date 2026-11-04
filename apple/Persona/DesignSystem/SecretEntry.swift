@@ -1,5 +1,5 @@
 import SwiftUI
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #endif
 
@@ -37,7 +37,7 @@ struct SecretField: View {
     }
 
     var body: some View {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         SecretTextField(placeholder: placeholder, filled: filled, identifier: identifier, text: $text)
         #else
         // The standard field on a Mac.
@@ -48,7 +48,7 @@ struct SecretField: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 private struct SecretTextField: UIViewRepresentable {
     var placeholder: String
     var filled: String

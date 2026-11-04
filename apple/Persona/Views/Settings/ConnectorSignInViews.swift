@@ -518,7 +518,7 @@ struct ConnectorSignInSteps: View {
     }
 
     @ViewBuilder private func field(_ f: ConnectorPrompt.Field) -> some View {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if Self.stacked(f) {
             // A label and a placeholder too long for one line: the title above, the field the row's width below. Left to
             // LabeledContent, the row wrapped on its own and the field in it never took the focus (a long token hint).
@@ -537,7 +537,7 @@ struct ConnectorSignInSteps: View {
     @ViewBuilder private func input(_ f: ConnectorPrompt.Field) -> some View {
         let text = Binding(get: { model.values[f.name] ?? "" }, set: { model.values[f.name] = $0 })
         let prompt = Text(f.placeholder ?? f.label)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if f.secret == true {
             // A token, an API hash, another service's password: never offered to the system's passwords (#1598).
             SecretField(f.placeholder ?? f.label, filled: "已填写", text: text, identifier: "connector.field." + f.name)

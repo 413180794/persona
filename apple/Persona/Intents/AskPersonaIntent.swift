@@ -23,7 +23,7 @@ struct AskJarvisIntent: AppIntent {
 
     // The snippet view's `ShowsSnippetView` / `view:` result does not build with the iOS 26 SDKs (Xcode 26.x, Swift 6.2–6.3),
     // so it is only compiled with Swift 6.4+ (Xcode 27); before that the answer comes back as the dialog, as on macOS.
-    #if os(iOS) && compiler(>=6.4)
+    #if (os(iOS) || os(visionOS)) && compiler(>=6.4)
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> & ShowsSnippetView {
         let (body, answer, spoken) = try await ask()
         return .result(value: answer ?? "", dialog: IntentSupport.dialog(spoken),

@@ -592,7 +592,7 @@ struct AnsweredLine: View {
         Haptics.tap()
         let opening = !open
         toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         // The line as the chat's last row: the answers open under it, past the composer.
         guard opening, let pin else { return }
         Task { @MainActor in
@@ -960,7 +960,7 @@ extension View {
     /// The shape a long press lifts for the context menu's preview (iOS). The Mac's right-click menu has no preview,
     /// and `ContentShapeKinds.contextMenuPreview` does not exist there (#1083).
     @ViewBuilder func menuPreviewShape(_ shape: some Shape) -> some View {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         contentShape(.contextMenuPreview, shape)
         #else
         self

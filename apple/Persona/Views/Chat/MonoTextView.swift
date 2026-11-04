@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 #endif
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// Monospaced, unwrapped text that scrolls both ways — files, diffs, the terminal. A UIScrollView around a
 /// non-scrolling UITextView sized to the longest line: SwiftUI's horizontal ScrollView around a LazyVStack cannot size
 /// its content width, and a scrolling UITextView (TextKit 2) wraps no matter how wide its text container is.

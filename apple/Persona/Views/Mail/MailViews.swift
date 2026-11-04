@@ -271,7 +271,7 @@ struct NewChatPrefilled: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 struct HTMLView: UIViewRepresentable {
     var html: String
     @Binding var height: CGFloat

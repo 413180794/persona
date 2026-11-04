@@ -1,4 +1,4 @@
-#if DEBUG && os(iOS)
+#if DEBUG && (os(iOS) || os(visionOS))
 import UIKit
 
 /// `-showPopFrames YES`: every display frame, where the lists, navigation bars and search bars are (window points),

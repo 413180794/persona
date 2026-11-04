@@ -126,7 +126,7 @@ struct QuickLookFileView: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// QuickLook's preview of one local file, embedded (no bars of its own: the page's toolbar has the menu).
 struct QuickLookView: UIViewControllerRepresentable {
     var url: URL
@@ -288,7 +288,7 @@ final class FileThumbnails {
         guard let data, let src = CGImageSourceCreateWithData(data as CFData, nil),
               let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
         if document, let light = lightness(cg), light < 0.35 { return nil }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         return UIImage(cgImage: cg)
         #else
         return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))

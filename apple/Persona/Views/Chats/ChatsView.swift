@@ -187,7 +187,7 @@ struct ChatsView: View {
                     DispatchQueue.main.async { query = q }
                 }
                 // The Mac's buttons are in the list column's own title row (below); the shell is the phone's.
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 .toolbar {
                     if shell != nil {
                         // The shell's own bar floats over this one (AgentsTopBar): the bar stays for the search field.
@@ -358,7 +358,7 @@ private struct AgentsList: View {
     /// shell's slide between the pages shows it again).
     private var covered: Bool {
         if widthClass != .regular && !path.isEmpty { return true }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if model.selectedTab != .chats && shell?.pager.moving != true { return true }
         #endif
         return false
@@ -478,7 +478,7 @@ private struct AgentsList: View {
             if widthClass != .regular {
                 Section {
                     filterBar
-                        #if os(iOS)
+                        #if os(iOS) || os(visionOS)
                         .background { DrawerPan.NoRowSwipe() } // no swipe of its own: a drag to the right pages to 助手
                         #endif
                 }
@@ -486,7 +486,7 @@ private struct AgentsList: View {
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
             }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             if !model.desktops.isEmpty && query.isEmpty {
                 Section { DesktopPresenceRow() } // 「Mac 上的 Persona 已登录」, WeChat's line over its chats
             }
@@ -650,7 +650,7 @@ private struct AgentsList: View {
         // Back in front (its tab picked again, the shell's Agents): folded again too (#740). Not on the way back from a
         // chat, which keeps the list as it was: that changes the view's appearance, not the tab.
         .onChange(of: tabIsActive) { _, active in if active { searchClose.refold() } }
-        #if (DEBUG || PERF_SIGNPOST) && os(iOS)
+        #if (DEBUG || PERF_SIGNPOST) && (os(iOS) || os(visionOS))
         .background { if ScreenProbe.enabled { AgentsScrollProbe(page: shell == nil ? nil : "agents") } }
         #endif
         // The search field folds away as the list scrolls and comes back on a pull (2026-11-01 user request: the
@@ -681,12 +681,12 @@ private struct AgentsList: View {
         .onChange(of: machineFilter) { _, _ in kept = [] }
         .onAppear {
             feed.follow(model)
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             Self.keepReader(feed.reader, searchClose)
             #endif
         }
         .onScrollPhaseChange { _, phase in
-            #if os(iOS) && (DEBUG || PERF_SIGNPOST)
+            #if (os(iOS) || os(visionOS)) && (DEBUG || PERF_SIGNPOST)
             PerfScroll.mark("Agents list \(phase)")
             #endif
             if phase != .idle { feed.reader.cancel() }
@@ -731,7 +731,7 @@ private struct AgentsList: View {
         path = NavigationPath([value])
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     /// `ReaderAnchor` on the list's own scroll view.
     private static func keepReader(_ reader: ReaderAnchor, _ watcher: SearchCloseWatcher) {
         reader.shown = { [weak watcher] in
@@ -1424,7 +1424,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
 
     /// What was held lands now, while the list may still be held.
     private func land() {
-        #if os(iOS) && (DEBUG || PERF_SIGNPOST)
+        #if (os(iOS) || os(visionOS)) && (DEBUG || PERF_SIGNPOST)
         if hold.held { PerfScroll.mark("Agents list lands while held") }
         PerfScroll.shared.released()
         #endif
@@ -1441,7 +1441,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     /// needing the user or go offline, the questions, the machines. Last lines, times and order wait for the rest:
     /// landing all of it mid-glide changed the rows' heights under the finger (the list jumped by 100 pt and more).
     private func landCritical(_ s: [Session], _ i: [Interaction], _ m: [Machine]) {
-        #if os(iOS) && (DEBUG || PERF_SIGNPOST)
+        #if (os(iOS) || os(visionOS)) && (DEBUG || PERF_SIGNPOST)
         PerfScroll.mark("Agents list lands what is critical while held")
         PerfScroll.shared.released()
         #endif
@@ -2176,7 +2176,7 @@ private struct TopBar<Bar: View>: ViewModifier {
 }
 
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// Runs something once the system search has really closed. Closing it (`isPresented = false`) only starts the fold:
 /// a push made while it still folds away is dropped by the navigation stack, which keeps the path it was given (the
 /// chat in the path, the list on screen). A fixed wait from the tap was too short whenever the list took a while to

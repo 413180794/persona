@@ -276,7 +276,7 @@ struct ConnectorsSection: View {
     var body: some View {
         Section {
             Group {
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 // A Mac is a desktop, not the phone: the hub never calls its tools (AppModel.registration).
                 NavigationLink(value: SettingsPage.phoneData) {
                     ConnectorRowLabel(title: ConnectorText.device, symbol: Theme.Icon.thisDevice, value: ConnectorText.deviceSummary())
@@ -358,7 +358,7 @@ private struct ConnectorRowLabel: View {
 /// itself is signed in on the hub's machine (docs/feishu.md), not here.
 struct FeishuConnectorView: View {
     @Environment(AppModel.self) private var model
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     @Bindable private var larkHome = LarkHomePreference.shared
     #endif
     @State private var status: LarkStatus?
@@ -410,7 +410,7 @@ struct FeishuConnectorView: View {
                 }
             }
 
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             Section {
                 Toggle("首页显示消息", isOn: $larkHome.enabled)
                 .accessibilityIdentifier("feishu-home-enabled")

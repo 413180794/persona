@@ -171,7 +171,7 @@ struct LinkSheet: View {
     }
 
     @ViewBuilder private var browserItems: some View {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         Button { UIApplication.shared.open(target.url) } label: { Label("在 Safari 打开", systemImage: Theme.Icon.safari) }
         #else
         Button { UIApplication.shared.open(target.url) } label: { Label("在浏览器打开", systemImage: Theme.Icon.safari) }
@@ -218,7 +218,7 @@ final class WebViewPool {
     private let config: WKWebViewConfiguration = {
         let c = WKWebViewConfiguration()
         c.websiteDataStore = .default()
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         c.allowsInlineMediaPlayback = true
         #endif
         return c
@@ -229,7 +229,7 @@ final class WebViewPool {
         let key = url.absoluteString
         if let v = views[key] { touch(key); return v }
         let v = SelectableWebView(frame: .zero, configuration: config)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         v.scrollView.showsVerticalScrollIndicator = false
         v.scrollView.showsHorizontalScrollIndicator = false
         #endif
@@ -264,7 +264,7 @@ final class WebViewPool {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// A WKWebView whose selection menu has AI 修改 and 作为上下文.
 final class SelectableWebView: WKWebView {
     var onPick: ((String, String) -> Void)?
@@ -502,7 +502,7 @@ struct PickTextSheet: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 struct PickTextView: UIViewRepresentable {
     var text: String
     var actions = PickAction.ai

@@ -1,7 +1,7 @@
-#if os(iOS) || os(watchOS)
+#if os(iOS) || os(visionOS) || os(watchOS)
 import AVFoundation
 import Observation
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #else
 import WatchKit
@@ -56,13 +56,13 @@ final class RecordingCapture {
 
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
         #else
         try session.setCategory(.record, mode: .default)
         #endif
         try session.setActive(true)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if let mic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) { try session.setPreferredInput(mic) }
         #endif
     }
@@ -177,7 +177,7 @@ final class RecordingCapture {
     }
 
     private static var segmentLength: Double {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         UIApplication.shared.applicationState == .active ? RecordingAudioSpec.liveSegmentSeconds : RecordingAudioSpec.segmentSeconds
         #else
         WatchRecordingTransfer.shared.reachable ? RecordingAudioSpec.liveSegmentSeconds : RecordingAudioSpec.segmentSeconds

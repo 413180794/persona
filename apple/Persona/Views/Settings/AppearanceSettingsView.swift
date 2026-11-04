@@ -25,7 +25,7 @@ struct AppearanceSection: View {
                     SettingsRow(title: "界面风格", symbol: Theme.Icon.style, tint: Theme.Hue.purple, value: styleSummary, look: .oneLine)
                 }
                 .accessibilityIdentifier("settings-style")
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 NavigationLink(value: SettingsPage.colorScheme) {
                     SettingsRow(title: "深浅色", symbol: Theme.Icon.colorScheme, tint: Theme.Hue.indigo,
                                 value: model.colorScheme.title, look: .oneLine)
@@ -147,7 +147,7 @@ struct StyleSettingsPage: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// 设置 › 外观 › 布局 (iPhone): the ChatGPT-style shell or the old four tabs.
 struct LayoutSettingsPage: View {
     @Environment(AppModel.self) private var model
@@ -177,7 +177,7 @@ struct LayoutSettingsPage: View {
 }
 #endif
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 #if DEBUG
 /// `probe.scheme` (`-probes YES`): the choice and the look the page is actually drawn in (ColorSchemeIconTests).
 private struct SchemeProbe: ViewModifier {
@@ -225,7 +225,7 @@ struct ColorSchemeSettingsPage: View {
 }
 #endif
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// 设置 › 外观 › App 图标: the home screen icon, each choice drawn as it looks on the home screen now (light or dark).
 /// The system confirms a switch with its own alert.
 struct AppIconSettingsPage: View {

@@ -120,7 +120,7 @@ final class MarkdownRenderer {
         }
         let config = WKSnapshotConfiguration()
         config.rect = rect
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         config.afterScreenUpdates = true
         #else
         // The offscreen window is never on screen, so a screen update may never come; WebKit paints the snapshot itself.
@@ -128,7 +128,7 @@ final class MarkdownRenderer {
         #endif
         let image = try await web.takeSnapshot(configuration: config)
         _ = try? await web.callAsyncJavaScript("clearOut()", arguments: [:], contentWorld: .page)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         return kind == .mermaid ? image : image.withRenderingMode(.alwaysTemplate)
         #else
         // A bitmap of the drawn size in pixels, shown at 1 / density: the same however many pixels the snapshot had.
@@ -155,7 +155,7 @@ final class MarkdownRenderer {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
         let web = WKWebView(frame: CGRect(x: -Self.maxWidth * 8, y: 0, width: 800, height: 600), configuration: config)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         web.isOpaque = false
         web.backgroundColor = .clear
         web.scrollView.backgroundColor = .clear
@@ -233,7 +233,7 @@ final class MarkdownRenderer {
     /// A kept picture, at the screen's scale, a formula as a template again.
     nonisolated private static func decode(_ file: URL, scale: CGFloat, template: Bool) -> UIImage? {
         guard let src = CGImageSourceCreateWithURL(file as CFURL, nil), let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let image = UIImage(cgImage: cg, scale: scale, orientation: .up)
         return template ? image.withRenderingMode(.alwaysTemplate) : image
         #else
@@ -248,7 +248,7 @@ final class MarkdownRenderer {
     /// How many times larger than shown the page draws (`draw`): 2 on the Mac, 1 on the iPhone (its snapshot has the
     /// screen's pixels already).
     nonisolated static var density: CGFloat {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         1
         #else
         2
@@ -256,7 +256,7 @@ final class MarkdownRenderer {
     }
 
     private static var screenScale: CGFloat {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         UITraitCollection.current.displayScale
         #else
         NSScreen.main?.backingScaleFactor ?? 2
@@ -264,7 +264,7 @@ final class MarkdownRenderer {
     }
 
     nonisolated private static func png(_ image: UIImage) -> Data? {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         return image.pngData()
         #else
         guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
@@ -278,7 +278,7 @@ final class MarkdownRenderer {
 @MainActor
 enum RenderedText {
     static var points: CGFloat {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         UIFont.preferredFont(forTextStyle: .body).pointSize
         #else
         // KaTeX's own size for formulas in text (1.21 em): its serif at the body's 13 pt looked a size smaller than the
@@ -288,7 +288,7 @@ enum RenderedText {
     }
 
     static var diagramPoints: CGFloat {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         UIFont.preferredFont(forTextStyle: .footnote).pointSize
         #else
         Theme.Font.pointSize(.caption)
@@ -367,7 +367,7 @@ struct RenderedBlock<Fallback: View>: View {
     }
 
     private static func payload(_ image: UIImage) -> ImagePayload? {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard let data = image.pngData() else { return nil }
         #else
         guard let tiff = image.tiffRepresentation, let data = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return nil }
@@ -419,7 +419,7 @@ struct MathInlineImages: InlineImageProvider {
         return await MainActor.run {
             let renderer = ImageRenderer(content: Text(tex).font(Theme.Font.code).foregroundStyle(Color.black))
             renderer.scale = MarkdownRenderer.displayScale
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             return renderer.uiImage.map { Image(uiImage: $0.withRenderingMode(.alwaysTemplate)) } ?? Image(systemName: Theme.Icon.code)
             #else
             return renderer.nsImage.map { i in i.isTemplate = true; return Image(nsImage: i) } ?? Image(systemName: Theme.Icon.code)

@@ -1,4 +1,4 @@
-#if DEBUG && os(iOS)
+#if DEBUG && (os(iOS) || os(visionOS))
 import Foundation
 
 /// The runtime CLI over the hub (docs/runtime-cli.md「经 hub 连真机」), for a DEBUG build on a real phone: launched with

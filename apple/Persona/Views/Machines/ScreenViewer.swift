@@ -47,7 +47,7 @@ struct ScreenOpen: Identifiable, Hashable {
     var id: MachineRef { machine }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// The live screen in a window of its own (#1604): over the shell's window and whatever it presents (a sheet, a page
 /// pushed in one), under the toasts' (`ToastWindow`). SwiftUI presents one thing at a time from the root, so a
 /// fullScreenCover there was swallowed while a machine page was up in a sheet. `AppModel.screenOpen` shows and hides it.

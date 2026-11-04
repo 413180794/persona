@@ -102,7 +102,7 @@ nonisolated struct LarkHistoryReach: Equatable {
 @MainActor final class LarkHistoryHold {
     nonisolated static let space = "larkChatContent"
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     weak var list: UIScrollView?
     #endif
     /// Forgets the position the chat last asked its list for (stored positions are applied again when content changes).
@@ -134,7 +134,7 @@ nonisolated struct LarkHistoryReach: Equatable {
 
     /// Where the list stands, for the log.
     var describe: String {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard let list else { return "no list" }
         return "offset \(Int(list.contentOffset.y)) inset \(Int(list.adjustedContentInset.top)) height \(Int(list.bounds.height)) content \(Int(list.contentSize.height))"
         #else
@@ -146,7 +146,7 @@ nonisolated struct LarkHistoryReach: Equatable {
     /// geometry callback can lag the hold's own moves; a page landing then looked like it was still at the top and
     /// asked for the next one at once (measured).
     var nearTop: Bool? {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard let list else { return nil }
         let inset = list.adjustedContentInset
         return list.contentOffset.y + inset.top <= (list.bounds.height - inset.top - inset.bottom) / 2
@@ -162,14 +162,14 @@ nonisolated struct LarkHistoryReach: Equatable {
         guard id == anchor else { return }
         guard let until, Date.now <= until else { end(); return }
         defer { last = y }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard let last, let list, abs(y - last) >= 0.5 else { return }
         // No upper bound from the content size: it follows the rows a pass late (ChatPin).
         list.contentOffset.y = max(-list.adjustedContentInset.top, list.contentOffset.y + y - last)
         #endif
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     /// Sits in the list's content and hands the scroll view around it to the hold.
     struct Finder: UIViewRepresentable {
         let hold: LarkHistoryHold

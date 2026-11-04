@@ -23,7 +23,7 @@ struct EngineSelectionView: View {
         let machine = app.machine(ref)
         Form {
             if let machine, let selection {
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 if pairing {
                     Section {
                         Text("这台电脑用哪个引擎").font(Theme.Font.title)
@@ -90,7 +90,7 @@ struct EngineSelectionView: View {
                         if pairing { Text("必须选一个引擎才能继续，检查网络后再点一次确认。").font(Theme.Font.secondary) }
                     }
                 }
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 Section {
                     Button { save(selection) } label: {
                         HStack {

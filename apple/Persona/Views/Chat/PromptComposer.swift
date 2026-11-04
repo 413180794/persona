@@ -67,7 +67,7 @@ struct PromptComposer: View {
         o.text = $text
         o.selection = $selection
         o.focus = focused
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         o.showsDictation = false // the shared mic and stop, over the bar (`sharedButtons`)
         #else
         o.onStop = stop
@@ -84,7 +84,7 @@ struct PromptComposer: View {
             }
             PromptBar(model: bar, sources: mentionRows, commands: commands, models: models, placeholder: placeholder,
                       options: o, onSend: { _ in if !disabled { stopDictation(); send() } })
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 .mask { SendCutout(cut: stopping, control: Self.control, inset: Self.barInset).fill(style: FillStyle(eoFill: true)) }
                 .overlay(alignment: .bottomTrailing) { sharedButtons }
                 #endif
@@ -103,7 +103,7 @@ struct PromptComposer: View {
             #endif
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     /// The shell composer's mic and stop, where the bar draws its send: the stop's circle in send's corner (the same gap
     /// to the bar's edges; it is a little larger), the mic on the toolbar's middle line, as far before the stop as in
     /// the shell's composer.
@@ -142,7 +142,7 @@ struct PromptComposer: View {
     }
     #endif
 
-    #if !os(iOS)
+    #if os(macOS)
     private func toggleDictation() {
         if dictation.isListening { stopDictation(); return }
         let base = text.isEmpty || text.last?.isWhitespace == true ? text : text + " "
@@ -258,18 +258,18 @@ final class Dictation {
 
     /// Starts listening; `update` gets the whole transcript so far. Returns what went wrong, if it could not start.
     func start(update: @escaping (String) -> Void) async -> String? {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard RecordingCapture.shared.state == .idle else { return "录音正在进行，请先结束录音再听写" }
         #endif
         guard await Self.allowed() else { return "没有麦克风或语音识别的权限，可以到 设置 › Persona 打开" }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard RecordingCapture.shared.state == .idle else { return "录音正在进行，请先结束录音再听写" }
         #endif
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")), recognizer.isAvailable else {
             return "语音识别现在用不了"
         }
         guard RecordingMicrophone.shared.claim(microphoneOwner) else { return "麦克风正在使用，请先结束录音或听写" }
-        #if os(iOS) // a Mac has no audio session to configure: the engine takes the input as it is
+        #if os(iOS) || os(visionOS) // a Mac has no audio session to configure: the engine takes the input as it is
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -286,7 +286,7 @@ final class Dictation {
         engine.prepare()
         do { try engine.start() } catch {
             engine.inputNode.removeTap(onBus: 0)
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             #endif
             RecordingMicrophone.shared.release(microphoneOwner)
@@ -319,7 +319,7 @@ final class Dictation {
         task = nil
         update = nil
         isListening = false
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
     }
@@ -349,7 +349,7 @@ final class Dictation {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// What of `PromptBar` shows: all of it but, while the shared stop stands in its place, the bar's own send. The menus
 /// hang above the bar, so the shape reaches far past its edges.
 private nonisolated struct SendCutout: Shape {

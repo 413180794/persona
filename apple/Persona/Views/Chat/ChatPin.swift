@@ -1,6 +1,6 @@
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// Keeps what you tapped under your finger while it opens or closes. The chat's list is flipped (the newest end is
 /// its origin), so a row that grows pushes everything above it up, the tapped header included: a thought jumped
 /// 40 pt on opening, and a work line, whose steps load after the tap, went 440 pt up and its header out of reach

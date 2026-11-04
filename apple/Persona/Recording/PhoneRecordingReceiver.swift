@@ -1,4 +1,4 @@
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import Foundation
 
 /// WCSession 激活前安装接收器；系统可能只为了投递文件在后台启动 App。

@@ -10,6 +10,7 @@
 [![iOS 26+](docs/assets/readme/badge-ios.svg)](docs/ios.md)
 [![watchOS 10+](docs/assets/readme/badge-watchos.svg)](docs/ios.md)
 [![macOS 26+](docs/assets/readme/badge-macos.svg)](docs/mac.md)
+[![visionOS 26+](docs/assets/readme/badge-visionos.svg)](docs/vision.md)
 [![Android 12+](docs/assets/readme/badge-android.svg)](docs/android.md)
 [![hub: Go 1.27](docs/assets/readme/badge-hub.svg)](docs/server.md)
 [![agents: Claude Code · Codex](docs/assets/readme/badge-agents.svg)](docs/runtimes.md)
@@ -132,6 +133,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 | iPhone | iOS 26 | 全部功能，加上灵动岛、Siri 和快捷指令 | [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)（商店名 Persona Side），或自己编译（[docs/release.md](docs/release.md)） |
 | Apple Watch | watchOS 10 | 抬腕看谁在等你，直接批准或回答 | 随 iPhone App 安装 |
 | Mac | macOS 26 | 和 iOS 同一套逻辑层的原生 App；菜单栏 App「Persona Link」把这台 Mac 接进 hub | Xcode 编 `PersonaMac`；`./scripts/app/mac-link.sh install`（[指南](docs/persona-link-install.md)） |
+| Apple Vision Pro | visionOS 26 | 和 iOS 同一套逻辑层的原生 App：tab 在窗口侧边的装饰条里，对话可以单独开窗口，主窗口下方的「需要你」装饰条显示等你处理的事；没有灵动岛、拍照和画中画 | Xcode 编 `PersonaVision`（[docs/vision.md](docs/vision.md)） |
 | Android | Android 12 | 助手、Agents、收件箱、知识库、文件、语音入口和部分手机工具，后台通知不依赖推送服务 | `./scripts/app/android.sh install` |
 | 网页 | 现代浏览器 | 由 hub 托管：Agents（连同终端、文件、Git）、助手、收件箱、机器监控 | 打开 hub 的地址 |
 
@@ -157,7 +159,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 ## 目前的限制
 
 - 界面只有中文。
-- Apple 平台没有上架 App Store：iPhone 用 [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)安装（不限人数），或自己编译。
+- Apple 平台没有上架 App Store：iPhone 用 [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)安装（不限人数），或自己编译；Vision Pro 版目前只能自己编译。
 - hub 的原生装法只支持 Linux（systemd + Docker 里的 Postgres）；别的系统用 Docker 跑 hub，那台机器不能同时跑 Agent。
 - Android 还没和 iOS 完全对齐：健康工具没做，后台通知要在系统设置里放开后台运行（[docs/android.md](docs/android.md)）。
 
@@ -171,7 +173,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 | 服务端的几种模式和运维 | [docs/server.md](docs/server.md) |
 | hub 的 API 和协议 | [docs/protocol.md](docs/protocol.md) |
 | 助手、收件箱、知识库 | [docs/assistant.md](docs/assistant.md) · [docs/inbox.md](docs/inbox.md) · [docs/knowledge.md](docs/knowledge.md) |
-| 各端 App | [iOS](docs/ios.md) · [Mac](docs/mac.md) · [Android](docs/android.md) · [网页](docs/web.md) |
+| 各端 App | [iOS](docs/ios.md) · [Mac](docs/mac.md) · [Vision Pro](docs/vision.md) · [Android](docs/android.md) · [网页](docs/web.md) |
 | 灵动岛、Siri | [docs/live-activity.md](docs/live-activity.md) · [docs/siri.md](docs/siri.md) |
 
 全部文档的索引在 [CLAUDE.md](CLAUDE.md)「文档索引」。

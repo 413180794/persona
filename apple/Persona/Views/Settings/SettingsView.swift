@@ -57,14 +57,14 @@ struct SettingsView: View {
                     }
                     .padding(.vertical, Theme.Space.xs)
                 }
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 // On the section that is always there: the plugins' one is empty until they are read.
                 .task(id: SlotsKey(source: PluginSlots.source(model), depth: model.settingsPath.count)) {
                     await PluginSlots.shared.reload()
                 }
                 #endif
 
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 // The plugins' cards and pages (docs/plugins.md「UI 插槽」): at the top, where the main navigation's
                 // entries are on an iPhone (the Mac has them in its sidebar).
                 PluginSlotsSettingsSection(link: $pluginLink)
@@ -134,7 +134,7 @@ struct SettingsView: View {
                     .bareListRow()
                 }
 
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 // A Mac pairs with no watch (WatchSync does nothing there): no button that would claim it sent something.
                 if !model.isDemo { watchSection }
                 #endif
@@ -228,7 +228,7 @@ struct SettingsView: View {
                 Button("断开", role: .destructive) { model.unpair() }
             }
             .sheet(isPresented: $showPair) { PairView() }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             .pluginLinks($pluginLink)
             #endif
             #if os(macOS) && DEBUG
@@ -403,12 +403,12 @@ private struct SettingsDestinations: ViewModifier {
         case .persona: PersonaSettingsPage()
         case .themeColor: ThemeColorSettingsPage()
         case .style: StyleSettingsPage()
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         case .appIcon: AppIconSettingsPage()
         #else
         case .appIcon: EmptyView()
         #endif
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         case .layout: LayoutSettingsPage()
         case .colorScheme: ColorSchemeSettingsPage()
         #else
@@ -613,7 +613,7 @@ struct AppGlyph: View {
 
     /// Under 跟随系统 the page's look (read here so the glyph redraws when the system's changes); else the screen's.
     private var systemLook: ColorScheme {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         model.colorScheme == .system ? pageLook : AppIconChoice.systemLook
         #else
         pageLook
@@ -747,13 +747,13 @@ struct PairView: View {
                                 Task { await connect() }
                             }
                         }
-                        #if os(iOS)
+                        #if os(iOS) || os(visionOS)
                         .scaledFrame(height: Theme.Size.box280)
                         .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .listRowInsets(EdgeInsets())
                         #endif
                     } footer: {
-                        #if os(iOS)
+                        #if os(iOS) || os(visionOS)
                         Text("扫描 `personad hub pair` 打印的二维码。")
                         #else
                         Text("拷贝 `personad hub pair` 打印的配对链接（jarvis://pair?…），再点「粘贴配对链接」。")
@@ -860,7 +860,7 @@ struct PairView: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 struct QRScanner: UIViewControllerRepresentable {
     var onCode: (String) -> Void
 

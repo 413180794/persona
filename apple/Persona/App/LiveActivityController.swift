@@ -15,6 +15,8 @@ import UIKit
 ///     activity's own push token (it rotates), and says when an activity ended;
 ///   - while open, applies the hub's `fleet` events itself (faster than the push, and the only way on the simulator):
 ///     starts the activity when there is something to show, updates it, ends it after a minute of nothing.
+// visionOS has no Live Activities: Vision/App/VisionStandIns.swift keeps the same API (docs/vision.md).
+#if os(iOS)
 @MainActor
 final class LiveActivityController {
     static let shared = LiveActivityController()
@@ -314,6 +316,7 @@ extension LiveActivityController {
     }
 }
 #endif
+#endif // os(iOS)
 
 extension AppModel {
     /// What the Live Activity draws for the persona on screen (docs/live-activity.md「形象」).

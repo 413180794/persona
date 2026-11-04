@@ -698,7 +698,7 @@ final class FileViewerModel {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 struct PDFKitView: UIViewRepresentable {
     var document: PDFDocument
     func makeUIView(context: Context) -> PDFView {

@@ -123,7 +123,7 @@ struct ImageEditor: View {
         guard !marks.isEmpty else { return image }
         let width = max(image.size.width, image.size.height) / 220 // the on-screen stroke at the image's scale
         return UIGraphicsImageRenderer(size: image.size).image { ctx in
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             image.draw(at: .zero)
             #else
             // The renderer's context is flipped (top-left origin); NSImage only honours that when asked.

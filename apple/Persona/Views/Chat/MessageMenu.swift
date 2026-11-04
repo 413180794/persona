@@ -41,7 +41,7 @@ final class MessageMenu {
     @ObservationIgnored private var pressing = false
     @ObservationIgnored private var pressEnded = Date.distantPast
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     func pressChanged(_ state: UIGestureRecognizer.State) {
         switch state {
         case .began: pressing = true
@@ -393,7 +393,7 @@ struct SelectableTextSheet: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 struct SelectableTextView: UIViewRepresentable {
     var text: String
 

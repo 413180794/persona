@@ -1,6 +1,6 @@
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 @MainActor @Observable final class LarkHomePreference {
     static let shared = LarkHomePreference()
     static let enabledKey = "integrations.lark-connector.enabled"

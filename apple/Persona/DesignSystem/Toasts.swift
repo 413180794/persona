@@ -68,7 +68,7 @@ struct ToastOverlay: View {
                     .accessibilityElement(children: toast.action == nil ? .combine : .contain)
                     .accessibilityIdentifier("toast")
                     .task(id: toast.id) {
-                        #if os(iOS)
+                        #if os(iOS) || os(visionOS)
                         // In a window that takes no touches VoiceOver does not come to it: it is read out as it comes.
                         if !tapToDismiss { AccessibilityNotification.Announcement(toast.message).post() }
                         #endif

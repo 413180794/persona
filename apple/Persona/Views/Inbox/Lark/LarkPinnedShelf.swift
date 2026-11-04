@@ -1,6 +1,6 @@
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// The compact shelf and its expanded rows use the same ordering and unread state.
 struct LarkPinnedShelf: View {
     let conversations: [LarkConversation]

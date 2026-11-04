@@ -4,7 +4,7 @@ import SwiftUI
 import UIKit
 #endif
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// How far the Persona tab's sidebar is out (0 closed … 1 open). Its own object so following the finger only redraws
 /// the page's motion modifier (offset, scale, opacities) and moves two UIKit views, never the conversation or the sidebar.
 @Observable final class AssistantDrawer {
@@ -99,7 +99,7 @@ import UIKit
         let way = (target - progress) * max(width, 1)
         let share = abs(way) > 1 ? max(0, Double(velocity / way)) : 0
         let motion = Theme.Motion.drawer(velocity: share)
-        #if DEBUG
+        #if DEBUG && os(iOS)
         DrawerProbe.note("settle", ["from": Double(progress), "to": Double(target), "share": share])
         #endif
         // The same spring for the tab bar and the sidebar (UIKit) as for the page (SwiftUI).
@@ -158,7 +158,9 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
             .background { backdrop.ignoresSafeArea() }
+            #if os(iOS)
             .gesture(DrawerPan(drawer: drawer, enabled: enabled, pager: pager))
+            #endif
             .background { DrawerTabBarProbe(drawer: drawer) }
             .onAppear { drawer.width = width }
             .onChange(of: width) { drawer.width = width }
@@ -324,6 +326,7 @@ private struct DrawerPageMotion: ViewModifier {
     }
 }
 
+#if os(iOS)
 /// The drag that opens and closes the sidebar. A UIKit pan so it can decide when the finger has moved a little: it takes
 /// the touch when that move is within 45° of horizontal (steeper drags stay the list's), only to the right while closed,
 /// and never on something that scrolls sideways itself (a wide code block or table that is not at its left edge) —
@@ -603,10 +606,19 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
         }
     }
 }
+#else
+/// visionOS: a pinch-and-drag scrolls, and the sidebar opens from its ☰ button; nothing takes a sideways drag.
+struct DrawerPan {
+    /// Marks nothing: there is no drawer drag to keep off a row.
+    struct NoRowSwipe: View {
+        var body: some View { Color.clear.frame(width: 0, height: 0) }
+    }
+}
+#endif
 
 #endif
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// Marks a list row whose swipe the drawer leaves alone (a sidebar conversation's 归档): the drawer looks for it in
 /// the cell under the finger.
 struct SwipeRowMark: UIViewRepresentable {
@@ -1082,7 +1094,7 @@ struct AssistantSidebar: View {
                 .tint(Theme.accent)
             }
         }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .background { if !isMain { SwipeRowMark() } } // the drawer leaves a drag to the left on it to the row
         #endif
         .contextMenu {

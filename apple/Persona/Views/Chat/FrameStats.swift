@@ -43,7 +43,7 @@ final class FrameStats: NSObject {
         }
         for o in [wake, sleep] { CFRunLoopAddObserver(CFRunLoopGetMain(), o, .commonModes) }
         observers = [wake, sleep].compactMap { $0 }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
         #else
         // A Mac's display link comes from the screen it draws on.
@@ -103,7 +103,7 @@ final class FrameStats: NSObject {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 
 /// Any page, measured (`-showPagePerf YES`, docs/testing.md「整个 App」): 10 s after launch, 8 s on the page as it is

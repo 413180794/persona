@@ -14,7 +14,7 @@ struct VNCPage: View {
     @State private var help = false
     @State private var typing = false
     @State private var unlocked = false
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     @State private var screenView: VNCScreenUIView?
     @State private var modifiers = VNCModifiers()
     @State private var pipLog = false
@@ -34,7 +34,7 @@ struct VNCPage: View {
                 Color.black
                 if let s = session { content(s) }
             }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             // Over the keyboard while it is up (the bars ride above it).
             if typing, let s = session { VNCShortcutBar(session: s, modifiers: modifiers) }
             #endif
@@ -106,7 +106,7 @@ struct VNCPage: View {
                 Label("触控板模式", systemImage: Theme.Icon.trackpad).tag(VNCMode.trackpad)
             }
             Button { centerPointer() } label: { Label("指针居中", systemImage: Theme.Icon.pointerCenter) }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             if VNCPiP.supported {
                 Button { toPictureInPicture() } label: { Label("小窗", systemImage: Theme.Icon.pictureInPicture) }
             }
@@ -146,7 +146,7 @@ struct VNCPage: View {
                 .accessibilityIdentifier("vnc-done")
                 Spacer(minLength: Theme.Space.s)
             }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             Button { typing.toggle() } label: {
                 Image(systemName: Theme.Icon.keyboard).font(Theme.Font.heading).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
             }
@@ -157,12 +157,12 @@ struct VNCPage: View {
         }
         .padding(.horizontal, Theme.Space.page)
         .padding(.vertical, Theme.Space.s)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .background { if let s = session { VNCKeyCatcher(session: s, modifiers: modifiers, typing: $typing).frame(width: Theme.Size.hairline, height: Theme.Size.hairline) } }
         #endif
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     static let fromPhone = "从 iPhone 粘贴", toPhone = "复制到 iPhone"
     #else
     static let fromPhone = "从这台 Mac 粘贴", toPhone = "复制到这台 Mac"
@@ -181,7 +181,7 @@ struct VNCPage: View {
     @ViewBuilder private func content(_ s: RFBSession) -> some View {
         switch s.phase {
         case .live:
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             VNCScreen(session: s, mode: mode, interactive: true) { v in DispatchQueue.main.async { screenView = v } }
             #else
             VNCScreen(session: s, mode: mode, interactive: true)
@@ -230,7 +230,7 @@ struct VNCPage: View {
     // MARK: Actions
 
     private func centerPointer() {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         screenView?.centerPointer()
         #else
         if let s = session { s.move(to: CGPoint(x: s.size.width / 2, y: s.size.height / 2)) }
@@ -256,7 +256,7 @@ struct VNCPage: View {
     }
 
     private func pasteFromPhone(andPaste: Bool) async {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let text = UIPasteboard.general.string
         #else
         let text = NSPasteboard.general.string(forType: .string)
@@ -274,7 +274,7 @@ struct VNCPage: View {
             model.toast = Toast("\(name) 的剪贴板里没有文字", style: .error)
             return
         }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         UIPasteboard.general.string = text
         #else
         NSPasteboard.general.clearContents()
@@ -311,7 +311,7 @@ private struct VNCSignIn: View {
             }
             TextField("账号", text: $account)
                 .textContentType(.username)
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 .textInputAutocapitalization(.never)
                 #endif
                 .autocorrectionDisabled()
@@ -377,7 +377,7 @@ struct VNCHelp: View {
                 }
             }
             .navigationTitle("使用 VNC")
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {

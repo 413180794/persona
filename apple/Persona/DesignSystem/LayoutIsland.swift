@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 
 /// A piece of a page laid out on its own: in a hosting controller of its own, so what changes inside it (a text field

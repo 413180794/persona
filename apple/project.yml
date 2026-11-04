@@ -9,6 +9,7 @@ options:
     iOS: "26.0"
     watchOS: "10.0"
     macOS: "26.0"
+    visionOS: "26.0"
   developmentLanguage: zh-Hans
   createIntermediateGroups: true
 packages:
@@ -244,6 +245,84 @@ targets:
         NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
         NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
         NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
+  # The native visionOS app (docs/vision.md): the iOS app's logic and content views, compiled for visionOS (UIKit, so
+  # most of it as is), inside a visionOS shell (Vision/): an ornament for the tabs, a window per conversation, the
+  # 需要你 ornament. iPhone-only parts (Live Activity, the watch, haptics) are behind `#if os(iOS)` / `os(visionOS)`.
+  PersonaVision:
+    type: application
+    platform: visionOS
+    sources:
+      - path: Vision
+        excludes: ["**/*.md"]
+      - path: Shared
+      - path: Persona
+        excludes: ["**/*.md", "Resources/Info.plist", "Resources/Persona.entitlements"]
+      # The persona's pictures as the Live Activity keeps them (FleetFaces, FleetLookStore): AppModel reads them.
+      - path: LiveActivity/FleetPersona.swift
+      - path: LiveActivity/FleetIslandViews.swift
+    dependencies:
+      - package: MarkdownUI
+      - package: BeautifulUI
+      - package: PersonaSSH
+    entitlements:
+      path: Vision/Resources/PersonaVision.entitlements
+      properties:
+        aps-environment: development
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
+        PRODUCT_MODULE_NAME: Jarvis
+        PRODUCT_NAME: Persona
+        TARGETED_DEVICE_FAMILY: "7"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postBuildScripts:
+      - name: Stamp the commit
+        basedOnDependencyAnalysis: false
+        inputFiles: ["$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"]
+        script: |
+          sha=$(git -C "$SRCROOT/.." rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+          git -C "$SRCROOT/.." diff --quiet HEAD -- 2>/dev/null || sha="$sha+"
+          plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+          /usr/libexec/PlistBuddy -c "Set :JarvisCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :JarvisCommit string $sha" "$plist"
+    info:
+      path: Vision/Resources/Info.plist
+      properties:
+        CFBundleName: Persona
+        CFBundleDisplayName: Persona
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleURLSchemes: [jarvis, persona]
+        ITSAppUsesNonExemptEncryption: false
+        JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        JarvisPushKeychainGroup: $(DEVELOPMENT_TEAM).$(JARVIS_BUNDLE_ID).push
+        LSApplicationCategoryType: public.app-category.productivity
+        UIApplicationSupportsIndirectInputEvents: true
+        # Several windows: one per conversation opened on its own (VisionScenes).
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UIApplicationPreferredDefaultSceneSessionRole: UIWindowSceneSessionRoleApplication
+        UIBackgroundModes: [remote-notification, audio]
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSCameraUsageDescription: "Persona uses the camera to scan the pairing QR code printed by `personad hub pair`, for example when you first connect to your hub."
+        NSFaceIDUsageDescription: "Persona asks for Optic ID before it types a Mac's remembered password on that Mac's lock screen, when you tap 一键解锁 on the Mac's page."
+        NSContactsUsageDescription: "Persona lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message."
+        NSCalendarsFullAccessUsageDescription: "Persona lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Persona adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you."
+        NSRemindersFullAccessUsageDescription: "Persona lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list."
+        NSLocationWhenInUseUsageDescription: "Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
+        NSPhotoLibraryUsageDescription: "Persona lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
+        NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
+        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your device before you choose to share the text with your assistant."
+        NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # Draws the Fleet Live Activity. The app starts it and reports its tokens; the hub pushes its content.
   PersonaWidgets:
     type: app-extension
@@ -446,6 +525,12 @@ schemes:
       config: Debug
     test:
       targets: [PersonaMacTests]
+  PersonaVision:
+    build:
+      targets:
+        PersonaVision: all
+    run:
+      config: Debug
   # Legacy scheme names keep existing callers on the renamed targets.
   Jarvis:
     build:

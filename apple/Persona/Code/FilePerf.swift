@@ -65,7 +65,7 @@ import AppKit
     func start(_ label: String) {
         guard FilePerf.on, link == nil else { return }
         self.label = label
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let l = CADisplayLink(target: self, selector: #selector(tick(_:)))
         #else
         // A Mac's display link comes from the screen it draws on.
@@ -127,7 +127,7 @@ import AppKit
     func start(after delay: TimeInterval = 2) {
         guard Self.on, link == nil else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             let l = CADisplayLink(target: self, selector: #selector(tick(_:)))
             #else
             // A Mac's display link comes from the screen it draws on.

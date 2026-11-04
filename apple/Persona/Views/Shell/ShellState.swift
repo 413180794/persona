@@ -17,7 +17,7 @@ import SwiftUI
     let drawer = AssistantDrawer()
     /// 助手 and Agents side by side: a drag sideways moves from one to the other (`ShellPager`).
     let pager = ShellPager()
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     /// The status row's link state and toasts (`ShellStatusRow`).
     let notices = ShellNotices()
     #endif
@@ -77,13 +77,13 @@ import SwiftUI
     }
 
     static func tab(for page: Int) -> AppTab {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if page == 2 { return .feishu }
         #endif
         return page == 1 ? .chats : .assistant
     }
     static func index(for tab: AppTab) -> Int {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if tab == .feishu { return 2 }
         #endif
         return tab == .chats ? 1 : 0
@@ -98,7 +98,7 @@ import SwiftUI
         self.model = model
         model.tabRouter = self
         route(model.selectedTab, in: model)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         // The status row takes the link's state as it is set, like the tab (the toasts float, `ToastWindow`).
         model.connection.onShown = { [weak notices] in notices?.linkChanged($0) }
         notices.linkChanged(model.connection.shown)
@@ -109,7 +109,7 @@ import SwiftUI
         // Only while this shell is still the one on screen: a new one may have taken over already.
         guard model.tabRouter === self else { return }
         model.tabRouter = nil
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         model.connection.onShown = nil
         #endif
     }
@@ -143,7 +143,7 @@ import SwiftUI
         switch t {
         case .assistant: select(0)
         case .chats: select(1)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         case .feishu: select(pager.pageCount > 2 ? 2 : 0)
         #endif
         case .mail:

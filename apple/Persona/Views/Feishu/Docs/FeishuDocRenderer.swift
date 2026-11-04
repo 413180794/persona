@@ -50,7 +50,7 @@ nonisolated enum FeishuDocsColor {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 private extension UIColor {
     var lighter: UIColor {
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0

@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// The iPhone's ChatGPT-style shell (docs/ios.md「新外壳」): no tab bar. 助手 (the Persona assistant) and Agents (the Agents
 /// list) are two pages under the top switch, both kept alive like tabs (switching keeps each one's place); the drawer
 /// slides both aside; 收件箱 / 定时任务 / 知识库 / 机器 push onto 助手; 设置 is a sheet.

@@ -217,7 +217,7 @@ final class PersonaFrames: Sendable {
         var total = 0.0
         for i in 0..<CGImageSourceGetCount(src) {
             guard let cg = CGImageSourceCreateImageAtIndex(src, i, opts) else { continue }
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             images.append(UIImage(cgImage: cg))
             #else
             images.append(NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))) // AppKit's own init: callable off the main actor

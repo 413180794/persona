@@ -2,7 +2,7 @@
 import UIKit
 #endif
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 // Pages that draw their own header hide the navigation bar (the Agents chat), and UIKit then switches off the
 // edge swipe back. Keep it on whenever there is somewhere to go back to.
 extension UINavigationController: @retroactive UIGestureRecognizerDelegate {

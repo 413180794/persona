@@ -43,7 +43,7 @@ nonisolated enum PerfTrace {
     static func body(_ name: String) {
         guard enabled else { return }
         bodies[name, default: 0] += 1
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if PerfScroll.shared.scrolling { PerfScroll.shared.bodies[name, default: 0] += 1 }
         #endif
     }
@@ -51,7 +51,7 @@ nonisolated enum PerfTrace {
     static func pushArrived(_ kind: String) {
         guard enabled else { return }
         events += 1
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         PerfScroll.shared.pushed(kind)
         #endif
         guard started == nil else { return }
@@ -74,7 +74,7 @@ nonisolated enum PerfTrace {
 
     static var summary: String {
         let b = bodies.sorted { $0.key < $1.key }.map { "\"\($0.key)\":\($0.value)" }.joined(separator: ",")
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let scroll = ",\"scroll\":" + PerfScroll.shared.summary
         #else
         let scroll = ""
@@ -93,14 +93,14 @@ struct PerfCountProbe: View {
             }
             .frame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
             .clipped()
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             .onAppear { PerfScroll.shared.start() }
             #endif
         }
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// Scrolling under the hub's pushes (`-perfCounts YES`; `ScrollUnderPushTests`, docs/archive/lanes/live-updates.md). Every frame
 /// a scroll view is dragged or gliding, where what is on it sits on screen: its cells (a `List`), or the layers SwiftUI
 /// draws a `ScrollView`'s rows in. Under the finger and in a glide everything on screen moves together and smoothly;
@@ -371,7 +371,7 @@ struct PerfCountProbe: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 @MainActor private struct PerfWindowProbe: UIViewRepresentable {
     let name: String
     func makeUIView(context: Context) -> PerfProbeView { PerfProbeView(name) }

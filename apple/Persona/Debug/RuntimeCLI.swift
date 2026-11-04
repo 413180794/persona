@@ -1,4 +1,4 @@
-#if DEBUG && os(iOS)
+#if DEBUG && (os(iOS) || os(visionOS))
 import Network
 import SwiftUI
 import UIKit
@@ -139,6 +139,14 @@ enum RuntimeCLI {
     }
 
     static var window: UIWindow? { windows.first(where: \.isKeyWindow) ?? windows.first }
+    /// What is on screen, in window coordinates: the screen's bounds; visionOS has no screen, so the window's own.
+    static var screenBounds: CGRect {
+        #if os(visionOS)
+        window?.bounds ?? .zero
+        #else
+        window?.screen.bounds ?? .zero
+        #endif
+    }
 
     static func render(scale: CGFloat) -> UIImage? {
         guard let w = window else { return nil }

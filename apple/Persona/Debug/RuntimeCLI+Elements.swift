@@ -1,4 +1,4 @@
-#if DEBUG && os(iOS)
+#if DEBUG && (os(iOS) || os(visionOS))
 import SwiftUI
 import UIKit
 
@@ -33,7 +33,7 @@ extension RuntimeCLI {
 
         /// The frame is on screen, whether or not something covers it.
         var onScreen: Bool {
-            let screen = RuntimeCLI.window?.screen.bounds ?? .zero
+            let screen = RuntimeCLI.screenBounds
             return !frame.isEmpty && frame.minX.isFinite && screen.intersects(frame)
         }
 
@@ -43,7 +43,7 @@ extension RuntimeCLI {
         /// SwiftUI's accessibility hit test cannot tell: it answers with the hidden page's elements.
         var visible: Bool {
             guard onScreen, let v = RuntimeCLI.view(of: object), let w = v.window, RuntimeCLI.drawn(v) else { return false }
-            let screen = w.screen.bounds
+            let screen = RuntimeCLI.screenBounds
             let mid = CGPoint(x: frame.intersection(screen).midX, y: frame.intersection(screen).midY)
             for top in RuntimeCLI.windows.sorted(by: { $0.windowLevel > $1.windowLevel }) where !top.isHidden {
                 guard let hit = top.hitTest(top.convert(mid, from: nil), with: nil) else { continue }

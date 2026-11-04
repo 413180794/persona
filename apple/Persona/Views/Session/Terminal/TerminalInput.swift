@@ -108,7 +108,7 @@ nonisolated enum TerminalKeyBytes {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// A position in the composition (UTF-16 offset); the "document" the input method sees is only that.
 final class TermTextPosition: UITextPosition {
     let offset: Int

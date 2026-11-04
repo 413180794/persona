@@ -1,6 +1,6 @@
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 
 /// Brings a growing text field's text back into view (#909). A vertical `TextField` is a text view that scrolls to

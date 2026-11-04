@@ -1,5 +1,5 @@
 import SwiftUI
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #endif
 
@@ -34,7 +34,7 @@ nonisolated enum ColorSchemeChoice: String, CaseIterable, Identifiable, Sendable
     /// `ui.scheme` (also a launch argument: `-ui.scheme dark`).
     static var current: ColorSchemeChoice { ColorSchemeChoice(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .system }
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     var interfaceStyle: UIUserInterfaceStyle {
         switch self {
         case .system: .unspecified

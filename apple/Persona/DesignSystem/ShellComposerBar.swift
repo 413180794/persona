@@ -54,7 +54,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                 TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
                     .font(Theme.Font.body)
                     .lineLimit(expanded ? 1...8 : 1...1)
-                    #if os(iOS)
+                    #if os(iOS) || os(visionOS)
                     // Grown taller, the field must not stay scrolled down a line (#909, TextViewScroll).
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in
                         if focused.wrappedValue { TextViewScroll.settleFocused() }

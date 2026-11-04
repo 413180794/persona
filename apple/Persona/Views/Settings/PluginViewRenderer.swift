@@ -468,7 +468,7 @@ extension View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 private struct PluginLinkSheet: ViewModifier {
     @Environment(AppModel.self) private var model
     @Binding var link: LinkTarget?

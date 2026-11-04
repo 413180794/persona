@@ -112,7 +112,7 @@ actor LarkOutboxStore {
             data = try sealer.seal(data)
         }
         let url = directory.appending(path: "state.json")
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         #else
         try data.write(to: url, options: .atomic)
@@ -134,7 +134,7 @@ actor LarkOutboxStore {
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try url.setResourceValues(values)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         try files.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: url.path)
         #endif
     }
@@ -151,7 +151,7 @@ actor LarkOutboxStore {
                 try files.copyItem(at: source.file, to: incoming)
                 try files.moveItem(at: incoming, to: target)
                 try files.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 try files.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: target.path)
                 #endif
             }

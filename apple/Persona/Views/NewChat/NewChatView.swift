@@ -237,7 +237,7 @@ struct NewChatView: View {
                         .background(.regularMaterial, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .accessibilityIdentifier("newChat.error")
                 }
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 Button {
                     Task { await start() }
                 } label: {

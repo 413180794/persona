@@ -74,7 +74,7 @@ struct PluginMarketView: View {
             #endif
         }
         .themedPage()
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         // The chips come right under the search field: the list's own top margin (a first section's header band) made a
         // gap several times the page's other spacing.
         .contentMargins(.top, Theme.Space.s, for: .scrollContent)
@@ -83,7 +83,7 @@ struct PluginMarketView: View {
         .detailTitle("插件市场")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、说明、发布者或标签")
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: SettingsPage.pluginMarkets) { Text("市场").lineLimit(1) }
@@ -462,7 +462,7 @@ struct PluginMarketsView: View {
         .overlay { if page.markets.isEmpty && page.loading { ProgressView() } }
         .detailTitle("市场")
         .navigationBarTitleDisplayMode(.inline)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { adding = true } label: { Image(systemName: Theme.Icon.add) }

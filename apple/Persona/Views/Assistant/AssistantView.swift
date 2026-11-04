@@ -133,7 +133,7 @@ struct AssistantView: View {
             }
             // No system bar: the top bar floats over the conversation with a fog under it (it scrolls beneath).
             .toolbarVisibility(.hidden, for: .navigationBar)
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             .background { RootBarHidden(atRoot: atRoot) }
             #endif
             .overlay(alignment: .top) {
@@ -187,8 +187,10 @@ struct AssistantView: View {
                 let sidebarAt = UserDefaults.standard.double(forKey: "openAssistantSidebar")
                 if sidebarAt > 0 { activeDrawer.progress = min(sidebarAt, 1) }
                 else if UserDefaults.standard.bool(forKey: "openAssistantSidebar") { activeDrawer.progress = 1 }
+                #if os(iOS)
                 let rounds = UserDefaults.standard.integer(forKey: "showDrawerAutoDrag")
                 if rounds > 0 { Task { await DrawerAutoDrag(drawer: activeDrawer).run(rounds: rounds) } }
+                #endif
                 // `-openShellPage inbox|machines|routines|knowledge|profile` (the new shell): that page pushed.
                 switch UserDefaults.standard.string(forKey: "openShellPage") {
                 case "inbox": show(.inbox)
@@ -929,7 +931,7 @@ struct StarterModesMenu: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// Hides the stack's navigation bar again once the page is back at its root. Swiped back from a pushed page with its
 /// search still open (知识库), UIKit left the bar showing over the root, with the root's title and ~106 pt tall: the top
 /// bar was pushed down under it, and a tap where the switch belongs hit the empty bar (2026-11-01). SwiftUI still has

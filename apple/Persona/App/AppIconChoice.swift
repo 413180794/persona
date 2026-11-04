@@ -1,5 +1,5 @@
 import SwiftUI
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #endif
 
@@ -108,7 +108,7 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     func setAlternateIconName(_ name: String?) async throws
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 extension UIApplication: AppIconSetting {}
 #endif
 
@@ -179,12 +179,16 @@ extension UIApplication: AppIconSetting {}
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 extension AppIconChoice {
     /// The system's look, the home screen's: read off the screen, as the window carries the app's own 深浅色.
     @MainActor static var systemLook: ColorScheme {
+        #if os(visionOS)
+        return .dark // visionOS draws its windows on glass in the room: there is no light home screen to follow
+        #else
         let screen = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
         return screen?.traitCollection.userInterfaceStyle == .dark ? .dark : .light
+        #endif
     }
 }
 #endif
@@ -192,7 +196,7 @@ extension AppIconChoice {
 extension AppIconModel {
     /// The app's own: UIApplication on iPhone and iPad, nothing on the Mac.
     static func live() -> AppIconModel {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         AppIconModel(system: UIApplication.shared)
         #else
         AppIconModel(system: nil)

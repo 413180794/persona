@@ -16,11 +16,13 @@ struct PersonaApp: App {
                 .environment(model)
                 .task(id: model.fleetLook) { LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces } }
                 .onOpenURL { url in
+                    #if os(iOS)
                     if let link = FleetLink.session(url) { // tapped the Live Activity
                         // "group|machine" for another group's row (FleetMerge); a row the hub pushed names no group.
                         if let key = model.resolve(path: link.machine + "/" + link.session) { model.open(key) }
                         return
                     }
+                    #endif
                     guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
                     Task {
                         do { try await model.pair(cfg); model.toast = Toast("已连接到 \(cfg.url.host() ?? "服务器")", style: .success) }
@@ -28,6 +30,9 @@ struct PersonaApp: App {
                     }
                 }
         }
+        #if os(visionOS)
+        .defaultSize(width: Theme.Size.visionMainWindowWidth, height: Theme.Size.visionMainWindowHeight)
+        #endif
         // `initial`: a launch into the foreground is already active here, and `start()` may have found the app in the
         // background (scene apps are, during didFinishLaunching): the socket opens now.
         .onChange(of: phase, initial: true) { old, new in
@@ -46,6 +51,10 @@ struct PersonaApp: App {
                 model.suspendLinks()
             }
         }
+        #if os(visionOS)
+        // A conversation opened in a window of its own (VisionScenes).
+        VisionChatScene(model: model)
+        #endif
     }
 }
 
@@ -83,7 +92,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: dir))
             }
         }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         PagePerf.runIfAsked()
         #endif
         // Every tab a UI test can ask for. One it asks for and this does not know leaves the tab the last run saved

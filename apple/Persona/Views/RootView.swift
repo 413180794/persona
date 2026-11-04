@@ -17,7 +17,10 @@ struct RootView: View {
 
     /// The ChatGPT-style shell (docs/ios.md「新外壳」): an iPhone-width screen, unless 设置 › 外观 › 旧布局 is on.
     private var usesShell: Bool {
-        #if os(iOS)
+        #if os(visionOS)
+        // Apple Vision Pro keeps the tabs, as the system's ornament (VisionShell), whatever the window's width.
+        return false
+        #elseif os(iOS)
         return !model.oldLayout && (widthClass == .compact || flipped)
         #else
         return false
@@ -32,7 +35,9 @@ struct RootView: View {
             if let ref = model.pairingEngineMachine {
                 PairingEngineView(ref: ref)
             } else if model.isPaired {
-                #if os(iOS)
+                #if os(visionOS)
+                RootTabs().visionShell()
+                #elseif os(iOS)
                 if usesShell { ShellView() } else { RootTabs() }
                 #else
                 RootTabs()
@@ -71,7 +76,7 @@ struct RootView: View {
         .markdownInlineImageProvider(MathInlineImages()) // inline formulas in every Markdown (MathMarkdown)
         // The shell shows the toasts in a window of its own, over its sheets too (`ToastWindow`).
         .overlay(alignment: .top) { if !usesShell { ToastOverlay() } }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         // 设置 › 外观 › 深浅色 on this scene's window (and any other open one) as it first shows.
         .onAppear { model.colorScheme.apply() }
         // The 主题色 on the windows too, for what UIKit draws in the window's tint (设置's row icons, `WindowTint`).
@@ -99,7 +104,7 @@ struct RootView: View {
         }
         .sendRefusalAlert(model)
         .loadsChannels() // the names under a message that came in from a channel (「来自 微信」)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .onChange(of: LarkHomePreference.shared.shows) { _, enabled in
             if !enabled, model.selectedTab == .feishu { model.selectedTab = .assistant }
         }
@@ -118,7 +123,7 @@ struct RootView: View {
         TabView(selection: $model.selectedTab) {
             AssistantRootTab()
             AgentsRootTab()
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             if LarkHomePreference.shared.shows { FeishuRootTab() }
             #endif
             InboxRootTab()
@@ -238,7 +243,7 @@ nonisolated struct ConnectionShown: Encodable, Equatable {
 }
 #endif
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 @MainActor private struct FeishuRootTab: TabContent {
     var body: some TabContent<AppTab> {
         Tab("消息", systemImage: Theme.Icon.feishuChats, value: AppTab.feishu) {

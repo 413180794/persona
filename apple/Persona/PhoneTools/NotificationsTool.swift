@@ -43,7 +43,7 @@ enum NotificationsTool {
             status = await center.notificationSettings().authorizationStatus
             await NotificationsAccess.refresh()
         }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let allowed = status == .authorized || status == .provisional || status == .ephemeral
         #else
         let allowed = status == .authorized || status == .provisional // no App Clips on a Mac

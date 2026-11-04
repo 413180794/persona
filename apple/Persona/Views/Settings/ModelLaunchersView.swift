@@ -99,7 +99,7 @@ struct ModelLaunchersView: View {
         .detailTitle("模型供应商")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、模型、网关或电脑")
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { adding = true } label: { Image(systemName: Theme.Icon.add) }.accessibilityLabel("新增供应商")

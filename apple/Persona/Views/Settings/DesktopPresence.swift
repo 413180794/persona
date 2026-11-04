@@ -1,6 +1,6 @@
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// 「Mac 上的 Persona 已登录」 over the Agents list, like WeChat's line over its chats (docs/ios.md「Mac 已登录」): one
 /// quiet row while a desktop app is connected, 手机静音 beside it when on. A tap opens `DesktopPresenceSheet`.
 struct DesktopPresenceRow: View {

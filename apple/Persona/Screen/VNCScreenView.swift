@@ -11,7 +11,7 @@ enum VNCMode: String, CaseIterable {
     static func set(_ mode: VNCMode, for ref: MachineRef) { UserDefaults.standard.set(mode.rawValue, forKey: key(ref)) }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// The Mac's screen in a layer, aspect-fit and zoomable, its pointer drawn over it, and, when interactive, touches turned
 /// into the Mac's pointer as the mode says:
 /// - 鼠标模式: a tap clicks there; one finger drags; two scroll (or, zoomed in, move the picture); two tapping or one

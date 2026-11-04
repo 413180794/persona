@@ -51,7 +51,7 @@ final class InboxStore {
     }
 
     /// The connectors' items (GitHub…) are drawn on iOS; the Mac's inbox and the watch do not draw them yet.
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     private static let drawsConnectors = true
     #else
     private static let drawsConnectors = false

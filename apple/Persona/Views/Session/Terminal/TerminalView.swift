@@ -20,7 +20,7 @@ struct TerminalContent: Equatable {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// The terminal tab's screen: every character drawn in its own cell (wide ones in two), so columns and Chinese line up
 /// whatever the font's own widths are. Wrapped, each row is folded at the view's width; unwrapped, rows keep the pane's
 /// width and the view scrolls sideways. Long press selects (拷贝 / 全选), a tap opens a link. With `onInput` it takes the
@@ -756,7 +756,7 @@ struct CellMetrics {
 
     func font(_ s: TermStyle) -> UIFont {
         let f = s.bold ? bold : regular
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard s.italic, let d = f.fontDescriptor.withSymbolicTraits(.traitItalic) else { return f }
         return UIFont(descriptor: d, size: size)
         #else
@@ -882,7 +882,7 @@ private extension CGFloat {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// One end of a text selection, as the system draws it: a thin bar the height of a line with a knob above (start) or
 /// below (end); a finger-sized area around it takes the drag.
 final class SelectionHandle: UIView {

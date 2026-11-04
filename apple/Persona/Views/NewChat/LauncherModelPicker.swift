@@ -117,7 +117,7 @@ struct LauncherModelPicker: View {
         .refreshable { await refresh() }
         .themedPage()
         .navigationTitle("模型")
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
     }

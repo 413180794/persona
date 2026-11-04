@@ -247,7 +247,7 @@ struct TerminalKeyBar: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// Reports every touch down and up on it (each finger on its own key), nothing else.
 private struct TouchArea: UIViewRepresentable {
     var down: () -> Void

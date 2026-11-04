@@ -86,7 +86,7 @@ private func isolatedWebView(scripts: Bool, network: Bool, coordinator: Isolated
     config.websiteDataStore = .nonPersistent()
     config.defaultWebpagePreferences.allowsContentJavaScript = scripts
     config.preferences.javaScriptCanOpenWindowsAutomatically = false
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     config.dataDetectorTypes = []
     #endif
     let web = WKWebView(frame: .zero, configuration: config)
@@ -154,7 +154,7 @@ final class IsolatedWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDele
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 struct IsolatedWebView: UIViewRepresentable {
     let html: String
     let scripts: Bool

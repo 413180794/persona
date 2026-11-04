@@ -90,7 +90,7 @@ nonisolated final class LarkAttachment: Identifiable, Equatable, Sendable {
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try dir.setResourceValues(values)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: dir.path)
         #endif
         return dir

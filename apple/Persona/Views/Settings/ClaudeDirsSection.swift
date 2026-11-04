@@ -167,7 +167,7 @@ struct ClaudeDirsSection: View {
                     #endif
                     .font(Theme.Font.code)
                     .autocorrectionDisabled()
-                    #if os(iOS)
+                    #if os(iOS) || os(visionOS)
                     .textInputAutocapitalization(.never)
                     #endif
                     .submitLabel(.done)

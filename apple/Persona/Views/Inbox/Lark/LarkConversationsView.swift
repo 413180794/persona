@@ -1,6 +1,6 @@
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// One extra entry, not a second messaging implementation: destinations are the inbox's native chat.
 struct LarkConversationsView: View {
     @Environment(AppModel.self) private var model

@@ -1,4 +1,4 @@
-#if (DEBUG || PERF_SIGNPOST) && os(iOS)
+#if (DEBUG || PERF_SIGNPOST) && (os(iOS) || os(visionOS))
 import SwiftUI
 import UIKit
 

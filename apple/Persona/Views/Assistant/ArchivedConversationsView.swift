@@ -21,7 +21,7 @@ struct ArchivedConversationsView: View {
                 }
             }
             .navigationTitle("已归档")
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             #if os(macOS)

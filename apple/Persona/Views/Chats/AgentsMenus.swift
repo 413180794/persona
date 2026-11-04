@@ -189,6 +189,9 @@ struct AgentRowMenu: View, Equatable {
         #if os(macOS)
         MacOpenInWindowButton(key: key)
         Divider()
+        #elseif os(visionOS)
+        VisionOpenInWindowButton(key: key)
+        Divider()
         #endif
         Button { model.togglePin(key) } label: {
             Label(pinned ? "取消置顶" : "置顶", systemImage: pinned ? Theme.Icon.unpin : Theme.Icon.pin)

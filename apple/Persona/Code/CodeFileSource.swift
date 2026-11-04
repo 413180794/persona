@@ -9,7 +9,7 @@ import UIKit
     static let font = CodeMetrics.font
     private static let bold = UIFont.monospacedSystemFont(ofSize: font.pointSize, weight: .bold)
     private static let italic: UIFont = {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard let d = font.fontDescriptor.withSymbolicTraits(.traitItalic) else { return font }
         return UIFont(descriptor: d, size: font.pointSize)
         #else

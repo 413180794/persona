@@ -223,7 +223,7 @@ struct ChatView: View {
         chatSurface
         // The session's details come up from the bottom (2026-10-31: the card that dropped from the title covered the
         // chat and needed a second tap on the title; a sheet closes with a swipe or a tap above it).
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .sheet(isPresented: $showInfo) {
             SessionInfoSheet(key: key, session: session)
                 .presentationDetents([.medium, .large])
@@ -315,7 +315,7 @@ struct ChatView: View {
         #if DEBUG
         // Simulator automation: `-showComposerPhoto YES` puts a made-up picture in the composer, as if picked from
         // 照片 (the UI tests of a sent picture showing in the chat).
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .task { if UserDefaults.standard.bool(forKey: "showComposerPhoto") { model.composerInbox[key, default: []].append(Self.debugPhoto) } }
         #endif
         // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
@@ -913,7 +913,7 @@ struct ChatView: View {
         // A finger on the list: not even at the newest end. The scroll phase says `tracking` only once the finger has
         // moved; touched down near the newest, the chat jumped there under it (`ScrollUnderPushTests`, 263 pt). The Mac
         // has no finger resting on the list: a scroll moves it at once, and the scroll phase says so.
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if pin.list?.isTracking == true { return }
         #endif
         guard follow.follows, !pin.holding else { return }
@@ -1068,13 +1068,32 @@ struct ChatView: View {
         return t.id
     }
 
+    /// The wake notices' drawer. Looked up live: it follows the work while the agent is still on it. Its own property:
+    /// inline in the chat's modifier chain it was too much for visionOS's type checker.
+    private var wakeDrawerSheet: some View {
+        let t: Turn? = store.blocks.lazy.compactMap { (b: ChatBlock) -> Turn? in if case .turn(let t) = b, t.id == wakeDrawer { t } else { nil } }.first
+        return WakeDrawer(notices: t?.wakes ?? []) {
+            if let t { ForEach(unfoldWork(wakeLines(t, live: t.id == liveTurnID && !t.tail.isEmpty))) { lineView($0) } }
+        }
+        .environment(\.chatPin, nil) // the drawer has a list of its own; the chat's must not scroll for it
+        .environment(menu)
+        .environment(\.openFold, actions.openFold)
+        .environment(\.taskIndex, store.tasks)
+        .environment(\.jumpToCall, actions.jumpToCall)
+    }
+
     private var lastPromptID: String? { store.items.last { $0.role == "user" && $0.kind == .text }?.id }
 
     /// A swipe to the right goes from files or Git back to the chat. To the left there is none: on the chat a drag to
     /// the left quotes a message (#1058); files are behind the header's folder button.
     private var swipeablePanes: some View {
+        #if os(visionOS)
+        // A pinch-and-drag scrolls on visionOS; a sideways drag here would take it. The panes switch with their buttons.
+        paneContent
+        #else
         paneContent
             .gesture(SwipeTo(direction: .right) { swipePane(forward: false) })
+        #endif
     }
 
     @ViewBuilder private var paneContent: some View {
@@ -1261,7 +1280,7 @@ struct ChatView: View {
     }
 
     #if DEBUG
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     /// The made-up picture `-showComposerPhoto` attaches: a blue square with a white bar, easy to tell in a screenshot.
     static let debugPhoto: UIImage = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 240)).image { c in
         UIColor.systemBlue.setFill()
@@ -1606,18 +1625,7 @@ struct ChatView: View {
         #endif
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
         .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
-        .sheet(isPresented: Binding(get: { wakeDrawer != nil }, set: { if !$0 { wakeDrawer = nil } })) {
-            // Looked up live: the drawer follows the work while the agent is still on it.
-            let t = store.blocks.lazy.compactMap { b -> Turn? in if case .turn(let t) = b, t.id == wakeDrawer { t } else { nil } }.first
-            WakeDrawer(notices: t?.wakes ?? []) {
-                if let t { ForEach(unfoldWork(wakeLines(t, live: t.id == liveTurnID && !t.tail.isEmpty))) { lineView($0) } }
-            }
-            .environment(\.chatPin, nil) // the drawer has a list of its own; the chat's must not scroll for it
-            .environment(menu)
-            .environment(\.openFold, actions.openFold)
-            .environment(\.taskIndex, store.tasks)
-            .environment(\.jumpToCall, actions.jumpToCall)
-        }
+        .sheet(isPresented: Binding(get: { wakeDrawer != nil }, set: { if !$0 { wakeDrawer = nil } })) { wakeDrawerSheet }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
         .onChange(of: follow.holdsBack) { _, holds in
@@ -1700,7 +1708,7 @@ struct ChatView: View {
     /// Something is up over the page (a sheet from the header — the space's tabs —, its ⋯ menu): the header waits. Folded,
     /// it leaves the view tree (`ChromeHeader`), and what it presented would go with it.
     static var somethingPresented: Bool {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
             .contains { $0.isKeyWindow && $0.rootViewController?.presentedViewController != nil }
         #else
@@ -1714,7 +1722,7 @@ struct ChatView: View {
         let folded = min(max(chrome.collapse - delta, 0), chrome.maxCollapse)
         guard folded != chrome.collapse else { return }
         chrome.collapse = folded
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if folded > 0, showInfo { showInfo = false } // the sheet goes with the chrome; the Mac's inspector stays
         #endif
     }
@@ -1734,7 +1742,7 @@ struct ChatView: View {
     private func hideChrome() {
         guard style == .dev, pane == .chat, chrome.collapse < chrome.maxCollapse else { return }
         withAnimation(.smooth(duration: 0.35)) { chrome.collapse = chrome.maxCollapse }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         showInfo = false
         #endif
     }
@@ -2243,7 +2251,7 @@ struct ChatView: View {
                     FrameStats.shared.stop(label: "sweep")
                     // The same distance as a finger's glide: the list's own scroll view moved every display frame at
                     // 2000 pt/s (no SwiftUI state written), four seconds back into the history and four to the newest.
-                    #if os(iOS)
+                    #if os(iOS) || os(visionOS)
                     try? await Task.sleep(for: .seconds(2))
                     if let list = pin.list {
                         FrameStats.shared.start()
@@ -2790,7 +2798,7 @@ struct Composer: View, Equatable {
                                  quotes: contexts,
                                  send: { Task { await sendText(text) } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
-                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    if CameraPicker.isAvailable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
@@ -2805,7 +2813,7 @@ struct Composer: View, Equatable {
                                text: textBinding, selection: $selection, focused: $focused,
                                hasAttachments: hasAttachments,
                                stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
-                               attach: PromptItems.attachments(camera: UIImagePickerController.isSourceTypeAvailable(.camera)),
+                               attach: PromptItems.attachments(camera: CameraPicker.isAvailable),
                                mentions: mentions,
                                commands: PromptItems.commands(clear: canClear && !status.isActive && !clearing),
                                models: canPickModel ? PromptItems.claudeModels : [],
@@ -2843,7 +2851,7 @@ struct Composer: View, Equatable {
                             send: { Task { await sendText(text) } }, quotes: contexts) {
                     // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
-                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    if CameraPicker.isAvailable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
@@ -3150,9 +3158,18 @@ struct QueueStrip: View {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// System camera for "拍照" in the composer.
 struct CameraPicker: UIViewControllerRepresentable {
+    /// Whether this device has a camera to take a picture with (Apple Vision Pro does not lend its cameras to apps).
+    static var isAvailable: Bool {
+        #if os(visionOS)
+        false
+        #else
+        UIImagePickerController.isSourceTypeAvailable(.camera)
+        #endif
+    }
+
     var onImage: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -3160,7 +3177,9 @@ struct CameraPicker: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let vc = UIImagePickerController()
+        #if !os(visionOS) // never shown there: `isAvailable` is false
         vc.sourceType = .camera
+        #endif
         vc.delegate = context.coordinator
         return vc
     }
@@ -3250,7 +3269,7 @@ struct SessionInfoSheet: View {
             }
             .listStyle(.insetGrouped)
             .listSectionSpacing(.compact)
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             .navigationTitle("会话信息")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -3269,7 +3288,7 @@ struct SessionInfoSheet: View {
     private struct InfoContainer<Content: View>: View {
         @ViewBuilder var content: Content
         var body: some View {
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             NavigationStack { content }
             #else
             content

@@ -1,6 +1,6 @@
 #if DEBUG
 import QuartzCore
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 typealias TracedScroll = UIScrollView
 #else
@@ -26,7 +26,7 @@ final class ScrollTrace: NSObject {
     private var lastFlush: CFTimeInterval = 0
     private var started = false
     /// iOS: the app's Documents. The Mac app is not sandboxed: its temporary directory, or `-scrollTracePath`.
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     private let url = URL.documentsDirectory.appending(path: "scroll-trace.txt")
     #else
     private let url = URL(fileURLWithPath: UserDefaults.standard.string(forKey: "scrollTracePath")
@@ -47,7 +47,7 @@ final class ScrollTrace: NSObject {
         guard !started else { return }
         started = true
         try? Data().write(to: url)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let link = CADisplayLink(target: self, selector: #selector(tick))
         link.add(to: .main, forMode: .common)
         #else
@@ -58,7 +58,7 @@ final class ScrollTrace: NSObject {
 
     @objc private func tick() {
         guard let l = list() else { return }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let i = l.adjustedContentInset
         let (offset, height, top, bottom) = (l.contentOffset.y, l.contentSize.height, i.top, i.bottom)
         let (finger, glide) = (l.isTracking, l.isDecelerating)

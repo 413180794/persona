@@ -83,7 +83,7 @@ import Foundation
         if !reasons.contains(.scrolling) { capTask?.cancel(); capTask = nil } // out of sight alone has no cap
         capIfScrolling()
         guard held != was else { return }
-        #if os(iOS) && (DEBUG || PERF_SIGNPOST)
+        #if (os(iOS) || os(visionOS)) && (DEBUG || PERF_SIGNPOST)
         PerfScroll.mark("\(name) \(held ? "holds" : "lets go")")
         #endif
         if !held, waitingSince != nil { land() }

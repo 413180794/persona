@@ -1,4 +1,4 @@
-#if DEBUG && os(iOS)
+#if DEBUG && (os(iOS) || os(visionOS))
 import SwiftUI
 import UIKit
 

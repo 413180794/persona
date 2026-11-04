@@ -5,7 +5,7 @@ struct RecordingContextSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var library = RecordingLibrary.shared
     @State private var transcription = RecordingTranscription.shared
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     @State private var capture = RecordingCapture.shared
     #endif
     @State private var locale = "zh-CN"
@@ -17,7 +17,7 @@ struct RecordingContextSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 Section {
                     captureControls
                 } footer: {
@@ -74,12 +74,12 @@ struct RecordingContextSheet: View {
             .onAppear { opened = RecordingSamples.installIfAsked() }
             #endif
         }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .onAppear { PhoneRecordingReceiver.shared.start() }
         #endif
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     @ViewBuilder private var captureControls: some View {
         if capture.state == .idle {
             Picker("录音语言", selection: $locale) {

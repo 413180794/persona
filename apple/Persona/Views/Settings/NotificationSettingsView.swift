@@ -156,7 +156,7 @@ struct NotificationSettingsView: View {
 
     /// Allowed for a while (App Clips): iOS only.
     private static func ephemeral(_ status: UNAuthorizationStatus) -> Bool {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         status == .ephemeral
         #else
         false

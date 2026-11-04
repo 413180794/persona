@@ -271,19 +271,21 @@ import SwiftUI
                                                 completion: @escaping () -> Void) { completion() }
 }
 
-/// What the small window did, step by step (#1839): the last few dozen lines, for 小窗诊断 on the page and the
-/// runtime CLI's state; each also goes to the system log (category vnc). No names or passwords.
-@MainActor enum VNCPiPLog {
-    private(set) static var lines: [String] = []
-    static var last: String? { lines.last.map { String($0.drop { $0 != " " }.dropFirst()) } }
+#elseif os(visionOS)
+/// visionOS has no picture in picture for a sample-buffer layer: the small window is not offered there
+/// (`supported` is false); the full page shows the screen.
+@MainActor final class VNCPiP: NSObject {
+    static let shared = VNCPiP()
+    nonisolated static let log = Logger(subsystem: "jarvis", category: "vnc")
+    private(set) var ref: MachineRef?
 
-    static func yes(_ on: Bool) -> String { on ? "是" : "否" }
+    static var supported: Bool { false }
+    var active: Bool { false }
 
-    static func add(_ line: String) {
-        lines.append(Date.now.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits)) + " " + line)
-        if lines.count > 60 { lines.removeFirst(lines.count - 60) }
-        VNCPiP.log.notice("pip: \(line, privacy: .public)")
-    }
+    func start(_ ref: MachineRef, from: SessionKey? = nil) {}
+    func restore() {}
+    func handOver() {}
+    func stop() {}
 }
 #else
 /// A Mac's VNC in a small window that floats over the other windows (#1343): it only shows; a click on it opens the
@@ -346,6 +348,23 @@ import SwiftUI
         if let ref { VNC.release(ref) }
         ref = nil
         AppModel.shared.vncPiP = nil
+    }
+}
+#endif
+
+#if os(iOS) || os(visionOS)
+/// What the small window did, step by step (#1839): the last few dozen lines, for 小窗诊断 on the page and the
+/// runtime CLI's state; each also goes to the system log (category vnc). No names or passwords.
+@MainActor enum VNCPiPLog {
+    private(set) static var lines: [String] = []
+    static var last: String? { lines.last.map { String($0.drop { $0 != " " }.dropFirst()) } }
+
+    static func yes(_ on: Bool) -> String { on ? "是" : "否" }
+
+    static func add(_ line: String) {
+        lines.append(Date.now.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits)) + " " + line)
+        if lines.count > 60 { lines.removeFirst(lines.count - 60) }
+        VNCPiP.log.notice("pip: \(line, privacy: .public)")
     }
 }
 #endif

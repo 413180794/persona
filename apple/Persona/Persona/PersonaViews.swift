@@ -66,7 +66,7 @@ extension Persona {
     var avatarDesign: AssistantAvatar.Design { design.flatMap(AssistantAvatar.Design.init(rawValue:)) ?? .mochi }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// Frames in a UIImageView, looping; the first one alone when not animating (frame 0 says the state by itself).
 struct PersonaFramesView: UIViewRepresentable {
     var frames: PersonaFrames

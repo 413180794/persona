@@ -114,7 +114,7 @@ final class TableFileModel {
     func rowText(_ row: Int) -> String { (current?.rows[safe: row] ?? []).joined(separator: "\t") }
 }
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 private typealias PlatformFont = UIFont
 #else
 private typealias PlatformFont = NSFont
@@ -169,7 +169,7 @@ struct TableFileView: View {
     /// How wide `text` is in the table's font (`Theme.Font.secondary`, digits all one width), or its header's.
     private func measured(_ text: String, header: Bool = false) -> CGFloat {
         let weight: PlatformFont.Weight = header ? .semibold : .regular
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         let points = UIFont.preferredFont(forTextStyle: .subheadline,
                                           compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize))).pointSize
         #else

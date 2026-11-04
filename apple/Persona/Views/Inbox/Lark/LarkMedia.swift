@@ -104,7 +104,7 @@ final class LarkMedia {
         let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
                                      kCGImageSourceThumbnailMaxPixelSize: maxPixel, kCGImageSourceShouldCacheImmediately: true]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return UIImage(data: data) }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         return UIImage(cgImage: cg)
         #else
         return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)) // AppKit's own init: callable off the main actor
@@ -240,7 +240,7 @@ struct LarkImageGallery: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             TabView(selection: $index) {
                 ForEach(urls.indices, id: \.self) { i in
                     Group {
