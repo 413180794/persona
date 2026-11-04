@@ -90,7 +90,7 @@ internal class AgentsViewModel(
 
     fun dismissHubNotice(notice: HubNotice) {
         val key = notice.dismissKey ?: return
-        _hubNoticeDismissed.update { (it + key).takeLast(8).toSet() }
+        _hubNoticeDismissed.update { (it + key).toList().takeLast(8).toSet() }
     }
 
     fun setAutoUpdate(on: Boolean) {

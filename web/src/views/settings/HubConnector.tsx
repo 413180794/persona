@@ -10,7 +10,7 @@ import {
   canSendStep, CI_MODES, connectorBrand, connectorLogin, connectorLogout, connectorState, connectorSummary, connectorTone, deleteConnectorArchive,
   deleteConnectorData, deletedLine, feedsFooter, fieldInput, githubAuth, githubInboxFooter, githubMachineLine, githubMachineWarns, githubOptions,
   githubScopeAdvice, isEnabled, isPolledStep, isSignedIn, isStarting, listConnectors, logoutMessage, mutableRepo, otherConnectors, setConnector, setGitHubAuth,
-  signInFooter, signsInHere, stepView, switchFooter, undescribed,
+  signInFooter, signsInHere, stepView, storesData, switchFooter, switchLabel, undescribed,
   type ConnectorPrompt, type ConnectorTone, type GitHubAuth, type GitHubInboxOptions, type HubConnector,
 } from "../../lib/connectors";
 import { useChannels } from "../../lib/channels";
@@ -199,9 +199,9 @@ function SwitchGroup({ c, a }: { c: HubConnector; a: Actions }) {
   return (
     <Group footer={switchFooter(c)}>
       <div className="flex items-center gap-3 px-4 py-2.5">
-        <span className="min-w-0 flex-1 truncate text-[13px] text-ink">同步 {c.name}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{switchLabel(c)}</span>
         {a.busy === "enabled" && <Spinner />}
-        <Switch on={isEnabled(c)} disabled={!!a.busy} label={`同步 ${c.name}`} onChange={(on) => void a.run("enabled", () => setConnector(c.id, { enabled: on }))} />
+        <Switch on={isEnabled(c)} disabled={!!a.busy} label={switchLabel(c)} onChange={(on) => void a.run("enabled", () => setConnector(c.id, { enabled: on }))} />
       </div>
     </Group>
   );
@@ -243,16 +243,21 @@ function FeedsGroup({ c, a }: { c: HubConnector; a: Actions }) {
 function DataGroup({ c, a, logout }: { c: HubConnector; a: Actions; logout: boolean }) {
   const [confirm, setConfirm] = useState<"" | "logout" | "delete">("");
   const [deleted, setDeleted] = useState("");
+  const showsLogout = logout && (isSignedIn(c) || !!c.via);
+  const stores = storesData(c); // a chat bot (WeChat) keeps nothing to delete
+  if (!showsLogout && !stores) return null;
   return (
-    <Group footer={deleted || "删除：知识库里从它来的会话和人、收件箱里它的条目，并关掉同步；登录状态不受影响。"}>
-      {logout && (isSignedIn(c) || !!c.via) && (
+    <Group footer={deleted || (stores ? "删除：知识库里从它来的会话和人、收件箱里它的条目，并关掉同步；登录状态不受影响。" : undefined)}>
+      {showsLogout && (
         <div className="px-4 py-2.5">
           <button type="button" disabled={!!a.busy} onClick={() => setConfirm("logout")} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">退出登录</button>
         </div>
       )}
-      <div className="px-4 py-2.5">
-        <button type="button" disabled={!!a.busy} onClick={() => setConfirm("delete")} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">删除已存的数据</button>
-      </div>
+      {stores && (
+        <div className="px-4 py-2.5">
+          <button type="button" disabled={!!a.busy} onClick={() => setConfirm("delete")} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">删除已存的数据</button>
+        </div>
+      )}
       <Confirm
         open={confirm === "logout"}
         title={`退出 ${c.name} 登录？`}

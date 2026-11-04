@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canSendStep, connectorBrand, connectorOpenTitle, connectorState, connectorSummary, connectorTone, deletedLine, feedsFooter, fieldInput, githubInboxFooter, githubMachineLine,
   githubOptions, githubScopeAdvice, isDeviceCode, isPolledStep, isStarting, labelColor, listConnectors, logoutMessage, mediaLine, mergeNewest, mergeOlder, mutableRepo,
-  otherConnectors, setGitHubAuth, signInFooter, signsInHere, startsGroup, stepView, switchFooter, undescribed,
+  otherConnectors, setGitHubAuth, signInFooter, signsInHere, startsGroup, stepView, storesData, switchFooter, switchLabel, undescribed,
   type HubConnector, type ThreadMessage, type ThreadPage,
 } from "./connectors";
 
@@ -63,6 +63,24 @@ describe("连接器的状态", () => {
     expect(connectorOpenTitle("example")).toBeUndefined();
     expect(switchFooter({ ...plugin, enabled: true })).toContain("关掉后不再读 示例");
     for (const text of [switchFooter(plugin), signInFooter(plugin)]) expect(text).not.toMatch(/Telegram|api_id|私聊和群/);
+  });
+
+  it("says 启用 for a chat bot that stores nothing (WeChat), 同步 for one that brings data in, as the apps do", () => {
+    const wechat = (enabled: boolean) => conn("ok", { id: "wechat", name: "微信", enabled, capabilities: ["status", "login"] });
+    expect(storesData(wechat(true))).toBe(false);
+    expect(switchLabel(wechat(true))).toBe("启用 微信");
+    expect(switchFooter(wechat(true))).toBe("关掉后 微信 停下来；登录状态留着。");
+    expect(switchFooter(wechat(false))).toBe("打开后才能登录。");
+    for (const text of [switchFooter(wechat(true)), switchFooter(wechat(false))]) expect(text).not.toMatch(/知识库|收件箱|不再读/);
+
+    const telegram = conn("ok", { id: "telegram", name: "Telegram", capabilities: ["status", "login", "archive", "inbox"] });
+    expect(storesData(telegram)).toBe(true);
+    expect(switchLabel(telegram)).toBe("同步 Telegram");
+    expect(storesData(conn("ok", { capabilities: ["status", "inbox"] }))).toBe(true);
+    // not described yet (a program not started, a hub from before capabilities): as before there were bots
+    expect(storesData(conn("error", { capabilities: [] }))).toBe(true);
+    expect(storesData(conn("ok"))).toBe(true);
+    expect(switchLabel(conn("ok"))).toBe("同步 GitHub");
   });
 
   it("tells a sign-out that ends the remote session from one that only forgets the hub's copy", () => {

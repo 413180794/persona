@@ -160,6 +160,20 @@ export function isEnabled(c: HubConnector): boolean {
   return c.enabled ?? true;
 }
 
+/** It brings things into the knowledge base or the inbox (Telegram), so its switch syncs and it has data to delete; a
+ * chat bot (WeChat: a status and a sign-in, docs/channels.md) only talks. One not described yet (no capabilities, or a
+ * hub from before them) counts as bringing them, as before there were bots (the apps do the same). */
+export function storesData(c: HubConnector): boolean {
+  const caps = c.capabilities;
+  if (!caps?.length) return true;
+  return caps.includes("archive") || caps.includes("inbox");
+}
+
+/** The connector's switch: 同步 X for one that brings data in, 启用 X for one that does not. */
+export function switchLabel(c: HubConnector): string {
+  return `${storesData(c) ? "同步" : "启用"} ${c.name}`;
+}
+
 export function isSignedIn(c: HubConnector): boolean {
   return c.status === "ok" || c.status === "rate_limited";
 }
@@ -226,6 +240,7 @@ export function connectorOpenTitle(id: string): string | undefined {
 // ── its page ─────────────────────────────────────────────
 
 export function switchFooter(c: HubConnector): string {
+  if (!storesData(c)) return isEnabled(c) ? `关掉后 ${c.name} 停下来；登录状态留着。` : "打开后才能登录。";
   if (isEnabled(c)) return `关掉后不再读 ${c.name}；登录状态和已经存下的数据都留着。`;
   return `打开后才能登录，登录后${PROFILES.get(c.id)?.reads ?? "它的内容"}进知识库和收件箱，助手也能查。`;
 }
