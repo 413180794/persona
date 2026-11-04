@@ -69,7 +69,7 @@ struct FeishuBotView: View {
                 }
             }
             if let e = model.error, !e.isEmpty {
-                Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled)
+                LoadProblem(text: e, labeled: false)
             }
         } footer: {
             Text("在飞书里私聊这个机器人，就是在和 Persona 说话。机器人只回应配对过的你，群里不回应。")

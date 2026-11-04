@@ -228,6 +228,10 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 - 设置子页的标题（#1224 B2）：页面用 `detailTitle("…")`（iPhone 上就是 `navigationTitle`），Mac 上由详情栏的 `MacDetailBack` 画在这一栏标题行的左边，
   第二层前面是 ‹（「‹ SSH 隧道」「‹ MacBook」），同系统设置。不用 `pageTitle`：那个会告诉外壳标题行被占了，左边列表栏的「设置」两个字就没了。
 
+- 设置列表顶上的「体验模式」两项、「服务器」里的「重新配对」「断开并忘记服务器」在 Mac 上是和别的行一样的行（`SettingsButtonLook` 在 Mac 上是 `.plain`），断开 / 退出是红字（#1224 B4）。
+- 体验模式下没有演示数据的页（模型供应商、飞书机器人）在 Mac 上用灰色说明「体验模式没有这部分的演示数据」，不显示红字错误（`LoadProblem`，#1224 A4）。
+- 待查（用户定）：Mac 兼容层的系统填充色（`quaternarySystemFill` 等）用 `withAlphaComponent` 换掉了标签色本来的透明度，比 iPhone 深好几倍（提问卡片的选项区就是这样，#1224 B5 只改了那一处：`Theme.Fill.macOptionsWell`）。
+
 ## SSH 隧道（Mac）
 
 和 iOS 同一套（`apple/Packages/PersonaSSH`，见 [network.md「经 SSH 隧道连 hub」](network.md#经-ssh-隧道连-hub直连不通时的后备)、[ios.md「SSH 隧道」](ios.md#ssh-隧道直连不通时的后备891)）：设置 › hub › SSH 隧道，配对页的「经 SSH 隧道连接」。

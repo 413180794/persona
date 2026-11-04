@@ -91,7 +91,7 @@ struct ModelLaunchersView: View {
                     }
                 }
             } else if let error {
-                Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
+                Section { LoadProblem(text: error) }
             } else {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
@@ -343,7 +343,7 @@ struct ModelLauncherDetailView: View {
                     }
                 }
             } else if let error {
-                Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
+                Section { LoadProblem(text: error) }
             } else {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
@@ -590,7 +590,7 @@ struct LauncherEditor: View {
             } header: { Text("额外参数（可选）") } footer: { Text("加在 claude 后面，空格分隔，每个都以 - 开头。") }
         }
         if let error {
-            Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
+            Section { LoadProblem(text: error) }
         }
     }
 

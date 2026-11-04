@@ -29,6 +29,32 @@ import (
 // A conversation is named once: a rename in the app (POST …/rename with a title) is recorded as the user's and
 // is never replaced; conversations from before this are left as they were.
 
+// mainTitle is the main conversation's title on the lists the apps get: it has no title of its own (conversation_rename
+// refuses it, the apps show the persona there), so neither its first message (the node's title for a transcript
+// without one) nor a model's name nor a rename shows up as one (#1313).
+const mainTitle = "Persona"
+
+var errRenameMain = errors.New("主对话没有标题可以改")
+
+// mainConversation is the main conversation's session id when machine is the assistant's and list holds an assistant
+// conversation, else "" (the setting is only read when it can matter: decorated runs on every push).
+func (h *Hub) mainConversation(machine string, list []proto.Session, dir string) string {
+	if !slices.ContainsFunc(list, func(s proto.Session) bool { return isAssistant(s, dir) }) {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if cfg := h.assistantConfigLegacy(ctx); cfg.MachineID == machine {
+		return cfg.Main
+	}
+	return ""
+}
+
+// isMain: id is the main conversation (the assistant's machine is not checked: session ids are unique).
+func (h *Hub) isMain(ctx context.Context, id string) bool {
+	return id != "" && h.assistantConfigLegacy(ctx).Main == id
+}
+
 var titleKinds = []string{"功能", "设计", "修复", "优化", "发布", "探索", "文档", "研究", "评审", "定时"}
 
 const (
@@ -178,6 +204,10 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	title, _ := p["title"].(string)
 	s, _ := m.session(sid)
 	assistant := isAssistant(s, m.assistantCwd())
+	if t, _ := p["title"].(string); assistant && strings.TrimSpace(t) != "" && h.isMain(r.Context(), sid) {
+		writeErr(w, http.StatusBadRequest, errRenameMain) // the apps show the persona there (#1313)
+		return
+	}
 	if assistant && s.Agent == "codex" {
 		delete(p, "title") // only the hub's title for Codex (renameConversation)
 	}
@@ -240,6 +270,12 @@ func (h *Hub) titleAfterTurn(m *Machine, id string) {
 	}
 	t := b.m[id]
 	if t == nil || t.By != titlePending || b.naming[id] {
+		b.mu.Unlock()
+		return
+	}
+	if h.isMain(context.Background(), id) { // it has no title: not worth a model call (#1313)
+		delete(b.m, id)
+		h.saveTitlesLocked()
 		b.mu.Unlock()
 		return
 	}

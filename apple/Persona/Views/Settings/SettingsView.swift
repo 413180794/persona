@@ -145,6 +145,9 @@ struct SettingsView: View {
                                 .modifier(SettingsButtonLook())
                             Button(role: .destructive) { confirmUnpair = true } label: {
                                 SettingsRow(title: model.isMultiHub ? "断开所有 hub" : "断开并忘记服务器", symbol: Theme.Icon.end, tint: Theme.danger)
+                                    #if os(macOS)
+                                    .foregroundStyle(Theme.danger) // a plain row on the Mac: red says what it does
+                                    #endif
                             }
                             .modifier(SettingsButtonLook())
                         }
@@ -396,6 +399,20 @@ private struct DemoSection: View {
     var body: some View {
         Section {
             Group {
+                #if os(macOS)
+                // Rows like the list's other rows on the Mac (#1224 B4): as buttons they were two small gray capsules
+                // at the list's leading edge, the sidebar-style list's own button look.
+                Button(action: pair) {
+                    SettingsRow(title: "连接我的 hub…", symbol: "qrcode.viewfinder", tint: Theme.accent)
+                }
+                .modifier(SettingsButtonLook())
+                Button(role: .destructive) { model.unpair() } label: {
+                    SettingsRow(title: "退出体验模式", symbol: "rectangle.portrait.and.arrow.right", tint: Theme.danger)
+                        .foregroundStyle(Theme.danger)
+                }
+                .modifier(SettingsButtonLook())
+                .accessibilityIdentifier("settings.leaveDemo")
+                #else
                 Button(action: pair) {
                     if AppStyle.current.usesBeautifulUI {
                         SettingsRow(title: "连接我的 hub", symbol: "qrcode.viewfinder", tint: Theme.accent)
@@ -413,6 +430,7 @@ private struct DemoSection: View {
                 }
                 .modifier(SettingsButtonLook())
                 .accessibilityIdentifier("settings.leaveDemo")
+                #endif
             }
             .bareListRow()
         } header: {
@@ -1013,6 +1031,11 @@ struct SettingsHeading: View {
 /// 设置's buttons that are rows: the list's tinted button; in the BeautifulUI style a plain row (its tile carries the color).
 struct SettingsButtonLook: ViewModifier {
     func body(content: Content) -> some View {
+        #if os(macOS)
+        // A row like the settings list's other rows on the Mac (#1224 B4), not the sidebar list's small gray capsule.
+        content.buttonStyle(.plain)
+        #else
         if AppStyle.current.usesBeautifulUI { content.buttonStyle(.plain) } else { content }
+        #endif
     }
 }

@@ -12,7 +12,11 @@ export function splitTitle(title: string): { head: string; topic: string } | nul
 }
 
 /** What a row calls it: an untitled one (empty, or Claude Code's placeholder) is 新对话. */
-export function conversationTitle(s: Pick<Session, "title">): string {
+/** The main conversation's title: it has none of its own (the hub refuses renaming it), whatever its first message was (#1313). */
+export const MAIN_TITLE = "Persona";
+
+export function conversationTitle(s: Pick<Session, "title">, isMain = false): string {
+  if (isMain) return MAIN_TITLE;
   const t = s.title?.trim();
   return !t || t === "Claude Code" || t === "assistant" ? "新对话" : t;
 }

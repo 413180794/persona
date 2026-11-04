@@ -20,6 +20,11 @@ describe("titles", () => {
     expect(conversationTitle({ title: "Claude Code" })).toBe("新对话");
     expect(conversationTitle({ title: " 早报 " })).toBe("早报");
   });
+
+  it("calls the main conversation Persona, whatever its first message was (#1313)", () => {
+    expect(conversationTitle({ title: "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。" }, true)).toBe("Persona");
+    expect(conversationTitle({ title: "" }, true)).toBe("Persona");
+  });
 });
 
 describe("search", () => {

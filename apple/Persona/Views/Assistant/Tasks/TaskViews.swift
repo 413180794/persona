@@ -770,6 +770,18 @@ struct TaskDock: View {
                         }
                     }
                     .scrollIndicators(.hidden)
+                    #if os(macOS)
+                    // The pills fade out at the trailing edge instead of being cut off by it (#1224 B6): a window
+                    // narrower than the dock showed half a pill with its words cut.
+                    .mask {
+                        Color.black
+                            .padding(.trailing, Theme.Size.macRowFade)
+                            .overlay(alignment: .trailing) {
+                                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                                    .frame(width: Theme.Size.macRowFade)
+                            }
+                    }
+                    #endif
                     .animation(Theme.Motion.layout, value: dock.map(\.id) + agents.map(\.key.path))
                 }
             }

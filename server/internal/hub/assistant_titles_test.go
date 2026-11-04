@@ -205,3 +205,54 @@ func TestATaskConversationIsTitledAfterTheTask(t *testing.T) {
 		t.Fatalf("the same title every run, no model: %q, %d calls", got, len(calls()))
 	}
 }
+
+// The main conversation is 「Persona」 on the lists the apps get, whatever the node, a model or a rename would call it;
+// it is not named after its first turn and the app cannot rename it (#1313).
+func TestTheMainConversationIsAlwaysPersona(t *testing.T) {
+	h, n := conversationsHub(t)
+	model, calls := replies(t, "探索 | 不该用到")
+	h.ai = model
+	// The node's title for a transcript without one is its first message.
+	n.m.sessions[0].Title = "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"
+	h.titleSet("server", "trip-0002", "1030 | 探索 | 周末出游", titleAuto)
+	byID := func() map[string]string {
+		out := map[string]string{}
+		for _, s := range h.decorated(n.m) {
+			out[s.SessionID] = s.Title
+		}
+		return out
+	}
+	if got := byID(); got["main-0001"] != "Persona" || got["trip-0002"] != "1030 | 探索 | 周末出游" || got["agent-0005"] != "不是助手的" {
+		t.Fatalf("titles: %v", got)
+	}
+
+	// Noted when it started (POST /assistant/conversations with main): not named when its first turn ends.
+	h.titleNew("server", "main-0001", time.Now(), "")
+	h.titleAfterTurn(n.m, "main-0001")
+	if len(calls()) != 0 || h.conversationTitles()["main-0001"] != "" {
+		t.Fatalf("named the main conversation: %d calls, %q", len(calls()), h.conversationTitles()["main-0001"])
+	}
+	if by, _ := h.titleOf("main-0001"); by != "" {
+		t.Fatalf("the pending note stays: %q", by)
+	}
+
+	// Renaming it in the app is refused; a side conversation's rename still goes through.
+	srv := httptest.NewServer(func() http.Handler {
+		mux := http.NewServeMux()
+		mux.HandleFunc("POST /r/{sid}", func(w http.ResponseWriter, r *http.Request) { h.renameSession(w, r, n.m) })
+		return mux
+	}())
+	defer srv.Close()
+	sends := n.sent()
+	res, err := http.Post(srv.URL+"/r/main-0001", "application/json", strings.NewReader(`{"title":"我的主对话"}`))
+	if err != nil || res.StatusCode != http.StatusBadRequest || n.sent() != sends {
+		t.Fatalf("renaming the main conversation: %v %v, %d calls to the node", res, err, n.sent()-sends)
+	}
+	if got := byID()["main-0001"]; got != "Persona" {
+		t.Fatalf("after a rename: %q", got)
+	}
+	res, err = http.Post(srv.URL+"/r/trip-0002", "application/json", strings.NewReader(`{"title":"出游"}`))
+	if err != nil || res.StatusCode != http.StatusOK || byID()["trip-0002"] != "出游" {
+		t.Fatalf("a side conversation: %v %v %q", res, err, byID()["trip-0002"])
+	}
+}

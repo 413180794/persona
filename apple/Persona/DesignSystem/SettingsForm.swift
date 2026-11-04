@@ -40,3 +40,34 @@ extension View {
         #endif
     }
 }
+
+/// Why a settings page has nothing to show. In 体验模式 on the Mac a page whose data the demo does not make up (飞书机器人,
+/// 模型供应商) says so plainly instead of in red, which read as something broken (#1224 A4); the phone, and the Mac
+/// with a real hub, show the error as before.
+struct LoadProblem: View {
+    @Environment(AppModel.self) private var model
+    let text: String
+    /// Drawn as a label with the error icon (lists of things) rather than a line of text (a status row).
+    var labeled = true
+
+    var body: some View {
+        #if os(macOS)
+        if model.isDemo {
+            Label("体验模式没有这部分的演示数据，连接自己的 hub 后显示。", systemImage: Theme.Icon.info)
+                .font(Theme.Font.label).foregroundStyle(.secondary)
+        } else {
+            problem
+        }
+        #else
+        problem
+        #endif
+    }
+
+    @ViewBuilder private var problem: some View {
+        if labeled {
+            Label(text, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
+        } else {
+            Text(text).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled)
+        }
+    }
+}

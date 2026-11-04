@@ -35,6 +35,7 @@ import { chatFiles } from "../../lib/mentions";
 import { sameMessage } from "../../lib/queue";
 import { OutboxBubbles } from "./OutboxBubbles";
 import { AssistantFace, AssistantLauncherChip, useAssistantMenu } from "../assistant/AssistantChat";
+import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
 import { displayLines, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
 import { DayLine, FeedLineView, QuickResultCard, RouteChip, TaskDock, TaskQuestions } from "../assistant/Tasks";
@@ -317,7 +318,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   }, [state, session]);
 
   const lastLive = viewed ? Boolean(viewed.running) && !tr.loading : working && !tr.loading;
-  const title = session ? sessionTitle(session) : assistant ? "新对话" : "会话";
+  // The main conversation is always Persona (#1313): not its first message, the node's title for it.
+  const isMain = Boolean(assistant && sid === mainConversation);
+  const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? "新对话" : "会话";
   const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (viewed ? true : !outgoing), split }), [tr.items, lastLive, viewed, outgoing, split]);
   const ctx = useMemo<ChatContextValue>(
     () => ({ tasks: buildTaskIndex(tr.items), subagents: session?.subagents ?? [], openSubagent: assistant ? undefined : (a) => setViewing(a) }),
@@ -351,6 +354,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         title={title}
         machineName={machineName}
         assistant={assistant}
+        main={isMain}
         siblings={siblings}
         onToggleSidebar={onToggleSidebar}
         onInterrupt={interrupt}
@@ -534,6 +538,7 @@ function Header({
   title,
   machineName,
   assistant,
+  main,
   siblings,
   onToggleSidebar,
   onInterrupt,
@@ -544,6 +549,8 @@ function Header({
   title: string;
   machineName: string;
   assistant?: boolean;
+  /** The assistant's main conversation: no subtitle (iOS's AssistantTopBar has none) and no 重命名. */
+  main?: boolean;
   siblings: Session[];
   onToggleSidebar?: () => void;
   onInterrupt: () => void;
@@ -574,7 +581,9 @@ function Header({
   };
   const [linkTodoOpen, setLinkTodoOpen] = useState(false);
   const state = session ? stateOf(session) : "unknown";
-  const sub = assistant
+  const sub = main
+    ? ""
+    : assistant
     ? [sourceSubtitle(session), session?.launcher, session?.updated_at ? ago(session.updated_at) : ""].filter(Boolean).join(" · ")
     : [sourceSubtitle(session), machineName, session?.space_name, session && tabLabel(session)].filter(Boolean).join(" › ");
   const allowed = session ? sessionMenuActions(session) : [];
@@ -645,7 +654,7 @@ function Header({
         ...(showFiles ? [{ key: "files", label: "文件", icon: "folder" as const, checked: here(panel, "files"), onSelect: openFiles }, { key: "git", label: "Git", icon: "git" as const, checked: here(panel, "git"), onSelect: openGit }] : []),
         ...(allowed.includes("stop") ? [{ key: "stop", label: "中断", icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
         { key: "info", label: "会话信息", icon: "info", onSelect: () => setDialog("info") },
-        ...(sessionCan(session, "send") && (session.assistant || !session.source_kind) ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => setDialog("rename") }] : []),
+        ...(!main && sessionCan(session, "send") && (session.assistant || !session.source_kind) ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => setDialog("rename") }] : []),
         ...(!assistant && session.space_id && !session.source_kind ? [{ key: "space", label: "重命名空间…", icon: "folder" as const, onSelect: () => setDialog("space") }] : []),
         ...(!assistant ? [{ key: "mute", label: muted ? "恢复通知" : "屏蔽通知", icon: muted ? ("bell" as const) : ("bellOff" as const), onSelect: () => void flipMute() }] : []),
         ...(!assistant ? [{ key: "pin", label: pinned ? "取消置顶" : "置顶", icon: "pin" as const, onSelect: () => void flipPin(session) }] : []),
@@ -667,7 +676,7 @@ function Header({
           <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>
           {session && !assistant && state !== "idle" && <StatePill state={state} />}
         </div>
-        <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>
+        {sub && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
       </div>
       {session && !assistant && <ActivityChips session={session} onStopLoop={onStopLoop} />}
       {others.length > 0 && (

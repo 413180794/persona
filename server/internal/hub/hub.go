@@ -403,11 +403,14 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	h.mu.Unlock()
 	titles, named := h.agentConversationTitles(), h.conversationTitles()
 	archived, relayed := h.archivedIDs(), h.queuedRelays()
+	main := h.mainConversation(m.cfg.ID, list, dir)
 	for i := range list {
 		list[i].MachineID = m.cfg.ID
 		list[i].PendingInteractions = counts[list[i].SessionID]
 		list[i].Assistant = isAssistant(list[i], dir)
-		if t := titles[list[i].SessionID]; t != "" && list[i].Assistant {
+		if list[i].Assistant && list[i].SessionID == main {
+			list[i].Title = mainTitle // never its first message, a model's name or a rename (#1313)
+		} else if t := titles[list[i].SessionID]; t != "" && list[i].Assistant {
 			list[i].Title = t // not the first line of the prompt the hub wrote for it
 		} else if t := named[list[i].SessionID]; t != "" && list[i].Assistant {
 			list[i].Title = t // 「MMDD | 类型 | 主题」 or the user's own (assistant_titles.go)

@@ -253,6 +253,9 @@ App 的「定时任务」页只列前者的开关。用户让助手「每 30 分
 - **只起一次，用户的优先**：App 里 重命名（抽屉里长按对话 › 重命名…，`POST /api/v1/sessions/{mid}/{sid}/rename`）记成用户起的，以后不再覆盖；
   第一轮结束前就改了名的也不会被替换。Codex 对话改名只记在 hub（node 会往 Codex 的 rollout 里写 Claude 的 custom-title 行）。
 - 已有的旧对话不补（没有「待命名」那一笔）。
+- **主对话没有标题**（#1313）：发给 App 的会话列表里主对话的 `title` 一律是「Persona」（`mainTitle`，按 settings `assistant.main` 认），
+  不是 node 给的（无头跑的 transcript 没有 Claude Code 的 ai-title，node 拿第一条消息当标题）、不起「MMDD | 类型 | 主题」（开主对话时记的「待命名」在第一轮结束时直接丢掉，不调模型），
+  App 给它改标题返回 400「主对话没有标题可以改」（`conversation_rename` 本来就拒绝）。各端顶栏在主对话上显示形象：iOS / Mac / 安卓是形象名（默认「Persona」），网页是「Persona」。
 - App：抽屉的对话行里 `MMDD | 类型 | ` 用次要色、主题用主色，窄的时候从主题末尾截断（`ConversationTitle`）；别的标题照旧。
 
 ## 管理自己的对话（2026-11-01）

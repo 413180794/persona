@@ -133,7 +133,7 @@ export function useAssistantMenu(session: Session | undefined): MenuItem[] {
   const isMain = assistant?.main === session.session_id;
   const launcher = effectiveLauncher({ isMain, picked, session: session.launcher, config: assistant?.launcher });
   const cwd = session.cwd || assistant?.cwd || "~/.jarvis/assistant";
-  const title = session.title && session.title !== "Claude Code" ? session.title : undefined;
+  const title = !isMain && session.title && session.title !== "Claude Code" ? session.title : undefined;
   return [
     { key: "profile", label: "详细信息", icon: "info", onSelect: () => navigate({ name: "profile" }) },
     { key: "kb", label: "知识库", icon: "book", onSelect: () => navigate({ name: "kb" }) },

@@ -4,6 +4,8 @@ import SwiftUI
 extension Theme.Size {
     /// The Persona drawer's widest (narrow windows only; wide ones show it as a column).
     static let macDrawer: CGFloat = 380
+    /// The width over which a sideways-scrolling row fades out at its trailing edge (the task dock's pills, #1224 B6).
+    static let macRowFade: CGFloat = 32
     /// The smallest a sheet standing in for an iOS full-screen cover opens.
     static let macSheetMinWidth: CGFloat = 640
     static let macSheetMinHeight: CGFloat = 520
@@ -83,6 +85,10 @@ extension Theme.Icon {
 }
 
 extension Theme.Fill {
+    /// The well a question card's options sit in (#1224 B5): a third of `well`. The Mac's `well` (the compat layer's
+    /// quaternarySystemFill) is the label color at 18% in all, much darker than the phone's: the options looked pressed,
+    /// or disabled, a mid-gray block on the card.
+    static let macOptionsWell = Theme.Fill.well.opacity(0.35)
     /// A row under the pointer in the shell's sidebar: half the selected row's well.
     static let macHover = Theme.Fill.well.opacity(0.5)
     /// The faint dim behind ⌘K (a click on it closes the panel).
