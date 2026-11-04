@@ -77,6 +77,12 @@ Claude 的参数里有 `--settings`（`alias work="claude --settings ~/.claude/s
 - 启动参数，以及其他设置（`ANTHROPIC_*`、`CLAUDE_CODE_*`、代理……，像 Key / Token 的值是 •••）
 - 函数原文收在折叠里；参数里直接写的 Key（`_claude_proxy … sk-…`、`Bearer …`）也打码
 
+**截不到的启动器**（#1489）：函数调用另一个脚本、脚本再按绝对路径 `exec …/claude` 的，桩函数换不掉，探测看不到 Agent 起来。
+- 页面上显示「看不出这个启动器的网关和模型……照常能用」，不当成坏了。
+- 带模型的发送和新建（`launcherModelCheck`）照探测之前的老路径走：模型用 `--model` 交给启动器，不再 502。
+- 能截到、又写死了别的模型的，照旧拒绝。
+- 注意：这种启动器探测时真的会跑到那个脚本（桩换不掉它），脚本里的 claude 会在 15 秒后被杀掉。
+
 跑一遍会执行启动器在 claude 之前做的事（比如取 token 的脚本），所以每个启动器 10 分钟最多跑一次、15 秒超时（连子进程一起杀），
 stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.zsh` 覆盖 helper、带小模型和窗口、helper 前加变量、
 子 shell 里 export、Codex 几种写法，`--settings` 的 env（`withSettingsEnv`）。

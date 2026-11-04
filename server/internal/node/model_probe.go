@@ -39,16 +39,22 @@ func (n *Node) launcherModelCheck(ctx context.Context, name, model string) (stri
 		return cached.agent, cached.err
 	}
 	probe, err := n.launcherProbe(ctx, name, "--model", model)
-	if err == nil {
+	agent := probe.Agent
+	switch {
+	case errors.Is(err, errProbeUnseen):
+		// What it forwards cannot be seen: start it as before the check, the model given as --model, rather than refuse
+		// every send and start through it (the assistant's own launcher: nothing could be sent at all).
+		agent, err = launcherAgentType(name), nil
+	case err == nil:
 		err = forwardedModel(probe, model)
 	}
 	modelProbeCache.Lock()
 	if len(modelProbeCache.results) > 256 {
 		modelProbeCache.results = map[string]modelProbeResult{}
 	}
-	modelProbeCache.results[key] = modelProbeResult{at: time.Now(), agent: probe.Agent, err: err}
+	modelProbeCache.results[key] = modelProbeResult{at: time.Now(), agent: agent, err: err}
 	modelProbeCache.Unlock()
-	return probe.Agent, err
+	return agent, err
 }
 
 func forwardedModel(probe Probe, model string) error {

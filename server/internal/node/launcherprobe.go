@@ -3,6 +3,7 @@ package node
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os/exec"
@@ -23,6 +24,12 @@ import (
 // the environment and arguments the agent would have got. probeScript is that harness; parseProbe reads its output.
 
 const probeMarker = "__JARVIS_LAUNCHER_PROBE__"
+
+// errProbeUnseen is a launcher the stubs never saw start an agent: it reaches claude some way they cannot stand in for
+// (a function that runs a script of its own, which execs claude by its absolute path). Nothing is known about what it
+// sets, which is not the same as being broken: a send through it goes ahead as it did before the probe, the model
+// passed as --model (launcherModelCheck), and its page says what cannot be seen.
+var errProbeUnseen = errors.New("看不出这个启动器的网关和模型：它没有直接调用 claude / codex（比如经过别的脚本、按绝对路径启动），试运行时截不到；照常能用")
 
 // probeScript runs launcher `name` with the agents stubbed. The stubs are defined with `function name {`: in the
 // `name() {` form an alias of the same name (`alias claude="claude --…"`, common in ~/.zshrc) is expanded first and
@@ -132,6 +139,8 @@ func (n *Node) launcherProbeCached(ctx context.Context, name string) proto.Launc
 	var d proto.LauncherDetail
 	if p, err := n.launcherProbe(ctx, name); err == nil {
 		d = LauncherDetail(p)
+	} else if errors.Is(err, errProbeUnseen) {
+		d = proto.LauncherDetail{Agent: launcherAgentType(name), Error: err.Error()}
 	} else {
 		d = proto.LauncherDetail{Error: err.Error()}
 	}
@@ -153,7 +162,7 @@ func (n *Node) launcherProbe(ctx context.Context, name string, args ...string) (
 	out, _ := cmd.Output()
 	p, ok := parseProbe(string(out))
 	if !ok {
-		return Probe{}, fmt.Errorf("%s did not start an agent when tried", name)
+		return Probe{}, errProbeUnseen
 	}
 	return withSettingsEnv(p, n.home), nil
 }
