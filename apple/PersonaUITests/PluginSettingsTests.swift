@@ -29,7 +29,7 @@ final class PluginSettingsTests: XCTestCase {
         let entry = app.buttons["settings-plugins"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15) || app.staticTexts["设置"].exists, "no settings")
         for _ in 0..<8 where !(entry.exists && entry.isHittable) { app.swipeUp() }
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "5 个 · 2 个要处理")).firstMatch.exists,
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "6 个 · 2 个要处理")).firstMatch.exists,
                       "the row's summary:\n\(app.debugDescription)")
         shot(app, "home")
         entry.tap()

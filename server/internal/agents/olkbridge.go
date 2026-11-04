@@ -11,6 +11,11 @@ import (
 
 const OLKBridge = "olk-bridge"
 
+// MigratableSources are the hub's own sources a plugin may take over, keeping their session ids (<source>:<key>):
+// lark-connector's agent-bridge, moving out of the hub with the rest of Feishu through lark-connector (docs/plan-plugins.md
+// 「第 3 步」). While a plugin's source of that name runs, the hub's own steps aside.
+var MigratableSources = []string{OLKBridge}
+
 // BridgeAPI is the part of *lark.Client the olk-bridge source uses.
 type BridgeAPI interface {
 	AgentBridgeStatus(ctx context.Context) (*lark.AgentBridgeState, error)

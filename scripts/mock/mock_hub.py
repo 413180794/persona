@@ -6455,7 +6455,8 @@ MARKETS = {
 _NET = lambda hosts: {"key": "network", "title": "访问网络", "detail": hosts + "（hub 暂不拦截别的地址）"}
 CATALOG = [
     {"market": _MARKET_A, "id": "example-gateway", "name": "Example 网关面板", "version": "1.1.0", "description": "在启动器页上显示 Example 网关的余额、Key 和用量。",
-     "publisher": "example", "tags": ["额度", "面板"], "contributes": {"ui": ["home", "panel"]}, "permissions": PLUGINS["example-gateway"]["permissions"]},
+     "publisher": "example", "tags": ["额度", "面板"], "contributes": {"ui": ["home", "panel"]},
+     "permissions": PLUGINS["example-gateway"]["permissions"] + [_NET("status.example.com")]},
     {"market": _MARKET_A, "id": "example-calendar", "name": "Example 日历", "version": "0.9.0", "description": "把 Example 日历的日程收进收件箱，助手能查空闲时间。",
      "publisher": "example", "homepage": "https://plugins.example.com/calendar", "tags": ["日历", "连接器"], "contributes": {"connectors": ["examplecal"]},
      "permissions": [_RUNS, _NET("calendar.example.com"), {"key": "secrets", "title": "使用你填的密钥", "detail": "API Key"}]},
@@ -6521,7 +6522,9 @@ def markets_route(handler, p, body):
         pv = {"preview_id": pid, "manifest": {"id": c["id"], "name": c["name"], "version": c["version"], "description": c["description"]},
               "permissions": c["permissions"], "permissions_digest": "d-" + c["id"], "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 600)), "market": c["market"]}
         if cur and cur["source"] == "installed":
-            pv.update({"upgrade": True, "from": cur.get("version"), "more_permissions": False})
+            added = [x for x in c["permissions"] if x not in cur.get("permissions", [])]
+            pv.update({"upgrade": True, "from": cur.get("version"), "more_permissions": bool(added)})
+            if added: pv["added_permissions"] = added
         _PREVIEWS[pid] = c
         handler.send_json(pv); return True
     if p in ("/api/v1/plugins/-/install",) or (p.startswith("/api/v1/plugins/") and p.endswith("/-/upgrade")):

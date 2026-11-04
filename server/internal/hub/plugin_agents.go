@@ -162,12 +162,13 @@ func (s *pluginAgentSource) MarkRead(ctx context.Context, key string) error {
 }
 
 // addAgentSources registers a running plugin's agent_sources with the agents service; a contribution whose id the
-// hub already has (its own removedbridge, another plugin's) is skipped and logged.
+// hub already has (another plugin's) is skipped and logged. The hub's own removedbridge steps aside for a plugin's.
 func (ps *plugins) addAgentSources(id string, m *plugin.Manifest, hp *hubPlugin) {
 	if ps.h == nil || ps.h.agents == nil || hp.proc == nil {
 		return
 	}
 	for _, item := range m.AgentSources() {
+		ps.yieldOwnAgentSource(item.ID)
 		if ps.h.agents.Add(&pluginAgentSource{item: item, proc: hp.proc}) {
 			ps.mu.Lock()
 			hp.agentSources = append(hp.agentSources, item.ID)
@@ -190,6 +191,37 @@ func (ps *plugins) removeAgentSources(hp *hubPlugin) {
 	ps.mu.Unlock()
 	for _, id := range ids {
 		ps.h.agents.Remove(id)
+		ps.restoreOwnAgentSource(id)
+	}
+}
+
+// yieldOwnAgentSource takes the hub's own source id out for a plugin's of the same id (a migratable one only: Open
+// Lark's agent-bridge); the session ids stay, so the apps' sessions, unread counts and caches go on.
+func (ps *plugins) yieldOwnAgentSource(id string) {
+	if !slices.Contains(agents.MigratableSources, id) {
+		return
+	}
+	own := ps.h.agents.Get(id)
+	if own == nil {
+		return
+	}
+	if _, isPlugin := own.(*pluginAgentSource); isPlugin {
+		return
+	}
+	ps.h.migrated.Store("agentsrc:"+id, own)
+	ps.h.agents.Remove(id)
+	ps.logf("agent source %s: a plugin takes it over", id)
+}
+
+// restoreOwnAgentSource puts the hub's own source back once the plugin's is gone.
+func (ps *plugins) restoreOwnAgentSource(id string) {
+	v, ok := ps.h.migrated.LoadAndDelete("agentsrc:" + id)
+	if !ok || ps.h.agents.Get(id) != nil {
+		return
+	}
+	if ps.h.agents.Add(v.(agents.Source)) {
+		ps.h.agentsChanged([]string{})
+		ps.logf("agent source %s: back to the hub's own", id)
 	}
 }
 

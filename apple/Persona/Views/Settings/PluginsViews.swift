@@ -8,6 +8,18 @@ struct PluginsView: View {
 
     var body: some View {
         SettingsForm {
+            // 插件市场 (docs/plugins.md「插件市场」): only with a hub that has markets.
+            if page.markets {
+                Section {
+                    Group {
+                        NavigationLink(value: SettingsPage.pluginMarket) {
+                            SettingsRow(title: "插件市场", symbol: Theme.Icon.pluginMarket, tint: Theme.accent)
+                        }
+                        .accessibilityIdentifier("plugins-market")
+                    }
+                    .bareListRow()
+                }
+            }
             if let plugins = page.plugins, plugins.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.plugins, title: "没有插件",
@@ -110,6 +122,7 @@ struct PluginDetailView: View {
                         Text("停用后它不再运行，提供的连接器等也一起关掉；设置和密钥留着。")
                     }
                 }
+                pages(d)
                 if !d.readOnly && !d.form.isEmpty { form(d) }
                 if !d.readOnly && !d.secrets.isEmpty { secrets(d) }
                 contributions(d)
@@ -174,6 +187,22 @@ struct PluginDetailView: View {
     private var stateText: String {
         guard let p = page.detail?.plugin else { return page.loading ? "正在读取…" : "读不到" }
         return [PluginText.state(p), p.version, PluginText.source(p.source)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// The pages it draws (docs/plugins.md「声明式 UI」), a row each.
+    @ViewBuilder private func pages(_ d: HubPluginDetail) -> some View {
+        if !d.ui.isEmpty {
+            Section {
+                ForEach(d.ui) { place in
+                    NavigationLink(value: SettingsPage.pluginPage(plugin: d.plugin.id, ui: place.id, title: place.title)) {
+                        Label { Text(place.title).lineLimit(1) } icon: { Image(systemName: Theme.Icon.pluginPage) }
+                    }
+                    .accessibilityIdentifier("plugin-page-\(place.id)")
+                }
+            } header: {
+                SettingsHeading("页面")
+            }
+        }
     }
 
     private func form(_ d: HubPluginDetail) -> some View {

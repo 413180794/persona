@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/agents"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -37,7 +38,7 @@ func serveAgentSourcePluginForTest() {
 				ClientID     string `json:"client_id"`
 			}
 			_ = json.Unmarshal(params, &p)
-			if p.Contribution != "examplebot" {
+			if p.Contribution != "examplebot" && p.Contribution != agents.OLKBridge {
 				return nil, &rpc.Error{Code: plugin.CodeNoContribution, Message: "no source " + p.Contribution}
 			}
 			if p.SessionKey != "" && p.SessionKey != "room/1" {
@@ -105,9 +106,6 @@ func TestPluginAgentSource(t *testing.T) {
 		return call(t, mux, "POST", "/api/v1/plugins/-/install", master,
 			fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"]))
 	}
-	if code, out := install(agentSourcePackage(t, "example-taker", "removedbridge")); code == 200 {
-		t.Fatalf("a plugin took the hub's own source id: %v", out)
-	}
 	if code, out := install(agentSourcePackage(t, "example-agents", "examplebot")); code != 200 {
 		t.Fatalf("%d %v", code, out)
 	}
@@ -171,4 +169,50 @@ func TestPluginAgentSource(t *testing.T) {
 	if code, _ := call(t, mux, "GET", path+"/messages", master, ""); code != 404 {
 		t.Fatal("a turned-off plugin's session:", code)
 	}
+}
+
+// ownBridge stands for the hub's own removedbridge source.
+type ownBridge struct{ agents.Bridge }
+
+func (ownBridge) Status(context.Context) (agents.Status, error) {
+	return agents.Status{Source: agents.OLKBridge, Enabled: true, Setup: "hub"}, nil
+}
+
+// A plugin's removedbridge takes the hub's own over while it runs (same session ids); turned off, the hub's is back.
+func TestPluginTakesOverOLKBridge(t *testing.T) {
+	h, _ := pluginTestHub(t)
+	h.initAgents()
+	h.agents.Add(ownBridge{})
+	mux := h.routes()
+	master := h.cfg.Token
+	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/preview", master, `{"source": "dir:`+agentSourcePackage(t, "example-agents", agents.OLKBridge)+`"}`)
+	if code, out := call(t, mux, "POST", "/api/v1/plugins/-/install", master,
+		fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"])); code != 200 {
+		t.Fatalf("%d %v", code, out)
+	}
+	setup := func() string {
+		_, out := call(t, mux, "GET", "/api/v1/agents", master, "")
+		srcs, _ := out["sources"].([]any)
+		if len(srcs) != 1 {
+			return fmt.Sprint(len(srcs), " sources")
+		}
+		m := srcs[0].(map[string]any)
+		if m["source"] != agents.OLKBridge {
+			return fmt.Sprint(m["source"])
+		}
+		s, _ := m["setup"].(string)
+		if acc, _ := m["accounts"].([]any); s == "" && len(acc) != 1 {
+			return "not answering yet"
+		}
+		return "setup=" + s
+	}
+	var last string
+	waitLong(t, "the plugin's removedbridge", func() bool { last = setup(); return last == "setup=" })
+	_ = last
+	_, out := call(t, mux, "GET", "/api/v1/agents/sessions", master, "")
+	if list, _ := out["sessions"].([]any); len(list) != 1 || list[0].(map[string]any)["id"] != "removedbridge:room/1" {
+		t.Fatalf("the plugin's sessions under removedbridge: %v", out)
+	}
+	call(t, mux, "PUT", "/api/v1/plugins/example-agents/-/enabled", master, `{"enabled": false}`)
+	waitLong(t, "the hub's own back", func() bool { return setup() == "setup=hub" })
 }

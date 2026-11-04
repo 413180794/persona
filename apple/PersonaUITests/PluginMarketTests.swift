@@ -1,0 +1,197 @@
+import XCTest
+
+/// 设置 › 插件 › 插件市场 and a plugin's own page (docs/plugins.md「插件市场」「声明式 UI」): a plugin installed from a market
+/// (preview, its permissions agreed to, installed, then removed so the next run finds it as before), a plugin page's
+/// form filled in and saved (the plugin's toast, its new view), and a launcher's page with the plugin's section — the
+/// one that says unsupported (#1339) not there at all. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1:
+/// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named
+/// by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark) and the style.
+final class PluginMarketTests: XCTestCase {
+    private var env: [String: String] { ProcessInfo.processInfo.environment }
+
+    @MainActor private func launch(_ args: [String] = []) throws -> XCUIApplication {
+        guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
+        addUIInterruptionMonitor(withDescription: "notifications") { alert in
+            for label in ["允许", "Allow"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
+            return false
+        }
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let app = XCUIApplication()
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings"] + args
+        app.launchPinned()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for label in ["允许", "Allow"] where springboard.buttons[label].waitForExistence(timeout: 3) { springboard.buttons[label].tap() }
+        return app
+    }
+
+    @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
+        guard let dir = env["JARVIS_SHOTS"] else { return }
+        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "market-\(name)-\(UITestStyle.name)-\(look).png"))
+    }
+
+    @MainActor private func scrollTo(_ el: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<8 where !(el.exists && el.isHittable) { app.swipeUp() }
+    }
+
+    @MainActor func testInstallFromTheMarket() throws {
+        let app = try launch()
+        let entry = app.buttons["settings-plugins"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 15) || app.staticTexts["设置"].exists, "no settings:\n\(app.debugDescription)")
+        scrollTo(entry, in: app)
+        entry.tap()
+
+        // 插件市场 is there: the hub has markets.
+        let market = app.buttons["plugins-market"]
+        XCTAssertTrue(market.waitForExistence(timeout: 15), "no 插件市场:\n\(app.debugDescription)")
+        shot(app, "plugins")
+        market.tap()
+
+        let calendar = app.buttons["market-plugin-example-calendar"]
+        XCTAssertTrue(calendar.waitForExistence(timeout: 15), "no catalog:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["market-plugin-team-windows"].exists && app.buttons["market-plugin-example-gateway"].exists)
+        XCTAssertTrue(app.buttons["market-filter-all"].exists, "no market chips")
+        shot(app, "catalog")
+        // Filtered by a market: only its plugins.
+        app.buttons["market-filter-8e01b7c4a2"].tap()
+        XCTAssertTrue(calendar.waitForNonExistence(timeout: 5), "the filter keeps another market's plugin")
+        XCTAssertTrue(app.buttons["market-plugin-team-digest"].exists)
+        app.buttons["market-filter-all"].tap()
+        XCTAssertTrue(calendar.waitForExistence(timeout: 5))
+        calendar.tap()
+
+        let install = app.buttons["market-install"]
+        XCTAssertTrue(install.waitForExistence(timeout: 10), "no 安装:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["访问网络"].exists, "its permissions are listed")
+        shot(app, "detail")
+        install.tap()
+
+        // The preview: what it may do, then 安装.
+        let confirm = app.buttons["market-confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "no preview:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["在 hub 机器上运行程序"].exists)
+        shot(app, "preview")
+        confirm.tap()
+        let remove = app.buttons["market-uninstall"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 10), "installed from this market, it can be removed:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["market-open-plugin"].exists)
+        shot(app, "installed")
+
+        // Removed again: the mock is as it was for the next run.
+        remove.tap()
+        let sure = app.buttons["market-uninstall-confirm"].firstMatch
+        XCTAssertTrue(sure.waitForExistence(timeout: 5), "no confirmation:\n\(app.debugDescription)")
+        shot(app, "uninstall")
+        sure.tap()
+        XCTAssertTrue(app.buttons["market-install"].waitForExistence(timeout: 10), "removed, it can be installed again:\n\(app.debugDescription)")
+
+        // An upgrade lists what the new version asks for in addition; cancelled, nothing changes.
+        app.navigationBars.buttons.firstMatch.tap()
+        let gateway = app.buttons["market-plugin-example-gateway"]
+        XCTAssertTrue(gateway.waitForExistence(timeout: 10))
+        gateway.tap()
+        let upgrade = app.buttons["market-upgrade"]
+        XCTAssertTrue(upgrade.waitForExistence(timeout: 10), "no 升级:\n\(app.debugDescription)")
+        upgrade.tap()
+        XCTAssertTrue(app.staticTexts["新版本多要的"].waitForExistence(timeout: 10), "no added permissions:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "status.example.com")).firstMatch.exists)
+        shot(app, "upgrade")
+        app.buttons["取消"].firstMatch.tap()
+        XCTAssertTrue(upgrade.waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testManageMarkets() throws {
+        let app = try launch(["-openPluginMarkets", "YES"])
+        let add = app.buttons["market-add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 15), "no 市场:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["第 3 个插件：没有 manifest"].exists, "a market's warning is shown")
+        shot(app, "markets")
+        add.tap()
+
+        // The address goes to the hub as typed; its reason for refusing stays on the sheet.
+        let spec = app.textFields["market-spec"]
+        XCTAssertTrue(spec.waitForExistence(timeout: 5))
+        spec.tap()
+        spec.typeText("https://example.com/private/")
+        app.buttons["market-save"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "要填 token")).firstMatch.waitForExistence(timeout: 10),
+                      "the hub's reason is not shown:\n\(app.debugDescription)")
+        let token = app.secureTextFields["market-token"]
+        token.tap()
+        token.typeText("t0ken")
+        shot(app, "add-market")
+        app.buttons["market-save"].tap()
+        let added = app.staticTexts["https://example.com/private/"]
+        XCTAssertTrue(added.waitForExistence(timeout: 10), "the market is not listed:\n\(app.debugDescription)")
+        XCTAssertTrue(spec.waitForNonExistence(timeout: 5), "the sheet stays")
+        shot(app, "markets-added")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "t0ken")).firstMatch.exists, "a token is never shown")
+
+        // Removed again.
+        let removes = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "market-remove-"))
+        let remove = removes.element(boundBy: removes.count - 1)
+        scrollTo(remove, in: app)
+        // Refreshed now; the first tap after the sheet closes can go to ending the keyboard's focus, so it is a harmless one.
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "market-refresh-")).firstMatch.tap()
+        sleep(1)
+        remove.tap()
+        let sure = app.buttons["market-remove-confirm"].firstMatch
+        XCTAssertTrue(sure.waitForExistence(timeout: 5), "no confirmation:\n\(app.debugDescription)")
+        sure.tap()
+        XCTAssertTrue(added.waitForNonExistence(timeout: 10), "the market is still listed:\n\(app.debugDescription)")
+    }
+
+    @MainActor func testSaveOnAPluginPage() throws {
+        let app = try launch(["-openPlugin", "example-gateway"])
+        let page = app.buttons["plugin-page-home"]
+        XCTAssertTrue(page.waitForExistence(timeout: 15), "no 页面 row:\n\(app.debugDescription)")
+        page.tap()
+
+        XCTAssertTrue(app.staticTexts["¥ 182.40"].waitForExistence(timeout: 10), "the view is not drawn:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["有效"].exists, "a row's badge")
+        shot(app, "page")
+        let note = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "写点什么")).firstMatch
+        scrollTo(note, in: app)
+        XCTAssertTrue(note.waitForExistence(timeout: 5), "no 备注 field:\n\(app.debugDescription)")
+        note.tap()
+        // What an earlier run saved is still in the mock: cleared first.
+        let old = (note.value as? String) ?? ""
+        if !old.isEmpty && old != note.placeholderValue {
+            note.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
+        }
+        let words = "ui-\(Int.random(in: 1000...9999))"
+        note.typeText(words + "\n")
+        let save = app.buttons["plugin-ui-action-save"]
+        scrollTo(save, in: app)
+        shot(app, "page-filled")
+        save.tap()
+        XCTAssertTrue(app.staticTexts["已保存"].waitForExistence(timeout: 10), "no toast:\n\(app.debugDescription)")
+        // The plugin's new view has what was saved.
+        let saved = app.textFields.matching(NSPredicate(format: "value CONTAINS %@", words)).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 5), "the saved value is not in the new view:\n\(app.debugDescription)")
+
+        // A confirm asks first.
+        let disable = app.buttons["plugin-ui-action-disable:test"]
+        for _ in 0..<6 where !(disable.exists && disable.isHittable) { app.swipeDown() }
+        disable.tap()
+        XCTAssertTrue(app.staticTexts["停用后不能恢复，确定停用？"].waitForExistence(timeout: 5), "no confirmation:\n\(app.debugDescription)")
+        shot(app, "confirm")
+        app.buttons["plugin-ui-confirm"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["已停用"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor func testALauncherShowsThePluginsSection() throws {
+        let app = try launch(["-openLauncherPage", "cc_main"])
+        XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 20))
+        // After the quota and the test rows: down the page.
+        let refresh = app.buttons["plugin-ui-action-refresh"]
+        for _ in 0..<10 where !(refresh.exists && refresh.isHittable) { app.swipeUp(); _ = refresh.waitForExistence(timeout: 1) }
+        XCTAssertTrue(refresh.exists, "no plugin section:\n\(app.debugDescription)")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "今日额度")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["别家网关"].exists, "a section that says unsupported is not drawn")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "not the plugin")).firstMatch.exists, "and no error")
+        shot(app, "launcher")
+        app.buttons["plugin-ui-action-refresh"].tap()
+        XCTAssertTrue(app.staticTexts["已刷新"].waitForExistence(timeout: 10), "no toast")
+    }
+}

@@ -2,8 +2,9 @@ import Foundation
 import Observation
 
 // 设置 › 插件 (docs/plugins.md「hub 的接口」): the hub's plugins, each one's switch, its configuration as a form drawn
-// from its schema (`form.fields`), and its secrets, write-only. Installing, upgrading and removing are done on the
-// hub's machine (`personad plugin`), never here.
+// from its schema (`form.fields`), its secrets, write-only, and the pages it draws (`ui`, PluginUIModel). Installing,
+// upgrading and removing are done on the hub's machine (`personad plugin`), or from a plugin market the hub has
+// (PluginMarketModel: only what a market lists).
 
 /// One of GET /api/v1/plugins.
 nonisolated struct HubPlugin: Codable, Hashable, Sendable, Identifiable {
@@ -114,10 +115,12 @@ nonisolated struct HubPluginDetail: Decodable, Hashable, Sendable {
     var config: [String: JSONValue]
     var secrets: [PluginSecret]
     var permissions: [PluginPermission]
+    /// The pages it draws (placement plugin_page), a row each.
+    var ui: [PluginUIPlace]
 
     private struct Form: Decodable { var fields: [PluginField]? }
     private enum CodingKeys: String, CodingKey {
-        case publisher, homepage, origin, form, config, secrets, permissions
+        case publisher, homepage, origin, form, config, secrets, permissions, ui
         case previousVersion = "previous_version", readOnly = "read_only"
     }
 
@@ -133,15 +136,33 @@ nonisolated struct HubPluginDetail: Decodable, Hashable, Sendable {
         config = try c.decodeIfPresent([String: JSONValue].self, forKey: .config) ?? [:]
         secrets = try c.decodeIfPresent([PluginSecret].self, forKey: .secrets) ?? []
         permissions = try c.decodeIfPresent([PluginPermission].self, forKey: .permissions) ?? []
+        ui = (try c.decodeIfPresent([PluginUIPlace].self, forKey: .ui) ?? []).filter { ($0.placement ?? "plugin_page") == "plugin_page" }
+    }
+}
+
+/// GET /api/v1/plugins: the plugins, and whether this hub has plugin markets (`markets`: 设置 › 插件 › 插件市场).
+nonisolated struct HubPluginList: Decodable, Sendable {
+    var plugins: [HubPlugin]
+    var canInstall: Bool
+    var markets: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case plugins, markets
+        case canInstall = "can_install"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        plugins = try c.decodeIfPresent([HubPlugin].self, forKey: .plugins) ?? []
+        canInstall = try c.decodeIfPresent(Bool.self, forKey: .canInstall) ?? false
+        markets = try c.decodeIfPresent(Bool.self, forKey: .markets) ?? false
     }
 }
 
 extension APIClient {
-    func plugins() async throws -> [HubPlugin] {
-        struct List: Decodable { var plugins: [HubPlugin] }
-        let list: List = try await get("/api/v1/plugins")
-        return list.plugins
-    }
+    func plugins() async throws -> [HubPlugin] { try await pluginList().plugins }
+
+    func pluginList() async throws -> HubPluginList { try await get("/api/v1/plugins") }
 
     func plugin(_ id: String) async throws -> HubPluginDetail { try await get("/api/v1/plugins/\(id)/-/") }
 
@@ -228,6 +249,8 @@ enum PluginText {
     }
 
     private(set) var plugins: [HubPlugin]?
+    /// The hub has plugin markets: the list shows 插件市场.
+    private(set) var markets = false
     private(set) var loading = false
     private(set) var error: String?
     @ObservationIgnored private let deps: Deps
@@ -240,7 +263,9 @@ enum PluginText {
         defer { loading = false }
         do {
             guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
-            plugins = try await api.plugins()
+            let list = try await api.pluginList()
+            plugins = list.plugins
+            markets = list.markets
             error = nil
         } catch {
             self.error = error.localizedDescription

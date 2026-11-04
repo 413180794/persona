@@ -403,7 +403,8 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 接口还是 `/api/v1/agents*`（`docs/protocol.md`「个人 Agent」），会话 id 是 `<贡献 id>:<sessionKey>`，按 `provider` 分组和显示名字。
 用于直接连一个个人 Agent 的服务（比如它有实时推送，就不用 lark-connector 那样每分钟轮询）。
 
-- **id**：不能是 `removedbridge`（hub 自己的，装不上），也不能和别的插件的重复。插件启用、开始跑就进 Agents 页，停用、卸载、升级时先拿掉
+- **id**：不能和别的插件的重复。`removedbridge`（hub 自己的 lark-connector agent-bridge）是**可迁出**的（`agents.MigratableSources`，#1497）：
+  插件贡献同名来源时，插件跑着期间 hub 自己的让出，停用、卸载后放回；会话 id 不变（`removedbridge:<sessionKey>`），App 里的会话、未读、缓存接得上。插件启用、开始跑就进 Agents 页，停用、卸载、升级时先拿掉
   （App 收到 `{"type":"agents"}` 重新拉）。进程崩溃、超时、没起来时来源还在：它的 `status` 带错误，列全部会话、搜索时跳过它（别的来源照常），
   只问它的时候才回错误。
 - **hub 调插件**（`agentsrc.<方法>`，参数带 `contribution`；字段和 lark-connector agent-bridge 返回的一样，`server/internal/lark/agent_bridge.go`）：
@@ -424,7 +425,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
   hub 清掉缓存、推 `{"type":"agents","session_ids":[…]}`，App 立刻重拉。只认这个插件自己的来源。hub 自己的发送之后也会推，并在 4 / 15 / 45 秒再推一次；
   hub 每 60 秒还会兜底重新列一遍各来源。
 - 实现：`server/internal/hub/plugin_agents.go`；测试 `TestPluginAgentSource`（`plugin_agents_test.go`，假插件经协议走一遍）、
-  `agents.TestAddAndRemoveSources`。
+  `agents.TestAddAndRemoveSources`、`TestPluginTakesOverOLKBridge`（接管和放回）。
 
 ## 事件
 
@@ -456,8 +457,24 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
 - 详情：状态、版本、来源、描述、「还缺：…」和错误；「启用」开关；「设置」是按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，
   对象是单独一节），右上角「保存」整份提交，hub 拒绝的字段把原因显示在那一项下面、草稿留着；「密钥」每项只显示已设置 / 未设置，点开在单独的表单里输入（不回显），
   已设置的可以清除；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、主页、警告）。hub.json 来的只能看，不显示开关和表单。
-- 截图：`MOCK_PLUGINS=1` 的假 hub 有五个状态各不相同的示例插件；`-tab settings -openPlugins YES`（`-openPlugin <id>` 直接进详情）。
-  UI 测试 `PluginSettingsTests`（`TEST_RUNNER_JARVIS_PLUGINS_HUB`），单元测试 `PluginsModelTests`。
+- 页面（#1328，「声明式 UI」）：详情里插件的每个 `plugin_page` 一行（「页面」一节），点进去是一页；启动器详情页在额度、可用性后面每个
+  `launcher_section` 一节。`PluginViewRenderer`（`PluginViewRenderer.swift`）用设计系统画 8 种条目：分隔线把一节分成两组（标题跟第一组，页脚跟最后一组），
+  `tone` 换成 `Theme.positive` / `caution` / `danger`（neutral：次要色，进度条用强调色），`field` 的 5 种 kind（`secret` 用 SecureField、
+  永远不预填），按钮文字单行；`confirm` 先弹确认，`submit` 带上这一页全部字段；回 `view` 就换掉，`toast` 走 App 的提示，`open_url` 和 `link`
+  在 App 内的链接卡片（Mac 是侧边面板）打开，只认 https；出错有空状态和重试。画启动器那一节时插件回 404 `{"code":"unsupported"}`
+  （没写 `hosts` 的会列在每个启动器上，#1339）就整节不画，也不算出错。逻辑在 `PluginUIModel.swift`（`PluginViewModel`、`PluginLauncherModel`）。
+- 插件市场（#1328，「插件市场」）：`GET /api/v1/plugins` 回 `markets: true` 时列表最上面一行「插件市场」。目录有搜索框（停 0.3 秒再问 hub）、
+  按市场筛选的 chip（`FilterChip`，两个以上市场才有）、每个插件的名字、版本、说明、标签和状态（可安装 / 可升级 / 已安装 / 装不了的原因），
+  读不到的市场在上面写原因；详情列权限，「安装」「升级到 …」先 `catalog/preview`，弹出的确认页列出权限（升级时先单列「新版本多要的」），
+  确认后带 `permissions_digest` 安装 / 升级；「卸载」只对 `from_this_market` 的开放（先确认）。右上角「市场」是市场管理：每个市场的地址、个数、
+  读取时间、错误和警告，一行「刷新」「设 / 换 token」「删除」；「添加」填地址和可选 token（token 只写不回显），地址原样交给 hub、不在 App 里校验格式，
+  hub 拒绝的原因留在表单里（#1373：https、`github:owner/repo`、`git:<地址>[#分支]` 三种写法，git 的用 hub 机器的 SSH 凭据、不用 token）。
+  逻辑在 `PluginMarketModel.swift`（`PluginMarketModel`、`MarketPluginModel`），页面 `PluginMarketViews.swift`。
+- 截图：`MOCK_PLUGINS=1` 的假 hub 有五个状态各不相同的示例插件，另有 `example-gateway` 的页面、启动器上的一节（外加一个总回 unsupported 的）、
+  两个市场和它们的目录；`-tab settings -openPlugins YES`（`-openPlugin <id>` 直接进详情，再加 `-openPluginPage <ui>` 进它的页面）、
+  `-openPluginMarket YES`（目录）、`-openPluginMarkets YES`（市场管理）、`-openMarketPlugin <市场 id>/<插件 id>`、`-openLauncherPage <启动器>`。
+  UI 测试 `PluginSettingsTests`、`PluginMarketTests`（从市场装、升级预览、市场管理、插件页面里保存、启动器那一节；`TEST_RUNNER_JARVIS_PLUGINS_HUB`），
+  单元测试 `PluginsModelTests`、`PluginMarketModelTests`、`PluginViewModelTests`。
 - 网页（#1207）：设置 › 插件，同样的列表和详情（`web/src/views/settings/Plugins.tsx`、`web/src/lib/plugins.ts`，`/settings?tab=plugins&plugin=<id>`），见 `docs/web.md`「设置」。
   #1330 加上声明式 UI（`settings/PluginView.tsx`、`lib/plugin-ui.ts`：插件详情的「页面」、启动器详情里的一节）和插件市场（`settings/PluginMarket.tsx`、`lib/plugin-market.ts`：目录、详情、管理市场）。
 - Android（#1206）同样的功能，入口在设置首页的「扩展」一节，代码和截图方法见 [android.md](android.md)「插件（设置 › 插件）」；插件画的界面（插件页面、启动器页上的一节）和插件市场（#1329）见同一节下的「插件画的界面和插件市场」。

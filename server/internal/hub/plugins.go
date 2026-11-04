@@ -247,7 +247,12 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 		}
 	}
 	reg.Reserve("connectors", own...)
-	reg.Reserve("agent_sources", agents.OLKBridge) // the hub's own personal agents source
+	// The hub's own personal agents sources, but those a plugin may take over (plugin_agents.go).
+	for _, id := range []string{agents.OLKBridge} {
+		if !slices.Contains(agents.MigratableSources, id) {
+			reg.Reserve("agent_sources", id)
+		}
+	}
 	if path := telegramProgram(); path != "" {
 		if err := reg.AddBuiltin(telegramManifest(h, path), filepath.Dir(path), true); err != nil {
 			h.logf("plugin telegram: %v", err)

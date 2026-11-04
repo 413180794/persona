@@ -253,6 +253,9 @@ struct ModelLauncherDetailView: View {
     @State private var showDefinition = false
     /// 测试可用性: per machine, running (nil) or done.
     @State private var checks: [String: LauncherCheck?] = [:]
+    /// What plugins draw on this page (docs/plugins.md「声明式 UI」), and the link one of them opens.
+    @State private var pluginSections: PluginLauncherModel?
+    @State private var pluginLink: LinkTarget?
 
     /// Machines whose launcher sets the same, with that detail.
     private struct DetailGroup { var machines: [String]; var names: String; var detail: LauncherDetail }
@@ -308,6 +311,7 @@ struct ModelLauncherDetailView: View {
                     LauncherQuotaSection(name: l.name)
                     availability(l)
                 }
+                if let pluginSections { PluginLauncherSections(page: pluginSections, link: $pluginLink) }
                 // What the launcher really sets, once for the machines where it is the same.
                 ForEach(detailGroups(l), id: \.machines) { g in
                     LauncherDetailSections(detail: g.detail, place: groups(l) > 1 ? g.names : nil)
@@ -360,6 +364,13 @@ struct ModelLauncherDetailView: View {
         }
         .sheet(isPresented: $editing) {
             LauncherEditor(existing: launcher) { await load() }
+        }
+        .pluginLinks($pluginLink)
+        .task(id: model.hubFeatures.contains("plugin_manager")) {
+            guard model.hubFeatures.contains("plugin_manager") else { return }
+            let sections = pluginSections ?? PluginLauncherModel(launcher: name)
+            pluginSections = sections
+            await sections.load()
         }
         .task {
             await load()

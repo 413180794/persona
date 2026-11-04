@@ -259,9 +259,21 @@ struct SettingsView: View {
         }
         else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
-        else if d.bool(forKey: "openPlugins") || d.string(forKey: "openPlugin") != nil { // 设置 › 插件 (› one)
+        else if d.bool(forKey: "openPlugins") || d.string(forKey: "openPlugin") != nil { // 设置 › 插件 (› one (› a page of it))
             p.append(SettingsPage.plugins)
-            if let id = d.string(forKey: "openPlugin") { p.append(SettingsPage.plugin(id)) }
+            if let id = d.string(forKey: "openPlugin") {
+                p.append(SettingsPage.plugin(id))
+                if let ui = d.string(forKey: "openPluginPage") { p.append(SettingsPage.pluginPage(plugin: id, ui: ui, title: "")) }
+            }
+        }
+        else if d.bool(forKey: "openPluginMarket") || d.bool(forKey: "openPluginMarkets") || d.string(forKey: "openMarketPlugin") != nil {
+            // 设置 › 插件 › 插件市场 (› 市场, or › <market>/<plugin>)
+            p.append(SettingsPage.plugins)
+            p.append(SettingsPage.pluginMarket)
+            if d.bool(forKey: "openPluginMarkets") { p.append(SettingsPage.pluginMarkets) }
+            if let m = d.string(forKey: "openMarketPlugin"), let slash = m.firstIndex(of: "/") {
+                p.append(SettingsPage.marketPlugin(market: String(m[..<slash]), id: String(m[m.index(after: slash)...])))
+            }
         }
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
         else if d.bool(forKey: "openClaudeSettings") { p.append(SettingsPage.claude) } // with its 屏蔽的配置目录
@@ -334,6 +346,12 @@ enum SettingsPage: Hashable {
     /// 设置 › 插件, and one plugin by its id (docs/plugins.md).
     case plugins
     case plugin(String)
+    /// A page a plugin draws (placement plugin_page, docs/plugins.md「声明式 UI」), titled until its View says otherwise.
+    case pluginPage(plugin: String, ui: String, title: String)
+    /// 设置 › 插件 › 插件市场, one plugin of a market, and the markets (docs/plugins.md「插件市场」).
+    case pluginMarket
+    case marketPlugin(market: String, id: String)
+    case pluginMarkets
     /// 设置 › hub › SSH 隧道 of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
     case sshTunnel(String)
 
@@ -391,6 +409,10 @@ private struct SettingsDestinations: ViewModifier {
         case .skills: SkillsPage()
         case .plugins: PluginsView()
         case .plugin(let id): PluginDetailView(id: id)
+        case .pluginPage(let plugin, let ui, let title): PluginPageView(plugin: plugin, ui: ui, title: title)
+        case .pluginMarket: PluginMarketView()
+        case .marketPlugin(let market, let id): MarketPluginDetailView(market: market, id: id)
+        case .pluginMarkets: PluginMarketsView()
         }
     }
 

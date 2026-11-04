@@ -222,6 +222,13 @@ extension Theme {
         static let skills = "puzzlepiece.extension"
         /// A plugin of the hub's (设置 › 插件, docs/plugins.md).
         static let plugins = "powerplug"
+        /// 插件市场: the markets' catalog of plugins to install.
+        static let pluginMarket = "storefront"
+        /// A plugin installed from a market / upgraded to its newer version.
+        static let install = "arrow.down.app"
+        static let upgrade = "arrow.up.square"
+        /// A page a plugin draws (its declarative UI).
+        static let pluginPage = "chart.bar.doc.horizontal"
         static let phone = "iphone"
         static let watch = "applewatch"
         static let handoff = "iphone.and.arrow.forward"

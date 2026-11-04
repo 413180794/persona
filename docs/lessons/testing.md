@@ -335,3 +335,11 @@
   看起来像「页面横向溢出」（管理界面的设备页、插件页都是这样），其实不是页面的问题。窄屏截 `--window-size=500,…`，要真 390 宽用 DevTools 的设备模拟。
 - 管理界面的截图不用起 hub：`cd web && npx vite --port <空闲端口>`，打开 `/admin/<页面>?mock=app&theme=dark`（`?dialog=…` 直接打开对话框，见 `web/src/admin/mock.ts`）。
   `--user-data-dir` 指到 `/tmp` 下自己的目录，不碰用户的 Chrome。
+
+## UI 测试里点不到列表行里的按钮（2026-11-04，#1328）
+
+- **容器上的 `accessibilityIdentifier` 盖掉里面每个控件的**：给一行的 `VStack` 加了标识，行里 `Menu` 的 `market-menu-…` 就查不到了。标识只加在要点的控件上，
+  或者容器先 `.accessibilityElement(children: .contain)`。
+- **sheet 刚关上时第一下点按可能被吞掉**（键盘的焦点还在收）：填完表单「添加」后紧接着点列表里的按钮，什么都没发生、确认框不出来。
+  测试里等 sheet 里的输入框 `waitForNonExistence`，再先点一个无害的按钮（刷新），然后才点要测的。
+- 图标大小的 `Menu`（20 pt）在 XCUITest 里点了常常不展开：列表行里的几个操作直接做成一排 `.borderless` 的文字按钮，手机和 Mac 上都更清楚。

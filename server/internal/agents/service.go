@@ -91,6 +91,13 @@ func (s *Service) Add(src Source) bool {
 	return true
 }
 
+// Get is the source registered under name, nil when none.
+func (s *Service) Get(name string) Source {
+	s.srcMu.RLock()
+	defer s.srcMu.RUnlock()
+	return s.sources[name]
+}
+
 // Remove drops a source (its plugin turned off or gone) with what is cached of it, and tells the apps.
 func (s *Service) Remove(name string) {
 	s.srcMu.Lock()
