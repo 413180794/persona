@@ -25,12 +25,13 @@ type Client struct {
 	Bin string
 	// Socket is herdr's API socket; empty: the CLI only.
 	Socket string
-	// Log gets one line when calls to herdr start failing (at most every 30 s while they do, with how many failed
-	// meanwhile) and one when they work again; nil: silent.
+	// Log gets one line when calls to herdr start failing, more and more rarely while they go on (LogBackoff: 30 s
+	// after the first, up to an hour apart, with how many failed meanwhile), and one when they work again; nil: silent.
 	Log func(format string, args ...any)
 
 	seq   atomic.Int64
 	trips episode
+	now   func() time.Time // the clock note reads; nil: time.Now (tests set it)
 }
 
 // episode throttles logging of transport failures (herdr down, socket gone): not one line per poll.
@@ -38,7 +39,7 @@ type episode struct {
 	mu       sync.Mutex
 	failing  bool
 	since    time.Time
-	logged   time.Time
+	log      LogBackoff
 	failures int
 }
 
@@ -46,24 +47,28 @@ func (c *Client) note(method string, err error) {
 	if c.Log == nil {
 		return
 	}
+	now := time.Now
+	if c.now != nil {
+		now = c.now
+	}
 	e := &c.trips
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	var he *Error
 	if err == nil || errors.As(err, &he) { // an answer from herdr, even an error one, means it is reachable
 		if e.failing {
-			c.Log("herdr: reachable again after %s (%d failed calls)", time.Since(e.since).Round(time.Second), e.failures)
+			c.Log("herdr: reachable again after %s (%d failed calls)", now().Sub(e.since).Round(time.Second), e.failures)
 		}
 		e.failing, e.failures = false, 0
+		e.log.Reset()
 		return
 	}
 	e.failures++
 	if !e.failing {
-		e.failing, e.since = true, time.Now()
+		e.failing, e.since = true, now()
 	}
-	if time.Since(e.logged) >= 30*time.Second {
+	if e.log.Due(now()) {
 		c.Log("herdr: %s failed: %v (%d failed calls since %s)", method, err, e.failures, e.since.Format("15:04:05"))
-		e.logged = time.Now()
 	}
 }
 

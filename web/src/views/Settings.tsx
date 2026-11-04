@@ -2,7 +2,9 @@
 // kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, enc, errorText, setToken } from "../lib/api";
+import { splitDevices } from "../lib/devices";
 import { ago } from "../lib/format";
+import { install, useInstall, type InstallState } from "../lib/pwa";
 import { reset, useStore } from "../lib/store";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
@@ -76,6 +78,8 @@ interface DeviceToken {
   role: string;
   created_at?: string;
   last_seen?: string;
+  /** Set once revoked: the hub keeps listing it (lib/devices.ts). */
+  revoked_at?: string;
 }
 
 const enLauncher = (n: string) => `/launchers/${enc(n)}`;
@@ -265,12 +269,37 @@ function About() {
         </Row>
       )}
       <Row label="电脑">{`${machines.filter((m) => m.online).length} / ${machines.length} 在线`}</Row>
+      <InstallRow />
       <div className="flex justify-end px-4 py-2.5">
         <Button tone="quiet" icon="logout" onClick={() => void logout()} className="text-red enabled:hover:text-red">
           断开这个浏览器
         </Button>
       </div>
     </Group>
+  );
+}
+
+// Installing the web client as an app (lib/pwa.ts): the browser's prompt where it has one, else where to find it.
+const INSTALL_HINT: Record<InstallState, string> = {
+  installed: "已经在独立窗口里打开",
+  prompt: "装到桌面或主屏幕，在独立窗口里打开",
+  ios: "在 Safari 的分享菜单里选「添加到主屏幕」",
+  safari: "在 Safari 的「文件」菜单里选「添加到程序坞」",
+  insecure: "用 HTTPS 地址打开 hub 才能安装",
+  menu: "在浏览器菜单里选「安装」或「添加到主屏幕」",
+};
+
+function InstallRow() {
+  const state = useInstall();
+  return (
+    <Row label="安装为 App" hint={INSTALL_HINT[state]}>
+      {state === "installed" && <Pill tone="green">已安装</Pill>}
+      {state === "prompt" && (
+        <Button icon="download" onClick={() => void install()}>
+          安装
+        </Button>
+      )}
+    </Row>
   );
 }
 
@@ -875,47 +904,52 @@ function Devices() {
     }
   };
   const kind: Record<string, string> = { phone: "手机", watch: "手表", other: "其他（网页 / 命令行）", web: "网页" };
-  const sorted = (data?.tokens ?? []).slice().sort((a, b) => (a.id === data?.current ? -1 : b.id === data?.current ? 1 : (b.last_seen ?? "").localeCompare(a.last_seen ?? "")));
+  const { active, revoked } = splitDevices(data?.tokens ?? [], data?.current);
+
+  // A revoked credential is shown greyed, with when it was revoked and no 撤销 (iOS DeviceCredentials.swift).
+  const row = (t: DeviceToken, gone: boolean) => (
+    <div key={t.id} className="flex items-center gap-3 px-4 py-2.5">
+      <Icon name={t.kind === "phone" ? "machine" : t.kind === "watch" ? "monitor" : "web"} size={15} className="shrink-0 text-ink-3" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className={cx("truncate text-[13px]", gone ? "text-ink-3" : "text-ink")}>{t.name || t.id}</span>
+          {t.id === data?.current && <Pill tone="green">这个浏览器</Pill>}
+          {t.role !== "full" && <Pill>{t.role === "answer" ? "只能回答" : t.role}</Pill>}
+        </div>
+        <div className="mt-0.5 truncate text-[11.5px] text-ink-3">
+          {kind[t.kind] ?? t.kind}
+          {gone && t.revoked_at ? ` · ${ago(t.revoked_at)}撤销` : ""}
+          {!gone && t.last_seen ? ` · ${ago(t.last_seen)}用过` : ""}
+          {t.created_at ? ` · ${ago(t.created_at)}添加` : ""}
+        </div>
+      </div>
+      {!gone && t.id !== data?.current && (
+        <RowConfirm
+          open={confirm === t.id}
+          confirm="确认撤销"
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => void revoke(t.id)}
+          trigger={
+            <Button tone="quiet" onClick={() => setConfirm(t.id)} className="text-red enabled:hover:text-red">
+              撤销
+            </Button>
+          }
+        />
+      )}
+    </div>
+  );
 
   return (
     <>
       {!data && !error && <Loading />}
       {error && <p className="text-[13px] text-red">{error}</p>}
       {data && (
-        <Group title={`设备 ${sorted.length}`} footer="每台手机、手表、浏览器各用自己的 token；撤销立刻失效，并断开它的连接。配对用的 hub token 不在这里。">
-          {sorted.length === 0 && <p className="px-4 py-3 text-[12.5px] text-ink-3">还没有设备。</p>}
-          {sorted.map((t) => (
-            <div key={t.id} className="flex items-center gap-3 px-4 py-2.5">
-              <Icon name={t.kind === "phone" ? "machine" : t.kind === "watch" ? "monitor" : "web"} size={15} className="shrink-0 text-ink-3" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-[13px] text-ink">{t.name || t.id}</span>
-                  {t.id === data.current && <Pill tone="green">这个浏览器</Pill>}
-                  {t.role !== "full" && <Pill>{t.role === "answer" ? "只能回答" : t.role}</Pill>}
-                </div>
-                <div className="mt-0.5 truncate text-[11.5px] text-ink-3">
-                  {kind[t.kind] ?? t.kind}
-                  {t.last_seen ? ` · ${ago(t.last_seen)}用过` : ""}
-                  {t.created_at ? ` · ${ago(t.created_at)}添加` : ""}
-                </div>
-              </div>
-              {t.id !== data.current && (
-                <RowConfirm
-                  open={confirm === t.id}
-                  confirm="确认撤销"
-                  onCancel={() => setConfirm(null)}
-                  onConfirm={() => void revoke(t.id)}
-                  trigger={
-                    <Button tone="quiet" onClick={() => setConfirm(t.id)} className="text-red enabled:hover:text-red">
-                      撤销
-                    </Button>
-                  }
-                />
-              )}
-            </div>
-          ))}
+        <Group title={`设备 ${active.length}`} footer="每台手机、手表、浏览器各用自己的 token；撤销立刻失效，并断开它的连接。配对用的 hub token 不在这里。">
+          {active.length === 0 && <p className="px-4 py-3 text-[12.5px] text-ink-3">还没有设备。</p>}
+          {active.map((t) => row(t, false))}
         </Group>
       )}
+      {data && revoked.length > 0 && <Group title={`已撤销 ${revoked.length}`}>{revoked.map((t) => row(t, true))}</Group>}
     </>
   );
 }

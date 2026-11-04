@@ -12,6 +12,10 @@ function current(): Theme {
 function apply() {
   const t = current();
   document.documentElement.classList.toggle("dark", t === "dark" || (t === "system" && media.matches));
+  // The browser's / installed app's bar (index.html's theme-color metas): the system's scheme, or the one picked here.
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => {
+    m.media = t === "system" ? `(prefers-color-scheme: ${m.dataset.scheme})` : m.dataset.scheme === t ? "all" : "not all";
+  });
 }
 
 media.addEventListener("change", apply);

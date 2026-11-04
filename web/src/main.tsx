@@ -3,10 +3,13 @@ import { screen } from "./screen/take";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { startPWA } from "./lib/pwa";
 import "./styles.css";
 // Copying a selection that contains formulas puts their LaTeX ($…$ / $$…$$) on the clipboard, not KaTeX's glyphs.
 // Imported here, not in Markdown.tsx, because it touches `document` on load and tests run without a DOM.
 import "katex/contrib/copy-tex";
+
+startPWA();
 
 // The live screen (/screen/<machine>) is a page of its own: no sign-in flow, no sidebar, and noVNC loads only there.
 const target = screen;

@@ -7,6 +7,15 @@
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/app-icon-64.png" type="image/png" media="(prefers-color-scheme: light)" />
     <link rel="icon" href="/app-icon-dark-64.png" type="image/png" media="(prefers-color-scheme: dark)" />
+    <!-- Installable as an app (PWA, docs/web.md「安装成 App」). The theme colours are --page of styles.css. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#fafafb" media="(prefers-color-scheme: light)" data-scheme="light" />
+    <meta name="theme-color" content="#17181a" media="(prefers-color-scheme: dark)" data-scheme="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Persona" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Persona</title>
     <script>
       // Pick the theme before the first paint so a dark page never flashes white.
@@ -14,6 +23,12 @@
         var t = localStorage.getItem("jarvis.theme") || "system";
         var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.classList.toggle("dark", dark);
+        // A theme picked in 设置 also colours the browser's / installed app's bar (views/theme.ts does the same later).
+        if (t !== "system") {
+          document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+            m.media = m.dataset.scheme === t ? "all" : "not all";
+          });
+        }
       } catch (e) {}
     </script>
   </head>

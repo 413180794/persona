@@ -1,0 +1,73 @@
+// Installing the web client as an app (PWA, docs/web.md「安装成 App」): registers the service worker (src/sw.ts) and
+// tracks what 设置 › 通用 can offer — the browser's own install prompt, a hint where there is none, or 已安装.
+import { useSyncExternalStore } from "react";
+
+export type InstallState =
+  | "installed" // running as the installed app
+  | "prompt" // the browser offered its install prompt (Chrome, Edge): one click
+  | "ios" // iPhone / iPad: Safari's share menu › 添加到主屏幕
+  | "safari" // Safari on a Mac: 文件 › 添加到程序坞
+  | "insecure" // other browsers install only from https (or localhost)
+  | "menu"; // the browser's own menu, if it can
+
+export function installState(env: { standalone: boolean; installed: boolean; prompt: boolean; secure: boolean; ua: string; touchPoints: number }): InstallState {
+  if (env.standalone || env.installed) return "installed";
+  if (env.prompt) return "prompt";
+  // iPadOS asks for the desktop site: a "Macintosh" with a touch screen.
+  if (/iPhone|iPad|iPod/.test(env.ua) || (/Macintosh/.test(env.ua) && env.touchPoints > 1)) return "ios";
+  if (/Macintosh/.test(env.ua) && /Version\/[\d.]+.*Safari\//.test(env.ua) && !/Chrome|Chromium|Edg\//.test(env.ua)) return "safari";
+  if (!env.secure) return "insecure";
+  return "menu";
+}
+
+interface InstallPrompt extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+let deferred: InstallPrompt | null = null;
+let installed = false;
+const listeners = new Set<() => void>();
+const changed = () => listeners.forEach((l) => l());
+const standalone = () => matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+
+/** From main.tsx, before the first render: the install prompt comes early and only once per page load. */
+export function startPWA() {
+  addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault(); // offered in 设置, not as the browser's own banner
+    deferred = e as InstallPrompt;
+    changed();
+  });
+  addEventListener("appinstalled", () => {
+    deferred = null;
+    installed = true;
+    changed();
+  });
+  matchMedia("(display-mode: standalone)").addEventListener("change", changed);
+  // Service workers need a secure context; over the LAN's plain http the page stays a plain page. Not in dev: Vite's
+  // modules aren't the build's.
+  if (import.meta.env.PROD && isSecureContext && "serviceWorker" in navigator) {
+    addEventListener("load", () => void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {}), { once: true });
+  }
+}
+
+const current = (): InstallState =>
+  installState({ standalone: standalone(), installed, prompt: !!deferred, secure: isSecureContext, ua: navigator.userAgent, touchPoints: navigator.maxTouchPoints });
+
+export function useInstall(): InstallState {
+  return useSyncExternalStore((l) => {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  }, current);
+}
+
+/** Shows the browser's install prompt; false when it isn't there or the user said no. */
+export async function install(): Promise<boolean> {
+  const p = deferred;
+  if (!p) return false;
+  deferred = null; // a prompt can be shown once
+  await p.prompt();
+  const { outcome } = await p.userChoice;
+  changed();
+  return outcome === "accepted";
+}

@@ -164,6 +164,9 @@ body {
 @keyframes pin-flash{0%,35%{opacity:.9}to{opacity:0}}
 
 html, body, #root { height: 100%; }
+/* Installed on a phone (PWA, docs/web.md「安装成 App」): the page runs under the home indicator and, in landscape, the
+   notch (viewport-fit=cover); the status bar keeps its own strip (apple-mobile-web-app-status-bar-style: default). */
+@media (display-mode: standalone) { #root { padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); } }
 body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
 ::selection { background: var(--accent-tint); }
 /* In the base layer: unlayered, it beat every utility, so `scrollbar-none` rows kept a thin, always-on bar (#1381). */

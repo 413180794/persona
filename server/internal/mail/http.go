@@ -115,7 +115,7 @@ func statusFor(err error) int {
 		strings.Contains(msg, "not found"),
 		strings.Contains(msg, "unknown mailbox"):
 		return http.StatusNotFound
-	case strings.Contains(msg, "already exists"):
+	case errors.Is(err, ErrAccountExists):
 		return http.StatusConflict
 	case strings.Contains(msg, "is required"),
 		strings.Contains(msg, "invalid"),

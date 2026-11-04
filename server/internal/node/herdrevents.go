@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/host"
 )
 
@@ -86,6 +87,7 @@ func (n *Node) watchHerdr(ctx context.Context) {
 	e := n.events
 	me := e.watcherID()
 	backoff := time.Second
+	var logs herdr.LogBackoff // a stream that stays down (no herdr on this computer) is reported more and more rarely
 	for ctx.Err() == nil {
 		panes := n.livePanes()
 		sctx, cancel := context.WithCancel(ctx)
@@ -111,8 +113,9 @@ func (n *Node) watchHerdr(ctx context.Context) {
 		}
 		if time.Since(started) > time.Minute {
 			backoff = time.Second
+			logs.Reset()
 		}
-		if err != nil && backoff >= 8*time.Second {
+		if err != nil && backoff >= 8*time.Second && logs.Due(time.Now()) {
 			n.logger.Printf("herdr events: %v (retrying in %s)", err, backoff)
 		}
 		select {

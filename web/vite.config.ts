@@ -39,9 +39,10 @@ export default defineConfig({
     sourcemap: false,
     chunkSizeWarningLimit: 900,
     rollupOptions: {
-      input: { main: "index.html", admin: "admin/index.html" },
+      // The service worker (src/sw.ts) is its own entry at a fixed /sw.js: its scope is the folder it's served from.
+      input: { main: "index.html", admin: "admin/index.html", sw: "src/sw.ts" },
       output: {
-        entryFileNames: (chunk) => (chunk.name === "admin" ? "admin/assets/[name]-[hash].js" : "assets/[name]-[hash].js"),
+        entryFileNames: (chunk) => (chunk.name === "sw" ? "sw.js" : chunk.name === "admin" ? "admin/assets/[name]-[hash].js" : "assets/[name]-[hash].js"),
         chunkFileNames: (chunk) => (adminOnly(chunk.moduleIds) ? "admin/assets/[name]-[hash].js" : "assets/[name]-[hash].js"),
         assetFileNames: (asset) => ((asset.names ?? []).some((n) => n.startsWith("admin")) ? "admin/assets/[name]-[hash][extname]" : "assets/[name]-[hash][extname]"),
       },

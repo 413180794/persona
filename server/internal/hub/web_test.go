@@ -35,6 +35,15 @@ func TestWebAppServesFilesAndFallsBackToIndex(t *testing.T) {
 			t.Fatalf("%s: %d %q", p, w.Code, w.Body)
 		}
 	}
+	// The installable app's files (docs/web.md「安装成 App」): typed, and never kept past a redeploy.
+	must(os.WriteFile(filepath.Join(dir, "manifest.webmanifest"), []byte(`{"name":"Persona"}`), 0o644))
+	must(os.WriteFile(filepath.Join(dir, "sw.js"), []byte("self"), 0o644))
+	if w := get("/manifest.webmanifest"); w.Code != 200 || w.Header().Get("Content-Type") != "application/manifest+json" || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("manifest: %d %q %q", w.Code, w.Header().Get("Content-Type"), w.Header().Get("Cache-Control"))
+	}
+	if w := get("/sw.js"); w.Code != 200 || w.Body.String() != "self" || !strings.Contains(w.Header().Get("Content-Type"), "javascript") || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("sw.js: %d %q %q", w.Code, w.Header().Get("Content-Type"), w.Header().Get("Cache-Control"))
+	}
 	if w := get("/assets/gone.js"); w.Code != 404 {
 		t.Fatalf("missing asset: %d", w.Code)
 	}

@@ -26,6 +26,8 @@
   假 hub 带 `MOCK_TASKS=1 MOCK_LONG_ASSISTANT=1 MOCK_LONG_HISTORY=1` 起，再跑 `python3 scripts/test/web_chat_scroll_e2e.py <网页地址> [--hub <假 hub 地址>] [--shots <目录>]`。
   主对话任务坞的端到端检查（「全部 N」和胶囊同高、上下边对齐，胶囊行没有滚动条、仍能横滑；Chrome 开着常显的滚动条跑，WebKit 可选）：假 hub 带
   `MOCK_TASKS=1 MOCK_TASKS_DOCK=pair|many` 起，再跑 `python3 scripts/test/web_task_dock_e2e.py <网页地址> [--browser chromium|webkit|all] [--shots <目录>]`。
+  安装成 App 的端到端检查（Chrome 认为可安装、service worker 接管、缓存里只有外壳和 assets、断网能打开、设置里的安装行、theme-color 跟深浅色）：
+  service worker 只在构建里跑，所以先 `npm run build`，用 `npx vite preview`（不是 `vite`）对着假 hub 起，再跑 `python3 scripts/test/web_pwa_e2e.py <网页地址> [--shots <目录>]`。
 
 ## 登录
 
@@ -253,7 +255,8 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   「翻译」（`settings/TranslationSettings.tsx`，`?tab=translate`）：自动翻译、翻译模型（跳到模型配置的 `translate` 用途）、目标语言、翻译范围（邮件、选中的飞书会话），
   存在当前浏览器（键名同 iOS 的 AppStorage）。不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上（`/devices/{id}/prefs`，按它收信时预翻），网页没有这个 id；
   网页打开时按需翻，hub 预翻好的直接用。
-  「设备」列出各设备的 token（这个浏览器排第一），撤销同样就地确认。分类记在 `?tab=`；旧 `?tab=models` 仍打开供应商，新分类为 `?tab=model-config`。
+  「设备」列出各设备的 token（这个浏览器排第一），撤销同样就地确认；hub 连已撤销的一起返回（带 `revoked_at`），它们不算进「设备 N」，
+  放在下面的「已撤销」里，灰色、写撤销时间、不能再撤销，和 iOS 一样（#1764）。分类记在 `?tab=`；旧 `?tab=models` 仍打开供应商，新分类为 `?tab=model-config`。
 - **机器**：每台电脑一张卡片，CPU / 内存 / 磁盘当前值和最近一小时 CPU 曲线（`/api/v1/metrics`，10 秒刷新；空档断线），离线的能重连；点名字或「详情 ›」进机器页。
 - **机器页**（`/machines/<机器>`，`src/views/machines/`）：在线状态、系统、hub 和线路（多台 hub 时）；离线时的错误和「重新连接」（之后最多再查 10 次等它上线）、
   版本不一致时「重新部署」；这台的 Agent 按空间列出；1 / 6 / 24 小时的 CPU、内存、网络曲线（`/machines/{id}/metrics?range=`，三张同步的悬停读数，键盘左右也能移，
@@ -398,13 +401,36 @@ CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App�
 store 自己不存的推送（`inbox`、`lark`、`terminal`、`terminal_control`、`assistant_schedule`……）由用到的页面按类型订阅（`onHubEvent(type, fn)`，`src/lib/store.ts`）；
 hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector 的飞书由插件提供（feature `lark`，公司圈 `lark_moments`）：依赖 `/api/v1/lark/…` 的地方——「消息」页和侧边栏入口、设置 › 连接器 › 飞书、翻译里的飞书会话、飞书文档 / 公司圈帖子的阅读器——都按 `store.larkOn()` / `useLarkOn()` 显示；hub 还没说 features（hello 之前）时照旧显示。收件箱里带 `lark` / `doc` / `moment` 块的条目照常画（只有插件在时才有）。知识库的帖子存档带 `feed` 时用它当帖子页标题，没有时叫「公司圈」（#1530）。
 
+## 安装成 App（PWA，#1772）
+
+网页可以装到手机主屏幕 / 电脑桌面，独立窗口打开，图标、名字和 iOS App 一致。
+
+- **manifest**（`public/manifest.webmanifest`）：`standalone`、`start_url` / `scope` 都是 `/`，背景和 theme 色是浅色的 `--page`；
+  长按图标的快捷方式：新对话、收件箱、Agents、机器。hub 给 `.webmanifest` 显式设 `application/manifest+json`（Go 的内置表里没有，又开着 nosniff），
+  它和 `sw.js` 跟 `index.html` 一样 `no-cache`（`server/internal/hub/web.go`）。
+- **图标**全部从 `AppIcon.appiconset` 缩出来，不重画：`app-icon-192/512.png`（`purpose: any`，桌面安装用 Mac 图标那种带圆角和边距的 `mac-512@2x.png`）；
+  `app-icon-maskable-192/512.png`（Android 的遮罩：满版的 `icon.png` 缩到 84%，四周用它自己的边缘延展补满，挥手的线落在中间 80% 的安全圆里）；
+  `apple-touch-icon.png`（180，满版 `icon.png`，iOS 自己加圆角）。
+- **iOS**：`apple-mobile-web-app-capable`、状态栏 `default`（内容从状态栏下面开始，深浅色都不会白字压浅底）；独立运行时 `#root` 让出底部和横屏两侧的安全区（`styles.css` 的 `display-mode: standalone`）。
+  主屏幕上的 App 和 Safari 的存储是分开的，第一次打开要重新登录（贴 token 或用 `?token=` 链接）。
+- **theme-color**：两条 `<meta name="theme-color">`（浅色 / 深色的 `--page`），跟系统；设置里选了浅色或深色，`index.html` 的首帧脚本和 `views/theme.ts` 把对应那条的 `media` 改成 `all`，地址栏 / 标题栏的颜色跟着页面走。
+- **service worker**（`src/sw.ts`，Vite 单独打成根目录的 `sw.js`，规则在 `lib/sw-routes.ts`，有单测）：
+  - 打开页面：先等 hub 的 `index.html`（3.5 秒），拿到就用并存一份；hub 慢或连不上就用存的那份，页面照常起来，显示自己的「连不上 hub」。外壳只按 `/` 一个键存，`?token=` 链接不会进缓存。
+  - `/assets/` 下带哈希的文件：缓存优先，没有再取；保留最近 400 个（约三次构建，换版本不会删掉正在用的）。外壳一更新就顺带取它首屏要的脚本和 CSS，下一次断网也能打开。
+  - 根目录的图标和 manifest：先取 hub 的，取不到用存的。
+  - `/api/`（数据、WebSocket、图片）和 `/admin` 一律不经过它，数据永远是实时的。
+  - 只在安全上下文注册（https 或 localhost）：内网用明文 http 打开时就是普通网页，iOS 照样能「添加到主屏幕」，但没有离线外壳；Chrome / Edge 要 https 才能安装（公网 TLS 见 `docs/network.md`）。
+    开发时（`npm run dev`）不注册。
+- **设置 › 通用 ›「这个浏览器」›「安装为 App」**（`lib/pwa.ts`）：浏览器给了安装提示（Chrome、Edge）就是一个「安装」按钮；
+  iPhone / iPad 提示 Safari 分享菜单的「添加到主屏幕」，Mac 上的 Safari 提示「文件 › 添加到程序坞」，http 下的其他浏览器说明要 https，别的指向浏览器菜单；已经在独立窗口里时显示「已安装」。
+
 ## 细节约定
 
 - 颜色只走 token（`src/styles.css` 的 `:root` / `.dark`），不写死色值；状态色：需要你红（呼吸）、工作中橙（呼吸）、完成未看绿、已看灰。
 - 主题：跟随系统 / 浅色 / 深色（左上角菜单），`index.html` 里在首帧前就决定，深色不闪白。
 - 品牌标志：侧边栏左上角（32 px、圆角 8）和登录页（44 px、圆角 12）是 iOS App 图标原图（`AppMark`，`public/app-icon.png` / `app-icon-dark.png`，
   从 `AppIcon.appiconset` 的 `icon.png` / `icon-dark.png` 缩出来，不重画），按页面的深浅色换；favicon 是同一份的 64 px 版，按系统深浅色换（`<link media>`），管理页也用它。
-  网页没有 manifest 和 apple-touch-icon。形象里可选的「标志」（黑底白星）是另一回事，不动。
+  安装成 App 用的图标见下面「安装成 App」。形象里可选的「标志」（黑底白星）是另一回事，不动。
 - 按钮文字一律单行（`whitespace-nowrap`），放不下的用图标 + `title`。
 - 链接规则和 App 一样（`Links`）：裸链接在空白或非 ASCII 字符处结束，交给 Markdown 前写成 `<url>`（`src/ui/Markdown.tsx` 的 `linkify`），中文里的链接不会吞掉后半句。
 - 尊重 `prefers-reduced-motion`：所有动画缩成 1ms。

@@ -193,6 +193,26 @@ func (a *MailAccount) public() *MailAccount {
 	return &cp
 }
 
+// ErrAccountExists: the address already has an account (HTTP 409). Changing its servers or password means deleting
+// it and adding it again, and the message says so.
+var ErrAccountExists = errors.New("已经添加过了")
+
+func accountExists(email string) error {
+	return fmt.Errorf("%s %w；要换服务器或授权码，先删掉原来的账号再添加", email, ErrAccountExists)
+}
+
+// hasAddress reports whether an account with this address is already there.
+func (s *Service) hasAddress(email string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, existing := range s.accts {
+		if strings.EqualFold(existing.Email, email) {
+			return true
+		}
+	}
+	return false
+}
+
 // AddAccount validates the account (by testing the connections) and saves it.
 func (s *Service) AddAccount(req AddAccountRequest) (*MailAccount, error) {
 	if req.Auth == AuthOAuth2 {
@@ -201,6 +221,11 @@ func (s *Service) AddAccount(req AddAccountRequest) (*MailAccount, error) {
 	a, err := buildAccount(req)
 	if err != nil {
 		return nil, err
+	}
+	// A duplicate is refused before the connection test, which takes seconds and up to 40 on a slow server, twice for
+	// Feishu's two server sets (#1766).
+	if s.hasAddress(a.Email) {
+		return nil, accountExists(a.Email)
 	}
 	if a.Provider == ProviderFeishu {
 		err = s.pickFeishuServers(context.Background(), a)
@@ -213,9 +238,9 @@ func (s *Service) AddAccount(req AddAccountRequest) (*MailAccount, error) {
 
 	s.mu.Lock()
 	for _, existing := range s.accts {
-		if strings.EqualFold(existing.Email, a.Email) {
+		if strings.EqualFold(existing.Email, a.Email) { // added by another request while this one was testing
 			s.mu.Unlock()
-			return nil, fmt.Errorf("account %s already exists", a.Email)
+			return nil, accountExists(a.Email)
 		}
 	}
 	s.accts[a.ID] = a

@@ -54,11 +54,16 @@ func webFrom(dir string, embedded fs.FS) http.Handler {
 			}
 			file = "index.html"
 		}
-		if file == "index.html" {
+		switch {
+		// the service worker and the manifest (docs/web.md「安装成 App」) are checked again on every load, like the shell
+		case file == "index.html", file == "sw.js", file == "manifest.webmanifest":
 			w.Header().Set("Cache-Control", "no-cache")
-		} else if strings.HasPrefix(name, "assets/") {
+		case strings.HasPrefix(name, "assets/"):
 			// Vite names them by content hash
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		if path.Ext(file) == ".webmanifest" { // not in Go's built-in table, and nosniff would leave it untyped
+			w.Header().Set("Content-Type", "application/manifest+json")
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
