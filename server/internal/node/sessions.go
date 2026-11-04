@@ -1038,6 +1038,22 @@ func (n *Node) placeIn(s *proto.Session, a host.Agent) {
 	}
 }
 
+// unplaced: a claude in a terminal (not a background session, not parked) runs a session no pane is named after.
+func unplaced(procs []claudeProc, agents []host.Agent) bool {
+	named := map[string]bool{}
+	for _, a := range agents {
+		if id := a.SessionID(); id != "" {
+			named[id] = true
+		}
+	}
+	for _, c := range procs {
+		if c.Kind == "interactive" && c.ParkedJobID == "" && validID(c.SessionID) && !named[c.SessionID] {
+			return true
+		}
+	}
+	return false
+}
+
 // setAgents maps live claude agents to session ids: the host's own report when it knows (herdr's claude integration),
 // else what our hooks told us about the pane, else the newest transcript in the agent's project directory.
 func (n *Node) setAgents(agents []host.Agent) {
@@ -1051,7 +1067,23 @@ func (n *Node) setAgents(agents []host.Agent) {
 func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	m := map[string]host.Agent{}
 	var unknown, codex, pi []host.Agent
-	parked := parkedClaudeSessions(n.liveClaudes()) // claudebg.go
+	procs := n.liveClaudes()
+	parked := parkedClaudeSessions(procs) // claudebg.go
+	// What the claude in each pane says it runs, for the panes herdr names a session for: herdr takes the session from
+	// a SessionStart hook that reported HERDR_PANE_ID, and a claude elsewhere that inherited the variable (botmux's
+	// tmux server, first started in a herdr pane, 2026-11-04) reports into the pane too. The pane's own claude wins.
+	// Asked only while a terminal claude runs a session herdr names for no pane (the pane's own one, then): one
+	// process lookup per pane, kept a minute.
+	own := map[string]string{}
+	if unplaced(procs, agents) {
+		for _, a := range agents {
+			if a.Agent == "claude" && a.SessionID() != "" && a.PaneID != "" {
+				if id := n.sessionFromProcess(a.PaneID); id != "" {
+					own[a.PaneID] = id
+				}
+			}
+		}
+	}
 	n.mu.Lock()
 	for _, a := range agents {
 		if a.Agent == "codex" {
@@ -1072,6 +1104,9 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			continue
 		}
 		if id := a.SessionID(); id != "" {
+			if p := own[a.PaneID]; p != "" && p != id {
+				id = p // reported by a claude outside the pane (above)
+			}
 			if j, ok := parked[id]; ok {
 				// its claude sent the session to the background: the pane shows Claude's agents view, or the job
 				if bg := j.shownIn(a); bg != "" && !liveTaken(m, bg) {

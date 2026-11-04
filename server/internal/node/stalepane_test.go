@@ -78,3 +78,41 @@ func TestAPidFileNotFoundIsLookedForAgainSoon(t *testing.T) {
 		t.Fatalf("looked again after %v: %q, want %q", panePIDRetry, got, id)
 	}
 }
+
+// herdr names a pane's session after the SessionStart its claude integration hook reported with HERDR_PANE_ID. A
+// claude started elsewhere that inherited that variable reports into the pane too: botmux's tmux server, first started
+// from inside a herdr pane, passed HERDR_PANE_ID on to every claude it launched (2026-11-04), and herdr's main tab
+// showed a botmux session while its own claude went offline. The claude in the pane says what it runs.
+func TestAPaneIsNotTakenForASessionAClaudeElsewhereReported(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	const (
+		own     = "0c000000-0000-4000-8000-000000000005" // the claude in w:p1
+		foreign = "0c000000-0000-4000-8000-000000000006" // a claude outside herdr that inherited HERDR_PANE_ID=w:p1
+	)
+	h, _ := methodHerdr(t, func(method string, params map[string]any) any {
+		if method != "pane.process_info" {
+			return map[string]any{}
+		}
+		return map[string]any{"process_info": map[string]any{"foreground_processes": []any{
+			map[string]any{"pid": 4545, "name": "claude", "argv0": "claude"}}}}
+	})
+	n, home := testNode(t)
+	n.hosts, n.panes, n.panePIDs = herdrHosts(h), map[string]string{}, map[string]panePID{}
+	dir := filepath.Join(home, ".claude", "sessions")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "4545.json"), []byte(`{"pid":4545,"sessionId":"`+own+`"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The claude in w:p1, running (this test's process stands in for it: liveClaudes checks the pid is alive).
+	writeClaudeProc(t, home, os.Getpid(), map[string]any{"sessionId": own, "kind": "interactive", "entrypoint": "cli"})
+	n.setAgents([]host.Agent{{Agent: "claude", PaneID: "w:p1", Cwd: "/work/repo",
+		AgentSession: &host.AgentSession{Kind: "id", Value: foreign}}})
+	if a, ok := n.agents[own]; !ok || a.PaneID != "w:p1" {
+		t.Errorf("w:p1's claude runs %s, listed %v", own, n.agents)
+	}
+	if _, ok := n.agents[foreign]; ok {
+		t.Errorf("w:p1 taken for %s, which a claude elsewhere reported into it", foreign)
+	}
+}

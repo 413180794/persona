@@ -32,6 +32,10 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   → **窗格里 claude 进程的 `~/.claude/sessions/<pid>.json`**（Claude Code 自己维护，含当前 `sessionId`，`/clear` 后会更新；
   pid 用 `herdr pane process-info --pane <id>` 拿，缓存一分钟）→ 标题匹配 AI 标题 → 按 cwd 推项目目录
   （cwd 里非字母数字都换成 `-`，如 `/Users/me/code/jarvis` → `-Users-me-code-jarvis`）里最新的 `.jsonl`。
+- herdr 上报的 id 来自 claude integration 的 SessionStart hook，它按进程环境里的 `HERDR_PANE_ID` 记到窗格上。不在这个窗格里、却继承了
+  这个变量的 claude 也会报进来：在 herdr 窗格里第一次起的 tmux 服务器（botmux 就是这样）把 `HERDR_*` 传给它之后起的每个 claude，
+  herdr 的 main 标签于是显示成一个 botmux 会话，窗格里真正的 claude 列成离线（2026-11-04）。所以有终端里的 claude 跑着一个没有窗格认领的会话时，
+  node 也读窗格里 claude 自己的 `sessions/<pid>.json`，和 herdr 报的不一样就以窗格里的为准（`setAgentsAt`、`unplaced`）。
 - transcript：`~/.claude/projects/<编码后的 cwd>/<session id>.jsonl`，每个内容块完成就追加一行（thinking、text、tool_use 各自一行，
   tool_result 在下一条 user 行里）。不是逐 token，逐字效果靠屏幕采样。
 - 需要跳过：`isSidechain`（子代理）、`isMeta`（系统注入的 user 消息）、`attachment` / `api-request*` / `mode` / `permission-mode`

@@ -158,3 +158,6 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 - Claude Code 一轮以模型 API 错误结束（「API Error: Connection lost mid-response…」、过载、限流、登录过期）在 herdr 里和正常做完一样是 done，hub 也就算成 unread：
   task_plan 的任务曾因此显示绿色「完成」卡片、摘要就是错误原文，快照里写「做完了」（#1516）。区分它只能看最后一句：hub 在会话停着、`last_text` 以这些错误开头时填 `turn_error`（只认开头，
   回复里提到「API Error」不算），任务判「中断了」、不自动关、回执写 `interrupted`；普通 Agent 的推送也不再是 ✅。
+- herdr 按 `HERDR_PANE_ID` 把 SessionStart 记到窗格上，这个变量会被窗格外的进程继承：在 herdr 窗格里第一次起的 tmux 服务器（botmux 的
+  `tmux new-session -d`）留着它，之后 botmux 起的每个 claude 都报进同一个窗格，main 标签显示成 botmux 的会话（2026-11-04）。
+  herdr 报的会话要和窗格里 claude 进程自己的 `sessions/<pid>.json` 对一下（`docs/claude-integration.md`「会话 id 与 transcript」）。
