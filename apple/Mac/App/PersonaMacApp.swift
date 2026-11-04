@@ -179,6 +179,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         MacShellState.shared.watchKeyWindow()
         #if DEBUG
         MacSnapshot.scheduleIfAsked()
+        MacScrollLab.scheduleIfAsked()
         #endif
         #if DEBUG || PERF_SIGNPOST
         MacPerfHarness.scheduleIfAsked(AppModel.shared) // `-showPerfRun …`: measure smoothness from inside (#1337)

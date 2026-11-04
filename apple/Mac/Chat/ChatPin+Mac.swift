@@ -8,6 +8,8 @@ import SwiftUI
     var letGo: () -> Void = {}
 
     nonisolated static let space = "chatContent"
+    /// How long a tapped header is held at most.
+    nonisolated static let holdTime: Double = 1.5
 
     nonisolated struct Spot: Equatable, Sendable { var y: CGFloat; var content: CGFloat }
 
@@ -16,13 +18,27 @@ import SwiftUI
     private var last: [String: Spot] = [:]
 
     /// `rise`: how far up the header may go to show what opens under it (as on iOS).
-    func hold(_ key: String, from: String? = nil, slow: Bool = false, rise: CGFloat = 0) {
+    /// `keep`: held until `release()` (as on iOS).
+    func hold(_ key: String, from: String? = nil, slow: Bool = false, rise: CGFloat = 0, keep: Bool = false) {
         guard let list, let at = last[from ?? key] else { return }
-        held = Held(key: key, at: at, base: Self.offset(list), until: .now.addingTimeInterval(1.5), slow: slow, rise: max(rise, 0))
+        // A row under the kept header: the kept hold has it in place already (as on iOS).
+        if !keep, let k = held, k.until == .distantFuture, let kept = last[k.key], at.content < kept.content { return }
+        held = Held(key: key, at: at, base: Self.offset(list), until: keep ? .distantFuture : .now.addingTimeInterval(Self.holdTime),
+                    slow: slow || keep, rise: max(rise, 0))
         letGo()
     }
 
     var holding: Bool { held.map { Date.now <= $0.until } ?? false }
+
+    func release() { held = nil }
+
+    /// The kept hold lasts the usual time from now (as on iOS).
+    func unkeep() {
+        if var h = held, h.until == .distantFuture {
+            h.until = .now.addingTimeInterval(Self.holdTime)
+            held = h
+        }
+    }
 
     func moved(_ key: String, to spot: Spot) {
         last[key] = spot

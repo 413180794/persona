@@ -80,6 +80,23 @@ struct ChatLinesTests {
         #expect(kinds(split).filter { $0 == "user" }.count == 2, "opened, each message is its own exchange again")
     }
 
+    /// A running turn's words between its steps: the latest out of the work line; while the next ones stream in (drawn
+    /// after the lines), in it already, so the chat does not grow under the new words and then shrink when they land.
+    @Test func theRunningTurnsLatestWordsFoldWhileTheNextStream() {
+        let items = [item(1, .text, role: "user", text: "查一下"), item(2, .toolUse, tool: "Bash", id: "a"),
+                     item(3, .toolResult, role: "user", text: "ok", id: "a"), item(4, .text, text: "先看了第一处"),
+                     item(5, .toolUse, tool: "Read", id: "b"), item(6, .toolResult, role: "user", text: "ok", id: "b")]
+        let b = blocks(items)
+        guard case .turn(let t) = b.last else { Issue.record("expected a turn"); return }
+        #expect(kinds(ChatLines(openWork: []).build(b, live: t.id)) == ["user", "work", "answer"])
+        let streaming = ChatLines(openWork: []).build(b, live: t.id, streaming: true)
+        #expect(kinds(streaming) == ["user", "work"])
+        guard case .work(_, let steps, _, _, _) = streaming[1].content else { Issue.record("expected a work line"); return }
+        #expect(steps.count == 3, "the words are a step of the line now")
+        // A finished turn has no streaming words of its own: as before.
+        #expect(kinds(ChatLines(openWork: []).build(b, live: nil, streaming: true)) == ["user", "work", "answer"])
+    }
+
     @Test func theRunningTurnIsNeverMerged() {
         var queued = item(3, .text, role: "user", text: "b")
         queued.queued = true

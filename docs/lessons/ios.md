@@ -815,3 +815,29 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - **画中画**：`AVPictureInPictureController.isPictureInPictureSupported()` 在 iOS 27.0、27.1 的模拟器上（iPhone、iPhone Duo）都是 false，`AVSampleBufferDisplayLayer` 的小窗在模拟器上起不来。App 这时退回整页（`AppModel.openVNC`），UI 测试照这个分支走（`VNCTests` 看到整页就跳过小窗那段）。小窗的录屏和验收只能用真机。
 - **发送顺序**：原生 RFB 客户端起先每条指针、按键、剪贴板消息各开一个 `Task { try await transport.send(…) }`。这些 Task 谁先跑没有保证，按下和松开、移动和点击会乱序到 Mac，快速打字时最明显。改成一个发件队列（`AsyncStream`），握手完后由一个任务按顺序发；握手前来的也排在握手之后，不会插进握手中间。别的「多条消息、顺序有意义」的通道（终端按键、WS）同理。
 - **测试读剪贴板**：UI 测试的 runner 写了 `UIPasteboard.general`，App 去读时没弹「允许粘贴」，送到 mock 的剪贴板却是空的（runner 那时在后台，写的没有生效或读不到）。剪贴板的 UI 测试改成在 App 里来回：先「复制到 iPhone」，再「只放进 Mac 的剪贴板」送回 mock，比对 mock 收到的。
+
+## 在几何回调里直接改 UIScrollView 的偏移，别的行的几何回调可能收不到（2026-11-04，#1046）
+
+`ChatPin` 在标题的 `onGeometryChange` 里直接设 `contentOffset`，把标题按在原处。屏幕上是对的，标题自己的回调也报了按住后的位置；
+但同一行外层记位置的 `onGeometryChange`（`debugLineY`）停在挪之前的值，直到下一条内容进来：
+在最新处点开的工作行一直按着，流式的回复写进对话时，`probe.chat-rows` 报「顶部那行移了 56 pt」，下一条进来又「移回来」。
+`RunningChatTests` 因此失败，可测试期间从外面每 0.5 s 截一张屏，60 s 里的 120 张内容区逐像素相同（两种布局都是）。
+
+- 探针里工作行的标题用它自己报的位置（`scratch.workHeadY`，pin 按住它用的就是这个）。
+- 拿 UIKit 的偏移去补 SwiftUI 的位置不行：落后的方向不定，一种布局补对了另一种就补反了；改完偏移再 `setNeedsLayout()` 也不会让那个回调再报一次。
+- 报「跳了」又对不上的时候，先拿截图比像素（`simctl io screenshot`，比较相邻两张的行亮度曲线），再去查代码。
+
+## 流式时「不稳」要录屏逐帧量，而且要按真 hub 的事件顺序（2026-11-04，#1046）
+
+用户说流式时滚动不稳。截图看不出来，探针也会报假的跳动；录屏逐帧解码（`scripts/diag/stream-scroll/`）才看到几件真事，每件都只有一两帧或者几百毫秒：
+
+- **只在一帧里发生的**：回复写成正式消息的那一帧整段不见。原因是两个状态不在同一轮更新：流式文本当场清掉，行要后台重排、下一轮才到。
+  凡是「一个东西换成另一个东西」，旧的要留到新的到了的那一轮再拿掉。
+- **mock 的事件顺序比真 hub 规矩**：mock 先发正式消息再清空，真 hub 是一轮结束就清空，transcript 那行可能更晚。改 mock 加上 `&late=` 才复现出来，
+  修之前先读服务端是按什么顺序发的。
+- **倒着的列表里，最新那一端一变，手指下面的东西就动**：扣住新内容时把流式文本拿掉（少了几百 pt）、手指按着时流式照常长（推走一两行），都在手里跳。
+  手指按着就扣住，扣住时照原样留着已经画出来的东西。
+- **懒列表里换分支不一定换掉那一行**：扣住时用 `if let f = frozen { StreamingText(f.text).id("live") } else { ChatLiveText(store) }`，
+  两个分支里那一行的 id 都是 `live`，`LazyVStack` 留着原来的 `ChatLiveText`、它照样跟着 store 长，扣住的文本根本没画出来（`ScrollTrace` 里扣住的文本一直 309 字、
+  内容高却一直涨，加 `NSLog` 看 body 才确认）。同一行要换内容，就让同一个视图拿不同的值（`ChatLiveText(held:)`），别用两个分支各画一个。
+- **Mac 的滚动阶段只管手指**：两指离开触控板 SwiftUI 就报 idle，惯性还在走；要按滚动事件的 phase / momentumPhase 自己判断（`MacWheelWatch`）。

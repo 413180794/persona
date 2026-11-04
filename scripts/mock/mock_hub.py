@@ -6549,7 +6549,57 @@ def bump(what, session=None):
     return {"error": "nothing to bump"}
 
 
-def say(text, user=None, stream=False, steps=10, ms=300):
+# /mock/say?preset=markdown: a long reply whose blocks change height as they render (a code block, a table, a list),
+# for StreamingScrollTests: streamed at the hub's pace it shows whether the chat holds still while it grows.
+SAY_PRESETS = {
+    "markdown": """先说结论：三台机器上的服务都能拿到凭据，但有两处要改配置。下面按顺序列出来。
+
+## 1. 构建机
+
+构建机的服务从环境变量读凭据，启动脚本里没有导出，所以每次重启都要手动补。改法是在服务的配置文件里加一段：
+
+```yaml
+service:
+  name: example-builder
+  env:
+    EXAMPLE_TOKEN_FILE: /etc/example/token
+    EXAMPLE_RETRY: 3
+  restart: on-failure
+```
+
+改完重启一次，`systemctl status example-builder` 里能看到它读到了文件。
+
+## 2. 测试机
+
+测试机上的凭据是对的，问题在过期时间。对比如下：
+
+| 机器 | 凭据来源 | 过期时间 | 要不要改 |
+| --- | --- | --- | --- |
+| 构建机 | 文件 | 90 天 | 要 |
+| 测试机 | 钥匙串 | 7 天 | 要 |
+| 训练机 | 文件 | 不过期 | 不用 |
+
+7 天太短了，建议改成和构建机一样的 90 天。
+
+## 3. 训练机
+
+训练机不用动。顺手检查了几件事：
+
+- 磁盘还剩 41%，够用一阵；
+- 定时任务每天凌晨三点跑，最近七天都成功；
+- 日志轮转正常，没有超过 1 GB 的文件。
+
+## 接下来
+
+1. 先改构建机的配置并重启；
+2. 再把测试机的过期时间改成 90 天；
+3. 两边都改完后，我再跑一遍检查，把结果发你。
+
+有问题随时说。""",
+}
+
+
+def say(text, user=None, stream=False, steps=10, ms=300, late=0):
     """A reply (after `user`'s message, if given) in every conversation an app has open (/mock/say). `stream`: the
     message first, then the reply arrives as growing `delta` text over about 3 s, like the Jarvis assistant's."""
     import time
@@ -6569,6 +6619,10 @@ def say(text, user=None, stream=False, steps=10, ms=300):
                 for k in range(1, steps + 1):
                     time.sleep(ms / 1000)
                     send({"type": "delta", "machine_id": mid, "session_id": sid, "text": text[:len(text) * k // steps]})
+                if late:
+                    # As a real hub can: the turn's end clears the stream before the transcript line is read (&late=ms).
+                    send({"type": "delta", "machine_id": mid, "session_id": sid, "text": ""})
+                    time.sleep(late / 1000)
                 items = ITEMS[sid]
             before = items[-1]["seq"]
             new = ([it("user", "text", 0, text=user)] if user else []) + [it("assistant", "text", 0, text=text)]
@@ -7542,8 +7596,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/mark": return self.send_json({"ok": True})  # a test's marker in the request log (explore)
         if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
             # &steps=50&ms=80: the hub's own pace (a delta every 80 ms, node/assistant.go).
-            args = (q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1",
-                    int(q.get("steps", ["10"])[0]), int(q.get("ms", ["300"])[0]))
+            args = (SAY_PRESETS.get(q.get("preset", [""])[0]) or q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1",
+                    int(q.get("steps", ["10"])[0]), int(q.get("ms", ["300"])[0]), int(q.get("late", ["0"])[0]))
             threading.Thread(target=say, args=args, daemon=True).start()
             return self.send_json({"ok": True})
         if MOCK_LARK and (p.startswith("/api/v1/lark/") or p == "/mock/lark") and fs_get(self, p, q): return  # area: feishu chat page

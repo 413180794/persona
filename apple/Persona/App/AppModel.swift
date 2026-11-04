@@ -1275,7 +1275,7 @@ final class AppModel {
             let live = deltas.pendingText(key) ?? store.liveText
             if !live.isEmpty, items.contains(where: { $0.role == "assistant" && $0.kind == .text && ($0.text ?? "").hasPrefix(live) }) {
                 deltas.drop(key)
-                store.liveText = ""
+                store.endLive(live)
             }
         case .screen(let key, let text, let status):
             let c = chat(key)
@@ -1283,7 +1283,9 @@ final class AppModel {
             c.screenStatus = status
             c.screenUpdatedAt = .now
         case .delta(let key, let text):
+            let newest = deltas.pendingText(key)
             switch deltas.offer(key, text, now: .now) {
+            case .draw(let t) where t.isEmpty: chat(key).clearLive(newest: newest)
             case .draw(let t): chat(key).liveText = t
             case .later(let wait):
                 DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in

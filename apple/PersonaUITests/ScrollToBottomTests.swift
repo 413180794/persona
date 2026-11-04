@@ -1,9 +1,9 @@
 import XCTest
 
-/// ↓ 回到最新 and following the newest in the chat, case by case (docs/ios-state.md「回到最新」): each case records the chat's
-/// state over time (`probe.chat-rows`: the arrow, following, held back, the sentinel, the gap to the newest end, a finger
-/// on the list) and prints `FINDING` lines where it differs from what the user should see. It fails only on setup:
-/// it is the measurement the state machine is designed from, not its acceptance yet.
+/// ↓ 回到最新 and following the newest in the chat, case by case (docs/ios-state.md「回到最新」, #1046): each case records
+/// the chat's state over time (`probe.chat-rows`: the arrow, the follow mode, held back, near the newest, the gap to
+/// it, a finger on the list) and asserts what the user should see. Each case saves a few screenshots along its
+/// timeline (`/tmp/persona-follow-<case>-<n><suffix>.png`) for the review.
 ///   Agents chat:  PORT=… MOCK_STREAM=1 MOCK_LONG_HISTORY=1 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py  (JARVIS_MOCK_HUB)
 ///   Jarvis chat:  PORT=… MOCK_ASSISTANT_RUN=1 (JARVIS_RUN_HUB); MOCK_ASSISTANT_RUN=alone for the one-screen chat
 final class ScrollToBottomTests: XCTestCase {
@@ -19,12 +19,15 @@ final class ScrollToBottomTests: XCTestCase {
         var newest: Bool
         var follows: Bool
         var frozen: Bool?
-        var atBottom: Bool?
+        var near: Bool?
+        var mode: String?
         var arrow: Bool?
         var gap: Int?
         var dragging: Bool?
         var held: Bool?
     }
+
+    private typealias Timeline = [(t: Double, r: Rows)]
 
     override func setUpWithError() throws {
         continueAfterFailure = true
@@ -58,8 +61,7 @@ final class ScrollToBottomTests: XCTestCase {
 
     private var arrowButton: XCUIElement { app.buttons["回到最新"].firstMatch }
 
-    /// The composer's field (a vertical TextField), waited for. Nil in the old layout's liquid glass, where it is not in
-    /// the accessibility tree (#1006).
+    /// The composer's field, waited for.
     private func composer() -> XCUIElement? {
         let f = app.textFields.firstMatch
         if f.waitForExistence(timeout: 8) { return f }
@@ -69,98 +71,168 @@ final class ScrollToBottomTests: XCTestCase {
 
     /// The probe's state as one line, for the timeline.
     private func line(_ r: Rows) -> String {
-        "arrow \((r.arrow ?? false) ? 1 : 0) follows \(r.follows ? 1 : 0) frozen \((r.frozen ?? false) ? 1 : 0) bottom \((r.atBottom ?? false) ? 1 : 0) "
-            + "newest \(r.newest ? 1 : 0) gap \(r.gap ?? -1) drag \((r.dragging ?? false) ? 1 : 0) held \((r.held ?? false) ? 1 : 0) items \(r.items)"
+        "mode \(r.mode ?? "?") arrow \((r.arrow ?? false) ? 1 : 0) follows \(r.follows ? 1 : 0) frozen \((r.frozen ?? false) ? 1 : 0) "
+            + "near \((r.near ?? false) ? 1 : 0) newest \(r.newest ? 1 : 0) gap \(r.gap ?? -1) drag \((r.dragging ?? false) ? 1 : 0) "
+            + "held \((r.held ?? false) ? 1 : 0) items \(r.items)"
     }
 
-    /// Each change of the state for `seconds`, printed as `TRUTH <case> t: …`; the states seen, in order.
+    private var shotCount: [String: Int] = [:]
+
+    private func shot(_ label: String) {
+        let n = (shotCount[label] ?? 0) + 1
+        shotCount[label] = n
+        let suffix = ProcessInfo.processInfo.environment["SHOT_SUFFIX"].map { "-" + $0 } ?? ""
+        let name = label.replacingOccurrences(of: " ", with: "_")
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/persona-follow-\(name)-\(n)\(suffix).png"))
+    }
+
+    /// Each change of the state for `seconds`, printed as `TRUTH <case> t: …`; `shots` screenshots spread over it.
     @discardableResult
-    private func record(_ label: String, seconds: Double) -> [(t: Double, r: Rows)] {
-        var out: [(Double, Rows)] = []
+    private func record(_ label: String, seconds: Double, shots: Int = 0) -> Timeline {
+        var out: Timeline = []
         var last = ""
+        var taken = 0
         let start = Date.now
         while Date.now.timeIntervalSince(start) < seconds {
+            let t = Date.now.timeIntervalSince(start)
             if let r = rows() {
                 let l = line(r)
                 if l != last {
-                    let t = Date.now.timeIntervalSince(start)
                     print(String(format: "TRUTH %@ %.2f s: ", label, t) + l)
                     out.append((t, r))
                     last = l
                 }
+            }
+            if taken < shots, t >= seconds * Double(taken) / Double(shots) {
+                shot(label)
+                taken += 1
             }
             Thread.sleep(forTimeInterval: 0.05)
         }
         return out
     }
 
-    private func finding(_ label: String, _ what: String) {
-        print("FINDING \(label): \(what)")
-        let a = XCTAttachment(screenshot: app.screenshot())
-        a.name = "finding \(label)"
-        a.lifetime = .keepAlways
-        add(a)
+    /// Waits until the chat's state passes `ok`.
+    private func waitFor(seconds: Double, _ ok: (Rows) -> Bool) -> Bool {
+        let start = Date.now
+        while Date.now.timeIntervalSince(start) < seconds {
+            if let r = rows(), ok(r) { return true }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return false
     }
 
-    /// How often the arrow turned on and off in a timeline (a flash: on for less than 0.6 s).
-    private func flashes(_ states: [(t: Double, r: Rows)]) -> Int {
+    /// The timeline, for a failure message.
+    private func describe(_ s: Timeline) -> String {
+        s.map { String(format: "%.2f ", $0.t) + line($0.r) }.joined(separator: "\n")
+    }
+
+    /// How often the arrow came and went in a timeline: on, then off again within 2 s (on longer, it was there).
+    private func flashes(_ states: Timeline) -> Int {
         var n = 0
-        for (i, s) in states.enumerated() where (s.r.arrow ?? false) {
-            let off = states[(i + 1)...].first { !($0.r.arrow ?? false) }
-            if let off, off.t - s.t < 0.6 { n += 1 }
+        var on: Double?
+        for s in states {
+            let arrow = s.r.arrow ?? false
+            if arrow, on == nil { on = s.t }
+            if !arrow, let t = on {
+                if s.t - t < 2 { n += 1 }
+                on = nil
+            }
         }
         return n
     }
 
-    private func drag(from: CGFloat, to: CGFloat, hold: TimeInterval = 0.05, velocity: XCUIGestureVelocity = .slow) {
+    /// The one truth's promises, at every moment: ↓ never at the newest end, nothing held back while following.
+    private func consistent(_ label: String, _ s: Timeline) {
+        for (t, r) in s {
+            if r.newest { XCTAssertFalse(r.arrow ?? false, String(format: "%@ %.2f s: ↓ at the newest end", label, t)) }
+            if r.mode == "following" && r.dragging != true {
+                XCTAssertFalse(r.frozen ?? false, String(format: "%@ %.2f s: held back while following", label, t))
+            }
+        }
+    }
+
+    /// `rest`: the finger stays down at the end for that long, so the list does not glide on (the drag's distance is
+    /// then the list's).
+    private func drag(from: CGFloat, to: CGFloat, hold: TimeInterval = 0.05, velocity: XCUIGestureVelocity = .slow, rest: TimeInterval = 0) {
         let a = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from))
-        a.press(forDuration: hold, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to)), withVelocity: velocity, thenHoldForDuration: 0)
+        a.press(forDuration: hold, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to)), withVelocity: velocity, thenHoldForDuration: rest)
     }
 
     // MARK: Cases
 
-    /// 1. Streaming, at the newest: a finger drags the list up a little (40 pt) and lets go.
+    /// 1. Streaming, at the newest: a finger drags the list up a little (40 pt) and lets go. It keeps following.
     func testA_DragUpALittleWhileStreaming() throws {
         launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
-        record("1 before", seconds: 2)
-        drag(from: 0.55, to: 0.60)
-        let s = record("1 after a small drag", seconds: 10)
-        let end = s.last?.r
-        if end?.follows == false { finding("1", "a 40 pt drag stopped following: the stream is held back (frozen \((end?.frozen ?? false) ? 1 : 0)) until the list is exactly at the newest end again (gap \(end?.gap ?? -1))") }
-        if end?.arrow == true { finding("1", "the arrow stays after a 40 pt drag (gap \(end?.gap ?? -1) pt)") }
-        if flashes(s) > 0 { finding("1", "the arrow flashed \(flashes(s))×") }
+        record("1 before", seconds: 2, shots: 1)
+        drag(from: 0.55, to: 0.60, rest: 0.4) // about 45 pt, no glide after it
+        let s = record("1 after a small drag", seconds: 10, shots: 4)
+        let end = try XCTUnwrap(s.last?.r)
+        let stopped = try XCTUnwrap(s.first?.r.gap, "where the drag left the list")
+        XCTAssertLessThanOrEqual(stopped, 100, "the drag stayed within the tolerance:\n\(describe(s))")
+        XCTAssertEqual(end.mode, "following", "a small drag keeps following:\n\(describe(s))")
+        XCTAssertFalse(end.frozen ?? true, "nothing held back:\n\(describe(s))")
+        XCTAssertFalse(end.arrow ?? true, "no ↓:\n\(describe(s))")
+        XCTAssertGreaterThan(end.items, s.first?.r.items ?? .max, "the stream kept coming in")
+        XCTAssertEqual(flashes(s), 0, "the arrow flashed")
+        consistent("1", s)
     }
 
-    /// 2. A flick down from a few screens up, gliding toward the newest end.
+    /// 2. A flick toward the newest from a little way up: it glides to the end and follows; from far up it stops in
+    /// the history, reading, with ↓.
     func testB_FlickTowardTheNewest() throws {
         launch(try hub("JARVIS_MOCK_HUB"), chat: Self.widget, assistant: false)
+        drag(from: 0.35, to: 0.75)
+        sleep(1)
+        let up = record("2 a screen up", seconds: 2, shots: 1)
+        XCTAssertEqual(up.last?.r.mode, "reading", "a screen up it reads:\n\(describe(up))")
+        drag(from: 0.75, to: 0.2, velocity: .fast)
+        let s = record("2 after the flick", seconds: 5, shots: 3)
+        let end = try XCTUnwrap(s.last?.r)
+        XCTAssertTrue(end.near ?? false, "the glide reached the newest end:\n\(describe(s))")
+        XCTAssertEqual(end.mode, "following", "and follows:\n\(describe(s))")
+        XCTAssertFalse(end.arrow ?? true, "no ↓")
+        XCTAssertEqual(flashes(s), 0, "the arrow flashed during the glide")
+        consistent("2", s)
+
         for _ in 0..<3 { drag(from: 0.3, to: 0.8, velocity: .fast); sleep(1) }
-        record("2 scrolled up", seconds: 2)
-        drag(from: 0.75, to: 0.25, velocity: .fast)
-        let s = record("2 after the flick", seconds: 8)
-        if let end = s.last?.r {
-            if end.newest && !end.follows { finding("2", "the glide ended at the newest end but following did not come back") }
-            if !end.newest && end.gap ?? 0 < 100 && end.arrow == true { finding("2", "the glide ended \(end.gap ?? -1) pt short of the newest end: the arrow shows, the stream is held back") }
-        }
-        if flashes(s) > 0 { finding("2", "the arrow flashed \(flashes(s))× during the glide") }
+        drag(from: 0.6, to: 0.4, velocity: .fast)
+        let far = record("2 far", seconds: 3)
+        let r = try XCTUnwrap(far.last?.r)
+        XCTAssertFalse(r.near ?? true, "a short flick from far up stays in the history")
+        XCTAssertEqual(r.mode, "reading")
+        XCTAssertTrue((r.arrow ?? false) && (r.frozen ?? false), "↓ and held back:\n\(describe(far))")
     }
 
-    /// 3. A work line opened and folded at the newest end of a running turn.
+    /// 3. The running turn's work line opened at the newest end: its header goes up under the top bar (#1173) and stays
+    /// there while the turn keeps growing under it — never held back, not following away from it; folded, it follows.
     func testC_OpenAndFoldAWorkLine() throws {
         launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
         let work = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "正在工作")).firstMatch
         XCTAssertTrue(work.waitForExistence(timeout: 10))
+        shot("3 before")
         work.tap()
-        let opened = record("3 opened", seconds: 5)
-        if work.exists && work.isHittable { work.tap() }
-        let folded = record("3 folded", seconds: 5)
-        if let r = opened.last?.r, r.arrow == true { finding("3", "after opening the work line at the newest end the arrow shows (gap \(r.gap ?? -1), follows \(r.follows ? 1 : 0))") }
-        if let r = folded.last?.r {
-            if r.newest && !r.follows { finding("3", "folded back at the newest end, following stays off: new steps are held back with no arrow") }
-            if r.arrow == true && r.newest { finding("3", "the arrow shows at the newest end") }
-        }
-        let flashed = flashes(opened) + flashes(folded) // two timelines, each from 0: counted apart
-        if flashed > 0 { finding("3", "the arrow flashed \(flashed)×") }
+        // A list still settling at the newest end takes the first touch to stop (docs/lessons/ios.md): tapped again.
+        if !waitFor(seconds: 1.5, { $0.mode == "holding" }) { work.tap() }
+        XCTAssertTrue(waitFor(seconds: 1.5, { $0.mode == "holding" }), "opening holds")
+        record("3 opening", seconds: 2, shots: 6) // risen, the hold's first moment over
+        shot("3 risen")
+        XCTAssertTrue(work.waitForExistence(timeout: 3), "the header after opening:\n\(describe(record("3 lost", seconds: 1)))")
+        let y0 = work.frame.minY
+        let opened = record("3 opened", seconds: 6, shots: 4)
+        XCTAssertTrue(work.isHittable, "the header stays on screen")
+        XCTAssertLessThanOrEqual(abs(work.frame.minY - y0), 1, "the header holds still while steps come in under it")
+        XCTAssertFalse(opened.contains { $0.r.frozen ?? false }, "opening the running turn held it back:\n\(describe(opened))")
+        XCTAssertTrue(opened.allSatisfy { $0.r.mode == "holding" }, "held, not following away, until the user decides:\n\(describe(opened))")
+        XCTAssertGreaterThan(opened.last?.r.items ?? 0, opened.first?.r.items ?? .max, "the turn kept growing")
+        consistent("3 opened", opened)
+        work.tap() // fold
+        let folded = record("3 folded", seconds: 5, shots: 2)
+        let r = try XCTUnwrap(folded.last?.r)
+        XCTAssertTrue(r.mode == "following" && r.newest && !(r.frozen ?? true), "folded: at the newest, following:\n\(describe(folded))")
+        XCTAssertFalse(r.arrow ?? true, "folded: no ↓")
+        XCTAssertEqual(flashes(folded), 0, "the arrow flashed")
+        consistent("3 folded", folded)
     }
 
     /// 4. The keyboard comes up (the composer tapped) and goes down, at the newest end.
@@ -168,12 +240,14 @@ final class ScrollToBottomTests: XCTestCase {
         launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
         guard let field = composer() else { throw XCTSkip("the composer is not in the accessibility tree (#1006)") }
         field.tap()
-        let up = record("4 keyboard up", seconds: 3)
+        let up = record("4 keyboard up", seconds: 3, shots: 1)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap() // a tap on the page closes it
-        let down = record("4 keyboard down", seconds: 3)
+        let down = record("4 keyboard down", seconds: 3, shots: 1)
         for (name, s) in [("up", up), ("down", down)] {
-            if let r = s.last?.r, !r.newest || !r.follows { finding("4", "keyboard \(name): left the newest end (gap \(r.gap ?? -1), follows \(r.follows ? 1 : 0))") }
-            if flashes(s) > 0 { finding("4", "keyboard \(name): the arrow flashed") }
+            let r = try XCTUnwrap(s.last?.r)
+            XCTAssertTrue(r.newest && r.mode == "following", "keyboard \(name): at the newest end, following:\n\(describe(s))")
+            XCTAssertEqual(flashes(s), 0, "keyboard \(name): the arrow flashed")
+            consistent("4 \(name)", s)
         }
     }
 
@@ -181,28 +255,32 @@ final class ScrollToBottomTests: XCTestCase {
     func testE_SendWhileReadingHistory() throws {
         launch(try hub("JARVIS_MOCK_HUB"), chat: Self.widget, assistant: false)
         for _ in 0..<3 { drag(from: 0.3, to: 0.8, velocity: .fast); sleep(1) }
+        XCTAssertEqual(rows()?.mode, "reading")
+        shot("5 reading")
         guard let field = composer() else { throw XCTSkip("the composer is not in the accessibility tree (#1006)") }
         field.tap()
         field.typeText("再看一下")
         app.buttons["发送"].firstMatch.tap()
-        let s = record("5 sent", seconds: 6)
-        if let r = s.last?.r, !(r.newest && r.follows) { finding("5", "after sending from history the chat is not at the newest end, following (gap \(r.gap ?? -1), follows \(r.follows ? 1 : 0))") }
+        let s = record("5 sent", seconds: 6, shots: 3)
+        let r = try XCTUnwrap(s.last?.r)
+        XCTAssertTrue(r.newest && r.mode == "following" && !(r.frozen ?? true), "sent from history: at the newest end, following:\n\(describe(s))")
+        consistent("5", s)
     }
 
-    /// 6. Pushes insert new content while the user reads history; then ↓.
+    /// 6. Pushes insert new content while the user reads history: held back with ↓; then ↓.
     func testF_PushesWhileReadingThenTheArrow() throws {
         launch(try hub("JARVIS_MOCK_HUB"), chat: Self.widget, assistant: false)
         for _ in 0..<2 { drag(from: 0.3, to: 0.8, velocity: .fast); sleep(1) }
-        let reading = record("6 reading", seconds: 8) // MOCK_STREAM: a push every 2 s
-        if reading.contains(where: { !($0.r.arrow ?? false) }) && reading.count > 1 { finding("6", "the arrow went away while reading history") }
-        if reading.contains(where: { $0.r.follows }) { finding("6", "following came back on while reading history") }
-        if arrowButton.exists && arrowButton.isHittable {
-            arrowButton.tap()
-            let s = record("6 after ↓", seconds: 4)
-            if let r = s.last?.r, !(r.newest && r.follows && r.arrow != true) { finding("6", "↓ did not end at the newest end, following, arrow gone (gap \(r.gap ?? -1), follows \(r.follows ? 1 : 0), arrow \((r.arrow ?? false) ? 1 : 0))") }
-        } else {
-            finding("6", "no ↓ to tap while reading history")
-        }
+        let reading = record("6 reading", seconds: 8, shots: 3) // MOCK_STREAM: a push every 2 s
+        XCTAssertTrue(reading.allSatisfy { ($0.r.arrow ?? false) && $0.r.mode == "reading" && ($0.r.frozen ?? false) },
+                      "reading: ↓ stays, held back:\n\(describe(reading))")
+        XCTAssertTrue(arrowButton.waitForExistence(timeout: 2) && arrowButton.isHittable, "↓ to tap")
+        arrowButton.tap()
+        let s = record("6 after ↓", seconds: 4, shots: 2)
+        let r = try XCTUnwrap(s.last?.r)
+        XCTAssertTrue(r.newest && r.mode == "following" && r.arrow != true && !(r.frozen ?? true),
+                      "↓: at the newest end, following, no ↓:\n\(describe(s))")
+        consistent("6", s)
     }
 
     /// 7. Out of the chat and back in (the Agents list and the same chat again).
@@ -217,47 +295,52 @@ final class ScrollToBottomTests: XCTestCase {
             ?? (0..<min(rows.count, 6)).map { rows.element(boundBy: $0) }.first { $0.isHittable }
         guard let row else { throw XCTSkip("no agent row to open again on the list (the test's selector, not measured)") }
         row.tap()
-        let s = record("7 back in", seconds: 4)
-        if flashes(s) > 0 { finding("7", "the arrow flashed on entry") }
-        if let r = s.last?.r, !(r.newest && r.follows) { finding("7", "back in, not at the newest end following (gap \(r.gap ?? -1))") }
+        let s = record("7 back in", seconds: 4, shots: 2)
+        XCTAssertEqual(flashes(s), 0, "the arrow flashed on entry")
+        let r = try XCTUnwrap(s.last?.r)
+        XCTAssertTrue(r.newest && r.mode == "following", "back in: at the newest end, following:\n\(describe(s))")
+        consistent("7", s)
     }
 
     /// 8. To the background and back, at the newest end of a running turn.
     func testH_BackgroundAndBack() throws {
         launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
+        shot("8 before")
         XCUIDevice.shared.press(.home)
         sleep(6)
         app.activate()
-        let s = record("8 back from the background", seconds: 6)
-        if flashes(s) > 0 { finding("8", "the arrow flashed on return") }
-        if let r = s.last?.r, !(r.newest && r.follows) { finding("8", "back from the background, not at the newest end following (gap \(r.gap ?? -1), follows \(r.follows ? 1 : 0))") }
+        let s = record("8 back from the background", seconds: 6, shots: 3)
+        XCTAssertEqual(flashes(s), 0, "the arrow flashed on return")
+        let r = try XCTUnwrap(s.last?.r)
+        XCTAssertTrue(r.newest && r.mode == "following", "back from the background: at the newest end, following:\n\(describe(s))")
+        consistent("8", s)
     }
 
-    /// 9. A chat shorter than the screen: there is nothing to scroll, the arrow never shows.
+    /// 9. A chat shorter than the screen: there is nothing to scroll, the arrow never shows, it keeps following.
     func testI_ShortChat() throws {
         launch(try hub("JARVIS_RUN_HUB"), chat: Self.main, assistant: true)
         drag(from: 0.4, to: 0.6)
-        let s = record("9 short chat", seconds: 6)
-        if s.contains(where: { $0.r.arrow ?? false }) { finding("9", "the arrow showed in a chat that fits on one screen") }
-        if let r = s.last?.r, !r.follows { finding("9", "a drag in a one-screen chat stopped following: new steps are held back") }
+        let s = record("9 short chat", seconds: 6, shots: 1)
+        XCTAssertFalse(s.contains { $0.r.arrow ?? false }, "↓ in a chat that fits on one screen:\n\(describe(s))")
+        XCTAssertEqual(s.last?.r.mode, "following", "a drag in a one-screen chat keeps following")
+        consistent("9", s)
     }
 
-    /// 10. Several pending cards over the chat (#939): the arrow above them, following unchanged.
+    /// 10. Several pending cards over the chat (#939): no ↓ at rest; scrolled up, ↓ above the cards brings it back.
     func testJ_PendingCards() throws {
         launch(try hub("JARVIS_MOCK_HUB"), chat: Self.photos, assistant: false)
-        let s = record("10 cards", seconds: 4)
-        if let r = s.last?.r {
-            if r.arrow == true { finding("10", "the arrow shows at rest with the cards up (gap \(r.gap ?? -1))") }
-            if !r.follows { finding("10", "not following with the cards up") }
-        }
+        let s = record("10 cards", seconds: 4, shots: 1)
+        let r = try XCTUnwrap(s.last?.r)
+        XCTAssertFalse(r.arrow ?? true, "↓ at rest with the cards up:\n\(describe(s))")
+        XCTAssertEqual(r.mode, "following", "following with the cards up")
         drag(from: 0.3, to: 0.7, velocity: .fast)
         sleep(2)
-        if arrowButton.exists {
-            let cards = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "pending")).allElementsBoundByIndex
-            if let c = cards.first(where: { $0.frame.intersects(arrowButton.frame) }) { finding("10", "the arrow is under a pending card (\(c.identifier))") }
-            arrowButton.tap()
-            let after = record("10 after ↓", seconds: 3)
-            if let r = after.last?.r, !(r.newest && r.follows) { finding("10", "↓ with the cards up did not reach the newest end (gap \(r.gap ?? -1))") }
-        }
+        guard arrowButton.exists else { return } // the chat is too short to leave the tolerance
+        let cards = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "pending")).allElementsBoundByIndex
+        XCTAssertNil(cards.first { $0.frame.intersects(arrowButton.frame) }, "↓ under a pending card")
+        arrowButton.tap()
+        let after = record("10 after ↓", seconds: 3, shots: 1)
+        let a = try XCTUnwrap(after.last?.r)
+        XCTAssertTrue(a.newest && a.mode == "following", "↓ with the cards up: at the newest end:\n\(describe(after))")
     }
 }

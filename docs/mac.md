@@ -173,6 +173,14 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   - 截图的坑：`-showMailAskClaude`、`-openMonitor` 这类 DEBUG 钩子挂在 onAppear 上，每次出现都会再触发（只在 DEBUG、只为截图，不改）；`-showWakeDrawer`、`-showMenu` 要 `DELAY` 11 秒左右；
     共享 UserDefaults 里别的运行留下的草稿（比如一个 `/`）启动时会弹出斜杠菜单；假 hub 换数据重启后缓存合并会多出一张重复的错误卡片，`-openChatsFresh` 能清掉。
 
+
+### 滚动实验（`MacScrollLab`，锁屏也能做）
+
+锁屏时 `screencapture` 只拍到锁屏、也没有真触控板，滚动的问题就让 App 自己滚、自己画（DEBUG）：
+`-macScrollGestures "13:150,17:900"`（启动后第 13 s 两指滑 150 pt、第 17 s 滑 900 pt，手指 120 ms 加惯性约 1 s，负数往最新处），
+`-macScrollFrames <目录>`（按 0.1 s 把窗口画成 `m-<时间>.png`，`list.txt` 是对话列表在图里的位置），`-scrollTrace YES -scrollTracePath <文件>`（每帧的偏移、内容高、手指 / 惯性、跟随状态）。
+`scripts/diag/stream-scroll/run-mac.sh` 连 mock hub 跑一遍，`pngs2mp4.swift` 把图按时间拼成视频，`vidrows.swift` + `streamrows.py` 量每帧的位移（docs/ios-state.md「流式时的滚动」）。
+限制：合成的惯性事件 SwiftUI 不当作惯性，列表也不跟着滑（真触控板的惯性要在解锁的 Mac 上看）；锁屏时投进事件队列（`-macScrollPost YES`）的事件到不了窗口，所以直接交给列表和 `MacWheelWatch`。
 ## Mac 版现在的样子（阶段 0：能编、能跑）
 
 - 壳（`Mac/App/`）：窗口左边一列六项（Persona / Agents / 收件箱 / 知识库 / 机器 / 设置，角标同 iOS 的 tab 栏），右边是 iOS 的页面本身；

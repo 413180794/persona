@@ -503,6 +503,13 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
   测试用隔离 HOME/Git 配置的临时仓库验证真实提交钩子、暂存区与工作树差异，不操作主工作区的暂存区或历史。
 - hooksPath 是每个克隆的本地配置；新克隆仍需运行上面的 `git config` 命令，不能因为仓库里有 hooks 文件就以为它已经生效。
 
+## 流式时的滚动（`StreamingScrollTests`，录屏逐帧量）
+
+看「流式时稳不稳」，截图和探针都不够（探针读的是 SwiftUI 的位置，会和屏幕差一拍，docs/lessons/ios.md）：录模拟器的屏，逐帧量。
+`SIM=<udid> OUT=/tmp/stream-shots scripts/diag/stream-scroll/run-ios.sh [用例…]` 每个用例起一个 mock hub、录屏、取回 App 的 `-scrollTrace`；
+`scripts/diag/stream-scroll/analyze.sh /tmp/stream-shots` 量每帧的位移、往回跳、一帧里的大变（回复消失一帧这种），跟随的用例再量最后一行到输入框的距离；
+`vidpick.swift` 按时间取出某几帧看。用例：跟随时长回复流式、先清空后到正式消息、看历史时流式、点 ↓、流式中往上拖、运行中的一轮、Agents 工作中。Mac 见 docs/mac.md「滚动实验」。
+
 ## 卡顿测量（掉帧统计）
 
 xctrace 在这台 Mac 上会卡在授权上，改用 App 自己统计：`-showAutoScroll YES`（DEBUG）打开后 12 秒开始，

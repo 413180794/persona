@@ -17,13 +17,20 @@ import SwiftUI
 
     /// The coordinate space of the list's content: a place in it does not change when the list scrolls.
     nonisolated static let space = "chatContent"
+    /// How long a tapped header is held at most.
+    nonisolated static let holdTime: Double = 1.5
 
     /// Where a header is: on screen, and in the list's content. Both come from one layout pass, so the offset that
     /// puts it back is worked out from the content alone; correcting by the screen and the reported offset went past
     /// the mark, and back, when one of the two lagged the other by a frame.
     nonisolated struct Spot: Equatable, Sendable { var y: CGFloat; var content: CGFloat }
 
-    private struct Held { var key: String; var at: Spot; var base: CGFloat; var until: Date; var slow: Bool; var rise: CGFloat }
+    private struct Held {
+        var key: String; var at: Spot; var base: CGFloat; var until: Date; var slow: Bool; var rise: CGFloat
+        /// The content's height when the hold began, and whether the header has reported since (`watch`).
+        var height: CGFloat = 0
+        var reported = false
+    }
     private var held: Held?
     /// The offset that puts the held header back, when the list could not go there yet (`settle`).
     private var want: CGFloat?
@@ -31,29 +38,87 @@ import SwiftUI
     /// scroll view's content size says so.
     private var reach: CGFloat = 0
     private var last: [String: Spot] = [:]
+    /// A kept hold a tap above its header interrupted: taken up again once that one ends (`ended`).
+    private var resume: String?
 
     /// Before opening or closing: keep `key` where `from` (the header before, if it changes id) is now. `slow`: what
     /// opens comes later (a work line's steps load from the hub), so the hold lasts its full 1.5 s; otherwise it ends
     /// as soon as the header is back. `rise`: how far up the header may go to show what opens under it. Opened at the
     /// newest end, the steps came in under the composer and the header held still: the tap seemed to do nothing.
-    func hold(_ key: String, from: String? = nil, slow: Bool = false, rise: CGFloat = 0) {
+    /// `keep`: held until the finger takes the list or `release()`, not for 1.5 s: a running work line opened at the newest
+    /// end stays under the top bar while its steps keep coming in under it (#1046), instead of each one pushing it up.
+    func hold(_ key: String, from: String? = nil, slow: Bool = false, rise: CGFloat = 0, keep: Bool = false) {
         guard let list, let at = last[from ?? key] else { return }
-        held = Held(key: key, at: at, base: list.contentOffset.y, until: .now.addingTimeInterval(1.5), slow: slow, rise: max(rise, 0))
+        if !keep, let k = held, k.until == .distantFuture {
+            // A row under the kept header (a step of the open work line): the kept hold has it in place already, as it
+            // has all between the header and what grows. Replaced by this one, it let go when this one ended, and what
+            // streamed in from then on pushed the screen up and back (#1046).
+            if let kept = last[k.key], at.content < kept.content { return }
+            resume = k.key
+        } else if keep {
+            resume = nil
+        }
+        held = Held(key: key, at: at, base: list.contentOffset.y, until: keep ? .distantFuture : .now.addingTimeInterval(Self.holdTime),
+                    slow: slow || keep, rise: max(rise, 0), height: list.contentSize.height)
         want = nil
         reach = 0
         letGo()
+        if slow || keep { watch() }
+    }
+
+    /// A header pushed far off screen in one pass (a work line's cached steps all laid out at once) leaves the lazy list:
+    /// it reports no more, and nothing put it back (old layout + BeautifulUI, 2026-11-04: the header gone, the steps
+    /// from the sixth on). Until it reports, the list moves by what the content grew: all that opens is newer than it.
+    private func watch() {
+        Task { @MainActor [weak self] in
+            for _ in 0..<45 {
+                try? await Task.sleep(for: .milliseconds(16))
+                guard let self, let h = self.held, !h.reported, let list = self.list else { return }
+                if list.isTracking || list.isDecelerating { return }
+                let grown = list.contentSize.height - h.height
+                guard grown > h.rise + 0.5 else { continue }
+                let target = Self.within(list, h.base + grown - h.rise)
+                if abs(target - list.contentOffset.y) >= 0.5 { list.contentOffset.y = target }
+            }
+        }
     }
 
     /// Something is held: following the newest must wait (it scrolled to the end as soon as a work line's steps
     /// arrived, and the header went with it).
     var holding: Bool { held.map { Date.now <= $0.until } ?? false }
 
+    /// Lets go of what is held (a kept hold: ↓, sending, the user's scrolling).
+    func release() {
+        held = nil
+        want = nil
+        resume = nil
+    }
+
+    /// The kept hold is no longer kept (the line folded, another one opened): it lasts the usual time from now, so what
+    /// was tapped settles first.
+    func unkeep() {
+        resume = nil
+        if var h = held, h.until == .distantFuture {
+            h.until = .now.addingTimeInterval(Self.holdTime)
+            held = h
+        }
+    }
+
+    /// A hold is over. One that interrupted a kept hold hands the list back to it, unless a finger has the list.
+    private func ended(_ list: UIScrollView) {
+        held = nil
+        guard let key = resume else { return }
+        resume = nil
+        if !list.isTracking, !list.isDecelerating { hold(key, slow: true, keep: true) }
+    }
+
     /// A header moved (layout or scrolling).
     func moved(_ key: String, to spot: Spot) {
         last[key] = spot
-        guard let h = held, h.key == key, let list else { return }
-        if Date.now > h.until || list.isTracking || list.isDecelerating { held = nil; return }
-        if !h.slow, abs(spot.y - h.at.y) < 0.5 { held = nil; return }
+        guard var h = held, h.key == key, let list else { return }
+        if Date.now > h.until || list.isTracking || list.isDecelerating { return ended(list) }
+        if !h.reported, abs(spot.content - h.at.content) >= 0.5 { h.reported = true; held = h } // it moved, and says where
+        if !h.slow, abs(spot.y - h.at.y) < 0.5 { return ended(list) }
         // The content runs newest first: rows opening under the header on screen push it further into the content,
         // and the offset has to grow by as much to keep it on screen where it was (as far as the list can go). Allowed to
         // rise, the header goes up by that much first: the list moves only for what opened past it.
@@ -107,7 +172,7 @@ import SwiftUI
             for _ in 0..<30 {
                 try? await Task.sleep(for: .milliseconds(16))
                 guard let self, self.want != nil, let h = self.held, let list = self.list else { return }
-                if Date.now > h.until || list.isTracking || list.isDecelerating { self.held = nil; self.want = nil; return }
+                if Date.now > h.until || list.isTracking || list.isDecelerating { self.want = nil; return self.ended(list) }
                 self.put(list)
             }
             self?.want = nil

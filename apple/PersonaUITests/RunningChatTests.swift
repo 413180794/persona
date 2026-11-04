@@ -39,6 +39,9 @@ final class RunningChatTests: XCTestCase {
         var frozen: Bool?
         var ids: [String]?
         var x: Int?
+        var mode: String?
+        var gap: Int?
+        var held: Bool?
     }
 
     private func launch(_ extra: [String] = []) {
@@ -71,6 +74,11 @@ final class RunningChatTests: XCTestCase {
         }
         let background = lum.sorted()[lum.count / 2]
         return Double(lum.filter { abs($0 - background) > 0.12 }.count) / Double(lum.count)
+    }
+
+    /// The follow state and the list's place in a sample, for a jump's message.
+    private static func state(_ r: Rows) -> String {
+        "top \(r.top.map { String($0.suffix(24)) } ?? "–") y \(r.topY ?? -1) \(r.mode ?? "?") held \((r.held ?? false) ? 1 : 0) frozen \((r.frozen ?? false) ? 1 : 0) gap \(r.gap ?? -1) offset \(r.offset ?? -1) content \(r.content ?? -1) items \(r.items)"
     }
 
     func testARunningTurnNeitherBlanksNorJumps() {
@@ -162,7 +170,7 @@ final class RunningChatTests: XCTestCase {
                     if l.top != r.top {
                         jumps.append(String(format: "%.1f s: top line %@ → %@", t, l.top ?? "–", r.top ?? "–"))
                     } else if let a = l.topY, let b = r.topY, abs(a - b) > 2 {
-                        jumps.append(String(format: "%.1f s: top line moved %d pt", t, b - a))
+                        jumps.append(String(format: "%.1f s: top line moved %d pt (", t, b - a) + Self.state(l) + " → " + Self.state(r) + ")")
                     }
                 }
                 if let l = last, l.newest != r.newest {

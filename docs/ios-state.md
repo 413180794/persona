@@ -303,13 +303,13 @@ App 端 `apple/Persona/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
 
 测试：`ScreenTruthTests`（`docs/testing.md`「真实性与及时性」）。
 
-## 回到最新：对话页的「跟随最新处」（2026-11-04，梳理，未改行为）
+## 回到最新：对话页的「跟随最新处」（2026-11-04，梳理；#1046 按下面的方案改了）
 
 Agents 对话和 Jarvis 对话是同一个 `ChatView`：列表倒着放（最新的在偏移 0），右下角的 ↓（「回到最新」）和「跟随最新处」都在这里。
-下面是现状、实测出的问题，和一个对照 Vercel `useScrollToBottom` 的单一真相方案。复现用 `ScrollToBottomTests`（每种情况记下
+下面先是改之前的样子、实测出的问题、对照 Vercel `useScrollToBottom` 的单一真相方案，最后是落地时的做法（#1046）。复现用 `ScrollToBottomTests`（每种情况记下
 `probe.chat-rows` 的时间线：按钮、跟随、扣住、哨兵、离最新处多远、手指、pin）。
 
-### 现在有几份真相
+### 改之前有几份真相
 
 | 状态 | 是什么 | 谁写 |
 | --- | --- | --- |
@@ -325,7 +325,7 @@ Agents 对话和 Jarvis 对话是同一个 `ChatView`：列表倒着放（最新
 ↓ 只看 `!atBottom && settled`，不看 `followsEnd`；扣不扣看 `followsEnd`。两件事由两份不同的状态决定。
 （Agents 列表的 `Hold` 不管对话页：对话页的「用户正在操作」是上表这些。）
 
-### `followsEnd` 的迁移
+### 改之前 `followsEnd` 的迁移
 
 | 从 | 到 | 触发 |
 | --- | --- | --- |
@@ -378,3 +378,55 @@ Agents 对话和 Jarvis 对话是同一个 `ChatView`：列表倒着放（最新
 
 验收：`ScrollToBottomTests` 从记录改成断言（每种情况的期望写在上面的表里），两种布局 × 两种风格；现有 `ChatFollowTests`、`RunningChatTests`、
 `ScreenTruthTests` 不变红。
+
+### 落地（#1046）
+
+`ChatFollow`（`apple/Persona/Views/Chat/ChatFollow.swift`，纯值类型）是唯一的真相，`ChatView` 只经 `setFollow` 改它（值没变就不写回：几何每帧都报，
+每写一次整页重算）。`atBottom`、`followsEnd`、`scratch.landingInFlight` 和哨兵的可见性回调都删了，`landed` 的 #597 补丁、`contentArrived` 的 #754 补丁也跟着没了。
+
+| 输入 | 来自 | 做什么 |
+| --- | --- | --- |
+| `scrolled(gap:)` | `onScrollGeometryChange` | 只更新 `near`（离最新处 ≤ 100 pt）；手指按着且离开容差时记下 `draggedAway` |
+| `touched()` | 滚动阶段进 `tracking` / `interacting` | 记下手指在列表上，此后不迁移 |
+| `released()` | 滚动阶段回到 `idle`（之前不是 `animating`） | 之前有过 `touched` 才算：`near` → `following`，否则 `reading` |
+| `follow()` | 点 ↓、发消息、自己的消息进了 transcript、换会话 / 子 Agent、切回对话、折叠后一屏放得下（#686） | `following` |
+| `read()` | 跳到引用的消息、跳到工具调用、调试用的往上翻 | `reading` |
+| `land()` / `landed()` | 落到保存的位置或最新回答的开头 | `landing`，结束时按 `near` 定；用户中途接过列表就以松手时为准 |
+| `hold()` / `endHold()` | 点开 / 折叠工作行（`changeWork`），`ChatPin.holdTime`（1.5 s）后结束 | `holding`，结束时**回到之前的状态** |
+| `hold(anchored: true)` | 跟随时点开工作行 | `holding`，不限时：标题留在原处（在最新处则升到顶栏下，#1173），运行中的这一轮照常长；用户松手时按位置定、点 ↓ / 发消息回到跟随、折叠后回到跟随并滑回最新处 |
+
+派生：跟随 `follows = mode == .following && !touching`；扣住 `holdsBack = mode == .reading || touching || draggedAway`；↓ `arrow = !near && (mode != .following || draggedAway)`，
+再加进对话后的 `settled`。`frozen` 的快照随 `holdsBack` 拍、随它清。
+
+和上面方案不同的几处：
+- **`holding` 结束时回到之前的状态，不按 `near` 定**：在最新处点开运行中的工作行，步骤会把最新处推出好几屏，按 `near` 定就成了 `reading`，又扣住了（问题 3）。
+- **跟随时点开工作行，一直 `holding`（anchored），不再接着跟随**（2026-11-04 用户拍板）：#1173 让在最新处点开的工作行标题升到顶栏下、步骤露在它下面；
+  接着跟随会在 1.5 s 后把标题滑出屏幕，扣住又会冻住这一轮。所以既不跟随也不扣住：`ChatPin.hold(keep:)` 一直按住标题，新步骤在它下面长、长出屏幕就有 ↓。
+  - 倒着的列表里，比标题新的内容一长就把标题往上推，按住靠的是每次改偏移；一次排出很多缓存的步骤时，懒列表随后把它们量得比估计的高，标题被推出列表、不再报位置，
+    偏移就没法再算（旧布局 + BeautifulUI 上 #1173 自己的测试在 master 也不过）。补救：标题不报位置时按内容长了多少挪（`ChatPin.watch`）；
+    还是丢了就按 id 滚到标题（`ChatView.keepHeader`，懒列表会把那一行排准），再从那里按住。
+  - 一直按住的时候再点开标题下面的一步：起初那一步的短按住（1.5 s）顶替了标题的，结束后谁都不按。现在比标题新的行不另按（标题按住了，它和标题之间不会变）；
+    比标题旧的行照常按，按完再接着按住标题；折叠或点开另一行时，一直按住改成从现在起按 1.5 s（`ChatPin.unkeep`）。
+    （`RunningChatTests.testARunningTurnNeitherBlanksNorJumps` 当时报的「上下跳 56 pt」是探针读错了位置，屏幕逐像素没动，见 `docs/lessons/ios.md`。）
+- **手指按着（连同松手后的惯性）就扣住，松手再按位置定**（`holdsBack` 含 `touching`）：倒着的列表里，最新那一端一长，手指下面的东西就被往上推，
+  流式中轻拖一下就被推了 23 pt、39 pt；松手还在容差里就接着跟随（问题 1），扣住的内容这时一起进来。拖出容差另记 `draggedAway`，管 ↓。
+
+### 流式时的滚动（2026-11-04，用户：「流式输出的时候，滚动就不稳定了」）
+
+量法：模拟器录屏逐帧解码，算内容区每帧相对上一帧的位移、最后一行到输入框的距离、「一帧里大变又变回」的跳动；App 里 `-scrollTrace YES`
+每帧记 UIKit / AppKit 自己的偏移、内容高、手指 / 惯性和跟随状态（`ScrollTrace`）。用例 `StreamingScrollTests`（mock 的 `/mock/say?preset=markdown`：
+代码块、表格、列表，按 hub 的节奏 80 ms 一个 delta；`&late=600` 先清空、600 ms 后才到正式消息）。Mac 锁屏时没法录屏、没有真触控板：
+`MacScrollLab` 给列表送合成的两指滑动和惯性、按 0.1 s 把窗口画成图（`docs/mac.md`）。工具在 `scripts/diag/stream-scroll/`。
+
+| 现象（master） | 原因 | 改法 |
+| --- | --- | --- |
+| 流式结束那一帧，整段回复不见，屏幕停在上一条消息，下一帧回来 | 正式消息进来的同一刻清掉流式文本，行却要后台重排、下一轮才到 | 流式文本等行到了同一轮再清（`ChatStore.endLive`） |
+| 真 hub 先发「清空」、正式消息后到：回复消失到它来为止（mock 里 610 ms） | 一轮结束、下一次请求开始时 hub 都会清空，transcript 那行可能更晚读到 | 清空时消息还没进来就留着流式文本，等它来，最多 5 s（`ChatStore.clearLive`） |
+| 运行中的一轮，每流出一句：往上长两行，写完再掉三行 | 只露最近一句；新句流着时上一句还在，写完上一句才收进工作行 | 新句开始流时上一句就收进工作行（`ChatLines.lines(streaming:)`），新句在原位长 |
+| 流式中往上拖：手指一按下，正在流的回复整段不见，内容少了 368 pt；Mac 上 80 pt 时跳回最新处、惯性里跳到 380 再被拉回 | 扣住新内容时不画流式文本和待发的消息 | 扣住时照当时的样子留着它们（`Frozen.text` / `pending`），由原来那个 `ChatLiveText` 画（`held`）：另开一个分支画，两行的 id 都是 `live`，懒列表留着原来那行接着长，手指下面每个 delta 推走 9–30 pt |
+| 手指按着时，流式内容把手指下面的东西往上推（一次轻拖里 23、39 pt） | 拖出 100 pt 才扣住 | 手指一按下就扣住（`ChatFollow.holdsBack` 含 `touching`），松手再接上 |
+| Mac：轻滑一下，惯性还在走就被流式拉回最新处 | 两指一离开触控板，SwiftUI 的滚动阶段就是 idle，惯性不算 | 按滚动事件自己判断（`MacWheelWatch`）：手指、惯性、半秒内转过的滚轮都算用户在滚 |
+
+往上翻着看历史时，流式进来本来就一像素不动（扣住了），各场景前后都量过。代码块刚开头时先排出一个空的灰框、内容到了再长，末尾离输入框的距离跳一下，没改。
+
+单元测试 `ChatFollowStateTests` 覆盖上表每个入口；`ScrollToBottomTests` 的 FINDING 改成了断言（每个时刻：在最新处没有 ↓，跟随时不扣住），每个场景按时间存几张截图。

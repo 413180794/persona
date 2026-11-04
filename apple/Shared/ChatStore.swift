@@ -388,6 +388,9 @@ final class ChatStore {
     var screen: String = ""
     /// Text of the assistant message being generated (headless sessions stream it token by token).
     var liveText: String = ""
+    /// The streamed message is in the items, its row not yet in `rows`: the live copy stays until the rebuild publishes
+    /// the row (`endLive`).
+    @ObservationIgnored private var liveEnds: String?
     var screenStatus: SessionStatus = .unknown
     var screenUpdatedAt: Date?
     var error: String?
@@ -591,6 +594,32 @@ final class ChatStore {
         return true
     }
 
+    /// The streamed message `text` landed in the items: its live copy goes when its row comes. The rows are rebuilt off
+    /// the main thread and published a pass later; cleared at once, the reply was gone for a frame, the chat ending
+    /// at the message before it, then back (2026-11-04: 「流式输出的时候，滚动就不稳定了」).
+    func endLive(_ text: String) {
+        guard rebuildScheduled else { liveText = ""; return }
+        liveEnds = text
+    }
+
+    /// The stream was cleared (`text`: the newest text streamed). The hub clears it when the turn ends or the next
+    /// request starts, and the message's transcript line can come after that: cleared then, the reply was gone until it
+    /// did, the chat ending at the message before it. The live copy stays until the item comes (`endLive`), 5 s at most
+    /// (a turn cut off before its message was written).
+    func clearLive(newest text: String?) {
+        if let text, !text.isEmpty, text.hasPrefix(liveText) { liveText = text }
+        let shown = liveText
+        guard !shown.isEmpty else { return }
+        if items.suffix(12).contains(where: { $0.role == "assistant" && $0.kind == .text && ($0.text ?? "").hasPrefix(shown) }) {
+            return endLive(shown)
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, self.liveText == shown else { return }
+            self.liveText = ""
+        }
+    }
+
     /// Coalesces events into one background worker; only a current snapshot is published on the main actor.
     private func scheduleRebuild() {
         rebuildRevision += 1
@@ -607,6 +636,12 @@ final class ChatStore {
                 guard revision == self.rebuildRevision else { continue }
                 self.rows = built.rows
                 self.blocks = built.blocks
+                // The streamed message's row is in: its live copy goes in the same pass (a newer one that started
+                // meanwhile stays).
+                if let ended = self.liveEnds {
+                    self.liveEnds = nil
+                    if ended.hasPrefix(self.liveText) { self.liveText = "" }
+                }
                 // No item changed since the snapshot (same revision): these blocks hold everything loaded so far.
                 if self.backlogBuilt != self.loadedOnce { self.backlogBuilt = self.loadedOnce }
                 self.settled = built.settled

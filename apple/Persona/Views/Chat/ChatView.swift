@@ -17,9 +17,13 @@ struct ChatView: View {
     @State private var key: SessionKey
     var style: ChatStyle = .dev
     @State private var position = ScrollPosition(edge: .top) // .top is the newest end of the flipped list
-    /// The bottom sentinel is on screen. Starts false: if the first jump lands in unrendered space the arrow is the
-    /// way out, and `settleAtEnd` retries until the sentinel has been seen.
-    @State private var atBottom = false
+    /// Where the chat stands with its newest end: ↓, following and holding back all come from it (#1046). Changed
+    /// through `setFollow` only.
+    @State private var follow = ChatFollow()
+    #if os(macOS)
+    /// The Mac's trackpad and wheel, from their events (`MacWheelWatch`): SwiftUI's scroll phase ends with the fingers.
+    @State private var wheel = MacWheelWatch()
+    #endif
     /// Hide the arrow for the first moment on entry (it would flash while the list settles at the end).
     @State private var settled = false
     @State private var showTerminal = false
@@ -54,14 +58,16 @@ struct ChatView: View {
         var part: Int
         /// The turn that was running: its lines stay as they were drawn (live work line, answer not yet picked).
         var live: String?
+        /// The streamed words and the unsent messages on screen then: they stay as they were. Taken away, they went from
+        /// under the finger the moment it drew the list away from a streaming reply, the list jumped by their height,
+        /// and came back on release (the Mac, 2026-11-04: 80 pt into a drag the list was at the newest again, 380 pt
+        /// away as it glided, then back).
+        var text = ""
+        var pending: [UUID] = []
     }
     /// The user dragged the list at least once: only then does reaching the top load older pages (a lazy stack may
     /// lay out the top row while settling at the bottom, which used to chain-load history on entry).
     @State private var userScrolled = false
-    /// Stick to the latest message: on while you are at the end, off as soon as you drag the list (reading history is
-    /// never interrupted), on again when you come back to the end, tap ↓ or send. Jumps and their retries only run
-    /// while it is on — a lone jump into rows the lazy stack never laid out lands on an earlier message.
-    @State private var followsEnd = true
     @State private var entered = false
     #if DEBUG
     /// How many times each conversation has appeared since launch (`probe.chat`'s `appeared`). Opened at launch it
@@ -272,9 +278,8 @@ struct ChatView: View {
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
             if p == .chat {
                 position = ScrollPosition(edge: .top)
-                atBottom = false
                 settled = false
-                followsEnd = true
+                setFollow { $0.follow() }
                 settleAtEnd()
             }
         }
@@ -384,7 +389,8 @@ struct ChatView: View {
         let feed = style == .assistant ? TasksStore.shared.feed(shownKey.sessionID) : []
         let key = ChatScratch.LinesKey(store: "\(shownKey.machineID)/\(shownKey.sessionID)", version: frozen == nil ? store.version : cut,
                                        first: items.first?.id, live: frozen == nil ? liveTurnID : frozen?.live, open: openWork,
-                                       runs: openRuns, frozen: frozen, feed: feed.map(\.id))
+                                       runs: openRuns, frozen: frozen, feed: feed.map(\.id),
+                                       streaming: style == .assistant && (frozen.map { !$0.text.isEmpty } ?? liveShown))
         if scratch.linesKey == key { return scratch.lines }
         var blocks = store.blocks
         if frozen != nil {
@@ -392,7 +398,7 @@ struct ChatView: View {
             scratch.frozenSettled = built.settled
             blocks = built.blocks
         }
-        var lines = lineBuilder.build(Self.debugTrim(blocks), live: key.live)
+        var lines = lineBuilder.build(Self.debugTrim(blocks), live: key.live, streaming: key.streaming)
         if style == .assistant { // docs/unified-entry.md: the hub's items, quick results, a line for each day
             lines = ChatLines.daySections(ChatLines.quickResults(ChatLines.mergeFeed(lines, feed)))
         }
@@ -487,7 +493,7 @@ struct ChatView: View {
     private func freezeProbe() async {
         try? await Task.sleep(for: .seconds(8)) // a big chat takes a moment to load and lay out
         userScrolled = true
-        followsEnd = false
+        setFollow { $0.read() }
         scrollList(to: chrome.offset + 260)
         try? await Task.sleep(for: .seconds(1.5))
         var log: [String] = []
@@ -513,7 +519,7 @@ struct ChatView: View {
             moved = max(moved, Int(abs(y - y0)))
             log.append("items \(store.items.count), line at \(Int(y)) (moved \(Int(y - y0)))")
         }
-        followsEnd = true
+        setFollow { $0.follow() }
         scrollToEnd()
         try? await Task.sleep(for: .seconds(2))
         let newest = currentLines().last?.id ?? ""
@@ -630,15 +636,19 @@ struct ChatView: View {
     }
 
     private func changeWork(_ id: String, fromHeader: Bool, run: Bool, wasOpen: Bool) {
+        // A work line opened while following (at the newest end its header goes up under the top bar, #1173): it stays
+        // where it is while a running turn's steps keep coming in under it, until the user takes the list, folds it or
+        // taps ↓. Following on would scroll it away; holding back would freeze the turn (#1046).
+        let anchored = fromHeader && !run && !wasOpen && follow.follows
         if fromHeader {
             pin.hold(headLine(id, open: !wasOpen), from: headLine(id, open: wasOpen), slow: true,
-                     rise: !run && !wasOpen ? workRise(id) : 0)
+                     rise: !run && !wasOpen ? workRise(id) : 0, keep: anchored)
         }
         if wasOpen { scratch.foldedAt = .now }
-        // The user took the list, as with a drag: what they opened or closed stays where it is, and the newest no longer
-        // pulls it away. At the newest of a running turn it did, as soon as the pin let go: the header went off the
-        // top, came back with the next tap, and so on (#754). Back at the newest, it follows again.
-        followsEnd = false
+        // Not taking the list: while the header settles nothing pulls it away (the pin has it) and nothing is held
+        // back (the running turn opened at the newest keeps growing: it froze, #1046); then the chat goes on as before.
+        holdFollow(anchored: anchored)
+        if anchored { keepHeader(headLine(id, open: true), rise: workRise(id)) }
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
@@ -831,8 +841,7 @@ struct ChatView: View {
         }
         guard let id else { return }
         entry = nil
-        followsEnd = false
-        scratch.landingInFlight = true
+        setFollow { $0.land() }
         if target == .latestAnswer, let i = lines.lastIndex(where: \.isInput) {
             landUnderInput(lines[i].id)
             return
@@ -873,21 +882,13 @@ struct ChatView: View {
         }
     }
 
-    /// A landing is over. A line in the last screenful lands at the newest end (the list cannot go further): follow from
-    /// there. The landing stopped following and the sentinel never left the screen, so nothing turned it back on: what
-    /// arrived after it was held back, with no ↓ either (TestFlight 50/51, 2026-10-31).
-    private func landed() {
-        scratch.landingInFlight = false
-        // A jump far away takes the end sentinel out of the lazy stack without its visibility turning off: more than a
-        // screen from the newest end the list is not at the bottom, whatever the sentinel last said. `atBottom` stayed
-        // true, following went back on, and the next reply pulled the list down from the saved place (#597).
-        if scratch.listFrame.height > 0, scratch.newestGap > scratch.listFrame.height { atBottom = false }
-        if atBottom { followsEnd = true }
-    }
+    /// A landing is over: near the newest end it follows (a line in the last screenful lands there: what arrived after
+    /// it was held back with no ↓, TestFlight 50/51), further up it reads (#597), by the geometry.
+    private func landed() { setFollow { $0.landed() } }
 
-    /// New content arrived. At the newest end, untouched, but not following (anything that stopped following without
-    /// moving the list): follow again, or the new lines wait behind a sentinel that is on screen, with no ↓. Then
-    /// following goes to the newest, unless a tapped header is held in place (`ChatPin`).
+    /// New content arrived: following goes to the newest, unless a tapped header is held in place (`ChatPin`). Nothing
+    /// here turns following on; that is `ChatFollow`'s (it used to, at the newest end untouched, to make up for the
+    /// sentinel and following disagreeing: #754).
     private func contentArrived(foldChrome: Bool) {
         // A finger on the list: not even at the newest end. The scroll phase says `tracking` only once the finger has
         // moved; touched down near the newest, the chat jumped there under it (`ScrollUnderPushTests`, 263 pt). The Mac
@@ -895,12 +896,10 @@ struct ChatView: View {
         #if os(iOS)
         if pin.list?.isTracking == true { return }
         #endif
-        // At the newest by the scroll geometry too, and no header held: the end marker's visibility and the geometry lag
-        // a list the pin moved directly (both still said so right after a work line opened from its header, and
-        // following came back on: #754).
-        if !followsEnd, atBottom, scratch.atNewest, !pin.holding, !scratch.userDragging, !scratch.landingInFlight { followsEnd = true }
-        guard followsEnd, !pin.holding else { return }
-        scrollToEnd()
+        guard follow.follows, !pin.holding else { return }
+        // More than a screen away while following: a work line opened at the newest end of a running turn, its steps
+        // between the header and the newest. Its next step glides there rather than jumping a screen or more.
+        scrollToEnd(animated: scratch.listFrame.height > 0 && scratch.newestGap > scratch.listFrame.height)
         if foldChrome, userScrolled { hideChrome() }
     }
 
@@ -936,7 +935,7 @@ struct ChatView: View {
         guard viewing == nil else { return }
         // Still on the way to the saved place (an older page loading): what is on screen is not where you read.
         if case .line = entry { return }
-        if atBottom || scratch.visibleLines.isEmpty {
+        if follow.near || scratch.visibleLines.isEmpty {
             UserDefaults.standard.removeObject(forKey: readKey)
             return
         }
@@ -966,7 +965,7 @@ struct ChatView: View {
     private func settleAtEnd() {
         Task { @MainActor in
             await Task.yield()
-            if entry == nil && followsEnd { scrollToEnd() }
+            if entry == nil && follow.follows { scrollToEnd() }
             try? await Task.sleep(for: .milliseconds(400))
             settled = true
         }
@@ -974,9 +973,68 @@ struct ChatView: View {
 
     private func jumpToEnd() {
         Haptics.tap()
-        followsEnd = true
+        setFollow { $0.follow() }
         scrollToEnd(animated: true)
     }
+
+    /// ↓ shows: the follow state says so, once the chat has settled on entry.
+    private var arrowShows: Bool { follow.arrow && settled }
+
+    /// Changes the follow state; written back only if it changed (the geometry reports every frame of a scroll, and
+    /// each write would evaluate the page again).
+    private func setFollow(_ change: (inout ChatFollow) -> Void) {
+        var next = follow
+        change(&next)
+        guard next != follow else { return }
+        // Out of a kept hold (↓, sending, the user's scrolling): the pin lets go of the header too; into another hold
+        // (folded, another line opened), what was tapped settles first.
+        if follow.anchored && !next.anchored {
+            if next.mode == .holding { pin.unkeep() } else { pin.release() }
+        }
+        follow = next
+    }
+
+    /// An anchored header (`changeWork`) lost: the steps under it laid out all at once and the lazy list then measured
+    /// them taller than it had guessed, so the header went off the top and left the list, and the pin had nothing to
+    /// put back (old layout + BeautifulUI, #1173's test failed on master too). By id the list lays that row out exactly:
+    /// it goes to the top, under the bar as far as `rise` let it, and the pin holds it from there.
+    private func keepHeader(_ key: String, rise: CGFloat) {
+        let target = scratch.listFrame.minY + headerRoom + Theme.Space.l
+        Task { @MainActor in
+            for _ in 0..<3 {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard follow.anchored, !scratch.userDragging else { return }
+                let y = scratch.workHeadY[key] ?? -.infinity
+                if y >= target - 1, y < scratch.listFrame.maxY { return }
+                pin.release()
+                // Flipped: the scroll view's bottom edge is the top of the screen.
+                position.scrollTo(id: key, anchor: .bottomLeading)
+                try? await Task.sleep(for: .milliseconds(100))
+                if let y = scratch.workHeadY[key], scratch.listFrame.height > 0 { scrollList(to: chrome.offset + (target - y)) } // > 0: too high, toward older lowers it
+                try? await Task.sleep(for: .milliseconds(100))
+                pin.hold(key, slow: true, keep: true)
+            }
+        }
+    }
+
+    /// A header opened or folded: held while it settles (`ChatPin`'s hold), then as before; anchored, until something
+    /// ends it (`ChatFollow.hold(anchored:)`).
+    private func holdFollow(anchored: Bool = false) {
+        setFollow { $0.hold(anchored: anchored) }
+        scratch.holds += 1
+        let n = scratch.holds
+        if anchored { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(ChatPin.holdTime))
+            guard scratch.holds == n else { return }
+            setFollow { $0.endHold() }
+            // Following again short of the newest (folded from an anchored open): back there.
+            if follow.follows, !scratch.atNewest { scrollToEnd(animated: true) }
+        }
+    }
+
+    /// Streamed words are drawn after the lines (`ChatLiveText`'s rule: not once the message is in the rows).
+    private var liveShown: Bool { ChatLiveText.shows(store) }
 
     private var liveTurnID: String? {
         guard status.isActive, case .turn(let t) = store.blocks.last else { return nil }
@@ -1107,7 +1165,7 @@ struct ChatView: View {
         guard let target else { return false }
         wakeDrawer = nil
         userScrolled = true
-        followsEnd = false
+        setFollow { $0.read() }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120)) // an opened work line's steps are laid out first
             withAnimation(Theme.Motion.standard) { position.scrollTo(id: target, anchor: .center) }
@@ -1152,7 +1210,7 @@ struct ChatView: View {
         }
         wakeDrawer = nil
         userScrolled = true
-        followsEnd = false
+        setFollow { $0.read() }
         Haptics.tap()
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120)) // the opened work line's steps are laid out first
@@ -1193,15 +1251,18 @@ struct ChatView: View {
             let order = currentLines().map(\.id)
             let index = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
             let visible = scratch.visibleLines.filter { index[$0] != nil }.sorted { index[$0]! < index[$1]! }
+            // A work line's header by its own report, the one the pin holds it by: the pin moves the list from inside
+            // that report, and the line's own geometry callback missed the move. A header kept in place while a reply
+            // streamed under it read as moving 56 pt and back, on screenshots identical to the pixel (#1046).
             Color.clear.frame(width: Theme.Size.line, height: Theme.Size.line)
                 .screenProbe("chat-rows", page: style == .assistant ? "assistant" : "agents",
                              ChatRowsShown(items: store.items.count, lines: order.count, visible: visible.count,
-                                           top: visible.first, topY: visible.first.flatMap { scratch.lineY[$0] }.map { Int($0.rounded()) },
-                                           newest: scratch.atNewest, follows: followsEnd,
+                                           top: visible.first, topY: visible.first.flatMap { scratch.workHeadY[$0] ?? scratch.lineY[$0] }.map { Int($0.rounded()) },
+                                           newest: scratch.atNewest, follows: follow.follows,
                                            offset: Int(scratch.scrollY.rounded()), content: Int(scratch.contentHeight.rounded()),
                                            frozen: frozen != nil, ids: order.suffix(4).map { String($0.suffix(16)) },
                                            x: Int(scratch.offsetX.rounded()),
-                                           atBottom: atBottom, arrow: !atBottom && settled, gap: Int(scratch.newestGap.rounded()),
+                                           near: follow.near, mode: "\(follow.mode)", arrow: arrowShows, gap: Int(scratch.newestGap.rounded()),
                                            dragging: scratch.userDragging, held: pin.holding))
         }
     }
@@ -1218,7 +1279,7 @@ struct ChatView: View {
             let newest = lines.last?.id ?? ""
             let shown = Set(scratch.visibleLines)
             let lastShown = lines.lastIndex { shown.contains($0.id) }.map { lines.count - 1 - $0 } ?? -1
-            Text("bottom=\(atBottom ? 1 : 0) follows=\(followsEnd ? 1 : 0) frozen=\(frozen == nil ? 0 : 1) arrow=\(!atBottom && settled ? 1 : 0) newestShown=\(shown.contains(newest) ? 1 : 0) behind=\(lastShown) items=\(store.items.count) withheld=\(store.items.count - (frozen.map { f in Self.prefixCount(store.items) { ($0.seq, $0.part) <= (f.seq, f.part) } } ?? store.items.count)) key=\(key.machineID)/\(key.sessionID)")
+            Text("bottom=\(follow.near ? 1 : 0) follows=\(follow.follows ? 1 : 0) mode=\(follow.mode) frozen=\(frozen == nil ? 0 : 1) arrow=\(arrowShows ? 1 : 0) newestShown=\(shown.contains(newest) ? 1 : 0) behind=\(lastShown) items=\(store.items.count) withheld=\(store.items.count - (frozen.map { f in Self.prefixCount(store.items) { ($0.seq, $0.part) <= (f.seq, f.part) } } ?? store.items.count)) key=\(key.machineID)/\(key.sessionID)")
                 .font(Theme.Font.label).opacity(Self.scrollProbeVisible ? 1 : 0.01).allowsHitTesting(false)
                 .accessibilityIdentifier("chat.scrollState")
         }
@@ -1226,7 +1287,7 @@ struct ChatView: View {
     #endif
 
     @ViewBuilder private var jumpArrow: some View {
-            if !atBottom && settled {
+            if arrowShows {
                 Button(action: jumpToEnd) {
                     Image(systemName: Theme.Icon.down).font(Theme.Font.bodyStrong).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
                 }
@@ -1351,7 +1412,7 @@ struct ChatView: View {
         if viewing != nil { model.unsubscribe(shownKey, by: owner) }
         withAnimation(Theme.Motion.standard) { viewing = agent }
         if agent != nil { model.subscribe(shownKey, by: owner) }
-        followsEnd = true
+        setFollow { $0.follow() }
         frozen = nil
         scrollToEnd()
     }
@@ -1368,23 +1429,14 @@ struct ChatView: View {
                 Color.clear
                     .frame(height: Theme.Size.line)
                     .id(Self.bottomID)
-                    .onScrollVisibilityChange(threshold: 0.01) { visible in
-                        atBottom = visible
-                        // Back at the newest: follow new messages again. Not while a tapped header is held: the rows it
-                        // opened come in at the newest end first, and following came back on just as the pin moved the
-                        // list away (#754).
-                        if visible && !pin.holding { followsEnd = true }
-                    }
                 if let err = store.error {
                     Label(err, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).flippedBack()
                 }
                 // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
-                // history they wait with the rest.
-                if style == .assistant && frozen == nil {
-                    ChatLiveText(store: store)
-                }
+                // history they wait with the rest, as they were drawn then (`Frozen`).
+                if style == .assistant { ChatLiveText(store: store, held: frozen?.text) }
                 // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
-                ForEach(frozen == nil ? pending.reversed() : []) { msg in
+                ForEach((frozen.map { f in pending.filter { f.pending.contains($0.id) } } ?? pending).reversed()) { msg in
                     PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
                         .flippedBack()
                         .id(msg.id.uuidString)
@@ -1459,10 +1511,11 @@ struct ChatView: View {
             if new.content < old.content, new.content <= new.height, old.content > old.height,
                Date.now.timeIntervalSince(scratch.foldedAt) < 1.5, !scratch.userDragging {
                 listBuild += 1
-                followsEnd = true
+                setFollow { $0.follow() }
             }
             scratch.atNewest = new.offset <= -new.top + 0.5
             scratch.newestGap = new.offset + new.top
+            setFollow { $0.scrolled(gap: scratch.newestGap) }
             chrome.offset = new.offset
             // A height change (keyboard) moves the offset too: that is not the user scrolling.
             if old.height != new.height { return }
@@ -1474,20 +1527,37 @@ struct ChatView: View {
             if phase != .idle { scratch.lastActivity = .now }
             let flick = phase == .decelerating && (old == .tracking || old == .interacting || scratch.userDragging)
             scratch.userDragging = phase == .tracking || phase == .interacting || flick
-            if phase == .idle, old != .idle, old != .animating { settleChrome() } // the finger lifted, the glide ended
+            if phase == .idle, old != .idle, old != .animating {
+                settleChrome() // the finger lifted, the glide ended
+                setFollow { $0.released() } // where the user's scrolling stopped decides (nothing if it was the app's)
+            }
             if phase == .tracking || phase == .interacting {
                 scratch.lastUserScroll = .now
                 menu.dismiss()
                 entry = nil // the user scrolls on their own: no landing on the saved place after this
                 userScrolled = true
-                followsEnd = false // the user has the list; nothing moves it until they return to the newest
-            } else if phase == .idle, userScrolled, atBottom {
-                followsEnd = true
+                setFollow { $0.touched() } // nothing changes until the finger lets go
             }
         }
         .environment(menu)
         .environment(\.chatPin, pin)
         .onAppear { pin.letGo = { [position = $position] in position.wrappedValue = ScrollPosition(idType: String.self) } }
+        #if os(macOS)
+        .onAppear {
+            wheel.start(list: { [pin] in pin.list }) { on in
+                if on { setFollow { $0.touched() } } else { setFollow { $0.released() } }
+            }
+        }
+        .onDisappear { wheel.stop() }
+        #endif
+        #if DEBUG
+        .onAppear {
+            guard ScrollTrace.enabled else { return }
+            ScrollTrace.shared.start(list: { [pin] in pin.list }) { [store, scratch, follow = $follow, frozen = $frozen] in
+                "\(follow.wrappedValue.mode) near \(follow.wrappedValue.near ? 1 : 0) touch \(follow.wrappedValue.touching ? 1 : 0) drag \(scratch.userDragging ? 1 : 0) frozen \(frozen.wrappedValue == nil ? 0 : 1) ftext \(frozen.wrappedValue?.text.count ?? -1) live \(store.liveText.count) items \(store.items.count) gap \(Int(scratch.newestGap))"
+            }
+        }
+        #endif
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
         .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
         .sheet(isPresented: Binding(get: { wakeDrawer != nil }, set: { if !$0 { wakeDrawer = nil } })) {
@@ -1504,11 +1574,12 @@ struct ChatView: View {
         }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
-        .onChange(of: followsEnd) { _, follows in
-            if follows {
+        .onChange(of: follow.holdsBack) { _, holds in
+            if !holds {
                 frozen = nil
             } else if let last = store.items.last {
-                frozen = Frozen(seq: last.seq, part: last.part, live: liveTurnID)
+                frozen = Frozen(seq: last.seq, part: last.part, live: liveTurnID,
+                                text: style == .assistant && liveShown ? store.liveText : "", pending: store.pending.map(\.id))
             }
         }
         .onChange(of: rows.last?.id) { _, _ in contentArrived(foldChrome: false) }
@@ -1528,14 +1599,14 @@ struct ChatView: View {
             else { return }
             scratch.sentHere.remove(at: i)
             guard scratch.lastUserScroll < scratch.sentAt else { return }
-            followsEnd = true
+            setFollow { $0.follow() }
             scrollToEnd()
         }
         .onChange(of: store.pending.count) { old, new in
             guard new > old else { return }
             scratch.sentHere = Array((scratch.sentHere + store.pending.map { (id: $0.id, text: $0.text) }).suffix(20))
             scratch.sentAt = .now
-            followsEnd = true
+            setFollow { $0.follow() }
             scrollToEnd(animated: true)
         }
         // Parse what rows will show (Markdown, paths) in the background as messages load: scrolling then only lays out.
@@ -2040,7 +2111,7 @@ struct ChatView: View {
                 Task {
                     try? await Task.sleep(for: .seconds(8))
                     userScrolled = true // as if dragged: older pages only load after the user took the list
-                    followsEnd = false
+                    setFollow { $0.read() }
                     var log: [String] = []
                     var y: CGFloat = chrome.offset
                     for step in 0..<20 {
@@ -2048,7 +2119,7 @@ struct ChatView: View {
                         withAnimation(.easeOut(duration: 1.5)) { scrollList(to: y) }
                         try? await Task.sleep(for: .seconds(2.5))
                         let s = model.chat(shownKey)
-                        log.append("step \(step) offset=\(Int(chrome.offset)) target=\(Int(y)) items=\(s.items.count) rows=\(s.rows.count) first=\(s.items.first?.seq ?? 0) more=\(s.hasMore) loading=\(s.isLoadingOlder) follows=\(followsEnd) atBottom=\(atBottom) ends=\(scratch.endJumps)")
+                        log.append("step \(step) offset=\(Int(chrome.offset)) target=\(Int(y)) items=\(s.items.count) rows=\(s.rows.count) first=\(s.items.first?.seq ?? 0) more=\(s.hasMore) loading=\(s.isLoadingOlder) follows=\(follow.follows) near=\(follow.near) ends=\(scratch.endJumps)")
                         y = max(y, chrome.offset)
                     }
                     if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
@@ -2189,7 +2260,7 @@ struct ChatView: View {
                 Task {
                     try? await Task.sleep(for: .seconds(5))
                     userScrolled = true
-                    followsEnd = false
+                    setFollow { $0.read() }
                     position.scrollTo(edge: .bottom)
                 }
             }
@@ -2315,8 +2386,7 @@ struct ChatView: View {
         scratch.entryPages = 0
         userScrolled = false
         settled = false
-        followsEnd = true
-        atBottom = false
+        setFollow { $0.follow() }
         settleAtEnd()
         bindMenu()
         menu.selected = nil
@@ -3767,19 +3837,26 @@ private struct ChatRegion<Content: View>: View {
 
 private struct ChatLiveText: View {
     let store: ChatStore
+    /// While the chat holds back what arrives (`Frozen`): the words as they were drawn then. One view either way: drawn
+    /// in a branch of its own beside this one (both rows `live`), the frozen words never showed, this view stayed in
+    /// the lazy list and went on growing under the finger (2026-11-04, StreamingScrollTests: 9 to 30 pt every delta).
+    var held: String?
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("ChatLiveText")
         #endif
+        // Held: the store is not read, so the deltas do not draw this again.
+        let text = held ?? (Self.shows(store) ? store.liveText : "")
+        if !text.isEmpty { StreamingText(text: text).id("live").flippedBack() }
+    }
+
+    /// There is streamed text, and its message is not the last row yet.
+    static func shows(_ store: ChatStore) -> Bool {
         let live = store.liveText
-        let lastText: String? = {
-            if case .assistant(let item) = store.rows.last { return item.text }
-            return nil
-        }()
-        if !live.isEmpty && !(lastText.map { $0.hasPrefix(live) || live == $0 } ?? false) {
-            StreamingText(text: live).id("live").flippedBack()
-        }
+        guard !live.isEmpty else { return false }
+        if case .assistant(let item) = store.rows.last, let text = item.text { return !(text.hasPrefix(live) || live == text) }
+        return true
     }
 }
 
@@ -3868,6 +3945,8 @@ final class ChatScratch {
         var frozen: ChatView.Frozen?
         /// The assistant conversation's feed items (TasksStore): one more is a new line.
         var feed: [String] = []
+        /// The running turn's next words are streaming (`ChatLines.lines`).
+        var streaming = false
     }
     /// What was sent from this chat lately: its transcript copy arriving brings you to the newest, others do not.
     var sentHere: [(id: UUID, text: String)] = []
@@ -3890,10 +3969,10 @@ final class ChatScratch {
     var userDragging = false
     /// The list sits exactly at its newest end (offset at the content inset).
     var atNewest = false
-    /// Between a landing's first jump and its end (`ChatView.landed`): the list is not where it is going yet.
-    var landingInFlight = false
     /// How far the list is from its newest end (pt; the flipped list's offset past its inset).
     var newestGap: CGFloat = 0
+    /// Headers opened or folded (`ChatView.holdFollow`): only the last one's hold ends the follow state's.
+    var holds = 0
     /// The saved place's search for older pages (`ChatView.searchOlderForEntry`).
     var entryPages = 0
     var entrySearching = false
@@ -4007,9 +4086,10 @@ nonisolated struct ChatRowsShown: Encodable, Equatable {
     var ids: [String]
     /// The list's horizontal offset (-16 at rest: the side margins).
     var x: Int
-    /// The end sentinel is on screen; ↓ 回到最新 shows; how far the list is from its newest end (pt); a finger is on it;
-    /// the pin holds a header.
-    var atBottom: Bool
+    /// Within `ChatFollow.tolerance` of the newest end; the follow mode; ↓ 回到最新 shows; how far the list is from its
+    /// newest end (pt); a finger is on it; the pin holds a header.
+    var near: Bool
+    var mode: String
     var arrow: Bool
     var gap: Int
     var dragging: Bool

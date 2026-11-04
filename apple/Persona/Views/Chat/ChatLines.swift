@@ -17,10 +17,15 @@ struct ChatLines {
     var foldsIntoRun: (ToolCall) -> Bool = { _ in true }
 
     /// The lines of these blocks with the open work lines unfolded.
-    func build(_ blocks: [ChatBlock], live: String?) -> [ChatLine] { unfold(lines(blocks, live: live)) }
+    func build(_ blocks: [ChatBlock], live: String?, streaming: Bool = false) -> [ChatLine] {
+        unfold(lines(blocks, live: live, streaming: streaming))
+    }
 
-    /// The lines of these blocks, before open work lines are unfolded.
-    func lines(_ blocks: [ChatBlock], live liveID: String?) -> [ChatLine] {
+    /// The lines of these blocks, before open work lines are unfolded. `streaming`: the running turn's next words are
+    /// streaming in (drawn after the lines): the words before them are in its work line already, where they go once
+    /// those are written. Out of it until then, they stayed under the new words as these streamed in, and then folded
+    /// away: every sentence of a running turn moved the chat up two lines and down three (2026-11-04).
+    func lines(_ blocks: [ChatBlock], live liveID: String?, streaming: Bool = false) -> [ChatLine] {
         var out: [ChatLine] = []
         for block in blocks {
             switch block {
@@ -67,7 +72,7 @@ struct ChatLines {
                     let photos = Self.photos(seg.rows)
                     if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
                     if let u = seg.user { out.append(.row(u)) }
-                    let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
+                    let last = live && streaming ? nil : seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
                     // A compaction after the answer (Claude Code compacted once the turn was over: idle, /compact on
                     // its own) is a divider after it, not a step hidden in the turn's work line.
                     let after = Set(seg.rows.indices.filter { n in
