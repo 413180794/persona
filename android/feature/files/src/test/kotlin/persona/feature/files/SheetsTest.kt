@@ -1,0 +1,134 @@
+package persona.feature.files
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+class SheetsTest {
+    @Test fun delimitedFollowsRfc4180() {
+        val rows = Delimited.parse("a,\"b,1\",\"say \"\"hi\"\"\"\r\n\"two\nlines\",,x\n\n3", ',')
+        assertEquals(listOf(listOf("a", "b,1", "say \"hi\""), listOf("two\nlines", "", "x"), listOf("3")), rows)
+    }
+
+    @Test fun delimitedKeepsValuesAsWrittenAndSkipsTheBom() {
+        assertEquals(listOf(listOf("001", "1e3", " 2 ")), Delimited.parse("﻿001,1e3, 2 ", ','))
+        assertEquals(listOf(listOf("a", "")), Delimited.parse("a,", ','))
+        // A lone empty field is a blank line, skipped (as iOS does).
+        assertEquals(emptyList<List<String>>(), Delimited.parse("\"\"", ','))
+    }
+
+    @Test fun separatorByNameOrFirstLine() {
+        assertEquals('\t', Delimited.separator("x.tsv", "a,b"))
+        assertEquals(';', Delimited.separator("x.csv", "a;b;c\n1,5;2"))
+        assertEquals(',', Delimited.separator("x.csv", "a,b;c"))
+        assertEquals('\t', Delimited.separator("x.csv", "a\tb\tc,d"))
+        assertEquals(',', Delimited.separator("x.csv", "plain"))
+    }
+
+    @Test fun sheetCapsRows() {
+        val sheet = Delimited.sheet("big.csv", (0..TableSheet.MAX_ROWS + 5).joinToString("\n"))
+        assertEquals(TableSheet.MAX_ROWS, sheet.rows.size)
+        assertTrue(sheet.capped)
+        assertEquals("big", sheet.name)
+    }
+
+    @Test fun columnNames() {
+        assertEquals(listOf("A", "Z", "AA", "AZ", "BA", "ZZ", "AAA"), listOf(0, 25, 26, 51, 52, 701, 702).map(TableSheet::columnName))
+        assertEquals(27, Xlsx.column("AB12"))
+        assertEquals(null, Xlsx.column("12"))
+    }
+
+    @Test fun numbersAsExcelShowsThem() {
+        assertEquals("42", Xlsx.number("42.0"))
+        assertEquals("0.1", Xlsx.number("0.1000000000000000055511151231257827"))
+        assertEquals("3.14159", Xlsx.number("3.14159"))
+        assertEquals("-7", Xlsx.number("-7"))
+        assertEquals("1E+20", Xlsx.number("1e20"))
+        assertEquals("abc", Xlsx.number("abc"))
+    }
+
+    @Test fun datesFromSerials() {
+        assertEquals("2024-01-15", Xlsx.date("45306"))
+        assertEquals("2024-01-15 12:30", Xlsx.date("45306.5208333333"))
+        assertEquals("06:00", Xlsx.date("0.25"))
+        // Excel's 1900 leap-year bug: serial 60 is a 1900-02-29 that never was; days before it are off by one.
+        assertEquals("1900-01-01", Xlsx.date("1"))
+        assertEquals("1900-02-28", Xlsx.date("59"))
+        assertEquals("1900-02-29", Xlsx.date("60"))
+        assertEquals("1900-03-01", Xlsx.date("61"))
+    }
+
+    @Test fun readsAWorkbook() {
+        val sheets = Xlsx.read(workbook())
+        assertEquals(listOf("数据", "Empty"), sheets.map { it.name })
+        val s = sheets[0]
+        assertEquals(listOf("名称", "数量", "日期", "通过"), s.rows[0])
+        assertEquals(listOf("苹果", "12", "2024-01-15", "TRUE"), s.rows[1])
+        // Row 3 is missing in the file: an empty row in its place; cell C4 is placed by its reference.
+        assertEquals(emptyList<String>(), s.rows[2])
+        assertEquals(listOf("内联", "0.5", "", "FALSE"), s.rows[3])
+        assertEquals(4, s.columns)
+        assertTrue(sheets[1].rows.isEmpty())
+    }
+
+    @Test fun partPathsResolveDots() {
+        assertEquals("xl/worksheets/a.xml", Xlsx.normalizePath("xl/../xl/./worksheets/a.xml"))
+        assertEquals("xl/worksheets/a.xml", Xlsx.normalizePath("xl//worksheets/a.xml"))
+    }
+
+    @Test fun partsWithADtdAreNotParsed() {
+        assertTrue(Xml.declaresDtd("<?xml?><!DOCTYPE x [<!ENTITY a \"b\">]><x>&a;</x>".toByteArray()))
+        assertTrue(Xml.declaresDtd("<!doctype x>".toByteArray()))
+        assertFalse(Xml.declaresDtd("<sst><si><t>DOCTYPE</t></si></sst>".toByteArray()))
+        val bomb = "<!DOCTYPE s [<!ENTITY a \"aaaaaaaaaa\"><!ENTITY b \"&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;\">]><sst><si><t>&b;</t></si></sst>"
+        val found = Xml.elements(bomb.toByteArray(), setOf("si"))
+        assertTrue(found.isEmpty())
+    }
+
+    @Test fun aNonWorkbookSaysWhy() {
+        val failure = runCatching { Xlsx.read("not a zip".toByteArray()) }.exceptionOrNull()
+        assertTrue(failure is SheetFailure)
+    }
+
+    @Test fun numericCellsAlignRight() {
+        listOf("1,234.5", "-3", "12%", "$4", "¥4", "1e5", "(12)").forEach { assertTrue(it, looksNumeric(it)) }
+        listOf("", "abc", "1-2", "v1.2").forEach { assertFalse(it, looksNumeric(it)) }
+    }
+
+    @Test fun wideCharactersCountTwo() {
+        assertEquals(4, textCells("名称"))
+        assertEquals(3, textCells("abc"))
+    }
+
+    @Test fun summary() {
+        val sheet = Delimited.sheet("a.csv", "a,b\n1,2,3")
+        assertEquals("2 行 × 3 列", sheetSummary(sheet, false))
+        assertEquals("2 行 × 3 列 · 只读了前 2 MB", sheetSummary(sheet, true))
+    }
+
+    companion object {
+        /** A small xlsx: shared and inline strings, a date style, booleans, a skipped row, an empty second sheet. */
+        fun workbook(): ByteArray {
+            val parts = mapOf(
+                "[Content_Types].xml" to "<Types/>",
+                "xl/workbook.xml" to """<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="数据" sheetId="1" r:id="rId1"/><sheet name="Empty" sheetId="2" r:id="rId2"/></sheets></workbook>""",
+                "xl/_rels/workbook.xml.rels" to """<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="/xl/worksheets/sheet2.xml"/></Relationships>""",
+                "xl/sharedStrings.xml" to """<sst><si><t>名称</t></si><si><t>数量</t></si><si><r><t>日</t></r><r><t>期</t></r><rPh><t>にち</t></rPh></si><si><t>通过</t></si><si><t>苹果</t></si></sst>""",
+                "xl/styles.xml" to """<styleSheet><numFmts><numFmt numFmtId="164" formatCode="&quot;d&quot;0.0"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/><xf numFmtId="164"/></cellXfs></styleSheet>""",
+                "xl/worksheets/sheet1.xml" to """<worksheet><sheetData>
+                    <row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c></row>
+                    <row r="2"><c r="A2" t="s"><v>4</v></c><c r="B2" s="2"><v>12</v></c><c r="C2" s="1"><v>45306</v></c><c r="D2" t="b"><v>1</v></c></row>
+                    <row r="4"><c r="A4" t="inlineStr"><is><t>内联</t></is></c><c r="B4"><v>0.5</v></c><c r="D4" t="b"><v>0</v></c></row>
+                    </sheetData></worksheet>""",
+                "xl/worksheets/sheet2.xml" to "<worksheet><sheetData/></worksheet>",
+            )
+            val out = ByteArrayOutputStream()
+            ZipOutputStream(out).use { zip -> parts.forEach { (name, xml) -> zip.putNextEntry(ZipEntry(name)); zip.write(xml.toByteArray()); zip.closeEntry() } }
+            return out.toByteArray()
+        }
+    }
+}
