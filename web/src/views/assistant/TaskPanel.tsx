@@ -51,7 +51,7 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
         onClose={onClose}
       />
       {agents.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 [scrollbar-width:none]">
+        <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 scrollbar-none">
           {agents.map((a) => {
             const s = (sessions[a.machine_id] ?? []).find((x) => x.session_id === a.session_id);
             const key = `${a.machine_id}/${a.session_id}`;

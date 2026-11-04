@@ -20,5 +20,5 @@
 | `android.md` | 改 Android App：Compose 与玻璃（Haze）、切页面闪烁、平板 / 折叠屏、深浅色、前台服务、模拟器和真机调试 |
 | `macos.md` | 改 Mac App：兼容层、分栏、截图 |
 | `windows.md` | 改 Windows 上的 node、在 Windows 上开发：LF 检出、AF_UNIX 路径长度、`bash` 是 WSL、读别的进程的 PEB、Orca 的命名管道 |
-| `web.md` | 改网页界面：React 事件、弹出菜单、窄屏布局、浏览器交互回归、xterm、加 npm 依赖、Playwright 验证、展开折叠的动画和滚动锚定 |
+| `web.md` | 改网页界面：React 事件、弹出菜单、窄屏布局、浏览器交互回归、xterm、加 npm 依赖、Playwright 验证、展开折叠的动画和滚动锚定、全局样式和 Tailwind 的 layer |
 | `testing.md` | 跑 UI 测试、截图、量帧率 / 跳动；模拟器和 XCUITest 的怪行为；起 sshd 做测试 |

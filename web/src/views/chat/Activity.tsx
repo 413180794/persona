@@ -147,7 +147,7 @@ function BackgroundList({ tasks, onOutput }: { tasks: BackgroundTask[]; onOutput
 /** Under the header, while subagents run (plus the one being read): 主 Agent and each subagent. */
 export function AgentStrip({ agents, viewing, onSelect }: { agents: Subagent[]; viewing?: string; onSelect: (a: Subagent | null) => void }) {
   return (
-    <div className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-line bg-page/85 px-3 py-2 [scrollbar-width:none] sm:px-4" role="tablist" aria-label="子 Agent">
+    <div className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-line bg-page/85 px-3 py-2 scrollbar-none sm:px-4" role="tablist" aria-label="子 Agent">
       <Chip on={!viewing} title="主 Agent" onClick={() => onSelect(null)} />
       {agents.map((a) => (
         <Chip key={a.id} on={viewing === a.id} title={subagentTitle(a)} running={a.running} done={!a.running} onClick={() => onSelect(a)} />

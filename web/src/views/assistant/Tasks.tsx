@@ -596,19 +596,24 @@ export function TaskDock({ conversation }: { conversation: string }) {
     .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
     .filter((x) => rank[x.st] !== undefined)
     .sort((a, b) => rank[a.st]! - rank[b.st]! || b.t.created_at.localeCompare(a.t.created_at));
-  const pill = "inline-flex h-8 max-w-[240px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[12.5px] font-semibold";
+  // 全部 and the pills share one capsule (height, radius, padding, size), like iOS DockPillLabel.
+  const capsule = "inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[12.5px]";
+  const pill = cx(capsule, "max-w-[240px] gap-2 font-semibold");
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    // Top-aligned, so a scrollbar an engine still draws under the pills cannot push 全部 down from them (#1381).
+    <div className="flex min-w-0 items-start gap-2" data-testid="task-dock">
       <button
         type="button"
         data-testid="task-dock-board"
         onClick={() => navigate({ name: "todos" })}
-        className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full bg-field px-3 text-[12.5px] font-medium text-ink-2 hover:bg-hover"
+        className={cx(capsule, "bg-field font-medium text-ink-2 hover:bg-hover")}
       >
         全部 {mine.length + agents.length}
       </button>
       {(going.length > 0 || agents.length > 0) && (
-        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+        // The scroller pads by the focus ring's width and takes it back, so the ring is not clipped and the row
+        // stays a pill high.
+        <div className="scrollbar-none -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1">
           {going.map(({ t, st }) => (
             <button
               key={t.id}

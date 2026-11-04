@@ -156,7 +156,7 @@ function Crumbs({ root, stack, go }: { root: string; stack: string[]; go: (level
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-2">
       <IconButton icon="chevronLeft" label="上一级" onClick={() => go(stack.length - 1)} disabled={!stack.length} iconSize={16} />
-      <div ref={bar} className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]" aria-label="位置">
+      <div ref={bar} className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none" aria-label="位置">
         {names.map((n, i) => {
           const current = i === stack.length;
           return (

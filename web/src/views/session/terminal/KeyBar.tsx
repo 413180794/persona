@@ -136,7 +136,7 @@ export function KeyBar({ feed, v, onEditShortcuts }: { feed: TerminalFeed; v: Fe
         />
       )}
       <div role="toolbar" aria-label="按键栏" className="flex items-center gap-1">
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none">
           <ModifierKeyCap k="ctrl" label="Ctrl" name="Control" feed={feed} state={v.mods.ctrl} disabled={off} />
           <Key label="Esc" title="Esc" disabled={off} onPress={k("esc")} />
           <Key label="Tab" title="Tab" disabled={off} onPress={k("tab")} />

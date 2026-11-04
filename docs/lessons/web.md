@@ -172,3 +172,13 @@
 - **中文的「发粗宋体」是字体回退**：docx 点名的字体（Calibri、等线）本机没有时，浏览器退到自己的默认字体，中文是宋体。不能只给外层设无衬线：docx-preview 在样式表和元素上都直接写了 `font-family`，要给每一处补上回退列表；衬线只跟着文档点名的衬线字体。
 - **iWork 文件是 zip，预览在里面**：新格式（2013 以后）有 `preview.jpg` 等第一页的图，旧一点的有 `QuickLook/Preview.pdf`（每一页）。zip 的目录在文件末尾，按 Range 读末尾 64 KiB 找到中央目录、再读那一项，不用下载整个文件；预览一般是不压缩存的。
 - **Playwright 的 `addInitScript` 会注入每个 frame**，包括沙盒 iframe：截图日志里的「document is sandboxed and lacks the allow-same-origin flag」是测试脚本自己读 localStorage 报的，不是页面的错。
+
+## 不在 layer 里的全局样式压过所有 Tailwind 工具类（2026-11-04，#1381）
+
+- `styles.css` 里写在 `@layer` 外面的规则，按层叠规则排在所有 layer 之后，选择器再弱也压过 Tailwind v4 的工具类（都在 `@layer utilities` 里）。
+  以前全局的 `* { scrollbar-width: thin }` 就这样让每个 `[scrollbar-width:none]` 都失效：任务坞、子 Agent 标签、终端按键栏的横向滚动行一直画着细滚动条。
+  macOS 默认滚动条是浮层、不占地方，开发时看不出来；Linux / Windows 和设成「始终显示滚动条」的 Mac 上，它占了几像素高度，把胶囊往上顶，旁边居中的「全部」就低了一截。
+- 全局的元素样式放进 `@layer base`；横着滚、不要滚动条的行用 `scrollbar-none`（`@utility`，带 WebKit 18.2 之前要的 `::-webkit-scrollbar`）。
+- 无头 Chrome 默认带 `--hide-scrollbars`，截图里永远没有滚动条：要看滚动条的情形，Playwright 启动时 `ignore_default_args=["--hide-scrollbars"]`（Linux 上就是常显的经典滚动条）。
+- 无头 Chrome 不理 CDP 的 `Input.synthesizeScrollGesture`，测触摸横滑用 `Input.dispatchTouchEvent` 发 touchStart / touchMove / touchEnd。
+- 没有桌面库的 Linux 开发机上 Playwright 的 WebKit 缺一堆系统库跑不了，WebKit 的检查放到 Mac 上跑（`ssh -R` 把网页端口转过去）。
