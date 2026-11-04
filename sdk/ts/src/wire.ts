@@ -136,6 +136,68 @@ export interface Contributes {
   channel?: ChannelItem[];
   events?: EventsItem[];
   shortcuts?: ShortcutItem[];
+  skills?: SkillItem[];
+  prompts?: PromptItem[];
+  themes?: ThemeItem[];
+  triage_templates?: TriageTemplateItem[];
+}
+
+/**
+ * A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
+ */
+export interface SkillItem {
+  id: string;
+  /** The directory, relative to the package. */
+  dir: string;
+}
+
+export type PromptKind = "instructions" | "quick" | (string & {});
+export const PROMPT_KINDS = ["instructions", "quick"] as const;
+
+/**
+ * A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template the apps
+ * offer in the message box).
+ */
+export interface PromptItem {
+  id: string;
+  kind: PromptKind;
+  /** instructions: the .md file. */
+  file?: string;
+  /** quick: what the apps show. */
+  title?: string;
+  /** quick: what goes into the message box. */
+  text?: string;
+}
+
+/**
+ * A scheme's role colors, #RRGGBB: accent (required), positive, caution, danger, ai.
+ */
+export interface ThemeColors {
+  accent: string;
+  positive?: string;
+  caution?: string;
+  danger?: string;
+  ai?: string;
+}
+
+/**
+ * A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer one
+ * that fails.
+ */
+export interface ThemeItem {
+  id: string;
+  name: string;
+  light: ThemeColors;
+  dark: ThemeColors;
+}
+
+/**
+ * A template of an inbox source's triage rules (triage_rules): settings offer it.
+ */
+export interface TriageTemplateItem {
+  id: string;
+  title: string;
+  text: string;
 }
 
 /**

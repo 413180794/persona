@@ -43,7 +43,7 @@ func (ps *extensions) extensionSkills() []ExtensionSkill {
 			continue
 		}
 		total := 0
-		for _, a := range p.Manifest.Assistants() {
+		for _, a := range p.Manifest.AssistantParts() { // with the declarative skills (contributes.skills)
 			for _, dir := range a.Skills {
 				root := filepath.Join(p.Dir, filepath.FromSlash(dir))
 				files := map[string][]byte{}
@@ -112,7 +112,7 @@ func (ps *extensions) extensionInstructions() string {
 		if !p.Record.Enabled || p.Problem != "" || p.Dir == "" {
 			continue
 		}
-		for _, a := range p.Manifest.Assistants() {
+		for _, a := range p.Manifest.AssistantParts() { // with the declarative instructions (contributes.prompts)
 			if a.Instructions == "" {
 				continue
 			}

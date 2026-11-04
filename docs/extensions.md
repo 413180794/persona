@@ -78,6 +78,10 @@ hub 给老路径的每次调用按路由计数（`extension_compat.go` 的 `lega
 | `channel`（版本 1） | `channel.` | `id`（`^[a-z][a-z0-9_]{0,31}$`，不能是 8 位十六进制）、`name`、`kind`（`im`）、`connector?`（绑定和状态来自同一个扩展的这个连接器）、`bind?`（`qr` / `code` / `fields`）、`description?`、`capabilities`（收图片 / 文件 / 语音、`format`、`max_text`、`asks`、`push`、`typing`、`progress`、`threads`） | 进程说协议；没有 `connector` 时 `on_startup` | 和 Persona 对话的渠道：hub 跑统一管线（进对话、跟踪这一轮、答案发回、提问），扩展只管和 IM 说话，见 [channels.md](channels.md) |
 | `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉扩展 hub 上发生了什么，见下面「事件」 |
 | `shortcuts`（版本 1） | `shortcut.` | `id`、`title`（1–40 字）、`description?`（≤ 200 字）、`params?`（≤ 8 个 `{name, title, kind: text / number / toggle / choice, choices?, required?}`）、`ui?`（同一个扩展的整页） | 进程说协议 | 快捷指令和 Siri 里的动作（iPhone、Mac、Apple Watch），见下面「系统级位置」 |
+| `skills`（版本 1） | — | `id`、`dir`（包里有 `SKILL.md` 的目录） | 纯声明即可 | 助手的技能，和 `assistant.skills` 一样下发，见下面「纯声明贡献」 |
+| `prompts`（版本 1） | — | `id`、`kind`：`instructions`（`file`：包里的 `.md`）/ `quick`（`title`、`text`） | 纯声明即可 | 接在助手 CLAUDE.md 后的说明；App 输入框的快捷提示，见「纯声明贡献」 |
+| `themes`（版本 1） | — | `id`、`name`、`light` / `dark`：角色色 `accent`（必填）、`positive`、`caution`、`danger`、`ai` 的 `#RRGGBB` | 纯声明即可 | 设置 › 外观 › 主题色里多一种，见「纯声明贡献」 |
+| `triage_templates`（版本 1） | — | `id`、`title`（≤ 40 字）、`text`（≤ 4000 字） | 纯声明即可 | 填收件箱分拣规则（`triage_rules`）时能选的模板，见「纯声明贡献」 |
 
 hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
 
@@ -1169,6 +1173,25 @@ schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`
 新增启动器 `POST /api/v1/launchers` 带 `preset` 时，没填的 Base URL、接入类型、API、模型、小模型从预设补上，用户只填名字和 Key；启动器记着它来自哪个预设。
 App 里是「设置 › 模型供应商 › 新增」的「从扩展添加」（iOS 和网页；有预设时才出现），见 `docs/launchers.md`「从扩展添加」。
 新建 Agent 的模型选择器也列预设的模型：从这个预设加的启动器、网关地址和预设一样的启动器（手动加的、~/.zshrc 的），在 `/model` 的几项后面补上预设的全部模型。
+
+## 纯声明贡献（#1854）
+
+只有清单和几个文件、不跑程序的扩展能做的事（模型供应商 `providers` 见上一节）。和别的贡献一样能单独开关（「贡献的开关」），扩展停用就都没了。
+
+| 扩展点 | 写法 | 到哪 |
+| --- | --- | --- |
+| `skills` | `{"id": "weekly-review", "dir": "skills/weekly-review"}`：包里的目录，里面有 `SKILL.md` | 和 `assistant` 的 `skills` 同一条路：随 `assistant.prepare` 下发到跑助手的电脑，放进助手目录（见「助手」） |
+| `prompts` | `{"id": "tone", "kind": "instructions", "file": "assistant/tone.md"}` | 接在助手的 CLAUDE.md 后面（同 `assistant.instructions`） |
+| | `{"id": "today", "kind": "quick", "title": "今天做了什么", "text": "…"}` | App 输入框的快捷提示：`GET /api/v1/extensions/-/prompts` → `{prompts: [{extension, extension_name, id, title, text}]}` |
+| `themes` | `{"id": "forest", "name": "森林", "light": {"accent": "#2E7D32", …}, "dark": {"accent": "#81C784"}}`：只能给设计系统的角色色（`accent` 必填，`positive`、`caution`、`danger`、`ai` 可选），不能给字号、图标、别的颜色 | `GET /api/v1/extensions/-/themes` → `{themes: [{extension, extension_name, id, name, light, dark, problems?}]}` |
+| `triage_templates` | `{"id": "quiet-groups", "title": "大群只看提到我的", "text": "…"}` | 填一个来源的分拣规则（`triage_rules`）时能选：`GET /api/v1/extensions/-/triage-templates` → `{templates: [{extension, extension_name, id, title, text}]}` |
+
+- 装的时候查包里有 `SKILL.md`、`.md` 文件（同 `assistant`）。三个 `GET` 任何设备都能读，只列开着的扩展里开着的贡献；扩展的 token 不能调（只认完整凭据）。
+- **主题色的契约（给各端）**：hub 按 WCAG 算每个角色色在浅色（对白底）、深色（对黑底）下的对比度，低于 3 的写进 `problems`（「light.accent #FFF59D 对比度 1.2，低于 3」）。
+  各端：有 `problems` 的不出现在 设置 › 外观 › 主题色 里；没有的作为一种新的主题色（`ThemeColor`）出现，名字是 `name`，只换给了的角色色、其余用默认主题色的，
+  再按各端自己的 `StyleSpecTests` 一类的检查（真实背景、各界面风格）过一遍，不合格的同样不出现；扩展停用或关掉这一项后，选着它的退回默认主题色。
+- **快捷提示**：各端在输入框的快捷提示 / 斜杠菜单里列出来（标题单行、截断），选了把 `text` 放进输入框（不直接发出去）。
+- **分拣模板**：设置里编辑一个来源的「分拣规则」时，有模板就多一个「从模板填」，选了把 `text` 填进去（替换前确认）。
 
 ## App：设置 › 扩展
 

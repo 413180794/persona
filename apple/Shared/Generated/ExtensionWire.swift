@@ -362,8 +362,12 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
     var channel: [ExtensionChannelItem]?
     var events: [ExtensionEventsItem]?
     var shortcuts: [ExtensionShortcutItem]?
+    var skills: [ExtensionSkillItem]?
+    var prompts: [ExtensionPromptItem]?
+    var themes: [ExtensionThemeItem]?
+    var triageTemplates: [ExtensionTriageTemplateItem]?
 
-    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil) {
+    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil) {
         self.connectors = connectors
         self.voice = voice
         self.computer = computer
@@ -377,6 +381,10 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
         self.channel = channel
         self.events = events
         self.shortcuts = shortcuts
+        self.skills = skills
+        self.prompts = prompts
+        self.themes = themes
+        self.triageTemplates = triageTemplates
     }
 
     enum CodingKeys: String, CodingKey {
@@ -393,6 +401,10 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
         case channel
         case events
         case shortcuts
+        case skills
+        case prompts
+        case themes
+        case triageTemplates = "triage_templates"
     }
 
     init(from decoder: Decoder) throws {
@@ -410,6 +422,169 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
         self.channel = try? c.decodeIfPresent([ExtensionChannelItem].self, forKey: .channel)
         self.events = try? c.decodeIfPresent([ExtensionEventsItem].self, forKey: .events)
         self.shortcuts = try? c.decodeIfPresent([ExtensionShortcutItem].self, forKey: .shortcuts)
+        self.skills = try? c.decodeIfPresent([ExtensionSkillItem].self, forKey: .skills)
+        self.prompts = try? c.decodeIfPresent([ExtensionPromptItem].self, forKey: .prompts)
+        self.themes = try? c.decodeIfPresent([ExtensionThemeItem].self, forKey: .themes)
+        self.triageTemplates = try? c.decodeIfPresent([ExtensionTriageTemplateItem].self, forKey: .triageTemplates)
+    }
+}
+
+/// A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
+nonisolated struct ExtensionSkillItem: Codable, Equatable, Sendable {
+    var id: String
+    /// The directory, relative to the package.
+    var dir: String
+
+    init(id: String = "", dir: String = "") {
+        self.id = id
+        self.dir = dir
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case dir
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.dir = (try? c.decodeIfPresent(String.self, forKey: .dir)) ?? ""
+    }
+}
+
+/// Values of PromptKind.
+nonisolated enum ExtensionPromptKind {
+    static let instructions = "instructions"
+    static let quick = "quick"
+    static let all = ["instructions", "quick"]
+}
+
+/// A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template the apps
+/// offer in the message box).
+nonisolated struct ExtensionPromptItem: Codable, Equatable, Sendable {
+    var id: String
+    var kind: String
+    /// instructions: the .md file.
+    var file: String?
+    /// quick: what the apps show.
+    var title: String?
+    /// quick: what goes into the message box.
+    var text: String?
+
+    init(id: String = "", kind: String = "", file: String? = nil, title: String? = nil, text: String? = nil) {
+        self.id = id
+        self.kind = kind
+        self.file = file
+        self.title = title
+        self.text = text
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case file
+        case title
+        case text
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? ""
+        self.file = try? c.decodeIfPresent(String.self, forKey: .file)
+        self.title = try? c.decodeIfPresent(String.self, forKey: .title)
+        self.text = try? c.decodeIfPresent(String.self, forKey: .text)
+    }
+}
+
+/// A scheme's role colors, #RRGGBB: accent (required), positive, caution, danger, ai.
+nonisolated struct ExtensionThemeColors: Codable, Equatable, Sendable {
+    var accent: String
+    var positive: String?
+    var caution: String?
+    var danger: String?
+    var ai: String?
+
+    init(accent: String = "", positive: String? = nil, caution: String? = nil, danger: String? = nil, ai: String? = nil) {
+        self.accent = accent
+        self.positive = positive
+        self.caution = caution
+        self.danger = danger
+        self.ai = ai
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case accent
+        case positive
+        case caution
+        case danger
+        case ai
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.accent = (try? c.decodeIfPresent(String.self, forKey: .accent)) ?? ""
+        self.positive = try? c.decodeIfPresent(String.self, forKey: .positive)
+        self.caution = try? c.decodeIfPresent(String.self, forKey: .caution)
+        self.danger = try? c.decodeIfPresent(String.self, forKey: .danger)
+        self.ai = try? c.decodeIfPresent(String.self, forKey: .ai)
+    }
+}
+
+/// A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer
+/// one that fails.
+nonisolated struct ExtensionThemeItem: Codable, Equatable, Sendable {
+    var id: String
+    var name: String
+    var light: ExtensionThemeColors
+    var dark: ExtensionThemeColors
+
+    init(id: String = "", name: String = "", light: ExtensionThemeColors = ExtensionThemeColors(), dark: ExtensionThemeColors = ExtensionThemeColors()) {
+        self.id = id
+        self.name = name
+        self.light = light
+        self.dark = dark
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case light
+        case dark
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        self.light = (try? c.decodeIfPresent(ExtensionThemeColors.self, forKey: .light)) ?? ExtensionThemeColors()
+        self.dark = (try? c.decodeIfPresent(ExtensionThemeColors.self, forKey: .dark)) ?? ExtensionThemeColors()
+    }
+}
+
+/// A template of an inbox source's triage rules (triage_rules): settings offer it.
+nonisolated struct ExtensionTriageTemplateItem: Codable, Equatable, Sendable {
+    var id: String
+    var title: String
+    var text: String
+
+    init(id: String = "", title: String = "", text: String = "") {
+        self.id = id
+        self.title = title
+        self.text = text
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case text
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
     }
 }
 

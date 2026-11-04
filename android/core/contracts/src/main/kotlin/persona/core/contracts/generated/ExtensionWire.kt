@@ -184,6 +184,87 @@ data class ExtensionContributes(
     val channel: List<ExtensionChannelItem>? = null,
     val events: List<ExtensionEventsItem>? = null,
     val shortcuts: List<ExtensionShortcutItem>? = null,
+    val skills: List<ExtensionSkillItem>? = null,
+    val prompts: List<ExtensionPromptItem>? = null,
+    val themes: List<ExtensionThemeItem>? = null,
+    @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
+)
+
+/**
+ * A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
+ */
+@Serializable
+data class ExtensionSkillItem(
+    val id: String = "",
+    /**
+     * The directory, relative to the package.
+     */
+    val dir: String = "",
+)
+
+/**
+ * Values of PromptKind.
+ */
+object ExtensionPromptKind {
+    const val INSTRUCTIONS = "instructions"
+    const val QUICK = "quick"
+    val ALL = listOf("instructions", "quick")
+}
+
+/**
+ * A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template the apps
+ * offer in the message box).
+ */
+@Serializable
+data class ExtensionPromptItem(
+    val id: String = "",
+    val kind: String = "",
+    /**
+     * instructions: the .md file.
+     */
+    val file: String? = null,
+    /**
+     * quick: what the apps show.
+     */
+    val title: String? = null,
+    /**
+     * quick: what goes into the message box.
+     */
+    val text: String? = null,
+)
+
+/**
+ * A scheme's role colors, #RRGGBB: accent (required), positive, caution, danger, ai.
+ */
+@Serializable
+data class ExtensionThemeColors(
+    val accent: String = "",
+    val positive: String? = null,
+    val caution: String? = null,
+    val danger: String? = null,
+    val ai: String? = null,
+)
+
+/**
+ * A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer one
+ * that fails.
+ */
+@Serializable
+data class ExtensionThemeItem(
+    val id: String = "",
+    val name: String = "",
+    val light: ExtensionThemeColors = ExtensionThemeColors(),
+    val dark: ExtensionThemeColors = ExtensionThemeColors(),
+)
+
+/**
+ * A template of an inbox source's triage rules (triage_rules): settings offer it.
+ */
+@Serializable
+data class ExtensionTriageTemplateItem(
+    val id: String = "",
+    val title: String = "",
+    val text: String = "",
 )
 
 /**

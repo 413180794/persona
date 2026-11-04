@@ -111,6 +111,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	h.extensionDevRoutes(api)
 	h.sandboxRoutes(api)
 	h.contributionRoutes(api)
+	h.declaredRoutes(api)
 	ps := func() *extensions { return h.extensions }
 	h.legacyExtensionRoutes(api, "/api/v1/plugins", "/api/v1/extensions")
 	api.HandleFunc("GET /api/v1/extensions", func(w http.ResponseWriter, r *http.Request) {

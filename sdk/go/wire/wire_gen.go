@@ -117,19 +117,77 @@ type Permissions struct {
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking
 // effect.
 type Contributes struct {
-	Connectors   []ConnectorItem   `json:"connectors,omitempty"`
-	Voice        []NamedItem       `json:"voice,omitempty"`
-	Computer     []NamedItem       `json:"computer,omitempty"`
-	Browser      []NamedItem       `json:"browser,omitempty"`
-	Quota        []QuotaItem       `json:"quota,omitempty"`
-	Providers    []ProviderItem    `json:"providers,omitempty"`
-	API          []APIItem         `json:"api,omitempty"`
-	Assistant    []AssistantItem   `json:"assistant,omitempty"`
-	UI           []UIItem          `json:"ui,omitempty"`
-	AgentSources []AgentSourceItem `json:"agent_sources,omitempty"`
-	Channel      []ChannelItem     `json:"channel,omitempty"`
-	Events       []EventsItem      `json:"events,omitempty"`
-	Shortcuts    []ShortcutItem    `json:"shortcuts,omitempty"`
+	Connectors      []ConnectorItem      `json:"connectors,omitempty"`
+	Voice           []NamedItem          `json:"voice,omitempty"`
+	Computer        []NamedItem          `json:"computer,omitempty"`
+	Browser         []NamedItem          `json:"browser,omitempty"`
+	Quota           []QuotaItem          `json:"quota,omitempty"`
+	Providers       []ProviderItem       `json:"providers,omitempty"`
+	API             []APIItem            `json:"api,omitempty"`
+	Assistant       []AssistantItem      `json:"assistant,omitempty"`
+	UI              []UIItem             `json:"ui,omitempty"`
+	AgentSources    []AgentSourceItem    `json:"agent_sources,omitempty"`
+	Channel         []ChannelItem        `json:"channel,omitempty"`
+	Events          []EventsItem         `json:"events,omitempty"`
+	Shortcuts       []ShortcutItem       `json:"shortcuts,omitempty"`
+	Skills          []SkillItem          `json:"skills,omitempty"`
+	Prompts         []PromptItem         `json:"prompts,omitempty"`
+	Themes          []ThemeItem          `json:"themes,omitempty"`
+	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
+}
+
+// SkillItem: A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
+type SkillItem struct {
+	ID string `json:"id"`
+	// The directory, relative to the package.
+	Dir string `json:"dir"`
+}
+
+// Values of PromptKind.
+const (
+	PromptKindInstructions = "instructions"
+	PromptKindQuick        = "quick"
+)
+
+// PromptKinds are the values of PromptKind, in order.
+var PromptKinds = []string{"instructions", "quick"}
+
+// PromptItem: A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template
+// the apps offer in the message box).
+type PromptItem struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	// instructions: the .md file.
+	File string `json:"file,omitempty"`
+	// quick: what the apps show.
+	Title string `json:"title,omitempty"`
+	// quick: what goes into the message box.
+	Text string `json:"text,omitempty"`
+}
+
+// ThemeColors: A scheme's role colors, #RRGGBB: accent (required), positive, caution, danger, ai.
+type ThemeColors struct {
+	Accent   string `json:"accent"`
+	Positive string `json:"positive,omitempty"`
+	Caution  string `json:"caution,omitempty"`
+	Danger   string `json:"danger,omitempty"`
+	Ai       string `json:"ai,omitempty"`
+}
+
+// ThemeItem: A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do
+// not offer one that fails.
+type ThemeItem struct {
+	ID    string      `json:"id"`
+	Name  string      `json:"name"`
+	Light ThemeColors `json:"light"`
+	Dark  ThemeColors `json:"dark"`
+}
+
+// TriageTemplateItem: A template of an inbox source's triage rules (triage_rules): settings offer it.
+type TriageTemplateItem struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Text  string `json:"text"`
 }
 
 // ConnectorItem: the connector protocol's manifest (docs/connector-protocol.md).
@@ -1009,6 +1067,11 @@ var newDef = map[string]func() any{
 	"SecretSpec":            func() any { return new(SecretSpec) },
 	"Permissions":           func() any { return new(Permissions) },
 	"Contributes":           func() any { return new(Contributes) },
+	"SkillItem":             func() any { return new(SkillItem) },
+	"PromptItem":            func() any { return new(PromptItem) },
+	"ThemeColors":           func() any { return new(ThemeColors) },
+	"ThemeItem":             func() any { return new(ThemeItem) },
+	"TriageTemplateItem":    func() any { return new(TriageTemplateItem) },
 	"ConnectorItem":         func() any { return new(ConnectorItem) },
 	"NamedItem":             func() any { return new(NamedItem) },
 	"QuotaItem":             func() any { return new(QuotaItem) },

@@ -79,7 +79,10 @@ assistant.ask        GET /api/v1/assistant/conversations/{id}/feed
 -                    GET /api/v1/devices/{id}/sessions
 -                    GET /api/v1/endpoints
 -                    GET /api/v1/extensions
+-                    GET /api/v1/extensions/-/prompts
 -                    GET /api/v1/extensions/-/shortcuts
+-                    GET /api/v1/extensions/-/themes
+-                    GET /api/v1/extensions/-/triage-templates
 -                    GET /api/v1/extensions/-/ui
 -                    GET /api/v1/extensions/-/upgrades
 -                    GET /api/v1/extensions/-/widgets
