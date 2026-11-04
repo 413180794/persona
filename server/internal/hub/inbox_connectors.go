@@ -39,7 +39,8 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 			continue
 		}
 		if !h.connectors.Feeds(c.ID(), connector.FeedInbox) ||
-			connector.StatusOf(ctx, c).State != connector.StateOK && connector.StatusOf(ctx, c).State != connector.StateRateLimited {
+			connector.StatusOf(ctx, c).State != connector.StateOK && connector.StatusOf(ctx, c).State != connector.StateRateLimited ||
+			h.waitsForTriageModel(ctx, c) { // a hub.json plugin's that needs the triage model (plugin_inbox.go)
 			h.inbox.readSource(c.ID(), c.Name()) // nothing of it comes in now: nothing of it waits either
 			continue
 		}
@@ -190,7 +191,11 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 func fillConnectorItem(it *InboxItem, t connector.InboxThing) {
 	it.Kind, it.Title, it.Sender, it.Preview, it.Context = t.Kind, t.Title, t.Sender, t.Preview, t.Context
 	it.UpdatedAt, it.Last, it.Rules = t.At, t.Last, t.Rules
-	it.Connector = &InboxConnector{Thread: t.Thread, Label: t.Label, URL: t.URL, OpenURL: t.OpenURL, ReplyTo: t.ReplyTo, CanReply: t.CanReply, RuleTier: string(t.Tier), Tags: t.Tags}
+	rule := t.Tier
+	if rule == "" && t.Extra != nil && connector.Tier(t.Extra.RuleTier).Known() {
+		rule = connector.Tier(t.Extra.RuleTier) // its fallback (capability fallback): the model still sorts it first
+	}
+	it.Connector = &InboxConnector{Thread: t.Thread, Label: t.Label, URL: t.URL, OpenURL: t.OpenURL, ReplyTo: t.ReplyTo, CanReply: t.CanReply, RuleTier: string(rule), Tags: t.Tags}
 	if t.Tier != "" {
 		setRuleTier(it, t)
 	}

@@ -217,6 +217,9 @@ func (ps *plugins) view(ctx context.Context, p *plugin.Plugin) PluginView {
 			v.Status = pluginNeedsSetup
 		}
 	}
+	if p.Record.Enabled && ps.h != nil && ps.h.hubJSONWaitsForTriageModel(ctx, p) { // runs, but its inbox waits
+		v.Status, v.NeedsSetup = pluginNeedsSetup, append(v.NeedsSetup, needsTriageModelSetup)
+	}
 	if ps.h != nil {
 		ps.h.pluginUpgrades().decorate(ctx, &v, p)
 	}
@@ -253,6 +256,7 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 		_ = reg.AddHubJSON(p.Manifest, p.Legacy, p.Record.Enabled)
 	}
 	reg.RemoteManifest = ps.remoteManifest
+	reg.CanEnable = h.canEnablePlugin // the inbox's rules (plugin_inbox.go)
 	var own []string
 	for _, c := range h.connectors.All() {
 		if !slices.Contains(connector.MigratableConnectors, c.ID()) { // a plugin may take these over (connectors_migrate.go)
@@ -705,7 +709,7 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		if p.Record.Source == plugin.SourceBuiltin {
 			pluginConnectors.Delete(c.ID)
 		} else {
-			pluginConnectors.Store(c.ID, true)
+			pluginConnectors.Store(c.ID, p.Record.Source)
 		}
 		conn := proc.New(proc.Config{ID: c.ID, Name: c.Name, Manifest: connectorManifest(c), Secrets: secrets, KB: kbase, Logf: ps.logf, Link: link})
 		byID[c.ID] = conn
@@ -730,13 +734,21 @@ func sameItem(a, b plugin.ConnectorItem) bool {
 var pluginKinds sync.Map
 
 // pluginConnectors are the connectors a plugin provides (installed, or from hub.json), not one built into personad
-// (Telegram's): their new inbox items are triaged before they enter (inbox_admit.go). Connector id → true.
+// (Telegram's): their new inbox items are triaged before they enter (inbox_admit.go). Connector id → the plugin's
+// source (plugin.SourceInstalled, plugin.SourceHubJSON).
 var pluginConnectors sync.Map
 
 // fromPlugin says whether a connector (an item's source) is provided by a plugin.
 func fromPlugin(connectorID string) bool {
 	_, ok := pluginConnectors.Load(connectorID)
 	return ok
+}
+
+// pluginSource is where the plugin providing a connector comes from ("" not a plugin's).
+func pluginSource(connectorID string) string {
+	v, _ := pluginConnectors.Load(connectorID)
+	s, _ := v.(string)
+	return s
 }
 
 // connectorManifest is a contribution to connectors as the connector registry declares it.

@@ -14,7 +14,8 @@ import (
 type Capability string
 
 // Capabilities and the interface each stands for. The names are the ones GET /api/v1/connectors lists (except
-// CapSettle, which only the hub uses).
+// CapSettle and CapFallback, which only the hub uses). CapFallback is a promise, not an interface: every inbox thing
+// carries a fallback tier (ThingExtra.RuleTier), so its items never need the model to come in (docs/plugins.md).
 const (
 	CapStatus   Capability = "status"   // Accounts
 	CapTools    Capability = "tools"    // ReadTools
@@ -29,6 +30,7 @@ const (
 	CapOptions  Capability = "options"  // Options
 	CapThreads  Capability = "threads"  // Threads
 	CapSnapshot Capability = "snapshot" // Snapshot
+	CapFallback Capability = "fallback" // (none: every inbox thing carries extra.rule_tier)
 )
 
 type capability struct {
@@ -53,6 +55,7 @@ var capabilities = []capability{
 	{CapOptions, reflect.TypeFor[Options](), true},
 	{CapThreads, reflect.TypeFor[Threads](), true},
 	{CapSnapshot, reflect.TypeFor[Snapshot](), true},
+	{CapFallback, nil, false},
 }
 
 // Manifest is what a connector says it is and does, in one place (docs/connectors.md「二 · 1」): read whenever the
@@ -141,6 +144,9 @@ func Check(c Connector) error {
 	}
 	impl := reflect.TypeOf(c)
 	for _, x := range capabilities {
+		if x.iface == nil { // a promise: nothing to implement
+			continue
+		}
 		has, declared := impl.Implements(x.iface), m.Has(x.cap)
 		switch {
 		case declared && !has:
@@ -151,6 +157,9 @@ func Check(c Connector) error {
 	}
 	if len(m.Kinds) > 0 && !m.Has(CapInbox) {
 		errs = append(errs, errors.New("declares inbox kinds without an inbox"))
+	}
+	if m.Has(CapFallback) && !m.Has(CapInbox) {
+		errs = append(errs, errors.New("declares fallback without an inbox"))
 	}
 	if err := errors.Join(errs...); err != nil {
 		return fmt.Errorf("connector %s: %w", c.ID(), err)

@@ -89,18 +89,34 @@ func (m *Machine) startDeploy() error {
 	return nil
 }
 
-// deployScript installs the gzipped binary on stdin as bin and stops a resident node so launchd restarts it.
-// The pkill pattern is written so it does not match this ssh session's own command line.
+// deployScript is the remote command that installs the gzipped binary on stdin as bin and stops a resident node so
+// launchd restarts it. The pkill pattern is written so it does not match this ssh session's own command line.
 func deployScript(bin string) string {
 	target := shellQuote(bin)
 	if rest, ok := strings.CutPrefix(bin, "~/"); ok {
 		target = `"$HOME"/` + shellQuote(rest)
 	}
-	return "set -e; b=" + target + `; mkdir -p "$(dirname "$b")"; gzip -dc > "$b.new"; chmod 755 "$b.new"; mv "$b.new" "$b"; ` +
-		`pkill -f '[j]arvisd node --attach' || true`
+	return posixCommand("set -e; b=" + target + `; mkdir -p "$(dirname "$b")"; gzip -dc > "$b.new"; chmod 755 "$b.new"; mv "$b.new" "$b"; ` +
+		`pkill -f '[j]arvisd node --attach' || true`)
 }
 
+// shellQuote quotes s for a POSIX shell only (the script inside posixCommand); a remote command goes through
+// anyShellQuote.
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+// posixCommand is a remote command that runs a POSIX sh script on any machine. sshd hands the remote command to the
+// user's login shell, which is not always a POSIX shell: on a machine whose login shell is fish the script failed at
+// its first assignment and nothing was installed (#1770). `sh -c <script>` reads the same in sh, bash, zsh, fish and
+// csh once the script is quoted by anyShellQuote; sh then runs the script itself.
+func posixCommand(script string) string { return "sh -c " + anyShellQuote(script) }
+
+// anyShellQuote quotes s as one word that POSIX shells, fish and csh all read back as s. Inside single quotes fish
+// still takes \\ and \' as escapes and csh still expands !history (POSIX shells take all three literally), so a quote,
+// a backslash or a ! is put outside the quotes, backslash-escaped, which every one of them reads alike. s must be one
+// line: csh rejects a newline inside quotes.
+func anyShellQuote(s string) string {
+	return "'" + strings.NewReplacer(`'`, `'\''`, `\`, `'\\'`, `!`, `'\!'`).Replace(s) + "'"
+}
 
 func (m *Machine) deploy(ctx context.Context, bin string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute) // a slow link: about 8 MB gzipped

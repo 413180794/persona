@@ -58,6 +58,10 @@
   给了它 = 任何 ssh 登录都有完全磁盘访问权限（能读 `~/Library/Messages/chat.db` 等）。只想给一个程序，就让 launchd 起它（LaunchAgent），见 `docs/plan-connectors.md`。
 - 机器的 node 不是 hub 这一版（`node_mismatch`）时，App 的「重新部署」让 hub 自己装：`deploy.sh` 部署 hub 时把各平台的 node 二进制留在 hub 机器的
   `~/.jarvis/bin/nodes/`，hub 经 ssh 装进去、杀掉常驻 node 让 launchd 重启、重新连接（`hub/deploy.go`）。只部署了某一台、没部署 hub 时那里还是旧版，按钮会装回旧版本。
+- ssh 的远程命令由目标机器的**登录 shell** 解析，不一定是 POSIX shell（2026-11-04，#1770）：登录 shell 是 fish 的电脑上，部署脚本第一句 `b=…` 就报
+  `Unsupported use of '='`，后面什么都没执行。要跑 sh 脚本就包成 `sh -c <脚本>`（`hub/deploy.go` 的 `posixCommand`），外层引用用 `anyShellQuote`：
+  fish 在单引号里仍把 `\\`、`\'` 当转义，csh 在单引号里仍做 `!` 历史展开（`'a!b'` 报 `Event not found`），所以引号、反斜杠和 `!` 都放到引号外面、用反斜杠转义，sh / bash / zsh / fish / csh 读出来一样；不能有换行（csh 不认）。
+  只是一个命令加参数（`jarvisd node --stdio`、`true`）各种 shell 都一样，不用包。`deploy_test.go` 在本机找得到的每种 shell 下把部署命令、引用和起 node 的命令各跑一遍（装了 fish 才测得到 fish）。
 - 从 Mac 用 tar 往 hub 传文件，macOS 的 tar 会把每个文件的扩展属性带上（2026-11-03，#665 / #884）：构建产物都有 `com.apple.provenance`，
   下载来的文件还有下载来源网址。它走两条路：`._<名字>` AppleDouble 文件（hub 的 GNU tar 当成普通文件解出来）要 `COPYFILE_DISABLE=1`，
   每个条目 pax 头里的 `LIBARCHIVE.xattr.*`（GNU tar 丢掉并逐个报 `Ignoring unknown extended header keyword`）要 `--no-xattrs`，两个都加。

@@ -40,7 +40,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 
 | 字段 | 意思 |
 | --- | --- |
-| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）、`snapshot`（助手快照里的未读会话和今天的会）；hub 只调声明了的 |
+| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）、`snapshot`（助手快照里的未读会话和今天的会）、`fallback`（承诺每个收件箱条目都带兜底分级 `extra.rule_tier`，没有方法；要有 `inbox`，见 `docs/plugins.md`「收件箱的通用规则」）；hub 只调声明了的 |
 | `hosts` | 链接所在的主机名（App 认链接） |
 | `agent_tools` | 哪些工具也给编程 Agent，按名字的通配（不写就只给助手） |
 | `unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行）。不是权限：按名字调照常能调，写的照常过闸门，Agent 能不能调照旧看 `agent_tools` |
@@ -78,6 +78,8 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 - `rules`：用户给这件事定的分拣规则，原话（这个来源、这个账号的，比如插件设置里的 `triage_rules`，`docs/plugins.md`「约定的设置项」）。
   有就**只用它**，不用 hub 的全局 `inbox.rules`；空的用全局。hub 的默认判断标准照旧在下面，用户的规则优先。可以有换行；最多 4000 字，多了截掉。和别的字段一样在 thing 的第一层，迁出 hub 的连接器（带 `extra` 的）也是。
   旧 hub 不认这个字段，照旧用全局规则。
+- 声明了 `fallback` 的连接器每个条目都带 `extra.rule_tier`：这件事的兜底分级，模型照样先分，分不了时按它进收件箱（不带 `tier` 时也一样；
+  普通连接器的 `extra` hub 只读这一项）。没声明 `fallback` 的插件连接器要有能用的分拣模型才能启用（`docs/plugins.md`「收件箱的通用规则」）。
 - `tier` 是这件事的兜底：模型分不了（没配、没额度、出错、超时）时按它进收件箱。插件提供的连接器（不是 personad 自带的）`tier` 为空的没有兜底，
   它的新条目先分拣再进收件箱（`docs/inbox.md`「AI 分拣」），模型分不了时**这一轮不进收件箱**，
   hub 也不存；下一轮 `inbox.collect` 再交回来（本来就是从内存回答，不用为此做什么），模型好了就进来。hub 在 `GET /api/v1/inbox` 的 `triage` 里说有几件在等（`docs/inbox.md`「AI 分拣」）。

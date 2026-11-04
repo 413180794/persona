@@ -62,6 +62,9 @@ func (c Config) configured() bool {
 var errNotConfigured = errors.New("还没有能直接调用的模型：在 设置 › 模型供应商 添加带 Key 的接入，再到 设置 › 模型配置 为这项选择它" +
 	`（或在 hub.json 写 "ai"）`)
 
+// Configured says whether there is a model to call: an address, a model and a key (or a key file).
+func (c Config) Configured() bool { return c.configured() }
+
 // IsNotConfigured tells a request that had no model to go to (nothing set up for it) from one that failed.
 func IsNotConfigured(err error) bool { return errors.Is(err, errNotConfigured) }
 

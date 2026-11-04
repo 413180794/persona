@@ -167,7 +167,7 @@ func (h *Hub) pluginRoutes(api *http.ServeMux) {
 			return
 		}
 		if err := ps().reg.SetEnabled(r.Context(), p.Record.ID, in.Enabled, actor(r)); err != nil {
-			writeErrCode(w, http.StatusConflict, "read_only", err)
+			writePluginErr(w, http.StatusConflict, "read_only", err)
 			return
 		}
 		writeJSON(w, ps().detail(r.Context(), ps().reg.Get(p.Record.ID)))
@@ -238,7 +238,7 @@ func (h *Hub) pluginRoutes(api *http.ServeMux) {
 		}
 		p, err := ps().reg.Install(r.Context(), in.PreviewID, in.Digest, actorOr(r, "personad plugin"))
 		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "install_failed", err)
+			writePluginErr(w, http.StatusBadRequest, "install_failed", err)
 			return
 		}
 		writeJSON(w, ps().detail(r.Context(), p))
@@ -253,7 +253,7 @@ func (h *Hub) pluginRoutes(api *http.ServeMux) {
 		}
 		p, err := ps().reg.Upgrade(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, actorOr(r, "personad plugin"))
 		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "upgrade_failed", err)
+			writePluginErr(w, http.StatusBadRequest, "upgrade_failed", err)
 			return
 		}
 		writeJSON(w, ps().detail(r.Context(), p))

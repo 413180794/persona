@@ -113,6 +113,8 @@ struct ChatView: View {
     @State private var barsVertical = false
     /// The slim header's height while the actions are in the side column (`sideHeader`).
     @State private var sideHeaderHeight: CGFloat = 0
+    /// The keyboard is up on the composer: the slim header gives its rows to the chat (`sideHeader`).
+    @State private var composerTyping = false
     /// Safari-style chrome (title row, agent strip, tabs): it follows the finger as the list scrolls and settles
     /// open or folded when the finger lifts. Its own object so the per-frame updates only redraw the header.
     @State private var chrome = ChatChrome()
@@ -198,6 +200,10 @@ struct ChatView: View {
         .navigationBarBackButtonHidden(sideBars)
         .toolbar { if sideBars { sideBarItems } }
         .readsVerticalBars($barsVertical)
+        #if DEBUG
+        // `-sideBars YES`: lay the chat out as under iPhone Duo's side bars on any simulator (screenshots, tests).
+        .onAppear { if UserDefaults.standard.bool(forKey: "sideBars") { barsVertical = true } }
+        #endif
         .overlay(alignment: .top) {
             if style == .dev { if sideBars { sideHeader } else { devChrome } }
         }
@@ -1362,7 +1368,7 @@ struct ChatView: View {
                     Text(reason).font(Theme.Font.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
-                         onCleared: { switchTo($0) })
+                         onCleared: { switchTo($0) }, onFocus: { composerTyping = $0 })
                     // The shell's expanding field stays in the page's layout graph; so does BeautifulUI's prompt bar,
                     // whose menus hang above it: an island's hosting view takes no touches outside its bounds.
                     .layoutIsland(enabled: !usesShellComposer && !AppStyle.current.usesBeautifulUI)
@@ -2005,26 +2011,13 @@ struct ChatView: View {
     }
 
     /// The header's other half while its buttons are in the side column: the title (a tap shows the session's info),
-    /// and when there are any the space's other agents, a /loop or background work and subagents. It stays put.
+    /// and when there are any the space's other agents, a /loop or background work and subagents. It stays put, but
+    /// while the keyboard is up on the composer it is only the fog: iPhone Duo's inner display on its side has about
+    /// 390pt over the keyboard, and the title, the tabs and the mode chips over the box left no row of the chat
+    /// (2026-11-04). The system's title in the side column still says which session it is.
     private var sideHeader: some View {
         VStack(spacing: Theme.Space.sm) {
-            titleButton
-            let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
-            if session?.spaceKey != nil || hasActivity {
-                HStack(spacing: Theme.Space.s) {
-                    SiblingTabs(current: key, select: switchTo, closed: closedAgent)
-                    if hasActivity {
-                        ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
-                            .fixedSize()
-                    }
-                }
-            }
-            if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
-            let all = session?.subagents ?? []
-            let agents = all.filter { $0.running || $0.id == viewing?.id }
-            if pane == .chat, !all.isEmpty {
-                AgentStrip(agents: agents, all: all, viewing: viewing?.id) { a in view(a) }
-            }
+            if !composerTyping { sideHeaderRows }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.xs)
@@ -2038,12 +2031,33 @@ struct ChatView: View {
                     .offset(y: -g.safeAreaInsets.top)
             }
         }
+        .animation(Theme.Motion.layout, value: composerTyping)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sideHeaderHeight = $0 }
         .sheet(isPresented: $showActivity) {
             ActivitySheet(loop: session?.loop, background: session?.background ?? [], stopLoop: { model.stopLoop(key) }) { t in
                 showActivity = false
                 if let out = t.outputFile { file = FileRef(group: key.group, machineID: key.machineID, path: out, cwd: session?.cwd) }
             }
+        }
+    }
+
+    @ViewBuilder private var sideHeaderRows: some View {
+        titleButton
+        let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
+        if session?.spaceKey != nil || hasActivity {
+            HStack(spacing: Theme.Space.s) {
+                SiblingTabs(current: key, select: switchTo, closed: closedAgent)
+                if hasActivity {
+                    ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
+                        .fixedSize()
+                }
+            }
+        }
+        if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
+        let all = session?.subagents ?? []
+        let agents = all.filter { $0.running || $0.id == viewing?.id }
+        if pane == .chat, !all.isEmpty {
+            AgentStrip(agents: agents, all: all, viewing: viewing?.id) { a in view(a) }
         }
     }
 
@@ -2568,6 +2582,8 @@ struct Composer: View, Equatable {
     var placeholder: String?
     /// After /clear the pane runs a new session: the page follows it.
     var onCleared: ((SessionKey) -> Void)? = nil
+    /// The box got or lost the keyboard.
+    var onFocus: ((Bool) -> Void)? = nil
     private var text: String {
         get { model.drafts[key] ?? "" }
         nonmutating set { model.drafts[key] = newValue }
@@ -2770,6 +2786,8 @@ struct Composer: View, Equatable {
         }
         #endif
         .animation(Theme.Motion.standard, value: suggestion)
+        .onChange(of: focused) { _, f in onFocus?(f) }
+        .onDisappear { if focused { onFocus?(false) } } // gone with the keyboard (a subagent opened, another pane)
         .onChange(of: model.composerFocus) { _, k in
             guard k == key else { return }
             model.composerFocus = nil

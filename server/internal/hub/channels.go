@@ -490,7 +490,7 @@ func (h *Hub) channelRoutes(api *http.ServeMux) {
 			return
 		}
 		if err := h.updateChannel(r.Context(), v, in.Enabled, in.Target, in.Features); err != nil {
-			writeErrCode(w, http.StatusBadRequest, "invalid", err)
+			writePluginErr(w, http.StatusBadRequest, "invalid", err)
 			return
 		}
 		d, _ := h.channelDetail(r.Context(), v.ID)

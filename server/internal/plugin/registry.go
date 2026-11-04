@@ -111,6 +111,10 @@ type Registry struct {
 	OnChange func(Change)
 	// RemoteManifest asks a remote plugin for its manifest (the hub's host; initialize, or GET /manifest).
 	RemoteManifest func(ctx context.Context, r Remote) (*Manifest, error)
+	// CanEnable says why a plugin (its source and manifest) may not be on now, nil when it may: asked before it is
+	// switched on, installed (on at once) or upgraded while on. A rollback is not asked (it goes back to a version
+	// that ran; the hub rolls back a broken upgrade itself).
+	CanEnable func(ctx context.Context, source string, m *Manifest) error
 
 	mu       sync.Mutex
 	plugins  map[string]*Plugin
@@ -405,6 +409,9 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 		if err := m.Validate(); err != nil {
 			return nil, err
 		}
+		if err := CheckTriageRules(m); err != nil {
+			return nil, err
+		}
 	} else {
 		pv.staging = filepath.Join(r.dir, "staging", pv.ID)
 		root, err := stage(pv.staging)
@@ -419,6 +426,9 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 		}
 		if err == nil {
 			err = r.checkPackage(m, root)
+		}
+		if err == nil {
+			err = CheckTriageRules(m)
 		}
 		if err != nil {
 			_ = os.RemoveAll(pv.staging)
@@ -552,6 +562,22 @@ func (r *Registry) expire() {
 }
 
 // take is the preview previewID, removed from the waiting ones.
+// canEnable asks CanEnable, when the hub set it.
+func (r *Registry) canEnable(ctx context.Context, source string, m *Manifest) error {
+	if r.CanEnable == nil {
+		return nil
+	}
+	return r.CanEnable(ctx, source, m)
+}
+
+// peek is a preview, left in place (a refusal before installing does not use it up).
+func (r *Registry) peek(previewID string) *Preview {
+	r.expire()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.previews[previewID]
+}
+
 func (r *Registry) take(previewID string) (*Preview, error) {
 	r.expire()
 	r.mu.Lock()
@@ -564,8 +590,14 @@ func (r *Registry) take(previewID string) (*Preview, error) {
 	return pv, nil
 }
 
-// Install installs a previewed package, digest being the one the user was shown.
+// Install installs a previewed package, digest being the one the user was shown. It is on at once, so CanEnable is
+// asked first (a refusal keeps the preview).
 func (r *Registry) Install(ctx context.Context, previewID, digest, actor string) (*Plugin, error) {
+	if pv := r.peek(previewID); pv != nil && !pv.Upgrade {
+		if err := r.canEnable(ctx, SourceInstalled, pv.Manifest); err != nil {
+			return nil, err
+		}
+	}
 	pv, err := r.take(previewID)
 	if err != nil {
 		return nil, err
@@ -631,8 +663,14 @@ func (r *Registry) dropStaging(pv *Preview) {
 	}
 }
 
-// Upgrade installs a previewed newer version of id. The digest is needed when it asks for more than was granted.
+// Upgrade installs a previewed newer version of id. The digest is needed when it asks for more than was granted. A
+// plugin that is on stays on, so CanEnable is asked about the new version first (a refusal keeps the preview).
 func (r *Registry) Upgrade(ctx context.Context, id, previewID, digest, actor string) (*Plugin, error) {
+	if pv, cur := r.peek(previewID), r.Get(id); pv != nil && pv.Upgrade && pv.Manifest.ID == id && cur != nil && cur.Record.Enabled {
+		if err := r.canEnable(ctx, cur.Record.Source, pv.Manifest); err != nil {
+			return nil, err
+		}
+	}
 	pv, err := r.take(previewID)
 	if err != nil {
 		return nil, err
@@ -773,11 +811,16 @@ func (r *Registry) put(ctx context.Context, row Record) error {
 	return r.store.PutPlugin(ctx, row)
 }
 
-// SetEnabled switches a plugin on or off.
+// SetEnabled switches a plugin on or off; on only when CanEnable lets it.
 func (r *Registry) SetEnabled(ctx context.Context, id string, on bool, actor string) error {
 	p, err := r.editable(id)
 	if err != nil {
 		return err
+	}
+	if on && !p.Record.Enabled {
+		if err := r.canEnable(ctx, p.Record.Source, p.Manifest); err != nil {
+			return err
+		}
 	}
 	r.mu.Lock()
 	row := p.Record

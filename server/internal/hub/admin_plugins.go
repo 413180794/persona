@@ -188,7 +188,7 @@ func (h *Hub) adminPluginRoutes(mux *http.ServeMux) {
 		}
 		p, err := s.reg.Install(r.Context(), in.PreviewID, in.Digest, adminActor)
 		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "install_failed", err)
+			writePluginErr(w, http.StatusBadRequest, "install_failed", err)
 			return
 		}
 		h.logf("admin: installed plugin %s %s", p.Record.ID, p.Record.Version)
@@ -204,7 +204,7 @@ func (h *Hub) adminPluginRoutes(mux *http.ServeMux) {
 		}
 		np, err := ps.reg.Upgrade(r.Context(), p.Record.ID, in.PreviewID, in.Digest, adminActor)
 		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "upgrade_failed", err)
+			writePluginErr(w, http.StatusBadRequest, "upgrade_failed", err)
 			return
 		}
 		h.logf("admin: upgraded plugin %s %s → %s", np.Record.ID, np.Record.PreviousVersion, np.Record.Version)
@@ -227,7 +227,7 @@ func (h *Hub) adminPluginRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err := ps.reg.SetEnabled(r.Context(), p.Record.ID, in.Enabled, adminActor); err != nil {
-			writeErrCode(w, http.StatusConflict, "read_only", err)
+			writePluginErr(w, http.StatusConflict, "read_only", err)
 			return
 		}
 		writeJSON(w, ps.detail(r.Context(), ps.reg.Get(p.Record.ID)))
