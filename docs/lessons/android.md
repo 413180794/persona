@@ -53,6 +53,8 @@
 
 ## 测试
 
+- 读取仓库源码的 JVM 测试不要把 `File(".")` 当仓库根目录（2026-11-04，#1672）：Gradle 的 `:app:testDebugUnitTest` 在 `android/app` 下运行，重复拼接 `android/app/...` 会在文件存在检查处失败，真正的契约断言根本没有执行。沿当前目录的父目录寻找约定的源码文件，用合成目录验证仓库根、Android 根、App 模块三种入口以及缺失文件／同名目录；不全局改测试工作目录、不跳过原契约断言。原发布失败记录保留，修复后真实运行 Gradle 测试和打包。
+
 - `RealInboxRepository` 构造时在作用域里起一个收集当前配对的协程，它第一次运行会把列表清空（换配对时的清场）。`runTest` 里构造完直接 `refresh()`，清场排在第一次挂起之后跑，刚读到的列表又被清掉：先等 `snapshot.first { it.contentSource != null }` 再刷新（`InboxHandOffRepositoryTest`）。
 - `RealInboxRepository` 的测试用尾随 lambda 传最后一个参数 `download`：新加的构造参数要放在它前面（带默认值），否则尾随 lambda 对不上。
 
