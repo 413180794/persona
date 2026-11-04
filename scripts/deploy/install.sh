@@ -307,7 +307,8 @@ else
 		echo "jarvisd: warning: could not install herdr; install it yourself (https://herdr.dev) before using Agents on this computer" >&2
 	fi
 fi
-# fetch_link puts jarvis-link (the connector) at $DEST/jarvis-link, checked against SHA256SUMS like jarvisd.
+# fetch_link puts jarvis-link (the connector, Persona Link) at $DEST/jarvis-link, checked against SHA256SUMS like
+# jarvisd, and persona-link next to it as its new name (#1159): the file, the download and the service keep the old one.
 fetch_link() {
 	[ -z "${LINK_FETCHED:-}" ] || return 0
 	lname="jarvis-link-$os-$arch"
@@ -319,14 +320,16 @@ fetch_link() {
 	gzip -dc "$tmp/$larchive" > "$tmp/$lname" && [ -s "$tmp/$lname" ] || { echo "jarvisd: could not unpack $larchive: not installed" >&2 && return 1; }
 	chmod 755 "$tmp/$lname"
 	mv "$tmp/$lname" "$DEST/jarvis-link"
+	binary_alias persona-link jarvis-link
 	LINK_FETCHED=1
-	echo "jarvis-link $("$DEST/jarvis-link" version 2>/dev/null || echo unknown) installed at $DEST/jarvis-link"
+	echo "persona-link $("$DEST/jarvis-link" version 2>/dev/null || echo unknown) installed at $DEST/persona-link (also $DEST/jarvis-link)"
 }
 
 # install_node makes this computer the node service: the resident node and the connector, paired with the hub
-# (docs/link.md). jarvis-link does the work; this only picks how it pairs.
+# (docs/link.md). jarvis-link does the work; this only picks how it pairs. It runs the real file, and
+# PERSONA_LINK_NAME only makes what it prints say persona-link (the alias fetch_link made).
 install_node() {
-	fetch_link || fail "the node service needs jarvis-link"
+	fetch_link || fail "the node service needs Persona Link (jarvis-link)"
 	if [ -z "$PAIR" ] && [ -z "$LISTEN_SET" ] && (: </dev/tty) 2>/dev/null; then
 		cat >/dev/tty <<'ASK'
 这台电脑怎么和 hub 连？
@@ -338,7 +341,7 @@ ASK
 		case "$how" in
 		2) LISTEN_SET=1 ;;
 		*)
-			printf '粘贴配对链接（回车跳过，以后再 jarvis-link pair）：' >/dev/tty
+			printf '粘贴配对链接（回车跳过，以后再 persona-link pair）：' >/dev/tty
 			read -r PAIR </dev/tty || PAIR=
 			;;
 		esac
@@ -353,16 +356,16 @@ ASK
 		for a in ${ADDRS:-}; do set -- "$@" --addr "$a"; done # addresses have no spaces
 	fi
 	if [ "$os" = darwin ]; then
-		# On a Mac the connector is the menu bar app (Jarvis Link, docs/link.md); here: the resident node and the pairing.
-		"$DEST/jarvis-link" node install || return 1
+		# On a Mac the connector is the menu bar app (Persona Link, docs/link.md); here: the resident node and the pairing.
+		PERSONA_LINK_NAME=persona-link "$DEST/jarvis-link" node install || return 1
 		case "${1:-}" in
-		--pair) "$DEST/jarvis-link" pair "$PAIR" ${MACHINE:+--machine "$MACHINE"} || return 1 ;;
-		--listen) shift && "$DEST/jarvis-link" pair --listen "$@" || return 1 ;;
+		--pair) PERSONA_LINK_NAME=persona-link "$DEST/jarvis-link" pair "$PAIR" ${MACHINE:+--machine "$MACHINE"} || return 1 ;;
+		--listen) shift && PERSONA_LINK_NAME=persona-link "$DEST/jarvis-link" pair --listen "$@" || return 1 ;;
 		esac
-		echo "Mac 上的连接器是菜单栏 App「Jarvis Link」：装上它（它带着 jarvis-link 和 jarvisd，配对也在它的菜单里）；没有 App 时先前台跑 $DEST/jarvis-link run。"
+		echo "Mac 上的连接器是菜单栏 App「Persona Link」：装上它（它带着连接器和 personad，配对也在它的菜单里）；没有 App 时先前台跑 $DEST/persona-link run。"
 		return 0
 	fi
-	"$DEST/jarvis-link" install "$@"
+	PERSONA_LINK_NAME=persona-link "$DEST/jarvis-link" install "$@"
 }
 
 # Who may open the admin UI, on the machine that runs the hub (one with a hub.json, or one the person says is).

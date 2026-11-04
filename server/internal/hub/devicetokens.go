@@ -249,7 +249,7 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 		if name == "" || len([]rune(name)) > 80 {
 			name = map[string]string{"phone": "iPhone", "watch": "Apple Watch"}[kind]
 			if kind == "link" {
-				name = h.cfgMachine(machine).cfg.Name + " 的 jarvis-link"
+				name = h.cfgMachine(machine).cfg.Name + " 的 Persona Link"
 			}
 			if name == "" {
 				name = "设备"

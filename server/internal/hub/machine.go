@@ -91,7 +91,7 @@ func newMachine(h *Hub, cfg MachineConfig) *Machine {
 		timings: defaultTailcatTimings, linkUp: make(chan struct{}, 1)}
 	switch cfg.Kind {
 	case kindLink:
-		m.err = "waiting for jarvis-link"
+		m.err = "waiting for Persona Link"
 	case kindService:
 		m.err = "waiting for the connector"
 	}

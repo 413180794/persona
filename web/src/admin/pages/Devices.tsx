@@ -23,7 +23,7 @@ export function Devices() {
     <>
       <PageHeader
         title="设备"
-        subtitle="hub 发出去的每个凭据：手机、手表、浏览器、电脑上的 jarvis-link。丢了哪个就撤销哪个，别的不受影响。"
+        subtitle="hub 发出去的每个凭据：手机、手表、浏览器、电脑上的 Persona Link。丢了哪个就撤销哪个，别的不受影响。"
         right={
           !member && (
             <Button tone="primary" onClick={() => setPairing(true)}>

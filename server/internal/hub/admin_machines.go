@@ -289,11 +289,11 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			return
 		}
 		if m.cfg.Kind != kindLink {
-			writeErrCode(w, http.StatusBadRequest, "not_link", errors.New("only a link machine pairs a jarvis-link"))
+			writeErrCode(w, http.StatusBadRequest, "not_link", errors.New("only a link machine pairs a Persona Link"))
 			return
 		}
 		if port, _ := h.tlsPin(); port == 0 {
-			writeErrCode(w, http.StatusConflict, "tls_required", errors.New("jarvis-link only uses TLS: turn on the TLS listener first"))
+			writeErrCode(w, http.StatusConflict, "tls_required", errors.New("Persona Link only uses TLS: turn on the TLS listener first"))
 			return
 		}
 		p, err := h.adminPairCode(r, id)

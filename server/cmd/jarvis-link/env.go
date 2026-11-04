@@ -81,6 +81,25 @@ func (e *env) jarvisDir() string  { return identity.DataDir(e.home) }
 func (e *env) configPath() string { return filepath.Join(e.jarvisDir(), "link.json") }
 func (e *env) logPath() string    { return filepath.Join(e.jarvisDir(), "link.log") }
 func (e *env) binPath() string    { return filepath.Join(e.jarvisDir(), "bin", "jarvis-link") }
+func (e *env) aliasPath() string  { return filepath.Join(e.jarvisDir(), "bin", newName) }
+
+// isLinkAlias says path is what install.sh's binary_alias made for persona-link: a symlink to jarvis-link, or (where
+// symlinks fail) the two-line script that execs the jarvis-link beside it.
+func isLinkAlias(path string) bool {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(path)
+		return err == nil && filepath.Base(target) == legacyName
+	}
+	if !fi.Mode().IsRegular() || fi.Size() > 256 {
+		return false
+	}
+	b, err := os.ReadFile(path)
+	return err == nil && string(b) == "#!/bin/sh\nexec \"$(dirname \"$0\")/"+legacyName+"\" \"$@\"\n"
+}
 
 // interruptible is a context that ends on Ctrl-C (logs -f).
 func (e *env) interruptible() (context.Context, context.CancelFunc) {

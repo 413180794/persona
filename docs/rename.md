@@ -24,6 +24,7 @@
 | XcodeGen 工程 | `apple/Persona.xcodeproj` | `apple/Jarvis.xcodeproj → Persona.xcodeproj`；先生成工程才能使用入口 |
 | scheme / target | `Persona`、`PersonaMac`、`PersonaWatch` | 旧 `Jarvis`、`JarvisMac`、`JarvisWatch` scheme 指向新 target；scheme alias 不代表旧 target 仍存在 |
 | 扩展 / 测试 target | `PersonaWidgets`、`PersonaNotify`、`PersonaMacNotify`、`PersonaTests`、`PersonaUITests`、`PersonaMacTests` | `-only-testing:` 使用新测试 target；`@testable import Jarvis` 仍按旧 module 编译 |
+| 连接器命令 | `persona-link`（安装器建的别名；以这个名字运行或带 `PERSONA_LINK_NAME=persona-link` 时提示里自称 persona-link，#1159） | `jarvis-link` 是真实文件、下载名、systemd / launchd 单元和 Mac App helper 的名字，都不变；hub / 管理页给出的可复制命令暂留 `jarvis-link`（旧版电脑没有新名字），带别名的版本发出一段时间后再换 |
 | 菜单栏 App 的 Swift package target | `PersonaLink` | 包装器的旧 `JarvisLink` 进程路径、helper 和服务身份保留；它与原生 Mac App 是两个产品入口 |
 
 更新当前命令示例时使用新路径；历史 SHA、当时的源码行号、日志、测量和验收结论保留。尤其不能把「新目录存在」写成真机升级、已保存快捷指令、真实推送或发布签名已经验证。

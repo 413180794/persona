@@ -100,13 +100,13 @@
     <p class="idx mono">01 / 架构</p>
     <h2>一台 hub，<span class="hl">连起你所有的机器。</span></h2>
     <p class="sub">hub 是一个 Go 写的服务 <code>personad</code>，跑在家里或公司一台常开的机器上（原生二进制或 Docker / NAS）。
-      手机、手表、网页都只连它；电脑上装 node 服务，经连接器 <code>jarvis-link</code> 主动连 hub，或让 hub 来连，不用 SSH、不用 VPN。</p>
+      手机、手表、网页都只连它；电脑上装 node 服务，经连接器 Persona Link 主动连 hub，或让 hub 来连，不用 SSH、不用 VPN。</p>
   </header>
 
   <div class="arch reveal" data-arch>
     <svg viewBox="0 0 1200 600" role="img" aria-labelledby="arch-title arch-desc">
       <title id="arch-title">Persona 架构图</title>
-      <desc id="arch-desc">左边是各个客户端，经 WSS 连到中间的 hub；hub 经 jarvis-link 连到右边各台电脑上的 node 服务，node 在 herdr 或 Orca 里驱动 Claude Code、Codex、DSH 和 pi；推送经端到端加密的中继到手机；多台 hub 可以互联成组。</desc>
+      <desc id="arch-desc">左边是各个客户端，经 WSS 连到中间的 hub；hub 经 Persona Link 连到右边各台电脑上的 node 服务，node 在 herdr 或 Orca 里驱动 Claude Code、Codex、DSH 和 pi；推送经端到端加密的中继到手机；多台 hub 可以互联成组。</desc>
       <defs>
         <linearGradient id="wire" x1="0" x2="1"><stop offset="0" stop-color="var(--acc)" stop-opacity=".15"/><stop offset=".5" stop-color="var(--acc)" stop-opacity=".9"/><stop offset="1" stop-color="var(--acc)" stop-opacity=".15"/></linearGradient>
         <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
@@ -180,7 +180,7 @@
       <g class="node infra" transform="translate(850 530)"><rect width="200" height="52" rx="12"/><text x="18" y="22">另一台 hub</text><text class="small" x="18" y="40">互联 · 单中心</text></g>
 
       <!-- wire labels -->
-      <g class="wire-label"><text x="330" y="236">WSS · TLS 公钥钉扎</text><text x="804" y="236" text-anchor="middle">jarvis-link</text><text x="600" y="430" text-anchor="middle">推送 · 互联</text></g>
+      <g class="wire-label"><text x="330" y="236">WSS · TLS 公钥钉扎</text><text x="804" y="236" text-anchor="middle">Persona Link</text><text x="600" y="430" text-anchor="middle">推送 · 互联</text></g>
     </svg>
   </div>
 
@@ -320,7 +320,7 @@
 <section class="chapter" id="faq">
   <header class="chapter-head reveal"><p class="idx mono">06 / 常见问题</p><h2>常见问题</h2></header>
   <div class="faq reveal">
-    <details><summary>要开 VPN 或内网穿透吗？</summary><p>不用。hub 开着 TLS 端口时，手机经公网直连（优先 IPv6），靠配对时钉住的公钥确认身份；在内网里也照常能连。电脑那边由 jarvis-link 主动拨 hub，不需要公网地址。</p></details>
+    <details><summary>要开 VPN 或内网穿透吗？</summary><p>不用。hub 开着 TLS 端口时，手机经公网直连（优先 IPv6），靠配对时钉住的公钥确认身份；在内网里也照常能连。电脑那边由 Persona Link 主动拨 hub，不需要公网地址。</p></details>
     <details><summary>支持哪些 Agent？</summary><p>Claude Code、Codex 和 TRAEX、DSH（DeepSeek Harness）、pi / pi-web，跑在 herdr、Herdr App 或 Orca 里。按运行时协议写一个 driver，或者把常驻服务注册成 daemon，就能接入别的。</p></details>
     <details><summary>手机不在身边时 Agent 卡住了怎么办？</summary><p>需要你的事会推送到手机和手表，锁屏和灵动岛上能看到是哪台电脑的哪个 Agent；点开直接作答。你也可以让 Persona 助手替你巡检。</p></details>
     <details><summary>数据会经过你们的服务器吗？</summary><p>只有推送。没有自己 APNs 密钥的 hub 经开发者运营的推送中继发送：普通通知的正文用手机的公钥端到端加密，中继看不到；锁屏和灵动岛的实时活动是 iOS 要求的明文，经中继时它能看到。在意的话给 hub 配上自己的 APNs 密钥，或者自己搭一个中继。详见<a href="/privacy/">隐私政策</a>。</p></details>

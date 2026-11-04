@@ -338,7 +338,7 @@ def architecture(theme):
             chips(490, 550, ("飞书", "邮件", "GitHub", "Telegram"), 15, True)]
 
     # Wire labels on top.
-    out += [label(400, 274, "HTTPS / WSS"), label(885, 274, "SSH 或 jarvis-link", 13), label(410, 57, "APNs 推送")]
+    out += [label(400, 274, "HTTPS / WSS"), label(885, 274, "SSH 或 Persona Link", 13), label(410, 57, "APNs 推送")]
 
     s1, s2, s3 = t["spark"]
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">

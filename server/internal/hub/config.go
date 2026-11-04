@@ -306,8 +306,8 @@ func (c *Config) printLinkPair(ctx context.Context, machine string, out, help io
 		return err
 	}
 	fmt.Fprintln(out, p.PairURL)
-	fmt.Fprintf(help, "\n这是给「%s」的 jarvis-link 用的配对链接，%d 分钟内有效，只能用一次。\n"+
-		"在那台电脑上：菜单栏的 Persona Link › 配对 / 修改连接… 里粘贴；或者运行 jarvis-link pair '<链接>'。\n",
+	fmt.Fprintf(help, "\n这是给「%s」的 Persona Link 用的配对链接，%d 分钟内有效，只能用一次。\n"+
+		"在那台电脑上：菜单栏的 Persona Link › 配对 / 修改连接… 里粘贴；或者运行 jarvis-link pair '<链接>'（新装的也可以用 persona-link）。\n",
 		machine, max(1, int(time.Until(p.ExpiresAt).Round(time.Minute).Minutes())))
 	return nil
 }

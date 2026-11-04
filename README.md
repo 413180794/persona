@@ -76,11 +76,11 @@ Claude 还能用 `phone_*` 工具读写 iPhone 上的通讯录、日历、提醒
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/architecture-dark.svg">
-  <img src="docs/assets/readme/architecture-light.svg" alt="结构图：iPhone、Apple Watch、Mac、网页和 Android 经 HTTPS / WSS 连 hub；hub 经 SSH 或 jarvis-link 连各台电脑上的 personad node，经连接器接飞书、邮件、GitHub、Telegram，经 APNs 推送到手机" width="100%">
+  <img src="docs/assets/readme/architecture-light.svg" alt="结构图：iPhone、Apple Watch、Mac、网页和 Android 经 HTTPS / WSS 连 hub；hub 经 SSH 或 Persona Link 连各台电脑上的 personad node，经连接器接飞书、邮件、GitHub、Telegram，经 APNs 推送到手机" width="100%">
 </picture>
 
 - **hub**（`personad hub`）是手机唯一连接的地方：转发对话、管理要你回答的事、运行助手、收消息和邮件，状态存在本机的 Postgres 里。App 关着时，它经 Apple 推送提醒你。
-- **各台电脑**上跑 `personad node`：hub 经 SSH 临时启动它，或者电脑装上 node 服务（[jarvis-link](docs/link.md)）主动连 hub。
+- **各台电脑**上跑 `personad node`：hub 经 SSH 临时启动它，或者电脑装上 node 服务（连接器 [Persona Link](docs/link.md)）主动连 hub。
   node 驱动 herdr、读 Claude Code 的对话记录，把提问和权限请求（hooks）、手机工具调用（MCP）转给 hub。
 - **手机**用设备 token 连 hub 实时收发。Claude 调用手机工具时，请求经 node 和 hub 到达 iPhone，在本地执行后原路返回。
 

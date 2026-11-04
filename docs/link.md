@@ -1,4 +1,9 @@
-# 连接器 jarvis-link：电脑连 hub，或者 hub 来连电脑
+# 连接器 Persona Link：电脑连 hub，或者 hub 来连电脑
+
+> 名字（#1159）：连接器叫 **Persona Link**，命令是 `persona-link`。`persona-link` 是安装器在 `jarvis-link` 旁边建的别名，两个名字是同一个程序，
+> 用哪个名字运行，它的提示里就用哪个名字。可执行文件 `~/.persona/bin/jarvis-link`、下载名 `jarvis-link-<os>-<arch>.gz`、
+> systemd 单元 `jarvis-link.service`、launchd、Mac App 里的 helper 都保持旧名，所以本文下面提到程序时仍写 `jarvis-link`。
+> hub 和管理页给出的可复制命令也暂时写 `jarvis-link`，因为 hub 不知道那台电脑的版本，旧版没有 `persona-link`。
 
 笔记本这类 IP 和网络经常变的电脑，hub 没法稳定地 ssh 进去。2026-10-31 用户要求：不用 Tailscale，也不用反向隧道，
 改成由电脑上的客户端主动连 hub、断了自己重连，hub 复用这条链路和这台的 node 通信。这样整条路不需要 SSH，也不需要 VPN。

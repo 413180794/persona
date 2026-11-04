@@ -15,7 +15,7 @@ import (
 var errBusy = errors.New("locked")
 
 // ErrRunning: another jarvis-link holds the run lock of this link.json.
-var ErrRunning = errors.New("这台电脑上已经有一个 jarvis-link 在运行")
+var ErrRunning = errors.New("这台电脑上已经有一个 Persona Link 在运行")
 
 // LockRun takes the run lock of the link.json at path: one jarvis-link per computer, or two would keep taking the
 // link from each other. ErrRunning when another one has it; release gives it back (exiting does too).

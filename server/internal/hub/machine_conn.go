@@ -531,7 +531,7 @@ func (m *Machine) unavailableWhy() string {
 		if down != nil {
 			return down.Error()
 		}
-		return "等这台电脑的 jarvis-link 连上来"
+		return "等这台电脑的 Persona Link 连上来"
 	case kindService:
 		return m.serviceWhy()
 	}

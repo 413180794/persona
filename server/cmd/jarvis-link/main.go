@@ -66,13 +66,20 @@ type exitCode int
 func (e exitCode) Error() string { return fmt.Sprintf("exit %d", int(e)) }
 
 func main() {
+	// Under the new name (or the installer's PERSONA_LINK_NAME) what it prints says persona-link (name.go).
+	self := commandName(os.Args[0], os.Getenv)
+	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
+	if self != legacyName {
+		stdout, stderr = renamer{os.Stdout}, renamer{os.Stderr}
+	}
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	log.SetPrefix("jarvis-link: ")
+	log.SetPrefix(self + ": ")
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, usage)
+		fmt.Fprintln(stderr, usage)
 		os.Exit(2)
 	}
 	e := newEnv()
+	e.stdout, e.stderr = stdout, stderr
 	var err error
 	switch args := os.Args[2:]; os.Args[1] {
 	case "pair":
@@ -98,9 +105,9 @@ func main() {
 	case "version", "--version", "-v":
 		fmt.Println(version)
 	case "help", "--help", "-h":
-		fmt.Println(usage)
+		fmt.Fprintln(stdout, usage)
 	default:
-		fmt.Fprintln(os.Stderr, usage)
+		fmt.Fprintln(stderr, usage)
 		os.Exit(2)
 	}
 	var code exitCode
@@ -108,10 +115,10 @@ func main() {
 	case errors.As(err, &code):
 		os.Exit(int(code))
 	case errors.Is(err, errUsage):
-		fmt.Fprintln(os.Stderr, usage)
+		fmt.Fprintln(stderr, usage)
 		os.Exit(2)
 	case err != nil:
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(stderr, err)
 		os.Exit(1)
 	}
 }

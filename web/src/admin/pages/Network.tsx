@@ -223,7 +223,7 @@ function PublicCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
         )}
         <Field
           label="TLS 监听（public.tls_listen）"
-          hint={v.tls ? `正在监听 ${v.tls.listen}，指纹 ${v.tls.fp.slice(0, 12)}…；留空关掉 TLS（jarvis-link、互联都要它）` : "例如 :18662。开启后公网和互联只走这个端口；第一次开会生成自签证书"}
+          hint={v.tls ? `正在监听 ${v.tls.listen}，指纹 ${v.tls.fp.slice(0, 12)}…；留空关掉 TLS（Persona Link、互联都要它）` : "例如 :18662。开启后公网和互联只走这个端口；第一次开会生成自签证书"}
           value={tls}
           onChange={setTls}
           placeholder=":18662"

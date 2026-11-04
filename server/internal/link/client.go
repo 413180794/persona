@@ -520,7 +520,7 @@ func runActive(ctx context.Context, o Options, rep *reporter) {
 			wait = max(wait, he.retry)
 		case websocket.CloseStatus(end) == CloseReplaced:
 			wait = replaceWait
-			end = errors.New("这台电脑在别处又连了一条链路（同一个凭据开了两个 jarvis-link？）")
+			end = errors.New("这台电脑在别处又连了一条链路（同一个凭据开了两个 Persona Link？）")
 		case websocket.CloseStatus(end) == CloseRevoked:
 			state, wait = "refused", refusedWait
 			end = errors.New("凭据被撤销了：重新配对")

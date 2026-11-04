@@ -400,6 +400,10 @@ func uninstall(e *env, args []string) error {
 			gone = append(gone, p)
 		}
 	}
+	// The installer's persona-link next to it (#1159), only when it is that alias: nothing else of that name is touched.
+	if alias := e.aliasPath(); isLinkAlias(alias) && os.Remove(alias) == nil {
+		gone = append(gone, alias)
+	}
 	if dir := link.TLSDir(cfg); fileExists(dir) && os.RemoveAll(dir) == nil {
 		gone = append(gone, dir)
 	}

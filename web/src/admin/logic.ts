@@ -159,7 +159,7 @@ export function machineStatus(m: AdminMachine): { tone: "green" | "red" | "orang
 }
 
 export function deviceKindLabel(kind: string): string {
-  return ({ phone: "手机", watch: "手表", link: "jarvis-link", other: "网页 / 其他" } as Record<string, string>)[kind] ?? kind;
+  return ({ phone: "手机", watch: "手表", link: "Persona Link", other: "网页 / 其他" } as Record<string, string>)[kind] ?? kind;
 }
 
 export function roleLabel(role: string): string {

@@ -63,7 +63,7 @@ func (h *Hub) linkRoutes(api *http.ServeMux) {
 func (h *Hub) linkCaller(w http.ResponseWriter, r *http.Request) (*Machine, principal, bool) {
 	p := principalOf(r.Context())
 	if p.Role != roleLink {
-		writeErr(w, http.StatusForbidden, errors.New("only a jarvis-link credential opens a machine link"))
+		writeErr(w, http.StatusForbidden, errors.New("only a Persona Link credential opens a machine link"))
 		return nil, p, false
 	}
 	if r.TLS == nil && h.sourceOf(r) != sourceLoopback {
@@ -154,7 +154,7 @@ func (h *Hub) serveLink(w http.ResponseWriter, r *http.Request) {
 		}
 		var msg link.Message
 		if json.Unmarshal(data, &msg) == nil && msg.Type == "open_failed" {
-			l.deliver(msg.ID, linkStream{err: fmt.Errorf("jarvis-link: %s", clip(msg.Error, 300))})
+			l.deliver(msg.ID, linkStream{err: fmt.Errorf("Persona Link: %s", clip(msg.Error, 300))})
 		}
 	}
 	cause := context.Cause(ctx)
@@ -232,7 +232,7 @@ func (l *hubLink) open(ctx context.Context) (*websocket.Conn, chan struct{}, err
 			}
 			return s.conn, s.done, nil
 		case <-timer.C:
-			err = errors.New("jarvis-link did not open the stream in time")
+			err = errors.New("Persona Link did not open the stream in time")
 		case <-l.ctx.Done():
 			err = context.Cause(l.ctx)
 		case <-ctx.Done():
@@ -417,7 +417,7 @@ func (m *Machine) dialLink(ctx context.Context) (*nodePipe, error) {
 	case l == nil && down != nil:
 		return nil, down
 	case l == nil:
-		return nil, errors.New("waiting for jarvis-link")
+		return nil, errors.New("waiting for Persona Link")
 	case l.ctx.Err() != nil:
 		return nil, context.Cause(l.ctx)
 	}

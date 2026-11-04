@@ -96,7 +96,7 @@ export function installMock(scenario: string) {
           : [
               { id: "server", name: "服务器", kind: "local", icon: "server", online: true, transport: "local", node_version: VERSION, os: "linux", state: "active" },
               { id: "laptop", name: "笔记本", kind: "ssh", ssh_host: "laptop", online: true, transport: "ssh", node_version: "v1.3.9-4-gdef5678", node_mismatch: true, os: "darwin", state: "active" },
-              { id: "desk", name: "办公室电脑", kind: "link", online: false, error: "jarvis-link 没有连上来（最后一次：连接被对方重置）", os: "darwin", last_seen: iso(180), state: "active" },
+              { id: "desk", name: "办公室电脑", kind: "link", online: false, error: "Persona Link 没有连上来（最后一次：连接被对方重置）", os: "darwin", last_seen: iso(180), state: "active" },
               { id: "studio", name: "工作室", kind: "ssh", ssh_host: "studio", online: false, state: "pending_add" },
             ];
   let mesh: MeshView =
@@ -128,7 +128,7 @@ export function installMock(scenario: string) {
     { id: "dev_a1", name: "iPhone", kind: "phone", role: "full", created_at: iso(60 * 24 * 40), last_seen: iso(3) },
     { id: "dev_b2", name: "Apple Watch", kind: "watch", role: "answer", created_at: iso(60 * 24 * 38), last_seen: iso(50) },
     { id: "dev_c3", name: "Chrome · 网页", kind: "other", role: "full", created_at: iso(60 * 24 * 2), last_seen: iso(60 * 5) },
-    { id: "dev_d4", name: "办公室电脑 的 jarvis-link", kind: "link", role: "link", machine_id: "desk", created_at: iso(60 * 24 * 9), last_seen: iso(180) },
+    { id: "dev_d4", name: "办公室电脑 的 Persona Link", kind: "link", role: "link", machine_id: "desk", created_at: iso(60 * 24 * 9), last_seen: iso(180) },
   ];
   let peers: Peer[] =
     scenario === "empty"

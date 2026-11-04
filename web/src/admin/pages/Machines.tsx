@@ -490,7 +490,7 @@ function PairPanel({ machine, onClose }: { machine: AdminMachine; onClose: () =>
           )}
           {platform === "linux" && (
             <div className="space-y-2">
-              <p>下载 jarvis-link 后在那台电脑上运行，一条命令配对、装成 systemd 用户服务并连上：</p>
+              <p>在那台电脑上装好连接器 Persona Link（命令名 jarvis-link，新装的也叫 persona-link）后运行，一条命令配对、装成 systemd 用户服务并连上：</p>
               <CodeBlock value={linuxInstallCommand(pair.pair_url)} copyLabel="拷贝命令" />
               <p className="text-[11.5px] text-ink-3">没人登录时也要连着的话，再运行 sudo loginctl enable-linger 加你的用户名。</p>
             </div>

@@ -15,14 +15,20 @@ INSTALL = ROOT / 'scripts/deploy/install.sh'
 
 
 class PersonaInstallTests(unittest.TestCase):
-    def run_install(self, home, initial='fresh', extra=None, corrupt=False):
-        name = 'jarvisd-' + {'Darwin': 'darwin', 'Linux': 'linux'}[platform.system()] + '-' + {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]
+    def run_install(self, home, initial='fresh', extra=None, corrupt=False, link=None):
+        target = {'Darwin': 'darwin', 'Linux': 'linux'}[platform.system()] + '-' + {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]
+        name = 'jarvisd-' + target
         with tempfile.TemporaryDirectory() as directory:
             downloads = Path(directory)
             data = gzip.compress(b'#!/bin/sh\nif [ "$1" = version ]; then printf "fixture-version\\n"; fi\n', mtime=0)
             (downloads / (name + '.gz')).write_bytes(data)
             digest = '0' * 64 if corrupt else hashlib.sha256(data).hexdigest()
-            (downloads / 'SHA256SUMS').write_text(digest + '  ' + name + '.gz\n')
+            sums = digest + '  ' + name + '.gz\n'
+            if link is not None:  # the connector's download, a script that does what `link` says
+                link_data = gzip.compress(link.encode(), mtime=0)
+                (downloads / ('jarvis-link-' + target + '.gz')).write_bytes(link_data)
+                sums += hashlib.sha256(link_data).hexdigest() + '  jarvis-link-' + target + '.gz\n'
+            (downloads / 'SHA256SUMS').write_text(sums)
             class Handler(SimpleHTTPRequestHandler):
                 def __init__(self, *args, **kwargs):
                     super().__init__(*args, directory=str(downloads), **kwargs)
@@ -53,6 +59,28 @@ class PersonaInstallTests(unittest.TestCase):
                 self.assertFalse((home / '.jarvis').is_symlink())
                 self.assertEqual((home / '.persona').resolve(), (home / '.jarvis').resolve())
                 self.assertEqual((home / '.persona/bin/personad').resolve(), (home / '.jarvis/bin/jarvisd').resolve())
+
+    def test_node_install_adds_persona_link_and_runs_the_real_connector(self):
+        # #1159: persona-link is an alias of the jarvis-link file; the installer runs the real file (the service and
+        # the unit keep the old name) and only asks it to say the new name.
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            log = home / 'link-calls'
+            link = ('#!/bin/sh\nif [ "$1" = version ]; then printf "link-version\\n"; exit 0; fi\n'
+                    'printf "%s|%s|%s\\n" "$(basename "$0")" "${PERSONA_LINK_NAME:-}" "$*" >> "' + str(log) + '"\n')
+            for _ in range(2):
+                result = self.run_install(home, link=link, extra={'PERSONA_ROLE': 'node', 'JARVIS_PAIR': 'jarvis://link?url=https%3A%2F%2Fhub.example.com&token=jp_x'})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                bin_dir = home / '.persona/bin'
+                self.assertTrue((bin_dir / 'jarvis-link').is_file())
+                self.assertFalse((bin_dir / 'jarvis-link').is_symlink())
+                self.assertEqual((bin_dir / 'persona-link').resolve(), (bin_dir / 'jarvis-link').resolve())
+                self.assertIn('persona-link link-version installed', result.stdout)
+            calls = log.read_text().splitlines()
+            self.assertTrue(calls)
+            for call in calls:
+                invoked, shown, _ = call.split('|', 2)
+                self.assertEqual((invoked, shown), ('jarvis-link', 'persona-link'))
 
     def test_legacy_state_and_external_symlink_are_not_moved(self):
         for external in (False, True):

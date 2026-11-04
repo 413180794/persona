@@ -284,7 +284,7 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 		if !allowed(p, r.Method, r.URL.Path) {
 			msg := "this device can only read and answer"
 			if p.Role == roleLink || p.Role == roleLinkPair {
-				msg = "a jarvis-link credential only opens its machine's link"
+				msg = "a Persona Link credential only opens its machine's link"
 			} else if p.Role == rolePeer || p.Role == rolePeerPair {
 				msg = "a peer credential only opens the mesh link"
 			}

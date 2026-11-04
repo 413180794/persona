@@ -86,7 +86,7 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 				return
 			}
 			if port, _ := h.tlsPin(); port == 0 {
-				writeErr(w, http.StatusConflict, errors.New("jarvis-link only uses TLS: set public.tls_listen in hub.json"))
+				writeErr(w, http.StatusConflict, errors.New("Persona Link only uses TLS: set public.tls_listen in hub.json"))
 				return
 			}
 		}
