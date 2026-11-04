@@ -423,6 +423,17 @@ struct PluginMarketsView: View {
                 }
                 .listRowBackground(Color.clear)
             }
+            if let auto = page.autoUpgrade, !page.markets.isEmpty {
+                Section {
+                    Toggle(isOn: Binding(get: { auto }, set: { on in Task { await page.setAutoUpgrade(on) } })) {
+                        Text("自动升级插件").lineLimit(1)
+                    }
+                    .accessibilityIdentifier("market-auto-upgrade")
+                } footer: {
+                    Text(auto ? "从这些市场装的插件出了新版本，插件空闲时 hub 自动装上；要的权限变多时先问你。每个插件也可以在自己的页面里单独关掉。"
+                              : "关着：有新版本时只在插件的页面里提示，你自己去升级。")
+                }
+            }
             ForEach(page.markets) { m in
                 Section {
                     MarketRow(market: m, busy: page.busyMarket == m.id) { act in
@@ -470,8 +481,8 @@ struct PluginMarketsView: View {
                 await page.setToken(m.id, token: token)
             }
         }
-        .task { await page.loadMarkets() }
-        .refreshable { await page.loadMarkets() }
+        .task { await page.loadMarkets(); await page.loadAutoUpgrade() }
+        .refreshable { await page.loadMarkets(); await page.loadAutoUpgrade() }
     }
 }
 

@@ -774,6 +774,15 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
   读取时间、错误和警告，一行「刷新」「设 / 换 token」「删除」；「添加」填地址和可选 token（token 只写不回显），地址原样交给 hub、不在 App 里校验格式，
   hub 拒绝的原因留在表单里（#1373：https、`github:owner/repo`、`git:<地址>[#分支]` 三种写法，git 的用 hub 机器的 SSH 凭据、不用 token）。
   逻辑在 `PluginMarketModel.swift`（`PluginMarketModel`、`MarketPluginModel`），页面 `PluginMarketViews.swift`。
+- 自动升级（#1699，「自动升级」）：从市场装的插件（`PluginView.auto_upgrade` 有值）的详情里，「启用」下面多一节「升级」，内容如下。
+  - 「自动升级」开关（`PUT …/{id}/-/auto-upgrade`）。
+  - 有新版本时一行「有新版本 1.1.0」，下面一行小字写它怎么样：空闲时自动升级 / 自动升级关着 / 要多一项权限：…（橙色）/ 上次起不来、不再自动升级（橙色）/ 没装上 / 装不了。
+    要你做的，行尾写「去确认」或「去升级」，点了打开它在市场里的升级页，那里列权限、确认。
+  - 没有新版本时写上次的结果：「已自动升级到 1.0.0（原来是 0.9.0）· 3 小时前」，或「1.1.0 起不来，已回到 1.0.0」。
+
+  市场管理页最上面是全部插件的「自动升级插件」总开关（`GET/PUT /api/v1/plugins/-/upgrades`）：读不到这个接口的老 hub 不显示，没有市场时也不显示。
+  列表里等确认的插件，状态后面加「· 新版本待确认」。假 hub 的 `MOCK_PLUGIN_UPGRADE`（`needs_permission`（默认）/ `waiting_idle` / `skipped` / `upgraded`）
+  决定 `example-gateway` 处在哪种情况；UI 测试 `PluginMarketTests.testAutoUpgrade`、`testAutoUpgradeForAll`，单元测试 `PluginUpgradeTests`。
 - 截图：`MOCK_PLUGINS=1` 的假 hub 有五个状态各不相同的示例插件，另有 `example-gateway` 的页面、启动器上的一节（外加一个总回 unsupported 的）、
   两个市场和它们的目录；`-tab settings -openPlugins YES`（`-openPlugin <id>` 直接进详情，再加 `-openPluginPage <ui>` 进它的页面）、
   `-openPluginMarket YES`（目录）、`-openPluginMarkets YES`（市场管理）、`-openMarketPlugin <市场 id>/<插件 id>`、`-openLauncherPage <启动器>`。

@@ -25,11 +25,50 @@ nonisolated struct HubPlugin: Codable, Hashable, Sendable, Identifiable {
     /// What it still needs before it runs, in words.
     var needsSetup: [String]?
     var warnings: [String]?
+    /// A plugin from a market (a hub with plugin_auto_upgrade): its own auto-upgrade switch, its newer version and what
+    /// happened last with an upgrade (docs/plugins.md「自动升级」).
+    var autoUpgrade: Bool?
+    var upgrade: PluginUpgrade?
+    var upgradeNote: PluginUpgradeNote?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, status, error, version, source, enabled, description, contributes, warnings
-        case needsSetup = "needs_setup"
+        case id, name, kind, status, error, version, source, enabled, description, contributes, warnings, upgrade
+        case needsSetup = "needs_setup", autoUpgrade = "auto_upgrade", upgradeNote = "upgrade_note"
     }
+}
+
+/// A market plugin's newer version and where it stands (PluginView.upgrade, GET /api/v1/plugins/-/upgrades).
+nonisolated struct PluginUpgrade: Codable, Hashable, Sendable, Identifiable {
+    var id: String
+    var name: String?
+    var market: String
+    var from: String
+    var to: String
+    /// available | waiting_idle | needs_permission | off | skipped | failed | incompatible
+    var state: String
+    var addedPermissions: [PluginPermission]?
+    var detail: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, market, from, to, state, detail
+        case addedPermissions = "added_permissions"
+    }
+}
+
+/// What happened last with a plugin's upgrade.
+nonisolated struct PluginUpgradeNote: Codable, Hashable, Sendable {
+    /// upgraded | rolled_back | needs_permission | failed
+    var kind: String
+    var from: String
+    var to: String
+    var detail: String?
+    var at: Date
+}
+
+/// GET /api/v1/plugins/-/upgrades: the global switch and the newer versions.
+nonisolated struct PluginUpgrades: Decodable, Hashable, Sendable {
+    var auto: Bool
+    var upgrades: [PluginUpgrade]
 }
 
 /// One field of a plugin's configuration form (`form.fields`): the hub's reading of the manifest's JSON Schema subset.
@@ -168,6 +207,16 @@ extension APIClient {
 
     func plugin(_ id: String) async throws -> HubPluginDetail { try await get("/api/v1/plugins/\(id)/-/") }
 
+    func setPlugin(_ id: String, autoUpgrade: Bool) async throws -> HubPluginDetail {
+        try JSON.decoder.decode(HubPluginDetail.self, from: try await request("PUT", "/api/v1/plugins/\(id)/-/auto-upgrade", body: ["auto": autoUpgrade]))
+    }
+
+    func pluginUpgrades() async throws -> PluginUpgrades { try await get("/api/v1/plugins/-/upgrades") }
+
+    func setPluginUpgrades(auto: Bool) async throws -> PluginUpgrades {
+        try JSON.decoder.decode(PluginUpgrades.self, from: try await request("PUT", "/api/v1/plugins/-/upgrades", body: ["auto": auto]))
+    }
+
     func setPlugin(_ id: String, enabled: Bool) async throws -> HubPluginDetail {
         try JSON.decoder.decode(HubPluginDetail.self, from: try await request("PUT", "/api/v1/plugins/\(id)/-/enabled", body: ["enabled": enabled]))
     }
@@ -233,7 +282,9 @@ enum PluginText {
     }
 
     /// The row's value: its state (the version is on its page).
-    static func summary(_ p: HubPlugin) -> String { state(p) }
+    static func summary(_ p: HubPlugin) -> String {
+        p.upgrade?.state == "needs_permission" ? state(p) + " · 新版本待确认" : state(p)
+    }
 
     /// Under the form: which switches take effect at once (lists of machines, `PluginModel.saveNow`) and that the rest
     /// waits for 保存.
@@ -243,6 +294,47 @@ enum PluginText {
         if now.isEmpty { return "改完点右上角「保存」；保存后插件会重新启动。留空的项用插件的默认值。" }
         if now.count == all.count { return now.joined(separator: "、") + "的开关即时生效，不用保存。" }
         return now.joined(separator: "、") + "的开关即时生效；其他项改完点右上角「保存」，保存后插件会重新启动。留空的项用插件的默认值。"
+    }
+
+    /// The 升级 section's line for a newer version: what happens to it (docs/plugins.md「自动升级」).
+    static func upgradeDetail(_ u: PluginUpgrade) -> String {
+        let why = u.detail.flatMap { $0.isEmpty ? nil : "：" + $0 } ?? ""
+        switch u.state {
+        case "needs_permission": return morePermissions(u.addedPermissions ?? [])
+        case "waiting_idle": return "插件空闲时自动升级"
+        case "available": return "稍后自动升级"
+        case "off": return "自动升级关着"
+        case "skipped": return "上次升级后起不来，已回到 \(u.from)，不再自动升级到这个版本"
+        case "failed": return "没装上" + why
+        case "incompatible": return "这台 hub 装不了" + why
+        default: return ""
+        }
+    }
+
+    /// Whether the line asks something of the user (its row opens the upgrade in the market).
+    static func upgradeAction(_ u: PluginUpgrade) -> String? {
+        switch u.state {
+        case "needs_permission": return "去确认"
+        case "off", "skipped", "failed": return "去升级"
+        default: return nil
+        }
+    }
+
+    /// What a newer version asks for more, as the hub says it in its notice.
+    static func morePermissions(_ added: [PluginPermission]) -> String {
+        guard !added.isEmpty else { return "要的权限有变化" }
+        let count = ["", "一", "两", "三", "四", "五"]
+        let lines = added.map { p in p.title + (p.detail.flatMap { $0.isEmpty ? nil : "（\($0)）" } ?? "") }
+        return (added.count < count.count ? "要多\(count[added.count])项权限：" : "要多 \(added.count) 项权限：") + lines.joined(separator: "、")
+    }
+
+    /// The last upgrade, when it is news of its own (asking and failing are the newer version's line).
+    static func upgradeNote(_ n: PluginUpgradeNote) -> String? {
+        switch n.kind {
+        case "upgraded": return "已自动升级到 \(n.to)（原来是 \(n.from)）"
+        case "rolled_back": return "\(n.to) 起不来，已回到 \(n.from)"
+        default: return nil
+        }
     }
 
     /// 设置's row: how many, and how many need the user.
@@ -331,6 +423,10 @@ enum PluginText {
 
     func setEnabled(_ on: Bool) async {
         await run { api in try await api.setPlugin(self.id, enabled: on) }
+    }
+
+    func setAutoUpgrade(_ on: Bool) async {
+        await run { api in try await api.setPlugin(self.id, autoUpgrade: on) }
     }
 
     func save() async -> Bool {

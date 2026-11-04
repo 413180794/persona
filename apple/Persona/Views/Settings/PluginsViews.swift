@@ -93,6 +93,23 @@ private struct PluginRowLabel: View {
     }
 }
 
+/// A line of a plugin's 升级 section: what, and below it what happens (in the caution colour when it needs the user).
+private struct PluginUpgradeLine: View {
+    var title: String
+    var detail: String
+    var attention: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            Text(title).font(Theme.Font.body)
+            if !detail.isEmpty {
+                Text(detail).font(Theme.Font.label).foregroundStyle(attention ? Theme.cautionText : Color.secondary)
+            }
+        }
+        .padding(.vertical, Theme.Space.xxs)
+    }
+}
+
 /// The dot beside a plugin's state.
 private struct PluginStateDot: View {
     var plugin: HubPlugin?
@@ -139,6 +156,7 @@ struct PluginDetailView: View {
                         Text("停用后它不再运行，提供的连接器等也一起关掉；设置和密钥留着。")
                     }
                 }
+                if let auto = d.plugin.autoUpgrade { upgrades(d.plugin, auto: auto) }
                 pages(d)
                 if !d.readOnly && !d.form.isEmpty { form(d) }
                 if !d.readOnly && !d.secrets.isEmpty { secrets(d) }
@@ -213,6 +231,41 @@ struct PluginDetailView: View {
     private var stateText: String {
         guard let p = page.detail?.plugin else { return page.loading ? "正在读取…" : "读不到" }
         return [PluginText.state(p), p.version, PluginText.source(p.source)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// A market plugin's upgrades (docs/plugins.md「自动升级」): its own switch, its newer version (opening the market's
+    /// upgrade when it waits for the user) or what happened last.
+    @ViewBuilder private func upgrades(_ p: HubPlugin, auto: Bool) -> some View {
+        Section {
+            Toggle(isOn: Binding(get: { auto }, set: { on in Task { await page.setAutoUpgrade(on) } })) {
+                Text("自动升级").lineLimit(1)
+            }
+            .accessibilityIdentifier("plugin-auto-upgrade")
+            if let u = p.upgrade {
+                if let action = PluginText.upgradeAction(u) {
+                    NavigationLink(value: SettingsPage.marketPlugin(market: u.market, id: u.id)) {
+                        // The action stays at the end of the row however long what it asks for is.
+                        HStack(spacing: Theme.Space.m) {
+                            PluginUpgradeLine(title: "有新版本 \(u.to)", detail: PluginText.upgradeDetail(u),
+                                              attention: u.state == "needs_permission" || u.state == "skipped")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(action).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
+                        }
+                    }
+                    .accessibilityIdentifier("plugin-upgrade")
+                } else {
+                    PluginUpgradeLine(title: "有新版本 \(u.to)", detail: PluginText.upgradeDetail(u), attention: false)
+                        .accessibilityIdentifier("plugin-upgrade")
+                }
+            } else if let n = p.upgradeNote, let text = PluginText.upgradeNote(n) {
+                PluginUpgradeLine(title: text, detail: n.at.formatted(.relative(presentation: .named)), attention: n.kind == "rolled_back")
+                    .accessibilityIdentifier("plugin-upgrade-note")
+            }
+        } header: {
+            SettingsHeading("升级")
+        } footer: {
+            Text("插件市场里出了新版本，插件空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。")
+        }
     }
 
     /// The pages it draws (docs/plugins.md「声明式 UI」), a row each.

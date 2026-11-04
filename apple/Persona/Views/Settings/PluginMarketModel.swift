@@ -205,6 +205,8 @@ enum PluginMarketText {
     var market: String?
     /// A market being refreshed or removed (its spinner), by id.
     private(set) var busyMarket: String?
+    /// Whether plugins from the markets upgrade themselves (nil: a hub without auto-upgrade, or not read yet).
+    private(set) var autoUpgrade: Bool?
     @ObservationIgnored private let deps: Deps
 
     init(deps: Deps = .live) { self.deps = deps }
@@ -233,6 +235,23 @@ enum PluginMarketText {
             markets = try await api().pluginMarkets()
             error = nil
         } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// The auto-upgrade switch; a hub from before it has none (the switch stays hidden).
+    func loadAutoUpgrade() async {
+        autoUpgrade = try? await api().pluginUpgrades().auto
+    }
+
+    func setAutoUpgrade(_ on: Bool) async {
+        let before = autoUpgrade
+        autoUpgrade = on
+        do {
+            autoUpgrade = try await api().setPluginUpgrades(auto: on).auto
+            error = nil
+        } catch {
+            autoUpgrade = before
             self.error = error.localizedDescription
         }
     }

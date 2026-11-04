@@ -7159,7 +7159,8 @@ def cua_config(pl):
     pl["config"] = {**{k: v for k, v in pl["config"].items() if k != "machines"}, **({"machines": machines} if machines else {})}
 
 
-_PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings"]
+_PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings",
+                "auto_upgrade", "upgrade", "upgrade_note"]
 
 # ---------- MOCK_PLUGINS: declarative UI (docs/plugins.md「声明式 UI」) ----------
 # example-gateway draws a page (plugin_page "home") and a section on every launcher's page (launcher_section "panel"),
@@ -7309,12 +7310,63 @@ def _catalog_item(c):
     return {k: v for k, v in it.items() if v not in (None, "", False)} | {"tags": c.get("tags", [])}
 
 
+# Auto-upgrade (docs/plugins.md「自动升级」): example-gateway, from a market at 1.0.0, has 1.1.0 there asking for one more
+# host. MOCK_PLUGIN_UPGRADE picks how it stands: needs_permission (default), waiting_idle, skipped, upgraded (the last
+# one went in by itself), none.
+AUTO_UPGRADE = {"auto": True}
+
+
+def _gateway_upgrade(state):
+    pl = PLUGINS["example-gateway"]
+    pl["auto_upgrade"] = True
+    up = {"id": "example-gateway", "name": pl["name"], "market": _MARKET_A, "from": "1.0.0", "to": "1.1.0", "state": state}
+    at = lambda hours: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - hours * 3600))
+    if state == "needs_permission":
+        up["added_permissions"] = [{"key": "network", "title": "访问更多网络", "detail": "status.example.com"}]  # as the hub's plugin.Added
+        pl["upgrade_note"] = {"kind": "needs_permission", "from": "1.0.0", "to": "1.1.0", "detail": "要多一项权限：访问更多网络（status.example.com）", "at": at(2)}
+    elif state == "waiting_idle":
+        up["detail"] = "插件正在用"
+    elif state == "skipped":
+        pl["upgrade_note"] = {"kind": "rolled_back", "from": "1.0.0", "to": "1.1.0", "detail": "exited with status 3", "at": at(5)}
+    if state in ("needs_permission", "waiting_idle", "skipped"):
+        pl["upgrade"] = up
+    elif state == "upgraded":
+        pl["upgrade_note"] = {"kind": "upgraded", "from": "0.9.0", "to": "1.0.0", "at": at(3)}
+
+
+_gateway_upgrade(os.environ.get("MOCK_PLUGIN_UPGRADE", "needs_permission"))
+
+
+def upgrades_route(handler, p, req):
+    """The auto-upgrade's switches and list (GET/PUT /api/v1/plugins/-/upgrades, PUT …/{id}/-/auto-upgrade)."""
+    method, parts = handler.command, p.split("/")
+    if p == "/api/v1/plugins/-/upgrades" and method in ("GET", "PUT"):
+        if method == "PUT":
+            AUTO_UPGRADE["auto"] = bool(req.get("auto"))
+        handler.send_json({"auto": AUTO_UPGRADE["auto"], "upgrades": [pl["upgrade"] for pl in PLUGINS.values() if pl.get("upgrade")],
+                           "off": [pl["id"] for pl in PLUGINS.values() if pl.get("auto_upgrade") is False],
+                           "last": {pl["id"]: pl["upgrade_note"] for pl in PLUGINS.values() if pl.get("upgrade_note")}})
+        return True
+    if method == "PUT" and len(parts) == 7 and parts[3] == "plugins" and parts[5] == "-" and parts[6] == "auto-upgrade" and parts[4] in PLUGINS:
+        pl = PLUGINS[parts[4]]
+        if not pl.get("origin", "").startswith("market:"):
+            handler.send_json({"error": "只有从插件市场装的插件会自动升级", "code": "not_from_market"}, 400); return True
+        pl["auto_upgrade"] = bool(req.get("auto"))
+        up = pl.get("upgrade")
+        if up and up["state"] in ("available", "waiting_idle", "off"):
+            up["state"] = "waiting_idle" if pl["auto_upgrade"] else "off"
+            up.pop("detail", None)
+        handler.send_json({k: v for k, v in _plugin_needs(pl).items() if v is not None}); return True
+    return False
+
+
 def markets_route(handler, p, body):
     """MOCK_PLUGINS: the markets, the catalog, installing from it, and the plugins' declarative UI. False otherwise."""
     if not PLUGINS_MODE: return False
     method = handler.command
     q = {k: v[0] for k, v in parse_qs(urlparse(handler.path).query).items()}
     req = json.loads(body or b"{}") if body else {}
+    if upgrades_route(handler, p, req): return True
     if p == "/api/v1/plugins/-/markets" and method == "GET":
         handler.send_json({"markets": list(MARKETS.values())}); return True
     if p == "/api/v1/plugins/-/markets" and method == "POST":
@@ -7362,6 +7414,7 @@ def markets_route(handler, p, body):
         pl = PLUGINS.get(c["id"]) or {"id": c["id"], "source": "installed", "enabled": True, "form": {"fields": []}, "config": {}, "secrets": []}
         pl.update({"name": c["name"], "version": c["version"], "description": c["description"], "status": "running", "kind": next(iter(c["contributes"]), ""),
                    "contributes": c["contributes"], "permissions": c["permissions"], "origin": "market:%s/%s" % (c["market"], c["id"]), "publisher": c.get("publisher")})
+        pl.pop("upgrade", None); pl.pop("upgrade_note", None)  # the user upgraded it
         PLUGINS[c["id"]] = pl
         handler.send_json({k: v for k, v in _plugin_needs(pl).items() if v is not None}); return True
     if method == "DELETE" and len(parts) >= 6 and parts[3] == "plugins" and parts[5] == "-" and parts[6:] in ([], [""]) and parts[4] in PLUGINS:
@@ -7419,7 +7472,7 @@ _features_without_plugins = features
 
 
 def features():
-    return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots"] if PLUGINS_MODE else [])
+    return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots", "plugin_auto_upgrade"] if PLUGINS_MODE else [])
 
 
 def _plugin_needs(pl):

@@ -100,6 +100,40 @@ final class PluginMarketTests: XCTestCase {
         XCTAssertTrue(upgrade.waitForExistence(timeout: 5))
     }
 
+    /// A market plugin's 升级 section (docs/plugins.md「自动升级」): its own switch, the newer version that waits for the
+    /// user with what it asks for more, opening the market's upgrade; the 市场 page's switch for all of them. The mock's
+    /// MOCK_PLUGIN_UPGRADE picks the state (needs_permission by default; the screenshots of the others are named by it).
+    @MainActor func testAutoUpgrade() throws {
+        let state = env["JARVIS_PLUGIN_UPGRADE"] ?? "needs_permission"
+        let app = try launch(["-openPlugin", "example-gateway"])
+        let toggle = app.switches["plugin-auto-upgrade"].firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 15), "no 自动升级 switch:\n\(app.debugDescription)")
+        XCTAssertEqual(toggle.value as? String, "1", "on by default")
+        shot(app, "auto-upgrade-\(state)")
+        guard state == "needs_permission" else { return }
+        XCTAssertTrue(app.staticTexts["有新版本 1.1.0"].exists, "the newer version is not shown:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", "要多一项权限：访问更多网络（status.example.com）")).firstMatch.exists, "what it asks for more")
+        // Switched off and on again (the mock keeps it for the next run).
+        toggle.switches.firstMatch.tap()
+        sleep(1)
+        XCTAssertEqual(toggle.value as? String, "0", "not switched off")
+        toggle.switches.firstMatch.tap()
+        sleep(1)
+        XCTAssertEqual(toggle.value as? String, "1", "not switched on again")
+        // 去确认 opens the market's upgrade, where the permissions are agreed to.
+        app.buttons["plugin-upgrade"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["market-upgrade"].waitForExistence(timeout: 10), "the market's upgrade did not open:\n\(app.debugDescription)")
+        shot(app, "auto-upgrade-confirm")
+    }
+
+    @MainActor func testAutoUpgradeForAll() throws {
+        let app = try launch(["-openPluginMarkets", "YES"])
+        let all = app.switches["market-auto-upgrade"].firstMatch
+        XCTAssertTrue(all.waitForExistence(timeout: 15), "no switch for all:\n\(app.debugDescription)")
+        XCTAssertEqual(all.value as? String, "1")
+        shot(app, "markets-auto-upgrade")
+    }
+
     @MainActor func testManageMarkets() throws {
         let app = try launch(["-openPluginMarkets", "YES"])
         let add = app.buttons["market-add"]
