@@ -182,6 +182,8 @@ interface ConnectorProfile {
   reads?: string;
   /** The sign-in step's footer: where the credentials live and what is shown of them. */
   signInFooter?: string;
+  /** Signing out also ends the session at the service (Telegram's log-out call); false or absent: the hub only forgets its copy. */
+  logoutEndsRemoteSession?: boolean;
 }
 
 // A Map, not an object: a plugin's id may be `constructor` or `valueOf`.
@@ -195,6 +197,7 @@ const PROFILES = new Map<string, ConnectorProfile>([
       openTitle: "在 Telegram 里回复",
       reads: "它的私聊和群",
       signInFooter: "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。",
+      logoutEndsRemoteSession: true,
     },
   ],
   // No brand yet: the mark and its terms of use are undecided, so 微信 draws the generic icon until they are.
@@ -220,6 +223,13 @@ export function switchFooter(c: HubConnector): string {
 
 export function signInFooter(c: HubConnector): string {
   return PROFILES.get(c.id)?.signInFooter ?? "登录状态加密存在 hub 上，退出登录时删掉。";
+}
+
+/** The sign-out confirmation. Only a connector known to end the remote session says so; every other one (GitHub's device
+ * token, a plugin's key such as wechat-connector's) only has the hub forget its copy, so it says the authorization stays. */
+export function logoutMessage(c: HubConnector): string {
+  if (PROFILES.get(c.id)?.logoutEndsRemoteSession) return `hub 上存的 API 凭据和登录状态都会删掉，${c.name} 那边这个设备会话也会结束。再用要重新登录。`;
+  return "hub 上存的凭据和登录状态会删掉，再用要重新登录。对方服务里的授权不会自动撤销，需要的话到那边撤销。";
 }
 
 export function feedsFooter(c: HubConnector): string {

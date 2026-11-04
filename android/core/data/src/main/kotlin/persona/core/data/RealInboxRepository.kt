@@ -830,6 +830,7 @@ class RealInboxRepository(
                 it.string("task"), it.optional("machine_id"), it.optional("session_id")) },
             source = data.string("source"),
             atAll = lark?.flag("at_all") == true,
+            read = data.flag("read"),
             mail = mail?.let {
                 InboxMailRef(it.string("account_id"), it.optional("mailbox") ?: "INBOX",
                     it.array("uids").mapNotNull { uid -> (uid as? JsonPrimitive)?.longOrNull },

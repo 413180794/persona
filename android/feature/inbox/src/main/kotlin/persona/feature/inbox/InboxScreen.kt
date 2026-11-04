@@ -305,6 +305,7 @@ private fun kindLabel(kind: String) = when (kind) {
 
 /** The row's kind: an @ of everyone is 「@所有人」, a mail the user was only copied on is 「抄送」 (the old app's labels). */
 internal fun kindLabel(record: InboxRecord): String = when {
+    record.item.kind == "mention" && record.read -> "群聊"
     record.item.kind == "mention" && record.atAll -> "@所有人"
     record.item.kind == "mail" && record.mail?.direct == false -> "抄送"
     else -> kindLabel(record.item.kind)

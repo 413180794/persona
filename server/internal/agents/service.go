@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +49,7 @@ var FollowUps = []time.Duration{4 * time.Second, 15 * time.Second, 45 * time.Sec
 
 // Service is the agents layer the hub serves: sources, a cache, the outbox, and change notifications.
 type Service struct {
+	srcMu    sync.RWMutex
 	sources  map[string]Source
 	order    []string
 	cache    *cache
@@ -76,12 +78,67 @@ func NewService(kv KV, onChange func(ids []string), logf func(string, ...any), s
 	return s
 }
 
+// Add registers a source while the hub runs (a plugin's, docs/plugins.md「个人 Agent 来源」); false when one by that
+// name is there already.
+func (s *Service) Add(src Source) bool {
+	s.srcMu.Lock()
+	defer s.srcMu.Unlock()
+	if _, ok := s.sources[src.Name()]; ok {
+		return false
+	}
+	s.sources[src.Name()] = src
+	s.order = append(s.order, src.Name())
+	return true
+}
+
+// Remove drops a source (its plugin turned off or gone) with what is cached of it, and tells the apps.
+func (s *Service) Remove(name string) {
+	s.srcMu.Lock()
+	if _, ok := s.sources[name]; !ok {
+		s.srcMu.Unlock()
+		return
+	}
+	delete(s.sources, name)
+	s.order = slices.DeleteFunc(s.order, func(n string) bool { return n == name })
+	s.srcMu.Unlock()
+	s.cache.forget(name)
+	s.onChange([]string{})
+}
+
+// many says whether there is more than one source: alone, a source's failure is the answer, as it always was.
+func (s *Service) many() bool {
+	s.srcMu.RLock()
+	defer s.srcMu.RUnlock()
+	return len(s.order) > 1
+}
+
+// has says whether source is registered now.
+func (s *Service) has(source string) bool {
+	s.srcMu.RLock()
+	defer s.srcMu.RUnlock()
+	_, ok := s.sources[source]
+	return ok
+}
+
+// all is the sources in order, as they are now.
+func (s *Service) all() []Source {
+	s.srcMu.RLock()
+	defer s.srcMu.RUnlock()
+	out := make([]Source, len(s.order))
+	for i, n := range s.order {
+		out[i] = s.sources[n]
+	}
+	return out
+}
+
 func (s *Service) source(id string) (Source, string, error) {
 	name, key, err := SplitID(id)
 	if err != nil {
 		return nil, "", &Error{Status: http.StatusBadRequest, Msg: err.Error()}
 	}
+	s.srcMu.RLock()
 	src := s.sources[name]
+	s.srcMu.RUnlock()
 	if src == nil {
 		return nil, "", fail(http.StatusNotFound, "agents: unknown source %q", name)
 	}
@@ -90,8 +147,8 @@ func (s *Service) source(id string) (Source, string, error) {
 
 func (s *Service) Statuses(ctx context.Context) []Status {
 	out := []Status{}
-	for _, n := range s.order {
-		st, _ := s.sources[n].Status(ctx)
+	for _, src := range s.all() {
+		st, _ := src.Status(ctx)
 		if st.Providers == nil {
 			st.Providers = []lark.AgentProvider{}
 		}
@@ -103,28 +160,36 @@ func (s *Service) Statuses(ctx context.Context) []Status {
 	return out
 }
 
-func (s *Service) sessionsOf(ctx context.Context, name string, fresh bool) ([]Session, error) {
+func (s *Service) sessionsOf(ctx context.Context, src Source, fresh bool) ([]Session, error) {
+	name := src.Name()
 	if !fresh {
 		if list, ok := s.cache.getSessions(name); ok {
 			return list, nil
 		}
 	}
-	list, err := s.sources[name].Sessions(ctx)
+	gen := s.cache.generation(name)
+	list, err := src.Sessions(ctx)
 	if err != nil {
 		return nil, err
 	}
-	s.cache.putSessions(name, list)
+	s.cache.putSessions(name, gen, list)
 	return list, nil
 }
 
 // Sessions lists sessions of every source (or one), optionally of one provider, ordered as the sources rank them.
+// Of all of them, one that fails is left out (its status says why) so it does not take the others' away; asked
+// for by name, its error is the answer.
 func (s *Service) Sessions(ctx context.Context, source, provider string) ([]Session, error) {
 	out := []Session{}
-	for _, n := range s.order {
-		if source != "" && n != source {
+	for _, src := range s.all() {
+		if source != "" && src.Name() != source {
 			continue
 		}
-		list, err := s.sessionsOf(ctx, n, false)
+		list, err := s.sessionsOf(ctx, src, false)
+		if err != nil && source == "" && s.many() {
+			s.logf("agents: %s: sessions: %v", src.Name(), err)
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -139,11 +204,15 @@ func (s *Service) Sessions(ctx context.Context, source, provider string) ([]Sess
 
 func (s *Service) Search(ctx context.Context, source, q string) ([]SearchHit, error) {
 	out := []SearchHit{}
-	for _, n := range s.order {
-		if source != "" && n != source {
+	for _, src := range s.all() {
+		if source != "" && src.Name() != source {
 			continue
 		}
-		hits, err := s.sources[n].Search(ctx, q)
+		hits, err := src.Search(ctx, q)
+		if err != nil && source == "" && s.many() {
+			s.logf("agents: %s: search: %v", src.Name(), err)
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +228,7 @@ func (s *Service) Session(ctx context.Context, id string) (Session, error) {
 		return Session{}, err
 	}
 	for _, fresh := range []bool{false, true} {
-		list, err := s.sessionsOf(ctx, src.Name(), fresh)
+		list, err := s.sessionsOf(ctx, src, fresh)
 		if err != nil {
 			return Session{}, err
 		}
@@ -182,6 +251,7 @@ func (s *Service) Messages(ctx context.Context, id, cursor string, limit int) (*
 			return p, nil
 		}
 	}
+	gen := s.cache.generation(src.Name())
 	p, err := src.Messages(ctx, key, cursor, limit)
 	if err != nil {
 		return nil, err
@@ -198,7 +268,7 @@ func (s *Service) Messages(ctx context.Context, id, cursor string, limit int) (*
 		}
 	}
 	if cursor == "" {
-		s.cache.putLatest(id, limit, p)
+		s.cache.putLatest(src.Name(), gen, id, limit, p)
 	}
 	return p, nil
 }
@@ -349,6 +419,9 @@ func (s *Service) Outbox(ctx context.Context, id string, limit int) []OutboxEntr
 // Updated is a source reporting that these sessions changed (agent-bridge.updated, a send, the poll): drop
 // their cache and tell the apps. No keys means "something changed": only the list is dropped.
 func (s *Service) Updated(source string, keys []string) {
+	if !s.has(source) {
+		return // gone (its plugin stopped) since: a send's follow-up has nothing left to tell
+	}
 	ids := make([]string, 0, len(keys))
 	for _, k := range keys {
 		ids = append(ids, source+":"+k)
@@ -379,8 +452,10 @@ func (s *Service) PollOnce(ctx context.Context) {
 	if first {
 		s.marks = map[string][2]int64{}
 	}
-	for _, n := range s.order {
-		list, err := s.sources[n].Sessions(ctx)
+	for _, src := range s.all() {
+		n := src.Name()
+		gen := s.cache.generation(n)
+		list, err := src.Sessions(ctx)
 		if err != nil {
 			continue // the next tick tries again; the routes report errors themselves
 		}
@@ -392,7 +467,7 @@ func (s *Service) PollOnce(ctx context.Context) {
 			}
 			s.marks[x.ID] = m
 		}
-		s.cache.putSessions(n, list)
+		s.cache.putSessions(n, gen, list)
 		if len(changed) > 0 {
 			s.Updated(n, changed)
 		}

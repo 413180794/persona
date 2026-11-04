@@ -30,6 +30,7 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 | `api`（版本 1） | `api.` | `id`、`prefix`（一段路径）、`features?`、`events?` | `runtime.http`，`on_startup`；有 `events` 要进程说协议 | App 用的一段接口 `/api/v1/<prefix>/…`，见下面「App 接口」 |
 | `assistant`（版本 1） | — | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`） | 包里有这些文件 | 助手的技能和说明，见下面「助手」 |
 | `ui`（版本 1） | `ui.` | `id`、`title`、`placement`（`plugin_page` / `launcher_section`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，插件自己判断） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节，见下面「声明式 UI」 |
+| `agent_sources`（版本 1） | `agentsrc.` | `id`（`a-z0-9_-`，也是会话 id 的来源段 `<id>:<sessionKey>`）、`name`、`providers?`（`a-z0-9_`，如 `grok_bot`） | 进程说协议，`on_startup` | Agents 页的个人 Agent，和 hub 自己的 lark-connector 来源并列，见下面「个人 Agent 来源」 |
 | `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉插件 hub 上发生了什么，见下面「事件」 |
 
 hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
@@ -375,6 +376,35 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 `confirm` 有字就先让用户确认，`submit` 时把这一页所有 `field` 的值作为 `values`（名字 → 字符串，开关是 `"true"` / `"false"`）带上。
 限制：一页最多 300 个条目，每个字符串最多 2000 个字符；不认识的 `type`、`tone`、不是 https 的链接，整页拒绝（不画一半）。
 `open_url` 也只能是 https。
+
+## 个人 Agent 来源
+
+`agent_sources` 的每一项是 Agents 页里的一个个人 Agent 来源，和 hub 自己的 `removedbridge`（lark-connector agent-bridge）并列；App 不用改：
+接口还是 `/api/v1/agents*`（`docs/protocol.md`「个人 Agent」），会话 id 是 `<贡献 id>:<sessionKey>`，按 `provider` 分组和显示名字。
+用于直接连一个个人 Agent 的服务（比如它有实时推送，就不用 lark-connector 那样每分钟轮询）。
+
+- **id**：不能是 `removedbridge`（hub 自己的，装不上），也不能和别的插件的重复。插件启用、开始跑就进 Agents 页，停用、卸载、升级时先拿掉
+  （App 收到 `{"type":"agents"}` 重新拉）。进程崩溃、超时、没起来时来源还在：它的 `status` 带错误，列全部会话、搜索时跳过它（别的来源照常），
+  只问它的时候才回错误。
+- **hub 调插件**（`agentsrc.<方法>`，参数带 `contribution`；字段和 lark-connector agent-bridge 返回的一样，`server/internal/lark/agent_bridge.go`）：
+
+| 方法 | 参数 | 回 |
+| --- | --- | --- |
+| `status` | — | `{enabled?, setup?, providers?, accounts?}`：`enabled` 不写算 `true`；`setup` 是 `no_accounts` 等（见 protocol.md）；`providers` 不写就用清单里的 |
+| `sessions` | — | `{sessions: [{sessionKey, accountId?, provider, title, kind?, parentSessionKey?, canSend, unreadCount, rankTimeMs, avatarUrl?}]}` |
+| `messages` | `session_key`、`cursor?`、`limit` | `{session?, messages: [{externalId, sessionKey, role, blocks, createTimeMs, position}], hasMore, nextCursor?}` |
+| `send` | `session_key`、`client_id`（UUID）、`text` | 任意 JSON（原样给 App）；同一个 `client_id` 要去重：hub 对失败的会用同一个重试 |
+| `delete_message` | `session_key`、`client_id` | `{}` |
+| `mark_read` | `session_key` | `{}`；不支持回 `unsupported`，当成没有未读 |
+| `search` | `q` | `{hits: [{sessionKey, externalId, text, role, createTimeMs, title, provider}]}`；不支持回 `unsupported`，当成没有结果 |
+
+- **错误码**：没有这个会话回 `not_found`（App 看到 404），参数不对 `invalid`（400），现在发不了 `conflict`（409），不支持 `unsupported`（501）；
+  其余错误只有 `message`，App 看到 502。
+- **插件发给 hub 的事件** `agentsrc.updated {contribution?, session_keys?}`：这些会话变了（新消息、未读、标题），没有 `session_keys` 就是列表变了。
+  hub 清掉缓存、推 `{"type":"agents","session_ids":[…]}`，App 立刻重拉。只认这个插件自己的来源。hub 自己的发送之后也会推，并在 4 / 15 / 45 秒再推一次；
+  hub 每 60 秒还会兜底重新列一遍各来源。
+- 实现：`server/internal/hub/plugin_agents.go`；测试 `TestPluginAgentSource`（`plugin_agents_test.go`，假插件经协议走一遍）、
+  `agents.TestAddAndRemoveSources`。
 
 ## 事件
 

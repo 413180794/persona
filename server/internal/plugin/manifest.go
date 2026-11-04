@@ -245,6 +245,9 @@ func (m *Manifest) Validate() error {
 		if name == "events" && !slices.Contains(m.Activation(), OnStartup) {
 			bad("contributes.events: events are told to a plugin that runs: activation_events on_startup")
 		}
+		if name == "agent_sources" && !slices.Contains(m.Activation(), OnStartup) {
+			bad("contributes.agent_sources: the Agents tab lists it all the time: activation_events on_startup")
+		}
 		if name == "ui" {
 			for _, u := range m.UIs() {
 				if u.Placement == "launcher_section" && !m.Permissions.LauncherKeys {
@@ -423,6 +426,13 @@ func (m *Manifest) Quotas() []QuotaItem {
 	return out
 }
 
+// AgentSources are the manifest's contributions to agent_sources.
+func (m *Manifest) AgentSources() []AgentSourceItem {
+	var out []AgentSourceItem
+	_ = json.Unmarshal(m.Contributes["agent_sources"], &out)
+	return out
+}
+
 // Providers are the manifest's contributions to providers.
 func (m *Manifest) Providers() []ProviderItem {
 	var out []ProviderItem
@@ -444,7 +454,7 @@ func (m *Manifest) Contributions() map[string][]string {
 // Kind is the first extension point the plugin contributes to, by a fixed order: what GET /api/v1/plugins has always
 // said as "kind" (voice for a voice plugin).
 func (m *Manifest) Kind() string {
-	for _, name := range []string{"voice", "connectors", "api", "quota", "providers", "assistant", "ui", "events"} {
+	for _, name := range []string{"voice", "connectors", "api", "quota", "providers", "agent_sources", "assistant", "ui", "events"} {
 		if len(m.Items(name)) > 0 {
 			return name
 		}

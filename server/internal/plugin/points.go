@@ -70,6 +70,18 @@ type QuotaItem struct {
 	Hosts []string `json:"hosts,omitempty"`
 }
 
+// AgentSourceItem is a contribution to agent_sources: a source of personal agents' sessions in the Agents tab, next
+// to the hub's own (docs/plugins.md「个人 Agent 来源」). Its id is the source part of the sessions' ids
+// (<id>:<sessionKey>).
+type AgentSourceItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Providers are the agents it has ("grok_bot"): the apps group and label sessions by provider.
+	Providers []string `json:"providers,omitempty"`
+}
+
+var providerPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
+
 // ProviderItem is a contribution to providers: a model provider the user can add a launcher from (设置 › 模型供应商),
 // its address and models filled in (docs/plugins.md「模型供应商」).
 type ProviderItem struct {
@@ -178,6 +190,24 @@ var Points = map[string]Point{
 			}
 		}
 		return q.ID, nil
+	}},
+	"agent_sources": {Name: "agent_sources", Namespace: "agentsrc", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var a AgentSourceItem
+		if err := strict(raw, &a); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(a.ID) {
+			return a.ID, fmt.Errorf("agent_sources id %q: a-z0-9_-", a.ID)
+		}
+		if a.Name == "" {
+			return a.ID, errors.New("agent_sources " + a.ID + ": no name")
+		}
+		for _, pr := range a.Providers {
+			if !providerPattern.MatchString(pr) {
+				return a.ID, fmt.Errorf("agent_sources %s: provider %q: a-z0-9_", a.ID, pr)
+			}
+		}
+		return a.ID, nil
 	}},
 	"providers": {Name: "providers", Namespace: "provider", Version: 1, Item: func(raw json.RawMessage) (string, error) {
 		var p ProviderItem

@@ -106,6 +106,7 @@ data class InboxRecord(
     val aiDraft: Boolean = false,
     /** A Feishu chat's picture (the group's, or the other person's), at the thumbnail size. */
     val avatar: AuthenticatedLarkImage? = null,
+    val read: Boolean = false,
 ) {
     val isLark: Boolean get() = feedId != null || source == "lark"
 }

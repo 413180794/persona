@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -12,6 +13,9 @@ type cache struct {
 	ttl      time.Duration
 	sessions map[string]sessionsEntry // source → list
 	latest   map[string]*latestEntry  // public id → newest page
+	// gen counts each source's forgets: what was asked of it before one is not put back (a list or page answered
+	// late by a removed source must not outlive it).
+	gen map[string]int
 }
 
 type sessionsEntry struct {
@@ -26,7 +30,7 @@ type latestEntry struct {
 }
 
 func newCache(ttl time.Duration) *cache {
-	return &cache{ttl: ttl, sessions: map[string]sessionsEntry{}, latest: map[string]*latestEntry{}}
+	return &cache{ttl: ttl, sessions: map[string]sessionsEntry{}, latest: map[string]*latestEntry{}, gen: map[string]int{}}
 }
 
 func (c *cache) getSessions(source string) ([]Session, bool) {
@@ -36,10 +40,20 @@ func (c *cache) getSessions(source string) ([]Session, bool) {
 	return e.list, ok && time.Since(e.at) < c.ttl
 }
 
-func (c *cache) putSessions(source string, list []Session) {
+// generation is source's generation now: pass it to the put of what is asked of the source next.
+func (c *cache) generation(source string) int {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.gen[source]
+}
+
+func (c *cache) putSessions(source string, gen int, list []Session) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.gen[source] != gen {
+		return
+	}
 	c.sessions[source] = sessionsEntry{list: list, at: time.Now()}
-	c.mu.Unlock()
 }
 
 func (c *cache) getLatest(id string, limit int) (*MessagePage, bool) {
@@ -52,9 +66,12 @@ func (c *cache) getLatest(id string, limit int) (*MessagePage, bool) {
 	return e.page, true
 }
 
-func (c *cache) putLatest(id string, limit int, p *MessagePage) {
+func (c *cache) putLatest(source string, gen int, id string, limit int, p *MessagePage) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.gen[source] != gen {
+		return
+	}
 	if len(c.latest) > 200 { // a bound, not an LRU: dropping all is fine for a cache this cheap to refill
 		c.latest = map[string]*latestEntry{}
 	}
@@ -68,5 +85,18 @@ func (c *cache) invalidate(source string, ids []string) {
 	delete(c.sessions, source)
 	for _, id := range ids {
 		delete(c.latest, id)
+	}
+}
+
+// forget drops everything cached of source: its list and its sessions' pages.
+func (c *cache) forget(source string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.gen[source]++
+	delete(c.sessions, source)
+	for id := range c.latest {
+		if strings.HasPrefix(id, source+":") {
+			delete(c.latest, id)
+		}
 	}
 }

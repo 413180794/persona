@@ -66,11 +66,14 @@ class InboxHandOffTest {
     }
 
     @Test fun labels() {
-        fun record(kind: String, atAll: Boolean = false, mail: InboxMailRef? = null) =
-            InboxRecord(InboxItem("i", kind = kind), atAll = atAll, mail = mail)
+        fun record(kind: String, atAll: Boolean = false, mail: InboxMailRef? = null, read: Boolean = false) =
+            InboxRecord(InboxItem("i", kind = kind), atAll = atAll, mail = mail, read = read)
         assertEquals("私聊", kindLabel(record("dm")))
         assertEquals("@我", kindLabel(record("mention")))
         assertEquals("@所有人", kindLabel(record("mention", atAll = true)))
+        assertEquals("群聊", kindLabel(record("mention", read = true)))
+        assertEquals("群聊", kindLabel(record("mention", atAll = true, read = true)))
+        assertEquals("私聊", kindLabel(record("dm", read = true)))
         assertEquals("抄送", kindLabel(record("mail", mail = InboxMailRef("a1", direct = false))))
         assertEquals("邮件", kindLabel(record("mail", mail = InboxMailRef("a1", direct = true))))
         assertEquals("邮件", kindLabel(record("mail")))

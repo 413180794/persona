@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/agents"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/proc"
 	"github.com/nwverse/persona/server/internal/connector/serve"
@@ -93,6 +94,9 @@ type hubPlugin struct {
 	links   []*proc.Link // theirs, to proc
 	status  string       // when proc is nil
 	err     string
+
+	// agentSources are its agent_sources registered with the agents service (plugin_agents.go).
+	agentSources []string
 }
 
 // healthy says whether its HTTP side answers /health.
@@ -243,6 +247,7 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 		}
 	}
 	reg.Reserve("connectors", own...)
+	reg.Reserve("agent_sources", agents.OLKBridge) // the hub's own personal agents source
 	if path := telegramProgram(); path != "" {
 		if err := reg.AddBuiltin(telegramManifest(h, path), filepath.Dir(path), true); err != nil {
 			h.logf("plugin telegram: %v", err)
@@ -352,6 +357,7 @@ func (ps *plugins) apply(ctx context.Context, id string) {
 	delete(ps.byID, id)
 	ps.mu.Unlock()
 	if old != nil {
+		ps.removeAgentSources(old)
 		for _, c := range old.conns {
 			if ps.h != nil && ps.h.connectors != nil {
 				ps.h.removePluginConnector(c.ID())
@@ -392,6 +398,7 @@ func (ps *plugins) apply(ctx context.Context, id string) {
 	if hp.socket != "" {
 		hp.setProxy(id)
 	}
+	ps.addAgentSources(id, p.Manifest, hp) // before hp is published: its agentsrc.updated finds them
 	ps.mu.Lock()
 	ps.byID[id] = hp
 	ps.mu.Unlock()
@@ -606,6 +613,10 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 	s.OnEvent = func(event string, params json.RawMessage) {
 		if event == "api.broadcast" {
 			ps.apiBroadcast(id, params)
+			return
+		}
+		if event == "agentsrc.updated" {
+			ps.agentSourceUpdated(id, hp, params)
 			return
 		}
 		if rest, ok := strings.CutPrefix(event, serve.Namespace+"."); ok {

@@ -30,8 +30,11 @@ type Bridge struct{ API BridgeAPI }
 
 func (b Bridge) Name() string { return OLKBridge }
 
-func wrap(s lark.AgentSession) Session {
-	return Session{ID: OLKBridge + ":" + s.SessionKey, Source: OLKBridge, AgentSession: s}
+func wrap(s lark.AgentSession) Session { return Wrap(OLKBridge, s, "") }
+
+// Wrap is a session of source as the apps see it: its id <source>:<sessionKey>, and its avatar when there is one.
+func Wrap(source string, s lark.AgentSession, avatarURL string) Session {
+	return withAvatar(Session{ID: source + ":" + s.SessionKey, Source: source, AgentSession: s}, avatarURL)
 }
 
 // missingBridge is lark-connector answering 404 for the bridge's own routes: a build from before agent-bridge existed.

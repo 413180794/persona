@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canSendStep, connectorBrand, connectorOpenTitle, connectorState, connectorSummary, connectorTone, deletedLine, feedsFooter, fieldInput, githubInboxFooter, githubMachineLine,
-  githubOptions, githubScopeAdvice, isDeviceCode, isStarting, labelColor, listConnectors, mediaLine, mergeNewest, mergeOlder, mutableRepo,
+  githubOptions, githubScopeAdvice, isDeviceCode, isStarting, labelColor, listConnectors, logoutMessage, mediaLine, mergeNewest, mergeOlder, mutableRepo,
   otherConnectors, setGitHubAuth, signInFooter, signsInHere, startsGroup, switchFooter, undescribed,
   type HubConnector, type ThreadMessage, type ThreadPage,
 } from "./connectors";
@@ -61,6 +61,19 @@ describe("连接器的状态", () => {
     expect(connectorOpenTitle("example")).toBeUndefined();
     expect(switchFooter({ ...plugin, enabled: true })).toContain("关掉后不再读 示例");
     for (const text of [switchFooter(plugin), signInFooter(plugin)]) expect(text).not.toMatch(/Telegram|api_id|私聊和群/);
+  });
+
+  it("tells a sign-out that ends the remote session from one that only forgets the hub's copy", () => {
+    // Telegram's log-out call ends the session at Telegram: the old wording stays, word for word
+    expect(logoutMessage(conn("ok", { id: "telegram", name: "Telegram" }))).toBe(
+      "hub 上存的 API 凭据和登录状态都会删掉，Telegram 那边这个设备会话也会结束。再用要重新登录。",
+    );
+    // wechat-connector, GitHub's device token, an unknown plugin or an Object.prototype name: nothing is ended or revoked over there
+    for (const [id, name] of [["wechat-connector", "微信"], ["github", "GitHub"], ["example", "示例"], ["constructor", "示例"]]) {
+      const text = logoutMessage(conn("ok", { id, name }));
+      expect(text).toContain("授权不会自动撤销");
+      expect(text).not.toMatch(/会话也会结束|API 凭据|Telegram/);
+    }
   });
 
   it("words the footers", () => {

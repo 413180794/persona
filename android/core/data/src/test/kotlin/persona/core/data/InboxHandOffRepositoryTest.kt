@@ -63,6 +63,36 @@ class InboxHandOffRepositoryTest {
         }
     }
 
+    @Test fun recordsCarryReadStateWithoutChangingMentionOrTier() = runTest {
+        val directory = Files.createTempDirectory("inbox-read-test").toFile()
+        try {
+            val transport = ItemsTransport(buildJsonArray {
+                for (read in listOf(false, true)) for (atAll in listOf(false, true)) {
+                    add(buildJsonObject {
+                        put("id", "mention-$read-$atAll"); put("source", "lark"); put("kind", "mention")
+                        put("tier", "fyi"); put("read", read)
+                        put("lark", buildJsonObject { put("feed_id", "feed"); put("at_all", atAll) })
+                    })
+                }
+                add(buildJsonObject { put("id", "without-read"); put("kind", "mention") })
+            })
+            val repository = repository(transport, directory, backgroundScope)
+            repository.snapshot.first { it.contentSource != null }
+            repository.refresh()
+            val records = repository.snapshot.value.records.associateBy { it.item.id }
+            for (read in listOf(false, true)) for (atAll in listOf(false, true)) {
+                val record = records.getValue("mention-$read-$atAll")
+                assertEquals(read, record.read)
+                assertEquals(atAll, record.atAll)
+                assertEquals("mention", record.item.kind)
+                assertEquals("fyi", record.item.tier)
+            }
+            assertFalse(records.getValue("without-read").read)
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun handOffGoesToTheMainConversationOrTheAgentsOutboxAndDraftsAskTheHub() = runTest {
         val directory = Files.createTempDirectory("inbox-handoff-test").toFile()
         try {

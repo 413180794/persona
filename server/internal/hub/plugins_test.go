@@ -43,6 +43,10 @@ func TestMain(m *testing.M) {
 		serveAPIPluginForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "agentsrc" {
+		serveAgentSourcePluginForTest()
+		return
+	}
 	os.Exit(dbtest.Main(m))
 }
 

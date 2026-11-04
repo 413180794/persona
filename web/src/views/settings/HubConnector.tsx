@@ -9,7 +9,7 @@ import { errorText } from "../../lib/api";
 import {
   canSendStep, CI_MODES, connectorBrand, connectorLogin, connectorLogout, connectorState, connectorSummary, connectorTone, deleteConnectorArchive,
   deleteConnectorData, deletedLine, feedsFooter, fieldInput, githubAuth, githubInboxFooter, githubMachineLine, githubMachineWarns, githubOptions,
-  githubScopeAdvice, isDeviceCode, isEnabled, isSignedIn, isStarting, listConnectors, mutableRepo, otherConnectors, setConnector, setGitHubAuth,
+  githubScopeAdvice, isDeviceCode, isEnabled, isSignedIn, isStarting, listConnectors, logoutMessage, mutableRepo, otherConnectors, setConnector, setGitHubAuth,
   signInFooter, signsInHere, switchFooter, undescribed,
   type ConnectorPrompt, type ConnectorTone, type GitHubAuth, type GitHubInboxOptions, type HubConnector,
 } from "../../lib/connectors";
@@ -249,7 +249,7 @@ function DataGroup({ c, a, logout }: { c: HubConnector; a: Actions; logout: bool
       <Confirm
         open={confirm === "logout"}
         title={`退出 ${c.name} 登录？`}
-        message={`hub 上存的 API 凭据和登录状态都会删掉，${c.name} 那边这个设备会话也会结束。再用要重新登录。`}
+        message={logoutMessage(c)}
         action="退出登录"
         busy={a.busy === "logout"}
         onClose={() => setConfirm("")}
