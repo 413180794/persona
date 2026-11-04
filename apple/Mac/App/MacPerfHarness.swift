@@ -8,11 +8,13 @@ import QuartzCore
 /// shell tool are filtered out (no Accessibility grant), so the scroll is driven here and frames are timed here: a
 /// display link on the main run loop records when each frame could start. When the main thread is busy past a frame,
 /// the next tick comes late; that lateness is the hitch the user feels. It does not see the render server's own
-/// hitches (rare next to the main thread's).
+/// hitches; WindowServer's CPU time over the run (`windowServerCPUMsPerS`, every app's drawing, so only a comparison
+/// between runs on a quiet Mac says something) stands in for them.
 ///
-/// `-showPerfRun scroll|sections|chats|resize|launch`, `-showPerfDelay <s>` (default 6), `-showPerfOut <json>`,
+/// `-showPerfRun scroll|sections|chats|resize|launch|pushes`, `-showPerfDelay <s>` (default 6), `-showPerfOut <json>`,
 /// `-showPerfQuit YES`; scroll: `-showPerfPoint x,y` (window points from the top left, inside the scroll view to
-/// drive), `-showPerfSpeed <points per frame>` (default 12), `-showPerfSeconds <s>` (default 6).
+/// drive), `-showPerfSpeed <points per frame>` (default 12), `-showPerfSeconds <s>` (default 6), `-showPerfGlide
+/// YES|up|live`; pushes: `-showPerfChurn <url>` (the mock hub's `/mock/churn?…`), with `-perfCounts YES`.
 @MainActor enum MacPerfHarness {
     static func scheduleIfAsked(_ model: AppModel) {
         let d = UserDefaults.standard
@@ -25,6 +27,7 @@ import QuartzCore
             case "sections": MacPerfActions.shared.start(.sections, model)
             case "chats": MacPerfActions.shared.start(.chats, model)
             case "resize": MacPerfResize.shared.start()
+            case "pushes": MacPerfPushes.shared.start()
             default: finish(["error": "unknown run \(run)"])
             }
         }
@@ -86,6 +89,22 @@ nonisolated func macPerfMainThreadCPU() -> Double {
     guard kr == KERN_SUCCESS else { return 0 }
     return Double(info.user_time.seconds + info.system_time.seconds) * 1000
         + Double(info.user_time.microseconds + info.system_time.microseconds) / 1000
+}
+
+/// WindowServer's CPU time, in milliseconds (0 when it cannot be read): it composites every window, our frames too.
+nonisolated func macPerfWindowServerCPU() -> Double {
+    var pids = [pid_t](repeating: 0, count: 4096)
+    let n = Int(proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size)))
+    var name = [CChar](repeating: 0, count: 64)
+    for pid in pids.prefix(max(n, 0)) where pid > 0 {
+        guard proc_name(pid, &name, UInt32(name.count)) > 0, String(cString: name) == "WindowServer" else { continue }
+        var info = proc_taskinfo()
+        guard proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &info, Int32(MemoryLayout<proc_taskinfo>.size)) > 0 else { return 0 }
+        var base = mach_timebase_info()
+        mach_timebase_info(&base)
+        return Double(info.pti_total_user + info.pti_total_system) * Double(base.numer) / Double(base.denom) / 1e6
+    }
+    return 0
 }
 
 /// The whole process's CPU time (every thread), in milliseconds.
@@ -165,21 +184,30 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
         let speed = CGFloat(d.object(forKey: "showPerfSpeed") != nil ? d.double(forKey: "showPerfSpeed") : 12)
         let seconds = d.object(forKey: "showPerfSeconds") != nil ? d.double(forKey: "showPerfSeconds") : 6
         // `-showPerfGlide YES`: iOS's pattern (docs/testing.md「整个 App」); `-showPerfGlide up` starts toward the top.
+        // `-showPerfGlide live`: ping-pong as the user's own scroll, NSScrollView's live-scroll notifications around it
+        // (SwiftUI's scroll phase is `.interacting`). Without them SwiftUI does not take it for the user scrolling: the
+        // chat kept following its newest end and landing on the saved place against the drive, and a short chat's glide
+        // reached its end in half a second, then timed a list standing still (#1337).
         let glideArg = d.string(forKey: "showPerfGlide")
         let glide = glideArg != nil
+        let live = glideArg == "live"
         if glideArg == "up" { direction = -1 }
-        let cpu0 = macPerfMainThreadCPU(), all0 = macPerfProcessCPU()
+        var sweeps = 0
+        let cpu0 = macPerfMainThreadCPU(), all0 = macPerfProcessCPU(), ws0 = macPerfWindowServerCPU()
         defaults.start()
         let t0 = CACurrentMediaTime()
         var moved: CGFloat = 0
         clock.onTick = { [weak self] now in
             guard let self, let sv = self.scroll else { return }
             if now - t0 >= seconds {
+                if live { NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: sv) }
                 self.clock.stop()
                 let t1 = CACurrentMediaTime()
                 var r = self.clock.stats(from: t0, to: t1)
                 r["run"] = "scroll"
-                r["pattern"] = glide ? "glide" : "ping-pong"
+                r["pattern"] = live ? "live" : glide ? "glide" : "ping-pong"
+                if live { r["sweeps"] = sweeps }
+                r["windowServerCPUMsPerS"] = round1((macPerfWindowServerCPU() - ws0) / (t1 - t0))
                 r["point"] = "\(Int(point.x)),\(Int(point.y))"
                 r["speedPtPerFrame"] = Double(speed)
                 r["scrolledPt"] = Double(moved)
@@ -194,6 +222,16 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
             let clip = sv.contentView
             let maxY = max(0, (sv.documentView?.frame.height ?? 0) - clip.bounds.height)
             var y: CGFloat
+            if live {
+                if sweeps == 0 { sweeps = 1; NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: sv) }
+                y = clip.bounds.origin.y + speed * self.direction
+                if y >= maxY { y = maxY; self.direction = -1; sweeps += 1 } else if y <= 0 { y = 0; self.direction = 1; sweeps += 1 }
+                moved += abs(y - clip.bounds.origin.y)
+                clip.setBoundsOrigin(NSPoint(x: clip.bounds.origin.x, y: y))
+                sv.reflectScrolledClipView(clip)
+                NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: sv)
+                return
+            }
             if glide {
                 // As iOS's ListGlide: one way for half the time, back for the other half, stopping at the ends.
                 let dir: CGFloat = (now - t0) < seconds / 2 ? 1 : -1
@@ -323,6 +361,41 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
             MacPerfHarness.finish(["run": "launch", "toFirstFrameMs": round1((Date().timeIntervalSince1970 - started) * 1000)])
         }
         clock.start()
+    }
+}
+/// Hub pushes while a page stands still (`-showPerfRun pushes`): asks the mock hub for a burst of them
+/// (`-showPerfChurn`, its `/mock/churn?n=…&ms=…`), then reports, over the next seconds, which view bodies were evaluated
+/// and how often (`PerfCount`, `-perfCounts YES`), the main thread's time per push and the hitches.
+@MainActor final class MacPerfPushes {
+    static let shared = MacPerfPushes()
+    private let clock = MacFrameClock()
+
+    func start() {
+        let d = UserDefaults.standard
+        guard PerfCount.enabled, let url = d.string(forKey: "showPerfChurn").flatMap(URL.init(string:)) else {
+            return MacPerfHarness.finish(["error": "pushes needs -perfCounts YES and -showPerfChurn <url>"])
+        }
+        let seconds = d.object(forKey: "showPerfSeconds") != nil ? d.double(forKey: "showPerfSeconds") : 8
+        let bodies0 = PerfCount.bodies, events0 = PerfCount.events, passes0 = PerfCount.passes, ms0 = PerfCount.totalMS
+        let cpu0 = macPerfMainThreadCPU()
+        clock.start()
+        let t0 = CACurrentMediaTime()
+        URLSession.shared.dataTask(with: url).resume()
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [self] in
+            clock.stop()
+            let t1 = CACurrentMediaTime()
+            var r = clock.stats(from: t0, to: t1)
+            r["run"] = "pushes"
+            var bodies: [String: Int] = [:]
+            for (k, v) in PerfCount.bodies where v - (bodies0[k] ?? 0) > 0 { bodies[k] = v - (bodies0[k] ?? 0) }
+            r["bodies"] = bodies
+            let passes = PerfCount.passes - passes0
+            r["pushes"] = PerfCount.events - events0
+            r["pushPasses"] = passes
+            r["pushMsAvg"] = passes > 0 ? round1((PerfCount.totalMS - ms0) / Double(passes)) : 0
+            r["mainCPUMsPerS"] = round1((macPerfMainThreadCPU() - cpu0) / (t1 - t0))
+            MacPerfHarness.finish(r)
+        }
     }
 }
 #endif

@@ -113,7 +113,7 @@ func TestDoneTaskAgentIsClosed(t *testing.T) {
 }
 
 // A node that will not close an agent (it cannot resume it, or is too old to know how) is not asked again every
-// pass, only once the agent changed.
+// pass, only once the agent changed or a while later (the node may have been updated since).
 func TestRefusedRetireIsNotRepeated(t *testing.T) {
 	h, tn := newTaskHub(t)
 	todo := startedTask(t, h)
@@ -139,6 +139,25 @@ func TestRefusedRetireIsNotRepeated(t *testing.T) {
 	h.closeDoneTaskAgents(context.Background(), refused)
 	if got := retires(tn); len(got) != 2 {
 		t.Fatalf("not asked again after a change: %d", len(got))
+	}
+
+	// Its node is updated: the refusal it gave before does not stand for ever.
+	tn.mu.Lock()
+	tn.retireErr = nil
+	tn.mu.Unlock()
+	h.closeDoneTaskAgents(context.Background(), refused)
+	if got := retires(tn); len(got) != 2 {
+		t.Fatalf("asked again at once: %d", len(got))
+	}
+	oldRetry := taskCloseRetry
+	taskCloseRetry = 0
+	t.Cleanup(func() { taskCloseRetry = oldRetry })
+	h.closeDoneTaskAgents(context.Background(), refused)
+	if got := retires(tn); len(got) != 3 {
+		t.Fatalf("not asked again after a while: %d", len(got))
+	}
+	if _, ok := refused[[2]string{"box", "s1"}]; ok {
+		t.Fatal("the refusal outlived the close")
 	}
 }
 

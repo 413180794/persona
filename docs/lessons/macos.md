@@ -156,6 +156,10 @@
   它的位置约是「窗口宽度的一半减几十点」，列表栏的按钮在宽窗口里跑到对话栏中间；页面有 `.searchable` 时右端被搜索框占了，按钮被排到窗口中间。
   改成 `.automatic` 也一样。要钉在某一栏上的按钮，画在那一栏自己的标题行里（`overlay` + `ignoresSafeArea(.container, edges: .top)`，那一行能点），或者放进页面内容。
   另外：macOS 26 上 `.toolbar { }` 的内容在某个平台分支里为空会编不过（`EmptyView` 当 `ToolbarContent` 要 macOS 27），整个 `.toolbar` 用 `#if` 包起来。
+- 在 App 里推着滚动视图量帧（`clip.setBoundsOrigin`），SwiftUI 不当成用户在滚（2026-11-04，#1337）：滚动阶段一直是 `.idle`，
+  对话页照样「跟着最新」、落到上次读到的位置，和推着它的这边每帧拉扯，量出来 342–356 ms/s，按用户滚动的方式量是 65–86。
+  前后发 `NSScrollView.willStartLiveScrollNotification` / `didLiveScrollNotification` / `didEndLiveScrollNotification`，阶段就是 `.interacting`（`-showPerfGlide live`）。
+  合成带阶段的滚轮事件交给 `scrollWheel(with:)` 或 `NSWindow.sendEvent` 也不行：AppKit 另有手势跟踪，6 秒只滚 380 pt。量完看移动了多少（`scrolledPt`），到头停住的那一轮不算。
 - `NSColor.withAlphaComponent(_:)` 是把透明度换成给的值，不是乘上去（2026-11-04，#1224）：兼容层里 `tertiaryLabelColor.withAlphaComponent(0.18)` 得到的是 18% 的黑 / 白，
   不是 tertiaryLabel 本来的 26% 再乘 0.18，所以 Mac 的 `Theme.Fill.well` / `chip` 比 iPhone 深好几倍（真窗口取像素：卡片 248，选项区 212；深色 54 对 98）。量颜色用真窗口截图取像素，别凭感觉。
   #1169 把兼容层的四档填充改成了 UIKit 的原值：要照搬 iPhone 的颜色，在模拟器里 `simctl spawn` 一个打印 `resolvedColor(with:)` 的小程序取值，别凭记忆。

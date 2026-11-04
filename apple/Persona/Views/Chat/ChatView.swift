@@ -143,9 +143,12 @@ struct ChatView: View {
         viewing.map { SessionKey(group: key.group, machineID: key.machineID, sessionID: $0.sessionID) } ?? key
     }
     private var store: ChatStore { model.chat(shownKey) }
+    #if DEBUG || PERF_SIGNPOST
+    private static let printsChanges = UserDefaults.standard.bool(forKey: "showPerfChanges")
+    #endif
     /// The latest time this chat's model operated a Mac (#1343): shown with its running work, kept for the live screen.
     private var computerActivity: ComputerActivity? {
-        ComputerActivity.latest(in: store.items, chat: shownKey.machineRef, machines: model.machines)
+        ComputerActivity.latest(in: store.items, chat: shownKey.machineRef, machines: model.namedMachines)
     }
     private var session: Session? { model.session(key) }
     /// The latest state of the subagent being viewed (the list refreshes with the session).
@@ -164,6 +167,8 @@ struct ChatView: View {
     @ViewBuilder private var chatPage: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("ChatView")
+        // `-showPerfChanges YES`: what made the page draw again, in the log (docs/mac.md「卡顿怎么量」).
+        let _ = Self.printsChanges ? Self._printChanges() : ()
         #endif
         let _ = actions.set(handlers)
         chatLifecycle
@@ -1787,7 +1792,7 @@ struct ChatView: View {
             let words = stateWords(s, now: ctx.date)
             let tabShown = !model.siblings(of: key).isEmpty
             let place = [s.spaceName, tabShown ? nil : s.slotLabel].compactMap { $0 }.joined(separator: " › ")
-            let machine = model.machine(s.machineRef)?.title ?? s.machineID
+            let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
             HStack(spacing: Theme.Space.xs) {
                 StatusDot(state: s.state, size: 7)
                 ViewThatFits(in: .horizontal) {
@@ -2337,7 +2342,7 @@ struct ChatView: View {
             let launcher = model.assistantLaunchers[key] ?? s.launcher
             return s.status.isActive ? "正在处理…" : ([launcher, Fmt.model(s.model)].compactMap { $0 }.joined(separator: " · "))
         }
-        let machine = model.machine(s.machineRef)?.title ?? s.machineID
+        let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
         return [s.sourceSubtitle, machine, place.isEmpty ? nil : place, s.hasSource ? nil : s.agentLabel, s.state.label].compactMap { $0 }.joined(separator: " · ")
     }
@@ -3055,7 +3060,7 @@ struct SessionInfoSheet: View {
                                     #endif
                             }
                         }
-                        row(Theme.Icon.folder, "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineRef)?.home), mono: true)
+                        row(Theme.Icon.folder, "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.namedMachine(key.machineRef)?.home), mono: true)
                         if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", "分支", b, mono: true) }
                     }
                     Section {
@@ -3104,7 +3109,7 @@ struct SessionInfoSheet: View {
     /// The title, its state in words (the one place they still show) and where it runs.
     private var header: some View {
         let s = session
-        let place = [model.machine(key.machineRef)?.title ?? key.machineID, s?.spaceName, s?.slotLabel]
+        let place = [model.namedMachine(key.machineRef)?.title ?? key.machineID, s?.spaceName, s?.slotLabel]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
         return VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Text(s?.displayTitle ?? "会话").font(Theme.Font.title).lineLimit(2)

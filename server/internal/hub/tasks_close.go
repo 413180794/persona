@@ -24,13 +24,23 @@ import (
 var (
 	// taskCloseIdle is how long a done task's agent must have been still (and the task done) before it is closed.
 	taskCloseIdle = 3 * time.Minute
-	// taskCloseEvery is how often the hub looks for agents to close (tests shorten both).
+	// taskCloseEvery is how often the hub looks for agents to close (tests shorten them).
 	taskCloseEvery = time.Minute
+	// taskCloseRetry is how long a node's refusal stands for an agent that did not change: a node updated meanwhile
+	// may close it now (a deploy restarts the hub first and the resident node once it is idle: the hub asks the old
+	// one, which does not know session.retire).
+	taskCloseRetry = 10 * time.Minute
 )
 
-// taskCloseRefused: (machine, session) → the session's updated_at when its node refused to close it, so it is not
-// asked again every minute while nothing changed.
-type taskCloseRefused map[[2]string]time.Time
+// taskCloseRefusal is a node's refusal to close an agent: the session's updated_at then, when, and why.
+type taskCloseRefusal struct {
+	updated, at time.Time
+	why         string
+}
+
+// taskCloseRefused: (machine, session) → its node's last refusal, so it is not asked every minute while nothing
+// changed.
+type taskCloseRefused map[[2]string]taskCloseRefusal
 
 func (h *Hub) taskCloseLoop(ctx context.Context) {
 	t := time.NewTicker(taskCloseEvery)
@@ -133,7 +143,7 @@ func (h *Hub) closeDoneTaskAgents(ctx context.Context, refused taskCloseRefused)
 		if !ok || !retirable(s, a.doneAt, now) {
 			continue
 		}
-		if at, ok := refused[key]; ok && at.Equal(s.UpdatedAt) {
+		if r, ok := refused[key]; ok && r.updated.Equal(s.UpdatedAt) && now.Sub(r.at) < taskCloseRetry {
 			continue
 		}
 		var res struct {
@@ -149,9 +159,11 @@ func (h *Hub) closeDoneTaskAgents(ctx context.Context, refused taskCloseRefused)
 			if res.Closed {
 				h.logf("task %s: closed its finished agent %s/%s (resumes on the next message)", a.todo, a.machine, a.session)
 			}
-		case errors.As(err, &re): // the node refused (or is too old to know session.retire): not again until it changes
-			refused[key] = s.UpdatedAt
-			h.logf("task %s: agent %s/%s left open: %v", a.todo, a.machine, a.session, err)
+		case errors.As(err, &re): // the node refused (or is too old to know session.retire): not again for a while
+			if prev, ok := refused[key]; !ok || prev.why != err.Error() {
+				h.logf("task %s: agent %s/%s left open: %v", a.todo, a.machine, a.session, err)
+			}
+			refused[key] = taskCloseRefusal{updated: s.UpdatedAt, at: now, why: err.Error()}
 		default:
 			h.logf("task %s: close agent %s/%s: %v", a.todo, a.machine, a.session, err)
 		}

@@ -50,6 +50,8 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
 | `sessionsByMachine` | 助手资料页、机器详情、端口在线检测（`PortPresence`）、`AgentSync` | 是 |
 | `pendingInteractions` / `interactions` | Agents 列表、收件箱、旧布局的 tab 角标、新外壳首页 | 有人提问 / 答完时 |
 | `machines` | 设置、机器页、新对话、灵动岛设置、助手页 | 连上 / 断开 / `last_seen` |
+| `namedMachine(_:)` / `namedMachines`（不被观察的 `machinesNow`，只跟着 `machineChoices`） | 对话页（副标题、操作电脑的进度）、会话信息 | 加 / 删 / 改名时 |
+| `siblings(of:)`（每个空间一个 `SpaceCell`） | 对话页、空间的标签条 | 那个空间的标签变时 |
 | `session(key)`（`SessionCell`） | 对话页、行菜单 | 只在那个会话变时 |
 
 ### 一次推送的代价
@@ -199,6 +201,9 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
   - 点下去才要全部会话的动作（@ 菜单、引用另一个会话、下一个 / 上一个 Agent、终端换空间）读 `model.sessionsNow`：和 `allSessions` 同一份，不被观察，
     和第 3 步的 `latest(_:)` 一样，**显示用观察的，动作用不观察的**；
   - 新的列表要读，在登记里加一行写清楚为什么。
+  - 这个检查只扫视图里直接写的 `allSessions`、看不到模型方法里读的：`siblings(of:)` 里面读了它，对话页和标签条就跟着每次推送重算（2026-11-04，#1337）。
+    同样，只显示机器名字的地方读 `namedMachine(_:)`，别读 `machine(_:)` / `machines`：那个跟着每台机器的心跳（`last_seen`）变，
+    对话页的副标题和「正在操作 MacBook」读了它，每次心跳整页带所有行重算（Mac 上实测：20 轮心跳，对话页 30 次、气泡和正文 365 个）。
 
 每步都要过本文「真实性与及时性」的测试，用户看得到的交互不变。和 live 车道的 `ShellState`（当前页唯一来源）对齐：第 4 步的「用户正在操作」读它的页状态，不自己再存一份。
 

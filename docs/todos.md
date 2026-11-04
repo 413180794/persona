@@ -232,7 +232,7 @@ hub 每分钟看一遍（`hub/tasks_close.go`），任务完成且 Agent 静止�
 恢复要等启动器起来，`route` 和聊天页的发送一样不跟着手机断开而取消，最多等 5 分钟。完成的待办不因为这条消息重新打开；恢复后再次静止满 3 分钟会再被关掉。
 
 **不关**：在工作、等用户（提问、计划、权限、任何对话框、待处理的卡片）、引擎看不出状态的；有排队的消息、后台 shell、在跑的子 Agent、`/loop`、在监听端口（开着开发服务器）的；还挂在别的未完成待办上的；助手对话；别的工具管的会话（外部 Codex app-server、runtime、daemon、pi）；不是 Persona 开的（不知道怎么恢复）；引擎不能新开标签页的（Orca、herdr-core）；Claude 没有会话记录、Codex / TRAEX 不知道启动器的。
-这些由 node 拒绝（`not_retirable`），hub 记下来，Agent 有变化以前不再问；不认识 `session.retire` 的旧 node 同样当作拒绝，所以 hub 先升级、node 后升级也不会误关。
+这些由 node 拒绝（`not_retirable`），hub 记下来，Agent 没变化时 10 分钟内不再问（`taskCloseRetry`，之后重试：node 可能已经升级了）；不认识 `session.retire` 的旧 node 同样当作拒绝，所以 hub 先升级、node 后升级也不会误关，node 升级后最多 10 分钟就接着关。
 没挂在任何任务上的 Agent（用户自己开的、`agent_start` 开的、herdr-leader 之类的巡检会话）不归这里管。
 
 ## 决策记录

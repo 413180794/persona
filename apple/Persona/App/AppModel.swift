@@ -36,6 +36,7 @@ final class AppModel {
     let connection: ConnectionStatus
     private(set) var machines: [Machine] = [] {
         didSet {
+            machinesNow = machines
             let choices = machines.map(MachineChoice.init)
             if choices != machineChoices { machineChoices = choices }
             saveSnapshot()
@@ -43,6 +44,8 @@ final class AppModel {
     }
     /// The machines as menus list them (name, icon): changes only when one is added, removed or renamed.
     private(set) var machineChoices: [MachineChoice] = []
+    /// `machines` without watching it, as `sessionsNow`: for `namedMachine(_:)` / `namedMachines`.
+    @ObservationIgnored private(set) var machinesNow: [Machine] = []
     private(set) var sessionsByMachine: [MachineRef: [Session]] = [:] {
         didSet {
             allSessions = sessionsByMachine.values.flatMap { $0 }
@@ -59,6 +62,9 @@ final class AppModel {
             sessionIndex = index
             for (key, cell) in sessionCells where !Session.sameForItsPage(cell.value, index[key]) { cell.value = index[key] }
             for (key, cell) in sessionLineCells where !Session.sameApartFromTicks(cell.value, index[key]) { cell.value = index[key] }
+            let spaces = Self.liveBySpace(allSessions)
+            liveSpaces = spaces
+            for (space, cell) in spaceCells where !Self.sameForTheirPages(cell.value, spaces[space] ?? []) { cell.value = spaces[space] ?? [] }
             countBadges()
             saveSnapshot()
         }
@@ -78,6 +84,12 @@ final class AppModel {
     @ObservationIgnored private var sessionCells: [SessionKey: SessionCell] = [:]
     /// The same for views that show a session's last line and step (`sessionWithLine(_:)`, the task cards).
     @ObservationIgnored private var sessionLineCells: [SessionKey: SessionCell] = [:]
+    /// Each space's live agents, one per pane (`siblings(of:)`), worked out once per update of the lists, and one
+    /// observable cell per space a view has asked about: the open chat and its tab strip are drawn again when one of
+    /// their space's tabs changes as they show it. They read `allSessions` through `siblings(of:)`, so every push about
+    /// any agent on any machine drew the open chat again, and each call went through all the agents and sorted them.
+    @ObservationIgnored private var liveSpaces: [String: [Session]] = [:]
+    @ObservationIgnored private var spaceCells: [String: SpaceCell] = [:]
     /// Pending interactions by `uid` (the hub's id, with the group for another group).
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
     /// Interactions ended locally (answered, cancelled or gone): snapshots will not restore them (#1688).
@@ -556,6 +568,19 @@ final class AppModel {
     }
 
     func machine(_ ref: MachineRef) -> Machine? { machines.first { $0.id == ref.id && $0.group == ref.group } }
+    /// A machine for a view that shows only what it is called and where (title, name, icon, home): drawn again when a
+    /// machine is added, removed or renamed (`machineChoices`), not on every heartbeat (`last_seen`, the stats), which
+    /// `machine(_:)` follows. The open chat read that, and every machine's heartbeat drew it again, every row with it
+    /// (#1337). Its live fields (online, last seen) may be stale.
+    func namedMachine(_ ref: MachineRef) -> Machine? {
+        _ = machineChoices
+        return machinesNow.first { $0.id == ref.id && $0.group == ref.group }
+    }
+    /// The machines, as `namedMachine(_:)`.
+    var namedMachines: [Machine] {
+        _ = machineChoices
+        return machinesNow
+    }
     /// Macs whose live screen can be shown: the plugin cua or ego is on for them and Screen Sharing answers
     /// (docs/computer-use.md; ego's first-run setup is done over it, #1507).
     var screenMachines: [Machine] { machines.filter(Self.showsScreen) }
@@ -1516,19 +1541,47 @@ final class AppModel {
     /// Other live agents in the same space as this session (herdr tabs of one workspace), slot order.
     func siblings(of key: SessionKey) -> [Session] {
         guard let s = session(key), let space = s.spaceKey else { return [] }
-        // One per pane: a pane can briefly be listed under two session ids (/clear, a resume, a stale entry) and
-        // showed up twice in the strip. The open one wins, then the latest.
-        var byPane: [String: Session] = [:]
-        var rest: [Session] = []
-        for c in allSessions where c.spaceKey == space && c.state.isLive {
-            guard let pane = c.paneID else { rest.append(c); continue }
-            if let had = byPane[pane], had.key == key || (c.key != key && (had.updatedAt ?? .distantPast) >= (c.updatedAt ?? .distantPast)) {
-                continue
-            }
-            byPane[pane] = c
+        let cell: SpaceCell
+        if let had = spaceCells[space] {
+            cell = had
+        } else {
+            cell = SpaceCell(liveSpaces[space] ?? [])
+            spaceCells[space] = cell
         }
-        return (Array(byPane.values) + rest)
-            .sorted { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
+        var tabs = cell.value
+        // The open one wins its pane, over the latest the space keeps.
+        if s.state.isLive, let pane = s.paneID, let i = tabs.firstIndex(where: { $0.paneID == pane }), tabs[i].key != key {
+            tabs[i] = s
+            tabs.sort(by: Self.slotOrder)
+        }
+        return tabs
+    }
+
+    /// Each space's live agents, one per pane: a pane can briefly be listed under two session ids (/clear, a resume, a
+    /// stale entry) and showed up twice in the strip. The latest wins (the open one, in `siblings(of:)`), slot order.
+    static func liveBySpace(_ sessions: [Session]) -> [String: [Session]] {
+        var byPane: [String: [String: Session]] = [:]
+        var rest: [String: [Session]] = [:]
+        for c in sessions where c.state.isLive {
+            guard let space = c.spaceKey else { continue }
+            guard let pane = c.paneID else { rest[space, default: []].append(c); continue }
+            if let had = byPane[space]?[pane], (had.updatedAt ?? .distantPast) >= (c.updatedAt ?? .distantPast) { continue }
+            byPane[space, default: [:]][pane] = c
+        }
+        var out: [String: [Session]] = [:]
+        for space in Set(byPane.keys).union(rest.keys) {
+            out[space] = (Array((byPane[space] ?? [:]).values) + (rest[space] ?? [])).sorted(by: slotOrder)
+        }
+        return out
+    }
+
+    private static func slotOrder(_ a: Session, _ b: Session) -> Bool {
+        (a.slotIndex ?? 0, a.sessionID) < (b.slotIndex ?? 0, b.sessionID)
+    }
+
+    /// The same tabs, as far as the views about one session show them (`Session.sameForItsPage`).
+    private static func sameForTheirPages(_ a: [Session], _ b: [Session]) -> Bool {
+        a.count == b.count && zip(a, b).allSatisfy { $0.key == $1.key && Session.sameForItsPage($0, $1) }
     }
 
     func interrupt(_ key: SessionKey) async {
@@ -2067,6 +2120,12 @@ enum Haptics {
 @Observable final class SessionCell {
     var value: Session?
     init(_ value: Session?) { self.value = value }
+}
+
+/// A space's live agents as `AppModel.siblings(of:)` hands them out.
+@Observable final class SpaceCell {
+    var value: [Session]
+    init(_ value: [Session]) { self.value = value }
 }
 
 /// Questions and approvals waiting, as the tab bar counts them: the Persona tab's (its conversations') and the Agents

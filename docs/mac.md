@@ -266,13 +266,23 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 
 - 主线程的 display link 记下每一帧能开始的时刻；主线程忙过一帧，下一帧就晚到。指标和 iOS 的 `FrameStats` 同一口径：晚于 1.5 帧算卡顿，
   hitch 时间 = 超出一帧的部分（ms/s），掉帧数，最长一帧，P95，主线程 / 进程 CPU（ms/s），期间 UserDefaults 写了几次、哪些键变了。
-- `-showPerfRun scroll -showPerfPoint x,y -showPerfSpeed 33 -showPerfSeconds 6 [-showPerfGlide YES]`：按显示帧推动那一点下面的滚动视图
-  （33 pt/帧 = 60 Hz 下 2000 pt/s，同 iOS 的 `ListGlide`；`-showPerfGlide` 同 iOS 的走法：一个方向 3 秒、回来 3 秒，到头停；不加是来回弹）。
+- `-showPerfRun scroll -showPerfPoint x,y -showPerfSpeed 33 -showPerfSeconds 6 [-showPerfGlide YES|live]`：按显示帧推动那一点下面的滚动视图
+  （33 pt/帧 = 60 Hz 下 2000 pt/s，同 iOS 的 `ListGlide`；`-showPerfGlide YES` 同 iOS 的走法：一个方向 3 秒、回来 3 秒，到头停；不加是来回弹）。
+  - **量对话页用 `-showPerfGlide live`**：来回弹，前后发 `NSScrollView` 的 live scroll 通知，SwiftUI 的滚动阶段是 `.interacting`，和用户用触控板滚一样。
+    只挪 clip view，SwiftUI 不当成用户在滚：对话一直「跟着最新」、落到上次读到的地方，和推着它的这边拉扯，每帧跳回去（2026-11-04 的 342–356 ms/s 主要是这个）；
+    短对话一个方向 0.5 秒就到头，剩下的时间量的是不动的列表（看结果里的 `scrolledPt`：等于两倍滚动范围就是到头停了）。
+  - 用合成的滚轮事件直接交给滚动视图（`scrollWheel(with:)` 或窗口的 `sendEvent`）不行：带阶段的手势 AppKit 另有跟踪，6 秒只滚了 380 pt。
+  - 结果里还有 WindowServer 的 CPU（`windowServerCPUMsPerS`，所有 App 的合成都在里面，只能在安静的机器上前后对比）：卡顿可能在合成，不在我们的主线程。
+- `-showPerfRun pushes -perfCounts YES -showPerfChurn 'http://127.0.0.1:<端口>/mock/churn?n=20&ms=300&steps=0'`：页面静止，让 mock 推 20 轮
+  （每台机器的会话、机器列表的心跳；`steps=0` 时只有每 4 轮对话里多一句话），报这几秒里每个视图的 body 算了几次（`PerfCount`）、每次推送主线程忙多久。
+  对话页为什么重算：加 `-showPerfChanges YES`，日志里有 `ChatView` 每次的 `_printChanges()`（哪个 `@State`、哪个被观察的属性变了）。
 - `-showPerfRun sections|chats`：一个一个切侧栏分区 / 打开对话，量动作到下一帧能开始的时间（主线程被占了多久）。
 - `-showPerfRun resize`：窗口宽度在最宽和最窄之间来回拉（同拖窗口边），`-showPerfRun launch`：进程启动到窗口第一帧。
 - `-showPerfOut <json> -showPerfQuit YES`，`-showPerfDelay <秒>`。构建：Release 配置（`-O`、整模块）加 `SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG PERF_SIGNPOST'`
   （带 DEBUG 的启动参数，好配对 mock、打开页面），单独的 derivedData。窗口要在最前面（被挡住的窗口 AppKit 不画，数字会偏好看）。
 - 主线程在忙什么：跑的时候 `sample <pid> 5 1 -file x.txt`（系统自带），按主线程的调用树统计；`sample` 会暂停进程，那一轮的帧数据不算。
+- 这台 Mac 是几个车道共用的：别的车道在编译时负载上百（2026-11-04 晚上 250–310，20 核），帧数据跟着乱跳（同一个包连跑两次 366 和 1.8 ms/s），
+  主线程 CPU 和 body 次数还算稳。量帧之前看 `sysctl vm.loadavg`，等它降到几十以下；比前后用交替跑，别一个包连跑完再跑另一个。
 
 2026-11-04 第一轮（Mac Studio，1920×1080@60Hz；mock：`MOCK_AGENTS=1`（137 个 Agent）`MOCK_LONG_HISTORY=1` `MOCK_LONG_ASSISTANT=1`；各 2 次）：
 
@@ -292,8 +302,14 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   外壳和 Agents 列表跟着重算，137 行的 SwiftUI List 每次整表重新比对（`OutlineListCoordinator.diffRows`）：拖窗口时约占主线程的一半，打开对话时约 28%。
   热的视图改用 `@StoredValue`（`Persona/App/StoredValue.swift`，用法同 `@AppStorage`，只有自己那个键的值变了才重算）。改后：拖窗口 P95 264–365 → 33–103 ms，
   打开对话中位 293–356 → 196–224 ms。
-- 对话页滚动：每一帧都要从窗口根上走一遍 SwiftUI 布局（`NSHostingView.layout` 占主线程忙碌时间的约 80%），加上滚动中 `atBottom` 翻转、顶栏折叠让整页 `ChatView` 重算。
-- 外壳读 `MacTitleRowTaken` 这个 preference，每次更新都在整页上合并一遍（打开对话时约 9.5%）；打开对话时 `AppModel.siblings(of:)` 排序和 `Session` 结构体复制约 6.5%。
+- 对话页滚动：上面那一轮的数字不算数（见 `-showPerfGlide live`）。按用户滚动的方式量（`live`，2000 pt/s，负载 100 以上）：长 Agent 对话 65–86 ms/s，
+  关掉滚动几何 / 阶段的回调（等于顶栏不跟着手指折叠）是 10–14 ms/s，和 iPhone 一档；主线程 CPU 两边差不多（约 220 ms/s），差在顶栏每帧变高度、
+  它的材质背景每帧重新合成。要等机器安静了再确认，改顶栏的折叠方式先给用户看。
+- 推送让对话页整页重算（2026-11-04，#1337）：对话页的副标题、「正在操作」读了 `model.machines`，每台机器每次心跳整页带所有行重算；
+  标签条读 `siblings(of:)`，它在里面读 `allSessions`。改成 `namedMachine(_:)`、每个空间一个格子之后，mock 推 20 轮心跳（`steps=0`）：
+  `ChatView` 30 → 10 次（剩下的是那 5 句新话），气泡和正文 365 → 125 个，每次推送主线程 4.2 → 1.2 ms；带新步骤的推送 7.9 → 3.9 ms。
+  还剩：对话里来了新内容，屏幕上的每一行都重算一遍（每句新话 12 个气泡、13 段正文）。
+- 外壳读 `MacTitleRowTaken` 这个 preference（打开对话时调用树里约 9.4%）：这一块大多是页面自己的更新在合并 preference 时被拉着算，拿掉不一定省这么多，要量过再改。
 
 ## SSH 隧道（Mac）
 
