@@ -61,9 +61,11 @@ final class LarkPinnedShelfFlowTests: XCTestCase {
         wait(toggle, "label == %@", "展开置顶会话")
         shot(app, "pins-compact")
         XCTAssertLessThanOrEqual(chats(app).firstMatch.frame.height, 66, "normal rows retain the compact 64 pt layout")
-        // A pinned chat sits on the shelf only, not again at the head of the list.
+        // Pinned chats are on the shelf and in the list too, where their latest message puts them (as in Feishu):
+        // the newest chat is a pinned one, not the hub's pin order.
         XCTAssertTrue(app.buttons["feishu-pin-f2"].exists)
-        XCTAssertFalse(app.buttons["feishu-chat-f2"].exists)
+        XCTAssertEqual(chats(app).element(boundBy: 0).identifier, "feishu-chat-pin-1")
+        XCTAssertEqual(chats(app).element(boundBy: 1).identifier, "feishu-chat-f1")
         toggle.tapCenter()
         wait(toggle, "label == %@", "收起置顶会话")
         shot(app, "pins-expanded")

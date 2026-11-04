@@ -27,13 +27,24 @@ import Testing
         #expect(saved == store.conversations)
     }
 
-    @Test func pinnedChatsShowOnlyOnTheShelfUntilASearch() {
-        let rows = [chat("pinned-a", "hello"), chat("pinned-b"), chat("plain", "hello")]
-        let pinned = [chat("pinned-b"), chat("pinned-a")]
-        #expect(LarkConversationsModel.listed(rows, pinned: pinned, query: "").map(\.id) == ["plain"])
-        #expect(LarkConversationsModel.listed(rows, pinned: [], query: "").map(\.id) == ["pinned-a", "pinned-b", "plain"])
-        #expect(LarkConversationsModel.listed(rows, pinned: pinned, query: " hello ").map(\.id) == ["pinned-a", "plain"])
-        #expect(LarkConversationsModel.listed(rows, pinned: [chat("pinned-a")], query: "").map(\.id) == ["pinned-b", "plain"])
+    @Test func pinnedChatsSitInTheListWhereTheirTimePutsThem() {
+        func at(_ id: String, _ minutes: Double, _ preview: String = "") -> LarkConversation {
+            var c = chat(id, preview); c.updatedAt = Date(timeIntervalSince1970: 1_000_000 - minutes * 60); return c
+        }
+        // The hub's page: the pinned first in pin order, then the rest newest first.
+        let rows = [at("pin-old", 50, "hello"), at("pin-new", 1), at("a", 5), at("b", 20, "hello"), at("c", 40)]
+        let pinned = [at("pin-old", 50), at("pin-new", 1), at("pin-unloaded", 30)]
+        // No page left: every pinned chat where its time puts it, the shelf's own copy for one not on a page.
+        #expect(LarkConversationsModel.listed(rows, pinned: pinned, query: "").map(\.id)
+                == ["pin-new", "a", "b", "pin-unloaded", "c", "pin-old"])
+        // More pages: one older than the last loaded row waits for them.
+        #expect(LarkConversationsModel.listed(rows, pinned: pinned, query: "", more: true).map(\.id)
+                == ["pin-new", "a", "b", "pin-unloaded", "c"])
+        // A page of nothing but pinned chats, more to come: nothing to place them against yet.
+        #expect(LarkConversationsModel.listed(Array(rows.prefix(2)), pinned: pinned, query: "", more: true).isEmpty)
+        // No shelf: the hub's order; a search: the hub's rows, pinned ones included.
+        #expect(LarkConversationsModel.listed(rows, pinned: [], query: "").map(\.id) == rows.map(\.id))
+        #expect(LarkConversationsModel.listed(rows, pinned: pinned, query: " hello ").map(\.id) == ["pin-old", "b"])
     }
 
     @Test func aPageDroppedByARefreshIsAskedForAgain() async {

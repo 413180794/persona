@@ -56,16 +56,39 @@ final class LarkConversationsModel {
     @ObservationIgnored private var pending: Snapshot?
     @ObservationIgnored private var pageWaiters: [CheckedContinuation<Void, Never>] = []
 
-    /// The rows under the pinned shelf. The hub's pages start with the pinned chats, which the shelf already shows;
-    /// a search hides the shelf, so its results keep them.
-    nonisolated static func listed(_ conversations: [LarkConversation], pinned: [LarkConversation], query: String) -> [LarkConversation] {
+    /// The rows under the pinned shelf. The hub's pages start with the pinned chats, out of time order; Feishu lists
+    /// them under the shelf as well, each where its latest message puts it (2026-11-04: removing them was wrong). A
+    /// pinned chat older than the last loaded row waits for the page that reaches its time, unless no page is left.
+    /// A search hides the shelf and keeps the hub's rows as they are.
+    nonisolated static func listed(_ conversations: [LarkConversation], pinned: [LarkConversation], query: String,
+                                   more: Bool = false) -> [LarkConversation] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard q.isEmpty else {
             return conversations.filter { $0.name.localizedStandardContains(q) || $0.preview.localizedStandardContains(q) }
         }
         guard !pinned.isEmpty else { return conversations }
         let shelf = Set(pinned.map(\.id))
-        return conversations.filter { !shelf.contains($0.id) }
+        let rest = conversations.filter { !shelf.contains($0.id) }
+        let loaded = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let oldest = rest.last?.updatedAt
+        var pins = pinned.map { loaded[$0.id] ?? $0 }.filter { pin in
+            guard more else { return true }
+            guard let time = pin.updatedAt, let oldest else { return false }
+            return time >= oldest
+        }
+        pins.sort { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        var out: [LarkConversation] = []
+        out.reserveCapacity(rest.count + pins.count)
+        var next = pins.startIndex
+        for row in rest {
+            let time = row.updatedAt ?? .distantPast
+            while next < pins.endIndex, (pins[next].updatedAt ?? .distantPast) >= time {
+                out.append(pins[next]); next += 1
+            }
+            out.append(row)
+        }
+        out.append(contentsOf: pins[next...])
+        return out
     }
 
     init(deps: Deps) {

@@ -45,7 +45,7 @@ private struct LarkConversationsPage: View {
     }
 
     private var filtered: [LarkConversation] {
-        LarkConversationsModel.listed(store.conversations, pinned: store.pinned, query: query)
+        LarkConversationsModel.listed(store.conversations, pinned: store.pinned, query: query, more: store.nextCursor != nil)
     }
 
     var body: some View {
