@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/screen"
 )
@@ -319,5 +319,5 @@ func CodexStart(args []string) error {
 	if f.Prompt != "" { // a resume without a message (`jarvisd tab-start`, pi.go) runs the words alone
 		argv = append(argv, "--", f.Prompt)
 	}
-	return syscall.Exec(path, argv, env)
+	return osproc.Exec(path, argv, env)
 }

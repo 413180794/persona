@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -28,6 +29,9 @@ not json
 }
 
 func TestObserveSaysWhyHerdrRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in herdr is a shell script")
+	}
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "herdr")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 'unknown terminal session observe option' >&2\nexit 2\n"), 0o755); err != nil {

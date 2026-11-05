@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -251,10 +250,9 @@ func (n *Node) engines(ctx context.Context, herdrVersion string) []proto.Engine 
 	if hv == "" && n.hosts.Get(host.Herdr) == nil {
 		hv = herdrCLIVersion(ctx)
 	}
-	_, statErr := os.Stat(herdr.SocketPath())
 	_, pathErr := exec.LookPath("herdr")
 	hcv := herdrcore.New().Version(ctx)
-	herdrAvailable := hv != "" || statErr == nil || pathErr == nil
+	herdrAvailable := hv != "" || herdr.SocketUp() || pathErr == nil
 	coreAvailable := hcv != ""
 	return []proto.Engine{
 		{ID: proto.EngineHerdr, Name: proto.EngineNames[proto.EngineHerdr], Available: herdrAvailable, Version: hv},

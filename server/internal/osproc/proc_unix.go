@@ -55,3 +55,7 @@ func CPUTime() time.Duration {
 	}
 	return time.Duration(ru.Utime.Nano() + ru.Stime.Nano())
 }
+
+// Exec replaces this process with path (argv[0] included in argv), the way a launcher hands its terminal to the
+// program it starts. It returns only when the exec failed.
+func Exec(path string, argv, env []string) error { return syscall.Exec(path, argv, env) }

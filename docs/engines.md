@@ -55,6 +55,8 @@ iOS 和 Android App 都有这两处入口（Android 的机器页在 Agents：列
 | 带颜色的读屏、草稿识别 | ✅ | ❌（纯文本，只查对话框） | ❌（纯文本，只查对话框） | ❌（没有终端） |
 | 切权限模式 / 思考强度 | ✅ | 支持，未实测 | 支持，未实测 | ✅（端到端实测） |
 
+Windows：herdr 0.9.5 起有原生 Windows 版，herdr 引擎在 Windows 上除实时终端外和上表一样；Orca 也能用。见 [windows.md](windows.md)「herdr」。
+
 做不到的操作会直接提示，不会只做一半。Herdr App 和 Orca 里，Claude 不在前台（被挂起、已退出）时发消息会被拒绝、什么都不输入，
 提示「Claude 不在前台（可能被挂起），没有发送」或者要你在电脑上重新打开那个会话。
 

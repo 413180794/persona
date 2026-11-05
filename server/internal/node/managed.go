@@ -12,8 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 
+	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -211,7 +211,7 @@ func Launch(ctx context.Context, name string, args []string) error {
 			break
 		}
 	}
-	return syscall.Exec(claude, append(append([]string{"claude"}, resp.Args...), args...), env)
+	return osproc.Exec(claude, append(append([]string{"claude"}, resp.Args...), args...), env)
 }
 
 // launcherEnv answers `jarvisd launch` on the local socket.

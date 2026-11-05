@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"errors"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,7 +67,7 @@ func (fl *fakeLaunch) launch(_ context.Context, bin, sock string) (<-chan error,
 
 // serveSocket accepts (and closes) connections on sock until the test ends.
 func serveSocket(t *testing.T, sock string) {
-	ln, err := net.Listen("unix", sock)
+	ln, err := herdr.Listen(sock)
 	if err != nil {
 		t.Errorf("listen %s: %v", sock, err)
 		return

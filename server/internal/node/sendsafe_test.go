@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +47,7 @@ func (f *fakePane) serve(t *testing.T) *herdr.Client {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	sock := filepath.Join(dir, "h.sock")
-	ln, err := net.Listen("unix", sock)
+	ln, err := herdr.Listen(sock)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -63,7 +63,7 @@ func newFakeHerdr(t *testing.T) *fakeHerdr {
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	f := &fakeHerdr{sock: filepath.Join(dir, "h.sock"), on: map[string]func(map[string]any) any{},
 		screen: map[string]string{}, ansi: map[string]string{}}
-	ln, err := net.Listen("unix", f.sock)
+	ln, err := herdr.Listen(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}

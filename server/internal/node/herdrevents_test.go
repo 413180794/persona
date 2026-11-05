@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -166,7 +165,7 @@ func TestHerdrStatusEventsAreUrgent(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	sock := filepath.Join(dir, "s.sock")
-	ln, err := net.Listen("unix", sock)
+	ln, err := herdr.Listen(sock)
 	if err != nil {
 		t.Fatal(err)
 	}

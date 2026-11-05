@@ -1,8 +1,10 @@
 package osproc
 
 import (
+	"errors"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -71,4 +73,38 @@ func CPUTime() time.Duration {
 	}
 	ticks := func(t windows.Filetime) int64 { return int64(t.HighDateTime)<<32 | int64(t.LowDateTime) }
 	return time.Duration(ticks(kernel)+ticks(user)) * 100 // Filetime counts 100 ns ticks
+}
+
+// Exec runs path as this process's stand-in: Windows has no exec, so it starts path as a child on the same console
+// (stdin, stdout and stderr inherited: the terminal pane sees the program, not this process), and exits with the
+// child's exit code once it ends. Ctrl+C and Ctrl+Break reach the child from the console by themselves (same console,
+// same process group), so this process takes them and drops them instead of dying first and leaving the child without
+// a parent: on Windows only Notify turns off their default exit (os/signal's docs), Ignore does not promise that.
+// It returns only when the child could not start.
+func Exec(path string, argv, env []string) error {
+	cmd := exec.Command(path)
+	cmd.Args = argv
+	cmd.Env = env
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	interrupts := make(chan os.Signal, 1)
+	signal.Notify(interrupts, os.Interrupt)
+	go func() {
+		for range interrupts {
+		}
+	}()
+	if err := cmd.Start(); err != nil {
+		signal.Stop(interrupts)
+		close(interrupts)
+		return err
+	}
+	err := cmd.Wait()
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		os.Exit(0)
+	case errors.As(err, &exit):
+		os.Exit(exit.ExitCode())
+	}
+	os.Exit(1)
+	return nil
 }

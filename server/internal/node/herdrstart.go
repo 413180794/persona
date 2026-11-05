@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -69,7 +69,7 @@ func herdrAlive(ctx context.Context, sock string) bool {
 	}
 	ctx, cancel := context.WithTimeout(ctx, herdrDialWait)
 	defer cancel()
-	c, err := (&net.Dialer{}).DialContext(ctx, "unix", sock)
+	c, err := herdr.Dial(ctx, sock) // a named pipe on Windows
 	if err != nil {
 		return false
 	}

@@ -1,5 +1,6 @@
-// Package herdr drives herdr's terminals and agents: over its unix socket API (one JSON line each way), or the
-// herdr CLI when the socket is not there (older herdr, another session) — the CLI is a thin client of the same API.
+// Package herdr drives herdr's terminals and agents: over its socket API (one JSON line each way; a unix socket, a named
+// pipe on Windows), or the herdr CLI when the socket is not there (older herdr, another session) — the CLI is a thin
+// client of the same API.
 package herdr
 
 import (
@@ -74,7 +75,9 @@ func (c *Client) note(method string, err error) {
 
 func New() *Client { return &Client{Bin: "herdr", Socket: SocketPath()} }
 
-// SocketPath is where herdr listens: $HERDR_SOCKET_PATH, else herdr.sock in its config directory.
+// SocketPath is where herdr listens: $HERDR_SOCKET_PATH, else herdr.sock in its config directory ($XDG_CONFIG_HOME/herdr,
+// else the platform's: ~/.config/herdr, %APPDATA%\herdr on Windows). On Windows the socket is a named pipe named after
+// this path (dialSocket); the path itself is not a file.
 func SocketPath() string {
 	if p := os.Getenv("HERDR_SOCKET_PATH"); p != "" {
 		return p
@@ -82,11 +85,28 @@ func SocketPath() string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
 		return filepath.Join(d, "herdr", "herdr.sock")
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
+	d := platformConfigDir()
+	if d == "" {
 		return ""
 	}
-	return filepath.Join(home, ".config", "herdr", "herdr.sock")
+	return filepath.Join(d, "herdr.sock")
+}
+
+// Dial connects to herdr's API socket at path (a unix socket; on Windows the named pipe for path): for callers that
+// only check that something answers.
+func Dial(ctx context.Context, path string) (net.Conn, error) { return dialSocket(ctx, path) }
+
+// Listen listens where herdr serves its API for path (a unix socket; on Windows the named pipe for path): for a
+// stand-in herdr in tests, which then answers this package's clients on every platform.
+func Listen(path string) (net.Listener, error) { return listenSocket(path) }
+
+// SocketUp reports whether herdr's socket is there to dial (a file on Unix, a named pipe on Windows), without dialing.
+func SocketUp() bool {
+	p := SocketPath()
+	if p == "" {
+		return false
+	}
+	return socketExists(p)
 }
 
 type Error struct {
@@ -138,7 +158,7 @@ func (c *Client) rpcOnce(ctx context.Context, method string, params any, out any
 	}
 	ctx, cancel := context.WithTimeout(ctx, rpcTimeout)
 	defer cancel()
-	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", c.Socket)
+	conn, err := dialSocket(ctx, c.Socket)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errNoSocket, err)
 	}
@@ -523,7 +543,7 @@ func (c *Client) Subscribe(ctx context.Context, subs []Subscription, fn func(Eve
 		return errNoSocket
 	}
 	dctx, cancel := context.WithTimeout(ctx, rpcTimeout)
-	conn, err := (&net.Dialer{}).DialContext(dctx, "unix", c.Socket)
+	conn, err := dialSocket(dctx, c.Socket)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("%w: %v", errNoSocket, err)

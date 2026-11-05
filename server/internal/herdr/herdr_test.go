@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -20,7 +20,7 @@ func fakeServer(t *testing.T, reply func(method string, params map[string]any) s
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	sock := filepath.Join(dir, "h.sock")
-	ln, err := net.Listen("unix", sock)
+	ln, err := listenSocket(sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +56,9 @@ func fakeServer(t *testing.T, reply func(method string, params map[string]any) s
 // cliScript is a stand-in herdr binary that records its arguments and prints a canned response.
 func cliScript(t *testing.T, stdout string) (bin, argsFile string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in herdr is a shell script")
+	}
 	dir := t.TempDir()
 	argsFile = filepath.Join(dir, "args")
 	bin = filepath.Join(dir, "herdr")
@@ -149,7 +152,7 @@ func TestSocketPath(t *testing.T) {
 	}
 	t.Setenv("HERDR_SOCKET_PATH", "")
 	t.Setenv("XDG_CONFIG_HOME", "/cfg")
-	if p := SocketPath(); p != "/cfg/herdr/herdr.sock" {
+	if p, want := SocketPath(), filepath.Join("/cfg", "herdr", "herdr.sock"); p != want {
 		t.Fatal(p)
 	}
 }
@@ -161,7 +164,7 @@ func TestSubscribeStreamsUntilHerdrCloses(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	sock := filepath.Join(dir, "h.sock")
-	ln, err := net.Listen("unix", sock)
+	ln, err := listenSocket(sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +206,7 @@ func TestSubscribeEndsWithContext(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	sock := filepath.Join(dir, "h.sock")
-	ln, err := net.Listen("unix", sock)
+	ln, err := listenSocket(sock)
 	if err != nil {
 		t.Fatal(err)
 	}

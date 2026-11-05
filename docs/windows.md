@@ -1,9 +1,12 @@
-# Windows 上的 node（Orca 引擎）
+# Windows 上的 node（herdr、Orca 引擎）
 
-让手机看到、驱动一台 Windows 电脑上 Orca 里的 Claude Code：这台电脑跑常驻 node（`personad node --attach`）和连接器 jarvis-link（主动模式，见 [link.md](link.md)），
+让手机看到、驱动一台 Windows 电脑上 herdr 或 Orca 里的 Claude Code：这台电脑跑常驻 node（`personad node --attach`）和连接器 jarvis-link（主动模式，见 [link.md](link.md)），
 hub 在别处（WSL2 / Docker / 另一台机器）。需求和分步见 #1090，Windows 支持的总览见 #1179。踩过的坑在 [lessons/windows.md](lessons/windows.md)。
 
 ## 现状
+
+两个引擎都能用：**herdr**（0.9.5 起有原生 Windows 版，见下面「herdr」）能从手机新建、继续会话，和 macOS / Linux 一样；**Orca** 只能看、驱动已经开着的会话。
+下表是 Orca 的；herdr 引擎和 Orca 不同的地方在「herdr」一节的表里。
 
 | 能力 | Windows（Orca） | 说明 |
 | --- | --- | --- |
@@ -17,7 +20,8 @@ hub 在别处（WSL2 / Docker / 另一台机器）。需求和分步见 #1090，
 | 从手机新建会话、继续未运行的会话 | ❌ | Orca 引擎在所有平台上都还不支持（[plan-orca-support.md](plan-orca-support.md)「第二期」），不是 Windows 的问题 |
 | 机器监控（CPU、内存、交换、网络、磁盘、系统信息） | ✅ | Win32 调用，不起进程，口径见 [machines.md](machines.md)「采集口径」的 Windows 一列（#1943） |
 | 端口转发、Codex / TRAEX 发现 | ❌ | 依赖 `ps` / `lsof` / `/proc`，Windows 上安静地不可用（#1179） |
-| node 自己起的进程：受管启动器、`codex` 启动、自更新 | ❌ | 用 `syscall.Exec`，Windows 上能编译但跑不通；Orca 引擎用不到 |
+| node 自己起的进程：受管启动器、`codex` 启动 | ✅ | `osproc.Exec`：Windows 没有 exec，在同一个控制台里起子进程、按它的退出码退出（下面「herdr」） |
+| hub 自更新 | ❌ | 还是 `syscall.Exec`；hub 不在 Windows 上原生跑（#1179） |
 | 经 hub 更新常驻 node（[node-update.md](node-update.md)） | ❌ | node 报告不支持（「常驻 node 未由 launchd/systemd 管理」），App 里看得到原因；升级是再跑一次 `jarvis-link install --jarvisd <新的 personad.exe>` |
 | 被动模式（hub 来连这台） | 没验证 | 能编译、`install --listen` 走同一条路；Windows 防火墙要自己放行端口（`install` 打印 `New-NetFirewallRule` 的写法） |
 
@@ -93,6 +97,36 @@ go build -o jarvis-link.exe .\cmd\jarvis-link
 hub 那边：hub.json 的 `machines` 里这台是 `kind: link`，开着 `public.tls_listen`；配对链接用 `personad hub pair --machine <id>`（Docker 部署是
 `docker compose exec hub jarvisd hub pair --machine <id>`）。连上后在 App 里把这台的引擎选成 Orca（设置 › 机器 › 引擎）。
 
+## herdr
+
+herdr 0.9.5 起有原生 Windows 版（ConPTY 窗格，[官方说明](https://herdr.dev/docs/windows-beta/)）。node 只经 herdr 的 socket API 驱动它，所以 herdr 引擎在 Windows 上和别处一样：
+
+| 能力 | Windows（herdr） | 说明 |
+| --- | --- | --- |
+| 列出会话、状态，读对话记录 | ✅ | 同 macOS / Linux |
+| 从手机新建会话、继续未运行的会话 | ✅ | node 在新标签页里输入启动命令，和别处一样 |
+| 发消息（多行一整条）、按键、打断 | ✅ | |
+| 回答提问 / 授权卡片 | ✅ | 走 Claude Code 的 hook，不读屏 |
+| 实时终端（`terminal session observe`） | ❌ | herdr 在 Windows 上没有 direct terminal attach；退回读屏 |
+
+- **socket**：herdr 在 Windows 上的 API 是命名管道，名字是 `\\.\pipe\` 加 socket 路径（`\\.\pipe\C:\Users\<你>\AppData\Roaming\herdr\herdr.sock`），
+  配置目录是 `%APPDATA%\herdr`（`$XDG_CONFIG_HOME` 设了就是它下面的 `herdr`）。`internal/herdr` 的 `socket_windows.go` 按这个规则拨号，和 herdr 自己的
+  `config_dir` / interprocess `GenericNamespaced` 一致；`$HERDR_SOCKET_PATH` 照旧优先。路径本身不是文件，`SocketUp` 看管道在不在。
+- **窗格里的 shell**：herdr 在 Windows 上默认开 PowerShell，而 node 输入的启动命令是 POSIX shell 的写法（`'…'` 引号、`A=1 cmd`）。要在 herdr 的
+  `%APPDATA%\herdr\config.toml` 里把窗格的 shell 设成 Git Bash：
+
+  ```toml
+  [terminal]
+  default_shell = "C:/Program Files/Git/bin/bash.exe"
+  ```
+
+- **herdr 要在用户的桌面会话里常驻**：从 ssh 会话起的 `herdr server` 会随会话一起退出。用一个登录时启动的计划任务跑 `herdr.exe server`（当前用户、
+  `Interactive`、不限时）；和 `jarvis-link install` 的任务是同一种。
+- **`syscall.Exec`**：`jarvisd launch`（受管启动器）、`codex-start` / `tab-start` 要把自己换成 claude / codex。Windows 没有 exec，`osproc.Exec` 在同一个
+  控制台里起子进程（标准输入输出原样继承，窗格里看到的就是那个程序）、自己接住 Ctrl+C 不退出（同一个控制台的子进程照样收到；只能用 `signal.Notify`，`Ignore` 挡不住），子进程结束后按它的退出码退出。
+- **Claude Code 第一次运行**：新装的 Claude Code 先出选主题的引导，node 等不到输入框（「claude did not become ready」）。在这台电脑上手动开一次
+  `claude` 走完引导，或在 `%USERPROFILE%\.claude.json` 里设 `"hasCompletedOnboarding": true`。
+
 ## 本地 socket
 
 node 的 `node.sock`、`runtime.sock`、`node-attach.sock` 在 Windows 上照旧是 AF_UNIX 的 socket 文件（Windows 10 1803 起有），放在 `%USERPROFILE%\.persona\`。
@@ -117,6 +151,18 @@ node 的 `node.sock`、`runtime.sock`、`node-attach.sock` 在 Windows 上照旧
 node 在 Windows 上跑启动器探测、`claude --version` 这类 shell 脚本时用 Git for Windows 的 bash（`loginShellProgram`：`CLAUDE_CODE_GIT_BASH_PATH`，
 否则从 `git` 的位置和常见安装目录找），和 Claude Code 自己在 Windows 上一样。不用裸的 `bash`：服务拿到的 PATH 里 `System32\bash.exe` 在前，它是 WSL。
 找不到 Git Bash 时这些命令起不来（机器信息里没有 Claude 版本），不会跑到 WSL 里去。
+
+## 验证记录：herdr 引擎（2026-11-04，Windows 10 真机）
+
+- herdr 0.9.5（官方 `herdr-windows-x86_64.zip`）、Claude Code 2.1.311（原生 `claude.exe`）、Git for Windows 2.56（PortableGit）；herdr 由登录时启动的计划任务常驻，
+  窗格 shell 设成 Git Bash。hub 在一台 Linux 上，经 ssh 跑这台的 `jarvisd.exe node --stdio`。
+- hub 上这台在线，`windows/amd64`、引擎 herdr、herdr 0.9.5。经 hub 的接口：新建会话（`POST /api/v1/sessions`，带第一条消息）收到回复；
+  多行消息一整条提交、收到回复；让 Claude 调 AskUserQuestion，卡片经 hook 到 hub，`POST /api/v1/interactions/{id}/resolve` 回答后 Claude 照答案回复；
+  `/exit` 后会话变成 offline，再发消息时 node 在新标签页里 `--resume` 起来，Claude 记得前面的答案。
+- `jarvisd tab-start`：用文件里的 argv 起 `claude -p`（回复照常）、`cmd /c exit 3`（退出码 3）、带 `A=1` 前缀的命令（环境变量传到了）；文件用完就删。
+- 测试：`internal/herdr`（`TestPipeName`、`TestSocketPathWindows`，以及测试 herdr 改成监听命名管道的 RPC / 订阅测试）和 `internal/osproc`（`TestExecExitCode`、`TestExecSurvivesCtrlC`：换回 `signal.Ignore` 时失败）
+  在这台 Windows 上通过；用 shell 脚本冒充 herdr 可执行文件的几个测试在 Windows 上跳过。Linux 上 `internal/herdr`、`internal/osproc`、`internal/node`、`internal/hub` 通过。
+- 没验证：App 界面（用的是 App 调的同一套 hub 接口）；Codex；herdr 的实时终端（Windows 上 herdr 不支持）。
 
 ## 验证记录：安装和开机自启（2026-11-04，同一台 Windows 11 真机）
 

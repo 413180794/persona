@@ -60,3 +60,18 @@
   `orcart` 按平台挑传输：Windows 先 `named-pipe`（`tailscale/go-winio` 拨号）再 `unix`，其他平台只 `unix`。协议（一行一个 JSON）不变。
 - Orca 终端里的环境变量和 macOS 一样有 `ORCA_PANE_KEY` / `ORCA_AGENT_PANE`；还有 `ORCA_USER_DATA_PATH`（`%APPDATA%\orca`）。
 - `terminal.list` 的 `topologyRevisions` 键里路径分隔符混用（同一台机器上有 `C:/Users/…` 也有 `C:\Users\…`），别拿它和 `worktreePath` 直接比字符串。
+
+## herdr
+
+- **herdr 的 API 是命名管道，名字就是 socket 路径**：herdr 用 interprocess 的 `GenericNamespaced`，`C:\Users\<你>\AppData\Roaming\herdr\herdr.sock` 对应
+  `\\.\pipe\C:\Users\<你>\AppData\Roaming\herdr\herdr.sock`；路径本身不是文件，`os.Stat` 这个路径永远不存在，要 stat 管道名。配置目录是 `%APPDATA%\herdr`，不是 `~/.config/herdr`。
+- **从 ssh 起的 `herdr server` 随 ssh 会话一起退出**（Windows OpenSSH 关会话时结束整个作业），`Start-Process` 也一样。要常驻就用登录时启动的计划任务，跑在用户的桌面会话里。
+- **窗格默认是 PowerShell**：node 输入的命令按 POSIX shell 写（`'…'` 引号、`A=1 cmd`），PowerShell 里会被拆错。`config.toml` 的 `[terminal] default_shell` 设成 Git Bash；
+  这个键必须在 `[terminal]` 下，写在顶层时 `reload-config` 只报「unknown config key default_shell; ignoring key」。
+- **新装的 Claude Code 先出选主题的引导**：node 的 `waitReady` 一分钟等不到输入框就报「claude did not become ready」，屏幕上是主题列表。`~/.claude.json` 设 `hasCompletedOnboarding: true`，或手动跑一次。
+- **apiKeyHelper 在 Windows 上由 cmd 执行**：`cat ~/.config/…` 报「'cat' 不是内部或外部命令」；写 `type "C:\…\key"`。
+- **MinGit 没有 bash.exe**（只有 `usr\bin\sh.exe`），Git Bash 要用 PortableGit 或安装版。
+- **经 ssh 跑 PowerShell 时引号会被 cmd 再拆一遍**：长脚本用 `powershell -EncodedCommand <UTF-16LE 的 base64>`；PowerShell 5.1 给原生程序传 `-test.run=A|B` 这类参数也会拆错，套一层 `cmd /c "…"`。
+- **`signal.Ignore(os.Interrupt)` 挡不住 Ctrl+C**：Windows 上只有 `signal.Notify` 能关掉 Ctrl+C / Ctrl+Break 的默认退出（os/signal 文档）。`osproc.Exec` 用 Ignore 时，
+  控制台上一个 Ctrl+C 就把启动器以 `0xc000013a` 结束了，子进程（claude）还在、父进程没了，退出码也丢了；`TestExecSurvivesCtrlC` 盯着这个。
+- 测试程序 `xxx.test.exe` 退出后可能还在跑一会儿（子进程），scp 覆盖同名文件报 `dest open … Failure`：换个文件名或先结束进程。

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -24,7 +23,7 @@ func methodHerdr(t *testing.T, answer func(method string, params map[string]any)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	sock := filepath.Join(dir, "h.sock")
-	ln, err := net.Listen("unix", sock)
+	ln, err := herdr.Listen(sock)
 	if err != nil {
 		t.Fatal(err)
 	}
