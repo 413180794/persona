@@ -259,6 +259,11 @@ nonisolated enum TodosLogic {
         return 5
     }
 
+    /// An agent opened by hand in herdr: not started by Persona (nor spawned through it).
+    static func isManualHerdr(_ s: Session) -> Bool {
+        s.spaceKind == "herdr" && !s.startedByJarvis
+    }
+
     private static func byDate(_ a: Session, _ b: Session) -> Bool {
         if a.sortDate != b.sortDate { return a.sortDate > b.sortDate }
         if a.sessionID != b.sessionID { return a.sessionID < b.sessionID }
@@ -268,7 +273,8 @@ nonisolated enum TodosLogic {
     /**
      * Pure grouping for the Agents sidebar, by todo:
      * - one section per open todo with attached agents; the header shows the todo title and status, and tapping it opens the todo
-     * - agents with no todo go into the last section, "未归属": folded below todos unless one of them needs you
+     * - agents with no todo opened by hand in herdr get their own section, "手动开的", open, before 未归属 (#2608, #2917)
+     * - the other agents with no todo go into the last section, "未归属": folded below todos unless one of them needs you
      *   (unread alone stays folded, many lists always have some); with no todo above it is the whole list, open (#1836)
      * - pinning, muting and the "最近（未运行）" rules match the "按状态" grouping
      */
@@ -329,15 +335,24 @@ nonisolated enum TodosLogic {
             }
         }
 
-        let unassigned = live.filter { !assignedSessionKeys.contains("\($0.machineID)/\($0.sessionID)") }
+        let byRank = { (a: Session, b: Session) -> Bool in
+            let rA = sessionRank(a, isMuted: isMuted)
+            let rB = sessionRank(b, isMuted: isMuted)
+            if rA != rB { return rA < rB }
+            return byDate(a, b)
+        }
+        let rest = live.filter { !assignedSessionKeys.contains("\($0.machineID)/\($0.sessionID)") }
+
+        // Opened by hand in herdr and on no todo: no auto-link rule knows them (not spawned, their space is on no
+        // todo), so they get a section of their own, open, before 未归属 (#2608, #2917).
+        let manual = rest.filter(isManualHerdr).sorted(by: byRank)
+        if !manual.isEmpty {
+            groups.append(TodoAgentGroup(key: "todo:manual", name: "手动开的", sessions: manual, todoID: nil, todoStatus: nil))
+        }
+
+        let unassigned = rest.filter { !isManualHerdr($0) }
         if !unassigned.isEmpty {
-            var sortedUnassigned = unassigned
-            sortedUnassigned.sort { a, b in
-                let rA = sessionRank(a, isMuted: isMuted)
-                let rB = sessionRank(b, isMuted: isMuted)
-                if rA != rB { return rA < rB }
-                return byDate(a, b)
-            }
+            let sortedUnassigned = unassigned.sorted(by: byRank)
             groups.append(TodoAgentGroup(
                 key: "todo:none",
                 name: "未归属",

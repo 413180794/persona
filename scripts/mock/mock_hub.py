@@ -663,6 +663,15 @@ if os.environ.get("MOCK_ORCA_CHILDREN"):
         _orca("c2073000-0000-4000-8000-000000000004", "续期的文档", "refresh-docs", 4, "done", "unread", 3, "文档写好了。", parent="session-refresh"),
         _orca("c2073000-0000-4000-8000-000000000005", "登录埋点", "login-metrics", 5, "done", "unread", 6, "埋点加好了，等你看。", parent="main"),
     ]
+# MOCK_MANUAL_HERDR=1: two agents opened by hand in herdr (started_by_jarvis false) on no todo: Agents' 按待办 lists them
+# in 手动开的 (#2608 web, #2917 iOS / Mac).
+if os.environ.get("MOCK_MANUAL_HERDR"):
+    SESSIONS += [
+        sess("macbook", "a2917000-0000-4000-8000-000000000001", "试一下新的图表库", "/Users/me/code/sandbox", "working", "working",
+             "sandbox", 6, "charts", 1, 0, "在对比两个图表库的包大小。", started_by_jarvis=False),
+        sess("studio", "a2917000-0000-4000-8000-000000000002", "整理下载文件夹", "/Users/me/Downloads", "done", "idle",
+             "downloads", 7, "tidy", 1, 25, "按类型分好了。", started_by_jarvis=False),
+    ]
 # MOCK_WORK=1: stopped agents the hub triaged (docs/agent-work.md): one done with its conclusion, one waiting for a
 # deploy the hub will wake it after, one cut off by a 503 the hub retries, one waiting for the user's decision on a card;
 # 设置 › 会话分诊 reads and writes TRIAGE.
@@ -9149,6 +9158,7 @@ VOICE_VOICES = {
 }
 # What --help lists after the options.
 MOCK_HELP = [
+    "MOCK_MANUAL_HERDR=1  没挂待办的 herdr Agent 算手动开的（started_by_jarvis 为假），Agents「按待办」里出「手动开的」一段（#2917）",
     "MOCK_ORCA_CHILDREN=1  MacBook 上一个 Orca 工作区带三个子工作区（其中一个还有子项，parent_space_id，#2073）",
     "MOCK_PLUGINS=1  设置 › 插件：五个示例插件（需要设置 / 运行中 / hub.json / 已停用 / 不兼容），表单、密钥、开关在内存里",
     "MOCK_CONNECTOR_PLUGIN=1  设置 › 连接器：一个插件提供的通用连接器「示例笔记」，令牌 example-token 一步登录",

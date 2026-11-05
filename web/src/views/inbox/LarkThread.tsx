@@ -24,6 +24,7 @@ import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
 import { LarkPinsDialog } from "./LarkPins";
+import { isSummaryCard, LarkSummaryCard } from "./LarkSummaryCard";
 import { LarkTopicCard, LarkTopicDialog, useTopicReplies } from "./LarkTopicCard";
 
 const PAGE = 30;
@@ -1063,6 +1064,8 @@ function Block({ p }: { p: LarkPart }) {
     case "code":
       return <pre className="overflow-x-auto rounded-[8px] bg-inset px-3 py-2 font-mono text-[12px] leading-relaxed shadow-hairline">{p.text}</pre>;
     case "card": {
+      // Cards lark-connector summarises itself (merge-forward, group / contact cards, meetings, votes…), by their variant.
+      if (isSummaryCard(meta)) return <LarkSummaryCard meta={meta} fallbackTitle={p.text ?? ""} renderParts={(parts) => <Parts parts={parts} />} />;
       const c = cardText(meta);
       return (
         <div className="max-w-[460px] rounded-[10px] bg-surface px-3 py-2.5 shadow-card">

@@ -97,6 +97,35 @@ struct TodosLogicTests {
         #expect(groups[1].sessions.map(\.sessionID) == ["s_unassigned"])
     }
 
+    /// Agents opened by hand in herdr with no todo get "手动开的", open, before 未归属; Persona's own and other hosts' stay
+    /// in 未归属 (#2917).
+    @Test func manualHerdrAgentsGetTheirOwnSection() throws {
+        func agent(_ id: String, kind: String?, byPersona: Bool, state: AgentState = .working) throws -> Session {
+            let kindField = kind.map { ",\"space_kind\":\"\($0)\"" } ?? ""
+            let json = #"{"machine_id":"m","session_id":"\#(id)","title":"\#(id)","cwd":"/tmp","status":"idle","state":"\#(state.rawValue)","started_by_jarvis":\#(byPersona)\#(kindField)}"#
+            return try JSON.decoder.decode(Session.self, from: Data(json.utf8))
+        }
+        let onTodo = try agent("on_todo", kind: "herdr", byPersona: false)
+        let manualIdle = try agent("manual_idle", kind: "herdr", byPersona: false, state: .idle)
+        let manualNeeds = try agent("manual_needs", kind: "herdr", byPersona: false, state: .needsYou)
+        let spawned = try agent("spawned", kind: "herdr", byPersona: true)
+        let other = try agent("other", kind: nil, byPersona: false)
+        let todo = TodoItem(id: "t1", title: "Todo 1", doneAt: nil, createdAt: Date(), agents: [TodoItem.Agent(machineID: "m", sessionID: "on_todo")])
+
+        let groups = TodosLogic.buildTodoAgentGroups(
+            sessions: [onTodo, manualIdle, manualNeeds, spawned, other], todos: [todo], isMuted: { _ in false })
+        #expect(groups.map(\.key) == ["todo:t1", "todo:manual", "todo:none"])
+        #expect(groups[1].name == "手动开的")
+        #expect(!groups[1].folded)
+        #expect(groups[1].sessions.map(\.sessionID) == ["manual_needs", "manual_idle"])
+        #expect(groups[2].folded)
+        #expect(Set(groups[2].sessions.map(\.sessionID)) == ["spawned", "other"])
+
+        // Nothing opened by hand: no empty section.
+        let none = TodosLogic.buildTodoAgentGroups(sessions: [onTodo, spawned], todos: [todo], isMuted: { _ in false })
+        #expect(none.map(\.key) == ["todo:t1", "todo:none"])
+    }
+
     /// The host from the pane ref, as the hub's host.ParsePane: herdr's ids go bare and may hold a colon (#1836).
     @Test func hostKindFromPaneRef() throws {
         func host(_ pane: String?) throws -> String? {

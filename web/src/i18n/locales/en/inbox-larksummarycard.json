@@ -1,0 +1,21 @@
+{
+  "chat_history": "Chat history",
+  "line": "{name}: {text}",
+  "count_one": "{count} message",
+  "count_other": "{count} messages",
+  "recalled": "Message recalled",
+  "recalled_kept": "{text} · Recalled",
+  "recalled_mark": "Recalled",
+  "encrypted": "Encrypted message",
+  "message": "[Message]",
+  "empty": "No messages to show",
+  "unknown": "Unknown",
+  "group_card": "Group card",
+  "user_card": "Contact card",
+  "dissolved": "Disbanded",
+  "copy_number": "Copy meeting ID",
+  "image": "[Image]",
+  "file": "[File]",
+  "card": "[Card]",
+  "sticker": "[Sticker]"
+}

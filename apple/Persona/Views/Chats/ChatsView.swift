@@ -1334,8 +1334,9 @@ private struct AgentsList: View {
         }
     }
 
-    /// One section per todo, its agents ordered; unassigned agents go into "未归属" (folded by default, open while one
-    /// of them needs you or nothing is above it: `TodoAgentGroup.folded`).
+    /// One section per todo, its agents ordered; agents opened by hand in herdr go into "手动开的" (open); the other
+    /// unassigned ones into "未归属" (folded by default, open while one of them needs you or nothing is above it:
+    /// `TodoAgentGroup.folded`).
     @ViewBuilder private func todoSections(_ live: [Session]) -> some View {
         let todoGroups = TodosLogic.buildTodoAgentGroups(sessions: live, todos: TodoStore.shared.todos, isMuted: model.isMuted)
         let mixedHosts = Set(live.compactMap(\.hostKind)).count > 1

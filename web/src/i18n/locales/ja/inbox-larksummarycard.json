@@ -1,0 +1,20 @@
+{
+  "chat_history": "チャット履歴",
+  "line": "{name}：{text}",
+  "count_other": "{count}件",
+  "recalled": "メッセージは取り消されました",
+  "recalled_kept": "{text} · 取り消し済み",
+  "recalled_mark": "取り消し済み",
+  "encrypted": "暗号化メッセージ",
+  "message": "[メッセージ]",
+  "empty": "表示できるメッセージはありません",
+  "unknown": "不明",
+  "group_card": "グループカード",
+  "user_card": "連絡先カード",
+  "dissolved": "解散済み",
+  "copy_number": "会議 ID をコピー",
+  "image": "[画像]",
+  "file": "[ファイル]",
+  "card": "[カード]",
+  "sticker": "[スタンプ]"
+}
