@@ -24,6 +24,7 @@
   "ask_placeholder": "{name}に質問…",
   "resume_placeholder": "メッセージを送るとコンピューターでこのセッションが再開されます…",
   "agent_placeholder": "エージェントにメッセージ…",
+  "queue_placeholder": "補足（キューに入れて送信）",
   "draft_title": "コンピューターの入力欄に未送信のテキストがあります",
   "not_now": "今は送信しない",
   "clear_and_send": "クリアして送信",

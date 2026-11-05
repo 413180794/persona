@@ -226,11 +226,14 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - **「@」**（`MentionMenu.tsx`、`lib/mentions.ts`）：输入框打 `@` 或点工具条的 @：这段对话工具用过的文件、会话目录第一层（带 `/` 逐级进入，`/machines/{mid}/fs`）、其他会话；
     选文件插 `@路径`，选会话不插字、加一个上下文胶囊（随消息作为 `<jarvis-context>` 发出）。邮箱地址里的 @ 不弹。工具步骤折叠时（`fold_work`）没展开的那些文件不在列表里。
   - 交互卡片（提问 / 计划 / 授权 / 终端对话框）在输入框上方，Approval Card 的样子；× 是「交回电脑处理」（`dismiss`）。
-  - 输入框（Prompt Bar）：Enter 发送、Shift+Enter 换行、输入法组字时 Enter 不发送；`/` 命令（同 App 的快捷消息，`/clear` 先确认）；
+  - 输入框（Prompt Bar）：Enter 发送、Shift+Enter 换行、输入法组字时 Enter 不发送；`/` 命令（同 App 的快捷消息，`/clear` 先确认；#2978 起按会话能力过滤，同 iOS：`/model` 只给能切换模型的 herdr 窗格里的 Claude，`/clear` 只给窗格里的 Claude 且不在工作、不需要你，Codex / TRAEX / 只读来源都没有，`lib/composer-commands.ts`）；
     `/loop`（#1586，`lib/loop-command.ts`，App 还没有）：选中填入 `/loop `，草稿是 `/loop …` 时输入框下面一行说会做什么（「每 10 分钟重复：…」「由 Claude 自己定节奏重复：…」）或还缺什么，
     原样发给 Claude Code；只有 Claude 的 Agent 有，Codex / TRAEX 的会话不显示；
-    粘贴 / 拖入 / 选择图片作为附件，别的文件传到会话所在的电脑并把路径插到光标处（`docs/protocol.md`「发送文件」）；
-    Claude 输入框里的灰色建议显示成占位文字，Tab 填入；Agent 工作中且没打字时发送键换成红色中断，Esc 也是中断；Persona 的对话（主对话也算）一样（#1467：之前助手的对话一律不给中断，hub 和 node 其实支持，claude -p 结束进程、下一条消息从 transcript 接着）。草稿按会话存在 localStorage。
+    粘贴 / 拖入 / 选择图片作为附件（一次最多 4 张，同 iOS / Android，还在读的也算进去，连着粘贴两次也不会超；多出来的提示「一次最多 4 张」），别的文件传到会话所在的电脑并把路径插到光标处（`docs/protocol.md`「发送文件」）；
+    Claude 的回复建议（#2978，同 iOS SuggestionPill）：输入框为空、没有附件 / 引用、Agent 不在工作也不需要你（不在等提问 / 计划 / 审批卡片）时，输入框上方一条建议条，点一下填入（光标在末尾），右边箭头「直接发送」；桌面上占位文字也显示建议、Tab 填入。
+    Agent 工作中或需要你时占位文字是「补充说明（会排队发送）」（同 iOS 的 `status.isActive`）。
+    host 报了「出错停下」（`failure_reason`，botmux 不会自己续跑的错误）且会话不在工作、不需要你时，输入框上方一条红底提示：原因（去掉开头的 ⚠️）、「重试」（只发「继续」，不动输入框里的字，点了马上收起；收起记在对话页上，中间经过「需要你」再回来也不重新冒出，直到出现新的原因）、有飞书话题时「在飞书打开」；列表预览也显示这句原因（同 iOS FailureNote / listPreview）。
+    Agent 工作中且没打字时发送键换成红色中断，Esc 也是中断；Persona 的对话（主对话也算）一样（#1467：之前助手的对话一律不给中断，hub 和 node 其实支持，claude -p 结束进程、下一条消息从 transcript 接着）。草稿按会话存在 localStorage。
   - **发送历史和 Ctrl+R 搜索**（#2434，`lib/send-history.ts`、`views/chat/useSendHistory.ts`、`HistorySearch.tsx`，对照 Moshi；只在有精确指针的设备上，触屏没有）：每个会话在这个浏览器里记最近 100 条发出去的消息（`persona.sent.<会话>`，发送成功才记，重复的挪到最后；不上传）。
     输入框为空或正显示某条历史时，↑ 取更老的、↓ 取更新的（走过最新一条回到空框；多行的历史要光标在第一行 / 最后一行才翻，其余时候方向键归输入框）。输入框里打 Ctrl+R（Mac 也是 ⌃，⌘R 仍是刷新）在输入框上方开 `^R` 搜索面板：
     按空格拆词、每个词都要出现（不分大小写），最新在前，最多 100 条，候选来自**所有会话**的历史；↑↓ / Ctrl+R / Ctrl+P 上移，Ctrl+S / Ctrl+N 下移，Enter 或 Tab 把选中的放进输入框（不发送），Esc 或 Ctrl+G 取消；没有匹配时「没有匹配的消息」。输入法组字期间所有键都不算。输入框的悬停提示写着这两个键。
@@ -249,7 +252,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     Codex、TRAEX、runtime 的会话和助手没有。
   - 发送中的气泡把 `<jarvis-context>` 显示成引用卡片，和记录里的一样（以前会露出原始标签）。
   - 打开页面、页面回到前台时发 `seen`。
-- **Persona**：`/`（和旧的 `/j`）是主对话，`/j/new` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。
+- **Persona**：`/`（和旧的 `/j`）是主对话，`/j/new` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`；输入框能传文件到助手所在的电脑、能 @ 别的会话作为上下文，#2978，同 iOS StarterComposer），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。
   - **形象**（#433，`lib/persona.ts`、`views/assistant/Persona.tsx`，`docs/persona.md`）：hub 的 `/personas` 形象包，选哪个存在当前浏览器；用在新对话页的大图标、对话顶栏标题左边随状态变的圆点
     （状态同 iOS `personaState`，APNG 由浏览器自己播，减弱动态效果时用 canvas 画第一帧）、设置 › 助手的头部、「问 xxx…」占位符。选默认形象（或旧 hub、没有包）时每处都是原来的样子；
     形象的配色不改网页的 token。选择在设置 › 通用 › 形象和资料页。
@@ -881,6 +884,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 展示逻辑对齐 `ChatLines`：合并的交换、工作中插入、已中断、来自 X、循环唤醒 | 有 | #433 | `chatLines()` / `buildBlocks()` |
 | 交互卡片（提问 / 计划 / 授权 / 终端对话框、Codex） | 有 | — | |
 | 输入框（/ 命令、附件、建议、中断、草稿、被拒时清空并发送） | 有 | — | |
+| 输入框细节：出错停下提示和重试、/ 列表按会话能力过滤、可点的建议条、工作中「会排队发送」、一次最多 4 张图 | 有 | #2978 | 同 iOS；录音上下文、视频附件仍是手机专属 |
 | 「@」引用文件和其他会话 | 有 | #433 | 工具步骤折叠（`fold_work`）时没展开的文件不在候选里；没有全目录模糊搜索（iOS 也没有） |
 | 权限模式、思考强度 | 有 | #297 | 输入框下方两个胶囊 |
 | 会话信息 | 有 | #297 | |
@@ -907,7 +911,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 
 | 手机端的功能 | 网页 | 轮次 | 说明 |
 | --- | --- | --- | --- |
-| 新对话页（问候、设备、建议）、主对话、逐字流式 | 有 | — | |
+| 新对话页（问候、设备、建议）、主对话、逐字流式 | 有 | — | 新对话的输入框能传文件、@ 会话（#2978） |
 | 历史对话：搜索、主对话置顶、重命名、归档 / 取消归档 | 有 | #297 | `/history` |
 | 对话里切换启动器 / 模型 | 有 | #433 | 输入框下方的启动器胶囊；选择不跨刷新（iOS 也只在内存里） |
 | 定时任务、一次性跟进、运行记录 | 有 | #297 | `/routines` |

@@ -2,6 +2,7 @@
 // conversation, `/j/<id>` one of them, `/j/new` a new one-off conversation. With no main conversation yet, the first
 // message on `/` starts it.
 import { useState } from "react";
+import type { MentionSource } from "./chat/MentionMenu";
 import { api, errorText } from "../lib/api";
 import { navigate } from "../lib/router";
 import { refreshAssistant, useStore } from "../lib/store";
@@ -20,6 +21,9 @@ import { formatList, t } from "../i18n";
 const SUGGESTIONS = [t("personaassistant.suggestion_meetings"), t("personaassistant.suggestion_agents"), t("personaassistant.suggestion_lark"), t("personaassistant.suggestion_projects")];
 
 const starting = new Set<string>();
+
+// @ in a new conversation: other sessions as context; no chat yet, so no files it touched (typed / and ~ paths still browse)
+const NEW_MENTION: MentionSource = { self: "jarvis-new", files: () => [] };
 
 export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string; fresh?: boolean; onToggleSidebar: () => void }) {
   const assistant = useStore((s) => s.assistant);
@@ -98,7 +102,8 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">{t("personaassistant.empty_title")}</h1>
             <p className="mt-1.5 text-[13px] text-ink-2">{online.length ? t("personaassistant.empty_body_machines", { machines: formatList(online.map((m) => m.name), { type: "conjunction", style: "narrow" }) }) : t("personaassistant.empty_body")}</p>
           </div>
-          <Composer key={seed} draftKey="jarvis-new" placeholder={t("personaassistant.ask_placeholder", { name: persona.name })} onSend={start} autoFocus commands={[]} footer={assistant ? <StarterLauncherChip /> : undefined} />
+          {/* files go to the assistant's machine, as in its conversations (iOS StarterComposer) */}
+          <Composer key={seed} draftKey="jarvis-new" placeholder={t("personaassistant.ask_placeholder", { name: persona.name })} machineId={assistant?.machine_id} mention={NEW_MENTION} onSend={start} autoFocus commands={[]} footer={assistant ? <StarterLauncherChip /> : undefined} />
           <div className="mt-4 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {SUGGESTIONS.map((s, i) => (
               <button

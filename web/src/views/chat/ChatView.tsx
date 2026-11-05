@@ -1,7 +1,7 @@
 // One conversation: an agent in herdr on one of your computers, or a Persona assistant conversation.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
-import { ago, attentionReason, externalLink, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
+import { ago, attentionReason, externalLink, failureReason, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate, type SessionView } from "../../lib/router";
 import { canShowTerminal, otherView, useSessionView } from "../../lib/session-view";
 import { openLink } from "../../lib/links";
@@ -29,8 +29,9 @@ import { anchoredScroll, followsAgain, isScrollbarPress, jumpLabel, leavesOnKey,
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
-import { hasLoop, LOOP_TEXT } from "../../lib/loop-command";
+import { agentCommands } from "../../lib/composer-commands";
 import { PendingCards } from "./Interactions";
+import { FailureNote, showsFailureNote } from "./FailureNote";
 import { DOCK_MAX, turnStart } from "./dock";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
 import { ContextMeter } from "./ContextMeter";
@@ -509,6 +510,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const lastLine = lines[lines.length - 1];
   // 重试 on an API error card: only when it is the last thing, the agent is not working (someone may have retried already)
   const retry = useCallback(() => void deliver({ text: t("chat-chatview.continue_text"), images: [] }, uuid()), [deliver]);
+  // the failure notice 重试 was pressed on: kept here, not in the note, so it stays gone while the session goes through
+  // needs-you and back before the hub clears it (iOS ChatView @State retried)
+  const [retriedOn, setRetried] = useState<{ chat: string; reason?: string }>();
+  const retried = retriedOn?.chat === `${mid}/${sid}` ? retriedOn.reason : undefined;
   const canRetry = !readOnly && lastLine?.kind === "apiError" && state !== "working" && !outgoing && sessionCan(session, "send");
   // Claude Code's "while you were away" recap, open in full while it is the newest thing and not closed: the chat's last
   // line, in the flow with the agent's words (#1360: above the composer it covered the end of the reply)
@@ -715,18 +720,28 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         />
         {assistant && session && <CompactionStrip session={session} />}
         {session && !assistant && <AttentionNote session={session} />}
+        {session && !assistant && showsFailureNote(session, { readOnly, retried }) && (
+          <FailureNote
+            session={session}
+            onRetry={() => {
+              setRetried({ chat: `${mid}/${sid}`, reason: failureReason(session) });
+              retry();
+            }}
+          />
+        )}
         {!short && queue}
         <div ref={composerBox} className="shrink-0">
         <Composer
           draftKey={draftKey}
-          placeholder={!sessionCan(session, "send") && session?.source_kind ? t("chat-chatview.view_only") : assistant ? t("chat-chatview.ask_placeholder", { name: persona.name }) : state === "offline" ? t("chat-chatview.resume_placeholder") : t("chat-chatview.agent_placeholder")}
+          placeholder={!sessionCan(session, "send") && session?.source_kind ? t("chat-chatview.view_only") : state === "working" || state === "needs_you" ? t("chat-chatview.queue_placeholder") : assistant ? t("chat-chatview.ask_placeholder", { name: persona.name }) : state === "offline" ? t("chat-chatview.resume_placeholder") : t("chat-chatview.agent_placeholder")}
           machineId={mid}
           working={state === "working"}
+          needsYou={state === "needs_you"}
           onSend={onSend}
           disabled={!sessionCan(session, "send")}
           // Persona's conversations too, the main one included (#1467): the node stops their turn like an agent's
           onStop={sessionCan(session, "interrupt") ? interrupt : undefined}
-          commands={assistant ? [] : hasLoop(session) ? undefined : AGENT_COMMANDS.filter((c) => c.text !== LOOP_TEXT)}
+          commands={assistant ? [] : agentCommands(AGENT_COMMANDS, session)}
           suggestion={session?.suggestion}
           mention={mention}
           autoFocus

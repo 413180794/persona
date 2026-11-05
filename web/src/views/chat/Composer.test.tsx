@@ -116,3 +116,81 @@ describe("Composer image object URLs", () => {
     root = createRoot(host);
   });
 });
+
+// At most 4 pictures a message, as on iOS / Android.
+describe("Composer image cap", () => {
+  it("turns away a fifth picture from the chat", () => {
+    render("a");
+    for (let i = 0; i < 5; i++) putImage("a");
+    expect(trayImages()).toBe(4);
+  });
+
+  it("reads only the pictures that fit when several are picked", async () => {
+    render("a");
+    putImage("a");
+    act(() => {
+      const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+      const files = Array.from({ length: 5 }, (_, i) => new File(["x"], `p${i}.png`, { type: "image/png" }));
+      Object.defineProperty(input, "files", { value: files, configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    // one read at a time: settle each so the next starts
+    for (let i = 0; i < 3; i++) {
+      await act(async () => reads[i]?.({ mime: "image/png", data: btoa("png") }));
+    }
+    expect(reads.length).toBe(3);
+    expect(trayImages()).toBe(4);
+  });
+
+  it("holds when five pictures come from the chat in the same tick", () => {
+    render("a");
+    act(() => {
+      for (let i = 0; i < 5; i++) sendDraft("a", { type: "image", image: { name: "a.png", mime: "image/png", data: btoa("png") } });
+    });
+    expect(trayImages()).toBe(4);
+    expect(create).toHaveBeenCalledTimes(4);
+  });
+
+  it("counts pictures still being read when a second pick comes before they settle", async () => {
+    render("a");
+    putImage("a");
+    putImage("a");
+    putImage("a");
+    await pickFile(new File(["x"], "p1.png", { type: "image/png" }));
+    await pickFile(new File(["x"], "p2.png", { type: "image/png" }));
+    expect(reads.length).toBe(1); // the second is turned away while the first is read
+    await act(async () => reads[0]({ mime: "image/png", data: btoa("png") }));
+    expect(trayImages()).toBe(4);
+  });
+});
+
+// Claude's suggestion as a pill over the box (iOS SuggestionPill): a tap fills it in, the arrow sends it.
+describe("Composer suggestion", () => {
+  const show = (o: { working?: boolean; needsYou?: boolean; onSend?: (m: Outgoing) => Promise<boolean> } = {}) =>
+    act(() => root.render(<Composer draftKey="s" placeholder="" suggestion="跑一下测试" working={o.working} needsYou={o.needsYou} onSend={o.onSend ?? (async () => true)} />));
+  const pill = () => host.querySelector('[data-testid="composer-suggestion"]');
+
+  it("fills the box on a tap and goes away", () => {
+    show();
+    act(() => pill()!.querySelector("button")!.click());
+    expect(host.querySelector("textarea")!.value).toBe("跑一下测试");
+    expect(pill()).toBeNull();
+  });
+
+  it("sends it as it is", async () => {
+    const onSend = vi.fn(async () => true);
+    show({ onSend });
+    await act(async () => pill()!.querySelectorAll("button")[1].click());
+    expect(onSend).toHaveBeenCalledWith({ text: "跑一下测试", images: [] });
+  });
+
+  it("is not there while the agent works or something is in the box", () => {
+    show({ working: true });
+    expect(pill()).toBeNull();
+    show({ needsYou: true }); // waiting on a card: the arrow must not send into it
+    expect(pill()).toBeNull();
+    show();
+    putImage("s");
+    expect(pill()).toBeNull();
+  });
+});

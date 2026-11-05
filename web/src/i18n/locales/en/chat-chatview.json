@@ -24,6 +24,7 @@
   "ask_placeholder": "Ask {name}…",
   "resume_placeholder": "Sending a message resumes this session on the computer…",
   "agent_placeholder": "Message the agent…",
+  "queue_placeholder": "Add more (queued until it finishes)",
   "draft_title": "The input on the computer has unsent text",
   "not_now": "Not now",
   "clear_and_send": "Clear and send",

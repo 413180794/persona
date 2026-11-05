@@ -24,6 +24,7 @@ import { MentionMenu, useMentionRows, type MentionRow, type MentionSource } from
 import { HistorySearch } from "./HistorySearch";
 import { useSendHistory } from "./useSendHistory";
 import { isModelCommand, requestModelPicker } from "../../lib/model-switch";
+import { MAX_IMAGES } from "../../lib/composer-commands";
 import { t } from "../../i18n";
 
 export interface Attachment {
@@ -71,6 +72,7 @@ export function Composer({
   placeholder,
   machineId,
   working,
+  needsYou,
   disabled,
   commands = AGENT_COMMANDS,
   onSend,
@@ -85,6 +87,8 @@ export function Composer({
   placeholder: string;
   machineId?: string;
   working?: boolean;
+  /** Waits on a question, plan or approval card: no suggestion pill then (iOS status.isActive). */
+  needsYou?: boolean;
   disabled?: boolean;
   commands?: Command[];
   onSend: (m: Outgoing) => Promise<boolean>;
@@ -134,6 +138,22 @@ export function Composer({
   // after the box moved on: their object URLs are freed when they leave the box without being sent
   const attsNow = useRef(atts);
   attsNow.current = atts;
+  // pictures being read for this box, counted against MAX_IMAGES before they land
+  const reading = useRef(0);
+  const roomForImage = () => attsNow.current.length + reading.current < MAX_IMAGES;
+  // appends at once to the ref as well, so a second paste or draft image in the same tick sees it
+  const appendImage = (a: Attachment) => {
+    attsNow.current = [...attsNow.current, a];
+    setAtts((cur) => [...cur, a]);
+  };
+  // one word for the pictures turned away in the same tick (a paste of several, a burst of draft images)
+  const refusing = useRef(false);
+  const refuseImages = () => {
+    if (refusing.current) return;
+    refusing.current = true;
+    queueMicrotask(() => (refusing.current = false));
+    toast(t("chat-composer.too_many_images", { max: MAX_IMAGES }), "error");
+  };
   const keyNow = useRef(draftKey);
   keyNow.current = draftKey;
   const mounted = useRef(true);
@@ -163,7 +183,11 @@ export function Composer({
       onDraftEvent(draftKey, (e) => {
         if (!canTake.current) return;
         if (e.type === "image") {
-          setAtts((cur) => [...cur, fromDraftImage(e.image)]);
+          if (!roomForImage()) {
+            refuseImages();
+            return;
+          }
+          appendImage(fromDraftImage(e.image));
           input.current?.focus({ preventScroll: true });
           return;
         }
@@ -298,15 +322,28 @@ export function Composer({
 
   const addFiles = async (files: FileList | File[]) => {
     if (disabled) return;
+    // at most MAX_IMAGES pictures a message, as on the phone: the ones past it are turned away with a word
+    // (the count takes in pictures still being read by an earlier paste or drop)
+    let refused = false;
     for (const f of Array.from(files)) {
       if (f.type.startsWith("image/")) {
+        if (!roomForImage()) {
+          refused = true;
+          continue;
+        }
         if (f.size > MAX_IMAGE) {
           toast(t("chat-composer.image_too_large", { name: f.name }), "error");
           continue;
         }
-        const a = await readImage(f);
+        reading.current++;
+        let a: Attachment;
+        try {
+          a = await readImage(f);
+        } finally {
+          reading.current--;
+        }
         // read after the box closed or moved to another conversation: freed, not put into that one
-        if (mounted.current && keyNow.current === draftKey) setAtts((cur) => [...cur, a]);
+        if (mounted.current && keyNow.current === draftKey) appendImage(a);
         else releaseAttachments([a]);
       } else if (machineId) {
         void upload(f);
@@ -314,6 +351,7 @@ export function Composer({
         toast(t("chat-composer.images_only"), "error");
       }
     }
+    if (refused) refuseImages();
   };
 
   // a file goes to the session's machine; its path lands in the input (docs/protocol.md「发送文件」)
@@ -338,6 +376,21 @@ export function Composer({
   };
 
   const canSend = (draft.trim().length > 0 || atts.length > 0 || contexts.length > 0 || quote !== null) && !sending && !disabled;
+  // Claude's suggested next message (iOS SuggestionPill): while the box is empty and the agent waits for a message
+  // (not working, not on a card); a tap fills it
+  // in, 直接发送 sends it as it is (the node drops it once the agent works again)
+  const pill = suggestion && !draft && !atts.length && !contexts.length && !quote && !working && !needsYou && !disabled ? suggestion : null;
+  const fillSuggestion = (text: string) => {
+    setDraft(text);
+    setDismissed(true);
+    setCaret(text.length);
+    requestAnimationFrame(() => {
+      const el = input.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(text.length, text.length);
+    });
+  };
   const showStop = working && !sending && !draft.trim() && !atts.length && !contexts.length && !quote && onStop;
 
   const submit = async (text = draft) => {
@@ -431,6 +484,8 @@ export function Composer({
       {mOpen && (
         <MentionMenu rows={mRows} active={Math.min(mActive, Math.max(mRows.length - 1, 0))} loading={mLoading} browsing={Boolean(token && browseTarget(token.query, mention?.cwd))} onHover={setMActive} onPick={pickMention} />
       )}
+
+      {pill && <SuggestionPill text={pill} onFill={() => fillSuggestion(pill)} onSend={() => void submit(pill)} />}
 
       <div
         className={cx(
@@ -532,9 +587,9 @@ export function Composer({
                 return;
               }
             }
-            if (e.key === "Tab" && !draft && suggestion) {
+            if (e.key === "Tab" && pill) {
               e.preventDefault();
-              setDraft(suggestion);
+              fillSuggestion(pill);
               return;
             }
             // a touch keyboard's return is a new line there; the send button sends (a hardware keyboard with a
@@ -544,7 +599,7 @@ export function Composer({
               void submit();
             }
           }}
-          placeholder={suggestion && !draft ? t("chat-composer.suggestion", { suggestion }) : placeholder}
+          placeholder={pill && hasFinePointer() ? t("chat-composer.suggestion", { suggestion: pill }) : placeholder}
           aria-label={t("chat-composer.message")}
           title={hasFinePointer() ? t("composer.history_hint") : undefined}
           style={{ maxHeight: INPUT_MAX }}
@@ -636,6 +691,36 @@ export function Composer({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** Claude's suggestion over the box (iOS SuggestionPill): the row fills it in, the arrow sends it as it is. */
+function SuggestionPill({ text, onFill, onSend }: { text: string; onFill: () => void; onSend: () => void }) {
+  return (
+    <div data-testid="composer-suggestion" className="mb-2 flex items-center gap-1 rounded-full bg-surface p-1 pl-1 shadow-card" style={{ animation: `fade-up 200ms ${EASE} both` }}>
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onFill}
+        aria-label={t("chat-composer.suggestion_label", { suggestion: text })}
+        title={hasFinePointer() ? t("chat-composer.suggestion_use_hint") : undefined}
+        className="touch-hit flex min-w-0 flex-1 items-center gap-2 rounded-full py-1 pr-1 pl-2.5 text-left transition-colors hover:bg-hover"
+      >
+        <Icon name="sparkles" size={13} stroke={2} className="shrink-0 text-accent" />
+        <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">{text}</span>
+        <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-accent">{t("chat-composer.suggestion_use")}</span>
+      </button>
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onSend}
+        aria-label={t("chat-composer.suggestion_send")}
+        title={t("chat-composer.suggestion_send")}
+        className="touch-hit flex size-7 shrink-0 items-center justify-center rounded-full text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink active:scale-[0.94]"
+      >
+        <Icon name="send" size={14} stroke={2} />
+      </button>
     </div>
   );
 }

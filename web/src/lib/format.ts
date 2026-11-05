@@ -93,10 +93,23 @@ export function attentionReason(s: Session): string | undefined {
   return reason && stateOf(s) === "needs_you" ? reason : undefined;
 }
 
-/** The line a list row shows for it: why it waits for you when its host says so, else where its work stands when the
- *  hub triaged its turn (docs/agent-work.md), else its last words (iOS listPreview). */
+/** The line a list row shows for it: why it waits for you when its host says so, else why its host stopped it on an
+ *  error, else where its work stands when the hub triaged its turn (docs/agent-work.md), else its last words (iOS
+ *  listPreview). */
 export function sessionPreview(s: Session): string {
-  return attentionReason(s) ?? workLine(s) ?? s.last_text ?? "";
+  return attentionReason(s) ?? failureReason(s) ?? workLine(s) ?? s.last_text ?? "";
+}
+
+/** A failure notice without the warning sign botmux starts it with: the page draws its own (iOS Session.failureText). */
+export function failureText(reason: string): string {
+  return reason.trim().replace(/^[\u26A0\uFE0F\s]+/u, "").trim();
+}
+
+/** Why the host stopped the session's turn on an error it will not retry by itself (failure_reason), while the
+ *  session is not working (iOS listPreview, FailureNote); undefined otherwise. */
+export function failureReason(s: Session | undefined): string | undefined {
+  if (!s?.failure_reason || stateOf(s) === "working") return undefined;
+  return failureText(s.failure_reason) || undefined;
 }
 
 /** 在飞书打开: the session's place outside Persona, a web (https) link only (iOS externalLink). */

@@ -197,6 +197,9 @@ export interface Session {
   quiet?: boolean;
   /** Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you (docs/engines.md「botmux」). */
   attention_reason?: string;
+  /** The host stopped its turn on an error it will not retry by itself (a botmux notice), until a message goes to it:
+   *  shown over the composer with 重试 (iOS FailureNote). */
+  failure_reason?: string;
   /** Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开. */
   external_url?: string;
   /** An assistant conversation's runtime as it runs ("agentsdk"; absent: the CLI, #2455). */
