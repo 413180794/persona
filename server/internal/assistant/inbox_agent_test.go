@@ -3,14 +3,17 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 func agentHub(t *testing.T) *inboxHub {
@@ -190,8 +193,162 @@ func TestInboxAgentNoMachineFails(t *testing.T) {
 	it.Agent = &InboxAgent{State: AgentQueued, Task: "t"}
 	h.inbox.items[it.ID] = it
 	h.startInboxAgents(context.Background(), InboxAgentConfig{Enabled: true})
-	if it.Agent.State != AgentFailed || !strings.Contains(it.Agent.Error, "machine") {
+	// A definite refusal fails at once, with a localized sentence instead of the English error.
+	if it.Agent.State != AgentFailed || it.Agent.Attempts != 1 || it.Agent.Error != "没能启动，未开始处理" {
 		t.Fatalf("agent = %+v", it.Agent)
+	}
+}
+
+// definiteStartError separates refusals that cannot have started anything from failures whose result is unknown.
+func TestInboxDefiniteStartError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"no inbox machine", errNoInboxMachine, true},
+		{"no device", ErrNoDevice, true},
+		{"no machine code", &rpc.Error{Code: proto.CodeNoMachine}, true},
+		{"machine pending", &rpc.Error{Code: proto.CodeMachinePending}, true},
+		{"claude missing", &rpc.Error{Code: proto.CodeClaudeMissing}, true},
+		{"launcher missing", &rpc.Error{Code: proto.CodeLauncherMissing}, true},
+		{"node outdated", &rpc.Error{Code: proto.CodeNodeOutdated}, true},
+		{"deadline", context.DeadlineExceeded, false},
+		{"dropped", rpc.ErrDropped, false},
+		{"closed", rpc.ErrClosed, false},
+		{"offline", apierr.ErrOffline, false},
+		{"timeout code", &rpc.Error{Code: "timeout"}, false},
+		{"unreachable code", &rpc.Error{Code: "node_unreachable"}, false},
+		{"plain error", errors.New("upstream 502 bad gateway"), false},
+		{"empty code", &rpc.Error{Message: "boom"}, false},
+	}
+	for _, c := range cases {
+		if got := definiteStartError(c.err); got != c.want {
+			t.Errorf("%s: definite = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// A start whose result is unknown (a timeout) queues the item again with one more attempt and a backoff, and stores
+// no error text for the wait.
+func TestInboxAgentStartUnknownResultRetries(t *testing.T) {
+	h := agentHub(t)
+	h.f.failAssistant = context.DeadlineExceeded
+	it := actionItem("x", time.Now())
+	it.Agent = &InboxAgent{State: AgentQueued, Task: "t"}
+	h.inbox.items[it.ID] = it
+	before := time.Now()
+	h.startInboxAgents(context.Background(), InboxAgentConfig{Enabled: true})
+	a := it.Agent
+	if a.State != AgentQueued || a.Attempts != 1 || a.Error != "" || a.SessionID != "" || a.RetryAfter == nil {
+		t.Fatalf("agent = %+v", a)
+	}
+	if got := a.RetryAfter.Sub(before); got < 50*time.Second || got > 70*time.Second {
+		t.Fatalf("retry after %s, want about 1m", got)
+	}
+}
+
+// A round does not start an agent whose backoff has not passed; once it is due, the next round starts it and clears
+// the backoff.
+func TestInboxAgentRetryWaitsForBackoff(t *testing.T) {
+	h := agentHub(t)
+	it := actionItem("x", time.Now())
+	future := time.Now().Add(time.Hour)
+	it.Agent = &InboxAgent{State: AgentQueued, Task: "t", Attempts: 1, RetryAfter: &future}
+	h.inbox.items[it.ID] = it
+	h.startInboxAgents(context.Background(), InboxAgentConfig{Enabled: true})
+	if it.Agent.State != AgentQueued || h.f.sent() != 0 {
+		t.Fatalf("started before the backoff passed: %+v sends %d", it.Agent, h.f.sent())
+	}
+	past := time.Now().Add(-time.Minute)
+	it.Agent.RetryAfter = &past
+	h.startInboxAgents(context.Background(), InboxAgentConfig{Enabled: true})
+	if it.Agent.State != AgentRunning || it.Agent.Attempts != 2 || it.Agent.RetryAfter != nil || it.Agent.SessionID == "" {
+		t.Fatalf("agent = %+v", it.Agent)
+	}
+}
+
+// Three unknown results in a row (waits of about 1m and 5m) fail the item with a localized sentence, never the
+// transport error's words.
+func TestInboxAgentStartGivesUpAfterThreeAttempts(t *testing.T) {
+	h := agentHub(t)
+	h.f.failAssistant = rpc.ErrDropped
+	it := actionItem("x", time.Now())
+	it.Agent = &InboxAgent{State: AgentQueued, Task: "t"}
+	h.inbox.items[it.ID] = it
+	wantWaits := []time.Duration{time.Minute, 5 * time.Minute}
+	for attempt := 1; attempt <= inboxAgentStartMaxAttempts; attempt++ {
+		before := time.Now()
+		h.startInboxAgents(context.Background(), InboxAgentConfig{Enabled: true})
+		if attempt < inboxAgentStartMaxAttempts {
+			if it.Agent.State != AgentQueued || it.Agent.Attempts != attempt || it.Agent.RetryAfter == nil {
+				t.Fatalf("attempt %d: agent = %+v", attempt, it.Agent)
+			}
+			if got := it.Agent.RetryAfter.Sub(before); got < wantWaits[attempt-1]-10*time.Second ||
+				got > wantWaits[attempt-1]+10*time.Second {
+				t.Fatalf("attempt %d: retry after %s, want %s", attempt, got, wantWaits[attempt-1])
+			}
+			due := before // already in the past by the next round
+			it.Agent.RetryAfter = &due
+		}
+	}
+	if it.Agent.State != AgentFailed || it.Agent.Attempts != inboxAgentStartMaxAttempts {
+		t.Fatalf("agent = %+v", it.Agent)
+	}
+	if it.Agent.Error != "多次启动都没成功" || strings.Contains(strings.ToLower(it.Agent.Error), "rpc") {
+		t.Fatalf("error = %q", it.Agent.Error)
+	}
+}
+
+// A coded setup refusal (the launcher is missing) fails immediately instead of burning retries, in plain words.
+func TestInboxAgentStartRefusalFails(t *testing.T) {
+	h := agentHub(t)
+	h.f.failAssistant = &rpc.Error{Code: proto.CodeLauncherMissing, Message: "launcher foo not found in zshrc"}
+	it := actionItem("x", time.Now())
+	it.Agent = &InboxAgent{State: AgentQueued, Task: "t"}
+	h.inbox.items[it.ID] = it
+	h.startInboxAgents(context.Background(), InboxAgentConfig{Enabled: true})
+	if it.Agent.State != AgentFailed || it.Agent.Attempts != 1 || it.Agent.RetryAfter != nil {
+		t.Fatalf("agent = %+v", it.Agent)
+	}
+	if it.Agent.Error != "没能启动，未开始处理" {
+		t.Fatalf("error = %q", it.Agent.Error)
+	}
+}
+
+// An item filed (replied or done) while its start was in flight never comes back queued: the failed start marks it
+// failed, without a backoff.
+func TestInboxAgentStartFailureOnAFiledItem(t *testing.T) {
+	h := agentHub(t)
+	it := actionItem("x", time.Now())
+	it.done(time.Now(), "replied")
+	a := &InboxAgent{State: AgentRunning, Attempts: 1}
+	it.Agent = a
+	h.inbox.items[it.ID] = it
+	h.inbox.mu.Lock()
+	h.requeueAgentStart(context.Background(), a, context.DeadlineExceeded, time.Now(), it.open())
+	h.inbox.mu.Unlock()
+	if a.State != AgentFailed || a.RetryAfter != nil || a.Error != "没能启动，未开始处理" {
+		t.Fatalf("agent = %+v", a)
+	}
+}
+
+// The retry bookkeeping survives an item's JSON round-trip (stored inbox rows): a restarted manager keeps the
+// attempts and the backoff.
+func TestInboxAgentRetryFieldsPersist(t *testing.T) {
+	retryAfter := time.Now().UTC().Add(5 * time.Minute)
+	a := InboxAgent{State: AgentQueued, Attempts: 2, RetryAfter: &retryAfter}
+	raw, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got InboxAgent
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.State != AgentQueued || got.Attempts != 2 || got.RetryAfter == nil ||
+		!got.RetryAfter.Equal(retryAfter) {
+		t.Fatalf("round-trip lost the retry fields: %+v from %s", got, raw)
 	}
 }
 

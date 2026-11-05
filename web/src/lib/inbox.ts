@@ -839,15 +839,18 @@ export async function refreshInbox(): Promise<void> {
 }
 
 /** 已处理 / 移回: shown at once, sent in the background; a failure puts the item back. */
-export async function setDone(item: InboxItem, done: boolean): Promise<void> {
+/** Marks an item done or open; resolves to whether the hub took it. */
+export async function setDone(item: InboxItem, done: boolean): Promise<boolean> {
   const before = state.items.find((x) => x.id === item.id);
-  if (!before) return;
+  if (!before) return false;
   patchItem(item.id, (it) => ({ ...it, done_at: done ? new Date().toISOString() : null, done_by: done ? "user" : null }));
   try {
     await api(`${itemPath(item.id)}/done`, { method: "POST", json: { done } });
+    return true;
   } catch (e) {
     patchItem(item.id, () => before);
     toast(t(done ? "lib-inbox.done_failed" : "lib-inbox.undone_failed", { error: errorText(e) }), "error");
+    return false;
   }
 }
 

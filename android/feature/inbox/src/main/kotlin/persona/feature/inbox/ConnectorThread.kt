@@ -27,6 +27,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -289,7 +292,7 @@ private fun mediaKind(kind: String): Pair<PhIcon, Int> = when (kind) {
 }
 
 @Composable
-private fun ConnectorComposer(
+internal fun ConnectorComposer(
     text: String,
     onText: (String) -> Unit,
     replyTo: ConnectorThreadMessage?,
@@ -299,7 +302,11 @@ private fun ConnectorComposer(
     onSend: () -> Unit,
 ) {
     val palette = PersonaTheme.palette
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     ComposerFrame(
+        // Blank space around the field types too, as in the chat composer (#894, #4093).
+        onBlankTap = { if (!state.sending) { focus.requestFocus(); keyboard?.show() } },
         accessory = {
             replyStatus(state)?.let { (line, tone) -> JInlineStatus(line, Modifier.padding(bottom = Tokens.Space.s), tone = tone) }
             replyTo?.let { quoted ->
@@ -321,7 +328,7 @@ private fun ConnectorComposer(
             SendButton(onClick = onSend, enabled = text.isNotBlank() && !state.sending, loading = state.sending)
         },
     ) {
-        ComposerTextField(text, onText, stringResource(R.string.inbox_connector_placeholder), enabled = !state.sending)
+        ComposerTextField(text, onText, stringResource(R.string.inbox_connector_placeholder), Modifier.focusRequester(focus), enabled = !state.sending)
     }
 }
 

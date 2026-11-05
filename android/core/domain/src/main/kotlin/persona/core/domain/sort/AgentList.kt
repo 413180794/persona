@@ -260,13 +260,19 @@ fun buildAgentList(
                 items.groupBy(project).toList().sortedWith(compareBy<Pair<String, List<T>>> { it.first.isEmpty() }
                     .thenBy { (_, list) -> todoTreeRank(list.flatMap(members)) })
             fun projectTitle(project: String) = repoTitle(project.ifEmpty { UnnamedRepo })
-            val claimed = mutableSetOf<persona.core.contracts.SessionKey>()
+            // Each agent sits under one to-do only, as on the web (`assignedSessionKeys`): a to-do's agents list can still hold
+            // an agent the session's own `todo` (pushed with the session, so newer) already moved to another, and one row twice
+            // would repeat its list key. Unlike the web, which takes the first to-do listing it, the session's own open to-do
+            // wins here, so a moved agent shows under its new to-do at once; else the first to-do listing it.
+            val openIds = uncompletedTodos.map { it.id }.toSet()
+            val home = live.associate { row ->
+                val own = row.session.todo?.id?.takeIf { it.isNotEmpty() && it in openIds }
+                row.session.key to (own ?: uncompletedTodos.firstOrNull { todo -> todo.currentAgents.any { it.key == row.session.key } }?.id)
+            }
+            val claimed = home.filterValues { it != null }.keys
             val linked = uncompletedTodos.mapNotNull { todo ->
-                val linkedKeys = todo.currentAgents.map { it.key }.toSet()
-                val matched = live.filter { (it.session.todo?.id == todo.id && it.session.todo?.id?.isNotEmpty() == true) || it.session.key in linkedKeys }
-                if (matched.isEmpty()) return@mapNotNull null
-                claimed.addAll(matched.map { it.session.key })
-                todo to matched
+                val matched = live.filter { home[it.session.key] == todo.id }
+                if (matched.isEmpty()) null else todo to matched
             }
             byProject(linked, { (_, rows) -> todoProjectOf(rows.map { it.session.cwd }) }, { it.second }).forEach { (project, inProject) ->
                 val id = TodoProjectPrefix + project.ifEmpty { "-" }

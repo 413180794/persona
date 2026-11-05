@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -497,7 +498,19 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 		c.mu.Unlock()
 		return false
 	}
+	// A question ask can sit at its final step while it is otherwise still pending: after a crash between ReadAnswer
+	// and its resolve, or while the final resolve is still in flight. ReadAnswer only says "answer it in the app"
+	// there, so step its last question back first, letting this reply finish it.
+	if a.Kind == proto.IxQuestion && a.Step == len(a.Questions) {
+		rewindLastAnswer(a)
+	}
 	r, done, again := channel.ReadAnswer(l, a, text)
+	if done && r.Answers != nil {
+		// ReadAnswer returns the ask's own Answers map by reference. The resolve runs without the channel lock and
+		// marshals this map for the hub call, while another reply could meanwhile heal or rewind the same ask; detach
+		// the resolution's copy here under the lock so the two never touch the same map concurrently.
+		r.Answers = maps.Clone(r.Answers)
+	}
 	s.saveChannelStateLocked()
 	c.mu.Unlock()
 	reply := func(t string) { _ = s.channelTell(ctx, id, m.ID, t, channel.OutNote) }
@@ -511,10 +524,18 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 	}
 	ok, err := s.resolveInteraction(ctx, a.ID, r, action)
 	c.mu.Lock()
-	c.st.Asks = slices.DeleteFunc(c.st.Asks, func(x *channel.Ask) bool { return x.ID == a.ID })
+	if err == nil {
+		c.st.Asks = slices.DeleteFunc(c.st.Asks, func(x *channel.Ask) bool { return x.ID == a.ID })
+	} else {
+		// The answer never reached the hub: keep the ask so the owner can send it again, instead of losing a
+		// multi-question ask's answers so far. ReadAnswer took its last question's answer and moved Step on;
+		// step back so the re-sent reply answers that same question again.
+		rewindLastAnswer(a)
+	}
 	left := 0
 	for _, x := range c.st.Asks {
-		if x.Channel == id {
+		// On a failed resolve this ask is still in the list and is the one the note is about: it is not "more".
+		if x.Channel == id && x.ID != a.ID {
 			left++
 		}
 	}
@@ -522,7 +543,7 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 	c.mu.Unlock()
 	switch {
 	case err != nil:
-		reply(i18n.T(l, "assistant-channels_plugin.not_answered", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
+		reply(i18n.T(l, "assistant-channels_plugin.answer_not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
 	case !ok:
 		reply(i18n.T(l, "assistant-channels_plugin.answered_elsewhere"))
 	default:
@@ -542,6 +563,17 @@ func (s *Service) resolveInteraction(ctx context.Context, id string, r proto.Res
 	}
 	err := s.appCall(ctx, AppInteractions, InteractionsResolve, map[string]any{"interaction_id": id, "resolution": r, "action": action}, &res)
 	return res.OK, err
+}
+
+// rewindLastAnswer undoes the answer ReadAnswer just took on the last question of a question ask, so a reply re-sent
+// after a failed resolve answers that question again (and the answers given before it are kept). Other ask kinds
+// record no per-question progress.
+func rewindLastAnswer(a *channel.Ask) {
+	if a.Kind != proto.IxQuestion || a.Step == 0 || a.Step > len(a.Questions) {
+		return
+	}
+	delete(a.Answers, a.Questions[a.Step-1].Question)
+	a.Step--
 }
 
 // --- pushes and the sync mirror ---

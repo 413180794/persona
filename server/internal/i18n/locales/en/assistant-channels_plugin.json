@@ -17,7 +17,7 @@
   "chat_gone": "That chat is gone. Send /main to go back to the main chat",
   "save_file": "Save the file to {machine}: ",
   "not_started": "Couldn't start a new chat: ",
-  "not_answered": "Couldn't answer: {error}",
+  "answer_not_sent": "Your last reply didn't go through: {error}\nIt's still waiting for your reply — just send the same answer again.",
   "answered_elsewhere": "This was already handled elsewhere.",
   "more_waiting_one": "{count} more waiting for your reply; the latest is the second-to-last message above.",
   "more_waiting_other": "{count} more waiting for your reply; the latest is the second-to-last message above.",

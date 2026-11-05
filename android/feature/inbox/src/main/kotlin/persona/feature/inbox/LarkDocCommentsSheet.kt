@@ -8,6 +8,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -128,7 +131,7 @@ private fun LarkDocReplyRow(reply: LarkDocCommentReply) {
 
 /** The box: where it goes (回复 某某 / 评论这段, × back to the whole document), @ suggestions, what went wrong. */
 @Composable
-private fun LarkDocCommentComposer(model: LarkDocCommentsModel, run: (suspend () -> Unit) -> Unit) {
+internal fun LarkDocCommentComposer(model: LarkDocCommentsModel, run: (suspend () -> Unit) -> Unit) {
     val palette = PersonaTheme.palette
     val query = larkDocMentionQuery(model.draft)
     var people by remember { mutableStateOf<List<LarkDocPerson>>(emptyList()) }
@@ -139,7 +142,10 @@ private fun LarkDocCommentComposer(model: LarkDocCommentsModel, run: (suspend ()
         people = try { model.people(query).take(5) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
     }
     val target = model.target
-    ComposerFrame(Modifier.imePadding(), accessory = {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Blank space around the field types too, as in the chat composer (#894, #4093).
+    ComposerFrame(Modifier.imePadding(), onBlankTap = { if (!model.sending) { focus.requestFocus(); keyboard?.show() } }, accessory = {
         when (target) {
             is LarkDocCommentTarget.Thread -> LarkDocTargetBar(stringResource(R.string.inbox_lark_doc_comments_replying_to, target.name), target.text,
                 stringResource(R.string.inbox_lark_doc_comments_cancel_reply)) { model.target = LarkDocCommentTarget.Document }
@@ -164,7 +170,7 @@ private fun LarkDocCommentComposer(model: LarkDocCommentsModel, run: (suspend ()
             LarkDocCommentTarget.Document -> R.string.inbox_lark_doc_comments_placeholder_document
             is LarkDocCommentTarget.Thread -> R.string.inbox_lark_doc_comments_placeholder_reply
             is LarkDocCommentTarget.Passage -> R.string.inbox_lark_doc_comments_placeholder_passage
-        }), Modifier.testTag("docComments.box"), enabled = !model.sending)
+        }), Modifier.testTag("docComments.box").focusRequester(focus), enabled = !model.sending)
     }
 }
 

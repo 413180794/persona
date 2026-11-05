@@ -19,6 +19,7 @@ import { errorText } from "../../lib/api";
 import { contextMenuProps } from "../../ui/context-menu";
 import type { MenuAt } from "../../ui/menu-model";
 import { Icon } from "../../ui/icons";
+import { isNoHover } from "../../ui/media-query";
 import { DraftDialog } from "./InboxDialogs";
 import { TriageBanner } from "./TriageBanner";
 import { AgentWorking, Chip, Count, DraftCard, Glyph, ItemAvatar, Spark, StatusMenu, Tag, type GlyphName } from "./InboxParts";
@@ -232,6 +233,16 @@ function Section({ k, title, count, open, onToggle, action, children }: { k: Tie
   );
 }
 
+/** Room for the row's 已处理 check, always shown on a touch screen (#4141), right of the time. */
+const TOUCH_DONE_ROOM = "[@media(hover:none)]:mr-8";
+
+/** The row's 已处理 / 移回: on a touch screen marking done says so with 撤销, since a tap there can be a slip. */
+export async function markFromRow(it: InboxItem, done: boolean, touch = isNoHover()): Promise<void> {
+  // after the request: 撤销 cannot race it, and a failure shows its own error instead of this
+  const ok = await setDone(it, done);
+  if (ok && done && touch) toast(t("inbox-inboxlist.marked_done"), "ok", { label: t("lib-inbox.undo"), run: () => void setDone(it, false) });
+}
+
 function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selected: boolean; showAccount: boolean; onEdit: () => void }) {
   const to = { name: "inbox", id: it.id } as const;
   const done = isDone(it);
@@ -255,9 +266,10 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
             {translated && <span role="img" aria-label={t("inbox-inboxlist.translated")} title={t("inbox-inboxlist.translated")} className="shrink-0 text-ink-3"><Icon name="translate" size={12} /></span>}
             {label && <Tag urgent={labelIsUrgent(it)}>{label}</Tag>}
             <span className="flex-1" />
-            <span className="shrink-0 text-[11.5px] text-ink-3 tabular-nums group-focus-within:invisible group-hover:invisible">{shortTime(it.updated_at)}</span>
+            <span className={cx("shrink-0 text-[11.5px] text-ink-3 tabular-nums group-focus-within:invisible group-hover:invisible", TOUCH_DONE_ROOM)}>{shortTime(it.updated_at)}</span>
           </span>
-          <span className="mt-0.5 flex items-start gap-2">
+          {/* on a touch screen the check's 44 pt tap area reaches this line: keep the summary and count clear of it */}
+          <span className="mt-0.5 flex items-start gap-2 [@media(hover:none)]:pr-8">
             <span className="min-w-0 flex-1">
               {it.summary ? (
                 <>
@@ -287,14 +299,17 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
           {working && <AgentWorking it={it} />}
         </div>
       )}
+      {/* Shown on hover with a mouse; on a touch screen (no hover, #4141) always there as a check beside the time, so an
+          item is marked without opening it, with 撤销 in the toast in case the tap was a slip. */}
       <button
         type="button"
-        onClick={() => void setDone(it, !done)}
-        className="absolute top-2.5 right-2.5 flex h-6 items-center gap-1 rounded-[7px] bg-surface px-2 text-[11.5px] font-medium whitespace-nowrap text-ink-2 opacity-0 shadow-btn transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100"
+        onClick={() => void markFromRow(it, !done)}
+        aria-label={done ? t("inbox-inboxlist.move_back_title") : t("inbox-inboxlist.mark_done_title")}
+        className="touch-hit absolute top-2.5 right-2.5 flex h-6 items-center gap-1 rounded-[7px] bg-surface px-2 text-[11.5px] font-medium whitespace-nowrap text-ink-2 opacity-0 shadow-btn transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:w-6 [@media(hover:none)]:justify-center [@media(hover:none)]:px-0 [@media(hover:none)]:opacity-100"
         title={done ? t("inbox-inboxlist.move_back_title") : t("inbox-inboxlist.mark_done_title")}
       >
         {done ? <Glyph name="undo" size={12} stroke={2.2} /> : <Icon name="check" size={12} stroke={2.6} />}
-        {done ? t("inbox-inboxlist.move_back") : t("inbox-inboxlist.done")}
+        <span className="[@media(hover:none)]:hidden">{done ? t("inbox-inboxlist.move_back") : t("inbox-inboxlist.done")}</span>
       </button>
       {menu && <Menu anchor={menu.anchor ?? null} point={menu.point} onClose={() => setMenu(null)} width={224} items={rowMenu(it, done)} />}
     </div>

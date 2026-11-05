@@ -657,6 +657,11 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 		}
 	}
 	p.mu.Unlock()
+	if collapseID == "" {
+		// One id for this push, kept by every retry (sendDirect, postRelayRetrying): a push APNs took whose answer was
+		// lost shows once, not twice (#4158). Each push gets its own, so different ones do not replace each other.
+		collapseID = "p_" + randomHex(8)
+	}
 	devices := reachable[:0]
 	for _, d := range reachable {
 		if to == nil || to(d) {
@@ -686,6 +691,8 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 				fitted := maps.Clone(b.payload)
 				if body, err := fitAlert(fitted, apnsMaxAlert); err == nil {
 					b.body = body
+				} else {
+					p.logf("apns: %s push of %d bytes does not fit even shortened: %v", pushType, len(b.body), err)
 				}
 			}
 			byLang[lang] = b

@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.update
 import persona.core.contracts.api.AgentTriage
 import persona.core.contracts.api.TriageSwitches
 import persona.core.contracts.api.TriageUnsupported
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 
 internal data class TriageSettingsState(
     /** The hub's switches; null until read (the switches wait, greyed). */
@@ -35,8 +35,8 @@ internal class TriageSettingsModel(private val api: AgentTriage) {
             val read = api.switches()
             mutable.update { it.copy(switches = read, readError = null, unsupported = false) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: TriageUnsupported) { mutable.update { it.copy(unsupported = true, readError = ResText.of(R.string.settings_triage_read_failed, failureReason(error))) } }
-        catch (error: Exception) { mutable.update { it.copy(readError = ResText.of(R.string.settings_triage_read_failed, failureReason(error))) } }
+        catch (error: TriageUnsupported) { mutable.update { it.copy(unsupported = true, readError = ResText.of(R.string.settings_triage_read_failed, failureReasonText(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(readError = ResText.of(R.string.settings_triage_read_failed, failureReasonText(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -51,7 +51,7 @@ internal class TriageSettingsModel(private val api: AgentTriage) {
             mutable.update { it.copy(switches = before.switches) }
             throw cancelled
         } catch (error: Exception) {
-            mutable.update { it.copy(switches = before.switches, saveError = ResText.of(R.string.settings_triage_save_failed, failureReason(error))) }
+            mutable.update { it.copy(switches = before.switches, saveError = ResText.of(R.string.settings_triage_save_failed, failureReasonText(error))) }
         } finally { mutable.update { it.copy(busy = false) } }
     }
 }

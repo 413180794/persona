@@ -4,6 +4,10 @@ import persona.core.designsystem.*
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
 import persona.core.contracts.api.MailReplyTarget
@@ -265,7 +269,11 @@ internal fun ReplyComposerField(
     sendEnabled: Boolean = true,
     accessory: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     ComposerFrame(modifier,
+        // Blank space around the field types too, as in the chat composer (#894, #4093).
+        onBlankTap = { if (state.canEdit) { focus.requestFocus(); keyboard?.show() } },
         accessory = {
             accessory?.invoke(this)
             ReplyStatus(state)
@@ -281,6 +289,6 @@ internal fun ReplyComposerField(
                     state.delivery !in setOf(ReplyDelivery.Queued, ReplyDelivery.WaitingForNetwork, ReplyDelivery.Verifying))
         },
         field = {
-            ComposerTextField(state.draft.text, onUpdate, placeholder, enabled = state.canEdit)
+            ComposerTextField(state.draft.text, onUpdate, placeholder, Modifier.focusRequester(focus), enabled = state.canEdit)
         })
 }

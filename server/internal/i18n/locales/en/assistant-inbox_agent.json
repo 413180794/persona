@@ -1,4 +1,6 @@
 {
   "timeout": "Timed out without a draft",
-  "no_draft": "Finished without a draft"
+  "no_draft": "Finished without a draft",
+  "start_failed": "Could not start, so it was not handled",
+  "start_gave_up": "Could not start after retrying"
 }

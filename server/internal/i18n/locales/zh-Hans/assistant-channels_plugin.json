@@ -17,7 +17,7 @@
   "chat_gone": "那段对话不见了：发 /main 回到主对话",
   "save_file": "把文件存到 {machine}：",
   "not_started": "没开成新对话：",
-  "not_answered": "没答上：{error}",
+  "answer_not_sent": "刚那条没交上去：{error}\n它还在等你回复，把答案原样再发一次就行。",
   "answered_elsewhere": "这个已经在别处处理过了。",
   "more_waiting_one": "还有 {count} 个在等你回复，最近的那个是上面倒数第二条。",
   "more_waiting_other": "还有 {count} 个在等你回复，最近的那个是上面倒数第二条。",

@@ -172,6 +172,32 @@ class TodoDataTest {
     }
 
     @Test
+    fun anAgentSitsUnderOneTodoOnly() {
+        // t1's agents list still holds a1 while the session itself already moved to t2 (the session push came first).
+        val t1 = Todo(id = "t1", title = "Todo 1", createdAt = "2026-11-02T10:00:00Z", agents = listOf(todoAgent("a1"), todoAgent("a2")))
+        val t2 = Todo(id = "t2", title = "Todo 2", createdAt = "2026-11-02T09:00:00Z", agents = listOf(todoAgent("a3")))
+        val tDone = Todo(id = "t3", title = "Todo 3", doneAt = "2026-11-02T11:00:00Z")
+        val moved = AgentSession(s("a1", "needs_you", todoId = "t2"))
+        // Listed by two to-dos and on none itself: the first in the list's to-do order (t1, then t2).
+        val listedTwice = AgentSession(s("a2", "working"))
+        // Its own to-do is done: it goes by the agents lists (t2 lists a3).
+        val onDone = AgentSession(s("a3", "working", todoId = "t3"))
+        val t2Again = t2.copy(agents = t2.agents + todoAgent("a2"))
+        val result = buildAgentList(listOf(moved, listedTwice, onDone), settings = AgentListSettings(grouping = AgentGrouping.Todo),
+            todos = listOf(t1, t2Again, tDone))
+        // t1 comes first: its listed a1 needs you, which ranks the to-do before t2's working agents.
+        val todoIds = result.groups.map { it.id }.filter { it == "todo/t1" || it == "todo/t2" }
+        assertEquals(listOf("todo/t1", "todo/t2"), todoIds)
+        val rows = result.groups.flatMap { it.rows }.map { it.session.sessionId }
+        assertEquals(rows.distinct(), rows)
+        val byGroup = result.groups.filter { it.id.startsWith("todo/") }.associate { it.id to it.rows.map { r -> r.session.sessionId }.toSet() }
+        assertEquals(setOf("a1", "a3"), byGroup["todo/t2"])
+        assertEquals(setOf("a2"), byGroup["todo/t1"])
+        // The project heading counts the agent waiting for you once.
+        assertEquals(1, result.groups.filter { it.id.startsWith(TodoProjectPrefix) }.sumOf { it.stateCounts?.get(AgentState.NeedsYou) ?: 0 })
+    }
+
+    @Test
     fun todoJsonDecodeFromHubResponse() {
         val createOrPatchResp = """
             {

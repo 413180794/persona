@@ -52,10 +52,10 @@
 手机和网页那边全程不用终端；给电脑装 Claude Code、接一台 Linux 电脑时还会用到，到时候也只是粘贴一行。
 
 1. 在要当 hub 的电脑上打开「终端」。Mac：按 Command + 空格，输入「终端」，回车。Linux：在应用列表里找「终端」。
-2. 打开 Persona 官网 [personaside.com](https://personaside.com)，复制首页「hub」那一栏的命令，粘贴进终端，回车。命令长这样：
+2. 打开 Persona 官网，复制首页「hub」那一栏的命令，粘贴进终端，回车。命令长这样：
 
    ```sh
-   curl -fsSL https://personaside.com/install.sh | sh -s -- --hub
+   curl -fsSL <官网地址>/install.sh | sh -s -- --hub
    ```
 
 3. 它会一步一步装：下载并核对程序、准备数据库、设成开机自动运行、检查一遍。每做完一步打一行中文。

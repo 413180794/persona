@@ -12,6 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // The inbox's AI 分身 (docs/inbox.md): model 1 triages every new item (inbox_triage.go), model 2 decides which of
@@ -46,6 +47,20 @@ const (
 	AgentFailed  = "failed"
 )
 
+// inboxAgentStartWait bounds one assistant.send: the node builds the conversation before it answers, which can take
+// a while on a waking machine, so a timeout leaves the result unknown (the session may exist on the node).
+var inboxAgentStartWait = 110 * time.Second
+
+// inboxAgentStartMaxAttempts bounds starts whose result was unknown: the first try plus two retries.
+const inboxAgentStartMaxAttempts = 3
+
+// inboxAgentStartBackoff is the wait before the second and third starts, indexed by attempts already made minus one.
+// The waits are covered by the hub's inbox rounds (it starts queued agents on every round, a couple of minutes).
+var inboxAgentStartBackoff = []time.Duration{time.Minute, 5 * time.Minute}
+
+// errNoInboxMachine is the definite "no computer can run the inbox agent" refusal before any node call.
+var errNoInboxMachine = errors.New("no machine for the inbox agent")
+
 // InboxAgent is the AI 分身's work on one item.
 type InboxAgent struct {
 	State     string `json:"state"`
@@ -64,6 +79,15 @@ type InboxAgent struct {
 	TodoID    string     `json:"todo_id,omitempty"`
 	StartedAt *time.Time `json:"started_at,omitempty"`
 	DraftedAt *time.Time `json:"drafted_at,omitempty"`
+	// Attempts is how many starts were made; RetryAfter keeps a queued agent whose last start's result was unknown
+	// out of the next rounds until the backoff passed.
+	Attempts   int        `json:"attempts,omitempty"`
+	RetryAfter *time.Time `json:"retry_after,omitempty"`
+}
+
+// startDue says a queued agent waits for no backoff (a fresh judge's agent has no RetryAfter).
+func (a *InboxAgent) startDue(now time.Time) bool {
+	return a.RetryAfter == nil || !a.RetryAfter.After(now)
 }
 
 // handInbox is one pass of models 2 and 3: settle agents that finished or hung, judge newly triaged 需要你 items,
@@ -156,6 +180,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		linked[t.ID] = &t
 	}
 	owner := s.owner(ctx)
+	now := time.Now().UTC()
 	b.mu.Lock()
 	running := 0
 	var queued []*InboxItem
@@ -166,7 +191,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		switch {
 		case it.Agent.State == AgentRunning:
 			running++
-		case it.Agent.State == AgentQueued && it.open():
+		case it.Agent.State == AgentQueued && it.open() && it.Agent.startDue(now):
 			queued = append(queued, it)
 		}
 	}
@@ -178,10 +203,9 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		prompt func(*prompts.KBContext) string
 	}
 	jobs := make([]job, 0, len(queued))
-	now := time.Now().UTC()
 	larkDefault := max(b.larkAccount, 1)
 	for _, it := range queued {
-		it.Agent.State, it.Agent.StartedAt = AgentRunning, &now
+		it.Agent.State, it.Agent.StartedAt, it.Agent.Attempts, it.Agent.RetryAfter = AgentRunning, &now, it.Agent.Attempts+1, nil
 		a := b.inboxAgentFor(it, owner, linked[it.Agent.TodoID], larkDefault)
 		jobs = append(jobs, job{it, kbChatOf(it), func(kbc *prompts.KBContext) string { a.KB = kbc; return prompts.RenderInboxAgent(a) }})
 	}
@@ -191,13 +215,14 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		if j.chat != "" {
 			kbc = s.kbChatContext(ctx, j.chat)
 		}
-		cctx, cancel := context.WithTimeout(ctx, 110*time.Second)
+		cctx, cancel := context.WithTimeout(ctx, inboxAgentStartWait)
 		machineID, sessionID, err := s.startInboxAgent(cctx, cfg, j.it, j.prompt(kbc))
 		cancel()
 		b.mu.Lock()
 		if a := j.it.Agent; a != nil && a.State == AgentRunning && a.SessionID == "" {
 			if err != nil {
-				a.State, a.Error = AgentFailed, clip(oneLine(err.Error()), 200)
+				// The item may have been replied to or filed while the start was in flight: it never queues again.
+				s.requeueAgentStart(ctx, a, err, time.Now().UTC(), j.it.open())
 				s.logf("inbox: agent for %s: %v", j.it.ID, err)
 			} else {
 				a.MachineID, a.SessionID = machineID, sessionID
@@ -230,7 +255,7 @@ func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, it 
 		machine = cfg.Machine
 	}
 	if _, ok := s.device(ctx, machine); !ok || machine == "" {
-		return "", "", errors.New("no machine for the inbox agent")
+		return "", "", errNoInboxMachine
 	}
 	sess, err := s.Start(ctx, StartParams{Text: prompt, Purpose: purposeAgent, MachineID: machine, Untitled: true, Origin: OriginInbox,
 		OriginRef: it.ID})
@@ -240,6 +265,47 @@ func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, it 
 	// 「MMDD | 收件箱 | the item's title」 from the start, not its prompt's first line (#3264).
 	s.titleFixed(sess.MachineID, sess.SessionID, time.Now(), titleInbox, it.Title)
 	return sess.MachineID, sess.SessionID, nil
+}
+
+// definiteStartError says a start refusal means nothing began on the node and a retry cannot help: no computer
+// (before the call or the hub's no_device answer), a computer still pending confirmation, Claude Code or the
+// launcher missing, or a node that must be updated first. Anything else (a timeout, a dropped RPC, an offline or
+// waking machine, an unknown error) leaves the result unknown and is retried.
+func definiteStartError(err error) bool {
+	if errors.Is(err, errNoInboxMachine) || errors.Is(err, ErrNoDevice) {
+		return true
+	}
+	var re *rpc.Error
+	if errors.As(err, &re) {
+		switch re.Code {
+		case proto.CodeNoMachine, proto.CodeMachinePending, proto.CodeClaudeMissing,
+			proto.CodeLauncherMissing, proto.CodeNodeOutdated:
+			return true
+		}
+	}
+	return false
+}
+
+// requeueAgentStart settles an agent whose start answered without a conversation. A definite refusal fails it at
+// once; an unknown result queues it again with backoff until the attempts are spent, then fails it. canRetry is
+// false for an item settled (replied or filed) while the start was in flight: it must not come back queued. Either
+// way the item keeps a localized plain sentence, never the error's own words. The caller holds the inbox lock.
+func (s *Service) requeueAgentStart(ctx context.Context, a *InboxAgent, err error, now time.Time, canRetry bool) {
+	definite := definiteStartError(err)
+	a.MachineID, a.SessionID, a.StartedAt, a.Error = "", "", nil, ""
+	if !definite && canRetry && a.Attempts < inboxAgentStartMaxAttempts {
+		i := min(a.Attempts-1, len(inboxAgentStartBackoff)-1)
+		at := now.Add(inboxAgentStartBackoff[i])
+		a.State, a.RetryAfter = AgentQueued, &at
+		return
+	}
+	a.RetryAfter = nil
+	a.State = AgentFailed
+	if !definite && canRetry { // retried until the attempts were spent
+		a.Error = i18n.T(s.lang(ctx), "assistant-inbox_agent.start_gave_up")
+	} else {
+		a.Error = i18n.T(s.lang(ctx), "assistant-inbox_agent.start_failed")
+	}
 }
 
 // sweepInboxAgents fails agents that ended their turn without a draft, or ran past the timeout.
