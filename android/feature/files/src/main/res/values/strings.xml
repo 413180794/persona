@@ -92,6 +92,11 @@
     <string name="files_git_part_cut">Change too large to bring back</string>
     <string name="files_git_part_cut_message">The commit\'s diff is over 512 KB, and this file comes after the cut.</string>
     <string name="files_git_synced">Up to date</string>
+    <string name="files_git_pull">Pull</string>
+    <string name="files_git_pull_behind">Pull %1$d</string>
+    <string name="files_git_pulling">Pulling</string>
+    <string name="files_git_pulled">Pulled the latest code</string>
+    <string name="files_git_pull_current">Already up to date</string>
     <string name="files_sheet_no_content">The file\'s contents didn\'t come through</string>
     <string name="files_sheet_incomplete">The file\'s contents are incomplete</string>
     <string name="files_sheet_failed">Can\'t show this table</string>
@@ -151,6 +156,10 @@
     <plurals name="files_time_days_ago">
         <item quantity="one">%1$d day ago</item>
         <item quantity="other">%1$d days ago</item>
+    </plurals>
+    <plurals name="files_git_behind_commits">
+        <item quantity="one">%1$d commit behind</item>
+        <item quantity="other">%1$d commits behind</item>
     </plurals>
     <plurals name="files_git_file_count">
         <item quantity="one">%1$d file</item>

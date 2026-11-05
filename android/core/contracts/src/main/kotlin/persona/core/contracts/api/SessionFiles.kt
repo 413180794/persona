@@ -23,7 +23,15 @@ interface SessionFiles {
      */
     suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File): Long =
         throw UnsupportedOperationException("download")
+    /**
+     * `POST …/git/pull`: a fast-forward pull of the working tree's branch from its upstream (docs/protocol.md); the
+     * hub refuses a diverged branch, local changes, no upstream or a failed sign-in, with its reason.
+     */
+    suspend fun pull(machineId: String, cwd: String): SessionGitPull = throw UnsupportedOperationException("pull")
 }
+
+/** What a pull did: the repository's status after it, and whether it brought anything. */
+@Serializable data class SessionGitPull(val status: SessionGitStatus, val updated: Boolean = false)
 
 /** `GET /api/v1/machines/{id}/stat`: each path as asked, `file`, `dir`, `denied` (macOS keeps it from the node) or `missing`. */
 @Serializable data class SessionPathStats(val stats: List<SessionPathStat> = emptyList())

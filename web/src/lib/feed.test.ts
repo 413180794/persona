@@ -14,12 +14,14 @@ import {
   retryKey,
   retryTask,
   sendMessage,
+  sendRouted,
   setRoute,
   startFailure,
   type FeedItem,
   type TaskPlan,
 } from "./feed";
 import { getPanel, openPanel } from "./panel";
+import { refreshTodos } from "./store";
 import type { Todo } from "./todos";
 import type { ChatLine, Segment } from "./turns";
 import type { Item } from "./types";
@@ -160,6 +162,67 @@ describe("a task whose agent did not start (#1077, #1142)", () => {
       expect(ask.mock.calls[0][0]).toContain("Agents 页");
       expect(fetcher.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true);
     });
+  });
+});
+
+describe("routing the next message to a task", () => {
+  const ok = () => ({ ok: true, status: 200, text: async () => "{}" });
+  afterEach(() => vi.unstubAllGlobals());
+  // A route is only ever set from a task's card, so the task is in the store.
+  const tasks = async (...ids: string[]) => {
+    const todos = ids.map((id) => ({ id, title: id, created_at: ago(1), updated_at: ago(1), origin: "c1", agents: [] }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify({ todos }) }));
+    vi.stubGlobal("localStorage", { getItem: () => "test" });
+    await refreshTodos();
+  };
+
+  it("keeps the route after a 503 so the retry still goes to the task", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503, text: async () => JSON.stringify({ error: "temporarily unavailable" }) })
+      .mockResolvedValueOnce(ok());
+    await tasks("task-one");
+    vi.stubGlobal("fetch", fetcher);
+    setRoute("route-retry", "task-one");
+
+    await expect(sendRouted("route-retry", "继续")).rejects.toThrow("temporarily unavailable");
+    expect(getFeedState().routes["route-retry"]).toBe("task-one");
+    expect(await sendRouted("route-retry", "继续")).toBe(true);
+    expect(getFeedState().routes["route-retry"]).toBeUndefined();
+    expect(fetcher.mock.calls.map(([url, init]) => [url, JSON.parse(init.body)])).toEqual([
+      ["/api/v1/assistant/conversations/route-retry/route", { todo_id: "task-one", text: "继续" }],
+      ["/api/v1/assistant/conversations/route-retry/route", { todo_id: "task-one", text: "继续" }],
+    ]);
+  });
+
+  it("keeps a different route chosen while the previous message is being sent", async () => {
+    let answer!: (value: ReturnType<typeof ok>) => void;
+    const fetcher = vi.fn().mockReturnValueOnce(new Promise<ReturnType<typeof ok>>((resolve) => { answer = resolve; }));
+    await tasks("task-one", "task-two");
+    vi.stubGlobal("fetch", fetcher);
+    setRoute("route-switch", "task-one");
+
+    const sending = sendRouted("route-switch", "继续");
+    setRoute("route-switch", "task-two");
+    answer(ok());
+    expect(await sending).toBe(true);
+    expect(getFeedState().routes["route-switch"]).toBe("task-two");
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ todo_id: "task-one", text: "继续" });
+    setRoute("route-switch", null);
+  });
+
+  it("gives the conversation back to Persona once the kept task is gone", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 409, text: async () => JSON.stringify({ error: "这个任务没有在跑的 Agent" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify({ todos: [] }) });
+    await tasks("task-gone");
+    vi.stubGlobal("fetch", fetcher);
+    setRoute("route-gone", "task-gone");
+
+    await expect(sendRouted("route-gone", "继续")).rejects.toThrow("这个任务没有在跑的 Agent");
+    await refreshTodos(); // removed elsewhere: the hub's list no longer has it, so its chip is not drawn
+    expect(await sendRouted("route-gone", "继续")).toBe(false);
+    expect(getFeedState().routes["route-gone"]).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
 

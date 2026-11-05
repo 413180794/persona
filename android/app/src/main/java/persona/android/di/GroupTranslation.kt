@@ -313,6 +313,7 @@ internal fun SessionFiles.inGroup(names: GroupNames): SessionFiles {
         override suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean) =
             source.diff(names.rawMachine(machineId), cwd, path, staged)
         override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int) = source.log(names.rawMachine(machineId), cwd, skip, limit)
+        override suspend fun pull(machineId: String, cwd: String) = source.pull(names.rawMachine(machineId), cwd)
         override suspend fun show(machineId: String, cwd: String, hash: String) = source.show(names.rawMachine(machineId), cwd, hash)
         override suspend fun stat(machineId: String, cwd: String, paths: List<String>) = source.stat(names.rawMachine(machineId), cwd, paths)
         override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File) =

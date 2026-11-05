@@ -10,7 +10,14 @@ cd apple && xcodegen generate -q && ~/.local/bin/xcode-slot xcodebuild -project 
 ./scripts/app/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
 cd apple/Packages/PersonaKit && swift test                             # PersonaKit 的单测：在 Mac 上直接跑，不编 App、不开模拟器
 python3 -B scripts/test/test_sim_boot.py                               # sim-boot.sh（假的 xcrun / simslim，不开模拟器）
+for f in scripts/*/test_*.py; do (cd "$(dirname "$f")" && python3 -B -m unittest -q "$(basename "$f" .py)") || echo "FAIL $f"; done   # scripts/ 的全部 Python 测试
 ```
+
+`scripts/` 下的 `test_*.py` 每个 PR 都由 CI 的「Scripts tests」（`.github/workflows/scripts-tests.yml`，job `scripts/ unittest suites`）在 Linux 上逐个从所在目录跑一遍，任一失败即红（#3011）；Linux 上整轮约 90 秒，只在 Mac 上有意义的自己 skip。新加的测试放在 `scripts/<子目录>/test_*.py` 就会被带上。
+
+服务端的 `go vet ./...` 和 `go test -count=1 ./...` 在 Linux 上由 CI 跑（`.github/workflows/server-test.yml`）：只在 PR 改到服务端会读的路径时触发
+（`server/`、`sdk/go/`、`spec/fixtures/`、`schema/extension/`、`integrations/` 等，清单在 workflow 里），同一分支的新推送会取消还在跑的旧任务。
+服务端测试新读了仓库里别的文件，要把路径加进这份清单。CI 里没有 Postgres，依赖数据库的测试没有 `JARVIS_TEST_DATABASE_URL` 会跳过，照旧靠 `scripts/test/test-server.sh` 在 hub 机器上跑。
 
 **PersonaKit**（`apple/Packages/PersonaKit`，#2095）：App 里不碰界面的逻辑挪进这个包，它的测试用 `swift test` 在 Mac 上跑，冷的约 10 秒、
 改一个文件后约 2 秒（同样的测试经 `PersonaTests` 跑，冷的约 140 秒、改一个文件后约 45 秒：要编整个 App、起模拟器）。改了包里的代码，合并前跑一遍 `swift test`；

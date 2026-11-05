@@ -91,6 +91,11 @@
     <string name="files_git_part_cut">変更が大きすぎて取得できませんでした</string>
     <string name="files_git_part_cut_message">コミット全体のdiffが512 KBを超えており、このファイルは切り捨て位置より後にあります。</string>
     <string name="files_git_synced">同期済み</string>
+    <string name="files_git_pull">プル</string>
+    <string name="files_git_pull_behind">プル %1$d</string>
+    <string name="files_git_pulling">プル中</string>
+    <string name="files_git_pulled">最新のコードをプルしました</string>
+    <string name="files_git_pull_current">すでに最新です</string>
     <string name="files_sheet_no_content">ファイルの内容を読み込めませんでした</string>
     <string name="files_sheet_incomplete">ファイルの内容が不完全です</string>
     <string name="files_sheet_failed">この表を表示できません</string>
@@ -146,6 +151,9 @@
     </plurals>
     <plurals name="files_time_days_ago">
         <item quantity="other">%1$d日前</item>
+    </plurals>
+    <plurals name="files_git_behind_commits">
+        <item quantity="other">%1$d件のコミット遅れ</item>
     </plurals>
     <plurals name="files_git_file_count">
         <item quantity="other">%1$d件のファイル</item>

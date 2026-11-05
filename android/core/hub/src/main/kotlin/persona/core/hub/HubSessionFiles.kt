@@ -1,5 +1,10 @@
 package persona.core.hub
 
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import persona.core.contracts.api.SessionGitPull
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.*
 import kotlinx.coroutines.CoroutineDispatcher
@@ -18,9 +23,12 @@ class HubSessionFiles internal constructor(
     private val decoding: CoroutineDispatcher = Dispatchers.Default,
     /** An unbuffered request, for bodies read as a stream (file/download). */
     private val stream: suspend (String) -> Response = request,
+    /** A POST with a JSON body (git/pull); the hub waits up to 90 s on the machine for it. */
+    private val post: suspend (String, String) -> Response = { _, _ -> throw UnsupportedOperationException("post") },
 ) : SessionFiles {
     constructor(connection: OkHttpHubConnection, decoding: CoroutineDispatcher = Dispatchers.Default) :
-        this({ path -> connection.request(path, "GET", null) }, decoding, { path -> connection.request(path, "GET", null, buffered = false) })
+        this({ path -> connection.request(path, "GET", null) }, decoding, { path -> connection.request(path, "GET", null, buffered = false) },
+            { path, body -> connection.request(path, "POST", body.toRequestBody(JSON), readTimeoutSeconds = 100) })
 
     override suspend fun directory(machineId: String, cwd: String, path: String) =
         get<SessionDirectory>(machineId, "fs", cwd, "path" to path)
@@ -36,6 +44,20 @@ class HubSessionFiles internal constructor(
     }
     override suspend fun show(machineId: String, cwd: String, hash: String) =
         get<SessionGitShow>(machineId, "git/show", cwd, "hash" to hash)
+    override suspend fun pull(machineId: String, cwd: String): SessionGitPull {
+        require(machineId.isNotBlank() && cwd.isNotBlank())
+        val path = HttpUrl.Builder().scheme("https").host("example.com")
+            .addPathSegments("api/v1/machines").addPathSegment(machineId).addPathSegments("git/pull").build().encodedPath
+        val body = buildJsonObject { put("cwd", cwd) }.toString()
+        return post(path, body).use { response ->
+            if (!response.isSuccessful) throw HubFailure.from(response)
+            withContext(decoding) {
+                try { JsonCodec.decodeFromString<SessionGitPull>(requireNotNull(response.body).string()) }
+                catch (error: SerializationException) { throw HubFailure(HubError.Protocol, retryable = false, cause = error) }
+            }
+        }
+    }
+
     override suspend fun stat(machineId: String, cwd: String, paths: List<String>) =
         get<SessionPathStats>(machineId, "stat", cwd, "paths" to paths.joinToString("\n"))
 
@@ -94,3 +116,5 @@ class HubSessionFiles internal constructor(
         }
     }
 }
+
+private val JSON = "application/json".toMediaType()

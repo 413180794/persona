@@ -15,6 +15,7 @@ on:
       - .dockerignore
       - deploy/docker/**
       - server/**
+      - sdk/go/**
       - web/**
       - integrations/**
       - spec/fixtures/injected/**
@@ -69,9 +70,12 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: jarvis-hub:ci
+          # A pull request's smoke test only runs the image's own (linux/amd64) jarvisd: it builds that node alone. A tag
+          # or a run by hand builds all four, as the image it publishes carries them.
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             IMAGE=${{ steps.version.outputs.image }}
+            ${{ github.event_name == 'pull_request' && 'NODE_PLATFORMS=linux/amd64' || '' }}
           cache-from: type=gha,scope=hub
           cache-to: type=gha,scope=hub,mode=max,timeout=2m,ignore-error=true
 

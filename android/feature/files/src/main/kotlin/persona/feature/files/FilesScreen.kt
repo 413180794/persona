@@ -61,7 +61,8 @@ fun SessionFilesScreen(
         } else {
             val scope = rememberCoroutineScope()
             val resources = LocalResources.current
-            val controller = remember { FilesController(api, session.machineId, base, scope) { filesLoadError(resources, it) } }
+            val controller = remember { FilesController(api, session.machineId, base, scope, { filesLoadError(resources, it) },
+                { resources.getString(if (it) R.string.files_git_pulled else R.string.files_git_pull_current) }) }
             val images = remember { MarkdownImages(api, session.machineId, base) }
             val state by controller.state.collectAsStateWithLifecycle()
             var pane by rememberSaveable { mutableStateOf(if (asked != null) FilesPane.Files else initialPane) }

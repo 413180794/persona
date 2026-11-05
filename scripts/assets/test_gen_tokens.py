@@ -319,8 +319,12 @@ class RepositoryTests(unittest.TestCase):
         for name in ("brand", "danger", "positive", "caution", "cautionText", "ai", "loop", "countBadge", "codeBackground", "terminalBackground", "terminalText"):
             found = re.search(rf'static let {name} = Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)', swift)
             if found is None:  # a palette color by name (brand = Palette.coral)
-                ref = re.search(rf'static let {name} = Palette\.(\w+)', swift)[1]
-                found = re.search(rf'static let {ref} = Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)', palette)
+                ref = re.search(rf'static let {name} = Palette\.(\w+)', swift)
+                if ref is not None:
+                    found = re.search(rf'static let {ref[1]} = Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)', palette)
+            if found is None:  # a role an extension can recolor (danger = Role.danger, a PersonaPalette.Pair)
+                found = re.search(rf'static let {name} = PersonaPalette\.Pair\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)', swift)
+            self.assertIsNotNone(found, f"Theme.{name} not found in Theme.swift")
             light, dark = found.groups()
             for mode, h in (("light", light), ("dark", dark)):
                 self.assertEqual(self.catalog.values[f"common.{mode}.{name}"], color(h), f"{name} {mode}")

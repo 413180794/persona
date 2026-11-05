@@ -91,6 +91,11 @@
     <string name="files_git_part_cut">改动太大，没有带回来</string>
     <string name="files_git_part_cut_message">整个提交的 diff 超过 512 KB，这个文件在截断之后。</string>
     <string name="files_git_synced">已同步</string>
+    <string name="files_git_pull">拉取</string>
+    <string name="files_git_pull_behind">拉取 %1$d</string>
+    <string name="files_git_pulling">拉取中</string>
+    <string name="files_git_pulled">已拉取最新代码</string>
+    <string name="files_git_pull_current">已经是最新代码</string>
     <string name="files_sheet_no_content">没有读到文件内容</string>
     <string name="files_sheet_incomplete">文件内容不完整</string>
     <string name="files_sheet_failed">无法显示这个表格</string>
@@ -146,6 +151,9 @@
     </plurals>
     <plurals name="files_time_days_ago">
         <item quantity="other">%1$d 天前</item>
+    </plurals>
+    <plurals name="files_git_behind_commits">
+        <item quantity="other">落后 %1$d 个提交</item>
     </plurals>
     <plurals name="files_git_file_count">
         <item quantity="other">%1$d 个文件</item>

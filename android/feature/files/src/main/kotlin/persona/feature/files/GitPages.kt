@@ -17,7 +17,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.api.SessionGitCommit
 import persona.core.contracts.api.SessionGitFile
@@ -36,10 +40,12 @@ internal fun LazyListScope.gitBrowser(state: FilesState, controller: FilesContro
             if (state.gitError) item { RetryState(stringResource(R.string.files_git_refresh_failed), stringResource(R.string.files_git_refresh_failed_message), controller::refreshGit) }
             if (state.gitLoading) item { JLinearProgress(null, Modifier.fillMaxWidth()) }
             item("branch") {
-                JSectionHeader(git.branch ?: stringResource(R.string.files_git_detached))
+                JSectionHeader(git.branch ?: stringResource(R.string.files_git_detached),
+                    action = if (git.upstream != null) ({ PullButton(git.behind, state, controller) }) else null)
                 JGroupItem(GroupPosition.Single) {
                     JRow(git.upstream ?: stringResource(R.string.files_git_no_upstream), subtitle = git.root, leadingIcon = PhIcons.GitBranch, value = gitSync(LocalResources.current, git))
                 }
+                state.pullMessage?.let { PullResult(it, state.pullFailed) }
             }
             item("changes") {
                 val (added, deleted) = GitDiffs.totals(git.files)
@@ -74,6 +80,30 @@ internal fun LazyListScope.gitBrowser(state: FilesState, controller: FilesContro
                     controller::more, Modifier.fillMaxWidth(), enabled = !state.moreLoading && !state.gitLoading)
             }
         }
+    }
+}
+
+/** 拉取 (N behind) on the branch heading: a fast-forward pull only; 拉取中 and off while it runs. */
+@Composable
+private fun PullButton(behind: Int, state: FilesState, controller: FilesController) {
+    val label = if (behind > 0) stringResource(R.string.files_git_pull_behind, behind) else stringResource(R.string.files_git_pull)
+    // The visible label is what TalkBack reads; the state says 拉取中 or how far behind, like iOS's accessibilityValue.
+    val pullState = if (state.pulling) stringResource(R.string.files_git_pulling)
+        else pluralStringResource(R.plurals.files_git_behind_commits, behind, behind)
+    JButton(label, controller::pull, Modifier.semantics { stateDescription = pullState }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
+        icon = PhIcons.ArrowDown, enabled = !state.moreLoading && state.git?.branch != null,
+        loading = state.pulling, loadingText = stringResource(R.string.files_git_pulling))
+}
+
+/** The last pull's outcome under the branch card: settled in the positive colour, the hub's reason in the danger colour. */
+@Composable
+private fun PullResult(message: String, failed: Boolean) {
+    val palette = PersonaTheme.palette
+    val tint = if (failed) palette.danger.text else palette.positive
+    Row(Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.s).semantics { liveRegion = LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+        JIcon(if (failed) PhIcons.WarningCircle else PhIcons.CheckCircle, null, size = Tokens.Space.l, tint = tint)
+        Text(message, style = PersonaTheme.type.caption, color = tint)
     }
 }
 

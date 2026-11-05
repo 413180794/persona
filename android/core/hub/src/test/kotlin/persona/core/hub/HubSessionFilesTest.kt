@@ -51,6 +51,34 @@ class HubSessionFilesTest {
         catch (failure: HubFailure) { assertEquals(404, failure.status) }
     }
 
+    @Test fun pullPostsTheFolderAndDecodesTheNewStatus(): Unit = runBlocking {
+        val posts = mutableListOf<Pair<String, String>>()
+        var status = 200
+        var answer = """{"status":{"is_repo":true,"branch":"main","upstream":"origin/main","behind":0,"commits":[{"hash":"fff","subject":"更新示例代码"}],"files":null},"updated":true,"future":1}"""
+        val api = HubSessionFiles({ error("GET used for a pull") }, post = { path, body ->
+            posts += path to body
+            Response.Builder().request(Request.Builder().url("https://example.com$path").build()).protocol(Protocol.HTTP_1_1)
+                .code(status).message("response").body(answer.toResponseBody()).build()
+        })
+        val pulled = api.pull("machine/segment", "/workspace/中文 &")
+        assertTrue(pulled.updated)
+        assertEquals("main", pulled.status.branch)
+        assertEquals(listOf("fff"), pulled.status.commits.map { it.hash })
+        assertEquals("/api/v1/machines/machine%2Fsegment/git/pull", posts.last().first)
+        assertEquals("""{"cwd":"/workspace/中文 &"}""", posts.last().second)
+
+        answer = """{"status":{"is_repo":true}}"""
+        assertFalse(api.pull("machine", "/workspace").updated)
+
+        status = 502
+        answer = """{"error":"工作区有未提交的改动，请先在电脑上提交或 stash 后再拉取"}"""
+        try { api.pull("machine", "/workspace"); fail("Expected HTTP failure") }
+        catch (failure: HubFailure) {
+            assertEquals(502, failure.status)
+            assertEquals("工作区有未提交的改动，请先在电脑上提交或 stash 后再拉取", failure.message)
+        }
+    }
+
     @Test fun downloadStreamsTheWholeFileIntoPlace(): Unit = runBlocking {
         val requests = mutableListOf<String>()
         var status = 200

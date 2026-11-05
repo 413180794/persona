@@ -36,6 +36,11 @@ data class FilesState(
     val moreLoading: Boolean = false,
     val moreError: Boolean = false,
     val noMore: Boolean = false,
+    /** A fast-forward pull is running (拉取中): the button is off and status / history loads wait for it. */
+    val pulling: Boolean = false,
+    /** The last pull's line under the branch: brought new commits / already up to date, or the hub's reason. */
+    val pullMessage: String? = null,
+    val pullFailed: Boolean = false,
     val stack: List<FileSelection> = emptyList(),
     /** The pages were opened straight from the conversation (a path in a message): back returns there. */
     val direct: Boolean = false,
@@ -60,6 +65,8 @@ class FilesController(
     private val scope: CoroutineScope,
     /** Why a load failed, in words for the page (the hub's message when the machine said why). */
     private val describe: (Throwable) -> String = { it.message.orEmpty() },
+    /** A pull's success line: 已拉取最新代码 when it brought commits, 已经是最新代码 otherwise. */
+    private val pulled: (updated: Boolean) -> String = { if (it) "updated" else "up to date" },
 ) {
     private val mutable = MutableStateFlow(FilesState(root = cwd, here = cwd))
     val state = mutable.asStateFlow()
@@ -145,6 +152,7 @@ class FilesController(
     }
 
     fun refreshGit() {
+        if (state.value.pulling) return
         gitJob?.cancel()
         moreJob?.cancel()
         val generation = ++gitGeneration
@@ -164,7 +172,7 @@ class FilesController(
 
     fun more() {
         val snapshot = state.value
-        if (snapshot.moreLoading || snapshot.noMore || snapshot.gitLoading || snapshot.git == null) return
+        if (snapshot.moreLoading || snapshot.noMore || snapshot.gitLoading || snapshot.pulling || snapshot.git == null) return
         val generation = gitGeneration
         mutable.update { it.copy(moreLoading = true, moreError = false) }
         moreJob = scope.launch {
@@ -178,6 +186,34 @@ class FilesController(
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
                 if (generation == gitGeneration) mutable.update { it.copy(moreLoading = false, moreError = true) }
+            }
+        }
+    }
+
+    /**
+     * `git pull --ff-only` on the machine (iOS GitPullModel): the returned status replaces the shown one and the history
+     * starts over; on a refusal (diverged, local changes, no upstream) the hub's reason shows and the status is read again.
+     */
+    fun pull() {
+        val snapshot = state.value
+        if (snapshot.pulling || snapshot.git?.upstream == null || snapshot.git.branch == null) return
+        // A status or log read in flight would land after the pull and show the branch as it was.
+        gitJob?.cancel()
+        moreJob?.cancel()
+        val generation = ++gitGeneration
+        mutable.update { it.copy(pulling = true, pullMessage = null, pullFailed = false, gitLoading = false, moreLoading = false) }
+        gitJob = scope.launch {
+            try {
+                val result = api.pull(machineId, cwd)
+                if (generation == gitGeneration) mutable.update {
+                    it.copy(pulling = false, pullMessage = pulled(result.updated), git = result.status, gitError = false,
+                        older = emptyList(), moreError = false, noMore = result.status.commits.size < 30)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (generation != gitGeneration) return@launch
+                mutable.update { it.copy(pulling = false, pullMessage = describe(error), pullFailed = true) }
+                refreshGit()
             }
         }
     }

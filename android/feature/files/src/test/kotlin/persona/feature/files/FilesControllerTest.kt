@@ -33,7 +33,18 @@ private class FakeMachine : SessionFiles {
         else SessionFileContent(real, FilesPaths.name(real), size = 5, text = "hello")
     }
 
-    override suspend fun status(machineId: String, cwd: String) = SessionGitStatus(true, root = "/Users/me/code/weather")
+    var gitStatus = SessionGitStatus(true, root = "/Users/me/code/weather")
+    var pulling: suspend () -> SessionGitPull = { error("no pull") }
+    /** Record status reads too (the pull tests count them). */
+    var askedStatus = false
+    override suspend fun status(machineId: String, cwd: String): SessionGitStatus {
+        if (askedStatus) asked += "status"
+        return gitStatus
+    }
+    override suspend fun pull(machineId: String, cwd: String): SessionGitPull {
+        asked += "pull $cwd"
+        return pulling()
+    }
     override suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean) = SessionGitDiff(path, "")
     override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int) = SessionGitLog()
     override suspend fun show(machineId: String, cwd: String, hash: String): SessionGitShow {
@@ -250,5 +261,73 @@ class FilesControllerTest {
         runCurrent()
         assertNull(files.state.value.previewError)
         assertEquals("hello", files.state.value.content?.text)
+    }
+
+    private val tracking = SessionGitStatus(true, root = "/Users/me/code/weather", branch = "main", upstream = "origin/main", behind = 2,
+        commits = listOf(SessionGitCommit("aaa")))
+
+    private fun TestScope.pulling(machine: FakeMachine) =
+        FilesController(machine, "macbook", cwd, this, describe = { it.message ?: "?" }, pulled = { if (it) "已拉取最新代码" else "已经是最新代码" })
+
+    @Test fun aPullShowsTheStatusItReturns() = runTest {
+        val machine = FakeMachine().apply { gitStatus = tracking; askedStatus = true }
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val fresh = tracking.copy(behind = 0, commits = listOf(SessionGitCommit("fff"), SessionGitCommit("aaa")))
+        machine.pulling = { gate.await(); SessionGitPull(fresh, updated = true) }
+        val files = pulling(machine)
+        files.refreshGit()
+        runCurrent()
+        files.pull()
+        runCurrent()
+        assertTrue(files.state.value.pulling)
+        files.pull() // already running
+        files.refreshGit() // waits for the pull
+        runCurrent()
+        assertEquals(listOf("status", "pull $cwd"), machine.asked)
+        gate.complete(Unit)
+        runCurrent()
+        val state = files.state.value
+        assertFalse(state.pulling)
+        assertFalse(state.pullFailed)
+        assertEquals("已拉取最新代码", state.pullMessage)
+        assertEquals(fresh, state.git)
+        assertTrue(state.older.isEmpty())
+        assertEquals(listOf("status", "pull $cwd"), machine.asked) // the answer is the status: no second read
+    }
+
+    @Test fun aPullThatBringsNothingSaysSo() = runTest {
+        val machine = FakeMachine().apply { gitStatus = tracking.copy(behind = 0); askedStatus = true }
+        machine.pulling = { SessionGitPull(machine.gitStatus, updated = false) }
+        val files = pulling(machine)
+        files.refreshGit()
+        runCurrent()
+        files.pull()
+        runCurrent()
+        assertEquals("已经是最新代码", files.state.value.pullMessage)
+        assertFalse(files.state.value.pullFailed)
+    }
+
+    @Test fun aRefusedPullShowsTheHubsReasonAndRereadsTheStatus() = runTest {
+        val machine = FakeMachine().apply { gitStatus = tracking; askedStatus = true }
+        machine.pulling = { throw IllegalStateException("工作区有未提交的改动") }
+        val files = pulling(machine)
+        files.refreshGit()
+        runCurrent()
+        files.pull()
+        runCurrent()
+        val state = files.state.value
+        assertTrue(state.pullFailed)
+        assertEquals("工作区有未提交的改动", state.pullMessage)
+        assertEquals(tracking, state.git)
+        assertEquals(listOf("status", "pull $cwd", "status"), machine.asked)
+
+        // No upstream (or a detached HEAD): nothing to pull from.
+        machine.gitStatus = tracking.copy(upstream = null)
+        files.refreshGit()
+        runCurrent()
+        machine.asked.clear()
+        files.pull()
+        runCurrent()
+        assertTrue(machine.asked.isEmpty())
     }
 }

@@ -213,8 +213,9 @@ docker compose logs hub
 
 ## 验证
 
-`.github/workflows/hub-image.yml` 在每个改到服务端、网页或镜像的 PR 上构建镜像并用 compose 起一遍：健康检查、配对、tailcat key、
-网页版、`hub.json` 的属主。本机（OrbStack / Docker Desktop）同样可以：
+`.github/workflows/hub-image.yml` 在每个改到服务端（含 `sdk/go`）、网页或镜像的 PR 上构建镜像并用 compose 起一遍：健康检查、配对、
+tailcat key、网页版、`hub.json` 的属主。PR 上只构建 linux/amd64 那个 node（`--build-arg NODE_PLATFORMS=linux/amd64`，冒烟只跑它），
+发布和本机默认四个都构建。本机（OrbStack / Docker Desktop）同样可以：
 
 ```sh
 docker build --build-arg VERSION=dev-local -t jarvis-hub .

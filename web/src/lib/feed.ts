@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 import { api, enc } from "./api";
 import { formatDate, t } from "../i18n";
 import { parseAPIError } from "./api-errors";
-import { onHubEvent, putTodo, refreshTodos } from "./store";
+import { getState, onHubEvent, putTodo, refreshTodos } from "./store";
 import { applySnapshot } from "./assistant-views";
 import type { AssistantView, ViewAction } from "./extension-wire";
 import { isResumed } from "./reconnect";
@@ -333,8 +333,14 @@ export function setRoute(conversation: string, todoId: string | null) {
 export async function sendRouted(conversation: string, text: string): Promise<boolean> {
   const todoId = st.routes[conversation];
   if (!todoId) return false;
-  setRoute(conversation, null);
+  // A failed send keeps the route for the retry, so a task gone elsewhere (its chip no longer drawn) must not hold it.
+  const { todos, todosLoaded } = getState();
+  if (todosLoaded && !todos.some((t) => t.id === todoId)) {
+    setRoute(conversation, null);
+    return false;
+  }
   const res = await api<{ item: FeedItem }>(`/assistant/conversations/${enc(conversation)}/route`, { method: "POST", json: { todo_id: todoId, text } });
+  if (st.routes[conversation] === todoId) setRoute(conversation, null);
   if (res.item) received([res.item]);
   return true;
 }

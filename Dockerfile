@@ -46,7 +46,10 @@ COPY integrations/paseo/ /src/integrations/paseo/
 COPY integrations/pi/ /src/integrations/pi/
 COPY integrations/runtime-sdk/ /src/integrations/runtime-sdk/
 RUN go generate ./internal/runtimepkg
-RUN for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do \
+# NODE_PLATFORMS: the node builds in /opt/jarvis/nodes. It must include linux/<the image's architecture>, which the hub
+# itself runs. The PR smoke build passes linux/amd64 only (it never starts the others); everything else builds all four.
+ARG NODE_PLATFORMS="linux/amd64 linux/arm64 darwin/arm64 darwin/amd64"
+RUN for t in $NODE_PLATFORMS; do \
       CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
         -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/jarvisd-${t%/*}-${t#*/} ./cmd/personad || exit 1; \
     done
