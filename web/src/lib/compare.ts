@@ -4,7 +4,6 @@
 import type JSZip from "jszip";
 import type { WorkBook } from "xlsx";
 import { t } from "../i18n";
-import { readPptx } from "./pptx";
 
 /** One page / slide / sheet: what it is called and its lines of text. */
 export interface Unit {
@@ -217,6 +216,7 @@ export async function docxUnits(zip: JSZip, parse: ParseXML): Promise<Unit[]> {
 
 /** A deck's text, slide by slide (notes after a marker). */
 export async function pptxUnits(zip: JSZip, parse: ParseXML): Promise<Unit[]> {
+  const { readPptx } = await import("./pptx"); // with Office previews' own chunk, not the Git panel's
   const deck = await readPptx(zip, parse);
   return deck.slides.map((s, i) => {
     const lines: string[] = [];
