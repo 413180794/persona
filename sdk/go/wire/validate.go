@@ -231,6 +231,16 @@ func (c *checker) check(s map[string]any, v any, here, at string) {
 		if m, ok := num(s["maxItems"]); ok && float64(len(x)) > m {
 			c.add("%s: more than %v items", at, m)
 		}
+		if s["uniqueItems"] == true {
+			seen := map[string]bool{}
+			for i, e := range x {
+				if k := show(e); seen[k] {
+					c.add("%s[%d]: %s twice", at, i, k)
+				} else {
+					seen[k] = true
+				}
+			}
+		}
 		items, _ := s["items"].(map[string]any)
 		for i, e := range x {
 			c.check(items, e, here, fmt.Sprintf("%s[%d]", at, i))
@@ -246,6 +256,9 @@ func (c *checker) check(s map[string]any, v any, here, at string) {
 		}
 		if m, ok := num(s["minProperties"]); ok && float64(len(x)) < m {
 			c.add("%s: fewer than %v properties", at, m)
+		}
+		if m, ok := num(s["maxProperties"]); ok && float64(len(x)) > m {
+			c.add("%s: more than %v properties", at, m)
 		}
 		extra := s["additionalProperties"]
 		for _, k := range sortedKeys(x) {

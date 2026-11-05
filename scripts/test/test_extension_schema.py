@@ -91,6 +91,13 @@ class Validator:
                 errs.append(f"{at}: fewer than {schema['minItems']} items")
             if "maxItems" in schema and len(value) > schema["maxItems"]:
                 errs.append(f"{at}: more than {schema['maxItems']} items")
+            if schema.get("uniqueItems") is True:
+                seen = set()
+                for i, v in enumerate(value):
+                    key = json.dumps(v, sort_keys=True)
+                    if key in seen:
+                        errs.append(f"{at}[{i}]: {key} twice")
+                    seen.add(key)
             for i, v in enumerate(value):
                 errs += self.errors(schema.get("items", {}), v, here, f"{at}[{i}]")
         if isinstance(value, dict):
@@ -100,6 +107,8 @@ class Validator:
                     errs.append(f"{at}: no {k}")
             if len(value) < schema.get("minProperties", 0):
                 errs.append(f"{at}: fewer than {schema['minProperties']} properties")
+            if "maxProperties" in schema and len(value) > schema["maxProperties"]:
+                errs.append(f"{at}: more than {schema['maxProperties']} properties")
             extra = schema.get("additionalProperties", True)
             for k, v in value.items():
                 if k in props:
@@ -144,6 +153,44 @@ class ExtensionSchemaTests(unittest.TestCase):
         for f in examples:
             with self.subTest(example=f.name):
                 self.assertNotEqual(self.v.validate(f.name.split(".")[0], json.loads(f.read_text())), [])
+
+    def test_schema_keywords_are_known(self):
+        # A keyword neither validator knows is silently ignored (maxProperties and uniqueItems were, #4012): every
+        # keyword the schemas use is one both validate, or an annotation (description, title, format, x-*).
+        validated = {"$ref", "oneOf", "type", "const", "enum", "minLength", "maxLength", "pattern", "minimum", "maximum",
+                     "items", "minItems", "maxItems", "uniqueItems", "properties", "required", "additionalProperties",
+                     "minProperties", "maxProperties", "$defs"}
+        annotations = {"$schema", "$id", "title", "description", "format"}
+        unknown = set()
+
+        def walk(node, where):
+            if isinstance(node, list):
+                for item in node:
+                    walk(item, where)
+            if not isinstance(node, dict):
+                return
+            for key, value in node.items():
+                if key in ("properties", "$defs"):  # names, not keywords
+                    for name, sub in value.items():
+                        walk(sub, f"{where}/{name}")
+                    continue
+                if key not in validated and key not in annotations and not key.startswith("x-"):
+                    unknown.add(f"{where}: {key}")
+                walk(value, where)
+
+        for name, doc in load_schemas().items():
+            walk(doc, name)
+        self.assertEqual(sorted(unknown), [])
+
+    def test_max_properties_and_unique_items(self):
+        view = json.loads((SCHEMA_DIR / "examples/invalid/View.action-nine-values.json").read_text())
+        self.assertIn("$.sections[0].items[0].action.values: more than 8 properties", self.v.validate("View", view))
+        del view["sections"][0]["items"][0]["action"]["values"]["i"]
+        self.assertEqual(self.v.validate("View", view), [])
+        manifest = json.loads((SCHEMA_DIR / "examples/invalid/Manifest.off-by-default-twice.json").read_text())
+        self.assertIn('$.off_by_default[1]: "voice/v" twice', self.v.validate("Manifest", manifest))
+        manifest["off_by_default"] = ["voice/v"]
+        self.assertEqual(self.v.validate("Manifest", manifest), [])
 
     def test_persona_card_cases_hold_to_the_schema(self):
         # examples/persona-card/<case>.json: a persona-card and the view every app turns it into (null: not drawn,

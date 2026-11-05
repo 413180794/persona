@@ -61,7 +61,7 @@ hub 查扩展画的 View（`extension.CheckView`）、一致性测试查 `initia
 - 可选字段：不在 `required` 里。Go 加 `omitempty`（时间加 `omitzero`），对象是指针；数字的「没有」和 0 意思不同时加 `"x-go-pointer": true`（`progress` 的 `ratio`）。
 - 组件加 `"x-since": <UI 版本>`：生成 `ComponentSince` 一类的表，hub 按它给老 App 拿掉新组件（`Fit`）。
 - 同一个联合里，几个变体的同名字段在 Go 的平铺结构体里合成一个，所以类型必须一样（枚举都算字符串）；不一样生成器会报错，给新字段换个名字。
-- 校验用的关键字（`pattern`、`minLength`、`maxLength`、`minimum`、`maximum`、`minItems`、`maxItems`、`minProperties`、`const`）不影响生成，`scripts/test/test_extension_schema.py` 里的校验器认得它们。
+- 校验用的关键字（`pattern`、`minLength`、`maxLength`、`minimum`、`maximum`、`minItems`、`maxItems`、`uniqueItems`、`minProperties`、`maxProperties`、`const`、`enum`）不影响生成，`sdk/go/wire` 的 `Validate` 和 `scripts/test/test_extension_schema.py` 里的校验器都认得它们；用了两边都不认的关键字，`test_schema_keywords_are_known` 会失败（#4012）。
   schema 说不清的规则（一页最多 300 个组件、图表各系列标签一致、字段名不重复、`state` 最多 16 KB）仍是 hub 手写的检查。
 - 清单的例子还要过 hub 的 `extension.Parse`（schema 之外的语义校验，如 `contributes.events` 要 `on_startup`）：`server/internal/extension/manifest_examples_test.go` 要求 `examples/Manifest.*.json`、填好占位符的 `sdk/templates/{go,ts}/persona-extension.json` 能装，`examples/invalid/Manifest.*.json` 装不上；
   只测类型往返的 fixture（`Manifest.custom-contributions.json`）在测试里单列，并写明 hub 拒绝它的原因。
