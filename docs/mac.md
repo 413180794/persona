@@ -515,7 +515,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 当前的系统查找黄并滚到看得见，「3 / 14」或红色「没有找到」；⏎ 下一个、⇧⏎ 上一个（两头循环），Esc / ✕ 关闭、焦点回到代码。这三个键用本地按键监听在窗口之前接住
 （文件查看器的「完成」占着 Esc，不先接就会关掉整个 sheet），拼音组字时让给输入法。截图：`-openFilePath <路径> -macFileFind <查询>`（体验模式的 hub 在 Mac 上给一个编造的 Swift 文件）。
 查找下一个 ⌘G / 查找上一个 ⇧⌘G（2026-11-01，`MacFind.findNext`，`CodeFindNextTests`、`MacFindTests`、`MacMenuShortcutTests`）跟着 ⌘F 走：带查找栏的文本视图（diff、输出）跳它的匹配，
-代码查看器跳自己的查找栏，查找栏关着时用上次的词重新打开。没做：区分大小写 / 整词 / 正则、行内部分选择；每次输入在主线程上重搜整个文件，10 万行的文件没量过。真按键没试过（锁屏）。
+代码查看器跳自己的查找栏，查找栏关着时用上次的词重新打开。
+区分大小写 / 整词 / 正则（2026-11-06，#3281，`CodeFind.Options` / `Matcher`，`CodeFindTests`）：查找框右边三个开关 Aa、整词、.*，点了立刻重搜，当前匹配还在就留在它那里；整词要求匹配两头挨着的不是字母、数字、`_`（汉字也算字），和正则可以一起开；正则用 `NSRegularExpression`，写错时不搜、计数处红字「正则有误」，空匹配（`^`、`a*`）不算。三个开关在这次运行里跨文件记住（不存盘）。截图：`-macFileFindOptions case,word,regex`（任选，逗号分开）配 `-macFileFind <查询>`。没做：行内部分选择；每次输入在主线程上重搜整个文件，10 万行的文件没量过。真按键没试过（锁屏）。
 显示 › 紧凑列表、分组方式（按仓库 / 按项目 / 状态 / 机器 / 按待办）、排序方式（状态优先 / 最近更新，按状态分组时不可选）、全部折叠 / 全部展开：和 Agents 列表左上 ⋯ 菜单是同一组设置（`dev.compact`、`dev.grouping`、`dev.sort`、折叠由列表登记的 `AgentsListMenu.Actions` 做）。
 会话信息在 Mac 上是对话右侧的一栏（Agent › 显示会话信息 ⌥⌘I，或点标题；`apple/Mac/Chat/MacInspector.swift`），宽度可拖、记在 `mac.inspector.width`，
 窗口太窄时盖在对话上。没用 SwiftUI 的 `.inspector`：放在 Agents 分栏的详情页里整栏是空的；`SessionInfoSheet` 在 Mac 上也不再包 NavigationStack（会接管详情栏的导航、对话页消失）。

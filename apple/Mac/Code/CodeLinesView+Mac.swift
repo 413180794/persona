@@ -365,7 +365,10 @@ struct CodeLines: View {
         .onAppear {
             // `-macFileFind <query>` (with `-openFilePath`): the bar open with that typed in, for offscreen screenshots.
             if let q = UserDefaults.standard.string(forKey: "macFileFind") {
+                // `-macFileFindOptions <case,word,regex>`: those switches on (any of the three, comma-separated).
+                let on = Set((UserDefaults.standard.string(forKey: "macFileFindOptions") ?? "").split(separator: ",").map(String.init))
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    find.options = CodeFind.Options(caseSensitive: on.contains("case"), wholeWord: on.contains("word"), regex: on.contains("regex"))
                     find.show()
                     find.query = q
                 }

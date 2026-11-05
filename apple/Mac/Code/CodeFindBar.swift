@@ -9,6 +9,18 @@ import SwiftUI
     var query = "" {
         didSet { if query != oldValue { search(from: view?.topLine ?? 0) } }
     }
+    /// 区分大小写 / 整词 / 正则: remembered for the next file while the app runs. A change searches again from the
+    /// current match, so it stays where it was when it still matches.
+    var options = CodeFindModel.lastOptions {
+        didSet {
+            guard options != oldValue else { return }
+            Self.lastOptions = options
+            search(from: currentMatch?.line ?? view?.topLine ?? 0)
+        }
+    }
+    @ObservationIgnored private static var lastOptions = CodeFind.Options()
+    /// A regular expression that does not compile: nothing is searched and the bar says so.
+    var invalid: Bool { !CodeFind.Matcher.isValid(query, options: options) }
     private(set) var matches: [CodeFind.Match] = []
     private(set) var current: Int?
     /// A new value each time ⌘F asks for the field (it takes the keyboard again when the bar is already open).
@@ -59,7 +71,7 @@ import SwiftUI
             set([], current: nil, scroll: false)
             return
         }
-        let found = CodeFind.matches(of: query, lineCount: source.lineCount) { source.findText($0) }
+        let found = CodeFind.matches(of: query, options: options, lineCount: source.lineCount) { source.findText($0) }
         set(found, current: CodeFind.first(in: found, atOrAfter: line), scroll: scroll)
     }
 
@@ -101,6 +113,9 @@ struct CodeFindBar: View {
                         .lineLimit(1)
                         .fixedSize()
                 }
+                option("Aa", "区分大小写", on: $find.options.caseSensitive)
+                option("整词", "全字匹配", on: $find.options.wholeWord)
+                option(".*", "正则表达式", on: $find.options.regex)
             }
             .padding(.horizontal, Theme.Space.s)
             .padding(.vertical, Theme.Space.xs)
@@ -161,7 +176,27 @@ struct CodeFindBar: View {
         keys = nil
     }
 
+    /// One of the field's switches: its short label, lit while on.
+    private func option(_ label: String, _ name: String, on: Binding<Bool>) -> some View {
+        Button { on.wrappedValue.toggle() } label: {
+            Text(label)
+                .font(Theme.Font.code)
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(on.wrappedValue ? Theme.accent : .secondary)
+                .padding(.horizontal, Theme.Space.xs)
+                .padding(.vertical, Theme.Space.xxs)
+                .background(on.wrappedValue ? Theme.Fill.macSelected : .clear, in: RoundedRectangle(cornerRadius: Theme.Radius.badge))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(name)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(on.wrappedValue ? .isSelected : [])
+    }
+
     private var count: String {
+        if find.invalid { return "正则有误" }
         guard !find.matches.isEmpty else { return "没有找到" }
         return "\((find.current ?? 0) + 1) / \(find.matches.count)"
     }
