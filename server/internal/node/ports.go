@@ -30,7 +30,8 @@ import (
 // the session list; the list is pushed again only when they change.
 //
 // A scan costs a process listing and a socket listing: on Linux both are read from /proc, on macOS `ps` and `lsof`
-// (about 0.17 s of CPU with ~3,700 processes). It runs every portSweep while there are live agents, and sooner
+// (about 0.17 s of CPU with ~3,700 processes), on Windows a Toolhelp snapshot and GetExtendedTcpTable
+// (ports_windows.go). It runs every portSweep while there are live agents, and sooner
 // (portKickGap after the last) when an agent's transcript grew — a dev server is usually started by a tool call — or
 // a forward found its port gone.
 
@@ -317,9 +318,12 @@ func pageTitle(page string) string {
 func scanListeners(ctx context.Context, roots map[string][]int) (map[string][]listener, error) {
 	var procs map[int]proc
 	var err error
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		procs, err = procfsProcs("/proc")
-	} else {
+	case "windows":
+		procs, err = winProcs()
+	default:
 		procs, err = psProcs(ctx)
 	}
 	if err != nil {
@@ -346,9 +350,15 @@ func scanListeners(ctx context.Context, roots map[string][]int) (map[string][]li
 		return nil, nil
 	}
 	var ls []listener
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		ls = procfsListeners("/proc", all)
-	} else if ls, err = lsofListeners(ctx, all); err != nil {
+	case "windows":
+		ls, err = winListeners(all)
+	default:
+		ls, err = lsofListeners(ctx, all)
+	}
+	if err != nil {
 		return nil, err
 	}
 	out := map[string][]listener{}

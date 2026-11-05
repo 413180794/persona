@@ -25,6 +25,10 @@ WKWebView ─ http://localhost:5173 ─▶ 本机 127.0.0.1:5173（App 监听）
   不起子进程；macOS 用 `ps -Ao pid=,ppid=,tty=,comm=` 加 `lsof -a -p <这些进程> -nP -iTCP -sTCP:LISTEN -Fpcn`。
   `lsof` 在某个 pid 已退出 / 是僵尸时退出 1、结果照常给，按结果算；扫描真出错时同一个错误只记一行日志。
   macOS 上一次约 0.17 s CPU（约 3,700 个进程的机器，`ps` 占大头）。
+  Windows（#2098）也不起子进程：进程树取 Toolhelp 快照（`CreateToolhelp32Snapshot`），监听的 socket 和所属进程取 iphlpapi 的
+  `GetExtendedTcpTable`（`TCP_TABLE_OWNER_PID_LISTENER`，IPv4、IPv6 各一张），`server/internal/node/ports_windows.go`。
+  Windows 没有控制终端，归属只按进程树；父进程退出后 Windows 照旧报它的 pid，pid 又会复用，所以父进程比子进程晚启动
+  （或读不到启动时间）时不认这条父子关系，免得新进程「收养」别人的子进程。
 - **哪些算**：对每个 `pid:端口` 发一次 `GET /`（`Host: localhost:端口`，dev server 的 host 检查认这个），回 HTTP 的才列出来，
   顺便取首页的 `<title>`（最多 60 字）。接受连接但 3 秒没回话的（next dev 第一次编译）先列出、不带标题，下次扫描再问，最多 5 次。
   回的不是 HTTP（ssh、数据库）的不列。结果按 `pid:端口` 缓存，进程或端口没了就丢。
