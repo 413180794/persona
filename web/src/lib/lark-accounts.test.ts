@@ -70,4 +70,28 @@ describe("LarkAccountsStore", () => {
     await s.refresh();
     expect(s.state).toMatchObject({ accounts: [], request: undefined, selected: undefined });
   });
+
+  it("an older read that lands after a newer one does not put back its unread counts (#4136)", async () => {
+    const turns: ((list: LarkAccountList) => void)[] = [];
+    const { s } = store(() => new Promise<LarkAccountList>((r) => turns.push(r)));
+    const older = s.refresh();
+    const newer = s.refresh();
+    turns[1]({ accounts: [{ ...account(1, "一号"), unread: 5 }], default: 1 });
+    await newer;
+    turns[0]({ accounts: [{ ...account(1, "一号"), unread: 0 }], default: 1 });
+    await older;
+    expect(s.state.accounts.map((a) => a.unread)).toEqual([5]);
+  });
+
+  it("an older 404 that lands after a newer list does not take the accounts away", async () => {
+    const turns: { ok: (list: LarkAccountList) => void; fail: (e: unknown) => void }[] = [];
+    const { s } = store(() => new Promise<LarkAccountList>((ok, fail) => turns.push({ ok, fail })));
+    const older = s.refresh();
+    const newer = s.refresh();
+    turns[1].ok({ accounts: [account(1, "一号"), account(2, "二号")], default: 1 });
+    await newer;
+    turns[0].fail(new ApiError(404, "not found", {}));
+    await older;
+    expect(s.state.accounts.map((a) => a.id)).toEqual([1, 2]);
+  });
 });

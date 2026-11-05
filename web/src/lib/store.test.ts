@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyMachine, dropAnswered, endInteraction, getState, hubHas, larkOn, refresh, refreshTodos, reset, setSpacesSupported } from "./store";
+import { applyMachine, dropAnswered, endInteraction, getState, hubHas, larkOn, refresh, refreshAssistant, refreshTodos, reset, setSpacesSupported } from "./store";
 
 describe("待办 store 与 404 兼容 (C2)", () => {
   beforeEach(() => {
@@ -320,5 +320,81 @@ describe("待办列表：先发的 /todos 晚回来不盖掉新的 (#3540)", () 
     turns[1]([todo("t1", "second")]);
     await b;
     expect(getState().todos.map((t) => t.title)).toEqual(["second"]);
+  });
+});
+
+describe("助手会话列表：先发的 /assistant 晚回来不盖掉新的 (#4136)", () => {
+  const info = (main: string, ...ids: string[]) => ({ machine_id: "hub", main, conversations: ids.map((id) => ({ machine_id: "hub", session_id: id, title: id, status: "idle" })) });
+  /** Each /assistant request waits until its turn is resolved; other paths answer at once. */
+  function heldAssistant() {
+    const turns: ((a: unknown) => void)[] = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+      if (!url.endsWith("/assistant")) return new Response(JSON.stringify({}), { status: 200 });
+      const a = await new Promise<unknown>((r) => turns.push(r));
+      return new Response(JSON.stringify(a), { status: 200 });
+    }));
+    return turns;
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const shown = () => ({ main: getState().assistant?.main, ids: getState().assistant?.conversations.map((c) => c.session_id) });
+
+  beforeEach(() => {
+    reset();
+    vi.stubGlobal("localStorage", { getItem: () => "mock-token", setItem: () => {}, removeItem: () => {} });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    reset();
+  });
+
+  it("a slow refresh() does not put back the list a later refreshAssistant() already applied", async () => {
+    const turns = heldAssistant();
+    const slow = refresh();
+    const later = refreshAssistant(); // a conversation was just started
+    await settle();
+    expect(turns).toHaveLength(2);
+    turns[1](info("new-main", "new-main", "old-main"));
+    await later;
+    turns[0](info("old-main", "old-main"));
+    await slow;
+    expect(getState().loaded).toBe(true);
+    expect(shown()).toEqual({ main: "new-main", ids: ["new-main", "old-main"] });
+  });
+
+  it("refreshAssistant: the later request's answer stays when the earlier one lands after it", async () => {
+    const turns = heldAssistant();
+    const a = refreshAssistant();
+    const b = refreshAssistant();
+    await settle();
+    turns[1](info("m", "m", "archived-now"));
+    await b;
+    turns[0](info("m", "m"));
+    await a;
+    expect(shown()).toEqual({ main: "m", ids: ["m", "archived-now"] });
+  });
+
+  it("an answer still on its way when the store is reset is dropped", async () => {
+    const turns = heldAssistant();
+    const old = refreshAssistant();
+    await settle();
+    reset();
+    turns[0](info("the old login's", "the old login's"));
+    await old;
+    expect(getState().assistant).toBeNull();
+  });
+
+  it("answers that come back in order are all taken", async () => {
+    const turns = heldAssistant();
+    const a = refreshAssistant();
+    await settle();
+    turns[0](info("first", "first"));
+    await a;
+    expect(shown()).toEqual({ main: "first", ids: ["first"] });
+    const b = refresh();
+    await settle();
+    turns[1](info("second", "second", "first"));
+    await b;
+    expect(shown()).toEqual({ main: "second", ids: ["second", "first"] });
   });
 });

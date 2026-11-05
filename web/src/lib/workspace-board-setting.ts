@@ -13,6 +13,9 @@ export interface WorkspaceBoardSetting {
 
 let state: WorkspaceBoardSetting = { enabled: null, canWrite: false };
 let loading: Promise<void> | null = null;
+// Every read, write and push of the switch, numbered: an answer applies only while nothing newer came after its request
+// (a read on its way when the user flips the switch, or a write overtaken by the next flip, would put an old value back).
+let rev = 0;
 const listeners = new Set<() => void>();
 
 function set(next: WorkspaceBoardSetting) {
@@ -27,11 +30,15 @@ export function getWorkspaceBoardSetting(): WorkspaceBoardSetting {
 
 /** Reads the switch again (on every hello: another hub, or one that came back, may say otherwise). */
 export function refreshWorkspaceBoardSetting(): Promise<void> {
-  loading ??= api<{ enabled?: boolean; can_write?: boolean }>("/workspace-board/settings")
-    .then((r) => set({ enabled: r.enabled === true, canWrite: r.can_write === true }))
+  if (loading) return loading;
+  const mine = ++rev;
+  loading = api<{ enabled?: boolean; can_write?: boolean }>("/workspace-board/settings")
+    .then((r) => {
+      if (mine === rev) set({ enabled: r.enabled === true, canWrite: r.can_write === true });
+    })
     .catch((e) => {
       // a hub from before the switch showed the board to everyone and has nothing to turn it off with
-      if (e instanceof ApiError && e.status === 404) set({ enabled: true, canWrite: false });
+      if (e instanceof ApiError && e.status === 404 && mine === rev) set({ enabled: true, canWrite: false });
       // anything else: keep what we had, the next hello asks again
     })
     .finally(() => {
@@ -43,12 +50,13 @@ export function refreshWorkspaceBoardSetting(): Promise<void> {
 /** Turns the board on or off for this hub; shown at once, put back (and thrown) when the hub refuses. */
 export async function setWorkspaceBoardEnabled(on: boolean): Promise<void> {
   const before = state;
+  const mine = ++rev;
   set({ ...state, enabled: on });
   try {
     const r = await api<{ enabled?: boolean; can_write?: boolean }>("/workspace-board/settings", { method: "PUT", json: { enabled: on } });
-    set({ enabled: r.enabled === true, canWrite: r.can_write !== false });
+    if (mine === rev) set({ enabled: r.enabled === true, canWrite: r.can_write !== false });
   } catch (e) {
-    set(before);
+    if (mine === rev) set(before);
     throw e;
   }
 }
@@ -56,7 +64,9 @@ export async function setWorkspaceBoardEnabled(on: boolean): Promise<void> {
 onHubEvent("hello", () => void refreshWorkspaceBoardSetting());
 // another browser or device changed it
 onHubEvent("workspace_board_settings", (e) => {
-  if (typeof e.enabled === "boolean") set({ ...state, enabled: e.enabled });
+  if (typeof e.enabled !== "boolean") return;
+  rev++;
+  set({ ...state, enabled: e.enabled });
 });
 
 const subscribe = (l: () => void) => {
@@ -75,4 +85,5 @@ export function useWorkspaceBoardSetting(): WorkspaceBoardSetting {
 export function resetWorkspaceBoardSettingForTest() {
   state = { enabled: null, canWrite: false };
   loading = null;
+  rev = 0;
 }

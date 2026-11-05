@@ -562,30 +562,42 @@ export function dropAnswered(id: string, only?: AnsweredCard) {
   set({ answered });
 }
 
-// Every /todos request, numbered: an answer to a request sent before the one already applied is older than what the
-// page shows (refresh() waits for /sessions too, seconds on a busy hub) and must not put the old list back.
-let todosAsked = 0;
-let todosApplied = 0;
-
-function askTodos() {
-  const n = ++todosAsked;
-  const answer = api<{ todos: Todo[] }>("/todos");
-  /** Whether this answer may be applied (no later request's answer is in place); if so it is the one in place now. */
-  const fresh = () => {
-    if (n < todosApplied) return false;
-    todosApplied = n;
-    return true;
+// Every request for a list the page keeps whole (/todos, /assistant), numbered: an answer to a request sent before the
+// one already applied is older than what the page shows (refresh() waits for /sessions too, seconds on a busy hub) and
+// must not put the old list back.
+function numbered<T>(path: string) {
+  let asked = 0;
+  let applied = 0;
+  return {
+    ask() {
+      const n = ++asked;
+      const answer = api<T>(path);
+      /** Whether this answer may be applied (no later request's answer is in place); if so it is the one in place now. */
+      const fresh = () => {
+        if (n < applied) return false;
+        applied = n;
+        return true;
+      };
+      return { answer, fresh };
+    },
+    /** Every answer still on its way is old now (another login). */
+    forget() {
+      applied = ++asked;
+    },
   };
-  return { answer, fresh };
 }
+
+const todosAsked = numbered<{ todos: Todo[] }>("/todos");
+const assistantAsked = numbered<AssistantInfo>("/assistant");
 
 export async function refresh() {
   const before = ixRev;
-  const asked = askTodos();
+  const asked = todosAsked.ask();
+  const askedAssistant = assistantAsked.ask();
   const [sessions, interactions, assistant, machines, mutes, pins, todos] = await Promise.allSettled([
     api<{ sessions: Session[] }>("/sessions"),
     api<{ interactions: Interaction[] }>("/interactions"),
-    api<AssistantInfo>("/assistant"),
+    askedAssistant.answer,
     api<{ machines: Machine[] }>("/machines"),
     api<AgentMutes>("/mutes"),
     api<Partial<AgentPins>>("/pins"),
@@ -603,7 +615,7 @@ export async function refresh() {
     patch.sessions = by;
   }
   if (interactions.status === "fulfilled") patch.interactions = mergeInteractions(interactions.value.interactions ?? [], before);
-  if (assistant.status === "fulfilled") patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
+  if (assistant.status === "fulfilled" && askedAssistant.fresh()) patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
   if (machines.status === "fulfilled") patch.machines = machines.value.machines ?? [];
   if (mutes.status === "fulfilled") patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
   if (pins.status === "fulfilled") patch.pins = pinsOf(pins.value);
@@ -640,7 +652,7 @@ export function putTodo(todo: Todo) {
 }
 
 export async function refreshTodos() {
-  const asked = askTodos();
+  const asked = todosAsked.ask();
   try {
     const res = await asked.answer;
     if (!asked.fresh()) return;
@@ -654,7 +666,9 @@ export async function refreshTodos() {
 }
 
 export async function refreshAssistant() {
-  const a = await api<AssistantInfo>("/assistant");
+  const asked = assistantAsked.ask();
+  const a = await asked.answer;
+  if (!asked.fresh()) return;
   set({ assistant: { ...a, conversations: a.conversations ?? [] } });
 }
 
@@ -666,7 +680,9 @@ export function reset() {
   disconnect();
   cursor = NO_CURSOR; // another login: another stream
   ixChanges.clear();
-  todosApplied = ++todosAsked; // a /todos answer still on its way belongs to the old login
+  // a /todos or /assistant answer still on its way belongs to the old login
+  todosAsked.forget();
+  assistantAsked.forget();
   resetAgents();
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({

@@ -85,6 +85,9 @@ export class LarkAccountsStore {
   private chosen?: number;
   private s: LarkAccountsState = { accounts: [] };
   private listeners = new Set<() => void>();
+  /** Reads of the list, numbered: the latest sent and the latest applied. */
+  private asked = 0;
+  private applied = 0;
   constructor(private deps: LarkAccountsDeps = liveAccountsDeps) {
     this.chosen = deps.load();
   }
@@ -124,12 +127,17 @@ export class LarkAccountsStore {
   /** Reads the list again (unread counts change with every message). A hub from before several accounts answers 404:
    * no chips, the hub's own account. Other failures keep the last list. */
   async refresh(): Promise<void> {
+    // an answer to a read sent before the one already applied is older (bursts of pushes overlap): it keeps out
+    const mine = ++this.asked;
     try {
       const r = await this.deps.list();
+      if (mine < this.applied) return;
+      this.applied = mine;
       this.list = (r.accounts ?? []).filter((a) => a.signed_in && !a.quarantined);
       this.def = r.default;
     } catch (e) {
-      if (!(e instanceof ApiError && e.status === 404)) return;
+      if (!(e instanceof ApiError && e.status === 404) || mine < this.applied) return;
+      this.applied = mine;
       this.list = [];
       this.def = undefined;
     }
