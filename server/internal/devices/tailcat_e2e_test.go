@@ -1,9 +1,10 @@
-package hub
+package devices
 
 import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,9 +95,9 @@ func TestTailcatEndToEnd(t *testing.T) {
 	}()
 
 	// The hub: ssh to that machine does not work (no such host); tailcat does.
-	h := newTestHub(t)
-	h.version = "v2"
-	h.logger.SetOutput(logTo(t))
+	h := newTestDevices(t)
+	h.cfg.HubVersion = "v2"
+	h.logf = log.New(logTo(t), "", 0).Printf
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "ssh", SSHHost: "jarvis-e2e.invalid", TailcatAddr: addr})
 	go m.run(ctx)
 	defer h.closeTailcat()

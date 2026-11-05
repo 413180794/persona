@@ -62,11 +62,9 @@ func (h *Hub) pendingRestart() restartView {
 	for _, m := range h.cfg.Machines {
 		running[m.ID] = m
 	}
-	h.fleet.mu.Lock()
-	for _, m := range h.fleet.extra { // added while running: already connecting (mesh_paths.go addMachineLive)
-		running[m.cfg.ID] = m.cfg
+	for _, m := range h.addedLive() { // added while running: already connecting (devices_link.go addMachineLive)
+		running[m.ID] = m
 	}
-	h.fleet.mu.Unlock()
 	seen := map[string]bool{}
 	for _, m := range disk.Machines {
 		seen[m.ID] = true

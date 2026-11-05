@@ -16,6 +16,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/link"
@@ -34,11 +35,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"machines": h.machineList()})
 	})
-	api.HandleFunc("POST /api/v1/machines/{mid}/reconnect", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
-		m.reconnect()
-		writeJSON(w, map[string]any{"ok": true})
-	}))
-	api.HandleFunc("PUT /api/v1/machines/{mid}/engine", h.withMachine(h.putEngine))
+	h.deviceRoutesRelayed(api) // the manager's own: reconnect, engine, herdr, deploy, claude-dirs (devices_link.go)
 	api.HandleFunc("GET /api/v1/machines/{mid}/computer", h.withMachine(h.getComputer))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/computer", h.withMachine(h.putComputer))
 	api.HandleFunc("POST /api/v1/machines/{mid}/computer/{action}", h.withMachine(h.postComputerJob))
@@ -48,22 +45,11 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("DELETE /api/v1/machines/{mid}/computer/apps/{bundle}", h.withMachine(h.deleteComputerApp))
 	api.HandleFunc("GET /api/v1/machines/{mid}/browser", h.withMachine(h.getBrowser))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/browser", h.withMachine(h.putBrowser))
-	// the engine row's herdr switch and the 启动 button (herdr.go)
-	api.HandleFunc("GET /api/v1/machines/{mid}/herdr", h.withMachine(h.getHerdr))
-	api.HandleFunc("PUT /api/v1/machines/{mid}/herdr", h.withMachine(h.putHerdr))
-	api.HandleFunc("POST /api/v1/machines/{mid}/herdr/start", h.withMachine(h.postHerdrStart))
 	api.HandleFunc("POST /api/v1/machines/{mid}/browser/{action}", h.withMachine(h.postBrowserJob))
 	// sign-ins in ego lite (browser_cookies.go): only the user's own apps, the hub keeps nothing
 	api.HandleFunc("GET /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
 	api.HandleFunc("POST /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
 	api.HandleFunc("DELETE /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
-	api.HandleFunc("POST /api/v1/machines/{mid}/deploy", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
-		if err := m.startDeploy(); err != nil {
-			writeErr(w, http.StatusConflict, err)
-			return
-		}
-		writeJSON(w, map[string]any{"ok": true})
-	}))
 	api.HandleFunc("GET /api/v1/machines/{mid}/launchers", h.withMachine(h.listLaunchers))
 	api.HandleFunc("GET /api/v1/machines/{mid}/launchers/{name}/models", h.withMachine(h.launcherModels))
 	h.launcherRoutes(api)
@@ -114,8 +100,6 @@ func (h *Hub) routes() http.Handler {
 	}))
 	api.HandleFunc("POST /api/v1/machines/{mid}/files", h.withMachine(h.uploadFile))
 	api.HandleFunc("GET /api/v1/machines/{mid}/claude-settings", h.proxy("claude.settings", nil))
-	api.HandleFunc("GET /api/v1/machines/{mid}/claude-dirs", h.withMachine(h.getClaudeDirs))
-	api.HandleFunc("PUT /api/v1/machines/{mid}/claude-dirs/blocked", h.withMachine(h.putClaudeDirsBlocked))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/claude-settings", h.proxyBody("claude.settings.set"))
 	api.HandleFunc("GET /api/v1/machines/{mid}/codex-settings", h.proxy("codex.settings", nil))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/codex-settings", h.proxyBody("codex.settings.set"))
@@ -422,7 +406,13 @@ func (h *Hub) withMachine(fn func(http.ResponseWriter, *http.Request, *Machine))
 	}
 }
 
-func callErr(w http.ResponseWriter, err error) { apierr.Call(w, err) }
+func callErr(w http.ResponseWriter, err error) {
+	if errors.Is(err, errManagerOffline) { // the manager that carries the machine is not there (devices_link.go)
+		writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
+		return
+	}
+	apierr.Call(w, err)
+}
 
 // proxy forwards a GET to the machine's node and returns its result verbatim.
 func (h *Hub) proxy(method string, params func(*http.Request) any) http.HandlerFunc {
@@ -653,7 +643,12 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	// The manager says what it runs on (模型配置 › Agents, a model picked for this start) and names its tab
 	// (agents_link.go).
 	if err := h.agentStartParams(ctx, m, params, name); err != nil {
-		writeErr(w, 400, err)
+		var refused *startRefused
+		if errors.As(err, &refused) {
+			writeErr(w, 400, err)
+			return
+		}
+		callErr(w, err) // 503 assistant_offline without the manager (the machine is its to reach), else 502
 		return
 	}
 	if err := m.call(ctx, "session.start", params, &res); err != nil {

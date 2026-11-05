@@ -1039,7 +1039,10 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
 
 ## hub ↔ node RPC
 
-`ssh <host> ~/.persona/bin/personad node --stdio`（hub 机器本机直接起子进程）。stdin/stdout 每行一个 JSON。
+> 2026-11-04 起连 node 的是管理者（助手的进程，[machines.md](machines.md)「谁连电脑」）：下面的「hub」在线上是管理者，hub 的调用和 node 的事件经总线转（「总线」下的「电脑（devices.*）」），
+> node 看到的协议一个字不变。
+
+`ssh <host> ~/.persona/bin/personad node --stdio`（hub 机器本机直接起子进程，现在是管理者的子进程）。stdin/stdout 每行一个 JSON。
 双向都能发请求：`{"id":"h12","method":"…","params":{}}` → `{"id":"h12","result":{}}` / `{"id":"h12","error":{"message":"…"}}`；
 单向事件 `{"event":"…","params":{}}`。hub 发的 id 以 `h` 开头，node 发的以 `n` 开头。stderr 是 node 日志。
 
@@ -1123,8 +1126,9 @@ node → hub 请求：
 
 ### 电脑链路（jarvis-link，kind link）
 
-hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS 端口，hub 在这条链路上开流，流里就是上面这套 RPC（字节原样转给那台的常驻 node）。
-细节见 [link.md](link.md)，这里只列线上的东西：
+hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS 端口，在这条链路上开流，流里就是上面这套 RPC（字节原样转给那台的常驻 node）。
+2026-11-04 起 hub 认完凭据把链路和流原样转给管理者（`devices.accept` + `GET /api/v1/bus/relay`，下面「电脑（devices.*）」），下面 hub 发的消息是管理者发的，关闭码照转；
+管理者没连着时 `GET /api/v1/link` 回 `503 assistant_offline`。细节见 [link.md](link.md)，这里只列线上的东西：
 
 - `GET /api/v1/link`（WebSocket，`role: link` 的凭据，只走 TLS，回环例外）。文本消息，每条一个 JSON：
   - jarvis-link → hub：`{"type":"hello","machine","version","address"}`（第一条，10 秒内）、`{"type":"open_failed","id","error"}`；
@@ -1296,6 +1300,41 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 - 助手没连着、或在请求中途断开回 `503 assistant_offline`，它回的 `rpc.Error` 变成 `502`（带它的 `code`）；没给期限的请求 5 分钟后放弃。
 
 **发给 App 的消息**：助手发单向事件 `ws.broadcast {message}`，`message` 是一个带字符串 `type` 的 JSON 对象（`assistant_schedule`、`assistant_feed`、`task_plan`），hub 原样发给每个 App 的 WebSocket（加上每条消息都有的 `event_seq`）；没有 `type` 的丢掉。
+
+### 电脑（devices.*）
+
+2026-11-04 起电脑是带着它们的管理者连的（现在是首席管理者 `assistant`，[machines.md](machines.md)「谁连电脑」），消息在 `server/internal/devicewire`。hub 那头 `hub/devices_link.go`、`devices_relay.go`，管理者那头 `internal/devices`。
+
+- 握手的回答多一个 `devices`（只给带着电脑的那个管理者）：`{machines:[hub.json 的条目，原样], hub_id, hub_name, hub_version, endpoints?, mesh_hubs?, tailcat_derp_map_url?, link_ping_ms?, link_ping_timeout_ms?, mesh?}`，
+  `mesh` 是 `{member?, center_name?, settle_until?, hubs:{hub_id:{name, reachable, rtt_ms}}, members:[{hub_id, machines:[{id, cfg, kind, avail?, rtt_ms?}]}], path_switch_ms}`；变了（管理界面加了电脑、互联组、hub 的地址和名字）hub 发 `devices.config`，参数同上（合并 200 毫秒）。
+- 管理者 → hub：
+  - 事件 `devices.state {machines:[{machine, config, info, connected?, connected_at?, warm_until?, derived?, paths?}], absorbed?:{条目 id: 机器 id}, entries?:[{id, kind, avail?, rtt_ms?}]}`：
+    全部机器，按 App 列的顺序；`machine` 是 App 看到的那份（除了 hub 加的 `system`、`computer`、`browser`；它的 `online` 把管理者重启后的暖启动也算上），`connected` 是 node 现在真连着、调用能到（hub 的自更新等的、更新 node 发给的都是这个），`connected_at` 变了是 node 重连了，`warm_until` 之前是暖启动；`entries` 是 hub 记录里自己的电脑。变了才发（合并 50 毫秒，`last_seen` 单独变不算），每次握手后发一次整份。
+  - 事件 `devices.event {machine_id, event, params}`：node 的单向事件，原样、按顺序（`session.items`、`terminal.frame`、`stream.data`……）；`state.put` 管理者自己存，不转。
+  - 调用 `devices.request {machine_id, method, params, request}` → hub 的回答：node 要 hub 答的（`interaction.create`、`assistant.lark`、`mcp.tools`、`mcp.call`）；`request` 是管理者给的键。
+  - 事件 `devices.request_end {machine_id, request}`：这条请求来的 node 连接在 hub 回答前断了，hub 不再等它（和 node 自己的连接断了一样：能续上的卡片留着，等 hook 从下一条连接来认领）。
+  - 调用 `devices.connected {machine_id, connected_at}` → `{configure?:{键: 值}, calls?:[{method, params}]}`：node 刚连上（或管理者和 hub 的连接新连上，每台在线的再来一次），
+    hub 要加进 `node.configure` 的（`codex`）和之后要发的（`launchers.managed`、`session.echoes`），管理者照做后才要会话列表；hub 同时开始它在连上时做的事。
+  - 调用 `devices.connector_cred {machine_id}` → `{machine_id, fp, token, version?}`（kind service 的凭据，hub 封着存，`token` 为空是没配对）、`devices.connector_paired {machine_id, fp, token, version}` → `{}`（配对完交给 hub 存）。
+- hub → 管理者：
+  - 调用 `devices.call {machine_id, method, params, timeout_ms?}` → node 的结果：App 和 hub 的功能对 node 的调用；`session.watch` / `session.unwatch` 管理者也记着，node 换连接时再 watch。
+    `timeout_ms` 是 hub 还肯等的时间减一点（十分之一，最多 500 毫秒），管理者的超时回答先到；hub 没给期限的调用（插件的 `nodes.call` 等）也不给，和 hub 自己连 node 时一样等。
+    错误码：`no_device`、`machine_offline`（没发出去）、`node_closed`（发出去以后 node 的连接断了，或调用被打断）、`deadline`（发出去以后时间到了）；node 自己带码的错误原样。
+    hub 认回原来的错误：离线照旧 503 `node_unreachable`；`node_closed`、`deadline` 和总线在调用途中断了都算「可能已经做了」，发消息的结果是 `unknown`（同一条不会再发），不当成没发出去；
+    总线中途断了的别的调用 App 看到的是 503 `assistant_offline`（管理者不在了）。
+  - 事件 `devices.notify {machine_id, event, params}`：发给 node 的单向事件（终端输入、转发端口的字节）。管理者按机器排队、各自按顺序写，一台电脑收得慢只耽误它自己；写一条卡住 30 秒、或排着的超过 32 MiB，就重连那台。
+  - 事件 `devices.link_rtt {id, rtt_ms}`：hub 在一条 Persona Link 链路上的心跳量出的往返（`id` 是 `devices.accept` 的），管理者比路时用。
+  - 调用 `devices.accept {id, kind, machine_id, token_id?, stream_id?, source?}` → `{}`：hub 握着一条给管理者的连接（`kind`：`link` Persona Link 的链路、`link_stream` 它开的流、`node` 中心经这台成员要的 node 流），管理者拨 `GET /api/v1/bus/relay?id=<id>` 接过去，hub 等 10 秒。
+  - 调用 `devices.reconnect {machine_id}`、`devices.update_nodes {}`（hub 自更新以后，重新部署不是这个版本的 node）、`devices.pair_connector {link, machine_id, address?, proxy?}` → `{address, version}`（管理界面配对 kind service）。
+  - 管理者自己回答的路由（`devicewire.Routes`）经 `http.request` 转：`POST /api/v1/machines/{mid}/reconnect`、`PUT …/engine`、`GET/PUT …/herdr`、`POST …/herdr/start`、`POST …/deploy`、`GET …/claude-dirs`、`PUT …/claude-dirs/blocked`。
+- **转发通道** `GET /api/v1/bus/relay`（WebSocket，管理者的总线 token，和 `/api/v1/bus` 同样的鉴权，只有带着电脑的那个管理者能开）：`?id=` 接过 hub 握着的连接；`?hub=<hub_id>&machine=<id>` 要一条经那台 hub 到它电脑的 node 流（hub 打不开时升级前回 502，`error` 是原因）。
+  hub 逐条转消息（文本、二进制照原样），一边的关闭码和原因给另一边；Persona Link 那边的心跳是 hub 的，没有 pong 时以 1001「no pong within …」关管理者那边。
+  `kind: node`（成员替中心开 node 流）的那条，管理者先打开 node，开好了发一条文本 `open`、开不了以原因关掉，成员这才回中心：`101` 或带原因的 502（最多等 1 分钟）。
+- 管理者每次握手（hub 重启了，或总线断过）把上一条连接时 hub 在 node 上开着的东西在 node 那边关掉：转发的流（`port.dial`、`plugin.node.dial`）发 `stream.close`，看着的终端 `terminal.unwatch`；
+  hub 在握手时也结束经上一条连接开着的流和终端（终端以「助手暂时连不上，稍后再试」结束，App 重新打开），还在等第一次 watch 的不动。
+- 管理者没连着时：机器显示离线（`error`「助手暂时连不上，稍后再试」），要经它的接口回 `503 assistant_offline`，终端流以同一句话结束，转发的端口关掉，`/api/v1/link` 回 503；
+  hub 刚起来、管理者还没第一次上报的那 30 秒里，调用等它而不是立刻失败（机器按管理者交接的显示），`/api/v1/link` 和成员的 `/api/v1/peer/node` 最多等 5 秒。
+- node 的一条消息超过 60 MiB 时管理者不转（总线一行最多 64 MiB）：事件丢掉，调用回 `too_large`。
 
 ### 渠道用的方法（2026-11-04）
 

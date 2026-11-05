@@ -116,7 +116,6 @@ func (h *Hub) initMesh(ctx context.Context) {
 		}
 		ms.mu.Unlock()
 	}
-	h.loadPathUIDs(ctx)
 	h.meshRebuild()
 }
 
@@ -212,10 +211,7 @@ func (h *Hub) buildRecord() *hubRecord {
 	rec.Center, rec.Term = ms.group.Center, ms.group.Term
 	ms.mu.Unlock()
 	sort.Slice(rec.Neighbors, func(i, j int) bool { return rec.Neighbors[i].HubID < rec.Neighbors[j].HubID })
-	for _, m := range h.cfgMachines() {
-		avail, rtt := m.reachableHere()
-		rec.Machines = append(rec.Machines, recMachine{ID: m.cfg.ID, Cfg: m.cfg.forMesh(), Kind: kindOf(m.cfg), Avail: avail, RTTMS: rtt})
-	}
+	rec.Machines = h.recordEntries() // how the manager reaches each (devices_link.go)
 	return rec
 }
 
@@ -365,8 +361,8 @@ func reachableHubs(v *meshView) int {
 	return max(n, 1)
 }
 
-// meshLoop rebuilds the record now and then (round trips change), measures the round trip to every computer this hub
-// drives and to the connectors it may dial, and keeps the records on disk.
+// meshLoop rebuilds the record now and then (round trips change; the manager measures those to the computers) and
+// keeps the records on disk.
 func (h *Hub) meshLoop(ctx context.Context) {
 	t := time.NewTicker(meshRefreshEvery)
 	defer t.Stop()
@@ -376,7 +372,6 @@ func (h *Hub) meshLoop(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		h.measureNodes(ctx)
 		h.meshPublish(false)
 		h.meshPersist(false)
 		h.fleetRegroup()

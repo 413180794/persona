@@ -131,14 +131,17 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
 
 ## 经成员的路（node 流）
 
-（`peer_node.go`。）中心连一台只在成员 hub.json 里的电脑（或者自己也有、但这时成员那条更好）：经链路发一个 HTTP 升级请求
+（`peer_node.go`。2026-11-04 起两头的电脑都是各自管理者的（[machines.md](machines.md)「谁连电脑」）：中心的管理者经中心 hub 要这条流
+（`GET /api/v1/bus/relay?hub=<成员>&machine=<id>`），成员 hub 收到后交给自己的管理者去开（`devices.accept` kind `node`），下面「hub」打开 node 的都是那台的管理者。）
+中心连一台只在成员 hub.json 里的电脑（或者自己也有、但这时成员那条更好）：经链路发一个 HTTP 升级请求
 `GET /api/v1/peer/node`，头 `Upgrade: jarvis-node`、`X-Jarvis-Peer-Node: <成员 hub_id>/<它的机器 id>`、`X-Jarvis-Peer-From: <中心>`，一跳一跳转到那台成员；
 成员核对请求来自它的中心、自己是成员、hub.json 里有这台，按 hub.json 的方式打开 node（本机 node、ssh、tailcat、这台的 jarvis-link、连接器），
-回 `101 Switching Protocols`，从此两边原样拷字节。中心在这条字节流上跑 node 协议，和别的路一样。成员自己不驱动这台电脑。
+打开了才回 `101 Switching Protocols`，从此两边原样拷字节；打不开回 502，`error` 是原因（中心在那台机器上显示它）。中心在这条字节流上跑 node 协议，和别的路一样。成员自己不驱动这台电脑。
 
 ## 一台电脑多条路
 
-（`mesh_paths.go`、`machine_conn.go`。）
+（2026-11-04 起在连电脑的管理者里：`server/internal/devices/paths.go`、`conn.go`；hub 在 `devices.config` 的 `mesh` 里给它组里的样子——这台是不是成员、
+别的 hub 到不到得了和多远、成员记录里的电脑——它去重、选路、换路，报回每台的路（`devices.state`），hub 的记录里自己的电脑能不能到也用它报的。）
 
 - **路**：中心 hub.json 里的每一项是一条路（`local` / `service` / `link` / `ssh` / `tailcat`，`ssh` 加 `tailcat_addr` 时先 ssh 再 tailcat 还是一条路），
   每台成员记录里的每台电脑是一条「经成员」的路（`hub`）。

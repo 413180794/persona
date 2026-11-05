@@ -2,10 +2,12 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -155,4 +157,75 @@ func TestNonResumableCancelledWithNode(t *testing.T) {
 	nodeGone()
 	<-done
 	waitPending(t, h, 0)
+}
+
+// Through the manager (devices.request): the node's connection ending ends the hub's wait (devices.request_end) though
+// the bus stays up, so the hook that comes back through the next connection is the one that gets the answer.
+func TestResumableSurvivesAReconnectThroughTheManager(t *testing.T) {
+	h := newTestHub(t)
+	h.store = newMemStore()
+	m := newMachine(h, MachineConfig{ID: "mac"})
+	h.machines, h.byID["mac"] = []*Machine{m}, m
+	ask := func(key string) <-chan json.RawMessage {
+		params, _ := json.Marshal(devicewire.NodeCall{MachineID: "mac", Method: "interaction.create", Request: key,
+			Params: rawOf(t, map[string]any{"interaction": resumable("ix_b")})})
+		out := make(chan json.RawMessage, 1)
+		go func() {
+			res, err := busMethods[devicewire.MethodRequest](h, context.Background(), nil, params)
+			if err != nil {
+				t.Errorf("%s: %v", key, err)
+			}
+			b, _ := json.Marshal(res)
+			out <- b
+		}()
+		return out
+	}
+	end := func(key string) {
+		busEvents[devicewire.EventRequestEnd](h, nil, rawOf(t, devicewire.RequestEnd{MachineID: "mac", Request: key}))
+	}
+	first := ask("k1")
+	waitPending(t, h, 1)
+	end("k1") // its connection ended: the hub's wait ends, the card stays
+	select {
+	case <-first:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first request still waits after its connection ended")
+	}
+	waitPending(t, h, 1)
+	second := ask("k2")
+	time.Sleep(20 * time.Millisecond)
+	yes := true
+	if err := h.resolve("ix_b", proto.Resolution{Allow: &yes}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case b := <-second:
+		var r proto.Resolution
+		if json.Unmarshal(b, &r) != nil || r.Allow == nil || !*r.Allow {
+			t.Fatalf("the hook that came back got %s", b)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the hook that came back never got the answer")
+	}
+
+	// The end can come before the request is read (an event is handled at once, a call in its own goroutine).
+	end("k3")
+	params, _ := json.Marshal(devicewire.NodeCall{MachineID: "mac", Method: "interaction.create", Request: "k3",
+		Params: rawOf(t, map[string]any{"interaction": resumable("ix_c")})})
+	done := make(chan struct{})
+	go func() { _, _ = busMethods[devicewire.MethodRequest](h, context.Background(), nil, params); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a request whose end came first still waits")
+	}
+}
+
+func rawOf(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

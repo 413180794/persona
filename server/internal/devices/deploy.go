@@ -1,11 +1,11 @@
-package hub
+package devices
 
 import (
 	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"io"
 	"os"
 	"os/exec"
@@ -20,15 +20,7 @@ import (
 // if there is one (launchd starts it again from the new binary; `launchctl kickstart` from an ssh session did not always
 // take, which is how two Macs kept an old node through deploys), and connects again.
 
-// nodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own; JARVIS_NODE_BINARIES points
-// elsewhere (the Docker image carries them in /opt/jarvis/nodes: ~/.jarvis is the data volume there).
-func nodeBinaryDir() string {
-	if d := identity.Getenv("JARVIS_NODE_BINARIES"); d != "" {
-		return d
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(identity.DataDir(home), "bin", "nodes")
-}
+func nodeBinaryDir() string { return devicewire.NodeBinaryDir() }
 
 // nodeBinary is the hub's build for a machine's OS and architecture.
 func nodeBinary(goos, arch string) (string, error) {
@@ -69,9 +61,9 @@ func (m *Machine) startDeploy() error {
 	}
 	m.deploying, m.deployErr, m.deployPhase = true, "", "transferring"
 	m.mu.Unlock()
-	m.hub.broadcastMachines()
+	m.d.changed()
 	go func() {
-		ctx := m.hub.deployContext()
+		ctx := m.d.deployContext()
 		err := m.deploy(ctx, bin)
 		m.mu.Lock()
 		m.deploying, m.deployPhase = false, ""
@@ -80,11 +72,11 @@ func (m *Machine) startDeploy() error {
 		}
 		m.mu.Unlock()
 		if err != nil {
-			m.hub.logf("[%s] deploy: %v", m.cfg.ID, err)
+			m.d.logf("[%s] deploy: %v", m.cfg.ID, err)
 		} else {
-			m.hub.logf("[%s] deployed the hub's build %s", m.cfg.ID, m.hub.version)
+			m.d.logf("[%s] deployed the hub's build %s", m.cfg.ID, m.d.hubVersion())
 		}
-		m.hub.broadcastMachines()
+		m.d.changed()
 	}()
 	return nil
 }
@@ -188,7 +180,7 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 		m.mu.Lock()
 		online, version := m.online, m.info.Version
 		m.mu.Unlock()
-		if online && !nodeMismatch(m.hub.version, version) {
+		if online && !nodeMismatch(m.d.hubVersion(), version) {
 			return nil
 		}
 	}
@@ -196,4 +188,43 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 	version := m.info.Version
 	m.mu.Unlock()
 	return fmt.Errorf("装好了，但这台电脑上跑的还是 %s：在那台电脑上重启一下 jarvisd", version)
+}
+
+// updateNodes redeploys each connected machine whose node is not the hub's build, one at a time, and queues the
+// update of an offline one reached over its link or connector (devices.update_nodes: the hub updated itself and put
+// the release's node binaries where 重新部署 takes them).
+func (d *Devices) updateNodes(ctx context.Context) {
+	version := d.hubVersion()
+	for _, m := range d.machinesNow() {
+		m.mu.Lock()
+		need := m.cfg.Kind != "local" && m.online && nodeMismatch(version, m.info.Version)
+		offlineLinked := !m.online && m.rpcDeploymentLocked()
+		m.mu.Unlock()
+		if offlineLinked {
+			if err := m.queueOfflineNodeUpdate(ctx); err != nil {
+				d.logf("update: [%s] queue node update: %v", m.cfg.ID, err)
+			}
+			continue
+		}
+		if !need {
+			continue
+		}
+		if err := m.startDeploy(); err != nil {
+			d.logf("update: [%s] %v", m.cfg.ID, err)
+			continue
+		}
+		for i := 0; i < 500; i++ { // deploy gives up after 15 minutes
+			m.mu.Lock()
+			busy := m.deploying
+			m.mu.Unlock()
+			if !busy {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(2 * time.Second):
+			}
+		}
+	}
 }

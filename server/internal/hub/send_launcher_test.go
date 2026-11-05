@@ -329,8 +329,9 @@ func TestOfflineSessionWithoutLauncherResumesOnNewAgents(t *testing.T) {
 		model, _ := got["model"].(string)
 		return l, model
 	}
-	if l, model := send("gone-1", `{"text":"hi"}`); l != "work" || model != "m-1" {
-		t.Errorf("without the manager: launcher %q model %q, want 模型配置 › Agents as the hub has it", l, model)
+	// Without the manager the hub adds nothing (it does not reach the machine without it: devices_link.go).
+	if l, model := send("gone-1", `{"text":"hi"}`); l != "" || model != "" {
+		t.Errorf("without the manager: launcher %q model %q, want nothing added", l, model)
 	}
 	connectAssistant(t, h)
 	for _, c := range []struct{ sid, body, launcher, model string }{

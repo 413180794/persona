@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -20,8 +21,9 @@ import (
 // the manager what happened (session.turn_started / turn_ended, session.seen), shows what it reports (the snapshot's
 // work on the session lists, its cards with the other interactions) and asks it to fill in a start
 // (agents.start_params, agents.resume_params, agents.tab_name). While the manager is not connected the lists keep
-// what it reported last (a long overdue wake no longer counts as one), answers to its cards wait for it (heldActs),
-// and a start waits for it a little, then goes on 模型配置 › Agents as the hub has it, with no tab name.
+// what it reported last (a long overdue wake no longer counts as one) and answers to its cards wait for it
+// (heldActs); a start right after the hub started waits for it to connect, and without it there is no start at all:
+// the computers are the manager's to reach (devices_link.go), so it is answered 503 assistant_offline.
 
 // AgentsConfig is hub.json "agents", the manager's defaults (Hello.Agents).
 type AgentsConfig = assistantwire.AgentsConfig
@@ -36,8 +38,8 @@ type agentWork struct {
 	on bool
 	by map[[2]string]proto.WorkState
 
-	everUp            bool      // it connected since the hub started
-	firstWait, goneAt time.Time // when a start first waited for it (never connected yet), when it went away
+	everUp    bool      // it connected since the hub started
+	firstWait time.Time // when a start first waited for it (never connected yet)
 }
 
 // takeWorkReport keeps the manager's report (nil: it could not read it; the last one stands) and says the machines
@@ -233,14 +235,12 @@ func (h *Hub) workSeen(machine, session string, at time.Time) {
 
 // Waiting for the manager: a hub that just started takes requests (queued on its socket, the apps' replays) before its
 // child has shaken hands, and one that restarts is back in a second or two. A start or a resume waits for it this
-// long; while it is still not there the hub fills in what it can itself.
-var (
-	managerStartWait   = 60 * time.Second // after the hub started, for a manager that never connected
-	managerRestartWait = 10 * time.Second // after it went away
-)
+// long. Once it connected, a manager that is gone is not waited for: what follows needs it anyway (the machines are
+// its), and is answered 503 assistant_offline at once.
+var managerStartWait = 60 * time.Second // after the hub started, for a manager that never connected
 
-// waitManager waits, within ctx (less a few seconds for the call that follows), for the manager to be connected;
-// false when it is not.
+// waitManager waits, within ctx (less a few seconds for the call that follows), for the manager to be connected,
+// only while it has not connected since the hub started; false when it is not.
 func (h *Hub) waitManager(ctx context.Context) bool {
 	if h.busConnOf(assistantwire.AssistantID) != nil {
 		return true
@@ -248,18 +248,14 @@ func (h *Hub) waitManager(ctx context.Context) bool {
 	aw := &h.agentWork
 	now := time.Now()
 	aw.mu.Lock()
-	var until time.Time
-	if !aw.everUp {
-		if aw.firstWait.IsZero() {
-			aw.firstWait = now
-		}
-		until = aw.firstWait.Add(managerStartWait)
-	} else {
-		if aw.goneAt.IsZero() {
-			aw.goneAt = now
-		}
-		until = aw.goneAt.Add(managerRestartWait)
+	if aw.everUp {
+		aw.mu.Unlock()
+		return false
 	}
+	if aw.firstWait.IsZero() {
+		aw.firstWait = now
+	}
+	until := aw.firstWait.Add(managerStartWait)
 	aw.mu.Unlock()
 	if d, ok := ctx.Deadline(); ok && d.Add(-5*time.Second).Before(until) {
 		until = d.Add(-5 * time.Second)
@@ -278,7 +274,7 @@ func (h *Hub) waitManager(ctx context.Context) bool {
 func (h *Hub) managerConnected() {
 	aw := &h.agentWork
 	aw.mu.Lock()
-	aw.everUp, aw.goneAt = true, time.Time{}
+	aw.everUp = true
 	aw.mu.Unlock()
 	if c := h.busConnOf(assistantwire.AssistantID); c != nil && nodeMismatch(h.version, c.presence.Version) {
 		h.logf("assistant: its build %q is not the hub's %q: the Agents triage may run in both or in neither", c.presence.Version, h.version)
@@ -287,9 +283,9 @@ func (h *Hub) managerConnected() {
 
 // agentStartParams has the manager fill in params, an Agent the app starts on m (POST /api/v1/sessions): what it runs
 // on (模型配置 › Agents, the launcher / model / effort picked for this start over it) and, from nameFrom when it is not
-// "", its tab's name. An error is the start's refusal (the app's to see, 400). While the manager is not connected
-// (after waiting for it a little) the hub applies 模型配置 › Agents itself, which it still has; the tab is then named
-// agent-<n> by the node.
+// "", its tab's name. An error is the start's refusal (*startRefused, the app's to see: 400), errManagerOffline (the
+// manager is not connected after waiting for it while the hub starts, and without it nothing reaches the machine:
+// 503), or the manager's failure to answer (502).
 func (h *Hub) agentStartParams(ctx context.Context, m *Machine, params map[string]any, nameFrom string) error {
 	var res struct {
 		Params map[string]any `json:"params"`
@@ -310,19 +306,21 @@ func (h *Hub) agentStartParams(ctx context.Context, m *Machine, params map[strin
 		}
 		return nil
 	case errors.As(err, &re) && re.Code == assistantwire.CodeBadRequest:
-		return errors.New(re.Message)
+		return &startRefused{re.Message}
+	case errors.Is(err, errBusOffline):
+		return fmt.Errorf("%s: %w", m.cfg.ID, errManagerOffline)
 	}
-	h.logf("start on %s: the manager did not say what it runs on (%v): 模型配置 › Agents as the hub has it", m.cfg.ID, err)
-	if resume, _ := params["resume_session_id"].(string); resume != "" {
-		return nil // a resume runs on what the node knows it ran on
-	}
-	return h.applyModel(ctx, "agent.new", params)
+	return err
 }
 
+// startRefused is the manager's refusal of a start (the request itself is wrong: 400).
+type startRefused struct{ msg string }
+
+func (e *startRefused) Error() string { return e.msg }
+
 // applyResumeLauncher adds 新建 Agent's launcher and model to p, a message that resumes sid on m (the manager's
-// agents.resume_params: asked with no params, what it answers goes over p's). While the manager is not connected (after
-// waiting for it a little) the hub applies 模型配置 › Agents itself; when that cannot run as a launcher the send goes
-// as before (plain claude).
+// agents.resume_params: asked with no params, what it answers goes over p's). Without the manager nothing is added:
+// the send that follows goes through it too and is answered 503 assistant_offline.
 func (h *Hub) applyResumeLauncher(ctx context.Context, m *Machine, sid string, p map[string]any) {
 	var res struct {
 		Params map[string]any `json:"params"`
@@ -333,12 +331,8 @@ func (h *Hub) applyResumeLauncher(ctx context.Context, m *Machine, sid string, p
 			SessionID: sid, Params: map[string]any{}}, &res)
 	}
 	if err != nil {
-		h.logf("resume %s: the manager did not say what it runs on (%v): 模型配置 › Agents as the hub has it", sid, err)
-		res.Params = map[string]any{}
-		if err := h.applyModel(ctx, "agent.new", res.Params); err != nil {
-			h.logf("resume %s: 新建 Agent's launcher not applied: %v", sid, err)
-			return
-		}
+		h.logf("resume %s: the manager did not say what it runs on: %v", sid, err)
+		return
 	}
 	for _, k := range []string{"launcher", "model", "effort", "model_fingerprint"} {
 		if v, ok := res.Params[k]; ok {

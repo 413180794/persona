@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/devicewire"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -111,7 +112,7 @@ func TestEnvOverridesConfig(t *testing.T) {
 
 func TestNodeBinaryDirFromEnv(t *testing.T) {
 	t.Setenv("JARVIS_NODE_BINARIES", "/opt/jarvis/nodes")
-	if d := nodeBinaryDir(); d != "/opt/jarvis/nodes" {
+	if d := devicewire.NodeBinaryDir(); d != "/opt/jarvis/nodes" {
 		t.Fatalf("node binaries in %s", d)
 	}
 }

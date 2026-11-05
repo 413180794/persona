@@ -34,6 +34,8 @@ type BusOptions struct {
 	Deploy     string        // how it was started: "child" (the hub's), "external"
 	Backoff    time.Duration // before dialing again, doubling to a minute (zero: the protocol's 1 s; tests shorten it)
 	Logf       func(format string, args ...any)
+	// Devices is the manager's own connections to the computers (devices.go); nil: the hub has them (tests).
+	Devices Devices
 }
 
 // BusHub is Hub over the bus.
@@ -84,7 +86,12 @@ func NewBusHub(o BusOptions) *BusHub {
 		},
 		OnHello:   b.onHello,
 		OnRequest: b.answer,
-		OnEvent:   b.queueEvent,
+		OnEvent: func(event string, params json.RawMessage) {
+			if o.Devices != nil && o.Devices.Event(event, params) {
+				return // the computers' (devices.go), in the order they came
+			}
+			b.queueEvent(event, params)
+		},
 	}
 	return b
 }
@@ -124,6 +131,14 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	b.mu.Lock()
 	svc, ctx := b.svc, b.ctx
 	b.mu.Unlock()
+	if d := b.opts.Devices; d != nil && ctx != nil {
+		d.Hello(res)
+		go func() { // once the connection counts as up (after this returns)
+			if b.client.Wait(ctx) == nil {
+				d.BusUp()
+			}
+		}()
+	}
 	if svc != nil {
 		svc.workReconnected() // turns that ended while it was away are looked for at the next tick (agents_work.go)
 		go svc.Resync(context.WithoutCancel(ctx))
@@ -137,6 +152,9 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 
 // Wait returns once the connection is up and its handshake went through.
 func (b *BusHub) Wait(ctx context.Context) error { return b.client.Wait(ctx) }
+
+// Client is the bus connection (for the devices: their calls and events to the hub).
+func (b *BusHub) Client() *bus.Client { return b.client }
 
 func (b *BusHub) setHello(h Hello) {
 	b.mu.Lock()
@@ -173,6 +191,9 @@ func (b *BusHub) Hello(context.Context) (Hello, error) {
 }
 
 func (b *BusHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage, error) {
+	if out, ok, err := b.localDeviceCall(ctx, p); ok { // the manager's own machines (devices.go)
+		return out, err
+	}
 	var out json.RawMessage
 	err := b.client.Call(ctx, assistantwire.MethodDevice, p, &out)
 	return out, busError(err)
@@ -198,6 +219,7 @@ func (b *BusHub) Broadcast(_ context.Context, m Broadcast) {
 }
 
 func (b *BusHub) Snapshot(ctx context.Context, s Snapshot) (SnapshotResult, error) {
+	b.keepFromSnapshot(s) // what the nodes keep listing is the manager's to tell them (devices.go)
 	var out SnapshotResult
 	err := b.client.Call(ctx, assistantwire.MethodSnapshot, s, &out)
 	return out, busError(err)
@@ -276,7 +298,11 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		if err := decode(&p); err != nil {
 			return nil, err
 		}
-		return serveHTTP(ctx, s, p)
+		var h http.Handler = s
+		if d := b.opts.Devices; d != nil {
+			h = d.Handler(s) // the machines' routes that are the manager's (devices.go)
+		}
+		return serveHTTP(ctx, h, p)
 	case assistantwire.MethodTools:
 		return map[string]any{"tools": s.Tools(ctx)}, nil
 	case assistantwire.MethodTool:
@@ -365,11 +391,16 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 	if out, ok, err := inboxRequest(ctx, s, method, decode); ok { // the inbox's (inbox_bus.go)
 		return out, err
 	}
+	if d := b.opts.Devices; d != nil {
+		if out, ok, err := d.Request(ctx, method, params); ok { // devices.* (devices.go)
+			return out, err
+		}
+	}
 	return nil, &rpc.Error{Code: bus.CodeUnknownMethod, Message: "unknown method " + method}
 }
 
 // serveHTTP answers an app's request the hub relayed (http.request) with s's routes.
-func serveHTTP(ctx context.Context, s *Service, p assistantwire.HTTPRequest) (assistantwire.HTTPResponse, error) {
+func serveHTTP(ctx context.Context, s http.Handler, p assistantwire.HTTPRequest) (assistantwire.HTTPResponse, error) {
 	target := p.Path
 	if p.Query != "" {
 		target += "?" + p.Query

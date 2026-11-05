@@ -20,6 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/osproc"
 
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/update"
 )
@@ -321,8 +322,8 @@ func (u *updater) rollback(p update.Pending, reason string) {
 	}
 }
 
-// updateNodes puts the release's node binaries where 重新部署 takes them (deploy.go) and redeploys each connected
-// machine whose node is not this build, one at a time.
+// updateNodes puts the release's node binaries where 重新部署 takes them (the manager's, internal/devices deploy.go)
+// and has the manager redeploy each connected machine whose node is not this build, one at a time.
 func (u *updater) updateNodes(ctx context.Context, staged string) {
 	if staged != "" {
 		files, _ := filepath.Glob(filepath.Join(staged, "jarvisd-*"))
@@ -330,10 +331,10 @@ func (u *updater) updateNodes(ctx context.Context, staged string) {
 			if strings.HasSuffix(f, ".gz") || strings.HasSuffix(f, ".part") {
 				continue
 			}
-			if err := os.MkdirAll(nodeBinaryDir(), 0o755); err == nil {
-				_, err = update.Swap(filepath.Join(nodeBinaryDir(), filepath.Base(f)), f)
+			if err := os.MkdirAll(devicewire.NodeBinaryDir(), 0o755); err == nil {
+				_, err = update.Swap(filepath.Join(devicewire.NodeBinaryDir(), filepath.Base(f)), f)
 				if err != nil && errors.Is(err, os.ErrNotExist) {
-					err = copyInto(f, filepath.Join(nodeBinaryDir(), filepath.Base(f)))
+					err = copyInto(f, filepath.Join(devicewire.NodeBinaryDir(), filepath.Base(f)))
 				}
 				if err != nil {
 					u.h.logf("update: node binary %s: %v", filepath.Base(f), err)
@@ -341,38 +342,7 @@ func (u *updater) updateNodes(ctx context.Context, staged string) {
 			}
 		}
 	}
-	for _, m := range u.h.machinesNow() {
-		m.mu.Lock()
-		need := m.cfg.Kind != "local" && m.online && nodeMismatch(u.h.version, m.info.Version)
-		offlineLinked := !m.online && m.rpcDeploymentLocked()
-		m.mu.Unlock()
-		if offlineLinked {
-			if err := m.queueOfflineNodeUpdate(ctx); err != nil {
-				u.h.logf("update: [%s] queue node update: %v", m.cfg.ID, err)
-			}
-			continue
-		}
-		if !need {
-			continue
-		}
-		if err := m.startDeploy(); err != nil {
-			u.h.logf("update: [%s] %v", m.cfg.ID, err)
-			continue
-		}
-		for i := 0; i < 500; i++ { // deploy.go gives up after 15 minutes
-			m.mu.Lock()
-			busy := m.deploying
-			m.mu.Unlock()
-			if !busy {
-				break
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(2 * time.Second):
-			}
-		}
-	}
+	u.h.updateNodes(ctx) // the manager redeploys them, one at a time (internal/devices deploy.go)
 }
 
 func copyInto(from, to string) error {
@@ -690,10 +660,7 @@ func (u *updater) healthURL() string {
 func (h *Hub) updateBusy() []busyItem {
 	var out []busyItem
 	for _, m := range h.machinesNow() {
-		m.mu.Lock()
-		deploying := m.deploying
-		m.mu.Unlock()
-		if deploying {
+		if m.snapshot().Deploying {
 			out = append(out, busyItem{MachineID: m.cfg.ID, Machine: m.cfg.Name, Title: "正在重新部署"})
 		}
 		for _, s := range h.decorated(m) {

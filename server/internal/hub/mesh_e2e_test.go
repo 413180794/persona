@@ -39,9 +39,16 @@ type meshNode struct {
 	watched  map[string]int
 	connects int
 	refuse   map[*Hub]bool // hubs whose connections fail (the network between them broke)
-	events   []string      // one-way events from the hub, "name text"
-	who      []string      // the hubs that connected, in order
-	whoAt    []whoAt
+	refusal  error         // what such a connection fails with (io.ErrUnexpectedEOF when nil)
+	// onEvent, when set, also sees each one-way event from the hub (after it is logged), with the connection it came on.
+	onEvent func(c *meshNodeConn, event string, params json.RawMessage)
+	// hold: a method whose answer waits until its channel is closed (a node still typing a message); held counts the
+	// calls that waited.
+	hold   map[string]chan struct{}
+	held   map[string]int
+	events []string // one-way events from the hub, "name text"
+	who    []string // the hubs that connected, in order
+	whoAt  []whoAt
 }
 
 type whoAt struct {
@@ -81,8 +88,12 @@ func (f *meshNode) dialer(h *Hub) func(context.Context) (net.Conn, error) {
 	return func(ctx context.Context) (net.Conn, error) {
 		f.mu.Lock()
 		if f.refuse[h] {
+			why := f.refusal
 			f.mu.Unlock()
-			return nil, io.ErrUnexpectedEOF
+			if why == nil {
+				why = io.ErrUnexpectedEOF
+			}
+			return nil, why
 		}
 		hubSide, nodeSide := net.Pipe()
 		fc := &meshNodeConn{p: rpc.New("n", nodeSide), c: nodeSide, hub: h}
@@ -111,7 +122,11 @@ func (f *meshNode) dialer(h *Hub) func(context.Context) (net.Conn, error) {
 			_ = json.Unmarshal(params, &p)
 			f.mu.Lock()
 			f.events = append(f.events, event+" "+p.Text)
+			hook := f.onEvent
 			f.mu.Unlock()
+			if hook != nil {
+				hook(fc, event, params)
+			}
 		}
 		fc.p.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
 			if method == "port.dial" { // a forwarded port: a stream to 127.0.0.1:port
@@ -130,6 +145,18 @@ func (f *meshNode) dialer(h *Hub) func(context.Context) (net.Conn, error) {
 				}
 				fc.mux.Start(p.ID, c)
 				return map[string]any{}, nil
+			}
+			f.mu.Lock()
+			held := f.hold[method]
+			if held != nil {
+				if f.held == nil {
+					f.held = map[string]int{}
+				}
+				f.held[method]++
+			}
+			f.mu.Unlock()
+			if held != nil {
+				<-held
 			}
 			return f.handle(method, params)
 		}
@@ -184,6 +211,10 @@ func (f *meshNode) handle(method string, params json.RawMessage) (any, error) {
 		return map[string]any{"control": c.Control != nil}, nil
 	case "fs.list":
 		return map[string]any{"path": "/home/user", "entries": []any{map[string]any{"name": "notes.txt"}}}, nil
+	case "port.probe": // a port the user opens (ports.go): something listens there
+		return map[string]any{"listening": true}, nil
+	case "claude.dirs.list":
+		return map[string]any{"dirs": []proto.ClaudeDir{{Path: "/home/user/.automation/claude-a", Sessions: 1}}}, nil
 	}
 	return map[string]any{}, nil
 }
@@ -210,6 +241,12 @@ func (f *meshNode) addItem(sid, text string) {
 	}
 }
 
+func (f *meshNode) heldCalls(method string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.held[method]
+}
+
 func (f *meshNode) eventLog() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -229,6 +266,7 @@ type testHub struct {
 	store  *meshStore
 	cancel context.CancelFunc
 	nodes  map[string]*meshNode
+	mgr    *testManager // carries its machines
 }
 
 var meshLogs = os.Getenv("JARVIS_MESH_LOG") == "1"
@@ -260,14 +298,14 @@ func startTestHubWith(t *testing.T, id, name string, st *meshStore, dir string, 
 	h.store = st
 	h.public.id = id
 	mh := &testHub{h: h, store: st, nodes: map[string]*meshNode{}}
+	dials := map[string]func(context.Context) (net.Conn, error){} // the manager connects them (devices_harness_test.go)
 	for i, mc := range machines {
-		m := newMachine(h, mc)
 		if i < len(nodes) && nodes[i] != nil {
-			m.dialNode = nodes[i].dialer(h)
+			dials[mc.ID] = nodes[i].dialer(h)
 			mh.nodes[mc.ID] = nodes[i]
+		} else if mc.Kind != kindService && mc.Kind != kindLink {
+			dials[mc.ID] = func(context.Context) (net.Conn, error) { return nil, io.ErrUnexpectedEOF } // no ssh in tests
 		}
-		h.machines = append(h.machines, m)
-		h.byID[mc.ID] = m
 	}
 	srv := httptest.NewUnstartedServer(h.routes())
 	srv.StartTLS()
@@ -282,18 +320,17 @@ func startTestHubWith(t *testing.T, id, name string, st *meshStore, dir string, 
 	h.mesh.mu.Lock()
 	h.mesh.ping = [2]time.Duration{300 * time.Millisecond, 2 * time.Second}
 	h.mesh.mu.Unlock()
-	h.fleetRegroup()
-	for _, m := range h.machines {
-		go m.run(ctx)
-	}
 	h.startMesh(ctx)
-	go h.probeServices(ctx)
 	mh.srv, mh.cancel = srv, cancel
+	mh.mgr = startTestManager(t, h, srv, dials)
 	t.Cleanup(mh.stop)
 	return mh
 }
 
 func (mh *testHub) stop() {
+	if mh.mgr != nil {
+		mh.mgr.stop()
+	}
 	mh.h.stopPeerLinks()
 	mh.cancel()
 	mh.srv.CloseClientConnections()

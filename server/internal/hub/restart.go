@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"context"
 	"encoding/json"
 	"time"
 )
@@ -42,9 +41,7 @@ func (h *Hub) beginStop() {
 			break
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	h.saveWarm(ctx)
+	// The machines are handed to the next hub by the manager, which stops with this one (internal/devices warm.go).
 }
 
 // rememberLiveText keeps a session's message being generated (session.delta: the whole text so far, "" once it is in

@@ -2,7 +2,7 @@
 
 机器通过 Persona Link 主动连接 hub（`kind: link`），或由 hub 连接电脑（`kind: service`）时，使用现有 node RPC 更新常驻 personad。Link 继续只转发字节流，不新增监听端口、不要求 SSH，也不负责安装程序。
 
-本能力更新常驻 node 使用的可执行文件；不更新连接器 jarvis-link 或 Mac 菜单栏 App 本体。相关实现：`server/internal/hub/deploy_rpc.go`、`server/internal/node/update.go`、`server/internal/nodeupdate/`。旧的 SSH / tailcat 部署入口继续保留。
+本能力更新常驻 node 使用的可执行文件；不更新连接器 jarvis-link 或 Mac 菜单栏 App 本体。相关实现：`server/internal/devices/deploy_rpc.go`、`server/internal/node/update.go`、`server/internal/nodeupdate/`。旧的 SSH / tailcat 部署入口继续保留。
 
 ## 使用
 

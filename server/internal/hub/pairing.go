@@ -81,7 +81,7 @@ func (h *Hub) pairRoutes(api *http.ServeMux) {
 			}
 		}
 		if req.Machine != "" {
-			if m := h.cfgMachine(req.Machine); m == nil || m.cfg.Kind != kindLink {
+			if mc := h.cfgEntry(req.Machine); mc == nil || mc.Kind != kindLink {
 				writeErr(w, http.StatusBadRequest, fmt.Errorf("hub.json has no machine %q of kind link", req.Machine))
 				return
 			}

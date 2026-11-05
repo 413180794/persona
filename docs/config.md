@@ -220,6 +220,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `mesh`（可选，hub 互联，[mesh.md](mesh.md)）：`discovery`（默认 true：在局域网里用 mDNS 广播自己、列出发现的 hub；Docker 桥接网络里收不到）、
   `path_switch_seconds`（默认 60：一台电脑有更好的路时，要一直更好这么久中心才换过去；断了的路马上换，不等）。互联的对端、组的中心和任期存在
   Postgres，不在这里。第一版的 `takeover_seconds` 不再用。
+- `machines`：2026-11-04 起是 hub 在握手时交给管理者（助手的进程）的默认值，**由管理者去连**（[machines.md](machines.md)「谁连电脑」）；下面说「hub 拨」「hub 连过去」的，
+  实际拨号的是管理者（hub 机器上它是 hub 的子进程，用同一个 HOME：ssh 配置、tailcat key、`~/.persona/secret.key` 都是这台的）。管理界面运行中加的电脑也交给它，马上连。
 - `machines[].kind`：`local`（hub 自己这台）、`service`（hub 拨这台连接器的被动端口，「hub 来连」，见下一条）、`link`（这台的 jarvis-link
   主动连 hub，「电脑来连」，[link.md](link.md)）；`ssh`（hub 经 `ssh_host` 连过去）、`tailcat`（只走 tailcat，见下下一条）只为已有的配置保留，
   管理界面不再添加，迁移步骤见 [mesh.md](mesh.md)「SSH / tailcat：兼容」。同一台电脑可以配几项（比如 service 和 link 各一项），hub 按
@@ -314,6 +316,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   每次启动给它一个新的总线 token（经 stdin）；设成 `true` 后 hub 不起它，在要跑它的机器上先用 `personad hub assistant-token` 生成一个 token（打印一次；再生成一次就换掉旧的），再
   `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub 地址> personad assistant`。它读的 hub.json 和环境变量同 hub：数据库是 `database_url`（`PERSONA_DATABASE_URL` 优先），
   不给 `PERSONA_ASSISTANT_HUB` 时连本机 `listen` 的端口。助手没连着时它的接口回 `503 assistant_offline`。
+  助手同时带着全部电脑（[machines.md](machines.md)「谁连电脑」）：跑在别的机器上时，`machines` 里的电脑由那台去连（ssh 主机名、tailcat key、
+  hub 机器自己那台的 `node --stdio` 都在那台上）；它没连着时机器显示离线、机器的接口回 `503 assistant_offline`。
 - `assistant.persona_view`（默认 `false`）：助手回答里的卡片写成 ```` ```persona-view ````（扩展的组件，`docs/extensions.md`「UI 版本 3」），不再写 `persona-card`。
   各端（iOS / Mac、安卓、网页）都画得了 UI 版本 3 以后再打开；`persona-card` 在所有端都照样能画。
 - `ai`（2026-10-31 起没有默认值）：App 里几个直接调模型 API（不经过 Claude Code）的小功能用的模型：收件箱分拣、代写回复、粘贴文字识别邮箱配置。

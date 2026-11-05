@@ -1,8 +1,7 @@
-package hub
+package devices
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
-	"github.com/nwverse/persona/server/internal/streams"
 )
 
 // A machine's connection to its node, over one of its paths at a time (mesh_paths.go): the run loop picks the best
@@ -28,7 +26,6 @@ type nodeConn struct {
 	via    string // the transport it took: local | ssh | tailcat | link | service | hub
 	pipe   *nodePipe
 	peer   *rpc.Peer
-	mux    *streams.Mux
 	info   proto.NodeInfo
 	served chan error
 	cancel context.CancelFunc
@@ -37,7 +34,6 @@ type nodeConn struct {
 func (c *nodeConn) close() {
 	c.peer.Close(errors.New("closed"))
 	c.cancel()
-	c.mux.CloseAll()
 	c.pipe.close()
 }
 
@@ -46,7 +42,7 @@ func (m *Machine) run(ctx context.Context) {
 	var conn *nodeConn
 	for ctx.Err() == nil {
 		if conn == nil {
-			if why := m.hub.parkReason(m); why != "" {
+			if why := m.d.parkReason(m); why != "" {
 				if why == "removed" {
 					return
 				}
@@ -54,7 +50,7 @@ func (m *Machine) run(ctx context.Context) {
 				m.waitChange(ctx, 0)
 				continue
 			}
-			if d := m.hub.meshSettling(); d > 0 {
+			if d := m.d.meshSettling(); d > 0 {
 				// Just started with peers: the group may have another center by now (a larger term); a member must not
 				// grab its computers before it hears so.
 				m.park("等组里的其他 hub 连上")
@@ -62,7 +58,7 @@ func (m *Machine) run(ctx context.Context) {
 				continue
 			}
 			m.unpark()
-			p, wait := m.hub.choosePath(m)
+			p, wait := m.d.choosePath(m)
 			if p == nil {
 				m.noPath()
 				m.waitChange(ctx, wait)
@@ -73,7 +69,7 @@ func (m *Machine) run(ctx context.Context) {
 				if ctx.Err() != nil {
 					return
 				}
-				m.hub.pathEnded(p, false, err, 0, false)
+				m.d.pathEnded(p, false, err, 0, false)
 				m.markOffline(err)
 				continue
 			}
@@ -83,7 +79,7 @@ func (m *Machine) run(ctx context.Context) {
 		err := m.serve(ctx, conn)
 		next := m.takeNext()
 		planned := next != nil
-		m.hub.pathEnded(conn.path, true, err, time.Since(start), planned)
+		m.d.pathEnded(conn.path, true, err, time.Since(start), planned)
 		conn.close()
 		m.detach(err, planned)
 		conn = next
@@ -118,14 +114,15 @@ func (m *Machine) waitChange(ctx context.Context, wait time.Duration) {
 	select {
 	case <-ctx.Done():
 	case <-m.kick:
-	case <-m.hub.fleetChanged():
-	case <-m.hub.meshWait():
+	case <-m.d.fleetChanged():
+	case <-m.d.meshWait():
 	case <-t.C:
 	}
 }
 
 // park: this machine is not connected from here now (why), and says so.
 func (m *Machine) park(why string) {
+	m.firstTried() // not connected from here: nothing to wait for
 	m.mu.Lock()
 	changed := m.parked != why
 	m.parked = why
@@ -134,7 +131,7 @@ func (m *Machine) park(why string) {
 	}
 	m.mu.Unlock()
 	if changed {
-		m.hub.broadcastMachines()
+		m.d.changed()
 	}
 }
 
@@ -150,9 +147,10 @@ func (m *Machine) unpark() {
 
 // noPath: no path can be tried now; the machine shows why the last one failed (or what it waits for).
 func (m *Machine) noPath() {
+	m.firstTried()
 	why := ""
-	for _, p := range m.hub.pathsOf(m) {
-		if st := m.hub.pathState(p); st.err != "" {
+	for _, p := range m.d.pathsOf(m) {
+		if st := m.d.pathState(p); st.err != "" {
 			why = st.err
 			break
 		}
@@ -167,7 +165,7 @@ func (m *Machine) noPath() {
 	}
 	m.mu.Unlock()
 	if changed {
-		m.hub.broadcastMachines()
+		m.d.changed()
 	}
 }
 
@@ -203,7 +201,7 @@ func (m *Machine) establishVia(ctx context.Context, p *nodePath, via string) (*n
 	var l *nodePipe
 	var err error
 	if via == viaHub {
-		l, err = m.hub.openThroughHub(cctx, p.hub, p.mid)
+		l, err = m.d.openThroughHub(cctx, p.hub, p.mid)
 	} else {
 		l, err = p.src.open(cctx, via)
 	}
@@ -215,14 +213,10 @@ func (m *Machine) establishVia(ctx context.Context, p *nodePath, via string) (*n
 		return nil, err
 	}
 	peer := rpc.New("h", l.w)
-	mux := streams.New(peer.Notify) // forwarded ports (ports.go)
-	peer.OnEvent = func(event string, params json.RawMessage) {
-		if !mux.Event(event, params) {
-			m.onEvent(event, params)
-		}
-	}
+	// Every event goes on to the hub, the forwarded ports' bytes among them (the hub is their end, ports.go there).
+	peer.OnEvent = m.onEvent
 	peer.OnRequest = m.onRequest
-	c := &nodeConn{path: p, via: via, pipe: l, peer: peer, mux: mux, served: make(chan error, 1), cancel: cancel}
+	c := &nodeConn{path: p, via: via, pipe: l, peer: peer, served: make(chan error, 1), cancel: cancel}
 	go func() { c.served <- peer.Serve(cctx, l.r) }()
 
 	ictx, icancel := context.WithTimeout(cctx, 40*time.Second)
@@ -246,13 +240,13 @@ func (m *Machine) establishVia(ctx context.Context, p *nodePath, via string) (*n
 // serve makes c the machine's connection and serves it until it ends (or a better path took over: m.next).
 func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	p := c.path
-	m.hub.pathConnected(p)
+	m.d.pathConnected(p)
 	m.mu.Lock()
 	m.peer, m.info, m.online, m.err, m.lastSeen = c.peer, c.info, true, "", time.Now().UTC()
 	m.connectedAt = m.lastSeen
+	m.forgetOpenedLocked()     // a new connection has nothing of the hub's open yet
 	m.herdrAsked = time.Time{} // node.info just said; this node may answer herdr.server.status where the last did not
 	m.endWarmLocked()
-	m.streams = c.mux
 	m.via, m.path = c.via, ""
 	m.active, m.transport, m.uid = p, c.via, c.info.MachineUID
 	if c.via == "ssh" && p.src == m {
@@ -260,11 +254,10 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	}
 	onlineAt := time.Now()
 	rewatch := map[string]int{}
-	for id, n := range m.watchers {
-		if n > 0 {
-			rewatch[id] = m.lastSeq[id]
-		}
+	for id := range m.watched {
+		rewatch[id] = m.lastSeq[id]
 	}
+	connectedAt := m.connectedAt
 	m.mu.Unlock()
 	if c.via == "ssh" && p.src != nil && p.src != m {
 		p.src.mu.Lock()
@@ -274,32 +267,33 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	info := c.info
 	where := c.via
 	if c.via == viaHub {
-		where = "hub " + m.hub.hubNameOf(p.hub)
+		where = "hub " + m.d.hubNameOf(p.hub)
 	}
-	m.hub.logf("[%s] connected over %s: %s %s/%s herdr %s claude %s", m.cfg.ID, where, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
+	m.d.logf("[%s] connected over %s: %s %s/%s herdr %s claude %s", m.cfg.ID, where, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
 	m.tellLinks(true, "")
-	m.hub.onSystem(m.cfg.ID, info.System)
-	if nodeMismatch(m.hub.version, info.Version) {
-		m.hub.logf("[%s] node %s is not the hub's build %s: update it", m.cfg.ID, info.Version, m.hub.version)
+	if v := m.d.hubVersion(); nodeMismatch(v, info.Version) {
+		m.d.logf("[%s] node %s is not the hub's build %s: update it", m.cfg.ID, info.Version, v)
 	}
-	m.hub.broadcastMachines()
-	m.hub.connectors.MachineOnline(m.cfg.ID)
-	m.hub.reconcileNodePrograms(ctx, m) // cua, ego and the plugins' programs on this computer (builtin_programs.go)
-	m.hub.learnUID(p, info.MachineUID)  // the paths reaching the same computer become one machine (mesh_paths.go)
+	// The hub has it connected before it is asked to hand the node what is the hub's (devices.connected).
+	m.d.reportNow()
+	m.d.learnUID(p, info.MachineUID) // the paths reaching the same computer become one machine (paths.go)
 	sctx, scancel := context.WithCancel(ctx)
 	defer scancel()
 	if c.via == "tailcat" && p.src == m {
 		go m.watchTailcat(sctx, c.peer, c.pipe.activity)
 	}
 
-	m.configureNode(ctx, c.peer)
+	// The hub's part (Codex, managed launchers, its sends; it starts the plugins' work on the computer) with it.
+	m.configureNode(ctx, c.peer, m.d.hubConnected(ctx, m, connectedAt))
 	var list struct {
 		Sessions []proto.Session `json:"sessions"`
 	}
 	if err := c.peer.Call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
 		m.setSessions(list.Sessions)
+		m.d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
 		m.nodeUpdateConnected(ctx, c.peer, info)
 	}
+	m.firstTried() // configured and listed: the calls that waited for it go now
 	for id, since := range rewatch {
 		_ = c.peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil)
 	}
@@ -348,27 +342,27 @@ func (m *Machine) watchPaths(ctx context.Context, c *nodeConn) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-		case <-m.hub.fleetChanged():
+		case <-m.d.fleetChanged():
 		}
 		if ctx.Err() != nil {
 			return
 		}
-		if why := m.hub.parkReason(m); why != "" || !m.hasPath(c.path) {
+		if why := m.d.parkReason(m); why != "" || !m.hasPath(c.path) {
 			if why == "" {
 				why = "这条路通向的是另一台电脑"
 			}
 			c.peer.Close(errors.New(why))
 			return
 		}
-		q := m.hub.betterPath(m, c.path, since)
+		q := m.d.betterPath(m, c.path, since)
 		if q == nil {
 			continue
 		}
-		m.hub.logf("[%s] trying a better path: %s instead of %s", m.cfg.ID, pathName(m.hub, q), pathName(m.hub, c.path))
+		m.d.logf("[%s] trying a better path: %s instead of %s", m.cfg.ID, pathName(m.d, q), pathName(m.d, c.path))
 		next, err := m.establish(ctx, q)
 		if err != nil {
-			m.hub.pathEnded(q, false, err, 0, false)
-			m.hub.logf("[%s] the better path did not work: %v", m.cfg.ID, err)
+			m.d.pathEnded(q, false, err, 0, false)
+			m.d.logf("[%s] the better path did not work: %v", m.cfg.ID, err)
 			delete(since, q.key)
 			continue
 		}
@@ -380,15 +374,15 @@ func (m *Machine) watchPaths(ctx context.Context, c *nodeConn) {
 	}
 }
 
-func pathName(h *Hub, p *nodePath) string {
+func pathName(d *Devices, p *nodePath) string {
 	if p.via == viaHub {
-		return "hub " + h.hubNameOf(p.hub)
+		return "hub " + d.hubNameOf(p.hub)
 	}
 	return p.via + " (" + p.src.cfg.ID + ")"
 }
 
 func (m *Machine) hasPath(p *nodePath) bool {
-	for _, q := range m.hub.pathsOf(m) {
+	for _, q := range m.d.pathsOf(m) {
 		if q.key == p.key {
 			return true
 		}
@@ -408,18 +402,17 @@ func (m *Machine) takeNext() *nodeConn {
 // ones come back through the next connection). Unless another connection takes over at once (planned), the machine is
 // offline.
 func (m *Machine) detach(err error, planned bool) {
-	if m.hub.stopping.Load() {
-		// The hub is stopping for a restart: the next one shows the machine as it was while its node reconnects
+	if m.d.stopping.Load() {
+		// The manager is stopping for a restart: the next one shows the machine as it was while its node reconnects
 		// (warm.go). Telling the apps it went offline, or ending its questions, would only be noise.
 		m.mu.Lock()
-		m.peer, m.streams, m.active, m.transport = nil, nil, nil, ""
+		m.peer, m.active, m.transport = nil, nil, ""
 		m.mu.Unlock()
 		return
 	}
-	m.hub.forgetLiveText(m.cfg.ID) // the node that was generating it is gone: the transcript has what was finished
-	m.hub.terminalsOffline(m.cfg.ID)
+	// The hub ends what ran on the connection (terminals, the live text, its questions) when it sees it go.
 	m.mu.Lock()
-	m.peer, m.streams = nil, nil
+	m.peer = nil
 	m.active, m.transport = nil, ""
 	if !planned && m.online && reconnectGrace > 0 && m.cfg.Kind != kindLink {
 		// A node the hub reaches itself that comes straight back (a resident node exec'ing a new binary, a relay
@@ -432,9 +425,9 @@ func (m *Machine) detach(err error, planned bool) {
 		ch := make(chan struct{})
 		m.warmUntil, m.warmed = time.Now().Add(reconnectGrace), ch
 		m.mu.Unlock()
-		m.hub.logf("[%s] disconnected: %v (shown as online for %s while it reconnects)", m.cfg.ID, err, reconnectGrace)
+		m.d.logf("[%s] disconnected: %v (shown as online for %s while it reconnects)", m.cfg.ID, err, reconnectGrace)
 		time.AfterFunc(reconnectGrace, func() { m.warmExpired(ch) })
-		m.hub.cancelMachineInteractions(m.cfg.ID)
+		m.d.changed()
 		return
 	}
 	if !planned {
@@ -451,37 +444,33 @@ func (m *Machine) detach(err error, planned bool) {
 	}
 	m.mu.Unlock()
 	if planned {
-		m.hub.logf("[%s] %v", m.cfg.ID, errSwitched)
+		m.d.logf("[%s] %v", m.cfg.ID, errSwitched)
 	} else {
-		m.hub.logf("[%s] offline: %v", m.cfg.ID, err)
+		m.d.logf("[%s] offline: %v", m.cfg.ID, err)
 		if err != nil {
 			m.tellLinks(false, err.Error())
 		}
-		m.hub.broadcastMachines()
 	}
-	m.hub.cancelMachineInteractions(m.cfg.ID)
+	m.d.changed()
 }
 
 // markOffline: a connection could not be made; the machine shows why.
 func (m *Machine) markOffline(err error) {
-	if m.hub.stopping.Load() {
+	defer m.firstTried()
+	if m.d.stopping.Load() {
 		return // a connection that failed because the hub is stopping (detach)
 	}
 	m.mu.Lock()
-	was := m.online
 	m.online = false
 	if err != nil {
 		m.err = err.Error()
 	}
 	m.mu.Unlock()
-	if was {
-		m.hub.cancelMachineInteractions(m.cfg.ID)
-	}
-	m.hub.logf("[%s] offline: %v", m.cfg.ID, err)
+	m.d.logf("[%s] offline: %v", m.cfg.ID, err)
 	if err != nil {
 		m.tellLinks(false, err.Error())
 	}
-	m.hub.broadcastMachines()
+	m.d.changed()
 }
 
 // setOffline is detach for callers outside the run loop (tests that end a connection by hand).
@@ -515,7 +504,7 @@ func (m *Machine) nodeUID() string {
 // tellLinks says on the links of this computer's jarvis-links (its own entry's and those of entries with the same
 // computer) whether the hub got through to the resident node.
 func (m *Machine) tellLinks(online bool, err string) {
-	for _, p := range m.hub.pathsOf(m) {
+	for _, p := range m.d.pathsOf(m) {
 		if p.src != nil && p.src.cfg.Kind == kindLink {
 			p.src.tellLink(online, err)
 		}
@@ -536,7 +525,8 @@ func (m *Machine) reachableHere() (bool, int) {
 		if l == nil {
 			return false, 0
 		}
-		return true, l.rttMS()
+		return true, int(l.rtt.Load()) // the hub's heartbeat on it (devices.link_rtt); 0 before the first
+
 	case kindService:
 		return m.serviceReachable()
 	}
@@ -563,12 +553,6 @@ func (m *Machine) unavailableWhy() string {
 		return m.serviceWhy()
 	}
 	return ""
-}
-
-// forMesh is a hub.json entry as a member tells the center about it: no ssh host, tailcat address or binary path.
-func (c MachineConfig) forMesh() MachineConfig {
-	c.SSHHost, c.TailcatAddr, c.RemoteBin, c.Address, c.Proxy = "", "", "", "", ""
-	return c
 }
 
 // connect makes one connection through the machine's own hub.json entry and serves it until it ends (tests drive a
@@ -613,8 +597,8 @@ func (m *Machine) retryClaudeVersion(ctx context.Context, peer *rpc.Peer) {
 		}
 		m.mu.Unlock()
 		if current {
-			m.hub.logf("[%s] claude %s", m.cfg.ID, info.ClaudeVersion)
-			m.hub.broadcastMachines()
+			m.d.logf("[%s] claude %s", m.cfg.ID, info.ClaudeVersion)
+			m.d.changed()
 		}
 		return
 	}

@@ -1,0 +1,578 @@
+package devices
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"os/exec"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+var errOffline = apierr.ErrOffline
+
+// MachineConfig is what the manager reads of a hub.json machines[] entry (the hub has the rest: launchers, Codex).
+type MachineConfig struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Kind: local | service (the manager dials the computer's connector, service.go) | link (the computer's
+	// Persona Link dials the hub, which relays it here, link.go) | ssh | tailcat (tailcat only, no ssh).
+	Kind    string `json:"kind"`
+	SSHHost string `json:"ssh_host,omitempty"`
+	// Address is a service computer's connector, host:port; Proxy an optional socks5://host:port to dial it through.
+	Address     string `json:"address,omitempty"`
+	Proxy       string `json:"proxy,omitempty"`
+	TailcatAddr string `json:"tailcat_addr,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+	// RemoteBin is the jarvisd path on the remote machine (default ~/.jarvis/bin/jarvisd).
+	RemoteBin        string   `json:"remote_bin,omitempty"`
+	ClaudeConfigDirs []string `json:"claude_config_dirs,omitempty"`
+	Botmux           *bool    `json:"botmux,omitempty"`
+	HerdrAutostart   *bool    `json:"herdr_autostart,omitempty"`
+	ClaudeStartDir   string   `json:"claude_start_dir,omitempty"`
+	// ClaudeGlobalHooks: the node puts report-only hooks into its default claude config directory (hub/config.go).
+	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
+}
+
+// Machine is the manager's connection to one node: a local subprocess, `ssh host jarvisd node --stdio`, a tailcat
+// connection to its resident node, a stream on the Persona Link it keeps to the hub (kind link, link.go), a
+// connector's stream (kind service), or a stream through a member hub (a derived machine).
+type Machine struct {
+	cfg  MachineConfig
+	raw  json.RawMessage // the entry as the hub gave it (for a derived machine, the member's)
+	d    *Devices
+	ctx  context.Context
+	stop context.CancelFunc
+
+	mu   sync.Mutex
+	peer *rpc.Peer
+	info proto.NodeInfo
+	// online: shown online (its node answered on the current connection, or warm); connectedAt: when the node's
+	// current connection began.
+	online      bool
+	connectedAt time.Time
+	// warmUntil, warmed: shown as before a restart until then, while its node reconnects (warm.go); warmed is closed
+	// when that ends.
+	warmUntil time.Time
+	warmed    chan struct{}
+	err       string
+	lastSeen  time.Time
+	sessions  []proto.Session
+	watched   map[string]bool // sessions the hub watches (session.watch): watched again on a new connection
+	lastSeq   map[string]int  // session id -> highest item seq seen
+	kick      chan struct{}
+	// deploying: the manager is sending this machine the hub's node build (deploy.go); deployErr: why the last try
+	// failed.
+	deploying   bool
+	deployErr   string
+	deployPhase string
+	// via is how the connection runs (local | ssh | tailcat | link | service | hub), path how tailcat's packets go.
+	via, path                  string
+	directFailed, switchedBack time.Time
+	flaps                      int
+	timings                    tailcatTimings
+	engineMu                   sync.Mutex
+	link                       *mgrLink      // kind link: the link Persona Link keeps open, nil while there is none
+	linkDown                   error         // why the last link went away
+	linkUp                     chan struct{} // a link arrived
+	// herdrAsked: when the node last said whether herdr's server answers (herdr.go, its row).
+	herdrAsked time.Time
+	// first is closed once the first try to connect ended (the node answered, or it did not): until then, right after
+	// the manager started, a call waits for it instead of failing at once (firstWait).
+	first     chan struct{}
+	firstOnce sync.Once
+	// pending counts the node's questions waiting on the hub (interaction.create): no switching paths meanwhile.
+	pending int
+	// notes are the hub's one-way events waiting for the node (notes.go; their own lock, not m.mu).
+	notes nodeNotes
+	// opened is what the hub has open on the node through the bus connection of the moment (hubopen.go).
+	opened hubOpened
+	// nodeCmd replaces the node command (tests).
+	nodeCmd func(context.Context) *exec.Cmd
+	// dialTailcat replaces dialing the node over tailcat, probeDirect checking that ssh works (tests).
+	dialTailcat func(context.Context) (net.Conn, error)
+	probeDirect func(context.Context) error
+	// dialNode replaces every way to the node with a connection to an in-process one (tests).
+	dialNode func(context.Context) (net.Conn, error)
+
+	derived   bool
+	active    *nodePath
+	transport string
+	uid       string
+	next      *nodeConn
+	parked    string
+	svc       serviceState
+}
+
+func newMachine(d *Devices, cfg MachineConfig) *Machine {
+	m := &Machine{cfg: cfg, d: d, watched: map[string]bool{}, lastSeq: map[string]int{}, kick: make(chan struct{}, 1),
+		timings: defaultTailcatTimings, linkUp: make(chan struct{}, 1), first: make(chan struct{})}
+	if dial := d.opts.DialNode; dial != nil {
+		m.dialNode = dial(cfg.ID)
+	}
+	switch cfg.Kind {
+	case kindLink:
+		m.err = "waiting for Persona Link"
+	case kindService:
+		m.err = "waiting for the connector"
+	}
+	return m
+}
+
+func sameConfig(a, b MachineConfig) bool {
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return string(x) == string(y)
+}
+
+// snapshot is the machine as the apps get it, but for what the hub adds (system, computer, browser).
+func (m *Machine) snapshot() proto.Machine {
+	d := m.d
+	engine := d.engineOf(m.cfg.ID) // before m.mu: it may read settings
+	version := d.hubVersion()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	engines := []proto.Engine{} // what the node found: none while offline
+	warm := m.warmLocked(time.Now())
+	if m.online || warm {
+		engines = append(engines, m.info.Engines...)
+	}
+	icon := m.cfg.Icon
+	if icon == "" {
+		icon = "laptop"
+	}
+	canDeploy, deployReason := m.canDeployLocked()
+	var link *proto.MachineLink
+	if m.link != nil {
+		link = m.link.info()
+	}
+	return proto.Machine{
+		ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, Icon: icon, SSHHost: m.cfg.SSHHost, Online: m.online || warm, Error: m.err,
+		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
+		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
+		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(version, m.info.Version),
+		Deploying: m.deploying, DeployError: m.deployErr,
+		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
+		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
+		Engine: engine, Engines: engines, Link: link,
+	}
+}
+
+// state is the machine as devices.state reports it.
+func (m *Machine) state() devicewire.State {
+	s := m.d.decorate(m, m.snapshot())
+	paths := m.d.pathInfos(m)
+	connected := m.reachable()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return devicewire.State{Machine: s, Config: m.raw, Info: m.info, Connected: connected, ConnectedAt: m.connectedAt,
+		WarmUntil: m.warmUntil, Derived: m.derived, Paths: paths}
+}
+
+func (m *Machine) reconnect() {
+	m.mu.Lock()
+	p := m.peer
+	m.mu.Unlock()
+	if p != nil {
+		p.Close(errors.New("reconnect requested"))
+	}
+	select {
+	case m.kick <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Machine) command(ctx context.Context) *exec.Cmd {
+	if m.nodeCmd != nil {
+		return m.nodeCmd(ctx)
+	}
+	if m.cfg.Kind == "local" {
+		self, _ := os.Executable()
+		return exec.CommandContext(ctx, self, "node", "--stdio")
+	}
+	bin := m.cfg.RemoteBin
+	if bin == "" {
+		bin = "~/.jarvis/bin/jarvisd"
+	}
+	host := m.cfg.SSHHost
+	if host == "" {
+		host = m.cfg.ID
+	}
+	// Compression: the RPC is JSON (transcript pages, screens) and shrinks about 4x. Over a slow link (a machine
+	// abroad at ~15 KB/s, 2026-10-31) an 87 KB page took 5.6 s and a 500-item page passed the hub's 30 s deadline;
+	// on a LAN it costs next to nothing.
+	return exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "Compression=yes",
+		"-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", host, bin+" node --stdio")
+}
+
+// nodePipe is one way to a node: what it says, where to write, and why it failed (ssh's last stderr line). It is an
+// ssh (or local) process's stdout and stdin, a tailcat connection, or a stream on a Persona Link (dialLink);
+// establish speaks the node protocol over each the same way.
+type nodePipe struct {
+	r       io.Reader
+	w       io.Writer
+	lastErr func() string
+	close   func() // ends it and waits until it is gone
+	// activity is when bytes last moved either way (tailcat only: watchTailcat pings only an idle connection).
+	activity *activityConn
+}
+
+// shutdownStepTimeout bounds draining a node's pipes once its process is gone.
+const shutdownStepTimeout = 2 * time.Second
+
+func (m *Machine) open(ctx context.Context, via string) (*nodePipe, error) {
+	if m.dialNode != nil {
+		c, err := m.dialNode(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &nodePipe{r: c, w: c, lastErr: func() string { return "" }, close: func() { _ = c.Close() }}, nil
+	}
+	if via == "link" {
+		return m.dialLink(ctx)
+	}
+	if via == kindService {
+		return m.dialService(ctx)
+	}
+	if via == "tailcat" {
+		dctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
+		c, err := m.tailcatDial(dctx)
+		if err != nil {
+			return nil, err
+		}
+		ac := &activityConn{Conn: c}
+		ac.touch()
+		return &nodePipe{r: ac, w: ac, lastErr: func() string { return "" }, close: func() { _ = c.Close() }, activity: ac}, nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	cmd := m.command(ctx)
+	// Bound pipe draining if a node descendant inherits stdout or stderr.
+	cmd.WaitDelay = shutdownStepTimeout
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return nil, err
+	}
+	var lastErr strings.Builder
+	var errMu sync.Mutex
+	stderrDone := make(chan struct{})
+	go func() {
+		defer close(stderrDone)
+		sc := bufio.NewScanner(stderr)
+		for sc.Scan() {
+			line := sc.Text()
+			m.d.logf("[%s] %s", m.cfg.ID, line)
+			errMu.Lock()
+			lastErr.Reset()
+			lastErr.WriteString(line)
+			errMu.Unlock()
+		}
+	}()
+	return &nodePipe{r: stdout, w: stdin,
+		// Asked once the link has failed: stdout can close before ssh's last stderr line is read, so give the reader a
+		// moment to finish (TestBothWaysFailing lost "ssh: connect to host …" that way on a loaded machine).
+		lastErr: func() string {
+			select {
+			case <-stderrDone:
+			case <-time.After(2 * time.Second):
+			}
+			errMu.Lock()
+			defer errMu.Unlock()
+			return lastErr.String()
+		},
+		close: func() { cancel(); _ = cmd.Wait() },
+	}, nil
+}
+
+func (m *Machine) call(ctx context.Context, method string, params any, out any) error {
+	m.mu.Lock()
+	p := m.peer
+	info := m.info
+	m.mu.Unlock()
+	if info.Version != "" && !info.ModelConfiguration && (method == "assistant.send" || method == "assistant.warm" || method == "session.start" || method == "session.send") {
+		raw, _ := json.Marshal(params)
+		var fields struct {
+			Model       string `json:"model"`
+			Fingerprint string `json:"model_fingerprint"`
+		}
+		_ = json.Unmarshal(raw, &fields)
+		if fields.Model != "" || fields.Fingerprint != "" {
+			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: "这台电脑的 node 还不支持统一模型配置，请更新 node"}
+		}
+	}
+	if p == nil && (m.waitWarm(ctx) || m.waitFirst(ctx)) { // the manager just started: its node is on its way (warm.go)
+		m.mu.Lock()
+		p = m.peer
+		m.mu.Unlock()
+	}
+	if p == nil {
+		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
+	}
+	select {
+	case <-p.Done(): // closed, a new connection on its way: nothing was sent
+		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
+	default:
+	}
+	return p.Call(ctx, method, params, out)
+}
+
+// firstWait bounds how long a call waits for a machine's first try to connect (the manager just started: an answer
+// the hub held for an agent while it was away, a start from the apps).
+var firstWait = 20 * time.Second
+
+// firstTried: the first try to connect ended, one way or the other.
+func (m *Machine) firstTried() { m.firstOnce.Do(func() { close(m.first) }) }
+
+// waitFirst waits, for a call made before the machine's first try to connect ended, until it did (true: there is a
+// connection now), at most firstWait.
+func (m *Machine) waitFirst(ctx context.Context) bool {
+	if firstWait <= 0 {
+		return false
+	}
+	select {
+	case <-m.first:
+		return false
+	default:
+	}
+	t := time.NewTimer(firstWait)
+	defer t.Stop()
+	select {
+	case <-m.first:
+	case <-t.C:
+	case <-ctx.Done():
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.peer != nil
+}
+
+// reachable: a call would go out now (call answers errOffline otherwise).
+func (m *Machine) reachable() bool {
+	m.mu.Lock()
+	p := m.peer
+	m.mu.Unlock()
+	if p == nil {
+		return false
+	}
+	select {
+	case <-p.Done():
+		return false
+	default:
+		return true
+	}
+}
+
+// notify sends the node a one-way event; events arrive in the order sent.
+func (m *Machine) notify(event string, params any) error {
+	m.mu.Lock()
+	p := m.peer
+	m.mu.Unlock()
+	if p == nil {
+		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
+	}
+	return p.Notify(event, params)
+}
+
+// noteWatch keeps which sessions the hub watches (its apps' subscriptions): a new connection watches them again.
+func (m *Machine) noteWatch(method string, params json.RawMessage) {
+	if method != "session.watch" && method != "session.unwatch" {
+		return
+	}
+	var p struct {
+		SessionID string `json:"session_id"`
+	}
+	if json.Unmarshal(params, &p) != nil || p.SessionID == "" {
+		return
+	}
+	m.mu.Lock()
+	if method == "session.watch" {
+		m.watched[p.SessionID] = true
+	} else {
+		delete(m.watched, p.SessionID)
+	}
+	m.mu.Unlock()
+}
+
+// setSessions keeps the node's session list (the hub gets it as the node sent it, devices.event).
+func (m *Machine) setSessions(list []proto.Session) {
+	for i := range list {
+		list[i].MachineID = m.cfg.ID
+	}
+	m.mu.Lock()
+	m.sessions = list
+	m.lastSeen = time.Now().UTC()
+	m.mu.Unlock()
+}
+
+func (m *Machine) sessionList() []proto.Session {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.sessions)
+}
+
+func (m *Machine) session(id string) (proto.Session, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, s := range m.sessions {
+		if s.SessionID == id {
+			return s, true
+		}
+	}
+	return proto.Session{}, false
+}
+
+// onEvent takes what is the manager's of a node's event, and passes every event on to the hub as it came.
+func (m *Machine) onEvent(event string, params json.RawMessage) {
+	m.noteClosed(event, params)
+	switch event {
+	case "sessions.changed":
+		var p struct {
+			Sessions []proto.Session `json:"sessions"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			m.setSessions(p.Sessions)
+		}
+	case "sessions.revs":
+		var p struct {
+			Revs map[string]int64 `json:"revs"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			m.mu.Lock()
+			for i := range m.sessions {
+				if r, ok := p.Revs[m.sessions[i].SessionID]; ok {
+					m.sessions[i].Rev = r
+				}
+			}
+			m.mu.Unlock()
+		}
+	case "session.items":
+		var p struct {
+			SessionID string       `json:"session_id"`
+			Items     []proto.Item `json:"items"`
+			ToSeq     *int         `json:"to_seq"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			last := 0
+			if len(p.Items) > 0 {
+				last = p.Items[len(p.Items)-1].Seq
+			}
+			if p.ToSeq != nil {
+				last = max(last, *p.ToSeq)
+			}
+			m.mu.Lock()
+			if last > m.lastSeq[p.SessionID] {
+				m.lastSeq[p.SessionID] = last
+			}
+			m.mu.Unlock()
+		}
+	case "state.put":
+		var p struct {
+			SessionID string         `json:"session_id"`
+			State     db.NodeSession `json:"state"`
+		}
+		if s, ok := m.d.opts.Store.(nodeStateStore); ok && json.Unmarshal(params, &p) == nil && p.SessionID != "" {
+			if err := s.PutNodeSession(context.Background(), m.cfg.ID, p.SessionID, p.State); err != nil {
+				m.d.logf("[%s] save session state: %v", m.cfg.ID, err)
+			}
+		}
+		return // the manager's alone
+	case "claude.dirs":
+		m.rememberClaudeDirs(params)
+	}
+	m.d.forward(m.cfg.ID, event, params)
+}
+
+// onRequest answers what is the manager's of a node's requests and passes the rest on to the hub.
+func (m *Machine) onRequest(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	switch method {
+	case "state.load":
+		out := map[string]db.NodeSession{}
+		if s, ok := m.d.opts.Store.(nodeStateStore); ok {
+			var err error
+			if out, err = s.NodeSessions(ctx, m.cfg.ID); err != nil {
+				return nil, err
+			}
+		}
+		return map[string]any{"sessions": out}, nil
+	}
+	if a := m.d.opts.Answer; a != nil {
+		if out, ok, err := a(ctx, m.cfg.ID, method, params); ok {
+			return out, err
+		}
+	}
+	if method == "interaction.create" {
+		m.mu.Lock()
+		m.pending++
+		m.mu.Unlock()
+		defer func() {
+			m.mu.Lock()
+			m.pending--
+			m.mu.Unlock()
+		}()
+	}
+	if len(params) > maxForward {
+		return nil, errTooLarge
+	}
+	var out json.RawMessage
+	key := m.d.requestKey()
+	err := m.d.opts.Hub.Call(ctx, devicewire.MethodRequest, devicewire.NodeCall{MachineID: m.cfg.ID, Method: method, Params: params,
+		Request: key}, &out)
+	if err != nil {
+		if ctx.Err() != nil { // the node's connection ended (ctx is its): the hub's part ends too
+			_ = m.d.opts.Hub.Notify(devicewire.EventRequestEnd, devicewire.RequestEnd{MachineID: m.cfg.ID, Request: key})
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+// machinePending: a question, plan or permission from this machine is waiting on the phone.
+func (m *Machine) machinePending() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.pending > 0
+}
+
+// nodeMismatch: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>
+// (deploy.sh); dev builds ("dev", empty) are never flagged. The local node is the hub binary itself.
+func nodeMismatch(hub, node string) bool {
+	if hub == "" || node == "" || hub == "dev" || node == "dev" {
+		return false
+	}
+	return hub != node
+}
+
+func (m *Machine) isOnline() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.online
+}

@@ -1,15 +1,10 @@
 package hub
 
 import (
-	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net"
-	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"sync"
@@ -17,7 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
-	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/streams"
@@ -25,16 +20,20 @@ import (
 
 var errOffline = apierr.ErrOffline
 
-// Machine is the hub's connection to one node: a local subprocess, `ssh host jarvisd node --stdio`, a tailcat
-// connection to its resident node, or a stream on the link the computer's jarvis-link keeps to the hub (kind link,
-// link.go).
+// Machine is what the hub knows of one of the user's computers: what the manager that carries it reports
+// (devices.state, devicewire; hub/devices_link.go) and the node's events it passes on, with what is the hub's own
+// beside it — the apps watching its sessions, the Cua / ego state, what the hub shows of its sessions. The hub does not
+// connect it: the manager does (internal/devices), and a call goes there over the bus (busNode). Tests attach an
+// in-process node as peer instead.
 type Machine struct {
 	cfg MachineConfig
 	hub *Hub
 
-	mu      sync.Mutex
-	peer    *rpc.Peer
-	streams *streams.Mux // the forwarded ports' connections on peer (ports.go)
+	mu sync.Mutex
+	// peer is how calls reach the node: the manager over the bus (busNode) for a machine it reported, or a test's
+	// rpc.Peer.
+	peer    nodeCaller
+	streams *streams.Mux // the forwarded ports' connections on the node's current connection (ports.go)
 	info    proto.NodeInfo
 	// computer: what the node last said of Cua Driver (computer.status), while the plugin cua is on for it (computer.go);
 	// computerAt: when the node answered it (or, from an older node, when it was asked), so an older answer never
@@ -44,15 +43,15 @@ type Machine struct {
 	// browser, browserAt: the same for ego lite (browser.status, the plugin ego; browser.go).
 	browser   *proto.Browser
 	browserAt time.Time
-	// herdrAsked: when the node was last asked whether herdr's server answers (herdr.server.status, herdr.go).
-	herdrAsked time.Time
-	online     bool
-	// connectedAt: when the node's current connection began (sessions.changed carries it to the assistant).
+	online    bool
+	// connectedAt: when the node's current connection began, as the manager says (sessions.changed carries it to the
+	// assistant).
 	connectedAt time.Time
-	// warmUntil, warmed: shown as before a hub restart until then, while its node reconnects (warm.go); warmed is
-	// closed when that ends.
+	// engine is the engine the manager handed over at its last stop, shown until it reports (snap has it then).
+	engine string
+	// warmUntil: shown as before a restart until then — the hub's, while the manager comes back (calls wait for it in
+	// busNode), or the manager's, while the node comes back (its report's) (devices_link.go).
 	warmUntil time.Time
-	warmed    chan struct{}
 	err       string
 	lastSeen  time.Time
 	sessions  []proto.Session
@@ -62,218 +61,94 @@ type Machine struct {
 	// stopSig: the signature of the reply each session's latest Stop ended its turn with; pushedSig: the one a
 	// "finished" push was already sent for, cleared when the next prompt comes (stopDuplicate).
 	stopSig, pushedSig map[string]string
-	kick               chan struct{}
-	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
-	deploying   bool
-	deployErr   string
-	deployPhase string
-	// via is how the connection runs (local | ssh | tailcat), path how tailcat's packets go (direct | relay).
-	via, path string
-	// directFailed: when ssh last failed to connect and tailcat was tried instead; switchedBack: when the hub last
-	// went back to ssh from tailcat; flaps: how many times in a row that failed right away (tailcat.go).
-	directFailed, switchedBack time.Time
-	flaps                      int
-	timings                    tailcatTimings
-	// engineMu: one engine.use to the node at a time (engine.go).
-	engineMu sync.Mutex
-	link     *hubLink      // kind link: the link jarvis-link keeps open, nil while there is none
-	linkDown error         // why the last link went away
-	linkUp   chan struct{} // a link arrived
-	// nodeCmd replaces the node command (tests).
-	nodeCmd func(context.Context) *exec.Cmd
-	// dialTailcat replaces dialing the node over tailcat, probeDirect checking that ssh works (tests).
-	dialTailcat func(context.Context) (net.Conn, error)
-	probeDirect func(context.Context) error
-	// dialNode replaces every way to the node with a connection to an in-process one (tests).
-	dialNode func(context.Context) (net.Conn, error)
-
-	// derived: a computer only a member hub has in hub.json; the center reaches it through that hub (mesh_paths.go).
+	// derived: a computer only a member hub has in hub.json; the center reaches it through that hub.
 	derived bool
-	// active: the path the connection runs over (nil while offline); transport: the way it took (ssh may fall back to
-	// tailcat); uid: the machine_uid the node said; next: a connection made through a better path, to take over from
-	// the one in use (machine_conn.go).
-	active    *nodePath
-	transport string
-	uid       string
-	next      *nodeConn
-	parked    string // why the run loop does not connect now (mesh_paths.go parkReason)
-	// svc: the connector of a computer of kind service (service.go).
-	svc serviceState
+
+	// The manager's report (devices_link.go): managed is set once one came for this machine (or the hub made it for
+	// one the manager will report); snap is the machine as it said; connected, a call would reach the node now;
+	// hookedAt, the connection the hub did its part for (devices.connected); paths, its ways for the admin page.
+	managed   bool
+	snap      *proto.Machine
+	connected bool
+	hookedAt  time.Time
+	paths     []pathInfo
+}
+
+// nodeCaller is how calls reach a node: *rpc.Peer (tests), busNode (the manager).
+type nodeCaller interface {
+	Call(ctx context.Context, method string, params, out any) error
+	Notify(event string, params any) error
+	Done() <-chan struct{}
+	Close(err error)
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {
-	m := &Machine{cfg: cfg, hub: h, watchers: map[string]int{}, lastSeq: map[string]int{}, kick: make(chan struct{}, 1),
-		timings: defaultTailcatTimings, linkUp: make(chan struct{}, 1)}
-	switch cfg.Kind {
-	case kindLink:
-		m.err = "waiting for Persona Link"
-	case kindService:
-		m.err = "waiting for the connector"
-	}
-	return m
+	return &Machine{cfg: cfg, hub: h, watchers: map[string]int{}, lastSeq: map[string]int{}}
 }
 
 func (m *Machine) snapshot() proto.Machine {
-	engine := m.hub.engineOf(m.cfg.ID) // before m.mu: it may read settings
-	computer := m.hub.computerOf(m)    // before m.mu: it takes it
+	computer := m.hub.computerOf(m) // before m.mu: it takes it
 	browser := m.hub.browserOf(m)
+	system := m.hub.metrics.system(m.cfg.ID)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	engines := []proto.Engine{} // what the node found: none while offline
 	warm := m.warmLocked(time.Now())
-	if m.online || warm {
-		engines = append(engines, m.info.Engines...)
+	var s proto.Machine
+	if m.snap != nil {
+		s = *m.snap
+	} else {
+		// Not reported yet (the hub just started, or a test's machine): what the hub has.
+		icon := m.cfg.Icon
+		if icon == "" {
+			icon = "laptop"
+		}
+		s = proto.Machine{ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, Icon: icon, SSHHost: m.cfg.SSHHost,
+			Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home, HerdrVersion: m.info.HerdrVersion,
+			ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen, NodeVersion: m.info.Version, Engine: cmp.Or(m.engine, proto.EngineHerdr),
+			Tailcat: m.cfg.TailcatAddr != ""}
+		s.Engines = []proto.Engine{}
+		if m.online || warm {
+			s.Engines = append(s.Engines, m.info.Engines...)
+		}
+		s.NodeMismatch = m.online && nodeMismatch(m.hub.version, m.info.Version)
+		can, why := m.canDeployLocked()
+		s.CanDeploy, s.DeployReason = &can, why
 	}
-	icon := m.cfg.Icon
-	if icon == "" {
-		icon = "laptop"
+	s.Online, s.Error = m.online || warm, m.err
+	if m.lastSeen.After(s.LastSeen) { // the session lists the hub got since the manager's last report
+		s.LastSeen = m.lastSeen
 	}
-	canDeploy, deployReason := m.canDeployLocked()
-	return proto.Machine{
-		ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, Icon: icon, SSHHost: m.cfg.SSHHost, Online: m.online || warm, Error: m.err,
-		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
-		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
-		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(m.hub.version, m.info.Version),
-		Deploying: m.deploying, DeployError: m.deployErr,
-		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
-		System:    m.hub.metrics.system(m.cfg.ID),
-		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
-		Engine: engine, Engines: engines, Computer: computer, Browser: browser, Link: linkInfo(m.link),
+	if s.Engines == nil {
+		s.Engines = []proto.Engine{}
 	}
+	s.System, s.Computer, s.Browser = system, computer, browser
+	return s
 }
 
-func linkInfo(l *hubLink) *proto.MachineLink {
-	if l == nil {
-		return nil
-	}
-	return l.info()
-}
-
-func (m *Machine) reconnect() {
-	m.mu.Lock()
-	p := m.peer
-	m.mu.Unlock()
-	if p != nil {
-		p.Close(errors.New("reconnect requested"))
-	}
-	select {
-	case m.kick <- struct{}{}:
-	default:
-	}
-}
-
-func (m *Machine) command(ctx context.Context) *exec.Cmd {
-	if m.nodeCmd != nil {
-		return m.nodeCmd(ctx)
-	}
+// canDeployLocked is whether the manager can update the machine's node from here, before it said (its own rules,
+// internal/devices deploy_rpc.go): the hub machine's goes with the hub; one reached over its link or connector needs a
+// node that updates itself; an offline one waits.
+func (m *Machine) canDeployLocked() (bool, string) {
 	if m.cfg.Kind == "local" {
-		self, _ := os.Executable()
-		return exec.CommandContext(ctx, self, "node", "--stdio")
+		return false, "hub 所在的机器跟着 hub 一起更新"
 	}
-	bin := m.cfg.RemoteBin
-	if bin == "" {
-		bin = "~/.jarvis/bin/jarvisd"
+	if (m.cfg.Kind == kindLink || m.cfg.Kind == kindService || m.derived) && !m.info.NodeUpdate {
+		if m.info.NodeUpdateReason != "" {
+			return false, m.info.NodeUpdateReason
+		}
+		return false, "请先在这台电脑上升级一次 node 服务，之后即可在这里远程更新"
 	}
-	host := m.cfg.SSHHost
-	if host == "" {
-		host = m.cfg.ID
+	if !m.online {
+		return false, "这台电脑不在线，连上以后再更新"
 	}
-	// Compression: the RPC is JSON (transcript pages, screens) and shrinks about 4x. Over a slow link (a machine
-	// abroad at ~15 KB/s, 2026-10-31) an 87 KB page took 5.6 s and a 500-item page passed the hub's 30 s deadline;
-	// on a LAN it costs next to nothing.
-	return exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "Compression=yes",
-		"-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", host, bin+" node --stdio")
+	return true, ""
 }
 
-// nodePipe is one way to a node: what it says, where to write, and why it failed (ssh's last stderr line). It is an
-// ssh (or local) process's stdout and stdin, a tailcat connection, or a stream on a jarvis-link (dialLink); connectVia
-// speaks the node protocol over each the same way.
-type nodePipe struct {
-	r       io.Reader
-	w       io.Writer
-	lastErr func() string
-	close   func() // ends it and waits until it is gone
-	// activity is when bytes last moved either way (tailcat only: watchTailcat pings only an idle connection).
-	activity *activityConn
-}
-
-func (m *Machine) open(ctx context.Context, via string) (*nodePipe, error) {
-	if m.dialNode != nil {
-		c, err := m.dialNode(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &nodePipe{r: c, w: c, lastErr: func() string { return "" }, close: func() { _ = c.Close() }}, nil
+// reconnect has the manager connect the machine's node again.
+func (m *Machine) reconnect() {
+	if err := m.hub.callBus(context.Background(), devicesOwner, devicewire.MethodReconnect, map[string]any{"machine_id": m.cfg.ID}, nil); err != nil {
+		m.hub.logf("[%s] reconnect: %v", m.cfg.ID, err)
 	}
-	if via == "link" {
-		return m.dialLink(ctx)
-	}
-	if via == kindService {
-		return m.dialService(ctx)
-	}
-	if via == "tailcat" {
-		dctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		defer cancel()
-		c, err := m.tailcatDial(dctx)
-		if err != nil {
-			return nil, err
-		}
-		ac := &activityConn{Conn: c}
-		ac.touch()
-		return &nodePipe{r: ac, w: ac, lastErr: func() string { return "" }, close: func() { _ = c.Close() }, activity: ac}, nil
-	}
-	ctx, cancel := context.WithCancel(ctx)
-	cmd := m.command(ctx)
-	// Bound pipe draining if a node descendant inherits stdout or stderr.
-	cmd.WaitDelay = shutdownStepTimeout
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return nil, err
-	}
-	var lastErr strings.Builder
-	var errMu sync.Mutex
-	stderrDone := make(chan struct{})
-	go func() {
-		defer close(stderrDone)
-		sc := bufio.NewScanner(stderr)
-		for sc.Scan() {
-			line := sc.Text()
-			m.hub.logf("[%s] %s", m.cfg.ID, line)
-			errMu.Lock()
-			lastErr.Reset()
-			lastErr.WriteString(line)
-			errMu.Unlock()
-		}
-	}()
-	return &nodePipe{r: stdout, w: stdin,
-		// Asked once the link has failed: stdout can close before ssh's last stderr line is read, so give the reader a
-		// moment to finish (TestBothWaysFailing lost "ssh: connect to host …" that way on a loaded machine).
-		lastErr: func() string {
-			select {
-			case <-stderrDone:
-			case <-time.After(2 * time.Second):
-			}
-			errMu.Lock()
-			defer errMu.Unlock()
-			return lastErr.String()
-		},
-		close: func() { cancel(); _ = cmd.Wait() },
-	}, nil
 }
 
 func (m *Machine) call(ctx context.Context, method string, params any, out any) error {
@@ -292,11 +167,6 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: "这台电脑的 node 还不支持统一模型配置，请更新 node"}
 		}
 	}
-	if p == nil && m.waitWarm(ctx) { // the hub just restarted: its node is on its way back (warm.go)
-		m.mu.Lock()
-		p = m.peer
-		m.mu.Unlock()
-	}
 	if p == nil {
 		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
 	}
@@ -312,7 +182,11 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 func (m *Machine) reachable() bool {
 	m.mu.Lock()
 	p := m.peer
+	managed, connected := m.managed, m.connected
 	m.mu.Unlock()
+	if managed {
+		return connected && m.hub.devicesUp()
+	}
 	if p == nil {
 		return false
 	}
@@ -515,16 +389,6 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 			m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "delta", "machine_id": m.cfg.ID, "session_id": p.SessionID, "text": p.Text})
 			m.hub.followedDelta(m.cfg.ID, p.SessionID, p.Text)
 		}
-	case "state.put":
-		var p struct {
-			SessionID string         `json:"session_id"`
-			State     db.NodeSession `json:"state"`
-		}
-		if json.Unmarshal(params, &p) == nil && p.SessionID != "" && m.hub.store != nil {
-			if err := m.hub.store.PutNodeSession(context.Background(), m.cfg.ID, p.SessionID, p.State); err != nil {
-				m.hub.logf("[%s] save session state: %v", m.cfg.ID, err)
-			}
-		}
 	case "codex.inventory":
 		m.rememberCodexInventory(params)
 	case "interaction.dismiss":
@@ -535,8 +399,6 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 			m.hub.recordEnd(p.ID, "dismissed", nil)
 			m.hub.finishInteraction(p.ID)
 		}
-	case "claude.dirs":
-		m.rememberClaudeDirs(params)
 	case "session.echo":
 		m.recordEcho(params)
 	case "usage":
@@ -600,15 +462,6 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			return proto.AssistantLark{}, nil
 		}
 		return m.hub.assistantLark(ctx)
-	case "state.load":
-		out := map[string]db.NodeSession{}
-		if m.hub.store != nil {
-			var err error
-			if out, err = m.hub.store.NodeSessions(ctx, m.cfg.ID); err != nil {
-				return nil, err
-			}
-		}
-		return map[string]any{"sessions": out}, nil
 	case "mcp.tools":
 		var p struct {
 			Assistant bool `json:"assistant"`

@@ -1,0 +1,125 @@
+package hub
+
+import (
+	"slices"
+	"sync"
+
+	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The machines the apps see, as the manager that carries them reported (devices_link.go): in its order, with the
+// hub.json entries whose computer another entry has (absorbed) still reaching it.
+
+const viaHub = "hub" // a path through a member hub
+
+// pathInfo is a path as the admin page and the machine list show it (plan 5「paths」).
+type pathInfo = devicewire.PathInfo
+
+// fleet guards Hub.machines and Hub.byID, which a report replaces.
+type fleet struct {
+	mu sync.Mutex
+}
+
+// machinesNow is every machine the apps see, in order.
+func (h *Hub) machinesNow() []*Machine {
+	h.fleet.mu.Lock()
+	defer h.fleet.mu.Unlock()
+	return slices.Clone(h.machines)
+}
+
+// fleetAll is machinesNow (every machine).
+func (h *Hub) fleetAll() []*Machine { return h.machinesNow() }
+
+// machineByID is the machine an id the apps use stands for: one the manager reported, or the machine that has the
+// computer of a hub.json entry it absorbed.
+func (h *Hub) machineByID(id string) *Machine {
+	if id == "" {
+		return nil
+	}
+	h.fleet.mu.Lock()
+	m := h.byID[id]
+	h.fleet.mu.Unlock()
+	if m != nil {
+		return m
+	}
+	d := &h.devices
+	d.mu.Lock()
+	to := d.absorbed[id]
+	d.mu.Unlock()
+	if to == "" {
+		return nil
+	}
+	h.fleet.mu.Lock()
+	defer h.fleet.mu.Unlock()
+	return h.byID[to]
+}
+
+// localMachine is machineByID (the name the request handlers use).
+func (h *Hub) localMachine(id string) *Machine { return h.machineByID(id) }
+
+// machineIDs are the ids localMachine knows: the machines now, and the hub.json entries another one absorbed (the
+// same computer: their id still reaches it), e.g. for the assistant, whose saved machine may be such an id.
+func (h *Hub) machineIDs() []string {
+	out := []string{}
+	for _, m := range h.machinesNow() {
+		out = append(out, m.cfg.ID)
+	}
+	d := &h.devices
+	d.mu.Lock()
+	var absorbed []string
+	for from := range d.absorbed {
+		if !slices.Contains(out, from) {
+			absorbed = append(absorbed, from)
+		}
+	}
+	d.mu.Unlock()
+	slices.Sort(absorbed) // the same order every time: the hello is compared with the last one
+	return append(out, absorbed...)
+}
+
+// fleetRegroup: the mesh changed (the members' computers, who is the center); the manager regroups the machines.
+func (h *Hub) fleetRegroup() { h.devicesConfigChanged() }
+
+// pathInfos is a machine's paths for the admin page, as the manager reported them.
+func (h *Hub) pathInfos(m *Machine) []pathInfo {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.paths)
+}
+
+// machineList is the machines the apps see, each with the hub it is reached through and its paths.
+func (h *Hub) machineList() []proto.Machine {
+	self, name := h.hubID(), h.hubName()
+	list := h.machinesNow()
+	out := make([]proto.Machine, 0, len(list))
+	for _, m := range list {
+		s := m.snapshot()
+		if s.HubID == "" {
+			s.HubID, s.HubName = self, name
+		}
+		if s.Route == nil {
+			s.Route = &proto.MachineRoute{Via: kindOf(m.cfg)}
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// recordEntries are this hub's hub.json computers as its mesh record lists them: how the manager says it reaches
+// each now.
+func (h *Hub) recordEntries() []recMachine {
+	d := &h.devices
+	d.mu.Lock()
+	reach := map[string]devicewire.RecMachine{}
+	for _, e := range d.recEntries {
+		reach[e.ID] = e
+	}
+	d.mu.Unlock()
+	var out []recMachine
+	for _, mc := range h.cfgEntries() {
+		e := reach[mc.ID]
+		out = append(out, recMachine{ID: mc.ID, Cfg: mc.forMesh(), Kind: kindOf(mc), Avail: e.Avail, RTTMS: e.RTTMS})
+	}
+	return out
+}

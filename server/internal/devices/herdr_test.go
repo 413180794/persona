@@ -1,9 +1,12 @@
-package hub
+package devices
 
 import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,14 +18,14 @@ import (
 
 // herdrMac is a machine whose node answers node.configure and herdr.server.start the way the node does, and says
 // which it was asked (herdrstart.go in the node).
-func herdrMac(t *testing.T, h *Hub, id string, starts bool) (*Machine, func() []map[string]any) {
+func herdrMac(t *testing.T, h *Devices, id string, starts bool) (*Machine, func() []map[string]any) {
 	t.Helper()
 	return herdrMacStatus(t, h, id, starts, nil)
 }
 
 // herdrMacStatus is herdrMac whose node also answers herdr.server.status with running (nil: an older node, which
 // has no such method).
-func herdrMacStatus(t *testing.T, h *Hub, id string, starts bool, running *atomic.Bool) (*Machine, func() []map[string]any) {
+func herdrMacStatus(t *testing.T, h *Devices, id string, starts bool, running *atomic.Bool) (*Machine, func() []map[string]any) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	h2nR, h2nW := io.Pipe()
@@ -54,9 +57,7 @@ func herdrMacStatus(t *testing.T, h *Hub, id string, starts bool, running *atomi
 	t.Cleanup(func() { cancel(); _ = h2nW.Close(); _ = n2hW.Close() })
 	m := newMachine(h, MachineConfig{ID: id, Name: id})
 	m.peer, m.online, m.info = hubSide, true, proto.NodeInfo{OS: "linux", HerdrRunning: false, HerdrRunningKnown: true}
-	h.mu.Lock()
-	h.machines, h.byID[id] = append(h.machines, m), m
-	h.mu.Unlock()
+	h.addEntry(m)
 	return m, func() []map[string]any {
 		mu.Lock()
 		defer mu.Unlock()
@@ -81,18 +82,18 @@ func autostartCalls(seen []map[string]any) []bool {
 // The switch answers for one machine: hub.json is only its default, the choice survives a restart of the hub, and the
 // node is told as soon as it is made.
 func TestHerdrAutostartPerMachine(t *testing.T) {
-	h, _ := extensionTestHub(t)
+	h := newTestDevices(t)
 	off := false
 	m, seen := herdrMac(t, h, "mac", false)
 	m.cfg.HerdrAutostart = &off // hub.json says off; nothing chosen for this machine yet
-	mux := h.routes()
+	mux := h.Handler(http.NotFoundHandler())
 
-	code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, "")
+	code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", "")
 	if code != 200 || out["autostart"] != false || out["running"] != false || out["known"] != true {
 		t.Fatalf("hub.json's value is the default: %d %v", code, out)
 	}
 
-	code, out = call(t, mux, "PUT", "/api/v1/machines/mac/herdr", h.cfg.Token, `{"autostart": true}`)
+	code, out = call(t, mux, "PUT", "/api/v1/machines/mac/herdr", `{"autostart": true}`)
 	if code != 200 || out["autostart"] != true {
 		t.Fatalf("turned on: %d %v", code, out)
 	}
@@ -110,27 +111,27 @@ func TestHerdrAutostartPerMachine(t *testing.T) {
 
 	// The choice is the machine's, not hub.json's: a second read after the decision answers true even though the
 	// config still says off.
-	code, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, "")
+	code, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", "")
 	if code != 200 || out["autostart"] != true {
 		t.Fatalf("stored choice wins over hub.json: %d %v", code, out)
 	}
 
 	// And it is in the settings store, so a restarted hub reads it back rather than the default.
 	var stored bool
-	if ok, err := h.store.Setting(context.Background(), herdrAutostartKey("mac"), &stored); !ok || err != nil || !stored {
+	if ok, err := h.opts.Store.Setting(context.Background(), herdrAutostartKey("mac"), &stored); !ok || err != nil || !stored {
 		t.Fatalf("kept in settings: ok=%v err=%v value=%v", ok, err, stored)
 	}
 }
 
 // The 启动 button works with autostart off — the switch says whether the node starts herdr on its own.
 func TestHerdrStartButton(t *testing.T) {
-	h, _ := extensionTestHub(t)
+	h := newTestDevices(t)
 	off := false
 	m, seen := herdrMac(t, h, "mac", true)
 	m.cfg.HerdrAutostart = &off
-	mux := h.routes()
+	mux := h.Handler(http.NotFoundHandler())
 
-	code, out := call(t, mux, "POST", "/api/v1/machines/mac/herdr/start", h.cfg.Token, "")
+	code, out := call(t, mux, "POST", "/api/v1/machines/mac/herdr/start", "")
 	if code != 200 || out["running"] != true || out["known"] != true {
 		t.Fatalf("start: %d %v", code, out)
 	}
@@ -153,11 +154,11 @@ func TestHerdrStartButton(t *testing.T) {
 // The row says whether herdr answers now, not what node.info said when the node connected: after a reboot the node
 // starts herdr itself once the hub's node.configure came, which is after node.info (#1916).
 func TestHerdrRowAsksTheNode(t *testing.T) {
-	h, _ := extensionTestHub(t)
+	h := newTestDevices(t)
 	var running atomic.Bool
 	running.Store(true) // node.info said down (herdrMac); it came up since
 	_, seen := herdrMacStatus(t, h, "mac", true, &running)
-	mux := h.routes()
+	mux := h.Handler(http.NotFoundHandler())
 	asked := func() int {
 		n := 0
 		for _, c := range seen() {
@@ -168,30 +169,30 @@ func TestHerdrRowAsksTheNode(t *testing.T) {
 		return n
 	}
 
-	code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, "")
+	code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", "")
 	if code != 200 || out["running"] != true || out["known"] != true {
 		t.Fatalf("the node's answer: %d %v", code, out)
 	}
 	// Every Agents list polls: a read right after is answered from what the node just said.
 	running.Store(false)
-	if _, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, ""); out["running"] != true || asked() != 1 {
+	if _, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", ""); out["running"] != true || asked() != 1 {
 		t.Fatalf("within herdrStatusFresh: %v, asked %d times", out, asked())
 	}
 	prev := herdrStatusFresh
 	herdrStatusFresh = 0
 	t.Cleanup(func() { herdrStatusFresh = prev })
-	if _, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, ""); out["running"] != false || asked() != 2 {
+	if _, out = call(t, mux, "GET", "/api/v1/machines/mac/herdr", ""); out["running"] != false || asked() != 2 {
 		t.Fatalf("stopped since: %v, asked %d times", out, asked())
 	}
 }
 
 // An older node has no herdr.server.status: the row says what node.info said, and the node is not asked on every read.
 func TestHerdrRowOlderNode(t *testing.T) {
-	h, _ := extensionTestHub(t)
+	h := newTestDevices(t)
 	_, seen := herdrMac(t, h, "mac", true)
-	mux := h.routes()
+	mux := h.Handler(http.NotFoundHandler())
 	for range 3 {
-		if code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, ""); code != 200 || out["running"] != false || out["known"] != true {
+		if code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", ""); code != 200 || out["running"] != false || out["known"] != true {
 			t.Fatalf("node.info's answer: %d %v", code, out)
 		}
 	}
@@ -208,25 +209,25 @@ func TestHerdrRowOlderNode(t *testing.T) {
 
 // After 启动 the row says it runs, even from an older node that cannot be asked again: it said so starting it.
 func TestHerdrRowAfterStart(t *testing.T) {
-	h, _ := extensionTestHub(t)
+	h := newTestDevices(t)
 	herdrMac(t, h, "mac", true)
-	mux := h.routes()
-	if code, out := call(t, mux, "POST", "/api/v1/machines/mac/herdr/start", h.cfg.Token, ""); code != 200 || out["running"] != true {
+	mux := h.Handler(http.NotFoundHandler())
+	if code, out := call(t, mux, "POST", "/api/v1/machines/mac/herdr/start", ""); code != 200 || out["running"] != true {
 		t.Fatalf("start: %d %v", code, out)
 	}
 	prev := herdrStatusFresh
 	herdrStatusFresh = 0 // asked (and refused) on this read: the start's answer stays
 	t.Cleanup(func() { herdrStatusFresh = prev })
-	if code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", h.cfg.Token, ""); code != 200 || out["running"] != true || out["known"] != true {
+	if code, out := call(t, mux, "GET", "/api/v1/machines/mac/herdr", ""); code != 200 || out["running"] != true || out["known"] != true {
 		t.Fatalf("after the start: %d %v", code, out)
 	}
 }
 
 // A machine driving something else has no such row.
 func TestHerdrRowOnlyForAHerdrEngine(t *testing.T) {
-	h, _ := extensionTestHub(t)
+	h := newTestDevices(t)
 	herdrMac(t, h, "mac", true)
-	mux := h.routes()
+	mux := h.Handler(http.NotFoundHandler())
 	h.engines.mu.Lock()
 	if h.engines.byID == nil {
 		h.engines.byID = map[string]string{}
@@ -234,7 +235,7 @@ func TestHerdrRowOnlyForAHerdrEngine(t *testing.T) {
 	h.engines.byID["mac"] = proto.EngineHerdrBoth
 	h.engines.loaded = true
 	h.engines.mu.Unlock()
-	if code, _ := call(t, mux, "PUT", "/api/v1/machines/mac/herdr", h.cfg.Token, `{"autostart": false}`); code != 200 {
+	if code, _ := call(t, mux, "PUT", "/api/v1/machines/mac/herdr", `{"autostart": false}`); code != 200 {
 		t.Fatalf("herdr-both has the row: %d", code)
 	}
 
@@ -242,7 +243,17 @@ func TestHerdrRowOnlyForAHerdrEngine(t *testing.T) {
 	h.engines.mu.Lock()
 	h.engines.byID["orca-box"] = proto.EngineOrca
 	h.engines.mu.Unlock()
-	if code, _ := call(t, mux, "PUT", "/api/v1/machines/orca-box/herdr", h.cfg.Token, `{"autostart": false}`); code != 404 {
+	if code, _ := call(t, mux, "PUT", "/api/v1/machines/orca-box/herdr", `{"autostart": false}`); code != 404 {
 		t.Fatalf("an orca machine has no herdr row: %d", code)
 	}
+}
+
+// call serves one request on mux and decodes its JSON answer.
+func call(t *testing.T, mux http.Handler, method, path, body string) (int, map[string]any) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(method, path, strings.NewReader(body)))
+	out := map[string]any{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	return rec.Code, out
 }

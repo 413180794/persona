@@ -34,10 +34,10 @@ type Hub struct {
 	shutdown      *shutdownBudget
 	wsStopping    bool // guarded by mu; prevents new WaitGroup additions during shutdown
 	wsHandlers    sync.WaitGroup
-	wsConnections map[*client]struct{}  // includes connections still registering their device session
-	links         map[*hubLink]struct{} // live jarvis-link links (link.go), guarded by mu
-	linkPing      [2]time.Duration      // tests: heartbeat interval and timeout of new links
-	bus           busState              // the services' connections and the roster (bus.go)
+	wsConnections map[*client]struct{} // includes connections still registering their device session
+	relay         relayState           // the connections relayed to the manager: Persona Link (devices_relay.go)
+	linkPing      [2]time.Duration     // tests: heartbeat interval and timeout of new links
+	bus           busState             // the services' connections and the roster (bus.go)
 
 	cfg         *Config
 	version     string
@@ -62,9 +62,7 @@ type Hub struct {
 
 	terms terminals // the terminal tab's live streams (terminal.go)
 
-	tailcat tailcatDialer // reaching machines the hub cannot ssh to (tailcat.go)
-
-	engines engineChoices // each machine's terminal engine (engine.go)
+	devices devicesState // the manager's machines as it reports them (devices_link.go)
 
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
@@ -100,11 +98,9 @@ type Hub struct {
 	ports portOpens // ports the user opened in the app (ports.go)
 	// assistant: what the assistant (internal/assistant, its own process on the bus) last reported (assistant_link.go).
 	assistant assistantState
-	// keepMu: one node.configure keep_sessions at a time (keepChanged, assistant_profile.go).
-	keepMu  sync.Mutex
-	deleted deletedBook  // conversations taken out of the apps' lists (deleted_sessions.go)
-	inbox   inboxSources // the inbox's sources and wake-ups; the inbox itself is the manager's (inbox.go)
-	kb      kbLink       // what the hub keeps for the knowledge base, the assistant's (kb.go)
+	deleted   deletedBook  // conversations taken out of the apps' lists (deleted_sessions.go)
+	inbox     inboxSources // the inbox's sources and wake-ups; the inbox itself is the manager's (inbox.go)
+	kb        kbLink       // what the hub keeps for the knowledge base, the assistant's (kb.go)
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots     botHub
 	channels channelsHub
@@ -124,7 +120,7 @@ type Hub struct {
 	apiMux *http.ServeMux // the API's routes: the one a request goes to decides what an extension's token may do
 
 	mesh  meshState // the other hubs of the mesh group (mesh.go)
-	fleet fleet     // the machines and their paths, the members' computers among them (mesh_paths.go)
+	fleet fleet     // guards machines and byID (machines.go)
 
 	todoLinks todoLinks // what the assistant reports of its todos (assistant_todos.go)
 
@@ -194,8 +190,6 @@ type Store interface {
 	Interactions(ctx context.Context, machine, session string, limit int) ([]db.InteractionRecord, error)
 	AllowAlways(ctx context.Context, session, tool string, keys []string) error
 	AlwaysAllowed(ctx context.Context, session string, keys []string) (bool, error)
-	PutNodeSession(ctx context.Context, machine, id string, s db.NodeSession) error
-	NodeSessions(ctx context.Context, machine string) (map[string]db.NodeSession, error)
 	MailAccounts(ctx context.Context) ([]db.MailAccountRow, error)
 	ReplaceMailAccounts(ctx context.Context, rows []db.MailAccountRow) error
 	MarkSeen(ctx context.Context, machine, session string, at time.Time) error
@@ -351,27 +345,21 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.push.hubID = h.hubID
 	h.initAgents()
 	h.connectors = connector.NewRegistry(cfg.ConnectorGate)
-	for _, mc := range cfg.Machines {
-		m := newMachine(h, mc)
-		h.machines = append(h.machines, m)
-		h.byID[mc.ID] = m
-	}
-	h.loadWarm(ctx) // before the machines connect: shown as they were before a restart meanwhile (warm.go)
-	h.initMesh(ctx) // before the machines connect: a member leaves its computers to the center (mesh_group.go)
-	h.fleetRegroup()
-	for _, m := range h.machines {
-		h.nodeWorkers.Add(1)
-		go func() {
-			defer h.nodeWorkers.Done()
-			m.run(ctx)
-		}()
-	}
-	defer h.closeTailcat()
+	// The machines are the manager's to connect (devices_link.go); until it reports them they show as before a
+	// restart (what it handed over), before the assistant's process starts and takes that hand-over.
+	h.startDevices(ctx)
+	h.initMesh(ctx) // before the manager connects: a member leaves its computers to the center (mesh_group.go)
 	go h.expireLoop(ctx)
 	go h.terminalKeepalive(ctx)
 	go h.live.run(ctx)
-	h.migrateWeChatState(ctx)    // into the channels' state before the assistant and the WeChat program read it (channels_migrate.go)
-	go h.superviseAssistant(ctx) // the assistant, its own process on the bus (assistant_process.go)
+	h.migrateWeChatState(ctx) // into the channels' state before the assistant and the WeChat program read it (channels_migrate.go)
+	// The assistant, its own process on the bus (assistant_process.go); it carries the machines, so the hub's stop
+	// waits for it as it waited for the node connections.
+	h.nodeWorkers.Add(1)
+	go func() {
+		defer h.nodeWorkers.Done()
+		h.superviseAssistant(ctx)
+	}()
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
@@ -395,7 +383,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		return err
 	}
 	h.startMesh(ctx)
-	go h.probeServices(ctx) // the connectors of the computers of kind service (service.go)
 	return h.serveHTTP(ctx)
 }
 

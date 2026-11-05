@@ -24,7 +24,7 @@ import (
 // report, the turns reach it, its cards are shown and answered, it fills in the starts.
 
 // A test without a manager does not wait for one either.
-func init() { managerStartWait, managerRestartWait = 0, 0 }
+func init() { managerStartWait = 0 }
 
 // workNode is a fake node: it records session.send and session.start and answers session.items with reply as the
 // turn's last answer.
@@ -427,14 +427,24 @@ func TestAgentStartAsksTheManager(t *testing.T) {
 		p := n.lastStart(t)
 		return func(k string) string { v, _ := p[k].(string); return v }
 	}
-	p := start(`{"machine_id":"box","cwd":"/code","prompt":"修一下登录页的报错"}`)
-	if p("launcher") != "work" || p("model") != "m-1" || p("model_fingerprint") == "" || p("tab_name") != "" {
-		t.Fatalf("without the manager: %q %q %q", p("launcher"), p("model"), p("tab_name"))
+	// Without the manager there is no start: the machines are its to reach (devices_link.go).
+	h.agentWork.mu.Lock()
+	h.agentWork.everUp = true // it was there, and went away
+	h.agentWork.mu.Unlock()
+	if code, out := call(t, mux, "POST", "/api/v1/sessions", h.cfg.Token, `{"machine_id":"box","cwd":"/code","prompt":"x"}`); code != 503 ||
+		out["code"] != "assistant_offline" {
+		t.Fatalf("without the manager: %d %v", code, out)
 	}
-	p = start(`{"machine_id":"box","cwd":"/code","prompt":"修一下登录页的报错","model":"picked"}`)
-	if p("launcher") != "work" || p("model") != "picked" || p("model_fingerprint") == "" {
-		t.Fatalf("without the manager, a model picked: %q %q", p("launcher"), p("model"))
+	n.mu.Lock()
+	started := len(n.starts)
+	n.mu.Unlock()
+	if started != 0 {
+		t.Fatal("started without the manager")
 	}
+	h.agentWork.mu.Lock()
+	h.agentWork.everUp = false
+	h.agentWork.mu.Unlock()
+	var p func(string) string
 
 	// The hub just started: a start waits for the manager connecting.
 	saved := managerStartWait

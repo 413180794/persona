@@ -307,9 +307,7 @@ func TestWorkspaceBoardCanonicalMachineAndMissingDirectory(t *testing.T) {
 		}
 		return directoryNode(ctx, method, p)
 	})
-	alias := newMachine(h, MachineConfig{ID: "alias"})
-	h.byID["alias"] = alias
-	h.fleet.absorbed = map[*Machine]*Machine{alias: m}
+	h.devices.absorbed = map[string]string{"alias": m.cfg.ID} // the same computer: "alias" reaches it
 	s := boardState(t, boardCall(h, "POST", "/api/v1/workspace-board", `{"revision":0,"action":"add_card","machine_id":"alias","cwd":"/work/weather","column_id":"todo"}`, roleFull))
 	if s.Cards[0].MachineID != "canonical" {
 		t.Fatal("alias not normalized")
@@ -338,9 +336,10 @@ func TestWorkspaceBoardLateMachineAlias(t *testing.T) {
 	_ = store.SaveWorkspaceSnapshot(context.Background(), "alias", raw)
 	canonical := boardNode(t, h, "canonical", directoryNode)
 	h.fleet.mu.Lock()
-	h.fleet.absorbed = map[*Machine]*Machine{alias: canonical}
-	h.fleet.order = []*Machine{canonical}
+	delete(h.byID, alias.cfg.ID)
+	h.machines = []*Machine{canonical}
 	h.fleet.mu.Unlock()
+	h.devices.absorbed = map[string]string{alias.cfg.ID: canonical.cfg.ID}
 	projected := boardState(t, boardCall(h, "GET", "/api/v1/workspace-board", "", roleFull))
 	card := projected.Cards[0]
 	if card.ID != id || card.ColumnID != "review" || card.MachineID != "canonical" || card.WorkspaceID == bound.Cards[0].WorkspaceID {

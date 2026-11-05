@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"errors"
 	"io"
 	"math/big"
 	"net"
@@ -24,6 +25,8 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/devices"
+	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -31,9 +34,7 @@ import (
 // the process, apps on WebSockets, a connector played by a TLS server here.
 
 func init() {
-	pathCheckEvery = 200 * time.Millisecond
-	serviceProbeEvery = 300 * time.Millisecond
-	connectorRefusedWait = 2 * time.Second
+	devices.ShortenTimings(200*time.Millisecond, 300*time.Millisecond, 2*time.Second) // the manager's
 	revocationResendEvery = 200 * time.Millisecond
 	credsHandoverRetryEvery = 200 * time.Millisecond
 }
@@ -87,9 +88,9 @@ func TestCenterMemberForwardsEverything(t *testing.T) {
 	if r := ms["box"].Route; r == nil || r.Via != "ssh" || ms["box"].HubID != hubB {
 		t.Fatalf("box's route %+v hub %s", r, ms["box"].HubID)
 	}
-	if member.h.byID["lap"].isOnline() {
-		t.Fatal("the member drives its computer itself")
-	}
+	eventually(t, 5*time.Second, "the member drives none of its computers itself", func() bool {
+		return !member.h.machineByID("lap").isOnline()
+	})
 
 	// Through the member: the same list, with the credential the member issued (handed to the center).
 	eventually(t, 10*time.Second, "the member's credential works through the member", func() bool {
@@ -609,9 +610,9 @@ func newFakeConnector(t *testing.T, node *meshNode) *fakeConnector {
 	}
 	fc.ln = ln
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST "+connectorPairPath, fc.pair)
-	mux.HandleFunc("GET "+connectorInfoPath, fc.info)
-	mux.HandleFunc("GET "+connectorStreamPath, fc.stream)
+	mux.HandleFunc("POST "+link.ConnectorPairPath, fc.pair)
+	mux.HandleFunc("GET "+link.ConnectorInfoPath, fc.info)
+	mux.HandleFunc("GET "+link.ConnectorStreamPath, fc.stream)
 	fc.srv = &http.Server{Handler: mux}
 	go func() { _ = fc.srv.Serve(ln) }()
 	t.Cleanup(func() { _ = fc.srv.Close() })
@@ -704,7 +705,7 @@ func (fc *fakeConnector) repair() {
 	fc.streams = nil
 	fc.mu.Unlock()
 	for _, c := range streams {
-		_ = c.Close(connectorRevoked, "paired with another hub")
+		_ = c.Close(link.CloseRevoked, "paired with another hub")
 	}
 }
 
@@ -763,16 +764,52 @@ func TestCenterServiceConnector(t *testing.T) {
 		t.Fatal("the hub kept asking a connector whose credential is gone")
 	}
 
-	// A wrong credential (a stale one in the database): refused, said so.
+	// A wrong credential (a stale one in the database): refused, said so. (Paired again first: the manager tries
+	// it again; then what the hub keeps is not what the connector knows.)
+	fc.mu.Lock()
+	fc.code = "code-again"
+	fc.mu.Unlock()
+	if _, _, err := center.h.pairConnector(context.Background(), fc.link(), "example-workstation", "", ""); err != nil {
+		t.Fatalf("pair again: %v", err)
+	}
+	eventually(t, 15*time.Second, "example-workstation online again", func() bool {
+		return center.machines(t, tok)["example-workstation"].Online
+	})
+	row, _ = cs.ConnectorCredential(context.Background(), "example-workstation")
 	sealed, _ := center.h.sealKey("jc_wrong")
 	row.Token = sealed
 	_ = cs.SaveConnectorCredential(context.Background(), *row)
-	m := center.h.byID["example-workstation"]
-	m.mu.Lock()
-	m.svc = serviceState{}
-	m.mu.Unlock()
-	m.wake()
+	fc.mu.Lock()
+	fc.hash = "lost" // and the connector forgot the one the manager holds: it asks the hub again, and that one is wrong
+	streams := fc.streams
+	fc.streams = nil
+	fc.mu.Unlock()
+	for _, c := range streams { // the connector restarts: the manager connects again, with what the hub keeps now
+		_ = c.Close(websocket.StatusGoingAway, "restarting")
+	}
 	eventually(t, 10*time.Second, "a wrong credential is refused", func() bool {
 		return strings.Contains(center.machines(t, tok)["example-workstation"].Error, "不认")
 	})
+}
+
+// A computer its member cannot open: the center says why. The member's manager opens the node before the member
+// answers the center's upgrade, and a failure comes back with its reason.
+func TestCenterLearnsWhyAMemberCannotOpenIt(t *testing.T) {
+	lap := newMeshNode("uid-lap", "lap", "s2")
+	center := startTestHub(t, hubB, "Office", nil, nil)
+	member := startTestHub(t, hubA, "家里", []MachineConfig{{ID: "lap", Name: "Laptop", Kind: "ssh"}}, []*meshNode{lap})
+	lap.mu.Lock()
+	lap.refuse[member.h], lap.refusal = true, errors.New("ssh: 主机拒绝了连接")
+	lap.mu.Unlock()
+	joinHubs(t, member, center)
+	member.waitCenter(t, hubB)
+	tok, _ := center.deviceToken(t, roleFull)
+	eventually(t, 20*time.Second, "the center says why", func() bool {
+		m, ok := center.machines(t, tok)["lap"]
+		return ok && !m.Online && strings.Contains(m.Error, "主机拒绝了连接")
+	})
+	lap.mu.Lock()
+	lap.refuse[member.h] = false
+	lap.mu.Unlock()
+	eventually(t, 30*time.Second, "through the member once it can", func() bool { return center.machines(t, tok)["lap"].Online })
 }

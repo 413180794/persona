@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"bytes"
@@ -121,7 +121,7 @@ func TestAnyShellQuoteReadsTheSameInEveryShell(t *testing.T) {
 // The remote command that starts a node over ssh is a plain command with arguments, which every login shell runs
 // alike (#1770): it starts the node at ~/.jarvis/bin/jarvisd with `node --stdio`.
 func TestNodeCommandRunsInEveryShell(t *testing.T) {
-	m := newMachine(newTestHub(t), MachineConfig{ID: "box", Name: "Box", Kind: "ssh"})
+	m := newMachine(newTestDevices(t), MachineConfig{ID: "box", Name: "Box", Kind: "ssh"})
 	args := m.command(context.Background()).Args
 	remote := args[len(args)-1]
 	for _, shell := range loginShells(t) {

@@ -166,6 +166,7 @@ agents.read          GET /api/v1/workspaces
 -                    GET {base}/catalog
 -                    GET {base}/markets
 -                    GET {bus.Path}
+-                    GET {devicewire.RelayPath}
 -                    GET {link.Path}
 -                    GET {link.StreamPath}
 -                    GET {peerPath}

@@ -16,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -144,6 +145,7 @@ func (c *busConn) close(code websocket.StatusCode, reason string) {
 // it on to its center (memberForward).
 func (h *Hub) busRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+bus.Path, h.serveBus)
+	h.relayRoutes(mux) // the manager's second channel: the connections relayed to it (devices_relay.go)
 }
 
 // busCaller is the identity a bus request's bearer token names (the header only: a token in a URL ends up in logs).
@@ -287,6 +289,8 @@ type busHelloReply struct {
 	Role     string            `json:"role"`
 	Managers []busManagerBrief `json:"managers"`
 	assistantwire.Hello
+	// Devices: hub.json's machines and what the manager that carries them needs (devices_link.go); only to it.
+	Devices *devicewire.Config `json:"devices,omitempty"`
 }
 
 type busManagerBrief struct {
@@ -308,7 +312,8 @@ func (h *Hub) managerHello(ctx context.Context, c *busConn, params json.RawMessa
 		Deploy: clip(p.Deploy, 40), Version: clip(p.Version, 80)}); err != nil {
 		return nil, err
 	}
-	return busHelloReply{Name: c.ident.Name, Role: c.ident.Role, Managers: h.busManagers(ctx), Hello: h.assistantHello(ctx)}, nil
+	return busHelloReply{Name: c.ident.Name, Role: c.ident.Role, Managers: h.busManagers(ctx), Hello: h.assistantHello(ctx),
+		Devices: h.devicesHello(c.ident.ID)}, nil
 }
 
 // busAccept makes c its identity's current connection, and hangs up the one it replaces.
@@ -341,6 +346,9 @@ func (h *Hub) busAccept(ctx context.Context, c *busConn, p busPresence) error {
 	if c.ident.ID == assistantwire.AssistantID {
 		go h.assistantConnected()
 	}
+	if c.ident.ID == devicesOwner {
+		h.devicesConnected() // its first report: the sessions the apps watch, watched again (devices_link.go)
+	}
 	return nil
 }
 
@@ -368,6 +376,9 @@ func (h *Hub) busEnded(c *busConn) {
 	h.bus.mu.Unlock()
 	if current {
 		h.logf("bus: [%s] disconnected", c.ident.ID)
+		if c.ident.ID == devicesOwner {
+			go h.devicesGone() // its machines (devices_link.go)
+		}
 		if c.ident.ID == assistantwire.AssistantID {
 			h.dropFollows() // the conversations its channels followed (assistant_channels.go)
 		}
@@ -440,14 +451,20 @@ func (h *Hub) busRosterChanged(ctx context.Context, except *busConn) {
 // meanwhile (errBusDropped, which is errBusOffline too, when the request had gone out). Without a deadline on ctx it
 // gives up after two minutes.
 func (h *Hub) callBus(ctx context.Context, id, method string, params, out any) error {
-	c := h.busConnOf(id)
-	if c == nil {
-		return fmt.Errorf("%s: %w", id, errBusOffline)
-	}
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
+	}
+	return h.callBusAsIs(ctx, id, method, params, out)
+}
+
+// callBusAsIs is callBus with ctx's own deadline, or none: a call to a machine's node through the manager waits as
+// long as its caller would have for the node itself (a plugin's nodes.call, an upload).
+func (h *Hub) callBusAsIs(ctx context.Context, id, method string, params, out any) error {
+	c := h.busConnOf(id)
+	if c == nil {
+		return fmt.Errorf("%s: %w", id, errBusOffline)
 	}
 	if params == nil {
 		params = map[string]any{}

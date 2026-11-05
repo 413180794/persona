@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -52,12 +51,8 @@ func (s *settingsStore) PutSetting(_ context.Context, key string, v any) error {
 	return nil
 }
 
-func (s *settingsStore) ListTodos(context.Context) ([]db.TodoRow, error) { return nil, nil }
-func (s *settingsStore) ListAllTodoSpaces(context.Context) ([]db.TodoSpaceRow, error) {
-	return nil, nil
-}
-func (s *settingsStore) ListAllTodoAgents(context.Context) ([]db.TodoAgentRow, error) {
-	return nil, nil
+func (s *settingsStore) TakeSetting(ctx context.Context, key string, out any) (bool, error) {
+	return s.Setting(ctx, key, out)
 }
 
 // engineNode is a node answering the hub over pipes, recording the methods it was called with.
@@ -82,13 +77,13 @@ func (f *engineNode) seen() []string {
 	return append([]string(nil), f.calls...)
 }
 
-func engineHub(t *testing.T) (*Hub, *settingsStore, *Machine, http.Handler) {
+func engineHub(t *testing.T) (*Devices, *settingsStore, *Machine, http.Handler) {
 	t.Helper()
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	st := &settingsStore{vals: map[string][]byte{}}
-	h.store = st
+	h.opts.Store = st
 	m := newMachine(h, MachineConfig{ID: "m1", Name: "box"})
-	h.byID["m1"], h.machines = m, []*Machine{m}
+	h.addEntry(m)
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v1/machines/{mid}/engine", h.withMachine(h.putEngine))
 	mux.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
@@ -158,8 +153,8 @@ func TestEnginePutOffline(t *testing.T) {
 	}
 
 	// A new hub reads it back from settings.
-	h2 := newTestHub(t)
-	h2.store = st
+	h2 := newTestDevices(t)
+	h2.opts.Store = st
 	if got := h2.engineOf("m1"); got != "herdr-core" {
 		t.Errorf("after a restart: %s", got)
 	}
@@ -187,7 +182,7 @@ func TestEngineOnline(t *testing.T) {
 	f.mu.Lock()
 	f.calls = nil
 	f.mu.Unlock()
-	m.configureNode(context.Background(), peer)
+	m.configureNode(context.Background(), peer, nil)
 	for _, c := range f.seen() {
 		if strings.HasPrefix(c, "engine.use") {
 			t.Errorf("configureNode sent %s", c)
@@ -207,9 +202,9 @@ func TestEngineNotSentWhenNeverChosen(t *testing.T) {
 
 // Settings that cannot be read are not read again on every machine list: herdr meanwhile, retried later.
 func TestEngineLoadBacksOff(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	st := &failingSettings{}
-	h.store = st
+	h.opts.Store = st
 	for range 5 {
 		if got := h.engineOf("m1"); got != "herdr" {
 			t.Fatalf("engineOf = %s", got)

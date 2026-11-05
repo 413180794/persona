@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -83,13 +82,13 @@ func (dirsStore) FinishInteraction(context.Context, string, string, *proto.Resol
 	return nil
 }
 
-func dirsHub(t *testing.T) (*Hub, *settingsStore, *Machine, http.Handler) {
+func dirsHub(t *testing.T) (*Devices, *settingsStore, *Machine, http.Handler) {
 	t.Helper()
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	st := &settingsStore{vals: map[string][]byte{}}
-	h.store = dirsStore{st}
+	h.opts.Store = dirsStore{st}
 	m := newMachine(h, MachineConfig{ID: "m1", Name: "box", ClaudeConfigDirs: []string{"~/.automation/claude-b"}})
-	h.byID["m1"], h.machines = m, []*Machine{m}
+	h.addEntry(m)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/machines/{mid}/claude-dirs", h.withMachine(h.getClaudeDirs))
 	mux.HandleFunc("PUT /api/v1/machines/{mid}/claude-dirs/blocked", h.withMachine(h.putClaudeDirsBlocked))
@@ -152,7 +151,7 @@ func TestBlockClaudeDirs(t *testing.T) {
 		t.Fatalf("remembered %v", seen)
 	}
 	// Reconnecting hands the node the patterns.
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	f.mu.Lock()
 	last = f.configure[len(f.configure)-1]
 	f.mu.Unlock()
@@ -207,56 +206,6 @@ func TestClaudeDirsEmptyBlocklistIsArray(t *testing.T) {
 	}
 }
 
-// jarvis_settings blocks a directory only after the phone approves, and removes it the same way.
-func TestSelfSettingsBlocksClaudeDirs(t *testing.T) {
-	h, _, m, _ := dirsHub(t)
-	connectDirsNode(t, m)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	run := func(args string) string {
-		t.Helper()
-		done := make(chan string, 1)
-		go func() {
-			out, err := h.toolJarvisSettings(ctx, m, "s1", json.RawMessage(args))
-			if err != nil {
-				out = "error: " + err.Error()
-			}
-			done <- out
-		}()
-		for ctx.Err() == nil {
-			if pending := h.pendingInteractions(); len(pending) == 1 {
-				allow := true
-				_ = h.resolve(pending[0].ID, proto.Resolution{Allow: &allow})
-				break
-			}
-			select {
-			case out := <-done:
-				return out
-			case <-time.After(5 * time.Millisecond):
-			}
-		}
-		return <-done
-	}
-	if out := run(`{"action":"get","key":"agents.blocked_claude_dirs"}`); !strings.Contains(out, "/home/me/.automation/claude-a (listed") {
-		t.Fatalf("get: %s", out)
-	}
-	if out := run(`{"action":"add","key":"agents.blocked_claude_dirs","value":{"machine":"m1","pattern":"~/.automation/*"}}`); !strings.HasPrefix(out, "Blocked") {
-		t.Fatalf("add: %s", out)
-	}
-	if ids := listedIDs(m); !slices.Equal(ids, []string{"work"}) {
-		t.Fatalf("sessions %v", ids)
-	}
-	if out := run(`{"action":"add","key":"agents.blocked_claude_dirs","value":{"machine":"m1","pattern":"dir"}}`); !strings.Contains(out, "bad pattern") {
-		t.Fatalf("bad add: %s", out)
-	}
-	if out := run(`{"action":"remove","key":"agents.blocked_claude_dirs","id":"m1:~/.automation/*"}`); !strings.HasPrefix(out, "Unblocked") {
-		t.Fatalf("remove: %s", out)
-	}
-	if len(m.blockedClaudeDirs(ctx)) != 0 || len(listedIDs(m)) != 2 {
-		t.Fatal("not unblocked")
-	}
-}
-
 // Connecting tells the node whether to list botmux's sessions: as before unless hub.json turns them off for the
 // machine (machines[].botmux false). So does handing it new config directories, which asks for the session list
 // next: the node must not take that list for an older hub's.
@@ -264,10 +213,10 @@ func TestConfigureNodeSaysBotmux(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	off := false
 	m.cfg.Botmux = &off
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	m.reconfigureClaudeDirs(ctx)
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -283,10 +232,10 @@ func TestConfigureNodeSaysHerdrAutostart(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	off := false
 	m.cfg.HerdrAutostart = &off
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.configure) != 2 || string(f.configure[0]["herdr_autostart"]) != "true" || string(f.configure[1]["herdr_autostart"]) != "false" {
@@ -299,9 +248,9 @@ func TestConfigureNodeSaysClaudeStartDir(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	m.cfg.ClaudeStartDir = "~/.config/claude-code/profiles/work"
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.configure) != 2 || string(f.configure[0]["claude_start_dir"]) != `""` ||
@@ -319,27 +268,12 @@ func TestConfigureNodeSaysClaudeGlobalHooks(t *testing.T) {
 	_, _, m, _ := dirsHub(t)
 	f := connectDirsNode(t, m)
 	ctx := context.Background()
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	m.cfg.ClaudeGlobalHooks = true
-	m.configureNode(ctx, m.peer)
+	m.configureNode(ctx, m.peer, nil)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.configure) != 2 || string(f.configure[0]["claude_global_hooks"]) != "false" || string(f.configure[1]["claude_global_hooks"]) != "true" {
 		t.Fatalf("claude_global_hooks in node.configure: %v", f.configure)
-	}
-}
-
-// A report-only hook event (node/globalhooks.go) is not Persona's hooks running in the session: the hub must not wait
-// for them to ask for a card (hasHooks), but a hook of Persona's own still counts.
-func TestReportOnlyHookEventDoesNotMeanPersonaHooks(t *testing.T) {
-	h := newTestHub(t)
-	m := newMachine(h, MachineConfig{ID: "box", Name: "box"})
-	m.onEvent("hook.event", json.RawMessage(`{"session_id":"s-report","event":"Stop","report_only":true}`))
-	if m.hasHooks(proto.Session{SessionID: "s-report"}) {
-		t.Error("a report-only event made the hub wait for a card that never comes")
-	}
-	m.onEvent("hook.event", json.RawMessage(`{"session_id":"s-own","event":"Stop"}`))
-	if !m.hasHooks(proto.Session{SessionID: "s-own"}) {
-		t.Error("a hook event of Persona's own no longer counts")
 	}
 }

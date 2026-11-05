@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/extension"
 	pserve "github.com/nwverse/persona/server/internal/extension/serve"
 )
@@ -222,6 +223,9 @@ func routePatterns(t *testing.T) []string {
 		})
 	}
 	for _, p := range slices.Concat(assistantwire.Routes, assistantwire.InboxRoutes) { // the manager's, relayed
+		seen[p] = true
+	}
+	for _, p := range devicewire.Routes { // the manager's, relayed (devices_link.go)
 		seen[p] = true
 	}
 	return slices.Sorted(func(yield func(string) bool) {

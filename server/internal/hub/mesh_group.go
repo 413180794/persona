@@ -154,21 +154,15 @@ func (h *Hub) groupChanged(oldCenter, newCenter string) {
 // becameMember: this hub stops driving its computers (the center connects through it) and serving apps (their
 // connections are dropped: they come back and are passed on to the center).
 func (h *Hub) becameMember() {
-	for _, m := range h.fleetAll() {
-		m.reconnect() // its run loop parks while this hub is a member (mesh_paths.go)
-	}
 	h.dropAppConnections("this hub joined a group: the center serves the apps now")
-	h.fleetRegroup()
-	h.restartBot() // the center's Feishu bot answers for the group
+	h.fleetRegroup() // the manager parks the machines: the center connects them through this hub
+	h.restartBot()   // the center's Feishu bot answers for the group
 }
 
 // becameCenter: this hub drives the computers again, its own and the members'.
 func (h *Hub) becameCenter() {
 	h.dropAppConnections("this hub is the center now")
-	h.fleetRegroup()
-	for _, m := range h.fleetAll() {
-		m.wake()
-	}
+	h.fleetRegroup() // the manager connects the computers again, its own and the members'
 	h.restartBot()
 }
 

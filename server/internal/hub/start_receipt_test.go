@@ -61,6 +61,7 @@ func TestSessionStartReceipt(t *testing.T) {
 			var starts atomic.Int32
 			h := newTestHub(t)
 			h.store = store
+			connectAssistant(t, h) // it says what a start runs on; without it nothing starts
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			startReceiptNode(t, h, func(_ context.Context, params json.RawMessage) (any, error) {

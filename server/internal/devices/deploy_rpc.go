@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -24,9 +24,11 @@ type nodeDeployRecord struct {
 	At     time.Time `json:"at"`
 }
 
-func (h *Hub) deployContext() context.Context {
-	if h.deployCtx != nil {
-		return h.deployCtx
+func (d *Devices) deployContext() context.Context {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.ctx != nil {
+		return d.ctx
 	}
 	return context.Background()
 }
@@ -55,12 +57,12 @@ func (m *Machine) canDeployLocked() (bool, string) {
 func (m *Machine) deployRecordKey() string { return "node.deploy." + m.cfg.ID }
 
 func (m *Machine) saveDeployRecord(ctx context.Context, record nodeDeployRecord) error {
-	if m.hub.store == nil {
+	if m.d.opts.Store == nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	return m.hub.store.PutSetting(ctx, m.deployRecordKey(), record)
+	return m.d.opts.Store.PutSetting(ctx, m.deployRecordKey(), record)
 }
 
 func (m *Machine) deploymentPhase(ctx context.Context, record *nodeDeployRecord, phase string) error {
@@ -71,7 +73,7 @@ func (m *Machine) deploymentPhase(ctx context.Context, record *nodeDeployRecord,
 	m.mu.Lock()
 	m.deployPhase = phase
 	m.mu.Unlock()
-	m.hub.broadcastMachines()
+	m.d.changed()
 	return nil
 }
 
@@ -88,18 +90,18 @@ func (m *Machine) startRPCDeployment(bin string, saved *nodeDeployRecord) error 
 	}
 	m.deploying, m.deployErr, m.deployPhase = true, "", "waiting_idle"
 	m.mu.Unlock()
-	record := nodeDeployRecord{Target: m.hub.version, State: "queued", Phase: "waiting_idle", At: time.Now().UTC()}
+	record := nodeDeployRecord{Target: m.d.hubVersion(), State: "queued", Phase: "waiting_idle", At: time.Now().UTC()}
 	if saved != nil {
 		record = *saved
 	}
-	ctx := m.hub.deployContext()
+	ctx := m.d.deployContext()
 	if err := m.saveDeployRecord(ctx, record); err != nil {
 		m.mu.Lock()
 		m.deploying, m.deployPhase = false, ""
 		m.mu.Unlock()
 		return fmt.Errorf("保存更新任务失败：%w", err)
 	}
-	m.hub.broadcastMachines()
+	m.d.changed()
 	go m.runRPCDeployment(ctx, bin, record)
 	return nil
 }
@@ -112,7 +114,7 @@ func (m *Machine) runRPCDeployment(ctx context.Context, bin string, record nodeD
 			record.State, record.Error = "failed", err.Error()
 		}
 		if saveErr := m.saveDeployRecord(ctx, record); saveErr != nil {
-			m.hub.logf("[%s] save node deployment: %v", m.cfg.ID, saveErr)
+			m.d.logf("[%s] save node deployment: %v", m.cfg.ID, saveErr)
 			if err == nil {
 				err = fmt.Errorf("更新已确认，但保存结果失败：%w", saveErr)
 			}
@@ -125,11 +127,11 @@ func (m *Machine) runRPCDeployment(ctx context.Context, bin string, record nodeD
 	}
 	m.mu.Unlock()
 	if err != nil {
-		m.hub.logf("[%s] node update: %v", m.cfg.ID, err)
+		m.d.logf("[%s] node update: %v", m.cfg.ID, err)
 	} else {
-		m.hub.logf("[%s] node update confirmed: %s", m.cfg.ID, record.Target)
+		m.d.logf("[%s] node update confirmed: %s", m.cfg.ID, record.Target)
 	}
-	m.hub.broadcastMachines()
+	m.d.changed()
 }
 
 func (m *Machine) performRPCDeployment(ctx context.Context, bin string, record *nodeDeployRecord) error {
@@ -176,8 +178,8 @@ func (m *Machine) waitNodeIdle(ctx context.Context) error {
 			return fmt.Errorf("检查电脑是否空闲失败：%w", err)
 		}
 		m.setSessions(list.Sessions)
-		busy := false
-		for _, s := range m.hub.decorated(m) {
+		busy := m.machinePending() // a question of its agents waits on the phone
+		for _, s := range list.Sessions {
 			if s.State == proto.StateWorking || s.State == proto.StateNeedsYou || s.Status == proto.StatusWorking || s.PendingInteractions > 0 || s.Starting || len(s.Background) > 0 {
 				busy = true
 				break
@@ -279,7 +281,7 @@ func (m *Machine) sendNodeUpdate(ctx context.Context, bin string, record *nodeDe
 		}
 		// A lost commit response is ambiguous: the node may already have
 		// replaced itself. Never report success until it reconnects and confirms.
-		m.hub.logf("[%s] node update commit response lost, checking reconnect: %v", m.cfg.ID, err)
+		m.d.logf("[%s] node update commit response lost, checking reconnect: %v", m.cfg.ID, err)
 	}
 	committed = true
 	return m.confirmNodeDeployment(ctx, record)
@@ -317,15 +319,15 @@ func (m *Machine) confirmNodeDeployment(ctx context.Context, record *nodeDeployR
 // Confirm a healthy replacement even if the hub restarted during transfer. An
 // unconfirmed target must never remain installed just because a worker vanished.
 func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info proto.NodeInfo) {
-	if info.NodeUpdate && info.Version == m.hub.version {
+	if info.NodeUpdate && info.Version == m.d.hubVersion() {
 		confirm, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := peer.Call(confirm, "node.update.confirm", map[string]any{"version": info.Version}, nil)
 		cancel()
 		if err != nil {
-			m.hub.logf("[%s] confirm connected node update: %v", m.cfg.ID, err)
+			m.d.logf("[%s] confirm connected node update: %v", m.cfg.ID, err)
 		}
 	}
-	if m.hub.store == nil {
+	if m.d.opts.Store == nil {
 		return
 	}
 	m.mu.Lock()
@@ -336,11 +338,11 @@ func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info 
 	}
 	var record nodeDeployRecord
 	load, cancel := context.WithTimeout(ctx, 10*time.Second)
-	found, err := m.hub.store.Setting(load, m.deployRecordKey(), &record)
+	found, err := m.d.opts.Store.Setting(load, m.deployRecordKey(), &record)
 	cancel()
 	if err != nil || !found {
 		if err != nil {
-			m.hub.logf("[%s] load pending node update: %v", m.cfg.ID, err)
+			m.d.logf("[%s] load pending node update: %v", m.cfg.ID, err)
 		}
 		return
 	}
@@ -349,11 +351,11 @@ func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info 
 			m.mu.Lock()
 			m.deployErr = record.Error
 			m.mu.Unlock()
-			m.hub.broadcastMachines()
+			m.d.changed()
 		}
 		return
 	}
-	if record.Target != m.hub.version {
+	if record.Target != m.d.hubVersion() {
 		err = errors.New("hub 版本已变化，之前的 node 更新任务已停止；请重新更新")
 	} else if info.Version != record.Target && (record.Phase == "restarting" || record.Phase == "confirming") {
 		// An accepted install may have rolled back while the hub was down.
@@ -374,11 +376,11 @@ func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info 
 		m.mu.Lock()
 		m.deployErr = err.Error()
 		m.mu.Unlock()
-		m.hub.broadcastMachines()
+		m.d.changed()
 	}
 }
 
 func (m *Machine) queueOfflineNodeUpdate(ctx context.Context) error {
-	record := nodeDeployRecord{Target: m.hub.version, State: "queued", Phase: "waiting_idle", At: time.Now().UTC()}
+	record := nodeDeployRecord{Target: m.d.hubVersion(), State: "queued", Phase: "waiting_idle", At: time.Now().UTC()}
 	return m.saveDeployRecord(ctx, record)
 }

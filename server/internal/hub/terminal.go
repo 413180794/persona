@@ -493,7 +493,10 @@ func (c *client) sendTerm(v any) {
 }
 
 // terminalsOffline ends every stream of a machine whose node went away.
-func (h *Hub) terminalsOffline(machineID string) {
+func (h *Hub) terminalsOffline(machineID string) { h.terminalsEnded(machineID, "电脑离线") }
+
+// terminalsEnded ends every terminal stream of the machine, saying why.
+func (h *Hub) terminalsEnded(machineID, why string) {
 	t := &h.terms
 	t.mu.Lock()
 	var ids []string
@@ -504,6 +507,6 @@ func (h *Hub) terminalsOffline(machineID string) {
 	}
 	t.mu.Unlock()
 	for _, id := range ids {
-		h.terminalEnded(machineID, id, "电脑离线", nil)
+		h.terminalEnded(machineID, id, why, nil)
 	}
 }

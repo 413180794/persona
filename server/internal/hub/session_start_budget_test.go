@@ -33,6 +33,7 @@ func TestSessionStartBudgetMatchesNodeStartup(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newTestHub(t)
+			connectAssistant(t, h) // it says what a start runs on; without it nothing starts
 			startReceiptNode(t, h, func(_ context.Context, params json.RawMessage) (any, error) {
 				var in struct {
 					AgentType string `json:"agent_type"`

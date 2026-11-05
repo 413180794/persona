@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -65,10 +66,8 @@ func TestNewMainConversation(t *testing.T) {
 	if cfg.Main != "" || len(cfg.Former) != 1 || cfg.Former[0].SessionID != "main-0001" || cfg.Former[0].MachineID != "server" {
 		t.Fatalf("config: %+v", cfg)
 	}
-	eventually(t, 5*time.Second, "the node keeps listing the old one", func() bool {
-		n.mu.Lock()
-		defer n.mu.Unlock()
-		return slices.Contains(n.kept, "main-0001")
+	eventually(t, 5*time.Second, "the profile keeps listing the old one (the manager tells the node)", func() bool {
+		return slices.ContainsFunc(h.assistantProfile().Keep, func(r assistantwire.SessionRef) bool { return r.SessionID == "main-0001" })
 	})
 	var old proto.Session
 	for _, s := range assistantViewOf(t, h, "?archived=1").Conversations {

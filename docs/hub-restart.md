@@ -113,11 +113,17 @@ SIGTERM 不再直接取消 hub 的 ctx，而是先 `beginStop`：
   10 分钟内交接的才接着用。崩溃时没有交接，新进程开一条新流，客户端全量刷新——不会拿到重复的序号。
 - 需要填写的授权卡片（elicitation）只发给声明了能力的客户端；重连补发时客户端还没发 `client_hello`，所以补发跳过它们，靠连接后的待处理交互快照补上。
 
-### 机器和会话（`hub/warm.go`）
+### 机器和会话（`devices/warm.go`，hub 那头 `hub/devices_link.go` 的 `startDevices`）
 
-新 hub 启动、机器开始连接之前，取走 `hub.warm_machines`（2 分钟内交接的），给当时在线的机器恢复 `NodeInfo` 和会话列表，**30 s 内**照常显示在线：
-重连上来的客户端看不到 Mac 先离线再回来。期间对这台机器的调用（订阅补发、发消息……）等它的 node 连上再发，而不是立刻返回「离线」。
-30 s 还没连上就按原来的方式显示离线（会话标成未知）并广播。
+2026-11-04 起电脑是管理者连的（[machines.md](machines.md)「谁连电脑」）：管理者是 hub 的子进程，hub 停的时候它也收到 SIGTERM，
+先把此刻在线机器的 `NodeInfo` 和会话列表交给下一个（`hub.warm_machines`，键和格式都和以前 hub 交的一样，另加每台的引擎 `engines`），再断开它们（这时不报离线）。
+hub 停机时等它退出（和以前等 node 连接一样，在停机预算里）。
+
+新 hub 起来先**读**（不取走）`hub.warm_machines`（2 分钟内交接的），按它显示 hub.json 的机器，在管理者第一次上报之前对这些机器的调用（订阅补发、发消息……）
+等它（最多 30 s），而不是立刻返回「离线」。新管理者起来**取走**这一份，给当时在线的机器恢复 `NodeInfo` 和会话列表、**30 s 内**照常显示在线，同时把 node 连回来：
+重连上来的客户端看不到 Mac 先离线再回来。30 s 还没连上就按原来的方式显示离线（会话标成未知）并广播。
+这段暖启动只是显示：hub 的自更新确认「之前在线的都连回来了」、之后更新各台 node，等的是 node 真连上（管理者报的 `connected`），和以前 hub 自己的暖启动一样。
+升级到这一版的那次重启，交接是旧 hub 写的，新管理者照样接得上。
 
 ### 正在生成的文字
 
@@ -160,7 +166,7 @@ hub 记住每个会话最后一条 `session.delta`（空串清掉，机器真正
 
 - node：本机的常驻 node 和 hub 之间只是转发，hub 重启后 0.2 s 内重新连上并接管对话；ssh 的电脑照旧 2–8 s 重连，靠 warm start 让客户端看不出来。
 - node 自己断开又马上回来（常驻 node 空闲时 `exec` 新二进制约 2 s、转发进程被换掉）：运行中的 hub 先把这台照原样显示 **5 s**
-  （`reconnectGrace`，`machine_conn.go` 的 `detach`），回来了就什么都不广播，过了 5 s 还没回来才照旧显示离线。jarvis-link 的电脑除外：链路断了就是电脑走了，立刻离线。
+  （`reconnectGrace`，管理者 `devices/conn.go` 的 `detach`），回来了就什么都不报，过了 5 s 还没回来才照旧显示离线。jarvis-link 的电脑除外：链路断了就是电脑走了，立刻离线。
 - 常驻 node 正在 `exec` 时它的 socket 文件还在、但没人听：`node --stdio` 的 `Relay` 遇到「拒绝连接」会等它最多 8 s（`dialResident`），
   而不是自己接下这条连接——那样助手的对话又会落到 hub 的 cgroup 里。没有 socket 文件（没装常驻 node）时立刻自己处理，和以前一样。
   node 侧状态（会话状态、后台任务）在 Postgres，连上后 `state.load`；hub 重新 `session.watch` 订阅中的会话（`since_seq`）。

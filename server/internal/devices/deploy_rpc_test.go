@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"bytes"
@@ -120,14 +120,14 @@ func (n *updatingNode) handle(_ context.Context, method string, params json.RawM
 	return nil, errors.New("unexpected method " + method)
 }
 
-func linkedDeployFixture(t *testing.T, kind string) (*Hub, *Machine, *updatingNode, string) {
+func linkedDeployFixture(t *testing.T, kind string) (*Devices, *Machine, *updatingNode, string) {
 	t.Helper()
-	h := newTestHub(t)
-	h.version = "new-build"
+	h := newTestDevices(t)
+	h.cfg.HubVersion = "new-build"
 	m := newMachine(h, MachineConfig{ID: "example-node", Name: "Example node", Kind: kind})
 	m.online = true
 	m.info = proto.NodeInfo{OS: "linux", Arch: "amd64", Version: "old-build", NodeUpdate: true}
-	h.machines, h.byID[m.cfg.ID] = []*Machine{m}, m
+	h.addEntry(m)
 	n := &updatingNode{machine: m, expected: bytes.Repeat([]byte("a-binary-block"), proto.UploadChunkBytes/4)}
 	toNode, nodeIn := io.Pipe()
 	toHub, hubIn := io.Pipe()
@@ -135,7 +135,9 @@ func linkedDeployFixture(t *testing.T, kind string) (*Hub, *Machine, *updatingNo
 	nodePeer := rpc.New("node", hubIn)
 	nodePeer.OnRequest = n.handle
 	ctx, cancel := context.WithCancel(context.Background())
-	h.deployCtx = ctx
+	h.mu.Lock()
+	h.ctx = ctx
+	h.mu.Unlock()
 	t.Cleanup(func() { cancel(); toNode.Close(); toHub.Close() })
 	go m.peer.Serve(ctx, toHub)
 	go nodePeer.Serve(ctx, toNode)
@@ -262,15 +264,15 @@ func TestLinkedDeployRequiresTargetVersion(t *testing.T) {
 
 func TestLinkedDeployResumesAfterHubRestart(t *testing.T) {
 	h, m, n, _ := linkedDeployFixture(t, kindService)
-	h.store = newKeepStore()
+	h.opts.Store = newMemStore()
 	m.info.Version = "new-build"
-	if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: h.version, State: "queued", Phase: "confirming"}); err != nil {
+	if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: h.hubVersion(), State: "queued", Phase: "confirming"}); err != nil {
 		t.Fatal(err)
 	}
 	m.nodeUpdateConnected(context.Background(), m.peer, m.info)
 	waitMachine(t, m, 5*time.Second, func(s proto.Machine) bool { return !s.Deploying })
 	var saved nodeDeployRecord
-	if found, err := h.store.Setting(context.Background(), m.deployRecordKey(), &saved); err != nil || !found || saved.State != "succeeded" {
+	if found, err := h.opts.Store.Setting(context.Background(), m.deployRecordKey(), &saved); err != nil || !found || saved.State != "succeeded" {
 		t.Fatalf("record=%+v found=%v err=%v", saved, found, err)
 	}
 	n.mu.Lock()
@@ -282,7 +284,7 @@ func TestLinkedDeployResumesAfterHubRestart(t *testing.T) {
 
 func TestLinkedDeployStopsStaleDesiredVersion(t *testing.T) {
 	h, m, n, _ := linkedDeployFixture(t, kindLink)
-	h.store = newKeepStore()
+	h.opts.Store = newMemStore()
 	if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: "previous-hub-build", State: "queued"}); err != nil {
 		t.Fatal(err)
 	}
@@ -299,11 +301,11 @@ func TestLinkedDeployStopsStaleDesiredVersion(t *testing.T) {
 
 func TestUpdateNodesQueuesOfflineLinkedMachine(t *testing.T) {
 	h, m, _, _ := linkedDeployFixture(t, kindLink)
-	h.store = newKeepStore()
+	h.opts.Store = newMemStore()
 	m.online = false
-	h.upd.updateNodes(context.Background(), "")
+	h.updateNodes(context.Background())
 	var saved nodeDeployRecord
-	if found, err := h.store.Setting(context.Background(), m.deployRecordKey(), &saved); err != nil || !found || saved.State != "queued" || saved.Target != h.version {
+	if found, err := h.opts.Store.Setting(context.Background(), m.deployRecordKey(), &saved); err != nil || !found || saved.State != "queued" || saved.Target != h.hubVersion() {
 		t.Fatalf("record=%+v found=%v err=%v", saved, found, err)
 	}
 	if m.snapshot().Deploying {
@@ -329,12 +331,12 @@ func TestLinkedDeployWaitsForBackgroundTasks(t *testing.T) {
 
 func TestLinkedDeployPersistsRejectedInstallation(t *testing.T) {
 	h, m, n, bin := linkedDeployFixture(t, kindService)
-	h.store = newKeepStore()
+	h.opts.Store = newMemStore()
 	n.installErr = &rpc.Error{Code: "invalid_update", Message: "binary self-check failed"}
-	record := nodeDeployRecord{Target: h.version, State: "queued"}
+	record := nodeDeployRecord{Target: h.hubVersion(), State: "queued"}
 	m.runRPCDeployment(context.Background(), bin, record)
 	var saved nodeDeployRecord
-	_, err := h.store.Setting(context.Background(), m.deployRecordKey(), &saved)
+	_, err := h.opts.Store.Setting(context.Background(), m.deployRecordKey(), &saved)
 	if err != nil || saved.State != "failed" || !strings.Contains(saved.Error, "binary self-check failed") {
 		t.Fatalf("record=%+v error=%v", saved, err)
 	}
@@ -350,8 +352,8 @@ func TestLinkedDeployPersistsRejectedInstallation(t *testing.T) {
 
 func TestLinkedDeployDoesNotRepeatRolledBackInstall(t *testing.T) {
 	h, m, n, _ := linkedDeployFixture(t, kindLink)
-	h.store = newKeepStore()
-	if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: h.version, State: "queued", Phase: "confirming"}); err != nil {
+	h.opts.Store = newMemStore()
+	if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: h.hubVersion(), State: "queued", Phase: "confirming"}); err != nil {
 		t.Fatal(err)
 	}
 	m.nodeUpdateConnected(context.Background(), m.peer, m.info)
@@ -359,7 +361,7 @@ func TestLinkedDeployDoesNotRepeatRolledBackInstall(t *testing.T) {
 		t.Fatalf("snapshot=%+v", s)
 	}
 	var saved nodeDeployRecord
-	_, _ = h.store.Setting(context.Background(), m.deployRecordKey(), &saved)
+	_, _ = h.opts.Store.Setting(context.Background(), m.deployRecordKey(), &saved)
 	if saved.State != "failed" {
 		t.Fatalf("record=%+v", saved)
 	}

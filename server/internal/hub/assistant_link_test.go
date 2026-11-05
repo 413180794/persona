@@ -303,14 +303,10 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 	if _, err := link.Snapshot(ctx, snap); err != nil {
 		t.Fatal(err)
 	}
-	if kept, ok := h.keptOn("server"); !ok || strings.Join(kept, " ") != "main-0001 trip-0002" {
-		t.Fatalf("the node keeps the main conversation and the tasks' own: %v", kept)
+	// The node is told what it keeps by the manager that connects it (internal/devices TestSetKeepTellsTheNodes).
+	if keep := h.assistantProfile().Keep; len(keep) != 2 || keep[0].SessionID != "main-0001" || keep[1].SessionID != "trip-0002" {
+		t.Fatalf("the profile keeps the main conversation and the tasks' own: %v", keep)
 	}
-	eventually(t, 5*time.Second, "the node told", func() bool {
-		n.mu.Lock()
-		defer n.mu.Unlock()
-		return strings.Join(n.kept, " ") == "main-0001 trip-0002"
-	})
 	if tasks, ok := h.assistantTasks(); !ok || len(tasks) != 1 || tasks[0].RunSessionID != "trip-0002" {
 		t.Fatalf("the tasks as reported: %+v", tasks)
 	}

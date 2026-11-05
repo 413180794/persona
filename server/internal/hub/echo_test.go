@@ -3,12 +3,11 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // echoMem keeps sent_messages.echo like the table does (db.RecordEcho / Echoes).
@@ -86,35 +85,25 @@ func TestEchoesAreKeptAndHandedBack(t *testing.T) {
 		t.Fatal("the found line was lost")
 	}
 
-	hubIn, nodeOut := io.Pipe()
-	nodeIn, hubOut := io.Pipe()
-	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)
-	var mu sync.Mutex
+	// What the hub hands a node that connects (devices.connected: the manager makes the calls right after its
+	// configuration, before anything asks it for items).
+	h.connectors = connector.NewRegistry(nil)
+	reply := h.machineConnected(context.Background(), m, time.Now())
 	var got []string
 	var handed []struct {
 		ClientMsgID string `json:"client_msg_id"`
 		Line        string `json:"line"`
 	}
-	nodePeer.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		got = append(got, method)
-		if method == "session.echoes" {
+	for _, c := range reply.Calls {
+		got = append(got, c.Method)
+		if c.Method == "session.echoes" {
 			var p struct {
 				Echoes json.RawMessage `json:"echoes"`
 			}
-			_ = json.Unmarshal(params, &p)
+			_ = json.Unmarshal(c.Params, &p)
 			_ = json.Unmarshal(p.Echoes, &handed)
 		}
-		return map[string]any{"ok": true}, nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() { _ = hubPeer.Serve(ctx, hubIn) }()
-	go func() { _ = nodePeer.Serve(ctx, nodeIn) }()
-	m.configureNode(ctx, hubPeer)
-	mu.Lock()
-	defer mu.Unlock()
 	if len(handed) != 2 || handed[0].ClientMsgID != "m1" || handed[0].Line != "u1" || handed[1].ClientMsgID != "m2" {
 		t.Fatalf("handed back %+v (calls %v)", handed, got)
 	}

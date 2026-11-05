@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"bytes"
@@ -21,18 +21,20 @@ import (
 	"github.com/coder/websocket"
 	"golang.org/x/net/proxy"
 
-	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/link"
+	"github.com/nwverse/persona/server/internal/textfmt"
 )
 
 // Computers of kind service (docs/plan-hub-center.md 4, docs/link.md「被动模式」): the computer's connector
-// (jarvis-link in passive mode) listens on a TLS port of its own and the hub dials it — no ssh. The hub pins the
-// connector's key (the SPKI SHA-256 pairing gave it), shows the credential it made up at pairing, and opens
+// (Persona Link in passive mode) listens on a TLS port of its own and the manager dials it — no ssh. The manager pins
+// the connector's key (the SPKI SHA-256 pairing gave it), shows the credential made up at pairing, and opens
 // GET /api/v1/connector/stream, which the connector joins to the resident node's attach socket: from there it is
 // the node protocol, as over ssh. GET /api/v1/connector/info, every half minute, says whether the connector is there
 // and how far (the choice between a computer's paths uses it). Pairing goes the other way round from link: the
 // computer makes a one-time code and a link (jarvis://connector?addr=…&fp=…&code=…), pasted into the admin page; the
-// hub trades the code for a credential it generates (POST /api/v1/connector/pair) and keeps it sealed in Postgres.
+// manager trades the code for a credential it generates (POST /api/v1/connector/pair); the hub keeps it sealed in
+// Postgres with its own key and hands it over when asked (devices.connector_cred, devices.connector_paired).
 
 const (
 	kindService          = "service"
@@ -62,28 +64,40 @@ type serviceState struct {
 	wait    time.Time // rate limited (429): not before this
 	version string    // the connector's build
 	pairGen int       // bumped when it is paired again
+	// cred is the pin and credential as the hub last handed them over (devices.connector_cred), kept so the secret
+	// crosses the bus once, not on every probe; forgotten when the connector refuses it or it is paired again.
+	cred *connectorCred
 }
 
 // connectorCred is a service machine's pin and credential.
 type connectorCred struct{ fp, token, version string }
 
 func (m *Machine) connectorCred(ctx context.Context) (*connectorCred, error) {
-	cs := m.hub.centerStore()
-	if cs == nil {
-		return nil, errors.New("no database")
+	m.mu.Lock()
+	cached := m.svc.cred
+	m.mu.Unlock()
+	if cached != nil {
+		return cached, nil
 	}
-	row, err := cs.ConnectorCredential(ctx, m.cfg.ID)
-	if err != nil {
+	var c devicewire.ConnectorCred
+	if err := m.d.opts.Hub.Call(ctx, devicewire.MethodConnectorCred, map[string]any{"machine_id": m.cfg.ID}, &c); err != nil {
 		return nil, err
 	}
-	if row == nil {
+	if c.Token == "" {
 		return nil, errors.New("这台电脑的连接器还没配对：在管理界面这台电脑上点「重新配对」，粘贴它的 jarvis://connector 链接")
 	}
-	tok, err := m.hub.openKey(row.Token)
-	if err != nil {
-		return nil, fmt.Errorf("读不出连接器的凭据：%w", err)
-	}
-	return &connectorCred{fp: row.FP, token: tok, version: row.Version}, nil
+	cred := &connectorCred{fp: c.FP, token: c.Token, version: c.Version}
+	m.mu.Lock()
+	m.svc.cred = cred
+	m.mu.Unlock()
+	return cred, nil
+}
+
+// forgetCred drops the kept credential: the connector refused it (the hub may have another by now).
+func (m *Machine) forgetCred() {
+	m.mu.Lock()
+	m.svc.cred = nil
+	m.mu.Unlock()
 }
 
 // connectorTransport is an HTTP/1.1 transport to a connector pinned to fp, dialing through proxyURL when set.
@@ -219,6 +233,9 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 	if err != nil {
 		tr.CloseIdleConnections()
 		if resp != nil && resp.StatusCode != http.StatusSwitchingProtocols {
+			if resp.StatusCode == http.StatusUnauthorized {
+				m.forgetCred()
+			}
 			herr := connectorError(resp)
 			var ce *connectorHTTPError
 			if errors.As(herr, &ce) && ce.retry > 0 {
@@ -233,7 +250,7 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 	conn.SetReadLimit(64 << 20)
 	sctx, scancel := context.WithCancelCause(context.Background())
 	nc := websocket.NetConn(sctx, conn, websocket.MessageBinary)
-	every, timeout := m.hub.linkPingTimes()
+	every, timeout := m.d.linkPingTimes()
 	go func() { // a stream whose TCP connection died quietly
 		t := time.NewTicker(every)
 		defer t.Stop()
@@ -303,11 +320,10 @@ func (c *closeWatch) Read(p []byte) (int, error) {
 // again until it is paired again here.
 func (m *Machine) serviceInvalidated() {
 	m.mu.Lock()
-	m.svc.invalid, m.svc.ok, m.svc.err = true, false, errConnectorInvalid
+	m.svc.invalid, m.svc.ok, m.svc.err, m.svc.cred = true, false, errConnectorInvalid, nil
 	m.mu.Unlock()
-	m.hub.logf("[%s] connector: credential revoked (paired with another hub)", m.cfg.ID)
-	m.hub.meshTouch()
-	m.hub.broadcastMachines()
+	m.d.logf("[%s] connector: credential revoked (paired with another hub)", m.cfg.ID)
+	m.d.changed()
 }
 
 // serviceReachable: the connector answered its last info (or was not asked yet), and its round trip.
@@ -350,12 +366,12 @@ func (m *Machine) probeService(ctx context.Context) {
 		}
 		m.mu.Unlock()
 		if was != ok {
-			m.hub.meshTouch()
+			m.d.changed() // the hub's mesh record says whether it answers
 			m.wake()
 			if ok {
-				m.hub.logf("[%s] connector answers (%d ms)", m.cfg.ID, rtt)
+				m.d.logf("[%s] connector answers (%d ms)", m.cfg.ID, rtt)
 			} else {
-				m.hub.logf("[%s] connector: %s", m.cfg.ID, err)
+				m.d.logf("[%s] connector: %s", m.cfg.ID, err)
 			}
 		}
 	}
@@ -383,6 +399,9 @@ func (m *Machine) probeService(ctx context.Context) {
 	defer resp.Body.Close()
 	rtt := max(1, int(time.Since(start).Milliseconds()))
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized {
+			m.forgetCred()
+		}
 		herr := connectorError(resp)
 		var ce *connectorHTTPError
 		if errors.As(herr, &ce) && ce.retry > 0 {
@@ -410,9 +429,9 @@ func (m *Machine) probeService(ctx context.Context) {
 
 // probeServices reads every service machine's connector info now and then, whatever this hub's role (a member says
 // in its record whether its connectors answer).
-func (h *Hub) probeServices(ctx context.Context) {
+func (d *Devices) probeServices(ctx context.Context) {
 	for {
-		for _, m := range h.cfgMachines() {
+		for _, m := range d.cfgMachines() {
 			if m.cfg.Kind == kindService && m.dialNode == nil {
 				pctx, cancel := context.WithTimeout(ctx, 2*connectorDialTimeout)
 				m.probeService(pctx)
@@ -437,19 +456,15 @@ func validHostPort(a string) bool {
 	return err == nil && n > 0 && n < 65536
 }
 
-// pairConnector trades a connector's one-time code for a credential this hub makes up, pinned to the link's key: the
-// address that worked (the one given, else the link's candidates in order), and the connector's build. The credential
-// is kept sealed for machine id.
-func (h *Hub) pairConnector(ctx context.Context, pairLink, id, address, proxyURL string) (string, string, error) {
-	addrs, fp, code, err := link.ParseConnectorLink(pairLink)
+// PairConnector trades a connector's one-time code for a credential the manager makes up, pinned to the link's key:
+// the address that worked (the one given, else the link's candidates in order), and the connector's build. The hub
+// keeps the credential sealed for machine id (devices.connector_paired).
+func (d *Devices) PairConnector(ctx context.Context, p devicewire.PairConnector) (string, string, error) {
+	addrs, fp, code, err := link.ParseConnectorLink(p.Link)
 	if err != nil {
 		return "", "", err
 	}
-	cs := h.centerStore()
-	if cs == nil {
-		return "", "", errors.New("no database")
-	}
-	if address = strings.TrimSpace(address); address != "" {
+	if address := strings.TrimSpace(p.Address); address != "" {
 		if !validHostPort(address) {
 			return "", "", errors.New("地址写成 主机:端口（IPv6 带方括号）")
 		}
@@ -458,15 +473,16 @@ func (h *Hub) pairConnector(ctx context.Context, pairLink, id, address, proxyURL
 	if len(addrs) == 0 {
 		return "", "", errors.New("配对链接里没有地址：填上那台电脑的 主机:端口")
 	}
-	tr, err := connectorTransport(fp, proxyURL)
+	tr, err := connectorTransport(fp, p.Proxy)
 	if err != nil {
 		return "", "", err
 	}
 	defer tr.CloseIdleConnections()
 	client := &http.Client{Transport: tr, Timeout: 2 * connectorDialTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	cfg := d.config()
 	token := "jc_" + randomHex(32)
-	body, _ := json.Marshal(map[string]string{"code": code, "token": token, "machine": id, "hub_id": h.hubID(), "hub_name": h.hubName()})
+	body, _ := json.Marshal(map[string]string{"code": code, "token": token, "machine": p.MachineID, "hub_id": cfg.HubID, "hub_name": cfg.HubName})
 	var errs []string
 	for _, a := range addrs {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+a+connectorPairPath, bytes.NewReader(body))
@@ -492,30 +508,43 @@ func (h *Hub) pairConnector(ctx context.Context, pairLink, id, address, proxyURL
 		}
 		_ = json.NewDecoder(io.LimitReader(resp.Body, 16<<10)).Decode(&out)
 		resp.Body.Close()
-		sealed, err := h.sealKey(token)
-		if err != nil {
+		version := clip(oneLine(out.Version), 80)
+		if err := d.opts.Hub.Call(ctx, devicewire.MethodConnectorPaired, devicewire.ConnectorCred{MachineID: p.MachineID, FP: fp,
+			Token: token, Version: version}, nil); err != nil {
 			return "", "", err
 		}
-		if err := cs.SaveConnectorCredential(ctx, db.ConnectorCredential{MachineID: id, FP: fp, Token: sealed,
-			Version: clip(oneLine(out.Version), 80)}); err != nil {
-			return "", "", err
-		}
-		if m := h.cfgMachine(id); m != nil {
+		if m := d.cfgMachine(p.MachineID); m != nil {
 			m.mu.Lock()
-			m.svc = serviceState{version: out.Version, pairGen: m.svc.pairGen + 1}
+			m.svc = serviceState{version: out.Version, pairGen: m.svc.pairGen + 1, cred: &connectorCred{fp: fp, token: token, version: version}}
 			m.mu.Unlock()
 			m.wake()
 		}
-		h.logf("[%s] connector paired at %s", id, a)
+		d.logf("[%s] connector paired at %s", p.MachineID, a)
 		return a, out.Version, nil
 	}
 	return "", "", errors.New("连不上那台电脑的连接器：" + strings.Join(errs, "；"))
 }
 
-// linkPingTimes are the heartbeats of the streams the hub keeps (link.PingEvery and PingTimeout, shorter in tests).
-func (h *Hub) linkPingTimes() (time.Duration, time.Duration) {
-	if h.linkPing[0] > 0 {
-		return h.linkPing[0], h.linkPing[1]
+// linkPingTimes are the heartbeats of the streams the manager keeps (link.PingEvery and PingTimeout, or the hub's).
+func (d *Devices) linkPingTimes() (time.Duration, time.Duration) {
+	cfg := d.config()
+	if cfg.LinkPingMS > 0 && cfg.LinkPingTimeoutMS > 0 {
+		return time.Duration(cfg.LinkPingMS) * time.Millisecond, time.Duration(cfg.LinkPingTimeoutMS) * time.Millisecond
 	}
 	return link.PingEvery, link.PingTimeout
 }
+
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+func clip(s string, n int) string { return textfmt.Clip(s, n) }
+
+func oneLine(s string) string { return textfmt.OneLine(s) }

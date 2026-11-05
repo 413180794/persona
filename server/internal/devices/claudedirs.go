@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -25,8 +26,8 @@ func claudeDirsBlockedKey(machine string) string { return "claude_dirs_blocked/"
 
 func (m *Machine) blockedClaudeDirs(ctx context.Context) []string {
 	var out []string
-	if m.hub.store != nil {
-		_, _ = m.hub.store.Setting(ctx, claudeDirsBlockedKey(m.cfg.ID), &out)
+	if m.d.opts.Store != nil {
+		_, _ = m.d.opts.Store.Setting(ctx, claudeDirsBlockedKey(m.cfg.ID), &out)
 	}
 	return proto.CleanClaudeDirPatterns(out)
 }
@@ -45,9 +46,9 @@ func (m *Machine) claudeDirs(ctx context.Context) []string {
 	if d := m.cfg.ClaudeStartDir; d != "" && !slices.Contains(dirs, d) {
 		dirs = append(dirs, d)
 	}
-	if m.hub.store != nil {
+	if m.d.opts.Store != nil {
 		var seen []string
-		if ok, err := m.hub.store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen); ok && err == nil {
+		if ok, err := m.d.opts.Store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen); ok && err == nil {
 			for _, d := range seen {
 				if !slices.Contains(dirs, d) {
 					dirs = append(dirs, d)
@@ -64,23 +65,39 @@ func (m *Machine) botmux() bool { return m.cfg.Botmux == nil || *m.cfg.Botmux }
 
 // configureNode hands the node its config directories and whether it lists botmux's sessions, before the first
 // session list. Older nodes do not know node.configure; they keep looking in ~/.claude only.
-func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
-	params := map[string]any{"machine_id": m.cfg.ID, "codex": m.codexConfig(ctx), "claude_dirs": m.claudeDirs(ctx),
+// hub is the hub's part (devices.connected: Codex settings, then managed launchers, the sends it remembers); nil
+// while it is not connected (it is done again when it is).
+func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer, hub *devicewire.ConnectedReply) {
+	params := map[string]any{"machine_id": m.cfg.ID, "claude_dirs": m.claudeDirs(ctx),
 		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux(), "claude_start_dir": m.cfg.ClaudeStartDir,
 		"herdr_autostart": m.herdrAutostart(ctx), "claude_global_hooks": m.cfg.ClaudeGlobalHooks}
 	// The sessions it lists however quiet are the assistant's to say (its profile); before it said, the node keeps
 	// what it has.
-	if keep, ok := m.hub.keptOn(m.cfg.ID); ok {
+	if keep, ok := m.d.keptOn(m.cfg.ID); ok {
 		if keep == nil {
 			keep = []string{}
 		}
 		params["keep_sessions"] = keep
 	}
+	if hub != nil {
+		for k, v := range hub.Configure {
+			if _, ours := params[k]; !ours {
+				params[k] = v
+			}
+		}
+	}
 	_ = peer.Call(ctx, "node.configure", params, nil)
-	m.sendManaged(ctx, func(ctx context.Context, method string, params, out any) error {
-		return peer.Call(ctx, method, params, out)
-	})
-	m.sendEchoes(ctx, peer)
+	if hub != nil {
+		for _, c := range hub.Calls {
+			p := c.Params
+			if len(p) == 0 {
+				p = json.RawMessage(`{}`)
+			}
+			if err := peer.Call(ctx, c.Method, p, nil); err != nil {
+				m.d.logf("[%s] %s: %v", m.cfg.ID, c.Method, err)
+			}
+		}
+	}
 }
 
 // rememberClaudeDirs stores the directories the node found (claude.dirs event), added to what was known; blocked ones
@@ -89,12 +106,12 @@ func (m *Machine) rememberClaudeDirs(params json.RawMessage) {
 	var p struct {
 		Dirs []string `json:"dirs"`
 	}
-	if json.Unmarshal(params, &p) != nil || m.hub.store == nil {
+	if json.Unmarshal(params, &p) != nil || m.d.opts.Store == nil {
 		return
 	}
 	ctx := context.Background()
 	var seen []string
-	_, _ = m.hub.store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen)
+	_, _ = m.d.opts.Store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen)
 	blocked, home := m.blockedClaudeDirs(ctx), m.nodeHome()
 	changed := false
 	for _, d := range p.Dirs {
@@ -104,8 +121,8 @@ func (m *Machine) rememberClaudeDirs(params json.RawMessage) {
 		}
 	}
 	if changed {
-		if err := m.hub.store.PutSetting(ctx, claudeDirsKey(m.cfg.ID), seen); err != nil {
-			m.hub.logf("[%s] remember claude dirs: %v", m.cfg.ID, err)
+		if err := m.d.opts.Store.PutSetting(ctx, claudeDirsKey(m.cfg.ID), seen); err != nil {
+			m.d.logf("[%s] remember claude dirs: %v", m.cfg.ID, err)
 		}
 	}
 }
@@ -115,7 +132,7 @@ var errBadPattern = errors.New("bad pattern")
 // setBlockedClaudeDirs stores the machine's blocked patterns, forgets the remembered directories they block, and
 // tells the node: it drops them at once and sends the session list without their sessions.
 func (m *Machine) setBlockedClaudeDirs(ctx context.Context, patterns []string) error {
-	if m.hub.store == nil {
+	if m.d.opts.Store == nil {
 		return errors.New("no database")
 	}
 	patterns = proto.CleanClaudeDirPatterns(patterns)
@@ -124,20 +141,20 @@ func (m *Machine) setBlockedClaudeDirs(ctx context.Context, patterns []string) e
 			return fmt.Errorf("%w %q: a path or glob starting with / or ~/", errBadPattern, p)
 		}
 	}
-	if err := m.hub.store.PutSetting(ctx, claudeDirsBlockedKey(m.cfg.ID), patterns); err != nil {
+	if err := m.d.opts.Store.PutSetting(ctx, claudeDirsBlockedKey(m.cfg.ID), patterns); err != nil {
 		return err
 	}
 	var seen []string
-	if ok, _ := m.hub.store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen); ok {
+	if ok, _ := m.d.opts.Store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen); ok {
 		home := m.nodeHome()
 		kept := slices.DeleteFunc(slices.Clone(seen), func(d string) bool { return proto.ClaudeDirBlocked(d, home, patterns) })
 		if len(kept) != len(seen) {
-			if err := m.hub.store.PutSetting(ctx, claudeDirsKey(m.cfg.ID), kept); err != nil {
+			if err := m.d.opts.Store.PutSetting(ctx, claudeDirsKey(m.cfg.ID), kept); err != nil {
 				return err
 			}
 		}
 	}
-	m.hub.logf("[%s] blocked claude dirs: %v", m.cfg.ID, patterns)
+	m.d.logf("[%s] blocked claude dirs: %v", m.cfg.ID, patterns)
 	m.reconfigureClaudeDirs(ctx)
 	return nil
 }
@@ -157,7 +174,7 @@ func (m *Machine) reconfigureClaudeDirs(ctx context.Context) {
 	// must not be the node's first word on it (an older hub's, node/hostbotmux.go useBotmux).
 	if err := m.call(ctx, "node.configure", map[string]any{"claude_dirs": m.claudeDirs(ctx),
 		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux()}, nil); err != nil {
-		m.hub.logf("[%s] configure claude dirs: %v", m.cfg.ID, err)
+		m.d.logf("[%s] configure claude dirs: %v", m.cfg.ID, err)
 		return
 	}
 	var list struct {
@@ -165,6 +182,7 @@ func (m *Machine) reconfigureClaudeDirs(ctx context.Context) {
 	}
 	if err := m.call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
 		m.setSessions(list.Sessions)
+		m.d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
 	}
 }
 
@@ -203,8 +221,8 @@ func (m *Machine) claudeDirsState(ctx context.Context) claudeDirsState {
 	// What the node did not list: configured ones it was not told about (blocked), and, from an older or offline
 	// node, the remembered ones.
 	var seen []string
-	if m.hub.store != nil {
-		_, _ = m.hub.store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen)
+	if m.d.opts.Store != nil {
+		_, _ = m.d.opts.Store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen)
 	}
 	add := func(d, source string) {
 		if d != "" && !has(d) {
@@ -236,11 +254,11 @@ func (m *Machine) claudeDirsState(ctx context.Context) claudeDirsState {
 	return st
 }
 
-func (h *Hub) getClaudeDirs(w http.ResponseWriter, r *http.Request, m *Machine) {
+func (d *Devices) getClaudeDirs(w http.ResponseWriter, r *http.Request, m *Machine) {
 	writeJSON(w, m.claudeDirsState(r.Context()))
 }
 
-func (h *Hub) putClaudeDirsBlocked(w http.ResponseWriter, r *http.Request, m *Machine) {
+func (d *Devices) putClaudeDirsBlocked(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var in struct {
 		Blocked []string `json:"blocked"`
 	}

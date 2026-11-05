@@ -1,7 +1,6 @@
-package hub
+package devices
 
 import (
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -15,36 +14,38 @@ func TestNodeReconnectGrace(t *testing.T) {
 	old := reconnectGrace
 	reconnectGrace = 150 * time.Millisecond
 	defer func() { reconnectGrace = old }()
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := newMachine(h, MachineConfig{ID: "box", Name: "box"})
-	h.machines, h.byID["box"] = append(h.machines, m), m
+	h.addEntry(m)
+	go h.reportLoop(h.ctx)
 	m.online = true
 	m.sessions = []proto.Session{{SessionID: "s1", Status: proto.StatusWorking}}
-	c := &client{out: make(chan []byte, 64)}
-	h.clients[c] = struct{}{}
+	h.report(false)
+	seen := 0
+	// machinesSent is how many reports since the last look said the machine is offline, and whether the last is online.
 	machinesSent := func() (n int, online bool) {
-		for {
-			select {
-			case b := <-c.out:
-				var msg struct {
-					Type     string          `json:"type"`
-					Machines []proto.Machine `json:"machines"`
-				}
-				_ = json.Unmarshal(b, &msg)
-				if msg.Type == "machines" {
+		f := h.host()
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		online = true
+		for _, st := range f.states[seen:] {
+			if len(st.Machines) == 1 {
+				online = st.Machines[0].Machine.Online
+				if !online {
 					n++
-					online = len(msg.Machines) == 1 && msg.Machines[0].Online
 				}
-			default:
-				return n, online
 			}
 		}
+		seen = len(f.states)
+		return n, online
 	}
 
+	machinesSent()
 	m.detach(errors.New("node exited"), false)
 	if !m.snapshot().Online || m.sessionList()[0].Status != proto.StatusWorking {
 		t.Fatal("a node that just disconnected shows offline at once")
 	}
+	time.Sleep(100 * time.Millisecond)
 	if n, _ := machinesSent(); n != 0 {
 		t.Fatalf("the apps were told about a disconnect within the grace (%d)", n)
 	}

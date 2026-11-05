@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -45,7 +45,7 @@ func shortClaudeVersionRetry(t *testing.T) {
 func TestAMissingClaudeVersionIsAskedForAgain(t *testing.T) {
 	shortClaudeVersionRetry(t)
 	peer, asked := versionNode(t, 2, "2.1.316")
-	m := newMachine(newTestHub(t), MachineConfig{ID: "box", Kind: "ssh", SSHHost: "box"})
+	m := newMachine(newTestDevices(t), MachineConfig{ID: "box", Kind: "ssh", SSHHost: "box"})
 	m.mu.Lock()
 	m.peer, m.info, m.online = peer, proto.NodeInfo{Hostname: "box"}, true
 	m.mu.Unlock()
@@ -67,7 +67,7 @@ func TestAClaudeVersionFromAnOldConnectionIsNotShown(t *testing.T) {
 	shortClaudeVersionRetry(t)
 	old, _ := versionNode(t, 0, "2.1.300")
 	current, _ := versionNode(t, 0, "2.1.316")
-	m := newMachine(newTestHub(t), MachineConfig{ID: "box", Kind: "ssh", SSHHost: "box"})
+	m := newMachine(newTestDevices(t), MachineConfig{ID: "box", Kind: "ssh", SSHHost: "box"})
 	m.mu.Lock()
 	m.peer, m.info = current, proto.NodeInfo{Hostname: "box", ClaudeVersion: "2.1.316"}
 	m.mu.Unlock()
@@ -85,7 +85,7 @@ func TestAClaudeVersionFromAnOldConnectionIsNotShown(t *testing.T) {
 func TestAskingForTheClaudeVersionStopsWithTheConnection(t *testing.T) {
 	shortClaudeVersionRetry(t)
 	peer, asked := versionNode(t, 1<<30, "")
-	m := newMachine(newTestHub(t), MachineConfig{ID: "box", Kind: "ssh", SSHHost: "box"})
+	m := newMachine(newTestDevices(t), MachineConfig{ID: "box", Kind: "ssh", SSHHost: "box"})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); m.retryClaudeVersion(ctx, peer) }()

@@ -79,6 +79,8 @@ TLS 已开启时，输出中的「公钥指纹」就是钉扎值 `fp`：证书 S
 默认配对 token 有效期为 10 分钟，只能兑换一次设备 token；兑换后最多再保留 2 分钟，且不超过原到期时间。这是兼容旧 iOS 配对流程的策略，详见 [协议](protocol.md#临时配对)。`hub pair --legacy` 才打印主 token；公网始终拒绝主 token。
 
 电脑链路（jarvis-link，[link.md](link.md)）也只走这个 TLS 端口，同样按配对时拿到的指纹钉扎，内网也不例外；hub 不收它的明文请求（回环除外）。
+TLS 在 hub 这里结束：hub 认完链路凭据后把连接原样转给连电脑的管理者（2026-11-04，[machines.md](machines.md)「谁连电脑」），
+转发走管理者自己的总线 token 开的 `GET /api/v1/bus/relay`（和总线一样：只认 `Authorization: Bearer jb_…`，公网来源要 TLS，设备凭据开不了它，它也开不了 App 的接口）。
 
 ## 候选地址与 DDNS
 

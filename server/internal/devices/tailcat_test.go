@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -89,7 +89,7 @@ func waitVia(t *testing.T, m *Machine, via string) {
 }
 
 // tailcatMachine is a machine reachable both ways, with its timings shortened.
-func tailcatMachine(h *Hub, retry, probe, check time.Duration) *Machine {
+func tailcatMachine(h *Devices, retry, probe, check time.Duration) *Machine {
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "ssh", SSHHost: "box", TailcatAddr: "tc-test"})
 	m.timings = tailcatTimings{directRetry: retry, directProbeEvery: probe, checkEvery: check}
 	return m
@@ -98,7 +98,7 @@ func tailcatMachine(h *Hub, retry, probe, check time.Duration) *Machine {
 // ssh first; when it fails, tailcat right away; and the next reconnects go to tailcat first for a while instead
 // of waiting on ssh again.
 func TestFallsBackToTailcatWhenSSHFails(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := tailcatMachine(h, time.Hour, time.Hour, time.Hour)
 	var sshTries, dials atomic.Int32
 	m.nodeCmd = func(ctx context.Context) *exec.Cmd { sshTries.Add(1); return sshDown(ctx) }
@@ -127,7 +127,7 @@ func TestFallsBackToTailcatWhenSSHFails(t *testing.T) {
 
 // On tailcat the hub keeps checking ssh, and goes back to it once it works.
 func TestGoesBackToSSHWhenItWorksAgain(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := tailcatMachine(h, time.Hour, 200*time.Millisecond, time.Hour)
 	var fixed atomic.Bool
 	m.nodeCmd = func(ctx context.Context) *exec.Cmd {
@@ -157,15 +157,14 @@ func TestGoesBackToSSHWhenItWorksAgain(t *testing.T) {
 
 // Not while a question waits on the phone: switching reconnects, which would cancel it.
 func TestStaysOnTailcatWhileAnInteractionWaits(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := tailcatMachine(h, time.Hour, 100*time.Millisecond, time.Hour)
 	var probes atomic.Int32
 	m.nodeCmd = func(ctx context.Context) *exec.Cmd { return sshDown(ctx) }
 	var dials atomic.Int32
 	m.dialTailcat = tailcatNode(&dials)
 	m.probeDirect = func(context.Context) error { probes.Add(1); return nil }
-	h.interactions["q"] = &pending{}
-	h.interactions["q"].ix.MachineID = "box"
+	m.pending = 1 // a question it asked waits on the phone (interaction.create, through the hub)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go m.run(ctx)
@@ -181,7 +180,7 @@ func TestStaysOnTailcatWhileAnInteractionWaits(t *testing.T) {
 
 // A machine without a tailcat address is ssh only, as before; kind tailcat never tries ssh.
 func TestTransports(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	for _, c := range []struct {
 		cfg  MachineConfig
 		want string
@@ -199,7 +198,7 @@ func TestTransports(t *testing.T) {
 
 // Both ways failing: the machine's error says why for each.
 func TestBothWaysFailing(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := tailcatMachine(h, time.Hour, time.Hour, time.Hour)
 	m.nodeCmd = sshDown
 	m.dialTailcat = func(context.Context) (net.Conn, error) { return nil, errors.New("no answer") }
@@ -214,7 +213,7 @@ func TestBothWaysFailing(t *testing.T) {
 
 // A tailcat connection that stops answering is ended after two missed pings, and the machine reconnects.
 func TestDeadTailcatConnectionIsNoticed(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := tailcatMachine(h, time.Hour, time.Hour, 100*time.Millisecond)
 	m.cfg.Kind = "tailcat"
 	var dials atomic.Int32
@@ -234,7 +233,7 @@ func TestDeadTailcatConnectionIsNoticed(t *testing.T) {
 // ssh logs in but the node does not answer over it: going back to ssh fails right away each time, so the hub
 // waits twice as long before trying again instead of dropping the connection every few minutes.
 func TestGoingBackToSSHBacksOffWhenItFailsAgain(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := tailcatMachine(h, time.Hour, 150*time.Millisecond, time.Hour)
 	var sshTries, dials atomic.Int32
 	m.nodeCmd = func(ctx context.Context) *exec.Cmd { sshTries.Add(1); return sshDown(ctx) }
@@ -265,7 +264,7 @@ func TestGoingBackToSSHBacksOffWhenItFailsAgain(t *testing.T) {
 // A node that stops reading after node.info: the hub's next write (the ping) blocks for good, as on a dead
 // connection with a full send buffer. The watcher must not wait on it: the connection still ends.
 func TestStuckWriteStillEndsTheConnection(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := tailcatMachine(h, time.Hour, time.Hour, 100*time.Millisecond)
 	m.cfg.Kind = "tailcat"
 	var dials atomic.Int32
@@ -297,7 +296,7 @@ func TestStuckWriteStillEndsTheConnection(t *testing.T) {
 
 // A connection busy sending (a big page over a slow relay) is alive even if a ping's answer is stuck behind it.
 func TestBusyConnectionIsKept(t *testing.T) {
-	h := newTestHub(t)
+	h := newTestDevices(t)
 	m := tailcatMachine(h, time.Hour, time.Hour, 100*time.Millisecond)
 	m.cfg.Kind = "tailcat"
 	var dials atomic.Int32

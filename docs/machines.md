@@ -10,6 +10,87 @@
 | App | `apple/Persona/Views/Machines/`（`MachinesView` 机器页、`MachineDetailView` 机器详情、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
 | 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个），最后一行是每次采集耗时和 personad 的 CPU |
 
+## 谁连电脑（2026-11-04）
+
+用户拍板：**电脑是管理者的，由管理者自己去连**；hub 看不到任何一台电脑，总线上也就没有要在电脑和管理者之间把关的东西（物理隔离）。迁移期间只有一个管理者，就是首席管理者（助手的进程 `personad assistant`），所以它带着全部电脑。
+
+| 部分 | 代码 |
+| --- | --- |
+| 管理者这一侧：连接、每台的状态、选路、Persona Link 的协议、kind service、tailcat、warm start、引擎、herdr 自动启动、Claude 配置目录、常驻列出的会话、node 更新 | `server/internal/devices/`（`devices.go` 入口和上报、`machine.go`、`conn.go`、`paths.go`、`link.go`、`relay.go`、`service.go`、`tailcat.go`、`warm.go`、`engine.go`、`herdr.go`、`claudedirs.go`、`deploy*.go`、`bus.go`） |
+| 两边共用的消息 | `server/internal/devicewire/`（方法名、参数、错误码、管理者自己回答的路由表 `Routes`） |
+| hub 这一侧：转发、它留的那份、它自己的功能在连上时要做的 | `server/internal/hub/devices_link.go`、`devices_relay.go`、`machines.go`、`machine.go`（`Machine` 现在是管理者报来的那份加上 hub 自己的东西） |
+| 助手进程里接起来 | `server/internal/assistant/main.go`、`devices.go`（`bus.go` 里几处只调它） |
+
+**管理者做的**（`internal/devices`，hub 不 import 它，它也不 import hub）：
+
+- 按 hub.json 的 `machines` 连每一台：hub 机器自己的 node（`node --stdio` 子进程，现在是管理者的子进程）、ssh、tailcat（hub 的 tailcat key 文件，同一个 HOME）、kind service（拨连接器；凭据还是 hub 用自己的密钥封着存，管理者经总线要 `devices.connector_cred`，配对完交给 hub 存 `devices.connector_paired`）、
+  kind link（电脑上的 Persona Link 照旧连 hub 的地址，hub 原样转给管理者，见下）、互联组里经成员 hub 到的电脑（选路、去重、换路都在管理者，`paths.go`；经别的 hub 的那条流由 hub 打开再转过来）。
+- 每台的状态：在不在线、`node.info`、会话列表和 revs、哪些会话被 App 看着（node 换了连接时再 `session.watch`，从最后一条 item 续）、warm start、引擎（settings `machine_engines`）、herdr 自动启动、Claude 配置目录（及屏蔽的）、
+  node 不管多久没动都要列出的会话（助手的 profile 的 `keep`，助手的快照一出来就告诉各台 node，`SetKeep`）、node 更新（`node.deploy.<id>`）、node 的 `state.put` / `state.load`（表 `node_sessions`）。
+  键和表都和以前一样，不迁数据。
+- 管理者自己回答的路由（`devicewire.Routes`，hub 照助手的路由那样作为 `http.request` 转过来）：`POST …/reconnect`、`PUT …/engine`、`GET/PUT …/herdr`、`POST …/herdr/start`、`POST …/deploy`、`GET …/claude-dirs`、`PUT …/claude-dirs/blocked`。
+- node 发来的请求：`state.load` 和助手自己的（`assistant.model`、`assistant.context`，进程内直接问助手）它答，别的（`interaction.create`、`assistant.lark`、`mcp.tools`、`mcp.call`）交给 hub（`devices.request`）。
+  请求来的那条 node 连接要是在 hub 回答前断了，管理者告诉 hub（`devices.request_end`），hub 就不再等它，和以前 node 自己的连接断了一样：要批准的卡片能续上的留着，hook 从新连接再来认领时拿到回答，不会被已经没人读的那次等待吃掉。
+  node 发来的每个单向事件都原样交给 hub（`devices.event`，顺序不变）。
+- hub 发给 node 的单向事件（`devices.notify`）管理者按机器排队、各写各的，一台电脑收得慢只耽误它自己，总线和别的电脑照常；一台写一条卡住 30 秒或者排着的超过 32 MiB，就重连它。
+- hub.json 里一台的条目变了（hub 改了配置重启，管理者还在），管理者换一个新的机器对象重新连它（App 正在看的会话照样再 watch），不在跑着的连接底下改配置。
+- 助手自己对机器的调用（`device.call` 里 node 的方法）直接在进程里走，不再绕 hub；hub 自己答的（`assistantwire.HubDeviceMethods`：`devices.list` 带手机在不在线、`interactions.list`、`sessions.list`、`session.get`，渠道跟对话的 `session.follow` / `session.unfollow`、只发一次的 `session.send_once`）照旧问 hub。Agents 的分诊发「继续」、助手开 Agent、定时任务开对话这些对 node 的调用都在进程里直接走。
+
+**hub 做的**：
+
+- 把 hub.json 的 `machines`（加上管理界面运行中加的）作为默认值交给管理者：握手回答里的 `devices`，变了（加了电脑、互联组变了、hub 的地址或名字变了）发 `devices.config`。
+- 留着管理者报的那份（`devices.state`：每台的快照、`node.info`、连没连着、这条连接从什么时候开始、warm 到什么时候、它的几条路），按它的顺序给 App 列，再加上 hub 自己的：`system`（监控，本页上文）、`computer` / `browser`（Cua、ego 插件的状态）。
+- App 对机器的调用和流照旧经 hub：调用是 `devices.call`（带期限），发给 node 的单向事件（终端输入、转发端口的字节）是 `devices.notify`，node 的事件（items、终端帧、端口的字节……）从 `devices.event` 回来，
+  hub 用原来的代码处理（推给订阅的 App、交互、推送、收件箱、分诊……）。所以终端、端口转发、屏幕、下载都走总线这一条连接，不另开通道。
+  调用的期限管理者那头少一点（十分之一，最多 500 毫秒），它的「超时」先回来；没期限的调用（插件的 `nodes.call`）也不加期限。发出去以后才出的事——node 的连接断了、时间到了、总线断了——都算「可能已经做了」：
+  发消息的结果是 `unknown`，同一条消息不会再发一遍（和以前 hub 直连 node 时一样），只有确定没发出去的（离线、管理者不在）才算没发。
+- hub 的自更新确认「之前在线的机器都连回来了」、之后让管理者更新各台的 node，看的是报来的 `connected`（node 真连着），不是 App 看到的在线（管理者重启后的暖启动也显示在线）。
+- 管理者和 hub 的连接每次新握手，经上一条连接开着的转发流和终端两边都结束：hub 结束它那边（终端以「助手暂时连不上，稍后再试」结束，App 重新打开），管理者在 node 上关掉（`stream.close`、`terminal.unwatch`），免得 hub 重启后 node 还开着没人要的端口连接、终端还一直推帧。
+  App 正在看的会话 hub 让新连接再 watch，同时最多 8 个，一台慢的电脑不耽误别的。
+- node 一连上，管理者先问 hub 它的那部分（`devices.connected`）：要加进 `node.configure` 的（Codex 的设置）和紧接着要发的（托管的启动器、hub 记着的发送），然后才问会话列表；hub 同时开始它在连上时要做的（Cua / ego 的状态、扩展在电脑上的程序、监控的系统信息、连接器）。
+  管理者和 hub 的连接每次新连上，这一步对每台在线的机器再做一遍。
+- 一台机器的连接断了（报来的 `connected` 变成 false 或者 `connected_at` 换了），hub 结束这条连接上的：终端流、正在生成的文字、还在等的不可续交互（和以前 detach 一样）。
+
+**流的转发**：App ↔ hub ↔ 管理者 ↔ node，hub 和管理者之间是本机回环上的总线。实测（隔离的 hub，hub 自己那台，转发端口上 32 字节来回 300 次，2026-11-04）：master 中位数 0.3–1.2 ms、p95 约 1.5 ms；这一版中位数 0.9–1.4 ms、p95 约 1.9 ms，多了约 0.2–0.4 ms（多一跳回环加一次编解码）。
+终端帧走的是同一条路（node 的事件 → 管理者 → hub → App，输入反过来）。
+
+**Persona Link（主动模式）**：电脑上的 Persona Link 照旧连 hub 的地址（配对码、链路凭据都不变）。hub 认凭据（必须是 kind link 那台的、走 TLS），然后把这条 WebSocket 原样交给管理者：
+`devices.accept {id, kind: link, machine_id, token_id}`，管理者用自己的总线 token 拨 `GET /api/v1/bus/relay?id=<id>`，hub 两边逐条转发消息（文本是 Persona Link 的消息，二进制是 node 的字节流），关闭码和原因原样过去。
+hello、`endpoints`、`open`、`node` 这些都是管理者说的；Persona Link 开的流（`/api/v1/link/stream`）同样转。心跳（ping）是 hub 和 Persona Link 之间的，没有 pong 时 hub 断开两边，原因交给管理者。
+凭据撤销时 hub 以 4002 关掉它转着的链路；管理者没连着时 hub 对 `/api/v1/link` 回 503，Persona Link 照常退避重连，管理者回来后自己连上。
+
+**互联（mesh）**：组、中心、记录、凭据交接、成员转发 App 还是 hub 的（`docs/mesh.md`）；电脑和路是管理者的：hub 在 `devices.config` 的 `mesh` 里给它组里的样子（这台是不是成员、中心叫什么、刚起来要等多久、别的 hub 到不到得了和多远、成员的电脑），
+管理者据此去重、选路、换路；经成员到的那条路由中心 hub 开（`GET /api/v1/bus/relay?hub=<成员>&machine=<id>`，hub 经互联链路开 node 流再转给管理者）；成员 hub 收到中心要的 node 流（`/api/v1/peer/node`）交给自己的管理者去开（`devices.accept` kind node），
+管理者开好了 node 成员才回 `101`，开不了就带着原因回 502，中心在那台机器上显示这个原因（和以前成员自己开 node 时一样）。
+Persona Link 链路的往返是 hub 的心跳量的，hub 告诉管理者（`devices.link_rtt`），选路和记录里的远近都用它。
+hub 的记录里自己的电脑到不到得了、多远，用管理者报的（`devices.state` 的 `entries`）。
+
+**管理者不在的时候**（进程在重启、崩了）：
+
+- 机器全部显示离线，`error` 是「助手暂时连不上，稍后再试」，会话标成未知（hub 留着最后的列表）；终端流以同一句话结束，转发的端口关掉，不可续的交互结束。
+- 要经管理者的接口（items、发消息、新建、文件、git、终端、端口、管理者自己的路由……）回 `503 {"code":"assistant_offline"}`；`GET /api/v1/machines`、`GET /api/v1/sessions` 照常回 hub 留的那份。
+- 管理者回来（hub 1 秒起退避重启它）后自己把所有电脑连回来，hub 让它把 App 正在看的会话再 watch 上，不用谁动手；Persona Link 在下一次重试时连上。
+  它刚起来时对一台还在连的机器的调用（hub 替它留着的卡片回答、App 新开的 Agent）等这台第一次连完（最多 20 秒），而不是马上回「离线」。
+- 管理者不在时开不了新的 Agent、发不了消息、看不到 Agent 的一轮结束：这些都要经它到 node（以前 hub 自己连着电脑，助手不在时 Agent 照样能开）。
+
+**总线上的大小**：hub 和管理者之间一条消息写完之前别的消息（包括心跳）要等，所以大的东西都分块：下载、上传、node 更新包每块最多 1 MiB，转发端口的字节每块 32 KB；
+一页 items、一张图、一张截图是一条消息（和以前在 node 的连接上一样）。总线一行最多 64 MiB，node 的一条消息超过 60 MiB 时管理者不转（事件丢掉并记日志，调用回 `too_large`），免得整条总线断掉。
+
+**密钥**：Persona Link 的凭据只到 hub（hub 认完只告诉管理者凭据的 id 和绑定的机器）；配对码、配对都在 hub。kind service 的连接器凭据是管理者拨号要用的：
+配对时它生成、交给 hub 封存，之后它要一次、记在内存里（连接器不认了、重新配对、被别的 hub 配走时才再要），不是每次探测都过一遍总线。
+
+**hub 重启**：管理者是 hub 的子进程，跟着重启。它停的时候先把在线机器的 `node.info` 和会话列表交给下一个（settings `hub.warm_machines`，和以前 hub 交的同一个键、同一个格式，所以升级后第一次重启也接得上），再断开连接；
+新的 hub 起来先读这一份（不取走）显示机器（引擎也在里面），在管理者第一次上报之前对这些机器的调用等它（最多 30 秒），管理者起来取走这一份、30 秒内照常显示在线，同时把 node 连回来。
+hub 的监听比管理者先起来：这几秒里来的 App 请求、管理者自己的路由等它（同样最多 30 秒），Persona Link 的链路和成员 hub 收到的中心的 node 流最多等 5 秒（Persona Link 一次握手给 8 秒），
+等不到才回 503（Persona Link 照常退避再连）。过了这一段，管理者不在就立刻回 503，不再等。
+
+和以前能看出来的差别：
+
+- 管理者不在时机器离线、接口 503 assistant_offline（以前 hub 自己连着电脑，不受助手重启影响）。
+- 一台机器连上时，Cua / ego 状态和扩展的程序比以前晚一点（hub 在 `devices.connected` 回答以后才开始）；`waitNodeIdle`（更新 node 前等空闲）看 node 列出的会话和管理者转给 hub 还没答的提问，不再看 hub 卡片上的「需要你」。
+- `assistant.external`（管理者跑在别的机器上）时，电脑由那台去连：ssh 配置、tailcat key、`node --stdio` 的二进制、node 更新包都是那台的；
+  hub 重启时它不跟着重启（电脑一直连着），hub 起来到它重新连上总线的那一两秒里，机器按 hub.json 显示为离线。
+
 ## 系统信息
 
 node 启动时读一次，随 `node.info` 的 `system` 字段给 hub；hub 存进 `machine_systems`（机器离线、hub 重启后也知道它是什么系统），

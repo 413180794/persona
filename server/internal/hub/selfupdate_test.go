@@ -471,9 +471,7 @@ func TestUpdateNodesBinariesInPlace(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(nodes, "jarvisd-darwin-arm64.gz")); !os.IsNotExist(err) {
 		t.Fatal("the download itself went in with the binaries")
 	}
-	if local.deploying || local.deployErr != "" {
-		t.Fatal("tried to deploy to the hub's own machine")
-	}
+	_ = local // the manager decides what to redeploy (internal/devices TestUpdateNodesSkipsTheHubsOwn)
 }
 
 // A Docker hub never replaces itself, but it looks up its image's tags and says when a newer release is out, and how

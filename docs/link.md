@@ -62,10 +62,12 @@ jarvis-link 和常驻 node、退出了重启，两个都在一个任务里（没
 - **node 不变**：功能都在 `personad node` 里。这台电脑要跑常驻 node（上面「装 node 服务」一起装好；单独装是 `jarvis-link node install`
   或 `scripts/deploy/node-launchd.sh install`），jarvis-link 只把流转给它的 socket `~/.persona/node-attach.sock`。这就是 ssh 起的 `node --stdio` 原来转给它的那条路
   （`internal/node/attach.go`）。替常驻 node 写 systemd / launchd 服务只是打包安装，不是功能：服务的内容和 `scripts/deploy/node-launchd.sh` 写的一样。
-- **hub**：
-  - hub.json 里这台的 kind 是 `link`，hub 不会 ssh 它；
-  - 链路一说 hello，hub 就开一条流去连 node，流上跑的 node 协议和 ssh 完全一样（`Machine.connect`，只有拿字节流的 `Machine.dial` 分两种）；
-  - 链路一断，这台马上离线。
+- **hub 和管理者**（2026-11-04 起电脑是管理者的，[machines.md](machines.md)「谁连电脑」）：
+  - hub.json 里这台的 kind 是 `link`，没人 ssh 它；
+  - Persona Link 照旧连 hub 的地址，hub 认凭据后把这条连接原样转给管理者（`devices.accept` + `GET /api/v1/bus/relay`，逐条消息、关闭码照转），
+    下面的协议是管理者说的；
+  - 链路一说 hello，管理者就开一条流去连 node（Persona Link 开的流同样经 hub 转过来），流上跑的 node 协议和 ssh 完全一样；
+  - 链路一断，这台马上离线；管理者不在时 hub 对 `/api/v1/link` 回 503，Persona Link 照常退避，管理者回来后连上。
 - **Mac** 上是菜单栏 App「Persona Link」（`apple/PersonaLink/`）：jarvis-link 作为 helper 打包在 App 里，由 App 启动和看护。
   **Linux**（服务器、NAS、树莓派，不要图形界面）上 `jarvis-link install` 把它自己装成 systemd 用户服务，见「Linux（headless）」；
   **Windows** 上装成登录时启动的计划任务，连常驻 node 一起看护，见 [windows.md](windows.md)「安装和开机自启」。
@@ -101,12 +103,14 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 
 **上报**
 - 连上后第一条消息 hello，报这台的机器 id、jarvis-link 的版本和用的哪个地址。
-- hub 核对机器 id 和凭据绑定的那台一致，然后马上开流连 node，不等 ssh 那样的重试间隔。
+- 管理者核对机器 id 和凭据绑定的那台一致（hub 转过来时带着凭据绑定的机器），然后马上开流连 node，不等 ssh 那样的重试间隔。
 - 机器列表里这台多一个 `link` 字段：`{version, address, since}`。
 
 **心跳**
 - 两边都每 10 秒 ping 一次，5 秒没有 pong 就断开。死链路约 15 秒内发现。
 - hub 在流上也 ping，防止链路还通、流的 TCP 连接却已经悄悄断了。
+- ping 是 hub 和 Persona Link 之间的（hub 握着这一端的连接）：没有 pong 时 hub 断开它，转给管理者的那条以「no pong within …」关闭，管理者把它当链路断了。
+  每次 pong 的往返 hub 告诉管理者（`devices.link_rtt`），这条路的远近（选路、记录里给中心的）就是它。
 - 这些都是配置值，没实测。
 
 **重连**
@@ -132,12 +136,13 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 
 **转发**
 - 只转给 `~/.persona/node-attach.sock`，只连回这条链路用的那个 hub 地址，流 id 只能是字母、数字、`-`、`_`。hub 没法让它去连别的地址。
-- 流上开 permessage-deflate 压缩。原来的 ssh 开了 `Compression=yes`，原因见 `hub/machine.go` 的注释。
+- 流上开 permessage-deflate 压缩。原来的 ssh 开了 `Compression=yes`，原因见 `devices/machine.go` 的注释（hub 和管理者之间是本机回环，那一段不压缩）。
 - 对常驻 node 来说，每条流就是一次新的 attach 连接，新的顶掉旧的，和 ssh 时一样。
 
 ## 被动模式（hub 来连）
 
-协议在 [plan-hub-center.md](plan-hub-center.md) 第 4 节定死，这里是细节；hub 那一侧（#435）按这里实现拨号。实现：`server/internal/link/`
+协议在 [plan-hub-center.md](plan-hub-center.md) 第 4 节定死，这里是细节；拨号的那一侧（#435）按这里实现，2026-11-04 起是管理者
+（`server/internal/devices/service.go`；配对时生成的凭据交给 hub 用它的密钥封着存，拨的时候再要回来）。实现：`server/internal/link/`
 （`listen.go` 监听和三个接口、`passive.go` 配对码和链接、`tlsid.go` 身份、`ratelimit.go` 限流），命令行在 `server/cmd/jarvis-link/passive.go`。
 
 ### 监听和身份

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -121,63 +120,6 @@ func (h *Hub) defaultAssistantMachine() string {
 		return machines[0].cfg.ID
 	}
 	return ""
-}
-
-// keptOn are the sessions machine's node lists however long they are quiet, as the assistant reported them; false
-// before it reported them (the node keeps what it has).
-func (h *Hub) keptOn(machine string) ([]string, bool) {
-	a := &h.assistant
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if a.profile == nil || a.profile.Keep == nil {
-		return nil, false
-	}
-	return keptByMachine(a.profile.Keep)[machine], true
-}
-
-func keptByMachine(refs []assistantwire.SessionRef) map[string][]string {
-	out := map[string][]string{}
-	for _, r := range refs {
-		out[r.MachineID] = append(out[r.MachineID], r.SessionID)
-	}
-	return out
-}
-
-// keepChanged tells the nodes whose kept sessions differ between two reported profiles (node.configure
-// keep_sessions); after the first report every node is told.
-func (h *Hub) keepChanged(old, now *assistantwire.Profile) {
-	if now == nil || now.Keep == nil {
-		return
-	}
-	after := keptByMachine(now.Keep)
-	var before map[string][]string
-	if old != nil && old.Keep != nil {
-		before = keptByMachine(old.Keep)
-	}
-	for _, m := range h.machinesNow() {
-		keep := after[m.cfg.ID]
-		if before != nil && slices.Equal(before[m.cfg.ID], keep) {
-			continue
-		}
-		go func() {
-			// One at a time, and what the latest report says when it goes: two reports close together (a new main
-			// conversation, then its first message) must not reach the node in the other order.
-			h.keepMu.Lock()
-			defer h.keepMu.Unlock()
-			keep, ok := h.keptOn(m.cfg.ID)
-			if !ok {
-				return
-			}
-			if keep == nil {
-				keep = []string{}
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := m.call(ctx, "node.configure", map[string]any{"keep_sessions": keep}, nil); err != nil && !errors.Is(err, errOffline) {
-				h.logf("[%s] assistant: keep sessions: %v", m.cfg.ID, err)
-			}
-		}()
-	}
 }
 
 // ---- asking the assistant about its conversations ----

@@ -87,9 +87,6 @@ func TestTheHubStartsWithTheProfileItKept(t *testing.T) {
 	if got := h.userLocation().String(); got != "Asia/Tokyo" {
 		t.Fatalf("zone before the assistant reports: %s", got)
 	}
-	if _, ok := h.keptOn("server"); ok {
-		t.Fatal("the nodes are told what they keep before the assistant says")
-	}
 
 	// A report replaces it, and is what the next start begins with (not the old settings again).
 	h.assistant.profile = nil
@@ -104,7 +101,7 @@ func TestTheHubStartsWithTheProfileItKept(t *testing.T) {
 	if p := next.assistantProfile(); p.Main != "main-2" || p.Timezone != "Europe/Paris" || len(p.Keep) != 1 {
 		t.Fatalf("after a restart: %+v", p)
 	}
-	if keep, ok := next.keptOn("server"); !ok || len(keep) != 1 || keep[0] != "main-2" {
-		t.Fatalf("kept: %v %v", keep, ok)
+	if keep := next.assistantProfile().Keep; len(keep) != 1 || keep[0].SessionID != "main-2" {
+		t.Fatalf("kept: %v", keep)
 	}
 }

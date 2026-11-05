@@ -230,6 +230,11 @@ func TestBusHello(t *testing.T) {
 		"deploy": "service", "version": "test-1", "apps": []any{}})
 	var reply busHelloReply
 	f.hello(t, &reply)
+	// The machines go to the manager that carries them (devices_link.go): the assistant, during the migration.
+	if reply.Devices == nil || reply.Devices.HubVersion != h.version || reply.Devices.Machines == nil {
+		t.Fatalf("hello's devices %+v", reply.Devices)
+	}
+	reply.Devices = nil
 	want := busHelloReply{Name: "助手", Role: bus.RoleManager,
 		Managers: []busManagerBrief{{ID: "assistant", Name: "助手", Role: bus.RoleManager, Online: true}, {ID: "desk", Name: "工作", Role: bus.RoleManager}},
 		Hello: assistantwire.Hello{Owner: "主人", OwnerNotes: notes, DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds(),

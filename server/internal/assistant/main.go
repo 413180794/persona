@@ -13,7 +13,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/coder/websocket"
+
+	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/devices"
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/identity"
 )
 
@@ -61,17 +66,44 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 		return fmt.Errorf("database: %w", err)
 	}
 	defer database.Close()
-	bh := NewBusHub(BusOptions{Hub: hub, Token: token, Version: version, Deploy: deploy, Logf: logger.Printf})
+	// The user's computers are the manager's: it connects them itself (internal/devices, docs/machines.md「谁连电脑」).
+	var bh *BusHub
+	var svc *Service
+	devs := devices.New(devices.Options{Store: database, Logf: log.New(os.Stderr, "devices: ", log.LstdFlags).Printf,
+		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
+			return svc.NodeAnswer(ctx, machine, method, params)
+		},
+		DialRelay: func(ctx context.Context, query string) (*websocket.Conn, error) {
+			return bus.DialAt(ctx, hub, token, nil, devicewire.RelayPath, query)
+		},
+		Connected: func() bool { return bh.Client().Peer() != nil },
+		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
+	bh = NewBusHub(BusOptions{Hub: hub, Token: token, Version: version, Deploy: deploy, Logf: logger.Printf, Devices: devs})
 	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
 	home := identity.HomeDir()
-	svc := New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf,
+	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf,
 		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}})
 	logger.Printf("connecting to %s", hub)
-	if err := bh.Run(ctx, svc); err != nil && !errors.Is(err, context.Canceled) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = devs.Run(ctx) // after ctx: hands the machines over to the next manager, then lets them go
+	}()
+	err = bh.Run(ctx, svc)
+	<-done
+	if err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}
 	return nil
 }
+
+// lazyHost is the bus client, made after the devices that use it.
+type lazyHost struct{ c func() *bus.Client }
+
+func (l lazyHost) Call(ctx context.Context, method string, params, out any) error {
+	return l.c().Call(ctx, method, params, out)
+}
+func (l lazyHost) Notify(event string, params any) error { return l.c().Notify(event, params) }
 
 // hubConfig is what the assistant reads of the hub's hub.json.
 type hubConfig struct {

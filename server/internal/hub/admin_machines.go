@@ -72,7 +72,9 @@ func (h *Hub) adminMachines() []adminMachine {
 			onDisk[m.ID] = true
 		}
 	}
+	listed := map[string]bool{}
 	for _, m := range h.machineList() {
+		listed[m.ID] = true
 		state := "active"
 		mm := h.localMachine(m.ID)
 		if disk != nil && !onDisk[m.ID] && (mm == nil || !mm.derived) {
@@ -85,9 +87,22 @@ func (h *Hub) adminMachines() []adminMachine {
 		}
 		out = append(out, a)
 	}
+	// Entries the hub has that the manager has not reported (yet): connecting. An entry whose computer another one
+	// has is that one's.
+	for _, mc := range h.cfgEntries() {
+		if listed[mc.ID] || h.machineByID(mc.ID) != nil {
+			continue
+		}
+		icon := mc.Icon
+		if icon == "" {
+			icon = "laptop"
+		}
+		out = append(out, adminMachine{ID: mc.ID, Name: mc.Name, Kind: mc.Kind, Icon: icon, SSHHost: mc.SSHHost,
+			Tailcat: mc.TailcatAddr != "", Address: mc.Address, Proxy: redactProxy(mc.Proxy), State: "active"})
+	}
 	if disk != nil {
 		for _, m := range disk.Machines {
-			if h.cfgMachine(m.ID) != nil {
+			if h.cfgEntry(m.ID) != nil {
 				continue
 			}
 			icon := m.Icon
@@ -130,13 +145,13 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			return
 		case kindLink:
 		case kindService:
-			if h.localMachine(mc.ID) != nil || h.cfgMachine(mc.ID) != nil {
+			if h.localMachine(mc.ID) != nil || h.cfgEntry(mc.ID) != nil {
 				writeErrCode(w, http.StatusConflict, "exists", errors.New("已经有这个 id 的电脑"))
 				return
 			}
 			proxyURL := strings.TrimSpace(in.Proxy)
 			if proxyURL != "" {
-				if _, err := connectorTransport("", proxyURL); err != nil {
+				if err := validProxy(proxyURL); err != nil {
 					writeErrCode(w, http.StatusBadRequest, "invalid_proxy", err)
 					return
 				}
@@ -165,7 +180,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 		default:
 			mc.Icon = "laptop"
 		}
-		exists := h.cfgMachine(mc.ID) != nil
+		exists := h.cfgEntry(mc.ID) != nil
 		err := editHubJSON(h.cfg.dir, func(o *jsonObject) error {
 			list, err := machineEntries(o)
 			if err != nil {
@@ -194,7 +209,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			return
 		}
 		h.logf("admin: machine %q (%s) added to hub.json", mc.ID, mc.Kind)
-		h.addMachineLive(mc) // connecting now, no restart (mesh_paths.go)
+		h.addMachineLive(mc) // the manager connects it now, no restart (devices_link.go)
 		var added adminMachine
 		for _, m := range h.adminMachines() {
 			if m.ID == mc.ID {
@@ -245,24 +260,24 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 		if !readAdminJSON(w, r, &in) {
 			return
 		}
-		m := h.cfgMachine(id)
-		if m == nil || m.cfg.Kind != kindService {
+		mc := h.cfgEntry(id)
+		if mc == nil || mc.Kind != kindService {
 			writeErrCode(w, http.StatusBadRequest, "not_service", errors.New("only a computer of kind service pairs a connector"))
 			return
 		}
 		address := strings.TrimSpace(in.Address)
 		if address == "" {
-			address = m.cfg.Address
+			address = mc.Address
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
 		defer cancel()
-		addr, version, err := h.pairConnector(ctx, in.PairLink, id, address, m.cfg.Proxy)
+		addr, version, err := h.pairConnector(ctx, in.PairLink, id, address, mc.Proxy)
 		if err != nil {
 			writeErrCode(w, http.StatusBadGateway, "pair_failed", err)
 			return
 		}
 		restart := false
-		if addr != m.cfg.Address {
+		if addr != mc.Address {
 			err := editHubJSON(h.cfg.dir, func(o *jsonObject) error { return setMachineField(o, id, "address", addr) })
 			if err != nil {
 				writeErr(w, http.StatusInternalServerError, err)
@@ -283,12 +298,12 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST /api/v1/admin/machines/{id}/link-pair", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
-		m := h.cfgMachine(id)
-		if m == nil {
+		mc := h.cfgEntry(id)
+		if mc == nil {
 			writeErrCode(w, http.StatusConflict, "not_active", errors.New("restart the hub first: it reads new machines when it starts"))
 			return
 		}
-		if m.cfg.Kind != kindLink {
+		if mc.Kind != kindLink {
 			writeErrCode(w, http.StatusBadRequest, "not_link", errors.New("only a link machine pairs a Persona Link"))
 			return
 		}

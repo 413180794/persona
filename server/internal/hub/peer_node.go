@@ -11,15 +11,24 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/coder/websocket"
+
+	"github.com/nwverse/persona/server/internal/devicewire"
 )
 
-// Node streams through a member (docs/mesh.md「经成员的路」): the center reaches a computer a member has in hub.json
-// by asking that member, over the links, for a stream to its node. The request is an HTTP upgrade
-// (Upgrade: jarvis-node) on the peer server, passed hop by hop like any other; the member opens the node the way its
-// hub.json says (its local node, ssh, tailcat, the computer's jarvis-link or connector), answers 101 and from then on
-// copies bytes both ways. Only the member's center may ask: a member drives none of its computers itself.
+// Node streams through a member (docs/mesh.md「经成员的路」): the center's manager reaches a computer a member has in
+// hub.json by asking the center, which asks that member over the links for a stream to its node (the center's side:
+// relayThroughHub, devices_relay.go). The request is an HTTP upgrade (Upgrade: jarvis-node) on the peer server, passed
+// hop by hop like any other; the member's manager opens the node the way its hub.json says (its local node, ssh,
+// tailcat, the computer's Persona Link or connector), the member answers 101 and from then on copies bytes both ways.
+// Only the member's center may ask: a member drives none of its computers itself.
 
 const nodeUpgrade = "jarvis-node"
+
+// nodeOpenWait bounds how long a member's manager may take to open a node for the center (each of its ways in turn).
+const nodeOpenWait = time.Minute
 
 // openThroughHub opens a stream to the node of machine mid in hub's hub.json, through that hub.
 func (h *Hub) openThroughHub(ctx context.Context, hub, mid string) (*nodePipe, error) {
@@ -62,10 +71,11 @@ func (h *Hub) openThroughHub(ctx context.Context, hub, mid string) (*nodePipe, e
 		return nil, errors.New("the stream through the member is not writable")
 	}
 	var once sync.Once
-	return &nodePipe{r: rwc, w: rwc, lastErr: func() string { return "" }, close: func() { once.Do(func() { _ = rwc.Close() }) }}, nil
+	return &nodePipe{r: rwc, w: rwc, close: func() { once.Do(func() { _ = rwc.Close() }) }}, nil
 }
 
-// serveNodeOpen is a member opening a stream to one of its computers for its center.
+// serveNodeOpen is a member opening a stream to one of its computers for its center: the manager opens it the way
+// hub.json says (devices.accept, kind node) and the hub copies bytes between the center's stream and the relay.
 func (h *Hub) serveNodeOpen(w http.ResponseWriter, r *http.Request, from, mid string) {
 	if !strings.EqualFold(r.Header.Get("Upgrade"), nodeUpgrade) {
 		writeErr(w, http.StatusBadRequest, errors.New("a node stream is an upgrade"))
@@ -75,20 +85,41 @@ func (h *Hub) serveNodeOpen(w http.ResponseWriter, r *http.Request, from, mid st
 		writeErr(w, http.StatusForbidden, errors.New("只有这台 hub 所在组的中心能经它连电脑"))
 		return
 	}
-	m := h.cfgMachine(mid)
-	if m == nil {
+	if h.cfgEntry(mid) == nil {
 		writeErr(w, http.StatusNotFound, fmt.Errorf("这台 hub 的 hub.json 里没有 %q", mid))
 		return
 	}
-	// Not the request's context: an ssh process lives as long as the context it was started with, and the stream
-	// outlives this handler's view of the request once the connection is taken over.
-	octx, ocancel := context.WithCancel(context.Background())
-	defer ocancel()
-	pipe, err := m.openForCenter(octx)
+	if !h.awaitManager(r.Context(), linkManagerWait) { // the hub just started: the manager is on its way
+		writeErr(w, http.StatusBadGateway, errAssistantOffline)
+		return
+	}
+	taken, err := h.handToManager(context.Background(), devicewire.Accept{Kind: devicewire.AcceptNode, MachineID: mid})
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
+	defer close(taken.done)
+	// The manager opens the node before the center is answered: a text message says it did, a close says why it
+	// could not (the center shows that on the machine and its path).
+	rctx, rcancel := context.WithTimeout(r.Context(), nodeOpenWait)
+	typ, _, err := taken.conn.Read(rctx)
+	rcancel()
+	if err != nil || typ != websocket.MessageText {
+		why := "the manager did not open the node"
+		var ce websocket.CloseError
+		if errors.As(err, &ce) && ce.Reason != "" {
+			why = ce.Reason
+		} else if err != nil {
+			why += ": " + err.Error()
+		}
+		_ = taken.conn.Close(websocket.StatusNormalClosure, "")
+		writeErr(w, http.StatusBadGateway, errors.New(why))
+		return
+	}
+	octx, ocancel := context.WithCancel(context.Background())
+	defer ocancel()
+	nc := websocket.NetConn(octx, taken.conn, websocket.MessageBinary)
+	pipe := &nodePipe{r: nc, w: nc, close: func() { _ = nc.Close() }}
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		pipe.close()
@@ -110,20 +141,11 @@ func (h *Hub) serveNodeOpen(w http.ResponseWriter, r *http.Request, from, mid st
 	h.logf("[%s] stream to the node for the center closed", mid)
 }
 
-// openForCenter opens the node the way this hub's hub.json says, each transport in turn.
-func (m *Machine) openForCenter(ctx context.Context) (*nodePipe, error) {
-	var failed []string
-	for _, via := range m.transports() {
-		p, err := m.open(ctx, via)
-		if err == nil {
-			return p, nil
-		}
-		if via == "tailcat" {
-			m.tailcatReset()
-		}
-		failed = append(failed, via+"："+err.Error())
-	}
-	return nil, errors.New(strings.Join(failed, "；"))
+// nodePipe is a byte stream to a node: the reading and the writing end, and how to end it.
+type nodePipe struct {
+	r     io.Reader
+	w     io.Writer
+	close func()
 }
 
 // joinNode copies between the center's stream and the node until either ends.

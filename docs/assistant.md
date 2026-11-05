@@ -70,6 +70,11 @@ hub 只是通道：助手是自己的一个进程（`personad assistant`），�
 | `ws.broadcast` | `{message}`，单向 | 给 App 的实时更新，`message` 原样发出（`broadcast`）：`assistant_schedule`、`assistant_feed`、`task_plan` |
 | `manager.snapshot` | `{epoch, seq, at, partial?, sessions:[{machine_id, session_id, title?, archived?, queued?}], interactions:[…], tasks:[…], work:{on, sessions:[{machine_id, session_id, work}]}, profile:{machine_id, main?, launcher, timezone?, keep:[{machine_id, session_id}]}, todos:{links:[{machine_id, session_id, todo_id, title, task?}], quiet:[{machine_id, session_id}]}}` → `{ok, seq}` | hub 只留最新的一份（同一个 epoch 里 seq 不比上一份大的回 `stale_snapshot`），`decorated` 照它给会话列表填标题（主对话的就是「Persona」）、归档、排队的消息，哪台机器的对话变了就推一次那台的会话列表；`interactions` 是助手在手机上问的（`ask_user`、`jarvis_settings` 改助手自己的设置，无头的 Claude 没有 AskUserQuestion），hub 照旧当一张卡片显示、推送、到期（`waitInteraction`），答案经 `manager.action` 回给助手，从列表里消失的就撤下；`tasks` 读不出来时是 `null`：模型配置的「定时任务」用途读它；`profile` 是助手的设置里 hub 自己的功能要用的（读不出来时是 `null`，hub 留着上一份），见下；`todos`（`assistantwire.TodoReport`）是每个 Agent 正在为哪个未完成的待办干活（`task` 是从对话派出去的任务）和安静的 Agent，`decorated` 照它填会话的 `todo`、`quiet`，`withTask` 照它在卡片上标任务名，`quietSession` 照它不推送（`hub/assistant_todos.go`）；读不出来时是 `null`（快照算不完整），hub 留着上一份；哪台机器的这几样变了也推一次那台的会话列表；`work` 是每个 Agent 最新一轮的工作态（`docs/agent-work.md`），`decorated` 只对还停在那一轮上的会话填 `work` 和由它算的 `state`，读不出来时是 `null`（hub 留着上一份）；`interactions` 里还有分诊开的卡片（`tool_name: persona_triage`，问的是那个 Agent 的会话；它没连着时答案 hub 记下，连上后再给） |
 
+**电脑是助手的**（2026-11-04，[machines.md](machines.md)「谁连电脑」）：助手的进程同时是带着全部电脑的管理者，`internal/devices` 在里面连每一台（hub 不再连）。
+它和 hub 之间的消息在 `server/internal/devicewire`，经同一条总线（`docs/protocol.md`「电脑（devices.*）」）；`assistant/devices.go` 把 hub 的 `devices.*` 调用和事件交给它，`BusHub` 里只有几处调用：
+上表 `device.call` 里 node 自己的方法直接在进程里交给那台的 node（不再绕 hub，错误照旧是 `apierr.ErrOffline`、`rpc.ErrClosed`、node 的 `rpc.Error`），hub 自己答的（`assistantwire.HubDeviceMethods`：`devices.list`、`interactions.list`、`sessions.list`、`session.get`，渠道用的 `session.follow` / `session.unfollow` / `session.send_once`）照旧问 hub；
+node 问的 `assistant.model`、`assistant.context` 也在进程里直接答（`Service.NodeAnswer`），hub 不再转；快照的 `profile.keep` 由它告诉各台 node（上面）。
+
 **hub 找助手只经** `assistant.Handler`（`assistant/handler.go`；hub 那头是 `assistantRemote`，同一组消息），每个方法是一条消息：App 的请求（助手的路由 `assistantwire.Routes`，经总线是 `http.request`，hub 原样转过去，调用方的角色放在 `X-Persona-Role`，客户端自己带的会被盖掉）、
 `assistant.tools`（hub 把它们和自己的工具一起列给助手的对话）、`assistant.tool`、`assistant.context`（node 每条消息前要的实时快照）、`manager.action`（用户回答了助手的提问）、`assistant.todo_handoff`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id` 时：这个待办在不在、完成没有，要交给 Agent 的话前面拼上生效的决策）、`assistant.todo_link`（交出去以后把这个 Agent 挂上待办）、
 `assistant.start`（hub 自己的功能要开一段助手的对话；收件箱的 AI 分身、飞书机器人和渠道 2026-11-04 起都是助手自己开，hub 现在不用它，`{text, images?, launcher?, permission_mode?, effort?, purpose?, machine_id?, main?, untitled?}` → `{session}`；AI 分身的带 `untitled`，不按助手的对话起标题）、
@@ -94,7 +99,8 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 
 - 手机发给主对话的消息认出主对话（`isMainOn`），模型配置「主对话」用途跑在哪台、它的默认启动器（`launcher`：助手自己的，没有就是 hub.json 的，再没有是 claude），收件箱 AI 分身默认的机器，`/api/v1/skills`、启动器测试和额度挑的机器，`assistant.lark` 只给助手那台。
 - 用户的时区（`userLocation`，`hub/usertz.go`）：hub 读时间都按它。
-- `keep`：各台 node 不管多久没动都要列出的会话（主对话、换下来的旧主对话、定时任务自己的对话）。和上一份不一样的机器 hub 发一次 `node.configure keep_sessions`，第一份来时每台都发；node 连上时 hub 也带上（`configureNode`）。
+- `keep`：各台 node 不管多久没动都要列出的会话（主对话、换下来的旧主对话、定时任务自己的对话）。2026-11-04 起电脑是助手的进程连的（[machines.md](machines.md)「谁连电脑」）：
+  助手报快照时，它的设备那一层（`internal/devices` 的 `SetKeep`）对和上一份不一样的机器发一次 `node.configure keep_sessions`，第一份来时每台都发；node 连上时也带上（`configureNode`）。hub 只留着这一份。
 - **hub 重启后、助手还没报的那一两秒**：hub 按自己存的那份（`loadAssistantProfile`，在插件、连接器起来之前读）。开机就起的插件要用户的时区，
   只在内存里留的话这几秒是 hub 自己的时区：插件一直用 hub 的时区到它重启。
   （知识库和飞书机器人以前也靠它：知识库每次重启都整份按 hub 的时区重排、两分钟后再排回来，飞书这时发来的消息新开一个主对话把原来的顶掉；2026-11-04 起两者都是助手的，知识库启动时直接读助手自己设置里的时区，飞书的对话由助手决定。）
@@ -137,7 +143,7 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
   飞书机器人和渠道插件发给主对话的（以及开新对话）在飞书 / 渠道里回「助手暂时连不上」，收件箱的 AI 分身这一件记成失败（错误同一句）；node 自己发的消息问不到时用对话自己的启动器（和以前问老 hub 一样）。
 - 安卓先空着开新主对话、第一条消息从飞书或渠道发来时，这条也带上旧主对话留下的（以前只有手机发的带，飞书发的漏掉，背景一直挂着等手机的下一条）。
 - 定时任务换了自己的对话之后，换下来的旧主对话 node 也照样常驻列出（以前助手自己发的 `keep_sessions` 漏了它们，要等 node 重连）。
-- Agents 这件事挪到助手以后（2026-11-04，`docs/agent-work.md`「谁管什么」）：它没连着时新建 Agent 先等它一会儿（hub 刚起来最多 60 秒、它刚断开 10 秒），等不到由 hub 自己套「模型配置 › Agents」，标签名是 `agent-<n>`；它的卡片的答案 hub 记下，它回来报了快照以后再给；分诊暂停，重新连上后的下一次检查（15 秒内）开始把这期间结束、还没看的轮次补上；会话分诊的开关、统计、`POST /api/v1/tabs/autoname` 回 503；会话列表留着它最后报的工作态。hub 刚重启、它还没报的那一两秒，分诊过的会话没有 `work`（显示成完成未看）。
+- Agents 这件事挪到助手以后（2026-11-04，`docs/agent-work.md`「谁管什么」）：它没连着时新建 Agent 只在 hub 刚起来、它还没连上过时等它（最多 60 秒），等不到、或它连上过又不在了，新建和续上都回 `503 assistant_offline`（电脑是它连的，[machines.md](machines.md)「谁连电脑」）；它的卡片的答案 hub 记下，它回来报了快照以后再给；分诊暂停，重新连上后的下一次检查（15 秒内）开始把这期间结束、还没看的轮次补上；会话分诊的开关、统计、`POST /api/v1/tabs/autoname` 回 503；会话列表留着它最后报的工作态。hub 刚重启、它还没报的那一两秒，分诊过的会话没有 `work`（显示成完成未看）。
 - 知识库挪到助手以后（2026-11-04）：助手没连着时 `/api/v1/kb…` 回 503，`kb_*` 工具失败，删除来源数据的接口回 503、什么都不删；归档等它回来，什么都不丢（游标是它的、插件下一轮重交、Agent 的那一行 hub 排着），见 `docs/knowledge.md`「谁管什么」。
 - 待办挪到助手以后（2026-11-04）：助手没连着时待办的接口和带 `todo_id` 的新建 / 发消息回 503；随项目自动挂、派生跟随的 Agent 在下一次推送里才带上待办（以前同一次推送就带上）。细节见 `docs/todos.md`「谁管什么」。
 - 收件箱挪到助手以后（2026-11-04）：助手没连着时 `/api/v1/inbox…` 和翻译 `/api/v1/translate*` 都回 503 `assistant_offline`（回复被拒不写回执，回来后能再发）；hub 照常按时读来源，读到的替助手攒着（合并、有上限、只在内存里），助手一连上连同攒着的来一轮完整的采集，邮件最新 40 封、iMessage 最新 30 条这种窗口里滑出去的不会丢。
@@ -159,6 +165,9 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
   再 `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub 地址> personad assistant`。它要能连到 hub 的 Postgres。
   知识库跟着它：在那台机器的数据目录里（hub 机器上原来的 `data/` 和 `handles.key` 要接着用就拷过去），见 `docs/knowledge.md`「谁管什么」。
 - 助手没连着的时候 hub 的表现见上一节最后。hub 每次启动都换一次 token，所以 `external` 没打开时别处跑的助手会被挤掉（旧 token 失效）。
+- 它同时是带着全部电脑的管理者（2026-11-04，[machines.md](machines.md)「谁连电脑」）：拿到握手回答里的 `devices` 就去连 hub.json 的机器（hub 机器自己的 `node --stdio` 现在是它的子进程），
+  第二条 WebSocket `GET /api/v1/bus/relay`（同一个 token）接 hub 转过来的 Persona Link 和经别的 hub 的 node 流；停的时候先把在线机器交给下一个（warm start），再断开它们。
+  它没连着时机器显示离线、机器的接口回 `503 assistant_offline`；回来后自己把电脑连回来。
 
 ## 飞书：lark-connector skill（2026-10-30）
 
@@ -243,7 +252,7 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 
 - **主对话**：第一段对话是主对话（助手的 settings `assistant.main`），Persona tab 默认打开它；快照开头写明「这是主对话」，提示词要求接着之前聊的往下做。
   node 的会话列表里离线会话只列 7 天内最新的 80 个，忙的机器上安静两天的主对话就被挤掉了，侧边栏没有「主对话」（2026-11-01）。
-  助手把这几个会话报在 profile 的 `keep` 里，hub 在 node 连上时、它们变了时用 `node.configure` 的 `keep_sessions` 告诉 node，不管多旧都列出来。
+  助手把这几个会话报在 profile 的 `keep` 里，它自己的设备那一层（2026-11-04 前是 hub）在 node 连上时、它们变了时用 `node.configure` 的 `keep_sessions` 告诉 node，不管多旧都列出来。
   其他页面交给 Persona 的东西（Agents 长按「交给 Persona」、知识库「问 Persona」）都以 `<jarvis-context>` 发进主对话。
 - **知识库**（`docs/knowledge.md`）：工具 `kb_search` / `kb_list` / `kb_get` / `kb_update`；快照带重点项目和会话；提示词要求把对话里得出的结论写回
   （项目进展写时间线、项目代码目录写 `dirs` 让 Agents 对上项目、给 Agent 派活前先读项目档案）。

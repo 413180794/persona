@@ -1,12 +1,16 @@
-package hub
+package devices
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -37,7 +41,7 @@ type nodePath struct {
 	src *Machine // cfg: the entry whose way it is (its transports, its link, its connector)
 	hub string   // hub: the member
 	mid string   // hub: the computer's id in the member's hub.json
-	rec recMachine
+	rec devicewire.RecMachine
 }
 
 func (p *nodePath) class() int {
@@ -60,15 +64,7 @@ type pathHealth struct {
 }
 
 // pathInfo is a path as the admin page and the machine list show it (plan 5「paths」).
-type pathInfo struct {
-	Via    string `json:"via"`
-	HubID  string `json:"hub_id"`
-	ID     string `json:"id,omitempty"` // the hub.json entry it comes from (there)
-	OK     bool   `json:"ok"`
-	RTTMS  int    `json:"rtt_ms,omitempty"`
-	Active bool   `json:"active,omitempty"`
-	Error  string `json:"error,omitempty"`
-}
+type pathInfo = devicewire.PathInfo
 
 type fleet struct {
 	mu       sync.Mutex
@@ -79,7 +75,6 @@ type fleet struct {
 	uids     map[string]string // path key -> the machine_uid seen through it (setting "mesh.path_uids")
 	health   map[string]*pathHealth
 	cancel   map[*Machine]context.CancelFunc // derived machines' run loops
-	extra    []*Machine                      // hub.json entries added while the hub runs (admin page)
 	changed  chan struct{}                   // closed when a regroup changed something
 	order    []*Machine                      // the machines listed: hub.json's (not absorbed), then derived by id
 }
@@ -94,22 +89,23 @@ func (f *fleet) init() {
 
 // machinesNow is every machine the apps see, in order: hub.json's (but entries for a computer another entry has),
 // then the members' computers. Before the first regroup (and in unit tests) it is hub.json's.
-func (h *Hub) machinesNow() []*Machine {
-	f := &h.fleet
+func (d *Devices) machinesNow() []*Machine {
+	f := &d.fleet
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.order == nil {
-		return h.cfgMachinesLocked()
+	order := f.order
+	f.mu.Unlock()
+	if order == nil {
+		return d.cfgMachines()
 	}
-	return append([]*Machine(nil), f.order...)
+	return append([]*Machine(nil), order...)
 }
 
 // fleetAll is every machine object with a run loop: hub.json's, absorbed ones included, and the derived ones.
-func (h *Hub) fleetAll() []*Machine {
-	f := &h.fleet
+func (d *Devices) fleetAll() []*Machine {
+	out := d.cfgMachines()
+	f := &d.fleet
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := h.cfgMachinesLocked()
 	for _, m := range f.derived {
 		out = append(out, m)
 	}
@@ -118,14 +114,15 @@ func (h *Hub) fleetAll() []*Machine {
 
 // machineByID is the machine an id the apps use stands for: a hub.json entry (or the entry that has its computer),
 // or a member's computer.
-func (h *Hub) machineByID(id string) *Machine {
+func (d *Devices) machineByID(id string) *Machine {
 	if id == "" {
 		return nil
 	}
-	f := &h.fleet
+	entry := d.cfgMachine(id)
+	f := &d.fleet
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if m := h.cfgMachineLocked(id); m != nil {
+	if m := entry; m != nil {
 		if to := f.absorbed[m]; to != nil {
 			return to
 		}
@@ -139,32 +136,9 @@ func (h *Hub) machineByID(id string) *Machine {
 	return nil
 }
 
-// localMachine is machineByID (the name the request handlers use).
-func (h *Hub) localMachine(id string) *Machine { return h.machineByID(id) }
-
-// machineIDs are the ids localMachine knows: the machines now, and the hub.json entries another one absorbed (the
-// same computer: their id still reaches it), e.g. for the assistant, whose saved machine may be such an id.
-func (h *Hub) machineIDs() []string {
-	out := []string{}
-	for _, m := range h.machinesNow() {
-		out = append(out, m.cfg.ID)
-	}
-	var absorbed []string
-	f := &h.fleet
-	f.mu.Lock()
-	for from := range f.absorbed {
-		if !slices.Contains(out, from.cfg.ID) {
-			absorbed = append(absorbed, from.cfg.ID)
-		}
-	}
-	f.mu.Unlock()
-	slices.Sort(absorbed) // the same order every time: the hello is compared with the last one
-	return append(out, absorbed...)
-}
-
 // pathsOf is a machine's paths, best first by kind (the choice also looks at health and round trips).
-func (h *Hub) pathsOf(m *Machine) []*nodePath {
-	f := &h.fleet
+func (d *Devices) pathsOf(m *Machine) []*nodePath {
+	f := &d.fleet
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if ps, ok := f.paths[m]; ok {
@@ -187,74 +161,9 @@ func kindOf(c MachineConfig) string {
 	return c.Kind
 }
 
-// cfgMachines is every hub.json entry: those read at start and those the admin page added since.
-func (h *Hub) cfgMachines() []*Machine {
-	f := &h.fleet
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return h.cfgMachinesLocked()
-}
-
-func (h *Hub) cfgMachinesLocked() []*Machine {
-	out := append([]*Machine(nil), h.machines...)
-	return append(out, h.fleet.extra...)
-}
-
-// cfgMachine is the hub.json entry with this id (not the machine an app's id leads to: see machineByID).
-func (h *Hub) cfgMachine(id string) *Machine {
-	f := &h.fleet
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return h.cfgMachineLocked(id)
-}
-
-func (h *Hub) cfgMachineLocked(id string) *Machine {
-	if m := h.byID[id]; m != nil {
-		return m
-	}
-	for _, m := range h.fleet.extra {
-		if m.cfg.ID == id {
-			return m
-		}
-	}
-	return nil
-}
-
-// addMachineLive starts a hub.json entry the admin page just added (nil when the hub is not running: it is read at
-// the next start).
-func (h *Hub) addMachineLive(mc MachineConfig) *Machine {
-	ctx := h.meshCtx()
-	if ctx == nil || h.cfgMachine(mc.ID) != nil {
-		return nil
-	}
-	m := newMachine(h, mc)
-	f := &h.fleet
-	f.mu.Lock()
-	f.init()
-	f.extra = append(f.extra, m)
-	f.mu.Unlock()
-	h.nodeWorkers.Add(1)
-	go func() {
-		defer h.nodeWorkers.Done()
-		m.run(ctx)
-	}()
-	h.fleetRegroup()
-	h.meshTouch()
-	h.logf("[%s] added (%s): connecting", mc.ID, kindOf(mc))
-	return m
-}
-
-// meshCtx is the hub's run context once the mesh started (nil before, and in unit tests without one).
-func (h *Hub) meshCtx() context.Context {
-	ms := &h.mesh
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-	return ms.ctx
-}
-
 // fleetChanged returns a channel closed at the next change of the machines or their paths.
-func (h *Hub) fleetChanged() <-chan struct{} {
-	f := &h.fleet
+func (d *Devices) fleetChanged() <-chan struct{} {
+	f := &d.fleet
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.init()
@@ -262,20 +171,20 @@ func (h *Hub) fleetChanged() <-chan struct{} {
 }
 
 // loadPathUIDs reads which computer each path reached last time, and the ids given to members' computers.
-func (h *Hub) loadPathUIDs(ctx context.Context) {
-	f := &h.fleet
+func (d *Devices) loadPathUIDs(ctx context.Context) {
+	f := &d.fleet
 	f.mu.Lock()
 	f.init()
 	f.mu.Unlock()
-	if h.store == nil {
+	if d.opts.Store == nil {
 		return
 	}
 	var uids, ids map[string]string
-	if _, err := h.store.Setting(ctx, "mesh.path_uids", &uids); err != nil {
-		h.logf("mesh: load path uids: %v", err)
+	if _, err := d.opts.Store.Setting(ctx, "mesh.path_uids", &uids); err != nil {
+		d.logf("mesh: load path uids: %v", err)
 	}
-	if _, err := h.store.Setting(ctx, "mesh.machine_ids", &ids); err != nil {
-		h.logf("mesh: load machine ids: %v", err)
+	if _, err := d.opts.Store.Setting(ctx, "mesh.machine_ids", &ids); err != nil {
+		d.logf("mesh: load machine ids: %v", err)
 	}
 	f.mu.Lock()
 	for k, v := range uids {
@@ -288,11 +197,11 @@ func (h *Hub) loadPathUIDs(ctx context.Context) {
 }
 
 // learnUID keeps the computer a path reached; when it is news, the machines are grouped again.
-func (h *Hub) learnUID(p *nodePath, uid string) {
+func (d *Devices) learnUID(p *nodePath, uid string) {
 	if uid == "" || p == nil {
 		return
 	}
-	f := &h.fleet
+	f := &d.fleet
 	f.mu.Lock()
 	f.init()
 	if f.uids[p.key] == uid {
@@ -305,55 +214,38 @@ func (h *Hub) learnUID(p *nodePath, uid string) {
 		save[k] = v
 	}
 	f.mu.Unlock()
-	if h.store != nil {
+	if d.opts.Store != nil {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := h.store.PutSetting(ctx, "mesh.path_uids", save); err != nil {
-				h.logf("mesh: save path uids: %v", err)
+			if err := d.opts.Store.PutSetting(ctx, "mesh.path_uids", save); err != nil {
+				d.logf("mesh: save path uids: %v", err)
 			}
 		}()
 	}
-	h.fleetRegroup()
+	d.fleetRegroup()
 }
 
-// memberRecords are the records of the hubs whose computers the center reaches through them: the other hubs that
-// take this hub for their center, not seen for too long excluded.
-func (h *Hub) memberRecords() []*hubRecord {
-	self := h.hubID()
-	ms := &h.mesh
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-	if !ms.running {
+// memberRecords are the members' computers the center reaches through them (the hub's mesh, devicewire.Mesh).
+func (d *Devices) memberRecords() []devicewire.MemberRecord {
+	mesh := d.config().Mesh
+	if mesh == nil || mesh.Member {
 		return nil
 	}
-	var out []*hubRecord
-	for id, r := range ms.records {
-		if id == self || r.Center != self || time.Since(ms.seenAt[id]) > meshRecordKeep {
-			continue
-		}
-		if _, paired := ms.peers[id]; !paired && !h.meshView().reachable(id) {
-			continue // left the group (no longer paired with anyone here)
-		}
-		out = append(out, r)
-	}
+	out := slices.Clone(mesh.Members)
 	sort.Slice(out, func(i, j int) bool { return out[i].HubID < out[j].HubID })
 	return out
 }
 
 // fleetRegroup works out the machines and their paths again: hub.json's entries, and (on the center) the members'
 // computers, grouped by the computer each path reached.
-func (h *Hub) fleetRegroup() {
-	center := h.isCenter()
-	var members []*hubRecord
-	if center {
-		members = h.memberRecords()
-	}
-	f := &h.fleet
+func (d *Devices) fleetRegroup() {
+	members := d.memberRecords()
+	cfgs := d.cfgMachines()
+	f := &d.fleet
 	f.mu.Lock()
 	f.init()
 
-	cfgs := h.cfgMachinesLocked()
 	var all []*nodePath
 	for _, m := range cfgs {
 		all = append(all, cfgPath(m))
@@ -436,15 +328,17 @@ func (h *Hub) fleetRegroup() {
 		if m == nil {
 			id := f.ids[g.key]
 			if id == "" || taken[id] && !derivedHas(f.derived, id) {
-				id = derivedID(ps[0], taken, h.hubNameOf(ps[0].hub))
+				id = derivedID(ps[0], taken, d.hubNameOf(ps[0].hub))
 			}
 			taken[id] = true
-			cfg := ps[0].rec.Cfg
+			var cfg MachineConfig
+			_ = json.Unmarshal(ps[0].rec.Cfg, &cfg)
 			cfg.ID, cfg.Kind = id, kindHub
 			if cfg.Name == "" {
 				cfg.Name = ps[0].mid
 			}
-			m = newMachine(h, cfg)
+			m = newMachine(d, cfg)
+			m.raw = ps[0].rec.Cfg
 			m.derived = true
 		}
 		used[m] = true
@@ -477,7 +371,9 @@ func (h *Hub) fleetRegroup() {
 	}
 	f.derived, f.absorbed, f.paths = newDerived, newAbsorbed, newPaths
 	f.order = append(listed, derivedList...)
-	ctx := h.meshCtx()
+	d.mu.Lock()
+	ctx := d.ctx
+	d.mu.Unlock()
 	cancels := map[*Machine]context.CancelFunc{}
 	for _, m := range gone {
 		cancels[m] = f.cancel[m]
@@ -489,9 +385,9 @@ func (h *Hub) fleetRegroup() {
 		}
 		mctx, cancel := context.WithCancel(ctx)
 		f.cancel[m] = cancel
-		h.nodeWorkers.Add(1)
+		d.workers.Add(1)
 		go func() {
-			defer h.nodeWorkers.Done()
+			defer d.workers.Done()
 			m.run(mctx)
 		}()
 	}
@@ -517,10 +413,10 @@ func (h *Hub) fleetRegroup() {
 		if cancel != nil {
 			cancel()
 		}
-		h.logf("[%s] no longer reachable through any hub of the group: removed", m.cfg.ID)
+		d.logf("[%s] no longer reachable through any hub of the group: removed", m.cfg.ID)
 	}
 	for _, m := range started {
-		h.logf("[%s] a member's computer: reached through %s", m.cfg.ID, h.hubNameOf(h.pathsOf(m)[0].hub))
+		d.logf("[%s] a member's computer: reached through %s", m.cfg.ID, d.hubNameOf(d.pathsOf(m)[0].hub))
 	}
 	if !changed {
 		return
@@ -528,14 +424,14 @@ func (h *Hub) fleetRegroup() {
 	for _, m := range wake {
 		m.wake()
 	}
-	if h.store != nil {
+	if d.opts.Store != nil {
 		go func() {
 			sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_ = h.store.PutSetting(sctx, "mesh.machine_ids", ids)
+			_ = d.opts.Store.PutSetting(sctx, "mesh.machine_ids", ids)
 		}()
 	}
-	h.broadcastMachines()
+	d.changed()
 }
 
 func derivedHas(d map[string]*Machine, id string) bool {
@@ -603,8 +499,8 @@ func samePaths(a, b map[*Machine][]*nodePath) bool {
 }
 
 // wakeOwnerOf wakes the machine a hub.json entry's path belongs to (the entry itself, or the one that has its computer).
-func (h *Hub) wakeOwnerOf(m *Machine) {
-	f := &h.fleet
+func (d *Devices) wakeOwnerOf(m *Machine) {
+	f := &d.fleet
 	f.mu.Lock()
 	to := f.absorbed[m]
 	f.mu.Unlock()
@@ -615,11 +511,11 @@ func (h *Hub) wakeOwnerOf(m *Machine) {
 
 // parkReason says why a machine's run loop does not connect now ("" when it should): a member leaves its computers to
 // the center; an entry whose computer another entry has is reached through that one.
-func (h *Hub) parkReason(m *Machine) string {
-	if h.isMember() {
-		return "由中心 hub「" + h.hubNameOf(h.centerID()) + "」连着"
+func (d *Devices) parkReason(m *Machine) string {
+	if mesh := d.config().Mesh; mesh != nil && mesh.Member {
+		return "由中心 hub「" + mesh.CenterName + "」连着"
 	}
-	f := &h.fleet
+	f := &d.fleet
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if to := f.absorbed[m]; to != nil {
@@ -641,8 +537,8 @@ type pathState struct {
 	err       string
 }
 
-func (h *Hub) pathState(p *nodePath) pathState {
-	f := &h.fleet
+func (d *Devices) pathState(p *nodePath) pathState {
+	f := &d.fleet
 	f.mu.Lock()
 	var hl pathHealth
 	if x := f.health[p.key]; x != nil {
@@ -652,13 +548,16 @@ func (h *Hub) pathState(p *nodePath) pathState {
 	st := pathState{failUntil: hl.failUntil, err: hl.err, rtt: hl.rtt}
 	switch p.via {
 	case viaHub:
-		v := h.meshView()
-		st.avail = v.reachable(p.hub) && p.rec.Avail
-		if !v.reachable(p.hub) {
-			st.err = "「" + h.hubNameOf(p.hub) + "」现在连不上"
+		var hub devicewire.MeshHub
+		if mesh := d.config().Mesh; mesh != nil {
+			hub = mesh.Hubs[p.hub]
 		}
-		if hr := v.rttTo(p.hub); hr >= 0 && p.rec.RTTMS > 0 {
-			st.rtt = hr + p.rec.RTTMS
+		st.avail = hub.Reachable && p.rec.Avail
+		if !hub.Reachable {
+			st.err = "「" + d.hubNameOf(p.hub) + "」现在连不上"
+		}
+		if hub.Reachable && hub.RTTMS >= 0 && p.rec.RTTMS > 0 {
+			st.rtt = hub.RTTMS + p.rec.RTTMS
 		}
 	default:
 		avail, rtt := p.src.reachableHere()
@@ -695,13 +594,13 @@ func clearlyBetter(q *nodePath, qs pathState, p *nodePath, ps pathState) bool {
 }
 
 // choosePath is the path a machine should connect through now; nil and how long to wait when none can be tried.
-func (h *Hub) choosePath(m *Machine) (*nodePath, time.Duration) {
+func (d *Devices) choosePath(m *Machine) (*nodePath, time.Duration) {
 	var best *nodePath
 	var bestSt pathState
 	wait := time.Duration(0)
 	now := time.Now()
-	for _, p := range h.pathsOf(m) {
-		st := h.pathState(p)
+	for _, p := range d.pathsOf(m) {
+		st := d.pathState(p)
 		if !st.avail {
 			continue
 		}
@@ -720,17 +619,17 @@ func (h *Hub) choosePath(m *Machine) (*nodePath, time.Duration) {
 
 // betterPath is a path clearly better than the one in use that has stayed so for mesh.path_switch_seconds (since
 // tracks when each became better); nil for none.
-func (h *Hub) betterPath(m *Machine, cur *nodePath, since map[string]time.Time) *nodePath {
-	curSt := h.pathState(cur)
+func (d *Devices) betterPath(m *Machine, cur *nodePath, since map[string]time.Time) *nodePath {
+	curSt := d.pathState(cur)
 	now := time.Now()
 	var pick *nodePath
 	var pickSt pathState
 	seen := map[string]bool{}
-	for _, p := range h.pathsOf(m) {
+	for _, p := range d.pathsOf(m) {
 		if p.key == cur.key {
 			continue
 		}
-		st := h.pathState(p)
+		st := d.pathState(p)
 		if !st.avail || now.Before(st.failUntil) || !clearlyBetter(p, st, cur, curSt) {
 			continue
 		}
@@ -738,7 +637,7 @@ func (h *Hub) betterPath(m *Machine, cur *nodePath, since map[string]time.Time) 
 		if since[p.key].IsZero() {
 			since[p.key] = now
 		}
-		if now.Sub(since[p.key]) < h.cfg.Mesh.pathSwitch() {
+		if now.Sub(since[p.key]) < d.pathSwitch() {
 			continue
 		}
 		if pick == nil || pathBefore(p, st, pick, pickSt) {
@@ -755,8 +654,8 @@ func (h *Hub) betterPath(m *Machine, cur *nodePath, since map[string]time.Time) 
 
 // pathEnded records how a connection through p went: a path that held for a while is fine again at once; one that
 // failed waits, longer each time in a row (2 s doubling to a minute).
-func (h *Hub) pathEnded(p *nodePath, online bool, err error, held time.Duration, planned bool) {
-	f := &h.fleet
+func (d *Devices) pathEnded(p *nodePath, online bool, err error, held time.Duration, planned bool) {
+	f := &d.fleet
 	f.mu.Lock()
 	f.init()
 	hl := f.health[p.key]
@@ -781,8 +680,8 @@ func (h *Hub) pathEnded(p *nodePath, online bool, err error, held time.Duration,
 }
 
 // pathConnected records that p reached the node.
-func (h *Hub) pathConnected(p *nodePath) {
-	f := &h.fleet
+func (d *Devices) pathConnected(p *nodePath) {
+	f := &d.fleet
 	f.mu.Lock()
 	f.init()
 	hl := f.health[p.key]
@@ -795,8 +694,8 @@ func (h *Hub) pathConnected(p *nodePath) {
 }
 
 // pathRTT records the node's round trip through p (the path in use, measureNodes).
-func (h *Hub) pathRTT(p *nodePath, rtt int) {
-	f := &h.fleet
+func (d *Devices) pathRTT(p *nodePath, rtt int) {
+	f := &d.fleet
 	f.mu.Lock()
 	f.init()
 	hl := f.health[p.key]
@@ -811,12 +710,12 @@ func (h *Hub) pathRTT(p *nodePath, rtt int) {
 }
 
 // pathInfos is a machine's paths for the admin page and the machine list.
-func (h *Hub) pathInfos(m *Machine) []pathInfo {
+func (d *Devices) pathInfos(m *Machine) []pathInfo {
 	active := m.activePathKey()
-	self := h.hubID()
+	self := d.config().HubID
 	var out []pathInfo
-	for _, p := range h.pathsOf(m) {
-		st := h.pathState(p)
+	for _, p := range d.pathsOf(m) {
+		st := d.pathState(p)
 		pi := pathInfo{Via: p.via, HubID: self, OK: st.avail && time.Now().After(st.failUntil), RTTMS: st.rtt,
 			Active: p.key == active, Error: st.err}
 		if p.via == viaHub {
@@ -838,8 +737,8 @@ func (h *Hub) pathInfos(m *Machine) []pathInfo {
 }
 
 // measureNodes measures the round trip to every computer this hub drives, over the path in use.
-func (h *Hub) measureNodes(ctx context.Context) {
-	for _, m := range h.machinesNow() {
+func (d *Devices) measureNodes(ctx context.Context) {
+	for _, m := range d.machinesNow() {
 		p := m.activePath()
 		if p == nil || !m.isOnline() {
 			continue
@@ -849,61 +748,109 @@ func (h *Hub) measureNodes(ctx context.Context) {
 		err := m.call(cctx, "ping", map[string]any{}, nil)
 		cancel()
 		if err == nil {
-			h.pathRTT(p, max(1, int(time.Since(start).Milliseconds())))
+			d.pathRTT(p, max(1, int(time.Since(start).Milliseconds())))
 		}
 	}
 }
 
-// machineList is the machines the apps see, each with the hub it is reached through and its paths.
-func (h *Hub) machineList() []proto.Machine {
-	self, name := h.hubID(), h.hubName()
-	list := h.machinesNow()
-	out := make([]proto.Machine, 0, len(list))
-	for _, m := range list {
-		s := m.snapshot()
-		s.HubID, s.HubName = self, name
-		f := &h.fleet
-		f.mu.Lock()
-		for _, p := range f.paths[m] {
-			if uid := f.uids[p.key]; uid != "" {
-				s.MachineUID = uid
+// decorate fills in what the apps see of how a machine is reached: the hub it is reached through, its own id, the
+// route, its paths.
+func (d *Devices) decorate(m *Machine, s proto.Machine) proto.Machine {
+	cfg := d.config()
+	s.HubID, s.HubName = cfg.HubID, cfg.HubName
+	f := &d.fleet
+	f.mu.Lock()
+	for _, p := range f.paths[m] {
+		if uid := f.uids[p.key]; uid != "" {
+			s.MachineUID = uid
+			break
+		}
+	}
+	f.mu.Unlock()
+	if uid := m.nodeUID(); uid != "" {
+		s.MachineUID = uid
+	}
+	infos := d.pathInfos(m)
+	route := &proto.MachineRoute{Via: kindOf(m.cfg)}
+	if m.derived {
+		route.Via = viaHub
+	}
+	for i, pi := range infos {
+		if pi.Active || i == 0 && !s.Online {
+			route = &proto.MachineRoute{Via: pi.Via}
+			if pi.Via == viaHub {
+				route.Hops = 1
+				s.HubID, s.HubName = pi.HubID, d.hubNameOf(pi.HubID)
+			}
+			if s.Online && pi.RTTMS > 0 {
+				rtt := pi.RTTMS
+				route.RTTMS = &rtt
+			}
+			if pi.Active {
 				break
 			}
 		}
-		f.mu.Unlock()
-		if uid := m.nodeUID(); uid != "" {
-			s.MachineUID = uid
-		}
-		infos := h.pathInfos(m)
-		route := &proto.MachineRoute{Via: kindOf(m.cfg)}
-		if m.derived {
-			route.Via = viaHub
-		}
-		for i, pi := range infos {
-			if pi.Active || i == 0 && !s.Online {
-				route = &proto.MachineRoute{Via: pi.Via}
-				if pi.Via == viaHub {
-					route.Hops = 1
-					s.HubID, s.HubName = pi.HubID, h.hubNameOf(pi.HubID)
-				}
-				if s.Online && pi.RTTMS > 0 {
-					rtt := pi.RTTMS
-					route.RTTMS = &rtt
-				}
-				if pi.Active {
-					break
-				}
-			}
-		}
-		s.Route = route
-		if len(infos) > 1 || m.derived {
-			for _, pi := range infos {
-				s.Paths = append(s.Paths, proto.MachinePath{Via: pi.Via, HubID: pi.HubID, OK: pi.OK, RTTMS: pi.RTTMS, Active: pi.Active})
-			}
-		}
-		out = append(out, s)
 	}
-	return out
+	s.Route = route
+	if len(infos) > 1 || m.derived {
+		for _, pi := range infos {
+			s.Paths = append(s.Paths, proto.MachinePath{Via: pi.Via, HubID: pi.HubID, OK: pi.OK, RTTMS: pi.RTTMS, Active: pi.Active})
+		}
+	}
+	return s
+}
+
+// hubNameOf is what a hub of the group is called ("" for an unknown one: its id).
+func (d *Devices) hubNameOf(id string) string {
+	cfg := d.config()
+	if id == cfg.HubID {
+		return cfg.HubName
+	}
+	if cfg.Mesh != nil {
+		if hub, ok := cfg.Mesh.Hubs[id]; ok && hub.Name != "" {
+			return hub.Name
+		}
+	}
+	return id
+}
+
+// meshSettling is how long to wait before connecting anything: just started with peers, the group may have another
+// center by now.
+func (d *Devices) meshSettling() time.Duration {
+	if mesh := d.config().Mesh; mesh != nil && time.Now().Before(mesh.SettleUntil) {
+		return time.Until(mesh.SettleUntil)
+	}
+	return 0
+}
+
+// meshWait is closed at the next change of the hub's handover (the mesh among it).
+func (d *Devices) meshWait() <-chan struct{} {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.cfgChanged == nil {
+		d.cfgChanged = make(chan struct{})
+	}
+	return d.cfgChanged
+}
+
+// pathSwitch is how long a better path must stay better before the switch (mesh.path_switch_seconds).
+func (d *Devices) pathSwitch() time.Duration {
+	if mesh := d.config().Mesh; mesh != nil && mesh.PathSwitchMS > 0 {
+		return time.Duration(mesh.PathSwitchMS) * time.Millisecond
+	}
+	return 30 * time.Second
+}
+
+// measureLoop measures the round trip to every computer now and then (the choice between paths uses it).
+func (d *Devices) measureLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(30 * time.Second):
+		}
+		d.measureNodes(ctx)
+	}
 }
 
 func abs(n int) int {
@@ -911,4 +858,41 @@ func abs(n int) int {
 		return -n
 	}
 	return n
+}
+
+// hubSlug is a hub's name made fit for a machine id suffix: lowercase letters, digits and dashes; a name with none
+// of those (家里) gives the start of the hub_id.
+func hubSlug(name, hubID string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(name) {
+		switch {
+		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
+			b.WriteRune(r)
+			dash = false
+		case b.Len() > 0 && !dash:
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	s := strings.Trim(b.String(), "-")
+	if s == "" {
+		return shortID(hubID)
+	}
+	return s
+}
+
+func shortID(hubID string) string {
+	if len(hubID) > 6 {
+		return hubID[:6]
+	}
+	return hubID
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }
+
+// ShortenTimings makes the checks of tests elsewhere (the hub's end-to-end tests) quick: how often the path in use is
+// compared with the others, a connector's info is read, and how long one that refused is left alone.
+func ShortenTimings(pathCheck, serviceProbe, refusedWait time.Duration) {
+	pathCheckEvery, serviceProbeEvery, connectorRefusedWait = pathCheck, serviceProbe, refusedWait
 }

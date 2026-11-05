@@ -25,10 +25,11 @@ func init() {
 // testAssistant is the assistant (internal/assistant) on the hub's bus, run in the test's process the way `personad
 // assistant` runs it: its own Service, the hub's store as its own, a real WebSocket connection to the hub.
 type testAssistant struct {
-	svc  *assistant.Service
-	bh   *assistant.BusHub
-	stop context.CancelFunc
-	done chan struct{}
+	svc   *assistant.Service
+	bh    *assistant.BusHub
+	stop  context.CancelFunc
+	done  chan struct{}
+	token string // its bus token (the manager's relay dials with it too)
 }
 
 // connectAssistant connects the assistant to h, on a server with h's bus endpoint alone (identities in memory when
@@ -72,7 +73,7 @@ func dialAssistant(t *testing.T, h *Hub, url string, schedule bool, opts ...func
 		return s
 	}, KB: testKBOf(h)}) // the knowledge base a test gave it (kb_test.go)
 	ctx, cancel := context.WithCancel(context.Background())
-	a := &testAssistant{svc: svc, bh: bh, stop: cancel, done: make(chan struct{})}
+	a := &testAssistant{svc: svc, bh: bh, stop: cancel, done: make(chan struct{}), token: tok}
 	testAssistants.Store(h, a)
 	go func() {
 		defer close(a.done)

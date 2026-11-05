@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -88,15 +88,15 @@ type tailcatDialer struct {
 	err  error
 }
 
-func (h *Hub) tailcatClient() (*tunnel.Dialer, error) {
-	t := &h.tailcat
+func (d *Devices) tailcatClient() (*tunnel.Dialer, error) {
+	t := &d.tailcat
 	t.once.Do(func() {
 		k, err := tunnel.LoadOrCreateHubKey(tunnel.HubKeyPath())
 		if err != nil {
 			t.err = err
 			return
 		}
-		t.d = &tunnel.Dialer{Key: k.Key, DERPMapURL: h.cfg.Tailcat.DERPMapURL, Logf: h.logf}
+		t.d = &tunnel.Dialer{Key: k.Key, DERPMapURL: d.config().TailcatDERPMapURL, Logf: d.logf}
 	})
 	return t.d, t.err
 }
@@ -105,7 +105,7 @@ func (m *Machine) tailcatDial(ctx context.Context) (net.Conn, error) {
 	if m.dialTailcat != nil {
 		return m.dialTailcat(ctx)
 	}
-	d, err := m.hub.tailcatClient()
+	d, err := m.d.tailcatClient()
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (m *Machine) tailcatReset() {
 	if m.dialTailcat != nil {
 		return
 	}
-	if d, _ := m.hub.tailcatClient(); d != nil {
+	if d, _ := m.d.tailcatClient(); d != nil {
 		d.Reset(m.cfg.TailcatAddr)
 	}
 }
@@ -156,7 +156,7 @@ func (m *Machine) watchTailcat(ctx context.Context, peer *rpc.Peer, activity *ac
 				return
 			}
 			if misses++; misses >= 2 {
-				m.hub.logf("[%s] tailcat: no answer to two pings, reconnecting", m.cfg.ID)
+				m.d.logf("[%s] tailcat: no answer to two pings, reconnecting", m.cfg.ID)
 				m.tailcatReset()
 				peer.Close(errors.New("tailcat 连接没有回应（那台电脑睡眠或断网了？）"))
 				if activity != nil {
@@ -165,7 +165,7 @@ func (m *Machine) watchTailcat(ctx context.Context, peer *rpc.Peer, activity *ac
 				return
 			}
 		case <-probeTick.C:
-			if m.cfg.Kind == "tailcat" || m.hub.machinePending(m.cfg.ID) {
+			if m.cfg.Kind == "tailcat" || m.machinePending() {
 				continue
 			}
 			pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -177,7 +177,7 @@ func (m *Machine) watchTailcat(ctx context.Context, peer *rpc.Peer, activity *ac
 			m.mu.Lock()
 			m.directFailed, m.switchedBack = time.Time{}, time.Now()
 			m.mu.Unlock()
-			m.hub.logf("[%s] ssh works again: switching back from tailcat", m.cfg.ID)
+			m.d.logf("[%s] ssh works again: switching back from tailcat", m.cfg.ID)
 			peer.Close(errors.New("ssh works again: switching back from tailcat"))
 			return
 		}
@@ -240,7 +240,7 @@ func (m *Machine) updatePath(ctx context.Context) {
 	if m.dialTailcat != nil {
 		return
 	}
-	d, err := m.hub.tailcatClient()
+	d, err := m.d.tailcatClient()
 	if err != nil {
 		return
 	}
@@ -257,8 +257,8 @@ func (m *Machine) updatePath(ctx context.Context) {
 	}
 	m.mu.Unlock()
 	if changed {
-		m.hub.logf("[%s] tailcat path: %s", m.cfg.ID, path)
-		m.hub.broadcastMachines()
+		m.d.logf("[%s] tailcat path: %s", m.cfg.ID, path)
+		m.d.changed()
 	}
 }
 
@@ -274,22 +274,10 @@ func (m *Machine) directWorks(ctx context.Context) error {
 	return exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, "true").Run()
 }
 
-// machinePending: a question, plan or permission from this machine is waiting on the phone.
-func (h *Hub) machinePending(machineID string) bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for _, p := range h.interactions {
-		if p.ix.MachineID == machineID {
-			return true
-		}
-	}
-	return false
-}
-
 // deployTailcat sends the hub's node build over tailcat: the node installs it over itself and exits, and its
 // supervisor starts the new one.
 func (m *Machine) deployTailcat(ctx context.Context, bin string) error {
-	d, err := m.hub.tailcatClient()
+	d, err := m.d.tailcatClient()
 	if err != nil {
 		return err
 	}
@@ -302,9 +290,9 @@ func (m *Machine) deployTailcat(ctx context.Context, bin string) error {
 }
 
 // closeTailcat ends every tunnel when the hub stops.
-func (h *Hub) closeTailcat() {
-	h.tailcat.once.Do(func() {}) // never made: nothing to close (and none made after this)
-	if h.tailcat.d != nil {
-		h.tailcat.d.Close()
+func (d *Devices) closeTailcat() {
+	d.tailcat.once.Do(func() {}) // never made: nothing to close (and none made after this)
+	if d.tailcat.d != nil {
+		d.tailcat.d.Close()
 	}
 }

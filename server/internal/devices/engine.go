@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -33,19 +33,19 @@ type engineChoices struct {
 // again — it is called while machine lists are built.
 const engineRetry = 30 * time.Second
 
-func (h *Hub) loadEnginesLocked(ctx context.Context) {
-	e := &h.engines
+func (d *Devices) loadEnginesLocked(ctx context.Context) {
+	e := &d.engines
 	if e.loaded || !e.failedAt.IsZero() && time.Since(e.failedAt) < engineRetry {
 		return
 	}
 	e.byID = map[string]string{}
-	if h.store == nil {
+	if d.opts.Store == nil {
 		e.loaded = true
 		return
 	}
 	var m map[string]string
-	if _, err := h.store.Setting(ctx, enginesKey, &m); err != nil {
-		h.logf("engines: %v (retried in %s)", err, engineRetry)
+	if _, err := d.opts.Store.Setting(ctx, enginesKey, &m); err != nil {
+		d.logf("engines: %v (retried in %s)", err, engineRetry)
 		e.failedAt = time.Now()
 		return
 	}
@@ -56,21 +56,21 @@ func (h *Hub) loadEnginesLocked(ctx context.Context) {
 }
 
 // engineOf is the machine's engine: what the user chose, else herdr.
-func (h *Hub) engineOf(machine string) string {
-	if engine, ok := h.storedEngine(machine); ok {
+func (d *Devices) engineOf(machine string) string {
+	if engine, ok := d.storedEngine(machine); ok {
 		return engine
 	}
 	return proto.EngineHerdr
 }
 
 // storedEngine is the engine the user chose for the machine; false when never chosen (or settings unreadable).
-func (h *Hub) storedEngine(machine string) (string, bool) {
-	h.engines.mu.Lock()
-	defer h.engines.mu.Unlock()
+func (d *Devices) storedEngine(machine string) (string, bool) {
+	d.engines.mu.Lock()
+	defer d.engines.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	h.loadEnginesLocked(ctx)
-	engine, ok := h.engines.byID[machine]
+	d.loadEnginesLocked(ctx)
+	engine, ok := d.engines.byID[machine]
 	return engine, ok && engine != ""
 }
 
@@ -78,15 +78,15 @@ func (h *Hub) storedEngine(machine string) (string, bool) {
 var errUnknownEngine = errors.New("unknown engine")
 
 // setEngine stores the machine's engine.
-func (h *Hub) setEngine(ctx context.Context, machine, engine string) error {
+func (d *Devices) setEngine(ctx context.Context, machine, engine string) error {
 	if _, ok := proto.EngineNames[engine]; !ok {
 		return fmt.Errorf("%w %q (herdr, herdr-core, herdr-both, orca)", errUnknownEngine, engine)
 	}
-	e := &h.engines
+	e := &d.engines
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.failedAt = time.Time{} // the user is waiting: try now
-	h.loadEnginesLocked(ctx)
+	d.loadEnginesLocked(ctx)
 	if !e.loaded {
 		return errors.New("engines: settings not readable")
 	}
@@ -95,8 +95,8 @@ func (h *Hub) setEngine(ctx context.Context, machine, engine string) error {
 		next[id] = v
 	}
 	next[machine] = engine
-	if h.store != nil {
-		if err := h.store.PutSetting(ctx, enginesKey, next); err != nil {
+	if d.opts.Store != nil {
+		if err := d.opts.Store.PutSetting(ctx, enginesKey, next); err != nil {
 			return err
 		}
 	}
@@ -111,18 +111,18 @@ func (h *Hub) setEngine(ctx context.Context, machine, engine string) error {
 func (m *Machine) useEngine(ctx context.Context, peer *rpc.Peer) {
 	m.engineMu.Lock()
 	defer m.engineMu.Unlock()
-	engine, ok := m.hub.storedEngine(m.cfg.ID)
+	engine, ok := m.d.storedEngine(m.cfg.ID)
 	if !ok {
 		return
 	}
 	if err := peer.Call(ctx, "engine.use", map[string]any{"engine": engine}, nil); err != nil {
-		m.hub.logf("[%s] the node did not take engine %s (it stays on its own engine until updated): %v", m.cfg.ID, engine, err)
+		m.d.logf("[%s] the node did not take engine %s (it stays on its own engine until updated): %v", m.cfg.ID, engine, err)
 	}
 }
 
 // putEngine is PUT /api/v1/machines/{mid}/engine {"engine": "herdr-core"}: stored even while the machine is offline
 // (applied when it connects), sent to the node at once when online; answers the machine as listed.
-func (h *Hub) putEngine(w http.ResponseWriter, r *http.Request, m *Machine) {
+func (d *Devices) putEngine(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var in struct {
 		Engine string `json:"engine"`
 	}
@@ -130,7 +130,7 @@ func (h *Hub) putEngine(w http.ResponseWriter, r *http.Request, m *Machine) {
 		writeErr(w, http.StatusBadRequest, fmt.Errorf("bad body: %w", err))
 		return
 	}
-	if err := h.setEngine(r.Context(), m.cfg.ID, in.Engine); err != nil {
+	if err := d.setEngine(r.Context(), m.cfg.ID, in.Engine); err != nil {
 		code := http.StatusInternalServerError
 		if errors.Is(err, errUnknownEngine) {
 			code = http.StatusBadRequest
@@ -146,6 +146,6 @@ func (h *Hub) putEngine(w http.ResponseWriter, r *http.Request, m *Machine) {
 		m.useEngine(ctx, peer)
 		cancel()
 	}
-	h.broadcastMachines()
-	writeJSON(w, m.snapshot())
+	d.reportNow()
+	writeJSON(w, d.decorate(m, m.snapshot()))
 }

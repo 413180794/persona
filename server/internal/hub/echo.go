@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"time"
-
-	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Where a sent message landed in the transcript (docs/protocol.md「待发消息的对应」). The node ties a send with a
@@ -46,18 +44,17 @@ func (m *Machine) recordEcho(params json.RawMessage) {
 	}()
 }
 
-// sendEchoes hands a node what was kept of its sends of the last day (an older node does not know session.echoes).
-func (m *Machine) sendEchoes(ctx context.Context, peer *rpc.Peer) {
+// echoesToSend is what was kept of a node's sends of the last day, handed to it when it connects (session.echoes,
+// devices.connected; an older node does not know the method).
+func (m *Machine) echoesToSend(ctx context.Context) []json.RawMessage {
 	s := m.hub.echoes()
 	if s == nil {
-		return
+		return nil
 	}
 	list, err := s.Echoes(ctx, m.cfg.ID)
 	if err != nil {
 		m.hub.logf("[%s] echoes: %v", m.cfg.ID, err)
-		return
+		return nil
 	}
-	if len(list) > 0 {
-		_ = peer.Call(ctx, "session.echoes", map[string]any{"echoes": list}, nil)
-	}
+	return list
 }

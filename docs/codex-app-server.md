@@ -103,7 +103,7 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 | 审批归属使用单进程 `p.id`；ID 哈希不含机器 / 连接代际 | `assistant_codex.go:690`、`:948` | 必须按真正的 request/thread/turn 路由，不能把其他 Agent 的请求给当前助手批准 |
 | steer 任意错误都会 fallback start；interrupt 之后清理后台终端 | `assistant_codex.go:377`、`:408` | 外部 server 不沿用这两个默认：只有确定本轮结束的错误才允许改走 start；停止轮次与清理所有后台命令要分开 |
 
-可借用目录发现、realpath 去重与落库机制：`server/internal/node/claudedirs.go:176`、`server/internal/hub/claudedirs.go:19`。只提取 allowlist 中的环境字段（如 `CODEX_HOME`），不把进程全部环境变量、token、账号配置发到 hub 或打印日志。Codex 自己的 `find_codex_home` 会规范化显式 home（`codex-rs/core/src/config/mod.rs:5239`），Persona 也应按规范化目录去重。
+可借用目录发现、realpath 去重与落库机制：`server/internal/node/claudedirs.go:176`、`server/internal/devices/claudedirs.go:19`。只提取 allowlist 中的环境字段（如 `CODEX_HOME`），不把进程全部环境变量、token、账号配置发到 hub 或打印日志。Codex 自己的 `find_codex_home` 会规范化显式 home（`codex-rs/core/src/config/mod.rs:5239`），Persona 也应按规范化目录去重。
 
 ## 协议内容不能只支持文本
 

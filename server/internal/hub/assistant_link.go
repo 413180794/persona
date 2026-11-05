@@ -346,7 +346,7 @@ func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (as
 	if s.Profile != nil && !jsonSame(oldProfile, s.Profile) {
 		h.keepAssistantProfile(context.Background(), s.Profile)
 	}
-	h.keepChanged(oldProfile, s.Profile)
+	// What the nodes keep listing (s.Profile.Keep) the manager tells them itself (internal/devices SetKeep).
 	h.takeInboxReport(s.Inbox) // inbox.go
 	h.askOnPhone(s.Interactions)
 	machines := changedMachines(old, views)

@@ -1,0 +1,288 @@
+// Package devicewire is what the hub and the manager that carries the user's computers say to each other over the
+// bus about them (docs/protocol.md「电脑（devices.*）」, docs/machines.md「谁连电脑」): the manager (internal/devices, in
+// `personad assistant`) connects every computer — the local node, ssh, tailcat, Persona Link in both modes, the ones
+// reached through another hub of the mesh — and holds what is known of each; the hub never dials or accepts a
+// computer. It hands the manager hub.json's machines as defaults, relays the apps' calls and streams to it, and keeps
+// what the manager reports to show the apps. Both sides import this package; neither imports the other.
+package devicewire
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// NodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own (the hub's updates put the release's
+// there too, the manager deploys them from there); JARVIS_NODE_BINARIES points elsewhere (the Docker image carries
+// them in /opt/jarvis/nodes: ~/.jarvis is the data volume there).
+func NodeBinaryDir() string {
+	if d := identity.Getenv("JARVIS_NODE_BINARIES"); d != "" {
+		return d
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(identity.DataDir(home), "bin", "nodes")
+}
+
+// Manager → hub.
+const (
+	// EventState {machines: [State], absorbed: {entry id: machine id}, entries: [Entry]}: every machine as the manager
+	// has it now, in the order the apps list them; sent whole whenever any of it changed (coalesced), and first thing
+	// after every handshake.
+	EventState = "devices.state"
+	// EventNode {machine_id, event, params}: one of a node's one-way events, as it came, in the order they came.
+	EventNode = "devices.event"
+	// MethodRequest {machine_id, method, params, request} → the hub's answer to a node's request the hub answers
+	// (interaction.create, assistant.lark, mcp.tools, mcp.call).
+	MethodRequest = "devices.request"
+	// EventRequestEnd {machine_id, request}: the node connection a devices.request came on ended before the hub
+	// answered it; the hub stops on it as it would on a node of its own (a resumable question stays for its hook to
+	// claim again through the next connection).
+	EventRequestEnd = "devices.request_end"
+	// MethodConnected {machine_id, connected_at} → ConnectedReply: a node just connected (or the manager's connection
+	// to the hub is new): what the hub adds to the node's configuration and the calls it gets right after (Codex
+	// settings, managed launchers, the sends the hub remembers), before the manager asks it for its sessions; the hub
+	// starts what it does on a connection (Cua, ego, the plugins' programs) too.
+	MethodConnected = "devices.connected"
+	// MethodConnectorCred {machine_id} → ConnectorCred: a computer of kind service's pin and credential, kept sealed by
+	// the hub; MethodConnectorPaired ConnectorCred → {}: pairing made new ones, the hub seals and keeps them.
+	MethodConnectorCred   = "devices.connector_cred"
+	MethodConnectorPaired = "devices.connector_paired"
+)
+
+// Hub → manager.
+const (
+	// MethodCall {machine_id, method, params, timeout_ms?} → the node's result: the apps' and the hub's calls to a
+	// machine's node. session.watch / session.unwatch also tell the manager what to watch again after a reconnect.
+	MethodCall = "devices.call"
+	// EventNotify {machine_id, event, params}: a one-way event to a node (terminal input, a port's bytes).
+	EventNotify = "devices.notify"
+	// EventConfig Config: what the hub hands the manager changed (an entry added on the admin page, the mesh, the
+	// hub's addresses).
+	EventConfig = "devices.config"
+	// MethodAccept Accept → {}: a connection for the manager came to the hub (a Persona Link, a stream through this
+	// hub for the center); the manager takes it by dialing RelayPath?id=.
+	MethodAccept = "devices.accept"
+	// MethodUpdateNodes {} → {}: the hub updated itself; redeploy the machines whose node is not its build.
+	MethodUpdateNodes = "devices.update_nodes"
+	// MethodPairConnector {link, machine_id, address, proxy} → {address, version}: pair a computer of kind service
+	// (the admin page).
+	MethodPairConnector = "devices.pair_connector"
+	// MethodReconnect {machine_id} → {}: connect the machine's node again (the apps' reconnect, the admin page).
+	MethodReconnect = "devices.reconnect"
+	// EventLinkRTT LinkRTT: a Persona Link's round trip, as the hub's heartbeat on it measured it (its paths are
+	// compared by it).
+	EventLinkRTT = "devices.link_rtt"
+)
+
+// LinkRTT is devices.link_rtt's params: the relay's id (devices.accept's) and the round trip.
+type LinkRTT struct {
+	ID    string `json:"id"`
+	RTTMS int    `json:"rtt_ms"`
+}
+
+// RelayPath is the second channel of a manager's bus token: a WebSocket that the hub joins to a connection it holds
+// for the manager (?id=, after devices.accept) or that it opens for it (?hub=&machine=: a node stream through that
+// hub of the mesh). Binary messages carry a byte stream, text ones a Persona Link's messages, as they are; the close
+// code and reason go through both ways.
+const RelayPath = "/api/v1/bus/relay"
+
+// Accept kinds.
+const (
+	AcceptLink       = "link"        // a Persona Link's control connection (GET /api/v1/link)
+	AcceptLinkStream = "link_stream" // a stream it opened (GET /api/v1/link/stream?id=)
+	AcceptNode       = "node"        // the center asks for a stream to one of this hub's computers (mesh)
+)
+
+// Accept is devices.accept's params.
+type Accept struct {
+	ID        string `json:"id"` // the relay's
+	Kind      string `json:"kind"`
+	MachineID string `json:"machine_id"`
+	TokenID   string `json:"token_id,omitempty"` // link: the credential it came with
+	StreamID  string `json:"stream_id,omitempty"`
+	Source    string `json:"source,omitempty"` // link: where it came from (masked), for the log
+}
+
+// Config is what the hub hands the manager: the defaults of what the manager carries, as the hub's hello has them
+// (manager.hello's answer, field devices) and devices.config again whenever they change.
+type Config struct {
+	// Machines are hub.json's machines (and those the admin page added since), each the JSON hub.json has.
+	Machines []json.RawMessage `json:"machines"`
+	// HubID, HubName, HubVersion: the hub's; a node of another build than HubVersion is flagged (and redeployed).
+	HubID      string `json:"hub_id"`
+	HubName    string `json:"hub_name"`
+	HubVersion string `json:"hub_version"`
+	// Endpoints are the hub's https addresses and MeshHubs how many hubs its mesh has: what Persona Link is told.
+	Endpoints []LinkEndpoint `json:"endpoints,omitempty"`
+	MeshHubs  int            `json:"mesh_hubs,omitempty"`
+	// TailcatDERPMapURL is hub.json's tailcat.derp_map_url.
+	TailcatDERPMapURL string `json:"tailcat_derp_map_url,omitempty"`
+	// LinkPingMS / LinkPingTimeoutMS: the heartbeats of the links and streams (0: the protocol's; tests shorten them).
+	LinkPingMS        int `json:"link_ping_ms,omitempty"`
+	LinkPingTimeoutMS int `json:"link_ping_timeout_ms,omitempty"`
+	// Mesh is the group this hub is in (nil: none).
+	Mesh *Mesh `json:"mesh,omitempty"`
+}
+
+// LinkEndpoint is one address Persona Link may use (internal/link.Endpoint).
+type LinkEndpoint struct {
+	URL  string `json:"url"`
+	Kind string `json:"kind"`
+}
+
+// Mesh is what the manager needs of the mesh group (docs/mesh.md「多条路」): whether this hub leaves its computers to
+// the center, and the members' computers the center reaches through them.
+type Mesh struct {
+	// Member: this hub is a member; its computers are connected by the center (through it), not from here.
+	Member     bool   `json:"member,omitempty"`
+	CenterName string `json:"center_name,omitempty"`
+	// SettleUntil: just started with peers, the group may have another center by now; connect nothing before.
+	SettleUntil time.Time `json:"settle_until,omitempty"`
+	// Hubs are the other hubs as this one sees them.
+	Hubs map[string]MeshHub `json:"hubs,omitempty"`
+	// Members are the records of the hubs that take this one for their center: their computers.
+	Members []MemberRecord `json:"members,omitempty"`
+	// PathSwitchMS: how long a better path must stay better before the switch.
+	PathSwitchMS int64 `json:"path_switch_ms,omitempty"`
+}
+
+// MeshHub is another hub of the group.
+type MeshHub struct {
+	Name      string `json:"name"`
+	Reachable bool   `json:"reachable"`
+	RTTMS     int    `json:"rtt_ms,omitempty"` // -1 unknown
+}
+
+// MemberRecord is a member's computers.
+type MemberRecord struct {
+	HubID    string       `json:"hub_id"`
+	Machines []RecMachine `json:"machines"`
+}
+
+// RecMachine is a computer in a hub's hub.json as that hub's record has it (and, for this hub's own, as the manager
+// says the record should have it: Entry).
+type RecMachine struct {
+	ID    string          `json:"id"`
+	Cfg   json.RawMessage `json:"cfg"`
+	Kind  string          `json:"kind"`
+	Avail bool            `json:"avail,omitempty"`
+	RTTMS int             `json:"rtt_ms,omitempty"`
+}
+
+// State is one machine as the manager has it.
+type State struct {
+	// Machine is what the apps get, but for what the hub adds (system, computer, browser).
+	Machine proto.Machine `json:"machine"`
+	// Config is the machine's entry: hub.json's, or a member's (a derived machine), as the hub gave it.
+	Config json.RawMessage `json:"config"`
+	Info   proto.NodeInfo  `json:"info"`
+	// Connected: its node is connected, a call would go out now (Machine.Online counts the warm start too: what the
+	// apps see); ConnectedAt: when the node's connection began (a new one is a reconnect).
+	Connected   bool      `json:"connected,omitempty"`
+	ConnectedAt time.Time `json:"connected_at,omitempty"`
+	// WarmUntil: shown as before the manager's restart until then, while its node reconnects.
+	WarmUntil time.Time `json:"warm_until,omitempty"`
+	Derived   bool      `json:"derived,omitempty"`
+	// Paths are its ways, for the admin page.
+	Paths []PathInfo `json:"paths,omitempty"`
+}
+
+// PathInfo is a path as the admin page and the machine list show it.
+type PathInfo struct {
+	Via    string `json:"via"`
+	HubID  string `json:"hub_id"`
+	ID     string `json:"id,omitempty"`
+	OK     bool   `json:"ok"`
+	RTTMS  int    `json:"rtt_ms,omitempty"`
+	Active bool   `json:"active,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// States is devices.state's params.
+type States struct {
+	Machines []State `json:"machines"`
+	// Absorbed: a hub.json entry whose computer another entry has → that machine's id (the id still reaches it).
+	Absorbed map[string]string `json:"absorbed,omitempty"`
+	// Entries are this hub's hub.json computers as its mesh record lists them.
+	Entries []RecMachine `json:"entries,omitempty"`
+}
+
+// NodeEvent is devices.event's and devices.notify's params.
+type NodeEvent struct {
+	MachineID string          `json:"machine_id"`
+	Event     string          `json:"event"`
+	Params    json.RawMessage `json:"params,omitempty"`
+}
+
+// NodeCall is devices.call's and devices.request's params.
+type NodeCall struct {
+	MachineID string          `json:"machine_id"`
+	Method    string          `json:"method"`
+	Params    json.RawMessage `json:"params,omitempty"`
+	// TimeoutMS bounds the call on the manager's side too, a little before the caller gives up: the manager's
+	// CodeDeadline answer comes back in time.
+	TimeoutMS int64 `json:"timeout_ms,omitempty"`
+	// Request is devices.request's key, the manager's (EventRequestEnd names it).
+	Request string `json:"request,omitempty"`
+}
+
+// RequestEnd is devices.request_end's params.
+type RequestEnd struct {
+	MachineID string `json:"machine_id"`
+	Request   string `json:"request"`
+}
+
+// Connected is devices.connected's params.
+type Connected struct {
+	MachineID   string    `json:"machine_id"`
+	ConnectedAt time.Time `json:"connected_at"`
+}
+
+// ConnectedReply is devices.connected's answer.
+type ConnectedReply struct {
+	// Configure is added to the node.configure the manager sends (key → value).
+	Configure map[string]json.RawMessage `json:"configure,omitempty"`
+	// Calls go to the node right after it, in order.
+	Calls []NodeCall `json:"calls,omitempty"`
+}
+
+// ConnectorCred is a computer of kind service's pin and credential (the token in the clear: the bus is the manager's).
+type ConnectorCred struct {
+	MachineID string `json:"machine_id"`
+	FP        string `json:"fp"`
+	Token     string `json:"token"`
+	Version   string `json:"version,omitempty"`
+}
+
+// PairConnector is devices.pair_connector's params.
+type PairConnector struct {
+	Link      string `json:"link"`
+	MachineID string `json:"machine_id"`
+	Address   string `json:"address,omitempty"`
+	Proxy     string `json:"proxy,omitempty"`
+}
+
+// Routes are the apps' routes on machines the manager answers itself (the hub relays them as http.request, as the
+// assistant's): its own settings of each machine and what only it can do.
+var Routes = []string{
+	"POST /api/v1/machines/{mid}/reconnect",
+	"PUT /api/v1/machines/{mid}/engine",
+	"GET /api/v1/machines/{mid}/herdr",
+	"PUT /api/v1/machines/{mid}/herdr",
+	"POST /api/v1/machines/{mid}/herdr/start",
+	"POST /api/v1/machines/{mid}/deploy",
+	"GET /api/v1/machines/{mid}/claude-dirs",
+	"PUT /api/v1/machines/{mid}/claude-dirs/blocked",
+}
+
+// Error codes that cross the bus (the node's own coded errors go through as they are).
+const (
+	CodeNoDevice       = "no_device"       // the manager has no such machine
+	CodeMachineOffline = "machine_offline" // its node is not connected
+	CodeNodeClosed     = "node_closed"     // the connection to its node dropped during the call
+	CodeDeadline       = "deadline"        // the call's time ran out with the node on it (it may have done it)
+)

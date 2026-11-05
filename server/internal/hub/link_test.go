@@ -22,16 +22,18 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// newLinkHub is a hub with a link machine "laptop" and an ssh machine "box", served over TLS as on the public port.
+// newLinkHub is a hub with a link machine "laptop" and an ssh machine "box", served over TLS as on the public port,
+// and the manager that connects them (Persona Link dials the hub, which relays it to the manager).
 func newLinkHub(t *testing.T) (*Hub, *Machine, *httptest.Server) {
+	h, _, srv := newLinkHubManaged(t)
+	return h, mirror(t, h, "laptop"), srv
+}
+
+func newLinkHubManaged(t *testing.T) (*Hub, *testManager, *httptest.Server) {
 	t.Helper()
 	h := newTestHub(t)
 	h.store = newPairStore()
-	for _, mc := range []MachineConfig{{ID: "laptop", Name: "笔记本", Kind: "link"}, {ID: "box", Name: "台式机", Kind: "ssh"}} {
-		m := newMachine(h, mc)
-		h.machines = append(h.machines, m)
-		h.byID[mc.ID] = m
-	}
+	h.cfg.Machines = []MachineConfig{{ID: "laptop", Name: "笔记本", Kind: "link"}, {ID: "box", Name: "台式机", Kind: "ssh"}}
 	srv := httptest.NewTLSServer(h.routes())
 	t.Cleanup(srv.Close)
 	port := srv.Listener.Addr().(*net.TCPAddr).Port
@@ -40,10 +42,18 @@ func newLinkHub(t *testing.T) (*Hub, *Machine, *httptest.Server) {
 	h.public.endpoints = []Endpoint{{URL: srv.URL, Kind: "lan", Port: port, Scheme: "https"}}
 	h.public.mu.Unlock()
 	h.cfg.PublicURL = "http://127.0.0.1:" + strconv.Itoa(port)
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	go h.byID["laptop"].run(ctx)
-	return h, h.byID["laptop"], srv
+	mgr := startTestManager(t, h, srv, map[string]func(context.Context) (net.Conn, error){
+		"box": func(context.Context) (net.Conn, error) { return nil, errors.New("no ssh in tests") }})
+	mirror(t, h, "laptop")
+	return h, mgr, srv
+}
+
+// linkVersion is the version of the machine's live link as the hub shows it ("" without one).
+func linkVersion(m *Machine) string {
+	if l := m.snapshot().Link; l != nil {
+		return l.Version
+	}
+	return ""
 }
 
 func linkToken(t *testing.T, h *Hub, machine string) (token, id string) {
@@ -168,6 +178,7 @@ func pid(t *testing.T, m *Machine) int {
 
 func TestLinkMachineComesOnlineThroughJarvisLink(t *testing.T) {
 	h, m, srv := newLinkHub(t)
+	h.linkPing = [2]time.Duration{200 * time.Millisecond, 2 * time.Second} // the hub's heartbeat on the link
 	token, _ := linkToken(t, h, "laptop")
 	target := fakeResidentNode(t)
 	cfg := linkConfig(h, srv, token)
@@ -183,6 +194,11 @@ func TestLinkMachineComesOnlineThroughJarvisLink(t *testing.T) {
 	if l := m.snapshot().Link; l == nil || l.Version != "test-build" || l.Address != srv.URL {
 		t.Fatalf("machine list shows link %+v", l)
 	}
+	// Its round trip is the hub's heartbeat's (devices.link_rtt): the paths are compared by it.
+	eventually(t, 5*time.Second, "the link's round trip", func() bool {
+		r := m.snapshot().Route
+		return r != nil && r.RTTMS != nil && *r.RTTMS > 0
+	})
 	// The hub's endpoints replaced the ones from pairing; the one added on the laptop stayed.
 	eventually(t, 5*time.Second, "endpoints saved", func() bool {
 		c, err := link.Load(path)
@@ -262,16 +278,13 @@ func TestLinkReplacedAndRevoked(t *testing.T) {
 	waitStatus(t, statuses, "being replaced", func(s link.Status) bool {
 		return s.State == "waiting" && strings.Contains(s.Error, "又连了一条")
 	})
-	eventually(t, 3*time.Second, "the new link in place", func() bool {
-		l := m.currentLink()
-		return l != nil && l.version == "manual"
-	})
+	eventually(t, 3*time.Second, "the new link in place", func() bool { return linkVersion(m) == "manual" })
 
 	h.revoked(id)
 	if code := closedWith(t, c); code != link.CloseRevoked {
 		t.Fatalf("revoked link closed with %d", code)
 	}
-	eventually(t, 3*time.Second, "no link", func() bool { return m.currentLink() == nil })
+	eventually(t, 3*time.Second, "no link", func() bool { return linkVersion(m) == "" })
 }
 
 func TestLinkRefusesWhatItShouldNot(t *testing.T) {
@@ -316,7 +329,7 @@ func TestLinkRefusesWhatItShouldNot(t *testing.T) {
 
 func TestLinkHeartbeatDropsADeadLink(t *testing.T) {
 	h, m, srv := newLinkHub(t)
-	h.linkPing = [2]time.Duration{50 * time.Millisecond, 50 * time.Millisecond}
+	h.linkPing = [2]time.Duration{50 * time.Millisecond, 50 * time.Millisecond} // the hub's side of the link
 	token, _ := linkToken(t, h, "laptop")
 	c, _, err := dialLink(t, srv, token)
 	if err != nil {
@@ -324,8 +337,8 @@ func TestLinkHeartbeatDropsADeadLink(t *testing.T) {
 	}
 	defer c.CloseNow()
 	hello(t, c, "laptop") // and never read again: pongs are only sent while reading
-	eventually(t, 3*time.Second, "link up", func() bool { return m.currentLink() != nil })
-	eventually(t, 3*time.Second, "dead link dropped", func() bool { return m.currentLink() == nil })
+	eventually(t, 3*time.Second, "link up", func() bool { return linkVersion(m) != "" })
+	eventually(t, 3*time.Second, "dead link dropped", func() bool { return linkVersion(m) == "" })
 	// The link is gone once its context is cancelled; the machine says why a moment later (dropLink).
 	eventually(t, 3*time.Second, "the machine says why", func() bool { return strings.Contains(m.snapshot().Error, "no pong") })
 }
@@ -393,6 +406,12 @@ func TestLinkPairing(t *testing.T) {
 func TestLinkTellsWhatTheHubIsCalled(t *testing.T) {
 	h, _, srv := newLinkHub(t)
 	h.cfg.Name = "家里"
+	h.sendLinkEndpoints() // as the admin page does when the name changes: the manager tells the links
+	eventually(t, 5*time.Second, "the manager has the new name", func() bool {
+		h.devices.mu.Lock()
+		defer h.devices.mu.Unlock()
+		return strings.Contains(string(h.devices.sent), "家里")
+	})
 	token, _ := linkToken(t, h, "laptop")
 	statuses, path, _ := runLink(t, linkConfig(h, srv, token), fakeResidentNode(t))
 	st := waitStatus(t, statuses, "the hub's name", func(s link.Status) bool { return s.State == "connected" && s.HubName != "" })
@@ -435,4 +454,40 @@ func TestHubName(t *testing.T) {
 	if h.meshHubCount() != 1 {
 		t.Fatal("a hub alone is a mesh of one")
 	}
+}
+
+// Right after the hub started its listeners are up before the manager is: a Persona Link that comes then waits for the
+// manager a little instead of being turned away.
+func TestLinkWaitsForTheManagerWhileTheHubStarts(t *testing.T) {
+	h := newTestHub(t)
+	h.store = newPairStore()
+	h.cfg.Machines = []MachineConfig{{ID: "laptop", Name: "笔记本", Kind: "link"}}
+	h.startDevices(context.Background())
+	srv := httptest.NewTLSServer(h.routes())
+	t.Cleanup(srv.Close)
+	token, _ := linkToken(t, h, "laptop")
+	type dialed struct {
+		c    *websocket.Conn
+		resp *http.Response
+		err  error
+	}
+	got := make(chan dialed, 1)
+	go func() {
+		c, resp, err := dialLink(t, srv, token)
+		got <- dialed{c, resp, err}
+	}()
+	select {
+	case d := <-got:
+		t.Fatalf("answered before the manager was there: %v %v", d.resp, d.err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	startTestManager(t, h, srv, nil)
+	d := <-got
+	if d.err != nil {
+		t.Fatalf("the link was turned away: %v %v", d.resp, d.err)
+	}
+	defer d.c.CloseNow()
+	hello(t, d.c, "laptop")
+	m := mirror(t, h, "laptop")
+	eventually(t, 5*time.Second, "the link up at the manager", func() bool { return linkVersion(m) == "manual" })
 }

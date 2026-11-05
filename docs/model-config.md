@@ -57,8 +57,8 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 它照旧用 hub 的模型配置算（`app.call models.apply agent.new`：分类的选择、这一次选的启动器 / 模型 / 思考强度盖在上面、执行指纹），所以 App 看到的生效结果、保存和继承都不变；
 模型配置这一块挪进管理者之前，解析本身还是 hub 的代码。标签名（用途 `agent.title`）、会话分诊（`agent.triage`）也由管理者经 `models.complete` / `models.json` 调。
 
-管理者没连着时 hub 先等它一会儿（hub 刚起来时最多到起来后 60 秒，它刚断开时 10 秒），等不到就自己套「模型配置 › Agents」（`applyModel`，结果和管理者算的一样，只是不起标签名）；
-续上的会话也一样。AI 分身执行经 `assistant.start` 开在助手那边，本来就是它解析；飞书机器人卡片上开的 Agent（`hub/bots_cards.go`）现在还是 hub 自己按 `agent.new` 解析、经 `agents.tab_name` 要标签名（渠道挪进管理者时一起挪）。
+管理者没连着时 hub 只在自己刚起来、它还没连上过的时候等它（最多到起来后 60 秒）；它连上过、现在不在就不等：电脑是管理者连的（`docs/machines.md`「谁连电脑」），
+没有它新建和续上都开不了，回 `503 assistant_offline`（以前 hub 自己套「模型配置 › Agents」照样开）。AI 分身执行经 `assistant.start` 开在助手那边，本来就是它解析；飞书机器人卡片上开的 Agent 也在助手那边（渠道是它的）。
 
 ## 新建 Agent 选模型（#794）
 

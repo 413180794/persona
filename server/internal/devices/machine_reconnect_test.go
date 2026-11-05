@@ -1,4 +1,4 @@
-package hub
+package devices
 
 import (
 	"context"
@@ -47,7 +47,7 @@ func TestMachineReconnectReplacesClosedPeer(t *testing.T) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("JARVIS_TEST_PEER_BINARY", bin)
 	t.Setenv("JARVIS_TEST_MACHINE_PEER", "1")
-	m := newMachine(newTestHub(t), MachineConfig{ID: "test-machine", Kind: "ssh", SSHHost: "test-node"})
+	m := newMachine(newTestDevices(t), MachineConfig{ID: "test-machine", Kind: "ssh", SSHHost: "test-node"})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); m.run(ctx) }()

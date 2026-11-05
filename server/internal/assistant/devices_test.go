@@ -1,0 +1,52 @@
+package assistant
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"testing"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/bus"
+)
+
+// fakeDevices is the manager's own device layer: it records the node calls it got.
+type fakeDevices struct{ calls []string }
+
+func (f *fakeDevices) Hello(json.RawMessage) {}
+func (f *fakeDevices) BusUp()                {}
+func (f *fakeDevices) Request(context.Context, string, json.RawMessage) (any, bool, error) {
+	return nil, false, nil
+}
+func (f *fakeDevices) Event(string, json.RawMessage) bool     { return false }
+func (f *fakeDevices) Handler(next http.Handler) http.Handler { return next }
+func (f *fakeDevices) Has(id string) bool                     { return id == "box" }
+func (f *fakeDevices) SetKeep(map[string][]string)            {}
+func (f *fakeDevices) CallNode(_ context.Context, id, method string, _ json.RawMessage) (json.RawMessage, error) {
+	f.calls = append(f.calls, id+" "+method)
+	return json.RawMessage(`{"ok":true}`), nil
+}
+
+// The assistant's calls to a node go straight to its own device layer; what the hub answers (its lists, following a
+// conversation, a send under the apps' once-only guard) and machines it does not have still go to the hub.
+func TestDeviceCallsGoToTheDevicesFirst(t *testing.T) {
+	d := &fakeDevices{}
+	b := NewBusHub(BusOptions{Hub: "http://127.0.0.1:1", Token: "jb_x", Devices: d})
+	ctx := context.Background()
+	for _, method := range []string{DeviceSessionSend, DeviceSessionStart, DeviceSessionItems, DeviceAssistantSend} {
+		if out, err := b.DeviceCall(ctx, DeviceCall{Device: "box", Method: method}); err != nil || string(out) != `{"ok":true}` {
+			t.Fatalf("%s: %s %v", method, out, err)
+		}
+	}
+	for _, c := range []DeviceCall{{Device: "box", Method: DeviceSessionsList}, {Device: "box", Method: assistantwire.DeviceSessionFollow},
+		{Device: "box", Method: assistantwire.DeviceSessionSendOnce}, {Device: DeviceAll, Method: DeviceDevicesList},
+		{Device: "elsewhere", Method: DeviceSessionSend}} {
+		if _, err := b.DeviceCall(ctx, c); !errors.Is(err, bus.ErrOffline) { // to the hub, which is not there
+			t.Fatalf("%s %s went to %v", c.Device, c.Method, err)
+		}
+	}
+	if len(d.calls) != 4 {
+		t.Fatalf("the devices got %v", d.calls)
+	}
+}
