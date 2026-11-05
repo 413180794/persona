@@ -68,6 +68,8 @@ var funcs = template.FuncMap{
 		return strings.NewReplacer("&", "&amp;", `"`, "&quot;", "<", "&lt;", ">", "&gt;").Replace(s)
 	},
 	"join": strings.Join,
+	// ctx is text for inside a context block, unable to close it (ContextBody).
+	"ctx": ContextBody,
 	// indent puts by before every line and ends with one newline.
 	"indent": func(by, s string) string {
 		lines := strings.Split(strings.TrimRight(s, "\n"), "\n")

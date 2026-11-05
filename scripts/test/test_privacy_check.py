@@ -86,6 +86,34 @@ class NpmSourceTests(unittest.TestCase):
                 self.assertFalse(pc.npm_source_allowed(source))
 
 
+class CamelJoinTests(unittest.TestCase):
+    # A made-up listed word that two ordinary words spell when joined in camel case (#3819).
+    WORD = "lamp" + "post"
+
+    def test_a_camel_join_is_not_the_word(self):
+        for line in ['static let lampPost = "light.max"', "case .open: Theme.Icon.lampPost", "LampPost.shared"]:
+            with self.subTest(line=line):
+                self.assertEqual(pc.problems(line, [self.WORD]), [])
+
+    def test_the_word_itself_is_still_found(self):
+        for line in ["deploy to lamppost", "host LAMPPOST-2", "Lamppost team", "myLamppost", "lamp" "post.example"]:
+            with self.subTest(line=line):
+                self.assertEqual(pc.problems(line, [self.WORD]), [self.WORD])
+
+    def test_one_plain_use_beside_a_camel_join_is_found(self):
+        self.assertEqual(pc.problems("lampPost and lamppost", [self.WORD]), [self.WORD])
+
+    def test_a_word_listed_with_its_camel_step_matches_every_casing(self):
+        listed = "Lamp" + "Post"
+        for line in ["lampPost", "lamppost", "LAMPPOST"]:
+            with self.subTest(line=line):
+                self.assertEqual(pc.problems(line, [listed]), [listed])
+
+    def test_words_with_other_characters_are_unchanged(self):
+        host = "lamp" + "-post"
+        self.assertEqual(pc.problems("at lamp-Post", [host]), [host])
+
+
 class LoopbackTests(unittest.TestCase):
     def test_persona_and_legacy_config_words_are_both_scanned(self):
         with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:

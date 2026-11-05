@@ -9,4 +9,4 @@
 {{else if eq .Kind "moment"}}类型：公司圈（飞书 Moments，公司内的公开动态，类似朋友圈）里有人评论了用户的帖子、回复了用户的评论或 @ 了用户；多数是闲聊和捧场，有人在问用户问题、要用户回应时才需要用户
 {{else if eq .Kind "mail"}}{{if .MailDirect}}类型：邮件（直接发给用户）
 {{else}}类型：邮件（抄送、群发或邮件列表）
-{{end}}{{end}}{{.Context}}
+{{end}}{{end}}{{ctx .Context}}

@@ -15,7 +15,8 @@ Not private: loopback addresses (127.0.0.0/8, ::1, also with a port or as a URL'
 CLAUDE.local.md holds one, the documentation and IETF protocol ranges (192.0.0.0/24), an `xcode` in /Applications,
 values config.example.json ships as defaults, the repo's own Go module path (it names the
 GitHub owner),
-CLAUDE.local.md spans that only name repo files, commands or config keys, and in site/ the contact address and domain
+CLAUDE.local.md spans that only name repo files, commands or config keys, a listed word of one case run where the text
+spells it only across a camel-case join ("fooBar", only_in_camel_joins), and in site/ the contact address and domain
 the App Store and the OAuth consent screen publish anyway.
 """
 import ipaddress, json, os, re, subprocess, sys
@@ -197,6 +198,19 @@ REAL_TLDS = {"com", "net", "org", "io", "cn", "dev", "app", "ai", "co", "me", "c
 PUBLIC_DIRS = ("site/",)
 
 
+CAMEL_JOIN = re.compile(r"[a-z][A-Z]")
+
+
+def only_in_camel_joins(text, w):
+    """Whether every place a word of one case run (no lowercase → uppercase step of its own) shows up in `text` has such
+    a step inside it: two ordinary words joined into an identifier ("fooBar"), which happened to spell a listed word and
+    flagged a design token (#3819). A word written with the step ("FooBar") is matched as before, camel-cased too."""
+    if not w.isalpha() or CAMEL_JOIN.search(w):
+        return False
+    hits = [m.group(0) for m in re.finditer(re.escape(w), text, re.I)]
+    return bool(hits) and all(CAMEL_JOIN.search(h) for h in hits)
+
+
 def problems(text, words, emails=True):
     found = []
     low = text.lower()
@@ -206,7 +220,7 @@ def problems(text, words, emails=True):
         if len(w) < 6 and w.isalnum():
             if re.search(r"(?<![a-z0-9])" + re.escape(w.lower()) + r"(?![a-z0-9])", low):
                 found.append(w)
-        elif w.lower() in low:
+        elif w.lower() in low and not only_in_camel_joins(text, w):
             found.append(w)
     for m in IPV4.finditer(text):
         try:

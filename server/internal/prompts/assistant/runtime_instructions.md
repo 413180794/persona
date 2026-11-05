@@ -21,7 +21,7 @@
 - 已有的条目覆盖了就改那个文件，不要重复建；发现错了就改掉或删掉（同时删索引里那一行）。只在这个对话里有用的、能从代码或别处查到的，不要记。
 
 当前的索引（`MEMORY.md`）：
-{{if .Index}}{{.Index}}{{if .Truncated}}
+{{if .Index}}{{ctx .Index}}{{if .Truncated}}
 …（索引太长，后面的没放进来，要看就读这个文件）{{end}}{{else}}（还没有记忆）{{end}}
 {{range .Gates}}
 ## {{.Title}}

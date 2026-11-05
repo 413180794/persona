@@ -2,10 +2,10 @@
 {{or .Owner "用户"}}在飞书里私聊 Persona 机器人发来这条消息。这一轮的最终回答会以机器人的身份发回飞书（Markdown 卡片），多半是在电脑或手机的飞书里看：结论先行、短一些，不用再 notify_user。需要确认的照常 ask_user，飞书里能直接点。
 </jarvis-context>
 {{end}}{{with .Quote}}<jarvis-context kind="context" title="引用的消息" url="">
-{{.Who}}：{{.Text}}
+{{ctx .Who}}：{{ctx .Text}}
 </jarvis-context>
 {{end}}{{with .Forward}}<jarvis-context kind="context" title="转发的聊天记录" url="">
-{{.}}
+{{ctx .}}
 </jarvis-context>
 {{end}}{{.Text}}{{if .Files}}{{if not (blank .Text)}}
 

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -241,18 +240,10 @@ func (s *Service) todoDecisionsContext(ctx context.Context, todoID string) strin
 	return prompts.RenderTodoDecisions(d)
 }
 
-// closingTag is anything a reader of the message could take for the end of a <jarvis-context> or <persona-context>
-// (the apps match it loosely: case, spaces; either name, #3182).
-var closingTag = regexp.MustCompile(`(?i)<\s*/\s*(?:jarvis|persona)-context\s*>`)
-
-// contextText keeps a text from closing the context block it is put in (also when taking one out leaves another,
-// "</jarvis</jarvis-context>-context>"), and indents its later lines under the item, so a text cannot pass for a
+// contextText keeps a text from closing the context block it is put in (prompts.ContextBody), and indents its later lines under the item, so a text cannot pass for a
 // decision of its own ("\n2. 选了：…").
 func contextText(s string) string {
-	for closingTag.MatchString(s) {
-		s = closingTag.ReplaceAllString(s, "")
-	}
-	return strings.ReplaceAll(strings.TrimSpace(s), "\n", "\n      ")
+	return strings.ReplaceAll(strings.TrimSpace(prompts.ContextBody(s)), "\n", "\n      ")
 }
 
 // withTodoDecisions puts the todo's decisions before text handed to an agent for it; text as it is without any.

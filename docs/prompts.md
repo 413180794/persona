@@ -100,8 +100,9 @@ node 的 `gateTools` 经 `runtime.sock` 交给运行时（`node/assistant_runtim
   同一个 Agent 的几段（主体、可选段、列表）在模板里用 `{{if}}` / `{{range}}` / `{{template}}` 组合，不在 Go 里拼。
 - **文件最后一个换行不算**（编辑器总会加）。提示词本身要以换行结尾，就在最后留一个空行。`TestFilesEndWithANewline` 要求每个文件以换行结尾。
 - 默认值写在模板里（`{{or .Owner "用户"}}`、没写要求时的那句话），不在调用方。各提示词的称呼默认不一样（「用户」「我」「你」），照原样保留。
-- 模板函数（`prompts.go`）：`attr`（XML 属性转义）、`join`、`indent`、`blank`（只有空白）、`first`（切片的前 n 个）。
+- 模板函数（`prompts.go`）：`attr`（XML 属性转义）、`ctx`（放进 `<jarvis-context>` / `<persona-context>` 块里的正文，见下一条）、`join`、`indent`、`blank`（只有空白）、`first`（切片的前 n 个）。
   截断这类整理数据的事（`clip`、`clipRunes`、`oneLine`）在调用方做，传进来的已经是要放进去的值。
+- **块里放别人的文字一律经 `ctx`**（#3754）：引用、转发的消息、收件箱条目正文、知识库摘要、快照的各节、记忆索引都可能来自别人（或由别人的话转写），正文里的结束标签会让块提前闭合，后面的话变成用户自己说的。`ctx`（`ContextBody`）先删一遍结束标签，删出来的再把 `<` 写成 `&lt;`，大小写不敏感，斜杠两边和 `>` 前允许空白（读取端都只认字面的 `</jarvis-context>` / `</persona-context>`，这是它们的超集）。
 - 包初始化时解析全部模板（`template.Must`，`missingkey=error`）：语法错误启动即崩，测试里先暴露；渲染出错（字段名写错）直接 panic，
   不会把半截提示词交给模型。`TestEveryTemplateIsUsed` 抓没人用的模板。
 - 提示词里要写字面的 `{{`：`{{"{{"}}`。

@@ -3,13 +3,13 @@
 {{- if .Summary}}
 
 上一段压缩时的摘要：
-{{.Summary}}
+{{ctx .Summary}}
 {{- end}}
 {{- if .Recent}}
 
 {{if .Summary}}摘要之后{{else}}上一段最后{{end}}的几条消息：
 {{- range .Recent}}
-{{if eq .Role "user"}}用户{{else}}你{{end}}：{{.Text}}
+{{if eq .Role "user"}}用户{{else}}你{{end}}：{{ctx .Text}}
 {{- end}}
 {{- end}}
 {{- if and (not .Summary) (not .Recent)}}
