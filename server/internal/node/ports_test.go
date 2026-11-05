@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -341,4 +342,57 @@ func portOf(t *testing.T, u string) int {
 		t.Fatal(err)
 	}
 	return p
+}
+
+// Two panes, a server each: one scan asks each server once, and the next asks neither (docs/ports.md: results are
+// kept by pid:port until the process or the port goes). A pane's own pass must not drop another pane's results.
+func TestProbePanesKeepsEveryPanesProbes(t *testing.T) {
+	var hits [2]atomic.Int32
+	var ports [2]int
+	for i := range hits {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits[i].Add(1)
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprintf(w, "<title>pane %d</title>", i)
+		}))
+		t.Cleanup(srv.Close)
+		ports[i] = portOf(t, srv.URL)
+	}
+	n := &Node{}
+	found := map[string][]listener{
+		"w1:p1": {{pid: 101, port: ports[0], addr: "127.0.0.1"}},
+		"w1:p2": {{pid: 102, port: ports[1], addr: "127.0.0.1"}},
+	}
+	ctx := context.Background()
+	for range 2 {
+		got := n.probePanes(ctx, found)
+		if len(got["w1:p1"]) != 1 || len(got["w1:p2"]) != 1 {
+			t.Fatalf("ports = %+v", got)
+		}
+	}
+	if a, b := hits[0].Load(), hits[1].Load(); a != 1 || b != 1 {
+		t.Fatalf("two scans asked the servers %d and %d times, want once each", a, b)
+	}
+
+	// The second pane's server gone: its result goes, the first pane's stays.
+	delete(found, "w1:p2")
+	n.probePanes(ctx, found)
+	n.ports.mu.Lock()
+	_, kept := n.ports.probes["101:"+strconv.Itoa(ports[0])]
+	_, stale := n.ports.probes["102:"+strconv.Itoa(ports[1])]
+	n.ports.mu.Unlock()
+	if !kept || stale {
+		t.Fatalf("after the second pane went: first kept %v, second kept %v", kept, stale)
+	}
+	// No listener found anywhere: nothing is kept.
+	n.probePanes(ctx, nil)
+	n.ports.mu.Lock()
+	left := len(n.ports.probes)
+	n.ports.mu.Unlock()
+	if left != 0 {
+		t.Fatalf("%d results kept with no listener left", left)
+	}
+	if hits[0].Load() != 1 {
+		t.Fatalf("the first server was asked %d times", hits[0].Load())
+	}
 }

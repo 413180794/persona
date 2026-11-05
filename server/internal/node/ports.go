@@ -142,12 +142,7 @@ func (n *Node) scanPorts(ctx context.Context) (changed bool) {
 		n.logger.Printf("ports: scanning again")
 		n.ports.scanErr = ""
 	}
-	next := map[string][]proto.Port{}
-	for pane, ls := range found {
-		if ps := n.httpPorts(ctx, ls); len(ps) > 0 {
-			next[pane] = ps
-		}
-	}
+	next := n.probePanes(ctx, found)
 	n.ports.mu.Lock()
 	defer n.ports.mu.Unlock()
 	changed = portsKey(next) != portsKey(n.ports.byPane)
@@ -196,12 +191,31 @@ func portsKey(m map[string][]proto.Port) string {
 	return b.String()
 }
 
+// probePanes is each pane's listeners that answer HTTP. The results of asking are kept for every pid:port this scan
+// found, in any pane; the others go (a process gone, or no longer listening there).
+func (n *Node) probePanes(ctx context.Context, found map[string][]listener) map[string][]proto.Port {
+	next := map[string][]proto.Port{}
+	live := map[string]bool{}
+	for pane, ls := range found {
+		if ps := n.httpPorts(ctx, ls, live); len(ps) > 0 {
+			next[pane] = ps
+		}
+	}
+	n.ports.mu.Lock()
+	for key := range n.ports.probes {
+		if !live[key] {
+			delete(n.ports.probes, key)
+		}
+	}
+	n.ports.mu.Unlock()
+	return next
+}
+
 // httpPorts keeps the listeners that answer HTTP, one per port, with their titles; each pid:port is asked once
-// (again while it has not answered).
-func (n *Node) httpPorts(ctx context.Context, ls []listener) []proto.Port {
+// (again while it has not answered). It adds the pid:ports it saw to live.
+func (n *Node) httpPorts(ctx context.Context, ls []listener, live map[string]bool) []proto.Port {
 	var out []proto.Port
 	seen := map[int]bool{}
-	live := map[string]bool{}
 	for _, l := range ls {
 		if seen[l.port] {
 			continue
@@ -228,13 +242,6 @@ func (n *Node) httpPorts(ctx context.Context, ls []listener) []proto.Port {
 		seen[l.port] = true
 		out = append(out, proto.Port{Port: l.port, Addr: l.addr, PID: l.pid, Process: l.cmd, Title: pr.title})
 	}
-	n.ports.mu.Lock()
-	for key := range n.ports.probes { // a process gone, or no longer listening there
-		if !live[key] {
-			delete(n.ports.probes, key)
-		}
-	}
-	n.ports.mu.Unlock()
 	slices.SortFunc(out, func(a, b proto.Port) int { return a.Port - b.Port })
 	return out
 }
