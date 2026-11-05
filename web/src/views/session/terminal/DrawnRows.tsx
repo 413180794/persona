@@ -4,6 +4,8 @@
 import { memo, useMemo } from "react";
 import type { TerminalPalette } from "../../../lib/terminal";
 import { foldRow, rowKey, runCss, type CellRow, type Run } from "../../../lib/terminal-cells";
+import type { FindMarks } from "../../../lib/terminal-search";
+import { cx } from "../../../ui/atoms";
 
 const PALETTE_ORDER: (keyof TerminalPalette)[] = [
   "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
@@ -33,25 +35,30 @@ function Runs({ runs }: { runs: Run[] }) {
   );
 }
 
-type RowProps = { row: CellRow; sig: string; cursor?: number };
-/** Rows are read again on every write: one draws again only when its text, styles or cursor changed. */
-const same = (a: RowProps, b: RowProps) => a.sig === b.sig && a.cursor === b.cursor;
+type Mark = "hit" | "current";
+type RowProps = { row: CellRow; sig: string; cursor?: number; mark?: Mark };
+/** Rows are read again on every write: one draws again only when its text, styles or cursor changed (or its search mark). */
+const same = (a: RowProps, b: RowProps) => a.sig === b.sig && a.cursor === b.cursor && a.mark === b.mark;
+
+/** The search's mark on a row (lib/terminal-search.ts): a tint on rows with a match, and a ring on the current one. */
+const markClass = (m?: Mark) => (m === "current" ? "bg-accent-tint shadow-[inset_0_0_0_1px_var(--accent)]" : m === "hit" ? "bg-orange-tint" : "");
 
 /** One row at the pane's width (no folding: the panel scrolls sideways). */
-const PlainRow = memo(function PlainRow({ row }: RowProps) {
+const PlainRow = memo(function PlainRow({ row, mark }: RowProps) {
   return (
-    <div className="min-h-[1.3em] whitespace-pre">
+    <div className={cx("min-h-[1.3em] whitespace-pre", markClass(mark))} data-find={mark}>
       <Runs runs={row.runs} />
     </div>
   );
 }, same);
 
 /** One row folded at the panel's width: its text wraps under its indent; its padding is cut at the edge. */
-const FoldedRow = memo(function FoldedRow({ row, cursor }: RowProps) {
+const FoldedRow = memo(function FoldedRow({ row, cursor, mark }: RowProps) {
   const f = foldRow(row, cursor);
   return (
     <div
-      className="min-h-[1.3em] overflow-hidden whitespace-pre-wrap [overflow-wrap:anywhere]"
+      data-find={mark}
+      className={cx("min-h-[1.3em] overflow-hidden whitespace-pre-wrap [overflow-wrap:anywhere]", markClass(mark))}
       style={f.indent ? { paddingLeft: `${f.indent}ch`, textIndent: `-${f.indent}ch` } : undefined}
     >
       <Runs runs={f.body.runs} />
@@ -73,21 +80,27 @@ export function DrawnRows({
   fold,
   cursor,
   fromEnd,
+  marks,
+  offset = 0,
 }: {
   rows: CellRow[];
   fold: boolean;
   cursor?: { row: number; col: number } | null;
   fromEnd?: boolean;
+  /** The search's rows, numbered over all the page holds; these rows start at `offset` (the screen follows the history). */
+  marks?: FindMarks | null;
+  offset?: number;
 }) {
   const sigs = useMemo(() => rows.map(rowKey), [rows]);
   return (
     <>
       {rows.map((row, i) => {
         const key = fromEnd ? rows.length - i : i;
+        const mark: Mark | undefined = marks?.current === offset + i ? "current" : marks?.rows.has(offset + i) ? "hit" : undefined;
         return fold ? (
-          <FoldedRow key={key} row={row} sig={sigs[i]} cursor={cursor?.row === i ? cursor.col : undefined} />
+          <FoldedRow key={key} row={row} sig={sigs[i]} cursor={cursor?.row === i ? cursor.col : undefined} mark={mark} />
         ) : (
-          <PlainRow key={key} row={row} sig={sigs[i]} />
+          <PlainRow key={key} row={row} sig={sigs[i]} mark={mark} />
         );
       })}
     </>

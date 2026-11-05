@@ -35,6 +35,9 @@
   验证要经 hub 订阅拿到完整终端帧，不能只看 WebSocket 握手成功或会话列表带 `pane_id`。
   Hub 的 `decorated` 也会重新判断 `assistant`，手机 Agents 又按这个字段过滤；只修 node 能打开终端，但列表仍会消失。
   Hub 的列表、发送和重命名分类要共用含 `PaneID` 的判断，验收同时检查 HTTP、普通 WebSocket 和增量 WebSocket 快照中的 `assistant:false`，无窗格助手仍为 true。
-
+- `@xterm/addon-search` 带 decorations（才有匹配数和 `onDidChangeResults`）要 `allowProposedApi: true`，否则 `findNext` 抛错；它在比较前先把新选项写进自己的状态，
+  所以只切「区分大小写」、搜索词没变时不会重新算高亮，新搜索前先 `clearDecorations()`（`docs/terminal.md` 第二十节）。
+- xterm 有焦点时会吞掉它处理的按键（`stopPropagation`）：页面上 window 级的 Esc / 方向键监听（弹出菜单、浮层）收不到，要先让 xterm 失焦；
+  接管时 Ctrl+F 是程序的（readline、vim），查找快捷键不能抢它。
 - 网页终端拖放（#2333）：`dragover` 里把 `dropEffect` 设成 `none` 浏览器就不再触发 `drop`，放下时的提示（「接管终端后才能粘贴文件」）出不来、只显示禁止光标。要在放下时说明原因的拖动（文件面板的条目）`dragover` 照样给 `copy`，由 `drop` 决定敲不敲。
   独立终端页上文件面板和终端并排时，终端只剩约 100px 宽会一直停在「正在连接终端」（算不出可用的网格）：端到端用 1800px 宽的窗口。

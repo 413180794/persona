@@ -568,3 +568,51 @@ hub：`GET /api/v1/machines/{mid}/panes`，feature `terminal_panes`。
 `TestPaneRoutesAreNotForAnswerOnlyDevices`（hub）；`web/src/lib/terminals.test.ts`。截图用 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 的假 hub（编造的窗格树，`pane:` 地址是一个编造的 zsh）。
 真 herdr 上用 `PERSONA_LIVE_PANES=1 go test -tags herdrlive -run TestLivePanes ./internal/node/`（`panes_live_test.go`）：列出它的空间 / 标签页 / 窗格（快照里确实有没有 Agent 的窗格，herdr 0.9.5），
 用 `tab create --no-focus` 临时开一个标签页、按地址 `terminal.watch` 拿到帧、再关掉这个标签页；不碰已有的窗格，没有往里打字。
+
+## 二十、网页版终端的细节：网址、右键菜单、搜索、光标选项、焦点（2026-11-05，#2331）
+
+对照 Moshi 网页版补的一批交互，代码都在网页：`web/src/lib/terminal-details.ts`、`web/src/lib/terminal-search.ts`（纯逻辑，有测试）、`web/src/views/session/terminal/`（`feed.ts`、`FindBar.tsx`、`focus.ts`、`TerminalOptions.tsx`）、`TerminalPanel.tsx`。协议和 hub / node 没有改动。
+
+### 能搜到什么
+
+xterm 在网页里 `scrollback: 0`（herdr 在原地重画网格，没有东西会滚进 xterm 的历史），所以搜索分两处找：
+
+| 状态 | 搜得到 | 怎么找 |
+| --- | --- | --- |
+| 接管 | 当前屏幕（面板的列 × 行） | `@xterm/addon-search`，匹配用边框标出、当前这个选中 |
+| 只看（不换行） | 已加载的 herdr 历史 + 当前屏幕 | 历史是页面自己画的行，用 `findInLines` 找、整行着色；屏幕交给 addon |
+| 只看（换行，页面自己画屏幕） | 已加载的历史 + 屏幕，都是页面画的行 | 全部用 `findInLines`，整行着色（xterm 此时是藏起来的） |
+| 轮询（hub / node 不能推送） | 同「只看」 | 同上 |
+
+- 复用「往上翻历史」的加载器（`loadOlder`），但搜索不会替你加载：只搜已经加载的页。滚到最上面时会像平常一样自动加载下一页，新页里的匹配接着算进总数，当前匹配不跳。
+- 接管时程序自己的滚动历史（herdr 的 `terminal.scroll`、Claude / Codex 的全屏界面往回翻）搜不到：这些内容不在网页里，网页只看得到当前这一屏。要搜更早的输出，切到「只看」再加载历史（herdr 只保留约 1000 行）。
+- 顺序：历史在前、屏幕在后，Enter 向下一个、Shift+Enter 向上一个，首尾相接。刚输入搜索词时落在最靠下的匹配（最新的输出）。
+- 历史里的匹配是整行着色，不是逐字高亮（`DrawnRows` 按行画，没有拆 run）。
+- 快捷键：⌘F（Mac）；其他系统 Ctrl+Shift+F，没接管时 Ctrl+F 也行（接管时 ^F 是 readline 的向前一格、vim 的下一页，不能抢）。只在终端面板内有焦点时生效（面板根节点 `tabIndex=-1`，点一下面板就有焦点），在 `TerminalPanel` 的 `onKeyDownCapture` 里处理，没有注册全局快捷键，查找键也不经过 xterm 的自定义按键处理（那里只有 Mac 行编辑键的一行）。
+- 实测的坑：`@xterm/addon-search` 0.16 的 `findNext / findPrevious` 在设置了 decorations 时要 `allowProposedApi: true`，否则抛错、查找条整个坏掉；
+  只切换「区分大小写」、搜索词不变时 addon 不会重新计算高亮（它先把新选项写进状态再比较），所以每次新搜索前先 `clearDecorations()`。
+
+### 接管时的「回到最新」：没做
+
+只看时已有「回到最新」（读历史时画面停住）。接管时，滚轮是发给 herdr 的（`terminal_scroll`），由 herdr 决定给谁：shell 滚 herdr 自己的历史，开了鼠标上报的程序（Claude 全屏渲染、Codex）自己往回画。
+页面没办法知道「程序的视图现在是不是滚上去了」：
+
+- 帧里只有 `cols / rows / data`，没有滚动位置（`TerminalFrame`）；herdr 的 `pane.scroll_changed` 事件带 `max_offset_from_bottom`，但 node 没有转给 hub，hub 的 `terminal` 推送里也没有。
+- 靠自己发出去的滚轮行数估算不可靠：程序可能到顶就不动、一个事件滚几行不定（Claude 有加速）、键入或新输出会把视图拉回底部。
+- 靠屏幕文字猜（Codex 的「Back to bottom」之类）只对某个程序某个版本成立。
+
+要做得对，需要 node 把 herdr 的滚动偏移带进帧（或另发一个事件），hub 转给客户端，网页再按偏移显示「回到最新」并发回 End / 滚到底；这是服务端改动，不在这一批。
+
+### 其他
+
+- 输出里的网址：`@xterm/addon-web-links`，只认 http(s)，点击走 `openLink`；这一下不再同时发 `terminal_click`（`linkHit`）。
+- 右键菜单：复制 / 粘贴 / 全选 / 搜索… / 清除选区，用 `ui/atoms.tsx` 的 `Menu`，没有改它；`Menu` 只认元素当锚点，所以在鼠标位置放了一个零大小的固定定位元素。菜单打开时让 xterm 失焦（xterm 会吞掉它有焦点时的按键，Esc 会发给程序、关不掉菜单）。
+- Mac 行编辑键：⌘⌫ → `\x15`、⌘← → `\x01`、⌘→ → `\x05`，只在接管时、只对只按了 ⌘ 的组合（`lineEditBytes`）。
+- 选项：光标样式、光标闪烁、WebGL 渲染（`@xterm/addon-webgl`，第一次打开才动态加载；关掉、context 丢失、浏览器没有 WebGL 时都释放并退回 DOM 渲染）；`jarvis.terminal.cursorStyle / cursorBlink / webgl`，默认值不写键。
+- 焦点：接管时点面板、窗口重新获得焦点，键盘还给终端，除非有选中文字、有对话框 / 菜单 / 浮层、焦点在别的输入框（含查找条）或面板外的控件、或这个终端是被盖在别的终端下面保持挂着的那个（`inert`）。
+
+### 验证
+
+`web/src/lib/terminal-details.test.ts`（Mac 键、链接过滤、右键菜单、焦点决定、选项）、`web/src/lib/terminal-search.test.ts`（行匹配、两份匹配的顺序、查找条状态、快捷键）；
+截图和交互用 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 的假 hub（接管时 shell 窗格会回显打进去的字，网址就是这样打进屏幕的；只看时有 430 行编造的历史）。
+没有在真 herdr 上试：这批改动不碰协议。

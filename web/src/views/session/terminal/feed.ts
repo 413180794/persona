@@ -7,6 +7,7 @@
 // and the panel scrolls over it; nothing goes in.
 import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon as XFit } from "@xterm/addon-fit";
+import type { SearchAddon as XSearch } from "@xterm/addon-search";
 import { api, errorText, isAbort, sessionPath } from "../../../lib/api";
 import { openLink } from "../../../lib/links";
 import { getState, isOpen, onHubEvent, send } from "../../../lib/store";
@@ -41,6 +42,16 @@ import {
   type TerminalPalette,
 } from "../../../lib/terminal";
 import { gridRow, parseAnsiRows, plainRow, type CellRow } from "../../../lib/terminal-cells";
+import {
+  DEFAULT_CURSOR,
+  hex6,
+  lineEditBytes,
+  parseCursorStyle,
+  parseFlag,
+  webLink,
+  type CursorStyle,
+} from "../../../lib/terminal-details";
+import { FIND_LIMIT, findIndex, findInLines, marksFor, stepFind, type FindMarks, type FindPos, type RowMatch } from "../../../lib/terminal-search";
 import { toast } from "../../../ui/atoms";
 import { dragHasEntry, dragIsDroppable, droppedEntry, terminalEntryDrop } from "../../../lib/entry-drag";
 import {
@@ -108,6 +119,14 @@ export interface FeedView {
   screen: ScreenRows | null;
   /** xterm's colors, for the rows the page draws (follows light / dark). */
   palette: TerminalPalette | null;
+  /** 光标样式 / 光标闪烁 / WebGL 渲染: the options in 终端设置 (remembered). */
+  cursorStyle: CursorStyle;
+  cursorBlink: boolean;
+  webgl: boolean;
+  /** The search: the current match (0-based, -1 when none is current) among `count`; null while not searching. */
+  find: { index: number; count: number } | null;
+  /** The page's own rows (history, and the screen when the page draws it) that hold a match. */
+  marks: FindMarks | null;
 }
 
 export interface ScreenRows {
@@ -124,6 +143,9 @@ const LINK_DOWN = "连不上 hub";
 const WATCH_KEY = "jarvis.terminal.watch";
 const WRAP_KEY = "jarvis.terminal.wrap";
 const FONT_KEY = "jarvis.terminal.fontSize";
+const CURSOR_KEY = "jarvis.terminal.cursorStyle";
+const BLINK_KEY = "jarvis.terminal.cursorBlink";
+const WEBGL_KEY = "jarvis.terminal.webgl";
 export const FONT_SIZES = { min: 9, max: 20, default: 13 };
 /** Frames held while history is read; past this the screen starts over from a whole frame instead. */
 const HELD_MAX = 4 << 20;
@@ -175,6 +197,22 @@ export class TerminalFeed {
   /** Names of the files on their way to the computer (pasted or dropped), and how deep the drag is over the panel. */
   private uploads: string[] = [];
   private dragDepth = 0;
+  /** A link was opened by this click (the click is not also a click in the terminal). */
+  private linkHit = false;
+  private webglAddon: { dispose(): void } | null = null;
+  private search: XSearch | null = null;
+  /** The search: what is looked for, the matches the page's rows hold, what xterm's screen holds, and which is current. */
+  private found: { query: string; cs: boolean; pos: FindPos | null; rows: RowMatch[]; base: number; drawn: boolean; busy: boolean; screen: { index: number; count: number } } = {
+    query: "",
+    cs: false,
+    pos: null,
+    rows: [],
+    base: 0,
+    drawn: false,
+    busy: false,
+    screen: { index: -1, count: 0 },
+  };
+  private recountFrame = 0;
   /** The pane's working directory when the page knows it: a dropped Files entry is named relative to it. */
   cwd = "";
 
@@ -211,6 +249,11 @@ export class TerminalFeed {
       fontFamily: "",
       screen: null,
       palette: null,
+      cursorStyle: parseCursorStyle(localStorage.getItem(CURSOR_KEY)),
+      cursorBlink: parseFlag(localStorage.getItem(BLINK_KEY)),
+      webgl: parseFlag(localStorage.getItem(WEBGL_KEY)),
+      find: null,
+      marks: null,
     };
   }
 
@@ -248,7 +291,7 @@ export class TerminalFeed {
       return;
     }
     if (this.disposed) return;
-    const { Terminal, FitAddon, ClipboardAddon } = mod;
+    const { Terminal, FitAddon, ClipboardAddon, WebLinksAddon, SearchAddon } = mod;
     const family = getComputedStyle(host).fontFamily;
     await terminalFontReady(this.view.fontSize, family); // xterm measures a cell when it opens: not before the font is there
     if (this.disposed) return;
@@ -258,20 +301,25 @@ export class TerminalFeed {
       fontSize: this.view.fontSize,
       lineHeight: 1.15,
       scrollback: 0, // herdr redraws the grid in place: nothing ever scrolls into xterm's history
-      cursorBlink: false,
-      cursorStyle: "block",
+      cursorBlink: this.view.cursorBlink,
+      cursorStyle: this.view.cursorStyle,
       cursorInactiveStyle: "outline",
       disableStdin: true,
+      allowProposedApi: true, // the search addon marks its matches with decorations
       macOptionIsMeta: true,
       theme: this.view.palette ?? undefined,
       linkHandler: {
         activate: (_e, uri) => {
-          if (/^https?:\/\//i.test(uri)) openLink(uri); // OSC 8 links from the program: web pages only
+          this.openWebLink(uri); // OSC 8 links from the program
         },
       },
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    term.loadAddon(new WebLinksAddon((_e, uri) => this.openWebLink(uri))); // plain URLs in the output
+    const search = new SearchAddon({ highlightLimit: FIND_LIMIT });
+    term.loadAddon(search);
+    this.search = search;
     // OSC 52 from the program (herdr's streams do not carry it, docs/terminal.md): a write goes to the clipboard, a read
     // is refused — a program must not read what the user copied, so it is told the clipboard is empty.
     term.loadAddon(new ClipboardAddon(undefined, { readText: () => "", writeText: (_selection: string, text: string) => this.programCopied(text) }));
@@ -283,6 +331,7 @@ export class TerminalFeed {
     const resized = term.onResize(() => this.sizeElement());
     const parsed = term.onWriteParsed(() => this.screenChanged());
     const selected = term.onSelectionChange(() => this.patch({ selection: term.hasSelection() }));
+    const results = search.onDidChangeResults((r) => this.screenResults(r.resultIndex, r.resultCount));
     term.attachCustomKeyEventHandler(this.key);
     term.attachCustomWheelEventHandler(this.wheelEvent);
     host.addEventListener("paste", this.paste, true);
@@ -307,7 +356,9 @@ export class TerminalFeed {
       () => resized.dispose(),
       () => parsed.dispose(),
       () => selected.dispose(),
+      () => results.dispose(),
       () => cancelAnimationFrame(this.screenFrame),
+      () => cancelAnimationFrame(this.recountFrame),
       () => host.removeEventListener("paste", this.paste, true),
       () => viewport.removeEventListener("dragenter", this.dragEnter, true),
       () => viewport.removeEventListener("dragover", this.dragOver, true),
@@ -323,6 +374,7 @@ export class TerminalFeed {
 
     this.measure(true); // the first grid sizes the empty terminal and is what driving asks for
     this.patch({ ready: true, fontFamily: family });
+    if (this.view.webgl) void this.enableWebgl();
     this.tick();
     void cjkFontStack(family).then((stack) => {
       if (!stack || this.disposed || !this.term) return;
@@ -666,6 +718,7 @@ export class TerminalFeed {
    * program as ever), shift+enter is a new line in Claude Code's box (ESC CR, as iOS), an IME composition is left alone.
    */
   private key = (e: KeyboardEvent) => {
+    if (this.lineEdit(e)) return false;
     const d = keyDecision(e, this.term?.hasSelection() ?? false);
     if (d === "xterm") return true;
     if (e.type === "keydown") {
@@ -677,6 +730,17 @@ export class TerminalFeed {
     return false;
   };
 
+  /** Mac line editing while driving: ⌘⌫ ^U, ⌘← ^A, ⌘→ ^E (lib/terminal-details.ts). True when the key was taken. */
+  private lineEdit(e: KeyboardEvent): boolean {
+    if (!this.driving) return false;
+    const bytes = lineEditBytes(e);
+    if (!bytes) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    this.send(bytes);
+    return true;
+  }
+
   /** Copies what is selected in xterm (the key bar's copy, ⌃C / ⌘C); the selection goes once it is on the clipboard. */
   copySelection() {
     const text = this.term?.getSelection() ?? "";
@@ -685,6 +749,32 @@ export class TerminalFeed {
       const n = copyNotice(outcome, window.isSecureContext);
       toast(n.text, n.tone);
       if (outcome !== "failed") this.term?.clearSelection();
+    });
+  }
+
+  hasSelection() {
+    return this.term?.hasSelection() ?? false;
+  }
+
+  /** What is selected in xterm ("" when nothing). */
+  selectedText() {
+    return this.term?.getSelection() ?? "";
+  }
+
+  selectAll() {
+    this.term?.selectAll();
+  }
+
+  clearSelection() {
+    this.term?.clearSelection();
+  }
+
+  /** Copies text the page selected itself (the rows it draws), with the same notices as the xterm selection. */
+  copyText(text: string) {
+    if (!text) return void toast("先用鼠标选中要复制的文字");
+    void copyWith(text, browserClipboard()).then((outcome) => {
+      const n = copyNotice(outcome, window.isSecureContext);
+      toast(n.text, n.tone);
     });
   }
 
@@ -845,12 +935,22 @@ export class TerminalFeed {
 
   private pointerDown = (e: PointerEvent) => {
     this.down = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+    this.linkHit = false;
   };
+
+  /** A link in the output was clicked (xterm's mouseup, before the click event): web pages only, in the app's link sheet. */
+  private openWebLink(uri: string) {
+    const url = webLink(uri);
+    if (!url) return;
+    this.linkHit = true;
+    openLink(url);
+  }
 
   /** Driving, a plain click is a click in the terminal at that cell (`terminal_click`); a drag selects instead. */
   private click = (e: MouseEvent) => {
     const d = this.down;
     this.down = null;
+    if (this.linkHit) return void (this.linkHit = false); // that click opened a link: the program does not get it too
     if (!d || e.detail !== 1 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
     if (this.view.control !== "active" || !this.has("terminal_click") || this.term?.hasSelection()) return;
     const b = this.box();
@@ -901,6 +1001,197 @@ export class TerminalFeed {
       this.lastPoll = null;
       void this.poll();
     }
+  }
+
+  // ── the options in 终端设置 ──────────────────────────────
+
+  setCursorStyle(style: CursorStyle) {
+    if (style === DEFAULT_CURSOR) localStorage.removeItem(CURSOR_KEY);
+    else localStorage.setItem(CURSOR_KEY, style);
+    this.patch({ cursorStyle: style });
+    if (this.term) this.term.options.cursorStyle = style;
+  }
+
+  setCursorBlink(on: boolean) {
+    if (on) localStorage.setItem(BLINK_KEY, "1");
+    else localStorage.removeItem(BLINK_KEY);
+    this.patch({ cursorBlink: on });
+    if (this.term) this.term.options.cursorBlink = on;
+  }
+
+  /** WebGL drawing instead of the DOM renderer (off by default: the default look is unchanged). */
+  setWebgl(on: boolean) {
+    if (on) localStorage.setItem(WEBGL_KEY, "1");
+    else localStorage.removeItem(WEBGL_KEY);
+    this.patch({ webgl: on });
+    if (on) void this.enableWebgl();
+    else this.dropWebgl();
+  }
+
+  /** The addon loads on first use (its own chunk). A browser without WebGL, or a lost context, goes back to the default renderer. */
+  private async enableWebgl() {
+    if (this.webglAddon || !this.term) return;
+    try {
+      const { WebglAddon } = await import("@xterm/addon-webgl");
+      if (this.disposed || !this.term || !this.view.webgl || this.webglAddon) return;
+      const gl = new WebglAddon();
+      gl.onContextLoss(() => {
+        this.dropWebgl();
+        this.turnOffWebgl("显卡渲染被中断，已改回默认渲染");
+      });
+      this.term.loadAddon(gl);
+      this.webglAddon = gl;
+    } catch {
+      this.webglAddon = null;
+      if (!this.disposed) this.turnOffWebgl("这个浏览器用不了 WebGL，仍用默认渲染");
+    }
+  }
+
+  private turnOffWebgl(why: string) {
+    localStorage.removeItem(WEBGL_KEY);
+    this.patch({ webgl: false });
+    toast(why);
+  }
+
+  /** Lets go of the GL context (off, or lost): xterm draws with the DOM again. */
+  private dropWebgl() {
+    const gl = this.webglAddon;
+    this.webglAddon = null;
+    try {
+      gl?.dispose();
+    } catch {
+      // already disposed by the context loss
+    }
+  }
+
+  // ── search (lib/terminal-search.ts: what is searchable and in which order) ──
+
+  /** The plain lines the page itself holds: herdr's history above, and the screen too when the page draws it. */
+  private findLines(): string[] {
+    return this.drawn() ? [...this.olderPlain, ...this.screenPlain()] : this.olderPlain;
+  }
+
+  /** xterm's grid is searched by its addon, except while the page draws the screen (xterm is hidden then). */
+  private screenCount(): number {
+    return this.search && !this.drawn() ? this.found.screen.count : 0;
+  }
+
+  private searchOptions() {
+    const css = getComputedStyle(document.documentElement);
+    const c = (name: string) => hex6(css.getPropertyValue(name));
+    const border = c("--orange"), tint = c("--accent-tint"), accent = c("--accent");
+    const decorations =
+      border && tint && accent
+        ? { matchBorder: border, matchOverviewRuler: border, activeMatchBackground: tint, activeMatchBorder: accent, activeMatchColorOverviewRuler: accent }
+        : undefined;
+    return { caseSensitive: this.found.cs, decorations };
+  }
+
+  /**
+   * Looks for `query`. dir 0 starts afresh and lands on the match nearest the bottom (the newest output); 1 / -1 step to
+   * the next / previous one, wrapping around, through the page's rows first and then xterm's screen.
+   */
+  find(query: string, caseSensitive: boolean, dir: 0 | 1 | -1) {
+    const f = this.found, t = this.term, search = this.search;
+    if (!query || !t || !search) return this.clearFind();
+    const fresh = dir === 0 || query !== f.query || caseSensitive !== f.cs || !f.pos;
+    f.query = query;
+    f.cs = caseSensitive;
+    f.busy = true;
+    try {
+      if (fresh) {
+        f.drawn = this.drawn();
+        f.rows = findInLines(this.findLines(), query, caseSensitive);
+        f.base = this.olderPlain.length;
+        f.screen = { index: -1, count: 0 };
+        t.clearSelection();
+        search.clearDecorations(); // also forgets the last term: the addon does not notice a changed 区分大小写 on its own
+        if (!f.drawn) search.findPrevious(query, this.searchOptions()); // selects the last match on screen and reports how many there are
+        f.pos = stepFind(null, -1, f.rows.length, this.screenCount());
+        if (f.pos?.seg === "rows") {
+          t.clearSelection();
+          search.clearActiveDecoration();
+        }
+      } else if (f.pos) {
+        const next = stepFind(f.pos, dir === -1 ? -1 : 1, f.rows.length, this.screenCount());
+        if (next?.seg === "screen") {
+          if (f.pos.seg !== "screen") t.clearSelection(); // coming from the rows: start from the top (or the bottom) of the screen
+          if (dir === -1) search.findPrevious(query, this.searchOptions());
+          else search.findNext(query, this.searchOptions());
+          if (f.screen.index >= 0) next.i = f.screen.index;
+        } else if (next) {
+          t.clearSelection();
+          search.clearActiveDecoration();
+        }
+        f.pos = next;
+      }
+    } finally {
+      f.busy = false;
+    }
+    this.publishFind();
+  }
+
+  /** Closes the search: highlights go (the selected match stays selected, to copy). */
+  clearFind() {
+    const f = this.found;
+    f.query = "";
+    f.pos = null;
+    f.rows = [];
+    f.screen = { index: -1, count: 0 };
+    this.search?.clearDecorations();
+    this.patch({ find: null, marks: null });
+  }
+
+  /** The addon counted the matches on xterm's screen (also when output changed them). */
+  private screenResults(index: number, count: number) {
+    const f = this.found;
+    f.screen = { index, count };
+    if (!f.query) return;
+    if (!f.busy) {
+      if (f.pos?.seg === "screen") f.pos.i = Math.max(0, index);
+      else if (f.pos) {
+        this.term?.clearSelection(); // the current match is among the page's rows: the addon's refresh must not select another
+        this.search?.clearActiveDecoration();
+      }
+    }
+    this.publishFind();
+  }
+
+  private publishFind() {
+    const f = this.found;
+    if (!f.query) return void this.patch({ find: null, marks: null });
+    const total = f.rows.length + this.screenCount();
+    this.patch({
+      find: { index: f.pos && total ? findIndex(f.pos, f.rows.length) : -1, count: total },
+      marks: marksFor(f.rows, f.pos?.seg === "rows" ? f.pos.i : null),
+    });
+  }
+
+  private recountSoon() {
+    if (this.recountFrame) return;
+    this.recountFrame = requestAnimationFrame(() => {
+      this.recountFrame = 0;
+      if (!this.disposed) this.recount();
+    });
+  }
+
+  /** The page's rows changed (a page of history above, the drawn screen, 换行 switched): the same match, new numbers. */
+  private recount() {
+    const f = this.found;
+    if (!f.query) return;
+    if (this.drawn() !== f.drawn) return void this.find(f.query, f.cs, 0);
+    const old = f.pos?.seg === "rows" ? f.rows[f.pos.i] : undefined;
+    const shift = this.olderPlain.length - f.base;
+    const rows = findInLines(this.findLines(), f.query, f.cs);
+    const same = rows.length === f.rows.length && shift === 0 && rows.every((m, i) => m.row === f.rows[i].row && m.start === f.rows[i].start);
+    if (same) return;
+    f.rows = rows;
+    f.base = this.olderPlain.length;
+    if (old) {
+      const i = rows.findIndex((m) => m.row === old.row + shift && m.start === old.start);
+      f.pos = i >= 0 ? { seg: "rows", i } : null; // the match is gone (回到最新): the next step starts afresh
+    }
+    this.publishFind();
   }
 
   // ── health ────────────────────────────────────────────
@@ -957,6 +1248,7 @@ export class TerminalFeed {
       if (!this.disposed) {
         this.patch({ loadingOlder: false });
         if (!this.view.older.length && !wasPaused) this.resume();
+        else this.recount();
       }
     }
   }
@@ -964,6 +1256,7 @@ export class TerminalFeed {
   /** 回到最新: history goes, the screen follows the pane again (what arrived meanwhile is drawn now). */
   resume() {
     this.olderPlain = [];
+    this.recount();
     const wasPaused = this.view.paused;
     this.patch({ older: [], hasOlder: true, atLimit: false, paused: false, loadingOlder: false });
     if (!wasPaused) return;
@@ -1022,6 +1315,7 @@ export class TerminalFeed {
 
   /** Something was written (or what draws the screen changed): read the rows again, once per frame. */
   private screenChanged() {
+    if (this.found.query) this.recountSoon();
     if (!this.drawn()) {
       if (this.view.screen) this.patch({ screen: null });
       return;
