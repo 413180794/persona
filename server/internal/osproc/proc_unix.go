@@ -41,6 +41,13 @@ func Alive(pid int) bool {
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
+// AliveMine says whether pid is a running process of this user (or any process, when this runs as root): the check
+// for a pid this user's own program wrote down. A pid that now belongs to another user (kill gives EPERM) is not the
+// process that wrote it: that one has exited and the pid was reused (#2141).
+func AliveMine(pid int) bool {
+	return pid > 0 && syscall.Kill(pid, 0) == nil
+}
+
 // OwnedByMe says whether the file belongs to the current user.
 func OwnedByMe(st os.FileInfo) bool {
 	sys, ok := st.Sys().(*syscall.Stat_t)

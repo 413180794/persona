@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -303,13 +304,30 @@ func TestHerdrTraexPanesAreMergedIntoTheList(t *testing.T) {
 	assertTrace(t, f.trace(), []string{call("session.snapshot", nil)})
 }
 
+// TestTraexOwnerHelper is the child TestHerdrTraexStatusFromScreen names as a TRAEX owner: it waits until killed.
+func TestTraexOwnerHelper(t *testing.T) {
+	if os.Getenv("PERSONA_TRAEX_OWNER_HELPER") == "" {
+		t.Skip("helper process only")
+	}
+	time.Sleep(time.Minute)
+}
+
 // Without a spinner a TRAEX pane's status is read off its screen (at most every 2 s per pane): "esc to interrupt"
 // is working, a numbered choice blocked, anything else a finished turn; a failed read keeps the last status, or is
 // unknown without one.
 func TestHerdrTraexStatusFromScreen(t *testing.T) {
 	n, f, home := herdrNode(t)
-	pids := map[int]string{os.Getpid(): thread1, os.Getppid(): thread2, 1: thread3} // all alive
-	panes := map[int]string{os.Getpid(): "w4:p1", os.Getppid(): "w4:p2", 1: "w4:p3"}
+	// Three of this user's processes, all alive: this one, its parent, and a child it runs. Not init: a pid file this
+	// user's TRAEX wrote that another user's process now has is a reused pid, not TRAEX (#2141).
+	child := exec.Command(os.Args[0], "-test.run=^TestTraexOwnerHelper$")
+	child.Env = append(os.Environ(), "PERSONA_TRAEX_OWNER_HELPER=1")
+	if err := child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = child.Process.Kill(); _ = child.Wait() })
+	third := child.Process.Pid
+	pids := map[int]string{os.Getpid(): thread1, os.Getppid(): thread2, third: thread3}
+	panes := map[int]string{os.Getpid(): "w4:p1", os.Getppid(): "w4:p2", third: "w4:p3"}
 	for pid, th := range pids {
 		writeTraexOwner(t, home, th, pid)
 		seedTraexPane(pid, panes[pid])
@@ -343,7 +361,7 @@ func TestHerdrTraexStatusFromScreen(t *testing.T) {
 
 	// Past 2 s: read again, once each. A failed read keeps the last status; a pane never read is unknown.
 	ageTraexStatus()
-	seedTraexPane(1, "w4:p4")
+	seedTraexPane(third, "w4:p4")
 	f.handle("pane.read", func(p map[string]any) any {
 		if p["pane_id"] == "w4:p1" || p["pane_id"] == "w4:p4" {
 			return herdrFail{Code: "pane_not_found", Message: "gone"}

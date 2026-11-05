@@ -91,7 +91,10 @@ func (n *Node) traexOwners() map[int]string {
 	return out
 }
 
-func alive(pid int) bool { return osproc.Alive(pid) }
+// alive says whether the process behind a pid file this user's claude or TRAEX wrote still runs. A pid now held by
+// another user's process is a reused one, not the program that wrote the file (#2141). The cost: a claude run as
+// another user that still writes into this user's home (`sudo claude`, sudo keeping HOME on macOS) counts as gone.
+func alive(pid int) bool { return osproc.AliveMine(pid) }
 
 // paneEnvRe finds a host's pane variable (host.PaneEnv) in a process's environment, NUL- (Linux) or space-separated
 // (ps -E).

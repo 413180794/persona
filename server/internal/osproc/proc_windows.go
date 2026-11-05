@@ -62,6 +62,22 @@ func Alive(pid int) bool {
 	return err == nil && ev == uint32(windows.WAIT_TIMEOUT)
 }
 
+// AliveMine says whether pid is a running process this user may open (any process, for an administrator): the check
+// for a pid this user's own program wrote down. One this user may not open (another user's, a protected one) is not
+// the process that wrote it: that one has exited and the pid was reused (#2141).
+func AliveMine(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	h, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		return false
+	}
+	defer windows.CloseHandle(h)
+	ev, err := windows.WaitForSingleObject(h, 0)
+	return err == nil && ev == uint32(windows.WAIT_TIMEOUT)
+}
+
 // OwnedByMe is false on Windows: FileInfo carries no owner, so checks that need one refuse.
 func OwnedByMe(os.FileInfo) bool { return false }
 
