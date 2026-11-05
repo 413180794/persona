@@ -1,5 +1,6 @@
 package persona.android.platform
 
+import persona.android.R
 import android.app.Application
 import android.content.Context
 import android.net.Uri
@@ -62,8 +63,8 @@ class ShareQueue @Inject constructor(
                 val attachments = uris.map { uri ->
                     require(uri.scheme == "content")
                     val provider = application.packageManager.resolveContentProvider(requireNotNull(uri.authority), 0)
-                    require(provider?.applicationInfo?.uid != Process.myUid()) { "不能转发应用私有文件" }
-                    var name = "附件"
+                    require(provider?.applicationInfo?.uid != Process.myUid()) { application.getString(R.string.app_share_private_file) }
+                    var name = application.getString(R.string.app_share_attachment)
                     application.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) {
                             val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -82,12 +83,12 @@ class ShareQueue @Inject constructor(
                                 val count = input.read(buffer)
                                 if (count < 0) break
                                 copied += count
-                                require(copied <= MAX_FILE_BYTES) { "附件超过上传大小限制" }
+                                require(copied <= MAX_FILE_BYTES) { application.getString(R.string.app_share_too_large) }
                                 output.write(buffer, 0, count)
                             }
                             output.fd.sync()
                         }
-                    } ?: throw IOException("无法读取附件")
+                    } ?: throw IOException(application.getString(R.string.app_share_unreadable))
                     SharedAttachment(file.name, name)
                 }
                 write(entry, QueuedShare(id, title, text, attachments))
@@ -182,10 +183,10 @@ class ShareQueue @Inject constructor(
             })
         }
         return response.use {
-            check(it.isSuccessful) { "附件上传失败" }
+            check(it.isSuccessful) { application.getString(R.string.app_share_upload_failed) }
             owner.active()
             JsonCodec.parseToJsonElement(it.body?.string().orEmpty()).jsonObject["path"]?.jsonPrimitive?.contentOrNull
-                ?.takeIf(String::isNotBlank) ?: throw IOException("上传结果缺少路径")
+                ?.takeIf(String::isNotBlank) ?: throw IOException(application.getString(R.string.app_share_no_path))
         }
     }
 

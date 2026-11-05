@@ -5,6 +5,7 @@ plugins {
 
 android {
     namespace = "persona.platform.notify"
+    testOptions.unitTests.isIncludeAndroidResources = true
     testOptions.unitTests.all {
         it.systemProperty("jarvis.repo.root", rootProject.projectDir.parentFile.absolutePath)
     }
@@ -22,4 +23,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.serialization.json)
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test.ext:junit:1.3.0")
 }

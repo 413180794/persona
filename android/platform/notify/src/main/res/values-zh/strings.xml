@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_connection_online">已连接 hub</string>
+    <string name="notify_connection_connecting">连接中…</string>
+    <string name="notify_connection_updating">更新中…</string>
+    <string name="notify_connection_waiting_network">等待网络</string>
+    <string name="notify_connection_local_network">需要本地网络权限</string>
+    <string name="notify_connection_certificate">hub 的证书变了</string>
+    <string name="notify_connection_revoked">配对已失效</string>
+    <string name="notify_result_expired_title">已过期，回到终端处理</string>
+    <string name="notify_result_expired_detail">请打开终端处理。</string>
+    <string name="notify_result_gone_title">已在电脑上处理</string>
+    <string name="notify_result_gone_detail">这条请求已不在待处理列表中，请打开会话查看。</string>
+    <string name="notify_result_locked_title">请先解锁</string>
+    <string name="notify_result_locked_detail">解锁后再提交你的选择。</string>
+    <string name="notify_result_invalid_title">操作不可用</string>
+    <string name="notify_result_invalid_detail">请打开会话查看最新请求。</string>
+    <string name="notify_result_unconfirmed_title">结果待确认</string>
+    <string name="notify_result_duplicate_detail">已记录这次操作，请打开会话核对结果，不要重复提交。</string>
+    <string name="notify_result_readonly_title">不能在手机上审批</string>
+    <string name="notify_result_readonly_detail">这个会话只能查看，请打开会话或到电脑上处理。</string>
+    <string name="notify_result_open_chat">请打开会话查看。</string>
+    <string name="notify_result_check_chat">请打开会话核对结果，不要重复提交。</string>
+    <string name="notify_open_terminal">打开终端</string>
+    <string name="notify_action_deny">拒绝</string>
+    <string name="notify_action_allow">允许</string>
+    <string name="notify_action_view">查看</string>
+    <string name="notify_action_approve">批准</string>
+    <string name="notify_action_reject">打回</string>
+    <string name="notify_reply_deny_reason">拒绝原因</string>
+    <string name="notify_reply_feedback">修改意见</string>
+    <string name="notify_channel_input">需要你</string>
+    <string name="notify_channel_alert">提醒</string>
+    <string name="notify_channel_done">做完了</string>
+    <string name="notify_channel_status">实时状态</string>
+    <string name="notify_title_assistant_asks">Persona 在问你</string>
+    <string name="notify_title_needs_you">需要你</string>
+    <string name="notify_title_done">做完了</string>
+    <string name="notify_title_alert">提醒</string>
+    <string name="notify_stopped_title">后台连接被你停止了</string>
+    <string name="notify_stopped_text">点「恢复」重新接收通知</string>
+    <string name="notify_resume">恢复</string>
+    <string name="notify_public_title">Persona 有新消息</string>
+</resources>

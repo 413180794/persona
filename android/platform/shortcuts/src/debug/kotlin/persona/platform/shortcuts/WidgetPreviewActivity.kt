@@ -37,12 +37,12 @@ class WidgetPreviewActivity : Activity() {
         }
         fun dp(value: Float) = ceil(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)).toInt()
         if (info == null) {
-            column.addView(TextView(this).apply { text = "找不到 Persona 小组件" })
+            column.addView(TextView(this).apply { text = "找不到 Persona 小组件" })  // i18n-ignore: debug preview, developer-only
         } else for ((width, height) in SIZES) {
             val id = host.allocateAppWidgetId()
             ids += id
             if (!manager.bindAppWidgetIdIfAllowed(id, provider)) {
-                column.addView(TextView(this).apply { text = "先运行 adb shell appwidget grantbind --package $packageName --user 0" })
+                column.addView(TextView(this).apply { text = "先运行 adb shell appwidget grantbind --package $packageName --user 0" })  // i18n-ignore: debug preview, developer-only
                 break
             }
             val view = host.createView(this, id, info)

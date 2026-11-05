@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 import persona.android.ui.ShellSession
 import persona.core.contracts.*
@@ -31,6 +32,8 @@ import kotlinx.serialization.json.JsonObject
 /** Regression cases from #2124: one surface, the original session, and an explicit destination. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CapsuleSessionsTest {
+    @Before fun chinese() = persona.android.ZhText.install()
+
     private fun agent(machine: String, id: String, state: String = "working", quiet: Boolean = false) =
         Session(machine, id, title = "$machine $id", state = state, quiet = quiet)
 

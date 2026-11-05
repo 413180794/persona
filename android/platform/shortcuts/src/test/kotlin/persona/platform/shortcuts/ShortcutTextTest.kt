@@ -1,5 +1,10 @@
 package persona.platform.shortcuts
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.FleetState
 import persona.core.contracts.Interaction
 import persona.core.contracts.Machine
@@ -18,7 +23,11 @@ import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.time.Instant
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ShortcutTextTest {
+    private val context: Context get() = ApplicationProvider.getApplicationContext()
+    private val res get() = context.resources
     private val t = Instant.parse("2026-10-30T08:00:00Z")
     private val plan = Interaction("a", "studio", "photos", sessionTitle = "照片同步", kind = "plan",
         createdAt = t.plusSeconds(10).toString(), plan = "# 计划\n先改   模型")
@@ -36,15 +45,15 @@ class ShortcutTextTest {
         assertNull(ShortcutText.resolution(permission, locked = true))
         assertNull(ShortcutText.resolution(Interaction("q", kind = "question", questions = listOf(Question("哪个？")))))
         assertNull(ShortcutText.resolution(Interaction("s", kind = "screen")))
-        assertEquals("允许 Bash: swift test？", ShortcutText.ask(permission))
-        assertEquals("允许 Bash？", ShortcutText.ask(permission.copy(summary = " ")))
-        assertEquals("批准这个计划？\n「计划 先改 模型」", ShortcutText.ask(plan))
-        assertEquals("批准", ShortcutText.confirmLabel(plan))
-        assertEquals("允许", ShortcutText.confirmLabel(permission))
-        assertEquals("已允许 Bash", ShortcutText.done(permission))
-        assertEquals("已批准计划，开始执行", ShortcutText.done(plan))
-        assertEquals("这是个提问，需要打开 Persona 回答。", ShortcutText.needsApp("question"))
-        assertEquals("终端在等你输入，需要打开 Persona。", ShortcutText.needsApp("screen"))
+        assertEquals("允许 Bash: swift test？", ShortcutText.ask(res, permission))
+        assertEquals("允许 Bash？", ShortcutText.ask(res, permission.copy(summary = " ")))
+        assertEquals("批准这个计划？\n「计划 先改 模型」", ShortcutText.ask(res, plan))
+        assertEquals("批准", ShortcutText.confirmLabel(res, plan))
+        assertEquals("允许", ShortcutText.confirmLabel(res, permission))
+        assertEquals("已允许 Bash", ShortcutText.done(res, permission))
+        assertEquals("已批准计划，开始执行", ShortcutText.done(res, plan))
+        assertEquals("这是个提问，需要打开 Persona 回答。", ShortcutText.needsApp(res, "question"))
+        assertEquals("终端在等你输入，需要打开 Persona。", ShortcutText.needsApp(res, "screen"))
         assertEquals("补测试 · MacBook", ShortcutText.where(permission, listOf(Machine("macbook", name = "MacBook"))))
         assertEquals("补测试", ShortcutText.where(permission, emptyList()))
         assertNull(ShortcutText.where(Interaction("x"), emptyList()))
@@ -52,23 +61,23 @@ class ShortcutTextTest {
     }
 
     @Test fun failuresSayWhatToDoAndNeverCallAnUnknownSendUndelivered() {
-        assertEquals("配对已失效，打开 Persona 重新配对。", ShortcutText.loadFailure(HubFailure(HubError.PairingExpired, status = 401)))
-        assertEquals("连不上 hub，确认手机能访问 hub（同一个网络或 VPN）。", ShortcutText.loadFailure(ConnectException("refused")))
-        assertEquals("连不上 hub，确认手机能访问 hub（同一个网络或 VPN）。", ShortcutText.loadFailure(SocketTimeoutException()))
-        assertEquals("hub 出错了", ShortcutText.loadFailure(HubFailure(HubError.Server, "hub 出错了", status = 500)))
-        assertEquals("这个已经处理过了。", ShortcutText.sendFailure(InteractionGoneException()))
-        assertEquals("配对已失效，打开 Persona 重新配对。", ShortcutText.sendFailure(HubFailure(HubError.PairingExpired, status = 403)))
-        assertEquals("没有送达：连不上 hub，确认手机能访问 hub（同一个网络或 VPN）。", ShortcutText.sendFailure(ConnectException("refused")))
+        assertEquals("配对已失效，打开 Persona 重新配对。", ShortcutText.loadFailure(res, HubFailure(HubError.PairingExpired, status = 401)))
+        assertEquals("连不上 hub，确认手机能访问 hub（同一个网络或 VPN）。", ShortcutText.loadFailure(res, ConnectException("refused")))
+        assertEquals("连不上 hub，确认手机能访问 hub（同一个网络或 VPN）。", ShortcutText.loadFailure(res, SocketTimeoutException()))
+        assertEquals("hub 出错了", ShortcutText.loadFailure(res, HubFailure(HubError.Server, "hub 出错了", status = 500)))
+        assertEquals("这个已经处理过了。", ShortcutText.sendFailure(res, InteractionGoneException()))
+        assertEquals("配对已失效，打开 Persona 重新配对。", ShortcutText.sendFailure(res, HubFailure(HubError.PairingExpired, status = 403)))
+        assertEquals("没有送达：连不上 hub，确认手机能访问 hub（同一个网络或 VPN）。", ShortcutText.sendFailure(res, ConnectException("refused")))
         // The request may have gone through: check, do not repeat.
-        assertEquals("结果待确认：打开 Persona 看看这条处理了没有。", ShortcutText.sendFailure(SocketTimeoutException()))
-        assertEquals("结果待确认：打开 Persona 看看这条处理了没有。", ShortcutText.sendFailure(HubFailure(HubError.Server, "boom", status = 502)))
-        assertEquals("请求无效", ShortcutText.sendFailure(HubFailure(HubError.Server, "请求无效", status = 400)))
+        assertEquals("结果待确认：打开 Persona 看看这条处理了没有。", ShortcutText.sendFailure(res, SocketTimeoutException()))
+        assertEquals("结果待确认：打开 Persona 看看这条处理了没有。", ShortcutText.sendFailure(res, HubFailure(HubError.Server, "boom", status = 502)))
+        assertEquals("请求无效", ShortcutText.sendFailure(res, HubFailure(HubError.Server, "请求无效", status = 400)))
     }
 
     @Test fun theTileSaysTheHeadline() {
-        assertEquals("还没配对", ShortcutText.tileSubtitle(false, FleetState("needsYou", needsYou = 2)))
-        assertEquals("都处理完了", ShortcutText.tileSubtitle(true, FleetState()))
-        assertEquals("2 个需要你", ShortcutText.tileSubtitle(true, FleetState("needsYou", needsYou = 2)))
+        assertEquals("还没配对", ShortcutText.tileSubtitle(res, false, FleetState("needsYou", needsYou = 2)))
+        assertEquals("都处理完了", ShortcutText.tileSubtitle(res, true, FleetState()))
+        assertEquals("2 个需要你", ShortcutText.tileSubtitle(res, true, FleetState("needsYou", needsYou = 2)))
     }
 
     @Test fun recentAgentsAreTheTwoLatestLiveOnesWithoutPersona() {
@@ -79,7 +88,7 @@ class ShortcutTextTest {
             session("jarvis", 8, assistant = true), session("new", 5), session("mid", 3)))
         assertEquals(listOf("new", "mid"), picked.map { it.sessionId })
         assertEquals("任务 new", ShortcutPublisher.shortLabel(picked.first()))
-        assertEquals("打开 任务 new", ShortcutPublisher.longLabel(picked.first()))
+        assertEquals("打开 任务 new", ShortcutPublisher.longLabel(context, picked.first()))
         assertEquals("x".repeat(24), ShortcutPublisher.shortLabel(session("long", 1).copy(title = "x".repeat(40))))
     }
 
@@ -107,7 +116,10 @@ class ShortcutTextTest {
     }
 }
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ApproveFirstModelTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     private class Center(var list: List<Interaction>, var failRefresh: Exception? = null, var failResolve: Exception? = null) : InteractionCenter {
         override val pending = MutableStateFlow<List<Interaction>>(emptyList())
         val resolved = mutableListOf<Pair<String, Resolution>>()
@@ -123,7 +135,7 @@ class ApproveFirstModelTest {
 
     @Test fun loadsTheOldestAndApprovesItOnce() = runTest {
         val center = Center(listOf(plan))
-        val model = ApproveFirstModel({ true }, center, { listOf(Machine("studio", name = "Mac Studio")) })
+        val model = ApproveFirstModel(res, { true }, center, { listOf(Machine("studio", name = "Mac Studio")) })
         model.load()
         assertEquals(ApproveState.Confirm(plan, "照片同步 · Mac Studio"), model.state.value)
         // Locked: nothing is sent.
@@ -140,22 +152,22 @@ class ApproveFirstModelTest {
 
     @Test fun emptyUnpairedQuestionsAndFailures() = runTest {
         val center = Center(emptyList())
-        ApproveFirstModel({ false }, center, { emptyList() }).apply { load(); assertEquals(ApproveState.NotPaired, state.value) }
-        ApproveFirstModel({ true }, center, { emptyList() }).apply { load(); assertEquals(ApproveState.Nothing, state.value) }
+        ApproveFirstModel(res, { false }, center, { emptyList() }).apply { load(); assertEquals(ApproveState.NotPaired, state.value) }
+        ApproveFirstModel(res, { true }, center, { emptyList() }).apply { load(); assertEquals(ApproveState.Nothing, state.value) }
         val question = plan.copy(id = "q", kind = "question", questions = listOf(Question("哪个？")))
         center.list = listOf(question)
-        ApproveFirstModel({ true }, center, { emptyList() }).apply {
+        ApproveFirstModel(res, { true }, center, { emptyList() }).apply {
             load(); assertEquals(ApproveState.NeedsApp(question, "照片同步"), state.value)
             assertNull(approve(locked = false))
         }
         center.failRefresh = ConnectException("refused")
-        ApproveFirstModel({ true }, center, { emptyList() }).apply {
+        ApproveFirstModel(res, { true }, center, { emptyList() }).apply {
             load(); assertEquals(ApproveState.Failed("连不上 hub，确认手机能访问 hub（同一个网络或 VPN）。"), state.value)
         }
         center.failRefresh = null
         center.list = listOf(plan)
         center.failResolve = InteractionGoneException()
-        ApproveFirstModel({ true }, center, { emptyList() }).apply {
+        ApproveFirstModel(res, { true }, center, { emptyList() }).apply {
             load(); assertNull(approve(locked = false)); assertEquals(ApproveState.Failed("这个已经处理过了。"), state.value)
         }
     }

@@ -1,5 +1,7 @@
 package persona.android.di
 
+import persona.android.AppText
+import persona.android.R
 import android.os.SystemClock
 import persona.android.PersonaApp
 import persona.android.data.ApiClient
@@ -129,7 +131,7 @@ class GroupRuntime internal constructor(
         val api = ApiClient(credentials.hubAddress, credentials.deviceToken, connection.http.client,
             onUnauthorized = connection::revoke,
             selectedOrigin = {
-                check(this.data === data && active) { "连接已切换" }
+                check(this.data === data && active) { AppText.get(R.string.app_error_switched) }
                 connection.route.value?.endpoint?.url ?: throw HubFailure(HubError.NoNetwork)
             })
         val hub = Hub(api, scope, connection)

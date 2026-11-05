@@ -27,7 +27,6 @@ import persona.core.contracts.api.SessionsRepository
 import persona.core.navigation.AppTab
 import persona.core.navigation.NotificationRoute
 import persona.core.navigation.TerminalRoute
-import persona.core.domain.answer.RequestExpiry
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,11 +54,11 @@ class Notifier @Inject constructor(
         context.getSystemService(NotificationManager::class.java).apply {
             deleteNotificationChannel("ongoing")
             createNotificationChannels(listOf(
-                NotificationChannel(CH_INPUT, "需要你", NotificationManager.IMPORTANCE_HIGH),
-                NotificationChannel(CH_ALERT, "提醒", NotificationManager.IMPORTANCE_HIGH),
-                NotificationChannel(CH_DONE, "做完了", NotificationManager.IMPORTANCE_DEFAULT),
+                NotificationChannel(CH_INPUT, context.getString(R.string.notify_channel_input), NotificationManager.IMPORTANCE_HIGH),
+                NotificationChannel(CH_ALERT, context.getString(R.string.notify_channel_alert), NotificationManager.IMPORTANCE_HIGH),
+                NotificationChannel(CH_DONE, context.getString(R.string.notify_channel_done), NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CH_ASSISTANT, "Persona", NotificationManager.IMPORTANCE_DEFAULT),
-                NotificationChannel(CH_STATUS, "实时状态", NotificationManager.IMPORTANCE_LOW).apply {
+                NotificationChannel(CH_STATUS, context.getString(R.string.notify_channel_status), NotificationManager.IMPORTANCE_LOW).apply {
                     setSound(null, null)
                     enableVibration(false)
                     setShowBadge(false)
@@ -82,15 +81,16 @@ class Notifier @Inject constructor(
 
     internal fun ongoing(status: OngoingStatus): Notification {
         val icon = persona.core.designsystem.R.drawable.ic_stat
+        val title = status.titleRes?.let(context::getString) ?: status.title
         // The lock screen's version: counts and 「有个授权等你」 only, never an agent's name or what it asks. The private one
         // names agents only with 锁屏显示详情 (OngoingStatus.from: a phone may show it on the lock screen too), and the system
         // shows it there only where the user lets sensitive content show; elsewhere this one.
         val public = NotificationCompat.Builder(context, CH_STATUS).setSmallIcon(icon)
-            .setContentTitle(status.title).setContentText(status.publicText)
+            .setContentTitle(title).setContentText(status.publicText)
             .setShowWhen(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).build()
         val builder = NotificationCompat.Builder(context, CH_STATUS).setSmallIcon(icon)
-            .setContentTitle(status.title)
+            .setContentTitle(title)
             .setContentText(status.text)
             .setSubText(status.subText)
             .apply { status.lines?.let { setStyle(NotificationCompat.BigTextStyle().bigText(it)) } }
@@ -128,9 +128,9 @@ class Notifier @Inject constructor(
                 .apply {
                     if (Build.VERSION.SDK_INT >= 37) {
                         setStyle(Notification.MetricStyle()
-                            .addMetric(Notification.Metric(Notification.Metric.FixedInt(status.needsYou), Status.NeedsYou.label))
-                            .addMetric(Notification.Metric(Notification.Metric.FixedInt(status.working), Status.Working.label))
-                            .addMetric(Notification.Metric(Notification.Metric.FixedInt(status.unread), Status.Unread.label))
+                            .addMetric(Notification.Metric(Notification.Metric.FixedInt(status.needsYou), Status.NeedsYou.label(context)))
+                            .addMetric(Notification.Metric(Notification.Metric.FixedInt(status.working), Status.Working.label(context)))
+                            .addMetric(Notification.Metric(Notification.Metric.FixedInt(status.unread), Status.Unread.label(context)))
                             .setCriticalMetric(if (status.needsYou > 0) 0 else if (status.working > 0) 1 else 2))
                     }
                 }
@@ -148,7 +148,7 @@ class Notifier @Inject constructor(
      */
     private fun ongoingAction(request: OngoingAction, button: OngoingButton): NotificationCompat.Action {
         val key = button.key
-            ?: return NotificationCompat.Action.Builder(0, button.label, open(request.session)).build()
+            ?: return NotificationCompat.Action.Builder(0, context.getString(button.label), open(request.session)).build()
         val intent = Intent(context, ActionReceiver::class.java).apply {
             this.action = ActionReceiver.RESOLVE
             data = Uri.Builder().scheme("jarvis-notify").authority("ongoing")
@@ -163,7 +163,7 @@ class Notifier @Inject constructor(
             putExtra(ActionReceiver.EXTRA_QUIET, true)
         }
         val pending = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        return NotificationCompat.Action.Builder(0, button.label, pending)
+        return NotificationCompat.Action.Builder(0, context.getString(button.label), pending)
             .setAuthenticationRequired(button.authenticationRequired).build()
     }
 
@@ -173,8 +173,8 @@ class Notifier @Inject constructor(
         if (preferences.preferences.value?.input != true) return
         if (NotificationPolicy.expired(ix)) { retract(ix.id); return }
         val assistant = isAssistant(ix.sessionKey)
-        val title = if (assistant == true && ix.kind == "question") "Persona 在问你"
-            else ix.sessionTitle?.takeIf { it.isNotBlank() } ?: "需要你"
+        val title = if (assistant == true && ix.kind == "question") context.getString(R.string.notify_title_assistant_asks)
+            else ix.sessionTitle?.takeIf { it.isNotBlank() } ?: context.getString(R.string.notify_title_needs_you)
         val detail = when (ix.kind) {
             "question" -> ix.questions.orEmpty().joinToString("\n") { it.question }
             "plan" -> ix.plan ?: ix.headline
@@ -210,11 +210,12 @@ class Notifier @Inject constructor(
         }
         val mutable = if (action.replyLabel != null) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE
         val pending = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or mutable)
-        return NotificationCompat.Action.Builder(0, action.label.replace(Regex("\\s+"), " ").trim(), pending)
+        val label = action.labelRes?.let(context::getString) ?: action.label.orEmpty()
+        return NotificationCompat.Action.Builder(0, label.replace(Regex("\\s+"), " ").trim(), pending)
             .setAuthenticationRequired(action.authenticationRequired)
             .apply {
-                action.replyLabel?.let { label ->
-                    addRemoteInput(RemoteInput.Builder(ActionReceiver.EXTRA_REPLY).setLabel(label).build())
+                action.replyLabel?.let { reply ->
+                    addRemoteInput(RemoteInput.Builder(ActionReceiver.EXTRA_REPLY).setLabel(context.getString(reply)).build())
                 }
             }.build()
     }
@@ -226,7 +227,7 @@ class Notifier @Inject constructor(
         if (channel == CH_ALERT && !settings.input) return
         val session = NotificationPolicy.session(event)
         post(NotificationPolicy.tag(event), EVENT_ID, base(channel).forSession(session)
-            .setContentTitle(event.title.ifBlank { when (channel) { CH_DONE -> "做完了"; CH_ALERT -> "提醒"; else -> "Persona" } })
+            .setContentTitle(event.title.ifBlank { when (channel) { CH_DONE -> context.getString(R.string.notify_title_done); CH_ALERT -> context.getString(R.string.notify_title_alert); else -> "Persona" } })
             .setContentText(event.body.ifBlank { event.subtitle })
             .setSubText(event.subtitle.takeIf { it.isNotBlank() })
             .setStyle(NotificationCompat.BigTextStyle().bigText(event.body.take(2000)))
@@ -238,7 +239,7 @@ class Notifier @Inject constructor(
     fun retract(id: String) = manager.cancel(interactionTag(id), EVENT_ID)
 
     internal fun pending(id: String, session: SessionKey?, status: PendingStatus, assistant: Boolean?) =
-        resultNotice(id, session, status.label, "请打开会话查看。", assistant)
+        resultNotice(id, session, status.label(context), context.getString(R.string.notify_result_open_chat), assistant)
 
     fun retractSession(session: SessionKey) {
         context.getSystemService(NotificationManager::class.java).activeNotifications
@@ -251,12 +252,12 @@ class Notifier @Inject constructor(
     }
 
     fun failure(id: String, session: SessionKey?, assistant: Boolean? = null) = resultNotice(
-        id, session, PendingStatus.Unconfirmed.label, "请打开会话核对结果，不要重复提交。", assistant,
+        id, session, context.getString(R.string.notify_result_unconfirmed_title), context.getString(R.string.notify_result_check_chat), assistant,
     )
 
     internal fun actionResult(id: String, session: SessionKey?, result: NotificationActionResult, assistant: Boolean?) {
         val (title, detail) = actionResultCopy(result) ?: return
-        resultNotice(id, session, title, detail, assistant, terminal = result == NotificationActionResult.Expired)
+        resultNotice(id, session, context.getString(title), context.getString(detail), assistant, terminal = result == NotificationActionResult.Expired)
     }
 
     private fun resultNotice(
@@ -267,7 +268,7 @@ class Notifier @Inject constructor(
             .setContentTitle(title).setContentText(detail)
             .setOnlyAlertOnce(true)
             .apply {
-                if (terminal && session != null) addAction(0, RequestExpiry.terminalLabel, destination)
+                if (terminal && session != null) addAction(0, context.getString(R.string.notify_open_terminal), destination)
             }
             .setAutoCancel(true).setContentIntent(destination).build())
     }
@@ -276,8 +277,8 @@ class Notifier @Inject constructor(
         val intent = Intent(context, ActionReceiver::class.java).setAction(ActionReceiver.RESUME)
         val pending = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         post("stopped", EVENT_ID, base(CH_STATUS)
-            .setContentTitle("后台连接被你停止了").setContentText("点「恢复」重新接收通知")
-            .addAction(NotificationCompat.Action.Builder(0, "恢复", pending).setAuthenticationRequired(true).build())
+            .setContentTitle(context.getString(R.string.notify_stopped_title)).setContentText(context.getString(R.string.notify_stopped_text))
+            .addAction(NotificationCompat.Action.Builder(0, context.getString(R.string.notify_resume), pending).setAuthenticationRequired(true).build())
             .setAutoCancel(true).setContentIntent(open(null)).build())
     }
 
@@ -295,7 +296,7 @@ class Notifier @Inject constructor(
         .setVisibility(if (showLockDetails) NotificationCompat.VISIBILITY_PUBLIC else NotificationCompat.VISIBILITY_PRIVATE)
         .apply {
             if (!showLockDetails) setPublicVersion(NotificationCompat.Builder(context, channel)
-                .setSmallIcon(persona.core.designsystem.R.drawable.ic_stat).setContentTitle("Persona 有新消息")
+                .setSmallIcon(persona.core.designsystem.R.drawable.ic_stat).setContentTitle(context.getString(R.string.notify_public_title))
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC).build())
         }
 

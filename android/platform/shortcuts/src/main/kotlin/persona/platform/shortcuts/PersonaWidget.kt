@@ -98,8 +98,8 @@ class PersonaWidget : GlanceAppWidget() {
                 Spacer(GlanceModifier.height(Tokens.Space.xs))
             }
             if (!paired) {
-                Text("还没配对", style = look.headline, maxLines = 1)
-                Text("打开 Persona 扫 hub 的二维码", style = look.caption, maxLines = 2)
+                Text(context.getString(R.string.shortcuts_not_paired_short), style = look.headline, maxLines = 1)
+                Text(context.getString(R.string.shortcuts_widget_scan), style = look.caption, maxLines = 2)
                 return@Column
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -112,7 +112,7 @@ class PersonaWidget : GlanceAppWidget() {
             val rest = FleetText.rest(fleet)
             if (rest.isNotEmpty()) Text(rest, style = look.caption, maxLines = 1)
             if (FleetSummary.isEmpty(fleet)) {
-                Text("没有 Agent 需要你", style = look.caption, maxLines = 1)
+                Text(context.getString(R.string.shortcuts_widget_nobody), style = look.caption, maxLines = 1)
                 return@Column
             }
             val shown = fleet.items.take(rows)

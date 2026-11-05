@@ -23,6 +23,7 @@ val googleOAuthScheme = providers.gradleProperty("personaGoogleOAuthScheme")
 
 android {
     namespace = "persona.android"
+    testOptions { unitTests { isIncludeAndroidResources = true } }
     lint {
         baseline = file("lint-baseline.xml")
     }
@@ -91,4 +92,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test.ext:junit:1.3.0")
 }

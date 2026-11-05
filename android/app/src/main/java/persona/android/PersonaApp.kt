@@ -53,6 +53,7 @@ class PersonaApp : Application() {
     override fun attachBaseContext(base: android.content.Context) {
         persona.core.designsystem.AppLanguages.init(base)
         super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
+        AppText.install(resources)
     }
 
     override fun onCreate() {

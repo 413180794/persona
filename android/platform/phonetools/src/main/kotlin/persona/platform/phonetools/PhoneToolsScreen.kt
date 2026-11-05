@@ -1,5 +1,6 @@
 package persona.platform.phonetools
 
+import androidx.compose.ui.res.stringResource
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -56,9 +57,9 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    JListPage(title = "手机数据", onBack = navigator::back) {
+    JListPage(title = stringResource(R.string.phonetools_title), onBack = navigator::back) {
         item {
-            Text("开启后，所选数据可交给 AI 处理。只有 App 在前台或常驻连接可用时，才会向 hub 声明工具。",
+            Text(stringResource(R.string.phonetools_intro),
                 Modifier.padding(bottom = 16.dp), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         }
         items(PhoneSource.entries, key = { it.name }) { source ->
@@ -68,52 +69,56 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
             }
             val subtitle = when {
                 source == PhoneSource.Health && !Health.available(context) ->
-                    "${Health.unavailableReason(context)}，装好后再打开（安卓 14 起系统自带）"
+                    stringResource(R.string.phonetools_health_install_hint, Health.unavailableReason(context).orEmpty())
                 source == PhoneSource.Health && source in enabled && healthGranted != null && healthGranted!!.isEmpty() ->
-                    "Health Connect 里没有允许读取，关掉再打开重新授权"
+                    stringResource(R.string.phonetools_health_none_allowed)
                 source == PhoneSource.Health && source in enabled && healthGranted != null && !healthGranted!!.containsAll(Health.permissions) ->
-                    "只允许了部分数据，缺的那些查不到"
-                else -> source.detail
+                    stringResource(R.string.phonetools_health_some_allowed)
+                else -> stringResource(source.detail)
             }
+            val toggleFailed = stringResource(R.string.phonetools_error_toggle)
+            val storeFailed = stringResource(R.string.phonetools_error_store)
+            val settingsFailed = stringResource(R.string.phonetools_error_settings)
+            val systemSettingsFailed = stringResource(R.string.phonetools_error_system_settings)
             JGroupItem(GroupPosition.Single, Modifier.padding(bottom = 12.dp)) {
-                JSwitchRow(source.title, checked = source in enabled, subtitle = subtitle, onCheckedChange = { value ->
+                JSwitchRow(stringResource(source.title), checked = source in enabled, subtitle = subtitle, onCheckedChange = { value ->
                     scope.launch {
                         try { runtime.settings.setEnabled(source, value); error = null }
-                        catch (_: Exception) { error = "开关未保存，请重试。" }
+                        catch (_: Exception) { error = toggleFailed }
                     }
                 })
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    JTag(status)
+                    JTag(runtime.permissions.statusText(source, status))
                     if (source == PhoneSource.Health) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (!Health.available(context)) {
-                                JButton("获取", {
+                                JButton(stringResource(R.string.phonetools_get), {
                                     try { context.startActivity(Health.installIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                                    catch (_: Exception) { error = "未能打开应用商店。" }
+                                    catch (_: Exception) { error = storeFailed }
                                 }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
                             } else {
-                                JButton(if (status == "部分授权") "重新选择" else "授权", {
+                                JButton(stringResource(if (status == PhoneAccess.Partial) R.string.phonetools_choose_again else R.string.phonetools_allow_access), {
                                     healthLauncher.launch(Health.permissions)
                                 }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
-                                JButton("Health Connect 设置", {
+                                JButton(stringResource(R.string.phonetools_health_settings), {
                                     try { context.startActivity(Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS)) }
                                     catch (_: Exception) {
                                         try { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }
-                                        catch (_: Exception) { error = "未能打开设置。" }
+                                        catch (_: Exception) { error = settingsFailed }
                                     }
                                 }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
                             }
                         }
                     } else if (runtime.permissions.permissions(source).isNotEmpty() || source == PhoneSource.Notifications) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            JButton(if (status == "部分授权") "重新选择" else "授权", {
+                            JButton(stringResource(if (status == PhoneAccess.Partial) R.string.phonetools_choose_again else R.string.phonetools_allow_access), {
                                 val permissions = runtime.permissions.permissions(source)
                                 if (permissions.isNotEmpty()) launcher.launch(permissions)
                             }, kind = JButtonKind.Secondary, size = JButtonSize.Small,
                                 enabled = runtime.permissions.permissions(source).isNotEmpty())
-                            JButton("系统设置", {
+                            JButton(stringResource(R.string.phonetools_system_settings), {
                                 try { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }
-                                catch (_: Exception) { error = "未能打开系统设置，请手动查看 Persona 的权限。" }
+                                catch (_: Exception) { error = systemSettingsFailed }
                             }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
                         }
                     }
@@ -121,7 +126,7 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
             }
         }
         item {
-            Text("Android 没有系统提醒事项接口。通知列表只包含 Persona 当前显示的通知。健康数据通过 Health Connect 读取（安卓 14 起系统自带）。",
+            Text(stringResource(R.string.phonetools_footnote),
                 style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
         }
         error?.let { item { JNotice(it, Modifier.padding(top = 12.dp), status = Status.NeedsYou) } }
@@ -133,11 +138,11 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
 fun PhoneConfirmationHost(confirmations: PhoneConfirmations) {
     val pending by confirmations.pending.collectAsStateWithLifecycle()
     pending?.let { request ->
-        JDialog(onDismiss = { confirmations.resolve(request.token, false) }, title = "确认手机操作",
+        JDialog(onDismiss = { confirmations.resolve(request.token, false) }, title = stringResource(R.string.phonetools_confirm_title),
             content = {
                 Text(request.summary, Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
                     style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-            }, confirm = "允许" to { confirmations.resolve(request.token, true) },
-            dismiss = "拒绝" to { confirmations.resolve(request.token, false) })
+            }, confirm = stringResource(R.string.phonetools_allow) to { confirmations.resolve(request.token, true) },
+            dismiss = stringResource(R.string.phonetools_deny) to { confirmations.resolve(request.token, false) })
     }
 }

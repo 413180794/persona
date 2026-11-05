@@ -1,5 +1,7 @@
 package persona.android.di
 
+import persona.android.AppText
+import persona.android.R
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,7 +42,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object MachineManagementModule {
     private fun ConnectionRuntime.connection(): OkHttpHubConnection {
-        val data = scopedData.value ?: throw HubFailure(HubError.NoNetwork, "请先配对 hub", retryable = false)
+        val data = scopedData.value ?: throw HubFailure(HubError.NoNetwork, AppText.get(R.string.app_error_pair_first), retryable = false)
         return connectionFor(data)
     }
 

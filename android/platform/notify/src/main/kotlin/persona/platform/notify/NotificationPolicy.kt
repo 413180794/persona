@@ -15,17 +15,20 @@ import persona.core.domain.answer.AnswerContext
 import persona.core.domain.answer.AnswerDraft
 import persona.core.domain.answer.AnswerRetry
 import persona.core.domain.answer.RequestExpiry
+import androidx.annotation.StringRes
 import java.time.Instant
 import java.util.UUID
 
 internal data class NotificationAction(
     val key: String,
-    val label: String,
+    /** A question's or a dialog's own option; null when [labelRes] names a fixed button. */
+    val label: String?,
     val authenticationRequired: Boolean,
-    val replyLabel: String? = null,
+    @StringRes val replyLabel: Int? = null,
     val answer: AnswerAction,
     val draft: AnswerDraft,
     val retry: AnswerRetry,
+    @StringRes val labelRes: Int? = null,
 )
 
 /** Notification presentation only; action availability and authentication belong to ApprovalPolicy. */
@@ -34,16 +37,17 @@ internal object NotificationPolicy {
 
     fun actions(ix: Interaction): List<NotificationAction> =
         ApprovalPolicy.actions(AnswerEntry.Notification, ix.kind, locked = true).sortedBy { order(it.id) }.flatMap { policy ->
-            fun action(key: String, label: String, answer: AnswerAction, draft: AnswerDraft = AnswerDraft()) = NotificationAction(
-                key, label, policy.authentication != Authentication.None,
-                when (policy.input) { "message" -> "拒绝原因"; "feedback" -> "修改意见"; else -> null },
-                answer, draft, policy.retry,
-            )
+            fun action(key: String, label: String?, answer: AnswerAction, draft: AnswerDraft = AnswerDraft(), @StringRes labelRes: Int? = null) =
+                NotificationAction(
+                    key, label, policy.authentication != Authentication.None,
+                    when (policy.input) { "message" -> R.string.notify_reply_deny_reason; "feedback" -> R.string.notify_reply_feedback; else -> null },
+                    answer, draft, policy.retry, labelRes,
+                )
             when (policy.id) {
-                ApprovalAction.Allow -> listOf(action(policy.id.wire, "允许", AnswerAction.Allow))
-                ApprovalAction.Deny -> listOf(action(policy.id.wire, "拒绝", AnswerAction.Deny))
-                ApprovalAction.ApproveEdits -> listOf(action(policy.id.wire, "批准", AnswerAction.ApproveEdits))
-                ApprovalAction.Reject -> listOf(action(policy.id.wire, "打回", AnswerAction.Reject))
+                ApprovalAction.Allow -> listOf(action(policy.id.wire, null, AnswerAction.Allow, labelRes = R.string.notify_action_allow))
+                ApprovalAction.Deny -> listOf(action(policy.id.wire, null, AnswerAction.Deny, labelRes = R.string.notify_action_deny))
+                ApprovalAction.ApproveEdits -> listOf(action(policy.id.wire, null, AnswerAction.ApproveEdits, labelRes = R.string.notify_action_approve))
+                ApprovalAction.Reject -> listOf(action(policy.id.wire, null, AnswerAction.Reject, labelRes = R.string.notify_action_reject))
                 ApprovalAction.ChooseOption -> when {
                     AnswerRequirement.SingleQuestionSingleChoice in policy.requirements ->
                         ix.questions?.singleOrNull()?.takeUnless { it.multiSelect }?.let { question ->

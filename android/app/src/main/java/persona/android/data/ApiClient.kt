@@ -1,5 +1,7 @@
 package persona.android.data
 
+import persona.android.AppText
+import persona.android.R
 import persona.core.contracts.Interaction
 import persona.core.contracts.JsonCodec
 import kotlinx.coroutines.Dispatchers
@@ -67,7 +69,7 @@ class ApiClient(
                     val msg = obj?.get("error")?.jsonPrimitive?.content ?: "HTTP ${resp.code}"
                     val rid = resp.header("X-Request-Id")
                     throw HubException(
-                        resp.code, if (resp.code >= 500 && rid != null) "$msg（请求 $rid）" else msg,
+                        resp.code, if (resp.code >= 500 && rid != null) AppText.get(R.string.app_error_request_id, msg, rid) else msg,
                         obj?.get("code")?.jsonPrimitive?.content, obj,
                     )
                 }

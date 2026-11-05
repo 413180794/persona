@@ -1,9 +1,0 @@
-{
-  "platform/shortcuts/src/debug/kotlin/persona/platform/shortcuts/ApproveFirstPreviewActivity.kt": 6,
-  "platform/shortcuts/src/debug/kotlin/persona/platform/shortcuts/WidgetPreviewActivity.kt": 2,
-  "platform/shortcuts/src/main/kotlin/persona/platform/shortcuts/ApproveFirst.kt": 6,
-  "platform/shortcuts/src/main/kotlin/persona/platform/shortcuts/PersonaTileService.kt": 1,
-  "platform/shortcuts/src/main/kotlin/persona/platform/shortcuts/PersonaWidget.kt": 3,
-  "platform/shortcuts/src/main/kotlin/persona/platform/shortcuts/ShortcutPublisher.kt": 3,
-  "platform/shortcuts/src/main/kotlin/persona/platform/shortcuts/ShortcutText.kt": 24
-}

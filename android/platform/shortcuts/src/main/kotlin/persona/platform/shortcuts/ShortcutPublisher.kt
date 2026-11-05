@@ -23,9 +23,9 @@ internal object ShortcutPublisher {
     fun publishFixed(context: Context) {
         val approve = Intent(context, ApproveFirstActivity::class.java).setAction(ApproveFirstActivity.ACTION_APPROVE)
         runCatching {
-            ShortcutManagerCompat.pushDynamicShortcut(context, shortcut(context, ASK, "问 Persona", "问 Persona",
+            ShortcutManagerCompat.pushDynamicShortcut(context, shortcut(context, ASK, context.getString(R.string.shortcuts_ask_label), context.getString(R.string.shortcuts_ask_label),
                 SurfaceLinks.ask(context), R.drawable.ic_shortcut_ask, 0))
-            ShortcutManagerCompat.pushDynamicShortcut(context, shortcut(context, APPROVE, "批准待处理", ShortcutText.TITLE,
+            ShortcutManagerCompat.pushDynamicShortcut(context, shortcut(context, APPROVE, context.getString(R.string.shortcuts_approve_label), context.getString(R.string.shortcuts_approve_title),
                 approve, R.drawable.ic_shortcut_approve, 1))
         }.onFailure { Log.w(TAG, "Fixed shortcuts not published: ${it.javaClass.simpleName}") }
     }
@@ -33,7 +33,7 @@ internal object ShortcutPublisher {
     /** Replaces the recent agents' shortcuts with [recent] (none when unpaired); ones no longer among them go. */
     fun publishRecent(context: Context, recent: List<Session>) {
         val shortcuts = recent.mapIndexed { index, session ->
-            shortcut(context, SESSION + session.key.path, shortLabel(session), longLabel(session),
+            shortcut(context, SESSION + session.key.path, shortLabel(session), longLabel(context, session),
                 SurfaceLinks.conversation(context, session.key, session.assistant), R.drawable.ic_shortcut_agent, 10 + index)
         }
         runCatching {
@@ -45,7 +45,7 @@ internal object ShortcutPublisher {
     }
 
     internal fun shortLabel(session: Session) = session.displayTitle.take(24)
-    internal fun longLabel(session: Session) = "打开 ${session.displayTitle}".take(48)
+    internal fun longLabel(context: Context, session: Session) = context.getString(R.string.shortcuts_open_session, session.displayTitle).take(48)
 
     private fun shortcut(context: Context, id: String, short: String, long: String, intent: Intent, icon: Int, rank: Int) =
         ShortcutInfoCompat.Builder(context, id)

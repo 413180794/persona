@@ -59,8 +59,15 @@ object Health {
     /** Why it can't be used on this phone, for the settings row and the tool error; null when it can. */
     fun unavailableReason(c: Context): String? = when (status(c)) {
         HealthConnectClient.SDK_AVAILABLE -> null
-        HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "Health Connect 需要更新"
-        else -> "这台手机没有 Health Connect"
+        HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> c.getString(R.string.phonetools_health_update_required)
+        else -> c.getString(R.string.phonetools_health_missing)
+    }
+
+    /** The same, in the words the tool result gives the model (not the phone's language). */
+    private fun modelReason(c: Context): String? = when (status(c)) {
+        HealthConnectClient.SDK_AVAILABLE -> null
+        HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "Health Connect 需要更新"  // i18n-ignore: tool result for the model
+        else -> "这台手机没有 Health Connect"  // i18n-ignore: tool result for the model
     }
 
     /** The read permissions granted now (empty when Health Connect is missing or does not answer). */
@@ -121,8 +128,8 @@ object Health {
         now.atZone(zone).toLocalDate().minusDays((days - 1).toLong()).atStartOfDay(zone).toInstant() to now
 
     suspend fun summary(c: Context, args: JsonObject): PhoneToolResult {
-        unavailableReason(c)?.let {
-            unavailable("$it，读不了健康数据。\nHealth Connect is " +
+        modelReason(c)?.let {
+            unavailable("$it，读不了健康数据。\nHealth Connect is " +  // i18n-ignore: tool result for the model
                 (if (status(c) == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) "out of date" else "not available") +
                 " on this Android phone, so there is no health data to read.")
         }
@@ -132,8 +139,8 @@ object Health {
         val granted = client.permissionController.getGrantedPermissions()
         val usable = requested.filter { HealthPermission.getReadPermission(recordTypes.getValue(it)) in granted }
         if (usable.isEmpty()) {
-            unavailable("没有权限：健康。请在安卓手机的 Persona › 设置 › 手机数据 里打开「健康」并在 Health Connect 里允许读取。\n" +
-                "Permission denied: Health. Turn on 健康 in Persona › Settings › Phone data on the Android phone and allow reading in Health Connect.")
+            unavailable("没有权限：健康。请在安卓手机的 Persona › 设置 › 手机数据 里打开「健康」并在 Health Connect 里允许读取。\n" +  // i18n-ignore: tool result for the model
+                "Permission denied: Health. Turn on 健康 in Persona › Settings › Phone data on the Android phone and allow reading in Health Connect.")  // i18n-ignore: tool result for the model
         }
         val zone = ZoneId.systemDefault()
         val (start, end) = window(days, Instant.now(), zone)

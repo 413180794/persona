@@ -1,5 +1,7 @@
 package persona.android.di
 
+import persona.android.AppText
+import persona.android.R
 import android.app.Application
 import dagger.Module
 import dagger.Provides
@@ -105,7 +107,7 @@ class WiredPairingService @Inject constructor(application: Application, private 
     }
 
     override suspend fun scheduleLockScreenTest(delaySeconds: Int) {
-        throw UnsupportedOperationException("当前 hub 尚未提供锁屏测试接口")
+        throw UnsupportedOperationException(AppText.get(R.string.app_error_lock_test_unsupported))
     }
 
     override suspend fun check(): AppUpdate? = lock.withLock {

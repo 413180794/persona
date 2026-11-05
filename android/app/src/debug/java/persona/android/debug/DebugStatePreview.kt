@@ -43,7 +43,7 @@ class DebugStatePreview : DeveloperTools by DeveloperPages {
             val inbox = object : persona.feature.inbox.InboxRepository by session.inbox {
                 override val connectionState = connection.state
                 override val snapshot = MutableStateFlow(if (empty) InboxSnapshot(
-                    loading = state == "loading", error = if (state == "load-failed") "加载失败，请重试" else null,
+                    loading = state == "loading", error = if (state == "load-failed") "加载失败，请重试" else null,  // i18n-ignore: debug preview fixture data
                 ) else session.inbox.snapshot.value)
                 override suspend fun refresh() = Unit
                 override suspend fun refreshNow() = Unit
@@ -54,7 +54,7 @@ class DebugStatePreview : DeveloperTools by DeveloperPages {
             }
             val chats = object : ChatRepository by session.chats {
                 override fun observe(session: SessionKey) = MutableStateFlow(ChatSnapshot(
-                    loading = state == "loading", error = if (state == "load-failed") "加载失败，请重试" else null,
+                    loading = state == "loading", error = if (state == "load-failed") "加载失败，请重试" else null,  // i18n-ignore: debug preview fixture data
                     items = emptyList(), verified = state !in setOf("loading", "load-failed"),
                 ))
             }

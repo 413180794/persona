@@ -13,7 +13,7 @@ class PhoneToolRegistry(
     private val available: () -> Boolean,
     private val foreground: () -> Boolean,
     private val permitted: (String, PhoneSource) -> Boolean,
-    private val confirm: suspend (String) -> Boolean,
+    private val confirm: suspend (PhoneConfirmationText) -> Boolean,
     private val execute: suspend (String, JsonObject) -> PhoneToolResult,
 ) {
     private val lock = Mutex()
@@ -74,38 +74,38 @@ internal object PhoneToolText {
     fun declined() = PhoneToolResult.text(DECLINED, true)
 
     fun unknownTool(name: String, available: List<String>) = PhoneToolResult.text(
-        "未知工具 / Unknown tool: $name. 可用工具 / Available tools: ${available.joinToString(", ")}.", true)
+        "未知工具 / Unknown tool: $name. 可用工具 / Available tools: ${available.joinToString(", ")}.", true)  // i18n-ignore: tool result for the model
 
     fun turnedOff(source: PhoneSource) = PhoneToolResult.text(
-        "“${source.title}” 已在手机上关闭 / The ${source.key} data source is turned off on the phone. " +
-            "The user can enable it in Persona › 设置 › 手机数据.", true)
+        "“${source.modelName}” 已在手机上关闭 / The ${source.key} data source is turned off on the phone. " +  // i18n-ignore: tool result for the model
+            "The user can enable it in Persona › 设置 › 手机数据.", true)  // i18n-ignore: tool result for the model
 
     fun denied(source: PhoneSource?) = PhoneToolResult.text(source?.let {
-        "没有权限：${it.title}。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\n" +
+        "没有权限：${it.modelName}。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\n" +  // i18n-ignore: tool result for the model
             "Permission denied: ${it.key}. Grant access in Persona › Settings › Phone data on the Android phone."
-    } ?: "没有权限。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\nPermission denied. Grant access in Persona › Settings › Phone data on the Android phone.", true)
+    } ?: "没有权限。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\nPermission denied. Grant access in Persona › Settings › Phone data on the Android phone.", true)  // i18n-ignore: tool result for the model
 
     fun needsForeground() = PhoneToolResult.text(
-        "安卓只允许打开着的 Persona 使用这项数据 / Android only allows this while Persona is open on screen: " +
+        "安卓只允许打开着的 Persona 使用这项数据 / Android only allows this while Persona is open on screen: " +  // i18n-ignore: tool result for the model
             "ask the user to open Persona, then retry.", true)
 
     fun interrupted() = PhoneToolResult.text(
-        "手机工具已关闭或 Persona 已进入后台 / The tool was turned off or Persona left the screen before it finished.", true)
+        "手机工具已关闭或 Persona 已进入后台 / The tool was turned off or Persona left the screen before it finished.", true)  // i18n-ignore: tool result for the model
 
-    fun unavailable(message: String?) = PhoneToolResult.text(message ?: "手机数据暂不可用 / Phone data is not available right now.", true)
+    fun unavailable(message: String?) = PhoneToolResult.text(message ?: "手机数据暂不可用 / Phone data is not available right now.", true)  // i18n-ignore: tool result for the model
 
-    fun invalid(message: String) = PhoneToolResult.text("参数错误 / Invalid argument: $message", true)
+    fun invalid(message: String) = PhoneToolResult.text("参数错误 / Invalid argument: $message", true)  // i18n-ignore: tool result for the model
 
     fun timedOut() = PhoneToolResult.text(
-        "手机操作超时 / The phone did not finish within 30 seconds. Check what happened before trying again.", true)
+        "手机操作超时 / The phone did not finish within 30 seconds. Check what happened before trying again.", true)  // i18n-ignore: tool result for the model
 
     fun failed(error: Exception) = PhoneToolResult.text(
-        "请求失败 / Request failed: ${error.message ?: error.javaClass.simpleName}", true)
+        "请求失败 / Request failed: ${error.message ?: error.javaClass.simpleName}", true)  // i18n-ignore: tool result for the model
 
     fun failure(failure: PhoneToolFailure) = when (failure.kind) {
         PhoneToolFailure.Kind.InvalidArgument -> invalid(failure.message.orEmpty())
         PhoneToolFailure.Kind.Denied -> PhoneToolResult.text(
-            "没有权限：${failure.message}。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\n" +
+            "没有权限：${failure.message}。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\n" +  // i18n-ignore: tool result for the model
                 "Permission denied: ${failure.message}. Grant access in Persona › Settings › Phone data on the Android phone.", true)
         PhoneToolFailure.Kind.Unavailable -> unavailable(failure.message)
     }

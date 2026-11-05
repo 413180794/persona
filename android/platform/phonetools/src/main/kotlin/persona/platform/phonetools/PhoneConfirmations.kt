@@ -18,7 +18,8 @@ class PhoneConfirmations(context: Context) : AutoCloseable {
     private var answer: CompletableDeferred<Boolean>? = null
     @Volatile private var foreground = false
 
-    suspend fun confirm(summary: String): Boolean {
+    suspend fun confirm(text: PhoneConfirmationText): Boolean {
+        val summary = text(context.resources)
         val token = UUID.randomUUID().toString()
         val deferred = CompletableDeferred<Boolean>()
         answer = deferred
@@ -45,18 +46,18 @@ class PhoneConfirmations(context: Context) : AutoCloseable {
     private fun showNotification(): Boolean {
         val current = _pending.value ?: return false
         return try {
-            manager.createNotificationChannel(NotificationChannel(CHANNEL, "手机操作确认", NotificationManager.IMPORTANCE_HIGH))
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(R.string.phonetools_confirm_channel), NotificationManager.IMPORTANCE_HIGH))
             if (!manager.areNotificationsEnabled() || manager.getNotificationChannel(CHANNEL).importance == NotificationManager.IMPORTANCE_NONE) return false
             fun action(allowed: Boolean): Notification.Action {
                 val intent = Intent(context, PhoneConfirmationReceiver::class.java)
                     .setAction("jarvis.phone.confirm").setData(Uri.parse("jarvis-phone://confirmation/${current.token}/$allowed"))
                     .putExtra("token", current.token).putExtra("allowed", allowed)
                 val pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                return Notification.Action.Builder(null, if (allowed) "允许" else "拒绝", pendingIntent)
+                return Notification.Action.Builder(null, context.getString(if (allowed) R.string.phonetools_allow else R.string.phonetools_deny), pendingIntent)
                     .setAuthenticationRequired(allowed).build()
             }
             val builder = Notification.Builder(context, CHANNEL).setSmallIcon(persona.core.designsystem.R.drawable.ic_stat)
-                .setContentTitle("请确认手机操作").setContentText(current.summary)
+                .setContentTitle(context.getString(R.string.phonetools_confirm_notification)).setContentText(current.summary)
                 .setStyle(Notification.BigTextStyle().bigText(current.summary)).setVisibility(Notification.VISIBILITY_PRIVATE)
                 .setCategory(Notification.CATEGORY_RECOMMENDATION).setTimeoutAfter(TIMEOUT_MILLIS)
                 .addAction(action(false)).addAction(action(true))

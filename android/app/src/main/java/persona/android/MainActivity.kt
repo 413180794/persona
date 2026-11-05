@@ -1,5 +1,6 @@
 package persona.android
 
+import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
@@ -141,8 +142,8 @@ class MainActivity : ComponentActivity() {
                     else Surface(Modifier.fillMaxSize()) {
                         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp)) {
                             if (failed) {
-                                Text("配对信息暂时无法读取，原数据已保留。")
-                                TextButton(onClick = app::restorePairing) { Text("重试", maxLines = 1) }
+                                Text(stringResource(R.string.app_pairing_unreadable))
+                                TextButton(onClick = app::restorePairing) { Text(stringResource(R.string.app_retry), maxLines = 1) }
                             } else CircularProgressIndicator()
                         }
                     }

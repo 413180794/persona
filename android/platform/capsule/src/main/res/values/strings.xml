@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capsule_window_title">Persona floating capsule</string>
+    <string name="capsule_mode_off">Off</string>
+    <string name="capsule_mode_active">When tasks are running</string>
+    <string name="capsule_mode_always">Always</string>
+    <string name="capsule_failure">Something went wrong. Open the full chat to check</string>
+    <string name="capsule_open">Open the Persona floating capsule</string>
+    <string name="capsule_open_new">Open the Persona floating capsule, new alerts</string>
+    <string name="capsule_collapse">Collapse</string>
+    <string name="capsule_loading">Loading…</string>
+    <string name="capsule_empty">Nothing here yet</string>
+    <string name="capsule_back">Back to list</string>
+    <string name="capsule_placeholder_working">Add to or change the request…</string>
+    <string name="capsule_placeholder">What should Persona do?</string>
+    <string name="capsule_open_chat">Open chat</string>
+    <string name="capsule_send">Send</string>
+    <string name="capsule_done_suffix">· Done</string>
+    <string name="capsule_done_description">%1$s · Done</string>
+</resources>

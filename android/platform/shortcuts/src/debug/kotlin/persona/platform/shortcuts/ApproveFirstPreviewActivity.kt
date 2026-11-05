@@ -38,21 +38,21 @@ class ApproveFirstPreviewActivity : ComponentActivity() {
     }
 
     private fun state(name: String?): ApproveState {
-        val where = "补齐网络层的单元测试 · MacBook"
+        val where = "补齐网络层的单元测试 · MacBook"  // i18n-ignore: debug preview fixture data
         val permission = Interaction("preview-permission", "macbook", "tests", kind = "permission", toolName = "Bash",
-            summary = "Bash: swift test --filter NetworkTests", sessionTitle = "补齐网络层的单元测试")
-        val plan = Interaction("preview-plan", "studio", "photos", kind = "plan", sessionTitle = "照片同步脚本支持 HEIC",
-            plan = "## 支持 HEIC\n\n1. 用 sips 把 HEIC 转成 JPEG，质量 90，保留 EXIF\n2. 转换放到导出前，原文件不动\n3. 已经转过的按内容哈希跳过")
+            summary = "Bash: swift test --filter NetworkTests", sessionTitle = "补齐网络层的单元测试")  // i18n-ignore: debug preview fixture data
+        val plan = Interaction("preview-plan", "studio", "photos", kind = "plan", sessionTitle = "照片同步脚本支持 HEIC",  // i18n-ignore: debug preview fixture data
+            plan = "## 支持 HEIC\n\n1. 用 sips 把 HEIC 转成 JPEG，质量 90，保留 EXIF\n2. 转换放到导出前，原文件不动\n3. 已经转过的按内容哈希跳过")  // i18n-ignore: debug preview fixture data
         return when (name) {
             "nothing" -> ApproveState.Nothing
             "unpaired" -> ApproveState.NotPaired
             "question" -> ApproveState.NeedsApp(permission.copy(kind = "question",
-                questions = listOf(Question("网络层的测试用哪个框架？"))), where)
+                questions = listOf(Question("网络层的测试用哪个框架？"))), where)  // i18n-ignore: debug preview fixture data
             "screen" -> ApproveState.NeedsApp(permission.copy(kind = "screen"), where)
             "permission" -> ApproveState.Confirm(permission, where)
-            "plan" -> ApproveState.Confirm(plan, "照片同步脚本支持 HEIC · Mac Studio")
+            "plan" -> ApproveState.Confirm(plan, "照片同步脚本支持 HEIC · Mac Studio")  // i18n-ignore: debug preview fixture data
             "sending" -> ApproveState.Confirm(permission, where, sending = true)
-            "error" -> ApproveState.Failed(ShortcutText.loadFailure(java.net.ConnectException("refused")))
+            "error" -> ApproveState.Failed(ShortcutText.loadFailure(resources, java.net.ConnectException("refused")))
             else -> ApproveState.Loading
         }
     }

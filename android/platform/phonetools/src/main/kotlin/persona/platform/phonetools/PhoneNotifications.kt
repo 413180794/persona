@@ -21,7 +21,7 @@ internal class PhoneNotifications(private val context: Context) {
         val delay = args.int("delay_seconds", 0, 0, 86_400)
         channel()
         if (!manager.areNotificationsEnabled() || manager.getNotificationChannel(CHANNEL).importance == NotificationManager.IMPORTANCE_NONE) {
-            throw PhoneToolFailure(PhoneToolFailure.Kind.Denied, "通知 / Notifications. The user has turned notifications off " +
+            throw PhoneToolFailure(PhoneToolFailure.Kind.Denied, "通知 / Notifications. The user has turned notifications off " +  // i18n-ignore: tool result for the model
                 "for Persona in Android Settings, so nothing was shown.")
         }
         val id = UUID.randomUUID().toString()
@@ -74,7 +74,7 @@ internal class PhoneNotifications(private val context: Context) {
     }
 
     // The channel the user sees in system settings; the name says who sends these (the old app's wording).
-    private fun channel() { manager.createNotificationChannel(NotificationChannel(CHANNEL, "Claude 发来的通知", NotificationManager.IMPORTANCE_DEFAULT)) }
+    private fun channel() { manager.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(R.string.phonetools_messages_channel), NotificationManager.IMPORTANCE_DEFAULT)) }
     companion object { const val CHANNEL = "phone_tools_messages" }
 }
 

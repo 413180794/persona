@@ -1,4 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="shortcuts_widget_description">あなたの対応待ち・作業中・完了したエージェント</string>
+    <string name="shortcuts_approve_title">最初の保留中を承認</string>
+    <string name="shortcuts_loading">対応待ちを確認しています…</string>
+    <string name="shortcuts_not_paired">まだペアリングされていません。Personaを開いて、ハブのペアリング用QRコードをスキャンしてください。</string>
+    <string name="shortcuts_no_pending">対応待ちのものはありません。</string>
+    <string name="shortcuts_plan_note">承認すると編集は自動で受け入れられます。コマンドは引き続き先に確認されます。</string>
+    <string name="shortcuts_ask_permission">%1$sを許可しますか？</string>
+    <string name="shortcuts_this_tool">このツール</string>
+    <string name="shortcuts_ask_plan">このプランを承認しますか？</string>
+    <string name="shortcuts_ask_plan_excerpt">このプランを承認しますか？\n「%1$s」</string>
+    <string name="shortcuts_approve">承認</string>
+    <string name="shortcuts_allow">許可</string>
+    <string name="shortcuts_done_allowed_tool">%1$sを許可しました</string>
+    <string name="shortcuts_done_allowed">許可しました</string>
+    <string name="shortcuts_done_plan">プランを承認しました。実行を開始します</string>
+    <string name="shortcuts_needs_app_question">これは質問です。Personaを開いて回答してください。</string>
+    <string name="shortcuts_needs_app_screen">ターミナルが入力を待っています。Personaを開いてください。</string>
+    <string name="shortcuts_needs_app">Personaを開いて対応してください。</string>
+    <string name="shortcuts_error_generic">エラーが発生しました。しばらくしてからもう一度お試しください。</string>
+    <string name="shortcuts_error_gone">これはすでに対応済みです。</string>
+    <string name="shortcuts_error_prompt_changed">ターミナルのダイアログが変わりました。Personaを開いて新しい内容を確認してください。</string>
+    <string name="shortcuts_error_not_delivered">届きませんでした：%1$s</string>
+    <string name="shortcuts_error_refused">ハブがこの操作を受け付けませんでした。</string>
+    <string name="shortcuts_error_unconfirmed">結果未確認：Personaを開いて処理されたか確認してください。</string>
+    <string name="shortcuts_error_pairing">ペアリングが無効になりました。Personaを開いて再度ペアリングしてください。</string>
+    <string name="shortcuts_error_certificate">ハブの証明書が変わりました。Personaを開いて再度ペアリングしてください。</string>
+    <string name="shortcuts_error_unreachable">ハブに接続できません。スマートフォンからハブにアクセスできるか確認してください（同じネットワークまたはVPN）。</string>
+    <string name="shortcuts_locked">スマートフォンのロックを解除してから承認してください。</string>
+    <string name="shortcuts_open_persona">Personaを開く</string>
+    <string name="shortcuts_ok">OK</string>
+    <string name="shortcuts_cancel">キャンセル</string>
+    <string name="shortcuts_not_paired_short">未ペアリング</string>
+    <string name="shortcuts_all_done">すべて対応済み</string>
+    <string name="shortcuts_tile_description">Persona：%1$s</string>
+    <string name="shortcuts_widget_scan">Personaを開いてハブのQRコードをスキャン</string>
+    <string name="shortcuts_widget_nobody">対応が必要なエージェントはありません</string>
+    <string name="shortcuts_ask_label">Personaに質問</string>
+    <string name="shortcuts_approve_label">保留中を承認</string>
+    <string name="shortcuts_open_session">%1$sを開く</string>
 </resources>

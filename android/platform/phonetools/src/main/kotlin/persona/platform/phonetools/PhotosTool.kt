@@ -55,7 +55,7 @@ internal class PhotosTool(private val context: Context) {
                     if (video) put("duration_seconds", (cursor.getLong(8) / 100.0).roundToInt() / 10.0)
                 }
             }
-        } ?: unavailable("照片库暂不可用 / The photo library is not available on this phone.")
+        } ?: unavailable("照片库暂不可用 / The photo library is not available on this phone.")  // i18n-ignore: tool result for the model
         return PhoneToolResult.text(buildJsonObject {
             put("count", rows.size)
             if (rows.isNotEmpty()) put("access", if (limitedAccess()) "limited" else "full")
@@ -91,7 +91,7 @@ internal class PhotosTool(private val context: Context) {
         try {
             val bytes = ByteArrayOutputStream().use { output ->
                 if (!bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, output)) {
-                    unavailable("无法编码这张照片 / Could not encode the photo as JPEG")
+                    unavailable("无法编码这张照片 / Could not encode the photo as JPEG")  // i18n-ignore: tool result for the model
                 }
                 output.toByteArray()
             }
@@ -126,7 +126,7 @@ internal fun parsePhotoId(id: String): Pair<String, Long>? {
 
 /** A photo in a screenshots folder (Screenshots, or the 截屏 / 截图 folders some Chinese ROMs use). */
 internal fun isScreenshot(path: String?): Boolean =
-    path != null && (path.contains("screenshot", true) || path.contains("截屏") || path.contains("截图"))
+    path != null && (path.contains("screenshot", true) || path.contains("截屏") || path.contains("截图"))  // i18n-ignore: matches folder names of Chinese phones
 
 /**
  * The image block of a tool result. The hub reads `mime_type` (proto.Content); with `mimeType` it forwarded the

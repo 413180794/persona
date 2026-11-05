@@ -26,7 +26,7 @@ internal class ContactsTool(private val context: Context) {
     private fun firstContacts(limit: Int): List<Long> = buildList {
         resolver.query(Contacts.CONTENT_URI, arrayOf(Contacts._ID), null, null, "${Contacts.SORT_KEY_PRIMARY} ASC")?.use { cursor ->
             while (size < limit && cursor.moveToNext()) add(cursor.getLong(0))
-        } ?: unavailable("通讯录暂不可用 / The contacts provider is not available on this phone.")
+        } ?: unavailable("通讯录暂不可用 / The contacts provider is not available on this phone.")  // i18n-ignore: tool result for the model
     }
 
     /**
@@ -49,7 +49,7 @@ internal class ContactsTool(private val context: Context) {
         val found = linkedSetOf<Long>()
         resolver.query(Data.CONTENT_URI, arrayOf(Data.CONTACT_ID), selection, values.toTypedArray(), null)?.use { cursor ->
             while (found.size < MAX_CANDIDATES && cursor.moveToNext()) found += cursor.getLong(0)
-        } ?: unavailable("通讯录暂不可用 / The contacts provider is not available on this phone.")
+        } ?: unavailable("通讯录暂不可用 / The contacts provider is not available on this phone.")  // i18n-ignore: tool result for the model
         if (found.isEmpty()) return emptyList()
         // Back in the address book's order, as iOS enumerates it.
         return buildList {

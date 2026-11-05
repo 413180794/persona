@@ -1,25 +1,26 @@
 package persona.platform.notify
 
+import androidx.annotation.StringRes
 import persona.core.contracts.api.ConnectionState
-import persona.core.designsystem.PendingStatus
-import persona.core.domain.answer.RequestExpiry
 
-internal fun ongoingTitle(state: ConnectionState): String = when (state) {
-    ConnectionState.Online -> "已连接 hub"
-    ConnectionState.Connecting -> "连接中…"
-    ConnectionState.Updating -> "更新中…"
-    ConnectionState.WaitingForNetwork -> PendingStatus.WaitingForNetwork.label
-    ConnectionState.NeedsLocalNetworkPermission -> "需要本地网络权限"
-    ConnectionState.CertificateMismatch -> "hub 的证书变了"
-    ConnectionState.Revoked -> "配对已失效"
+@StringRes
+internal fun ongoingTitle(state: ConnectionState): Int = when (state) {
+    ConnectionState.Online -> R.string.notify_connection_online
+    ConnectionState.Connecting -> R.string.notify_connection_connecting
+    ConnectionState.Updating -> R.string.notify_connection_updating
+    ConnectionState.WaitingForNetwork -> R.string.notify_connection_waiting_network
+    ConnectionState.NeedsLocalNetworkPermission -> R.string.notify_connection_local_network
+    ConnectionState.CertificateMismatch -> R.string.notify_connection_certificate
+    ConnectionState.Revoked -> R.string.notify_connection_revoked
 }
 
-internal fun actionResultCopy(result: NotificationActionResult): Pair<String, String>? = when (result) {
-    NotificationActionResult.Expired -> RequestExpiry.expiredLabel to "请打开终端处理。"
-    NotificationActionResult.Gone -> "已在电脑上处理" to "这条请求已不在待处理列表中，请打开会话查看。"
-    NotificationActionResult.Locked -> "请先解锁" to "解锁后再提交你的选择。"
-    NotificationActionResult.Invalid -> "操作不可用" to "请打开会话查看最新请求。"
-    NotificationActionResult.Duplicate -> PendingStatus.Unconfirmed.label to "已记录这次操作，请打开会话核对结果，不要重复提交。"
-    NotificationActionResult.ReadOnly -> "不能在手机上审批" to "这个会话只能查看，请打开会话或到电脑上处理。"
+/** The title and the detail of the notice that replaces a request's notification, as string resources. */
+internal fun actionResultCopy(result: NotificationActionResult): Pair<Int, Int>? = when (result) {
+    NotificationActionResult.Expired -> R.string.notify_result_expired_title to R.string.notify_result_expired_detail
+    NotificationActionResult.Gone -> R.string.notify_result_gone_title to R.string.notify_result_gone_detail
+    NotificationActionResult.Locked -> R.string.notify_result_locked_title to R.string.notify_result_locked_detail
+    NotificationActionResult.Invalid -> R.string.notify_result_invalid_title to R.string.notify_result_invalid_detail
+    NotificationActionResult.Duplicate -> R.string.notify_result_unconfirmed_title to R.string.notify_result_duplicate_detail
+    NotificationActionResult.ReadOnly -> R.string.notify_result_readonly_title to R.string.notify_result_readonly_detail
     NotificationActionResult.Submitted -> null
 }

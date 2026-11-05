@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
 
 internal object DeveloperPages : DeveloperTools {
     override val home: NavKey = ComponentCatalogRoute
-    override val homeTitle = "组件目录（调试版）"
+    override val homeTitle = "组件目录（调试版）"  // i18n-ignore: debug-only developer tool
 
     override fun EntryProviderScope<NavKey>.register(navigator: Navigator) {
         entry<ComponentCatalogRoute> { CatalogPage(navigator) }

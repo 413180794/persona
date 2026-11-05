@@ -2,6 +2,8 @@
 
 package persona.android.ui
 
+import persona.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -152,7 +154,7 @@ private fun PersonaRootContent(
                         onCredentialsSaved = { MainActivity.pendingPairLink.value = null }, machines = services.machines,
                         attempts = services.pairingAttempts,
                         footer = {
-                            if (hub == null) JTextButton("没有 hub？先体验一下", onClick = { scope.launch {
+                            if (hub == null) JTextButton(stringResource(R.string.app_try_demo), onClick = { scope.launch {
                                 try { shell.enterDemo(); MainActivity.pendingPairLink.value = null }
                                 catch (error: Exception) {
                                     android.util.Log.w("JarvisShell", "Unable to start demo", error)
@@ -412,7 +414,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             working -> Ambience.Working
             else -> Ambience.Calm
         }
-        val demoBadge = if (session.demo != null) "体验" else null
+        val demoBadge = if (session.demo != null) stringResource(R.string.app_demo_badge) else null
         val items = navigationItems(badges, demoBadge, settingsDot = slotBadge.dot)
         // The window decides the layout (WindowSizeClass and the fold posture), never the device model: split screen,
         // free-form windows, rotation and folding all just recompose this.
@@ -527,22 +529,22 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             }
             entry<PairingRoute> { ShellSettings(services, navigator, shell, "pair") }
             entry<PhoneToolsRoute> { session.phone?.let { PhoneToolsScreen(it, navigator) }
-                ?: UnavailablePage("当前模式没有可用的手机工具", navigator) }
+                ?: UnavailablePage(stringResource(R.string.app_unavailable_phone_tools), navigator) }
             session.terminal?.let { terminalEntries(navigator, it) { key -> sessions.firstOrNull { s -> s.key == key }?.displayTitle } }
-                ?: run { entry<TerminalRoute> { UnavailablePage("体验模式没有终端数据", navigator) } }
+                ?: run { entry<TerminalRoute> { UnavailablePage(stringResource(R.string.app_demo_no_terminal), navigator) } }
             session.metrics?.let { machinesEntries(navigator, it, session.sessions, session.machines,
                 launcherPages = services.extensions?.takeUnless { services.demo }?.available ?: kotlinx.coroutines.flow.flowOf(false),
                 extensionSections = { id -> persona.feature.settings.rememberMachineExtensionSections(services.extensionSlots, id, onOpen = navigator::navigate) }) } ?: run {
-                entry<MachinesRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
-                entry<MachineDetailRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
+                entry<MachinesRoute> { UnavailablePage(stringResource(R.string.app_demo_no_machines), navigator) }
+                entry<MachineDetailRoute> { UnavailablePage(stringResource(R.string.app_demo_no_machines), navigator) }
             }
             session.knowledge?.let { knowledgeEntries(navigator, it, session.assistant, session.sender, uriHandler::openUri,
                 onNewAgent = { start -> navigator.navigate(NewAgentRoute(start.machineId, start.cwd, start.prompt)) }) } ?: run {
-                entry<KnowledgeRoute> { UnavailablePage("体验模式没有知识库数据", navigator) }
-                entry<KnowledgeDetailRoute> { UnavailablePage("体验模式没有知识库数据", navigator) }
+                entry<KnowledgeRoute> { UnavailablePage(stringResource(R.string.app_demo_no_knowledge), navigator) }
+                entry<KnowledgeDetailRoute> { UnavailablePage(stringResource(R.string.app_demo_no_knowledge), navigator) }
             }
             settingsDetailEntries(navigator, services)
-            session.voice?.let { voiceEntries(navigator, it, session.identity, onModelConfiguration = { purpose -> navigator.navigate(ModelPurposeRoute(purpose)) }) } ?: run { entry<VoiceRoute> { UnavailablePage("体验模式没有语音对话", navigator) } }
+            session.voice?.let { voiceEntries(navigator, it, session.identity, onModelConfiguration = { purpose -> navigator.navigate(ModelPurposeRoute(purpose)) }) } ?: run { entry<VoiceRoute> { UnavailablePage(stringResource(R.string.app_demo_no_voice), navigator) } }
             tools?.run { register(navigator) }
         }
         val panes: (NavKey) -> NavEntry<NavKey> = { key ->
@@ -623,13 +625,13 @@ private fun pretendFold(real: androidx.compose.material3.adaptive.WindowAdaptive
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 private fun paneMetadata(key: NavKey): Map<String, Any> = when (key) {
     AgentsRoute -> ListDetailSceneStrategy.listPane(detailPlaceholder = {
-        DetailPlaceholder("选一个会话", "左边的会话和终端会在这里打开。", PhIcons.ChatsCircle)
+        DetailPlaceholder(stringResource(R.string.app_pane_agents_title), stringResource(R.string.app_pane_agents_detail), PhIcons.ChatsCircle)
     })
     InboxRoute -> ListDetailSceneStrategy.listPane(detailPlaceholder = {
-        DetailPlaceholder("选一条消息", "飞书会话和邮件会在这里打开。", PhIcons.Tray)
+        DetailPlaceholder(stringResource(R.string.app_pane_inbox_title), stringResource(R.string.app_pane_inbox_detail), PhIcons.Tray)
     })
     SettingsRoute -> ListDetailSceneStrategy.listPane(detailPlaceholder = {
-        DetailPlaceholder("设置", "选左边的一项，在这里打开。", PhIcons.GearSix)
+        DetailPlaceholder(stringResource(R.string.app_tab_settings), stringResource(R.string.app_pane_settings_detail), PhIcons.GearSix)
     })
     else -> if (isDetailDestination(key)) ListDetailSceneStrategy.detailPane() else emptyMap()
 }
@@ -640,16 +642,17 @@ private fun Modifier.unplaced(): Modifier = layout { measurable, constraints ->
     layout(placeable.width, placeable.height) {}
 }
 
-/** The four destinations, in the same order and with labels in every style. */
-private fun navigationItems(badges: Map<AppTab, Int>, demo: String?, settingsDot: Boolean = false): List<NavItem> {
+/** The four destinations, in the same order and with labels in every style; Persona and Agents read the same in every language. */
+@Composable
+internal fun navigationItems(badges: Map<AppTab, Int>, demo: String?, settingsDot: Boolean = false): List<NavItem> {
     fun item(tab: AppTab, label: String, icon: persona.core.designsystem.icons.PhIcon) =
         NavItem(tab.name, label, icon, badge = badges[tab] ?: 0, badgeText = if (tab == AppTab.Settings) demo else null,
             dot = tab == AppTab.Settings && settingsDot)
     return listOf(
         item(AppTab.Jarvis, "Persona", PhIcons.Sparkle),
         item(AppTab.Agents, "Agents", PhIcons.SquaresFour),
-        item(AppTab.Inbox, "收件箱", PhIcons.Tray),
-        item(AppTab.Settings, "设置", PhIcons.GearSix),
+        item(AppTab.Inbox, stringResource(R.string.app_tab_inbox), PhIcons.Tray),
+        item(AppTab.Settings, stringResource(R.string.app_tab_settings), PhIcons.GearSix),
     )
 }
 
@@ -681,7 +684,7 @@ private fun InboxLink(route: NavKey, inbox: InboxRepository, navigator: Navigato
             replace(route, it.key)
         }
     }
-    if (destination == InboxDestination.Missing) UnavailablePage("没有找到这条事项，可能已经处理或被移除", navigator)
+    if (destination == InboxDestination.Missing) UnavailablePage(stringResource(R.string.app_inbox_item_missing), navigator)
     else Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 }
 
@@ -697,11 +700,12 @@ private fun InboxItemUi(route: InboxItemUiRoute, inbox: InboxRepository, slots: 
     val snapshot by inbox.snapshot.collectAsStateWithLifecycle()
     val records by rememberUpdatedState(snapshot.records)
     val feedback = LocalAppFeedback.current
+    val missing = stringResource(R.string.app_inbox_item_missing)
     val record = snapshot.records.firstOrNull { it.item.id == route.itemId }
     // The extension draws the item again when it changes: new messages joined the event, it was done or reopened.
     val revision = record?.let { listOf(it.item.version, it.item.updatedAt, it.count, it.item.doneAt) }
     val body = rememberInboxItemBody(slots, route, revision, onSource = { id ->
-        inboxSourcePage(id, records)?.let(navigator::navigate) ?: feedback?.notice("没有找到这条事项，可能已经处理或被移除")
+        inboxSourcePage(id, records)?.let(navigator::navigate) ?: feedback?.notice(missing)
     })
     val fallback = body.fallback
     val drawn = fallback == null && !body.loading
@@ -714,7 +718,7 @@ private fun InboxItemUi(route: InboxItemUiRoute, inbox: InboxRepository, slots: 
     }
     when {
         fallback == null -> InboxItemExtensionScreen(inbox, route, navigator, body.title, body.loading, body.refreshing, body.refresh, body.items)
-        record == null -> UnavailablePage("没有找到这条事项，可能已经处理或被移除", navigator)
+        record == null -> UnavailablePage(missing, navigator)
         else -> Box(Modifier.fillMaxSize())
     }
 }
@@ -734,6 +738,6 @@ private fun SettingsWithTools(tools: DeveloperTools?, navigator: Navigator, cont
 internal fun UnavailablePage(message: String, navigator: Navigator) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(message)
-        TextButton(onClick = navigator::back) { Text("返回", maxLines = 1) }
+        TextButton(onClick = navigator::back) { Text(stringResource(R.string.app_back), maxLines = 1) }
     }
 }

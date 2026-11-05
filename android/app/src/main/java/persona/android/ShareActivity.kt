@@ -1,5 +1,7 @@
 package persona.android
 
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -71,15 +73,15 @@ class ShareActivity : ComponentActivity() {
                             .padding(horizontal = 24.dp).padding(bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text("发给 Persona", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.app_share_title), style = MaterialTheme.typography.titleLarge)
                         Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                Text(model.payload.title.ifBlank { "分享内容" }, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(model.payload.title.ifBlank { stringResource(R.string.app_share_content) }, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 if (model.payload.text.isNotBlank()) {
                                     Text(model.payload.text, maxLines = 4, overflow = TextOverflow.Ellipsis,
                                         style = MaterialTheme.typography.bodyMedium)
                                 }
-                                if (model.payload.uris.isNotEmpty()) Text("${model.payload.uris.size} 个附件")
+                                if (model.payload.uris.isNotEmpty()) Text(pluralStringResource(R.plurals.app_share_attachments, model.payload.uris.size, model.payload.uris.size))
                             }
                         }
                         OutlinedTextField(
@@ -87,11 +89,11 @@ class ShareActivity : ComponentActivity() {
                             onValueChange = model::updateNote,
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !model.locked && !model.busy,
-                            placeholder = { Text("补一句（可选）") },
+                            placeholder = { Text(stringResource(R.string.app_share_note)) },
                             maxLines = 4,
                         )
-                        Text("发到", style = MaterialTheme.typography.labelLarge)
-                        ShareTarget("主对话", "Persona", model.target == null,
+                        Text(stringResource(R.string.app_share_to), style = MaterialTheme.typography.labelLarge)
+                        ShareTarget(stringResource(R.string.app_main_chat), "Persona", model.target == null,
                             !model.busy && !model.locked && model.paired) { model.select(null) }
                         Column(Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState())) {
                             sessions.filter { it.isLive && !it.assistant && it.key != assistant.mainSession }
@@ -112,17 +114,17 @@ class ShareActivity : ComponentActivity() {
                                 }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("作为上下文附在消息里", Modifier.weight(1f))
+                            Text(stringResource(R.string.app_share_as_context), Modifier.weight(1f))
                             Switch(model.asContext, model::updateContext, enabled = !model.busy && !model.locked)
                         }
-                        if (model.loading) Text("正在获取对话…")
+                        if (model.loading) Text(stringResource(R.string.app_share_loading))
                         model.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         if (model.busy) {
                             LinearProgressIndicator(Modifier.fillMaxWidth())
                             Text(model.progress)
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = { finish() }) { Text("取消", maxLines = 1) }
+                            TextButton(onClick = { finish() }) { Text(stringResource(R.string.app_cancel), maxLines = 1) }
                             if (model.locked || !model.paired) {
                                 Button(onClick = {
                                     startActivity(mainActivityIntent(this@ShareActivity).apply {
@@ -130,15 +132,15 @@ class ShareActivity : ComponentActivity() {
                                     })
                                     finish()
                                 }, enabled = !model.busy) {
-                                    Text(if (model.paired) "查看对话" else "打开 Persona", maxLines = 1)
+                                    Text(stringResource(if (model.paired) R.string.app_share_view_chat else R.string.app_open_persona), maxLines = 1)
                                 }
                             } else {
                                 if (model.error != null && !model.busy) {
-                                    TextButton(onClick = model::refresh) { Text("刷新", maxLines = 1) }
+                                    TextButton(onClick = model::refresh) { Text(stringResource(R.string.app_refresh), maxLines = 1) }
                                 }
                                 Button(onClick = { model.send(model.target) },
                                     enabled = !model.busy && model.payload.hasContent && model.paired) {
-                                    Text("发送", maxLines = 1)
+                                    Text(stringResource(R.string.app_send), maxLines = 1)
                                 }
                             }
                         }
@@ -230,24 +232,24 @@ class ShareViewModel @Inject constructor(
                     ?: clips.mapNotNull { it.text?.toString() }.distinct().joinToString("\n"), uris)
             require(payload.hasContent)
         } catch (_: Exception) {
-            error = "无法读取分享内容，请从来源应用重新分享"
+            error = app.getString(R.string.app_share_read_failed)
             return
         }
         busy = true
-        progress = "正在保存分享内容…"
+        progress = app.getString(R.string.app_share_saving)
         viewModelScope.launch {
             try {
                 kotlinx.coroutines.flow.combine(app.pairingReady, app.pairingRestoreError) { ready, failed -> ready || failed }.first { it }
                 owner = app.hub.value
                 check(owner != null)
-                if (locked) { completed = "已加入发送队列"; return@launch }
+                if (locked) { completed = app.getString(R.string.app_share_queued); return@launch }
                 locked = queue.stage(id, payload.title, payload.text, payload.uris)
                 staged = true
-                if (locked) completed = "已加入发送队列"
+                if (locked) completed = app.getString(R.string.app_share_queued)
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) {
-                this@ShareViewModel.error = if (owner == null) "请先打开 Persona 完成配对，再重新分享"
-                    else "分享内容未能完整保存，请检查存储空间后从来源应用重新分享"
+                this@ShareViewModel.error = app.getString(if (owner == null) R.string.app_share_pair_first
+                    else R.string.app_share_save_failed)
             } finally { busy = false }
             refresh()
         }
@@ -261,26 +263,26 @@ class ShareViewModel @Inject constructor(
                 assistant.refresh()
                 sessions.refresh()
             } catch (error: CancellationException) { throw error }
-            catch (_: Exception) { if (staged) this@ShareViewModel.error = "对话列表暂未更新，仍可发到主对话；离线内容会先保存在本机。" }
+            catch (_: Exception) { if (staged) this@ShareViewModel.error = app.getString(R.string.app_share_list_stale) }
             finally { loading = false }
         }
     }
 
     fun send(destination: SessionKey?) {
         if (busy || locked || !staged) return
-        if (owner == null || app.hub.value !== owner) { error = "配对已变更，请重新分享"; return }
+        if (owner == null || app.hub.value !== owner) { error = app.getString(R.string.app_share_pairing_changed); return }
         busy = true
         error = null
-        progress = "正在加入发送队列…"
+        progress = app.getString(R.string.app_share_queueing)
         viewModelScope.launch {
             try {
                 queue.submit(id, destination, note, asContext)
                 sentTarget = destination
                 saved["submitted"] = true
                 locked = true
-                completed = "已加入发送队列，联网后自动发送"
+                completed = app.getString(R.string.app_share_queued_offline)
             } catch (error: CancellationException) { throw error }
-            catch (_: Exception) { this@ShareViewModel.error = "暂时无法加入发送队列，内容已保留，请重试" }
+            catch (_: Exception) { this@ShareViewModel.error = app.getString(R.string.app_share_queue_failed) }
             finally { busy = false }
         }
     }

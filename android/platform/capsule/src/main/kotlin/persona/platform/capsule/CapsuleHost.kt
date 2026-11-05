@@ -188,7 +188,7 @@ class CapsuleHost(
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-            setTitle("Persona 悬浮胶囊")
+            setTitle(app.getString(R.string.capsule_window_title))
         }
         place(updateWindow = false)
         try {

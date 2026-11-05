@@ -1,5 +1,7 @@
 package persona.android.di
 
+import persona.android.AppText
+import persona.android.R
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import persona.core.hub.HubError
@@ -125,7 +127,7 @@ internal interface MachineRoutes {
 
 /** Terminal, files, chat actions and machine metrics for the shell: each call goes to its machine's group. */
 internal class MergedShellServices(private val stacks: GroupStacks) {
-    private fun stack(machineId: String) = stacks.of(machineId) ?: throw IllegalStateException("终端暂不可用")
+    private fun stack(machineId: String) = stacks.of(machineId) ?: throw IllegalStateException(AppText.get(R.string.app_error_terminal_unavailable))
 
     fun terminal(key: SessionKey): TerminalTransport = stack(key.machineId).terminal
 

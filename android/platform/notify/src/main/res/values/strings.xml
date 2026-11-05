@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_connection_online">Connected to hub</string>
+    <string name="notify_connection_connecting">Connecting…</string>
+    <string name="notify_connection_updating">Updating…</string>
+    <string name="notify_connection_waiting_network">Waiting for network</string>
+    <string name="notify_connection_local_network">Local network permission needed</string>
+    <string name="notify_connection_certificate">The hub\'s certificate changed</string>
+    <string name="notify_connection_revoked">Pairing is no longer valid</string>
+    <string name="notify_result_expired_title">Expired. Handle it in the terminal</string>
+    <string name="notify_result_expired_detail">Open the terminal to handle it.</string>
+    <string name="notify_result_gone_title">Handled on the computer</string>
+    <string name="notify_result_gone_detail">This request is no longer pending. Open the chat to check.</string>
+    <string name="notify_result_locked_title">Unlock first</string>
+    <string name="notify_result_locked_detail">Unlock your phone, then submit your choice.</string>
+    <string name="notify_result_invalid_title">Action unavailable</string>
+    <string name="notify_result_invalid_detail">Open the chat to see the latest request.</string>
+    <string name="notify_result_unconfirmed_title">Result unconfirmed</string>
+    <string name="notify_result_duplicate_detail">Your action was recorded. Open the chat to check the result instead of submitting again.</string>
+    <string name="notify_result_readonly_title">Can\'t approve on this phone</string>
+    <string name="notify_result_readonly_detail">This chat is view-only. Open it or handle it on your computer.</string>
+    <string name="notify_result_open_chat">Open the chat to check.</string>
+    <string name="notify_result_check_chat">Open the chat to check the result. Don\'t submit again.</string>
+    <string name="notify_open_terminal">Open terminal</string>
+    <string name="notify_action_deny">Deny</string>
+    <string name="notify_action_allow">Allow</string>
+    <string name="notify_action_view">View</string>
+    <string name="notify_action_approve">Approve</string>
+    <string name="notify_action_reject">Send back</string>
+    <string name="notify_reply_deny_reason">Reason for denying</string>
+    <string name="notify_reply_feedback">What to change</string>
+    <string name="notify_channel_input">Needs you</string>
+    <string name="notify_channel_alert">Alerts</string>
+    <string name="notify_channel_done">Finished</string>
+    <string name="notify_channel_status">Live status</string>
+    <string name="notify_title_assistant_asks">Persona is asking you</string>
+    <string name="notify_title_needs_you">Needs you</string>
+    <string name="notify_title_done">Finished</string>
+    <string name="notify_title_alert">Alert</string>
+    <string name="notify_stopped_title">You stopped the background connection</string>
+    <string name="notify_stopped_text">Tap Resume to get notifications again</string>
+    <string name="notify_resume">Resume</string>
+    <string name="notify_public_title">New message from Persona</string>
+</resources>

@@ -1,5 +1,6 @@
 package persona.platform.capsule
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +30,7 @@ fun CapsuleCompletionNotice(completion: CapsuleCompletion, onOpen: (CapsuleCompl
     val palette = PersonaTheme.palette
     val feedback = LocalAppFeedback.current
     val shape = RoundedCornerShape(CapsuleTokens.compactRadius)
+    val description = stringResource(R.string.capsule_done_description, completion.title)
     Row(Modifier.size(CapsuleTokens.completionWidth, CapsuleTokens.orb).clip(shape).background(palette.surfaceOpaque)
         .border(CapsuleTokens.border, palette.line, shape)
         .clickable {
@@ -36,12 +38,12 @@ fun CapsuleCompletionNotice(completion: CapsuleCompletion, onOpen: (CapsuleCompl
             catch (error: Exception) { feedback?.failure(error) }
         }
         .testTag("capsule.completion")
-        .semantics { contentDescription = "${completion.title} · 已完成" }
+        .semantics { contentDescription = description }
         .padding(horizontal = CapsuleTokens.gap, vertical = CapsuleTokens.smallGap),
         horizontalArrangement = Arrangement.spacedBy(CapsuleTokens.gap), verticalAlignment = Alignment.CenterVertically) {
         PersonaFace(PersonaState.Idle, size = CapsuleTokens.face)
         Text(completion.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
             style = PersonaTheme.type.label, color = palette.ink)
-        Text("· 已完成", maxLines = 1, style = PersonaTheme.type.caption, color = palette.done.text)
+        Text(stringResource(R.string.capsule_done_suffix), maxLines = 1, style = PersonaTheme.type.caption, color = palette.done.text)
     }
 }

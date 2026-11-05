@@ -26,7 +26,7 @@ private val pages = mapOf(
     "mail" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Mail)),
     "feishu" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Feishu)),
     "catalog" to ResolvedRoute(AppTab.Settings, ComponentCatalogRoute),
-    "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),
+    "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),  // i18n-ignore: debug launch arguments, developer-only
     "channels" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Channels)),
     "hub-update" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.HubUpdate)),
     "translate" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Translation)),
@@ -45,8 +45,8 @@ class DebugLaunchAdapter : LaunchAdapter {
         intent.getStringExtra("openSession")?.let { arguments["debug.openSession"] = it }
         if (arguments.isEmpty()) return null
         val state = arguments["debug.state"]
-        require(state == null || state in DebugStatePreview.states) { "未知的调试状态" }
-        require(state == null || arguments["debug.mockAddress"] == null) { "状态预览使用本地演示数据，请勿同时传入假 hub 地址" }
+        require(state == null || state in DebugStatePreview.states) { "未知的调试状态" }  // i18n-ignore: debug launch arguments, developer-only
+        require(state == null || arguments["debug.mockAddress"] == null) { "状态预览使用本地演示数据，请勿同时传入假 hub 地址" }  // i18n-ignore: debug launch arguments, developer-only
         tools.state = state
         if (state != null && arguments.keys.none { it.startsWith("debug.open") }) {
             arguments["debug.openTab"] = if (state in setOf("load-failed", "loading")) "Inbox" else "Agents"
@@ -88,7 +88,7 @@ class DebugLaunchAdapter : LaunchAdapter {
             prepare = if (state == null) null else { shell -> shell.restoreDemo(); shell.enterDemo() },
             posture = arguments["debug.posture"]?.takeIf { it == "tabletop" || it == "book" },
             style = arguments["debug.style"]?.let { key ->
-                requireNotNull(persona.core.designsystem.AppStyle.entries.firstOrNull { it.key == key }) { "未知的界面风格" }
+                requireNotNull(persona.core.designsystem.AppStyle.entries.firstOrNull { it.key == key }) { "未知的界面风格" }  // i18n-ignore: debug launch arguments, developer-only
             },
         )
     }

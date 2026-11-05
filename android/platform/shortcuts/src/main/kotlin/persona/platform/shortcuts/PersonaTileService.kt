@@ -38,7 +38,7 @@ class PersonaTileService : TileService() {
         val feed = SurfacesDependencies.of(this).fleet()
         val paired = feed.paired.value
         val fleet = feed.state.value
-        val subtitle = ShortcutText.tileSubtitle(paired, fleet)
+        val subtitle = ShortcutText.tileSubtitle(resources, paired, fleet)
         tile.label = getString(R.string.shortcuts_tile_label)
         tile.subtitle = subtitle
         tile.icon = Icon.createWithResource(this, persona.core.designsystem.R.drawable.ic_stat)
@@ -47,7 +47,7 @@ class PersonaTileService : TileService() {
             FleetSummary.phase(fleet) == FleetSummary.NEEDS_YOU || FleetSummary.phase(fleet) == FleetSummary.WORKING -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
-        tile.contentDescription = "Persona：$subtitle"
+        tile.contentDescription = getString(R.string.shortcuts_tile_description, subtitle)
         tile.updateTile()
     }
 

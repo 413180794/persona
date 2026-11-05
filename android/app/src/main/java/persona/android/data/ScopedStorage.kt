@@ -1,5 +1,7 @@
 package persona.android.data
 
+import persona.android.AppText
+import persona.android.R
 import android.app.Application
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -23,9 +25,9 @@ class ScopedListPreferences(private val runtime: ConnectionRuntime) : DataStore<
     private val owner = runtime.groups.map { groups -> groups.firstOrNull()?.data }.distinctUntilChanged()
     override val data = owner.flatMapLatest { it?.listPreferences?.data ?: flowOf(emptyPreferences()) }
     override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
-        val data = checkNotNull(runtime.groups.value.firstOrNull()?.data) { "请先配对 hub" }
+        val data = checkNotNull(runtime.groups.value.firstOrNull()?.data) { AppText.get(R.string.app_error_pair_first) }
         return data.coroutineScope.async(Dispatchers.IO) {
-            check(runtime.groups.value.firstOrNull()?.data === data) { "连接已切换" }
+            check(runtime.groups.value.firstOrNull()?.data === data) { AppText.get(R.string.app_error_switched) }
             data.listPreferences.updateData(transform)
         }.await()
     }

@@ -9,6 +9,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import persona.android.AppText
+import persona.android.R
 import persona.android.ui.ShellSession
 import persona.core.contracts.*
 import persona.core.contracts.api.*
@@ -49,7 +51,7 @@ private fun capsuleEntry(session: Session, requests: List<Interaction> = emptyLi
     return CapsuleEntry(id, session.displayTitle,
         pending.firstOrNull()?.summary?.takeIf { it.isNotBlank() }
             ?: session.activity?.takeIf { it.isNotBlank() } ?: session.lastText.orEmpty(), state,
-        if (pending.isNotEmpty()) listOf(CapsuleAction("open", "查看并处理")) else emptyList())
+        if (pending.isNotEmpty()) listOf(CapsuleAction("open", AppText.get(R.string.app_capsule_open_and_handle))) else emptyList())
 }
 
 internal sealed interface CapsuleInboxTarget {
@@ -86,17 +88,22 @@ internal fun capsuleInbox(snapshot: InboxSnapshot): CapsuleInbox {
     return CapsuleInbox(entries, targets)
 }
 
+/** The main chat before the assistant's session is known. */
+private fun mainPlaceholder() =
+    CapsuleEntry(MainEntry, AppText.get(R.string.app_main_chat), AppText.get(R.string.app_capsule_main_prompt), CapsuleState.Idle)
+
 private data class CapsuleAgents(
     val sessions: List<Session>, val main: SessionKey?, val requests: List<Interaction>, val preferences: AgentsPreferencesSnapshot,
 )
 private data class CapsuleCatalog(
     val sessions: List<Session> = emptyList(), val main: SessionKey? = null,
-    val unread: List<CapsuleEntry> = emptyList(), val mainEntry: CapsuleEntry = CapsuleEntry(MainEntry, "主对话", "想让 Persona 做什么？", CapsuleState.Idle),
+    val unread: List<CapsuleEntry> = emptyList(), val mainEntry: CapsuleEntry = mainPlaceholder(),
     val inbox: CapsuleInbox = CapsuleInbox(emptyList(), emptyMap()), val activity: List<CapsuleEntry> = emptyList(),
     val inboxAlerts: List<CapsuleEntry> = emptyList(),
 ) {
-    val sections get() = listOf(CapsuleSection(UnreadSection, "未读", unread.size), CapsuleSection(MainSection, "主对话", list = false),
-        CapsuleSection(InboxSection, "收件箱", inbox.entries.size))
+    val sections get() = listOf(CapsuleSection(UnreadSection, AppText.get(R.string.app_capsule_unread), unread.size),
+        CapsuleSection(MainSection, AppText.get(R.string.app_capsule_main_section), list = false),
+        CapsuleSection(InboxSection, AppText.get(R.string.app_capsule_inbox), inbox.entries.size))
 }
 private data class CapsuleSelection(val section: String, val entries: List<CapsuleEntry>, val id: String?, val key: SessionKey?)
 
@@ -130,8 +137,8 @@ internal class CapsuleSessions(
             capsuleEntry(projected.session, data.requests)
         }.filter { it.state != CapsuleState.Idle }.sortedBy { it.state.ordinal }
         CapsuleCatalog(data.sessions, data.main, capsuleUnreadSessions(data.sessions, data.preferences).map { capsuleEntry(it) },
-            data.sessions.firstOrNull { it.key == data.main }?.let { capsuleEntry(it, data.requests, MainEntry).copy(title = "主对话") }
-                ?: CapsuleEntry(MainEntry, "主对话", "想让 Persona 做什么？", CapsuleState.Idle), inbox, activity,
+            data.sessions.firstOrNull { it.key == data.main }?.let { capsuleEntry(it, data.requests, MainEntry).copy(title = AppText.get(R.string.app_main_chat)) }
+                ?: mainPlaceholder(), inbox, activity,
             inbox.entries.filter { entry ->
                 when (val target = inbox.targets.getValue(entry.id)) {
                     is CapsuleInboxTarget.Item -> true
@@ -167,11 +174,11 @@ internal class CapsuleSessions(
             .takeLast(8).map { CapsuleMessage(it.id, it.text.orEmpty(), it.role == "user") }
         val pending = outbox.filter { key != null && it.session == key && it.clientMessageId !in seen && it.state != DeliveryState.Sent }
             .map { CapsuleMessage(it.clientMessageId, it.text + when (it.state) {
-                DeliveryState.WaitingForNetwork -> "\n等待网络"
-                DeliveryState.Queued -> "\n已排队"
-                DeliveryState.Unknown, DeliveryState.NeedsConfirmation, DeliveryState.Verifying -> "\n结果待核对，请打开会话"
-                DeliveryState.Refused, DeliveryState.Rejected -> "\n${it.error ?: "发送未成功，请打开会话"}"
-                else -> "\n发送中…"
+                DeliveryState.WaitingForNetwork -> "\n" + AppText.get(R.string.app_capsule_waiting_network)
+                DeliveryState.Queued -> "\n" + AppText.get(R.string.app_capsule_queued)
+                DeliveryState.Unknown, DeliveryState.NeedsConfirmation, DeliveryState.Verifying -> "\n" + AppText.get(R.string.app_capsule_unconfirmed)
+                DeliveryState.Refused, DeliveryState.Rejected -> "\n" + (it.error ?: AppText.get(R.string.app_capsule_not_sent))
+                else -> "\n" + AppText.get(R.string.app_capsule_sending)
             }, true) }
         CapsuleContent(entries = target.entries, selectedId = target.id, messages = history + pending,
             canSend = target.id != null && if (target.id == MainEntry && key == null) binding?.scope?.path == session.identity
@@ -241,8 +248,8 @@ internal class CapsuleSessions(
 
     override fun openCompletion(completion: CapsuleCompletion) {
         scope.coroutineContext.ensureActive()
-        val (key, assistant) = completionTargets[completion.id] ?: error("完成提示已失效")
-        check(capsuleId(key) == completion.targetId && find(key) != null) { "会话已关闭" }
+        val (key, assistant) = completionTargets[completion.id] ?: error(AppText.get(R.string.app_capsule_completion_gone))
+        check(capsuleId(key) == completion.targetId && find(key) != null) { AppText.get(R.string.app_capsule_closed) }
         openConversation(key, assistant)
     }
 
@@ -264,28 +271,28 @@ internal class CapsuleSessions(
         if (id == MainEntry) { selectSection(MainSection); return }
         if (selection.value.section == InboxSection && id != null) { open(id); return }
         selected.value = id?.let { chosen -> catalog.value.sessions.firstOrNull { capsuleId(it.key) == chosen }
-            ?: error("会话已关闭") }
+            ?: error(AppText.get(R.string.app_capsule_closed)) }
         failure.value = null
     }
     override suspend fun send(id: String?, text: String) {
         scope.coroutineContext.ensureActive()
-        check(!busy.value) { "正在发送" }
+        check(!busy.value) { AppText.get(R.string.app_capsule_busy) }
         require(text.isNotBlank())
         val target = selection.value
-        check(id != null && target.id == id) { "会话已变化，请重新选择" }
+        check(id != null && target.id == id) { AppText.get(R.string.app_capsule_changed) }
         busy.value = true
         failure.value = null
         try {
             if (id == MainEntry && target.key == null) {
-                val binding = wiring.current.value?.takeIf { it.scope.path == session.identity } ?: error("连接已切换")
+                val binding = wiring.current.value?.takeIf { it.scope.path == session.identity } ?: error(AppText.get(R.string.app_error_switched))
                 binding.mainSender.sendToMain(text, UUID.randomUUID().toString())
             } else {
-                val key = target.key ?: error("会话已关闭")
-                check(find(key)?.canSend == true) { "此会话仅可查看" }
+                val key = target.key ?: error(AppText.get(R.string.app_capsule_closed))
+                check(find(key)?.canSend == true) { AppText.get(R.string.app_capsule_view_only) }
                 session.sender.send(key, text, UUID.randomUUID().toString())
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { failure.value = error.message ?: "发送失败"; throw error }
+        catch (error: Exception) { failure.value = error.message ?: AppText.get(R.string.app_capsule_send_failed); throw error }
         finally { busy.value = false }
     }
     override suspend fun perform(id: String?, actionId: String) {
@@ -296,19 +303,19 @@ internal class CapsuleSessions(
     override fun open(id: String?) {
         scope.coroutineContext.ensureActive()
         if (selection.value.section == InboxSection) {
-            check(wiring.current.value?.scope?.path == session.identity) { "连接已切换" }
+            check(wiring.current.value?.scope?.path == session.identity) { AppText.get(R.string.app_error_switched) }
             if (id == null) { openInbox(null); return }
-            when (val item = catalog.value.inbox.targets[id] ?: error("事项已变化，请重新选择")) {
+            when (val item = catalog.value.inbox.targets[id] ?: error(AppText.get(R.string.app_capsule_item_changed))) {
                 is CapsuleInboxTarget.Item -> openInbox(item.id)
                 is CapsuleInboxTarget.Request -> openConversation(item.key, find(item.key)?.assistant == true)
             }
             return
         }
         val target = selection.value
-        check(id == target.id || id == null) { "会话已变化，请重新选择" }
+        check(id == target.id || id == null) { AppText.get(R.string.app_capsule_changed) }
         if (id == null && target.section == UnreadSection) { openConversation(null, false); return }
         val key = target.key
-        check(id == MainEntry || key != null && find(key) != null) { "会话已关闭" }
+        check(id == MainEntry || key != null && find(key) != null) { AppText.get(R.string.app_capsule_closed) }
         openConversation(key, id == MainEntry || find(requireNotNull(key))?.assistant == true)
     }
 }

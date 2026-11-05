@@ -1,5 +1,7 @@
 package persona.android.ui
 
+import persona.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import persona.core.contracts.api.MainConversationSender
@@ -50,8 +52,10 @@ internal fun ShellLinkHost(session: ShellSession, navigator: Navigator, feedback
     var picked by remember { mutableStateOf<ChatLinkContext?>(null) }
     val inboxPick: (InboxWebSelection) -> Unit = { selection -> picked = ChatLinkContext("context", selection.title, selection.url, selection.text) }
     // Without a main conversation to send to, a pick can only say where it works.
-    val contextElsewhere: (ChatLinkContext) -> Unit = { feedback.notice("请在对话中打开链接后选取上下文") }
-    val editElsewhere: suspend (ChatLinkContext, String) -> Unit = { _, _ -> feedback.notice("请在对话中修改选中的内容") }
+    val contextNotice = stringResource(R.string.app_link_context_elsewhere)
+    val editNotice = stringResource(R.string.app_link_edit_elsewhere)
+    val contextElsewhere: (ChatLinkContext) -> Unit = { feedback.notice(contextNotice) }
+    val editElsewhere: suspend (ChatLinkContext, String) -> Unit = { _, _ -> feedback.notice(editNotice) }
     CompositionLocalProvider(LocalChatAppLinks provides appLinks,
         LocalInboxWebSelection provides inboxPick.takeIf { handToPersona != null }) {
         ChatLinkHost(

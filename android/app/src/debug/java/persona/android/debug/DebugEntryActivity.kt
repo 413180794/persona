@@ -31,7 +31,7 @@ class DebugEntryActivity : ComponentActivity() {
             val loopback = byteArrayOf(127, 0, 0, 1).joinToString(".") { byte -> byte.toString() }
             require(uri.scheme == "http" && uri.host == loopback && uri.userInfo == null &&
                 uri.rawPath in listOf("", "/") && uri.query == null && uri.fragment == null && uri.port in 1..65535) {
-                "debug.addMockAddress 只能是本机回环地址上的假 hub"
+                "debug.addMockAddress 只能是本机回环地址上的假 hub"  // i18n-ignore: debug launch arguments, developer-only
             }
             val app = application as PersonaApp
             app.scope.launch {

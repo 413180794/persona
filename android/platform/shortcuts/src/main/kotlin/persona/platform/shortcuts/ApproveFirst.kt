@@ -1,6 +1,7 @@
 package persona.platform.shortcuts
 
 import android.app.KeyguardManager
+import android.content.res.Resources
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -19,6 +20,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import persona.core.contracts.Interaction
@@ -57,6 +60,7 @@ sealed interface ApproveState {
  * not retried (the user checks it in the app).
  */
 class ApproveFirstModel(
+    private val res: Resources,
     private val paired: () -> Boolean,
     private val center: InteractionCenter,
     private val machines: () -> List<Machine>,
@@ -82,7 +86,7 @@ class ApproveFirstModel(
                 else -> ApproveState.Confirm(request, where)
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: Exception) { ApproveState.Failed(ShortcutText.loadFailure(failure)) }
+        catch (failure: Exception) { ApproveState.Failed(ShortcutText.loadFailure(res, failure)) }
     }
 
     /** Sends the answer once; the toast to show when it went through, null otherwise (the state says why). */
@@ -91,14 +95,14 @@ class ApproveFirstModel(
         if (current.sending) return null
         // Saying yes needs an unlocked phone (the shared policy's launcher entry).
         val resolution = ShortcutText.resolution(current.request, locked)
-            ?: run { mutable.value = ApproveState.Failed("请先解锁手机，再批准。"); return null }
+            ?: run { mutable.value = ApproveState.Failed(res.getString(R.string.shortcuts_locked)); return null }
         mutable.value = current.copy(sending = true)
         return try {
             center.resolve(current.request.id, resolution)
-            ShortcutText.done(current.request)
+            ShortcutText.done(res, current.request)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
-            mutable.value = ApproveState.Failed(ShortcutText.sendFailure(failure))
+            mutable.value = ApproveState.Failed(ShortcutText.sendFailure(res, failure))
             null
         }
     }
@@ -121,7 +125,7 @@ class ApproveFirstActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val dependencies = SurfacesDependencies.of(this)
-        val model = ApproveFirstModel({ dependencies.pairing().isPaired.value }, dependencies.interactions(),
+        val model = ApproveFirstModel(resources, { dependencies.pairing().isPaired.value }, dependencies.interactions(),
             { dependencies.sessions().machines.value })
         val keyguard = getSystemService(KeyguardManager::class.java)
         val style = AppStyleStore(this).style.value
@@ -172,31 +176,36 @@ fun ApproveFirstDialog(
 ) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
+    val res = LocalResources.current
+    val title = stringResource(R.string.shortcuts_approve_title)
+    val openPersona = stringResource(R.string.shortcuts_open_persona)
+    val ok = stringResource(R.string.shortcuts_ok)
+    val cancel = stringResource(R.string.shortcuts_cancel) to onDismiss
     // The window shows nothing but the dialog, over the launcher: the design system's scrim sets it apart from the home
     // screen and gives the status bar's icons (light in dark mode) a background they can be read on, whatever the
     // wallpaper. Without it, a light wallpaper left them white on white.
     Box(Modifier.fillMaxSize().background(palette.scrim))
     when (state) {
-        ApproveState.Loading -> JDialog(onDismiss, ShortcutText.TITLE, content = {
+        ApproveState.Loading -> JDialog(onDismiss, title, dismiss = cancel, content = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                 JSpinner()
-                Text(ShortcutText.LOADING, style = type.callout, color = palette.ink2)
+                Text(stringResource(R.string.shortcuts_loading), style = type.callout, color = palette.ink2)
             }
         })
-        ApproveState.NotPaired -> JDialog(onDismiss, ShortcutText.TITLE, text = ShortcutText.NOT_PAIRED,
-            confirm = "打开 Persona" to { onOpen(null) })
-        ApproveState.Nothing -> JDialog(onDismiss, ShortcutText.TITLE, text = ShortcutText.NO_PENDING,
-            confirm = "好" to onDismiss, dismiss = null)
-        is ApproveState.NeedsApp -> JDialog(onDismiss, ShortcutText.TITLE, content = {
-            Request(ShortcutText.needsApp(state.request.kind), null, state.where)
-        }, confirm = "打开 Persona" to { onOpen(state.request) })
-        is ApproveState.Confirm -> JDialog(onDismiss = { if (!state.sending) onDismiss() }, title = ShortcutText.TITLE,
+        ApproveState.NotPaired -> JDialog(onDismiss, title, text = stringResource(R.string.shortcuts_not_paired),
+            confirm = openPersona to { onOpen(null) }, dismiss = cancel)
+        ApproveState.Nothing -> JDialog(onDismiss, title, text = stringResource(R.string.shortcuts_no_pending),
+            confirm = ok to onDismiss, dismiss = null)
+        is ApproveState.NeedsApp -> JDialog(onDismiss, title, content = {
+            Request(ShortcutText.needsApp(res, state.request.kind), null, state.where)
+        }, confirm = openPersona to { onOpen(state.request) }, dismiss = cancel)
+        is ApproveState.Confirm -> JDialog(onDismiss = { if (!state.sending) onDismiss() }, title = title,
             content = {
-                Request(ShortcutText.ask(state.request), ShortcutText.PLAN_NOTE.takeIf { state.request.kind == "plan" }, state.where)
+                Request(ShortcutText.ask(res, state.request), stringResource(R.string.shortcuts_plan_note).takeIf { state.request.kind == "plan" }, state.where)
             },
-            confirm = ShortcutText.confirmLabel(state.request) to onApprove, confirmEnabled = !state.sending,
-            dismiss = "取消" to { if (!state.sending) onDismiss() })
-        is ApproveState.Failed -> JDialog(onDismiss, ShortcutText.TITLE, text = state.message, confirm = "好" to onDismiss, dismiss = null)
+            confirm = ShortcutText.confirmLabel(res, state.request) to onApprove, confirmEnabled = !state.sending,
+            dismiss = cancel.first to { if (!state.sending) onDismiss() })
+        is ApproveState.Failed -> JDialog(onDismiss, title, text = state.message, confirm = ok to onDismiss, dismiss = null)
     }
 }
 

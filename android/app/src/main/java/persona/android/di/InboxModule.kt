@@ -1,5 +1,7 @@
 package persona.android.di
 
+import persona.android.AppText
+import persona.android.R
 import android.app.Application
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -123,13 +125,13 @@ class InboxDataOwner @Inject constructor(
     }.stateIn(app.scope, SharingStarted.Eagerly, initial)
 
     private suspend fun <T> use(block: suspend (Repositories) -> T): T {
-        val data = checkNotNull(runtime.scopedData.value) { "请先配对 hub" }
+        val data = checkNotNull(runtime.scopedData.value) { AppText.get(R.string.app_error_pair_first) }
         val repositories = combine(current, runtime.scopedData) { repositories, active ->
             if (active !== data) throw CancellationException("Pairing changed")
             repositories?.takeIf { it.data === data }
         }.filterNotNull().first()
         return data.coroutineScope.async {
-            check(runtime.scopedData.value === data) { "连接已切换" }
+            check(runtime.scopedData.value === data) { AppText.get(R.string.app_error_switched) }
             block(repositories)
         }.await()
     }

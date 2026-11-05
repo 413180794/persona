@@ -1,5 +1,6 @@
 package persona.android.capsule
 
+import persona.android.R
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -98,7 +99,7 @@ class CapsuleRuntime @Inject constructor(
         val face by app.appearance.face.collectAsState()
         val pack by app.personas.current.collectAsState()
         val feedback = remember { object : AppFeedback {
-            override fun failure(error: Throwable, operation: Boolean): Boolean = notice(error.message ?: "操作失败")
+            override fun failure(error: Throwable, operation: Boolean): Boolean = notice(error.message ?: app.getString(R.string.app_error_failed))
             override fun notice(message: String): Boolean {
                 Toast.makeText(app, message, Toast.LENGTH_LONG).show()
                 return true

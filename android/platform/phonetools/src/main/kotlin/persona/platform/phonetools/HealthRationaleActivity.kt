@@ -1,5 +1,6 @@
 package persona.platform.phonetools
 
+import androidx.compose.ui.res.stringResource
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,16 +26,16 @@ class HealthRationaleActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PersonaTheme {
-                JListPage(title = "健康数据", onBack = { finish() }) {
+                JListPage(title = stringResource(R.string.phonetools_health_rationale_title), onBack = { finish() }) {
                     item {
-                        Paragraphs("Persona 怎么用你的健康数据", listOf(
-                            "只有你在电脑上问 Claude 健康相关的问题时，Claude 才通过 Persona 读一次每天的汇总：步数、距离、活动能量、心率、静息心率、睡眠时长、体重。",
-                            "Persona 只读不写，也不在手机上另存这些数据。读到的汇总经你自己的 hub 交给 Claude，进入那次对话的上下文。",
+                        Paragraphs(stringResource(R.string.phonetools_health_rationale_how), listOf(
+                            stringResource(R.string.phonetools_health_rationale_read),
+                            stringResource(R.string.phonetools_health_rationale_store),
                         ))
                     }
                     item {
-                        Paragraphs("随时可以关掉", listOf(
-                            "在 Persona › 设置 › 手机数据 关掉「健康」，Claude 就看不到这个工具；也可以在 Health Connect 里撤销 Persona 的权限。",
+                        Paragraphs(stringResource(R.string.phonetools_health_rationale_off), listOf(
+                            stringResource(R.string.phonetools_health_rationale_off_detail),
                         ))
                     }
                 }

@@ -1,5 +1,6 @@
 package persona.android.platform
 
+import persona.android.AppText
 import android.Manifest
 import android.app.Application
 import android.app.NotificationChannel
@@ -37,7 +38,7 @@ class LockScreenTests @Inject constructor(
     override suspend fun scheduleLockScreenTest(delaySeconds: Int) {
         require(delaySeconds in 1..3600)
         val session = sessions.requireSession()
-        check("lock_test" in session.hub.connection.serverFeatures.value) { "请更新 hub 后再试" }
+        check("lock_test" in session.hub.connection.serverFeatures.value) { application.getString(R.string.app_error_update_hub) }
         lock.withLock {
             session.io {
                 val record = session.json("POST", session.devicePath() + "/lock-tests",
@@ -112,7 +113,7 @@ class LockScreenTests @Inject constructor(
 
     private fun show(event: LockTestEvent): Boolean {
         val manager = application.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "锁屏测试", NotificationManager.IMPORTANCE_HIGH))
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, application.getString(R.string.app_lock_test_channel), NotificationManager.IMPORTANCE_HIGH))
         if (!manager.areNotificationsEnabled() ||
             manager.getNotificationChannel(CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE ||
             Build.VERSION.SDK_INT >= 33 && application.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
@@ -144,7 +145,7 @@ private fun safeId(value: String): String {
     require(value.matches(Regex("[A-Za-z0-9_-]+")))
     return value
 }
-private fun PlatformSession.devicePath() = "/api/v1/devices/" + safeId(requireNotNull(data.credentials.deviceId) { "请重新配对以获取设备凭据" })
+private fun PlatformSession.devicePath() = "/api/v1/devices/" + safeId(requireNotNull(data.credentials.deviceId) { AppText.get(R.string.app_error_pair_again) })
 private suspend fun PlatformSession.json(method: String, path: String, body: JsonObject? = null): JsonObject {
     active()
     val response = hub.api.raw(method, path, body?.toString())

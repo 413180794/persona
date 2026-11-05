@@ -1,5 +1,7 @@
 package persona.android.ui
 
+import persona.android.AppText
+import persona.android.R
 import android.app.Application
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -97,7 +99,8 @@ class AppServices @Inject constructor(
     val session = mutableSession.asStateFlow()
     private val mode = app.getSharedPreferences("app-shell-mode", Application.MODE_PRIVATE)
     private var demoJob: Job? = null
-    internal val feedback = FeedbackGate(connection = { mutableSession.value?.connection?.state?.value ?: ConnectionState.WaitingForNetwork })
+    internal val feedback = FeedbackGate(connection = { mutableSession.value?.connection?.state?.value ?: ConnectionState.WaitingForNetwork },
+        localize = { it.resolve(app) })
     var automation = false
         set(value) { field = value; if (value) mutableSession.value?.phone?.close() }
     /** Debug captures only: a pretend fold posture (see LaunchInput.posture). */
@@ -219,7 +222,7 @@ class AppServices @Inject constructor(
         }
         val localInbox = RealInboxRepository(demo.inboxConnection, journal, local.sessions, local.interactions, scope,
             snapshots = snapshots, hubPreferences = localPreferences, mainConversationSender = messages, messageSender = messages,
-            download = { _, _ -> error("体验模式里没有这项数据") })
+            download = { _, _ -> error(AppText.get(R.string.app_error_demo_no_data)) })
         val conversations = RealAssistantRepository(demo.inboxConnection, local.sessions, scope, snapshots, localPreferences)
         mode.edit().putBoolean("demo", true).apply()
         mutableSession.value = ShellSession(demo.hubScope.path, demo, local.sessions, local.chats, local.interactions,
@@ -245,7 +248,7 @@ class AppServices @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val terminalFacade = object : TerminalTransport {
-        private fun active() = requireNotNull(mutableSession.value?.terminal) { "终端暂不可用" }
+        private fun active() = requireNotNull(mutableSession.value?.terminal) { AppText.get(R.string.app_error_terminal_unavailable) }
         /** The terminal of the session's group, with the group's plain key; the demo has its own. */
         private fun routed(key: SessionKey): Pair<TerminalTransport, SessionKey> =
             if (mutableSession.value?.demo != null || stacks.of(key.machineId) == null && 

@@ -1,4 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="shortcuts_widget_description">几个 Agent 需要你、在工作、做完了</string>
+    <string name="shortcuts_approve_title">批准第一个待处理</string>
+    <string name="shortcuts_loading">正在看有什么等你…</string>
+    <string name="shortcuts_not_paired">还没配对。先打开 Persona，扫 hub 的配对二维码。</string>
+    <string name="shortcuts_no_pending">没有等你处理的事。</string>
+    <string name="shortcuts_plan_note">批准后自动接受编辑，命令仍会先问你。</string>
+    <string name="shortcuts_ask_permission">允许 %1$s？</string>
+    <string name="shortcuts_this_tool">这个工具</string>
+    <string name="shortcuts_ask_plan">批准这个计划？</string>
+    <string name="shortcuts_ask_plan_excerpt">批准这个计划？\n「%1$s」</string>
+    <string name="shortcuts_approve">批准</string>
+    <string name="shortcuts_allow">允许</string>
+    <string name="shortcuts_done_allowed_tool">已允许 %1$s</string>
+    <string name="shortcuts_done_allowed">已允许</string>
+    <string name="shortcuts_done_plan">已批准计划，开始执行</string>
+    <string name="shortcuts_needs_app_question">这是个提问，需要打开 Persona 回答。</string>
+    <string name="shortcuts_needs_app_screen">终端在等你输入，需要打开 Persona。</string>
+    <string name="shortcuts_needs_app">需要打开 Persona 处理。</string>
+    <string name="shortcuts_error_generic">出错了，稍后再试。</string>
+    <string name="shortcuts_error_gone">这个已经处理过了。</string>
+    <string name="shortcuts_error_prompt_changed">终端上的对话框已经变了，打开 Persona 看看新的。</string>
+    <string name="shortcuts_error_not_delivered">没有送达：%1$s</string>
+    <string name="shortcuts_error_refused">hub 没有接受这次操作。</string>
+    <string name="shortcuts_error_unconfirmed">结果待确认：打开 Persona 看看这条处理了没有。</string>
+    <string name="shortcuts_error_pairing">配对已失效，打开 Persona 重新配对。</string>
+    <string name="shortcuts_error_certificate">hub 的证书变了，打开 Persona 重新配对。</string>
+    <string name="shortcuts_error_unreachable">连不上 hub，确认手机能访问 hub（同一个网络或 VPN）。</string>
+    <string name="shortcuts_locked">请先解锁手机，再批准。</string>
+    <string name="shortcuts_open_persona">打开 Persona</string>
+    <string name="shortcuts_ok">好</string>
+    <string name="shortcuts_cancel">取消</string>
+    <string name="shortcuts_not_paired_short">还没配对</string>
+    <string name="shortcuts_all_done">都处理完了</string>
+    <string name="shortcuts_tile_description">Persona：%1$s</string>
+    <string name="shortcuts_widget_scan">打开 Persona 扫 hub 的二维码</string>
+    <string name="shortcuts_widget_nobody">没有 Agent 需要你</string>
+    <string name="shortcuts_ask_label">问 Persona</string>
+    <string name="shortcuts_approve_label">批准待处理</string>
+    <string name="shortcuts_open_session">打开 %1$s</string>
 </resources>

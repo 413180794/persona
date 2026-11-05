@@ -1,5 +1,7 @@
 package persona.android.data
 
+import persona.android.AppText
+import persona.android.R
 import android.util.Base64
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -30,11 +32,11 @@ class ScopedChatStorage(private val runtime: ConnectionRuntime, scope: Coroutine
     /** Images are cached with the group the session belongs to. */
     override suspend fun imageFile(session: SessionKey, item: Item, width: Int, height: Int): File {
         val group = runtime.groupOf(session.machineId)
-        val data = checkNotNull(group?.data) { "请先配对 hub" }
+        val data = checkNotNull(group?.data) { AppText.get(R.string.app_error_pair_first) }
         val connection = runtime.connectionFor(data)
         val plain = GroupKeys.rawKey(session)
         return data.coroutineScope.async(Dispatchers.IO) {
-            check(group.data === data && group.active) { "连接已切换" }
+            check(group.data === data && group.active) { AppText.get(R.string.app_error_switched) }
             data.cachedImage(plain, item.id, width, height) {
                 item.image?.data?.takeIf(String::isNotBlank)?.let { Base64.decode(it, Base64.DEFAULT) }
                     ?: HubChatTransport(connection).image(plain, item.id)

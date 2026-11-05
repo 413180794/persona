@@ -1,5 +1,6 @@
 package persona.platform.capsule
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -66,13 +67,15 @@ fun CapsuleSurface(
             messageScroll.scrollTo(messageScroll.maxValue)
         }
     }
+    val failed = stringResource(R.string.capsule_failure)
+    val openDescription = stringResource(if (content.badgeCount > 0) R.string.capsule_open_new else R.string.capsule_open)
     fun run(block: suspend () -> Unit) {
         scope.launch {
             operation = true
             failure = null
             try { block() }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { failure = error.message ?: "操作失败，请打开完整会话核对" }
+            catch (error: Exception) { failure = error.message ?: failed }
             finally { operation = false }
         }
     }
@@ -90,7 +93,7 @@ fun CapsuleSurface(
         Row(
             Modifier.fillMaxWidth().heightIn(min = CapsuleTokens.orb)
                 .then(if (!expanded) Modifier.clickable(onClick = onExpand).semantics {
-                    contentDescription = if (content.badgeCount > 0) "打开 Persona 悬浮胶囊，有新提醒" else "打开 Persona 悬浮胶囊"
+                    contentDescription = openDescription
                 } else Modifier)
                 .padding(horizontal = if (expanded) CapsuleTokens.padding else CapsuleTokens.gap,
                     vertical = CapsuleTokens.smallGap),
@@ -109,7 +112,7 @@ fun CapsuleSurface(
                     if (!content.listing && !selected?.summary.isNullOrBlank()) Text(selected?.summary.orEmpty(),
                         style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                JTextButton("收起", onCollapse, Modifier.testTag("capsule.collapse"))
+                JTextButton(stringResource(R.string.capsule_collapse), onCollapse, Modifier.testTag("capsule.collapse"))
             } else if (content.badgeCount > 0) {
                 Box(Modifier.size(CapsuleTokens.badge).clip(CircleShape).background(palette.needsYou.dot)
                     .testTag("capsule.badge"))
@@ -129,7 +132,7 @@ fun CapsuleSurface(
                 if (content.listing) {
                     Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).testTag("capsule.list"),
                         verticalArrangement = Arrangement.spacedBy(CapsuleTokens.smallGap)) {
-                        if (content.entries.isEmpty()) Text(if (content.busy) "正在加载…" else "暂无内容",
+                        if (content.entries.isEmpty()) Text(stringResource(if (content.busy) R.string.capsule_loading else R.string.capsule_empty),
                             Modifier.padding(vertical = CapsuleTokens.padding), style = type.callout, color = palette.ink2)
                         content.entries.forEach { entry ->
                             JRow(entry.title, Modifier.fillMaxWidth().testTag("capsule.entry.${entry.id}"), subtitle = entry.summary,
@@ -138,7 +141,7 @@ fun CapsuleSurface(
                         (content.error ?: failure)?.let { Text(it, style = type.caption, color = palette.danger.text) }
                     }
                 } else {
-                    if (content.section?.list == true) JTextButton("返回列表", { onSelect(null) }, Modifier.testTag("capsule.back"))
+                    if (content.section?.list == true) JTextButton(stringResource(R.string.capsule_back), { onSelect(null) }, Modifier.testTag("capsule.back"))
                     Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(CapsuleTokens.gap)) {
                         if (content.sections.isEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(CapsuleTokens.gap)) {
@@ -168,11 +171,11 @@ fun CapsuleSurface(
                         (content.error ?: failure)?.let { Text(it, style = type.caption, color = palette.danger.text) }
                     }
                     if (content.canSend) JTextField(text, { drafts[draftKey] = it }, Modifier.fillMaxWidth().heightIn(max = CapsuleTokens.inputMaxHeight).testTag("capsule.input"),
-                        placeholder = if (selected?.state == CapsuleState.Working) "补充或改要求…" else "想让 Persona 做什么？",
+                        placeholder = stringResource(if (selected?.state == CapsuleState.Working) R.string.capsule_placeholder_working else R.string.capsule_placeholder),
                         maxLines = 2, enabled = !pending)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(CapsuleTokens.gap), verticalAlignment = Alignment.CenterVertically) {
-                        JButton("打开会话", { run { onOpen(content.selectedId) } }, Modifier.weight(1f), JButtonKind.Secondary, JButtonSize.Small)
-                        if (content.canSend) JButton("发送", {
+                        JButton(stringResource(R.string.capsule_open_chat), { run { onOpen(content.selectedId) } }, Modifier.weight(1f), JButtonKind.Secondary, JButtonSize.Small)
+                        if (content.canSend) JButton(stringResource(R.string.capsule_send), {
                             val sendingId = content.selectedId
                             val sendingDraft = draftKey
                             run { onSend(sendingId, text); drafts[sendingDraft] = "" }

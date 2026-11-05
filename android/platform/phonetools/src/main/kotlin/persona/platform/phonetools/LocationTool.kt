@@ -21,7 +21,7 @@ internal class LocationTool(private val context: Context) {
     @Suppress("MissingPermission") // PhoneToolRegistry checks the location permission before any call gets here.
     suspend fun current(): PhoneToolResult {
         val manager = context.getSystemService(LocationManager::class.java)
-        if (!manager.isLocationEnabled) unavailable("定位服务已关闭 / Location services are turned off on the phone.")
+        if (!manager.isLocationEnabled) unavailable("定位服务已关闭 / Location services are turned off on the phone.")  // i18n-ignore: tool result for the model
         val enabled = manager.getProviders(true)
         val providers = listOf("fused", LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).filter { it in enabled }
         val location = (if (providers.isEmpty()) null else withTimeoutOrNull(FIX_TIMEOUT_MILLIS) {
@@ -42,7 +42,7 @@ internal class LocationTool(private val context: Context) {
         })
             // No fresh fix in time (indoors): the newest one any provider still has, as the old Android app did.
             ?: enabled.mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }.maxByOrNull { it.time }
-            ?: unavailable("15 秒内没拿到定位 / No location fix within 15 seconds. The phone may be indoors or location services may be off.")
+            ?: unavailable("15 秒内没拿到定位 / No location fix within 15 seconds. The phone may be indoors or location services may be off.")  // i18n-ignore: tool result for the model
         val address = try { geocode(location) }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { buildJsonObject { put("note", "Reverse geocoding failed: ${error.message ?: error.javaClass.simpleName}") } }
@@ -54,7 +54,7 @@ internal class LocationTool(private val context: Context) {
             address?.let { put("address", it) }
             put("provider", location.provider.orEmpty())
             put("coordinate_system", if (location.provider == LocationManager.GPS_PROVIDER) "WGS-84" else "provider_defined")
-            put("coordinate_note", "GPS 使用 WGS-84；厂商融合或网络定位的坐标系须由地图侧核对，未转换为 GCJ-02。")
+            put("coordinate_note", "GPS 使用 WGS-84；厂商融合或网络定位的坐标系须由地图侧核对，未转换为 GCJ-02。")  // i18n-ignore: tool result for the model
         }.toString())
     }
 

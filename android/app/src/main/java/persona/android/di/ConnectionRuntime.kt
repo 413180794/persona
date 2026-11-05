@@ -1,5 +1,7 @@
 package persona.android.di
 
+import persona.android.AppText
+import persona.android.R
 import android.app.Application
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -143,7 +145,7 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         override val state = settings.flatMapLatest { it?.state ?: flowOf(ConnectionEndpointsState()) }
             .stateIn(scope, SharingStarted.Eagerly, ConnectionEndpointsState())
         override fun check(address: String, replacing: String?) =
-            settings.value?.check(address, replacing) ?: EndpointCheck.Invalid("请先配对 hub")
+            settings.value?.check(address, replacing) ?: EndpointCheck.Invalid(AppText.get(R.string.app_error_pair_first))
         override suspend fun add(address: String) = controller().add(address)
         override suspend fun replace(url: String, address: String) = controller().replace(url, address)
         override suspend fun remove(url: String) = controller().remove(url)
@@ -151,7 +153,7 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         override suspend fun reorder(urls: List<String>) = controller().reorder(urls)
         override suspend fun resetOrder() = controller().resetOrder()
         override suspend fun test(url: String) = controller().test(url)
-        private fun controller() = settings.value ?: throw EndpointEditException("请先配对 hub")
+        private fun controller() = settings.value ?: throw EndpointEditException(AppText.get(R.string.app_error_pair_first))
     }
 
     /** Every group's outbox in one list; a message goes to the group its session belongs to. */
@@ -165,8 +167,8 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
         override suspend fun send(session: SessionKey, text: String, clientMessageId: String, clearDraft: String?) {
             gate.withLock {
-                val group = groupOf(session.machineId) ?: throw IllegalStateException("请先配对 hub")
-                checkNotNull(group.data) { "请先配对 hub" }.messages.send(GroupKeys.rawKey(session), text, clientMessageId, clearDraft)
+                val group = groupOf(session.machineId) ?: throw IllegalStateException(AppText.get(R.string.app_error_pair_first))
+                checkNotNull(group.data) { AppText.get(R.string.app_error_pair_first) }.messages.send(GroupKeys.rawKey(session), text, clientMessageId, clearDraft)
             }
         }
         override suspend fun cancel(clientMessageId: String) = gate.withLock {

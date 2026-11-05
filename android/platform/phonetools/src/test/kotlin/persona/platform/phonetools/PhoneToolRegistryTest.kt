@@ -1,12 +1,20 @@
 package persona.platform.phonetools
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.api.*
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class PhoneToolRegistryTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     private fun text(result: PhoneToolResult) = result.content.single().jsonObject.getValue("text").jsonPrimitive.content
 
     @Test fun registrationAndStaleCallsRespectAvailabilityPermissionsAndSources() = runTest {
@@ -60,7 +68,8 @@ class PhoneToolRegistryTest {
         var confirmations = 0
         var executions = 0
         val registry = PhoneToolRegistry({ if (enabled) setOf(PhoneSource.Calendar) else emptySet() }, { true }, { true }, { _, _ -> true },
-            { summary ->
+            { render ->
+                val summary = render(res)
                 assertTrue(summary.startsWith("新建日程「测试日程」\n")); assertTrue(summary.contains(" → "))
                 confirmations++
                 if (revokeOnConfirm) enabled = false

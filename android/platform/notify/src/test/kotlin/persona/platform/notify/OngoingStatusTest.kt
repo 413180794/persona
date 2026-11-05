@@ -47,7 +47,7 @@ class OngoingStatusTest {
         val action = status.action!!
         assertEquals("ix_photos", action.interaction)
         assertEquals(SessionKey("studio", "photos"), action.session)
-        assertEquals(listOf(OngoingButton("查看", null, false), OngoingButton("批准", "approve_edits", true)), action.buttons)
+        assertEquals(listOf(OngoingButton(R.string.notify_action_view, null, false), OngoingButton(R.string.notify_action_approve, "approve_edits", true)), action.buttons)
         // Stats, the island's sides and the assistant are not drawn: they must not cause redraws.
         assertEquals(status, OngoingStatus.from(ConnectionState.Online, fleet.copy(
             stats = FleetStats(tpm = 1234), assistant = true, left = "tpm"), details = true))
@@ -59,7 +59,7 @@ class OngoingStatusTest {
         assertEquals(SessionKey("mac", "tests"), status.open)
         assertNull(status.subText)
         assertEquals("补齐网络层的单元测试 · 授权：Bash: swift test（MacBook · weather › tests）", status.lines)
-        assertEquals(listOf(OngoingButton("拒绝", "deny", false), OngoingButton("允许", "allow", true)), status.action!!.buttons)
+        assertEquals(listOf(OngoingButton(R.string.notify_action_deny, "deny", false), OngoingButton(R.string.notify_action_allow, "allow", true)), status.action!!.buttons)
         // A question has no buttons here: it needs the conversation.
         assertNull(OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 1, items = listOf(question))).action)
     }
@@ -76,7 +76,7 @@ class OngoingStatusTest {
         assertNull(OngoingStatus.from(ConnectionState.Online, fleet.copy(phase = "needsYou", needsYou = 1,
             items = listOf(permission, working))).workingSince)
 
-        val connected = OngoingStatus(ongoingTitle(ConnectionState.Online))
+        val connected = OngoingStatus.connection(ConnectionState.Online)
         assertEquals(connected, OngoingStatus.from(ConnectionState.Online, FleetState()))
         val done = FleetState("done", unread = 2, items = listOf(FleetItem("a/b", "博客迁移", kind = "unread", detail = "迁移完成")))
         assertEquals("2 个做完了", OngoingStatus.from(ConnectionState.Online, done).title)
@@ -87,7 +87,7 @@ class OngoingStatusTest {
 
         // A disconnected snapshot must not look like current work or expose an old request.
         val offline = OngoingStatus.from(ConnectionState.WaitingForNetwork, fleet)
-        assertEquals("等待网络", offline.title)
+        assertEquals(R.string.notify_connection_waiting_network, offline.titleRes)
         assertNull(offline.text)
         assertNull(offline.lines)
         assertNull(offline.action)
@@ -110,7 +110,7 @@ class OngoingStatusTest {
         }
         assertFalse(shown.contains("MacBook"))
         // The buttons stay: 查看 / 批准 say nothing about the request.
-        assertEquals(listOf(OngoingButton("查看", null, false), OngoingButton("批准", "approve_edits", true)), status.action!!.buttons)
+        assertEquals(listOf(OngoingButton(R.string.notify_action_view, null, false), OngoingButton(R.string.notify_action_approve, "approve_edits", true)), status.action!!.buttons)
         // Requests of one kind are counted, not listed.
         val two = OngoingStatus.from(ConnectionState.Online, FleetState("needsYou", needsYou = 2,
             items = listOf(permission, permission.copy(id = "studio/other", interaction = "ix_other"))))

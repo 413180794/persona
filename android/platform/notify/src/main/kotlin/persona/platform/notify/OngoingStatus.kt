@@ -1,6 +1,7 @@
 package persona.platform.notify
 
 import android.os.Build
+import androidx.annotation.StringRes
 import persona.core.contracts.FleetState
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ConnectionState
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.flow
  * equality, so the throttled updates skip anything the user would not see change.
  */
 internal data class OngoingStatus(
+    /** The fleet's headline; empty when [titleRes] says the connection's state instead. */
     val title: String,
     /** The first agent: 「名字 · 在做什么」; without lock screen details only 「有个授权等你」. */
     val text: String? = null,
@@ -41,6 +43,8 @@ internal data class OngoingStatus(
     val open: SessionKey? = null,
     /** The first permission or plan, settled from the notification's buttons. */
     val action: OngoingAction? = null,
+    /** The connection line, as a string resource. */
+    @StringRes val titleRes: Int? = null,
 ) {
     /** The fleet summed up, not the connection line. */
     val summary: Boolean get() = criticalText != null
@@ -58,7 +62,7 @@ internal data class OngoingStatus(
          */
         fun from(state: ConnectionState, fleet: FleetState, quiet: Boolean = false, details: Boolean = false): OngoingStatus {
             // A disconnected snapshot must not look like current work or expose an old request.
-            if (state != ConnectionState.Online || FleetSummary.isEmpty(fleet) || quiet) return OngoingStatus(ongoingTitle(state))
+            if (state != ConnectionState.Online || FleetSummary.isEmpty(fleet) || quiet) return connection(state)
             val needsYou = fleet.needsYou.coerceAtLeast(0)
             val working = fleet.working.coerceAtLeast(0)
             val unread = fleet.unread.coerceAtLeast(0)
@@ -101,6 +105,9 @@ internal data class OngoingStatus(
             )
         }
 
+        /** Only the connection line: no fleet to show. */
+        fun connection(state: ConnectionState) = OngoingStatus("", titleRes = ongoingTitle(state))
+
         const val MAX_ITEMS = 3
 
         private fun compact(count: Int) = if (count > 999) "999+" else count.toString()
@@ -108,7 +115,7 @@ internal data class OngoingStatus(
 }
 
 /** One button on the ongoing notification: answers a request through ActionReceiver, or opens its conversation. */
-internal data class OngoingButton(val label: String, val key: String?, val authenticationRequired: Boolean)
+internal data class OngoingButton(@StringRes val label: Int, val key: String?, val authenticationRequired: Boolean)
 
 /**
  * The first permission or plan and its buttons, from the lock screen entry of the shared policy: 拒绝 / 允许 for a
@@ -119,13 +126,13 @@ internal data class OngoingAction(val kind: String, val interaction: String, val
         fun of(kind: String, interaction: String, session: SessionKey?): OngoingAction? {
             if (interaction.isEmpty()) return null
             val policy = ApprovalPolicy.actions(AnswerEntry.LockScreen, kind, locked = true).associateBy { it.id }
-            fun answer(id: ApprovalAction, label: String) = policy[id]?.let {
+            fun answer(id: ApprovalAction, @StringRes label: Int) = policy[id]?.let {
                 OngoingButton(label, id.wire, it.authentication != Authentication.None)
             }
             val buttons = when (kind) {
-                "permission" -> listOfNotNull(answer(ApprovalAction.Deny, "拒绝"), answer(ApprovalAction.Allow, "允许"))
-                "plan" -> listOfNotNull(policy[ApprovalAction.OpenApp]?.let { OngoingButton("查看", null, false) },
-                    answer(ApprovalAction.ApproveEdits, "批准"))
+                "permission" -> listOfNotNull(answer(ApprovalAction.Deny, R.string.notify_action_deny), answer(ApprovalAction.Allow, R.string.notify_action_allow))
+                "plan" -> listOfNotNull(policy[ApprovalAction.OpenApp]?.let { OngoingButton(R.string.notify_action_view, null, false) },
+                    answer(ApprovalAction.ApproveEdits, R.string.notify_action_approve))
                 else -> emptyList()
             }
             return OngoingAction(kind, interaction, session, buttons).takeIf { buttons.isNotEmpty() }

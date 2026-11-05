@@ -3,6 +3,8 @@ package persona.platform.phonetools
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.res.Resources
+import persona.core.designsystem.LocalizedFormats
 import android.provider.CalendarContract as Calendar
 import persona.core.contracts.api.PhoneToolResult
 import kotlinx.serialization.json.*
@@ -21,32 +23,40 @@ internal data class CalendarArguments(
     fun endMillis(zone: ZoneId = ZoneId.systemDefault()): Long =
         if (allDay) end.atZone(zone).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() else end.toEpochMilli()
 
-    /** What the phone shows before saving: the times read in the phone's own zone, not as ISO strings. */
-    fun summary(zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): String = buildString {
-        append("新建日程「").append(title).append("」\n")
+    /**
+     * What the phone shows before saving: the times read in the phone's own zone and written in its language
+     * (LocalizedFormats), not as ISO strings.
+     */
+    fun summary(res: Resources, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): String {
+        val locale = res.configuration.locales[0]
         val from = start.atZone(zone)
         val to = end.atZone(zone)
-        fun day(date: LocalDate) = if (date.year == today.year) "${date.monthValue}月${date.dayOfMonth}日"
-            else "${date.year}年${date.monthValue}月${date.dayOfMonth}日"
-        if (allDay) {
-            // The end date is exclusive: an event on 11月1日 ends at 11月2日 00:00.
-            val last = to.toLocalDate().minusDays(1).takeIf { it.isAfter(from.toLocalDate()) }
-            append(day(from.toLocalDate()))
-            last?.let { append(" → ").append(day(it)) }
-            append("（全天）")
-        } else {
-            append(day(from.toLocalDate())).append(' ').append(from.format(TIME))
-            append(" → ")
-            if (to.toLocalDate() != from.toLocalDate()) append(day(to.toLocalDate())).append(' ')
-            append(to.format(TIME))
+        fun day(date: ZonedDateTime) = LocalizedFormats.formatter(
+            if (date.year == today.year) LocalizedFormats.MONTH_DAY else LocalizedFormats.DATE, locale, zone).format(date)
+        fun time(date: ZonedDateTime) = LocalizedFormats.formatter(LocalizedFormats.TIME, locale, zone).format(date)
+        val span = buildString {
+            if (allDay) {
+                // The end date is exclusive: an event on 11月1日 ends at 11月2日 00:00.
+                val last = to.minusDays(1).takeIf { it.toLocalDate().isAfter(from.toLocalDate()) }
+                append(day(from))
+                last?.let { append(" → ").append(day(it)) }
+            } else {
+                append(day(from)).append(' ').append(time(from))
+                append(" → ")
+                if (to.toLocalDate() != from.toLocalDate()) append(day(to)).append(' ')
+                append(time(to))
+            }
         }
-        location?.let { append("\n地点：").append(it) }
-        calendar?.let { append("\n日历：").append(it) }
-        notes?.let { append("\n备注：").append(if (it.length > 200) it.take(200) + "…" else it) }
+        return listOfNotNull(
+            res.getString(R.string.phonetools_calendar_new, title),
+            if (allDay) res.getString(R.string.phonetools_calendar_all_day, span) else span,
+            location?.let { res.getString(R.string.phonetools_calendar_location, it) },
+            calendar?.let { res.getString(R.string.phonetools_calendar_calendar, it) },
+            notes?.let { res.getString(R.string.phonetools_calendar_notes, if (it.length > 200) it.take(200) + "…" else it) },
+        ).joinToString("\n")
     }
 
     companion object {
-        private val TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
 
         fun parse(args: JsonObject, zone: ZoneId = ZoneId.systemDefault()): CalendarArguments {
             val title = args.text("title") ?: invalid("title is required")
@@ -116,7 +126,7 @@ internal class CalendarTools(context: Context) {
                     attendees(cursor.getLong(0), cursor.getString(8)).takeIf { it.isNotEmpty() }?.let { put("attendees", it) }
                 }
             }
-        } ?: unavailable("系统日历暂不可用 / The calendar provider is not available on this phone.")
+        } ?: unavailable("系统日历暂不可用 / The calendar provider is not available on this phone.")  // i18n-ignore: tool result for the model
         return PhoneToolResult.text(buildJsonObject {
             put("start", iso(start, zone)); put("end", iso(end, zone))
             put("count", rows.size); put("truncated", truncated); put("events", JsonArray(rows))
@@ -156,7 +166,7 @@ internal class CalendarTools(context: Context) {
             put(Calendar.Events.EVENT_LOCATION, event.location); put(Calendar.Events.DESCRIPTION, event.notes)
         }
         val uri = resolver.insert(Calendar.Events.CONTENT_URI, values)
-            ?: unavailable("日程没有保存 / The calendar did not take the event.")
+            ?: unavailable("日程没有保存 / The calendar did not take the event.")  // i18n-ignore: tool result for the model
         return PhoneToolResult.text(buildJsonObject {
             put("id", ContentUris.parseId(uri).toString()); put("title", event.title)
             put("start", iso(event.start)); put("end", iso(event.end))
@@ -174,7 +184,7 @@ internal class CalendarTools(context: Context) {
             "${Calendar.Calendars.CALENDAR_ACCESS_LEVEL} >= ?", arrayOf(Calendar.Calendars.CAL_ACCESS_CONTRIBUTOR.toString()),
             "${Calendar.Calendars.IS_PRIMARY} DESC, ${Calendar.Calendars._ID} ASC")?.use { cursor ->
             while (cursor.moveToNext()) calendars += cursor.getLong(0) to cursor.getString(1).orEmpty()
-        } ?: unavailable("系统日历暂不可用 / The calendar provider is not available on this phone.")
+        } ?: unavailable("系统日历暂不可用 / The calendar provider is not available on this phone.")  // i18n-ignore: tool result for the model
         if (wanted != null) {
             val needle = wanted.lowercase()
             val match = calendars.firstOrNull { it.second.lowercase() == needle } ?: calendars.firstOrNull { it.second.lowercase().contains(needle) }
@@ -193,7 +203,7 @@ internal class CalendarTools(context: Context) {
             put(Calendar.Calendars.SYNC_EVENTS, 1); put(Calendar.Calendars.CALENDAR_TIME_ZONE, ZoneId.systemDefault().id)
         }
         val created = resolver.insert(uri, values)
-            ?: unavailable("这台手机上没有可写入的日历 / No writable calendar is configured on this phone.")
+            ?: unavailable("这台手机上没有可写入的日历 / No writable calendar is configured on this phone.")  // i18n-ignore: tool result for the model
         return ContentUris.parseId(created) to "Persona"
     }
 

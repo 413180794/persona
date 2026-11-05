@@ -1,7 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget, the tile and the launcher shortcuts (docs/android.md「桌面入口」). English is the fallback (docs/i18n.md). -->
+<!-- The widget, the tile, the launcher shortcuts and 批准第一个待处理 (docs/android.md「桌面入口」). English is the fallback (docs/i18n.md). -->
 <resources>
     <string name="shortcuts_widget_label" translatable="false">Persona</string>
-    <string name="shortcuts_widget_description">Which agents need you, are working, or are done</string>
     <string name="shortcuts_tile_label" translatable="false">Persona</string>
+    <string name="shortcuts_widget_description">Which agents need you, are working, or are done</string>
+    <string name="shortcuts_approve_title">Approve first pending</string>
+    <string name="shortcuts_loading">Checking what\'s waiting for you…</string>
+    <string name="shortcuts_not_paired">Not paired yet. Open Persona and scan the hub\'s pairing QR code.</string>
+    <string name="shortcuts_no_pending">Nothing is waiting for you.</string>
+    <string name="shortcuts_plan_note">Approving accepts edits automatically. Commands still ask you first.</string>
+    <string name="shortcuts_ask_permission">Allow %1$s?</string>
+    <string name="shortcuts_this_tool">this tool</string>
+    <string name="shortcuts_ask_plan">Approve this plan?</string>
+    <string name="shortcuts_ask_plan_excerpt">Approve this plan?\n“%1$s”</string>
+    <string name="shortcuts_approve">Approve</string>
+    <string name="shortcuts_allow">Allow</string>
+    <string name="shortcuts_done_allowed_tool">Allowed %1$s</string>
+    <string name="shortcuts_done_allowed">Allowed</string>
+    <string name="shortcuts_done_plan">Plan approved. Starting now</string>
+    <string name="shortcuts_needs_app_question">This is a question. Open Persona to answer it.</string>
+    <string name="shortcuts_needs_app_screen">The terminal is waiting for your input. Open Persona.</string>
+    <string name="shortcuts_needs_app">Open Persona to handle this.</string>
+    <string name="shortcuts_error_generic">Something went wrong. Try again later.</string>
+    <string name="shortcuts_error_gone">This was already handled.</string>
+    <string name="shortcuts_error_prompt_changed">The terminal\'s dialog changed. Open Persona to see the new one.</string>
+    <string name="shortcuts_error_not_delivered">Not delivered: %1$s</string>
+    <string name="shortcuts_error_refused">The hub didn\'t accept this action.</string>
+    <string name="shortcuts_error_unconfirmed">Result unconfirmed: open Persona to check whether it went through.</string>
+    <string name="shortcuts_error_pairing">Pairing is no longer valid. Open Persona to pair again.</string>
+    <string name="shortcuts_error_certificate">The hub\'s certificate changed. Open Persona to pair again.</string>
+    <string name="shortcuts_error_unreachable">Can\'t reach the hub. Make sure your phone can reach it (same network or VPN).</string>
+    <string name="shortcuts_locked">Unlock your phone first, then approve.</string>
+    <string name="shortcuts_open_persona">Open Persona</string>
+    <string name="shortcuts_ok">OK</string>
+    <string name="shortcuts_cancel">Cancel</string>
+    <string name="shortcuts_not_paired_short">Not paired</string>
+    <string name="shortcuts_all_done">All caught up</string>
+    <string name="shortcuts_tile_description">Persona: %1$s</string>
+    <string name="shortcuts_widget_scan">Open Persona and scan the hub\'s QR code</string>
+    <string name="shortcuts_widget_nobody">No agents need you</string>
+    <string name="shortcuts_ask_label">Ask Persona</string>
+    <string name="shortcuts_approve_label">Approve pending</string>
+    <string name="shortcuts_open_session">Open %1$s</string>
 </resources>

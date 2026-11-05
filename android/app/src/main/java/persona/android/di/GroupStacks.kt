@@ -1,5 +1,7 @@
 package persona.android.di
 
+import persona.android.AppText
+import persona.android.R
 import android.app.Application
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -108,12 +110,12 @@ class GroupStacks @Inject constructor(application: Application, private val runt
     /** Runs [block] in the group's lifetime once its services are built; fails when no such group is paired. */
     suspend fun <T> use(namespace: String?, block: suspend (GroupStack) -> T): T {
         val stack = stacks.map { list ->
-            if (runtime.groups.value.none { it.namespace == namespace }) throw IllegalStateException("请先配对 hub")
+            if (runtime.groups.value.none { it.namespace == namespace }) throw IllegalStateException(AppText.get(R.string.app_error_pair_first))
             list.firstOrNull { it.namespace == namespace }
         }.filterNotNull().first()
         return try {
             stack.data.coroutineScope.async {
-                check(stack.current) { "连接已切换" }
+                check(stack.current) { AppText.get(R.string.app_error_switched) }
                 block(stack)
             }.await()
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -135,7 +137,7 @@ class GroupStacks @Inject constructor(application: Application, private val runt
     /** Every group in turn: succeeds when at least one does, else throws the first failure. */
     suspend fun forEach(block: suspend (GroupStack) -> Unit) {
         val list = stacks.value
-        if (list.isEmpty()) throw IllegalStateException("请先配对 hub")
+        if (list.isEmpty()) throw IllegalStateException(AppText.get(R.string.app_error_pair_first))
         var first: Exception? = null
         var any = false
         for (stack in list) try {

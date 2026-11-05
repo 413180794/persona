@@ -1,5 +1,7 @@
 package persona.android.platform
 
+import persona.android.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -143,9 +145,9 @@ internal fun LocalNetworkPermissionDialog(permission: LocalNetworkPermission, co
     }
     if (pending != null || state == ConnectionState.NeedsLocalNetworkPermission && !permission.granted() && !dismissed) AlertDialog(
         onDismissRequest = { pending?.complete(false); dismissed = true },
-        title = { Text("允许访问本地网络") },
-        text = { Text(if (permission.requestedBefore) "本地网络权限未开启。请到应用权限里允许访问本地网络，返回后继续配对。"
-            else "这个 hub 地址位于本地网络，需要允许 Persona 访问后才能配对。") },
+        title = { Text(stringResource(R.string.app_local_network_title)) },
+        text = { Text(stringResource(if (permission.requestedBefore) R.string.app_local_network_denied
+            else R.string.app_local_network_ask)) },
         confirmButton = { TextButton(onClick = {
             if (permission.requestedBefore) {
                 try {
@@ -156,7 +158,7 @@ internal fun LocalNetworkPermissionDialog(permission: LocalNetworkPermission, co
                 permission.recordRequest()
                 launcher.launch(LOCAL_NETWORK)
             }
-        }) { Text(if (permission.requestedBefore) "去授权" else "允许访问", maxLines = 1) } },
-        dismissButton = { TextButton(onClick = { pending?.complete(false); dismissed = true }) { Text("暂不授权", maxLines = 1) } },
+        }) { Text(stringResource(if (permission.requestedBefore) R.string.app_local_network_open_settings else R.string.app_local_network_allow), maxLines = 1) } },
+        dismissButton = { TextButton(onClick = { pending?.complete(false); dismissed = true }) { Text(stringResource(R.string.app_local_network_not_now), maxLines = 1) } },
     )
 }

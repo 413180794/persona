@@ -1,5 +1,6 @@
 package persona.platform.capsule
 
+import androidx.annotation.StringRes
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -52,8 +53,8 @@ data class CapsuleContent(
     val active: Boolean get() = if (sections.isEmpty()) activeCount > 0 else hasActivity
 }
 
-enum class CapsuleMode(val key: String, val label: String) {
-    Off("off", "关闭"), Active("active", "有任务时显示"), Always("always", "一直显示");
+enum class CapsuleMode(val key: String, @StringRes val label: Int) {
+    Off("off", R.string.capsule_mode_off), Active("active", R.string.capsule_mode_active), Always("always", R.string.capsule_mode_always);
     companion object { fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: Off }
 }
 

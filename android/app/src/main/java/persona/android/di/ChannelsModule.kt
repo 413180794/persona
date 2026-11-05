@@ -1,5 +1,7 @@
 package persona.android.di
 
+import persona.android.AppText
+import persona.android.R
 import android.app.Application
 import dagger.Module
 import dagger.Provides
@@ -37,7 +39,7 @@ object ChannelsModule {
                 .flatMapLatest { stack -> stack?.repositories?.sessions?.sessions ?: flowOf(emptyList()) }
                 .map { list -> list.filter { it.assistant } }
             private fun api(): HttpChannelManagement {
-                val data = runtime.scopedData.value ?: throw HubFailure(HubError.NoNetwork, "请先配对 hub", retryable = false)
+                val data = runtime.scopedData.value ?: throw HubFailure(HubError.NoNetwork, AppText.get(R.string.app_error_pair_first), retryable = false)
                 return HttpChannelManagement(runtime.connectionFor(data), available)
             }
             override suspend fun channels() = api().channels()

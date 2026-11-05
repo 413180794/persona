@@ -46,7 +46,7 @@ class ProactiveDebugActivity : ComponentActivity() {
         val forced = when (intent.getStringExtra("debug.theme")) { "dark" -> true; "light" -> false; else -> null }
         val app = application as PersonaApp
         intent.getStringExtra("debug.style")?.let { key ->
-            app.appearance.setStyle(requireNotNull(AppStyle.entries.firstOrNull { it.key == key }) { "未知的界面风格" })
+            app.appearance.setStyle(requireNotNull(AppStyle.entries.firstOrNull { it.key == key }) { "未知的界面风格" })  // i18n-ignore: debug-only developer tool
         }
         val page = intent.getStringExtra("debug.page")
         val client = OkHttpClient()
@@ -73,9 +73,9 @@ class ProactiveDebugActivity : ComponentActivity() {
                                 machines = machines, initialPage = page)
                         }
                         opened?.let { key ->
-                            JDialog(onDismiss = { opened = null }, title = "会打开这段对话",
-                                text = "接进设置后，这里会切到 Persona 打开 ${key.machineId} 上的对话 ${key.sessionId}。",
-                                confirm = "知道了" to { opened = null }, dismiss = null)
+                            JDialog(onDismiss = { opened = null }, title = "会打开这段对话",  // i18n-ignore: debug-only developer tool
+                                text = "接进设置后，这里会切到 Persona 打开 ${key.machineId} 上的对话 ${key.sessionId}。",  // i18n-ignore: debug-only developer tool
+                                confirm = "知道了" to { opened = null }, dismiss = null)  // i18n-ignore: debug-only developer tool
                         }
                     }
                 }
@@ -93,11 +93,11 @@ class ProactiveDebugActivity : ComponentActivity() {
 
     /** Only a fake hub on this device's loopback (adb reverse), the same rule as the debug launch adapter. */
     private fun loopback(address: String?): String {
-        val value = requireNotNull(address) { "需要 debug.mockAddress" }
+        val value = requireNotNull(address) { "需要 debug.mockAddress" }  // i18n-ignore: debug-only developer tool
         val uri = URI(value)
         val loopback = byteArrayOf(127, 0, 0, 1).joinToString(".") { it.toString() }
         require(uri.scheme == "http" && uri.host == loopback && uri.userInfo == null && uri.rawPath in listOf("", "/") &&
-            uri.query == null && uri.fragment == null && uri.port in 1..65535) { "debug.mockAddress 只能是本机回环地址上的假 hub" }
+            uri.query == null && uri.fragment == null && uri.port in 1..65535) { "debug.mockAddress 只能是本机回环地址上的假 hub" }  // i18n-ignore: debug-only developer tool
         return value
     }
 }

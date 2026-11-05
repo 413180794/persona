@@ -1,5 +1,6 @@
 package persona.platform.phonetools
 
+import androidx.annotation.StringRes
 import android.Manifest.permission.*
 import android.app.NotificationManager
 import android.content.Context
@@ -50,20 +51,36 @@ class PhonePermissions(private val context: Context) {
         PhoneSource.Health -> true
         else -> permissions(source).all(::granted)
     }
-    fun status(source: PhoneSource, healthGranted: Set<String>? = null): String = when {
+    /** The permission state of [source], as a string resource; [PhoneAccess.Partial] offers to choose again. */
+    fun status(source: PhoneSource, healthGranted: Set<String>? = null): PhoneAccess = when {
         source == PhoneSource.Health -> when {
-            !Health.available(context) -> Health.unavailableReason(context) ?: "不可用"
-            healthGranted == null -> "已授权"
-            healthGranted.containsAll(Health.permissions) -> "已授权"
-            healthGranted.any { it in Health.permissions } -> "部分授权"
-            else -> "未授权或已拒绝"
+            !Health.available(context) -> PhoneAccess.Unavailable
+            healthGranted == null -> PhoneAccess.Granted
+            healthGranted.containsAll(Health.permissions) -> PhoneAccess.Granted
+            healthGranted.any { it in Health.permissions } -> PhoneAccess.Partial
+            else -> PhoneAccess.Denied
         }
         source == PhoneSource.Photos && Build.VERSION.SDK_INT >= 33 &&
-            !(granted(READ_MEDIA_IMAGES) && granted(READ_MEDIA_VIDEO)) && allowed("", source) -> "部分授权"
-        source == PhoneSource.Location && granted(ACCESS_COARSE_LOCATION) && !granted(ACCESS_FINE_LOCATION) -> "仅大致位置"
-        source == PhoneSource.Calendar && granted(READ_CALENDAR) && !granted(WRITE_CALENDAR) -> "只读授权"
-        permissions(source).isEmpty() && source != PhoneSource.Notifications -> "无需授权"
-        allowed(if (source == PhoneSource.Calendar) "phone_calendar_create_event" else "", source) -> "已授权"
-        else -> "未授权或已拒绝"
+            !(granted(READ_MEDIA_IMAGES) && granted(READ_MEDIA_VIDEO)) && allowed("", source) -> PhoneAccess.Partial
+        source == PhoneSource.Location && granted(ACCESS_COARSE_LOCATION) && !granted(ACCESS_FINE_LOCATION) -> PhoneAccess.Approximate
+        source == PhoneSource.Calendar && granted(READ_CALENDAR) && !granted(WRITE_CALENDAR) -> PhoneAccess.ReadOnly
+        permissions(source).isEmpty() && source != PhoneSource.Notifications -> PhoneAccess.NotNeeded
+        allowed(if (source == PhoneSource.Calendar) "phone_calendar_create_event" else "", source) -> PhoneAccess.Granted
+        else -> PhoneAccess.Denied
     }
+
+    /** What the tag under a data source says. Health Connect missing says why. */
+    fun statusText(source: PhoneSource, access: PhoneAccess): String =
+        (if (source == PhoneSource.Health && access == PhoneAccess.Unavailable) Health.unavailableReason(context) else null)
+            ?: context.getString(access.label)
+}
+
+enum class PhoneAccess(@StringRes val label: Int) {
+    Unavailable(R.string.phonetools_status_unavailable),
+    Granted(R.string.phonetools_status_granted),
+    Partial(R.string.phonetools_status_partial),
+    Denied(R.string.phonetools_status_denied),
+    Approximate(R.string.phonetools_status_approximate),
+    ReadOnly(R.string.phonetools_status_read_only),
+    NotNeeded(R.string.phonetools_status_not_needed),
 }

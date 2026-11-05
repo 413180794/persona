@@ -1,5 +1,10 @@
 package persona.platform.phonetools
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -12,7 +17,10 @@ import java.time.ZoneId
  * mcpTools, phoneClient), so each tool Android declares must read exactly like the iOS app's. The fixture is exported
  * from apple/Persona/PhoneTools by scripts/assets/export_ios_phone_tools.py (`--check` tells when it is out of date).
  */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class PhoneToolCatalogTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     private val ios: JsonObject = Json.parseToJsonElement(
         requireNotNull(javaClass.classLoader!!.getResource("ios-phone-tools.json")).readText()).jsonObject
 
@@ -82,16 +90,16 @@ class PhoneToolCatalogTest {
             put("title", " 周会 "); put("start", "2026-11-01T15:00:00+08:00"); put("end", "2026-11-01T15:30:00+08:00")
             put("location", "三楼"); put("calendar", "工作")
         }, zone)
-        assertEquals("新建日程「周会」\n11月1日 15:00 → 15:30\n地点：三楼\n日历：工作", event.summary(zone, today))
+        assertEquals("新建日程「周会」\n11月1日 15:00 → 15:30\n地点：三楼\n日历：工作", event.summary(res, zone, today))
         val overnight = event.copy(end = Instant.parse("2027-01-02T01:00:00Z"), location = null, calendar = null)
-        assertEquals("新建日程「周会」\n11月1日 15:00 → 2027年1月2日 09:00", overnight.summary(zone, today))
+        assertEquals("新建日程「周会」\n11月1日 15:00 → 2027年1月2日 09:00", overnight.summary(res, zone, today))
         val allDay = CalendarArguments.parse(buildJsonObject {
             put("title", "出差"); put("start", "2026-11-03"); put("end", "2026-11-05"); put("all_day", true)
         }, zone)
-        assertEquals("新建日程「出差」\n11月3日 → 11月4日（全天）", allDay.summary(zone, today))
+        assertEquals("新建日程「出差」\n11月3日 → 11月4日（全天）", allDay.summary(res, zone, today))
         assertEquals(Instant.parse("2026-11-03T00:00:00Z").toEpochMilli(), allDay.startMillis(zone))
         assertEquals("新建日程「出差」\n11月3日（全天）",
-            allDay.copy(end = parseTime("2026-11-04", zone)!!).summary(zone, today))
+            allDay.copy(end = parseTime("2026-11-04", zone)!!).summary(res, zone, today))
     }
 
     @Test fun photoIdsAndScreenshots() {
@@ -104,5 +112,29 @@ class PhoneToolCatalogTest {
         assertTrue(isScreenshot("DCIM/截屏/"))
         assertFalse(isScreenshot("DCIM/Camera/"))
         assertFalse(isScreenshot(null))
+    }
+}
+
+/** The calendar confirmation in the other languages: words from the resources, dates from LocalizedFormats. */
+@RunWith(AndroidJUnit4::class)
+class CalendarSummaryLanguagesTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
+    private val zone = ZoneId.of("Asia/Shanghai")
+    private val event get() = CalendarArguments.parse(buildJsonObject {
+        put("title", "Weekly sync"); put("start", "2026-11-01T15:00:00+08:00"); put("end", "2026-11-01T15:30:00+08:00")
+        put("location", "3F")
+    }, zone)
+
+    @Config(sdk = [35], qualifiers = "en")
+    @Test fun english() {
+        val summary = event.summary(res, zone, LocalDate.of(2026, 10, 1))
+        assertTrue(summary, summary.startsWith("New event “Weekly sync”\nNov 1 "))
+        assertTrue(summary, summary.endsWith("\nLocation: 3F"))
+    }
+
+    @Config(sdk = [35], qualifiers = "ja")
+    @Test fun japanese() {
+        val summary = event.summary(res, zone, LocalDate.of(2026, 10, 1))
+        assertEquals("新しい予定「Weekly sync」\n11月1日 15:00 → 15:30\n場所：3F", summary)
     }
 }

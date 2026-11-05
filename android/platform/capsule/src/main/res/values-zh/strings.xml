@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capsule_window_title">Persona 悬浮胶囊</string>
+    <string name="capsule_mode_off">关闭</string>
+    <string name="capsule_mode_active">有任务时显示</string>
+    <string name="capsule_mode_always">一直显示</string>
+    <string name="capsule_failure">操作失败，请打开完整会话核对</string>
+    <string name="capsule_open">打开 Persona 悬浮胶囊</string>
+    <string name="capsule_open_new">打开 Persona 悬浮胶囊，有新提醒</string>
+    <string name="capsule_collapse">收起</string>
+    <string name="capsule_loading">正在加载…</string>
+    <string name="capsule_empty">暂无内容</string>
+    <string name="capsule_back">返回列表</string>
+    <string name="capsule_placeholder_working">补充或改要求…</string>
+    <string name="capsule_placeholder">想让 Persona 做什么？</string>
+    <string name="capsule_open_chat">打开会话</string>
+    <string name="capsule_send">发送</string>
+    <string name="capsule_done_suffix">· 已完成</string>
+    <string name="capsule_done_description">%1$s · 已完成</string>
+</resources>

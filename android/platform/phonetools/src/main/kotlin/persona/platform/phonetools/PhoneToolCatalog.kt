@@ -1,23 +1,32 @@
 package persona.platform.phonetools
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import persona.core.contracts.api.PhoneToolSpec
 import kotlinx.serialization.json.*
 
-enum class PhoneSource(val title: String, val detail: String, internal val key: String) {
-    Contacts("通讯录", "搜索姓名、公司、电话和邮箱", "contacts"),
-    Calendar("日历", "查看日程，新建日程须逐次确认", "calendar"),
-    Location("位置", "仅在前台获取位置，不依赖 Google 服务", "location"),
-    Health("健康", "步数、心率、睡眠、活动能量等汇总", "health"),
-    Photos("照片", "读取照片和视频，可只授权部分照片", "photos"),
-    Clipboard("剪贴板", "只能在 App 打开时读写", "clipboard"),
-    Device("设备信息", "系统、电量、存储和网络", "device"),
-    Notifications("通知", "发送本地通知，查看 Persona 当前通知", "notifications"),
+/** [modelName]: what tool results call the source, the same words whichever language the phone shows. */
+enum class PhoneSource(@StringRes val title: Int, @StringRes val detail: Int, internal val key: String, internal val modelName: String) {
+    Contacts(R.string.phonetools_source_contacts, R.string.phonetools_source_contacts_detail, "contacts", "通讯录"),  // i18n-ignore: named so in tool results for the model
+    Calendar(R.string.phonetools_source_calendar, R.string.phonetools_source_calendar_detail, "calendar", "日历"),  // i18n-ignore: named so in tool results for the model
+    Location(R.string.phonetools_source_location, R.string.phonetools_source_location_detail, "location", "位置"),  // i18n-ignore: named so in tool results for the model
+    Health(R.string.phonetools_source_health, R.string.phonetools_source_health_detail, "health", "健康"),  // i18n-ignore: named so in tool results for the model
+    Photos(R.string.phonetools_source_photos, R.string.phonetools_source_photos_detail, "photos", "照片"),  // i18n-ignore: named so in tool results for the model
+    Clipboard(R.string.phonetools_source_clipboard, R.string.phonetools_source_clipboard_detail, "clipboard", "剪贴板"),  // i18n-ignore: named so in tool results for the model
+    Device(R.string.phonetools_source_device, R.string.phonetools_source_device_detail, "device", "设备信息"),  // i18n-ignore: named so in tool results for the model
+    Notifications(R.string.phonetools_source_notifications, R.string.phonetools_source_notifications_detail, "notifications", "通知"),  // i18n-ignore: named so in tool results for the model
 }
+
+/** A confirmation's text, written out with the resources of the language the phone shows. */
+typealias PhoneConfirmationText = (Resources) -> String
 
 internal data class ToolDefinition(
     val spec: PhoneToolSpec, val source: PhoneSource, val foregroundOnly: Boolean = false,
-    /** What the phone asks the user before a write runs; it may throw for arguments that cannot be shown. */
-    val confirmation: ((JsonObject) -> String)? = null,
+    /**
+     * What the phone asks the user before a write runs, written out in the phone's language when it is shown; it may
+     * throw for arguments that cannot be shown.
+     */
+    val confirmation: ((JsonObject) -> PhoneConfirmationText)? = null,
 )
 
 /**
@@ -43,7 +52,7 @@ internal object PhoneToolCatalog {
     private fun tool(
         name: String, description: String, source: PhoneSource,
         properties: Map<String, JsonObject> = emptyMap(), required: List<String> = emptyList(),
-        foreground: Boolean = false, confirmation: ((JsonObject) -> String)? = null,
+        foreground: Boolean = false, confirmation: ((JsonObject) -> PhoneConfirmationText)? = null,
     ) = ToolDefinition(PhoneToolSpec(name, description, buildJsonObject {
         put("type", "object"); put("additionalProperties", false)
         if (properties.isNotEmpty()) put("properties", JsonObject(properties))
@@ -85,7 +94,7 @@ internal object PhoneToolCatalog {
                 "all_day" to boolean("Mark the event as all-day. Default false."),
                 "calendar" to string("Calendar name (title) to put the event in. Default: the default calendar for new events."),
             ), listOf("title", "start", "end"),
-            confirmation = { args -> CalendarArguments.parse(args).summary() }),
+            confirmation = { args -> CalendarArguments.parse(args).let { event -> { res: Resources -> event.summary(res) } } }),
         tool("phone_location_current",
             "Get the phone's current location. Returns latitude, longitude, horizontal accuracy in meters, altitude, the " +
                 "reverse-geocoded address (country, province, city, district, street, formatted address), the device " +
