@@ -2,20 +2,25 @@
 // grouping. Under a filter the agents it showed when it was chosen stay (`kept`): one opened from 未读 is seen now but
 // keeps its place, so the next one is still right below it.
 import { t } from "../i18n";
-import type { AgentMutes } from "./agent-groups";
+import { sessionSource, type AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
 import { agentKey, isSpacePinned, type AgentPins } from "./pins";
 import { isMuted } from "./session-actions";
 import type { AgentState, Session } from "./types";
 
-export type AgentFilter = "all" | "needs" | "unread" | "working";
+export type AgentFilter = "all" | "needs" | "unread" | "working" | "feishu" | "terminal";
 
 export const AGENT_FILTERS: { key: AgentFilter; label: string; state?: AgentState }[] = [
   { key: "all", label: t("lib-agent-filter.all") },
   { key: "needs", label: t("lib-agent-filter.needs_you"), state: "needs_you" },
   { key: "unread", label: t("lib-agent-filter.unread"), state: "unread" },
   { key: "working", label: t("lib-agent-filter.working"), state: "working" },
+  // where the agent was opened (#2526): a botmux session (its Feishu group) or a herdr pane
+  { key: "feishu", label: t("lib-agent-filter.feishu") },
+  { key: "terminal", label: t("lib-agent-filter.terminal") },
 ];
+
+const SOURCE_FILTERS = { feishu: "feishu", terminal: "terminal" } as const;
 
 export function agentFilter(value: string | null): AgentFilter {
   return AGENT_FILTERS.find((f) => f.key === value)?.key ?? "all";
@@ -28,6 +33,7 @@ export function filterState(f: AgentFilter): AgentState | undefined {
 /** A muted agent that is working or finished unread is not counted or listed under 未读 / 工作中 (it sits under 已屏蔽);
  * one that needs you still is, the same as the list's order. */
 export function matchesFilter(s: Session, f: AgentFilter, mutes: AgentMutes): boolean {
+  if (f === "feishu" || f === "terminal") return sessionSource(s) === SOURCE_FILTERS[f];
   const state = filterState(f);
   if (!state) return true;
   return stateOf(s) === state && (state === "needs_you" || !isMuted(s, mutes));
@@ -36,8 +42,8 @@ export function matchesFilter(s: Session, f: AgentFilter, mutes: AgentMutes): bo
 export type FilterCounts = Record<Exclude<AgentFilter, "all">, number>;
 
 export function filterCounts(sessions: Session[], mutes: AgentMutes): FilterCounts {
-  const out: FilterCounts = { needs: 0, unread: 0, working: 0 };
-  for (const s of sessions) for (const f of ["needs", "unread", "working"] as const) if (matchesFilter(s, f, mutes)) out[f]++;
+  const out: FilterCounts = { needs: 0, unread: 0, working: 0, feishu: 0, terminal: 0 };
+  for (const s of sessions) for (const f of ["needs", "unread", "working", "feishu", "terminal"] as const) if (matchesFilter(s, f, mutes)) out[f]++;
   return out;
 }
 

@@ -70,6 +70,9 @@ nonisolated enum Theme {
     static let cautionText = Color(light: 0xB35400, dark: 0xFF9F0A)
     /// What the AI wrote or suggests (✦ summaries, AI actions): not the accent, which means "tap me".
     static let ai = Color(light: 0x5B4FD6, dark: 0x9C94FF)
+    /// Where an agent was opened (#2526): a Feishu group's topic (botmux) and a terminal pane (herdr), each its own color.
+    static let sourceFeishu = Color(light: 0x1D5FD6, dark: 0x82AAFF)
+    static let sourceTerminal = Color(light: 0x6A46C2, dark: 0xBEA3FF)
     /// /loop and other scheduled wake-ups (待唤醒).
     static let loop = Color(light: 0x2E6FD0, dark: 0x5B9BFF)
     /// Count badges on rows (unread messages): white text on it is ≥ 4.5:1 in both appearances.

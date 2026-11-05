@@ -1,6 +1,7 @@
 // A tiny history router: the hub serves index.html for every path that isn't a file.
 import { useSyncExternalStore } from "react";
 import { takeOverlayEntry } from "./back-close";
+import { BASE, stripBase } from "./base";
 
 // Persona's main conversation is the front door (like the app, which opens on 助手): `/` and `/j` open it, `/j/<id>` is
 // one conversation, `/j/new` starts a one-off one, and 总览 lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
@@ -70,7 +71,13 @@ export function parse(path: string, search = ""): Route {
   return { name: "home" };
 }
 
-export function href(r: Route): string {
+/** The address of a route as this page reaches it: under the sub-path the hub is served at (lib/base.ts), if any. */
+export function href(r: Route, base = BASE): string {
+  return base + routePath(r);
+}
+
+/** A route's path in the app, without the sub-path (what parse reads). */
+export function routePath(r: Route): string {
   switch (r.name) {
     case "session":
       return `/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}${viewQuery(r.view)}`;
@@ -122,8 +129,9 @@ if (typeof addEventListener !== "undefined") {
   addEventListener("popstate", () => listeners.forEach((l) => l()));
 }
 
+/** `r` as a string is a path in the app ("/settings?tab=…"), without the sub-path. */
 export function navigate(r: Route | string, replace = false) {
-  const to = typeof r === "string" ? r : href(r);
+  const to = typeof r === "string" ? BASE + r : href(r);
   // the query is part of the address (/s/…?view=term): the same page with another view is somewhere else
   if (to === location.pathname + location.search) return;
   // From inside an open overlay (a drawer's link, a sheet's action): the new page takes the overlay's entry, so Back
@@ -145,7 +153,7 @@ export function useRoute(): Route {
     () => location.pathname + location.search,
   );
   const [path, ...query] = at.split("?");
-  return parse(path!, query.join("?"));
+  return parse(stripBase(path!), query.join("?"));
 }
 
 // <a> that navigates in-app on a plain click and still opens a new tab with ⌘ / middle click.

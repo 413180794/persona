@@ -648,6 +648,16 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         return ["orca", "herdr-core", "botmux"].contains(kind) ? kind : "herdr"
     }
 
+    /// Where it was opened (#2526): a botmux session is a Feishu group's topic, a herdr pane a terminal; nil for the
+    /// rest (Orca, runtimes, apps), which carry no source label.
+    var source: SessionSource? {
+        switch hostKind {
+        case "botmux": .feishu
+        case "herdr", "herdr-core": .terminal
+        default: nil
+        }
+    }
+
     var isCodex: Bool { agent == "codex" || sourceKind == "codex_app_server" || sourceKind == "codex_history" }
     var isTraex: Bool { agent == "traex" }
     /// Claude Code (or an older hub that does not name the agent): what the Claude-only controls (modes, /clear,
@@ -1679,4 +1689,10 @@ nonisolated enum DeleteSessionText {
         let back = resume.map { "之后在电脑上用 \($0) 继续，它会重新出现。" } ?? "之后再用到它，它会重新出现。"
         return "「\(title)」会从各端的列表里移除。\(place)对话记录不会删除，" + back
     }
+}
+
+/// Where an agent was opened (`Session.source`, #2526).
+nonisolated enum SessionSource: String, Sendable {
+    case feishu, terminal
+    var label: String { self == .feishu ? "飞书群" : "终端" }
 }

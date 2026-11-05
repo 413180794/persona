@@ -37,6 +37,8 @@ import type { Interaction, Launcher, Machine } from "../lib/types";
 import { Button, cx, Dialog, IconButton, Menu, StatusDot, toast, useMenu } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { t } from "../i18n";
+import { groupTodosByProject, treeStateLabel, type TodoProjectGroup, type TreeState } from "../lib/todo-tree";
+import { useFolded } from "../lib/use-folded";
 
 export function TodosView({
   selectedId,
@@ -87,6 +89,8 @@ export function TodosView({
 
   const filteredUncompleted = useMemo(() => uncompleted.filter(filterTodo), [uncompleted, search]);
   const filteredCompleted = useMemo(() => completed.filter(filterTodo), [completed, search]);
+  // open todos under the project their agents work in (#2526)
+  const projectGroups = useMemo(() => groupTodosByProject(filteredUncompleted, lookup), [filteredUncompleted, lookup]);
 
   // Active selected todo
   const activeTodo = useMemo(() => {
@@ -180,19 +184,23 @@ export function TodosView({
               </div>
             ) : (
               <div className="flex flex-col gap-1">
-                {filteredUncompleted.map((todo) => (
-                  <TodoListItem
-                    key={todo.id}
-                    todo={todo}
-                    lookup={lookup}
-                    interactions={interactions}
-                    selected={activeTodo?.id === todo.id}
-                    onSelect={() => {
-                      setActiveId(todo.id);
-                      navigate(`/todos?id=${encodeURIComponent(todo.id)}`);
-                    }}
-                    onToggleDone={() => toggleDone(todo)}
-                  />
+                {projectGroups.map((g) => (
+                  <TodoProjectSection key={g.key} group={g} holds={g.todos.some((td) => td.id === activeTodo?.id)}>
+                    {g.todos.map((todo) => (
+                      <TodoListItem
+                        key={todo.id}
+                        todo={todo}
+                        lookup={lookup}
+                        interactions={interactions}
+                        selected={activeTodo?.id === todo.id}
+                        onSelect={() => {
+                          setActiveId(todo.id);
+                          navigate(`/todos?id=${encodeURIComponent(todo.id)}`);
+                        }}
+                        onToggleDone={() => toggleDone(todo)}
+                      />
+                    ))}
+                  </TodoProjectSection>
                 ))}
 
                 {/* Completed Fold */}
@@ -287,6 +295,27 @@ export function TodosView({
           </div>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+// ── Project Section ──────────────────────────────────────────
+
+const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", done: "text-ink-3" };
+
+/** One project's open todos under a folding title with its 等你 / 在做 / 做完 (#2526). */
+function TodoProjectSection({ group, holds, children }: { group: TodoProjectGroup; holds: boolean; children: React.ReactNode }) {
+  const [folded, toggle] = useFolded(group.key, group.folded, { follow: true, holds });
+  return (
+    <div className="mt-1 first:mt-0">
+      <button type="button" aria-expanded={!folded} onClick={toggle} className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-control px-2 text-left text-[12px] text-ink-2 hover:bg-hover">
+        <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-60 transition-transform" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+        <Icon name="folder" size={12} stroke={2} className="shrink-0 text-ink-3" />
+        <span className="min-w-0 flex-1 truncate font-semibold">{group.name}</span>
+        <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{group.todos.length}</span>
+        <span className={cx("shrink-0 text-[11px] font-semibold whitespace-nowrap", TREE_TONE[group.state])}>{treeStateLabel(group.state)}</span>
+      </button>
+      {!folded && <div className="flex flex-col gap-1 pl-2 pt-0.5">{children}</div>}
     </div>
   );
 }

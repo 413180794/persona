@@ -33,6 +33,9 @@ export default defineConfig({
     host: "127.0.0.1",
     proxy: { "/api": { target: hub, changeOrigin: true, ws: true } },
   },
+  // The bundle's files are relative to the page's <base>, which the hub points at the sub-path a reverse proxy serves
+  // it under (docs/web.md「子路径」); at the root that is "/", as before.
+  base: "./",
   // The terminal loads xterm only when opened: pre-bundle it, or the first open in dev re-optimizes and reloads the page.
   optimizeDeps: { include: ["@xterm/xterm", "@xterm/addon-fit", "@xterm/addon-clipboard", "@xterm/addon-web-links", "@xterm/addon-search", "@xterm/addon-webgl"] },
   // Tests run in zh-Hans, the source language, so their expectations read like the interface (src/i18n/test-setup.ts).

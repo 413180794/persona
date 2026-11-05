@@ -1,6 +1,7 @@
 // A personal agent session's avatar: the hub serves lark-connector's image at /agents/sessions/{id}/avatar (SVGs already
 // rasterized to PNG); an <img> can't send a header, so the token rides in the query like other hub images. The
 // version keys the browser cache; without an avatar (or if it fails to load) the title's first letter is shown.
+import { BASE } from "../../lib/base";
 import { useState } from "react";
 import { enc, getToken } from "../../lib/api";
 import { cx } from "../../ui/atoms";
@@ -13,7 +14,7 @@ export interface AvatarSession {
 }
 
 export function agentAvatarURL(s: AvatarSession) {
-  return `/api/v1/agents/sessions/${enc(s.id)}/avatar?v=${enc(s.avatarVersion ?? "")}&token=${enc(getToken())}`;
+  return `${BASE}/api/v1/agents/sessions/${enc(s.id)}/avatar?v=${enc(s.avatarVersion ?? "")}&token=${enc(getToken())}`;
 }
 
 export function AgentAvatar({ s, size, className }: { s: AvatarSession; size: number; className?: string }) {

@@ -3,6 +3,7 @@
 // JSON tree. Bases, whiteboards and files say what they are and offer the tab. Reads are cached and can start early
 // (a pointer resting on the link), so the panel usually opens on a finished page.
 import { ApiError, api, enc, getToken } from "../../lib/api";
+import { BASE } from "../../lib/base";
 import { docKind, DOC_LABEL, setLinkPrefetcher, type DocKind } from "../../lib/links";
 import { t } from "../../i18n";
 
@@ -169,7 +170,7 @@ export const BR = "\u2028";
  *   an <img> cannot send as a header,
  * - turns `<br>` (table cells, mostly) into breaks; code is left alone.
  */
-export function prepareMarkdown(md: string, title?: string, token = ""): string {
+export function prepareMarkdown(md: string, title?: string, token = "", base = BASE): string {
   let lines = md.replace(/https?:\/\/[A-Za-z0-9.-]+(:\d+)?\/api\/(?!v1\/)/g, "/api/v1/lark/raw/").split("\n");
   const blank = (s?: string) => s !== undefined && !s.trim();
   while (blank(lines[0])) lines.shift();
@@ -192,7 +193,11 @@ export function prepareMarkdown(md: string, title?: string, token = ""): string 
     return line.replace(/<br\s*\/?>/gi, BR);
   });
   const withToken = (u: string) => (token ? `${u}${u.includes("?") ? "&" : "?"}token=${enc(token)}` : u);
-  return lines.join("\n").replace(/(!\[[^\]]*\]\(<?)(\/api\/v1\/[^)>\s]+)/g, (_, pre: string, u: string) => pre + withToken(u));
+  // under the sub-path the page is served at (lib/base.ts): images with the token, other links to the hub as they are
+  return lines
+    .join("\n")
+    .replace(/(!\[[^\]]*\]\(<?)(\/api\/v1\/[^)>\s]+)/g, (_, pre: string, u: string) => pre + base + withToken(u))
+    .replace(/((?<!!)\[[^\]]*\]\(<?)(\/api\/v1\/)/g, (_, pre: string, u: string) => pre + base + u);
 }
 
 /** Removes Markdown backslash escapes (`\-`, `\.`…) for plain display. */
@@ -248,7 +253,7 @@ export function plainText(n: DocNode): string {
 export function mediaURL(src: string, token = getToken()): string {
   const u = src.replace(/^https?:\/\/[A-Za-z0-9.-]+(:\d+)?\/api\/(?!v1\/)/, "/api/v1/lark/raw/");
   if (!u.startsWith("/api/v1/")) return u;
-  return `${u}${u.includes("?") ? "&" : "?"}token=${enc(token)}`;
+  return `${BASE}${u}${u.includes("?") ? "&" : "?"}token=${enc(token)}`;
 }
 
 // ── cache ──

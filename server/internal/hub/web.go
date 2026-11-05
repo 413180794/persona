@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bytes"
 	"embed"
 	"io"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // webDist is the web client built into a published jarvisd (scripts/release/publish.sh copies web/dist here before building);
@@ -67,6 +69,10 @@ func webFrom(dir string, embedded fs.FS) http.Handler {
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		if file == "index.html" {
+			serveIndex(w, r, site)
+			return
+		}
 		f, err := site.Open(file)
 		if err != nil {
 			http.NotFound(w, r)
@@ -81,4 +87,61 @@ func webFrom(dir string, embedded fs.FS) http.Handler {
 		}
 		http.ServeContent(w, r, path.Base(file), st.ModTime(), rs)
 	})
+}
+
+// serveIndex serves index.html with its <base> at the sub-path a reverse proxy serves the hub under (docs/web.md「子路径」):
+// the page's files are relative to it and lib/base.ts reads it for the API, the WebSocket and the page's routes. The
+// same file answers differently per X-Forwarded-Prefix, so a cache must key on it (Vary).
+func serveIndex(w http.ResponseWriter, r *http.Request, site fs.FS) {
+	b, err := fs.ReadFile(site, "index.html")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	var mod time.Time
+	if st, err := fs.Stat(site, "index.html"); err == nil {
+		mod = st.ModTime()
+	}
+	w.Header().Add("Vary", "X-Forwarded-Prefix")
+	http.ServeContent(w, r, "index.html", mod, bytes.NewReader(withBase(b, forwardedPrefix(r))))
+}
+
+// maxPrefix bounds X-Forwarded-Prefix: a proxy's sub-path is a few short segments.
+const maxPrefix = 256
+
+// forwardedPrefix is the sub-path a reverse proxy serves the hub under, from its X-Forwarded-Prefix ("/persona",
+// trailing slashes dropped), or "" at the root. Only plain path segments count: no dot segments, nothing that could
+// leave the attribute (quotes, angle brackets, spaces, control characters, percent escapes); anything else is ignored.
+func forwardedPrefix(r *http.Request) string {
+	v := r.Header.Get("X-Forwarded-Prefix")
+	if v == "" || len(v) > maxPrefix || v[0] != '/' {
+		return ""
+	}
+	p := strings.TrimRight(v, "/")
+	if p == "" {
+		return ""
+	}
+	for _, seg := range strings.Split(p[1:], "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return ""
+		}
+		for i := 0; i < len(seg); i++ {
+			c := seg[i]
+			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.' || c == '~') {
+				return ""
+			}
+		}
+	}
+	return p
+}
+
+// baseTag is index.html's <base> as web/index.html writes it (and Vite keeps it).
+var baseTag = []byte(`<base href="/" />`)
+
+// withBase points index.html's <base> at prefix + "/"; at the root (prefix "") the page is as it was built.
+func withBase(index []byte, prefix string) []byte {
+	if prefix == "" {
+		return index
+	}
+	return bytes.Replace(index, baseTag, []byte(`<base href="`+prefix+`/" />`), 1)
 }

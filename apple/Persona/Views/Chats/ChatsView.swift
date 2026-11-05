@@ -108,6 +108,8 @@ enum DevGrouping: String, CaseIterable, Identifiable {
 /// The quick filters over the Agents list (the bar under the search field): one tap, stacked on the machine menu.
 nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
     case all, needsYou, unread, working
+    /// Where the agent was opened (#2526): a botmux session (飞书群) or a herdr pane (终端).
+    case feishu, terminal
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -115,19 +117,29 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
         case .needsYou: "需要你"
         case .unread: "未读"
         case .working: "工作中"
+        case .feishu: SessionSource.feishu.label
+        case .terminal: SessionSource.terminal.label
         }
     }
     var state: AgentState? {
         switch self {
-        case .all: nil
+        case .all, .feishu, .terminal: nil
         case .needsYou: .needsYou
         case .unread: .unread
         case .working: .working
         }
     }
+    var source: SessionSource? {
+        switch self {
+        case .feishu: .feishu
+        case .terminal: .terminal
+        default: nil
+        }
+    }
     /// A muted agent that is working or finished unread is not counted or listed under 未读 / 工作中 (it sits under
     /// 已屏蔽); one that needs you still is, the same as the list's order (`AgentListOrder.rank`).
     func matches(_ s: Session, muted: Bool = false) -> Bool {
+        if let source { return s.source == source }
         guard let state else { return true }
         return s.state == state && (state == .needsYou || !muted)
     }
@@ -390,6 +402,8 @@ private struct AgentsList: View {
 
     /// The machines and agents the rows name, as the body last saw them (`Lookup`).
     @State private var lookup = Lookup()
+    /// Machines whose herdr does not run: a row with 启动 each (#1916).
+    @State private var herdr = HerdrWatch()
 
     /// A page pushed over it (beside it in the split it is in sight), the other page of the shell or another tab (the
     /// shell's slide between the pages shows it again).
@@ -418,6 +432,29 @@ private struct AgentsList: View {
     }
 
     private func machine(_ ref: MachineRef) -> Machine? { lookup.machines[ref] }
+
+    private var showsHerdrNotices: Bool { query.isEmpty && model.connection.shown == .online && !herdrStopped.isEmpty }
+
+    /// Beside the split (the Mac): the 「herdr 没在运行」 rows under the filter bar, not as the list's first section, which
+    /// a grouped list pads above for a header (an empty band between the bar and the row; `docs/lessons/macos.md`).
+    private var herdrNoticesAbove: some View {
+        VStack(spacing: 0) {
+            ForEach(herdrStopped) { m in
+                HerdrNoticeRow(machine: m, watch: herdr)
+                    .padding(.horizontal, Theme.Space.page)
+                    .padding(.vertical, Theme.Space.s)
+                Divider().padding(.leading, Theme.Space.page)
+            }
+        }
+    }
+
+    /// The machines with a 「herdr 没在运行」 row, under the machine menu and the group of hubs shown.
+    private var herdrStopped: [Machine] {
+        machines.filter { m in
+            herdr.stopped.contains(m.ref) && HerdrWatch.watched(m) && (machineFilter.isEmpty || m.ref.path == machineFilter) &&
+                (!model.isMultiHub || HubFilter.matches(hubFilter, m.group))
+        }
+    }
     private func session(_ key: SessionKey) -> Session? { lookup.sessions[key] }
 
     /// The agents the machine menu and the search leave.
@@ -554,6 +591,12 @@ private struct AgentsList: View {
                 Section { HubNoticeRow() } // the hub's version: an update out, under way, or too old (docs/hub-update.md)
             }
             #endif
+            if widthClass != .regular && showsHerdrNotices {
+                // 「MacBook 的 herdr 没在运行」 启动 (#1916); beside the split they are under the filter bar (`herdrNoticesAbove`).
+                ForEach(herdrStopped) { m in
+                    Section { HerdrNoticeRow(machine: m, watch: herdr) }
+                }
+            }
             if !interactions.isEmpty && query.isEmpty {
                 listSection {
                     ForEach(interactions, id: \.uid) { ix in
@@ -685,7 +728,10 @@ private struct AgentsList: View {
         .modifier(AgentsListPage(capsules: capsules))
         // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone it is the list's
         // first row (above).
-        .modifier(TopBar(abovePage: widthClass == .regular) { filterBar })
+        .modifier(TopBar(abovePage: widthClass == .regular) {
+            filterBar
+            if showsHerdrNotices { herdrNoticesAbove } // beside the split: over the list, not its first section
+        })
         .navigationTitle("Agents")
         // No title over the list (the tab says it); the name stays for the back button. The principal item (ChatsView)
         // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
@@ -708,6 +754,9 @@ private struct AgentsList: View {
         .pageSearchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .automatic),
                         prompt: "搜索空间、标签、会话、内容")
         .refreshable { await model.refresh() }
+        // Whether each machine's herdr runs, while the list is in sight (a modifier of its own: in this chain the
+        // compiler ran out of time type-checking it).
+        .modifier(HerdrPolling(watch: herdr, key: HerdrWatch.key(machines), covered: covered))
         #if DEBUG
         // `-openQuietSpaces YES` (with `-tab dev`): every quiet space opened, for screenshots (`-dev.folded` folds spaces).
         .task(id: quiet.map(\.id)) { if UserDefaults.standard.bool(forKey: "openQuietSpaces") { expandedQuiet.formUnion(quiet.map(\.id)) } }
@@ -2096,6 +2145,26 @@ struct StateCounts: View {
     }
 }
 
+/// Where an agent was opened, before its title (#2526): 飞书群 (botmux; a tap opens its Feishu topic) or 终端 (herdr),
+/// each on its own tint.
+struct SourceLabel: View {
+    var source: SessionSource
+    var link: URL?
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        let chip = Chip(text: source.label, look: .tint(source == .feishu ? Theme.sourceFeishu : Theme.sourceTerminal))
+        if source == .feishu, let link {
+            Button { openURL(link) } label: { chip }
+                .buttonStyle(.plain)
+                .accessibilityLabel("飞书群，在飞书里打开这个话题")
+                .accessibilityIdentifier("agents.row.source")
+        } else {
+            chip.accessibilityIdentifier("agents.row.source")
+        }
+    }
+}
+
 /// One agent: its state dot, the title and when, the latest line, then where it runs. Only 需要你 is spelled out (in
 /// its red, on the last line); the dot says every other state. The tab, the agent kind and the machine are plain
 /// words there: a tinted tab chip, a colored state word and an outlined kind tag on one line said the state three times.
@@ -2149,7 +2218,10 @@ nonisolated struct SlotRow: View, Equatable {
                                  subtitle: session.listPreview, footnote: meta,
                                  status: .pending(step: 0)),
                         shape: taskShape(), accessory: surface == .none ? .none : .disclosure, titleLines: 2, subtitleLines: 1) {
-                    if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
+                    HStack(spacing: Theme.Space.sm) {
+                        if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
+                        if !session.assistant, let source = session.source { SourceLabel(source: source, link: session.externalLink) }
+                    }
                 } trailing: {
                     VStack(alignment: .trailing, spacing: Theme.Space.xs) {
                         AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
@@ -2166,6 +2238,7 @@ nonisolated struct SlotRow: View, Equatable {
                     if dot { StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm) }
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
+                            if !session.assistant, let source = session.source { SourceLabel(source: source, link: session.externalLink) }
                             Text(session.displayTitle)
                                 .font(session.state == .unread ? Theme.Font.bodyHeavy : Theme.Font.bodyStrong)
                                 .lineLimit(2)

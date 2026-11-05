@@ -16,6 +16,7 @@ struct PersonaMacApp: App {
             MacRootView()
                 .environment(model)
                 .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
                 .onOpenURL { url in model.openURL(url) }
                 // A jarvis:// link goes to the window that is open: without this every link opened another main window.
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
@@ -41,6 +42,7 @@ struct PersonaMacApp: App {
         WindowGroup("终端", id: MacTerminalWindow.id, for: SessionKey.self) { $key in
             MacTerminalWindow(key: key).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowMinHeight)
 
@@ -48,6 +50,7 @@ struct PersonaMacApp: App {
         WindowGroup("对话", id: MacChatWindow.id, for: SessionKey.self) { $key in
             MacChatWindow(key: key).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowHeight)
 
@@ -55,20 +58,24 @@ struct PersonaMacApp: App {
         WindowGroup("网页", id: MacLinkWindow.id, for: URL.self) { $url in
             MacLinkWindow(url: url).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macLinkPanelIdeal * 2, height: Theme.Size.macWindowHeight)
         WindowGroup("收件箱", id: MacInboxItemWindow.id, for: String.self) { $id in
             MacInboxItemWindow(itemID: id).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowHeight)
 
         MenuBarExtra {
             MacMenuBarMenu().environment(model)
                 .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         } label: {
             MacMenuBarLabel().environment(model)
                 .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .menuBarExtraStyle(.menu)
     }

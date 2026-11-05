@@ -1,0 +1,8 @@
+{
+  "state_needs_you": "要対応",
+  "state_working": "作業中",
+  "state_done": "完了",
+  "no_project": "その他",
+  "no_agent": "Agent なし",
+  "spawned_agents": "派生した Agent {count} 件"
+}

@@ -1,6 +1,7 @@
 // App-wide state: what the hub pushes over the WebSocket (machines, sessions, interactions), plus the assistant.
 // Views read it with useStore(selector); per-session item streams go to listeners (ChatView subscribes).
 
+import { BASE } from "./base";
 import { useRef, useSyncExternalStore } from "react";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents } from "./agents";
 import { applySessionDelta, SESSIONS_DELTA_FEATURE, sessionRefreshed, sessionSnapshot } from "./sessions-delta";
@@ -244,7 +245,7 @@ export function connect() {
   clearTimeout(retryTimer);
   ws?.close();
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const sock = new WebSocket(`${proto}//${location.host}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE])}`);
+  const sock = new WebSocket(`${proto}//${location.host}${BASE}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE])}`);
   ws = sock;
   restartNotice = false;
   if (state.conn !== "online") set({ conn: "connecting" });

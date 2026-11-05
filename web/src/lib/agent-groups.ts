@@ -29,6 +29,17 @@ export function sessionHost(s: Session): string {
   return HOST_KINDS.includes(kind) ? kind : "herdr";
 }
 
+/** Where an agent was opened (#2526): "feishu" for a botmux session (a Feishu group's topic), "terminal" for a herdr
+ *  pane; undefined for the rest (Orca, runtimes, apps), which carry no source tag. */
+export type SessionSource = "feishu" | "terminal";
+
+export function sessionSource(s: Session): SessionSource | undefined {
+  const host = sessionHost(s);
+  if (host === "botmux") return "feishu";
+  if (host === "herdr" || host === "herdr-core") return "terminal";
+  return undefined;
+}
+
 /** The hosts a list's sessions run in, so a row names its host only when there is more than one. */
 export function hostsOf(sessions: Session[]): Set<string> {
   return new Set(sessions.map(sessionHost).filter(Boolean));

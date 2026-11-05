@@ -39,17 +39,24 @@ describe("service worker routes", () => {
       <link rel="icon" href="/app-icon-64.png"><link rel="stylesheet" href="/assets/main-3.css">`;
     expect(assetsIn(html)).toEqual(["/assets/main-1.js", "/assets/react-2.js", "/assets/main-3.css"]);
   });
+
+  it("reads them relative to the shell's <base> too, as the build writes them", () => {
+    const html = `<base href="/" /><script type="module" crossorigin src="./assets/main-1.js"></script>
+      <link rel="modulepreload" crossorigin href="./assets/react-2.js"><link rel="icon" href="app-icon-64.png">`;
+    expect(assetsIn(html)).toEqual(["/assets/main-1.js", "/assets/react-2.js"]);
+  });
 });
 
 // public/manifest.webmanifest: what Chrome needs to install it, and every icon it names is there at its size.
 describe("manifest", () => {
   const manifest = JSON.parse(manifestText);
+  // relative to the manifest, so they hold under a sub-path too (docs/web.md「子路径」)
   const files: Record<string, string> = {
-    "/app-icon-192.png": icon192,
-    "/app-icon-512.png": icon512,
-    "/app-icon-maskable-192.png": maskable192,
-    "/app-icon-maskable-512.png": maskable512,
-    "/apple-touch-icon.png": touchIcon,
+    "app-icon-192.png": icon192,
+    "app-icon-512.png": icon512,
+    "app-icon-maskable-192.png": maskable192,
+    "app-icon-maskable-512.png": maskable512,
+    "apple-touch-icon.png": touchIcon,
   };
   // a PNG's width and height are big-endian at bytes 16 and 20 of its IHDR
   const pngSize = (src: string) => {
@@ -60,7 +67,7 @@ describe("manifest", () => {
   };
 
   it("is installable", () => {
-    expect(manifest).toMatchObject({ name: "Persona", start_url: "/", scope: "/", display: "standalone" });
+    expect(manifest).toMatchObject({ name: "Persona", start_url: "./", scope: "./", display: "standalone" });
     const sizes = (purpose: string) => manifest.icons.filter((i: { purpose: string }) => i.purpose === purpose).map((i: { sizes: string }) => i.sizes);
     expect(sizes("any")).toEqual(expect.arrayContaining(["192x192", "512x512"]));
     expect(sizes("maskable")).toEqual(expect.arrayContaining(["192x192", "512x512"]));
@@ -69,10 +76,10 @@ describe("manifest", () => {
   it("names icons that exist at their sizes", () => {
     const icons = [...manifest.icons, ...manifest.shortcuts.flatMap((s: { icons: unknown[] }) => s.icons)] as { src: string; sizes: string }[];
     for (const i of icons) expect(pngSize(i.src), i.src).toBe(i.sizes);
-    expect(pngSize("/apple-touch-icon.png")).toBe("180x180");
+    expect(pngSize("apple-touch-icon.png")).toBe("180x180");
   });
 
   it("opens shortcuts on the client's routes", () => {
-    for (const s of manifest.shortcuts) expect(s.url).toMatch(/^\/[a-z]/);
+    for (const s of manifest.shortcuts) expect(s.url).toMatch(/^\.\/[a-z]/);
   });
 });

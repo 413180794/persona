@@ -199,7 +199,7 @@ stream {
 
 ### 反向代理的子路径（Android）
 
-hub 可以放在反向代理的子路径下（`public_url` 写成 `https://<hub 地址>/<前缀>`，代理去掉前缀再转给 hub 的明文端口）。这时 hub 没有自己的 TLS，`hub pair` 给出的链接里没有 `fp`，证书来自代理上的公共 CA。iOS 和网页版本来就按系统信任校验 HTTPS；Android 的做法：
+hub 可以放在反向代理的子路径下（`public_url` 写成 `https://<hub 地址>/<前缀>`，代理去掉前缀再转给 hub 的明文端口）。这时 hub 没有自己的 TLS，`hub pair` 给出的链接里没有 `fp`，证书来自代理上的公共 CA。iOS 和网页版本来就按系统信任校验 HTTPS。网页版要代理带上 `X-Forwarded-Prefix: /<前缀>`，hub 据此改 `index.html` 的 `<base>`，网页的接口、WebSocket、图片和路由都在前缀下（[web.md](web.md)「子路径」，管理界面只在根路径）。Android 的做法：
 
 - **地址带前缀**：配对地址、hub 下发的候选可以带路径前缀，所有请求（REST、WebSocket `/api/v1/ws`、媒体和安装包下载）都拼在前缀下面（`core/hub` 的 `hubUrl` / `hubPath` / `hubResolve`），hub 回的 `/api/…` 引用也补上前缀；同源检查同时要求在这个前缀之内。候选的键带上前缀（`https://host:443/jarvis`），根路径的键和以前一样。手动候选仍只能写到端口为止。
 - **没有 `fp` 的 HTTPS 用系统信任**：有 `fp` 的配对照旧只认钉住的公钥，不回落到系统 CA；没有 `fp` 的配对，HTTPS 按系统信任库（`network_security.xml`：只信系统 CA，不信用户装的证书）和主机名校验，配对和之后的常驻连接、设置里的测试、更新下载都一样。

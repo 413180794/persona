@@ -1,6 +1,7 @@
 // The live screen of a Mac (docs/computer-use.md「实时画面」): macOS's Screen Sharing on its 127.0.0.1:5900, through the
 // hub's port relay, drawn by noVNC. View only until 接管; Screen Sharing asks for the Mac account's name and password
 // (Apple's ARD sign-in), which go to the Mac only and are not kept. The app shows this page in its web view.
+import { BASE } from "../lib/base";
 import RFB from "@novnc/novnc";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, errorText } from "../lib/api";
@@ -232,7 +233,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
       {!target.embedded && (
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
         {!target.embedded && (
-          <a href={`/machines/${encodeURIComponent(target.mid)}`} className="whitespace-nowrap rounded-control px-2 py-1 text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink">
+          <a href={`${BASE}/machines/${encodeURIComponent(target.mid)}`} className="whitespace-nowrap rounded-control px-2 py-1 text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink">
             {t("screen-screenview.back")}
           </a>
         )}

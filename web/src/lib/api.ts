@@ -1,5 +1,6 @@
 // REST client for the hub. The page is served by the hub itself (same origin), so every path is relative.
 
+import { BASE } from "./base";
 import { currentLanguage, t } from "../i18n";
 
 const TOKEN_KEY = "jarvis.token";
@@ -43,7 +44,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown;
     headers.set("Content-Type", "application/json");
     body = JSON.stringify(init.json);
   }
-  const res = await fetch(`/api/v1${path}`, { ...init, headers, body });
+  const res = await fetch(`${BASE}/api/v1${path}`, { ...init, headers, body });
   const text = await res.text();
   let data: Record<string, unknown> = {};
   let isJson = false;
@@ -74,18 +75,18 @@ export function attachSession(mid: string, sid: string): Promise<unknown> {
 
 // An <img> can't send a header: the hub also takes the token as a query parameter (it never logs queries).
 export function imageURL(mid: string, sid: string, itemID: string) {
-  return `/api/v1${sessionPath(mid, sid)}/items/${enc(itemID)}/image?token=${enc(getToken())}`;
+  return `${BASE}/api/v1${sessionPath(mid, sid)}/items/${enc(itemID)}/image?token=${enc(getToken())}`;
 }
 
 /** A machine file's bytes by Range (docs/protocol.md「文件预览」): `<video>` / `<audio>` seek through it, a viewer
  * fetches it whole. `inline` lets the browser show it in place (images, media, PDF only; anything else downloads). */
 export function fileDownloadURL(mid: string, path: string, cwd?: string, opts: { inline?: boolean } = {}) {
-  return `/api/v1/machines/${enc(mid)}/file/download?path=${enc(path)}&cwd=${enc(cwd ?? "")}${opts.inline ? "&inline=1" : ""}&token=${enc(getToken())}`;
+  return `${BASE}/api/v1/machines/${enc(mid)}/file/download?path=${enc(path)}&cwd=${enc(cwd ?? "")}${opts.inline ? "&inline=1" : ""}&token=${enc(getToken())}`;
 }
 
 /** A machine file's thumbnail, at most `size` px on its long side; 404 `no_thumbnail` when the machine can't draw it. */
 export function fileThumbURL(mid: string, path: string, cwd?: string, size = 256) {
-  return `/api/v1/machines/${enc(mid)}/file/thumb?path=${enc(path)}&cwd=${enc(cwd ?? "")}&size=${size}&token=${enc(getToken())}`;
+  return `${BASE}/api/v1/machines/${enc(mid)}/file/thumb?path=${enc(path)}&cwd=${enc(cwd ?? "")}&size=${size}&token=${enc(getToken())}`;
 }
 
 export function isAbort(e: unknown) {

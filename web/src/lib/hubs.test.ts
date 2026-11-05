@@ -8,6 +8,10 @@ describe("normalizeHubURL", () => {
     expect(normalizeHubURL("http://192.0.2.10:18660")).toEqual({ url: "http://192.0.2.10:18660" });
     expect(normalizeHubURL("HTTPS://Hub.Example.COM:8443")).toEqual({ url: "https://hub.example.com:8443" });
     expect(normalizeHubURL("http://[2001:db8::10]:18660")).toEqual({ url: "http://[2001:db8::10]:18660" });
+    // the sub-path a reverse proxy serves the hub under (docs/web.md「子路径」)
+    expect(normalizeHubURL("https://hub.example.com/persona-hub/")).toEqual({ url: "https://hub.example.com/persona-hub" });
+    expect(normalizeHubURL("https://hub.example.com/persona")).toEqual({ url: "https://hub.example.com/persona" });
+    expect(normalizeHubURL("https://hub.example.com/x/../hub")).toEqual({ url: "https://hub.example.com/hub" });
   });
   it("reads no scheme as https", () => {
     expect(normalizeHubURL("hub.example.com")).toEqual({ url: "https://hub.example.com" });
@@ -17,9 +21,12 @@ describe("normalizeHubURL", () => {
     expect(normalizeHubURL("  ")).toEqual({ error: "填 hub 的地址" });
     expect(normalizeHubURL("ftp://hub.example.com")).toEqual({ error: "只能是 http:// 或 https:// 的地址" });
     expect(normalizeHubURL("https://me:pw@hub.example.com")).toEqual({ error: "地址里不要带用户名和密码" });
-    expect(normalizeHubURL("https://hub.example.com/settings")).toEqual({ error: "只填 hub 的地址，不要带路径" });
-    expect(normalizeHubURL("https://hub.example.com/?token=x")).toEqual({ error: "只填 hub 的地址，不要带路径" });
-    expect(normalizeHubURL("https://hub.example.com/#token=x")).toEqual({ error: "只填 hub 的地址，不要带路径" });
+    const noPath = "只填 hub 的地址（可以带反向代理的子路径），不要带 ? 或 # 之后的部分";
+    expect(normalizeHubURL("https://hub.example.com/settings")).toEqual({ error: noPath });
+    expect(normalizeHubURL("https://hub.example.com/persona/s/laptop/abc")).toEqual({ error: noPath });
+    expect(normalizeHubURL("https://hub.example.com/?token=x")).toEqual({ error: noPath });
+    expect(normalizeHubURL("https://hub.example.com/#token=x")).toEqual({ error: noPath });
+    expect(normalizeHubURL("https://hub.example.com/a%20b")).toEqual({ error: noPath });
     expect(normalizeHubURL("https://")).toEqual({ error: "不是一个地址" });
   });
 });
@@ -38,6 +45,7 @@ describe("handing the list over", () => {
     { url: "http://192.0.2.10:18660", label: "B 的" },
   ];
   it("round-trips through the fragment, and the link loses it", () => {
+    expect(switchURL("https://b.example.com/x", list).startsWith("https://b.example.com/x/#hubs=")).toBe(true);
     const href = switchURL("https://b.example.com", list);
     expect(href.startsWith("https://b.example.com/#hubs=")).toBe(true);
     expect(href).not.toContain("token");
@@ -53,7 +61,7 @@ describe("handing the list over", () => {
   });
   it("drops what does not parse or is not an address, but still cleans the link", () => {
     expect(takeHubs("https://b.example.com/#hubs=%7Bnope")).toEqual({ hubs: [], rest: "/" });
-    const odd = JSON.stringify([{ url: "javascript:alert(1)" }, { url: "https://c.example.com/path" }, { name: "no url" }, "x", { url: "https://a.example.com", name: 7 }]);
+    const odd = JSON.stringify([{ url: "javascript:alert(1)" }, { url: "https://c.example.com/settings" }, { name: "no url" }, "x", { url: "https://a.example.com", name: 7 }]);
     expect(takeHubs(`https://b.example.com/#hubs=${encodeURIComponent(odd)}`)).toEqual({ hubs: [{ url: "https://a.example.com" }], rest: "/" });
   });
   it("carries at most MAX_HUBS", () => {
@@ -97,7 +105,10 @@ describe("the stored list", () => {
   it("adds, renames and removes; refuses duplicates and bad addresses", () => {
     expect(addHub("b.example.com", "工作")).toEqual({ list: [{ url: "https://b.example.com", label: "工作" }] });
     expect(addHub("https://b.example.com:443/")).toEqual({ error: "这台 hub 已经在列表里" });
-    expect(addHub("https://b.example.com/x")).toEqual({ error: "只填 hub 的地址，不要带路径" });
+    expect(addHub("https://b.example.com/settings")).toEqual({ error: "只填 hub 的地址（可以带反向代理的子路径），不要带 ? 或 # 之后的部分" });
+    // the same origin under a reverse proxy's sub-path is another hub
+    expect(addHub("https://b.example.com/x")).toEqual({ list: [{ url: "https://b.example.com", label: "工作" }, { url: "https://b.example.com/x" }] });
+    removeHub("https://b.example.com/x");
     rememberHub("https://b.example.com", "B");
     expect(renameHub("https://b.example.com", "")).toEqual([{ url: "https://b.example.com", name: "B" }]);
     expect(renameHub("https://b.example.com", " 公司 ")).toEqual([{ url: "https://b.example.com", name: "B", label: "公司" }]);

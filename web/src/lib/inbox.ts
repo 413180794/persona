@@ -9,6 +9,7 @@
 import { formatDate, t } from "../i18n";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { api, ApiError, enc, errorText, getToken } from "./api";
+import { BASE } from "./base";
 import type { AgentMutes } from "./agent-groups";
 import { connectorOpenTitle } from "./connectors";
 import { larkPath } from "./lark-accounts";
@@ -298,11 +299,12 @@ export function itemPath(id: string): string {
   return `/inbox/${enc(id).replace(/%3A/gi, ":")}`;
 }
 
-/** Media under /api/ for an <img>: the token goes in the query (an <img> can't send a header). */
-export function withToken(url: string | undefined, token = getToken()): string | undefined {
+/** Media under /api/ for an <img>: the token goes in the query (an <img> can't send a header), and the path under the
+ * sub-path the page is served at (lib/base.ts). */
+export function withToken(url: string | undefined, token = getToken(), base = BASE): string | undefined {
   if (!url) return undefined;
   if (!url.startsWith("/api/")) return url;
-  return `${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+  return `${base}${url}${url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
 }
 
 /** 18:20 today, 昨天, 周三 within the week, 10月28日 this year, else 2025-10-28 (LarkTime.short). */

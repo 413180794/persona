@@ -8033,6 +8033,39 @@ def mock_usage_windows():
          "windows": [win("7d", 10080, 12, 5 * 24 * 3600)]},
     ], "checked_at": iso(now)}
 BROWSER_JOBS = {}  # machine id -> {"kind": install|open, "at": started, "started": iso, "cancelled": bool}
+# MOCK_HERDR_STOPPED=macbook,studio: those machines' classic herdr does not run (the Agents list's 「herdr 没在运行」
+# row with 启动, #1916); every other machine's does. MOCK_HERDR_START: how 启动 goes, "" (it comes up after 1.5 s),
+# "fail" (502 with the node's reason), "slow" (6 s), "stale" (it comes up but GET keeps saying it does not, as a hub
+# that only knew what node.info said). GET /mock/herdr: how many starts each machine was asked for; with
+# ?stopped=<ids>&start=<how> it sets both (HerdrNoticeTests), and /mock/reset puts the environment's back.
+def herdr_env():
+    return {x.strip() for x in os.environ.get("MOCK_HERDR_STOPPED", "").split(",") if x.strip()}
+
+
+HERDR_STOPPED = herdr_env()
+HERDR_STARTS = {}
+HERDR_MODE = {"start": os.environ.get("MOCK_HERDR_START", ""), "gen": 0}  # gen: a start begun before a reset is dropped
+
+
+def herdr_now(mid):
+    """GET /api/v1/machines/{mid}/herdr as the hub answers it."""
+    return {"autostart": False, "running": mid not in HERDR_STOPPED, "known": True}
+
+
+def herdr_start(mid):
+    """POST /api/v1/machines/{mid}/herdr/start: (answer, status)."""
+    HERDR_STARTS[mid] = HERDR_STARTS.get(mid, 0) + 1
+    how, gen = HERDR_MODE["start"], HERDR_MODE["gen"]
+    time.sleep(6 if how == "slow" else 1.5)
+    if gen != HERDR_MODE["gen"]:  # the state was set anew meanwhile (the app that asked is gone): leave it be
+        return {"error": "reset"}, 409
+    if how == "fail":
+        return {"error": "herdr server stopped right after starting: exit status 1"}, 502  # the node's words
+    if how != "stale":
+        HERDR_STOPPED.discard(mid)
+    return {"autostart": False, "running": True, "known": True}, 200
+
+
 BROWSER_INSTALL_STEPS = ["下载 ego lite", "校验签名和公证", "装进「应用程序」"]
 
 
@@ -9257,6 +9290,17 @@ class H(BaseHTTPRequestHandler):
             if machine is None or "browser" not in machine:
                 return self.send_json({"error": "浏览器插件没打开，或这台不是 Mac"}, 404)
             return self.send_json(browser_now(machine))
+        if p == "/mock/herdr":
+            if "stopped" in q:
+                HERDR_STOPPED.clear()
+                HERDR_STOPPED.update(x for x in q["stopped"][0].split(",") if x)
+                HERDR_STARTS.clear()
+                HERDR_MODE["gen"] += 1
+            if "start" in q: HERDR_MODE["start"] = q["start"][0]
+            return self.send_json({"starts": HERDR_STARTS, "stopped": sorted(HERDR_STOPPED), "start": HERDR_MODE["start"]})
+        if p.startswith("/api/v1/machines/") and p.endswith("/herdr"):  # the Agents list's herdr row (#1916)
+            if not any(m["id"] == p.split("/")[4] for m in MACHINES): return self.send_json({"error": "找不到机器"}, 404)
+            return self.send_json(herdr_now(p.split("/")[4]))
         if p.startswith("/api/v1/machines/") and p.endswith("/computer/apps"):  # the apps always allowed (#1507)
             return self.send_json({"apps": COMPUTER_APPS.get(p.split("/")[4], [])})
         if p.startswith("/api/v1/machines/") and p.endswith("/computer/clipboard") and os.environ.get("MOCK_SCREEN") == "fake":
@@ -9318,6 +9362,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"left": len(REPLAY["left"])})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
             COOKIES_FAILED[0] = False  # MOCK_COOKIES_FAIL: the next read fails again
+            HERDR_STOPPED.clear(); HERDR_STOPPED.update(herdr_env()); HERDR_STARTS.clear()  # the herdr row (#1916)
+            HERDR_MODE["start"] = os.environ.get("MOCK_HERDR_START", ""); HERDR_MODE["gen"] += 1
             # A test that died before putting them back: the start-up delay (MOCK_DELAY), no paging.
             NET["delay"], PAGING["on"] = float(os.environ.get("MOCK_DELAY", "0")), False
             for m in MACHINES:
@@ -10148,6 +10194,9 @@ class H(BaseHTTPRequestHandler):
                 else:
                     return self.send_json({"error": "unknown action"}, 404)
             return self.send_json(browser_now(machine))
+        if self.command == "POST" and p.startswith("/api/v1/machines/") and p.endswith("/herdr/start"):  # 启动 (#1916)
+            out, status = herdr_start(p.split("/")[4])
+            return self.send_json(out, status)
         if self.command == "POST" and p.startswith("/api/v1/machines/") and "/computer/" in p:  # 安装 / 去授权 / 取消
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             action = p.rsplit("/", 1)[1]

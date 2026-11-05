@@ -28,9 +28,11 @@ export function strategy(url: URL, origin: string, method: string, mode: string)
   return "pass";
 }
 
-/** The /assets/ files a shell loads up front (its script, CSS and preloads), cached with it so it starts offline. */
+/** The /assets/ files a shell loads up front (its script, CSS and preloads), cached with it so it starts offline. The
+ * build writes them relative to the page's <base> ("./assets/…", vite.config.ts), which is "/" wherever the worker runs
+ * (lib/pwa.ts registers it only at the root). */
 export function assetsIn(html: string): string[] {
   const out = new Set<string>();
-  for (const m of html.matchAll(/(?:src|href)="(\/assets\/[^"?#]+)"/g)) out.add(m[1]);
+  for (const m of html.matchAll(/(?:src|href)="(?:\.)?(\/assets\/[^"?#]+)"/g)) out.add(m[1]);
   return [...out];
 }

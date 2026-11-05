@@ -2,14 +2,13 @@
 // page. Switching opens the other hub's own page; with no other hub in the list, the menu and the sign-in page look as
 // before (only 设置 shows the list, to add one from).
 import { useEffect, useState } from "react";
-import { addHub, hostOf, hubTitle, loadHubs, normalizeHubURL, onHubsChange, removeHub, renameHub, switchURL, type SavedHub } from "../lib/hubs";
+import { addHub, here, hostOf, hubTitle, loadHubs, normalizeHubURL, onHubsChange, removeHub, renameHub, switchURL, type SavedHub } from "../lib/hubs";
 import { Button, Dialog, IconButton, toast, type MenuItem } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { Group, Pill, Row } from "./settings/SettingsParts";
 import { t } from "../i18n";
 
-/** This page's hub. */
-export const here = () => (typeof location === "undefined" ? "" : location.origin);
+export { here };
 
 export function useHubs(): SavedHub[] {
   const [list, setList] = useState(loadHubs);

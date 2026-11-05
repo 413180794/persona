@@ -43,6 +43,22 @@ import Testing
         #expect(AgentFilter.all.state == nil)
     }
 
+    /// 飞书群 is a botmux session, 终端 a herdr pane (#2526); other hosts and paneless sessions are neither.
+    @Test func sourceFiltersSplitBotmuxFromHerdr() {
+        var botmux = session("b", state: "idle"), herdr = session("h", state: "working"), orca = session("o", state: "idle")
+        let bare = session("n", state: "idle")
+        botmux.paneID = "botmux:abc"
+        herdr.paneID = "w1:p1"
+        orca.paneID = "orca:1"
+        #expect(botmux.source == .feishu)
+        #expect(herdr.source == .terminal)
+        #expect(orca.source == nil && bare.source == nil)
+        let all = [botmux, herdr, orca, bare]
+        #expect(all.filter { AgentFilter.feishu.matches($0) }.map(\.sessionID) == ["b"])
+        #expect(all.filter { AgentFilter.terminal.matches($0) }.map(\.sessionID) == ["h"])
+        #expect(AgentFilter.feishu.state == nil && AgentFilter.feishu.title == "飞书群")
+    }
+
     /// Muted agents sit under 已屏蔽: 未读 and 工作中 neither count nor list them; 需要你 still does.
     @Test func mutedAgentsAreNotUnreadOrWorking() {
         let unread = session("b", state: "unread"), working = session("d", state: "working"), needs = session("a", state: "needs_you")

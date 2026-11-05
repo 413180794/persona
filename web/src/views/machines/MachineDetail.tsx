@@ -174,7 +174,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
           <div className="flex flex-col items-start gap-3 rounded-card bg-surface p-4 shadow-card">
             <p className="text-[13.5px] font-medium text-ink">{t("machines-machinedetail.not_found")}</p>
             <p className="text-[12.5px] text-ink-2">{t("machines-machinedetail.not_found_detail", { id: mid })}</p>
-            <a href="/machines" onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12.5px] font-medium text-accent-ink hover:underline">
+            <a href={href({ name: "machines" })} onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12.5px] font-medium text-accent-ink hover:underline">
               {t("machines-machinedetail.back_to_list")}
             </a>
           </div>
@@ -363,7 +363,7 @@ function Page({ mid, title, right, onToggleSidebar, children }: { mid: string; t
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
         <IconButton icon="sidebar" label={t("machines-machinedetail.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
         <a
-          href="/machines"
+          href={href({ name: "machines" })}
           onClick={(e) => onLinkClick(e, { name: "machines" })}
           className="flex h-7 shrink-0 items-center gap-0.5 whitespace-nowrap rounded-[7px] pr-2 pl-1 text-[12.5px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
           title={t("machines-machinedetail.back_to_list")}

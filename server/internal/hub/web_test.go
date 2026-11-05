@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -88,5 +89,80 @@ func TestWebAppFallsBackToTheEmbeddedCopy(t *testing.T) {
 		if w.Code != 404 {
 			t.Fatalf("no web client: %d", w.Code)
 		}
+	}
+}
+
+// Behind a reverse proxy that serves the hub under a sub-path (docs/web.md「子路径」), index.html's <base> says where.
+func TestWebAppWritesTheProxyPrefixIntoBase(t *testing.T) {
+	dir := t.TempDir()
+	index := `<head><base href="/" /><script src="./assets/a-1.js"></script></head>app`
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(index), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "assets", "a-1.js"), []byte(`<base href="/" />`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := webApp(dir)
+	get := func(p string, prefix ...string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", p, nil)
+		for _, v := range prefix {
+			r.Header.Add("X-Forwarded-Prefix", v)
+		}
+		h.ServeHTTP(w, r)
+		return w
+	}
+	for _, c := range []struct {
+		path, prefix, want string
+	}{
+		{"/", "", `<base href="/" />`},
+		{"/s/laptop/abc", "/persona", `<base href="/persona/" />`},
+		{"/", "/persona/", `<base href="/persona/" />`},
+		{"/", "/a/b-c_d.e~f", `<base href="/a/b-c_d.e~f/" />`},
+		{"/", "/", `<base href="/" />`},
+		// not a plain path: ignored
+		{"/", "persona", `<base href="/" />`},
+		{"/", `/x" onload="alert(1)`, `<base href="/" />`},
+		{"/", "/x><script>", `<base href="/" />`},
+		{"/", "/a b", `<base href="/" />`},
+		{"/", "/a\tb", `<base href="/" />`},
+		{"/", "/a/../b", `<base href="/" />`},
+		{"/", "/a/./b", `<base href="/" />`},
+		{"/", "/..", `<base href="/" />`},
+		{"/", "//evil.example.com", `<base href="/" />`},
+		{"/", "/a%2fb", `<base href="/" />`},
+		{"/", "/" + strings.Repeat("a", maxPrefix), `<base href="/" />`},
+	} {
+		w := get(c.path, c.prefix)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), c.want) || strings.Count(w.Body.String(), "<base") != 1 {
+			t.Errorf("%s with prefix %q: %d %q, want %s", c.path, c.prefix, w.Code, w.Body, c.want)
+		}
+		if w.Header().Get("Cache-Control") != "no-cache" || !strings.Contains(w.Header().Get("Vary"), "X-Forwarded-Prefix") {
+			t.Errorf("%s with prefix %q: Cache-Control %q, Vary %q", c.path, c.prefix, w.Header().Get("Cache-Control"), w.Header().Get("Vary"))
+		}
+	}
+	// only index.html is rewritten: a file is served as it is
+	if w := get("/assets/a-1.js", "/persona"); w.Body.String() != `<base href="/" />` {
+		t.Errorf("asset rewritten: %q", w.Body)
+	}
+	// the length matches what is sent, and a conditional request still gets its 304
+	w := get("/", "/persona")
+	if got, want := w.Header().Get("Content-Length"), len(strings.Replace(index, `href="/"`, `href="/persona/"`, 1)); got != strconv.Itoa(want) {
+		t.Errorf("Content-Length %s, want %d", got, want)
+	}
+	if lm := w.Header().Get("Last-Modified"); lm != "" {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("X-Forwarded-Prefix", "/persona")
+		r.Header.Set("If-Modified-Since", lm)
+		w2 := httptest.NewRecorder()
+		h.ServeHTTP(w2, r)
+		if w2.Code != http.StatusNotModified {
+			t.Errorf("conditional: %d", w2.Code)
+		}
+	} else {
+		t.Error("no Last-Modified on index.html")
 	}
 }

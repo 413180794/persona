@@ -1,0 +1,8 @@
+{
+  "state_needs_you": "等你",
+  "state_working": "在做",
+  "state_done": "做完",
+  "no_project": "其他",
+  "no_agent": "还没有 Agent",
+  "spawned_agents": "它派出的 {count} 个 Agent"
+}

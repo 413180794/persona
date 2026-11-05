@@ -1,9 +1,11 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, sections, one gliding highlight. Persona's main conversation
 // is the first entry (the app opens on 助手); a new conversation and a new agent are the「+」of their sections (#1239).
+import { BASE } from "../lib/base";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { t } from "../i18n";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
-import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
+import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { keyedRefs } from "../lib/keyed-refs";
 import { buildMachineTree, paneRoute, resolveTab, tabRowKeys, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
@@ -24,7 +26,8 @@ import { useAgentSessions, useCounts } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
 import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
-import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
+import { buildTodoTree, treeStateLabel, type TodoTree, type TreeAgent, type TreeState, type TreeTodo } from "../lib/todo-tree";
+import { findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
 import type { AgentState, Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, type MenuItem } from "../ui/atoms";
 import { AppMark } from "../ui/AppMark";
@@ -42,7 +45,6 @@ import { useSidebarTerminals } from "../lib/sidebar-terminals";
 import { rowDetail, useAgentDetails, useContextAsUsed } from "../lib/context-usage";
 import { usePanes } from "../lib/terminal-panes";
 import { buildTerminalTree, shellsOnly, type TermSpace } from "../lib/terminals";
-import { t } from "../i18n";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
@@ -408,9 +410,10 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const { spaces, loose } = useMemo(() => buildSpaces(unpinned, machines), [unpinned, machines]);
   const groups = useMemo(() => {
     if (shownGrouping === "space" || shownGrouping === "repo" || shownGrouping === "machine") return [];
-    if (shownGrouping === "todo") return buildTodoAgentGroups(unpinned, machines, todos, mutes);
+    if (shownGrouping === "todo") return [];
     return buildAgentGroups(unpinned, machines, "state", mutes);
   }, [unpinned, machines, shownGrouping, mutes, todos]);
+  const todoTree = useMemo(() => (shownGrouping === "todo" ? buildTodoTree(unpinned, machines, todos, mutes) : undefined), [unpinned, machines, shownGrouping, mutes, todos]);
   const repoMachines = useMemo(() => (shownGrouping === "repo" ? buildRepoMachineTree(unpinned, machines) : []), [unpinned, machines, shownGrouping]);
   const machineTree = useMemo(() => (shownGrouping === "machine" ? buildMachineTree(machines, unpinned, { pins, hideEmpty: filtered }) : []), [shownGrouping, machines, unpinned, pins, filtered]);
   // by todo a group mixes hosts (herdr, botmux…): when the list has more than one, rows outside herdr name theirs (#1836)
@@ -538,6 +541,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
         repoMachines.map((m) => (
           <RepoMachineSection key={m.key} m={m} flat={repoMachines.length <= 1} machines={machines} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />
         ))
+      ) : todoTree ? (
+        <TodoTreeView tree={todoTree} machines={machines} showHost={mixedHosts} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onNavigate={onNavigate} />
       ) : groups.map((group) => (
         <AgentSection key={group.key} group={group} machines={machines} byTodo={shownGrouping === "todo"} showHost={mixedHosts} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onNavigate={onNavigate} />
       ))}
@@ -631,7 +636,7 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
     localStorage.removeItem("jarvis.tokenId");
     setToken("");
     reset();
-    location.href = "/";
+    location.href = BASE + "/";
   };
   return (
     <>
@@ -726,6 +731,101 @@ function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey
     <Section title={titleNode} folded={folded} onToggle={toggle} right={rightNode}>
       {group.sessions.map(row)}
     </Section>
+  );
+}
+
+type TreeRowProps = { machines: Machine[]; showHost?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onNavigate?: () => void };
+
+const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", done: "text-ink-3" };
+
+/** 等你 / 在做 / 做完 at the end of a tree node's line. */
+function TreeStateText({ state }: { state: TreeState }) {
+  return <span className={cx("shrink-0 text-[11px] font-semibold whitespace-nowrap", TREE_TONE[state])}>{treeStateLabel(state)}</span>;
+}
+
+/** Agents 「按待办」 as 项目 › 待办 › Agent (#2526): projects with their todos, a spawned agent under the one that
+ *  spawned it, 未归属 last (by project). */
+function TodoTreeView({ tree, ...p }: { tree: TodoTree } & TreeRowProps) {
+  return (
+    <>
+      {tree.projects.map((pr) => (
+        <TreeProjectSection key={pr.key} k={pr.key} name={pr.name} state={pr.state} folded={pr.folded} sessions={pr.sessions} todos={pr.todos} {...p} />
+      ))}
+      {tree.loose.map((g) => (
+        <TreeProjectSection key={g.key} k={g.key} name={g.name} state={g.state} folded={g.folded} sessions={g.sessions} todos={g.projects} loose {...p} />
+      ))}
+    </>
+  );
+}
+
+function TreeProjectSection({ k, name, state, folded: initial, sessions, todos, loose, ...p }: { k: string; name: string; state: TreeState; folded: boolean; sessions: Session[]; todos: TreeTodo[]; loose?: boolean } & TreeRowProps) {
+  const [folded, toggle] = useFolded(k, initial, { follow: true, holds: holdsRow(sessions, p.activeKey) });
+  return (
+    <Section
+      title={<span className="flex min-w-0 items-center gap-1.5"><Icon name={loose ? "layers" : "folder"} size={12} stroke={2} className="shrink-0 text-ink-3" /><span className="truncate normal-case tracking-normal text-[11.5px] text-ink-2">{name}</span></span>}
+      folded={folded}
+      onToggle={toggle}
+      right={<TreeStateText state={state} />}
+    >
+      {todos.map((td) => <TreeTodoRows key={td.key} td={td} {...p} />)}
+    </Section>
+  );
+}
+
+/** One todo (or, under 未归属, one project) and its agents under its own folding line. */
+function TreeTodoRows({ td, ...p }: { td: TreeTodo } & TreeRowProps) {
+  const [folded, toggle] = useFolded(td.key, td.folded, { follow: true, holds: holdsRow(td.sessions, p.activeKey) });
+  return (
+    <div className="mt-px">
+      <div className="relative z-10 flex w-full min-w-0 items-center gap-1.5 rounded-control py-1 pl-2 pr-2 text-[12px] text-ink-2 hover:bg-hover">
+        <button type="button" aria-expanded={!folded} aria-label={td.name} onClick={toggle} className="touch-hit flex shrink-0 items-center">
+          <Icon name="chevron" size={9} stroke={2.4} className="opacity-60 transition-transform" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+        </button>
+        {td.todoId && <Icon name="todo" size={11} stroke={2} className="shrink-0 text-ink-3" />}
+        {td.todoId ? (
+          <a href={href({ name: "todos", id: td.todoId })} onClick={(e) => { e.preventDefault(); openTodoFromTag(td.todoId!, navigate, p.onNavigate); }} className="min-w-0 flex-1 truncate font-medium text-ink hover:underline">{td.name}</a>
+        ) : (
+          <button type="button" onClick={toggle} className="min-w-0 flex-1 truncate text-left">{td.name}</button>
+        )}
+        <span className="shrink-0 text-[10.5px] text-ink-3 tabular-nums">{td.sessions.length}</span>
+        <TreeStateText state={td.state} />
+      </div>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px pl-3" inert={folded || undefined}>
+          {td.agents.map((a) => <TreeAgentRows key={a.key} a={a} depth={0} {...p} />)}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
+/** An agent and, folded under it, the agents it spawned for the same todo. */
+function TreeAgentRows({ a, depth, machines, showHost, reg, hover, activeKey, go, onRowMenu }: { a: TreeAgent; depth: number } & TreeRowProps) {
+  const subtree = (n: TreeAgent): Session[] => n.children.flatMap((c) => [c.session, ...subtree(c)]);
+  const [folded, toggle] = useFolded(a.key + ":children", a.folded, { follow: true, holds: holdsRow(subtree(a), activeKey) });
+  const s = a.session;
+  const key = `s:${s.machine_id}/${s.session_id}`;
+  const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
+  return (
+    <div style={depth ? { paddingLeft: 12 } : undefined}>
+      <div className="flex items-center">
+        {a.children.length > 0 && (
+          <button type="button" aria-expanded={!folded} aria-label={t("lib-todo-tree.spawned_agents", { count: a.children.length })} onClick={toggle} className="touch-hit relative z-10 -mr-1 flex size-4 shrink-0 items-center justify-center text-ink-3">
+            <Icon name="chevron" size={9} stroke={2.4} className="opacity-60 transition-transform" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+          </button>
+        )}
+        <div className="min-w-0 flex-1">
+          <SessionRow s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} host={showHost && sessionHost(s) !== "herdr" && sessionHost(s) !== "botmux" ? sessionHost(s) : undefined} onMenu={onRowMenu} />
+        </div>
+      </div>
+      {a.children.length > 0 && (
+        <Collapse open={!folded}>
+          <div className="flex flex-col gap-px border-l border-line ml-2" inert={folded || undefined}>
+            {a.children.map((c) => <TreeAgentRows key={c.key} a={c} depth={depth + 1} machines={machines} showHost={showHost} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />)}
+          </div>
+        </Collapse>
+      )}
+    </div>
   );
 }
 
@@ -1308,6 +1408,29 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
+/** Where the agent was opened, before its title (#2526): 飞书群 (botmux; a click opens its Feishu topic) or 终端
+ *  (herdr), each on its own tint. Nothing for other hosts. */
+export function SourceTag({ s }: { s: Session }) {
+  const source = sessionSource(s);
+  if (!source) return null;
+  const label = t(`lib-agent-groups.source_${source}`);
+  const cls = cx("shrink-0 rounded-[4px] px-1 text-[10.5px] font-medium leading-4 whitespace-nowrap", source === "feishu" ? "bg-source-feishu-tint text-source-feishu" : "bg-source-terminal-tint text-source-terminal");
+  if (source === "feishu" && s.external_url) {
+    // a link inside the row's link: opened by hand, so the row does not navigate too
+    const open = (e: React.SyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(s.external_url, "_blank", "noopener");
+    };
+    return (
+      <span role="link" tabIndex={0} title={t("lib-agent-groups.open_feishu_topic")} aria-label={t("lib-agent-groups.open_feishu_topic")} onClick={open} onKeyDown={(e) => e.key === "Enter" && open(e)} className={cx(cls, "cursor-pointer hover:underline")}>
+        {label}
+      </span>
+    );
+  }
+  return <span className={cls}>{label}</span>;
+}
+
 export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu, menuLabel = t("sidebar.agent_actions"), endRoom }: { menuLabel?: string; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; endRoom?: boolean }) {
   const st = stateOf(s);
   const tail = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
@@ -1342,6 +1465,7 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
         endRoom ? "pr-[108px] [@media(hover:none)]:pr-[120px]" : cx(onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11"))}
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
+      {showState && !s.assistant && <SourceTag s={s} />}
       {prefix}
       {detail.length > 0 ? (
         <span className="flex min-w-0 flex-1 flex-col">

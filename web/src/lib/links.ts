@@ -13,6 +13,7 @@ import { useSyncExternalStore } from "react";
 import { uuid } from "./format";
 import { openPanel } from "./panel";
 import { navigate } from "./router";
+import { BASE, stripBase } from "./base";
 import { larkOn } from "./store";
 import { mediaMatches, NARROW } from "./viewport";
 
@@ -100,12 +101,14 @@ function momentsPostID(u: URL): string | null {
 
 const pageOrigin = () => (typeof location !== "undefined" ? location.origin : "");
 
-/** An agent or task page of the hub this page is served by (router.ts's /s/… and /todos), or null. */
-function hubPage(u: URL, origin: string): LinkRoute | null {
+/** An agent or task page of the hub this page is served by (router.ts's /s/… and /todos, under the sub-path the page is
+ * served at), or null. */
+function hubPage(u: URL, origin: string, base: string): LinkRoute | null {
   if (!origin || u.origin !== origin) return null;
+  if (base && u.pathname !== base && !u.pathname.startsWith(base + "/")) return null;
   let p: string[];
   try {
-    p = u.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    p = stripBase(u.pathname, base).split("/").filter(Boolean).map(decodeURIComponent);
   } catch {
     return null;
   }
@@ -121,7 +124,7 @@ function hubPage(u: URL, origin: string): LinkRoute | null {
  * Where `url` opens. `lark`: whether the hub reads Feishu (store.larkOn); without it Feishu links are web pages.
  * `origin`: this page's, for telling the hub's own pages from other sites.
  */
-export function linkRoute(url: string, lark = larkOn(), origin = pageOrigin()): LinkRoute {
+export function linkRoute(url: string, lark = larkOn(), origin = pageOrigin(), base = BASE): LinkRoute {
   const u = parse(url.trim());
   if (!u) return { kind: "none" };
   const scheme = u.protocol.toLowerCase();
@@ -138,7 +141,7 @@ export function linkRoute(url: string, lark = larkOn(), origin = pageOrigin()): 
   }
   if (scheme === "mailto:" || scheme === "tel:") return { kind: "system" };
   if (scheme !== "http:" && scheme !== "https:") return { kind: "none" };
-  const own = hubPage(u, origin);
+  const own = hubPage(u, origin, base);
   if (own) return own;
   if (lark && isFeishuHost(u.hostname)) {
     const first = u.pathname.split("/").filter(Boolean)[0] ?? "";
@@ -161,7 +164,7 @@ export function opensInApp(url: string): boolean {
 /** The href to put on an <a>: jarvis://session links become the in-app path, so ⌘-click opens a tab of that page. */
 export function linkHref(url: string): string {
   const r = linkRoute(url);
-  return r.kind === "session" ? `/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}` : url;
+  return r.kind === "session" ? `${BASE}/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}` : url;
 }
 
 /** Opens a link where it belongs (see the top of this file). `title` names it in the panel until the page says. */

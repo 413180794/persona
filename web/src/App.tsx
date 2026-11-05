@@ -5,11 +5,11 @@ import { useCloseOnBack } from "./lib/back-close";
 import { SCRIM_FADE, useLingers } from "./lib/lingers";
 import { PageBoundary } from "./views/PageBoundary";
 import { drawerA11y, focusBack, useDrawerDrag } from "./lib/drawer";
-import { acceptHubs, rememberHub, takeHubs } from "./lib/hubs";
+import { acceptHubs, here, rememberHub, takeHubs } from "./lib/hubs";
 import { closePanel, getPanel } from "./lib/panel";
 import { resolveTab, tabOfSessionLink, tabPagePane } from "./lib/herdr-tree";
 import { resolveSessionLink, sessionLinkRoute } from "./lib/session-link";
-import { href, navigate, onLinkClick, useRoute } from "./lib/router";
+import { href, navigate, onLinkClick, routePath, useRoute } from "./lib/router";
 import { ago, sessionTitle, shortPath } from "./lib/format";
 import type { Session } from "./lib/types";
 import { unreachable } from "./lib/shell";
@@ -120,7 +120,7 @@ function Shell() {
   const conn = useStore((s) => s.conn);
   // this hub goes on the list of hubs to switch between, under the name it gives itself
   const hubName = useStore((s) => s.hubName);
-  useEffect(() => void rememberHub(location.origin, hubName), [hubName]);
+  useEffect(() => void rememberHub(here(), hubName), [hubName]);
   // the conversation on the page: a session's (`/s/…`), or the pane a tab (`/t/…`) opens on
   const tabSessions = useStore((s) => (route.name === "tab" || route.name === "session" ? s.sessions[route.mid] : undefined));
   const loaded = useStore((s) => s.loaded);
@@ -133,7 +133,7 @@ function Shell() {
   // in place; several sessions starting with it are listed to pick from
   const link = route.name === "session" ? resolveSessionLink(tabSessions ?? [], route.mid, route.sid, loaded) : undefined;
   const linkTo = link?.kind === "prefix" && route.name === "session" ? sessionLinkRoute(tabSessions ?? [], link.session, route.view) : undefined;
-  const tabLinkPath = tabLink ? href(tabLink) : linkTo ? href(linkTo) : "";
+  const tabLinkPath = tabLink ? routePath(tabLink) : linkTo ? routePath(linkTo) : "";
   useEffect(() => {
     if (tabLinkPath) navigate(tabLinkPath, true);
   }, [tabLinkPath]);

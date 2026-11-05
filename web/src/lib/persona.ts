@@ -3,6 +3,7 @@
 // app does). The default is 团子, the app icon's character the page draws (MochiFace); the page's own mark, the
 // built-in before 2026-11-03, is still a choice: with it chosen every place shows what it did before.
 // The pure parts (checks, which file, which state) are here; the views and the list are views/assistant/Persona.tsx.
+import { BASE } from "./base";
 import { t } from "../i18n";
 
 /** The default, 团子 (nothing saved means it). */
@@ -86,7 +87,7 @@ export function dotFile(m: PersonaManifest, s: PersonaState): string | undefined
 /** Where an <img> gets a package file: it can't send a header, so the token goes in the query (the hub never logs it). */
 export function personaFileURL(p: Pick<PersonaInfo, "id" | "rev">, file: string, token: string): string {
   const path = file.split("/").map(encodeURIComponent).join("/");
-  return `/api/v1/personas/${encodeURIComponent(p.id)}/${path}?rev=${encodeURIComponent(p.rev)}&token=${encodeURIComponent(token)}`;
+  return `${BASE}/api/v1/personas/${encodeURIComponent(p.id)}/${path}?rev=${encodeURIComponent(p.rev)}&token=${encodeURIComponent(token)}`;
 }
 
 /**

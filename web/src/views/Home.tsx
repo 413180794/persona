@@ -126,7 +126,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           )}
 
           {machines.length > 0 && (
-            <Group title={t("home.computers")} count={machines.length} right={<a href="/machines" onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12px] text-ink-3 hover:text-ink-2">{t("home.monitor")}</a>}>
+            <Group title={t("home.computers")} count={machines.length} right={<a href={href({ name: "machines" })} onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12px] text-ink-3 hover:text-ink-2">{t("home.monitor")}</a>}>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {machines.map((m) => {
                   const mine = m.online ? sessions.filter((s) => s.machine_id === m.id && stateOf(s) !== "offline") : [];

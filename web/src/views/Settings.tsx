@@ -1,5 +1,7 @@
 // 设置 (docs/web.md): appearance, where the assistant runs, 模型 (every launcher: ~/.zshrc ones synced, Persona ones
 // kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
+import { BASE, stripBase } from "../lib/base";
+import { href } from "../lib/router";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, enc, errorText, setToken } from "../lib/api";
 import { splitDevices } from "../lib/devices";
@@ -118,7 +120,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   // Back from a category opened from the list: the URL went back, the page follows it.
   useEffect(() => {
     const back = () => {
-      if (location.pathname !== "/settings") return;
+      if (stripBase(location.pathname) !== "/settings") return;
       const now = settingsAt(location.search);
       setAt((was) => (was.tab === now.tab && was.sub === now.sub ? was : now));
     };
@@ -137,12 +139,12 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     setAt({ tab: k, sub: id });
     const to = settingsHref(k, id, phone);
     // from the phone's list the category goes on top of it, so Back returns to the list
-    if (listed) history.pushState({ [FROM_LIST]: true }, "", to);
-    else history.replaceState(openedFromList(history.state) ? history.state : null, "", to);
+    if (listed) history.pushState({ [FROM_LIST]: true }, "", BASE + to);
+    else history.replaceState(openedFromList(history.state) ? history.state : null, "", BASE + to);
   };
   const toList = () => {
     if (openedFromList(history.state)) return history.back();
-    history.replaceState(null, "", "/settings");
+    history.replaceState(null, "", href({ name: "settings" }));
     setAt({ tab: null, sub: null });
   };
   return (
@@ -340,7 +342,7 @@ function About() {
     localStorage.removeItem("jarvis.tokenId");
     setToken("");
     reset();
-    location.href = "/";
+    location.href = BASE + "/";
   };
   return (
     <Group title={t("settings.this_browser")} footer={t("settings.this_browser_footer")}>

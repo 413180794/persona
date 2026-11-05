@@ -6,6 +6,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 
 代码：服务端 `server/internal/hub/admin*.go`（扩展 `admin_extensions.go`）、`server/internal/db/admin.go`（迁移 `0161_admin.sql`），
 网页 `web/admin/index.html` + `web/src/admin/`（和网页操作页同一个工程、同一套设计 token，单独一个入口）。
+管理界面只在 hub 的根路径：网页操作页能挂在反向代理的子路径下（[web.md](web.md)「子路径」），管理界面不读 `X-Forwarded-Prefix`，经子路径打不开，直接访问 hub 的端口。
 
 ## 访问范围 `admin.access`
 

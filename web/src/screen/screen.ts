@@ -3,6 +3,7 @@
 // this page's memory, is never stored and never traded for a browser token (the web's sign-in link would mint one per
 // open). A signed-in browser uses its own.
 
+import { BASE, stripBase } from "../lib/base";
 import { getToken } from "../lib/api";
 import { t } from "../i18n";
 
@@ -19,7 +20,7 @@ export function screenMachine(pathname: string): string | null {
 /** The page's machine and token, the fragment's token taken out of the address bar's text (returned as rest). */
 export function screenTarget(href: string, stored: () => string = getToken): { target: ScreenTarget | null; rest: string } {
   const u = new URL(href);
-  const mid = screenMachine(u.pathname);
+  const mid = screenMachine(stripBase(u.pathname));
   const hash = new URLSearchParams(u.hash.replace(/^#/, ""));
   const token = hash.get("token")?.trim() ?? "";
   const embedded = hash.get("embed") === "1";
@@ -40,7 +41,7 @@ export function screenTarget(href: string, stored: () => string = getToken): { t
 /** The WebSocket that carries the Mac's VNC (its port 5900) through the hub's port relay (docs/ports.md). */
 export function screenSocket(location: { protocol: string; host: string }, mid: string, token: string): string {
   const scheme = location.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${location.host}/api/v1/machines/${encodeURIComponent(mid)}/ports/5900/connect?token=${encodeURIComponent(token)}`;
+  return `${scheme}://${location.host}${BASE}/api/v1/machines/${encodeURIComponent(mid)}/ports/5900/connect?token=${encodeURIComponent(token)}`;
 }
 
 /** The Mac account's short name, from its home directory (/Users/<name>): what Screen Sharing's sign-in asks for. */

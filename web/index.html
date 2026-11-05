@@ -6,11 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="color-scheme" content="light dark" />
     <meta name="robots" content="noindex" />
-    <link rel="icon" href="/app-icon-64.png" type="image/png" media="(prefers-color-scheme: light)" />
-    <link rel="icon" href="/app-icon-dark-64.png" type="image/png" media="(prefers-color-scheme: dark)" />
+    <!-- The hub writes the sub-path a reverse proxy serves it under here (X-Forwarded-Prefix, docs/web.md「子路径」):
+         the bundle's files and the links below are relative to it, and lib/base.ts reads it for everything else. -->
+    <base href="/" />
+    <link rel="icon" href="app-icon-64.png" type="image/png" media="(prefers-color-scheme: light)" />
+    <link rel="icon" href="app-icon-dark-64.png" type="image/png" media="(prefers-color-scheme: dark)" />
     <!-- Installable as an app (PWA, docs/web.md「安装成 App」). The theme colours are --page of styles.css. -->
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <meta name="theme-color" content="#fafafb" media="(prefers-color-scheme: light)" data-scheme="light" />
     <meta name="theme-color" content="#17181a" media="(prefers-color-scheme: dark)" data-scheme="dark" />
     <meta name="mobile-web-app-capable" content="yes" />

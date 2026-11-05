@@ -244,6 +244,9 @@ describe("小工具", () => {
     expect(withToken("/api/v1/lark/media/k?size=48", "jd_x")).toBe("/api/v1/lark/media/k?size=48&token=jd_x");
     expect(withToken("https://example.com/a.png", "jd_x")).toBe("https://example.com/a.png");
     expect(withToken(undefined, "jd_x")).toBeUndefined();
+    // under a reverse proxy's sub-path (docs/web.md「子路径」)
+    expect(withToken("/api/v1/lark/media/k", "jd_x", "/persona")).toBe("/persona/api/v1/lark/media/k?token=jd_x");
+    expect(withToken("https://example.com/a.png", "jd_x", "/persona")).toBe("https://example.com/a.png");
   });
 
   it("时间：今天、昨天、本周、今年、往年", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { errorText } from "../lib/api";
 import { pair } from "../lib/auth";
-import { rememberHub } from "../lib/hubs";
+import { here, rememberHub } from "../lib/hubs";
 import { Button, Spinner } from "../ui/atoms";
 import { AppMark } from "../ui/AppMark";
 import { Icon } from "../ui/icons";
@@ -15,7 +15,7 @@ export function Login({ onDone, error: linkError = "" }: { onDone: () => void; e
   const [token, setTok] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(linkError);
-  useEffect(() => void rememberHub(location.origin), []);
+  useEffect(() => void rememberHub(here()), []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

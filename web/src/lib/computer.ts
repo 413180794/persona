@@ -1,5 +1,6 @@
 // 操控电脑 on a Mac's page (docs/computer-use.md, iOS ComputerSection): what the hub says the Mac has of Cua Driver
 // (GET/PUT /api/v1/machines/{mid}/computer, POST …/computer/{install|grant|cancel}), and what the section shows for it.
+import { BASE } from "./base";
 import { formatList, t } from "../i18n";
 
 export interface ComputerJob {
@@ -85,5 +86,5 @@ export function computerWatching(c: MachineComputer, online: boolean): boolean {
 
 /** The web's live screen of the machine (web/src/screen): a signed-in browser opens it with its own token. */
 export function screenPath(mid: string): string {
-  return `/screen/${encodeURIComponent(mid)}`;
+  return `${BASE}/screen/${encodeURIComponent(mid)}`;
 }

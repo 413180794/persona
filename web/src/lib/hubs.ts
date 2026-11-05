@@ -4,9 +4,11 @@
 // address (`#hubs=`, never sent to a server) so the next hub's page knows the same hubs.
 
 import { t } from "../i18n";
+import { BASE } from "./base";
 
 export interface SavedHub {
-  /** The hub's origin, `scheme://host[:port]` as `URL.origin` writes it. */
+  /** The hub's origin, `scheme://host[:port]` as `URL.origin` writes it, plus the sub-path a reverse proxy serves it
+   * under (`https://<domain>/<prefix>`, docs/web.md「子路径」), without a trailing slash. */
   url: string;
   /** The hub's own name (hello's `hub_name`), refreshed whenever this browser opens it. */
   name?: string;
@@ -18,7 +20,14 @@ const KEY = "persona.hubs";
 /** A link can carry a list in: keep it bounded. */
 export const MAX_HUBS = 20;
 
-/** The origin for what the user typed, or why it is not one. No scheme means https. */
+// The first segments of the page's own routes (lib/router.ts) and the hub's own paths.
+const PAGE_SEGMENTS = new Set(["s", "t", "j", "a", "overview", "history", "assistant", "inbox", "messages", "routines", "kb", "machines", "terminal", "agents", "settings", "todos", "extension", "plugin", "workspace-board", "screen", "api", "admin", "assets"]);
+
+/** This page's hub: its origin and the sub-path it is served under. */
+export const here = () => (typeof location === "undefined" ? "" : location.origin + BASE);
+
+/** The address for what the user typed (an origin, or one with the sub-path a proxy serves the hub under), or why
+ * it is not one. No scheme means https. */
 export function normalizeHubURL(input: string): { url: string } | { error: string } {
   const raw = input.trim();
   if (!raw) return { error: t("lib-hubs.url_empty") };
@@ -30,9 +39,14 @@ export function normalizeHubURL(input: string): { url: string } | { error: strin
   }
   if (u.protocol !== "http:" && u.protocol !== "https:") return { error: t("lib-hubs.url_scheme") };
   if (u.username || u.password) return { error: t("lib-hubs.url_credentials") };
-  if ((u.pathname && u.pathname !== "/") || u.search || u.hash) return { error: t("lib-hubs.url_path") };
+  if (u.search || u.hash) return { error: t("lib-hubs.url_path") };
   if (!u.hostname) return { error: t("lib-hubs.url_invalid") };
-  return { url: u.origin };
+  const path = u.pathname.replace(/\/+$/, "");
+  // only plain path segments, what the hub takes as X-Forwarded-Prefix (URL has already resolved any "..")
+  if (path && !/^(\/[A-Za-z0-9._~-]+)+$/.test(path)) return { error: t("lib-hubs.url_path") };
+  // a page's address pasted whole (…/settings, …/s/<machine>/<session>) is not where the hub is
+  if (path.split("/").some((seg) => PAGE_SEGMENTS.has(seg.toLowerCase()))) return { error: t("lib-hubs.url_path") };
+  return { url: u.origin + path };
 }
 
 /** The name to show: the user's, the hub's, else its host. */

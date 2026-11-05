@@ -301,6 +301,13 @@ describe("the Markdown export", () => {
   it("keeps a first heading that is not the title", () => {
     expect(prepareMarkdown("# 另一个\n正文", "标题")).toBe("# 另一个\n正文");
   });
+
+  it("puts the hub's media under the sub-path the page is served at", () => {
+    const out = prepareMarkdown("正文\n\n![图](</api/v1/lark/raw/m?x=1>) [文件](</api/v1/lark/raw/f>) [站外](https://example.com/api/v1/x)", "", "k", "/persona");
+    expect(out).toContain("![图](</persona/api/v1/lark/raw/m?x=1&token=k>)");
+    expect(out).toContain("[文件](</persona/api/v1/lark/raw/f>)");
+    expect(out).toContain("[站外](https://example.com/api/v1/x)");
+  });
 });
 
 describe("the JSON tree", () => {

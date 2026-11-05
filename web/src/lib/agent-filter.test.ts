@@ -22,15 +22,15 @@ describe("快速筛选（iOS AgentFilter）", () => {
   it("屏蔽的需要你仍算，屏蔽的未读 / 工作中不算", () => {
     const all = [session("needs", "needs_you"), session("muted-needs", "needs_you"), session("unread", "unread"), session("muted-unread", "unread"),
       session("working", "working"), session("muted-working", "working"), session("space-muted", "working", { space_name: "安静" }), session("idle", "idle")];
-    expect(filterCounts(all, muted)).toEqual({ needs: 2, unread: 1, working: 1 });
+    expect(filterCounts(all, muted)).toEqual({ needs: 2, unread: 1, working: 1, feishu: 0, terminal: 0 });
     expect(all.filter((s) => matchesFilter(s, "all", muted))).toHaveLength(all.length);
     expect(ids(all.filter((s) => matchesFilter(s, "working", muted)))).toEqual(["working"]);
   });
 
   it("只露出有 Agent 的状态，选中的空了也留着", () => {
-    expect(shownFilters("all", { needs: 0, unread: 2, working: 0 })).toEqual(["all", "unread"]);
-    expect(shownFilters("needs", { needs: 0, unread: 0, working: 1 })).toEqual(["all", "needs", "working"]);
-    expect(shownFilters("all", { needs: 0, unread: 0, working: 0 })).toEqual(["all"]);
+    expect(shownFilters("all", { needs: 0, unread: 2, working: 0, feishu: 0, terminal: 0 })).toEqual(["all", "unread"]);
+    expect(shownFilters("needs", { needs: 0, unread: 0, working: 1, feishu: 0, terminal: 0 })).toEqual(["all", "needs", "working"]);
+    expect(shownFilters("all", { needs: 0, unread: 0, working: 0, feishu: 0, terminal: 0 })).toEqual(["all"]);
   });
 
   it("选中时显示的留到再选一次：点开的未读变成已看，位置不变", () => {

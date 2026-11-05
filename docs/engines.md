@@ -146,7 +146,10 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
   只按 `node.info` 的话，提示会在 herdr 已经起来之后还一直挂着，直到 node 重连；之后的手动「启动」、电脑上的 `herdr server stop` 也一样（#1916）。
   所以 `GET …/herdr` 现问 node 的 `herdr.server.status`（只连一下 socket，`{running, known}`），3 秒内的再读用刚问到的；
   `herdr/start` 成功后也把结果记下。老 node 没有这个方法，就还是 `node.info` 的值，3 秒内不再问。
-  Android 的 Agents 列表已接提示行和「启动」按钮（#1916）：在线且状态已知为未运行时显示，点按显式启动；其他客户端待接。
+  Android 的 Agents 列表已接提示行和「启动」按钮（#1916）：在线且状态已知为未运行时显示，点按显式启动。
+  iOS / Mac 同样（`HerdrNotice.swift`）：Agents 列表在前台、没被对话盖住时每 10 秒读一次，提示行在列表最上面，一台机器一行，跟着机器筛选和 hub 分组；
+  读失败一次不撤掉已有的提示行，hub 没有这个接口（404）就不再问这台。点了「启动」显示「正在启动…」，失败时在行里用中文写原因（认得的几种：起来后马上退出 / 被结束、没装、没应答、node 太旧、离线、超时，`HerdrFailure.says`；认不出的保留原文），按钮还在；hub 的原文、状态码和请求 id 在长按 / 右键的「复制详情」里，不占正文；
+  成功后这台在本次运行里按 POST 的结果算，直到 hub 也说在跑（hub 更新前 `GET` 还是连上时的值）。网页待接。
 - **起不来**：仍然是 `engine_missing`。没装 herdr 时文案和以前一样；装了但起不来时说「自动启动也没成功」，原因（herdr 的退出码和输出的最后几行，
   输出在 `$TMPDIR/persona-herdr-server.log`）放在详情里，也写进 node 的日志。Windows 上不拉，行为和以前一样。
 

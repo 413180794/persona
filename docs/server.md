@@ -127,7 +127,8 @@ Linux 的 systemd 用户服务要在退出 SSH 后持续运行，需由管理员
 `public.ecr.aws/docker/library/postgres:18-alpine`，拉取成功后重新标记为 `postgres:18-alpine` 再运行数据库脚本。
 
 公网入口使用独立域名的 HTTPS 反向代理，hub 和数据库只监听回环地址。Nginx 要转发 WebSocket 的 Upgrade / Connection，
-关闭响应缓冲并延长读取超时；访问日志不要记录带 token 的查询字符串。重载 Nginx 后立即请求可能仍命中旧 worker，
+关闭响应缓冲并延长读取超时；访问日志不要记录带 token 的查询字符串。挂在已有域名的子路径下时（`location /<前缀>/` 去掉前缀转给 hub），
+再加 `proxy_set_header X-Forwarded-Prefix /<前缀>`，网页才能用（[web.md](web.md)「子路径」）。重载 Nginx 后立即请求可能仍命中旧 worker，
 应等待新配置生效后再验证证书、鉴权接口和 WSS 101。通过云控制台申请的免费证书需要在到期前重新申请并安装，
 不要将已有 certbot 定时器视为这类证书的自动续期。
 

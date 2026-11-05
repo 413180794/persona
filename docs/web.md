@@ -39,6 +39,49 @@
   终端鼠标的端到端检查（#2441：点击 / 拖动 / 中右键 / ctrl alt 修饰键以 `terminal_input.mouse` 到 hub，Shift 选字和 Shift+右键菜单，「本地选择」，只看时不发，滚轮不变）：
   假 hub 带 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 起，再跑 `python3 scripts/test/web_terminal_mouse_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`。
 
+## 子路径（#2563）
+
+hub 常常不单独开端口，而是挂在已有网站的一个子路径下：反向代理把 `https://<域名>/<前缀>/` 去掉前缀转给 hub 的明文端口，
+`hub.json` 的 `public_url` 写成 `https://<域名>/<前缀>`（App 和 `node --dial` 都在它后面拼 `/api/v1/…`，配对链接也用它）。网页这样也能用：
+
+- **代理带上 `X-Forwarded-Prefix: /<前缀>`**。hub 返回 `index.html` 时把里面的 `<base href="/" />` 改成 `<base href="/<前缀>/" />`
+  （`server/internal/hub/web.go` 的 `forwardedPrefix` / `withBase`）。只认 `/` 开头、每段只有字母数字和 `-._~`、不含 `.` / `..` 段、256 字节以内的前缀；
+  别的（引号、尖括号、空格、控制字符、百分号转义……）一律忽略，当作根路径。不带这个头时和以前一模一样。
+  同一个 `index.html` 按这个头回不同的内容，所以带 `Vary: X-Forwarded-Prefix`（本来就是 `no-cache`，`Last-Modified` 照旧，304 照旧）；只改 `index.html`，别的文件原样。
+- **网页从 `<base>` 读前缀**（`src/lib/base.ts` 的 `BASE`，根路径时是空串）：接口（`lib/api.ts`）、WebSocket（`lib/store.ts`）、
+  图片 / 文件下载 / 缩略图 / 头像 / 形象包 / 飞书文档的媒体（`imageURL`、`fileDownloadURL`、`fileThumbURL`、`agentAvatarURL`、`personaFileURL`、收件箱的 `withToken`、`feishu-doc` 的 `mediaURL`）、
+  实时画面的页面和它的 WebSocket（`/screen/<机器>`）、前端路由都加上它。路由：`href()` 生成带前缀的地址，`parse()` 读的是去掉前缀的路径（`useRoute` 先 `stripBase`），
+  `navigate("/settings?…")` 这种字符串参数是 App 内的路径、不带前缀。hub 自己页面的链接（`/s/…`、`/todos?id=…`）也要在前缀之内才在 App 里打开。
+  写新代码时：拼 `/api/…` 的 URL 一律走上面这些函数（或在前面加 `BASE`），站内链接用 `href(route)`，不写死 `"/xxx"`。
+- **打包按相对路径**（`vite.config.ts` 的 `base: "./"`）：`index.html` 引用 `./assets/…`，图标、manifest 也写相对地址，都相对 `<base>`；
+  深层路径（`/<前缀>/s/<机器>/<会话>`）直接刷新也对。`manifest.webmanifest` 的 `start_url` / `scope` / 图标 / 快捷方式都是相对地址（`id` 仍是 `/`，装过的不变）。
+- **子路径下不注册 service worker**（`lib/pwa.ts`）：它的规则和缓存都按根路径写；PWA 照样能「添加到主屏幕」，只是没有离线外壳。
+- **管理界面（`/admin`）只在根路径**：它不读前缀，经子路径打不开。管理界面按来源地址限制访问（[admin.md](admin.md)），本来就不该经对公网的代理开放，
+  在 hub 机器上或局域网里直接访问 hub 的端口。
+- **一个源只放一台 hub**：登录（`localStorage`）按源存，同一个域名下两个前缀挂两台 hub 会互相顶掉登录。「切换 hub」的列表可以记带前缀的地址。
+
+nginx 示例（`hub.example.com`、`/persona/` 和端口换成自己的；`map` 写在 `http` 块里，`location` 写在 443 的 `server` 块里）：
+
+```nginx
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+location = /persona { return 301 /persona/; }
+location /persona/ {
+    proxy_pass http://127.0.0.1:18660/;          # 末尾的 / 去掉前缀
+    proxy_set_header X-Forwarded-Prefix /persona;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;      # WebSocket
+    proxy_set_header Connection $connection_upgrade;
+    proxy_buffering off;
+    proxy_read_timeout 1h;
+}
+```
+
+`hub.json` 里 `"public_url": "https://hub.example.com/persona"`。验证：浏览器打开 `https://hub.example.com/persona/`，开发者工具里所有请求（含 `/api/v1/ws`）都应在 `/persona/` 下。
+
 ## 登录
 
 第一次打开要贴 hub 的 token（`personad hub pair` 打印的那个）。网页先用它换一个自己的设备 token（`POST /api/v1/auth/tokens`，`kind: web`，
@@ -630,12 +673,12 @@ CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App�
 一个页面同时连几台要 CORS 和跨源 token，和同源的设计冲突。所以**切换就是打开那台 hub 自己托管的网页**：
 
 - 每台 hub 的登录照旧存在它自己的源里，token 从不跨源；第一次打开某台要贴它的 token（或用登录链接），之后直接进。
-- 列表（`src/lib/hubs.ts`）只有名字和地址（`scheme://host:port`，即 `location.origin`），存在这个源的 `localStorage`（`persona.hubs`），最多 20 台。
+- 列表（`src/lib/hubs.ts`）只有名字和地址（`scheme://host:port`，即 `location.origin`；挂在反向代理子路径下的再带上前缀，见上面「子路径」），存在这个源的 `localStorage`（`persona.hubs`），最多 20 台。
   打开过的 hub 自动记下：登录页记地址，登录后再记 hello 的 `hub_name`。用户起的名字（`label`）优先于 hub 自己的名字。
 - 跳转时把列表放进地址的 fragment（`<那台 hub>/#hubs=<JSON>`，不发到服务器）。对面的页面在 React 渲染之前读出来、合并进自己的列表（自己已有的保留顺序和名字），
-  再用 `history.replaceState` 从地址栏抹掉，和登录链接里的 token 一样。读不出来的、不是 http(s) 地址的、带路径的条目一律丢掉。
-- 入口：左上角菜单在外观下面列出其他 hub（点一下切过去）；设置 › 通用 › hub 管理列表（「添加 hub」：地址加可选的名字，没写协议按 https，带路径、
-  用户名、查询串的不收，输入时预览将打开的地址；改名只改这个浏览器里的叫法；删除只是从列表里拿掉）；登录页列出「其他 hub」，进了一台还没登录过的 hub 也能回去。
+  再用 `history.replaceState` 从地址栏抹掉，和登录链接里的 token 一样。读不出来的、不是 http(s) 地址的、路径不是一个干净前缀的条目一律丢掉。
+- 入口：左上角菜单在外观下面列出其他 hub（点一下切过去）；设置 › 通用 › hub 管理列表（「添加 hub」：地址加可选的名字，没写协议按 https，带用户名、
+  查询串的不收，路径只收反向代理的前缀（像页面地址的 `/settings`、`/s/…` 不收），输入时预览将打开的地址；改名只改这个浏览器里的叫法；删除只是从列表里拿掉）；登录页列出「其他 hub」，进了一台还没登录过的 hub 也能回去。
 - 列表里没有别的 hub 时，菜单和登录页一像素不变；只有设置里多一节「hub」，要从这里添加第二台。
 
 ## 连接
@@ -651,7 +694,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 
 网页可以装到手机主屏幕 / 电脑桌面，独立窗口打开，图标、名字和 iOS App 一致。
 
-- **manifest**（`public/manifest.webmanifest`）：`standalone`、`start_url` / `scope` 都是 `/`，背景和 theme 色是浅色的 `--page`；
+- **manifest**（`public/manifest.webmanifest`）：`standalone`、`start_url` / `scope` 都是 `./`（相对 manifest，根路径时就是 `/`，子路径下是 `/<前缀>/`），背景和 theme 色是浅色的 `--page`；
   长按图标的快捷方式：新对话、收件箱、Agents、机器。hub 给 `.webmanifest` 显式设 `application/manifest+json`（Go 的内置表里没有，又开着 nosniff），
   它和 `sw.js` 跟 `index.html` 一样 `no-cache`（`server/internal/hub/web.go`）。
 - **图标**全部从 `AppIcon.appiconset` 缩出来，不重画：`app-icon-192/512.png`（`purpose: any`，桌面安装用 Mac 图标那种带圆角和边距的 `mac-512@2x.png`）；
@@ -666,7 +709,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
   - 根目录的图标和 manifest：先取 hub 的，取不到用存的。
   - `/api/`（数据、WebSocket、图片）和 `/admin` 一律不经过它，数据永远是实时的。
   - 只在安全上下文注册（https 或 localhost）：内网用明文 http 打开时就是普通网页，iOS 照样能「添加到主屏幕」，但没有离线外壳；Chrome / Edge 要 https 才能安装（公网 TLS 见 `docs/network.md`）。
-    开发时（`npm run dev`）不注册。
+    开发时（`npm run dev`）不注册；挂在反向代理的子路径下时也不注册（见上面「子路径」）。
 - **设置 › 通用 ›「这个浏览器」›「安装为 App」**（`lib/pwa.ts`）：浏览器给了安装提示（Chrome、Edge）就是一个「安装」按钮；
   iPhone / iPad 提示 Safari 分享菜单的「添加到主屏幕」，Mac 上的 Safari 提示「文件 › 添加到程序坞」，http 下的其他浏览器说明要 https，别的指向浏览器菜单；已经在独立窗口里时显示「已安装」。
 
