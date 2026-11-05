@@ -196,6 +196,8 @@ func (d *Devices) Handler(next http.Handler) http.Handler {
 	route("GET /api/v1/machines/{mid}/herdr", d.getHerdr)
 	route("PUT /api/v1/machines/{mid}/herdr", d.putHerdr)
 	route("POST /api/v1/machines/{mid}/herdr/start", d.postHerdrStart)
+	route("GET /api/v1/machines/{mid}/botmux", d.getBotmux)
+	route("PUT /api/v1/machines/{mid}/botmux", d.putBotmux)
 	route("POST /api/v1/machines/{mid}/deploy", func(w http.ResponseWriter, r *http.Request, m *Machine) {
 		if err := m.startDeploy(); err != nil {
 			writeErr(w, http.StatusConflict, err)

@@ -64,3 +64,36 @@ func TestFeedMarkSent(t *testing.T) {
 		t.Fatalf("since f4: %+v", list)
 	}
 }
+
+// MarkFeedSent finds the unsent cards through assistant_feed_unsent rather than scanning the whole feed (#2617).
+func TestMarkFeedSentUsesUnsentIndex(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// The table is tiny here, so tell the planner a scan costs too much. Without assistant_feed_unsent it still
+	// avoids the scan (a bitmap scan of assistant_feed_conversation), so check the plan names the index itself.
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tx.Query(ctx, `EXPLAIN `+markFeedSentSQL, "message", "inbox:1", time.Now(), []byte(`{"sent_at":"x"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan []string
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, line)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(plan, "\n"), "assistant_feed_unsent") {
+		t.Fatalf("MarkFeedSent does not use assistant_feed_unsent:\n%s", strings.Join(plan, "\n"))
+	}
+}

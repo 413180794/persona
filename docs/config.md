@@ -246,6 +246,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `~/.zshrc` 的 alias / 函数和 Persona 管理的启动器照旧用它们自己的设置；这个目录也会自动加进上面找会话的目录。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `machines[].botmux`（可选）：写 `false` 时那台电脑的 node 不列 botmux 的会话，也不跑 botmux（不跑 `botmux observe`、`botmux dashboard current`）；
   不写就和以前一样，装了 botmux 就列（`docs/engines.md`「botmux」）。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
+  现在它只是默认值：机器详情「引擎」下的「同时显示 botmux 会话」按机器存在 settings（`botmux/<机器 id>`），设过就以它为准（#2575）。
 - `machines[].herdr_autostart`（可选）：写 `false` 时那台电脑的 node 不在 herdr 没运行时自己拉起它的 server；不写是开
   （`docs/engines.md`「herdr 没在运行时」）。**只是默认值**：用户在「设置 › 机器 › 引擎」里按机器选过之后，以那次选择为准
   （存在 hub 的 settings，`herdr_autostart/<机器 id>`），再改这里不影响已经选过的机器。

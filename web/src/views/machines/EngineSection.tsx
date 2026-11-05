@@ -19,6 +19,7 @@ import { applyMachine } from "../../lib/store";
 import type { Machine } from "../../lib/types";
 import { Button, cx, EASE, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { BotmuxSwitch } from "./BotmuxSwitch";
 import { t } from "../../i18n";
 
 export function EngineSection({ machine, heading }: { machine: Machine; heading: React.ReactNode }) {
@@ -124,6 +125,7 @@ export function EngineSection({ machine, heading }: { machine: Machine; heading:
         )}
       </div>
       <p className="mt-2 px-1 text-[11.5px] leading-relaxed text-ink-3">{engineFooter(selected, machine.online)}</p>
+      <BotmuxSwitch key={machine.id} machineID={machine.id} />
     </section>
   );
 }

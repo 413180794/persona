@@ -1,0 +1,5 @@
+{
+  "label": "同时显示 botmux 会话",
+  "footer": "这台电脑装了 botmux 时，botmux 里的会话和所选引擎的会话一起列出。关掉后不再列出，也不再运行 botmux。",
+  "save_failed": "保存失败：{error}"
+}

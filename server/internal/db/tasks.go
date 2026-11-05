@@ -121,12 +121,16 @@ func (d *DB) FeedItem(ctx context.Context, id string) (*FeedRow, error) {
 	return &out[0], nil
 }
 
+// markFeedSentSQL is MarkFeedSent's update. Its WHERE matches the partial index assistant_feed_unsent
+// (migrations/0392): keep the two in step, or every reply scans the whole feed again.
+const markFeedSentSQL = `UPDATE assistant_feed SET body = body || $4::jsonb
+	WHERE kind = $1 AND ref = $2 AND at <= $3 AND NOT body ? 'sent_at'
+	RETURNING id, conversation, at, kind, ref, body`
+
 // MarkFeedSent merges patch into the body of the items of kind about ref put in at or before at that have no
 // sent_at yet, and returns them as they are now.
 func (d *DB) MarkFeedSent(ctx context.Context, kind, ref string, at time.Time, patch json.RawMessage) ([]FeedRow, error) {
-	rows, err := d.pool.Query(ctx, `UPDATE assistant_feed SET body = body || $4::jsonb
-		WHERE kind = $1 AND ref = $2 AND at <= $3 AND NOT body ? 'sent_at'
-		RETURNING id, conversation, at, kind, ref, body`, kind, ref, at, []byte(patch))
+	rows, err := d.pool.Query(ctx, markFeedSentSQL, kind, ref, at, []byte(patch))
 	if err != nil {
 		return nil, err
 	}

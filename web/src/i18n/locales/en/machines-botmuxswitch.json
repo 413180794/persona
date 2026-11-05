@@ -1,0 +1,5 @@
+{
+  "label": "Also show botmux sessions",
+  "footer": "When botmux is installed on this computer, its sessions are listed with the chosen engine's. Off: they are not listed and botmux is not run.",
+  "save_failed": "Couldn't save: {error}"
+}

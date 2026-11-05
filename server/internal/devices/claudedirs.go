@@ -60,9 +60,6 @@ func (m *Machine) claudeDirs(ctx context.Context) []string {
 	return slices.DeleteFunc(dirs, func(d string) bool { return proto.ClaudeDirBlocked(d, home, blocked) })
 }
 
-// botmux is hub.json's machines[].botmux: the machine's node lists botmux's sessions unless it says false.
-func (m *Machine) botmux() bool { return m.cfg.Botmux == nil || *m.cfg.Botmux }
-
 // usageWindows is hub.json's machines[].usage_windows: the machine's node reads the agents' subscription rate-limit
 // windows unless it says false (#2432).
 func (m *Machine) usageWindows() bool { return m.cfg.UsageWindows == nil || *m.cfg.UsageWindows }
@@ -73,7 +70,7 @@ func (m *Machine) usageWindows() bool { return m.cfg.UsageWindows == nil || *m.c
 // while it is not connected (it is done again when it is).
 func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer, hub *devicewire.ConnectedReply) {
 	params := map[string]any{"machine_id": m.cfg.ID, "claude_dirs": m.claudeDirs(ctx),
-		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux(), "claude_start_dir": m.cfg.ClaudeStartDir,
+		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux(ctx), "claude_start_dir": m.cfg.ClaudeStartDir,
 		"herdr_autostart": m.herdrAutostart(ctx), "claude_global_hooks": m.cfg.ClaudeGlobalHooks,
 		"usage_windows": m.usageWindows()}
 	// The sessions it lists however quiet are the assistant's to say (its profile); before it said, the node keeps
@@ -178,7 +175,7 @@ func (m *Machine) reconfigureClaudeDirs(ctx context.Context) {
 	// botmux too: this can come between the connection and its own node.configure, and the session list that follows
 	// must not be the node's first word on it (an older hub's, node/hostbotmux.go useBotmux).
 	if err := m.call(ctx, "node.configure", map[string]any{"claude_dirs": m.claudeDirs(ctx),
-		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux()}, nil); err != nil {
+		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux(ctx)}, nil); err != nil {
 		m.d.logf("[%s] configure claude dirs: %v", m.cfg.ID, err)
 		return
 	}

@@ -601,6 +601,9 @@ if os.environ.get("MOCK_TREE"):
                                  minutes, "「%s」这一步做完了，结果写在最后一条回复里。" % title, **extra))
             if title == "调学习率预热":
                 TREE_MUTED.append("%s/%s" % (mid, sid))
+# 同时显示 botmux 会话 per machine (PUT /api/v1/machines/{mid}/botmux); unset is on, as on a real hub.
+BOTMUX_ON: dict = {}
+
 # MOCK_BOTMUX=1: a botmux session (docs/engines.md「botmux」) that needs you, with botmux's reason and its Feishu topic
 # (attention_reason, external_url), a working one with only the topic, and one botmux stopped on an error
 # (failure_reason).
@@ -9272,6 +9275,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"apps": COMPUTER_APPS.get(p.split("/")[4], [])})
         if p.startswith("/api/v1/machines/") and p.endswith("/computer/clipboard") and os.environ.get("MOCK_SCREEN") == "fake":
             return self.send_json({"text": FAKE_SCREEN["clipboard"]})  # the Mac's clipboard through its node (#1343)
+        if p.startswith("/api/v1/machines/") and p.endswith("/botmux"):  # 同时显示 botmux 会话 (#2575): on by default
+            return self.send_json({"on": BOTMUX_ON.get(p.split("/")[4], True)})
         if p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua (MOCK_COMPUTER)
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "computer" not in machine:
@@ -9328,6 +9333,7 @@ class H(BaseHTTPRequestHandler):
             threading.Thread(target=replay_next, args=(n,), daemon=True).start()
             return self.send_json({"left": len(REPLAY["left"])})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
+            BOTMUX_ON.clear()
             COOKIES_FAILED[0] = False  # MOCK_COOKIES_FAIL: the next read fails again
             HERDR_STOPPED.clear(); HERDR_STOPPED.update(herdr_env()); HERDR_STARTS.clear()  # the herdr row (#1916)
             HERDR_MODE["start"] = os.environ.get("MOCK_HERDR_START", ""); HERDR_MODE["gen"] += 1
@@ -10199,6 +10205,11 @@ class H(BaseHTTPRequestHandler):
                 try: send({"type": "machines", "machines": out_machines()})
                 except Exception: pass
             return self.send_json(machine["computer"])
+        if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/botmux"):
+            body = json.loads(self.last_body or b"{}")
+            if not isinstance(body.get("on"), bool): return self.send_json({"error": "需要 on"}, 400)
+            BOTMUX_ON[p.split("/")[4]] = body["on"]
+            return self.send_json({"on": body["on"]})
         if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/engine"):
             mid = p.split("/")[4]
             machine = next((m for m in MACHINES if m["id"] == mid), None)

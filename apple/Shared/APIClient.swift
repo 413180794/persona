@@ -370,6 +370,17 @@ nonisolated struct APIClient: Sendable {
         return m
     }
 
+    /// 同时显示 botmux 会话 (#2575): whether the machine lists botmux's sessions beside its engine's. 404 on an older hub.
+    func botmux(machine: String) async throws -> Bool {
+        struct State: Decodable { var on: Bool }
+        return try JSON.decoder.decode(State.self, from: await request("GET", "/api/v1/machines/\(machine)/botmux")).on
+    }
+    func setBotmux(machine: String, on: Bool) async throws -> Bool {
+        struct Body: Encodable { var on: Bool }
+        struct State: Decodable { var on: Bool }
+        return try JSON.decoder.decode(State.self, from: await request("PUT", "/api/v1/machines/\(machine)/botmux", body: Body(on: on))).on
+    }
+
     /// What the machine has of Cua Driver now (its node is asked); 404 while the hub's plugin cua is off.
     func computer(machine: String) async throws -> MachineComputer {
         try JSON.decoder.decode(MachineComputer.self, from: await request("GET", "/api/v1/machines/\(machine)/computer"))

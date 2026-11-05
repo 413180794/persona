@@ -34,6 +34,8 @@
   假 hub 带 `MOCK_TASKS=1 MOCK_LONG_ASSISTANT=1 MOCK_LONG_HISTORY=1` 起，再跑 `python3 scripts/test/web_chat_scroll_e2e.py <网页地址> [--hub <假 hub 地址>] [--shots <目录>]`。
   主对话任务坞的端到端检查（「全部 N」和胶囊同高、上下边对齐，胶囊行没有滚动条、仍能横滑；Chrome 开着常显的滚动条跑，WebKit 可选）：假 hub 带
   `MOCK_TASKS=1 MOCK_TASKS_DOCK=pair|many` 起，再跑 `python3 scripts/test/web_task_dock_e2e.py <网页地址> [--browser chromium|webkit|all] [--shots <目录>]`。
+  侧边面板打开正在提问的任务不把整页顶上去的端到端检查（#1282：面板里的卡片像窄屏一样折起、底部区域限高，输入框聚焦不滚祖先）：假 hub 带
+  `MOCK_TASKS=1 MOCK_TASKS_DOCK=many` 起，再跑 `python3 scripts/test/web_panel_focus_e2e.py <网页地址> [--size 1280x800] [--shots <目录>]`。
   安装成 App 的端到端检查（Chrome 认为可安装、service worker 接管、缓存里只有外壳和 assets、断网能打开、设置里的安装行、theme-color 跟深浅色）：
   service worker 只在构建里跑，所以先 `npm run build`，用 `npx vite preview`（不是 `vite`）对着假 hub 起，再跑 `python3 scripts/test/web_pwa_e2e.py <网页地址> [--shots <目录>]`。
   终端鼠标的端到端检查（#2441：点击 / 拖动 / 中右键 / ctrl alt 修饰键以 `terminal_input.mouse` 到 hub，Shift 选字和 Shift+右键菜单，「本地选择」，只看时不发，滚轮不变）：

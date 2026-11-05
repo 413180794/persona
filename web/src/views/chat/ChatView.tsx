@@ -525,6 +525,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // On a phone (#1996): what is under the chat stays within about half of the visible height (dock.ts); the keyboard is
   // up while the composer has the focus on a touch screen alone
   const narrow = useMedia(NARROW);
+  // A task's or an agent's side panel (TaskPanel, AgentPanel) is a phone's width: its cards fold and its dock keeps
+  // to DOCK_MAX as a narrow screen's do. Unbounded there, a plan with a question and a permission stood taller than the
+  // panel, and focusing the composer scrolled the whole page up under it, the panel's header cut off (#1282).
+  const compactDock = narrow || (!inPage && !assistant && !readOnly);
   const short = useMedia(SHORT);
   const [typing, setTyping] = useState(false);
   const fine = useFinePointer();
@@ -672,9 +676,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       {!readOnly && (
       <div
         data-chat-dock
-        // narrow: at most DOCK_MAX; the cards' box gives up its height first, and should the composer alone need more,
+        // narrow (and in a side panel): at most DOCK_MAX; the cards' box gives up its height first, and should the composer alone need more,
         // it grows up over the chat (justify-end) instead of down off the screen
-        className="mx-auto flex w-full max-w-[880px] flex-col gap-2 px-4 pb-4 sm:px-7 max-lg:max-h-(--dock-max) max-lg:justify-end [@media(max-height:500px)]:pb-2"
+        className={cx("mx-auto flex w-full max-w-[880px] flex-col gap-2 px-4 pb-4 sm:px-7 [@media(max-height:500px)]:pb-2", compactDock && "max-h-(--dock-max) justify-end")}
         style={{ "--dock-max": DOCK_MAX } as React.CSSProperties}
         onInput={pendingRecap ? dismissRecap : undefined}
       >
@@ -703,7 +707,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <PendingCards
           interactions={interactions}
           answered={answered}
-          narrow={narrow}
+          narrow={compactDock}
           short={short}
           keyboard={keyboard}
           onDismissKeyboard={() => composerBox.current?.querySelector("textarea")?.blur()}

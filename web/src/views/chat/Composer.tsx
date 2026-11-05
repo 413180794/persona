@@ -120,7 +120,7 @@ export function Composer({
   sendNow.current = async (text) => (disabled ? false : onSend({ text, images: [] }));
   const canTake = useRef(!disabled);
   canTake.current = !disabled;
-  const handle = useMemo<ComposerHandle>(() => ({ key: draftKey, send: (text) => sendNow.current(text), focus: () => input.current?.focus(), ready: () => canTake.current }), [draftKey]);
+  const handle = useMemo<ComposerHandle>(() => ({ key: draftKey, send: (text) => sendNow.current(text), focus: () => input.current?.focus({ preventScroll: true }), ready: () => canTake.current }), [draftKey]);
   useEffect(() => registerComposer(handle), [handle]);
 
   const quoteNow = useRef(quote);
@@ -152,7 +152,7 @@ export function Composer({
     releaseAttachments(attsNow.current);
     setAtts([]);
     // not on a touch screen alone: there the focus brings the keyboard up over the conversation just opened
-    if (autoFocus && hasFinePointer()) setTimeout(() => input.current?.focus(), 0);
+    if (autoFocus && hasFinePointer()) setTimeout(() => input.current?.focus({ preventScroll: true }), 0);
   }, [draftKey, autoFocus]);
 
   // 引用 / 编辑 / a queued message pulled back / an edited picture, from the chat (lib/drafts.ts)
@@ -164,13 +164,13 @@ export function Composer({
         if (!canTake.current) return;
         if (e.type === "image") {
           setAtts((cur) => [...cur, fromDraftImage(e.image)]);
-          input.current?.focus();
+          input.current?.focus({ preventScroll: true });
           return;
         }
         if (e.type === "quote") {
           // the input keeps what is typed; the bar shows the quote, a new one in place of the last
           setQuote({ text: e.text.trim(), from: e.from, ts: e.ts, task: e.task });
-          requestAnimationFrame(() => input.current?.focus());
+          requestAnimationFrame(() => input.current?.focus({ preventScroll: true }));
           return;
         }
         if (e.type === "replace" && replaceNeedsConfirm(draftNow.current, e.text) && !confirm(t("chat-composer.replace_confirm"))) return;
@@ -183,7 +183,7 @@ export function Composer({
         requestAnimationFrame(() => {
           const el = input.current;
           if (!el) return;
-          el.focus();
+          el.focus({ preventScroll: true });
           el.setSelectionRange(next.length, next.length);
           setCaret(next.length);
         });
@@ -252,7 +252,7 @@ export function Composer({
     setDraft(out.text);
     setCaret(out.caret);
     requestAnimationFrame(() => {
-      input.current?.focus();
+      input.current?.focus({ preventScroll: true });
       input.current?.setSelectionRange(out.caret, out.caret);
     });
   };
@@ -267,7 +267,7 @@ export function Composer({
     setDismissed(false);
     setCaret(at + ins.length);
     requestAnimationFrame(() => {
-      input.current?.focus();
+      input.current?.focus({ preventScroll: true });
       input.current?.setSelectionRange(at + ins.length, at + ins.length);
     });
   };
@@ -371,14 +371,14 @@ export function Composer({
         if (!quoteNow.current) setQuote(q);
       } else if (q && !storedQuote(draftKey)) storeQuote(draftKey, q);
     }
-    input.current?.focus();
+    input.current?.focus({ preventScroll: true });
   };
 
   const pick = (c: Command) => {
     if (c.confirm && !confirm(c.confirm)) return;
     setDraft(c.text);
     setDismissed(true);
-    input.current?.focus();
+    input.current?.focus({ preventScroll: true });
   };
 
   return (
@@ -589,7 +589,7 @@ export function Composer({
             onClick={() => {
               setDraft("/");
               setDismissed(false);
-              input.current?.focus();
+              input.current?.focus({ preventScroll: true });
             }}
             className="touch-hit flex h-7 items-center justify-center rounded-[8px] px-1.5 font-mono text-[13px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
           >

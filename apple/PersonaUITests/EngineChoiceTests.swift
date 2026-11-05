@@ -105,6 +105,31 @@ final class EngineChoiceTests: XCTestCase {
         XCTAssertTrue(row.label.contains("Herdr App"), row.label)
         XCTAssertEqual(try current("server"), "herdr-core")
     }
+    /// 同时显示 botmux 会话 (#2575): on by default under the engine picker, saved at once when flipped.
+    @MainActor func testBotmuxSwitchUnderEngine() throws {
+        app = XCUIApplication()
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "server"]
+        app.launchPinned()
+        // A fresh install's notifications prompt covers the page until answered (ChatBackTests).
+        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons.matching(NSPredicate(format: "label IN %@", ["允许", "Allow"])).firstMatch
+        if allow.waitForExistence(timeout: 5) { allow.tap() }
+        let row = app.buttons["machine.engine"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        if !row.isHittable { app.swipeUp() }
+        row.tap()
+        let toggle = app.switches["engine.botmux"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        if !toggle.isHittable { app.swipeUp() }
+        XCTAssertEqual(toggle.value as? String, "1", "on by default")
+        try shot("botmux")
+        toggle.switches.firstMatch.tap()
+        let off = NSPredicate(format: "value == '0'")
+        expectation(for: off, evaluatedWith: toggle)
+        waitForExpectations(timeout: 5)
+        let data = try Data(contentsOf: URL(string: hub + "/api/v1/machines/server/botmux")!)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["on"] as? Bool, false)
+    }
+
     @MainActor func testSettingsTracksPushAndSavesOffline() async throws {
         app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "nas"]

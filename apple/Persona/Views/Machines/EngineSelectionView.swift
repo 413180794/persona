@@ -17,6 +17,7 @@ struct EngineSelectionView: View {
     var ref: MachineRef
     var pairing = false
     @State private var selection: EngineSelectionModel?
+    @State private var botmux: BotmuxSwitchModel?
     private var machineID: String { ref.id }
 
     var body: some View {
@@ -103,6 +104,21 @@ struct EngineSelectionView: View {
                     .accessibilityIdentifier("engine.save")
                 }
                 #endif
+                if !pairing, let botmux, let on = botmux.on {
+                    // Saved as soon as it is flipped, not with 保存: it is not part of the engine choice (#2575).
+                    Section {
+                        Toggle(isOn: Binding(get: { on }, set: { next in Task { await botmux.set(next) } })) {
+                            Text("同时显示 botmux 会话").font(Theme.Font.body).lineLimit(1)
+                        }
+                        .disabled(botmux.saving)
+                        .accessibilityIdentifier("engine.botmux")
+                        if let error = botmux.error {
+                            Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger)
+                        }
+                    } footer: {
+                        Text("这台电脑装了 botmux 时，botmux 里的会话和所选引擎的会话一起列出。关掉后不再列出，也不再运行 botmux。")
+                    }
+                }
             } else {
                 Section {
                     Text("暂时读不到这台机器")
@@ -123,6 +139,19 @@ struct EngineSelectionView: View {
         .task(id: ref) {
             guard let machine else { return }
             selection = EngineSelectionModel(machine: machine, pairing: pairing, deps: .init(api: { [ref] in app.api(ref.group) }, updated: { app.applyMachine($0) }))
+            guard !pairing else { return }
+            let api = { [ref] in app.api(ref.group) }
+            let model = BotmuxSwitchModel(deps: .init(
+                load: { [ref] in
+                    guard let api = api() else { throw APIError(status: 0, message: "还没连接 hub") }
+                    return try await api.botmux(machine: ref.id)
+                },
+                save: { [ref] on in
+                    guard let api = api() else { throw APIError(status: 0, message: "还没连接 hub") }
+                    return try await api.setBotmux(machine: ref.id, on: on)
+                }))
+            botmux = model
+            await model.load()
         }
         .onChange(of: machine) { _, updated in
             if let updated { selection?.synchronize(updated, pairing: pairing) }
