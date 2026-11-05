@@ -560,8 +560,11 @@ type Session struct {
 	ReadOnlyReason   string               `json:"read_only_reason,omitempty"`
 	Capabilities     *SessionCapabilities `json:"capabilities,omitempty"`
 	Attached         bool                 `json:"attached,omitempty"`
-	Title            string               `json:"title"`
-	Cwd              string               `json:"cwd"`
+	// CanFork: 分支到新聊天 works for it (a Claude Code conversation the node can copy, node/fork.go); older nodes
+	// never say so, and the clients hide it.
+	CanFork bool   `json:"can_fork,omitempty"`
+	Title   string `json:"title"`
+	Cwd     string `json:"cwd"`
 	// WorkspaceCwd is the node-verified physical directory for Cwd. Consumers
 	// matching workspace bindings prefer it and fall back to Cwd on older nodes.
 	WorkspaceCwd string `json:"workspace_cwd,omitempty"`

@@ -123,7 +123,7 @@ export function Answer({ item, streaming, mid, sid, fade }: { item?: Item; strea
     );
   }
   return (
-    <MessageActions text={text} ts={item?.ts}>
+    <MessageActions text={text} ts={item?.ts} itemId={item?.id}>
       <div className={ANSWER} data-answer>
         <Markdown text={text} mid={mid} cwd={cwd} fade={fade || undefined} />
       </div>

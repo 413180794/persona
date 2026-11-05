@@ -51,6 +51,7 @@
 - Claude Code 2.1.30x 的 `/fork`、转到后台的会话跑在 Claude 的 daemon 里（`sessions/<pid>.json` 的 `kind: "bg"`），没有窗格、herdr 没有 hook，
   一直列成离线；原窗格的 claude 带着 `parkedJobId` 显示 agents 视图，herdr 却仍按原会话 id 和后台会话的终端标题报「工作中」（2026-11-04）。
   认窗格之前看 `sessions/<pid>.json`：parked 的进程不算开着它的会话（`docs/claude-integration.md`「后台会话」）；但窗格正打开它转去的 job 时，窗格就是那个 job 的，别把 job 另列成只读而丢掉这个标签；停在 agents 列表时窗格也留在原会话的标签里（能开终端从列表里选，不收消息），别让它哪儿都不列。
+- 从某条回复分支（#2137）不能靠 CLI：`claude --resume <id> --fork-session --session-id <新 id>` 只能整段复制；隐藏参数 `--resume-session-at <uuid>` 在 `-p` 下会截断，交互模式下不截断（2026-11-05 实测，2.1.309）。node 自己把 transcript 复制到那一轮结束、只替换 `"sessionId":"<旧 id>"`，再 `claude --resume <新 id>`（`node/fork.go`）。
 - herdr 不认识的 Agent（TRAEX）：herdr 只报它内置识别的 Agent，`agent prompt` 对其他窗格报 not found。node 用 owner 文件（pid → 会话）
   加 pid 环境变量里的 `HERDR_PANE_ID`（pid → 窗格）自己认，状态看标题转圈字符和屏幕（`docs/codex.md` TRAEX 一节）。
 - Claude Code 的配置目录不一定是 `~/.claude`：启动器设了 `CLAUDE_CONFIG_DIR`（多套 profile）时 transcript、`sessions/<pid>.json`、`settings.json`

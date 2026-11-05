@@ -72,6 +72,11 @@ final class BackgroundNoticeTests: XCTestCase {
         let context = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Context Usage")).firstMatch
         XCTAssertTrue(context.waitForExistence(timeout: 3), "no local command output:\n\(app.debugDescription)")
         XCTAssertLessThan(context.frame.height, 100, "the local command output is \(context.frame.height) pt tall")
-        XCTAssertLessThan(context.frame.minX - app.frame.minX, 40, "the local command output is not left-aligned")
+        // It is one of the open work's steps, so it starts where they do: 28 pt in on a card, 62 pt on 液态玻璃's
+        // timeline (right of the rail). A centered block would be a narrow capsule in the middle instead.
+        XCTAssertLessThan(context.frame.minX - app.frame.minX, app.frame.width / 4,
+                          "the local command output does not start at the left (\(context.frame.minX) pt)")
+        XCTAssertGreaterThan(context.frame.width, app.frame.width / 2,
+                             "the local command output is \(context.frame.width) pt wide: a centered block, not a box")
     }
 }

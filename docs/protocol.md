@@ -524,6 +524,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`；未跟踪文件对 /dev/null 出 diff，最多 512 KB |
 | GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
 | GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
+| POST | `/api/v1/sessions/{mid}/{sid}/fork` | 分支到新聊天（#2137）：body `{at_item_id}`（某条回复的 item id，空则整段）→ `{session_id}`。node 把 Claude 的 transcript 复制到这条回复所在那一轮结束，换成新会话 id，原会话不动；新会话是离线会话，下一条消息照常 `--resume` 它。会话上 `can_fork: true` 才支持（Claude Code、有 transcript、不是外部来源 / runtime / Codex），否则回 `code: fork_unsupported`；从正在写的那一轮分支回 `fork_turn_running`。边界：只复制对话本身，`/rewind` 用的文件快照（`~/.claude/file-history/<id>/`）和子 Agent 的记录不复制，分支里 `/rewind` 不能回到分支前的改动 |
 | POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（herdr 里的任何 Agent，手动启动的也行；分屏的 tab 只关它自己的窗格） |
 | DELETE | `/api/v1/sessions/{mid}/{sid}` | 删除对话：只是从各端的会话列表里移除（hub 在 settings `sessions.deleted` 记下时间，`sessions` 推送和 `GET /api/v1/sessions` 都不再带它），电脑上的 transcript 不动；之后这个会话再被用到（`updated_at` 晚于删除时间，或又运行起来）会重新出现。启动失败的（`start_error`）也能删，立即消失。→ `{"ok":true}`；正在运行或还在启动 409，助手的对话 400（用归档），没有这个会话 404，只读设备 403 |
 | GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"main_tasks_quiet","conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main_tasks_quiet` 是「主对话派的任务只在主对话里通知」的生效值（没改过时是 `true`，#1731），`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`） |
@@ -1052,6 +1053,7 @@ hub → node 请求：
 | `session.item` | `{session_id, item_id}` → `Item`（全文，不带图片） |
 | `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容 |
 | `session.close` | `{session_id}` |
+| `session.fork` | `{session_id, at_item_id}` → `{session_id}`：见 HTTP 的 `/fork`；旧 node 报 unknown method |
 | `session.retire` | `{session_id}` → `{closed}`：做完的任务的 Agent 停着且以后能恢复时关掉它的窗格（同 `session.close`），没在运行时 `closed: false`；在工作、等用户、恢复不了的回 `code: not_retirable`；旧 node 报 unknown method（助手当作拒绝）。见 `docs/todos.md`「做完的任务关掉 Agent」 |
 | `file.upload.begin` | `{name, size}` → `{upload_id, chunk_bytes}`（超过上限报 `too_large`） |
 | `file.upload.chunk` | `{upload_id, offset, data}`（data 是 base64，offset 必须接着已收到的）→ `{received}`；出错整个上传作废 |

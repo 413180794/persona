@@ -61,6 +61,18 @@ interface Pending {
   at: number;
 }
 
+/** 分支到新聊天 (#2137): the node copies the conversation up to this reply's turn into a new one, which opens here. */
+async function forkAt(mid: string, sid: string, itemId: string, assistant: boolean) {
+  try {
+    const r = await api<{ session_id: string }>(`${sessionPath(mid, sid)}/fork`, { method: "POST", json: { at_item_id: itemId } });
+    await refresh();
+    navigate(assistant ? { name: "jarvis", sid: r.session_id } : { name: "session", mid, sid: r.session_id });
+    toast("已分支到新聊天", "ok");
+  } catch (e) {
+    toast(`分支失败：${errorText(e)}`, "error");
+  }
+}
+
 /** `readOnly`: a subagent's conversation (`<parent>@<agent>`) in the side panel (SubagentPanel): the transcript only,
  *  no header, no composer. */
 export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter }: {
@@ -116,7 +128,11 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   items.current = tr.items;
   const draftKey = `${mid}/${sid}`;
   const canCompose = sessionCan(session, "send");
-  const actions = useMemo<ChatActions>(() => ({ draftKey, canCompose, images: () => items.current.filter((i) => i.kind === "image") }), [draftKey, canCompose]);
+  const canFork = Boolean(session?.can_fork) && !readOnly;
+  const actions = useMemo<ChatActions>(
+    () => ({ draftKey, canCompose, images: () => items.current.filter((i) => i.kind === "image"), fork: canFork ? (itemId: string) => void forkAt(mid, sid, itemId, Boolean(assistant)) : undefined }),
+    [draftKey, canCompose, canFork, mid, sid, assistant],
+  );
   const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current) }), [session?.cwd, draftKey]);
 
   // a sent message stays as a "sending" bubble until the transcript has it (lib/echo.ts): an item the hub tied to it

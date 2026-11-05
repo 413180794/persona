@@ -132,6 +132,8 @@ export interface Session {
   read_only_reason?: string;
   capabilities?: SessionCapabilities;
   attached?: boolean;
+  /** 分支到新聊天 works for it (a Claude Code conversation, node/fork.go); older nodes never say so. */
+  can_fork?: boolean;
   /** What to call an agent the app does not know (a runtime's own name, "DSH"; docs/runtimes.md). */
   agent_label?: string;
   launcher?: string;

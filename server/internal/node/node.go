@@ -93,6 +93,7 @@ type Node struct {
 	typing    typingLocks     // one send at a time per session (sendsafe.go)
 	cx        codexCards      // Codex questions and approvals listed to the hub (codexask.go)
 	kept      map[string]bool // sessions always listed (node.configure keep_sessions)
+	forked    map[string]bool // sessions 分支到新聊天 made (fork.go): listed however short they are
 	starts    startLog        // sessions starting in the background (starting.go)
 	ups       uploads         // files arriving from the phone (upload.go)
 	sysOnce   sync.Once       // system: read once (metrics.go)
@@ -398,6 +399,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		PermissionMode string          `json:"permission_mode"`
 		Effort         string          `json:"effort"`
 		ResumeOnly     bool            `json:"resume_only"`
+		AtItemID       string          `json:"at_item_id"` // session.fork: the reply to branch off at
 		Refresh        bool            `json:"refresh"`    // launchers.models: ask again, not the kept list
 		Configured     bool            `json:"configured"` // launchers.models: hub.json names this launcher
 		Raw            json.RawMessage `json:"-"`
@@ -606,6 +608,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "", p.AgentType, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 		return map[string]any{"session": s}, err
+	case "session.fork": // 分支到新聊天 (fork.go)
+		id, err := n.fork(ctx, p.SessionID, p.AtItemID)
+		return map[string]any{"session_id": id}, err
 	case "assistant.send":
 		if p.ResumeOnly && !n.assistantResumable(p.SessionID) {
 			return nil, fmt.Errorf("conversation %s is gone", p.SessionID)

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -724,6 +725,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			continue
 		}
 		s.WorkspaceCwd = n.sessionWorkspaceCwd(s.Cwd)
+		s.CanFork = n.forkable(s) // 分支到新聊天 (fork.go)
 		keptSessions = append(keptSessions, s)
 	}
 	out = keptSessions
@@ -786,6 +788,9 @@ func (n *Node) scanOffline() []proto.Session {
 	}
 	var cands, assistant, kept []cand
 	keep := n.keptSessions()
+	n.mu.Lock()
+	forked := maps.Clone(n.forked) // 分支到新聊天's copies (fork.go)
+	n.mu.Unlock()
 	own := n.assistantProject()
 	for _, p := range files {
 		id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
@@ -800,7 +805,7 @@ func (n *Node) scanOffline() []proto.Session {
 			kept = append(kept, cand{p, st})
 			continue
 		}
-		if time.Since(st.ModTime()) > offlineWindow || st.Size() < 2048 {
+		if time.Since(st.ModTime()) > offlineWindow || (st.Size() < 2048 && !forked[id]) {
 			continue
 		}
 		if isAssistantProject(filepath.Base(filepath.Dir(p)), own) {
@@ -836,7 +841,7 @@ func (n *Node) scanOffline() []proto.Session {
 		// one only had its tail read, and a tail of tool calls under one huge line says nothing; the main conversation is
 		// listed whatever its tail holds. Dropping it left the app and the web with no session for 主对话, and its composer
 		// disabled (#1163: its last turn stopped mid tool call, under a 377 KB line).
-		if m.lastText == "" && m.lastTextAt.IsZero() && m.title == "" && !keep[id] && c.st.Size() <= quickTail {
+		if m.lastText == "" && m.lastTextAt.IsZero() && m.title == "" && !keep[id] && !forked[id] && c.st.Size() <= quickTail {
 			continue
 		}
 		n.setGuessedPath(id, c.path)

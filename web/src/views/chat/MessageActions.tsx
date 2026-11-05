@@ -1,7 +1,8 @@
 // What you can do with a message (iOS MessageMenu.swift: 复制 / 选择 / 引用 / 编辑): with a mouse, a small bar under it
 // on hover and the same items on right-click; on a touch screen, a long press opens them (and 选择 shows the text to
 // select, since the press no longer selects). 引用 puts it as a quote in front of the draft, 编辑 (your own messages)
-// puts it back in the composer to change and send again. Sharing as a card is the phone's.
+// puts it back in the composer to change and send again. Sharing as a card is the phone's. A reply's bar ends in a ⋯
+// whose menu has 分支到新聊天 (#2137: a new conversation with what was said up to this reply) when the session can.
 import { useEffect, useRef, useState } from "react";
 import { clock } from "../../lib/format";
 import { sendDraft } from "../../lib/drafts";
@@ -19,7 +20,7 @@ function pointAnchor(x: number, y: number): HTMLElement {
 }
 
 /** The actions of one message; empty when there is nothing to act on. */
-interface Action {
+export interface Action {
   key: string;
   label: string;
   icon: IconName;
@@ -38,6 +39,13 @@ function useActions(text: string, isUser: boolean, select: () => void): Action[]
   return out;
 }
 
+/** What the reply's ⋯ holds (also at the end of its right-click menu): 分支到新聊天 when the session can fork and the
+ *  reply is a transcript line of its own (`<uuid>#<n>`; lines without a uuid are `line<seq>`, which the node cannot find). */
+export function moreActions(itemId: string | undefined, fork: ((itemId: string) => void) | undefined): Action[] {
+  if (!itemId || !fork || itemId.startsWith("line") || !itemId.includes("#")) return [];
+  return [{ key: "fork", label: "分支到新聊天", icon: "fork", onSelect: () => fork(itemId) }];
+}
+
 /** Wraps a message: right-click / long press opens its menu. The hover bar goes under it (with the time), or beside it
  *  (`side`, your own bubbles: they had no row under them, so the layout does not move; the time stays the tooltip). */
 export function MessageActions({
@@ -45,6 +53,7 @@ export function MessageActions({
   isUser,
   ts,
   side,
+  itemId,
   children,
   className,
 }: {
@@ -52,11 +61,15 @@ export function MessageActions({
   isUser?: boolean;
   ts?: string;
   side?: boolean;
+  /** The reply's transcript item: where 分支到新聊天 branches off. */
+  itemId?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   const [selecting, setSelecting] = useState(false);
   const actions = useActions(text, Boolean(isUser), () => setSelecting(true));
+  const more = moreActions(itemId, useChatActions()?.fork);
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
   const press = useRef<{ timer: number; x: number; y: number } | null>(null);
@@ -82,7 +95,7 @@ export function MessageActions({
 
   if (!actions.length) return <div className={className}>{children}</div>;
 
-  const items: MenuItem[] = actions.map((a) => ({ key: a.key, label: a.label, icon: a.icon, onSelect: a.onSelect }));
+  const items: MenuItem[] = [...actions, ...more].map((a, i) => ({ key: a.key, label: a.label, icon: a.icon, onSelect: a.onSelect, divider: i === actions.length && i > 0 }));
 
   return (
     <div className={cx("group/msg", side && "relative", className)}>
@@ -132,6 +145,7 @@ export function MessageActions({
       <div
         className={cx(
           "hidden h-6 items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/msg:opacity-100 focus-within:opacity-100 [@media(hover:hover)]:flex",
+          moreAnchor && "opacity-100", // the ⋯ menu is open: its bar stays while the pointer is in the menu
           side ? "absolute right-full bottom-0.5 mr-1.5" : "mt-1.5",
         )}
       >
@@ -149,9 +163,23 @@ export function MessageActions({
               <Icon name={a.icon} size={14} />
             </button>
           ))}
+        {more.length > 0 && (
+          <button
+            type="button"
+            aria-label="更多"
+            title="更多"
+            aria-haspopup="menu"
+            aria-expanded={Boolean(moreAnchor)}
+            onClick={(e) => setMoreAnchor(moreAnchor ? null : e.currentTarget)}
+            className={cx("flex size-6 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2", moreAnchor && "bg-hover-2 text-ink-2")}
+          >
+            <Icon name="more" size={14} />
+          </button>
+        )}
         {!side && ts && <span className="ml-1 text-[11px] text-ink-3">{clock(ts)}</span>}
       </div>
       {anchor && <Menu anchor={anchor} onClose={close} items={items} width={168} />}
+      {moreAnchor && <Menu anchor={moreAnchor} onClose={() => setMoreAnchor(null)} items={more.map((a) => ({ key: a.key, label: a.label, icon: a.icon, onSelect: a.onSelect }))} side="top" width={168} />}
       <Dialog
         open={selecting}
         onClose={() => setSelecting(false)}

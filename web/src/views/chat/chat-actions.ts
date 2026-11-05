@@ -9,6 +9,8 @@ export interface ChatActions {
   canCompose: boolean;
   /** Every image of the loaded conversation, oldest first. A function: read when the viewer opens, not on every push. */
   images: () => Item[];
+  /** 分支到新聊天 from a reply (its item id): set only when the session can be forked. */
+  fork?: (itemId: string) => void;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);
