@@ -411,6 +411,41 @@ func (d *DB) RenameTodoSpace(ctx context.Context, machineID, oldSpace, newSpace 
 	return voided, nil
 }
 
+// lockTodoAgentMembership serializes one session's membership, then locks every affected parent in ID order.
+func lockTodoAgentMembership(ctx context.Context, tx pgx.Tx, todoID, machineID, sessionID string) (*time.Time, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended(
+		jsonb_build_array('todo-agent', $1::text, $2::text)::text, 0))`, machineID, sessionID); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id, done_at FROM todos
+		WHERE id = $1 OR id IN (SELECT todo_id FROM todo_agents
+			WHERE machine_id = $2 AND session_id = $3 AND released_at IS NULL)
+		ORDER BY id FOR UPDATE`, todoID, machineID, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	found := false
+	var targetDoneAt *time.Time
+	for rows.Next() {
+		var id string
+		var doneAt *time.Time
+		if err := rows.Scan(&id, &doneAt); err != nil {
+			return nil, err
+		}
+		if id == todoID {
+			found, targetDoneAt = true, doneAt
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, ErrTodoNotFound
+	}
+	return targetDoneAt, nil
+}
+
 // AutoLinkTodoAgent links an agent automatically if not already present.
 // Unlike LinkTodoAgentWithSource, it uses INSERT ... ON CONFLICT DO NOTHING so that
 // any existing row (such as a dismissed link from an immediate unlink) is NOT overwritten.
@@ -424,12 +459,9 @@ func (d *DB) AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID
 
 	var inserted bool
 	var releasedTodoIDs []string
+	alreadyLinked := errors.New("todo agent link already exists")
 	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		var targetDoneAt *time.Time
-		err := tx.QueryRow(ctx, `SELECT done_at FROM todos WHERE id = $1 FOR UPDATE`, todoID).Scan(&targetDoneAt)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrTodoNotFound
-		}
+		targetDoneAt, err := lockTodoAgentMembership(ctx, tx, todoID, machineID, sessionID)
 		if err != nil {
 			return err
 		}
@@ -437,19 +469,15 @@ func (d *DB) AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID
 			return ErrTodoCompleted
 		}
 
-		// Try insert with DO NOTHING so we never overwrite an existing/dismissed row.
-		tag, err := tx.Exec(ctx, `INSERT INTO todo_agents (todo_id, machine_id, session_id, linked_at, released_at, title, cwd, agent, start_error, source, via, dismissed_at)
-			VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, NULL)
-			ON CONFLICT (todo_id, machine_id, session_id) DO NOTHING`,
-			todoID, machineID, sessionID, linkedAt, title, cwd, agent, startError, source, via)
-		if err != nil {
+		// An existing or dismissed target must not release another active membership.
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM todo_agents
+			WHERE todo_id = $1 AND machine_id = $2 AND session_id = $3)`, todoID, machineID, sessionID).Scan(&exists); err != nil {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
-			// Row already exists (e.g. dismissed by immediate user unlink); do not change anything.
+		if exists {
 			return nil
 		}
-		inserted = true
 
 		// Find other active links for this agent and release them.
 		rows, err := tx.Query(ctx, `SELECT todo_id FROM todo_agents WHERE machine_id = $1 AND session_id = $2 AND released_at IS NULL AND todo_id != $3`,
@@ -480,9 +508,24 @@ func (d *DB) AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID
 			}
 		}
 
+		// Release the old active row before inserting: the partial unique index is immediate.
+		tag, err := tx.Exec(ctx, `INSERT INTO todo_agents (todo_id, machine_id, session_id, linked_at, released_at, title, cwd, agent, start_error, source, via, dismissed_at)
+			VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, NULL)
+			ON CONFLICT (todo_id, machine_id, session_id) DO NOTHING`,
+			todoID, machineID, sessionID, linkedAt, title, cwd, agent, startError, source, via)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return alreadyLinked // Roll back any releases if an unexpected target appeared.
+		}
+		inserted = true
 		_, err = tx.Exec(ctx, `UPDATE todos SET updated_at = $2 WHERE id = $1`, todoID, linkedAt)
 		return err
 	})
+	if errors.Is(err, alreadyLinked) {
+		return false, nil, nil
+	}
 	if err != nil {
 		return false, nil, err
 	}
@@ -504,11 +547,7 @@ func (d *DB) LinkTodoAgentWithSource(ctx context.Context, todoID, machineID, ses
 
 	var releasedTodoIDs []string
 	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		var targetDoneAt *time.Time
-		err := tx.QueryRow(ctx, `SELECT done_at FROM todos WHERE id = $1 FOR UPDATE`, todoID).Scan(&targetDoneAt)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrTodoNotFound
-		}
+		targetDoneAt, err := lockTodoAgentMembership(ctx, tx, todoID, machineID, sessionID)
 		if err != nil {
 			return err
 		}
@@ -581,17 +620,12 @@ func (d *DB) UnlinkTodoAgent(ctx context.Context, todoID, machineID, sessionID s
 	defer conn.Release()
 
 	return pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		var exists bool
-		err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM todos WHERE id = $1)`, todoID).Scan(&exists)
-		if err != nil {
+		if _, err := lockTodoAgentMembership(ctx, tx, todoID, machineID, sessionID); err != nil {
 			return err
-		}
-		if !exists {
-			return ErrTodoNotFound
 		}
 
 		now := time.Now().UTC()
-		_, err = tx.Exec(ctx, `INSERT INTO todo_agents (todo_id, machine_id, session_id, linked_at, released_at, dismissed_at)
+		_, err := tx.Exec(ctx, `INSERT INTO todo_agents (todo_id, machine_id, session_id, linked_at, released_at, dismissed_at)
 			VALUES ($1, $2, $3, $4, $4, $4)
 			ON CONFLICT (todo_id, machine_id, session_id) DO UPDATE SET
 				released_at = $4,
