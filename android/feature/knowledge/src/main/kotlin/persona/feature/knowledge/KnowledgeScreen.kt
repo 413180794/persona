@@ -1,5 +1,6 @@
 package persona.feature.knowledge
 
+import persona.core.domain.sort.workLine
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -366,7 +367,7 @@ private fun LazyListScope.agents(agents: List<Session>, navigator: Navigator) {
     itemsIndexed(agents, key = { _, session -> "agent/${session.key.path}" }, contentType = { _, _ -> "agent" }) { index, session ->
         val status = session.agentState.status()
         AgentRow(session.displayTitle, status, onClick = { navigator.navigate(ChatRoute(session.machineId, session.sessionId, ConversationKind.Agent)) },
-            position = GroupPosition.of(index, agents.size), preview = session.lastText, statusText = status.label,
+            position = GroupPosition.of(index, agents.size), preview = session.workLine(java.time.Instant.now()) ?: session.lastText, statusText = status.label,
             agent = session.agentLabel.takeIf { session.agent in setOf("codex", "traex") },
             facts = listOf(RowFact(listOf(session.machineId, session.folderName).filter { it.isNotBlank() }.joinToString(" / "))))
     }

@@ -390,7 +390,8 @@ internal fun SlotRow(
         title = session.displayTitle, status = row.state.designStatus, depth = depth, position = position,
         onClick = onOpen, onLongClick = { menu = true }, compact = compact, muted = muted,
         selected = isSessionSelected(LocalDetailKey.current, session.key),
-        preview = session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(row.updatedAt, now),
+        // Where its work stands once the hub triaged its turn (docs/agent-work.md), else its last words.
+        preview = session.workLine(now) ?: session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(row.updatedAt, now),
         // Codex, TRAEX or what the hub calls a runtime's agent ("DSH"); a session with a source names it in its facts instead.
         agent = session.agentLabel.takeIf { !session.isClaude && source == null },
         statusText = row.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label,

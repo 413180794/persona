@@ -23,6 +23,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Channels -> "channels"
     SettingsPage.HubUpdate -> "hub-update"
     SettingsPage.Translation -> "translate"
+    SettingsPage.Triage -> "triage"
 }
 
 /** The root and unknown page names have no detail destination. */

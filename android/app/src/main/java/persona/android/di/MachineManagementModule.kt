@@ -11,6 +11,7 @@ import persona.core.contracts.api.*
 import persona.core.hub.HttpConnectorsManagement
 import persona.core.hub.HttpHubUpdates
 import persona.core.hub.HttpMachineManagement
+import persona.core.hub.HttpAgentTriage
 import persona.core.hub.HttpModelConfiguration
 import persona.core.hub.HttpExtensionManagement
 import persona.core.hub.HttpProviderSetup
@@ -50,6 +51,12 @@ object MachineManagementModule {
     })
 
     // A hub-level page: the selected group's hub, whose own plain ids it reads and sends back (docs/android.md「多 hub」).
+    // Bound to the pairing at each call, like 模型配置: switching hubs reads the new hub's switches.
+    @Provides @Singleton fun triage(runtime: ConnectionRuntime): AgentTriage = object : AgentTriage {
+        override suspend fun switches() = HttpAgentTriage(runtime.connection()).switches()
+        override suspend fun put(value: TriageSwitches) = HttpAgentTriage(runtime.connection()).put(value)
+    }
+
     @Provides @Singleton fun models(runtime: ConnectionRuntime): ModelConfiguration = object : ModelConfiguration {
         private fun api() = HttpModelConfiguration(runtime.connection())
         override suspend fun catalog() = api().catalog()

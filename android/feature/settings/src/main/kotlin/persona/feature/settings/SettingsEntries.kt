@@ -63,6 +63,8 @@ data class SettingsServices(
     val hubUpdates: HubUpdates? = null,
     /** 设置 › 翻译, kept on this phone; null in 体验模式. */
     val translation: TranslationSettings? = null,
+    /** 设置 › 会话分诊 on the paired hub (docs/agent-work.md「开关」); null in 体验模式. */
+    val triage: AgentTriage? = null,
 )
 
 fun EntryProviderScope<NavKey>.settingsEntries(navigator: Navigator, services: SettingsServices? = null) {

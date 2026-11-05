@@ -935,6 +935,13 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 ![设置 › hub 版本：已是最新和更新记录（Board，深色）](screenshots/android-hub-update-dark.png)
 
+## 会话在等什么（设置 › 会话分诊，#1837）
+
+hub 分诊停下的会话（[agent-work.md](agent-work.md)）以后，`Session.work` 带一行：Agents 列表和知识库「在做这个项目的 Agent」的行，
+停着时用它代替最后一句话（做完的「✓ 结论」，在等的「在等什么（N 分钟后叫醒 / 马上重试）」，`Session.workLine`）；
+hub 会替它等的（`WorkState.hubWaits`）排进「待唤醒」。开关在「设置 › AI › 会话分诊」（`TriageSettingsPage`，`GET / PUT /api/v1/agents/triage`，默认全关），
+「分诊模型」一行跳到模型配置的 `agent.triage`。调试直达：`--es debug.openPage triage`。
+
 ## 翻译（设置 › 翻译，#1744）
 
 和 iOS（`docs/ios.md`「翻译」）、网页（`docs/web.md`）同一套：开了「自动翻译」以后，不是目标语言（默认简体中文）的内容由 hub 的翻译模型（模型配置的 `translate` 用途）翻译。范围是邮件（默认开）和设置里选中的飞书会话（默认一个都不翻，只翻别人发的）。

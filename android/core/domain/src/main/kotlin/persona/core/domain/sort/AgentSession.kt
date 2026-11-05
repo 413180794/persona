@@ -20,7 +20,7 @@ data class AgentSession(
     val isLive: Boolean get() = state != AgentState.Offline
     val isQuiet: Boolean get() = state == AgentState.Idle || state == AgentState.Unknown
     val isWaiting: Boolean get() = isQuiet &&
-        (session.loop != null || !session.background.isNullOrEmpty() || hasRunningSubagent)
+        (session.loop != null || !session.background.isNullOrEmpty() || hasRunningSubagent || session.work?.hubWaits == true)
     val updatedAt: Instant? get() = parseTime(session.updatedAt)
     val sortDate: Instant? get() = if (state == AgentState.Working) parseTime(stateSince) ?: updatedAt else updatedAt
     val spacePreferenceKey: String? get() = session.spaceName?.let { "${session.machineId}/$it" }

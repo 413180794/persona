@@ -129,6 +129,33 @@ data class SessionCapabilities(
     val attach: Boolean = false,
 )
 
+/**
+ * A session's work state (docs/agent-work.md): working, blocked on a named precondition ([on]: user, agent, external,
+ * transient), or done; [line] is what the lists show, [wakeAt] when the hub acts next on its own.
+ */
+@KeepGeneratedSerializer
+@Serializable(with = WorkStateSerializer::class)
+data class WorkState(
+    val phase: String = "",
+    val on: String? = null,
+    val line: String? = null,
+    val wait: String? = null,
+    val then: String? = null,
+    @WireTime @SerialName("wake_at") val wakeAt: String? = null,
+    val attempts: Int? = null,
+    val max: Int? = null,
+    @SerialName("interaction_id") val interactionId: String? = null,
+    val agent: WorkAgent? = null,
+)
+
+@KeepGeneratedSerializer
+@Serializable(with = WorkAgentSerializer::class)
+data class WorkAgent(
+    @SerialName("machine_id") val machineId: String = "",
+    @SerialName("session_id") val sessionId: String = "",
+    val label: String? = null,
+)
+
 @KeepGeneratedSerializer
 @Serializable(with = SessionTodoSerializer::class)
 data class SessionTodo(
@@ -195,6 +222,8 @@ data class Session(
     @WireTime @SerialName("activity_at") val activityAt: String? = null,
     /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
     @SerialName("turn_error") val turnError: String? = null,
+    /** Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. */
+    val work: WorkState? = null,
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,
     @SerialName("rev") val rev: Long? = null,
     @SerialName("suggestion") val suggestion: String? = null,
@@ -449,6 +478,8 @@ object BackgroundTaskSerializer : WireSerializer<BackgroundTask>(BackgroundTask.
 object SessionCapabilitiesSerializer : WireSerializer<SessionCapabilities>(SessionCapabilities.generatedSerializer())
 object SessionTodoSerializer : WireSerializer<SessionTodo>(SessionTodo.generatedSerializer())
 object SessionSerializer : WireSerializer<Session>(Session.generatedSerializer())
+object WorkStateSerializer : WireSerializer<WorkState>(WorkState.generatedSerializer())
+object WorkAgentSerializer : WireSerializer<WorkAgent>(WorkAgent.generatedSerializer())
 object ImagePayloadSerializer : WireSerializer<ImagePayload>(ImagePayload.generatedSerializer())
 object ItemSerializer : WireSerializer<Item>(Item.generatedSerializer())
 object QuestionOptionSerializer : WireSerializer<QuestionOption>(QuestionOption.generatedSerializer())
