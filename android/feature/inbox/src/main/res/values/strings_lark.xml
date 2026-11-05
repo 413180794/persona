@@ -193,7 +193,7 @@
     <string name="inbox_lark_doc_comments_reopen">Reopen</string>
     <string name="inbox_lark_doc_comments_none_open">No open comments</string>
     <string name="inbox_lark_doc_comments_none_resolved">No resolved comments</string>
-    <string name="inbox_lark_doc_comments_none_open_write">Write one below.</string>
+    <string name="inbox_lark_doc_comments_none_open_write">Write one below, or long-press the text.</string>
     <string name="inbox_lark_doc_comments_none_open_read">Comments made on this document in Feishu show up here.</string>
     <string name="inbox_lark_doc_comments_none_resolved_text">Resolved comments are kept here.</string>
     <string name="inbox_lark_doc_comments_placeholder_document">Comment on the document</string>
@@ -214,4 +214,6 @@
         <item quantity="one">%d image</item>
         <item quantity="other">%d images</item>
     </plurals>
+    <string name="inbox_lark_doc_comment_selection">Comment</string>
+    <string name="inbox_lark_doc_comment_passage">Comment on this passage</string>
 </resources>

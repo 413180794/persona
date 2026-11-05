@@ -185,7 +185,7 @@
     <string name="inbox_lark_doc_comments_reopen">再開</string>
     <string name="inbox_lark_doc_comments_none_open">未解決のコメントはありません</string>
     <string name="inbox_lark_doc_comments_none_resolved">解決済みのコメントはありません</string>
-    <string name="inbox_lark_doc_comments_none_open_write">下から書き込めます。</string>
+    <string name="inbox_lark_doc_comments_none_open_write">下から書き込むか、本文を長押ししてください。</string>
     <string name="inbox_lark_doc_comments_none_open_read">Feishu でこのドキュメントに付いたコメントがここに表示されます</string>
     <string name="inbox_lark_doc_comments_none_resolved_text">解決したコメントはここにまとめられます</string>
     <string name="inbox_lark_doc_comments_placeholder_document">ドキュメントにコメント</string>
@@ -205,4 +205,6 @@
     <plurals name="inbox_lark_doc_comments_images">
         <item quantity="other">%d 枚の画像</item>
     </plurals>
+    <string name="inbox_lark_doc_comment_selection">コメント</string>
+    <string name="inbox_lark_doc_comment_passage">この段落にコメント</string>
 </resources>

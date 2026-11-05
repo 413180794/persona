@@ -47,6 +47,7 @@ import { AnsweredCard, InteractionCard } from "../chat/Interactions";
 import { MessageActions } from "../chat/MessageActions";
 import { clock, sessionTitle, stateOf } from "../../lib/format";
 import { formatDate, t } from "../../i18n";
+import { interactionAsk } from "../../lib/inbox";
 import { Empty } from "./parts";
 import { PlanEditDialog } from "./PlanEdit";
 
@@ -147,6 +148,22 @@ function since(iso?: string): string | undefined {
 function progressOf(lead: Session | undefined) {
   const now = taskNow(lead, !!lead && stateOf(lead) === "working");
   return now && { text: now.kind === "words" ? plainMarkdown(now.text) : now.text, for: now.kind === "step" ? since(now.since) : undefined };
+}
+
+/** The card a task's agents wait on: its lead agent's first, else any of its other active agents'. */
+export function taskInteraction(todo: Todo, interactions: Interaction[], lead?: Session): Interaction | undefined {
+  const mine = (ix: Interaction) => (todo.agents ?? []).some((a) => !a.released_at && a.machine_id === ix.machine_id && a.session_id === ix.session_id);
+  return (lead && interactions.find((ix) => ix.machine_id === lead.machine_id && ix.session_id === lead.session_id)) ?? interactions.find(mine);
+}
+
+/** What a waiting task needs, in a line (#3301): 「在问你：用哪个框架？」「需要授权：swift test」「计划待批准」, the words
+ *  the 待办 page's agent rows use; undefined without a card. */
+export function taskAsk(ix: Interaction | undefined): string | undefined {
+  if (!ix) return undefined;
+  const kicker =
+    ix.kind === "plan" ? t("todos.kicker_plan") : ix.kind === "permission" ? t("todos.kicker_permission") : ix.kind === "screen" ? t("todos.kicker_screen") : ix.kind === "elicitation" ? t("todos.kicker_elicitation") : t("todos.kicker_question");
+  const ask = plainMarkdown(interactionAsk(ix).trim()).replace(/\s+/g, " ").trim();
+  return ask ? `${t("todos.kicker_line", { kicker })}${ask}` : kicker;
 }
 
 /** Opens a task's detail beside the conversation: its agent's own chat (the side panel). */
@@ -274,6 +291,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const status = todo ? statusOf(todo, lookup, plans) : undefined;
   const menu = useTaskMenu(todo, status);
   const retrying = useRetrying(todoId);
+  const interactions = useStore((s) => s.interactions);
   useStore((s) => s.machines); // place() reads machine names from the store: draw again when they load or change
   useNow(30_000, status === "working"); // how long its step has gone on
   if (!todo || !status) return null;
@@ -284,7 +302,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const progress = progressOf(lead);
   const now =
     status === "needs_you"
-      ? t("assistant-tasks.needs_answer")
+      ? (taskAsk(taskInteraction(todo, interactions, lead)) ?? t("assistant-tasks.needs_answer"))
       : cut
         ? t("assistant-tasks.interrupted_reason", { reason: cut.reason })
         : status === "failed"
@@ -960,6 +978,7 @@ export function TaskBoard({ open, conversation, onClose }: { open: boolean; conv
   const main = useStore((s) => s.assistant?.main);
   const lookup = useTaskLookup();
   const plans = useFeed((s) => s.plans);
+  const interactions = useStore((s) => s.interactions);
   const [menuFor, setMenuFor] = useState<{ todo: Todo; el: HTMLElement } | null>(null);
   const sections = useMemo(() => {
     if (!open) return [];
@@ -970,7 +989,8 @@ export function TaskBoard({ open, conversation, onClose }: { open: boolean; conv
     const lead = mostUrgentAgent(todo, lookup)?.session;
     const where = place(todo, lead);
     const failure = status === "failed" ? startFailure(todo, plans) : undefined;
-    const now = failure ?? progressOf(lead)?.text;
+    const ask = status === "needs_you" ? taskAsk(taskInteraction(todo, interactions, lead)) : undefined;
+    const now = failure ?? ask ?? progressOf(lead)?.text;
     return [where, now].filter(Boolean).join(" · ");
   };
   return (

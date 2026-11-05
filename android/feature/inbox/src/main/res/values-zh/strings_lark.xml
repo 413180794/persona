@@ -185,7 +185,7 @@
     <string name="inbox_lark_doc_comments_reopen">重新打开</string>
     <string name="inbox_lark_doc_comments_none_open">没有未解决的评论</string>
     <string name="inbox_lark_doc_comments_none_resolved">没有已解决的评论</string>
-    <string name="inbox_lark_doc_comments_none_open_write">在下面写一条。</string>
+    <string name="inbox_lark_doc_comments_none_open_write">在下面写一条，或者长按正文评论。</string>
     <string name="inbox_lark_doc_comments_none_open_read">在飞书里对文档发表的评论会出现在这里</string>
     <string name="inbox_lark_doc_comments_none_resolved_text">解决后的评论会收在这里</string>
     <string name="inbox_lark_doc_comments_placeholder_document">评论全文</string>
@@ -205,4 +205,6 @@
     <plurals name="inbox_lark_doc_comments_images">
         <item quantity="other">%d 张图片</item>
     </plurals>
+    <string name="inbox_lark_doc_comment_selection">评论</string>
+    <string name="inbox_lark_doc_comment_passage">评论这段</string>
 </resources>

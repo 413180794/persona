@@ -22,7 +22,10 @@ func TestCleanTodoTitle(t *testing.T) {
 		"v2.0 发布说明":              "v2.0 发布说明",
 		"11-05 的反馈：周报":           "周报",
 		"ultrathink":             "",
-		"把收件箱的分拣改成按会话合并，再给每件事写一句总结，最后跑一遍回放": "把收件箱的分拣改成按会话合并，再给每件事",
+		"把收件箱的分拣改成按会话合并，再给每件事写一句总结，最后跑一遍回放":                     "把收件箱的分拣改成按会话合并，再给每件事",
+		"ultrathink ultracode 主人 11-05 19:47 反馈，直接做：把待办标题改成短标题": "把待办标题改成短标题",
+		"一二三四五六七八九十一二三四五👨‍👩‍👧‍👦 家庭相册":                           "一二三四五六七八九十一二三四五",
+		"🚀 把首页加载速度提上来": "🚀 把首页加载速度提上来",
 	} {
 		if got := cleanTodoTitle(in, maxTodoTitle); got != want {
 			t.Errorf("cleanTodoTitle(%q) = %q, want %q", in, got, want)
@@ -123,6 +126,10 @@ func TestTodosRetitle(t *testing.T) {
 	good, _ := e.s.createTodo(ctx, "已读同步到飞书", prompt, "conv1", "")
 	byHand, _ := e.s.createTodo(ctx, old, prompt, "", "")
 	renamed, _ := e.s.createTodo(ctx, "这是我改过的一个特别特别特别长的待办标题哦", prompt, "conv1", "")
+	// Typed by the user, only looking like a prompt: a bracket, a date, or the prompt's opening but short.
+	looks, _ := e.s.createTodo(ctx, "【紧急】修登录", prompt, "conv1", "")
+	dated, _ := e.s.createTodo(ctx, "11/05 反馈：修登录", prompt, "conv1", "")
+	short, _ := e.s.createTodo(ctx, "ultrathink ultracode", prompt, "conv1", "")
 	e.f.mu.Lock()
 	e.f.todoTitleReply = "收件箱已读同步飞书"
 	e.f.mu.Unlock()
@@ -146,8 +153,9 @@ func TestTodosRetitle(t *testing.T) {
 	if res.DryRun || len(res.Todos) != 1 || e.get(fromPrompt.ID).Title != "收件箱已读同步飞书" {
 		t.Fatalf("retitle = %+v, title %q", res, e.get(fromPrompt.ID).Title)
 	}
-	for _, id := range []string{good.ID, byHand.ID, renamed.ID} {
-		if before, after := map[string]string{good.ID: "已读同步到飞书", byHand.ID: old, renamed.ID: "这是我改过的一个特别特别特别长的待办标题哦"}[id], e.get(id).Title; before != after {
+	for _, id := range []string{good.ID, byHand.ID, renamed.ID, looks.ID, dated.ID, short.ID} {
+		if before, after := map[string]string{good.ID: "已读同步到飞书", byHand.ID: old, renamed.ID: "这是我改过的一个特别特别特别长的待办标题哦",
+			looks.ID: "【紧急】修登录", dated.ID: "11/05 反馈：修登录", short.ID: "ultrathink ultracode"}[id], e.get(id).Title; before != after {
 			t.Errorf("%s renamed to %q", id, after)
 		}
 	}

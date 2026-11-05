@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/ai"
@@ -44,6 +45,8 @@ var (
 	todoTitleBracket = regexp.MustCompile(`^[^\s（(【\[]{0,8}\s*(?:（[^）]*）|\([^)]*\)|【[^】]*】|\[[^\]]*\])[\s,，、:：;；]*`)
 	// Permission the agent is given, which says nothing about the work.
 	todoTitleGrant = regexp.MustCompile(`^(?:已(?:经)?(?:获)?授权|授权)(?:过)?(?:，|,)?(?:直接|可以|你)?(?:开工|动手|开始|执行|做)?[\s,，、:：;；!！。]*`)
+	// The bare go-ahead before a colon: 「直接做：」「就开工：」.
+	todoTitleGo = regexp.MustCompile(`^(?:直接|就|马上|立刻)(?:做|开工|动手|开始|执行|改)\s*[:：]\s*`)
 )
 
 // cleanTodoTitle is s (a task's prompt, or a title made from it) on one line without what it opens with for the
@@ -54,7 +57,7 @@ func cleanTodoTitle(s string, max int) string {
 	s = strings.Join(strings.Fields(titleNoise.ReplaceAllString(s, " ")), " ")
 	for {
 		before := s
-		for _, re := range []*regexp.Regexp{todoTitleKeyword, todoTitleStamp, todoTitleBracket, todoTitleGrant} {
+		for _, re := range []*regexp.Regexp{todoTitleKeyword, todoTitleStamp, todoTitleBracket, todoTitleGrant, todoTitleGo} {
 			if loc := re.FindStringIndex(s); loc != nil && loc[1] > 0 {
 				s = strings.TrimSpace(s[loc[1]:])
 			}
@@ -64,7 +67,22 @@ func cleanTodoTitle(s string, max int) string {
 		}
 	}
 	s = strings.Trim(s, "，。,.：:；;、 ")
-	return strings.Trim(cutRunes(s, max), "，。,.：:；;、 ")
+	return strings.Trim(cutTitle(s, max), "，。,.：:；;、 ")
+}
+
+// cutTitle is s cut to max characters, never inside a joined emoji (👨‍👩‍👧‍👦 is kept whole or dropped) or before a
+// combining mark.
+func cutTitle(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	n := max
+	for n > 0 && (r[n] == '\u200d' || r[n-1] == '\u200d' || r[n] == '\ufe0f' || unicode.Is(unicode.Mn, r[n]) ||
+		(r[n] >= 0x1f3fb && r[n] <= 0x1f3ff)) {
+		n--
+	}
+	return strings.TrimSpace(string(r[:n]))
 }
 
 // taskTitle is the title a todo for a task with this prompt starts with: given, the assistant's own (task_plan),
@@ -189,10 +207,16 @@ type TodoRetitle struct {
 	NewTitle string `json:"new_title"`
 }
 
+// retitleable: a todo's title is still the one a task gave it before #2775, its prompt's first line cut: longer
+// than max characters and how its notes (the prompt) start. A todo keeps no record of who titled it, so a title that only
+// looks like a prompt (【紧急】修登录, 11/05 反馈：修登录) is taken as the user's and left.
+func retitleable(title, notes string, max int) bool {
+	return utf8.RuneCountInString(strings.TrimSuffix(strings.TrimSpace(title), "…")) > max && openedFromPrompt(title, notes)
+}
+
 // todoRetitleRoute: POST /api/v1/todos/retitle (?dry_run=1 lists only) renames the todos tasks opened before #2775
-// with their prompt's first line: a todo from a conversation (origin set) whose title reads as a prompt
-// (promptLikeTitle) and is either how its notes start or opens with what cleanTodoTitle takes off. Any other title is
-// taken as the assistant's or the user's and left: a todo keeps no record of who titled it.
+// with their prompt's first line: a todo from a conversation (origin set) whose title is retitleable. Any other
+// title is taken as the assistant's or the user's and left.
 func (s *Service) todoRetitleRoute() {
 	s.handle("POST /api/v1/todos/retitle", func(w http.ResponseWriter, r *http.Request) {
 		if !fullRole(r) {
@@ -211,7 +235,7 @@ func (s *Service) todoRetitleRoute() {
 		var todo []Todo
 		s.todos.mu.RLock()
 		for _, t := range s.todos.todos {
-			if t.Origin != "" && promptLikeTitle(t.Title, max) && (openedFromPrompt(t.Title, t.Notes) || hasPromptOpening(t.Title)) {
+			if t.Origin != "" && retitleable(t.Title, t.Notes, max) {
 				todo = append(todo, copyTodoLocked(t))
 			}
 		}

@@ -7,6 +7,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -184,6 +185,12 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
     val unnamed = stringResource(R.string.inbox_lark_doc_comments_unnamed)
     val comments = remember(url, source?.scope) { source?.let { LarkDocCommentsModel(url, LarkDocCommentsTransport(it.transport), unnamed = unnamed) } }
     var commentsShown by remember(url, source?.scope) { mutableStateOf(false) }
+    // 评论这段 (#2964, iOS #1729): the comments open with the box on that passage (its text, the block it is in when known).
+    val commentOn: ((String, String?) -> Unit)? = if (comments == null || !lark.docComments) null else { quote, block ->
+        comments.target = LarkDocCommentTarget.Passage(quote, block)
+        commentsShown = true
+    }
+    var pressed by remember(url) { mutableStateOf<LarkDocumentBlock?>(null) }
     val connectionDetails = rememberConnectionDetails(connection, navigator?.let { nav -> { nav.navigate(ConnectionSettingsRoute) } })
     JPage(title = if (connection == ConnectionState.Online) document?.title?.ifBlank { null } ?: stringResource(R.string.inbox_lark_doc) else inboxTitle(connection), modifier = modifier,
         titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
@@ -226,7 +233,8 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
                     }
                     items(loaded.blocks) { block ->
                         when (block.kind) {
-                            "heading" -> Text(block.text, style = if (block.level <= 2) PersonaTheme.type.title else PersonaTheme.type.headline,
+                            "heading" -> Text(block.text, Modifier.commentable(block, commentOn != null && !loaded.copyAllowed) { pressed = block },
+                                style = if (block.level <= 2) PersonaTheme.type.title else PersonaTheme.type.headline,
                                 color = PersonaTheme.palette.ink)
                             "codeBlock" -> JCard(padding = Tokens.Space.m) {
                                 if (block.language.isNotBlank()) Text(block.language, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
@@ -236,7 +244,8 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
                                 style = PersonaTheme.type.body, color = PersonaTheme.palette.ink2)
                                 else LarkPartContent(requireNotNull(source).image(block.image, document = true), repository) { }
                             "divider" -> JDivider()
-                            else -> Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                            else -> Row(Modifier.commentable(block, commentOn != null && !loaded.copyAllowed) { pressed = block },
+                                horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                                 if (block.marker.isNotEmpty()) Text(block.marker, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink3)
                                 LarkLinkedText(block.text.ifBlank { if (block.kind == "unsupported") stringResource(R.string.inbox_lark_doc_block_unsupported) else "" },
                                     source, Modifier.weight(1f))
@@ -251,9 +260,18 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
             val hand = LocalInboxWebSelection.current
             val handLabel = stringResource(R.string.inbox_hand_to_persona)
             val title = loaded.title.ifBlank { stringResource(R.string.inbox_lark_doc) }
-            val selectionPicks = picks?.picks ?: hand?.let { listOf(LarkTextPick(handLabel) { text -> it(InboxWebSelection(title, url, text)) }) }.orEmpty()
+            val commentLabel = stringResource(R.string.inbox_lark_doc_comment_selection)
+            // Text the document lets be selected: 评论 in the selection menu comments on the words picked (the long
+            // press selects them; the plugin finds their block). Text it does not: a long press on a paragraph.
+            val selectionPicks = (picks?.picks ?: hand?.let { listOf(LarkTextPick(handLabel) { text -> it(InboxWebSelection(title, url, text)) }) }.orEmpty()) +
+                listOfNotNull(commentOn?.let { comment -> LarkTextPick(commentLabel) { text -> comment(text, null) } })
             LarkSelectable(loaded.copyAllowed, selectionPicks) { body() }
         }
+    }
+    pressed?.let { block ->
+        JActionSheet(listOf(JAction(stringResource(R.string.inbox_lark_doc_comment_passage), PhIcons.ChatCircle) {
+            commentOn?.invoke(block.text, block.id.ifBlank { null })
+        }), onDismiss = { pressed = null }, note = block.text.take(120))
     }
     if (commentsShown && comments != null) LarkDocCommentsSheet(comments, lark.docComments, onDismiss = { commentsShown = false })
     if (outlineShown) JSheet(onDismiss = { outlineShown = false }, title = stringResource(R.string.inbox_lark_doc_outline), scrollable = false) {
@@ -265,6 +283,12 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
         }
     }
 }
+
+/** A paragraph or heading a long press comments on ([enabled]: comments can be written and the text is not selectable). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun Modifier.commentable(block: LarkDocumentBlock, enabled: Boolean, onPress: () -> Unit): Modifier =
+    if (!enabled || block.text.isBlank()) this
+    else then(Modifier.combinedClickable(onClick = {}, onLongClick = onPress).testTag("docComments.passage.${block.id.ifBlank { block.text.take(12) }}"))
 
 /** Who owns it, who edited it last and when; under it how often it was read (iOS FeishuDocReader's title block). */
 @Composable

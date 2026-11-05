@@ -38,9 +38,10 @@ data class LarkDocument(
     val title: String, val blocks: List<LarkDocumentBlock>, val partial: Boolean, val copyAllowed: Boolean,
 )
 
+/** [id]: the block's id in the document (`attrs.id`), which a comment on it names; empty when the tree has none. */
 data class LarkDocumentBlock(
     val kind: String, val text: String = "", val level: Int = 0, val marker: String = "",
-    val image: String = "", val language: String = "",
+    val image: String = "", val language: String = "", val id: String = "",
 )
 
 fun parseLarkDocument(data: JsonObject): LarkDocument {
@@ -61,7 +62,7 @@ fun parseLarkDocument(data: JsonObject): LarkDocument {
         when (val type = n.text("type")) {
             "paragraph", "heading", "codeBlock" -> out += LarkDocumentBlock(type, plain(n),
                 if (type == "heading") attrs.number("level")?.toInt()?.coerceIn(1, 6) ?: 1 else level,
-                marker, language = attrs.text("language"))
+                marker, language = attrs.text("language"), id = attrs.text("id"))
             "image" -> {
                 val src = attrs.text("src")
                 val uri = runCatching { URI(src) }.getOrNull()
