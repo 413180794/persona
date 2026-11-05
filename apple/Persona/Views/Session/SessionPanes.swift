@@ -161,6 +161,9 @@ struct TerminalPanel: View {
     private static let touchTips = true
     #endif
     @AppStorage(TerminalPrefs.size) private var sizeMode = "phone"
+    #if os(macOS)
+    @AppStorage(TerminalPrefs.mouseMode) private var mouseMode = MacTerminalMouse.Mode.program.rawValue
+    #endif
     /// A grid change waiting to go out (the keyboard animates, a pinch goes on: the last size is what counts).
     @State private var gridTask: Task<Void, Never>?
     /// The keyboard is up on the terminal (typing straight in).
@@ -418,6 +421,9 @@ struct TerminalPanel: View {
                              onGrid: gridChanged)
                 #if os(macOS)
                 .files(takeFiles, dropping: { on in dropping = on && feed.drives })
+                .mouse(feed.drives && model.canMouseTerminal(key.group) ? { e in
+                    model.terminalMouse(key, action: e.action.rawValue, button: e.button.rawValue, column: e.column, row: e.row, mods: e.mods)
+                } : nil, mode: MacTerminalMouse.mode(mouseMode))
                 #endif
             }
             .overlay(alignment: .top) {

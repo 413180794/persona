@@ -952,6 +952,8 @@ final class AppModel {
     func canScrollTerminal(_ group: String) -> Bool { features(group).contains("terminal_scroll") }
     /// The hub takes a tap on a terminal the app drives (terminal_input click) to herdr as a click.
     func canClickTerminal(_ group: String) -> Bool { features(group).contains("terminal_click") }
+    /// The hub takes the whole mouse on a terminal the app drives (terminal_input mouse: press, drag, release, buttons).
+    func canMouseTerminal(_ group: String) -> Bool { features(group).contains("terminal_mouse") }
     /// The hub-level group's socket is up.
     var isLive: Bool { live.state == .connected }
     /// A group's socket is up.
@@ -995,6 +997,14 @@ final class AppModel {
     func terminalClick(_ key: SessionKey, column: Int, row: Int) {
         guard session(key)?.canTerminal == true else { return }
         socket(key.group)?.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "click": [column, row]])
+    }
+
+    /// The pointer on a terminal the app drives (docs/terminal.md 第二十五节): action down / up / drag, button left /
+    /// middle / right, at a cell of its screen (0-based), mods herdr's bits (shift 1, ctrl 2, alt 4).
+    func terminalMouse(_ key: SessionKey, action: String, button: String, column: Int, row: Int, mods: Int) {
+        guard session(key)?.canTerminal == true else { return }
+        socket(key.group)?.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID,
+                                 "mouse": ["action": action, "button": button, "at": [column, row], "mods": mods]])
     }
 
     func terminalUnsubscribe(_ key: SessionKey) {

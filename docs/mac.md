@@ -290,7 +290,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   UIGraphicsImageRenderer、haptics 空操作、UIKit 语义色）、`SwiftUICompat.swift`（iOS 专用修饰符的同名 Mac 版本：`navigationBarTitleDisplayMode` 什么都不做、
   `.topBarTrailing` → `.primaryAction`、`.insetGrouped` → `.inset`、`fullScreenCover` → `sheet`、`.navigationBarDrawer` → `.toolbar`、`for: .tabBar/.navigationBar` 不做事、
   `horizontalSizeClass` 恒 regular、`EditButton` 空、`ImageRenderer.uiImage`…）、`MenuCompat.swift`（`UIAction` / `UIMenu` → `NSMenu`）、`NavigationCompat.swift`。
-- 用 AppKit 重写的同名类型：终端（`Mac/Terminal/`，NSScrollView + `NSTextInputClient`，拼音、选择、⌘C/⌘V（接管时 ⌘V 的文件、截图和拖进来的文件上传后敲路径，`docs/terminal.md` 第十八节）、滚轮、捏合 / ⌘± 调字号）、代码行与等宽文本
+- 用 AppKit 重写的同名类型：终端（`Mac/Terminal/`，NSScrollView + `NSTextInputClient`，拼音、选择、⌘C/⌘V（接管时 ⌘V 的文件、截图和拖进来的文件上传后敲路径，`docs/terminal.md` 第十八节）、滚轮、接管时整套鼠标交给程序（拖动、右键、中键、修饰键，Shift 留在本地，`docs/terminal.md` 第二十五节）、捏合 / ⌘± 调字号）、代码行与等宽文本
   （`Mac/Code/`，只画可见的行、可选中拷贝）、图片查看 / 缩放（`Mac/Media/`，NSScrollView 放大，←/→ 翻页）、长按菜单 → 右键、可选文本、
   网页（`Mac/Link/`，WKWebView 右键菜单加「AI 修改 / 作为上下文」）、形象帧动画、ChatPin、邮件 HTML、Persona 侧边栏抽屉（窄窗口时才用，宽窗口是一栏）。
 - Mac 上没有的，及原因：

@@ -10,6 +10,8 @@ import SwiftUI
 /// - the keyboard goes to the terminal through `NSTextInputClient` (input methods compose over the cursor);
 /// - scrolling is the terminal's wheel while driving (`onWheel`), else it scrolls the scrollback;
 /// - a click is a click on the program's screen (`onClick`) or opens a link (`onOpenURL`); a drag selects, ⌘C copies;
+/// - with `onMouse` (driving, on a hub that takes it) presses, drags and releases of every button go to the program as
+///   they are (MacTerminalMouse.swift); Shift keeps them here for selecting and the menu (the other way round in 本地选择);
 /// - ⌘+ / ⌘− / ⌘0 and a trackpad pinch change the font size (`onFontSize`); ⌘V pastes (`onDoubleTap`, the phone's paste);
 /// - files and pictures pasted with ⌘V or dragged in go to `onFiles` (uploaded, their paths typed: TerminalFiles.swift).
 struct TerminalView: NSViewRepresentable {
@@ -41,6 +43,17 @@ struct TerminalView: NSViewRepresentable {
     var onFiles: (([TerminalFileSource]) -> Void)?
     /// Files are being dragged over the terminal (true) or not any more.
     var onDropping: ((Bool) -> Void)?
+    /// Driving, on a hub with `terminal_mouse`: the pointer's events for the program (set with `mouse(_:mode:)`).
+    var onMouse: ((MacTerminalMouse.Event) -> Void)?
+    var mouseMode = MacTerminalMouse.Mode.program
+
+    /// Forwards the mouse to the program while driving (nil: the older click only).
+    func mouse(_ forward: ((MacTerminalMouse.Event) -> Void)?, mode: MacTerminalMouse.Mode) -> TerminalView {
+        var v = self
+        v.onMouse = forward
+        v.mouseMode = mode
+        return v
+    }
 
     /// Takes pasted and dropped files (the iOS view has no such thing: there the key bar picks them).
     func files(_ take: (([TerminalFileSource]) -> Void)?, dropping: ((Bool) -> Void)? = nil) -> TerminalView {
@@ -65,6 +78,7 @@ struct TerminalView: NSViewRepresentable {
         v.onGrid = onGrid
         v.onFiles = onFiles
         v.onDropping = onDropping
+        v.setMouse(onMouse, mode: mouseMode)
         v.onFocus = focused.map { b in { on in if b.wrappedValue != on { b.wrappedValue = on } } }
         v.update(content: content, wrap: wrap, fontSize: fontSize, font: font, theme: theme,
                  dark: context.environment.colorScheme == .dark)
@@ -96,6 +110,10 @@ final class TerminalScrollView: NSScrollView {
     var onGrid: ((TerminalGridSize) -> Void)?
     var onFiles: (([TerminalFileSource]) -> Void)?
     var onDropping: ((Bool) -> Void)?
+    private(set) var onMouse: ((MacTerminalMouse.Event) -> Void)?
+    private var mouseMode = MacTerminalMouse.Mode.program
+    /// The button herdr holds pressed, where it last was, and the drag's per-cell throttle.
+    private var held: (button: MacTerminalMouse.Button, cell: (col: Int, row: Int), throttle: MacTerminalMouse.CellThrottle)?
     private var reportedGrid: TerminalGridSize?
     private var wheelRows: CGFloat = 0
     private var wheelAt: (col: Int, row: Int)?
@@ -429,6 +447,69 @@ final class TerminalScrollView: NSScrollView {
 
     // MARK: Mouse
 
+    func setMouse(_ forward: ((MacTerminalMouse.Event) -> Void)?, mode: MacTerminalMouse.Mode) {
+        onMouse = forward
+        mouseMode = mode
+        if forward == nil { held = nil } // no longer driving: nothing to release (the program lost the pointer with it)
+    }
+
+    /// A press of any button: the program's (true, sent) or this view's to handle (false). Another button while one is
+    /// held is swallowed.
+    fileprivate func forwardDown(_ event: NSEvent) -> Bool {
+        if held != nil { return true }
+        guard let onMouse, let button = MacTerminalMouse.button(type: event.type, number: event.buttonNumber),
+              MacTerminalMouse.toProgram(mouseMode, flags: event.modifierFlags),
+              let at = mouseCell(event, clamp: false) else { return false }
+        selection = nil // what was selected with Shift goes: the program has the pointer now
+        pressedAt = nil
+        held = (button, at, MacTerminalMouse.CellThrottle(at))
+        onMouse(.init(action: .down, button: button, column: at.col, row: at.row, mods: MacTerminalMouse.modifiers(event.modifierFlags)))
+        return true
+    }
+
+    /// Motion with the held button: one event per cell, following the pointer out of the view (clamped to the screen).
+    fileprivate func forwardDrag(_ event: NSEvent) -> Bool {
+        guard var h = held else { return false }
+        guard MacTerminalMouse.button(type: event.type, number: event.buttonNumber) == h.button, let onMouse, let at = mouseCell(event, clamp: true),
+              h.throttle.step(at) else { return true }
+        h.cell = at
+        held = h
+        onMouse(.init(action: .drag, button: h.button, column: at.col, row: at.row, mods: MacTerminalMouse.modifiers(event.modifierFlags)))
+        return true
+    }
+
+    fileprivate func forwardUp(_ event: NSEvent) -> Bool {
+        guard let h = held else { return false }
+        guard MacTerminalMouse.button(type: event.type, number: event.buttonNumber) == h.button else { return true }
+        held = nil
+        let at = mouseCell(event, clamp: true) ?? h.cell
+        onMouse?(.init(action: .up, button: h.button, column: at.col, row: at.row, mods: MacTerminalMouse.modifiers(event.modifierFlags)))
+        return true
+    }
+
+    /// The live screen's cell under an event. Below the last row drawn (the feed leaves out blank rows at the end) it
+    /// counts on in rows; above the screen (the history kept while driving) it is outside.
+    private func mouseCell(_ event: NSEvent, clamp: Bool) -> (col: Int, row: Int)? {
+        guard !lines.isEmpty, metrics.cell.height > 0, metrics.cell.width > 0 else { return nil }
+        let p = screen.convert(event.locationInWindow, from: nil)
+        let i = Int(((p.y - inset.top) / metrics.cell.height).rounded(.down))
+        let x = Int(((p.x - inset.left) / metrics.cell.width).rounded(.down))
+        let row: Int, col: Int
+        if lines.indices.contains(i) {
+            row = lines[i].row - content.screenStart
+            col = lines[i].from + x - lines[i].indent
+        } else if i >= lines.count {
+            row = lines[lines.count - 1].row - content.screenStart + i - lines.count + 1
+            col = x
+        } else {
+            row = lines[0].row - content.screenStart + i
+            col = x
+        }
+        let cols = content.cols > 0 ? content.cols : reportedGrid?.cols ?? MacTerminalMouse.maxCell
+        let rows = reportedGrid?.rows ?? MacTerminalMouse.maxCell
+        return MacTerminalMouse.cell(col: col, row: row, cols: cols, rows: rows, clamp: clamp)
+    }
+
     private func cell(at p: CGPoint) -> CellPoint? {
         guard !lines.isEmpty else { return nil }
         let line = min(max(0, Int((p.y - inset.top) / metrics.cell.height)), lines.count - 1)
@@ -636,16 +717,56 @@ final class TerminalScreenView: NSView, NSTextInputClient, NSMenuItemValidation 
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        if host?.forwardDown(event) == true { return }
         host?.mouseDown(at: point(event), clicks: event.clickCount)
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if host?.forwardDrag(event) == true { return }
         autoscroll(with: event)
         host?.mouseDragged(to: point(event))
     }
 
     override func mouseUp(with event: NSEvent) {
+        if host?.forwardUp(event) == true { return }
         host?.mouseUp(at: point(event), clicks: event.clickCount)
+    }
+
+    // The right and middle buttons: the program's while forwarding, else the menu (right) as before.
+    override func rightMouseDown(with event: NSEvent) {
+        if host?.forwardDown(event) == true {
+            window?.makeFirstResponder(self)
+            return
+        }
+        super.rightMouseDown(with: event)
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        if host?.forwardDrag(event) == true { return }
+        super.rightMouseDragged(with: event)
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        if host?.forwardUp(event) == true { return }
+        super.rightMouseUp(with: event)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        if host?.forwardDown(event) == true {
+            window?.makeFirstResponder(self)
+            return
+        }
+        super.otherMouseDown(with: event)
+    }
+
+    override func otherMouseDragged(with event: NSEvent) {
+        if host?.forwardDrag(event) == true { return }
+        super.otherMouseDragged(with: event)
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        if host?.forwardUp(event) == true { return }
+        super.otherMouseUp(with: event)
     }
 
     // MARK: Dragging files in

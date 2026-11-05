@@ -17,6 +17,8 @@ enum TerminalPrefs {
     static let tipsSeen = "terminalTipsSeen"
     /// Mac: Option+key sends ESC+key (Meta), like Terminal.app's setting of that name; off by default, as there.
     static let optionAsMeta = "terminalOptionAsMeta"
+    /// Mac: who gets the mouse while driving, "program" (the default) or "local" (MacTerminalMouse.Mode).
+    static let mouseMode = "terminalMouseMode"
     /// "phone": the phone drives the terminal at its own size while the tab is open; "mirror": it shows the pane at the
     /// computer's size and folds long rows.
     static let size = "terminalSize"
@@ -100,6 +102,7 @@ struct TerminalSettingsView: View {
     @AppStorage(TerminalPrefs.size) private var size = "phone"
     #if os(macOS)
     @AppStorage(TerminalPrefs.optionAsMeta) private var optionAsMeta = false
+    @AppStorage(TerminalPrefs.mouseMode) private var mouseMode = MacTerminalMouse.Mode.program.rawValue
     #endif
     @State private var newShortcut = ""
 
@@ -160,6 +163,16 @@ struct TerminalSettingsView: View {
                 } footer: {
                     Text(optionAsMeta ? "Option+字母发出 Esc+字母，shell 里 Option+B / Option+F 按词移动；Option 打不出 ™、é 这类特殊字符了。输入法照常用。"
                          : "Option 照常打出特殊字符（Option+2 是 ™）；打开后 Option+键 发出 Esc+键，和「终端」App 的同名设置一样。")
+                }
+                Section {
+                    SegmentedChoice("接管时的鼠标", [(MacTerminalMouse.Mode.program.rawValue, "交给程序"), (MacTerminalMouse.Mode.local.rawValue, "本地选择")],
+                                    selection: $mouseMode)
+                } header: {
+                    Text("鼠标")
+                } footer: {
+                    Text(MacTerminalMouse.mode(mouseMode) == .program
+                         ? "接管时点击、拖动、右键和中键都交给电脑上的程序（vim、Claude Code 这类开了鼠标的程序才收得到），按住 Shift 在这里选字、右键出菜单；⌘ 点链接照旧打开。"
+                         : "接管时在这里选字、右键出菜单，单击照旧是点一下程序；按住 Shift 才把鼠标交给程序。")
                 }
                 #endif
                 Section {

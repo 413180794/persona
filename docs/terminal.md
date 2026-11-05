@@ -867,6 +867,18 @@ herdr 二进制里有 `mouse_tracking_enabled`（它内部的终端），只是�
 - 网页：纯逻辑在 `web/src/lib/terminal-mouse.ts`（按钮 / 修饰键映射、路由、右键菜单决定、按格节流），`feed.ts` 里「the mouse」一节只做事件接线；右键菜单的判断经 `feed.wantsMenu`。
 - 文件拖放（上传、Files 条目）不受影响：它们走 `dragenter` / `drop`，鼠标转发只处理 `mousedown` / `mouseup` / `mousemove`。
 
+### Mac（#3336）
+
+和网页同一套路由和消息：`apple/Mac/Terminal/MacTerminalMouse.swift`（纯逻辑：按钮、路由、修饰键、按格节流、出界夹边），`TerminalView+Mac.swift` 的
+`mouseDown` / `rightMouseDown` / `otherMouseDown` 及对应的拖动、松开先问 `forwardDown` / `forwardDrag` / `forwardUp`，发给 `AppModel.terminalMouse`（`terminal_input.mouse`）。
+
+- 只在接管、hub 有 `terminal_mouse` 时转发；旧 hub 或只看时和以前一样（拖动选字、右键菜单、单击是 `terminal_input.click`）。
+- 终端设置 › 鼠标（`terminalMouseMode`，只在 Mac 上有）：交给程序（默认）/ 本地选择，Shift 换路由、不当修饰键发出；⌘ 一律留在本地（⌘ 点链接）。ctrl、option 是修饰键（2、4）。
+- 按钮按事件类型认（左、右），其余按 `buttonNumber`（2 是中键）；按住一个键时按下别的键被吞掉；拖动每进一格发一次，出了窗口夹在最近的边缘格，松开一定发 `up`（AppKit 把松开交给按下的那个视图）。
+- 格子按画出来的行算：feed 不画末尾的空行，点在最后一行下面按行数往下数，夹在请求的网格里；点在接管后留下的历史（屏幕上面）不算程序的，照旧本地选字。
+- 滚轮不变，还是 `terminal_input.scroll`。悬停（`move`）同网页没做。
+- 单测 `PersonaMacTests/MacTerminalMouseTests`（路由、位、节流、夹边）和 `MacTerminalMouseViewTests`（给视图喂 AppKit 事件：按下 / 拖动 / 出界 / 松开、右键、Shift 选字、本地选择、不转发时的旧单击）。
+
 ### 验证
 
 `go test ./internal/herdr ./internal/hub ./internal/node`（编码、只有 driver 能发、顺序）、`npm test`（`terminal-mouse.test.ts`）、
