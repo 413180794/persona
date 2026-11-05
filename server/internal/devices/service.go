@@ -233,10 +233,15 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 	if err != nil {
 		return nil, err
 	}
+	every, timeout, set := m.d.linkPingTimes()
+	header := http.Header{"Authorization": {"Bearer " + cred.token}}
+	if set { // the connector pings the stream as this side does (an older one keeps its own)
+		header.Set(link.PingHeader, link.PingHeaderValue(every, timeout))
+	}
 	dctx, cancel := context.WithTimeout(ctx, 2*connectorDialTimeout)
 	conn, resp, err := websocket.Dial(dctx, "wss://"+m.cfg.Address+connectorStreamPath, &websocket.DialOptions{
 		HTTPClient: &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
-		HTTPHeader: http.Header{"Authorization": {"Bearer " + cred.token}}, CompressionMode: websocket.CompressionContextTakeover})
+		HTTPHeader: header, CompressionMode: websocket.CompressionContextTakeover})
 	cancel()
 	if err != nil {
 		tr.CloseIdleConnections()
@@ -250,7 +255,6 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 	conn.SetReadLimit(64 << 20)
 	sctx, scancel := context.WithCancelCause(context.Background())
 	nc := websocket.NetConn(sctx, conn, websocket.MessageBinary)
-	every, timeout := m.d.linkPingTimes()
 	go func() { // a stream whose TCP connection died quietly
 		t := time.NewTicker(every)
 		defer t.Stop()
@@ -263,7 +267,7 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 				err := conn.Ping(pctx)
 				pcancel()
 				if err != nil && sctx.Err() == nil {
-					scancel(fmt.Errorf("connector: no pong within %s", timeout))
+					scancel(fmt.Errorf("connector: no pong within %s: %w", timeout, err))
 					_ = conn.CloseNow()
 					return
 				}
@@ -565,13 +569,17 @@ func (d *Devices) PairConnector(ctx context.Context, p devicewire.PairConnector)
 	return "", "", errors.New("连不上那台电脑的连接器：" + strings.Join(errs, "；"))
 }
 
-// linkPingTimes are the heartbeats of the streams the manager keeps (link.PingEvery and PingTimeout, or the hub's).
-func (d *Devices) linkPingTimes() (time.Duration, time.Duration) {
-	cfg := d.config()
-	if cfg.LinkPingMS > 0 && cfg.LinkPingTimeoutMS > 0 {
-		return time.Duration(cfg.LinkPingMS) * time.Millisecond, time.Duration(cfg.LinkPingTimeoutMS) * time.Millisecond
+// linkPingTimes are the heartbeats of the streams the manager keeps and of Persona Link (link.PingEvery and
+// PingTimeout, or the hub's: hub.json link). set: the hub's, which Persona Link is told (endpoints, link.PingHeader).
+func (d *Devices) linkPingTimes() (every, timeout time.Duration, set bool) {
+	return linkPing(d.config())
+}
+
+func linkPing(cfg devicewire.Config) (time.Duration, time.Duration, bool) {
+	if every, timeout, ok := link.PingTimesMS(int64(cfg.LinkPingMS), int64(cfg.LinkPingTimeoutMS)); ok {
+		return every, timeout, true
 	}
-	return link.PingEvery, link.PingTimeout
+	return link.PingEvery, link.PingTimeout, false
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) bool {

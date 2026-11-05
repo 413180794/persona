@@ -77,7 +77,8 @@ jarvis-link 和常驻 node、退出了重启，两个都在一个任务里（没
 ```text
 jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_listen）
   → hello {machine, version, address}          第一条消息；机器 id 和凭据对不上时 hub 以 4003 关闭
-  ← endpoints {endpoints, hub_name, mesh_hubs} 连上就发，hub 的地址或互联组变了再发
+  ← endpoints {endpoints, hub_name, mesh_hubs, ping_ms?, ping_timeout_ms?}
+                                               连上就发，hub 的地址、互联组或心跳变了再发
   ← open {id}                                  hub 要连 node 了
       jarvis-link 先连 ~/.persona/node-attach.sock，再开 WSS /api/v1/link/stream?id=<id>，两边原样转发字节
   → open_failed {id, error}                    开不了（常驻 node 没在跑等），hub 把原因记成这台的错误
@@ -110,6 +111,12 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 
 **心跳**
 - 两边都每 10 秒 ping 一次，5 秒没有 pong 就断开。死链路约 15 秒内发现。
+- 慢链路可以在 hub.json 的 `link` 里改（`ping_seconds`、`ping_timeout_seconds`，[config.md](config.md)）：hub 自己照它 ping，写了的时候管理者在 `endpoints` 里带上
+  `ping_ms`、`ping_timeout_ms`，Persona Link 收到就换成它，不重连；没带（旧 hub、没配）或不是两个正数时用自己的。新连上的链路先用自己的，等 hub 说。
+  两端都把它限在 50 毫秒到 10 分钟之间（`link.PingTimes`）。旧版的 Persona Link 不认这两个字段，照旧 10 秒 / 5 秒。
+- ping 要排在这条连接上已经在发的数据后面：hub 到电脑每秒只有几十 KB 时，一块 1 MiB 的数据要 30 多秒才送完，超时短于这个就一定断，重连上以后照样再断。
+- 调心跳管不到的两个时限（`docs/lessons/server.md`「慢链路上心跳超时」）：coder/websocket 发 ping、回 pong 等写锁最多 5 秒，一条大到发送缓冲一次装不下的消息还在写时照样断；
+  hub 转发时写一条消息最多等 1 分钟（`spliceWS`），比约 17 KB/s 还慢的链路上 1 MiB 一块照样超时。hub 停掉链路时的原因里带着 ping 的错误，分得出是哪种。
 - hub 在流上也 ping，防止链路还通、流的 TCP 连接却已经悄悄断了。
 - ping 是 hub 和 Persona Link 之间的（hub 握着这一端的连接）：没有 pong 时 hub 断开它，转给管理者的那条以「no pong within …」关闭，管理者把它当链路断了。
   每次 pong 的往返 hub 告诉管理者（`devices.link_rtt`），这条路的远近（选路、记录里给中心的）就是它。
@@ -131,10 +138,10 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 **换网**
 - Mac：App 用 `NWPathMonitor`，网络一变就给 helper 发 `SIGUSR1`：
   - 链路原来用的本机地址已经不在了，马上重连；
-  - 还在，就立刻 ping 一次（3 秒），不通再重连；
+  - 还在，就立刻 ping 一次（3 秒；hub 设的心跳超时更长时等那么久），不通再重连；
   - 本来就没连着，立刻重试。
 - Linux：jarvis-link 自己用 netlink 盯地址变化（`internal/netaddr`）。
-- 「立即重连」是 `SIGUSR2`。
+- 「立即重连」是 `SIGUSR2`。等 pong 不挡它，也不挡换网的检查：慢链路上一个 ping 可能要等上 hub 设的整个超时。
 
 **转发**
 - 只转给 `~/.persona/node-attach.sock`，只连回这条链路用的那个 hub 地址，流 id 只能是字母、数字、`-`、`_`。hub 没法让它去连别的地址。
@@ -182,7 +189,7 @@ location /<前缀>/ {
     proxy_set_header X-Forwarded-Proto https;            # 代理在另一台机器上时 hub 认它，才让明文的链路进来
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_buffering off;
-    proxy_read_timeout 1h;                               # 长连接：至少要比 10 秒的心跳长，默认 60 秒也够，留余量
+    proxy_read_timeout 1h;                               # 长连接：至少要比心跳（默认 10 秒，hub.json 的 link 可改）长，留余量
     proxy_send_timeout 1h;
 }
 ```
@@ -234,11 +241,13 @@ location /<前缀>/ {
 | --- | --- | --- | --- |
 | `POST /api/v1/connector/pair` | 一次性码 | body ≤ 16 KiB：`{"code","token","machine","hub_id","hub_name"}`；`code`、`token`、`machine` 必填（`token` 32–512 个可打印 ASCII、不含空白），`hub_id`、`hub_name` 可选但请带上 | `200 {"version"}`；字段不对 `400 bad_request`（不计限流，不作废码）；码错、过期、用过 `401 bad_code`（计限流） |
 | `GET /api/v1/connector/info` | `Authorization: Bearer <凭据>` | — | `200 {"machine","version"}`：`machine` 是配对时 hub 给的机器 id；凭据缺或错 `401 unauthorized` |
-| `GET /api/v1/connector/stream` | 同上 | WebSocket 升级 | 先认证，再连 node-attach.sock，最后才升级：node 连不上 `503 node_unavailable`（`message` 说原因，hub 可以记成这台的错误）；不是升级请求 `400`；升级后见下 |
+| `GET /api/v1/connector/stream` | 同上 | WebSocket 升级；可带 `X-Persona-Ping`（心跳，见下） | 先认证，再连 node-attach.sock，最后才升级：node 连不上 `503 node_unavailable`（`message` 说原因，hub 可以记成这台的错误）；不是升级请求 `400`；升级后见下 |
 
 - 配对成功会替换之前配对的 hub（「只认配对它的那台」：组里的中心；换中心时由新中心重新配对）：旧凭据马上不认，旧凭据开着的流以关闭码 **4002** 关掉。
 - 流：二进制消息，原样是 node 的字节，两个方向都不改。接受 permessage-deflate（context takeover，和主动模式的流、原来 ssh 的 `Compression=yes` 一样）。
   连接器每 10 秒 ping、5 秒没 pong 就断，hub 的 ping 照常回。hub 关流时连接器对 node 半关（写端关掉），node 读完收尾，node 关了流就结束。
+  hub.json 设了心跳（`link`）时，开流的请求带 `X-Persona-Ping: <间隔毫秒> <超时毫秒>`，连接器在这条流上照它 ping（同样限在 50 毫秒到 10 分钟）；
+  没带或不是两个数时用自己的。旧连接器不认这个头，照旧 10 秒 / 5 秒。
 - 对常驻 node 来说每条流是一次新的 attach，新的顶掉旧的，和主动模式、ssh 时一样；连接器自己不管哪条是新的。
 - 连接器停止或改回主动模式时，流以 **1001** 关；被动模式的配对留在 link.json 里，改回被动后原凭据照样能用。
 

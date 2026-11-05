@@ -258,12 +258,15 @@ func (l *mgrLink) info() *proto.MachineLink {
 }
 
 // linkEndpoints is where the hub can be found, and what it is called and how many hubs its mesh has (the Mac menu
-// bar shows both, docs/link.md).
+// bar shows both, docs/link.md); and the heartbeat, when hub.json sets one: Persona Link pings as the hub does.
 func (d *Devices) linkEndpoints() link.Message {
 	cfg := d.config()
 	msg := link.Message{Type: "endpoints", HubName: cfg.HubName, MeshHubs: cfg.MeshHubs}
 	for _, e := range cfg.Endpoints {
 		msg.Endpoints = append(msg.Endpoints, link.Endpoint{URL: e.URL, Kind: e.Kind})
+	}
+	if every, timeout, set := linkPing(cfg); set {
+		msg.PingMS, msg.PingTimeoutMS = int(every.Milliseconds()), int(timeout.Milliseconds())
 	}
 	return msg
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/link"
 )
 
 // slowConnector is a connector whose info answers status, once the test lets it (release); asked is closed when the
@@ -385,5 +386,48 @@ func TestServiceDialOfRepairDuringFetchRefusedDropsCredential(t *testing.T) {
 	m.mu.Unlock()
 	if st.pairGen != 2 || st.cred != nil || time.Until(st.wait) < connectorRefusedWait/2 || !strings.Contains(st.err, "不认") {
 		t.Fatalf("the new pairing's refusal was ignored: gen=%d cred=%v wait=%v err=%q", st.pairGen, st.cred, st.wait, st.err)
+	}
+}
+
+// The stream dial tells the connector the hub's heartbeat (hub.json link) in link.PingHeader, and says nothing when
+// the hub sets none: the connector keeps its own then, as an older one always does.
+func TestServiceDialTellsTheConnectorTheHeartbeat(t *testing.T) {
+	got := make(chan string, 1)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get(link.PingHeader)
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+	}))
+	t.Cleanup(srv.Close)
+	sum := sha256.Sum256(srv.Certificate().RawSubjectPublicKeyInfo)
+	d := newTestDevices(t)
+	m := newMachine(d, MachineConfig{ID: "example-service", Name: "Example service", Kind: kindService,
+		Address: strings.TrimPrefix(srv.URL, "https://")})
+	d.addEntry(m)
+	m.svc = serviceState{pairGen: 1, cred: &connectorCred{fp: base64.RawURLEncoding.EncodeToString(sum[:]), token: "jc_x"}}
+	for _, tc := range []struct {
+		pingMS, timeoutMS int
+		want              string
+	}{
+		{0, 0, ""},
+		{30000, 90000, "30000 90000"},
+		{-1, 5000, ""}, // nothing usable: as none
+	} {
+		d.mu.Lock()
+		d.cfg.LinkPingMS, d.cfg.LinkPingTimeoutMS = tc.pingMS, tc.timeoutMS
+		d.mu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		p, err := m.dialService(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		p.close()
+		if h := <-got; h != tc.want {
+			t.Errorf("hub's %d / %d ms: header %q, want %q", tc.pingMS, tc.timeoutMS, h, tc.want)
+		}
 	}
 }

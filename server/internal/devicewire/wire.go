@@ -121,7 +121,8 @@ type Config struct {
 	MeshHubs  int            `json:"mesh_hubs,omitempty"`
 	// TailcatDERPMapURL is hub.json's tailcat.derp_map_url.
 	TailcatDERPMapURL string `json:"tailcat_derp_map_url,omitempty"`
-	// LinkPingMS / LinkPingTimeoutMS: the heartbeats of the links and streams (0: the protocol's; tests shorten them).
+	// LinkPingMS / LinkPingTimeoutMS: the heartbeats of the links and streams, hub.json's link section (0: the
+	// protocol's, link.PingEvery / PingTimeout; tests shorten them). The manager tells Persona Link them too.
 	LinkPingMS        int `json:"link_ping_ms,omitempty"`
 	LinkPingTimeoutMS int `json:"link_ping_timeout_ms,omitempty"`
 	// Mesh is the group this hub is in (nil: none).

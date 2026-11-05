@@ -204,7 +204,7 @@ func (h *Hub) relayLinkConn(w http.ResponseWriter, r *http.Request, a devicewire
 	defer close(taken.done)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	every, timeout := h.linkPingTimes()
+	every, timeout, _ := h.linkPingTimes()
 	var why atomic.Value // why the hub ended it, for the manager
 	go func() {          // a link whose network went away quietly (a laptop gone to sleep): no pong
 		t := time.NewTicker(every)
@@ -219,7 +219,10 @@ func (h *Hub) relayLinkConn(w http.ResponseWriter, r *http.Request, a devicewire
 				err := conn.Ping(pctx)
 				pcancel()
 				if err != nil && ctx.Err() == nil {
-					why.Store(fmt.Sprintf("no pong within %s", timeout))
+					// With the error: a pong that never came, or a ping coder/websocket could not even send within its
+					// own 5 s for control frames (behind a large message still being written). Clipped to a close
+					// reason's 123 bytes.
+					why.Store(clip(fmt.Sprintf("no pong within %s: %v", timeout, err), 120))
 					_ = conn.CloseNow()
 					return
 				}

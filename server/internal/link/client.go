@@ -112,7 +112,8 @@ type Options struct {
 	// Check: look at the link now (the network changed). Redial: drop it and connect again.
 	Check, Redial <-chan struct{}
 	Logf          func(string, ...any)
-	// PingEvery, PingTimeout replace the defaults (tests).
+	// PingEvery, PingTimeout replace the defaults (tests). A hub that says its own heartbeat (endpoints, PingHeader) is
+	// followed on that link or stream instead.
 	PingEvery, PingTimeout time.Duration
 	// limiter replaces passive mode's (tests).
 	limiter *authLimiter
@@ -801,26 +802,67 @@ func (l *link) serve(ctx context.Context, c *Config, o Options, rep *reporter) e
 		cancel(err)
 		l.conn.CloseNow()
 	}
+	// The heartbeat is o's until the hub says another (endpoints); beat hands the pinger the latest, the link stays.
+	beat := make(chan heartbeat, 1)
 	go func() {
-		t := time.NewTicker(o.PingEvery)
+		hb := heartbeat{every: o.PingEvery, timeout: o.PingTimeout}
+		t := time.NewTicker(hb.every)
 		defer t.Stop()
+		// A ping waits for its pong on its own, so a reconnect or a network change is not held up behind one that is
+		// out (with a slow link's heartbeat, for up to the hub's timeout). One of each kind at a time; the first that
+		// fails drops the link.
+		type pong struct {
+			check bool
+			err   error
+		}
+		pongs := make(chan pong)
+		var beating, checking bool
+		ping := func(check bool, d time.Duration) {
+			go func() {
+				err := l.ping(ctx, d)
+				select {
+				case pongs <- pong{check, err}:
+				case <-ctx.Done():
+				}
+			}()
+		}
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-t.C:
-				if err := l.ping(ctx, o.PingTimeout); err != nil && ctx.Err() == nil {
-					drop(fmt.Errorf("hub 没有回应心跳：%w", err))
+			case p := <-pongs:
+				why := "hub 没有回应心跳"
+				if p.check {
+					checking, why = false, "网络变了以后 hub 没有回应"
+				} else {
+					beating = false
+				}
+				if p.err != nil && ctx.Err() == nil {
+					drop(fmt.Errorf("%s：%w", why, p.err))
 					return
+				}
+			case b := <-beat:
+				if b == hb {
+					continue
+				}
+				if b.every != hb.every {
+					t.Reset(b.every)
+				}
+				hb = b
+				o.Logf("link: heartbeat every %s, %s for a pong", hb.every, hb.timeout)
+			case <-t.C:
+				if !beating {
+					beating = true
+					ping(false, hb.timeout)
 				}
 			case <-o.Check:
 				if l.localGone() {
 					drop(errors.New("网络变了，原来的地址已经不在"))
 					return
 				}
-				if err := l.ping(ctx, checkPing); err != nil && ctx.Err() == nil {
-					drop(fmt.Errorf("网络变了以后 hub 没有回应：%w", err))
-					return
+				if !checking {
+					checking = true
+					ping(true, hb.check())
 				}
 			case <-o.Redial:
 				cancel(errRedial)
@@ -844,6 +886,11 @@ func (l *link) serve(ctx context.Context, c *Config, o Options, rep *reporter) e
 		switch m.Type {
 		case "endpoints":
 			l.endpoints(m, c, o, rep)
+			select { // only the latest counts
+			case <-beat:
+			default:
+			}
+			beat <- o.heartbeatOf(m)
 		case "node":
 			rep.set(func(s *Status) {
 				s.Node, s.NodeError = "offline", m.Error
@@ -912,6 +959,30 @@ func (l *link) endpoints(m Message, c *Config, o Options, rep *reporter) {
 			s.MeshHubs = min(m.MeshHubs, 999)
 		}
 	})
+}
+
+// heartbeat is how a link is pinged: every, and how long a pong may take; hub: the hub said so (endpoints).
+type heartbeat struct {
+	every, timeout time.Duration
+	hub            bool
+}
+
+// heartbeatOf is the ping interval and timeout the hub asks for in m (endpoints: hub.json link), brought into range;
+// o's when it asks for none or for nothing usable (older hubs, hubs that leave it at the default).
+func (o Options) heartbeatOf(m Message) heartbeat {
+	if every, timeout, ok := PingTimesMS(int64(m.PingMS), int64(m.PingTimeoutMS)); ok {
+		return heartbeat{every, timeout, true}
+	}
+	return heartbeat{o.PingEvery, o.PingTimeout, false}
+}
+
+// check is how long the ping after a network change waits: checkPing, to notice a dead network quickly, but not less
+// than the hub's timeout when it set one (on its slow link a pong may take that long, network change or not).
+func (h heartbeat) check() time.Duration {
+	if h.hub {
+		return max(checkPing, h.timeout)
+	}
+	return checkPing
 }
 
 // clipName keeps a hub's name to one short line of printable text: it is shown in a menu and a terminal.

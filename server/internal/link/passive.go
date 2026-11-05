@@ -33,6 +33,30 @@ const (
 	DefaultListen       = ":18663"
 )
 
+// PingHeader is on a stream request from a hub whose hub.json sets the heartbeat (link): "<interval ms> <timeout ms>",
+// how the hub pings the stream; the connector pings it the same (PingTimes). Older hubs send none and older connectors
+// ignore it: each side keeps its own then.
+const PingHeader = "X-Persona-Ping"
+
+// PingHeaderValue is PingHeader's value for a heartbeat.
+func PingHeaderValue(every, timeout time.Duration) string {
+	return strconv.FormatInt(every.Milliseconds(), 10) + " " + strconv.FormatInt(timeout.Milliseconds(), 10)
+}
+
+// pingFromHeader reads PingHeader's value; ok is false when it is missing or not two numbers that PingTimes takes.
+func pingFromHeader(v string) (every, timeout time.Duration, ok bool) {
+	f := strings.Fields(v)
+	if len(f) != 2 {
+		return 0, 0, false
+	}
+	e, err1 := strconv.ParseInt(f[0], 10, 64)
+	t, err2 := strconv.ParseInt(f[1], 10, 64)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return PingTimesMS(e, t)
+}
+
 // PairCodeLife is how long a pairing code from `jarvis-link pair --listen` is good for (a setting).
 const PairCodeLife = 10 * time.Minute
 

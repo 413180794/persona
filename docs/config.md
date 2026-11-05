@@ -221,6 +221,13 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `mesh`（可选，hub 互联，[mesh.md](mesh.md)）：`discovery`（默认 true：在局域网里用 mDNS 广播自己、列出发现的 hub；Docker 桥接网络里收不到）、
   `path_switch_seconds`（默认 60：一台电脑有更好的路时，要一直更好这么久中心才换过去；断了的路马上换，不等）。互联的对端、组的中心和任期存在
   Postgres，不在这里。第一版的 `takeover_seconds` 不再用。
+- `link`（可选，电脑链路的心跳，[link.md](link.md)「心跳」）：`ping_seconds`（多久 ping 一次，默认 10）、`ping_timeout_seconds`（多久没有 pong 就断开，默认 5）。
+  不写或写 0 用默认值，只写一项时另一项用默认值；范围 1–600 秒，超过 600 按 600。管的是 hub 在 Persona Link 的链路和流上的 ping、管理者在连接器（kind service）的流上的 ping，
+  写了的时候管理者还把它告诉 Persona Link（主动模式在 `endpoints` 里、被动模式在开流的请求头里），电脑那边照着 ping；hub 之间的互联链路不受影响，仍是 10 秒 / 5 秒。
+  慢链路（hub 到电脑只有几十 KB/s）上 ping 要排在正在写的数据后面（一块 1 MiB 的数据 30 KB/s 要写 30 多秒），超时比写完一块的时间短就一定误判断开，这时把
+  `ping_timeout_seconds` 调到比它长（比如 `{"ping_seconds": 30, "ping_timeout_seconds": 90}`）；死链路要等约「间隔 + 超时」才发现。网络库发 ping、回 pong
+  本身最多等 5 秒，转发一条消息最多写 1 分钟，这两个调不了（link.md「心跳」）。
+  旧版的 Persona Link 不认这两个值，仍按自己的 10 秒 / 5 秒 ping（主动模式只 ping 链路本身，被动模式还 ping 每条流），要一起升级。手改文件要重启 hub。
 - `machines`：2026-11-04 起是 hub 在握手时交给管理者（助手的进程）的默认值，**由管理者去连**（[machines.md](machines.md)「谁连电脑」）；下面说「hub 拨」「hub 连过去」的，
   实际拨号的是管理者（hub 机器上它是 hub 的子进程，用同一个 HOME：ssh 配置、tailcat key、`~/.persona/secret.key` 都是这台的）。管理界面运行中加的电脑也交给它，马上连。
 - `machines[].kind`：`local`（hub 自己这台）、`service`（hub 拨这台连接器的被动端口，「hub 来连」，见下一条）、`link`（这台的 jarvis-link

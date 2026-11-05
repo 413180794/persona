@@ -1534,6 +1534,8 @@ hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS �
   - hub → jarvis-link：`{"type":"endpoints","endpoints":[{"url","kind"}]}`（只有 https 的候选）、`{"type":"open","id"}`、
     `{"type":"node","online","error"}`。
   - 关闭码：4001 被同一台的新链路顶掉、4002 凭据被撤销、4003 hello 和凭据对不上、1001 hub 停机。两边每 10 秒 ping，5 秒没 pong 断开（配置值）。
+    hub.json 设了 `link.ping_seconds` / `link.ping_timeout_seconds` 时 `endpoints` 多带 `ping_ms`、`ping_timeout_ms`（毫秒），jarvis-link 在这条链路上改用它
+    （限在 50 毫秒到 10 分钟，不是两个正数时不理）；没设时这两个字段不发，旧 jarvis-link 也不认。
 - `GET /api/v1/link/stream?id=<open 的 id>`（WebSocket，同一凭据，permessage-deflate）：二进制消息，内容是 RPC 的字节流；
   hub 15 秒内没等到就当失败。链路断了，链路上的流一起断。
 
@@ -1561,6 +1563,7 @@ hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS �
 
 - hub 按配对链接里的 `fp` 钉扎连 `<address>`（可经 `socks5://` 代理）：`POST /api/v1/connector/pair {code,token,machine,hub_id,hub_name}` 一次；
   之后 `GET /api/v1/connector/info`（每 30 秒，探活和 RTT）、`GET /api/v1/connector/stream`（WebSocket，node 的字节流），都带 `Authorization: Bearer <凭据>`。
+  hub.json 设了心跳（`link`）时流的请求多带 `X-Persona-Ping: <间隔毫秒> <超时毫秒>`，连接器在这条流上照它 ping；没设时不带，旧连接器不认。
 - 401：5 分钟内不再拨；429：按 `Retry-After`；503 `node_unavailable`：显示原因、照常退避；流以 4002 关：要重新配对，不再试；1001：照常退避。
 
 ## 总线（服务 ↔ hub，`GET /api/v1/bus`）
@@ -1724,6 +1727,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 2026-11-04 起电脑是带着它们的管理者连的（现在是首席管理者 `assistant`，[machines.md](machines.md)「谁连电脑」），消息在 `server/internal/devicewire`。hub 那头 `hub/devices_link.go`、`devices_relay.go`，管理者那头 `internal/devices`。
 
 - 握手的回答多一个 `devices`（只给带着电脑的那个管理者）：`{machines:[hub.json 的条目，原样], hub_id, hub_name, hub_version, endpoints?, mesh_hubs?, tailcat_derp_map_url?, link_ping_ms?, link_ping_timeout_ms?, mesh?}`，
+  `link_ping_ms`、`link_ping_timeout_ms` 是 hub.json `link` 一节的心跳（没设时不发，管理者用 10 秒 / 5 秒），管理者照它 ping 连接器的流，并告诉 Persona Link（`endpoints`、`X-Persona-Ping`）；
   `mesh` 是 `{member?, center_name?, settle_until?, hubs:{hub_id:{name, reachable, rtt_ms}}, members:[{hub_id, machines:[{id, cfg, kind, avail?, rtt_ms?}]}], path_switch_ms}`；变了（管理界面加了电脑、互联组、hub 的地址和名字）hub 发 `devices.config`，参数同上（合并 200 毫秒）。
 - 管理者 → hub：
   - 事件 `devices.state {machines:[{machine, config, info, connected?, connected_at?, warm_until?, derived?, paths?}], absorbed?:{条目 id: 机器 id}, entries?:[{id, kind, avail?, rtt_ms?}]}`：

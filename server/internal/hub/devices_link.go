@@ -189,8 +189,8 @@ func (h *Hub) devicesConfig() devicewire.Config {
 	if h.cfg != nil {
 		out.TailcatDERPMapURL = h.cfg.Tailcat.DERPMapURL
 	}
-	if h.linkPing[0] > 0 {
-		out.LinkPingMS, out.LinkPingTimeoutMS = int(h.linkPing[0].Milliseconds()), int(h.linkPing[1].Milliseconds())
+	if every, timeout, set := h.linkPingTimes(); set {
+		out.LinkPingMS, out.LinkPingTimeoutMS = int(every.Milliseconds()), int(timeout.Milliseconds())
 	}
 	msg := h.linkEndpoints()
 	out.MeshHubs = msg.MeshHubs
@@ -988,13 +988,19 @@ func validProxy(proxyURL string) error {
 	return nil
 }
 
-// linkPingTimes are the heartbeats of the Persona Links the hub relays (link.PingEvery and PingTimeout, shorter in
-// tests).
-func (h *Hub) linkPingTimes() (time.Duration, time.Duration) {
+// linkPingTimes are the heartbeats of the Persona Links the hub relays: hub.json's link section (config_link.go), else
+// link.PingEvery and PingTimeout; tests set their own (h.linkPing). set: not the defaults, the manager is told them
+// (devicesConfig) and tells Persona Link.
+func (h *Hub) linkPingTimes() (every, timeout time.Duration, set bool) {
 	if h.linkPing[0] > 0 {
-		return h.linkPing[0], h.linkPing[1]
+		return h.linkPing[0], h.linkPing[1], true
 	}
-	return link.PingEvery, link.PingTimeout
+	if h.cfg != nil {
+		if every, timeout, ok := h.cfg.Link.pingTimes(); ok {
+			return every, timeout, true
+		}
+	}
+	return link.PingEvery, link.PingTimeout, false
 }
 
 // metricsRoutesRelayed relays the monitoring's routes (devicewire.MetricsRoutes: the machines' samples, their history,

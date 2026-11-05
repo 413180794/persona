@@ -214,9 +214,9 @@ func (d *Devices) Configure(cfg devicewire.Config) {
 	d.changed()
 }
 
-// linkSays is what the links are told of the hub in cfg.
+// linkSays is what the links are told of the hub in cfg (linkEndpoints): with its heartbeat, which they follow.
 func linkSays(cfg devicewire.Config) string {
-	b, _ := json.Marshal([]any{cfg.HubName, cfg.MeshHubs, cfg.Endpoints})
+	b, _ := json.Marshal([]any{cfg.HubName, cfg.MeshHubs, cfg.Endpoints, cfg.LinkPingMS, cfg.LinkPingTimeoutMS})
 	return string(b)
 }
 

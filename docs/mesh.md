@@ -174,7 +174,7 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
   管理界面「电脑 › 添加电脑 › hub 来连」粘贴（可以改地址、填代理）。hub 用 `link.ParseConnectorLink` 解析，按 `fp` 钉扎（TLS 1.2+、ALPN http/1.1、
   只比 SPKI 指纹不验名字），按链接里的地址顺序试，`POST /api/v1/connector/pair {code, token, machine, hub_id, hub_name}`：凭据是 hub 生成的
   `jc_` + 64 位十六进制，连接器只存 hash。成功才写 hub.json，机器马上开始连，不用重启。码错 / 过期 401：「配对码不对…」；钉扎不符：报错，什么都不发。
-- **连**：`GET /api/v1/connector/stream`（WebSocket，`Authorization: Bearer`，permessage-deflate），流上就是 node 的字节；hub 每 10 秒 ping、5 秒没 pong 断开。
+- **连**：`GET /api/v1/connector/stream`（WebSocket，`Authorization: Bearer`，permessage-deflate），流上就是 node 的字节；hub 每 10 秒 ping、5 秒没 pong 断开（hub.json 的 `link` 可改，开流时经 `X-Persona-Ping` 告诉连接器，[link.md](link.md)「心跳」）。
   503 `node_unavailable`：把连接器给的原因显示成这台的错误，照常退避。
 - **探测**：每 30 秒 `GET /api/v1/connector/info`（不 attach，不影响在用的连接），回答了而且 `machine` 是这台就算能用，往返时间就是这条路的 RTT；
   每台 hub 都探自己 hub.json 里的连接器，成员把结果放进记录。探测或拨号在路上时流被 4002 关了、或者这台重新配对了，这次的结果作废

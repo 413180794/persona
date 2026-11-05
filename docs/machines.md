@@ -56,7 +56,7 @@
 
 **Persona Link（主动模式）**：电脑上的 Persona Link 照旧连 hub 的地址（配对码、链路凭据都不变）。hub 认凭据（必须是 kind link 那台的、走 TLS），然后把这条 WebSocket 原样交给管理者：
 `devices.accept {id, kind: link, machine_id, token_id}`，管理者用自己的总线 token 拨 `GET /api/v1/bus/relay?id=<id>`，hub 两边逐条转发消息（文本是 Persona Link 的消息，二进制是 node 的字节流），关闭码和原因原样过去。
-hello、`endpoints`、`open`、`node` 这些都是管理者说的；Persona Link 开的流（`/api/v1/link/stream`）同样转。心跳（ping）是 hub 和 Persona Link 之间的，没有 pong 时 hub 断开两边，原因交给管理者。
+hello、`endpoints`、`open`、`node` 这些都是管理者说的；Persona Link 开的流（`/api/v1/link/stream`）同样转。心跳（ping）是 hub 和 Persona Link 之间的，没有 pong 时 hub 断开两边，原因交给管理者；间隔和超时在 hub.json 的 `link` 里可改，管理者在 `endpoints` 里告诉 Persona Link（[link.md](link.md)「心跳」）。
 凭据撤销时 hub 以 4002 关掉它转着的链路；管理者没连着时 hub 对 `/api/v1/link` 回 503，Persona Link 照常退避重连，管理者回来后自己连上。
 
 **互联（mesh）**：组、中心、记录、凭据交接、成员转发 App 还是 hub 的（`docs/mesh.md`）；电脑和路是管理者的：hub 在 `devices.config` 的 `mesh` 里给它组里的样子（这台是不是成员、中心叫什么、刚起来要等多久、别的 hub 到不到得了和多远、成员的电脑），

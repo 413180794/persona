@@ -145,6 +145,8 @@ type Config struct {
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
 	// Mesh tunes the links to other hubs (docs/mesh.md, config_mesh.go).
 	Mesh MeshConfig `json:"mesh,omitempty"`
+	// Link tunes the heartbeat with the computers' Persona Links (config_link.go, docs/link.md「心跳」).
+	Link LinkConfig `json:"link,omitzero"`
 	// Personas tunes the looks: whose level a tiered look shows (persona_tiers.go, docs/persona.md).
 	Personas PersonasConfig `json:"personas,omitempty"`
 	// Usage: account-pool gateways whose accounts' subscription windows join the ones read on the machines

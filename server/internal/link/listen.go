@@ -588,15 +588,20 @@ func (s *passive) stream(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		s.o.Logf("passive: stream from %s ended", maskSource(remoteIP(r)))
 	}()
+	// The hub's heartbeat when it says one (hub.json link: a slow link needs a longer one), else this side's own.
+	every, timeout := s.o.PingEvery, s.o.PingTimeout
+	if e, t, ok := pingFromHeader(r.Header.Get(PingHeader)); ok {
+		every, timeout = e, t
+	}
 	go func() { // a stream whose TCP connection died quietly: the hub pings too, this side does not count on it
-		t := time.NewTicker(s.o.PingEvery)
+		t := time.NewTicker(every)
 		defer t.Stop()
 		for {
 			select {
 			case <-finished:
 				return
 			case <-t.C:
-				ctx, cancel := context.WithTimeout(context.Background(), s.o.PingTimeout)
+				ctx, cancel := context.WithTimeout(context.Background(), timeout)
 				err := ws.Ping(ctx) // a timeout closes the connection: both copies below end
 				cancel()
 				if err != nil {

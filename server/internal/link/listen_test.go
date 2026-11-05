@@ -183,10 +183,15 @@ func (h *hubSide) pair(code, token string) reply {
 }
 
 func (h *hubSide) stream(token string) (*websocket.Conn, *http.Response, error) {
+	return h.streamWith(bearer(token))
+}
+
+// streamWith opens a stream with header: the credential, and what else the hub says.
+func (h *hubSide) streamWith(header http.Header) (*websocket.Conn, *http.Response, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return websocket.Dial(ctx, "wss"+strings.TrimPrefix(h.base, "https")+ConnectorStreamPath, &websocket.DialOptions{
-		HTTPClient: h.client, HTTPHeader: bearer(token), CompressionMode: websocket.CompressionContextTakeover})
+		HTTPClient: h.client, HTTPHeader: header, CompressionMode: websocket.CompressionContextTakeover})
 }
 
 var tokenA = "jd_" + strings.Repeat("a", 40)
@@ -421,6 +426,54 @@ func TestPassiveStreamNoticesAHubThatStoppedAnswering(t *testing.T) {
 	defer ws.CloseNow()
 	c.waitFor(t, func(s Status) bool { return s.State == "connected" })
 	c.waitFor(t, func(s Status) bool { return s.State == "listening" })
+}
+
+// A stream follows the heartbeat the hub says in PingHeader (hub.json link), either way; without one, or with one that
+// is not two numbers, the connector keeps its own.
+func TestPassiveStreamFollowsTheHubsHeartbeat(t *testing.T) {
+	open := func(t *testing.T, o Options, ping string) *connector {
+		t.Helper()
+		node := newFakeNode(t)
+		c := startConnector(t, node.path, o)
+		fp, code := c.invite(t)
+		h := hubFor(t, c.addr, fp)
+		h.pair(code, tokenA)
+		header := bearer(tokenA)
+		if ping != "" {
+			header.Set(PingHeader, ping)
+		}
+		ws, _, err := h.streamWith(header) // and never read again: no pongs
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { ws.CloseNow() })
+		c.waitFor(t, func(s Status) bool { return s.State == "connected" })
+		return c
+	}
+	for _, tc := range []struct {
+		name, ping string
+		o          Options
+	}{
+		{"shorter", PingHeaderValue(50*time.Millisecond, 50*time.Millisecond), Options{}}, // 10 s and 5 s: 15 s
+		{"none", "", Options{PingEvery: 50 * time.Millisecond, PingTimeout: 50 * time.Millisecond}},
+		{"not numbers", "soon later", Options{PingEvery: 50 * time.Millisecond, PingTimeout: 50 * time.Millisecond}},
+		{"half", "60000", Options{PingEvery: 50 * time.Millisecond, PingTimeout: 50 * time.Millisecond}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := open(t, tc.o, tc.ping)
+			// The latest status, not the queue: it holds statuses from before the stream.
+			eventually(t, func() bool { return c.last.Load().State == "listening" }) // within 5 s
+		})
+	}
+	t.Run("longer", func(t *testing.T) {
+		c := open(t, Options{PingEvery: 50 * time.Millisecond, PingTimeout: 50 * time.Millisecond},
+			PingHeaderValue(time.Minute, time.Minute))
+		for until := time.Now().Add(time.Second); time.Now().Before(until); time.Sleep(10 * time.Millisecond) {
+			if s := c.last.Load(); s.State != "connected" {
+				t.Fatalf("dropped despite the hub's longer heartbeat: %+v", s)
+			}
+		}
+	})
 }
 
 func TestModeSwitchesBothWays(t *testing.T) {

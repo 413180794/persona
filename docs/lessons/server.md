@@ -560,3 +560,17 @@ Windows 上 `git archive` 会按 `core.autocrlf` 导出 CRLF，传到 Linux 的�
 和并发的「设 Key」交错时 Key 会配上它没设给的地址；而且只有这个接口管，别处调 `SetConfig`（助手改设置）绕得过去。改成注册表的钩子（`BoundSecrets` / `SecretNeeds`），
 在 `SetConfig` / `SetSecret` 同一把操作锁里判断和删除；地址变了就无条件删（删是幂等的），`SecretsSet` 只用来决定回应里说不说。
 以后凡是「为了安全要删 / 拒绝」的判断，别用吞错误的只读接口做依据，也别拆成处理器里的先查后写。
+
+## 慢链路上心跳超时（2026-11-06，#3452）
+
+hub 到一台电脑只有约 30 KB/s 时，那台的链路反复以「no pong within 5s」断开，发给它的消息都失败。ping 不是插队发的：它排在已经交给 TCP 的数据后面，
+对面要先收完这些才轮到它、再回 pong；流上一块 1 MiB 的数据（下载、上传、node 更新包都按这个分块）在 30 KB/s 下要 30 多秒才送完，5 秒的超时必定先到，重连后下一块照样断。
+心跳的超时必须比「这条连接上最大的一条消息在最慢的链路上送完」长，不然它量的是带宽而不是死活。现在 hub.json 的 `link.ping_seconds` / `ping_timeout_seconds`
+能调（`docs/config.md`），hub 经管理者告诉 Persona Link（`endpoints`、`X-Persona-Ping`），两端用同一个 `link.PingTimes` 限范围；旧版 Persona Link 不认，仍是 5 秒。
+停掉的原因里带上 ping 的错误（「no pong within …: …」），等不到 pong 和 ping 根本没发出去分得开。
+
+还没解决的两个时限，调心跳管不到：
+- coder/websocket 一条消息是一个帧，写的时候占着这条连接的写锁；ping 帧（还有欠对面的 pong）等这把锁只给 5 秒（`writeControl`，库里写死）。平常一条压缩后的消息
+  一下就进了内核的发送缓冲，锁马上放开，ping 只是在 TCP 里排队，超时调长就够；一条大到发送缓冲一次装不下的消息还在写时，ping 或 pong 过 5 秒照样失败，链路或流照样断。
+  要根治得把大消息拆成小帧写（`Writer` 分段），或者只在连接闲着时 ping。
+- hub 转发 Persona Link 的消息时一条最多写 1 分钟（`spliceWS`），比约 17 KB/s 还慢的链路上 1 MiB 一块照样超时；要么分块更小，要么按链路速度定这个时限。

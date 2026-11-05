@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -261,6 +262,79 @@ func TestLinkNoticesAHubThatStoppedAnswering(t *testing.T) {
 	}
 }
 
+// A heartbeat a hub sets is brought into range; half of one, or nonsense, is none (the caller keeps its own).
+func TestPingTimesKeepsAHubsHeartbeatInRange(t *testing.T) {
+	for _, tc := range []struct {
+		every, timeout int64
+		want           [2]time.Duration
+		ok             bool
+	}{
+		{30000, 90000, [2]time.Duration{30 * time.Second, 90 * time.Second}, true},
+		{1, 1, [2]time.Duration{MinPing, MinPing}, true},
+		{3600000, math.MaxInt64, [2]time.Duration{MaxPing, MaxPing}, true},
+		{0, 5000, [2]time.Duration{}, false},
+		{10000, -1, [2]time.Duration{}, false},
+		{-10_000_000_000_000, 5000, [2]time.Duration{}, false}, // would wrap round to a positive Duration
+		{10000, math.MinInt64, [2]time.Duration{}, false},
+	} {
+		every, timeout, ok := PingTimesMS(tc.every, tc.timeout)
+		if ok != tc.ok || (ok && [2]time.Duration{every, timeout} != tc.want) {
+			t.Errorf("%d / %d ms: %s, %s, %v", tc.every, tc.timeout, every, timeout, ok)
+		}
+	}
+	o := Options{PingEvery: time.Hour, PingTimeout: time.Minute}
+	for _, m := range []Message{{}, {PingMS: 30000}, {PingMS: -1, PingTimeoutMS: 5000}} {
+		if got := o.heartbeatOf(m); got != (heartbeat{time.Hour, time.Minute, false}) || got.check() != checkPing {
+			t.Errorf("%+v: %+v, want Options'", m, got)
+		}
+	}
+	got := o.heartbeatOf(Message{PingMS: 20000, PingTimeoutMS: 60000})
+	if got != (heartbeat{20 * time.Second, time.Minute, true}) || got.check() != time.Minute {
+		t.Errorf("the hub's: %+v, a check waits %s", got, got.check())
+	}
+	// A network change is still noticed quickly when the hub's pongs may come sooner than checkPing.
+	if got := o.heartbeatOf(Message{PingMS: 1000, PingTimeoutMS: 1000}).check(); got != checkPing {
+		t.Errorf("a check after a short heartbeat waits %s", got)
+	}
+}
+
+// The hub's heartbeat (endpoints) replaces this side's on the link, either way, without reconnecting.
+func TestLinkFollowsTheHubsHeartbeat(t *testing.T) {
+	t.Run("shorter", func(t *testing.T) {
+		srv, _ := fakeHub(t, func(c *websocket.Conn) {
+			_ = c.Write(context.Background(), websocket.MessageText, []byte(`{"type":"endpoints","ping_ms":50,"ping_timeout_ms":50}`))
+			time.Sleep(time.Minute) // never reads again: no pongs
+		})
+		ch := runAgainst(t, srv, "jd_x", Options{}) // 10 s and 5 s: the link would stay 15 s
+		waitFor(t, ch, func(s Status) bool { return s.State == "connected" })
+		start := time.Now()
+		s := waitFor(t, ch, func(s Status) bool { return s.State == "waiting" })
+		if !strings.Contains(s.Error, "心跳") || time.Since(start) > 5*time.Second {
+			t.Fatalf("after %s: %+v", time.Since(start), s)
+		}
+	})
+	t.Run("longer", func(t *testing.T) {
+		srv, _ := fakeHub(t, func(c *websocket.Conn) {
+			_ = c.Write(context.Background(), websocket.MessageText, []byte(`{"type":"endpoints","ping_ms":60000,"ping_timeout_ms":60000}`))
+			time.Sleep(time.Minute) // no pongs: a slow link's, as far as this side can tell
+		})
+		// Options' first ping would be due after a second and give up 50 ms later; the hub's is a minute away.
+		ch := runAgainst(t, srv, "jd_x", Options{PingEvery: time.Second, PingTimeout: 50 * time.Millisecond})
+		waitFor(t, ch, func(s Status) bool { return s.State == "connected" })
+		hold := time.After(2500 * time.Millisecond)
+		for {
+			select {
+			case s := <-ch:
+				if s.State != "connected" {
+					t.Fatalf("dropped despite the hub's longer heartbeat: %+v", s)
+				}
+			case <-hold:
+				return
+			}
+		}
+	})
+}
+
 func TestLinkReportsARefusedCredential(t *testing.T) {
 	srv, _ := fakeHub(t, func(*websocket.Conn) {})
 	ch := runAgainst(t, srv, "jd_other", Options{})
@@ -286,6 +360,24 @@ func TestRedialConnectsAgainAtOnce(t *testing.T) {
 	waitFor(t, ch, func(s Status) bool { return s.State == "connected" })
 	eventually(t, func() bool { return n.Load() == 2 })
 	if took := time.Since(asked); took > 500*time.Millisecond {
+		t.Fatalf("connected again %s after asking", took)
+	}
+}
+
+// A ping that is out (a slow link's heartbeat may wait a long time for its pong) does not hold up「立即重连」.
+func TestRedialDoesNotWaitForAPingThatIsOut(t *testing.T) {
+	srv, n := fakeHub(t, func(c *websocket.Conn) {
+		_ = c.Write(context.Background(), websocket.MessageText, []byte(`{"type":"endpoints","ping_ms":50,"ping_timeout_ms":60000}`))
+		time.Sleep(time.Minute) // never reads: the ping stays out
+	})
+	redial := make(chan struct{}, 1)
+	ch := runAgainst(t, srv, "jd_x", Options{Redial: redial})
+	waitFor(t, ch, func(s Status) bool { return s.State == "connected" })
+	time.Sleep(300 * time.Millisecond) // the hub's first ping went 50 ms after its endpoints
+	asked := time.Now()
+	redial <- struct{}{}
+	eventually(t, func() bool { return n.Load() == 2 })
+	if took := time.Since(asked); took > 2*time.Second {
 		t.Fatalf("connected again %s after asking", took)
 	}
 }

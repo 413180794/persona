@@ -38,11 +38,38 @@ const (
 )
 
 // Both ends ping every PingEvery and drop the link after PingTimeout without a pong, so a dead link is noticed
-// within about PingEvery+PingTimeout. These are settings, not measurements.
+// within about PingEvery+PingTimeout. These are settings, not measurements: a hub may set others (hub.json link: on a
+// slow link a ping waits behind the message being written), and then tells Persona Link (endpoints' ping_ms and
+// ping_timeout_ms, the connector stream's PingHeader).
 const (
 	PingEvery   = 10 * time.Second
 	PingTimeout = 5 * time.Second
 )
+
+// A heartbeat a hub sets is brought into [MinPing, MaxPing] at both ends (PingTimes). MinPing is below hub.json's
+// whole seconds for the tests' short heartbeats; MaxPing still notices a dead link within twenty minutes.
+const (
+	MinPing = 50 * time.Millisecond
+	MaxPing = 10 * time.Minute
+)
+
+// PingTimes is the heartbeat a hub set, in range; ok is false unless both are set (more than 0): the caller keeps its
+// own then.
+func PingTimes(every, timeout time.Duration) (time.Duration, time.Duration, bool) {
+	if every <= 0 || timeout <= 0 {
+		return 0, 0, false
+	}
+	return min(max(every, MinPing), MaxPing), min(max(timeout, MinPing), MaxPing), true
+}
+
+// PingTimesMS is PingTimes of milliseconds, as the wire has them (no overflow however large, either way: a negative
+// one stays not set).
+func PingTimesMS(every, timeout int64) (time.Duration, time.Duration, bool) {
+	ms := func(n int64) time.Duration {
+		return time.Duration(min(max(n, 0), MaxPing.Milliseconds())) * time.Millisecond
+	}
+	return PingTimes(ms(every), ms(timeout))
+}
 
 // Message is one JSON message on the link.
 type Message struct {
@@ -56,6 +83,10 @@ type Message struct {
 	Endpoints []Endpoint `json:"endpoints,omitempty"`
 	HubName   string     `json:"hub_name,omitempty"`
 	MeshHubs  int        `json:"mesh_hubs,omitempty"`
+	// endpoints, from hubs whose hub.json sets the heartbeat (link): how often to ping and how long to wait for a
+	// pong, in milliseconds; Persona Link keeps this link's to them (PingTimes). Without them it keeps its own.
+	PingMS        int `json:"ping_ms,omitempty"`
+	PingTimeoutMS int `json:"ping_timeout_ms,omitempty"`
 	// node (hub → jarvis-link): whether the hub got through to the resident node.
 	Online bool `json:"online,omitempty"`
 	// open (hub → jarvis-link) asks for stream ID; open_failed answers that it could not be opened.
