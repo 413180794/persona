@@ -32,6 +32,8 @@ type fakeHost struct {
 	// reply is what devices.connected answers; request what a node's request the hub answers gets.
 	reply   devicewire.ConnectedReply
 	request func(ctx context.Context, p devicewire.NodeCall) (json.RawMessage, error)
+	// credCall, when set, runs before devices.connector_cred is answered (a test acts while the fetch is out).
+	credCall func()
 }
 
 func (f *fakeHost) Call(ctx context.Context, method string, params, out any) error {
@@ -62,6 +64,12 @@ func (f *fakeHost) Call(ctx context.Context, method string, params, out any) err
 	case devicewire.MethodConnectorCred:
 		var p devicewire.ConnectorCred
 		_ = json.Unmarshal(raw, &p)
+		f.mu.Lock()
+		hook := f.credCall
+		f.mu.Unlock()
+		if hook != nil {
+			hook()
+		}
 		f.mu.Lock()
 		res = f.creds[p.MachineID]
 		f.mu.Unlock()

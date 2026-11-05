@@ -72,25 +72,40 @@ type serviceState struct {
 // connectorCred is a service machine's pin and credential.
 type connectorCred struct{ fp, token, version string }
 
-func (m *Machine) connectorCred(ctx context.Context) (*connectorCred, error) {
+// connectorCred is the kept credential, or the one the hub hands over. What the hub answers is kept only if the
+// state is where it was when the call went out: a pairing here while the call was out (PairConnector) already set the
+// new credential, which the old answer must not replace, and a 4002 meanwhile (serviceInvalidated) dropped it for good.
+// It also returns the pairing generation the credential belongs to, which can be newer than the caller's snapshot when
+// the computer was paired again while the call was out: what the connector says about that credential is of that
+// generation.
+func (m *Machine) connectorCred(ctx context.Context) (*connectorCred, int, error) {
 	m.mu.Lock()
-	cached := m.svc.cred
+	cached, gen := m.svc.cred, m.svc.pairGen
 	m.mu.Unlock()
 	if cached != nil {
-		return cached, nil
+		return cached, gen, nil
 	}
 	var c devicewire.ConnectorCred
 	if err := m.d.opts.Hub.Call(ctx, devicewire.MethodConnectorCred, map[string]any{"machine_id": m.cfg.ID}, &c); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if c.Token == "" {
-		return nil, errors.New("这台电脑的连接器还没配对：在管理界面这台电脑上点「重新配对」，粘贴它的 jarvis://connector 链接")
+		return nil, 0, errors.New("这台电脑的连接器还没配对：在管理界面这台电脑上点「重新配对」，粘贴它的 jarvis://connector 链接")
 	}
 	cred := &connectorCred{fp: c.FP, token: c.Token, version: c.Version}
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.svc.invalid {
+		return nil, 0, errors.New(errConnectorInvalid)
+	}
+	if m.svc.cred != nil { // paired again, or another fetch kept its answer first
+		return m.svc.cred, m.svc.pairGen, nil
+	}
+	if m.svc.pairGen != gen {
+		return nil, 0, errors.New("这台电脑的连接器刚重新配对，稍后再试")
+	}
 	m.svc.cred = cred
-	m.mu.Unlock()
-	return cred, nil
+	return cred, gen, nil
 }
 
 // connectorTransport is an HTTP/1.1 transport to a connector pinned to fp, dialing through proxyURL when set.
@@ -210,7 +225,7 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 	if m.cfg.Address == "" {
 		return nil, errors.New("hub.json 里这台没有 address（连接器的 主机:端口）")
 	}
-	cred, err := m.connectorCred(ctx)
+	cred, gen, err := m.connectorCred(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +242,7 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 		tr.CloseIdleConnections()
 		if resp != nil && resp.StatusCode != http.StatusSwitchingProtocols {
 			herr := connectorError(resp)
-			m.refused(st.pairGen, resp.StatusCode, herr, true)
+			m.refused(gen, resp.StatusCode, herr, true)
 			return nil, herr
 		}
 		return nil, err
@@ -255,15 +270,17 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 			}
 		}
 	}()
+	// A 4002 on a stream of an older pairing (gen is the stream credential's) is the connector replacing that
+	// credential (paired again, maybe here): it says nothing of the current one.
 	r := &closeWatch{r: nc, onClose: func(err error) {
 		if websocket.CloseStatus(err) == connectorRevoked {
-			m.serviceInvalidated()
+			m.serviceInvalidated(gen)
 		}
 	}}
 	var once sync.Once
 	return &nodePipe{r: r, w: nc,
 		lastErr: func() string {
-			if r.err != nil && websocket.CloseStatus(r.err) == connectorRevoked {
+			if r.err != nil && websocket.CloseStatus(r.err) == connectorRevoked && m.svcGenIs(gen) {
 				return errConnectorInvalid
 			}
 			if c := context.Cause(sctx); c != nil && !errors.Is(c, context.Canceled) {
@@ -302,9 +319,17 @@ func (m *Machine) refused(gen, status int, herr error, withErr bool) {
 }
 
 // svcMovedOnLocked: since a request made with pairing gen's credential went out, the connector was paired again here
-// or ended a stream with 4002 (serviceInvalidated). What that request learned is stale: a probe that answered before
-// the 4002 must not clear 「重新配对」, a refusal of the old credential must not hold off the new one. m.mu held.
+// or ended a stream of pairing gen with 4002 (serviceInvalidated). What that request learned is stale: a probe that
+// answered before the 4002 must not clear 「重新配对」, a refusal of the old credential must not hold off the new one.
+// m.mu held.
 func (m *Machine) svcMovedOnLocked(gen int) bool { return m.svc.invalid || m.svc.pairGen != gen }
+
+// svcGenIs: the computer was not paired again since pairing gen.
+func (m *Machine) svcGenIs(gen int) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.svc.pairGen == gen
+}
 
 const errConnectorInvalid = "连接器已经配对给了别的 hub，原来的凭据失效：在管理界面重新配对这台电脑"
 
@@ -327,10 +352,16 @@ func (c *closeWatch) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// serviceInvalidated: the connector ended the stream with 4002: it was paired with another hub. The path is not tried
-// again until it is paired again here.
-func (m *Machine) serviceInvalidated() {
+// serviceInvalidated: the connector ended a stream opened with pairing gen's credential with 4002: it was paired with
+// another hub. The path is not tried again until it is paired again here. Nothing when the state moved on since
+// (svcMovedOnLocked): the connector also ends old streams with 4002 when it is paired again here, and that close can be
+// read after PairConnector handed over the new credential.
+func (m *Machine) serviceInvalidated(gen int) {
 	m.mu.Lock()
+	if m.svcMovedOnLocked(gen) {
+		m.mu.Unlock()
+		return
+	}
 	m.svc.invalid, m.svc.ok, m.svc.err, m.svc.cred = true, false, errConnectorInvalid, nil
 	m.mu.Unlock()
 	m.d.logf("[%s] connector: credential revoked (paired with another hub)", m.cfg.ID)
@@ -368,9 +399,10 @@ func (m *Machine) probeService(ctx context.Context) {
 	if st.invalid || time.Now().Before(st.wait) || m.cfg.Address == "" {
 		return
 	}
+	gen := st.pairGen // the probed credential's pairing; connectorCred can hand over a newer one
 	set := func(ok bool, rtt int, err string, version string) {
 		m.mu.Lock()
-		if m.svcMovedOnLocked(st.pairGen) {
+		if m.svcMovedOnLocked(gen) {
 			m.mu.Unlock()
 			return
 		}
@@ -390,11 +422,12 @@ func (m *Machine) probeService(ctx context.Context) {
 			}
 		}
 	}
-	cred, err := m.connectorCred(ctx)
+	cred, credGen, err := m.connectorCred(ctx)
 	if err != nil {
 		set(false, 0, err.Error(), "")
 		return
 	}
+	gen = credGen
 	tr, err := connectorTransport(cred.fp, m.cfg.Proxy)
 	if err != nil {
 		set(false, 0, err.Error(), "")
@@ -415,7 +448,7 @@ func (m *Machine) probeService(ctx context.Context) {
 	rtt := max(1, int(time.Since(start).Milliseconds()))
 	if resp.StatusCode != http.StatusOK {
 		herr := connectorError(resp)
-		m.refused(st.pairGen, resp.StatusCode, herr, false)
+		m.refused(gen, resp.StatusCode, herr, false)
 		set(false, 0, herr.Error(), "")
 		return
 	}
