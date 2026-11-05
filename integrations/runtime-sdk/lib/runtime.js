@@ -111,6 +111,11 @@ export function createRuntime(driver, options) {
 
   let peer
   let stopped = false
+  // Bumped by stop(): a dialed connection's callbacks dial again only while their run is the current one. Without it a
+  // stop() then start() in the same tick (a runtime restarting itself) leaves the old connection's close and adopt
+  // tails seeing stopped === false, each dialing once more: two connections displacing each other forever. Only dialing
+  // mode has this; in listen mode the node dials.
+  let run = 0
   let retryTimer
   let retryMs = baseRetry
   let refreshTimer
@@ -142,6 +147,7 @@ export function createRuntime(driver, options) {
   // After an older node: try again when the socket file is replaced (a node restarting re-creates it: an update), or
   // after NEW_NODE_MAX anyway — not every few seconds, which would fill the node's log with connects and leaves.
   function awaitNewNode() {
+    const mine = run
     const id = () => {
       try {
         const st = statSync(socketPath)
@@ -153,7 +159,7 @@ export function createRuntime(driver, options) {
     const was = id()
     const since = Date.now()
     const look = () => {
-      if (stopped) return
+      if (stopped || run !== mine) return
       if (id() !== was || Date.now() - since >= NEW_NODE_MAX) return open()
       retryTimer = setTimeout(look, NEW_NODE_EVERY)
       retryTimer.unref?.()
@@ -223,11 +229,12 @@ export function createRuntime(driver, options) {
       scheduleConnect(backoff())
       return
     }
-    const state = { heldOff: false } // left an older node on purpose: awaitNewNode decides when to come back
+    // heldOff: left an older node on purpose (awaitNewNode decides when to come back); run: the run that dialed it.
+    const state = { heldOff: false, run }
     socket.once('error', () => {}) // handled by close
     socket.once('connect', () => void adopt(socket, state))
     socket.once('close', () => {
-      if (state.heldOff) return
+      if (state.heldOff || state.run !== run) return
       if (!peer || peer.socket !== socket) scheduleConnect(backoff())
     })
   }
@@ -261,7 +268,7 @@ export function createRuntime(driver, options) {
         if (peer === p) peer = undefined
         state.heldOff = true
         p.close(new Error('node too old'))
-        if (dialing) awaitNewNode()
+        if (dialing && state.run === run) awaitNewNode()
         return
       }
       warnedRequires = false
@@ -286,12 +293,12 @@ export function createRuntime(driver, options) {
         warnedConflict = true
         state.heldOff = true
         p.close(err)
-        if (dialing) scheduleConnect(CONFLICT_RETRY)
+        if (dialing && state.run === run) scheduleConnect(CONFLICT_RETRY)
         return
       }
       log(`jarvis: hello failed: ${err.message}`)
       p.close(err)
-      if (dialing) scheduleConnect(backoff())
+      if (dialing && state.run === run) scheduleConnect(backoff())
       return
     }
     retryMs = baseRetry
@@ -301,7 +308,7 @@ export function createRuntime(driver, options) {
     const why = await p.done
     if (peer === p) peer = undefined
     log(`jarvis: node connection closed${why?.message ? `: ${why.message}` : ''}`)
-    if (dialing) scheduleConnect(baseRetry)
+    if (dialing && state.run === run) scheduleConnect(baseRetry)
   }
 
   /**
@@ -710,6 +717,7 @@ export function createRuntime(driver, options) {
     /** Disconnect for good. */
     stop() {
       stopped = true
+      run++
       server?.close()
       server = undefined
       clearTimeout(retryTimer)

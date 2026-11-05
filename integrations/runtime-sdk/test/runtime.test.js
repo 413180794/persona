@@ -399,3 +399,31 @@ test('a card for a session not listed yet: the list goes out first, so the node 
   assert.deepEqual(res, { allow: true })
   assert.deepEqual(order.slice(0, 2), [['list', ['new']], ['card', 'new']])
 })
+
+test('stop() then start() in the same tick dials once more, not again and again (dialing mode)', async (t) => {
+  const n = await startFakeNode(t)
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: n.path, retryMs: 20, refreshMs: 0 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  assert.equal(n.hellos, 1)
+  rt.stop()
+  rt.start() // as a runtime restarting itself does (Paseo's version changed)
+  await new Promise((r) => setTimeout(r, 1000))
+  assert.equal(n.hellos, 2, 'the old connection\'s close and tail do not dial again')
+})
+
+test('stop() then start() while hello is in flight: the failed hello of the old run does not dial again', async (t) => {
+  const n = await startFakeNode(t)
+  n.holdHello = new Promise(() => {}) // the first hello is never answered
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: n.path, retryMs: 20, refreshMs: 0 })
+  t.after(() => rt.stop())
+  rt.start()
+  await until('hello sent', () => n.hellos === 1)
+  n.holdHello = undefined // the next one is answered
+  rt.stop()
+  rt.start()
+  await n.ready
+  await new Promise((r) => setTimeout(r, 1000))
+  assert.equal(n.hellos, 2, 'the old hello failing does not dial again')
+})

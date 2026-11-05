@@ -14,6 +14,7 @@ import { Peer, RpcError } from '../lib/wire.js'
  * @returns {Promise<{ path: string, ready: Promise<void>, hello: any, peer: Peer, events: {event: string, params: any}[],
  *   last(event: string): any, all(event: string): any[], asked: any[], resolve: (ix: any) => any, close(): void }>}
  *   Also: tools / toolCalls / callTool (how mcp.call answers), refuseHello (an RpcError hello answers with, or none),
+ *   holdHello (a promise the next hellos wait on before they are answered, or none),
  *   offer (a package {name, hash, version, files} this node carries: hello offers it to a runtime running another hash
  *   of it, runtime.package answers it) and packageCalls (the runtime.package calls).
  */
@@ -31,6 +32,7 @@ export async function startFakeNode(t, opts = {}) {
       onRequest: async (method, params) => {
         if (method === 'runtime.hello') {
           n.hellos++
+          if (n.holdHello) await n.holdHello
           if (n.refuseHello) throw n.refuseHello
           n.hello = params
           n.peer = p
