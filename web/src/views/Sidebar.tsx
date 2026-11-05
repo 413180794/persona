@@ -13,7 +13,7 @@ import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
 import { ago, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
-import { NAV_PAGES, otherConversations, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
+import { NAV_PAGES, firstAndCurrent, otherConversations, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
 import { useExtensionSlot } from "../lib/extension-slots";
 import { toneOf } from "../lib/extension-ui";
 import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
@@ -36,28 +36,77 @@ import { foldedNow } from "../lib/fold";
 
 // follow: until the user folds or opens it, the section takes its default as it is now, not as it was on the first
 // render (未归属 is folded only once the todos above it have loaded, #2249); other sections keep their first default.
-function useFolded(key: string, initial = false, follow = false): [boolean, () => void] {
+// holds: the section has the open conversation's row (#2283); it opens when it comes to hold it (opening the
+// conversation from anywhere shows its row), without storing that, and can still be folded by hand after.
+function useFolded(key: string, initial = false, { follow = false, holds = false } = {}): [boolean, () => void] {
   const [stored, setStored] = useState(() => localStorage.getItem(`fold:${key}`));
   const [first] = useState(initial);
-  const folded = foldedNow(stored, follow ? initial : first);
+  const [opened, setOpened] = useState(holds);
+  const [held, setHeld] = useState(holds);
+  if (held !== holds) {
+    // adjusted while rendering, so the row is laid out (and scrolled to) in the same frame
+    setHeld(holds);
+    if (holds) setOpened(true);
+  }
+  const folded = !opened && foldedNow(stored, follow ? initial : first);
   return [
     folded,
     () => {
       const next = folded ? "0" : "1";
       localStorage.setItem(`fold:${key}`, next);
       setStored(next);
+      setOpened(false);
     },
   ];
 }
 
+/** The open row's own fill (#2283): it stays while the pointer is elsewhere in the list, a step darker than hover. */
+const CURRENT_ROW = "bg-hover-2";
+
+/** Brings `el` to the middle of its nearest scrolling ancestor when it is not fully in view (rows loading above it
+ *  later still leave it on screen). Not `scrollIntoView`: that also scrolls the clipped (overflow-hidden) box of a
+ *  Collapse that is still opening, and it stays scrolled. */
+function reveal(el: HTMLElement): boolean {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if (o !== "auto" && o !== "scroll") continue;
+    const r = el.getBoundingClientRect(),
+      b = p.getBoundingClientRect();
+    if (r.top >= b.top && r.bottom <= b.bottom) return false;
+    p.scrollTop += r.top + r.height / 2 - (b.top + b.height / 2);
+    return true;
+  }
+  return false;
+}
+
 /** The gliding highlight under a list of rows (Beautiful UI's Sidebar Nav): rows register under their keys, and the
- *  one under the pointer (else the active one) gets the box. The list is the box's scroll container (`nav`). */
+ *  one under the pointer gets the box; the open row has its own fill (CURRENT_ROW), so the box doesn't take it away.
+ *  The list is the box's scroll container (`nav`). The open row is kept in view from when it opens until the list is
+ *  touched (wheel, pointer, keys): it may come later, and rows loading above it push it down. */
 function useGlide(activeKey: string) {
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());
+  const lastKey = useRef<string | null>(null);
+  const following = useRef(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const [box, setBox] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    const n = nav.current;
+    if (!n) return;
+    const stop = () => (following.current = false);
+    const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+    for (const e of events) n.addEventListener(e, stop, { passive: true });
+    return () => events.forEach((e) => n.removeEventListener(e, stop));
+  }, []);
   useLayoutEffect(() => {
+    if (lastKey.current !== activeKey) {
+      lastKey.current = activeKey;
+      following.current = true;
+    }
+    const open = following.current ? rows.current.get(activeKey) : undefined;
+    // a group that opened for it is still growing, and the list can't scroll past its end yet: again once it has
+    if (open?.offsetHeight && reveal(open)) setTimeout(() => following.current && open.isConnected && reveal(open), 350);
+    // the box rests under the open row when the pointer is away, so it glides from there; that row's fill covers it
     const el = rows.current.get(hovered ?? activeKey);
     let next: { top: number; height: number } | null = null;
     if (el && nav.current) {
@@ -123,13 +172,13 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const extensionPages = useExtensionSlot("nav_page");
   // a phone's drawer has the pages as two rows of icons, so its first screen reaches the Agents (#1996)
   const narrow = useMedia(NARROW);
-  const [jarvisFolded, toggleJarvis] = useFolded("jarvis");
   const activeKey = useActiveKey(route);
+  const convs = otherConversations(assistant?.conversations ?? [], assistant?.main, 5, activeKey.startsWith("j:") ? activeKey.slice(2) : undefined);
+  const [jarvisFolded, toggleJarvis] = useFolded("jarvis", false, { holds: activeKey === "history" || convs.some((c) => activeKey === `j:${c.session_id}`) });
   const { nav, reg, hover, highlight } = useGlide(activeKey);
   const go = useGo(onNavigate);
 
   const online = machines.filter((m) => m.online).length;
-  const convs = otherConversations(assistant?.conversations ?? [], assistant?.main);
   const mainConversation = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
   const page: Record<(typeof NAV_PAGES)[number], NavPage | false> = {
     home: { k: "home", to: { name: "home" }, icon: "home", label: "总览", badge: counts.badge || undefined, badgeTone: "red" },
@@ -306,11 +355,12 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
   const onRowMenu = (s: Session, anchor: HTMLElement) => setRowMenu((m) => (m?.anchor === anchor ? null : { s, anchor }));
   const onSpaceMenu = (sp: Space, anchor: HTMLElement) => setSpaceMenu((m) => (m?.anchor === anchor ? null : { sp, anchor }));
-  const [recentFolded, toggleRecent] = useFolded("recent", true);
+  const [recentFolded, toggleRecent] = useFolded("recent", true, { holds: holdsRow(recent, activeKey) });
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
-  const [pinnedFolded, togglePinned] = useFolded("agents-pinned");
-  const [launchesFolded, toggleLaunches] = useFolded("agents-launching");
+  const [pinnedFolded, togglePinned] = useFolded("agents-pinned", false, { holds: holdsRow(pinnedAgents, activeKey) });
+  const [launchesFolded, toggleLaunches] = useFolded("agents-launching", false, { holds: launches.some((l) => activeKey === `s:${l.machineId}/${l.id}`) });
   const [showAllRecent, setShowAllRecent] = useState(false);
+  const recentShown = showAllRecent ? recent : firstAndCurrent(recent, 8, (s) => rowKey(s) === activeKey);
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
   const [linkTargetSpace, setLinkTargetSpace] = useState<LinkTargetSpace | undefined>();
 
@@ -397,12 +447,12 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
 
       {recent.length > 0 && (
         <Section title="最近（未运行）" folded={recentFolded} onToggle={toggleRecent} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{recent.length}</span>}>
-          {(showAllRecent ? recent : recent.slice(0, 8)).map((s) => (
+          {recentShown.map((s) => (
             <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} />
           ))}
           {recent.length > 8 && (
             <button type="button" onClick={() => setShowAllRecent((x) => !x)} className="relative z-10 w-full rounded-[7px] px-2 py-1 text-left text-[12px] text-ink-3 hover:text-ink-2 [@media(pointer:coarse)]:min-h-11">
-              {showAllRecent ? "收起" : `再显示 ${recent.length - 8} 个`}
+              {showAllRecent ? "收起" : `再显示 ${recent.length - recentShown.length} 个`}
             </button>
           )}
         </Section>
@@ -532,9 +582,7 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
 }
 
 function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey, go, onRowMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byTodo?: boolean; showHost?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
-  const [storedFold, toggle] = useFolded(group.key, group.folded, true);
-  // folded by default (未归属) but holding the agent open now: open, so its row shows
-  const folded = storedFold && !group.sessions.some((s) => activeKey === `s:${s.machine_id}/${s.session_id}`);
+  const [folded, toggle] = useFolded(group.key, group.folded, { follow: true, holds: holdsRow(group.sessions, activeKey) });
   const row = (s: Session) => {
     const key = `s:${s.machine_id}/${s.session_id}`;
     const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
@@ -582,7 +630,7 @@ function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey
 /** One computer in the repository tree (#2108 / #2126): header folds the whole computer; flat when only one computer has agents. */
 function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRowMenu }: { m: RepoMachine; flat: boolean; machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
   const online = m.machine.online;
-  const [folded, toggle] = useFolded(m.foldKey, !online);
+  const [folded, toggle] = useFolded(m.foldKey, !online, { holds: holdsRow(m.sessions, activeKey) });
   const repos = m.repos.map((tree) => <RepoSection key={tree.key} tree={tree} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />);
   if (flat) return <>{repos}</>;
   return (
@@ -615,7 +663,7 @@ function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRo
 
 /** One repository on one machine (按仓库): its working trees under it, the main checkout marked and first. */
 function RepoSection({ tree, reg, hover, activeKey, go, onRowMenu }: { tree: RepoTree; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
-  const [folded, toggle] = useFolded(tree.key, false);
+  const [folded, toggle] = useFolded(tree.key, false, { holds: tree.worktrees.some((w) => holdsRow(w.sessions, activeKey)) });
   const row = (s: Session, hint: string) => {
     const key = `s:${s.machine_id}/${s.session_id}`;
     return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={hint} onMenu={onRowMenu} />;
@@ -629,15 +677,15 @@ function RepoSection({ tree, reg, hover, activeKey, go, onRowMenu }: { tree: Rep
       onToggle={toggle}
       right={<span className="text-[10.5px] text-ink-3 tabular-nums">{tree.count}</span>}
     >
-      {flat ? tree.worktrees[0]!.sessions.map((s) => row(s, tree.name)) : tree.worktrees.map((w) => <RepoWorktreeRows key={w.key} w={w} repo={tree.name} row={row} />)}
+      {flat ? tree.worktrees[0]!.sessions.map((s) => row(s, tree.name)) : tree.worktrees.map((w) => <RepoWorktreeRows key={w.key} w={w} repo={tree.name} row={row} activeKey={activeKey} />)}
     </Section>
   );
 }
 
 /** One working tree's agents under its own folding row: the main checkout wears a home mark, and a tree with nothing
  * running says so. */
-function RepoWorktreeRows({ w, repo, row }: { w: RepoWorktree; repo: string; row: (s: Session, hint: string) => React.ReactNode }) {
-  const [folded, toggle] = useFolded(w.key, w.sessions.length === 0);
+function RepoWorktreeRows({ w, repo, row, activeKey }: { w: RepoWorktree; repo: string; row: (s: Session, hint: string) => React.ReactNode; activeKey: string }) {
+  const [folded, toggle] = useFolded(w.key, w.sessions.length === 0, { holds: holdsRow(w.sessions, activeKey) });
   const running = w.sessions.filter((s) => !isQuiet(s)).length;
   return (
     <div className="mt-px">
@@ -656,7 +704,7 @@ function RepoWorktreeRows({ w, repo, row }: { w: RepoWorktree; repo: string; row
 
 function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onNavigate }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
   const allIdle = sp.sessions.every(isQuiet);
-  const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3);
+  const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3, { holds: holdsRow(sp.sessions, activeKey) });
 
   return (
     <Section
@@ -740,7 +788,7 @@ type TreeProps = { machines: Machine[]; reg: RegFn; hover: (k: string | null) =>
 // is away starts folded; its agents are under「最近（未运行）」.
 function MachineSection({ m, ...p }: { m: HerdrMachine } & TreeProps) {
   const online = m.machine.online;
-  const [folded, toggle] = useFolded(m.foldKey, !online);
+  const [folded, toggle] = useFolded(m.foldKey, !online, { holds: holdsRow(m.sessions, p.activeKey) });
   return (
     <div className="mt-3">
       <div className="group/sec flex items-center gap-1 px-2 pb-0.5">
@@ -765,7 +813,7 @@ function MachineSection({ m, ...p }: { m: HerdrMachine } & TreeProps) {
           {m.spaces.map((sp) => <WorkspaceBlock key={sp.key} sp={sp} {...p} />)}
           {m.other.length > 0 && (
             // 「其他」: the machine's agents outside any workspace (Codex threads, runtimes without spaces)
-            <TreeBlock foldKey={m.otherFoldKey} sessions={m.other} title={<span className="min-w-0 truncate font-medium">其他</span>} right={(folded) => <SessionTally sessions={m.other} folded={folded} />}>
+            <TreeBlock foldKey={m.otherFoldKey} sessions={m.other} activeKey={p.activeKey} title={<span className="min-w-0 truncate font-medium">其他</span>} right={(folded) => <SessionTally sessions={m.other} folded={folded} />}>
               {m.other.map((s) => <TreeSessionRow key={s.session_id} s={s} {...p} />)}
             </TreeBlock>
           )}
@@ -777,8 +825,8 @@ function MachineSection({ m, ...p }: { m: HerdrMachine } & TreeProps) {
 }
 
 // A workspace or「其他」in the tree: its title row folds what is under it, the fold kept by 机器/空间名.
-function TreeBlock({ foldKey, sessions, state, title, right, children }: { foldKey: string; sessions: Session[]; state?: AgentState; title: React.ReactNode; right: (folded: boolean) => React.ReactNode; children: React.ReactNode }) {
-  const [folded, toggle] = useFolded(foldKey, sessions.every(isQuiet) && sessions.length > 3);
+function TreeBlock({ foldKey, sessions, activeKey, state, title, right, children }: { foldKey: string; sessions: Session[]; activeKey: string; state?: AgentState; title: React.ReactNode; right: (folded: boolean) => React.ReactNode; children: React.ReactNode }) {
+  const [folded, toggle] = useFolded(foldKey, sessions.every(isQuiet) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
   return (
     <div>
       <div className="group/sec flex items-center gap-1 pr-2 pl-2">
@@ -802,6 +850,7 @@ function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
     <TreeBlock
       foldKey={sp.foldKey}
       sessions={sp.tree}
+      activeKey={p.activeKey}
       state={sp.state}
       title={<><span className="min-w-0 truncate font-medium">{sp.name}</span><SpaceMarks pinned={sp.pinned} muted={isSpaceMuted(sp, p.mutes)} /></>}
       right={(folded) => (
@@ -823,7 +872,7 @@ function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
 // A space's child spaces (Orca's「N 个子项」), folded at first like Orca's sidebar: the parent's row already sums up
 // what they are doing (ChildSummary), and the fold is kept by 机器/空间名 like the space's own.
 function ChildSpaces({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
-  const [folded, toggle] = useFolded(`${sp.foldKey}/子项`, true);
+  const [folded, toggle] = useFolded(`${sp.foldKey}/子项`, true, { holds: holdsRow(sp.tree.slice(sp.sessions.length), p.activeKey) });
   const n = sp.children.length;
   return (
     <div>
@@ -891,7 +940,7 @@ function TabRow({ t, reg, hover, activeKey, go, onRowMenu }: { t: HerdrTab } & T
 // Agents outside any space (Codex sessions and the like): folds like a space, folded at first when it is long and
 // nothing in it wants a look. The app lists them as a space of their machine.
 function LooseSection({ sessions, reg, hover, activeKey, go, onRowMenu }: { sessions: Session[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
-  const [folded, toggle] = useFolded("loose", sessions.every(isQuiet) && sessions.length > 3);
+  const [folded, toggle] = useFolded("loose", sessions.every(isQuiet) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
   return (
     <Section title="其他 Agent" folded={folded} onToggle={toggle} right={<SessionTally sessions={sessions} folded={folded} />}>
       {sessions.map((s) => (
@@ -919,6 +968,8 @@ function SessionTally({ sessions, folded }: { sessions: Session[]; folded: boole
 type RegFn = (k: string) => (el: HTMLElement | null) => void;
 /** An agent row's key in the sidebar (highlight, active): sidebarActiveKey's for a session. */
 const rowKey = (s: Pick<Session, "machine_id" | "session_id">) => `s:${agentKey(s)}`;
+/** Whether the open row (`activeKey`) is one of these agents': its group opens for it (useFolded). */
+const holdsRow = (sessions: readonly Session[], activeKey: string) => sessions.some((s) => rowKey(s) === activeKey);
 type GoFn = (to: Route) => (e: React.MouseEvent) => void;
 type RowMenuFn = (s: Session, anchor: HTMLElement) => void;
 
@@ -938,7 +989,7 @@ function PersonaRow({ reg, hover, active, go, main }: { reg: RegFn; hover: (k: s
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
       title="Persona 的主对话"
-      className="relative z-10 mb-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11"
+      className={cx("relative z-10 mb-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW)}
     >
       <PersonaAvatar
         size={18}
@@ -979,7 +1030,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
       onFocus={() => hover(k)}
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
-      className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11"
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW)}
     >
       <span className={active ? "text-ink" : "text-ink-3"}>
         <Icon name={icon} size={14} stroke={1.8} />
@@ -995,11 +1046,13 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
-function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn }) {
+export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn }) {
   const st = stateOf(s);
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
   const row = useRef<HTMLAnchorElement | null>(null);
+  // what sits at the row's end steps aside for the hover ⋯; the open row leaves room for its ⋯ instead
+  const aside = active ? undefined : "group-hover/row:invisible";
   const link = (
     <a
       ref={(el) => {
@@ -1019,18 +1072,19 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
       title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n待办：${s.todo.title}` : ""}${preview ? `\n${preview}` : ""}`}
-      // a touch screen: rows a finger can hit (44), and room at the end for the ⋯ that is always there
-      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", onMenu && "[@media(hover:none)]:pr-11")}
+      // a touch screen: rows a finger can hit (44), and room at the end for the ⋯ that is always there; the open row
+      // keeps its ⋯ too, so it has room for it
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
       {prefix}
       <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
         {label ?? sessionTitle(s)}
       </span>
-      {host && <span className="shrink-0 rounded bg-hover px-1 text-[10px] leading-4 text-ink-3 group-hover/row:invisible">{host}</span>}
+      {host && <span className={cx("shrink-0 rounded bg-hover px-1 text-[10px] leading-4 text-ink-3", aside)}>{host}</span>}
       {showTodoTag && s.todo && (
         <span
-          className="flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3 group-hover/row:invisible"
+          className={cx("flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3", aside)}
           title={`待办：${s.todo.title}`}
           aria-label={`待办：${s.todo.title}`}
         >
@@ -1038,13 +1092,14 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint
         </span>
       )}
       {/* the row's ⋯ takes the end on hover: what is there steps aside instead of showing half under it */}
-      {t && <span className="max-w-[72px] shrink-0 truncate text-[11px] text-ink-3 group-hover/row:invisible">{t}</span>}
-      {!t && (st === "offline" || !showState) && <span className="shrink-0 text-[11px] text-ink-3 group-hover/row:invisible">{ago(s.updated_at)}</span>}
-      {(s.pending_interactions ?? 0) > 0 && <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red px-1 text-[10px] font-semibold text-white tabular-nums group-hover/row:invisible">{s.pending_interactions}</span>}
+      {t && <span className={cx("max-w-[72px] shrink-0 truncate text-[11px] text-ink-3", aside)}>{t}</span>}
+      {!t && (st === "offline" || !showState) && <span className={cx("shrink-0 text-[11px] text-ink-3", aside)}>{ago(s.updated_at)}</span>}
+      {(s.pending_interactions ?? 0) > 0 && <span className={cx("flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red px-1 text-[10px] font-semibold text-white tabular-nums", aside)}>{s.pending_interactions}</span>}
     </a>
   );
   if (!onMenu) return link;
-  // the ⋯ shows over the row's end on hover (a pointer); on a touch screen it stays, in the room the row leaves for it
+  // the ⋯ shows over the row's end on hover (a pointer); on the open row and on a touch screen it stays, in the room
+  // the row leaves for it
   return (
     <div className="group/row relative">
       {link}
@@ -1055,7 +1110,7 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint
         title="更多"
         tabIndex={-1}
         onClick={() => row.current && onMenu(s, row.current)}
-        className="absolute top-1/2 right-1 z-20 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink group-hover/row:flex [@media(hover:none)]:right-0 [@media(hover:none)]:flex [@media(hover:none)]:size-11 [@media(hover:none)]:bg-transparent"
+        className={cx("absolute top-1/2 right-1 z-20 size-6 -translate-y-1/2 items-center justify-center rounded-[6px] text-ink-3 hover:text-ink group-hover/row:flex [@media(hover:none)]:right-0 [@media(hover:none)]:flex [@media(hover:none)]:size-11 [@media(hover:none)]:bg-transparent", active ? "flex hover:bg-hover" : "hidden bg-hover hover:bg-hover-2")}
       >
         <Icon name="more" size={14} />
       </button>
@@ -1113,7 +1168,7 @@ function agentRowItems(s: AgentSession, p: AgentPrefs): MenuItem[] {
 function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
   const { sessions, loaded, error } = useAgentList();
   const prefs = useAgentPrefs();
-  const [folded, toggle] = useFolded("personal-agents");
+  const [folded, toggle] = useFolded("personal-agents", false, { holds: activeKey.startsWith("a:") });
   const [q, setQ] = useState("");
   const [searching, setSearching] = useState(false);
   const [all, setAll] = useState<Record<string, boolean>>({});
@@ -1174,6 +1229,8 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
       {loaded && !error && !groups.length && <p className="px-2 py-1 text-[12px] text-ink-3">没有匹配的会话</p>}
       {groups.map((g) => {
         const more = !q && !all[g.key] && g.key !== "pinned" && g.sessions.length > 5;
+        const isOpen = (s: AgentSession) => activeKey === `a:${s.id}`;
+        const rows = more ? firstAndCurrent(g.sessions, 5, isOpen) : g.sessions;
         const sec = sectionOf(g.key);
         return (
           <div key={g.key} className="flex flex-col gap-px">
@@ -1189,12 +1246,12 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
                 )}
               </div>
             )}
-            {(more ? g.sessions.slice(0, 5) : g.sessions).map((s) => (
-              <AgentRow key={s.id} s={s} reg={reg} hover={hover} active={activeKey === `a:${s.id}`} go={go} pinned={prefs.pins.includes(s.id)} onMenu={(el) => setRowMenu({ s, el })} />
+            {rows.map((s) => (
+              <AgentRow key={s.id} s={s} reg={reg} hover={hover} active={isOpen(s)} go={go} pinned={prefs.pins.includes(s.id)} onMenu={(el) => setRowMenu({ s, el })} />
             ))}
             {g.sessions.length > 5 && !q && g.key !== "pinned" && (
               <button type="button" onClick={() => setAll((x) => ({ ...x, [g.key]: !x[g.key] }))} className="relative z-10 w-full rounded-[7px] px-2 py-1 text-left text-[12px] text-ink-3 hover:text-ink-2">
-                {more ? `再显示 ${g.sessions.length - 5} 个` : "收起"}
+                {more ? `再显示 ${g.sessions.length - rows.length} 个` : "收起"}
               </button>
             )}
           </div>
@@ -1205,7 +1262,7 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
   );
 }
 
-function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSession; reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; pinned: boolean; onMenu: (el: HTMLElement) => void }) {
+export function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSession; reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; pinned: boolean; onMenu: (el: HTMLElement) => void }) {
   const k = `a:${s.id}`;
   const to: Route = { name: "agents", id: s.id };
   const unread = s.unreadCount > 0;
@@ -1223,11 +1280,11 @@ function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSessi
         onBlur={() => hover(null)}
         aria-current={active ? "page" : undefined}
         title={`${s.title || "未命名会话"} · ${providerLabel(s.provider)}`}
-        className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(hover:none)]:pr-11 [@media(pointer:coarse)]:min-h-11"
+        className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(hover:none)]:pr-11 [@media(pointer:coarse)]:min-h-11", active && cx(CURRENT_ROW, "pr-7"))}
       >
         <AgentAvatar s={s} size={16} />
         <span className={cx("min-w-0 flex-1 truncate text-[13px]", active || unread ? "font-medium text-ink" : "text-ink-2")}>{s.title || "未命名会话"}</span>
-        <span className="flex shrink-0 items-center group-hover/row:invisible">
+        <span className={cx("flex shrink-0 items-center", !active && "group-hover/row:invisible")}>
           {unread ? (
             <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white tabular-nums">{s.unreadCount}</span>
           ) : (
@@ -1240,7 +1297,7 @@ function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSessi
         title={pinned ? "取消置顶" : "置顶"}
         aria-label={pinned ? "取消置顶" : "置顶"}
         onClick={() => updateAgentPrefs((x) => togglePin(x, s.id))}
-        className={cx("absolute top-1/2 right-1 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-[5px] opacity-0 hover:bg-hover group-hover/row:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden", pinned ? "text-accent" : "text-ink-3")}
+        className={cx("absolute top-1/2 right-1 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-[5px] hover:bg-hover group-hover/row:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden", active ? "opacity-100" : "opacity-0", pinned ? "text-accent" : "text-ink-3")}
       >
         <Icon name="pin" size={11} />
       </button>

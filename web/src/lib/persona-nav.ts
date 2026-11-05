@@ -26,12 +26,18 @@ export function sidebarActiveKey(route: Route, main?: string): string {
 /** An extension page's sidebar row (docs/extensions.md「UI 插槽」 nav_page). */
 export const extensionNavKey = (extension: string, ui: string) => `p:${extension}/${ui}`;
 
-/** The conversations listed under「Persona 对话」: the most recent ones, without the main one (it has its own row). */
-export function otherConversations(conversations: readonly Session[], main: string | undefined, limit = 5): Session[] {
-  return conversations
-    .filter((c) => c.session_id !== main)
-    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
-    .slice(0, limit);
+/** The conversations listed under「Persona 对话」: the most recent ones, without the main one (it has its own row), and
+ *  the open one (`current`) after them when it is older, so the sidebar always has its row (#2283). */
+export function otherConversations(conversations: readonly Session[], main: string | undefined, limit = 5, current?: string): Session[] {
+  const sorted = conversations.filter((c) => c.session_id !== main).sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
+  return firstAndCurrent(sorted, limit, (c) => c.session_id === current);
+}
+
+/** A shortened list's first `n`, and the open item after them when it is further down (#2283). */
+export function firstAndCurrent<T>(list: readonly T[], n: number, isCurrent: (x: T) => boolean): T[] {
+  const first = list.slice(0, n);
+  const current = list.slice(n).find(isCurrent);
+  return current ? [...first, current] : first;
 }
 
 /** The page entries under Persona, in the sidebar's order (the app's 助手 first, then the rest of its drawer). 消息 shows
