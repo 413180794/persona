@@ -2,7 +2,7 @@
   "add": "画像またはファイルを追加",
   "add_hint": "画像やファイルを選択・ペースト・ドロップ（一度に 4 個まで）",
   "too_many_other": "一度に添付できるのは 4 個までです。{count} 個は追加されませんでした",
-  "quote_unsupported": "メッセージを引用して画像やファイルを送るには、Hub の Feishu 拡張を更新してください",
+  "quote_unsupported": "メッセージを引用して画像やファイルを送るには、Hub の Lark 拡張を更新してください",
   "drop": "ドロップして添付",
-  "message": "Feishu メッセージ"
+  "message": "Lark メッセージ"
 }

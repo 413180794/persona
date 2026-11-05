@@ -174,8 +174,8 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 		}
 		key := ix.MachineID + "/" + ix.SessionID
 		a, ok := byKey[key]
-		if !ok || a.Muted {
-			continue
+		if !ok || a.Muted || asked[key] {
+			continue // one item per agent: its oldest card stands for it, as in the Agents list (#3571)
 		}
 		asked[key] = true
 		needs = append(needs, FleetItem{

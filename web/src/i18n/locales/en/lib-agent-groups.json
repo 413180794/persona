@@ -10,7 +10,7 @@
   "state_waiting": "Waiting",
   "state_muted": "Muted",
   "state_idle": "Seen",
-  "source_feishu": "Feishu group",
+  "source_feishu": "Lark group",
   "source_terminal": "Terminal",
-  "open_feishu_topic": "Open this topic in Feishu"
+  "open_feishu_topic": "Open this topic in Lark"
 }

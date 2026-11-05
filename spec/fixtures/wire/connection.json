@@ -69,6 +69,7 @@
         "channels",
         "runtime_cli",
         "conversation_origin",
+        "builtin_presets",
         "task_push"
       ],
       "fp": "",
@@ -151,6 +152,7 @@
           "channels",
           "runtime_cli",
           "conversation_origin",
+          "builtin_presets",
           "task_push"
         ],
         "/type": "hello"
@@ -224,6 +226,7 @@
         "channels",
         "runtime_cli",
         "conversation_origin",
+        "builtin_presets",
         "task_push"
       ],
       "fp": "",
@@ -296,6 +299,7 @@
           "channels",
           "runtime_cli",
           "conversation_origin",
+          "builtin_presets",
           "task_push"
         ],
         "/ok": true,

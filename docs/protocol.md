@@ -261,6 +261,9 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
 - `POST /api/v1/launchers/import` `{machine, providers:[name…]}` → `{created:[…], updated:[…]}`：再读一次 alias，key 和请求头只在管理者里转手、加密保存，`source` 写 `zshrc:<alias>@<machine>`。
   已存在的供应商只补 `models`（新的 id 加上，已有的只补未知的上下文窗口），别的字段不动；新建的和已有名字撞了加 `-2`、`-3`。不认识的名字 400。
   `inbox.triage` 改成调不了的、又有要它的插件开着时返回 422 `{code: "triage_model_in_use", plugins: [名字], error}`（`docs/extensions.md`「收件箱的通用规则」）。
+- `GET /api/v1/launchers/presets` → `{presets}`：内置预设（`plugin: "builtin"`，id `builtin/<厂商>`，多 `auth`、`signup_url`、`display_name`）加插件的，按请求语言排序，同 id 插件的盖掉内置的（`docs/launchers.md`「内置预设」）。
+- `POST /api/v1/launchers` 带 `preset` 时 `name` 可以空（厂商 slug，重名加 `-2`），`display_name` 空时用预设的；带 `assign: ["assistant","agent.new"]` 时回
+  `{launcher, assigned: [用途], kept: [{purpose, reason: "customized"|"incompatible"|"failed"}]}`，只改还是默认值的用途；别的用途 400。`POST /api/v1/launchers/test`、`/discover` 带 `preset` 时没填的地址（和模型）用预设的。以上在 `features` 里登记为 `builtin_presets`，客户端看到才走。
 - 用途的 `fields`、`provider_ids` 限定可编辑参数和兼容供应商；`override` 与 `effective` 分开，`inherited_from` 标记来源，`status` 为中文状态说明。真实任务/插件使用 `task.<id>` / `plugin.<id>`。
 
 供应商响应只带描述与 `has_key`，不返回秘密；具体默认、执行边界和兼容规则见 `docs/model-config.md`。

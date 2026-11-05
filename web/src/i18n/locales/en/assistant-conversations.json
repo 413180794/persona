@@ -6,7 +6,7 @@
   "last_7_days": "Previous 7 days",
   "origin_inbox": "Inbox",
   "origin_task": "Scheduled",
-  "origin_lark_agent": "Feishu /agent",
+  "origin_lark_agent": "Lark /agent",
   "origin_spawned": "From a chat",
   "origin_extension": "Extensions",
   "origin_other": "Other",

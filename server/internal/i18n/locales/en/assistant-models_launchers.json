@@ -9,6 +9,8 @@
   "err_custom_model_long": "Custom model is too long",
   "err_custom_model_name": "A custom model’s description needs a name",
   "err_name": "Names can only use letters, digits, _ and -, and start with a letter or _ (not “claude”)",
+  "err_display_name": "The display name can be at most 64 characters, with no line breaks or other control characters",
+  "err_assign": "assign takes only assistant or agent.new, not {purpose}",
   "err_base_url": "Base URL must start with http:// or https://",
   "err_base_url_parts": "Base URL can’t contain a user, credentials, a query or a fragment. Put credentials in API Key",
   "err_model_required": "Enter a model",

@@ -9,6 +9,8 @@
   "err_custom_model_long": "カスタムモデルが長すぎます",
   "err_custom_model_name": "カスタムモデルの説明には名前が必要です",
   "err_name": "名前に使えるのは英字、数字、_、-のみで、英字か_で始めてください（claudeは使えません）",
+  "err_display_name": "表示名は 64 文字までで、改行などの制御文字は使えません",
+  "err_assign": "assign に指定できるのは assistant か agent.new だけです（{purpose} は不明）",
   "err_base_url": "Base URLはhttp(s)://で始まるアドレスにしてください",
   "err_base_url_parts": "Base URLにはアカウント、認証情報、クエリ、フラグメントを含められません。認証情報はAPI Keyに入力してください",
   "err_model_required": "モデルを入力してください",

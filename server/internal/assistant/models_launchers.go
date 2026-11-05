@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/apierr"
@@ -39,10 +41,12 @@ type storedLauncher struct {
 	proto.ManagedLauncher
 	KeySealed string `json:"key_sealed,omitempty"`
 	// HeadersSealed: Headers (ANTHROPIC_CUSTOM_HEADERS) sealed like the key; the embedded Headers is never stored.
-	HeadersSealed string    `json:"headers_sealed,omitempty"`
-	Preset        string    `json:"preset,omitempty"` // the plugin's provider it was added from
-	Created       time.Time `json:"created"`
-	Updated       time.Time `json:"updated"`
+	HeadersSealed string `json:"headers_sealed,omitempty"`
+	Preset        string `json:"preset,omitempty"` // the preset (built-in or a plugin's) it was added from
+	// DisplayName is what the apps call it (any language, 「智谱 GLM」); Name stays the ASCII id the launch uses.
+	DisplayName string    `json:"display_name,omitempty"`
+	Created     time.Time `json:"created"`
+	Updated     time.Time `json:"updated"`
 }
 
 // LauncherView is one launcher for the app: where it comes from, which machines have it; never the key.
@@ -50,7 +54,8 @@ type LauncherView struct {
 	Kind                   string   `json:"kind,omitempty"`
 	API                    string   `json:"api,omitempty"`
 	Name                   string   `json:"name"`
-	Source                 string   `json:"source"` // zshrc | jarvis
+	DisplayName            string   `json:"display_name,omitempty"` // managed: the name shown, "" shows Name
+	Source                 string   `json:"source"`                 // zshrc | jarvis
 	BaseURL                string   `json:"base_url,omitempty"`
 	Model                  string   `json:"model,omitempty"`
 	SmallModel             string   `json:"small_model,omitempty"`
@@ -87,7 +92,7 @@ type LauncherView struct {
 
 // launcherView is a managed launcher for the app: never the key or the headers.
 func launcherView(l storedLauncher) LauncherView {
-	return LauncherView{Kind: l.Kind, API: l.API, Name: l.Name, Source: "jarvis", BaseURL: l.BaseURL, Model: l.Model, SmallModel: l.SmallModel,
+	return LauncherView{Kind: l.Kind, API: l.API, Name: l.Name, DisplayName: l.DisplayName, Source: "jarvis", BaseURL: l.BaseURL, Model: l.Model, SmallModel: l.SmallModel,
 		SubagentModel: l.SubagentModel, CustomModel: l.CustomModel, CustomModelName: l.CustomModelName,
 		CustomModelDescription: l.CustomModelDescription, Args: l.Args, HasKey: l.KeySealed != "", Auth: l.Auth,
 		Models: l.Models, OpusModel: l.OpusModel, SonnetModel: l.SonnetModel, HaikuModel: l.HaikuModel, FableModel: l.FableModel,
@@ -412,8 +417,14 @@ type launcherInput struct {
 	Args                   []string `json:"args"`
 	APIKey                 *string  `json:"api_key"` // nil or "" on an update keeps the key
 	Auth                   string   `json:"auth"`    // api_key (x-api-key, the default) or bearer (Authorization: Bearer)
-	// Preset is a plugin's provider it is added from (GET /api/v1/launchers/presets): what is left empty is filled in.
+	// Preset is the provider it is added from (GET /api/v1/launchers/presets): what is left empty is filled in, the
+	// name too (POST only).
 	Preset string `json:"preset,omitempty"`
+	// DisplayName is the name shown, any language; nil on an update keeps it; empty on a provider the hub names from a preset is the preset's name.
+	DisplayName *string `json:"display_name"`
+	// Assign (POST only): the categories (assistant, agent.new) to put on the new provider, each only while it is
+	// still at its default (docs/onboarding.md 5.4).
+	Assign []string `json:"assign,omitempty"`
 
 	// #2455's fields (proto.ManagedLauncher). Each is a pointer: left out (an app from before them) keeps what is
 	// stored on an update. Headers "" clears them; like the key they are sealed and never sent back.
@@ -599,6 +610,11 @@ func (in launcherInput) check() error {
 	if !managedLauncherName.MatchString(in.Name) || slices.Contains(reservedLauncherNames, in.Name) {
 		return i18n.Err("assistant-models_launchers.err_name")
 	}
+	if in.DisplayName != nil {
+		if d := strings.TrimSpace(*in.DisplayName); utf8.RuneCountInString(d) > 64 || strings.IndexFunc(d, unicode.IsControl) >= 0 {
+			return i18n.Err("assistant-models_launchers.err_display_name")
+		}
+	}
 	if err := checkGateway(in.BaseURL); err != nil {
 		return err
 	}
@@ -675,21 +691,48 @@ func (s *Service) launcherRoutes() {
 			writeBodyErr(w, err, err)
 			return
 		}
-		if err := s.presetFill(r.Context(), &in); err != nil {
+		ctx := r.Context()
+		if err := s.presetFill(ctx, &in); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
+		}
+		for _, id := range in.Assign {
+			if !slices.Contains(assignablePurposes, id) {
+				apierr.Write(w, http.StatusBadRequest, i18n.Err("assistant-models_launchers.err_assign", i18n.Args{"purpose": strconv.Quote(id)}))
+				return
+			}
+		}
+		views := s.launcherViews(ctx)
+		taken := func(n string) bool {
+			return slices.ContainsFunc(views, func(v LauncherView) bool { return v.Name == n })
+		}
+		if in.Name == "" && in.Preset != "" {
+			var n int
+			in.Name, n = launcherNameFor(in.Preset, taken)
+			if in.DisplayName == nil || strings.TrimSpace(*in.DisplayName) == "" {
+				d := s.presetDisplayName(ctx, in.Preset, n)
+				in.DisplayName = &d
+			}
 		}
 		if err := in.check(); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		for _, v := range s.launcherViews(r.Context()) {
-			if v.Name == in.Name {
-				apierr.Write(w, http.StatusConflict, i18n.Err("assistant-models_launchers.err_name_taken", i18n.Args{"name": in.Name}))
-				return
-			}
+		if taken(in.Name) {
+			apierr.Write(w, http.StatusConflict, i18n.Err("assistant-models_launchers.err_name_taken", i18n.Args{"name": in.Name}))
+			return
 		}
-		s.saveLauncher(w, r, in, nil)
+		l, err := s.saveLauncher(ctx, in, nil)
+		if err != nil {
+			apierr.Write(w, http.StatusInternalServerError, err)
+			return
+		}
+		out := map[string]any{"launcher": launcherView(l)}
+		if in.Assign != nil {
+			assigned, kept := s.assignIfDefault(ctx, launcherProvider(l.Name), in.Assign)
+			out["assigned"], out["kept"] = assigned, kept
+		}
+		apierr.WriteJSON(w, out)
 	})
 	s.handle("PUT /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
 		var in launcherInput
@@ -704,7 +747,12 @@ func (s *Service) launcherRoutes() {
 		}
 		for _, l := range s.storedLaunchers(r.Context()) {
 			if l.Name == in.Name {
-				s.saveLauncher(w, r, in, &l)
+				saved, err := s.saveLauncher(r.Context(), in, &l)
+				if err != nil {
+					apierr.Write(w, http.StatusInternalServerError, err)
+					return
+				}
+				apierr.WriteJSON(w, map[string]any{"launcher": launcherView(saved)})
 				return
 			}
 		}
@@ -878,8 +926,8 @@ func (s *Service) machineLauncherRoutes() {
 	})
 }
 
-func (s *Service) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherInput, old *storedLauncher) {
-	ctx := r.Context()
+// saveLauncher stores in (over old on an update) and tells the nodes.
+func (s *Service) saveLauncher(ctx context.Context, in launcherInput, old *storedLauncher) (storedLauncher, error) {
 	now := time.Now().UTC()
 	l := storedLauncher{Created: now, Updated: now}
 	if old != nil {
@@ -895,6 +943,9 @@ func (s *Service) saveLauncher(w http.ResponseWriter, r *http.Request, in launch
 	if in.Preset != "" {
 		l.Preset = in.Preset
 	}
+	if in.DisplayName != nil {
+		l.DisplayName = strings.TrimSpace(*in.DisplayName)
+	}
 	switch {
 	case in.API == "responses": // always goes as Bearer: nothing to keep
 		l.Auth = ""
@@ -906,8 +957,7 @@ func (s *Service) saveLauncher(w http.ResponseWriter, r *http.Request, in launch
 	if in.APIKey != nil && strings.TrimSpace(*in.APIKey) != "" {
 		sealed, err := s.sealKey(strings.TrimSpace(*in.APIKey))
 		if err != nil {
-			apierr.Write(w, http.StatusInternalServerError, err)
-			return
+			return l, err
 		}
 		l.KeySealed = sealed
 	}
@@ -917,8 +967,7 @@ func (s *Service) saveLauncher(w http.ResponseWriter, r *http.Request, in launch
 		if hd := strings.TrimSpace(*in.Headers); hd != "" {
 			sealed, err := s.sealKey(hd)
 			if err != nil {
-				apierr.Write(w, http.StatusInternalServerError, err)
-				return
+				return l, err
 			}
 			l.HeadersSealed = sealed
 		}
@@ -931,11 +980,10 @@ func (s *Service) saveLauncher(w http.ResponseWriter, r *http.Request, in launch
 		list = append(list, l)
 	}
 	if err := s.putSetting(ctx, launchersManagedKey, list); err != nil {
-		apierr.Write(w, http.StatusInternalServerError, err)
-		return
+		return l, err
 	}
 	s.pushManaged(ctx, "")
-	apierr.WriteJSON(w, map[string]any{"launcher": launcherView(l)})
+	return l, nil
 }
 
 // pickMachine is the machine to ask about a launcher the machines in has have: want when it has it, else the

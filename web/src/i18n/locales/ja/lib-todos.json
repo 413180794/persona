@@ -11,7 +11,7 @@
   "model_request_failed": "モデルへのリクエストに失敗しました",
   "unassigned": "ToDo なし",
   "manual": "ターミナルで開いた",
-  "unassigned_hint": "どの ToDo にも属していません。Feishu やスマホなど別の入口から開かれたことが多いです。行を右クリック（または行末の ⋯）› ToDoに関連付け… で振り分けられます。",
+  "unassigned_hint": "どの ToDo にも属していません。Lark やスマホなど別の入口から開かれたことが多いです。行を右クリック（または行末の ⋯）› ToDoに関連付け… で振り分けられます。",
   "manual_hint": "ターミナル（herdr）で開かれ、ToDo を経由していないエージェントです。行を右クリック（または行末の ⋯）› ToDoに関連付け… で振り分けられます。",
   "context_title": "ToDo · {title}",
   "decision_manual": "手動で記録",

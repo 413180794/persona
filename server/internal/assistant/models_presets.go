@@ -3,20 +3,95 @@ package assistant
 import (
 	"cmp"
 	"context"
+	_ "embed"
+	"encoding/json"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The plugins' model providers (docs/extensions.md「模型供应商」), as the hub has them (plugins.presets): 设置 › 模型供应商
-// adds a provider from one (the user fills in only the name and the key), and a launcher on a plugin's gateway offers
-// the gateway's models in 新建 Agent.
+// The model providers 设置 › 模型供应商 adds a provider from (the user fills in only the key): the built-in ones
+// (presets_builtin.json, docs/onboarding.md 4.3) and the plugins' (docs/extensions.md「模型供应商」, as the hub has them:
+// plugins.presets). A launcher on a preset's gateway offers the gateway's models in 新建 Agent.
 
 type LauncherPreset = assistantwire.LauncherPreset
 
-// launcherPresets are the plugins' providers now.
+// builtinPlugin is the plugin field of the built-in presets; their ids are builtin/<vendor>.
+const builtinPlugin = "builtin"
+
+//go:embed presets_builtin.json
+var builtinPresetsJSON []byte
+
+// builtinPreset is one entry of presets_builtin.json: a preset and where it can be opened without a VPN or a foreign
+// card (cn, global or both), which orders the list for the request's language.
+type builtinPreset struct {
+	LauncherPreset
+	Region string `json:"region"`
+}
+
+var builtinPresets = func() []builtinPreset {
+	var list []builtinPreset
+	if err := json.Unmarshal(builtinPresetsJSON, &list); err != nil {
+		panic("presets_builtin.json: " + err.Error())
+	}
+	return list
+}()
+
+// presetSlug is the vendor part of a preset id (builtin/deepseek → deepseek, <plugin>/<provider> → <provider>).
+func presetSlug(id string) string {
+	if _, after, ok := strings.Cut(id, "/"); ok {
+		return after
+	}
+	return id
+}
+
+// builtinLauncherPresets are the built-in presets for l: names and descriptions in l, the ones that can be opened from
+// where l is spoken first (Chinese: the vendors in China, else Anthropic and the international endpoints), each group
+// in the file's order.
+func builtinLauncherPresets(l i18n.Lang) []LauncherPreset {
+	first := func(region string) bool {
+		if l == i18n.ZhHans {
+			return region != "global"
+		}
+		return region != "cn"
+	}
+	var head, tail []LauncherPreset
+	for _, b := range builtinPresets {
+		pr := b.LauncherPreset
+		pr.Extension = builtinPlugin
+		pr.Models = slices.Clone(pr.Models)
+		key := strings.ReplaceAll(presetSlug(pr.ID), "-", "_")
+		pr.DisplayName = i18n.T(l, "assistant-models_presets.name_"+key)
+		pr.Description = i18n.T(l, "assistant-models_presets.desc_"+key)
+		if first(b.Region) {
+			head = append(head, pr)
+		} else {
+			tail = append(tail, pr)
+		}
+	}
+	return append(head, tail...)
+}
+
+// mergePresets is the built-in presets with the plugins' after them; a plugin's with a built-in one's id takes its
+// place.
+func mergePresets(builtin, plugins []LauncherPreset) []LauncherPreset {
+	out := slices.Clone(builtin)
+	for _, pr := range plugins {
+		if i := slices.IndexFunc(out, func(b LauncherPreset) bool { return b.ID == pr.ID }); i >= 0 {
+			out[i] = pr
+			continue
+		}
+		out = append(out, pr)
+	}
+	return out
+}
+
+// launcherPresets are the built-in providers and the plugins' now, in the request's language.
 func (s *Service) launcherPresets(ctx context.Context) []LauncherPreset {
 	var res struct {
 		Presets []LauncherPreset `json:"presets"`
@@ -24,7 +99,25 @@ func (s *Service) launcherPresets(ctx context.Context) []LauncherPreset {
 	if err := s.appCall(ctx, AppPlugins, assistantwire.PluginsPresets, map[string]any{}, &res); err != nil {
 		s.logf("launchers: the plugins' providers: %v", err)
 	}
-	return res.Presets
+	return mergePresets(builtinLauncherPresets(s.requestCtxLang(ctx)), res.Presets)
+}
+
+// presetByID is the preset id names, if there is one.
+func (s *Service) presetByID(ctx context.Context, id string) (LauncherPreset, bool) {
+	for _, pr := range s.launcherPresets(ctx) {
+		if pr.ID == id {
+			return pr, true
+		}
+	}
+	return LauncherPreset{}, false
+}
+
+// presetModel is a preset's default model: its own, else the first it lists.
+func presetModel(pr LauncherPreset) string {
+	if pr.Model == "" && len(pr.Models) > 0 {
+		return pr.Models[0].ID
+	}
+	return pr.Model
 }
 
 // presetFill fills in what a launcher added from a preset leaves empty.
@@ -32,35 +125,80 @@ func (s *Service) presetFill(ctx context.Context, in *launcherInput) error {
 	if in.Preset == "" {
 		return nil
 	}
-	for _, pr := range s.launcherPresets(ctx) {
-		if pr.ID != in.Preset {
-			continue
-		}
-		if in.Kind == "" {
-			in.Kind = pr.Kind
-		}
-		if in.API == "" {
-			in.API = pr.API
-		}
-		if in.BaseURL == "" {
-			in.BaseURL = pr.BaseURL
-		}
-		if in.Model == "" {
-			in.Model = pr.Model
-			if in.Model == "" && len(pr.Models) > 0 {
-				in.Model = pr.Models[0].ID
-			}
-		}
-		if in.SmallModel == "" && in.Kind != "api" {
-			in.SmallModel = pr.SmallModel
-		}
-		return nil
+	pr, ok := s.presetByID(ctx, in.Preset)
+	if !ok {
+		return errNoPreset
 	}
-	return errNoPreset
+	if in.Kind == "" {
+		in.Kind = pr.Kind
+	}
+	if in.API == "" {
+		in.API = pr.API
+	}
+	if in.BaseURL == "" {
+		in.BaseURL = pr.BaseURL
+	}
+	if in.Auth == "" {
+		in.Auth = pr.Auth
+	}
+	if in.Model == "" {
+		in.Model = presetModel(pr)
+	}
+	if in.SmallModel == "" && in.Kind != "api" {
+		in.SmallModel = pr.SmallModel
+	}
+	return nil
+}
+
+// presetDisplayName is the display name a provider gets when the hub named it from preset (launcherNameFor gave it
+// n, 1 for the bare slug): the preset's localized name, with the same number after it when n > 1 (「智谱 GLM 2」), so
+// two providers from one preset tell apart in 模型配置. A provider the user named keeps showing that name.
+func (s *Service) presetDisplayName(ctx context.Context, preset string, n int) string {
+	pr, ok := s.presetByID(ctx, preset)
+	if !ok {
+		return ""
+	}
+	name := cmp.Or(pr.DisplayName, pr.Name)
+	if n > 1 {
+		name += " " + strconv.Itoa(n)
+	}
+	return name
+}
+
+// launcherNameFor is the name a provider added from preset gets when none is given: the vendor's slug made to fit the
+// name rule, -2, -3… after it while taken.
+// n is 1 for the bare slug, else the number after it.
+func launcherNameFor(preset string, taken func(string) bool) (name string, n int) {
+	var b strings.Builder
+	for _, r := range strings.ToLower(presetSlug(preset)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	base := strings.Trim(b.String(), "-")
+	if base == "" {
+		base = "provider"
+	}
+	if c := base[0]; c >= '0' && c <= '9' {
+		base = "p-" + base
+	}
+	used := func(n string) bool { return taken(n) || slices.Contains(reservedLauncherNames, n) }
+	if !used(base) {
+		return base, 1
+	}
+	for i := 2; ; i++ {
+		if n := base + "-" + strconv.Itoa(i); !used(n) {
+			return n, i
+		}
+	}
 }
 
 // presetFor is the launcher-kind preset a launcher reaches its gateway through: the one it was added from, else the one
-// whose address is the launcher's gateway (a provider added by hand, or a ~/.zshrc launcher, on a plugin's gateway).
+// whose address is the launcher's gateway (a provider added by hand, or a ~/.zshrc launcher, on a plugin's gateway;
+// built-in presets match only by id).
 func presetFor(presets []LauncherPreset, preset, baseURL string) (LauncherPreset, bool) {
 	var byURL *LauncherPreset
 	want := normalGateway(baseURL)
@@ -71,7 +209,9 @@ func presetFor(presets []LauncherPreset, preset, baseURL string) (LauncherPreset
 		if preset != "" && pr.ID == preset {
 			return pr, true
 		}
-		if byURL == nil && want != "" && normalGateway(pr.BaseURL) == want {
+		// Built-in presets are vendors' public endpoints: a launcher only gets their models when it was added from one,
+		// not because it happens to point at api.anthropic.com.
+		if byURL == nil && want != "" && pr.Extension != builtinPlugin && normalGateway(pr.BaseURL) == want {
 			byURL = &presets[i]
 		}
 	}
@@ -101,7 +241,7 @@ func withPresetModels(res proto.LauncherModels, pr LauncherPreset) proto.Launche
 			continue
 		}
 		seen[m.ID] = true
-		res.Models = append(res.Models, proto.AgentModel{ID: m.ID, Name: cmp.Or(m.Name, m.ID), Description: pr.Name})
+		res.Models = append(res.Models, proto.AgentModel{ID: m.ID, Name: cmp.Or(m.Name, m.ID), Description: cmp.Or(pr.DisplayName, pr.Name)})
 	}
 	return res
 }

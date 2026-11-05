@@ -33,6 +33,8 @@ type probeInput struct {
 	APIKey  string  `json:"api_key"`
 	Headers *string `json:"headers"`
 	Model   string  `json:"model"`
+	// Preset fills in the address and the model left empty (GET /api/v1/launchers/presets), so a key alone is tested.
+	Preset string `json:"preset"`
 }
 
 // probeTarget is a resolved gateway: everything needed for one request.
@@ -74,6 +76,18 @@ func (s *Service) probeTarget(ctx context.Context, in probeInput) (probeTarget, 
 	}
 	if m := strings.TrimSpace(in.Model); m != "" {
 		t.model = m
+	}
+	if in.Preset != "" {
+		pr, ok := s.presetByID(ctx, in.Preset)
+		if !ok {
+			return t, errNoPreset
+		}
+		if strings.TrimSpace(t.base) == "" {
+			t.base = pr.BaseURL
+		}
+		if t.model == "" {
+			t.model = presetModel(pr)
+		}
 	}
 	// Both credential headers go anyway (cindy's buildProbeRequest), so Auth only tidies a pasted "Bearer …".
 	t.key = strings.TrimSpace(strings.TrimPrefix(t.key, "Bearer "))

@@ -10,7 +10,7 @@
   "state_waiting": "待機中",
   "state_muted": "ミュート中",
   "state_idle": "確認済み",
-  "source_feishu": "Feishuグループ",
+  "source_feishu": "Larkグループ",
   "source_terminal": "ターミナル",
-  "open_feishu_topic": "Feishuでこのトピックを開く"
+  "open_feishu_topic": "Larkでこのトピックを開く"
 }

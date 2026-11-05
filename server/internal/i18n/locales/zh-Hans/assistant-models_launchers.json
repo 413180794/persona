@@ -9,6 +9,8 @@
   "err_custom_model_long": "自定义模型太长",
   "err_custom_model_name": "自定义模型的说明要配一个名字",
   "err_name": "名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）",
+  "err_display_name": "显示名最多 64 个字，不能有换行等控制字符",
+  "err_assign": "assign 只能是 assistant 或 agent.new，不认识 {purpose}",
   "err_base_url": "Base URL 要是 http(s):// 开头的地址",
   "err_base_url_parts": "Base URL 不能包含账号、凭据、查询参数或片段，请把凭据填在 API Key 中",
   "err_model_required": "要填模型",

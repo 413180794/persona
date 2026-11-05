@@ -1,0 +1,18 @@
+{
+  "name_anthropic": "Anthropic 官方",
+  "desc_anthropic": "Claude 官方 API，需要海外账号和支付方式",
+  "name_deepseek": "DeepSeek",
+  "desc_deepseek": "深度求索，国内直接开通，按量付费",
+  "name_kimi": "Kimi（月之暗面）",
+  "desc_kimi": "国内直接开通，按量付费",
+  "name_kimi_intl": "Kimi 国际版",
+  "desc_kimi_intl": "moonshot.ai，海外账号和支付方式",
+  "name_glm": "智谱 GLM",
+  "desc_glm": "智谱开放平台，国内直接开通，按量付费",
+  "name_bailian": "阿里云百炼（通义千问）",
+  "desc_bailian": "阿里云账号，按量计费的百炼 API Key（sk- 开头）",
+  "name_minimax": "MiniMax",
+  "desc_minimax": "国内直接开通，按量付费",
+  "name_minimax_intl": "MiniMax 国际版",
+  "desc_minimax_intl": "minimax.io，海外账号和支付方式"
+}

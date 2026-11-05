@@ -1,7 +1,7 @@
 {
   "recalled": "Message recalled",
   "recalled_kept": "{text} · Recalled",
-  "not_logged_in": "The hub's lark-connector is not signed in to Feishu. Sign in again on the hub's machine.",
+  "not_logged_in": "The hub's lark-connector is not signed in to Lark. Sign in again on the hub's machine.",
   "upgrade_read": "Update the hub and lark-connector to use message display settings.",
   "read_failed": "Couldn't read the settings. Try again once connected.",
   "conflict": "The settings or account changed. Reload them before changing.",

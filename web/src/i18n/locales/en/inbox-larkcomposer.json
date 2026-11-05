@@ -3,7 +3,7 @@
   "add_hint": "Choose, paste or drop pictures and files, up to 4 at a time",
   "too_many_one": "Up to 4 attachments at a time; {count} was left out",
   "too_many_other": "Up to 4 attachments at a time; {count} were left out",
-  "quote_unsupported": "Update the Feishu extension on the hub to send pictures and files quoting a message",
+  "quote_unsupported": "Update the Lark extension on the hub to send pictures and files quoting a message",
   "drop": "Drop to attach",
-  "message": "Feishu message"
+  "message": "Lark message"
 }

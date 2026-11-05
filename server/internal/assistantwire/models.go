@@ -57,7 +57,8 @@ const (
 	PluginsQuota = "plugins.quota"
 )
 
-// LauncherPreset is one plugin's model provider (docs/extensions.md「模型供应商」), as 设置 › 模型供应商 offers it.
+// LauncherPreset is one model provider 设置 › 模型供应商 offers: a plugin's (docs/extensions.md「模型供应商」) or a built-in
+// one (plugin "builtin", docs/onboarding.md 4.3).
 type LauncherPreset struct {
 	ID          string                    `json:"id"` // <plugin>/<provider>
 	Extension   string                    `json:"plugin"`
@@ -70,6 +71,12 @@ type LauncherPreset struct {
 	SmallModel  string                    `json:"small_model,omitempty"`
 	Models      []extension.ProviderModel `json:"models,omitempty"`
 	KeyHint     string                    `json:"key_hint,omitempty"`
+	// Auth is how the gateway takes the key: api_key (x-api-key, the default) or bearer. Built-in presets only.
+	Auth string `json:"auth,omitempty"`
+	// SignupURL is the page to open an account or buy a key at (built-in presets only; the apps open it in-app).
+	SignupURL string `json:"signup_url,omitempty"`
+	// DisplayName is the provider's name in the request's language (「智谱 GLM」); Name stays the plain one.
+	DisplayName string `json:"display_name,omitempty"`
 	// ModelsError says why the plugin's own list could not be had (the declared models are still there).
 	ModelsError string `json:"models_error,omitempty"`
 }

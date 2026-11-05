@@ -1,0 +1,18 @@
+{
+  "name_anthropic": "Anthropic",
+  "desc_anthropic": "Claude の公式 API",
+  "name_deepseek": "DeepSeek",
+  "desc_deepseek": "従量課金",
+  "name_kimi": "Kimi（中国版）",
+  "desc_kimi": "moonshot.cn、中国本土のアカウントが必要",
+  "name_kimi_intl": "Kimi",
+  "desc_kimi_intl": "Moonshot AI の国際版、従量課金",
+  "name_glm": "Zhipu GLM",
+  "desc_glm": "bigmodel.cn、中国本土のアカウントが必要",
+  "name_bailian": "Alibaba Cloud Model Studio",
+  "desc_bailian": "Qwen モデル。従量課金の Model Studio API キー（sk- で始まる）",
+  "name_minimax": "MiniMax（中国版）",
+  "desc_minimax": "minimax.cn、中国本土のアカウントが必要",
+  "name_minimax_intl": "MiniMax",
+  "desc_minimax_intl": "MiniMax の国際版、従量課金"
+}

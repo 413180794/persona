@@ -126,10 +126,10 @@ Persona 管理的左滑是「删除」，连存着的 Key 一起删、不能恢�
 | `GET /api/v1/launchers` | 全部（先同步各台电脑的 ~/.zshrc） |
 | `GET /api/v1/launchers/{name}` | 一个；~/.zshrc 的带 `definitions`（每台电脑的函数，打码）和 `details`（跑一遍得到的参数） |
 | `POST /api/v1/launchers/{name}/check?machine=` | 测试可用性 |
-| `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, auth?, preset?}`；`auth` 是 `api_key`（默认）或 `bearer`；带 `preset` 时没填的从预设补上（见下面「从插件添加」） |
-| `GET /api/v1/launchers/presets` | 插件提供的供应商预设（`docs/extensions.md`「模型供应商」）；旧 hub 回 404，App 当成没有 |
+| `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, auth?, preset?, display_name?, assign?}`；`auth` 是 `api_key`（默认）或 `bearer`；带 `preset` 时没填的从预设补上，`name` 也可以空（见下面「内置预设」「从插件添加」）；带 `assign` 时回 `{launcher, assigned, kept}` |
+| `GET /api/v1/launchers/presets` | 供应商预设：内置的（`plugin: "builtin"`）加插件的（`docs/extensions.md`「模型供应商」），按请求语言排序；旧 hub 回 404，App 当成没有 |
 | `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的。下面「供应商的模型和网关参数」里的字段不带就保留原值 |
-| `POST /api/v1/launchers/test` | 测试连接（不经 node，见下）：`{name?, base_url?, auth?, api_key?, headers?, model}` → `{ok, ms, model, error?}` |
+| `POST /api/v1/launchers/test` | 测试连接（不经 node，见下）：`{name?, base_url?, auth?, api_key?, headers?, model, preset?}` → `{ok, ms, model, error?}`；带 `preset` 时没填的地址、模型用预设的（默认模型） |
 | `POST /api/v1/launchers/discover` | 获取模型：`{name?, base_url?, auth?, api_key?, headers?}` → `{models:[{id, name?, context_window?, efforts?, default_effort?}], error?}` |
 | `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
@@ -178,6 +178,27 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 `kind: api` 由管理者直接发请求，不出现在新建 Agent 的启动器列表中；小模型、子 Agent 模型、自定义模型项和 CLI 额外参数不用于这类接入。
 `api` 为空或 `messages` 的也随启动器一起下发给 node（#2455），主对话可以用它的 Base URL 和 Key 起 claude；`responses` 的不下发。
 认证仍使用原有的加密 Key 存储，不需要把 API Key 放进用途配置。原有 `/launchers` 接口与供应商名称保持兼容。
+
+## 内置预设
+
+hub 自带一份常见厂商的 Anthropic 兼容入口（`server/internal/assistant/presets_builtin.json`，嵌进二进制），新手「只有 API Key」时选一家、粘 Key 就能接上（新用户上手设计 #287 的 4.3、5.4 节）。
+`GET /api/v1/launchers/presets` 先列内置的、再列插件的；插件的预设 id 和内置的一样时盖掉内置那一项（位置不变）。
+
+- 每项：`id`（`builtin/<厂商>`）、`plugin: "builtin"`、`name`（英文的平名）、`display_name` 和 `description`（按请求语言，词条在 `assistant-models_presets`）、`kind: launcher`、`api: messages`、
+  `base_url`、`auth`（`api_key` / `bearer`，按厂商 Claude Code 说明里用的）、`model`（默认模型）、`small_model`、`models`、`signup_url`（开通 / 拿 Key 的页面）。`auth`、`signup_url`、`display_name` 只有内置的填。
+- 排序：中文先列国内能直接开通的（DeepSeek、Kimi、智谱 GLM、阿里云百炼、MiniMax），再列 Anthropic 和国际版；其他语言先列 Anthropic、DeepSeek 和国际版。文件里每项的 `region`（`cn` / `global` / `both`）决定分组，组内按文件顺序。
+- 只放厂商官方文档里写明的公开地址（按量付费的那个入口，不放编程套餐、中转站、公司网关）。地址、认证方式和模型名都对过官方文档；没有 Key，没有发过真实请求。厂商改了模型名就改这个文件，`TestBuiltinPresetsAreComplete` 查每项字段齐全。
+  阿里云百炼用 `dashscope.aliyuncs.com/apps/anthropic`（按量计费的 `sk-` Key；Coding Plan、Token Plan 的 Key 不能用在这个地址）。
+- 加的时候 `POST /api/v1/launchers {preset, api_key, name: "", display_name: ""}`：`name` 空时用预设 id 的厂商部分（`builtin/glm` → `glm`），不合规则的字符换成 `-`，重名加 `-2`、`-3`；`name` 由 hub 起、`display_name` 又是空的时用预设的（「智谱 GLM」），名字加了 `-2` 的显示名也带上同一个数（「智谱 GLM 2」），模型配置里分得开。
+  自己填了 `name`、没填 `display_name` 的（包括老客户端从插件添加的）不补显示名，照旧显示 `name`。
+  没有 `preset` 时 `display_name` 也可以填（任何语言，最多 64 个字），`name` 仍然必填。`display_name` 存在供应商上，列表和模型配置的供应商名显示它，`name` 仍是启动时用的 id。
+- `assign: ["assistant", "agent.new"]`：保存后对列出的用途各试一次，只在它还是默认值时换成新供应商——没在模型配置里选过供应商或模型、主对话的启动器也还是默认的 `claude`（设置 › 助手、hub.json 没改过）。
+  结果 `assigned: [用途]`、`kept: [{purpose, reason}]`，`reason` 是 `customized`（有人选过）、`incompatible`（这一项用不了它）或 `failed`（读写配置出错）。只认这两个用途，别的回 400，什么都不存。
+
+- hub 在 `features` 里登记 `builtin_presets`：客户端看到它才发空 `name`、`assign`；老 hub 上空 `name` 回 400、`assign` 不认。
+- `POST /api/v1/launchers/discover` 也认 `preset`：没填 `base_url` 时用预设的地址，填了的优先。
+- 新建 Agent 的 `/model` 列表只给「从这个内置预设加的」供应商补预设的模型（按 `preset` 认）；插件的预设照旧也按网关地址认，内置的不按地址认，免得 ~/.zshrc 里一个指向 `api.anthropic.com` 的启动器多出一串模型。
+- 兼容的代价：老 App 的「从插件添加」也会列出内置预设，说明里写「由扩展「builtin」提供」、标题是英文平名（老客户端不读 `display_name`）。加的路径能用（它们本来就发 `name` + Key + `preset`），文案的问题跟进在 #3621。
 
 ## 从插件添加
 

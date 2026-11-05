@@ -1,7 +1,7 @@
 {
   "recalled": "メッセージは取り消されました",
   "recalled_kept": "{text} · 取り消し済み",
-  "not_logged_in": "hub に接続された lark-connector が Feishu にログインしていません。hub のマシンで再ログインしてください。",
+  "not_logged_in": "hub に接続された lark-connector が Lark にログインしていません。hub のマシンで再ログインしてください。",
   "upgrade_read": "メッセージ表示の設定を使うには、ハブとlark-connectorを更新してください。",
   "read_failed": "設定を読み込めません。接続後に再試行してください。",
   "conflict": "設定またはアカウントが変わりました。再読み込みしてから変更してください。",

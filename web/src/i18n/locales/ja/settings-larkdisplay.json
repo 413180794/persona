@@ -5,7 +5,7 @@
   "edit_history": "編集履歴",
   "edit_history_hint": "メッセージ横の「編集済み」をクリックすると、保存された以前の版を表示します。",
   "reload": "再読み込み",
-  "shared": "hub の現在の Feishu アカウントの設定を lark-connector の Web ページと共有します。表示だけを変え、保存には影響しません。",
+  "shared": "hub の現在の Lark アカウントの設定を lark-connector の Web ページと共有します。表示だけを変え、保存には影響しません。",
   "brave_climb": "",
   "brave_climb_hint": ""
 }

@@ -109,3 +109,34 @@ func TestBuildFleetBackground(t *testing.T) {
 		t.Errorf("a plain working one: %+v", it)
 	}
 }
+
+// An agent with two cards up is one agent that needs you, as in the Agents list: one item, its oldest card (#3571).
+func TestBuildFleetOneItemPerAgent(t *testing.T) {
+	t0 := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
+	agents := []fleetInput{
+		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "a", State: proto.StateNeedsYou}},
+		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "b", State: proto.StateNeedsYou}},
+		{Machine: "box", Session: proto.Session{MachineID: "m", SessionID: "w", State: proto.StateWorking}},
+	}
+	ixs := []proto.Interaction{ // oldest first, as pendingInteractions gives them
+		{ID: "a1", MachineID: "m", SessionID: "a", Kind: proto.IxPermission, Summary: "first", CreatedAt: t0},
+		{ID: "a2", MachineID: "m", SessionID: "a", Kind: proto.IxPermission, Summary: "second", CreatedAt: t0.Add(time.Second)},
+		{ID: "b1", MachineID: "m", SessionID: "b", Kind: proto.IxQuestion, CreatedAt: t0.Add(2 * time.Second)},
+		{ID: "a3", MachineID: "m", SessionID: "a", Kind: proto.IxPlan, CreatedAt: t0.Add(3 * time.Second)},
+	}
+	st := buildFleet(agents, ixs)
+	if st.NeedsYou != 2 || st.Working != 1 {
+		t.Fatalf("counts %+v", st)
+	}
+	if len(st.Items) != 3 || st.Items[0].ID != "m/a" || st.Items[0].Interaction != "a1" || st.Items[1].ID != "m/b" || st.Items[2].ID != "m/w" {
+		t.Fatalf("items %+v", st.Items)
+	}
+	// An elicitation is left out before the dedup: the agent's next card still stands for it.
+	st = buildFleet(agents[:1], []proto.Interaction{
+		{ID: "e1", MachineID: "m", SessionID: "a", Kind: proto.IxElicitation, CreatedAt: t0},
+		{ID: "a1", MachineID: "m", SessionID: "a", Kind: proto.IxPermission, CreatedAt: t0.Add(time.Second)},
+	})
+	if st.NeedsYou != 1 || len(st.Items) != 1 || st.Items[0].Interaction != "a1" {
+		t.Fatalf("after an elicitation %+v", st.Items)
+	}
+}

@@ -1,0 +1,18 @@
+{
+  "name_anthropic": "Anthropic",
+  "desc_anthropic": "The official Claude API",
+  "name_deepseek": "DeepSeek",
+  "desc_deepseek": "Pay as you go",
+  "name_kimi": "Kimi (China)",
+  "desc_kimi": "moonshot.cn, needs a mainland China account",
+  "name_kimi_intl": "Kimi",
+  "desc_kimi_intl": "Moonshot AI's international platform, pay as you go",
+  "name_glm": "Zhipu GLM",
+  "desc_glm": "bigmodel.cn, needs a mainland China account",
+  "name_bailian": "Alibaba Cloud Model Studio",
+  "desc_bailian": "Qwen models; a pay-as-you-go Model Studio API key (starts with sk-)",
+  "name_minimax": "MiniMax (China)",
+  "desc_minimax": "minimax.cn, needs a mainland China account",
+  "name_minimax_intl": "MiniMax",
+  "desc_minimax_intl": "MiniMax's international platform, pay as you go"
+}

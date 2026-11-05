@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -311,7 +312,7 @@ func (s *Service) modelProviders(ctx context.Context) []ModelProvider {
 		if kind == "api" && apiName == "" {
 			apiName = "messages"
 		}
-		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: v.Name, Kind: kind, API: apiName, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey})
+		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: cmp.Or(v.DisplayName, v.Name), Kind: kind, API: apiName, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey})
 	}
 	if !slices.ContainsFunc(out, func(p ModelProvider) bool { return p.ID == "launcher.claude" }) {
 		out = append(out, ModelProvider{ID: "launcher.claude", Name: mc(l, "provider_claude_default"), Kind: "launcher"})
