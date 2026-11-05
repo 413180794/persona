@@ -54,10 +54,20 @@ func inboxSaveItems(n int) []*InboxItem {
 	return items
 }
 
+func registerInboxSaveItems(s *Service, items []*InboxItem) {
+	s.inbox.mu.Lock()
+	defer s.inbox.mu.Unlock()
+	for _, it := range items {
+		s.inbox.items[it.ID] = it
+	}
+}
+
 // A round's changed items reach a store that writes many at once in one write, not one write each.
 func TestSaveInboxWritesOnceForMany(t *testing.T) {
 	s, st := newInboxBatchService(t)
-	s.saveInbox(context.Background(), inboxSaveItems(300))
+	items := inboxSaveItems(300)
+	registerInboxSaveItems(s, items)
+	s.saveInbox(context.Background(), items)
 	if len(st.batches) != 1 || len(st.batches[0]) != 300 {
 		t.Fatalf("batches = %d, want one of 300", len(st.batches))
 	}
@@ -72,7 +82,9 @@ func TestSaveInboxWritesOnceForMany(t *testing.T) {
 func TestSaveInboxFallsBackOneByOne(t *testing.T) {
 	s, st := newInboxBatchService(t)
 	st.batchFail = errors.New("batch refused")
-	s.saveInbox(context.Background(), inboxSaveItems(3))
+	items := inboxSaveItems(3)
+	registerInboxSaveItems(s, items)
+	s.saveInbox(context.Background(), items)
 	if len(st.batches) != 1 {
 		t.Fatalf("batches = %d", len(st.batches))
 	}
@@ -104,6 +116,7 @@ func BenchmarkSaveInbox(b *testing.B) {
 	}
 	for _, n := range []int{10, 300} {
 		items := inboxSaveItems(n)
+		registerInboxSaveItems(s, items)
 		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
 			for b.Loop() {
 				s.saveInbox(ctx, items)

@@ -229,6 +229,7 @@ type inboxBook struct {
 	loadMu      sync.Mutex  // one load at a time
 	loaded      atomic.Bool // what the database keeps was read: until then nothing is taken or written
 	running     sync.Mutex  // one collection applied at a time
+	saving      sync.Mutex  // snapshots and writes in the same order
 	epoch       string      // the hub's run and its last round applied (InboxRound.Epoch, Seq), under running
 	seq         uint64
 	triaging    sync.Mutex // one triage pass at a time (inbox_triage.go)
@@ -518,10 +519,14 @@ func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) {
 		return
 	}
 	var told []assistantwire.InboxChangedItem
+	b.saving.Lock()
 	b.mu.Lock()
 	rows := make([]db.InboxRow, 0, len(changed))
 	now := time.Now()
 	for i, it := range changed {
+		if current := b.items[it.ID]; current != it {
+			continue // the item was forgotten or replaced while this save was waiting
+		}
 		it.arrived(now)
 		raw, _ := json.Marshal(it)
 		rows = append(rows, db.InboxRow{ID: it.ID, Data: raw, UpdatedAt: it.UpdatedAt, DoneAt: it.DoneAt})
@@ -530,9 +535,14 @@ func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) {
 		}
 	}
 	b.mu.Unlock()
+	if len(rows) == 0 {
+		b.saving.Unlock()
+		return
+	}
 	if st := s.inboxDB(); st != nil {
 		s.putInboxRows(ctx, st, rows)
 	}
+	b.saving.Unlock()
 	s.inboxChanged(ctx, told)
 }
 
@@ -1146,6 +1156,7 @@ func (s *Service) InboxForget(ctx context.Context, source string) (int, error) {
 		return 0, err
 	}
 	b := &s.inbox
+	b.saving.Lock()
 	b.mu.Lock()
 	var ids []string
 	for id, it := range b.items {
@@ -1158,9 +1169,11 @@ func (s *Service) InboxForget(ctx context.Context, source string) (int, error) {
 	b.mu.Unlock()
 	if st := s.inboxDB(); st != nil && len(ids) > 0 {
 		if err := st.DeleteInboxItems(ctx, ids); err != nil {
+			b.saving.Unlock()
 			return 0, err
 		}
 	}
+	b.saving.Unlock()
 	if len(ids) > 0 {
 		s.inboxChanged(ctx, nil)
 	}
