@@ -1,5 +1,5 @@
 // One conversation: an agent in herdr on one of your computers, or a Persona assistant conversation.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
 import { ago, attentionReason, externalLink, failureReason, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate, type SessionView } from "../../lib/router";
@@ -59,7 +59,7 @@ import { sameMessage } from "../../lib/queue";
 import { OutboxBubbles } from "./OutboxBubbles";
 import { AssistantFace, AssistantLauncherChip, CompactionStrip, useAssistantMenu } from "../assistant/AssistantChat";
 import { Segmented } from "../assistant/parts";
-import { TerminalPanel } from "../session/TerminalPanel";
+import { PageBoundary } from "../PageBoundary";
 import { ViewLayer } from "../session/ViewLayer";
 import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
@@ -67,6 +67,12 @@ import { displayLines, getFeedState, loadFeed, loadToday, sendRouted, useFeed, t
 import { CardConversation } from "../../ui/AssistantCard";
 import { DayLine, FeedLineView, QuickResultCard, RouteChip, TaskDock, TaskQuestions } from "../assistant/Tasks";
 import { t } from "../../i18n";
+
+// The terminal view (TerminalPanel and its stream / cell parsing) loads on demand: most visits only read the chat, so it
+// stays out of the main chunk. A page that can switch to it fetches it in the background (loadTerminal below), so the
+// first switch does not slide in an empty layer.
+const loadTerminal = () => import("../session/TerminalPanel");
+const TerminalPanel = lazy(() => loadTerminal().then((m) => ({ default: m.TerminalPanel })));
 
 const NO_FEED: FeedItem[] = [];
 /** Going to a search hit: how long the rows that hold it get to open before the line it is on stands in, when to give
@@ -172,6 +178,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const [termKept, setTermKept] = useState(false);
   if (switchable && view === "term" && !termKept) setTermKept(true);
   if (!switchable && termKept) setTermKept(false);
+  useEffect(() => {
+    // a failed prefetch is not an error yet: the lazy load retries it on the switch, under PageBoundary
+    if (switchable) loadTerminal().catch(() => {});
+  }, [switchable]);
   const viewNow = useRef(view);
   viewNow.current = view;
   useEffect(() => {
@@ -903,7 +913,11 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       {switchable && termKept && (
         <ViewLayer on={view === "term"} from="end" enter layerRef={termLayer}>
           {/* Files opens beside it (the Files panel, as on the 终端 page); the page's header is the panel's, so the panel keeps a toolbar of its own controls (单窗格 / 完整界面…) */}
-          <TerminalPanel mid={mid} sid={sid} onFiles={session?.cwd ? openFiles : undefined} onClose={() => setView("chat")} embedded />
+          <PageBoundary page={`term:${mid}/${sid}`}>
+            <Suspense fallback={<div className="flex h-full items-center justify-center"><Loading /></div>}>
+              <TerminalPanel mid={mid} sid={sid} onFiles={session?.cwd ? openFiles : undefined} onClose={() => setView("chat")} embedded />
+            </Suspense>
+          </PageBoundary>
         </ViewLayer>
       )}
       </div>
