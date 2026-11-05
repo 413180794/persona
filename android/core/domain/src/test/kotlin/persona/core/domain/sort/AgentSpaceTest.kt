@@ -4,6 +4,9 @@ import persona.core.contracts.Session
 import org.junit.Assert.*
 import org.junit.Test
 
+/** The 按电脑和空间 tree these tests were written for (the default grouping is now 按仓库). */
+private val MachineSpaceTree = AgentListSettings(grouping = AgentGrouping.MachineSpace)
+
 class AgentSpaceTest {
     @Test fun detailKeepsTabOrderAndMuteExceptionsOverrideSpace() {
         val idle = AgentSession(Session(machineId = "machine", sessionId = "idle", state = "idle", spaceId = "workspace", spaceName = "项目", slotIndex = 1))
@@ -13,7 +16,7 @@ class AgentSpaceTest {
         val pinned = AgentPreferences().togglePin(idle.id).togglePin(active.id)
         assertEquals(listOf(idle.id, active.id), pinned.sessions)
         assertEquals(listOf(idle.id, active.id), space.members.map { it.id })
-        assertEquals(listOf(active.id), buildAgentList(listOf(idle, active)).groups.single().visibleRows.map { it.id })
+        assertEquals(listOf(active.id), buildAgentList(listOf(idle, active), settings = MachineSpaceTree).groups.single().visibleRows.map { it.id })
         val muted = AgentPreferences(spaces = listOf(space.preferenceKey))
         val allowed = muted.toggleMute(idle.id, space.preferenceKey)
         assertFalse(allowed.mutes(idle))

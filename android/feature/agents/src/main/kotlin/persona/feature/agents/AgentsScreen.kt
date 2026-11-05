@@ -142,8 +142,20 @@ internal fun AgentsScreen(
             onOpen = if (inList) ({ navigator.navigate(SpaceRoute(space.id, space.name)) }) else null, compact = inList)
     }
     val tree = remember(page.list, page.settings.machineFilter) { agentTreeEntries(page.list, page.settings.machineFilter) }
-    val spacesById = remember(spaces, page.preferences.grouping) {
-        if (page.preferences.grouping == AgentGrouping.MachineSpace) spaces.associateBy { it.id } else emptyMap()
+    val spacesById = remember(spaces, page.preferences.grouping, page.list) {
+        when (page.preferences.grouping) {
+            AgentGrouping.MachineSpace -> spaces.associateBy { it.id }
+            // A repository whose sessions are all in one herdr space (the usual case) takes that space's marks and ⋯ (iOS).
+            AgentGrouping.Repo -> {
+                val byId = spaces.associateBy { it.id }
+                page.list.groups.filter { it.repo == RepoLevel.Repository }.mapNotNull { repo ->
+                    val members = repo.rows + page.list.groups.filter { it.under == repo.id }.flatMap { it.rows }
+                    agentSpaces(members).singleOrNull()?.takeIf { it.members.first().session.spaceId != null }
+                        ?.let { byId[it.id] }?.let { repo.id to it }
+                }.toMap()
+            }
+            else -> emptyMap()
+        }
     }
 
     val working = page.list.counts[AgentQuickFilter.Working] ?: 0
@@ -234,7 +246,8 @@ internal fun AgentsScreen(
                         val machine = entry.machine
                         AgentTreeHeader(machine.machine.displayName, machine.folded, { model.fold(machine) }, first = entry.first,
                             icon = machine.machine.deviceIcon, online = machine.machine.online,
-                            detail = "${machine.spaceCount} 个空间，${machine.sessionCount} 个会话", counts = machine.headingCounts,
+                            detail = machine.repoCount?.let { "$it 个仓库，${machine.sessionCount} 个会话" }
+                                ?: "${machine.spaceCount} 个空间，${machine.sessionCount} 个会话", counts = machine.headingCounts,
                             onMonitor = { navigator.navigate(MachineDetailRoute(machine.machine.id)) }, tag = groups.tagFor(machine.machine.id))
                     }
                     is TreeGroupEntry -> item(entry.key, contentType = if (entry.space) "space" else "section") {
@@ -245,7 +258,8 @@ internal fun AgentsScreen(
                             flags = buildList {
                                 if (space != null && space.preferenceKey in page.preferences.pins.spaces) add(RowFlag("空间已置顶", PhIcons.PushPin))
                                 if (space != null && space.preferenceKey in page.preferences.mutes.spaces) add(RowFlag("空间已屏蔽", PhIcons.Prohibit))
-                            }, menu = space?.let { { spaceMenu(it, true) } })
+                            }, menu = space?.let { { spaceMenu(it, true) } }, icon = group.repo?.icon,
+                            kind = group.repo?.kind ?: "空间")
                         else if (group.id.startsWith("todo/") && group.id != "todo/none") {
                             val todoId = group.id.removePrefix("todo/")
                             AgentTreeHeader(group.title, group.folded, { model.fold(group) }, first = entry.first,
@@ -475,7 +489,19 @@ private val ConnectionState.title: String get() = when (this) {
     ConnectionState.CertificateMismatch -> "hub 的证书变了"
     ConnectionState.Revoked -> "配对已失效"
 }
+/** What TalkBack calls the level (iOS WorktreeRow: 主工作树 / 工作树). */
+internal val RepoLevel.kind get() = when (this) {
+    RepoLevel.Repository -> "仓库"
+    RepoLevel.MainCheckout -> "主工作树"
+    RepoLevel.Worktree -> "工作树"
+}
+internal val RepoLevel.icon get() = when (this) {
+    RepoLevel.Repository -> PhIcons.Folder
+    RepoLevel.MainCheckout -> PhIcons.House
+    RepoLevel.Worktree -> PhIcons.GitBranch
+}
 private val AgentGrouping.label: String get() = when (this) {
+    AgentGrouping.Repo -> "按仓库"
     AgentGrouping.State -> "按状态"
     AgentGrouping.Todo -> "按待办"
     else -> "按电脑和空间"

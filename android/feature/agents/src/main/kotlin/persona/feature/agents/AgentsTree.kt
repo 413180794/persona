@@ -14,7 +14,7 @@ import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.*
 
-// The Agents tree (电脑 → 空间 → 会话) as lazy list lines. The lines are drawn by the design system's Agents components
+// The Agents tree (电脑 → 空间 → 会话, or 电脑 → 仓库 → 工作树 → 会话 under 按仓库) as lazy list lines. The lines are drawn by the design system's Agents components
 // (AgentTreeHeader, AgentSpaceHeader, AgentRow, AgentIdleRow, MachineChip; docs/android-design.md 2.4).
 
 /** One line of the flattened tree, in list order. [key] is the lazy item key. */
@@ -26,8 +26,9 @@ internal data class TreeMachineEntry(val machine: AgentMachineGroup, val first: 
 }
 
 /**
- * A group heading. [space] groups are herdr workspaces of a computer; the others (置顶, states, history projects)
- * are top-level sections. [depth] 1 sits under a computer heading. Quiet spaces (every agent finished and seen)
+ * A group heading. [space] groups are herdr workspaces of a computer (or its repositories and their working trees
+ * under 按仓库); the others (置顶, states, history projects) are top-level sections. [depth] 1 sits under a computer
+ * heading, a working tree one step further in. Quiet spaces (every agent finished and seen)
  * come after the active ones of their computer, folded by default and drawn weaker.
  */
 internal data class TreeGroupEntry(val group: AgentListGroup, val space: Boolean, val depth: Int, val first: Boolean) : AgentTreeEntry {
@@ -69,7 +70,9 @@ internal fun agentTreeEntries(list: AgentListResult, machineFilter: String): Lis
         if (headed) entries += TreeMachineEntry(machine, first = entries.isEmpty())
         if (headed && machine.folded) return@forEach
         machine.groups.mapNotNull(byId::get).forEachIndexed { index, it ->
-            group(it, space = true, depth = if (headed) 1 else 0, first = index == 0)
+            // A working tree sits in its repository, gone while the repository is folded.
+            if (it.under != null && byId[it.under]?.folded != false) return@forEachIndexed
+            group(it, space = true, depth = (if (headed) 1 else 0) + (if (it.under != null) 1 else 0), first = index == 0)
         }
     }
     list.groups.filter { it.id != "pinned" && it.id !in treeIds }.forEach { group(it, space = false, depth = 0, first = entries.isEmpty()) }
@@ -113,4 +116,7 @@ internal val AgentMachineGroup.headingCounts: List<Pair<Status, Int>>
     get() = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread).map { it.designStatus to (stateCounts[it] ?: 0) }
 
 internal val AgentListGroup.headingCounts: List<Pair<Status, Int>>
-    get() = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread).map { state -> state.designStatus to rows.count { it.state == state } }
+    get() = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread).map { state ->
+        // A repository with working trees holds no rows itself (its trees do): it counts from stateCounts.
+        state.designStatus to if (rows.isEmpty()) stateCounts?.get(state) ?: 0 else rows.count { it.state == state }
+    }

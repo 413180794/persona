@@ -45,7 +45,7 @@ class AgentsListTest {
         val rows = listOf("working", "idle", "idle").mapIndexed { index, state ->
             AgentSession(Session(machineId = "machine", sessionId = "session-$index", state = state, spaceId = "space", spaceName = "空间"))
         }
-        val settings = AgentListSettings()
+        val settings = AgentListSettings(grouping = AgentGrouping.MachineSpace)
         val collapsed = buildAgentList(rows, settings = settings).groups.single()
         assertEquals(2, collapsed.rows.size - collapsed.visibleRows.size)
         assertEquals(AgentState.Working, collapsed.visibleRows.single().state)
@@ -68,6 +68,29 @@ class AgentsListTest {
         assertEquals(1, retained.counts[AgentQuickFilter.Unread])
         val reselected = buildAgentList(listOf(AgentSession(first.copy(state = "idle")), AgentSession(second)), settings = settings)
         assertEquals(listOf(second.key.path), reselected.groups.flatMap { it.visibleRows }.map { it.id })
+    }
+
+    @Test fun byRepositoryAnOpenedRowStaysInItsCheckoutWhenATreeAppearsOrGoes() {
+        val opened = Session(machineId = "m", sessionId = "opened", state = "unread", cwd = "/code/app", updatedAt = "2026-01-02T00:00:00Z")
+        val tree = Session(machineId = "m", sessionId = "tree", state = "unread", cwd = "/code/app/.worktrees/wt", updatedAt = "2026-01-01T00:00:00Z")
+        val settings = AgentListSettings(grouping = AgentGrouping.Repo, quick = AgentQuickFilter.Unread)
+        val kept = setOf(opened.key.path)
+        fun list(vararg sessions: Session, keep: Set<String> = emptySet()) =
+            buildAgentList(sessions.map(::AgentSession), listOf(Machine("m", online = true)), settings = settings.copy(kept = keep))
+        fun assertInTree(result: AgentListResult) {
+            val inTree = result.machines.flatMap { it.groups }.toSet()
+            assertTrue("no stray section outside the computer", result.groups.all { it.id in inTree })
+            assertTrue("a repository with trees holds no rows of its own", result.groups.filter { group -> result.groups.any { it.under == group.id } }.all { it.rows.isEmpty() })
+            assertEquals("tree/m//code/app", result.groups.single { group -> group.rows.any { it.id == opened.key.path } }.id)
+        }
+        // A second working tree appears while the opened row is kept: it stays in the main checkout, not on the repository.
+        val appeared = retainOpenedRows(list(opened.copy(state = "idle"), tree, keep = kept), list(opened), kept)
+        assertInTree(appeared)
+        assertEquals(listOf("repo/m//code/app", "tree/m//code/app", "tree/m//code/app/.worktrees/wt"), appeared.groups.map { it.id })
+        // The other tree goes: the repository is one level again and no old tree group is brought back at the bottom.
+        val gone = retainOpenedRows(list(opened.copy(state = "idle"), keep = kept), list(opened, tree), kept)
+        assertInTree(gone)
+        assertEquals(listOf("tree/m//code/app"), gone.groups.map { it.id })
     }
 
     @Test fun quickAnswersPreserveWireLabelsAndEnforceTheInlineBoundary() {

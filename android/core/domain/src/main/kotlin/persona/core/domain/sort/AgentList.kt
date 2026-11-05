@@ -7,7 +7,7 @@ import persona.core.contracts.state
 
 /** Kept IDs retain membership, not a previous row position. Reselecting a filter replaces kept. */
 data class AgentListSettings(
-    val grouping: AgentGrouping = AgentGrouping.MachineSpace,
+    val grouping: AgentGrouping = AgentGrouping.Repo,
     val quick: AgentQuickFilter = AgentQuickFilter.All,
     val machineFilter: String = "",
     val query: String = "",
@@ -18,19 +18,24 @@ data class AgentListSettings(
 )
 
 enum class AgentGrouping {
-    MachineSpace, State, Todo,
+    Repo, MachineSpace, State, Todo,
     // Retained for callers of the original list projection; stored preferences migrate to MachineSpace.
     Space, Machine;
 
     companion object {
+        /** A phone that never chose a grouping gets 按仓库 (#2252, as iOS #2108); any stored choice keeps its own. */
         fun fromPreference(value: String?): AgentGrouping = when (value) {
+            null, Repo.name -> Repo
             State.name -> State
             Todo.name -> Todo
             else -> MachineSpace
         }
-        val selectable = listOf(MachineSpace, State, Todo)
+        val selectable = listOf(Repo, MachineSpace, State, Todo)
     }
 }
+
+/** A group's place in 按仓库: a repository, or one of its working trees (the main checkout or another). */
+enum class RepoLevel { Repository, MainCheckout, Worktree }
 enum class AgentQuickFilter(val state: AgentState?) {
     All(null), NeedsYou(AgentState.NeedsYou), Unread(AgentState.Unread), Working(AgentState.Working);
     fun matches(session: AgentSession) = state == null || session.state == state
@@ -45,6 +50,10 @@ data class AgentListGroup(
     val parent: String? = null,
     val stateCounts: Map<AgentState, Int>? = null,
     val spoken: String? = null,
+    /** 按仓库: the repository or working tree this group is. */
+    val repo: RepoLevel? = null,
+    /** The group this one sits in: a working tree's repository, whose own [rows] are then empty (its trees hold them). */
+    val under: String? = null,
 )
 
 data class AgentListResult(
@@ -62,6 +71,8 @@ data class AgentMachineGroup(
     val spaceCount: Int,
     val stateCounts: Map<AgentState, Int>,
     val folded: Boolean,
+    /** 按仓库: how many repositories it has. */
+    val repoCount: Int? = null,
 ) {
     val id: String get() = "machine/${machine.id}"
 }
@@ -105,10 +116,53 @@ fun buildAgentList(
         return AgentListGroup(id, title, rows, if (folded) emptyList() else visible, folded)
     }
     val result = mutableListOf<AgentListGroup>()
-    if (pinned.isNotEmpty()) result += if (settings.grouping == AgentGrouping.MachineSpace)
+    if (pinned.isNotEmpty()) result += if (settings.grouping == AgentGrouping.MachineSpace || settings.grouping == AgentGrouping.Repo)
         group("pinned", "置顶", pinned, pinned) else AgentListGroup("pinned", "置顶", pinned, pinned)
     var quietTitle: String? = null
+    fun stateCounts(rows: List<AgentSession>) = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
     when (settings.grouping) {
+        AgentGrouping.Repo -> {
+            // Computer → repository → working tree → sessions, from each cwd (web `buildRepoMachineTree`, iOS `RepoTree`).
+            // A repository with nothing going on is quiet: folded, after the busy ones, like a quiet space; a quiet working
+            // tree is folded too but keeps its place (main checkout first, then by name, as on iOS).
+            fun quiet(members: List<AgentSession>) = !quick && members.none(::stays)
+            fun section(id: String, title: String, members: List<AgentSession>, level: RepoLevel, under: String?, machineFolded: Boolean): AgentListGroup {
+                val isQuiet = quiet(members)
+                val rows = ordered(members)
+                val folded = if (isQuiet) id !in settings.expandedQuiet && settings.query.isEmpty() else id in settings.folded
+                val visible = when {
+                    folded || machineFolded -> emptyList()
+                    isQuiet || quick || showIdle(id) -> rows
+                    else -> rows.filter(::stays)
+                }
+                return AgentListGroup(id, title, rows, visible, folded, if (isQuiet) "quiet" else null, stateCounts(rows), repo = level, under = under)
+            }
+            val known = machines + live.map { it.session.machineId }.distinct()
+                .filter { id -> machines.none { it.id == id } }.map { Machine(it, "机器信息待更新") }
+            val machineGroups = known.sortedBy { !it.online }.mapNotNull { machine ->
+                val members = live.filter { it.session.machineId == machine.id }
+                if (members.isEmpty()) return@mapNotNull null
+                val machineFolded = "machine/${machine.id}" in settings.folded
+                val repos = agentRepos(members).sortedBy { quiet(it.members) }
+                val groups = repos.flatMap { repo ->
+                    // A quiet repository opens to all its sessions in one list, as iOS's 空闲的仓库 does. A repository with only
+                    // its main checkout is drawn as one level but keeps the checkout's id, so a session opened under a quick
+                    // filter stays in the same group when a second working tree appears or goes (retainOpenedRows).
+                    if (repo.flat) listOf(section(repo.worktrees[0].id, repo.name, repo.members, RepoLevel.Repository, null, machineFolded))
+                    else if (quiet(repo.members)) listOf(section(repo.id, repo.name, repo.members, RepoLevel.Repository, null, machineFolded))
+                    else listOf(AgentListGroup(repo.id, repo.name, emptyList(), emptyList(), repo.id in settings.folded,
+                        stateCounts = stateCounts(repo.members), repo = RepoLevel.Repository)) +
+                        repo.worktrees.map { tree ->
+                            section(tree.id, tree.name, tree.members, if (tree.main) RepoLevel.MainCheckout else RepoLevel.Worktree, repo.id, machineFolded)
+                        }
+                }
+                result += groups
+                AgentMachineGroup(machine, groups.map { it.id }, members.size, agentSpaces(members).size, stateCounts(members),
+                    machineFolded, repoCount = repos.size)
+            }
+            return AgentListResult(counts, result, filtered.filter { it.state == AgentState.Unread }.map { it.id },
+                machines = machineGroups)
+        }
         AgentGrouping.MachineSpace -> {
             // Keep each session in a single leaf group; machine headers only reference those leaves.
             val treeRows = filtered.filter { it.isLive }

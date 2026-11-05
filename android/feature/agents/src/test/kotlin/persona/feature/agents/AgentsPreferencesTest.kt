@@ -27,6 +27,7 @@ class AgentsPreferencesTest {
             override suspend fun markSeen(session: SessionKey, version: String) = Unit
         }
         val preferences = AgentsPreferences(store, hub)
+        assertEquals("a phone that never chose a grouping gets 按仓库", AgentGrouping.Repo, preferences.snapshots.first().grouping)
         for (value in listOf("Space", "Machine", "removed-value")) {
             store.data.value = preferencesOf(stringPreferencesKey("grouping") to value)
             assertEquals(AgentGrouping.MachineSpace, preferences.snapshots.first().grouping)

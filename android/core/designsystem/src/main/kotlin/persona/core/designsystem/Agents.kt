@@ -207,6 +207,9 @@ fun AgentTreeHeader(
  * The second level: a herdr workspace under its computer, indented [depth] steps (0 when the list shows one
  * computer and drops its heading) and smaller than the computer. A [quiet] space (all finished and seen) is lighter
  * and says how many [sessions] it holds instead of [counts]. [menu] is the space's ⋯ (a [HeadingAction] and its sheet).
+ * Under 按仓库 the same heading is a repository or one of its working trees, told apart by [icon] (folder, ⌂ for the
+ * main checkout, a branch for another tree) and one more [depth] step for a tree. [kind] names the level for TalkBack
+ * (空间, 仓库, 主工作树, 工作树): the caret says 展开 / 折叠 it, the icon says what it is, the heading whether it is open.
  */
 @Composable
 fun AgentSpaceHeader(
@@ -221,16 +224,20 @@ fun AgentSpaceHeader(
     counts: List<Pair<Status, Int>> = emptyList(),
     flags: List<RowFlag> = emptyList(),
     menu: (@Composable () -> Unit)? = null,
+    icon: PhIcon? = null,
+    kind: String = "空间",
 ) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     Row(
         modifier.fillMaxWidth().padding(top = if (first) Tokens.Space.xxs else Tokens.Space.s).heightIn(min = Action)
-            .clickable(role = Role.Button, onClick = onToggle).semantics { heading() }.padding(start = Step * depth),
+            .clickable(role = Role.Button, onClick = onToggle)
+            .semantics { heading(); stateDescription = if (folded) "已折叠" else "已展开" }.padding(start = Step * depth),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, if (folded) "展开空间" else "折叠空间", size = Caret, tint = palette.ink3)
+        JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, if (folded) "展开$kind" else "折叠$kind", size = Caret, tint = palette.ink3)
         Spacer(Modifier.width(Tokens.Space.s - Tokens.Space.xxs))
+        icon?.let { JIcon(it, kind, size = Caret, tint = palette.ink2); Spacer(Modifier.width(Tokens.Space.xs)) }
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 title, style = if (quiet) type.callout else type.label, color = if (quiet) palette.ink2 else palette.ink,

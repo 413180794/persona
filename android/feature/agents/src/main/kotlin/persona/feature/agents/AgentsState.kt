@@ -70,7 +70,7 @@ class AgentsPreferences @Inject constructor(private val store: DataStore<Prefere
 }
 
 data class AgentsPreferencesSnapshot(
-    val grouping: AgentGrouping = AgentGrouping.MachineSpace,
+    val grouping: AgentGrouping = AgentGrouping.Repo,
     val compact: Boolean = false,
     val pins: AgentPreferences = AgentPreferences(),
     val mutes: AgentPreferences = AgentPreferences(),
@@ -118,12 +118,18 @@ internal fun retainOpenedRows(
 ): AgentListResult {
     if (previous == null || kept.isEmpty()) return current
     val currentRows = current.groups.flatMap { it.rows }.associateBy { it.id }
-    val retained = kept.intersect(currentRows.keys)
+    // 按仓库: a repository with working trees takes no rows of its own, and a repository or tree group that is gone is
+    // not brought back as a stray section outside its computer; such a row stays where the list put it now.
+    val currentIds = current.groups.map { it.id }.toSet()
+    val parents = current.groups.mapNotNull { it.under }.toSet()
+    val homes = previous.groups.filter { it.id !in parents && (it.id in currentIds || it.repo == null) }.map { it.id }.toSet()
+    val retained = kept.intersect(currentRows.keys).filter { id -> previous.groups.any { it.id in homes && it.rows.any { row -> row.id == id } } }.toSet()
     val groups = current.groups.map { group -> group.copy(
         rows = group.rows.filterNot { it.id in retained },
         visibleRows = group.visibleRows.filterNot { it.id in retained },
     ) }.toMutableList()
     previous.groups.forEachIndexed { groupIndex, old ->
+        if (old.id !in homes) return@forEachIndexed
         val rowsToKeep = old.rows.filter { it.id in retained }
         if (rowsToKeep.isEmpty()) return@forEachIndexed
         val index = groups.indexOfFirst { it.id == old.id }
@@ -140,7 +146,8 @@ internal fun retainOpenedRows(
             else insert(group.visibleRows, if (old.folded) old.rows else old.visibleRows))
         if (index >= 0) groups[index] = restored else groups.add(groupIndex.coerceAtMost(groups.size), restored)
     }
-    return current.copy(groups = groups.filter { it.rows.isNotEmpty() })
+    // A repository with working trees holds no rows itself; it stays while a tree under it does.
+    return current.copy(groups = groups.filter { group -> group.rows.isNotEmpty() || groups.any { it.under == group.id && it.rows.isNotEmpty() } })
 }
 
 internal fun Interaction.quickQuestion(): Question? = questions?.singleOrNull()?.takeIf {
