@@ -80,7 +80,8 @@ func gz(b []byte) []byte {
 }
 
 // updatingHub is a hub of build 202611021500 that updates from p, running target (its "binary"), with one machine.
-func updatingHub(t *testing.T, p *fakePublisher, channel string) (*Hub, *Machine, string, *[]string) {
+// execs returns a copy of the paths the hub exec'd so far: the update runs exec on its own goroutine.
+func updatingHub(t *testing.T, p *fakePublisher, channel string) (*Hub, *Machine, string, func() []string) {
 	t.Helper()
 	h := newTestHub(t)
 	h.build = update.Make("v1-202611021500", channel, "202611021500", p.srv.URL+"/dl")
@@ -96,10 +97,11 @@ func updatingHub(t *testing.T, p *fakePublisher, channel string) (*Hub, *Machine
 	var mu sync.Mutex
 	var execd []string
 	u.exec = func(path string) error { mu.Lock(); execd = append(execd, path); mu.Unlock(); return nil }
+	execs := func() []string { mu.Lock(); defer mu.Unlock(); return slices.Clone(execd) }
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "ssh"})
 	m.online = true
 	h.machines, h.byID["box"] = append(h.machines, m), m
-	return h, m, target, &execd
+	return h, m, target, execs
 }
 
 func waitFor(t *testing.T, what string, ok func() bool) {
@@ -122,7 +124,7 @@ func setSessions(m *Machine, ss ...proto.Session) {
 // place, the old one kept, the marker written, and the hub runs the new one.
 func TestUpdateWaitsForIdle(t *testing.T) {
 	p := newPublisher(t, "v2-202611021700", 202611021700)
-	h, m, target, execd := updatingHub(t, p, "release")
+	h, m, target, execs := updatingHub(t, p, "release")
 	setSessions(m, proto.Session{SessionID: "s1", Title: "migrate the db", Status: proto.StatusWorking})
 	ctx := context.Background()
 	if _, err := h.upd.check(ctx); err != nil {
@@ -139,7 +141,7 @@ func TestUpdateWaitsForIdle(t *testing.T) {
 		t.Fatalf("busy %+v", v.Busy)
 	}
 	setSessions(m, proto.Session{SessionID: "s1", Status: proto.StatusIdle})
-	waitFor(t, "the restart", func() bool { return len(*execd) == 1 })
+	waitFor(t, "the restart", func() bool { return len(execs()) == 1 })
 	if b, _ := os.ReadFile(target); !bytes.Equal(b, p.script) {
 		t.Fatal("the new binary is not in place")
 	}
@@ -155,7 +157,7 @@ func TestUpdateWaitsForIdle(t *testing.T) {
 // 现在就更新 (the second confirmation) does not wait.
 func TestUpdateNowSkipsTheWait(t *testing.T) {
 	p := newPublisher(t, "v2-202611021700", 202611021700)
-	h, m, _, execd := updatingHub(t, p, "release")
+	h, m, _, execs := updatingHub(t, p, "release")
 	setSessions(m, proto.Session{SessionID: "s1", Status: proto.StatusWorking})
 	if _, err := h.upd.check(context.Background()); err != nil {
 		t.Fatal(err)
@@ -163,20 +165,20 @@ func TestUpdateNowSkipsTheWait(t *testing.T) {
 	if err := h.upd.begin(context.Background(), true); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the restart", func() bool { return len(*execd) == 1 })
+	waitFor(t, "the restart", func() bool { return len(execs()) == 1 })
 }
 
 // A download that does not match the manifest leaves the binary as it is, and the history says why.
 func TestUpdateBadDownloadChangesNothing(t *testing.T) {
 	p := newPublisher(t, "v2-202611021700", 202611021700)
 	p.corrupt = true
-	h, _, target, execd := updatingHub(t, p, "release")
+	h, _, target, execs := updatingHub(t, p, "release")
 	h.upd.check(context.Background())
 	if err := h.upd.begin(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the failure", func() bool { return h.upd.view().State == "failed" })
-	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" || len(*execd) != 0 {
+	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" || len(execs()) != 0 {
 		t.Fatal("a bad download replaced the binary")
 	}
 	if hs := h.upd.settings.History; len(hs) != 1 || hs[0].Result != "failed" {
@@ -189,7 +191,7 @@ func TestUpdateBadDownloadChangesNothing(t *testing.T) {
 func TestUpdateConfirmOrRollBack(t *testing.T) {
 	p := newPublisher(t, "v2-202611021700", 202611021700)
 	// Running as the new version (build 202611021700) after the restart.
-	h, m, target, execd := updatingHub(t, p, "release")
+	h, m, target, execs := updatingHub(t, p, "release")
 	h.build = update.Make("v2-202611021700", "release", "202611021700", p.srv.URL+"/dl")
 	h.version = h.build.Version
 	os.WriteFile(target+".prev", []byte("#!/bin/sh\necho old\n"), 0o755)
@@ -220,7 +222,7 @@ func TestUpdateConfirmOrRollBack(t *testing.T) {
 	m.mu.Unlock()
 	update.Save(update.PendingPath(h.upd.dir), pending)
 	h.upd.confirm(context.Background(), pending)
-	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" || len(*execd) != 1 || (*execd)[0] != target {
+	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" || len(execs()) != 1 || execs()[0] != target {
 		t.Fatal("did not go back to the old binary")
 	}
 	// The old version starts and records it.
@@ -250,14 +252,14 @@ func TestUpdateConfirmOrRollBack(t *testing.T) {
 // A build deployed straight from master during an update's checks clears the marker without calling it a failure.
 func TestUpdateDirectDeployIsNotARollback(t *testing.T) {
 	p := newPublisher(t, "v2-202611021700", 202611021700)
-	h, _, target, execd := updatingHub(t, p, "release")
+	h, _, target, execs := updatingHub(t, p, "release")
 	h.build = update.Make("deployed-202611021800", "release", "202611021800", p.srv.URL+"/dl")
 	update.Save(update.PendingPath(h.upd.dir), update.Pending{FromBuild: 202611021500, ToBuild: 202611021700, Target: target, Prev: target + ".prev"})
 	h.upd.boot()
 	if _, err := os.Stat(update.RolledBackPath(h.upd.dir)); !os.IsNotExist(err) {
 		t.Fatal("a direct deploy was recorded as a rollback (its release would be marked bad)")
 	}
-	if _, err := os.Stat(update.PendingPath(h.upd.dir)); !os.IsNotExist(err) || len(*execd) != 0 {
+	if _, err := os.Stat(update.PendingPath(h.upd.dir)); !os.IsNotExist(err) || len(execs()) != 0 {
 		t.Fatal("the marker stayed, or it restarted")
 	}
 }
@@ -265,17 +267,17 @@ func TestUpdateDirectDeployIsNotARollback(t *testing.T) {
 // Each start is counted once: the third failed start of a new version still runs it, the fourth goes back.
 func TestUpdateStartsCountedOnce(t *testing.T) {
 	p := newPublisher(t, "v2-202611021700", 202611021700)
-	h, _, target, execd := updatingHub(t, p, "release")
+	h, _, target, execs := updatingHub(t, p, "release")
 	h.build = update.Make("v2-202611021700", "release", "202611021700", p.srv.URL+"/dl")
 	os.WriteFile(target+".prev", []byte("old"), 0o755)
 	update.Save(update.PendingPath(h.upd.dir), update.Pending{ToBuild: 202611021700, Target: target, Prev: target + ".prev"})
 	for i := 1; i <= updateMaxStarts; i++ {
-		if !h.upd.boot() || len(*execd) != 0 {
+		if !h.upd.boot() || len(execs()) != 0 {
 			t.Fatalf("start %d went back already", i)
 		}
 	}
 	h.upd.boot()
-	if len(*execd) != 1 {
+	if len(execs()) != 1 {
 		t.Fatal("start 4 did not go back")
 	}
 }
@@ -283,12 +285,12 @@ func TestUpdateStartsCountedOnce(t *testing.T) {
 // A new version that keeps dying in a service manager's restart loop goes back on its next start.
 func TestUpdateCrashLoopGoesBack(t *testing.T) {
 	p := newPublisher(t, "v2-202611021700", 202611021700)
-	h, _, target, execd := updatingHub(t, p, "release")
+	h, _, target, execs := updatingHub(t, p, "release")
 	h.build = update.Make("v2-202611021700", "release", "202611021700", p.srv.URL+"/dl")
 	os.WriteFile(target+".prev", []byte("old"), 0o755)
 	update.Save(update.PendingPath(h.upd.dir), update.Pending{ToBuild: 202611021700, Target: target, Prev: target + ".prev", Starts: updateMaxStarts})
 	h.upd.boot()
-	if b, _ := os.ReadFile(target); string(b) != "old" || len(*execd) != 1 {
+	if b, _ := os.ReadFile(target); string(b) != "old" || len(execs()) != 1 {
 		t.Fatal("a crash loop did not go back")
 	}
 }
@@ -300,7 +302,7 @@ func TestUpdateUnsavedStartCountGoesBack(t *testing.T) {
 		t.Skip("needs a directory the test cannot write to")
 	}
 	p := newPublisher(t, "v2-202611021700", 202611021700)
-	h, _, target, execd := updatingHub(t, p, "release")
+	h, _, target, execs := updatingHub(t, p, "release")
 	var logs bytes.Buffer
 	h.logger = log.New(&logs, "", 0)
 	h.build = update.Make("v2-202611021700", "release", "202611021700", p.srv.URL+"/dl")
@@ -313,8 +315,8 @@ func TestUpdateUnsavedStartCountGoesBack(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(h.upd.dir, 0o700) })
 	h.upd.boot()
-	if b, _ := os.ReadFile(target); string(b) != "old" || len(*execd) != 1 {
-		t.Fatalf("an unsaved start count kept the new version (execd %v)", *execd)
+	if b, _ := os.ReadFile(target); string(b) != "old" || len(execs()) != 1 {
+		t.Fatalf("an unsaved start count kept the new version (execd %v)", execs())
 	}
 	for _, want := range []string{"save start count", "save rollback marker", "remove pending marker"} {
 		if !strings.Contains(logs.String(), want) {
@@ -389,7 +391,7 @@ func publishedAtB(t *testing.T) *fakePublisher {
 // the reason, but not installed by itself, and the history says so once; the user can still install it.
 func TestUpdateHeldWhenTheReleaseIsBehind(t *testing.T) {
 	p := publishedAtB(t)
-	h, _, _, execd := updatingHub(t, p, "release")
+	h, _, _, execs := updatingHub(t, p, "release")
 	h.build.Commit = gitD
 	ctx := context.Background()
 	if _, err := h.upd.check(ctx); err != nil {
@@ -416,7 +418,7 @@ func TestUpdateHeldWhenTheReleaseIsBehind(t *testing.T) {
 	if err := h.upd.begin(ctx, true); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the update the user asked for", func() bool { return len(*execd) == 1 })
+	waitFor(t, "the update the user asked for", func() bool { return len(execs()) == 1 })
 }
 
 // A release that contains the hub's commit installs by itself as before, and nothing is held.
@@ -578,7 +580,7 @@ func TestUpdateSwapsPrograms(t *testing.T) {
 		m.Programs = map[string]map[string]update.File{"jarvisd-wechat": {plat: pf}}
 	})
 	p.extra = map[string][]byte{"/dl/" + pf.Name: pgz}
-	h, _, target, execd := updatingHub(t, p, "release")
+	h, _, target, execs := updatingHub(t, p, "release")
 	ctx := context.Background()
 	if _, err := h.upd.check(ctx); err != nil {
 		t.Fatal(err)
@@ -586,7 +588,7 @@ func TestUpdateSwapsPrograms(t *testing.T) {
 	if err := h.upd.begin(ctx, true); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the restart", func() bool { return len(*execd) == 1 })
+	waitFor(t, "the restart", func() bool { return len(execs()) == 1 })
 	placed := filepath.Join(filepath.Dir(target), "jarvisd-wechat")
 	if b, _ := os.ReadFile(placed); !bytes.Equal(b, prog) {
 		t.Fatal("the program is not next to the hub's binary")
@@ -615,14 +617,14 @@ func TestUpdateRefusesAWrongProgram(t *testing.T) {
 		m.Programs = map[string]map[string]update.File{"jarvisd-wechat": {plat: pf}}
 	})
 	p.extra = map[string][]byte{"/dl/" + pf.Name: pgz}
-	h, _, target, execd := updatingHub(t, p, "release")
+	h, _, target, execs := updatingHub(t, p, "release")
 	ctx := context.Background()
 	h.upd.check(ctx)
 	if err := h.upd.begin(ctx, true); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the failure", func() bool { return h.upd.view().State == "failed" })
-	if len(*execd) != 0 {
+	if len(execs()) != 0 {
 		t.Fatal("restarted")
 	}
 	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" {

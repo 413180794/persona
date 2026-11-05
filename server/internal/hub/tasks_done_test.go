@@ -377,13 +377,13 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 	}
 
 	// 重试: 「继续」 to the agent, once for eight taps; the todo is answered as it is.
-	retryHandler := h.routes()
+	mux := h.routes()
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if w := retryReqWithHandler(h, todo.ID, retryHandler); w.Code != http.StatusOK {
+			if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 				t.Errorf("retry: %d %s", w.Code, w.Body)
 			}
 		}()
@@ -417,7 +417,8 @@ func TestTaskContinueRefusedOrNotNeeded(t *testing.T) {
 	todo := startedTask(t, h)
 	m := h.byID["box"]
 	m.setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, UpdatedAt: time.Now()}})
-	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+	mux := h.routes()
+	if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 		t.Fatalf("retry of a working task: %d %s", w.Code, w.Body)
 	}
 	m.setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusDone, LastText: "API Error: 529 Overloaded", UpdatedAt: time.Now()}})
@@ -425,7 +426,7 @@ func TestTaskContinueRefusedOrNotNeeded(t *testing.T) {
 	p := m.peer
 	m.peer = nil
 	m.mu.Unlock()
-	if w := retryReq(h, todo.ID); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "离线") {
+	if w := retryReq(h, mux, todo.ID); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "离线") {
 		t.Fatalf("retry offline: %d %s", w.Code, w.Body)
 	}
 	m.mu.Lock()
@@ -435,7 +436,7 @@ func TestTaskContinueRefusedOrNotNeeded(t *testing.T) {
 		t.Fatalf("sends = %v", sends)
 	}
 	// Back online, 重试 goes through (the refusal left no claim behind).
-	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+	if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 		t.Fatalf("retry: %d %s", w.Code, w.Body)
 	}
 	if _, sends := tn.calls(); len(sends) != 1 {

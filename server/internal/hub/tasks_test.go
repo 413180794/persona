@@ -255,16 +255,13 @@ func TestTaskStartFailedEndsTheTodo(t *testing.T) {
 	}
 }
 
-// retryReq posts a task's retry as the app does.
-func retryReq(h *Hub, todoID string) *httptest.ResponseRecorder {
-	return retryReqWithHandler(h, todoID, h.routes())
-}
-
-func retryReqWithHandler(h *Hub, todoID string, handler http.Handler) *httptest.ResponseRecorder {
+// retryReq posts a task's retry as the app does, through mux (the test's one h.routes(): building the routes
+// writes Hub fields, so concurrent retries must share one).
+func retryReq(h *Hub, mux http.Handler, todoID string) *httptest.ResponseRecorder {
 	r := todoRequest("POST", "/api/v1/todos/"+todoID+"/retry", nil)
 	r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, r)
+	mux.ServeHTTP(w, r)
 	return w
 }
 
@@ -281,7 +278,8 @@ func TestTaskRetryStartsTheSameTask(t *testing.T) {
 	tn.failStart, tn.gate = nil, make(chan struct{})
 	tn.mu.Unlock()
 
-	w := retryReq(h, todo.ID)
+	mux := h.routes()
+	w := retryReq(h, mux, todo.ID)
 	if w.Code != http.StatusOK {
 		t.Fatalf("retry: %d %s", w.Code, w.Body)
 	}
@@ -314,7 +312,7 @@ func TestTaskRetryStartsTheSameTask(t *testing.T) {
 		t.Fatalf("feed = %s", got)
 	}
 	// Retrying a task that runs is nothing to do.
-	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+	if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 		t.Fatalf("retry of a running task: %d %s", w.Code, w.Body)
 	}
 	if starts, _ := tn.calls(); len(starts) != 2 {
@@ -333,7 +331,8 @@ func TestTaskRetryFailsAgain(t *testing.T) {
 	tn.mu.Lock()
 	tn.failStart = errors.New("launcher not found")
 	tn.mu.Unlock()
-	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+	mux := h.routes()
+	if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 		t.Fatalf("retry: %d %s", w.Code, w.Body)
 	}
 	waitFor(t, "the retry to fail", func() bool {
@@ -352,7 +351,7 @@ func TestTaskRetryFailsAgain(t *testing.T) {
 		t.Fatalf("%d receipts", n)
 	}
 	// It can be retried again: a finished retry is not still marked as starting.
-	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+	if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 		t.Fatalf("retry again: %d %s", w.Code, w.Body)
 	}
 	waitFor(t, "a third start", func() bool { starts, _ := tn.calls(); return len(starts) == 3 })
@@ -369,13 +368,14 @@ func TestTaskRetryTwiceStartsOnce(t *testing.T) {
 	tn.mu.Lock()
 	tn.failStart, tn.gate = nil, make(chan struct{})
 	tn.mu.Unlock()
+	mux := h.routes()
 	var wg sync.WaitGroup
 	codes := make(chan int, 8)
 	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			codes <- retryReq(h, todo.ID).Code
+			codes <- retryReq(h, mux, todo.ID).Code
 		}()
 	}
 	wg.Wait()
@@ -406,7 +406,8 @@ func TestTaskRetryWithTheMachineOffline(t *testing.T) {
 	tnPeer := m.peer
 	m.peer = nil
 	m.mu.Unlock()
-	w := retryReq(h, todo.ID)
+	mux := h.routes()
+	w := retryReq(h, mux, todo.ID)
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "离线") {
 		t.Fatalf("retry: %d %s", w.Code, w.Body)
 	}
@@ -417,7 +418,7 @@ func TestTaskRetryWithTheMachineOffline(t *testing.T) {
 	m.mu.Lock()
 	m.peer = tnPeer
 	m.mu.Unlock()
-	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+	if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 		t.Fatalf("retry back online: %d %s", w.Code, w.Body)
 	}
 	waitFor(t, "the retried start", func() bool { starts, _ := tn.calls(); return len(starts) == 2 })
@@ -429,10 +430,10 @@ func TestTaskRetryWithTheMachineOffline(t *testing.T) {
 	m.peer = nil
 	m.mu.Unlock()
 	plain := plainTodo(t, h, "买牛奶")
-	if w := retryReq(h, plain.ID); w.Code != http.StatusConflict {
+	if w := retryReq(h, mux, plain.ID); w.Code != http.StatusConflict {
 		t.Fatalf("retry of a plain todo: %d %s", w.Code, w.Body)
 	}
-	if w := retryReq(h, "todo_nope"); w.Code != http.StatusNotFound {
+	if w := retryReq(h, mux, "todo_nope"); w.Code != http.StatusNotFound {
 		t.Fatalf("retry of no todo: %d %s", w.Code, w.Body)
 	}
 }
@@ -452,12 +453,13 @@ func TestTaskRetryWithTheStore(t *testing.T) {
 	tn.mu.Lock()
 	tn.failStart, tn.gate = nil, make(chan struct{})
 	tn.mu.Unlock()
+	mux := h.routes()
 	var wg sync.WaitGroup
 	for range 4 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+			if w := retryReq(h, mux, todo.ID); w.Code != http.StatusOK {
 				t.Errorf("retry: %d %s", w.Code, w.Body)
 			}
 		}()
