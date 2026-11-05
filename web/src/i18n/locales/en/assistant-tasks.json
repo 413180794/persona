@@ -115,5 +115,6 @@
   "board_section": "{title} · {count}",
   "board_empty_title": "No tasks yet",
   "board_empty_body": "Say what needs doing in the conversation and Persona turns it into a task.",
-  "board_remove": "Remove “{title}”"
+  "board_remove": "Remove “{title}”",
+  "card_label": "{title}, {status}"
 }

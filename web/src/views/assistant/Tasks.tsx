@@ -300,8 +300,14 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
       role="button"
       tabIndex={0}
       onClick={() => openTask(todo.id)}
-      onKeyDown={(e) => e.key === "Enter" && openTask(todo.id)}
+      // Enter / Space on the card itself (not on its own buttons) opens it, as a click does
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        openTask(todo.id);
+      }}
       onContextMenu={menu.onContextMenu}
+      aria-label={t("assistant-tasks.card_label", { title: todo.title, status: info.label })}
       className={cx("flex cursor-pointer flex-col gap-2 rounded-card bg-surface p-4 shadow-card transition-shadow hover:shadow-raised", status === "needs_you" && "ring-[1.5px] ring-red")}
     >
       <div className="flex items-center gap-2">

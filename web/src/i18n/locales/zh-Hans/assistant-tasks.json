@@ -105,5 +105,6 @@
   "board_section": "{title} · {count}",
   "board_empty_title": "还没有任务",
   "board_empty_body": "在对话里说要做的事，Persona 会把它变成任务。",
-  "board_remove": "移除「{title}」"
+  "board_remove": "移除「{title}」",
+  "card_label": "{title}，{status}"
 }

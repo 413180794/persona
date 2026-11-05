@@ -105,5 +105,6 @@
   "board_section": "{title} · {count}",
   "board_empty_title": "タスクはまだありません",
   "board_empty_body": "会話でやることを伝えると、Personaがタスクにします。",
-  "board_remove": "「{title}」を削除"
+  "board_remove": "「{title}」を削除",
+  "card_label": "{title}、{status}"
 }
