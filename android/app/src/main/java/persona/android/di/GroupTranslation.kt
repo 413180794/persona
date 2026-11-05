@@ -179,6 +179,9 @@ internal fun MachineManagement.inGroup(names: GroupNames): MachineManagement {
         override suspend fun claudeSettings(machineId: String) = source.claudeSettings(names.rawMachine(machineId))
         override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) =
             source.setClaudeSetting(names.rawMachine(machineId), key, value)
+        override suspend fun codexSettings(machineId: String) = source.codexSettings(names.rawMachine(machineId))
+        override suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement) =
+            source.setCodexSetting(names.rawMachine(machineId), key, value)
     }
 }
 

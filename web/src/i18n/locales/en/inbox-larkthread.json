@@ -57,5 +57,11 @@
   "edit_history": "Edit history",
   "edit_history_hint": "View kept earlier versions",
   "edit_history_hidden": "Edit history is hidden",
-  "edit_version_encrypted": "Encrypted"
+  "edit_version_encrypted": "Encrypted",
+  "unknown_result": "Send result unknown",
+  "check_result": "Check result",
+  "discard": "Remove local copy",
+  "check_found": "Sent",
+  "check_missing": "Not found in the latest messages; it may not have been sent",
+  "thread_placeholder": "Reply in thread…"
 }

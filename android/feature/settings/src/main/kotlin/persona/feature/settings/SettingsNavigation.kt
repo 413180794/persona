@@ -25,6 +25,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Triage -> "triage"
     SettingsPage.Capsule -> "capsule"
     SettingsPage.Language -> "language"
+    SettingsPage.Codex -> "codex"
 }
 
 /** The root and unknown page names have no detail destination. */

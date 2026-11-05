@@ -1,0 +1,7 @@
+{
+  "unnamed": "Untitled file",
+  "empty": "“{name}” is empty and can't be sent",
+  "too_big": "“{name}” is over 100 MiB and can't be sent",
+  "image_too_big": "The picture “{name}” is too large. Choose a smaller one",
+  "no_receipt": "No valid send result yet. Check again later"
+}

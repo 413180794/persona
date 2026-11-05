@@ -141,6 +141,30 @@ class HttpMachineManagementTest {
         assertEquals("""{"key":"language","value":null}""", (server.takeRequest().body.readUtf8()).zhAny())
         assertTrue(cleared.single().isDefault)
     }
+
+    @Test fun codexSettingsUseTheirOwnPathAndTheSameBody() = withHub { server, machines ->
+        // The shape scripts/mock/mock_hub.py and server/internal/node/codexconfig.go answer with.
+        val table = """{"settings":[{"key":"model_reasoning_effort","title":"思考强度","detail":"越高越慢、越仔细","type":"enum",
+            "options":["minimal","low","medium","high","xhigh"],"default":"medium","value":"high"},
+            {"key":"hide_agent_reasoning","type":"bool","default":false,"value":null}]}"""
+        server.enqueue(MockResponse().setBody(table))
+        val read = machines.codexSettings("mac")
+        assertEquals("/api/v1/machines/mac/codex-settings", (server.takeRequest().path).zhAny())
+        assertEquals(listOf("high", ""), (read.map { it.stringValue }).zhAny())
+        assertTrue(read[1].isDefault)
+        assertEquals(listOf("minimal", "low", "medium", "high", "xhigh"), (read[0].options).zhAny())
+
+        server.enqueue(MockResponse().setBody(table))
+        machines.setCodexSetting("mac", "hide_agent_reasoning", JsonPrimitive(true))
+        server.takeRequest().let {
+            assertEquals("PUT", (it.method).zhAny())
+            assertEquals("/api/v1/machines/mac/codex-settings", (it.path).zhAny())
+            assertEquals("""{"key":"hide_agent_reasoning","value":true}""", (it.body.readUtf8()).zhAny())
+        }
+        server.enqueue(MockResponse().setBody(table))
+        machines.setCodexSetting("mac", "model", JsonNull)
+        assertEquals("""{"key":"model","value":null}""", (server.takeRequest().body.readUtf8()).zhAny())
+    }
 }
 
 class HttpModelConfigurationTest {

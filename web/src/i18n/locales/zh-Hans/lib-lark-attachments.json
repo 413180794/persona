@@ -1,0 +1,7 @@
+{
+  "unnamed": "未命名文件",
+  "empty": "「{name}」是空文件，不能发送",
+  "too_big": "「{name}」超过 100 MiB，不能发送",
+  "image_too_big": "图片「{name}」过大，请选择较小的图片",
+  "no_receipt": "尚未收到有效的发送结果，请稍后检查"
+}

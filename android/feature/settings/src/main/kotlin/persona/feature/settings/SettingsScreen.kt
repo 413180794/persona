@@ -183,6 +183,7 @@ private fun SettingsContent(
             machines = services.machines.takeUnless { services.demo }, attempts = services.pairingAttempts)
         "capsule" -> CapsuleSettingsPage(services.capsule, back)
         "claude" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back)
+        "codex" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back, AgentSettingsKind.Codex)
         "models" -> purpose?.let { id -> ModelPurposePage(services.models.takeUnless { services.demo }, id, onBack = { purpose = null },
                 providers = services.providers.takeUnless { services.demo }) }
             ?: ModelConfigurationPage(services.models.takeUnless { services.demo }, back,
@@ -292,7 +293,8 @@ private fun SettingsContent(
                 item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Extensions), title = stringResource(R.string.settings_section_extensions), leadingIcon = PhIcons.PuzzlePiece, subtitle = stringResource(R.string.settings_row_extensions_subtitle), value = extensionSummary, onClick = { open(SettingsPage.Extensions) }) } }
             }
             item { JSectionHeader(stringResource(R.string.settings_section_computers)) }
-            item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = stringResource(R.string.settings_row_claude), leadingIcon = PhIcons.TerminalWindow, subtitle = stringResource(R.string.settings_row_claude_subtitle), onClick = { open(SettingsPage.ClaudeCode) }) } }
+            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = stringResource(R.string.settings_row_claude), leadingIcon = PhIcons.TerminalWindow, subtitle = stringResource(R.string.settings_row_claude_subtitle), onClick = { open(SettingsPage.ClaudeCode) }) } }
+            item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Codex), title = stringResource(R.string.settings_row_codex), leadingIcon = PhIcons.Code, subtitle = stringResource(R.string.settings_row_codex_subtitle), onClick = { open(SettingsPage.Codex) }) } }
             if (channelsAvailable) {
                 item { JSectionHeader(stringResource(R.string.settings_section_channels)) }
                 item {

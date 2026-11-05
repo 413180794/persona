@@ -173,6 +173,9 @@ class GroupRoutingTest {
         override suspend fun claudeSettings(machineId: String) = emptyList<ClaudeSetting>().also { calls += "settings $machineId" }
         override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
             emptyList<ClaudeSetting>().also { calls += "set $machineId $key" }
+        override suspend fun codexSettings(machineId: String) = emptyList<ClaudeSetting>().also { calls += "codex settings $machineId" }
+        override suspend fun setCodexSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
+            emptyList<ClaudeSetting>().also { calls += "set codex $machineId $key" }
     }
 
     @Test fun anotherGroupsMachineIsManagedOnItsOwnHub() = runBlocking<Unit> {
@@ -190,11 +193,13 @@ class GroupRoutingTest {
         // the machine that read the quota is named back in the merged ids
         assertEquals("macbook~g0a1b2c3d", managed.launcherQuota("macbook~g0a1b2c3d", "cc_main", refresh = true).machine)
         managed.setClaudeSetting("macbook~g0a1b2c3d", "model", kotlinx.serialization.json.JsonPrimitive("opus"))
+        managed.codexSettings("macbook~g0a1b2c3d")
+        managed.setCodexSetting("macbook~g0a1b2c3d", "model", kotlinx.serialization.json.JsonPrimitive("gpt-5.5"))
         assertEquals(HerdrState(false, false, true), managed.herdr("macbook~g0a1b2c3d"))
         assertEquals(HerdrState(false, true, true), managed.startHerdr("macbook~g0a1b2c3d"))
         val changed = managed.setEngine("macbook~g0a1b2c3d", "orca")
         assertEquals(listOf("reconnect macbook", "deploy macbook", "launchers macbook", "settings macbook",
-            "quota macbook cc_main true", "set macbook model",
+            "quota macbook cc_main true", "set macbook model", "codex settings macbook", "set codex macbook model",
             "herdr macbook", "start herdr macbook", "engine macbook orca"), work.calls)
         // the machine it hands back is the merged list's, so the page finds it again
         assertEquals("macbook~g0a1b2c3d", changed.id)

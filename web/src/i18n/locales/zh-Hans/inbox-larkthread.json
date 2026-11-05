@@ -56,5 +56,11 @@
   "edit_history": "编辑历史",
   "edit_history_hint": "查看已留存的旧版本",
   "edit_history_hidden": "编辑历史已隐藏",
-  "edit_version_encrypted": "加密"
+  "edit_version_encrypted": "加密",
+  "unknown_result": "发送结果未知",
+  "check_result": "检查发送结果",
+  "discard": "移除本机记录",
+  "check_found": "已发出",
+  "check_missing": "最新消息里没有找到它，可能没有发出",
+  "thread_placeholder": "回复话题…"
 }

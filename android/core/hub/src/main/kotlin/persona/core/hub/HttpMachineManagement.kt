@@ -60,11 +60,20 @@ class HttpMachineManagement internal constructor(
     override suspend fun claudeSettings(machineId: String): List<ClaudeSetting> =
         settings(call(api("machines", machineId, "claude-settings"), "GET"))
 
-    override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting> {
+    override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting> =
+        setSetting(machineId, "claude-settings", key, value)
+
+    override suspend fun codexSettings(machineId: String): List<ClaudeSetting> =
+        settings(call(api("machines", machineId, "codex-settings"), "GET"))
+
+    override suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting> =
+        setSetting(machineId, "codex-settings", key, value)
+
+    private suspend fun setSetting(machineId: String, page: String, key: String, value: JsonElement): List<ClaudeSetting> {
         require(key.isNotBlank())
-        return settings(call(api("machines", machineId, "claude-settings"), "PUT", buildJsonObject {
+        return settings(call(api("machines", machineId, page), "PUT", buildJsonObject {
             put("key", key)
-            // JSON null (not an absent field) takes the option back to Claude Code's default.
+            // JSON null (not an absent field) takes the option back to the agent's default.
             put("value", value)
         }))
     }

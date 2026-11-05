@@ -277,6 +277,8 @@
     <string name="settings_section_computers">Computers</string>
     <string name="settings_row_claude">Claude Code settings</string>
     <string name="settings_row_claude_subtitle">Common options on your computers, changed together</string>
+    <string name="settings_row_codex">Codex settings</string>
+    <string name="settings_row_codex_subtitle">Codex options on your computers, changed together</string>
     <string name="settings_section_channels">Channels</string>
     <string name="settings_section_connectors">Connectors</string>
     <string name="settings_row_phone_subtitle">Contacts, calendar, photos, location and clipboard</string>

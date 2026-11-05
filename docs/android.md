@@ -126,7 +126,7 @@ Agents、机器、要你处理的请求把各组合在一起显示；Persona、�
 | `PairingModule` | 配对就是替换 | 原来的配对页仍是替换；设置 › hub › 添加 hub 是 `WiredPairingService.addHub` |
 | `ChatDataOwner`、`AgentsWiringModule`、`AppServices` 的终端 / 文件 / 动作 / 机器监控 | 按唯一的作用域构造 | 每组一份（`GroupStacks`），再合并（`MergedServices.kt`） |
 | `InboxDataOwner`（收件箱、Persona 会话列表）、设备设置、检查更新、锁屏测试、分享、手机数据工具、知识库 | 唯一的 hub | 选中的组 |
-| `MachineManagementModule` 的机器管理（重连、重新部署、启动器、引擎、Claude Code 设置） | 当前配对 | 机器 id 的后缀所在的组（`mergedMachineManagement` + `MachineManagement.inGroup`，#634）：别的组的机器原来被拿去问选中组的 hub，找不到机器或改错了地方；配对后选引擎的那台也从合并列表来，同样按后缀走 |
+| `MachineManagementModule` 的机器管理（重连、重新部署、启动器、引擎、Claude Code / Codex 设置） | 当前配对 | 机器 id 的后缀所在的组（`mergedMachineManagement` + `MachineManagement.inGroup`，#634）：别的组的机器原来被拿去问选中组的 hub，找不到机器或改错了地方；配对后选引擎的那台也从合并列表来，同样按后缀走 |
 | 模型配置（`MachineManagementModule.models`）、语音（`AppServices` 的 `VoiceExtensions`） | 当前配对 | 选中的组：都是 hub 级的（一台 hub 一份配置、一个语音扩展），和收件箱、Persona 一样一次看一组（#634 定的）；模型配置里的机器是那台 hub 自己报的，原样用它的 id |
 | 连接诊断的候选地址 | 唯一的配对 | 选中的组自己的 hub（组里第一台已配对的 hub）；同组别的 hub 的候选也参与选路，诊断里一起列出 |
 | `Notify.install(connection.events)`、前台服务 | 一条 WebSocket 的事件 | 各组事件合成一条流（ID 已加后缀，见下）；常驻通知的状态是选中组的，Agent 计数各组相加 |
@@ -931,6 +931,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
   - 进程被杀后能恢复：配对时把要问的机器记在 `ReadinessRecords`（`engine-pending`），App 重启后 `OnboardingScreen` 先显示这一步再进准备清单；读不到那台机器时可以重试或「先继续」。
   - 机器页的「引擎」打开同一页（`EngineSelectionScreen`，`EngineRoute` 由 `settingsDetailEntries` 注册）；成功提示「已切换引擎」/「已保存，连上后生效」，返回的 Machine 立刻替换列表里那台（`SessionsRepository.applyMachine`）。规则（选项、能不能选、检测文案、脚注）在 `core:domain` 的 `engines/Engines.kt`。
 - **Claude Code 设置**（设置 › 电脑 › Claude Code 设置，`SettingsPage.ClaudeCode`，深链 `page=claudecode`）：选一台在线机器（第一次是 hub 所在那台，离线了退回第一台在线的）和「同时改所有在线机器」（默认开），两项记在本机；开关 / 选项 / 文本三种行，没设过标「默认」，文本清空 = 发 JSON null 回到默认；同时改时逐台写，全部成功提示「已应用到 N 台机器」，有失败逐台列出并重读。
+- **Codex 设置**（设置 › 电脑 › Codex 设置，`SettingsPage.Codex`，深链 `page=codex`，#2754）：和 Claude Code 设置同一页（`ClaudeSettingsPage(kind = AgentSettingsKind.Codex)`，iOS `AgentSettingsKind.codex`），读写 `GET/PUT /api/v1/machines/{mid}/codex-settings`，改的是那台机器 `~/.codex/config.toml` 白名单里的几项；选的机器和「同时改」跟 Claude Code 设置共用。
 - **模型配置**（设置 › AI › 模型配置，`SettingsPage.ModelConfig`，深链 `page=modelconfig`）：hub 的用途目录按分组列出、可搜索（名称、分组、id、模型），每行写生效的供应商和模型、状态或继承来源；一个用途一页（`ModelPurposeRoute(purposeId)`，语音页可以直接打开 `plugin.<id>`）：当前生效、供应商选择（隐藏的标「已隐藏」，引用了不可用的标「当前引用不可用」，换供应商清掉模型和思考强度）、具体模型、思考强度（Messages API 的供应商不显示）、恢复继承；保存是带 revision 的 PATCH，空值发 null，409 时保留编辑、提示「配置已在别处修改……」并只给「重新加载（丢弃编辑）」。旧 hub（路由 404、没有 JSON 错误）提示先更新服务器，hub 有配置但没有这个用途时说没有。扩展用途的「具体模型」暂时是文本框：语音扩展的模型目录接口随语音模块（G 组）接入后再换成选择。
 - **新建 Agent**：
   - Claude 一律异步新建（`async: true`）：hub 立刻回一个 `starting` 的会话，先并进会话列表（`SessionsRepository.adopt`），对话页马上打开；第一条消息不放 `prompt`，改带 `name_hint` 起标签名，消息本身当普通消息走待发队列，它的 id 和启动的操作 ID 一起存在启动记录里（`AgentCreationStore`），回执丢了、进程重启后核对时用同一个 id 入队，只发一次。Codex 照旧同步新建、第一条消息放 `prompt`（必填）。

@@ -539,7 +539,9 @@ export interface LarkPage {
 
 /** Oldest first by position (numeric when both are), one copy per id: a later page wins. */
 export function mergeMessages(have: LarkMessage[], batch: LarkMessage[]): LarkMessage[] {
-  const byId = new Map(have.map((m) => [m.id, m]));
+  // the hub's copy of a message this page sent replaces its local one (same client_id), which may still be waiting
+  const echoed = new Set(batch.flatMap((m) => (m.client_id && !m.id.startsWith("temp-") ? [m.client_id] : [])));
+  const byId = new Map(have.filter((m) => !(m.id.startsWith("temp-") && m.client_id && echoed.has(m.client_id))).map((m) => [m.id, m]));
   for (const m of batch) byId.set(m.id, m);
   return [...byId.values()].sort((a, b) => comparePosition(a.position, b.position));
 }

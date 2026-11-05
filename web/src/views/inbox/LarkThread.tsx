@@ -6,9 +6,10 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { api, ApiError, enc, errorText, getToken } from "../../lib/api";
 import { clock } from "../../lib/format";
 import {
-  cardText, comparePosition, emojiLabel, isDone, mergeMessages, nextLarkPosition, partRuns, replyLarkMessage,
-  sendLarkMessage, withToken, type InboxItem, type LarkMessage, type LarkPage, type LarkPart,
+  cardText, comparePosition, emojiLabel, isDone, mergeMessages, partRuns, withToken, type InboxItem, type LarkMessage,
+  type LarkPage, type LarkPart,
 } from "../../lib/inbox";
+import { LARK_ATTACHMENT_REPLY_FEATURE, LARK_ATTACHMENTS_FEATURE, routeAllowed, type LarkAttachment } from "../../lib/lark-attachments";
 import { larkPath, olAccount } from "../../lib/lark-accounts";
 import { larkAccount } from "../../lib/lark-chats";
 import { quoteSummary, showsBody, showsHistory, useLarkDisplay, useLarkDisplayState } from "../../lib/lark-display";
@@ -17,7 +18,7 @@ import { historyProblem, type HistoryProblem, latestOf, nearTop, OlderPaging, sc
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
 import { clickLink, linkHref, prefetchLink } from "../../lib/links";
 import { navigate } from "../../lib/router";
-import { onHubEvent } from "../../lib/store";
+import { getState, onHubEvent, useStore } from "../../lib/store";
 import { isForeignCached, requestTranslation, translatesChat, translationOf, useTranslatePrefs, useTranslations } from "../../lib/translate";
 import type { Session } from "../../lib/types";
 import { t } from "../../i18n";
@@ -25,16 +26,37 @@ import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
 import { LarkEditHistoryDialog } from "./LarkEditHistory";
+import { LarkComposer, type LarkComposerHandle, type LarkReplyTarget } from "./LarkComposer";
+import { newClientID, useLarkOutbox, type LarkOutgoing } from "./LarkOutbox";
 import { LarkPinsDialog } from "./LarkPins";
 import { isSummaryCard, LarkSummaryCard } from "./LarkSummaryCard";
 import { LarkTopicCard, LarkTopicDialog, useTopicReplies } from "./LarkTopicCard";
 
 const PAGE = 30;
 
-export interface LarkReplyTarget {
-  id: string;
-  sender_name?: string;
-  text?: string;
+export type { LarkReplyTarget };
+
+/** What the hub's Feishu extension lets the composer send: pictures and files, and those quoting or in a thread. */
+function useAttachmentSupport() {
+  const files = useStore((s) => s.features.includes(LARK_ATTACHMENTS_FEATURE));
+  const routed = useStore((s) => s.features.includes(LARK_ATTACHMENT_REPLY_FEATURE));
+  return { files, routed };
+}
+
+/** Text, then each attachment, as the messages to send. False when the extension cannot route the attachments as
+ * asked (a quote): nothing goes and it all stays in the box (docs/lark-attachments.md, #1035). */
+export function outgoingOf(text: string, attachments: LarkAttachment[], route: LarkOutgoing["route"], quote?: LarkOutgoing["quote"],
+  features: string[] = getState().features): LarkOutgoing[] | false {
+  if (attachments.length && !routeAllowed(route, features)) return false;
+  const out: LarkOutgoing[] = [];
+  if (text) out.push({ clientID: newClientID(), text, route: { replyTo: route.replyTo, thread: route.thread }, quote });
+  for (const a of attachments) out.push({ clientID: newClientID(), attachment: a, route, quote });
+  return out;
+}
+
+/** A batch the extension could not route: it says why. */
+function refuseAttachments() {
+  toast(t("inbox-larkcomposer.quote_unsupported"), "error");
 }
 
 /** The chat a LarkThread shows: from an inbox item, or a row of 消息. */
@@ -55,11 +77,17 @@ export function chatOfItem(item: InboxItem): LarkChatRef {
 
 /** The account of the chat a message is drawn in: its thread is read as that account. */
 const ChatAccount = createContext<number | undefined>(undefined);
+/** …and its feed, where a thread's pictures and files are sent. */
+const ChatFeed = createContext("");
 
 type LarkThreadProps = { chat: LarkChatRef; pinsOpen?: boolean; onPinsOpen?: (open: boolean) => void };
 
 export function LarkThread(props: LarkThreadProps) {
-  return <ChatAccount.Provider value={props.chat.account}><LarkThreadBody {...props} /></ChatAccount.Provider>;
+  return (
+    <ChatAccount.Provider value={props.chat.account}>
+      <ChatFeed.Provider value={props.chat.feed}><LarkThreadBody {...props} /></ChatFeed.Provider>
+    </ChatAccount.Provider>
+  );
 }
 
 function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps) {
@@ -71,7 +99,8 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   const [newerBusy, setNewerBusy] = useState(false);
   const [replyTo, setReplyTo] = useState<LarkReplyTarget | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composer = useRef<LarkComposerHandle>(null);
+  const support = useAttachmentSupport();
   const anchor = useRef<{ height: number; top: number; id?: string; offset?: number } | null>(null);
   const placed = useRef(false);
   const base = `/lark/conversations/${enc(feed)}/messages`;
@@ -288,7 +317,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       sender_name: m.is_mine ? t("inbox-larkthread.me") : (m.sender_name || t("inbox-larkthread.unknown")),
       text: m.text || (m.parts ?? []).map((p) => p.text).join(""),
     });
-    inputRef.current?.focus();
+    composer.current?.focus();
   }, []);
 
   // A Pin found by the hub (lark-pins.ts locate): a reply opens its thread; a message replaces the window around it.
@@ -357,90 +386,29 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     }
   }, []);
 
-  const handleSend = useCallback(async (content: string, replyTarget?: LarkReplyTarget) => {
-    const clientID = "wmsg-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
-    const tempId = "temp-" + clientID;
-    const currentMessages = pageRef.current?.messages ?? [];
-    const optMsg: LarkMessage = {
-      id: tempId,
-      client_id: clientID,
-      position: nextLarkPosition(currentMessages),
-      is_mine: true,
-      sender_name: t("inbox-larkthread.me"),
-      created_at: new Date().toISOString(),
-      text: content,
-      parts: [{ kind: "text", text: content }],
-      sending: true,
-      reply_to: replyTarget ? { id: replyTarget.id, sender_name: replyTarget.sender_name, text: replyTarget.text } : undefined,
-    };
+  const outbox = useLarkOutbox(
+    feed, ol,
+    (fn) => setPage((cur) => cur && { ...cur, messages: fn(cur.messages) }),
+    () => pageRef.current?.messages ?? [],
+    () => api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol)).then((r) => r.messages ?? []),
+  );
 
-    setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, [optMsg]) });
+  const handleSend = useCallback(async (content: string, attachments: LarkAttachment[], replyTarget?: LarkReplyTarget) => {
+    const quote = replyTarget ? { id: replyTarget.id, sender_name: replyTarget.sender_name, text: replyTarget.text } : undefined;
+    const outs = outgoingOf(content, attachments, { replyTo: replyTarget?.id }, quote);
+    if (!outs) {
+      refuseAttachments();
+      return false;
+    }
     setReplyTo(null);
+    // the box is free again at once: the sends go on in the background (#1176)
+    void outbox.send(outs);
     setTimeout(() => {
       const el = scroller.current;
       if (el) el.scrollTop = el.scrollHeight;
     }, 10);
-
-    try {
-      let res: { message_id?: string };
-      if (replyTarget?.id) {
-        res = await replyLarkMessage(replyTarget.id, content, false, clientID, ol);
-      } else {
-        res = await sendLarkMessage(feed, content, clientID, ol);
-      }
-      setPage((cur) => {
-        if (!cur) return cur;
-        const updated = cur.messages.map((m) =>
-          m.id === tempId ? { ...m, id: res.message_id || tempId, sending: false, failed: false } : m,
-        );
-        return { ...cur, messages: updated };
-      });
-    } catch (e) {
-      setPage((cur) => {
-        if (!cur) return cur;
-        const updated = cur.messages.map((m) =>
-          m.id === tempId ? { ...m, sending: false, failed: true } : m,
-        );
-        return { ...cur, messages: updated };
-      });
-      toast(t("inbox-larkthread.send_failed", { error: errorText(e) }), "error");
-    }
-  }, [feed, ol]);
-
-  const handleRetry = useCallback(async (m: LarkMessage) => {
-    const clientID = m.client_id || ("wmsg-" + Date.now().toString(36));
-    setPage((cur) => {
-      if (!cur) return cur;
-      const updated = cur.messages.map((msg) =>
-        msg.id === m.id ? { ...msg, sending: true, failed: false } : msg,
-      );
-      return { ...cur, messages: updated };
-    });
-    try {
-      let res: { message_id?: string };
-      if (m.reply_to?.id) {
-        res = await replyLarkMessage(m.reply_to.id, m.text ?? "", false, clientID, ol);
-      } else {
-        res = await sendLarkMessage(feed, m.text ?? "", clientID, ol);
-      }
-      setPage((cur) => {
-        if (!cur) return cur;
-        const updated = cur.messages.map((msg) =>
-          msg.id === m.id ? { ...msg, id: res.message_id || msg.id, sending: false, failed: false } : msg,
-        );
-        return { ...cur, messages: updated };
-      });
-    } catch (e) {
-      setPage((cur) => {
-        if (!cur) return cur;
-        const updated = cur.messages.map((msg) =>
-          msg.id === m.id ? { ...msg, sending: false, failed: true } : msg,
-        );
-        return { ...cur, messages: updated };
-      });
-      toast(t("inbox-larkthread.retry_failed", { error: errorText(e) }), "error");
-    }
-  }, [feed, ol]);
+    return true;
+  }, [outbox]);
 
   if (!page) {
     return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label={t("inbox-larkthread.loading")} />}</div>;
@@ -448,7 +416,17 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   const firstNew = focus ? page.messages.find((m) => comparePosition(m.position, focus) >= 0)?.id : undefined;
   const topicGroup = topic || Boolean(page.topic);
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      onDragOver={(e) => {
+        if (support.files && e.dataTransfer.types.includes("Files")) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (!support.files || !e.dataTransfer.files.length) return;
+        e.preventDefault();
+        composer.current?.addFiles(e.dataTransfer.files);
+      }}
+    >
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={scroller} onScroll={checkScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[760px] px-2 py-3 sm:px-4">
@@ -484,7 +462,10 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
                 onReply={handleReply}
                 onAskPersona={handleAskPersona}
                 onCopy={handleCopy}
-                onRetry={handleRetry}
+                onRetry={outbox.retry}
+                onCheck={outbox.check}
+                onDiscard={outbox.discard}
+                threadAttachments={support.files && support.routed}
                 onPin={onPinsOpen && !changingPin && !pinRecheck ? setAdding : undefined}
                 flash={flash?.id === m.id ? flash.n : undefined}
               />}
@@ -514,10 +495,11 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       )}
       </div>
       <LarkComposer
+        ref={composer}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
         onSend={handleSend}
-        inputRef={inputRef}
+        attachments={support.files}
       />
       {pinsOpen && <LarkPinsDialog feed={feed} topic={topic} account={ol} onClose={closePins} onOpen={openPin} />}
       {openTopic && <LarkTopicDialog topic={openTopic} account={ol} onClose={() => setOpenTopic(null)} renderMessage={(m) => <Message m={m} nested translateTo={translateTo} />} />}
@@ -738,8 +720,11 @@ function Message({
   onAskPersona,
   onCopy,
   onRetry,
+  onCheck,
+  onDiscard,
   onPin,
   flash,
+  threadAttachments,
 }: {
   m: LarkMessage;
   prev?: LarkMessage;
@@ -749,6 +734,11 @@ function Message({
   onAskPersona?: () => void;
   onCopy?: (m: LarkMessage) => void;
   onRetry?: (m: LarkMessage) => void;
+  /** A file whose upload broke off: 检查发送结果, or remove the local copy. */
+  onCheck?: (m: LarkMessage) => void;
+  onDiscard?: (m: LarkMessage) => void;
+  /** The thread's reply box can send pictures and files too. */
+  threadAttachments?: boolean;
   /** 添加 Pin, offered when the hub says the message may be pinned. */
   onPin?: (m: LarkMessage) => void;
   /** Lit for a moment (a Pin jumped here); a new number lights it again. */
@@ -809,7 +799,14 @@ function Message({
                 <span>{t("inbox-larkthread.sending")}</span>
               </span>
             )}
-            {m.failed && (
+            {m.failed && m.local_state === "unknown" && (
+              <span className="flex items-center gap-2 text-[11px]">
+                <span className="text-red">{t("inbox-larkthread.unknown_result")}</span>
+                {onCheck && <button type="button" onClick={() => onCheck(m)} className="font-medium whitespace-nowrap text-accent-ink hover:underline">{t("inbox-larkthread.check_result")}</button>}
+                {onDiscard && <button type="button" onClick={() => onDiscard(m)} className="whitespace-nowrap text-ink-3 hover:text-ink hover:underline">{t("inbox-larkthread.discard")}</button>}
+              </span>
+            )}
+            {m.failed && m.local_state !== "unknown" && (
               <button
                 type="button"
                 onClick={() => onRetry?.(m)}
@@ -842,15 +839,12 @@ function Message({
             {thread ? t("inbox-larkthread.hide_replies") : t("inbox-larkthread.replies", { count: replies })}
           </button>
         )}
-        {thread && (
-          <div className="mt-1 border-l-2 border-line pl-1">
-            {thread.length ? thread.map((r) => <Message key={r.id} m={r} nested translateTo={translateTo} />) : <p className="px-2 py-1 text-[11.5px] text-ink-3">{t("inbox-larkthread.replies_unavailable")}</p>}
-          </div>
-        )}
+        {thread && <ThreadPanel root={m} thread={thread} setThread={setThread} translateTo={translateTo} attachments={threadAttachments} />}
       </div>
 
       {/* Hover action bar */}
-      {!isSystem(m) && !m.recalled && !m.sending && (
+      {/* nested replies have no actions: no empty bar when the message they sit under is hovered */}
+      {!isSystem(m) && !m.recalled && !m.sending && (onReply || onCopy || (!nested && (onAskPersona || onPin))) && (
         <div className="absolute right-2 top-1.5 z-10 hidden items-center gap-0.5 rounded-[6px] border border-line bg-surface/95 px-1 py-0.5 shadow-hairline backdrop-blur-sm group-hover/msg:flex">
           {onReply && (
             <button
@@ -901,91 +895,43 @@ function Message({
   );
 }
 
-/** Bottom composer for native Feishu chat replies. */
-function LarkComposer({
-  replyTo,
-  onClearReply,
-  onSend,
-  inputRef,
-}: {
-  replyTo: LarkReplyTarget | null;
-  onClearReply: () => void;
-  onSend: (text: string, replyToMessage?: LarkReplyTarget) => Promise<void>;
-  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+/** A thread opened under its first message: the replies, and a box to reply in the thread (iOS LarkThreadView). */
+function ThreadPanel({ root, thread, setThread, translateTo, attachments }: {
+  root: LarkMessage;
+  thread: LarkMessage[];
+  setThread: React.Dispatch<React.SetStateAction<LarkMessage[] | null>>;
+  translateTo?: string;
+  attachments?: boolean;
 }) {
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-
-  const submit = async () => {
-    const trimmed = text.trim();
-    if (!trimmed || sending) return;
-    setSending(true);
-    const toReply = replyTo ?? undefined;
-    setText("");
-    if (inputRef.current) inputRef.current.style.height = "auto";
-    try {
-      await onSend(trimmed, toReply);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      if (e.nativeEvent.isComposing) return;
-      e.preventDefault();
-      void submit();
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
-    const el = e.target;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  };
-
+  const ol = useContext(ChatAccount);
+  const feed = useContext(ChatFeed);
+  const threadRef = useRef(thread);
+  threadRef.current = thread;
+  const outbox = useLarkOutbox(
+    feed, ol,
+    (fn) => setThread((cur) => fn(cur ?? [])),
+    () => threadRef.current,
+    () => api<LarkPage>(larkPath(`/lark/messages/${enc(root.id)}/thread?limit=50`, ol)).then((r) => r.messages ?? []),
+  );
   return (
-    <div className="shrink-0 border-t border-line bg-surface px-3 py-2 sm:px-4">
-      <div className="mx-auto max-w-[760px]">
-        {replyTo && (
-          <div className="mb-2 flex items-center justify-between rounded-[8px] bg-field/60 px-3 py-1.5 text-[12px] text-ink-2">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <Icon name="quote" size={12} className="shrink-0 text-accent-ink" />
-              <span className="shrink-0 font-medium text-ink">{t("inbox-larkthread.quoted_sender", { name: replyTo.sender_name ?? "" })}</span>
-              <span className="truncate text-ink-3">{replyTo.text || t("inbox-larkthread.quoted_message")}</span>
-            </div>
-            <button
-              type="button"
-              onClick={onClearReply}
-              className="ml-2 shrink-0 rounded p-0.5 text-ink-3 hover:bg-surface hover:text-ink"
-              title={t("inbox-larkthread.cancel_quote")}
-            >
-              <Icon name="x" size={12} />
-            </button>
-          </div>
-        )}
-        <div className="flex items-end gap-2">
-          <textarea
-            ref={inputRef}
-            value={text}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder={replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : t("inbox-larkthread.reply_placeholder")}
-            rows={1}
-            className="min-h-[36px] max-h-[120px] flex-1 resize-none rounded-[10px] border border-line bg-field px-3 py-1.5 text-[13px] leading-relaxed text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
-          />
-          <Button
-            tone="accent"
-            busy={sending}
-            disabled={!text.trim() || sending}
-            onClick={() => void submit()}
-            className="h-[36px] shrink-0"
-          >
-            {t("inbox-larkthread.send")}
-          </Button>
-        </div>
-      </div>
+    <div className="mt-1 border-l-2 border-line pl-1">
+      {thread.length
+        ? thread.map((r) => <Message key={r.id} m={r} nested translateTo={translateTo} onRetry={outbox.retry} onCheck={outbox.check} onDiscard={outbox.discard} />)
+        : <p className="px-2 py-1 text-[11.5px] text-ink-3">{t("inbox-larkthread.replies_unavailable")}</p>}
+      <LarkComposer
+        compact
+        attachments={attachments}
+        placeholder={t("inbox-larkthread.thread_placeholder")}
+        onSend={async (text, picked) => {
+          const outs = outgoingOf(text, picked, { replyTo: root.id, thread: true, threadRoot: root.id });
+          if (!outs) {
+            refuseAttachments();
+            return false;
+          }
+          void outbox.send(outs);
+          return true;
+        }}
+      />
     </div>
   );
 }
@@ -1058,7 +1004,8 @@ function Block({ p }: { p: LarkPart }) {
   const meta = p.metadata ?? {};
   switch (p.kind) {
     case "image": {
-      const src = safeURL(p.url);
+      // a picture this page is sending shows its own preview
+      const src = p.url?.startsWith("blob:") ? p.url : safeURL(p.url);
       return src ? (
         <button type="button" onClick={() => openMedia(src)} className="w-fit">
           <img src={src} alt={t("inbox-larkthread.image")} loading="lazy" className="max-h-64 max-w-[min(280px,100%)] rounded-[8px] object-contain shadow-hairline" />

@@ -108,6 +108,13 @@ class ClaudeSettingsModelTest {
             if (machineId in failing) throw HubFailure(HubError.Server, "machine is offline", 503)
             return listOf(ClaudeSetting(key, "回复语言", value = value))
         }
+        val codexWrites = mutableListOf<Triple<String, String, JsonElement>>()
+        override suspend fun codexSettings(machineId: String) =
+            listOf(ClaudeSetting("model_reasoning_effort", "思考强度", type = "enum", options = listOf("low", "high"), value = JsonPrimitive("high")))
+        override suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting> {
+            codexWrites += Triple(machineId, key, value)
+            return listOf(ClaudeSetting(key, "思考强度", type = "enum", options = listOf("low", "high"), value = value))
+        }
         override suspend fun launchers(machineId: String) = emptyList<AgentLauncher>()
         override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) = persona.core.contracts.api.LauncherQuotaAnswer()
         override suspend fun reconnect(machineId: String) = Unit
@@ -144,6 +151,25 @@ class ClaudeSettingsModelTest {
         assertEquals("已保存", model.set("language", JsonNull, listOf(mac, hub))?.resolve(res))
         assertEquals(Triple("hub", "language", JsonNull as JsonElement), api.writes.last())
         assertTrue(model.state.value.settings.single().isDefault)
+    }
+
+    @Test fun codexKindReadsAndWritesCodexSettingsOnly() = runBlocking {
+        val api = Api()
+        val model = ClaudeSettingsModel(api, Choices(), AgentSettingsKind.Codex)
+        model.follow(listOf(mac, hub))
+        model.load()
+        assertEquals(0, api.reads)
+        assertEquals("high", model.state.value.settings.single().stringValue)
+        assertEquals("已应用到 2 台机器", model.set("model_reasoning_effort", JsonPrimitive("low"), listOf(mac, hub))?.resolve(res))
+        assertEquals(listOf("mac", "hub"), api.codexWrites.map { it.first })
+        assertTrue(api.writes.isEmpty())
+        assertEquals("low", model.state.value.settings.single().stringValue)
+    }
+
+    @Test fun eachKindHasItsOwnWords() {
+        assertEquals("Codex 设置", res.getString(AgentSettingsKind.Codex.title))
+        assertEquals("Claude Code 设置", res.getString(AgentSettingsKind.Claude.title))
+        assertTrue(res.getString(AgentSettingsKind.Codex.caption).contains("~/.codex/config.toml"))
     }
 
     @Test fun failuresAreListedPerMachineAndTheTableIsReadAgain() = runBlocking {

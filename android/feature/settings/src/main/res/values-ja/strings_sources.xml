@@ -307,6 +307,9 @@
     <string name="settings_src_claude_caption">そのマシンの~/.claude/settings.jsonのうち、下の項目だけを変更します。新しいClaudeセッションから反映され、実行中のセッションには通常、再起動が必要です。</string>
     <string name="settings_src_claude_no_online_hint">マシンがハブに接続してから変更してください。</string>
     <string name="settings_src_claude_pick_machine">オンラインのマシンを選択</string>
+    <string name="settings_src_codex_title">Codexの設定</string>
+    <string name="settings_src_codex_demo">体験モードにはコンピューター上のCodexの設定がありません。</string>
+    <string name="settings_src_codex_caption">そのマシンの~/.codex/config.tomlのうち、下の項目だけを変更します。ファイル内のほかの設定（モデルプロバイダー、プロジェクトの信頼など）はそのまま残ります。新しいCodexセッションから反映されます。</string>
     <string name="settings_src_quota_read_failed">利用枠を読み込めません：%1$s</string>
     <string name="settings_src_quota_title">利用枠</string>
     <string name="settings_src_quota_title_named">利用枠・%1$s</string>

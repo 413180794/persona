@@ -55,6 +55,8 @@ class HerdrNoticeTest {
         override suspend fun setEngine(machineId: String, engine: String) = error("unused")
         override suspend fun claudeSettings(machineId: String) = error("unused")
         override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) = error("unused")
+        override suspend fun codexSettings(machineId: String) = error("unused")
+        override suspend fun setCodexSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) = error("unused")
     }
 
     @Test fun startIsExplicitDeduplicatedAndUsesTheConfirmedResult() = runTest {

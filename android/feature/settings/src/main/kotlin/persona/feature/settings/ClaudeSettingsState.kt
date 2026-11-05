@@ -11,7 +11,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.JsonElement
 
-/** The machine last looked at and whether changes go to every online machine; kept on this phone. */
+/**
+ * Which agent's settings the page edits (iOS `AgentSettingsKind`): Claude Code's `~/.claude/settings.json` or Codex's
+ * `~/.codex/config.toml`. The node keeps a whitelist of each (claudeconfig.go / codexconfig.go) in the same shape.
+ */
+internal enum class AgentSettingsKind(val title: Int, val demo: Int, val caption: Int) {
+    Claude(R.string.settings_src_claude_title, R.string.settings_src_claude_demo, R.string.settings_src_claude_caption),
+    Codex(R.string.settings_src_codex_title, R.string.settings_src_codex_demo, R.string.settings_src_codex_caption);
+
+    suspend fun read(api: MachineManagement, machineId: String): List<ClaudeSetting> =
+        if (this == Claude) api.claudeSettings(machineId) else api.codexSettings(machineId)
+
+    suspend fun write(api: MachineManagement, machineId: String, key: String, value: JsonElement): List<ClaudeSetting> =
+        if (this == Claude) api.setClaudeSetting(machineId, key, value) else api.setCodexSetting(machineId, key, value)
+}
+
+/** The machine last looked at and whether changes go to every online machine; kept on this phone, shared by both kinds like iOS. */
 internal interface ClaudeSettingsChoices {
     var machine: String
     var applyAll: Boolean
@@ -40,10 +55,14 @@ internal fun claudeSettingsMachine(remembered: String, online: List<Machine>): S
     remembered.takeIf { id -> online.any { it.id == id } } ?: (online.firstOrNull { it.kind == "local" } ?: online.firstOrNull())?.id
 
 /**
- * 设置 › Claude Code 设置 (iOS `ClaudeSettingsView`): the whitelisted `~/.claude/settings.json` options of one
- * machine, written to every online machine at once unless that is switched off.
+ * 设置 › Claude Code 设置 / Codex 设置 (iOS `ClaudeSettingsView`): the whitelisted options of one machine's [kind],
+ * written to every online machine at once unless that is switched off.
  */
-internal class ClaudeSettingsModel(private val api: MachineManagement, private val choices: ClaudeSettingsChoices) {
+internal class ClaudeSettingsModel(
+    private val api: MachineManagement,
+    private val choices: ClaudeSettingsChoices,
+    private val kind: AgentSettingsKind = AgentSettingsKind.Claude,
+) {
     private val mutable = MutableStateFlow(ClaudeSettingsState(applyAll = choices.applyAll))
     val state = mutable.asStateFlow()
 
@@ -68,7 +87,7 @@ internal class ClaudeSettingsModel(private val api: MachineManagement, private v
         val machine = state.value.machineId.takeIf { it.isNotBlank() } ?: return
         mutable.update { it.copy(loading = true) }
         try {
-            val settings = api.claudeSettings(machine)
+            val settings = kind.read(api, machine)
             mutable.update { if (it.machineId == machine) it.copy(settings = settings, error = it.error.takeIf { keepError }) else it }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { mutable.update { if (it.machineId == machine) it.copy(error = ResText.of(R.string.settings_src_claude_read_failed, failureReason(error))) else it } }
@@ -86,7 +105,7 @@ internal class ClaudeSettingsModel(private val api: MachineManagement, private v
         val failed = mutableListOf<ResText>()
         for (id in targets) {
             try {
-                val list = api.setClaudeSetting(id, key, value)
+                val list = kind.write(api, id, key, value)
                 if (id == state.value.machineId) mutable.update { it.copy(settings = list) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { failed += ResText.of(R.string.settings_src_name_reason, online.firstOrNull { it.id == id }?.displayName ?: id, failureReason(error)) }

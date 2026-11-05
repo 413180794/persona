@@ -24,16 +24,20 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
-/** 设置 › Claude Code 设置: the common options of each computer's Claude Code, written to one or all online machines. */
+/**
+ * 设置 › Claude Code 设置 / Codex 设置: the common options of each computer's Claude Code or Codex ([kind]), written to
+ * one or all online machines.
+ */
 @Composable
-internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: MachineManagement?, onBack: () -> Unit) {
+internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: MachineManagement?, onBack: () -> Unit,
+    kind: AgentSettingsKind = AgentSettingsKind.Claude) {
     if (management == null) {
-        JListPage(title = stringResource(R.string.settings_src_claude_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_src_claude_demo)) } }
+        JListPage(title = stringResource(kind.title), onBack = onBack) { item { JNotice(stringResource(kind.demo)) } }
         return
     }
     val context = LocalContext.current
     val res = LocalResources.current
-    val model = remember(management) { ClaudeSettingsModel(management, StoredClaudeSettingsChoices(context)) }
+    val model = remember(management, kind) { ClaudeSettingsModel(management, StoredClaudeSettingsChoices(context), kind) }
     val state by model.state.collectAsState()
     val machines by sessions.machines.collectAsState()
     val online = machines.filter { it.online }
@@ -47,7 +51,7 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
     fun set(key: String, value: JsonElement) {
         scope.launch { model.set(key, value, online)?.let { feedback?.notice(it.resolve(res)) } }
     }
-    JListPage(title = stringResource(R.string.settings_src_claude_title), onBack = onBack, actions = {
+    JListPage(title = stringResource(kind.title), onBack = onBack, actions = {
         JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.settings_src_refresh), { scope.launch { model.load() } }, enabled = !state.loading && state.machineId.isNotBlank())
     }) {
         item("target") {
@@ -62,7 +66,7 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
             }
         }
         item("target-note") {
-            SettingsCaption(stringResource(R.string.settings_src_claude_caption),
+            SettingsCaption(stringResource(kind.caption),
                 Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
         }
         state.error?.let { error -> item("error") { JInlineStatus(error.text(), Modifier.padding(vertical = Tokens.Space.s), tone = InlineTone.Failed) } }
@@ -84,7 +88,7 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
                         fun commit() {
                             focus.clearFocus()
                             val value = drafts.remove(setting.key)?.trim() ?: return
-                            // Emptied: back to Claude Code's default (the node removes the key).
+                            // Emptied: back to the agent's default (the node removes the key).
                             if (value != setting.stringValue) set(setting.key, if (value.isEmpty()) JsonNull else JsonPrimitive(value))
                         }
                         JTextField(drafts[setting.key] ?: setting.stringValue, { drafts[setting.key] = it }, Modifier.fillMaxWidth(),

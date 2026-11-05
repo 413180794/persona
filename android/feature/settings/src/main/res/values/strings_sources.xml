@@ -321,6 +321,9 @@
     <string name="settings_src_claude_caption">Changes ~/.claude/settings.json on that machine, only the options below. New Claude sessions pick them up; running sessions usually need a restart.</string>
     <string name="settings_src_claude_no_online_hint">Come back once a machine connects to the hub.</string>
     <string name="settings_src_claude_pick_machine">Choose an online machine</string>
+    <string name="settings_src_codex_title">Codex settings</string>
+    <string name="settings_src_codex_demo">Demo mode has no Codex settings from your computers.</string>
+    <string name="settings_src_codex_caption">Changes ~/.codex/config.toml on that machine, only the options below; the rest of the file (model providers, project trust and so on) stays as it is. New Codex sessions pick them up.</string>
     <string name="settings_src_quota_read_failed">Couldn\'t load quota: %1$s</string>
     <string name="settings_src_quota_title">Quota</string>
     <string name="settings_src_quota_title_named">Quota · %1$s</string>

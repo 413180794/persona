@@ -223,6 +223,8 @@ class SourcesShotsTest {
             ClaudeSetting("model", "Model", type = "enum", options = listOf("opus", "sonnet"), default = JsonPrimitive("opus")),
         )
         override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) = claudeSettings(machineId)
+        override suspend fun codexSettings(machineId: String) = claudeSettings(machineId)
+        override suspend fun setCodexSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) = claudeSettings(machineId)
         override suspend fun launchers(machineId: String) = emptyList<AgentLauncher>()
         override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) = LauncherQuotaAnswer()
         override suspend fun reconnect(machineId: String) = Unit

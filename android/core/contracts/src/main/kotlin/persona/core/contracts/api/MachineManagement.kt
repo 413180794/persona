@@ -17,7 +17,7 @@ import kotlinx.serialization.json.contentOrNull
 
 /**
  * What the app changes on a machine (docs/protocol.md「REST」): its launchers, reconnecting and redeploying its node,
- * its terminal engine and its whitelisted Claude Code settings. Bound to the active pairing; every call goes to the
+ * its terminal engine and its whitelisted Claude Code and Codex settings. Bound to the active pairing; every call goes to the
  * hub that is paired when it is made.
  */
 interface MachineManagement {
@@ -50,9 +50,18 @@ interface MachineManagement {
 
     /** `PUT /api/v1/machines/{id}/claude-settings`: [value] [JsonNull] goes back to Claude Code's default. */
     suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting>
+
+    /** `GET /api/v1/machines/{id}/codex-settings`: the whitelisted `~/.codex/config.toml` options, the same shape as Claude's. */
+    suspend fun codexSettings(machineId: String): List<ClaudeSetting>
+
+    /** `PUT /api/v1/machines/{id}/codex-settings`: [value] [JsonNull] removes the key, back to Codex's default. */
+    suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting>
 }
 
-/** One whitelisted `~/.claude/settings.json` option of a machine. [value] null means unset: Claude Code uses [default]. */
+/**
+ * One whitelisted `~/.claude/settings.json` (or `~/.codex/config.toml`) option of a machine. [value] null means unset:
+ * the agent uses [default].
+ */
 @KeepGeneratedSerializer
 @Serializable(with = ClaudeSettingSerializer::class)
 data class ClaudeSetting(

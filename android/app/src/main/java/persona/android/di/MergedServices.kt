@@ -102,7 +102,7 @@ internal fun mergedPreferences(stacks: GroupStacks): HubPreferences = object : H
 }
 
 /**
- * Machine management (机器页, 引擎, Claude Code 设置) over every group (#634): each call goes to the group its machine id
+ * Machine management (机器页, 引擎, Claude Code / Codex 设置) over every group (#634): each call goes to the group its machine id
  * names ([routes]: that group's service, already speaking merged ids), so another group's machine is no longer asked of the
  * selected group's hub. Hub-level services (模型配置, 语音) stay with the selected group, like the other hub-level pages.
  */
@@ -118,6 +118,9 @@ internal fun mergedMachineManagement(routes: MachineRoutes): MachineManagement =
     override suspend fun claudeSettings(machineId: String) = routes.on(machineId) { it.claudeSettings(machineId) }
     override suspend fun setClaudeSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
         routes.on(machineId) { it.setClaudeSetting(machineId, key, value) }
+    override suspend fun codexSettings(machineId: String) = routes.on(machineId) { it.codexSettings(machineId) }
+    override suspend fun setCodexSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
+        routes.on(machineId) { it.setCodexSetting(machineId, key, value) }
 }
 
 /** Runs a call on the machine management of the group [machineId] names, in that group's lifetime (GroupStacks.use). */

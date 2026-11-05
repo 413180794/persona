@@ -104,6 +104,8 @@ class MachinesShotsTest {
         override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId, engine = engine)
         override suspend fun claudeSettings(machineId: String) = emptyList<ClaudeSetting>()
         override suspend fun setClaudeSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()
+        override suspend fun codexSettings(machineId: String) = emptyList<ClaudeSetting>()
+        override suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement) = emptyList<ClaudeSetting>()
     }
     private val navigator = object : Navigator {
         override fun navigate(key: NavKey) = Unit
