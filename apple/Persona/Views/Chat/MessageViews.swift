@@ -70,6 +70,9 @@ extension MarkdownUI.Theme {
                 .padding(Theme.Space.m)
         }
         .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+        .macHoverActions(onEdge: false) {
+            MacHoverButton(title: "拷贝代码", symbol: Theme.Icon.copy) { MacHover.copy(config.content, said: "已拷贝代码") }
+        }
     }
 }
 
@@ -500,6 +503,11 @@ struct AssistantText: View, Equatable {
         }
         .lookUpFiles(d.asked)
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
+        #if os(macOS)
+        // Under an answer, while the pointer is over it: 拷贝, and 引用 where the chat quotes (#2113). Not under an
+        // agent's words between its steps (`quiet`).
+        .modifier(AnswerHoverActions(on: !quiet, id: item.id, text: item.text ?? ""))
+        #endif
     }
 
     /// Links in a fresh answer open instantly: their pages load in the background. Only for recent answers — every
@@ -523,6 +531,28 @@ private struct QuietMarkdown: ViewModifier {
         }
     }
 }
+
+#if os(macOS)
+private struct AnswerHoverActions: ViewModifier {
+    @Environment(MessageMenu.self) private var menu: MessageMenu?
+    var on: Bool
+    var id: String
+    var text: String
+
+    func body(content: Content) -> some View {
+        if on {
+            content.macHoverFooter {
+                MacHoverButton(title: "拷贝", symbol: Theme.Icon.copy) { MacHover.copy(text) }
+                if let quote = menu?.quote {
+                    MacHoverButton(title: "引用", symbol: Theme.Icon.quote) { quote(text, id, false) }
+                }
+            }
+        } else {
+            content
+        }
+    }
+}
+#endif
 
 struct CopyButton: View {
     var text: String

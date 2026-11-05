@@ -1323,6 +1323,7 @@ private struct AgentsList: View {
                 NavigationLink(value: s.key) {
                     slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
                         .padding(.leading, nested(indent))
+                        .macHoverShade(in: RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous), outset: Theme.Space.xs)
                 }
             }
         }

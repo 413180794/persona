@@ -697,6 +697,9 @@ struct CodeBlock: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+            .macHoverActions(onEdge: false) {
+                MacHoverButton(title: "拷贝", symbol: Theme.Icon.copy) { MacHover.copy(text) }
+            }
             if clipped {
                 Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(Theme.Font.labelMedium)
             }

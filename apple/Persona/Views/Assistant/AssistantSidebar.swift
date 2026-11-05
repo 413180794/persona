@@ -892,6 +892,7 @@ struct AssistantSidebar: View {
             .background {
                 if selected { RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).fill(Self.selectedFill) }
             }
+            .macHoverShade(in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -1114,6 +1115,7 @@ struct AssistantSidebar: View {
                     RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous).fill(Self.selectedFill)
                 }
             }
+            .macHoverShade(in: RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
