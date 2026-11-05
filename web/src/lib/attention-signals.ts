@@ -1,5 +1,5 @@
 // The DOM side of the attention signals (#2332, logic in lib/attention.ts): the tab title, the favicon's badge, and the
-// optional sounds, and the system notifications (#2971, lib/notify.ts). `useAttentionSignals` is the one call App makes.
+// optional sounds, and the system notifications (#2971, lib/notify.ts). `<AttentionSignals>` is what App renders for them.
 import { useEffect, useRef } from "react";
 import { stateOf } from "./format";
 import { agentKey } from "./pins";
@@ -269,4 +269,13 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     const pending = timers.current;
     return () => pending.forEach(clearTimeout);
   }, []);
+}
+
+/**
+ * `useAttentionSignals` as a component that draws nothing. It reads every session push (the 需要你 count, the
+ * transitions): rendered as a leaf, a push re-renders only it, not the shell with the sidebar and the page around it.
+ */
+export function AttentionSignals({ label, pane }: { label: string; pane: { mid: string; sid: string } | undefined }): null {
+  useAttentionSignals(label, pane);
+  return null;
 }

@@ -846,10 +846,145 @@ func TestAnswerThatDidNotGoPutsTheCardBack(t *testing.T) {
 	if len(cards) != 1 || cards[0].ID == first || entryOf(t, s, "s1").InteractionID != cards[0].ID {
 		t.Fatalf("cards %+v entry %+v", cards, entryOf(t, s, "s1"))
 	}
+	// The old card is gone while its replacement is up.
+	raw, _ := json.Marshal(proto.Resolution{Answers: map[string]string{"A 还是 B？": "A"}})
+	if _, err := s.Action(context.Background(), Action{Op: "answer", InteractionID: first, Answer: raw}); err == nil {
+		t.Fatal("the old card could still be answered")
+	} else if re := (*rpc.Error)(nil); !errors.As(err, &re) || re.Code != CodeGone {
+		t.Fatalf("the old card: %v", err)
+	}
 	f.failSend = nil
 	answerCard(t, s, cards[0].ID, proto.Resolution{Answers: map[string]string{"A 还是 B？": "A"}})
 	if got := f.sentToAgents(); len(got) != 1 || len(s.workCards()) != 0 {
 		t.Fatalf("sent %v, cards %+v", got, s.workCards())
+	}
+}
+
+// A repeated callback while the answer is still being sent (a redelivered webhook, a second tap, phone and watch
+// together) is answered OK and the first instruction reaches the agent once, not twice; a different answer racing it
+// is ignored.
+func TestWorkCardAnswerDeliveredOnce(t *testing.T) {
+	s, f := workService(t)
+	f.triage = `{"phase":"blocked","on":"user","line":"选哪个","questions":[{"question":"A 还是 B？","options":[{"label":"A"},{"label":"B"}]}]}`
+	f.setSessions("box", stopped("s1", "A 还是 B？"))
+	triage(t, s, "s1")
+	card := s.workCards()[0].ID
+
+	inside := make(chan struct{})
+	release := make(chan struct{})
+	defer func() { // let the in-flight goroutine return when the test ends early
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	f.onSend = func(f *fakeHub, _ map[string]any) {
+		close(inside)
+		<-release
+	}
+	rawA, _ := json.Marshal(proto.Resolution{Answers: map[string]string{"A 还是 B？": "A"}})
+	rawB, _ := json.Marshal(proto.Resolution{Answers: map[string]string{"A 还是 B？": "B"}})
+	var firstErr error
+	done := make(chan struct{})
+	go func() {
+		_, firstErr = s.Action(context.Background(), Action{Op: "answer", InteractionID: card, Answer: rawA})
+		close(done)
+	}()
+	<-inside
+	// The same callback again (with a different answer) while the first send is in flight. Without the claim it
+	// queues on the fake's lock and sends a second instruction once the first returns.
+	type actionOut struct {
+		r   ActionResult
+		err error
+	}
+	again := make(chan actionOut, 1)
+	go func() {
+		r, err := s.Action(context.Background(), Action{Op: "answer", InteractionID: card, Answer: rawB})
+		again <- actionOut{r, err}
+	}()
+	select {
+	case a := <-again:
+		if a.err != nil || !a.r.OK {
+			t.Fatalf("the repeated callback: %+v %v", a.r, a.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the repeated callback blocked behind the first send instead of being answered at once")
+	}
+	close(release)
+	<-done
+	if firstErr != nil {
+		t.Fatal(firstErr)
+	}
+	if got := f.sentToAgents(); len(got) != 1 || !strings.Contains(got[0], "A 还是 B？ → A") || strings.Contains(got[0], "→ B") {
+		t.Fatalf("sent %v", got)
+	}
+	s.work.mu.Lock()
+	left := s.work.answering[card]
+	s.work.mu.Unlock()
+	if left {
+		t.Fatal("the answering mark was left")
+	}
+	// A repeat after the delivery finished is gone, as before.
+	if _, err := s.Action(context.Background(), Action{Op: "answer", InteractionID: card, Answer: rawA}); err == nil {
+		t.Fatal("a later repeat was accepted")
+	} else if re := (*rpc.Error)(nil); !errors.As(err, &re) || re.Code != CodeGone {
+		t.Fatalf("a later repeat: %v", err)
+	}
+}
+
+// While an answer is being sent, a tick can find the card "not out" and put it back under the same id: once the
+// delivery finished, the turn's work no longer names the card, so the resurrected card must go too. Otherwise a later
+// tap on it finds and sends the same instruction again.
+func TestDeliveredCardResurrectedByTickGoesAfterSend(t *testing.T) {
+	s, f := workService(t)
+	f.triage = `{"phase":"blocked","on":"user","line":"选哪个","questions":[{"question":"A 还是 B？","options":[{"label":"A"},{"label":"B"}]}]}`
+	f.setSessions("box", stopped("s1", "A 还是 B？"))
+	triage(t, s, "s1")
+	card := s.workCards()[0].ID
+	v := s.newWorkView(context.Background()) // the session view from before the send blocks it
+	v.machines()                             // read the device and session before the fake's lock is held by the send
+	v.sessions("box")
+
+	inside := make(chan struct{})
+	release := make(chan struct{})
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	f.onSend = func(f *fakeHub, _ map[string]any) {
+		close(inside)
+		<-release
+	}
+	raw, _ := json.Marshal(proto.Resolution{Answers: map[string]string{"A 还是 B？": "A"}})
+	finished := make(chan struct{})
+	go func() {
+		_, _ = s.Action(context.Background(), Action{Op: "answer", InteractionID: card, Answer: raw})
+		close(finished)
+	}()
+	<-inside
+	// A tick while the send is in flight (the delay keeps its snapshot publish off the fake's held lock).
+	workPublishDelay = time.Hour
+	s.cardTick(context.Background(), v, [2]string{"box", "s1"}, turnEnd.Add(time.Minute))
+	workPublishDelay = 0
+	if cards := s.workCards(); len(cards) != 1 || cards[0].ID != card {
+		t.Fatalf("the tick did not put the card back: %+v", cards)
+	}
+	close(release)
+	<-finished
+	if cards := s.workCards(); len(cards) != 0 {
+		t.Fatalf("the resurrected card stayed after the delivery: %+v", cards)
+	}
+	if _, err := s.Action(context.Background(), Action{Op: "answer", InteractionID: card, Answer: raw}); err == nil {
+		t.Fatal("the resurrected card could still be answered")
+	} else if re := (*rpc.Error)(nil); !errors.As(err, &re) || re.Code != CodeGone {
+		t.Fatalf("the resurrected card: %v", err)
+	}
+	if got := f.sentToAgents(); len(got) != 1 {
+		t.Fatalf("sent %v", got)
 	}
 }
 

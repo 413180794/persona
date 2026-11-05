@@ -2,7 +2,7 @@
 // task cards that follow their agents, the hub's lines (answered, receipt, routed), the 今天 card, message cards about
 // a task, quick results, the dock above the composer, the tasks' questions, the route chip, and a task's detail in the
 // side panel.
-import { memo, useId, useMemo, useState } from "react";
+import { memo, useId, useMemo, useRef, useState } from "react";
 import {
   answeredItems,
   cardSent,
@@ -30,7 +30,7 @@ import {
   type TodayBody,
 } from "../../lib/feed";
 import { runningWorkflows, workflowLine } from "../../lib/workflows";
-import { dockAgents, interruption, isRemovable, makeSessionLookup, mostUrgentAgent, runningSubagents, taskNow, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
+import { dockAgents, type DockAgent, interruption, isRemovable, makeSessionLookup, mostUrgentAgent, runningSubagents, taskNow, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
 import { parseAPIError } from "../../lib/api-errors";
 import { boardSections, type BoardSectionKey } from "../../lib/task-board";
 import { openPanel } from "../../lib/panel";
@@ -38,8 +38,8 @@ import { plainMarkdown } from "../../lib/plain-markdown";
 import { Markdown } from "../../ui/Markdown";
 import { LiveCard } from "../../ui/AssistantCard";
 import type { AssistantView } from "../../lib/extension-wire";
-import { getState, useStore } from "../../lib/store";
-import type { AgentState, Interaction, Session } from "../../lib/types";
+import { getState, useStore, type State } from "../../lib/store";
+import type { AgentState, Interaction, Machine, Session } from "../../lib/types";
 import { Button, Collapse, cx, Dialog, IconButton, Menu, toast, useNow } from "../../ui/atoms";
 import { StatusMark } from "../../ui/StatusMark";
 import { Icon, type IconName } from "../../ui/icons";
@@ -58,6 +58,48 @@ import { byTime } from "../../lib/times";
 function useTaskLookup() {
   const sessions = useStore((s) => s.sessions);
   return useMemo(() => makeSessionLookup(sessions), [sessions]);
+}
+
+// The cards in the conversation do not take the whole session list, the pending cards or the machines: their store
+// selectors work out what each one draws (its status, lead agent, question, place), so a push about another agent
+// gives back the same strings and objects (the sessions delta keeps an unchanged session's object) and useStore's
+// shallow compare skips the render. A push about its own agent, card or machine still draws it again.
+
+/** What a task is now, from the store: its status and its lead agent. */
+function taskNowIn(s: State, todo: Todo, plans: Record<string, TaskPlan>): { status: TodoStatus; lead?: Session } {
+  const lookup = makeSessionLookup(s.sessions);
+  return { status: statusOf(todo, lookup, plans), lead: mostUrgentAgent(todo, lookup)?.session };
+}
+
+/** A task's status (undefined without the task). */
+function useTaskStatus(todo: Todo | undefined): TodoStatus | undefined {
+  const plans = useFeed((s) => s.plans);
+  return useStore((s) => (todo ? statusOf(todo, makeSessionLookup(s.sessions), plans) : undefined));
+}
+
+/** A task's status and lead agent (undefined without the task). */
+function useTaskNow(todo: Todo | undefined): { status: TodoStatus; lead?: Session } | undefined {
+  const plans = useFeed((s) => s.plans);
+  return useStore((s) => (todo ? taskNowIn(s, todo, plans) : undefined));
+}
+
+/** Two rows with the same fields, each the same value or object. */
+function sameRow(a: object, b: object): boolean {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
+
+/** useStore for a list of rows a selector builds: useStore compares one level down only, and rows made anew always
+ *  differ, so the last list stands while every row has the same fields as before. */
+function useStoreRows<T extends object>(select: (s: State) => T[]): T[] {
+  const last = useRef<T[] | null>(null);
+  return useStore((s) => {
+    const rows = select(s);
+    const prev = last.current;
+    if (prev && prev.length === rows.length && rows.every((r, i) => sameRow(r, prev[i]))) return prev;
+    last.current = rows;
+    return rows;
+  });
 }
 
 export function useTodo(id: string | undefined): Todo | undefined {
@@ -119,16 +161,18 @@ function TaskMark({ status, size = 9 }: { status: TodoStatus; size?: number }) {
   return <StatusMark state={dotState(status)} />;
 }
 
-function place(todo: Todo, lead?: Session): string {
+/** Where a task runs: machine · folder · agent. `machines` and `plans` default to the stores' own; a selector passes
+ *  them in, so what it reads is what it depends on. */
+function place(todo: Todo, lead?: Session, machines: Machine[] = getState().machines, plans: Record<string, TaskPlan> = getFeedState().plans): string {
   const a = (todo.agents ?? []).find((x) => !x.released_at) ?? todo.agents?.[0];
   const parts: string[] = [];
-  const machineName = (id: string) => getState().machines.find((m) => m.id === id)?.name ?? id;
+  const machineName = (id: string) => machines.find((m) => m.id === id)?.name ?? id;
   if (a) {
     parts.push(machineName(a.machine_id));
     if (a.cwd) parts.push(a.cwd.split("/").filter(Boolean).at(-1) ?? a.cwd);
   } else {
     // No agent (yet, or ever): where the plan meant it to run.
-    const planned = todo.plan_id ? getFeedState().plans[todo.plan_id]?.tasks.find((t) => t.todo_id === todo.id) : undefined;
+    const planned = todo.plan_id ? plans[todo.plan_id]?.tasks.find((t) => t.todo_id === todo.id) : undefined;
     if (planned) {
       parts.push(machineName(planned.machine));
       parts.push(planned.cwd.split("/").filter(Boolean).at(-1) ?? planned.cwd);
@@ -286,25 +330,33 @@ function PlanTaskRow({ n, task, numbered }: { n: number; task: PlanTask; numbere
 
 // ── task cards ──
 
-export function TaskCard({ todoId, conversation }: { todoId: string; conversation: string }) {
-  const todo = useTodo(todoId);
-  const lookup = useTaskLookup();
+/** What a task card draws from the store: the task, its status and lead agent, the card it waits on (only while it
+ *  waits) and where it runs (with the machine's name, so a renamed or loaded machine draws it again). */
+function useTaskCard(todoId: string) {
   const plans = useFeed((s) => s.plans);
-  const status = todo ? statusOf(todo, lookup, plans) : undefined;
+  const card = useStore((s) => {
+    const todo = s.todos.find((t) => t.id === todoId);
+    if (!todo) return undefined;
+    const { status, lead } = taskNowIn(s, todo, plans);
+    const ix = status === "needs_you" ? taskInteraction(todo, s.interactions, lead) : undefined;
+    return { todo, status, lead, ix, where: place(todo, lead, s.machines, plans) };
+  });
+  return { ...card, plans };
+}
+
+export function TaskCard({ todoId, conversation }: { todoId: string; conversation: string }) {
+  const { todo, status, lead, ix, where, plans } = useTaskCard(todoId);
   const menu = useTaskMenu(todo, status);
   const retrying = useRetrying(todoId);
-  const interactions = useStore((s) => s.interactions);
-  useStore((s) => s.machines); // place() reads machine names from the store: draw again when they load or change
   useNow(30_000, status === "working"); // how long its step has gone on
   if (!todo || !status) return null;
-  const lead = mostUrgentAgent(todo, lookup)?.session;
   const info = TODO_STATUS_INFO[status];
   const startError = todo.agents?.find((a) => a.start_error)?.start_error;
   const cut = status === "interrupted" ? interruption(lead) : undefined;
   const progress = progressOf(lead);
   const now =
     status === "needs_you"
-      ? (taskAsk(taskInteraction(todo, interactions, lead)) ?? t("assistant-tasks.needs_answer"))
+      ? (taskAsk(ix) ?? t("assistant-tasks.needs_answer"))
       : cut
         ? t("assistant-tasks.interrupted_reason", { reason: cut.reason })
         : status === "failed"
@@ -336,7 +388,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
         <span className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">{todo.title}</span>
         {status !== "done" && status !== "failed" && <span className="shrink-0 text-[12px] text-ink-3">{since(todo.created_at)}</span>}
       </div>
-      <div className="truncate text-[12px] text-ink-2">{place(todo, lead)}</div>
+      <div className="truncate text-[12px] text-ink-2">{where}</div>
       <div className={cx("flex items-start gap-2 rounded-control bg-field px-3 py-2 text-[13px]", (status === "needs_you" || status === "failed" || cut) && "text-red")}>
         <Icon name={status === "needs_you" ? "hand" : status === "failed" || cut ? "info" : "terminal"} size={13} className="mt-0.5 shrink-0 text-ink-2" />
         <span className="flex min-w-0 flex-col gap-0.5">
@@ -436,9 +488,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
 /** A task of another day, folded into a line. */
 export function TaskLine({ todoId }: { todoId: string }) {
   const todo = useTodo(todoId);
-  const lookup = useTaskLookup();
-  const plans = useFeed((s) => s.plans);
-  const status = todo ? statusOf(todo, lookup, plans) : undefined;
+  const status = useTaskStatus(todo);
   const menu = useTaskMenu(todo, status);
   if (!todo || !status) return null;
   const info = TODO_STATUS_INFO[status];
@@ -551,10 +601,9 @@ function ReceiptCard({ item }: { item: FeedItem }) {
  *  a quiet line that opens the task (a later receipt says how it ended). */
 function InterruptedReceipt({ item }: { item: FeedItem }) {
   const todo = useTodo(item.ref);
-  const lookup = useTaskLookup();
-  const plans = useFeed((s) => s.plans);
+  const now = useTaskNow(todo);
   const retrying = useRetrying(todo?.id);
-  const status = todo ? statusOf(todo, lookup, plans) : undefined;
+  const status = now?.status;
   const title = field(item, "title") ?? t("assistant-tasks.task_fallback");
   if (todo && status && status !== "interrupted") {
     return (
@@ -564,7 +613,7 @@ function InterruptedReceipt({ item }: { item: FeedItem }) {
       </button>
     );
   }
-  const cut = todo ? interruption(mostUrgentAgent(todo, lookup)?.session) : undefined;
+  const cut = todo ? interruption(now?.lead) : undefined;
   const raw = field(item, "error") ?? field(item, "summary");
   const reason = cut?.reason ?? parseAPIError(raw)?.reason;
   const canContinue = todo && (cut ? cut.canContinue : true);
@@ -591,10 +640,9 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   // A failed start's banner follows its task: 重试 while it is still failed (with its latest error), a quiet line once
   // it was started again, so no stale error stays in the conversation (#1396).
   const todo = useTodo(failed ? item.ref : undefined);
-  const lookup = useTaskLookup();
   const plans = useFeed((s) => s.plans);
   const retrying = useRetrying(todo?.id);
-  const status = todo ? statusOf(todo, lookup, plans) : undefined;
+  const status = useTaskStatus(todo);
   const pr = field(item, "pr");
   const prN = pr?.split("/").at(-1);
   const title = field(item, "title") ?? t("assistant-tasks.task_fallback");
@@ -725,7 +773,7 @@ function useSayToPersona(conversation: string) {
 
 function MessageCard({ item }: { item: FeedItem }) {
   const todo = useTodo(field(item, "todo_id"));
-  const lookup = useTaskLookup();
+  const now = useTaskNow(todo);
   const sent = cardSent(item);
   const busy = useFeed((s) => !!s.busy[item.id]);
   const [text, setText] = useState<string | null>(null);
@@ -740,8 +788,7 @@ function MessageCard({ item }: { item: FeedItem }) {
       toast(t("assistant-tasks.send_failed", { error: String(e instanceof Error ? e.message : e) }), "error");
     }
   };
-  const plans = useFeed((s) => s.plans);
-  const status = todo ? statusOf(todo, lookup, plans) : undefined;
+  const status = now?.status;
   return (
     <div className="flex flex-col gap-2.5 rounded-card bg-surface p-4 shadow-card" data-testid="message-card">
       <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
@@ -753,7 +800,7 @@ function MessageCard({ item }: { item: FeedItem }) {
         <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-2 rounded-control bg-field px-3 py-2 text-left text-[12.5px] hover:bg-hover">
           <TaskMark status={status} />
           <span className="font-semibold">{todo.title}</span>
-          <span className="min-w-0 flex-1 truncate text-ink-2">{progressOf(mostUrgentAgent(todo, lookup)?.session)?.text || TODO_STATUS_INFO[status].label}</span>
+          <span className="min-w-0 flex-1 truncate text-ink-2">{progressOf(now?.lead)?.text || TODO_STATUS_INFO[status].label}</span>
           <Icon name="chevronRight" size={13} className="text-ink-3" />
         </button>
       )}
@@ -794,23 +841,24 @@ function MessageCard({ item }: { item: FeedItem }) {
 // ── above the composer ──
 
 /** The oldest question the conversation's tasks' agents ask, under its task's name (还有 N 件). */
+function questionsIn(s: State, conversation: string) {
+  const out: { todo: Todo; ix: Interaction }[] = [];
+  const keys = new Set<string>();
+  for (const t of s.todos) {
+    if (t.origin !== conversation || t.done_at) continue;
+    const mine = (t.agents ?? []).filter((a) => !a.released_at).map((a) => `${a.machine_id}/${a.session_id}`);
+    mine.forEach((k) => keys.add(k));
+    for (const ix of s.interactions) if (mine.includes(`${ix.machine_id}/${ix.session_id}`)) out.push({ todo: t, ix });
+  }
+  // just answered here: shown answered for a moment above the next one
+  const done = Object.values(s.answered).filter((a) => keys.has(`${a.ix.machine_id}/${a.ix.session_id}`));
+  return { asks: out.sort((a, b) => byTime(a.ix.created_at, b.ix.created_at)), answered: done };
+}
+
 export function TaskQuestions({ conversation }: { conversation: string }) {
-  const todos = useStore((s) => s.todos);
-  const interactions = useStore((s) => s.interactions);
-  const answeredAll = useStore((s) => s.answered);
-  const { asks, answered } = useMemo(() => {
-    const out: { todo: Todo; ix: Interaction }[] = [];
-    const keys = new Set<string>();
-    for (const t of todos) {
-      if (t.origin !== conversation || t.done_at) continue;
-      const mine = (t.agents ?? []).filter((a) => !a.released_at).map((a) => `${a.machine_id}/${a.session_id}`);
-      mine.forEach((k) => keys.add(k));
-      for (const ix of interactions) if (mine.includes(`${ix.machine_id}/${ix.session_id}`)) out.push({ todo: t, ix });
-    }
-    // just answered here: shown answered for a moment above the next one
-    const done = Object.values(answeredAll).filter((a) => keys.has(`${a.ix.machine_id}/${a.ix.session_id}`));
-    return { asks: out.sort((a, b) => byTime(a.ix.created_at, b.ix.created_at)), answered: done };
-  }, [todos, interactions, answeredAll, conversation]);
+  // a card for another agent coming or going leaves these rows as they were: no render
+  const asks = useStoreRows((s) => questionsIn(s, conversation).asks);
+  const answered = useStoreRows((s) => questionsIn(s, conversation).answered);
   const first = asks[0];
   if (!first && !answered.length) return null;
   return (
@@ -835,24 +883,29 @@ export function TaskQuestions({ conversation }: { conversation: string }) {
 
 /** The dock: 全部 N held at its left edge (it does not scroll), then a pill for each task going on (waiting first) and,
  * in the main conversation, each agent going on that no task stands for (#1113), scrolling on their own (iOS TaskDock). */
+// Failed, done and stopped tasks are not in the dock.
+const DOCK_RANK: Partial<Record<TodoStatus, number>> = { needs_you: 0, interrupted: 0, working: 1, not_started: 1, unread: 2 };
+
+/** The dock's task pills, waiting first: each task going on, its status and what it waits on (#3463). */
+function dockTasksIn(s: State, conversation: string, plans: Record<string, TaskPlan>): { t: Todo; st: TodoStatus; ask?: string }[] {
+  const lookup = makeSessionLookup(s.sessions);
+  return s.todos
+    .filter((t) => t.origin === conversation)
+    .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
+    .filter((x) => DOCK_RANK[x.st] !== undefined)
+    .sort((a, b) => DOCK_RANK[a.st]! - DOCK_RANK[b.st]! || byTime(b.t.created_at, a.t.created_at))
+    .map(({ t, st }) => ({ t, st, ask: st === "needs_you" ? taskAsk(taskInteraction(t, s.interactions, mostUrgentAgent(t, lookup)?.session)) : undefined }));
+}
+
 export function TaskDock({ conversation }: { conversation: string }) {
-  const todos = useStore((s) => s.todos);
-  const interactions = useStore((s) => s.interactions);
-  const sessions = useStore((s) => s.sessions);
-  const main = useStore((s) => s.assistant?.main);
-  const lookup = useTaskLookup();
   const plans = useFeed((s) => s.plans);
   const [menuFor, setMenuFor] = useState<{ todo: Todo; el: HTMLElement } | null>(null);
   const [board, setBoard] = useState(false);
-  const agents = useMemo(() => dockAgents(Object.values(sessions).flat(), todos, conversation, main), [sessions, todos, conversation, main]);
-  const mine = todos.filter((t) => t.origin === conversation);
-  if (mine.length === 0 && agents.length === 0) return null;
-  // Failed, done and stopped tasks are not in the dock.
-  const rank: Partial<Record<TodoStatus, number>> = { needs_you: 0, interrupted: 0, working: 1, not_started: 1, unread: 2 };
-  const going = mine
-    .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
-    .filter((x) => rank[x.st] !== undefined)
-    .sort((a, b) => rank[a.st]! - rank[b.st]! || byTime(b.t.created_at, a.t.created_at));
+  // rows of strings and the store's own objects: a push about an agent or a card none of them shows draws nothing
+  const agents = useStoreRows<DockAgent>((s) => dockAgents(Object.values(s.sessions).flat(), s.todos, conversation, s.assistant?.main));
+  const going = useStoreRows((s) => dockTasksIn(s, conversation, plans));
+  const mine = useStore((s) => s.todos.filter((t) => t.origin === conversation).length);
+  if (mine === 0 && agents.length === 0) return null;
   // 全部 and the pills share one capsule (height, radius, padding, size), like iOS DockPillLabel.
   const capsule = "inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[12.5px]";
   const pill = cx(capsule, "max-w-[240px] gap-2 font-semibold");
@@ -866,15 +919,14 @@ export function TaskDock({ conversation }: { conversation: string }) {
         onClick={() => setBoard(true)}
         className={cx(capsule, "bg-field font-medium text-ink-2 hover:bg-hover")}
       >
-        {t("assistant-tasks.dock_all", { count: mine.length + agents.length })}
+        {t("assistant-tasks.dock_all", { count: mine + agents.length })}
       </button>
       {(going.length > 0 || agents.length > 0) && (
         // The scroller pads by the focus ring's width and takes it back, so the ring is not clipped and the row
         // stays a pill high.
         <div className="scrollbar-none -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1">
-          {going.map(({ t: todo, st }) => {
+          {going.map(({ t: todo, st, ask }) => {
             // a waiting task says what it waits on when hovered or read out (#3463)
-            const ask = st === "needs_you" ? taskAsk(taskInteraction(todo, interactions, mostUrgentAgent(todo, lookup)?.session)) : undefined;
             const label = ask ? t("assistant-tasks.dock_task_asks", { title: todo.title, ask }) : undefined;
             return (
             <button
@@ -950,11 +1002,10 @@ export function DayLine({ date }: { date: Date }) {
 
 /** A task's state for other views (the side panel's header). */
 export function useTaskState(todo?: Todo): { status: TodoStatus; lead?: Session; failure?: string } | undefined {
-  const lookup = useTaskLookup();
+  const now = useTaskNow(todo);
   const plans = useFeed((s) => s.plans);
-  if (!todo) return undefined;
-  const status = statusOf(todo, lookup, plans);
-  return { status, lead: mostUrgentAgent(todo, lookup)?.session, failure: status === "failed" ? startFailure(todo, plans) : undefined };
+  if (!todo || !now) return undefined;
+  return { ...now, failure: now.status === "failed" ? startFailure(todo, plans) : undefined };
 }
 
 // ── 全部: the task board ──

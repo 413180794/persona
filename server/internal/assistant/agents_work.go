@@ -149,7 +149,10 @@ type workBook struct {
 	sent     map[[2]string]time.Time // when the manager itself last sent the session something
 	seen     map[[2]string]time.Time // the turn whose first look was recorded
 	approved map[[2]string]string    // a risky next step the user said yes to (its wait.then)
-	switches *TriageSwitches         // the saved switches, once read (nil: not read yet)
+	// answering marks cards whose answer is being delivered to the agent: a repeated callback in the send window
+	// (a redelivered webhook, a second tap, phone and watch together) is the same answer, not a second one.
+	answering map[string]bool
+	switches  *TriageSwitches // the saved switches, once read (nil: not read yet)
 
 	sampleAt, pruneAt, backfillAt time.Time
 	publishing                    atomic.Bool // a snapshot is on its way (publishSoon)
@@ -166,6 +169,7 @@ func (b *workBook) init() {
 		b.sent = map[[2]string]time.Time{}
 		b.seen = map[[2]string]time.Time{}
 		b.approved = map[[2]string]string{}
+		b.answering = map[string]bool{}
 	}
 }
 
@@ -872,7 +876,8 @@ func errGone(id string) error {
 // workAnswer is manager.action for one of the cards (false: id is none of them). What the agent is to hear goes to it;
 // the answers the manager acts on itself (先不管, 再等等…) do not. The work is read back first: an answer the hub kept
 // while the manager was away comes right after it is back. When the agent cannot be sent the answer (its machine just
-// went away) the card goes up again, under a new id.
+// went away) the card goes up again, under a new id. A repeated callback while an answer is being sent is answered OK
+// and delivered once: the send can take until its timeout, and the entry still names the card until it comes back.
 func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution) (bool, error) {
 	if !strings.HasPrefix(id, workCardPrefix) {
 		return false, nil
@@ -882,6 +887,10 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 	}
 	s.work.mu.Lock()
 	s.work.init()
+	if s.work.answering[id] { // this callback's answer is already on its way to the agent
+		s.work.mu.Unlock()
+		return true, nil
+	}
 	ix, ok := s.work.cards[id]
 	delete(s.work.cards, id)
 	if !ok { // read back but not up again yet (its machine was away): its turn's work still has it
@@ -892,15 +901,26 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 			}
 		}
 	}
+	if ok { // claimed until the answer is delivered, so a repeated callback cannot send it again
+		s.work.answering[id] = true
+	}
 	s.work.mu.Unlock()
 	if !ok {
 		return true, errGone(id)
 	}
+	defer func() {
+		s.work.mu.Lock()
+		delete(s.work.answering, id)
+		s.work.mu.Unlock()
+	}()
 	key := [2]string{ix.MachineID, ix.SessionID}
 	turn := ix.ExpiresAt.Add(-workCardTTL)
 	after := time.Since(turn).Seconds()
 	// done takes the card off its turn's work as the work is now (the agent may have gone on meanwhile), with change.
 	done := func(change func(e *db.SessionWork)) {
+		s.work.mu.Lock()
+		delete(s.work.cards, ix.ID) // a tick may have put it back while the answer was on its way to the agent
+		s.work.mu.Unlock()
 		e, ok := s.workEntry(key)
 		if ok && e.InteractionID == ix.ID {
 			e.InteractionID, e.Work.InteractionID = "", ""
@@ -976,6 +996,7 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 		if e, ok := s.workEntry(key); ok && e.InteractionID == id {
 			ix.ID, ix.CreatedAt = workCardPrefix+randomHex(6), time.Now().UTC()
 			s.work.mu.Lock()
+			delete(s.work.cards, id) // a tick may have put the old card back while the send was failing
 			s.work.cards[ix.ID] = ix
 			s.work.mu.Unlock()
 			e.InteractionID, e.Work.InteractionID = ix.ID, ix.ID

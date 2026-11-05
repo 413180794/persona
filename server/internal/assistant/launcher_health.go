@@ -16,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Launcher health (docs/launcher-health.md): every launcher on every machine is checked now and then with the same
@@ -342,9 +343,10 @@ func (s *Service) healthChanged(ctx context.Context, r LauncherHealth, before st
 }
 
 // recordStartFailure: an agent did not start with launcher on machine. A dropped link says nothing about the
-// launcher; anything else counts, and a check follows at once to tell a blink from a broken launcher.
+// launcher, nor does a start the node turned down before running it (startRefused); anything else counts, and a
+// check follows at once to tell a blink from a broken launcher.
 func (s *Service) recordStartFailure(ctx context.Context, machine, launcher string, err error) {
-	if err == nil || launcher == "" || transientStartErr(err) || errors.Is(err, ErrNoDevice) {
+	if err == nil || launcher == "" || transientStartErr(err) || errors.Is(err, ErrNoDevice) || startRefused(err) {
 		return
 	}
 	s.recordHealth(ctx, machine, launcher, healthResult{err: err.Error(), source: "start"})
@@ -354,6 +356,29 @@ func (s *Service) recordStartFailure(ctx context.Context, machine, launcher stri
 			s.recordHealth(ctx, machine, launcher, res)
 		}
 	}()
+}
+
+// startRequestErr are the node's answers to a session.start it would not run, whatever the launcher (node/control.go
+// checkStart and start, node/model_config.go check): a directory that is not there, a bad name, mode, effort or model.
+var startRequestErr = regexp.MustCompile(`^directory .* does not exist$|^invalid launcher |^invalid session id |^invalid model$|^unknown permission mode |^unknown effort level |^unsupported agent type |^permission mode and effort are only supported for Claude starts|^普通 Agent 的启动只支持|^新建 Codex 的思考强度由其启动器管理`)
+
+// startRefusalCodes are the node's (and the hub's) coded refusals of the request itself (node/control.go,
+// node/codex_start.go, node/openelsewhere.go…). Codes about the machine's state (engine_missing, runtime_away,
+// not_running, orca_not_registered) are not here: the launcher cannot run there now, and a task may go elsewhere.
+var startRefusalCodes = []string{"codex_needs_prompt", "codex_resume", "codex_read_only", "orca_resume", "open_elsewhere",
+	"identity_conflict", proto.CodeNodeOutdated}
+
+// startRefused: the start failed on the request, not the launcher: the node checked it and said no before running
+// anything (one of startRefusalCodes, or of startRequestErr).
+func startRefused(err error) bool {
+	var re *rpc.Error
+	if !errors.As(err, &re) {
+		return false
+	}
+	if re.Code != "" {
+		return slices.Contains(startRefusalCodes, re.Code)
+	}
+	return startRequestErr.MatchString(re.Message)
 }
 
 // ---- classifying ----

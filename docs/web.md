@@ -888,7 +888,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经飞书网关的
 
 ## 注意力信号（标签页标题、图标角标、提示音、系统通知，#2332、#2971）
 
-人不盯着网页时，也要知道有 Agent 在等自己。逻辑在 `src/lib/attention.ts`（纯函数，有单测），页面副作用在 `src/lib/attention-signals.ts`，`App.tsx` 里只有一次 `useAttentionSignals(title, pane)` 调用（它接管了原来设 `document.title` 的那个 effect）。
+人不盯着网页时，也要知道有 Agent 在等自己。逻辑在 `src/lib/attention.ts`（纯函数，有单测），页面副作用在 `src/lib/attention-signals.ts`，`App.tsx` 里只渲染一个 `<AttentionSignals label={title} pane={pane} />`（叶子组件，不画东西，里面调 `useAttentionSignals`；它接管了原来设 `document.title` 的那个 effect）。它读每一次会话推送，放在叶子里，推送只让它自己重渲染，不带着整个 Shell（侧栏、命令面板、当前页面）一起。
 
 - **数字**：就是侧边栏「总览」红色角标的那个数（`lib/sessions.ts` 的 `stateCounts().badge`，经 `useCounts()`）：状态是 `needs_you` 的 Agent，不含安静任务的（#1731）。不另算一份，标签页和侧边栏不会不一致。
 - **标签页标题**：有 N 个需要你时前面加 `(N) `，后面还是原来的页面名（`(2) 设置 · Persona`、`(2) Persona`）；0 个时和原来完全一样。

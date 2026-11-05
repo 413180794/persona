@@ -280,3 +280,49 @@ func postJSON(t *testing.T, s *Service, path string) []byte {
 	}
 	return w.Body.Bytes()
 }
+
+// A start the node turned down before running the launcher (a directory that is not there, a coded refusal of the
+// request) says nothing about the launcher: it is not recorded, and a planned task is not moved off the machine for it
+// (#3790). A failure of the run itself, or the machine not able to run it now, still counts.
+func TestLauncherHealthIgnoresRefusedStarts(t *testing.T) {
+	s, f := launcherHealthHubOn(t, newStorelessService)
+	delete(f.checks, "l4/work")
+	ctx := context.Background()
+	for _, err := range []error{
+		&rpc.Error{Message: "directory /home/me/nope does not exist"},
+		fmt.Errorf("session.start: %w", &rpc.Error{Message: `unknown permission mode "yolo"`}),
+		&rpc.Error{Message: "invalid model"},
+		&rpc.Error{Code: "codex_needs_prompt", Message: "新建 Codex 会话要连第一条消息一起发"},
+		&rpc.Error{Code: proto.CodeNodeOutdated, Message: "node too old"},
+	} {
+		s.recordStartFailure(ctx, "l4", "work", err)
+		if r, ok := s.launcherHealth(ctx, "l4", "work"); ok {
+			t.Fatalf("%v counted against the launcher: %+v", err, r)
+		}
+	}
+	for _, err := range []error{
+		&rpc.Error{Message: "wait for claude session: context deadline exceeded"},
+		&rpc.Error{Code: "engine_missing", Message: "herdr is not running"},
+		&rpc.Error{Code: "runtime_away", Message: "runtime not connected"},
+		errors.New("session.start: context deadline exceeded"),
+	} {
+		if startRefused(err) {
+			t.Fatalf("%v read as a refused request", err)
+		}
+	}
+
+	f.mu.Lock()
+	f.failStart = &rpc.Error{Message: "directory /home/me/nope does not exist"}
+	f.mu.Unlock()
+	s.startPlanTask("plan_x", "conv1", 0, PlanTask{Title: "修 CI", Prompt: "修 CI", Machine: "l4", Cwd: "/home/me/nope", Launcher: "work"}, false)
+	f.mu.Lock()
+	starts := append([]map[string]any(nil), f.starts...)
+	checked := len(f.checked)
+	f.mu.Unlock()
+	if len(starts) != 1 || checked != 0 {
+		t.Fatalf("a bad directory was retried elsewhere or checked: starts %v, checks %d", starts, checked)
+	}
+	if r, ok := s.launcherHealth(ctx, "l4", "work"); ok {
+		t.Fatalf("recorded: %+v", r)
+	}
+}

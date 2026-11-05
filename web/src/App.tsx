@@ -39,7 +39,7 @@ import { Sidebar, SidebarRail } from "./views/Sidebar";
 import { SidePanel } from "./views/SidePanel";
 import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
 import { useExtensionPlace } from "./lib/extension-slots";
-import { useAttentionSignals } from "./lib/attention-signals";
+import { AttentionSignals } from "./lib/attention-signals";
 
 // The pages a first screen doesn't need load when they are opened (#1996), or once the browser is idle after start
 // (lib/lazy-page.ts); 对话, Persona and 总览 stay in the main bundle (the extensions' page too: the sidebar already has
@@ -260,7 +260,6 @@ function Shell() {
     pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? t("app.title_new_chat") : route.name === "history" ? t("app.title_history") : route.name === "health" ? t("app.title_health") : route.name === "profile" ? t("app.title_profile") : route.name === "inbox" ? t("app.title_inbox") : route.name === "messages" ? t("app.title_messages")
       : route.name === "routines" ? t("app.title_routines") : route.name === "kb" ? t("app.title_kb") : route.name === "workspace-board" ? t("app.title_workspace_board") : route.name === "todos" ? t("app.title_todos") : route.name === "machines" || route.name === "machine" ? t("app.title_machines") : route.name === "space" ? route.space : route.name === "terminal" ? t("app.title_terminal") : route.name === "settings" ? t("app.title_settings")
       : route.name === "agents" ? t("app.title_agents") : route.name === "agent-list" ? "Agents" : route.name === "extension" ? extensionTitle || t("app.title_extension") : t("app.title_home");
-  useAttentionSignals(title, pane); // tab title with the 需要你 count, favicon badge, optional sounds (#2332)
 
   // never reached the hub: say so with a way to try again, instead of pages loading forever (kept through a retry)
   const [away, setAway] = useState(false);
@@ -383,6 +382,9 @@ function Shell() {
         setPreset(null);
       }} />
       <NewWorktreeHost />
+      {/* tab title with the 需要你 count, favicon badge, optional sounds (#2332): a leaf, so a sessions push re-renders
+          only it, not the whole shell */}
+      <AttentionSignals label={title} pane={pane} />
     </div>
   );
 }
