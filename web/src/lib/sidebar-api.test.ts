@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cycleGrouping, GROUPING_KEY, groupingLabel, nextGrouping, onFoldAll, onGrouping, setAllFolded, stepIndex } from "./sidebar-api";
+import { AGENTS_FOLD, cycleGrouping, GROUPING_KEY, groupingLabel, nextGrouping, onFoldAll, onGrouping, setAgentsFolded, setAllFolded, stepIndex } from "./sidebar-api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -12,6 +12,32 @@ describe("folding every group", () => {
     off();
     setAllFolded(true);
     expect(seen).toEqual([true, false]);
+  });
+
+  it("moves only one block's groups when asked for its scope, every group otherwise (#3027)", () => {
+    const agents: boolean[] = [];
+    const other: boolean[] = [];
+    const offA = onFoldAll((f) => agents.push(f), AGENTS_FOLD);
+    const offB = onFoldAll((f) => other.push(f));
+    setAllFolded(true, AGENTS_FOLD);
+    setAllFolded(false);
+    offA();
+    offB();
+    expect(agents).toEqual([true, false]);
+    expect(other).toEqual([false]);
+  });
+
+  it("opens the spaces and tab groups folded by hand that are not drawn when the Agents list opens all", () => {
+    const kept = new Map<string, string>([["fold:space:mac/a", "1"], ["fold:tree:mac/ws/1", "1"], ["fold:tree:mac", "0"], ["fold:jarvis", "1"], ["fold:term:m:mac", "1"], ["other", "1"]]);
+    const store = { get length() { return kept.size; }, key: (i: number) => [...kept.keys()][i] ?? null, getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
+    const seen: boolean[] = [];
+    const off = onFoldAll((f) => seen.push(f), AGENTS_FOLD);
+    setAgentsFolded(true, store);
+    expect(kept.get("fold:space:mac/a")).toBe("1"); // folding leaves what isn't drawn as it is
+    setAgentsFolded(false, store);
+    off();
+    expect(seen).toEqual([true, false]);
+    expect(Object.fromEntries(kept)).toEqual({ "fold:space:mac/a": "0", "fold:tree:mac/ws/1": "0", "fold:tree:mac": "0", "fold:jarvis": "1", "fold:term:m:mac": "1", other: "1" });
   });
 });
 

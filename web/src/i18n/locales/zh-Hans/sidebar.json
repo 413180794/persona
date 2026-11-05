@@ -113,5 +113,7 @@
   "personal_actions": "个人 Agent 的操作",
   "collapse": "收起侧边栏",
   "expand": "展开侧边栏",
-  "nav_health": "健康"
+  "nav_health": "健康",
+  "fold_all": "全部折叠",
+  "open_all": "全部展开"
 }

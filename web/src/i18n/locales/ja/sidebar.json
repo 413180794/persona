@@ -113,5 +113,7 @@
   "personal_actions": "個人エージェントの操作",
   "collapse": "サイドバーを折りたたむ",
   "expand": "サイドバーを展開",
-  "nav_health": "ヘルスケア"
+  "nav_health": "ヘルスケア",
+  "fold_all": "すべて折りたたむ",
+  "open_all": "すべて展開"
 }

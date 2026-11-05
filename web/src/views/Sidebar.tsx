@@ -52,9 +52,9 @@ import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
 import { PersonaAvatar } from "./assistant/Persona";
-import { useFolded } from "../lib/use-folded";
+import { FoldScope, useFolded } from "../lib/use-folded";
 import { clipsOverflow, glideBox, sameBox, type GlideBox, type Span } from "../lib/glide";
-import { onGrouping } from "../lib/sidebar-api";
+import { AGENTS_FOLD, onGrouping, setAgentsFolded } from "../lib/sidebar-api";
 import { formatChord, jumpHint, useBindings } from "../lib/shortcuts";
 import { toggleSidebarColumn } from "../lib/layout";
 
@@ -460,10 +460,10 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const onRowMenu: RowMenuFn = (s, anchor, at) => setRowMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
   const onSpaceMenu: SpaceMenuFn = (sp, anchor, at, fold) => setSpaceMenu((m) => (!at && m?.anchor === anchor ? null : { sp, anchor, at, fold }));
   const onNodeMenu: NodeMenuFn = (node, at, header, toggle) => setNodeMenu((m) => (toggle && m?.at.anchor && m.at.anchor === at.anchor ? null : { node, at, header }));
-  const [recentFolded, toggleRecent] = useFolded("recent", true, { holds: holdsRow(recent, activeKey) });
-  const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
-  const [pinnedFolded, togglePinned] = useFolded("agents-pinned", false, { holds: holdsRow(pinnedAgents, activeKey) });
-  const [launchesFolded, toggleLaunches] = useFolded("agents-launching", false, { holds: launches.some((l) => activeKey === `s:${l.machineId}/${l.id}`) });
+  const [recentFolded, toggleRecent] = useFolded("recent", true, { holds: holdsRow(recent, activeKey), scope: AGENTS_FOLD });
+  const [idleFolded, toggleIdle] = useFolded("idle-spaces", true, { scope: AGENTS_FOLD });
+  const [pinnedFolded, togglePinned] = useFolded("agents-pinned", false, { holds: holdsRow(pinnedAgents, activeKey), scope: AGENTS_FOLD });
+  const [launchesFolded, toggleLaunches] = useFolded("agents-launching", false, { holds: launches.some((l) => activeKey === `s:${l.machineId}/${l.id}`), scope: AGENTS_FOLD });
   // the whole block folds under its title in the sidebar (#2524); the phone's Agents page is the block, it doesn't
   const [blockFolded, toggleBlock] = useFolded("agents", false, { all: false });
   const folded = foldable && blockFolded;
@@ -498,11 +498,17 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
         {add && <SectionAdd label={t("sidebar.new_agent")} onClick={onNewAgent} />}
       </div>
       {groupingMenu.anchor && (
-        <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header={t("sidebar.grouping_header")} items={availableGroupings.map((g) => ({
+        <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header={t("sidebar.grouping_header")} items={[...availableGroupings.map((g): MenuItem => ({
           key: g.key, label: g.label, icon: g.key === "space" ? "folder" : g.key === "machine" ? "machine" : g.key === "todo" ? "todo" : "layers", checked: shownGrouping === g.key,
           onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); hover(null); },
-        }))} />
+        })),
+          // every group of the list, like the app's list settings (#3027); 全部展开 also opens the spaces and tab groups
+          // folded by hand that are not drawn now
+          { key: "fold-all", label: t("sidebar.fold_all"), icon: "up", checked: false, divider: true, onSelect: () => { setAgentsFolded(true); hover(null); } },
+          { key: "open-all", label: t("sidebar.open_all"), icon: "chevron", checked: false, onSelect: () => { setAgentsFolded(false); hover(null); } },
+        ]} />
       )}
+      <FoldScope.Provider value={AGENTS_FOLD}>
       <Collapse open={!folded}>
       <div inert={folded || undefined}>
       <FilterBar selection={filter} counts={filterTotals} onChoose={choose} botmux={botmuxCount > 0 || botmuxHidden ? { hidden: botmuxHidden, onToggle: toggleBotmux } : undefined} />
@@ -583,6 +589,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       )}
       </div>
       </Collapse>
+      </FoldScope.Provider>
       {/* the row's ⋯ (and its right click): pin, rename, mute, the todo it hangs on, delete — a long press on iOS
           Safari sends no contextmenu, so nothing lives only there */}
       {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} at={rowMenu.at} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} onLinkTodo={setLinkTargetSession} />}

@@ -1,5 +1,5 @@
 // A fold kept per browser (`fold:<key>` is "1" or "0"): the sidebar's sections and the 终端 page's tree share it.
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { foldedNow } from "./fold";
 import { onFoldAll } from "./sidebar-api";
 
@@ -9,7 +9,13 @@ import { onFoldAll } from "./sidebar-api";
 // conversation from anywhere shows its row), without storing that, and can still be folded by hand after.
 // all: 折叠 / 展开全部 moves it too; off for the blocks that hold the groups (页面, Agents, #2524), so folding every
 // group still leaves their titles to read.
-export function useFolded(key: string, initial = false, { follow = false, holds = false, all = true } = {}): [boolean, () => void] {
+// scope: the block the group is in, so the block's own 全部折叠 / 全部展开 moves only its groups (#3027); taken from the
+// FoldScope around it unless given (a block's own groups, above its provider).
+export const FoldScope = createContext<string | undefined>(undefined);
+
+export function useFolded(key: string, initial = false, { follow = false, holds = false, all = true, scope }: { follow?: boolean; holds?: boolean; all?: boolean; scope?: string } = {}): [boolean, () => void] {
+  const around = useContext(FoldScope);
+  const within = scope ?? around;
   const [stored, setStored] = useState(() => localStorage.getItem(`fold:${key}`));
   const [first] = useState(initial);
   const [opened, setOpened] = useState(holds);
@@ -26,7 +32,7 @@ export function useFolded(key: string, initial = false, { follow = false, holds 
     localStorage.setItem(`fold:${key}`, next);
     setStored(next);
     setOpened(false);
-  }) : undefined, [key, all]);
+  }, within) : undefined, [key, all, within]);
   return [
     folded,
     () => {

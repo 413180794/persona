@@ -113,5 +113,7 @@
   "personal_actions": "Personal agent actions",
   "collapse": "Collapse sidebar",
   "expand": "Expand sidebar",
-  "nav_health": "Health"
+  "nav_health": "Health",
+  "fold_all": "Collapse all",
+  "open_all": "Expand all"
 }

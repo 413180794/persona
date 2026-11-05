@@ -7,16 +7,35 @@ export const GROUPING_KEY = "jarvis.agentGrouping";
 
 // ── fold all / open all ──────────────────────────────────
 
-const foldListeners = new Set<(folded: boolean) => void>();
+const foldListeners = new Map<(folded: boolean) => void, string | undefined>();
 
-/** Every foldable group of the sidebar follows (the sidebar's useFolded subscribes here). */
-export function onFoldAll(listener: (folded: boolean) => void): () => void {
-  foldListeners.add(listener);
+/** The Agents block's groups (its list menu folds or opens only them, #3027). */
+export const AGENTS_FOLD = "agents";
+
+/** Every foldable group of the sidebar follows (the sidebar's useFolded subscribes here); `scope`: the block it is in. */
+export function onFoldAll(listener: (folded: boolean) => void, scope?: string): () => void {
+  foldListeners.set(listener, scope);
   return () => void foldListeners.delete(listener);
 }
 
-export function setAllFolded(folded: boolean) {
-  foldListeners.forEach((f) => f(folded));
+/** Folds or opens every group, or only those of `scope`. */
+export function setAllFolded(folded: boolean, scope?: string) {
+  foldListeners.forEach((s, f) => (scope === undefined || s === scope) && f(folded));
+}
+
+/** The Agents list menu's 全部折叠 / 全部展开 (#3027, the app's foldAll): every group of the Agents block. Opening also
+ *  opens the spaces and tab groups folded by hand that are not drawn now (another grouping, inside a folded group), so
+ *  switching to them later finds them open too (Android #2792). */
+export function setAgentsFolded(folded: boolean, store: Pick<Storage, "length" | "key" | "getItem" | "setItem"> = localStorage) {
+  if (!folded) {
+    const keys: string[] = [];
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (k && /^fold:(space|tree):/.test(k) && store.getItem(k) === "1") keys.push(k);
+    }
+    keys.forEach((k) => store.setItem(k, "0"));
+  }
+  setAllFolded(folded, AGENTS_FOLD);
 }
 
 // ── how Agents are grouped ───────────────────────────────

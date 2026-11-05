@@ -149,3 +149,20 @@ describe("folding a block of the sidebar", () => {
     expect(localStorage.getItem("fold:pages")).toBeNull();
   });
 });
+
+describe("the Agents list menu (#3027)", () => {
+  it("has 全部折叠 and 全部展开, which open the spaces folded by hand and leave the other blocks", async () => {
+    localStorage.setItem("fold:space:mac/a", "1");
+    act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+    const menu = [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label")?.startsWith("Agent 分组"))!;
+    act(() => menu.click());
+    await flush();
+    const item = (label: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem], [role=menuitemradio], [role=menuitemcheckbox]")].find((el) => el.textContent?.includes(label));
+    expect(item("全部折叠")).toBeDefined();
+    act(() => item("全部展开")!.click());
+    await flush();
+    expect(localStorage.getItem("fold:space:mac/a")).toBe("0");
+    expect(localStorage.getItem("fold:jarvis")).toBeNull();
+  });
+});
