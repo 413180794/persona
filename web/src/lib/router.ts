@@ -122,14 +122,15 @@ export function navigate(r: Route | string, replace = false) {
 }
 
 export function useRoute(): Route {
-  const path = useSyncExternalStore(
+  // The query is part of the route (/todos?id=…): a change to it alone must re-render too.
+  const at = useSyncExternalStore(
     (l) => {
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    () => location.pathname,
+    () => location.pathname + location.search,
   );
-  return parse(path);
+  return parse(at.split("?")[0]);
 }
 
 // <a> that navigates in-app on a plain click and still opens a new tab with ⌘ / middle click.
