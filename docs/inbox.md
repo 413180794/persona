@@ -15,7 +15,7 @@ App 用的通用翻译（`docs/ios.md`「翻译」），以及 `/api/v1/inbox…
 
 **hub 只管来源**（`server/internal/hub/inbox.go`）：连接器和插件怎么采（`inbox.collect`）、什么时候采（2 分钟一轮、连接器的
 `changed`、飞书事件、邮件 3 分钟一次），采到的原样交给管理者（总线调用 `inbox.collected`，一轮一次：每个来源读到的条目、它能做什么、
-邮件每个账号最新一页；每轮带 hub 这次运行的 `epoch` 和轮次 `seq`，路上耽搁了、比用过的旧的一轮管理者丢掉）；管理者要对来源做的事经
+邮件每个账号最新一页，最多 4 个账号同时读、按账号顺序交，读失败的跳过；每轮带 hub 这次运行的 `epoch` 和轮次 `seq`，路上耽搁了、比用过的旧的一轮管理者丢掉）；管理者要对来源做的事经
 `app.call inbox.*` 请 hub 做：读一封邮件的全文（翻译要的是保留段落和链接的文字）、发回复（邮件或经连接器 / 接飞书的插件）、
 `settle`、事件合成的 `group.tool` / `group.fallback` / `group.append`、读 hub 的分拣规则、AI 分身配置和插件提供了哪些连接器
 （`inbox.config`）、翻译模型现在是哪个（`inbox.translate_fingerprint`）。条目变了管理者发 `inbox.changed`，hub 在总线的读循环外

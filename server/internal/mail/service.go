@@ -21,8 +21,10 @@ import (
 const (
 	// networkTimeout bounds every single network operation (dial, command).
 	networkTimeout = 20 * time.Second
-	// idleTimeout closes a cached IMAP connection that has been unused this long.
-	idleTimeout = 2 * time.Minute
+	// idleTimeout closes a cached IMAP connection that has been unused this long. It is longer than the mail rounds
+	// (the inbox's every 3 minutes, the knowledge base's every 6), so a round reuses the last one's login instead of
+	// a fresh TCP + TLS + LOGIN per account; RFC 3501 servers keep an idle session at least 30 minutes.
+	idleTimeout = 10 * time.Minute
 	// sweepInterval is how often idle connections are checked.
 	sweepInterval = 30 * time.Second
 )
@@ -61,6 +63,8 @@ type Service struct {
 	// scan bounds one page of a local header search, fetch a page's summary fetch; tests shrink them.
 	scan  localScan
 	fetch pageFetch
+	// probe is when a cached connection is checked before it is reused; tests shrink it.
+	probe connProbe
 	// refreshAccess replaces the Google token endpoint in tests.
 	refreshAccess func(*OAuthCreds) (string, error)
 	// sendMail delivers a rendered message over SMTP; nil uses the real network.
@@ -91,6 +95,7 @@ func New(dataDir string, recs Records) (*Service, error) {
 		now:        time.Now,
 		scan:       defaultLocalScan,
 		fetch:      defaultPageFetch,
+		probe:      defaultConnProbe,
 	}
 	accounts, err := st.load()
 	if err != nil {
@@ -589,13 +594,63 @@ func imapSecurity(a *MailAccount) string {
 	}
 }
 
-// getConn returns a logged-in IMAP client for the account, dialing if needed.
+// connProbe is when getConn checks a cached connection before handing it out: one unused for longer than after
+// must answer a NOOP within wait, or it is dropped and dialed again. A NAT or firewall that silently forgot an idle
+// flow would otherwise leave the next command hanging for the whole networkTimeout.
+type connProbe struct {
+	after, wait time.Duration
+}
+
+var defaultConnProbe = connProbe{after: time.Minute, wait: 5 * time.Second}
+
+// probeLimits is s.probe with the defaults filled in (a zero Service has none).
+func (s *Service) probeLimits() connProbe {
+	p := s.probe
+	if p.after <= 0 {
+		p.after = defaultConnProbe.after
+	}
+	if p.wait <= 0 {
+		p.wait = defaultConnProbe.wait
+	}
+	return p
+}
+
+// alive reports whether c answers a NOOP within wait. A connection that doesn't is closed, which also ends the NOOP.
+func alive(ctx context.Context, c *imapclient.Client, wait time.Duration) bool {
+	done := make(chan error, 1)
+	go func() { done <- c.Noop().Wait() }()
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case err := <-done:
+		return err == nil
+	case <-t.C:
+	case <-ctx.Done():
+	}
+	c.Close()
+	return false
+}
+
+// getConn returns a logged-in IMAP client for the account, dialing if needed. The caller holds the account's lock
+// (withConnAt), so nothing else uses the connection while it is probed.
 func (s *Service) getConn(ctx context.Context, a *MailAccount) (*imapclient.Client, error) {
 	s.mu.Lock()
-	if c, ok := s.conns[a.ID]; ok && s.now().Sub(c.lastUsed) <= idleTimeout {
-		c.lastUsed = s.now()
-		s.mu.Unlock()
-		return c.c, nil
+	cached := s.conns[a.ID]
+	if cached != nil {
+		if idle := s.now().Sub(cached.lastUsed); idle <= idleTimeout {
+			cached.lastUsed = s.now()
+			s.mu.Unlock()
+			p := s.probeLimits()
+			if idle <= p.after || alive(ctx, cached.c, p.wait) {
+				return cached.c, nil
+			}
+			logf("mail: %s: the connection idle for %v did not answer a NOOP; reconnecting", a.ID, idle.Round(time.Second))
+			if err := ctx.Err(); err != nil {
+				s.dropConn(a.ID)
+				return nil, err
+			}
+			s.mu.Lock()
+		}
 	}
 	stale := s.conns[a.ID]
 	delete(s.conns, a.ID)

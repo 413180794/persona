@@ -39,6 +39,10 @@ const (
 	inboxDebounce = 3 * time.Second // a burst of Feishu events collects once
 	// inboxRoundWait bounds handing a round over (the manager reads the new mail's text before it answers).
 	inboxRoundWait = 5 * time.Minute
+	// inboxMailParallel is how many mail accounts a full round reads at once: a slow server (up to the mail
+	// package's 20 s per operation) no longer holds up the others, and the round (which holds the inbox lock the
+	// Feishu chat rounds wait on) takes about the slowest account's time instead of their sum.
+	inboxMailParallel = 4
 )
 
 // InboxConfig tunes the inbox (hub.json "inbox").
@@ -338,8 +342,8 @@ func (h *Hub) readInbox(ctx context.Context, round inboxRound) assistantwire.Inb
 	return r
 }
 
-// readMail is each mail account's latest inbox page (an account that can't be read is left out); nil without mail or
-// when the accounts can't be listed.
+// readMail is each mail account's latest inbox page, read up to inboxMailParallel accounts at once and kept in the
+// accounts' order (an account that can't be read is left out); nil without mail or when the accounts can't be listed.
 func (h *Hub) readMail(ctx context.Context) *assistantwire.InboxMailRead {
 	if h.mail == nil || h.connectors.Get("mail") == nil {
 		return nil
@@ -349,21 +353,39 @@ func (h *Hub) readMail(ctx context.Context) *assistantwire.InboxMailRead {
 		h.logf("inbox: mail accounts: %v", err)
 		return nil
 	}
+	read := make([]*assistantwire.InboxMailAccount, len(accounts))
+	slots := make(chan struct{}, inboxMailParallel)
+	var wg sync.WaitGroup
+	for i, a := range accounts {
+		slots <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-slots }()
+			read[i] = h.readMailAccount(ctx, a)
+		})
+	}
+	wg.Wait()
 	out := &assistantwire.InboxMailRead{Accounts: []assistantwire.InboxMailAccount{}}
-	for _, a := range accounts {
-		res, err := h.mail.ListMessages(ctx, mail.ListOptions{AccountID: a.ID, Limit: 40})
-		if err != nil {
-			h.logf("inbox: mail %s: %v", a.Email, err)
-			continue
+	for _, acc := range read {
+		if acc != nil {
+			out.Accounts = append(out.Accounts, *acc)
 		}
-		acc := assistantwire.InboxMailAccount{ID: a.ID, Email: a.Email, Messages: []assistantwire.InboxMailSummary{}}
-		for _, m := range res.Messages {
-			acc.Messages = append(acc.Messages, assistantwire.InboxMailSummary{Mailbox: m.Mailbox, UID: m.UID, MessageID: m.MessageID,
-				Subject: m.Subject, From: mailAddress(m.From), To: mailAddresses(m.To), Date: m.Date, Snippet: m.Snippet, Seen: m.Seen})
-		}
-		out.Accounts = append(out.Accounts, acc)
 	}
 	return out
+}
+
+// readMailAccount is one account's latest inbox page; nil when it can't be read.
+func (h *Hub) readMailAccount(ctx context.Context, a mail.MailAccount) *assistantwire.InboxMailAccount {
+	res, err := h.mail.ListMessages(ctx, mail.ListOptions{AccountID: a.ID, Limit: 40})
+	if err != nil {
+		h.logf("inbox: mail %s: %v", a.Email, err)
+		return nil
+	}
+	acc := &assistantwire.InboxMailAccount{ID: a.ID, Email: a.Email, Messages: []assistantwire.InboxMailSummary{}}
+	for _, m := range res.Messages {
+		acc.Messages = append(acc.Messages, assistantwire.InboxMailSummary{Mailbox: m.Mailbox, UID: m.UID, MessageID: m.MessageID,
+			Subject: m.Subject, From: mailAddress(m.From), To: mailAddresses(m.To), Date: m.Date, Snippet: m.Snippet, Seen: m.Seen})
+	}
+	return acc
 }
 
 func mailAddress(a mail.Address) assistantwire.MailAddress {
