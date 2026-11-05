@@ -125,7 +125,7 @@ func Main(prog Program) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if len(os.Args) > 1 && os.Args[1] == "manifest" && len(prog.Manifest) > 0 {
-		_, _ = os.Stdout.Write(append(prog.Manifest, '\n'))
+		_, _ = os.Stdout.Write(append(answeredManifest(prog.Manifest), '\n'))
 		return
 	}
 	errs := make(chan error, 2)
@@ -190,7 +190,7 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		if len(s.prog.Manifest) == 0 {
 			return nil, &Error{Code: wire.ErrorCodeUnknownMethod, Message: "no manifest here: it is in the package"}
 		}
-		return s.prog.Manifest, nil
+		return answeredManifest(s.prog.Manifest), nil
 	}
 	s.mu.Lock()
 	ok := s.initialized
@@ -282,4 +282,19 @@ func Contribution(params json.RawMessage) string {
 	}
 	_ = json.Unmarshal(params, &t)
 	return t.Contribution
+}
+
+// answeredManifest is the manifest as the program answers it to a hub: without "tags", the market's (nwverse/persona
+// #2424), which hubs from before them refuse as an unknown field. A manifest that is not an object goes out as it is.
+func answeredManifest(m json.RawMessage) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(m, &fields) != nil || fields["tags"] == nil {
+		return m
+	}
+	delete(fields, "tags")
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return m
+	}
+	return out
 }

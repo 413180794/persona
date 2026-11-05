@@ -19,6 +19,10 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
     var description: String?
     var publisher: String?
     var homepage: String?
+    /// What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes
+    /// carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them
+    /// instead.
+    var tags: [String]?
     var engines: ExtensionEngines?
     var runtime: ExtensionRuntime?
     var node: ExtensionNodeRuntime?
@@ -35,7 +39,7 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
     var secrets: [ExtensionSecretSpec]?
     var permissions: ExtensionPermissions?
 
-    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, node: ExtensionNodeRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil) {
+    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, tags: [String]? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, node: ExtensionNodeRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil) {
         self.manifestVersion = manifestVersion
         self.id = id
         self.name = name
@@ -43,6 +47,7 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         self.description = description
         self.publisher = publisher
         self.homepage = homepage
+        self.tags = tags
         self.engines = engines
         self.runtime = runtime
         self.node = node
@@ -64,6 +69,7 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         case description
         case publisher
         case homepage
+        case tags
         case engines
         case runtime
         case node
@@ -86,6 +92,7 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         self.description = try? c.decodeIfPresent(String.self, forKey: .description)
         self.publisher = try? c.decodeIfPresent(String.self, forKey: .publisher)
         self.homepage = try? c.decodeIfPresent(String.self, forKey: .homepage)
+        self.tags = try? c.decodeIfPresent([String].self, forKey: .tags)
         self.engines = try? c.decodeIfPresent(ExtensionEngines.self, forKey: .engines)
         self.runtime = try? c.decodeIfPresent(ExtensionRuntime.self, forKey: .runtime)
         self.node = try? c.decodeIfPresent(ExtensionNodeRuntime.self, forKey: .node)

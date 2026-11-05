@@ -37,6 +37,12 @@ data class ExtensionManifest(
     val description: String? = null,
     val publisher: String? = null,
     val homepage: String? = null,
+    /**
+     * What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes
+     * carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them
+     * instead.
+     */
+    val tags: List<String>? = null,
     val engines: ExtensionEngines? = null,
     val runtime: ExtensionRuntime? = null,
     val node: ExtensionNodeRuntime? = null,

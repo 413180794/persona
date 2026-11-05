@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -34,7 +35,7 @@ func gunzip(t *testing.T, b []byte) string {
 
 func serveGzip(h http.Handler, r *http.Request) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
-	gzipResponses(h).ServeHTTP(w, r)
+	gzipResponses(log.Printf, h).ServeHTTP(w, r)
 	return w
 }
 
@@ -162,7 +163,7 @@ func TestGzipPassesAnUpgradeThrough(t *testing.T) {
 // What a handler flushes reaches the client at once, compressed: a stream is not held for the rest.
 func TestGzipStreamsWhatIsFlushed(t *testing.T) {
 	more := make(chan struct{})
-	srv := httptest.NewServer(gzipResponses(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(gzipResponses(log.Printf, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, "{\"n\":1}\n")
 		_ = http.NewResponseController(w).Flush()
@@ -253,4 +254,64 @@ func (l lockedWriter) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.w.Write(p)
+}
+
+// A handler that declares a Content-Length and breaks off before it (a download whose later chunk failed, #2367)
+// must not reach the client as a complete gzipped body: the connection is aborted and the client sees an error.
+// One that writes all it declared still goes out compressed and whole.
+func TestGzipAbortsABodyShorterThanItsContentLength(t *testing.T) {
+	body := strings.Repeat("a log line that is still growing\n", 64)[:2048]
+	for _, tc := range []struct {
+		name    string
+		write   int
+		aborted bool
+	}{
+		{"short", 1500, true},
+		{"full", 2048, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var logs []string
+			logf := func(format string, args ...any) {
+				mu.Lock()
+				defer mu.Unlock()
+				logs = append(logs, fmt.Sprintf(format, args...))
+			}
+			srv := httptest.NewServer(gzipResponses(logf, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.Header().Set("Content-Length", "2048")
+				// The first part reaches the client before the rest fails, as with a download's first chunk.
+				_, _ = io.WriteString(w, body[:1100])
+				_ = http.NewResponseController(w).Flush()
+				_, _ = io.WriteString(w, body[1100:tc.write])
+			})))
+			defer srv.Close()
+			resp, err := srv.Client().Get(srv.URL + "/api/v1/machines/m/files/download")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if !resp.Uncompressed {
+				t.Fatal("the response did not come gzipped")
+			}
+			got, err := io.ReadAll(resp.Body)
+			mu.Lock()
+			defer mu.Unlock()
+			if tc.aborted {
+				if err == nil {
+					t.Fatalf("a %d-byte body declared as 2048 was read without an error", len(got))
+				}
+				if len(logs) != 1 || !strings.Contains(logs[0], "1500 of 2048") {
+					t.Fatalf("logs %q", logs)
+				}
+				return
+			}
+			if err != nil || string(got) != body {
+				t.Fatalf("%d bytes, %v", len(got), err)
+			}
+			if len(logs) != 0 {
+				t.Fatalf("logs %q", logs)
+			}
+		})
+	}
 }

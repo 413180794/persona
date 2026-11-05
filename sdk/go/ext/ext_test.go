@@ -170,3 +170,13 @@ func TestShortcuts(t *testing.T) {
 		t.Fatalf("another method: %+v", f.Error)
 	}
 }
+
+// manifest answers the manifest without its tags: hubs from before them refuse the field.
+func TestManifestWithoutTags(t *testing.T) {
+	c := start(t, Program{ID: "example", Version: "1.0.0", Manifest: json.RawMessage(`{"id": "example", "tags": ["示例"], "version": "1.0.0"}`)})
+	f := c.call("manifest", nil)
+	var got map[string]any
+	if err := json.Unmarshal(f.Result, &got); err != nil || got["tags"] != nil || got["id"] != "example" || got["version"] != "1.0.0" {
+		t.Fatalf("manifest: %s %v", f.Result, err)
+	}
+}

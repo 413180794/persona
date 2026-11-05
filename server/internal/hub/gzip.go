@@ -24,15 +24,26 @@ const gzipMinSize = 1024
 var gzipWriters = sync.Pool{New: func() any { return gzip.NewWriter(io.Discard) }}
 
 // gzipResponses is the outermost layer of routes(), outside logRequests: the handlers still get its statusWriter.
-func gzipResponses(next http.Handler) http.Handler {
+//
+// A handler that declared a Content-Length and then wrote a different number of bytes broke off mid-response (a
+// file download whose later chunk failed, #2367). Uncompressed, net/http would drop the connection over the short
+// body and the client would notice; compressed, the length is gone and a proper gzip end would make the truncated
+// body look complete. So the gzip end is not written and the connection is aborted instead.
+func gzipResponses(logf func(format string, args ...any), next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !gzipWanted(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		gw := &gzipWriter{ResponseWriter: w}
+		gw := &gzipWriter{ResponseWriter: w, declared: -1}
 		next.ServeHTTP(gw, r)
-		gw.close() // not deferred: after a panic, net/http drops the response and nothing more should be written
+		// close is not deferred: after a panic, net/http drops the response and nothing more should be written.
+		if !gw.close() {
+			// The request log has already counted this as a success; say that the client got a broken response.
+			logf("[%s] %s %s: aborted a gzipped response after %d of %d declared bytes",
+				w.Header().Get("X-Request-Id"), r.Method, r.URL.Path, gw.written, gw.declared)
+			panic(http.ErrAbortHandler)
+		}
 	})
 }
 
@@ -98,6 +109,10 @@ type gzipWriter struct {
 	buf     []byte // the first bytes, held until the decision
 	decided bool
 	gz      *gzip.Writer // nil: not compressing
+	// declared is the Content-Length the handler set before compressing began (-1: none); written counts the
+	// uncompressed bytes the handler wrote, to tell a complete body from a cut one once that header is gone.
+	declared int64
+	written  int64
 }
 
 func (g *gzipWriter) WriteHeader(code int) {
@@ -113,10 +128,13 @@ func (g *gzipWriter) WriteHeader(code int) {
 func (g *gzipWriter) Write(p []byte) (int, error) {
 	if g.decided {
 		if g.gz != nil {
-			return g.gz.Write(p)
+			n, err := g.gz.Write(p)
+			g.written += int64(n)
+			return n, err
 		}
 		return g.ResponseWriter.Write(p)
 	}
+	g.written += int64(len(p))
 	if g.status == 0 {
 		g.status = http.StatusOK
 	}
@@ -177,6 +195,9 @@ func (g *gzipWriter) start(compress bool) error {
 		if h.Get("Content-Type") == "" { // net/http would sniff the compressed bytes
 			h.Set("Content-Type", http.DetectContentType(g.buf))
 		}
+		if n, err := strconv.ParseInt(h.Get("Content-Length"), 10, 64); err == nil && n >= 0 {
+			g.declared = n
+		}
 		h.Del("Content-Length")
 		h.Set("Content-Encoding", "gzip")
 		h.Add("Vary", "Accept-Encoding")
@@ -202,14 +223,20 @@ func (g *gzipWriter) start(compress bool) error {
 }
 
 // close ends the response: what is still held goes out as it is (it is under gzipMinSize), and gzip writes its end.
-func (g *gzipWriter) close() {
+// It reports false, without writing that end, when a compressed body does not match the length the handler declared.
+func (g *gzipWriter) close() bool {
 	if !g.decided && (g.status != 0 || len(g.buf) > 0) {
 		_ = g.start(false)
 	}
-	if g.gz != nil {
-		_ = g.gz.Close()
-		g.gz.Reset(io.Discard)
-		gzipWriters.Put(g.gz)
-		g.gz = nil
+	if g.gz == nil {
+		return true
 	}
+	complete := g.declared < 0 || g.written == g.declared
+	if complete {
+		_ = g.gz.Close()
+	}
+	g.gz.Reset(io.Discard)
+	gzipWriters.Put(g.gz)
+	g.gz = nil
+	return complete
 }

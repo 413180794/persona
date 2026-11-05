@@ -35,13 +35,16 @@ func ValidID(id string) bool { return idPattern.MatchString(id) }
 
 // Manifest is persona-plugin.json (docs/plan-extensions.md「三」).
 type Manifest struct {
-	ManifestVersion  int                        `json:"manifest_version"`
-	ID               string                     `json:"id"`
-	Name             string                     `json:"name"`
-	Version          string                     `json:"version"`
-	Description      string                     `json:"description,omitempty"`
-	Publisher        string                     `json:"publisher,omitempty"`
-	Homepage         string                     `json:"homepage,omitempty"`
+	ManifestVersion int    `json:"manifest_version"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Version         string `json:"version"`
+	Description     string `json:"description,omitempty"`
+	Publisher       string `json:"publisher,omitempty"`
+	Homepage        string `json:"homepage,omitempty"`
+	// Tags are what the market shows and searches (docs/extensions.md「扩展市场」). Packages and indexes carry the
+	// manifest without them (PackagedManifest): hubs before tags read manifests strictly and would refuse it.
+	Tags             []string                   `json:"tags,omitempty"`
 	Engines          Engines                    `json:"engines,omitzero"`
 	Runtime          *Runtime                   `json:"runtime,omitempty"`
 	Node             *NodeRuntime               `json:"node,omitempty"`
@@ -295,6 +298,38 @@ func strict(data []byte, v any) error {
 	return nil
 }
 
+// checkTags holds tags to what a market entry may have: at most marketTagMost, each 1 to 24 characters.
+func checkTags(tags []string) error {
+	if len(tags) > marketTagMost {
+		return fmt.Errorf("more than %d", marketTagMost)
+	}
+	for _, t := range tags {
+		if t == "" || utf8.RuneCountInString(t) > 24 {
+			return errors.New("a tag is empty or longer than 24 characters")
+		}
+	}
+	return nil
+}
+
+// PackagedManifest is the manifest as a package and a market index carry it: data without tags, which the market
+// entry carries instead. A hub from before tags reads manifests strictly (no unknown fields) and would refuse one
+// with them; the same bytes go in as persona-extension.json and as LegacyManifestFile.
+func PackagedManifest(data []byte) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if err := strict(data, &fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", ManifestFile, err)
+	}
+	if _, ok := fields["tags"]; !ok {
+		return data, nil
+	}
+	delete(fields, "tags")
+	out, err := json.MarshalIndent(fields, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
+}
+
 // Validate checks everything a manifest can be checked for on its own (docs/plan-extensions.md「字段」). What depends on
 // the hub (the platform's command, engines, ids other plugins use) is the registry's.
 func (m *Manifest) Validate() error {
@@ -316,6 +351,9 @@ func (m *Manifest) Validate() error {
 		if u, err := url.Parse(m.Homepage); err != nil || u.Scheme != "https" || u.Host == "" {
 			bad("homepage: an https URL")
 		}
+	}
+	if err := checkTags(m.Tags); err != nil {
+		bad("tags: %v", err)
 	}
 	if m.Engines.Persona != "" {
 		if _, err := ParseRange(m.Engines.Persona); err != nil {

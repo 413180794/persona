@@ -36,7 +36,7 @@ Persona 的扩展底座（#1101）：开源仓库只放通用能力和**扩展�
 
 | 旧 | 新 | 兼容 |
 | --- | --- | --- |
-| 清单 `persona-plugin.json` | `persona-extension.json` | 包里只有老名字时读老的；两个都有以新的为准 |
+| 清单 `persona-plugin.json` | `persona-extension.json` | 包里只有老名字时读老的；两个都有以新的为准。源码里只放 `persona-extension.json`（#2424）：`personad extension pack` 和扩展仓库的打包脚本把同一份清单（去掉 `tags`，见「清单」）在包里写成两个名字，老 hub 照样装得上 |
 | `engines.plugin_protocol` | `engines.extension_protocol` | 都认（两个都写时必须一样）。hub 存下、发给 App 的清单仍写 `plugin_protocol`：回滚到老 hub 时它还读得懂 |
 | 接口 `/api/v1/plugins/…` | `/api/v1/extensions/…` | 老路径在 hub 里改写成新路径处理，回答用老字段名（`plugins`、`plugin`、`plugin_name`，市场的个数 `plugins`）；新路径用 `extensions`、`extension`、`extension_name` |
 | `/api/v1/admin/plugins…`（含上传 `…/upload`） | `/api/v1/admin/extensions…` | 同上 |
@@ -58,6 +58,8 @@ Persona 的扩展底座（#1101）：开源仓库只放通用能力和**扩展�
 **保留多久**：兼容层至少留到 **2027-05-05**（半年，覆盖已发布 TestFlight 构建的 90 天有效期和安卓的老版本），并且 hub 日志里老接口**连续 30 天没有调用**。
 hub 给老路径的每次调用按路由计数（`extension_compat.go` 的 `legacyCalls`；每天第一次调用时把前一天的计数记一行日志 `extensions: old plugin API calls since …`，阶段 7 接到管理界面），
 据此判断能不能删；删的时候另开 issue，按上表逐项去掉，并把存下的清单改写成 `extension_protocol`。
+包里生成的 `persona-plugin.json` 也按这个期限：过了 2027-05-05、并且没人再用改名前的 hub 以后，`personad extension pack` 和两个扩展仓库的打包脚本 package.sh 不再生成它。
+包和索引里去掉 `tags` 要留得更久，到市场不再给加 `tags` 以前的 hub 用为止（同样另开 issue）。
 
 ## 扩展点
 
@@ -98,6 +100,7 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
   "description": "把 Example Notes 的笔记同步进知识库，并给助手一个搜索工具。",
   "publisher": "example",
   "homepage": "https://example.com/persona-extension",
+  "tags": ["笔记", "知识库"],
   "engines": {"persona": ">=202611050000", "extension_protocol": 1},
   "runtime": {
     "command": {"linux-amd64": "bin/example-notes-linux-amd64", "darwin-arm64": "bin/example-notes-darwin-arm64"},
@@ -132,6 +135,7 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `name` | 是 | 1–40 个字符 |
 | `version` | 是 | `MAJOR.MINOR.PATCH`（可带 `-pre`，不能带 `+build`）；升级只能往上 |
 | `description`、`publisher`、`homepage` | 否 | `homepage` 只能是 https |
+| `tags` | 否 | 市场里显示、搜索的标签（#2424，原来放在扩展仓库的 `market.json`）：最多 16 个，每个 1–24 个字符。只写在源码的清单里：包和市场索引里的清单都去掉它（两个 SDK 回答 `manifest` 时也去掉，程序里嵌的是源码的清单），标签放在索引条目的 `tags`（见「扩展市场」），因为加这个字段以前的 hub 严格读清单，见到 `tags` 会拒装 |
 | `engines.persona` | 否 | hub 构建号的范围，只有 `>=N`、`<N` 及其组合；不满足装不上，已装的标成 `incompatible`。开发构建（构建号 0）不检查，给一条警告 |
 | `engines.extension_protocol` | 有 `runtime` 或 `node` 时是 | `1` |
 | `runtime` | 否 | 没有就是纯声明扩展。`command`：包里的相对路径，或 `{"<GOOS>-<GOARCH>": 路径}`，没有这台 hub 的平台就装不上；不能是绝对路径、不能跳出包（`..`、指向包外的链接都查），必须可执行；`personad` 只有内置扩展能用。`args`；`env`（不能是 `PERSONA_` / `JARVIS_` 开头，密钥不放这里）；`rpc`：`stdio`（默认）/ `none`；`http`：在 `PERSONA_EXTENSION_SOCKET` 上起 HTTP。`rpc: none` 又没有 `http` 装不上 |
@@ -498,6 +502,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 ```
 
 - `manifest` 是扩展的整份 `persona-extension.json`：没下载就能看它的权限、贡献。下载的包里的清单必须和它一致（id、版本、权限摘要），否则不装。
+- `tags` 是市场里显示的标签。扩展仓库从清单的 `tags` 生成，写索引时把它从 `manifest` 里拿出来（老 hub 认不出清单里的 `tags`，整个条目就丢了）；条目没有 `tags` 时 hub 用 `manifest` 里的。
 - `packages` 按顺序找第一个 `platforms` 含这台 hub（`GOOS-GOARCH`）的，没写 `platforms` 的算哪都能用。`url` 是相对索引的路径（GitHub、git 市场是仓库里的路径，git 市场不能经链接跳出仓库）、
   https 地址，或 GitHub 市场的 `release:<tag>/<附件名>`（经 API 下载 Release 附件，私有仓库也行）。`sha256` 必填，下载后校验，不对就不装。
 - 坏掉的条目（清单不合法、没有包、地址不是 https、同一个 id 两次）丢掉并给一条警告，其余照常；`market_version` 不是 1、没有 `name` 的整份不认。
@@ -1581,7 +1586,7 @@ View 发给老 App 时，带 `push` 的动作换成 SDK 自己的 id（`ext.push
 | --- | --- |
 | `new <id> [--template go\|ts] [--name <名字>] [--dir <目录>]` | 从模板写一个扩展（模板和 SDK 编在 personad 里：`sdk/go` 的 `sdk.Go`、`sdk.Bundle`），SDK 拷一份到 `<目录>/sdk/go` 或 `sdk/ts`，Go 的 `go.mod` 用 `replace` 指向它；目录里已经有东西就不写。不需要 hub |
 | `test [<目录>]` | 给这台机器构建，按装的时候那样查清单和包（程序在不在、配置的 schema、收件箱的分拣规则），再起程序跑 hub 的一致性检查（`extension/conformance`，和 hub 收 View 时同一套）。不需要 hub |
-| `pack [<目录>] [--platforms …] [--out dist] [--split]` | 清单里每个平台都构建（Go：`CGO_ENABLED=0 go build -buildvcs=false -trimpath`；TS：`bun build --compile`），打一个 `<id>-<版本>.tar.gz`（`--split` 每个平台一个），里面只有清单、各平台的程序、`skills/`、`assistant/`、`assets/`、README、LICENSE，没有源码和 SDK；打印 sha256 和可以贴进市场索引的 `packages` |
+| `pack [<目录>] [--platforms …] [--out dist] [--split]` | 清单里每个平台都构建（Go：`CGO_ENABLED=0 go build -buildvcs=false -trimpath`；TS：`bun build --compile`），打一个 `<id>-<版本>.tar.gz`（`--split` 每个平台一个），里面只有清单（去掉 `tags`，同一份写成 `persona-extension.json` 和给改名前 hub 的 `persona-plugin.json`）、各平台的程序、`skills/`、`assistant/`、`assets/`、README、LICENSE，没有源码和 SDK；打印 sha256 和可以贴进市场索引的 `packages` |
 | `dev [<目录>]` | 构建后挂到这台机器的 hub 上（下面），每秒看一次文件，改了就重建、让 hub 重启它（清单变了就重新挂）；扩展的 stderr、hub 对它的每次调用（方法、耗时、错误）打到终端；Ctrl-C 拿掉 |
 
 **dev**：只在 hub 机器上、主 token 经回环（和安装一样）。hub 把它当来源 `dev` 的扩展：直接从那个目录跑（不拷贝、不进数据库，hub 重启就没了），开着，

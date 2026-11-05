@@ -226,6 +226,10 @@ func (e *MarketEntry) check() (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	// An entry without tags of its own shows the manifest's (an index written from the source manifest as it is).
+	if len(e.Tags) == 0 {
+		e.Tags = m.Tags
+	}
 	if len(e.Tags) > marketTagMost {
 		return nil, errors.New("tags 太多")
 	}

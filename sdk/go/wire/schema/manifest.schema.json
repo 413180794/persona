@@ -23,6 +23,10 @@
         "description": {"type": "string"},
         "publisher": {"type": "string"},
         "homepage": {"type": "string", "pattern": "^https://[^/?#]+"},
+        "tags": {
+          "description": "What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.",
+          "type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 24}
+        },
         "engines": {"$ref": "#/$defs/Engines"},
         "runtime": {"$ref": "#/$defs/Runtime"},
         "node": {"$ref": "#/$defs/NodeRuntime"},

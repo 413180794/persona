@@ -12,6 +12,11 @@ export interface Manifest {
   description?: string;
   publisher?: string;
   homepage?: string;
+  /**
+   * What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes carry
+   * the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.
+   */
+  tags?: string[];
   engines?: Engines;
   runtime?: Runtime;
   node?: NodeRuntime;

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -828,5 +829,33 @@ func TestExplainAndAddedNodeProgram(t *testing.T) {
 	}
 	if got := keys(Added(n, base)); got != "" {
 		t.Fatal("no program on computers any more adds nothing", got)
+	}
+}
+
+// Tags are the market's: held to a market entry's rules, and left out of the manifest a package or an index carries.
+func TestManifestTags(t *testing.T) {
+	tagged := strings.Replace(exampleManifest, `"manifest_version": 1,`, `"manifest_version": 1, "tags": ["notes", "示例"],`, 1)
+	m, err := Parse([]byte(tagged))
+	if err != nil || !slices.Equal(m.Tags, []string{"notes", "示例"}) {
+		t.Fatalf("tags: %v %v", m, err)
+	}
+	for _, bad := range []string{`[""]`, `["` + strings.Repeat("x", 25) + `"]`, `["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q"]`} {
+		if _, err := Parse([]byte(strings.Replace(exampleManifest, `"manifest_version": 1,`, `"manifest_version": 1, "tags": `+bad+`,`, 1))); err == nil {
+			t.Errorf("tags %s: no error", bad)
+		}
+	}
+	packed, err := PackagedManifest([]byte(tagged))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := strict(packed, &fields); err != nil || fields["tags"] != nil || fields["id"] == nil {
+		t.Fatalf("packaged: %s %v", packed, err)
+	}
+	if p, err := Parse(packed); err != nil || p.ID != m.ID || p.Tags != nil {
+		t.Fatalf("packaged reads back as %+v %v", p, err)
+	}
+	if same, _ := PackagedManifest([]byte(exampleManifest)); string(same) != exampleManifest {
+		t.Fatal("a manifest without tags is changed")
 	}
 }

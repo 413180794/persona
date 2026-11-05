@@ -458,8 +458,18 @@ func packExtension(ctx context.Context, dir string, opts map[string]string, stdo
 // tarball packs the manifest, the programs of these platforms and the package's own files (skills, assistant,
 // assets, README, LICENSE) under one top directory; source code and the SDK copy stay out.
 func (p *devProject) tarball(platforms []string) ([]byte, error) {
+	// The manifest goes in under both names, without its tags (extension.PackagedManifest): hubs from before the
+	// rename (#1844) read only persona-plugin.json, and hubs from before tags refuse a manifest with them.
+	raw, err := os.ReadFile(extension.ManifestPath(p.dir))
+	if err != nil {
+		return nil, err
+	}
+	manifest, err := extension.PackagedManifest(raw)
+	if err != nil {
+		return nil, err
+	}
 	var paths []string
-	for _, name := range []string{extension.ManifestFile, extension.LegacyManifestFile, "README.md", "LICENSE"} {
+	for _, name := range []string{"README.md", "LICENSE"} {
 		if exists(filepath.Join(p.dir, name)) {
 			paths = append(paths, name)
 		}
@@ -486,6 +496,14 @@ func (p *devProject) tarball(platforms []string) ([]byte, error) {
 	zw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(zw)
 	top := p.manifest.ID + "-" + p.manifest.Version + "/"
+	for _, name := range []string{extension.ManifestFile, extension.LegacyManifestFile} {
+		if err := tw.WriteHeader(&tar.Header{Name: top + name, Mode: 0o644, Size: int64(len(manifest)), ModTime: time.Unix(0, 0), Typeflag: tar.TypeReg}); err != nil {
+			return nil, err
+		}
+		if _, err := tw.Write(manifest); err != nil {
+			return nil, err
+		}
+	}
 	for _, rel := range paths {
 		full := filepath.Join(p.dir, rel)
 		st, err := os.Stat(full)

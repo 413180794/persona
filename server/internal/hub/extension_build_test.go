@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
@@ -66,7 +67,7 @@ func TestNewTestPackTemplates(t *testing.T) {
 			}
 			names := tarNames(t, filepath.Join(dir, "dist", "demo-"+template+"-0.1.0.tar.gz"))
 			want := []string{"demo-" + template + "-0.1.0/README.md", "demo-" + template + "-0.1.0/bin/demo-" + template + "-" + here,
-				"demo-" + template + "-0.1.0/persona-extension.json"}
+				"demo-" + template + "-0.1.0/persona-extension.json", "demo-" + template + "-0.1.0/persona-plugin.json"}
 			if !slices.Equal(names, want) {
 				t.Fatalf("the package holds %v, want %v (no source, no SDK)", names, want)
 			}
@@ -75,6 +76,60 @@ func TestNewTestPackTemplates(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The package carries the manifest under both names and without its tags: hubs from before the rename read only
+// persona-plugin.json, and hubs from before tags refuse a manifest with a field they don't know.
+func TestPackWritesTheManifestForOlderHubs(t *testing.T) {
+	dir := t.TempDir()
+	src := `{"manifest_version": 1, "id": "tagged", "name": "Tagged", "version": "1.0.0", "tags": ["示例", "开发"],
+ "contributes": {"prompts": [{"id": "hi", "kind": "quick", "title": "Hi", "text": "Say hi."}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "persona-extension.json"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errs bytes.Buffer
+	if err := packExtension(context.Background(), dir, nil, &out, &errs); err != nil {
+		t.Fatalf("pack: %v\n%s", err, errs.String())
+	}
+	files := tarFiles(t, filepath.Join(dir, "dist", "tagged-1.0.0.tar.gz"))
+	extensionJSON, pluginJSON := files["tagged-1.0.0/persona-extension.json"], files["tagged-1.0.0/persona-plugin.json"]
+	if extensionJSON == "" || extensionJSON != pluginJSON {
+		t.Fatalf("the two manifests: %q and %q", extensionJSON, pluginJSON)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal([]byte(extensionJSON), &fields); err != nil || fields["tags"] != nil || fields["id"] != "tagged" {
+		t.Fatalf("packaged manifest %v: %v", fields, err)
+	}
+	if src, _ := os.ReadFile(filepath.Join(dir, "persona-extension.json")); !strings.Contains(string(src), `"tags"`) {
+		t.Fatal("pack changed the source manifest")
+	}
+}
+
+func tarFiles(t *testing.T, path string) map[string]string {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	zr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{}
+	tr := tar.NewReader(zr)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(tr)
+		files[h.Name] = string(b)
+	}
+	return files
 }
 
 func tarNames(t *testing.T, path string) []string {

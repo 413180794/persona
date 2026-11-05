@@ -2,6 +2,7 @@ package extension
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -74,5 +75,26 @@ func TestParseIndex(t *testing.T) {
 	}
 	if FromMarket(MarketOrigin("abc", "example-notes")) != "abc" || FromMarket("dir:/tmp/x") != "" {
 		t.Fatal("origin")
+	}
+}
+
+// An entry without tags of its own shows its manifest's; its own win.
+func TestIndexTagsFromTheManifest(t *testing.T) {
+	var m map[string]any
+	_ = json.Unmarshal([]byte(exampleManifest), &m)
+	m["tags"] = []string{"笔记", "示例"}
+	pkg := []any{map[string]any{"url": "notes.tar.gz", "sha256": strings.Repeat("a", 64)}}
+	for _, c := range []struct {
+		entry map[string]any
+		want  []string
+	}{
+		{map[string]any{"manifest": m, "packages": pkg}, []string{"笔记", "示例"}},
+		{map[string]any{"manifest": m, "tags": []string{"自己的"}, "packages": pkg}, []string{"自己的"}},
+	} {
+		b, _ := json.Marshal(map[string]any{"market_version": 1, "name": "Example", "extensions": []any{c.entry}})
+		ix, warnings, err := ParseIndex(b)
+		if err != nil || len(warnings) != 0 || len(ix.Extensions) != 1 || !slices.Equal(ix.Extensions[0].Tags, c.want) {
+			t.Fatalf("%v %v %+v", err, warnings, ix)
+		}
 	}
 }

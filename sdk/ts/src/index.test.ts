@@ -58,6 +58,11 @@ test("the protocol", async () => {
   expect((await call("manifest")).error.code).toBe("unknown_method");
 });
 
+test("manifest goes out without tags", async () => {
+  const { call } = harness({ ...prog(), manifest: { id: "example", version: "1.0.0", tags: ["示例"] } });
+  expect((await call("manifest")).result).toEqual({ id: "example", version: "1.0.0" });
+});
+
 test("calls to the hub", async () => {
   const { conn, sent } = harness(prog());
   const p = conn.hub.call<{ value: string }>("connector.secrets.load", { key: "a" });

@@ -185,7 +185,7 @@ export function connect(prog: Program, write: Write) {
     }
     if (method === "manifest") {
       if (prog.manifest === undefined) throw new ExtError("no manifest here: it is in the package", "unknown_method");
-      return prog.manifest;
+      return answeredManifest(prog.manifest);
     }
     // A call sent right behind initialize (without waiting for its answer) waits for it.
     if (!initialized && initializing) await initializing.catch(() => {});
@@ -321,11 +321,19 @@ export function env() {
   };
 }
 
+/** The manifest as the program answers it to a hub: without `tags`, the market's (nwverse/persona#2424), which hubs
+ * from before them refuse as an unknown field. */
+function answeredManifest(m: unknown): unknown {
+  if (m === null || typeof m !== "object" || Array.isArray(m) || !("tags" in m)) return m;
+  const { tags: _tags, ...rest } = m as Record<string, unknown>;
+  return rest;
+}
+
 /** Runs prog as the hub starts it: the protocol on stdin / stdout, HTTP on the hub's socket when it has fetch.
  * Exits when the hub closes stdin or stops the program. */
 export async function main(prog: Program) {
   if (process.argv[2] === "manifest" && prog.manifest !== undefined) {
-    process.stdout.write(JSON.stringify(prog.manifest) + "\n");
+    process.stdout.write(JSON.stringify(answeredManifest(prog.manifest)) + "\n");
     return;
   }
   let server: { stop(): void } | undefined;
