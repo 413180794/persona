@@ -371,6 +371,9 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 - 别的车道收尾时会 `pkill -f mock_hub.py`：长时间跑的 mock 复制一份改个名再起（`/tmp/<车道>_fakehub.py`），套个 while 循环被杀了自己起来。
 - 测试中途失败时 XCTest 会结束 App，App 的请求被取消：hub 日志里那次 `POST /api/v1/sessions` 记 502，其实 node 已经把会话起好了（node 不随 hub 的请求取消）。
   看到孤立的 502 先查是不是测试自己杀了 App。
+- 「这台电脑能做什么」（`MachineHealthTests`，#3018）：`MOCK_DOCTOR=stale PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
+  `TEST_RUNNER_JARVIS_DOCTOR_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/MachineHealthTests`：MacBook 的机器页「2 项功能需要处理」→「修复」→ 确认 → 「一切正常」→ 展开全部检查；
+  `TEST_RUNNER_JARVIS_SHOTS=<目录>`、`TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` 存三张图。mock 记着修过的机器，重跑前重启 mock。
 
 ### Agents 列表（`AgentsListTests`）
 

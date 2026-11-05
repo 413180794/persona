@@ -102,7 +102,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   DEBUG：`-tab dev -openMachinePage <机器 id>`。
 - 机器（`docs/machines.md`「App」）：一个页面看全部机器，每台一张卡：在线、系统、Agent 数（需要你 / 工作中 / 空闲）、CPU / 内存 / 网络当前值和
   最近 1 小时迷你曲线、告警、版本不一致时的「重新部署」，需要注意的排前面。点卡片进机器详情：上面是这台的 Agent（点进对话），下面是曲线
-  （1 / 6 / 24 小时，按住看某一时刻）、系统信息、启动器。入口：抽屉「机器」、设置 › 机器、Agents 左上角菜单「机器」（原来的「机器监控」并进来了）。
+  （1 / 6 / 24 小时，按住看某一时刻）、系统信息、启动器。引擎下面是「这台电脑能做什么」（#3018，node 自检按功能读出来，可展开全部检查，生成文件过期时「修复」先确认一次；`docs/machines.md`「自检」）。入口：抽屉「机器」、设置 › 机器、Agents 左上角菜单「机器」（原来的「机器监控」并进来了）。
   卡片下面是「订阅额度」（#2889，`docs/usage-windows.md`「界面（iOS / Mac）」）：Codex / Claude / 账号池网关的账号，每个窗口一行，hub 没有数据时不画。
   DEBUG：`-tab dev -openMonitor all|<机器 id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`。
 - 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。

@@ -219,6 +219,7 @@ hub 收到样本：最新一个留在内存（Dashboard 的「现在」，超过
 ## 自检：这台电脑能做什么（#2429）
 
 网页版机器页有一张「这台电脑能做什么」（照 Moshi 的 Doctor 页），把 `personad node doctor` 的结果（`docs/claude-integration.md`「自检」）按功能读给人看，而不是丢一串检查名。
+iOS / Mac 的机器详情（#3018，`apple/Persona/Views/Machines/NodeHealthSection.swift`，归并逻辑 `NodeHealthModel.swift` 的 `NodeHealth`）放在引擎后面，归并表、状态、文案和网页一致，改一边要同步改另一边。
 
 - **取数**：hub 路由 `GET /api/v1/machines/{mid}/doctor`（只读）和 `POST …/doctor/fix`（重写 Persona 自己生成的文件，写完再检查一次，返回新的报告），都**只有 `full` 设备**（报告里有路径和用户自己的钩子命令，fix 会写电脑上的文件）；node RPC 是 `node.doctor`（只读，`{"fix":true}` 才写）和 `node.doctor.fix`（`node/doctor_rpc.go`），检查在 node 进程里跑，用的就是命令行的 `RunDoctor`，JSON 模型是同一个 `DoctorReport`。hub 的 GET 从不把 `fix` 传给 node。
 - **按功能归并**（`web/src/lib/node-health.ts` 的 `FEATURES`）：手机审批卡片（`node.sock`、claude / assistant 的 settings 和 hooks、`command-paths`）、状态与通知（`node.sock`、`command-paths`）、终端与引擎（`herdr`）、MCP 工具（`node.sock`、`mcp.json`、`command-paths`）、技能（`agent-plugin`、`claude-version`）、运行时接入（`runtime.sock`）。
@@ -231,7 +232,7 @@ hub 收到样本：最新一个留在内存（Dashboard 的「现在」，超过
 - **连不上时的分类**（`classifyConnection`）：机器卡片和机器页离线时，按 hub 记下的错误文本分「认证没通过 / 连不上这台电脑 / 连接超时 / 版本不一致」，各配一句下一步（ssh 接入和 Persona Link 的措辞不同）；
   文本认不出来就什么都不加，不猜。计划内的重启（部署中）不算。
 - 截图用假 hub：`MOCK_DOCTOR=healthy|stale|broken|mixed|old|error|slow`、`MOCK_DOCTOR_OLD=<机器 id,…>`（`scripts/mock/mock_hub.py`）。
-- 测试：`node/doctor_rpc_test.go`（临时目录；不带 fix 时不写任何文件、fix 只重写生成的文件且不碰用户的 settings.json、检查名和网页的归并表对得上）、`hub/node_doctor_test.go`（权限）、`web/src/lib/node-health.test.ts`（归并、总结、修复、旧 node、连接分类）。
+- 测试：`node/doctor_rpc_test.go`（临时目录；不带 fix 时不写任何文件、fix 只重写生成的文件且不碰用户的 settings.json、检查名和网页的归并表对得上）、`hub/node_doctor_test.go`（权限）、`web/src/lib/node-health.test.ts`（归并、总结、修复、旧 node、连接分类）、`apple/PersonaTests/NodeHealthTests.swift`（同一张归并表、解码、旧 node / 旧 hub、模型的检查和修复）。
 
 ## API
 

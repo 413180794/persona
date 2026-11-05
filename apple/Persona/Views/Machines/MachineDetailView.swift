@@ -57,6 +57,8 @@ struct MachineDetailView: View {
                         if !online { connection(machine) }
                     }
                     agentsSection(machine)
+                    // The node's self-check by feature, after the engine as on the web (#3018).
+                    NodeHealthSection(ref: ref, machine: machine)
                     if let computer = machine.computer { ComputerSection(ref: ref, computer: computer, online: online) }
                     if let browser = machine.browser { BrowserSection(ref: ref, browser: browser, online: online) }
                     if machine.browser?.setUp == true { BrowserLoginsSection(ref: ref, online: online) }
