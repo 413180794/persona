@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -59,10 +60,12 @@ internal class ChatDeliveryActions(private val sender: MessageSender) {
     }
 }
 
+/** Why the computer refused the message, by the hub's code; the hub's own words for a code it does not know. */
+@androidx.compose.runtime.Composable
 internal fun OutboxMessage.refusalReason(): String = when (error) {
-    "input_draft" -> "电脑上有草稿"
-    "dialog_open" -> "请先处理电脑上的对话框"
-    "op_id_reused" -> "这条消息的发送标识已被使用"
-    "invalid" -> "消息内容不符合要求"
-    else -> error?.takeIf(String::isNotBlank) ?: "电脑未接受这条消息"
+    "input_draft" -> stringResource(R.string.chat_delivery_input_draft)
+    "dialog_open" -> stringResource(R.string.chat_delivery_dialog_open)
+    "op_id_reused" -> stringResource(R.string.chat_delivery_op_id_reused)
+    "invalid" -> stringResource(R.string.chat_delivery_invalid)
+    else -> error?.takeIf(String::isNotBlank) ?: stringResource(R.string.chat_delivery_refused)
 }

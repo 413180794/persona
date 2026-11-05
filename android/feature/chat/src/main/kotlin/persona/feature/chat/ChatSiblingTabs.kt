@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import persona.core.contracts.*
@@ -71,14 +73,15 @@ internal fun ChatSiblingTabs(session: Session?, sessions: List<Session>, onOpenS
         LazyRow(Modifier.weight(1f), state = list, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             items(tabs, key = { it.key.path }) { tab ->
                 val on = tab.key == session.key
-                JChip(tabLabel(tab), Modifier.semantics { contentDescription = "${tabLabel(tab)}，${tab.status().label}" },
+                val description = stringResource(R.string.chat_tabs_tab_description, tabLabel(tab), tab.status().label)
+                JChip(tabLabel(tab), Modifier.semantics { contentDescription = description },
                     selected = on, status = tab.status(), onClick = { if (!on) onOpenSession(tab.key) })
             }
         }
-        JIconButton(PhIcons.DotsThree, "同一空间的 ${tabs.size} 个 Agent" + if (waiting) "，有 Agent 需要你" else "",
+        JIconButton(PhIcons.DotsThree, pluralStringResource(if (waiting) R.plurals.chat_tabs_all_waiting else R.plurals.chat_tabs_all, tabs.size, tabs.size),
             { all = true }, badge = waiting)
     }
-    if (all) JSheet(onDismiss = { all = false }, title = "${tabs.size} 个标签页", scrollable = true) {
+    if (all) JSheet(onDismiss = { all = false }, title = pluralStringResource(R.plurals.chat_tabs_sheet_title, tabs.size, tabs.size), scrollable = true) {
         tabs.forEach { tab ->
             val on = tab.key == session.key
             JRow(tabLabel(tab), subtitle = tab.status().label, leading = { JStatusDot(tab.status()) }, selected = on,

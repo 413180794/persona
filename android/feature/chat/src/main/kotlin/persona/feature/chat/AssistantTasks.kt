@@ -39,10 +39,13 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import persona.core.designsystem.LocalizedFormats
+import persona.core.designsystem.currentLocale
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -119,14 +122,15 @@ private fun Todo.place(host: AssistantTaskHost, lead: Session?): String = buildL
     lead?.agentLabel?.let(::add)
 }.joinToString(" · ")
 
+@Composable
 private fun since(iso: String?, now: Instant = Instant.now()): String? {
     val t = AssistantLines.time(iso) ?: return null
     val m = ((now.toEpochMilli() - t.toEpochMilli()) / 60_000).coerceAtLeast(0)
     return when {
-        m < 1 -> "刚开始"
-        m < 60 -> "$m 分钟"
-        m % 60 == 0L -> "${m / 60} 小时"
-        else -> "${m / 60} 小时 ${m % 60} 分"
+        m < 1 -> stringResource(R.string.chat_tasks_since_just_started)
+        m < 60 -> stringResource(R.string.chat_tasks_since_minutes, m)
+        m % 60 == 0L -> stringResource(R.string.chat_tasks_since_hours, m / 60)
+        else -> stringResource(R.string.chat_tasks_since_hours_minutes, m / 60, m % 60)
     }
 }
 
@@ -153,7 +157,7 @@ private fun FeedLine(item: FeedItem, host: AssistantTaskHost) {
     val todos by host.tasks.todos.collectAsStateWithLifecycle()
     val plans by host.tasks.plans.collectAsStateWithLifecycle()
     val later by host.tasks.later.collectAsStateWithLifecycle()
-    val title = todos.firstOrNull { it.id == item.ref }?.title ?: "任务"
+    val title = todos.firstOrNull { it.id == item.ref }?.title ?: stringResource(R.string.chat_tasks_default_title)
     when (item.kind) {
         "plan" -> (item.ref?.let { plans[it] } ?: item.plan)?.let { PlanCard(it, host) }
         "task" -> todos.firstOrNull { it.id == item.ref }?.let { todo ->
@@ -164,7 +168,7 @@ private fun FeedLine(item: FeedItem, host: AssistantTaskHost) {
         "receipt" -> ReceiptCard(item, host, todos)
         "routed" -> Column(Modifier.fillMaxWidth().padding(start = Tokens.Space.xxxl), horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            Text("对「$title」说", style = PersonaTheme.type.caption, color = PersonaTheme.palette.accent, maxLines = 1)
+            Text(stringResource(R.string.chat_tasks_routed_to, title), style = PersonaTheme.type.caption, color = PersonaTheme.palette.accent, maxLines = 1)
             Text(item.field("text").orEmpty(), Modifier.clip(PersonaTheme.shapes.controlShape).background(PersonaTheme.palette.surfaceStrong)
                 .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
         }
@@ -183,17 +187,20 @@ internal fun AnsweredLine(item: FeedItem, title: String, onOpenTask: (() -> Unit
     val items = remember(item) { item.answeredItems() }
     val expandable = items.isNotEmpty()
     val shape = if (open) PersonaTheme.shapes.cardShape else CircleShape
+    val toggleLabel = stringResource(if (open) R.string.chat_tasks_collapse else R.string.chat_tasks_expand)
+    val toggleState = stringResource(if (open) R.string.chat_tasks_expanded else R.string.chat_tasks_collapsed)
+    val openTaskLabel = stringResource(R.string.chat_tasks_open_task)
     Column(Modifier.then(if (open) Modifier.fillMaxWidth() else Modifier).clip(shape).background(PersonaTheme.palette.surfaceStrong)
         .animateContentSize()) {
-        Row(Modifier.then(if (expandable) Modifier.clickable(onClickLabel = if (open) "收起" else "展开") { open = !open } else Modifier)
-            .semantics { if (expandable) stateDescription = if (open) "已展开" else "已收起" }
+        Row(Modifier.then(if (expandable) Modifier.clickable(onClickLabel = toggleLabel) { open = !open } else Modifier)
+            .semantics { if (expandable) stateDescription = toggleState }
             .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.xs),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             JIcon(PhIcons.Check, decorative = true, size = Tokens.Space.m, tint = PersonaTheme.palette.ink2)
-            Text(title, (if (onOpenTask != null) Modifier.clickable(onClickLabel = "打开任务", onClick = onOpenTask) else Modifier)
+            Text(title, (if (onOpenTask != null) Modifier.clickable(onClickLabel = openTaskLabel, onClick = onOpenTask) else Modifier)
                 .weight(1f, fill = false), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("· ${item.field("answer") ?: "回答了"}", Modifier.weight(1f, fill = false), style = PersonaTheme.type.caption,
+            Text("· ${item.field("answer") ?: stringResource(R.string.chat_tasks_answered_default)}", Modifier.weight(1f, fill = false), style = PersonaTheme.type.caption,
                 color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (expandable) JIcon(PhIcons.CaretRight, decorative = true, size = Tokens.Space.m, tint = PersonaTheme.palette.ink3,
                 modifier = Modifier.rotate(if (open) 90f else 0f))
@@ -214,7 +221,15 @@ internal fun AnsweredLine(item: FeedItem, title: String, onOpenTask: (() -> Unit
 
 // ── plans ──
 
-private val PERMISSION = mapOf("acceptEdits" to "可以改文件", "plan" to "先出方案", "bypassPermissions" to "全部放行", "default" to "每步都问")
+/** How a planned task's agent asks before it acts, by its permission mode. */
+@Composable
+private fun permissionLabel(mode: String?): String = when (mode ?: "default") {
+    "acceptEdits" -> stringResource(R.string.chat_tasks_permission_accept_edits)
+    "plan" -> stringResource(R.string.chat_tasks_permission_plan)
+    "bypassPermissions" -> stringResource(R.string.chat_tasks_permission_bypass)
+    "default" -> stringResource(R.string.chat_tasks_permission_default)
+    else -> mode.orEmpty()
+}
 
 @Composable
 private fun PlanCard(plan: TaskPlan, host: AssistantTaskHost) {
@@ -222,17 +237,19 @@ private fun PlanCard(plan: TaskPlan, host: AssistantTaskHost) {
     var remember by remember(plan.id) { mutableStateOf(false) }
     if (plan.state != "open") {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            Text(if (plan.state == "started") "✓ 开了 ${plan.tasks.size} 个任务" else "没开 · ${plan.tasks.size} 个任务",
+            Text(pluralStringResource(if (plan.state == "started") R.plurals.chat_tasks_plan_started else R.plurals.chat_tasks_plan_dismissed,
+                plan.tasks.size, plan.tasks.size),
                 style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
             plan.tasks.filter { it.error != null }.forEach {
-                Text("「${it.title}」没开起来：${it.error}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.danger.text)
+                Text(stringResource(R.string.chat_tasks_plan_task_failed, it.title, it.error.orEmpty()), style = PersonaTheme.type.caption, color = PersonaTheme.palette.danger.text)
             }
         }
         return
     }
     JCard {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-            Text(if (plan.tasks.size > 1) "拆成 ${plan.tasks.size} 件事，这样开" else "这样开", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            Text(if (plan.tasks.size > 1) pluralStringResource(R.plurals.chat_tasks_plan_split, plan.tasks.size, plan.tasks.size)
+                else stringResource(R.string.chat_tasks_plan_single), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             plan.tasks.forEachIndexed { n, t ->
                 if (n > 0) HorizontalDivider(color = PersonaTheme.palette.line)
                 Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
@@ -240,20 +257,21 @@ private fun PlanCard(plan: TaskPlan, host: AssistantTaskHost) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                         JChip(host.machineName(t.machine), icon = PhIcons.Laptop)
                         JChip(t.project, icon = PhIcons.Folder)
-                        JChip(t.model?.takeIf(String::isNotBlank) ?: t.launcher?.takeIf(String::isNotBlank) ?: "默认模型", icon = PhIcons.Cpu)
-                        JChip(if (t.readonly == true) "只读" else PERMISSION[t.permission ?: "default"] ?: t.permission.orEmpty(), selected = t.readonly == true)
+                        JChip(t.model?.takeIf(String::isNotBlank) ?: t.launcher?.takeIf(String::isNotBlank) ?: stringResource(R.string.chat_tasks_default_model), icon = PhIcons.Cpu)
+                        JChip(if (t.readonly == true) stringResource(R.string.chat_tasks_read_only) else permissionLabel(t.permission), selected = t.readonly == true)
                     }
                     t.why?.takeIf(String::isNotBlank)?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
                 }
             }
             Row(Modifier.clickable { remember = !remember }, verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(remember, { remember = it })
-                Text("这类以后直接开", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+                Text(stringResource(R.string.chat_tasks_plan_remember), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                JButton(if (plan.tasks.size > 1) "开始 ${plan.tasks.size} 个任务" else "开始", { host.tasks.startPlan(plan, remember, host.onError) },
+                JButton(if (plan.tasks.size > 1) pluralStringResource(R.plurals.chat_tasks_plan_start_count, plan.tasks.size, plan.tasks.size)
+                    else stringResource(R.string.chat_tasks_plan_start), { host.tasks.startPlan(plan, remember, host.onError) },
                     Modifier.weight(1f), size = JButtonSize.Medium, loading = plan.id in busy)
-                JButton("不开", { host.tasks.dismissPlan(plan, host.onError) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium,
+                JButton(stringResource(R.string.chat_tasks_plan_dismiss), { host.tasks.dismissPlan(plan, host.onError) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium,
                     enabled = plan.id !in busy)
             }
         }
@@ -271,13 +289,14 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
     val progress = TaskNow.of(lead, lead?.agentState == AgentState.Working)
     val clock by rememberNow(30_000, state == TaskState.Working) // how long its step has gone on
     val now = when {
-        state == TaskState.NeedsYou -> "有事等你回答"
-        cut != null -> "模型服务出错，中断了：" + cut.reason
-        state == TaskState.Failed -> "没开起来：" + todo.startError.orEmpty().trim()
+        state == TaskState.NeedsYou -> stringResource(R.string.chat_tasks_now_needs_you)
+        cut != null -> stringResource(R.string.chat_tasks_now_cut, cut.reason)
+        state == TaskState.Failed -> stringResource(R.string.chat_tasks_now_failed, todo.startError.orEmpty().trim())
         progress != null -> progress.text
-        todo.agents.any { !it.startError.isNullOrBlank() } -> "没开起来：" + todo.agents.first { !it.startError.isNullOrBlank() }.startError
-        state == TaskState.NotStarted -> "正在开 Agent"
-        else -> "还没有动静"
+        todo.agents.any { !it.startError.isNullOrBlank() } ->
+            stringResource(R.string.chat_tasks_now_failed, todo.agents.first { !it.startError.isNullOrBlank() }.startError.orEmpty())
+        state == TaskState.NotStarted -> stringResource(R.string.chat_tasks_now_starting)
+        else -> stringResource(R.string.chat_tasks_now_quiet)
     }
     JCard(onClick = { openTask(host, todo) }, status = if (state == TaskState.NeedsYou) Status.NeedsYou else null) {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -297,23 +316,24 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
                     overflow = TextOverflow.Ellipsis,
                     color = if (state == TaskState.NeedsYou || state == TaskState.Failed || cut != null) PersonaTheme.palette.status(Status.NeedsYou).text
                     else PersonaTheme.palette.ink)
-                if (subagents.isNotEmpty()) Text("子 Agent 在跑：" + subagents.take(3).joinToString("、") +
-                    (if (subagents.size > 3) " 等 ${subagents.size} 个" else ""), style = PersonaTheme.type.caption,
+                val names = subagents.take(3).joinToString(stringResource(R.string.chat_tasks_list_separator))
+                if (subagents.isNotEmpty()) Text(if (subagents.size > 3) pluralStringResource(R.plurals.chat_tasks_subagents_many, subagents.size, names, subagents.size)
+                    else stringResource(R.string.chat_tasks_subagents, names), style = PersonaTheme.type.caption,
                     color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (state != TaskState.Done) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(state.label, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text)
                 if (state == TaskState.Failed) {
                     // Nothing to say a word to: the ways out are on the card — start it again as it was, or let it go.
-                    JButton("重试", { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
+                    JButton(stringResource(R.string.chat_tasks_retry), { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
                         icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
-                    JButton("移除", { host.tasks.removeTask(todo, host.onError) }, kind = JButtonKind.Destructive, size = JButtonSize.Small,
+                    JButton(stringResource(R.string.chat_tasks_remove), { host.tasks.removeTask(todo, host.onError) }, kind = JButtonKind.Destructive, size = JButtonSize.Small,
                         icon = PhIcons.Trash)
                 } else {
                     // The model service cut its turn off: 继续 tells its agent to go on, as the chat's 重试 does (#1516).
-                    if (cut?.canContinue == true) JButton("继续", { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Quiet,
+                    if (cut?.canContinue == true) JButton(stringResource(R.string.chat_tasks_continue), { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Quiet,
                         size = JButtonSize.Small, icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
-                    JButton("说一句", { host.tasks.setRoute(host.conversation, todo.id) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
+                    JButton(stringResource(R.string.chat_tasks_say), { host.tasks.setRoute(host.conversation, todo.id) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
                         icon = PhIcons.PaperPlaneTilt)
                 }
             }
@@ -340,7 +360,7 @@ private fun ReceiptCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
     if (outcome == "interrupted") return InterruptedReceipt(item, host, todos)
     val failed = outcome == "failed"
     val todo = todos.firstOrNull { it.id == item.ref }
-    val title = item.field("title") ?: "任务"
+    val title = item.field("title") ?: stringResource(R.string.chat_tasks_default_title)
     // A failed start's banner follows its task: 重试 while it is still failed (with its latest error), a quiet line once
     // it was started again, so no stale error stays in the conversation (#1396).
     val state = todo?.let { host.tasks.stateOf(it, host.sessions) }
@@ -349,24 +369,24 @@ private fun ReceiptCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             JIcon(if (state == TaskState.NotStarted) PhIcons.ArrowClockwise else PhIcons.Check, decorative = true, size = Tokens.Space.m,
                 tint = PersonaTheme.palette.ink2)
-            Text("「$title」" + if (state == TaskState.NotStarted) "正在重新开" else "重试后开起来了", style = PersonaTheme.type.caption,
+            Text(stringResource(if (state == TaskState.NotStarted) R.string.chat_tasks_restarting else R.string.chat_tasks_restarted, title), style = PersonaTheme.type.caption,
                 color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         return
     }
     val busy by host.tasks.busy.collectAsStateWithLifecycle()
     val tone = if (failed) PersonaTheme.palette.danger else PersonaTheme.palette.done
-    val summary = todo?.startError?.takeIf { failed && it.isNotBlank() }?.let { "没开起来：" + it.trim() } ?: item.field("summary")
+    val summary = todo?.startError?.takeIf { failed && it.isNotBlank() }?.let { stringResource(R.string.chat_tasks_now_failed, it.trim()) } ?: item.field("summary")
     Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(tone.tint).padding(Tokens.Space.l),
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
         JIcon(if (failed) PhIcons.WarningCircle else PhIcons.CheckCircle, decorative = true, tint = tone.dot)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            Text(title + if (failed) "没开起来" else " 完成", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+            Text(stringResource(if (failed) R.string.chat_tasks_receipt_failed_title else R.string.chat_tasks_receipt_done_title, title), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
             summary?.let { if (failed) Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 else ReceiptSummary(it) }
-            if (failed && todo != null) JButton("重试", { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Secondary,
+            if (failed && todo != null) JButton(stringResource(R.string.chat_tasks_retry), { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Secondary,
                 size = JButtonSize.Small, icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
-            if (!failed && todo != null) JButton("看看", { openTask(host, todo) }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+            if (!failed && todo != null) JButton(stringResource(R.string.chat_tasks_look), { openTask(host, todo) }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
         }
     }
 }
@@ -398,14 +418,14 @@ private fun ReceiptSummary(md: String) {
 @Composable
 private fun InterruptedReceipt(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>) {
     val todo = todos.firstOrNull { it.id == item.ref }
-    val title = item.field("title") ?: "任务"
+    val title = item.field("title") ?: stringResource(R.string.chat_tasks_default_title)
     val state = todo?.let { host.tasks.stateOf(it, host.sessions) }
     if (todo != null && state != TaskState.Interrupted) {
         Row(Modifier.clip(PersonaTheme.shapes.controlShape).clickable { openTask(host, todo) }.padding(vertical = Tokens.Space.xs),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             JIcon(if (state == TaskState.Done) PhIcons.Check else PhIcons.ArrowClockwise, decorative = true, size = Tokens.Space.m,
                 tint = PersonaTheme.palette.ink2)
-            Text("「$title」" + if (state == TaskState.Done) "已完成" else "中断后继续了", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1,
+            Text(stringResource(if (state == TaskState.Done) R.string.chat_tasks_finished_line else R.string.chat_tasks_resumed_line, title), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }
         return
@@ -418,14 +438,14 @@ private fun InterruptedReceipt(item: FeedItem, host: AssistantTaskHost, todos: L
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
         JIcon(PhIcons.WarningCircle, decorative = true, tint = tone.dot)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            Text("$title 中断了", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
-            Text(if (reason != null) "模型服务出错，中断了：$reason" else "模型服务出错，中断了", style = PersonaTheme.type.callout,
+            Text(stringResource(R.string.chat_tasks_interrupted_title, title), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+            Text(if (reason != null) stringResource(R.string.chat_tasks_now_cut, reason) else stringResource(R.string.chat_tasks_now_cut_plain), style = PersonaTheme.type.callout,
                 color = PersonaTheme.palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                if (todo != null && cut?.canContinue != false) JButton("继续", { host.tasks.retryTask(todo, host.onError) },
+                if (todo != null && cut?.canContinue != false) JButton(stringResource(R.string.chat_tasks_continue), { host.tasks.retryTask(todo, host.onError) },
                     kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ArrowClockwise,
                     loading = TasksStore.retryKey(todo.id) in busy)
-                if (todo != null) JButton("看看", { openTask(host, todo) }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+                if (todo != null) JButton(stringResource(R.string.chat_tasks_look), { openTask(host, todo) }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
             }
         }
     }
@@ -433,18 +453,18 @@ private fun InterruptedReceipt(item: FeedItem, host: AssistantTaskHost, todos: L
 
 @Composable
 private fun QuickResultCard(result: QuickResult) {
-    val time = AssistantLines.time(result.time)?.atZone(ZoneId.systemDefault())
-        ?.format(DateTimeFormatter.ofPattern("M月d日 HH:mm"))
+    val locale = currentLocale
+    val time = AssistantLines.time(result.time)?.let { LocalizedFormats.format(it, LocalizedFormats.MONTH_DAY_TIME, locale) }
     Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(PersonaTheme.palette.sunken).padding(Tokens.Space.m),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
         JIcon(if (result.reminder) PhIcons.BellSimple else PhIcons.CalendarCheck, decorative = true,
             tint = if (result.reminder) PersonaTheme.palette.caution else PersonaTheme.palette.accent)
         Column(Modifier.weight(1f)) {
-            Text(if (result.reminder) "已加提醒" else "已加到日历", style = PersonaTheme.type.bodyStrong, color = PersonaTheme.palette.ink)
+            Text(stringResource(if (result.reminder) R.string.chat_tasks_quick_reminder else R.string.chat_tasks_quick_calendar), style = PersonaTheme.type.bodyStrong, color = PersonaTheme.palette.ink)
             Text(listOfNotNull(time, result.title, result.place).joinToString(" · "), style = PersonaTheme.type.caption,
                 color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text("在 iPhone 上", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+        Text(stringResource(R.string.chat_tasks_quick_on_iphone), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
     }
 }
 
@@ -457,31 +477,44 @@ private fun JsonObject.str(name: String): String? = (this[name] as? JsonPrimitiv
 private fun TodayCard(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>) {
     val body = item.body as? JsonObject ?: return
     data class TodayRow(val icon: PhIcon, val status: Status?, val title: String, val detail: String?, val action: String?, val run: (() -> Unit)?)
+    val locale = currentLocale
+    val separator = stringResource(R.string.chat_tasks_list_separator)
     val rows = buildList {
         val done = body.list("done")
         if (done.isNotEmpty()) add(TodayRow(PhIcons.CheckCircle, Status.Unread,
-            if (done.size == 1) "做完了：${done[0].str("title")}" else "做完了 ${done.size} 个任务",
-            done.takeIf { it.size > 1 }?.joinToString("、") { it.str("title").orEmpty() }, "看看",
+            if (done.size == 1) stringResource(R.string.chat_today_done_one, done[0].str("title").orEmpty())
+            else pluralStringResource(R.plurals.chat_today_done_many, done.size, done.size),
+            done.takeIf { it.size > 1 }?.joinToString(separator) { it.str("title").orEmpty() }, stringResource(R.string.chat_tasks_look),
             todos.firstOrNull { it.id == done[0].str("id") }?.let { t -> { openTask(host, t) } }))
         val waiting = body.list("waiting")
         if (waiting.isNotEmpty()) add(TodayRow(PhIcons.Hand, Status.NeedsYou,
-            if (waiting.size == 1) "等你：${waiting[0].str("title")}" else "${waiting.size} 件等你", null, "去看",
+            if (waiting.size == 1) stringResource(R.string.chat_today_waiting_one, waiting[0].str("title").orEmpty())
+            else pluralStringResource(R.plurals.chat_today_waiting_many, waiting.size, waiting.size), null, stringResource(R.string.chat_today_go),
             todos.firstOrNull { it.id == waiting[0].str("id") }?.let { t -> { openTask(host, t) } }))
-        item.number("working")?.takeIf { it > 0 }?.let { add(TodayRow(PhIcons.GearSix, Status.Working, "$it 个任务在做", null, null, null)) }
+        item.number("working")?.takeIf { it > 0 }?.let {
+            add(TodayRow(PhIcons.GearSix, Status.Working, pluralStringResource(R.plurals.chat_today_working, it.toInt(), it.toInt()), null, null, null))
+        }
         body.list("meetings").take(3).forEach { m ->
-            val t = AssistantLines.time(m.str("start"))?.atZone(ZoneId.systemDefault())?.format(DateTimeFormatter.ofPattern("HH:mm")).orEmpty()
+            val t = AssistantLines.time(m.str("start"))?.let { LocalizedFormats.format(it, LocalizedFormats.TIME, locale) }.orEmpty()
             val name = m.str("title").orEmpty()
-            add(TodayRow(PhIcons.CalendarBlank, null, "$t $name", null, "准备") { host.say("帮我准备一下 $t 的「$name」：要看的文档、上次的结论、要我拍板的事") })
+            val prompt = stringResource(R.string.chat_today_prepare_prompt, t, name)
+            add(TodayRow(PhIcons.CalendarBlank, null, "$t $name", null, stringResource(R.string.chat_today_prepare)) { host.say(prompt) })
         }
         val atMe = body.list("at_me")
-        if (atMe.isNotEmpty()) add(TodayRow(PhIcons.At, null,
-            "飞书 ${atMe.size} 个会话 @你" + (item.number("unread")?.takeIf { it > 0 }?.let { " · 其他未读 $it" } ?: ""),
-            atMe.take(2).joinToString("\n") { c -> c.str("name").orEmpty() + (c.str("preview")?.let { "：$it" } ?: "") }, "过一遍")
-            { host.say("帮我过一遍飞书里 @我 的消息：哪些要我回，能起草的先起草") })
+        if (atMe.isNotEmpty()) {
+            val mentions = pluralStringResource(R.plurals.chat_today_at_me, atMe.size, atMe.size)
+            val unread = item.number("unread")?.takeIf { it > 0 }
+            val preview = stringResource(R.string.chat_label_value)
+            val prompt = stringResource(R.string.chat_today_review_prompt)
+            add(TodayRow(PhIcons.At, null,
+                if (unread != null) stringResource(R.string.chat_today_at_me_unread, mentions, unread.toInt()) else mentions,
+                atMe.take(2).joinToString("\n") { c -> c.str("preview")?.let { preview.format(c.str("name").orEmpty(), it) } ?: c.str("name").orEmpty() },
+                stringResource(R.string.chat_today_review)) { host.say(prompt) })
+        }
     }
     JCard {
-        Text("今天要知道的", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-        if (rows.isEmpty()) Text("没有等你的事，日程也空着。", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+        Text(stringResource(R.string.chat_today_title), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+        if (rows.isEmpty()) Text(stringResource(R.string.chat_today_empty), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         rows.forEachIndexed { n, r ->
             if (n > 0) HorizontalDivider(color = PersonaTheme.palette.line)
             Row(Modifier.padding(vertical = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically,
@@ -528,19 +561,19 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
             Column(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape)
                 .background(if (done) PersonaTheme.palette.done.tint else PersonaTheme.palette.accentSoft).padding(Tokens.Space.m),
                 verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-                Text(if (done) "已以你的名义回复" else "按任务进度起草的回复", style = PersonaTheme.type.caption,
+                Text(stringResource(if (done) R.string.chat_tasks_message_replied else R.string.chat_tasks_message_drafted), style = PersonaTheme.type.caption,
                     color = if (done) PersonaTheme.palette.done.text else PersonaTheme.palette.accent)
                 if (sent != null) Text(sent.text, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
                 else BasicTextField(draft, { draft = it }, Modifier.fillMaxWidth(),
                     textStyle = PersonaTheme.type.body.copy(color = PersonaTheme.palette.ink),
                     cursorBrush = SolidColor(PersonaTheme.palette.accent))
             }
-            if (blank != null) Text("草稿里还有没填的「$blank」，改掉或删掉再发送", style = PersonaTheme.type.caption,
+            if (blank != null) Text(stringResource(R.string.chat_tasks_message_blank, blank), style = PersonaTheme.type.caption,
                 color = PersonaTheme.palette.danger.text)
             if (!done) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                JButton("发送", { host.tasks.sendMessage(item, draft, host.onError) }, Modifier.weight(1f), size = JButtonSize.Medium,
+                JButton(stringResource(R.string.chat_tasks_send), { host.tasks.sendMessage(item, draft, host.onError) }, Modifier.weight(1f), size = JButtonSize.Medium,
                     enabled = blank == null && draft.isNotBlank(), loading = item.id in busy)
-                JButton("稍后", { host.tasks.putOff(itemId) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium)
+                JButton(stringResource(R.string.chat_tasks_later), { host.tasks.putOff(itemId) }, kind = JButtonKind.Secondary, size = JButtonSize.Medium)
             }
         }
     }
@@ -561,14 +594,14 @@ internal fun AssistantTaskBar(host: AssistantTaskHost) {
         if (going.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             going.forEach { (todo, state) ->
                 JChip(when (state) {
-                    TaskState.NeedsYou -> "${todo.title} · 等你"
-                    TaskState.Interrupted -> "${todo.title} · 中断了"
+                    TaskState.NeedsYou -> stringResource(R.string.chat_tasks_dock_waiting, todo.title)
+                    TaskState.Interrupted -> stringResource(R.string.chat_tasks_dock_interrupted, todo.title)
                     else -> todo.title
                 }, onClick = { openTask(host, todo) }, status = state.status())
             }
         }
         val routed = routes[host.conversation]?.let { id -> mine.firstOrNull { it.id == id } }
-        if (routed != null) JChip("对「${routed.title}」说 ×", selected = true, onClick = { host.tasks.setRoute(host.conversation, null) }, icon = PhIcons.PaperPlaneTilt)
+        if (routed != null) JChip(stringResource(R.string.chat_tasks_route_chip, routed.title), selected = true, onClick = { host.tasks.setRoute(host.conversation, null) }, icon = PhIcons.PaperPlaneTilt)
     }
 }
 

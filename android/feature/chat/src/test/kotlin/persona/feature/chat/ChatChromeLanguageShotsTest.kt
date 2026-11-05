@@ -95,7 +95,8 @@ class ChatChromeLanguageShotsTest {
         rule.setContent {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = AppStyle.Glass) {
                 val scope = rememberCoroutineScope()
-                val chrome = remember { ChatChromeState(null, scope, {}, {}) }
+                val resources = androidx.compose.ui.platform.LocalResources.current
+                val chrome = remember { ChatChromeState(resources, null, scope, {}, {}) }
                 Box(Modifier.testTag("shot").width(400.dp).height(860.dp).background(PersonaTheme.palette.background)) {
                     Column(Modifier.fillMaxWidth()) {
                         when (scene) {

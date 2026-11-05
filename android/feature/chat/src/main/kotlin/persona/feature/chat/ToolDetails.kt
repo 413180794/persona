@@ -1,6 +1,7 @@
 package persona.feature.chat
 
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,7 +36,7 @@ import kotlinx.serialization.json.contentOrNull
 @Composable
 internal fun ToolInputDetail(item: Item) {
     val input = item.toolInput as? JsonObject
-    val plain: @Composable () -> Unit = { CodeText(toolDetail(item), "工具详情") }
+    val plain: @Composable () -> Unit = { CodeText(toolDetail(item), stringResource(R.string.chat_tool_details)) }
     when (item.toolName) {
         "Read", "NotebookEdit" -> (input?.text("file_path") ?: input?.text("notebook_path"))?.takeIf { it.isNotBlank() }
             ?.let { PathLink(it) } ?: plain()
@@ -52,9 +53,10 @@ internal fun PathLink(path: String) {
     val open = LocalChatRowActions.current?.openPath
     val palette = PersonaTheme.palette
     val tint = if (open != null) palette.accent else palette.ink2
+    val viewFile = stringResource(R.string.chat_tool_view_file)
     Row(
         Modifier.clip(PersonaTheme.shapes.controlShape)
-            .then(if (open != null) Modifier.clickable(role = Role.Button, onClickLabel = "查看文件") { open(path) } else Modifier)
+            .then(if (open != null) Modifier.clickable(role = Role.Button, onClickLabel = viewFile) { open(path) } else Modifier)
             .padding(vertical = Tokens.Space.xs),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
     ) {
@@ -70,9 +72,10 @@ internal fun DiffHeader(path: String, added: Int, removed: Int) {
     val open = LocalChatRowActions.current?.openPath
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
+    val viewFile = stringResource(R.string.chat_tool_view_file)
     Row(
         Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape)
-            .then(if (open != null) Modifier.clickable(role = Role.Button, onClickLabel = "查看文件") { open(path) } else Modifier)
+            .then(if (open != null) Modifier.clickable(role = Role.Button, onClickLabel = viewFile) { open(path) } else Modifier)
             .padding(vertical = Tokens.Space.xs),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
     ) {
@@ -82,7 +85,7 @@ internal fun DiffHeader(path: String, added: Int, removed: Int) {
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (added > 0) Text("+$added", style = type.micro, color = palette.diffAdd, maxLines = 1)
         if (removed > 0) Text("−$removed", style = type.micro, color = palette.diffDel, maxLines = 1)
-        if (open != null) JIcon(PhIcons.ArrowSquareOut, "查看文件", size = Tokens.Space.l, tint = palette.accent)
+        if (open != null) JIcon(PhIcons.ArrowSquareOut, viewFile, size = Tokens.Space.l, tint = palette.accent)
     }
 }
 
@@ -91,7 +94,7 @@ internal fun DiffHeader(path: String, added: Int, removed: Int) {
 private fun PlanDetail(plan: String, id: String) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
         ChatMarkdown(plan, "$id/plan", PersonaTheme.type.callout)
-        ReaderEntry(plan, "计划")
+        ReaderEntry(plan, stringResource(R.string.chat_tool_plan_title))
     }
 }
 
@@ -123,11 +126,11 @@ private fun QuestionsDetail(questions: List<ToolQuestion>) {
             Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                     question.header?.let { JTag(it) }
-                    if (question.multiSelect) JTag("可多选")
+                    if (question.multiSelect) JTag(stringResource(R.string.chat_tool_multi_select))
                 }
                 Text((if (questions.size > 1) "${index + 1}. " else "") + question.question, style = type.callout, color = palette.ink)
                 question.options.forEach { (label, description) ->
-                    Text("· $label" + (description?.let { "：$it" } ?: ""), style = type.caption, color = palette.ink2)
+                    Text("· " + (description?.let { stringResource(R.string.chat_label_value, label, it) } ?: label), style = type.caption, color = palette.ink2)
                 }
             }
         }
@@ -141,7 +144,7 @@ private fun TaskDetail(prompt: String, agentType: String?) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
         agentType?.takeIf { it.isNotBlank() }?.let { JTag(it) }
         Text(prompt, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 8, overflow = TextOverflow.Ellipsis)
-        ReaderEntry(prompt, "子任务说明", always = long)
+        ReaderEntry(prompt, stringResource(R.string.chat_tool_task_brief), always = long)
     }
 }
 

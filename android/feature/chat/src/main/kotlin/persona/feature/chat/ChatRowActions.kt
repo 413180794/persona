@@ -33,13 +33,15 @@ internal class ChatRowActions(
     val retryLineId: String?,
     /** What 重试 does: send 「继续」. */
     val onRetry: () -> Unit,
+    /** What a picture of the conversation is called to accessibility services, in the page's language. */
+    val imageDescription: String = "",
 ) {
     /** Opens the viewer on the conversation's pictures at [item]; a picture not among them opens alone. */
     fun openPicture(item: Item) {
         val all = pictures()
         val index = all.indexOfFirst { it.key == item.id }
         if (index >= 0) openImages(all, index)
-        else openImages(listOf(chatViewerImage(session, item, null)), 0)
+        else openImages(listOf(chatViewerImage(session, item, null, imageDescription)), 0)
     }
 }
 
@@ -49,21 +51,21 @@ internal val LocalChatRowActions = compositionLocalOf<ChatRowActions?> { null }
  * A picture of the conversation for the viewer: its bytes come inline with the page when the hub sent them, else
  * from the repository by item id (pages drop picture bytes, docs/android.md「缓存体积预算」).
  */
-internal fun chatViewerImage(session: SessionKey, item: Item, repository: ChatRepository?): ViewerImage {
+internal fun chatViewerImage(session: SessionKey, item: Item, repository: ChatRepository?, description: String = ""): ViewerImage {
     val image = item.image
-    return ViewerImage(item.id, "对话图片", image?.width, image?.height) {
+    return ViewerImage(item.id, description, image?.width, image?.height) {
         val inline = image?.data?.takeIf { it.isNotEmpty() && image?.lazy != true }
         when {
             inline != null -> Base64.getMimeDecoder().decode(inline)
             repository != null -> repository.loadImage(session, item.id)
-            else -> error("图片暂不可用")
+            else -> error("picture unavailable")
         }
     }
 }
 
 /** Every picture of the conversation in order: what the agent showed, the tools' screenshots, the photos it got. */
-internal fun chatViewerImages(session: SessionKey, items: List<Item>, repository: ChatRepository?): List<ViewerImage> =
-    items.filter { it.kind == "image" && it.image != null }.map { chatViewerImage(session, it, repository) }
+internal fun chatViewerImages(session: SessionKey, items: List<Item>, repository: ChatRepository?, description: String = ""): List<ViewerImage> =
+    items.filter { it.kind == "image" && it.image != null }.map { chatViewerImage(session, it, repository, description) }
 
 /** The image viewer to show: [images] from [index]. */
 internal data class ViewerRequest(val images: List<ViewerImage>, val index: Int)

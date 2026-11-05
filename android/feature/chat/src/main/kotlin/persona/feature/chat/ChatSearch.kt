@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import android.content.res.Resources
 import persona.core.contracts.Item
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.ChatRepository
@@ -20,36 +21,38 @@ private fun JsonElement.strings(): Sequence<String> = when (this) {
     is JsonPrimitive -> if (isString) sequenceOf(content) else emptySequence()
 }
 
-private fun Item.searchFields(): List<Pair<String, String>> = buildList {
+private fun Item.searchFields(res: Resources): List<Pair<String, String>> = buildList {
+    val event = res.getString(R.string.chat_search_category_event)
+    val toolInputLabel = res.getString(R.string.chat_search_category_tool_input)
     // Persona's message for the model: what the chat shows of it (its line, a scheduled run's ask), not its words
     injectedOf(this@searchFields)?.let { n ->
-        add("系统事件" to listOfNotNull(n.line, n.detail).joinToString("\n"))
+        add(event to listOfNotNull(n.line, n.detail).joinToString("\n"))
         return@buildList
     }
     val category = when (kind) {
-        "text" -> "正文"
-        "thinking" -> "思考"
-        "tool_use" -> "工具输入"
-        "tool_result" -> "工具输出"
-        "notice", "recap" -> "系统事件"
+        "text" -> res.getString(R.string.chat_search_category_text)
+        "thinking" -> res.getString(R.string.chat_search_category_thinking)
+        "tool_use" -> toolInputLabel
+        "tool_result" -> res.getString(R.string.chat_search_category_tool_output)
+        "notice", "recap" -> event
         else -> return@buildList
     }
     text?.takeIf(String::isNotBlank)?.let { add(category to it) }
     if (kind == "tool_use") {
-        toolName?.let { add("工具名" to it) }
-        toolInput?.strings()?.joinToString("\n")?.takeIf(String::isNotBlank)?.let { add("工具输入" to it) }
+        toolName?.let { add(res.getString(R.string.chat_search_category_tool_name) to it) }
+        toolInput?.strings()?.joinToString("\n")?.takeIf(String::isNotBlank)?.let { add(toolInputLabel to it) }
     }
-    task?.let { add("系统事件" to listOfNotNull(it.title, it.detail, it.status).joinToString("\n")) }
+    task?.let { add(event to listOfNotNull(it.title, it.detail, it.status).joinToString("\n")) }
 }
 
-/** Literal matching preserves UTF-16 offsets used by Compose text spans. */
-internal suspend fun searchChat(items: List<Item>, query: String): ChatSearchResults {
+/** Literal matching preserves UTF-16 offsets used by Compose text spans; [res] names each hit's category. */
+internal suspend fun searchChat(res: Resources, items: List<Item>, query: String): ChatSearchResults {
     val needle = query.trim()
     if (needle.isEmpty()) return ChatSearchResults()
     val hits = mutableListOf<ChatSearchHit>()
     for (item in items.distinctBy { it.id }.sortedWith(chatItemOrder).asReversed()) {
         currentCoroutineContext().ensureActive()
-        for ((category, text) in item.searchFields()) {
+        for ((category, text) in item.searchFields(res)) {
             val first = text.indexOf(needle, ignoreCase = true)
             if (first < 0) continue
             if (hits.size == 100) return ChatSearchResults(hits, truncated = true)
@@ -101,18 +104,18 @@ internal fun searchTarget(lines: List<ChatLine>, itemId: String): ChatSearchTarg
 }
 
 /** Only the existing continuous history cursor is used; no disjoint search window is merged. */
-internal suspend fun loadEarlierForSearch(repository: ChatRepository, key: SessionKey, onPage: (Int) -> Unit): String? {
+internal suspend fun loadEarlierForSearch(res: Resources, repository: ChatRepository, key: SessionKey, onPage: (Int) -> Unit): String? {
     repeat(20) { page ->
         val before = repository.observe(key).first()
         if (!before.hasOlder) return null
-        if (before.loading || before.loadingOlder || !before.verified) return "记录正在更新，请稍后继续"
+        if (before.loading || before.loadingOlder || !before.verified) return res.getString(R.string.chat_search_updating)
         repository.loadOlder(key)
         val after = repository.observe(key).first { !it.loadingOlder }
-        if (after.error != null) return "更早的记录未能载入，请重试"
+        if (after.error != null) return res.getString(R.string.chat_search_older_failed)
         if (!after.verified || (after.items.minOfOrNull { it.seq } ?: Int.MAX_VALUE) >=
-            (before.items.minOfOrNull { it.seq } ?: Int.MAX_VALUE)) return "本次没有载入更早的记录，可稍后重试"
+            (before.items.minOfOrNull { it.seq } ?: Int.MAX_VALUE)) return res.getString(R.string.chat_search_older_none)
         onPage(page + 1)
         if (!after.hasOlder) return null
     }
-    return "本次已加载 20 页，可继续加载"
+    return res.getString(R.string.chat_search_older_limit, 20)
 }

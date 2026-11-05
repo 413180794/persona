@@ -1,5 +1,10 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import persona.core.domain.answer.*
@@ -8,7 +13,10 @@ import persona.core.domain.lines.WorkItem
 import org.junit.Assert.*
 import org.junit.Test
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChatStateTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun recordedDurationsStayWithHistoricalWorkAndMetadataAddsNoVisibleRow() {
         val user = Item("user#0", 1, role = "user", kind = "text")
         val thought = Item("thought#0", 2, role = "assistant", kind = "thinking", text = "检查示例")
@@ -24,10 +32,10 @@ class ChatStateTest {
         val work = withDuration.lines.filterIsInstance<ChatLine.Work>()
         assertEquals(12L, work.first().recordedDuration(durations))
         assertNull(work.last().recordedDuration(durations))
-        assertEquals("用时 12 秒", recordedDurationLabel(12))
-        assertEquals("用时 0 秒", recordedDurationLabel(0))
-        assertNull(recordedDurationLabel(null))
-        assertNull(recordedDurationLabel(-1))
+        assertEquals("用时 12 秒", recordedDurationLabel(res, 12))
+        assertEquals("用时 0 秒", recordedDurationLabel(res, 0))
+        assertNull(recordedDurationLabel(res, null))
+        assertNull(recordedDurationLabel(res, -1))
     }
 
     @Test fun historicalSnapshotSurvivesTurnRegroupingAndFoldExpansion() {
@@ -78,7 +86,7 @@ class ChatStateTest {
         val store = listOf(user) + work + answer
         val closed = timeline.lines(store, null, emptySet()).lines.filterIsInstance<ChatLine.Work>().single()
         assertEquals(2, closed.steps.size)
-        assertEquals("做了 2 步", workSummary(closed, null))
+        assertEquals("做了 2 步", workSummary(res, closed, null))
         val open = timeline.lines(store, null, setOf(closed.id)).lines
         assertEquals(2, open.filterIsInstance<ChatLine.Step>().size)
         assertEquals(2, open.filterIsInstance<ChatLine.End>().single().count)
@@ -92,9 +100,9 @@ class ChatStateTest {
         val message = OutboxMessage("operation", key, "消息", DeliveryState.NeedsConfirmation)
         val permission = Interaction("permission", sessionId = "session", kind = "permission")
         val snapshot = ChatSnapshot(loading = false)
-        assertEquals(StatusKind.Unconfirmed, chatStatus(snapshot, session, null, listOf(message), listOf(permission), false)?.kind)
-        assertEquals(StatusKind.Submitting, chatStatus(snapshot, session, null, listOf(message), listOf(permission), true)?.kind)
-        assertEquals(StatusKind.Ended, chatStatus(snapshot.copy(ended = true), session, null, listOf(message), listOf(permission), true)?.kind)
+        assertEquals(StatusKind.Unconfirmed, chatStatus(res, snapshot, session, null, listOf(message), listOf(permission), false)?.kind)
+        assertEquals(StatusKind.Submitting, chatStatus(res, snapshot, session, null, listOf(message), listOf(permission), true)?.kind)
+        assertEquals(StatusKind.Ended, chatStatus(res, snapshot.copy(ended = true), session, null, listOf(message), listOf(permission), true)?.kind)
         assertFalse(AnswerBuilder.build(permission, AnswerAction.Allow, AnswerDraft(message = "先别执行")).allowed)
         assertEquals("先别执行", AnswerBuilder.build(permission, AnswerAction.Deny, AnswerDraft(message = "先别执行")).resolution?.message)
         val plan = Interaction("plan", kind = "plan")

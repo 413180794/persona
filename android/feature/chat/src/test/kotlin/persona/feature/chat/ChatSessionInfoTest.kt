@@ -19,9 +19,9 @@ import java.time.ZoneId
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class ChatSessionInfoTest {
-    private val res = ApplicationProvider.getApplicationContext<Context>().resources
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     private val zone = ZoneId.of("Asia/Shanghai")
-    private fun rows(session: Session, info: SessionInfo) = sessionInfoSections(session, info, zone, resources = res).associate { section ->
+    private fun rows(session: Session, info: SessionInfo) = sessionInfoSections(res, session, info, zone).associate { section ->
         section.title to section.rows.associate { it.label to it.value }
     }
 
@@ -73,11 +73,11 @@ class ChatSessionInfoTest {
     @Test fun readOnlySourcesAndBlockedApprovalsSayWhy() {
         val history = Session(sessionId = "h", sourceKind = "codex_history", readOnlyReason = "仅查看：外部进程正在使用此会话",
             capabilities = SessionCapabilities(read = true))
-        assertEquals("仅查看：外部进程正在使用此会话", readOnlyNote(history))
-        assertEquals("此会话仅可查看", readOnlyNote(history.copy(sourceKind = "codex_history", readOnlyReason = null,
+        assertEquals("仅查看：外部进程正在使用此会话", readOnlyNote(res, history))
+        assertEquals("此会话仅可查看", readOnlyNote(res, history.copy(sourceKind = "codex_history", readOnlyReason = null,
             capabilities = SessionCapabilities(read = true, send = true))))
         val live = history.copy(sourceKind = "codex_app_server", capabilities = SessionCapabilities(read = true, send = true, attach = true))
-        assertTrue("实时接入" in approvalBlockedReason(live))
-        assertFalse("实时接入" in approvalBlockedReason(history))
+        assertTrue("实时接入" in approvalBlockedReason(res, live))
+        assertFalse("实时接入" in approvalBlockedReason(res, history))
     }
 }

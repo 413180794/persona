@@ -1,6 +1,7 @@
 package persona.feature.chat.media
 
 import android.app.Activity
+import persona.feature.chat.R
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
@@ -65,7 +66,7 @@ object MediaShare {
             clipData = ClipData.newRawUri("", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val chooser = Intent.createChooser(send, "分享图片")
+        val chooser = Intent.createChooser(send, context.getString(R.string.chat_viewer_share_title))
         if (context.activity() == null) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             context.startActivity(chooser)
@@ -80,7 +81,7 @@ object MediaShare {
         val uri = sharedUri(context, bytes, ImageMath.extension(ImageMath.sniffMime(bytes))) ?: return false
         return try {
             val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return false
-            clipboard.setPrimaryClip(ClipData.newUri(context.contentResolver, "图片", uri))
+            clipboard.setPrimaryClip(ClipData.newUri(context.contentResolver, context.getString(R.string.chat_viewer_clip_label), uri))
             true
         } catch (_: Exception) {
             false

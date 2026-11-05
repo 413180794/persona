@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -15,6 +16,8 @@ import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
@@ -137,7 +140,7 @@ internal fun CodeText(text: String, language: String = "") {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(language, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-            JTextButton("复制", { clipboard.setText(AnnotatedString(text)) }, icon = PhIcons.Copy)
+            JTextButton(stringResource(R.string.chat_content_copy), { clipboard.setText(AnnotatedString(text)) }, icon = PhIcons.Copy)
         }
         if (remember(preview) { ChatLinks.matches(preview).isNotEmpty() }) {
             SelectionContainer {
@@ -147,8 +150,8 @@ internal fun CodeText(text: String, language: String = "") {
             }
         } else JCodeBlock(preview)
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            if (preview.length < text.length) JTextButton("展开全部", { expanded = true })
-            ReaderEntry(text, language.ifBlank { "全文" })
+            if (preview.length < text.length) JTextButton(stringResource(R.string.chat_content_show_all), { expanded = true })
+            ReaderEntry(text, language.ifBlank { stringResource(R.string.chat_content_full_text) })
         }
     }
 }
@@ -183,10 +186,11 @@ internal fun ChatPicture(session: SessionKey, item: Item, loader: ImageLoader, a
     val ratio = if ((image.width ?: 0) > 0 && (image.height ?: 0) > 0) image.width!!.toFloat() / image.height!! else null
     var failed by remember(item.id) { mutableStateOf(false) }
     var attempt by remember(item.id) { mutableIntStateOf(0) }
+    val description = stringResource(R.string.chat_content_image)
     ChatPictureFrame(ratio, failed, onClick = actions?.let { rowActions -> { rowActions.openPicture(item) } },
-        onRetry = { failed = false; attempt++ }, description = "对话图片", alignEnd = alignEnd) {
+        onRetry = { failed = false; attempt++ }, description = description, alignEnd = alignEnd) {
         key(attempt) {
-            AsyncImage(ChatImage(session, item), "对话图片", imageLoader = loader,
+            AsyncImage(ChatImage(session, item), description, imageLoader = loader,
                 modifier = Modifier.fillMaxSize(), onError = { failed = true }, onSuccess = { failed = false })
         }
     }
@@ -210,6 +214,7 @@ internal fun ChatLineContent(
     lastWorkStep: Boolean = false,
     plan: LinePlan? = null,
 ) {
+    val res = LocalResources.current
     when (line) {
         is ChatLine.Row -> when (line.row.type) {
             "user" -> line.row.item?.injected?.let { InjectedLine(line.row.id, it) } ?: line.row.item?.item?.let {
@@ -232,14 +237,14 @@ internal fun ChatLineContent(
         is ChatLine.MergedUsers -> MergedUserBubble(line.users.mapNotNull { it.item?.item }, textUpdates,
             onLastLine.takeIf { line.users.any { it.id == lastUserId } },
             images = userPictures(userImages, session, loader))
-        is ChatLine.SplitHeader -> JTextButton("合并 ${line.count} 条输入", { onToggle(line.groupId) })
+        is ChatLine.SplitHeader -> JTextButton(pluralStringResource(R.plurals.chat_content_merge_inputs, line.count, line.count), { onToggle(line.groupId) })
         is ChatLine.Work -> {
             // While it runs, the plan and the newest steps show under 「正在工作…」 and a ticking clock (web #1990); done,
             // it folds to its summary. Persona's own chat keeps one sentence that counts its time up every second (R1).
             val trace = line.live && !style.compactToolSummary
             val now by rememberNow(1_000, enabled = line.live && !trace)
             val peek = remember(line.steps, trace) { if (trace) workPeek(line.steps) else null }
-            WorkGroup(workSummary(line, recordedDuration, now.takeIf { line.live }, peek = trace), line.open,
+            WorkGroup(workSummary(res, line, recordedDuration, now.takeIf { line.live }, peek = trace), line.open,
                 { onToggle(line.id) }, running = line.live,
                 trailing = if (trace) ({ WorkClock(line) }) else null,
                 peek = peek?.takeIf { it.plan != null || it.steps.isNotEmpty() }?.let { shown -> {
@@ -249,7 +254,8 @@ internal fun ChatLineContent(
                             val last = i == shown.steps.lastIndex
                             // A thought is one line here (web ThinkingLine): a long one streaming in would make the peek jump.
                             if (step is WorkItem.Thought) TimelineStep(PhIcons.Lightbulb,
-                                thoughtLine(textUpdates[step.item.id]?.text ?: step.item.text.orEmpty()), verb = "思考", last = last, singleLine = true)
+                                thoughtLine(textUpdates[step.item.id]?.text ?: step.item.text.orEmpty(), stringResource(R.string.chat_work_thought)),
+                                verb = stringResource(R.string.chat_work_thought), last = last, singleLine = true)
                             else WorkStep(step, session, loader, onFold, folding, foldErrors, onFullText, style, textUpdates,
                                 running = true, last = last)
                         }
@@ -257,9 +263,9 @@ internal fun ChatLineContent(
                 } }) {}
         }
         is ChatLine.Step -> WorkStep(line.step, session, loader, onFold, folding, foldErrors, onFullText, style, textUpdates, workRunning, lastWorkStep, plan)
-        is ChatLine.End -> TimelineMark("收起 ${line.count} 步",
+        is ChatLine.End -> TimelineMark(pluralStringResource(R.plurals.chat_content_collapse_steps, line.count, line.count),
             Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { onToggle(line.groupId) })
-        is ChatLine.Wakes -> ChatSystemLine("后台唤醒 ${line.turn.wakes.size} 次")
+        is ChatLine.Wakes -> ChatSystemLine(pluralStringResource(R.plurals.chat_content_wakes, line.turn.wakes.size, line.turn.wakes.size))
     }
 }
 
@@ -272,8 +278,9 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
             val item = step.item.item
             val loading = item.id in folding
             WorkGroup(
-                summary = if (loading) "正在载入 ${step.stepCount()} 步…"
-                    else if (item.id in errors) "载入失败，点此重试" else "做了 ${step.stepCount()} 步",
+                summary = if (loading) pluralStringResource(R.plurals.chat_content_loading_steps, step.stepCount(), step.stepCount())
+                    else if (item.id in errors) stringResource(R.string.chat_content_load_failed)
+                    else pluralStringResource(R.plurals.chat_work_done_steps, step.stepCount(), step.stepCount()),
                 expanded = false, onToggle = { if (!loading) onFold(item) }, running = loading,
             ) {}
 
@@ -293,10 +300,11 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                 if (plan?.id == call.id) PlanStep(plan, running)
                 return
             }
-            val presentation = toolPresentation(call.use.item)
+            val presentation = toolPresentation(LocalResources.current, call.use.item)
             Column(Modifier.fillMaxWidth()) {
                 TimelineStep(toolCategory(call.name), presentation.title, verb = presentation.verb,
-                    detail = listOfNotNull(presentation.detail, if (call.running) (if (running) "正在执行" else "无结果记录") else null).joinToString("，").ifBlank { null },
+                    detail = listOfNotNull(presentation.detail, if (call.running) stringResource(if (running) R.string.chat_content_tool_running else R.string.chat_content_tool_no_result) else null)
+                        .joinToString(stringResource(R.string.chat_status_clause_separator)).ifBlank { null },
                     state = when {
                         call.failed -> WorkState.Failed
                         running && call.running -> WorkState.Running
@@ -317,7 +325,7 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                         DiffView(diff, call.id)
                     } else if (todos == null) ToolInputDetail(call.use.item)
                     // A truncated output opens in full from 原始输出 below. An edit's own result only says it worked.
-                    call.result?.item?.let { result -> if (todos == null && (diff == null || call.failed)) CodeText(result.text.orEmpty(), "输出") }
+                    call.result?.item?.let { result -> if (todos == null && (diff == null || call.failed)) CodeText(result.text.orEmpty(), stringResource(R.string.chat_content_output)) }
                     // A dev server saying where it listens (docs/ports.md).
                     if (call.name == "Bash") call.result?.text?.let { PortBadges(it) }
                     call.images.forEach { ChatPicture(session, it.item, loader) }
@@ -347,7 +355,7 @@ private fun PlanStep(plan: LinePlan, running: Boolean, nested: Boolean = false) 
             else -> PlanItemState.Pending
         } }
     }
-    PlanCard(items, progress.current, progress.step, live = running, nested = nested, note = if (plan.failed) "更新失败" else null)
+    PlanCard(items, progress.current, progress.step, live = running, nested = nested, note = if (plan.failed) stringResource(R.string.chat_content_plan_failed) else null)
 }
 
 /** A running line's clock, every second: a leaf of its own, so the ticking redraws nothing else. */

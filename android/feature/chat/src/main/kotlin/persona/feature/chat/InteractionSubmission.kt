@@ -12,11 +12,11 @@ internal fun AnswerDraft.forStorage(interaction: Interaction): AnswerDraft =
         persona.core.domain.answer.ElicitationForm.fields(interaction.elicitation?.requestedSchema).none { it.key == key && it.secret }
     }))
 
-internal enum class InteractionSubmission(val notice: String, val withdraw: Boolean) {
-    Answered("已回传你的选择", true),
-    ResolvedElsewhere("已在电脑上处理", true),
-    PromptChanged("屏幕内容已变化，本次未提交。请查看新问题后重新选择", true),
-    Unknown("回传结果待确认，请先核对请求", false),
+internal enum class InteractionSubmission(@androidx.annotation.StringRes val notice: Int, val withdraw: Boolean) {
+    Answered(R.string.chat_interaction_answered, true),
+    ResolvedElsewhere(R.string.chat_interaction_resolved_elsewhere, true),
+    PromptChanged(R.string.chat_interaction_prompt_changed, true),
+    Unknown(R.string.chat_interaction_unknown, false),
 }
 
 internal suspend fun submitInteraction(submit: suspend () -> Unit): InteractionSubmission = try {

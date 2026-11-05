@@ -37,11 +37,12 @@ internal fun ChatSearchScreen(
     var pages by remember { mutableIntStateOf(0) }
     var notice by remember { mutableStateOf<String?>(null) }
     var searching by remember { mutableStateOf(false) }
+    val res = androidx.compose.ui.platform.LocalResources.current
     val results by produceState(ChatSearchResults(), state.query, items) {
         searching = true
         value = ChatSearchResults()
         delay(200)
-        value = withContext(Dispatchers.Default) { searchChat(items, state.query) }
+        value = withContext(Dispatchers.Default) { searchChat(res, items, state.query) }
         searching = false
     }
     val loadFailed = stringResource(R.string.chat_search_load_failed)
@@ -73,7 +74,7 @@ internal fun ChatSearchScreen(
                         pages = 0
                         notice = null
                         pageJob = scope.launch {
-                            try { notice = loadEarlierForSearch(repository, session) { pages = it } }
+                            try { notice = loadEarlierForSearch(res, repository, session) { pages = it } }
                             catch (e: CancellationException) { throw e }
                             catch (_: Exception) { notice = loadFailed }
                             finally { loading = false }

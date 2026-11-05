@@ -1,5 +1,10 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.chatlist.ChatReadingPosition
 import persona.core.contracts.Item
 import persona.core.contracts.SessionKey
@@ -13,7 +18,10 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.*
 import org.junit.Test
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChatSearchTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun searchesNestedStringsAndAllReadingCategoriesWithLiteralHighlightsAndLimit() = runTest {
         val items = listOf(
             Item("text", kind = "text", text = "正文 Needle"),
@@ -23,19 +31,19 @@ class ChatSearchTest {
             Item("result", kind = "tool_result", text = "输出 needle"),
             Item("notice", kind = "notice", text = "事件 needle"),
         )
-        val results = searchChat(items, " needle ")
+        val results = searchChat(res, items, " needle ")
         assertEquals(setOf("正文", "思考", "工具名", "工具输入", "工具输出", "系统事件"), results.hits.map { it.category }.toSet())
         results.hits.forEach { hit -> hit.ranges.forEach { range -> assertEquals("needle", hit.snippet.substring(range).lowercase()) } }
-        assertTrue(searchChat(items, "123").hits.isEmpty())
-        assertTrue(searchChat(items, "true").hits.isEmpty())
-        assertTrue(searchChat(items, " ").hits.isEmpty())
-        val literal = searchChat(listOf(Item("literal", kind = "text", text = "😀前文 a.* a.*")), "a.*").hits.single()
+        assertTrue(searchChat(res, items, "123").hits.isEmpty())
+        assertTrue(searchChat(res, items, "true").hits.isEmpty())
+        assertTrue(searchChat(res, items, " ").hits.isEmpty())
+        val literal = searchChat(res, listOf(Item("literal", kind = "text", text = "😀前文 a.* a.*")), "a.*").hits.single()
         assertEquals(2, literal.ranges.size)
-        val capped = searchChat((1..101).map { Item("item-$it", it, kind = "text", text = "needle") }, "needle")
+        val capped = searchChat(res, (1..101).map { Item("item-$it", it, kind = "text", text = "needle") }, "needle")
         assertEquals(100, capped.hits.size)
         assertTrue(capped.truncated)
         assertEquals("item-101", capped.hits.first().itemId)
-        assertFalse(searchChat((1..100).map { Item("item-$it", it, kind = "text", text = "needle") }, "needle").truncated)
+        assertFalse(searchChat(res, (1..100).map { Item("item-$it", it, kind = "text", text = "needle") }, "needle").truncated)
     }
 
     @Test fun resolvesFoldedTargetsAndLoadsOnlyContinuousBoundedPagesWithoutLosingReturnAnchor() = runTest {
@@ -72,12 +80,12 @@ class ChatSearchTest {
             }
         }
         val pages = mutableListOf<Int>()
-        assertNotNull(loadEarlierForSearch(repository, key, pages::add))
+        assertNotNull(loadEarlierForSearch(res, repository, key, pages::add))
         assertEquals((1..20).toList(), pages)
         assertEquals(20, calls)
         assertEquals(10, snapshot.value.items.minOf { it.seq })
         fail = true
-        assertNotNull(loadEarlierForSearch(repository, key) { org.junit.Assert.fail("Failed page must not advance progress") })
+        assertNotNull(loadEarlierForSearch(res, repository, key) { org.junit.Assert.fail("Failed page must not advance progress") })
         assertEquals(21, calls)
     }
 }

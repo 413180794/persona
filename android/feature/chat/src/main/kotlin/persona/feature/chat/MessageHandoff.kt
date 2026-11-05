@@ -3,6 +3,7 @@ package persona.feature.chat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.MainConversationSender
 import persona.core.contracts.api.PendingMainConversation
@@ -53,7 +54,8 @@ suspend fun handToPersona(
 fun rememberHandToPersona(sender: MainConversationSender?, navigator: Navigator): ((String) -> Unit)? {
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
-    return remember(sender, navigator, scope, feedback) {
+    val failed = stringResource(R.string.chat_handoff_failed)
+    return remember(sender, navigator, scope, feedback, failed) {
         sender?.let { main ->
             { text: String ->
                 scope.launch {
@@ -64,7 +66,7 @@ fun rememberHandToPersona(sender: MainConversationSender?, navigator: Navigator)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        if (feedback?.failure(e) != true) feedback?.notice("没能交给 Persona，请重试")
+                        if (feedback?.failure(e) != true) feedback?.notice(failed)
                     }
                 }
                 Unit

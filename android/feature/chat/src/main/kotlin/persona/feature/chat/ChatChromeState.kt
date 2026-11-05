@@ -1,5 +1,7 @@
 package persona.feature.chat
 
+import androidx.compose.ui.platform.LocalResources
+import android.content.res.Resources
 import androidx.compose.runtime.*
 import persona.core.designsystem.operationFeedback
 import persona.core.domain.FailureAction
@@ -21,17 +23,22 @@ internal fun spaceCompanions(session: Session?, sessions: List<Session>): List<S
     }.sortedWith(compareBy<Session> { it.agentState.priority }.thenBy { it.slotIndex ?: Int.MAX_VALUE }.thenBy { it.sessionId })
 }
 
-internal fun connectionTitle(state: ConnectionState?): String? = when (state) {
+internal fun connectionTitle(res: Resources, state: ConnectionState?): String? = when (state) {
     null, ConnectionState.Online -> null
-    ConnectionState.Connecting -> "连接中…"
-    ConnectionState.Updating -> "更新中…"
-    ConnectionState.WaitingForNetwork -> "等待网络"
-    ConnectionState.NeedsLocalNetworkPermission -> "需要本地网络权限"
-    ConnectionState.CertificateMismatch -> "hub 的证书变了"
-    ConnectionState.Revoked -> "配对已失效"
+    ConnectionState.Connecting -> res.getString(R.string.chat_connection_connecting)
+    ConnectionState.Updating -> res.getString(R.string.chat_connection_updating)
+    ConnectionState.WaitingForNetwork -> res.getString(R.string.chat_connection_waiting_network)
+    ConnectionState.NeedsLocalNetworkPermission -> res.getString(R.string.chat_connection_local_network)
+    ConnectionState.CertificateMismatch -> res.getString(R.string.chat_connection_certificate)
+    ConnectionState.Revoked -> res.getString(R.string.chat_connection_revoked)
 }
 
+/** The header's word for a connection that is not online, in the page's language. */
+@Composable
+internal fun connectionTitle(state: ConnectionState?): String? = connectionTitle(LocalResources.current, state)
+
 internal class ChatChromeState(
+    private val res: Resources,
     private val actions: ChatActions?, private val scope: CoroutineScope,
     private val refresh: suspend () -> Unit, private val onClosed: () -> Unit,
     private val renamer: SessionRenamer? = null,
@@ -50,7 +57,7 @@ internal class ChatChromeState(
         busy = true
         scope.launch {
             try {
-                if (service.rename(session, edit.title, edit.tabName)) notice = "已重命名"
+                if (service.rename(session, edit.title, edit.tabName)) notice = res.getString(R.string.chat_action_renamed)
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) { notice = operationFeedback(error).message }
             finally { busy = false }
@@ -59,7 +66,7 @@ internal class ChatChromeState(
 
     /** 会话信息 (GET …/info); fails when the actions are not wired, which the sheet says. */
     suspend fun info(session: Session): SessionInfo =
-        actions?.info(session) ?: throw UnsupportedOperationException("会话信息尚未接入")
+        actions?.info(session) ?: throw UnsupportedOperationException(res.getString(R.string.chat_action_info_unavailable))
 
     suspend fun loadMute(session: Session) {
         try { muted = actions?.isMuted(session) }
@@ -76,21 +83,21 @@ internal class ChatChromeState(
                 when (val result = if (verify) service.verify(session, action) else service.execute(session, action)) {
                     ChatActionResult.Done -> {
                         pending = null
-                        notice = when (action) {
-                            ChatAction.Interrupt -> "已发出中断，等电脑确认"
-                            is ChatAction.Rename -> "已重命名"
-                            is ChatAction.Mute -> if (action.muted) "已屏蔽通知" else "已开启通知"
-                            is ChatAction.Modes -> "已更新设置"
-                            ChatAction.Close -> "已关闭 Agent"
-                            ChatAction.Attach -> "已实时接入"
-                            ChatAction.Delete -> "已删除对话"
-                        }
+                        notice = res.getString(when (action) {
+                            ChatAction.Interrupt -> R.string.chat_action_interrupt_sent
+                            is ChatAction.Rename -> R.string.chat_action_renamed
+                            is ChatAction.Mute -> if (action.muted) R.string.chat_action_muted else R.string.chat_action_unmuted
+                            is ChatAction.Modes -> R.string.chat_action_modes_updated
+                            ChatAction.Close -> R.string.chat_action_closed
+                            ChatAction.Attach -> R.string.chat_action_attached
+                            ChatAction.Delete -> R.string.chat_action_deleted
+                        })
                         if (action is ChatAction.Mute) muted = action.muted
                         if (action == ChatAction.Close || action == ChatAction.Delete) onClosed()
                         else try { refresh() } catch (error: CancellationException) { throw error }
-                        catch (_: Exception) { notice = "操作已完成，会话信息稍后更新" }
+                        catch (_: Exception) { notice = res.getString(R.string.chat_action_done_refresh_later) }
                     }
-                    ChatActionResult.Unknown -> { pending = action; notice = "操作结果待确认，请先核对" }
+                    ChatActionResult.Unknown -> { pending = action; notice = res.getString(R.string.chat_action_unknown) }
                     is ChatActionResult.Failed -> {
                         val feedback = result.cause?.let { operationFeedback(it) }
                         pending = action.takeIf { feedback?.action == FailureAction.Verify }

@@ -1,5 +1,7 @@
 package persona.feature.chat
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import persona.core.contracts.Item
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.MessageContext
@@ -69,7 +71,7 @@ internal fun messageModel(raw: String, from: String? = null): MessageModel {
             val attributes = attribute.findAll(match.groupValues[1]).associate {
                 it.groupValues[1] to decodeXmlEntities(it.groupValues[2].ifEmpty { it.groupValues[3] })
             }
-            add(MessagePart.Source(attributes["from-name"].orEmpty().ifBlank { "其他会话" }, decodeXmlEntities(match.groupValues[2]).trim()))
+            add(MessagePart.Source(attributes["from-name"].orEmpty(), decodeXmlEntities(match.groupValues[2]).trim()))
             offset = match.range.last + 1
         }
         plain(text.substring(offset))
@@ -275,42 +277,59 @@ internal fun workPeek(steps: List<WorkItem>, limit: Int = 5): WorkPeek {
     return WorkPeek(plan, out.asReversed())
 }
 
-/** A thought as one line in a running line's peek (web ThinkingLine): its words with the line breaks folded. */
-internal fun thoughtLine(text: String): String = text.trim().replace(Regex("\\s+"), " ").ifEmpty { "思考" }
+/** A thought as one line in a running line's peek (web ThinkingLine): its words with the line breaks folded; [empty] when it has none. */
+internal fun thoughtLine(text: String, empty: String): String = text.trim().replace(Regex("\\s+"), " ").ifEmpty { empty }
 
-internal data class ToolPresentation(val title: String, val verb: String, val detail: String? = null, val mono: Boolean = false)
+/** What a tool call does, as the word on its step ([label]) and as the running line's 「正在读取 x」 ([running], with the title). */
+internal enum class ToolVerb(@StringRes val label: Int, @StringRes val running: Int) {
+    Read(R.string.chat_tool_read, R.string.chat_tool_running_read),
+    Edit(R.string.chat_tool_edit, R.string.chat_tool_running_edit),
+    Create(R.string.chat_tool_create, R.string.chat_tool_running_create),
+    Run(R.string.chat_tool_run, R.string.chat_tool_running_run),
+    Search(R.string.chat_tool_search, R.string.chat_tool_running_search),
+    Update(R.string.chat_tool_update, R.string.chat_tool_running_update),
+    Delegate(R.string.chat_tool_delegate, R.string.chat_tool_running_delegate),
+    Plan(R.string.chat_tool_plan, R.string.chat_tool_running_plan),
+    Ask(R.string.chat_tool_ask, R.string.chat_tool_running_ask),
+    Use(R.string.chat_tool_use, R.string.chat_tool_running_use),
+}
 
-internal fun toolPresentation(item: Item): ToolPresentation {
+internal data class ToolPresentation(
+    val title: String, val verb: String, val detail: String? = null, val mono: Boolean = false, val kind: ToolVerb = ToolVerb.Use,
+)
+
+internal fun toolPresentation(res: Resources, item: Item): ToolPresentation {
     val input = item.toolInput as? JsonObject
     val name = item.toolName.orEmpty()
-    val verb = when (name) {
-        "Read", "LS" -> "读取"
-        "Edit", "MultiEdit", "NotebookEdit" -> "编辑"
-        "Write" -> "新建"
-        "Bash" -> "运行"
-        "Grep", "Glob", "ToolSearch", "WebSearch" -> "搜索"
-        "WebFetch" -> "读取"
-        "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList" -> "更新"
-        "Task", "Agent" -> "委派"
-        "EnterPlanMode", "ExitPlanMode" -> "规划"
-        "AskUserQuestion" -> "询问"
-        else -> "执行"
+    val kind = when (name) {
+        "Read", "LS" -> ToolVerb.Read
+        "Edit", "MultiEdit", "NotebookEdit" -> ToolVerb.Edit
+        "Write" -> ToolVerb.Create
+        "Bash" -> ToolVerb.Run
+        "Grep", "Glob", "ToolSearch", "WebSearch" -> ToolVerb.Search
+        "WebFetch" -> ToolVerb.Read
+        "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList" -> ToolVerb.Update
+        "Task", "Agent" -> ToolVerb.Delegate
+        "EnterPlanMode", "ExitPlanMode" -> ToolVerb.Plan
+        "AskUserQuestion" -> ToolVerb.Ask
+        else -> ToolVerb.Use
     }
+    val verb = res.getString(kind.label)
     val path = input?.string("file_path") ?: input?.string("notebook_path")
     if (!path.isNullOrBlank()) {
         val normalized = path.replace('\\', '/')
-        return ToolPresentation(normalized.substringAfterLast('/'), verb, normalized.substringBeforeLast('/', "").ifBlank { null })
+        return ToolPresentation(normalized.substringAfterLast('/'), verb, normalized.substringBeforeLast('/', "").ifBlank { null }, kind = kind)
     }
     if (name == "Bash") {
         val command = input?.string("command")?.lineSequence()?.firstOrNull().orEmpty()
-        return ToolPresentation(command.ifBlank { "命令" }, verb, input?.string("description"), mono = true)
+        return ToolPresentation(command.ifBlank { res.getString(R.string.chat_tool_command) }, verb, input?.string("description"), mono = true, kind = kind)
     }
     val subject = persona.core.domain.toolSubject(item).trim()
     return ToolPresentation(subject.ifBlank { when (name) {
-        "TodoWrite" -> "任务清单"
-        "Task", "Agent" -> "子 Agent"
+        "TodoWrite" -> res.getString(R.string.chat_tool_todo_list)
+        "Task", "Agent" -> res.getString(R.string.chat_tool_subagent)
         else -> verb
-    } }, verb, mono = name == "Bash")
+    } }, verb, mono = name == "Bash", kind = kind)
 }
 
 /**
@@ -324,28 +343,33 @@ internal fun WorkItem.Folded.stepCount(): Int = item.fold?.let { it.tools + it.t
  * every second like iOS's 「正在工作 39 秒」). With [peek] its latest steps show under it, so it only says
  * 「正在工作…」; the time is a leaf of its own beside it (web #1990).
  */
-internal fun workSummary(line: ChatLine.Work, recordedDuration: Long?, now: Instant? = null, peek: Boolean = false): String {
+internal fun workSummary(res: Resources, line: ChatLine.Work, recordedDuration: Long?, now: Instant? = null, peek: Boolean = false): String {
     val count = line.steps.sumOf { if (it is WorkItem.Folded) it.stepCount() else 1 }
-    if (line.live && peek) return "正在工作…"
+    if (line.live && peek) return res.getString(R.string.chat_work_working_ellipsis)
     if (line.live) {
         val current = line.steps.lastOrNull()
+        val working = res.getString(R.string.chat_work_working)
         val action = when (current) {
             is WorkItem.Tool -> if (current.call.running)
-                toolPresentation(current.call.use.item).let { "正在${it.verb} ${it.title}" } else "正在工作"
-            is WorkItem.Thought -> if (current.item.kind == "thinking") "正在思考" else "正在工作"
-            else -> "正在工作"
+                toolPresentation(res, current.call.use.item).let { res.getString(it.kind.running, it.title) } else working
+            is WorkItem.Thought -> if (current.item.kind == "thinking") res.getString(R.string.chat_work_thinking) else working
+            else -> working
         }
-        val running = if (count > 0) "$action，第 $count 步" else action
+        val running = if (count > 0) res.getString(R.string.chat_work_step, action, count) else action
         val elapsed = now?.let { line.durationText(it) }.orEmpty()
-        return if (elapsed.isEmpty()) running else "$running，$elapsed"
+        return if (elapsed.isEmpty()) running else res.getString(R.string.chat_work_elapsed, running, elapsed)
     }
     val seconds = recordedDuration?.takeIf { it >= 0 }
     val duration = seconds?.let { when {
-        it < 60 -> "$it 秒"
-        it < 3600 -> "${it / 60} 分钟"
-        else -> "${it / 3600} 小时 ${it % 3600 / 60} 分钟"
+        it < 60 -> res.getString(R.string.chat_work_seconds, it)
+        it < 3600 -> res.getString(R.string.chat_work_minutes, it / 60)
+        else -> res.getString(R.string.chat_work_hours_minutes, it / 3600, it % 3600 / 60)
     } }
-    return "做了 $count 步" + (duration?.let { "，用时 $it" } ?: "") +
-        (if (line.knownFailedTools > 0) "，${line.knownFailedTools} 项失败" else "") +
-        (if (line.unresolvedTools > 0) "，${line.unresolvedTools} 项无结果记录" else "")
+    var summary = res.getQuantityString(R.plurals.chat_work_done_steps, count, count)
+    if (duration != null) summary = res.getString(R.string.chat_work_took, summary, duration)
+    if (line.knownFailedTools > 0)
+        summary = res.getQuantityString(R.plurals.chat_work_failed, line.knownFailedTools, summary, line.knownFailedTools)
+    if (line.unresolvedTools > 0)
+        summary = res.getQuantityString(R.plurals.chat_work_unresolved, line.unresolvedTools, summary, line.unresolvedTools)
+    return summary
 }

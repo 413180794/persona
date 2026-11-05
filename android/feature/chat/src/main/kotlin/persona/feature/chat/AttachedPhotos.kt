@@ -1,6 +1,7 @@
 package persona.feature.chat
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -48,9 +49,9 @@ internal class AttachedPhotos(private val files: SessionFiles, private val machi
         cachedBytes[key]?.let { return it }
         val file = files.file(machineId, folder, path)
         val data = file.data
-        check(!file.isDir && !file.truncated && data != null && file.mime.orEmpty().startsWith("image/")) { "不是图片" }
+        check(!file.isDir && !file.truncated && data != null && file.mime.orEmpty().startsWith("image/")) { "not a picture" }
         val bytes = withContext(Dispatchers.Default) { Base64.getMimeDecoder().decode(data) }
-        check(bytes.isNotEmpty()) { "图片是空的" }
+        check(bytes.isNotEmpty()) { "empty picture" }
         cachedBytes[key] = bytes
         return bytes
     }
@@ -88,8 +89,9 @@ private sealed interface PhotoState {
 internal fun AttachedPhotoRow(paths: List<String>) {
     val actions = LocalChatRowActions.current
     val photos = actions?.photos
-    val images = remember(paths, photos) {
-        paths.map { path -> ViewerImage("photo:$path", "照片") { checkNotNull(photos) { "图片暂不可用" }.bytes(path) } }
+    val description = stringResource(R.string.chat_photo)
+    val images = remember(paths, photos, description) {
+        paths.map { path -> ViewerImage("photo:$path", description) { checkNotNull(photos) { "photos unavailable" }.bytes(path) } }
     }
     PhotoRow(alignEnd = true) {
         paths.forEachIndexed { index, path ->
@@ -112,9 +114,10 @@ private fun AttachedPhoto(path: String, photos: AttachedPhotos?, single: Boolean
         }
     }
     val picture = state
+    val description = stringResource(R.string.chat_photo_named, path.substringAfterLast('/'))
     PhotoThumbnail(
         image = (picture as? PhotoState.Ready)?.image, failed = picture is PhotoState.Failed, single = single,
-        onClick = onOpen, onRetry = { attempt++ }, description = "照片 " + path.substringAfterLast('/'),
+        onClick = onOpen, onRetry = { attempt++ }, description = description,
     )
 }
 

@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.designsystem.*
@@ -35,13 +36,13 @@ fun ChatLinkText(text: String, modifier: Modifier = Modifier, style: TextStyle =
 @Composable
 internal fun ChatContextCard(context: ChatLinkContext, compact: Boolean = false, onRemove: (() -> Unit)? = null) {
     val uriHandler = LocalUriHandler.current
-    val label = if (context.kind == "edit") "AI 修改" else "关联上下文"
-    val title = context.title.ifBlank { context.url.ifBlank { "网页选文" } }
+    val label = stringResource(if (context.kind == "edit") R.string.chat_context_ai_edit else R.string.chat_context_linked)
+    val title = context.title.ifBlank { context.url.ifBlank { stringResource(R.string.chat_context_web_selection) } }
     if (compact) JCard(Modifier.fillMaxWidth(), padding = Tokens.Space.xs) {
         Row(Modifier.padding(start = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
-            Text("$label：${context.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: title}", Modifier.weight(1f),
+            Text(stringResource(R.string.chat_label_value, label, context.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: title), Modifier.weight(1f),
                 style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (onRemove != null) JTextButton("移除", onRemove)
+            if (onRemove != null) JTextButton(stringResource(R.string.chat_context_remove), onRemove)
         }
     } else JCard(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(Tokens.Space.s)) {
@@ -49,9 +50,9 @@ internal fun ChatContextCard(context: ChatLinkContext, compact: Boolean = false,
                 Text(label, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink2)
                 Text(title, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(context.text, maxLines = 2, overflow = TextOverflow.Ellipsis, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-                if (ChatLinks.webUrl(context.url) != null) JTextButton("查看原文", { uriHandler.openUri(context.url) })
+                if (ChatLinks.webUrl(context.url) != null) JTextButton(stringResource(R.string.chat_context_view_source), { uriHandler.openUri(context.url) })
             }
-            if (onRemove != null) JTextButton("移除", onRemove)
+            if (onRemove != null) JTextButton(stringResource(R.string.chat_context_remove), onRemove)
         }
     }
 }

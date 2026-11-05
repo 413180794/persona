@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.api.*
 import persona.core.designsystem.*
@@ -39,24 +40,23 @@ internal fun ComposerRefusalActions(
     }
     Column {
         when (code) {
-            "input_draft" -> Text(if (refusal?.clearable.isNullOrEmpty())
-                "电脑上有未发送的草稿，请先到终端处理。手机输入已保留。" else
-                "电脑上有未发送的草稿，可以确认后清空并发送。", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-            "dialog_open" -> Text("电脑上的对话框挡住了输入，请先处理下方交互面板或打开终端。", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            "input_draft" -> Text(stringResource(if (refusal?.clearable.isNullOrEmpty())
+                R.string.chat_refusal_draft_terminal else R.string.chat_refusal_draft_clearable), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            "dialog_open" -> Text(stringResource(R.string.chat_refusal_dialog_open), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            if (code == "input_draft" && !refusal?.clearable.isNullOrEmpty()) JButton("清空并发送", { confirm = true }, size = JButtonSize.Small, kind = JButtonKind.Secondary, enabled = !busy)
-            if (terminal != null) JButton("打开终端", terminal, size = JButtonSize.Small, kind = JButtonKind.Secondary, enabled = !busy)
-            JButton("编辑", edit, size = JButtonSize.Small, kind = JButtonKind.Secondary, enabled = !busy)
+            if (code == "input_draft" && !refusal?.clearable.isNullOrEmpty()) JButton(stringResource(R.string.chat_refusal_clear_and_send), { confirm = true }, size = JButtonSize.Small, kind = JButtonKind.Secondary, enabled = !busy)
+            if (terminal != null) JButton(stringResource(R.string.chat_refusal_open_terminal), terminal, size = JButtonSize.Small, kind = JButtonKind.Secondary, enabled = !busy)
+            JButton(stringResource(R.string.chat_refusal_edit), edit, size = JButtonSize.Small, kind = JButtonKind.Secondary, enabled = !busy)
         }
     }
-    if (confirm) JDialog(onDismiss = { confirm = false }, title = "清空电脑草稿并发送？",
+    if (confirm) JDialog(onDismiss = { confirm = false }, title = stringResource(R.string.chat_refusal_confirm_title),
         content = {
             Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
-                Text("将清空以下电脑草稿，再发送刚才被拒绝的消息：", style = PersonaTheme.type.callout)
+                Text(stringResource(R.string.chat_refusal_confirm_text), style = PersonaTheme.type.callout)
                 JCodeBlock(refusal?.draft ?: refusal?.clearable.orEmpty(), Modifier.padding(vertical = Tokens.Space.s))
-                Text("如果电脑草稿已经变化，会再次拒绝发送。", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                Text(stringResource(R.string.chat_refusal_confirm_note), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             }
         },
-        confirm = "清空并发送" to { confirm = false; retry(true) }, destructive = true)
+        confirm = stringResource(R.string.chat_refusal_clear_and_send) to { confirm = false; retry(true) }, destructive = true)
 }

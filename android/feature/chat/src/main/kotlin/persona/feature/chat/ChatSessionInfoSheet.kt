@@ -1,12 +1,13 @@
 package persona.feature.chat
 
-import android.content.res.Resources
 import androidx.compose.ui.platform.LocalResources
+import android.content.res.Resources
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.Machine
@@ -17,7 +18,6 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.resumeCommand
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 
@@ -38,44 +38,50 @@ internal data class SessionInfoSection(val title: String, val rows: List<Session
  * thread resumes by its own thread id.
  */
 internal fun sessionInfoSections(
+    res: Resources,
     session: Session,
     info: SessionInfo,
     zone: ZoneId = ZoneId.systemDefault(),
     onOpenTodo: ((String) -> Unit)? = null,
-    resources: Resources,
 ): List<SessionInfoSection> {
     fun String?.orSession(fallback: String?) = this?.takeIf(String::isNotBlank) ?: fallback?.takeIf(String::isNotBlank)
     val cwd = info.cwd.orSession(session.cwd)
     val id = info.sessionId.ifBlank { session.sessionId }
+    val locale = res.configuration.locales[0]
+    val directory = res.getString(R.string.chat_info_directory)
+    val branch = res.getString(R.string.chat_info_branch)
+    val resume = res.getString(R.string.chat_info_resume_command)
     return buildList {
         session.todo?.let { todo ->
-            add(SessionInfoSection("待办", listOf(
-                SessionInfoRow("关联待办", todo.title, copy = todo.id, onClick = onOpenTodo?.let { { it(todo.id) } })
+            add(SessionInfoSection(res.getString(R.string.chat_info_todo_section), listOf(
+                SessionInfoRow(res.getString(R.string.chat_info_todo), todo.title, copy = todo.id, onClick = onOpenTodo?.let { { it(todo.id) } })
             )))
         }
-        add(SessionInfoSection("运行", listOf(
-            SessionInfoRow("模型", info.model.orSession(session.model)),
-            SessionInfoRow("启动器", info.launcher.orSession(session.launcher)),
+        add(SessionInfoSection(res.getString(R.string.chat_info_run_section), listOf(
+            SessionInfoRow(res.getString(R.string.chat_info_model), info.model.orSession(session.model)),
+            SessionInfoRow(res.getString(R.string.chat_info_launcher), info.launcher.orSession(session.launcher)),
             SessionInfoRow(if (session.isClaude) "Claude Code" else session.agentLabel, info.version.orSession(null)),
-            SessionInfoRow("权限", SessionModes.modeLabel(info.permissionMode.orSession(session.permissionMode), resources)),
-            SessionInfoRow("思考强度", SessionModes.effortLabel(info.effort.orSession(session.effort), resources)),
+            SessionInfoRow(res.getString(R.string.chat_info_permission), SessionModes.modeLabel(info.permissionMode.orSession(session.permissionMode), res)),
+            SessionInfoRow(res.getString(R.string.chat_info_effort), SessionModes.effortLabel(info.effort.orSession(session.effort), res)),
         )))
-        add(SessionInfoSection("用量", buildList {
-            add(SessionInfoRow("上下文", "${formatTokens(info.contextTokens)} tokens"))
-            if (info.compactions > 0) add(SessionInfoRow("压缩", "${info.compactions} 次"))
-            add(SessionInfoRow("对话", "${info.turns} 轮"))
-            add(SessionInfoRow("共生成", "${formatTokens(info.outputTokens)} tokens"))
+        add(SessionInfoSection(res.getString(R.string.chat_info_usage_section), buildList {
+            add(SessionInfoRow(res.getString(R.string.chat_info_context), res.getString(R.string.chat_info_tokens, formatTokens(info.contextTokens))))
+            if (info.compactions > 0) add(SessionInfoRow(res.getString(R.string.chat_info_compactions),
+                res.getQuantityString(R.plurals.chat_info_compaction_count, info.compactions, info.compactions)))
+            add(SessionInfoRow(res.getString(R.string.chat_info_turns), res.getQuantityString(R.plurals.chat_info_turn_count, info.turns, info.turns)))
+            add(SessionInfoRow(res.getString(R.string.chat_info_output), res.getString(R.string.chat_info_tokens, formatTokens(info.outputTokens))))
             parseTime(info.startedAt)?.let {
-                add(SessionInfoRow("开始", DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.ROOT).format(it.atZone(zone))))
+                add(SessionInfoRow(res.getString(R.string.chat_info_started),
+                    LocalizedFormats.format(it, LocalizedFormats.MONTH_DAY_TIME, locale, zone)))
             }
         }))
-        add(SessionInfoSection("位置", listOfNotNull(
-            SessionInfoRow("目录", cwd, copy = cwd?.let { "目录" }),
-            info.gitBranch.orSession(null)?.let { SessionInfoRow("分支", it, copy = "分支") },
+        add(SessionInfoSection(res.getString(R.string.chat_info_place_section), listOfNotNull(
+            SessionInfoRow(directory, cwd, copy = cwd?.let { directory }),
+            info.gitBranch.orSession(null)?.let { SessionInfoRow(branch, it, copy = branch) },
         )))
-        add(SessionInfoSection("拷贝", listOfNotNull(
+        add(SessionInfoSection(res.getString(R.string.chat_info_copy_section), listOfNotNull(
             SessionInfoRow("session id", id, copy = "session id"),
-            session.resumeCommand(cwd = cwd.orEmpty())?.let { SessionInfoRow("恢复命令", it, copy = "恢复命令") },
+            session.resumeCommand(cwd = cwd.orEmpty())?.let { SessionInfoRow(resume, it, copy = resume) },
         )))
     }
 }
@@ -90,6 +96,7 @@ internal fun ChatSessionInfoSheet(
 ) {
     val clipboard = LocalClipboardManager.current
     val feedback = LocalAppFeedback.current
+    val res = LocalResources.current
     var info by remember(session.key) { mutableStateOf<SessionInfo?>(null) }
     var error by remember(session.key) { mutableStateOf<String?>(null) }
     var attempt by remember(session.key) { mutableIntStateOf(0) }
@@ -97,9 +104,11 @@ internal fun ChatSessionInfoSheet(
         error = null
         try { info = state.info(session) }
         catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error = "读不到会话信息：" + ((e as? UnsupportedOperationException)?.message ?: operationFeedback(e).message) }
+        catch (e: Exception) {
+            error = res.getString(R.string.chat_info_unreadable, (e as? UnsupportedOperationException)?.message ?: operationFeedback(e).message)
+        }
     }
-    JSheet(onDismiss = onDismiss, title = "会话信息", scrollable = true) {
+    JSheet(onDismiss = onDismiss, title = stringResource(R.string.chat_info_title), scrollable = true) {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             Text(session.displayTitle, style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink, maxLines = 2,
                 overflow = TextOverflow.Ellipsis)
@@ -110,7 +119,7 @@ internal fun ChatSessionInfoSheet(
         }
         val loaded = info
         when {
-            loaded != null -> sessionInfoSections(session, loaded, onOpenTodo = onOpenTodo, resources = LocalResources.current).filter { it.rows.isNotEmpty() }.forEach { section ->
+            loaded != null -> sessionInfoSections(res, session, loaded, onOpenTodo = onOpenTodo).filter { it.rows.isNotEmpty() }.forEach { section ->
                 JSectionHeader(section.title)
                 section.rows.forEachIndexed { index, row ->
                     JGroupItem(GroupPosition.of(index, section.rows.size)) {
@@ -119,15 +128,15 @@ internal fun ChatSessionInfoSheet(
                         if (row.onClick != null) JRow(row.label, subtitle = value, subtitleLines = 4,
                             chevron = true, onClick = { onDismiss(); row.onClick.invoke() })
                         else if (copy != null) JRow(row.label, subtitle = value, subtitleLines = 4,
-                            trailing = { JIcon(PhIcons.Copy, "拷贝$copy", tint = PersonaTheme.palette.ink2) }, onClick = {
-                                clipboard.setText(AnnotatedString(value)); feedback?.notice("已拷贝$copy")
+                            trailing = { JIcon(PhIcons.Copy, stringResource(R.string.chat_info_copy_item, copy), tint = PersonaTheme.palette.ink2) }, onClick = {
+                                clipboard.setText(AnnotatedString(value)); feedback?.notice(res.getString(R.string.chat_info_copied_item, copy))
                             })
                         else JRow(row.label, value = value)
                     }
                 }
             }
             error != null -> JNotice(error.orEmpty(), Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou,
-                icon = PhIcons.WarningCircle, actionLabel = "重试", onAction = { attempt++ })
+                icon = PhIcons.WarningCircle, actionLabel = stringResource(R.string.chat_info_retry), onAction = { attempt++ })
             else -> JLoading()
         }
     }

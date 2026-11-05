@@ -1,5 +1,10 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.Session
 import persona.core.contracts.api.ConnectionState
 import org.junit.Assert.*
@@ -12,7 +17,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.*
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChatChromeTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test fun renameSendsOnlyChangesGuardsDuplicateSavesAndReportsSuccessOrFailure() = runTest {
         val session = Session("machine", "session", title = "旧会话", paneId = "pane", slotName = "旧标签")
@@ -36,7 +44,7 @@ class ChatChromeTest {
                 return true
             }
         }
-        val state = ChatChromeState(null, backgroundScope, {}, {}, renamer)
+        val state = ChatChromeState(res, null, backgroundScope, {}, {}, renamer)
         state.rename(session, " 旧会话 ", " 旧标签 ")
         runCurrent()
         assertTrue(calls.isEmpty())
@@ -69,7 +77,7 @@ class ChatChromeTest {
         assertEquals("cd -- '/workspace/project' && codex resume 'session'", current.copy(agent = "codex", sessionId = "session").resumeCommand())
         assertEquals("cd -- '/workspace/it'\"'\"'s' && claude --resume 'session'\"'\"'id'",
             current.copy(cwd = "/workspace/it's", sessionId = "session'id").resumeCommand())
-        assertEquals("配对已失效", connectionTitle(ConnectionState.Revoked))
-        assertNull(connectionTitle(ConnectionState.Online))
+        assertEquals("配对已失效", connectionTitle(res, ConnectionState.Revoked))
+        assertNull(connectionTitle(res, ConnectionState.Online))
     }
 }

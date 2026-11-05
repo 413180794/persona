@@ -76,11 +76,13 @@ internal fun ChatLine.recordedDuration(durations: Map<String, Long>): Long? = wh
     else -> null
 }
 
-internal fun recordedDurationLabel(seconds: Long?): String? = seconds?.takeIf { it >= 0 }?.let { "用时 $it 秒" }
+internal fun recordedDurationLabel(res: android.content.res.Resources, seconds: Long?): String? =
+    seconds?.takeIf { it >= 0 }?.let { res.getString(R.string.chat_state_took_seconds, it) }
 
 internal typealias StatusKind = StatusLineKind
 
 internal fun chatStatusState(
+    res: android.content.res.Resources,
     snapshot: persona.core.contracts.api.ChatSnapshot,
     session: Session?, machine: Machine?, messages: List<OutboxMessage>,
     requests: List<Interaction>, answering: Boolean,
@@ -99,17 +101,18 @@ internal fun chatStatusState(
     working = session?.status == "working",
     waiting = session?.loop != null || !session?.background.isNullOrEmpty(),
     waitingDetail = when {
-        session?.loop != null -> "循环中"
-        !session?.background.isNullOrEmpty() -> "等后台任务 · ${session?.background?.size} 个"
+        session?.loop != null -> res.getString(R.string.chat_state_looping)
+        !session?.background.isNullOrEmpty() -> session?.background?.size?.let { res.getQuantityString(R.plurals.chat_state_background, it, it) }
         else -> null
     },
 )
 
 internal fun chatStatus(
+    res: android.content.res.Resources,
     snapshot: persona.core.contracts.api.ChatSnapshot,
     session: Session?, machine: Machine?, messages: List<OutboxMessage>,
     requests: List<Interaction>, answering: Boolean,
-) = resolveStatusLine(chatStatusState(snapshot, session, machine, messages, requests, answering))
+) = resolveStatusLine(chatStatusState(res, snapshot, session, machine, messages, requests, answering))
 
 internal fun ChatLine.contentType(): String = when (this) {
     is ChatLine.Row -> row.type
@@ -125,10 +128,15 @@ internal fun ChatLine.contentType(): String = when (this) {
     is ChatLine.Extra -> "extra"
 }
 
-internal fun interactionSource(interaction: Interaction, machine: Machine?): String = listOfNotNull(
+internal fun interactionSource(res: android.content.res.Resources, interaction: Interaction, machine: Machine?): String = listOfNotNull(
     interaction.sessionTitle?.takeIf { it.isNotBlank() },
-    machine?.takeIf { it.id == interaction.machineId }?.name?.takeIf { it.isNotBlank() } ?: "未知机器",
+    machine?.takeIf { it.id == interaction.machineId }?.name?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chat_state_unknown_machine),
 ).joinToString(" · ")
+
+/** Where a request comes from, in the page's language. */
+@androidx.compose.runtime.Composable
+internal fun interactionSource(interaction: Interaction, machine: Machine?): String =
+    interactionSource(androidx.compose.ui.platform.LocalResources.current, interaction, machine)
 
 internal fun interactionDeadline(expires: java.time.Instant, now: java.time.Instant): String {
     return requireNotNull(persona.core.domain.answer.RequestExpiry.label(expires.toString(), now))

@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import android.content.res.Resources
 import androidx.compose.runtime.*
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
@@ -10,6 +11,7 @@ import kotlinx.coroutines.launch
 
 /** Owned by the page so dismissing a sheet cannot start a second operation. */
 internal class ChatStatusRecovery(
+    private val res: Resources,
     private val service: ChatRecoveryService?,
     private val scope: CoroutineScope,
     private val refresh: suspend () -> Unit,
@@ -31,7 +33,7 @@ internal class ChatStatusRecovery(
                     is ChatRecoveryResult.Restored -> {
                         restored = result.session
                         resumeUnknown = false
-                        notice = "会话已恢复"
+                        notice = res.getString(R.string.chat_recovery_restored)
                         refreshSafely()
                     }
                     ChatRecoveryResult.Unknown -> unknownResume()
@@ -51,30 +53,30 @@ internal class ChatStatusRecovery(
             try {
                 if (reconnectRequested) {
                     refresh()
-                    notice = "已刷新状态，请查看电脑是否在线。"
+                    notice = res.getString(R.string.chat_recovery_refreshed)
                 } else {
                     reconnectRequested = true
                     when (val result = source.reconnect(machineId)) {
-                        ChatActionResult.Done -> notice = "已请求重连，等待电脑上线。"
-                        ChatActionResult.Unknown -> notice = "重连结果待确认，请刷新状态核对。"
+                        ChatActionResult.Done -> notice = res.getString(R.string.chat_recovery_reconnect_requested)
+                        ChatActionResult.Unknown -> notice = res.getString(R.string.chat_recovery_reconnect_unknown)
                         is ChatActionResult.Failed -> { reconnectRequested = false; notice = result.reason }
                     }
                     refreshSafely()
                 }
             } catch (error: CancellationException) { throw error }
-            catch (_: Exception) { notice = "暂时无法确认电脑状态，请稍后刷新。" }
+            catch (_: Exception) { notice = res.getString(R.string.chat_recovery_machine_unknown) }
             finally { busy = false }
         }
     }
 
     private fun unknownResume() {
         resumeUnknown = true
-        notice = "恢复结果待确认。再次核对只会读取会话状态，不会重复启动。"
+        notice = res.getString(R.string.chat_recovery_resume_unknown)
     }
 
     private suspend fun refreshSafely() {
         try { refresh() }
         catch (error: CancellationException) { throw error }
-        catch (_: Exception) { notice = "${notice.orEmpty()}，列表暂未更新，请稍后查看。" }
+        catch (_: Exception) { notice = res.getString(R.string.chat_recovery_list_stale, notice.orEmpty()) }
     }
 }

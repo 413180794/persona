@@ -1,5 +1,7 @@
 package persona.feature.chat
 
+import androidx.compose.ui.platform.LocalResources
+import android.content.res.Resources
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,12 +18,12 @@ import persona.core.domain.sort.canAttach
 import persona.core.domain.sort.source
 
 /** Why a request in this session cannot be answered from the phone: a Codex thread not joined yet, or a read-only source. */
-internal fun approvalBlockedReason(session: Session?): String =
-    if (session?.canAttach == true) "实时接入以后才能在手机上处理这个请求（会话菜单里的「实时接入」），也可以到电脑上处理。"
-    else "这个会话不允许在手机上审批，请到电脑上处理。"
+internal fun approvalBlockedReason(res: Resources, session: Session?): String =
+    res.getString(if (session?.canAttach == true) R.string.chat_source_attach_to_answer else R.string.chat_source_no_phone_approval)
 
 /** What the read-only note says after the source's name: the source's reason, or that the session can only be read. */
-internal fun readOnlyNote(session: Session): String = session.source?.readOnlyReason?.let { "仅查看：$it" } ?: READ_ONLY
+internal fun readOnlyNote(res: Resources, session: Session): String =
+    session.source?.readOnlyReason?.let { res.getString(R.string.chat_source_read_only_reason, it) } ?: READ_ONLY
 
 /**
  * In place of what would be typed, for a session whose source only lets the phone read it (a Codex history thread, a
@@ -33,7 +35,7 @@ internal fun ChatSourceNote(session: Session, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.xs),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         source?.let { JTag(it.label) }
-        Text(readOnlyNote(session), Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
+        Text(readOnlyNote(LocalResources.current, session), Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }

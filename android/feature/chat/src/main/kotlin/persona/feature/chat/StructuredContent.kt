@@ -16,6 +16,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -70,7 +72,7 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
                 else ChatMarkdown(part.text, "$id/$index", selectable = false)
             is MessagePart.Source -> JGroupItem(GroupPosition.Single) {
                 Column(Modifier.fillMaxWidth().padding(10.dp)) {
-                    Text("来自 ${part.name}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                    Text(stringResource(R.string.chat_content_from, part.name.ifBlank { stringResource(R.string.chat_content_other_session) }), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                     // Markdown like an answer: agents write Markdown, and the hub turns a teammate's JSON notes into it.
                     if (part.text.isNotBlank()) ChatMarkdown(keepLineBreaks(part.text), "$id/$index", selectable = false)
                 }
@@ -138,12 +140,13 @@ internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUp
 internal fun ThoughtContent(text: String, id: String, collapsed: Boolean, last: Boolean = true) {
     var open by rememberSaveable(id) { mutableStateOf(!collapsed) }
     Column {
-        TimelineStep(PhIcons.Lightbulb, "思考", verb = "思考", last = last, onClick = { open = !open })
+        val thought = stringResource(R.string.chat_work_thought)
+        TimelineStep(PhIcons.Lightbulb, thought, verb = thought, last = last, onClick = { open = !open })
         if (open) {
             Column(Modifier.padding(start = Tokens.Space.m)) {
                 ChatMarkdown(text, id, PersonaTheme.type.callout, PersonaTheme.palette.ink2)
             }
-            ReaderEntry(text, "思考")
+            ReaderEntry(text, thought)
         }
     }
 }
@@ -212,7 +215,8 @@ internal fun DiffView(diff: ToolDiff, id: String) {
                     }
                 }
             }
-            if (diff.lines.size > 40) JTextButton(if (expanded) "收起" else "展开全部（${diff.lines.size} 行）", { expanded = !expanded })
+            if (diff.lines.size > 40) JTextButton(if (expanded) stringResource(R.string.chat_content_collapse)
+                else pluralStringResource(R.plurals.chat_content_show_all_lines, diff.lines.size, diff.lines.size), { expanded = !expanded })
         }
     }
 }
@@ -220,15 +224,16 @@ internal fun DiffView(diff: ToolDiff, id: String) {
 @Composable
 internal fun TodoList(todos: List<TodoEntry>, failed: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("${todos.count { it.status == "completed" }}/${todos.size} 项待办已完成" + if (failed) "，更新失败" else "",
+        val progress = stringResource(R.string.chat_todos_progress, todos.count { it.status == "completed" }, todos.size)
+        Text(if (failed) stringResource(R.string.chat_todos_progress_failed, progress) else progress,
             style = PersonaTheme.type.caption, color = if (failed) PersonaTheme.palette.danger.text else PersonaTheme.palette.ink2)
         todos.forEach { todo ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                 val label = when (todo.status) {
-                    "completed" -> "已完成"
-                    "in_progress" -> "进行中"
-                    "pending" -> "待办"
-                    else -> "状态未知"
+                    "completed" -> stringResource(R.string.chat_todos_done)
+                    "in_progress" -> stringResource(R.string.chat_todos_in_progress)
+                    "pending" -> stringResource(R.string.chat_todos_pending)
+                    else -> stringResource(R.string.chat_todos_unknown)
                 }
                 JCheckbox(todo.status == "completed", onCheckedChange = null)
                 Column(Modifier.weight(1f)) {

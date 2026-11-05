@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -115,7 +116,7 @@ fun RequestEditor(
             next.fields.filterKeys { key -> ElicitationForm.fields(request.elicitation?.requestedSchema).any { it.key == key && it.secret } }))
         if (storageScope != null) store.save(storageScope, request, next)
     }
-    if (storageScope == null && request.secret != true) Text("草稿暂存于当前页面", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+    if (storageScope == null && request.secret != true) Text(stringResource(R.string.chat_request_draft_page_only), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
     val items by remember(services, request.sessionKey, request.kind) {
         if (request.kind == "screen") services.chats().observe(request.sessionKey) else flowOf(ChatSnapshot())
     }

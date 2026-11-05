@@ -1,5 +1,10 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.*
@@ -14,7 +19,10 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChatDeliveryStateTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun deliveryActionsUseOriginalIdsAndPreserveDraftsAcrossRaces() = runTest {
         val sender = FakeSender()
         val actions = ChatDeliveryActions(sender)
@@ -101,16 +109,16 @@ class ChatDeliveryStateTest {
         )
         DeliveryState.entries.forEach { assertEquals(expected[it], it.pendingStatus) }
         listOf(DeliveryState.Unknown, DeliveryState.Verifying, DeliveryState.NeedsConfirmation).forEach { state ->
-            val line = chatStatus(snapshot, session, null, listOf(message.copy(state = state)), emptyList(), false)
+            val line = chatStatus(res, snapshot, session, null, listOf(message.copy(state = state)), emptyList(), false)
             assertEquals(StatusLineKind.Unconfirmed, line?.kind)
             assertEquals("上次操作结果待确认", line?.text)
         }
-        val stopping = chatStatusState(snapshot.copy(stopping = true), session, null, emptyList(), emptyList(), false)
+        val stopping = chatStatusState(res, snapshot.copy(stopping = true), session, null, emptyList(), emptyList(), false)
         assertEquals(StatusLineKind.Stopping, resolveStatusLine(stopping)?.kind)
         assertEquals("会话已结束", resolveStatusLine(stopping.copy(ended = true))?.text)
         assertEquals("已换成新会话", resolveStatusLine(stopping.copy(replaced = true))?.text)
         assertEquals(StatusLineKind.MachineOffline, resolveStatusLine(stopping.copy(machineOffline = true))?.kind)
-        assertNull(chatStatus(snapshot, session.copy(status = "done"), null, emptyList(), emptyList(), false))
+        assertNull(chatStatus(res, snapshot, session.copy(status = "done"), null, emptyList(), emptyList(), false))
     }
 
     private class FakeSender : MessageSender {

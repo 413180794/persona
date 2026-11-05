@@ -15,7 +15,7 @@ class InteractionSubmissionTest {
     @Test fun terminalOutcomesWithdrawStaleCardsAndOnlyLostReceiptsStayUncertain() = runTest {
         assertEquals(InteractionSubmission.Answered, submitInteraction { })
         val gone = submitInteraction { throw InteractionGoneException() }
-        assertEquals("已在电脑上处理", gone.notice)
+        assertEquals(R.string.chat_interaction_resolved_elsewhere, gone.notice)
         assertTrue(gone.withdraw)
         val changed = submitInteraction { throw InteractionPromptChangedException() }
         assertEquals(InteractionSubmission.PromptChanged, changed)

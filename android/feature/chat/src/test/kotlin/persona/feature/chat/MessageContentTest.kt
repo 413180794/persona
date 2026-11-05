@@ -26,7 +26,7 @@ import java.time.Instant
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class MessageContentTest {
-    private val res = ApplicationProvider.getApplicationContext<Context>().resources
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun photosSentFromThePhoneAreThumbnailsNotText() {
         val model = messageModel("看这个 [Image #1]\n\n<attached_images>\n/Users/me/a.jpg\n/Users/me/b.jpg\n</attached_images>")
         assertEquals(listOf("/Users/me/a.jpg", "/Users/me/b.jpg"), model.images)
@@ -136,20 +136,20 @@ class MessageContentTest {
     @Test fun theRunningWorkLineCountsItsTime() {
         val start = Instant.parse("2026-11-02T10:00:00Z")
         val line = ChatLine.Work("w-1", emptyList(), live = true, start = start, end = null, open = false)
-        assertEquals("正在工作", workSummary(line, null))
-        assertEquals("正在工作，1 分 20 秒", workSummary(line, null, start.plusSeconds(80)))
-        assertEquals("正在工作，39 秒", workSummary(line, null, start.plusSeconds(39)))
+        assertEquals("正在工作", workSummary(res, line, null))
+        assertEquals("正在工作，1 分 20 秒", workSummary(res, line, null, start.plusSeconds(80)))
+        assertEquals("正在工作，39 秒", workSummary(res, line, null, start.plusSeconds(39)))
         // A finished line keeps its recorded words.
-        assertFalse(workSummary(line.copy(live = false), 30, start.plusSeconds(80)).contains("正在"))
+        assertFalse(workSummary(res, line.copy(live = false), 30, start.plusSeconds(80)).contains("正在"))
     }
 
     @Test fun aRunningLineWithItsStepsShowingOnlySaysItIsWorking() {
         val start = Instant.parse("2026-11-02T10:00:00Z")
         val line = ChatLine.Work("w-1", emptyList(), live = true, start = start, end = null, open = false)
         // The clock is a leaf of its own beside these words (WorkClock).
-        assertEquals("正在工作…", workSummary(line, null, start.plusSeconds(80), peek = true))
+        assertEquals("正在工作…", workSummary(res, line, null, start.plusSeconds(80), peek = true))
         // Done, it folds to the summary as before.
-        assertEquals("做了 0 步，用时 30 秒", workSummary(line.copy(live = false), 30, start.plusSeconds(80), peek = true))
+        assertEquals("做了 0 步，用时 30 秒", workSummary(res, line.copy(live = false), 30, start.plusSeconds(80), peek = true))
     }
 
     private fun step(id: String, name: String, vararg fields: Pair<String, String>) =
@@ -211,7 +211,7 @@ class MessageContentTest {
             persona.core.domain.lines.Fold(wire.items, wire.tools, wire.thoughts, wire.throughSeq, wire.throughId)))
         assertEquals(4, folded.stepCount())
         val line = ChatLine.Work("w-1", listOf(folded), live = false, start = null, end = null, open = false)
-        assertEquals("做了 4 步", workSummary(line, null))
+        assertEquals("做了 4 步", workSummary(res, line, null))
     }
 
     @Test fun theLatestTurnsMarkdownIsParsedFirstWithTheTextItsRowsDraw() {
