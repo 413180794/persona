@@ -41,5 +41,11 @@
   "confirmed_hint": "它会出现在机器列表里，新建 Agent 时可以选它。",
   "rejected": "已删掉「{name}」",
   "gone": "「{name}」已经不在了",
-  "rejected_hint": "它用过的配对链接也作废了。要加电脑，重新添加一次。"
+  "rejected_hint": "它用过的配对链接也作废了。要加电脑，重新添加一次。",
+  "title_confirm": "确认电脑",
+  "offline": "「{name}」还没连上来",
+  "offline_hint": "它连上来以后，这里会问你是不是你的电脑。那台电脑还没拿到配对链接，就重新出一个。",
+  "offline_hint_old": "它连上来以后，这里会问你是不是你的电脑。",
+  "new_link": "重新出链接",
+  "remove": "删掉"
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { addBody, addErrorText, addStage, canAddComputer, linuxCommand, machineErrorText, pairCommand, windowsCommand } from "./add-computer";
+import {
+  addBody, addErrorText, addStage, canAddComputer, canConfirmComputer, confirmStage, linuxCommand, machineErrorText, pairCommand, pendingToConfirm, windowsCommand,
+} from "./add-computer";
 import { ApiError } from "./api";
 import type { Machine } from "./types";
 
@@ -73,5 +75,30 @@ describe("words", () => {
     expect(addErrorText(err("mesh_member"))).toContain("中心 hub");
     expect(addErrorText(err("too_many_pending"))).toContain("3 台");
     expect(addErrorText(err("exists", "这个 id 已经有了"))).toBe("这个 id 已经有了");
+  });
+});
+
+describe("confirming a computer waiting to be confirmed", () => {
+  it("needs the hub to say machine_trust", () => {
+    expect(canConfirmComputer(["machine_trust"])).toBe(true);
+    expect(canConfirmComputer([])).toBe(false);
+  });
+
+  it("asks only once it is online, and follows a confirm or a removal made elsewhere", () => {
+    expect(confirmStage(m({ trust: "pending", online: true }))).toBe("joined");
+    expect(confirmStage(m({ trust: "pending" }))).toBe("offline");
+    expect(confirmStage(m({ online: true }))).toBe("connected");
+    expect(confirmStage(undefined)).toBe("gone");
+  });
+
+  it("opens the step's computer, else the first one waiting that is online, else the first one waiting", () => {
+    const a = m({ id: "a", trust: "pending" });
+    const b = m({ id: "b", trust: "pending", online: true });
+    const c = m({ id: "c", online: true });
+    expect(pendingToConfirm([a, b, c], "a")?.id).toBe("a");
+    expect(pendingToConfirm([a, b, c], "c")?.id).toBe("b");
+    expect(pendingToConfirm([a, b, c])?.id).toBe("b");
+    expect(pendingToConfirm([a, c])?.id).toBe("a");
+    expect(pendingToConfirm([c])).toBeUndefined();
   });
 });

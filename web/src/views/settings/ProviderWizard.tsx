@@ -3,7 +3,9 @@
 // A preset needs only ② the key: it is tested on its own (POST /launchers/test with the preset) and saved with
 // assign, and ③ says what now runs on it. The gateway goes ② 连接 (address, auth, key; 测试连接 and 获取模型列表) ③ 选择模型
 // (context window, thinking levels, the default), the rest under 高级. Editing opens at 连接 with the same form. The logic
-// is lib/providers.ts and lib/launcher-presets.ts.
+// is lib/providers.ts and lib/launcher-presets.ts. It reads the main conversation's readiness (4.3 B.3 / B.4): with a
+// Claude Code that already answers, 主对话和新开的 Agent 都用它 starts off; a key saved for a computer with no Claude Code
+// says so (the main conversation still starts claude there) with how to install it.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import {
@@ -42,11 +44,13 @@ import {
   type ProviderView,
   type TestResult,
 } from "../../lib/providers";
+import { claudeMissing, claudeWorks, currentReadiness, readinessChanged, readinessSettled, useReadiness, type Readiness } from "../../lib/readiness";
 import { effortLabel } from "../../lib/routines";
 import { hubHas, useStore } from "../../lib/store";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Segmented } from "../assistant/parts";
+import { InstallClaudeHelp } from "../assistant/Readiness";
 import { Pill, Switch } from "./SettingsParts";
 import { CheckMark, Disclosure, FIELD, INPUT, Labelled, SecretField, SMALL, TextField } from "./ProviderFields";
 import { t } from "../../i18n";
@@ -90,10 +94,15 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
   const [choice, setChoice] = useState("");
   const [pf, setPf] = useState({ name: "", api_key: "", model: "" });
   const [more, setMore] = useState(false);
-  const [assign, setAssign] = useState(true);
+  // null: not touched, so it follows the readiness (off while Claude Code already answers)
+  const [assignSet, setAssign] = useState<boolean | null>(null);
   const [keyTest, setKeyTest] = useState<KeyTest | null>(null);
   const testSeq = useRef(0);
-  const [added, setAdded] = useState<{ result: AddResult; asked: boolean; fallback: string } | null>(null);
+  const [added, setAdded] = useState<Added | null>(null);
+  // pending: the first readiness answer has not come (it can take seconds): the switch waits for it, and so does 保存
+  const { readiness, pending } = useReadiness(isNew);
+  const works = claudeWorks(readiness);
+  const assign = assignSet ?? !works;
   const preset = presets?.find((p) => p.id === choice);
   // a hub with built-in presets names a provider itself and takes assign; an older one needs the name and knows no assign
   const hubNames = useStore((s) => hubHas(s.features, BUILTIN_PRESETS_FEATURE, true));
@@ -111,7 +120,7 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
     setChoice("");
     setPf({ name: "", api_key: "", model: "" });
     setMore(false);
-    setAssign(true);
+    setAssign(null);
     setKeyTest(null);
     setAdded(null);
     setPresets(null);
@@ -200,15 +209,21 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
     setError("");
     try {
       if (step === "key" && preset) {
-        const result = await api<AddResult>("/launchers", { method: "POST", json: presetBody(preset, pf.name, pf.api_key, pf.model, hubNames && assign) });
+        // never decide on "not known yet": a Claude Code that already answers must not be moved off (4.3 B.3)
+        await readinessSettled();
+        const before = currentReadiness();
+        const give = hubNames && (assignSet ?? !claudeWorks(before));
+        const result = await api<AddResult>("/launchers", { method: "POST", json: presetBody(preset, pf.name, pf.api_key, pf.model, give) });
         onSaved();
-        setAdded({ result, asked: hubNames && assign, fallback: pf.name.trim() || presetTitle(preset) });
+        setAdded({ result, asked: give, fallback: pf.name.trim() || presetTitle(preset), noClaude: claudeMissing(before) });
         setStep("done");
+        void readinessChanged();
       } else {
         const body = providerBody(f, old);
         await api(isNew ? "/launchers" : `/launchers/${enc(String(body.name))}`, { method: isNew ? "POST" : "PUT", json: body });
         toast(isNew ? t("settings-providerwizard.added", { name: String(body.name) }) : t("settings-providerwizard.saved", { name: String(body.name) }), "ok");
         onSaved();
+        void readinessChanged();
         onClose();
       }
     } catch (e) {
@@ -306,10 +321,10 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
         {step === "pick" && <PickStep presets={presets} error={presetsError} choice={choice} onPick={pick} />}
 
         {step === "key" && preset && (
-          <KeyStep preset={preset} pf={pf} setPf={setPf} keyTest={keyTest} onRetest={() => void runKeyTest()} assign={hubNames ? assign : null} setAssign={setAssign} more={more} setMore={setMore} />
+          <KeyStep preset={preset} pf={pf} setPf={setPf} keyTest={keyTest} onRetest={() => void runKeyTest()} assign={hubNames ? assign : null} setAssign={setAssign} checking={pending && assignSet === null} works={works ? readiness?.machine?.name ?? "" : null} more={more} setMore={setMore} />
         )}
 
-        {step === "done" && added && <DoneStep added={added} />}
+        {step === "done" && added && <DoneStep added={added} readiness={readiness} />}
 
         {step === "connect" && (
           <div className="flex flex-col gap-3">
@@ -430,7 +445,7 @@ function PickStep({ presets, error, choice, onPick }: { presets: LauncherPreset[
 type PresetForm = { name: string; api_key: string; model: string };
 
 /** ② for a preset: only the key; it is tested by itself. The name and another model wait under 更多选项. */
-function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, more, setMore }: {
+function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, checking, works, more, setMore }: {
   preset: LauncherPreset;
   pf: PresetForm;
   setPf: React.Dispatch<React.SetStateAction<PresetForm>>;
@@ -439,6 +454,10 @@ function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, more
   /** null: the hub takes no assign and wants the name (an older hub). */
   assign: boolean | null;
   setAssign: (on: boolean) => void;
+  /** Still asking whether the main conversation already runs: the switch waits (it follows the answer). */
+  checking: boolean;
+  /** The computer whose Claude Code already answers the main conversation (its name, maybe ""); null: none does. */
+  works: string | null;
   more: boolean;
   setMore: (fn: (o: boolean) => boolean) => void;
 }) {
@@ -477,9 +496,17 @@ function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, more
         <div className="flex items-center gap-3 rounded-card bg-surface p-3 shadow-btn">
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] text-ink">{t("settings-providerwizard.assign_label")}</span>
-            <span className="mt-0.5 block text-[11.5px] leading-relaxed text-ink-3">{t("settings-providerwizard.assign_hint")}</span>
+            <span className="mt-0.5 block text-[11.5px] leading-relaxed text-ink-3">
+              {checking
+                ? t("settings-providerwizard.assign_checking")
+                : works === null
+                ? t("settings-providerwizard.assign_hint")
+                : works
+                  ? t("settings-providerwizard.assign_hint_works", { machine: works })
+                  : t("settings-providerwizard.assign_hint_works_here")}
+            </span>
           </span>
-          <Switch on={assign} onChange={setAssign} label={t("settings-providerwizard.assign_label")} />
+          {checking ? <Spinner /> : <Switch on={assign} onChange={setAssign} label={t("settings-providerwizard.assign_label")} />}
         </div>
       )}
       <Disclosure title={t("settings-providerwizard.more_options")} open={more} onToggle={() => setMore((o) => !o)}
@@ -528,10 +555,25 @@ function KeyTestStatus({ keyTest, hasKey, onRetest }: { keyTest: KeyTest | null;
   );
 }
 
-/** ③ for a preset: it is saved; what runs on it now and what was left as it was. */
-function DoneStep({ added }: { added: { result: AddResult; asked: boolean; fallback: string } }) {
+/** What saving a preset gave: the hub's answer, and whether the readiness said, before it, that the computer has no
+ *  Claude Code (after it the step may read `unknown`: the hub does not say a provider of its own misses claude). */
+type Added = { result: AddResult; asked: boolean; fallback: string; noClaude: boolean };
+
+/** The computer has no Claude Code: now (asked again after saving) or before saving and not found since. */
+function stillNoClaude(added: Added, r: Readiness | null): boolean {
+  if (claudeMissing(r)) return true;
+  return added.noClaude && r?.steps.find((s) => s.id === "claude")?.state !== "ok";
+}
+
+/** ③ for a preset: it is saved; what runs on it now and what was left as it was; that Claude Code is still missing. */
+function DoneStep({ added, readiness }: { added: Added; readiness: Readiness | null }) {
+  const [help, setHelp] = useState(false);
   const name = added.result.launcher?.display_name || added.result.launcher?.name || added.fallback;
   const s = assignSummary(added.result, added.asked);
+  const machine = readiness?.machine?.name ?? "";
+  const noClaude = stillNoClaude(added, readiness);
+  // "the main conversation can use it" only where the key went to it
+  const toMain = added.asked && !!added.result.assigned?.includes("assistant");
   return (
     <div role="status" className="flex flex-col items-center gap-2 py-4 text-center">
       <span className="flex size-10 items-center justify-center rounded-full bg-green-tint text-green">
@@ -545,6 +587,26 @@ function DoneStep({ added }: { added: { result: AddResult; asked: boolean; fallb
         </p>
       ))}
       {!s.assigned && <p className="max-w-[420px] text-[12.5px] leading-relaxed text-ink-3">{t("settings-providerwizard.done_pick_later")}</p>}
+      {noClaude && (
+        <div data-testid="wizard-no-claude" className="mt-2 flex w-full max-w-[460px] items-start gap-2.5 rounded-card bg-orange-tint p-3 text-left">
+          <Icon name="warning" size={14} stroke={2.2} className="mt-0.5 shrink-0 text-orange" />
+          <span className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-ink">
+            {toMain
+              ? machine ? t("settings-providerwizard.done_no_claude", { machine }) : t("settings-providerwizard.done_no_claude_any")
+              : machine ? t("settings-providerwizard.done_no_claude_kept", { machine }) : t("settings-providerwizard.done_no_claude_kept_any")}
+          </span>
+          {!help && (
+            <Button tone="secondary" onClick={() => setHelp(true)}>
+              {t("settings-providerwizard.how_install")}
+            </Button>
+          )}
+        </div>
+      )}
+      {noClaude && help && (
+        <div className="w-full max-w-[460px] text-left">
+          <InstallClaudeHelp machine={machine} />
+        </div>
+      )}
     </div>
   );
 }

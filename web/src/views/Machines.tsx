@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { t as tr } from "../i18n";
 import { canAddComputer, isPending, machineErrorText } from "../lib/add-computer";
 import { api, enc, errorText } from "../lib/api";
+import { readinessChanged } from "../lib/readiness";
 import { bytes, stateOf } from "../lib/format";
 import { hubLabel, routeText } from "../lib/mesh";
 import { machineDeployment } from "../lib/machine-deploy";
@@ -61,6 +62,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     try {
       await api(`/machines/${enc(m.id)}/${what}`, { method: "POST" });
       toast(t(what === "confirm" ? "machines.confirmed" : "machines.rejected", { name: m.name }), "ok");
+      void readinessChanged();
     } catch (e) {
       toast(t("machines.answer_failed", { error: errorText(e) }), "error");
     } finally {

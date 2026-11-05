@@ -56,5 +56,5 @@
     <string name="phonetools_health_rationale_read">コンピューターでClaudeに健康に関する質問をしたときだけ、ClaudeがPersona経由で1日ごとの集計を1回読み取ります：歩数、距離、アクティブエネルギー、心拍数、安静時心拍数、睡眠時間、体重。</string>
     <string name="phonetools_health_rationale_store">Personaは読み取るだけで書き込まず、スマートフォンにコピーも保存しません。読み取った集計はあなた自身のハブを経由してClaudeに渡され、そのチャットのコンテキストになります。</string>
     <string name="phonetools_health_rationale_off">いつでもオフにできます</string>
-    <string name="phonetools_health_rationale_off_detail">Persona › 設定 › スマートフォンのデータで「ヘルスケア」をオフにすると、Claudeからこのツールが見えなくなります。Health ConnectでPersonaの権限を取り消すこともできます。</string>
+    <string name="phonetools_health_rationale_off_detail">Persona › 設定 › コネクタ › このスマートフォンで「ヘルスケア」をオフにすると、Claudeからこのツールが見えなくなります。Health ConnectでPersonaの権限を取り消すこともできます。</string>
 </resources>

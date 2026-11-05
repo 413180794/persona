@@ -8,6 +8,9 @@ import type { Machine } from "./types";
 
 export const MACHINES_ADD_FEATURE = "machines_add";
 
+/** Machines carry `trust` and take POST /machines/{id}/confirm | reject (docs/protocol.md「电脑的信任」). */
+export const MACHINE_TRUST_FEATURE = "machine_trust";
+
 /** The systems the dialog has instructions for; the hub takes the same words (`add.os`). */
 export type ComputerOS = "mac" | "linux" | "windows";
 
@@ -70,6 +73,11 @@ export function canAddComputer(features: string[]): boolean {
   return hubHas(features, MACHINES_ADD_FEATURE, false);
 }
 
+/** Whether this hub says which computers wait to be confirmed and takes 是我的电脑 / 不是我的. */
+export function canConfirmComputer(features: string[]): boolean {
+  return hubHas(features, MACHINE_TRUST_FEATURE, false);
+}
+
 export function addBody(name: string, os: ComputerOS) {
   return { add: { name: name.trim(), os } };
 }
@@ -99,8 +107,9 @@ export function isPending(m: Pick<Machine, "trust"> | undefined): boolean {
   return m?.trust === "pending";
 }
 
-/** Where adding a computer is, from what the machine list says of it now. */
-export type AddStage = "waiting" | "expired" | "joined" | "connected" | "gone";
+/** Where adding a computer is, from what the machine list says of it now. `offline`: only when confirming one with no
+ *  code made here (it waits to be confirmed but is not online to be looked at). */
+export type AddStage = "waiting" | "expired" | "joined" | "connected" | "gone" | "offline";
 
 /** `seen`: the list has had it since the code was made (a new one may not be in the list the page has yet). */
 export function addStage(m: Machine | undefined, secondsLeft: number, seen: boolean): AddStage {
@@ -108,6 +117,22 @@ export function addStage(m: Machine | undefined, secondsLeft: number, seen: bool
   if (!m) return secondsLeft > 0 ? "waiting" : "expired";
   if (m.online) return isPending(m) ? "joined" : "connected";
   return secondsLeft > 0 ? "waiting" : "expired";
+}
+
+/** Confirming a computer the user did not just add here (no code): asked only once it is online. */
+export function confirmStage(m: Machine | undefined): AddStage {
+  if (!m) return "gone";
+  if (!isPending(m)) return "connected"; // confirmed elsewhere meanwhile
+  return m.online ? "joined" : "offline";
+}
+
+/**
+ * The computer 确认电脑 opens: `preferred` (the step's machine) while it waits to be confirmed, else the first one waiting
+ * that is online (it can be asked about now), else the first one waiting; undefined when none waits.
+ */
+export function pendingToConfirm(machines: Machine[], preferred?: string): Machine | undefined {
+  const waiting = machines.filter(isPending);
+  return waiting.find((m) => preferred && m.id === preferred) ?? waiting.find((m) => m.online) ?? waiting[0];
 }
 
 /** A machine's error_code (docs/onboarding.md 5.3) in words; "" for a code this page does not know. */

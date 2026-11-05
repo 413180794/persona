@@ -9,6 +9,7 @@ vi.hoisted(() => {
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
   window.matchMedia ??= ((query: string) => ({ matches: false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false })) as typeof window.matchMedia;
 });
+import { resetReadiness, type Readiness } from "../../lib/readiness";
 import { getState } from "../../lib/store";
 import { ProviderWizard } from "./ProviderWizard";
 
@@ -21,6 +22,14 @@ const presets = [
 ];
 let calls: { method: string; path: string; body?: Record<string, unknown> }[] = [];
 let testOK = true;
+let readiness: Readiness | null = null;
+// set: readiness answers only once it resolves (a node self-check can take seconds)
+let readinessGate: Promise<void> | null = null;
+const readinessGets = () => calls.filter((c) => c.path.endsWith("/assistant/readiness")).length;
+const step = (id: string, state: string, code?: string) => ({ id, state, ...(code ? { code } : {}) });
+const withSteps = (mode: string, steps: Readiness["steps"]): Readiness => ({
+  version: 1, mode, ready: mode === "full", next: null, machine: { id: "mbp", name: "小林的 MacBook" }, launcher: "claude", steps, dismissed: false, checked_at: "2026-11-06T09:00:00Z",
+});
 
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { "Content-Type": "application/json" } });
 function hub(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -28,6 +37,7 @@ function hub(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const method = init?.method ?? "GET";
   const body = init?.body ? JSON.parse(String(init.body)) : undefined;
   calls.push({ method, path, body });
+  if (path.endsWith("/assistant/readiness")) return (readinessGate ?? Promise.resolve()).then(() => (readiness ? json(readiness) : json({ error: "not found" }, 404)));
   if (path.endsWith("/launchers/presets")) return Promise.resolve(json({ presets }));
   if (path.endsWith("/launchers/test")) return Promise.resolve(json(testOK ? { ok: true, ms: 321, model: "glm-x" } : { ok: false, ms: 80, model: "glm-x", error: "Key 不对（401）" }));
   if (path.endsWith("/launchers") && method === "POST")
@@ -59,6 +69,9 @@ beforeEach(() => {
   Object.assign(getState(), { features: ["builtin_presets"] });
   calls = [];
   testOK = true;
+  readiness = null;
+  readinessGate = null;
+  resetReadiness();
   vi.stubGlobal("fetch", vi.fn(hub));
   host = document.createElement("div");
   document.body.append(host);
@@ -164,5 +177,78 @@ describe("ProviderWizard from presets", () => {
     act(() => button("自定义兼容网关")!.click());
     expect(text()).toContain("鉴权方式");
     expect(text()).toContain("地址");
+  });
+
+  it("leaves a Claude Code that already answers in place unless told otherwise", async () => {
+    Object.assign(getState(), { features: ["builtin_presets", "assistant_readiness"] });
+    readiness = withSteps("full", [step("computer", "ok"), step("claude", "ok"), step("model", "ok"), step("first_message", "ok")]);
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    expect(document.body.querySelector('button[role="switch"]')?.getAttribute("aria-checked")).toBe("false");
+    expect(text()).toContain("小林的 MacBook 上的 Claude Code，已经能用");
+    type(keyInput(), "sk-test-123456");
+    await waitAutoTest();
+    const before = readinessGets();
+    await act(async () => button("保存")!.click());
+    await flush();
+    const post = calls.find((c) => c.method === "POST" && c.path.endsWith("/launchers"));
+    expect(post?.body).not.toHaveProperty("assign");
+    // saving asks for the readiness again, so the main conversation's card follows
+    expect(readinessGets()).toBeGreaterThan(before);
+    expect(document.body.querySelector('[data-testid="wizard-no-claude"]')).toBeNull();
+  });
+
+  it("waits for a slow readiness before deciding to take over the main conversation", async () => {
+    Object.assign(getState(), { features: ["builtin_presets", "assistant_readiness"] });
+    readiness = withSteps("full", [step("computer", "ok"), step("claude", "ok"), step("model", "ok"), step("first_message", "ok")]);
+    let answer!: () => void;
+    readinessGate = new Promise((r) => (answer = r));
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    // not known yet: no switch to read as on
+    expect(document.body.querySelector('button[role="switch"]')).toBeNull();
+    expect(text()).toContain("正在看主对话现在能不能用");
+    type(keyInput(), "sk-test-123456");
+    await waitAutoTest();
+    await act(async () => button("保存")!.click());
+    await flush();
+    expect(calls.some((c) => c.method === "POST" && c.path.endsWith("/launchers"))).toBe(false);
+    await act(async () => answer());
+    await flush();
+    const post = calls.find((c) => c.method === "POST" && c.path.endsWith("/launchers"));
+    expect(post?.body).not.toHaveProperty("assign");
+  });
+
+  it("says Claude Code is missing without promising the main conversation when the key did not go to it", async () => {
+    Object.assign(getState(), { features: ["builtin_presets", "assistant_readiness"] });
+    readiness = withSteps("setup", [step("computer", "ok"), step("claude", "problem", "claude_missing"), step("model", "unknown"), step("first_message", "todo")]);
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    act(() => (document.body.querySelector('button[role="switch"]') as HTMLButtonElement).click());
+    type(keyInput(), "sk-test-123456");
+    await waitAutoTest();
+    await act(async () => button("保存")!.click());
+    await flush();
+    const note = document.body.querySelector('[data-testid="wizard-no-claude"]');
+    expect(note?.textContent).toContain("Key 存好了；要用它，还得先在 小林的 MacBook 上装 Claude Code。");
+  });
+
+  it("says the key is saved but the computer still needs Claude Code", async () => {
+    Object.assign(getState(), { features: ["builtin_presets", "assistant_readiness"] });
+    readiness = withSteps("setup", [step("computer", "ok"), step("claude", "problem", "claude_missing"), step("model", "unknown"), step("first_message", "todo")]);
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    // nothing answers yet: the new key takes over the defaults
+    expect(document.body.querySelector('button[role="switch"]')?.getAttribute("aria-checked")).toBe("true");
+    type(keyInput(), "sk-test-123456");
+    await waitAutoTest();
+    // after saving the hub may no longer say it (a provider of its own reads unknown): what it said before still holds
+    readiness = withSteps("setup", [step("computer", "ok"), step("claude", "unknown"), step("model", "unknown"), step("first_message", "todo")]);
+    await act(async () => button("保存")!.click());
+    await flush();
+    const note = document.body.querySelector('[data-testid="wizard-no-claude"]');
+    expect(note?.textContent).toContain("Key 存好了；还要在 小林的 MacBook 上装 Claude Code，主对话才能用它。");
+    act(() => button("怎么装")!.click());
+    expect(text()).toContain("claude.ai/install.sh");
   });
 });

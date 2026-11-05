@@ -139,8 +139,7 @@ object Health {
         val granted = client.permissionController.getGrantedPermissions()
         val usable = requested.filter { HealthPermission.getReadPermission(recordTypes.getValue(it)) in granted }
         if (usable.isEmpty()) {
-            unavailable("没有权限：健康。请在安卓手机的 Persona › 设置 › 手机数据 里打开「健康」并在 Health Connect 里允许读取。\n" +  // i18n-ignore: tool result for the model
-                "Permission denied: Health. Turn on 健康 in Persona › Settings › Phone data on the Android phone and allow reading in Health Connect.")  // i18n-ignore: tool result for the model
+            unavailable("没有权限：健康 / Permission denied: health.\n" + PhoneToolText.grantHint(PhoneSource.Health))  // i18n-ignore: tool result for the model
         }
         val zone = ZoneId.systemDefault()
         val (start, end) = window(days, Instant.now(), zone)

@@ -25,6 +25,7 @@ vi.mock("../../lib/store", async (importOriginal) => {
 
 const { PersonaAssistant } = await import("../PersonaAssistant");
 const { resetReadiness } = await import("../../lib/readiness");
+const { getState } = await import("../../lib/store");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -58,6 +59,7 @@ function hub(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   calls.push(`${init?.method ?? "GET"} ${path}`);
   if (path === "/api/v1/assistant/readiness") return Promise.resolve(readiness ? json(readiness) : json({ error: "not found", code: "not_found" }, 404));
   if (path === "/api/v1/assistant/conversations") return Promise.resolve(startReply());
+  if (path === "/api/v1/machines/m1/confirm") return Promise.resolve(json({ ok: true }));
   return Promise.resolve(json({ error: "not found", code: "not_found" }, 404));
 }
 
@@ -93,6 +95,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  Object.assign(getState(), { features: [] });
   act(() => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
@@ -154,5 +157,38 @@ describe("the main conversation's readiness", () => {
     expect(card?.textContent).toContain("详情");
     // the draft is back in the box, not lost
     expect(textarea().value).toBe("你好");
+  });
+
+  it("adds a computer in place where the hub lets this device add one", async () => {
+    fake.features = ["assistant_readiness", "machine_trust", "machines_add"];
+    await render();
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="composer-blocked"]')!.click());
+    await flush();
+    // the machines page's own flow, not the how-to pointing at the admin page
+    expect(document.body.textContent).toContain("这台电脑的系统");
+    expect(document.body.textContent).not.toContain("打开管理界面");
+  });
+
+  it("asks about the computer waiting to be confirmed in place, then asks for the readiness again", async () => {
+    fake.features = ["assistant_readiness", "machine_trust", "machines_add"];
+    fake.machines = [{ id: "m1", name: "小林的 MacBook", online: true, trust: "pending" }];
+    Object.assign(getState(), { features: fake.features }); // what readinessChanged reads outside React
+    readiness = {
+      ...setup,
+      steps: [{ id: "computer", state: "problem", code: "machine_pending", machine: "m1", title: "确认这台电脑是你的", action: { id: "confirm_computer" } }, ...setup.steps.slice(1)],
+    };
+    await render();
+    const blocked = host.querySelector<HTMLButtonElement>('[data-testid="composer-blocked"]')!;
+    expect(blocked.textContent).toBe("先确认电脑");
+    act(() => blocked.click());
+    await flush();
+    expect(document.body.textContent).toContain("有一台电脑想加入：小林的 MacBook");
+    const before = calls.filter((c) => c === "GET /api/v1/assistant/readiness").length;
+    const yes = [...document.body.querySelectorAll("button")].find((b) => b.textContent === "是我的电脑")!;
+    await act(async () => yes.click());
+    await flush();
+    expect(calls).toContain("POST /api/v1/machines/m1/confirm");
+    expect(document.body.textContent).toContain("已添加：小林的 MacBook");
+    expect(calls.filter((c) => c === "GET /api/v1/assistant/readiness").length).toBeGreaterThan(before);
   });
 });

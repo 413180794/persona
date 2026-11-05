@@ -1,14 +1,18 @@
 // 机器 › 添加电脑 (docs/onboarding.md 4.2「你的电脑 ↔ hub」, 7.2 #11): pick the system, name it, and the hub adds the
 // computer and gives its Persona Link a pairing link (POST /api/v1/auth/pair-codes {"add"}, feature machines_add). The
 // dialog then says how to use the link on that system, waits for the computer to come online (the countdown and the
-// polling of 设置 › 设备 › 连接新设备) and asks, on the same screen, whether it is yours (…/confirm | …/reject).
+// polling of 设置 › 设备 › 连接新设备) and asks, on the same screen, whether it is yours (…/confirm | …/reject). With
+// `confirm` it opens straight at that question for a computer already waiting to be confirmed (the main conversation's
+// 确认电脑), and offers a new link if that computer is not online.
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
 import {
   addBody,
   addErrorText,
   addStage,
+  canAddComputer,
   COMPUTER_OSES,
+  confirmStage,
   knownOS,
   LINK_LINUX_DOC,
   linuxCommand,
@@ -19,6 +23,7 @@ import {
   type ComputerOS,
 } from "../../lib/add-computer";
 import { api, enc, errorText } from "../../lib/api";
+import { readinessChanged } from "../../lib/readiness";
 import { clock, secondsLeft } from "../../lib/connect-device";
 import { useStore } from "../../lib/store";
 import type { Machine } from "../../lib/types";
@@ -37,7 +42,7 @@ export interface PendingComputer {
 
 type Outcome = "confirmed" | "rejected" | null;
 
-export function AddComputer({ open, onClose, again }: { open: boolean; onClose: () => void; again?: PendingComputer | null }) {
+export function AddComputer({ open, onClose, again, confirm }: { open: boolean; onClose: () => void; again?: PendingComputer | null; confirm?: PendingComputer | null }) {
   const [os, setOS] = useState<ComputerOS>("mac");
   const [name, setName] = useState("");
   const [code, setCode] = useState<ComputerCodeReply | null>(null);
@@ -51,6 +56,7 @@ export function AddComputer({ open, onClose, again }: { open: boolean; onClose: 
   // Only the latest pair-codes request may land: a reply to one made before the dialog closed or switched computers is dropped.
   const seq = useRef(0);
   const listed = useStore((s) => s.machines);
+  const canAdd = useStore((s) => canAddComputer(s.features));
 
   const reset = () => {
     setCode(null);
@@ -89,17 +95,18 @@ export function AddComputer({ open, onClose, again }: { open: boolean; onClose: 
     if (again) {
       setOS(knownOS(listed.find((m) => m.id === again.id)?.os, again.id) ?? "mac");
       void make({ machine: again.id });
-    } else setOS("mac");
-  }, [open, again?.id]);
+    } else if (confirm) setOS(knownOS(listed.find((m) => m.id === confirm.id)?.os, confirm.id) ?? "mac");
+    else setOS("mac");
+  }, [open, again?.id, confirm?.id]);
 
-  const id = code?.machine ?? "";
+  const id = code?.machine ?? confirm?.id ?? "";
   const fromStore = listed.find((m) => m.id === id);
   const fromPoll = polled?.find((m) => m.id === id);
   // The WebSocket's list or the polled one, whichever has it online first.
   const machine = [fromStore, fromPoll].find((m) => m?.online) ?? fromStore ?? fromPoll;
   if (machine) seen.current = true;
   const left = code ? secondsLeft(code.expires_at, now) : 0;
-  const stage = code ? addStage(machine, left, seen.current) : null;
+  const stage = code ? addStage(machine, left, seen.current) : confirm ? confirmStage(machine) : null;
   const waiting = open && !!code && !outcome && (stage === "waiting" || stage === "expired");
 
   useEffect(() => {
@@ -119,6 +126,7 @@ export function AddComputer({ open, onClose, again }: { open: boolean; onClose: 
     try {
       await api(`/machines/${enc(id)}/${what}`, { method: "POST" });
       setOutcome(what === "confirm" ? "confirmed" : "rejected");
+      void readinessChanged(); // the main conversation's card follows (it may have been waiting on this computer)
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -126,7 +134,9 @@ export function AddComputer({ open, onClose, again }: { open: boolean; onClose: 
     }
   };
 
-  const shown = code?.name || machine?.name || again?.name || name.trim();
+  const shown = code?.name || machine?.name || again?.name || confirm?.name || name.trim();
+  // a new link for a computer that never came online (or for the one being confirmed, which is not online)
+  const relink = again ?? (confirm && code ? confirm : null);
   let body: React.ReactNode;
   let footer: React.ReactNode = (
     <Button tone="quiet" onClick={onClose}>
@@ -136,7 +146,7 @@ export function AddComputer({ open, onClose, again }: { open: boolean; onClose: 
 
   if (!code && again) {
     body = error ? <Failure text={error} onRetry={() => void make({ machine: again.id })} /> : <Busy />;
-  } else if (!code) {
+  } else if (!code && !confirm) {
     const trimmed = name.trim();
     const submit = () => trimmed && !busy && void make(addBody(trimmed, os), os);
     body = (
@@ -214,6 +224,35 @@ export function AddComputer({ open, onClose, again }: { open: boolean; onClose: 
         </Button>
       </>
     );
+  } else if (stage === "offline") {
+    body = (
+      <div className="flex flex-col items-center gap-2 py-6 text-center" data-stage="offline">
+        <span className="mb-1 flex size-11 items-center justify-center rounded-full bg-orange-tint text-orange">
+          <Icon name="machine" size={19} />
+        </span>
+        <p className="text-[14px] font-medium text-ink">{t("machines-addcomputer.offline", { name: shown })}</p>
+        <p className="max-w-[340px] text-[12.5px] leading-relaxed text-ink-2">{t(canAdd ? "machines-addcomputer.offline_hint" : "machines-addcomputer.offline_hint_old")}</p>
+        {error && <p role="alert" className="text-[12.5px] text-red">{error}</p>}
+      </div>
+    );
+    footer = (
+      <>
+        <Button tone="quiet" onClick={onClose}>
+          {t("machines-addcomputer.close")}
+        </Button>
+        {/* not recognised: remove it here, as the machines page offers */}
+        <Button tone="secondary" busy={answering === "reject"} disabled={!!answering || busy} onClick={() => void answer("reject")}>
+          {t("machines-addcomputer.remove")}
+        </Button>
+        {canAdd && (
+          // a new link revokes the old pairing: the first choice only for a computer that never connected (one that is
+          // only asleep comes back by itself)
+          <Button tone={machine?.error_code === "never_connected" ? "primary" : "secondary"} busy={busy} disabled={!!answering} onClick={() => void make({ machine: id })}>
+            {t("machines-addcomputer.new_link")}
+          </Button>
+        )}
+      </>
+    );
   } else if (stage === "expired") {
     body = (
       <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -224,10 +263,12 @@ export function AddComputer({ open, onClose, again }: { open: boolean; onClose: 
         </Button>
       </div>
     );
+  } else if (!code) {
+    body = <Busy />; // confirming: every stage without a code is drawn above
   } else {
     body = (
       <div className="flex flex-col gap-4" data-stage="waiting">
-        {again && (
+        {relink && (
           // The hub does not know which system a computer that never connected runs: let the user switch.
           <Segmented<ComputerOS> label={t("machines-addcomputer.os")} value={os} onChange={setOS} options={COMPUTER_OSES.map((v) => ({ v, label: t(`machines-addcomputer.os_${v}`) }))} />
         )}
@@ -244,7 +285,7 @@ export function AddComputer({ open, onClose, again }: { open: boolean; onClose: 
   }
 
   return (
-    <Dialog open={open} onClose={onClose} width={480} title={again ? t("machines-addcomputer.title_again", { name: again.name }) : t("machines-addcomputer.title")} footer={footer}>
+    <Dialog open={open} onClose={onClose} width={480} title={again ? t("machines-addcomputer.title_again", { name: again.name }) : confirm ? t("machines-addcomputer.title_confirm") : t("machines-addcomputer.title")} footer={footer}>
       {body}
     </Dialog>
   );

@@ -540,7 +540,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 ### 主对话还缺什么（#3847）
 
 照新用户上手的方案第 4.4、4.5、5.1、5.2 节（[onboarding.md](onboarding.md)）。hub 带 `assistant_readiness` 时，主对话的首屏和主对话本身读 `GET /api/v1/assistant/readiness`（`lib/readiness.ts`）；
-进页面、机器上线 / 下线、窗口回到前台时重拉（5 秒内不重复），开对话或发消息被拒之后马上重拉。老 hub 不带这个能力，页面和以前一样（不画卡片，示例问题是写死的四个，失败照旧弹提示）。
+进页面、机器上线 / 下线 / 确认、窗口回到前台时重拉（5 秒内不重复），开对话或发消息被拒、添加 / 确认 / 删掉电脑、保存供应商之后马上重拉（`readinessChanged`，不等 5 秒，也不被之前发出、还没回来的那次盖掉，#4037；别的重拉共用正在路上的那一次，因为每次都可能让 node 自检好几秒）。老 hub 不带这个能力，页面和以前一样（不画卡片，示例问题是写死的四个，失败照旧弹提示）。
 
 - **引导卡**（`views/assistant/Readiness.tsx` 的 `ReadinessCard`）：`mode` 是 `setup` 时，输入框上方一张卡，只画电脑 / Claude Code / 模型里第一个 `todo` 或 `problem` 的那一步：
   标题和一句话用 hub 给的（`title` / `detail`），按钮按 `action.id` 出（不认识的 id 不画），`alt_actions` 是旁边的次要按钮。`rate_limited` 不挡（hub 也不因为它变 `setup`）；
@@ -548,10 +548,14 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **发送按钮**：有缺的那一步时换成「先添加电脑」「先唤醒电脑」「先确认电脑」「先接上模型」，点了和卡片的主按钮一样；输入框照常能打字，草稿保留，回车不发，什么都不排队（`Composer` 的 `blocked`）；「今天」卡片的动作、错误卡的「重试」这些不经输入框的发送在主对话里也一样拦下，改成打开那一步。
   只有主对话和首屏才去问就绪度，Agent 会话和侧边面板不问。
 - **按钮去哪**：`connect_model` → 设置 › 模型供应商并打开向导（`/settings?tab=models&add=1`）；`edit_provider` → 那个供应商的详情（`&launcher=<名字>`）；
-  `confirm_computer` → 机器页；`wake_computer`、`install_claude`、`login_claude` 是页面里的说明弹窗（安装和登录各给一行要在那台电脑上敲的命令，可拷贝，另有「改用 API Key」）；
-  `add_computer` 现在也是说明弹窗，指到 hub 管理界面的「电脑 › 添加电脑」（`/admin/machines`，新标签页）：已登录的设备自己添加电脑（5.3 的 `machines_add`）合进来后，换成机器页里的添加流程；
+  `confirm_computer` → 就地打开那台待确认电脑的确认界面（机器页添加流程的同一个弹窗，`AddComputer` 的 `confirm`：在线就问「是我的电脑 / 不是，删掉」，没连上来就说一句并给「删掉」和「重新出链接」（新链接会作废原来的配对，只有从没连上来过的 `never_connected` 才是主按钮）；优先就绪度里那一步的 `machine`，否则第一台在线的待确认电脑），hub 没有 `machine_trust` 或列表里没有待确认的电脑时还是去机器页；`wake_computer`、`install_claude`、`login_claude` 是页面里的说明弹窗（安装和登录各给一行要在那台电脑上敲的命令，可拷贝，另有「改用 API Key」）；
+  `add_computer`（引导卡、发送按钮、失败卡、「只能聊天」提示、「Persona 能做什么」里的按钮）在 hub 有 `machines_add` 时就地打开机器页的添加流程（`views/machines/AddComputer.tsx`），
+  老 hub 还是说明弹窗，指到 hub 管理界面的「电脑 › 添加电脑」（`/admin/machines`，新标签页）；
   `enable_tls` / `open_admin` 打开 `/admin`；`test_assistant` 跑一次 `?probe=1`，按钮转圈到 hub 回话，卡片上写试的结果（回答或原因）。
   管理界面默认只在 hub 所在的网络里能打开（`admin.access: lan`），添加电脑的说明里写明了打不开时换一台同一网络的电脑。
+- **模型供应商向导读就绪度**（#4037，4.3 B.3 / B.4）：电脑、Claude Code、模型三步都是 `ok`（主对话已经能答）时，预设那一屏的「主对话和新开的 Agent 都用它」默认关，说明写「主对话现在用 <电脑> 上的 Claude Code，已经能用，所以默认不换」；
+  就绪度第一次还没回来（node 自检最多等十几秒）时开关先不出现，显示「正在看主对话现在能不能用…」，「保存」也等它回来再按结果决定带不带 `assign`，不会在「还不知道」时把能用的 Claude Code 换掉。用户拨过就以用户的为准。保存后如果 Claude Code 那一步是 `claude_missing`（保存前就是，或保存后重拉的结果是），完成页多一条橙色提示「Key 存好了；还要在 <电脑> 上装 Claude Code，主对话才能用它」（Key 没给主对话时是「Key 存好了；要用它，还得先在 <电脑> 上装 Claude Code」）+「怎么装」（就地展开和说明弹窗同一段安装说明，没有「改用 API Key」）。
+  保存前的结果也算，因为主对话换成 Persona 管理的供应商以后，hub 不再替它断定 claude 缺失（这一步变成 `unknown`），而主对话照样要在那台电脑上起 claude；保存后重拉读到 `ok` 就不提示。
 - **示例问题**：用就绪度里的 `suggestions`；`local: true` 的打开本地说明（「Persona 能做什么」「怎么接模型」），不发给模型；带 `prompt` 的点了填进输入框；`needs` 里有 `phone_calendar` 时右边写「会用到手机日历」。
   `setup` 时首屏副标题换成「还差一步就能开始」，不再说「也能到各台电脑上动手」。
 - **失败是卡片，不是提示**（`FailureCard`）：开主对话（首屏）或在 Persona 对话里发消息被拒时，输入框上方一张卡：hub 按请求语言写的 `error`、按 `code` / `action` 的按钮

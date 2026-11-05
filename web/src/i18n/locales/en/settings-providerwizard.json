@@ -109,5 +109,13 @@
   "retest": "Test again",
   "done_title": "{name} is connected",
   "done_pick_later": "To use it for the main conversation or Agents, pick it under Models.",
-  "more_options_model": "Default model"
+  "more_options_model": "Default model",
+  "assign_hint_works": "The main conversation already works with Claude Code on {machine}, so this is off. Turn it on to use this key instead (only where nobody has picked a model).",
+  "assign_hint_works_here": "The main conversation already works with Claude Code on your computer, so this is off. Turn it on to use this key instead (only where nobody has picked a model).",
+  "done_no_claude": "The key is saved. Claude Code still needs to be installed on {machine} before the main conversation can use it.",
+  "done_no_claude_any": "The key is saved. Claude Code still needs to be installed on the computer before the main conversation can use it.",
+  "how_install": "How to install",
+  "assign_checking": "Checking whether the main conversation already works…",
+  "done_no_claude_kept": "The key is saved. Claude Code still needs to be installed on {machine} before anything can run on it.",
+  "done_no_claude_kept_any": "The key is saved. Claude Code still needs to be installed on the computer before anything can run on it."
 }

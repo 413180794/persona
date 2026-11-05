@@ -41,5 +41,11 @@
   "confirmed_hint": "It's in the machine list now, and you can pick it for new agents.",
   "rejected": "Removed \"{name}\"",
   "gone": "\"{name}\" is gone",
-  "rejected_hint": "The pairing link it used no longer works. Add the computer again to try once more."
+  "rejected_hint": "The pairing link it used no longer works. Add the computer again to try once more.",
+  "title_confirm": "Confirm computer",
+  "offline": "\"{name}\" hasn't connected yet",
+  "offline_hint": "Once it connects, you'll be asked here whether it's yours. If that computer doesn't have the pairing link yet, make a new one.",
+  "offline_hint_old": "Once it connects, you'll be asked here whether it's yours.",
+  "new_link": "New link",
+  "remove": "Remove"
 }

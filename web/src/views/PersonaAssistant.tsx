@@ -135,7 +135,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
           {/* files go to the assistant's machine, as in its conversations (iOS StarterComposer) */}
           {(gate.step || failure || gate.readiness?.mode === "chat_only") && (
             <div className="mb-2.5 flex flex-col gap-2">
-              {failure ? <FailureCard failure={failure} onClose={() => setFailure(null)} onHelp={gate.help} /> : <ReadinessCard gate={gate} />}
+              {failure ? <FailureCard failure={failure} onClose={() => setFailure(null)} onHelp={gate.help} onConfirm={gate.confirm} /> : <ReadinessCard gate={gate} />}
               <ChatOnlyNote gate={gate} />
             </div>
           )}

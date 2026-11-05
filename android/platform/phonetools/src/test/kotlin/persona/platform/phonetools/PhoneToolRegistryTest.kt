@@ -39,7 +39,7 @@ class PhoneToolRegistryTest {
         val off = registry.call(PhoneToolCall("disabled", "phone_device_info", buildJsonObject {}))
         assertTrue(off.isError)
         assertEquals("“设备信息” 已在手机上关闭 / The device data source is turned off on the phone. " +
-            "The user can enable it in Persona › 设置 › 手机数据.", text(off))
+            "The user can turn it on in Persona › Settings › Connectors › This phone (Persona › 设置 › 连接器 › 这台手机).", text(off))
         sources = PhoneSource.entries.toSet()
         permission = false
         assertTrue(registry.enabledSpecs().isEmpty())
@@ -100,5 +100,44 @@ class PhoneToolRegistryTest {
         assertEquals(3, confirmations)
         assertTrue(text(registry.call(PhoneToolCall("untitled", call.name, JsonObject(args - "title")))).contains("title is required"))
         assertEquals(3, confirmations)
+    }
+
+    @Test fun refusalsNameTheCurrentPageAndTheAndroidSetting() = runTest {
+        var permitted = false
+        val registry = PhoneToolRegistry({ PhoneSource.entries.toSet() }, { true }, { true }, { _, _ -> permitted },
+            { true }, { _, _ -> throw PhoneToolFailure(PhoneToolFailure.Kind.Denied, "通知 / Notifications.") })
+        val contacts = text(registry.call(PhoneToolCall("contacts", "phone_contacts_search", buildJsonObject {})))
+        // The page that used to be Settings › Phone data is now Settings › Connectors › This phone.
+        assertFalse(contacts.contains("手机数据") || contacts.contains("Phone data"))
+        assertTrue(contacts.contains("Persona › 设置 › 连接器 › 这台手机"))
+        assertTrue(contacts.contains("Persona › Settings › Connectors › This phone"))
+        // Android stops asking after two refusals: say which system permission to allow, and where.
+        assertTrue(contacts.contains("系统设置 › 应用 › Persona › 权限 里允许「通讯录」"))
+        assertTrue(contacts.contains("allow Contacts in Android Settings › Apps › Persona › Permissions"))
+        val photos = text(registry.call(PhoneToolCall("photos", "phone_photos_recent", buildJsonObject {})))
+        assertTrue(photos.contains("允许「照片和视频」") && photos.contains("allow Photos and videos"))
+        // A refusal raised while running (notifications turned off) gets the same directions.
+        permitted = true
+        val notify = registry.call(PhoneToolCall("notify", "phone_notify", buildJsonObject {}))
+        assertTrue(notify.isError)
+        assertTrue(text(notify).contains("Android Settings › Apps › Persona › Notifications"))
+        assertFalse(text(notify).contains("手机数据"))
+        val calendar = text(registry.call(PhoneToolCall("calendar", "phone_calendar_events", buildJsonObject {})))
+        assertTrue(calendar.contains("允许「日历」") && calendar.contains("allow Calendar"))
+        val location = text(registry.call(PhoneToolCall("location", "phone_location_current", buildJsonObject {})))
+        assertTrue(location.contains("允许「位置信息」") && location.contains("allow Location"))
+        // Android 12 and older call the photos permission storage.
+        val sdk = PhoneToolText.photosSdk
+        try {
+            PhoneToolText.photosSdk = { 32 }
+            assertTrue(PhoneToolText.grantHint(PhoneSource.Photos).contains("allow Files and media"))
+        } finally { PhoneToolText.photosSdk = sdk }
+        assertTrue(PhoneToolText.grantHint(null).contains("tap Allow for that data"))
+        // No Allow button exists for sources without a permission.
+        assertFalse(PhoneToolText.grantHint(PhoneSource.Clipboard).contains("授权"))
+        assertFalse(PhoneToolText.grantHint(PhoneSource.Clipboard).contains("Allow"))
+        val health = PhoneToolText.grantHint(PhoneSource.Health)
+        assertTrue(health.contains("Health Connect › App permissions › Persona"))
+        assertFalse(PhoneToolText.grantHint(PhoneSource.Device).contains("系统设置"))
     }
 }

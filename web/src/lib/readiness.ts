@@ -7,7 +7,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { t } from "../i18n";
 import { api, ApiError, errorText } from "./api";
 import { navigate } from "./router";
-import { hubHas, useStore } from "./store";
+import { getState, hubHas, useStore } from "./store";
 
 export const READINESS_FEATURE = "assistant_readiness";
 export const READINESS_PATH = "/assistant/readiness";
@@ -134,8 +134,8 @@ export function actionLabel(id: string): string {
   return id;
 }
 
-/** The hub's own admin page (served by the hub at /admin, its own sign-in). Adding a computer is there until a signed-in
- *  device can add one itself (5.3, `machines_add`). */
+/** The hub's own admin page (served by the hub at /admin, its own sign-in): where adding a computer is on a hub where a
+ *  signed-in device cannot add one itself (no `machines_add`, 5.3). */
 export const ADMIN_MACHINES = "/admin/machines";
 
 /** 设置 › 模型供应商 with the wizard open (`add=1`), or one provider's details (`launcher=`). */
@@ -144,10 +144,11 @@ export function providersPath(launcher?: string): string {
 }
 
 /**
- * What a button does: a help topic to open in place, or done here (a page opened, a check run). `launcher` is the
- * step's, for 改 Key.
+ * What a button does: a help topic to open in place (add_computer too: the page that owns `onHelp` opens the add flow
+ * instead where the hub has it), or done here (a page opened, a check run). `launcher` is the step's, for 改 Key;
+ * `onConfirm` opens the confirm screen of a computer waiting to be confirmed (without it: the machines page).
  */
-export function runAction(id: string, o: { launcher?: string; onHelp: (topic: HelpTopic) => void }): void {
+export function runAction(id: string, o: { launcher?: string; onHelp: (topic: HelpTopic) => void; onConfirm?: () => void }): void {
   switch (id) {
     case "add_computer":
     case "wake_computer":
@@ -155,7 +156,7 @@ export function runAction(id: string, o: { launcher?: string; onHelp: (topic: He
     case "login_claude":
       return o.onHelp(id);
     case "confirm_computer":
-      return navigate("/machines");
+      return o.onConfirm ? o.onConfirm() : navigate("/machines");
     case "connect_model":
       return navigate(providersPath());
     case "edit_provider":
@@ -228,11 +229,17 @@ interface ReadinessState {
   unsupported: boolean;
   probing: boolean;
   at: number;
+  /** A request has finished (answered or failed): before it, "no readiness" means "not known yet". */
+  tried: boolean;
 }
 
-let rs: ReadinessState = { readiness: null, unsupported: false, probing: false, at: 0 };
+let rs: ReadinessState = { readiness: null, unsupported: false, probing: false, at: 0, tried: false };
 const listeners = new Set<() => void>();
 let inflight: Promise<void> | null = null;
+// Every request's number: an answer lands only if no later request has answered first (a forced ask after a change
+// must not be overwritten by one sent before it).
+let asked = 0;
+let answered = 0;
 
 function set(patch: Partial<ReadinessState>) {
   rs = { ...rs, ...patch };
@@ -242,19 +249,29 @@ function set(patch: Partial<ReadinessState>) {
 /** How long a fetched answer is good for before a visit asks again. */
 const FRESH_MS = 5_000;
 
-/** Asks the hub again (a visit, a machine coming or going, after a failure, 试一句's probe). */
-export function refreshReadiness(o: { force?: boolean; probe?: boolean } = {}): Promise<void> {
-  if (!o.probe && !o.force && Date.now() - rs.at < FRESH_MS) return Promise.resolve();
-  if (inflight && !o.probe) return inflight;
+/**
+ * Asks the hub again (a visit, a machine coming or going, after a failure, 试一句's probe). `force` asks even with a
+ * fresh answer; `changed` also asks with an answer in flight: that one may have been worked out before the change made
+ * here. The rest share the one in flight (each can hold a node self-check for seconds).
+ */
+export function refreshReadiness(o: { force?: boolean; probe?: boolean; changed?: boolean } = {}): Promise<void> {
+  if (!o.probe && !o.force && !o.changed && Date.now() - rs.at < FRESH_MS) return Promise.resolve();
+  if (inflight && !o.probe && !o.changed) return inflight;
   if (o.probe) set({ probing: true });
+  const mine = ++asked;
+  // a probe always lands: it is the only answer that carries 试一句's result, however long it took
+  const lands = () => (o.probe || mine > answered) && ((answered = Math.max(answered, mine)), true);
   const p = api<Readiness>(o.probe ? `${READINESS_PATH}?probe=1` : READINESS_PATH)
-    .then((r) => set({ readiness: r, unsupported: false, at: Date.now() }))
+    .then((r) => {
+      if (lands()) set({ readiness: r, unsupported: false, at: Date.now() });
+    })
     .catch((e) => {
       // 404: an older hub; 503 assistant_offline and the rest: keep what was there, ask again next time
-      if (e instanceof ApiError && e.status === 404) set({ unsupported: true, readiness: null, at: Date.now() });
+      if (e instanceof ApiError && e.status === 404 && lands()) set({ unsupported: true, readiness: null, at: Date.now() });
     })
     .finally(() => {
       if (o.probe) set({ probing: false });
+      if (!rs.tried) set({ tried: true });
       if (inflight === p) inflight = null;
     });
   if (!o.probe) inflight = p;
@@ -268,20 +285,60 @@ function subscribe(l: () => void) {
   };
 }
 
+/**
+ * Something the readiness depends on changed here (a computer added, confirmed or removed, a provider saved or given to
+ * the main conversation): ask again now so the card follows without a reload (5.1「客户端什么时候重拉」). Nothing on a
+ * hub without readiness.
+ */
+export function readinessChanged(): Promise<void> {
+  if (!hubHas(getState().features, READINESS_FEATURE)) return Promise.resolve();
+  return refreshReadiness({ changed: true });
+}
+
+/** The first answer is still on its way (a hub with readiness that has not answered or failed yet). */
+export function readinessPending(): boolean {
+  return hubHas(getState().features, READINESS_FEATURE) && !rs.unsupported && !rs.readiness && !rs.tried;
+}
+
+/** Waits for the request in flight, if any (asks once if none is), so a decision can read the answer. */
+export function readinessSettled(): Promise<void> {
+  if (!readinessPending()) return Promise.resolve();
+  return inflight ?? refreshReadiness({ force: true });
+}
+
+/** The readiness this page has now (null before the first answer or on a hub without it). */
+export function currentReadiness(): Readiness | null {
+  return rs.unsupported ? null : rs.readiness;
+}
+
+/** The main conversation already runs: its computer, Claude Code and model all check out (4.3 B.3). */
+export function claudeWorks(r: Readiness | null | undefined): boolean {
+  if (!r) return false;
+  const ok = (id: string) => r.steps.find((s) => s.id === id)?.state === "ok";
+  return ok("computer") && ok("claude") && ok("model");
+}
+
+/** The main conversation's computer has no Claude Code (4.3 B.4): a key alone does not make it answer. */
+export function claudeMissing(r: Readiness | null | undefined): boolean {
+  return !!r?.steps.some((s) => s.id === "claude" && s.code === "claude_missing" && (s.state === "problem" || s.state === "todo"));
+}
+
 /** For tests: forget everything. */
 export function resetReadiness(r: Readiness | null = null) {
-  rs = { readiness: r, unsupported: false, probing: false, at: r ? Date.now() : 0 };
+  rs = { readiness: r, unsupported: false, probing: false, at: r ? Date.now() : 0, tried: !!r };
+  inflight = null;
   listeners.forEach((l) => l());
 }
 
 /**
  * The main conversation's readiness, or null on a hub without it (and until the first answer). Asked on a visit, when
- * the machines change (one added, one going offline or coming back) and when the window comes back into view.
+ * the machines change (one added or confirmed, one going offline or coming back) and when the window comes back into view.
  */
-export function useReadiness(enabled = true): { readiness: Readiness | null; probing: boolean } {
+export function useReadiness(enabled = true): { readiness: Readiness | null; probing: boolean; pending: boolean } {
   // a page that never shows the card (an agent session, a side panel) does not ask
   const supported = useStore((s) => hubHas(s.features, READINESS_FEATURE)) && enabled;
-  const machines = useStore((s) => s.machines.map((m) => `${m.id}:${m.online ? 1 : 0}`).join(","));
+  // a computer confirmed (trust pending → omitted) changes the computer step as much as one coming online
+  const machines = useStore((s) => s.machines.map((m) => `${m.id}:${m.online ? 1 : 0}:${m.trust ?? ""}`).join(","));
   const s = useSyncExternalStore(subscribe, () => rs, () => rs);
   useEffect(() => {
     if (!supported) return;
@@ -297,6 +354,6 @@ export function useReadiness(enabled = true): { readiness: Readiness | null; pro
       window.removeEventListener("focus", on);
     };
   }, [supported]);
-  if (!supported || s.unsupported) return { readiness: null, probing: false };
-  return { readiness: s.readiness, probing: s.probing };
+  if (!supported || s.unsupported) return { readiness: null, probing: false, pending: false };
+  return { readiness: s.readiness, probing: s.probing, pending: !s.readiness && !s.tried };
 }

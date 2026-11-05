@@ -56,5 +56,5 @@
     <string name="phonetools_health_rationale_read">Only when you ask Claude a health question on your computer does Claude read the daily totals once through Persona: steps, distance, active energy, heart rate, resting heart rate, sleep time and weight.</string>
     <string name="phonetools_health_rationale_store">Persona only reads, never writes, and doesn\'t keep a copy on the phone. The totals go to Claude through your own hub and become part of that chat\'s context.</string>
     <string name="phonetools_health_rationale_off">Turn it off any time</string>
-    <string name="phonetools_health_rationale_off_detail">Turn off Health in Persona › Settings › Phone data and Claude no longer sees this tool. You can also revoke Persona\'s access in Health Connect.</string>
+    <string name="phonetools_health_rationale_off_detail">Turn off Health in Persona › Settings › Connectors › This phone and Claude no longer sees this tool. You can also revoke Persona\'s access in Health Connect.</string>
 </resources>

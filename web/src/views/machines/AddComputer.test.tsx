@@ -10,6 +10,7 @@ vi.hoisted(() => {
   const g = globalThis as unknown as { localStorage: Pick<Storage, "getItem" | "setItem" | "removeItem"> };
   g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v), removeItem: (k: string) => void kept.delete(k) };
 });
+import { getState } from "../../lib/store";
 import { AddComputer } from "./AddComputer";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -133,6 +134,28 @@ describe("AddComputer", () => {
     await click("不是，删掉");
     expect(posts.at(-1)?.path).toBe("/machines/home/reject");
     expect(text()).toContain("已删掉「家里的服务器」");
+  });
+
+  it("confirming one that is not online: remove it, or a new link (first choice only if it never connected)", async () => {
+    const saved = { machines: getState().machines, features: getState().features };
+    const asleep = { id: "home", name: "家里的服务器", online: false, trust: "pending" };
+    Object.assign(getState(), { features: ["machines_add", "machine_trust"], machines: [asleep] });
+    try {
+      await act(async () => root.render(<AddComputer open onClose={() => {}} confirm={{ id: "home", name: "家里的服务器" }} />));
+      await flush();
+      expect(document.querySelector('[data-stage="offline"]')).not.toBeNull();
+      // only asleep: a new link (it revokes the old pairing) is not the first choice
+      expect(button("重新出链接")?.className).toBe(button("删掉")?.className);
+      Object.assign(getState(), { machines: [{ ...asleep, error_code: "never_connected" }] });
+      await act(async () => root.render(<AddComputer open onClose={() => {}} confirm={{ id: "home", name: "家里的服务器" }} />));
+      await flush();
+      expect(button("重新出链接")?.className).not.toBe(button("删掉")?.className);
+      await click("删掉");
+      expect(posts.at(-1)?.path).toBe("/machines/home/reject");
+      expect(text()).toContain("已删掉「家里的服务器」");
+    } finally {
+      Object.assign(getState(), saved);
+    }
   });
 
   it("gives a Mac the pairing link and Persona Link's install guide, not a command", async () => {

@@ -38,7 +38,9 @@ class PhoneToolRegistry(
                 withTimeoutOrNull(EXECUTION_TIMEOUT_MILLIS) { execute(call.name, call.args) } ?: PhoneToolText.timedOut()
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: PhoneToolFailure) { PhoneToolText.failure(failure) }
+        catch (failure: PhoneToolFailure) {
+            PhoneToolText.failure(failure, PhoneToolCatalog.all.firstOrNull { it.spec.name == call.name }?.source)
+        }
         catch (invalid: IllegalArgumentException) { PhoneToolText.invalid(invalid.message ?: "invalid arguments") }
         catch (_: SecurityException) {
             PhoneToolText.denied(PhoneToolCatalog.all.firstOrNull { it.spec.name == call.name }?.source)
@@ -76,14 +78,61 @@ internal object PhoneToolText {
     fun unknownTool(name: String, available: List<String>) = PhoneToolResult.text(
         "未知工具 / Unknown tool: $name. 可用工具 / Available tools: ${available.joinToString(", ")}.", true)  // i18n-ignore: tool result for the model
 
+    /** Where the switch for every source lives in the app (Settings › Connectors › This phone). */
+    private const val APP_PATH_ZH = "Persona › 设置 › 连接器 › 这台手机"  // i18n-ignore: tool result for the model
+    private const val APP_PATH_EN = "Persona › Settings › Connectors › This phone"
+
     fun turnedOff(source: PhoneSource) = PhoneToolResult.text(
         "“${source.modelName}” 已在手机上关闭 / The ${source.key} data source is turned off on the phone. " +  // i18n-ignore: tool result for the model
-            "The user can enable it in Persona › 设置 › 手机数据.", true)  // i18n-ignore: tool result for the model
+            "The user can turn it on in $APP_PATH_EN ($APP_PATH_ZH).", true)
 
-    fun denied(source: PhoneSource?) = PhoneToolResult.text(source?.let {
-        "没有权限：${it.modelName}。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\n" +  // i18n-ignore: tool result for the model
-            "Permission denied: ${it.key}. Grant access in Persona › Settings › Phone data on the Android phone."
-    } ?: "没有权限。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\nPermission denied. Grant access in Persona › Settings › Phone data on the Android phone.", true)  // i18n-ignore: tool result for the model
+    /**
+     * Where to allow [source]: the app's switch first, then the Android setting, because once a permission is refused
+     * twice Android stops asking and only the system settings page can grant it.
+     */
+    fun grantHint(source: PhoneSource?): String {
+        val system = source?.let(::systemSetting)
+        // Sources that need no permission (clipboard, device) have a switch but no Allow button.
+        val zh = "请在安卓手机上打开 $APP_PATH_ZH" +  // i18n-ignore: tool result for the model
+            when {
+                source == null -> "，点对应数据的「授权」"  // i18n-ignore: tool result for the model
+                system == null -> "，打开「${source.modelName}」"  // i18n-ignore: tool result for the model
+                else -> "，打开「${source.modelName}」并点「授权」"  // i18n-ignore: tool result for the model
+            } + (system?.let { "；如果拒绝过、系统不再弹窗，就去${it.first}。" } ?: "。")  // i18n-ignore: tool result for the model
+        val en = "On the Android phone, open $APP_PATH_EN" +
+            when {
+                source == null -> " and tap Allow for that data"
+                system == null -> " and turn on ${source.key}"
+                else -> ", turn on ${source.key} and tap Allow"
+            } + (system?.let { ". If it was refused before and Android no longer asks, ${it.second}." } ?: ".")
+        return "$zh\n$en"
+    }
+
+    /** The Android settings page that grants [source], as (Chinese, English) sentences; null when there is none. */
+    private fun systemSetting(source: PhoneSource): Pair<String, String>? = when (source) {
+        PhoneSource.Contacts -> permission("通讯录", "Contacts")  // i18n-ignore: tool result for the model
+        PhoneSource.Calendar -> permission("日历", "Calendar")  // i18n-ignore: tool result for the model
+        PhoneSource.Location -> permission("位置信息", "Location")  // i18n-ignore: tool result for the model
+        // Android 12 and older grant photos through storage (READ_EXTERNAL_STORAGE).
+        PhoneSource.Photos -> if (photosSdk() >= 33) permission("照片和视频", "Photos and videos")  // i18n-ignore: tool result for the model
+            else permission("文件和媒体", "Files and media")  // i18n-ignore: tool result for the model
+        PhoneSource.Notifications -> "系统设置 › 应用 › Persona › 通知 里打开通知" to  // i18n-ignore: tool result for the model
+            "turn notifications on in Android Settings › Apps › Persona › Notifications"
+        PhoneSource.Health -> "Health Connect › 应用权限 › Persona 里允许读取" to  // i18n-ignore: tool result for the model
+            "allow reading in Health Connect › App permissions › Persona"
+        PhoneSource.Clipboard, PhoneSource.Device -> null
+    }
+
+    /** The SDK level the photos permission name depends on; replaceable in tests. */
+    internal var photosSdk: () -> Int = { android.os.Build.VERSION.SDK_INT }
+
+    private fun permission(zh: String, en: String) =
+        "系统设置 › 应用 › Persona › 权限 里允许「$zh」" to  // i18n-ignore: tool result for the model
+            "allow $en in Android Settings › Apps › Persona › Permissions"
+
+    fun denied(source: PhoneSource?) = PhoneToolResult.text(
+        (source?.let { "没有权限：${it.modelName} / Permission denied: ${it.key}.\n" } ?: "没有权限 / Permission denied.\n") +  // i18n-ignore: tool result for the model
+            grantHint(source), true)
 
     fun needsForeground() = PhoneToolResult.text(
         "安卓只允许打开着的 Persona 使用这项数据 / Android only allows this while Persona is open on screen: " +  // i18n-ignore: tool result for the model
@@ -102,11 +151,10 @@ internal object PhoneToolText {
     fun failed(error: Exception) = PhoneToolResult.text(
         "请求失败 / Request failed: ${error.message ?: error.javaClass.simpleName}", true)  // i18n-ignore: tool result for the model
 
-    fun failure(failure: PhoneToolFailure) = when (failure.kind) {
+    fun failure(failure: PhoneToolFailure, source: PhoneSource?) = when (failure.kind) {
         PhoneToolFailure.Kind.InvalidArgument -> invalid(failure.message.orEmpty())
         PhoneToolFailure.Kind.Denied -> PhoneToolResult.text(
-            "没有权限：${failure.message}。请在安卓手机的 Persona › 设置 › 手机数据 里授权。\n" +  // i18n-ignore: tool result for the model
-                "Permission denied: ${failure.message}. Grant access in Persona › Settings › Phone data on the Android phone.", true)
+            "没有权限 / Permission denied: ${failure.message}\n" + grantHint(source), true)  // i18n-ignore: tool result for the model
         PhoneToolFailure.Kind.Unavailable -> unavailable(failure.message)
     }
 }

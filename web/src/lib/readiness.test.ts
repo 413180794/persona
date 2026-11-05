@@ -1,10 +1,15 @@
+// @vitest-environment jsdom
 // What the main conversation still needs (docs/onboarding.md 4.4, 5.1, 5.2): which step the card shows, what the send
 // button says, a refused start's card, a turn's model error that the user must fix.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { getState } from "./store";
 import { ApiError } from "./api";
 import { parseAPIError } from "./api-errors";
 import { providerName } from "./model-config";
-import { blockingStep, codedFailure, helpTopic, knownAction, passesBySelf, providersPath, sendLabel, turnErrorFix, type Readiness, type ReadinessStep } from "./readiness";
+import {
+  blockingStep, claudeMissing, readinessChanged, refreshReadiness, resetReadiness, claudeWorks, codedFailure, helpTopic, knownAction, passesBySelf, providersPath, runAction, sendLabel, turnErrorFix, type Readiness,
+  type ReadinessStep,
+} from "./readiness";
 
 const step = (id: string, state: string, o: Partial<ReadinessStep> = {}): ReadinessStep => ({ id, state, ...o });
 const ready = (mode: string, steps: ReadinessStep[], next: string | null = null): Readiness => ({
@@ -77,6 +82,15 @@ describe("actions and help", () => {
     expect(providersPath("my key")).toBe("/settings?tab=models&launcher=my%20key");
   });
 
+  it("opens the computer flows through the page: add as help (the page picks the flow), confirm in place", () => {
+    const onHelp = vi.fn();
+    const onConfirm = vi.fn();
+    runAction("add_computer", { onHelp, onConfirm });
+    expect(onHelp).toHaveBeenCalledWith("add_computer");
+    runAction("confirm_computer", { onHelp, onConfirm });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
   it("opens help for a local question, never sending it", () => {
     expect(helpTopic("how_to_connect_model")).toBe("how_to_connect_model");
     expect(helpTopic("something_new")).toBe("what_can_you_do");
@@ -108,5 +122,47 @@ describe("providerName", () => {
     expect(providerName("legacy.kb", [])).toBeUndefined();
     expect(providerName("legacy.kb", [{ id: "legacy.kb", name: "hub 知识 API" } as never])).toBe("hub 知识 API");
     expect(providerName("mine", [])).toBe("mine");
+  });
+});
+
+describe("what the provider wizard reads", () => {
+  const ok = (id: string) => step(id, "ok");
+  it("knows a Claude Code that already answers", () => {
+    expect(claudeWorks(ready("full", [ok("computer"), ok("claude"), ok("model"), step("first_message", "todo")]))).toBe(true);
+    // never verified: not known to work, so a new key may still take over
+    expect(claudeWorks(ready("full", [ok("computer"), ok("claude"), step("model", "unknown", { code: "model_unverified" })]))).toBe(false);
+    expect(claudeWorks(ready("setup", [ok("computer"), ok("claude"), step("model", "problem", { code: "not_logged_in" })]))).toBe(false);
+    expect(claudeWorks(null)).toBe(false);
+  });
+
+  it("knows a computer with no Claude Code", () => {
+    expect(claudeMissing(ready("setup", [ok("computer"), step("claude", "problem", { code: "claude_missing" })]))).toBe(true);
+    expect(claudeMissing(ready("setup", [ok("computer"), step("claude", "problem", { code: "launcher_missing" })]))).toBe(false);
+    expect(claudeMissing(ready("full", [ok("computer"), ok("claude")]))).toBe(false);
+    expect(claudeMissing(null)).toBe(false);
+  });
+});
+
+describe("asking again", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetReadiness();
+  });
+
+  it("shares the request in flight, except after a change made here", async () => {
+    Object.assign(getState(), { features: ["assistant_readiness"] });
+    let n = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    vi.stubGlobal("fetch", vi.fn(() => (n++, gate.then(() => new Response(JSON.stringify(ready("full", [step("computer", "ok")])), { status: 200, headers: { "Content-Type": "application/json" } })))));
+    resetReadiness();
+    const a = refreshReadiness({ force: true });
+    const b = refreshReadiness({ force: true });
+    expect(b).toBe(a);
+    const c = readinessChanged();
+    expect(c).not.toBe(a);
+    release();
+    await Promise.all([a, b, c]);
+    expect(n).toBe(2);
   });
 });

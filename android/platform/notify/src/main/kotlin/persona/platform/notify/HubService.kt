@@ -4,8 +4,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.net.ConnectivityManager
-import android.net.Network
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -55,7 +53,6 @@ open class HubService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var observing = false
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     /**
      * What the ongoing notification shows now. Every start promotes with it (the app coming to the front starts the
@@ -134,15 +131,9 @@ open class HubService : Service() {
             scope.launch {
                 pairing.isPaired.collect { if (!it && !starts.deferStop()) stopSelf() }
             }
-            val manager = getSystemService(ConnectivityManager::class.java)
-            val callback = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) { connection.reconnect() }
-                override fun onLost(network: Network) { connection.reconnect() }
-            }
-            runCatching { manager.registerDefaultNetworkCallback(callback) }
-                .onSuccess { networkCallback = callback }
-                .onFailure { Log.w(TAG, "Network observation failed: ${it.javaClass.simpleName}") }
-            connection.reconnect()
+            // Network changes are the connection's own business (it reconnects only when the network really changed,
+            // #4139); a second callback here tore every change down twice and an online connection down at each start.
+            ResidentConnection.resume(connection)
         }
         return START_STICKY
     }
@@ -165,9 +156,6 @@ open class HubService : Service() {
     override fun onDestroy() {
         running = false
         scope.cancel()
-        networkCallback?.let { callback ->
-            runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(callback) }
-        }
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }

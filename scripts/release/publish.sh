@@ -185,11 +185,15 @@ if [ -n "${NO_DEPLOY:-}" ]; then
   exit 0
 fi
 # The downloads first, into the slot no one is served from; then the deploy that points dl/SLOT at it.
-command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true
-# Absolute paths: wr runs wrangler inside the site copy.
+# cf's OAuth token lasts about an hour and runs out between uploads too (twice on 2026-11-06, #4202): refresh it before
+# each file, and once more before the one retry.
+refresh_cf() { command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true; }
+# put <file>: upload it into the slot. Absolute paths: wr runs wrangler inside the site copy.
+put() { wr "$OUT/site" r2 object put "$DL_BUCKET/$SLOT/${1##*/}" --file "$1" --content-type application/gzip --remote >>"$OUT/upload.log" 2>&1; }
 for gz in "$PWD/$OUT/bin/"*.gz; do
-  wr "$OUT/site" r2 object put "$DL_BUCKET/$SLOT/${gz##*/}" --file "$gz" --content-type application/gzip --remote \
-    >>"$OUT/upload.log" 2>&1 || { tail -20 "$OUT/upload.log" >&2; echo "upload of ${gz##*/} to R2 failed; see $OUT/upload.log" >&2; exit 1; }
+  refresh_cf
+  put "$gz" || { sleep 5; refresh_cf; put "$gz"; } \
+    || { tail -20 "$OUT/upload.log" >&2; echo "upload of ${gz##*/} to R2 failed; see $OUT/upload.log" >&2; exit 1; }
 done
 deploy_site "$OUT/site"
 

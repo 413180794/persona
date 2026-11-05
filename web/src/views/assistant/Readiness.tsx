@@ -1,11 +1,16 @@
 // What the main conversation still needs, above its composer (docs/onboarding.md 4.4): the first missing step as a card
 // (a title, one line why, one button), 「只能聊天」's note, a refused start or send as a card with the original text under
-// 详情 (4.6), and the help those buttons and the local example questions open in place.
+// 详情 (4.6), and the help those buttons and the local example questions open in place. 添加电脑 and 确认电脑 open the
+// machines page's own flow (views/machines/AddComputer.tsx) in place where the hub has it (machines_add, machine_trust).
 import { useState } from "react";
+import { canAddComputer, canConfirmComputer, pendingToConfirm } from "../../lib/add-computer";
 import {
-  actionLabel, ADMIN_MACHINES, blockingStep, knownAction, runAction, sendLabel, useReadiness, type CodedFailure, type HelpTopic, type Readiness,
-  type ReadinessStep,
+  actionLabel, ADMIN_MACHINES, blockingStep, knownAction, readinessChanged, runAction, sendLabel, useReadiness, type CodedFailure, type HelpTopic,
+  type Readiness, type ReadinessStep,
 } from "../../lib/readiness";
+import { navigate } from "../../lib/router";
+import { useStore } from "../../lib/store";
+import { AddComputer, type PendingComputer } from "../machines/AddComputer";
 import { Button, Collapse, copyText, cx, Dialog, IconButton } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { t } from "../../i18n";
@@ -19,9 +24,11 @@ export interface ReadinessGate {
   /** The send button's stand-in while a step is missing: its words and what it opens. Nothing is queued (4.4). */
   blocked?: { label: string; onClick?: () => void };
   help: (topic: HelpTopic) => void;
+  /** 确认电脑: the confirm screen of the computer waiting to be confirmed (the machines page on an older hub). */
+  confirm: () => void;
   /** 试一句 is running (the hub's probe takes up to ~30 s). */
   probing: boolean;
-  /** The help dialog, to render once beside the card. */
+  /** The help dialog and the add / confirm computer flow, to render once beside the card. */
   dialog: React.ReactNode;
 }
 
@@ -29,10 +36,22 @@ export interface ReadinessGate {
 export function useReadinessGate(on = true): ReadinessGate {
   const { readiness, probing } = useReadiness(on);
   const [topic, setTopic] = useState<HelpTopic | null>(null);
+  // the add computer flow: a new one ({}), or the one waiting to be confirmed
+  const [computer, setComputer] = useState<{ confirm?: PendingComputer } | null>(null);
+  const canAdd = useStore((s) => canAddComputer(s.features));
+  const canConfirm = useStore((s) => canConfirmComputer(s.features));
+  const machines = useStore((s) => s.machines);
   const r = on ? readiness : null;
   const step = blockingStep(r);
   const machine = r?.machine?.name ?? "";
-  const act = (id: string) => runAction(id, { launcher: step?.launcher, onHelp: setTopic });
+  // 添加电脑 is the in-app flow where a signed-in device can add one; the how-to pointing at /admin on an older hub
+  const help = (h: HelpTopic) => (h === "add_computer" && canAdd ? setComputer({}) : setTopic(h));
+  const confirm = () => {
+    const m = canConfirm ? pendingToConfirm(machines, step?.machine) : undefined;
+    if (m) setComputer({ confirm: { id: m.id, name: m.name } });
+    else navigate("/machines");
+  };
+  const act = (id: string) => runAction(id, { launcher: step?.launcher, onHelp: help, onConfirm: confirm });
   const blocked = step
     ? {
         label: sendLabel(step),
@@ -43,9 +62,24 @@ export function useReadinessGate(on = true): ReadinessGate {
     readiness: r,
     step,
     blocked,
-    help: setTopic,
+    help,
+    confirm,
     probing: on && probing,
-    dialog: topic ? <HelpDialog topic={topic} machine={machine} step={step} onClose={() => setTopic(null)} onAction={act} /> : null,
+    dialog: (
+      <>
+        {topic && <HelpDialog topic={topic} machine={machine} step={step} onClose={() => setTopic(null)} onAction={act} />}
+        {on && (
+          <AddComputer
+            open={!!computer}
+            confirm={computer?.confirm}
+            onClose={() => {
+              setComputer(null);
+              void readinessChanged(); // added, confirmed or removed: the card follows now
+            }}
+          />
+        )}
+      </>
+    ),
   };
 }
 
@@ -61,7 +95,7 @@ function stepIcon(step: ReadinessStep): IconName {
 export function ReadinessCard({ gate }: { gate: ReadinessGate }) {
   const step = gate.step;
   if (!step) return null;
-  const act = (id: string) => runAction(id, { launcher: step.launcher, onHelp: gate.help });
+  const act = (id: string) => runAction(id, { launcher: step.launcher, onHelp: gate.help, onConfirm: gate.confirm });
   const main = step.action && knownAction(step.action.id) ? step.action.id : undefined;
   const alts = (step.alt_actions ?? []).map((a) => a.id).filter((id) => knownAction(id) && id !== main);
   const problem = step.state === "problem";
@@ -122,7 +156,7 @@ export function ChatOnlyNote({ gate }: { gate: ReadinessGate }) {
 // ── a refused start or send ─────────────────────────────
 
 /** A start or a send that did not go: the hub's words, a button for its code, the original under 详情 (4.6). */
-export function FailureCard({ failure, onClose, onHelp }: { failure: CodedFailure; onClose: () => void; onHelp: (topic: HelpTopic) => void }) {
+export function FailureCard({ failure, onClose, onHelp, onConfirm }: { failure: CodedFailure; onClose: () => void; onHelp: (topic: HelpTopic) => void; onConfirm?: () => void }) {
   const [open, setOpen] = useState(false);
   const action = failure.action && knownAction(failure.action) ? failure.action : undefined;
   const raw = [failure.detail, failure.requestId && t("assistant-readiness.request_id", { id: failure.requestId })].filter(Boolean).join("\n");
@@ -135,7 +169,7 @@ export function FailureCard({ failure, onClose, onHelp }: { failure: CodedFailur
       </div>
       <div className="flex flex-wrap items-center gap-1.5 pl-[22px]">
         {action && (
-          <Button tone="primary" onClick={() => runAction(action, { launcher: failure.launcher, onHelp })}>
+          <Button tone="primary" onClick={() => runAction(action, { launcher: failure.launcher, onHelp, onConfirm })}>
             {actionLabel(action)}
           </Button>
         )}
@@ -177,14 +211,28 @@ function P({ children }: { children: React.ReactNode }) {
   return <p className="text-[13px] leading-relaxed text-ink-2">{children}</p>;
 }
 
+/** How to install Claude Code on that computer: the line to paste in its terminal (the help dialog, the provider wizard). */
+export function InstallClaudeHelp({ machine }: { machine: string }) {
+  return (
+    <div>
+      <P>{t("assistant-readiness.help_install_body", { machine: machine || t("assistant-readiness.that_computer") })}</P>
+      {/* i18n-ignore: Claude Code's own installer, typed as it is */}
+      <Command text="curl -fsSL https://claude.ai/install.sh | bash" />
+      <p className="mt-2 text-[12px] leading-relaxed text-ink-3">{t("assistant-readiness.help_install_after")}</p>
+    </div>
+  );
+}
+
 /** The help a card's button or a local example question opens (wake, install, sign in, add a computer, what Persona
  *  does, how to connect a model): local words, nothing sent to the model. */
-export function HelpDialog({ topic, machine, step, onClose, onAction }: { topic: HelpTopic; machine: string; step: ReadinessStep | null; onClose: () => void; onAction: (id: string) => void }) {
+/** Without `onAction` the help is only words (no 改用 API Key). */
+export function HelpDialog({ topic, machine, step, onClose, onAction }: { topic: HelpTopic; machine: string; step: ReadinessStep | null; onClose: () => void; onAction?: (id: string) => void }) {
   const where = machine || t("assistant-readiness.that_computer");
   const then = (id: string) => {
     onClose();
-    onAction(id);
+    onAction?.(id);
   };
+  const useKey = onAction ? <Button tone="secondary" onClick={() => then("connect_model")}>{t("assistant-readiness.use_api_key")}</Button> : undefined;
   const footer = (main?: React.ReactNode) => (
     <>
       <Button tone="quiet" onClick={onClose}>
@@ -215,16 +263,13 @@ export function HelpDialog({ topic, machine, step, onClose, onAction }: { topic:
       );
     case "install_claude":
       return (
-        <Dialog open onClose={onClose} title={t("assistant-readiness.help_install_title")} footer={footer(<Button tone="secondary" onClick={() => then("connect_model")}>{t("assistant-readiness.use_api_key")}</Button>)}>
-          <P>{t("assistant-readiness.help_install_body", { machine: where })}</P>
-          {/* i18n-ignore: Claude Code's own installer, typed as it is */}
-          <Command text="curl -fsSL https://claude.ai/install.sh | bash" />
-          <p className="mt-2 text-[12px] leading-relaxed text-ink-3">{t("assistant-readiness.help_install_after")}</p>
+        <Dialog open onClose={onClose} title={t("assistant-readiness.help_install_title")} footer={footer(useKey)}>
+          <InstallClaudeHelp machine={machine} />
         </Dialog>
       );
     case "login_claude":
       return (
-        <Dialog open onClose={onClose} title={t("assistant-readiness.help_login_title")} footer={footer(<Button tone="secondary" onClick={() => then("connect_model")}>{t("assistant-readiness.use_api_key")}</Button>)}>
+        <Dialog open onClose={onClose} title={t("assistant-readiness.help_login_title")} footer={footer(useKey)}>
           <P>{t("assistant-readiness.help_login_body", { machine: where })}</P>
           <Command text="claude" />
           <p className="mt-2 text-[12px] leading-relaxed text-ink-3">{t("assistant-readiness.help_login_after")}</p>
