@@ -41,6 +41,10 @@ struct GitPane: View {
         .pageToolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac
         #endif
         .task(id: cwd) { await load() }
+        // Live refresh (#3089): the status again when the hub says it moved, in place (the commits loaded below stay).
+        .fsLive(group: group, machineID: machineID, cwd: cwd, paths: [], git: true) { change in
+            if change.git { Task { await load(live: true) } }
+        }
         .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, group: group, cwd: cwd, root: status?.root, target: t) }
         .sheet(item: $commit) { c in GitCommitSheet(machineID: machineID, group: group, cwd: cwd, commit: c) }
         #if os(macOS) && DEBUG
@@ -181,18 +185,23 @@ struct GitPane: View {
         }
     }
 
-    private func load() async {
+    /// live: an automatic refresh (#3089): the older commits already loaded stay while the newest one is the same,
+    /// and a failure leaves what is shown.
+    private func load(live: Bool = false) async {
         guard let api = model.api(group), !cwd.isEmpty, !pullModel.isPulling else { return }
         let started = revision
         do {
             let fresh = try await api.gitStatus(machine: machineID, cwd: cwd)
             guard started == revision else { return }
-            status = fresh
-            older = []
-            noMore = false
+            let sameHistory = live && fresh.commits.first?.hash == status?.commits.first?.hash
+            if fresh != status { status = fresh }
+            if !sameHistory {
+                older = []
+                noMore = false
+            }
             error = nil
         } catch {
-            if status == nil { self.error = error.shown }
+            if status == nil && !live { self.error = error.shown }
         }
     }
 

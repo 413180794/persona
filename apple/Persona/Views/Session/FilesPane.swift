@@ -9,6 +9,8 @@ struct FilesPane: View {
     let cwd: String
     var git: GitStatus?
     var key: SessionKey? = nil
+    /// Reads the folder's Git status again (its marks come from the chat's): live refresh when it changes (#3089).
+    var reloadGit: (() async -> Void)? = nil
     @State private var stack: [String] = [] // folders entered below cwd
     @State private var listing: FileListing?
     @State private var listed = "" // the path `listing` belongs to (the server returns it cleaned)
@@ -43,6 +45,11 @@ struct FilesPane: View {
             .refreshable { await load() }
         }
         .task(id: path) { await load() }
+        // Live refresh (#3089): the folder shown, and the Git marks when the chat can read them again.
+        .fsLive(group: group, machineID: machineID, cwd: cwd, paths: [path], git: reloadGit != nil) { change in
+            if change.dirs.contains(path) { Task { await load() } }
+            if change.git, let reloadGit { Task { await reloadGit() } }
+        }
         .sheet(item: $file) { ref in FileViewer(ref: ref, key: key) }
         #if os(macOS)
         .pageToolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac

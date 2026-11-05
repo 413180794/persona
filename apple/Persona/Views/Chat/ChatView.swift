@@ -1456,7 +1456,8 @@ struct ChatView: View {
         // Files and Git come in from the right (a swipe to the left), the chat back from the left.
         case .git: GitPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
             .transition(.move(edge: .trailing))
-        case .files: FilesPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", git: git, key: key).padding(.top, headerRoom)
+        case .files: FilesPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", git: git, key: key,
+                                     reloadGit: { await loadGit() }).padding(.top, headerRoom)
             .transition(.move(edge: .trailing))
         }
         #endif

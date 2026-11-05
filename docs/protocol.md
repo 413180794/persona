@@ -1135,7 +1135,7 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
 
 ## 文件自动刷新（#2439）
 
-网页的文件面板和 Git 面板开着时自动刷新（`web/src/lib/fs-live.ts`、`server/internal/hub/fswatch.go`、`server/internal/node/fswatch.go`）：
+网页的文件面板和 Git 面板开着时自动刷新（`web/src/lib/fs-live.ts`；iOS / Mac 的文件页和 Git 页同样，`apple/Persona/App/FsLive.swift`，#3089；`server/internal/hub/fswatch.go`、`server/internal/node/fswatch.go`）：
 
 - 页面发 `fs_watch`（上面的消息表），**每个会话目录一份、整份替换**；同一页面里文件面板和 Git 面板各自的需求在页面里合并，页面隐藏时发一份空的，回来时再发并刷新一遍。
 - hub 把所有页面的集合并起来，**整份替换**地调 node 的 `fs.watch`；node 重连后 hub 重发一次。页面连接断开、面板关闭、换页都会释放，最后一个页面走了 node 就停掉看的循环（不留 goroutine）。只有完全权限的设备能发 `fs_watch`。

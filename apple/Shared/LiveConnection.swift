@@ -59,6 +59,9 @@ nonisolated enum ServerEvent: Sendable {
     case assistantViewAction(conversation: String, action: ExtensionViewAction)
     case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
+    /// Folders a Files / Git pane watches (`fs_watch`) changed on the computer, or the Git status of `cwd` did (#2439,
+    /// docs/protocol.md「文件自动刷新」).
+    case fsChanged(machineID: String, cwd: String, dirs: [String], git: Bool)
     /// A plugin changed the badge on one of its main-navigation entries (docs/extensions.md「UI 插槽」角标): nil clears it.
     case pluginBadge(plugin: String, id: String, badge: ExtensionBadge?)
     /// An extension's data changed (`ui.invalidate`, docs/extensions.md「ui.invalidate」): its interface `id` (nil: all of
@@ -128,11 +131,14 @@ nonisolated enum ServerEvent: Sendable {
         var extensionID: String?
         var invalidate: Bool?
         var badge: ExtensionBadge?
+        var cwd: String?
+        var dirs: [String]?
+        var git: Bool?
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, conversation, plan
-            case plugin, badge, invalidate
+            case plugin, badge, invalidate, cwd, dirs, git
             case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build", publicURL = "public_url"
             case settingsChanged = "settings_changed", olAccount = "ol_account"
@@ -221,6 +227,9 @@ nonisolated enum ServerEvent: Sendable {
             if e.invalidate == true, let ext = e.extensionID ?? e.plugin { return .extensionInvalidate(extension: ext, id: e.id) }
             guard let plugin = e.extensionID ?? e.plugin, let id = e.id else { return nil }
             return .pluginBadge(plugin: plugin, id: id, badge: e.badge.flatMap { $0.text.isEmpty ? nil : $0 })
+        case "fs_changed":
+            guard let m = e.machineID, let cwd = e.cwd, !cwd.isEmpty else { return nil }
+            return .fsChanged(machineID: m, cwd: cwd, dirs: e.dirs ?? [], git: e.git ?? false)
         case "terminal_control":
             guard let key, let state = e.state else { return nil }
             return .terminal(key, .control(state: state, cols: e.cols, rows: e.rows, why: e.error))
@@ -250,7 +259,7 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .personas, .assistantFeed, .assistantView, .assistantViewAction, .taskPlan, .pluginBadge, .extensionInvalidate: return self
+             .personas, .assistantFeed, .assistantView, .assistantViewAction, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged: return self
         }
     }
 }

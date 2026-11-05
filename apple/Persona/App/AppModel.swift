@@ -935,6 +935,9 @@ final class AppModel {
     @ObservationIgnored private var muteWrites = 0
     /// The terminal views streaming each session (one at a time; a newer one replaces the handler).
     @ObservationIgnored private var terminalHandlers: [SessionKey: (TerminalEvent) -> Void] = [:]
+    /// The Files and Git panes' live refresh (#3089): what they watch, told to each group's hub over its socket.
+    @ObservationIgnored private(set) lazy var fsLive = FsLive(send: { [weak self] group, msg in self?.socket(group)?.send(msg) },
+                                                            isOpen: { [weak self] group in self?.isLive(group) ?? false })
 
     func canStreamTerminal(_ group: String) -> Bool { features(group).contains("terminal_stream") }
     /// The hub can let the phone drive a terminal at its own size (`terminal_control`).
@@ -1120,6 +1123,8 @@ final class AppModel {
             }
         }
         if plan.refetch { AgentSync.shared.schedule() }
+        // A new socket is a new client for the hub: the Files / Git panes' folders are told again and refreshed (#3089).
+        fsLive.reconnected(group: group)
         let mine = subscribed.filter { $0.group == group }
         // 更新中… until the open chats' backlog and the pending interactions are in (ConnectionStatus); nothing when
         // resumed (an empty catch-up only lets the outbox go).
@@ -1308,6 +1313,8 @@ final class AppModel {
             for key in seenOutbox.unanswered(group: group, at: Date()) { deliverSeen(key) }
         case .terminal(let key, let event):
             terminalHandlers[key]?(event)
+        case .fsChanged(let machineID, let cwd, let dirs, let git):
+            fsLive.received(group: group, machineID: machineID, cwd: cwd, dirs: dirs, git: git)
         case .machines(let list):
             // A machine that just came back: re-subscribe its open chats (their backlog failed while it was down).
             let wasOffline = Set(machines.filter { !$0.online && $0.group == group }.map(\.id))
@@ -1443,6 +1450,7 @@ final class AppModel {
         case .hubUpdate: "hub_update"
         case .desktops: "desktops"
         case .terminal: "terminal"
+        case .fsChanged: "fs_changed"
         case .pluginBadge: "plugin_ui"
         case .extensionInvalidate: "extension_ui"
         case .error: "error"

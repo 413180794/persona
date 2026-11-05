@@ -280,6 +280,10 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
     只允许干净工作区的 fast-forward，不自动 stash、合并或变基；已有 stash 保持原样，无上游、分离 HEAD、未提交改动或分叉时给出失败原因。其他 Git 视图仍只读。
   - 文件（`FilesPane`）：从会话目录开始逐级进入，面包屑跳回任意一级；目录在前，显示大小和修改时间、Git 改动标记（目录里有改动显示圆点）；
     隐藏文件默认不显示（菜单里切换）；点文件用文件查看器打开。
+  - **自动刷新**（#3089，和网页 #2439 一样，`App/FsLive.swift`、`Views/Session/FsLiveModifier.swift`，`docs/protocol.md`「文件自动刷新」）：
+    文件页、Git 页在前台时经 WebSocket 发 `fs_watch`（文件页看当前文件夹和 Git 标记，Git 页看 Git 状态；同一会话目录的合成一份），
+    收到 `fs_changed` 等 200 ms 去抖后原位重读（不出加载动画，Git 页已加载的更早提交在最新提交没变时保留）；不在前台（`.onTabVisibility`）时退订，
+    回来时重读一遍；socket 重连后重发并重读。旧 hub / node 不认 `fs_watch`，照旧下拉 / ⌘R 手动刷新。打开着的 diff 和文件查看器还不跟着刷新。Mac 共用这两个面板。
 - 循环（`/loop`）：输入框上方「循环中 · 每 30 分钟 · 下次唤醒 11:56（还有 4 分钟）」，点开看循环的任务，「停止循环」确认后给 Agent 发停止指令；
   每次唤醒在对话里是一行「⟳ 循环唤醒 21:11 …」，不是一条用户气泡。
 - 子 Agent：Agent 工具启动的子 Agent 不再算后台任务。对话页选项卡下多一排「主 Agent / 运行中的子 Agent」（转圈；会话一天内有子 Agent 就有这一排，完成的不列成 chip，从工作行里的「查看子 Agent」进入），点一个就用同一套
