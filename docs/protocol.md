@@ -44,7 +44,7 @@
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`herdr_focus`（完整界面的焦点联动：`herdr_focus` 等，见下「焦点联动」）、`file_upload`。
 - 按 hub.json 出现：`assistant_views`（`assistant.persona_view` 打开：声明式动作带 `expected_version`、活卡片、正文卡片注册的接口可用）、`assistant_html_bridge`（另外 `assistant.html_views` 未关：`…/html-actions` 可用；客户端是否运行 HTML 仍看自己的安全验收，不据此跑 JS），见下面「助手」的卡片接口和 [assistant-views.md](assistant-views.md)。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -538,6 +538,79 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 - 展开后每个来源一行小标签（收件箱 · 定时任务 · 飞书 /agent · 对话派生 · 扩展 · 其他），带个数和同样的状态点，只列有对话的来源；点一行打开「全部对话」，按这个来源筛好。
 - 「全部对话」顶部加来源筛选（全部 · 我的 · 收件箱 · 定时任务 · …），默认「全部」；搜索照旧搜全部对话，不管来源和折叠。
 
+## 扩展的安装、升级、卸载进度（`extension_operations`，#3277）
+
+hub 把每一次安装、升级、卸载记成一个**操作**（operation）：分成几个有名字的步骤，每步有状态，下载那一步带字节数，失败时停在哪一步、为什么都写在里面。操作一变就经 WebSocket 推 `extension_operation`；关掉页面再回来用 `GET /api/v1/extensions/-/operations` 拿到进行中和刚结束的。`hello.features` 带 `extension_operations` 才有这些；没有时客户端照旧用同步的预览 / 安装（下面的老接口不变）。
+
+### 操作（`ExtensionOperation`）
+
+```json
+{
+  "id": "3f9c…",                 // 操作 id
+  "kind": "install",             // install | upgrade | uninstall
+  "extension": "lark-connector",       // 扩展 id（预览前只知道市场里的 id）
+  "name": "飞书（lark-connector）",    // 给人看的名字，知道了才有
+  "market": "c0bbc68b20",        // 从哪个市场来，可选
+  "source": "market:c0bbc68b20/lark-connector", // 安装来源（同扩展的 origin），可选
+  "version": "0.11.1",           // 要装的版本，知道了才有
+  "from": "0.10.0",              // 升级前的版本，只有 upgrade
+  "actor": "网页",               // 谁发起的：设备名、personad extension、hub（自动升级）
+  "state": "running",            // running | needs_consent | succeeded | failed | canceled
+  "step": "download",            // 正在做（或停在）的步骤 id
+  "steps": [
+    {"id": "download", "state": "running", "bytes": 5242880, "total": 17302381, "started_at": "…"},
+    {"id": "verify", "state": "pending"},
+    {"id": "unpack", "state": "pending"}
+  ],
+  "error": "下载卡住了：30 秒没有收到数据",  // 失败时，按发起请求的语言
+  "error_code": "download_stalled", // 失败时，可选，见下
+  "preview_id": "…",             // needs_consent 时：要用户同意的那份预览
+  "retryable": true,             // 失败后能不能 POST …/retry
+  "started_at": "…", "updated_at": "…", "ended_at": "…"
+}
+```
+
+- 步骤的 `state`：`pending`（还没到）、`running`、`done`、`failed`、`skipped`（这次用不着，如本地目录装的没有 `download`）。`state` 是 `done` 的 `download` 带 `cached: true` 表示包是本机缓存里的、没再下载。
+- `bytes` / `total` 只有 `download` 有：`total` 是索引写的大小或响应的 Content-Length，不知道时没有（画不确定的进度条）。别的步骤没有百分比。
+- 步骤 id（按顺序；没用到的是 `skipped`，客户端不认识的 id 原样显示，不出错）：
+
+| kind | 步骤 |
+| --- | --- |
+| install / upgrade | `download`（下载包）→ `verify`（核对 sha256 和市场索引）→ `unpack`（解包）→ `check`（清单、权限、依赖、冲突；合集和缺的依赖一起预览）→ `consent`（等用户同意）→ `install`（放进 installed/、写库）→ `start`（启动并等到它起来）→ `nodes`（把它在电脑上的程序发到各台电脑，只有带 `node` 段的） |
+| uninstall | `stop`（停下它）→ `remove`（删文件和记录）→ `nodes`（各台电脑上停掉、删掉它的程序，只有带 `node` 段的） |
+
+- `consent` 是 `running` 时操作的 `state` 是 `needs_consent`：带 `preview_id`，客户端 `GET …/operations/{id}` 拿到完整预览（同 `catalog/preview` 的回答）给用户看，同意了照旧 `POST /-/install`（或 `/{id}/-/upgrade`）带这个 `preview_id`，hub 接着这个操作往下走；不同意 `DELETE …/operations/{id}`。预览过期（`expires_at`）操作就变成 `canceled`。不用用户同意的升级（自动升级、权限没变多的）这一步是 `skipped`。
+- `start`：没有程序的扩展（只有声明）、按需启动的（第一次被调才起）立刻 `done`；等到 `running` 才 `done`，起不来是 `failed`（升级会回滚到原来的版本，`error` 写明）。最多等 `host.ReadyWithin` 加 5 秒。
+- `nodes`：等每台在线的电脑同步完（离线的不等，上线时 hub 照旧补发），步骤带 `machines: {"done": 1, "total": 2}`；某台失败不算整个操作失败，那台的原因在 `machines.errors`（`{"<机器 id>": "…"}`）。
+- `error_code`：`download_stalled`（下载 30 秒没有收到数据）、`download_failed`、`checksum_mismatch`、`invalid_package`、`needs_consent`（同意的不是这份）、`start_failed`、`rolled_back`、`uninstall_failed`；不认识的按 `error` 显示。
+- 操作只在 hub 的内存里：进行中和结束后 10 分钟内的列得出来，hub 重启后就没了（重启前没装完的照常没装上，再装一次即可）。
+
+### 接口
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/v1/extensions/-/catalog/preview`、`/api/v1/extensions/-/preview` | 原样；body 加 `"async": true` 时马上回 202 `{"operation": …}`，下载、检查在后台做，做完操作停在 `needs_consent`（或 `failed`）。不带 `async` 的同步回答照旧，多一个 `operation_id` |
+| POST | `/api/v1/extensions/-/install`、`/api/v1/extensions/{id}/-/upgrade` | 原样；body 加 `"async": true` 时回 202 `{"operation": …}`，`install` / `start` / `nodes` 在后台做。同步的照旧在装好后回扩展详情（多一个 `operation_id`），不等 `start` 和 `nodes` |
+| DELETE | `/api/v1/extensions/{id}/-/` | 原样；查询串加 `async=1` 时回 202 `{"operation": …}` |
+| GET | `/api/v1/extensions/-/operations` | `{"operations": [ExtensionOperation…]}`：进行中、等同意的和 10 分钟内结束的，新的在前 |
+| GET | `/api/v1/extensions/-/operations/{id}` | 一个操作；`needs_consent` 时多一个 `preview`（完整预览）。没有或过期 404 |
+| POST | `/api/v1/extensions/-/operations/{id}/retry` | 失败的操作从头再来一次，回 202 `{"operation": 新操作}`。下载过的包在缓存里，`download` 立刻 `done`（`cached`）；失败在 `consent` 之后、新预览的权限摘要和用户同意的一样时不再问，直接接着装 |
+| DELETE | `/api/v1/extensions/-/operations/{id}` | 取消：下载、检查中的（异步发起的）停下来，等同意的丢掉预览，操作变成 `canceled`；结束了的从列表里去掉；`install` 开始后不能取消（409 `cannot_cancel`） |
+
+权限同发起它的接口：能预览 / 安装的设备才能列、看、重试、取消操作（完整权限的设备装市场里的扩展，其余来源只认主 token 经回环）。
+
+### 事件
+
+`{"type": "extension_operation", "operation": ExtensionOperation}`：步骤变了就推；下载中最多每秒一条，不带 `preview`。只推给在 WebSocket 的 `?features=` 或 `client_hello.features` 里声明了 `extension_operations` 的连接，也不进事件日志（`event_seq` 续传补不回来）：重连后 `GET …/operations` 重新拿一次。旧客户端收不到，只认 `extension_upgrade` 的照旧能收到自动升级的结果。
+
+### 客户端怎么用
+
+0. 连 WebSocket 时在 `?features=`（或 `client_hello.features`）里带上 `extension_operations`。
+1. 点「安装」：`POST …/catalog/preview {"market", "extension", "async": true}`，拿到操作，画步骤列表；之后只听 `extension_operation`（按 `id` 替换）。
+2. `needs_consent`：`GET …/operations/{id}` 拿 `preview`，弹出原来的权限确认；同意就 `POST /-/install {"preview_id", "permissions_digest", "bundle", "async": true}`。
+3. `succeeded`：刷新扩展列表；`failed`：在失败的那一步旁边显示 `error`，`retryable` 时给「重试」（`POST …/retry`）。
+4. 打开扩展页（或重连）时 `GET …/operations`，把进行中的接着画出来。
+
 ## REST（App → hub）
 
 | 方法 | 路径 | 说明 |
@@ -700,6 +773,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `workspace_board` | `revision`：看板修改已保存，客户端重新读取完整状态；不代表 Agent 状态变化 |
 | `workspace_board_settings` | `enabled`：看板的开关改了（`PUT /api/v1/workspace-board/settings`），客户端据此显示或隐藏入口 |
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
+| `extension_operation` | `operation`（`ExtensionOperation`）：扩展的安装、升级、卸载走到了下一步，或下载有进展（最多每秒一条）；只发给声明了 `extension_operations` 的连接，不进事件日志，见上「扩展的安装、升级、卸载进度」 |
 | `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[extensions.md](extensions.md)「UI 插槽」 |
 | `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条；kind `view` 是活卡片的原始位置，body.view 是 AssistantView |
 | `assistant_view` | `conversation`, `view`（schema 的 AssistantView：id、conversation、version、view、created_at、updated_at）：已存入数据库的活卡片更新；同一卡片每秒最多一次，按 version 忽略旧更新；不另发通知 |
