@@ -128,6 +128,18 @@ type Splitter interface {
 	Split(ctx context.Context, pane PaneRef, direction, cwd string) (PaneRef, error)
 }
 
+// Worktreer is a host that makes Git worktree checkouts itself and opens them as spaces grouped under the repository's
+// (herdr: `worktree create`). A host without it, or one that says CanWorktree is false (an older herdr), gets the
+// checkout from git and a plain CreateSpace.
+type Worktreer interface {
+	CanWorktree() bool
+	// WorktreesDir is the directory the host puts checkouts under (`<dir>/<repo>/<branch-slug>`); home is the user's.
+	WorktreesDir(home string) string
+	// CreateWorktree checks branch out at path (an existing local branch, else a new one from the space's HEAD) and opens
+	// it as a space, taking no focus. It never forces anything.
+	CreateWorktree(ctx context.Context, space, branch, path string) (*Created, error)
+}
+
 // Streamer streams a pane's terminal as it changes, at the pane's own size, without resizing it.
 type Streamer interface {
 	// CanObserve reports whether this host can stream (herdr: a version with `terminal session observe`).

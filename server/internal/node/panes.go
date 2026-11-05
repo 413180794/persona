@@ -94,6 +94,7 @@ func (n *Node) listPanes(ctx context.Context) (proto.PanesResponse, error) {
 			c.Control = ct.CanControl()
 		}
 		_, c.NewTab = h.(host.Launcher)
+		c.Worktree = canWorktree(h)
 		caps[h.Kind()] = c
 	}
 	n.mu.Lock()

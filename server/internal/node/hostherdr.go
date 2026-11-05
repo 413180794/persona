@@ -26,6 +26,7 @@ var (
 	_ host.Organizer  = (*herdrHost)(nil)
 	_ host.SlotCloser = (*herdrHost)(nil)
 	_ host.Splitter   = (*herdrHost)(nil)
+	_ host.Worktreer  = (*herdrHost)(nil)
 	_ host.Streamer   = (*herdrHost)(nil)
 	_ host.Controller = (*herdrHost)(nil)
 )
@@ -223,6 +224,31 @@ func (h *herdrHost) Split(ctx context.Context, pane host.PaneRef, direction, cwd
 	return host.PaneRef{Kind: pane.Kind, ID: id}, nil
 }
 
+// CreateWorktree has herdr check the branch out at path and open it as a workspace grouped under the source one.
+func (h *herdrHost) CreateWorktree(ctx context.Context, space, branch, path string) (*host.Created, error) {
+	c, err := h.c.WorktreeCreate(ctx, space, branch, path)
+	if err != nil {
+		return nil, err
+	}
+	out := fromHerdrCreated(&c.Created)
+	if out.SpaceID == "" {
+		return nil, errors.New("herdr did not return the new workspace")
+	}
+	return out, nil
+}
+
+func (h *herdrHost) WorktreesDir(home string) string { return herdr.WorktreesDir(home) }
+
+// worktreeSupport caches whether this herdr has `worktree` (herdr 0.9 on Unix).
+var worktreeSupport struct {
+	once sync.Once
+	ok   bool
+}
+
+func (h *herdrHost) CanWorktree() bool {
+	return h.has(&worktreeSupport, "worktree")
+}
+
 // observeSupport, controlSupport cache whether this herdr has `terminal session observe` / `control` (herdr 0.9 on
 // Unix).
 var observeSupport, controlSupport struct {
@@ -230,20 +256,25 @@ var observeSupport, controlSupport struct {
 	ok   bool
 }
 
+// has runs `herdr <args> --help` once: whether this herdr knows the command.
 func (h *herdrHost) has(cache *struct {
 	once sync.Once
 	ok   bool
-}, sub string) bool {
+}, args ...string) bool {
 	cache.once.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		cache.ok = exec.CommandContext(ctx, h.c.Bin, "terminal", "session", sub, "--help").Run() == nil
+		cache.ok = exec.CommandContext(ctx, h.c.Bin, append(args, "--help")...).Run() == nil
 	})
 	return cache.ok
 }
 
-func (h *herdrHost) CanObserve() bool { return h.has(&observeSupport, "observe") }
-func (h *herdrHost) CanControl() bool { return h.has(&controlSupport, "control") }
+func (h *herdrHost) CanObserve() bool {
+	return h.has(&observeSupport, "terminal", "session", "observe")
+}
+func (h *herdrHost) CanControl() bool {
+	return h.has(&controlSupport, "terminal", "session", "control")
+}
 
 func (h *herdrHost) PaneSize(ctx context.Context, pane host.PaneRef) (int, int, error) {
 	return h.c.PaneSize(ctx, pane.ID)

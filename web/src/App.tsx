@@ -25,6 +25,7 @@ import { Home } from "./views/Home";
 import { PersonaAssistant } from "./views/PersonaAssistant";
 import { Login } from "./views/Login";
 import { NewAgent } from "./views/NewAgent";
+import { NewWorktreeHost } from "./views/NewWorktree";
 import { onOpenNewAgent, type NewAgentPreset } from "./lib/new-agent";
 import { StartingAgent } from "./views/StartingAgent";
 import { Palette } from "./views/Palette";
@@ -359,6 +360,7 @@ function Shell() {
         setNewAgent(false);
         setPreset(null);
       }} />
+      <NewWorktreeHost />
     </div>
   );
 }

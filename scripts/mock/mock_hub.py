@@ -2386,6 +2386,9 @@ PANES_NEW = {}  # machine id -> [(workspace id, pane)] opened by POST
 # layout above: a closed pane or tab is gone, a renamed tab has its new name, a split adds a shell.
 NODE_ACTIONS = []
 CLOSED_PANES, CLOSED_TABS, TAB_NAMES, SPLIT_PANES = set(), set(), {}, {}
+# #2431 新建 worktree…: worktree/create adds a workspace (with one shell pane) next to the persona one; a branch or a path
+# containing "taken" is refused the way git refuses a branch checked out elsewhere / a directory with files in it.
+WORKTREES = {}  # machine id -> [(workspace id, label, path, branch)]
 
 
 def mock_panes(mid):
@@ -2404,6 +2407,10 @@ def mock_panes(mid):
         panes.insert(i, {"pane": "w1:p%d" % (i + 1) if i == 0 else "w1:p9", "terminal": "pane:w1:p%d" % (i + 1) if i == 0 else "pane:w1:p9",
                          "tab_id": "w1:t1", "workspace_id": "w1", "agent": sess.get("agent", "claude"), "status": sess.get("status", "idle"),
                          "title": sess.get("title"), "cwd": sess.get("cwd"), "session_id": sess["session_id"]})
+    for i, (wid, label, path, branch) in enumerate(WORKTREES.get(mid, [])):
+        ws.append({"id": wid, "label": label, "number": 3 + i, "cwd": path, "branch": branch})
+        tabs.append({"id": wid + ":t1", "workspace_id": wid, "label": "1", "number": 1})
+        panes.append({"pane": wid + ":p1", "terminal": "pane:" + wid + ":p1", "tab_id": wid + ":t1", "workspace_id": wid, "title": "zsh", "cwd": path})
     for wid, extra in PANES_NEW.get(mid, []):
         panes.append(extra)
         if not any(t["id"] == extra["tab_id"] for t in tabs):
@@ -2412,7 +2419,23 @@ def mock_panes(mid):
         panes.append(pane)
     panes = [p for p in panes if p["pane"] not in CLOSED_PANES and p["tab_id"] not in CLOSED_TABS]
     tabs = [dict(t, label=TAB_NAMES.get(t["id"], t["label"])) for t in tabs if t["id"] not in CLOSED_TABS]
-    return {"hosts": [{"kind": "herdr", "stream": True, "control": True, "new_tab": True, "workspaces": ws, "tabs": tabs, "panes": panes}]}
+    return {"hosts": [{"kind": "herdr", "stream": True, "control": True, "new_tab": True, "worktree": True, "workspaces": ws, "tabs": tabs, "panes": panes}]}
+
+
+def worktree_route(h, p, body):
+    """POST /api/v1/machines/{mid}/worktree/{prepare,create} (#2431)."""
+    mid, verb = p.split("/")[4], p.split("/")[6]
+    NODE_ACTIONS.append({"machine": mid, "route": "worktree/" + verb, **body})
+    if verb == "prepare":
+        return h.send_json({"root": "/home/me/persona", "repoName": "persona", "branch": "main", "path": "/home/me/.herdr/worktrees/persona"})
+    branch, path = str(body.get("branch", "")), str(body.get("path", ""))
+    if "taken" in branch:
+        return h.send_json({"error": "'%s' is already used by worktree at '/home/me/persona'" % branch, "code": "internal"}, 502)
+    if "taken" in path:
+        return h.send_json({"error": "检出路径已存在且不是空目录"}, 502)
+    wid = "w%d" % (3 + len(WORKTREES.setdefault(mid, [])))
+    WORKTREES[mid].append((wid, "persona", path, branch))
+    return h.send_json({"workspace_id": wid, "tab_id": wid + ":t1", "pane": wid + ":p1", "terminal": "pane:" + wid + ":p1", "path": path, "branch": branch})
 
 
 def node_action(h, p, body):
@@ -9444,6 +9467,8 @@ class H(BaseHTTPRequestHandler):
         if plugins_route(self, p, self.last_body): return
         if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/(panes/(close|split|agent|git)|tabs/(close|rename))", p):
             return node_action(self, p, json.loads(self.last_body or b"{}"))
+        if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/worktree/(prepare|create)", p):
+            return worktree_route(self, p, json.loads(self.last_body or b"{}"))
         if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/spaces/[^/]+/rename", p):
             NODE_ACTIONS.append({"machine": p.split("/")[4], "route": "spaces/rename", "workspace_id": p.split("/")[6], **json.loads(self.last_body or b"{}")})
             return self.send_json({})

@@ -1,0 +1,111 @@
+package herdr
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+)
+
+// WorktreesDir is the directory herdr puts Git worktree checkouts under (`<dir>/<repo>/<branch-slug>`): the
+// `[worktrees] directory` of its config file, else ~/.herdr/worktrees. A relative value is taken from home. home is
+// the user's home directory.
+func WorktreesDir(home string) string {
+	dir := ""
+	if b, err := os.ReadFile(configPath(home)); err == nil {
+		dir = worktreesDirIn(string(b))
+	}
+	if dir == "" {
+		dir = "~/.herdr/worktrees"
+	}
+	return expandHome(home, dir)
+}
+
+// configPath is herdr's config file: ~/.config/herdr/config.toml, %APPDATA%\herdr\config.toml on Windows.
+func configPath(home string) string {
+	if runtime.GOOS == "windows" {
+		if app := os.Getenv("APPDATA"); app != "" {
+			return filepath.Join(app, "herdr", "config.toml")
+		}
+	}
+	return filepath.Join(home, ".config", "herdr", "config.toml")
+}
+
+func expandHome(home, p string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		return filepath.Join(home, p[1:])
+	}
+	if !filepath.IsAbs(p) {
+		return filepath.Join(home, p)
+	}
+	return filepath.Clean(p)
+}
+
+// worktreesDirIn reads `directory` out of the `[worktrees]` table of a config file ("" when it is not set). Only
+// what this one setting needs of TOML: a basic or literal string on a line of its own in that table.
+func worktreesDirIn(config string) string {
+	inTable := false
+	for _, line := range strings.Split(config, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "" || strings.HasPrefix(line, "#"):
+			continue
+		case strings.HasPrefix(line, "["):
+			head, _, _ := strings.Cut(line, "#")
+			inTable = strings.TrimSpace(head) == "[worktrees]"
+			continue
+		}
+		if !inTable {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) != "directory" {
+			continue
+		}
+		val = strings.TrimSpace(val)
+		if len(val) < 2 {
+			return ""
+		}
+		q := val[0]
+		if q != '"' && q != '\'' {
+			return ""
+		}
+		var out strings.Builder
+		closed := false
+		for i := 1; i < len(val) && !closed; i++ {
+			switch c := val[i]; {
+			case c == q:
+				closed = true
+			case c == '\\' && q == '"' && i+1 < len(val) && (val[i+1] == '\\' || val[i+1] == '"'):
+				i++
+				out.WriteByte(val[i])
+			default:
+				out.WriteByte(c)
+			}
+		}
+		if !closed {
+			return ""
+		}
+		return out.String()
+	}
+	return ""
+}
+
+// WorktreeSlug is how herdr turns a branch name into the directory name of its checkout: lower case, every run of
+// characters other than ASCII letters and digits one "-", none at either end ("Feat/A_b.c" is "feat-a-b-c").
+func WorktreeSlug(branch string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(branch) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			if dash && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			dash = false
+			b.WriteRune(r)
+			continue
+		}
+		dash = true
+	}
+	return b.String()
+}

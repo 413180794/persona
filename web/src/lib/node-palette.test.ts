@@ -3,6 +3,7 @@ import { itemsToCommands, nodesFor, setKnownTree, getAsk, answerAsk, subscribeAs
 import { contextCommands } from "./palette";
 import { nodeActions, type MenuNode, type NodeActionDeps } from "./node-actions";
 import { buildTerminalTree } from "./terminals";
+import { getState } from "./store";
 
 vi.mock("../ui/atoms", () => ({ toast: vi.fn(), copyText: vi.fn() }));
 
@@ -108,5 +109,24 @@ describe("the node the user is on", () => {
     expect(cmds.some((c) => c.title === "关闭标签页" && c.section === "Workspace · zsh")).toBe(true);
     expect(nodeCommands({ route: { name: "home" } })).toEqual([]);
     expect(nodeCommands({ route: { name: "terminal", mid: "m1", id: "pane:w9:p9" } })).toEqual([]);
+  });
+
+  it("offers 新建 worktree… for the workspace when its host can make worktrees (#2431)", () => {
+    const withWt = { hosts: [{ ...res.hosts[0], worktree: true }] };
+    setKnownTree("m1", buildTerminalTree(withWt, []));
+    const cmds = contextCommands({ route: { name: "terminal", mid: "m1", id: "pane:w1:p2" } });
+    expect(cmds.filter((c) => c.title === "新建 worktree").map((c) => c.section)).toEqual(["Workspace · proj"]);
+    // an older node does not say, so the command is not there
+    setKnownTree("m1", buildTerminalTree(res, []));
+    expect(contextCommands({ route: { name: "terminal", mid: "m1", id: "pane:w1:p2" } }).some((c) => c.title === "新建 worktree")).toBe(false);
+  });
+
+  it("finds the workspace of an agent's session in the page's list too", () => {
+    setKnownTree("m1", buildTerminalTree({ hosts: [{ ...res.hosts[0], worktree: true }] }, []));
+    const session = { machine_id: "m1", session_id: "s1", cwd: "/home/me/proj", title: "t", status: "idle", space_kind: "herdr", space_id: "w1", space_name: "proj", pane_id: "w1:p1" };
+    const state = getState();
+    state.sessions = { m1: [session as never] };
+    const where = nodesFor({ route: { name: "session", mid: "m1", sid: "s1" }, pane: { mid: "m1", sid: "s1" } });
+    expect(where.find((w) => w.node.kind === "workspace")?.node.canWorktree).toBe(true);
   });
 });

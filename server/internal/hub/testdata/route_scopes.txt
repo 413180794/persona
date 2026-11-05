@@ -265,6 +265,8 @@ agents.control       POST /api/v1/interactions/{id}/resolve
 -                    POST /api/v1/machines/{mid}/spaces/{wid}/rename
 -                    POST /api/v1/machines/{mid}/tabs/close
 -                    POST /api/v1/machines/{mid}/tabs/rename
+-                    POST /api/v1/machines/{mid}/worktree/create
+-                    POST /api/v1/machines/{mid}/worktree/prepare
 notify               POST /api/v1/notify
 -                    POST /api/v1/phone/runtime-cli
 agents.control       POST /api/v1/sessions

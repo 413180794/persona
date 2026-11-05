@@ -122,6 +122,17 @@ const (
 	maxLine = 64 << 20
 )
 
+// worktreeTimeout bounds a worktree.create: it checks a whole tree out and runs the repository's hooks.
+const worktreeTimeout = 2 * time.Minute
+
+// timeoutOf is how long a call may take: a worktree checkout is slow, everything else is one quick request.
+func timeoutOf(method string) time.Duration {
+	if method == "worktree.create" {
+		return worktreeTimeout
+	}
+	return rpcTimeout
+}
+
 // errNoSocket: herdr's socket is not reachable, the CLI may still be (it can find a server we cannot).
 var errNoSocket = errors.New("herdr socket unavailable")
 
@@ -156,7 +167,7 @@ func (c *Client) rpcOnce(ctx context.Context, method string, params any, out any
 	if c.Socket == "" {
 		return errNoSocket
 	}
-	ctx, cancel := context.WithTimeout(ctx, rpcTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeoutOf(method))
 	defer cancel()
 	conn, err := dialSocket(ctx, c.Socket)
 	if err != nil {
@@ -227,7 +238,11 @@ func readLine(r *bufio.Reader, max int) ([]byte, error) {
 
 // run executes herdr with args and decodes `.result` into out.
 func (c *Client) run(ctx context.Context, out any, args ...string) error {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	limit := 20 * time.Second
+	if len(args) > 0 && args[0] == "worktree" {
+		limit = worktreeTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, c.Bin, args...)
 	var stdout, stderr bytes.Buffer
@@ -425,6 +440,26 @@ func (c *Client) WorkspaceCreate(ctx context.Context, cwd, label string) (*Creat
 	var res Created
 	err := c.call(ctx, "workspace.create", map[string]any{"cwd": cwd, "label": label, "focus": false}, &res,
 		"workspace", "create", "--cwd", cwd, "--label", label, "--no-focus")
+	return &res, err
+}
+
+// WorktreeCreated is what worktree.create opened: the new workspace (with its first tab and pane) and the checkout.
+type WorktreeCreated struct {
+	Created
+	Worktree struct {
+		Path   string `json:"path"`
+		Branch string `json:"branch"`
+	} `json:"worktree"`
+}
+
+// WorktreeCreate has herdr make a Git worktree checkout at path (an absolute path) from the repository of a workspace
+// and open it as a workspace grouped under that one, without moving the computer's focus. An existing local branch is
+// checked out; any other name becomes a new branch from the workspace's HEAD. herdr never forces anything: a branch
+// checked out elsewhere, or a path git refuses, is an error.
+func (c *Client) WorktreeCreate(ctx context.Context, workspace, branch, path string) (*WorktreeCreated, error) {
+	var res WorktreeCreated
+	err := c.call(ctx, "worktree.create", map[string]any{"workspace_id": workspace, "branch": branch, "path": path, "focus": false}, &res,
+		"worktree", "create", "--workspace", workspace, "--branch", branch, "--path", path, "--no-focus")
 	return &res, err
 }
 

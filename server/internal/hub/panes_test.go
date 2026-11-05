@@ -137,12 +137,14 @@ func TestPaneRoutesAreNotForAnswerOnlyDevices(t *testing.T) {
 // ── the menu actions (close / split / rename / run an agent / git) ──────────────────────────────────────────────
 
 var actionBodies = map[string]string{
-	"panes/close": `{"pane":"w1:p2"}`,
-	"panes/split": `{"pane":"w1:p2","direction":"right"}`,
-	"panes/agent": `{"pane":"w1:p2","launcher":"claude"}`,
-	"panes/git":   `{"pane":"w1:p2","op":"fetch"}`,
-	"tabs/close":  `{"tab_id":"w1:t2"}`,
-	"tabs/rename": `{"tab_id":"w1:t2","label":"build"}`,
+	"panes/close":      `{"pane":"w1:p2"}`,
+	"panes/split":      `{"pane":"w1:p2","direction":"right"}`,
+	"panes/agent":      `{"pane":"w1:p2","launcher":"claude"}`,
+	"panes/git":        `{"pane":"w1:p2","op":"fetch"}`,
+	"tabs/close":       `{"tab_id":"w1:t2"}`,
+	"tabs/rename":      `{"tab_id":"w1:t2","label":"build"}`,
+	"worktree/prepare": `{"workspace_id":"w1"}`,
+	"worktree/create":  `{"workspace_id":"w1","branch":"feat/x","path":"/tmp/wt/feat-x"}`,
 }
 
 func postAction(h *Hub, role, path, body string) int {
@@ -176,7 +178,8 @@ func TestNodeActionsNeedAFullDevice(t *testing.T) {
 			t.Errorf("%s: full device = %d", path, code)
 		}
 	}
-	want := map[string]bool{"panes.close": true, "panes.split": true, "panes.agent": true, "panes.git": true, "tabs.close": true, "tabs.rename": true}
+	want := map[string]bool{"panes.close": true, "panes.split": true, "panes.agent": true, "panes.git": true, "tabs.close": true, "tabs.rename": true,
+		"worktree.prepare": true, "worktree.create": true}
 	for _, m := range tn.await(t, len(want)) {
 		delete(want, m)
 	}
@@ -203,6 +206,7 @@ func TestNodeActionsPassOnlyTheirFields(t *testing.T) {
 	for path, body := range map[string]string{
 		"panes/close": `{}`, "panes/split": `{"pane":"w1:p2"}`, "panes/agent": `{"pane":"w1:p2"}`, "panes/git": `{"pane":"w1:p2"}`,
 		"tabs/close": `{"tab_id":7}`, "tabs/rename": `{"tab_id":"w1:t2"}`, "panes/close ": `not json`,
+		"worktree/prepare": `{}`, "worktree/create": `{"workspace_id":"w1","branch":"feat/x"}`,
 	} {
 		path = strings.TrimSpace(path)
 		if code := postAction(h, roleFull, path, body); code != http.StatusBadRequest {
@@ -232,5 +236,33 @@ func TestNodeActionRoutesAreFullCredentialsOnly(t *testing.T) {
 		if !strings.Contains(string(data), line) {
 			t.Errorf("route_scopes.txt has no full-credentials-only line for %s", path)
 		}
+	}
+}
+
+// #2431: 新建 worktree… passes the workspace, the branch, the path and the host kind, and nothing else (no base ref, no
+// force, no hook).
+func TestWorktreeCreatePassesOnlyItsFields(t *testing.T) {
+	tn := newTermNode(t)
+	body := `{"workspace_id":"w1","kind":"herdr","branch":"feat/x","path":"/tmp/wt/feat-x","force":"true","base":"main","command":"rm -rf ~","cwd":"/etc"}`
+	if code := postAction(tn.hub, roleFull, "worktree/create", body); code != http.StatusOK {
+		t.Fatalf("create = %d", code)
+	}
+	tn.await(t, 1)
+	tn.mu.Lock()
+	got := tn.args["worktree.create"]
+	tn.mu.Unlock()
+	if got != `{"branch":"feat/x","kind":"herdr","path":"/tmp/wt/feat-x","workspace_id":"w1"}` {
+		t.Errorf("the node was sent %s", got)
+	}
+	for _, role := range []string{roleAnswer, roleLink, roleExtension} {
+		if code := postAction(tn.hub, role, "worktree/create", body); code != http.StatusForbidden {
+			t.Errorf("%s: create = %d", role, code)
+		}
+		if code := postAction(tn.hub, role, "worktree/prepare", `{"workspace_id":"w1"}`); code != http.StatusForbidden {
+			t.Errorf("%s: prepare = %d", role, code)
+		}
+	}
+	if got := tn.await(t, 1); len(got) != 1 {
+		t.Errorf("a refused request reached the node: %q", got)
 	}
 }

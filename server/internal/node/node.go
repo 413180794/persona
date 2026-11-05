@@ -378,6 +378,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Label            string        `json:"label"`     // tabs.rename
 		Kind             string        `json:"kind"`      // tabs.*, panes.git: the host kind ("" the engine's)
 		Op               string        `json:"op"`        // panes.git: fetch, pull or push
+		Branch           string        `json:"branch"`    // worktree.create
 		TabName          *string       `json:"tab_name"`
 		TZ               string        `json:"tz"` // the user's time zone
 		// HTTP is a quota plugin's request to send to a launcher's gateway (launchers.http); nil asks for the gateway.
@@ -785,6 +786,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		return n.gitOp(ctx, dir, p.Op)
+	case "worktree.prepare": // 新建 worktree…: what the dialog starts from (worktree.go)
+		return n.worktreePrepare(ctx, p.Kind, p.WorkspaceID)
+	case "worktree.create": // a Git worktree of a workspace's repository, opened as a workspace (worktree.go)
+		return n.worktreeCreate(ctx, p.Kind, p.WorkspaceID, p.Branch, p.Path)
 	case "tabs.close":
 		return ok(n.closeTab(ctx, p.Kind, p.TabID))
 	case "tabs.rename":

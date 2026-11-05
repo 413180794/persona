@@ -77,6 +77,11 @@ function findPane(spaces: readonly TermSpace[], id: string) {
   return undefined;
 }
 
+/** Whether the 终端 page's list says this workspace's host can make worktrees (an agent session's workspace has no flag of its own). */
+function canWorktreeIn(mid: string, host: string | undefined, workspace: string | undefined): boolean {
+  return (trees.get(mid) ?? []).some((sp) => sp.id === workspace && sp.host === (host || "herdr") && sp.canWorktree === true);
+}
+
 export function nodesFor(ctx: PaletteContext): Where[] {
   const state = getState();
   const machine = (mid: string) => state.machines.find((m) => m.id === mid);
@@ -98,7 +103,7 @@ export function nodesFor(ctx: PaletteContext): Where[] {
     const online = machine(s.machine_id)?.online !== false;
     const out: Where[] = [{ section: `Workspace · ${sessionTitle(s)}`, node: sessionNode(s, online) }];
     if (s.space_id && s.space_name)
-      out.push({ section: `Workspace · ${s.space_name}`, node: { kind: "workspace", mid: s.machine_id, online, host: s.space_kind, label: s.space_name, workspaceId: s.workspace_id ?? s.space_id, paneId: s.pane_id, cwd: s.cwd } });
+      out.push({ section: `Workspace · ${s.space_name}`, node: { kind: "workspace", mid: s.machine_id, online, host: s.space_kind, label: s.space_name, workspaceId: s.workspace_id ?? s.space_id, paneId: s.pane_id, cwd: s.cwd, canWorktree: canWorktreeIn(s.machine_id, s.space_kind, s.workspace_id ?? s.space_id) } });
     return out;
   }
   return [];

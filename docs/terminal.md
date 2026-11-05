@@ -648,3 +648,27 @@ Moshi 是同一个会话页，中间区域在 Term 和 Chat 之间原地切换�
 - 切到对话时终端**不卸载**：盒子大小不变、只是看不见（`invisible` + `inert`，不用 `display:none`），所以窗格不会被缩成 100px 的盒子的列数、流不断、切回来不重新订阅（`terminal_subscribe` 只有第一次）。离开会话页或标签页进后台且在看对话时才 `dispose`、放手窗格。
 - 接管的尺寸就是会话页中间区域的大小；右边开着文件 / Git 面板时中间变窄，终端按新的宽度防抖后重发尺寸（和以前侧边面板被拖窄一样）。
 - 验证：假 hub（`MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1`）上数 WebSocket 里发出的 `terminal_subscribe` / `terminal_unsubscribe`：开页面 0 条，切到终端 1 条，来回切 ⌘J 和分段控件仍是 1 条、没有 unsubscribe，换页后有 unsubscribe。
+
+## 二十三、新建 worktree…：从工作区的仓库开一个 Git worktree（2026-11-05，网页，#2431）
+
+工作区的右键菜单 / ⋯ 里的「新建 worktree…」（W），命令面板里同名命令。弹出一个对话框：**分支**和**检出路径**，点「创建并打开」后电脑上多出一个 worktree，并作为 herdr 工作区（分组在原工作区下）打开，网页跳到它的第一个终端。
+和 Moshi 的 `worktree/prepare` + `worktree/create` 同一个形状。
+
+- **路由**（`hub/panes.go` 的 `nodeActions`，和菜单里别的动作一样**只有 `full` 设备**，`answer` 设备和扩展令牌 403，`route_scopes.txt` 里是 `-`）：
+  - `POST /machines/{mid}/worktree/prepare {workspace_id, kind?}` → `{root, repoName, branch, path}`：`root` 是仓库的 git 顶层，`repoName` 是仓库名（linked worktree 里也是主仓库的名字），`branch` 是工作区当前的分支（分离 HEAD 时空），`path` 是 herdr 放这个仓库的检出的目录 `<worktrees 目录>/<仓库名>`。
+  - `POST /machines/{mid}/worktree/create {workspace_id, branch, path, kind?}` → `{workspace_id, tab_id?, pane?, terminal?, path, branch}`。
+  - 只认这几个字段，请求里没有地方写基准提交、`--force` 或命令。node 方法 `worktree.prepare` / `worktree.create`（`node/worktree.go`）。
+- **交给 herdr**：herdr 0.9 自己有 `worktree create`（socket 方法 `worktree.create {workspace_id, branch, path, focus}`，CLI 退路 `herdr worktree create --workspace … --branch … --path … --no-focus`）：
+  分支已有就检出，没有就从工作区的 HEAD 新建；开出的工作区带 worktree 来历，分组在原工作区下，侧边栏里 herdr 自己的 worktree 分组也认它。不抢电脑上的焦点（和别的菜单动作一样），网页自己导航过去。
+  `host.Worktreer`（`CanWorktree` 看 `herdr worktree --help`、`WorktreesDir`、`CreateWorktree`）只有 herdr 宿主实现。
+- **没有 `worktree` 的旧 herdr**：node 退回 `git worktree add`（已有的本地分支原样检出，否则 `-b` 从仓库的 HEAD 新建；没有 `--force`），再用 `workspace create` 在检出里开一个普通工作区（没有 herdr 的分组）。
+  检出成功但工作区没开起来时检出留着，错误里说明。其他宿主（Orca、herdr-core、botmux）不提供，菜单项不出现。
+- **能力**：`GET /machines/{mid}/panes` 的每个宿主多一个 `worktree` 布尔值（和 `new_tab` 并列）；没有这个字段的旧 node 不显示菜单项。
+- **默认检出路径**：沿用 herdr 的约定 `<worktrees.directory>/<仓库名>/<分支 slug>`，目录读 herdr 配置（`~/.config/herdr/config.toml` 的 `[worktrees] directory`，默认 `~/.herdr/worktrees`，`~` 和相对路径按用户主目录展开）。
+  分支 slug 和 herdr 一致：转小写，连续的非 ASCII 字母数字合成一个 `-`，两头不留（`Feat/A_b.c` → `feat-a-b-c`，`fix/中文` → `fix`），这是 2026-11-05 在 herdr 0.9.5 上试出来的，`herdr.WorktreeSlug` 和网页的 `branchSlug` 各有测试。
+- **node 的把关**（`worktreeCreate`，都在碰 herdr / git 之前）：工作区必须是宿主列出的；必须在 Git 仓库里；分支名要过 `git check-ref-format --branch`，且不能以 `-` 开头、不能是 `@{-1}` 这类修订表达式；
+  检出路径要是绝对路径（`~/` 会展开），不能是已有的文件，已有的目录必须是空的（空目录 git 会直接用），不能放进仓库的 `.git` 里。git 拒绝的（分支已在别处检出、路径不行……）原样把 `fatal:` 那一行回给用户，不会强制、不会删东西、失败不留半成品。
+- **对话框**（`views/NewWorktree.tsx`，逻辑在 `lib/worktree.ts`）：打开时先读仓库（「正在读取仓库…」）；检出路径跟着分支名走，手改之后不再跟，清空后恢复；分支名当场校验（空：「请填写分支名」）；
+  创建中按钮转圈、对话框不能关；失败显示在对话框里（「没能新建 worktree：…」），旧 hub / 旧 node 没有这个接口时说「这台电脑上的 Persona 版本太旧，更新后才能新建 worktree」；成功后 toast、读一遍树、跳到新工作区的终端。
+- **测试**：`node/worktree_test.go`（真 git 仓库 + 假 herdr：prepare 的仓库名 / 分支 / 配置的目录 / linked worktree / 分离 HEAD / 非仓库；经 herdr 创建新分支和已有分支；各种被拒绝的路径和分支名不碰 herdr；git 的拒绝原因；退回 git 的路径和重复检出；`panes.list` 带 `worktree`）、
+  `herdr/worktrees_test.go`（配置解析、slug、socket 参数和 CLI 退路）、`hub/panes_test.go`（权限、只转发点名的字段）、`web/src/lib/worktree.test.ts`、`node-actions.test.ts`、`node-palette.test.ts`、`views/NewWorktree.test.tsx`。

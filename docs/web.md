@@ -533,7 +533,7 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
 | 节点 | 项 |
 | --- | --- |
 | 机器 | 折叠 / 展开 Z、刷新 R（终端页）、复制机器 id I |
-| 工作区 | 折叠 Z、新建 Agent… N、新建终端 T（终端页）、重命名… R（终端页，行内）、Git ▸ G（拉取 P / 推送 U / 获取 F / 复制分支名 B）、复制路径 C、复制 herdr id I |
+| 工作区 | 折叠 Z、新建 Agent… N、新建终端 T（终端页）、重命名… R（终端页，行内）、新建 worktree… W（宿主能开 worktree 时，#2431）、Git ▸ G（拉取 P / 推送 U / 获取 F / 复制分支名 B）、复制路径 C、复制 herdr id I |
 | 标签页 | 重命名… R（行内；有 Agent 的标签页走原来的重命名接口）、新建窗格 ▸ N（向右 / 向下）、在这里运行 Agent… ▸ A（单个普通 shell 窗格）、Git ▸ G、复制路径 C、复制会话 id S、复制 herdr id I、关闭标签页 ⌫ |
 | 窗格 | 新建窗格 N、在这里运行 Agent… A（普通 shell）、Git G、复制路径 C、复制会话 id S、复制 herdr id I、关闭窗格 ⌫ |
 
@@ -543,6 +543,9 @@ Agent 行的菜单保留原来的全部项（置顶 P、重命名 R、拷贝目�
 接口（都是 `POST /api/v1/machines/{mid}/…`，**只有 `full` 设备**；`answer` 设备和扩展令牌被拒，route scopes 里是「仅凭据」）：`panes/close {pane}`、`panes/split {pane, direction: right|down}`、
 `panes/agent {pane, launcher}`、`panes/git {op: pull|push|fetch, pane | workspace_id+kind}`、`tabs/close {tab_id, kind?}`、`tabs/rename {tab_id, label, kind?}`；工作区重命名用原来的 `spaces/{wid}/rename`。
 请求只带这些字段（别的会被丢掉），不能指定目录或命令，细节见 `docs/terminal.md` 第二十一节。
+
+- **新建 worktree…**（#2431，W）：工作区的菜单和命令面板里的一项，弹出「分支 / 检出路径」对话框（`views/NewWorktree.tsx`，逻辑 `lib/worktree.ts`）。路由 `worktree/prepare {workspace_id, kind?}`、`worktree/create {workspace_id, branch, path, kind?}`，同样只有 `full` 设备；
+  只在 `panes` 里宿主带 `worktree: true` 时出现（旧 node 不带，就没有这一项）。检出路径跟着分支名走、手改后不再跟、清空后恢复；创建成功后跳到新工作区的终端。细节见 `docs/terminal.md` 第二十三节。截图用 `MOCK_TERMINAL_PANES=1` 的假 hub（`worktree/create` 里分支或路径带 `taken` 会被拒绝，看错误提示）。
 
 - **`/terminal` 页**：机器、工作区、标签页三层都能折叠（点标题；左边出一个小箭头，悬停时显示，折叠后一直显示；键 `fold:term:…`，机器 / 工作区名为键，herdr 重启后 id 变了也保留），搜索时不管折叠。
   行尾悬停出 ⋯（触屏一直在）。

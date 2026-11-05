@@ -193,6 +193,31 @@ describe("machine and workspace", () => {
   });
 });
 
+describe("新建 worktree… (#2431)", () => {
+  const ws: MenuNode = { kind: "workspace", mid: "m1", host: "herdr", label: "proj", workspaceId: "w1", cwd: "/home/me/proj", branch: "main", canWorktree: true };
+
+  it("is on a workspace whose host can make worktrees, with the W accelerator, in front of Git", () => {
+    const items = nodeActions(ws, deps({ newWorktree: vi.fn() }));
+    expect(by(items, "node-worktree")).toMatchObject({ label: "新建 worktree…", accel: "w", icon: "git" });
+    expect(keys(items).indexOf("node-worktree")).toBeLessThan(keys(items).indexOf("node-git"));
+  });
+  it("opens the dialog for that workspace", () => {
+    const d = deps({ newWorktree: vi.fn() });
+    by(nodeActions(ws, d), "node-worktree").onSelect();
+    expect(d.newWorktree).toHaveBeenCalledWith(ws);
+  });
+  it("is left out where it cannot work", () => {
+    const d = deps({ newWorktree: vi.fn() });
+    expect(keys(nodeActions({ ...ws, canWorktree: false }, d))).not.toContain("node-worktree");
+    expect(keys(nodeActions({ ...ws, canWorktree: undefined }, d))).not.toContain("node-worktree");
+    expect(keys(nodeActions({ ...ws, online: false }, d))).not.toContain("node-worktree");
+    expect(keys(nodeActions({ ...ws, host: "orca" }, d))).not.toContain("node-worktree");
+    expect(keys(nodeActions({ ...ws, workspaceId: undefined }, d))).not.toContain("node-worktree");
+    expect(keys(nodeActions({ ...ws, kind: "tab", tabId: "w1:t1", paneId: "w1:p1" }, d))).not.toContain("node-worktree");
+    expect(keys(nodeActions(ws, deps()))).not.toContain("node-worktree");
+  });
+});
+
 describe("the nodes of the two trees", () => {
   const s = { machine_id: "m1", session_id: "sid-1", cwd: "/p", title: "t", status: "idle", space_kind: "herdr", space_id: "w1", workspace_id: "w1", slot_id: "w1:t1", tab_id: "w1:t1", pane_id: "w1:p1", slot_name: "agent-1" } as Session;
   it("a session is its pane", () => {
@@ -214,6 +239,11 @@ describe("the nodes of the two trees", () => {
   };
   const [sp] = buildTerminalTree(res, []);
 
+  it("a workspace carries whether its host makes worktrees", () => {
+    expect(termSpaceNode("m1", sp, true).canWorktree).toBe(false);
+    const [withWt] = buildTerminalTree({ hosts: [{ ...res.hosts[0], worktree: true }] }, []);
+    expect(termSpaceNode("m1", withWt, true).canWorktree).toBe(true);
+  });
   it("a workspace carries its directory and branch", () => {
     expect(termSpaceNode("m1", sp, true)).toMatchObject({ kind: "workspace", workspaceId: "w1", cwd: "/home/me/proj", branch: "main", host: "herdr" });
   });

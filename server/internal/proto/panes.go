@@ -15,7 +15,9 @@ type PaneHost struct {
 	// Control: a phone can drive a pane at its own size (接管).
 	Control bool `json:"control"`
 	// NewTab: the host can open a new shell tab in a workspace (panes.new).
-	NewTab     bool        `json:"new_tab"`
+	NewTab bool `json:"new_tab"`
+	// Worktree: the host can make a Git worktree of a workspace's repository and open it as a workspace (worktree.create).
+	Worktree   bool        `json:"worktree"`
 	Workspaces []PaneSpace `json:"workspaces"`
 	Tabs       []PaneTab   `json:"tabs"`
 	Panes      []PaneItem  `json:"panes"`
@@ -71,4 +73,25 @@ type PaneGitResult struct {
 	Op      string `json:"op"`
 	Message string `json:"message"`
 	Output  string `json:"output,omitempty"`
+}
+
+// WorktreePrepare is what worktree.prepare knows of a workspace's repository, for 新建 worktree…'s dialog. Path is the
+// directory the host puts a repository's checkouts under (`<dir>/<repo>`): a checkout of branch b goes in
+// Path + "/" + Slug(b), the host's own naming, which is what the dialog fills in from the branch.
+type WorktreePrepare struct {
+	Root     string `json:"root"`
+	RepoName string `json:"repoName"`
+	// Branch is the branch checked out in the workspace ("" on a detached HEAD).
+	Branch string `json:"branch"`
+	Path   string `json:"path"`
+}
+
+// WorktreeCreateResult is what worktree.create opened: the new workspace, and the checkout it is in.
+type WorktreeCreateResult struct {
+	WorkspaceID string `json:"workspace_id"`
+	TabID       string `json:"tab_id,omitempty"`
+	Pane        string `json:"pane,omitempty"`
+	Terminal    string `json:"terminal,omitempty"`
+	Path        string `json:"path"`
+	Branch      string `json:"branch"`
 }

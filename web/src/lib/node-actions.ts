@@ -8,6 +8,7 @@ import type { TermPane, TermSpace, TermTab } from "./terminals";
 import type { Launcher, Machine, Session } from "./types";
 import { copyText, toast } from "../ui/atoms";
 import { openNewAgent } from "./new-agent";
+import { openNewWorktree } from "./worktree";
 import type { MenuItem } from "../ui/menu-model";
 
 export type NodeKind = "machine" | "workspace" | "tab" | "pane";
@@ -33,6 +34,8 @@ export interface MenuNode {
   tabSessionId?: string;
   cwd?: string;
   branch?: string;
+  /** The workspace's terminal host can make a Git worktree of its repository (新建 worktree…, #2431). */
+  canWorktree?: boolean;
   /** The node's fold: the row it hangs under folds and opens (the sidebar's and the terminal page's `fold:` keys). */
   fold?: { folded: boolean; toggle: () => void };
   /** 新建终端 in this workspace (the terminal page). */
@@ -50,6 +53,8 @@ export interface NodeActionDeps {
   launchers: (mid: string) => Promise<Launcher[]>;
   /** 新建 Agent… in a folder of this machine (the 新建 Agent dialog, filled in). */
   newAgent: (mid: string, cwd: string) => void;
+  /** 新建 worktree… for this workspace (the dialog, #2431); a deps without it leaves the item out. */
+  newWorktree?: (node: MenuNode) => void;
   copy: (text: string) => void;
   notify: (text: string, tone: "ok" | "error" | "info") => void;
   /** The tree changed on the computer: read it again. */
@@ -66,6 +71,7 @@ export function defaultNodeDeps(changed: () => void = () => {}): NodeActionDeps 
         : api(`/machines/${enc(node.mid)}/tabs/rename`, { method: "POST", json: { tab_id: node.tabId, label: name, ...(node.host ? { kind: node.host } : {}) } }),
     launchers: (mid) => api<{ launchers: Launcher[] }>(`/machines/${enc(mid)}/launchers`).then((r) => r.launchers ?? []),
     newAgent: (mid, cwd) => openNewAgent({ machineId: mid, cwd }),
+    newWorktree: (node) => openNewWorktree(node, changed),
     copy: (text) => void copyText(text),
     notify: (text, tone) => toast(text, tone),
     changed,
@@ -190,7 +196,15 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
     },
   });
   const gitMenu = writes && node.kind !== "machine" && Boolean(gitTarget);
+  const newWorktree = deps.newWorktree;
   group(
+    node.kind === "workspace" && writes && node.canWorktree && Boolean(node.workspaceId) && newWorktree && {
+      key: "node-worktree",
+      label: t("worktree.menu_new"),
+      icon: "git",
+      accel: "w",
+      onSelect: () => newWorktree(node),
+    },
     writes && Boolean(node.paneId) && node.kind !== "machine" && node.kind !== "workspace" && {
       key: "node-split",
       label: t("lib-node-actions.new_pane"),
@@ -294,7 +308,7 @@ export function sessionNode(s: Session, online: boolean, extra: Partial<MenuNode
 
 /** A workspace of the 终端 page. */
 export function termSpaceNode(mid: string, sp: TermSpace, online: boolean, extra: Partial<MenuNode> = {}): MenuNode {
-  return { kind: "workspace", mid, online, host: sp.host, label: sp.label, workspaceId: sp.id, cwd: sp.cwd, branch: sp.branch, ...extra };
+  return { kind: "workspace", mid, online, host: sp.host, label: sp.label, workspaceId: sp.id, cwd: sp.cwd, branch: sp.branch, canWorktree: sp.canWorktree, ...extra };
 }
 
 /** A tab of the 终端 page; a tab with one pane is that pane too (its agent or shell, its session). */

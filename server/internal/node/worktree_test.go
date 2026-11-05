@@ -1,0 +1,301 @@
+package node
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/nwverse/persona/server/internal/host"
+)
+
+// 新建 worktree… against real temp Git repositories and a fake herdr (docs/terminal.md「新建 worktree」).
+
+// setWorktreeSupport decides whether the fake herdr "has" the worktree command, for this test only.
+func setWorktreeSupport(t *testing.T, ok bool) {
+	t.Helper()
+	reset := func() {
+		worktreeSupport.once = sync.Once{}
+		worktreeSupport.ok = false
+	}
+	reset()
+	worktreeSupport.once.Do(func() { worktreeSupport.ok = ok })
+	t.Cleanup(reset)
+}
+
+type worktreeFixture struct {
+	n    *Node
+	f    *fakeHerdr
+	home string
+	repo string // the repository of workspace w1
+}
+
+// worktreeNode is a node on a fake herdr whose workspace w1 is a real repository (branch main, one commit, a second
+// local branch "spare"). The fake's worktree.create does what herdr does: a real `git worktree add`.
+func worktreeNode(t *testing.T) worktreeFixture {
+	t.Helper()
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_AUTHOR_NAME", "Sample Dev")
+	t.Setenv("GIT_AUTHOR_EMAIL", "dev@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Sample Dev")
+	t.Setenv("GIT_COMMITTER_EMAIL", "dev@example.com")
+	setWorktreeSupport(t, true)
+	streamingHerdr()
+	n, f, home := herdrNode(t)
+	repo := mkdir(t, filepath.Join(home, "proj"))
+	runPullGit(t, repo, "init", "--initial-branch=main")
+	if err := os.WriteFile(filepath.Join(repo, "app.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runPullGit(t, repo, "add", "app.txt")
+	runPullGit(t, repo, "commit", "-m", "first")
+	runPullGit(t, repo, "branch", "spare")
+	f.reply("session.snapshot", snapshot(
+		[]any{map[string]any{"workspace_id": "w1", "label": "proj", "number": 1, "cwd": repo, "branch": "main"}},
+		[]any{map[string]any{"tab_id": "w1:t1", "workspace_id": "w1", "label": "1", "number": 1}},
+		nil, []any{map[string]any{"pane_id": "w1:p1", "tab_id": "w1:t1", "workspace_id": "w1", "cwd": repo}},
+	))
+	f.handle("worktree.create", func(p map[string]any) any {
+		path, branch := str(p["path"]), str(p["branch"])
+		args := []string{"worktree", "add", "-b", branch, "--", path}
+		if _, err := git(t.Context(), repo, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
+			args = []string{"worktree", "add", "--", path, branch}
+		}
+		if out, err := gitRun(t.Context(), repo, gitOpTimeout, args...); err != nil {
+			return herdrFail{Code: "worktree_create_failed", Message: "Preparing worktree\n" + out}
+		}
+		return map[string]any{
+			"workspace": map[string]any{"workspace_id": "w2", "label": "proj", "number": 2, "cwd": path},
+			"tab":       map[string]any{"tab_id": "w2:t1"}, "root_pane": map[string]any{"pane_id": "w2:p1"},
+			"worktree": map[string]any{"path": path, "branch": branch},
+		}
+	})
+	f.handle("workspace.create", func(p map[string]any) any {
+		return map[string]any{
+			"workspace": map[string]any{"workspace_id": "w3", "label": str(p["label"]), "number": 3, "cwd": str(p["cwd"])},
+			"tab":       map[string]any{"tab_id": "w3:t1"}, "root_pane": map[string]any{"pane_id": "w3:p1"},
+		}
+	})
+	listSessions(t, n)
+	f.reset()
+	return worktreeFixture{n: n, f: f, home: home, repo: repo}
+}
+
+func branchOf(t *testing.T, dir string) string { return runPullGit(t, dir, "branch", "--show-current") }
+
+func TestWorktreePrepareReadsTheRepository(t *testing.T) {
+	w := worktreeNode(t)
+	res, err := request(t, w.n, "worktree.prepare", map[string]any{"workspace_id": "w1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res["root"] != w.repo || res["repoName"] != "proj" || res["branch"] != "main" || res["path"] != filepath.Join(w.home, ".herdr", "worktrees", "proj") {
+		t.Errorf("prepare = %v", res)
+	}
+
+	// herdr's own setting for where checkouts go
+	cfg := mkdir(t, filepath.Join(w.home, ".config", "herdr"))
+	if err := os.WriteFile(filepath.Join(cfg, "config.toml"), []byte("[worktrees]\ndirectory = \"~/trees\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ = request(t, w.n, "worktree.prepare", map[string]any{"workspace_id": "w1"}); res["path"] != filepath.Join(w.home, "trees", "proj") {
+		t.Errorf("a configured directory: %v", res["path"])
+	}
+
+	// a detached HEAD has no branch to offer
+	runPullGit(t, w.repo, "checkout", "--detach")
+	if res, _ = request(t, w.n, "worktree.prepare", map[string]any{"workspace_id": "w1"}); res["branch"] != "" || res["repoName"] != "proj" {
+		t.Errorf("detached: %v", res)
+	}
+	if got := w.f.trace("worktree.create", "workspace.create"); len(got) != 0 {
+		t.Errorf("prepare changed something: %v", got)
+	}
+}
+
+func TestWorktreePrepareNamesTheRepositoryOfALinkedCheckout(t *testing.T) {
+	w := worktreeNode(t)
+	linked := filepath.Join(w.home, "elsewhere", "feature-checkout")
+	runPullGit(t, w.repo, "worktree", "add", "-b", "feature", linked)
+	w.f.reply("session.snapshot", snapshot(
+		[]any{map[string]any{"workspace_id": "w1", "label": "linked", "number": 1, "cwd": linked}}, nil, nil,
+		[]any{map[string]any{"pane_id": "w1:p1", "tab_id": "w1:t1", "workspace_id": "w1", "cwd": linked}},
+	))
+	listSessions(t, w.n)
+	res, err := request(t, w.n, "worktree.prepare", map[string]any{"workspace_id": "w1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res["repoName"] != "proj" || res["branch"] != "feature" || res["root"] != linked {
+		t.Errorf("prepare in a linked checkout = %v", res)
+	}
+}
+
+func TestWorktreePrepareRefusals(t *testing.T) {
+	w := worktreeNode(t)
+	if _, err := request(t, w.n, "worktree.prepare", map[string]any{"workspace_id": "w9"}); err == nil {
+		t.Error("prepared a workspace the host does not list")
+	}
+	if _, err := request(t, w.n, "worktree.prepare", map[string]any{}); err == nil {
+		t.Error("prepared no workspace")
+	}
+	plain := mkdir(t, filepath.Join(w.home, "notes"))
+	w.f.reply("session.snapshot", snapshot([]any{map[string]any{"workspace_id": "w1", "label": "notes", "number": 1, "cwd": plain}}, nil, nil, nil))
+	listSessions(t, w.n)
+	if _, err := request(t, w.n, "worktree.prepare", map[string]any{"workspace_id": "w1"}); err == nil || !strings.Contains(err.Error(), "Git") {
+		t.Errorf("a directory that is not a repository: %v", err)
+	}
+}
+
+// A new branch from the workspace's HEAD and an existing local branch both go through herdr, with the typed path.
+func TestWorktreeCreateThroughHerdr(t *testing.T) {
+	w := worktreeNode(t)
+	dest := filepath.Join(w.home, ".herdr", "worktrees", "proj", "feat-x")
+	res, err := request(t, w.n, "worktree.create", map[string]any{"workspace_id": "w1", "branch": " feat/x ", "path": dest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res["workspace_id"] != "w2" || res["path"] != dest || res["branch"] != "feat/x" || res["terminal"] != "pane:w2:p1" {
+		t.Errorf("create = %v", res)
+	}
+	assertTrace(t, w.f.trace("worktree.create", "workspace.create"), []string{
+		call("worktree.create", map[string]any{"workspace_id": "w1", "branch": "feat/x", "path": dest, "focus": false}),
+	})
+	if got := branchOf(t, dest); got != "feat/x" {
+		t.Errorf("the checkout is on %q", got)
+	}
+
+	w.f.reset()
+	spare := filepath.Join(w.home, "trees", "spare")
+	if _, err := request(t, w.n, "worktree.create", map[string]any{"workspace_id": "w1", "branch": "spare", "path": spare}); err != nil {
+		t.Fatal(err)
+	}
+	if got := branchOf(t, spare); got != "spare" {
+		t.Errorf("an existing branch checked out as %q", got)
+	}
+}
+
+// An empty directory is a place git fills; anything else is refused before herdr hears of it, and so are names and
+// paths that could be read as something else.
+func TestWorktreeCreateRefusals(t *testing.T) {
+	w := worktreeNode(t)
+	full := mkdir(t, filepath.Join(w.home, "full"))
+	if err := os.WriteFile(filepath.Join(full, "keep.txt"), []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(w.home, "a-file")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ok := filepath.Join(w.home, "ok")
+	for name, p := range map[string]map[string]any{
+		"a path holding something": {"branch": "b1", "path": full},
+		"a path that is a file":    {"branch": "b2", "path": file},
+		"a relative path":          {"branch": "b3", "path": "trees/b3"},
+		"no path":                  {"branch": "b4", "path": "  "},
+		"inside .git":              {"branch": "b5", "path": filepath.Join(w.repo, ".git", "wt")},
+		"no branch":                {"branch": " ", "path": ok},
+		"an option as a branch":    {"branch": "--detach", "path": ok},
+		"a bad ref name":           {"branch": "a..b", "path": ok},
+		"a space in the name":      {"branch": "my branch", "path": ok},
+		"a revision expression":    {"branch": "@{-1}", "path": ok},
+		"a trailing slash":         {"branch": "feat/", "path": ok},
+	} {
+		p["workspace_id"] = "w1"
+		if _, err := request(t, w.n, "worktree.create", p); err == nil {
+			t.Errorf("accepted %s", name)
+		}
+	}
+	if _, err := request(t, w.n, "worktree.create", map[string]any{"workspace_id": "w9", "branch": "b", "path": ok}); err == nil {
+		t.Error("created from a workspace the host does not list")
+	}
+	if got := w.f.trace("worktree.create", "workspace.create"); len(got) != 0 {
+		t.Errorf("herdr heard of a refused request: %v", got)
+	}
+	if b, err := os.ReadFile(filepath.Join(full, "keep.txt")); err != nil || string(b) != "mine\n" {
+		t.Errorf("a directory with files was touched: %v", err)
+	}
+
+	empty := mkdir(t, filepath.Join(w.home, "empty"))
+	if _, err := request(t, w.n, "worktree.create", map[string]any{"workspace_id": "w1", "branch": "b6", "path": empty}); err != nil {
+		t.Errorf("an empty directory refused: %v", err)
+	}
+}
+
+// What git says is what the user sees, nothing is forced, and nothing is left half-made.
+func TestWorktreeCreateReportsGitsReason(t *testing.T) {
+	w := worktreeNode(t)
+	// main is checked out in the repository itself
+	dest := filepath.Join(w.home, "trees", "main")
+	_, err := request(t, w.n, "worktree.create", map[string]any{"workspace_id": "w1", "branch": "main", "path": dest})
+	if err == nil || !strings.Contains(err.Error(), "already") || strings.Contains(err.Error(), "Preparing") || strings.Contains(err.Error(), "fatal:") {
+		t.Fatalf("a branch checked out elsewhere: %v", err)
+	}
+	if _, statErr := os.Stat(dest); statErr == nil {
+		t.Error("a failed create left a directory")
+	}
+	for _, c := range w.f.calls() {
+		if _, forced := c.Params["force"]; forced {
+			t.Errorf("a forcing parameter was sent: %v", c)
+		}
+	}
+}
+
+// A herdr without `worktree`: git adds the checkout, herdr opens a workspace in it.
+func TestWorktreeCreateWithoutHerdrsWorktree(t *testing.T) {
+	w := worktreeNode(t)
+	setWorktreeSupport(t, false)
+	dest := filepath.Join(w.home, "trees", "fresh")
+	res, err := request(t, w.n, "worktree.create", map[string]any{"workspace_id": "w1", "branch": "fresh", "path": dest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res["workspace_id"] != "w3" || res["path"] != dest {
+		t.Errorf("create = %v", res)
+	}
+	assertTrace(t, w.f.trace("worktree.create", "workspace.create"), []string{
+		call("workspace.create", map[string]any{"cwd": dest, "label": "proj", "focus": false}),
+	})
+	if got := branchOf(t, dest); got != "fresh" {
+		t.Errorf("new branch = %q", got)
+	}
+	if head, spare := runPullGit(t, dest, "rev-parse", "HEAD"), runPullGit(t, w.repo, "rev-parse", "main"); head != spare {
+		t.Errorf("the new branch did not start at the repository's HEAD")
+	}
+
+	spare := filepath.Join(w.home, "trees", "spare")
+	if _, err := request(t, w.n, "worktree.create", map[string]any{"workspace_id": "w1", "branch": "spare", "path": spare}); err != nil {
+		t.Fatal(err)
+	}
+	if got := branchOf(t, spare); got != "spare" {
+		t.Errorf("existing branch = %q", got)
+	}
+
+	// git refuses a branch checked out elsewhere; no workspace is opened for it
+	w.f.reset()
+	clash := filepath.Join(w.home, "trees", "clash")
+	if _, err := request(t, w.n, "worktree.create", map[string]any{"workspace_id": "w1", "branch": "spare", "path": clash}); err == nil {
+		t.Error("checked a branch out twice")
+	}
+	if got := w.f.trace("workspace.create"); len(got) != 0 {
+		t.Errorf("a workspace was opened for a failed checkout: %v", got)
+	}
+}
+
+// The terminal browser learns whether a host can make worktrees from the host list; a host that cannot do either is
+// not offered it.
+func TestPanesListAdvertisesWorktrees(t *testing.T) {
+	w := worktreeNode(t)
+	res, err := w.n.listPanes(t.Context())
+	if err != nil || len(res.Hosts) != 1 || !res.Hosts[0].Worktree {
+		t.Fatalf("hosts = %+v %v", res.Hosts, err)
+	}
+	if !canWorktree(w.n.hosts.Get(host.Herdr)) {
+		t.Error("herdr with worktree cannot")
+	}
+	setWorktreeSupport(t, false)
+	if !canWorktree(w.n.hosts.Get(host.Herdr)) {
+		t.Error("an older herdr gets the git way")
+	}
+}
