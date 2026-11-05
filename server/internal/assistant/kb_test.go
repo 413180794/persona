@@ -367,3 +367,30 @@ func TestKBKeptAsTheHubSays(t *testing.T) {
 		t.Fatalf("off at the hub: %v", err)
 	}
 }
+
+// A panic inside one part of a knowledge-base round is recovered and logged with its value and stack, not dropped
+// silently; a cancelled round does not run the part at all.
+func TestKBRunLogsPanic(t *testing.T) {
+	var mu sync.Mutex
+	var lines []string
+	logf := func(format string, args ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		lines = append(lines, fmt.Sprintf(format, args...))
+	}
+	s := kbServiceOn(t, newFakeHub(), newKBStore(), t.TempDir(), logf)
+	s.kbRun(context.Background(), func() { panic("malformed item") })
+	mu.Lock()
+	got := strings.Join(lines, "\n")
+	mu.Unlock()
+	if !strings.Contains(got, "kb: panic: malformed item") || !strings.Contains(got, "TestKBRunLogsPanic") {
+		t.Fatalf("panic not logged with its value and stack: %q", got)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ran := false
+	s.kbRun(ctx, func() { ran = true })
+	if ran {
+		t.Fatal("kbRun ran f on a cancelled context")
+	}
+}

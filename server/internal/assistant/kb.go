@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -365,9 +366,9 @@ func (s *Service) kbRound(ctx context.Context, e *kb.Engine, r *kbRounds) {
 		s.logf("kb: the user's time zone could not be read: archiving waits for the next round")
 		return
 	}
-	kbRun(ctx, func() { s.kbRezone(e.Store, loc) })
-	e.Owner = s.owner(ctx)                        // only this loop reads it (the models' prompts)
-	kbRun(ctx, func() { s.kbConnectors(ctx, e) }) // mail, GitHub, the plugins'…, each when it is due
+	s.kbRun(ctx, func() { s.kbRezone(e.Store, loc) })
+	e.Owner = s.owner(ctx)                          // only this loop reads it (the models' prompts)
+	s.kbRun(ctx, func() { s.kbConnectors(ctx, e) }) // mail, GitHub, the plugins'…, each when it is due
 	for i, c := range e.DueForCompression(time.Now()) {
 		if i >= kbCompressMax || ctx.Err() != nil {
 			break
@@ -383,7 +384,7 @@ func (s *Service) kbRound(ctx context.Context, e *kb.Engine, r *kbRounds) {
 	// Same work under two names, and the 公司圈 posts about each project: a few model calls every half hour.
 	if time.Since(r.links) >= kbItemsPoll {
 		r.links = time.Now()
-		kbRun(ctx, func() {
+		s.kbRun(ctx, func() {
 			if n := e.DedupeProjects(ctx, 4); n > 0 {
 				s.logf("kb: merged %d duplicate project(s)", n)
 			}
@@ -394,7 +395,7 @@ func (s *Service) kbRound(ctx context.Context, e *kb.Engine, r *kbRounds) {
 	}
 	if time.Since(r.items) >= kbItemsPoll {
 		r.items = time.Now()
-		kbRun(ctx, func() { s.kbCollectItems(ctx, e) })
+		s.kbRun(ctx, func() { s.kbCollectItems(ctx, e) })
 	}
 	daily := time.Since(r.prune) >= 24*time.Hour
 	if daily {
@@ -403,12 +404,17 @@ func (s *Service) kbRound(ctx context.Context, e *kb.Engine, r *kbRounds) {
 			s.logf("kb: pruned %d day(s)", n)
 		}
 	}
-	kbRun(ctx, func() { s.kbPostsUpkeep(e, daily) })
+	s.kbRun(ctx, func() { s.kbPostsUpkeep(e, daily) })
 }
 
-// kbRun calls f, turning a panic into a log line: one malformed message must not stop the loop.
-func kbRun(ctx context.Context, f func()) {
-	defer func() { _ = recover() }()
+// kbRun calls f, turning a panic into a log line with its stack: one malformed message must not stop the loop,
+// but the part it broke must still leave a trace to debug.
+func (s *Service) kbRun(ctx context.Context, f func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logf("kb: panic: %v\n%s", r, debug.Stack())
+		}
+	}()
 	if ctx.Err() == nil {
 		f()
 	}
