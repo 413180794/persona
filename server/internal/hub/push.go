@@ -67,12 +67,17 @@ type Pusher struct {
 	// replaced: per device, the grant the hub renewed away from (renewGrant). The app keeps reporting the one it
 	// cached; that one must not undo the renewal.
 	replaced map[string]string
-	saveMu   sync.Mutex // one device row write at a time, always the latest state (save)
+	saveMu   sync.Mutex // one device row write at a time, always the latest state (save, setPrefs)
+	// storeTimeout bounds each device row write, which never runs under mu; tests shorten it.
+	storeTimeout time.Duration
 }
+
+// deviceStoreTimeout: how long a device row write may take before it gives up (the pool has no statement_timeout).
+const deviceStoreTimeout = 5 * time.Second
 
 func newPusher(dir string, store Store, logf func(string, ...any)) *Pusher {
 	p := &Pusher{dir: dir, store: store, logf: logf, devices: map[string]Device{}, replaced: map[string]string{}, relay: &http.Client{Timeout: 20 * time.Second},
-		retryWaits: []time.Duration{time.Second, 4 * time.Second}, now: time.Now}
+		retryWaits: []time.Duration{time.Second, 4 * time.Second}, now: time.Now, storeTimeout: deviceStoreTimeout}
 	if store != nil {
 		if list, err := store.Devices(context.Background()); err == nil {
 			for _, d := range list {
@@ -150,7 +155,9 @@ func (p *Pusher) save(id string) {
 	if !ok {
 		return
 	}
-	if err := p.store.UpsertDevice(context.Background(), d); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), p.storeTimeout)
+	defer cancel()
+	if err := p.store.UpsertDevice(ctx, d); err != nil {
 		p.logf("save device: %v", err)
 	}
 }
@@ -224,7 +231,9 @@ func (p *Pusher) forget(d Device) {
 	delete(p.devices, d.DeviceID)
 	p.mu.Unlock()
 	if p.store != nil {
-		_ = p.store.DeleteDevice(context.Background(), d.DeviceID)
+		ctx, cancel := context.WithTimeout(context.Background(), p.storeTimeout)
+		defer cancel()
+		_ = p.store.DeleteDevice(ctx, d.DeviceID)
 	}
 }
 
@@ -484,15 +493,22 @@ func (p *Pusher) setPrefs(id string, prefs NotifyPrefs) error { return p.setPref
 
 // setPrefsBy is setPrefs written with a device token (`credential`): a device that has none recorded takes it, so
 // revoking the token forgets a device only its prefs made (a browser's 设置 › 通知, which never registers a push token).
+// The row is written under saveMu, not mu: a slow database holds this one save (up to storeTimeout), not every
+// other device's settings and every push. The settings take effect once the row is written.
 func (p *Pusher) setPrefsBy(id, credential string, prefs NotifyPrefs) error {
 	raw, _ := json.Marshal(prefs)
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.saveMu.Lock()
+	defer p.saveMu.Unlock()
 	if p.store != nil {
-		if err := p.store.SetDevicePrefs(context.Background(), id, credential, raw); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), p.storeTimeout)
+		err := p.store.SetDevicePrefs(ctx, id, credential, raw)
+		cancel()
+		if err != nil {
 			return err
 		}
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	d, ok := p.devices[id]
 	if !ok {
 		d = Device{DeviceID: id}
