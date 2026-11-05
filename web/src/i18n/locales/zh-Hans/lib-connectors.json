@@ -63,5 +63,9 @@
   "check_failure": "失败",
   "check_pending": "进行中",
   "check_skipped": "跳过",
-  "check_cancelled": "已取消"
+  "check_cancelled": "已取消",
+  "chat_group": "群聊",
+  "chat_group_members_other": "群聊 · {n} 位成员",
+  "chat_channel": "频道",
+  "chat_channel_members_other": "频道 · {n} 位订阅者"
 }

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  canSendStep, connectorBrand, connectorOpenTitle, connectorState, connectorSummary, connectorTone, deletedLine, feedsFooter, fieldInput, githubInboxFooter, githubMachineLine,
+  canSendStep, chatHeadline, connectorBrand, connectorOpenTitle, connectorState, connectorSummary, connectorTone, deletedLine, feedsFooter, fieldInput, githubInboxFooter, githubMachineLine,
   githubOptions, githubScopeAdvice, isDeviceCode, isPolledStep, isStarting, labelColor, listConnectors, logoutMessage, mediaLine, mergeNewest, mergeOlder, mutableRepo,
-  otherConnectors, setGitHubAuth, signInFooter, signsInHere, startsGroup, stepView, storesData, switchFooter, switchLabel, undescribed,
+  otherConnectors, reachMessage, setGitHubAuth, signInFooter, signsInHere, startsGroup, stepView, storesData, switchFooter, switchLabel, undescribed,
   type HubConnector, type ThreadMessage, type ThreadPage,
 } from "./connectors";
 
@@ -224,5 +224,26 @@ describe("会话页", () => {
     expect(mediaLine({ kind: "file", size: 3 << 20 })).toBe("文件 · 3.0 MB");
     expect(labelColor("a2eeef")).toBe("#a2eeef");
     expect(labelColor("red")).toBeUndefined();
+  });
+
+  it("says a group's or channel's size when the hub gives it, nothing for a direct chat", () => {
+    expect(chatHeadline({ id: "c", name: "示例群", kind: "group", members: 1234 })).toBe("群聊 · 1,234 位成员");
+    expect(chatHeadline({ id: "c", name: "示例群", kind: "group" })).toBe("群聊");
+    expect(chatHeadline({ id: "c", name: "示例频道", kind: "channel", members: 12 })).toBe("频道 · 12 位订阅者");
+    expect(chatHeadline({ id: "u", name: "示例用户", kind: "dm", members: 3 })).toBeUndefined();
+    expect(chatHeadline(undefined)).toBeUndefined();
+  });
+
+  it("reads back a few pages at most for a quote's message", async () => {
+    const pages: Record<string, ThreadPage> = { "5": page(["3", "4"], "3"), "3": page(["1", "2"], "1"), "1": page(["0"]) };
+    const older = vi.fn((before: string) => Promise.resolve(pages[before]));
+    const found = await reachMessage(page(["5", "6"], "5"), "1", older);
+    expect(found.found).toBe(true);
+    expect(found.page.messages.map((m) => m.id)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(older).toHaveBeenCalledTimes(2);
+    older.mockClear();
+    expect((await reachMessage(page(["5", "6"], "5"), "x", older, 2)).found).toBe(false);
+    expect(older).toHaveBeenCalledTimes(2); // gives up after its pages
+    expect((await reachMessage(page(["5"]), "x", older)).found).toBe(false); // the thread's start: nothing to read
   });
 });

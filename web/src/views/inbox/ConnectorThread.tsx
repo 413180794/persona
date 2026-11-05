@@ -6,8 +6,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, ApiError, errorText } from "../../lib/api";
 import {
-  checkLabel, githubStateLabel, isChatThread, isGitHubThread, labelColor, loadThread, mediaLine, mediaURL, mergeNewest, mergeOlder, replyInThread,
-  reviewLabel, startsGroup, type ThreadChat, type ThreadMedia, type ThreadMessage, type ThreadPage,
+  chatHeadline, checkLabel, githubStateLabel, isChatThread, isGitHubThread, labelColor, loadThread, mediaLine, mediaURL, mergeNewest, mergeOlder,
+  reachMessage, replyInThread, reviewLabel, startsGroup, type ThreadChat, type ThreadMedia, type ThreadMessage, type ThreadPage,
 } from "../../lib/connectors";
 import { connectorReference, itemPath, shortTime, withToken, type InboxItem } from "../../lib/inbox";
 import { openLink } from "../../lib/links";
@@ -62,6 +62,23 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
     }
   };
 
+  // A quote's message: the pages before it read until it is on screen (a few at most, as iOS); whether it is.
+  const reach = async (msg: string) => {
+    if (!page) return false;
+    if (page.messages.some((m) => m.id === msg)) return true;
+    setOlder(true);
+    try {
+      const r = await reachMessage(page, msg, (before) => loadThread(id, thread, before));
+      setPage((have) => (have ? mergeOlder(have, r.page) : r.page));
+      return r.found;
+    } catch (e) {
+      toast(t("inbox-connectorthread.older_failed", { error: errorText(e) }), "error");
+      return false;
+    } finally {
+      setOlder(false);
+    }
+  };
+
   const send = async (text: string, replyTo?: ThreadMessage) => {
     if (!page?.chat.reply) return false;
     try {
@@ -78,7 +95,7 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
   if (!page || (!isChatThread(page.chat) && !isGitHubThread(page.chat))) return <ConnectorText item={item} problem={page ? undefined : failure || undefined} />;
   return isGitHubThread(page.chat)
     ? <GitHubThread id={id} item={item} page={page} older={older} onOlder={() => void loadOlder()} onSend={send} />
-    : <ChatThread id={id} page={page} older={older} onOlder={() => void loadOlder()} onSend={send} />;
+    : <ChatThread id={id} page={page} older={older} onOlder={() => void loadOlder()} onReach={reach} onSend={send} />;
 }
 
 // ── what the hub collected (no thread page) ──────────────
@@ -207,30 +224,50 @@ function OlderButton({ busy, onClick }: { busy: boolean; onClick: () => void }) 
 
 // ── a chat app's conversation (Telegram) ─────────────────
 
-function ChatThread({ id, page, older, onOlder, onSend }: {
+function ChatThread({ id, page, older, onOlder, onReach, onSend }: {
   id: string;
   page: ThreadPage;
   older: boolean;
   onOlder: () => void;
+  /** Reads back until a message is on the page; whether it is. */
+  onReach: (id: string) => Promise<boolean>;
   onSend: (text: string, replyTo?: ThreadMessage) => Promise<boolean>;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
+  // The message a quote led back to, lit for a moment (n tells a second jump to the same one apart).
+  const [flash, setFlash] = useState<{ id: string; n: number } | null>(null);
   const last = page.messages[page.messages.length - 1]?.id;
   const group = page.chat.kind !== "dm";
+  const headline = chatHeadline(page.chat);
   // At the newest message on open and when one comes in (an older page leaves the scroll where it was).
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [last]);
+  // To the quoted message once it is drawn: centred, without the smooth scroll when the user asks for less motion.
+  useEffect(() => {
+    if (!flash) return;
+    const row = [...(scroller.current?.querySelectorAll<HTMLElement>("[data-mid]") ?? [])].find((el) => el.dataset.mid === flash.id);
+    const still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    row?.scrollIntoView?.({ block: "center", behavior: still ? "auto" : "smooth" });
+    const off = setTimeout(() => setFlash(null), 1600);
+    return () => clearTimeout(off);
+  }, [flash]);
+  const jump = async (to: string) => {
+    if (await onReach(to)) setFlash({ id: to, n: Date.now() });
+    else toast(t("inbox-connectorthread.quote_not_found"));
+  };
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {headline && <p className="shrink-0 truncate border-b border-line px-4 py-1.5 text-center text-[12px] text-ink-3 tabular-nums">{headline}</p>}
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[760px] px-3 py-3 sm:px-5">
           {page.before && <OlderButton busy={older} onClick={onOlder} />}
           {!page.messages.length && <p className="py-10 text-center text-[12.5px] text-ink-3">{t("inbox-connectorthread.empty")}</p>}
           {page.messages.map((m, i) => (
-            <Bubble key={m.id} id={id} m={m} head={startsGroup(m, page.messages[i - 1])} group={group} onReply={page.chat.reply ? () => setReplyTo(m) : undefined} />
+            <Bubble key={m.id} id={id} m={m} head={startsGroup(m, page.messages[i - 1])} group={group} lit={flash?.id === m.id}
+              onQuote={m.reply_to?.id ? () => void jump(m.reply_to!.id) : undefined} onReply={page.chat.reply ? () => setReplyTo(m) : undefined} />
           ))}
         </div>
       </div>
@@ -241,25 +278,40 @@ function ChatThread({ id, page, older, onOlder, onSend }: {
   );
 }
 
-function Bubble({ id, m, head, group, onReply }: { id: string; m: ThreadMessage; head: boolean; group: boolean; onReply?: () => void }) {
-  if (m.event) return <p className="px-2 py-2 text-center text-[11.5px] text-ink-3">{m.text}</p>;
+function Bubble({ id, m, head, group, lit, onQuote, onReply }: {
+  id: string;
+  m: ThreadMessage;
+  head: boolean;
+  group: boolean;
+  /** A quote just led back here. */
+  lit?: boolean;
+  /** Back to the message its quote answers. */
+  onQuote?: () => void;
+  onReply?: () => void;
+}) {
+  if (m.event) return <p data-mid={m.id} className="px-2 py-2 text-center text-[11.5px] text-ink-3">{m.text}</p>;
   const mine = !!m.mine;
   const pictures = (m.media ?? []).filter((x) => (x.kind === "image" || x.kind === "sticker" || x.kind === "video") && (x.ref || x.thumb));
   const others = (m.media ?? []).filter((x) => !pictures.includes(x));
   const bare = !m.text && !m.reply_to && !others.length; // only pictures: no bubble around them
   return (
-    <div className={cx("group/msg flex items-start gap-2", head ? "mt-2.5" : "mt-0.5", mine && "flex-row-reverse")}>
+    <div data-mid={m.id} className={cx("group/msg flex items-start gap-2 rounded-[16px] motion-safe:transition-colors motion-safe:duration-300", head ? "mt-2.5" : "mt-0.5", mine && "flex-row-reverse", lit && "bg-accent-tint")}>
       {!mine && <span className="w-8 shrink-0">{head && <Monogram name={m.sender.name} size={32} src={m.sender.avatar ? mediaURL(id, m.sender.avatar) : undefined} />}</span>}
       <div className={cx("flex min-w-0 max-w-[78%] flex-col", mine ? "items-end" : "items-start")}>
         {head && group && !mine && <span className="mb-0.5 px-1 text-[11.5px] font-medium text-ink-2">{m.sender.name}</span>}
         {pictures.map((x, i) => <Picture key={i} id={id} media={x} />)}
         {!bare && (
           <div className={cx("rounded-[16px] px-3 py-1.5 text-[13px] leading-relaxed break-words", mine ? "bg-accent text-white" : "bg-surface text-ink shadow-card", pictures.length > 0 && "mt-1")}>
-            {m.reply_to && (
-              <p className={cx("mb-1 truncate border-l-2 pl-2 text-[12px]", mine ? "border-white/60 text-white/80" : "border-line-strong text-ink-3")}>
-                {m.reply_to.from ? t("inbox-connectorthread.quoted_sender", { name: m.reply_to.from }) : ""}{m.reply_to.text || t("inbox-connectorthread.a_message")}
-              </p>
-            )}
+            {m.reply_to && (() => {
+              const quote = `${m.reply_to.from ? t("inbox-connectorthread.quoted_sender", { name: m.reply_to.from }) : ""}${m.reply_to.text || t("inbox-connectorthread.a_message")}`;
+              const look = cx("mb-1 block w-full truncate border-l-2 pl-2 text-left text-[12px]", mine ? "border-white/60 text-white/80" : "border-line-strong text-ink-3");
+              return onQuote ? (
+                <button type="button" onClick={onQuote} title={t("inbox-connectorthread.quote_jump", { text: quote })} aria-label={t("inbox-connectorthread.quote_jump", { text: quote })}
+                  className={cx(look, "rounded-r-[4px] hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2", mine ? "focus-visible:outline-white" : "focus-visible:outline-accent")}>
+                  {quote}
+                </button>
+              ) : <p className={look}>{quote}</p>;
+            })()}
             {others.map((x, i) => (
               <p key={i} className={cx("flex items-center gap-1.5 text-[12.5px]", mine ? "text-white/90" : "text-ink-2")}>
                 <Icon name={x.kind === "voice" ? "play" : "clip"} size={12} className="shrink-0" />
@@ -273,7 +325,7 @@ function Bubble({ id, m, head, group, onReply }: { id: string; m: ThreadMessage;
           {clock(m.at)}
           {m.edited && <span>{t("inbox-connectorthread.edited")}</span>}
           {onReply && (
-            <button type="button" onClick={onReply} className="hidden items-center gap-0.5 whitespace-nowrap text-ink-3 hover:text-ink group-hover/msg:flex">
+            <button type="button" onClick={onReply} className="flex items-center gap-0.5 whitespace-nowrap rounded text-ink-3 opacity-0 hover:text-ink focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-accent group-hover/msg:opacity-100 group-focus-within/msg:opacity-100">
               <Icon name="quote" size={10} />
               {t("inbox-connectorthread.reply")}
             </button>

@@ -1,0 +1,117 @@
+// @vitest-environment jsdom
+// A connector's chat opened from the inbox (#2728): a group says how many are in it, a quote leads back to the message
+// it answers (reading back a page when it is not loaded), and a reply to one message carries its id as reply_to.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ThreadMessage, ThreadPage } from "../../lib/connectors";
+import type { InboxItem } from "../../lib/inbox";
+
+const calls = vi.hoisted(() => ({ load: [] as (string | undefined)[], reply: [] as unknown[] }));
+const pages = vi.hoisted(() => ({ newest: null as unknown, older: null as unknown }));
+vi.mock("../../lib/connectors", async (original) => ({
+  ...(await original<typeof import("../../lib/connectors")>()),
+  loadThread: (_id: string, _thread: string, before?: string) => {
+    calls.load.push(before);
+    return Promise.resolve(before ? pages.older : pages.newest);
+  },
+  replyInThread: (_id: string, body: unknown) => {
+    calls.reply.push(body);
+    return Promise.resolve({ ok: true });
+  },
+}));
+vi.mock("../../ui/atoms", async (original) => ({ ...(await original<typeof import("../../ui/atoms")>()), toast: vi.fn() }));
+import { toast } from "../../ui/atoms";
+import { ConnectorBody } from "./ConnectorThread";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const msg = (id: string, extra: Partial<ThreadMessage> = {}): ThreadMessage => ({
+  id, at: "2026-11-01T09:00:00Z", sender: { id: "wxid_example_a", name: "示例用户" }, text: `消息 ${id}`, ...extra,
+});
+const item: InboxItem = {
+  id: "examplechat:1", source: "examplechat", kind: "group", account: "examplechat", account_name: "Example Chat", title: "示例群",
+  preview: "", count: 1, connector: { thread: "primary.example-group" },
+} as InboxItem;
+
+let host: HTMLDivElement;
+let root: Root;
+const flush = async () => {
+  for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); });
+};
+const buttons = () => [...host.querySelectorAll<HTMLButtonElement>("button")];
+
+beforeEach(() => {
+  calls.load = [];
+  calls.reply = [];
+  vi.mocked(toast).mockClear();
+  Element.prototype.scrollIntoView = vi.fn();
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+});
+
+describe("连接器会话页", () => {
+  it("says the group's size over the messages", async () => {
+    pages.newest = { chat: { id: "g", name: "示例群", kind: "group", members: 128 }, messages: [msg("1")] } satisfies ThreadPage;
+    act(() => root.render(<ConnectorBody item={item} />));
+    await flush();
+    expect(host.textContent).toContain("群聊 · 128 位成员");
+  });
+
+  it("leads a quote back to its message, reading back a page for one not loaded", async () => {
+    pages.newest = {
+      chat: { id: "g", name: "示例群", kind: "group" },
+      messages: [msg("5"), msg("6", { reply_to: { id: "5", from: "示例用户", text: "消息 5" } }), msg("7", { reply_to: { id: "2", text: "更早的" } })],
+      before: "5",
+    } satisfies ThreadPage;
+    pages.older = { chat: { id: "g", name: "示例群", kind: "group" }, messages: [msg("2")] } satisfies ThreadPage;
+    act(() => root.render(<ConnectorBody item={item} />));
+    await flush();
+    const quote = (text: string) => buttons().find((b) => b.getAttribute("aria-label")?.includes(text))!;
+    act(() => quote("消息 5").click());
+    await flush();
+    expect(calls.load).toEqual([undefined]); // on the page already: nothing more read
+    expect(host.querySelector('[data-mid="5"]')!.className).toContain("bg-accent-tint");
+    act(() => quote("更早的").click());
+    await flush();
+    expect(calls.load).toEqual([undefined, "5"]);
+    expect(host.querySelector('[data-mid="2"]')).not.toBeNull();
+    expect(host.querySelector('[data-mid="2"]')!.className).toContain("bg-accent-tint");
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("says so when the quoted message is not found", async () => {
+    pages.newest = { chat: { id: "g", name: "示例群", kind: "group" }, messages: [msg("6", { reply_to: { id: "x", text: "很早的" } })] } satisfies ThreadPage;
+    act(() => root.render(<ConnectorBody item={item} />));
+    await flush();
+    act(() => buttons().find((b) => b.getAttribute("aria-label")?.includes("很早的"))!.click());
+    await flush();
+    expect(toast).toHaveBeenCalledWith("原消息太早了，往上翻几页再找");
+  });
+
+  it("sends a reply to one message with its id as reply_to", async () => {
+    pages.newest = { chat: { id: "g", name: "示例群", kind: "group", reply: "examplechat_send" }, messages: [msg("1"), msg("2")] } satisfies ThreadPage;
+    act(() => root.render(<ConnectorBody item={item} />));
+    await flush();
+    const reply = buttons().filter((b) => b.textContent?.trim() === "回复");
+    expect(reply).toHaveLength(2);
+    act(() => reply[0].click());
+    await flush();
+    const box = host.querySelector("textarea")!;
+    expect(document.activeElement).toBe(box);
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    act(() => {
+      setter.call(box, "好的");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await flush();
+    expect(calls.reply).toEqual([{ thread: "primary.example-group", action: "examplechat_send", text: "好的", reply_to: "1" }]);
+  });
+});

@@ -22,5 +22,7 @@
   "opened_by": "Opened by {name}",
   "open_github": "Open in GitHub",
   "hide_log": "Hide log",
-  "show_log": "View log"
+  "show_log": "View log",
+  "quote_jump": "Go to the original message: {text}",
+  "quote_not_found": "The original message is further back; scroll up a few pages to find it"
 }

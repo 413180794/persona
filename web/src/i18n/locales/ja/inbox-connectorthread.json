@@ -22,5 +22,7 @@
   "opened_by": "{name}が作成",
   "open_github": "GitHub で開く",
   "hide_log": "ログを閉じる",
-  "show_log": "ログを表示"
+  "show_log": "ログを表示",
+  "quote_jump": "元のメッセージへ：{text}",
+  "quote_not_found": "元のメッセージはもっと前です。何ページか上にスクロールして探してください"
 }

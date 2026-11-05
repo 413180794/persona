@@ -6,7 +6,7 @@
 //
 // The pure parts (state words, rows, sign-in checks, footers, thread pages) are plain functions for the tests.
 
-import { formatList, t } from "../i18n";
+import { formatList, formatNumber, t } from "../i18n";
 import { api, enc } from "./api";
 
 // ── wire types ───────────────────────────────────────────
@@ -592,4 +592,30 @@ export function checkLabel(state: string): string {
 /** A label's own color (six hex digits) or none. */
 export function labelColor(color?: string): string | undefined {
   return color && /^[0-9a-f]{6}$/i.test(color) ? `#${color}` : undefined;
+}
+
+/** Pages a jump to a quote's message reads back at most before giving up (iOS ConnectorThreadModel.jumpPages). */
+export const QUOTE_JUMP_PAGES = 3;
+
+/**
+ * The line over a group's or channel's conversation, as iOS ThreadLayout.subtitle: the kind of chat and, when the hub
+ * knows (`chat.members`, first page only), how many are in it — 群聊 · 128 位成员. Nothing for a direct chat.
+ */
+export function chatHeadline(chat?: ThreadChat): string | undefined {
+  const n = chat?.members && chat.members > 0 ? chat.members : 0;
+  switch (chat?.kind) {
+    case "group":
+      return n ? t("lib-connectors.chat_group_members", { count: n, n: formatNumber(n) }) : t("lib-connectors.chat_group");
+    case "channel":
+      return n ? t("lib-connectors.chat_channel_members", { count: n, n: formatNumber(n) }) : t("lib-connectors.chat_channel");
+    default:
+      return undefined;
+  }
+}
+
+/** The page with older pages put before it until message [id] is on it (at most [pages] more), and whether it is. */
+export async function reachMessage(have: ThreadPage, id: string, older: (before: string) => Promise<ThreadPage>, pages = QUOTE_JUMP_PAGES): Promise<{ page: ThreadPage; found: boolean }> {
+  let page = have;
+  for (let i = 0; i < pages && !page.messages.some((m) => m.id === id) && page.before; i++) page = mergeOlder(page, await older(page.before));
+  return { page, found: page.messages.some((m) => m.id === id) };
 }

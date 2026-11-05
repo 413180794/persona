@@ -63,5 +63,11 @@
   "check_failure": "Failed",
   "check_pending": "In progress",
   "check_skipped": "Skipped",
-  "check_cancelled": "Canceled"
+  "check_cancelled": "Canceled",
+  "chat_group": "Group",
+  "chat_group_members_one": "Group · {n} member",
+  "chat_group_members_other": "Group · {n} members",
+  "chat_channel": "Channel",
+  "chat_channel_members_one": "Channel · {n} subscriber",
+  "chat_channel_members_other": "Channel · {n} subscribers"
 }

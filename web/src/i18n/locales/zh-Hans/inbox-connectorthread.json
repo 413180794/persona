@@ -22,5 +22,7 @@
   "opened_by": "{name} 开的",
   "open_github": "在 GitHub 打开",
   "hide_log": "收起日志",
-  "show_log": "看日志"
+  "show_log": "看日志",
+  "quote_jump": "跳到原消息：{text}",
+  "quote_not_found": "原消息太早了，往上翻几页再找"
 }

@@ -63,5 +63,9 @@
   "check_failure": "失敗",
   "check_pending": "実行中",
   "check_skipped": "スキップ",
-  "check_cancelled": "キャンセル済み"
+  "check_cancelled": "キャンセル済み",
+  "chat_group": "グループ",
+  "chat_group_members_other": "グループ · メンバー {n} 人",
+  "chat_channel": "チャンネル",
+  "chat_channel_members_other": "チャンネル · 登録者 {n} 人"
 }
