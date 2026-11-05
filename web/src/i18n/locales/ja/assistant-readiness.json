@@ -34,5 +34,6 @@
   "help_model_key": "API キーがある：「設定 › モデルプロバイダ」でプロバイダを選んでキーを貼り付けます。自動でテストされます。",
   "help_model_claude": "すでに Claude Code を使っている：そのパソコンで一度ログインするだけで、ほかに入力するものはありません。",
   "probe_ok": "試しました。返答：{answer}",
-  "probe_failed": "試しましたが失敗しました：{error}"
+  "probe_failed": "試しましたが失敗しました：{error}",
+  "resend": "再送信"
 }

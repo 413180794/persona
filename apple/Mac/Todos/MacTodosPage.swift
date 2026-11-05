@@ -36,6 +36,18 @@ struct MacTodosPage: View {
         return false
     }
 
+    /// Whether the done group is expanded for the current query: a non-empty query with done matches reveals the
+    /// collapsed group; an empty query (same trim rule as `matchesQuery`) or a query without done matches leaves the
+    /// current state untouched, so clearing the search never collapses a group the user opened (#3474).
+    /// Pure (no AppKit/UIKit types), so nonisolated despite the target's default MainActor isolation: the unit tests
+    /// call it from a synchronous nonisolated context (cf. `nonisolated enum MacPaste`).
+    nonisolated enum SearchExpansion {
+        static func doneExpanded(query: String, hasDoneMatches: Bool, current: Bool) -> Bool {
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return current }
+            return hasDoneMatches ? true : current
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             listColumn
@@ -119,6 +131,10 @@ struct MacTodosPage: View {
                         action: query.isEmpty ? (String(localized: "新建待办"), { showCreate = true }) : nil
                     )
                 }
+            }
+            // A done-only search must not leave the matching group hidden behind the collapsed disclosure (#3474).
+            .onChange(of: query) { _, _ in
+                expandedDone = SearchExpansion.doneExpanded(query: query, hasDoneMatches: !doneList.isEmpty, current: expandedDone)
             }
         }
         // In the list column's own title row, at its trailing edge, as the Agents list's buttons (#1223, #2318): as a

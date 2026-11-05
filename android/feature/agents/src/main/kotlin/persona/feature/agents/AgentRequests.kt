@@ -109,7 +109,7 @@ internal fun RequestCard(
 @Composable
 internal fun RequestsDialog(
     requests: List<Interaction>, names: Map<String, String>, metadata: AgentsMetadata, now: Instant,
-    online: Boolean, delivery: Map<String, RequestDelivery>, onDismiss: () -> Unit,
+    delivery: Map<String, RequestDelivery>, onDismiss: () -> Unit,
     onOpen: (Interaction) -> Unit, onAnswer: AnswerRequest,
     history: List<Interaction> = emptyList(),
 ) {

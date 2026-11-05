@@ -13,6 +13,9 @@ struct MacInboxActions: View {
     var column: Bool
     /// A document is open beside the item: the strip starts with 显示列表 / 收起列表 (the list folds away for it).
     var reading = false
+    /// Whether the 显示列表 / 收起列表 toggle is offered. A standalone item window has no list of its own and must
+    /// not fold the main window's list, so the toggle is hidden there (#3477).
+    var showsListToggle = true
     var draft: () -> Void
     var handOff: () -> Void
     var openItem: ((InboxItem) -> Void)?
@@ -52,7 +55,7 @@ struct MacInboxActions: View {
 
     /// While a document is read: brings the folded list back beside it, or folds it again.
     @ViewBuilder private var listButton: some View {
-        if reading {
+        if reading, showsListToggle {
             let state = MacInboxState.shared
             action(state.listWhileReading ? String(localized: "收起列表") : String(localized: "显示列表"), Theme.Icon.list, iconsOnly: true,
                    help: state.listWhileReading ? String(localized: "收起列表，把地方留给文档") : String(localized: "显示收件箱列表（关掉文档也会回来）")) {
@@ -119,9 +122,11 @@ struct MacInboxActions: View {
 
 extension View {
     /// The item's actions (`MacInboxActions`) beside it when the detail has room for a column, over it otherwise.
-    func macInboxActions(_ item: InboxItem, reading: Bool = false, draft: @escaping () -> Void, handOff: @escaping () -> Void,
+    func macInboxActions(_ item: InboxItem, reading: Bool = false, showsListToggle: Bool = true,
+                         draft: @escaping () -> Void, handOff: @escaping () -> Void,
                          openItem: ((InboxItem) -> Void)? = nil) -> some View {
-        modifier(MacInboxActionsHost(item: item, reading: reading, draft: draft, handOff: handOff, openItem: openItem))
+        modifier(MacInboxActionsHost(item: item, reading: reading, showsListToggle: showsListToggle,
+                                     draft: draft, handOff: handOff, openItem: openItem))
     }
 }
 
@@ -129,6 +134,8 @@ private struct MacInboxActionsHost: ViewModifier {
     var item: InboxItem
     /// A document is open beside the item: the actions are a row over it, the column's width is the document's.
     var reading: Bool
+    /// The strip offers 显示列表 / 收起列表 only when embedded in the page that owns the list (#3477).
+    var showsListToggle: Bool
     var draft: () -> Void
     var handOff: () -> Void
     var openItem: ((InboxItem) -> Void)?
@@ -140,7 +147,10 @@ private struct MacInboxActionsHost: ViewModifier {
     func body(content: Content) -> some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                if !room { MacInboxActions(item: item, column: false, reading: reading, draft: draft, handOff: handOff, openItem: openItem) }
+                if !room {
+                    MacInboxActions(item: item, column: false, reading: reading, showsListToggle: showsListToggle,
+                                    draft: draft, handOff: handOff, openItem: openItem)
+                }
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if room {

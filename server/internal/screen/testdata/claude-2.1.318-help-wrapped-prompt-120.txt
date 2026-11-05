@@ -1,0 +1,30 @@
+
+ ▐▛███▛█   Claude Code v2.1.318
+▝▜██████▀  Opus 5.5 · API Usage Billing
+ ▝▝   ▝▝   /tmp/project
+
+
+❯ Reply with only the word ok, and ignore the rest of this sentence, which is only padding so that the prompt wraps
+  onto a second row
+
+● ok
+
+✻ Brewed for 26s · done 5:15 AM
+
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Help  General   Commands   Custom commands
+
+   Claude understands your codebase, makes edits with your permission, and executes commands — right from your
+   terminal.
+   Shortcuts
+   ! for shell mode          double tap esc to clear input        ctrl + shift + _ to undo
+   / for commands            shift + tab to auto-accept edits     ctrl + z to suspend
+   @ for file paths          ctrl + o for verbose output          ctrl + v to paste images
+   /btw for side question    ctrl + t to toggle tasks             alt + p to switch model
+                             backslash (\) + return (⏎) for       ctrl + s to stash prompt
+                             newline                              ctrl + g to edit in $EDITOR
+                                                                  /keybindings to customize
+
+   For more help: https://code.claude.com/docs/en/overview
+
+   Esc to cancel

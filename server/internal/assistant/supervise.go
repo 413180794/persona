@@ -780,26 +780,37 @@ func (s *Service) toolTaskReview(ctx context.Context, self string, args json.Raw
 		}
 	}
 	verdict, note := a.Verdict, clip(a.Note, 2000)
+	// Only the main conversation supervises (task_plan, quietAgentTask): another conversation's task without a ledger
+	// gets none here either, or its signals would go into the main conversation's 督办 messages (#4262). It can still
+	// be closed; rework and needs_user are what supervision is for.
+	ledger := t.Supervision != nil || s.isMain(ctx, self)
+	if !ledger && (verdict == reviewRework || verdict == reviewNeedsUser) {
+		return "", fmt.Errorf("task %s is not supervised: send what is missing to its agent with agent_send, or ask the user in your answer", t.ID)
+	}
 	over := false
-	v, _, err := s.updateSupervision(ctx, t.ID, func(v *Supervision) bool {
-		if v.Supervisor == "" {
-			v.Supervisor = t.Origin
-		}
-		if verdict == reviewRework && v.Round >= maxReworkRounds {
-			verdict, over = reviewNeedsUser, true
-		}
-		r := TaskReview{At: time.Now().UTC(), Verdict: verdict, Checks: checks, Note: note}
-		if verdict == reviewRework {
-			v.Round++
-			r.Round = v.Round
-		}
-		v.State = verdict
-		v.Reviews = append(v.Reviews, r)
-		if len(v.Reviews) > 20 {
-			v.Reviews = v.Reviews[len(v.Reviews)-20:]
-		}
-		return true
-	})
+	var v Supervision
+	var err error
+	if ledger {
+		v, _, err = s.updateSupervision(ctx, t.ID, func(v *Supervision) bool {
+			if v.Supervisor == "" {
+				v.Supervisor = t.Origin
+			}
+			if verdict == reviewRework && v.Round >= maxReworkRounds {
+				verdict, over = reviewNeedsUser, true
+			}
+			r := TaskReview{At: time.Now().UTC(), Verdict: verdict, Checks: checks, Note: note}
+			if verdict == reviewRework {
+				v.Round++
+				r.Round = v.Round
+			}
+			v.State = verdict
+			v.Reviews = append(v.Reviews, r)
+			if len(v.Reviews) > 20 {
+				v.Reviews = v.Reviews[len(v.Reviews)-20:]
+			}
+			return true
+		})
+	}
 	if err != nil {
 		return "", err
 	}

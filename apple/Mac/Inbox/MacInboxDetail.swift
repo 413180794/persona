@@ -56,12 +56,20 @@ struct MacInboxItemDetail: View {
     @State private var link: LinkTarget?
     @State private var path = NavigationPath()
     @State private var slot: InboxItemSlotModel
+    /// The detail runs in a window of its own (`MacInboxItemWindow`), not in the inbox page: it must not drive the
+    /// page's shared `reading` state, or its link panel would fold the main window's list (#3477).
+    var standalone: Bool
 
-    init(item: InboxItem, accounts: [MailAccount]) {
+    init(item: InboxItem, accounts: [MailAccount], standalone: Bool = false) {
         self.item = item
         self.accounts = accounts
+        self.standalone = standalone
         _slot = State(initialValue: InboxItemSlotModel(item: item))
     }
+
+    /// Whether the detail writes the app-wide `reading` state: an embedded detail does (the page folds its filters
+    /// and list for the link panel); a standalone window never touches the main window's layout (#3477).
+    static func writesSharedReading(standalone: Bool) -> Bool { !standalone }
 
     private var current: InboxItem { InboxStore.shared.items.first { $0.id == item.id } ?? item }
 
@@ -69,7 +77,9 @@ struct MacInboxItemDetail: View {
         NavigationStack(path: $path) {
             InboxItemSlotContent(item: current, slot: slot) { content }
                 .feishuRoutes()
-                .navigationDestination(for: InboxItem.self) { MacInboxItemDetail(item: $0, accounts: accounts) }
+                .navigationDestination(for: InboxItem.self) {
+                    MacInboxItemDetail(item: $0, accounts: accounts, standalone: standalone)
+                }
         }
         .environment(\.feishuOpen) { route in
             // Documents read beside the item; people and chats replace it (back returns).
@@ -78,12 +88,19 @@ struct MacInboxItemDetail: View {
         .macOpensLinksInPanel($link)
         .macLinkPanel($link, wide: true)
         // Outside the link panel: the actions stay at the window's edge, the document opens between them and the item.
-        // While a document is open they are a row over the item, and the filters and the list fold away (`reading`).
+        // While a document is open they are a row over the item; embedded in the page the filters and the list fold
+        // away (`reading`). A standalone window keeps that row for its own layout, but gets no 显示列表 button: it
+        // does not own the main window's list (#3477).
         // Another item of its 线索 pushes in the column's stack, as a Feishu page does (back returns).
-        .macInboxActions(current, reading: link != nil, draft: { drafting = true }, handOff: { handingOff = true },
+        .macInboxActions(current, reading: link != nil, showsListToggle: !standalone,
+                         draft: { drafting = true }, handOff: { handingOff = true },
                          openItem: { path.append($0) })
-        .onChange(of: link != nil, initial: true) { _, open in MacInboxState.shared.reading = open }
-        .onDisappear { if link != nil { MacInboxState.shared.reading = false } }
+        .onChange(of: link != nil, initial: true) { _, open in
+            if Self.writesSharedReading(standalone: standalone) { MacInboxState.shared.reading = open }
+        }
+        .onDisappear {
+            if Self.writesSharedReading(standalone: standalone), link != nil { MacInboxState.shared.reading = false }
+        }
         .navigationTitle(current.title)
         .navigationSubtitle(subtitle)
         .sheet(isPresented: $drafting) { InboxDraftSheet(item: current, accounts: accounts).macSheet() }
@@ -140,7 +157,7 @@ struct MacInboxItemWindow: View {
     var body: some View {
         Group {
             if let itemID, let item = InboxStore.shared.items.first(where: { $0.id == itemID }) {
-                MacInboxItemDetail(item: item, accounts: MacInboxState.shared.accounts)
+                MacInboxItemDetail(item: item, accounts: MacInboxState.shared.accounts, standalone: true)
             } else {
                 EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "这件事不在收件箱里了"), message: String(localized: "可能已经过期，回到主窗口看看。"))
             }

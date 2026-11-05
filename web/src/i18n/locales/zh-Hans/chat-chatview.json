@@ -75,5 +75,6 @@
   "not_live": "不是实时的",
   "not_live_reload": "重新加载",
   "switch_agent": "切换 Agent",
-  "composer_source": "来源"
+  "composer_source": "来源",
+  "unsent": "这条没发出去（{error}），字还在输入框里"
 }

@@ -410,6 +410,41 @@ class InboxRepositoryTest {
         }
     }
 
+    @Test fun bulkDoneKeepsWhatWasAlreadyDoneElsewhereAndDropsWhatIsGone() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-bulk-unchanged-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(id: String, doneAt: String? = null) = buildJsonObject {
+                put("id", id); put("source", "mail"); put("kind", "mail"); put("title", id); put("version", "v$id")
+                if (doneAt != null) put("done_at", doneAt)
+            }
+            val transport = FakeTransport().apply { items = JsonArray(listOf(item("a"), item("b"), item("c"))) }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            // Before the answer: b was filed on another device, c is gone from the hub. The refresh after the
+            // answer fails (offline), so what the list shows is what bulk() itself made of the answer.
+            transport.onBulk = { _, _ ->
+                transport.onInbox = { throw IOException("offline") }
+                buildJsonObject {
+                    put("changed", JsonArray(listOf(item("a", "2026-11-06T08:00:00Z"))))
+                    put("unchanged", JsonArray(listOf(JsonPrimitive("b"))))
+                    put("skipped", JsonArray(listOf(buildJsonObject { put("id", "c"); put("reason", "missing") })))
+                }
+            }
+            val calls = transport.inboxCalls.get()
+            val result = repository.bulk(listOf(InboxDoneTarget("a", "va"), InboxDoneTarget("b", "vb"), InboxDoneTarget("c", "vc")), InboxBulkAction.Done)
+            assertEquals(listOf("a"), result.changed)
+            // Nothing took new messages, yet the hub's own state for b and c is asked for once.
+            assertEquals(calls + 1, transport.inboxCalls.get())
+            // Already done elsewhere stays done; one the hub no longer has leaves the list; neither comes back open.
+            assertEquals(mapOf("a" to true, "b" to true), repository.snapshot.value.records.associate { it.item.id to it.item.isDone })
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun bulkDoneIsOneRequestWithVersionsAndPutsBackWhatTheHubDidNotFile() = runBlocking {
         val directory = Files.createTempDirectory("inbox-bulk-test").toFile()
         val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)

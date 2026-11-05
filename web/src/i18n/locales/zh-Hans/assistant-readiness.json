@@ -34,5 +34,6 @@
   "help_model_key": "有 API Key：在「设置 › 模型供应商」里选一家，粘贴 Key，会自动测试。",
   "help_model_claude": "已经在用 Claude Code：在那台电脑上登录一次就行，不用再填什么。",
   "probe_ok": "试过了，回答：{answer}",
-  "probe_failed": "试了一句，没成功：{error}"
+  "probe_failed": "试了一句，没成功：{error}",
+  "resend": "重新发送"
 }

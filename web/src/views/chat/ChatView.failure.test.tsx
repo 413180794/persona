@@ -15,14 +15,18 @@ vi.hoisted(() => {
 });
 
 const captured = vi.hoisted(() => ({
-  onSend: undefined as ((out: Outgoing) => Promise<boolean>) | undefined,
+  onSend: undefined as ((out: Outgoing, fromBox?: boolean) => Promise<boolean>) | undefined,
+  onEdit: undefined as (() => void) | undefined,
+  resend: vi.fn(),
   session: { machine_id: "hub", session_id: "c1", title: "Conversation", cwd: "/code", status: "idle" } as Session,
 }));
 
 vi.mock("./Composer", async (importOriginal) => ({
   ...await importOriginal<typeof import("./Composer")>(),
-  Composer: ({ onSend }: { onSend: (out: Outgoing) => Promise<boolean> }) => {
+  Composer: ({ onSend, onEdit, resendRef }: { onSend: (out: Outgoing, fromBox?: boolean) => Promise<boolean>; onEdit?: () => void; resendRef?: { current: (() => void) | null } }) => {
     captured.onSend = onSend;
+    captured.onEdit = onEdit;
+    if (resendRef) resendRef.current = captured.resend;
     return null;
   },
 }));
@@ -97,5 +101,36 @@ describe("a refused send's card", () => {
     await act(async () => void (await captured.onSend!({ text: "再来", images: [] })));
     await flush();
     expect(host.querySelector('[data-testid="readiness-failure"]')).toBeNull();
+  });
+});
+
+describe("a message from the box that did not go, in an agent's chat (#4270)", () => {
+  const card = () => host.querySelector('[data-testid="readiness-failure"]');
+  const resendButton = () => Array.from(card()?.querySelectorAll("button") ?? []).find((b) => b.textContent === "重新发送");
+
+  it("stays above the box with a 重新发送 that sends the box again", async () => {
+    act(() => root.render(<ChatView mid="hub" sid="c1" />));
+    await flush();
+    reply = () => json({ error: "会话已结束" }, 400);
+    await act(async () => void (await captured.onSend!({ text: "你好", images: [] }, true)));
+    await flush();
+    expect(card()?.textContent).toContain("这条没发出去（会话已结束）");
+    await act(async () => void (await captured.onSend!({ text: "继续", images: [] }))); // another send, not from the box
+    await flush();
+    expect(card()).not.toBeNull(); // the box still holds the unsent words
+    act(() => resendButton()!.click());
+    expect(captured.resend).toHaveBeenCalledOnce();
+  });
+
+  it("goes away once you edit the box", async () => {
+    act(() => root.render(<ChatView mid="hub" sid="c1" />));
+    await flush();
+    reply = () => json({ error: "会话已结束" }, 400);
+    await act(async () => void (await captured.onSend!({ text: "你好", images: [] }, true)));
+    await flush();
+    expect(card()).not.toBeNull();
+    act(() => captured.onEdit!());
+    await flush();
+    expect(card()).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -383,5 +384,37 @@ func TestReportingConversationAgentStartIsToldThere(t *testing.T) {
 	time.Sleep(4 * superviseEvery)
 	if got := f.notices(); len(got) != 0 {
 		t.Fatalf("the main conversation was told: %q", got)
+	}
+}
+
+// A reporting conversation's task_review on its own unsupervised task closes it without making a ledger, so the task
+// never joins the main conversation's 督办 messages; rework and needs_user are refused (#4262).
+func TestReportingConversationTaskReviewMakesNoLedger(t *testing.T) {
+	s, f := newQuietService(t)
+	ctx := context.Background()
+	f.known["lark1"] = true
+	f.setSessions("server", proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle},
+		proto.Session{SessionID: "lark1", MachineID: "server", Assistant: true, Status: proto.StatusIdle})
+	s.markReporter(ctx, "server", "lark1")
+	if _, err := s.runTool(ctx, "server", "lark1", "agent_start", json.RawMessage(`{"machine":"box","cwd":"/code/app","prompt":"提个 MR 修掉它"}`)); err != nil {
+		t.Fatal(err)
+	}
+	todo := onlyTodo(s)
+	review := func(verdict string) error {
+		raw, _ := json.Marshal(map[string]any{"todo_id": todo.ID, "verdict": verdict, "note": "重复了"})
+		_, err := s.runTool(ctx, "server", "lark1", "task_review", raw)
+		return err
+	}
+	for _, v := range []string{"rework", "needs_user"} {
+		if err := review(v); err == nil || !strings.Contains(err.Error(), "not supervised") {
+			t.Fatalf("%s: %v", v, err)
+		}
+	}
+	if err := review("cancelled"); err != nil {
+		t.Fatal(err)
+	}
+	now := todoNow(s, todo.ID)
+	if now.DoneAt == nil || now.DoneBy != db.DoneByReview || now.Supervision != nil {
+		t.Fatalf("after cancelled: %+v, supervision %+v", now, now.Supervision)
 	}
 }

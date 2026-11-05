@@ -17,7 +17,7 @@ import (
 // runRelease is `jarvisd release …`, what scripts/release/publish.sh runs to describe a release (docs/hub-update.md「发布」).
 func runRelease(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: jarvisd release manifest … | check-next <served latest.json> --build N --commit C")
+		return usageError(releaseUsage())
 	}
 	switch args[0] {
 	case "manifest":
@@ -67,7 +67,7 @@ func runRelease(args []string) error {
 			return fs.Parse(args[1:]) // prints the help; main exits 0 on flag.ErrHelp
 		}
 		if len(args) < 2 {
-			return errors.New("usage: jarvisd release check-next <served latest.json> --build N --commit C")
+			return usageError("usage: " + commandName() + " release check-next <served latest.json> --build N --commit C")
 		}
 		served := args[1]
 		if err := fs.Parse(args[2:]); err != nil {
@@ -92,5 +92,12 @@ func runRelease(args []string) error {
 			return err == nil, err
 		})
 	}
-	return fmt.Errorf("unknown release command %q", args[0])
+	return usageError(fmt.Sprintf("unknown release command %q\n%s", args[0], releaseUsage()))
+}
+
+// releaseUsage is what `release` without a known subcommand prints.
+func releaseUsage() string {
+	return "usage: " + commandName() + " release manifest --dir D --version V --build N --commit C --out latest.json […]\n" +
+		"       " + commandName() + " release check-next <served latest.json> --build N --commit C\n" +
+		"(" + commandName() + " release manifest -h for its flags)"
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,7 +18,7 @@ import (
 // new build with the update confirmed within 3 minutes, the old binary goes back and the hub restarts on it.
 func runUpdateWatch(ctx context.Context, args []string) error {
 	if len(args) != 1 {
-		return errors.New("usage: jarvisd update-watch <pending.json>")
+		return usageError("usage: " + commandName() + " update-watch <pending.json>")
 	}
 	var p update.Pending
 	ok, err := update.Load(args[0], &p)

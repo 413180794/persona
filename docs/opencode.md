@@ -78,6 +78,7 @@ opencode 的插件接口给的是会话的 context（压缩之后留下的那部
 | `assistant` 的 `reasoning` / `text` / `tool` | `thinking` / `text` / `tool_use`（+ 完成或出错后的 `tool_result`，带 `tool_use_id`、`is_error`） |
 | 工具名和参数（按 Claude 的画法） | `shell`→`Bash`（`command`、`description`）、`read`→`Read`（`path`→`file_path`）、`write`→`Write`、`edit`→`Edit`（`oldString`/`newString`→`old_string`/`new_string`）、`grep`→`Grep`、`glob`→`Glob`、`subagent`→`Agent`、`webfetch`→`WebFetch`、`websearch`→`WebSearch`、`skill`→`Skill`，别的（`patch`、`execute`……）用原名 |
 | `finish: error` / 被打断（`error.type: aborted`） | notice「出错了：…」/「已中断」 |
+| `finish: length` / `content-filter`（输出达到上限 / 被内容过滤拦下） | notice「输出达到上限，这一轮停了」/「这一轮被拦下了」 |
 | `idle`（`outcome: interrupted`） | notice「已中断」 |
 | `compaction` | notice「已压缩上下文」 |
 | 用户用 `!` 跑的命令（`shell`） | 一对 `Bash` 的 `tool_use` + `tool_result` |

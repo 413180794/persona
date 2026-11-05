@@ -33,6 +33,8 @@ test('interrupted and failed turns, compactions and the user\'s own commands lea
   assert.match(entryItems(msg('a', null, { role: 'assistant', stopReason: 'error', errorMessage: 'rate limited', content: [] }), 1)[0].text, /rate limited/)
   assert.deepEqual(entryItems(msg('a', null, { role: 'assistant', stopReason: 'length', content: [{ type: 'text', text: '一半' }] }), 1).map((i) => i.text),
     ['一半', '输出达到上限，这一轮停了'], 'a turn cut by the output limit says so')
+  assert.deepEqual(entryItems(msg('a', null, { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: '好了' }] }), 1).map((i) => i.text),
+    ['好了'], 'a turn the model ended itself adds no notice')
   assert.equal(entryItems({ type: 'compaction', id: 'c', parentId: 'a', summary: 's', firstKeptEntryId: 'a' }, 2)[0].text, '已压缩上下文')
   const bash = entryItems(msg('b', null, { role: 'bashExecution', command: 'ls', output: 'a.go', exitCode: 0, cancelled: false, truncated: false }), 3)
   assert.deepEqual(bash.map((i) => [i.kind, i.tool_name ?? '', i.is_error ?? false]), [['tool_use', 'Bash', false], ['tool_result', '', false]])

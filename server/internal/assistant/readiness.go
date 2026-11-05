@@ -140,6 +140,9 @@ type readinessRecord struct {
 	AnsweredAt *time.Time `json:"answered_at,omitempty"`
 	// Last is the last readiness worked out (without suggestions and probe).
 	Last *Readiness `json:"last,omitempty"`
+	// RoutinesWaiting: since then scheduled runs were skipped for not being ready; the first one that goes again
+	// clears it and notes it in the main conversation (schedule_ready.go).
+	RoutinesWaiting *time.Time `json:"routines_waiting,omitempty"`
 }
 
 type readinessProbe struct {

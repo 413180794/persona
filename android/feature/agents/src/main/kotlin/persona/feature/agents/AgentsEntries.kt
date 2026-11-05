@@ -100,7 +100,8 @@ fun EntryProviderScope<NavKey>.agentsEntries(
             val tasksStore = dependencies.tasks() ?: wiring.tasks
             val model = viewModel(key = "agents:${wiring.scope}:${operations?.operations?.scope.orEmpty()}") {
                 AgentsViewModel(dependencies.sessions(), dependencies.interactions(), dependencies.connection(), dependencies.sender(), dependencies.preferences(), operations, wiring.mainSender,
-                    wiring.scope.ifEmpty { operations?.operations?.scope.orEmpty() }, renamer, tasksStore, hubUpdates = dependencies.hubUpdates(), machineManagement = dependencies.machines())
+                    wiring.scope.ifEmpty { operations?.operations?.scope.orEmpty() }, renamer, tasksStore, hubUpdates = dependencies.hubUpdates(), machineManagement = dependencies.machines(),
+                    hubGroups = dependencies.groups())
                     .also { it.machine(initialMachine) }
             }
             val source = LocalAgentsDraftSource.current

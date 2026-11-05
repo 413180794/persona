@@ -601,7 +601,8 @@ POST /api/v1/assistant/warm                 → {"ok": true, "readiness"?: Readi
 - `mode`：`computer`、`claude`、`model` 里有 `todo` 或 `problem` 就是 `setup`，例外是 `rate_limited`（会自己好，`mode` 照样 `full`）；`unknown` / `checking` 不挡。
 - `suggestions`：`setup` 时只有 `local: true` 的两条（`what_can_you_do`、`how_to_connect_model`，客户端打开本地帮助，不发给模型）；`full` 时另有 `largest_folders`、`today`（`needs: ["phone_calendar"]`）、`connect_mail`，带 `prompt`（点了发出去的原话）。
 - `probe` 即 `POST /api/v1/launchers/{name}/check` 在主对话电脑上的 `{ok, agent, model, answer, millis, error}`；电脑没答（离线、超时）时只有 `error`，这种结果不记、不当作模型的证据。
-- 存储：最近一次结果、`dismissed`、最近一次 probe、开对话被拒、主对话答过一次，存 Postgres `settings` 的 `assistant.readiness`；结果和上次一样（不算时间）时不写。第一版不推送事件，客户端在进 Persona tab、配对成功、添加 / 确认电脑、保存供应商、收到 `machines` 变化时重拉。
+- 定时任务（#4253）：到点的运行先按同一套规则算一次就绪度（不 probe），这次运行要用的那一步挡着时不发，运行记录 `status: "skipped"`、`error` 是「还没接好电脑或模型，这次跳过」，不推送；「立即运行」和一次性的任务不看（一次性的到点就关，跳过就丢）。
+- 存储：最近一次结果、`dismissed`、最近一次 probe、开对话被拒、主对话答过一次、定时任务在等就绪（`routines_waiting`，#4253），存 Postgres `settings` 的 `assistant.readiness`；结果和上次一样（不算时间）时不写。第一版不推送事件，客户端在进 Persona tab、配对成功、添加 / 确认电脑、保存供应商、收到 `machines` 变化时重拉。
 
 ## 助手对话的来源（`origin`，#3264）
 
@@ -1936,7 +1937,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
            "error":""}]}                 // Agent 没开起来的原因
 
 // FeedItem：hub 插进助手对话的条目，不在 transcript 里；客户端按 at 和 transcript 合在一起画
-{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message|review","ref":"plan_…、todo_…、日期或收件箱条目 id",
+{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message|review|notice","ref":"plan_…、todo_…、日期或收件箱条目 id",
  "body":{…}}
 // plan：ref 是计划 id，没有 body；task：ref 是待办 id，没有 body
 // answered：{"question":"使用 Bash","answer":"批准了 · 以后同类不再问",
@@ -1950,6 +1951,8 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 //   interrupted（#1516）：Agent 这一轮被模型服务出错打断，summary 是「模型服务出错，中断了」，error 是错误原文；客户端画成红色、带「继续」
 //   这一轮既没回复也没调工具、又没有报错（模型服务回了 200 但内容是空的，#2349）同样是 interrupted，error 是「这一轮没有任何输出：…」
 // routed：{"text":"…"}（督办返工时发给 Agent 的说明也是一条 routed）
+// notice：没有 ref；hub 写进对话的一行说明 {"text":"…"}（按 hub 的语言写好），客户端画成居中的一行小字，不认识的客户端跳过。
+//         现在只有一种：定时任务因为主对话没接好被跳过以后，就绪后第一次运行前在主对话里写「电脑和模型接好了，定时任务恢复运行，这次是「早报」」（#4253）
 // review：ref 是待办 id；督办人验收了一次（#3124）：{"title","verdict":"accepted|rework|needs_user|cancelled","round":1,"note":"…",
 //         "checks":[{"criterion","met","evidence"}]}；不认识的客户端跳过这一条
 // message：ref 是收件箱条目 id；AI 分身给一条和任务有关的消息起草了回复：

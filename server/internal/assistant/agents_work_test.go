@@ -680,6 +680,9 @@ type workMemStore struct {
 	wmu    sync.Mutex
 	rows   map[[2]string]db.SessionWork
 	events []db.WorkEvent
+	// eventLag makes each event insert take this long, as a database round trip does (the service writes them
+	// in the background, #4179).
+	eventLag time.Duration
 }
 
 func (m *workMemStore) PutSessionWork(_ context.Context, w db.SessionWork) error {
@@ -707,6 +710,7 @@ func (m *workMemStore) SessionWorks(_ context.Context, since time.Time) ([]db.Se
 func (m *workMemStore) PruneSessionWork(context.Context, time.Time) error { return nil }
 
 func (m *workMemStore) AddWorkEvent(_ context.Context, e db.WorkEvent) error {
+	time.Sleep(m.eventLag)
 	m.wmu.Lock()
 	defer m.wmu.Unlock()
 	m.events = append(m.events, e)
@@ -724,7 +728,7 @@ func (m *workMemStore) WorkEvents(context.Context, time.Time) ([]db.WorkEvent, e
 func TestWorkComesBackAfterARestart(t *testing.T) {
 	f := newFakeHub()
 	f.sessions["box"] = nil
-	st := &workMemStore{}
+	st := &workMemStore{eventLag: 20 * time.Millisecond}
 	ctx := context.Background()
 	s := newServiceOn(t, f, st)
 	if err := s.putTriageSwitches(ctx, TriageSwitches{Enabled: true, Decide: true, Wake: true, AutoContinue: true}); err != nil {
@@ -742,7 +746,8 @@ func TestWorkComesBackAfterARestart(t *testing.T) {
 	}
 	first := entryOf(t, s, "s1").InteractionID
 
-	// Restarted while the machine is not back.
+	// Restarted while the machine is not back; what the old one recorded is in the database (its writes are async).
+	s.waitWorkEvents()
 	f.devices = []Device{{ID: "box", Name: "box", Online: false, Reachable: false}}
 	s = newServiceOn(t, f, st)
 	if sw := s.triageSwitches(ctx); !sw.Enabled || !sw.Decide {
@@ -771,6 +776,7 @@ func TestWorkComesBackAfterARestart(t *testing.T) {
 	if got := f.sentToAgents(); len(got) != 1 || !strings.Contains(got[0], "A 还是 B？ → A") {
 		t.Fatalf("sent %v", got)
 	}
+	s.waitWorkEvents()
 	if w := serve(s, "GET", "/api/v1/agents/work/stats?hours=1", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"blocked/user":2`) {
 		t.Fatalf("stats %d %s", w.Code, w.Body)
 	}

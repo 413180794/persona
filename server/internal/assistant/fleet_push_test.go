@@ -140,6 +140,37 @@ func TestFinishedPushSkipsChannelTurns(t *testing.T) {
 	}
 }
 
+// A turn that stops on a background command that reports back before the push's delay is up: the turn the report
+// wakes is the end of the work, pushed once with the time from the first start (#4187). It used to be dropped as a
+// turn a task started on its own, since the hold was only noted by a check that came after the wake.
+func TestFinishedPushAfterQuickBackground(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	ft.f.mu.Lock()
+	ft.f.hello.Notify = assistantwire.NotifyTimings{DoneDelayMS: 300, LongTurnMS: 60_000}
+	ft.f.mu.Unlock()
+	work := proto.Session{SessionID: "s1", Title: "跑测试", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1",
+		UpdatedAt: time.Now()}
+	ft.sessions("mac", work)
+	stopped := work
+	stopped.Status, stopped.LastText = proto.StatusDone, "测试放到后台跑了"
+	stopped.Background = []proto.BackgroundTask{{ID: "b1", Kind: "shell"}}
+	ft.sessions("mac", stopped)
+	woken := work
+	woken.WokeByTask = true // the command's report starts the next turn
+	ft.sessions("mac", woken)
+	finished := woken
+	finished.Status, finished.LastText = proto.StatusDone, "全部通过"
+	ft.sessions("mac", finished)
+	got := ft.pushesOf(assistantwire.NotifyDone, 1, 2*time.Second)
+	if len(got) != 1 || got[0].SessionID != "s1" || got[0].Body != "全部通过" {
+		t.Fatalf("pushes %+v", got)
+	}
+	time.Sleep(400 * time.Millisecond)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 2, 0); len(got) != 1 {
+		t.Fatalf("pushed twice: %+v", got)
+	}
+}
+
 // The own conversation of a scheduled task that pushes only what its runs send (#2396) is known by the task list the
 // snapshot has; other tasks' conversations, a task without one yet and the main conversation are not.
 func TestQuietTaskConversation(t *testing.T) {

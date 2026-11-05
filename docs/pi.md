@@ -104,6 +104,7 @@ node 带的就是要跑的（通用做法见 `docs/runtimes.md`「自动更新�
 | user 消息（文字、图片） | user `text` / `image`（图片是占位，数据走 `session.image`） |
 | assistant 消息：`thinking` / `text` / `toolCall` | `thinking` / `text` / `tool_use`；工具名和参数按 Claude 的画法：`bash`→`Bash`、`read`→`Read`（`path`→`file_path`）、`edit`→`Edit`（一处改动）/ `MultiEdit`（多处）、`write`→`Write`…… |
 | `stopReason: aborted / error` | notice「已中断」/「出错了：…」 |
+| `stopReason: length`（输出达到上限） | notice「输出达到上限，这一轮停了」 |
 | `toolResult` | `tool_result`（带 `tool_use_id`、`is_error`），里面的图片另成 `image` |
 | 用户在 pi 里 `!` 跑的命令（`bashExecution`） | 一对 `Bash` 的 `tool_use` + `tool_result` |
 | compaction、分支摘要、显示的自定义消息 | notice |

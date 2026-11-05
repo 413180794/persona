@@ -1092,6 +1092,12 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 		s.logf("task %s: %s is a quiet task's conversation; running in its own", t.ID, short(t.SessionID))
 		t.SessionID = ""
 	}
+	if !manual && t.Repeat != repeatOnce { // a one-off is never held back: skipped it would be lost (schedule_ready.go)
+		if err := s.gateRun(ctx, t); err != nil { // not set up yet: skipped, nothing pushed (schedule_ready.go)
+			s.logf("task %s: the main conversation is not ready; skipped", t.ID)
+			return proto.Session{}, s.skipRun(run, err)
+		}
+	}
 	if t.SessionID != "" {
 		if m, ok := s.device(ctx, t.MachineID); ok {
 			// A follow-up the assistant scheduled for itself is a turn of that conversation: it keeps the

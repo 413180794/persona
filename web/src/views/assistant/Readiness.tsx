@@ -156,7 +156,8 @@ export function ChatOnlyNote({ gate }: { gate: ReadinessGate }) {
 // ── a refused start or send ─────────────────────────────
 
 /** A start or a send that did not go: the hub's words, a button for its code, the original under 详情 (4.6). */
-export function FailureCard({ failure, onClose, onHelp, onConfirm }: { failure: CodedFailure; onClose: () => void; onHelp: (topic: HelpTopic) => void; onConfirm?: () => void }) {
+/** `onRetry`: a send that did not go and is back in the box (#4270): a 重新发送 button that sends the box again. */
+export function FailureCard({ failure, onClose, onHelp, onConfirm, onRetry }: { failure: CodedFailure; onClose: () => void; onHelp: (topic: HelpTopic) => void; onConfirm?: () => void; onRetry?: () => void }) {
   const [open, setOpen] = useState(false);
   const action = failure.action && knownAction(failure.action) ? failure.action : undefined;
   const raw = [failure.detail, failure.requestId && t("assistant-readiness.request_id", { id: failure.requestId })].filter(Boolean).join("\n");
@@ -168,6 +169,11 @@ export function FailureCard({ failure, onClose, onHelp, onConfirm }: { failure: 
         <IconButton icon="x" label={t("assistant-readiness.close")} onClick={onClose} size={24} iconSize={12} />
       </div>
       <div className="flex flex-wrap items-center gap-1.5 pl-[22px]">
+        {onRetry && (
+          <Button tone={action ? "quiet" : "primary"} onClick={onRetry}>
+            {t("assistant-readiness.resend")}
+          </Button>
+        )}
         {action && (
           <Button tone="primary" onClick={() => runAction(action, { launcher: failure.launcher, onHelp, onConfirm })}>
             {actionLabel(action)}

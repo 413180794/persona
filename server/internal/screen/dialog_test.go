@@ -323,3 +323,55 @@ func TestNumberedListItemInTheAnswerIsNotAnOption(t *testing.T) {
 		t.Fatalf("the dialog under the answer's list: %+v", d)
 	}
 }
+
+// #4159: a panel without options (/help, a notice) under the user's own prompt. The prompt is `❯ label` at the left
+// edge, and the row it wraps onto (or a slash command's `⎿` output) lines up with it, so the unnumbered reader took
+// the two rows for a dialog: the phone offered the user's words as buttons, and NoticeOnly refused the notice.
+// Recorded on Claude Code 2.1.318 at 120 columns.
+func TestUserPromptAboveAPanelIsNotAnOption(t *testing.T) {
+	for _, name := range []string{"claude-2.1.318-help-wrapped-prompt-120.txt", "claude-2.1.318-help-after-command-120.txt"} {
+		s := fixture(t, name)
+		if !Choosing(s) {
+			t.Fatalf("%s: the panel no longer holds the keyboard", name)
+		}
+		if d := ParseDialog(s); d != nil {
+			t.Errorf("%s: the conversation read as a dialog: %q %+v", name, d.Question, d.Options)
+		}
+		if got := DialogHead(s); got != "Help  General   Commands   Custom commands" {
+			t.Errorf("%s: the panel's first line: %q", name, got)
+		}
+	}
+
+	const wrapped = "❯ run the tests again, and when they pass push the branch and open a pull request for the watcher\n  fix we talked about this morning"
+	notice := strings.Replace(fixture(t, "claude-2.1.309-auto-mode-notice-120.txt"), "❯ run the tests again", wrapped, 1)
+	if !strings.Contains(notice, "fix we talked about") {
+		t.Fatal("the committed notice no longer holds the prompt this test swaps")
+	}
+	if d := ParseDialog(notice); d != nil {
+		t.Fatalf("the wrapped prompt read as the notice's options: %+v", d.Options)
+	}
+	if !NoticeOnly(notice) {
+		t.Error("the notice under a wrapped prompt is no longer a notice")
+	}
+
+	// The trust prompt's own unnumbered list is still read, under the conversation as well.
+	trust := ParseDialog("❯ hello there, this prompt wraps\n  onto a second row\n\n⏺ ok\n\n" + fixture(t, "claude-2.1.312-trust-162.txt"))
+	if trust == nil || len(trust.Options) != 2 || trust.Options[1].Label != "Yes, I trust this folder" {
+		t.Fatalf("trust prompt under a conversation: %+v", trust)
+	}
+
+	// A list taller than the 30 rows the cursor is looked for in keeps its top options and its question.
+	var tall strings.Builder
+	tall.WriteString("────────────────────────────────────\n Pick a session to resume\n\n")
+	for k := range 30 {
+		tall.WriteString("   session " + strconv.Itoa(k) + "\n")
+	}
+	tall.WriteString(" ❯ session 30\n\n Enter to select · Esc to cancel\n")
+	long := ParseDialog(tall.String())
+	if long == nil || len(long.Options) != 31 || long.Options[0].Label != "session 0" || long.Question != "Pick a session to resume" {
+		t.Fatalf("a tall list: %+v", long)
+	}
+	if o := long.Options[0]; len(o.Keys) != 31 || o.Keys[0] != "up" || o.Keys[30] != "enter" {
+		t.Fatalf("a tall list's first option keys: %v", o.Keys)
+	}
+}

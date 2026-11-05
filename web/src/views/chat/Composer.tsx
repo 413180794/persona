@@ -83,6 +83,8 @@ export function Composer({
   mention,
   onFocusChange,
   blocked,
+  resendRef,
+  onEdit,
 }: {
   draftKey: string;
   placeholder: string;
@@ -92,7 +94,8 @@ export function Composer({
   needsYou?: boolean;
   disabled?: boolean;
   commands?: Command[];
-  onSend: (m: Outgoing) => Promise<boolean>;
+  /** `fromBox`: the words were in this box and go back into it if the send fails. */
+  onSend: (m: Outgoing, fromBox?: boolean) => Promise<boolean>;
   onStop?: () => void;
   autoFocus?: boolean;
   footer?: React.ReactNode;
@@ -104,6 +107,10 @@ export function Composer({
   /** The main conversation cannot answer yet (docs/onboarding.md 4.4): the send button says what to do first and opens
    *  it; the box still takes typing and keeps the draft, nothing is sent or queued. */
   blocked?: { label: string; onClick?: () => void };
+  /** Set to this box's send (what is in it now): a failed send's 重新发送 sends the words that were put back (#4270). */
+  resendRef?: React.MutableRefObject<(() => void) | null>;
+  /** You typed in the box (not a send putting words back). */
+  onEdit?: () => void;
 }) {
   const [draft, setDraft] = useState(() => localStorage.getItem(`draft:${draftKey}`) ?? "");
   const [atts, setAtts] = useState<Attachment[]>([]);
@@ -405,7 +412,7 @@ export function Composer({
     refs.forEach((r) => removeContext(draftKey, r.id));
     setQuotes(draftKey, []);
     // picked contexts ride in front as <jarvis-context> tags (docs/protocol.md「消息里的标签」), the quote as `> ` lines
-    const ok = await onSend({ text: withContexts(refs, withQuoteBlock(q, text), sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) });
+    const ok = await onSend({ text: withContexts(refs, withQuoteBlock(q, text), sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) }, true);
     setSending(false);
     if (ok) {
       history.record(text);
@@ -421,6 +428,8 @@ export function Composer({
     }
     input.current?.focus({ preventScroll: true });
   };
+
+  if (resendRef) resendRef.current = () => void submit();
 
   const pick = (c: Command) => {
     if (c.confirm && !confirm(c.confirm)) return;
@@ -526,6 +535,7 @@ export function Composer({
           }}
           onChange={(e) => {
             setDraft(e.target.value);
+            onEdit?.();
             setDismissed(false);
             setCaret(e.target.selectionStart);
           }}

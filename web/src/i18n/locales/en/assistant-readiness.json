@@ -34,5 +34,6 @@
   "help_model_key": "You have an API key: in Settings › Model providers, pick a provider and paste the key. It's tested for you.",
   "help_model_claude": "You already use Claude Code: sign in once on that computer, nothing else to fill in.",
   "probe_ok": "Tried it. The answer: {answer}",
-  "probe_failed": "Tried it, and it failed: {error}"
+  "probe_failed": "Tried it, and it failed: {error}",
+  "resend": "Send again"
 }

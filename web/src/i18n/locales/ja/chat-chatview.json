@@ -75,5 +75,6 @@
   "not_live": "リアルタイムではありません",
   "not_live_reload": "再読み込み",
   "switch_agent": "Agent を切り替え",
-  "composer_source": "ソース"
+  "composer_source": "ソース",
+  "unsent": "このメッセージは送信できませんでした（{error}）。入力欄に残っています"
 }

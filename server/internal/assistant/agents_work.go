@@ -158,6 +158,8 @@ type workBook struct {
 	publishing                    atomic.Bool // a snapshot is on its way (publishSoon)
 	// testEvents collects the events when there is no store (tests).
 	testEvents []db.WorkEvent
+	// eventWrites are the event inserts still on their way to the store (waitWorkEvents).
+	eventWrites sync.WaitGroup
 }
 
 func (b *workBook) init() {
@@ -371,7 +373,9 @@ func (s *Service) workEvent(machine, session, kind string, detail map[string]any
 		s.work.mu.Unlock()
 		return
 	}
+	s.work.eventWrites.Add(1)
 	go func() {
+		defer s.work.eventWrites.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := st.AddWorkEvent(ctx, e); err != nil {
@@ -379,6 +383,11 @@ func (s *Service) workEvent(machine, session, kind string, detail map[string]any
 		}
 	}()
 }
+
+// waitWorkEvents returns once the events recorded so far are in the store (or failed): what reads the stats right
+// after acting sees them. For tests only: the caller must know nothing else is recording events meanwhile (no Run,
+// no triage goroutine from workTick), as a WaitGroup's Add from zero must not race its Wait.
+func (s *Service) waitWorkEvents() { s.work.eventWrites.Wait() }
 
 // workEntry is a copy of a session's stored work state.
 func (s *Service) workEntry(k [2]string) (db.SessionWork, bool) {

@@ -273,7 +273,7 @@ func main() {
 		runHook(ctx)
 	case "launch": // a launcher kept in 设置 › 模型: its settings from the local node, then claude (docs/launchers.md)
 		if len(os.Args) < 3 {
-			err = fmt.Errorf("usage: jarvisd launch <launcher> [claude args…]")
+			err = usageError("usage: " + commandName() + " launch <launcher> [claude args…]")
 			break
 		}
 		err = node.Launch(ctx, os.Args[2], os.Args[3:])
@@ -312,6 +312,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
+	var ue usageError
+	if errors.As(err, &ue) { // a usage mistake: what to type instead, exit 2 like the other usage mistakes
+		fmt.Fprintln(os.Stderr, string(ue))
+		os.Exit(2)
+	}
 	if errors.Is(err, flag.ErrHelp) { // -h on a subcommand's flags: the flag package printed its help, nothing failed
 		os.Exit(0)
 	}
@@ -327,6 +332,20 @@ func checkNodeStdioArgs(args []string) error {
 		return nil
 	}
 	return fmt.Errorf("不认识的 node 子命令 %q：可用的有 --stdio、--attach、tailcat、doctor、reset-uid（personad node -h 看用法）", strings.Join(args, " "))
+}
+
+// usageError is a usage mistake: main prints it as it is (no log timestamp) and exits 2.
+type usageError string
+
+func (e usageError) Error() string { return string(e) }
+
+// commandName is the program's name in what it prints: jarvisd when run under that name (the compatibility
+// alias, docs/rename.md), otherwise personad.
+func commandName() string {
+	if strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") == "jarvisd" {
+		return "jarvisd"
+	}
+	return "personad"
 }
 
 func isHelpArg(a string) bool { return a == "-h" || a == "--help" }
@@ -433,7 +452,7 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 		return nil
 	case "init":
 		fs := flag.NewFlagSet("tailcat init", flag.ContinueOnError)
-		hubKey := fs.String("hub", "", "the hub's key: `jarvisd hub tailcat-key` on the hub's machine")
+		hubKey := fs.String("hub", "", "the hub's `key`: what "+commandName()+" hub tailcat-key prints on the hub's machine")
 		derpMap := fs.String("derp-map-url", "", "a DERP map of your own relays instead of Tailscale's public ones")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
@@ -442,7 +461,7 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 			exitNodeUsage(fmt.Errorf("node tailcat init 只认 --hub 和 --derp-map-url，多了 %q（personad node -h 看用法）", strings.Join(fs.Args(), " ")))
 		}
 		if *hubKey == "" {
-			return fmt.Errorf("--hub is required: run `jarvisd hub tailcat-key` on the hub's machine")
+			return fmt.Errorf("--hub is required: run `%s hub tailcat-key` on the hub's machine", commandName())
 		}
 		ictx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()

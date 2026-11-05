@@ -16,5 +16,8 @@
   "busy_skipped": "The last run is still going, so this one was skipped",
   "busy_wait": "The last run is still going. Try again when it’s done.",
   "run_failed": "Scheduled task failed: {name}",
-  "gone": "This scheduled task no longer exists"
+  "gone": "This scheduled task no longer exists",
+  "not_ready_skipped": "Your computer or model isn’t set up yet, so this one was skipped",
+  "ready_again": "Your computer and model are set up, so scheduled tasks run again, starting with “{name}”",
+  "ready_again_unnamed": "Your computer and model are set up, so scheduled tasks run again"
 }

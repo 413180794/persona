@@ -33,6 +33,14 @@ internal fun GroupFilter?.admits(machineId: String) = this == null || GroupKeys.
 internal fun List<HubGroupInfo>.tagFor(machineId: String): String? =
     if (size > 1) GroupKeys.namespaceOf(machineId).let { namespace -> firstOrNull { it.namespace == namespace }?.name } else null
 
+/**
+ * The connection a request or computer of [machineId] goes through: with more than one group, its own group's (the shell's
+ * connection is the selected group's, so one group being offline must not block or allow answering another's); else [fallback].
+ */
+internal fun List<HubGroupInfo>.stateFor(machineId: String, fallback: ConnectionState): ConnectionState =
+    if (size > 1) GroupKeys.namespaceOf(machineId).let { namespace -> firstOrNull { it.namespace == namespace }?.state } ?: fallback
+    else fallback
+
 /** Computer names for rows and request cards; with more than one group a name says its group, as 「MacBook（家里）」. */
 internal fun List<HubGroupInfo>.machineNames(machines: List<Machine>, withGroup: String): Map<String, String> =
     machines.associate { machine -> machine.id to (tagFor(machine.id)?.let { withGroup.format(machine.displayName, it) } ?: machine.displayName) }

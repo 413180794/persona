@@ -63,6 +63,14 @@ func TestParseWhen(t *testing.T) {
 	}
 }
 
+// readyHub is a fake hub whose main conversation is ready (the computer "server" with Claude Code on it), so
+// scheduled runs are not skipped for want of one (schedule_ready.go).
+func readyHub() *fakeHub {
+	f := newFakeHub().withMachine()
+	f.doctor = map[string]string{"server": "2.1.308"}
+	return f
+}
+
 func setTasks(s *Service, tasks ...Task) *schedule {
 	sc := s.loadSchedule(context.Background())
 	sc.mu.Lock()
@@ -141,7 +149,7 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 // minutes late on Monday still sends them, and one too late records the miss, as on any other weekday (#3397: it looked
 // back two minutes only, and the run was dropped without a trace).
 func TestWeekdayTaskCatchesUpOnMonday(t *testing.T) {
-	f := newFakeHub()
+	f := readyHub() // a set-up computer: a skip here is a missed time, not one for want of a computer
 	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	h := newStorelessService(t, f)
 	loc, _ := time.LoadLocation("Asia/Shanghai")
@@ -575,9 +583,13 @@ func TestScheduleAcrossHubRestart(t *testing.T) {
 	sc.mu.Unlock()
 
 	h1.runDue(context.Background(), at(9, 0).Add(2*time.Second))
-	runs := waitRuns(t, h1, 2) // no assistant machine in tests: both runs fail to start, and say so
-	for _, r := range runs {
-		if r.Status != runFailed || r.Error == "" || !r.Due.Equal(at(9, 0)) {
+	runs := waitRuns(t, h1, 2) // no assistant machine here: the routine waits for one (skipped, schedule_ready.go), the
+	for _, r := range runs {   // one-off is not held back and fails to start; both say so
+		want := runSkipped
+		if r.RefID == "f1" {
+			want = runFailed
+		}
+		if r.Status != want || r.Error == "" || !r.Due.Equal(at(9, 0)) {
 			t.Fatalf("run %+v", r)
 		}
 	}
@@ -790,7 +802,7 @@ func TestTaskEditsCannotCreateModelOverrides(t *testing.T) {
 // run the hub missed, so nothing is recorded as 「Persona 停机，错过了时间」 and the next run comes as usual (#3816).
 // Retimed to later today it still runs today; a hub that really was down still records the miss.
 func TestNoMissRecordedForARunBeforeTheTaskWasArmed(t *testing.T) {
-	f := newFakeHub()
+	f := readyHub() // a set-up computer: a skip here is a missed time, not one for want of a computer
 	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	h := newStorelessService(t, f)
 	loc, _ := time.LoadLocation("Asia/Shanghai")
@@ -875,7 +887,7 @@ func TestRearm(t *testing.T) {
 // A task created, or retimed, during its own minute still runs today: at 10:05:20 the owner sets one for 10:05 to
 // try it (review of #3915: armed at 10:05:20 it waited until tomorrow). Through the app's routes, as the app does it.
 func TestTaskArmedDuringItsMinuteRunsToday(t *testing.T) {
-	f := newFakeHub()
+	f := readyHub() // a set-up computer: a skip here is a missed time, not one for want of a computer
 	f.settings = &Settings{Timezone: "Asia/Shanghai"}
 	h := newStorelessService(t, f)
 	loc, _ := time.LoadLocation("Asia/Shanghai")

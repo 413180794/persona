@@ -25,7 +25,8 @@ import persona.core.domain.answer.AnswerAction
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentsHapticsTest {
     private lateinit var model: AgentsViewModel
-    private val request = Interaction("request", machineId = "m", sessionId = "s", kind = "permission", toolName = "Bash")
+    private var request = Interaction("request", machineId = "m", sessionId = "s", kind = "permission", toolName = "Bash")
+    private var groups: HubGroups = HubGroups.None
     private val state = MutableStateFlow(ConnectionState.Online)
     private var resolve: suspend () -> Unit = {}
     private val preferences = AgentsPreferences(object : DataStore<Preferences> {
@@ -48,8 +49,8 @@ class AgentsHapticsTest {
 
     private fun TestScope.played(): List<Haptic> {
         model = AgentsViewModel(object : SessionsRepository {
-            override val sessions = MutableStateFlow(listOf(Session("m", "s", state = "needs_input")))
-            override val machines = MutableStateFlow(listOf(Machine("m", online = true)))
+            override val sessions = MutableStateFlow(listOf(Session(request.machineId, "s", state = "needs_input")))
+            override val machines = MutableStateFlow(listOf(Machine(request.machineId, online = true)))
             override suspend fun refresh() = Unit
         }, object : InteractionCenter {
             override val pending = MutableStateFlow(listOf(request))
@@ -63,7 +64,7 @@ class AgentsHapticsTest {
         }, object : MessageSender {
             override val outbox = MutableStateFlow<List<OutboxMessage>>(emptyList())
             override suspend fun send(session: SessionKey, text: String, clientMessageId: String, clearDraft: String?) = Unit
-        }, preferences)
+        }, preferences, hubGroups = groups)
         val seen = mutableListOf<Haptic>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.page.collect {} }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.haptics.collect { seen += it } }
@@ -92,6 +93,29 @@ class AgentsHapticsTest {
 
     @Test fun offlineItNudgesAndSendsNothing() = runTest {
         state.value = ConnectionState.Connecting
+        resolve = { error("must not send") }
+        assertEquals(listOf(Haptic.Attention), played())
+    }
+
+    private fun twoGroups(selected: ConnectionState, work: ConnectionState) = object : HubGroups by HubGroups.None {
+        override val groups = MutableStateFlow(listOf(
+            HubGroupInfo("g11111111", "home", null, true, selected, emptyList()),
+            HubGroupInfo("g0a1b2c3d", "work", "g0a1b2c3d", false, work, emptyList())))
+    }
+
+    @Test fun anotherGroupOnlineIsAnsweredWhileTheSelectedOneIsOffline() = runTest {
+        request = request.copy(machineId = "m~g0a1b2c3d")
+        state.value = ConnectionState.WaitingForNetwork
+        groups = twoGroups(ConnectionState.WaitingForNetwork, ConnectionState.Online)
+        var sent = false
+        resolve = { sent = true }
+        assertEquals(listOf(Haptic.Success), played())
+        assertEquals(true, sent)
+    }
+
+    @Test fun anotherGroupOfflineIsNotSentThroughTheSelectedOne() = runTest {
+        request = request.copy(machineId = "m~g0a1b2c3d")
+        groups = twoGroups(ConnectionState.Online, ConnectionState.Connecting)
         resolve = { error("must not send") }
         assertEquals(listOf(Haptic.Attention), played())
     }

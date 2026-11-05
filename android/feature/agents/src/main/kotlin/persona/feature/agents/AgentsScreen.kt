@@ -122,6 +122,8 @@ internal fun AgentsScreen(
     val unknownRequests = remember(pending, delivery) {
         pending.filter { delivery[it.id] == RequestDelivery.Unknown }.map { it.sessionKey }.toSet()
     }
+    /** Whether a request can be answered now: through its own group's connection when there are several groups. */
+    fun reachable(request: Interaction) = groups.stateFor(request.machineId, connection) == ConnectionState.Online
     fun open(session: SessionKey) { navigator.navigate(ChatRoute(session.machineId, session.sessionId)) }
     fun connectionSettings() { navigator.navigate(ConnectionSettingsRoute) }
     // The title while the hub is out of reach opens why, since when and 立即重试 in place (iOS ConnectionTitle).
@@ -277,7 +279,7 @@ internal fun AgentsScreen(
                 item("requests-title") { JSectionHeader(stringResource(R.string.agents_requests_title), count = requests.size) }
                 items(requests.take(3), key = { "request:${it.id}" }) { request ->
                     val owner = page.sessions.firstOrNull { it.key == request.sessionKey }
-                    RequestCard(request, names[request.machineId], metadata, now, connection == ConnectionState.Online,
+                    RequestCard(request, names[request.machineId], metadata, now, reachable(request),
                         delivery[request.id], { requestDetail = request }, model::answer,
                         space = owner?.spaceName?.takeIf { it.isNotBlank() }, approvable = owner?.canApprove ?: true)
                 }
@@ -490,7 +492,7 @@ internal fun AgentsScreen(
         else JDialog(onDismiss = { newAgent = false }, title = stringResource(R.string.agents_action_new_session),
             text = stringResource(R.string.agents_new_session_unavailable), confirm = stringResource(R.string.agents_close) to { newAgent = false }, dismiss = null)
     }
-    if (allRequests) RequestsDialog(requests, names, metadata, now, connection == ConnectionState.Online, delivery,
+    if (allRequests) RequestsDialog(requests, names, metadata, now, delivery,
         onDismiss = { allRequests = false }, onOpen = { request ->
             allRequests = false
             requestDetail = request
@@ -501,7 +503,7 @@ internal fun AgentsScreen(
     requestDetail?.let { selected ->
         val current = pending.firstOrNull { it.id == selected.id && it.sessionKey == selected.sessionKey }
         val request = current ?: selected
-        RequestDetail(request, metadata, now, connection == ConnectionState.Online, delivery[request.id],
+        RequestDetail(request, metadata, now, reachable(request), delivery[request.id],
             onDismiss = { requestDetail = null }, onOpenChat = {
                 requestDetail = null
                 open(it.sessionKey)

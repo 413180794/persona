@@ -84,8 +84,11 @@ func (t *turnTracker) startOf(key string) time.Time {
 	return time.Time{}
 }
 
-// ended: working → done / idle. Returns the generation the delayed check must still see.
-func (t *turnTracker) ended(key string, now time.Time) int {
+// ended: working → done / idle; background is whether background work still runs as it stops. Returns the generation
+// the delayed check must still see. A turn that stops on background work is held work from here on, not only once the
+// delayed check sees it still running: work that reports back within the delay wakes the agent, the check of this end
+// is stale by then, and the woken turn's end is the one push (#4187).
+func (t *turnTracker) ended(key string, now time.Time, background bool) int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	tr := t.turns[key]
@@ -95,6 +98,9 @@ func (t *turnTracker) ended(key string, now time.Time) int {
 	}
 	tr.gen++
 	tr.endedAt = now
+	if background {
+		tr.background = true
+	}
 	return tr.gen
 }
 

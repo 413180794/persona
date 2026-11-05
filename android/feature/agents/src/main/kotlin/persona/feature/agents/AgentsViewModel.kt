@@ -47,6 +47,8 @@ internal class AgentsViewModel(
     val hubUpdates: persona.core.contracts.api.HubUpdates? = null,
     val appBuild: Long = 1L,
     machineManagement: MachineManagement? = null,
+    /** The phone's hub groups: a request is answered through its own group's connection (AgentGroups.kt stateFor). */
+    private val hubGroups: persona.core.contracts.api.HubGroups = persona.core.contracts.api.HubGroups.None,
 ) : ViewModel() {
     private val operations = bindings?.operations?.let { AgentOperationsState(it, preferences.hubCache) }
     val operationState = operations?.state ?: MutableStateFlow(AgentOperationsSnapshot())
@@ -486,7 +488,7 @@ internal class AgentsViewModel(
         if (page.value.sessions.firstOrNull { it.key == latest.sessionKey }?.canApprove == false) {
             _notice.value = AgentText(R.string.agents_notice_approve_blocked); return
         }
-        if (connection.state.value != ConnectionState.Online) {
+        if (hubGroups.groups.value.stateFor(latest.machineId, connection.state.value) != ConnectionState.Online) {
             _notice.value = AgentText(R.string.agents_notice_answer_offline); _haptics.tryEmit(Haptic.Attention); return
         }
         val result = AnswerBuilder.build(latest, action, draft, AnswerContext(fullPlanRead = fullPlanRead))

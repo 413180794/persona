@@ -235,14 +235,20 @@ func (d *Dialog) typedOption() {
 }
 
 // unnumbered reads a list without numbers whose cursor row is `❯ label` and whose other rows line up with it, under
-// a footer of key hints (Claude's trust prompt): options are picked by arrow moves and enter.
+// a footer of key hints (Claude's trust prompt): options are picked by arrow moves and enter. Like numbered, only rows
+// from dialogTop down count (#4159): the user's own prompt above a panel without options (/help, a notice) is a
+// `❯ label` too, and the row it wraps onto (or a command's `⎿` output) lines up with it as a second "option". So a list
+// whose cursor sits at the left edge is taken for that prompt and not read; Claude Code 2.1.318 draws its lists' cursor
+// at column 1 or 3 (trust prompt, /resume, /theme, /memory, rewind).
 func unnumbered(lines []string) *Dialog {
 	if !Choosing(strings.Join(lines, "\n")) {
 		return nil
 	}
+	top := dialogTop(lines)
 	cur := -1
 	indent := 0
-	for i := len(lines) - 1; i >= 0 && i >= len(lines)-30; i-- {
+	// The cursor is near the bottom; the options above it may run higher (a long list).
+	for i := len(lines) - 1; i >= max(top, len(lines)-30); i-- {
 		if m := cursorRE.FindStringSubmatch(lines[i]); m != nil {
 			cur, indent = i, len([]rune(m[1]))+2
 			break
@@ -256,7 +262,7 @@ func unnumbered(lines []string) *Dialog {
 		return len(r) > indent && strings.TrimSpace(string(r[:indent])) == "" && r[indent] != ' ' && !footerRE.MatchString(l)
 	}
 	first, last := cur, cur
-	for first-1 >= 0 && sibling(lines[first-1]) {
+	for first-1 >= top && sibling(lines[first-1]) {
 		first--
 	}
 	for last+1 < len(lines) && sibling(lines[last+1]) {

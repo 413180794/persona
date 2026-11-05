@@ -19,7 +19,7 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("finished and left alone: push with the turn's length", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(90))
+		gen := tr.ended("k", at(90), false)
 		v, took := tr.settle("k", gen, done, false, false, false, at(150), hold)
 		if v != finishPush || took != 90*time.Second {
 			t.Fatalf("%v %v", v, took)
@@ -33,12 +33,12 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("seen in herdr (idle) or in the app: no push", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(90))
+		gen := tr.ended("k", at(90), false)
 		if v, _ := tr.settle("k", gen, proto.Session{Status: proto.StatusIdle}, false, false, false, at(150), hold); v != finishDrop {
 			t.Fatalf("idle: %v", v)
 		}
 		tr.working("k", at(200))
-		gen = tr.ended("k", at(300))
+		gen = tr.ended("k", at(300), false)
 		if v, _ := tr.settle("k", gen, done, true, false, false, at(360), hold); v != finishDrop {
 			t.Fatalf("seen: %v", v)
 		}
@@ -47,12 +47,12 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("resumed within the delay: same turn, counted from its first start", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		first := tr.ended("k", at(20))
+		first := tr.ended("k", at(20), false)
 		tr.working("k", at(30)) // status flickers between tool calls
 		if v, _ := tr.settle("k", first, done, false, false, false, at(80), hold); v != finishStale {
 			t.Fatalf("first end: %v", v)
 		}
-		gen := tr.ended("k", at(100))
+		gen := tr.ended("k", at(100), false)
 		v, took := tr.settle("k", gen, done, false, false, false, at(160), hold)
 		if v != finishPush || took != 100*time.Second {
 			t.Fatalf("%v %v", v, took)
@@ -62,7 +62,7 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("still working at check time: wait for the next end", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(10))
+		gen := tr.ended("k", at(10), false)
 		if v, _ := tr.settle("k", gen, proto.Session{Status: proto.StatusWorking}, false, false, false, at(70), hold); v != finishStale {
 			t.Fatalf("%v", v)
 		}
@@ -71,24 +71,40 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("background work: hold, then one push when the woken turn ends", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(30))
+		gen := tr.ended("k", at(30), false)
 		busy := proto.Session{Status: proto.StatusDone, Background: []proto.BackgroundTask{{ID: "b1", Kind: "shell"}}}
 		if v, _ := tr.settle("k", gen, busy, false, false, false, at(90), hold); v != finishHold {
 			t.Fatalf("hold: %v", v)
 		}
 		// The task reports back: Claude works on the report, then finishes.
 		tr.working("k", at(600))
-		gen = tr.ended("k", at(620))
+		gen = tr.ended("k", at(620), false)
 		v, took := tr.settle("k", gen, proto.Session{Status: proto.StatusDone, WokeByTask: true}, false, false, false, at(680), hold)
 		if v != finishPush || took != 620*time.Second {
 			t.Fatalf("after background: %v %v", v, took)
 		}
 	})
 
+	t.Run("background that reports back within the delay: the woken turn's end is the push (#4187)", func(t *testing.T) {
+		tr := newTurnTracker()
+		tr.working("k", at(0))
+		first := tr.ended("k", at(30), true) // stops with a background command running
+		// It reports back at once: the agent works on the report and finishes before the first check.
+		tr.working("k", at(40))
+		gen := tr.ended("k", at(50), false)
+		if v, _ := tr.settle("k", first, done, false, false, false, at(90), hold); v != finishStale {
+			t.Fatalf("first end: %v", v)
+		}
+		v, took := tr.settle("k", gen, proto.Session{Status: proto.StatusDone, WokeByTask: true}, false, false, false, at(110), hold)
+		if v != finishPush || took != 50*time.Second {
+			t.Fatalf("woken turn: %v %v", v, took)
+		}
+	})
+
 	t.Run("running subagent counts as background", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(30))
+		gen := tr.ended("k", at(30), false)
 		s := proto.Session{Status: proto.StatusDone, Subagents: []proto.Subagent{{ID: "a", Running: true}}}
 		if v, _ := tr.settle("k", gen, s, false, false, false, at(90), hold); v != finishHold {
 			t.Fatalf("%v", v)
@@ -98,14 +114,14 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("a running workflow counts as background (#2935)", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(30))
+		gen := tr.ended("k", at(30), false)
 		s := proto.Session{Status: proto.StatusDone, Workflows: []proto.Workflow{{TaskID: "w1", Status: proto.WorkflowRunning, Running: true}}}
 		if v, _ := tr.settle("k", gen, s, false, false, false, at(90), hold); v != finishHold {
 			t.Fatalf("%v", v)
 		}
 		// The workflow's notification wakes it; that turn's end is the push.
 		tr.working("k", at(900))
-		gen = tr.ended("k", at(960))
+		gen = tr.ended("k", at(960), false)
 		s = proto.Session{Status: proto.StatusDone, WokeByTask: true, Workflows: []proto.Workflow{{TaskID: "w1", Status: proto.WorkflowCompleted}}}
 		if v, _ := tr.settle("k", gen, s, false, false, false, at(1020), hold); v != finishPush {
 			t.Fatalf("after the workflow: %v", v)
@@ -115,7 +131,7 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("background that never finishes is given up", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(30))
+		gen := tr.ended("k", at(30), false)
 		busy := proto.Session{Status: proto.StatusDone, Background: []proto.BackgroundTask{{ID: "b1"}}}
 		if v, _ := tr.settle("k", gen, busy, false, false, false, at(30).Add(2*hold), hold); v != finishDrop {
 			t.Fatalf("%v", v)
@@ -125,7 +141,7 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("a turn woken by a task on its own: no push", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(120))
+		gen := tr.ended("k", at(120), false)
 		if v, _ := tr.settle("k", gen, proto.Session{Status: proto.StatusDone, WokeByTask: true}, false, false, false, at(180), hold); v != finishDrop {
 			t.Fatalf("%v", v)
 		}
@@ -134,12 +150,12 @@ func TestTurnTracker(t *testing.T) {
 	t.Run("muted, or the assistant already pushed: no push", func(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("k", at(0))
-		gen := tr.ended("k", at(120))
+		gen := tr.ended("k", at(120), false)
 		if v, _ := tr.settle("k", gen, done, false, true, false, at(180), hold); v != finishDrop {
 			t.Fatalf("muted: %v", v)
 		}
 		tr.working("k", at(200))
-		gen = tr.ended("k", at(400))
+		gen = tr.ended("k", at(400), false)
 		if v, _ := tr.settle("k", gen, done, false, false, true, at(460), hold); v != finishDrop {
 			t.Fatalf("assistant: %v", v)
 		}
@@ -149,8 +165,8 @@ func TestTurnTracker(t *testing.T) {
 		tr := newTurnTracker()
 		tr.working("a", at(0))
 		tr.working("b", at(50))
-		ga := tr.ended("a", at(100))
-		tr.ended("b", at(100))
+		ga := tr.ended("a", at(100), false)
+		tr.ended("b", at(100), false)
 		if v, took := tr.settle("a", ga, done, false, false, false, at(160), hold); v != finishPush || took != 100*time.Second {
 			t.Fatalf("%v %v", v, took)
 		}

@@ -171,7 +171,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly, updatedAt: (readOnly ? viewed : session)?.updated_at });
   const status = useSessionLive(mid, sid);
   // a Persona conversation's send the hub refused: a card above the composer, not a toast (docs/onboarding.md 4.4)
-  const [sendFailure, setSendFailure] = useState<{ chat: string; failure: CodedFailure } | null>(null);
+  const [sendFailure, setSendFailure] = useState<{ chat: string; failure: CodedFailure; fromBox?: boolean } | null>(null);
+  // the composer's own send, for the failure card's 重新发送: the words are back in the box, so the box is what goes
+  const resend = useRef<(() => void) | null>(null);
   // the main conversation's setup gate, for deliver (defined before the gate is)
   const blockedRef = useRef<ReadinessGate["blocked"]>(undefined);
   const [pending, setPending] = useState<Pending[]>(() => {
@@ -478,7 +480,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 
   // ── sending ──
   const deliver = useCallback(
-    async (out: Outgoing, id: string, clearDraft?: string): Promise<boolean> => {
+    async (out: Outgoing, id: string, clearDraft?: string, fromBox = false): Promise<boolean> => {
       // the main conversation's setup gate holds every path that sends, not only the composer (4.4)
       if (blockedRef.current) {
         blockedRef.current.onClick?.();
@@ -490,7 +492,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       }
       // a sending bubble shows picked contexts as quote cards, like the transcript will (not the raw tags)
       const p: Pending = { id, at: Date.now(), msg: { id: `pending:${id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${id}#${i}`, seq: 0, role: "user", kind: "image", image })) } };
-      setSendFailure(null); // a new try: an earlier failure no longer applies
+      // a new try: an earlier failure no longer applies; a box's unsent card stays until the box is sent again (#4270)
+      setSendFailure((f) => (fromBox || !f?.fromBox ? null : f));
       setPending((ps) => [...ps.filter((x) => x.id !== id), p]);
       follow(true); // your own message: to the end, whatever you were reading
       try {
@@ -505,13 +508,17 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         setPending((ps) => ps.filter((x) => x.id !== id));
         if (e instanceof ApiError && e.code === "input_draft") {
           setDraftRefusal({ out, id, draft: String(e.body.draft ?? ""), clearable: typeof e.body.clearable === "string" ? e.body.clearable : undefined });
-        } else if (e instanceof ApiError && e.code === "dialog_open") {
-          toast(t("chat-chatview.dialog_open"), "error");
         } else if (e instanceof ApiError && e.body.delivered === "unknown") {
           toast(t("chat-chatview.delivery_unknown"), "error");
-        } else if (assistant) {
-          setSendFailure({ chat: `${mid}/${sid}`, failure: codedFailure(e) });
+        } else if (assistant && !(e instanceof ApiError && e.code === "dialog_open")) {
+          setSendFailure({ chat: `${mid}/${sid}`, failure: codedFailure(e), fromBox });
           void refreshReadiness({ force: true });
+        } else if (fromBox) {
+          // a card that stays until 重新发送 or an edit of the box (#4270): a 5 s toast is gone by the time you are back
+          const why = e instanceof ApiError && e.code === "dialog_open" ? t("chat-chatview.dialog_open") : errorText(e);
+          setSendFailure({ chat: `${mid}/${sid}`, failure: { code: "", error: t("chat-chatview.unsent", { error: why }) }, fromBox });
+        } else if (e instanceof ApiError && e.code === "dialog_open") {
+          toast(t("chat-chatview.dialog_open"), "error");
         } else {
           toast(t("chat-chatview.send_failed", { error: errorText(e) }), "error");
         }
@@ -521,7 +528,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     [mid, sid, session, assistant, follow],
   );
 
-  const onSend = async (out: Outgoing): Promise<boolean> => {
+  const onSend = async (out: Outgoing, fromBox?: boolean): Promise<boolean> => {
     // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
     if (assistant && out.images.length && getFeedState().routes[sid]) {
       toast(t("chat-chatview.route_no_images"), "error");
@@ -535,7 +542,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         return false;
       }
     }
-    return deliver(out, uuid());
+    return deliver(out, uuid(), undefined, fromBox);
   };
   // The assistant's tasks (docs/unified-entry.md): the conversation's feed, and the main one's 今天 card.
   const mainConversation = useStore((s) => s.assistant?.main);
@@ -586,6 +593,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const gate = useReadinessGate(isMain && !readOnly);
   blockedRef.current = gate.blocked;
   const failure = sendFailure?.chat === `${mid}/${sid}` ? sendFailure.failure : null;
+  const failedFromBox = Boolean(failure && sendFailure?.fromBox);
   // the hub's word on the last turn's model error, for its card (5.2 turn_error_code)
   const turnFix = assistant ? turnErrorFix(session?.turn_error_code) : null;
   const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
@@ -961,7 +969,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           onDismissKeyboard={() => composerBox.current?.querySelector("textarea")?.blur()}
         />
         {assistant && session && <CompactionStrip session={session} />}
-        {failure ? <FailureCard failure={failure} onClose={() => setSendFailure(null)} onHelp={gate.help} onConfirm={gate.confirm} /> : <ReadinessCard gate={gate} />}
+        {failure ? <FailureCard failure={failure} onClose={() => setSendFailure(null)} onHelp={gate.help} onConfirm={gate.confirm} onRetry={failedFromBox && sessionCan(session, "send") && !gate.blocked ? () => resend.current?.() : undefined} /> : <ReadinessCard gate={gate} />}
         <ChatOnlyNote gate={gate} />
         {gate.dialog}
         {session && !assistant && <AttentionNote session={session} />}
@@ -983,6 +991,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           working={state === "working"}
           needsYou={state === "needs_you"}
           onSend={onSend}
+          resendRef={resend}
+          onEdit={failedFromBox ? () => setSendFailure(null) : undefined}
           disabled={!sessionCan(session, "send")}
           // Persona's conversations too, the main one included (#1467): the node stops their turn like an agent's
           onStop={sessionCan(session, "interrupt") ? interrupt : undefined}
