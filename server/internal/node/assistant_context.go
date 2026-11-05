@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -70,15 +71,24 @@ func contextDelta(seen map[string]string, snapshot string) (string, map[string]s
 	return prompts.RenderTurnContext(prompts.TurnContext{Full: seen == nil, Sections: out}), next
 }
 
-// turnContext is the <jarvis-context> block for conversation id's next message from snapshot (assistantContext);
-// commit records it as seen once the message is on its way.
-func (n *Node) turnContext(id, snap string) (block string, commit func()) {
+// turnContext is the context for conversation id's next message from the hub's answer (assistantContext): the
+// <jarvis-context> block, then the <persona-view-errors> one when its last replies drew rich views that failed their
+// check. commit, called once the message is on its way, records the snapshot as seen and acks the view errors (the
+// hub keeps them until then: a message that fails to go out leaves them for the next one).
+func (n *Node) turnContext(id string, c contextAnswer) (block string, commit func()) {
 	n.mu.Lock()
 	seen := n.ctxSent[id]
 	n.mu.Unlock()
-	block, next := contextDelta(seen, snap)
+	block, next := contextDelta(seen, c.Text)
+	snapshot := block != ""
+	if c.ViewErrors != "" {
+		block = strings.TrimSpace(block + "\n" + c.ViewErrors)
+	}
 	return block, func() {
-		if block == "" {
+		if len(c.Receipts) > 0 {
+			n.ackViewErrors(id, c.Receipts)
+		}
+		if !snapshot {
 			return
 		}
 		n.mu.Lock()
@@ -128,20 +138,41 @@ func (n *Node) toolsAtStart(id string, tools []string) {
 	n.logger.Printf("assistant %s: tools changed since its last start (+%v -%v): its prompt cache starts over", short(id), added, gone)
 }
 
-// assistantContext asks the hub for the live snapshot (prompts.AssistantContext). The hub answers from what it read
-// lately and waits only briefly for a new read, so this doesn't hold the message up.
-func (n *Node) assistantContext(id string) string {
+// contextAnswer is the hub's assistant.context answer (assistantwire.ContextResult).
+type contextAnswer struct {
+	Text       string          `json:"text"`
+	ViewErrors string          `json:"view_errors"`
+	Receipts   json.RawMessage `json:"view_error_receipts"`
+}
+
+// assistantContext asks the hub for the live snapshot (prompts.AssistantContext) and the view errors to report. The
+// hub answers from what it read lately and waits only briefly for a new read, so this doesn't hold the message up.
+func (n *Node) assistantContext(id string) contextAnswer {
 	if n.peer == nil {
-		return ""
+		return contextAnswer{}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	var res struct {
-		Text string `json:"text"`
-	}
+	var res contextAnswer
 	if err := n.peer.Call(ctx, "assistant.context", map[string]any{"session_id": id}, &res); err != nil {
 		n.logger.Printf("assistant context: %v", err)
-		return ""
+		return contextAnswer{}
 	}
-	return res.Text
+	if string(res.Receipts) == "null" {
+		res.Receipts = nil
+	}
+	return res
+}
+
+// ackViewErrors tells the hub the message carrying the view errors of receipts was delivered. The hub scopes it to
+// this machine; a lost ack only means they are told again with the next message.
+func (n *Node) ackViewErrors(id string, receipts json.RawMessage) {
+	if n.peer == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := n.peer.Call(ctx, "assistant.context", map[string]any{"session_id": id, "ack": receipts}, nil); err != nil {
+		n.logger.Printf("assistant view errors ack: %v", err)
+	}
 }

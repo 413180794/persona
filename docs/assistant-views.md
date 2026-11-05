@@ -126,7 +126,19 @@ Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返
 
 摘要、通知、任务回执和标题中的 persona-view 替换成 fallback，替换在裁剪之前完成；半截或坏 JSON 不打印原始代码。缺 fallback 的历史块可以保留旧只读渲染兼容，新工具和新协议必须校验精确的 `fallback` 字段名。
 
-正文诊断按机器／对话／item 持久化，同一错误重放不重复报告，修正后不再等待反馈。诊断存储和助手专用 Stop 已实现；下一轮 `<persona-view-errors>` 注入仍在 #2020，不能把落库写成助手已经收到下一轮反馈。
+正文诊断按机器／对话／item 持久化，同一错误重放不重复报告，修正后不再等待反馈。诊断存储和助手专用 Stop 已实现。
+
+### 下一轮反馈
+
+Stop hook 只管 Claude 当轮；Codex、runtime 和 Stop 没拦下的 Claude 回复，诊断随下一条消息走（`assistant/context_view_errors.go`、`node/assistant_context.go`）：
+
+- **放在哪**：`<persona-view-errors>` 接在这条消息的 `<jarvis-context>` 后面，是消息内容，不进系统提示（不破坏前缀缓存）。模板 `prompts/assistant/view_errors.md` 写明它是校验反馈，不是用户的新要求、授权或确认，不为修卡片重做已执行的操作，卡片与当前话题无关就不重画。
+- **读不消费**：`assistant.context` 只读（`PeekAssistantViewErrors`），返回 `view_errors` 和每条回复的收据 `{item_id, digest}`。node 在消息真正送出后（Claude 写入 stdin 且进程已启动、Codex `turn/start` / `turn/steer` 成功、runtime `session.send` 成功）才调 turnContext 的 commit，再发 `assistant.context{session_id, ack}` 确认。发送失败、调试读取、重复读取都不标已反馈；确认丢了只会让下一条再说一次。
+- **旧收据不吃新错误**：确认只标 item 和 digest（`sha256(errors::text)`）都对得上的行；读完之后同一回复的错误变了，旧收据什么也不标，伪造的 digest 同理。
+- **可信隔离**：机器取自连接（hub 的 `machine.go`、助手进程的 `NodeAnswer`），node 传来的 `machine_id` 一律忽略；按对话 + 机器读和确认。`persona_view` 关闭时不读、不确认（开着时拿到的收据，关掉以后再确认也不生效）。
+- **体积**：落库每条回复最多 20 个问题、每个 2000 字；每条消息最多 5 条回复、共 20 个问题，每个问题 300 字，超长时从中间截、保留末尾的原因（整块约 6K 字以内）。一条回复要么整条带上，要么整条留到下一条消息：只有问题全部列出的回复才有收据，所以确认从不会标掉模型没看到的问题；第一条回复总放得下（最多 20 个）。
+- **不回显卡片原文**：引号里的值只保留简单的字段名，链接、HTML、JSON、句子都换成 `"…"`；校验信息里不带引号的页名、动作 id（`pages.<名字>`、`action.<id>`）按卡片 JSON 认出来，不是 40 字以内的简单名字就换成 `…`；65 字以上不带空格的串也换掉；`<` `>` 换成全角，不能闭合标签。这些在落库前就做（落库只留每个问题前 2000 字，先截再洗会留下没闭合的引号），读的时候再做一遍，没闭合的引号一直洗到末尾。
+- **过期**：只有带了完整、校验通过并已注册的卡片的回复才算「改好了」；只提到 persona-view、卡片在示例代码块里、或卡片也坏了的回复都不算。这样一条回复写下的时间记成这段对话（按机器）的通过水位 `assistant_view_error_marks`，只升不降：不晚于水位的未反馈诊断全部清掉，之后才迟到落库的更早回复的诊断也直接记成已处理。各轮登记并发、顺序不定，所以每次写错误行（登记坏的、登记通过、确认）都先锁水位那一行、再碰错误行，同一顺序不会死锁（同一条回复的通过和旧诊断重放曾按相反顺序加锁而死锁）。没有时间戳的重放只清它自己、不动水位；超过 7 天的不再读。都在 Postgres，hub / node 重启后仍在。
 
 ## 提示词与开关
 
@@ -144,8 +156,8 @@ Claude 的助手 Stop hook 用 `last_assistant_message` 校验，首次失败返
 | --- | --- | --- |
 | 设计 | #2017 | 规格已合并；阶段进展与验收继续写回总 issue |
 | schema | #2018 | 基础协议／生成类型／校验已合并；新共享组件仍待小 PR |
-| hub | #2019 | 存储、工具、声明式 reply、正文注册和摘要已实现；expected_version、HTML bridge 接口和 feature（`assistant_views`／`assistant_html_bridge`）在合并中；端到端验收未完成 |
-| 提示词 | #2020 | 专用 Stop、主动组件选择／动作／活卡片提示词和 golden 已实现；下一轮错误反馈与 Codex 验收未完成 |
+| hub | #2019 | 存储、工具、声明式 reply、正文注册和摘要已实现；expected_version、HTML bridge 接口和 feature（`assistant_views`／`assistant_html_bridge`）已合并；端到端验收未完成 |
+| 提示词 | #2020 | 专用 Stop、主动组件选择／动作／活卡片提示词和 golden 已实现；下一轮错误反馈见上「下一轮反馈」（#2634），真实对话和 Codex 端到端验收未完成 |
 | 网页 | #2021 | 复用 ViewBody 接好正文／活卡片的 reply、open、push／pop、确认、expected_version、409 处理和多设备同步（`web/src/lib/assistant-views.ts`、`web/src/ui/AssistantCard.tsx`），实际提交等 hub 发出 `assistant_views`；HTML 只显示文字 fallback：网页还没有通过网络／导航／死循环验收的隔离运行时，不运行 allow-scripts iframe |
 | 安卓 | #2022 | 复用 #1851 组件，动作、活卡片、HTML、三风格深浅色截图 |
 | 管理界面 | #2023 | `persona_view` 开关（hub 侧即时生效、助手提示词在下次准备目录时更新，保留 hub.json 其他配置）、各端支持说明、本地示例预览（HTML 只显示 fallback）已在 `/admin/assistant`；`html_views` 开关等 #2019 的配置字段合并后再接 |

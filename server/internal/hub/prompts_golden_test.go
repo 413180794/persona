@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -267,4 +268,48 @@ func TestTodoDecisionsGolden(t *testing.T) {
 		{N: 1, Question: "先发哪个平台？", Choice: "安卓", Reason: "iOS 审核卡住了", When: "11-04 10:02"},
 		{N: 2, Question: "用哪个迁移号？", Choice: "0311", When: "11-04 11:30", From: "在「发版 Agent」的提问里答的"},
 	}}))
+}
+
+// A node's assistant.context reads and acks the view errors of its own machine only: the hub names the machine from
+// the connection, not from what the node sent (assistant/context_view_errors.go).
+func TestAssistantContextViewErrorsAreTheConnectionsMachine(t *testing.T) {
+	store := testDB(t)
+	ctx := context.Background()
+	h := snapshotHub(t, false)
+	h.store = store
+	h.cfg.Assistant.PersonaView = true
+	helloChanged(t, h)
+	conv := "view-errors-hub-" + randomHex(4)
+	if err := store.RecordAssistantViewErrors(ctx, conv, "server", "item-a", []string{"fallback: include a plain text summary of the card"}, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	ask := func(machine string, params map[string]any) assistantwire.ContextResult {
+		t.Helper()
+		raw, _ := json.Marshal(params)
+		res, err := h.byID[machine].onRequest(ctx, "assistant.context", raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := json.Marshal(res)
+		var out assistantwire.ContextResult
+		if err := json.Unmarshal(b, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	if res := ask("laptop", map[string]any{"session_id": conv, "machine_id": "server"}); res.ViewErrors != "" {
+		t.Fatalf("another machine read them: %q", res.ViewErrors)
+	}
+	res := ask("server", map[string]any{"session_id": conv})
+	if !strings.Contains(res.ViewErrors, "fallback: include") || len(res.Receipts) != 1 {
+		t.Fatalf("%+v", res)
+	}
+	ask("laptop", map[string]any{"session_id": conv, "machine_id": "server", "ack": res.Receipts})
+	if again := ask("server", map[string]any{"session_id": conv}); again.ViewErrors != res.ViewErrors {
+		t.Fatal("another machine's ack consumed them")
+	}
+	ask("server", map[string]any{"session_id": conv, "ack": res.Receipts})
+	if after := ask("server", map[string]any{"session_id": conv}); after.ViewErrors != "" {
+		t.Fatalf("after the ack %q", after.ViewErrors)
+	}
 }

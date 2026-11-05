@@ -70,7 +70,7 @@ func TestAssistantIdleCompaction(t *testing.T) {
 	p := &assistantProc{id: id, agent: "claude", stdin: in}
 	n.procs[id] = p
 	stream := func(lines ...string) { n.readAssistant(p, strings.NewReader(strings.Join(lines, "\n")+"\n")) }
-	_, commit := n.turnContext(id, snapA)
+	_, commit := n.turnContext(id, contextAnswer{Text: snapA})
 	commit()
 
 	stream(`{"type":"stream_event","event":{"type":"message_start","message":{"usage":{"input_tokens":2,"cache_read_input_tokens":180000,"cache_creation_input_tokens":900}}},"parent_tool_use_id":null}`,
@@ -109,7 +109,7 @@ func TestAssistantIdleCompaction(t *testing.T) {
 	if !reap || compact {
 		t.Fatalf("compacted: let go next time (reapable %v), not compacted again (%v)", reap, compact)
 	}
-	if block, _ := n.turnContext(id, snapA); !strings.Contains(block, "实时快照（") {
+	if block, _ := n.turnContext(id, contextAnswer{Text: snapA}); !strings.Contains(block, "实时快照（") {
 		t.Fatalf("after a compaction the whole snapshot again:\n%s", block)
 	}
 }

@@ -82,7 +82,7 @@ func TestInlineViewsUseOnlyTrustedAssistantItems(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	// Source errors are diagnostics, not another executable view; valid content retains its block index.
-	feedback, err := database.TakeAssistantViewErrors(ctx, conversation, "server")
+	feedback, err := database.PeekAssistantViewErrors(ctx, conversation, "server", 5)
 	if err != nil || len(feedback) < 1 {
 		t.Fatalf("feedback %v %v", feedback, err)
 	}

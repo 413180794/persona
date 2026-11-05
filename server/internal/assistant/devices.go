@@ -60,7 +60,8 @@ func (b *BusHub) keepFromSnapshot(s Snapshot) {
 // each message (assistant.context).
 func (s *Service) NodeAnswer(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 	var p struct {
-		SessionID string `json:"session_id"`
+		SessionID string                           `json:"session_id"`
+		Ack       []assistantwire.ViewErrorReceipt `json:"ack"`
 	}
 	switch method {
 	case "assistant.model":
@@ -69,7 +70,8 @@ func (s *Service) NodeAnswer(ctx context.Context, machine, method string, params
 		return out, true, err
 	case "assistant.context":
 		_ = json.Unmarshal(params, &p)
-		return s.Context(ctx, ContextParams{SessionID: p.SessionID}), true, nil
+		// The machine is the connection's, not anything in params.
+		return s.Context(ctx, ContextParams{SessionID: p.SessionID, MachineID: machine, Ack: p.Ack}), true, nil
 	}
 	return nil, false, nil
 }

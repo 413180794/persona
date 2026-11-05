@@ -304,14 +304,29 @@ type SessionRef struct {
 	SessionID string `json:"session_id"`
 }
 
-// ContextParams is assistant.context's params.
+// ContextParams is assistant.context's params. MachineID is the asking node's machine: the hub sets it from the
+// node's connection, never from the node's params. With Ack the call only confirms that a message carrying those
+// view errors (ContextResult.ViewErrors) was delivered, and answers nothing.
 type ContextParams struct {
-	SessionID string `json:"session_id"`
+	SessionID string             `json:"session_id"`
+	MachineID string             `json:"machine_id,omitempty"`
+	Ack       []ViewErrorReceipt `json:"ack,omitempty"`
 }
 
-// ContextResult is assistant.context's answer: the <jarvis-context> text.
+// ContextResult is assistant.context's answer: the <jarvis-context> text, and the <persona-view-errors> block of the
+// conversation's rich views that failed their check and were not reported yet (docs/assistant-views.md「下一轮反馈」).
+// Reading it consumes nothing: the node acks Receipts once the message is delivered.
 type ContextResult struct {
-	Text string `json:"text"`
+	Text       string             `json:"text"`
+	ViewErrors string             `json:"view_errors,omitempty"`
+	Receipts   []ViewErrorReceipt `json:"view_error_receipts,omitempty"`
+}
+
+// ViewErrorReceipt names the reported errors of one reply as they were read: an ack whose digest no longer matches
+// (the errors changed since) confirms nothing.
+type ViewErrorReceipt struct {
+	ItemID string `json:"item_id"`
+	Digest string `json:"digest"`
 }
 
 // Action is manager.action's params (appkit.Action): op answer, with the user's answer (a proto.Resolution).

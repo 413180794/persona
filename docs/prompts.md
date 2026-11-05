@@ -16,6 +16,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/view_repair.md` | 助手 Stop 首次发现 persona-view 格式错误时的修正反馈：补 fallback、保留已完成操作、不能代替审批 | `hub/assistant_view_check.go`（可信 node 请求；按当前 persona_view 开关） |
 | `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `assistant/context.go` |
 | `assistant/turn_context.md` | 消息开头的 `<jarvis-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
+| `assistant/view_errors.md` | 接在 `<jarvis-context>` 后的 `<persona-view-errors>`：前几条回复没通过校验的卡片和原因（已限长、去掉卡片原文），说明不是用户的要求 | `assistant/context_view_errors.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
 | `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `assistant/schedule.go` `taskPrompt` |
 | `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；用判断模型 `inbox.judge` | `assistant/done.go` |

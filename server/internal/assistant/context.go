@@ -14,10 +14,16 @@ import (
 
 // Context is the <jarvis-context> block a message to conversation p.SessionID starts with (the node asks on every
 // message, node/assistant_context.go): who the user is, whether this is the main conversation, and the snapshot.
+// With p.Ack it only confirms the view errors a delivered message carried (context_view_errors.go).
 func (s *Service) Context(ctx context.Context, p ContextParams) ContextResult {
+	if len(p.Ack) > 0 {
+		s.ackViewErrors(ctx, p)
+		return ContextResult{}
+	}
 	text := prompts.RenderAssistantContext(prompts.AssistantContext{Snapshot: s.contextSnapshot(ctx), Owner: s.owner(ctx),
 		Main: s.isMain(ctx, p.SessionID)})
-	return ContextResult{Text: text}
+	errs, receipts := s.viewErrors(ctx, p)
+	return ContextResult{Text: text, ViewErrors: errs, Receipts: receipts}
 }
 
 // contextState is the last snapshot taken for the live context.

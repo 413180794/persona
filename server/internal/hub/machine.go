@@ -522,10 +522,12 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		return m.hub.asst().SendParams(ctx, m.cfg.ID, p.SessionID, map[string]any{})
 	case "assistant.context":
 		var p struct {
-			SessionID string `json:"session_id"`
+			SessionID string                           `json:"session_id"`
+			Ack       []assistantwire.ViewErrorReceipt `json:"ack"`
 		}
 		_ = json.Unmarshal(params, &p)
-		return m.hub.asst().Context(ctx, assistantwire.ContextParams{SessionID: p.SessionID})
+		// The machine is this connection's: a node cannot read or ack another machine's view errors.
+		return m.hub.asst().Context(ctx, assistantwire.ContextParams{SessionID: p.SessionID, MachineID: m.cfg.ID, Ack: p.Ack})
 	}
 	return nil, fmt.Errorf("unknown method %s", method)
 }

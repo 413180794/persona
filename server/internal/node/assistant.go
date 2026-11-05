@@ -329,7 +329,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	// The live snapshot the message starts with, asked for while the process starts (assistant_context.go). A new
 	// Codex conversation has no id yet: it can't be the main one.
-	snapc := make(chan string, 1)
+	snapc := make(chan contextAnswer, 1)
 	go func(id string) { snapc <- n.assistantContext(id) }(id)
 	if id == "" { // a new Codex conversation: the thread's id is Codex's to pick
 		if p, err = n.spawnCodex("", cwd, launcher, false, false, execution); err != nil {

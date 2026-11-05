@@ -30,7 +30,8 @@ type fakeAppServer struct {
 	mu      sync.Mutex
 	got     []codexMessage // requests and notifications from the node
 	replies map[string]codexMessage
-	results map[string]any // method → result
+	results map[string]any    // method → result
+	errors  map[string]string // method → error message, instead of a result
 }
 
 func (f *fakeAppServer) serve(r io.Reader) {
@@ -49,7 +50,12 @@ func (f *fakeAppServer) serve(r io.Reader) {
 		}
 		f.got = append(f.got, m)
 		res, ok := f.results[m.Method]
+		fail, failing := f.errors[m.Method]
 		f.mu.Unlock()
+		if len(m.ID) > 0 && failing {
+			f.push(map[string]any{"id": m.ID, "error": map[string]any{"code": -32000, "message": fail}})
+			continue
+		}
 		if len(m.ID) > 0 {
 			if !ok {
 				res = map[string]any{}
@@ -118,6 +124,8 @@ type fakeHub struct {
 	deltas  []string
 	model   map[string]any    // assistant.model's answer; nil: an older hub without it
 	queried map[string]string // the session id the node asked about, by method
+	context map[string]any    // assistant.context's answer; nil: just a snapshot
+	acks    []json.RawMessage // assistant.context calls that acked view errors
 }
 
 func (h *fakeHub) interactions() []proto.Interaction {
@@ -139,6 +147,19 @@ func withFakeHub(t *testing.T, n *Node) *fakeHub {
 		case "assistant.lark":
 			return proto.AssistantLark{}, nil
 		case "assistant.context":
+			var p struct {
+				Ack json.RawMessage `json:"ack"`
+			}
+			_ = json.Unmarshal(params, &p)
+			fh.mu.Lock()
+			defer fh.mu.Unlock()
+			if len(p.Ack) > 0 {
+				fh.acks = append(fh.acks, p.Ack)
+				return map[string]any{}, nil
+			}
+			if fh.context != nil {
+				return fh.context, nil
+			}
 			return map[string]any{"text": "snapshot"}, nil
 		case "assistant.model":
 			var p struct {
