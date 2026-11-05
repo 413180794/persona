@@ -21,7 +21,8 @@ final class LarkSync {
     /// and decode its latest page, and a busy group changes more often than that (#674).
     static let chatGap: Duration = .seconds(1)
 
-    private var listeners: [UUID: (key: String?, cont: AsyncStream<Void>.Continuation)] = [:]
+    private var listeners: [UUID: (key: String, cont: AsyncStream<Void>.Continuation)] = [:]
+    private var lists: [UUID: AsyncStream<LarkListChange>.Continuation] = [:]
     private var gates: [UUID: LarkChangeGate] = [:]
     /// Conversations from the inbox list: a topic group needs its own kind of page, and only listed ones are fetched.
     private var known: [String: LarkConversation] = [:]
@@ -38,9 +39,9 @@ final class LarkSync {
         fetched = StateCache.load(Self.stateName, as: [String: Date].self) ?? [:]
     }
 
-    /// Fires on every relayed change (`key` nil), or on those touching one conversation (its `LarkConversation.key`,
-    /// at most once per `chatGap`). Bursts collapse into one.
-    func changes(of key: String? = nil) -> AsyncStream<Void> {
+    /// Fires on the changes touching one conversation (its `LarkConversation.key`), at most once per `chatGap`. Bursts
+    /// collapse into one.
+    func changes(of key: String) -> AsyncStream<Void> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont in
             let id = UUID()
             listeners[id] = (key, cont)
@@ -48,6 +49,23 @@ final class LarkSync {
                 LarkSync.shared.listeners[id] = nil
                 LarkSync.shared.gates[id] = nil
             } }
+        }
+    }
+
+    /// What the conversation list heard since it last looked: one change that names every chat the events did, or says
+    /// to read everything again (a reconnect). The list reads page 1 alone for most of them (`refreshHead`).
+    func listChanges() -> AsyncStream<LarkListChange> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont in
+            let id = UUID()
+            lists[id] = cont
+            cont.onTermination = { _ in Task { @MainActor in LarkSync.shared.lists[id] = nil } }
+        }
+    }
+
+    /// One more change for the lists: one the list has not taken yet is folded in, not dropped.
+    private func tellLists(_ change: LarkListChange) {
+        for cont in lists.values {
+            if case .dropped(let unread) = cont.yield(change) { cont.yield(unread.merged(change)) }
         }
     }
 
@@ -65,10 +83,10 @@ final class LarkSync {
     /// The hub's `lark` event: feeds of `account` (nil: the hub's own).
     func received(_ feedIDs: [String], account: Int? = nil) {
         let keys = feedIDs.map { LarkConversation.key($0, account: account) }
-        for (id, l) in listeners {
-            guard let key = l.key else { l.cont.yield(); continue }
-            if keys.contains(key) { tell(id) }
-        }
+        for (id, l) in listeners where keys.contains(l.key) { tell(id) }
+        // An event that names no chat (pins, settings) can change any row.
+        tellLists(feedIDs.isEmpty ? LarkListChange(everything: true)
+                  : LarkListChange(feeds: Set(feedIDs.map { LarkListChange.Feed(id: $0, account: account) })))
         enqueue(keys.filter { known[$0] != nil })
     }
 
@@ -95,7 +113,7 @@ final class LarkSync {
 
     /// The socket came (back) up: whatever happened while away is pulled now.
     func reconnected() {
-        for l in listeners.values where l.key == nil { l.cont.yield() }
+        tellLists(LarkListChange(everything: true))
         Task {
             // A hub without Feishu chats (no lark-connector plugin, `LarkFeatures`) has nothing to pull.
             guard AppModel.shared.larkFeatures.chats, let api = AppModel.shared.api,
@@ -140,4 +158,21 @@ final class LarkSync {
             }
         }
     }
+}
+
+/// The chats relayed events named since the list last looked (`LarkSync.listChanges`).
+nonisolated struct LarkListChange: Equatable, Sendable {
+    struct Feed: Hashable, Sendable {
+        var id: String
+        var account: Int?
+    }
+
+    var feeds: Set<Feed> = []
+    /// Read the whole list again: the socket came back, or an event named no chat.
+    var everything = false
+
+    /// The feed ids of one account's chats (nil: the hub's own).
+    func feeds(of account: Int?) -> Set<String> { Set(feeds.filter { $0.account == account }.map(\.id)) }
+
+    func merged(_ other: Self) -> Self { Self(feeds: feeds.union(other.feeds), everything: everything || other.everything) }
 }

@@ -157,6 +157,55 @@ final class LarkConversationsModel {
         }
     }
 
+    /// Events named these chats (feed ids of this list's account). A new message puts its chat on page 1, so the shelf
+    /// and page 1 alone are read and those chats move up there: two requests, where `refresh` reads every loaded page
+    /// and the status too. The shelf is read every time: an event names a pinned chat for its count and for the shelf's
+    /// own changes alike.
+    /// When page 1 lacks one of them (read elsewhere, done, left: it may have left the window or changed in place in
+    /// it), the whole window is read again (#3006; #530: a refresh of page 1 alone left the older rows' unread counts stale).
+    func refreshHead(_ feeds: Set<String>) async {
+        guard !feeds.isEmpty else { return }
+        guard let owner = accountID, !failed, !current.conversations.isEmpty else { return await refresh() }
+        revision += 1
+        let request = revision
+        while loading || loadingMore {
+            await withCheckedContinuation { pageWaiters.append($0) }
+            guard !Task.isCancelled, request == revision else { return }
+        }
+        guard !Task.isCancelled, request == revision else { return }
+        loading = true
+        var whole = false
+        do {
+            let shelf = try await deps.pinned()
+            try check(request)
+            let page = try await deps.page(nil, owner)
+            try check(request)
+            // Another account signed in: the whole list is read for it (`refresh` clears the old one first).
+            if try Self.owner(shelf) != owner || Self.owner(page) != owner || accountID != owner { whole = true }
+            else if feeds.isSubset(of: page.conversations.map(\.id)) {
+                // Rows past page 1 keep their place, and so does the cursor: a chat that moved up from past the window
+                // comes again on the next page, and `merge` keeps it once.
+                let base = current
+                publish(Snapshot(accountID: owner, conversations: Self.raise(base.conversations, page.conversations),
+                                 pinned: Self.merge([], shelf.conversations), nextCursor: base.nextCursor,
+                                 loadedPages: base.loadedPages))
+                failed = false
+                pageFailed = false
+            } else {
+                whole = true
+            }
+        } catch {
+            if request == revision, !Self.cancelled(error) {
+                handle(error)
+                // An account change cleared the list: read the new account's at once, as `refresh` does.
+                if accountID == nil { whole = true } else { failed = true }
+            }
+        }
+        loading = false
+        wakePageWaiters()
+        if whole, request == revision, !Task.isCancelled { await refresh() }
+    }
+
     func more() async {
         // A refresh landing while the page is on its way drops it. The spinner asking for it keys on the cursor, which
         // the refresh leaves as it was, so it would not ask again: ask here once the refresh is done.
@@ -264,6 +313,13 @@ final class LarkConversationsModel {
 
     private static func cancelled(_ error: Error) -> Bool {
         error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled
+    }
+
+    /// Page 1 on top, then the other rows in their order: a chat page 1 holds leaves its old place.
+    static func raise(_ rows: [LarkConversation], _ head: [LarkConversation]) -> [LarkConversation] {
+        let top = merge([], head)
+        let moved = Set(top.map(\.id))
+        return top + rows.filter { !moved.contains($0.id) }
     }
 
     static func merge(_ existing: [LarkConversation], _ fresh: [LarkConversation]) -> [LarkConversation] {

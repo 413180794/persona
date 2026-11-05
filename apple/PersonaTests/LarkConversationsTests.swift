@@ -374,4 +374,79 @@ import Testing
         #expect(store.conversations.map(\.id) == ["head", "tail"])
         #expect(store.conversations.first?.preview == "version 1")
     }
+
+    /// A window of two pages: page 1 `a b`, page 2 `c d`, then `e` on a third.
+    private func twoPages(_ head: @escaping () -> [LarkConversation], asked: @escaping (String?) -> Void = { _ in },
+                          statuses: @escaping () -> Void = {}) -> LarkConversationsModel {
+        LarkConversationsModel(deps: .init(
+            page: { cursor, _ in
+                asked(cursor)
+                return cursor == nil ? reply(conversations: head(), nextCursor: "2")
+                    : reply(conversations: [chat("c"), chat("d")], nextCursor: "3")
+            }, pinned: { reply(conversations: []) },
+            status: { statuses(); return .init(configured: true, connected: true) }, cached: { nil }, save: { _ in }))
+    }
+
+    /// A new message in a chat of page 2: page 1 alone is read, the chat moves up, the window and its cursor stay.
+    @Test func anEventReadsPageOneAndMovesItsChatUp() async {
+        var head = [chat("a"), chat("b")]
+        var asked: [String?] = []
+        var statuses = 0
+        let store = twoPages({ head }, asked: { asked.append($0) }, statuses: { statuses += 1 })
+        await store.refresh(); await store.more()
+        #expect(store.conversations.map(\.id) == ["a", "b", "c", "d"])
+        head = [chat("d", "new"), chat("a")]
+        asked = []; statuses = 0
+        await store.refreshHead(["d"])
+        #expect(asked == [nil])
+        #expect(statuses == 0)
+        #expect(store.conversations.map(\.id) == ["d", "a", "b", "c"])
+        #expect(store.conversations.first?.preview == "new")
+        #expect(store.nextCursor == "3")
+    }
+
+    /// A chat named that page 1 does not hold (read elsewhere, done) may have changed in place: the whole window again.
+    @Test func anEventPageOneCannotAnswerReadsTheWindowAgain() async {
+        var asked: [String?] = []
+        let store = twoPages({ [chat("a"), chat("b")] }, asked: { asked.append($0) })
+        await store.refresh(); await store.more()
+        asked = []
+        await store.refreshHead(["c"])
+        #expect(asked == [nil, nil, "2"])
+        #expect(store.conversations.map(\.id) == ["a", "b", "c", "d"])
+    }
+
+    /// Another account's events name no chat of this list: nothing is read.
+    @Test func noChatOfThisAccountReadsNothing() async {
+        var asked = 0
+        let store = twoPages({ [chat("a")] }, asked: { _ in asked += 1 })
+        await store.refresh()
+        asked = 0
+        let change = LarkListChange(feeds: [.init(id: "a", account: 2)])
+        await store.refreshHead(change.feeds(of: nil))
+        #expect(asked == 0)
+        #expect(change.feeds(of: 2) == ["a"])
+    }
+
+    /// Changes the list has not taken yet fold into one; a reconnect among them reads everything.
+    @Test func changesFoldTogether() {
+        let one = LarkListChange(feeds: [.init(id: "a", account: nil)])
+        let two = LarkListChange(feeds: [.init(id: "b", account: nil)])
+        #expect(one.merged(two).feeds(of: nil) == ["a", "b"])
+        #expect(!one.merged(two).everything)
+        #expect(one.merged(LarkListChange(everything: true)).everything)
+    }
+
+    /// A pinned chat's count, or the shelf itself, changes on an event too: the shelf comes with page 1.
+    @Test func anEventReadsTheShelfWithPageOne() async {
+        var unread = 0
+        let store = LarkConversationsModel(deps: .init(
+            page: { _, _ in reply(conversations: [chat("a"), chat("p")]) },
+            pinned: { reply(conversations: [LarkConversation(id: "p", name: "p", isGroup: true, unread: unread)]) },
+            status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in }))
+        await store.refresh()
+        unread = 8
+        await store.refreshHead(["p"])
+        #expect(store.pinned.first?.unread == 8)
+    }
 }

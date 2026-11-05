@@ -44,8 +44,8 @@ private struct LarkConversationsPage: View {
 
     /// A search reads on through this many pages by itself, then asks before going further back (#2823).
     private static let searchPageLimit = 8
-    /// At least this long between two refreshes of the list: each one reads every loaded page again, and a busy account
-    /// sends an event for every message (#2823).
+    /// At least this long between two refreshes of the list: a busy account sends an event for every message (#2823),
+    /// and one that page 1 cannot answer reads every loaded page again.
     private static let refreshGap: Duration = .seconds(1)
     /// The next page is asked for when the row this far from the end comes on screen.
     private static let prefetchRows = 10
@@ -199,15 +199,20 @@ private struct LarkConversationsPage: View {
         .onDisappear { pins.cancelDrag(); store.holdScrolling(false); store.willChange = {} }
         .onChange(of: path.isEmpty, initial: true) { _, root in shell?.feishuAtRoot = root }
         .tabActiveTask(id: model.connection.shown == .online) {
-            let changes = LarkSync.shared.changes()
+            let changes = LarkSync.shared.listChanges()
             async let accounts: Void = choice.load()
             await store.refresh()
             await accounts
-            for await _ in changes {
+            for await change in changes {
                 guard !Task.isCancelled else { return }
-                async let accounts: Void = choice.load()
-                await store.refresh()
-                await accounts
+                if change.everything {
+                    async let accounts: Void = choice.load()
+                    await store.refresh()
+                    await accounts
+                } else {
+                    // Most events are new messages: page 1 alone, of this account's chats only.
+                    await store.refreshHead(change.feeds(of: choice.requestAccount))
+                }
                 // Events that come meanwhile fold into one (the stream keeps the newest), and the next page gets its turn.
                 try? await Task.sleep(for: Self.refreshGap)
             }
