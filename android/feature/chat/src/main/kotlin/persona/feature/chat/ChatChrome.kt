@@ -7,6 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.*
@@ -54,15 +56,15 @@ internal fun ChatHeader(
     // While the hub is out of reach the status line under the title says so (等待网络 / 连接中… / 更新中…) instead of
     // the session's state, which may be stale; it is back the moment the connection is.
     ChatTopBar(
-        title = session?.displayTitle ?: "对话", onBack = onBack,
+        title = session?.displayTitle ?: stringResource(R.string.chat_chrome_title_default), onBack = onBack,
         status = if (linkTitle != null) null else status,
         statusText = linkTitle ?: when (line?.kind) {
-            StatusLineKind.Ended -> if (statusState.replaced) "已换会话" else "已结束"
-            StatusLineKind.MachineOffline -> "电脑离线"
-            StatusLineKind.Submitting -> "回传中"
-            StatusLineKind.Unconfirmed -> "待核对"
-            StatusLineKind.NeedsYou -> "等你处理"
-            StatusLineKind.Stopping -> "中断中"
+            StatusLineKind.Ended -> stringResource(if (statusState.replaced) R.string.chat_chrome_status_replaced else R.string.chat_chrome_status_ended)
+            StatusLineKind.MachineOffline -> stringResource(R.string.chat_chrome_status_machine_offline)
+            StatusLineKind.Submitting -> stringResource(R.string.chat_chrome_status_submitting)
+            StatusLineKind.Unconfirmed -> stringResource(R.string.chat_chrome_status_unconfirmed)
+            StatusLineKind.NeedsYou -> stringResource(R.string.chat_chrome_status_needs_you)
+            StatusLineKind.Stopping -> stringResource(R.string.chat_chrome_status_stopping)
             else -> status.label
         },
         // A session from a Codex app-server, Codex history or an agent runtime names its source first.
@@ -72,83 +74,84 @@ internal fun ChatHeader(
         onTitleClick = onDetails,
     ) {
         actions()
-        JIconButton(PhIcons.DotsThree, "更多操作", { menu = true })
+        JIconButton(PhIcons.DotsThree, stringResource(R.string.chat_chrome_more), { menu = true })
     }
-    if (menu) ChatActionsSheet(title = "会话操作", onDismiss = { menu = false }, actions = buildList {
+    val resumeCopied = stringResource(R.string.chat_chrome_resume_copied)
+    if (menu) ChatActionsSheet(title = stringResource(R.string.chat_chrome_actions_title), onDismiss = { menu = false }, actions = buildList {
         session?.todo?.let { todo ->
-            add(JAction("待办 · ${todo.title}", PhIcons.ListChecks) { onOpenTodo?.invoke(todo.id) })
+            add(JAction(stringResource(R.string.chat_chrome_todo, todo.title), PhIcons.ListChecks) { onOpenTodo?.invoke(todo.id) })
         }
-        onSearch?.let { add(JAction("搜索", PhIcons.MagnifyingGlass, onClick = it)) }
-        onFiles?.let { add(JAction("文件", PhIcons.FolderSimple, onClick = it)) }
+        onSearch?.let { add(JAction(stringResource(R.string.chat_chrome_search), PhIcons.MagnifyingGlass, onClick = it)) }
+        onFiles?.let { add(JAction(stringResource(R.string.chat_chrome_files), PhIcons.FolderSimple, onClick = it)) }
         onGit?.let { add(JAction(gitLabel, onClick = it)) }
-        add(JAction("会话详情", onClick = onDetails))
-        add(JAction("会话信息", PhIcons.Info, enabled = session != null) { dialog = "info" })
+        add(JAction(stringResource(R.string.chat_chrome_details), onClick = onDetails))
+        add(JAction(stringResource(R.string.chat_chrome_info), PhIcons.Info, enabled = session != null) { dialog = "info" })
         // A Codex app-server thread the phone may join live (iOS 实时接入); joined, it can answer its approvals.
         session?.takeIf { it.canAttach }?.let { target ->
-            add(JAction("实时接入", PhIcons.PlugsConnected, enabled = canAct) { state.run(target, ChatAction.Attach) })
+            add(JAction(stringResource(R.string.chat_chrome_attach), PhIcons.PlugsConnected, enabled = canAct) { state.run(target, ChatAction.Attach) })
         }
-        add(JAction("同伴 ${peers.size}", enabled = session != null) { dialog = "peers" })
-        add(JAction("换会话", enabled = session != null) { dialog = "peers" })
-        children.forEach { child -> add(JAction("子 Agent：${child.description?.takeIf(String::isNotBlank) ?: child.type}",
+        add(JAction(pluralStringResource(R.plurals.chat_chrome_peers, peers.size, peers.size), enabled = session != null) { dialog = "peers" })
+        add(JAction(stringResource(R.string.chat_chrome_switch_session), enabled = session != null) { dialog = "peers" })
+        children.forEach { child -> add(JAction(stringResource(R.string.chat_chrome_subagent, child.description?.takeIf(String::isNotBlank) ?: child.type),
             enabled = onOpenSession != null) { onOpenSession?.invoke(SessionKey(session!!.machineId, child.sessionId)) }) }
         if (linkTitle != null) add(JAction(linkTitle) { dialog = "connection" })
-        add(JAction("中断", enabled = canAct && session?.status in listOf("working", "blocked") && session?.canInterrupt != false) {
+        add(JAction(stringResource(R.string.chat_chrome_interrupt), enabled = canAct && session?.status in listOf("working", "blocked") && session?.canInterrupt != false) {
             state.run(session!!, ChatAction.Interrupt)
         })
-        add(JAction("重命名", PhIcons.NotePencil, enabled = canRename) {
+        add(JAction(stringResource(R.string.chat_chrome_rename), PhIcons.NotePencil, enabled = canRename) {
             title = session!!.title; tabName = session.slotName.orEmpty(); dialog = "rename"
         })
-        add(JAction(if (state.muted == true) "开启通知" else "屏蔽通知", enabled = canAct && state.muted != null) {
+        add(JAction(stringResource(if (state.muted == true) R.string.chat_chrome_unmute else R.string.chat_chrome_mute), enabled = canAct && state.muted != null) {
             state.run(session!!, ChatAction.Mute(state.muted != true))
         })
         // Only a session in a terminal resumes there; a Codex thread by its own thread id.
         session?.resumeCommand()?.let { command ->
-            add(JAction("复制恢复命令", enabled = !readOnly) {
-                clipboard.setText(AnnotatedString(command)); state.notice = "已复制恢复命令"
+            add(JAction(stringResource(R.string.chat_chrome_copy_resume), enabled = !readOnly) {
+                clipboard.setText(AnnotatedString(command)); state.notice = resumeCopied
             })
         }
         // Persona's conversations are not agents in a pane, and a session without a terminal has no pane to close.
         if (session?.assistant != true && session?.canTerminal != false)
-            add(JAction("关闭 Agent", destructive = true, enabled = canAct && session?.isLive == true) { dialog = "close" })
+            add(JAction(stringResource(R.string.chat_chrome_close_agent), destructive = true, enabled = canAct && session?.isLive == true) { dialog = "close" })
         // Only one that is not running (core:contracts Session.canDelete); the same words as the Agents list's.
-        if (session?.canDelete == true) add(JAction("删除对话", destructive = true, enabled = canAct) { dialog = "delete" })
+        if (session?.canDelete == true) add(JAction(stringResource(R.string.chat_chrome_delete_chat), destructive = true, enabled = canAct) { dialog = "delete" })
     })
     val feedback = LocalAppFeedback.current
     LaunchedEffect(state.notice) {
         state.notice?.let { if (feedback?.notice(it) == true && state.pending == null) state.notice = null }
     }
     state.notice?.let { notice ->
-        JNotice(notice, actionLabel = if (state.pending != null && session != null) "核对" else "关闭", onAction = {
+        JNotice(notice, actionLabel = stringResource(if (state.pending != null && session != null) R.string.chat_chrome_notice_verify else R.string.chat_chrome_notice_dismiss), onAction = {
             if (state.pending != null && session != null) {
                 if (!state.busy && online) state.run(session, state.pending!!, verify = true)
             } else state.notice = null
         })
     }
     when (dialog) {
-        "rename" -> JDialog(onDismiss = { dialog = null }, title = "重命名",
-            text = "标签名同步到 herdr；会话名用 Claude 的 /rename，Mac 上 claude --resume 也看得到。",
-            confirm = "保存" to { dialog = null; state.rename(session!!, title, tabName) },
+        "rename" -> JDialog(onDismiss = { dialog = null }, title = stringResource(R.string.chat_chrome_rename),
+            text = stringResource(R.string.chat_chrome_rename_text),
+            confirm = stringResource(R.string.chat_chrome_save) to { dialog = null; state.rename(session!!, title, tabName) },
             confirmEnabled = canRename && session?.let { SessionRename.changes(it, title, tabName).changed } == true,
             content = {
                 Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                    if (!session?.paneId.isNullOrBlank()) JTextField(tabName, { tabName = it }, label = "标签名（herdr tab）", singleLine = true)
-                    JTextField(title, { title = it }, label = "会话名", singleLine = true)
+                    if (!session?.paneId.isNullOrBlank()) JTextField(tabName, { tabName = it }, label = stringResource(R.string.chat_chrome_tab_name), singleLine = true)
+                    JTextField(title, { title = it }, label = stringResource(R.string.chat_chrome_session_name), singleLine = true)
                 }
             })
         // The same words as the Agents list's long press and swipe (core:domain closeConfirmation).
         "close" -> session?.let { target ->
             val confirmation = target.closeConfirmation(machine?.displayName)
             JDialog(onDismiss = { dialog = null }, title = confirmation.title, text = confirmation.message,
-                confirm = "关闭 Agent" to { dialog = null; state.run(target, ChatAction.Close) }, destructive = true, confirmEnabled = canAct)
+                confirm = stringResource(R.string.chat_chrome_close_agent) to { dialog = null; state.run(target, ChatAction.Close) }, destructive = true, confirmEnabled = canAct)
         }
         "delete" -> session?.let { target ->
             val confirmation = target.deleteConfirmation(machine?.displayName)
             JDialog(onDismiss = { dialog = null }, title = confirmation.title, text = confirmation.message,
-                confirm = "删除" to { dialog = null; state.run(target, ChatAction.Delete) }, destructive = true, confirmEnabled = canAct)
+                confirm = stringResource(R.string.chat_chrome_delete) to { dialog = null; state.run(target, ChatAction.Delete) }, destructive = true, confirmEnabled = canAct)
         }
         "info" -> session?.let { target -> ChatSessionInfoSheet(target, machine, state, onOpenTodo = onOpenTodo, onDismiss = { dialog = null }) }
-        "peers" -> JSheet(onDismiss = { dialog = null }, title = "同空间的 Agent") {
-            if (peers.isEmpty()) JEmptyState("没有同伴会话", "这个空间暂时没有其他 Agent。")
+        "peers" -> JSheet(onDismiss = { dialog = null }, title = stringResource(R.string.chat_chrome_peers_title)) {
+            if (peers.isEmpty()) JEmptyState(stringResource(R.string.chat_chrome_peers_empty_title), stringResource(R.string.chat_chrome_peers_empty_text))
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 400.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                 items(peers, key = { it.key.path }) { peer ->
                     JRow(peer.displayTitle, subtitle = peer.slotName ?: peer.agentLabel,
@@ -157,12 +160,12 @@ internal fun ChatHeader(
                 }
             }
         }
-        "connection" -> JDialog(onDismiss = { dialog = null }, title = linkTitle ?: "已连接", text = when (connection) {
-            ConnectionState.CertificateMismatch -> "请检查 hub 的证书，并重新扫码配对。"
-            ConnectionState.Revoked -> "请重新扫码配对。"
-            ConnectionState.NeedsLocalNetworkPermission -> "请在系统设置中允许本地网络访问。"
-            else -> "连接恢复后会自动更新对话。当前显示的内容可能尚未同步。"
-        }, confirm = (if (onConnectionDetails != null) "连接诊断" else "知道了") to { dialog = null; onConnectionDetails?.invoke() }, dismiss = null)
+        "connection" -> JDialog(onDismiss = { dialog = null }, title = linkTitle ?: stringResource(R.string.chat_chrome_connected), text = stringResource(when (connection) {
+            ConnectionState.CertificateMismatch -> R.string.chat_chrome_conn_cert
+            ConnectionState.Revoked -> R.string.chat_chrome_conn_revoked
+            ConnectionState.NeedsLocalNetworkPermission -> R.string.chat_chrome_conn_local_network
+            else -> R.string.chat_chrome_conn_other
+        }), confirm = stringResource(if (onConnectionDetails != null) R.string.chat_chrome_conn_details else R.string.chat_chrome_got_it) to { dialog = null; onConnectionDetails?.invoke() }, dismiss = null)
     }
 }
 

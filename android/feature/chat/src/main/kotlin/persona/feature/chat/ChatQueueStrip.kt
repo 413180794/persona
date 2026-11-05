@@ -1,7 +1,10 @@
 package persona.feature.chat
 
 import androidx.compose.runtime.*
+import android.content.res.Resources
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import persona.core.contracts.Session
 import persona.core.contracts.api.ChatActions
@@ -15,7 +18,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /** 「排队中 2 条，Claude 忙完会依次处理」: how many wait, and for whom. */
-internal fun queueTitle(count: Int, agent: String): String = "排队中 $count 条，$agent 忙完会依次处理"
+internal fun queueTitle(count: Int, agent: String, resources: Resources): String =
+    resources.getQuantityString(R.plurals.chat_queue_title, count, count, agent)
 
 /** What to put back when one queued message is pulled out: every other index, in order (an empty list is meaningful). */
 internal fun queueKeep(size: Int, index: Int): List<Int> = (0 until size).filter { it != index }
@@ -39,6 +43,7 @@ internal fun ChatQueueStrip(
     if (session == null || queued.isEmpty()) return
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
+    val resources = LocalResources.current
     var busy by remember { mutableStateOf(false) }
     // The row picked, with its words: if the queue moves under the open menu (the agent took one), the menu closes.
     var picked by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -51,11 +56,11 @@ internal fun ChatQueueStrip(
         scope.launch {
             try {
                 val pulled = service.editQueue(session, queueKeep(queued.size, index))
-                if (delete) onNotice("已从队列删除")
-                else pulled.getOrNull(index)?.let { composer.restoreQueued(it); onNotice("已撤回到输入框，改好再发送") }
-                    ?: onNotice("没找到这一条，队列可能已经变了，请核对后再试")
+                if (delete) onNotice(resources.getString(R.string.chat_queue_deleted))
+                else pulled.getOrNull(index)?.let { composer.restoreQueued(it); onNotice(resources.getString(R.string.chat_queue_restored)) }
+                    ?: onNotice(resources.getString(R.string.chat_queue_not_found))
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { onNotice("没改成：${operationFeedback(e).message}") }
+            catch (e: Exception) { onNotice(resources.getString(R.string.chat_queue_failed, operationFeedback(e).message)) }
             finally {
                 // Stay busy until the queue on screen is the new one, so a stale row cannot be picked.
                 try { refresh() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
@@ -63,12 +68,12 @@ internal fun ChatQueueStrip(
             }
         }
     }
-    QueueStrip(queueTitle(queued.size, session.agentLabel), queued.map(::composerMessagePreview),
+    QueueStrip(queueTitle(queued.size, session.agentLabel, resources), queued.map { composerMessagePreview(it) },
         onItem = { index -> queued.getOrNull(index)?.let { picked = index to it } }, busy = busy, enabled = enabled)
     val (index, text) = picked ?: return
     JActionSheet(listOf(
-        JAction("撤回编辑", PhIcons.ArrowUUpLeft, enabled = enabled && !busy) { edit(index, delete = false) },
-        JAction("拷贝", PhIcons.Copy) { clipboard.setText(AnnotatedString(text)); onNotice("已拷贝") },
-        JAction("删除", PhIcons.Trash, destructive = true, enabled = enabled && !busy) { edit(index, delete = true) },
+        JAction(stringResource(R.string.chat_queue_edit), PhIcons.ArrowUUpLeft, enabled = enabled && !busy) { edit(index, delete = false) },
+        JAction(stringResource(R.string.chat_queue_copy), PhIcons.Copy) { clipboard.setText(AnnotatedString(text)); onNotice(resources.getString(R.string.chat_queue_copied)) },
+        JAction(stringResource(R.string.chat_queue_delete), PhIcons.Trash, destructive = true, enabled = enabled && !busy) { edit(index, delete = true) },
     ), onDismiss = { picked = null }, title = composerMessagePreview(text))
 }

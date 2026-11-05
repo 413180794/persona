@@ -15,7 +15,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import android.content.res.Resources
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import persona.core.contracts.Item
 import persona.core.contracts.parseTime
@@ -33,14 +36,13 @@ import persona.core.designsystem.JSheet
 import persona.core.designsystem.JTextButton
 import persona.core.designsystem.PersonaTheme
 import persona.core.designsystem.LocalAppFeedback
+import persona.core.designsystem.LocalizedFormats
 import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.lines.ApiErrorInfo
 import persona.core.domain.lines.ChatLine
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * A model API error as a card (D6, iOS `APIErrorCard`): the reason in words with its status, 临时故障 or 要处理 and
@@ -55,40 +57,42 @@ internal fun ApiErrorLine(line: ChatLine.ApiError) {
     val clipboard = LocalClipboardManager.current
     val feedback = LocalAppFeedback.current
     val palette = PersonaTheme.palette
+    val resources = LocalResources.current
     fun copy(text: String) {
         clipboard.setText(AnnotatedString(text))
-        feedback?.notice("已复制")
+        feedback?.notice(resources.getString(R.string.chat_api_error_copied))
     }
     val retry = actions?.takeIf { it.retryLineId == line.id }?.onRetry
     ErrorCard(
-        info.reason, apiErrorTags(info, line.count), open, { open = !open },
-        action = if (retry != null) ({ JButton("重试", retry, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowClockwise) }) else null,
+        info.reason, apiErrorTags(info, line.count, resources), open, { open = !open },
+        action = if (retry != null) ({ JButton(stringResource(R.string.chat_api_error_retry), retry, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowClockwise) }) else null,
     ) {
-        info.requestId?.let { id -> DetailField("请求 ID", id) { JIconButton(PhIcons.Copy, "复制请求 ID", { copy(id) }) } }
-        info.session?.let { session -> DetailField("Session", session) { JIconButton(PhIcons.Copy, "复制 Session", { copy(session) }) } }
-        apiErrorTime(line.item.item.ts)?.let { DetailField("时间", it, mono = false) }
+        info.requestId?.let { id -> DetailField(stringResource(R.string.chat_api_error_request_id), id) { JIconButton(PhIcons.Copy, stringResource(R.string.chat_api_error_copy_request_id), { copy(id) }) } }
+        info.session?.let { session -> DetailField("Session", session) { JIconButton(PhIcons.Copy, stringResource(R.string.chat_api_error_copy_session), { copy(session) }) } }
+        apiErrorTime(line.item.item.ts, resources)?.let { DetailField(stringResource(R.string.chat_api_error_time), it, mono = false) }
         SelectionContainer {
             Text(info.raw, style = PersonaTheme.type.code, color = palette.ink,
                 modifier = Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape).background(palette.sunken).padding(Tokens.Space.m))
         }
-        JTextButton("复制原文", { copy(info.raw) }, icon = PhIcons.Copy)
+        JTextButton(stringResource(R.string.chat_api_error_copy_raw), { copy(info.raw) }, icon = PhIcons.Copy)
     }
 }
 
 /** The facts under an error's reason: its status, whether it may pass by itself, how many times in a row. */
-internal fun apiErrorTags(info: ApiErrorInfo, count: Int): List<ErrorTag> = buildList {
+internal fun apiErrorTags(info: ApiErrorInfo, count: Int, resources: Resources): List<ErrorTag> = buildList {
     info.status?.let { add(ErrorTag("$it", ErrorTagTone.Danger)) }
     when (info.transient) {
-        true -> add(ErrorTag("临时故障"))
-        false -> add(ErrorTag("要处理", ErrorTagTone.Caution))
+        true -> add(ErrorTag(resources.getString(R.string.chat_api_error_transient)))
+        false -> add(ErrorTag(resources.getString(R.string.chat_api_error_needs_action), ErrorTagTone.Caution))
         null -> Unit
     }
-    if (count > 1) add(ErrorTag("连续 $count 次"))
+    if (count > 1) add(ErrorTag(resources.getQuantityString(R.plurals.chat_api_error_repeated, count, count)))
 }
 
 /** 「11月2日 08:01:05」 for an item's time, in the phone's zone; null without one. */
-internal fun apiErrorTime(ts: String?, zone: ZoneId = ZoneId.systemDefault()): String? =
-    parseTime(ts)?.let { DateTimeFormatter.ofPattern("M月d日 HH:mm:ss", Locale.ROOT).withZone(zone).format(it) }
+internal fun apiErrorTime(ts: String?, resources: Resources, zone: ZoneId = ZoneId.systemDefault()): String? = parseTime(ts)?.let {
+    LocalizedFormats.format(it, LocalizedFormats.MONTH_DAY + LocalizedFormats.TIME_SECONDS, resources.configuration.locales[0], zone)
+}
 
 /**
  * The card that offers 重试: the conversation's newest line when it is an API error that may pass by itself, the agent
@@ -109,13 +113,14 @@ internal fun RecapLine(items: List<Item>) {
     var open by rememberSaveable(items.first().id) { mutableStateOf(false) }
     val now by rememberNow(60_000)
     val newest = items.last()
-    val label = recapLabel(items.size, parseTime(newest.ts), now)
+    val resources = LocalResources.current
+    val label = recapLabel(items.size, parseTime(newest.ts), now, resources)
     Box(Modifier.fillMaxWidth()) { ChatNoteChip(label, PhIcons.ClockCountdown, onClick = { open = true }) }
-    if (open) JSheet({ open = false }, title = "离开期间回顾", scrollable = true) {
+    if (open) JSheet({ open = false }, title = stringResource(R.string.chat_recap_title), scrollable = true) {
         items.asReversed().forEachIndexed { index, item ->
             if (index > 0) JDivider(Modifier.padding(vertical = Tokens.Space.m))
             parseTime(item.ts)?.let {
-                Text("写于 " + relativeTime(it, now), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                Text(stringResource(R.string.chat_recap_written, relativeTime(it, now, resources)), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                 Spacer(Modifier.height(Tokens.Space.s))
             }
             ChatMarkdown(item.text.orEmpty(), "recap/${item.id}")
@@ -124,5 +129,8 @@ internal fun RecapLine(items: List<Item>) {
 }
 
 /** 「离开期间回顾 · 21 分钟前」, with how many when there are several. */
-internal fun recapLabel(count: Int, newest: Instant?, now: Instant): String =
-    "离开期间回顾" + (if (count > 1) " $count 条" else "") + (newest?.let { " · " + relativeTime(it, now) } ?: "")
+internal fun recapLabel(count: Int, newest: Instant?, now: Instant, resources: Resources): String {
+    val title = if (count > 1) resources.getQuantityString(R.plurals.chat_recap_count, count, count)
+        else resources.getString(R.string.chat_recap_title)
+    return newest?.let { resources.getString(R.string.chat_recap_with_time, title, relativeTime(it, now, resources)) } ?: title
+}

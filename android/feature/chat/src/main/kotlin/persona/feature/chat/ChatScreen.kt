@@ -75,7 +75,8 @@ fun ChatScreen(
             .collectAsStateWithLifecycle()
         val scopedReadingKey = readingKey ?: local?.let { ChatReadingKey(it.scope, sessionKey.path) }
         key(sessionKey, scopedReadingKey) {
-            val pageSender = remember(sender, historyReadOnly) { if (historyReadOnly) ReadOnlyMessageSender(sender) else sender }
+            val readOnlyRefusal = androidx.compose.ui.res.stringResource(R.string.chat_read_only_history)
+            val pageSender = remember(sender, historyReadOnly) { if (historyReadOnly) ReadOnlyMessageSender(sender, readOnlyRefusal) else sender }
             ChatPage(sessionKey, repository, pageSender, interactions, sessions, onBack, onTerminal, chrome, scopedReadingKey, anchorStore ?: local?.anchors,
                 renderStyle, textUpdates,
                 composerService, composerState ?: rememberChatComposerState(), onDraftChanged, onContextCleared, statusBindings,
@@ -327,7 +328,7 @@ private fun ChatPage(
         }
         val draft = composer.draft
         val refs = if (command == null) linkContexts else emptyList()
-        val wireText = command ?: linkMessage(composer.message(), refs)
+        val wireText = command ?: linkMessage(composer.message(), refs, context.resources)
         val id = UUID.randomUUID().toString()
         if (command == null) { submittedDraft = id to draft; submittedContexts = refs }
         if (command == "/clear") clearingPane = session?.paneId
@@ -450,7 +451,7 @@ private fun ChatPage(
             onEdit = { selection, instruction ->
                 if (readOnly || !canSend) notice = "当前对话只读，不能发送修改要求"
                 else {
-                    sender.send(key, ChatLinkContext.editMessage(selection, instruction), selection.id)
+                    sender.send(key, ChatLinkContext.editMessage(selection, instruction, context.resources), selection.id)
                     followEnd()
                 }
             }, onVisibilityChanged = { linkVisible = it; if (it) { fullText = null; statusSheet = false } }) { linkInset ->
@@ -645,9 +646,9 @@ private fun ChatPage(
             val menuTitle = session?.displayTitle ?: "对话"
             MessageMenuSheet(messageMenu, messageMenuWrites(readOnly, session),
                 onQuote = composer::quote, onEdit = composer::edit,
-                onContext = { text -> linkContexts = linkContexts + messageContext(menuTitle, text); notice = "已作为上下文，随下一条消息发送" },
+                onContext = { text -> linkContexts = linkContexts + messageContext(menuTitle, text, context.resources); notice = "已作为上下文，随下一条消息发送" },
                 onHandToPersona = chrome.onHandToPersona?.takeIf { renderStyle != ChatRenderStyle.Assistant }
-                    ?.let { hand -> { text: String -> hand(handoffMessage(menuTitle, text)) } },
+                    ?.let { hand -> { text: String -> hand(handoffMessage(menuTitle, text, context.resources)) } },
                 onNotice = { notice = it })
             viewer?.let { request ->
                 ChatImageViewer(request.images, request.index, onDismiss = { viewer = null },

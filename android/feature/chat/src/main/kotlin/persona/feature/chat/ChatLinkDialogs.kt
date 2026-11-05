@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.designsystem.JDialog
 import persona.core.designsystem.JTextField
@@ -32,7 +34,7 @@ internal fun LinkPickDialog(
     val palette = PersonaTheme.palette
     JDialog(
         onDismiss = { if (!sending) onDismiss() }, title = title,
-        confirm = (if (sending) "发送中" else "发送") to {
+        confirm = stringResource(if (sending) R.string.chat_dialog_sending else R.string.chat_dialog_send) to {
             if (!sending) {
                 sending = true; failed = false
                 scope.launch {
@@ -43,7 +45,7 @@ internal fun LinkPickDialog(
                 }
             }
         },
-        dismiss = "取消" to { if (!sending) onDismiss() },
+        dismiss = stringResource(R.string.chat_dialog_cancel) to { if (!sending) onDismiss() },
         confirmEnabled = !sending,
     ) {
         Text(selection.text.take(120), style = PersonaTheme.type.callout, color = palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
@@ -51,7 +53,7 @@ internal fun LinkPickDialog(
         JTextField(instruction, { instruction = it }, placeholder = placeholder, enabled = !sending, maxLines = 5)
         if (failed) {
             Spacer(Modifier.height(Tokens.Space.s))
-            Text("没有发出去，请再试一次", style = PersonaTheme.type.caption, color = palette.danger.text)
+            Text(stringResource(R.string.chat_dialog_send_failed), style = PersonaTheme.type.caption, color = palette.danger.text)
         }
     }
 }
@@ -62,7 +64,9 @@ internal fun LinkPickDialog(
  * [send], the app's main conversation.
  */
 @Composable
-fun HandToPersonaDialog(selection: ChatLinkContext, onDismiss: () -> Unit, send: suspend (String) -> Unit) =
-    LinkPickDialog("交给 Persona", selection, "要 Persona 做什么？", onDismiss) { instruction ->
-        send(ChatLinkContext.handToPersonaMessage(selection, instruction))
+fun HandToPersonaDialog(selection: ChatLinkContext, onDismiss: () -> Unit, send: suspend (String) -> Unit) {
+    val resources = LocalResources.current
+    LinkPickDialog(stringResource(R.string.chat_dialog_hand_title), selection, stringResource(R.string.chat_dialog_hand_hint), onDismiss) { instruction ->
+        send(ChatLinkContext.handToPersonaMessage(selection, instruction, resources))
     }
+}

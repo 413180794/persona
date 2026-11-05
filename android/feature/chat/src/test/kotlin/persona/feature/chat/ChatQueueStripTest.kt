@@ -1,12 +1,20 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChatQueueStripTest {
+    private val res = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun titleSaysHowManyAndForWhom() {
-        assertEquals("排队中 2 条，Claude 忙完会依次处理", queueTitle(2, "Claude"))
-        assertEquals("排队中 1 条，Codex 忙完会依次处理", queueTitle(1, "Codex"))
+        assertEquals("排队中 2 条，Claude 忙完会依次处理", queueTitle(2, "Claude", res))
+        assertEquals("排队中 1 条，Codex 忙完会依次处理", queueTitle(1, "Codex", res))
     }
 
     @Test fun pullingOneOutKeepsTheRestInOrder() {

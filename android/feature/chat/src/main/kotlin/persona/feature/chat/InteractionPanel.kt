@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
@@ -80,11 +81,11 @@ internal fun InteractionPanel(
     }
     if (full) JSheet(onDismiss = { full = false }, title = request.headline) {
         Column(Modifier.fillMaxHeight().imePadding()) {
-            JTextButton("收起完整页", { full = false })
+            JTextButton(stringResource(R.string.chat_request_collapse_full), { full = false })
             body(true)
         }
     }
-    if (all) JSheet(onDismiss = { all = false }, title = "等你处理的请求") {
+    if (all) JSheet(onDismiss = { all = false }, title = stringResource(R.string.chat_request_list_title)) {
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = maxHeight), contentPadding = PaddingValues(bottom = 16.dp)) {
             itemsIndexed(requests, key = { _, interaction -> interaction.id }) { i, interaction ->
                 JRow(interaction.headline, value = "${i + 1}", onClick = { selected = i; all = false; full = true })
@@ -162,42 +163,42 @@ internal fun InteractionForm(
             "permission" -> {
                 // "Always" is Claude's, or another agent's when its TUI says what it would allow (as on iOS).
                 DecisionButtons(
-                    primary = JAction("允许", enabled = enabled(AnswerAction.Allow)) { act(AnswerAction.Allow) },
-                    secondary = JAction("拒绝", enabled = enabled(AnswerAction.Deny)) { act(AnswerAction.Deny) },
+                    primary = JAction(stringResource(R.string.chat_request_allow), enabled = enabled(AnswerAction.Allow)) { act(AnswerAction.Allow) },
+                    secondary = JAction(stringResource(R.string.chat_request_deny), enabled = enabled(AnswerAction.Deny)) { act(AnswerAction.Deny) },
                     more = if (interaction.offersAlways) listOf(JAction(interaction.alwaysActionLabel,
                         enabled = enabled(AnswerAction.Always)) { act(AnswerAction.Always) }) else emptyList(),
                 )
                 interaction.alwaysLabel?.takeIf { interaction.agentDisplayName != null && it.isNotBlank() }?.let {
-                    Text("总是同意会放行：$it", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                    Text(stringResource(R.string.chat_request_always_allows, it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                 }
             }
             "plan" -> {
                 DecisionButtons(
-                    primary = JAction("批准编辑", enabled = enabled(AnswerAction.ApproveEdits)) { act(AnswerAction.ApproveEdits) },
-                    secondary = JAction("打回", enabled = enabled(AnswerAction.Reject)) { act(AnswerAction.Reject) },
-                    more = listOf(JAction("批准并自动执行", enabled = enabled(AnswerAction.ApproveAll)) { act(AnswerAction.ApproveAll) }),
+                    primary = JAction(stringResource(R.string.chat_plan_approve_edits), enabled = enabled(AnswerAction.ApproveEdits)) { act(AnswerAction.ApproveEdits) },
+                    secondary = JAction(stringResource(R.string.chat_plan_reject), enabled = enabled(AnswerAction.Reject)) { act(AnswerAction.Reject) },
+                    more = listOf(JAction(stringResource(R.string.chat_plan_approve_all), enabled = enabled(AnswerAction.ApproveAll)) { act(AnswerAction.ApproveAll) }),
                 )
-                Text(if (planRead) "等于全部放行：之后的命令和编辑都不再问你" else "完整页读完计划后才能批准并自动执行",
+                Text(stringResource(if (planRead) R.string.chat_plan_approve_all_note else R.string.chat_plan_read_first_note),
                     style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             }
             "question" -> if (question != null) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    JTextButton("上一题", { update(draft.copy(page = draft.page - 1)) }, enabled = draft.page > 0 && editable)
+                    JTextButton(stringResource(R.string.chat_question_previous), { update(draft.copy(page = draft.page - 1)) }, enabled = draft.page > 0 && editable)
                     Text("${draft.page + 1} / ${questions.size}", Modifier.padding(top = Tokens.Space.m))
                     val action = if (draft.page == questions.lastIndex) AnswerAction.Submit else AnswerAction.Advance
-                    JTextButton(if (draft.page == questions.lastIndex) "提交" else "下一题", { act(action) }, enabled = enabled(action))
+                    JTextButton(stringResource(if (draft.page == questions.lastIndex) R.string.chat_question_submit else R.string.chat_question_next), { act(action) }, enabled = enabled(action))
                 }
             }
             "elicitation" -> ElicitationActions(interaction, draft, editable, ::act)
             "screen" -> if (secret) {
-                JButton("提交密码", onClick = { act(AnswerAction.TerminalText, AnswerDraft(text = password)) },
+                JButton(stringResource(R.string.chat_screen_submit_password), onClick = { act(AnswerAction.TerminalText, AnswerDraft(text = password)) },
                     enabled = editable && password.isNotEmpty())
             } else options.forEach { option ->
                 val value = draft.copy(option = option.key)
                 val allowed = option.kind != ScreenOptionKind.Unknown &&
                     AnswerBuilder.build(interaction, AnswerAction.ScreenOption, value, context).allowed
                 // The terminal's "chat about this" hands the question back to the conversation (iOS 改在对话里说).
-                if (option.kind == ScreenOptionKind.Chat) JButton("改在对话里说", { act(AnswerAction.ScreenOption, value) },
+                if (option.kind == ScreenOptionKind.Chat) JButton(stringResource(R.string.chat_screen_chat_instead), { act(AnswerAction.ScreenOption, value) },
                     kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ChatCircle, enabled = allowed)
                 else {
                     val display = AnswerBuilder.display(option.label)
@@ -214,10 +215,10 @@ internal fun InteractionForm(
         blockedReason?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.cautionText) }
         if (uncertain) PendingBadge(PendingStatus.Unconfirmed)
         if (full || readOnly || uncertain || busy) Text(when {
-            readOnly -> "已处理或已撤回，仅查看历史"
-            uncertain -> "请先核对请求或到终端查看"
-            busy -> "正在回传你的选择…"
-            else -> RequestExpiry.label(interaction.expiresAt, now) ?: "等待你的选择"
+            readOnly -> stringResource(R.string.chat_request_read_only)
+            uncertain -> stringResource(R.string.chat_request_uncertain)
+            busy -> stringResource(R.string.chat_request_busy)
+            else -> RequestExpiry.label(interaction.expiresAt, now) ?: stringResource(R.string.chat_request_waiting)
         }, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         Spacer(Modifier.height(Tokens.Space.s))
         when (interaction.kind) {
@@ -229,12 +230,12 @@ internal fun InteractionForm(
                 PermissionRequestSummary(interaction)
                 interaction.toolInput?.let { input ->
                     var showInput by remember(interaction) { mutableStateOf(false) }
-                    JTextButton(if (showInput) "收起完整参数" else "查看完整参数", { showInput = !showInput })
+                    JTextButton(stringResource(if (showInput) R.string.chat_permission_hide_input else R.string.chat_permission_show_input), { showInput = !showInput })
                     if (showInput) JCodeBlock(input.toString())
                 }
                 JTextField(draft.message, { if (it.length <= 4000) update(draft.copy(message = it)) },
-                    label = "拒绝原因（可选）", modifier = Modifier.fillMaxWidth(), enabled = editable)
-                if (draft.message.isNotEmpty()) Text("要允许请先清空原因", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                    label = stringResource(R.string.chat_permission_deny_reason), modifier = Modifier.fillMaxWidth(), enabled = editable)
+                if (draft.message.isNotEmpty()) Text(stringResource(R.string.chat_permission_clear_reason), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             }
             "plan" -> {
                 if (full) ChatMarkdown(interaction.plan.orEmpty())
@@ -242,11 +243,11 @@ internal fun InteractionForm(
                     Column(Modifier.heightIn(max = 140.dp).verticalScroll(rememberScrollState(), enabled = false)) {
                         ChatMarkdown(interaction.plan.orEmpty())
                     }
-                    JTextButton("查看完整计划", onExpand)
+                    JTextButton(stringResource(R.string.chat_plan_show_full), onExpand)
                 }
-                JTextField(draft.feedback, { update(draft.copy(feedback = it)) }, label = "意见（写了就只能打回）",
+                JTextField(draft.feedback, { update(draft.copy(feedback = it)) }, label = stringResource(R.string.chat_plan_feedback),
                     modifier = Modifier.fillMaxWidth(), enabled = editable)
-                if (draft.feedback.isNotEmpty()) Text("要批准请先清空意见", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                if (draft.feedback.isNotEmpty()) Text(stringResource(R.string.chat_plan_clear_feedback), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             }
             "question" -> if (readOnly) {
                 questions.forEach { past ->
@@ -258,7 +259,7 @@ internal fun InteractionForm(
                 }
             } else if (question != null) {
                 // The question's header and 可多选, numbered options: as the terminal shows them (iOS QuestionForm).
-                val tags = listOfNotNull(question.header?.takeIf(String::isNotBlank), "可多选".takeIf { question.multiSelect })
+                val tags = listOfNotNull(question.header?.takeIf(String::isNotBlank), stringResource(R.string.chat_question_multi).takeIf { question.multiSelect })
                 if (tags.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) { tags.forEach { JTag(it) } }
                 ChatLinkText(question.question, style = PersonaTheme.type.body)
                 question.options.forEachIndexed { index, option ->
@@ -271,38 +272,38 @@ internal fun InteractionForm(
                 if (otherOpen || question.question in draft.other) {
                     JTextField(draft.other[question.question].orEmpty(), {
                         update(draft.copy(other = draft.other + (question.question to it), picks = draft.picks - question.question))
-                    }, label = "其他回答", modifier = Modifier.fillMaxWidth(), enabled = editable)
-                } else JTextButton("其他回答…", { otherOpen = true }, enabled = editable)
+                    }, label = stringResource(R.string.chat_question_other), modifier = Modifier.fillMaxWidth(), enabled = editable)
+                } else JTextButton(stringResource(R.string.chat_question_other_open), { otherOpen = true }, enabled = editable)
             }
             "elicitation" -> ElicitationFields(interaction, draft, update, editable)
             "screen" -> if (secret) {
-                Text("终端需要输入密码")
-                JTextField(password, { password = it }, label = "密码",
+                Text(stringResource(R.string.chat_screen_password_needed))
+                JTextField(password, { password = it }, label = stringResource(R.string.chat_screen_password),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
                     singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = editable)
-                Text("密码不会保存；收起面板或离开页面后清空", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                Text(stringResource(R.string.chat_screen_password_note), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             } else {
                 interaction.dialog?.header?.takeIf(String::isNotBlank)?.let { JTag(it) }
                 ChatLinkText(interaction.dialog?.question ?: fallback?.question ?: interaction.headline)
                 val command = interaction.requestCommand(items)
                 if (command != null) {
-                    Text("完整命令", style = PersonaTheme.type.headline)
+                    Text(stringResource(R.string.chat_screen_full_command), style = PersonaTheme.type.headline)
                     JCodeBlock(command.command)
-                    Text("请求 ${command.requestId}，工具调用 ${command.toolUseId}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                    Text(stringResource(R.string.chat_screen_command_ids, command.requestId, command.toolUseId), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                 } else (interaction.dialog?.detail ?: fallback?.detail)?.let { ChatLinkText(it) }
                 options.mapNotNull { it.detail }.forEach { ChatLinkText(it, style = PersonaTheme.type.caption.copy(color = PersonaTheme.palette.ink2)) }
                 if (options.any { it.kind == ScreenOptionKind.TypeSomething }) JTextField(draft.text,
-                    { update(draft.copy(text = it)) }, label = "输入回答", modifier = Modifier.fillMaxWidth(), enabled = editable)
-                if (options.isEmpty()) Text("暂时读不出这个对话框，请在电脑上核对并处理。")
+                    { update(draft.copy(text = it)) }, label = stringResource(R.string.chat_screen_type_answer), modifier = Modifier.fillMaxWidth(), enabled = editable)
+                if (options.isEmpty()) Text(stringResource(R.string.chat_screen_unreadable))
             }
-            else -> Text("暂不支持在手机上处理这个请求，请在电脑上核对并处理。")
+            else -> Text(stringResource(R.string.chat_request_unsupported))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            if (onTerminal != null || showTerminalHelp) JTextButton(if (onTerminal != null) RequestExpiry.terminalLabel else "终端处理说明",
+            if (onTerminal != null || showTerminalHelp) JTextButton(if (onTerminal != null) RequestExpiry.terminalLabel else stringResource(R.string.chat_request_terminal_help),
                 { password = ""; if (onTerminal != null) onTerminal() else terminalHelp = true })
             if (ApprovalPolicy.actions(AnswerEntry.Conversation, interaction.kind, false).any { it.id == ApprovalAction.Dismiss }) {
-                JTextButton("交给电脑处理", { act(AnswerAction.Dismiss) }, enabled = enabled(AnswerAction.Dismiss))
+                JTextButton(stringResource(R.string.chat_request_dismiss), { act(AnswerAction.Dismiss) }, enabled = enabled(AnswerAction.Dismiss))
             }
         }
     }
@@ -330,7 +331,7 @@ internal fun numberedOption(key: String, text: String): String =
 
 @Composable
 internal fun TerminalHelpDialog(onDismiss: () -> Unit) {
-    JDialog(onDismiss = onDismiss, title = "在电脑上处理",
-        text = "请打开这个会话所在电脑的终端，核对当前问题后操作。",
-        confirm = "知道了" to onDismiss, dismiss = null)
+    JDialog(onDismiss = onDismiss, title = stringResource(R.string.chat_terminal_help_title),
+        text = stringResource(R.string.chat_terminal_help_text),
+        confirm = stringResource(R.string.chat_terminal_help_ok) to onDismiss, dismiss = null)
 }

@@ -2,6 +2,7 @@ package persona.feature.chat
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.api.ChatComposerService
@@ -41,18 +43,18 @@ internal const val PHOTO_JPEG_QUALITY = 75
 internal const val PHOTO_MAX_SIDE = 1600
 
 /** Why a file cannot go to the computer at all: over the upload limit. Unknown sizes are counted while staging. */
-internal fun oversizeReason(name: String, size: Long?): String? =
-    if (size != null && size > MAX_COMPOSER_FILE_BYTES) "「$name」超过 200 MB，传不了" else null
+internal fun oversizeReason(name: String, size: Long?, resources: Resources): String? =
+    if (size != null && size > MAX_COMPOSER_FILE_BYTES) resources.getString(R.string.chat_attach_too_large, name) else null
 
 internal fun attachmentName(context: Context, uri: Uri): String =
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
         if (it.moveToFirst()) it.getString(0) else null
-    } ?: "附件"
+    } ?: context.getString(R.string.chat_attach_default_name)
 
 internal fun selectAttachment(context: Context, uri: Uri, image: Boolean): ComposerAttachment {
     val resolver = context.contentResolver
     runCatching { resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-    val name = runCatching { attachmentName(context, uri) }.getOrDefault("附件")
+    val name = runCatching { attachmentName(context, uri) }.getOrDefault(context.getString(R.string.chat_attach_default_name))
     val size = runCatching {
         resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use {
             if (it.moveToFirst() && !it.isNull(0)) it.getLong(0).takeIf { bytes -> bytes >= 0 } else null
@@ -60,9 +62,9 @@ internal fun selectAttachment(context: Context, uri: Uri, image: Boolean): Compo
     }.getOrNull()
     val attachment = ComposerAttachment(UUID.randomUUID().toString(), name, uri.toString(), image, size = size)
     // A file over the limit is refused before anything is copied; retrying could not help, so it can only be removed.
-    if (!image) oversizeReason(name, size)?.let { return attachment.copy(uploadState = DraftUploadState.Invalid, error = it) }
+    if (!image) oversizeReason(name, size, context.resources)?.let { return attachment.copy(uploadState = DraftUploadState.Invalid, error = it) }
     return if (attachmentReadable(context, attachment)) attachment else attachment.copy(
-        uploadState = DraftUploadState.Invalid, error = "附件已失效或无法保留读取权限，请移除后重新选择")
+        uploadState = DraftUploadState.Invalid, error = context.getString(R.string.chat_attach_lost_permission))
 }
 
 /** App-owned camera URIs need no provider grant; external URIs must survive process death. */
@@ -99,11 +101,11 @@ internal fun stageAttachment(context: Context, attachment: ComposerAttachment): 
                         val read = input.read(buffer)
                         if (read < 0) break
                         total += read
-                        if (total > MAX_COMPOSER_FILE_BYTES) throw ComposerOperationException(oversizeReason(attachment.name, total)!!)
+                        if (total > MAX_COMPOSER_FILE_BYTES) throw ComposerOperationException(oversizeReason(attachment.name, total, context.resources)!!)
                         output.write(buffer, 0, read)
                     }
                 }
-            } ?: throw ComposerOperationException("文件无法读取，请重新选择")
+            } ?: throw ComposerOperationException(context.getString(R.string.chat_attach_unreadable))
         }
         return file
     } catch (error: Throwable) { file.delete(); throw error }
@@ -160,7 +162,7 @@ internal fun ComposerAttachmentPreviews(state: ChatComposerState, service: ChatC
                 photos.forEachIndexed { index, photo ->
                     key(photo.id) {
                         // The badge stays while a send is in flight (no flicker); taps are ignored until it finishes.
-                        AttachmentThumb(rememberThumbnail(photo.uri), "照片 ${index + 1}", state = photo.thumbnailState(service),
+                        AttachmentThumb(rememberThumbnail(photo.uri), stringResource(R.string.chat_attach_photo, index + 1), state = photo.thumbnailState(service),
                             onRemove = { if (!sending) remove(photo.id) },
                             onRetry = if (canRetry) ({ retry(photo.id) }) else null)
                     }
@@ -180,15 +182,15 @@ internal fun ComposerAttachmentPreviews(state: ChatComposerState, service: ChatC
                         Text(attachment.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink)
                         Text(attachment.error ?: when {
-                            attachment.path != null -> "已上传，等待发送"
-                            service == null -> "附件服务尚未接入"
-                            else -> "正在上传…"
+                            attachment.path != null -> stringResource(R.string.chat_attach_uploaded)
+                            service == null -> stringResource(R.string.chat_attach_no_service)
+                            else -> stringResource(R.string.chat_attach_uploading)
                         }, color = if (attachment.error != null) PersonaTheme.palette.danger.text else PersonaTheme.palette.ink2,
                             style = PersonaTheme.type.caption)
                     }
                     if (attachment.error != null && attachment.uploadState != DraftUploadState.Invalid)
-                        JTextButton("重试", { retry(attachment.id) }, enabled = canRetry)
-                    JIconButton(PhIcons.X, "移除附件", { remove(attachment.id) }, enabled = !sending)
+                        JTextButton(stringResource(R.string.chat_attach_retry), { retry(attachment.id) }, enabled = canRetry)
+                    JIconButton(PhIcons.X, stringResource(R.string.chat_attach_remove), { remove(attachment.id) }, enabled = !sending)
                 }
             }
         }

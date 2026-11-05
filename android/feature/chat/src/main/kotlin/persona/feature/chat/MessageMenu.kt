@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -18,6 +20,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -90,26 +94,28 @@ internal fun MessageMenuSheet(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val target = menu.target
-    if (target != null) JActionSheet(messageMenuActions(target, writes, onHandToPersona != null) { action ->
+    val resources = LocalResources.current
+    if (target != null) JActionSheet(messageMenuActions(target, writes, onHandToPersona != null, resources) { action ->
         when (action) {
             MessageAction.Copy -> {
                 clipboard.setText(AnnotatedString(target.text))
-                onNotice("已拷贝")
+                onNotice(resources.getString(R.string.chat_menu_copied))
             }
             MessageAction.Select -> { selecting = target.text }
             MessageAction.Quote -> onQuote(target.text)
-            MessageAction.Share -> { if (!shareText(context, target.text)) onNotice("没有能分享的应用") }
+            MessageAction.Share -> { if (!shareText(context, target.text)) onNotice(resources.getString(R.string.chat_menu_no_share)) }
             MessageAction.HandToPersona -> onHandToPersona?.invoke(target.text)
             MessageAction.Context -> onContext(target.text)
             MessageAction.Edit -> onEdit(target.editText)
         }
     }, onDismiss = menu::close)
-    selecting?.let { FullTextReader(it, onDismiss = { selecting = null }, title = "选择文本", plain = true) }
+    selecting?.let { FullTextReader(it, onDismiss = { selecting = null }, title = stringResource(R.string.chat_menu_select_title), plain = true) }
 }
 
 /** What the menu offers, in order. */
-internal enum class MessageAction(val label: String) {
-    Copy("复制"), Select("选择"), Quote("引用"), Share("分享"), HandToPersona("交给 Persona"), Context("作为上下文"), Edit("编辑"),
+internal enum class MessageAction(@StringRes val label: Int) {
+    Copy(R.string.chat_menu_copy), Select(R.string.chat_menu_select), Quote(R.string.chat_menu_quote), Share(R.string.chat_menu_share),
+    HandToPersona(R.string.chat_menu_hand_to_persona), Context(R.string.chat_menu_context), Edit(R.string.chat_menu_edit),
 }
 
 /** The menu's actions for [target]: [writes] for the composer ones, [handOff] when 交给 Persona is offered. */
@@ -123,9 +129,10 @@ internal fun messageActions(target: MessageTarget, writes: Boolean, handOff: Boo
     if (writes && target.user) add(MessageAction.Edit)
 }
 
-private fun messageMenuActions(target: MessageTarget, writes: Boolean, handOff: Boolean, run: (MessageAction) -> Unit): List<JAction> =
+private fun messageMenuActions(target: MessageTarget, writes: Boolean, handOff: Boolean, resources: Resources,
+    run: (MessageAction) -> Unit): List<JAction> =
     messageActions(target, writes, handOff).map { action ->
-        JAction(action.label, when (action) {
+        JAction(resources.getString(action.label), when (action) {
             MessageAction.Copy -> PhIcons.Copy
             MessageAction.Select -> PhIcons.CursorText
             MessageAction.Quote -> PhIcons.Quotes
@@ -164,11 +171,12 @@ internal fun quoted(message: String, draft: String): String {
 }
 
 /** What 「交给 Persona」 sends to the main conversation: the message as context from [title], then the ask. */
-internal fun handoffMessage(title: String, text: String): String =
-    linkMessage("看看这条消息，告诉我该怎么处理。", listOf(ChatLinkContext("context", "$title · 消息", "", text)))
+internal fun handoffMessage(title: String, text: String, resources: Resources): String =
+    linkMessage(resources.getString(R.string.chat_menu_handoff_ask), listOf(messageContext(title, text, resources)), resources)
 
 /** The context 「作为上下文」 adds to the composer: the message, titled by its conversation. */
-internal fun messageContext(title: String, text: String): ChatLinkContext = ChatLinkContext("context", "$title · 消息", "", text)
+internal fun messageContext(title: String, text: String, resources: Resources): ChatLinkContext =
+    ChatLinkContext("context", resources.getString(R.string.chat_menu_context_title, title), "", text)
 
 /** The system share sheet with [text]; false when nothing can share it. */
 internal fun shareText(context: Context, text: String): Boolean {
@@ -176,7 +184,7 @@ internal fun shareText(context: Context, text: String): Boolean {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    val chooser = Intent.createChooser(send, "分享")
+    val chooser = Intent.createChooser(send, context.getString(R.string.chat_menu_share))
     if (context.findActivity() == null) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     return try {
         context.startActivity(chooser)

@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import persona.core.contracts.ListeningPort
@@ -37,24 +38,27 @@ internal fun ChatPortChips(ports: List<ListeningPort>?) {
     val shown = chipPorts(ports)
     if (shown.isEmpty() || LocalChatPorts.current == null) return
     val links = LocalUriHandler.current
+    val openLabel = stringResource(R.string.chat_port_open)
     LazyRow(
         Modifier.fillMaxWidth().padding(vertical = Tokens.Space.xs),
         contentPadding = PaddingValues(horizontal = Tokens.Space.l), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
     ) {
         items(shown, key = { it.port }) { port ->
+            val description = port.title?.let { stringResource(R.string.chat_port_desc_titled, port.port, it) }
+                ?: stringResource(R.string.chat_port_desc, port.port)
             PathChip(portChipLabel(port), PhIcons.GlobeSimple, onClick = { links.openUri("http://localhost:${port.port}/") },
-                modifier = Modifier.semantics { contentDescription = "端口 ${port.port}" + (port.title?.let { "，$it" } ?: "") },
-                onClickLabel = "在 App 里打开这个页面")
+                modifier = Modifier.semantics { contentDescription = description },
+                onClickLabel = openLabel)
         }
     }
 }
 
 /** A link's badge text: `:5173`, with the path when it has one (`:8000/docs`, cut past 24), and what is known of it. */
-internal fun portBadgeLabel(link: PortLink, state: PortPresence.State?): String {
+internal fun portBadgeLabel(link: PortLink, state: PortPresence.State?, stopped: String): String {
     val path = link.path.takeIf { it != "/" }.orEmpty().let { if (it.length > 24) it.take(23) + "…" else it }
     val detail = when (state) {
         is PortPresence.State.Live -> state.title?.takeIf(String::isNotBlank)
-        PortPresence.State.Gone -> "已停止"
+        PortPresence.State.Gone -> stopped
         null -> null
     }
     return ":${link.port}$path" + (detail?.let { " $it" } ?: "")
@@ -73,17 +77,20 @@ internal fun PortBadges(text: String) {
     val presence = ports.presence
     if (presence != null) LaunchedEffect(presence, links, ports.listed) { presence.ask(links.map { it.port }.distinct(), ports.listed) }
     val open = LocalUriHandler.current
+    val openLabel = stringResource(R.string.chat_port_open)
+    val stopped = stringResource(R.string.chat_port_stopped)
     Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.xs).horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         links.forEach { link ->
             val state = presence?.state(link.port, ports.listed) ?: ports.listed[link.port]?.let { PortPresence.State.Live(it) }
             val gone = state == PortPresence.State.Gone
-            PathChip(portBadgeLabel(link, state), PhIcons.GlobeSimple,
+            val description = stringResource(if (gone) R.string.chat_port_desc_gone else R.string.chat_port_desc, link.port)
+            PathChip(portBadgeLabel(link, state, stopped), PhIcons.GlobeSimple,
                 onClick = { open.openUri("${if (link.secure) "https" else "http"}://localhost:${link.port}${link.path}") },
                 modifier = Modifier.alpha(if (gone) GONE_ALPHA else 1f).semantics {
-                    contentDescription = "端口 ${link.port}" + if (gone) "，已经没有在监听" else ""
+                    contentDescription = description
                 },
-                onClickLabel = "在 App 里打开这个页面")
+                onClickLabel = openLabel)
         }
     }
 }

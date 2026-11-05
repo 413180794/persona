@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import persona.core.contracts.Injected
@@ -39,7 +40,7 @@ internal fun InjectedLine(id: String, n: Injected) {
         else -> null
     }
     ChatHint(n.line, icon, tint, onClick, Modifier.testTag("injected-${n.kind}"),
-        onClickLabel = if (todo != null) "打开任务" else "看任务的要求")
+        onClickLabel = stringResource(if (todo != null) R.string.chat_injected_open_task else R.string.chat_injected_view_request))
     if (open) JSheet({ open = false }, title = n.title ?: n.line, scrollable = true) {
         ChatMarkdown(n.detail.orEmpty(), "injected/$id")
     }

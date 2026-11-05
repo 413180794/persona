@@ -1,5 +1,10 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.Session
 import persona.core.contracts.SessionCapabilities
 import persona.core.contracts.SessionInfo
@@ -11,9 +16,12 @@ import org.junit.Test
 import java.time.ZoneId
 
 /** The old App's SessionInfoTest (81dc6928): tokens, rows and what can be copied. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChatSessionInfoTest {
+    private val res = ApplicationProvider.getApplicationContext<Context>().resources
     private val zone = ZoneId.of("Asia/Shanghai")
-    private fun rows(session: Session, info: SessionInfo) = sessionInfoSections(session, info, zone).associate { section ->
+    private fun rows(session: Session, info: SessionInfo) = sessionInfoSections(session, info, zone, resources = res).associate { section ->
         section.title to section.rows.associate { it.label to it.value }
     }
 

@@ -7,6 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import persona.core.chatlist.ChatListState
 import persona.core.chatlist.beginRecordNavigation
 import persona.core.chatlist.scrollToRecord
@@ -38,6 +40,7 @@ internal fun ChatTasks(
     var origin by remember { mutableStateOf<TaskReturnPosition?>(null) }
     var returning by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
+    val resources = LocalResources.current
     val visible = open || target != null || returning
     val visibilityChanged by rememberUpdatedState(onVisibilityChanged)
     LaunchedEffect(visible) { visibilityChanged(visible) }
@@ -50,7 +53,7 @@ internal fun ChatTasks(
                 chatList.setExpanded(saved.expanded)
                 return@LaunchedEffect
             }
-            if (!chatList.scrollToRecord(saved.rowId, saved.offset)) notice = "原来的记录已不在当前列表中"
+            if (!chatList.scrollToRecord(saved.rowId, saved.offset)) notice = resources.getString(R.string.chat_tasks_origin_gone)
             returning = false
             origin = null
         } else {
@@ -59,22 +62,22 @@ internal fun ChatTasks(
             when {
                 destination?.expandFold != null -> {
                     if (destination.expandFold.id in foldErrors) {
-                        notice = "相关记录载入失败，可展开工作过程后重试"
+                        notice = resources.getString(R.string.chat_tasks_load_failed)
                         target = null
                     } else onExpandFold(destination.expandFold)
                 }
                 destination?.rowId != null -> {
-                    if (!chatList.scrollToRecord(destination.rowId)) notice = "相关记录已不在当前列表中"
+                    if (!chatList.scrollToRecord(destination.rowId)) notice = resources.getString(R.string.chat_tasks_record_gone)
                     target = null
                 }
                 destination?.expandGroup != null -> chatList.setExpanded(chatList.position.expanded + destination.expandGroup)
-                else -> { notice = "相关记录已不在当前列表中"; target = null }
+                else -> { notice = resources.getString(R.string.chat_tasks_record_gone); target = null }
             }
         }
     }
     if (showBar && index.progress.isNotEmpty()) TaskProgressBar(index.progress) { open = true }
     if (origin != null) {
-        JTextButton("返回查看任务前的位置", { target = null; returning = true },
+        JTextButton(stringResource(R.string.chat_tasks_return), { target = null; returning = true },
             enabled = !returning, icon = PhIcons.ArrowLeft,
             modifier = Modifier.padding(horizontal = Tokens.Space.m))
     }
@@ -102,26 +105,26 @@ private fun TaskProgressBar(tasks: List<TaskProgressItem>, onClick: () -> Unit) 
     val completed = tasks.count { it.status == TaskProgressStatus.Completed }
     val active = tasks.count { it.status == TaskProgressStatus.InProgress }
     Row(Modifier.fillMaxWidth().padding(horizontal = Tokens.Space.m), verticalAlignment = Alignment.CenterVertically) {
-        JChip("$completed/${tasks.size} 已完成，$active 个进行中", Modifier.weight(1f),
+        JChip(stringResource(R.string.chat_tasks_bar, completed, tasks.size, active), Modifier.weight(1f),
             onClick = onClick, icon = PhIcons.ListChecks)
-        JIconButton(PhIcons.CaretRight, "查看全部任务", onClick)
+        JIconButton(PhIcons.CaretRight, stringResource(R.string.chat_tasks_view_all), onClick)
     }
 }
 
 @Composable
 internal fun TaskProgressPage(tasks: List<TaskProgressItem>, onBack: () -> Unit, onRecord: (TaskProgressItem) -> Unit) {
-    JListPage(title = "任务进度", onBack = onBack) {
+    JListPage(title = stringResource(R.string.chat_tasks_title), onBack = onBack) {
         item {
             val completed = tasks.count { it.status == TaskProgressStatus.Completed }
-            Text("$completed/${tasks.size} 已完成", Modifier.padding(vertical = Tokens.Space.m),
+            Text(stringResource(R.string.chat_tasks_done_count, completed, tasks.size), Modifier.padding(vertical = Tokens.Space.m),
                 style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         }
-        if (tasks.isEmpty()) item { JEmptyState("暂无任务", "已加载的记录里还没有任务清单。") }
+        if (tasks.isEmpty()) item { JEmptyState(stringResource(R.string.chat_tasks_empty_title), stringResource(R.string.chat_tasks_empty_text)) }
         itemsIndexed(tasks, key = { _, task -> task.id }) { index, task ->
             JGroupItem(GroupPosition.of(index, tasks.size)) { TaskProgressRow(task) { onRecord(task) } }
         }
         item {
-            Text("根据已加载的记录整理，可能和电脑上此刻不同", Modifier.padding(vertical = Tokens.Space.m),
+            Text(stringResource(R.string.chat_tasks_note), Modifier.padding(vertical = Tokens.Space.m),
                 style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         }
     }
@@ -135,13 +138,13 @@ private fun TaskProgressRow(task: TaskProgressItem, onRecord: () -> Unit) {
         TaskProgressStatus.Pending -> Status.Idle
         TaskProgressStatus.Unknown -> Status.Unknown
     }
-    val label = when (task.status) {
-        TaskProgressStatus.Pending -> "待开始"
-        TaskProgressStatus.InProgress -> "进行中"
-        TaskProgressStatus.Completed -> "已完成"
-        TaskProgressStatus.Unknown -> "无结果记录"
-    }
+    val label = stringResource(when (task.status) {
+        TaskProgressStatus.Pending -> R.string.chat_tasks_pending
+        TaskProgressStatus.InProgress -> R.string.chat_tasks_in_progress
+        TaskProgressStatus.Completed -> R.string.chat_tasks_completed
+        TaskProgressStatus.Unknown -> R.string.chat_tasks_unknown
+    })
     JRow(task.subject, subtitle = task.description?.takeIf(String::isNotBlank),
         leading = { JStatusMark(status) }, value = label, subtitleLines = Int.MAX_VALUE)
-    JTextButton("查看相关记录", onRecord, Modifier.padding(horizontal = Tokens.Space.s))
+    JTextButton(stringResource(R.string.chat_tasks_view_record), onRecord, Modifier.padding(horizontal = Tokens.Space.s))
 }

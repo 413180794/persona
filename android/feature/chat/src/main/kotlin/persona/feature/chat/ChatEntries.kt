@@ -3,6 +3,7 @@ package persona.feature.chat
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import dagger.hilt.EntryPoint
@@ -77,7 +78,8 @@ class ChatDraftEditor(
         this(bindings.drafts, bindings.coroutineScope, DraftKey.Chat(session), bindings.draftVersions(session))
 
     val composer = MutableStateFlow<ChatComposerState?>(null)
-    val error = MutableStateFlow<String?>(null)
+    /** Why the draft could not be read or saved, as a string resource. */
+    val error = MutableStateFlow<Int?>(null)
     private val changes = Channel<ChatComposerDraft>(Channel.CONFLATED)
     init {
         scope.launch {
@@ -89,7 +91,7 @@ class ChatDraftEditor(
                     sessionVersion = saved.sessionVersion
                 } else ChatComposerState(saved.composerDraft())
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { error.value = "草稿未能读取，输入会暂留在当前页面" }
+            catch (_: Exception) { error.value = R.string.chat_draft_read_failed }
             if (composer.value == null) composer.value = ChatComposerState()
             val versions = sessionVersions?.let { flow -> launch {
                 flow.collect { version ->
@@ -114,7 +116,7 @@ class ChatDraftEditor(
                     saved = repository.save(key, text, previous.version, attachments, version)
                 error.value = null
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { error.value = "草稿未能保存，输入仍在当前页面，请勿退出 App" }
+            catch (_: Exception) { error.value = R.string.chat_draft_save_failed }
             } finally { versions?.cancel() }
         }
     }
@@ -155,7 +157,7 @@ fun ChatDestination(
     val editor = rememberChatDraftEditor(if (historyReadOnly) null else wiring, session)
     val handToPersona = rememberHandToPersona(wiring?.mainSender?.takeIf { style != ChatRenderStyle.Assistant }, navigator)
     val composer by (editor?.composer ?: remember { MutableStateFlow<ChatComposerState?>(null) }).collectAsStateWithLifecycle()
-    val error by (editor?.error ?: remember { MutableStateFlow<String?>(null) }).collectAsStateWithLifecycle()
+    val error by (editor?.error ?: remember { MutableStateFlow<Int?>(null) }).collectAsStateWithLifecycle()
     if (editor != null && composer == null) return
     ChatScreen(session, services.chats(), services.messages(),
         services.interactions(), services.sessions(), onBack = onHistoryBack ?: navigator::back,
@@ -170,6 +172,6 @@ fun ChatDestination(
         historyReadOnly = historyReadOnly, historyFooter = historyFooter,
         composerState = composer, onDraftChanged = editor?.let { it::changed },
         composerService = wiring?.composer.takeUnless { historyReadOnly },
-        statusBindings = ChatStatusBindings(recovery = wiring?.recovery.takeUnless { historyReadOnly }, draftSaveError = error),
+        statusBindings = ChatStatusBindings(recovery = wiring?.recovery.takeUnless { historyReadOnly }, draftSaveError = error?.let { stringResource(it) }),
         onContextCleared = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) })
 }

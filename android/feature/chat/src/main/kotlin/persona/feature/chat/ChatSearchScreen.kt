@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.dp
@@ -42,17 +44,19 @@ internal fun ChatSearchScreen(
         value = withContext(Dispatchers.Default) { searchChat(items, state.query) }
         searching = false
     }
+    val loadFailed = stringResource(R.string.chat_search_load_failed)
     JFullScreen(onClose) {
-        JPage(title = "会话内搜索", onBack = onClose, modifier = Modifier.imePadding(),
+        JPage(title = stringResource(R.string.chat_search_title), onBack = onClose, modifier = Modifier.imePadding(),
             topBar = {
                 Column {
-                    JTopBar("会话内搜索", onBack = onClose)
-                    JSearchField(state.query, { state.query = it }, "搜索已加载的记录",
+                    JTopBar(stringResource(R.string.chat_search_title), onBack = onClose)
+                    JSearchField(state.query, { state.query = it }, stringResource(R.string.chat_search_field),
                         Modifier.padding(horizontal = pagePadding))
-                    Text("${results.hits.size}${if (results.truncated) "+" else ""} 条命中，已加载 $rounds 轮",
+                    Text(pluralStringResource(if (results.truncated) R.plurals.chat_search_hits_more else R.plurals.chat_search_hits,
+                        results.hits.size, results.hits.size, rounds),
                         Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s),
                         style = PersonaTheme.type.caption, color = palette.ink2)
-                    if (results.truncated) Text("只显示前 100 条命中，请缩小搜索范围",
+                    if (results.truncated) Text(stringResource(R.string.chat_search_truncated),
                         Modifier.padding(horizontal = pagePadding), color = palette.ink2, style = PersonaTheme.type.caption)
                     if (searching) JLinearProgress(null)
                 }
@@ -61,28 +65,29 @@ internal fun ChatSearchScreen(
                 JBottomBar { Column(Modifier.fillMaxWidth()) {
                     notice?.let { Text(it, style = PersonaTheme.type.caption, color = palette.ink2) }
                     if (loading) {
-                        Text("正在加载更早的记录，已加载 $pages 页", style = PersonaTheme.type.caption, color = palette.ink2)
-                        JTextButton("停止加载", { pageJob?.cancel(); notice = "已停止，载入的记录已保留" })
-                    } else if (hasOlder) JButton("加载更早的记录并继续搜", onClick = {
+                        Text(pluralStringResource(R.plurals.chat_search_loading, pages, pages), style = PersonaTheme.type.caption, color = palette.ink2)
+                        val stopped = stringResource(R.string.chat_search_stopped)
+                        JTextButton(stringResource(R.string.chat_search_stop), { pageJob?.cancel(); notice = stopped })
+                    } else if (hasOlder) JButton(stringResource(R.string.chat_search_load_more), onClick = {
                         loading = true
                         pages = 0
                         notice = null
                         pageJob = scope.launch {
                             try { notice = loadEarlierForSearch(repository, session) { pages = it } }
                             catch (e: CancellationException) { throw e }
-                            catch (_: Exception) { notice = "更早的记录未能载入，请重试" }
+                            catch (_: Exception) { notice = loadFailed }
                             finally { loading = false }
                         }
                     }, modifier = Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
-                    else Text("已到最早的记录", style = PersonaTheme.type.caption, color = palette.ink2)
+                    else Text(stringResource(R.string.chat_search_at_start), style = PersonaTheme.type.caption, color = palette.ink2)
                 } }
             }) { padding ->
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(
                 start = pagePadding, end = pagePadding, top = padding.calculateTopPadding(),
                 bottom = padding.calculateBottomPadding() + Tokens.Space.m)) {
                 if (!searching && results.hits.isEmpty()) item {
-                    JEmptyState(if (state.query.isBlank()) "输入关键词" else "没有找到匹配记录",
-                        "可搜索正文、思考、工具名、工具输入和输出、系统事件。")
+                    JEmptyState(stringResource(if (state.query.isBlank()) R.string.chat_search_enter else R.string.chat_search_no_match),
+                        stringResource(R.string.chat_search_scope))
                 }
                 results.hits.groupBy { it.category }.forEach { (category, hits) ->
                     item(key = "category-$category") { JSectionHeader(category) }
@@ -99,7 +104,7 @@ internal fun ChatSearchScreen(
                     }
                 }
                 item {
-                    Text("仅搜索已加载的内容；未展开的工作记录和截断的全文不在搜索范围内。",
+                    Text(stringResource(R.string.chat_search_note),
                         Modifier.padding(vertical = Tokens.Space.m), style = PersonaTheme.type.caption, color = palette.ink2)
                 }
             }
@@ -110,7 +115,7 @@ internal fun ChatSearchScreen(
 @Composable
 internal fun ReturnChip(onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = Tokens.Space.m)) {
-        JChip("返回搜索前位置", onClick = onClick, icon = PhIcons.ArrowLeft)
+        JChip(stringResource(R.string.chat_search_return), onClick = onClick, icon = PhIcons.ArrowLeft)
     }
 }
 

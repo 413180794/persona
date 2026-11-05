@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import androidx.annotation.StringRes
 import android.content.Context
 import android.graphics.Rect
 import android.os.Message
@@ -148,7 +149,7 @@ internal class ChatWebViewPool(private val context: Context) {
                 // Another app's link (mailto:, tel:, intent:): only for a tap on a page that is on screen, and only after
                 // asking. Preloaded pages and scripts cannot start apps; this app's own jarvis: links never come from a page.
                 if (ChatLinks.kind(target) == ChatLinkKind.External && request.hasGesture() && view.parent != null) page.onExternal?.invoke(target)
-                else if (request.isForMainFrame) failure = "此链接无法在网页中打开"
+                else if (request.isForMainFrame) failure = view.context.getString(R.string.chat_web_cannot_open)
                 return true
             }
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
@@ -163,10 +164,10 @@ internal class ChatWebViewPool(private val context: Context) {
                 return true
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) failure = "网页未能载入，请重试"
+                if (request.isForMainFrame) failure = view.context.getString(R.string.chat_web_load_failed)
             }
             override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
-                if (request.isForMainFrame) failure = "网页暂时无法访问，请重试"
+                if (request.isForMainFrame) failure = view.context.getString(R.string.chat_web_unreachable)
             }
         }
         webChromeClient = object : WebChromeClient() {
@@ -201,7 +202,9 @@ internal class ChatWebViewPool(private val context: Context) {
 }
 
 /** What text picked on a page can become: in a conversation AI 修改 and 作为上下文, elsewhere 交给 Persona. */
-internal enum class ChatLinkPick(val label: String) { Edit("AI 修改"), Context("作为上下文"), HandToPersona("交给 Persona") }
+internal enum class ChatLinkPick(@StringRes val label: Int) {
+    Edit(R.string.chat_web_pick_edit), Context(R.string.chat_web_pick_context), HandToPersona(R.string.chat_web_pick_hand),
+}
 
 internal class ChatSelectionWebView(context: Context) : WebView(context) {
     /** The items put first in the text selection menu, in this order. */
@@ -229,7 +232,7 @@ internal class ChatSelectionWebView(context: Context) : WebView(context) {
             ChatLinkPick.entries.forEach { menu.removeItem(it.id) }
             if (onPick == null) return changed
             val group = (0 until menu.size()).map { menu.getItem(it) }.minByOrNull { it.order }?.groupId ?: Menu.NONE
-            picks.forEach { menu.add(group, it.id, 0, it.label).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS) }
+            picks.forEach { menu.add(group, it.id, 0, context.getString(it.label)).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS) }
             return true
         }
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {

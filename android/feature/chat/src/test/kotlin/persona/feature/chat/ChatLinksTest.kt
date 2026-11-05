@@ -1,11 +1,19 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.Item
 import java.time.Instant
 import org.junit.Assert.*
 import org.junit.Test
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChatLinksTest {
+    private val res = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun linksStopAtChineseAndUnbalancedPunctuationWithoutRewritingMarkdownCode() {
         val source = "看https://example.com/a_(b)).，再看 https://example.com/x?q=1&v=2!"
         assertEquals(listOf("https://example.com/a_(b)", "https://example.com/x?q=1&v=2"), ChatLinks.matches(source).map { it.url })
@@ -24,19 +32,19 @@ class ChatLinksTest {
         )
         // The text goes as it is: only the closing tag is taken out, so it cannot end the context early.
         assertTrue(ChatLinkContext(title = "t", url = "u", text = "a <b> & c").xml().contains("\na <b> & c\n"))
-        assertEquals("hi", linkMessage("hi", emptyList()))
-        assertEquals(ref.xml() + "\n" + ref.xml() + "\n\nhi", linkMessage("hi", listOf(ref, ref)))
+        assertEquals("hi", linkMessage("hi", emptyList(), res))
+        assertEquals(ref.xml() + "\n" + ref.xml() + "\n\nhi", linkMessage("hi", listOf(ref, ref), res))
         // Only contexts: the line iOS sends with them.
-        assertEquals(ref.xml() + "\n\n参考上面的内容。", linkMessage(" ", listOf(ref)))
-        assertEquals(ref.copy(kind = "edit").xml() + "\n\n按要求修改上面选中的内容：短一点", ChatLinkContext.editMessage(ref, " 短一点 "))
-        assertEquals(ref.copy(kind = "edit").xml() + "\n\n按上面选中的内容修改。", ChatLinkContext.editMessage(ref, ""))
-        assertEquals(ref.xml() + "\n\n看看上面这段。", ChatLinkContext.handToPersonaMessage(ref.copy(kind = "edit"), " "))
-        assertEquals(ref.xml() + "\n\n翻译成英文", ChatLinkContext.handToPersonaMessage(ref, "翻译成英文"))
+        assertEquals(ref.xml() + "\n\n参考上面的内容。", linkMessage(" ", listOf(ref), res))
+        assertEquals(ref.copy(kind = "edit").xml() + "\n\n按要求修改上面选中的内容：短一点", ChatLinkContext.editMessage(ref, " 短一点 ", res))
+        assertEquals(ref.copy(kind = "edit").xml() + "\n\n按上面选中的内容修改。", ChatLinkContext.editMessage(ref, "", res))
+        assertEquals(ref.xml() + "\n\n看看上面这段。", ChatLinkContext.handToPersonaMessage(ref.copy(kind = "edit"), " ", res))
+        assertEquals(ref.xml() + "\n\n翻译成英文", ChatLinkContext.handToPersonaMessage(ref, "翻译成英文", res))
     }
 
     @Test fun contextsReadBackAsIosReadsThem() {
         val ref = ChatLinkContext(title = "标题\"<&", url = "https://example.com/?q=1&v=2", text = "选文 <command>")
-        val (contexts, body) = ChatLinkContext.parse(linkMessage("请解释", listOf(ref, ref.copy(kind = "edit", text = "改这段"))))
+        val (contexts, body) = ChatLinkContext.parse(linkMessage("请解释", listOf(ref, ref.copy(kind = "edit", text = "改这段")), res))
         assertEquals("请解释", body)
         assertEquals(listOf("context", "edit"), contexts.map { it.kind })
         assertEquals(ref.title, contexts[0].title)
@@ -94,9 +102,9 @@ class ChatLinksTest {
     }
 
     @Test fun externalLinksAskFirstAndNeverComeBackIn() {
-        assertEquals(ExternalPrompt("写邮件？", "打开邮件 App，写给 me@example.com。"), ChatLinks.externalPrompt("mailto:me@example.com?subject=hi"))
-        assertEquals(ExternalPrompt("拨打电话？", "打开拨号，号码 +86 10086。"), ChatLinks.externalPrompt("tel:+86%2010086"))
-        assertEquals("用其他 App 打开？", ChatLinks.externalPrompt("intent://x#Intent;scheme=y;end").title)
+        assertEquals(ExternalPrompt("写邮件？", "打开邮件 App，写给 me@example.com。"), ChatLinks.externalPrompt("mailto:me@example.com?subject=hi", res))
+        assertEquals(ExternalPrompt("拨打电话？", "打开拨号，号码 +86 10086。"), ChatLinks.externalPrompt("tel:+86%2010086", res))
+        assertEquals("用其他 App 打开？", ChatLinks.externalPrompt("intent://x#Intent;scheme=y;end", res).title)
         assertTrue(ChatLinks.allowedIntent("https", null, "com.example.jarvis"))
         assertTrue(ChatLinks.allowedIntent(null, "com.example.mail", "com.example.jarvis"))
         assertFalse(ChatLinks.allowedIntent("jarvis", null, "com.example.jarvis"))

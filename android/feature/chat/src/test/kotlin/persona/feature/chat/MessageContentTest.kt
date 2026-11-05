@@ -1,5 +1,10 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import androidx.compose.ui.text.input.TextFieldValue
 import persona.core.contracts.Item
 import persona.core.contracts.api.DraftUploadState
@@ -18,7 +23,10 @@ import org.junit.Test
 import java.time.Instant
 
 /** What a message and a tool step draw (R2, R3): photos, file paths, Codex patches, the running line's time. */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class MessageContentTest {
+    private val res = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun photosSentFromThePhoneAreThumbnailsNotText() {
         val model = messageModel("看这个 [Image #1]\n\n<attached_images>\n/Users/me/a.jpg\n/Users/me/b.jpg\n</attached_images>")
         assertEquals(listOf("/Users/me/a.jpg", "/Users/me/b.jpg"), model.images)
@@ -225,8 +233,8 @@ class MessageContentTest {
     @Test fun aCutTextLosesTheHubsMark() {
         assertEquals("开头", cutText("开头\n…（已截断，共 26000 字节）"))
         assertEquals("完整", cutText("完整"))
-        assertEquals("12 KB", formatBytes(12_345))
-        assertEquals("3.4 MB", formatBytes(3_400_000))
-        assertEquals("999 字节", formatBytes(999))
+        assertEquals("12 KB", formatBytes(12_345, res))
+        assertEquals("3.4 MB", formatBytes(3_400_000, res))
+        assertEquals("999 字节", formatBytes(999, res))
     }
 }

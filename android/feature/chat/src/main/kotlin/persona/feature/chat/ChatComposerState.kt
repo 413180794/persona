@@ -3,6 +3,7 @@ package persona.feature.chat
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import persona.core.contracts.api.*
@@ -44,6 +45,8 @@ internal fun ChatComposerDraft.storedAttachments() = attachments.map {
 class ChatComposerState(initial: ChatComposerDraft = ChatComposerDraft()) {
     var focused by mutableStateOf(false)
     var focusRequest by mutableIntStateOf(0)
+    /** What [message] says for photos sent without words; [ChatComposer] keeps it in the app's language. */
+    var photosOnlyText: String = ""
     var value by mutableStateOf(TextFieldValue(initial.text, TextRange(initial.text.length)))
     var attachments by mutableStateOf(initial.attachments)
     var sessionVersion by mutableStateOf(initial.sessionVersion)
@@ -74,8 +77,8 @@ class ChatComposerState(initial: ChatComposerDraft = ChatComposerDraft()) {
         check(ready)
         val images = attachments.filter { it.image }.mapNotNull { it.path }
         val files = attachments.filterNot { it.image }.mapNotNull { it.path }.map(::quoteComposerPath)
-        // Photos alone still say something to the agent (iOS and the old app send 「请看图片」).
-        val words = if (value.text.isBlank() && files.isEmpty() && images.isNotEmpty()) PHOTOS_ONLY_TEXT else value.text
+        // Photos alone still say something to the agent (iOS and the old app send 「请看图片」), in the app's language.
+        val words = if (value.text.isBlank() && files.isEmpty() && images.isNotEmpty()) photosOnlyText else value.text
         val text = (listOf(words) + files).filter(String::isNotBlank).joinToString(" ")
         return text + if (images.isEmpty()) "" else "\n\n<attached_images>\n${images.joinToString("\n")}\n</attached_images>"
     }
@@ -143,8 +146,11 @@ fun rememberChatComposerState(initial: ChatComposerDraft = ChatComposerDraft()):
 internal fun quoteComposerPath(path: String): String =
     if (path.any { it.isWhitespace() || it in "'\"\\\$`;&|<>()[]{}*?!" }) "'${path.replace("'", "'\\''")}'" else path
 
-/** The words sent with photos when nothing else was typed. */
-internal const val PHOTOS_ONLY_TEXT = "请看图片"
-
 private val composerImageTags = Regex("<attached_images>([\\s\\S]*?)</attached_images>")
-internal fun composerMessagePreview(text: String): String = text.replace(composerImageTags, "[图片]").trim()
+
+/** [text] with its photos as one [photo] mark (「[图片]」). */
+internal fun composerMessagePreview(text: String, photo: String): String = text.replace(composerImageTags, photo).trim()
+
+@Composable
+internal fun composerMessagePreview(text: String): String =
+    composerMessagePreview(text, stringResource(R.string.chat_composer_photo_placeholder))

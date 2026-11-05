@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import android.content.res.Resources
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -8,22 +9,24 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.Item
 import persona.core.contracts.Session
 import persona.core.designsystem.JChip
 import persona.core.designsystem.JTextButton
+import persona.core.designsystem.LocalizedFormats
 import persona.core.designsystem.icons.PhIcons
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** The words the hub adds where it cut a long text for the page (`…（已截断，共 N 字节）`). */
-private const val CUT_MARK = "\n…（已截断"
+private const val CUT_MARK = "\n…（已截断" // i18n-ignore: the hub's cut mark, matched
 
 /** [text] without the hub's cut mark: the part a page carries of a text with `full_size`. */
 internal fun cutText(text: String): String {
@@ -32,22 +35,23 @@ internal fun cutText(text: String): String {
 }
 
 /** 「12 KB」「3.4 MB」: decimal units, like iOS `ByteCountFormatter`. */
-internal fun formatBytes(bytes: Long): String = when {
+internal fun formatBytes(bytes: Long, resources: Resources): String = when {
     bytes >= 1_000_000_000 -> String.format(Locale.ROOT, "%.1f GB", bytes / 1e9)
     bytes >= 1_000_000 -> String.format(Locale.ROOT, "%.1f MB", bytes / 1e6)
     bytes >= 1_000 -> "${bytes / 1000} KB"
-    else -> "$bytes 字节"
+    else -> resources.getQuantityString(R.plurals.chat_bytes, bytes.toInt(), bytes.toInt())
 }
 
-/** 「刚刚」「5 分钟前」「3 小时前」「昨天 17:05」「10月3日」. */
-internal fun relativeTime(time: Instant, now: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
+/** 「刚刚」「5 分钟前」「3 小时前」「昨天 17:05」「10月3日」, in the language of [resources]. */
+internal fun relativeTime(time: Instant, now: Instant, resources: Resources, zone: ZoneId = ZoneId.systemDefault()): String {
     val seconds = Duration.between(time, now).seconds.coerceAtLeast(0)
+    val locale = resources.configuration.locales[0]
     return when {
-        seconds < 60 -> "刚刚"
-        seconds < 3600 -> "${seconds / 60} 分钟前"
-        seconds < 86_400 -> "${seconds / 3600} 小时前"
-        seconds < 2 * 86_400 -> "昨天 " + DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT).withZone(zone).format(time)
-        else -> DateTimeFormatter.ofPattern("M月d日", Locale.ROOT).withZone(zone).format(time)
+        seconds < 60 -> resources.getString(R.string.chat_time_just_now)
+        seconds < 3600 -> (seconds / 60).toInt().let { resources.getQuantityString(R.plurals.chat_time_minutes_ago, it, it) }
+        seconds < 86_400 -> (seconds / 3600).toInt().let { resources.getQuantityString(R.plurals.chat_time_hours_ago, it, it) }
+        seconds < 2 * 86_400 -> resources.getString(R.string.chat_time_yesterday, LocalizedFormats.format(time, LocalizedFormats.TIME, locale, zone))
+        else -> LocalizedFormats.format(time, LocalizedFormats.MONTH_DAY, locale, zone)
     }
 }
 
@@ -71,11 +75,12 @@ internal fun FullTextButton(item: Item, onLoaded: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     var loading by remember(item.id) { mutableStateOf(false) }
     var failed by remember(item.id) { mutableStateOf(false) }
+    val resources = LocalResources.current
     JTextButton(
         when {
-            loading -> "加载中…"
-            failed -> "加载失败，点一下重试"
-            else -> "看全文（${formatBytes(size.toLong())}）"
+            loading -> stringResource(R.string.chat_full_text_loading)
+            failed -> stringResource(R.string.chat_full_text_failed)
+            else -> stringResource(R.string.chat_full_text_open, formatBytes(size.toLong(), resources))
         },
         {
             loading = true

@@ -16,6 +16,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +55,7 @@ fun ChatComposer(
     // Content queued outside the text field (selected page context) also makes the draft sendable.
     extraContent: Boolean = false,
     enabled: Boolean = true,
-    placeholder: String = "输入消息",
+    placeholder: String = stringResource(R.string.chat_composer_placeholder),
     leading: (@Composable RowScope.() -> Unit)? = null,
     accessory: (@Composable ColumnScope.() -> Unit)? = null,
     modeHint: String? = null,
@@ -65,6 +67,9 @@ fun ChatComposer(
     canInterrupt: Boolean = true,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
+    val photosOnly = stringResource(R.string.chat_composer_photos_only)
+    SideEffect { state.photosOnlyText = photosOnly }
     val hasContent = state.hasContent || extraContent
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
@@ -90,7 +95,7 @@ fun ChatComposer(
     fun select(uris: List<Uri>, image: Boolean, capture: Boolean = false) {
         scope.launch {
             val allowed = if (image) (4 - state.attachments.count { it.image }).coerceAtLeast(0) else uris.size
-            if (uris.size > allowed) onNotice("最多添加 4 张照片")
+            if (uris.size > allowed) onNotice(resources.getString(R.string.chat_composer_photo_limit))
             if (capture) withContext(Dispatchers.IO) { uris.drop(allowed).forEach { deleteCapture(context, it.toString()) } }
             for (uri in uris.take(allowed)) {
                 try {
@@ -101,7 +106,7 @@ fun ChatComposer(
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) {
                     if (capture) withContext(Dispatchers.IO) { deleteCapture(context, uri.toString()) }
-                    onNotice("附件无法读取，请重新选择；输入已保留")
+                    onNotice(resources.getString(R.string.chat_composer_attachment_unreadable))
                 }
             }
         }
@@ -123,7 +128,7 @@ fun ChatComposer(
         try { camera.launch(uri) }
         catch (error: Exception) {
             file.delete(); cameraUri = null
-            onNotice(if (error is ActivityNotFoundException) "这台手机上没有能拍照的应用" else "无法打开相机，请稍后再试")
+            onNotice(resources.getString(if (error is ActivityNotFoundException) R.string.chat_composer_no_camera_app else R.string.chat_composer_camera_failed))
         }
     }
     // The app declares CAMERA (pairing scans codes), so Android starts another app's camera for it only once granted.
@@ -137,7 +142,7 @@ fun ChatComposer(
     }
     fun launchPicker(action: () -> Unit) {
         menu = false
-        try { action() } catch (_: Exception) { onNotice("无法打开选择器，请检查是否安装了对应应用") }
+        try { action() } catch (_: Exception) { onNotice(resources.getString(R.string.chat_composer_picker_failed)) }
     }
 
     state.attachments.forEach { attachment ->
@@ -145,7 +150,7 @@ fun ChatComposer(
             LaunchedEffect(attachment.id, attachment.error, service) {
                 if (attachment.uploadState == DraftUploadState.Invalid) return@LaunchedEffect
                 if (!withContext(Dispatchers.IO) { attachmentReadable(context, attachment) }) {
-                    val reason = "附件已失效或读取权限已丢失，请移除后重新选择"
+                    val reason = resources.getString(R.string.chat_composer_attachment_gone)
                     state.attachments = state.attachments.map {
                         if (it.id == attachment.id) it.copy(uploadState = DraftUploadState.Invalid, error = reason) else it
                     }
@@ -176,7 +181,7 @@ fun ChatComposer(
                     }
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) {
-                    val reason = (e as? ComposerOperationException)?.message ?: "上传失败，请重试；输入已保留"
+                    val reason = (e as? ComposerOperationException)?.message ?: resources.getString(R.string.chat_composer_upload_failed)
                     state.attachments = state.attachments.map {
                         if (it.id == attachment.id) it.copy(error = reason, uploadState = DraftUploadState.Failed) else it
                     }
@@ -204,7 +209,7 @@ fun ChatComposer(
 
     ComposerFrame(
         leading = {
-            JIconButton(PhIcons.Plus, "添加附件和快捷指令", { menu = true }, enabled = !sending && enabled)
+            JIconButton(PhIcons.Plus, stringResource(R.string.chat_composer_add), { menu = true }, enabled = !sending && enabled)
             leading?.invoke(this)
         },
         trailing = {
@@ -212,29 +217,29 @@ fun ChatComposer(
             when {
                 hasContent -> SendButton(onClick = onSend, enabled = enabled && state.ready && !sending, loading = sending)
                 working && canInterrupt -> {
-                    dictate?.let { JIconButton(PhIcons.Microphone, "听写", it, enabled = !sending) }
+                    dictate?.let { JIconButton(PhIcons.Microphone, stringResource(R.string.chat_composer_dictate), it, enabled = !sending) }
                     SendButton(onClick = {
                         if (service != null) {
                             interruptPending = true
                             scope.launch {
-                                try { service.interrupt(session); onNotice("已请求中断，排队消息仍会保留") }
+                                try { service.interrupt(session); onNotice(resources.getString(R.string.chat_composer_interrupt_requested)) }
                                 catch (e: CancellationException) { throw e }
-                                catch (_: Exception) { onNotice("中断结果待确认，请查看终端后再操作") }
+                                catch (_: Exception) { onNotice(resources.getString(R.string.chat_composer_interrupt_unknown)) }
                             }
                         }
                     }, enabled = !sending && !interruptPending && service != null, kind = SendKind.Stop)
                 }
-                dictate != null -> JIconButton(PhIcons.Microphone, "听写", dictate, enabled = !sending)
+                dictate != null -> JIconButton(PhIcons.Microphone, stringResource(R.string.chat_composer_dictate), dictate, enabled = !sending)
                 else -> SendButton(onClick = onSend, enabled = false, loading = sending)
             }
         },
         accessory = {
-            if (state.oldVersion) Text("这份草稿来自会话旧版本，请核对后再发送", style = PersonaTheme.type.caption,
+            if (state.oldVersion) Text(stringResource(R.string.chat_composer_old_version), style = PersonaTheme.type.caption,
                 color = PersonaTheme.palette.cautionText)
             ComposerAttachmentPreviews(state, service, sending, enabled)
             accessory?.invoke(this)
             modeHint?.let { JChip(it, icon = PhIcons.SlidersHorizontal) }
-            if (working && hasContent && enabled) Text("会排队发送", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            if (working && hasContent && enabled) Text(stringResource(R.string.chat_composer_will_queue), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             // A draft that is one "/" word: the quick messages it can be, right above the field.
             ComposerSuggestions(quick.map { ComposerSuggestion(it.title, it.extensionName, key = "${it.extension}/${it.id}", flexible = true) },
                 onPick = { picked -> quick.firstOrNull { "${it.extension}/${it.id}" == picked.key }?.let { state.fillQuickPrompt(it) } },
@@ -251,27 +256,27 @@ fun ChatComposer(
             cursorBrush = SolidColor(PersonaTheme.palette.ink),
             decorationBox = { field ->
                 Box {
-                    if (state.value.text.isEmpty()) Text(if (working && enabled) "补充说明（会排队发送）" else placeholder,
+                    if (state.value.text.isEmpty()) Text(if (working && enabled) stringResource(R.string.chat_composer_placeholder_working) else placeholder,
                         style = PersonaTheme.type.body, color = PersonaTheme.palette.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     field()
                 }
             })
     }
-    if (menu) ChatActionsSheet(onDismiss = { menu = false }, title = "附件和快捷指令", actions = buildList {
-        add(JAction("照片", enabled = service != null && state.attachments.count { it.image } < 4) {
+    if (menu) ChatActionsSheet(onDismiss = { menu = false }, title = stringResource(R.string.chat_composer_menu_title), actions = buildList {
+        add(JAction(stringResource(R.string.chat_composer_photos), enabled = service != null && state.attachments.count { it.image } < 4) {
             launchPicker { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
         })
-        add(JAction("拍照", enabled = service != null && state.attachments.count { it.image } < 4) { takePhoto() })
-        add(JAction("文件", enabled = service != null) { launchPicker { files.launch(arrayOf("*/*")) } })
+        add(JAction(stringResource(R.string.chat_composer_take_photo), enabled = service != null && state.attachments.count { it.image } < 4) { takePhoto() })
+        add(JAction(stringResource(R.string.chat_composer_files), enabled = service != null) { launchPicker { files.launch(arrayOf("*/*")) } })
         // Quick messages go out at once; /clear asks first, and only while nothing is running or being cleared.
         extensionPrompts.forEach { prompt -> add(JAction(prompt.title) { menu = false; state.fillQuickPrompt(prompt) }) }
-        SlashCommand.all.forEach { command -> add(JAction(command.title) { menu = false; onCommand(command.text) }) }
-        if (canClear && !working) add(JAction(SlashCommand.clearCommand.title, destructive = true) { menu = false; confirmClear = true })
+        SlashCommand.all(resources).forEach { command -> add(JAction(command.title) { menu = false; onCommand(command.text) }) }
+        if (canClear && !working) add(JAction(SlashCommand.clearCommand(resources).title, destructive = true) { menu = false; confirmClear = true })
     })
-    if (confirmClear) JDialog(onDismiss = { confirmClear = false }, title = "清空上下文？",
-        text = "$agentName 会开一个新会话，这段对话留在历史里；新会话出现后页面会跳过去。手机里没发出的输入会保留。",
-        confirm = "清空" to { confirmClear = false; onCommand(SlashCommand.CLEAR) }, destructive = true)
-    if (cameraDenied) JDialog(onDismiss = { cameraDenied = false }, title = "需要相机权限",
-        text = "拍照要用相机。可以到系统设置 › 应用 › ${appLabel(context)} › 权限里打开相机权限。",
-        confirm = "去设置" to { cameraDenied = false; openAppSettings(context) })
+    if (confirmClear) JDialog(onDismiss = { confirmClear = false }, title = stringResource(R.string.chat_composer_clear_title),
+        text = stringResource(R.string.chat_composer_clear_text, agentName),
+        confirm = stringResource(R.string.chat_composer_clear) to { confirmClear = false; onCommand(SlashCommand.CLEAR) }, destructive = true)
+    if (cameraDenied) JDialog(onDismiss = { cameraDenied = false }, title = stringResource(R.string.chat_composer_camera_title),
+        text = stringResource(R.string.chat_composer_camera_text, appLabel(context)),
+        confirm = stringResource(R.string.chat_composer_open_settings) to { cameraDenied = false; openAppSettings(context) })
 }

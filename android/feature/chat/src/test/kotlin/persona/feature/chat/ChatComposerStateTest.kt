@@ -1,5 +1,10 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import org.junit.Assert.*
@@ -10,7 +15,10 @@ import persona.core.contracts.SessionKey
 import persona.core.contracts.api.*
 import kotlinx.serialization.encodeToString
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChatComposerStateTest {
+    private val res = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun structuredDraftRestoresPendingInvalidAndUploadedFilesAndKeepsOriginalHistory() {
         val version = DraftSessionVersion("original", "pane")
         val draft = ChatComposerDraft("检查附件", listOf(
@@ -58,7 +66,7 @@ class ChatComposerStateTest {
         assertTrue(state.message().endsWith("<attached_images>\n/tmp/photo.jpg\n</attached_images>"))
         val restored = ChatComposerState().apply { editMessage(state.message()) }
         assertEquals(state.message(), restored.message())
-        assertFalse(composerMessagePreview(state.message()).contains("<attached_images>"))
+        assertFalse(composerMessagePreview(state.message(), "[图片]").contains("<attached_images>"))
         val sent = state.draft
         state.insert("补充", false)
         state.clearIfUnchanged(sent)
@@ -71,8 +79,8 @@ class ChatComposerStateTest {
         val photo = ComposerAttachment("photo", "photo.jpg", "content://example.com/photo", true, "/tmp/photo.jpg",
             uploadState = DraftUploadState.Uploaded)
         val tag = "\n\n<attached_images>\n/tmp/photo.jpg\n</attached_images>"
-        assertEquals("请看图片$tag", ChatComposerState(ChatComposerDraft("", listOf(photo))).message())
-        assertEquals("请看图片$tag", ChatComposerState(ChatComposerDraft("  \n", listOf(photo))).message())
+        assertEquals("请看图片$tag", ChatComposerState(ChatComposerDraft("", listOf(photo))).apply { photosOnlyText = "请看图片" }.message())
+        assertEquals("请看图片$tag", ChatComposerState(ChatComposerDraft("  \n", listOf(photo))).apply { photosOnlyText = "请看图片" }.message())
         assertEquals("看这里$tag", ChatComposerState(ChatComposerDraft("看这里", listOf(photo))).message())
         // A file is something to say already; nothing but text is unchanged.
         val file = ComposerAttachment("file", "notes.txt", "content://example.com/file", false, "/tmp/notes.txt",
@@ -80,17 +88,17 @@ class ChatComposerStateTest {
         assertEquals("/tmp/notes.txt$tag", ChatComposerState(ChatComposerDraft("", listOf(file, photo))).message())
         assertEquals("只有字", ChatComposerState(ChatComposerDraft("只有字")).message())
         // Editing it again keeps the same message, words and photo.
-        val sent = ChatComposerState(ChatComposerDraft("", listOf(photo))).message()
+        val sent = ChatComposerState(ChatComposerDraft("", listOf(photo))).apply { photosOnlyText = "请看图片" }.message()
         val restored = ChatComposerState().apply { editMessage(sent) }
         assertEquals("请看图片", restored.value.text)
         assertEquals(sent, restored.message())
     }
 
     @Test fun filesOverTheLimitAreRefusedWhenPicked() {
-        assertEquals("「录屏.mov」超过 200 MB，传不了", oversizeReason("录屏.mov", MAX_COMPOSER_FILE_BYTES + 1))
-        assertNull(oversizeReason("录屏.mov", MAX_COMPOSER_FILE_BYTES))
+        assertEquals("「录屏.mov」超过 200 MB，传不了", oversizeReason("录屏.mov", MAX_COMPOSER_FILE_BYTES + 1, res))
+        assertNull(oversizeReason("录屏.mov", MAX_COMPOSER_FILE_BYTES, res))
         // An unknown size is counted while the file is staged instead.
-        assertNull(oversizeReason("录屏.mov", null))
+        assertNull(oversizeReason("录屏.mov", null, res))
     }
 
     @Test fun thumbnailsCoverTheirSquareWithoutEnlarging() {

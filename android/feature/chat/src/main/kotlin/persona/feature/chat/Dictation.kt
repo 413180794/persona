@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 
@@ -22,11 +23,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 @Composable
 internal fun rememberDictation(onHeard: (String) -> Unit, onError: (String) -> Unit): (() -> Unit)? {
     val context = LocalContext.current
-    val intent = remember {
+    val resources = LocalResources.current
+    val intent = remember(resources) {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-            .putExtra(RecognizerIntent.EXTRA_PROMPT, "说吧，说完会放进输入框")
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, resources.configuration.locales[0].let { if (it.language == "zh") "zh-CN" else it.toLanguageTag() })
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, resources.getString(R.string.chat_dictation_prompt))
     }
     val available = remember(context) { runCatching { intent.resolveActivity(context.packageManager) != null }.getOrDefault(false) }
     val heard by rememberUpdatedState(onHeard)
@@ -36,7 +38,7 @@ internal fun rememberDictation(onHeard: (String) -> Unit, onError: (String) -> U
             ?.firstOrNull()?.trim()?.takeIf(String::isNotEmpty)?.let(heard)
     }
     if (!available) return null
-    return remember(launcher, intent) { { runCatching { launcher.launch(intent) }.onFailure { failed("这台手机上没有语音输入") } } }
+    return remember(launcher, intent) { { runCatching { launcher.launch(intent) }.onFailure { failed(resources.getString(R.string.chat_dictation_unavailable)) } } }
 }
 
 /**

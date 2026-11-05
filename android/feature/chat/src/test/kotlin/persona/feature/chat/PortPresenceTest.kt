@@ -36,8 +36,8 @@ class PortPresenceTest {
     }
 
     @Test fun aBadgeSaysPortPathAndState() {
-        assertEquals(":5173 落地页", portBadgeLabel(PortLink(5173, "/", false), PortPresence.State.Live("落地页")))
-        assertEquals(":8000/docs 已停止", portBadgeLabel(PortLink(8000, "/docs", false), PortPresence.State.Gone))
-        assertEquals(":3000/a/very/long/path/to/so…", portBadgeLabel(PortLink(3000, "/a/very/long/path/to/somewhere", false), null))
+        assertEquals(":5173 落地页", portBadgeLabel(PortLink(5173, "/", false), PortPresence.State.Live("落地页"), "已停止"))
+        assertEquals(":8000/docs 已停止", portBadgeLabel(PortLink(8000, "/docs", false), PortPresence.State.Gone, "已停止"))
+        assertEquals(":3000/a/very/long/path/to/so…", portBadgeLabel(PortLink(3000, "/a/very/long/path/to/somewhere", false), null, "已停止"))
     }
 }

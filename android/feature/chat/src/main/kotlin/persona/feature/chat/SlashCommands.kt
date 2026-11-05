@@ -1,5 +1,9 @@
 package persona.feature.chat
 
+import android.content.res.Resources
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalResources
+
 /** How long the chat waits after /clear for the new session in the same pane before pointing at the list (iOS: 20 s). */
 internal const val CLEAR_WAIT_MILLIS = 20_000L
 
@@ -11,22 +15,29 @@ internal data class SlashCommand(val title: String, val word: String, val detail
     val clear: Boolean get() = word == CLEAR
 
     companion object {
-        val all = listOf(
-            SlashCommand("继续", "/继续", "让它接着做", "继续"),
-            SlashCommand("压缩上下文 /compact", "/compact", "压缩上下文", "/compact"),
-            SlashCommand("查看上下文 /context", "/context", "查看上下文", "/context"),
-            SlashCommand("提交并推送", "/提交", "按规范提交并推送", "把当前改动按规范提交并推送"),
-            SlashCommand("汇报进展", "/汇报", "汇报进展、还剩什么", "简要汇报一下目前的进展、还剩什么"),
+        /** Claude Code's own commands keep their words in every language; the others are Persona's, in the app's language. */
+        fun all(resources: Resources): List<SlashCommand> = listOf(
+            SlashCommand(resources.getString(R.string.chat_slash_continue_title), resources.getString(R.string.chat_slash_continue_word),
+                resources.getString(R.string.chat_slash_continue_detail), resources.getString(R.string.chat_slash_continue_text)),
+            SlashCommand(resources.getString(R.string.chat_slash_compact_title), COMPACT, resources.getString(R.string.chat_slash_compact_detail), COMPACT),
+            SlashCommand(resources.getString(R.string.chat_slash_context_title), CONTEXT, resources.getString(R.string.chat_slash_context_detail), CONTEXT),
+            SlashCommand(resources.getString(R.string.chat_slash_commit_title), resources.getString(R.string.chat_slash_commit_word),
+                resources.getString(R.string.chat_slash_commit_detail), resources.getString(R.string.chat_slash_commit_text)),
+            SlashCommand(resources.getString(R.string.chat_slash_report_title), resources.getString(R.string.chat_slash_report_word),
+                resources.getString(R.string.chat_slash_report_detail), resources.getString(R.string.chat_slash_report_text)),
         )
 
         /** A new Claude session in the same pane, the conversation kept in history: asks first, never a quick message. */
         const val CLEAR = "/clear"
-        val clearCommand = SlashCommand("清空上下文 /clear", CLEAR, "清空上下文，开新会话", CLEAR)
+        private const val COMPACT = "/compact"
+        private const val CONTEXT = "/context"
+        fun clearCommand(resources: Resources) =
+            SlashCommand(resources.getString(R.string.chat_slash_clear_title), CLEAR, resources.getString(R.string.chat_slash_clear_detail), CLEAR)
 
         /** What the "/" list offers for [draft]: everything for a bare "/", else the words starting with it (any case). */
-        fun matching(draft: String, clear: Boolean): List<SlashCommand> {
+        fun matching(draft: String, clear: Boolean, resources: Resources): List<SlashCommand> {
             if (!draft.startsWith("/") || draft.any { it == ' ' || it == '\n' }) return emptyList()
-            val list = all + if (clear) listOf(clearCommand) else emptyList()
+            val list = all(resources) + if (clear) listOf(clearCommand(resources)) else emptyList()
             return list.filter { it.word.startsWith(draft, ignoreCase = true) }
         }
 
@@ -34,7 +45,10 @@ internal data class SlashCommand(val title: String, val word: String, val detail
          * The list the composer shows: [matching], except once the draft is exactly the one quick message it matches
          * (picked, or typed out): there is nothing left to choose. /clear stays, so picking it can still ask first.
          */
-        fun suggestions(draft: String, clear: Boolean): List<SlashCommand> =
-            matching(draft, clear).takeUnless { it.singleOrNull()?.let { only -> !only.clear && only.word.equals(draft, ignoreCase = true) } == true }.orEmpty()
+        fun suggestions(draft: String, clear: Boolean, resources: Resources): List<SlashCommand> =
+            matching(draft, clear, resources).takeUnless { it.singleOrNull()?.let { only -> !only.clear && only.word.equals(draft, ignoreCase = true) } == true }.orEmpty()
+
+        @Composable
+        fun suggestions(draft: String, clear: Boolean): List<SlashCommand> = suggestions(draft, clear, LocalResources.current)
     }
 }

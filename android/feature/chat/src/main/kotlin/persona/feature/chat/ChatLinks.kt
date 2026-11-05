@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import android.content.res.Resources
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.staticCompositionLocalOf
 import persona.core.contracts.Item
@@ -116,16 +117,19 @@ internal object ChatLinks {
     }
 
     /** Asked before mailto: / tel: / another app's link leaves the app. */
-    fun externalPrompt(url: String): ExternalPrompt {
+    fun externalPrompt(url: String, resources: Resources): ExternalPrompt {
         val trimmed = url.trim()
         val scheme = trimmed.substringBefore(':').lowercase()
         // The scheme-specific part, percent-decoded (a + in a phone number stays a +).
         val target = (runCatching { URI(trimmed).schemeSpecificPart }.getOrNull() ?: trimmed.substringAfter(':')).substringBefore('?').trim()
         return when (scheme) {
-            "mailto" -> ExternalPrompt("写邮件？", if (target.isEmpty()) "打开邮件 App 写一封邮件。" else "打开邮件 App，写给 $target。")
-            "tel" -> ExternalPrompt("拨打电话？", if (target.isEmpty()) "打开拨号。" else "打开拨号，号码 $target。")
-            "sms", "smsto" -> ExternalPrompt("发短信？", if (target.isEmpty()) "打开短信 App。" else "打开短信 App，发给 $target。")
-            else -> ExternalPrompt("用其他 App 打开？", "这个链接要交给手机上的其他 App：${trimmed.take(80)}")
+            "mailto" -> ExternalPrompt(resources.getString(R.string.chat_links_mail_title),
+                if (target.isEmpty()) resources.getString(R.string.chat_links_mail_text) else resources.getString(R.string.chat_links_mail_to, target))
+            "tel" -> ExternalPrompt(resources.getString(R.string.chat_links_tel_title),
+                if (target.isEmpty()) resources.getString(R.string.chat_links_tel_text) else resources.getString(R.string.chat_links_tel_to, target))
+            "sms", "smsto" -> ExternalPrompt(resources.getString(R.string.chat_links_sms_title),
+                if (target.isEmpty()) resources.getString(R.string.chat_links_sms_text) else resources.getString(R.string.chat_links_sms_to, target))
+            else -> ExternalPrompt(resources.getString(R.string.chat_links_other_title), resources.getString(R.string.chat_links_other_text, trimmed.take(80)))
         }
     }
 }
@@ -158,14 +162,15 @@ data class ChatLinkContext(
         }
 
         /** 「AI 修改」: the selection and what to do with it, one message to the agent (iOS `LinkSheet`). */
-        fun editMessage(selection: ChatLinkContext, instruction: String): String {
+        fun editMessage(selection: ChatLinkContext, instruction: String, resources: Resources): String {
             val ask = instruction.trim()
-            return selection.copy(kind = "edit").xml() + "\n\n" + if (ask.isEmpty()) "按上面选中的内容修改。" else "按要求修改上面选中的内容：$ask"
+            return selection.copy(kind = "edit").xml() + "\n\n" +
+                if (ask.isEmpty()) resources.getString(R.string.chat_links_edit_default) else resources.getString(R.string.chat_links_edit_ask, ask)
         }
 
         /** 「交给 Persona」 from a page with no conversation behind it: the selection and what Persona is to do with it. */
-        fun handToPersonaMessage(selection: ChatLinkContext, instruction: String): String =
-            selection.copy(kind = "context").xml() + "\n\n" + instruction.trim().ifEmpty { "看看上面这段。" }
+        fun handToPersonaMessage(selection: ChatLinkContext, instruction: String, resources: Resources): String =
+            selection.copy(kind = "context").xml() + "\n\n" + instruction.trim().ifEmpty { resources.getString(R.string.chat_links_hand_default) }
     }
 }
 
@@ -173,9 +178,9 @@ data class ChatLinkContext(
  * A message with the picked contexts in front of it, as iOS sends it: the tags a line apart, then a blank line and
  * what was typed (「参考上面的内容。」 when only contexts go).
  */
-internal fun linkMessage(draft: String, contexts: List<ChatLinkContext>): String =
+internal fun linkMessage(draft: String, contexts: List<ChatLinkContext>, resources: Resources): String =
     if (contexts.isEmpty()) draft
-    else contexts.joinToString("\n") { it.xml() } + "\n\n" + draft.ifBlank { "参考上面的内容。" }
+    else contexts.joinToString("\n") { it.xml() } + "\n\n" + draft.ifBlank { resources.getString(R.string.chat_links_context_default) }
 
 internal val ChatLinkContextsSaver = listSaver<List<ChatLinkContext>, String>(
     save = { refs -> refs.flatMap { listOf(it.kind, it.title, it.url, it.text, it.id) } },

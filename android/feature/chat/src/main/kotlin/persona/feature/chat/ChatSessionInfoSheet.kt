@@ -1,5 +1,7 @@
 package persona.feature.chat
 
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -40,6 +42,7 @@ internal fun sessionInfoSections(
     info: SessionInfo,
     zone: ZoneId = ZoneId.systemDefault(),
     onOpenTodo: ((String) -> Unit)? = null,
+    resources: Resources,
 ): List<SessionInfoSection> {
     fun String?.orSession(fallback: String?) = this?.takeIf(String::isNotBlank) ?: fallback?.takeIf(String::isNotBlank)
     val cwd = info.cwd.orSession(session.cwd)
@@ -54,8 +57,8 @@ internal fun sessionInfoSections(
             SessionInfoRow("模型", info.model.orSession(session.model)),
             SessionInfoRow("启动器", info.launcher.orSession(session.launcher)),
             SessionInfoRow(if (session.isClaude) "Claude Code" else session.agentLabel, info.version.orSession(null)),
-            SessionInfoRow("权限", SessionModes.modeLabel(info.permissionMode.orSession(session.permissionMode))),
-            SessionInfoRow("思考强度", SessionModes.effortLabel(info.effort.orSession(session.effort))),
+            SessionInfoRow("权限", SessionModes.modeLabel(info.permissionMode.orSession(session.permissionMode), resources)),
+            SessionInfoRow("思考强度", SessionModes.effortLabel(info.effort.orSession(session.effort), resources)),
         )))
         add(SessionInfoSection("用量", buildList {
             add(SessionInfoRow("上下文", "${formatTokens(info.contextTokens)} tokens"))
@@ -107,7 +110,7 @@ internal fun ChatSessionInfoSheet(
         }
         val loaded = info
         when {
-            loaded != null -> sessionInfoSections(session, loaded, onOpenTodo = onOpenTodo).filter { it.rows.isNotEmpty() }.forEach { section ->
+            loaded != null -> sessionInfoSections(session, loaded, onOpenTodo = onOpenTodo, resources = LocalResources.current).filter { it.rows.isNotEmpty() }.forEach { section ->
                 JSectionHeader(section.title)
                 section.rows.forEachIndexed { index, row ->
                     JGroupItem(GroupPosition.of(index, section.rows.size)) {

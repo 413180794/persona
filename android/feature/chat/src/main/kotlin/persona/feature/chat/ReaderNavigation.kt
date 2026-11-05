@@ -6,6 +6,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.lines.ChatLine
@@ -30,9 +32,9 @@ internal fun DiffNavigation(diff: ToolDiff, list: LazyListState, expand: () -> U
         }
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        JTextButton("上一处", { jump(-1) }, enabled = selected != 0)
-        Text("${selected + 1}/${changes.size} 处改动", Modifier.weight(1f), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink2, maxLines = 1)
-        JTextButton("下一处", { jump(1) }, enabled = selected < changes.lastIndex)
+        JTextButton(stringResource(R.string.chat_changes_previous), { jump(-1) }, enabled = selected != 0)
+        Text(pluralStringResource(R.plurals.chat_changes_position, changes.size, selected + 1, changes.size), Modifier.weight(1f), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink2, maxLines = 1)
+        JTextButton(stringResource(R.string.chat_changes_next), { jump(1) }, enabled = selected < changes.lastIndex)
     }
 }
 
@@ -67,6 +69,6 @@ internal fun WorkCollapseOverlay(lines: List<ChatLine>, list: LazyListState, out
     }
     current?.let { work ->
         val count = lines.filterIsInstance<ChatLine.End>().firstOrNull { it.groupId == work.id }?.count ?: work.steps.size
-        JChip("收起 $count 步", modifier, onClick = { pending = work.id; onCollapse(work.id) }, icon = PhIcons.CaretUp)
+        JChip(pluralStringResource(R.plurals.chat_steps_collapse, count, count), modifier, onClick = { pending = work.id; onCollapse(work.id) }, icon = PhIcons.CaretUp)
     }
 }

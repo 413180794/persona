@@ -110,7 +110,7 @@ fun AssistantScreen(
     }
     DisposableEffect(draftEditor) { onDispose { draftEditor?.close() } }
     val savedComposer by (draftEditor?.composer ?: remember { MutableStateFlow<ChatComposerState?>(null) }).collectAsStateWithLifecycle()
-    val draftError by (draftEditor?.error ?: remember { MutableStateFlow<String?>(null) }).collectAsStateWithLifecycle()
+    val draftError by (draftEditor?.error ?: remember { MutableStateFlow<Int?>(null) }).collectAsStateWithLifecycle()
     val composer = savedComposer ?: transientComposer
     val draftReady = draftEditor == null || savedComposer != null
     LaunchedEffect(draftEditor, savedComposer) {
@@ -428,7 +428,7 @@ fun AssistantScreen(
                             actionLabel = stringResource(R.string.assistant_got_it), onAction = { data.dismiss() })
                     }
                     if (hasComposer) {
-                        draftError?.let { JNotice(it, Modifier.padding(horizontal = pagePadding), status = Status.NeedsYou) }
+                        draftError?.let { JNotice(androidx.compose.ui.res.stringResource(it), Modifier.padding(horizontal = pagePadding), status = Status.NeedsYou) }
                         val uploadTarget = active ?: snapshot.mainSession
                             ?: SessionKey(assistantMachine, PendingMainConversation.sessionId)
                         ChatComposer(uploadTarget, composer, working = false, sending = sending || !draftReady,

@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -27,7 +28,7 @@ import kotlinx.coroutines.withContext
  * rather than code (a message to select from: the long-press menu's 「选择」).
  */
 @Composable
-internal fun FullTextReader(text: String, onDismiss: () -> Unit, title: String = "全文", plain: Boolean = false) {
+internal fun FullTextReader(text: String, onDismiss: () -> Unit, title: String = stringResource(R.string.chat_reader_full_text), plain: Boolean = false) {
     val frozen = remember { text }
     val snapshot by produceState<ReaderSnapshot?>(null) {
         value = withContext(Dispatchers.Default) { ReaderSnapshot(frozen) }
@@ -98,25 +99,25 @@ private fun ReaderPages(snapshot: ReaderSnapshot, modifier: Modifier, title: Str
     JPage(title = title, onBack = onBack, modifier = modifier,
         topBar = {
             Column {
-                JTopBar(title, onBack = onBack, actions = { JIconButton(PhIcons.Copy, "复制全文", onCopy) })
-                JSearchField(query, { query = it; target = null }, if (onlyPage) "搜索本页" else "搜索全文",
+                JTopBar(title, onBack = onBack, actions = { JIconButton(PhIcons.Copy, stringResource(R.string.chat_reader_copy_all), onCopy) })
+                JSearchField(query, { query = it; target = null }, stringResource(if (onlyPage) R.string.chat_reader_search_page else R.string.chat_reader_search_all),
                     Modifier.padding(horizontal = pagePadding))
                 Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding), verticalAlignment = Alignment.CenterVertically) {
-                    JTextButton(if (onlyPage) "范围：本页" else "范围：全文", { onlyPage = !onlyPage; target = null })
-                    Text(if (query.isEmpty()) "" else if (matches.isEmpty()) "未找到" else "${(selected + 1).coerceAtLeast(0)}/${matches.size}",
+                    JTextButton(stringResource(if (onlyPage) R.string.chat_reader_scope_page else R.string.chat_reader_scope_all), { onlyPage = !onlyPage; target = null })
+                    Text(if (query.isEmpty()) "" else if (matches.isEmpty()) stringResource(R.string.chat_reader_not_found) else "${(selected + 1).coerceAtLeast(0)}/${matches.size}",
                         Modifier.weight(1f), style = PersonaTheme.type.micro, color = palette.ink2, maxLines = 1)
-                    JIconButton(PhIcons.CaretUp, "上一处匹配", { moveMatch(-1) }, enabled = matches.isNotEmpty())
-                    JIconButton(PhIcons.CaretDown, "下一处匹配", { moveMatch(1) }, enabled = matches.isNotEmpty())
+                    JIconButton(PhIcons.CaretUp, stringResource(R.string.chat_reader_previous_match), { moveMatch(-1) }, enabled = matches.isNotEmpty())
+                    JIconButton(PhIcons.CaretDown, stringResource(R.string.chat_reader_next_match), { moveMatch(1) }, enabled = matches.isNotEmpty())
                 }
             }
         },
         bottomBar = {
             JBottomBar { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                JIconButton(PhIcons.ArrowLeft, "首页", { movePage(0) }, enabled = page > 0)
-                JIconButton(PhIcons.CaretLeft, "上一页", { movePage(page - 1) }, enabled = page > 0)
+                JIconButton(PhIcons.ArrowLeft, stringResource(R.string.chat_reader_first_page), { movePage(0) }, enabled = page > 0)
+                JIconButton(PhIcons.CaretLeft, stringResource(R.string.chat_reader_previous_page), { movePage(page - 1) }, enabled = page > 0)
                 Text("${page + 1}/${snapshot.pages.size}", style = PersonaTheme.type.caption, color = palette.ink, maxLines = 1)
-                JIconButton(PhIcons.CaretRight, "下一页", { movePage(page + 1) }, enabled = page < snapshot.pages.lastIndex)
-                JIconButton(PhIcons.ArrowLeft, "末页", { movePage(snapshot.pages.lastIndex) }, modifier = Modifier.rotate(180f), enabled = page < snapshot.pages.lastIndex)
+                JIconButton(PhIcons.CaretRight, stringResource(R.string.chat_reader_next_page), { movePage(page + 1) }, enabled = page < snapshot.pages.lastIndex)
+                JIconButton(PhIcons.ArrowLeft, stringResource(R.string.chat_reader_last_page), { movePage(snapshot.pages.lastIndex) }, modifier = Modifier.rotate(180f), enabled = page < snapshot.pages.lastIndex)
             } }
         }) { padding ->
         LazyColumn(Modifier.fillMaxSize(), state = scroll, contentPadding = PaddingValues(
@@ -124,7 +125,7 @@ private fun ReaderPages(snapshot: ReaderSnapshot, modifier: Modifier, title: Str
             bottom = padding.calculateBottomPadding() + Tokens.Space.m)) {
             item {
                 SelectionContainer {
-                    Text(if (body.isEmpty()) AnnotatedString("没有内容") else annotated,
+                    Text(if (body.isEmpty()) AnnotatedString(stringResource(R.string.chat_reader_empty)) else annotated,
                         style = if (plain) PersonaTheme.type.body else PersonaTheme.type.code, color = palette.ink, onTextLayout = { layout = it },
                         modifier = if (plain) Modifier.fillMaxWidth().padding(vertical = Tokens.Space.m)
                             else Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape).background(palette.sunken).padding(Tokens.Space.m))
@@ -135,10 +136,10 @@ private fun ReaderPages(snapshot: ReaderSnapshot, modifier: Modifier, title: Str
 }
 
 @Composable
-internal fun ReaderEntry(text: String, title: String = "全文", always: Boolean = false) {
+internal fun ReaderEntry(text: String, title: String = stringResource(R.string.chat_reader_full_text), always: Boolean = false) {
     var opened by remember { mutableStateOf<String?>(null) }
     if (always || text.length > 8192 || text.count { it == '\n' } >= 40) {
-        JTextButton("看全文", { opened = text })
+        JTextButton(stringResource(R.string.chat_reader_open), { opened = text })
     }
     opened?.let { FullTextReader(it, onDismiss = { opened = null }, title = title) }
 }
@@ -148,10 +149,12 @@ internal fun ToolReaderActions(input: String?, output: String?, onFullOutput: ((
     var opened by remember { mutableStateOf<Pair<String, String>?>(null) }
     val clipboard = LocalClipboardManager.current
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-        JTextButton("原始输入", { opened = "原始输入" to input.orEmpty() }, enabled = input != null)
-        JTextButton(if (onFullOutput != null) "完整输出" else "原始输出", { if (onFullOutput != null) onFullOutput() else opened = "原始输出" to output.orEmpty() },
+        val rawInput = stringResource(R.string.chat_reader_raw_input)
+        val rawOutput = stringResource(R.string.chat_reader_raw_output)
+        JTextButton(rawInput, { opened = rawInput to input.orEmpty() }, enabled = input != null)
+        JTextButton(if (onFullOutput != null) stringResource(R.string.chat_reader_full_output) else rawOutput, { if (onFullOutput != null) onFullOutput() else opened = rawOutput to output.orEmpty() },
             enabled = output != null || onFullOutput != null)
-        JTextButton("全部复制", { clipboard.setText(AnnotatedString(listOfNotNull(input, output).joinToString("\n\n"))) },
+        JTextButton(stringResource(R.string.chat_reader_copy_both), { clipboard.setText(AnnotatedString(listOfNotNull(input, output).joinToString("\n\n"))) },
             enabled = input != null || output != null)
     }
     opened?.let { (title, text) -> FullTextReader(text, onDismiss = { opened = null }, title = title) }

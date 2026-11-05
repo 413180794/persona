@@ -55,7 +55,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
     val assistant = route.kind == ConversationKind.Assistant || metadata?.assistant == true
     val editor = rememberChatDraftEditor(wiring, key)
     val storedComposer by (editor?.composer ?: remember { MutableStateFlow<ChatComposerState?>(null) }).collectAsStateWithLifecycle()
-    val draftError by (editor?.error ?: remember { MutableStateFlow<String?>(null) }).collectAsStateWithLifecycle()
+    val draftError by (editor?.error ?: remember { MutableStateFlow<Int?>(null) }).collectAsStateWithLifecycle()
     val composer = storedComposer ?: rememberChatComposerState()
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     var pane by rememberSaveable { mutableStateOf<FilesPane?>(null) }
@@ -92,7 +92,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
             renderStyle = if (assistant) ChatRenderStyle.Assistant else ChatRenderStyle.Agent,
             composerState = composer, composerService = wiring?.composer,
             onDraftChanged = editor?.let { it::changed },
-            statusBindings = ChatStatusBindings(recovery = wiring?.recovery, draftSaveError = draftError),
+            statusBindings = ChatStatusBindings(recovery = wiring?.recovery, draftSaveError = draftError?.let { androidx.compose.ui.res.stringResource(it) }),
             onContextCleared = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) })
         if (pane != null && filesAvailable) {
             BackHandler { pane = null; openedPath = null }

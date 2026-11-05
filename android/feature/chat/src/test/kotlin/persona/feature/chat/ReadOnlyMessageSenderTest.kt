@@ -17,7 +17,7 @@ class ReadOnlyMessageSenderTest {
             override suspend fun cancel(clientMessageId: String): Boolean { writes++; return true }
             override suspend fun confirm(clientMessageId: String, delivered: Boolean): Boolean { writes++; return true }
         }
-        val reader = ReadOnlyMessageSender(source)
+        val reader = ReadOnlyMessageSender(source, "历史会话只读，请先继续这个会话")
         try {
             reader.send(SessionKey("machine", "history"), "消息", "operation")
             fail("Historical messages must be blocked")

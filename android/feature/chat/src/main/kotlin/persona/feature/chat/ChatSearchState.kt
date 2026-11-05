@@ -1,6 +1,7 @@
 package persona.feature.chat
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalResources
 import persona.core.chatlist.*
 import persona.core.domain.lines.ChatLine
 import kotlinx.coroutines.delay
@@ -55,13 +56,14 @@ internal fun searchVisibleLines(lines: List<ChatLine>, itemId: String?): List<Ch
 
 @Composable
 internal fun ChatSearchNavigation(search: ChatSearchState, list: ChatListState, lines: List<ChatLine>) {
+    val resources = LocalResources.current
     LaunchedEffect(search.pending, search.selected, lines) {
         val hit = search.selected ?: return@LaunchedEffect
         if (!search.pending) return@LaunchedEffect
         val target = searchTarget(lines, hit.itemId)
         if (target == null) {
             search.pending = false
-            search.notice = "这条记录暂时无法定位，可返回搜索前位置"
+            search.notice = resources.getString(R.string.chat_search_unlocatable)
             return@LaunchedEffect
         }
         if (!list.position.expanded.containsAll(target.expand)) {
@@ -87,7 +89,7 @@ internal fun ChatSearchNavigation(search: ChatSearchState, list: ChatListState, 
             // Expansion changes are projected asynchronously before the saved key becomes available.
             if (lines.any { it is ChatLine.Step && it.groupId !in origin.expanded } ||
                 lines.any { it is ChatLine.SplitHeader && it.groupId !in origin.expanded }) return@LaunchedEffect
-            search.notice = "原来的记录已变化，请继续浏览当前记录"
+            search.notice = resources.getString(R.string.chat_search_origin_changed)
         }
         search.origin = null
         search.returning = false

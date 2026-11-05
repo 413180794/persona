@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.*
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -57,6 +58,7 @@ fun ChatLinkHost(
     content: @Composable (bottomInset: Dp) -> Unit,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val pool = remember(context) { ChatWebViewPool(context) }
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -87,7 +89,7 @@ fun ChatLinkHost(
                                 .onSuccess { local -> pool.forget(local); url = local; forwarded = "${machine.name} :${port.port}"; opening++ }
                                 .onFailure { error ->
                                     if (error is persona.core.contracts.api.PortGone) machine.presence?.noteGone(port.port)
-                                    if (error !is kotlinx.coroutines.CancellationException) feedback?.notice(error.message ?: "打不开端口 :${port.port}")
+                                    if (error !is kotlinx.coroutines.CancellationException) feedback?.notice(error.message ?: resources.getString(R.string.chat_link_port_failed, port.port))
                                 }
                         }
                         else -> { url = target; forwarded = null; opening++ }
@@ -195,55 +197,57 @@ fun ChatLinkHost(
                         Box(Modifier.align(Alignment.CenterHorizontally).padding(top = Tokens.Space.s).size(Tokens.Space.xxxl, Tokens.Space.xs)
                             .clip(PersonaTheme.shapes.controlShape).background(palette.ink3))
                         Row(Modifier.fillMaxWidth().padding(end = Tokens.Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                            JIconButton(PhIcons.CaretLeft, "网页返回", { if (!view.gone && view.canGoBack()) view.goBack() else close() })
+                            JIconButton(PhIcons.CaretLeft, stringResource(R.string.chat_link_back), { if (!view.gone && view.canGoBack()) view.goBack() else close() })
                             Column(Modifier.weight(1f)) {
-                                Text(view.pageTitle.ifBlank { "网页" }, style = PersonaTheme.type.bodyStrong, color = palette.ink,
+                                Text(view.pageTitle.ifBlank { stringResource(R.string.chat_link_page) }, style = PersonaTheme.type.bodyStrong, color = palette.ink,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(forwarded ?: view.currentUrl.ifBlank { target }, style = PersonaTheme.type.micro, color = palette.ink3,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             JIconButton(if (drag.currentValue == LinkDetent.Full) PhIcons.CaretDown else PhIcons.CaretUp,
-                                if (drag.currentValue == LinkDetent.Full) "收起到六成，继续对话" else "铺满网页",
+                                stringResource(if (drag.currentValue == LinkDetent.Full) R.string.chat_link_peek else R.string.chat_link_full),
                                 { scope.launch { drag.animateTo(if (drag.currentValue == LinkDetent.Full) LinkDetent.Peek else LinkDetent.Full) } })
                             Box {
                                 val clipboard = LocalClipboardManager.current
                                 val page = { ChatLinks.webUrl(view.currentUrl) ?: target }
-                                JIconButton(PhIcons.DotsThree, "网页操作", { menu = true })
+                                JIconButton(PhIcons.DotsThree, stringResource(R.string.chat_link_actions), { menu = true })
+                                val copied = stringResource(R.string.chat_link_copied)
+                                val noBrowser = stringResource(R.string.chat_link_no_browser)
                                 // A forwarded port's address is the phone's own loopback: no other app could open it.
                                 JMenu(menu, { menu = false }, listOfNotNull(
-                                    JAction("复制链接", PhIcons.LinkSimple) {
-                                        clipboard.setText(AnnotatedString(page())); feedback?.notice("已复制链接")
+                                    JAction(stringResource(R.string.chat_link_copy), PhIcons.LinkSimple) {
+                                        clipboard.setText(AnnotatedString(page())); feedback?.notice(copied)
                                     }.takeIf { forwarded == null },
-                                    JAction("重新加载", PhIcons.ArrowClockwise, enabled = !view.gone) { view.reload() },
-                                    if (forwarded != null) null else JAction("在浏览器打开", PhIcons.ArrowSquareOut) {
+                                    JAction(stringResource(R.string.chat_link_reload), PhIcons.ArrowClockwise, enabled = !view.gone) { view.reload() },
+                                    if (forwarded != null) null else JAction(stringResource(R.string.chat_link_open_browser), PhIcons.ArrowSquareOut) {
                                         val opened = runCatching {
                                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(page())).addCategory(Intent.CATEGORY_BROWSABLE))
                                         }.isSuccess
-                                        if (!opened) feedback?.notice("没有可用的浏览器")
+                                        if (!opened) feedback?.notice(noBrowser)
                                     },
-                                    JAction("分享", PhIcons.ShareNetwork) {
+                                    JAction(stringResource(R.string.chat_link_share), PhIcons.ShareNetwork) {
                                         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, page())
                                         runCatching { context.startActivity(Intent.createChooser(send, null)) }
                                     }.takeIf { forwarded == null },
                                 ))
                             }
-                            JIconButton(PhIcons.X, "关闭网页", ::close)
+                            JIconButton(PhIcons.X, stringResource(R.string.chat_link_close), ::close)
                         }
                     }
                     if (!view.gone && view.loadProgress < 100 && view.failure == null)
                         JLinearProgress(view.loadProgress / 100f, Modifier.padding(horizontal = pagePadding))
-                    (if (view.gone) "网页意外退出了" else view.failure)?.let { error ->
+                    (if (view.gone) stringResource(R.string.chat_link_crashed) else view.failure)?.let { error ->
                         Row(Modifier.padding(horizontal = pagePadding), verticalAlignment = Alignment.CenterVertically) {
                             Text(error, Modifier.weight(1f).padding(vertical = Tokens.Space.s), style = PersonaTheme.type.callout,
                                 color = palette.danger.text)
-                            JTextButton(if (view.gone) "重新载入" else "重试", { if (view.gone) generation++ else view.reload() })
+                            JTextButton(stringResource(if (view.gone) R.string.chat_link_reopen else R.string.chat_link_retry), { if (view.gone) generation++ else view.reload() })
                         }
                     }
                     if (!view.gone) key(view) {
                         // Feishu documents in the native reader while the hub has it (the lark-connector extension, #1530).
                         if (larkNativeLink(target, lark) is LarkNativeLink.Document) LarkDocumentLink(target, Modifier.fillMaxWidth().weight(1f)) {
                             AndroidView(factory = { view }, modifier = Modifier.fillMaxSize(), onRelease = { pool.release(it) })
-                        } else JPage(title = "网页", modifier = Modifier.fillMaxWidth().weight(1f), topBar = {}) { padding ->
+                        } else JPage(title = stringResource(R.string.chat_link_page), modifier = Modifier.fillMaxWidth().weight(1f), topBar = {}) { padding ->
                             AndroidView(factory = { view },
                                 modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = pagePadding),
                                 onRelease = { pool.release(it) })
@@ -252,7 +256,7 @@ fun ChatLinkHost(
                 }
                 }
                 editing?.let { selection ->
-                    LinkPickDialog("让 Agent 改这段", selection, "怎么改？", onDismiss = { editing = null }) { instruction ->
+                    LinkPickDialog(stringResource(R.string.chat_link_edit_title), selection, stringResource(R.string.chat_link_edit_hint), onDismiss = { editing = null }) { instruction ->
                         onEdit?.invoke(selection, instruction)
                         editing = null
                         scope.launch { drag.animateTo(LinkDetent.Peek) }
@@ -267,13 +271,14 @@ fun ChatLinkHost(
                 }
             }
         }
-        if (unsupported) JDialog(onDismiss = { unsupported = false }, title = "无法打开链接",
-            text = "这个链接不能在 Persona 里打开。", confirm = "知道了" to { unsupported = false }, dismiss = null)
+        if (unsupported) JDialog(onDismiss = { unsupported = false }, title = stringResource(R.string.chat_link_unsupported_title),
+            text = stringResource(R.string.chat_link_unsupported_text), confirm = stringResource(R.string.chat_link_ok) to { unsupported = false }, dismiss = null)
         external?.let { link ->
-            val prompt = remember(link) { ChatLinks.externalPrompt(link) }
-            JDialog(onDismiss = { external = null }, title = prompt.title, text = prompt.text, confirm = "打开" to {
+            val prompt = remember(link, resources) { ChatLinks.externalPrompt(link, resources) }
+            val noApp = stringResource(R.string.chat_link_no_app)
+            JDialog(onDismiss = { external = null }, title = prompt.title, text = prompt.text, confirm = stringResource(R.string.chat_link_open) to {
                 external = null
-                if (!openExternal(context, link)) feedback?.notice("没有能打开这个链接的 App")
+                if (!openExternal(context, link)) feedback?.notice(noApp)
             })
         }
     }

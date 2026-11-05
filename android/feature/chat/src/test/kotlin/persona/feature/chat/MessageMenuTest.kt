@@ -1,5 +1,10 @@
 package persona.feature.chat
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.Item
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
@@ -29,8 +34,11 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /** The long-press menu (R4), 交给 Persona, the API error card's rules (D6), recaps and Claude's suggestion (X1). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessageMenuTest {
+    private val res = ApplicationProvider.getApplicationContext<Context>().resources
     @Test fun theMenuOffersWhatTheConversationAllows() {
         val mine = MessageTarget("m", "你好", user = true)
         assertEquals(listOf(Copy, Select, Quote, Share, HandToPersona, Context, Edit), messageActions(mine, writes = true, handOff = true))
@@ -59,8 +67,8 @@ class MessageMenuTest {
 
     @Test fun handingToPersonaSendsTheMessageAsContext() {
         assertEquals("<jarvis-context kind=\"context\" title=\"修复登录 · 消息\" url=\"\">\n原文\n</jarvis-context>\n\n看看这条消息，告诉我该怎么处理。",
-            handoffMessage("修复登录", "原文"))
-        val context = messageContext("修复登录", "原文")
+            handoffMessage("修复登录", "原文", res))
+        val context = messageContext("修复登录", "原文", res)
         assertEquals(listOf("context", "修复登录 · 消息", "", "原文"), listOf(context.kind, context.title, context.url, context.text))
     }
 
@@ -121,24 +129,24 @@ class MessageMenuTest {
 
     @Test fun errorTagsSayWhatKindOfError() {
         val gpu = ApiErrorInfo.parse("API Error: 502 no available GPU")!!
-        assertEquals(listOf(ErrorTag("502", ErrorTagTone.Danger), ErrorTag("临时故障"), ErrorTag("连续 3 次")), apiErrorTags(gpu, 3))
+        assertEquals(listOf(ErrorTag("502", ErrorTagTone.Danger), ErrorTag("临时故障"), ErrorTag("连续 3 次")), apiErrorTags(gpu, 3, res))
         val login = ApiErrorInfo.parse("API Error: 401 /login")!!
-        assertEquals(listOf(ErrorTag("401", ErrorTagTone.Danger), ErrorTag("要处理", ErrorTagTone.Caution)), apiErrorTags(login, 1))
-        assertEquals(listOf<ErrorTag>(), apiErrorTags(ApiErrorInfo.parse("API Error: odd")!!, 1))
-        assertEquals("11月2日 08:01:05", apiErrorTime("2026-11-02T08:01:05+08:00", ZoneOffset.ofHours(8)))
-        assertNull(apiErrorTime(null))
+        assertEquals(listOf(ErrorTag("401", ErrorTagTone.Danger), ErrorTag("要处理", ErrorTagTone.Caution)), apiErrorTags(login, 1, res))
+        assertEquals(listOf<ErrorTag>(), apiErrorTags(ApiErrorInfo.parse("API Error: odd")!!, 1, res))
+        assertEquals("11月2日 08:01:05", apiErrorTime("2026-11-02T08:01:05+08:00", res, ZoneOffset.ofHours(8)))
+        assertNull(apiErrorTime(null, res))
     }
 
     @Test fun recapsAndTimesReadLikeTheOldApp() {
         val now = Instant.parse("2026-11-02T12:00:00Z")
-        assertEquals("刚刚", relativeTime(now.minusSeconds(30), now, ZoneOffset.UTC))
-        assertEquals("21 分钟前", relativeTime(now.minusSeconds(21 * 60), now, ZoneOffset.UTC))
-        assertEquals("3 小时前", relativeTime(now.minusSeconds(3 * 3600), now, ZoneOffset.UTC))
-        assertEquals("昨天 09:30", relativeTime(Instant.parse("2026-11-01T09:30:00Z"), now, ZoneOffset.UTC))
-        assertEquals("10月3日", relativeTime(Instant.parse("2026-10-03T08:00:00Z"), now, ZoneOffset.UTC))
-        assertEquals("离开期间回顾 · 21 分钟前", recapLabel(1, now.minusSeconds(21 * 60), now))
-        assertEquals("离开期间回顾 3 条 · 刚刚", recapLabel(3, now, now))
-        assertEquals("离开期间回顾", recapLabel(1, null, now))
+        assertEquals("刚刚", relativeTime(now.minusSeconds(30), now, res, ZoneOffset.UTC))
+        assertEquals("21 分钟前", relativeTime(now.minusSeconds(21 * 60), now, res, ZoneOffset.UTC))
+        assertEquals("3 小时前", relativeTime(now.minusSeconds(3 * 3600), now, res, ZoneOffset.UTC))
+        assertEquals("昨天 09:30", relativeTime(Instant.parse("2026-11-01T09:30:00Z"), now, res, ZoneOffset.UTC))
+        assertEquals("10月3日", relativeTime(Instant.parse("2026-10-03T08:00:00Z"), now, res, ZoneOffset.UTC))
+        assertEquals("离开期间回顾 · 21 分钟前", recapLabel(1, now.minusSeconds(21 * 60), now, res))
+        assertEquals("离开期间回顾 3 条 · 刚刚", recapLabel(3, now, now, res))
+        assertEquals("离开期间回顾", recapLabel(1, null, now, res))
     }
 
     @Test fun claudesSuggestionWaitsForAnIdleEmptyComposer() {
