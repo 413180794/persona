@@ -44,7 +44,7 @@
   "no_matching_providers": "「{query}」に一致するプロバイダーはありません",
   "managed_title": "Persona が管理 {count}",
   "managed_footer": "キーはハブに暗号化して保存されます。直接 API はハブが呼び出し、ランチャーは jarvisd launch <名前> で実行されます。",
-  "managed_empty": "まだありません。「プロバイダーを追加」からプロトコル、ゲートウェイのアドレス、キー、デフォルトのモデルを入力してください。用途は「モデル設定」で選びます。",
+  "managed_empty": "まだありません。「プロバイダーを追加」から1つ選んでキーを貼り付けるだけで使えます。用途は「モデル設定」で選びます。",
   "zshrc_title": "~/.zshrc から {count}",
   "zshrc_footer": "各コンピューターの ~/.zshrc にある claude を呼び出す関数で、このページを開くたびに同期されます。追加した関数は自動で表示されます。",
   "hidden_title": "非表示 {count}",
@@ -156,5 +156,8 @@
   "timeout": "タイムアウト",
   "max_context": "最大コンテキスト",
   "default_effort": "デフォルトの思考の強さ",
-  "from_zshrc": "~/.zshrcから読み込み"
+  "from_zshrc": "~/.zshrcから読み込み",
+  "providers_advanced": "詳細",
+  "zshrc_import_hint": "コンピューターの ~/.zshrc にある claude を呼び出す関数をプロバイダーにします。キーはハブがそのコンピューターから読み込み、ブラウザーは経由しません。",
+  "zshrc_import_no_machines": "まだコンピューターが接続されていません。コンピューター上の ~/.zshrc を読むので、先に「マシン」でコンピューターを追加してください。"
 }

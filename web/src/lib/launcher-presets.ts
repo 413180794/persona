@@ -1,7 +1,8 @@
-// 设置 › 模型 › 新增供应商 › 从扩展添加 (docs/extensions.md「模型供应商」, iOS LauncherPresetModel): the model providers the
-// hub's extensions offer (GET /api/v1/launchers/presets). A launcher added from one sends only its name, its key, the preset
-// and maybe another of the provider's models; the hub fills in the address, the kind and the rest.
-import { t } from "../i18n";
+// 设置 › 模型供应商 › 新增供应商 (docs/onboarding.md 4.3 / 5.4, docs/extensions.md「模型供应商」, iOS LauncherPresetModel):
+// the providers the hub offers (GET /api/v1/launchers/presets): its built-in ones (plugin "builtin", in the request
+// language's order) and the extensions'. A launcher added from one sends only the key, the preset and maybe a name or
+// another of its models; the hub fills in the name, the address, the kind and the rest.
+import { formatList, t } from "../i18n";
 import { api, ApiError } from "./api";
 
 export interface PresetModel {
@@ -22,6 +23,30 @@ export interface LauncherPreset {
   models?: PresetModel[];
   key_hint?: string;
   models_error?: string;
+  /** How the gateway takes the key (built-in presets). */
+  auth?: "api_key" | "bearer";
+  /** Where to open an account or get a key (built-in presets). */
+  signup_url?: string;
+  /** The name in the request's language (「智谱 GLM」); `name` stays the plain one. */
+  display_name?: string;
+}
+
+/** The hub's built-in presets' plugin. */
+export const BUILTIN_PLUGIN = "builtin";
+
+/** What a preset is called in the list. */
+export const presetTitle = (p: LauncherPreset) => p.display_name?.trim() || p.name;
+
+/** 「Key 从哪拿」's link: the preset's signup page when it is a web address, else "". */
+export function signupHref(p: LauncherPreset): string {
+  const raw = p.signup_url?.trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : "";
+  } catch {
+    return "";
+  }
 }
 
 /** The extensions' providers; none from a hub without the extension base (404). */
@@ -46,6 +71,15 @@ export function presetChoices(p: LauncherPreset): PresetModel[] {
 
 export const presetModelLabel = (m: PresetModel) => m.name || m.id;
 
+/** The host a preset talks to, "" when its address does not parse. */
+export function presetHost(p: LauncherPreset): string {
+  try {
+    return new URL(p.base_url).host;
+  } catch {
+    return "";
+  }
+}
+
 /** "直接 API · api.example.com", "Claude Code 启动器 · gateway.example.com". */
 export function presetSubtitle(p: LauncherPreset): string {
   const kind = p.kind === "api" ? t("lib-launcher-presets.kind_api") : t("lib-launcher-presets.kind_launcher");
@@ -66,8 +100,57 @@ export function launcherNameProblem(name: string): string {
   return "";
 }
 
-/** POST /api/v1/launchers' body: the model only when another one than the preset's default was picked. */
-export function presetBody(p: LauncherPreset, name: string, key: string, model: string) {
+/** The categories a provider added in the wizard takes over while they are still at their default (docs/onboarding.md 5.4). */
+export const ASSIGN_PURPOSES = ["assistant", "agent.new"] as const;
+
+/** POST /api/v1/launchers' body: the name only when typed (the hub names it after the provider), the model only when
+ *  another one than the preset's default was picked, `assign` when asked. */
+export function presetBody(p: LauncherPreset, name: string, key: string, model: string, assign = false) {
   const m = model.trim();
-  return { name: name.trim(), api_key: key.trim(), preset: p.id, ...(m && m !== presetDefaultModel(p) ? { model: m } : {}) };
+  const n = name.trim();
+  return {
+    ...(n ? { name: n } : {}),
+    api_key: key.trim(),
+    preset: p.id,
+    ...(m && m !== presetDefaultModel(p) ? { model: m } : {}),
+    ...(assign ? { assign: [...ASSIGN_PURPOSES] } : {}),
+  };
+}
+
+/** Whether the hub can test a preset's key: its test speaks the Messages protocol only, so a Responses API cannot be. */
+export function presetTestable(p: LauncherPreset): boolean {
+  return !(p.kind === "api" && p.api === "responses");
+}
+
+/** POST /api/v1/launchers/test's body for a preset: the hub fills in its address and, without one here, its default model. */
+export function presetTestBody(p: LauncherPreset, key: string, model: string) {
+  const m = model.trim();
+  return { preset: p.id, api_key: key.trim(), auth: p.auth ?? "api_key", ...(m ? { model: m } : {}) };
+}
+
+/** A key long enough to be worth testing on its own: a test costs a request, so not on every keystroke of a typed one. */
+export const testableKey = (key: string) => key.trim().length >= 8;
+
+/** POST /api/v1/launchers' answer with `assign` (older hubs leave assigned / kept out). */
+export interface AddResult {
+  launcher?: { name: string; display_name?: string };
+  assigned?: string[];
+  kept?: { purpose: string; reason: string }[];
+}
+
+const purposeLabel = (id: string) => (id === "assistant" ? t("lib-launcher-presets.purpose_assistant") : id === "agent.new" ? t("lib-launcher-presets.purpose_agent_new") : id);
+
+function keptReason(reason: string): string {
+  if (reason === "customized") return t("lib-launcher-presets.kept_customized");
+  if (reason === "incompatible") return t("lib-launcher-presets.kept_incompatible");
+  return t("lib-launcher-presets.kept_failed");
+}
+
+/** The wizard's last screen: what now runs on the new provider and what was left as it was, and why. */
+export function assignSummary(r: AddResult, asked: boolean): { assigned: string; kept: string[] } {
+  if (!asked || !r.assigned) return { assigned: "", kept: [] };
+  return {
+    assigned: r.assigned.length ? t("lib-launcher-presets.assigned", { purposes: formatList(r.assigned.map(purposeLabel)) }) : "",
+    kept: (r.kept ?? []).map((k) => t("lib-launcher-presets.kept", { purpose: purposeLabel(k.purpose), reason: keptReason(k.reason) })),
+  };
 }

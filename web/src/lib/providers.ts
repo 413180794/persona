@@ -1,5 +1,5 @@
-// 设置 › 模型供应商 (#2455, docs/launchers.md): the add / edit wizard's form (cindy's AddProviderWizard: pick → connect
-// → models, the rest folded under 高级), its checks, the POST / PUT body, and 从 ~/.zshrc 导入's preview. Pure: the views
+// 设置 › 模型供应商 (#2455, docs/launchers.md): the add / edit wizard's form for a compatible gateway typed by hand
+// (cindy's AddProviderWizard: connect → models, the rest folded under 高级; the hub's presets are lib/launcher-presets.ts), its checks, the POST / PUT body, and 从 ~/.zshrc 导入's preview. Pure: the views
 // in views/settings/Provider*.tsx only render it.
 import { ApiError, errorText } from "./api";
 import { hostOf as urlHost } from "./hubs";
@@ -22,6 +22,8 @@ export interface ProviderModel {
 /** GET /api/v1/launchers' managed launcher (hub LauncherView): never the key or the headers, only has_key / has_headers. */
 export interface ProviderView {
   name: string;
+  /** The name it shows, in any language (one added from a preset gets the provider's). */
+  display_name?: string;
   kind?: "launcher" | "api";
   api?: "messages" | "responses";
   base_url?: string;
@@ -50,10 +52,6 @@ export interface ProviderView {
   /** ManagedLauncher.Source: "" made by hand, "zshrc:<alias>@<machine>", "preset:<id>". */
   origin?: string;
 }
-
-/** Step 1's choice. */
-export type ProviderPreset = "official" | "custom";
-export const OFFICIAL_BASE_URL = "https://api.anthropic.com";
 
 /** One model row of step 3: numbers as typed. */
 export interface FormModel {
@@ -97,14 +95,15 @@ export interface ProviderForm {
   args: string;
 }
 
-export function newForm(preset: ProviderPreset = "custom"): ProviderForm {
+/** A compatible gateway's form, typed by hand (the providers the hub knows are presets, lib/launcher-presets.ts). */
+export function newForm(): ProviderForm {
   return {
     kind: "launcher",
     api: "messages",
     name: "",
-    // the official API takes the key as x-api-key; gateways mostly want Bearer (ANTHROPIC_AUTH_TOKEN)
-    base_url: preset === "official" ? OFFICIAL_BASE_URL : "",
-    auth: preset === "official" ? "api_key" : "bearer",
+    base_url: "",
+    // gateways mostly want Bearer (ANTHROPIC_AUTH_TOKEN)
+    auth: "bearer",
     api_key: "",
     models: [],
     model: "",
@@ -136,15 +135,12 @@ export function formModel(m: ProviderModel, checked = true): FormModel {
   return { id: m.id, name: m.name ?? "", context_window: numText(m.context_window), efforts: [...(m.efforts ?? [])], default_effort: m.default_effort ?? "", checked };
 }
 
-/** Which of step 1's choices a saved provider is. */
-export const presetOf = (base_url?: string): ProviderPreset => (base_url?.replace(/\/+$/, "") === OFFICIAL_BASE_URL ? "official" : "custom");
-
 /** The form an existing provider opens with: its models checked, the default among them even when not listed. */
 export function formFromView(v: ProviderView): ProviderForm {
   const models = (v.models ?? []).map((m) => formModel(m));
   if (v.model && !models.some((m) => m.id === v.model)) models.unshift(formModel({ id: v.model }));
   return {
-    ...newForm(presetOf(v.base_url)),
+    ...newForm(),
     kind: v.kind ?? "launcher",
     api: v.api ?? "messages",
     name: v.name,

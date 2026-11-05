@@ -1,9 +1,27 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetSubtitle, type LauncherPreset } from "./launcher-presets";
+import {
+  assignSummary,
+  launcherNameProblem,
+  loadPresets,
+  presetBody,
+  presetChoices,
+  presetDefaultModel,
+  presetHost,
+  presetSubtitle,
+  presetTestBody,
+  presetTitle,
+  signupHref,
+  testableKey,
+  type LauncherPreset,
+} from "./launcher-presets";
 
 const team: LauncherPreset = {
   id: "example-gateway/team", plugin: "example-gateway", name: "示例网关 · 团队", kind: "launcher", base_url: "https://gateway.example.com/v1",
   model: "example-pro", models: [{ id: "example-mini", name: "Example Mini" }],
+};
+const glm: LauncherPreset = {
+  id: "builtin/glm", plugin: "builtin", name: "Zhipu GLM", display_name: "智谱 GLM", kind: "launcher", base_url: "https://open.example.cn/api/anthropic",
+  auth: "bearer", model: "glm-x", signup_url: "https://open.example.cn/keys",
 };
 const api: LauncherPreset = { id: "example-gateway/api", plugin: "example-gateway", name: "示例 API", kind: "api", api: "responses", base_url: "not a url", models: [{ id: "m1" }, { id: "m2" }] };
 
@@ -36,6 +54,40 @@ describe("launcher presets", () => {
   it("sends the model only when another one was picked", () => {
     expect(presetBody(team, " jv_team ", " sk-x ", "example-pro")).toEqual({ name: "jv_team", api_key: "sk-x", preset: "example-gateway/team" });
     expect(presetBody(team, "jv_team", "k", "example-mini")).toEqual({ name: "jv_team", api_key: "k", preset: "example-gateway/team", model: "example-mini" });
+  });
+
+  it("leaves the name out when none is typed, so the hub names it, and asks to assign when told to", () => {
+    expect(presetBody(glm, "  ", "sk-x", "glm-x", true)).toEqual({ api_key: "sk-x", preset: "builtin/glm", assign: ["assistant", "agent.new"] });
+    expect(presetBody(glm, "", "sk-x", "")).toEqual({ api_key: "sk-x", preset: "builtin/glm" });
+  });
+
+  it("tests a key against the preset: the hub fills in the address and the default model", () => {
+    expect(presetTestBody(glm, " sk-x ", "")).toEqual({ preset: "builtin/glm", api_key: "sk-x", auth: "bearer" });
+    expect(presetTestBody(team, "sk-x", "example-mini")).toEqual({ preset: "example-gateway/team", api_key: "sk-x", auth: "api_key", model: "example-mini" });
+    expect(testableKey("sk-1")).toBe(false);
+    expect(testableKey(" sk-12345 ")).toBe(true);
+  });
+
+  it("names a preset in the request's language and links only web pages", () => {
+    expect(presetTitle(glm)).toBe("智谱 GLM");
+    expect(presetTitle(team)).toBe("示例网关 · 团队");
+    expect(presetHost(glm)).toBe("open.example.cn");
+    expect(presetHost(api)).toBe("");
+    expect(signupHref(glm)).toBe("https://open.example.cn/keys");
+    expect(signupHref({ ...glm, signup_url: "javascript:alert(1)" })).toBe("");
+    expect(signupHref(team)).toBe("");
+  });
+
+  it("says what was assigned and what was kept, and why", () => {
+    const r = { launcher: { name: "glm" }, assigned: ["assistant"], kept: [{ purpose: "agent.new", reason: "customized" }] };
+    const s = assignSummary(r, true);
+    expect(s.assigned).toContain("主对话");
+    expect(s.kept).toHaveLength(1);
+    expect(s.kept[0]).toContain("新开的 Agent");
+    expect(s.kept[0]).toContain("你选过");
+    expect(assignSummary({ launcher: { name: "glm" } }, true)).toEqual({ assigned: "", kept: [] });
+    expect(assignSummary(r, false)).toEqual({ assigned: "", kept: [] });
+    expect(assignSummary({ ...r, assigned: [], kept: [{ purpose: "assistant", reason: "failed" }] }, true).assigned).toBe("");
   });
 
   it("an older hub without presets answers none", async () => {

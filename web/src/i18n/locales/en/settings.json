@@ -44,7 +44,7 @@
   "no_matching_providers": "No providers match “{query}”",
   "managed_title": "Managed by Persona {count}",
   "managed_footer": "Keys are stored encrypted on the hub. Direct APIs are called by the hub; launchers run as jarvisd launch <name>.",
-  "managed_empty": "None yet. Click Add provider and fill in the protocol, gateway address, key and default model; choose what it's used for in Model settings.",
+  "managed_empty": "None yet. Choose Add provider, pick one and paste its key. Pick what uses it under Models.",
   "zshrc_title": "From ~/.zshrc {count}",
   "zshrc_footer": "Functions in each computer's ~/.zshrc that call claude, synced each time you open this page. New ones show up on their own.",
   "hidden_title": "Hidden {count}",
@@ -159,5 +159,8 @@
   "timeout": "Timeout",
   "max_context": "Max context",
   "default_effort": "Default thinking effort",
-  "from_zshrc": "Imported from ~/.zshrc"
+  "from_zshrc": "Imported from ~/.zshrc",
+  "providers_advanced": "Advanced",
+  "zshrc_import_hint": "Turns the functions that call claude in a computer's ~/.zshrc into providers. The hub reads the keys from that computer; they never pass through the browser.",
+  "zshrc_import_no_machines": "No computer is connected yet. This reads ~/.zshrc on a computer, so add one under Machines first."
 }

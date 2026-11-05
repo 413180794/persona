@@ -18,7 +18,7 @@ import {
 } from "./providers";
 
 const ready = (over: Partial<ProviderForm> = {}): ProviderForm => ({
-  ...newForm("custom"),
+  ...newForm(),
   name: "gw",
   base_url: "https://gw.example.com",
   api_key: "sk-test-1",
@@ -44,9 +44,8 @@ const stored: ProviderView = {
 };
 
 describe("newForm", () => {
-  it("defaults to Bearer for a gateway, x-api-key and the official address for Anthropic", () => {
-    expect(newForm("custom")).toMatchObject({ auth: "bearer", base_url: "" });
-    expect(newForm("official")).toMatchObject({ auth: "api_key", base_url: "https://api.anthropic.com" });
+  it("is a gateway typed by hand: no address, Bearer", () => {
+    expect(newForm()).toMatchObject({ auth: "bearer", base_url: "" });
   });
 });
 

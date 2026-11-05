@@ -214,7 +214,13 @@ hub 自带一份常见厂商的 Anthropic 兼容入口（`server/internal/assist
 
 - iOS：`LauncherPresetModel`（`apple/Persona/Views/Settings/LauncherPresetModel.swift`，单元测试 `LauncherPresetModelTests`）、`LauncherPresetViews.swift`；
   DEBUG `-tab settings -openModelLaunchers YES -openLauncherEditor preset` 直接打开从插件添加（`-openLauncherEditor YES` 打开新增页）。
-- 网页：`web/src/lib/launcher-presets.ts`（测试同名 `.test.ts`），新增弹窗里同样的切换。
+- 网页（#3693，新用户上手 #287 的 4.3「三条路」B）：新增弹窗的第一步直接列 `GET /api/v1/launchers/presets` 的全部预设（内置的在前，按 hub 的顺序；插件的带「扩展」标记），
+  「自定义兼容网关」放最后，地址、鉴权方式只在它里面出现；客户端不再写死「Anthropic 官方」，用内置预设 `builtin/anthropic`。选了预设只粘 Key：Key 停下 0.7 秒（至少 8 个字符）
+  自动 `POST /api/v1/launchers/test {preset, api_key, auth}` 测一次（直接 API 里 `api: "responses"` 的预设不测：hub 的测试只发 `/v1/messages`，改成一行说明），失败写 hub 的大白话并能「重新测试」，`signup_url` 是「Key 从哪拿」（新标签页打开）；名称（空时 hub 起）、默认模型收在「更多选项」。
+  保存带 `assign: ["assistant", "agent.new"]`（开关默认开，「主对话和新开的 Agent 都用它」），最后一屏按 `assigned` / `kept` 写哪些用途换成了它、哪些没改和原因。
+  缺口：设计要求「已有能用的 Claude Code 时开关默认关」，要等 `assistant_readiness`（第 4 个 PR）；在那之前开关总是默认开，hub 的 assign-if-default 只保护用户自己选过的用途。
+  hub 的 `features` 没有 `builtin_presets`（老 hub）时，名称必填、放在 Key 上面，不发 `assign`、没有开关。「从 ~/.zshrc 导入」挪到列表页底下的「高级」，没有电脑时按钮禁用并写明原因。
+  逻辑 `web/src/lib/launcher-presets.ts`（测试同名 `.test.ts`），界面 `web/src/views/settings/ProviderWizard.tsx`（测试 `ProviderWizard.test.tsx`）。
 - Android（#3048）：设置 › AI › 模型供应商列表页（分组、搜索、详情、测试可用性、隐藏 / 恢复 / 删除、从 ~/.zshrc 导入），见 `docs/android.md`「设置的其他对齐项」。
 - Android（#1331）：「新增模型供应商」页（`feature/settings` 的 `NewProviderScreen.kt`、`NewProviderState.kt`），入口在设置 › 模型配置右上角的「+」和用途页选供应商弹层里的「新增模型供应商…」（从用途页加的保存后直接选上，仍要点保存）；见 `docs/android.md`「新增模型供应商」。
 - 截图：假 hub 自带两个示例预设（`example-gateway/team`、`example-gateway/api`），`POST /api/v1/launchers` 在内存里补全并加进列表。

@@ -481,7 +481,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   页面不查地址的写法，原样交给 hub，hub 读不到时原因写在对话框里；`git:` 的市场用 hub 机器自己的 SSH 凭据，token 一栏不能填。逻辑和文字（`MARKET_SPEC_HINT`）网页和管理界面共用。
   「模型供应商」是全部接入（搜索；Persona 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
   「额度 · <网关名>」（非直接 API 的，#1326，`settings/LauncherQuota.tsx`，逻辑 `lib/quota.ts`，照 iOS `LauncherQuotaSection`：预算、各账号 / 供应商的窗口和进度条（≥ 70% 橙、≥ 90% 或用完红）、按模型折叠、这个 Key 的用量，右上刷新带 `refresh=1`，`docs/launchers.md`「额度」）、
-  测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses），hub 的扩展有供应商预设时多一个「从扩展添加」（`docs/launchers.md`「从扩展添加」）；
+  测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增先列 hub 的供应商预设（内置的和扩展的，选了只粘 Key、自动测试、保存时 `assign`），最后是「自定义兼容网关」（启动器或直接 API，Messages / Responses）；「从 ~/.zshrc 导入」在列表底下的「高级」，没有电脑时禁用（`docs/launchers.md`「从插件添加」）；
   「模型配置」按 hub 的真实用途目录分组/搜索，编辑供应商、具体模型和支持的思考强度，显示继承与当前生效值。保存失败保留草稿，revision 冲突需重新加载（`docs/model-config.md`）；
   「翻译」（`settings/TranslationSettings.tsx`，`?tab=translate`）：自动翻译、翻译模型（跳到模型配置的 `translate` 用途）、目标语言、翻译范围（邮件、选中的飞书会话），
   存在当前浏览器（键名同 iOS 的 AppStorage）。不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上（`/devices/{id}/prefs`，iOS 和 Android 都会发，hub 按它收信时预翻），网页没有这个 id；

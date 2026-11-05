@@ -2,5 +2,12 @@
   "kind_api": "直接API",
   "kind_launcher": "Claude Codeランチャー",
   "name_invalid": "名前には英字、数字、_、-のみ使えます。先頭は英字か_にしてください",
-  "name_reserved": "{name}という名前は使えません"
+  "name_reserved": "{name}という名前は使えません",
+  "purpose_assistant": "メインの会話",
+  "purpose_agent_new": "新しい Agent",
+  "assigned": "{purposes}で使います。",
+  "kept": "{purpose}は変更していません：{reason}",
+  "kept_customized": "別のモデルが選ばれているので、その選択を残しました。",
+  "kept_incompatible": "このプロバイダーでは動きません。",
+  "kept_failed": "変更できませんでした。「モデル設定」で選んでください。"
 }

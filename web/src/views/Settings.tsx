@@ -413,11 +413,12 @@ function Models() {
     <button key={l.name} type="button" onClick={() => setOpen(l.name)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate font-mono text-[13px] font-medium text-ink">{l.name}</span>
+          {l.display_name ? <span className="truncate text-[13px] font-medium text-ink">{l.display_name}</span> : <span className="truncate font-mono text-[13px] font-medium text-ink">{l.name}</span>}
           {l.source === "jarvis" && <Pill tone="accent">Persona</Pill>}
           {l.kind === "api" && <Pill>{t("settings.direct_api")}</Pill>}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11.5px] text-ink-3">
+          {l.display_name && <span className="shrink-0 font-mono">{l.name}</span>}
           {l.model && <span className="truncate font-mono text-ink-2">{l.model}</span>}
           {host(l.base_url) && <span className="truncate">{host(l.base_url)}</span>}
         </div>
@@ -435,10 +436,6 @@ function Models() {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("settings.search_placeholder")} className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3" aria-label={t("settings.search_providers")} />
           {query && <IconButton icon="x" label={t("settings.clear")} size={22} iconSize={12} onClick={() => setQuery("")} />}
         </label>
-        <Button tone="secondary" icon="download" onClick={() => setImporting(true)}>
-          <span className="max-sm:hidden">{t("settings-providerimport.title")}</span>
-          <span className="sm:hidden">{t("settings-providerimport.import")}</span>
-        </Button>
         <Button tone="accent" icon="plus" onClick={() => setEditing("new")}>
           <span className="max-sm:hidden">{t("settings.add_provider")}</span>
           <span className="sm:hidden">{t("settings.add_provider_short")}</span>
@@ -460,6 +457,16 @@ function Models() {
       {hidden.length > 0 && (
         <Group title={t("settings.hidden_title", { count: hidden.length })} footer={t("settings.hidden_footer")}>
           {hidden.map(row)}
+        </Group>
+      )}
+      {list && !query && (
+        // 从 ~/.zshrc 导入 reads a computer's ~/.zshrc, so it is for people who already run claude there, and needs a computer
+        <Group title={t("settings.providers_advanced")} footer={machines.length ? t("settings.zshrc_import_hint") : t("settings.zshrc_import_no_machines")}>
+          <Row label={t("settings-providerimport.title")} icon="terminal">
+            <Button tone="secondary" icon="download" disabled={machines.length === 0} onClick={() => setImporting(true)}>
+              {t("settings-providerimport.import")}
+            </Button>
+          </Row>
         </Group>
       )}
       <LauncherDetailDialog

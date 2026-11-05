@@ -44,7 +44,7 @@
   "no_matching_providers": "没有和「{query}」相关的供应商",
   "managed_title": "Persona 管理 {count}",
   "managed_footer": "Key 加密存在 hub；直接 API 由 hub 调用，启动器以 jarvisd launch <名字> 运行。",
-  "managed_empty": "还没有。点「新增供应商」：填协议、网关地址、Key 和默认模型；用途在「模型配置」中选择。",
+  "managed_empty": "还没有。点「新增供应商」，选一家、粘贴 Key 就能用；用途在「模型配置」中选择。",
   "zshrc_title": "来自 ~/.zshrc {count}",
   "zshrc_footer": "各台电脑 ~/.zshrc 里调用 claude 的函数，每次打开这页时同步；新加的函数会自动出现。",
   "hidden_title": "已隐藏 {count}",
@@ -156,5 +156,8 @@
   "timeout": "超时",
   "max_context": "最大上下文",
   "default_effort": "默认思考档位",
-  "from_zshrc": "从 ~/.zshrc 导入"
+  "from_zshrc": "从 ~/.zshrc 导入",
+  "providers_advanced": "高级",
+  "zshrc_import_hint": "读一台电脑 ~/.zshrc 里调用 claude 的函数，把它们变成供应商。Key 由 hub 从那台电脑读，不经过浏览器。",
+  "zshrc_import_no_machines": "还没有接上电脑。这一项要读电脑上的 ~/.zshrc，先在「机器」里添加一台电脑。"
 }

@@ -1,10 +1,30 @@
-// 设置 › 模型供应商 › 新增 / 编辑 (#2455, after cindy's AddProviderWizard): ① 选择供应商 (Anthropic 官方, a compatible
-// gateway, or one an extension offers) ② 连接 (address, auth, key; 测试连接 and 获取模型列表 through the hub) ③ 选择模型
-// (context window, thinking levels, the default), the rest under 高级. Editing opens at ② with the same form. The logic
-// is lib/providers.ts.
-import { useEffect, useId, useMemo, useState } from "react";
+// 设置 › 模型供应商 › 新增 / 编辑 (#2455, docs/onboarding.md 4.3「三条路」B): ① 选择供应商 lists what the hub offers
+// (GET /api/v1/launchers/presets: its built-in providers, then the extensions'), a compatible gateway typed by hand last.
+// A preset needs only ② the key: it is tested on its own (POST /launchers/test with the preset) and saved with
+// assign, and ③ says what now runs on it. The gateway goes ② 连接 (address, auth, key; 测试连接 and 获取模型列表) ③ 选择模型
+// (context window, thinking levels, the default), the rest under 高级. Editing opens at 连接 with the same form. The logic
+// is lib/providers.ts and lib/launcher-presets.ts.
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
-import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../../lib/launcher-presets";
+import {
+  assignSummary,
+  BUILTIN_PLUGIN,
+  launcherNameProblem,
+  loadPresets,
+  presetBody,
+  presetChoices,
+  presetDefaultModel,
+  presetHost,
+  presetModelLabel,
+  presetSubtitle,
+  presetTestBody,
+  presetTestable,
+  presetTitle,
+  signupHref,
+  testableKey,
+  type AddResult,
+  type LauncherPreset,
+} from "../../lib/launcher-presets";
 import {
   EFFORT_LEVELS,
   formFromView,
@@ -12,7 +32,6 @@ import {
   formProblems,
   mergeDiscovered,
   newForm,
-  presetOf,
   probeBody,
   providerBody,
   testModel,
@@ -24,23 +43,38 @@ import {
   type TestResult,
 } from "../../lib/providers";
 import { effortLabel } from "../../lib/routines";
-import { Button, cx, Dialog, toast } from "../../ui/atoms";
-import { Icon } from "../../ui/icons";
+import { hubHas, useStore } from "../../lib/store";
+import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
+import { Icon, type IconName } from "../../ui/icons";
 import { Segmented } from "../assistant/parts";
-import { Switch } from "./SettingsParts";
+import { Pill, Switch } from "./SettingsParts";
 import { CheckMark, Disclosure, FIELD, INPUT, Labelled, SecretField, SMALL, TextField } from "./ProviderFields";
 import { t } from "../../i18n";
 
-type Step = 1 | 2 | 3;
-type Source = "official" | "custom" | "extension";
-const stepTitle = (s: Step) => ({ 1: t("settings-providerwizard.step_pick"), 2: t("settings-providerwizard.step_connect"), 3: t("settings-providerwizard.step_models") })[s];
+type Step = "pick" | "key" | "done" | "connect" | "models";
+const CUSTOM = "custom";
+/** The hub's hello feature for built-in presets, a name it makes up and assign (docs/launchers.md「内置预设」). */
+const BUILTIN_PRESETS_FEATURE = "builtin_presets";
+const stepTitle = (s: Step) =>
+  ({
+    pick: t("settings-providerwizard.step_pick"),
+    key: t("settings-providerwizard.step_key"),
+    done: t("settings-providerwizard.step_done"),
+    connect: t("settings-providerwizard.step_connect"),
+    models: t("settings-providerwizard.step_models"),
+  })[s];
+
+/** A preset's key test: running, or what it answered. */
+type KeyTest = { running: true } | { running: false; result: TestResult };
+
+/** How long a pasted or typed key has to stay the same before it is tested on its own. */
+const AUTO_TEST_MS = 700;
 
 export function ProviderWizard({ existing, onClose, onSaved }: { existing: ProviderView | "new" | null; onClose: () => void; onSaved: () => void }) {
   const isNew = existing === "new";
   const old = existing && existing !== "new" ? existing : null;
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>("pick");
   const [f, setF] = useState<ProviderForm>(() => newForm());
-  const [source, setSource] = useState<Source>("custom");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [advanced, setAdvanced] = useState(false);
@@ -49,11 +83,20 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
   const [probeModel, setProbeModel] = useState("");
   const [discovering, setDiscovering] = useState(false);
   const [found, setFound] = useState<{ n: number; error?: string } | null>(null);
-  // 从扩展添加 (docs/extensions.md「模型供应商」): only when adding, and only when the hub's extensions offer providers.
-  const [presets, setPresets] = useState<LauncherPreset[]>([]);
-  const [pick, setPick] = useState("");
+  // the hub's providers (built-in ones, then the extensions'); null while loading
+  const [presets, setPresets] = useState<LauncherPreset[] | null>(null);
+  const [presetsError, setPresetsError] = useState("");
+  // a preset's id, or CUSTOM for a gateway typed by hand; "" before anything is picked
+  const [choice, setChoice] = useState("");
   const [pf, setPf] = useState({ name: "", api_key: "", model: "" });
-  const preset = presets.find((p) => p.id === pick);
+  const [more, setMore] = useState(false);
+  const [assign, setAssign] = useState(true);
+  const [keyTest, setKeyTest] = useState<KeyTest | null>(null);
+  const testSeq = useRef(0);
+  const [added, setAdded] = useState<{ result: AddResult; asked: boolean; fallback: string } | null>(null);
+  const preset = presets?.find((p) => p.id === choice);
+  // a hub with built-in presets names a provider itself and takes assign; an older one needs the name and knows no assign
+  const hubNames = useStore((s) => hubHas(s.features, BUILTIN_PRESETS_FEATURE, true));
 
   useEffect(() => {
     if (existing === null) return;
@@ -62,33 +105,63 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
     setTest(null);
     setFound(null);
     setProbeModel("");
-    setF(old ? formFromView(old) : newForm("custom"));
-    setSource(old ? presetOf(old.base_url) : "custom");
-    setStep(old ? 2 : 1);
+    setF(old ? formFromView(old) : newForm());
+    setStep(old ? "connect" : "pick");
     if (!isNew) return;
+    setChoice("");
     setPf({ name: "", api_key: "", model: "" });
+    setMore(false);
+    setAssign(true);
+    setKeyTest(null);
+    setAdded(null);
+    setPresets(null);
+    setPresetsError("");
     let live = true;
     loadPresets()
-      .then((list) => {
-        if (!live) return;
-        setPresets(list);
-        setPick(list[0]?.id ?? "");
-        setPf((x) => ({ ...x, model: list[0] ? presetDefaultModel(list[0]) : "" }));
-      })
-      .catch(() => live && setPresets([]));
+      .then((list) => live && setPresets(list))
+      .catch((e) => live && (setPresets([]), setPresetsError(errorText(e))));
     return () => void (live = false);
   }, [existing]);
+
+  // A preset's key is tested by itself once it stops changing: the hub fills in the address and the default model.
+  useEffect(() => {
+    const seq = ++testSeq.current;
+    if (step !== "key" || !preset || !presetTestable(preset) || !testableKey(pf.api_key)) {
+      setKeyTest(null);
+      return;
+    }
+    const timer = setTimeout(() => void runKeyTest(seq), AUTO_TEST_MS);
+    return () => clearTimeout(timer);
+  }, [step, preset?.id, pf.api_key, pf.model]);
+
+  const runKeyTest = async (seq = ++testSeq.current) => {
+    if (!preset) return;
+    setKeyTest({ running: true });
+    let result: TestResult;
+    try {
+      result = await api<TestResult>("/launchers/test", { method: "POST", json: presetTestBody(preset, pf.api_key, pf.model === presetDefaultModel(preset) ? "" : pf.model) });
+    } catch (e) {
+      result = { ok: false, ms: 0, error: errorText(e) };
+    }
+    if (seq === testSeq.current) setKeyTest({ running: false, result });
+  };
 
   const set = <K extends keyof ProviderForm>(k: K) => (v: ProviderForm[K]) => setF((x) => ({ ...x, [k]: v }));
   const problems = formProblems(f, isNew, !!old?.has_key);
   const responses = f.kind === "api" && f.api === "responses";
-  const fromExtension = isNew && step === 1 && source === "extension" && !!preset;
-  const presetReady = !!preset && !!pf.name.trim() && !launcherNameProblem(pf.name) && !!pf.api_key.trim();
-  const canSave = fromExtension ? presetReady : !problems.connect && !problems.models && !problems.advanced;
+  const presetFlow = isNew && choice !== CUSTOM;
+  const presetReady = !!preset && (hubNames || !!pf.name.trim()) && !launcherNameProblem(pf.name) && !!pf.api_key.trim() && !keyTest?.running;
+  const canSave = step === "key" ? presetReady : !problems.connect && !problems.models && !problems.advanced;
 
-  const choose = (s: Source) => {
-    setSource(s);
-    if (s !== "extension") setF((x) => ({ ...newForm(s), name: x.name, api_key: x.api_key, models: x.models, model: x.model }));
+  const pick = (id: string) => {
+    setError("");
+    if (id !== choice) {
+      const p = presets?.find((x) => x.id === id);
+      setPf((x) => ({ ...x, name: "", model: p ? presetDefaultModel(p) : "" }));
+      setMore(false);
+    }
+    setChoice(id);
+    setStep(id === CUSTOM ? "connect" : "key");
   };
 
   const runTest = async () => {
@@ -126,17 +199,18 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
     setBusy(true);
     setError("");
     try {
-      if (fromExtension && preset) {
-        const body = presetBody(preset, pf.name, pf.api_key, pf.model);
-        await api("/launchers", { method: "POST", json: body });
-        toast(t("settings-providerwizard.added", { name: body.name }), "ok");
+      if (step === "key" && preset) {
+        const result = await api<AddResult>("/launchers", { method: "POST", json: presetBody(preset, pf.name, pf.api_key, pf.model, hubNames && assign) });
+        onSaved();
+        setAdded({ result, asked: hubNames && assign, fallback: pf.name.trim() || presetTitle(preset) });
+        setStep("done");
       } else {
         const body = providerBody(f, old);
         await api(isNew ? "/launchers" : `/launchers/${enc(String(body.name))}`, { method: isNew ? "POST" : "PUT", json: body });
         toast(isNew ? t("settings-providerwizard.added", { name: String(body.name) }) : t("settings-providerwizard.saved", { name: String(body.name) }), "ok");
+        onSaved();
+        onClose();
       }
-      onSaved();
-      onClose();
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -144,14 +218,23 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
     }
   };
 
-  const steps: Step[] = isNew ? [1, 2, 3] : [2, 3];
-  const stepProblem = step === 1 ? "" : step === 2 ? problems.connect : problems.models || problems.advanced;
+  const steps: Step[] = !isNew ? ["connect", "models"] : presetFlow ? ["pick", "key", "done"] : ["pick", "connect", "models"];
+  const at = steps.indexOf(step);
+  const stepProblem = step === "connect" ? problems.connect : step === "models" ? problems.models || problems.advanced : "";
   const next = () => {
     if (stepProblem) return setError(stepProblem);
     setError("");
-    setStep((s) => (s + 1) as Step);
+    setStep(steps[at + 1]);
   };
-  const reachable = (s: Step) => s <= step || !isNew || (s === 3 && !problems.connect);
+  const back = () => (setError(""), setStep(steps[at - 1]));
+  // done is only reached by saving, and once there the provider exists: nothing before it is open again
+  const reachable = (s: Step) => {
+    if (step === "done") return s === "done";
+    if (s === "done") return false;
+    const i = steps.indexOf(s);
+    return i <= at || !isNew || (s === "models" && !problems.connect);
+  };
+  const done = step === "done";
 
   return (
     <Dialog
@@ -160,35 +243,44 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
       width={580}
       title={isNew ? t("settings-providerwizard.title_new") : t("settings-providerwizard.title_edit", { name: old?.name ?? "" })}
       footer={
-        <>
-          <Button tone="quiet" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <span className="flex-1" />
-          {step > steps[0] && (
-            <Button tone="secondary" onClick={() => (setError(""), setStep((s) => (s - 1) as Step))}>
-              {t("settings-providerwizard.back")}
+        done ? (
+          <>
+            <span className="flex-1" />
+            <Button tone="primary" onClick={onClose}>
+              {t("settings-providerwizard.finish")}
             </Button>
-          )}
-          {step < 3 && !fromExtension && (
-            <Button tone={isNew ? "primary" : "secondary"} onClick={next}>
-              {t("settings-providerwizard.next")}
+          </>
+        ) : (
+          <>
+            <Button tone="quiet" onClick={onClose}>
+              {t("common.cancel")}
             </Button>
-          )}
-          {(step === 3 || fromExtension || !isNew) && (
-            <Button tone="primary" busy={busy} disabled={!canSave} onClick={() => void save()}>
-              {t("common.save")}
-            </Button>
-          )}
-        </>
+            <span className="flex-1" />
+            {at > 0 && (
+              <Button tone="secondary" onClick={back}>
+                {t("settings-providerwizard.back")}
+              </Button>
+            )}
+            {step === "connect" && (
+              <Button tone={isNew ? "primary" : "secondary"} onClick={next}>
+                {t("settings-providerwizard.next")}
+              </Button>
+            )}
+            {(step === "key" || step === "models" || !isNew) && step !== "pick" && (
+              <Button tone="primary" busy={busy} disabled={!canSave} onClick={() => void save()}>
+                {t("common.save")}
+              </Button>
+            )}
+          </>
+        )
       }
     >
       <form
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault();
-          if (step === 3 || fromExtension) void save();
-          else next();
+          if (step === "key" || step === "models") void save();
+          else if (step === "connect") next();
         }}
       >
         <ol aria-label={t("settings-providerwizard.steps")} className="flex items-center gap-2">
@@ -202,8 +294,8 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
                 onClick={() => (setError(""), setStep(s))}
                 className="touch-hit flex min-w-0 items-center gap-1.5 rounded-control text-[12px] disabled:opacity-50"
               >
-                <span className={cx("flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums", s === step ? "bg-accent text-white" : s < step ? "bg-accent-tint text-accent" : "bg-inset text-ink-3 shadow-hairline")}>
-                  {s < step ? <Icon name="check" size={10} stroke={3} /> : i + 1}
+                <span className={cx("flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums", s === step ? "bg-accent text-white" : i < at ? "bg-accent-tint text-accent" : "bg-inset text-ink-3 shadow-hairline")}>
+                  {i < at || (done && s === step) ? <Icon name="check" size={10} stroke={3} /> : i + 1}
                 </span>
                 <span className={cx("truncate whitespace-nowrap", s === step ? "font-medium text-ink" : "text-ink-3")}>{stepTitle(s)}</span>
               </button>
@@ -211,13 +303,15 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
           ))}
         </ol>
 
-        {step === 1 && (
-          <PickStep source={source} onChoose={choose} presets={presets}>
-            {source === "extension" && preset && <PresetFields presets={presets} preset={preset} onPick={(p) => (setPick(p.id), setPf((x) => ({ ...x, model: presetDefaultModel(p) })))} pf={pf} setPf={setPf} />}
-          </PickStep>
+        {step === "pick" && <PickStep presets={presets} error={presetsError} choice={choice} onPick={pick} />}
+
+        {step === "key" && preset && (
+          <KeyStep preset={preset} pf={pf} setPf={setPf} keyTest={keyTest} onRetest={() => void runKeyTest()} assign={hubNames ? assign : null} setAssign={setAssign} more={more} setMore={setMore} />
         )}
 
-        {step === 2 && (
+        {step === "done" && added && <DoneStep added={added} />}
+
+        {step === "connect" && (
           <div className="flex flex-col gap-3">
             <TextField label={t("settings-providerwizard.name")} value={f.name} onChange={set("name")} disabled={!isNew} mono placeholder={t("settings-providerwizard.name_placeholder", { example: "my_gateway" })}
               error={isNew ? launcherNameProblem(f.name) : undefined} hint={t("settings-providerwizard.name_hint")} />
@@ -233,7 +327,7 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
               </Labelled>
             )}
             <TextField label={t("settings-providerwizard.base_url")} value={f.base_url} onChange={set("base_url")} mono inputMode="url" placeholder="https://…"
-              hint={source === "official" ? t("settings-providerwizard.url_official_hint") : responses ? t("settings-providerwizard.url_responses_hint") : t("settings-providerwizard.url_gateway_hint")} />
+              hint={responses ? t("settings-providerwizard.url_responses_hint") : t("settings-providerwizard.url_gateway_hint")} />
             {!responses && (
               <Labelled label={t("settings-providerwizard.auth")} hint={f.auth === "bearer" ? t("settings-providerwizard.auth_bearer_hint") : t("settings-providerwizard.auth_key_hint")}>
                 <Segmented<ProviderForm["auth"]> label={t("settings-providerwizard.auth")} value={f.auth} onChange={set("auth")} options={[{ v: "bearer", label: "Bearer" }, { v: "api_key", label: "x-api-key" }]} />
@@ -271,7 +365,7 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
           </div>
         )}
 
-        {step === 3 && (
+        {step === "models" && (
           <div className="flex flex-col gap-3">
             <ModelList f={f} setF={setF} />
             <Disclosure title={t("settings-providerwizard.advanced")} open={advanced} onToggle={() => setAdvanced((o) => !o)} badge={advanced ? undefined : t("settings-providerwizard.advanced_badge")}>
@@ -280,37 +374,177 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
           </div>
         )}
 
-        {(error || (step === 3 && !canSave && (problems.models || problems.advanced))) && <p role="alert" className="text-[12px] text-red">{error || problems.models || problems.advanced}</p>}
+        {(error || (step === "models" && !canSave && (problems.models || problems.advanced))) && <p role="alert" className="text-[12px] text-red">{error || problems.models || problems.advanced}</p>}
         <button type="submit" hidden />
       </form>
     </Dialog>
   );
 }
 
-function PickStep({ source, onChoose, presets, children }: { source: Source; onChoose: (s: Source) => void; presets: LauncherPreset[]; children?: React.ReactNode }) {
-  const options: { v: Source; title: string; detail: string }[] = [
-    { v: "official", title: t("settings-providerwizard.official"), detail: t("settings-providerwizard.official_detail") },
-    { v: "custom", title: t("settings-providerwizard.custom"), detail: t("settings-providerwizard.custom_detail") },
-    ...(presets.length ? [{ v: "extension" as const, title: t("settings-providerwizard.extension"), detail: t("settings-providerwizard.extension_detail", { count: presets.length }) }] : []),
-  ];
+/** A provider's tile in the list: the built-in ones a spark, an extension's its piece, the gateway a link. */
+function Tile({ icon }: { icon: IconName }) {
+  return (
+    <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-control bg-inset text-ink-2 shadow-hairline">
+      <Icon name={icon} size={15} />
+    </span>
+  );
+}
+
+const presetIcon = (p: LauncherPreset): IconName => (p.plugin === BUILTIN_PLUGIN ? "spark" : "extension");
+
+/** ①: the hub's providers in its order, the gateway typed by hand last. Picking one goes on. A built-in one says who
+ *  it is for, not its address (that is on ②); an extension's says its kind and host. */
+function PickStep({ presets, error, choice, onPick }: { presets: LauncherPreset[] | null; error: string; choice: string; onPick: (id: string) => void }) {
+  if (!presets) return <Loading />;
+  const row = (id: string, icon: IconName, title: string, detail: string | undefined, meta: string, badge?: string) => (
+    <li key={id} className="border-b border-line last:border-b-0">
+      <button type="button" onClick={() => onPick(id)} aria-current={choice === id ? "true" : undefined}
+        className={cx("flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors pointer-coarse:min-h-14", choice === id ? "bg-accent-tint" : "hover:bg-hover")}>
+        <Tile icon={icon} />
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[13px] font-medium text-ink">{title}</span>
+            {badge && <Pill>{badge}</Pill>}
+          </span>
+          {detail && <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-relaxed text-ink-2">{detail}</span>}
+          {meta && <span className="mt-0.5 block truncate text-[11px] text-ink-3">{meta}</span>}
+        </span>
+        <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
+      </button>
+    </li>
+  );
   return (
     <div className="flex flex-col gap-3">
-      <div role="radiogroup" aria-label={t("settings-providerwizard.provider_type")} className="grid gap-2 sm:grid-cols-2">
-        {options.map((o) => (
-          <button key={o.v} type="button" role="radio" aria-checked={source === o.v} onClick={() => onChoose(o.v)}
-            className={cx("touch-hit flex items-start gap-2.5 rounded-card p-3 text-left transition-[background-color,box-shadow] duration-150",
-              source === o.v ? "bg-accent-tint shadow-[inset_0_0_0_1.5px_var(--accent)]" : "bg-surface shadow-btn hover:bg-hover")}>
-            <span className={cx("mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full", source === o.v ? "bg-accent text-white" : "shadow-[inset_0_0_0_1.5px_var(--line-strong)]")}>
-              {source === o.v && <Icon name="check" size={9} stroke={3.2} />}
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-ink">{o.title}</span>
-              <span className="mt-0.5 block text-[11.5px] leading-relaxed text-ink-3">{o.detail}</span>
-            </span>
-          </button>
-        ))}
+      <p className="text-[12.5px] leading-relaxed text-ink-2">{t("settings-providerwizard.pick_intro")}</p>
+      <ul aria-label={t("settings-providerwizard.provider_type")} className="overflow-hidden rounded-card bg-surface shadow-btn">
+        {presets.map((p) =>
+          row(p.id, presetIcon(p), presetTitle(p), p.description, p.plugin === BUILTIN_PLUGIN ? "" : presetSubtitle(p), p.plugin === BUILTIN_PLUGIN ? undefined : t("settings-providerwizard.extension_badge")),
+        )}
+        {row(CUSTOM, "link", t("settings-providerwizard.custom"), t("settings-providerwizard.custom_detail"), "")}
+      </ul>
+      {error && <p className="text-[12px] text-orange">{t("settings-providerwizard.presets_failed", { error })}</p>}
+    </div>
+  );
+}
+
+type PresetForm = { name: string; api_key: string; model: string };
+
+/** ② for a preset: only the key; it is tested by itself. The name and another model wait under 更多选项. */
+function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, more, setMore }: {
+  preset: LauncherPreset;
+  pf: PresetForm;
+  setPf: React.Dispatch<React.SetStateAction<PresetForm>>;
+  keyTest: KeyTest | null;
+  onRetest: () => void;
+  /** null: the hub takes no assign and wants the name (an older hub). */
+  assign: boolean | null;
+  setAssign: (on: boolean) => void;
+  more: boolean;
+  setMore: (fn: (o: boolean) => boolean) => void;
+}) {
+  const signup = signupHref(preset);
+  const choices = presetChoices(preset);
+  const nameProblem = launcherNameProblem(pf.name);
+  const builtin = preset.plugin === BUILTIN_PLUGIN;
+  const nameField = (
+    <TextField label={t("settings-providerwizard.name")} value={pf.name} onChange={(v) => setPf((x) => ({ ...x, name: v }))} mono
+      placeholder={assign === null ? t("settings-providerwizard.name_placeholder", { example: "jv_team" }) : t("settings-providerwizard.name_auto")} error={nameProblem} hint={t("settings-providerwizard.name_hint")} />
+  );
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3 rounded-card bg-inset p-3 shadow-hairline">
+        <Tile icon={presetIcon(preset)} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium text-ink">{presetTitle(preset)}</span>
+          <span className="block truncate text-[11.5px] text-ink-3">{builtin ? presetHost(preset) : t("settings-providerwizard.extension_note", { plugin: preset.plugin })}</span>
+        </span>
       </div>
-      {children}
+      {assign === null && nameField}
+      <SecretField label="API Key" value={pf.api_key} onChange={(v) => setPf((x) => ({ ...x, api_key: v }))} placeholder={t("settings-providerwizard.key_paste")}
+        hint={preset.key_hint ? t("settings-providerwizard.key_hint_with", { hint: preset.key_hint }) : t("settings-providerwizard.key_hint")} />
+      {signup && (
+        <a href={signup} target="_blank" rel="noopener noreferrer" className="touch-hit inline-flex items-center gap-1 self-start whitespace-nowrap text-[12px] font-medium text-accent hover:underline">
+          {t("settings-providerwizard.where_key")}
+          <Icon name="external" size={11} stroke={2} />
+        </a>
+      )}
+      {presetTestable(preset) ? (
+        <KeyTestStatus keyTest={keyTest} hasKey={!!pf.api_key.trim()} onRetest={onRetest} />
+      ) : (
+        <p className="text-[11.5px] leading-relaxed text-ink-3">{t("settings-providerwizard.key_test_responses")}</p>
+      )}
+      {assign !== null && (
+        <div className="flex items-center gap-3 rounded-card bg-surface p-3 shadow-btn">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] text-ink">{t("settings-providerwizard.assign_label")}</span>
+            <span className="mt-0.5 block text-[11.5px] leading-relaxed text-ink-3">{t("settings-providerwizard.assign_hint")}</span>
+          </span>
+          <Switch on={assign} onChange={setAssign} label={t("settings-providerwizard.assign_label")} />
+        </div>
+      )}
+      <Disclosure title={t("settings-providerwizard.more_options")} open={more} onToggle={() => setMore((o) => !o)}
+        badge={more ? undefined : assign === null ? t("settings-providerwizard.more_options_model") : t("settings-providerwizard.more_options_badge")}>
+        {assign !== null && nameField}
+        <Labelled label={t("settings-providerwizard.default_model")} hint={preset.models_error ? t("settings-providerwizard.preset_models_error", { error: preset.models_error }) : t("settings-providerwizard.default_model_hint")}>
+          {choices.length ? (
+            <select value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} aria-label={t("settings-providerwizard.default_model")} className={cx(INPUT, "font-mono")}>
+              {choices.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {presetModelLabel(m)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} placeholder={t("settings-providerwizard.main_model")} aria-label={t("settings-providerwizard.default_model")} autoComplete="off" spellCheck={false} className={cx(INPUT, "font-mono")} />
+          )}
+        </Labelled>
+      </Disclosure>
+    </div>
+  );
+}
+
+function KeyTestStatus({ keyTest, hasKey, onRetest }: { keyTest: KeyTest | null; hasKey: boolean; onRetest: () => void }) {
+  if (!keyTest) return <p className="text-[11.5px] leading-relaxed text-ink-3">{hasKey ? t("settings-providerwizard.key_test_wait") : t("settings-providerwizard.key_test_cost")}</p>;
+  if (keyTest.running)
+    return (
+      <p role="status" className="flex items-center gap-1.5 text-[12px] text-ink-2">
+        <Spinner />
+        {t("settings-providerwizard.key_testing")}
+      </p>
+    );
+  const r = keyTest.result;
+  return (
+    <div role="status" className={cx("flex items-start gap-2 rounded-card p-3 text-[12px]", r.ok ? "bg-green-tint text-green" : "bg-red-tint text-red")}>
+      <Icon name={r.ok ? "check" : "warning"} size={13} stroke={2.4} className="mt-0.5 shrink-0" />
+      <span className="min-w-0 flex-1 break-words">
+        {r.ok ? t("settings-providerwizard.key_test_ok", { model: r.model ?? "", ms: r.ms }) : r.error || t("settings-providerwizard.key_test_failed")}
+      </span>
+      {!r.ok && (
+        <button type="button" onClick={onRetest} className="touch-hit shrink-0 whitespace-nowrap font-medium hover:underline">
+          {t("settings-providerwizard.retest")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** ③ for a preset: it is saved; what runs on it now and what was left as it was. */
+function DoneStep({ added }: { added: { result: AddResult; asked: boolean; fallback: string } }) {
+  const name = added.result.launcher?.display_name || added.result.launcher?.name || added.fallback;
+  const s = assignSummary(added.result, added.asked);
+  return (
+    <div role="status" className="flex flex-col items-center gap-2 py-4 text-center">
+      <span className="flex size-10 items-center justify-center rounded-full bg-green-tint text-green">
+        <Icon name="check" size={18} stroke={2.6} />
+      </span>
+      <p className="text-[15px] font-semibold text-ink">{t("settings-providerwizard.done_title", { name })}</p>
+      {s.assigned && <p className="text-[13px] text-ink-2">{s.assigned}</p>}
+      {s.kept.map((k) => (
+        <p key={k} className="max-w-[420px] text-[12.5px] leading-relaxed text-ink-3">
+          {k}
+        </p>
+      ))}
+      {!s.assigned && <p className="max-w-[420px] text-[12.5px] leading-relaxed text-ink-3">{t("settings-providerwizard.done_pick_later")}</p>}
     </div>
   );
 }
@@ -506,52 +740,3 @@ function Advanced({ f, setF, set, hadHeaders }: {
     </>
   );
 }
-
-/** 从扩展添加: pick one of the extensions' providers, then only the name, the key and maybe another of its models. */
-function PresetFields({ presets, preset, onPick, pf, setPf }: {
-  presets: LauncherPreset[];
-  preset: LauncherPreset;
-  onPick: (p: LauncherPreset) => void;
-  pf: { name: string; api_key: string; model: string };
-  setPf: React.Dispatch<React.SetStateAction<{ name: string; api_key: string; model: string }>>;
-}) {
-  const choices = presetChoices(preset);
-  const nameProblem = launcherNameProblem(pf.name);
-  return (
-    <>
-      <div>
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-providerwizard.extension_providers")}</span>
-        <div role="radiogroup" aria-label={t("settings-providerwizard.extension_providers")} className="overflow-hidden rounded-control bg-field shadow-inset-field">
-          {presets.map((p) => (
-            <button key={p.id} type="button" role="radio" aria-checked={p.id === preset.id} onClick={() => onPick(p)}
-              className="flex w-full items-center gap-3 border-b border-line px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-hover">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium text-ink">{p.name}</div>
-                {p.description && <div className="line-clamp-2 text-[11.5px] text-ink-2">{p.description}</div>}
-                <div className="truncate text-[11px] text-ink-3">{presetSubtitle(p)}</div>
-              </div>
-              {p.id === preset.id && <Icon name="check" size={13} stroke={2.2} className="shrink-0 text-accent" />}
-            </button>
-          ))}
-        </div>
-        <span className="mt-1 block text-[11px] text-ink-3">{t("settings-providerwizard.extension_note", { plugin: preset.plugin })}</span>
-      </div>
-      <TextField label={t("settings-providerwizard.name")} value={pf.name} onChange={(v) => setPf((x) => ({ ...x, name: v }))} mono placeholder={t("settings-providerwizard.name_placeholder", { example: "jv_team" })} error={nameProblem} hint={t("settings-providerwizard.name_hint")} />
-      <SecretField label="API Key" value={pf.api_key} onChange={(v) => setPf((x) => ({ ...x, api_key: v }))} hint={preset.key_hint ? t("settings-providerwizard.key_hint_with", { hint: preset.key_hint }) : t("settings-providerwizard.key_hint")} />
-      <Labelled label={t("settings-providerwizard.default_model")} hint={preset.models_error ? t("settings-providerwizard.preset_models_error", { error: preset.models_error }) : t("settings-providerwizard.default_model_hint")}>
-        {choices.length ? (
-          <select value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} aria-label={t("settings-providerwizard.default_model")} className={cx(INPUT, "font-mono")}>
-            {choices.map((m) => (
-              <option key={m.id} value={m.id}>
-                {presetModelLabel(m)}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} placeholder={t("settings-providerwizard.main_model")} aria-label={t("settings-providerwizard.default_model")} autoComplete="off" spellCheck={false} className={cx(INPUT, "font-mono")} />
-        )}
-      </Labelled>
-    </>
-  );
-}
-

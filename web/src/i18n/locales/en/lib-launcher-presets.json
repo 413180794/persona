@@ -2,5 +2,12 @@
   "kind_api": "Direct API",
   "kind_launcher": "Claude Code launcher",
   "name_invalid": "Use only letters, digits, _ and -, starting with a letter or _",
-  "name_reserved": "Can't be named {name}"
+  "name_reserved": "Can't be named {name}",
+  "purpose_assistant": "the main conversation",
+  "purpose_agent_new": "new Agents",
+  "assigned": "Now used by {purposes}.",
+  "kept": "Left {purpose} as it was: {reason}",
+  "kept_customized": "you picked another model there, so your choice stays.",
+  "kept_incompatible": "it can't run on this provider.",
+  "kept_failed": "it couldn't be changed. Pick it under Models."
 }
