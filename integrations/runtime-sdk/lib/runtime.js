@@ -121,7 +121,7 @@ export function createRuntime(driver, options) {
   let refreshTimer
   let server // the endpoint start() serves in listen mode
   let pushTimer
-  let pushing = false
+  let pushing // the push under way (a promise), if any
   let pushAgain = false
   const listed = new Set() // ids in the last pushed list
   const watched = new Map() // session id -> { last, catchingUp, held: [], batch, timer }
@@ -371,20 +371,34 @@ export function createRuntime(driver, options) {
     pushTimer.unref?.()
   }
 
-  /** Push the list now and wait until it went (after a push already under way). */
+  /**
+   * Push the list now and wait until it went: after a push already under way, however long it takes (it read the list
+   * before what is new; a card sent meanwhile is refused for a session not listed yet).
+   */
   async function listNow() {
     clearTimeout(pushTimer)
-    for (let i = 0; pushing && i < 250; i++) await sleep(20)
+    while (pushing) await pushing
     await pushSessions()
   }
 
-  async function pushSessions() {
-    if (!peer) return
+  function pushSessions() {
+    if (!peer) return Promise.resolve()
     if (pushing) {
       pushAgain = true
-      return
+      return pushing
     }
-    pushing = true
+    const p = push().finally(() => {
+      if (pushing === p) pushing = undefined
+      if (pushAgain) {
+        pushAgain = false
+        schedulePush()
+      }
+    })
+    pushing = p
+    return p
+  }
+
+  async function push() {
     try {
       const rows = await driver.listSessions()
       const list = []
@@ -398,12 +412,6 @@ export function createRuntime(driver, options) {
       peer?.notify('runtime.sessions', { sessions: list })
     } catch (err) {
       log(`jarvis: list sessions: ${err.message}`)
-    } finally {
-      pushing = false
-      if (pushAgain) {
-        pushAgain = false
-        schedulePush()
-      }
     }
   }
 

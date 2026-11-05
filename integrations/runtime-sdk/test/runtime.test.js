@@ -438,3 +438,40 @@ test('stop() before the dial has connected: the connection is dropped, not taken
   assert.equal(n.hellos, 0, 'a stopped runtime says no hello')
   assert.equal(rt.connected, false)
 })
+
+test('a card for a new session waits for a slow list already under way, then for the list with it', async (t) => {
+  const n = await startFakeNode(t)
+  let rows = []
+  let slow = false
+  const listSessions = async () => {
+    const now = rows // what the list is when it is read
+    if (slow) {
+      slow = false // only the push under way is slow
+      await new Promise((r) => setTimeout(r, 6000)) // longer than the 5 s listNow used to wait
+    }
+    return now
+  }
+  const rt = createRuntime(minimal({ listSessions }), { runtime: 'toy', socketPath: n.path, retryMs: 20, refreshMs: 0 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await until('the first list', () => n.last('runtime.sessions'))
+  slow = true
+  rt.sessionsChanged(0) // a slow push starts, before the session is there
+  await new Promise((r) => setTimeout(r, 50))
+  const order = []
+  const orig = n.peer.onEvent
+  n.peer.onEvent = (event, params) => {
+    if (event === 'runtime.sessions') order.push(['list', params.sessions.map((s) => s.session_id)])
+    orig(event, params)
+  }
+  n.resolve = (ix) => {
+    order.push(['card', ix.session_id])
+    return { allow: true }
+  }
+  rows = [{ session_id: 'new', status: 'working' }]
+  const res = await rt.ask({ id: 'toy-2', kind: 'permission', session_id: 'new', tool_name: 'Bash', tool_input: {} })
+  assert.deepEqual(res, { allow: true })
+  const card = order.findIndex((e) => e[0] === 'card')
+  assert.ok(order.slice(0, card).some((e) => e[0] === 'list' && e[1].includes('new')), JSON.stringify(order))
+})
