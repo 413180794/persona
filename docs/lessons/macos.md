@@ -282,3 +282,13 @@
   还在生成的回复（`StreamingText`，每 80 ms 重排一次）不开，生成完就能选。MarkdownUI 一块一个 Text，只能在块内选，整条用悬停的「拷贝」。
 - Persona Link 菜单栏 App（`apple/PersonaLink`）在 Xcode 26.1 上 `swift build` / `mac-link.sh` 报 `PairView.swift` 的「unable to type-check this expression in reasonable time」（2026-11-05，#2573，master 上就有）：
   被动模式那页的 `Text("…" + (optional.map { … } ?? "") + …)` 一串可选值拼接拖垮了整个 `VStack` 的类型推断。拼字符串挪进一个标了类型的静态函数（`pairedText`）就好；SwiftUI 的 `body` 里不要写长的 `+` 拼接。
+
+## 列表底色（2026-11-05，#3080）
+
+- **浮动分组**：收件箱最上面的「需要你」是 `NSTableRowView.isFloating == true` 的分组行，内部还有 `NSBannerView`、`NSHardPocketView` 和分隔线。
+  `.scrollContentBackground(.hidden)` 只隐藏列表底色；`.scrollEdgeEffectHidden(true, for: .top)` 和隐藏滚动视图自己的 `NSScrollPocket` 都去不掉这个浮动横条。
+  运行时分别关闭滚动挡板和 `NSTableView.floatsGroupRows` 对照后，只有关闭浮动分组消除了横条。收件箱在分组标题内部挂 `MacInlineListHeaders`，
+  只沿祖先找到这张表、关闭浮动，分组标题跟内容一起滚；不遍历窗口、不改系统私有视图，原有选择、悬停、折叠和行分隔线保留。
+- **整栏同色**：Persona 的 `macListRow` 为盖住系统选中底色，会给每条对话铺 `Theme.pageBackground`；标题、任务入口和空白处原本透明，露出窗口底色。
+  默认玻璃风格的真窗口截图也能看到色带，但离屏截图里两种颜色可能一样，不能据此说没问题；黏土风格深浅色都能稳定复现。Mac 的 `AssistantSidebar` 整栏也铺同一个 token，
+  不改行的选中和悬停，也不改 iOS。核对时要同时看标题、分组标题、未选中行和底部空白，并补看带页面底色的风格。

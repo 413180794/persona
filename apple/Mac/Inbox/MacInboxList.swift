@@ -193,6 +193,9 @@ struct MacInboxList: View {
             }
         }
         .textCase(nil)
+        // AppKit's floating group banner adds its own fill and full-width separator.
+        // Keep the section headers inline, on the same page color as the rows.
+        .background(MacInlineListHeaders())
     }
 
     private func agentRow(_ ix: Interaction) -> some View {

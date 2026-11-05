@@ -174,8 +174,8 @@ struct MacInboxPage: View {
         HStack(spacing: 0) {
             // On the window's white, as the lists beside the sections are on the other pages.
             // Below the title bar's row: the page's title is drawn there over the filters (#1243). Not the list beside
-            // them: the title is not over it, and there the system's scroll edge effect keeps its pinned group header
-            // legible (kept below the row, the header sat on the rows scrolled under it).
+            // them: the title is not over it. Its section headers scroll with the rows (`MacInlineListHeaders`),
+            // without AppKit's separately colored floating group banner (#3080).
             // Folded away while a document is read beside the item: the page is the document's (#2113).
             if !MacInboxState.shared.reading {
                 MacInboxFilters()
