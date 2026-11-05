@@ -379,10 +379,10 @@ enum MacLaunchArguments {
         if let key = sessionKey(d.string(forKey: "openChatWindow")) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MacShellState.shared.chatWindow = key }
         }
-        // `-macAgentAsk rename|clear|close|delete|inspector` with `-openSession`: what that Agent menu item does, 3 s in.
+        // `-macAgentAsk rename|clear|close|delete|inspector|terminal` with `-openSession`: what that Agent menu item does, 3 s in.
         if let key = sessionKey(d.string(forKey: "openSession")), let ask = d.string(forKey: "macAgentAsk") {
             let kinds: [String: MacShellState.ChatRequest.Kind] = ["rename": .rename, "clear": .clear, "close": .close, "delete": .delete,
-                                                                      "inspector": .inspector]
+                                                                      "inspector": .inspector, "terminal": .terminal]
             if let kind = kinds[ask] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     // For the main window, as the menu would with it key (`-openChatWindow` opens the same chat in a second one).

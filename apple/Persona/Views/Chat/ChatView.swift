@@ -33,6 +33,13 @@ struct ChatView: View {
     /// The pin is bringing a header up to show what opened under it (`ChatPin.onRising`): no ↓ for that moment.
     @State private var pinRising = false
     @State private var showTerminal = false
+    #if os(macOS)
+    /// The Mac's terminal takes the chat's place (终端 | 对话, #3183): mounted the first time it is shown, then kept under
+    /// the chat, still subscribed and at the same size, so coming back to it does not connect again.
+    @State private var macSwitch = TerminalChatSwitch()
+    /// The goal / ports row over the page (`macChrome`): the terminal starts under it.
+    @State private var macChromeHeight: CGFloat = 0
+    #endif
     @State private var file: FileRef?
     @State private var showActivity = false
     /// The folded header's goal mark opened (`GoalSheet`); the open header's `GoalBar` keeps its own.
@@ -266,14 +273,14 @@ struct ChatView: View {
     /// follow the window's middle, not their column (#1302). The row's end is left to the search field.
     private func macTitleRow(inTitleBar: Bool) -> some View {
         HStack(spacing: Theme.Space.s) {
-            if pane != .chat || !hidesBack {
+            if macShowsBack {
                 Button { back() } label: {
                     Image(systemName: Theme.Icon.back).font(Theme.Font.heading)
                         .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon).contentShape(.rect)
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help(pane != .chat ? "回到对话" : "返回")
+                .help(pane == .git || pane == .files ? "回到对话" : "返回")
                 .accessibilityLabel("返回")
             }
             Button {
@@ -297,14 +304,36 @@ struct ChatView: View {
             .help("会话信息")
             .layoutPriority(-1) // the title gives way to the buttons
             Spacer(minLength: Theme.Space.s)
+            if session?.canTerminal == true, pane == .chat || pane == .terminal { macViewSwitch }
             macTitleButtons
         }
-        .padding(.leading, pane != .chat || !hidesBack ? Theme.Space.s : Theme.Space.l)
+        .padding(.leading, macShowsBack ? Theme.Space.s : Theme.Space.l)
         // The row's end is the window's search field's (the Agents list's, at the window's trailing edge).
         .padding(.trailing, inTitleBar ? Theme.Size.box320 : Theme.Space.l)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: Theme.Size.macToolbarHeight)
         .ignoresSafeArea(.container, edges: inTitleBar ? .top : [])
+    }
+
+    /// ‹ in the title row: off a pushed page, or out of 文件 / Git. The terminal is not a page over the chat but the
+    /// other side of 终端 | 对话: no ‹ for it.
+    private var macShowsBack: Bool { pane == .git || pane == .files || split?.isFirstPage != true }
+
+    /// 终端 | 对话 (the web's session switch, #2445): the middle of the page is one or the other, ⇧⌘J flips it.
+    private var macViewSwitch: some View {
+        SegmentedChoice("显示", [(SessionPane.terminal, SessionPane.terminal.title), (SessionPane.chat, SessionPane.chat.title)],
+                        selection: Binding(get: { pane == .terminal ? .terminal : .chat }, set: { setMacView($0) }))
+            .labelsHidden()
+            .fixedSize()
+            .help("终端 / 对话（⇧⌘J）")
+            .accessibilityLabel("终端或对话")
+    }
+
+    /// Shows the terminal or the chat in place; the one going away stays mounted, the keyboard goes with the one shown.
+    private func setMacView(_ p: SessionPane) {
+        guard let next = macSwitch.pick(p, from: pane, canTerminal: session?.canTerminal == true) else { return }
+        pane = next
+        if next == .chat { model.composerFocus = key }
     }
 
     /// One agent of the Mac's sibling menu: its title (its agent beside its tab mates), its state; the open one ticked.
@@ -381,6 +410,8 @@ struct ChatView: View {
             .padding(.vertical, Theme.Space.s)
             .frame(maxWidth: .infinity)
             .background(Theme.pageBackground)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { macChromeHeight = $0 }
+            .onDisappear { macChromeHeight = 0 }
         }
         Color.clear.hidden()
             .sheet(isPresented: $showActivity) {
@@ -433,6 +464,11 @@ struct ChatView: View {
             case .close: if session?.status.isLive == true && session?.canTerminal == true { closing = session }
             case .delete: if session?.canDelete == true { deleting = session }
             case .clear: break // the composer's
+            case .terminal:
+                if let next = macSwitch.toggle(from: pane, canTerminal: session?.canTerminal == true) {
+                    pane = next
+                    if next == .chat { model.composerFocus = key }
+                }
             }
         }
         #endif
@@ -469,6 +505,10 @@ struct ChatView: View {
         .onChange(of: computerActivity, initial: true) { _, a in if let a { model.computerActivities[a.machine] = a } }
         .onChange(of: pane) { _, p in
             showChrome()
+            #if os(macOS)
+            // The Mac keeps the chat mounted under the other panes: it stays where you were reading.
+            macSwitch.shown(p)
+            #else
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
             if p == .chat {
                 position = ScrollPosition(edge: .top)
@@ -476,7 +516,17 @@ struct ChatView: View {
                 setFollow { $0.follow() }
                 settleAtEnd()
             }
+            #endif
         }
+        #if os(macOS)
+        // Another agent of the space: its terminal connects only once it is shown; one that has none shows its chat.
+        .onChange(of: key) { _, _ in
+            let next = macSwitch.switchedAgent(pane: pane, canTerminal: session?.canTerminal == true)
+            if next != pane { pane = next }
+        }
+        // ⌘I (聚焦输入框) goes to the chat's composer: the chat comes back first.
+        .onChange(of: model.composerFocus) { _, k in if k == key, pane == .terminal { pane = .chat } }
+        #endif
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         // One stack: the chat takes the whole screen. Beside the list (split) the tab bar stays, or there is no way out.
         .hidesTabBarWhenShown(style == .dev && split == nil)
@@ -1007,7 +1057,7 @@ struct ChatView: View {
             SentPhotos(images: items.compactMap(\.image)).padding(.bottom, -8)
         case .work(let id, let items, let live, let start, let end):
             WorkLine(items: items, live: live, start: start, end: end, open: isOpen(id),
-                     openTerminal: live && style == .dev && session?.canTerminal == true ? { showTerminal = true } : nil) {
+                     openTerminal: live && style == .dev && session?.canTerminal == true ? { openTerminal() } : nil) {
                 toggleWork(id, fromHeader: true)
             }
             .equatable()
@@ -1368,6 +1418,33 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var paneContent: some View {
+        #if os(macOS)
+        // One layer for the chat and its terminal, kept mounted whichever shows (and under 文件 / Git): switching does not
+        // rebuild the chat or connect the terminal again. Only what shows takes clicks and the keyboard.
+        let terminalShown = pane == .terminal && session?.canTerminal == true
+        let base = pane == .chat || pane == .terminal
+        ZStack {
+            chatPane
+                .opacity(base && !terminalShown ? 1 : 0)
+                .allowsHitTesting(base && !terminalShown)
+                .accessibilityHidden(!(base && !terminalShown))
+            if macSwitch.mounted, session?.canTerminal == true {
+                TerminalPanel(key: key, switchTo: switchTo, active: terminalShown)
+                    .padding(.horizontal, Theme.Space.l).padding(.bottom, Theme.Space.s)
+                    .padding(.top, macChromeHeight + Theme.Space.s)
+                    .opacity(terminalShown ? 1 : 0)
+                    .allowsHitTesting(terminalShown)
+                    .accessibilityHidden(!terminalShown)
+            }
+            if pane == .git {
+                GitPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
+                    .transition(.move(edge: .trailing))
+            } else if pane == .files {
+                FilesPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", git: git, key: key).padding(.top, headerRoom)
+                    .transition(.move(edge: .trailing))
+            }
+        }
+        #else
         switch pane {
         case .chat: chatPane.transition(.move(edge: .leading))
         case .terminal:
@@ -1382,6 +1459,7 @@ struct ChatView: View {
         case .files: FilesPane(machineID: key.machineID, group: key.group, cwd: session?.cwd ?? "", git: git, key: key).padding(.top, headerRoom)
             .transition(.move(edge: .trailing))
         }
+        #endif
     }
 
     /// Typing on the terminal folds the header to its slim bar, so the rows over the keyboard go to the terminal; the
@@ -2158,7 +2236,7 @@ struct ChatView: View {
             }
             if style == .dev {
                 if session?.canTerminal == true {
-                    Button { showTerminal = true } label: { Label("终端", systemImage: Theme.Icon.terminal).lineLimit(1) }
+                    Button { openTerminal() } label: { Label("终端", systemImage: Theme.Icon.terminal).lineLimit(1) }
                 }
                 if pane != .chat {
                     Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("回到对话", systemImage: SessionPane.chat.symbol) }
@@ -2401,7 +2479,7 @@ struct ChatView: View {
                 Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("对话", systemImage: SessionPane.chat.symbol) }
             }
             if session?.canTerminal == true {
-                Button { Haptics.tap(); showTerminal = true } label: { Label("终端", systemImage: SessionPane.terminal.symbol).lineLimit(1) }
+                Button { Haptics.tap(); openTerminal() } label: { Label("终端", systemImage: SessionPane.terminal.symbol).lineLimit(1) }
             }
             ForEach(panes.filter { ($0 == .git || $0 == .files) && $0 != pane }) { p in
                 Button { Haptics.tap(); withAnimation(Theme.Motion.standard) { pane = p } } label: {
@@ -2494,7 +2572,20 @@ struct ChatView: View {
     }
 
     private func back() {
+        #if os(macOS)
+        if pane == .git || pane == .files { withAnimation(Theme.Motion.standard) { pane = .chat } } else { dismissChat() }
+        #else
         if pane != .chat { withAnimation(Theme.Motion.standard) { pane = .chat } } else { dismissChat() }
+        #endif
+    }
+
+    /// 终端: on the Mac it takes the chat's place (终端 | 对话, #3183); elsewhere it comes up from the bottom over the page.
+    private func openTerminal() {
+        #if os(macOS)
+        setMacView(.terminal)
+        #else
+        showTerminal = true
+        #endif
     }
 
     /// A swipe to the right goes back toward the chat (from Git to files, from files to the chat).
@@ -2553,7 +2644,7 @@ struct ChatView: View {
             model.markSeen(key)
             if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
-            if UserDefaults.standard.bool(forKey: "openTerminalPane") { showTerminal = true }
+            if UserDefaults.standard.bool(forKey: "openTerminalPane") { openTerminal() }
             if UserDefaults.standard.bool(forKey: "openSpaceFromChat") { // chat → its space page
                 UserDefaults.standard.set(false, forKey: "openSpaceFromChat")
                 Task {
@@ -2705,7 +2796,7 @@ struct ChatView: View {
                 Task { try? await Task.sleep(for: .seconds(delay)); model.sendNow(key, text: t) }
             }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) {
-                if p == .terminal { showTerminal = true } else { pane = p } // the terminal comes up over the page
+                if p == .terminal { openTerminal() } else { pane = p } // the terminal comes up over the page (in its place on the Mac)
             }
             if let f = UserDefaults.standard.string(forKey: "openFilePath") {
                 // Once the session is known (its cwd resolves a relative path) and the push is over: a sheet asked for

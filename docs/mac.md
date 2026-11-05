@@ -32,7 +32,7 @@
 - 列表栏：iOS 同一份列表内容（Agents 列表的分组、卡片 / 紧凑、折叠空间、置顶），Mac 上行高更紧，选中用系统高亮，
   键盘 ↑↓ 移动选中、⏎ 打开、空格预览（Quick Look 式：对话最后几条）。
 - 详情：对话页。顶部工具栏（`.toolbar`）：标题 + 状态·机器·空间›标签，同空间的标签做成工具栏里的分段 / 下拉；
-  右侧「对话 / 终端 / 文件 / Git」分段（⌘1–⌘4 在详情获焦时切换），信息按钮打开 **Inspector**（`.inspector`，⌥⌘I）：会话信息、
+  标题行的「终端 | 对话」分段（⇧⌘J，#3183），文件 / Git 在 ⋯ 里，信息按钮打开 **Inspector**（`.inspector`，⌥⌘I）：会话信息、
   运行 / 用量、后台任务、子 Agent、循环、排队消息。
 - 搜索：工具栏 `.searchable`（⌘F 聚焦），作用于当前列表。全局 ⌘K「快速打开」：搜 Agent、对话、空间、当前对话目录下的文件、收件箱、知识库条目，回车打开。
 
@@ -43,7 +43,7 @@
 | 文件 | 新建 Agent 对话 ⌘N、新建 Persona 对话 ⇧⌘N、在新窗口打开 ⌥⏎ / ⌘⏎（列表里）、关闭窗口 ⌘W、交给 Persona ⌘J |
 | 编辑 | 系统的拷贝 / 粘贴 / 全选 / 查找、查找下一个 ⌘G / 上一个 ⇧⌘G；拷贝会话 ID、拷贝恢复命令 |
 | 显示 | 刷新 ⌘R、显示 / 隐藏侧边栏 ⌃⌘S、显示 Inspector ⌥⌘I、紧凑列表、分组方式（仓库 / 项目 / 状态 / 机器 / 按待办，默认按仓库）、全部折叠 / 展开、字号放大缩小 ⌘+ ⌘- ⌘0 |
-| Agent | 发送 ⏎（输入框里，⇧⏎ 换行，↑↓ 取回发过的、⌃R 搜索）、中断 ⌘.、批准当前待处理 ⇧⌘⏎、拒绝 ⇧⌘⌫、回答选项 ⌥⌘1–9、聚焦输入框 ⌘I（同网页的 Mod+I）、重命名、屏蔽、置顶、标为已读、清空上下文、关闭 Agent… |
+| Agent | 发送 ⏎（输入框里，⇧⏎ 换行，↑↓ 取回发过的、⌃R 搜索）、中断 ⌘.、批准当前待处理 ⇧⌘⏎、拒绝 ⇧⌘⌫、回答选项 ⌥⌘1–9、聚焦输入框 ⌘I（同网页的 Mod+I）、切换终端 / 对话 ⇧⌘J（网页是 Mod+J，Mac 的 ⌘J 已是交给 Persona）、重命名、屏蔽、置顶、标为已读、清空上下文、关闭 Agent… |
 | 收件箱 | 全部标为已处理 ⇧⌘E、全部忽略 ⌥⇧⌘E（收件箱在前时；当前筛选和搜索下未处理的，10 件起先确认，见 `docs/inbox.md`「一键清理」） |
 | 前往 | Persona ⌘1 … 机器 ⌘5、设置 ⌘6、待办 ⌘7（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
 | 窗口 | 系统的；每个对话可以单独开窗口（`WindowGroup(for: SessionKey.self)`），终端也可以单独开窗口 |
@@ -492,7 +492,7 @@ Agent 的行打开它的对话窗口。测试里经真的 `NSWindow.sendEvent` �
 DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗口另存成 `<名字>.chat.png`。
 窗口里的对话是这个窗口的第一页（`SplitDetail(isFirstPage: true)`），对话页自己画的返回箭头不显示。
 Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（`MacTerminalWindow`，`WindowGroup(id: "terminal", for: SessionKey.self)`，标题「终端 · Agent 名」），
-和对话里「终端」浮层是同一个面板，⌘W 关；只有 herdr 里的 Agent 可点。截图：`-openTerminalWindow <m>/<s>`（存成 `<名字>.chat.png`）。
+和对话页里的终端是同一个面板，⌘W 关；只有 herdr 里的 Agent 可点。截图：`-openTerminalWindow <m>/<s>`（存成 `<名字>.chat.png`）。
 菜单要开的窗口（对话、终端）由菜单栏图标上的 `MacWindowOpener` 打开：主窗口关了、只剩一个对话窗口时也能开（原来挂在主窗口上，主窗口一关就点了没反应，两个截图参数都验过）。
 「下一个需要你的」、⌘[ / ⌘] 打开的对话在主窗口里，先把主窗口叫出来（关了就重开，最小化了就还原）。终端窗口顶上的手柄点了关窗口。
 手机工具的写操作确认（「Claude 想在这台 Mac 上执行」）挂在主窗口上，弹之前先把主窗口叫出来，并让 Dock 图标跳（`requestUserAttention(.criticalRequest)`：App 在后台时系统可能不让它直接到前台）；没连真 hub，没实际触发过。
@@ -879,7 +879,13 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 7. Terminal
 - [x] Terminal cover (bottom-up full page, drag to dismiss, size/handle/settings bar) — Views/Chat/ChatView.swift (TerminalCover), Views/Session/SessionPanes.swift (TerminalPanel)
-  - Mac 真窗口（2026-11-03，mock `MOCK_TERMINAL_STREAM=1`）：终端是大 sheet，顶部正中的手柄往下拖能关，单击手柄（无障碍名「关闭终端」）也能关；Esc 不关，按设计发给终端里的程序。关掉后点对话页的「打开终端」能再打开。手柄、「窗口尺寸 132×24」、设置按钮、键栏都在。
+  - Mac 上终端不再是浮层（#3183，对齐网页 #2445）：对话页标题行有「终端 | 对话」分段（只有能开终端的 Agent 有），⇧⌘J 或 Agent › 切换终端 / 对话也能切；
+    ⋯ 里的「终端」、回复里的终端按钮、`-openTerminalPane YES`、`-openPane terminal` 都是原地切到终端。终端第一次切到时才连上，之后切回对话也留在下面
+    （`ChatView.paneContent` 里同一层 ZStack，透明、不接点击和无障碍），照样订阅、尺寸不变，切回来不重连；对话也一直挂着，切回来还停在原来读到的位置。
+    键盘跟着显示的那个走：切到终端时终端获焦（`TerminalPanel.active`），切回对话时输入框获焦，⌘I 在终端上也是回到对话的输入框。切到同空间的另一个 Agent 时，
+    只有正停在终端上才连它的终端。文件 / Git 仍是 ‹ 回对话的推入页，盖在这一层上面。`-macAgentAsk terminal` 等同按 ⇧⌘J（截图用）。
+    没做网页的「每个 Agent 记住上次停在哪边」和地址里的 `?view=`：Mac 打开 Agent 总是先看对话。
+  - 下面是改之前的记录。Mac 真窗口（2026-11-03，mock `MOCK_TERMINAL_STREAM=1`）：终端是大 sheet，顶部正中的手柄往下拖能关，单击手柄（无障碍名「关闭终端」）也能关；Esc 不关，按设计发给终端里的程序。关掉后点对话页的「打开终端」能再打开。手柄、「窗口尺寸 132×24」、设置按钮、键栏都在。
 - [ ] Live stream (terminal_stream, epoch/seq) or 1s ANSI polling fallback — Views/Session/Terminal/TerminalFeed.swift, SessionPanes.swift (TerminalFeedLink)
   - Mac（2026-11-01 核对）：流式这半截图看过（`MOCK_TERMINAL_STREAM=1`：颜色、真彩、反显、下划线）；普通 mock 下只看到一份静态的终端快照，看不出每秒轮询在刷新，回退这半没证实。
 - [x] Grid model + cell renderer (wide chars, box drawing as shapes) — Terminal/TerminalGrid.swift, Terminal/TerminalView.swift (TerminalCanvas), Terminal/BoxDrawing.swift

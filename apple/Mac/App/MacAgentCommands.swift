@@ -122,6 +122,13 @@ struct MacAgentMenu: Commands {
             Button("显示会话信息") { ask(.inspector) }
                 .keyboardShortcut("i", modifiers: [.command, .option])
                 .disabled(key == nil)
+            // The chat page's 终端 | 对话 (#3183). ⇧⌘J: ⌘J (the web's toggle) is 交给 Persona here; a ⌃ key would be the
+            // terminal's own when it has the keyboard.
+            if !terminalOff {
+                Button("切换终端 / 对话") { ask(.terminal) }
+                    .keyboardShortcut("j", modifiers: [.command, .shift])
+                    .disabled(current.map { $0.assistant || !$0.canTerminal } ?? true)
+            }
             Divider()
             // The chat page's own dialogs (ChatView's ⋯ menu, the composer's /clear), so only for an Agent's chat.
             let agent = key.flatMap { model.session($0) }.flatMap { $0.assistant ? nil : $0 }

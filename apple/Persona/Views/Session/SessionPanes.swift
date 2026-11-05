@@ -25,6 +25,39 @@ enum SessionPane: String, CaseIterable, Identifiable {
     }
 }
 
+/// The Mac's 终端 | 对话 (#3183, the web's #2445): the chat and the agent's terminal take turns in the middle of the
+/// page. The terminal is mounted the first time it shows and stays mounted (subscribed, same size) while the chat
+/// shows, so coming back to it does not connect again.
+nonisolated struct TerminalChatSwitch: Equatable {
+    private(set) var mounted = false
+
+    /// The pane to show for a pick of the switch (or ⇧⌘J's flip), from `pane`; nil when nothing changes.
+    mutating func pick(_ p: SessionPane, from pane: SessionPane, canTerminal: Bool) -> SessionPane? {
+        guard p != pane, p == .chat || p == .terminal else { return nil }
+        if p == .terminal {
+            guard canTerminal else { return nil }
+            mounted = true
+        }
+        return p
+    }
+
+    /// ⇧⌘J: the terminal from the chat, 文件 or Git; the chat from the terminal.
+    mutating func toggle(from pane: SessionPane, canTerminal: Bool) -> SessionPane? {
+        pick(pane == .terminal ? .chat : .terminal, from: pane, canTerminal: canTerminal)
+    }
+
+    /// The pane changed some other way (a link, a launch argument): the terminal mounts once it shows.
+    mutating func shown(_ pane: SessionPane) { if pane == .terminal { mounted = true } }
+
+    /// The page switched to another agent of the space: its terminal connects only once it shows, and one that has
+    /// none shows its chat. Returns the pane to show.
+    mutating func switchedAgent(pane: SessionPane, canTerminal: Bool) -> SessionPane {
+        let next = pane == .terminal && !canTerminal ? SessionPane.chat : pane
+        if next != .terminal { mounted = false }
+        return next
+    }
+}
+
 /// One row of equal segments under the navigation bar; labels never wrap.
 struct SessionPaneBar: View {
     @Binding var pane: SessionPane
@@ -144,15 +177,20 @@ struct TerminalPanel: View {
     var onKeyboard: ((Bool) -> Void)?
     /// Shown from the bottom over the page (TerminalCover): its header is a slim bar to drag it down by.
     var grab: TerminalGrab?
+    /// Kept mounted while another view takes its place (the Mac's 终端 | 对话, #3183): the keyboard comes to it when it
+    /// shows and leaves it when it hides; its feed goes on either way. Nil: always on screen while mounted.
+    var active: Bool?
 
     /// Older than this without a fresh screen counts as stale even before anything fails (a request may hang).
     static let staleAfter: TimeInterval = 4
 
-    init(key: SessionKey, switchTo: ((SessionKey) -> Void)? = nil, onKeyboard: ((Bool) -> Void)? = nil, grab: TerminalGrab? = nil) {
+    init(key: SessionKey, switchTo: ((SessionKey) -> Void)? = nil, onKeyboard: ((Bool) -> Void)? = nil, grab: TerminalGrab? = nil,
+         active: Bool? = nil) {
         self.key = key
         self.switchTo = switchTo
         self.onKeyboard = onKeyboard
         self.grab = grab
+        self.active = active
         _feed = State(initialValue: TerminalFeed(key: key))
     }
 
@@ -175,6 +213,10 @@ struct TerminalPanel: View {
         .animation(Theme.Motion.standard, value: typing)
         .animation(Theme.Motion.standard, value: keyboardUp)
         .onChange(of: keyboardUp) { _, up in onKeyboard?(up) }
+        .onChange(of: active, initial: true) { _, on in
+            guard let on else { return }
+            if on { if direct { keyboardUp = true } else { typing = true } } else { keyboardUp = false; typing = false }
+        }
         .sheet(isPresented: $showSettings) {
             TerminalSettingsView().environment(\.colorScheme, scheme)
             #if os(macOS)
