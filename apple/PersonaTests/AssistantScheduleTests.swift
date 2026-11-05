@@ -35,6 +35,45 @@ struct AssistantScheduleTests {
         #expect(AssistantScheduleText.runsWith(t)?.danger == true)
     }
 
+    /// 跑完推送 (#2676): "asked" comes from the hub and goes back; a hub that never sends it, or sends "", is 每次, and
+    /// such a task saves no `push` at all (an older hub never gets the field).
+    @Test func pushRoundTrip() throws {
+        func decode(_ push: String) throws -> APIClient.ScheduledTask {
+            try JSON.decoder.decode(APIClient.ScheduledTask.self,
+                                    from: Data(#"{"id":"p","title":"巡检","prompt":"x","repeat":"interval","every_minutes":30,"enabled":true\#(push)}"#.utf8))
+        }
+        func body(_ t: APIClient.ScheduledTask) throws -> [String: Any] {
+            try JSONSerialization.jsonObject(with: JSONEncoder().encode(t)) as! [String: Any]
+        }
+        let asked = try decode(",\"push\":\"asked\"")
+        #expect(asked.pushesOnlyAsked)
+        #expect(try body(asked)["push"] as? String == "asked")
+        for old in ["", ",\"push\":\"\""] {
+            let t = try decode(old)
+            #expect(t.push == nil && !t.pushesOnlyAsked)
+            #expect(try body(t)["push"] == nil, "left out: the hub keeps it")
+        }
+        var back = asked
+        back.push = "" // switched back to 每次
+        #expect(try body(back)["push"] as? String == "")
+    }
+
+    /// The row says 只在提醒时推送 on its rule line; the editor sees a switch to it as a change, and nil and "" as the same.
+    @Test func pushOnTheRowAndInTheEditor() {
+        var t = APIClient.ScheduledTask(id: "p", title: "巡检", prompt: "x", repeats: .interval, everyMinutes: 30)
+        #expect(AssistantScheduleText.ruleLine(t) == "每 30 分钟")
+        var asked = t
+        asked.push = APIClient.ScheduledTask.pushAsked
+        #expect(AssistantScheduleText.ruleLine(asked) == "每 30 分钟 · 只在提醒时推送")
+        #expect(!AssistantTaskEditor.same(t, asked))
+        var every = t
+        every.push = ""
+        #expect(AssistantTaskEditor.same(t, every))
+        t = APIClient.ScheduledTask(id: "f", title: "", prompt: "x", repeats: .once, at: .now.addingTimeInterval(600))
+        t.push = APIClient.ScheduledTask.pushAsked
+        #expect(AssistantScheduleText.ruleLine(t) == "一次 · 新对话 · 只在提醒时推送")
+    }
+
     /// 17:00 is "17:00": the system's two-digit hour without AM/PM is 12-hour in a Chinese locale ("05:00").
     @Test func timesAre24Hour() {
         let d = Calendar.current.date(bySettingHour: 17, minute: 5, second: 0, of: .now)!

@@ -81,6 +81,13 @@ enum AssistantScheduleText {
         return r.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? r.prompt
     }
 
+    /// A row's rule line: the rule in words (a one-off: where it runs), then 只在提醒时推送 when 跑完推送 is
+    /// 只在它自己提醒时 (on the line rather than as a second pill, which squeezes the title on a phone).
+    static func ruleLine(_ r: APIClient.ScheduledTask) -> String {
+        let rule = r.repeats == .once ? (r.sessionID == nil ? "一次 · 新对话" : "一次 · 接着原来的对话") : sentence(r)
+        return r.pushesOnlyAsked ? rule + " · 只在提醒时推送" : rule
+    }
+
     /// What it runs with when that isn't the default, in a few words: "claude-fast · 自动改文件 · 思考低"; `danger`
     /// for 全部放行.
     static func runsWith(_ r: APIClient.ScheduledTask) -> (text: String, danger: Bool)? {
@@ -328,7 +335,7 @@ struct AssistantTaskRow: View {
                      with?.text, AssistantScheduleText.lastRun(t)?.text,
                      t.createdBy == "assistant" && t.repeats != .once ? "Persona 建的" : nil].compactMap { $0 }
         return TaskRow(TaskItem(id: t.id, title: AssistantScheduleText.title(t),
-                                subtitle: t.repeats == .once ? (t.sessionID == nil ? "一次 · 新对话" : "一次 · 接着原来的对话") : AssistantScheduleText.sentence(t),
+                                subtitle: AssistantScheduleText.ruleLine(t),
                                 footnote: notes.joined(separator: " · "), status: .pending(step: 0)),
                        accessory: .disclosure, subtitleLines: 2,
                        action: {
@@ -367,7 +374,7 @@ struct AssistantTaskRow: View {
                             .fixedSize()
                     }
                 }
-                Text(t.repeats == .once ? (t.sessionID == nil ? "一次 · 新对话" : "一次 · 接着原来的对话") : AssistantScheduleText.sentence(t))
+                Text(AssistantScheduleText.ruleLine(t))
                     .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -477,6 +484,8 @@ struct AssistantTaskEditor: View {
         return titled && !draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     private var changed: Bool { saved.map { !Self.same($0, draft) } ?? true }
+    /// 跑完推送 shows when the hub takes it (task_push), or the task already has it.
+    private var showsPush: Bool { model.hubFeatures.contains(APIClient.ScheduledTask.pushFeature) || opened.pushesOnlyAsked }
     private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
 
     var body: some View {
@@ -502,6 +511,7 @@ struct AssistantTaskEditor: View {
                 Text("像在对话里一样写：看哪些数据、怎么汇报。它可以用 schedule_followup 再安排一次性的跟进，比如会前 10 分钟。")
             }
             runsWithSection
+            if showsPush { pushSection }
             conversationSection
             Section {
                 Button { Task { await runNow() } } label: {
@@ -593,7 +603,8 @@ struct AssistantTaskEditor: View {
     /// one, which the first run starts and the next ones continue; 下次开新对话 lets the next run start over.
     private var conversationSection: some View {
         Section {
-            if conversation != nil {
+            // A task that pushes only what it sends runs in its own conversation (the hub clears session_id too).
+            if conversation != nil && !draft.pushesOnlyAsked {
                 Toggle("接着原来的对话", isOn: Binding(get: { draft.sessionID != nil }, set: { draft.sessionID = $0 ? conversation : nil }))
             }
             if draft.sessionID == nil {
@@ -626,6 +637,32 @@ struct AssistantTaskEditor: View {
             Text(draft.sessionID != nil ? "每次运行都发进安排它的那段对话，带着那里的上下文接着做。"
                  : saved?.ownConversation != nil ? "每次运行都发进这个任务自己的对话，能看到前几次的结果。对话太长或想重来时，点「下次开新对话」，原来的对话还在。"
                  : "第一次运行时开一段新对话，之后每次都在这段对话里接着跑，能看到前几次的结果。")
+        }
+    }
+
+    /// 跑完推送 (docs/assistant.md「跑完推送」): every run's answer is pushed, or only what a run sends with notify_user.
+    private var pushSection: some View {
+        Section {
+            SegmentedChoice("跑完推送", [(value: "", label: "每次"), (value: APIClient.ScheduledTask.pushAsked, label: "只在它自己提醒时")],
+                            selection: push)
+                .accessibilityIdentifier("task-push")
+        } header: {
+            Text("跑完推送")
+        } footer: {
+            Text(draft.pushesOnlyAsked
+                 ? "只有这次运行判断你需要知道、主动提醒你时才推送，没事就不打扰；出错、被打断照常推送。这种任务固定在它自己的对话里跑，你在那段对话里发的消息做完也不推送。"
+                 : "每次运行完都把回答推送到手机。")
+        }
+    }
+
+    /// 只在它自己提醒时 leaves 接着原来的对话: such a task runs in its own conversation. 每次 is sent as "" (the default),
+    /// so a task switched back is saved as such; one never switched sends nothing.
+    private var push: Binding<String> {
+        Binding { draft.push ?? "" } set: { new in
+            withAnimation(Theme.Motion.standard) {
+                draft.push = new
+                if new == APIClient.ScheduledTask.pushAsked { draft.sessionID = nil }
+            }
         }
     }
 
@@ -780,7 +817,8 @@ struct AssistantTaskEditor: View {
     /// Ignores the hub-only fields (last / next run) and, outside its rule, the fields another rule uses.
     static func same(_ a: APIClient.ScheduledTask, _ b: APIClient.ScheduledTask) -> Bool {
         guard a.title == b.title, a.prompt == b.prompt, a.repeats == b.repeats, a.enabled == b.enabled, a.sessionID == b.sessionID,
-              a.launcher == b.launcher, a.permissionMode == b.permissionMode, a.effort == b.effort else { return false }
+              a.launcher == b.launcher, a.permissionMode == b.permissionMode, a.effort == b.effort,
+              (a.push ?? "") == (b.push ?? "") else { return false }
         return switch a.repeats {
         case .once: a.at == b.at
         case .daily: a.time == b.time && Set(a.weekdays) == Set(b.weekdays)

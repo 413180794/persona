@@ -47,6 +47,8 @@ def case(browser, base, hub, token, size, theme, shots):
     page.wait_for_function("localStorage.getItem('jarvis.token')")
     page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
     page.goto(base + "/routines")
+    if page.locator('[role="button"]', has_text=TASK).filter(has_text="只在提醒时推送").count():
+        fail(f"{tag}: {TASK} is marked before it was switched")
     page.get_by_text(TASK, exact=True).first.click()
     group = page.get_by_role("radiogroup", name="跑完推送")
     expect(group).to_be_visible()
@@ -74,7 +76,8 @@ def case(browser, base, hub, token, size, theme, shots):
     ok(f"{tag}: saved push asked, in its own conversation")
     page.keyboard.press("Escape")
     page.wait_for_timeout(400)
-    expect(page.get_by_text("只在提醒时推送").first).to_be_visible()
+    # Its own row: the mock hub has another task that already pushes only when it alerts (项目巡检).
+    expect(page.locator('[role="button"]', has_text=TASK).filter(has_text="只在提醒时推送").first).to_be_visible()
     ok(f"{tag}: the list marks it")
     if shots:
         page.screenshot(path=os.path.join(shots, f"task-push-{size}-{theme}-list.png"))

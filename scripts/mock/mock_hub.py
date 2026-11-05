@@ -984,7 +984,8 @@ SCHEDULE = [
      "last_error": "assistant machine is offline", "next_run": next_at("17:00", [5])},
     {"id": "rt_patrol", "title": "项目巡检", "prompt": "看看各台电脑上的 Agent 和昨晚的 CI，有卡住的就告诉我。", "repeat": "daily",
      "time": "22:00", "weekdays": [], "enabled": True, "created_by": "assistant", "last_run": prev_at("22:00", []),
-     "last_session_id": ASK4, "last_status": "ok", "next_run": next_at("22:00", [])},
+     "last_session_id": ASK4, "last_status": "ok", "next_run": next_at("22:00", []),
+     "push": "asked"},  # 跑完推送: only what a run sends (#2396, #2676); the apps mark it on the row
     {"id": "evening", "title": "晚间回顾", "prompt": "今天的晚间回顾。", "repeat": "daily", "time": "21:30", "weekdays": WEEKDAYS,
      "enabled": False, "last_run": prev_at("21:30", WEEKDAYS, back=1, late=timedelta(minutes=45)), "last_status": "skipped",
      "last_error": "Jarvis 停机，错过了时间"},

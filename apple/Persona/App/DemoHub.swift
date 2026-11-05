@@ -427,6 +427,7 @@ final class DemoHub {
             guard let i = tasks.firstIndex(where: { $0["id"]?.string == p[2] }), case .object(var t) = tasks[i],
                   case .object(let edit) = body else { throw notFound() }
             for (k, v) in edit where k != "id" { t[k] = v.string == "" ? .null : v } // "" = the default
+            if t["push"]?.string == "asked" { t["session_id"] = .null } // 跑完推送: such a task runs in its own conversation
             if edit["enabled"]?.bool == false { t["next_run"] = .null } else if t["repeat"]?.string != "daily" { t["next_run"] = t["at"] ?? .null }
             tasks[i] = .object(t)
             return ["task": .object(t)]
@@ -601,7 +602,7 @@ final class DemoHub {
         sockets.removeAll { $0.socket == nil }
         sockets.append(WeakSocket(socket: s))
         s.send(["type": "hello", "server_version": "demo", "client_id": "demo",
-                "features": ["file_upload", "terminal_stream"]])
+                "features": ["file_upload", "terminal_stream", "task_push"]])
         s.send(["type": "machines", "machines": .array(machines)])
         for m in Set(sessions.compactMap { $0["machine_id"]?.string }).sorted() {
             s.send(["type": "sessions", "machine_id": .string(m), "sessions": .array(sessions.filter { $0["machine_id"]?.string == m })])

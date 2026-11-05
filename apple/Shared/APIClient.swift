@@ -826,6 +826,10 @@ nonisolated struct APIClient: Sendable {
         var permissionMode: String?
         var effort: String?
         var includesModelSettings = true
+        /// 跑完推送 (hubs with the task_push feature, docs/assistant.md「跑完推送」): nil or "" every run's answer is pushed,
+        /// "asked" only what a run sends with notify_user. Such a task always runs in its own conversation. Sent only when
+        /// set: a hub keeps it when left out, and an older hub never gets it.
+        var push: String?
         var createdBy: String?    // "assistant": Persona set it up from a conversation
         var lastRun: Date?        // read-only, set by the hub
         var lastSessionID: String?
@@ -833,13 +837,18 @@ nonisolated struct APIClient: Sendable {
         var lastError: String?
         var nextRun: Date?
         enum CodingKeys: String, CodingKey {
-            case id, title, prompt, at, time, weekdays, enabled, launcher, effort
+            case id, title, prompt, at, time, weekdays, enabled, launcher, effort, push
             case repeats = "repeat", everyMinutes = "every_minutes", machineID = "machine_id", sessionID = "session_id"
             case permissionMode = "permission_mode", createdBy = "created_by"
             case lastRun = "last_run", lastSessionID = "last_session_id", nextRun = "next_run"
             case lastStatus = "last_status", lastError = "last_error"
             case runMachineID = "run_machine_id", runSessionID = "run_session_id"
         }
+        /// 跑完推送 is 只在它自己提醒时: a run's answer is not pushed, only what it sends with notify_user.
+        var pushesOnlyAsked: Bool { push == Self.pushAsked }
+        static let pushAsked = "asked"
+        /// The hub feature that says it takes `push`; without it the editor leaves the setting out.
+        static let pushFeature = "task_push"
         /// Where the next run goes when the task isn't continuing the conversation it came from.
         var ownConversation: SessionKey? {
             guard let m = runMachineID, let s = runSessionID else { return nil }
@@ -866,6 +875,7 @@ nonisolated struct APIClient: Sendable {
             machineID = text(.machineID); sessionID = text(.sessionID)
             launcher = text(.launcher); permissionMode = text(.permissionMode); effort = text(.effort)
             createdBy = text(.createdBy)
+            push = text(.push)
             lastRun = date(.lastRun); lastSessionID = text(.lastSessionID); lastStatus = text(.lastStatus); lastError = text(.lastError)
             nextRun = date(.nextRun)
             runMachineID = text(.runMachineID); runSessionID = text(.runSessionID)
@@ -877,6 +887,7 @@ nonisolated struct APIClient: Sendable {
             try c.encode(time, forKey: .time); try c.encode(weekdays, forKey: .weekdays); try c.encode(everyMinutes, forKey: .everyMinutes)
             try c.encode(enabled, forKey: .enabled); try c.encode(sessionID ?? "", forKey: .sessionID)
             try c.encode(permissionMode ?? "", forKey: .permissionMode)
+            try c.encodeIfPresent(push, forKey: .push)
             if includesModelSettings {
                 try c.encode(launcher ?? "", forKey: .launcher)
                 try c.encode(effort ?? "", forKey: .effort)
