@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkCjkFriendly from "remark-cjk-friendly";
+import remarkGfm from "./remark-gfm-parse";
+import remarkCjkFriendly from "remark-cjk-friendly/parseOnly";
 import type { PluggableList } from "unified";
 import { clickLink, linkHref, linkRoute, prefetchLink } from "../lib/links";
 import { fileDownloadURL } from "../lib/api";

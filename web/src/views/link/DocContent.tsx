@@ -2,7 +2,7 @@
 // the JSON tree drawn as the same HTML (FeishuDocRenderer: the blocks Feishu documents are made of; the rare ones
 // say so and point at Feishu). Content colors are left out: the page only uses its own tokens.
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import remarkGfm from "../../ui/remark-gfm-parse";
 import { bytes } from "../../lib/format";
 import { clickLink, linkHref, prefetchLink } from "../../lib/links";
 import { linkify, markdownComponents, markdownUrl } from "../../ui/Markdown";

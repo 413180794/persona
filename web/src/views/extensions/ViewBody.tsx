@@ -6,7 +6,7 @@
 // one was answered, and when the fields are locked). A tone becomes a role color.
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import remarkGfm from "../../ui/remark-gfm-parse";
 import { openLink } from "../../lib/links";
 import {
   blocks, imageURL, initials, isHttps, numberProblem, percent, rowIcon, tableRows, toneOf,
