@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import persona.core.designsystem.icons.PhIcons
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.Session
@@ -110,4 +111,11 @@ internal fun AgentSpaceMenu(session: Session, pinned: Boolean, muted: Boolean, b
             todo.onUnlink?.let { add(JAction(stringResource(R.string.agents_space_todo_unlink), PhIcons.LinkSimple, destructive = true, onClick = it)) }
         }
     }, { menu = false }, title = session.spaceName?.takeIf { it.isNotBlank() } ?: actions)
+}
+
+/** Asks before 全部标为已读 and names how many finished sessions it marks (iOS confirmReadAll). */
+@Composable
+internal fun MarkAllReadDialog(count: Int, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    JDialog(onDismiss = onDismiss, title = pluralStringResource(R.plurals.agents_mark_all_read_confirm, count, count),
+        confirm = stringResource(R.string.agents_mark_all_read_action, count) to { onDismiss(); onConfirm() })
 }

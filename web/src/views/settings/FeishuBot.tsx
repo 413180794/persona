@@ -251,7 +251,7 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
                     <div className="text-[13px] text-ink">{f.title}</div>
                     <div className="mt-0.5 text-[11.5px] leading-snug text-ink-3">{f.detail}</div>
                   </div>
-                  <Switch on={features[f.key]} disabled={saving || off} label={f.title} onChange={(on) => void run(t("settings-feishubot.save_failed"), () => updateBot({ features: withFeature(features, f.key, on) }))} />
+                  <Switch on={features[f.key] ?? false} disabled={saving || off} label={f.title} onChange={(on) => void run(t("settings-feishubot.save_failed"), () => updateBot({ features: withFeature(features, f.key, on) }))} />
                 </div>
               );
             })}

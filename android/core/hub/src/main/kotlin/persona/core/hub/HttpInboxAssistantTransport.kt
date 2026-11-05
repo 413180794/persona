@@ -41,9 +41,9 @@ class HttpInboxAssistantTransport private constructor(
 
     private fun checkScope() { if (!isCurrent()) throw CancellationException("Pairing changed") }
 
-    private suspend fun json(url: HttpUrl, body: JsonObject? = null): JsonObject {
+    private suspend fun json(url: HttpUrl, body: JsonObject? = null, method: String = if (body == null) "GET" else "POST"): JsonObject {
         checkScope()
-        return request(url.apiPath(), if (body == null) "GET" else "POST",
+        return request(url.apiPath(), method,
             body?.toString()?.toRequestBody("application/json".toMediaType())).use { response ->
             checkScope()
             val text = response.body?.string().orEmpty()
@@ -165,6 +165,41 @@ class HttpInboxAssistantTransport private constructor(
         require(messageId.isNotBlank() && url.isNotBlank())
         return json(this.url("api", "v1", "lark", "messages", messageId, "url-preview").newBuilder()
             .addQueryParameter("url", url).build())
+    }
+
+    override suspend fun inboxMutes() = json(url("api", "v1", "inbox", "mutes"))
+    override suspend fun muteInbox(itemId: String, tag: String): JsonObject {
+        require(itemId.isNotBlank() && tag.isNotBlank())
+        return json(url("api", "v1", "inbox", "mutes"), buildJsonObject { put("item_id", itemId); put("tag", tag) })
+    }
+    override suspend fun unmuteInbox(id: String) {
+        require(id.isNotBlank())
+        json(url("api", "v1", "inbox", "mutes", id), method = "DELETE")
+    }
+
+    override suspend fun larkChatPins(feedId: String, accountId: String?, cursor: String?) = json(
+        url("api", "v1", "lark", "conversations", feedId, "pins").newBuilder().apply {
+            addQueryParameter("limit", "50")
+            accountId?.let { addQueryParameter("account_id", it) }
+            cursor?.let { addQueryParameter("cursor", it) }
+        }.build(),
+    )
+    override suspend fun larkPinTarget(feedId: String, messageId: String, accountId: String, topic: Boolean) = json(
+        url("api", "v1", "lark", "conversations", feedId, "pin-messages", messageId).newBuilder()
+            .addQueryParameter("account_id", accountId).addQueryParameter("topic", if (topic) "1" else "0").build(),
+    )
+    override suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String): JsonObject {
+        require(feedId.isNotBlank() && messageId.isNotBlank() && accountId.isNotBlank())
+        return json(url("api", "v1", "lark", "conversations", feedId, "pins"), buildJsonObject {
+            put("account_id", accountId); put("message_id", messageId)
+            pinId?.let { put("pin_id", it) }
+            put("remove", pinId != null)
+        })
+    }
+    override suspend fun larkReadStates(feedId: String, messageIds: List<String>): JsonObject {
+        require(feedId.isNotBlank() && messageIds.isNotEmpty())
+        return json(url("api", "v1", "lark", "conversations", feedId, "read-states"),
+            buildJsonObject { putJsonArray("message_ids") { messageIds.distinct().forEach { add(it) } } })
     }
 
     override suspend fun media(ref: String): ByteArray = readMedia(ref, document = false)

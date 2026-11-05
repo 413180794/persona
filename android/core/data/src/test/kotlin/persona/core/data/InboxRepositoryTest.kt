@@ -473,6 +473,50 @@ class InboxRepositoryTest {
         }
     }
 
+    @Test fun aMuteFilesWhatItCoversAtOnceAndAFailurePutsThemBack() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-mute-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(id: String, repo: String) = buildJsonObject {
+                put("id", id); put("source", "github"); put("kind", "mention"); put("title", id)
+                putJsonArray("mutes") { add(buildJsonObject { put("tag", "repo"); put("value", repo) }) }
+            }
+            val chat = buildJsonObject {
+                put("id", "l"); put("source", "lark"); put("kind", "group"); put("title", "l")
+                putJsonObject("lark") { put("feed_id", "f"); put("is_group", true); put("is_topic", true) }
+            }
+            val transport = FakeTransport().apply { items = JsonArray(listOf(item("a", "o/r"), item("b", "o/r"), item("c", "o/other"), chat)) }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            fun done() = repository.snapshot.value.records.filter { it.item.isDone }.map { it.item.id }.toSet()
+            val records = repository.snapshot.value.records.associateBy { it.item.id }
+            // A Feishu row carries its chat's kind (read receipts, Pin 消息 in a topic group).
+            assertEquals(true to true, records.getValue("l").isGroup to records.getValue("l").isTopic)
+            assertEquals(null, records.getValue("a").isGroup)
+
+            val seen = mutableListOf<Set<String>>()
+            transport.onMute = { id, tag -> seen += done(); assertEquals("a" to "repo", id to tag); throw IOException("offline") }
+            assertThrows(IOException::class.java) { runBlocking { repository.mute(records.getValue("a"), records.getValue("a").mutes.single()) } }
+            // Filed while the request was out, the other repository's item untouched; back after the failure.
+            assertEquals(listOf(setOf("a", "b")), seen)
+            assertEquals(emptySet<String>(), done())
+
+            transport.onMute = { _, _ -> seen += done(); JsonObject(emptyMap()) }
+            // The hub files them too, so the refresh after the mute keeps them done.
+            transport.items = JsonArray(transport.items.map { row ->
+                val id = (row as JsonObject)["id"]!!.jsonPrimitive.content
+                if (id in setOf("a", "b")) JsonObject(row + ("done_at" to JsonPrimitive("2026-11-04T08:00:00Z"))) else row
+            })
+            repository.mute(records.getValue("b"), records.getValue("b").mutes.single())
+            assertEquals(setOf("a", "b"), seen.last())
+            assertEquals(setOf("a", "b"), done())
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     // A Feishu chat that keeps announcing itself unchanged, and a burst of inbox changes, over a shown list on a slow
     // hub: the list never goes back to loading (which inserts a row and pushes it down), Feishu events do not refresh
     // the inbox (the hub sends {"type":"inbox"} when it changes), the burst is one refresh instead of a queue, and an
@@ -664,5 +708,7 @@ class InboxRepositoryTest {
         override suspend fun pins() = JsonObject(emptyMap())
         override suspend fun mutes() = JsonObject(emptyMap())
         override suspend fun media(ref: String) = byteArrayOf(1).also { mediaRefs += ref }
+        var onMute: suspend (String, String) -> JsonObject = { _, _ -> JsonObject(emptyMap()) }
+        override suspend fun muteInbox(itemId: String, tag: String) = onMute(itemId, tag)
     }
 }

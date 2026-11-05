@@ -61,8 +61,9 @@ class LarkInboxRepository(
             combine(w.state, locals, base.snapshot) { state, messages, inbox ->
                 val pending = if (!state.hasNewer) messages.filter { it.position == null && it.clientId != null }
                     .filterNot { local -> state.messages.any { it.id == local.id || it.clientId == local.clientId } } else emptyList()
-                state.copy(title = inbox.records.firstOrNull { it.feedId == feedId }?.item?.title ?: state.title,
-                    messages = state.messages + pending)
+                val row = inbox.records.firstOrNull { it.feedId == feedId }
+                state.copy(title = row?.item?.title ?: state.title, messages = state.messages + pending,
+                    isGroup = row?.isGroup ?: state.isGroup, isTopic = row?.isTopic ?: state.isTopic)
             }.collect { send(it) }
         }
     }
@@ -95,8 +96,56 @@ class LarkInboxRepository(
     override suspend fun emojis(): JsonObject? {
         return transports.value?.emojis()
     }
+    private fun transport() = requireNotNull(transports.value) { "Not paired" }
+
+    /**
+     * A hub without Pin 消息 answers 404 / 405 with no code of its own: it needs an update (iOS `chatPinRequest`).
+     * The hub's own codes for a switched account and an unknown result read as those failures.
+     */
+    private suspend fun <T> pinRequest(block: suspend () -> T): T = try { block() } catch (e: Exception) {
+        val failure = e as? persona.core.hub.HubFailure
+        val code = failure?.code.orEmpty().lowercase()
+        throw when {
+            failure == null -> e
+            code == "lark_account_changed" -> LarkPinFailure(LarkPinFailure.Kind.AccountChanged)
+            code == "lark_pin_result_unknown" -> LarkPinFailure(LarkPinFailure.Kind.ResultUnknown)
+            failure.status in setOf(404, 405) && code in setOf("", "not_found", "method_not_allowed") -> LarkPinFailure(LarkPinFailure.Kind.UpgradeRequired)
+            else -> e
+        }
+    }
+
+    override suspend fun larkChatPins(feedId: String, accountId: String?, cursor: String?): LarkChatPinsPage {
+        val transport = transport()
+        val page = larkPinsPage(pinRequest { transport.larkChatPins(feedId, accountId, cursor) }) { larkMessage(it, transport, feedId) }
+        if (page.accountId.isBlank() || accountId != null && page.accountId != accountId) throw LarkPinFailure(LarkPinFailure.Kind.AccountChanged)
+        return page
+    }
+
+    override suspend fun larkPinTarget(feedId: String, messageId: String, accountId: String, topic: Boolean): LarkPinTarget {
+        val transport = transport()
+        val body = pinRequest { transport.larkPinTarget(feedId, messageId, accountId, topic) }
+        val target = body["target"] as? JsonObject
+        val message = target?.get("message") as? JsonObject
+        if (body.text("account_id") != accountId || message == null || message.text("id") != messageId)
+            throw LarkPinFailure(LarkPinFailure.Kind.AccountChanged)
+        return LarkPinTarget(larkMessage(message, transport, feedId), (target["root"] as? JsonObject)?.let { larkMessage(it, transport, feedId) })
+    }
+
+    override suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String?) {
+        val transport = transport()
+        // 添加 Pin from a message: the account is the one the chat's pins answer for.
+        val account = accountId ?: larkChatPins(feedId, null, null).accountId
+        val body = pinRequest { transport.larkChangePin(feedId, messageId, pinId, account) }
+        if (body.text("account_id") != account) throw LarkPinFailure(LarkPinFailure.Kind.AccountChanged)
+        if (body.flag("pinned") != (pinId == null)) throw LarkPinFailure(LarkPinFailure.Kind.ResultUnknown)
+    }
+
+    override suspend fun larkReadStates(feedId: String, messageIds: List<String>): List<LarkReadState> =
+        if (messageIds.isEmpty()) emptyList() else larkReadStates(transport().larkReadStates(feedId, messageIds.take(LarkReadReceipts.BATCH)))
+
     override suspend fun larkMessageDisplay(): LarkMessageDisplay? =
         transports.value?.messageDisplay()?.let(::larkMessageDisplay)?.takeIf { it.accountId.isNotBlank() }
+
     override suspend fun latestConversation(feedId: String) {
         val w = window(feedId)
         w.lock.withLock {

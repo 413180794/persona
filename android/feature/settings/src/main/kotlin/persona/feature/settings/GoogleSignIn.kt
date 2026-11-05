@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import persona.core.contracts.api.ConnectorsManagement
 import persona.core.contracts.api.GoogleFinish
 import persona.core.contracts.api.MailAccount
+import persona.core.contracts.api.MicrosoftFinish
 
 /**
  * Gmail's 「使用 Google 账号登录」 on Android (docs/mail.md「Android」).
@@ -26,9 +27,12 @@ import persona.core.contracts.api.MailAccount
  * the page says so and offers Gmail with an app password.
  */
 object GoogleSignIn {
+    /** Whose sign-in is waiting: Google's (Gmail) or Microsoft's (Outlook, `jarvis-mail-oauth://outlook`). */
+    enum class Provider { Google, Microsoft }
+
     sealed interface Result {
         data class Code(val code: String, val state: String?) : Result
-        data class Failed(val error: String, val state: String?) : Result
+        data class Failed(val error: String, val state: String?, val description: String? = null) : Result
         data object Cancelled : Result
     }
 
@@ -51,10 +55,12 @@ object GoogleSignIn {
     }
 
     private var expectedState: String? = null
+    @Volatile private var provider = Provider.Google
 
-    fun canReceive(ctx: Context, scheme: String): Boolean {
+    fun canReceive(ctx: Context, scheme: String, provider: Provider = Provider.Google): Boolean {
         if (scheme.isBlank()) return false
-        val probe = Intent(Intent.ACTION_VIEW, Uri.parse("$scheme:/oauth2redirect")).setPackage(ctx.packageName)
+        val uri = if (provider == Provider.Microsoft) "$scheme://outlook" else "$scheme:/oauth2redirect"
+        val probe = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(ctx.packageName)
             .addCategory(Intent.CATEGORY_BROWSABLE)
         return ctx.packageManager.queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY).isNotEmpty()
     }
@@ -69,7 +75,7 @@ object GoogleSignIn {
         val state = uri.getQueryParameter("state")
         val expected = expectedState
         if (state.isNullOrEmpty() || expected == null || state != expected) return
-        val r = parse(uri.getQueryParameter("code"), state, uri.getQueryParameter("error"))
+        val r = parse(uri.getQueryParameter("code"), state, uri.getQueryParameter("error"), uri.getQueryParameter("error_description"))
         val d = pending
         if (d != null && d.isActive) {
             d.complete(r)
@@ -80,8 +86,8 @@ object GoogleSignIn {
         scope.launch { finish(connectors, r, expected) }
     }
 
-    fun parse(code: String?, state: String?, error: String?): Result = when {
-        !error.isNullOrEmpty() -> if (error == "access_denied") Result.Cancelled else Result.Failed(error, state)
+    fun parse(code: String?, state: String?, error: String?, description: String? = null): Result = when {
+        !error.isNullOrEmpty() -> if (error == "access_denied") Result.Cancelled else Result.Failed(error, state, description)
         !code.isNullOrEmpty() -> Result.Code(code, state)
         else -> Result.Cancelled
     }
@@ -90,8 +96,11 @@ object GoogleSignIn {
         val outcome = try {
             when (r) {
                 is Result.Cancelled -> null
-                is Result.Failed -> connectors.googleSignInFinish(GoogleFinish(state, null, r.error))
-                is Result.Code -> connectors.googleSignInFinish(GoogleFinish(state, r.code))
+                // Microsoft's error goes to the hub too: it says what to do about it (an admin has to consent, IMAP is off…).
+                is Result.Failed -> if (provider == Provider.Microsoft) connectors.microsoftSignInFinish(MicrosoftFinish(state, null, r.error, r.description))
+                    else connectors.googleSignInFinish(GoogleFinish(state, null, r.error))
+                is Result.Code -> if (provider == Provider.Microsoft) connectors.microsoftSignInFinish(MicrosoftFinish(state, r.code))
+                    else connectors.googleSignInFinish(GoogleFinish(state, r.code))
             }?.let { Finished.Added(it) }
         } catch (e: CancellationException) {
             throw e
@@ -101,10 +110,17 @@ object GoogleSignIn {
         if (outcome != null) _finished.value = outcome
     }
 
-    suspend fun signIn(ctx: Context, connectors: ConnectorsManagement, loginHint: String? = null) {
-        val start = connectors.googleSignInStart(loginHint)
-        if (!canReceive(ctx, start.callbackScheme)) throw UnsupportedOperationException(start.callbackScheme)
+    suspend fun signIn(ctx: Context, connectors: ConnectorsManagement, loginHint: String? = null) =
+        run(ctx, connectors, Provider.Google, connectors.googleSignInStart(loginHint))
+
+    /** Outlook's 使用 Microsoft 账号登录 (docs/mail.md「Outlook 接入方式」): the same flow on Microsoft's page. */
+    suspend fun signInMicrosoft(ctx: Context, connectors: ConnectorsManagement) =
+        run(ctx, connectors, Provider.Microsoft, connectors.microsoftSignInStart())
+
+    private suspend fun run(ctx: Context, connectors: ConnectorsManagement, provider: Provider, start: persona.core.contracts.api.GoogleStart) {
+        if (!canReceive(ctx, start.callbackScheme, provider)) throw UnsupportedOperationException(start.callbackScheme)
         pending?.complete(Result.Cancelled)
+        this.provider = provider
         val d = CompletableDeferred<Result>()
         pending = d
         activeConnectors = connectors

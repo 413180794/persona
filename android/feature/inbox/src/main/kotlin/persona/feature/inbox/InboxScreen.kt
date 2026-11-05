@@ -149,6 +149,19 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             finally { asked.forEach { pending.remove(it.id) } }
         }
     }
+    // 静音这个仓库 / 会话 / 发件人 from a row's menu (iOS `InboxStore.mute`): what it covers is filed at once.
+    fun mute(record: InboxRecord, option: InboxMuteOption) {
+        scope.launch {
+            try {
+                repository.mute(record, option)
+                error = null
+                feedback?.notice(res.getString(R.string.inbox_muted_notice, option.name))
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { if (feedback?.failure(e) != true) error = res.getString(R.string.inbox_failed_restored) }
+        }
+    }
+    var showMutes by remember { mutableStateOf(false) }
+    if (showMutes) InboxMutesSheet(repository, onDismiss = { showMutes = false })
     LaunchedEffect(repository) { refresh(collectNow = false) }
     // The title while the hub is out of reach opens why, since when and 立即重试 in place (iOS ConnectionTitle).
     val connectionDetails = rememberConnectionDetails(shownConnection, { navigator.navigate(ConnectionSettingsRoute) }, onRetry = { refresh(collectNow = false) })
@@ -166,6 +179,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             actions = listOf(
                 JAction(bulkLabel(res, bulk.size, scopeText), PhIcons.Checks, enabled = bulk.isNotEmpty()) { bulkAll(InboxBulkAction.Done) },
                 JAction(bulkLabel(res, bulk.size, scopeText, dismiss = true), PhIcons.Prohibit, enabled = bulk.isNotEmpty()) { bulkAll(InboxBulkAction.Dismiss) },
+                JAction(res.getString(R.string.inbox_mutes_title), PhIcons.Prohibit, separatorBefore = true) { showMutes = true },
             ),
             note = if (scopeText == null) stringResource(R.string.inbox_bulk_note_all) else stringResource(R.string.inbox_bulk_note_scope, scopeText))
     }
@@ -284,7 +298,8 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                     } else records[row.id]?.let { record ->
                         val done = pending[record.item.id] ?: record.item.isDone
                         InboxItemRow(record, repository, navigator, composers, position, done, record.item.id in pending, onlineSince,
-                            onDone = { markDone(record.item.id, !done) }, onHandOff = { handingOff = record.item.id })
+                            onDone = { markDone(record.item.id, !done) }, onHandOff = { handingOff = record.item.id },
+                            onMute = { option -> mute(record, option) })
                     }
                 }
             }
@@ -308,6 +323,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
 private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navigator: Navigator,
     composers: ReplyComposers, position: GroupPosition, done: Boolean, busy: Boolean, onlineSince: Long?, onDone: () -> Unit,
     onHandOff: () -> Unit,
+    onMute: (InboxMuteOption) -> Unit = {},
 ) {
     val item = record.item
     val pages = LocalInboxItemPages.current
@@ -316,10 +332,15 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
     val res = LocalResources.current
     val doneLabel = stringResource(if (done) R.string.inbox_move_back else R.string.inbox_done)
     val handOffLabel = stringResource(R.string.inbox_hand_to_ai)
-    if (menu) JActionSheet(title = item.title, onDismiss = { menu = false }, actions = listOf(
-        JAction(doneLabel, PhIcons.Check, enabled = !busy, onClick = onDone),
-        JAction(handOffLabel, PhIcons.Robot, onClick = onHandOff),
-    ))
+    if (menu) JActionSheet(title = item.title, onDismiss = { menu = false }, actions = buildList {
+        add(JAction(doneLabel, PhIcons.Check, enabled = !busy, onClick = onDone))
+        add(JAction(handOffLabel, PhIcons.Robot, onClick = onHandOff))
+        // What the item can be muted by, the name with each (iOS `rowMenu`): its repository, chat or sender.
+        record.mutes.forEachIndexed { i, option ->
+            add(JAction(res.getString(R.string.inbox_mute_option, res.getString(option.title), option.shortName), PhIcons.Prohibit,
+                separatorBefore = i == 0) { onMute(option) })
+        }
+    })
     JSwipeActions(
         start = if (busy) null else SwipeAction(doneLabel, PhIcons.Check, Status.Unread, onDone),
         end = SwipeAction(handOffLabel, PhIcons.Robot, Status.Working, onHandOff),

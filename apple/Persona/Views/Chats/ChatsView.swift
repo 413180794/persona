@@ -493,10 +493,13 @@ private struct AgentsList: View {
     private func session(_ key: SessionKey) -> Session? { lookup.sessions[key] }
 
     /// The agents the machine menu and the search leave.
+    /// The stored filters are read once, not once per agent: each read of a `@StoredValue` builds its key path anew
+    /// (#343, a few percent of every push on the main thread).
     private var base: [Session] {
-        sessions.filter { s in
+        let machineFilter = machineFilter, hubFilter = hubFilter, multiHub = model.isMultiHub
+        return sessions.filter { s in
             !s.assistant && (machineFilter.isEmpty || s.machineRef.path == machineFilter) &&
-            (!model.isMultiHub || HubFilter.matches(hubFilter, s.group)) &&
+            (!multiHub || HubFilter.matches(hubFilter, s.group)) &&
             (query.isEmpty || [s.title, s.cwd, s.lastText ?? "", s.spaceName ?? "", s.slotName ?? ""]
                 .contains { $0.localizedCaseInsensitiveContains(query) })
         }
@@ -621,7 +624,7 @@ private struct AgentsList: View {
             // leaving a blurred gap, TestFlight 35). Beside the split (regular width) it stays above the list.
             if widthClass != .regular {
                 Section {
-                    filterBar
+                    filterBar(base)
                         #if os(iOS) || os(visionOS)
                         .background { DrawerPan.NoRowSwipe() } // no swipe of its own: a drag to the right pages to 助手
                         #endif
@@ -779,7 +782,7 @@ private struct AgentsList: View {
         // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone it is the list's
         // first row (above).
         .modifier(TopBar(abovePage: widthClass == .regular) {
-            filterBar
+            filterBar(base)
             if showsHerdrNotices { herdrNoticesAbove } // beside the split: over the list, not its first section
         })
         .navigationTitle("Agents")
@@ -866,7 +869,8 @@ private struct AgentsList: View {
 
     /// The quick filter bar. Equal while the counts are: the bar is not drawn again for pushes that change none of
     /// them. The tap reads the list as it is then.
-    private var filterBar: some View {
+    /// `base`: as the body worked it out (working it out again here went through every agent twice more per push).
+    private func filterBar(_ base: [Session]) -> some View {
         QuickFilterBar(selection: quick, counts: Self.counts(base, muted: model.isMuted)) { choose($0, self.base) }.equatable()
     }
 
@@ -1609,6 +1613,28 @@ private struct AgentsList: View {
     /// `pane`, `branch`: an agent of a tab with several, and one hanging off its 发起者 (a level further in).
     private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil,
                          showHost: Bool = false, depth: Int = 0, pane: TabPanes.Role? = nil, branch: Bool = false) -> some View {
+        // Following the feed, the row's own `FeedRow` draws its last line and time: only the rest is the row's key.
+        let shown = feed.following ? AgentsFeed.shape([s], searching: false).sessions[0] : s
+        #if os(macOS)
+        let open = s.key == macOpenNow
+        #else
+        let open = false
+        #endif
+        let key = SlotRowKey(session: shown, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost,
+                             depth: depth, pane: pane, branch: branch, searching: searching, query: searching ? query : "",
+                             compact: compact, capsules: capsules, grouping: grouping.rawValue, allMachines: machineFilter.isEmpty,
+                             machine: context ? machine(s.machineRef)?.title : nil, pinned: model.isPinned(s.key),
+                             muted: model.isMuted(s), open: open)
+        return KeyedRow(key: key) {
+            slotRowBody(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost, depth: depth,
+                        pane: pane, branch: branch)
+        }
+        // Not `.equatable()`: through an `EquatableView` the row's list traits (insets, separator, background) were
+        // lost. SwiftUI compares a view with its own `==` when it has one.
+    }
+
+    private func slotRowBody(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool?, showHost: Bool, depth: Int,
+                             pane: TabPanes.Role?, branch: Bool) -> some View {
         let level = depth + (branch ? 1 : 0)
         let closes = s.state.isLive && s.canTerminal // the row's 关闭, and its mark for the strip (#2822)
         return Group {
@@ -1684,6 +1710,42 @@ private struct AgentsList: View {
                     .equatable()
             }
     }
+}
+
+/// What an Agents row is drawn from apart from what its body watches (`slotRow`): the values it is handed and the
+/// list's own state. When the list's structure changes (a new order, on about half of a busy hub's pushes) each row
+/// whose key is the same is not built again: building every row's chain of modifiers took a fifth of each push (#343).
+nonisolated struct SlotRowKey: Equatable, Sendable {
+    var session: Session
+    var context: Bool
+    var inStateSection: Bool
+    var cardLast: Bool?
+    var showHost: Bool
+    var depth: Int
+    var pane: TabPanes.Role?
+    var branch: Bool
+    var searching: Bool
+    /// While searching: a result's tap keeps the text searched for.
+    var query: String
+    var compact: Bool
+    var capsules: Bool
+    var grouping: String
+    var allMachines: Bool
+    var machine: String?
+    var pinned: Bool
+    var muted: Bool
+    /// The Mac: the row of the agent open beside the list.
+    var open: Bool
+}
+
+/// A view drawn again only when its `key` changes or what its body watches does (its `==`).
+private struct KeyedRow<Key: Equatable & Sendable, Content: View>: View, Equatable {
+    nonisolated let key: Key
+    @ViewBuilder let content: () -> Content
+
+    var body: some View { content() }
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 }
 
 /// One row of the Agents list, drawn from its agent as it is now (`AgentsFeed.Row`). It tells `reader` where it is,
@@ -2837,14 +2899,15 @@ private struct AgentsDestinations: ViewModifier {
 
 /// A bar above a list in a stack (the split's sidebar column). Otherwise nothing: on a phone the bar is the list's
 /// first row, so the folding search field leaves no gap above it.
+/// `bar` is made only when it shows: on a phone it is not, and making it counted the agents again on every push.
 private struct TopBar<Bar: View>: ViewModifier {
     var abovePage: Bool
-    @ViewBuilder var bar: Bar
+    @ViewBuilder var bar: () -> Bar
 
     func body(content: Content) -> some View {
         if abovePage {
             VStack(spacing: 0) {
-                bar
+                bar()
                 content
             }
             .background(Theme.pageBackground)

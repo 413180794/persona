@@ -27,6 +27,15 @@
     </plurals>
     <string name="agents_requests_history">Requests and history</string>
     <string name="agents_mark_all_read">Mark all as read</string>
+    <plurals name="agents_mark_all_read_count">
+        <item quantity="one">1 to review</item>
+        <item quantity="other">%1$d to review</item>
+    </plurals>
+    <plurals name="agents_mark_all_read_confirm">
+        <item quantity="one">Mark 1 finished session you have not seen as read?</item>
+        <item quantity="other">Mark %1$d finished sessions you have not seen as read?</item>
+    </plurals>
+    <string name="agents_mark_all_read_action">Mark all as read (%1$d)</string>
     <plurals name="agents_count_repos">
         <item quantity="one">1 repository</item>
         <item quantity="other">%1$d repositories</item>

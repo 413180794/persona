@@ -90,6 +90,7 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
     val snackbar = remember { SnackbarHostState() }
     val feedback = LocalAppFeedback.current
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
+    var confirmRead by remember { mutableStateOf<List<AgentSession>?>(null) }
     var newAgent by rememberSaveable { mutableStateOf(false) }
     val creation = creationModel?.state?.collectAsStateWithLifecycle()?.value
     var now by remember { mutableStateOf(Instant.now()) }
@@ -146,7 +147,7 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
             AgentSpaceMenu(session, shown.preferenceKey in page.preferences.pins.spaces, shown.preferenceKey in page.preferences.mutes.spaces,
                 operations.busy, onPin = { model.spacePin(session) }, onMute = { model.spaceMute(session) },
                 onRename = { operationDialog = AgentOperationDialog.RenameSpace(session) },
-                onMarkRead = unread.takeIf { it.isNotEmpty() }?.let { rows -> { model.markRead(rows) } })
+                onMarkRead = unread.takeIf { it.isNotEmpty() }?.let { rows -> { confirmRead = rows } })
         },
         sessionMenu = rowMenu, title = route.title,
         // The page's list arrives a moment after it opens: no 「没有运行中的 Agent」 flash before that.
@@ -155,6 +156,7 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
     operationDialog?.let { dialog ->
         AgentOperationDialog(dialog, model, page.machines.firstOrNull { it.id == dialog.session.machineId }?.displayName) { operationDialog = null }
     }
+    confirmRead?.let { rows -> MarkAllReadDialog(rows.size, onDismiss = { confirmRead = null }) { model.markRead(rows) } }
     if (newAgent) {
         if (creationModel != null) NewAgentDialog(creationModel, page.machines, connection == ConnectionState.Online) { newAgent = false }
         else JDialog(onDismiss = { newAgent = false }, title = stringResource(R.string.agents_action_new_session),

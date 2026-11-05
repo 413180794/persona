@@ -144,6 +144,8 @@ data class Todo(
     val quiet: Boolean = false,
     val agents: List<TodoAgent> = emptyList(),
     val spaces: List<TodoSpace>? = null,
+    /** The main conversation supervises it (#3124): what done means and where its review stands; null from an older hub. */
+    val supervision: Supervision? = null,
 ) {
     val isDone: Boolean get() = doneAt != null
     val activeAgents get() = agents.filter { it.releasedAt == null }
@@ -153,6 +155,43 @@ data class Todo(
     val updated: Instant? get() = parseTime(updatedAt)
     val done: Instant? get() = parseTime(doneAt)
 }
+
+/** One criterion as a review found it (#3124). */
+@KeepGeneratedSerializer
+@Serializable(with = ReviewCheckSerializer::class)
+data class ReviewCheck(
+    val criterion: String = "",
+    val met: Boolean = false,
+    val evidence: String? = null,
+)
+
+/** One review of a supervised task: accepted, rework (with its round), needs_user or cancelled. */
+@KeepGeneratedSerializer
+@Serializable(with = TaskReviewSerializer::class)
+data class TaskReview(
+    @WireTime val at: String? = null,
+    val verdict: String = "",
+    val round: Int = 0,
+    val checks: List<ReviewCheck> = emptyList(),
+    val note: String? = null,
+)
+
+/**
+ * A supervised task's ledger (#3124, docs/unified-entry.md「督办」): its supervisor (the conversation that handed it
+ * out), what done means, how long it should take, and its review: [state] "" while it goes on, then pending_review,
+ * rework ([round] counts them), needs_user, accepted or cancelled.
+ */
+@KeepGeneratedSerializer
+@Serializable(with = SupervisionSerializer::class)
+data class Supervision(
+    val supervisor: String = "",
+    @SerialName("done_when") val doneWhen: List<String> = emptyList(),
+    @SerialName("expect_minutes") val expectMinutes: Int = 0,
+    val state: String = "",
+    val round: Int = 0,
+    val reviews: List<TaskReview> = emptyList(),
+    @WireTime @SerialName("updated_at") val updatedAt: String? = null,
+)
 
 /**
  * Todo states in order of rank (umbrella.final.md / docs/todos.md「状态计算规则」):
@@ -279,6 +318,9 @@ object FeedItemSerializer : WireSerializer<FeedItem>(FeedItem.generatedSerialize
 object TodoSpaceSerializer : WireSerializer<TodoSpace>(TodoSpace.generatedSerializer())
 object TodoAgentSerializer : WireSerializer<TodoAgent>(TodoAgent.generatedSerializer())
 object TodoSerializer : WireSerializer<Todo>(Todo.generatedSerializer())
+object ReviewCheckSerializer : WireSerializer<ReviewCheck>(ReviewCheck.generatedSerializer())
+object TaskReviewSerializer : WireSerializer<TaskReview>(TaskReview.generatedSerializer())
+object SupervisionSerializer : WireSerializer<Supervision>(Supervision.generatedSerializer())
 object TodosResponseSerializer : WireSerializer<TodosResponse>(TodosResponse.generatedSerializer())
 object FeedResponseSerializer : WireSerializer<FeedResponse>(FeedResponse.generatedSerializer())
 object TodosEventSerializer : WireSerializer<TodosEvent>(TodosEvent.generatedSerializer())

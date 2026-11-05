@@ -270,7 +270,10 @@ private fun SettingsContent(
         "feishu" -> FeishuConnectorPage(connectorsService, onBack = back, onAgentModel = {
             onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("lark.agent")) ?: run { purpose = "lark.agent" }
         })
-        else -> if (page.startsWith("connector/")) {
+        // 信息 has its own page, as on iOS: 交给 Persona, its steps on the Mac, 会话 (MessagesConnector.kt).
+        else -> if (page == "connector/imessage") {
+            MessagesConnectorPage(connectorsService, onBack = back)
+        } else if (page.startsWith("connector/")) {
             HubConnectorPage(connectorsService, connectorId = page.removePrefix("connector/"), onBack = back)
         } else JListPage(title = stringResource(R.string.settings_title)) {
             if (services.demo) {

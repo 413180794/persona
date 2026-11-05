@@ -105,8 +105,9 @@ describe("代码托管组件", () => {
     code.line_url = "https://example.com/blob/main/retry.go#L{start}-L{end}";
     host = document.createElement("div");
     document.body.append(host);
-    const root = createRoot(host);
-    flush(() => root.render(<ViewSections view={view} {...INERT} onAct={() => {}} />));
+    const r = createRoot(host);
+    root = r;
+    flush(() => r.render(<ViewSections view={view} {...INERT} onAct={() => {}} />));
     const card = host.querySelector(".code-hl")!.parentElement!;
     click(card.querySelector('[aria-label="查找"], [aria-label="Find"]'));
     const input = card.querySelector("input")!;

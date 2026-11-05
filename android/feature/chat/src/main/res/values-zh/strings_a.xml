@@ -419,4 +419,18 @@
     <string name="chat_goal_tokens_budget">%1$s / %2$s tokens</string>
     <string name="chat_goal_minutes">%1$d 分钟</string>
     <string name="chat_goal_hours">%1$d 小时 %2$d 分</string>
+    <string name="chat_review_ongoing">督办中</string>
+    <string name="chat_review_pending">待验收</string>
+    <string name="chat_review_rework">返工第 %1$d 轮</string>
+    <string name="chat_review_needs_user">等你决定</string>
+    <string name="chat_review_accepted">已验收</string>
+    <string name="chat_review_cancelled">已取消</string>
+    <string name="chat_review_line">验收</string>
+    <string name="chat_review_title">验收标准</string>
+    <string name="chat_review_none">派活时没写验收标准</string>
+    <string name="chat_review_open">还没验收</string>
+    <string name="chat_review_met">达成</string>
+    <string name="chat_review_missing">缺口</string>
+    <string name="chat_review_note">督办说明：%1$s</string>
+    <string name="chat_review_expect">预计 %1$d 分钟</string>
 </resources>

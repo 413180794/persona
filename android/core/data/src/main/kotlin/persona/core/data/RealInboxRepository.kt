@@ -262,6 +262,29 @@ class RealInboxRepository(
         }
     }
 
+    override suspend fun inboxMutes(): List<persona.feature.inbox.InboxMute> =
+        persona.feature.inbox.inboxMutes(requireTransport().inboxMutes())
+
+    // 静音这个仓库 / 会话 / 发件人: the items it covers are done at once (the hub files them too), back if it fails.
+    override suspend fun mute(record: InboxRecord, option: persona.feature.inbox.InboxMuteOption) {
+        val transport = requireTransport()
+        val covered = refreshLock.withLock {
+            val ids = persona.feature.inbox.mutedBy(current.value.records, record, option)
+            val old = current.value.records.filter { it.item.id in ids }
+            val doneAt = Instant.now().toString()
+            current.update { it.copy(records = it.records.map { r -> if (r.item.id in ids) r.copy(item = r.item.copy(doneAt = doneAt)) else r }) }
+            old
+        }
+        try { transport.muteInbox(record.item.id, option.tag) }
+        catch (e: Exception) {
+            if (owns(transport)) refreshLock.withLock { covered.forEach(::replaceRecord) }
+            throw e
+        }
+        quietly { refresh() }
+    }
+
+    override suspend fun unmute(id: String) = requireTransport().unmuteInbox(id)
+
     override suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): InboxBulkResult =
         bulk(items, if (done) InboxBulkAction.Done else InboxBulkAction.Reopen)
 
@@ -866,6 +889,8 @@ class RealInboxRepository(
                 it.string("task"), it.optional("machine_id"), it.optional("session_id")) },
             source = data.string("source"),
             atAll = lark?.flag("at_all") == true,
+            isGroup = lark?.let { it.flag("is_group") },
+            isTopic = lark?.let { it.flag("is_topic") },
             read = data.flag("read"),
             mail = mail?.let {
                 InboxMailRef(it.string("account_id"), it.optional("mailbox") ?: "INBOX",
@@ -895,6 +920,7 @@ class RealInboxRepository(
                     persona.feature.inbox.InboxConnectorRef(thread, c.optional("label"), c.flag("can_reply"), c.optional("reply_to"))
                 }
             },
+            mutes = persona.feature.inbox.inboxMuteOptions(data),
         )
     }
 

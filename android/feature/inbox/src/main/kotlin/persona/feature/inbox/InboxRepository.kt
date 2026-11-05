@@ -87,7 +87,22 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun userProfile(userId: String, feedId: String? = null): kotlinx.serialization.json.JsonObject? = null
     suspend fun quickReactions(): List<String> = emptyList()
     suspend fun emojis(): kotlinx.serialization.json.JsonObject? = null
-    /** The account''t be read (then nothing is decoded). */
+
+    /** 已静音 (docs/inbox.md「静音」): what the user muted, in every source, newest first. */
+    suspend fun inboxMutes(): List<InboxMute> = error("静音尚未接入") // i18n-ignore: developer error for a repository without the hub
+    /** 静音这个仓库 / 会话 / 发件人: the item and the open ones of its source it covers are done at once; a failure puts them back. */
+    suspend fun mute(record: InboxRecord, option: InboxMuteOption): Unit = error("静音尚未接入") // i18n-ignore: developer error
+    suspend fun unmute(id: String): Unit = error("静音尚未接入") // i18n-ignore: developer error
+
+    /** A chat's Pin 消息, a page at a time ([accountId] null: the hub's current account, which the page names). */
+    suspend fun larkChatPins(feedId: String, accountId: String?, cursor: String?): LarkChatPinsPage = error("Chat pins unavailable")
+    /** Where a pin's message is: the message itself, and the thread's root when it is a reply in one ([topic]: a 话题群). */
+    suspend fun larkPinTarget(feedId: String, messageId: String, accountId: String, topic: Boolean): LarkPinTarget = error("Chat pins unavailable")
+    /** 添加 Pin ([pinId] null) or 移除 Pin; throws [LarkPinFailure] when the hub answers otherwise. */
+    suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String?): Unit = error("Chat pins unavailable")
+    /** Read receipts of my messages; ones lark-connector has none for are left out. */
+    suspend fun larkReadStates(feedId: String, messageIds: List<String>): List<LarkReadState> = emptyList()
+    /** The account''t be read (then kept content stays hidden and nothing is decoded). */
     suspend fun larkMessageDisplay(): LarkMessageDisplay? = null
 }
 
@@ -133,6 +148,11 @@ data class InboxRecord(
     val doc: InboxDocRef? = null,
     /** A hub connector's item (GitHub, Telegram, an extension's): its thread opens as a conversation (ConnectorThread.kt). */
     val connector: InboxConnectorRef? = null,
+    /** What it can be muted by (the row's menu: 静音这个仓库 / 会话 / 发件人); an older hub sends none. */
+    val mutes: List<InboxMuteOption> = emptyList(),
+    /** A Feishu chat's kind (`lark.is_group` / `is_topic`); null for one listed or cached before the hub said. */
+    val isGroup: Boolean? = null,
+    val isTopic: Boolean? = null,
 ) {
     /** A hub connector's item (not Feishu's, not mail): it opens as its connector's thread. */
     val isConnector: Boolean get() = connector != null && !isLark && !isMail && moment == null
@@ -192,68 +212,42 @@ sealed interface ReplyTarget {
 data class ReplyRequest(val text: String, @SerialName("client_id") val clientId: String,
     val mailTarget: persona.core.contracts.api.MailReplyTarget? = null)
 
-/** [ai]: the text came from AI (the AI 分身, or AI 草拟); sending it asks first, sending the user''s own text (recalled, encrypted): 设置 › 翻译 leaves it alone. */
-    val translatable: Boolean = true,
-    /** Recalled by its sender: it has no parts and reads 「消息已撤回」. */
-    val recalled: Boolean = false,
-    /** Shown decoded from [removed] words ([LarkMessage.shown]): the bubble says so under them. */
-    val braveClimb: Boolean = false,
+/** [ai]: the text came from AI (the AI 分身, or AI 草拟); sending it asks first, sending the user''s kind, from its inbox row; null when the inbox does not list it (read receipts go by the counts then). */
+    val isGroup: Boolean? = null,
+    /** A topic group (话题群): Pin 消息 resolves threads with it. */
+    val isTopic: Boolean = false,
 )
 
-data class LarkQuote(val id: String, val sender: String, val text: String, val recalled: Boolean = false)
-
-data class LarkForwardedMessage(
-    val id: String = "",
-    val senderName: String = "",
-    val senderAvatar: AuthenticatedLarkImage? = null,
-    val time: String = "",
-    val text: String = "",
-    val parts: List<LarkPart> = emptyList(),
-)
-
-sealed interface LarkPart {
-    data class Text(val text: String, val source: LarkContentSource? = null) : LarkPart
-    data class Card(val content: LarkCardContent, val source: LarkContentSource, val messageId: String? = null) : LarkPart
-    // Models may carry an authenticated Coil ImageRequest supplied by the data layer.
-    data class Image(val model: Any, val description: String = "", val width: Int = 1, val height: Int = 1) : LarkPart
-    data class File(val ref: String, val name: String, val mimeType: String = "application/octet-stream") : LarkPart
-    data class External(val title: String, val larkUrl: String, val kind: String, val duration: String = "", val cover: Image? = null) : LarkPart
-    data class Code(val code: String, val language: String = "") : LarkPart
-    data class Audio(val ref: String, val durationMs: Long, val source: LarkContentSource? = null) : LarkPart
-    data class Video(val ref: String, val durationMs: Long, val cover: Image? = null, val source: LarkContentSource? = null) : LarkPart
-    data class Sticker(val model: Any, val description: String = "", val width: Int = 1, val height: Int = 1) : LarkPart
-    data class MergeForward(val title: String, val messages: List<LarkForwardedMessage>, val source: LarkContentSource? = null) : LarkPart
+enum class LarkFailure(@androidx.annotation.StringRes val text: Int) {
+    NotPaired(R.string.inbox_lark_not_paired),
+    Incomplete(R.string.inbox_lark_incomplete),
+    LoadFailed(R.string.inbox_lark_messages_failed),
 }
 
-internal fun startsInboxItem(message: LarkMessage, previous: LarkMessage?, start: Long?): Boolean =
-    start != null && message.position != null && message.position >= start &&
-        (previous?.position == null || previous.position < start)
+enum class LarkDelivery { Sent, Sending, Failed, WaitingForNetwork }
 
-internal fun showsSender(message: LarkMessage, previous: LarkMessage?, boundary: Boolean): Boolean =
-    boundary || previous == null || previous.senderId != message.senderId || previous.mine != message.mine
-
-@Serializable
-data class InboxPreferences(
-    val source: String = "",
-    val kind: String = "",
-    val query: String = "",
-    val section: String = "",
-    val expanded: List<String> = listOf("action", "fyi"),
-)
-
-enum class InboxAiAction { Summarize, DraftReply, Handoff }
-@Serializable
-data class InboxPersonaRequest(
-    val itemId: String,
-    val action: InboxAiAction,
-    val operationId: String = UUID.randomUUID().toString(),
-    val context: String? = null,
-)
-@Serializable
-enum class ReplyDelivery { Ready, Queued, WaitingForNetwork, Sending, Unknown, Verifying, Refused, NeedsConfirmation, Sent }
-
-/**
- * One 交给 AI. No [machineId] / [sessionId]: Persona's main conversation. [operationId] stays the same while the same
+data class LarkMessage(
+    val id: String,
+    val senderId: String,
+    val senderName: String,
+    val position: Long? = null,
+    val time: String = "",
+    val mine: Boolean = false,
+    val parts: List<LarkPart>,
+    val clientId: String? = null,
+    val delivery: LarkDelivery = LarkDelivery.Sent,
+    val pendingDelivery: persona.core.contracts.api.DeliveryState? = null,
+    val avatar: AuthenticatedLarkImage? = null,
+    val bot: Boolean = false,
+    val system: Boolean = false,
+    val edited: Boolean = false,
+    val quote: LarkQuote? = null,
+    val badgeCount: Long? = null,
+    val isRead: Boolean = false,
+    val replyCount: Long = 0,
+    val thread: LarkThreadSource? = null,
+    val reactions: List<LarkReaction> = emptyList(),
+    /** False for what is not the sender''s main conversation. [operationId] stays the same while the same
  * text goes to the same place, so a retry after an unclear failure is not queued twice.
  */
 @Serializable

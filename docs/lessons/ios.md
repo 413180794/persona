@@ -1027,3 +1027,17 @@ UIKit 的栈却还推着一页，上面只有系统的返回按钮「Agents」�
   栈本来就停着就马上推，启动和列表上点通知照旧不等。
 - 这种时机靠手点复现不了：写 UI 测试，从测试进程直接连 App 的 runtime CLI 端口在指定的毫秒发命令，按几十毫秒一档扫时机，
   每档多跑几轮；判断「空白」要看导航栏上有没有系统的 `BackButton`，不能只看列表的元素在不在（有一次它们还在无障碍树里）。
+
+## 列表的结构一变，每一行的修饰链都重新构造（2026-11-05，#343）
+
+- **现象**：Agents 列表停着时，hub 每次推送都有一帧主线程 16–30 ms（模拟器，140 个 Agent）。行本身已经是 `Equatable`、跟着自己的 `AgentsFeed.Row`，
+  可是空间的顺序一变（真实 hub 上约一半的推送），列表 body 重算，`ForEach` 给每一行重新构造 `NavigationLink`、`swipeActions`、`contextMenu`
+  和里面捕获的整份 `Session`，占每次推送的五分之一。
+- **做法**：行包进一个只比较 key 的 `Equatable` 视图（`KeyedRow` + `SlotRowKey`），key 里放行的参数和列表自己的状态（搜索、细列表、风格、分组、机器名），
+  跟着推送变的字段（最后一句、时间）去掉：它们由行自己观察的对象读。key 漏了列表 body 里的非观察值（`@State`、`Binding`、`Lookup`），行就会停在旧的样子。
+- 这样的行别再套 `.equatable()`：包进 `EquatableView` 后，行里写的列表 trait（`listRowSeparator`、`listRowBackground`、细列表的 `listRowInsets`）
+  没有传到 `List`，胶囊风格多出分隔线、细列表的行矮了一截（截图对比才发现，测试都过）。视图自己实现了 `==`，SwiftUI 就按它比较，不需要 `.equatable()`。
+- body 里的计算属性别在一次 body 里算两遍：筛选条的 `counts(base)` 又调了一次 `base`，`TopBar` 的 `@ViewBuilder` 参数即使不显示也会被构造。
+- 泛型 `@Observable` 类（`StoredValueBox<Value>`）的属性每读一次都要在运行时实例化 key path（`swift_getKeyPath`），放在每个元素的闭包里读很贵，先读到局部变量。
+- 先用 Time Profiler 看清时间花在哪（`docs/testing.md`「Agents 列表的结构推送」）：只看 body 次数会以为是 body 贵，这次 body 只占五分之一。
+

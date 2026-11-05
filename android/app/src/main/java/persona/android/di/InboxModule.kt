@@ -193,6 +193,15 @@ class InboxDataOwner @Inject constructor(
         override suspend fun userProfile(userId: String, feedId: String?) = use { it.inbox.userProfile(userId, feedId) }
         override suspend fun quickReactions() = use { it.inbox.quickReactions() }
         override suspend fun emojis() = use { it.inbox.emojis() }
+        override suspend fun inboxMutes() = use { it.inbox.inboxMutes() }
+        override suspend fun mute(record: persona.feature.inbox.InboxRecord, option: persona.feature.inbox.InboxMuteOption) =
+            use { it.inbox.mute(record, option) }
+        override suspend fun unmute(id: String) = use { it.inbox.unmute(id) }
+        override suspend fun larkChatPins(feedId: String, accountId: String?, cursor: String?) = use { it.inbox.larkChatPins(feedId, accountId, cursor) }
+        override suspend fun larkPinTarget(feedId: String, messageId: String, accountId: String, topic: Boolean) = use { it.inbox.larkPinTarget(feedId, messageId, accountId, topic) }
+        override suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String?) =
+            use { it.inbox.larkChangePin(feedId, messageId, pinId, accountId) }
+        override suspend fun larkReadStates(feedId: String, messageIds: List<String>) = use { it.inbox.larkReadStates(feedId, messageIds) }
         override suspend fun larkMessageDisplay() = use { it.inbox.larkMessageDisplay() }
     }
     val assistant = object : AssistantConversations {

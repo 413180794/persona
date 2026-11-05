@@ -14,17 +14,21 @@ data class MailAccountForm(
     val smtpHost: String = "",
     val smtpPort: String = "465",
 ) {
-    enum class Kind(@StringRes val title: Int) { GMAIL(R.string.settings_src_mail_kind_gmail), FEISHU(R.string.settings_src_mail_kind_feishu), IMAP(R.string.settings_src_mail_kind_imap) }
+    enum class Kind(@StringRes val title: Int) {
+        GMAIL(R.string.settings_src_mail_kind_gmail), OUTLOOK(R.string.settings_src_mail_kind_outlook),
+        FEISHU(R.string.settings_src_mail_kind_feishu), IMAP(R.string.settings_src_mail_kind_imap),
+    }
 
-    /** 连接 is possible: address and password typed (Gmail only through the app-password fallback). */
+    /** 连接 is possible: address and password typed (Gmail only through the app-password fallback; Outlook signs in with Microsoft). */
     fun canConnect(gmailPasswordAllowed: Boolean): Boolean =
-        email.contains('@') && password.isNotEmpty() && (kind != Kind.GMAIL || gmailPasswordAllowed)
+        kind != Kind.OUTLOOK && email.contains('@') && password.isNotEmpty() && (kind != Kind.GMAIL || gmailPasswordAllowed)
 
     /** The POST /api/v1/mail/accounts body (iOS `save`); servers only when typed (else the domain preset). */
     fun request(): AddMailAccountRequest {
         val base = AddMailAccountRequest(name = email, email = email, auth = "password", password = password)
         return when (kind) {
             Kind.GMAIL -> base.copy(provider = "gmail")
+            Kind.OUTLOOK -> base.copy(provider = "outlook")
             Kind.FEISHU -> base.copy(provider = "feishu")
             Kind.IMAP -> {
                 var r = base.copy(provider = "imap")

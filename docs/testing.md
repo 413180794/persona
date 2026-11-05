@@ -680,7 +680,7 @@ Agents 的新会话（空会话里发第一条，`MOCK_START_SECONDS` 后 Claude
 
 ## 卡顿测量（掉帧统计）
 
-xctrace 在这台 Mac 上会卡在授权上，改用 App 自己统计：`-showAutoScroll YES`（DEBUG）打开后 12 秒开始，
+帧间隔用 App 自己统计（看时间花在哪用 Time Profiler，附加模拟器里的进程要带 `--device`，见下面「Agents 列表的结构推送」）：`-showAutoScroll YES`（DEBUG）打开后 12 秒开始，
 在对话里以快速轻扫的速度（3000pt / 2.5s）往历史翻 4 段、再翻回 4 段，`FrameStats` 记下每帧间隔，写到
 App 数据目录的 `Documents/frames.json`：卡顿次数（晚于半帧）、每秒卡顿毫秒（hitch ratio）、p50 / p95 / p99、最长一帧。
 
@@ -779,6 +779,30 @@ Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约
 改了什么：已看到的记录、上报已读的计时、回执的记账，都放进 `@State` 里的一个 class（`LarkChatBook`），写它不会让视图失效；
 会显示的（「N 条新消息」计数、回执）仍然放 state，只在真的变了时写。两次测量里 mock 收到的已读上报完全一样。
 剩下的掉帧主要是 SwiftUI 给新进来的卡片行排版：只放卡片时 5–7，只放图片或富文本时 0–4。
+
+### Agents 列表的结构推送（#343）
+
+2026-11-05，master `870b0873f`，iPhone 17 Pro 模拟器，`MOCK_AGENTS=1`（140 个 Agent，19 个在工作），`-showPagePerf YES`，
+改前、改后交替跑 11 轮（`/mock/churn` 每轮都换了空间的顺序，列表的结构每次都变），取中位数。负载高（60–79），
+同一改动在负载 25–60 时另跑过一次 11 轮（那次的构建行外面还多套了 `.equatable()`，见 `lessons/ios.md`），列在括号里：
+
+| 段 | 指标 | 改前 | 改后 |
+| --- | --- | --- | --- |
+| idle（12 轮推送） | 掉帧耗时（ms/s） | 27.6（26.6） | 18.9（10.4） |
+| idle | 掉帧 | 12（11） | 9（5） |
+| idle | 最长一帧的主线程 | 32.4 ms（33.6） | 25.0 ms（23.5） |
+| glide | 掉帧耗时（ms/s） | 13.8（10.2） | 16.7（11.3），这次没改滑动，在误差内 |
+| 40 轮推送（Time Profiler，各 1 次） | 主线程合计 | 1234 ms | 825 ms |
+
+改了什么：结构变了时，列表 body 会给每一行重新构造它的修饰链（滑动操作、长按菜单、链接），占每次推送的五分之一；
+现在每行包在 `KeyedRow` 里，key（`SlotRowKey`）不变的行不再构造（跟着推送的最后一句和时间仍由行自己的 `FeedRow` 读）。
+另外 body 只算一遍要列的 Agent（筛选条在手机上不显示时也构造，又把所有 Agent 筛了两遍），`@StoredValue` 不在每个 Agent 的闭包里读；
+`AppModel` 只给有视图在看的空间排标签（`siblings(of:)`），不再每次推送给所有空间排序。
+同期对话页（长对话、流式）、收件箱、知识库量下来都接近 0（对话页 sweep 段是人为的快速大跨度翻动），没有改。
+
+Time Profiler 能用：附加到模拟器里的进程要带 `--device <模拟器 udid>`（`xcrun xctrace record --template 'Time Profiler' --device <udid>
+--attach <pid> --time-limit 20s`，pid 取 `simctl launch` 的输出），再 `xcrun xctrace export --xpath '…/table[@schema="time-profile"]'`
+导出 XML 按主线程（栈里有 `UIApplicationMain`）汇总。不带 `--device` 会报找不到进程。
 
 ## 侧边栏拖动（Persona tab）
 

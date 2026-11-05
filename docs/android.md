@@ -539,6 +539,20 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - **列表**：文档事项的头像是文档类型的图标（`MessageItem` 的 `avatarIcon`：表格 `SquaresFour`、多维表格 `Kanban`、其他 `FileText`），类型标签「@我」/「评论」，没有摘要时第二行是「表格 · 李雷提及了你」。
 - **测试**：`InboxItemPagesTest.aDocumentsNoticeOpensItsOwnPageAndOnlyMailOpensTheMailPage`（解析、文档 / 飞书会话 / 公司圈 / 邮件 / 只有 kind 的邮件 / 连接器和不认识的条目的分派、缓存、选中、标签）；截图 `./gradlew :feature:inbox:testDebugUnitTest --tests '*InboxDocShotsTest*'`，三种风格 × 深浅色，并检查「打开表格」交给链接打开器，PNG 在 `build/inbox-doc-shots/`。
 
+## 收件箱、飞书聊天和连接器对齐 iOS（#3045）
+
+#2919 的 and-inbox 批次，参考端都是 iOS。
+
+- **静音**（G119，`InboxMutes.kt`）：条目的 `mutes` 读成 `InboxRecord.mutes`，长按菜单在「已处理 / 交给 AI」下面列「静音这个仓库 / 会话 / 发件人 · 名字」（仓库只写名字不带 owner）；点了先把同来源、同 tag + value 的未处理条目标成已处理（`mutedBy`），再 `POST /api/v1/inbox/mutes`，失败放回，成功提示「已静音「X」，以后不再进收件箱」。收件箱 ⋯ 菜单加「已静音」浮层（`GET /inbox/mutes`，新的在前），每行「取消静音」立刻拿掉（`DELETE /inbox/mutes/{id}`），失败放回。和 Agent 静音（`/api/v1/mutes`）是两回事。
+- **Pin 消息**（G124，`LarkChatExtras.kt` 的 `LarkPinsSheet`）：聊天 ⋯ 菜单「Pin 消息」，只在打开时读（读列表会在上游标成已读），`next_cursor` 有就显示「加载更多」；点一条先问 hub 原消息在哪（`pin-messages/{id}`，带会话的 `topic`：话题群靠它找到话题），话题里的回复打开话题浮层（话题浮层同样按风灵月影显示），其余跳到聊天里那条附近；⋯ / 长按「移除 Pin」先确认。消息长按菜单在 `can_pin` 时有「添加 Pin」，确认后发（账号取自 Pin 列表的 `account_id`）。账号变了、结果不明、旧 hub（404 / 405 无 code）各有一句话。账号变了时清掉列表、不再能点（只剩「飞书账号已切换，请重新打开会话」）；移除后或结果不明时，重新读到列表前不能再移除。摘要只按 Pin 列表那个账号的风灵月影显示留存内容，账号对不上就当全关。
+- **已读回执**（G133）：只问自己的、已在飞书里的消息（`LarkReadReceipts`：一次最多 100 条，同一聊天 3 秒一次，全部已读的不再问，404 / 405 这次打开不再问）；时间左边显示：单聊「已读 / 未读」，群里（按收件箱条目的 `lark.is_group`，两个人的群也算）「N 人未读」或「全部已读」；收件箱里没有这个会话、不知道是不是群时按人数判断。请求不跟着列表变化取消（列表变化太快会一直拿不到回执），间隔到了再问变化后的。iOS 群里画的是进度环，这里用文字。
+- **风灵月影**（G131）：设置 › 飞书 › 风灵月影（`LarkDisplaySettings.kt`，`GET / POST /lark/message-display`，带 `expected`），防撤回、编辑历史、扩展有时才出现的[removed]编码；读不到、409、403、404 各有说明和「重新读取」。聊天页打开时读一次（读不到就当全关）：`retained` 的撤回消息在防撤回打开时照常画、下面标「已撤回」；编辑历史打开且有 `edit_history` 时「已编辑」可以点开旧版本。[removed]的解码和发送见 #3274（`LarkBraveClimb.kt`）；三个开关读成同一个 `LarkMessageDisplay`，聊天、话题浮层和 Pin 浮层都经 `LocalLarkMessageDisplay` 拿到它。
+- **Outlook**（G128，`OutlookSignIn.kt`）：添加邮箱多一档 Outlook。hub 没有 client ID 时显示注册步骤、回调地址（可复制）和输入框（`PUT /mail/oauth/microsoft/config`）；有了就是「使用 Microsoft 账号登录」，走和 Google 一样的浏览器 + 回调（`GoogleSignIn.signInMicrosoft`，`OAuthRedirectActivity` 多认 `jarvis-mail-oauth://outlook`），错误连同 `error_description` 交给 hub 去说怎么办。hub.json 改过回调地址时这个包接不到，页面会说明。读 hub 的配置时先显示加载中，读不到给「重试」，读到之前不显示缺回调地址的注册表单。
+- **信息（iMessage）**（G137，`MessagesConnector.kt`）：`connector/imessage` 不再走通用连接器页：状态行（哪台 Mac、能不能读）、没有权限时的分步引导和「重新检查」、「交给 Persona」开关（`PUT /imessage/settings`）、「删除 hub 上已存的信息」（必须先关开关，确认框说明删什么、Mac 上不受影响）、按开关切换的说明；「会话」页（`/imessage/chats`，搜名字或号码，滚到底续页）和单个会话（`/imessage/chats/{id}/messages`，「更早的消息」，停顿一小时或换天显示时间，群里显示发送人，服务变化时标 iMessage / 短信）。
+- **全部标为已读**（G215，`feature:agents`）：「完成未看」筛选下这一行右边写「N 个完成未看」，点了先确认「把 N 个完成未看的会话标为已读？」，数和标的都是列表的 `unreadShown`（和 iOS 一样，不管分组怎么画）；空间菜单里的「全部标为已读」同样先确认。
+- **测试**：`ParityInboxTest`（`feature:inbox`、`feature:settings` 各一个）、`core:hub` 的 `ParityInboxTransportTest`（MockWebServer 核对路径和请求体）；截图 `ParityInboxShotsTest`（两个模块）和 `MarkAllReadShotsTest`，三套风格 × 深浅色，PNG 在各模块的 `build/parity-shots/`。
+- **没做**：飞书聊天发图片 / 文件（G121）、群聊 @ 人（G122）都要改回复的发件箱（持久化的请求和 `reply` 接口）；话题群一个话题一张卡片（G134）要重排聊天时间线。见 #3045。
+
 ## 飞书经扩展：按 hub 的 features 显示（#1530）
 
 经 lark-connector 接飞书由私有扩展提供，hub 只在装了扩展时有 `/api/v1/lark/…`，扩展往 hello 的 features 里加 `lark`、`lark_moments`（还有 `lark_attachments`、`lark_native_encryption`）。

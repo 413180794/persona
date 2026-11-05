@@ -3,7 +3,7 @@
 // for a comment, drafts and suggestions, hidden lines asked for as lines, viewed marks, generated files folded, the
 // pending review's bar — and what each sends.
 import { act as flush } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHOWCASE } from "../../showcase/snapshots";
 import type { UIAction, UIActionResult } from "../../lib/extension-ui";
@@ -18,8 +18,12 @@ vi.hoisted(() => {
 
 type Sent = [string, Record<string, string> | undefined];
 let host: HTMLDivElement | null = null;
+let root: Root | null = null;
 beforeEach(() => localStorage.clear());
 afterEach(() => {
+  // Unmounted inside act, so React has no work left for after the environment is torn down.
+  flush(() => root?.unmount());
+  root = null;
   host?.remove();
   host = null;
 });
@@ -27,7 +31,8 @@ afterEach(() => {
 function mount(sent: Sent[], answer: (a: UIAction, v?: Record<string, string>) => UIActionResult | null = () => ({})) {
   host = document.createElement("div");
   document.body.append(host);
-  const root = createRoot(host);
+  const r = createRoot(host);
+  root = r;
   const view = SHOWCASE["code-review-v5"];
   const act = (a: UIAction, v?: Record<string, string>) => sent.push([a.id, { ...v, ...a.values }]);
   const fetch = async (a: UIAction, v?: Record<string, string>) => {
@@ -35,7 +40,7 @@ function mount(sent: Sent[], answer: (a: UIAction, v?: Record<string, string>) =
     return answer(a, v);
   };
   flush(() =>
-    root.render(
+    r.render(
       <ReviewProvider view={view} page="p" fetch={fetch}>
         <ReviewToolbar view={view} onHelp={() => {}} />
         <ViewSections view={view} {...INERT} onAct={act} />

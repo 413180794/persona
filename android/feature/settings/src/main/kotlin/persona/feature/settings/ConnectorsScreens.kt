@@ -277,14 +277,16 @@ internal fun AddMailAccountPage(
         }
     }
 
+    val outlook = rememberOutlookSignIn(connectors, form.kind == MailAccountForm.Kind.OUTLOOK) { error = it }
     val gmailSignIn = form.kind == MailAccountForm.Kind.GMAIL && gmailFallback == null
+    val signsIn = gmailSignIn || form.kind == MailAccountForm.Kind.OUTLOOK
     val canConnect = form.canConnect(gmailFallback != null) && !saving
     BackHandler(onBack = onBack)
 
     JListPage(
         title = stringResource(R.string.settings_src_mail_add),
         onBack = onBack,
-        bottomBar = if (!gmailSignIn) {
+        bottomBar = if (!signsIn) {
             {
                 Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
                     JButton(stringResource(R.string.settings_src_mail_connect), ::save, Modifier.fillMaxWidth(), enabled = canConnect, loading = saving)
@@ -304,7 +306,9 @@ internal fun AddMailAccountPage(
             )
         }
 
-        if (gmailSignIn) {
+        if (form.kind == MailAccountForm.Kind.OUTLOOK) {
+            outlookSignIn(outlook, connectors) { error = it }
+        } else if (gmailSignIn) {
             item("google-btn") {
                 Column(Modifier.fillMaxWidth().padding(top = Tokens.Space.l)) {
                     JButton(
@@ -354,7 +358,7 @@ internal fun AddMailAccountPage(
                     stringResource(when (form.kind) {
                         MailAccountForm.Kind.FEISHU -> R.string.settings_src_mail_feishu_footer
                         MailAccountForm.Kind.IMAP -> R.string.settings_src_mail_imap_footer
-                        MailAccountForm.Kind.GMAIL -> R.string.settings_src_mail_gmail_footer
+                        MailAccountForm.Kind.GMAIL, MailAccountForm.Kind.OUTLOOK -> R.string.settings_src_mail_gmail_footer
                     }),
                     Modifier.padding(top = Tokens.Space.xs),
                 )
@@ -440,6 +444,8 @@ internal fun FeishuConnectorPage(
     var accounts by remember { mutableStateOf<LarkAccounts?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var displayPage by remember { mutableStateOf(false) }
+    if (displayPage) { LarkMessageDisplayPage(connectors, onBack = { displayPage = false }); return }
 
     fun load() {
         if (connectors == null) {
@@ -542,6 +548,11 @@ internal fun FeishuConnectorPage(
             }
         }
 
+        item("display") {
+            JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.l)) {
+                JRow(stringResource(R.string.settings_src_display_title), leadingIcon = PhIcons.Eye, onClick = { displayPage = true })
+            }
+        }
         item("uses-header") { JSectionHeader(stringResource(R.string.settings_src_lark_uses_header)) }
         item("use-inbox") {
             JGroupItem(GroupPosition.of(0, 5)) {

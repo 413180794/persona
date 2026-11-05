@@ -20,6 +20,13 @@
                 <!-- Google's installed-app redirect is <reversed client id>:/oauth2redirect: a custom scheme, no host. -->
                 <data android:scheme="${googleOAuthScheme}" android:path="/oauth2redirect" tools:ignore="AppLinkUrlError" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Outlook's 使用 Microsoft 账号登录: the hub's default redirect URI (server/internal/mail/microsoft.go). -->
+                <data android:scheme="jarvis-mail-oauth" android:host="outlook" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

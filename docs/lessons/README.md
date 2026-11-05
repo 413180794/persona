@@ -17,7 +17,7 @@
 | `transcript.md` | 改 transcript / rollout 解析、会话列表、分页、后台同步、折叠、App 的会话缓存 |
 | `lark-mail.md` | 改飞书（lark-connector）和邮件（IMAP / SMTP / Gmail）、云文档通知 |
 | `terminal.md` | 改终端 tab：herdr 读屏 / observe / 接管、滚动、键盘输入、宽字符 |
-| `ios.md` | 改 iOS 界面：聊天列表与滚动、导航、布局与组件、Swift 与编译、系统能力与页面约定、SSH 隧道、密钥输入框不弹「保存密码？」、要能取消的确认用 alert |
+| `ios.md` | 改 iOS 界面：聊天列表与滚动、导航、布局与组件、Swift 与编译、系统能力与页面约定、SSH 隧道、密钥输入框不弹「保存密码？」、要能取消的确认用 alert、列表结构一变每行修饰链重建 |
 | `android.md` | 改 Android App：Compose 与玻璃（Haze）、切页面闪烁、平板 / 折叠屏、深浅色、前台服务、模拟器和真机调试 |
 | `macos.md` | 改 Mac App：兼容层、分栏、截图、非活动窗口变灰、Form 里的危险按钮 |
 | `windows.md` | 改 Windows 上的 node、在 Windows 上开发：LF 检出、AF_UNIX 路径长度、`bash` 是 WSL、读别的进程的 PEB、Orca 的命名管道、计划任务（S4U 要管理员、失败后重启不管程序退出、控制台窗口、默认 72 小时）、机器监控（每核要正好的缓冲区、Google Drive 的假固定盘、ProductName 写着 Windows 10）、herdr（管道名是 socket 路径、ssh 起的 server 会退出、窗格 shell 设 Git Bash） |

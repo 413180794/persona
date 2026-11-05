@@ -184,4 +184,18 @@
     <string name="inbox_local_unconfirmed">Unconfirmed · Open to check</string>
     <string name="inbox_local_draft">Draft · %1$s</string>
     <string name="inbox_tier_fyi">FYI</string>
+    <string name="inbox_mute_repo">Mute this repository</string>
+    <string name="inbox_mute_chat">Mute this conversation</string>
+    <string name="inbox_mute_sender">Mute this sender</string>
+    <string name="inbox_mute_option">%1$s · %2$s</string>
+    <string name="inbox_mute_tag_repo">Repository</string>
+    <string name="inbox_mute_tag_chat">Conversation</string>
+    <string name="inbox_mute_tag_sender">Sender</string>
+    <string name="inbox_mutes_title">Muted</string>
+    <string name="inbox_mutes_failed">Couldn\'t read what is muted</string>
+    <string name="inbox_mutes_empty_title">Nothing muted</string>
+    <string name="inbox_mutes_empty_text">Long-press an item in the Inbox to mute its repository, conversation or sender.</string>
+    <string name="inbox_unmute">Unmute</string>
+    <string name="inbox_unmute_failed">Couldn\'t unmute; restored</string>
+    <string name="inbox_muted_notice">Muted “%1$s”; it won\'t come into the Inbox again</string>
 </resources>

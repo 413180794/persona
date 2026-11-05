@@ -419,4 +419,18 @@
     <string name="chat_goal_tokens_budget">%1$s / %2$s tokens</string>
     <string name="chat_goal_minutes">%1$d 分</string>
     <string name="chat_goal_hours">%1$d 時間 %2$d 分</string>
+    <string name="chat_review_ongoing">監督中</string>
+    <string name="chat_review_pending">検収待ち</string>
+    <string name="chat_review_rework">差し戻し %1$d 回目</string>
+    <string name="chat_review_needs_user">判断待ち</string>
+    <string name="chat_review_accepted">検収済み</string>
+    <string name="chat_review_cancelled">取り消し</string>
+    <string name="chat_review_line">検収</string>
+    <string name="chat_review_title">完了条件</string>
+    <string name="chat_review_none">完了条件は未指定</string>
+    <string name="chat_review_open">未検収</string>
+    <string name="chat_review_met">達成</string>
+    <string name="chat_review_missing">不足</string>
+    <string name="chat_review_note">監督メモ：%1$s</string>
+    <string name="chat_review_expect">目安 %1$d 分</string>
 </resources>

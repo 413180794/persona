@@ -49,16 +49,21 @@ internal data class CachedInboxRecord(
     val doc: InboxDocRef? = null,
     /** A connector's item: the thread it opens as; absent in records cached before connectors' items were listed. */
     val connector: InboxConnectorRef? = null,
+    /** A Feishu chat's kind; absent in records cached before it was kept. */
+    val isGroup: Boolean? = null,
+    val isTopic: Boolean? = null,
 ) {
     fun record() = InboxRecord(
         InboxItem(id, account, kind, title, sender, preview, summary, tier, updatedAt, doneAt, version),
         sourceLabel, feedId, startPosition, count, agent, source = source, doc = doc, connector = connector,
+        isGroup = isGroup, isTopic = isTopic,
     )
 }
 
 internal fun InboxRecord.cached() = CachedInboxRecord(
     item.id, item.account, item.kind, item.title, item.sender, item.preview, item.summary,
     item.tier, item.updatedAt, item.doneAt, sourceLabel, feedId, startPosition, count, agent, item.version, source, doc, connector,
+    isGroup, isTopic,
 )
 internal fun ReplyTarget.localKey() = when (this) {
     is ReplyTarget.Inbox -> "inbox:$itemId"

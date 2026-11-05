@@ -147,11 +147,14 @@ fun LarkMessageActionMenu(
     onOpenPicker: () -> Unit,
     onOpenProfile: (() -> Unit)? = null,
     onCopy: () -> Unit,
+    onAddPin: (() -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
     val clipboard = LocalClipboardManager.current
     val res = LocalResources.current
     val moreLabel = stringResource(R.string.inbox_lark_more_emoji)
+    // The menu rows' icons, one size.
+    val menuIcon = Modifier.size(16.dp)
 
     DropdownMenu(
         expanded = expanded,
@@ -199,18 +202,30 @@ fun LarkMessageActionMenu(
         // Copy
         DropdownMenuItem(
             text = { Text(stringResource(R.string.inbox_lark_copy), style = PersonaTheme.type.callout, color = palette.ink) },
-            leadingIcon = { JIcon(PhIcons.Copy, modifier = Modifier.size(16.dp), tint = palette.ink) },
+            leadingIcon = { JIcon(PhIcons.Copy, modifier = menuIcon, tint = palette.ink) },
             onClick = {
                 onDismiss()
                 onCopy()
             }
         )
 
+        // 添加 Pin, where the chat can pin it
+        if (onAddPin != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.inbox_lark_pin_add), style = PersonaTheme.type.callout, color = palette.ink) },
+                leadingIcon = { JIcon(PhIcons.PushPin, modifier = menuIcon, tint = palette.ink) },
+                onClick = {
+                    onDismiss()
+                    onAddPin()
+                }
+            )
+        }
+
         // View Sender Profile
         if (onOpenProfile != null && message.senderId.isNotBlank()) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.inbox_lark_view_profile), style = PersonaTheme.type.callout, color = palette.ink) },
-                leadingIcon = { JIcon(PhIcons.User, modifier = Modifier.size(16.dp), tint = palette.ink) },
+                leadingIcon = { JIcon(PhIcons.User, modifier = menuIcon, tint = palette.ink) },
                 onClick = {
                     onDismiss()
                     onOpenProfile()

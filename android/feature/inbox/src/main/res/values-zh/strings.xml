@@ -168,4 +168,18 @@
     <string name="inbox_local_unconfirmed">结果待确认 · 打开核对</string>
     <string name="inbox_local_draft">草稿 · %1$s</string>
     <string name="inbox_tier_fyi">知悉即可</string>
+    <string name="inbox_mute_repo">静音这个仓库</string>
+    <string name="inbox_mute_chat">静音这个会话</string>
+    <string name="inbox_mute_sender">静音这个发件人</string>
+    <string name="inbox_mute_option">%1$s · %2$s</string>
+    <string name="inbox_mute_tag_repo">仓库</string>
+    <string name="inbox_mute_tag_chat">会话</string>
+    <string name="inbox_mute_tag_sender">发件人</string>
+    <string name="inbox_mutes_title">已静音</string>
+    <string name="inbox_mutes_failed">读不到已静音的列表</string>
+    <string name="inbox_mutes_empty_title">没有静音的</string>
+    <string name="inbox_mutes_empty_text">在收件箱里长按一条，可以静音它的仓库、会话或发件人。</string>
+    <string name="inbox_unmute">取消静音</string>
+    <string name="inbox_unmute_failed">没能取消静音，已恢复</string>
+    <string name="inbox_muted_notice">已静音「%1$s」，以后不再进收件箱</string>
 </resources>

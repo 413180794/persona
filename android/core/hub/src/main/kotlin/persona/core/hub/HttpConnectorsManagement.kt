@@ -136,6 +136,51 @@ class HttpConnectorsManagement internal constructor(
         }
     }
 
+    override suspend fun microsoftConfig(): MicrosoftConfig =
+        read(call("/api/v1/mail/oauth/microsoft/config", "GET"), MicrosoftConfig.serializer())
+
+    override suspend fun setMicrosoftClientId(clientId: String): MicrosoftConfig =
+        read(call("/api/v1/mail/oauth/microsoft/config", "PUT", buildJsonObject { put("client_id", clientId) }), MicrosoftConfig.serializer())
+
+    override suspend fun microsoftSignInStart(): GoogleStart =
+        read(callRaw("/api/v1/mail/oauth/microsoft/start", "POST", "{}"), GoogleStart.serializer())
+
+    override suspend fun microsoftSignInFinish(finish: MicrosoftFinish): MailAccount {
+        val payload = JsonCodec.encodeToString(MicrosoftFinish.serializer(), finish)
+        val body = parse(callRaw("/api/v1/mail/oauth/microsoft/finish", "POST", payload)) as? JsonObject ?: throw HubFailure(HubError.Protocol)
+        val account = body["account"] ?: throw HubFailure(HubError.Protocol)
+        return decode { JsonCodec.decodeFromJsonElement(MailAccount.serializer(), account) }
+    }
+
+    override suspend fun larkMessageDisplay(): LarkMessageDisplay =
+        read(call("/api/v1/lark/message-display", "GET"), LarkMessageDisplay.serializer())
+
+    override suspend fun setLarkMessageDisplay(current: LarkMessageDisplay, key: String, value: Boolean): LarkMessageDisplay {
+        val expected = requireNotNull(current.value(key)) { "Unknown message display key" }
+        val body = buildJsonObject {
+            put("account_id", current.accountId); put("key", key); put("value", value); put("expected", expected)
+        }
+        return read(call("/api/v1/lark/message-display", "POST", body), LarkMessageDisplay.serializer())
+    }
+
+    override suspend fun messagesStatus(): MessagesStatus = read(call("/api/v1/imessage", "GET"), MessagesStatus.serializer())
+
+    override suspend fun setMessagesAi(on: Boolean): MessagesStatus =
+        read(call("/api/v1/imessage/settings", "PUT", buildJsonObject { put("ai", on) }), MessagesStatus.serializer())
+
+    override suspend fun deleteMessagesData(): ConnectorDataDeleted =
+        read(call("/api/v1/imessage/data", "DELETE"), ConnectorDataDeleted.serializer())
+
+    override suspend fun messagesChats(before: String?): MessagesChatsPage {
+        val query = "limit=50" + (before?.takeIf { it.isNotEmpty() }?.let { "&before=${encode(it)}" } ?: "")
+        return read(call("/api/v1/imessage/chats?$query", "GET"), MessagesChatsPage.serializer())
+    }
+
+    override suspend fun messagesThread(chatId: String, before: String?): MessagesPage {
+        val query = "limit=50" + (before?.takeIf { it.isNotEmpty() }?.let { "&before=${encode(it)}" } ?: "")
+        return read(call("/api/v1/imessage/chats/${encode(chatId)}/messages?$query", "GET"), MessagesPage.serializer())
+    }
+
     private fun <T> read(body: String, serializer: KSerializer<T>): T =
         decode { JsonCodec.decodeFromJsonElement(serializer, parse(body)) }
 

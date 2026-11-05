@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.currentStateAsState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,9 +50,11 @@ import kotlinx.coroutines.launch
 /** The host sets this while an in-app sheet or overlay covers the conversation. */
 val LocalLarkReadOccluded = staticCompositionLocalOf { false }
 
-/** The account''s).
+/** The account''s thread, read with the chat''s).
     val openImage: (LarkPart.Image) -> Unit = remember { { image -> viewer = larkGallery(larkImages(messages), image) } }
-    thread?.let { root -> CompositionLocalProvider(LocalLarkImageOpener provides openImage) { LarkThreadSheet(root, repository, onDismiss = { thread = null }) } }
+    thread?.let { root -> CompositionLocalProvider(LocalLarkImageOpener provides openImage) {
+        LarkChatThreadSheet(root, repository, shownDisplay, onDismiss = { thread = null })
+    } }
     profilePerson?.let { person ->
         LarkProfileSheet(person, repository, onDismiss = { profilePerson = null })
     }
@@ -96,7 +99,7 @@ val LocalLarkReadOccluded = staticCompositionLocalOf { false }
                     JNotice(message, status = Status.NeedsYou, actionLabel = stringResource(R.string.inbox_retry), onAction = { refreshConversation() })
                 }
             })
-    }) { padding -> CompositionLocalProvider(LocalLarkMessageDisplay provides (display ?: LarkMessageDisplay.Hidden)) {
+    }) { padding -> CompositionLocalProvider(LocalLarkMessageDisplay provides shownDisplay) {
         val density = LocalDensity.current
         val topInset = with(density) { padding.calculateTopPadding().toPx() }
         val bottomInset = with(density) { padding.calculateBottomPadding().toPx() }
@@ -137,7 +140,9 @@ val LocalLarkReadOccluded = staticCompositionLocalOf { false }
                             onOpenReactionPicker = { reactionPickerMessage = it },
                             onOpenForward = { forwardedDetail = it },
                             onPlayVideo = { videoPlayerUrl = it },
-                            feedId = route.feedId)
+                            feedId = route.feedId,
+                            readMark = LarkReadMark.of(readStates[message.id], conversation.isGroup).takeIf { message.mine },
+                            onAddPin = if (changingPin) null else ({ addingPin = it }))
                     }
                 }
                 if (conversation.hasOlder) item("older") {
@@ -151,7 +156,7 @@ val LocalLarkReadOccluded = staticCompositionLocalOf { false }
                         }
                     })
                 }
-            } }
+            }
             val newestVisible by remember(chatList) { derivedStateOf {
                 messages.lastOrNull { message ->
                     bounds[message.listKey()]?.let { box -> box.width > 0 && box.height > 0 && viewport.overlaps(box) } == true
@@ -162,7 +167,7 @@ val LocalLarkReadOccluded = staticCompositionLocalOf { false }
                 onClick = chatList::returnToLatest,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = Tokens.Space.l,
                     bottom = padding.calculateBottomPadding() + Tokens.Space.s))
-        }
+        } }
     } }
 }
 
@@ -183,16 +188,23 @@ internal fun LarkBubble(
     onOpenForward: ((LarkPart.MergeForward) -> Unit)? = null,
     onPlayVideo: ((String) -> Unit)? = null,
     feedId: String? = null,
+    /** The read receipt beside a message of mine, once there is one. */
+    readMark: LarkReadMark? = null,
+    /** 添加 Pin, where the chat can pin. */
+    onAddPin: ((LarkMessage) -> Unit)? = null,
 ) {
     val display = LocalLarkMessageDisplay.current
     val message = remember(original, display) { original.shown(display) }
-    if (message.system) {
+    // 防撤回 shows what lark-connector kept of a recalled message, marked 已撤回; otherwise it is one line.
+    if (message.system && !(message.recalled && display.showsBody(message))) {
         TimelineMark(if (message.recalled) stringResource(R.string.inbox_lark_recalled)
             else message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }, modifier)
         return
     }
     var menuExpanded by remember { mutableStateOf(false) }
+    var showingHistory by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
+    if (showingHistory) LarkEditHistorySheet(message, onDismiss = { showingHistory = false })
 
     val body: @Composable ColumnScope.() -> Unit = {
         Box {
@@ -222,7 +234,14 @@ internal fun LarkBubble(
                     JIcon(PhIcons.ShieldCheck, null, size = Tokens.Space.m, tint = PersonaTheme.palette.ink3)
                     Text(stringResource(R.string.inbox_lark_brave_climb_decoded), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1)
                 }
-                if (message.edited) Text(stringResource(R.string.inbox_lark_edited), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+                if (message.recalled) Text(stringResource(R.string.inbox_lark_recalled_mark), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+                // 编辑历史 on and old versions kept: 已编辑 opens them.
+                if (message.edited) {
+                    if (display.showsHistory(message)) Text(stringResource(R.string.inbox_lark_edited), style = PersonaTheme.type.micro,
+                        color = PersonaTheme.palette.ink2, modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button,
+                            onClickLabel = stringResource(R.string.inbox_lark_edit_history)) { showingHistory = true })
+                    else Text(stringResource(R.string.inbox_lark_edited), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+                }
             }
 
             LarkMessageActionMenu(
@@ -234,6 +253,8 @@ internal fun LarkBubble(
                 onOpenProfile = if (message.senderId.isNotBlank() && onProfile != null) ({
                     onProfile(LarkPersonRef(message.senderId, message.senderName, message.avatar, feedId))
                 }) else null,
+                onAddPin = if (onAddPin != null && message.canPin && !message.recalled && message.delivery == LarkDelivery.Sent && message.pendingDelivery == null)
+                    ({ onAddPin(message) }) else null,
                 onCopy = {
                     val textToCopy = message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }
                         .ifBlank { message.parts.filterIsInstance<LarkPart.Code>().joinToString("\n") { it.code } }
@@ -253,7 +274,10 @@ internal fun LarkBubble(
                     onOpenPicker = { onOpenReactionPicker(message) }
                 )
             }
-            if (message.mine) Text(larkTime(message.time), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+            if (message.mine) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
+                readMark?.let { LarkReadMarkView(it) }
+                Text(larkTime(message.time), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+            }
             if (message.bot) JTag(stringResource(R.string.inbox_bot))
             if (message.replyCount > 0 && onThread != null) {
                 JTextButton(pluralStringResource(R.plurals.inbox_lark_replies, message.replyCount.toQuantity(), message.replyCount), onClick = onThread)

@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import persona.feature.chat.ReviewChecklist
 import persona.core.designsystem.text
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -282,6 +283,8 @@ fun TodoDetailScreen(
                                 color = PersonaTheme.palette.ink3
                             )
                         }
+                        // What done means for a task the main conversation supervises, and where its review stands (#3124).
+                        ReviewChecklist(todo)
                     }
                 }
             }

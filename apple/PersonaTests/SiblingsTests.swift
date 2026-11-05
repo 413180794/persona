@@ -58,6 +58,20 @@ struct SiblingsTests {
         #expect(changed == 1, "a new tab in its own space")
         #expect(model.siblings(of: key("a")).map(\.sessionID) == ["a", "c"])
     }
+
+    /// Only the spaces a view asked about are worked out at each update (#343): one first asked about after its tabs
+    /// changed is current all the same, and follows the updates from then on.
+    @Test func aSpaceAskedAboutLaterIsCurrent() throws {
+        let model = AppModel()
+        model.adopt(try session("a", pane: "p1", slot: 1))
+        _ = model.siblings(of: key("a"))
+        model.adopt(try session("x", space: "w2", pane: "p9", slot: 2))
+        model.adopt(try session("y", space: "w2", pane: "p8", slot: 1))
+        #expect(model.siblings(of: key("x")).map(\.sessionID) == ["y", "x"])
+        model.adopt(try session("z", space: "w2", pane: "p7", slot: 3))
+        #expect(model.siblings(of: key("x")).map(\.sessionID) == ["y", "x", "z"])
+        #expect(model.siblings(of: key("a")).map(\.sessionID) == ["a"])
+    }
 }
 
 /// What only names a machine (`AppModel.namedMachine(_:)`, the open chat's subtitle and its computer activity) is not

@@ -60,6 +60,8 @@ internal fun AgentsScreen(
     val operations by model.operationState.collectAsStateWithLifecycle()
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
     var pickingTodoForSession by remember { mutableStateOf<Session?>(null) }
+    // 全部标为已读 asks first and names how many it marks (iOS confirmReadAll).
+    var confirmRead by remember { mutableStateOf<List<AgentSession>?>(null) }
     /** A project being put on a to-do (挂到待办…): its machine and its name as the hub keys it. */
     var pickingTodoForSpace by remember { mutableStateOf<Pair<String, String>?>(null) }
     val todos by (model.tasks?.todos ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
@@ -160,7 +162,7 @@ internal fun AgentsScreen(
         AgentSpaceMenu(session, space.preferenceKey in page.preferences.pins.spaces, space.preferenceKey in page.preferences.mutes.spaces,
             operations.busy, onPin = { model.spacePin(session) }, onMute = { model.spaceMute(session) },
             onRename = { operationDialog = AgentOperationDialog.RenameSpace(session) },
-            onMarkRead = unread.takeIf { it.isNotEmpty() }?.let { rows -> { model.markRead(rows) } },
+            onMarkRead = unread.takeIf { it.isNotEmpty() }?.let { rows -> { confirmRead = rows } },
             onOpen = if (inList) ({ navigator.navigate(SpaceRoute(space.id, space.name)) }) else null, compact = inList,
             todo = todoSpace?.let { name ->
                 SpaceTodoActions(linked != null, onLink = { pickingTodoForSpace = session.machineId to name },
@@ -282,7 +284,15 @@ internal fun AgentsScreen(
                 JTextButton(stringResource(R.string.agents_requests_history), { allRequests = true })
             }
             if (page.settings.quick == AgentQuickFilter.Unread && page.list.unreadShown.isNotEmpty()) item("mark-read") {
-                JTextButton(stringResource(R.string.agents_mark_all_read), { model.markRead(page.list.groups.flatMap { it.rows }.filter { it.state == AgentState.Unread }) })
+                // The same set iOS counts and marks: the list's unread ids, whichever groups (or none) draw them.
+                val unread = remember(page.list, page.sessions) {
+                    val rows = page.list.groups.flatMap { it.rows }.associateBy { it.id }
+                    val sessions = page.sessions.associateBy { it.key.path }
+                    page.list.unreadShown.distinct().mapNotNull { id -> rows[id] ?: sessions[id]?.let(::AgentSession) }
+                }
+                JRow(stringResource(R.string.agents_mark_all_read), leadingIcon = PhIcons.Check,
+                    value = pluralStringResource(R.plurals.agents_mark_all_read_count, unread.size, unread.size),
+                    chevron = false, onClick = { confirmRead = unread })
             }
             if (page.list.groups.isEmpty()) item("empty") {
                 // Three cases, as iOS: a search with no result (no 新建会话, which read as if the agents were gone), no
@@ -449,6 +459,9 @@ internal fun AgentsScreen(
                 }
             },
         )
+    }
+    confirmRead?.let { rows ->
+        MarkAllReadDialog(rows.size, onDismiss = { confirmRead = null }) { model.markRead(rows) }
     }
     if (newAgent) {
         if (creationModel != null) NewAgentDialog(creationModel, page.machines, connection == ConnectionState.Online) { newAgent = false }

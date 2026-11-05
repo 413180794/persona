@@ -14,11 +14,12 @@ import (
 
 // Where the machine's own zone is right, and why.
 var allowed = map[string]string{
-	"internal/node/":             "a node runs on the user's own computer, in their zone (uploads by day)",
-	"internal/hub/usertz.go":     "userLocation / userTZName: the hub's zone only while the user's is unknown",
-	"internal/assistant/zone.go": "location: the hub's zone only while the user's is unknown (as userLocation)",
-	"internal/kb/zone.go":        "the archive's zone before it is set, and files written before zones were recorded",
-	"internal/quota/quota.go":    "a gateway's report while the user's zone is unknown",
+	"internal/node/":              "a node runs on the user's own computer, in their zone (uploads by day)",
+	"internal/hub/usertz.go":      "userLocation / userTZName: the hub's zone only while the user's is unknown",
+	"internal/assistant/zone.go":  "location: the hub's zone only while the user's is unknown (as userLocation)",
+	"internal/kb/zone.go":         "the archive's zone before it is set, and files written before zones were recorded",
+	"internal/quota/quota.go":     "a gateway's report while the user's zone is unknown",
+	"internal/devices/metrics.go": "Usage: the machine's zone only without Options.Location (the manager passes the user's, assistant/main.go)",
 }
 
 var (

@@ -165,5 +165,16 @@ object MachineManagementModule {
         override suspend fun connectorThread(id: String, thread: String, before: String?, limit: Int) = api().connectorThread(id, thread, before, limit)
         override suspend fun connectorThreadReply(id: String, thread: String, action: String, text: String, replyTo: String?) =
             api().connectorThreadReply(id, thread, action, text, replyTo)
+        override suspend fun microsoftConfig() = api().microsoftConfig()
+        override suspend fun setMicrosoftClientId(clientId: String) = api().setMicrosoftClientId(clientId)
+        override suspend fun microsoftSignInStart() = api().microsoftSignInStart()
+        override suspend fun microsoftSignInFinish(finish: MicrosoftFinish) = api().microsoftSignInFinish(finish)
+        override suspend fun larkMessageDisplay() = api().larkMessageDisplay()
+        override suspend fun setLarkMessageDisplay(current: LarkMessageDisplay, key: String, value: Boolean) = api().setLarkMessageDisplay(current, key, value)
+        override suspend fun messagesStatus() = api().messagesStatus()
+        override suspend fun setMessagesAi(on: Boolean) = api().setMessagesAi(on)
+        override suspend fun deleteMessagesData() = api().deleteMessagesData()
+        override suspend fun messagesChats(before: String?) = api().messagesChats(before)
+        override suspend fun messagesThread(chatId: String, before: String?) = api().messagesThread(chatId, before)
     }
 }

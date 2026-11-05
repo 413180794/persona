@@ -444,4 +444,18 @@
     <string name="chat_goal_tokens_budget">%1$s / %2$s tokens</string>
     <string name="chat_goal_minutes">%1$d min</string>
     <string name="chat_goal_hours">%1$d h %2$d min</string>
+    <string name="chat_review_ongoing">Supervised</string>
+    <string name="chat_review_pending">Awaiting review</string>
+    <string name="chat_review_rework">Rework round %1$d</string>
+    <string name="chat_review_needs_user">Needs your call</string>
+    <string name="chat_review_accepted">Accepted</string>
+    <string name="chat_review_cancelled">Cancelled</string>
+    <string name="chat_review_line">Review</string>
+    <string name="chat_review_title">Done when</string>
+    <string name="chat_review_none">No criteria were given</string>
+    <string name="chat_review_open">Not reviewed yet</string>
+    <string name="chat_review_met">Met</string>
+    <string name="chat_review_missing">Missing</string>
+    <string name="chat_review_note">Supervisor: %1$s</string>
+    <string name="chat_review_expect">About %1$d min</string>
 </resources>

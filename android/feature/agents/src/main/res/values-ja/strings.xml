@@ -22,6 +22,13 @@
     </plurals>
     <string name="agents_requests_history">リクエストと履歴</string>
     <string name="agents_mark_all_read">すべて既読にする</string>
+    <plurals name="agents_mark_all_read_count">
+        <item quantity="other">未確認 %1$d 件</item>
+    </plurals>
+    <plurals name="agents_mark_all_read_confirm">
+        <item quantity="other">完了して未確認の %1$d 件のセッションを既読にしますか？</item>
+    </plurals>
+    <string name="agents_mark_all_read_action">すべて既読にする（%1$d）</string>
     <plurals name="agents_count_repos">
         <item quantity="other">リポジトリ%1$d個</item>
     </plurals>

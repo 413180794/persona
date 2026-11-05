@@ -51,6 +51,28 @@ interface InboxAssistantTransport {
     suspend fun momentsPost(postId: String): JsonObject = throw UnsupportedOperationException("Moments post unavailable")
     suspend fun momentsComments(postId: String): JsonObject = throw UnsupportedOperationException("Moments comments unavailable")
     suspend fun urlPreview(messageId: String, url: String): JsonObject = throw UnsupportedOperationException("URL preview unavailable")
+
+    // 静音 (docs/inbox.md「静音」): an item's repository, chat or sender, in every source.
+    /** `GET /api/v1/inbox/mutes`: `{mutes: [{id, source, source_name, tag, value, name, created_at}]}`. */
+    suspend fun inboxMutes(): JsonObject = throw UnsupportedOperationException("Inbox mutes unavailable")
+    /** `POST /api/v1/inbox/mutes` `{item_id, tag}`: `{mute, settled}`. */
+    suspend fun muteInbox(itemId: String, tag: String): JsonObject = throw UnsupportedOperationException("Inbox mutes unavailable")
+    /** `DELETE /api/v1/inbox/mutes/{id}`. */
+    suspend fun unmuteInbox(id: String): Unit = throw UnsupportedOperationException("Inbox mutes unavailable")
+
+    // A Feishu chat's Pin 消息 (iOS `LarkChatPins`): reading the list marks the pins read upstream.
+    /** `GET /api/v1/lark/conversations/{feed}/pins?limit=50&account_id=&cursor=`. */
+    suspend fun larkChatPins(feedId: String, accountId: String?, cursor: String?): JsonObject =
+        throw UnsupportedOperationException("Chat pins unavailable")
+    /** `GET /api/v1/lark/conversations/{feed}/pin-messages/{message}?account_id=&topic=`: where a pin's message is. */
+    suspend fun larkPinTarget(feedId: String, messageId: String, accountId: String, topic: Boolean): JsonObject =
+        throw UnsupportedOperationException("Chat pins unavailable")
+    /** `POST /api/v1/lark/conversations/{feed}/pins` `{account_id, message_id, pin_id, remove}`: `{account_id, pinned}`. */
+    suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String): JsonObject =
+        throw UnsupportedOperationException("Chat pins unavailable")
+    /** `POST /api/v1/lark/conversations/{feed}/read-states` `{message_ids}`: receipts of my messages. */
+    suspend fun larkReadStates(feedId: String, messageIds: List<String>): JsonObject =
+        throw UnsupportedOperationException("Read receipts unavailable")
 }
 
 interface InboxAssistantConnection {

@@ -76,9 +76,13 @@ final class AppModel {
             sessionIndex = index
             for (key, cell) in sessionCells where !Session.sameForItsPage(cell.value, index[key]) { cell.value = index[key] }
             for (key, cell) in sessionLineCells where !Session.sameApartFromTicks(cell.value, index[key]) { cell.value = index[key] }
-            let spaces = Self.liveBySpace(allSessions)
-            liveSpaces = spaces
-            for (space, cell) in spaceCells where !Self.sameForTheirPages(cell.value, spaces[space] ?? []) { cell.value = spaces[space] ?? [] }
+            // Only the spaces a view watches (`siblings(of:)`): working out every space's tabs sorted each one on every
+            // push, with no chat open to show them (#343).
+            if !spaceCells.isEmpty {
+                let watched = allSessions.filter { $0.spaceKey.map { spaceCells[$0] != nil } ?? false }
+                let spaces = Self.liveBySpace(watched)
+                for (space, cell) in spaceCells where !Self.sameForTheirPages(cell.value, spaces[space] ?? []) { cell.value = spaces[space] ?? [] }
+            }
             countBadges()
             saveSnapshot()
         }
@@ -108,11 +112,10 @@ final class AppModel {
     @ObservationIgnored private var sessionCells: [SessionKey: SessionCell] = [:]
     /// The same for views that show a session's last line and step (`sessionWithLine(_:)`, the task cards).
     @ObservationIgnored private var sessionLineCells: [SessionKey: SessionCell] = [:]
-    /// Each space's live agents, one per pane (`siblings(of:)`), worked out once per update of the lists, and one
-    /// observable cell per space a view has asked about: the open chat and its tab strip are drawn again when one of
-    /// their space's tabs changes as they show it. They read `allSessions` through `siblings(of:)`, so every push about
-    /// any agent on any machine drew the open chat again, and each call went through all the agents and sorted them.
-    @ObservationIgnored private var liveSpaces: [String: [Session]] = [:]
+    /// One observable cell per space a view has asked about (`siblings(of:)`), with its live agents, one per pane,
+    /// worked out at each update of the lists: the open chat and its tab strip are drawn again when one of their space's
+    /// tabs changes as they show it. They read `allSessions` through `siblings(of:)`, so every push about any agent on
+    /// any machine drew the open chat again, and each call went through all the agents and sorted them.
     @ObservationIgnored private var spaceCells: [String: SpaceCell] = [:]
     /// Pending interactions by `uid` (the hub's id, with the group for another group).
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
@@ -1727,7 +1730,7 @@ final class AppModel {
         if let had = spaceCells[space] {
             cell = had
         } else {
-            cell = SpaceCell(liveSpaces[space] ?? [])
+            cell = SpaceCell(Self.liveBySpace(sessionsNow.filter { $0.spaceKey == space })[space] ?? [])
             spaceCells[space] = cell
         }
         var tabs = cell.value

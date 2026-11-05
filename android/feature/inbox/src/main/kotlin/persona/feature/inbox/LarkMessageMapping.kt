@@ -21,7 +21,9 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
     val id = data.text("id")
     val external = "https://applink.feishu.cn/client/chat/open?chatId=${URLEncoder.encode(feed, "UTF-8")}&messageId=${URLEncoder.encode(id, "UTF-8")}"
     val recalled = data.flag("recalled")
-    val parts = if (recalled) emptyList() else
+    // A recalled message's kept words come along for 防撤回 (shown only with it on: LarkMessageDisplay.showsBody).
+    val retained = recalled && data.flag("retained") && data.text("type") != "SYSTEM"
+    val parts = if (recalled && !retained) emptyList() else
         (data["parts"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { part ->
             val meta = part["metadata"] as? JsonObject ?: JsonObject(emptyMap())
             val text = part.text("text").ifBlank { data.text("text") }
@@ -108,7 +110,8 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
         badgeCount = data.number("badge_count"), isRead = data.flag("is_read"),
         replyCount = maxOf(0L, data.number("reply_count") ?: 0L, data.number("thread_reply_count") ?: 0L),
         thread = larkThreadSource(data, transport, feed),
-        reactions = reactions, recalled = recalled)
+        reactions = reactions, recalled = recalled, retained = retained, editHistory = larkEditHistory(data),
+        canPin = data.flag("can_pin"), canUnpin = data.flag("can_unpin"))
 }
 
 internal fun larkDate(time: String): LocalDate? = runCatching {
@@ -124,7 +127,8 @@ internal fun LarkMessage.listKey() = clientId?.let { "client:$it" } ?: "message:
 /** `GET /api/v1/lark/message-display`: no `brave_climb_codec` from an older Feishu extension (no such switch). */
 internal fun larkMessageDisplay(data: JsonObject): LarkMessageDisplay =
     LarkMessageDisplay(accountId = data.text("account_id"),
-        braveClimb = (data["brave_climb_codec"] as? JsonPrimitive)?.booleanOrNull)
+        braveClimb = (data["brave_climb_codec"] as? JsonPrimitive)?.booleanOrNull,
+        antiRecall = data.flag("anti_recall"), showEditHistory = data.flag("show_edit_history"))
 
 /**
  * The message as the chat shows it: [removed] words decoded while the switch is on, as they came otherwise (#882).

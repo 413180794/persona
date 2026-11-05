@@ -182,9 +182,66 @@ interface ConnectorsManagement {
      */
     suspend fun connectorThreadReply(id: String, thread: String, action: String, text: String, replyTo: String?): ConnectorReplyOutcome =
         throw UnsupportedOperationException("Connector replies unavailable")
+
+    // Outlook's 使用 Microsoft 账号登录 (docs/mail.md「Outlook 接入方式」): the client ID the user registered lives on the hub.
+
+    /** `GET /api/v1/mail/oauth/microsoft/config`. */
+    suspend fun microsoftConfig(): MicrosoftConfig = throw UnsupportedOperationException("Outlook sign-in unavailable")
+
+    /** `PUT /api/v1/mail/oauth/microsoft/config` `{client_id}` ("" forgets it). */
+    suspend fun setMicrosoftClientId(clientId: String): MicrosoftConfig = throw UnsupportedOperationException("Outlook sign-in unavailable")
+
+    /** `POST /api/v1/mail/oauth/microsoft/start`: Microsoft's sign-in URL and the scheme it calls back on. */
+    suspend fun microsoftSignInStart(): GoogleStart = throw UnsupportedOperationException("Outlook sign-in unavailable")
+
+    /** `POST /api/v1/mail/oauth/microsoft/finish`: the callback as it came (an error too: the hub says what to do). */
+    suspend fun microsoftSignInFinish(finish: MicrosoftFinish): MailAccount = throw UnsupportedOperationException("Outlook sign-in unavailable")
+
+    // 设置 › 飞书 › 风灵月影 (iOS `LarkMessageDisplay`): shared with lark-connector's web for the signed-in account.
+
+    /** `GET /api/v1/lark/message-display`. */
+    suspend fun larkMessageDisplay(): LarkMessageDisplay = throw UnsupportedOperationException("Message display unavailable")
+
+    /** `POST /api/v1/lark/message-display` `{account_id, key, value, expected}`: one switch, from what it was. */
+    suspend fun setLarkMessageDisplay(current: LarkMessageDisplay, key: String, value: Boolean): LarkMessageDisplay =
+        throw UnsupportedOperationException("Message display unavailable")
+
+    // 设置 › 连接器 › 信息 (iOS `MessagesConnectorView`): one Mac's Messages, read through the hub.
+
+    /** `GET /api/v1/imessage`. */
+    suspend fun messagesStatus(): MessagesStatus = throw UnsupportedOperationException("Messages unavailable")
+
+    /** `PUT /api/v1/imessage/settings` `{ai}`: 交给 Persona. */
+    suspend fun setMessagesAi(on: Boolean): MessagesStatus = throw UnsupportedOperationException("Messages unavailable")
+
+    /** `DELETE /api/v1/imessage/data`: what the hub kept (knowledge base, inbox); the Mac's messages stay. */
+    suspend fun deleteMessagesData(): ConnectorDataDeleted = throw UnsupportedOperationException("Messages unavailable")
+
+    /** `GET /api/v1/imessage/chats?limit=50&before=`: the Mac's conversations, newest first. */
+    suspend fun messagesChats(before: String? = null): MessagesChatsPage = throw UnsupportedOperationException("Messages unavailable")
+
+    /** `GET /api/v1/imessage/chats/{id}/messages?limit=50&before=`: a page of one conversation, oldest first. */
+    suspend fun messagesThread(chatId: String, before: String? = null): MessagesPage = throw UnsupportedOperationException("Messages unavailable")
 }
 
-/** A person in a connector's thread. */
+@Serializable
+data class MicrosoftConfig(
+    val configured: Boolean = false,
+    @SerialName("client_id") val clientId: String? = null,
+    val source: String? = null,
+    @SerialName("redirect_uri") val redirectUri: String = "",
+)
+
+@Serializable
+data class MicrosoftFinish(
+    val state: String,
+    val code: String? = null,
+    val error: String? = null,
+    @SerialName("error_description") val errorDescription: String? = null,
+)
+
+/**
+ * 风灵月影 for the signed-in Feishu account: 防撤回 (a recalled message's kept words), 编辑历史 and lark-connector''s thread. */
 @Serializable
 data class ConnectorThreadPerson(val id: String? = null, val name: String = "", val avatar: String? = null)
 
