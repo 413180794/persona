@@ -10,7 +10,7 @@ import { composerEntryDrop, dragHasEntry, droppedEntry } from "../../lib/entry-d
 import { uuid } from "../../lib/format";
 import { enterSends, hasFinePointer } from "../../lib/viewport";
 import { INPUT_MAX } from "./dock";
-import { imagePayload, MAX_IMAGE, quotePath, sendFile } from "../../lib/attachments";
+import { imagePayload, MAX_IMAGE, quotePath, releaseAttachments, sendFile } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
 import { applyDraft, onDraftEvent, replaceNeedsConfirm, withUnsent, type DraftImage } from "../../lib/drafts";
 import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
@@ -116,9 +116,25 @@ export function Composer({
   const handle = useMemo<ComposerHandle>(() => ({ key: draftKey, send: (text) => sendNow.current(text), focus: () => input.current?.focus(), ready: () => canTake.current }), [draftKey]);
   useEffect(() => registerComposer(handle), [handle]);
 
+  // the pictures in the box right now and the conversation shown, read by the cleanups and by a send that finishes
+  // after the box moved on: their object URLs are freed when they leave the box without being sent
+  const attsNow = useRef(atts);
+  attsNow.current = atts;
+  const keyNow = useRef(draftKey);
+  keyNow.current = draftKey;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      releaseAttachments(attsNow.current);
+    };
+  }, []);
+
   // a different conversation: its own draft
   useEffect(() => {
     setDraft(localStorage.getItem(`draft:${draftKey}`) ?? "");
+    releaseAttachments(attsNow.current);
     setAtts([]);
     // not on a touch screen alone: there the focus brings the keyboard up over the conversation just opened
     if (autoFocus && hasFinePointer()) setTimeout(() => input.current?.focus(), 0);
@@ -262,7 +278,9 @@ export function Composer({
           continue;
         }
         const a = await readImage(f);
-        setAtts((cur) => [...cur, a]);
+        // read after the box closed or moved to another conversation: freed, not put into that one
+        if (mounted.current && keyNow.current === draftKey) setAtts((cur) => [...cur, a]);
+        else releaseAttachments([a]);
       } else if (machineId) {
         void upload(f);
       } else {
@@ -311,10 +329,12 @@ export function Composer({
     const ok = await onSend({ text: withContexts(refs, text, sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) });
     setSending(false);
     if (ok) {
-      sent.forEach((a) => URL.revokeObjectURL(a.url));
+      releaseAttachments(sent);
     } else {
       setDraft((cur) => withUnsent(cur, text));
-      setAtts((cur) => [...sent, ...cur]);
+      // the box closed or shows another conversation now: the pictures are not put back there, only freed
+      if (mounted.current && keyNow.current === draftKey) setAtts((cur) => [...sent, ...cur]);
+      else releaseAttachments(sent);
       refs.forEach((r) => addContext(draftKey, r));
     }
     input.current?.focus();
