@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Node streams through a member (docs/mesh.md「经成员的路」): the center's manager reaches a computer a member has in
@@ -34,7 +36,7 @@ const nodeOpenWait = time.Minute
 func (h *Hub) openThroughHub(ctx context.Context, hub, mid string) (*nodePipe, error) {
 	l := h.nextLink(hub)
 	if l == nil || l.transport == nil {
-		return nil, fmt.Errorf("「%s」现在连不上", h.hubNameOf(hub))
+		return nil, i18n.Err("hub-peer_node.unreachable", i18n.Args{"name": h.hubNameOf(hub)})
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://peer/api/v1/peer/node", nil)
 	if err != nil {
@@ -82,11 +84,11 @@ func (h *Hub) serveNodeOpen(w http.ResponseWriter, r *http.Request, from, mid st
 		return
 	}
 	if !h.isMember() || from == "" || from != h.centerID() {
-		writeErr(w, http.StatusForbidden, errors.New("只有这台 hub 所在组的中心能经它连电脑"))
+		writeErr(w, http.StatusForbidden, i18n.Err("hub-peer_node.center_only"))
 		return
 	}
 	if h.cfgEntry(mid) == nil {
-		writeErr(w, http.StatusNotFound, fmt.Errorf("这台 hub 的 hub.json 里没有 %q", mid))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-peer_node.no_machine", i18n.Args{"id": strconv.Quote(mid)}))
 		return
 	}
 	if !h.awaitManager(r.Context(), linkManagerWait) { // the hub just started: the manager is on its way

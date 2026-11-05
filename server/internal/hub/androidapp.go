@@ -3,10 +3,11 @@ package hub
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 func (h *Hub) androidAppRoutes(api *http.ServeMux) {
@@ -45,7 +46,7 @@ func (h *Hub) androidAppAPK(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(b, &release)
 	digest, decodeErr := hex.DecodeString(release.SHA256)
 	if err != nil || decodeErr != nil || len(digest) != 32 {
-		writeErr(w, http.StatusInternalServerError, errors.New("Android 版本清单无效"))
+		writeErr(w, http.StatusInternalServerError, i18n.Err("hub-androidapp.bad_manifest"))
 		return
 	}
 	f, err := os.Open(filepath.Join(dir, release.SHA256+".apk"))
@@ -56,7 +57,7 @@ func (h *Hub) androidAppAPK(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		writeErr(w, http.StatusInternalServerError, errors.New("无法读取 Android 安装包"))
+		writeErr(w, http.StatusInternalServerError, i18n.Err("hub-androidapp.unreadable_apk"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/vnd.android.package-archive")
@@ -67,8 +68,8 @@ func (h *Hub) androidAppAPK(w http.ResponseWriter, r *http.Request) {
 
 func androidAppError(w http.ResponseWriter, err error) {
 	if os.IsNotExist(err) {
-		writeErrCode(w, http.StatusNotFound, "not_found", errors.New("尚未发布 Android 安装包"))
+		writeErrCode(w, http.StatusNotFound, "not_found", i18n.Err("hub-androidapp.not_published"))
 		return
 	}
-	writeErr(w, http.StatusInternalServerError, errors.New("无法读取 Android 发布文件"))
+	writeErr(w, http.StatusInternalServerError, i18n.Err("hub-androidapp.unreadable_release"))
 }

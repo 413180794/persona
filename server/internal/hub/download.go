@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -34,7 +35,7 @@ func (h *Hub) downloadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if err != nil {
 		var re *rpc.Error
 		if errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method") {
-			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, "这台机器上的 jarvisd 太旧，不能下载完整文件，需要重新部署", nil)
+			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(h.requestLang(r), "hub-download.outdated_file"), nil)
 			return
 		}
 		callErr(w, err)
@@ -89,7 +90,7 @@ func (h *Hub) fileThumb(w http.ResponseWriter, r *http.Request, m *Machine) {
 		var re *rpc.Error
 		switch {
 		case errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method"):
-			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, "这台机器上的 jarvisd 太旧，没有缩略图，需要重新部署", nil)
+			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(h.requestLang(r), "hub-download.outdated_thumbnail"), nil)
 		case errors.As(err, &re) && re.Code == proto.CodeNoThumbnail:
 			writeCode(w, http.StatusNotFound, proto.CodeNoThumbnail, re.Message, nil)
 		default:
@@ -182,7 +183,7 @@ func (h *Hub) fileConvert(w http.ResponseWriter, r *http.Request, m *Machine) {
 		var re *rpc.Error
 		switch {
 		case errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method"):
-			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, "这台机器上的 jarvisd 太旧，不能转换文档，需要重新部署", nil)
+			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(h.requestLang(r), "hub-download.outdated_convert"), nil)
 		case errors.As(err, &re) && re.Code == proto.CodeNoConverter:
 			writeCode(w, http.StatusNotFound, proto.CodeNoConverter, re.Message, nil)
 		default:

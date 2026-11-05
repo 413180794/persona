@@ -8,6 +8,7 @@ import (
 	"rsc.io/qr"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The devices page: the credentials the hub has handed out, revoking one, and a QR code to pair a phone.
@@ -104,6 +105,6 @@ func (h *Hub) memberRefuses(w http.ResponseWriter) bool {
 	if name == "" {
 		name = shortID(c)
 	}
-	writeErrCode(w, http.StatusConflict, "member_hub", errors.New("这台 hub 是组里的成员，设备由中心 hub「"+name+"」管理：到它的管理界面去"))
+	writeErrCode(w, http.StatusConflict, "member_hub", i18n.Err("hub-admin_devices.member_hub", i18n.Args{"name": name}))
 	return true
 }

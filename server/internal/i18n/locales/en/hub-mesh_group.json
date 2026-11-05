@@ -1,0 +1,4 @@
+{
+  "center_offline": "The current primary hub can’t be reached. If you confirm, it becomes a member hub when it’s back",
+  "target_unreachable": "Hub {id} can’t be reached right now. Only a reachable hub can be made the primary hub"
+}

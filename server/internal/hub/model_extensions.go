@@ -3,10 +3,11 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 type ModelChoice struct {
@@ -22,11 +23,11 @@ type extensionModels struct {
 func (h *Hub) extensionModelChoices(ctx context.Context, id string) (extensionModels, error) {
 	var result extensionModels
 	if h.extensions == nil {
-		return result, errors.New("未接入扩展")
+		return result, i18n.Err("hub-model_extensions.no_extensions")
 	}
 	p := h.extensions.get(strings.TrimPrefix(id, "plugin."))
 	if p == nil || p.kind != "voice" || p.client == nil {
-		return result, errors.New("语音扩展不存在")
+		return result, i18n.Err("hub-model_extensions.no_voice")
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", "http://plugin/models", nil)
 	if err != nil {
@@ -34,14 +35,14 @@ func (h *Hub) extensionModelChoices(ctx context.Context, id string) (extensionMo
 	}
 	response, err := p.client.Do(req)
 	if err != nil {
-		return result, errors.New("读不到扩展模型列表")
+		return result, i18n.Err("hub-model_extensions.unreadable")
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return result, errors.New("扩展模型列表暂不可用")
+		return result, i18n.Err("hub-model_extensions.unavailable")
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result); err != nil {
-		return result, errors.New("扩展模型列表格式不正确")
+		return result, i18n.Err("hub-model_extensions.malformed")
 	}
 	return result, nil
 }

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/link"
 )
 
@@ -167,7 +168,7 @@ func (h *Hub) setupPeerHTTP(l *peerLink) {
 			if r.Context().Err() != nil {
 				return
 			}
-			writeCode(w, http.StatusBadGateway, "hub_unreachable", "转给另一台 hub 时失败："+err.Error(), nil)
+			writeCode(w, http.StatusBadGateway, "hub_unreachable", i18n.T(h.requestLang(r), "hub-peer_http.forward_failed", i18n.Args{"err": err.Error()}), nil)
 		},
 	}
 }
@@ -184,7 +185,7 @@ func meshTTLOf(ctx context.Context) int {
 func (h *Hub) servePeerHTTP(w http.ResponseWriter, r *http.Request) {
 	ttl := atoi(r.Header.Get(hdrPeerTTL))
 	if ttl <= 0 {
-		writeCode(w, http.StatusLoopDetected, "mesh_loop", "转发的次数太多（hub 之间的路由在变）", nil)
+		writeCode(w, http.StatusLoopDetected, "mesh_loop", i18n.T(h.requestLang(r), "hub-peer_http.loop"), nil)
 		return
 	}
 	r = r.WithContext(context.WithValue(r.Context(), meshTTLKey{}, ttl))
@@ -193,13 +194,13 @@ func (h *Hub) servePeerHTTP(w http.ResponseWriter, r *http.Request) {
 		// while the routes change, and its opener tries again, or is a client's, passed on by a member from before
 		// memberForward dropped these. The two look the same, and neither should open.
 		if r.Header.Get(hdrPeerFrom) == h.hubID() {
-			writeCode(w, http.StatusLoopDetected, "mesh_loop", "转发的次数太多（hub 之间的路由在变）", nil)
+			writeCode(w, http.StatusLoopDetected, "mesh_loop", i18n.T(h.requestLang(r), "hub-peer_http.loop"), nil)
 			return
 		}
 		hub, mid, _ := strings.Cut(target, "/")
 		if hub != h.hubID() {
 			if !h.meshForwardTo(w, r, hub) {
-				writeCode(w, http.StatusServiceUnavailable, "hub_unreachable", "那台 hub 现在连不上", nil)
+				writeCode(w, http.StatusServiceUnavailable, "hub_unreachable", i18n.T(h.requestLang(r), "hub-peer_http.unreachable"), nil)
 			}
 			return
 		}
@@ -259,7 +260,7 @@ func (h *Hub) meshForwardTo(w http.ResponseWriter, r *http.Request, to string) b
 		return false
 	}
 	if meshTTLOf(r.Context()) <= 1 {
-		writeCode(w, http.StatusLoopDetected, "mesh_loop", "转发的次数太多（hub 之间的路由在变）", nil)
+		writeCode(w, http.StatusLoopDetected, "mesh_loop", i18n.T(h.requestLang(r), "hub-peer_http.loop"), nil)
 		return true
 	}
 	l.proxy.ServeHTTP(w, r)
@@ -341,7 +342,7 @@ func (h *Hub) forwardToCenter(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = shortID(c)
 	}
-	writeCode(w, http.StatusServiceUnavailable, "center_unreachable", "这台 hub 是组里的成员，中心 hub「"+name+"」现在连不上",
+	writeCode(w, http.StatusServiceUnavailable, "center_unreachable", i18n.T(h.requestLang(r), "hub-peer_http.center_unreachable", i18n.Args{"name": name}),
 		map[string]any{"center": map[string]any{"hub_id": c, "name": name}})
 }
 

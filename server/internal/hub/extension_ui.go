@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"maps"
 	"net/http"
 	"net/url"
@@ -19,6 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/proc"
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/quota"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -220,11 +220,11 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 		}
 	}
 	if item == nil {
-		return res, fmt.Errorf("%s 没有叫 %s 的界面", id, uiID)
+		return res, i18n.Err("hub-extension_ui.no_ui", i18n.Args{"id": id, "ui": uiID})
 	}
 	slot, known := extension.Slot(item.Placement)
 	if !known {
-		return res, fmt.Errorf("这个 hub 没有 %s 这个位置", item.Placement)
+		return res, i18n.Err("hub-extension_ui.no_placement", i18n.Args{"placement": item.Placement})
 	}
 	if item.Placement == "widget" {
 		return res, errUseWidget
@@ -233,10 +233,10 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 	switch item.Placement {
 	case "launcher_section":
 		if in.Context.Launcher == "" {
-			return res, errors.New("这个界面属于一个启动器：缺 context.launcher")
+			return res, i18n.Err("hub-extension_ui.needs_launcher")
 		}
 		if !p.Record.Granted.LauncherKeys {
-			return res, errors.New("这个扩展没有被允许用启动器的 Key")
+			return res, i18n.Err("hub-extension_ui.no_launcher_keys")
 		}
 		gw, err := h.launcherGateway(ctx, in.Context.Launcher, in.Context.Machine)
 		if err != nil {
@@ -244,7 +244,7 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 		}
 		root, err := quota.Root(gw.base)
 		if err != nil || (len(item.Hosts) > 0 && !hostMatches(root.Hostname(), item.Hosts)) {
-			return res, errors.New("这个启动器的网关不是这个扩展的")
+			return res, i18n.Err("hub-extension_ui.not_its_gateway")
 		}
 		var b [12]byte
 		_, _ = rand.Read(b[:])
@@ -301,14 +301,14 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 			h.extensions.logf("plugin %s: ui %s drew items this hub does not know (%s): left out", id, uiID, strings.Join(dropped, ", "))
 		}
 		if err != nil {
-			return fmt.Errorf("扩展画的界面这个 hub 画不了：%v", err)
+			return i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
 		}
 		return nil
 	}
 	if method == "ui.render" {
 		var v extension.View
 		if err := json.Unmarshal(out, &v); err != nil {
-			return res, fmt.Errorf("扩展画的界面这个 hub 画不了：%v", err)
+			return res, i18n.Err("hub-extension_ui.view_unsupported", i18n.Args{"err": err.Error()})
 		}
 		if err := fit(&v); err != nil {
 			return res, err
@@ -352,18 +352,18 @@ func checkPushes(m *extension.Manifest, from extension.UIItem, v *extension.View
 			continue
 		}
 		if len(p.State) > extension.StateMost {
-			return fmt.Errorf("扩展要打开的页面带的 state 超过 %d 字节", extension.StateMost)
+			return i18n.Err("hub-extension_ui.state_too_large", i18n.Args{"max": extension.StateMost})
 		}
 		target := from
 		if p.UI != "" {
 			i := slices.IndexFunc(m.UIs(), func(u extension.UIItem) bool { return u.ID == p.UI })
 			if i < 0 {
-				return fmt.Errorf("扩展要打开的页面 %s 不是它的界面", p.UI)
+				return i18n.Err("hub-extension_ui.push_not_its_ui", i18n.Args{"ui": p.UI})
 			}
 			target = m.UIs()[i]
 		}
 		if !extension.FullPage(target.Placement) {
-			return fmt.Errorf("扩展要打开的 %s 不是一整页（只能打开 extension_page 或 nav_page）", target.ID)
+			return i18n.Err("hub-extension_ui.push_not_page", i18n.Args{"ui": target.ID})
 		}
 	}
 	return nil
@@ -380,9 +380,9 @@ func checkOpenURL(ui extension.UIItem, itemID, raw string) error {
 	}
 	if u, err := url.Parse(raw); err != nil || u.Scheme != "https" || u.Host == "" {
 		if strings.HasPrefix(raw, "persona:") {
-			return errors.New("扩展要打开的 persona: 链接不是这一条的来源（只有收件箱条目的界面能开 persona://inbox/<这一条>/source）")
+			return i18n.Err("hub-extension_ui.open_not_source")
 		}
-		return errors.New("扩展要打开的不是 https 链接")
+		return i18n.Err("hub-extension_ui.open_not_https")
 	}
 	return nil
 }
@@ -393,14 +393,14 @@ var (
 	// the apps leave the section out.
 	errUnsupportedGateway = errors.New("not this plugin's gateway")
 	// errNoMachine: a machine section for a machine the hub does not have.
-	errNoMachine = errors.New("没有这台机器")
+	errNoMachine = i18n.Err("hub-extension_ui.no_machine")
 	// errNoItem: an inbox item's page without the item, or for one the inbox does not have.
-	errNoItem = errors.New("收件箱里没有这一条")
+	errNoItem = i18n.Err("hub-extension_ui.no_item")
 	// errNotItsItem: an inbox item's page for an item of another source than its connector.
-	errNotItsItem = errors.New("这一条不是这个扩展的连接器收进来的")
+	errNotItsItem = i18n.Err("hub-extension_ui.not_its_item")
 	// errNotServed: an inbox item's page whose connector is not the plugin's now (not registered, or another's); the
 	// apps draw the item's own detail.
-	errNotServed = errors.New("这个扩展现在不管这个连接器")
+	errNotServed = i18n.Err("hub-extension_ui.not_served")
 )
 
 func (h *Hub) extensionUIRoutes(api *http.ServeMux) {

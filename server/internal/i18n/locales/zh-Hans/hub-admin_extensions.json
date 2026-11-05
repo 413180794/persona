@@ -1,0 +1,7 @@
+{
+  "no_extensions": "这台 hub 没有启用扩展",
+  "not_found": "没有这个扩展",
+  "busy": "正在预览另一个扩展，等它结束再试",
+  "too_large": "包超过 {mb} MB",
+  "confirm_required": "先看过它能做什么，确认后带上 permissions_digest 安装"
+}

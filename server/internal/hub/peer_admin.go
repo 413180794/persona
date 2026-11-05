@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The admin page's peers API (docs/plan-hub-mesh.md 2.7): the admin routes (#296) call registerPeerAdmin on their mux,
@@ -137,7 +139,7 @@ func (h *Hub) registerPeerAdmin(mux *http.ServeMux) {
 		_ = json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&req)
 		target := r.PathValue("hub_id")
 		if target != h.hubID() && !h.inGroup(target) {
-			writeErrCode(w, http.StatusNotFound, "not_in_group", errors.New("这台 hub 不在组里"))
+			writeErrCode(w, http.StatusNotFound, "not_in_group", i18n.Err("hub-peer_admin.not_in_group"))
 			return
 		}
 		if _, err := h.setCenter(r.Context(), target, req.Confirm); err != nil {
@@ -310,16 +312,16 @@ func probeHub(ctx context.Context, address string) (map[string]any, error) {
 	if strings.Contains(address, "://") {
 		u, err := url.Parse(address)
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
-			return nil, errors.New("地址写成 https://主机:端口 或 主机:端口")
+			return nil, i18n.Err("hub-peer_admin.bad_address")
 		}
 		bases = []string{u.Scheme + "://" + u.Host}
 	} else {
 		host, port, err := net.SplitHostPort(address)
 		if err != nil {
-			return nil, errors.New("地址要带端口：主机:端口")
+			return nil, i18n.Err("hub-peer_admin.needs_port")
 		}
 		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
-			return nil, errors.New("端口不对")
+			return nil, i18n.Err("hub-peer_admin.bad_port")
 		}
 		hp := net.JoinHostPort(strings.Trim(host, "[]"), port)
 		bases = []string{"https://" + hp, "http://" + hp}
@@ -342,7 +344,7 @@ func probeHub(ctx context.Context, address string) (map[string]any, error) {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			last = errors.New("对方回了 " + resp.Status)
+			last = i18n.Err("hub-peer_admin.status", i18n.Args{"status": resp.Status})
 			continue
 		}
 		var hv struct {
@@ -353,10 +355,10 @@ func probeHub(ctx context.Context, address string) (map[string]any, error) {
 			Version string `json:"version"`
 		}
 		if err := json.Unmarshal(b, &hv); err != nil || hv.HubID == "" {
-			last = errors.New("那里不是 Persona hub")
+			last = i18n.Err("hub-peer_admin.not_a_hub")
 			continue
 		}
 		return map[string]any{"hub_id": hv.HubID, "name": hv.Name, "tls_port": hv.TLSPort, "fp": hv.FP, "version": hv.Version}, nil
 	}
-	return nil, errors.New("连不上：" + last.Error())
+	return nil, i18n.Err("hub-peer_admin.unreachable", i18n.Args{"err": i18n.Localize(last, i18n.From(ctx).Or(i18n.Default))})
 }

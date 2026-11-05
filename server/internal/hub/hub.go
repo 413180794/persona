@@ -21,6 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -693,7 +694,7 @@ func screenAnswer(session string, d *screen.Dialog, r proto.Resolution) (map[str
 			}
 		}
 		if len(options) == 0 && strings.TrimSpace(r.Text) == "" {
-			return nil, fmt.Errorf("至少勾一项，或者写上自己的回答")
+			return nil, i18n.Err("hub-hub.pick_or_answer")
 		}
 		return map[string]any{"session_id": session, "rev": d.Rev, "multi": true, "options": options, "free_text": r.Text}, nil
 	}
@@ -924,7 +925,7 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		for _, f := range p.ix.Fields {
 			if !f.Optional && strings.TrimSpace(r.Values[f.Key]) == "" {
 				h.mu.Unlock()
-				return fmt.Errorf("请先填写%s", f.Label)
+				return i18n.Err("hub-hub.fill_in", i18n.Args{"field": f.Label})
 			}
 		}
 	}

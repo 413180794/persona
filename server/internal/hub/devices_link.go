@@ -16,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -591,11 +592,11 @@ func (h *Hub) applyDeviceStates(st devicewire.States) {
 			c.oldMux.CloseAll()
 		}
 		if c.ended {
-			h.connectionEnded(c.m, "电脑离线")
+			h.connectionEnded(c.m, i18n.T(h.userLang(), "hub-devices_link.computer_offline"))
 		}
 	}
 	for _, m := range gone {
-		h.connectionEnded(m, "电脑离线")
+		h.connectionEnded(m, i18n.T(h.userLang(), "hub-devices_link.computer_offline"))
 		m.mu.Lock()
 		mux := m.streams
 		m.streams = nil
@@ -732,7 +733,7 @@ func (h *Hub) devicesGone() {
 		}
 		mux := m.streams
 		m.streams, m.connected = nil, false
-		m.online, m.err = false, errAssistantOffline.Error()
+		m.online, m.err = false, i18n.Localize(errAssistantOffline, h.userLang())
 		m.endWarmLocked()
 		if m.snap != nil {
 			s := *m.snap
@@ -747,7 +748,7 @@ func (h *Hub) devicesGone() {
 		off = append(off, m)
 	}
 	for _, m := range off {
-		h.connectionEnded(m, errAssistantOffline.Error())
+		h.connectionEnded(m, i18n.Localize(errAssistantOffline, h.userLang()))
 	}
 	if len(off) > 0 {
 		h.logf("devices: the manager is gone: %d machines offline until it is back", len(off))
@@ -966,7 +967,7 @@ func validProxy(proxyURL string) error {
 	}
 	if !strings.HasPrefix(proxyURL, "socks5://") && !strings.HasPrefix(proxyURL, "socks5h://") ||
 		strings.TrimPrefix(strings.TrimPrefix(proxyURL, "socks5h://"), "socks5://") == "" {
-		return errors.New("proxy 要写成 socks5://主机:端口")
+		return i18n.Err("hub-devices_link.bad_proxy")
 	}
 	return nil
 }

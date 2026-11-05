@@ -2,16 +2,17 @@ package hub
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"slices"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The assistant's skills live on the machine that runs it, in the user's ~/.jarvis/skills (docs/hub-update.md「skill
 // 从二进制里拿出来」): the hub asks that machine's node (skills.list) to show them and to tell the assistant what it has.
 
-var errNoAssistantMachine = errors.New("还没设置助手跑在哪台电脑上")
+var errNoAssistantMachine = i18n.Err("hub-skills.no_assistant_machine")
 
 // skill is one skill as the node lists it (assistantskills.Skill).
 type skill struct {

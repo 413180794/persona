@@ -1,0 +1,7 @@
+{
+  "not_found": "没有这个扩展",
+  "member_not_from_market": "成员「{name}」不是从市场安装的，请在 hub 机器或管理界面卸载",
+  "none": "无",
+  "list_separator": "、",
+  "partial": "卸载未完成。已卸载成员：{removed}；未卸载：{failed}。合集仍保留，可以重试。"
+}

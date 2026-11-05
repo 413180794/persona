@@ -1,0 +1,6 @@
+{
+  "forward_failed": "Couldn’t pass it on to the other hub: {err}",
+  "loop": "Forwarded too many times (the routes between hubs are changing)",
+  "unreachable": "That hub can’t be reached right now",
+  "center_unreachable": "This hub is a member hub, and the primary hub “{name}” can’t be reached right now"
+}

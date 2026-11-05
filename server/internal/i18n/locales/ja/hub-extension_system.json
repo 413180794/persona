@@ -1,0 +1,18 @@
+{
+  "not_widget": "これはウィジェットではありません",
+  "no_shortcut": "この拡張機能にそのショートカットはありません",
+  "bad_family": "このウィジェットはこのサイズに対応していません",
+  "bad_family_detail": "このウィジェットはこのサイズに対応していません：{title}は{families}のみです",
+  "list_separator": "、",
+  "shortcut_arg": "ショートカットのパラメーターが正しくありません",
+  "shortcut_no_param": "ショートカットのパラメーターが正しくありません：パラメーター {name} はありません",
+  "shortcut_bad_value": "ショートカットのパラメーターが正しくありません：{title}{problem}",
+  "shortcut_missing": "ショートカットのパラメーターが正しくありません：{title}がありません",
+  "value_not_number": "は数値にしてください",
+  "value_not_bool": "は true か false にしてください",
+  "value_not_choice": "の選択肢にありません",
+  "value_too_long": "が長すぎます",
+  "use_widget": "ウィジェットは /api/v1/extensions/{id}/-/widget/{ui} で描画します",
+  "widget_unsupported": "このハブでは拡張機能のウィジェットを描画できません：{err}",
+  "result_unsupported": "このハブでは拡張機能の結果を描画できません：{err}"
+}

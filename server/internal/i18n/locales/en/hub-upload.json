@@ -1,0 +1,4 @@
+{
+  "too_large": "The file is larger than {mb} MB",
+  "outdated": "jarvisd on {name} is too old to receive files. Redeploy it"
+}

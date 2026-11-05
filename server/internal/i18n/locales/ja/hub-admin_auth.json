@@ -1,0 +1,5 @@
+{
+  "password_too_short": "パスワードは{min}文字以上にしてください",
+  "password_too_long": "パスワードは{max}バイト以内にしてください",
+  "password_blank": "パスワードをスペースだけにすることはできません"
+}

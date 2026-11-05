@@ -1,0 +1,16 @@
+{
+  "market_not_registered": "マーケット {spec} は登録されていません",
+  "not_in_markets": "登録済みのどのマーケットにもありません",
+  "unresolved": "{id}（{why}）",
+  "too_deep": "依存関係が深すぎます",
+  "version_mismatch": "{want}が必要ですが、マーケットにあるのは{have}です",
+  "unresolved_missing": "次の拡張機能が足りず、マーケットにも見つかりません：{list}",
+  "list_separator": "、",
+  "install_dependency": "先に必要な拡張機能 {id} をインストールしてください",
+  "bundle_required_one": "{count}個の拡張機能を一緒にインストールします。確認してから一緒に送ってください（bundle）",
+  "bundle_required_other": "{count}個の拡張機能を一緒にインストールします。確認してから一緒に送ってください（bundle）",
+  "bundle_mismatch": "一緒にインストールする {id} がプレビューと一致しません。もう一度プレビューしてください",
+  "bundle_member_failed": "一緒にインストールする {id} をインストールできませんでした：{err}",
+  "has_dependents": "次の拡張機能がこれを使っています：{names}。まとめてオフにしますか？",
+  "read_only": "拡張機能「{name}」は hub.json に書かれています。先にそこでオフにしてください"
+}

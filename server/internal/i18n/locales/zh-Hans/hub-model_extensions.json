@@ -1,0 +1,7 @@
+{
+  "no_extensions": "未接入扩展",
+  "no_voice": "语音扩展不存在",
+  "unreadable": "读不到扩展模型列表",
+  "unavailable": "扩展模型列表暂不可用",
+  "malformed": "扩展模型列表格式不正确"
+}

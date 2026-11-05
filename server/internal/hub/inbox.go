@@ -18,6 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -873,11 +874,11 @@ func (h *Hub) replyMail(ctx context.Context, ref assistantwire.InboxMailRef, tex
 	if err != nil {
 		return err
 	}
-	return h.mail.Send(ctx, mailReply(ref.AccountID, orig, text))
+	return h.mail.Send(ctx, mailReply(h.userLang(), ref.AccountID, orig, text))
 }
 
 // mailReply is a reply to orig: Re: subject, threading headers, the original quoted below.
-func mailReply(accountID string, orig *mail.MailMessage, text string) mail.SendRequest {
+func mailReply(lang i18n.Lang, accountID string, orig *mail.MailMessage, text string) mail.SendRequest {
 	subject := orig.Subject
 	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
 		subject = "Re: " + subject
@@ -894,7 +895,7 @@ func mailReply(accountID string, orig *mail.MailMessage, text string) mail.SendR
 	if from == "" {
 		from = orig.From.Email
 	}
-	body := text + "\n\n" + orig.Date + "，" + from + " 写道：\n" + strings.Join(quoted, "\n")
+	body := text + "\n\n" + i18n.T(lang, "hub-inbox.reply_attribution", i18n.Args{"date": orig.Date, "from": from}) + "\n" + strings.Join(quoted, "\n")
 	return mail.SendRequest{AccountID: accountID, To: []mail.Address{orig.From}, Subject: subject, Text: body,
 		InReplyTo: orig.MessageID, References: mail.MessageIDs(strings.Join(refs, " "))}
 }

@@ -1,0 +1,7 @@
+{
+  "not_found": "No such extension",
+  "member_not_from_market": "Member “{name}” wasn’t installed from a marketplace. Remove it on the hub machine or in the admin page",
+  "none": "none",
+  "list_separator": ", ",
+  "partial": "Removal didn’t finish. Removed members: {removed}. Not removed: {failed}. The pack is still installed, so you can try again."
+}

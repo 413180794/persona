@@ -1,11 +1,11 @@
 package hub
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 type removedMember struct {
@@ -24,7 +24,7 @@ func (h *Hub) uninstallPack(w http.ResponseWriter, r *http.Request, id string, o
 	ps := h.extensions
 	p := ps.reg.Get(id)
 	if p == nil {
-		writeErrCode(w, http.StatusNotFound, "not_found", errors.New("没有这个扩展"))
+		writeErrCode(w, http.StatusNotFound, "not_found", i18n.Err("hub-extension_uninstall.not_found"))
 		return
 	}
 	if !o.members || !p.Full.IsPack() {
@@ -43,7 +43,7 @@ func (h *Hub) uninstallPack(w http.ResponseWriter, r *http.Request, id string, o
 	for _, mid := range ids {
 		cur := ps.reg.Get(mid)
 		if cur != nil && !o.owner && extension.FromMarket(cur.Record.Origin) == "" {
-			writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("成员「"+cur.Full.Name+"」不是从市场安装的，请在 hub 机器或管理界面卸载"))
+			writeErrCode(w, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_uninstall.member_not_from_market", i18n.Args{"name": cur.Full.Name}))
 			return
 		}
 	}
@@ -73,13 +73,15 @@ func (h *Hub) uninstallPack(w http.ResponseWriter, r *http.Request, id string, o
 		if remaining == nil {
 			remaining = []string{}
 		}
-		removedText := "无"
+		l := h.requestLang(r)
+		sep := i18n.T(l, "hub-extension_uninstall.list_separator")
+		removedText := i18n.T(l, "hub-extension_uninstall.none")
 		if len(removed) > 0 {
-			removedText = strings.Join(removed, "、")
+			removedText = strings.Join(removed, sep)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
-		writeJSON(w, map[string]any{"ok": false, "code": "partial_uninstall", "error": "卸载未完成。已卸载成员：" + removedText + "；未卸载：" + strings.Join(names, "、") + "。合集仍保留，可以重试。", "removed_members": removed, "failed_members": failed, "remaining_members": remaining})
+		writeJSON(w, map[string]any{"ok": false, "code": "partial_uninstall", "error": i18n.T(l, "hub-extension_uninstall.partial", i18n.Args{"removed": removedText, "failed": strings.Join(names, sep)}), "removed_members": removed, "failed_members": failed, "remaining_members": remaining})
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true, "removed_members": removed})

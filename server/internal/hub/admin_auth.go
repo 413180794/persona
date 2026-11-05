@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/argon2"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The administrator's password and browser sessions (docs/admin.md「管理员密码和会话」).
@@ -98,17 +99,17 @@ func checkAdminPassword(encoded, password string) bool {
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
-// adminPasswordProblem is why a new password is refused, "" when it is fine.
-func adminPasswordProblem(password string) string {
+// adminPasswordProblem is why a new password is refused, nil when it is fine.
+func adminPasswordProblem(password string) error {
 	switch {
 	case utf8.RuneCountInString(password) < adminPasswordMin:
-		return fmt.Sprintf("密码至少 %d 个字符", adminPasswordMin)
+		return i18n.Err("hub-admin_auth.password_too_short", i18n.Args{"min": adminPasswordMin})
 	case len(password) > adminPasswordBytes:
-		return fmt.Sprintf("密码最多 %d 字节", adminPasswordBytes)
+		return i18n.Err("hub-admin_auth.password_too_long", i18n.Args{"max": adminPasswordBytes})
 	case strings.TrimSpace(password) == "":
-		return "密码不能全是空格"
+		return i18n.Err("hub-admin_auth.password_blank")
 	}
-	return ""
+	return nil
 }
 
 // --- sessions ---------------------------------------------------------------------------------------------------
@@ -325,8 +326,8 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 					errors.New("from this machine the first password needs the setup code: hub log, or jarvisd hub admin setup-code"))
 				return
 			}
-			if problem := adminPasswordProblem(in.Password); problem != "" { // before spending the code
-				writeErrCode(w, http.StatusBadRequest, "weak_password", errors.New(problem))
+			if problem := adminPasswordProblem(in.Password); problem != nil { // before spending the code
+				writeErrCode(w, http.StatusBadRequest, "weak_password", problem)
 				return
 			}
 			if !h.useSetupCode(in.SetupCode) {
@@ -337,8 +338,8 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 				return
 			}
 		}
-		if problem := adminPasswordProblem(in.Password); problem != "" {
-			writeErrCode(w, http.StatusBadRequest, "weak_password", errors.New(problem))
+		if problem := adminPasswordProblem(in.Password); problem != nil {
+			writeErrCode(w, http.StatusBadRequest, "weak_password", problem)
 			return
 		}
 		hash, err := hashAdminPassword(in.Password)
@@ -427,8 +428,8 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 			writeErrCode(w, http.StatusUnauthorized, "bad_password", errors.New("the current password is wrong"))
 			return
 		}
-		if problem := adminPasswordProblem(in.New); problem != "" {
-			writeErrCode(w, http.StatusBadRequest, "weak_password", errors.New(problem))
+		if problem := adminPasswordProblem(in.New); problem != nil {
+			writeErrCode(w, http.StatusBadRequest, "weak_password", problem)
 			return
 		}
 		next, err := hashAdminPassword(in.New)

@@ -1,0 +1,4 @@
+{
+  "too_large": "文件超过 {mb} MB",
+  "outdated": "{name} 上的 jarvisd 太旧，不能接收文件，需要重新部署"
+}

@@ -1,0 +1,6 @@
+{
+  "bad_manifest": "The Android release manifest is invalid",
+  "unreadable_apk": "Can’t read the Android package",
+  "not_published": "No Android package has been published yet",
+  "unreadable_release": "Can’t read the Android release files"
+}

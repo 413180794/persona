@@ -1,0 +1,9 @@
+{
+  "bad_address": "地址写成 https://主机:端口 或 主机:端口",
+  "needs_port": "地址要带端口：主机:端口",
+  "bad_port": "端口不对",
+  "status": "对方回了 {status}",
+  "not_a_hub": "那里不是 Persona hub",
+  "unreachable": "连不上：{err}",
+  "not_in_group": "这台 hub 不在组里"
+}

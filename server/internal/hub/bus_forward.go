@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -45,7 +46,7 @@ func (h *Hub) forwardSend(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 // errSendInDoubt is what forwardSend answers when it can't tell whether the request was done.
-var errSendInDoubt = errors.New("和助手的连接在发送途中断了，可能已经发出去了：先看看再决定要不要重发")
+var errSendInDoubt = i18n.Err("hub-bus_forward.send_in_doubt")
 
 func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send bool) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, busHTTPLimit))
@@ -72,6 +73,7 @@ func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send 
 		switch {
 		case send && (errors.Is(err, errBusDropped) || errors.Is(err, context.DeadlineExceeded)):
 			body := errorBody(http.StatusBadGateway, assistantwire.CodeAssistantInDoubt, errSendInDoubt)
+			body["error"] = i18n.Localize(errSendInDoubt, h.requestLang(r))
 			body["delivered"], body["retryable"] = "unknown", false
 			writeErrorBody(w, http.StatusBadGateway, body)
 		case errors.Is(err, errBusOffline):

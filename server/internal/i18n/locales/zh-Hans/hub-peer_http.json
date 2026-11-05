@@ -1,0 +1,6 @@
+{
+  "forward_failed": "转给另一台 hub 时失败：{err}",
+  "loop": "转发的次数太多（hub 之间的路由在变）",
+  "unreachable": "那台 hub 现在连不上",
+  "center_unreachable": "这台 hub 是组里的成员，中心 hub「{name}」现在连不上"
+}

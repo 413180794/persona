@@ -25,6 +25,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/host"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 	wechat "github.com/nwverse/persona/server/internal/wechat/spec"
 )
@@ -250,7 +251,7 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 		}
 	}
 	if p.Record.Enabled && ps.h != nil && ps.h.hubJSONWaitsForTriageModel(ctx, p) { // runs, but its inbox waits
-		v.Status, v.NeedsSetup = extensionNeedsSetup, append(v.NeedsSetup, needsTriageModelSetup)
+		v.Status, v.NeedsSetup = extensionNeedsSetup, append(v.NeedsSetup, needsTriageModelSetup(ps.h.contextLang(ctx)))
 	}
 	if ps.h != nil {
 		ps.h.extensionUpgrades().decorate(ctx, &v, p)
@@ -489,7 +490,8 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 	case p.Problem != "":
 		hp.status, hp.err = extensionIncompatible, p.Problem
 	case len(missing) > 0:
-		hp.status, hp.err = extensionNeedsSetup, "还缺："+strings.Join(missing, "、")
+		l := ps.h.contextLang(ctx)
+		hp.status, hp.err = extensionNeedsSetup, i18n.T(l, "hub-extensions.missing", i18n.Args{"fields": strings.Join(missing, i18n.T(l, "hub-extensions.list_separator"))})
 	case p.Manifest.Runtime == nil:
 		hp.status = host.StateRunning // nothing to run: its declarations are in effect
 	default:
@@ -656,7 +658,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 	} else {
 		cmd, ok := rt.Command.For(runtime.GOOS + "-" + runtime.GOARCH)
 		if !ok {
-			return s, fmt.Errorf("没有 %s-%s 的程序", runtime.GOOS, runtime.GOARCH)
+			return s, i18n.Err("hub-extensions.no_program", i18n.Args{"platform": runtime.GOOS + "-" + runtime.GOARCH})
 		}
 		if extension.IsBuiltinCommand(cmd) {
 			s.Command = selfExecutable()

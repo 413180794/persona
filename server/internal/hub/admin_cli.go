@@ -324,8 +324,8 @@ func readNewPassword(stdin io.Reader, stderr io.Writer) (string, error) {
 		if string(first) != string(second) {
 			return "", errors.New("两次输入的不一样，没有改")
 		}
-		if problem := adminPasswordProblem(string(first)); problem != "" {
-			return "", errors.New(problem)
+		if problem := adminPasswordProblem(string(first)); problem != nil {
+			return "", problem
 		}
 		return string(first), nil
 	}
@@ -334,8 +334,8 @@ func readNewPassword(stdin io.Reader, stderr io.Writer) (string, error) {
 		return "", err
 	}
 	password := strings.TrimRight(line, "\r\n")
-	if problem := adminPasswordProblem(password); problem != "" {
-		return "", errors.New(problem)
+	if problem := adminPasswordProblem(password); problem != nil {
+		return "", problem
 	}
 	return password, nil
 }

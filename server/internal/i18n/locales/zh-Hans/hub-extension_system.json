@@ -1,0 +1,18 @@
+{
+  "not_widget": "这不是一个小组件",
+  "no_shortcut": "这个扩展没有这个快捷指令",
+  "bad_family": "这个小组件不画这个尺寸",
+  "bad_family_detail": "这个小组件不画这个尺寸：{title} 只画 {families}",
+  "list_separator": "、",
+  "shortcut_arg": "快捷指令的参数不对",
+  "shortcut_no_param": "快捷指令的参数不对：没有参数 {name}",
+  "shortcut_bad_value": "快捷指令的参数不对：{title} {problem}",
+  "shortcut_missing": "快捷指令的参数不对：缺 {title}",
+  "value_not_number": "要一个数",
+  "value_not_bool": "是 true 或 false",
+  "value_not_choice": "不是它的选项",
+  "value_too_long": "太长",
+  "use_widget": "小组件用 /api/v1/extensions/{id}/-/widget/{ui} 画",
+  "widget_unsupported": "扩展画的小组件这个 hub 画不了：{err}",
+  "result_unsupported": "扩展回的结果这个 hub 画不了：{err}"
+}

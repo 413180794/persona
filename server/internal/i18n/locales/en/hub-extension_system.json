@@ -1,0 +1,18 @@
+{
+  "not_widget": "This isn’t a widget",
+  "no_shortcut": "This extension doesn’t have that shortcut",
+  "bad_family": "This widget doesn’t come in this size",
+  "bad_family_detail": "This widget doesn’t come in this size: {title} only comes in {families}",
+  "list_separator": ", ",
+  "shortcut_arg": "The shortcut’s parameters aren’t right",
+  "shortcut_no_param": "The shortcut’s parameters aren’t right: there’s no parameter {name}",
+  "shortcut_bad_value": "The shortcut’s parameters aren’t right: {title} {problem}",
+  "shortcut_missing": "The shortcut’s parameters aren’t right: {title} is missing",
+  "value_not_number": "must be a number",
+  "value_not_bool": "must be true or false",
+  "value_not_choice": "isn’t one of its options",
+  "value_too_long": "is too long",
+  "use_widget": "Widgets are drawn with /api/v1/extensions/{id}/-/widget/{ui}",
+  "widget_unsupported": "This hub can’t draw the extension’s widget: {err}",
+  "result_unsupported": "This hub can’t draw the extension’s result: {err}"
+}

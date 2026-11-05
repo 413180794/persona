@@ -1,0 +1,4 @@
+{
+  "computer_offline": "コンピューターがオフライン",
+  "bad_proxy": "proxy は socks5://ホスト:ポート の形式で入力してください"
+}

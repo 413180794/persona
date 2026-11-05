@@ -1,0 +1,5 @@
+{
+  "password_too_short": "The password needs at least {min} characters",
+  "password_too_long": "The password can be at most {max} bytes",
+  "password_blank": "The password can’t be only spaces"
+}

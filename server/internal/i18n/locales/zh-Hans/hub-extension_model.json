@@ -1,0 +1,16 @@
+{
+  "market_not_registered": "没有登记市场 {spec}",
+  "not_in_markets": "登记的市场里都没有",
+  "unresolved": "{id}（{why}）",
+  "too_deep": "依赖太深",
+  "version_mismatch": "要 {want}，市场里是 {have}",
+  "unresolved_missing": "还缺这些扩展，市场里找不到：{list}",
+  "list_separator": "、",
+  "install_dependency": "先装它要的扩展 {id}",
+  "bundle_required_one": "要一起装 {count} 个扩展：确认它们后一起发过来（bundle）",
+  "bundle_required_other": "要一起装 {count} 个扩展：确认它们后一起发过来（bundle）",
+  "bundle_mismatch": "一起装的 {id} 和预览里的对不上：重新预览",
+  "bundle_member_failed": "一起装的 {id} 没装上：{err}",
+  "has_dependents": "这些扩展要用它：{names}。连它们一起停用？",
+  "read_only": "扩展「{name}」写在 hub.json 里，请先在那里停用"
+}

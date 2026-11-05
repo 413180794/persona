@@ -1,0 +1,6 @@
+{
+  "invalid_public_url": "public_url: a full address starting with http:// or https://",
+  "invalid_tls_listen": "tls_listen: for example :18662 or 0.0.0.0:18662",
+  "tls_listen_same_port": "tls_listen can’t use the same port as the plain-text listen",
+  "invalid_advertise": "advertise: one address per line"
+}

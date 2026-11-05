@@ -13,6 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // asInbox makes a plugin package's connector one with an inbox (and fallback when asked), with triage_rules in its
@@ -180,12 +181,12 @@ func TestHubJSONInboxExtensionWaitsForTheModel(t *testing.T) {
 		return v.Status, strings.Join(v.NeedsSetup, "、")
 	}
 	h.readConnectors(context.Background())
-	if st, needs := status(); c.n.Load() != 0 || st != extensionNeedsSetup || needs != needsTriageModelSetup {
+	if st, needs := status(); c.n.Load() != 0 || st != extensionNeedsSetup || needs != needsTriageModelSetup(i18n.Default) {
 		t.Fatalf("collected %d time(s), status %s %q", c.n.Load(), st, needs)
 	}
 	withTriageModel(t, h, true)
 	h.readConnectors(context.Background())
-	if _, needs := status(); c.n.Load() != 1 || strings.Contains(needs, needsTriageModelSetup) {
+	if _, needs := status(); c.n.Load() != 1 || strings.Contains(needs, needsTriageModelSetup(i18n.Default)) {
 		t.Fatalf("with the model: collected %d time(s), needs %q", c.n.Load(), needs)
 	}
 }

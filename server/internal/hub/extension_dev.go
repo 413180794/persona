@@ -11,6 +11,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/host"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Extensions being written (`personad extension dev`, docs/extensions.md「命令行」): run from their own directory, kept
@@ -97,7 +98,7 @@ func (h *Hub) extensionDevRoutes(api *http.ServeMux) {
 	owner := func(f http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if !h.fromThisMachine(r) {
-				writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("开发中的扩展只能在 hub 机器上挂（personad extension dev）"))
+				writeErrCode(w, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_dev.owner_only"))
 				return
 			}
 			if ps() == nil {
@@ -145,7 +146,7 @@ func (h *Hub) extensionDevRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/extensions/{id}/-/dev/logs", owner(func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if p := ps().reg.Get(id); p == nil || p.Record.Source != extension.SourceDev {
-			writeErrCode(w, http.StatusNotFound, "not_found", errors.New("没有开发中的扩展 "+id))
+			writeErrCode(w, http.StatusNotFound, "not_found", i18n.Err("hub-extension_dev.not_found", i18n.Args{"id": id}))
 			return
 		}
 		lines, stop := ps().dev.subscribe(id)

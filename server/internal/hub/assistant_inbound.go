@@ -11,6 +11,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -68,7 +69,7 @@ func (h *Hub) issueOwnerAction(channel, interaction string) string {
 }
 
 // errNoOwnerAction: an answer to a card from a channel without the owner's action behind it.
-var errNoOwnerAction = errors.New("这个回答没有对应主人在渠道里的操作：批准类的不能代答")
+var errNoOwnerAction = i18n.Err("hub-assistant_inbound.no_owner_action")
 
 // takeOwnerAction uses up the owner action id for an answer to interaction (once).
 func (h *Hub) takeOwnerAction(id, interaction string) error {

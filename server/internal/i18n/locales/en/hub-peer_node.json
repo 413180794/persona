@@ -1,0 +1,5 @@
+{
+  "unreachable": "“{name}” can’t be reached right now",
+  "center_only": "Only the primary hub of this hub’s group can reach computers through it",
+  "no_machine": "This hub’s hub.json has no {id}"
+}

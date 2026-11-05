@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/quota"
 )
 
@@ -23,6 +24,7 @@ type quotaEntry struct {
 	report  quota.Report
 	machine string
 	err     string
+	cause   error // what err says, for people in the language of the request reading it
 	at      time.Time
 }
 
@@ -47,6 +49,9 @@ func (c *quotaCache) put(name string, e quotaEntry) {
 	c.m[name] = e
 }
 
+// errNoGateway: the launcher has no gateway address of its own (it uses the official API), so there is no quota to read.
+var errNoGateway = i18n.Err("hub-launcherquota.no_gateway")
+
 // launcherQuota reads (or recalls) one launcher's quota; machine picks which machine reads a ~/.zshrc launcher.
 func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh bool) (quotaEntry, error) {
 	if e, ok := h.quotas.get(name); ok && !refresh && (machine == "" || machine == e.machine) {
@@ -63,7 +68,7 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 		e.report, err = h.extensions.quota(ctx, base, h.userTZName(), send)
 	}
 	if err != nil {
-		e.err = err.Error()
+		e.err, e.cause = err.Error(), err
 		if !strings.Contains(e.err, quota.ErrUnsupported.Error()) && ctx.Err() != nil {
 			return quotaEntry{}, err // cancelled: nothing to remember
 		}
@@ -115,8 +120,8 @@ func (h *Hub) launcherQuotaRoutes(api *http.ServeMux) {
 		out := map[string]any{"machine": e.machine, "checked_at": e.at.UTC()}
 		if e.err != "" {
 			// Not a failure of this request: the gateway has nothing to read, or said no; the page shows why.
-			out["error"] = e.err
-			out["unsupported"] = strings.Contains(e.err, quota.ErrUnsupported.Error()) || strings.Contains(e.err, "没有设网关地址")
+			out["error"] = i18n.Localize(e.cause, h.requestLang(r))
+			out["unsupported"] = strings.Contains(e.err, quota.ErrUnsupported.Error()) || errors.Is(e.cause, errNoGateway)
 		} else {
 			out["quota"] = e.report
 		}
@@ -163,7 +168,7 @@ func (h *Hub) launcherGateway(ctx context.Context, name, machine string) (launch
 			}
 		}
 		if out.base == "" {
-			return out, errors.New("这个启动器没有设网关地址（用的是默认的官方接口）")
+			return out, errNoGateway
 		}
 		return out, nil
 	}
@@ -177,7 +182,7 @@ func (h *Hub) launcherGateway(ctx context.Context, name, machine string) (launch
 	}
 	if err := m.call(ctx, "launchers.http", map[string]any{"name": name, "configured": m.configuredLauncher(name)}, &gw); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
-			return out, errors.New(m.cfg.Name + " 上的 node 太旧：更新后才能查额度")
+			return out, i18n.Err("hub-launcherquota.node_outdated", i18n.Args{"name": m.cfg.Name})
 		}
 		return out, err
 	}

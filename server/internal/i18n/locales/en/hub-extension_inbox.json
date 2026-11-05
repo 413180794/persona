@@ -1,0 +1,6 @@
+{
+  "needs_triage_model": "Set up “Message triage” in Settings › Models first, then turn on this extension",
+  "needs_triage_setup": "Needs a triage model",
+  "triage_in_use": "These extensions use “Message triage” to sort the inbox: {names}. Turn them off in Settings › Extensions before changing this model",
+  "list_separator": ", "
+}

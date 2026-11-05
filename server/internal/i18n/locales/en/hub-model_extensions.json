@@ -1,0 +1,7 @@
+{
+  "no_extensions": "Extensions aren’t set up",
+  "no_voice": "No such voice extension",
+  "unreadable": "Can’t read the extension’s model list",
+  "unavailable": "The extension’s model list isn’t available right now",
+  "malformed": "The extension’s model list is malformed"
+}

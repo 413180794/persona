@@ -14,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -104,13 +105,38 @@ func (ps *extensions) shortcutPlaces() []ShortcutPlace {
 }
 
 var (
-	errNotWidget   = errors.New("这不是一个小组件")
-	errNoShortcut  = errors.New("这个扩展没有这个快捷指令")
-	errBadFamily   = errors.New("这个小组件不画这个尺寸")
-	errShortcutArg = errors.New("快捷指令的参数不对")
+	errNotWidget   = i18n.Err("hub-extension_system.not_widget")
+	errNoShortcut  = i18n.Err("hub-extension_system.no_shortcut")
+	errBadFamily   = i18n.Err("hub-extension_system.bad_family")
+	errShortcutArg = i18n.Err("hub-extension_system.shortcut_arg")
 	// errUseWidget: a widget asked for as a page (…/-/ui/{ui}); widgets are drawn with …/-/widget/{ui}.
-	errUseWidget = errors.New("小组件用 /api/v1/extensions/{id}/-/widget/{ui} 画")
+	errUseWidget = i18n.Err("hub-extension_system.use_widget")
 )
+
+// contextLang is the language of what ctx is doing for people: its request's (i18n.With), else the user's.
+func (h *Hub) contextLang(ctx context.Context) i18n.Lang {
+	if l := i18n.From(ctx); i18n.Valid(l) {
+		return l
+	}
+	if h == nil {
+		return i18n.Default
+	}
+	return h.userLang()
+}
+
+// kindErr is a localized message that is also kind (errors.Is), for a sentinel error with detail of its own.
+type kindErr struct {
+	msg  *i18n.Message
+	kind error
+}
+
+func (e *kindErr) Error() string   { return e.msg.Error() }
+func (e *kindErr) Unwrap() []error { return []error{e.msg, e.kind} }
+
+// localizedKind is key's text as an error that is kind.
+func localizedKind(kind error, key string, args i18n.Args) error {
+	return &kindErr{msg: &i18n.Message{Key: key, Args: args}, kind: kind}
+}
 
 // widgetCall draws extension id's widget ui at the family in.Context.Size: the view kept from before while it is not
 // due, else the extension's ui.render held to the family (FitWidget), kept until the widget's refresh is due.
@@ -131,7 +157,8 @@ func (h *Hub) widgetCall(ctx context.Context, id, uiID string, in uiRequest) (wi
 	}
 	family := in.Context.Size
 	if !slices.Contains(item.Families, family) {
-		return out, fmt.Errorf("%w：%s 只画 %s", errBadFamily, item.Title, strings.Join(item.Families, "、"))
+		return out, localizedKind(errBadFamily, "hub-extension_system.bad_family_detail",
+			i18n.Args{"title": item.Title, "families": strings.Join(item.Families, i18n.T(h.contextLang(ctx), "hub-extension_system.list_separator"))})
 	}
 	slot, _ := extension.Slot("widget")
 	params := h.uiParams(item, slot, in)
@@ -157,11 +184,11 @@ func (h *Hub) widgetCall(ctx context.Context, id, uiID string, in uiRequest) (wi
 	}
 	var v extension.View
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return out, fmt.Errorf("扩展画的小组件这个 hub 画不了：%v", err)
+		return out, i18n.Err("hub-extension_system.widget_unsupported", i18n.Args{"err": err.Error()})
 	}
 	dropped, err := extension.FitWidget(&v, family, params.UIVersion)
 	if err != nil {
-		return out, fmt.Errorf("扩展画的小组件这个 hub 画不了：%v", err)
+		return out, i18n.Err("hub-extension_system.widget_unsupported", i18n.Args{"err": err.Error()})
 	}
 	if len(dropped) > 0 {
 		h.extensions.logf("extension %s: widget %s (%s) drew what a widget does not (%s): left out", id, uiID, family, strings.Join(dropped, ", "))
@@ -200,16 +227,17 @@ func (h *Hub) shortcutCall(ctx context.Context, id, sid string, in wire.Shortcut
 	for name, v := range in.Values {
 		j := slices.IndexFunc(sc.Params, func(p extension.ShortcutParam) bool { return p.Name == name })
 		if j < 0 {
-			return out, fmt.Errorf("%w：没有参数 %s", errShortcutArg, name)
+			return out, localizedKind(errShortcutArg, "hub-extension_system.shortcut_no_param", i18n.Args{"name": name})
 		}
-		if err := checkShortcutValue(sc.Params[j], v); err != nil {
-			return out, fmt.Errorf("%w：%s %v", errShortcutArg, sc.Params[j].Title, err)
+		if problem := checkShortcutValue(sc.Params[j], v); problem != "" {
+			return out, localizedKind(errShortcutArg, "hub-extension_system.shortcut_bad_value",
+				i18n.Args{"title": sc.Params[j].Title, "problem": i18n.T(h.contextLang(ctx), "hub-extension_system."+problem)})
 		}
 		values[name] = v
 	}
 	for _, p := range sc.Params {
 		if p.Required && values[p.Name] == "" {
-			return out, fmt.Errorf("%w：缺 %s", errShortcutArg, p.Title)
+			return out, localizedKind(errShortcutArg, "hub-extension_system.shortcut_missing", i18n.Args{"title": p.Title})
 		}
 	}
 	var req uiRequest
@@ -233,32 +261,33 @@ func (h *Hub) shortcutCall(ctx context.Context, id, sid string, in wire.Shortcut
 	out.Text = clipRunes(out.Text, extension.StringMost)
 	if out.View != nil {
 		if _, err := extension.FitWidget(out.View, "large", params.UIVersion); err != nil {
-			return wire.ShortcutResult{}, fmt.Errorf("扩展回的结果这个 hub 画不了：%v", err)
+			return wire.ShortcutResult{}, i18n.Err("hub-extension_system.result_unsupported", i18n.Args{"err": err.Error()})
 		}
 	}
 	return out, nil
 }
 
-// checkShortcutValue holds a value to its param's kind.
-func checkShortcutValue(p extension.ShortcutParam, v string) error {
+// checkShortcutValue holds a value to its param's kind: "" when it fits, else the problem's key in
+// hub-extension_system.
+func checkShortcutValue(p extension.ShortcutParam, v string) string {
 	switch p.Kind {
 	case "number":
 		if _, err := strconv.ParseFloat(v, 64); err != nil && v != "" {
-			return errors.New("要一个数")
+			return "value_not_number"
 		}
 	case "toggle":
 		if v != "true" && v != "false" && v != "" {
-			return errors.New("是 true 或 false")
+			return "value_not_bool"
 		}
 	case "choice":
 		if v != "" && !slices.ContainsFunc(p.Choices, func(c wire.Choice) bool { return c.Value == v }) {
-			return errors.New("不是它的选项")
+			return "value_not_choice"
 		}
 	}
 	if len(v) > extension.StringMost {
-		return errors.New("太长")
+		return "value_too_long"
 	}
-	return nil
+	return ""
 }
 
 // deviceWidgets are the widgets each device has (device id → its widgets), as each last said; the caller holds no

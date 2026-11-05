@@ -1,0 +1,4 @@
+{
+  "owner_only": "开发中的扩展只能在 hub 机器上挂（personad extension dev）",
+  "not_found": "没有开发中的扩展 {id}"
+}

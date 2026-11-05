@@ -1,0 +1,7 @@
+{
+  "no_extensions": "Extensions aren’t enabled on this hub",
+  "not_found": "No such extension",
+  "busy": "Another extension is being previewed. Try again when it’s done",
+  "too_large": "The package is larger than {mb} MB",
+  "confirm_required": "Review what it can do first, then install with permissions_digest to confirm"
+}

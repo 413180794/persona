@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -93,9 +94,9 @@ func (h *Hub) shown(machine string, list []proto.Session) []proto.Session {
 }
 
 var (
-	errDeleteRunning   = errors.New("这个 Agent 还在运行，先关闭再删除")
-	errDeleteAssistant = errors.New("助手的对话用归档")
-	errDeleteUnknown   = errors.New("没有这个会话")
+	errDeleteRunning   = i18n.Err("hub-deleted_sessions.running")
+	errDeleteAssistant = i18n.Err("hub-deleted_sessions.assistant")
+	errDeleteUnknown   = i18n.Err("hub-deleted_sessions.unknown")
 )
 
 // deleteSession is DELETE /api/v1/sessions/{mid}/{sid}: take an offline session out of the apps' lists.

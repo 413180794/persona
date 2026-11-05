@@ -2,12 +2,12 @@ package hub
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The plugins page (docs/admin.md「扩展」, docs/extensions.md「管理界面」): what `personad plugin` does on the hub's
@@ -75,7 +75,7 @@ type AdminExtensions struct {
 func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 	ps := func(w http.ResponseWriter) *extensions {
 		if h.extensions == nil {
-			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("这台 hub 没有启用扩展"))
+			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", i18n.Err("hub-admin_extensions.no_extensions"))
 		}
 		return h.extensions
 	}
@@ -88,7 +88,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			}
 			p := s.reg.Get(r.PathValue("id"))
 			if p == nil {
-				writeErrCode(w, http.StatusNotFound, "not_found", errors.New("没有这个扩展"))
+				writeErrCode(w, http.StatusNotFound, "not_found", i18n.Err("hub-admin_extensions.not_found"))
 				return
 			}
 			f(w, r, s, p)
@@ -99,7 +99,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 		end, retry, busy := h.admin.extensions.begin(h.adminNow())
 		switch {
 		case busy:
-			writeErrCode(w, http.StatusConflict, "busy", errors.New("正在预览另一个扩展，等它结束再试"))
+			writeErrCode(w, http.StatusConflict, "busy", i18n.Err("hub-admin_extensions.busy"))
 			return
 		case retry > 0:
 			retryAfter(w, retry)
@@ -172,7 +172,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			return
 		}
 		if r.ContentLength > extension.PackageMost {
-			writeErrCode(w, http.StatusRequestEntityTooLarge, "too_large", fmt.Errorf("包超过 %d MB", extension.PackageMost>>20))
+			writeErrCode(w, http.StatusRequestEntityTooLarge, "too_large", i18n.Err("hub-admin_extensions.too_large", i18n.Args{"mb": extension.PackageMost >> 20}))
 			return
 		}
 		q := r.URL.Query()
@@ -203,7 +203,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			return
 		}
 		if in.Digest == "" {
-			writeErrCode(w, http.StatusBadRequest, "confirm_required", errors.New("先看过它能做什么，确认后带上 permissions_digest 安装"))
+			writeErrCode(w, http.StatusBadRequest, "confirm_required", i18n.Err("hub-admin_extensions.confirm_required"))
 			return
 		}
 		if err := h.installBundle(r.Context(), s.reg.PreviewOf(in.PreviewID), in.Digest, in.Bundle, adminActor); err != nil {

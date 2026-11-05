@@ -1,0 +1,5 @@
+{
+  "missing": "Still needs: {fields}",
+  "list_separator": ", ",
+  "no_program": "No program for {platform}"
+}

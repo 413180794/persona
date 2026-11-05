@@ -1,0 +1,4 @@
+{
+  "no_gateway": "This launcher has no gateway address (it uses the default official API)",
+  "node_outdated": "The node on {name} is too old. Update it to check usage limits"
+}

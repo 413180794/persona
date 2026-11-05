@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Dialing a peer (docs/mesh.md「拨号」): every paired hub is dialed until there is a link to it, whichever side made
@@ -31,7 +32,7 @@ const (
 	peerRefusedWait = 5 * time.Minute
 )
 
-var errPeerPin = errors.New("TLS 公钥指纹和配对时的不一样，不是那台 hub")
+var errPeerPin = i18n.Err("hub-peer_dial.pin_mismatch")
 
 type peerDialer struct {
 	cancel context.CancelFunc
@@ -133,7 +134,7 @@ func (h *Hub) dialLoop(ctx context.Context, hubID string) {
 		}
 		token, err := h.openKey(row.Token)
 		if err != nil {
-			h.setDialState(hubID, peerDialState{Error: "读不出互联凭据：" + err.Error(), At: time.Now()})
+			h.setDialState(hubID, peerDialState{Error: i18n.T(h.userLang(), "hub-peer_dial.credentials_unreadable", i18n.Args{"err": err.Error()}), At: time.Now()})
 			sleepCtx(ctx, peerRefusedWait)
 			continue
 		}
@@ -143,10 +144,10 @@ func (h *Hub) dialLoop(ctx context.Context, hubID string) {
 				return
 			}
 			wait := b.next()
-			st := peerDialState{Error: err.Error(), At: time.Now()}
+			st := peerDialState{Error: i18n.Localize(err, h.userLang()), At: time.Now()}
 			var he *peerHTTPError
 			if errors.As(err, &he) && (he.status == http.StatusUnauthorized || he.status == http.StatusForbidden) {
-				st.Refused, st.Error, wait = true, "对方不认这台 hub 的互联凭据（可能已在对方断开）：重新互联", peerRefusedWait
+				st.Refused, st.Error, wait = true, i18n.T(h.userLang(), "hub-peer_dial.refused"), peerRefusedWait
 			}
 			h.setDialState(hubID, st)
 			if !sleepCtx(ctx, wait) {
@@ -165,7 +166,7 @@ func (h *Hub) dialLoop(ctx context.Context, hubID string) {
 		}
 		switch websocket.CloseStatus(err) {
 		case peerCloseUnpaired:
-			h.setDialState(hubID, peerDialState{Error: "对方断开了互联", At: time.Now(), Refused: true})
+			h.setDialState(hubID, peerDialState{Error: i18n.T(h.userLang(), "hub-peer_dial.unpaired"), At: time.Now(), Refused: true})
 			sleepCtx(ctx, peerRefusedWait)
 			continue
 		}
@@ -279,7 +280,7 @@ func pinnedClient(fp string) *http.Client {
 func raceEndpoints[T any](ctx context.Context, eps []string, try func(context.Context, string) (T, error), drop func(T)) (T, string, error) {
 	var zero T
 	if len(eps) == 0 {
-		return zero, "", errors.New("没有对方 hub 的候选地址")
+		return zero, "", i18n.Err("hub-peer_dial.no_endpoints")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

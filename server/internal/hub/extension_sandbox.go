@@ -16,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension/egress"
 	"github.com/nwverse/persona/server/internal/extension/host"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // An installed extension's program runs in a sandbox, reaching out only through the hub's egress proxy and only to the
@@ -127,7 +128,7 @@ func (ps *extensions) sandboxOf(ctx context.Context, p *extension.Extension) san
 		sup := sandboxProbe()
 		st.Active = sup.Available()
 		if !st.Active {
-			st.Why = "没有沙箱：" + sup.Why
+			st.Why = i18n.T(ps.h.contextLang(ctx), "hub-extension_sandbox.unavailable", i18n.Args{"why": sup.Why})
 		}
 	}
 	if px := ps.sandboxes.proxyIfStarted(); px != nil {
@@ -246,10 +247,10 @@ func (ps *extensions) forgetSandbox(ctx context.Context, id string) {
 // setSandbox records the owner's choice (nil: back to the default) and restarts it.
 func (ps *extensions) setSandbox(ctx context.Context, p *extension.Extension, on *bool, who string) error {
 	if !sandboxApplies(p) {
-		return errors.New("只有装在 hub 上、由 hub 运行程序的扩展才有沙箱")
+		return i18n.Err("hub-extension_sandbox.not_applicable")
 	}
 	if ps.h == nil || ps.h.store == nil {
-		return errors.New("这个 hub 没有数据库")
+		return i18n.Err("hub-extension_sandbox.no_database")
 	}
 	sb := &ps.sandboxes
 	sb.mu.Lock()
@@ -371,7 +372,7 @@ func setEnv(env []string, name, value string) []string {
 func (h *Hub) sandboxRoutes(api *http.ServeMux) {
 	api.HandleFunc("PUT /api/v1/extensions/{id}/-/sandbox", func(w http.ResponseWriter, r *http.Request) {
 		if !h.fromThisMachine(r) {
-			writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("扩展的沙箱只能在 hub 机器上（personad extension sandbox …）或 hub 的管理界面里改"))
+			writeErrCode(w, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_sandbox.owner_only"))
 			return
 		}
 		h.putSandbox(w, r, actorOr(r, "personad extension"))

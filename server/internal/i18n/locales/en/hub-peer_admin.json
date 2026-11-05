@@ -1,0 +1,9 @@
+{
+  "bad_address": "Write the address as https://host:port or host:port",
+  "needs_port": "The address needs a port: host:port",
+  "bad_port": "Invalid port",
+  "status": "It answered {status}",
+  "not_a_hub": "That isn’t a Persona hub",
+  "unreachable": "Can’t connect: {err}",
+  "not_in_group": "This hub isn’t in a group"
+}

@@ -2,13 +2,15 @@ package hub
 
 import (
 	"errors"
-	"github.com/nwverse/persona/server/internal/identity"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // The network and access page: how the hub is reached (public URL, TLS, candidate addresses: written to hub.json,
@@ -62,7 +64,7 @@ func (h *Hub) adminNetworkView(r *http.Request) map[string]any {
 			"container": h.adminContainer(),
 		},
 		"you":     map[string]any{"address": remoteIP(r).String(), "tls": r.TLS != nil, "allowed": allowed},
-		"restart": h.pendingRestart(),
+		"restart": h.pendingRestart(h.requestLang(r)),
 	}
 }
 
@@ -168,7 +170,7 @@ func (h *Hub) adminNetworkRoutes(mux *http.ServeMux) {
 		if in.PublicURL != nil {
 			v := strings.TrimSpace(*in.PublicURL)
 			if u, err := url.Parse(v); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
-				writeErrCode(w, http.StatusBadRequest, "invalid_public_url", errors.New("public_url: http:// 或 https:// 开头的完整地址"))
+				writeErrCode(w, http.StatusBadRequest, "invalid_public_url", i18n.Err("hub-admin_network.invalid_public_url"))
 				return
 			}
 			*in.PublicURL = v
@@ -176,11 +178,11 @@ func (h *Hub) adminNetworkRoutes(mux *http.ServeMux) {
 		if in.TLSListen != nil {
 			v := strings.TrimSpace(*in.TLSListen)
 			if v != "" && !validListen(v) {
-				writeErrCode(w, http.StatusBadRequest, "invalid_tls_listen", errors.New("tls_listen: 例如 :18662 或 0.0.0.0:18662"))
+				writeErrCode(w, http.StatusBadRequest, "invalid_tls_listen", i18n.Err("hub-admin_network.invalid_tls_listen"))
 				return
 			}
 			if v != "" && sameListenPort(v, h.cfg.Listen) {
-				writeErrCode(w, http.StatusBadRequest, "invalid_tls_listen", errors.New("tls_listen 不能和明文 listen 用同一个端口"))
+				writeErrCode(w, http.StatusBadRequest, "invalid_tls_listen", i18n.Err("hub-admin_network.tls_listen_same_port"))
 				return
 			}
 			*in.TLSListen = v
@@ -192,7 +194,7 @@ func (h *Hub) adminNetworkRoutes(mux *http.ServeMux) {
 					continue
 				}
 				if strings.ContainsAny(a, " \t\n") || len(a) > 300 {
-					writeErrCode(w, http.StatusBadRequest, "invalid_advertise", errors.New("advertise: 每行一个地址"))
+					writeErrCode(w, http.StatusBadRequest, "invalid_advertise", i18n.Err("hub-admin_network.invalid_advertise"))
 					return
 				}
 				advertise = append(advertise, a)

@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // ContributionView is one contribution of an extension and its switch (docs/extensions.md「贡献的开关」).
@@ -98,7 +99,7 @@ func (h *Hub) contributionRoutes(api *http.ServeMux) {
 		}
 		switch {
 		case p.ReadOnly():
-			writeErrCode(w, http.StatusConflict, "read_only", errors.New(p.Record.ID+" 写在 hub.json 里：去 hub.json 或管理界面改"))
+			writeErrCode(w, http.StatusConflict, "read_only", i18n.Err("hub-extension_contributions.read_only", i18n.Args{"id": p.Record.ID}))
 			return
 		case p.Full.SwitchedElsewhere(point, cid):
 			connectorID := cid
@@ -110,7 +111,7 @@ func (h *Hub) contributionRoutes(api *http.ServeMux) {
 				}
 			}
 			if h.connectors == nil || h.connectors.Get(connectorID) == nil {
-				writeErrCode(w, http.StatusConflict, "not_running", errors.New("连接器还没起来：先启用这个扩展"))
+				writeErrCode(w, http.StatusConflict, "not_running", i18n.Err("hub-extension_contributions.not_running"))
 				return
 			}
 			if err := h.setConnectorEnabled(r.Context(), connectorID, *in.Enabled); err != nil {

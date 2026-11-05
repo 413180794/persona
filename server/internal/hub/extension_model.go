@@ -3,14 +3,13 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The extension model in the hub (docs/extensions.md「依赖、导出和合集」, #1854): what installs together (a preview's
@@ -34,7 +33,7 @@ func (h *Hub) findInMarkets(id, spec, prefer string) (extension.MarketRecord, *e
 		}
 		if len(order) == 0 {
 			ms.mu.Unlock()
-			return extension.MarketRecord{}, nil, fmt.Errorf("没有登记市场 %s", spec)
+			return extension.MarketRecord{}, nil, i18n.Err("hub-extension_model.market_not_registered", i18n.Args{"spec": spec})
 		}
 	} else {
 		if prefer != "" && ms.byID[prefer] != nil {
@@ -50,7 +49,7 @@ func (h *Hub) findInMarkets(id, spec, prefer string) (extension.MarketRecord, *e
 		order = append(order, rest...)
 	}
 	ms.mu.Unlock()
-	var last error = errors.New("登记的市场里都没有")
+	var last error = i18n.Err("hub-extension_model.not_in_markets")
 	for _, mid := range order {
 		rec, e, err := h.marketEntry(mid, id)
 		if err == nil {
@@ -69,6 +68,10 @@ func (h *Hub) resolveBundle(ctx context.Context, pv *extension.Preview, market s
 		return
 	}
 	reg := h.extensions.reg
+	l := h.contextLang(ctx)
+	unresolved := func(id string, why string) string {
+		return i18n.T(l, "hub-extension_model.unresolved", i18n.Args{"id": id, "why": why})
+	}
 	seen := map[string]bool{pv.Manifest.ID: true}
 	type want struct{ id, spec, version string }
 	var walk func(m *extension.Manifest, market string, depth int)
@@ -91,21 +94,21 @@ func (h *Hub) resolveBundle(ctx context.Context, pv *extension.Preview, market s
 			}
 			seen[w.id] = true
 			if depth > bundleDepth {
-				pv.Unresolved = append(pv.Unresolved, w.id+"（依赖太深）")
+				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.T(l, "hub-extension_model.too_deep")))
 				continue
 			}
 			rec, e, err := h.findInMarkets(w.id, w.spec, market)
 			if err != nil {
-				pv.Unresolved = append(pv.Unresolved, w.id+"（"+err.Error()+"）")
+				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.Localize(err, l)))
 				continue
 			}
 			if !(extension.Dependency{ID: w.id, Version: w.version}).Allows(e.Parsed.Version) {
-				pv.Unresolved = append(pv.Unresolved, fmt.Sprintf("%s（要 %s，市场里是 %s）", w.id, w.version, e.Parsed.Version))
+				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.T(l, "hub-extension_model.version_mismatch", i18n.Args{"want": w.version, "have": e.Parsed.Version})))
 				continue
 			}
 			mk, err := h.market(rec)
 			if err != nil {
-				pv.Unresolved = append(pv.Unresolved, w.id+"（"+err.Error()+"）")
+				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.Localize(err, l)))
 				continue
 			}
 			upgrade := ""
@@ -114,7 +117,7 @@ func (h *Hub) resolveBundle(ctx context.Context, pv *extension.Preview, market s
 			}
 			sub, err := reg.PreviewMarket(ctx, mk, rec.ID, e, upgrade)
 			if err != nil {
-				pv.Unresolved = append(pv.Unresolved, w.id+"（"+err.Error()+"）")
+				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.Localize(err, l)))
 				continue
 			}
 			walk(sub.Manifest, rec.ID, depth+1) // what it needs installs before it
@@ -137,22 +140,23 @@ func (h *Hub) installBundle(ctx context.Context, main *extension.Preview, digest
 		return nil // expired, used or not what the user saw: Install says so, before anything installs
 	}
 	if len(main.Unresolved) > 0 {
-		return errors.New("还缺这些扩展，市场里找不到：" + strings.Join(main.Unresolved, "、"))
+		l := h.contextLang(ctx)
+		return i18n.Err("hub-extension_model.unresolved_missing", i18n.Args{"list": strings.Join(main.Unresolved, i18n.T(l, "hub-extension_model.list_separator"))})
 	}
 	bundled := func(id string) bool {
 		return slices.ContainsFunc(main.Bundle, func(b *extension.Preview) bool { return b.Manifest.ID == id })
 	}
 	for _, d := range h.extensions.reg.Dependencies(main.Manifest) {
 		if d.State == extension.DepMissing && !bundled(d.ID) {
-			return errors.New("先装它要的扩展 " + d.ID)
+			return i18n.Err("hub-extension_model.install_dependency", i18n.Args{"id": d.ID})
 		}
 	}
 	if len(refs) != len(main.Bundle) {
-		return fmt.Errorf("要一起装 %d 个扩展：确认它们后一起发过来（bundle）", len(main.Bundle))
+		return i18n.Err("hub-extension_model.bundle_required", i18n.Args{"count": len(main.Bundle)})
 	}
 	for i, b := range main.Bundle {
 		if refs[i].PreviewID != b.ID || refs[i].Digest != b.Digest {
-			return fmt.Errorf("一起装的 %s 和预览里的对不上：重新预览", b.Manifest.ID)
+			return i18n.Err("hub-extension_model.bundle_mismatch", i18n.Args{"id": b.Manifest.ID})
 		}
 	}
 	reg := h.extensions.reg
@@ -164,7 +168,7 @@ func (h *Hub) installBundle(ctx context.Context, main *extension.Preview, digest
 			_, err = reg.Install(ctx, b.ID, b.Digest, actor)
 		}
 		if err != nil {
-			return fmt.Errorf("一起装的 %s 没装上：%w", b.Manifest.ID, err)
+			return localizedKind(err, "hub-extension_model.bundle_member_failed", i18n.Args{"id": b.Manifest.ID, "err": i18n.Localize(err, h.contextLang(ctx))})
 		}
 	}
 	return nil
@@ -224,12 +228,12 @@ func (h *Hub) takeDependentsOf(w http.ResponseWriter, r *http.Request, ids []str
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		_ = json.NewEncoder(w).Encode(map[string]any{"code": "has_dependents", "dependents": deps,
-			"error": "这些扩展要用它：" + strings.Join(names, "、") + "。连它们一起停用？"})
+			"error": i18n.T(h.requestLang(r), "hub-extension_model.has_dependents", i18n.Args{"names": strings.Join(names, i18n.T(h.requestLang(r), "hub-extension_model.list_separator"))})})
 		return false
 	}
 	for _, d := range deps {
 		if p := h.extensions.reg.Get(d.ID); p != nil && p.ReadOnly() {
-			writeErrCode(w, http.StatusConflict, "read_only", errors.New("扩展「"+d.Name+"」写在 hub.json 里，请先在那里停用"))
+			writeErrCode(w, http.StatusConflict, "read_only", i18n.Err("hub-extension_model.read_only", i18n.Args{"name": d.Name}))
 			return false
 		}
 	}

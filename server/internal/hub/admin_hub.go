@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The overview page: what this hub is and how it runs, its name, the doctor, a restart.
@@ -52,7 +54,7 @@ func (h *Hub) diskConfig() (*Config, error) {
 }
 
 // pendingRestart lists what hub.json says that the running hub does not do yet: it read the file when it started.
-func (h *Hub) pendingRestart() restartView {
+func (h *Hub) pendingRestart(l i18n.Lang) restartView {
 	v := restartView{Reasons: []string{}}
 	disk, err := h.diskConfig()
 	if err != nil {
@@ -71,9 +73,9 @@ func (h *Hub) pendingRestart() restartView {
 		was, ok := running[m.ID]
 		switch {
 		case !ok:
-			v.Reasons = append(v.Reasons, "添加电脑「"+m.ID+"」")
+			v.Reasons = append(v.Reasons, i18n.T(l, "hub-admin_hub.restart_add_computer", i18n.Args{"id": m.ID}))
 		case !reflect.DeepEqual(was, m):
-			v.Reasons = append(v.Reasons, "电脑「"+m.ID+"」的设置")
+			v.Reasons = append(v.Reasons, i18n.T(l, "hub-admin_hub.restart_computer_settings", i18n.Args{"id": m.ID}))
 		}
 	}
 	gone := []string{}
@@ -84,21 +86,21 @@ func (h *Hub) pendingRestart() restartView {
 	}
 	sort.Strings(gone)
 	for _, id := range gone {
-		v.Reasons = append(v.Reasons, "删除电脑「"+id+"」")
+		v.Reasons = append(v.Reasons, i18n.T(l, "hub-admin_hub.restart_remove_computer", i18n.Args{"id": id}))
 	}
 	if disk.Listen != h.cfg.Listen {
-		v.Reasons = append(v.Reasons, "明文监听 listen")
+		v.Reasons = append(v.Reasons, i18n.T(l, "hub-admin_hub.restart_listen"))
 	}
 	if disk.PublicURL != h.cfg.PublicURL {
-		v.Reasons = append(v.Reasons, "对外地址 public_url")
+		v.Reasons = append(v.Reasons, i18n.T(l, "hub-admin_hub.restart_public_url"))
 	}
 	was, now := h.cfg.Public, disk.Public
 	if was.TLSListen != now.TLSListen || was.CertFile != now.CertFile || was.KeyFile != now.KeyFile {
-		v.Reasons = append(v.Reasons, "TLS 监听")
+		v.Reasons = append(v.Reasons, i18n.T(l, "hub-admin_hub.restart_tls"))
 	}
 	if !reflect.DeepEqual(was.Advertise, now.Advertise) || !reflect.DeepEqual(was.AdvertiseIPv6, now.AdvertiseIPv6) ||
 		!reflect.DeepEqual(was.AdvertiseLAN, now.AdvertiseLAN) {
-		v.Reasons = append(v.Reasons, "候选地址")
+		v.Reasons = append(v.Reasons, i18n.T(l, "hub-admin_hub.restart_advertise"))
 	}
 	v.Required = len(v.Reasons) > 0
 	return v
@@ -167,7 +169,7 @@ func (h *Hub) adminHubRoutes(mux *http.ServeMux) {
 			},
 			"listen": h.cfg.Listen, "public_url": h.cfg.PublicURL, "tls": h.adminTLS(), "endpoints": h.endpointList(),
 			"machines": map[string]int{"total": total, "online": online}, "devices": devices,
-			"restart": h.pendingRestart(),
+			"restart": h.pendingRestart(h.requestLang(r)),
 		})
 	})
 	mux.HandleFunc("PUT /api/v1/admin/hub", func(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +182,7 @@ func (h *Hub) adminHubRoutes(mux *http.ServeMux) {
 		if in.Name != nil {
 			name := strings.TrimSpace(*in.Name)
 			if len([]rune(name)) > 40 || strings.ContainsAny(name, "\n\r\t") {
-				writeErrCode(w, http.StatusBadRequest, "invalid_name", errors.New("名字最多 40 个字，不能换行"))
+				writeErrCode(w, http.StatusBadRequest, "invalid_name", i18n.Err("hub-admin_hub.invalid_name"))
 				return
 			}
 			err := editHubJSON(h.cfg.dir, func(o *jsonObject) error {
@@ -201,7 +203,7 @@ func (h *Hub) adminHubRoutes(mux *http.ServeMux) {
 			h.logf("admin: hub name set to %q", name)
 			h.sendLinkEndpoints() // the links show it (the Mac menu bar)
 		}
-		writeJSON(w, map[string]any{"name": h.hubName(), "name_set": h.configuredHubName() != "", "restart": h.pendingRestart()})
+		writeJSON(w, map[string]any{"name": h.hubName(), "name_set": h.configuredHubName() != "", "restart": h.pendingRestart(h.requestLang(r))})
 	})
 	mux.HandleFunc("POST /api/v1/admin/doctor", func(w http.ResponseWriter, r *http.Request) {
 		if !h.admin.doctorMu.TryLock() {

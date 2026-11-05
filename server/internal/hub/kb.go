@@ -10,6 +10,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -42,7 +43,7 @@ type kbLink struct {
 const kbPendingMost = 200
 
 // errKBOff is what the knowledge base's sources answer while hub.json turns it off.
-var errKBOff = errors.New("这台 hub 没开知识库")
+var errKBOff = i18n.Err("hub-kb.off")
 
 // kbOff: hub.json kb.enabled is false: there is no knowledge base (the assistant opens none, the hub hands nothing over).
 func (h *Hub) kbOff() bool {

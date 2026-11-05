@@ -15,6 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -593,7 +594,7 @@ func (h *Hub) asst() assistantRemote { return assistantRemote{h} }
 type assistantRemote struct{ h *Hub }
 
 // errAssistantOffline is what an assistant tool or request answers while the assistant is not connected.
-var errAssistantOffline = errors.New("助手暂时连不上，稍后再试")
+var errAssistantOffline = i18n.Err("hub-assistant_link.offline")
 
 func (a assistantRemote) call(ctx context.Context, method string, params, out any) error {
 	err := a.h.callBus(ctx, assistantwire.AssistantID, method, params, out)

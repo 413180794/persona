@@ -3,14 +3,15 @@ package hub
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand/v2"
 	"net/http"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -110,12 +111,12 @@ func (h *Hub) extensionUpgrades() *extensionUpgrades {
 // plugin's tools next).
 func (h *Hub) extensionBusy(id string) string {
 	if hp := h.extensions.get(id); hp != nil && hp.proc != nil && !hp.proc.Idle() {
-		return "扩展正在用"
+		return i18n.T(h.userLang(), "hub-extension_autoupgrade.busy_extension")
 	}
 	for _, m := range h.machinesNow() {
 		for _, s := range h.decorated(m) {
 			if s.Assistant && (s.State == proto.StateWorking || s.Status == proto.StatusWorking) {
-				return "助手正在工作"
+				return i18n.T(h.userLang(), "hub-extension_autoupgrade.busy_assistant")
 			}
 		}
 	}
@@ -269,11 +270,11 @@ func (u *extensionUpgrades) candidate(p *extension.Extension) (up ExtensionUpgra
 	s := u.settings
 	switch _, engines := extension.CheckEngines(m, u.h.build.Number); {
 	case e.PackageFor(extension.Platform()) == nil:
-		up.State, up.Detail = upgradeIncompatible, "没有这台 hub（"+extension.Platform()+"）能用的包"
+		up.State, up.Detail = upgradeIncompatible, i18n.T(u.h.userLang(), "hub-extension_autoupgrade.no_package", i18n.Args{"platform": extension.Platform()})
 	case engines != nil:
 		up.State, up.Detail = upgradeIncompatible, engines.Error()
 	case s.Skipped[id] == m.Version:
-		up.State, up.Detail = upgradeSkipped, "这个版本上次起不来，已回到原来的版本"
+		up.State, up.Detail = upgradeSkipped, i18n.T(u.h.userLang(), "hub-extension_autoupgrade.skipped")
 	case extension.MorePermissions(p, m) || extension.Digest(m) != granted(p):
 		up.State, up.AddedPermissions = upgradeNeedsConsent, extension.Added(p.Manifest, m)
 	case (s.Auto != nil && !*s.Auto) || slices.Contains(s.Off, id):
@@ -312,7 +313,7 @@ func (u *extensionUpgrades) upgrade(ctx context.Context) {
 			told := u.settings.Notified[id] == up.To
 			u.mu.Unlock()
 			if !told {
-				n := ExtensionUpgradeNote{Kind: upgradeNeedsConsent, From: up.From, To: up.To, Detail: morePermissionsText(up.AddedPermissions), At: time.Now()}
+				n := ExtensionUpgradeNote{Kind: upgradeNeedsConsent, From: up.From, To: up.To, Detail: morePermissionsText(h.userLang(), up.AddedPermissions), At: time.Now()}
 				_ = u.change(ctx, func(s *extensionUpgradeSettings) {
 					if s.Notified == nil {
 						s.Notified = map[string]string{}
@@ -320,7 +321,9 @@ func (u *extensionUpgrades) upgrade(ctx context.Context) {
 					s.Notified[id] = up.To
 					s.note(id, n)
 				})
-				u.tell(id, n, "扩展有新版本", fmt.Sprintf("%s %s %s，去确认", up.Name, up.To, n.Detail))
+				u.tell(id, n, "consent", func(l i18n.Lang) i18n.Args {
+					return i18n.Args{"name": up.Name, "version": up.To, "detail": morePermissionsText(l, up.AddedPermissions)}
+				})
 			}
 		case upgradeAvailable, upgradeWaitingIdle:
 			why := u.busy(id)
@@ -341,23 +344,25 @@ func (u *extensionUpgrades) upgrade(ctx context.Context) {
 	}
 }
 
-// morePermissionsText says what a newer version asks for more.
-func morePermissionsText(added []extension.PermissionLine) string {
+// morePermissionsText says what a newer version asks for more, in l.
+func morePermissionsText(l i18n.Lang, added []extension.PermissionLine) string {
+	const ns = "hub-extension_autoupgrade."
 	if len(added) == 0 {
-		return "要的权限有变化"
+		return i18n.T(l, ns+"permissions_changed")
 	}
-	count := []string{"", "一", "两", "三", "四", "五"}
-	text := fmt.Sprintf("要多 %d 项权限：", len(added))
-	if len(added) < len(count) {
-		text = "要多" + count[len(added)] + "项权限："
+	n := len(added)
+	text := i18n.T(l, ns+"more_permissions", i18n.Args{"count": n})
+	if n <= 5 { // a small number reads as a word ("要多一项权限")
+		text = i18n.T(l, ns+"more_permissions_few", i18n.Args{"count": n, "word": i18n.T(l, ns+"number_"+strconv.Itoa(n))})
 	}
-	for i, l := range added {
+	for i, p := range added {
 		if i > 0 {
-			text += "、"
+			text += i18n.T(l, ns+"list_separator")
 		}
-		text += l.Title
-		if l.Detail != "" {
-			text += "（" + l.Detail + "）"
+		if p.Detail != "" {
+			text += i18n.T(l, ns+"permission_detail", i18n.Args{"title": p.Title, "detail": p.Detail})
+		} else {
+			text += p.Title
 		}
 	}
 	return text
@@ -373,7 +378,7 @@ func (u *extensionUpgrades) install(ctx context.Context, p *extension.Extension,
 	}
 	if err == nil && (pv.MorePermissions || len(pv.AddedPermissions) > 0 || pv.Digest != granted(p)) {
 		reg.Discard(pv.ID) // the index said the same as the package, so this does not happen
-		err = errors.New("下载的包要的权限比索引里写的多")
+		err = i18n.Err("hub-extension_autoupgrade.package_more_permissions")
 	}
 	if err == nil {
 		u.mu.Lock()
@@ -427,7 +432,7 @@ func (u *extensionUpgrades) watched(ctx context.Context, id, from, to string, ro
 			s.Skipped[id] = to
 			s.note(id, n)
 		})
-		u.tell(id, n, "扩展升级没成功", fmt.Sprintf("%s %s 起不来，已回到 %s，不再自动升级到这个版本", name, to, from))
+		u.tell(id, n, "rolled_back", func(i18n.Lang) i18n.Args { return i18n.Args{"name": name, "version": to, "from": from} })
 		return
 	}
 	if !auto {
@@ -436,17 +441,23 @@ func (u *extensionUpgrades) watched(ctx context.Context, id, from, to string, ro
 	}
 	n := ExtensionUpgradeNote{Kind: "upgraded", From: from, To: to, At: time.Now()}
 	_ = u.change(ctx, func(s *extensionUpgradeSettings) { s.note(id, n) })
-	u.tell(id, n, "扩展已自动升级", fmt.Sprintf("%s 升级到了 %s", name, to))
+	u.tell(id, n, "upgraded", func(i18n.Lang) i18n.Args { return i18n.Args{"name": name, "version": to} })
 }
 
-// tell tells the apps (the plugin's page) and sends a quiet push, like the hub's own update.
-func (u *extensionUpgrades) tell(id string, n ExtensionUpgradeNote, title, body string) {
+// tell tells the apps (the plugin's page) and sends a quiet push, like the hub's own update. The push's title and
+// body are hub-extension_autoupgrade.<what>_title / _body, each device's in its language.
+func (u *extensionUpgrades) tell(id string, n ExtensionUpgradeNote, what string, args func(i18n.Lang) i18n.Args) {
 	u.h.broadcastExtension("upgrade", id, map[string]any{"note": n})
-	u.h.push.send(map[string]any{
-		"aps": map[string]any{"alert": map[string]any{"title": title, "body": body}, "thread-id": "plugin_upgrade",
-			"interruption-level": "passive"},
-		"plugin_upgrade":    map[string]any{"plugin": id, "kind": n.Kind, "version": n.To},
-		"extension_upgrade": map[string]any{"extension": id, "kind": n.Kind, "version": n.To},
+	u.h.push.sendLocalized(func(l i18n.Lang) map[string]any {
+		a := args(l)
+		return map[string]any{
+			"aps": map[string]any{"alert": map[string]any{
+				"title": i18n.T(l, "hub-extension_autoupgrade."+what+"_title", a),
+				"body":  i18n.T(l, "hub-extension_autoupgrade."+what+"_body", a),
+			}, "thread-id": "plugin_upgrade", "interruption-level": "passive"},
+			"plugin_upgrade":    map[string]any{"plugin": id, "kind": n.Kind, "version": n.To},
+			"extension_upgrade": map[string]any{"extension": id, "kind": n.Kind, "version": n.To},
+		}
 	}, "plugin_upgrade."+id, nil)
 }
 
@@ -556,7 +567,7 @@ func (h *Hub) upgradeRoutes(api *http.ServeMux) {
 			return
 		}
 		if p.Record.Source != extension.SourceInstalled || extension.FromMarket(p.Record.Origin) == "" {
-			writeErrCode(w, http.StatusBadRequest, "not_from_market", errors.New("只有从扩展市场装的扩展会自动升级"))
+			writeErrCode(w, http.StatusBadRequest, "not_from_market", i18n.Err("hub-extension_autoupgrade.not_from_market"))
 			return
 		}
 		u := h.extensionUpgrades()

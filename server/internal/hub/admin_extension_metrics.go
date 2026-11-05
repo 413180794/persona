@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // How the extensions run, for the admin UI (docs/admin.md「扩展」「运行情况」, extension_metrics.go): the counts over a
@@ -51,7 +52,7 @@ func (h *Hub) adminExtensionMetricsRoutes(mux *http.ServeMux, ps func(http.Respo
 		if v := q.Get("since"); v != "" {
 			n, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
-				writeErrCode(w, http.StatusBadRequest, "invalid", fmt.Errorf("since 不是数字"))
+				writeErrCode(w, http.StatusBadRequest, "invalid", i18n.Err("hub-admin_extension_metrics.since_not_number"))
 				return
 			}
 			since = n

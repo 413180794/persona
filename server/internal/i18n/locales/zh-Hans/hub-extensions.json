@@ -1,0 +1,5 @@
+{
+  "missing": "还缺：{fields}",
+  "list_separator": "、",
+  "no_program": "没有 {platform} 的程序"
+}

@@ -1,0 +1,10 @@
+{
+  "restart_add_computer": "Add computer “{id}”",
+  "restart_computer_settings": "Settings for computer “{id}”",
+  "restart_remove_computer": "Remove computer “{id}”",
+  "restart_listen": "Plain-text listen address (listen)",
+  "restart_public_url": "Public address (public_url)",
+  "restart_tls": "TLS listen address",
+  "restart_advertise": "Candidate addresses",
+  "invalid_name": "The name can be at most 40 characters, on one line"
+}

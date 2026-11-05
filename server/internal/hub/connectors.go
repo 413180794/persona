@@ -15,6 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -565,17 +566,17 @@ func sameBuild(h *Hub, name, path string) func(context.Context) error {
 	want := fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number)
 	return func(ctx context.Context) error {
 		if _, err := os.Stat(path); err != nil {
-			return fmt.Errorf("没有找到 %s 的程序（%s）", name, path)
+			return errors.New(i18n.T(h.userLang(), "hub-connectors.program_missing", i18n.Args{"name": name, "path": path}))
 		}
 		vctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
 		out, err := exec.CommandContext(vctx, path, "version", "-v").Output()
 		if err != nil {
-			return fmt.Errorf("%s 的程序运行不了：%v", name, err)
+			return errors.New(i18n.T(h.userLang(), "hub-connectors.program_fails", i18n.Args{"name": name, "err": err.Error()}))
 		}
 		if got := strings.TrimSpace(string(out)); got != strings.TrimSpace(want) {
 			first := func(s string) string { line, _, _ := strings.Cut(s, "\n"); return line }
-			return fmt.Errorf("%s 的程序和 hub 不是同一个版本（%s / %s）", name, first(got), first(want))
+			return errors.New(i18n.T(h.userLang(), "hub-connectors.program_version", i18n.Args{"name": name, "got": first(got), "want": first(want)}))
 		}
 		return nil
 	}

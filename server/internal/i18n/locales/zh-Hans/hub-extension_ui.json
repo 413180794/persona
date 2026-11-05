@@ -1,0 +1,17 @@
+{
+  "no_ui": "{id} 没有叫 {ui} 的界面",
+  "no_placement": "这个 hub 没有 {placement} 这个位置",
+  "needs_launcher": "这个界面属于一个启动器：缺 context.launcher",
+  "no_launcher_keys": "这个扩展没有被允许用启动器的 Key",
+  "not_its_gateway": "这个启动器的网关不是这个扩展的",
+  "view_unsupported": "扩展画的界面这个 hub 画不了：{err}",
+  "state_too_large": "扩展要打开的页面带的 state 超过 {max} 字节",
+  "push_not_its_ui": "扩展要打开的页面 {ui} 不是它的界面",
+  "push_not_page": "扩展要打开的 {ui} 不是一整页（只能打开 extension_page 或 nav_page）",
+  "open_not_source": "扩展要打开的 persona: 链接不是这一条的来源（只有收件箱条目的界面能开 persona://inbox/<这一条>/source）",
+  "open_not_https": "扩展要打开的不是 https 链接",
+  "no_machine": "没有这台机器",
+  "no_item": "收件箱里没有这一条",
+  "not_its_item": "这一条不是这个扩展的连接器收进来的",
+  "not_served": "这个扩展现在不管这个连接器"
+}

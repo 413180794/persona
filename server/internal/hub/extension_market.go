@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Plugin markets (docs/extensions.md「扩展市场」): the hub keeps the markets the user registered and their indexes, lists
@@ -118,7 +119,7 @@ func (h *Hub) marketsState() *markets {
 func (h *Hub) marketsLoad(ctx context.Context) error {
 	ms, st := h.marketsState(), h.marketStore()
 	if ms == nil || st == nil {
-		return errors.New("这个 hub 没有数据库：用不了扩展市场")
+		return i18n.Err("hub-extension_market.no_database")
 	}
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -213,7 +214,7 @@ func (h *Hub) market(rec extension.MarketRecord) (*extension.Market, error) {
 	mk := &extension.Market{Spec: spec, Client: h.extensions.markets.client, GitHubAPI: h.extensions.markets.githubAPI, Dir: h.marketsDir()}
 	if rec.TokenSealed != "" {
 		if mk.Token, err = (hubSealer{h}).Open(rec.TokenSealed); err != nil {
-			return nil, errors.New("市场的 token 解不开（hub 的 secret.key 换过？）：重新填一次")
+			return nil, i18n.Err("hub-extension_market.token_unreadable")
 		}
 	}
 	return mk, nil
@@ -265,7 +266,7 @@ func (h *Hub) marketReadAs(ctx context.Context, id string, trust bool) (MarketVi
 				h.logf("extension market %s: its owner accepts it unsigned (was %s)", id, keyIDOf(rec.SigningKey))
 				rec.SigningKey = ""
 			case sig.Bad():
-				return marketView(s), errors.New("没有可以信任的新 key：签名对不上市场自己写的公钥，索引可能被改过")
+				return marketView(s), i18n.Err("hub-extension_market.no_trusted_key")
 			}
 		}
 		var ix *extension.MarketIndex
@@ -303,7 +304,7 @@ func mustJSON(v any) []byte {
 	return b
 }
 
-var errNoMarket = errors.New("没有这个市场")
+var errNoMarket = i18n.Err("hub-extension_market.no_market")
 
 // marketsDir is where git markets' clones are kept.
 func (h *Hub) marketsDir() string { return filepath.Join(h.extensions.root, "markets") }
@@ -353,7 +354,7 @@ func (h *Hub) marketAdd(ctx context.Context, specText, token string) (MarketView
 		return MarketView{}, err
 	}
 	if len(token) > extension.MarketTokenMost {
-		return MarketView{}, errors.New("token 太长")
+		return MarketView{}, i18n.Err("hub-extension_market.token_too_long")
 	}
 	id := extension.MarketID(spec)
 	ms := h.marketsState()
@@ -361,10 +362,10 @@ func (h *Hub) marketAdd(ctx context.Context, specText, token string) (MarketView
 	n, dup := len(ms.byID), ms.byID[id] != nil || ms.withSpec(spec.String()) != nil || (extension.Official.Is(spec.String()) && ms.official() != nil)
 	ms.mu.Unlock()
 	if dup {
-		return MarketView{}, errors.New("已经登记过这个市场")
+		return MarketView{}, i18n.Err("hub-extension_market.duplicate")
 	}
 	if n >= extension.MarketsMost {
-		return MarketView{}, errors.New("市场太多了：先删掉几个")
+		return MarketView{}, i18n.Err("hub-extension_market.too_many")
 	}
 	mk := &extension.Market{Spec: spec, Token: token, Client: ms.client, GitHubAPI: ms.githubAPI, Dir: h.marketsDir()}
 	f, err := mk.FetchSigned(ctx)
@@ -404,7 +405,7 @@ func (h *Hub) marketToken(id string) (string, error) {
 		return "", errNoMarket
 	}
 	if s.rec.TokenSealed == "" {
-		return "", errors.New("那个市场没有 token")
+		return "", i18n.Err("hub-extension_market.no_token")
 	}
 	mk, err := h.market(s.rec)
 	if err != nil {
@@ -453,7 +454,7 @@ func (h *Hub) marketSetSpec(ctx context.Context, id, specText string) (MarketVie
 		return MarketView{}, errNoMarket
 	}
 	if other != nil && other != s {
-		return MarketView{}, errors.New("另一个市场已经是这个地址")
+		return MarketView{}, i18n.Err("hub-extension_market.address_taken")
 	}
 	old, err := h.market(s.rec)
 	if err != nil {
@@ -491,7 +492,10 @@ func (h *Hub) marketSetSpec(ctx context.Context, id, specText string) (MarketVie
 }
 
 // catalog is every market's plugins, filtered by q (in the id, name, description, publisher, tags) and market.
-func (h *Hub) catalog(q, market string) []CatalogItem {
+func (h *Hub) catalog(q, market string) []CatalogItem { return h.catalogIn(h.userLang(), q, market) }
+
+// catalogIn is catalog with its problems in l.
+func (h *Hub) catalogIn(l i18n.Lang, q, market string) []CatalogItem {
 	ms := h.marketsState()
 	ms.mu.Lock()
 	states := make([]*marketState, 0, len(ms.byID))
@@ -515,9 +519,9 @@ func (h *Hub) catalog(q, market string) []CatalogItem {
 			it := CatalogItem{Market: s.rec.ID, MarketName: s.rec.Name, ID: m.ID, Name: m.Name, Version: m.Version, Description: m.Description,
 				Publisher: m.Publisher, Homepage: m.Homepage, Tags: append([]string{}, e.Tags...), Contributes: m.Contributions(), Permissions: extension.Explain(m)}
 			if s.rec.Signature.Bad() {
-				it.Problem = "市场的签名不对：" + s.rec.Error
+				it.Problem = i18n.T(l, "hub-extension_market.bad_signature", i18n.Args{"err": s.rec.Error})
 			} else if e.PackageFor(extension.Platform()) == nil {
-				it.Problem = "没有这台 hub（" + extension.Platform() + "）能用的包"
+				it.Problem = i18n.T(l, "hub-extension_market.no_package", i18n.Args{"platform": extension.Platform()})
 			} else if _, err := extension.CheckEngines(m, h.build.Number); err != nil {
 				it.Problem = err.Error()
 			}
@@ -574,7 +578,7 @@ func (h *Hub) marketEntry(market, id string) (extension.MarketRecord, *extension
 	}
 	if s.rec.Signature.Bad() {
 		// Nothing is installed or upgraded from a market whose signature fails, not even from its last good index.
-		return extension.MarketRecord{}, nil, errors.New("市场的签名不对，先不从它安装或升级：" + s.rec.Error)
+		return extension.MarketRecord{}, nil, i18n.Err("hub-extension_market.bad_signature_install", i18n.Args{"err": s.rec.Error})
 	}
 	if s.index != nil {
 		for i := range s.index.Extensions {
@@ -583,7 +587,7 @@ func (h *Hub) marketEntry(market, id string) (extension.MarketRecord, *extension
 			}
 		}
 	}
-	return extension.MarketRecord{}, nil, errors.New("这个市场里没有扩展 " + id)
+	return extension.MarketRecord{}, nil, i18n.Err("hub-extension_market.not_in_market", i18n.Args{"id": id})
 }
 
 // marketRoutes are the markets' routes for the apps (a device with full rights).
@@ -634,7 +638,7 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 		}
 		if in.TokenFrom != "" {
 			if in.Token != "" {
-				fail(w, errors.New("token 和 token_from 只能给一个"), "market_failed")
+				fail(w, i18n.Err("hub-extension_market.token_and_token_from"), "market_failed")
 				return
 			}
 			tok, err := h.marketToken(in.TokenFrom)
@@ -715,7 +719,7 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 			return
 		}
 		if len(in.Token) > extension.MarketTokenMost {
-			fail(w, errors.New("token 太长"), "invalid_token")
+			fail(w, i18n.Err("hub-extension_market.token_too_long"), "invalid_token")
 			return
 		}
 		id := r.PathValue("mid")
@@ -756,7 +760,7 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 		} else {
 			h.refreshStale()
 		}
-		writeJSON(w, map[string]any{"markets": marketsOut(r, h.marketViews()), extKey(r, "extensions", "plugins"): h.catalog(r.URL.Query().Get("q"), r.URL.Query().Get("market")),
+		writeJSON(w, map[string]any{"markets": marketsOut(r, h.marketViews()), extKey(r, "extensions", "plugins"): h.catalogIn(h.requestLang(r), r.URL.Query().Get("q"), r.URL.Query().Get("market")),
 			"platform": extension.Platform()})
 	}))
 	api.HandleFunc("POST "+base+"/catalog/preview", gate(func(w http.ResponseWriter, r *http.Request) {

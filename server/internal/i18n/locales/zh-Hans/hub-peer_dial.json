@@ -1,0 +1,7 @@
+{
+  "pin_mismatch": "TLS 公钥指纹和配对时的不一样，不是那台 hub",
+  "credentials_unreadable": "读不出互联凭据：{err}",
+  "refused": "对方不认这台 hub 的互联凭据（可能已在对方断开）：重新互联",
+  "unpaired": "对方断开了互联",
+  "no_endpoints": "没有对方 hub 的候选地址"
+}

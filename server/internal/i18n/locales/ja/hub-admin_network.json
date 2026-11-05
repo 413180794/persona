@@ -1,0 +1,6 @@
+{
+  "invalid_public_url": "public_url：http:// か https:// で始まる完全なアドレス",
+  "invalid_tls_listen": "tls_listen：例 :18662 や 0.0.0.0:18662",
+  "tls_listen_same_port": "tls_listen に平文の listen と同じポートは使えません",
+  "invalid_advertise": "advertise：1行に1つのアドレス"
+}

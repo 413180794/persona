@@ -9,6 +9,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The inbox's common rules for plugins (#1730, docs/extensions.md「收件箱的通用规则」). A plugin connector with an inbox and
@@ -18,10 +19,12 @@ import (
 // cannot be switched: it runs, but its inbox is not collected until the model is there.
 
 // errNeedsTriageModel refuses to switch on (or install, or upgrade while on) a plugin that needs the triage model.
-var errNeedsTriageModel = errors.New("先在 设置 › 模型 里配好『信息筛选』，再启用这个扩展")
+var errNeedsTriageModel = i18n.Err("hub-extension_inbox.needs_triage_model")
 
 // needsTriageModelSetup is what 设置 › 扩展 says of a hub.json plugin waiting for the model (needs_setup).
-const needsTriageModelSetup = "需要先配分拣模型"
+func needsTriageModelSetup(l i18n.Lang) string {
+	return i18n.T(l, "hub-extension_inbox.needs_triage_setup")
+}
 
 // modelUsable says whether a binding of an API use can be called: it resolves to an address, a model and a key.
 func (h *Hub) modelUsable(ctx context.Context, b ModelBinding) bool {
@@ -108,6 +111,7 @@ func (h *Hub) triageInUse(ctx context.Context, id string, effective ModelBinding
 	if len(names) == 0 {
 		return nil
 	}
+	l := h.contextLang(ctx)
 	return map[string]any{"code": "triage_model_in_use", "plugins": names,
-		"error": "这些扩展靠『信息筛选』分拣收件箱：" + strings.Join(names, "、") + "。先在 设置 › 扩展 里停用它们，再改掉这个模型"}
+		"error": i18n.T(l, "hub-extension_inbox.triage_in_use", i18n.Args{"names": strings.Join(names, i18n.T(l, "hub-extension_inbox.list_separator"))})}
 }

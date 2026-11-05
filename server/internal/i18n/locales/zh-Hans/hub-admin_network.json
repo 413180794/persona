@@ -1,0 +1,6 @@
+{
+  "invalid_public_url": "public_url: http:// 或 https:// 开头的完整地址",
+  "invalid_tls_listen": "tls_listen: 例如 :18662 或 0.0.0.0:18662",
+  "tls_listen_same_port": "tls_listen 不能和明文 listen 用同一个端口",
+  "invalid_advertise": "advertise: 每行一个地址"
+}

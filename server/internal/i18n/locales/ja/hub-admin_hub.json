@@ -1,0 +1,10 @@
+{
+  "restart_add_computer": "コンピューター「{id}」の追加",
+  "restart_computer_settings": "コンピューター「{id}」の設定",
+  "restart_remove_computer": "コンピューター「{id}」の削除",
+  "restart_listen": "平文の待ち受け（listen）",
+  "restart_public_url": "公開アドレス（public_url）",
+  "restart_tls": "TLSの待ち受け",
+  "restart_advertise": "候補アドレス",
+  "invalid_name": "名前は40文字以内で、改行は使えません"
+}

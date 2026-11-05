@@ -20,6 +20,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // `personad extension …` on the hub's machine (docs/extensions.md「命令行」): what installs, upgrades and removes
@@ -613,7 +614,7 @@ func printUpgrades(w io.Writer, v upgradesView) {
 			line := fmt.Sprintf("  %-20s %s → %s", up.ID, up.From, up.To)
 			switch {
 			case up.State == upgradeNeedsConsent:
-				line += "  " + morePermissionsText(up.AddedPermissions) + "（App 的 设置 › 扩展，或 personad extension install market:" + up.Market + "/" + up.ID + "）"
+				line += "  " + morePermissionsText(i18n.Default, up.AddedPermissions) + "（App 的 设置 › 扩展，或 personad extension install market:" + up.Market + "/" + up.ID + "）"
 			case up.Detail != "":
 				line += "  " + what[up.State] + "：" + up.Detail
 			default:

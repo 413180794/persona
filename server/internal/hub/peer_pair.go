@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Pairing two hubs (docs/plan-hub-mesh.md 2.2, docs/mesh.md「配对」): hub B makes a one-time code good for 10 minutes
@@ -91,7 +91,7 @@ func (h *Hub) newPeerCode(ctx context.Context) (*peerCode, error) {
 	return &peerCode{Code: "jarvis://peer?" + q.Encode(), ExpiresAt: expires}, nil
 }
 
-var errNoTLS = errors.New("这台 hub 没开 TLS（hub.json 的 public.tls_listen）：hub 之间只走 TLS，开了再互联")
+var errNoTLS = i18n.Err("hub-peer_pair.no_tls")
 
 type parsedPeerCode struct {
 	hubID, name, fp, secret string
@@ -102,17 +102,17 @@ type parsedPeerCode struct {
 func parsePeerCode(raw string) (*parsedPeerCode, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || (u.Scheme != "jarvis" && u.Scheme != "persona") || u.Host != "peer" {
-		return nil, errors.New("这不是互联码（jarvis://peer?…）")
+		return nil, i18n.Err("hub-peer_pair.not_a_code")
 	}
 	q := u.Query()
 	p := &parsedPeerCode{hubID: q.Get("hub"), name: q.Get("name"), fp: q.Get("fp"), secret: q.Get("code")}
 	p.tlsPort, _ = strconv.Atoi(q.Get("tls"))
 	if p.hubID == "" || p.fp == "" || !strings.HasPrefix(p.secret, "jx_") {
-		return nil, errors.New("互联码不完整：在对方 hub 上重新生成")
+		return nil, i18n.Err("hub-peer_pair.incomplete")
 	}
 	p.endpoints = rankEndpoints(q["url"])
 	if len(p.endpoints) == 0 {
-		return nil, errors.New("互联码里没有对方 hub 的地址")
+		return nil, i18n.Err("hub-peer_pair.no_address")
 	}
 	return p, nil
 }
@@ -132,10 +132,10 @@ func (h *Hub) joinPeer(ctx context.Context, raw string) (*db.Peer, error) {
 		return nil, errNoTLS
 	}
 	if code.hubID == me.HubID {
-		return nil, errors.New("这是这台 hub 自己的互联码：要在另一台 hub 上用")
+		return nil, i18n.Err("hub-peer_pair.own_code")
 	}
 	if old, had := h.pairedWith(code.hubID); had && old.FP != code.fp {
-		return nil, errors.New("已经和这个 hub_id 互联过，但公钥指纹不一样：先断开原来的，再重新互联")
+		return nil, i18n.Err("hub-peer_pair.fingerprint_changed")
 	}
 	tok := "jd_" + randomHex(24)
 	cred := db.DeviceToken{ID: "dev_" + randomHex(6), Name: peerCredName(code.name, code.hubID), Kind: "peer", Role: rolePeer, MachineID: code.hubID}
@@ -165,21 +165,21 @@ func (h *Hub) joinPeer(ctx context.Context, raw string) (*db.Peer, error) {
 			}
 			_ = json.Unmarshal(b, &e)
 			if resp.StatusCode == http.StatusUnauthorized {
-				e.Error = "互联码无效、已用过或过期了：在对方 hub 上重新生成"
+				e.Error = i18n.T(h.contextLang(ctx), "hub-peer_pair.code_invalid")
 			}
 			if e.Error == "" {
 				e.Error = resp.Status
 			}
-			return peerInfo{}, fmt.Errorf("对方 hub 拒绝了：%s", e.Error)
+			return peerInfo{}, i18n.Err("hub-peer_pair.refused", i18n.Args{"err": e.Error})
 		}
 		var out peerInfo
 		if err := json.Unmarshal(b, &out); err != nil || out.Token == "" {
-			return peerInfo{}, errors.New("对方 hub 没给出互联凭据：升级对方 hub")
+			return peerInfo{}, i18n.Err("hub-peer_pair.no_credentials")
 		}
 		return out, nil
 	}, func(peerInfo) {})
 	if err == nil && got.HubID != code.hubID {
-		err = fmt.Errorf("连到的 hub 是 %q，不是互联码里的 %q", got.HubID, code.hubID)
+		err = i18n.Err("hub-peer_pair.wrong_hub", i18n.Args{"got": strconv.Quote(got.HubID), "want": strconv.Quote(code.hubID)})
 	}
 	if err != nil {
 		_, _ = h.store.RevokeDeviceToken(context.WithoutCancel(ctx), cred.ID)

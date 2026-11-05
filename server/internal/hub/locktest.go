@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 func (h *Hub) lockTestRoutes(api *http.ServeMux) {
@@ -112,7 +113,7 @@ func (h *Hub) dispatchLockTests(ctx context.Context, now time.Time) error {
 		c.sendJSON(map[string]any{
 			"type": "lock_test", "lock_test_id": test.TestID,
 			"lock_test_due_at": test.DueAt, "lock_test_sent_at": now,
-			"lock_test_title": "锁屏测试", "lock_test_body": "已收到测试通知，请回到应用查看结果。",
+			"lock_test_title": i18n.T(c.lang(), "hub-locktest.title"), "lock_test_body": i18n.T(c.lang(), "hub-locktest.body"),
 		})
 	}
 	return nil

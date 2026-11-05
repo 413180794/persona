@@ -419,10 +419,10 @@ func TestAdminPasswordHash(t *testing.T) {
 			t.Fatalf("accepted %q", bad)
 		}
 	}
-	if adminPasswordProblem("short") == "" || adminPasswordProblem("        ") == "" || adminPasswordProblem(strings.Repeat("a", 300)) == "" {
+	if adminPasswordProblem("short") == nil || adminPasswordProblem("        ") == nil || adminPasswordProblem(strings.Repeat("a", 300)) == nil {
 		t.Fatal("weak passwords pass")
 	}
-	if adminPasswordProblem("long enough") != "" || adminPasswordProblem("中文密码也可以的") != "" {
+	if adminPasswordProblem("long enough") != nil || adminPasswordProblem("中文密码也可以的") != nil {
 		t.Fatal("good passwords refused")
 	}
 }

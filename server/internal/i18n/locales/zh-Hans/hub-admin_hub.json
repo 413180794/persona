@@ -1,0 +1,10 @@
+{
+  "restart_add_computer": "添加电脑「{id}」",
+  "restart_computer_settings": "电脑「{id}」的设置",
+  "restart_remove_computer": "删除电脑「{id}」",
+  "restart_listen": "明文监听 listen",
+  "restart_public_url": "对外地址 public_url",
+  "restart_tls": "TLS 监听",
+  "restart_advertise": "候选地址",
+  "invalid_name": "名字最多 40 个字，不能换行"
+}

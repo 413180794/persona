@@ -1,0 +1,6 @@
+{
+  "bad_manifest": "Android 版本清单无效",
+  "unreadable_apk": "无法读取 Android 安装包",
+  "not_published": "尚未发布 Android 安装包",
+  "unreadable_release": "无法读取 Android 发布文件"
+}

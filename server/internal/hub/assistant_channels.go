@@ -14,6 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -268,7 +269,7 @@ func (h *Hub) sendOnce(ctx context.Context, m *Machine, p map[string]any) error 
 		case state == sendDelivered:
 			return nil
 		case state == sendSending || state == sendUnknown:
-			return errors.New("这条消息之前发送时连接断了，先到 App 里看看有没有送到")
+			return i18n.Err("hub-assistant_channels.send_in_doubt")
 		}
 	}
 	err := m.call(ctx, "session.send", p, nil)

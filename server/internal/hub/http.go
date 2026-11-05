@@ -1055,7 +1055,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		}
 		if c.role != roleFull && msg.Control != nil { // driving a terminal is typing into it: an answer-only device only watches
 			msg.Control, msg.Takeover = nil, false
-			c.sendTerm(termControlMessage(msg.MachineID, msg.SessionID, "unsupported", nil, "这台设备只能看，不能接管"))
+			c.sendTerm(termControlMessage(msg.MachineID, msg.SessionID, "unsupported", nil, i18n.T(c.lang(), "hub-http.watch_only")))
 		}
 		h.terminalSubscribe(ctx, c, msg.MachineID, msg.SessionID, msg.Epoch, msg.AfterSeq, msg.Control, msg.Takeover)
 	case "terminal_input":

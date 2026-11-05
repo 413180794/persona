@@ -1,0 +1,12 @@
+{
+  "no_tls": "这台 hub 没开 TLS（hub.json 的 public.tls_listen）：hub 之间只走 TLS，开了再互联",
+  "not_a_code": "这不是互联码（jarvis://peer?…）",
+  "incomplete": "互联码不完整：在对方 hub 上重新生成",
+  "no_address": "互联码里没有对方 hub 的地址",
+  "own_code": "这是这台 hub 自己的互联码：要在另一台 hub 上用",
+  "fingerprint_changed": "已经和这个 hub_id 互联过，但公钥指纹不一样：先断开原来的，再重新互联",
+  "code_invalid": "互联码无效、已用过或过期了：在对方 hub 上重新生成",
+  "refused": "对方 hub 拒绝了：{err}",
+  "no_credentials": "对方 hub 没给出互联凭据：升级对方 hub",
+  "wrong_hub": "连到的 hub 是 {got}，不是互联码里的 {want}"
+}

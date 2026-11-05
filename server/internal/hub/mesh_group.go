@@ -2,11 +2,10 @@ package hub
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // One center per group (docs/plan-hub-center.md 2, docs/mesh.md「中心」): every hub of a mesh group keeps which hub
@@ -22,7 +21,7 @@ type meshGroup struct {
 	Term   int64  `json:"term"`
 }
 
-var errCenterOffline = errors.New("现在的中心 hub 连不上：确认后它回来时会变成成员")
+var errCenterOffline = i18n.Err("hub-mesh_group.center_offline")
 
 // loadGroup reads the group's center from the database (a hub that never had one is its own, term 0).
 func (h *Hub) loadGroup(ctx context.Context) {
@@ -195,7 +194,7 @@ func (h *Hub) setCenter(ctx context.Context, target string, confirm bool) (meshG
 	}
 	v := h.meshView()
 	if target != h.hubID() && !v.reachable(target) {
-		return g, fmt.Errorf("hub %s 现在连不上：只能把能连上的 hub 设为中心", shortID(target))
+		return g, i18n.Err("hub-mesh_group.target_unreachable", i18n.Args{"id": shortID(target)})
 	}
 	if g.Center != h.hubID() && !v.reachable(g.Center) && !confirm {
 		return g, errCenterOffline

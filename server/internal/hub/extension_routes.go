@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The plugin API (docs/extensions.md「hub 的接口」). /api/v1/plugins/<id>/… is relayed to the plugin, so the hub's own
@@ -61,7 +62,7 @@ func (ps *extensions) detail(ctx context.Context, p *extension.Extension) Extens
 	}
 	if m.NodeProgram() != nil { // not cua / ego / imessage: built in, their machines show as they always did
 		d.NodeMachines = m.Node.Machines
-		d.Form = nodeConfirmForm(p.Schema, m)
+		d.Form = nodeConfirmForm(ps.h.contextLang(ctx), p.Schema, m)
 	}
 	for _, u := range ps.uiPlaces("", "") {
 		if u.Extension == p.Record.ID && extension.FullPage(u.Placement) {
@@ -154,7 +155,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	owner := func(f http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if !h.fromThisMachine(r) {
-				writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("扩展只能在 hub 机器上（personad extension …）或 hub 的管理界面里装、升级和卸载"))
+				writeErrCode(w, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_routes.owner_only"))
 				return
 			}
 			if ps() == nil {
@@ -174,7 +175,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		if h.fromThisMachine(r) || (principalOf(r.Context()).Role == roleFull && ofMarket()) {
 			return true
 		}
-		writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("这个扩展只能在 hub 机器上（personad extension …）或 hub 的管理界面里装、升级和卸载；手机上只能装扩展市场里的"))
+		writeErrCode(w, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_routes.market_only"))
 		return false
 	}
 	api.HandleFunc("GET /api/v1/extensions/{id}/-/{$}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
@@ -385,7 +386,7 @@ func (ps *extensions) listCtx(ctx context.Context) []ExtensionView {
 // nodeConfirmForm is the form with the computers' field asking before a machine is switched on (x-confirm), unless the
 // manifest asks something of its own: switching one on starts a program there (plan「七」「权限展示」). A copy: the
 // plugin's own schema is shared.
-func nodeConfirmForm(s *extension.Schema, m *extension.Manifest) *extension.Schema {
+func nodeConfirmForm(l i18n.Lang, s *extension.Schema, m *extension.Manifest) *extension.Schema {
 	if s == nil {
 		return nil
 	}
@@ -393,7 +394,7 @@ func nodeConfirmForm(s *extension.Schema, m *extension.Manifest) *extension.Sche
 	out.Fields = slices.Clone(s.Fields)
 	for i := range out.Fields {
 		if out.Fields[i].Name == m.Node.Machines && out.Fields[i].Confirm == "" {
-			out.Fields[i].Confirm = "将在这台电脑上运行「" + m.Name + "」的程序：以 node 的系统用户运行，不在沙箱里。"
+			out.Fields[i].Confirm = i18n.T(l, "hub-extension_routes.node_confirm", i18n.Args{"name": m.Name})
 		}
 	}
 	return &out

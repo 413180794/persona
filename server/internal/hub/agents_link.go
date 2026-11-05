@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -104,13 +105,13 @@ func (h *Hub) decorateWork(mid string, s *proto.Session, asking map[string]proto
 	if ok {
 		e = &reported
 	}
-	s.Work = workOf(*s, e, asking)
+	s.Work = workOf(h.userLang(), *s, e, asking)
 	s.State = workState(s.State, s.Work)
 }
 
 // workOf is s's work state for the lists: reported is what the manager reported for its latest turn (nil: nothing),
 // asking the pending interactions of its machine, by session.
-func workOf(s proto.Session, reported *proto.WorkState, asking map[string]proto.Interaction) *proto.WorkState {
+func workOf(l i18n.Lang, s proto.Session, reported *proto.WorkState, asking map[string]proto.Interaction) *proto.WorkState {
 	if s.Assistant || s.Status == proto.StatusOffline {
 		return nil
 	}
@@ -119,10 +120,10 @@ func workOf(s proto.Session, reported *proto.WorkState, asking map[string]proto.
 	}
 	ix, asks := asking[s.SessionID]
 	if asks && ix.ToolName != workCardTool { // the agent asks itself: that is what it waits for
-		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, Line: interactionLine(ix)}
+		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, Line: interactionLine(l, ix)}
 	}
 	if s.Status == proto.StatusBlocked && !asks {
-		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, Line: "终端等你处理"}
+		return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, Line: i18n.T(l, "hub-agents_link.screen")}
 	}
 	if reported == nil || reported.Phase == "" || !sameTurn(s, reported.TurnAt) {
 		return nil
@@ -169,25 +170,25 @@ func hubWaits(w *proto.WorkState) bool {
 	return w.WakeAt != nil || w.On == proto.WaitExternal && w.Wait == "" && w.Agent == nil
 }
 
-// interactionLine is what a pending interaction waits for, in a line.
-func interactionLine(ix proto.Interaction) string {
+// interactionLine is what a pending interaction waits for, in a line, in l.
+func interactionLine(l i18n.Lang, ix proto.Interaction) string {
 	switch ix.Kind {
 	case proto.IxQuestion:
 		if len(ix.Questions) > 0 {
 			return clip(oneLine(ix.Questions[0].Question), 60)
 		}
-		return "在问你"
+		return i18n.T(l, "hub-agents_link.question")
 	case proto.IxPlan:
-		return "计划等你审批"
+		return i18n.T(l, "hub-agents_link.plan")
 	case proto.IxPermission:
 		if ix.Summary != "" {
-			return clip(oneLine("等你授权："+ix.Summary), 60)
+			return clip(oneLine(i18n.T(l, "hub-agents_link.permission_for", i18n.Args{"summary": ix.Summary})), 60)
 		}
-		return "等你授权"
+		return i18n.T(l, "hub-agents_link.permission")
 	case proto.IxElicitation:
-		return "MCP 请求等你处理"
+		return i18n.T(l, "hub-agents_link.elicitation")
 	}
-	return "终端等你处理"
+	return i18n.T(l, "hub-agents_link.screen")
 }
 
 // workLogLine is what the knowledge base's project timeline gets for a finished turn: its conclusion when the manager

@@ -1,0 +1,5 @@
+{
+  "unreachable": "「{name}」现在连不上",
+  "center_only": "只有这台 hub 所在组的中心能经它连电脑",
+  "no_machine": "这台 hub 的 hub.json 里没有 {id}"
+}

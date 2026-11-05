@@ -1,0 +1,5 @@
+{
+  "password_too_short": "密码至少 {min} 个字符",
+  "password_too_long": "密码最多 {max} 字节",
+  "password_blank": "密码不能全是空格"
+}

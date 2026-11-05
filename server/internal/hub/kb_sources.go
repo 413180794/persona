@@ -10,6 +10,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/kb"
 )
 
@@ -138,7 +139,7 @@ func (h *Hub) kbArchive(id string) (connector.Archive, error) {
 	return a, nil
 }
 
-var errArchiveOff = errors.New("用户关了这个连接器的「进知识库」")
+var errArchiveOff = i18n.Err("hub-kb_sources.archive_off")
 
 // kbMediaExternal is the largest attachment handed to an assistant on another machine: one bus message must not hold
 // the connection longer than its keepalive allows on a slow link (20 MB is ~27 MB of base64 in one frame).

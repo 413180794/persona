@@ -1,0 +1,17 @@
+{
+  "no_ui": "{id} has no view called {ui}",
+  "no_placement": "This hub has no {placement} placement",
+  "needs_launcher": "This view belongs to a launcher: context.launcher is missing",
+  "no_launcher_keys": "This extension isn’t allowed to use launcher keys",
+  "not_its_gateway": "This launcher’s gateway doesn’t belong to this extension",
+  "view_unsupported": "This hub can’t draw the extension’s view: {err}",
+  "state_too_large": "The page the extension opens has state over {max} bytes",
+  "push_not_its_ui": "The page {ui} the extension opens isn’t one of its views",
+  "push_not_page": "{ui}, which the extension opens, isn’t a full page (only extension_page or nav_page can be opened)",
+  "open_not_source": "The persona: link the extension opens isn’t this item’s source (only an inbox item’s view can open persona://inbox/<item>/source)",
+  "open_not_https": "The extension can only open https links",
+  "no_machine": "No such machine",
+  "no_item": "This item isn’t in the inbox",
+  "not_its_item": "This item didn’t come from this extension’s connector",
+  "not_served": "This extension doesn’t handle this connector now"
+}

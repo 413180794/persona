@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 const (
@@ -180,8 +181,10 @@ func (h *Hub) notifyPairing(name string) {
 		h.logf("new device paired: %q (push unavailable)", name)
 		return
 	}
-	h.push.send(map[string]any{"aps": map[string]any{
-		"alert": map[string]any{"title": "Persona", "body": "有新设备配对：" + name},
-		"sound": "default",
-	}}, "", nil)
+	h.push.sendLocalized(func(l i18n.Lang) map[string]any {
+		return map[string]any{"aps": map[string]any{
+			"alert": map[string]any{"title": "Persona", "body": i18n.T(l, "hub-pairing.new_device", i18n.Args{"name": name})},
+			"sound": "default",
+		}}
+	}, "", nil)
 }

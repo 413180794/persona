@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -287,7 +288,7 @@ func (h *Hub) startExtensionNode(ctx context.Context, p *extension.Extension, m 
 	m.mu.Unlock()
 	fail := func(err error) (proto.PluginNodeState, *proto.PluginNodeProgram) {
 		if nodeOutdated(err) {
-			st.State, st.Error = extensionNodeOutdated, "这台电脑上的 personad 太旧，不能运行插件的程序；更新它之后再试"
+			st.State, st.Error = extensionNodeOutdated, i18n.T(h.contextLang(ctx), "hub-extension_nodes.node_outdated")
 			return st, nil
 		}
 		st.State, st.Error = "error", err.Error()
@@ -446,7 +447,7 @@ func (h *Hub) serveNodeExtensionHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !m.isOnline() {
-		writeErrCode(w, http.StatusConflict, extensionNodeOffline, fmt.Errorf("%s 离线", m.cfg.Name))
+		writeErrCode(w, http.StatusConflict, extensionNodeOffline, i18n.Err("hub-extension_nodes.offline", i18n.Args{"name": m.cfg.Name}))
 		return
 	}
 	prefix := "/api/v1/extensions/" + id + "/-/machines/" + mid

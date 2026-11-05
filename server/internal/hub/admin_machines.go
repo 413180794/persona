@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -119,7 +120,7 @@ func (h *Hub) adminMachines() []adminMachine {
 func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/machines", func(w http.ResponseWriter, r *http.Request) {
 		port, _ := h.tlsPin()
-		writeJSON(w, map[string]any{"machines": h.adminMachines(), "tls": port > 0, "restart": h.pendingRestart()})
+		writeJSON(w, map[string]any{"machines": h.adminMachines(), "tls": port > 0, "restart": h.pendingRestart(h.requestLang(r))})
 	})
 	mux.HandleFunc("POST /api/v1/admin/machines", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -136,17 +137,17 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 		}
 		mc := MachineConfig{ID: strings.TrimSpace(in.ID), Name: strings.TrimSpace(in.Name), Kind: in.Kind, Icon: in.Icon}
 		if !adminMachineID.MatchString(mc.ID) {
-			writeErrCode(w, http.StatusBadRequest, "invalid_id", errors.New("id: 小写字母、数字、. _ -，以字母或数字开头，最多 63 个字符"))
+			writeErrCode(w, http.StatusBadRequest, "invalid_id", i18n.Err("hub-admin_machines.invalid_id"))
 			return
 		}
 		switch mc.Kind {
 		case "ssh", "tailcat":
-			writeErrCode(w, http.StatusBadRequest, "ssh_unsupported", errors.New("不再添加 ssh 电脑：在那台电脑上装 node 服务，选「电脑来连」或「hub 来连」；hub.json 里已有的 ssh 电脑照常能用"))
+			writeErrCode(w, http.StatusBadRequest, "ssh_unsupported", i18n.Err("hub-admin_machines.ssh_unsupported"))
 			return
 		case kindLink:
 		case kindService:
 			if h.localMachine(mc.ID) != nil || h.cfgEntry(mc.ID) != nil {
-				writeErrCode(w, http.StatusConflict, "exists", errors.New("已经有这个 id 的电脑"))
+				writeErrCode(w, http.StatusConflict, "exists", i18n.Err("hub-admin_machines.exists"))
 				return
 			}
 			proxyURL := strings.TrimSpace(in.Proxy)
@@ -172,7 +173,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			mc.Name = mc.ID
 		}
 		if len([]rune(mc.Name)) > 40 || strings.ContainsAny(mc.Name, "\n\r\t") {
-			writeErrCode(w, http.StatusBadRequest, "invalid_name", errors.New("名字最多 40 个字，不能换行"))
+			writeErrCode(w, http.StatusBadRequest, "invalid_name", i18n.Err("hub-admin_machines.invalid_name"))
 			return
 		}
 		switch mc.Icon {
@@ -205,7 +206,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			return
 		}
 		if exists {
-			writeErrCode(w, http.StatusConflict, "exists", errors.New("已经有这个 id 的电脑"))
+			writeErrCode(w, http.StatusConflict, "exists", i18n.Err("hub-admin_machines.exists"))
 			return
 		}
 		h.logf("admin: machine %q (%s) added to hub.json", mc.ID, mc.Kind)
@@ -216,7 +217,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 				added = m
 			}
 		}
-		writeJSON(w, map[string]any{"machine": added, "restart": h.pendingRestart()})
+		writeJSON(w, map[string]any{"machine": added, "restart": h.pendingRestart(h.requestLang(r))})
 	})
 	mux.HandleFunc("DELETE /api/v1/admin/machines/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
@@ -248,7 +249,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 			return
 		}
 		h.logf("admin: machine %q removed from hub.json", id)
-		writeJSON(w, map[string]any{"ok": true, "restart": h.pendingRestart()})
+		writeJSON(w, map[string]any{"ok": true, "restart": h.pendingRestart(h.requestLang(r))})
 	})
 	// Pair a service machine's connector again (it was paired with another hub, or reinstalled).
 	mux.HandleFunc("POST /api/v1/admin/machines/{id}/connector", func(w http.ResponseWriter, r *http.Request) {

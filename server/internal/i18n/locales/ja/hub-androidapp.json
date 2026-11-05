@@ -1,0 +1,6 @@
+{
+  "bad_manifest": "Android のリリースマニフェストが無効です",
+  "unreadable_apk": "Android のパッケージを読み取れません",
+  "not_published": "Android のパッケージはまだ公開されていません",
+  "unreadable_release": "Android のリリースファイルを読み取れません"
+}

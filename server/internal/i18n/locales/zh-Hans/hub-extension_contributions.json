@@ -1,0 +1,4 @@
+{
+  "read_only": "{id} 写在 hub.json 里：去 hub.json 或管理界面改",
+  "not_running": "连接器还没起来：先启用这个扩展"
+}

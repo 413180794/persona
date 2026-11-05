@@ -1,0 +1,12 @@
+{
+  "no_tls": "TLS is off on this hub (public.tls_listen in hub.json). Hubs only link over TLS, so turn it on first",
+  "not_a_code": "This isn’t a link code (jarvis://peer?…)",
+  "incomplete": "The link code is incomplete. Generate a new one on the other hub",
+  "no_address": "The link code has no address for the other hub",
+  "own_code": "This is this hub’s own link code. Use it on another hub",
+  "fingerprint_changed": "Already linked with this hub_id, but the public key fingerprint is different. Unlink the old one, then link again",
+  "code_invalid": "The link code is invalid, used or expired. Generate a new one on the other hub",
+  "refused": "The other hub refused: {err}",
+  "no_credentials": "The other hub didn’t return link credentials. Update the other hub",
+  "wrong_hub": "Connected to hub {got}, not {want} from the link code"
+}

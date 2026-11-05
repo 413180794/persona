@@ -1,0 +1,4 @@
+{
+  "center_offline": "现在的中心 hub 连不上：确认后它回来时会变成成员",
+  "target_unreachable": "hub {id} 现在连不上：只能把能连上的 hub 设为中心"
+}

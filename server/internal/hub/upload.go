@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -41,7 +42,7 @@ func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	case size > limit:
 		writeCode(w, http.StatusRequestEntityTooLarge, proto.CodeTooLarge,
-			fmt.Sprintf("文件超过 %d MB", limit>>20), map[string]any{"limit": limit})
+			i18n.T(h.requestLang(r), "hub-upload.too_large", i18n.Args{"mb": limit >> 20}), map[string]any{"limit": limit})
 		return
 	}
 	ctx := r.Context()
@@ -60,7 +61,7 @@ func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if err := step("file.upload.begin", beginParams, &begin); err != nil {
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == "" && strings.HasPrefix(re.Message, "unknown method") {
-			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, m.cfg.Name+" 上的 jarvisd 太旧，不能接收文件，需要重新部署", nil)
+			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(h.requestLang(r), "hub-upload.outdated", i18n.Args{"name": m.cfg.Name}), nil)
 			return
 		}
 		callErr(w, err)
