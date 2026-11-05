@@ -96,3 +96,53 @@ func TestAddedPermissions(t *testing.T) {
 		t.Fatal("the same version adds nothing")
 	}
 }
+
+// A channel's messages reach the assistant as the owner's own, so an upgrade adding one (or adding an extension it
+// contributes to) asks for consent as the install screen does, not only the first install.
+func TestUpgradeAddingChannelNeedsConsent(t *testing.T) {
+	old, err := Parse([]byte(exampleManifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := []any{map[string]any{"id": "examplenotes", "name": "Example Notes", "capabilities": []any{"status", "login"}}}
+	ch := map[string]any{"id": "examplechat", "name": "Example Chat", "kind": "im", "connector": "examplenotes", "bind": "qr",
+		"capabilities": map[string]any{"images_in": true, "format": "plain", "max_text": 4000, "asks": "text", "push": true, "typing": true}}
+	m, err := Parse(with(t, func(m map[string]any) {
+		m["version"] = "9.0.0"
+		m["depends"] = []any{map[string]any{"id": "search"}}
+		m["contributes"].(map[string]any)["connectors"] = conn
+		m["contributes"].(map[string]any)["channel"] = []any{ch}
+		m["contributes"].(map[string]any)["search.sources"] = []any{map[string]any{"id": "notes"}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cur := &Extension{Record: Record{Granted: old.Permissions}, Manifest: old, Full: old}
+	if !MorePermissions(cur, m) {
+		t.Fatal("a new channel went in without consent")
+	}
+	var keys []string
+	for _, l := range Added(old, m) {
+		keys = append(keys, l.Key+"="+l.Detail)
+	}
+	s := strings.Join(keys, "|")
+	if !strings.Contains(s, "channel=") || !strings.Contains(s, "Example Chat") || !strings.Contains(s, "contributes_to=") || !strings.Contains(s, "search") {
+		t.Fatal(s)
+	}
+	// Already granted: the same channel and contributions again add nothing.
+	cur = &Extension{Record: Record{Granted: m.Permissions}, Manifest: m, Full: m}
+	if MorePermissions(cur, m) || Added(m, m) != nil {
+		t.Fatal("the same channel asked again")
+	}
+	// Only the contribution to another extension is new.
+	noChan, err := Parse(with(t, func(m map[string]any) {
+		m["contributes"].(map[string]any)["connectors"] = conn
+		m["contributes"].(map[string]any)["channel"] = []any{ch}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !MorePermissions(&Extension{Record: Record{Granted: noChan.Permissions}, Manifest: noChan, Full: noChan}, m) {
+		t.Fatal("a new contributes_to went in without consent")
+	}
+}

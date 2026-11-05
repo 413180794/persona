@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/channel"
 )
 
 // Permissions are what a plugin asks for (docs/plan-extensions.md「权限」). The vocabulary is closed: a manifest naming
@@ -255,7 +257,8 @@ func Explain(m *Manifest) []PermissionLine {
 }
 
 // Added is what upgrading from old to m adds to what the plugin may do, in Explain's words: running a program when old
-// ran none, the hosts and secrets old did not have, the hub's token or launchers' keys when old did not get them. Nil when nothing is added.
+// ran none, the hosts and secrets old did not have, the hub's token or launchers' keys when old did not get them, the
+// channels and the extensions it contributes to that old did not have. Nil when nothing is added.
 func Added(old, m *Manifest) []PermissionLine {
 	var out []PermissionLine
 	if m.Runtime != nil && old.Runtime == nil {
@@ -285,6 +288,24 @@ func Added(old, m *Manifest) []PermissionLine {
 	}
 	if m.Permissions.LauncherKeys && !old.Permissions.LauncherKeys {
 		out = append(out, launcherKeys)
+	}
+	var to []string
+	for _, owner := range m.ContributesTo() {
+		if !slices.Contains(old.ContributesTo(), owner) {
+			to = append(to, owner)
+		}
+	}
+	if len(to) > 0 {
+		out = append(out, PermissionLine{Key: "contributes_to", Title: "给更多别的扩展提供内容",
+			Detail: "它在清单里写的贡献交给这些扩展：" + strings.Join(to, "、")})
+	}
+	if chans := newChannels(old, m); len(chans) > 0 {
+		var names []string
+		for _, c := range chans {
+			names = append(names, c.Name)
+		}
+		out = append(out, PermissionLine{Key: "channel", Title: "作为和 Persona 对话的更多渠道",
+			Detail: "把你在" + strings.Join(names, "、") + "里发给它的消息交给 Persona，再把回答和 Agent 的提问发回给你"})
 	}
 	var topics []string
 	for _, t := range m.Topics() {
@@ -317,6 +338,18 @@ func Added(old, m *Manifest) []PermissionLine {
 		out = append(out, nodeLines(m.Node, old.NodeProgram())...)
 		if names := nodeSecrets(m, old); len(names) > 0 {
 			out = append(out, PermissionLine{Key: "node_secrets", Title: "把更多密钥发给这些电脑", Detail: strings.Join(names, "、")})
+		}
+	}
+	return out
+}
+
+// newChannels are m's channel contributions whose ids old does not contribute. A channel's messages reach the
+// assistant as the owner's own (and can answer the owner's Agent asks), so a new one needs the user's consent.
+func newChannels(old, m *Manifest) []channel.Item {
+	var out []channel.Item
+	for _, c := range m.Channels() {
+		if !slices.ContainsFunc(old.Channels(), func(o channel.Item) bool { return o.ID == c.ID }) {
+			out = append(out, c)
 		}
 	}
 	return out

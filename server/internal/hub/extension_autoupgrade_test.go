@@ -255,6 +255,29 @@ func TestExtensionAutoUpgradeMorePermissions(t *testing.T) {
 	})
 }
 
+// A version that adds a channel (whose messages reach the assistant as the owner's own) waits for the user even
+// when its permissions are the same.
+func TestExtensionAutoUpgradeNewChannel(t *testing.T) {
+	h, mux, phone, mk, dir, mid := upgradeHub(t)
+	ctx := context.Background()
+	u := h.extensionUpgrades()
+
+	setUIVersion(t, dir, "1.2.0")
+	editManifest(t, dir, func(m map[string]any) {
+		m["contributes"].(map[string]any)["channel"] = []any{map[string]any{"id": "examplechat", "name": "Example Chat", "kind": "im",
+			"capabilities": map[string]any{"format": "plain", "max_text": 4000, "asks": "text", "push": true}}}
+	})
+	mk.publish(dir)
+	_, _ = h.marketRead(ctx, mid)
+	u.upgrade(ctx)
+	if v := installedVersion(h); v != "1.0.0" {
+		t.Fatalf("upgraded to a new channel without consent: %s", v)
+	}
+	if up := upgradeOf(t, mux, phone); up["state"] != upgradeNeedsConsent || !strings.Contains(fmt.Sprint(up["added_permissions"]), "Example Chat") {
+		t.Fatalf("%v", up)
+	}
+}
+
 // One that does not come up is rolled back, skipped from then on, and the user is told.
 func TestExtensionAutoUpgradeRollsBack(t *testing.T) {
 	h, mux, phone, mk, dir, mid := upgradeHub(t)
