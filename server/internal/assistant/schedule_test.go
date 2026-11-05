@@ -785,3 +785,137 @@ func TestTaskEditsCannotCreateModelOverrides(t *testing.T) {
 		t.Fatalf("task edit created a hidden model override: %+v", task)
 	}
 }
+
+// A task switched on again, or retimed to earlier today, after its time has gone by: the run due before that is no
+// run the hub missed, so nothing is recorded as 「Persona 停机，错过了时间」 and the next run comes as usual (#3816).
+// Retimed to later today it still runs today; a hub that really was down still records the miss.
+func TestNoMissRecordedForARunBeforeTheTaskWasArmed(t *testing.T) {
+	f := newFakeHub()
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
+	h := newStorelessService(t, f)
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	wed := func(hh, mm int) time.Time { return time.Date(2026, 11, 4, hh, mm, 0, 0, loc) }
+	off := Task{ID: "r", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Enabled: false, LastRun: wed(9, 0).Add(-5 * 24 * time.Hour)}
+	on := off
+	on.Enabled = true
+	rearm(off, &on, wed(10, 0)) // switched on at 10:00, an hour after its time
+	moved := Task{ID: "m", Title: "午报", Prompt: "y", Repeat: repeatDaily, Time: "11:00", Enabled: true, LastRun: wed(11, 0).Add(-24 * time.Hour)}
+	earlier := moved
+	earlier.Time = "09:00"
+	rearm(moved, &earlier, wed(10, 0)) // at 10:00, 11:00 → 09:00
+	later := Task{ID: "l", Title: "晚报", Prompt: "z", Repeat: repeatDaily, Time: "09:00", Enabled: true, LastRun: wed(9, 0).Add(-24 * time.Hour)}
+	retimed := later
+	retimed.Time = "10:20"
+	rearm(later, &retimed, wed(10, 0)) // moved to later today
+	down := Task{ID: "d", Title: "日报", Prompt: "w", Repeat: repeatDaily, Time: "09:00", Enabled: true, LastRun: wed(9, 0).Add(-24 * time.Hour)}
+	setTasks(h, on, earlier, retimed, down)
+
+	h.runDue(context.Background(), wed(10, 1))
+	h.sched.inflight.Wait()
+	for _, id := range []string{"r", "m"} {
+		if r, _ := taskByID(h, id); r.LastStatus == runSkipped || !r.LastRun.Before(wed(10, 0)) {
+			t.Fatalf("%s: armed after its time, nothing is due or missed today: %+v", id, r)
+		}
+	}
+	if r, _ := taskByID(h, "d"); r.LastStatus != runSkipped {
+		t.Fatalf("a task the hub really missed still records it: %+v", r)
+	}
+	sc := h.loadSchedule(context.Background())
+	sc.mu.Lock()
+	for _, run := range sc.runs {
+		if run.RefID == "r" || run.RefID == "m" {
+			sc.mu.Unlock()
+			t.Fatalf("no run recorded for a task armed after its time: %+v", run)
+		}
+	}
+	sc.mu.Unlock()
+
+	h.runDue(context.Background(), wed(10, 21))
+	h.sched.inflight.Wait()
+	if r, _ := taskByID(h, "l"); !r.LastRun.Equal(wed(10, 21)) || r.LastStatus == runSkipped {
+		t.Fatalf("retimed to later today, it runs today: %+v", r)
+	}
+	// Thursday they run as ever.
+	thu := wed(9, 1).Add(24 * time.Hour)
+	h.runDue(context.Background(), thu)
+	h.sched.inflight.Wait()
+	for _, id := range []string{"r", "m"} {
+		if r, _ := taskByID(h, id); !r.LastRun.Equal(thu) || r.LastStatus == runSkipped {
+			t.Fatalf("%s runs the next day: %+v", id, r)
+		}
+	}
+}
+
+// rearm marks a daily task only when it starts counting anew: created, switched on, retimed or given other days.
+func TestRearm(t *testing.T) {
+	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
+	base := Task{Repeat: repeatDaily, Time: "09:00", Weekdays: []int{1, 2}, Enabled: true}
+	for _, c := range []struct {
+		name string
+		old  Task
+		edit func(*Task)
+		want bool
+	}{
+		{"new", Task{}, func(*Task) {}, true},
+		{"switched on", Task{Repeat: repeatDaily, Time: "09:00", Weekdays: []int{1, 2}}, func(*Task) {}, true},
+		{"retimed", base, func(t *Task) { t.Time = "08:00" }, true},
+		{"other days", base, func(t *Task) { t.Weekdays = []int{1} }, true},
+		{"prompt only", base, func(t *Task) { t.Prompt = "新的" }, false},
+		{"switched off", base, func(t *Task) { t.Enabled = false }, false},
+	} {
+		t2 := base
+		c.edit(&t2)
+		rearm(c.old, &t2, now)
+		if got := !t2.ArmedAt.IsZero(); got != c.want {
+			t.Errorf("%s: armed %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// A task created, or retimed, during its own minute still runs today: at 10:05:20 the owner sets one for 10:05 to
+// try it (review of #3915: armed at 10:05:20 it waited until tomorrow). Through the app's routes, as the app does it.
+func TestTaskArmedDuringItsMinuteRunsToday(t *testing.T) {
+	f := newFakeHub()
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
+	h := newStorelessService(t, f)
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	at := time.Date(2026, 11, 4, 10, 5, 20, 0, loc)
+
+	created := Task{ID: "c", Title: "试一下", Prompt: "x", Repeat: repeatDaily, Time: "10:05", Enabled: true}
+	rearm(Task{}, &created, at) // created at 10:05:20
+	ran := Task{ID: "r", Title: "早报", Prompt: "y", Repeat: repeatDaily, Time: "09:00", Enabled: true, LastRun: at.Add(-24 * time.Hour)}
+	retimed := ran
+	retimed.Time = "10:05"
+	rearm(ran, &retimed, at) // retimed to 10:05 at 10:05:20
+	setTasks(h, created, retimed)
+
+	h.runDue(context.Background(), at.Add(time.Second))
+	h.sched.inflight.Wait()
+	for _, id := range []string{"c", "r"} {
+		if r, _ := taskByID(h, id); !r.LastRun.Equal(at.Add(time.Second)) || r.LastStatus == runSkipped {
+			t.Fatalf("%s, armed during its minute, runs today: %+v", id, r)
+		}
+	}
+
+	// The app's PUT arms it the same way: switched on during its minute, it runs at once.
+	h2 := newStorelessService(t, newFakeHub())
+	if sec := time.Now().Second(); sec >= 57 {
+		time.Sleep(time.Duration(61-sec) * time.Second) // not across a minute's end
+	}
+	now := time.Now().In(time.Local)
+	hhmm := now.Format("15:04")
+	setTasks(h2, Task{ID: "a", Title: "试", Prompt: "z", Repeat: repeatDaily, Time: hhmm, Enabled: false, LastRun: now.Add(-48 * time.Hour)})
+	rec := httptest.NewRecorder()
+	h2.ServeHTTP(rec, httptest.NewRequest("PUT", "/api/v1/assistant/tasks/a",
+		strings.NewReader(`{"title":"试","prompt":"z","repeat":"daily","time":"`+hhmm+`","enabled":true}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT: %d %s", rec.Code, rec.Body)
+	}
+	a, _ := taskByID(h2, "a")
+	if a.ArmedAt.IsZero() || !a.ArmedAt.Before(now.Truncate(time.Minute)) {
+		t.Fatalf("armed from the start of the minute: %v (now %v)", a.ArmedAt, now)
+	}
+	if next := nextRun(a, a.ArmedAt, time.Local); next.After(now) {
+		t.Fatalf("switched on during its minute, its run is due now, not %v", next)
+	}
+}

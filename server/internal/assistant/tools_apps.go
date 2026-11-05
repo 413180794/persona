@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -39,7 +40,12 @@ func (s *Service) toolKB(ctx context.Context, name string, args json.RawMessage)
 		}
 		hits := e.Search(a.Query, a.Messages == nil || *a.Messages, min(a.Limit, 200))
 		if len(hits) == 0 {
-			return "No match in " + e.Store.Dir + ".", nil
+			// A neutral, localized line: it can be relayed to the owner, so it never names the store's disk path.
+			l := s.lang(ctx)
+			if strings.TrimSpace(a.Query) == "" {
+				return i18n.T(l, "assistant-kb_tools.search_empty_no_query"), nil
+			}
+			return i18n.T(l, "assistant-kb_tools.search_empty", i18n.Args{"query": a.Query}), nil
 		}
 		var b strings.Builder
 		for _, hit := range hits {
@@ -60,7 +66,7 @@ func (s *Service) toolKB(ctx context.Context, name string, args json.RawMessage)
 			items = items[:a.Limit]
 		}
 		if len(items) == 0 {
-			return "Nothing yet.", nil
+			return i18n.T(s.lang(ctx), "assistant-kb_tools.list_empty"), nil
 		}
 		var b strings.Builder
 		for _, x := range items {

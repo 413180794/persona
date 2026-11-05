@@ -245,6 +245,15 @@ func TestDaemonConfigIsChecked(t *testing.T) {
 	if _, ok := got["acme"]; ok || got["other"].ID != "other" || len(got) != 1 || len(errs) != 1 {
 		t.Fatalf("a twice-listed id connects neither, a disabled one is left out: %v %v", got, errs)
 	}
+	// Whichever of the two is disabled, and in either order, neither connects.
+	off := with("disabled", true)
+	for _, pair := range [][2]map[string]any{{off, good}, {good, off}, {off, off}} {
+		b, _ := json.Marshal(map[string]any{"daemons": []any{pair[0], pair[1]}})
+		got, errs := parseDaemons(b)
+		if len(got) != 0 || len(errs) != 1 {
+			t.Errorf("%v then %v: got %v, errors %v", pair[0]["disabled"], pair[1]["disabled"], got, errs)
+		}
+	}
 }
 
 // A daemon is a runtime under the config's names: its id, name and launcher, its sessions namespaced, only the

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -50,7 +51,8 @@ func TestKBToolsFormatTheData(t *testing.T) {
 	if out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度", "limit": 1}); err != nil || strings.Count(out, "\n") != 1 {
 		t.Fatalf("search, one: %q %v", out, err)
 	}
-	if out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度", "messages": false}); err != nil || out != "No match in "+dir+"." {
+	if out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度", "messages": false}); err != nil ||
+		out != "知识库里没有与「灰度」相关的内容。" || strings.Contains(out, dir) {
 		t.Fatalf("search without the messages: %q %v", out, err)
 	}
 
@@ -75,7 +77,8 @@ func TestKBToolsFormatTheData(t *testing.T) {
 	if out, err := runTool(s, "c1", "kb_list", map[string]any{"kind": "projects", "limit": 1}); err != nil || strings.Count(out, "\n") != 1 {
 		t.Fatalf("list, one: %q %v", out, err)
 	}
-	if out, err := runTool(s, "c1", "kb_list", map[string]any{"kind": "meetings"}); err != nil || out != "Nothing yet." {
+	if out, err := runTool(s, "c1", "kb_list", map[string]any{"kind": "meetings"}); err != nil ||
+		out != "知识库里还没有内容。" || strings.Contains(out, dir) {
 		t.Fatalf("list, empty: %q %v", out, err)
 	}
 
@@ -108,6 +111,49 @@ func TestKBToolsFormatTheData(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "chats", "lark-f1", "meta.json"), []byte("not json"), 0o600)
 	if out, err := runTool(s, "c1", "kb_get", map[string]any{"kind": "chats", "id": "lark-f1"}); err != nil || !strings.Contains(out, "meta.json:\nnot json\n") {
 		t.Fatalf("get, meta not JSON: %q %v", out, err)
+	}
+}
+
+// Empty answers are neutral text in the user's language and never expose the store's disk directory; with data,
+// hits carry only paths relative to the store.
+func TestKBToolsEmptyAnswersAreLocalizedAndPathFree(t *testing.T) {
+	want := map[i18n.Lang]struct{ search, searchNoQuery, list string }{
+		i18n.ZhHans: {"知识库里没有与「发布会」相关的内容。", "知识库里没有相关内容。", "知识库里还没有内容。"},
+		i18n.En:     {"Nothing in the knowledge base matches “发布会”.", "The knowledge base has no matching content.", "The knowledge base is empty so far."},
+		i18n.Ja:     {"ナレッジベースに「发布会」に関連する内容はありません。", "ナレッジベースに該当する内容はありません。", "ナレッジベースにはまだ内容がありません。"},
+	}
+	for lang, w := range want {
+		f := newFakeHub()
+		f.mu.Lock()
+		f.hello.Locale = string(lang)
+		f.mu.Unlock()
+		s := newKBService(t, f)
+		dir := kbEng(t, s).Store.Dir
+		out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "发布会"})
+		if err != nil || out != w.search || strings.Contains(out, dir) {
+			t.Fatalf("%s search empty: %q %v", lang, out, err)
+		}
+		out, err = runTool(s, "c1", "kb_search", map[string]any{"query": "  "})
+		if err != nil || out != w.searchNoQuery || strings.Contains(out, dir) {
+			t.Fatalf("%s search without a query: %q %v", lang, out, err)
+		}
+		out, err = runTool(s, "c1", "kb_list", map[string]any{"kind": "projects"})
+		if err != nil || out != w.list || strings.Contains(out, dir) {
+			t.Fatalf("%s list empty: %q %v", lang, out, err)
+		}
+	}
+	// With data, a hit that lives inside the store uses a store-relative path; the empty answers are the only place
+	// the absolute disk directory used to leak.
+	f := newFakeHub()
+	s := newKBService(t, f)
+	e := kbEng(t, s)
+	dir := e.Store.Dir
+	c := &kb.Chat{ID: kb.ChatID("lark", "f1"), Source: "lark", SourceID: "f1", Kind: "group", Name: "发布群", Created: time.Now()}
+	_ = e.Store.PutChat(c)
+	_ = e.Store.AppendMessages(c, []kb.Line{{At: time.Now(), Sender: "张三", Text: "周五灰度"}})
+	out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度"})
+	if err != nil || !strings.Contains(out, "chats/lark-f1/messages/") || strings.Contains(out, dir) {
+		t.Fatalf("search hit: %q %v", out, err)
 	}
 }
 

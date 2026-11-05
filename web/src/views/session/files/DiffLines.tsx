@@ -3,10 +3,11 @@
 // a + under the pointer, the box under the diff, and `at` opens it on a line (a comment card's click).
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { addCodeComment, commentKey, markedLines } from "../../../lib/comment-target";
-import { codeQuote, diffLabel, diffPick, rangeLabel, type DiffScope } from "../../../lib/comments";
+import { codeQuote, diffPick, rangeLabel, type DiffScope } from "../../../lib/comments";
 import { useQuotes } from "../../../lib/drafts";
 import { columns, parseDiff, type DiffLine } from "../../../lib/files";
 import { cx } from "../../../ui/atoms";
+import { diffName } from "../../chat/CommentCard";
 import { GutterNumber, LineBox, useLinePick } from "./LineComment";
 import { Empty, useWindow } from "./parts";
 import { t } from "../../../i18n";
@@ -130,7 +131,7 @@ function DiffBox({ comment, lines, rows, draftKey, onDone }: { comment: DiffComm
   const file = comment.path;
   return (
     <LineBox
-      where={`${file}:${rangeLabel(got.from, got.to)} · ${diffLabel(comment.diff)}`}
+      where={`${file}:${rangeLabel(got.from, got.to)} · ${diffName(comment.diff)}`}
       onCancel={onDone}
       onAdd={(body) => {
         const quote = codeQuote({ file, path: comment.path, from: got.from, to: got.to, lines: got.lines, old: got.old, diff: comment.diff, lang: "diff", mid: comment.mid, sid: comment.sid, cwd: comment.cwd });

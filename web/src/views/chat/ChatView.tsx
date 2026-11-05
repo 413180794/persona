@@ -34,6 +34,7 @@ import { scrollBehavior } from "../../ui/stream/motion";
 import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
 import { agentCommands } from "../../lib/composer-commands";
 import { PendingCards } from "./Interactions";
+import { focusedCard, focusedFirst } from "../../lib/card-focus";
 import { FailureNote, showsFailureNote } from "./FailureNote";
 import { AWAIT_MS, awaitingTurn, DOCK_MAX, turnStart } from "./dock";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
@@ -952,7 +953,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           </>
         )}
         <PendingCards
-          interactions={interactions}
+          interactions={focusedFirst(interactions, focusedCard())}
           answered={answered}
           narrow={compactDock}
           short={short}

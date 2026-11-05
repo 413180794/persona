@@ -142,17 +142,18 @@ if (typeof addEventListener !== "undefined") {
   addEventListener("popstate", () => listeners.forEach((l) => l()));
 }
 
-/** `r` as a string is a path in the app ("/settings?tab=…"), without the sub-path. */
-export function navigate(r: Route | string, replace = false) {
+/** `r` as a string is a path in the app ("/settings?tab=…"), without the sub-path. `state` goes with the new entry
+ *  (history.state), so Back / Forward to it bring it back and other ways to the same page do not have it. */
+export function navigate(r: Route | string, replace = false, state: Record<string, unknown> | null = null) {
   const to = typeof r === "string" ? BASE + r : href(r);
   // the query is part of the address (/s/…?view=term): the same page with another view is somewhere else
   if (to === location.pathname + location.search) return;
   // From inside an open overlay (a drawer's link, a sheet's action): the new page takes the overlay's entry, so Back
   // from it goes to the page under the overlay, not to a dead copy of it (#1996). A replace keeps the entry's state:
   // an overlay open over the page keeps its marker.
-  if (replace) history.replaceState(history.state, "", to);
-  else if (takeOverlayEntry()) history.replaceState(null, "", to);
-  else history.pushState(null, "", to);
+  if (replace) history.replaceState(state ?? history.state, "", to);
+  else if (takeOverlayEntry()) history.replaceState(state, "", to);
+  else history.pushState(state, "", to);
   listeners.forEach((l) => l());
 }
 
@@ -175,8 +176,8 @@ export function useRoute(): Route {
 }
 
 // <a> that navigates in-app on a plain click and still opens a new tab with ⌘ / middle click.
-export function onLinkClick(e: React.MouseEvent, to: Route) {
+export function onLinkClick(e: React.MouseEvent, to: Route, state: Record<string, unknown> | null = null) {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
   e.preventDefault();
-  navigate(to);
+  navigate(to, false, state);
 }

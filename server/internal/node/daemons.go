@@ -183,18 +183,19 @@ func parseDaemons(data []byte) (map[string]daemonConfig, []error) {
 	}
 	out := map[string]daemonConfig{}
 	var errs []error
-	dup := map[string]bool{}
+	// seen counts disabled entries too: a disabled first entry must not let a second one with its id connect.
+	seen := map[string]bool{}
 	for _, c := range f.Daemons {
 		if err := c.validate(); err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		if _, seen := out[c.ID]; seen || dup[c.ID] {
+		if seen[c.ID] {
 			errs = append(errs, fmt.Errorf("daemon %s is listed twice; neither connects", c.ID))
 			delete(out, c.ID)
-			dup[c.ID] = true
 			continue
 		}
+		seen[c.ID] = true
 		if !c.Disabled {
 			out[c.ID] = c
 		}

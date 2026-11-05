@@ -81,6 +81,22 @@ type Task struct {
 	LastStatus    string    `json:"last_status,omitempty"` // of the last run: ok / failed / skipped
 	LastError     string    `json:"last_error,omitempty"`
 	NextRun       time.Time `json:"next_run,omitempty"`
+	// ArmedAt is when a daily task was last created, switched on or given another time or weekdays (rearm): a run
+	// due before that is no run it missed (#3816).
+	ArmedAt time.Time `json:"armed_at,omitempty"`
+}
+
+// rearm notes that t starts counting from now when it was just created, switched on, or its daily time or weekdays
+// changed (old: as it was; a new task's has no ID or is off). Without it the scheduler took the run due earlier today
+// for one the hub missed while it was down, and recorded 「Persona 停机，错过了时间」 (#3816).
+func rearm(old Task, t *Task, now time.Time) {
+	if t.Repeat != repeatDaily || !t.Enabled {
+		return
+	}
+	if !old.Enabled || old.Repeat != repeatDaily || old.Time != t.Time || !slices.Equal(old.Weekdays, t.Weekdays) {
+		// From the start of this minute: a task set at 10:05:20 for 10:05 (trying it out) still runs now.
+		t.ArmedAt = now.UTC().Truncate(time.Minute).Add(-time.Nanosecond)
+	}
 }
 
 const (
@@ -687,7 +703,7 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args jso
 	if err != nil {
 		return "", err
 	}
-	var t Task
+	var t, old Task
 	i := -1
 	if a.ID != "" {
 		if i = sc.indexLocked(a.ID); i < 0 || sc.tasks[i].Space != space {
@@ -695,6 +711,7 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args jso
 			return "", fmt.Errorf("no task %q (list_followups lists them)", a.ID)
 		}
 		t = sc.tasks[i]
+		old = t
 	} else {
 		t = Task{ID: "rt_" + randomHex(4), Repeat: repeatDaily, Enabled: true, Space: space, CreatedBy: "assistant", CreatedAt: time.Now().UTC()}
 	}
@@ -723,6 +740,7 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args jso
 		sc.mu.Unlock()
 		return "", err
 	}
+	rearm(old, &t, time.Now())
 	if i < 0 {
 		sc.tasks = append(sc.tasks, t)
 	} else {
@@ -925,6 +943,9 @@ func (s *Service) runDue(ctx context.Context, now time.Time) {
 				// up a few minutes late. Looking back a day treats it as any other day: run within the catch-up
 				// window, else skipped and recorded (#3397).
 				last = now.Add(-24 * time.Hour)
+			}
+			if t.ArmedAt.After(last) {
+				last = t.ArmedAt // switched on or retimed since: a run due before that was not missed (#3816)
 			}
 			next := nextRun(*t, last, loc)
 			if next.IsZero() || next.After(now) {
@@ -1545,6 +1566,7 @@ func (s *Service) scheduleRoutes() {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
+		rearm(Task{}, &t, now)
 		sc, err := s.lockedSchedule(r.Context())
 		if err != nil {
 			apierr.Write(w, http.StatusServiceUnavailable, err)
@@ -1581,7 +1603,8 @@ func (s *Service) scheduleRoutes() {
 			apierr.Write(w, 400, err)
 			return
 		}
-		t := editTask(sc.tasks[i], in, time.Now())
+		now := time.Now()
+		t := editTask(sc.tasks[i], in, now)
 		push, has, err := pushIn(raw)
 		if err != nil {
 			sc.mu.Unlock()
@@ -1591,11 +1614,12 @@ func (s *Service) scheduleRoutes() {
 		if has { // an app that does not know the field leaves it out: the task keeps its push
 			t.Push = push
 		}
-		if err := checkTask(&t, time.Now()); err != nil {
+		if err := checkTask(&t, now); err != nil {
 			sc.mu.Unlock()
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
+		rearm(sc.tasks[i], &t, now)
 		sc.tasks[i] = t
 		s.saveLocked(sc)
 		sc.mu.Unlock()
@@ -1676,6 +1700,11 @@ func (s *Service) scheduleRoutes() {
 				sc.mu.Unlock()
 				apierr.Write(w, http.StatusBadRequest, err)
 				return
+			}
+			if ok {
+				rearm(prev, &t, now)
+			} else {
+				rearm(Task{}, &t, now)
 			}
 			out = append(out, t)
 		}

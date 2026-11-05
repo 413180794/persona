@@ -319,7 +319,7 @@ def diff_case(browser, base, size, theme, shots):
     n.click()
     box = page.locator("[data-line-box]")
     expect(box).to_be_visible()
-    expect(box).to_contain_text("unstaged")
+    expect(box).to_contain_text("未暂存")
     box.locator("textarea").fill("这里漏了错误处理")
     page.wait_for_timeout(250)
     shot(page, shots, f"comments-{size}-{theme}-diffbox")

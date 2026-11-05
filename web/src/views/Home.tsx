@@ -1,6 +1,7 @@
 // 总览: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
 import { useMemo, useState } from "react";
 import { ago, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
+import { cardState } from "../lib/card-focus";
 import { interactionAsk } from "../lib/inbox";
 import { plainMarkdown } from "../lib/plain-markdown";
 import { homeOverview, paneRoute, type TabGroup } from "../lib/herdr-tree";
@@ -86,6 +87,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                     meta={[name(ix.machine_id), s?.space_name, s && tabLabel(s)].filter(Boolean).join(" › ")}
                     detail={ix.kind === "plan" ? t("home.plan_ready") : plainMarkdown(interactionAsk(ix)).replace(/\s+/g, " ").trim() || undefined}
                     pill={<Pill tone="red">{KIND[ix.kind]}</Pill>}
+                    entry={cardState(ix.id)}
                   />
                 );
               })}
@@ -233,11 +235,11 @@ function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: s
 }
 
 // One Task Rows capsule: status badge, title, the latest words, a pill.
-function TaskRow({ i, state, to, title, meta, detail, pill }: { i: number; state: AgentState; to: Route; title: string; meta: string; detail?: string; pill: React.ReactNode }) {
+function TaskRow({ i, state, to, title, meta, detail, pill, entry }: { i: number; state: AgentState; to: Route; title: string; meta: string; detail?: string; pill: React.ReactNode; entry?: Record<string, unknown> }) {
   return (
     <a
       href={href(to)}
-      onClick={(e) => onLinkClick(e, to)}
+      onClick={(e) => onLinkClick(e, to, entry)}
       className="group flex items-center gap-3 rounded-[16px] bg-surface px-3 py-2.5 shadow-card transition-[background-color,transform] duration-150 hover:bg-inset active:scale-[0.995]"
       style={{ animation: `fade-up 420ms ${EASE} ${Math.min(i, 8) * 50}ms both` }}
     >

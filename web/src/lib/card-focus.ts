@@ -1,0 +1,23 @@
+// The card a row in 总览's 需要你处理 was opened for (#4089): the chat puts it first, so on a phone it is the one shown in
+// full and not folded into 还有 N 件 under another card of the same agent. It rides on that history entry only: the
+// sidebar, a notification or a new tab open the chat without it.
+import type { Interaction } from "./types";
+
+const KEY = "card";
+
+/** The history state that opens a chat with `id` first. */
+export function cardState(id: string): Record<string, unknown> {
+  return { [KEY]: id };
+}
+
+/** The card the current history entry was opened for, if any. */
+export function focusedCard(state: unknown = typeof history !== "undefined" ? history.state : null): string | undefined {
+  const id = state && typeof state === "object" ? (state as Record<string, unknown>)[KEY] : undefined;
+  return typeof id === "string" ? id : undefined;
+}
+
+/** The cards with `id` first, the rest in their order; the same list when it is first or not among them. */
+export function focusedFirst<T extends Pick<Interaction, "id">>(cards: T[], id: string | undefined): T[] {
+  const i = id === undefined ? -1 : cards.findIndex((c) => c.id === id);
+  return i <= 0 ? cards : [cards[i], ...cards.slice(0, i), ...cards.slice(i + 1)];
+}
