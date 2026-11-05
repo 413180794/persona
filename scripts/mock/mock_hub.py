@@ -5285,22 +5285,41 @@ HISTORY = "mock-1"
 # MOCK_GAP=1: the first conversation's subscribe backlog leaves out its last items, then a live push brings only the
 # final two, as if a batch in between had been lost; the app should notice the hole and fetch it (after_seq).
 PHOTO = "a1f3c2d4-0000-4000-8000-00000000000c"
-if os.environ.get("MOCK_PHOTO") == "1":  # a screenshot in the chat, to save to the photo library (PhotoSaveTests)
-    import struct, zlib
+_PHOTO_FIXTURE = []  # (session, items), built once so turning it on again reuses the same seqs
 
-    def _png(w, h, rgb):
-        def chunk(t, d):
-            return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
-        raw = b"".join(b"\0" + bytes(rgb) * w for _ in range(h))
-        return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
-                + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
-    SESSIONS.append(sess("macbook", PHOTO, "看看这张截图", "/Users/me/code/weather", "done", "read", "weather", 1, "shot", 6, 3,
-                         "截图里的布局没问题。"))
-    _shot = {"mime": "image/png", "data": base64.b64encode(_png(64, 48, (52, 120, 246))).decode(), "width": 64, "height": 48}
-    ITEMS[PHOTO] = [it("user", "text", 4, text="看看这张截图"), it("user", "image", 4, image=_shot),
-                    it("assistant", "text", 3, text="截图里的布局没问题。")]
+def set_photo(on):
+    """A screenshot in the chat, to save to the photo library (PhotoSaveTests). MOCK_PHOTO=1 puts it in at start;
+    GET /mock/photo?on=1|0 puts it in or takes it out while running, so the test does not depend on how the mock was
+    started. Answers whether it is in now and whether it was before."""
+    was = PHOTO in ITEMS
+    if not _PHOTO_FIXTURE:
+        import struct, zlib
 
+        def _png(w, h, rgb):
+            def chunk(t, d):
+                return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+            raw = b"".join(b"\0" + bytes(rgb) * w for _ in range(h))
+            return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                    + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+        _shot = {"mime": "image/png", "data": base64.b64encode(_png(64, 48, (52, 120, 246))).decode(), "width": 64, "height": 48}
+        _PHOTO_FIXTURE.append((sess("macbook", PHOTO, "看看这张截图", "/Users/me/code/weather", "done", "read", "weather", 1, "shot", 6, 3,
+                                    "截图里的布局没问题。"),
+                               [it("user", "text", 4, text="看看这张截图"), it("user", "image", 4, image=_shot),
+                                it("assistant", "text", 3, text="截图里的布局没问题。")]))
+    if on and not was:
+        session, items = _PHOTO_FIXTURE[0]
+        SESSIONS.append(session)
+        ITEMS[PHOTO] = items
+    elif not on and was:
+        SESSIONS[:] = [x for x in SESSIONS if x["session_id"] != PHOTO]
+        ITEMS.pop(PHOTO, None)
+    return {"ok": True, "photo": on, "was": was}
+
+
+if os.environ.get("MOCK_PHOTO") == "1":
+    set_photo(True)
 
 GAP = os.environ.get("MOCK_GAP") == "1"
 
@@ -8565,6 +8584,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/truth": return self.send_json(truth())
         if p == "/mock/bump": return self.send_json(bump(q.get("what", ["last"])[0], q.get("session", [None])[0]))
         if p == "/mock/mark": return self.send_json({"ok": True})  # a test's marker in the request log (explore)
+        if p == "/mock/photo": return self.send_json(set_photo(q.get("on", ["1"])[0] == "1"))  # PhotoSaveTests' own fixture
         if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
             # &steps=50&ms=80: the hub's own pace (a delta every 80 ms, node/assistant.go).
             args = (SAY_PRESETS.get(q.get("preset", [""])[0]) or q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1",

@@ -1,19 +1,36 @@
 import XCTest
 
-/// Saving to the photo library for real (scripts/mock/mock_hub.py MOCK_PHOTO=1, JARVIS_MOCK_HUB): the image viewer's 保存
+/// Saving to the photo library for real (scripts/mock/mock_hub.py, JARVIS_MOCK_HUB): the image viewer's 保存
 /// and the share card's 保存图片, each after allowing the system's permission alert. Photos runs the change block on its
 /// own queue; a block the compiler took for main-actor code crashed the app there (2026-10-31), so the test only
 /// passes if the app is still alive and says 已保存到相册.
+/// The conversation with the screenshot is put in by the test (GET /mock/photo?on=1) rather than by starting the mock
+/// with MOCK_PHOTO=1: a mock started the usual way had no such conversation, the chat opened empty and both failed (#2334).
 final class PhotoSaveTests: XCTestCase {
     private var hub: String!
+    private var photoWas = true
     private let session = "macbook/a1f3c2d4-0000-4000-8000-00000000000c"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
-            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_PHOTO=1 (JARVIS_MOCK_HUB)")
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
         self.hub = hub
+        let state = try mockPhoto(true)
+        XCTAssertEqual(state["photo"] as? Bool, true, "the mock did not put in the conversation with the screenshot: \(state)")
+        photoWas = state["was"] as? Bool ?? true
+    }
+
+    override func tearDownWithError() throws {
+        if !photoWas { _ = try? mockPhoto(false) } // the tests after this one see the mock as it was
+    }
+
+    /// GET /mock/photo?on=1|0 puts the conversation with the screenshot in or takes it out; answers {"photo", "was"}.
+    private func mockPhoto(_ on: Bool) throws -> [String: Any] {
+        let data = try Data(contentsOf: URL(string: hub + "/mock/photo?on=" + (on ? "1" : "0"))!)
+        return try XCTUnwrap(try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                             "no /mock/photo in this mock (an older scripts/mock/mock_hub.py?)")
     }
 
     @MainActor private func launch(_ extra: [String]) -> XCUIApplication {
