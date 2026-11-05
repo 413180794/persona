@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
 import { pair, takeToken } from "./lib/auth";
 import { useCloseOnBack } from "./lib/back-close";
+import { SCRIM_FADE, useLingers } from "./lib/lingers";
 import { PageBoundary } from "./views/PageBoundary";
 import { drawerA11y, focusBack, useDrawerDrag } from "./lib/drawer";
 import { acceptHubs, rememberHub, takeHubs } from "./lib/hubs";
@@ -148,6 +149,9 @@ function Shell() {
   const [drawer, setDrawer] = useState(false);
   const toggle = useCallback(() => setDrawer((d) => !d), []);
   const close = useCallback(() => setDrawer(false), []);
+  // The scrim leaves the page once it has faded out (#2102): kept there at opacity 0, iOS took its colour (the page's
+  // under 20% black) for the status bar strip of the installed app.
+  const scrimShown = useLingers(drawer, SCRIM_FADE);
   const drawerBox = useRef<HTMLDivElement>(null);
   const scrim = useRef<HTMLDivElement>(null);
   const mainBox = useRef<HTMLElement>(null);
@@ -320,7 +324,7 @@ function Shell() {
       <div
         ref={scrim}
         aria-hidden
-        className={cx("fixed inset-0 z-20 bg-black/20 transition-opacity duration-200 lg:hidden", drawer ? "opacity-100" : "pointer-events-none opacity-0")}
+        className={cx("fixed inset-0 z-20 bg-black/20 transition-opacity duration-200 lg:hidden", drawer ? "opacity-100 starting:opacity-0" : "pointer-events-none opacity-0", !scrimShown && "hidden")}
         onClick={close}
       />
       <main ref={mainBox} inert={a11y.modal || undefined} className="relative min-w-0 flex-1">

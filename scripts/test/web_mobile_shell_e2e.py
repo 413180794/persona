@@ -62,6 +62,18 @@ class Touch:
         self.page.wait_for_timeout(450)  # the drawer settles (300 ms)
 
 
+# What iOS may take the installed app's status bar strip from (#2102): a full-width fixed element at the top of the page
+# with a background colour, even at opacity 0. With nothing open there must be none.
+TOP_TINTS = """() => [...document.querySelectorAll('body *')].filter((e) => {
+  const cs = getComputedStyle(e);
+  if (cs.position !== 'fixed' || cs.display === 'none') return false;
+  const r = e.getBoundingClientRect();
+  if (r.top > 1 || r.width < innerWidth - 1 || r.height < 40) return false;
+  const bg = cs.backgroundColor;
+  return bg !== 'transparent' && !/rgba\\([^)]*,\\s*0\\)$/.test(bg);
+}).map((e) => e.className.slice(0, 60))"""
+
+
 def drawer_x(page):
     # the drawer's left edge: 0 open, minus its width shut
     return page.evaluate("() => document.querySelector('aside').parentElement.getBoundingClientRect().left")
@@ -161,6 +173,10 @@ def gestures(browser, base, token):
     page.wait_for_timeout(400)
     assert not is_open(page) and float(op) > 0, op
     ok(f"tapping the scrim closes it, fading out (opacity {op} the moment after)")
+    # faded out, it leaves the page: nothing tints the top any more (iOS took the dimmed colour for the status bar)
+    tints = page.evaluate(TOP_TINTS)
+    assert not tints, f"with the drawer closed, fixed layers with a background still cover the top: {tints}"
+    ok("closed, nothing with a background covers the top of the page (the status bar keeps the page's colour)")
 
     # a sideways scroller under the finger scrolls first: the pane tabs of a tab with many panes, a code block
     page.goto(base + TAB1)

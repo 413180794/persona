@@ -201,7 +201,7 @@ func TestBotmuxAttentionReasonAndTopicLink(t *testing.T) {
 	const topic = "https://applink.example.com/client/thread/open?chat=c1&thread=t1"
 	blocked := bmxRow(sidA, "claude-code", "alive", "idle", false, "stuck")
 	blocked["raw"] = map[string]any{"title": "stuck", "feishuThreadLink": topic,
-		"agentAttention": map[string]any{"kind": "blocked", "reason": "⚠️ 本轮执行失败，\n 请检查后再发一条消息继续。"}}
+		"agentAttention": map[string]any{"kind": "decision", "reason": "要合并到哪个分支，\n 请在话题里回复。"}}
 	working := bmxRow(sidB, "claude-code", "alive", "working", false, "busy")
 	working["raw"] = map[string]any{"title": "busy", "feishuThreadLink": "javascript:alert(1)"}
 	prompt := bmxRow(sidC, "claude-code", "alive", "idle", true, "asks")
@@ -210,7 +210,7 @@ func TestBotmuxAttentionReasonAndTopicLink(t *testing.T) {
 		writeTranscript(t, home, bmxCwd, id, time.Now().Add(-time.Minute), `{"type":"user","message":{"role":"user","content":"hi"}}`)
 	}
 	m := byID(listSessions(t, n))
-	if s := m[sidA]; s.Status != proto.StatusBlocked || s.AttentionReason != "⚠️ 本轮执行失败， 请检查后再发一条消息继续。" || s.ExternalURL != topic {
+	if s := m[sidA]; s.Status != proto.StatusBlocked || s.AttentionReason != "要合并到哪个分支， 请在话题里回复。" || s.ExternalURL != topic {
 		t.Errorf("blocked: status %s reason %q url %q", s.Status, s.AttentionReason, s.ExternalURL)
 	}
 	if s := m[sidB]; s.AttentionReason != "" || s.ExternalURL != "" {
@@ -929,5 +929,75 @@ func TestBotmuxIDsInReadsTheHeadOnce(t *testing.T) {
 		`{"type":"event_msg","payload":{"text":"<session_id>`+sidE+`</session_id>"}}`)
 	if got := botmuxIDsIn(escaped); !slices.Equal(got, []string{sidE}) {
 		t.Fatalf("escaped: %v", got)
+	}
+}
+
+// botmux's own failure notice (a turn it stopped on an error, its reason starting with a warning sign) is no wait for
+// the user: the session takes its turn's state and carries the notice as failure_reason, until a message comes in
+// after it. An attention an agent raised waits for the user until the agent takes a message after it.
+func TestBotmuxFailureNoticeAndStaleAttention(t *testing.T) {
+	n, f, _, home := bmxNode(t)
+	raisedAt := time.Now().Add(-48 * time.Hour)
+	row := func(id, reason string) map[string]any {
+		r := bmxRow(id, "claude-code", "alive", "idle", false, "t")
+		r["raw"] = map[string]any{"title": "t",
+			"agentAttention": map[string]any{"kind": "blocked", "reason": reason, "at": raisedAt.UnixMilli()}}
+		return r
+	}
+	const failure = "⚠️ Claude 本轮执行失败，且当前错误不能安全自动续跑。\n 请检查后再发一条消息继续。"
+	const sidH = "0d000000-0000-4000-8000-000000000013"
+	f.rows = []map[string]any{
+		row(sidA, failure),                // failed, nothing after
+		row(sidB, failure),                // failed, then a message went in another way
+		row(sidC, "需要你决定用哪个方案"),           // an agent's attention, still waiting
+		row(sidD, "需要你决定用哪个方案"),           // an agent's attention, answered another way
+		row(sidE, "⚠️ 需要你确认是否删库"),         // an agent's attention with a warning sign: still a wait
+		row(sidF, "需要你决定用哪个方案"),           // answered with a long pasted message (a line the tail read skips)
+		row(sidG, "需要你决定用哪个方案"),           // only a slash command, a "! cmd" and a teammate's report after it
+		row(sidH, "⚠️ Claude 本轮执行失败，请检查"), // a warning sign without botmux's words: an agent's
+	}
+	prompt := func(at time.Time) string {
+		return `{"type":"user","timestamp":"` + at.UTC().Format(time.RFC3339) + `","message":{"role":"user","content":"hi"}}`
+	}
+	user := func(at time.Time, text string) string {
+		b, _ := json.Marshal(text)
+		return `{"type":"user","timestamp":"` + at.UTC().Format(time.RFC3339) + `","message":{"role":"user","content":` + string(b) + `}}`
+	}
+	after := raisedAt.Add(time.Hour)
+	for _, id := range []string{sidA, sidB, sidC, sidD, sidE, sidF, sidG, sidH} {
+		lines := []string{prompt(raisedAt.Add(-time.Hour))}
+		switch id {
+		case sidB, sidD:
+			lines = append(lines, prompt(after))
+		case sidF: // past the head read (32 KB), so only the tail read sees it
+			pad := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"` +
+				strings.Repeat("x", 40<<10) + `"}]}}`
+			lines = append(lines, pad, user(after, strings.Repeat("日志 ", 4<<10)))
+		case sidG:
+			lines = append(lines, user(after, "<command-name>/model</command-name><command-args>opus</command-args>"),
+				user(after, "<bash-input>ls</bash-input>"),
+				user(after, `<teammate-message teammate_id="tester">测试都过了</teammate-message>`))
+		}
+		writeTranscript(t, home, bmxCwd, id, time.Now().Add(-time.Minute), lines...)
+	}
+	m := byID(listSessions(t, n))
+	cases := []struct {
+		id, status, attention, failure string
+	}{
+		{sidA, proto.StatusDone, "", "⚠️ Claude 本轮执行失败，且当前错误不能安全自动续跑。 请检查后再发一条消息继续。"},
+		{sidB, proto.StatusDone, "", ""},
+		{sidC, proto.StatusBlocked, "需要你决定用哪个方案", ""},
+		{sidD, proto.StatusDone, "", ""},
+		{sidE, proto.StatusBlocked, "⚠️ 需要你确认是否删库", ""},
+		{sidF, proto.StatusDone, "", ""},
+		{sidG, proto.StatusBlocked, "需要你决定用哪个方案", ""},
+		{sidH, proto.StatusBlocked, "⚠️ Claude 本轮执行失败，请检查", ""},
+	}
+	for _, c := range cases {
+		s := m[c.id]
+		if s.Status != c.status || s.AttentionReason != c.attention || s.FailureReason != c.failure {
+			t.Errorf("%s: status %s attention %q failure %q, want %s %q %q", c.id, s.Status, s.AttentionReason,
+				s.FailureReason, c.status, c.attention, c.failure)
+		}
 	}
 }

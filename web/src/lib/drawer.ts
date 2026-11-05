@@ -112,6 +112,8 @@ export function useDrawerDrag(opts: {
       if (s) {
         s.style.transition = p === null ? "" : "none";
         s.style.opacity = p === null ? "" : String(p);
+        // a closed drawer's scrim is out of the page (display: none, #2102): a drag brings it in for as long as it goes
+        s.style.display = p === null ? "" : "block";
       }
     };
     const start = (e: TouchEvent) => {

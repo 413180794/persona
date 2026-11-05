@@ -499,9 +499,11 @@ if os.environ.get("MOCK_TREE"):
             if title == "调学习率预热":
                 TREE_MUTED.append("%s/%s" % (mid, sid))
 # MOCK_BOTMUX=1: a botmux session (docs/engines.md「botmux」) that needs you, with botmux's reason and its Feishu topic
-# (attention_reason, external_url), and a working one with only the topic.
+# (attention_reason, external_url), a working one with only the topic, and one botmux stopped on an error
+# (failure_reason).
 BOTMUX_BLOCKED = "b0700000-0000-4000-8000-000000000001"
 BOTMUX_WORKING = "b0700000-0000-4000-8000-000000000002"
+BOTMUX_FAILED = "b0700000-0000-4000-8000-000000000003"
 if os.environ.get("MOCK_BOTMUX"):
     _bmx = dict(space_kind="botmux", space_id="dir:/home/me/code/report", space_name="report", space_index=9,
                 slot_id=None, slot_name=None, slot_index=None, tab_id=None, workspace_id="dir:/home/me/code/report")
@@ -513,6 +515,11 @@ if os.environ.get("MOCK_BOTMUX"):
         sess("server", BOTMUX_WORKING, "1104 | 功能 | 看板筛选", "/home/me/code/report", "working", "working", "", 0, "", 0, 1,
              "筛选条件加好了，在补测试。", **_bmx, pane_id="botmux:" + BOTMUX_WORKING,
              external_url="https://applink.example.com/client/thread/open?chat=demo&thread=t2"),
+        # botmux stopped its turn on an error (its own notice): done, with failure_reason, not 「需要你」.
+        sess("server", BOTMUX_FAILED, "1104 | 功能 | 干货整理", "/home/me/code/report", "done", "idle", "", 0, "", 0, 3,
+             "标题改好了。", **_bmx, pane_id="botmux:" + BOTMUX_FAILED,
+             failure_reason="⚠️ Claude 本轮执行失败，且当前错误不能安全自动续跑。请检查 Web 终端和模型服务状态后，再发送一条消息继续。",
+             external_url="https://applink.example.com/client/thread/open?chat=demo&thread=t3"),
     ]
 # MOCK_WORK=1: stopped agents the hub triaged (docs/agent-work.md): one done with its conclusion, one waiting for a
 # deploy the hub will wake it after, one cut off by a 503 the hub retries, one waiting for the user's decision on a card;

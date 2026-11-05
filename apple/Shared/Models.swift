@@ -576,6 +576,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var quiet: Bool = false
     /// Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you.
     var attentionReason: String? = nil
+    /// Its host stopped its turn on an error it will not retry by itself (a botmux notice), until a message goes in.
+    var failureReason: String? = nil
     /// Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开.
     var externalURL: String? = nil
     /// The channels messages came into it from, newest first ("wechat", "feishu"; docs/channels.md「来源标记」): the
@@ -658,7 +660,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
-             attentionReason = "attention_reason", externalURL = "external_url", channels, compaction
+             attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction
     }
 
     init(from decoder: Decoder) throws {
@@ -717,6 +719,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         todo = try c.decodeIfPresent(SessionTodoRef.self, forKey: .todo)
         quiet = try c.decodeIfPresent(Bool.self, forKey: .quiet) ?? false
         attentionReason = try c.decodeIfPresent(String.self, forKey: .attentionReason)
+        failureReason = try c.decodeIfPresent(String.self, forKey: .failureReason)
         externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
         channels = try c.decodeIfPresent([String].self, forKey: .channels)
         compaction = try? c.decodeIfPresent(CompactionRun.self, forKey: .compaction) // an odd one never drops the session
@@ -895,7 +898,14 @@ extension Session {
     /// The line a list row shows under the title: why it waits for you when its host says so, else the last words.
     var listPreview: String? {
         if state == .needsYou, let r = attentionReason, !r.isEmpty { return r } // a stale reason (offline, seen) stays out
+        if state != .working, let r = failureReason, !r.isEmpty { return Session.failureText(r) }
         return lastText.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }
+    }
+    /// A failure notice without the warning sign botmux starts it with: the app draws its own.
+    static func failureText(_ reason: String) -> String {
+        var t = Substring.UnicodeScalarView(reason.trimmingCharacters(in: .whitespaces).unicodeScalars)
+        while let c = t.first, c == "\u{26A0}" || c == "\u{FE0F}" { t.removeFirst() }
+        return String(t).trimmingCharacters(in: .whitespaces)
     }
     /// 在飞书打开: the session's place outside Persona, a web link only.
     var externalLink: URL? {

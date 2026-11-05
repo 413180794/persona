@@ -191,6 +191,7 @@ type botmuxRow struct {
 		AgentAttention *struct {
 			Kind   string `json:"kind"`
 			Reason string `json:"reason"`
+			At     int64  `json:"at"` // epoch ms
 		} `json:"agentAttention"`
 		// FeishuThreadLink opens the session's topic in Feishu (a raw field: shown when present).
 		FeishuThreadLink string `json:"feishuThreadLink"`
@@ -287,15 +288,24 @@ func (r botmuxRow) agent() (host.Agent, bool) {
 		a.AgentStatus = proto.StatusOffline
 	case r.Liveness != "alive":
 		return host.Agent{}, false
-	case r.TUIPromptActive || (r.Raw.AgentAttention != nil && r.Raw.AgentAttention.Kind != ""):
-		a.AgentStatus = proto.StatusBlocked
-		if r.Raw.AgentAttention != nil {
-			a.Attention = botmuxTitle(r.Raw.AgentAttention.Reason)
-		}
 	default:
-		a.AgentStatus = botmuxTurns[r.Turn]
-		if a.AgentStatus == "" {
-			a.AgentStatus = proto.StatusDone
+		a.TurnStatus = cmp.Or(botmuxTurns[r.Turn], proto.StatusDone)
+		a.AgentStatus = a.TurnStatus
+		at := r.Raw.AgentAttention
+		switch {
+		case r.TUIPromptActive:
+			a.AgentStatus = proto.StatusBlocked
+			if at != nil {
+				a.Attention = botmuxTitle(at.Reason)
+			}
+		case at == nil || at.Kind == "":
+		case botmuxFailure(at.Reason):
+			// botmux's own notice that the turn failed and it stopped: nothing to answer, the turn is over.
+			a.Failure = botmuxTitle(at.Reason)
+			a.FailureAt = botmuxTime(at.At)
+		default:
+			a.AgentStatus = proto.StatusBlocked
+			a.Attention, a.AttentionAt = botmuxTitle(at.Reason), botmuxTime(at.At)
 		}
 	}
 	a.Title = a.Name
@@ -304,9 +314,7 @@ func (r botmuxRow) agent() (host.Agent, bool) {
 	// waiting for the user, whose reply in the topic is often the attention reason itself.
 	if a.AgentStatus != proto.StatusWorking && a.AgentStatus != proto.StatusBlocked && r.Raw.PreviewBotState == "replied" {
 		a.LastText = botmuxReply(cmp.Or(r.Raw.PreviewBotFullText, r.Raw.PreviewBotText))
-		if r.Raw.PreviewBotAt > 0 {
-			a.LastTextAt = time.UnixMilli(r.Raw.PreviewBotAt)
-		}
+		a.LastTextAt = botmuxTime(r.Raw.PreviewBotAt)
 	}
 	if strings.HasPrefix(r.Raw.FeishuThreadLink, "https://") {
 		a.ExternalURL = r.Raw.FeishuThreadLink
@@ -319,6 +327,30 @@ var botmuxCard = regexp.MustCompile(`^\[卡片: ([^\]\n]*)\]`)
 
 // botmuxReply is a reply as botmux recorded it, a card's title without botmux's label (the first words are the summary).
 func botmuxReply(s string) string { return botmuxCard.ReplaceAllString(s, "$1") }
+
+// botmuxFailure: an attention botmux raised itself on a turn it stopped (a failure it did not continue, a crash loop
+// it no longer restarts), not one an agent raised with `botmux send --attention`. botmux's notices start with a
+// warning sign and say what it stopped doing on its own; an agent's reason may start with the sign too, so both count.
+func botmuxFailure(reason string) bool {
+	r := strings.TrimSpace(reason)
+	if !strings.HasPrefix(r, "⚠") {
+		return false
+	}
+	l := strings.ToLower(r)
+	return slices.ContainsFunc(botmuxStopWords, func(w string) bool { return strings.Contains(l, w) })
+}
+
+// botmuxStopWords are in every notice botmux raises on a turn it stopped (its worker.*recovery*, crash and
+// continuation texts, Chinese and English).
+var botmuxStopWords = []string{"自动续跑", "自动恢复", "自动重启", "自动处理", "automatic", "auto-restart"}
+
+// botmuxTime is an epoch-ms time, zero when botmux gave none.
+func botmuxTime(ms int64) time.Time {
+	if ms <= 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(ms)
+}
 
 // botmuxTitle is a session's title on one line (botmux keeps the first words of the topic until it is renamed).
 func botmuxTitle(s string) string { return strings.Join(strings.Fields(s), " ") }

@@ -2641,6 +2641,37 @@ struct AttentionNote: View {
     }
 }
 
+/// Its host stopped the last turn on an error it will not retry by itself (a botmux notice): what went wrong, a retry
+/// (a message to go on, delivered by the host) and its Feishu topic. Not a wait for the user: no 「需要你」.
+struct FailureNote: View {
+    var reason: String
+    var link: URL?
+    var retry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.errorFilled).font(Theme.Font.labelStrong).foregroundStyle(Theme.danger)
+                Text(Session.failureText(reason)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: Theme.Space.m) {
+                Button(action: retry) { Label("重试", systemImage: Theme.Icon.retry).lineLimit(1) }
+                    .font(Theme.Font.secondaryStrong)
+                    .accessibilityIdentifier("chat.failure.retry")
+                if let link { FeishuLink(url: link).font(Theme.Font.secondaryStrong) }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.s)
+        .surface(tint: Theme.danger.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("chat.failure")
+    }
+
+}
+
 /// 在飞书打开: the system opens it (Feishu takes its own links), not the chat's in-app web sheet.
 struct FeishuLink: View {
     var url: URL
@@ -2711,6 +2742,8 @@ struct Composer: View, Equatable {
         nonmutating set { model.drafts[key] = newValue }
     }
     private var textBinding: Binding<String> { Binding(get: { text }, set: { text = $0 }) }
+    /// The failure notice 重试 was tapped on: its note stays hidden (the host takes 继续, the list follows).
+    @State private var retried: String?
     @State private var picks: [PhotosPickerItem] = []
     @State private var showPhotos = false
     @State private var showCamera = false
@@ -2803,6 +2836,15 @@ struct Composer: View, Equatable {
             } else if let s = model.session(key), let reason = s.attentionReason, !reason.isEmpty, s.state == .needsYou {
                 AttentionNote(reason: reason, link: s.externalLink)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let s = model.session(key), let reason = s.failureReason, !reason.isEmpty, !status.isActive,
+                      retried != reason {
+                // 继续 alone (not what is in the box); the note goes at once and stays gone for this notice, while the
+                // host takes the message and the list catches up.
+                FailureNote(reason: reason, link: s.externalLink) {
+                    retried = reason
+                    model.sendNow(key, text: "继续")
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             CompactionSlot(key: key) // an assistant conversation's 压缩上下文 (#1762)
             if let suggestion {

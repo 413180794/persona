@@ -98,6 +98,12 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
 - **摘要（`last_text`）**：会话不在工作中、不在「需要你」、botmux 已经回了最新一条消息（`previewBotState` 是 `replied`）时，用 botmux 记下的最后一条回复（`previewBotFullText`，没有就用 `previewBotText`；卡片记成「[卡片: 标题]」，去掉标签只留标题）：
   Agent 的回答走 `botmux send` 发到飞书，对话记录的最后一句常常只是 `BOTMUX_NOTHING_TO_SEND`。工作中、还没回、「需要你」（话题里的回复常常就是等你的原因），或者对话记录里在这条回复 10 分钟之后还有文字（在 botmux 之外接着做了）的，照旧取对话记录的最后一段文字。
   对话记录里单独一行的 `BOTMUX_NOTHING_TO_SEND` 不算文字（任何会话都一样）：整轮只有它时，保留之前的文字；只说过它的对话记录也算说过话，挂起超过 7 天后照样按「未运行」列出。
+- **执行失败**：botmux 自己发的失败通知（以 ⚠️ 开头，且说的是它停掉了自动续跑 / 自动恢复 / 自动重启 / 自动处理）不是在等你回答，不算「需要你」：
+  状态按 botmux 的 turn 来（通常是做完），原因放进 `failure_reason`，App 在对话里显示红色的出错提示，带「重试」（给会话发一条「继续」，走 botmux 投递）和「在飞书打开」。
+  Agent 自己用 `botmux send --attention` 举的手照旧是「需要你」，原因以 ⚠️ 开头也一样。
+- **过期的举手**：botmux 只在消息经过它（飞书、投递）时清掉举手和失败通知；在终端等别的途径发的消息不会清。
+  对话记录里在举手 / 失败通知之后又有新的用户消息，就当它已经过期：不再显示「需要你」和原因，状态按 turn 来。
+  斜杠命令、`! cmd`、别的 Agent 的汇报不算新消息。只看对话记录最后 384 KB：那条消息之后一轮写了更多内容时看不到它，就照旧显示（偏保守，不会误清）。
 - **不重复**：botmux 用 herdr 后端时，它的会话本来就是 herdr 的窗格，botmux 宿主不再列。botmux 的 Codex 会话同时出现在 Codex 历史或 Codex 桌面版的列表里时（同一份 rollout），
   只留 botmux 的那一行（能经 botmux 发消息，不是只读的历史）。botmux 的 Codex / TRAEX 会话不接 app-server（不 `thread/resume`）、不读屏幕出提问 / 审批卡片、发消息前不查输入框：
   这些和它的 Claude Code 会话一样留在飞书和电脑上。挂起超过 7 天、botmux 不再列的 Codex 会话按 Codex 历史只读显示，去飞书里回。

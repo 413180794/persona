@@ -227,8 +227,16 @@ type Agent struct {
 	RawTitle string
 	// Tokens are metadata tokens reported by herdr (#762).
 	Tokens map[string]string
-	// Attention is why the host says the agent waits for the user (botmux's attention reason), "" when it says nothing.
-	Attention string
+	// Attention is why the host says the agent waits for the user (botmux's attention reason), "" when it says nothing;
+	// AttentionAt when it said so, and TurnStatus the agent's state from its turn alone (what AgentStatus is once the
+	// agent took a message after the attention: the attention is out of date).
+	Attention   string
+	AttentionAt time.Time
+	TurnStatus  string
+	// Failure is the host's notice that the agent's turn failed and it stopped there (botmux: recovery exhausted, not
+	// safe to continue on its own), FailureAt when; nothing the user answers, so not a wait: AgentStatus is the turn's.
+	Failure   string
+	FailureAt time.Time
 	// ExternalURL opens the agent where the host shows it (a botmux session's Feishu topic), "" when there is none.
 	ExternalURL string
 	// LastText is the agent's last answer as the host recorded it (the last reply botmux posted in the topic), "" when

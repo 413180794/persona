@@ -665,6 +665,9 @@ type Session struct {
 	SpawnFrom string `json:"spawn_from,omitempty"`
 	// AttentionReason is why the session waits for the user, in the host's words (a botmux attention's reason).
 	AttentionReason string `json:"attention_reason,omitempty"`
+	// FailureReason: the host stopped the session's turn on an error it will not retry by itself (a botmux notice),
+	// until a message goes to the session. The apps show it with a retry; the session is not waiting for the user.
+	FailureReason string `json:"failure_reason,omitempty"`
 	// ExternalURL opens the session where it lives outside Persona (a botmux session's Feishu topic).
 	ExternalURL string `json:"external_url,omitempty"`
 }

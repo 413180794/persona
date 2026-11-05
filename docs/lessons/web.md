@@ -242,3 +242,7 @@
 - **iOS 键盘弹起时 `vh` 不变，fixed 浮层还是按布局视口定位**：被键盘挡住的部分照样算在高度里。用 visualViewport 算出可见区域写成 CSS 变量（`--kb-top` / `--kb-h`），浮层按它定位；`max-h-[40vh]` 这类写法在手机上不可信。
 - **iOS Safari 长按不会触发 `contextmenu`，长按链接还会弹系统预览**：只挂在右键菜单上的操作，在手机上等于没有，要同时放进 ⋯ 菜单。菜单用 `mousedown` 判断点到外面的话，长按松手时合成的 mousedown 会把刚打开的菜单关掉，要改用 `pointerdown` 并跳过触摸。
 - **CDP 模拟触摸**：同一个手势的 `Input.dispatchTouchEvent`（start / move / end）要在同一个 CDP session 里发，否则页面收到的是几段互不相干的触摸。
+
+## 主屏 App 顶部状态栏是一条灰条（2026-11-05，#2102）
+
+- **iOS 用页面顶部全屏 fixed 元素的背景色当状态栏颜色，不看它的 opacity**。#1996 为了让抽屉遮罩（`bg-black/20`）能淡出，让它关着时也留在页面上（`opacity: 0`）。结果主屏 App 的状态栏一直是页面色压暗 20% 的颜色：浅色主题下是 #FAFAFB × 0.8 = #C8C8C8。浮层关上以后，必须真正离开页面（`display: none` 或者卸载），淡出要在离开之前做完（`useLingers`）。模拟器里的 Safari 浏览器看不出这个问题，要在真机的主屏 App 上才看得到。`web_mobile_shell_e2e.py` 会检查：没有浮层打开时，顶部不能有带背景色的全屏 fixed 元素。

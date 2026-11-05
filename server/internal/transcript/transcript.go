@@ -154,6 +154,8 @@ type Meta struct {
 	// LastTool: the latest tool call no assistant text or new prompt came after (activity.go), nil when the agent's
 	// last word is newer.
 	LastTool *ToolCall
+	// localInput: the line being parsed is input the terminal handles itself (a slash command, "! cmd"), no message.
+	localInput bool
 	// bashInput is the last "! cmd" typed in Claude Code, for the Bash call its output line turns into.
 	bashInput string
 	// notified holds the background-task notifications already shown: one is often recorded twice (as a user line and
@@ -165,7 +167,10 @@ type Meta struct {
 	// LastTextAt is when the agent last wrote text, botmux's sentinel included (it ends a turn that answered in the
 	// Feishu topic): zero when it never did.
 	LastTextAt time.Time
-	Updated    time.Time
+	// LastPromptAt is when the latest message to the agent came in (typed, sent or delivered by a host), zero when
+	// none did or it had no time.
+	LastPromptAt time.Time
+	Updated      time.Time
 }
 
 // botmuxSentinel is the line a botmux session's agent ends a turn with when its answer went to the Feishu topic
@@ -212,6 +217,7 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	if len(meta.FirstUser) > pageTextLen { // it titles the session in every list
 		meta.FirstUser = clipTo(meta.FirstUser, pageTextLen)
 	}
+	defer func() { meta.localInput = false }()
 	for _, it := range items {
 		if it.Role != "system" && !it.TS.IsZero() && it.TS.After(meta.LastActivity) {
 			meta.LastActivity = it.TS
@@ -222,6 +228,10 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			meta.LastTurnWake = true
 		case it.Role == "user" && it.Kind == proto.KindText && !it.Queued:
 			meta.LastTurnWake = false
+			// A message to the agent: not a local command, a `! cmd` or another agent's report (localInput).
+			if it.From == "" && !meta.localInput && it.TS.After(meta.LastPromptAt) {
+				meta.LastPromptAt = it.TS
+			}
 		}
 		if !meta.Codex && (it.Wake || it.Role == "user" && it.Kind == proto.KindText && !it.Queued) {
 			meta.TurnOpen, meta.TurnClosed = true, false // a Claude turn starts; parseLine closes it
@@ -782,7 +792,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 	// as a Bash call under it (the input line comes first; its command is kept for the output's call).
 	if strings.HasPrefix(trimmed, "<bash-input>") {
 		cmd := strings.TrimSpace(firstTag(trimmed, "bash-input"))
-		meta.bashInput = cmd
+		meta.bashInput, meta.localInput = cmd, true
 		it := mk(0, "user", proto.KindText)
 		it.Text = clip("! " + cmd)
 		return []proto.Item{it}
@@ -808,6 +818,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 			it.Text = CompactNotice
 			return []proto.Item{it}
 		}
+		meta.localInput = true
 		it := mk(0, "user", proto.KindText)
 		it.Text = strings.TrimSpace(name + " " + args)
 		return []proto.Item{it}

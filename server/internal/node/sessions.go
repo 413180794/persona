@@ -128,6 +128,8 @@ type quickMeta struct {
 	lastText string
 	// lastTextAt is when the agent last wrote text (botmux's sentinel included: it said something, it is no probe).
 	lastTextAt time.Time
+	// lastPromptAt is when the latest message to the agent came in.
+	lastPromptAt time.Time
 	// doing / doingAt: what the agent's latest tool call does, when no text came after it (transcript.Activity).
 	doing    string
 	doingAt  time.Time
@@ -242,6 +244,9 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 					if !tm.Codex {
 						tm.TurnOpen, tm.TurnClosed = true, false
 					}
+					if ts := lineTime(line); !bytes.Contains(line, []byte(`"isMeta":true`)) && ts.After(tm.LastPromptAt) {
+						tm.LastPromptAt = ts
+					}
 				}
 				continue
 			}
@@ -249,7 +254,7 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 		}
 	}
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
-	m.wake, m.turnClosed, m.lastTextAt = tm.LastTurnWake, tm.TurnClosed, tm.LastTextAt
+	m.wake, m.turnClosed, m.lastTextAt, m.lastPromptAt = tm.LastTurnWake, tm.TurnClosed, tm.LastTextAt, tm.LastPromptAt
 	if m.lastText == "" && off > 0 {
 		// An agent that said a line and then ran tools for a while: their results and hook lines push its words out of
 		// the tail (a 1.5 MB transcript whose last text was 900 KB back, 2026-11-04) and its task card said 还没有动静.
@@ -539,6 +544,27 @@ func (n *Node) evictFiles() {
 	}
 }
 
+// hostNotices applies what the host says beyond the state: a failure notice (FailureReason, the state stays the
+// turn's), and an attention the agent is past (a message came in after it: the turn's state, no reason). A host only
+// clears its notices when a message comes through it; one sent another way leaves them standing.
+func (n *Node) hostNotices(id string, s *proto.Session, a host.Agent) {
+	if a.Failure == "" && a.AttentionAt.IsZero() {
+		return
+	}
+	var promptAt time.Time
+	if p := n.transcriptPath(id); p != "" {
+		if st, err := os.Stat(p); err == nil {
+			promptAt = n.meta(p, st).lastPromptAt
+		}
+	}
+	if a.Failure != "" && (a.FailureAt.IsZero() || !promptAt.After(a.FailureAt)) {
+		s.FailureReason = a.Failure
+	}
+	if !a.AttentionAt.IsZero() && promptAt.After(a.AttentionAt) && s.Status == proto.StatusBlocked {
+		s.Status = a.TurnStatus
+	}
+}
+
 // sessionList returns live herdr sessions plus recent offline transcripts.
 func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Session {
 	if refreshAgents {
@@ -582,6 +608,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		if a.Agent == "codex" && s.Status == proto.StatusWorking && n.codexTurnOver(id, time.Now()) {
 			s.Status = proto.StatusDone
 		}
+		n.hostNotices(id, &s, a)
 		n.mu.Lock()
 		if n.driving[id] && s.Status == proto.StatusBlocked {
 			s.Status = proto.StatusIdle
@@ -610,7 +637,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					s.PermissionMode, s.Effort = n.currentModes(id, m)
 				}
 				s.WokeByTask = m.wake
-				if a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked {
+				if s.Status == proto.StatusWorking || s.Status == proto.StatusBlocked {
 					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
 				}
 				// Background shells keep running after the turn ends; background subagents are listed as subagents.
@@ -1553,7 +1580,7 @@ func listKey(list []proto.Session) string {
 		if s.Activity != "" { // a new step shows at once, not with the next 10 s of updated_at
 			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
 		}
-		fmt.Fprintf(&b, "attention:%q/%s\n", s.AttentionReason, s.ExternalURL) // a new reason or link alone is a change
+		fmt.Fprintf(&b, "attention:%q/%q/%s\n", s.AttentionReason, s.FailureReason, s.ExternalURL) // a new reason or link alone is a change
 		if c := s.Compaction; c != nil {
 			fmt.Fprintf(&b, "compaction:%s/%d\n", c.State, c.StartedAt.Unix())
 		}
