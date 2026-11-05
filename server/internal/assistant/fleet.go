@@ -41,6 +41,9 @@ type fleetBook struct {
 	seenLoaded   bool
 	stateSince   map[[2]string]stateMark // (machine, session) -> its state and when it entered it
 	notified     map[string]time.Time    // assistant conversation -> when it last pushed with notify_user
+	// reportSent: assistant conversation -> when a scheduled run or a task notice was sent into it (noteReportTurn):
+	// the turn it starts is pushed however short it is.
+	reportSent map[string]time.Time
 	// codexAnnounced: Codex card id -> when it was announced (fleet_ix.go)
 	codexAnnounced map[string]time.Time
 	// hooked: Persona's hooks run in the session (a hook event came since the manager started).

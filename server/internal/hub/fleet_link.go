@@ -134,15 +134,16 @@ func (h *Hub) takeFleetSessions(p assistantwire.FleetSessions) {
 // are over for the apps, the others are sent as they are.
 func (h *Hub) takeFleetInteractions(list []proto.Interaction) {
 	f := &h.reported
+	now := make(map[string]proto.Interaction, len(list))
+	for _, ix := range list {
+		now[ix.ID] = ix
+	}
 	f.mu.Lock()
 	old := f.interactions
-	f.interactions = make(map[string]proto.Interaction, len(list))
-	for _, ix := range list {
-		f.interactions[ix.ID] = ix
-	}
+	f.interactions = now
 	f.mu.Unlock()
 	for id := range old {
-		if _, ok := f.interactions[id]; !ok {
+		if _, ok := now[id]; !ok {
 			h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 		}
 	}

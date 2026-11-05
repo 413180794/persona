@@ -14,6 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Closing a finished task (docs/todos.md「自动完成」, #1092). When a task's agents have all stopped and its receipt
@@ -152,7 +153,7 @@ func turnExchange(items []proto.Item) (ask, answer string) {
 
 // userStoppedNotice is the notice the transcript reader puts where the user stopped a turn (Claude Code's "[Request
 // interrupted by user]", Codex's turn_aborted; transcript.go, codex.go).
-const userStoppedNotice = "已中断"
+const userStoppedNotice = transcript.InterruptedNotice
 
 // silentTurn: a turn the node could read (it has items, at least the prompt) in which the agent neither replied nor
 // called a tool. Claude Code ends a turn so, without an error, when the model service answers 200 with nothing in it

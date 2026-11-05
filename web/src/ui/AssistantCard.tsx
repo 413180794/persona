@@ -9,7 +9,7 @@
 // An html component is never run on the web (lib/assistant-html.ts): the card shows its plain-text fallback.
 import { createContext, useContext, useMemo, useState } from "react";
 import { assistantView } from "../lib/assistant-view";
-import { blockKey, blockOf, checkCard, openTarget, type OpenTarget } from "../lib/assistant-blocks";
+import { blockKey, blockOf, cardKnown, checkCard, openTarget, type OpenTarget } from "../lib/assistant-blocks";
 import { hasHtml } from "../lib/assistant-html";
 import { conversationCards, draftKey, submitAction, updateDraft, useCards, type CardDraft } from "../lib/assistant-views";
 import type { AssistantView, ViewAction } from "../lib/extension-wire";
@@ -59,6 +59,7 @@ export function LiveCard({ conversation, id, first }: { conversation: string; id
   if (!v) return null;
   const raw = v.view as unknown as Record<string, unknown>;
   const fb = typeof raw.fallback === "string" ? raw.fallback : "";
+  if (!cardKnown(raw)) return <FallbackCard text={fb} />;
   if (hasHtml(raw)) return <HtmlFallback text={fb} title={typeof raw.title === "string" ? raw.title : undefined} />;
   return <CardBody raw={raw} conversation={conversation} cardKey={v.id} version={v.version} source="live" />;
 }

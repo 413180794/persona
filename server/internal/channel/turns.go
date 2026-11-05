@@ -7,6 +7,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // A message from a channel starts a run: the hub follows the conversation until the turn is over, then sends its
@@ -145,6 +146,8 @@ type Reading struct {
 	Answer string // the turn's answer ("" when it has no words)
 	Found  bool   // the run's message is in the conversation
 	Last   int    // the last line read
+	// Stopped is why a turn without words ended, when the conversation says (Stopped): an API error, an interruption.
+	Stopped string
 }
 
 // Result is what to send when a run is over (or held: answered once, waiting on its background work).
@@ -155,6 +158,8 @@ type Result struct {
 	Last   int
 	// Quiet: nothing to send (a held run whose background work ended without a word).
 	Quiet bool
+	// Stopped is why the turn ended without words, when known (Reading.Stopped).
+	Stopped string
 }
 
 // Decide is, after reading, whether the run is answered: nil to keep waiting. found false past QueuedMost reads the
@@ -175,6 +180,9 @@ func (r *Run) Decide(rd Reading, l Look) *Result {
 		}
 	}
 	res := &Result{Answer: rd.Answer, Held: held, Last: rd.Last}
+	if strings.TrimSpace(rd.Answer) == "" {
+		res.Stopped = rd.Stopped
+	}
 	if held {
 		res.Note = i18n.T(l.Lang, "channel-turns.background", i18n.Args{"count": l.Background})
 	}
@@ -234,6 +242,54 @@ func Answer(items []proto.Item) []proto.Item {
 		return []proto.Item{*last}
 	}
 	return tail
+}
+
+// StoppedMost bounds the reason Stopped gives.
+const StoppedMost = 300
+
+// Stopped is why a turn ended when its items end on a model API error or 已中断 (the notices the transcript parser
+// writes for them, transcript.APIErrorPrefix / InterruptedNotice) rather than on words: StopReason of its text.
+// Compactions after it (an idle conversation compacted, Persona's /compact) are passed over; any other ending gives
+// "", other notices too (goals, a task reporting back, Codex events, command output).
+func Stopped(items []proto.Item) string {
+	for i := len(items) - 1; i >= 0; i-- {
+		it := items[i]
+		switch {
+		case it.Kind == proto.KindThinking, it.TurnDuration != nil, it.Kind == proto.KindText && strings.TrimSpace(it.Text) == "":
+			continue
+		case it.Kind != proto.KindNotice || it.Task != nil:
+			return ""
+		case compaction(it):
+			continue
+		}
+		text := strings.TrimSpace(it.Text)
+		if text == transcript.InterruptedNotice || strings.HasPrefix(text, transcript.APIErrorPrefix) {
+			return StopReason(text)
+		}
+		return ""
+	}
+	return ""
+}
+
+// compaction: a notice that the context was compacted, which says nothing of how the turn before it ended.
+func compaction(it proto.Item) bool {
+	if it.Compact != nil {
+		return true
+	}
+	switch strings.TrimSpace(it.Text) {
+	case transcript.CompactedNotice, transcript.CompactSummaryNotice, transcript.CompactNotice:
+		return true
+	}
+	return false
+}
+
+// StopReason is text as the reason a turn stopped: on one line, cut to StoppedMost runes.
+func StopReason(text string) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if r := []rune(text); len(r) > StoppedMost {
+		text = string(r[:StoppedMost]) + "…"
+	}
+	return text
 }
 
 // Background is how much background work a conversation still runs (commands, Monitors, subagents).

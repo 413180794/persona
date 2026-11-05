@@ -1,6 +1,7 @@
 // Dev only (assistant-cards.html, not built): the assistant's cards (docs/assistant-views.md) in a made-up conversation,
 // for screenshots: a decision answered from another device, a form to fill in, a live card at its second version, a
-// card that changed under a submit, an html card shown as its fallback, and the message a card sent. The hub is faked
+// card that changed under a submit, an html card shown as its fallback, a card with a component the web does not draw
+// (its fallback), and the message a card sent. The hub is faked
 // (fetch): a submit answers the record it would keep. All data is made up.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -41,6 +42,8 @@ const live = (id: string, version: number, view: Record<string, unknown>) => ({ 
 const replyA = "三个方案里 B 最划算。\n\n" + fence(example("decision")); // i18n-ignore: made-up sample data (dev-only page)
 const replyB = "需要几项信息才能安排：\n\n" + fence(example("form")); // i18n-ignore: made-up sample data (dev-only page)
 const replyC = "这是交互说明（网页端显示文字版）：\n\n" + fence(example("html")); // i18n-ignore: made-up sample data (dev-only page)
+const future = { title: "排期", fallback: "排期：周一定方案，周三联调，周五上线。", sections: [{ items: [{ type: "timeline", events: [] }] }] }; // i18n-ignore: made-up sample data (dev-only page)
+const replyD = "排期如下：\n\n" + fence(future); // i18n-ignore: made-up sample data (dev-only page)
 cards.applyBlock(C, "msg-a/0");
 cards.applyBlock(C, "msg-b/0");
 cards.applyBlock(C, "msg-c/0");
@@ -72,6 +75,7 @@ createRoot(document.getElementById("root")!).render(
           <LiveCard conversation={C} id="view_progress" />
           <LiveCard conversation={C} id="view_compare" />
           <Answer id="msg-c" text={replyC} />
+          <Answer id="msg-d" text={replyD} />
         </div>
       </CardConversation.Provider>
       <Toasts />

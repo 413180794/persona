@@ -6,6 +6,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // The node writes a transcript's notices, task lines and activities in Chinese (internal/transcript): it does not know
@@ -83,7 +84,7 @@ const (
 // noticeText is one of the node's fixed notices in l; anything else stays as it is.
 func noticeText(l i18n.Lang, s string) string {
 	switch {
-	case s == "已中断":
+	case s == transcript.InterruptedNotice:
 		return tt(l, "interrupted")
 	case s == loopFired:
 		return tt(l, "loop_fired")

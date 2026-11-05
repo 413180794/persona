@@ -280,3 +280,17 @@ func TestFeishuRefusedAgentMessagesGoToTheCardFromTheStart(t *testing.T) {
 		t.Fatalf("no progress card: %v", *posts)
 	}
 }
+
+// A turn that stopped without words (an API error) tells the chat why, not just that there is no answer.
+func TestFeishuEmptyTurnSaysWhyItStopped(t *testing.T) {
+	s, posts, _ := cotHub(t, false)
+	r, _ := cotRun(s)
+	s.finishChannelRun(r, &channel.Result{Stopped: "API 错误：overloaded"})
+	if len(*posts) != 1 {
+		t.Fatalf("posts %v", *posts)
+	}
+	card, _ := (*posts)[0]["card"].(string)
+	if !strings.Contains(card, "这一轮没有文字回答就停了") || !strings.Contains(card, "overloaded") {
+		t.Fatalf("answer card %s", card)
+	}
+}

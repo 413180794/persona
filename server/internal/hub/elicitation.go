@@ -47,7 +47,11 @@ func visibleInteractions(ixs []proto.Interaction, elicitation bool) []proto.Inte
 	return out
 }
 
+// sendPendingInteractions queues the pending cards for c. The snapshot is taken and queued under h.mu, where
+// broadcastTo queues: an interaction_resolved for a card in it is queued after it, never before (#3937).
 func (h *Hub) sendPendingInteractions(c *client, elicitationOnly bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	for _, ix := range h.pendingInteractions() {
 		if ix.Kind == proto.IxElicitation {
 			if !c.has("elicitation") {

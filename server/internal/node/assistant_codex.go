@@ -234,15 +234,11 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	n.mu.Lock()
 	n.akeys[key] = p
 	n.mu.Unlock()
-	go func() {
-		sc := bufio.NewScanner(stderr)
-		sc.Buffer(make([]byte, 64*1024), 1<<20)
-		for sc.Scan() {
-			if l := sc.Text(); strings.Contains(l, "ERROR") && !strings.Contains(l, "unrecognized configuration") {
-				n.logger.Printf("assistant codex %s: %s", key, l)
-			}
+	go logLines(stderr, func(l string) {
+		if strings.Contains(l, "ERROR") && !strings.Contains(l, "unrecognized configuration") {
+			n.logger.Printf("assistant codex %s: %s", key, l)
 		}
-	}()
+	})
 	go c.read(stdout)
 	go func() {
 		_ = cmd.Wait()

@@ -8,6 +8,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 func TestValidID(t *testing.T) {
@@ -181,6 +182,83 @@ func TestAnswerIsTheLastWords(t *testing.T) {
 	}
 	if got := Answer(items[:3]); len(got) != 1 || got[0].Text != "先看看" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// A turn that ends on the conversation's own notice (an API error, 已中断) says why it stopped; one that ends on
+// words, a tool call, or a notice that is no reason (a compaction, a task reporting back) does not.
+func TestStoppedIsTheClosingNotice(t *testing.T) {
+	apiErr := []proto.Item{
+		{Role: "user", Kind: proto.KindText, Text: "查一下"},
+		{Role: "assistant", Kind: proto.KindToolUse, ToolName: "Bash"},
+		{Role: "user", Kind: proto.KindToolResult},
+		{Role: "system", Kind: proto.KindNotice, Text: "API 错误：overloaded（重试 10 次后放弃）"},
+		{Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 1}},
+	}
+	if got := Stopped(apiErr); got != "API 错误：overloaded（重试 10 次后放弃）" {
+		t.Fatalf("api error: %q", got)
+	}
+	if got := Stopped([]proto.Item{{Role: "assistant", Kind: proto.KindThinking, Text: "嗯"}, {Role: "system", Kind: proto.KindNotice, Text: "已中断"}}); got != "已中断" {
+		t.Fatalf("interrupted: %q", got)
+	}
+	for name, items := range map[string][]proto.Item{
+		"words":     {{Role: "system", Kind: proto.KindNotice, Text: "API 错误：x"}, {Role: "assistant", Kind: proto.KindText, Text: "好了"}},
+		"tool":      apiErr[:3],
+		"compacted": {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: "上下文已压缩", Compact: &proto.Compact{}}},
+		"task":      {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: "后台任务完成", Task: &proto.TaskNote{}}},
+		"nothing":   nil,
+		// Notices that end a turn's items but say nothing of why it stopped (only API errors and 已中断 count).
+		"compact summary": {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: transcript.CompactSummaryNotice}},
+		"compact notice":  {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: transcript.CompactNotice}},
+		"codex compacted": {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: transcript.CompactedNotice}},
+		"goal":            {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: "目标已达成：修好 bug"}},
+		"codex event":     {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: "Codex 事件：Foo（完整记录在原会话中）"}},
+		"command output":  {{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: "Set model to opus"}},
+	} {
+		if got := Stopped(items); got != "" {
+			t.Fatalf("%s: %q", name, got)
+		}
+	}
+	// A compaction after the stop (an idle conversation compacted, Persona's /compact) does not hide why it stopped.
+	compacted := []proto.Item{
+		{Role: "system", Kind: proto.KindNotice, Text: "上下文已压缩", Compact: &proto.Compact{Trigger: "auto"}},
+		{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactSummaryNotice},
+		{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactNotice},
+	}
+	for name, stop := range map[string]string{"error then compact": "API 错误：x", "interrupted then compact": transcript.InterruptedNotice} {
+		items := append([]proto.Item{{Role: "assistant", Kind: proto.KindToolUse}, {Role: "system", Kind: proto.KindNotice, Text: stop}}, compacted...)
+		if got := Stopped(items); got != stop {
+			t.Fatalf("%s: %q", name, got)
+		}
+	}
+	// Codex's compaction has no Compact flag, only its text: it is passed over too.
+	bare := []proto.Item{{Role: "system", Kind: proto.KindNotice, Text: "API 错误：x"}, {Role: "system", Kind: proto.KindNotice, Text: transcript.CompactedNotice}}
+	if got := Stopped(bare); got != "API 错误：x" {
+		t.Fatalf("codex compaction: %q", got)
+	}
+	// An earlier turn's 已中断 is not this turn's reason: the owner's message comes between.
+	earlier := []proto.Item{{Role: "system", Kind: proto.KindNotice, Text: transcript.InterruptedNotice}, {Role: "user", Kind: proto.KindText, Text: "再试一次"},
+		{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactSummaryNotice}}
+	if got := Stopped(earlier); got != "" {
+		t.Fatalf("earlier turn's stop: %q", got)
+	}
+	long := transcript.APIErrorPrefix + strings.Repeat("错", StoppedMost+50)
+	if got := Stopped([]proto.Item{{Role: "system", Kind: proto.KindNotice, Text: long}}); len([]rune(got)) != StoppedMost+1 {
+		t.Fatalf("not cut: %d runes", len([]rune(got)))
+	}
+	if got := StopReason(" 第一行\n  第二行 "); got != "第一行 第二行" {
+		t.Fatalf("one line: %q", got)
+	}
+}
+
+// Decide carries why a turn without words stopped, and drops it when there is an answer.
+func TestDecideCarriesStopped(t *testing.T) {
+	r := &Run{Started: t0, Seen: true}
+	if res := r.Decide(Reading{Found: true, Stopped: "已中断"}, Look{Now: t0.Add(time.Minute)}); res == nil || res.Stopped != "已中断" {
+		t.Fatalf("empty: %+v", res)
+	}
+	if res := r.Decide(Reading{Answer: "好了", Found: true, Stopped: "已中断"}, Look{Now: t0.Add(time.Minute)}); res == nil || res.Stopped != "" {
+		t.Fatalf("answered: %+v", res)
 	}
 }
 

@@ -132,6 +132,83 @@ func TestBotCommandsPassTheRestOn(t *testing.T) {
 	}
 }
 
+// Commands run before the normal message's feature gate, so /stop and /status must check botAllowed against the
+// target they resolve: a feature that is off can neither be interrupted nor shown in a status (#3903).
+func TestBotCommandFeatureGate(t *testing.T) {
+	f := newFakeHub().withMachine()
+	f.setSessions("box", proto.Session{SessionID: "agent01", MachineID: "box", Agent: "claude"})
+	var notes []string
+	var posts []map[string]any
+	f.answerApp(AppFeishu, FeishuText, func(p json.RawMessage) (any, error) {
+		var m struct {
+			Text string `json:"text"`
+		}
+		_ = json.Unmarshal(p, &m)
+		notes = append(notes, m.Text)
+		return map[string]any{}, nil
+	})
+	f.answerApp(AppFeishu, FeishuPost, func(p json.RawMessage) (any, error) {
+		var m map[string]any
+		_ = json.Unmarshal(p, &m)
+		posts = append(posts, m)
+		return map[string]any{"message_id": "om_card"}, nil
+	})
+	s := newTestService(t, f)
+	ctx := context.Background()
+	s.setBotCurrent(botTarget{Kind: targetAgent, MachineID: "box", SessionID: "agent01"})
+	s.rememberBotThread("om_agent", botTarget{Kind: targetAgent, MachineID: "box", SessionID: "agent01"}, "agent")
+
+	// Agents feature off: /stop as a bare command and in the agent's thread interrupts nothing, and the note says why.
+	for _, c := range []struct{ name, root, parent string }{
+		{"agents off, current target", "", ""},
+		{"agents off, agent thread", "", "om_agent"},
+	} {
+		before := len(f.interrupted())
+		notes = nil
+		if h, _ := s.botCommand(ctx, FeishuFeatures{}, "om", "/stop", c.root, c.parent); !h {
+			t.Fatalf("%s: /stop was not handled", c.name)
+		}
+		if got := f.interrupted()[before:]; len(got) != 0 {
+			t.Fatalf("%s: interrupted %v, want none", c.name, got)
+		}
+		want := i18n.T("", "assistant-feishu.agents_off")
+		if len(notes) != 1 || notes[0] != want {
+			t.Fatalf("%s: notes %v, want %q", c.name, notes, want)
+		}
+	}
+	// Main off with Agents on and a real main conversation: /stop must reach the gate, not the main session.
+	f.setSessions("server", proto.Session{SessionID: "main001", MachineID: "server", Assistant: true})
+	setSettings(t, s, func(v *Settings) { v.MachineID = "server"; v.Main = "main001" })
+	s.setBotCurrent(botTarget{Kind: targetMain})
+	before := len(f.interrupted())
+	notes = nil
+	mainOff := i18n.T("", "assistant-feishu.main_off_agents_on")
+	if h, _ := s.botCommand(ctx, FeishuFeatures{Agents: true}, "om", "/stop", "", ""); !h {
+		t.Fatal("main off: /stop not handled")
+	}
+	if got := f.interrupted()[before:]; len(got) != 0 || len(notes) != 1 || notes[0] != mainOff {
+		t.Fatalf("main off: interrupted %v notes %v, want none + %q", got, notes, mainOff)
+	}
+	// /status must not reveal a target the features do not allow, and must not post a card.
+	notes, posts = nil, nil
+	s.setBotCurrent(botTarget{Kind: targetAgent, MachineID: "box", SessionID: "agent01"})
+	if h, _ := s.botCommand(ctx, FeishuFeatures{}, "om", "/status", "", "om_agent"); !h {
+		t.Fatal("agents off /status: not handled")
+	}
+	if len(notes) != 1 || notes[0] != i18n.T("", "assistant-feishu.agents_off") || len(posts) != 0 {
+		t.Fatalf("agents off /status: notes %v posts %d, want one agents_off note and no card", notes, len(posts))
+	}
+	// With Agents on, /stop interrupts as before.
+	s.setBotCurrent(botTarget{Kind: targetAgent, MachineID: "box", SessionID: "agent01"})
+	before = len(f.interrupted())
+	if h, _ := s.botCommand(ctx, FeishuFeatures{Agents: true}, "om", "/stop", "", ""); !h {
+		t.Fatal("agents on: /stop not handled")
+	}
+	if got := f.interrupted()[before:]; len(got) != 1 || got[0] != "box/agent01" {
+		t.Fatalf("agents on: interrupted %v, want [box/agent01]", got)
+	}
+}
+
 // "/stop" in an agent's thread (or replying to one of its cards) stops that agent, not the chat's current target;
 // without a bound thread it stops the current target, as before (#3844).
 func TestBotStopFollowsTheRepliedThread(t *testing.T) {
@@ -601,5 +678,18 @@ func TestFeishuMirrorSendsTheWholeAnswer(t *testing.T) {
 	}
 	if got := s.botTargetFor("om_card", ""); got.Kind != targetJarvis || got.SessionID != "m1" {
 		t.Fatalf("thread %+v", got)
+	}
+}
+
+// A turn that ended without words says why, when the conversation says; otherwise the plain line as before.
+func TestEmptyAnswerSaysWhyItStopped(t *testing.T) {
+	if got := emptyAnswer("zh-Hans", "API 错误：overloaded"); got != "这一轮没有文字回答就停了：API 错误：overloaded" {
+		t.Fatalf("with a reason: %q", got)
+	}
+	if got := emptyAnswer("zh-Hans", " "); got != "（这一轮没有文字回答）" {
+		t.Fatalf("without: %q", got)
+	}
+	if got := emptyAnswer("en", "已中断"); !strings.Contains(got, "stopped without a text answer: 已中断") {
+		t.Fatalf("en: %q", got)
 	}
 }

@@ -550,11 +550,29 @@ func (c *Conn) spawn(ctx context.Context) (*child, error) {
 	return ch, nil
 }
 
-// logLines keeps what the program writes to stderr (its own log: it keeps secrets and messages out of it).
+// logLineMost is the longest line of a program's log kept whole; a longer one is cut (the rest of it dropped).
+const logLineMost = 64 << 10
+
+// logLines keeps what the program writes to stderr (its own log: it keeps secrets and messages out of it), until
+// stderr ends. Nothing else reads it: stopping early (a line too long) would leave the program stuck on its next
+// write once the pipe is full (#3959).
 func (c *Conn) logLines(r io.Reader) {
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
-		c.cfg.Logf("connector %s: %s", c.cfg.ID, sc.Text())
+	br := bufio.NewReaderSize(r, logLineMost)
+	for {
+		b, err := br.ReadSlice('\n')
+		line := strings.TrimRight(string(b), "\r\n")
+		if errors.Is(err, bufio.ErrBufferFull) {
+			line += "…"
+			for errors.Is(err, bufio.ErrBufferFull) {
+				_, err = br.ReadSlice('\n')
+			}
+		}
+		if len(b) > 0 {
+			c.cfg.Logf("connector %s: %s", c.cfg.ID, line)
+		}
+		if err != nil {
+			return
+		}
 	}
 }
 

@@ -169,8 +169,9 @@ func TestInterruptHangsUp(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan int, 1)
+	var errOut bytes.Buffer
 	go func() {
-		var out, errOut bytes.Buffer
+		var out bytes.Buffer
 		done <- Main(ctx, []string{"example_say", `{"text":"hi"}`}, strings.NewReader(""), &out, &errOut)
 	}()
 	cancel()
@@ -179,8 +180,11 @@ func TestInterruptHangsUp(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("an interrupted call kept waiting on the node")
 	}
-	if code := <-done; code != exitUnavailable {
-		t.Fatalf("exit %d", code)
+	if code := <-done; code != exitInterrupted {
+		t.Fatalf("an interrupted call exits %d, want %d (not \"the node is not reachable\")", code, exitInterrupted)
+	}
+	if e := errOut.String(); !strings.Contains(e, `"kind":"interrupted"`) || strings.Contains(e, "not reachable") {
+		t.Fatalf("stderr %q", e)
 	}
 }
 

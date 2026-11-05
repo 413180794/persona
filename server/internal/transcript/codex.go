@@ -205,7 +205,7 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 		meta.TurnOpen, meta.TurnClosed = false, true
 		meta.TurnError, meta.TurnErrorKind = "", "" // stopped by the user: no failure
 		it := mk(0, "", "system", proto.KindNotice)
-		it.Text = "已中断"
+		it.Text = InterruptedNotice
 		return []proto.Item{it}
 	case "thread_goal_updated":
 		return meta.codexGoalUpdated(p.Goal, l.Timestamp, func() proto.Item { return mk(0, "", "system", proto.KindNotice) })
@@ -360,7 +360,7 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 	case "ContextCompaction":
 		meta.Compactions++
 		n := mk(0, it.ID, "system", proto.KindNotice)
-		n.Text = "上下文已压缩"
+		n.Text = CompactedNotice
 		return []proto.Item{n}
 	}
 	if it.Type == "" {

@@ -210,9 +210,22 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	pushed := time.Since(s.fleet.notified[id]) < 3*time.Minute // the assistant already pushed what matters (notify_user)
 	s.fleet.mu.Unlock()
 	seen := agentState(sess, s.seenAt(machine, id)) == proto.StateIdle
+	start := s.turnsBook().startOf(machine + "/" + id)
 	verdict, took := s.turnsBook().settle(machine+"/"+id, gen, sess, seen, s.muted(machine, id), pushed, time.Now(), t.backgroundHold())
+	if verdict == finishStale || verdict == finishHold {
+		return // the turn goes on: its mark waits for how it ends
+	}
+	// 「只推耗时长的」 is for turns the user started: a quick answer is read where it was asked. A 早报 or a task notice
+	// has nobody waiting for it; a quick one was never pushed and the user had to go and look (#3438). The mark is
+	// used up by this turn whether it is pushed or dropped (notify_user, seen, muted): left over, the user's own next
+	// turn took it.
+	report := s.reportTurn(id, start)
 	if verdict != finishPush {
 		return
+	}
+	long := t.longTurn()
+	if report {
+		long = 0
 	}
 	// The own conversation of a scheduled task that pushes only what its runs send, finished normally (#2396): its
 	// news, if any, went out with notify_user. Decided after settle, not as a push: a turn held for its background
@@ -236,7 +249,55 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	}
 	head, text := doneAlert(s.lang(context.Background()), sess)
 	s.deliver(Notification{Kind: assistantwire.NotifyDone, DeviceID: machine, Subtitle: place, SessionID: id, Title: head,
-		Body: text, TookMS: took.Milliseconds(), LongMS: t.longTurn().Milliseconds()})
+		Body: text, TookMS: took.Milliseconds(), LongMS: long.Milliseconds()})
+}
+
+// reportSlack is how long before its turn started a scheduled run or notice may have been sent (the node starts the
+// turn after the send is answered, a resumed conversation a little later).
+const reportSlack = 2 * time.Minute
+
+// noteReportTurn: a scheduled run or a task notice was just sent into conversation session; the turn it starts is
+// pushed whatever its length (the device's 完成推送 off still means no push).
+func (s *Service) noteReportTurn(session string) {
+	if session == "" {
+		return
+	}
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	if s.fleet.reportSent == nil {
+		s.fleet.reportSent = map[string]time.Time{}
+	}
+	now := time.Now()
+	for k, at := range s.fleet.reportSent {
+		if now.Sub(at) > time.Hour {
+			delete(s.fleet.reportSent, k)
+		}
+	}
+	s.fleet.reportSent[session] = now
+}
+
+// reportLead is how long after the turn started its send may still be noted (a new conversation is working before
+// startConversation returns).
+const reportLead = 30 * time.Second
+
+// reportTurn: the turn of session that started at start is one noteReportTurn marked; the mark is used up. A mark
+// made after the turn started is for the next turn (the message waits behind this one, a turn of the user's) and is
+// kept; a later turn the user starts goes by the device's setting again.
+func (s *Service) reportTurn(session string, start time.Time) bool {
+	s.fleet.mu.Lock()
+	defer s.fleet.mu.Unlock()
+	at, ok := s.fleet.reportSent[session]
+	switch {
+	case !ok || start.IsZero():
+		return false
+	case at.After(start.Add(reportLead)):
+		return false // sent during this turn: it starts the next one
+	case at.Before(start.Add(-reportSlack)):
+		delete(s.fleet.reportSent, session) // its turn went by unseen
+		return false
+	}
+	delete(s.fleet.reportSent, session)
+	return true
 }
 
 // doneAlert is the title and body of the push for sess's finished turn, in l.

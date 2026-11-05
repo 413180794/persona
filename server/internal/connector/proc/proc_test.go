@@ -33,6 +33,9 @@ func TestMain(m *testing.M) {
 			fmt.Println(childVersion)
 			os.Exit(0)
 		}
+		if os.Getenv("JARVIS_PROC_KIND") == "loud" { // a log line far longer than a pipe holds, before it serves
+			fmt.Fprintf(os.Stderr, "%s\nafter the long line\n", strings.Repeat("x", 200<<10))
+		}
 		err := serve.Main(context.Background(), os.Stdin, os.Stdout, func(cfg json.RawMessage, s connector.Secrets) (connector.Connector, error) {
 			switch os.Getenv("JARVIS_PROC_KIND") {
 			case "settings":
@@ -726,5 +729,49 @@ func TestSharedRefreshOutlivesAnAskerWhoGaveUp(t *testing.T) {
 	}
 	if got := calls() - before; got != 2 {
 		t.Fatalf("%d status calls for a round and the one shared after it, want 2", got)
+	}
+}
+
+// A program whose log has a line longer than any buffer is still read to the end: its stderr does not fill up and
+// stop it before it answers (#3959). The long line is cut, the next one is logged whole.
+func TestProgramWithALongLogLine(t *testing.T) {
+	var mu sync.Mutex
+	var logs []string
+	cfg := program(t, &memSecrets{data: []byte("example session")}, "JARVIS_PROC_KIND=loud")
+	cfg.Logf = func(format string, args ...any) {
+		mu.Lock()
+		logs = append(logs, fmt.Sprintf(format, args...))
+		mu.Unlock()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := New(cfg)
+	go c.Run(ctx)
+	waitUntil(t, "the program to answer", func() bool { return c.Status(context.Background()).State == connector.StateOK })
+	mu.Lock()
+	defer mu.Unlock()
+	var cut, after bool
+	for _, l := range logs {
+		cut = cut || strings.HasSuffix(l, "x…") && len(l) < 70<<10
+		after = after || strings.HasSuffix(l, ": after the long line")
+	}
+	if !cut || !after {
+		t.Fatalf("long line cut %v, next line logged %v", cut, after)
+	}
+}
+
+func TestLogLinesReadsPastALongLine(t *testing.T) {
+	var got []string
+	c := &Conn{cfg: Config{ID: "x", Logf: func(format string, args ...any) { got = append(got, fmt.Sprintf(format, args...)) }}}
+	long := strings.Repeat("y", 3*logLineMost)
+	c.logLines(strings.NewReader("one\r\n" + long + "\n\ntwo\nlast without newline"))
+	want := []string{"connector x: one", "connector x: " + long[:logLineMost] + "…", "connector x: ", "connector x: two",
+		"connector x: last without newline"}
+	if !slices.Equal(got, want) {
+		short := make([]string, len(got))
+		for i, l := range got {
+			short[i] = l[:min(len(l), 40)]
+		}
+		t.Fatalf("logged %d lines: %q", len(got), short)
 	}
 }

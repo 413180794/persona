@@ -94,7 +94,7 @@ func ReadTurn(ctx context.Context, src ItemSource, r *Run) (Reading, error) {
 		}
 		out = append(out, strings.TrimSpace(text))
 	}
-	return Reading{Answer: strings.Join(out, "\n\n"), Found: true, Last: after}, nil
+	return Reading{Answer: strings.Join(out, "\n\n"), Found: true, Last: after, Stopped: Stopped(kept)}, nil
 }
 
 // RunAnswer is the answer to r's messages in items (the transcript from the first of them on), and whether all of them

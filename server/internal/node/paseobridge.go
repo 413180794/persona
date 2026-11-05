@@ -422,18 +422,28 @@ func (rh *RuntimeHost) runPaseoBridge(ctx context.Context) error {
 	}
 }
 
-// logLines hands each line of r to f (long lines cut), until r ends.
+// logLines hands each line of r to f (long lines cut), until r ends. A line longer than the buffer is cut too and
+// its rest dropped, and the lines after it still come: nothing else reads r, and a program whose log nobody reads
+// is stuck on its next write once the pipe is full (#3959).
 func logLines(r io.Reader, f func(string)) {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64<<10), 1<<20)
-	for sc.Scan() {
-		line := sc.Text()
-		if len(line) > 2000 {
-			line = line[:2000] + "…"
+	br := bufio.NewReaderSize(r, 64<<10)
+	for {
+		b, err := br.ReadSlice('\n')
+		line := strings.TrimRight(string(b), "\r\n") // copied: the next read reuses b
+		long := errors.Is(err, bufio.ErrBufferFull)
+		for errors.Is(err, bufio.ErrBufferFull) {
+			_, err = br.ReadSlice('\n')
 		}
-		f(line)
+		if len(b) > 0 {
+			if long || len(line) > 2000 {
+				line = line[:min(len(line), 2000)] + "…"
+			}
+			f(line)
+		}
+		if err != nil {
+			return
+		}
 	}
-	_, _ = io.Copy(io.Discard, r)
 }
 
 // paseoEngine is the Paseo engine as found on this machine for node.info: available when the bridge is connected or

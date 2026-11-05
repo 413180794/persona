@@ -208,3 +208,63 @@ func TestHealthDonePushHidesContent(t *testing.T) {
 		t.Fatalf("assistant's done: %q %q", head, text)
 	}
 }
+
+// A scheduled run (早报) or a task notice that the assistant answers quickly is pushed all the same: its finished push
+// asks for no minimum length (LongMS 0), so 「只推耗时长的」 does not drop it (#3438). The user's next turn there goes by
+// the device's setting again, and so does a turn of the user's during which a run was sent (the run is the next turn).
+func TestReportTurnPushedHoweverShort(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	fastDone(ft)
+	work := proto.Session{SessionID: "s1", Title: "早报", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1",
+		UpdatedAt: time.Now()}
+	done := work
+	turn := func(text string) {
+		work.UpdatedAt = time.Now()
+		ft.sessions("mac", work)
+		done.Status, done.LastText, done.UpdatedAt = proto.StatusDone, text, time.Now()
+		ft.sessions("mac", done)
+	}
+	wantLong := func(n int, long int64) {
+		t.Helper()
+		got := ft.pushesOf(assistantwire.NotifyDone, n, 2*time.Second)
+		if len(got) != n || got[n-1].LongMS != long {
+			t.Fatalf("push %d: want LongMS %d, have %+v", n, long, got)
+		}
+	}
+
+	ft.s.noteReportTurn("s1")
+	turn("今天三个会")
+	wantLong(1, 0)
+
+	turn("好的") // the user's own turn
+	wantLong(2, 60_000)
+
+	// A run sent a minute into a turn of the user's: that turn is not the run's, the next one is.
+	work.UpdatedAt = time.Now()
+	ft.sessions("mac", work)
+	tb := ft.s.turnsBook()
+	tb.mu.Lock()
+	tb.turns["mac/s1"].start = time.Now().Add(-time.Minute)
+	tb.mu.Unlock()
+	ft.s.noteReportTurn("s1")
+	done.LastText, done.UpdatedAt = "改好了", time.Now()
+	ft.sessions("mac", done)
+	wantLong(3, 60_000)
+	turn("巡检：一切正常")
+	wantLong(4, 0)
+
+	// The run's turn is dropped (it pushed with notify_user): its mark goes with it, the user's quick reply after it
+	// is not pushed as a report (review of #3713).
+	ft.s.noteReportTurn("s1")
+	ft.s.noteAsked("s1")
+	turn("已通知")
+	time.Sleep(300 * time.Millisecond)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 5, 0); len(got) != 4 {
+		t.Fatalf("a turn that pushed itself is not pushed again: %+v", got)
+	}
+	ft.s.fleet.mu.Lock()
+	delete(ft.s.fleet.notified, "s1")
+	ft.s.fleet.mu.Unlock()
+	turn("好的")
+	wantLong(5, 60_000)
+}

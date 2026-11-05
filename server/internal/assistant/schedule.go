@@ -1169,6 +1169,9 @@ const runRetryDelay = 3 * time.Minute
 // told; the watcher records it as failed, pushes it, and retries once (the task as it is then, see watchScheduledRun).
 // m is the machine the run went to (nil: none).
 func (s *Service) startScheduledRun(run ScheduleRun, t Task, m *Device) {
+	if !t.pushesOnlyAsked() {
+		s.noteReportTurn(run.SessionID) // its answer is pushed however quick it was (#3438)
+	}
 	run.ID = s.recordRun(run)
 	if m == nil || run.ID == "" {
 		return

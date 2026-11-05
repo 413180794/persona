@@ -237,6 +237,18 @@ var ContextRe = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context>.*?</(?:jarv
 
 var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>(.*?)</(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>`)
 
+// InterruptedNotice is the notice a turn stopped by the user becomes (Claude Code and Codex); APIErrorPrefix starts
+// the notice of a turn the model service failed. The channels read them as why a turn ended without words
+// (channel.Stopped).
+const (
+	InterruptedNotice = "已中断"
+	APIErrorPrefix    = "API 错误："
+	// CompactedNotice marks where the context was compacted (Claude Code's compact_boundary, Codex's
+	// ContextCompaction); CompactSummaryNotice stands for the summary a compacted conversation goes on from.
+	CompactedNotice      = "上下文已压缩"
+	CompactSummaryNotice = "已从压缩的上下文继续"
+)
+
 // CompactNotice is the notice a /compact without instructions becomes (no user line): a /compact sent from the phone
 // is tied to it (node/echo.go).
 const CompactNotice = "压缩上下文"
@@ -433,14 +445,14 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			it.TurnDuration = &proto.TurnDuration{DurationMS: ms, Source: "claude_turn_duration", ParentUUID: e.ParentUUID}
 			return []proto.Item{it}
 		case "compact_boundary":
-			text = "上下文已压缩"
+			text = CompactedNotice
 		case "api_error":
 			// Claude Code writes one line per retry (retryAttempt 1..maxRetries): show the first and, if it never
 			// got through, the last.
 			if e.RetryAttempt > 1 && (e.MaxRetries == 0 || e.RetryAttempt < e.MaxRetries) {
 				return nil
 			}
-			text = "API 错误：" + apiErrorText(e)
+			text = APIErrorPrefix + apiErrorText(e)
 			switch {
 			case e.MaxRetries > 0 && e.RetryAttempt >= e.MaxRetries:
 				text += fmt.Sprintf("（重试 %d 次后放弃）", e.RetryAttempt)
@@ -491,7 +503,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		}
 		if e.IsCompactSummary {
 			it := mk(0, "system", proto.KindNotice)
-			it.Text = "已从压缩的上下文继续"
+			it.Text = CompactSummaryNotice
 			return []proto.Item{it}
 		}
 		var s string
@@ -1015,7 +1027,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 	if trimmed == "[Request interrupted by user]" || trimmed == "[Request interrupted by user for tool use]" {
 		meta.TurnOpen, meta.TurnClosed = false, true
 		it := mk(0, "system", proto.KindNotice)
-		it.Text = "已中断"
+		it.Text = InterruptedNotice
 		return []proto.Item{it}
 	}
 	text := strings.TrimSpace(tagRe.ReplaceAllStringFunc(trimmed, func(m string) string {

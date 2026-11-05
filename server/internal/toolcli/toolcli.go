@@ -16,6 +16,7 @@ package toolcli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -36,10 +37,13 @@ const (
 	exitUnavailable = 3 // the node, the hub or the connector cannot be reached or is not signed in
 	exitRateLimited = 4 // the connector waits out a rate limit (retry_after seconds)
 	exitDeclined    = 5 // the user (or connector_gate) did not allow the write
+	// exitInterrupted: Ctrl-C / SIGTERM (as personad ask): the node hung up and the card came off the phone; nothing
+	// is wrong with the node or the hub.
+	exitInterrupted = 130
 )
 
 var kinds = map[int]string{exitFailed: "failed", exitUsage: "usage", exitUnavailable: "unavailable", exitRateLimited: "rate_limited",
-	exitDeclined: "declined"}
+	exitDeclined: "declined", exitInterrupted: "interrupted"}
 
 // callTimeout covers a write waiting for the user on the phone (the card lasts 15 minutes).
 const callTimeout = 30 * time.Minute
@@ -106,7 +110,7 @@ func Main(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 	}
 	res, err := call(ctx, args[0], toolArgs)
 	if err != nil {
-		return out.fail(exitUnavailable, fmt.Sprintf("the Persona node on this machine is not reachable (%v): is the hub connected?", err), 0)
+		return out.unreachable(ctx, err)
 	}
 	text := firstText(res)
 	if res.IsError {
@@ -161,7 +165,7 @@ func commandLine(ctx context.Context, conn string, args []string, stdin io.Reade
 	}
 	res, err := call(ctx, conn+"_cli", in)
 	if err != nil {
-		return out.fail(exitUnavailable, fmt.Sprintf("the Persona node on this machine is not reachable (%v): is the hub connected?", err), 0)
+		return out.unreachable(ctx, err)
 	}
 	if res.IsError {
 		code, retry := classify(res)
@@ -196,7 +200,7 @@ func commandLine(ctx context.Context, conn string, args []string, stdin io.Reade
 	}
 	res, err = call(ctx, p.Call.Tool, toolArgs)
 	if err != nil {
-		return out.fail(exitUnavailable, fmt.Sprintf("the Persona node on this machine is not reachable (%v): is the hub connected?", err), 0)
+		return out.unreachable(ctx, err)
 	}
 	text := firstText(res)
 	if res.IsError {
@@ -247,6 +251,15 @@ func (f failer) fail(code int, msg string, retry int) int {
 	b, _ := json.Marshal(out)
 	fmt.Fprintln(f.stderr, string(b))
 	return code
+}
+
+// unreachable is the failure of a call that did not come back: interrupted when ctx ended first (the caller stopped
+// it, so the node and the hub are fine), else the node could not be reached.
+func (f failer) unreachable(ctx context.Context, err error) int {
+	if ctx.Err() != nil && !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return f.fail(exitInterrupted, "interrupted: the call was stopped before its result came back (a write still waiting for the user was withdrawn; one already approved may have run, so check before retrying)", 0)
+	}
+	return f.fail(exitUnavailable, fmt.Sprintf("the Persona node on this machine is not reachable (%v): is the hub connected?", err), 0)
 }
 
 func firstText(res proto.ToolResult) string {

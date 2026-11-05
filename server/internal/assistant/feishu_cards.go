@@ -797,7 +797,14 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		}
 		reply(s.startAgentCard(ctx, rest))
 	case "/stop", "/停":
-		rt, err := s.resolveBotTarget(ctx, s.botTargetFor(root, parent))
+		t := s.botTargetFor(root, parent)
+		// Commands run before the normal message's botAllowed gate, so check it here: with the Agents feature off
+		// a reply in an agent's thread must not interrupt that agent.
+		if err := botAllowed(l, f, t); err != nil {
+			s.botNote(ctx, messageID, err.Error())
+			return true, ""
+		}
+		rt, err := s.resolveBotTarget(ctx, t)
 		if err != nil || rt.isNew {
 			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.nothing_running"))
 			return true, ""
@@ -808,8 +815,13 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		}
 		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.stopped", i18n.Args{"label": rt.label}))
 	case "/status", "/状态":
+		t := s.botTargetFor(root, parent)
+		if err := botAllowed(l, f, t); err != nil {
+			s.botNote(ctx, messageID, err.Error())
+			return true, ""
+		}
 		var b strings.Builder
-		b.WriteString(i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": feishubot.EscapeMarkdown(s.targetLabel(ctx, s.botTargetFor(root, parent)))}))
+		b.WriteString(i18n.T(l, "assistant-feishu_cards.status_to", i18n.Args{"target": feishubot.EscapeMarkdown(s.targetLabel(ctx, t))}))
 		if running := len(s.channelRuns(channel.Feishu)); running > 0 {
 			b.WriteString(i18n.T(l, "assistant-feishu_cards.status_waiting", i18n.Args{"count": running}))
 		}

@@ -181,7 +181,7 @@ hub 只对这些连接器读它，而且只有 `extra` 里带了上面那几个�
   2. 调 `call.tool`（和助手按名字调一样，写操作照旧过 hub 的闸门 `connector_gate`）。
   3. `--format text` 且有 `render` 时，再调 `<id>_cli {render, result}`（`result` 是上一步工具回的文字）→ `{stdout}`，打印出来。
 - 输出：默认一行 JSON（工具回的原文）；失败时 stderr 一行 `{error, kind, retry_after?}`（`--format text` 时是 `<name>: …`），退出码：
-  0 成功、1 失败、2 用法、3 不可用（node / hub 连不上，连接器没登录）、4 限流（`retry_after` 是还要几秒）、5 用户或 `connector_gate` 没同意。
+  0 成功、1 失败、2 用法、3 不可用（node / hub 连不上，连接器没登录）、4 限流（`retry_after` 是还要几秒）、5 用户或 `connector_gate` 没同意、130 被打断（Ctrl-C / SIGTERM：没等到结果；如有等着批准的卡，已从手机撤下；已经批准、正在执行的写操作可能已经做了，重试前先确认；不是 node / hub 的问题）。
   退出码按 hub 和 node 给的失败类别（`mcp.call` 结果的 `error_kind` / `retry_after`，`docs/protocol.md`）定，不看错误的措辞：闸门的拒绝、连接器没登录或状态是 `rate_limited`、程序回的 `rate_limited` 错误（见下面「错误」）都带类别。
   没带类别的（旧的 hub / node）才退回看措辞：「The user declined」「(connector_gate) do not allow」是 5，「is not available」「Persona hub error」是 3，「限流中，N 秒」「限流，N 秒」「还要 N 秒」是 4、`retry_after` 是 N（状态是 `rate_limited` 但没给秒数时也这样从状态的 `error` 里找）。
 - `personad tool <工具> [<JSON 参数> | -]`：直接调一个工具，同样的限制和输出。

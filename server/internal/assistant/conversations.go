@@ -377,6 +377,7 @@ func (s *Service) deliverRelay(ctx context.Context, machine, to string, msg rela
 		return nil
 	}
 	if msg.Tool == noticeTool {
+		s.noteReportTurn(to) // the answer to a task's notice is pushed however quick it was (#3438)
 		return nil
 	}
 	b := &s.relays

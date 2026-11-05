@@ -87,6 +87,19 @@ describe("正文卡片", () => {
     expect(html).not.toMatch(/<iframe|<script|onclick=/i);
   });
 
+  it("a card with a component the web does not draw shows its fallback, not an empty or partial card", () => {
+    const future = { title: "T", fallback: "未来组件的文字", sections: [{ items: [{ type: "metric", label: "a", value: "1" }, { type: "timeline" }] }] };
+    const html = draw(fence(future));
+    expect(html).toContain('data-assistant-card="fallback"');
+    expect(html).toContain("未来组件的文字");
+    expect(html).not.toContain('data-assistant-card="persona-view"');
+    // the same in a named page and in a one-component card; an html component keeps its own frame
+    const paged = { ...decision, pages: { more: { sections: [{ items: [{ type: "timeline" }] }] } } };
+    expect(draw(fence(paged))).toContain('data-assistant-card="fallback"');
+    expect(draw(fence({ type: "timeline", fallback: "单个未来组件" }))).toContain("单个未来组件");
+    expect(draw(fence(example("html")))).toContain('data-assistant-card="html-fallback"');
+  });
+
   it("a card without the exact fallback stays code", () => {
     const html = draw(fence({ Fallback: "x", sections: [] }));
     expect(html).not.toContain("data-assistant-card");
@@ -109,6 +122,14 @@ describe("活卡片", () => {
     // an older event never brings the old one back
     applyView("c1", live(1, "第一版"));
     expect(renderToStaticMarkup(<LiveCard conversation="c1" id="view_1" first={live(1, "第一版")} />)).toContain("第二版");
+  });
+
+  it("a version with a component the web does not draw shows its fallback", () => {
+    const future = { ...decision, fallback: "新版本的文字", sections: [{ items: [{ type: "timeline" }] }] };
+    applyView("c1", { id: "view_3", conversation: "c1", version: 2, created_at: "", updated_at: "", view: future as unknown as AssistantView["view"] });
+    const html = renderToStaticMarkup(<LiveCard conversation="c1" id="view_3" />);
+    expect(html).toContain('data-assistant-card="fallback"');
+    expect(html).toContain("新版本的文字");
   });
 
   it("a page taken away by an update leaves the stack at what still reads", () => {

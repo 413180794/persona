@@ -6,6 +6,8 @@
 // Also: the plain checks a card must pass before it is drawn (CheckAssistantView's client side), the open targets an
 // action may name (CheckAssistantOpen), and the strict <persona-action> tag the hub ends a card's reply with.
 
+import { KNOWN_ITEMS } from "./extension-ui";
+
 export interface AssistantBlock {
   /** The n-th persona-view block of the text, from 0; -1 for a persona-card block (not numbered). */
   index: number;
@@ -145,8 +147,22 @@ export function checkCard(code: string): { raw: Record<string, unknown> } | { pr
     }
     return "";
   };
-  const problem = check(view, true) || Object.values(pages).map((p) => check(p, false)).find(Boolean) || "";
+  const problem = check(view, true) || Object.values(pages).map((p) => check(p, false)).find(Boolean) || (cardKnown(view) ? "" : "component");
   return problem ? { problem, fallback } : { raw: view };
+}
+
+/** A component this web draws in a card (html shows its fallback); any other, the whole card shows its fallback, like the hub refuses it. */
+const cardItem = (it: Record<string, unknown>) => typeof it.type === "string" && (it.type === "html" || KNOWN_ITEMS.includes(it.type));
+
+/** Whether every component of a card (its pages too) is one this web draws: a live card from a newer hub may not be. */
+export function cardKnown(raw: Record<string, unknown>): boolean {
+  const pages = isObject(raw.pages) ? Object.values(raw.pages) : [];
+  return [raw, ...pages].every((page) => {
+    if (!isObject(page)) return true;
+    if (typeof page.type === "string") return cardItem(page);
+    const sections = Array.isArray(page.sections) ? page.sections : [];
+    return sections.every((s) => !isObject(s) || !Array.isArray(s.items) || s.items.every((it) => !isObject(it) || cardItem(it)));
+  });
 }
 
 /** checkAssistantAction: exactly one of reply, open, push (a root page) or pop; submit only with reply. */

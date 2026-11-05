@@ -536,6 +536,9 @@ func (s *Service) checkChannelRun(id string) {
 			return
 		}
 	}
+	if rd.Stopped == "" && !look.Working {
+		rd.Stopped = channel.StopReason(sess.TurnError) // a Codex turn the model service failed writes no line of it
+	}
 	res := snap.Decide(rd, look)
 	if res == nil {
 		return
@@ -617,7 +620,7 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 		quiet := res.Quiet || strings.TrimSpace(res.Answer) == "" && res.Note == "" && snap.Held
 		answer := res.Answer
 		if strings.TrimSpace(answer) == "" && res.Note == "" && !quiet {
-			answer = i18n.T(s.botLang(ctx), "assistant-channels_runs.no_text")
+			answer = emptyAnswer(s.botLang(ctx), res.Stopped)
 		}
 		if err := sink.answer(ctx, &snap, answer, res.Note, took, !res.Held, quiet); err != nil {
 			if s.answerAgain(prog, now) {
@@ -806,3 +809,12 @@ var (
 	errCannotSend = errors.New("cannot send yet")
 	errNoChannel  = errors.New("no channel")
 )
+
+// emptyAnswer is what a channel is told of a turn that ended without words: why it stopped, when the conversation
+// says (an API error, an interruption), so the owner need not open the app to find out.
+func emptyAnswer(l i18n.Lang, stopped string) string {
+	if stopped = strings.TrimSpace(stopped); stopped != "" {
+		return i18n.T(l, "assistant-channels_runs.no_text_stopped", i18n.Args{"reason": stopped})
+	}
+	return i18n.T(l, "assistant-channels_runs.no_text")
+}

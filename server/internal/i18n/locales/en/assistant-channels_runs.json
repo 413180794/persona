@@ -1,3 +1,4 @@
 {
-  "no_text": "(No text answer this turn)"
+  "no_text": "(No text answer this turn)",
+  "no_text_stopped": "This turn stopped without a text answer: {reason}"
 }
