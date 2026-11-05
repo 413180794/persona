@@ -1,5 +1,6 @@
 import BeautifulUI
 import MarkdownUI
+import PersonaKit
 import PhotosUI
 import SwiftUI
 

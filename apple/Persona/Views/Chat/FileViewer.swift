@@ -1,5 +1,6 @@
 import MarkdownUI
 import PDFKit
+import PersonaKit
 import SwiftUI
 
 nonisolated struct FileContent: Decodable, Sendable {

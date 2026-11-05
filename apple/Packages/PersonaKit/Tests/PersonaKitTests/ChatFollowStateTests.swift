@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// The chat's one truth about its newest end (`ChatFollow`, #1046): every way in and out, and what ↓, following and
 /// holding back read from it. The cases measured in docs/ios-state.md「回到最新」are named after their number there.

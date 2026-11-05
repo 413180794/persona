@@ -7,7 +7,17 @@ cd server && go test ./... && go vet ./...                    # 服务端
 cd apple && xcodegen generate -q && xcodebuild -project Persona.xcodeproj -scheme Persona \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
 ./scripts/app/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
+cd apple/Packages/PersonaKit && swift test                             # PersonaKit 的单测：在 Mac 上直接跑，不编 App、不开模拟器
 ```
+
+**PersonaKit**（`apple/Packages/PersonaKit`，#2095）：App 里不碰界面的逻辑挪进这个包，它的测试用 `swift test` 在 Mac 上跑，冷的约 10 秒、
+改一个文件后约 2 秒（同样的测试经 `PersonaTests` 跑，冷的约 140 秒、改一个文件后约 45 秒：要编整个 App、起模拟器）。改了包里的代码，合并前跑一遍 `swift test`；
+它不在 `PersonaTests` 里，也没有 CI job。iOS / Mac / visionOS 三个 App 依赖它，手表和小组件不依赖。
+
+- 现在在包里的：`Notebook`、`HTMLResources`、`ChatFollow`、`PathRefs`（连同 `PathRef`、`PathLinkURL`、`PathMarkdown`）。
+- 挪进来的类型和 App 用到的成员要写 `public`（结构体要 `public init`），用到它的 App 文件加 `import PersonaKit`。包里的测试照旧用 `@testable import PersonaKit`。
+- 用到 App 类型的断言（视图、`FilePaths`）留在 `PersonaTests`，那个文件也加 `import PersonaKit`。
+- 包里只放 Foundation 能编的代码：不 import SwiftUI / UIKit，不用 App 的 `Theme`、`AppModel`。设计系统的源码检查（`TokenRatchetTests` 等）不扫这个包。
 
 transcript 解析用真实样本做 golden 测试（`server/internal/transcript/testdata/`，`fixtures_test.go`）：每份样本的解析结果、
 「边写边读 = 一次读完」、「往前翻页不漏不重」。改了解析跑 `go test ./internal/transcript -run Fixture -update`，把 golden 的 diff 当评审看。

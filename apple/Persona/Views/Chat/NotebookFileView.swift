@@ -1,4 +1,5 @@
 import MarkdownUI
+import PersonaKit
 import SwiftUI
 
 /// A Jupyter notebook in the file viewer (docs/ios.md「Jupyter 笔记本」): Markdown cells in the chat's Markdown look,

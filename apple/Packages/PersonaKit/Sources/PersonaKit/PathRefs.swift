@@ -2,15 +2,15 @@ import Foundation
 
 /// A path a message names (docs/ios.md「文件查看器」), with the line it points at: `path:12`, `path:12:5`,
 /// `path:12-20` (the first line), `path#L12`. The same rules as the web's `web/src/lib/path-refs.ts`.
-nonisolated struct PathRef: Hashable, Sendable {
+public nonisolated struct PathRef: Hashable, Sendable {
     /// Where it is in the text (UTF-16): the path and its line.
-    var range: NSRange
+    public var range: NSRange
     /// The path as written, without the line: what the machine is asked about (`FilePresence`).
-    var path: String
-    var line: Int?
-    var column: Int?
+    public var path: String
+    public var line: Int?
+    public var column: Int?
     /// A code span that is one path (`~/My Notes/a.md`), not an ASCII path found in text.
-    var whole = false
+    public var whole = false
 }
 
 /// Finds the paths in text:
@@ -21,7 +21,7 @@ nonisolated struct PathRef: Hashable, Sendable {
 ///   and a sentence's full stop after it is not part of it. In backticks the whole span is one, whatever it is written
 ///   in (`~/报告/第四季度.docx`); the ASCII paths in a span are candidates too (`/a.md 和 /b.md`): what is there decides.
 /// - Not inside a URL or a longer word.
-nonisolated enum PathRefs {
+public nonisolated enum PathRefs {
     private static let seg = "[A-Za-z0-9_.@+\\-]+"
     private static let line = #"(?::(\d{1,7})(?::(\d{1,5}))?(?:[-–]\d{1,7})?|#L(\d{1,7})(?:-L?\d{1,7})?)?"#
     private static let ascii = try! NSRegularExpression(pattern:
@@ -35,7 +35,7 @@ nonisolated enum PathRefs {
     private static let fullStops = try! NSRegularExpression(pattern: "(?<=[^./])\\.+$")
 
     /// The paths in plain text, in order (the longer first at one place), at most `limit`.
-    static func find(in text: String, limit: Int = 40) -> [PathRef] {
+    public static func find(in text: String, limit: Int = 40) -> [PathRef] {
         let ns = text as NSString
         var out: [PathRef] = []
         for m in codeSpan.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
@@ -48,13 +48,13 @@ nonisolated enum PathRefs {
     }
 
     /// The ASCII paths of text, outside backticks or in them.
-    static func asciiRefs(in text: String) -> [PathRef] {
+    public static func asciiRefs(in text: String) -> [PathRef] {
         let ns = text as NSString
         return ascii.matches(in: text, range: NSRange(location: 0, length: ns.length)).compactMap { ref(m: $0, in: ns) }
     }
 
     /// The path a whole code span is (`/tmp/a.md`, `src/a.ts:12`, `~/报告/第四季度.docx`), or nil; its range is in `code`.
-    static func codePathRef(_ code: String) -> PathRef? {
+    public static func codePathRef(_ code: String) -> PathRef? {
         let ns = code as NSString
         let lead = ns.length - (code.drop { $0 == " " } as Substring).utf16.count
         let t = code.trimmingCharacters(in: .whitespaces)
@@ -84,9 +84,9 @@ nonisolated enum PathRefs {
     }
 
     /// Each path once, in order, for asking the machine.
-    static func unique(_ refs: [PathRef], limit: Int = 24) -> [String] { unique(refs.map(\.path), limit: limit) }
+    public static func unique(_ refs: [PathRef], limit: Int = 24) -> [String] { unique(refs.map(\.path), limit: limit) }
 
-    static func unique(_ paths: [String], limit: Int) -> [String] {
+    public static func unique(_ paths: [String], limit: Int) -> [String] {
         var out: [String] = []
         for p in paths where !out.contains(p) {
             out.append(p)
@@ -96,7 +96,7 @@ nonisolated enum PathRefs {
     }
 
     /// The refs to link: the ones `linkable` says yes to, in order, none overlapping (the first, the longer at one place).
-    static func pick(_ refs: [PathRef], linkable: (String) -> Bool) -> [PathRef] {
+    public static func pick(_ refs: [PathRef], linkable: (String) -> Bool) -> [PathRef] {
         var out: [PathRef] = []
         var at = 0
         for r in refs where r.range.location >= at && linkable(r.path) {
@@ -107,7 +107,7 @@ nonisolated enum PathRefs {
     }
 
     /// A streaming text without its last word, which may be a path still being written (`/tmp/jar…`).
-    static func written(_ text: String) -> String {
+    public static func written(_ text: String) -> String {
         guard let r = text.range(of: #"\s\S*$"#, options: .regularExpression) else { return "" }
         return String(text[..<r.lowerBound])
     }
@@ -140,18 +140,18 @@ nonisolated enum PathRefs {
 
 /// The link a path in a message is drawn with (`persona-path:<path>?line=N`): the chat's `openURL` opens it in the
 /// file viewer, at its line.
-nonisolated enum PathLinkURL {
-    static let scheme = "persona-path"
+public nonisolated enum PathLinkURL {
+    public static let scheme = "persona-path"
     /// ASCII letters and digits and `/-._~` stay; everything else (spaces, Chinese, parentheses) is percent-encoded,
     /// so the link stays one Markdown destination.
     private static let kept = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-._~")
 
-    static func make(_ path: String, line: Int?) -> URL? {
+    public static func make(_ path: String, line: Int?) -> URL? {
         guard let p = path.addingPercentEncoding(withAllowedCharacters: kept) else { return nil }
         return URL(string: scheme + ":" + p + (line.map { "?line=\($0)" } ?? ""))
     }
 
-    static func parse(_ url: URL) -> (path: String, line: Int?)? {
+    public static func parse(_ url: URL) -> (path: String, line: Int?)? {
         guard url.scheme == scheme else { return nil }
         var rest = String(url.absoluteString.dropFirst(scheme.count + 1))
         var line: Int?
@@ -166,20 +166,20 @@ nonisolated enum PathLinkURL {
 
 /// An answer's Markdown, ready to have its paths linked (`linked`): where the paths are in it, outside code blocks,
 /// formulas and links (written or bare), and the code spans that are a whole path (the span is the link).
-nonisolated struct PathMarkdown: Sendable {
-    struct Spot: Sendable {
-        var range: NSRange
-        var ref: PathRef
+public nonisolated struct PathMarkdown: Sendable {
+    public struct Spot: Sendable {
+        public var range: NSRange
+        public var ref: PathRef
         /// A whole code span: linked as written, backticks and all.
-        var code: Bool
+        public var code: Bool
     }
 
-    let source: String
-    let spots: [Spot]
+    public let source: String
+    public let spots: [Spot]
     /// Each path once, for asking the machine.
-    let paths: [String]
+    public let paths: [String]
 
-    init(_ source: String, limit: Int = 40) {
+    public init(_ source: String, limit: Int = 40) {
         self.source = source
         var spots: [Spot] = []
         var fence: String?
@@ -206,7 +206,7 @@ nonisolated struct PathMarkdown: Sendable {
     }
 
     /// The source with the paths `linkable` says yes to as links, and which paths those are.
-    func linked(_ linkable: (String) -> Bool) -> (markdown: String, paths: Set<String>) {
+    public func linked(_ linkable: (String) -> Bool) -> (markdown: String, paths: Set<String>) {
         let ns = source as NSString
         var out = ""
         var at = 0

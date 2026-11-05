@@ -13,8 +13,8 @@ import CoreGraphics
 /// - the scroll geometry (`scrolled`), which only says whether the list is near the newest.
 /// The scroll phase tells the user's scrolling from the app's (Vercel's `useScrollToBottom` cannot: it only has the
 /// position). `ChatView` reports and reads; the rules are here, and `ChatFollowStateTests` checks them.
-nonisolated struct ChatFollow: Equatable, Sendable {
-    enum Mode: Equatable, Sendable {
+public nonisolated struct ChatFollow: Equatable, Sendable {
+    public enum Mode: Equatable, Sendable {
         /// New content brings the list to the newest.
         case following
         /// The user is reading elsewhere: what arrives at the newest end waits (inserted there it would push what they
@@ -30,36 +30,38 @@ nonisolated struct ChatFollow: Equatable, Sendable {
 
     /// How close to the newest end still counts as there (pt), as in Vercel's hook: a glance a few lines up while a
     /// reply streams does not stop following.
-    static let tolerance: CGFloat = 100
+    public static let tolerance: CGFloat = 100
 
-    private(set) var mode: Mode = .following
+    public private(set) var mode: Mode = .following
     /// The scroll geometry: the list is within `tolerance` of its newest end. True until it is measured.
-    private(set) var near = true
+    public private(set) var near = true
     /// A finger on the list, or the glide after it.
-    private(set) var touching = false
+    public private(set) var touching = false
     /// The finger took the list beyond `tolerance` before letting go: ↓ shows from then on, until the release decides.
-    private(set) var draggedAway = false
+    public private(set) var draggedAway = false
     /// What a hold goes back to.
     private var resume: Mode = .following
     /// The hold lasts until something ends it (`hold(anchored:)`), not until the header settles.
-    private(set) var anchored = false
+    public private(set) var anchored = false
+
+    public init() {}
 
     /// New content brings the list to the newest end.
-    var follows: Bool { mode == .following && !touching }
+    public var follows: Bool { mode == .following && !touching }
     /// What arrives at the newest end waits: reading, and while a finger has the list. Under a finger, what grew at the
     /// newest end (a reply streaming) pushed what the finger held up the screen: by a line or two each time, 23 and
     /// 39 pt in one short drag (2026-11-04, StreamingScrollTests). It comes in once the finger lets go, if the list
     /// follows then.
-    var holdsBack: Bool { mode == .reading || touching || draggedAway }
+    public var holdsBack: Bool { mode == .reading || touching || draggedAway }
     /// ↓ shows (once the chat has settled on entry; `ChatView`). While a header is held for a moment, by what the hold
     /// goes back to: a work line opened pushes the newest screens away for that moment, and ↓ came up for it only.
     /// Anchored, the steps grow past the screen and ↓ is the way to them.
-    var arrow: Bool { !near && ((mode == .holding && !anchored ? resume : mode) != .following || draggedAway) }
+    public var arrow: Bool { !near && ((mode == .holding && !anchored ? resume : mode) != .following || draggedAway) }
 
     // MARK: The scroll geometry
 
     /// The list's distance from its newest end (pt).
-    mutating func scrolled(gap: CGFloat) {
+    public mutating func scrolled(gap: CGFloat) {
         near = gap <= Self.tolerance
         if touching, !near { draggedAway = true }
     }
@@ -67,10 +69,10 @@ nonisolated struct ChatFollow: Equatable, Sendable {
     // MARK: The user's scrolling
 
     /// A finger moved the list (the scroll phase's `tracking` / `interacting`).
-    mutating func touched() { touching = true }
+    public mutating func touched() { touching = true }
 
     /// The user's scrolling ended (the finger lifted, or its glide stopped): where it stopped decides.
-    mutating func released() {
+    public mutating func released() {
         guard touching else { return }
         touching = false
         draggedAway = false
@@ -81,7 +83,7 @@ nonisolated struct ChatFollow: Equatable, Sendable {
     // MARK: What the app does
 
     /// ↓, a message sent, another chat or subagent, back to the chat from a file: to the newest, following.
-    mutating func follow() {
+    public mutating func follow() {
         mode = .following
         touching = false
         draggedAway = false
@@ -89,16 +91,16 @@ nonisolated struct ChatFollow: Equatable, Sendable {
     }
 
     /// A jump the app makes away from the newest (to a quoted message, a tool call): reading there.
-    mutating func read() {
+    public mutating func read() {
         mode = .reading
         anchored = false
     }
 
     /// On the way to a saved place or the latest answer.
-    mutating func land() { mode = .landing }
+    public mutating func land() { mode = .landing }
 
     /// The landing is over: following if it ended near the newest, reading otherwise.
-    mutating func landed() {
+    public mutating func landed() {
         guard mode == .landing else { return }
         mode = near ? .following : .reading
     }
@@ -107,7 +109,7 @@ nonisolated struct ChatFollow: Equatable, Sendable {
     /// at the newest, reading further up) it goes back to once the header has settled. `anchored` (a running work line
     /// opened at the newest end, its header raised under the top bar): held until the user takes the list, folds it, or
     /// goes back to the newest; following would scroll the header away, holding back would freeze the turn (#1046).
-    mutating func hold(anchored: Bool = false) {
+    public mutating func hold(anchored: Bool = false) {
         if mode != .holding {
             resume = mode == .landing ? (near ? .following : .reading) : mode
         } else if self.anchored {
@@ -121,7 +123,7 @@ nonisolated struct ChatFollow: Equatable, Sendable {
 
     /// The header has settled. A finger that took the list meanwhile has decided already (`released`); an anchored
     /// hold goes on.
-    mutating func endHold() {
+    public mutating func endHold() {
         guard mode == .holding, !anchored else { return }
         mode = resume
     }

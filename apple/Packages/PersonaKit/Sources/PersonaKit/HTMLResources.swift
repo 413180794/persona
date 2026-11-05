@@ -5,23 +5,23 @@ import Foundation
 /// fonts and scripts load in the isolated preview while the network stays off. URLs, anchors and absolute paths are
 /// left as they are. At most `maxFiles` files, each up to `maxFileBytes`, `maxTotalBytes` in all; what is past that,
 /// missing or unreadable stays a reference that does not load.
-nonisolated enum HTMLResources {
-    static let maxFiles = 64
-    static let maxFileBytes = 8 << 20
-    static let maxTotalBytes = 24 << 20
+public nonisolated enum HTMLResources {
+    public static let maxFiles = 64
+    public static let maxFileBytes = 8 << 20
+    public static let maxTotalBytes = 24 << 20
 
     /// Reads a file on the machine by its absolute path; nil when it is not there.
-    typealias Fetch = @Sendable (String) async -> Data?
+    public typealias Fetch = @Sendable (String) async -> Data?
 
-    struct Result: Sendable, Equatable {
-        var html: String
+    public struct Result: Sendable, Equatable {
+        public var html: String
         /// Relative references read in, and those that could not be.
-        var loaded: Int
-        var missing: Int
+        public var loaded: Int
+        public var missing: Int
     }
 
     /// A reference to a file beside the page: not a URL (scheme:), an anchor, or an absolute / protocol-relative path.
-    static func isRelative(_ ref: String) -> Bool {
+    public static func isRelative(_ ref: String) -> Bool {
         let r = ref.trimmingCharacters(in: .whitespaces)
         guard !r.isEmpty, !r.hasPrefix("#"), !r.hasPrefix("/") else { return false }
         if let colon = r.firstIndex(of: ":"), r[..<colon].allSatisfy({ $0.isLetter || $0.isNumber || "+.-".contains($0) }) { return false }
@@ -29,7 +29,7 @@ nonisolated enum HTMLResources {
     }
 
     /// Where a relative reference points from the folder `dir` ("a/../b.png?v=1" → "dir/b.png").
-    static func resolve(_ dir: String, _ ref: String) -> String {
+    public static func resolve(_ dir: String, _ ref: String) -> String {
         var clean = ref.trimmingCharacters(in: .whitespaces)
         if let cut = clean.firstIndex(where: { $0 == "?" || $0 == "#" }) { clean = String(clean[..<cut]) }
         clean = clean.removingPercentEncoding ?? clean
@@ -40,7 +40,7 @@ nonisolated enum HTMLResources {
         return "/" + parts.joined(separator: "/")
     }
 
-    static func mime(_ path: String) -> String {
+    public static func mime(_ path: String) -> String {
         switch (path as NSString).pathExtension.lowercased() {
         case "png": "image/png"
         case "jpg", "jpeg": "image/jpeg"
@@ -62,7 +62,7 @@ nonisolated enum HTMLResources {
     }
 
     /// The page with its files beside it read in; `dir` is the page's folder on the machine.
-    static func inline(_ html: String, dir: String, fetch: @escaping Fetch) async -> Result {
+    public static func inline(_ html: String, dir: String, fetch: @escaping Fetch) async -> Result {
         let reader = Reader(fetch: fetch)
         var out = html
         // Style sheets first (a <link> becomes a <style> with its own references read in), then the attributes.
@@ -136,14 +136,14 @@ nonisolated enum HTMLResources {
 
     // MARK: Markup
 
-    static func matches(_ pattern: String, in s: String) -> [String] {
+    public static func matches(_ pattern: String, in s: String) -> [String] {
         guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         let ns = s as NSString
         return Array(Set(re.matches(in: s, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }))
     }
 
     /// Each match and its first group.
-    static func groups(_ pattern: String, in s: String) -> [(String, String)] {
+    public static func groups(_ pattern: String, in s: String) -> [(String, String)] {
         guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         let ns = s as NSString
         var seen = Set<String>()
@@ -155,7 +155,7 @@ nonisolated enum HTMLResources {
     }
 
     /// An attribute's value, double-quoted, single-quoted or bare.
-    static func attribute(_ name: String, in tag: String) -> String? {
+    public static func attribute(_ name: String, in tag: String) -> String? {
         guard let re = try? NSRegularExpression(pattern: #"\s"# + name + #"\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))"#,
                                                 options: [.caseInsensitive]) else { return nil }
         let ns = tag as NSString
@@ -164,7 +164,7 @@ nonisolated enum HTMLResources {
         return nil
     }
 
-    static func replaceAttribute(_ name: String, in tag: String, with value: String) -> String {
+    public static func replaceAttribute(_ name: String, in tag: String, with value: String) -> String {
         guard let re = try? NSRegularExpression(pattern: #"(\s"# + name + #"\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s>]+)"#, options: [.caseInsensitive]) else { return tag }
         let ns = tag as NSString
         guard let m = re.firstMatch(in: tag, range: NSRange(location: 0, length: ns.length)) else { return tag }

@@ -382,7 +382,7 @@ Agents 对话和 Jarvis 对话是同一个 `ChatView`：列表倒着放（最新
 
 ### 落地（#1046）
 
-`ChatFollow`（`apple/Persona/Views/Chat/ChatFollow.swift`，纯值类型）是唯一的真相，`ChatView` 只经 `setFollow` 改它（值没变就不写回：几何每帧都报，
+`ChatFollow`（`apple/Packages/PersonaKit/Sources/PersonaKit/ChatFollow.swift`，纯值类型，#2095）是唯一的真相，`ChatView` 只经 `setFollow` 改它（值没变就不写回：几何每帧都报，
 每写一次整页重算）。`atBottom`、`followsEnd`、`scratch.landingInFlight` 和哨兵的可见性回调都删了，`landed` 的 #597 补丁、`contentArrived` 的 #754 补丁也跟着没了。
 
 | 输入 | 来自 | 做什么 |

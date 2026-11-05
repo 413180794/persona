@@ -965,3 +965,13 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - 一个状态被「上一个动作」借走：在最新处打开的工作行可以往上升到顶栏下面，再点里面的思考，思考展开的高度就把标题剩下的上升量用掉了，被点的行跟着上去 46 pt；
   BeautifulUI 的工具胶囊则把工作行的「一直按住」换成了普通的 1.5 s，1.5 s 后跟随又起来，把列表拉到最新处、胶囊上去 119–381 pt。
   里面的东西被点了，外面的那个就从此原地不动、状态也不变（`ChatPin.hold` 重新以当前位置按住，`changeWork` 对 run 不动跟随状态）。
+
+## 纯逻辑挪进 SPM 包，测试才能离开 App（2026-11-05，#2095）
+
+- **现象**：跑一个纯逻辑的单测（笔记本解析、路径识别）也要先编完整个 App、再起模拟器：新 worktree 第一次约 140 秒，改一个文件后约 45 秒，几个 Agent 同时编时还要排队。
+- **做法**：只依赖 Foundation 的类型挪进 `apple/Packages/PersonaKit`，测试跟着挪，`swift test` 冷的约 10 秒、改一个文件后约 2 秒。挪的时候：
+  - App 用到的类型、成员都要 `public`，`private(set)` 写成 `public private(set)`，App 里构造的结构体补 `public init`。不然 App 编不过，而包自己的 `swift test` 照样全过，因为测试是 `@testable import`。所以每挪一批都要编一遍三个 App。
+  - 一个测试文件里混着 App 层的断言（视图、`FilePaths`）时，拆开：纯逻辑的进包，App 层的留在 `PersonaTests`，加 `import PersonaKit`。
+  - 包的默认隔离是 nonisolated，App 是 MainActor：原来就标了 `nonisolated` 的值类型直接挪，不用改。
+  - `swift test` 把编译产物写在包目录下的 `.build/`，仓库根的 `.gitignore` 要盖住它（`/apple/Packages/*/.build/`）。第一次提交时 `git add -A` 把 1,500 多个产物带了进去，里面有本机的路径；推到远端后发现，删了分支。提交前看一眼 `git diff --stat` 的文件数。
+

@@ -21,6 +21,10 @@ packages:
   # The SSH tunnel to the hub (docs/network.md「经 SSH 隧道连 hub」): the iOS and Mac apps only, not the watch.
   PersonaSSH:
     path: Packages/PersonaSSH
+  # The logic that needs no UI, its tests run with `swift test` (#2095, docs/testing.md「PersonaKit」): the iOS, Mac and
+  # Vision apps, not the watch or widgets.
+  PersonaKit:
+    path: Packages/PersonaKit
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -61,6 +65,7 @@ targets:
       - package: MarkdownUI
       - package: BeautifulUI
       - package: PersonaSSH
+      - package: PersonaKit
     entitlements:
       path: Persona/Resources/Persona.entitlements
       properties:
@@ -178,6 +183,7 @@ targets:
       - package: MarkdownUI
       - package: BeautifulUI
       - package: PersonaSSH
+      - package: PersonaKit
     entitlements:
       path: Mac/Resources/PersonaMac.entitlements
       properties:
@@ -268,6 +274,7 @@ targets:
       - package: MarkdownUI
       - package: BeautifulUI
       - package: PersonaSSH
+      - package: PersonaKit
     entitlements:
       path: Vision/Resources/PersonaVision.entitlements
       properties:

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// Paths in messages linked where they are there (docs/ios.md「文件查看器」): the same cases as the web's
 /// web/src/lib/path-refs.test.ts and web/src/ui/PathLinks.test.tsx.
@@ -54,8 +54,6 @@ struct PathRefsTests {
 
     @Test func asksAboutEachPathOnce() {
         #expect(PathRefs.unique(PathRefs.find(in: "src/a.ts:1 src/a.ts:2 `src/a.ts`")) == ["src/a.ts"])
-        // and the chips' list asks without the lines
-        #expect(FilePaths.find(in: "见 server/handlers.go:120 和 `README.md`") == ["server/handlers.go"])
     }
 
     @Test func aCodeSpanThatIsAWholePath() {
@@ -127,28 +125,5 @@ struct PathMarkdownTests {
         let md = "生成了 `~/报告/第四季度 终稿.docx`。"
         let out = PathMarkdown(md).linked { $0 == "~/报告/第四季度 终稿.docx" }
         #expect(out.markdown == "生成了 [`~/报告/第四季度 终稿.docx`](\(link("~/报告/第四季度 终稿.docx")))。")
-    }
-}
-
-/// The user's bubble: plain text with the paths there as links.
-@MainActor
-struct PathTextTests {
-    @Test func linksThePickedPathsAndKeepsTheRest() {
-        let t = "看一下 server/handlers.go:120，还有 /tmp/x/y.md"
-        let refs = PathRefs.pick(PathRefs.find(in: t)) { $0 == "server/handlers.go" }
-        let a = PathText.attributed(t, refs, link: .blue)
-        #expect(String(a.characters) == t)
-        let links = a.runs.compactMap { run in run.link.map { (String(a[run.range].characters), $0) } }
-        #expect(links.count == 1)
-        #expect(links.first?.0 == "server/handlers.go:120")
-        #expect(links.first.flatMap { PathLinkURL.parse($0.1) }.map { "\($0.path):\($0.line ?? 0)" } == "server/handlers.go:120")
-    }
-}
-
-/// The chips' list keeps a span that is one path whole: not its folder or the words before a space as well.
-struct FilePathsWholeSpanTests {
-    @Test func aWholeSpanIsOneChip() {
-        #expect(FilePaths.find(in: "`/tmp/a.md 和 /tmp/b.md`") == ["/tmp/a.md 和 /tmp/b.md"])
-        #expect(FilePaths.find(in: "先看 /var/log/app.log:3，再看 `src/a.ts:12`") == ["/var/log/app.log", "src/a.ts"])
     }
 }

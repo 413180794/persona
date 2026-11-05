@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 struct NotebookTests {
     private static let sample = #"""
