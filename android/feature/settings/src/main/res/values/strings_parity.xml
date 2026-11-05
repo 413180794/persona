@@ -137,7 +137,7 @@
     <string name="settings_storage_about">What Persona takes on this phone. Caches can all be fetched again from the hub: after clearing, conversations and pictures download again when you open them.</string>
     <string name="settings_storage_images">Pictures in conversations</string>
     <string name="settings_storage_images_detail">Screenshots and other pictures, downloaded once</string>
-    <string name="settings_storage_inbox">Feishu pictures and files</string>
+    <string name="settings_storage_inbox">Lark pictures and files</string>
     <string name="settings_storage_inbox_detail">Pictures, videos and files in inbox messages</string>
     <string name="settings_storage_web">Web pages</string>
     <string name="settings_storage_web_detail">Pages opened in the app (sign-ins stay)</string>

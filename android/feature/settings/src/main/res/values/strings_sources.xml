@@ -376,7 +376,7 @@
     <string name="settings_src_messages_recheck">Check again</string>
     <string name="settings_src_messages_ai">Share with Persona</string>
     <string name="settings_src_messages_delete">Delete messages stored on the hub</string>
-    <string name="settings_src_messages_ai_on">People in your contacts and chats you have replied to go to the knowledge base and the Inbox (sorted like Feishu), and the assistant can search and summarize them; codes are masked. Turning this off stops at once; turn it off before deleting what the hub stored.</string>
+    <string name="settings_src_messages_ai_on">People in your contacts and chats you have replied to go to the knowledge base and the Inbox (sorted like Lark), and the assistant can search and summarize them; codes are masked. Turning this off stops at once; turn it off before deleting what the hub stored.</string>
     <string name="settings_src_messages_ai_off">Not shared with Persona: nothing syncs, nothing reaches the Inbox, the assistant can\'t read it. What the hub stored before is still there and can be deleted.</string>
     <string name="settings_src_messages_footer_private">Messages are only shown to you here: not stored on the hub, not given to AI, and not marked as read. Persona only reads; it never sends for you.</string>
     <string name="settings_src_messages_footer">Every conversation can be read here (straight from that Mac, without marking anything read). Persona only reads; it never sends for you.</string>

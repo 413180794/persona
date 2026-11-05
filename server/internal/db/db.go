@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -65,6 +66,10 @@ func connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("parse database_url: %w", err)
 	}
 	cfg.MaxConns = 8
+	cfg.AfterConnect = func(_ context.Context, c *pgx.Conn) error {
+		utcTimes(c.TypeMap())
+		return nil
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -84,6 +89,12 @@ func connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 		time.Sleep(time.Second)
 	}
 	return pool, nil
+}
+
+// utcTimes makes m read timestamptz values in UTC. pgx reads them in time.Local by default, which puts the hub
+// machine's offset ("+08:00") into every time the protocol sends, where docs/protocol.md has UTC.
+func utcTimes(m *pgtype.Map) {
+	m.RegisterType(&pgtype.Type{Name: "timestamptz", OID: pgtype.TimestamptzOID, Codec: &pgtype.TimestamptzCodec{ScanLocation: time.UTC}})
 }
 
 func (d *DB) Close() { _ = d.CloseContext(context.Background()) }

@@ -54,8 +54,8 @@ func (n *Node) launcherRepair(ctx context.Context, name, action string) (proto.L
 }
 
 // dropShellStartupNoise removes the two warnings an interactive bash prints when it has no terminal (a node run as a
-// daemon, CI), and the "exit" it echoes last when the script runs the exit builtin: they are not the repair's output
-// and would crowd it out of the last lines the user sees.
+// daemon, CI), Ubuntu's hint on how to use sudo, and the "exit" it echoes last when the script runs the exit builtin:
+// they are not the repair's output and would crowd it out of the last lines the user sees.
 func dropShellStartupNoise(out string) string {
 	lines := strings.Split(strings.TrimRight(out, "\r\n"), "\n")
 	kept := lines[:0]
@@ -72,6 +72,11 @@ func dropShellStartupNoise(out string) string {
 }
 
 func isShellStartupNoise(line string) bool {
+	// Ubuntu's /etc/bash.bashrc prints these to a sudo-group user until ~/.sudo_as_admin_successful exists.
+	if strings.HasPrefix(line, `To run a command as administrator (user "`) && strings.HasSuffix(line, `"), use "sudo <command>".`) ||
+		line == `See "man sudo_root" for details.` {
+		return true
+	}
 	shell, msg, ok := strings.Cut(line, ": ")
 	if !ok || shell == "" || strings.ContainsAny(shell, " \t") {
 		return false

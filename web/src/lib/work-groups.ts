@@ -393,23 +393,25 @@ export function thinkingDurations(steps: Step[], turnStart?: string): Map<string
   return out;
 }
 
-/** cindy's formatDuration: 6s, 1m 5s, 2m, 1h 05m (at least a second). */
+/** cindy's formatDuration in the page's language: 「6 秒」「1 分 5 秒」「2 分钟」「1 小时 05 分」, 6s, 1m 5s in English (at least a second). */
 export function workDuration(msValue: number): string {
   const total = Math.max(1, Math.round((Number.isFinite(msValue) ? msValue : 0) / 1000));
-  if (total < 60) return `${total}s`;
+  // Units come from the catalog (#3592): 「1 分 5 秒」 in Chinese, 1m 5s in English.
+  if (total < 60) return t("lib-work-groups.dur_seconds", { s: total });
   if (total >= 3600) {
     const d = Math.floor(total / 86_400);
     const h = Math.floor((total % 86_400) / 3600);
     const m = Math.floor((total % 3600) / 60);
     const pad = (n: number) => String(n).padStart(2, "0");
-    return d > 0 ? `${d}d ${pad(h)}h ${pad(m)}m` : `${h}h ${pad(m)}m`;
+    if (d > 0) return t("lib-work-groups.dur_days_hours_minutes", { d, h: pad(h), m: pad(m) });
+    return m ? t("lib-work-groups.dur_hours_minutes", { h, m: pad(m) }) : t("lib-work-groups.dur_hours", { h });
   }
   const m = Math.floor(total / 60);
   const s = total % 60;
-  return s ? `${m}m ${s}s` : `${m}m`;
+  return s ? t("lib-work-groups.dur_minutes_seconds", { m, s }) : t("lib-work-groups.dur_minutes", { m });
 }
 
-/** A finished group's title: 「已工作 1m 5s」, and what it read when that is all it did. */
+/** A finished group's title: 「已工作 1 分 5 秒」, and what it read when that is all it did. */
 export function groupTitle(g: WorkGroupNode): string {
   if (g.live) return t("lib-work-groups.working");
   const base = g.durationMs !== undefined ? t("lib-work-groups.worked_for", { duration: workDuration(g.durationMs) }) : t("lib-work-groups.work");

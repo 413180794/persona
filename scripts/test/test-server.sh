@@ -12,6 +12,8 @@ ssh "$H" "mkdir -p ~/$D/sdk ~/$D/schema"
 rsync -a --delete --exclude bin server/ "$H":"$D/server/"
 # Go's local SDK replacement must keep the same sibling path as in this checkout, including embedded schemas.
 rsync -a --delete sdk/go/ "$H":"$D/sdk/go/"
+# Manifest example tests parse the extension templates' persona-extension.json (../../../sdk/templates).
+rsync -a --delete sdk/templates/ "$H":"$D/sdk/templates/"
 # Extension conformance tests read the source schemas' valid and invalid examples outside the Go module.
 rsync -a --delete schema/extension/ "$H":"$D/schema/extension/"
 # Wire, continuity and resolution tests read the shared fixtures next to server/ (../../../spec from a package),

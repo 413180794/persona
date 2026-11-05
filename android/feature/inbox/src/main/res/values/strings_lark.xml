@@ -194,7 +194,7 @@
     <string name="inbox_lark_doc_comments_none_open">No open comments</string>
     <string name="inbox_lark_doc_comments_none_resolved">No resolved comments</string>
     <string name="inbox_lark_doc_comments_none_open_write">Write one below, or long-press the text.</string>
-    <string name="inbox_lark_doc_comments_none_open_read">Comments made on this document in Feishu show up here.</string>
+    <string name="inbox_lark_doc_comments_none_open_read">Comments made on this document in Lark show up here.</string>
     <string name="inbox_lark_doc_comments_none_resolved_text">Resolved comments are kept here.</string>
     <string name="inbox_lark_doc_comments_placeholder_document">Comment on the document</string>
     <string name="inbox_lark_doc_comments_placeholder_reply">Reply</string>
@@ -209,7 +209,7 @@
     <string name="inbox_lark_doc_comments_load_failed">Couldn\'t read the comments.</string>
     <string name="inbox_lark_doc_comments_unsupported">this kind of document can\'t be commented on here</string>
     <string name="inbox_lark_doc_comments_unreachable">can\'t reach the hub</string>
-    <string name="inbox_lark_doc_comments_unnamed">Feishu user</string>
+    <string name="inbox_lark_doc_comments_unnamed">Lark user</string>
     <plurals name="inbox_lark_doc_comments_images">
         <item quantity="one">%d image</item>
         <item quantity="other">%d images</item>

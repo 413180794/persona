@@ -133,7 +133,7 @@
     <string name="settings_storage_about">Persona がこの端末で使っている容量です。キャッシュはすべて hub から取り直せます。消去すると、会話や画像を開いたときに再ダウンロードします。</string>
     <string name="settings_storage_images">会話の画像</string>
     <string name="settings_storage_images_detail">スクリーンショットなどの画像。一度見ると再ダウンロードしません</string>
-    <string name="settings_storage_inbox">Feishu の画像とファイル</string>
+    <string name="settings_storage_inbox">Lark の画像とファイル</string>
     <string name="settings_storage_inbox_detail">受信箱のメッセージにある画像、動画、ファイル</string>
     <string name="settings_storage_web">Web ページ</string>
     <string name="settings_storage_web_detail">アプリ内で開いたページ（ログイン状態は残ります）</string>

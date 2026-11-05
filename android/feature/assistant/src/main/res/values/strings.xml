@@ -74,7 +74,7 @@
     <string name="assistant_auto">Automatic</string>
     <string name="assistant_origin_inbox">Inbox</string>
     <string name="assistant_origin_task">Scheduled</string>
-    <string name="assistant_origin_lark_agent">Feishu /agent</string>
+    <string name="assistant_origin_lark_agent">Lark /agent</string>
     <string name="assistant_origin_spawned">From a chat</string>
     <string name="assistant_origin_extension">Extensions</string>
     <string name="assistant_origin_other">Other</string>

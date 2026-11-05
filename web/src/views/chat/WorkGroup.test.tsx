@@ -34,7 +34,7 @@ describe("WorkGroup", () => {
     const html = renderToStaticMarkup(<WorkGroup g={group([tool("t1", "Bash", { command: "ls", description: "看目录" }, false)], true)} p={props} />);
     expect(html).toContain('data-work-group="live"');
     expect(html).toContain(">正在工作…<");
-    expect(html).toMatch(/font-mono text-\[12px\][^>]*>[\ddhms ]+</);
+    expect(html).toMatch(/font-mono text-\[12px\][^>]*>[\d秒分钟小时天 ]+</);
     expect(html).toContain("data-live-preview");
     expect(html).toContain("border-l-2 border-tool-rail");
     expect(html).toContain(">看目录<");
@@ -43,7 +43,7 @@ describe("WorkGroup", () => {
 
   it("done: layers and 已工作 Xs, folded", () => {
     const html = renderToStaticMarkup(<WorkGroup g={group([tool("t1", "Bash", { command: "ls" })], false, 65_000)} p={props} />);
-    expect(html).toContain(">已工作 1m 5s<");
+    expect(html).toContain(">已工作 1 分 5 秒<");
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain("data-live-preview");
   });
@@ -136,14 +136,14 @@ describe("ActionRow", () => {
 describe("ThinkingCard", () => {
   it("an empty thought only says how long it took and does not open", () => {
     const html = renderToStaticMarkup(<ThinkingCard item={{ id: "th#0", seq: 1, role: "assistant", kind: "thinking", text: "" }} durationMs={3000} />);
-    expect(html).toContain(">思考 3s<");
+    expect(html).toContain(">思考 3 秒<");
     expect(html).toContain('disabled=""');
     expect(html).not.toContain("aria-expanded");
   });
 
   it("one with words opens to them, 14 px italic on a rail", () => {
     const html = renderToStaticMarkup(<ThinkingCard item={{ id: "th#1", seq: 1, role: "assistant", kind: "thinking", text: "先看测试" }} durationMs={12_000} />);
-    expect(html).toContain(">思考 12s<");
+    expect(html).toContain(">思考 12 秒<");
     expect(html).toContain('aria-expanded="false"');
   });
 
@@ -242,7 +242,7 @@ describe("the user's bubble and the answer", () => {
     const seg = { id: "s", user: { id: "u1#0", text: "看一下", images: [], contexts: [], ts: at(0) }, steps: [tool("t2", "Read", { file_path: "/a.ts" })], answer: { id: "a3#0", seq: 3, role: "assistant", kind: "text", text: "看完了。", ts: at(9) } as Item, tools: 1, thoughts: 0, replies: 0, folds: [], start: user.ts };
     const html = renderToStaticMarkup(<SegmentView seg={seg} live={false} mid="m" sid="s" expandFold={async () => {}} />);
     expect(html).toContain("[&amp;_.prose-j]:text-[length:var(--chat-body)]!");
-    expect(html).toContain(">已工作 9s · 读取 1 个文件<");
+    expect(html).toContain(">已工作 9 秒 · 读取 1 个文件<");
     expect(html.indexOf("已工作")).toBeLessThan(html.indexOf("看完了。"));
   });
 });

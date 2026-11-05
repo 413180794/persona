@@ -215,20 +215,22 @@ describe("titles and plans", () => {
     const b = blocks([user("u1", 0), ...tool("r1", "Read", 1000, undefined, { file_path: "/a.ts" }), ...tool("r2", "Read", 2000, undefined, { file_path: "/b.ts" }), ...tool("r3", "Read", 2500, undefined, { file_path: "/a.ts" }), ...tool("g", "Grep", 3000, undefined, { pattern: "x" }), say("a", "看完了。", 65_000)]);
     const [g] = groups(b);
     expect(explorationSummary(g)).toBe("读取 2 个文件 · 搜索 1 次");
-    expect(groupTitle(g)).toBe("已工作 1m 5s · 读取 2 个文件 · 搜索 1 次");
+    expect(groupTitle(g)).toBe("已工作 1 分 5 秒 · 读取 2 个文件 · 搜索 1 次");
   });
 
   it("one that ran a command does not", () => {
     const g = groups(blocks([user("u1", 0), ...tool("r1", "Read", 1000, undefined, { file_path: "/a.ts" }), ...tool("b", "Bash", 2000), say("a", "好。", 6000)]))[0];
-    expect(groupTitle(g)).toBe("已工作 6s");
+    expect(groupTitle(g)).toBe("已工作 6 秒");
   });
 
-  it("formats durations like cindy", () => {
-    expect(workDuration(0)).toBe("1s");
-    expect(workDuration(6062)).toBe("6s");
-    expect(workDuration(65_000)).toBe("1m 5s");
-    expect(workDuration(120_000)).toBe("2m");
-    expect(workDuration(3_900_000)).toBe("1h 05m");
+  it("formats durations like cindy, in Chinese units", () => {
+    expect(workDuration(0)).toBe("1 秒");
+    expect(workDuration(6062)).toBe("6 秒");
+    expect(workDuration(65_000)).toBe("1 分 5 秒");
+    expect(workDuration(120_000)).toBe("2 分钟");
+    expect(workDuration(3_900_000)).toBe("1 小时 05 分");
+    expect(workDuration(3_600_000)).toBe("1 小时");
+    expect(workDuration(93_900_000)).toBe("1 天 02 小时 05 分");
   });
 
   it("only the latest plan of two or more items draws, in the open", () => {

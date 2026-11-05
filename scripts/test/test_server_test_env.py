@@ -145,9 +145,10 @@ class ServerTestEnvironmentTests(unittest.TestCase):
             profile = remote / "live-profile"
             for path in (checkout / "scripts/test", checkout / "server", checkout / "spec", checkout / "apple",
                          checkout / "docs", checkout / "sdk/go/ext", checkout / "sdk/go/wire/schema",
-                         checkout / "schema/extension/examples/invalid", tools, profile):
+                         checkout / "sdk/templates/go", checkout / "schema/extension/examples/invalid", tools, profile):
                 path.mkdir(parents=True)
             (checkout / "docs/guide.md").write_text("# Fixture guide\n")
+            (checkout / "sdk/templates/go/persona-extension.json").write_text('{"template":true}\n')
             sdk = checkout / "sdk/go"
             (sdk / "go.mod").write_text("module example.invalid/fixture-sdk\n")
             (sdk / "wire/schema/view.schema.json").write_text('{"fixture":true}\n')
@@ -208,6 +209,7 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                  "assert (schema/'examples/invalid/View.fixture.json').read_text()=='{\"valid\":false}\\n'\n"
                  "assert not (schema/'stale.json').exists()\n"
                  "assert (base/'docs/guide.md').read_text()=='# Fixture guide\\n'\n"
+                 "assert (base/'sdk/templates/go/persona-extension.json').read_text()=='{\"template\":true}\\n'\n"
                  f"pathlib.Path({str(capture)!r}).write_text(json.dumps({{'args':sys.argv[1:],'env':dict(os.environ),'sdk_source':(sdk/'ext/fixture.go').read_text()}}))\n"
                  "sys.exit(int(os.environ.get('FAKE_GO_EXIT','0')))\n")
             environment = {

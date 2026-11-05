@@ -157,7 +157,7 @@ class AgentsParityShotsTest {
         for (s in AppStyle.entries) for (d in listOf(false, true)) {
             rule.runOnIdle { style = s; dark = d }
             rule.waitForIdle()
-            listOf("All", "Needs you", "Unread", "Working", "Feishu groups", "Terminal").forEach {
+            listOf("All", "Needs you", "Unread", "Working", "Lark groups", "Terminal").forEach {
                 assertTrue("$s shows $it", rule.onAllNodesWithText(it, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
             }
             val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()

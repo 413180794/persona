@@ -406,7 +406,7 @@
     <string name="agents_tab_lead_words">%1$s: %2$s</string>
     <string name="agents_source_feishu">Lark group</string>
     <string name="agents_source_feishu_open">Open this topic in Lark</string>
-    <string name="agents_filter_feishu">Feishu groups</string>
+    <string name="agents_filter_feishu">Lark groups</string>
     <string name="agents_filter_terminal">Terminal</string>
     <string name="agents_botmux">botmux</string>
     <string name="agents_botmux_hide">Hide botmux sessions</string>

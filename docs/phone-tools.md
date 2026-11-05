@@ -22,6 +22,15 @@ App 在本地查询/写入 → `tool_result` 原路返回。
 每个数据源（通讯录 / 日历 / 提醒 / 位置 / 健康 / 照片 / 设备 / 剪贴板 / 通知）在设置里可单独关掉；关掉后
 `enabledSpecs()` 里不再出现，模型看不到这些工具，调用也会被拒绝（防止旧会话继续调）。
 
+上表是 iOS（Mac 同一份代码）。**安卓**的对应是 `android/platform/phonetools/` 里的 `PhoneToolRegistry.kt`，同样有 `all`、`enabledSpecs()`、`call(…)`，所有调用都过它这一道关：
+
+- **开关**在 设置 › 手机数据（安卓没有「连接器」分组），按数据源（通讯录 / 日历 / 位置 / 健康 / 照片 / 剪贴板 / 设备信息 / 通知，没有提醒事项）各一个，默认全关，按配对分开保存（`PhoneToolSettings`）。
+- **前台限制**写在工具目录里：`PhoneToolCatalog.kt` 给 `phone_location_current` 和剪贴板的两个工具标了 `foreground = true`。App 不在前台时 `enabledSpecs()` 不带它们，调用会被拒绝，并提示模型请用户打开 Persona 再试，执行到一半 App 退到后台也会中断。
+- **注册给 hub**由 `PhoneToolsRuntime.kt` 负责：连上 hub 后发 `register_phone`。开关、前后台、常驻服务一变（每次回到前台也会重新查权限），就重新算 `enabledSpecs()`，有变化再发一次。断线或解除配对时发空列表。App 在前台或常驻服务开着时才提供工具，两样都没有就一个都不提供。
+- 执行前依次查开关、权限、前台、在线；要确认的写操作（只有新建日程）在用户点了允许以后再查一遍。同一个 `call_id` 重复送来时直接返回上次的结果，不会再执行一次。
+
+接线和细节见 `docs/android.md`「App 外壳与页面直达」（设置 › 手机数据那条）、「手机数据工具和 iOS 对齐（2026-11-02）」，以及 `android/platform/phonetools/README.md`。
+
 ## 工具一览
 
 | 工具 | 需要权限 | 需确认 | 说明 |
@@ -64,7 +73,7 @@ Claude 再调一次会再问一次。
 
 ## 邮箱工具（mail_*）
 
-邮箱工具由 hub 的邮件连接器提供（`server/internal/hub/mail_connector.go`，描述和参数在 `server/internal/prompts/mcp/mail/`），在 hub 上连 IMAP / SMTP，不经过手机。
+邮箱工具由 hub 的邮件连接器提供（`server/internal/extmgr/mail_connector.go`，描述和参数在 `server/internal/prompts/mcp/mail/`），在 hub 上连 IMAP / SMTP，不经过手机。
 助手和 Agent 都能用（连接器的 `AgentTools: mail_*`）。账号和凭据见 `docs/mail.md`。
 
 | 工具 | 需确认 | 说明 |

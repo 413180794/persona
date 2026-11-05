@@ -7,5 +7,11 @@
   "listings_other": "Listed {count} directories",
   "working": "Working…",
   "worked_for": "Worked for {duration}",
-  "work": "Work"
+  "work": "Work",
+  "dur_seconds": "{s}s",
+  "dur_minutes_seconds": "{m}m {s}s",
+  "dur_minutes": "{m}m",
+  "dur_hours_minutes": "{h}h {m}m",
+  "dur_days_hours_minutes": "{d}d {h}h {m}m",
+  "dur_hours": "{h}h"
 }

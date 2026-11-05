@@ -360,7 +360,7 @@
     <string name="settings_src_messages_recheck">再確認</string>
     <string name="settings_src_messages_ai">Persona に任せる</string>
     <string name="settings_src_messages_delete">ハブに保存したメッセージを削除</string>
-    <string name="settings_src_messages_ai_on">連絡先の人と返信したことのある会話はナレッジベースと受信トレイに入り（Feishu と同じく仕分け）、アシスタントが検索・要約できます。認証コードは伏せられます。オフにするとすぐ止まります。ハブに保存したものを削除するには先にオフにしてください。</string>
+    <string name="settings_src_messages_ai_on">連絡先の人と返信したことのある会話はナレッジベースと受信トレイに入り（Lark と同じく仕分け）、アシスタントが検索・要約できます。認証コードは伏せられます。オフにするとすぐ止まります。ハブに保存したものを削除するには先にオフにしてください。</string>
     <string name="settings_src_messages_ai_off">いまは Persona に任せていません：同期せず、受信トレイにも入らず、アシスタントも読めません。以前ハブに保存したものは残っており、削除できます。</string>
     <string name="settings_src_messages_footer_private">メッセージはここで自分だけが見られます：ハブに保存せず、AI にも渡さず、既読にもなりません。Persona は読むだけで、代わりに送信しません。</string>
     <string name="settings_src_messages_footer">ここではすべての会話を見られます（その Mac から直接読み、既読にはなりません）。Persona は読むだけで、代わりに送信しません。</string>

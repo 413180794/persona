@@ -214,6 +214,7 @@
 - 只记钟点的文件（知识库的天文件、时间线）换时区要整体搬，还要记下自己是哪个时区，不能直接改写入时用的时区：
   否则同一个文件里新旧两种钟点混在一起，`Since` 按新时区解析旧行会差 8 小时，漏读压缩窗口里的消息（`docs/knowledge.md`「时区」）。
 - 发给别的程序的时区用 IANA 名字（`Hub.userTZName()`）：`time.Local.String()` 是 "Local"，不是时区名。
+- pgx 默认把 `timestamptz` 读成 `time.Local` 的时间（#3755）：hub 不在 UTC 的机器上时，库里读出来直接序列化的时间带 `+08:00`，和协议要求的 UTC 不符。`db.Open` 的 `AfterConnect` 给每个连接注册 `ScanLocation: time.UTC` 的 codec（`utcTimes`），读出的都是 UTC；不要在各处补 `.UTC()`。
 - hub 的 Docker 镜像（`docs/docker.md`，2026-11-01）：锁文件的 `resolved` 指向别的 npm 源时，别的网络里（GitHub Actions、NAS）`npm ci`
   卡一分多钟后只报 npm 自己的「Exit handler never called!」，看不出是网络问题。锁文件的下载源由 `privacy_check.py` 拦
   （`docs/testing.md`「npm 下载源拦截」），`Dockerfile` 装依赖前也查一次。镜像里的网页构建用 `--ignore-scripts` 跳过 `prebuild` 的

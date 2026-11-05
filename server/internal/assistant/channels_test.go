@@ -41,12 +41,62 @@ func TestResolutionText(t *testing.T) {
 	}
 }
 
+// Each tool call reads as one line: a verb and what it works on.
+func TestBotStepLines(t *testing.T) {
+	for _, c := range []struct{ tool, in, want string }{
+		{"Bash", `{"command":"go test ./...","description":"跑服务端测试"}`, "运行 · 跑服务端测试"},
+		{"Bash", `{"command":"sleep 60","run_in_background":true}`, "后台运行 `sleep 60`"},
+		{"Read", `{"file_path":"/a/feishu.go","offset":850,"limit":101}`, "读 `feishu.go` 第 850–950 行"},
+		{"Read", `{"file_path":"/a/feishu.go","offset":20}`, "读 `feishu.go` 第 20 行起"},
+		{"Read", `{"file_path":"/a/feishu.go"}`, "读 `feishu.go`"},
+		{"Edit", `{"file_path":"/a/b.go"}`, "改 `b.go`"},
+		{"Edit", `{"file_path":"/a/b.go","change":"add"}`, "新建 `b.go`"},
+		{"Write", `{"file_path":"/a/b.go"}`, "写入 `b.go`"},
+		{"Grep", `{"pattern":"botStep","path":"internal","glob":"*.go"}`, "搜 `botStep` 在 internal（&#42;.go）"},
+		{"Grep", `{"pattern":"x","glob":"*.go"}`, "搜 `x`（&#42;.go）"},
+		{"Glob", `{"pattern":"**/*.md"}`, "搜 `**/*.md`"},
+		{"Task", `{"description":"查代码","subagent_type":"Explore"}`, "派子任务 · 查代码（Explore）"},
+		{"TodoWrite", `{"todos":[{"content":"a","status":"completed"},{"content":"跑测试","activeForm":"正在跑测试","status":"in_progress"}]}`, "更新待办 · 正在跑测试"},
+		{"mcp__jarvis__phone_calendar_events", `{"start":"2026-01-01"}`, "查日历"},
+		{"mcp__jarvis__phone_contacts_search", `{"query":"张三"}`, "查通讯录 `张三`"},
+		{"mcp__jarvis__phone_reminders_list", `{}`, "查提醒事项"},
+		{"mcp__jarvis__phone_reminders_complete", `{"id":"r1"}`, "完成提醒 `r1`"},
+		{"mcp__jarvis__phone_reminders_create", `{"title":"买菜"}`, "加提醒 `买菜`"},
+		{"mcp__jarvis__mail_search", `{"query":"发票"}`, "查邮件 `发票`"},
+		{"mcp__jarvis__mail_send", `{"to":"me@example.com"}`, "发邮件 `me@example.com`"},
+		{"mcp__jarvis__kb_search", `{"query":"周报"}`, "查知识库 `周报`"},
+		{"mcp__github__github_read", `{"url":"https://example.com/x"}`, "github_read `https://example.com/x`"},
+	} {
+		it := proto.Item{Kind: proto.KindToolUse, ToolName: c.tool, ToolInput: json.RawMessage(c.in)}
+		if got := botStep("", it); got != c.want {
+			t.Errorf("%s %s: %q, want %q", c.tool, c.in, got, c.want)
+		}
+	}
+	// The agent message's titles keep the (verb, detail) split.
+	verb, detail := botStepParts(i18n.En, proto.Item{Kind: proto.KindToolUse, ToolName: "Read", ToolInput: json.RawMessage(`{"file_path":"/a/x.go","offset":1,"limit":10}`)})
+	if verb != "Read" || detail != "x.go lines 1–10" {
+		t.Fatalf("%q %q", verb, detail)
+	}
+	for _, c := range []struct {
+		l              i18n.Lang
+		tool, in, want string
+	}{
+		{i18n.En, "Task", `{"description":"look","subagent_type":"Explore"}`, "Subtask · look (Explore)"},
+		{i18n.En, "Grep", `{"pattern":"x","path":"src/x_y","glob":"*.go"}`, "Search · x in src/x_y (*.go)"},
+		{"", "Task", `{"description":"查代码","subagent_type":"Explore"}`, "派子任务 · 查代码（Explore）"},
+		// An unknown tool goes by its name: one separator in the agent message's title.
+		{"", "mcp__x__github_read_file", `{"path":"abc_def"}`, "github_read_file · abc_def"},
+	} {
+		verb, detail := botStepParts(c.l, proto.Item{Kind: proto.KindToolUse, ToolName: c.tool, ToolInput: json.RawMessage(c.in)})
+		if got := verb + " · " + detail; got != c.want { // as cotEvents joins them
+			t.Errorf("%s: %q, want %q", c.tool, got, c.want)
+		}
+	}
+}
+
 func TestBotStepAndStripContext(t *testing.T) {
 	if s := botStep("", proto.Item{Kind: proto.KindToolUse, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"go test ./...\nmore"}`)}); s != "运行 `go test ./...`" {
 		t.Fatalf("bash step %q", s)
-	}
-	if s := botStep("", proto.Item{Kind: proto.KindToolUse, ToolName: "mcp__jarvis__kb_search", ToolInput: json.RawMessage(`{"query":"周报"}`)}); s != "kb_search `周报`" {
-		t.Fatalf("mcp step %q", s)
 	}
 	if s := botStep("", proto.Item{Kind: proto.KindText}); s != "" {
 		t.Fatalf("text step %q", s)
@@ -56,9 +106,9 @@ func TestBotStepAndStripContext(t *testing.T) {
 		t.Fatalf("strip %q", got)
 	}
 	for in, want := range map[string]string{
-		"<persona-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</persona-context>\n真正的问题": "真正的问题",
+		"<persona-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</persona-context>\n真正的问题":          "真正的问题",
 		"<persona-context>\n快照\n</persona-context>\n<jarvis-context kind=\"doc\">文档</jarvis-context>\n问题": "问题",
-		"问题\n<persona-context kind=\"context\">\n被截断": "问题",
+		"问题\n<persona-context kind=\"context\">\n被截断":                                                     "问题",
 	} {
 		if got := stripContext(in); got != want {
 			t.Fatalf("strip %q = %q, want %q", in, got, want)
