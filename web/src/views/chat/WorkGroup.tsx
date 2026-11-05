@@ -14,6 +14,7 @@ import { Answer } from "./SegmentView";
 import { NoticeRow, Thumb } from "./Steps";
 import { SubagentCard } from "./SubagentCard";
 import { ThinkingCard, ThinkingLine } from "./ThinkingCard";
+import { t } from "../../i18n";
 
 export interface WorkProps {
   mid: string;
@@ -95,8 +96,8 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
       </button>
       {open && failed && !loading && (
         <div className="mt-1 flex items-center gap-2 pl-[22px] text-[12px] text-ink-3" role="status">
-          没能取回这段过程
-          <button type="button" onClick={() => setAttempt((n) => n + 1)} className="touch-hit rounded-control px-1.5 py-0.5 font-medium whitespace-nowrap text-accent-ink hover:bg-hover">重试</button>
+          {t("chat-workgroup.load_failed")}
+          <button type="button" onClick={() => setAttempt((n) => n + 1)} className="touch-hit rounded-control px-1.5 py-0.5 font-medium whitespace-nowrap text-accent-ink hover:bg-hover">{t("chat-workgroup.retry")}</button>
         </div>
       )}
       {(preview.length > 0 || (thinkingNow && !open)) && (
@@ -166,7 +167,7 @@ export function StepView({ step, p, live, fresh }: { step: Step; p: WorkProps; l
     case "fold":
       return (
         <div className="flex h-7 items-center gap-2 px-2 text-[13px] text-tool-ink">
-          <Spinner size={11} /> 正在取 {step.item.fold?.items ?? ""} 条
+          <Spinner size={11} /> {t("chat-workgroup.loading_steps", { count: step.item.fold?.items ?? 0 })}
         </div>
       );
   }

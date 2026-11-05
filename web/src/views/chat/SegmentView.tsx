@@ -21,6 +21,7 @@ import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
 import { useChatContext } from "./chat-context";
 import { WorkGroup, WorkNodes, type WorkProps } from "./WorkGroup";
+import { t } from "../../i18n";
 
 /** A message longer than this many lines folds to ten of them (line-clamp-10), with 展开 under it (cindy's UserMessage). */
 export const BUBBLE_MAX_LINES = 14;
@@ -52,7 +53,7 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
             <BubbleText text={msg.text} ts={msg.ts} mid={mid} sid={sid} />
           </MessageActions>
         ))}
-      {(pending || msg.queued) && <span className="text-[11px] text-ink-3">{pending ? "发送中…" : "工作中插入的消息"}</span>}
+      {(pending || msg.queued) && <span className="text-[11px] text-ink-3">{pending ? t("chat-segmentview.sending") : t("chat-segmentview.queued")}</span>}
       {!pending && <ChannelSource clientMsgId={msg.client_msg_id} />}
     </div>
   );
@@ -100,7 +101,7 @@ function BubbleText({ text: whole, ts, mid, sid, pending }: { text: string; ts?:
       )}
       {long && (
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="rounded-[6px] px-1.5 py-0.5 text-[12px] font-medium whitespace-nowrap text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2">
-          {open ? "收起" : "展开"}
+          {open ? t("chat-segmentview.collapse") : t("chat-segmentview.expand")}
         </button>
       )}
     </div>
@@ -114,7 +115,7 @@ function ChannelSource({ clientMsgId }: { clientMsgId?: string }) {
   return (
     <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-ink-3">
       <ChannelMark c={via} size={14} />
-      来自 {via.name}
+      {t("chat-segmentview.from", { name: via.name })}
     </span>
   );
 }

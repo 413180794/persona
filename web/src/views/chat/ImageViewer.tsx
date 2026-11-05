@@ -16,6 +16,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { NARROW, useMedia } from "../../ui/media-query";
 import { useChatActions } from "./chat-actions";
 import { ImageEditor } from "./ImageEditor";
+import { t } from "../../i18n";
 
 export interface ViewerImage {
   id: string;
@@ -51,10 +52,10 @@ export function ChatImageViewer({ item, mid, sid, onClose }: { item: Item; mid: 
   const attach = chat?.canCompose
     ? (img: DraftImage) => {
         if (!sendDraft(chat.draftKey, { type: "image", image: img })) {
-          toast("没有能放图片的输入框", "error");
+          toast(t("chat-imageviewer.no_composer"), "error");
           return false;
         }
-        toast("已加到输入框，补一句话就能发", "ok");
+        toast(t("chat-imageviewer.attached"), "ok");
         return true;
       }
     : undefined;
@@ -192,9 +193,9 @@ export function ImageViewer({
       // the clipboard takes PNG everywhere; other types are converted first
       const png = blob.type === "image/png" ? blob : await toPNG(blob);
       await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-      toast("已拷贝图片", "ok");
+      toast(t("chat-imageviewer.copied"), "ok");
     } catch {
-      toast("拷贝失败：浏览器不让写入图片", "error");
+      toast(t("chat-imageviewer.copy_failed"), "error");
     }
   };
 
@@ -208,7 +209,7 @@ export function ImageViewer({
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
-      toast("下载失败", "error");
+      toast(t("chat-imageviewer.download_failed"), "error");
     }
   };
 
@@ -226,9 +227,9 @@ export function ImageViewer({
   // the bottom bar; more than three don't fit a phone with their words, so there they are icons
   const off = failed[cur.id];
   const bar: (ViewerAction & { disabled?: boolean })[] = [
-    ...(attach ? [{ key: "edit", icon: "pencil" as const, label: "编辑", run: () => setEditing(true), disabled: off }] : []),
-    ...(canCopyImage() ? [{ key: "copy", icon: "copy" as const, label: "拷贝", run: () => void copy(), disabled: off }] : []),
-    { key: "download", icon: "download", label: "下载", run: () => void download(), disabled: off },
+    ...(attach ? [{ key: "edit", icon: "pencil" as const, label: t("chat-imageviewer.edit"), run: () => setEditing(true), disabled: off }] : []),
+    ...(canCopyImage() ? [{ key: "copy", icon: "copy" as const, label: t("chat-imageviewer.copy"), run: () => void copy(), disabled: off }] : []),
+    { key: "download", icon: "download", label: t("chat-imageviewer.download"), run: () => void download(), disabled: off },
     ...(actions?.(index) ?? []),
   ];
 
@@ -237,13 +238,13 @@ export function ImageViewer({
       ref={box}
       role="dialog"
       aria-modal="true"
-      aria-label={[cur.label || "图片", many ? `${index + 1} / ${images.length}` : ""].filter(Boolean).join(" ")}
+      aria-label={[cur.label || t("chat-imageviewer.image"), many ? `${index + 1} / ${images.length}` : ""].filter(Boolean).join(" ")}
       tabIndex={-1}
       className="fixed inset-0 z-50 flex flex-col bg-black/90 text-white outline-none backdrop-blur-sm"
       style={{ animation: "fade-in 150ms ease-out both" }}
     >
       <div className="flex h-14 shrink-0 items-center gap-2 px-3">
-        <RoundButton icon="x" label="关闭（Esc）" onClick={onClose} />
+        <RoundButton icon="x" label={t("chat-imageviewer.close")} onClick={onClose} />
         <div className="flex-1" />
         {cur.label && <span className="min-w-0 truncate text-[13px] font-medium">{cur.label}</span>}
         {many && (
@@ -252,7 +253,7 @@ export function ImageViewer({
           </span>
         )}
         <div className="flex-1" />
-        <RoundButton icon="external" label="在新标签页打开" onClick={() => void openOriginal()} />
+        <RoundButton icon="external" label={t("chat-imageviewer.open_in_new_tab")} onClick={() => void openOriginal()} />
       </div>
 
       <div
@@ -347,7 +348,7 @@ export function ImageViewer({
         }}
       >
         {failed[cur.id] ? (
-          <span className="text-[13px] text-white/70">图片读不出来</span>
+          <span className="text-[13px] text-white/70">{t("chat-imageviewer.unreadable")}</span>
         ) : (
           <img
             key={cur.id}
@@ -356,7 +357,7 @@ export function ImageViewer({
             draggable={false}
             onLoad={(e) => setNatural({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
             onError={() => setFailed((f) => ({ ...f, [cur.id]: true }))}
-            title={zoomed ? "拖动查看，双击还原" : "滚轮或双击放大"}
+            title={zoomed ? t("chat-imageviewer.zoomed_hint") : t("chat-imageviewer.zoom_hint")}
             className={cx("select-none rounded-[8px] object-contain", fit ? "absolute max-w-none" : "max-h-full max-w-full", !zoomed && "shadow-overlay", zoomed ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in")}
             // fitted at rest; zoomed with translate / scale (not transform, which the pop-in animation owns)
             style={{
@@ -384,7 +385,7 @@ export function ImageViewer({
       {editing && attach && (
         <ImageEditor
           src={cur.src}
-          doneTitle="加到输入框"
+          doneTitle={t("chat-imageviewer.add_to_composer")}
           onCancel={() => setEditing(false)}
           onDone={(img) => {
             setEditing(false);
@@ -418,8 +419,8 @@ function SideButton({ side, disabled, onClick }: { side: "left" | "right"; disab
   return (
     <button
       type="button"
-      aria-label={side === "left" ? "上一张（←）" : "下一张（→）"}
-      title={side === "left" ? "上一张（←）" : "下一张（→）"}
+      aria-label={side === "left" ? t("chat-imageviewer.previous") : t("chat-imageviewer.next")}
+      title={side === "left" ? t("chat-imageviewer.previous") : t("chat-imageviewer.next")}
       disabled={disabled}
       onClick={onClick}
       className={cx(

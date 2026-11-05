@@ -1,0 +1,9 @@
+{
+  "quote": "引用",
+  "summary_edit": "修正対象 · {label}",
+  "summary_single": "コンテキスト · {label}",
+  "summary_many_other": "コンテキスト · {count}件",
+  "empty": "空",
+  "no_content": "内容がありません",
+  "open_url": "{url}を開く"
+}

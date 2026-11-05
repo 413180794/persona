@@ -10,6 +10,7 @@ import { Button, copyText, cx, Dialog, Menu, type MenuItem } from "../../ui/atom
 import { Icon, type IconName } from "../../ui/icons";
 import { isNoHover } from "../../ui/media-query";
 import { useChatActions } from "./chat-actions";
+import { t } from "../../i18n";
 
 
 function pointAnchor(x: number, y: number): HTMLElement {
@@ -30,11 +31,11 @@ export interface Action {
 function useActions(text: string, isUser: boolean, ts: string | undefined, task: QuotedTask | undefined, select: () => void): Action[] {
   const chat = useChatActions();
   if (!text.trim()) return [];
-  const out: Action[] = [{ key: "copy", label: "复制", icon: "copy", onSelect: () => void copyText(text) }];
-  if (isNoHover()) out.push({ key: "select", label: "选择文本", icon: "read", onSelect: select });
+  const out: Action[] = [{ key: "copy", label: t("chat-messageactions.copy"), icon: "copy", onSelect: () => void copyText(text) }];
+  if (isNoHover()) out.push({ key: "select", label: t("chat-messageactions.select_text"), icon: "read", onSelect: select });
   if (chat?.canCompose) {
-    out.push({ key: "quote", label: "引用", icon: "quote", onSelect: () => void sendDraft(chat.draftKey, { type: "quote", text, from: isUser ? "我" : chat.speaker, ts, task }) });
-    if (isUser) out.push({ key: "edit", label: "编辑", icon: "pencil", onSelect: () => void sendDraft(chat.draftKey, { type: "replace", text }) });
+    out.push({ key: "quote", label: t("chat-messageactions.quote"), icon: "quote", onSelect: () => void sendDraft(chat.draftKey, { type: "quote", text, from: isUser ? t("chat-messageactions.me") : chat.speaker, ts, task }) });
+    if (isUser) out.push({ key: "edit", label: t("chat-messageactions.edit"), icon: "pencil", onSelect: () => void sendDraft(chat.draftKey, { type: "replace", text }) });
   }
   return out;
 }
@@ -43,7 +44,7 @@ function useActions(text: string, isUser: boolean, ts: string | undefined, task:
  *  reply is a transcript line of its own (`<uuid>#<n>`; lines without a uuid are `line<seq>`, which the node cannot find). */
 export function moreActions(itemId: string | undefined, fork: ((itemId: string) => void) | undefined): Action[] {
   if (!itemId || !fork || itemId.startsWith("line") || !itemId.includes("#")) return [];
-  return [{ key: "fork", label: "分支到新聊天", icon: "fork", onSelect: () => fork(itemId) }];
+  return [{ key: "fork", label: t("chat-messageactions.fork"), icon: "fork", onSelect: () => fork(itemId) }];
 }
 
 /** Wraps a message: right-click / long press opens its menu. The hover bar goes under it (with the time), or beside it
@@ -160,7 +161,7 @@ export function MessageActions({
             <button
               key={a.key}
               type="button"
-              aria-label={a.key === "copy" ? (isUser ? "复制消息" : "拷贝回复") : a.label}
+              aria-label={a.key === "copy" ? (isUser ? t("chat-messageactions.copy_message") : t("chat-messageactions.copy_reply")) : a.label}
               title={a.label}
               onClick={a.onSelect}
               className="flex size-6 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2"
@@ -171,8 +172,8 @@ export function MessageActions({
         {more.length > 0 && (
           <button
             type="button"
-            aria-label="更多"
-            title="更多"
+            aria-label={t("chat-messageactions.more")}
+            title={t("chat-messageactions.more")}
             aria-haspopup="menu"
             aria-expanded={Boolean(moreAnchor)}
             onClick={(e) => setMoreAnchor(moreAnchor ? null : e.currentTarget)}
@@ -188,11 +189,11 @@ export function MessageActions({
       <Dialog
         open={selecting}
         onClose={() => setSelecting(false)}
-        title="选择文本"
+        title={t("chat-messageactions.select_text")}
         footer={
           <>
             <Button tone="quiet" onClick={() => setSelecting(false)}>
-              完成
+              {t("chat-messageactions.done")}
             </Button>
             <Button
               tone="primary"
@@ -201,7 +202,7 @@ export function MessageActions({
                 setSelecting(false);
               }}
             >
-              全部拷贝
+              {t("chat-messageactions.copy_all")}
             </Button>
           </>
         }

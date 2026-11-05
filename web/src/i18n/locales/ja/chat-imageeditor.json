@@ -1,0 +1,17 @@
+{
+  "color_red": "赤",
+  "color_yellow": "黄",
+  "color_green": "緑",
+  "color_blue": "青",
+  "color_white": "白",
+  "color_black": "黒",
+  "done": "完了",
+  "unreadable": "画像を読み込めないため、編集できません",
+  "too_large": "編集後の画像が大きすぎます（最大8MB）",
+  "save_failed": "保存できませんでした：ブラウザーがこの画像のピクセルを読み取れません",
+  "title": "画像を編集",
+  "box": "矩形",
+  "pen": "ペン",
+  "undo": "取り消す（⌘Z）",
+  "clear": "クリア"
+}

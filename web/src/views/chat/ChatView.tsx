@@ -56,6 +56,7 @@ import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
 import { displayLines, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
 import { DayLine, FeedLineView, QuickResultCard, RouteChip, TaskDock, TaskQuestions } from "../assistant/Tasks";
+import { t } from "../../i18n";
 
 const NO_FEED: FeedItem[] = [];
 
@@ -72,9 +73,9 @@ async function forkAt(mid: string, sid: string, itemId: string, assistant: boole
     const r = await api<{ session_id: string }>(`${sessionPath(mid, sid)}/fork`, { method: "POST", json: { at_item_id: itemId } });
     await refresh();
     navigate(assistant ? { name: "jarvis", sid: r.session_id } : { name: "session", mid, sid: r.session_id });
-    toast("已分支到新聊天", "ok");
+    toast(t("chat-chatview.forked"), "ok");
   } catch (e) {
-    toast(`分支失败：${errorText(e)}`, "error");
+    toast(t("chat-chatview.fork_failed", { error: errorText(e) }), "error");
   }
 }
 
@@ -382,7 +383,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const deliver = useCallback(
     async (out: Outgoing, id: string, clearDraft?: string): Promise<boolean> => {
       if (!sessionCan(getSession(mid, sid), "send")) {
-        toast(sourceSubtitle(session) || "正在读取会话信息，稍后再试", "error");
+        toast(sourceSubtitle(session) || t("chat-chatview.session_loading"), "error");
         return false;
       }
       // a sending bubble shows picked contexts as quote cards, like the transcript will (not the raw tags)
@@ -402,11 +403,11 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         if (e instanceof ApiError && e.code === "input_draft") {
           setDraftRefusal({ out, id, draft: String(e.body.draft ?? ""), clearable: typeof e.body.clearable === "string" ? e.body.clearable : undefined });
         } else if (e instanceof ApiError && e.code === "dialog_open") {
-          toast("电脑上开着一个对话框，先处理它再发", "error");
+          toast(t("chat-chatview.dialog_open"), "error");
         } else if (e instanceof ApiError && e.body.delivered === "unknown") {
-          toast("不确定送到没有：先看一眼对话再决定要不要重发", "error");
+          toast(t("chat-chatview.delivery_unknown"), "error");
         } else {
-          toast(`没发出去：${errorText(e)}`, "error");
+          toast(t("chat-chatview.send_failed", { error: errorText(e) }), "error");
         }
         return false;
       }
@@ -420,7 +421,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       try {
         if (await sendRouted(sid, out.text)) return true;
       } catch (e) {
-        toast(`没送到：${errorText(e)}`, "error");
+        toast(t("chat-chatview.not_delivered", { error: errorText(e) }), "error");
         return false;
       }
     }
@@ -449,9 +450,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     if (!sessionCan(getSession(mid, sid), "interrupt")) return;
     try {
       await api(`${sessionPath(mid, sid)}/interrupt`, { method: "POST" });
-      toast("已中断");
+      toast(t("chat-chatview.interrupted"));
     } catch (e) {
-      toast(`中断失败：${errorText(e)}`, "error");
+      toast(t("chat-chatview.interrupt_failed", { error: errorText(e) }), "error");
     }
   };
 
@@ -471,7 +472,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const lastLive = (readOnly ? Boolean(viewed?.running) : working) && !tr.loading;
   // The main conversation is always Persona (#1313): not its first message, the node's title for it.
   const isMain = Boolean(assistant && sid === mainConversation);
-  const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? "新对话" : "会话";
+  const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
   const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (readOnly || !outgoing), split }), [tr.items, lastLive, readOnly, outgoing, split]);
   const ctx = useMemo<ChatContextValue>(
     () => ({ tasks: buildTaskIndex(tr.items), subagents: assistant ? [] : (subagents ?? []), fresh, scope: `${mid}/${sid}:` }),
@@ -484,7 +485,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const onUnsplit = useCallback((g: string) => setSplit((x) => new Set([...x].filter((y) => y !== g))), []);
   const lastLine = lines[lines.length - 1];
   // 重试 on an API error card: only when it is the last thing, the agent is not working (someone may have retried already)
-  const retry = useCallback(() => void deliver({ text: "继续", images: [] }, uuid()), [deliver]);
+  const retry = useCallback(() => void deliver({ text: t("chat-chatview.continue_text"), images: [] }, uuid()), [deliver]);
   const canRetry = !readOnly && lastLine?.kind === "apiError" && state !== "working" && !outgoing && sessionCan(session, "send");
   // Claude Code's "while you were away" recap, open in full while it is the newest thing and not closed: the chat's last
   // line, in the flow with the agent's words (#1360: above the composer it covered the end of the reply)
@@ -569,24 +570,24 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <div ref={scroller} onScroll={onScroll} data-chat-scroll className="h-full overflow-y-auto [overflow-anchor:none]">
           <ChatActionsContext.Provider value={actions}>
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
-            {session?.start_error && <div role="alert" className="rounded-control bg-inset px-3 py-2 text-[13px] text-red">启动失败：{session.start_error}</div>}
-            {starting && !tr.loading && !outgoing && <Loading label="正在启动 Agent" />}
+            {session?.start_error && <div role="alert" className="rounded-control bg-inset px-3 py-2 text-[13px] text-red">{t("chat-chatview.start_failed", { error: session.start_error })}</div>}
+            {starting && !tr.loading && !outgoing && <Loading label={t("chat-chatview.starting_agent")} />}
             {tr.loadingEarlier && (
               <div className="flex justify-center py-2">
-                <Loading label="加载更早的消息" />
+                <Loading label={t("chat-chatview.loading_earlier")} />
               </div>
             )}
-            {!tr.hasMore && !tr.loading && tr.items.length > 0 && <div className="text-center text-[11.5px] text-ink-3">{session?.cwd && !assistant ? `在 ${shortPath(session.cwd)} 开始` : "对话开始"}</div>}
+            {!tr.hasMore && !tr.loading && tr.items.length > 0 && <div className="text-center text-[11.5px] text-ink-3">{session?.cwd && !assistant ? t("chat-chatview.started_in", { path: shortPath(session.cwd) }) : t("chat-chatview.chat_start")}</div>}
             {tr.loading && !tr.items.length && (
               <div className="flex justify-center py-16">
-                <Loading label={starting ? "正在准备" : "正在读取对话"} />
+                <Loading label={starting ? t("chat-chatview.preparing") : t("chat-chatview.loading_chat")} />
               </div>
             )}
             {tr.error && !tr.items.length && (
               <div className="flex flex-col items-center gap-3 py-16 text-center">
                 <p className="text-[13px] text-ink-2">{tr.error}</p>
                 <Button onClick={tr.reload} icon="retry">
-                  重试
+                  {t("chat-chatview.retry")}
                 </Button>
               </div>
             )}
@@ -639,7 +640,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
             {!readOnly && <OutboxBubbles mid={mid} sid={sid} entries={outbox} />}
             {!readOnly && (shownPending.length > 0 || outbox.some((e) => e.state === "sending") || (starting && outgoing > 0)) && (
               <div className="flex items-center gap-2.5">
-                <Loading label={starting ? "正在准备" : "正在送达"} />
+                <Loading label={starting ? t("chat-chatview.preparing") : t("chat-chatview.delivering")} />
               </div>
             )}
           </div>
@@ -693,7 +694,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <div ref={composerBox} className="shrink-0">
         <Composer
           draftKey={draftKey}
-          placeholder={!sessionCan(session, "send") && session?.source_kind ? "此会话仅可查看" : assistant ? `问 ${persona.name}…` : state === "offline" ? "发消息会在电脑上恢复这个会话…" : "给 Agent 发消息…"}
+          placeholder={!sessionCan(session, "send") && session?.source_kind ? t("chat-chatview.view_only") : assistant ? t("chat-chatview.ask_placeholder", { name: persona.name }) : state === "offline" ? t("chat-chatview.resume_placeholder") : t("chat-chatview.agent_placeholder")}
           machineId={mid}
           working={state === "working"}
           onSend={onSend}
@@ -722,11 +723,11 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       <Dialog
         open={Boolean(draftRefusal)}
         onClose={() => setDraftRefusal(null)}
-        title="电脑上的输入框里有没发出去的字"
+        title={t("chat-chatview.draft_title")}
         footer={
           <>
             <Button tone="quiet" onClick={() => setDraftRefusal(null)}>
-              先不发
+              {t("chat-chatview.not_now")}
             </Button>
             {draftRefusal?.clearable !== undefined && (
               <Button
@@ -737,13 +738,13 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                   void deliver(r.out, uuid(), r.clearable); // another operation: the refused one keeps its answer
                 }}
               >
-                清空并发送
+                {t("chat-chatview.clear_and_send")}
               </Button>
             )}
           </>
         }
       >
-        <p className="text-[13px] leading-relaxed text-ink-2">为了不把你的消息和它拼在一起，什么都没打。{draftRefusal?.clearable === undefined && "这段字有好几行，要在电脑上处理。"}</p>
+        <p className="text-[13px] leading-relaxed text-ink-2">{t("chat-chatview.draft_detail")}{draftRefusal?.clearable === undefined && t("chat-chatview.draft_multiline")}</p>
         {draftRefusal?.draft && <pre className="mt-2.5 max-h-40 overflow-auto rounded-[8px] bg-inset px-2.5 py-2 font-mono text-[12px] whitespace-pre-wrap text-ink shadow-hairline">{draftRefusal.draft}</pre>}
       </Dialog>
     </div>
@@ -796,7 +797,7 @@ function AttentionNote({ session }: { session: Session }) {
       {link && (
         <a href={link} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-accent hover:underline">
           <Icon name="external" size={12} />
-          在飞书打开
+          {t("chat-chatview.open_in_lark")}
         </a>
       )}
     </div>
@@ -853,10 +854,10 @@ export function Header({
     setMutes(next);
     try {
       await api("/mutes", { method: "PUT", json: next });
-      toast(isMuted(session, next) ? "已屏蔽通知" : "已恢复通知", "ok");
+      toast(isMuted(session, next) ? t("chat-chatview.muted") : t("chat-chatview.unmuted"), "ok");
     } catch (e) {
       setMutes(before);
-      toast(`没改成：${errorText(e)}`, "error");
+      toast(t("chat-chatview.change_failed", { error: errorText(e) }), "error");
     }
   };
   const [linkTodoOpen, setLinkTodoOpen] = useState(false);
@@ -872,8 +873,8 @@ export function Header({
     try {
       await attachSession(session.machine_id, session.session_id);
       await refresh();
-      toast("已实时接入", "ok");
-    } catch (e) { toast(`接入失败：${errorText(e)}`, "error"); }
+      toast(t("chat-chatview.attached"), "ok");
+    } catch (e) { toast(t("chat-chatview.attach_failed", { error: errorText(e) }), "error"); }
   };
   const others = siblings.filter((s) => s.session_id !== session?.session_id);
   // the session's files and Git open in the side panel (docs/web.md「侧边面板」); the assistant has none. Its terminal is
@@ -895,28 +896,28 @@ export function Header({
           ? [
               {
                 key: "todo-detail",
-                label: `待办：${session.todo.title}`,
+                label: t("chat-chatview.todo_label", { title: session.todo.title }),
                 icon: "todo" as const,
                 onSelect: () => navigate(`/todos?id=${encodeURIComponent(session.todo!.id)}`),
               },
               {
                 key: "unlink-todo",
-                label: "解除关联",
+                label: t("chat-chatview.unlink_todo"),
                 icon: "x" as const,
                 onSelect: async () => {
                   try {
                     await unlinkAgentFromTodo(session.todo!.id, session.machine_id, session.session_id);
                     await refreshTodos();
                     await refresh();
-                    toast("已解除待办关联", "ok");
+                    toast(t("chat-chatview.todo_unlinked"), "ok");
                   } catch (e) {
-                    toast(`解除关联失败：${errorText(e)}`, "error");
+                    toast(t("chat-chatview.unlink_failed", { error: errorText(e) }), "error");
                   }
                 },
               },
               {
                 key: "relink-todo",
-                label: "改挂到其他待办…",
+                label: t("chat-chatview.relink_todo"),
                 icon: "todo" as const,
                 onSelect: () => setLinkTodoOpen(true),
               },
@@ -925,34 +926,34 @@ export function Header({
             ? [
                 {
                   key: "link-todo",
-                  label: "关联到待办…",
+                  label: t("chat-chatview.link_todo"),
                   icon: "todo" as const,
                   onSelect: () => setLinkTodoOpen(true),
                 },
               ]
             : []),
-        ...(allowed.includes("attach") ? [{ key: "attach", label: "实时接入", icon: "link" as const, onSelect: () => void attach() }] : []),
-        ...(showTerminal ? [{ key: "terminal", label: "终端", icon: "terminal" as const, checked: view === "term", onSelect: flipView }] : []),
-        ...(showFiles ? [{ key: "files", label: "文件", icon: "folder" as const, checked: here(panel, "files"), onSelect: openFiles }, { key: "git", label: "Git", icon: "git" as const, checked: here(panel, "git"), onSelect: openGit }] : []),
-        ...(allowed.includes("stop") ? [{ key: "stop", label: "中断", icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
-        ...(feishu ? [{ key: "feishu", label: "在飞书打开", icon: "external" as const, onSelect: () => openLink(feishu) }] : []),
-        { key: "info", label: "会话信息", icon: "info", onSelect: () => setDialog("info") },
-        ...(!main && sessionCan(session, "send") && (session.assistant || !session.source_kind) ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => setDialog("rename") }] : []),
-        ...(!assistant && session.space_id && !session.source_kind ? [{ key: "space", label: "重命名空间…", icon: "folder" as const, onSelect: () => setDialog("space") }] : []),
-        ...(!assistant ? [{ key: "mute", label: muted ? "恢复通知" : "屏蔽通知", icon: muted ? ("bell" as const) : ("bellOff" as const), onSelect: () => void flipMute() }] : []),
-        ...(!assistant ? [{ key: "pin", label: pinned ? "取消置顶" : "置顶", icon: "pin" as const, onSelect: () => void flipPin(session) }] : []),
-        { key: "sid", label: "拷贝会话 ID", icon: "copy", onSelect: () => copyText(session.session_id) },
-        ...(session.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, onSelect: () => copyText(session.cwd) }] : []),
-        ...(allowed.includes("resume") ? [{ key: "resume", label: "拷贝恢复命令", icon: "terminal" as const, onSelect: () => copyText(resumeCommand(session)) }] : []),
-        ...(!assistant && allowed.includes("close") ? [{ key: "close", label: "关闭 Agent…", icon: "x" as const, danger: true, onSelect: () => setClosing(true) }] : []),
-        ...(sessionDeletable(session) ? [{ key: "delete", label: "删除对话…", icon: "trash" as const, danger: true, onSelect: () => setDialog("delete") }] : []),
+        ...(allowed.includes("attach") ? [{ key: "attach", label: t("chat-chatview.attach"), icon: "link" as const, onSelect: () => void attach() }] : []),
+        ...(showTerminal ? [{ key: "terminal", label: t("chat-chatview.terminal"), icon: "terminal" as const, checked: view === "term", onSelect: flipView }] : []),
+        ...(showFiles ? [{ key: "files", label: t("chat-chatview.files"), icon: "folder" as const, checked: here(panel, "files"), onSelect: openFiles }, { key: "git", label: "Git", icon: "git" as const, checked: here(panel, "git"), onSelect: openGit }] : []),
+        ...(allowed.includes("stop") ? [{ key: "stop", label: t("chat-chatview.interrupt"), icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
+        ...(feishu ? [{ key: "feishu", label: t("chat-chatview.open_in_lark"), icon: "external" as const, onSelect: () => openLink(feishu) }] : []),
+        { key: "info", label: t("chat-chatview.session_info"), icon: "info", onSelect: () => setDialog("info") },
+        ...(!main && sessionCan(session, "send") && (session.assistant || !session.source_kind) ? [{ key: "rename", label: t("chat-chatview.rename"), icon: "pencil" as const, onSelect: () => setDialog("rename") }] : []),
+        ...(!assistant && session.space_id && !session.source_kind ? [{ key: "space", label: t("chat-chatview.rename_space"), icon: "folder" as const, onSelect: () => setDialog("space") }] : []),
+        ...(!assistant ? [{ key: "mute", label: muted ? t("chat-chatview.unmute") : t("chat-chatview.mute"), icon: muted ? ("bell" as const) : ("bellOff" as const), onSelect: () => void flipMute() }] : []),
+        ...(!assistant ? [{ key: "pin", label: pinned ? t("chat-chatview.unpin") : t("chat-chatview.pin"), icon: "pin" as const, onSelect: () => void flipPin(session) }] : []),
+        { key: "sid", label: t("chat-chatview.copy_session_id"), icon: "copy", onSelect: () => copyText(session.session_id) },
+        ...(session.cwd ? [{ key: "cwd", label: t("chat-chatview.copy_folder"), icon: "folder" as const, onSelect: () => copyText(session.cwd) }] : []),
+        ...(allowed.includes("resume") ? [{ key: "resume", label: t("chat-chatview.copy_resume_command"), icon: "terminal" as const, onSelect: () => copyText(resumeCommand(session)) }] : []),
+        ...(!assistant && allowed.includes("close") ? [{ key: "close", label: t("chat-chatview.close_agent_menu"), icon: "x" as const, danger: true, onSelect: () => setClosing(true) }] : []),
+        ...(sessionDeletable(session) ? [{ key: "delete", label: t("chat-chatview.delete_chat"), icon: "trash" as const, danger: true, onSelect: () => setDialog("delete") }] : []),
       ]
     : [];
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-page/85 px-3 backdrop-blur-md sm:px-4">
       <div className={headerSlot(Boolean(topCenter), "start")}>
-        {onToggleSidebar && <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />}
+        {onToggleSidebar && <IconButton icon="sidebar" label={t("chat-chatview.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />}
       </div>
       <div className={cx("min-w-0 flex-1", Boolean(topCenter) && "max-lg:hidden")}>
         <div className="flex min-w-0 items-center gap-2">
@@ -967,12 +968,12 @@ export function Header({
         {/* the todo it works for, up top (#1836): opens the todo, 改挂 picks another */}
         {session?.todo && !assistant && (
           <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
-            <button type="button" onClick={() => navigate(`/todos?id=${encodeURIComponent(session.todo!.id)}`)} title={`待办：${session.todo.title}`}
+            <button type="button" onClick={() => navigate(`/todos?id=${encodeURIComponent(session.todo!.id)}`)} title={t("chat-chatview.todo_label", { title: session.todo.title })}
               className="flex min-w-0 items-center gap-1 whitespace-nowrap rounded px-1 text-ink-2 hover:bg-hover hover:text-ink">
               <Icon name="todo" size={11} stroke={2} className="shrink-0" />
               <span className="truncate">{session.todo.title}</span>
             </button>
-            <button type="button" onClick={() => setLinkTodoOpen(true)} className="shrink-0 whitespace-nowrap rounded px-1 hover:bg-hover hover:text-ink">改挂</button>
+            <button type="button" onClick={() => setLinkTodoOpen(true)} className="shrink-0 whitespace-nowrap rounded px-1 hover:bg-hover hover:text-ink">{t("chat-chatview.relink")}</button>
             {sub && <span title={sub} className="min-w-0 truncate">· {sub}</span>}
           </div>
         )}
@@ -985,12 +986,12 @@ export function Header({
         <button
           type="button"
           onClick={tabs.open}
-          aria-label={`同空间 ${others.length}`}
-          title={`同空间 ${others.length}`}
+          aria-label={t("chat-chatview.same_space_count", { count: others.length })}
+          title={t("chat-chatview.same_space_count", { count: others.length })}
           className="touch-hit flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover hover:text-ink max-sm:gap-1 max-sm:px-1.5"
         >
           <Icon name="layers" size={13} />
-          <span className="max-sm:hidden">同空间</span> {others.length}
+          <span className="max-sm:hidden">{t("chat-chatview.same_space")}</span> {others.length}
           {othersNeed && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red shadow-[0_0_0_2px_var(--page)]" />}
         </button>
       )}
@@ -1000,7 +1001,7 @@ export function Header({
           onClose={tabs.close}
           align="right"
           width={360}
-          header={session?.space_name ? `空间 ${session.space_name}` : undefined}
+          header={session?.space_name ? t("chat-chatview.space_header", { name: session.space_name }) : undefined}
           items={siblings
             .slice()
             .sort((a, b) => (a.slot_index ?? 0) - (b.slot_index ?? 0))
@@ -1013,20 +1014,20 @@ export function Header({
             }))}
         />
       )}
-      {showFiles && <IconButton icon="folder" label="文件" onClick={openFiles} active={here(panel, "files") || here(panel, "git")} className="hidden sm:flex" />}
+      {showFiles && <IconButton icon="folder" label={t("chat-chatview.files")} onClick={openFiles} active={here(panel, "files") || here(panel, "git")} className="hidden sm:flex" />}
       {view && onView && (
         <Segmented
-          label="终端或对话"
+          label={t("chat-chatview.terminal_or_chat")}
           value={view}
           onChange={onView}
           compact
           options={[
-            { v: "term", label: "终端" },
-            { v: "chat", label: "对话", dot: viewDot },
+            { v: "term", label: t("chat-chatview.terminal") },
+            { v: "chat", label: t("chat-chatview.chat"), dot: viewDot },
           ]}
         />
       )}
-      {items.length > 0 && <IconButton icon="more" label="更多" onClick={menu.open} active={Boolean(menu.anchor)} />}
+      {items.length > 0 && <IconButton icon="more" label={t("chat-chatview.more")} onClick={menu.open} active={Boolean(menu.anchor)} />}
       </div>
       {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" items={items} />}
       {session && <CloseAgent open={closing} onClose={() => setClosing(false)} session={session} machineName={machineName} />}
@@ -1054,11 +1055,11 @@ function CloseAgent({ open, onClose, session, machineName }: { open: boolean; on
     setBusy(true);
     try {
       await api(`${sessionPath(session.machine_id, session.session_id)}/close`, { method: "POST" });
-      toast("已关闭", "ok");
+      toast(t("chat-chatview.closed"), "ok");
       onClose();
       navigate({ name: "home" });
     } catch (e) {
-      toast(`关闭失败：${errorText(e)}`, "error");
+      toast(t("chat-chatview.close_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -1067,20 +1068,20 @@ function CloseAgent({ open, onClose, session, machineName }: { open: boolean; on
     <Dialog
       open={open}
       onClose={onClose}
-      title="关闭这个 Agent？"
+      title={t("chat-chatview.close_agent_title")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="danger" busy={busy} onClick={go}>
-            关闭 Agent
+            {t("chat-chatview.close_agent")}
           </Button>
         </>
       }
     >
       <p className="text-[13px] leading-relaxed text-ink-2">
-        会退出 {machineName} 上「{[session.space_name, tabLabel(session)].filter(Boolean).join(" › ") || sessionTitle(session)}」里的 Claude 并关掉这个标签页。对话记录还在，之后可以从「最近」里恢复。
+        {t("chat-chatview.close_agent_detail", { machine: machineName, where: [session.space_name, tabLabel(session)].filter(Boolean).join(" › ") || sessionTitle(session) })}
       </p>
     </Dialog>
   );

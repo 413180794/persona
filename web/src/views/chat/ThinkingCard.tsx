@@ -9,6 +9,7 @@ import { Collapse, cx, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { CHEVRON_SLOT, STATUS_SLOT } from "./ActionRow";
 import { useExpanded } from "./expanded";
+import { t } from "../../i18n";
 
 const HEAD = "flex w-full min-w-0 items-center gap-1.5 rounded-[8px] px-2 py-0.5 [@media(pointer:coarse)]:min-h-10 text-left select-none transition-colors duration-150 motion-reduce:transition-none";
 
@@ -16,7 +17,7 @@ export function ThinkingCard({ item, durationMs, live, scope = "" }: { item?: It
   const text = item?.text?.trim() ?? "";
   const [open, setOpen] = useExpanded(`${scope}thinking:${item?.id ?? "live"}`);
   if (live !== undefined) return live?.thinking ? <LiveThinking /> : null;
-  const label = `思考 ${workDuration(durationMs ?? 0)}`;
+  const label = t("chat-thinkingcard.thought_for", { duration: workDuration(durationMs ?? 0) });
   return (
     <div className="flex min-w-0 flex-col" data-thinking={text ? "words" : "empty"}>
       <button type="button" disabled={!text} aria-expanded={text ? open : undefined} onClick={() => setOpen((o) => !o)} className={cx(HEAD, text ? "group cursor-pointer hover:bg-tool-hover" : "cursor-default")}>

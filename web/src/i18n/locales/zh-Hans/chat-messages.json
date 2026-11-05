@@ -1,0 +1,6 @@
+{
+  "message_count_other": "{count} 条消息",
+  "from": "来自 {name}",
+  "loop_tick": "循环唤醒",
+  "open_task": "{line}，打开任务"
+}

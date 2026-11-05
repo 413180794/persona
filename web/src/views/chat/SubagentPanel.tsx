@@ -5,6 +5,7 @@ import { subagentParent, subagentTitle } from "../../lib/tasks";
 import { StatusDot } from "../../ui/atoms";
 import { PanelHeader } from "../SidePanel";
 import { ChatView } from "./ChatView";
+import { t } from "../../i18n";
 
 export function SubagentPanel({ mid, sid, onClose }: { mid: string; sid: string; onClose: () => void }) {
   const agent = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === subagentParent(sid))?.subagents?.find((a) => a.session_id === sid));
@@ -15,10 +16,10 @@ export function SubagentPanel({ mid, sid, onClose }: { mid: string; sid: string;
         title={
           <span className="flex min-w-0 items-center gap-1.5">
             <StatusDot state={agent?.running ? "working" : "unread"} size={7} />
-            <span className="truncate">{agent ? subagentTitle(agent) : "子 Agent"}</span>
+            <span className="truncate">{agent ? subagentTitle(agent) : t("chat-subagentpanel.subagent")}</span>
           </span>
         }
-        subtitle={["子 Agent", agent?.fork ? "分叉" : agent?.type, agent?.running ? "运行中，只读" : "只读"].filter(Boolean).join(" · ")}
+        subtitle={[t("chat-subagentpanel.subagent"), agent?.fork ? t("chat-subagentpanel.fork") : agent?.type, agent?.running ? t("chat-subagentpanel.running_read_only") : t("chat-subagentpanel.read_only")].filter(Boolean).join(" · ")}
         onClose={onClose}
       />
       <div className="flex min-h-0 flex-1 flex-col">

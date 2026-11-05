@@ -1,0 +1,7 @@
+{
+  "message_count_one": "{count} message",
+  "message_count_other": "{count} messages",
+  "from": "From {name}",
+  "loop_tick": "Loop wake-up",
+  "open_task": "{line}, open task"
+}

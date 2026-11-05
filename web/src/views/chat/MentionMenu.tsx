@@ -9,6 +9,7 @@ import type { Session } from "../../lib/types";
 import { useStore } from "../../lib/store";
 import { EASE, Spinner } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { t } from "../../i18n";
 
 export interface MentionSource {
   /** The session's folder: relative paths and the first listing start here. */
@@ -90,11 +91,11 @@ export function useMentionRows(token: MentionToken | null, source: MentionSource
       if (q && !rel.toLowerCase().includes(q)) continue;
       used.add(rel);
       const slash = rel.lastIndexOf("/");
-      out.push({ kind: "file", id: `used:${p}`, name: rel.slice(slash + 1), detail: slash > 0 ? rel.slice(0, slash) : "本会话用过的文件", insert: `@${rel} `, dir: false });
+      out.push({ kind: "file", id: `used:${p}`, name: rel.slice(slash + 1), detail: slash > 0 ? rel.slice(0, slash) : t("chat-mentionmenu.used_files"), insert: `@${rel} `, dir: false });
     }
     const top = (listing?.entries ?? []).filter((e) => nameMatches(e.name, q) && !used.has(e.name));
     for (const e of [...byPrefix(top.filter((x) => x.dir), (x) => x.name, q), ...byPrefix(top.filter((x) => !x.dir), (x) => x.name, q)].slice(0, 12)) {
-      out.push({ kind: "file", id: `top:${e.name}`, name: e.dir ? `${e.name}/` : e.name, detail: e.dir ? "文件夹" : "会话目录", insert: `@${e.name}${e.dir ? "/" : " "}`, dir: e.dir });
+      out.push({ kind: "file", id: `top:${e.name}`, name: e.dir ? `${e.name}/` : e.name, detail: e.dir ? t("chat-mentionmenu.folder") : t("chat-mentionmenu.session_dir"), insert: `@${e.name}${e.dir ? "/" : " "}`, dir: e.dir });
     }
     for (const s of otherSessions(Object.values(sessions).flat(), source.self, q)) {
       out.push({ kind: "session", id: `session:${s.machine_id}/${s.session_id}`, name: displayTitle(s), detail: sessionDetail(s), session: s });
@@ -121,7 +122,7 @@ export function MentionMenu({ rows, active, loading, browsing, onHover, onPick }
   }, [active, rows.length]);
   const firstSession = rows.findIndex((r) => r.kind === "session");
   return (
-    <div className="absolute inset-x-0 bottom-full z-10 mb-2 rounded-[10px] bg-surface p-1 shadow-raised" style={{ animation: `pop-in 180ms ${EASE} both`, transformOrigin: "bottom center" }} role="listbox" aria-label="引用文件或会话">
+    <div className="absolute inset-x-0 bottom-full z-10 mb-2 rounded-[10px] bg-surface p-1 shadow-raised" style={{ animation: `pop-in 180ms ${EASE} both`, transformOrigin: "bottom center" }} role="listbox" aria-label={t("chat-mentionmenu.label")}>
       <div className="relative max-h-[min(50vh,320px)] overflow-y-auto">
         <span aria-hidden className="pointer-events-none absolute inset-x-0 rounded-[6px] bg-hover" style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 200ms ${EASE}, height 200ms ${EASE}` }} />
         {rows.map((r, i) => (
@@ -142,7 +143,7 @@ export function MentionMenu({ rows, active, loading, browsing, onHover, onPick }
               <Icon name={rowIcon(r)} size={14} className="shrink-0 text-ink-3" />
               <span className="min-w-0 shrink truncate text-[12.5px] font-medium text-ink">{r.name}</span>
               <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-3">{r.detail}</span>
-              {r.kind === "session" && <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-3">作为上下文</span>}
+              {r.kind === "session" && <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-3">{t("chat-mentionmenu.as_context")}</span>}
             </button>
           </div>
         ))}
@@ -150,17 +151,17 @@ export function MentionMenu({ rows, active, loading, browsing, onHover, onPick }
           <div className="flex h-9 items-center gap-2 px-2 text-[12px] text-ink-3">
             {loading ? (
               <>
-                <Spinner /> 正在读取文件夹…
+                <Spinner /> {t("chat-mentionmenu.reading_folder")}
               </>
             ) : browsing ? (
-              "这个文件夹里没有对得上的"
+              t("chat-mentionmenu.no_match_in_folder")
             ) : (
-              "没有对得上的文件或会话"
+              t("chat-mentionmenu.no_match")
             )}
           </div>
         )}
       </div>
-      <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-[11px] text-ink-3">↑↓ 选择 · Enter 填入 · 输入 / 进入文件夹 · Esc 关闭</div>
+      <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-[11px] text-ink-3">{t("chat-mentionmenu.keys_hint")}</div>
     </div>
   );
 }

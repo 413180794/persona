@@ -1,0 +1,17 @@
+{
+  "color_red": "Red",
+  "color_yellow": "Yellow",
+  "color_green": "Green",
+  "color_blue": "Blue",
+  "color_white": "White",
+  "color_black": "Black",
+  "done": "Done",
+  "unreadable": "Couldn't read the image to edit it",
+  "too_large": "The edited image is too large (8 MB max)",
+  "save_failed": "Couldn't save: the browser can't read this image's pixels",
+  "title": "Edit image",
+  "box": "Box",
+  "pen": "Pen",
+  "undo": "Undo (⌘Z)",
+  "clear": "Clear"
+}

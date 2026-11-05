@@ -9,6 +9,7 @@ import { keepAllBut } from "../../lib/queue";
 import type { Session } from "../../lib/types";
 import { Collapse, copyText, cx, Menu, Spinner, toast, useMenu, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { t } from "../../i18n";
 
 /** `compact` (a phone on its side): one line, 排队中 N 条, that opens the messages. */
 export function QueueStrip({ session, draftKey, canEdit, compact }: { session: Session; draftKey: string; canEdit: boolean; compact?: boolean }) {
@@ -26,9 +27,9 @@ export function QueueStrip({ session, draftKey, canEdit, compact }: { session: S
       });
       const pulled = r.queue ?? [];
       if (!del && pulled[index] !== undefined) sendDraft(draftKey, { type: "append", text: pulled[index] });
-      toast(del ? "已从队列删除" : "已撤回到输入框，改好再发送", "ok");
+      toast(del ? t("chat-queuestrip.deleted") : t("chat-queuestrip.pulled_back"), "ok");
     } catch (e) {
-      toast(`没改成：${errorText(e)}`, "error");
+      toast(t("chat-queuestrip.failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -42,7 +43,7 @@ export function QueueStrip({ session, draftKey, canEdit, compact }: { session: S
     <>
       <Icon name="inbox" size={13} />
       <span className="min-w-0 flex-1 truncate">
-        排队中 {queued.length} 条 · {agentLabel(session)} 忙完会依次处理
+        {t("chat-queuestrip.summary", { count: queued.length, agent: agentLabel(session) })}
       </span>
       {busy && <Spinner />}
     </>
@@ -70,9 +71,9 @@ export function QueueStrip({ session, draftKey, canEdit, compact }: { session: S
 function QueueRow({ n, text, disabled, canEdit, onEdit, onDelete }: { n: number; text: string; disabled: boolean; canEdit: boolean; onEdit: () => void; onDelete: () => void }) {
   const menu = useMenu();
   const items: MenuItem[] = [
-    ...(canEdit ? [{ key: "edit", label: "撤回编辑", icon: "pencil" as const, onSelect: onEdit }] : []),
-    { key: "copy", label: "拷贝", icon: "copy", onSelect: () => void copyText(text) },
-    ...(canEdit ? [{ key: "delete", label: "删除", icon: "trash" as const, danger: true, onSelect: onDelete }] : []),
+    ...(canEdit ? [{ key: "edit", label: t("chat-queuestrip.pull_back"), icon: "pencil" as const, onSelect: onEdit }] : []),
+    { key: "copy", label: t("chat-queuestrip.copy"), icon: "copy", onSelect: () => void copyText(text) },
+    ...(canEdit ? [{ key: "delete", label: t("chat-queuestrip.delete"), icon: "trash" as const, danger: true, onSelect: onDelete }] : []),
   ];
   return (
     <>
@@ -81,7 +82,7 @@ function QueueRow({ n, text, disabled, canEdit, onEdit, onDelete }: { n: number;
         onClick={menu.open}
         disabled={disabled}
         title={text}
-        aria-label={`排队的第 ${n} 条：${text}`}
+        aria-label={t("chat-queuestrip.row_label", { n, text })}
         aria-haspopup="menu"
         className="flex w-full items-start gap-2 rounded-[8px] bg-inset px-2.5 py-1.5 text-left transition-colors hover:bg-hover disabled:opacity-60"
       >

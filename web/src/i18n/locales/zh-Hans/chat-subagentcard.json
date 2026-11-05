@@ -1,0 +1,15 @@
+{
+  "status_running": "运行中",
+  "status_completed": "已完成",
+  "status_failed": "失败",
+  "status_stopped": "已停止",
+  "untitled_task": "子 Agent 任务",
+  "collapse_details": "收起子 Agent 详情",
+  "expand_details": "展开子 Agent 详情",
+  "subagent": "子 Agent",
+  "fork": "分叉",
+  "running_for": "已运行 {duration}",
+  "background": "后台",
+  "ended": "已结束",
+  "view_full": "查看完整过程"
+}

@@ -1,0 +1,11 @@
+{
+  "deleted": "Removed from queue",
+  "pulled_back": "Moved back to the input. Edit, then send.",
+  "failed": "Couldn't update: {error}",
+  "summary_one": "{count} queued · {agent} handles it when free",
+  "summary_other": "{count} queued · {agent} handles them in order when free",
+  "pull_back": "Pull back to edit",
+  "copy": "Copy",
+  "delete": "Delete",
+  "row_label": "Queued #{n}: {text}"
+}

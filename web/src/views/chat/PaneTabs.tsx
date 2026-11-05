@@ -8,6 +8,8 @@ import { agentLabel } from "../../lib/mentions";
 import type { Session } from "../../lib/types";
 import { NARROW, useMedia } from "../../lib/viewport";
 import { cx, StatusDot } from "../../ui/atoms";
+import { t } from "../../i18n";
+import { tRich } from "../../i18n/rich";
 
 /** The tab an arrow key (or Home / End) moves to from `i` among `n`; undefined for any other key. */
 export function nextTab(i: number, key: string, n: number): number | undefined {
@@ -38,7 +40,7 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
   return (
     <div
       role="tablist"
-      aria-label="这个标签页里的 Agent"
+      aria-label={t("chat-panetabs.tablist_label")}
       className={cx(
         "sticky top-0 z-10 flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-page px-3 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         // a short screen (a phone on its side): one 36px row, the taps still 44 (touch-hit)
@@ -62,7 +64,7 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
             role="tab"
             aria-selected={on}
             tabIndex={on ? 0 : -1}
-            title={`${agentLabel(s)}${first ? "（发起者）" : ""} · ${sessionTitle(s)} · ${STATE_LABEL[st]}`}
+            title={`${agentLabel(s)}${first ? t("chat-panetabs.launcher_suffix") : ""} · ${sessionTitle(s)} · ${STATE_LABEL[st]}`}
             onClick={() => !on && onSelect(s)}
             onKeyDown={(e) => {
               const to = nextTab(i, e.key, sessions.length);
@@ -82,7 +84,7 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
             <span className={cx("shrink-0", on ? "text-ink-2" : "text-ink-3", first && fit === "fill" && "max-sm:hidden")}>{agentLabel(s)}</span>
             {first && (
               <span className={cx("shrink-0 rounded px-1 text-[10px] leading-4 text-ink-3", on ? "bg-hover" : "bg-hover-2")}>
-                发起<span className="sr-only">者</span>
+                {tRich("chat-panetabs.launcher_badge", { rest: <span className="sr-only">{t("chat-panetabs.launcher_badge_rest")}</span> })}
               </span>
             )}
             <span className="min-w-0 truncate">{sessionTitle(s)}</span>

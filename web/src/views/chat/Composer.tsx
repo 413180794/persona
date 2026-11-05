@@ -21,6 +21,7 @@ import { ContextChips } from "../link/ContextChips";
 import { QuoteBar } from "./Quote";
 import { ImageEditor } from "./ImageEditor";
 import { MentionMenu, useMentionRows, type MentionRow, type MentionSource } from "./MentionMenu";
+import { t } from "../../i18n";
 
 export interface Attachment {
   id: string;
@@ -36,14 +37,14 @@ export interface Outgoing {
 }
 
 export const AGENT_COMMANDS: Command[] = [
-  { word: "/继续", desc: "让它接着做", text: "继续" },
-  { word: "/提交", desc: "按规范提交并推送", text: "把当前改动按规范提交并推送" },
-  { word: "/汇报", desc: "汇报进展、还剩什么", text: "简要汇报一下目前的进展、还剩什么" },
-  { word: "/compact", desc: "压缩上下文", text: "/compact" },
-  { word: "/context", desc: "查看上下文", text: "/context" },
-  { word: "/model", desc: "切换模型", text: "/model " },
-  { word: "/loop", desc: "定时重复做一件事", text: LOOP_TEXT },
-  { word: "/clear", desc: "清空对话，从头开始", text: "/clear", confirm: "清空这个 Agent 的对话？它会忘掉之前的上下文。" },
+  { word: t("chat-composer.cmd_continue_word"), desc: t("chat-composer.cmd_continue_desc"), text: t("chat-composer.cmd_continue_text") },
+  { word: t("chat-composer.cmd_commit_word"), desc: t("chat-composer.cmd_commit_desc"), text: t("chat-composer.cmd_commit_text") },
+  { word: t("chat-composer.cmd_report_word"), desc: t("chat-composer.cmd_report_desc"), text: t("chat-composer.cmd_report_text") },
+  { word: "/compact", desc: t("chat-composer.cmd_compact_desc"), text: "/compact" },
+  { word: "/context", desc: t("chat-composer.cmd_context_desc"), text: "/context" },
+  { word: "/model", desc: t("chat-composer.cmd_model_desc"), text: "/model " },
+  { word: "/loop", desc: t("chat-composer.cmd_loop_desc"), text: LOOP_TEXT },
+  { word: "/clear", desc: t("chat-composer.cmd_clear_desc"), text: "/clear", confirm: t("chat-composer.cmd_clear_confirm") },
 ];
 
 function parseSlash(draft: string) {
@@ -169,7 +170,7 @@ export function Composer({
           requestAnimationFrame(() => input.current?.focus());
           return;
         }
-        if (e.type === "replace" && replaceNeedsConfirm(draftNow.current, e.text) && !confirm("输入框里有没发出去的字，换成这条消息？")) return;
+        if (e.type === "replace" && replaceNeedsConfirm(draftNow.current, e.text) && !confirm(t("chat-composer.replace_confirm"))) return;
         // 编辑 a message sent with a quote: the quote goes back to the bar, the words to the input
         const split = e.type === "replace" ? splitQuote(e.text) : null;
         if (e.type === "replace") setQuote(split ? parseQuote(split.quote) : null);
@@ -294,7 +295,7 @@ export function Composer({
     for (const f of Array.from(files)) {
       if (f.type.startsWith("image/")) {
         if (f.size > MAX_IMAGE) {
-          toast(`${f.name} 太大了（图片最多 8 MB）`, "error");
+          toast(t("chat-composer.image_too_large", { name: f.name }), "error");
           continue;
         }
         const a = await readImage(f);
@@ -304,7 +305,7 @@ export function Composer({
       } else if (machineId) {
         void upload(f);
       } else {
-        toast("这里只能发图片", "error");
+        toast(t("chat-composer.images_only"), "error");
       }
     }
   };
@@ -322,9 +323,9 @@ export function Composer({
           after = d.slice(at);
         return `${before}${before && !before.endsWith(" ") ? " " : ""}${p}${after.startsWith(" ") || !after ? "" : " "}${after}`;
       });
-      toast(`已传到电脑：${path}`, "ok");
+      toast(t("chat-composer.uploaded", { path }), "ok");
     } catch (e) {
-      toast(e instanceof ApiError && e.code === "too_large" ? "文件太大（最多 200 MB）" : `上传失败：${errorText(e)}`, "error");
+      toast(e instanceof ApiError && e.code === "too_large" ? t("chat-composer.file_too_large") : t("chat-composer.upload_failed", { error: errorText(e) }), "error");
     } finally {
       setUploading((n) => n - 1);
     }
@@ -410,11 +411,11 @@ export function Composer({
               >
                 <span className={cx("shrink-0 font-mono text-[12.5px] font-medium text-ink", c.key && "max-w-[45%] truncate")}>{c.word}</span>
                 <span className="min-w-0 flex-1 truncate text-[12px] text-ink-3">{c.desc}</span>
-                {c.text.startsWith("/") ? null : <span className="max-w-[45%] shrink truncate text-[11px] text-ink-3">「{c.text}」</span>}
+                {c.text.startsWith("/") ? null : <span className="max-w-[45%] shrink truncate text-[11px] text-ink-3">{t("chat-composer.command_text", { text: c.text })}</span>}
               </button>
             ))}
           </div>
-          <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-[11px] text-ink-3">↑↓ 选择 · Enter 填入 · Esc 关闭</div>
+          <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-[11px] text-ink-3">{t("chat-composer.keys_hint")}</div>
         </div>
       )}
 
@@ -527,8 +528,8 @@ export function Composer({
               void submit();
             }
           }}
-          placeholder={suggestion && !draft ? `${suggestion}（Tab 填入）` : placeholder}
-          aria-label="消息"
+          placeholder={suggestion && !draft ? t("chat-composer.suggestion", { suggestion }) : placeholder}
+          aria-label={t("chat-composer.message")}
           style={{ maxHeight: INPUT_MAX }}
           className="min-h-6 w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [@media(pointer:coarse)]:text-[16px] [@media(pointer:coarse)]:leading-[24px] [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50"
         />
@@ -542,8 +543,8 @@ export function Composer({
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files).finally(() => (e.target.value = ""))} />
           <button
             type="button"
-            aria-label={machineId ? "添加图片或文件" : "添加图片"}
-            title={machineId ? "图片作为附件；其他文件传到会话所在的电脑" : "添加图片"}
+            aria-label={machineId ? t("chat-composer.add_image_or_file") : t("chat-composer.add_image")}
+            title={machineId ? t("chat-composer.add_hint") : t("chat-composer.add_image")}
             onClick={() => fileInput.current?.click()}
             disabled={disabled}
             className="touch-hit flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink active:scale-[0.94]"
@@ -553,8 +554,8 @@ export function Composer({
           {mention && (
             <button
               type="button"
-              aria-label="引用文件或会话"
-              title="引用文件或会话（@）"
+              aria-label={t("chat-composer.mention")}
+              title={t("chat-composer.mention_hint")}
               disabled={disabled}
               onClick={typeAt}
               className="touch-hit flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
@@ -565,9 +566,9 @@ export function Composer({
           {allCommands.length > 0 && (
           <button
             type="button"
-            aria-label="命令"
+            aria-label={t("chat-composer.commands")}
             disabled={disabled}
-            title="命令"
+            title={t("chat-composer.commands")}
             onClick={() => {
               setDraft("/");
               setDismissed(false);
@@ -583,8 +584,8 @@ export function Composer({
           {showStop ? (
             <button
               type="button"
-              aria-label="中断"
-              title="中断（Esc）"
+              aria-label={t("chat-composer.interrupt")}
+              title={t("chat-composer.interrupt_hint")}
               onClick={onStop}
               className="touch-hit flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-red text-white transition-transform duration-150 active:scale-[0.94]"
               style={{ animation: `pop-in 200ms ${EASE} both` }}
@@ -594,8 +595,8 @@ export function Composer({
           ) : (
             <button
               type="button"
-              aria-label="发送"
-              title="发送（Enter）· 换行（Shift+Enter）"
+              aria-label={t("chat-composer.send")}
+              title={t("chat-composer.send_hint")}
               disabled={!canSend}
               onClick={() => void submit()}
               className="touch-hit flex size-7 shrink-0 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.94]"

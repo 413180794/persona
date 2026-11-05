@@ -1,0 +1,22 @@
+{
+  "verb_edit": "Edited",
+  "verb_create": "Created",
+  "verb_run": "Ran",
+  "verb_read": "Read",
+  "verb_update": "Updated",
+  "verb_search": "Searched",
+  "verb_list": "Listed",
+  "verb_visit": "Visited",
+  "verb_run_command": "Ran command",
+  "verb_call": "Called",
+  "status_running": "In progress",
+  "status_error": "Error",
+  "status_done": "Done",
+  "no_content": "No content",
+  "changes": "Changes",
+  "changes_in": "Changes to {name}",
+  "open_file": "Open file",
+  "close": "Close",
+  "show_rest_one": "Show {count} more line",
+  "show_rest_other": "Show {count} more lines"
+}

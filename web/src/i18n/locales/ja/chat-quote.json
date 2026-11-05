@@ -1,0 +1,10 @@
+{
+  "quoting": "引用",
+  "quoting_from": "{name}を引用",
+  "quoted_message": "引用されたメッセージ",
+  "remove": "引用を解除",
+  "collapse": "引用を折りたたむ",
+  "expand": "引用を展開",
+  "quoting_task": "タスク「{title}」を引用",
+  "task_title": "タスク「{title}」"
+}

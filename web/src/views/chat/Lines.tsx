@@ -12,6 +12,7 @@ import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { Answer, SegmentView } from "./SegmentView";
 import { CompactDivider, NoticeRow } from "./Steps";
+import { t } from "../../i18n";
 
 export interface LineProps {
   line: ChatLine;
@@ -50,7 +51,7 @@ export const ChatLineView = memo(function ChatLineView({ line, status, mid, sid,
           onClick={() => onUnsplit(line.group)}
           className="-mb-3 flex w-fit items-center gap-1.5 self-end rounded-control px-1.5 py-0.5 text-[12px] whitespace-nowrap text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2"
         >
-          已按 {line.count} 条消息拆开 · 收起
+          {t("chat-lines.split_collapse", { count: line.count })}
           <Icon name="up" size={12} stroke={2.2} />
         </button>
       );
@@ -105,20 +106,20 @@ function WakeChip({ turn, live, mid, sid, expandFold }: { turn: Turn; live: bool
   const [open, setOpen] = useState(false);
   const notices = turn.wakes;
   const failed = notices.some((n) => wakeSummary(n).failed);
-  const text = live ? "后台任务完成 · 正在处理" : notices.length === 1 ? wakeSummary(notices[0]).text : `${notices.length} 个后台任务完成`;
+  const text = live ? t("chat-lines.wake_processing") : notices.length === 1 ? wakeSummary(notices[0]).text : t("chat-lines.wake_count", { count: notices.length });
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="后台任务完成，查看之后的消息"
+        aria-label={t("chat-lines.wake_open")}
         className="-mt-2 flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] text-ink-2 shadow-hairline transition-colors hover:bg-hover-2"
       >
         {live ? <Spinner size={11} /> : <Icon name="bell" size={12} className={cx("shrink-0", failed ? "text-red" : "text-accent")} />}
         <span className="min-w-0 truncate">{text}</span>
         <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />
       </button>
-      <Dialog open={open} onClose={() => setOpen(false)} title={notices.length > 1 ? `${notices.length} 个后台任务完成` : "后台任务完成"} width={640}>
+      <Dialog open={open} onClose={() => setOpen(false)} title={notices.length > 1 ? t("chat-lines.wake_count", { count: notices.length }) : t("chat-lines.wake_single")} width={640}>
         {open && <WakeDrawerBody turn={turn} live={live} mid={mid} sid={sid} expandFold={expandFold} />}
       </Dialog>
     </>
@@ -159,12 +160,12 @@ function RecapChip({ items }: { items: Item[] }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={items.length > 1 ? `${items.length} 次离开期间回顾，点击查看` : "离开期间回顾，点击查看"}
+        aria-label={items.length > 1 ? t("chat-lines.recap_open_many", { count: items.length }) : t("chat-lines.recap_open")}
         className="flex w-fit max-w-full items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] whitespace-nowrap text-ink-2 shadow-hairline transition-colors hover:bg-hover-2"
       >
         <Icon name="retry" size={12} className="shrink-0 text-accent" />
-        离开期间回顾
-        {items.length > 1 && <span>· {items.length} 次</span>}
+        {t("chat-lines.recap")}
+        {items.length > 1 && <span>{t("chat-lines.recap_times", { count: items.length })}</span>}
         {newest.ts && <span>· {ago(newest.ts)}</span>}
         <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />
       </button>
@@ -175,13 +176,13 @@ function RecapChip({ items }: { items: Item[] }) {
 
 function RecapDrawer({ items, open, onClose }: { items: Item[]; open: boolean; onClose: () => void }) {
   return (
-    <Dialog open={open} onClose={onClose} title={items.length > 1 ? `离开期间回顾 · ${items.length} 次` : "离开期间回顾"} width={600}>
+    <Dialog open={open} onClose={onClose} title={items.length > 1 ? t("chat-lines.recap_title_many", { count: items.length }) : t("chat-lines.recap")} width={600}>
       <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
         {[...items].reverse().map((it, n) => (
           <section key={it.id} className={cx("flex flex-col gap-2", n > 0 && "border-t border-line pt-4")}>
             {it.ts && (
               <span className="text-[11.5px] text-ink-3">
-                {n === 0 && items.length > 1 ? "最新 · " : ""}写于 {ago(it.ts)}
+                {t(n === 0 && items.length > 1 ? "chat-lines.recap_newest_written" : "chat-lines.recap_written", { ago: ago(it.ts) })}
               </span>
             )}
             <Markdown text={it.text ?? ""} />
@@ -211,14 +212,14 @@ function RecapStrip({ item, onClose }: { item: Item; onClose: () => void }) {
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap text-ink">
           <Icon name="retry" size={12} className="text-accent" />
-          离开期间回顾
+          {t("chat-lines.recap")}
           {item.ts && <span className="font-normal text-ink-3">· {ago(item.ts)}</span>}
         </span>
         <div className="line-clamp-6 text-[13px] leading-relaxed text-ink-2">
           <Markdown text={item.text ?? ""} small />
         </div>
       </div>
-      <button type="button" onClick={onClose} aria-label="关闭回顾" title="关闭" className="flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink">
+      <button type="button" onClick={onClose} aria-label={t("chat-lines.recap_close")} title={t("chat-lines.close")} className="flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink">
         <Icon name="x" size={13} />
       </button>
     </div>
@@ -254,10 +255,10 @@ export function closeRecap(key: string, id: string) {
 
 function APIErrorCard({ info, count, at, onRetry }: { info: APIErrorInfo; count: number; at?: string; onRetry?: () => void }) {
   const [open, setOpen] = useState(false);
-  const sub = info.transient === true ? "临时故障，过一会儿多半会好" : info.transient === false ? "要你处理，重试没有用" : "";
+  const sub = info.transient === true ? t("chat-lines.api_transient") : info.transient === false ? t("chat-lines.api_permanent") : "";
   return (
     <div className="flex flex-col gap-2.5 rounded-card bg-red-tint px-3.5 py-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--red)_22%,transparent)]">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`API 错误：${info.reason}`} className="flex min-w-0 items-start gap-2 text-left">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={t("chat-lines.api_error", { reason: info.reason })} className="flex min-w-0 items-start gap-2 text-left">
         <Icon name="info" size={15} stroke={2.2} className="mt-[2px] shrink-0 text-red" />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="text-[14px] font-semibold text-ink">{info.reason}</span>
@@ -265,26 +266,26 @@ function APIErrorCard({ info, count, at, onRetry }: { info: APIErrorInfo; count:
         </span>
         <span className="flex shrink-0 items-center gap-1">
           {info.status !== undefined && <span className="rounded-[4px] bg-red-tint px-1 font-mono text-[11px] font-medium text-red">{info.status}</span>}
-          {count > 1 && <span className="rounded-[4px] bg-field px-1 text-[11px] font-medium whitespace-nowrap text-ink-2">连续 {count} 次</span>}
+          {count > 1 && <span className="rounded-[4px] bg-field px-1 text-[11px] font-medium whitespace-nowrap text-ink-2">{t("chat-lines.api_repeated", { count })}</span>}
           <Icon name="chevron" size={13} stroke={2.2} className="text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(180deg)" : "none" }} />
         </span>
       </button>
       <Collapse open={open}>
         <div className="flex flex-col gap-1.5 pt-0.5">
-          {info.requestId && <Field label="请求 ID" value={info.requestId} />}
+          {info.requestId && <Field label={t("chat-lines.request_id")} value={info.requestId} />}
           {info.session && <Field label="Session" value={info.session} />}
-          {at && <Field label="时间" value={clock(at)} copy={false} />}
+          {at && <Field label={t("chat-lines.time")} value={clock(at)} copy={false} />}
           <pre className="max-h-56 overflow-auto rounded-[8px] bg-surface px-2.5 py-2 font-mono text-[11.5px] leading-[1.6] whitespace-pre-wrap text-ink-2 shadow-hairline [overflow-wrap:anywhere]">{info.raw}</pre>
           <button type="button" onClick={() => copyText(info.raw)} className="flex w-fit items-center gap-1 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline">
             <Icon name="copy" size={12} />
-            复制原文
+            {t("chat-lines.copy_raw")}
           </button>
         </div>
       </Collapse>
       {onRetry && (
         <div>
           <Button icon="retry" onClick={onRetry}>
-            重试
+            {t("chat-lines.retry")}
           </Button>
         </div>
       )}
@@ -298,7 +299,7 @@ function Field({ label, value, copy = true }: { label: string; value: string; co
       <span className="w-14 shrink-0 text-ink-3">{label}</span>
       <span className="min-w-0 truncate font-mono text-ink-2">{value}</span>
       {copy && (
-        <button type="button" onClick={() => copyText(value)} aria-label={`拷贝${label}`} className="flex size-5 shrink-0 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover-2 hover:text-ink">
+        <button type="button" onClick={() => copyText(value)} aria-label={t("chat-lines.copy_field", { label })} className="flex size-5 shrink-0 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover-2 hover:text-ink">
           <Icon name="copy" size={11} />
         </button>
       )}

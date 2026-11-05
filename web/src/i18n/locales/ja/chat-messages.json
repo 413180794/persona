@@ -1,0 +1,6 @@
+{
+  "message_count_other": "{count}件のメッセージ",
+  "from": "{name}から",
+  "loop_tick": "ループ起動",
+  "open_task": "{line}、タスクを開く"
+}

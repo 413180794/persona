@@ -17,10 +17,14 @@ export function ActivityChips({ session, onStopLoop }: { session: Session; onSto
   const bg = session.background ?? [];
   const now = useNow(30_000, Boolean(loop));
   if (!loop && !bg.length) return null;
-  const label = [loop ? `循环中，${loopLabel(loop, now)}` : "", bg.length ? `${bg.length} 个后台任务` : ""].filter(Boolean).join("，");
+  const label = loop && bg.length
+    ? t("chat-activity.label_loop_and_background", { loop: loopLabel(loop, now), count: bg.length })
+    : loop
+      ? t("chat-activity.label_loop", { loop: loopLabel(loop, now) })
+      : t("chat-activity.label_background", { count: bg.length });
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={`${label}，点按查看`} title={label} className="touch-hit flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1 transition-colors hover:bg-hover">
+      <button type="button" onClick={() => setOpen(true)} aria-label={t("chat-activity.open_label", { label })} title={label} className="touch-hit flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1 transition-colors hover:bg-hover">
         {loop && (
           <span className="flex h-5.5 items-center gap-1 rounded-full bg-accent-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-accent-ink">
             <Icon name="loop" size={12} stroke={2.2} />
@@ -30,11 +34,11 @@ export function ActivityChips({ session, onStopLoop }: { session: Session; onSto
         {bg.length > 0 && (
           <span className={cx("flex h-5.5 items-center gap-1 rounded-full bg-orange-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-orange", loop && "max-sm:hidden")}>
             <Icon name="gear" size={12} stroke={2.2} />
-            <span className="hidden sm:inline">后台</span> {bg.length}
+            <span className="hidden sm:inline">{t("chat-activity.background_chip")}</span> {bg.length}
           </span>
         )}
       </button>
-      <Dialog open={open} onClose={() => setOpen(false)} title={loop && !bg.length ? "循环" : !loop ? "后台任务" : "循环与后台任务"} width={520}>
+      <Dialog open={open} onClose={() => setOpen(false)} title={loop && !bg.length ? t("chat-activity.title_loop") : !loop ? t("chat-activity.title_background") : t("chat-activity.title_both")} width={520}>
         <div className="flex flex-col gap-3">
           {loop && (
             <LoopCard
@@ -48,9 +52,9 @@ export function ActivityChips({ session, onStopLoop }: { session: Session; onSto
           {bg.length > 0 && (
             <BackgroundList
               tasks={bg}
-              onOutput={(t) => {
+              onOutput={(task) => {
                 setOpen(false);
-                openPanel({ kind: "file", mid: session.machine_id, path: t.output_file!, cwd: session.cwd });
+                openPanel({ kind: "file", mid: session.machine_id, path: task.output_file!, cwd: session.cwd });
               }}
             />
           )}
@@ -71,7 +75,7 @@ function LoopCard({ loop, onStop }: { loop: LoopInfo; onStop: () => void }) {
       <div className="flex items-center gap-2.5">
         <Icon name="loop" size={15} stroke={2.2} className="shrink-0 text-accent" />
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[13px] font-semibold text-ink">循环中{cadence ? ` · ${cadence}` : ""}</span>
+          <span className="truncate text-[13px] font-semibold text-ink">{cadence ? t("chat-activity.looping_every", { cadence }) : t("chat-activity.looping")}</span>
           {next && <span className="truncate text-[12px] text-ink-2">{next}</span>}
         </div>
         {!confirming && (
@@ -80,7 +84,7 @@ function LoopCard({ loop, onStop }: { loop: LoopInfo; onStop: () => void }) {
             onClick={() => setConfirming(true)}
             className="inline-flex h-8 shrink-0 items-center rounded-control bg-surface px-3 text-[12.5px] font-medium whitespace-nowrap text-red shadow-btn transition-colors hover:bg-hover"
           >
-            停止循环
+            {t("chat-activity.stop_loop")}
           </button>
         )}
       </div>
@@ -93,13 +97,13 @@ function LoopCard({ loop, onStop }: { loop: LoopInfo; onStop: () => void }) {
       )}
       {confirming && (
         <div className="flex flex-col gap-2 rounded-[8px] bg-surface px-3 py-2.5 shadow-hairline">
-          <p className="text-[12.5px] leading-relaxed text-ink-2">会给 Agent 发一条消息，让它不再安排下一次唤醒。正在执行的这一轮会先做完。</p>
+          <p className="text-[12.5px] leading-relaxed text-ink-2">{t("chat-activity.stop_loop_explain")}</p>
           <div className="flex justify-end gap-2">
             <Button tone="quiet" onClick={() => setConfirming(false)}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="danger" onClick={onStop}>
-              停止循环
+              {t("chat-activity.stop_loop")}
             </Button>
           </div>
         </div>
@@ -115,27 +119,27 @@ function BackgroundList({ tasks, onOutput }: { tasks: BackgroundTask[]; onOutput
     <div className="flex flex-col overflow-hidden rounded-card bg-surface shadow-hairline">
       <div className="flex items-center gap-1.5 border-b border-line bg-inset px-3.5 py-2 text-[12px] font-medium text-ink-2">
         <Icon name="gear" size={12} className="text-orange" />
-        后台任务 {tasks.length}
+        {t("chat-activity.background_count", { count: tasks.length })}
       </div>
-      {tasks.map((t, i) => {
-        const cmd = t.command && t.command !== backgroundTitle(t) ? t.command : "";
+      {tasks.map((task, i) => {
+        const cmd = task.command && task.command !== backgroundTitle(task) ? task.command : "";
         return (
-          <div key={t.id} className={cx("flex items-start gap-2.5 px-3.5 py-2.5", i > 0 && "border-t border-line")}>
+          <div key={task.id} className={cx("flex items-start gap-2.5 px-3.5 py-2.5", i > 0 && "border-t border-line")}>
             <span className="mt-[3px] flex size-4 shrink-0 items-center justify-center text-orange">
-              <Icon name={t.kind === "agent" ? "agent" : "run"} size={13} />
+              <Icon name={task.kind === "agent" ? "agent" : "run"} size={13} />
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate text-[13px] font-medium text-ink">{backgroundTitle(t)}</span>
+              <span className="truncate text-[13px] font-medium text-ink">{backgroundTitle(task)}</span>
               {cmd && (
-                <button type="button" onClick={() => copyText(cmd)} title="拷贝命令" className="line-clamp-2 text-left font-mono text-[11.5px] text-ink-3 hover:text-ink-2">
+                <button type="button" onClick={() => copyText(cmd)} title={t("chat-activity.copy_command")} className="line-clamp-2 text-left font-mono text-[11.5px] text-ink-3 hover:text-ink-2">
                   {cmd}
                 </button>
               )}
             </div>
-            <span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{elapsed(t.started_at, now)}</span>
-            {t.output_file && (
-              <button type="button" onClick={() => onOutput(t)} className="flex shrink-0 items-center gap-0.5 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline">
-                看输出
+            <span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{elapsed(task.started_at, now)}</span>
+            {task.output_file && (
+              <button type="button" onClick={() => onOutput(task)} className="flex shrink-0 items-center gap-0.5 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline">
+                {t("chat-activity.view_output")}
                 <Icon name="chevronRight" size={12} stroke={2.2} />
               </button>
             )}

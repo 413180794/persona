@@ -1,0 +1,9 @@
+{
+  "source_read": "读取的图片",
+  "source_screenshot": "截图",
+  "source_browser": "网页截图",
+  "source_mcp": "MCP 工具",
+  "source_tool": "工具返回",
+  "copy_path": "拷贝路径",
+  "open_in_files": "在文件页打开"
+}

@@ -1,0 +1,7 @@
+{
+  "sending": "发送中…",
+  "queued": "工作中插入的消息",
+  "collapse": "收起",
+  "expand": "展开",
+  "from": "来自 {name}"
+}

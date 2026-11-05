@@ -15,6 +15,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { NARROW, useMedia } from "../../ui/media-query";
 import { useChatContext } from "./chat-context";
 import { ChatImageViewer } from "./ImageViewer";
+import { t } from "../../i18n";
 
 function firstLine(s?: string) {
   return (s ?? "").trim().split("\n")[0].slice(0, 160);
@@ -119,7 +120,7 @@ function Mono({ text, tone }: { text: string; tone?: "out" | "error" }) {
       </pre>
       <button
         type="button"
-        aria-label="拷贝"
+        aria-label={t("chat-steps.copy")}
         onClick={() => copyText(text)}
         className="absolute top-1 right-1 flex size-6 touch-hit items-center justify-center rounded-[6px] bg-surface text-ink-3 opacity-0 shadow-btn transition-opacity group-hover/mono:opacity-100 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       >
@@ -157,21 +158,21 @@ export function CompactDivider({ item }: { item: Item }) {
 export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: string }) {
   const { tasks } = useChatContext();
   if (item.compact) return <CompactDivider item={item} />;
-  const t = item.task;
-  if (t) {
+  const task = item.task;
+  if (task) {
     const call = tasks.calls.get(item.id);
-    const pill = taskPill(t, call ? tasks.startedAt.get(call) : undefined, item.ts);
-    const out = t.output_file;
+    const pill = taskPill(task, call ? tasks.startedAt.get(call) : undefined, item.ts);
+    const out = task.output_file;
     const detail = (
       <div className="flex flex-col gap-1.5 py-1">
-        {t.kind === "shell" ? (
-          <Mono text={`$ ${t.detail || t.title || ""}`} />
-        ) : t.kind === "agent" ? (
-          t.detail && <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-ink-2">{t.detail}</p>
+        {task.kind === "shell" ? (
+          <Mono text={`$ ${task.detail || task.title || ""}`} />
+        ) : task.kind === "agent" ? (
+          task.detail && <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-ink-2">{task.detail}</p>
         ) : (
-          t.detail && <Mono text={t.detail} />
+          task.detail && <Mono text={task.detail} />
         )}
-        {t.kind === "monitor" && (t.status === "event" || !t.detail) && t.title && <p className="text-[12px] text-ink-3">{t.title}</p>}
+        {task.kind === "monitor" && (task.status === "event" || !task.detail) && task.title && <p className="text-[12px] text-ink-3">{task.title}</p>}
         {out && (
           <button
             type="button"
@@ -179,19 +180,19 @@ export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: st
             className="flex w-fit items-center gap-1.5 rounded-[6px] px-0.5 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline"
           >
             <Icon name="read" size={12} />
-            查看输出
+            {t("chat-steps.view_output")}
           </button>
         )}
       </div>
     );
     return (
       <Disclosure
-        icon={TASK_ICON[t.kind] ?? "bell"}
-        label={taskLabel(t)}
-        chip={taskSubject(t, call ? tasks.descriptions.get(call) : undefined) || firstLine(item.text)}
-        mono={t.kind === "shell"}
+        icon={TASK_ICON[task.kind] ?? "bell"}
+        label={taskLabel(task)}
+        chip={taskSubject(task, call ? tasks.descriptions.get(call) : undefined) || firstLine(item.text)}
+        mono={task.kind === "shell"}
         status={pill ? <span className={cx("rounded-[4px] px-1 text-[10.5px] font-medium whitespace-nowrap", TONE[pill.tone])}>{pill.text}</span> : null}
-        detail={t.detail || t.title || out ? detail : undefined}
+        detail={task.detail || task.title || out ? detail : undefined}
       />
     );
   }
@@ -231,7 +232,7 @@ export function Thumb({ item, mid, sid, size = 132 }: { item: Item; mid: string;
         className="block overflow-hidden rounded-[10px] bg-field shadow-hairline transition-transform duration-150 active:scale-[0.98]"
         // a phone screenshot (tall) gets more height, so it is not a sliver
         style={ratio < 1 ? { width: Math.round(size * 1.5 * ratio), height: Math.round(size * 1.5) } : { width: Math.round(Math.min(size * 1.6, size * ratio)), height: size }}
-        aria-label="查看图片"
+        aria-label={t("chat-steps.view_image")}
       >
         <img src={src} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
       </button>
@@ -253,10 +254,10 @@ export function Lightbox({ src, onClose }: { src: string; onClose: () => void })
       ref={(el) => el?.focus()}
     >
       <img src={src} alt="" className="max-h-full max-w-full rounded-[8px] object-contain shadow-overlay" style={{ animation: `pop-in 220ms ${EASE} both` }} />
-      <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="absolute top-4 right-14 flex size-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25" aria-label="在新标签页打开">
+      <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="absolute top-4 right-14 flex size-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25" aria-label={t("chat-steps.open_in_new_tab")}>
         <Icon name="external" size={15} />
       </a>
-      <button type="button" onClick={onClose} className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25" aria-label="关闭">
+      <button type="button" onClick={onClose} className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25" aria-label={t("chat-steps.close")}>
         <Icon name="x" size={15} />
       </button>
     </div>,

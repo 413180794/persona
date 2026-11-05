@@ -18,6 +18,7 @@ import { NARROW, useMedia } from "../../ui/media-query";
 import { useChatContext } from "./chat-context";
 import { edgeMask, useEdgeFade } from "./edge-fade";
 import { Thumb } from "./Steps";
+import { t } from "../../i18n";
 
 /** The row's chrome, shared with the thinking rows so a mixed list reads as one (cindy's activityRowChrome). */
 /** On a touch screen a row is a finger tall (40). */
@@ -29,22 +30,22 @@ const COMMAND_TOOLS = new Set(["Bash", "exec_command", "shell"]);
 const FILE_TOOLS = new Set(["Read", "Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const DIFF_TOOLS = new Set(["Edit", "Write", "MultiEdit"]);
 
-/** cindy's verbAggregator, in its Chinese wording. */
+/** cindy's verbAggregator (its Chinese wording is the zh-Hans text). */
 const VERB: Record<string, string> = {
-  Edit: "编辑",
-  MultiEdit: "编辑",
-  NotebookEdit: "编辑",
-  Write: "创建",
-  Bash: "运行",
-  exec_command: "运行",
-  shell: "运行",
-  Read: "读取",
-  TodoWrite: "更新",
-  Glob: "搜索",
-  Grep: "搜索",
-  LS: "列出",
-  WebFetch: "访问",
-  WebSearch: "访问",
+  Edit: t("chat-actionrow.verb_edit"),
+  MultiEdit: t("chat-actionrow.verb_edit"),
+  NotebookEdit: t("chat-actionrow.verb_edit"),
+  Write: t("chat-actionrow.verb_create"),
+  Bash: t("chat-actionrow.verb_run"),
+  exec_command: t("chat-actionrow.verb_run"),
+  shell: t("chat-actionrow.verb_run"),
+  Read: t("chat-actionrow.verb_read"),
+  TodoWrite: t("chat-actionrow.verb_update"),
+  Glob: t("chat-actionrow.verb_search"),
+  Grep: t("chat-actionrow.verb_search"),
+  LS: t("chat-actionrow.verb_list"),
+  WebFetch: t("chat-actionrow.verb_visit"),
+  WebSearch: t("chat-actionrow.verb_visit"),
 };
 
 const PARAM_MAX = 60;
@@ -76,7 +77,7 @@ export function presentAction(use: Item): ActionPresentation {
     const cmd = commandOf(inp);
     const desc = str(inp.description);
     if (desc) return { param: { text: desc, title: cmd || undefined } };
-    return { verb: "运行命令", raw: cmd || undefined };
+    return { verb: t("chat-actionrow.verb_run_command"), raw: cmd || undefined };
   }
   if (FILE_TOOLS.has(name)) {
     const path = toolFile(name, inp)?.path ?? "";
@@ -87,10 +88,10 @@ export function presentAction(use: Item): ActionPresentation {
   if (name === "WebSearch") return { verb: VERB[name], param: { text: truncateParam(str(inp.query)) } };
   if (name === "LS") return { verb: VERB[name], param: { text: truncateParam(str(inp.path)) } };
   if (name.startsWith("mcp__")) {
-    return { verb: "调用", param: { text: truncateParam(toolDisplayName(name)), title: name } };
+    return { verb: t("chat-actionrow.verb_call"), param: { text: truncateParam(toolDisplayName(name)), title: name } };
   }
   const chip = toolChip(use);
-  return { verb: VERB[name] ?? "调用", param: { text: truncateParam(chip ? `${toolLabel(name)} · ${chip}` : toolLabel(name)), title: chip || undefined } };
+  return { verb: VERB[name] ?? t("chat-actionrow.verb_call"), param: { text: truncateParam(chip ? `${toolLabel(name)} · ${chip}` : toolLabel(name)), title: chip || undefined } };
 }
 
 // ── diffs ──
@@ -162,7 +163,7 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
   return (
     <div className="flex min-w-0 flex-col" data-action-row={name}>
       <button type="button" onClick={activate} aria-expanded={inPlace ? open : undefined} aria-label={label || name} title={p.param?.title} className={ROW}>
-        <span role="img" aria-label={running ? "进行中" : error ? "出错" : "完成"} className={cx(STATUS_SLOT, error && "text-red")}>
+        <span role="img" aria-label={running ? t("chat-actionrow.status_running") : error ? t("chat-actionrow.status_error") : t("chat-actionrow.status_done")} className={cx(STATUS_SLOT, error && "text-red")}>
           {running ? <Spinner size={12} /> : <Icon name={error ? "x" : "check"} size={13} />}
         </span>
         {p.verb && <span className="shrink-0 text-[length:var(--chat-secondary)] whitespace-nowrap text-tool-ink">{p.verb}</span>}
@@ -208,7 +209,7 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
               <pre className={cx("m-0 whitespace-pre-wrap [overflow-wrap:anywhere]", error ? "text-red" : "text-tool-ink")}>{result.text}</pre>
             </>
           )}
-          {!input && !result?.text && <span className="text-tool-ink">没有内容</span>}
+          {!input && !result?.text && <span className="text-tool-ink">{t("chat-actionrow.no_content")}</span>}
         </div>
       )}
       {diffs && diffOpen && <DiffDialog onClose={() => setDiffOpen(false)} path={p.file ?? ""} diffs={diffs} mid={mid} sid={sid} />}
@@ -271,7 +272,7 @@ function DiffDialog({ onClose, path, diffs, mid, sid }: { onClose: () => void; p
       width={860}
       title={
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate">{path ? fileName(path) : "改动"}</span>
+          <span className="truncate">{path ? fileName(path) : t("chat-actionrow.changes")}</span>
           <DiffStats diffs={diffs} />
         </span>
       }
@@ -279,7 +280,7 @@ function DiffDialog({ onClose, path, diffs, mid, sid }: { onClose: () => void; p
         path ? (
           <button type="button" onClick={openFile} className="flex h-8 items-center gap-1.5 rounded-control px-3 text-[12.5px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover">
             <Icon name="read" size={13} />
-            打开文件
+            {t("chat-actionrow.open_file")}
           </button>
         ) : undefined
       }
@@ -311,21 +312,21 @@ function DiffScreen({ onClose, path, diffs, onOpenFile }: { onClose: () => void;
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={path ? `${fileName(path)} 的改动` : "改动"}
+      aria-label={path ? t("chat-actionrow.changes_in", { name: fileName(path) }) : t("chat-actionrow.changes")}
       className="fixed inset-x-0 z-40 flex flex-col bg-surface pt-[env(safe-area-inset-top)]"
       style={{ top: "var(--kb-top)", height: "var(--kb-h)", animation: `slide-up 220ms ${EASE} both` }}
       data-diff-screen
     >
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-2">
-        <IconButton icon="x" label="关闭" onClick={onClose} size={36} className="touch-hit" />
+        <IconButton icon="x" label={t("chat-actionrow.close")} onClick={onClose} size={36} className="touch-hit" />
         <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink" title={path || undefined}>
-          {path ? fileName(path) : "改动"}
+          {path ? fileName(path) : t("chat-actionrow.changes")}
         </span>
         <DiffStats diffs={diffs} />
         {onOpenFile && (
           <button type="button" onClick={onOpenFile} className="flex h-9 shrink-0 items-center gap-1.5 rounded-control px-3 text-[13px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover">
             <Icon name="read" size={13} />
-            打开文件
+            {t("chat-actionrow.open_file")}
           </button>
         )}
       </div>
@@ -335,7 +336,7 @@ function DiffScreen({ onClose, path, diffs, onOpenFile }: { onClose: () => void;
         {hidden > 0 && (
           <button type="button" onClick={() => setAll(true)} className="sticky left-0 flex h-10 w-fit shrink-0 items-center gap-1.5 rounded-control px-3 text-[13px] font-medium whitespace-nowrap text-accent-ink" data-diff-more>
             <Icon name="chevron" size={13} stroke={2.2} />
-            展开其余 {hidden} 行
+            {t("chat-actionrow.show_rest", { count: hidden })}
           </button>
         )}
       </div>

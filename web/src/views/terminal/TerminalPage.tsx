@@ -34,6 +34,7 @@ import { onNodeChanged, setKnownTree } from "../../lib/node-palette";
 import { Icon } from "../../ui/icons";
 import { Empty } from "../session/files/parts";
 import { TerminalPanel } from "../session/TerminalPanel";
+import { t } from "../../i18n";
 
 type TerminalRoute = Extract<Route, { name: "terminal" }>;
 
@@ -105,7 +106,7 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
       void reload([mid]);
       navigate({ name: "terminal", mid, id: r.terminal });
     } catch (e) {
-      toast(`新建终端失败：${errorText(e)}`, "error");
+      toast(t("terminal-terminalpage.new_failed", { error: errorText(e) }), "error");
     }
   };
 
@@ -118,12 +119,12 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
   return (
     <div className="flex h-full flex-col">
       <header className={cx("flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4", shown && "max-lg:hidden")}>
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        <h1 className="flex-1 text-[14px] font-semibold text-ink">终端</h1>
-        <IconButton icon="retry" label="刷新列表" onClick={() => void refresh()} disabled={busy} />
+        <IconButton icon="sidebar" label={t("terminal-terminalpage.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
+        <h1 className="flex-1 text-[14px] font-semibold text-ink">{t("terminal-terminalpage.title")}</h1>
+        <IconButton icon="retry" label={t("terminal-terminalpage.refresh")} onClick={() => void refresh()} disabled={busy} />
       </header>
       <div className="flex min-h-0 flex-1">
-        <section aria-label="窗格" className={cx("flex min-h-0 w-full flex-col lg:w-[320px] lg:shrink-0 lg:border-r lg:border-line", listHidden)}>
+        <section aria-label={t("terminal-terminalpage.panes")} className={cx("flex min-h-0 w-full flex-col lg:w-[320px] lg:shrink-0 lg:border-r lg:border-line", listHidden)}>
           <label className="mx-3 mt-3 mb-1 flex h-8 shrink-0 items-center gap-2 rounded-control bg-inset px-2.5 shadow-hairline">
             <Icon name="search" size={12} stroke={2} className="text-ink-3" />
             <input
@@ -139,13 +140,13 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
                   navigate(terminalTarget(activeItem.mid, activeItem.id, sessions[activeItem.mid] ?? []));
                 } else if (e.key === "Escape") setQuery("");
               }}
-              placeholder="跳转到窗格：标题、目录、分支、机器…"
-              aria-label="跳转到窗格"
+              placeholder={t("terminal-terminalpage.search_placeholder")}
+              aria-label={t("terminal-terminalpage.search_label")}
               className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3"
             />
           </label>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6">
-            {machines.length === 0 && <Empty icon="machine" title="还没有电脑" detail="连上一台电脑后，这里列出它的终端" />}
+            {machines.length === 0 && <Empty icon="machine" title={t("terminal-terminalpage.no_computers")} detail={t("terminal-terminalpage.no_computers_detail")} />}
             {visible.map(({ mid, spaces }) => {
               const m = machines.find((x) => x.id === mid)!;
               return (
@@ -165,7 +166,7 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
                 />
               );
             })}
-            {query.trim() && flat.length === 0 && machines.length > 0 && <p className="px-3 py-8 text-center text-[12.5px] text-ink-3">没有找到「{query.trim()}」</p>}
+            {query.trim() && flat.length === 0 && machines.length > 0 && <p className="px-3 py-8 text-center text-[12.5px] text-ink-3">{t("terminal-terminalpage.no_results", { query: query.trim() })}</p>}
           </div>
         </section>
         {menu && (
@@ -180,7 +181,7 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
             }}
           />
         )}
-        <section aria-label="终端" className={cx("relative flex min-h-0 min-w-0 flex-1 flex-col", termHidden)}>
+        <section aria-label={t("terminal-terminalpage.title")} className={cx("relative flex min-h-0 min-w-0 flex-1 flex-col", termHidden)}>
           {stable.map((t) => {
             const on = sameTerminal(t, shown);
             return (
@@ -201,7 +202,7 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
           })}
           {!shown && (
             <div className="flex min-h-0 flex-1 flex-col">
-              {busy && !anyPanes ? <Loading /> : <Empty icon="terminal" title="选一个窗格" detail="Agent 和普通 shell 都可以打开成终端；接管时窗格会变成这里的大小，关掉后恢复" />}
+              {busy && !anyPanes ? <Loading /> : <Empty icon="terminal" title={t("terminal-terminalpage.pick_pane")} detail={t("terminal-terminalpage.pick_pane_detail")} />}
             </div>
           )}
         </section>
@@ -231,7 +232,7 @@ function MoreButton({ label, onOpen, className = "" }: { label: string; onOpen: 
       type="button"
       aria-label={label}
       aria-haspopup="menu"
-      title="更多"
+      title={t("terminal-terminalpage.more")}
       onClick={(e) => onOpen(e.currentTarget.parentElement ?? e.currentTarget)}
       className={cx(
         "touch-hit absolute top-1/2 right-1 z-10 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink focus-visible:flex group-hover/fold:flex [@media(hover:none)]:flex [@media(hover:none)]:bg-transparent",
@@ -285,24 +286,24 @@ function MachineBlock({
           <button type="button" aria-expanded={!hide} onClick={toggle} className="flex h-7 min-w-0 flex-1 items-center gap-2 px-2.5 text-left">
             <Icon name="machine" size={12} className={machine.online ? "text-ink-2" : "text-ink-3"} />
             <span className={cx("min-w-0 flex-1 truncate text-[12.5px] font-semibold", machine.online ? "text-ink" : "text-ink-3")}>{machine.name}</span>
-            {!machine.online && <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">离线</span>}
+            {!machine.online && <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">{t("terminal-terminalpage.offline")}</span>}
           </button>
           <FoldMark folded={hide} className="top-1/2 left-0.5 -translate-y-1/2" />
-          <MoreButton label={`${name} 的操作`} onOpen={(el) => open(node, { anchor: el }, name, true)} />
+          <MoreButton label={t("terminal-terminalpage.actions_for", { name })} onOpen={(el) => open(node, { anchor: el }, name, true)} />
         </div>
       )}
       <Collapse open={!hide}>
         <div inert={hide || undefined}>
-          {machine.online && !listing && loading && <p className="px-2.5 py-2 text-[12px] text-ink-3">读取中…</p>}
+          {machine.online && !listing && loading && <p className="px-2.5 py-2 text-[12px] text-ink-3">{t("terminal-terminalpage.loading")}</p>}
           {machine.online && listing?.error && !listing.data && (
             <p className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-red">
               <span className="min-w-0 flex-1 truncate">{listing.error}</span>
               <button type="button" onClick={onRetry} className="shrink-0 whitespace-nowrap rounded-control px-2 py-0.5 text-ink-2 hover:bg-hover hover:text-ink">
-                重试
+                {t("terminal-terminalpage.retry")}
               </button>
             </p>
           )}
-          {machine.online && listing?.data && spaces.length === 0 && !searching && <p className="px-2.5 py-2 text-[12px] text-ink-3">没有窗格</p>}
+          {machine.online && listing?.data && spaces.length === 0 && !searching && <p className="px-2.5 py-2 text-[12px] text-ink-3">{t("terminal-terminalpage.no_panes")}</p>}
           {spaces.map((sp) => (
             <SpaceBlock key={`${sp.host}/${sp.id}`} machine={machine} sp={sp} searching={searching} shown={shown} activeItem={activeItem} onOpenShell={onOpenShell} open={open} />
           ))}
@@ -319,7 +320,7 @@ function SpaceBlock({ machine, sp, searching, shown, activeItem, onOpenShell, op
   const node = termSpaceNode(mid, sp, machine.online, { fold: { folded, toggle }, onOpenShell: sp.canOpen ? () => onOpenShell(sp) : undefined });
   return (
     <div className="mt-1">
-      <div className="group/fold relative flex h-7 items-center gap-1.5 pr-1 pl-2.5" {...contextMenuProps((at) => open(node, at, `空间 ${sp.label}`))}>
+      <div className="group/fold relative flex h-7 items-center gap-1.5 pr-1 pl-2.5" {...contextMenuProps((at) => open(node, at, t("terminal-terminalpage.space_header", { name: sp.label })))}>
         <button type="button" aria-expanded={!hide} onClick={toggle} className="flex h-7 min-w-0 flex-1 items-center gap-1.5 text-left">
           <Icon name="layers" size={12} className="shrink-0 text-ink-3" />
           <span className="min-w-0 truncate text-[12px] font-medium text-ink-2">{sp.label}</span>
@@ -327,8 +328,8 @@ function SpaceBlock({ machine, sp, searching, shown, activeItem, onOpenShell, op
           <span className="flex-1" />
         </button>
         <FoldMark folded={hide} className="top-1/2 left-0.5 -translate-y-1/2" />
-        {sp.canOpen && <IconButton icon="plus" label={`在「${sp.label}」新建终端`} size={24} iconSize={13} onClick={() => onOpenShell(sp)} />}
-        <MoreButton label={`${sp.label} 的操作`} onOpen={(el) => open(node, { anchor: el }, `空间 ${sp.label}`, true)} className="right-8" />
+        {sp.canOpen && <IconButton icon="plus" label={t("terminal-terminalpage.new_in_space", { name: sp.label })} size={24} iconSize={13} onClick={() => onOpenShell(sp)} />}
+        <MoreButton label={t("terminal-terminalpage.actions_for", { name: sp.label })} onOpen={(el) => open(node, { anchor: el }, t("terminal-terminalpage.space_header", { name: sp.label }), true)} className="right-8" />
       </div>
       <Collapse open={!hide}>
         <div inert={hide || undefined}>
@@ -341,35 +342,35 @@ function SpaceBlock({ machine, sp, searching, shown, activeItem, onOpenShell, op
   );
 }
 
-function TabBlock({ machine, sp, t, searching, shown, activeItem, open }: { machine: Machine; sp: TermSpace; t: TermTab; searching: boolean; shown?: OpenTerminal; activeItem?: OpenTerminal } & Menus) {
+function TabBlock({ machine, sp, t: tab, searching, shown, activeItem, open }: { machine: Machine; sp: TermSpace; t: TermTab; searching: boolean; shown?: OpenTerminal; activeItem?: OpenTerminal } & Menus) {
   const mid = machine.id;
   const mySessions = useStore((s) => s.sessions[mid]);
-  const labelled = sp.tabs.length > 1 || t.panes.length > 1; // the tab's name is shown (and folds) when it tells tabs or panes apart
-  const [folded, toggle] = useFolded(`term:t:${mid}/${sp.host}:${sp.label}/${t.label}`);
+  const labelled = sp.tabs.length > 1 || tab.panes.length > 1; // the tab's name is shown (and folds) when it tells tabs or panes apart
+  const [folded, toggle] = useFolded(`term:t:${mid}/${sp.host}:${sp.label}/${tab.label}`);
   const hide = labelled && folded && !searching;
-  const tabNode = termTabNode(mid, sp, t, machine.online, { fold: labelled ? { folded, toggle } : undefined });
-  const tabHeader = `标签页 ${t.label}`;
+  const tabNode = termTabNode(mid, sp, tab, machine.online, { fold: labelled ? { folded, toggle } : undefined });
+  const tabHeader = t("terminal-terminalpage.tab_header", { name: tab.label });
   return (
     <div>
       {labelled && (
         <div className="group/fold relative" {...contextMenuProps((at) => open(tabNode, at, tabHeader))}>
           <button type="button" aria-expanded={!hide} onClick={toggle} className="block w-full truncate px-2.5 pt-1 pl-7 text-left text-[11px] text-ink-3">
-            {t.label}
+            {tab.label}
           </button>
           <FoldMark folded={hide} className="top-[calc(50%+2px)] left-4 -translate-y-1/2" />
-          {t.panes.length > 1 && <MoreButton label={`${t.label} 的操作`} onOpen={(el) => open(tabNode, { anchor: el }, tabHeader, true)} />}
+          {tab.panes.length > 1 && <MoreButton label={t("terminal-terminalpage.actions_for", { name: tab.label })} onOpen={(el) => open(tabNode, { anchor: el }, tabHeader, true)} />}
         </div>
       )}
       <Collapse open={!hide}>
         <div inert={hide || undefined}>
-          {t.panes.map((p) => {
+          {tab.panes.map((p) => {
             // an agent's pane opens on its own page, in the terminal view; a plain shell here (it has no conversation)
             const to: Route = terminalTarget(mid, p.id, mySessions ?? []);
             const on = sameTerminal(shown, { mid, id: p.id });
             const hot = sameTerminal(activeItem, { mid, id: p.id });
             // a tab with one pane is that pane: its menu has the tab's rename and close too
-            const node = t.panes.length === 1 ? termTabNode(mid, sp, t, machine.online) : termPaneNode(mid, sp, t, p, machine.online);
-            const header = t.panes.length === 1 ? tabHeader : p.title;
+            const node = tab.panes.length === 1 ? termTabNode(mid, sp, tab, machine.online) : termPaneNode(mid, sp, tab, p, machine.online);
+            const header = tab.panes.length === 1 ? tabHeader : p.title;
             return (
               <div key={p.id} className="group/fold relative">
                 <a
@@ -387,7 +388,7 @@ function TabBlock({ machine, sp, t, searching, shown, activeItem, open }: { mach
                     {p.detail && <span className="block truncate text-[11px] text-ink-3">{p.detail}</span>}
                   </span>
                 </a>
-                <MoreButton label={`${p.title} 的操作`} onOpen={(el) => open(node, { anchor: el }, header, true)} />
+                <MoreButton label={t("terminal-terminalpage.actions_for", { name: p.title })} onOpen={(el) => open(node, { anchor: el }, header, true)} />
               </div>
             );
           })}

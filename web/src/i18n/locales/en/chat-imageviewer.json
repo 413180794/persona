@@ -1,0 +1,19 @@
+{
+  "no_composer": "No input box to add the image to",
+  "attached": "Added to the input. Add a note and send.",
+  "copied": "Image copied",
+  "copy_failed": "Couldn't copy: the browser won't write images",
+  "download_failed": "Download failed",
+  "edit": "Edit",
+  "copy": "Copy",
+  "download": "Download",
+  "image": "Image",
+  "close": "Close (Esc)",
+  "open_in_new_tab": "Open in new tab",
+  "unreadable": "Couldn't load the image",
+  "zoomed_hint": "Drag to pan, double-click to reset",
+  "zoom_hint": "Scroll or double-click to zoom",
+  "add_to_composer": "Add to input",
+  "previous": "Previous (←)",
+  "next": "Next (→)"
+}

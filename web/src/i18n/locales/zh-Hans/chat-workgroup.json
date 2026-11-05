@@ -1,0 +1,5 @@
+{
+  "load_failed": "没能取回这段过程",
+  "retry": "重试",
+  "loading_steps_other": "正在取 {count} 条"
+}

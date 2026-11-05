@@ -13,8 +13,14 @@ import { Icon } from "../../ui/icons";
 import { ActionRow } from "./ActionRow";
 import { useChatContext } from "./chat-context";
 import { useExpanded } from "./expanded";
+import { t } from "../../i18n";
 
-const STATUS: Record<AgentStatus, string> = { running: "运行中", completed: "已完成", failed: "失败", stopped: "已停止" };
+const STATUS: Record<AgentStatus, string> = {
+  running: t("chat-subagentcard.status_running"),
+  completed: t("chat-subagentcard.status_completed"),
+  failed: t("chat-subagentcard.status_failed"),
+  stopped: t("chat-subagentcard.status_stopped"),
+};
 /** How many of its latest steps the open card shows. */
 const RECENT_STEPS = 3;
 
@@ -33,7 +39,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
   const [open, setOpen] = useExpanded(`${scope}task:${use.id}`);
   const running = status === "running";
   const now = useNow(1000, running);
-  const title = (typeof inp.description === "string" && inp.description.trim()) || (meta ? subagentTitle(meta) : "") || "子 Agent 任务";
+  const title = (typeof inp.description === "string" && inp.description.trim()) || (meta ? subagentTitle(meta) : "") || t("chat-subagentcard.untitled_task");
   const prompt = typeof inp.prompt === "string" ? inp.prompt.trim() : "";
   const summary = agentSummary(result, meta);
   const type = (typeof inp.subagent_type === "string" && inp.subagent_type) || meta?.type || "";
@@ -48,7 +54,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          aria-label={open ? "收起子 Agent 详情" : "展开子 Agent 详情"}
+          aria-label={open ? t("chat-subagentcard.collapse_details") : t("chat-subagentcard.expand_details")}
           className="flex w-full min-w-0 items-start gap-2 rounded-lg text-left [@media(pointer:coarse)]:min-h-10"
         >
           <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-field text-ink-2">
@@ -56,7 +62,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-2">子 Agent</span>
+              <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-2">{t("chat-subagentcard.subagent")}</span>
               <span className="min-w-0 flex-1 truncate text-[length:var(--chat-secondary)] leading-[1.428571] font-medium text-ink">{title}</span>
               <span className={cx("inline-flex shrink-0 items-center gap-1.5 text-[12px] leading-[1.333333] whitespace-nowrap", status === "failed" ? "text-red" : "text-ink-2")}>
                 {running ? <Spinner size={11} /> : <Icon name={status === "failed" ? "info" : status === "stopped" ? "stop" : "check"} size={12} />}
@@ -65,9 +71,9 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
             </span>
             <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] leading-[1.333333] text-ink-3">
               <span>Claude Code</span>
-              {type && <span className="inline-flex items-center rounded-full bg-field px-1.5 py-0.5">{meta?.fork ? "分叉" : type}</span>}
-              {took && <span className="tabular-nums">{running ? `已运行 ${took}` : took}</span>}
-              {meta?.background && <span>后台</span>}
+              {type && <span className="inline-flex items-center rounded-full bg-field px-1.5 py-0.5">{meta?.fork ? t("chat-subagentcard.fork") : type}</span>}
+              {took && <span className="tabular-nums">{running ? t("chat-subagentcard.running_for", { duration: took }) : took}</span>}
+              {meta?.background && <span>{t("chat-subagentcard.background")}</span>}
             </span>
           </span>
           <Icon name="chevronRight" size={14} stroke={2.2} className="mt-1 shrink-0 text-ink-3 transition-transform duration-150 motion-reduce:transition-none" style={{ transform: open ? "rotate(90deg)" : "none" }} />
@@ -90,7 +96,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
                     {depth > 0 && <span aria-hidden className="h-2 w-2.5 shrink-0 rounded-bl-[4px] border-b border-l border-line-strong" />}
                     <StatusDot state={a.running ? "working" : "unread"} size={6} />
                     <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{subagentTitle(a)}</span>
-                    <span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3">{a.running ? "运行中" : "已结束"}</span>
+                    <span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3">{a.running ? t("chat-subagentcard.status_running") : t("chat-subagentcard.ended")}</span>
                   </button>
                 ))}
               </div>
@@ -102,7 +108,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
                 className="mt-0.5 flex w-fit items-center gap-1 rounded-[6px] py-0.5 text-[12px] font-medium whitespace-nowrap text-accent-ink hover:underline"
                 data-subagent-open
               >
-                查看完整过程
+                {t("chat-subagentcard.view_full")}
                 <Icon name="chevronRight" size={12} stroke={2.2} />
               </button>
             )}

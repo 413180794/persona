@@ -1,0 +1,9 @@
+{
+  "source_read": "Image read",
+  "source_screenshot": "Screenshot",
+  "source_browser": "Web screenshot",
+  "source_mcp": "MCP tool",
+  "source_tool": "Tool result",
+  "copy_path": "Copy path",
+  "open_in_files": "Open in Files"
+}

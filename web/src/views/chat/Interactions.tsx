@@ -11,10 +11,11 @@ import { Button, Collapse, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { cardFold, cardLine, PLAN_MAX, showsAnswered } from "./dock";
+import { t } from "../../i18n";
 
 async function resolve(ix: Interaction, body: Record<string, unknown>) {
   if (!sessionCan(getSession(ix.machine_id, ix.session_id), "approve")) {
-    toast("此会话不允许审批", "error");
+    toast(t("chat-interactions.approve_not_allowed"), "error");
     return false;
   }
   try {
@@ -24,14 +25,14 @@ async function resolve(ix: Interaction, body: Record<string, unknown>) {
     const already = res?.already === true;
     const r: Resolution = already ? (res.resolution ?? {}) : body;
     endInteraction(ix.id, r.dismiss === true && !already ? undefined : { ix, resolution: r, already });
-    if (already) toast("这张卡片已经回答过了", "info");
+    if (already) toast(t("chat-interactions.already_answered"), "info");
     return true;
   } catch (e) {
     if (e instanceof ApiError && e.status === 410) {
       endInteraction(ix.id); // over (expired, withdrawn, handed back): nothing left to answer
       toast(endedText(e.body.status), "error");
-    } else if (e instanceof ApiError && e.code === "prompt_changed") toast("电脑上的对话框变了，已按新的屏幕重新生成", "error");
-    else toast(`没送到：${errorText(e)}`, "error");
+    } else if (e instanceof ApiError && e.code === "prompt_changed") toast(t("chat-interactions.prompt_changed"), "error");
+    else toast(t("chat-interactions.send_failed", { error: errorText(e) }), "error");
     return false;
   }
 }
@@ -50,8 +51,8 @@ function Card({ title, kicker, onDismiss, children, footer }: { title: string; k
           </div>
           <button
             type="button"
-            aria-label="交回电脑处理"
-            title="交回电脑处理"
+            aria-label={t("chat-interactions.hand_back")}
+            title={t("chat-interactions.hand_back")}
             onClick={onDismiss}
             className="touch-hit flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
           >
@@ -135,7 +136,7 @@ function QuestionCard({ ix }: { ix: Interaction }) {
 
   return (
     <Card
-      kicker={q.header || "提问"}
+      kicker={q.header || t("chat-interactions.question")}
       title={q.question}
       onDismiss={() => resolve(ix, { dismiss: true })}
       footer={
@@ -143,7 +144,7 @@ function QuestionCard({ ix }: { ix: Interaction }) {
           <span className="flex items-center gap-2">
             {qs.length > 1 && (
               <>
-                <button type="button" aria-label="上一题" disabled={qi === 0} onClick={() => setQi(qi - 1)} className="touch-hit flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
+                <button type="button" aria-label={t("chat-interactions.previous_question")} disabled={qi === 0} onClick={() => setQi(qi - 1)} className="touch-hit flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
                   <Icon name="chevronLeft" size={14} stroke={2.2} />
                 </button>
                 <span className="flex items-center gap-1">
@@ -151,21 +152,21 @@ function QuestionCard({ ix }: { ix: Interaction }) {
                     <button
                       key={i}
                       type="button"
-                      aria-label={`第 ${i + 1} 题`}
+                      aria-label={t("chat-interactions.question_n", { n: i + 1 })}
                       onClick={() => setQi(i)}
                       className="rounded-full transition-all duration-300"
                       style={i === qi ? { width: 9, height: 9, border: "2.5px solid var(--ink)" } : answered(i) ? { width: 7, height: 7, background: "var(--ink-3)" } : { width: 7, height: 7, border: "1.5px solid var(--ink-3)" }}
                     />
                   ))}
                 </span>
-                <button type="button" aria-label="下一题" disabled={last} onClick={() => setQi(qi + 1)} className="touch-hit flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
+                <button type="button" aria-label={t("chat-interactions.next_question")} disabled={last} onClick={() => setQi(qi + 1)} className="touch-hit flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
                   <Icon name="chevronRight" size={14} stroke={2.2} />
                 </button>
               </>
             )}
-            {q.multi_select && <span className="text-[11.5px] text-ink-3">可多选</span>}
+            {q.multi_select && <span className="text-[11.5px] text-ink-3">{t("chat-interactions.multi_select")}</span>}
           </span>
-          <SendArrow ready={last ? all : answered(qi)} busy={busy} label={last ? "发送回答" : "下一题"} onClick={() => (last ? void send() : setQi(qi + 1))} />
+          <SendArrow ready={last ? all : answered(qi)} busy={busy} label={last ? t("chat-interactions.send_answer") : t("chat-interactions.next_question")} onClick={() => (last ? void send() : setQi(qi + 1))} />
         </>
       }
     >
@@ -182,8 +183,8 @@ function QuestionCard({ ix }: { ix: Interaction }) {
               if (e.target.value) setPicked((p) => ({ ...p, [qi]: [] }));
             }}
             onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && (last ? all && void send() : answered(qi) && setQi(qi + 1))}
-            placeholder="或者自己写…"
-            aria-label="自定义回答"
+            placeholder={t("chat-interactions.custom_placeholder")}
+            aria-label={t("chat-interactions.custom_answer")}
             className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
           />
         </label>
@@ -193,9 +194,9 @@ function QuestionCard({ ix }: { ix: Interaction }) {
 }
 
 const MODES = [
-  { key: "acceptEdits", label: "批准，自动接受编辑" },
-  { key: "bypassPermissions", label: "批准，全部放行" },
-  { key: "default", label: "批准，每步确认" },
+  { key: "acceptEdits", label: t("chat-interactions.mode_accept_edits") },
+  { key: "bypassPermissions", label: t("chat-interactions.mode_bypass") },
+  { key: "default", label: t("chat-interactions.mode_default") },
 ];
 
 function PlanCard({ ix }: { ix: Interaction }) {
@@ -210,8 +211,8 @@ function PlanCard({ ix }: { ix: Interaction }) {
   };
   return (
     <Card
-      kicker="计划待批准"
-      title="Agent 想按这个计划做"
+      kicker={t("chat-interactions.plan_kicker")}
+      title={t("chat-interactions.plan_title")}
       onDismiss={() => go({ dismiss: true })}
       footer={
         rejecting ? (
@@ -221,26 +222,26 @@ function PlanCard({ ix }: { ix: Interaction }) {
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && feedback.trim() && go({ approve: false, feedback: feedback.trim() })}
-              placeholder="要怎么改…"
+              placeholder={t("chat-interactions.feedback_placeholder")}
               className="h-8 min-w-0 flex-1 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
             />
             <Button tone="quiet" onClick={() => setRejecting(false)}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="primary" busy={busy} disabled={!feedback.trim()} onClick={() => go({ approve: false, feedback: feedback.trim() })}>
-              打回
+              {t("chat-interactions.reject")}
             </Button>
           </>
         ) : (
           <>
             <Button tone="quiet" onClick={() => setRejecting(true)}>
-              打回修改
+              {t("chat-interactions.request_changes")}
             </Button>
             <span className="flex items-center">
               <Button tone="primary" busy={busy} className="rounded-r-none" onClick={() => go({ approve: true, mode: "acceptEdits" })}>
-                批准
+                {t("chat-interactions.approve")}
               </Button>
-              <button type="button" aria-label="批准方式" onClick={menu.open} className="touch-hit flex h-8 w-7 items-center justify-center rounded-r-control border-l border-white/15 bg-ink text-surface hover:opacity-90">
+              <button type="button" aria-label={t("chat-interactions.approve_mode")} onClick={menu.open} className="touch-hit flex h-8 w-7 items-center justify-center rounded-r-control border-l border-white/15 bg-ink text-surface hover:opacity-90">
                 <Icon name="chevron" size={12} stroke={2.4} />
               </button>
               {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" side="top" width={196} items={MODES.map((m) => ({ key: m.key, label: m.label, onSelect: () => go({ approve: true, mode: m.key }) }))} />}
@@ -266,23 +267,23 @@ function PermissionCard({ ix }: { ix: Interaction }) {
   const detail = ix.summary || JSON.stringify(ix.tool_input ?? {}, null, 2);
   return (
     <Card
-      kicker="需要授权"
-      title={`允许使用 ${toolDisplayName(ix.tool_name)}？`}
+      kicker={t("chat-interactions.permission_kicker")}
+      title={t("chat-interactions.permission_title", { tool: toolDisplayName(ix.tool_name) })}
       onDismiss={() => go({ dismiss: true })}
       footer={
         <>
-          <Button tone="quiet" onClick={() => go({ allow: false, message: "用户拒绝了" })}>
-            拒绝
+          <Button tone="quiet" onClick={() => go({ allow: false, message: t("chat-interactions.denied_message") })}>
+            {t("chat-interactions.deny")}
           </Button>
           <span className="flex gap-1.5">
             {/* Claude's 总是允许; another agent's card (Codex, an agent runtime) only when it says what always allows. */}
             {(!ix.agent || ix.agent === "claude" || ix.always_label) && (
               <Button tone="secondary" onClick={() => go({ allow: true, always: true })}>
-                总是允许
+                {t("chat-interactions.always_allow")}
               </Button>
             )}
             <Button tone="primary" busy={busy} onClick={() => go({ allow: true })}>
-              允许
+              {t("chat-interactions.allow")}
             </Button>
           </span>
         </>
@@ -306,24 +307,24 @@ function ScreenCard({ ix }: { ix: Interaction }) {
   if (d?.multi) return <MultiScreenCard ix={ix} />;
   return (
     <Card
-      kicker={d?.header || "终端里的对话框"}
-      title={d?.question || "电脑上的 Agent 停在一个对话框上"}
+      kicker={d?.header || t("chat-interactions.screen_kicker")}
+      title={d?.question || t("chat-interactions.screen_title")}
       onDismiss={() => go({ dismiss: true }, "dismiss")}
       footer={
         d?.options?.length ? (
-          <span className="text-[11.5px] text-ink-3">选一项，按键在电脑上按当时的屏幕算</span>
+          <span className="text-[11.5px] text-ink-3">{t("chat-interactions.screen_hint")}</span>
         ) : (
           <>
             <input
               type={ix.secret ? "password" : "text"}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder={ix.secret ? "密码" : "输入文字后回车"}
+              placeholder={ix.secret ? t("chat-interactions.password") : t("chat-interactions.type_and_enter")}
               autoComplete="off"
               className="h-8 min-w-0 flex-1 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
             />
             <Button tone="primary" busy={busy === "text"} onClick={() => go({ text, keys: ["enter"] }, "text")}>
-              发送
+              {t("chat-interactions.send")}
             </Button>
           </>
         )
@@ -344,7 +345,7 @@ function ScreenCard({ ix }: { ix: Interaction }) {
                   className="h-8 min-w-0 flex-1 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
                 />
                 <Button tone="primary" busy={busy === o.key} disabled={!text.trim()} onClick={() => go({ option: o.key, text }, o.key)}>
-                  发送
+                  {t("chat-interactions.send")}
                 </Button>
               </div>
             ) : (
@@ -395,14 +396,14 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
   const answer = text.trim();
   return (
     <Card
-      kicker={[d.header, "可多选"].filter(Boolean).join(" · ")}
-      title={d.question || "电脑上的 Agent 停在一个多选题上"}
+      kicker={[d.header, t("chat-interactions.multi_select")].filter(Boolean).join(" · ")}
+      title={d.question || t("chat-interactions.multi_title")}
       onDismiss={() => go({ dismiss: true }, "dismiss")}
       footer={
         <>
           {chat && (
             <Button busy={busy === chat.key} onClick={() => go({ option: chat.key }, chat.key)}>
-              改在对话里说
+              {t("chat-interactions.say_in_chat")}
             </Button>
           )}
           <span className="flex-1" />
@@ -412,7 +413,7 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
             disabled={busy !== null || (picked.size === 0 && !answer)}
             onClick={() => go({ options: options.map((o) => o.key).filter((k) => picked.has(k)), text: answer || undefined }, "multi")}
           >
-            {d.submit === "Next" ? "下一题" : "提交"}
+            {d.submit === "Next" ? t("chat-interactions.next_question") : t("chat-interactions.submit")}
           </Button>
         </>
       }
@@ -442,7 +443,7 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="其他回答（可不填）"
+            placeholder={t("chat-interactions.other_answer")}
             disabled={busy !== null}
             className="mt-1 h-8 min-w-0 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
           />
@@ -461,7 +462,7 @@ export function AnsweredCard({ card }: { card: Answered }) {
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-green">
             <Icon name="check" size={11} stroke={3} />
-            {card.resolution.dismiss === true ? "已交回电脑" : "已回答"}
+            {card.resolution.dismiss === true ? t("chat-interactions.handed_back") : t("chat-interactions.answered")}
           </div>
           <div className="flex flex-col gap-1">
             {lines.map((l, i) => (
@@ -474,8 +475,8 @@ export function AnsweredCard({ card }: { card: Answered }) {
         </div>
         <button
           type="button"
-          aria-label="收起"
-          title="收起"
+          aria-label={t("chat-interactions.collapse")}
+          title={t("chat-interactions.collapse")}
           onClick={() => dropAnswered(card.ix.id)}
           className="touch-hit flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
         >
@@ -538,14 +539,14 @@ export function PendingCards({ interactions, answered, narrow, short = false, ke
       {/* the line for what is folded stays in view under the box (in it, a tall first card would scroll it away) */}
       {summary && (
         <FoldRow
-          label={more ? `还有 ${summary.count} 件` : `${summary.count} 件待处理`}
+          label={more ? t("chat-interactions.more_pending", { count: summary.count }) : t("chat-interactions.pending", { count: summary.count })}
           detail={(more ? interactions.slice(1) : interactions).map(cardLine).join(" · ")}
           onClick={summary.kind === "typing" ? onDismissKeyboard : () => setOpen(true)}
         />
       )}
       {open && (count > 1 || short) && !keyboard && (
         <Button tone="quiet" onClick={() => setOpen(false)} className="touch-hit -mt-1 self-center">
-          {short ? "收起" : "只看第一件"}
+          {short ? t("chat-interactions.collapse") : t("chat-interactions.first_only")}
         </Button>
       )}
     </div>

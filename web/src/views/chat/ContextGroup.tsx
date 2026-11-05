@@ -3,6 +3,7 @@ import { clickLink, linkHref } from "../../lib/links";
 import type { Context } from "../../lib/turns";
 import { Collapse, cx } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { t } from "../../i18n";
 
 // What a message carries besides what the user wrote (picked page excerpts, everything a Feishu /agent request hands
 // its agent): one folded row under the bubble; open, a list of titles; each title opens to its text.
@@ -10,12 +11,12 @@ import { Icon, type IconName } from "../../ui/icons";
 const ICONS: Record<string, IconName> = { instructions: "info", doc: "book", edit: "pencil" };
 
 export function contextLabel(c: Context): string {
-  return c.title || c.url || "引用";
+  return c.title || c.url || t("chat-contextgroup.quote");
 }
 
 export function contextSummary(cs: Context[]): string {
-  if (cs.length === 1) return `${cs[0].kind === "edit" ? "要改的内容" : "上下文"} · ${contextLabel(cs[0])}`;
-  return `上下文 · ${cs.length} 项`;
+  if (cs.length === 1) return t(cs[0].kind === "edit" ? "chat-contextgroup.summary_edit" : "chat-contextgroup.summary_single", { label: contextLabel(cs[0]) });
+  return t("chat-contextgroup.summary_many", { count: cs.length });
 }
 
 export function ContextGroup({ contexts }: { contexts: Context[] }) {
@@ -54,7 +55,7 @@ function ContextRow({ c, first }: { c: Context; first: boolean }) {
       >
         <Icon name={ICONS[c.kind] ?? "quote"} size={13} className="shrink-0 text-ink-3" />
         <span className="min-w-0 flex-1 truncate">{contextLabel(c)}</span>
-        {!c.text && <span className="shrink-0 text-[11.5px] text-ink-3">空</span>}
+        {!c.text && <span className="shrink-0 text-[11.5px] text-ink-3">{t("chat-contextgroup.empty")}</span>}
         <Icon name="chevronRight" size={13} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(90deg)" : "none" }} />
       </button>
       <Collapse open={open} lazy><ContextBody c={c} /></Collapse>
@@ -68,7 +69,7 @@ function ContextBody({ c }: { c: Context }) {
       {c.text ? (
         <div className="max-h-[320px] overflow-y-auto text-[12.5px] leading-[1.6] whitespace-pre-wrap text-ink-3 [overflow-wrap:anywhere]">{c.text}</div>
       ) : (
-        <span className="text-[12px] text-ink-3">没有内容</span>
+        <span className="text-[12px] text-ink-3">{t("chat-contextgroup.no_content")}</span>
       )}
       {c.url && (
         <a
@@ -79,7 +80,7 @@ function ContextBody({ c }: { c: Context }) {
           className="flex w-fit max-w-full min-w-0 items-center gap-1 text-[12px] whitespace-nowrap text-accent hover:underline"
         >
           <Icon name="external" size={12} className="shrink-0" />
-          <span className="min-w-0 truncate">打开 {c.url}</span>
+          <span className="min-w-0 truncate">{t("chat-contextgroup.open_url", { url: c.url })}</span>
         </a>
       )}
     </div>

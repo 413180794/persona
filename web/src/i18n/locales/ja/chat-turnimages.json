@@ -1,0 +1,9 @@
+{
+  "source_read": "読み込んだ画像",
+  "source_screenshot": "スクリーンショット",
+  "source_browser": "Webスクリーンショット",
+  "source_mcp": "MCPツール",
+  "source_tool": "ツールの結果",
+  "copy_path": "パスをコピー",
+  "open_in_files": "ファイルで開く"
+}

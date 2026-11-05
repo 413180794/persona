@@ -16,6 +16,7 @@ import { QuoteBlock } from "./Quote";
 import { Markdown } from "../../ui/Markdown";
 import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
+import { t } from "../../i18n";
 
 export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string; sid: string }) {
   const parts = msg.parts ?? [msg.text];
@@ -30,11 +31,11 @@ export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string;
       )}
       {msg.files && <FileCards files={msg.files} mid={mid} />}
       <MessageActions text={parts.join("\n\n")} isUser ts={msg.ts} side className="max-w-full">
-        <div className="flex max-w-full flex-col gap-2 rounded-[14px] bg-user-bubble px-3.5 py-2 text-[length:var(--chat-secondary)] leading-[1.55] text-ink" title={clock(msg.ts)} aria-label={`${parts.length} 条消息`}>
-          {parts.map((t, i) => (
+        <div className="flex max-w-full flex-col gap-2 rounded-[14px] bg-user-bubble px-3.5 py-2 text-[length:var(--chat-secondary)] leading-[1.55] text-ink" title={clock(msg.ts)} aria-label={t("chat-messages.message_count", { count: parts.length })}>
+          {parts.map((part, i) => (
             <div key={i} className="flex flex-col gap-2">
               {i > 0 && <span aria-hidden className="mx-auto h-[2px] w-6 rounded-full bg-ink/20" />}
-              <MergedPart text={t} mid={mid} sid={sid} />
+              <MergedPart text={part} mid={mid} sid={sid} />
             </div>
           ))}
         </div>
@@ -66,7 +67,7 @@ export function PeerMessage({ msg }: { msg: UserMessage }) {
     <div className="flex min-w-0 flex-col gap-1.5 rounded-card bg-inset px-3.5 py-2.5 shadow-hairline sm:mr-[12%]" title={clock(msg.ts)}>
       <span className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap text-ink-3">
         <Icon name="loop" size={12} />
-        来自 {msg.from}
+        {t("chat-messages.from", { name: msg.from ?? "" })}
       </span>
       <Markdown text={keepLineBreaks(msg.text)} small />
     </div>
@@ -84,7 +85,7 @@ export function LoopTick({ msg }: { msg: UserMessage }) {
     <div className="flex justify-end">
       <span className="flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] text-ink-2 shadow-hairline">
         <Icon name="loop" size={12} className="shrink-0" />
-        <span className="shrink-0 font-medium whitespace-nowrap">循环唤醒</span>
+        <span className="shrink-0 font-medium whitespace-nowrap">{t("chat-messages.loop_tick")}</span>
         {msg.ts && <span className="shrink-0 tabular-nums">{clock(msg.ts)}</span>}
         {rest && <span className="min-w-0 truncate text-ink-3">{rest}</span>}
       </span>
@@ -122,7 +123,7 @@ export function InjectedHint({ msg, sid }: { msg: UserMessage; sid: string }) {
   return (
     <div className="flex flex-col items-center gap-2" data-injected={n.kind}>
       {todo ? (
-        <button type="button" className={cx(pill, "hover:bg-hover")} onClick={() => openPanel({ kind: "task", todo })} aria-label={`${n.line}，打开任务`}>
+        <button type="button" className={cx(pill, "hover:bg-hover")} onClick={() => openPanel({ kind: "task", todo })} aria-label={t("chat-messages.open_task", { line: n.line })}>
           {body}
         </button>
       ) : n.detail ? (

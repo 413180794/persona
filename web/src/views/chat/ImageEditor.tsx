@@ -7,9 +7,17 @@ import type { DraftImage } from "../../lib/drafts";
 import { boxRect, burnWidth, fitRect, keepMark, toImage, toScreen, type Mark, type MarkTool, type Rect } from "../../lib/image-edit";
 import { cx, Spinner, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { t } from "../../i18n";
 
 const COLORS = ["red", "yellow", "green", "blue", "white", "black"] as const;
-const COLOR_NAME: Record<(typeof COLORS)[number], string> = { red: "红", yellow: "黄", green: "绿", blue: "蓝", white: "白", black: "黑" };
+const COLOR_NAME: Record<(typeof COLORS)[number], string> = {
+  red: t("chat-imageeditor.color_red"),
+  yellow: t("chat-imageeditor.color_yellow"),
+  green: t("chat-imageeditor.color_green"),
+  blue: t("chat-imageeditor.color_blue"),
+  white: t("chat-imageeditor.color_white"),
+  black: t("chat-imageeditor.color_black"),
+};
 
 function markColor(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(`--mark-${name}`).trim() || name;
@@ -30,7 +38,7 @@ function drawMark(ctx: CanvasRenderingContext2D, m: Mark, map: (p: { x: number; 
   ctx.stroke();
 }
 
-export function ImageEditor({ src, doneTitle = "完成", onDone, onCancel }: { src: string; doneTitle?: string; onDone: (img: DraftImage) => void; onCancel: () => void }) {
+export function ImageEditor({ src, doneTitle = t("chat-imageeditor.done"), onDone, onCancel }: { src: string; doneTitle?: string; onDone: (img: DraftImage) => void; onCancel: () => void }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [tool, setTool] = useState<MarkTool>("box");
   const [color, setColor] = useState<(typeof COLORS)[number]>("red");
@@ -49,7 +57,7 @@ export function ImageEditor({ src, doneTitle = "完成", onDone, onCancel }: { s
       () => live && setImg(el),
       () => {
         if (!live) return;
-        toast("图片读不出来，没法编辑", "error");
+        toast(t("chat-imageeditor.unreadable"), "error");
         onCancel();
       },
     );
@@ -137,25 +145,25 @@ export function ImageEditor({ src, doneTitle = "完成", onDone, onCancel }: { s
       // a big screenshot as PNG can pass the 8 MB a message takes: JPEG then
       const fitting = blob && blob.size <= MAX_IMAGE ? blob : await encode(out, "image/jpeg", 0.9);
       if (!fitting || fitting.size > MAX_IMAGE) {
-        toast("编辑后的图片太大了（最多 8 MB）", "error");
+        toast(t("chat-imageeditor.too_large"), "error");
         return;
       }
       const name = fitting.type === "image/jpeg" ? "image.jpg" : "image.png";
       onDone({ name, ...(await imagePayload(new File([fitting], name, { type: fitting.type }))) });
     } catch {
-      toast("没存成：浏览器读不了这张图的像素", "error");
+      toast(t("chat-imageeditor.save_failed"), "error");
     } finally {
       setBusy(false);
     }
   };
 
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="编辑图片" className="fixed inset-0 z-[60] flex flex-col bg-black text-white" style={{ animation: "fade-in 150ms ease-out both" }}>
+    <div role="dialog" aria-modal="true" aria-label={t("chat-imageeditor.title")} className="fixed inset-0 z-[60] flex flex-col bg-black text-white" style={{ animation: "fade-in 150ms ease-out both" }}>
       <div className="flex h-14 shrink-0 items-center gap-2 px-3">
         <button type="button" onClick={onCancel} className="h-9 rounded-full px-3 text-[13.5px] whitespace-nowrap text-white/85 transition-colors hover:bg-white/15 hover:text-white">
-          取消
+          {t("common.cancel")}
         </button>
-        <span className="flex-1 truncate text-center text-[14px] font-semibold">编辑图片</span>
+        <span className="flex-1 truncate text-center text-[14px] font-semibold">{t("chat-imageeditor.title")}</span>
         <button
           type="button"
           onClick={() => void finish()}
@@ -199,7 +207,7 @@ export function ImageEditor({ src, doneTitle = "完成", onDone, onCancel }: { s
             <button
               key={c}
               type="button"
-              aria-label={`${COLOR_NAME[c]}色`}
+              aria-label={COLOR_NAME[c]}
               aria-pressed={color === c}
               onClick={() => setColor(c)}
               className={cx("size-7 rounded-full transition-[box-shadow,transform] active:scale-90", color === c ? "ring-3 ring-white" : "ring-1 ring-white/40")}
@@ -209,14 +217,14 @@ export function ImageEditor({ src, doneTitle = "完成", onDone, onCancel }: { s
         </div>
         <div className="flex items-center gap-2">
           <ToolButton icon="square" active={tool === "box"} onClick={() => setTool("box")}>
-            框选
+            {t("chat-imageeditor.box")}
           </ToolButton>
           <ToolButton icon="write" active={tool === "pen"} onClick={() => setTool("pen")}>
-            画笔
+            {t("chat-imageeditor.pen")}
           </ToolButton>
           <div className="flex-1" />
-          <IconAction icon="undo" label="撤销（⌘Z）" disabled={!marks.length} onClick={() => setMarks((ms) => ms.slice(0, -1))} />
-          <IconAction icon="trash" label="清除" disabled={!marks.length} onClick={() => setMarks([])} />
+          <IconAction icon="undo" label={t("chat-imageeditor.undo")} disabled={!marks.length} onClick={() => setMarks((ms) => ms.slice(0, -1))} />
+          <IconAction icon="trash" label={t("chat-imageeditor.clear")} disabled={!marks.length} onClick={() => setMarks([])} />
         </div>
       </div>
     </div>,

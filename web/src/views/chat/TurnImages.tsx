@@ -11,6 +11,7 @@ import { Icon } from "../../ui/icons";
 import { edgeMask, useEdgeFade } from "./edge-fade";
 import { ImageViewer, type ViewerAction, type ViewerImage } from "./ImageViewer";
 import { imageSrc } from "./Steps";
+import { t } from "../../i18n";
 
 const TILE_H = 60;
 const ONE_H = 88; // a lone picture: a little larger
@@ -24,7 +25,13 @@ function sources(img: TurnImage, mid: string, sid: string, cwd?: string): { full
   return { full: fileDownloadURL(mid, img.path!, cwd, { inline: true }), thumb: fileThumbURL(mid, img.path!, cwd, 256) };
 }
 
-const SOURCE: Record<TurnImage["source"], string> = { read: "读取的图片", screenshot: "截图", browser: "网页截图", mcp: "MCP 工具", tool: "工具返回" };
+const SOURCE: Record<TurnImage["source"], string> = {
+  read: t("chat-turnimages.source_read"),
+  screenshot: t("chat-turnimages.source_screenshot"),
+  browser: t("chat-turnimages.source_browser"),
+  mcp: t("chat-turnimages.source_mcp"),
+  tool: t("chat-turnimages.source_tool"),
+};
 
 function meta(img: TurnImage): string {
   // a screenshot's label already says what it is (截图 · MacBook): only the size then
@@ -107,11 +114,11 @@ function Gallery({ images, start, mid, sid, cwd, onClose }: { images: TurnImage[
     const path = images[i]?.path;
     if (!path) return [];
     return [
-      { key: "path", icon: "link", label: "拷贝路径", run: () => void copyText(path) },
+      { key: "path", icon: "link", label: t("chat-turnimages.copy_path"), run: () => void copyText(path) },
       {
         key: "file",
         icon: "folder",
-        label: "在文件页打开",
+        label: t("chat-turnimages.open_in_files"),
         run: () => {
           onClose();
           openPanel({ kind: "file", mid, path, cwd });

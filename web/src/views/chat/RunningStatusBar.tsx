@@ -10,6 +10,7 @@ import { useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { prefersReducedMotion } from "../../ui/stream/motion";
 import "../../ui/stream/stream.css";
+import { t } from "../../i18n";
 
 const LINGER_MS = 1000;
 const FADE_OUT_MS = 400;
@@ -22,9 +23,9 @@ export function tokenCount(n: number): string {
 
 /** The left side's words. */
 export function statusText(live: SessionLive | null): string {
-  if (!live) return "运行中";
-  if (live.thinking) return "思考中";
-  return live.verb ? `${live.verb}…` : "运行中";
+  if (!live) return t("chat-runningstatusbar.running");
+  if (live.thinking) return t("chat-runningstatusbar.thinking");
+  return live.verb ? `${live.verb}…` : t("chat-runningstatusbar.running");
 }
 
 export function RunningStatusBar({ mid, sid, working, startedAt }: { mid: string; sid: string; working: boolean; startedAt?: string }) {

@@ -1,0 +1,10 @@
+{
+  "quoting": "Quote",
+  "quoting_from": "Quoting {name}",
+  "quoted_message": "Quoted message",
+  "remove": "Remove quote",
+  "collapse": "Hide quote",
+  "expand": "Show quote",
+  "quoting_task": "Quoting task “{title}”",
+  "task_title": "Task “{title}”"
+}

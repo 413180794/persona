@@ -1,0 +1,10 @@
+{
+  "deleted": "キューから削除しました",
+  "pulled_back": "入力欄に戻しました。編集してから送信してください",
+  "failed": "変更できませんでした：{error}",
+  "summary_other": "{count}件待機中 · {agent}の作業が終わると順に処理します",
+  "pull_back": "戻して編集",
+  "copy": "コピー",
+  "delete": "削除",
+  "row_label": "キューの{n}件目：{text}"
+}

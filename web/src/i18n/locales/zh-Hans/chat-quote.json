@@ -1,0 +1,10 @@
+{
+  "quoting": "引用",
+  "quoting_from": "引用 {name}",
+  "quoted_message": "引用的消息",
+  "remove": "取消引用",
+  "collapse": "收起引用",
+  "expand": "展开引用",
+  "quoting_task": "引用任务「{title}」",
+  "task_title": "任务「{title}」"
+}

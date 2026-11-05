@@ -9,6 +9,7 @@ import { dropSession, refresh, refreshAssistant, upsertSession } from "../../lib
 import type { Session } from "../../lib/types";
 import { Button, copyText, cx, Dialog, Loading, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { t } from "../../i18n";
 
 interface SessionInfo {
   session_id?: string;
@@ -49,9 +50,9 @@ export function SessionInfoDialog({ session, machineName, open, onClose }: { ses
 
   const groups: { title: string; rows: [string, string | undefined, boolean?][] }[] = info
     ? [
-        { title: "运行", rows: [["模型", info.model], ["启动器", info.launcher || session.launcher], ["权限模式", modeTitle(info.permission_mode)], ["思考强度", effortTitle(info.effort)], ["版本", info.version, true]] },
-        { title: "用量", rows: [["上下文", count(info.context_tokens) && `${count(info.context_tokens)} tokens`], ["输出", count(info.output_tokens) && `${count(info.output_tokens)} tokens`], ["轮数", info.turns !== undefined ? String(info.turns) : ""], ["压缩", info.compactions ? `${info.compactions} 次` : ""], ["开始", info.started_at && ago(info.started_at)], ["最后活动", info.last_activity && ago(info.last_activity)]] },
-        { title: "位置", rows: [["机器", machineName], ["目录", info.cwd ? shortPath(info.cwd) : undefined, true], ["分支", info.git_branch, true], ["记录", info.transcript_path ? shortPath(info.transcript_path) : undefined, true]] },
+        { title: t("chat-sessiondialogs.group_run"), rows: [[t("chat-sessiondialogs.model"), info.model], [t("chat-sessiondialogs.launcher"), info.launcher || session.launcher], [t("chat-sessiondialogs.permission_mode"), modeTitle(info.permission_mode)], [t("chat-sessiondialogs.effort"), effortTitle(info.effort)], [t("chat-sessiondialogs.version"), info.version, true]] },
+        { title: t("chat-sessiondialogs.group_usage"), rows: [[t("chat-sessiondialogs.context"), count(info.context_tokens) && `${count(info.context_tokens)} tokens`], [t("chat-sessiondialogs.output"), count(info.output_tokens) && `${count(info.output_tokens)} tokens`], [t("chat-sessiondialogs.turns"), info.turns !== undefined ? String(info.turns) : ""], [t("chat-sessiondialogs.compaction"), info.compactions ? t("chat-sessiondialogs.compactions", { count: info.compactions }) : ""], [t("chat-sessiondialogs.started"), info.started_at && ago(info.started_at)], [t("chat-sessiondialogs.last_activity"), info.last_activity && ago(info.last_activity)]] },
+        { title: t("chat-sessiondialogs.group_location"), rows: [[t("chat-sessiondialogs.machine"), machineName], [t("chat-sessiondialogs.folder"), info.cwd ? shortPath(info.cwd) : undefined, true], [t("chat-sessiondialogs.branch"), info.git_branch, true], [t("chat-sessiondialogs.transcript"), info.transcript_path ? shortPath(info.transcript_path) : undefined, true]] },
       ]
     : [];
 
@@ -59,21 +60,21 @@ export function SessionInfoDialog({ session, machineName, open, onClose }: { ses
     <Dialog
       open={open}
       onClose={onClose}
-      title="会话信息"
+      title={t("chat-sessiondialogs.info_title")}
       width={480}
       footer={
         <>
           <Button tone="quiet" icon="copy" onClick={() => copyText(session.session_id)}>
-            拷贝会话 ID
+            {t("chat-sessiondialogs.copy_session_id")}
           </Button>
           {externalLink(session) && (
             <Button tone="secondary" icon="external" onClick={() => openLink(externalLink(session)!)}>
-              在飞书打开
+              {t("chat-sessiondialogs.open_in_lark")}
             </Button>
           )}
           {!session.assistant && (
             <Button tone="secondary" icon="terminal" onClick={() => copyText(resumeCommand(session))}>
-              拷贝恢复命令
+              {t("chat-sessiondialogs.copy_resume_command")}
             </Button>
           )}
         </>
@@ -132,10 +133,10 @@ export function RenameDialog({ session, open, onClose }: { session: Session; ope
       // the list shows the new name at once; the hub's push confirms it
       upsertSession({ ...session, ...(body.title ? { title: body.title } : {}), ...(body.tab_name ? { slot_name: body.tab_name } : {}) });
       if (session.assistant) void refreshAssistant().catch(() => {});
-      toast("已重命名", "ok");
+      toast(t("chat-sessiondialogs.renamed"), "ok");
       onClose();
     } catch (e) {
-      toast(`没改成：${errorText(e)}`, "error");
+      toast(t("chat-sessiondialogs.change_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -144,14 +145,14 @@ export function RenameDialog({ session, open, onClose }: { session: Session; ope
     <Dialog
       open={open}
       onClose={onClose}
-      title="重命名"
+      title={t("chat-sessiondialogs.rename")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={busy} disabled={!body} onClick={() => void save()}>
-            保存
+            {t("common.save")}
           </Button>
         </>
       }
@@ -163,9 +164,9 @@ export function RenameDialog({ session, open, onClose }: { session: Session; ope
           void save();
         }}
       >
-        {hasTab && <Field label="标签名（herdr tab）" value={tab} onChange={setTab} autoFocus />}
-        <Field label="会话名" value={title} onChange={setTitle} autoFocus={!hasTab} />
-        <p className="text-[12px] leading-relaxed text-ink-3">{session.assistant ? "只改这段对话在 Persona 里的标题。" : "标签名同步到 herdr；会话名用 Claude 的 /rename，电脑上 claude --resume 也看得到。"}</p>
+        {hasTab && <Field label={t("chat-sessiondialogs.tab_name")} value={tab} onChange={setTab} autoFocus />}
+        <Field label={t("chat-sessiondialogs.session_name")} value={title} onChange={setTitle} autoFocus={!hasTab} />
+        <p className="text-[12px] leading-relaxed text-ink-3">{session.assistant ? t("chat-sessiondialogs.rename_hint_assistant") : t("chat-sessiondialogs.rename_hint_agent")}</p>
         <button type="submit" hidden />
       </form>
     </Dialog>
@@ -187,10 +188,10 @@ export function RenameSpaceDialog({ session, open, onClose }: { session: Session
     try {
       await api(`/machines/${enc(session.machine_id)}/spaces/${enc(session.space_id)}/rename`, { method: "POST", json: { name: next } });
       void refresh().catch(() => {});
-      toast("已重命名空间", "ok");
+      toast(t("chat-sessiondialogs.space_renamed"), "ok");
       onClose();
     } catch (e) {
-      toast(`没改成：${errorText(e)}`, "error");
+      toast(t("chat-sessiondialogs.change_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -199,14 +200,14 @@ export function RenameSpaceDialog({ session, open, onClose }: { session: Session
     <Dialog
       open={open}
       onClose={onClose}
-      title="重命名空间"
+      title={t("chat-sessiondialogs.rename_space")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={busy} disabled={!next || next === session.space_name} onClick={() => void save()}>
-            保存
+            {t("common.save")}
           </Button>
         </>
       }
@@ -218,8 +219,8 @@ export function RenameSpaceDialog({ session, open, onClose }: { session: Session
           void save();
         }}
       >
-        <Field label="空间名" value={name} onChange={setName} autoFocus />
-        <p className="text-[12px] leading-relaxed text-ink-3">同时改 herdr 里这个 workspace 的名字，置顶和屏蔽跟着改。</p>
+        <Field label={t("chat-sessiondialogs.space_name")} value={name} onChange={setName} autoFocus />
+        <p className="text-[12px] leading-relaxed text-ink-3">{t("chat-sessiondialogs.rename_space_hint")}</p>
         <button type="submit" hidden />
       </form>
     </Dialog>
@@ -253,22 +254,22 @@ export function ModeChips({ session, effortOnly, assistant }: { session: Session
       await api(`${sessionPath(session.machine_id, session.session_id)}/modes`, { method: "POST", json: patch });
     } catch (e) {
       upsertSession({ ...session, ...before });
-      toast(`没改成：${errorText(e)}`, "error");
+      toast(t("chat-sessiondialogs.change_failed", { error: errorText(e) }), "error");
     }
   };
   const mode = session.permission_mode;
   const danger = mode === BYPASS_MODE;
   return (
     <span className="flex shrink-0 items-center gap-1">
-      {!effortOnly && <Chip label={mode ? modeTitle(mode) : "权限：默认"} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : "权限模式"} />}
-      <Chip label={session.effort ? `思考 ${effortTitle(session.effort)}` : "思考：默认"} onClick={effortMenu.open} active={Boolean(effortMenu.anchor)} title="思考强度" />
+      {!effortOnly && <Chip label={mode ? modeTitle(mode) : t("chat-sessiondialogs.permission_default")} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : t("chat-sessiondialogs.permission_mode")} />}
+      <Chip label={session.effort ? t("chat-sessiondialogs.effort_chip", { effort: effortTitle(session.effort) }) : t("chat-sessiondialogs.effort_default")} onClick={effortMenu.open} active={Boolean(effortMenu.anchor)} title={t("chat-sessiondialogs.effort")} />
       {modeMenu.anchor && !effortOnly && (
         <Menu
           anchor={modeMenu.anchor}
           onClose={modeMenu.close}
           side="top"
           width={300}
-          header="权限模式"
+          header={t("chat-sessiondialogs.permission_mode")}
           items={switchableModes(assistant || session.assistant).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: mode === m.id, onSelect: () => void set({ permission_mode: m.id }) }))}
         />
       )}
@@ -278,7 +279,7 @@ export function ModeChips({ session, effortOnly, assistant }: { session: Session
           onClose={effortMenu.close}
           side="top"
           width={280}
-          header="思考强度"
+          header={t("chat-sessiondialogs.effort")}
           items={effortOptions(session).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: session.effort === m.id, onSelect: () => void set({ effort: m.id }) }))}
         />
       )}
@@ -314,10 +315,10 @@ export function DeleteSessionDialog({ session, machineName, open, onClose }: { s
       await api(sessionPath(session.machine_id, session.session_id), { method: "DELETE" });
       dropSession(session.machine_id, session.session_id);
       if (location.pathname === href({ name: "session", mid: session.machine_id, sid: session.session_id })) navigate({ name: "home" }, true);
-      toast("已删除", "ok");
+      toast(t("chat-sessiondialogs.deleted"), "ok");
       onClose();
     } catch (e) {
-      toast(`删除失败：${errorText(e)}`, "error");
+      toast(t("chat-sessiondialogs.delete_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -326,20 +327,20 @@ export function DeleteSessionDialog({ session, machineName, open, onClose }: { s
     <Dialog
       open={open}
       onClose={onClose}
-      title="删除这个对话？"
+      title={t("chat-sessiondialogs.delete_title")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="danger" busy={busy} onClick={go}>
-            删除
+            {t("chat-sessiondialogs.delete")}
           </Button>
         </>
       }
     >
       <p className="text-[13px] leading-relaxed text-ink-2">
-        「{sessionTitle(session)}」会从各端的列表里移除。{machineName} 上的对话记录不会删除，之后在电脑上用 claude --resume 继续，它会重新出现。
+        {t("chat-sessiondialogs.delete_detail", { title: sessionTitle(session), machine: machineName })}
       </p>
     </Dialog>
   );

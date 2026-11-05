@@ -1,0 +1,15 @@
+{
+  "status_running": "Running",
+  "status_completed": "Done",
+  "status_failed": "Failed",
+  "status_stopped": "Stopped",
+  "untitled_task": "Subagent task",
+  "collapse_details": "Hide subagent details",
+  "expand_details": "Show subagent details",
+  "subagent": "Subagent",
+  "fork": "Fork",
+  "running_for": "Running for {duration}",
+  "background": "Background",
+  "ended": "Ended",
+  "view_full": "View full run"
+}

@@ -1,0 +1,5 @@
+{
+  "load_failed": "この過程を取得できませんでした",
+  "retry": "再試行",
+  "loading_steps_other": "{count}件を取得中"
+}

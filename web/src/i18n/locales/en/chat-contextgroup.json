@@ -1,0 +1,10 @@
+{
+  "quote": "Quote",
+  "summary_edit": "To edit · {label}",
+  "summary_single": "Context · {label}",
+  "summary_many_one": "Context · {count} item",
+  "summary_many_other": "Context · {count} items",
+  "empty": "Empty",
+  "no_content": "No content",
+  "open_url": "Open {url}"
+}

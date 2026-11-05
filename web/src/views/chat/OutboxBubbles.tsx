@@ -3,6 +3,7 @@
 // computer's input box holds text it can clear).
 import { discardOutbox, outboxMessage, retryOutbox, type OutboxEntry } from "../../lib/outbox";
 import { UserBubble } from "./SegmentView";
+import { t } from "../../i18n";
 
 export function OutboxBubbles({ mid, sid, entries }: { mid: string; sid: string; entries: OutboxEntry[] }) {
   if (!entries.length) return null;
@@ -13,17 +14,17 @@ export function OutboxBubbles({ mid, sid, entries }: { mid: string; sid: string;
           <UserBubble msg={outboxMessage(e)} mid={mid} sid={sid} pending={e.state === "sending"} />
           {e.state === "failed" && (
             <div role="alert" className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 pl-[12%] text-[11.5px]">
-              <span className="min-w-0 text-red">没发出去：{e.error}</span>
+              <span className="min-w-0 text-red">{t("chat-outboxbubbles.failed", { error: e.error ?? "" })}</span>
               {e.clearable !== undefined && (
                 <button type="button" onClick={() => void retryOutbox(mid, sid, e.id, e.clearable)} className="whitespace-nowrap font-medium text-accent-ink hover:underline">
-                  清空并发送
+                  {t("chat-outboxbubbles.clear_and_send")}
                 </button>
               )}
               <button type="button" onClick={() => void retryOutbox(mid, sid, e.id)} className="whitespace-nowrap font-medium text-accent-ink hover:underline">
-                重试
+                {t("chat-outboxbubbles.retry")}
               </button>
               <button type="button" onClick={() => discardOutbox(mid, sid, e.id)} className="whitespace-nowrap text-ink-3 hover:text-ink-2">
-                删除
+                {t("chat-outboxbubbles.delete")}
               </button>
             </div>
           )}

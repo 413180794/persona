@@ -1,0 +1,6 @@
+{
+  "load_failed": "Couldn't load these steps",
+  "retry": "Retry",
+  "loading_steps_one": "Loading {count} step",
+  "loading_steps_other": "Loading {count} steps"
+}

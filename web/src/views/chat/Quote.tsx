@@ -9,11 +9,12 @@ import { plainMarkdown } from "../../lib/plain-markdown";
 import { cx, EASE } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
+import { t } from "../../i18n";
 
 /** 「引用 Persona · 16:45」 / 「引用任务「…」 · 16:45」: who said it, or which task, and when, as far as is known. */
 export function quoteSource(q: DraftQuote): string {
-  const who = q.task ? `任务「${q.task.title}」` : q.from;
-  return ["引用" + (who ? (q.task ? who : ` ${who}`) : ""), clock(q.ts)].filter(Boolean).join(" · ");
+  if (q.task) return [t("chat-quote.quoting_task", { title: q.task.title }), clock(q.ts)].filter(Boolean).join(" · ");
+  return [q.from ? t("chat-quote.quoting_from", { name: q.from }) : t("chat-quote.quoting"), clock(q.ts)].filter(Boolean).join(" · ");
 }
 
 /** The quote waiting above the composer's input. */
@@ -23,7 +24,7 @@ export function QuoteBar({ quote, onRemove }: { quote: DraftQuote; onRemove: () 
     <div
       className="flex min-w-0 items-start gap-2 rounded-[10px] bg-inset py-1.5 pr-1 pl-2 shadow-hairline"
       title={quote.task ? `${quote.task.title}\n${quote.text}` : quote.text}
-      aria-label="引用的消息"
+      aria-label={t("chat-quote.quoted_message")}
       style={{ animation: `pop-in 180ms ${EASE} both` }}
     >
       <span aria-hidden className="w-[3px] shrink-0 self-stretch rounded-full bg-accent" />
@@ -36,8 +37,8 @@ export function QuoteBar({ quote, onRemove }: { quote: DraftQuote; onRemove: () 
       </div>
       <button
         type="button"
-        aria-label="取消引用"
-        title="取消引用"
+        aria-label={t("chat-quote.remove")}
+        title={t("chat-quote.remove")}
         onClick={onRemove}
         className="flex size-6 shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2"
       >
@@ -66,7 +67,7 @@ export function QuoteBlock({ text: whole }: { text: string }) {
         {task && (
           <span className="flex max-w-full min-w-0 items-center gap-1 text-[12px] font-medium whitespace-nowrap text-ink-3" data-quote-task>
             <Icon name="check" size={12} className="shrink-0" />
-            <span className="min-w-0 truncate">任务「{task.title}」</span>
+            <span className="min-w-0 truncate">{t("chat-quote.task_title", { title: task.title })}</span>
           </span>
         )}
         {!text ? null : open ? (
@@ -90,7 +91,7 @@ export function QuoteBlock({ text: whole }: { text: string }) {
             aria-expanded={open}
             className="-ml-1 rounded-[6px] px-1 text-[12px] font-medium whitespace-nowrap text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2"
           >
-            {open ? "收起引用" : "展开引用"}
+            {open ? t("chat-quote.collapse") : t("chat-quote.expand")}
           </button>
         )}
       </div>
