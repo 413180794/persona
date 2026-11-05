@@ -223,6 +223,19 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
     `{"method":"CLI","path":"/im/+messages-send","action":"allow"}` 也行）。
 - **还没做**：runtime 助手（DSH、pi）的提示词和 `lark-connector` 工具还只认 lark-connector；设置页的 lark-cli 状态、缺的权限（L2）。
 
+## 本会话总是允许（2026-11-05，#2202）
+
+助手对话里的授权卡点了「本会话总是允许」，这段对话里就一直有效，进程换了也一样。以前只靠 Agent 自己记：Claude 是 PermissionRequest hook 回的
+`addRules … destination: session`，Codex 是 `acceptForSession` / 权限 `scope: session`，飞书闸门记在 node 的内存里。可主对话的进程随时会换
+（空闲 20 分钟回收、部署、换启动器 / 模型、bypassPermissions 只能启动时给），`--resume` 起来的新进程没有之前的会话规则，node 重启后闸门也忘了，同一个操作又开始问。
+
+- node 在助手对话的授权卡上写明「总是允许」放行什么（`always_keys`，Agents 页的会话不带，行为不变）：Claude 是 `tool:<工具名>`（和 addRules 一样是整个工具）；
+  Codex 是 `codex-command:<命令>`、`codex-edit:<文件>` / `codex-root:<目录>`、`codex-permissions:<权限>`（和 Codex 自己「本会话」的范围一样）；
+  飞书闸门是 `lark:<路由>`（id 抹掉；整条命令确认的不记，和以前一样）。
+- hub 收到以「总是允许」批准的卡，把这些 key 记进 Postgres 的 `assistant_always`（对话 id + key 的 sha256）。之后这段对话的卡上的 key 都记过，hub 直接回「允许 + 总是」，
+  不弹卡、不推送；新进程照样拿到会话规则，这个进程里之后不再问。这段对话里正等着的、被这次覆盖的卡一起答掉（并行的工具调用会同时来几张）。
+- 只记放行：拒绝、只允许一次都不记；卡上有一个没记过的 key 就照常问。还没有撤销入口：新建对话即可（或删 `assistant_always` 里这段对话的行）。
+
 ## 主对话、知识库和上下文流动（2026-10-30）
 
 提示词都在 `server/internal/prompts/assistant/`（`docs/prompts.md`）：CLAUDE.md 是 `claude_md.md`，快照是 `snapshot.md`（主对话那句在 `context.md`），定时任务到点的消息是 `task_run.md`，默认的早报 / 晚间回顾是 `routine_*.md`。

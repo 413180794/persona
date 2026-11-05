@@ -151,7 +151,7 @@ struct FileViewer: View {
                 .navigationTitle(page?.file?.name ?? (ref.path as NSString).lastPathComponent)
                 .navigationSubtitle(model.machine(ref.machineRef)?.name ?? ref.machineID)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
+                .pageToolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         if let back = history.last {
                             Button { history.removeLast(); ref = back } label: { Label("返回", systemImage: Theme.Icon.back) }

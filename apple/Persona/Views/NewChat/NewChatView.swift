@@ -214,7 +214,7 @@ struct NewChatView: View {
             .themedPage()
             .navigationTitle("新对话")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 #if os(macOS)
                 // A Mac sheet's primary button sits beside 取消 and answers ⏎ (docs/mac.md「和 iOS 的对应」).
@@ -519,7 +519,7 @@ struct LauncherPicker: View {
                 }
             }
         }
-        .searchable(text: $query, prompt: "函数名或模型")
+        .pageSearchable(text: $query, prompt: "函数名或模型")
         .themedPage()
         .navigationTitle("启动器")
     }

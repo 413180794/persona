@@ -183,7 +183,7 @@ struct LarkChatView: View {
         .toolbarBackground(.bar, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .hidesTabBarWhenShown()
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(action: openPins) { Label("Pin 消息", systemImage: Theme.Icon.pin) }
                     .accessibilityIdentifier("lark.pins.open")

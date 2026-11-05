@@ -53,7 +53,7 @@ struct MachineSpacesView: View {
         .themedPage()
         .navigationTitle(machine?.title ?? ref.id)
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 // By value, like the chats the details page opens (MachineDetailRoute).
                 NavigationLink(value: MachineDetailRoute(ref)) { Label("机器详情", systemImage: Theme.Icon.info) }

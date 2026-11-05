@@ -1039,6 +1039,11 @@ type Interaction struct {
 	// AgentLabel is what to call Agent when the apps do not know it (a runtime's own name, "DSH"; docs/runtimes.md),
 	// as proto.Session.AgentLabel.
 	AgentLabel string `json:"agent_label,omitempty"`
+	// AlwaysKeys: what "本会话总是允许" grants on an assistant conversation's permission card, set by the node (a tool,
+	// a Codex command or file, a gated write's route). The hub keeps them for the conversation once answered so, and
+	// answers a later card whose keys are all kept by itself: the agent's own session rule dies with its process
+	// (docs/assistant.md「本会话总是允许」). Absent on Agents sessions' cards.
+	AlwaysKeys []string `json:"always_keys,omitempty"`
 }
 
 // Field is one input of a card (Interaction.Fields).

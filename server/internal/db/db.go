@@ -3,7 +3,9 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -554,6 +556,43 @@ func (d *DB) InteractionOutcome(ctx context.Context, id string) (string, *proto.
 	return status, &res, json.Unmarshal(raw, &res)
 }
 
+// ---- 本会话总是允许 on assistant conversations (assistant_always) ----
+
+func alwaysKeyHash(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
+}
+
+// AllowAlways keeps keys as granted for the session (tool: what the card was about, for reading the table).
+func (d *DB) AllowAlways(ctx context.Context, session, tool string, keys []string) error {
+	hashes := make([]string, len(keys))
+	for i, k := range keys {
+		hashes[i] = alwaysKeyHash(k)
+	}
+	_, err := d.pool.Exec(ctx, `INSERT INTO assistant_always (session_id, key_hash, tool_name)
+		SELECT $1::text, h, $2::text FROM unnest($3::text[]) AS h ON CONFLICT DO NOTHING`, session, tool, hashes)
+	return err
+}
+
+// AlwaysAllowed reports whether every one of keys was granted for the session; false for none.
+func (d *DB) AlwaysAllowed(ctx context.Context, session string, keys []string) (bool, error) {
+	want := map[string]bool{}
+	for _, k := range keys {
+		want[alwaysKeyHash(k)] = true
+	}
+	if session == "" || len(want) == 0 {
+		return false, nil
+	}
+	hashes := make([]string, 0, len(want))
+	for h := range want {
+		hashes = append(hashes, h)
+	}
+	var n int
+	err := d.pool.QueryRow(ctx, `SELECT count(*) FROM assistant_always WHERE session_id = $1 AND key_hash = ANY($2::text[])`,
+		session, hashes).Scan(&n)
+	return err == nil && n == len(hashes), err
+}
+
 // ---- connector secrets ----
 
 // ConnectorSecret is a connector's sealed secret; false when it has none.
@@ -864,6 +903,6 @@ func (d *DB) TouchDeviceToken(ctx context.Context, id string) error {
 
 // TruncateForTest clears tables in tests.
 func (d *DB) TruncateForTest(ctx context.Context) error {
-	_, err := d.pool.Exec(ctx, `TRUNCATE workspace_board, workspace_snapshots, devices, device_tokens, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, connector_secrets, machine_systems, machine_metrics, sent_messages, todos, todo_agents CASCADE`)
+	_, err := d.pool.Exec(ctx, `TRUNCATE workspace_board, workspace_snapshots, devices, device_tokens, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, connector_secrets, machine_systems, machine_metrics, sent_messages, todos, todo_agents, assistant_always CASCADE`)
 	return err
 }

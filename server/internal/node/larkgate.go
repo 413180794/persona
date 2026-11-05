@@ -530,6 +530,13 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		return "allow", "读操作", nil
 	}
 	ix.Kind, ix.ToolName, ix.Summary = proto.IxPermission, callTitle(cfg.Gates, ask[0]), larkSummary(cfg.Gates, ask)
+	// The routes 本会话总是允许 lets through, kept by the hub too: this node's memory of them ends when it restarts.
+	ix.AlwaysKeys = nil
+	for _, c := range ask {
+		if k := "lark:" + larkPattern(c); !slices.Contains(ix.AlwaysKeys, k) {
+			ix.AlwaysKeys = append(ix.AlwaysKeys, k)
+		}
+	}
 	return n.confirmLark(ctx, session, ix, ask)
 }
 

@@ -196,7 +196,7 @@ struct TaskBoardSheet: View {
             .themedGroupedPage()
             .navigationTitle("任务")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: Theme.Icon.close) }
                         .accessibilityLabel("关闭")

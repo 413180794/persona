@@ -21,6 +21,7 @@ struct AssistantAvatar: View {
         }
     }
 
+    @Environment(\.tabIsActive) private var inFront
     var size: CGFloat
     var design: Design = .mochi
     var state: PersonaState = .idle
@@ -38,8 +39,9 @@ struct AssistantAvatar: View {
     }
 
     private var accent: Color { state == .offline ? Color(white: 0.62) : tint ?? Theme.accent }
-    /// Moving every frame: only these states, and never when still.
-    private var moving: Bool { !still && [.thinking, .working, .needsYou].contains(state) }
+    /// Moving every frame: only these states, and never when still or on a page behind another (the Mac keeps the
+    /// Persona page in the window, `MacPageStack`: its face blinked and moved while nobody could see it).
+    private var moving: Bool { !still && inFront && [.thinking, .working, .needsYou].contains(state) }
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -63,7 +65,7 @@ struct AssistantAvatar: View {
     private func face(_ d: PersonaFace.Design) -> some View {
         TimelineView(.animation(minimumInterval: 1 / 15, paused: !moving)) { tl in
             PersonaFace(size: size, design: d, state: state, tint: tint ?? Theme.accent, mark: Theme.Icon.jarvis,
-                        time: tl.date.timeIntervalSinceReferenceDate, moving: moving, blink: still ? nil : Theme.Motion.blink)
+                        time: tl.date.timeIntervalSinceReferenceDate, moving: moving, blink: still || !inFront ? nil : Theme.Motion.blink)
         }
     }
 

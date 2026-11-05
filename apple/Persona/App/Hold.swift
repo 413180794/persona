@@ -15,6 +15,9 @@ import Foundation
         case scrolling
         /// The page cannot be seen.
         case outOfSight
+        /// The page is kept behind the one in front (the Mac's sections, `MacPageStack`): held with no cap, as out of
+        /// sight, and told apart from it so the two can come and go on their own.
+        case behind
     }
 
     /// How long a list rests after a scroll before what came meanwhile lands.

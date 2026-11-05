@@ -1208,7 +1208,7 @@ struct AssistantSidebar: View {
     /// Persona's face and name with where it runs (a tap: its profile), 设置 on the right (the tab bar is hidden while
     /// the drawer is out).
     @ViewBuilder private var footer: some View {
-        if isShell { shellFooter } else { profileFooter }
+        if isShell { shellFooter } else { AssistantProfileFooter(machineID: machineID, openProfile: openProfile, openSettings: openSettings) }
     }
 
     /// The shell's foot, ChatGPT's: a 新对话 pill in the 主题色 on the left (#1312), 设置 in a glass circle on the right.
@@ -1246,9 +1246,20 @@ struct AssistantSidebar: View {
         .padding(.horizontal, Theme.Space.xl)
         .padding(.vertical, Theme.Space.m)
     }
+}
 
-    private var profileFooter: some View {
-        let machine = model.machine(model.hubRef(machineID))
+/// Persona's face and name with where it runs, 设置 on the right: a view of its own, so the machines' heartbeats (and
+/// the page coming to the front) draw this row again, not the conversations' list.
+private struct AssistantProfileFooter: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.tabIsActive) private var inFront
+    let machineID: String
+    let openProfile: () -> Void
+    let openSettings: (() -> Void)?
+
+    var body: some View {
+        // Behind another section (the Mac keeps the page): the machine as it is now, not each push's heartbeat.
+        let machine = model.machine(model.hubRef(machineID), inFront: inFront)
         let online = machine?.online ?? false
         return VStack(spacing: 0) {
             Divider()

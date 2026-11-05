@@ -143,7 +143,7 @@ struct MessageShareSheet: View {
             .safeAreaInset(edge: .bottom, spacing: 0) { actions }
             .navigationTitle("分享消息")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
                 ToolbarItem(placement: .principal) {
                     Picker("样式", selection: Binding(get: { isDark }, set: { dark = $0 })) {

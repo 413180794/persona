@@ -72,5 +72,12 @@ private struct MacRefreshesModifier: ViewModifier {
                 if let window { MacPageRefreshRegistry.shared.set(id, window: window, action: action) }
             }
             .onDisappear { MacPageRefreshRegistry.shared.remove(id) }
+            // A section's page kept behind another one (`MacPageStack`) is not on screen: ⌘R goes to the one in front.
+            .background {
+                PageFrontWatcher(initial: false) { [id, window, action] front in
+                    if !front { MacPageRefreshRegistry.shared.remove(id) }
+                    else if let window { MacPageRefreshRegistry.shared.set(id, window: window, action: action) }
+                }
+            }
     }
 }

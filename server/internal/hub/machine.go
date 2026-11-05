@@ -581,7 +581,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		if s, ok := m.hub.extensions.assistantSummary(ctx, p.Interaction.ToolName, p.Interaction.Summary); ok {
 			p.Interaction.Summary = s
 		}
-		return m.hub.waitInteraction(ctx, p.Interaction)
+		return m.hub.nodeInteraction(ctx, p.Interaction)
 	case "assistant.lark":
 		// The skills' gated commands' credentials go to the assistant's machine only (its process runs them); so does
 		// how to run lark-cli (its login stays on that machine, in lark-cli's own store).

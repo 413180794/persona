@@ -49,7 +49,7 @@ struct PersonalAgentSessionView: View {
         .safeAreaInset(edge: .bottom) { composer }
         .navigationTitle(session.title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: Theme.Space.s) {
                     PersonalAgentAvatar(session: session, size: 24)

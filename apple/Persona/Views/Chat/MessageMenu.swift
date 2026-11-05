@@ -378,7 +378,7 @@ struct SelectableTextSheet: View {
             SelectableTextView(text: text)
                 .navigationTitle("选择文本")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
+                .pageToolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
                     ToolbarItem(placement: .primaryAction) {
                         Button {

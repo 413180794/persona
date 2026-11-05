@@ -11,7 +11,7 @@ import QuartzCore
 /// header rebuilt at every fold left the main thread's CPU time about the same and the frames late (#1337). Frames
 /// the render server drops on its own are not seen.
 ///
-/// `-showPerfRun scroll|sections|chats|resize|launch|pushes`, `-showPerfDelay <s>` (default 6), `-showPerfOut <json>`,
+/// `-showPerfRun scroll|sections|chats|resize|launch|pushes` (sections: `-showPerfSections a,b` for just those, once; `-showPerfRounds n` times), `-showPerfDelay <s>` (default 6), `-showPerfOut <json>`,
 /// `-showPerfQuit YES`; scroll: `-showPerfPoint x,y` (window points from the top left, inside the scroll view to
 /// drive), `-showPerfSpeed <points per frame>` (default 12), `-showPerfSeconds <s>` (default 6), `-showPerfGlide
 /// YES|up|live`; pushes: `-showPerfChurn <url>` (the mock hub's `/mock/churn?…`), with `-perfCounts YES`.
@@ -247,8 +247,12 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
         var steps: [(String, () -> Void)] = []
         switch kind {
         case .sections:
-            let order = MacSection.shortcutOrder.filter { MacSection.visible(supportsTodos: TodoStore.shared.isSupported).contains($0) }
-            for _ in 0..<3 {
+            // `-showPerfSections agents,knowledge` (once each, in that order) instead of every section three times.
+            let asked = (UserDefaults.standard.string(forKey: "showPerfSections") ?? "").split(separator: ",").compactMap { MacSection(rawValue: String($0)) }
+            let order = asked.isEmpty
+                ? MacSection.shortcutOrder.filter { MacSection.visible(supportsTodos: TodoStore.shared.isSupported).contains($0) } : asked
+            let rounds = UserDefaults.standard.integer(forKey: "showPerfRounds")
+            for _ in 0..<(rounds > 0 ? rounds : asked.isEmpty ? 3 : 1) {
                 for s in order { steps.append((s.rawValue, { MacShellState.shared.go(s, model) })) }
             }
         case .chats:
@@ -271,6 +275,7 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
                 return
             }
             let (name, act) = steps[i]
+            let bodies0 = PerfCount.bodies
             let cpu0 = macPerfMainThreadCPU()
             let t0 = CACurrentMediaTime()
             act()
@@ -282,6 +287,13 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
                 r["step"] = name
                 r["toFirstFrameMs"] = round1(((first ?? t0) - t0) * 1000)
                 r["mainCPUMs"] = round1(macPerfMainThreadCPU() - cpu0)
+                // With `-perfCounts YES`: the views whose body ran for this step (and how often).
+                if PerfCount.enabled {
+                    r["bodies"] = PerfCount.bodies.compactMapValues { $0 }.reduce(into: [String: Int]()) { acc, kv in
+                        let n = kv.value - (bodies0[kv.key] ?? 0)
+                        if n > 0 { acc[kv.key] = n }
+                    }
+                }
                 results.append(r)
                 next(i + 1)
             }

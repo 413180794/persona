@@ -36,7 +36,7 @@ struct LarkProfileView: View {
         } else {
             NavigationStack(path: $path) {
                 card
-                    .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.tint(LarkColor.blue) } }
+                    .pageToolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.tint(LarkColor.blue) } }
                     .feishuRoutes()
             }
             .environment(\.feishuOpen) { path.append($0) }

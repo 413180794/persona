@@ -88,7 +88,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     }
                     mic
                     if canSend {
-                        round(Theme.Icon.send, label: "发送", id: "shell-composer-send", action: send)
+                        round(Theme.Icon.send, label: "发送", id: "shell-composer-send", action: sendTyped)
                             .keyboardShortcut(.return, modifiers: .command)
                     } else if let stop {
                         stopButton(stop)
@@ -172,6 +172,14 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
 
     private func round(_ symbol: String, label: String, id: String, action: @escaping () -> Void) -> some View {
         ComposerRoundButton(symbol: symbol, label: label, id: id) { endDictation(then: action) }
+    }
+
+    /// Sends what the field shows: the keyboard's composition confirmed into the draft first (`TypedText`, #2203).
+    private func sendTyped() {
+        #if os(iOS) || os(visionOS)
+        if focused.wrappedValue { TypedText.commitFocused(into: $text) }
+        #endif
+        send()
     }
 
     private func endDictation(then action: () -> Void) {

@@ -77,8 +77,8 @@ struct PersonalAgentListView: View {
             }
         }
         .navigationTitle("个人 Agent")
-        .searchable(text: $query, prompt: "搜索会话")
-        .toolbar {
+        .pageSearchable(text: $query, prompt: "搜索会话")
+        .pageToolbar {
             ToolbarItem(placement: .primaryAction) { viewMenu }
         }
         .alert("新建分组", isPresented: $naming) {

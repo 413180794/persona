@@ -109,3 +109,81 @@ extension View {
         modifier(TabActiveTask(id: id, action: action))
     }
 }
+
+extension View {
+    /// `.searchable` for a page that may be kept in the window while another one is in front (the Mac's sections,
+    /// `MacPageStack`): only the page in front puts its field in the window's toolbar. Two pages' fields there at once
+    /// are a crash (`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`). On the Mac the
+    /// field hangs off a view in the page's background, so the page's own views do not see `isSearching` /
+    /// `dismissSearch`; use `isPresented` instead.
+    func pageSearchable(text: Binding<String>, isPresented: Binding<Bool>? = nil, placement: SearchFieldPlacement = .automatic,
+                        prompt: String) -> some View {
+        modifier(PageSearchable(text: text, isPresented: isPresented, placement: placement, prompt: prompt))
+    }
+}
+
+private struct PageSearchable: ViewModifier {
+    let text: Binding<String>
+    let isPresented: Binding<Bool>?
+    let placement: SearchFieldPlacement
+    let prompt: String
+    @Environment(\.tabIsActive) private var active
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        // On a view of its own beside the content, so the content keeps its identity when the field comes and goes.
+        content.background { if active { field(Color.clear) } }
+        #else
+        field(content)
+        #endif
+    }
+
+    @ViewBuilder private func field<V: View>(_ v: V) -> some View {
+        if let isPresented {
+            v.searchable(text: text, isPresented: isPresented, placement: placement, prompt: Text(prompt))
+        } else {
+            v.searchable(text: text, placement: placement, prompt: Text(prompt))
+        }
+    }
+}
+
+extension View {
+    /// `.toolbar` for a page that may be kept in the window while another one is in front (the Mac's sections,
+    /// `MacPageStack`): only the page in front puts its items in the window's toolbar; a hidden page's buttons showed
+    /// there beside the shown one's. On the iPhone and iPad each page has its own bar: the same as `.toolbar`.
+    func pageToolbar<Items: ToolbarContent>(@ToolbarContentBuilder _ items: () -> Items) -> some View {
+        modifier(PageToolbar(items: items()))
+    }
+}
+
+private struct PageToolbar<Items: ToolbarContent>: ViewModifier {
+    let items: Items
+    @Environment(\.tabIsActive) private var active
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        // Taken out behind, not `.hidden(!active)`: AppKit lays the toolbar out again either way, and with every page's
+        // items kept hidden in it the switch's long frame grew from about 85 ms to 150 (#390).
+        content.toolbar { if active { items } }
+        #else
+        content.toolbar { items }
+        #endif
+    }
+}
+
+/// Tells `change` whether its page is in front (`tabIsActive`), at once and on every change, from a view of its own:
+/// a page that read `tabIsActive` in its body was drawn again, rows and all, each time it came to the front or went
+/// behind (the Mac's sections, #390). Put it in the page's background.
+struct PageFrontWatcher: View {
+    /// Also told once as it appears.
+    var initial = true
+    let change: (Bool) -> Void
+    @Environment(\.tabIsActive) private var active
+
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onChange(of: active, initial: initial) { _, now in change(now) }
+    }
+}

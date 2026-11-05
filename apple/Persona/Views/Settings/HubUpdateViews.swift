@@ -341,7 +341,7 @@ struct HubNoticeRow: View {
             .onTapGesture { page = true }
             .accessibilityElement(children: .contain) // or the row's id hides its buttons' (docs/lessons/ios.md)
             .accessibilityIdentifier("agents.hubNotice")
-            .sheet(isPresented: $page) { NavigationStack { HubSettingsPage().toolbar { closeButton } } }
+            .sheet(isPresented: $page) { NavigationStack { HubSettingsPage().pageToolbar { closeButton } } }
         }
     }
 

@@ -82,9 +82,9 @@ struct ExtensionMarketView: View {
         .overlay { if page.items == nil && page.error == nil { ProgressView() } }
         .detailTitle("扩展市场")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、说明、发布者或标签")
+        .pageSearchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、说明、发布者或标签")
         #if os(iOS) || os(visionOS)
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: SettingsPage.pluginMarkets) { Text("市场").lineLimit(1) }
                     .accessibilityIdentifier("market-manage")
@@ -463,7 +463,7 @@ struct ExtensionMarketsView: View {
         .detailTitle("市场")
         .navigationBarTitleDisplayMode(.inline)
         #if os(iOS) || os(visionOS)
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { adding = true } label: { Image(systemName: Theme.Icon.add) }
                     .accessibilityLabel("添加市场")

@@ -94,7 +94,7 @@
   两个页面各有一个搜索框就直接崩（`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`，2026-11-02）。
   系统 `TabView` 在 macOS 26 上是按标签页隔开工具栏的（StackOverflow 76032647 说的是 macOS 13），也保留各页状态；但它在工具栏正中放的
   分段选择器 SwiftUI 藏不掉，而且保活之后切换并没有变快：时间不在建视图，在新页面进窗口后的 AppKit 布局和整批换工具栏项（`docs/mac.md` 性能，#390）。
-  先 `sample` 看时间去哪，再决定要不要保活。
+  先 `sample` 看时间去哪，再决定要不要保活。后来的做法（每页一个 hosting view，工具栏等这一帧提交后再换）见下面「分区的页面常驻在窗口里」。
 - 别用写死的 `listRowInsets` 去对齐 `List` 里的分组标题：iOS 上分组标题的缩进是 20，Mac 上是行自带的缩进（窄得多），iOS 那套数值在 Mac 上把行往里多推一截。
   折起的空间只剩标题、画成普通一行，写死 20 时在 Mac 上比展开的空间标题左右各缩 20pt，名字被截成「weat…」（#405，2026-11-02）。Mac 上传 `nil`，用行自带的缩进。
 - 这台 Mac 的 hub 反向隧道（launchd `dev.jarvis.hub-tunnel`）断线后，hub 那台机器上死掉的 sshd 会继续占着 2232 好几小时
@@ -241,3 +241,28 @@
   `AppStorageRatchetTests` 管着不再新加。
 - 看「每帧主线程 CPU」（`mainCPUMsPerS ÷ fps`）比看卡顿稳：卡顿跟着机器负载乱跳，每帧 CPU 在负载几十时还算稳。
 
+## 分区的页面常驻在窗口里（2026-11-05，#390，`MacPageStack`）
+
+每页放在自己的 `NSHostingView` 里，藏起来就设 `isHidden`。踩到的几处：
+
+- 藏起来的页照样把自己的 `.toolbar` 项和 `.searchable` 挂到窗口工具栏上，`sceneBridgingOptions = []` 也拦不住。
+  两个搜索框会直接崩溃：`NSToolbar … already contains an item with the identifier com.apple.SwiftUI.search`。
+  页面一律用 `pageToolbar` / `pageSearchable`，这样只有前台页提供工具栏项。
+- SwiftUI 没有办法让藏起来的子树暂停。`NSHostingView.layout()` 可以跳过，body 和 `List` 的行照样跟着推送更新，所以要逐页处理：
+  - Agents 列表的 `Hold` 加了 `.behind`；
+  - 待办、机器页读 `allSessions(inFront:)` / `machines(inFront:)`；只要名字的读 `namedMachine`（`List` 的行在藏起来的页里拿到的 `tabIsActive` 不一定是新的，别靠它）；
+  - 对话页藏起来时退订（回到前台按 `since_seq` 补齐），形象的时钟和眨眼停下（空闲时每 10 秒 80 ms）。
+  新写的页面也要这样做，否则每次推送都要多算一页。查哪一页还在跟：在 body 里临时加 `Self._printChanges()`，
+  正常退出（`osascript … quit`）才会把 stdout 刷出来，`kill` 掉就什么都没有。
+- 把藏起来的 hosting view 从窗口上摘掉（`removeFromSuperview`）反而更糟：每次推送约多 30 ms。
+- 「等第一帧画完再做」别用一次 `DispatchQueue.main.async`：它有时排在这一轮 Core Animation 提交之前，工具栏的重排又落回第一帧。
+  在 run loop 的 `beforeWaiting` 观察者（排在 Core Animation 提交之后）里再 `async` 一次。
+- `NSViewRepresentable` 没写 `sizeThatFits` 时，SwiftUI 每画一次外壳，都会用 Auto Layout 量一遍里面的视图（`systemLayoutSizeFitting`）。
+  七页都常驻时，这一步占了每次推送一半的时间。容器类的 representable 要直接返回提议的尺寸。
+- 在 body 里读 `tabIsActive` 的视图，每次进出前台都会整个重算。Agents 列表因此每次切回来都多花约 80 ms。
+  只需要知道进出前台、不需要因此重画的，用 `PageFrontWatcher` 放在 background 里。
+- 页面的 hosting view 拿不到窗口那棵树的环境：`openWindow`、`scenePhase`、`markdownInlineImageProvider`、标题行的边距等。
+  这些由 `MacPageRoot` 补上（`MacPageChrome`）。新加窗口级的环境值时，记得这里也要加。
+- 写 UserDefaults 会让每一页里的 `@AppStorage` 视图都重算，页面常驻后这个代价乘以页数。
+  所以切分区时记的 `app.tab` / `mac.section` 改成延后写（`DeferredDefaults`）。
+- 不要用 lldb attach 去看异常：会弹「开发者工具访问」的密码框并卡住，之后连 `sample` 也会卡；在 SecurityAgent 窗口点「取消」能恢复。

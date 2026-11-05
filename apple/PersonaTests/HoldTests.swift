@@ -68,6 +68,22 @@ import Testing
         #expect(l.count == 1)
     }
 
+    /// A page kept behind another one (the Mac's sections): as out of sight, no cap; the two reasons come and go on
+    /// their own.
+    @Test func behindHasNoCapAndLandsInFrontOnlyWhenNothingElseHolds() async throws {
+        let l = Landings()
+        let h = hold(l)
+        h.set(.behind, true)
+        h.set(.outOfSight, true)
+        #expect(h.wait())
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(l.count == 0)
+        h.set(.behind, false)
+        #expect(l.count == 0) // still out of sight
+        h.set(.outOfSight, false)
+        #expect(l.count == 1)
+    }
+
     @Test func nothingWaitingLandsNothing() {
         let l = Landings()
         let h = hold(l)

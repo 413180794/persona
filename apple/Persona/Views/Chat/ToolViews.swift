@@ -783,7 +783,7 @@ struct FullOutputSheet: View {
             .background(Theme.codeBackground)
             .navigationTitle("工具输出")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .pageToolbar {
                 #if os(macOS)
                 // A Mac sheet has no navigation bar: only its bottom row of actions is drawn, and the leading item that
                 // maps to `.navigation` never showed (#743). 拷贝全文 goes in that row, before 完成.

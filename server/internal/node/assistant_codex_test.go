@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -333,6 +334,10 @@ func TestCodexApprovals(t *testing.T) {
 	if ix := fh.interactions(); len(ix) != 1 || ix[0].ToolName != "示例" || ix[0].SessionID != testThread {
 		t.Fatalf("a gated write not confirmed on the phone: %+v", ix)
 	}
+	// Confirmed whole (a command the gate cannot follow): 本会话总是允许 remembers nothing for it, nor does the hub.
+	if ix := fh.interactions(); len(ix[0].AlwaysKeys) != 0 {
+		t.Fatalf("whole command's always keys: %q", ix[0].AlwaysKeys)
+	}
 
 	// Default: other commands are asked about; a refusal with words goes back to the model.
 	n.noteModes(testThread, "default", "")
@@ -348,6 +353,9 @@ func TestCodexApprovals(t *testing.T) {
 	ix := fh.interactions()
 	if len(ix) != 2 || ix[1].ToolName != "Bash" || ix[1].Summary != "rm -rf build" {
 		t.Fatalf("command card: %+v", ix[len(ix)-1])
+	}
+	if !slices.Equal(ix[1].AlwaysKeys, []string{"codex-command:rm -rf build"}) { // acceptForSession: this command
+		t.Fatalf("command card's always keys: %q", ix[1].AlwaysKeys)
 	}
 	waitFor(t, "refusal passed on", func() bool {
 		s := f.sent("turn/steer")

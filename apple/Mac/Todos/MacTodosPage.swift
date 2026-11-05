@@ -13,9 +13,10 @@ struct MacTodosPage: View {
 
     @AppStorage("mac.todos.listWidth") private var listWidth: Double = Theme.Size.macTodosListIdeal
     @State private var dragging: Double?
+    @Environment(\.tabIsActive) private var inFront
 
     private var allTodos: [TodoItem] {
-        let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions)
+        let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions(inFront: inFront))
         return TodosLogic.sortTodos(store.todos, lookup: lookup)
     }
 
@@ -49,7 +50,7 @@ struct MacTodosPage: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.pageBackground)
-        .toolbar {
+        .pageToolbar {
             MacToolbarMiddle() // keeps these buttons off the page's title at the narrowest window (#830, #853)
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -124,7 +125,7 @@ struct MacTodosPage: View {
     }
 
     private func row(_ todo: TodoItem) -> some View {
-        let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions)
+        let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions(inFront: inFront))
         let status = TodosLogic.todoStatus(todo, lookup: lookup)
         let urgent = TodosLogic.mostUrgentAgent(todo, lookup: lookup)
         let activeAgents = todo.agents.filter { $0.releasedAt == nil }

@@ -362,6 +362,10 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 
 	case in.HookEventName == "PermissionRequest":
 		ix.Kind, ix.Summary = proto.IxPermission, toolSummary(in.ToolName, in.ToolInput)
+		if n.isAssistantSession(in.SessionID) {
+			// What the session rule below allows, kept by the hub past this process (a resumed one has no rules).
+			ix.AlwaysKeys = []string{"tool:" + in.ToolName}
+		}
 		res, ok, err := n.ask(ctx, ix)
 		if err != nil || !ok || res.Allow == nil {
 			return nil, err

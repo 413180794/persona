@@ -204,7 +204,7 @@ struct SettingsView: View {
             .modifier(MacBelowTitleRow())
             #endif
             .themedPage()
-            .toolbar {
+            .pageToolbar {
                     // As a sheet over the shell (docs/ios.md「新外壳」): ChatGPT's × to close it.
                     if shell != nil {
                         ToolbarItem(placement: .topBarTrailing) {

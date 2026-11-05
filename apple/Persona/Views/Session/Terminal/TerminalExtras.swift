@@ -221,7 +221,7 @@ struct TerminalSettingsView: View {
             .themedPage()
             .navigationTitle("终端设置")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
             }

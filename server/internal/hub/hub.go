@@ -187,6 +187,8 @@ type Store interface {
 	FinishInteraction(ctx context.Context, id, status string, res *proto.Resolution) error
 	InteractionOutcome(ctx context.Context, id string) (status string, res *proto.Resolution, err error)
 	Interactions(ctx context.Context, machine, session string, limit int) ([]db.InteractionRecord, error)
+	AllowAlways(ctx context.Context, session, tool string, keys []string) error
+	AlwaysAllowed(ctx context.Context, session string, keys []string) (bool, error)
 	PutNodeSession(ctx context.Context, machine, id string, s db.NodeSession) error
 	NodeSessions(ctx context.Context, machine string) (map[string]db.NodeSession, error)
 	MailAccounts(ctx context.Context) ([]db.MailAccountRow, error)
@@ -966,6 +968,7 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 	h.recordEnd(id, status, &kept)
 	h.channelsEnded(p.ix, &r)
 	go h.taskAnswered(p.ix, r, status)
+	h.keepAlways(p.ix, r) // kept before the hook hears: its next card may follow at once (assistant_always.go)
 	select {
 	case p.done <- r:
 	default:

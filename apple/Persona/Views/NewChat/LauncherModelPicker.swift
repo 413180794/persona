@@ -113,7 +113,7 @@ struct LauncherModelPicker: View {
                 ContentUnavailableView.search(text: query)
             }
         }
-        .searchable(text: $query, prompt: allowsCustom ? "搜索，或输入模型 ID" : "名称或 ID")
+        .pageSearchable(text: $query, prompt: allowsCustom ? "搜索，或输入模型 ID" : "名称或 ID")
         .refreshable { await refresh() }
         .themedPage()
         .navigationTitle("模型")

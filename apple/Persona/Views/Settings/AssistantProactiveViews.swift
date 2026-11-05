@@ -220,7 +220,7 @@ struct AssistantRoutinesView: View {
             }
         }
         .pageTitle("定时任务")
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Section("从模板开始") {
@@ -1105,7 +1105,7 @@ struct AssistantMemoryDetail: View {
         .themedPage()
         .pageTitle(title ?? entry.name ?? entry.file.name)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .pageToolbar {
             if onSaved != nil {
                 ToolbarItem(placement: .primaryAction) { Button("编辑") { editing = true } }
             }

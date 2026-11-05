@@ -223,7 +223,7 @@ struct ModelPurposeEditorView: View {
         .themedPage()
         .detailTitle(page.purpose?.name ?? "模型配置")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .pageToolbar {
             #if os(macOS)
             if inSheet {
                 ToolbarItem(placement: .confirmationAction) { saveButton }
@@ -404,7 +404,7 @@ private struct ModelConfigurationSheet: ViewModifier {
                     if let purposeID { ModelPurposeEditorView(purposeID: purposeID) } else { ModelConfigurationView() }
                 }
                 .navigationDestination(for: ModelPurposeRoute.self) { ModelPurposeEditorView(purposeID: $0.id) }
-                .toolbar {
+                .pageToolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("关闭") { showing = false }.lineLimit(1)
                     }

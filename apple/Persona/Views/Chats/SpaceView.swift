@@ -376,7 +376,7 @@ struct SpaceView: View {
         .themedGroupedPage()
         .navigationTitle(first?.spaceName ?? "空间")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
+        .pageToolbar {
             if let g = SpaceGroup.build(sessions).first {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu { SpaceMenuItems(group: g) { renaming = g } } label: {

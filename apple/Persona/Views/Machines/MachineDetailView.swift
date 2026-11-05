@@ -28,6 +28,12 @@ struct MachineDetailView: View {
         (model.sessionsByMachine[ref] ?? []).filter { $0.status.isLive && !$0.assistant }
     }
 
+    /// Every machine's agents (`agents(_:_:)`), for a page that can be kept hidden behind another: watched only in front
+    /// (`AppModel.allSessions(inFront:)`).
+    static func agentsByMachine(_ model: AppModel, inFront: Bool) -> [MachineRef: [Session]] {
+        Dictionary(grouping: model.allSessions(inFront: inFront).filter { $0.status.isLive && !$0.assistant }, by: \.machineRef)
+    }
+
     /// The agents before 显示全部: with dozens on one machine its charts would be screens away.
     static let agentsShown = 5
 

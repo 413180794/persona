@@ -60,7 +60,7 @@ struct KnowledgeView: View {
         .themedPage()
         .navigationTitle("知识库")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .pageToolbar {
             #if os(macOS)
             MacToolbarMiddle() // the menu by the search field, clear of the title row's 知识库 (#830)
             #endif
@@ -68,7 +68,7 @@ struct KnowledgeView: View {
         }
         // Always shown: the drawer that hides on scroll folded away as soon as results replaced the list (the chips
         // row goes), taking the typed text out of sight (2026-10-31).
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索档案和聊天记录")
+        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索档案和聊天记录")
         .task(id: query) { await search() }
         .task(id: "\(kind.rawValue)|\(tag ?? "")") { await load() }
         .onChange(of: kind) { showIgnored = false }
@@ -571,7 +571,7 @@ struct KnowledgeDetailView: View {
         .themedPage()
         .navigationTitle(KBKind(rawValue: entry.kind)?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { editing = true } label: { Label("打标", systemImage: Theme.Icon.label) }
                     .accessibilityLabel("打标")
@@ -1105,7 +1105,7 @@ struct KBDayView: View {
             .pageTitle(Self.title(day), subtitle: chatName)
             #else
             .navigationTitle(Self.title(day))
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
                         Text(Self.title(day)).font(Theme.Font.heading).lineLimit(1)

@@ -88,7 +88,8 @@
   - 切侧栏分区（#390）：每次主线程约 240 ms，Debug 和 Release（`-O` 全模块）一样，不是调试版的问题。
     `⌘1…⌘6` 轮流切、量切过去 1.2 秒内的进程 CPU（不读无障碍树，见下面量法）：设置约 400 ms、收件箱约 460、知识库约 440、Persona 约 560、
     Agents 约 770、机器约 1100；什么都不按的 1.2 秒是 0。
-    **整页重建不是大头**：`MacShell` 的 `page` 是 `switch`，换分区就整页重建，但改成系统 `TabView` 保活（去过的页留着，工具栏跟着当前页，
+    **2026-11-05 已改成页面常驻（#390，`MacPageStack`，见下面「切换分区：页面常驻」）**，这一段和下面的 `TabView` 结论是改之前的历史。
+    当时以为整页重建不是大头：`MacShell` 的 `page` 是 `switch`，换分区就整页重建，但改成系统 `TabView` 保活（去过的页留着，工具栏跟着当前页，
     macOS 26 上实测不崩、状态保留）之后六个分区合计 3750 ms，和原来的 3730 一样：机器页快了约 480 ms（Swift Charts 的迷你曲线不用重建），
     别的页反而慢了一点。时间花在每次都要做的事上：新页面重新进窗口后的 AppKit 布局（`List` 行自动算高、约束、`NSHostingView` 量尺寸）、
     工具栏的项整批换一遍（每个都是一个 SwiftUI 托管视图；Agents ↔ 知识库来回切平均每次约 115 ms）、菜单栏图标重画（`MenuBarExtra`，每次约 25 ms），
@@ -136,6 +137,57 @@
     Persona 120、Agents 240、收件箱 190、知识库 110、机器 90、设置 100 ms。Agents 那一下的大头是 AppKit 的布局（采样里约三分之二在
     `NSWindow layoutIfNeeded`：工具栏重排、`NSTableView` 自动行高），去掉工具栏的 Agents 菜单能省约 40 ms，让它常驻、离开时 `.hidden()` 藏起来省不了，没改。
     `PerfCount` 的 ms 只算推送到 run loop 空闲那一段，比 `ps` 量的少得多（推送解码、合并、布局在它之外），比较前后要用 `ps`。
+
+### 切换分区：页面常驻（#390）
+
+每个分区的页面第一次打开时建好，之后一直留在窗口里（`Mac/App/MacPageStack.swift`）。切换分区只是藏起一页、显示另一页，切回去过的页一两帧就能画出来。
+原来每切一次都要整页重建：列表、分栏、每行的高度、工具栏项全部重来，Agents 主线程要约 200 ms，收件箱约 160 ms。
+
+- **每页一个 `NSHostingView`**，藏起来就 `isHidden`，藏着时跳过 `layout()`。
+  不用 SwiftUI 的 `ZStack` 或 `TabView`：`ZStack` 里藏起来的视图照样跟着整窗布局；`TabView` 会把切走的页从窗口里摘下，再放回来又是整页布局（见上一段的历史）。
+  也不要把藏起来的 hosting view 从窗口上摘掉：实测每次推送反而多 30 ms。
+- **工具栏晚一帧换**：谁在前台（`tabIsActive`、工具栏项、搜索框）等这一帧提交以后才改（run loop 进入休眠前的观察者，再 `async` 一次）。页面先在第一帧画出来，AppKit 逐项重排工具栏放到下一帧。
+  只用 `DispatchQueue.main.async` 时，有时会赶在第一帧之前执行，Agents 切回去三次里有一次是 135 ms。
+  所以 Agents、收件箱切回去后还有一帧长约 85–95 ms 的帧（工具栏重排）；要去掉它，得让各分区共用一套稳定的窗口工具栏，那是界面改动，没做。
+- **插件页盖在常驻页上面**（`overlay`），这时所有常驻页都在后面（`MacPageStack(shown: nil)`），回来不重建。
+- **页面根视图补上窗口那棵树的环境**（`MacPageRoot`、`MacPageChrome`）：`openWindow`（页面里用 `shellOpenWindow`）、`scenePhase`、公式图片、
+  标题行的边距和分区标题（`MacTitleRowTaken`）、`tabIsActive`。新加窗口级的环境值时，这里也要补上。
+- **藏起来的页要做的事，各页自己负责，靠 `tabIsActive`（藏着时为 false）判断**：
+  - 工具栏项和搜索框只由前台页提供，用 `pageToolbar`、`pageSearchable`。两个搜索框同时出现在窗口工具栏会直接崩溃。
+  - 不跟着推送重算：
+    - Agents 列表：`Hold` 加了 `.behind`；
+    - 待办、机器页：读 `allSessions(inFront:)`、`machines(inFront:)`；
+    - 只显示机器名字、主机名的地方（端口链接、收件箱的 Agent 行、侧栏底部）读 `namedMachine`，不跟心跳；
+    - 对话页：藏起来就退订，回到前台按 `since_seq` 补齐；也不再算「屏幕上的对话」，期间答完的回复照样是「完成未看」并发通知；
+    - 形象的时钟和眨眼停下（藏着时空闲每 10 秒原来要 80 ms）；
+    - Persona 侧栏：`assistantConversations` 只在会话列表真的变了时才变。
+  - `List` 的行在藏起来的页里拿到的 `tabIsActive` 不一定是新的（行不重新布局），行里别靠它，读不跟心跳的值。
+  - 页面里只想知道进出前台、不需要因此重画的，用 `PageFrontWatcher`，不要在 body 里读 `tabIsActive`，否则每次进出前台整页重算。
+- **外壳本身**：切分区时记的 `app.tab`、`mac.section` 延后写（`DeferredDefaults`：停下 3 秒后、离开 App 或退出时）。每写一次 UserDefaults，所有常驻页里的 `@AppStorage` 视图都要重算。
+  `MacPageStack` 自己实现 `sizeThatFits`：不然每画一次外壳，SwiftUI 都会用 Auto Layout 把所有常驻页量一遍。
+- **量法**：用 App 自带的测量工具，不用 cua，也不用真按键。
+  - `-showPerfRun sections -showPerfRounds 4` 把每个分区切 4 轮；`-showPerfSections agents,settings` 只来回切这几个；`-perfCounts YES` 记下每一步重算了哪些视图的 body。
+  - 第一轮是第一次进入，后面几轮是「切回去过的页」。
+  - 看 `toFirstFrameMs`：按下以后，主线程第一次能开始画下一帧要多久。这台开发机的虚拟屏是 50 Hz，一帧 20 ms。
+  - 推送开销：先把所有页都去一遍，最后停在知识库，再用 `/mock/churn?n=20&ms=400` 推送，`ps -M` 取主线程 CPU。
+  - 查哪一页藏着还在跟推送：在 body 里临时加 `Self._printChanges()`，正常退出（`osascript … quit`）后看 stdout。
+
+实测（2026-11-05，这台开发机，Debug + `-O`，假 hub `MOCK_AGENTS=1`；master 是 `f97caba5`，只加了 `-showPerfRounds`）：
+
+| 分区 | master 切回去 | 常驻 切回去 | 常驻 切回去后最长一帧 | master 第一次进 | 常驻 第一次进 |
+| --- | --- | --- | --- | --- | --- |
+| Persona | 81 | 31 | 36 | 10 | 16 |
+| Agents | 217 | 48 | 86 | 147 | 29 |
+| 收件箱 | 159 | 34 | 92 | 195 | 117 |
+| 知识库 | 94 | 27 | 50 | 115 | 84 |
+| 机器 | 54 | 28 | 50 | 61 | 70 |
+| 设置 | 43 | 28 | 20 | 52 | 91 |
+| 待办 | 46 | 33 | 49 | 54 | 87 |
+
+（毫秒，`toFirstFrameMs`，3 次各 4 轮的中位数，「切回去」是第 2–4 轮。常驻的切回去在 10 ms 上下和 30–50 ms 两档之间跳；第一次进设置、待办比 master 慢 30–40 ms：新页先按「在后面」建好，下一帧再整页变成前台。）
+
+每次推送主线程（`/mock/churn?n=20&ms=400`，3 次）：停在知识库 master 15–16 ms、常驻且七页都去过 19–20 ms；停在 Agents master 62–63 ms、常驻且都去过 65–68 ms、只开 Agents 58–61 ms。
+多出来的几毫秒没有落在我们自己的 body 上（`-perfCounts` 计数为 0），在藏着的页面 hosting view 里 AttributeGraph 的更新上；空闲时都是 0。
 
 ## 构建、运行、截图
 

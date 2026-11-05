@@ -172,7 +172,7 @@ struct MailDetailView: View {
             }
             .padding(Theme.Space.xl)
         }
-        .toolbar {
+        .pageToolbar {
             ToolbarItemGroup(placement: .bottomBar) {
                 Button { askClaude = true } label: { Label("让 Claude 处理", systemImage: Theme.Icon.ai) }
                 Spacer()

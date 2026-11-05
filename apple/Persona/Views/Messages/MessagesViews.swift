@@ -193,7 +193,7 @@ struct MessagesChatListView: View {
         }
         .detailTitle("会话")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "搜索名字或号码")
+        .pageSearchable(text: $query, prompt: "搜索名字或号码")
         .task { if !page.loaded { await page.load() } }
         .refreshable { await page.load() }
     }

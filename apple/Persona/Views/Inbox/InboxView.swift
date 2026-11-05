@@ -99,8 +99,8 @@ struct InboxPage: View {
             list
                 .navigationTitle("收件箱")
                 .navigationBarTitleDisplayMode(.inline)
-                .searchable(text: $query, prompt: "搜索标题、发件人、内容")
-                .toolbar {
+                .pageSearchable(text: $query, prompt: "搜索标题、发件人、内容")
+                .pageToolbar {
                     ToolbarItem(placement: .principal) { ConnectionTitle(title: "收件箱") }
                     if model.isMultiHub {
                         // Each hub has its own inbox (docs/multi-hub.md「hub 级页面」): whose this is, and the others.
@@ -692,7 +692,7 @@ struct InboxDetailView: View {
                 }
             }
             #endif
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if current.isDone {
                         Button { InboxStore.shared.setDone(current, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }

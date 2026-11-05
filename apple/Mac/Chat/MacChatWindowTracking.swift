@@ -19,6 +19,14 @@ extension View {
         .onDisappear {
             if let window, MacShellState.shared.chatsByWindow[window] == key { MacShellState.shared.chatsByWindow[window] = nil }
         }
+        // A section's page kept behind another one (`MacPageStack`): its chat is not the one the menus act on.
+        .background {
+            PageFrontWatcher(initial: false) { front in
+                guard let window else { return }
+                let shell = MacShellState.shared
+                if front { shell.chatsByWindow[window] = key } else if shell.chatsByWindow[window] == key { shell.chatsByWindow[window] = nil }
+            }
+        }
     }
 }
 

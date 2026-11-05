@@ -181,6 +181,7 @@ WebSocket ──解码（后台线程）──▶ AppModel.handle(_:)（主线�
   - 关键与否由数据方定：`Hold.wait()` 只说「这次要不要等」，等的时候关键的那部分照样立刻落（Agents 的 `critical` / `landCritical` 不变）。
 - 页面只登记状态：Agents 列表把滚动阶段（`feed.hold.set(.scrolling, phase != .idle)`）和看不见（`feed.hold.set(.outOfSight, covered)`）报给 feed 的 hold，
   自己不再记滚动阶段、不再等 0.5 s。「看不见」读的是唯一的页状态：`AppModel.selectedTab`（新外壳翻页也写它）和外壳 pager 是否在动。
+  Mac 上分区的页面常驻在窗口里（#390，`MacPageStack`），藏到别的分区后面时另报 `.behind`（`PageFrontWatcher`，`tabIsActive`），和「看不见」各管各的，同样没有上限。
 - `AgentsFeed` 只剩数据：什么算关键、关键的怎么只落一部分；什么时候落地交给 `Hold`。
 - 一处行为变化（看不到）：在滚的时候页面被盖住（列表里点开一个对话），停下以后 5 s 上限的计时停掉，回到列表时立刻落地；原来计时照走，到点在看不见的页上落一次。
 - 菜单、键盘：原计划把「菜单开着、键盘在输入」也做成扣留的理由，看下来没有一处需要：行的长按菜单是 `Equatable` 的（`AgentRowMenu`），推送不重建它；

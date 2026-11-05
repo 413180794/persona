@@ -128,7 +128,7 @@ struct TranslationChatPicker: View {
                 }
             }
             .overlay { if loading && conversations.isEmpty { ProgressView() } }
-            .searchable(text: $query, prompt: "搜索会话")
+            .pageSearchable(text: $query, prompt: "搜索会话")
             .navigationTitle("要翻译的会话")
             .navigationBarTitleDisplayMode(.inline)
             .sheetCancel(unsaved: opened.map { $0 != Set(selected.map(\.id)) } ?? false) { dismiss() }

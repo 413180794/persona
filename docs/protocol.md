@@ -368,6 +368,7 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
  "plan":"markdown",                                              // plan
  "tool_input":{...}, "summary":"rm -rf build",                   // permission
  "screen":"终端可见区域文本",                                     // screen（hook 覆盖不到的 TUI 对话框）
+ "always_keys":["tool:Bash"],  // node → hub：助手对话的授权卡上「总是允许」放行什么，hub 记下后自己回答同样的卡（docs/assistant.md「本会话总是允许」）；客户端不用
  "agent":"codex", "reason":"…", "always_label":"本会话不再问这个命令"} // node 从 Codex / TRAEX 的 TUI 读出来的卡（「Codex 的提问和审批」）
 
 // Resolution（按 kind）

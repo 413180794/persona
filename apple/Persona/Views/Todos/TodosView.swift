@@ -17,9 +17,10 @@ struct TodosView: View {
     @State private var expandedDone = false
     /// DEBUG screenshots: `-openTodoTitled <text>` opens the first todo whose title has the text.
     @State private var debugOpen: TodoDetailRoute?
+    @Environment(\.tabIsActive) private var inFront
 
     private var allTodos: [TodoItem] {
-        let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions)
+        let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions(inFront: inFront))
         return TodosLogic.sortTodos(store.todos, lookup: lookup)
     }
 
@@ -119,7 +120,7 @@ struct TodosView: View {
         .themedPage()
         .navigationTitle("待办")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     creatingTitle = ""
@@ -228,11 +229,12 @@ struct TodosView: View {
 
 struct TodoRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.tabIsActive) private var inFront
     var todo: TodoItem
     var onToggleDone: () -> Void
 
     var body: some View {
-        let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions)
+        let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions(inFront: inFront))
         let status = TodosLogic.todoStatus(todo, lookup: lookup)
         let urgent = TodosLogic.mostUrgentAgent(todo, lookup: lookup)
         let activeAgents = todo.agents.filter { $0.releasedAt == nil }

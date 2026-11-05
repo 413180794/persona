@@ -782,6 +782,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 			return map[string]any{"decision": "accept"}, nil // Claude reads its auto-memory unasked too
 		}
 		ix.Kind, ix.Summary = proto.IxPermission, withReason(command, r.Reason)
+		ix.AlwaysKeys = []string{"codex-command:" + command} // acceptForSession: this command, kept past the process
 		return c.askPhone(ctx, ix, "accept", "acceptForSession", "decline"), nil
 
 	case "item/fileChange/requestApproval":
@@ -798,6 +799,12 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 		ix.Kind, ix.Summary = proto.IxPermission, withReason(strings.Join(paths, "\n"), r.Reason)
 		if ix.Summary == "" {
 			ix.Summary = "修改文件"
+		}
+		for _, p := range paths {
+			ix.AlwaysKeys = append(ix.AlwaysKeys, "codex-edit:"+p)
+		}
+		if r.GrantRoot != "" {
+			ix.AlwaysKeys = append(ix.AlwaysKeys, "codex-root:"+r.GrantRoot)
 		}
 		return c.askPhone(ctx, ix, "accept", "acceptForSession", "decline"), nil
 
@@ -839,6 +846,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 			ix.ToolInput = r.Permissions
 			b, _ := json.Marshal(granted)
 			ix.Kind, ix.Summary = proto.IxPermission, withReason("Codex 要更多权限："+string(b), r.Reason)
+			ix.AlwaysKeys = []string{"codex-permissions:" + string(b)}
 			res, ok, err := n.ask(ctx, ix)
 			if err != nil || !ok || res.Allow == nil || !*res.Allow {
 				return deny, nil

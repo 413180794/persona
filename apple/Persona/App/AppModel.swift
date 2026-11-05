@@ -44,6 +44,12 @@ final class AppModel {
             saveSnapshot()
         }
     }
+    /// `machines` for a page that can be kept hidden behind another (`allSessions(inFront:)`): watched only in front.
+    func machines(inFront: Bool) -> [Machine] { inFront ? machines : machinesNow }
+    /// `machine(_:)` for a page that can be kept hidden behind another (`machines(inFront:)`).
+    func machine(_ ref: MachineRef, inFront: Bool) -> Machine? {
+        machines(inFront: inFront).first { $0.id == ref.id && $0.group == ref.group }
+    }
     /// The machines as menus list them (name, icon): changes only when one is added, removed or renamed.
     private(set) var machineChoices: [MachineChoice] = []
     /// `machines` without watching it, as `sessionsNow`: for `namedMachine(_:)` / `namedMachines`.
@@ -54,6 +60,8 @@ final class AppModel {
             sessionsNow = allSessions
             let going = DockAgent.going(allSessions)
             if going != goingAgents { goingAgents = going }
+            let lists = AssistantLists(allSessions, group: hub?.group ?? "")
+            if lists != assistantLists { assistantLists = lists }
             var index: [SessionKey: Session] = [:]
             for (machine, sessions) in sessionsByMachine {
                 for session in sessions {
@@ -72,6 +80,8 @@ final class AppModel {
         }
     }
     private(set) var allSessions: [Session] = []
+    /// The Persona conversations (`assistantConversations`, `archivedConversations`).
+    private var assistantLists = AssistantLists([], group: "")
     /// The agents waiting for the user or working, as the main conversation's dock shows them (#1113): set only when
     /// what a pill shows changes, so the dock is not drawn again by every push.
     private(set) var goingAgents: [DockAgent] = []
@@ -79,6 +89,10 @@ final class AppModel {
     /// A view reading `allSessions` is drawn again by every push about any agent; only the lists of agents may
     /// (`AllSessionsReadersTests`).
     @ObservationIgnored private(set) var sessionsNow: [Session] = []
+    /// `allSessions` for a page that can be kept hidden behind another (the Mac's sections, `MacPageStack`): watched
+    /// while the page is in front; behind another page, the list as it is now and not watched, so a hidden page is not
+    /// drawn again by every push. Pass the page's `tabIsActive`: the page is drawn again when it comes to the front.
+    func allSessions(inFront: Bool) -> [Session] { inFront ? allSessions : sessionsNow }
     @ObservationIgnored private var sessionIndex: [SessionKey: Session] = [:]
     /// One observable cell per session a view has looked up (`session(_:)`): a view showing one session is drawn again
     /// when that session changes, not on every push about any of them (the open chat and the tab badges were redrawn
@@ -117,7 +131,7 @@ final class AppModel {
     /// Remembered across launches together with the open dev chat (restoreChat), so a relaunch lands where you were.
     var selectedTab: AppTab = .assistant {
         didSet {
-            UserDefaults.standard.set(selectedTab.rawValue, forKey: "app.tab")
+            DeferredDefaults.set(selectedTab.rawValue, forKey: "app.tab")
             #if DEBUG
             ShellTrace.shared.note("tab \(oldValue)->\(selectedTab)")
             #endif
@@ -653,17 +667,16 @@ final class AppModel {
     }
 
     /// The hub-level group's Persona conversations (each hub has its own Persona), newest first.
-    var assistantConversations: [Session] {
-        let g = hub?.group ?? ""
-        return allSessions.filter { $0.assistant && $0.archived != true && $0.group == g }
-            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
-    }
+    var assistantConversations: [Session] { assistantLists(for: hub?.group ?? "").open }
 
     /// The archived ones (已归档), newest first.
-    var archivedConversations: [Session] {
-        let g = hub?.group ?? ""
-        return allSessions.filter { $0.assistant && $0.archived == true && $0.group == g }
-            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+    var archivedConversations: [Session] { assistantLists(for: hub?.group ?? "").archived }
+
+    /// The two lists as of the last push, set only when they changed: a push about the agents (most of them) leaves
+    /// the Persona page's conversations alone (`AssistantSidebar` was drawn again twice for each one, #390). For a group
+    /// other than the one they were made for (the hub just changed), made from every session.
+    private func assistantLists(for group: String) -> AssistantLists {
+        assistantLists.group == group ? assistantLists : AssistantLists(allSessions, group: group)
     }
 
     /// Loads the assistant config; with no remembered conversation, picks up the newest one.
@@ -2326,3 +2339,17 @@ nonisolated struct TabBadges: Equatable, Sendable {
     func route(_ tab: AppTab, in model: AppModel)
 }
 
+/// The Persona conversations of one group, newest first: open and archived (`AppModel.assistantConversations`).
+nonisolated struct AssistantLists: Equatable {
+    let group: String
+    let open: [Session]
+    let archived: [Session]
+
+    init(_ sessions: [Session], group: String) {
+        self.group = group
+        let mine = sessions.filter { $0.assistant && $0.group == group }
+            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        open = mine.filter { $0.archived != true }
+        archived = mine.filter { $0.archived == true }
+    }
+}

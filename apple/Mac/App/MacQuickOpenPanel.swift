@@ -23,8 +23,8 @@ import SwiftUI
     /// (显示会话信息 ⌥⌘I), or bring up its own 重命名 / 清空上下文 / 关闭 Agent dialogs.
     var chatRequest: ChatRequest?
     /// What the Agents list's menu acts on (its folds, its machine filter, 机器): the shell draws that menu in the
-    /// window's toolbar while Agents shows, and 显示 › 全部折叠 / 全部展开 use it too. Cleared when the window leaves
-    /// the Agents section (`MacShell`): it holds the list's state, which then kept following every push (#1495).
+    /// window's toolbar while Agents shows, and 显示 › 全部折叠 / 全部展开 use it too. The list stays in the window
+    /// behind other sections (`MacPageStack`), holding still there (its `AgentsFeed` is out of sight, #390).
     var agentsList: AgentsListMenu.Actions?
     /// Counts ⇧Tab presses in a composer: the list beside it takes the keys again (`MacListKeys`).
     var focusList = 0

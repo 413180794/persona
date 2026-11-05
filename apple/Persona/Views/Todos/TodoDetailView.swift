@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TodoDetailView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.tabIsActive) private var inFront
     @Environment(\.dismiss) private var dismiss
     var todoID: String
 
@@ -32,7 +33,7 @@ struct TodoDetailView: View {
         }
         .navigationTitle(currentTodo?.title ?? "待办详情")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button(role: .destructive) {
@@ -91,7 +92,7 @@ struct TodoDetailView: View {
     }
 
     private func content(_ todo: TodoItem) -> some View {
-        let sessions = model.allSessions
+        let sessions = model.allSessions(inFront: inFront)
         let lookup = TodosLogic.makeSessionLookup(sessions)
         let status = TodosLogic.todoStatus(todo, lookup: lookup)
         let activeAgents = todo.agents.filter { $0.releasedAt == nil }
@@ -190,7 +191,7 @@ struct TodoDetailView: View {
             }
 
             TodoSpacesSection(todo: todo, sessions: sessions, machineName: machineName, hubGroup: model.hub?.group,
-                              machineOnline: { model.machine(model.hubRef($0))?.online ?? false })
+                              machineOnline: { model.machine(model.hubRef($0), inFront: inFront)?.online ?? false })
 
             Section {
                 if activeAgents.isEmpty {
@@ -232,7 +233,7 @@ struct TodoDetailView: View {
     /// The machine's name as the other pages show it (`model.machine(...)?.title`, the same as the Agents rows): the hub's
     /// own machines, since a todo belongs to the hub (`AppModel.hubRef`).
     private func machineName(_ id: String) -> String {
-        model.machine(model.hubRef(id))?.title ?? id
+        model.machine(model.hubRef(id), inFront: inFront)?.title ?? id
     }
 
     private func agentRow(_ a: TodoItem.Agent, todo: TodoItem, isReleased: Bool, lookup: @escaping TodosLogic.SessionLookup) -> some View {

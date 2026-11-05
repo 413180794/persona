@@ -180,7 +180,7 @@ struct ExtensionDetailView: View {
         .themedPage()
         .detailTitle(page.detail?.plugin.name ?? "扩展")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .pageToolbar {
             if page.detail?.readOnly == false && !(page.detail?.form.isEmpty ?? true) {
                 ToolbarItem(placement: .confirmationAction) {
                     Button {

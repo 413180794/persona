@@ -37,7 +37,10 @@ struct MacInboxFilters: View {
 /// The list column.
 struct MacInboxList: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openWindow) private var ownOpenWindow
+    @Environment(\.shellOpenWindow) private var shellOpenWindow
+    /// The window scene's: the page is in a hosting view of its own (`MacPageStack`), whose own one opens nothing.
+    private var openWindow: OpenWindowAction { shellOpenWindow ?? ownOpenWindow }
     @Bindable var state = MacInboxState.shared
     private var store: InboxStore { .shared }
 
@@ -97,8 +100,8 @@ struct MacInboxList: View {
             return .handled
         }
         .onDeleteCommand { state.toggleDone(state.selection, model: model) }
-        .searchable(text: $state.query, placement: .toolbar, prompt: "搜索标题、发件人、内容")
-        .toolbar { toolbar }
+        .pageSearchable(text: $state.query, placement: .toolbar, prompt: "搜索标题、发件人、内容")
+        .pageToolbar { toolbar }
         .sheet(isPresented: $state.showAccounts, onDismiss: { Task { await state.loadAccounts(model) } }) {
             MailAccountsView().macSheet()
         }
@@ -178,7 +181,7 @@ struct MacInboxList: View {
     }
 
     private func agentRow(_ ix: Interaction) -> some View {
-        InboxAgentRow(interaction: ix, machine: model.machine(ix.machineRef), machineName: model.machine(ix.machineRef)?.name ?? ix.machineID)
+        MacInboxAgentRow(interaction: ix)
             .tag(MacInboxSelection.agent(ix.id))
             .macHoverRow(.agent(ix.id))
     }
@@ -264,6 +267,17 @@ extension View {
     /// A list row that reacts to the pointer (a light fill under it), as Mac lists with row actions do, and shows it is
     /// selected with the shell's gray well.
     func macHoverRow(_ id: MacInboxSelection) -> some View { modifier(MacHoverRow(id: id)) }
+}
+
+/// An Agent's request in the list, with its machine (`namedMachine`): the row is not drawn again by each heartbeat.
+private struct MacInboxAgentRow: View {
+    @Environment(AppModel.self) private var model
+    let interaction: Interaction
+
+    var body: some View {
+        let machine = model.namedMachine(interaction.machineRef)
+        InboxAgentRow(interaction: interaction, machine: machine, machineName: machine?.name ?? interaction.machineID)
+    }
 }
 
 /// The system's selection stays (↑↓, ⇧ / ⌘, E and ⌫ go by it) but is not what shows: in the active window it filled the

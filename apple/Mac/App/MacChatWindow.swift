@@ -28,7 +28,10 @@ struct MacChatWindow: View {
 
 /// 「在新窗口打开」 in a row's menu (the Agents list, ⌘K's results go through MacShellState).
 struct MacOpenInWindowButton: View {
-    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openWindow) private var ownOpenWindow
+    @Environment(\.shellOpenWindow) private var shellOpenWindow
+    /// The window scene's: the page is in a hosting view of its own (`MacPageStack`), whose own one opens nothing.
+    private var openWindow: OpenWindowAction { shellOpenWindow ?? ownOpenWindow }
     var key: SessionKey
 
     var body: some View {

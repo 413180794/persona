@@ -96,8 +96,9 @@ extension AppModel {
         return out
     }
 
-    /// The names a machine goes by in links (its host name).
+    /// The names a machine goes by in links (its host name): `namedMachine`, so the chips in a chat are not drawn again by
+    /// each heartbeat.
     func hostnames(of machine: MachineRef) -> [String] {
-        [self.machine(machine)?.hostname].compactMap { $0 }
+        [namedMachine(machine)?.hostname].compactMap { $0 }
     }
 }

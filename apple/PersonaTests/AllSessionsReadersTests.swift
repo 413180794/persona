@@ -15,6 +15,7 @@ struct AllSessionsReadersTests {
         "ChatsView.swift": (3, "the Agents list, through AgentsFeed (which holds it while the list scrolls)"),
         "SpaceView.swift": (1, "a space's agents"),
         "MachineSpacesView.swift": (1, "a machine's spaces and agents"),
+        "MachineDetailView.swift": (1, "机器: each machine's agents for its card, through allSessions(inFront:) (behind another section, as they are now)"),
         "InboxActions.swift": (1, "交给 Agent: the agents to pick from"),
         "MacAgentCommands.swift": (1, "Agent › 下一个需要你的 is enabled while one needs you"),
         "MacAttention.swift": (3, "the Dock badge and notifications follow every agent (not a view)"),

@@ -165,7 +165,7 @@ struct FeishuDocReader: View {
         .themedPage()
         .navigationTitle(showTitle ? docTitle : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
+        .pageToolbar { toolbar }
         .refreshable { await model.load(url: url, title: title) }
         .task {
             if model.content == nil { await model.load(url: url, title: title) }

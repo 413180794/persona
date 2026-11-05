@@ -174,7 +174,7 @@ struct LarkThreadView: View {
             .sheet(item: $person) { LarkProfileView(person: $0) }
             .modifier(LarkThreadTitle(chatName: chatName))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
+            .pageToolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
             .task {
                 if focusBox {
                     // Once the sheet is up: focusing while it slides in is dropped.

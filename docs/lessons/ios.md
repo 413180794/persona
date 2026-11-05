@@ -141,6 +141,15 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
   模拟器上系统键盘、拼音的 marked text、自己写的第三方键盘扩展都复现不了；`ShellComposerBar` 在高度变化后把有焦点的文本视图
   超出内容末端的偏移拉回来（`TextViewScroll`，偏移在内容范围内时什么都不做）。别用隐藏的 `Text` 量行数来定高度：
   `Text` 不压缩全角标点，输入框压缩，折行位置差一两个字。
+- 发送时别只读 TextField 的绑定，先确认输入法正在拼的字（2026-11-05，#2203）：用微信输入法在主对话打一段话点发送，发出去只有前一半，
+  换别的键盘就没事。第三方键盘常把还没确认的字（往往已经是汉字，带下划线，看着像打完了）留成 marked text，SwiftUI 绑定不保证跟上键盘扩展的每一步；
+  发送一清空输入框，键盘还可能把没确认的字再放回空框。现在三个输入框（`ShellComposerBar`、`ComposerRow`、`PromptComposer`）发送前都走
+  `TypedText.commitFocused`：有焦点时先 `unmarkText()`（和点别处一样确认），再拿文本视图里的字更新绑定，然后才发。
+  模拟器上复现不了微信输入法本身：照 `testing.md` 的办法做了一个只有键盘扩展的 App（按钮调 `setMarkedText` / `unmarkText` / `insertText`），
+  一步一步来时绑定都跟得上（marked text 也在绑定里）；同一个按钮里连着发十几次 `setMarkedText` 时，SwiftUI 的输入框和普通 `UITextView` 的结果都乱，
+  是键盘扩展通道本身的问题，不能当成复现。单测（`TypedTextTests`）直接用 `UITextView` 的 marked text 和「绑定落后」两种情况。
+  键盘列表可以不进设置：`simctl spawn <udid> defaults write -g AppleKeyboards -array <扩展 bundle id> …` 和 `com.apple.Preferences KeyboardsCurrentAndNext` 写上，App 一启动就是它；
+  系统拼音写 `zh_Hans-Pinyin@sw=Pinyin-Simplified;hw=Automatic`，候选时空格键的标签是「选定」。
 - `List` 的行别为了 `Equatable` 包成自定义视图、再把 `.swipeActions` / `.contextMenu` 放进它的 body：试过（2026-11-01），推送和滑动都更慢
   （UIKit 那边每次都要重新配置 cell 的滑动操作）。Agents 列表推送的开销靠合并推送降下来（`AppModel.applyPendingSessions`）。
 

@@ -128,14 +128,14 @@ private struct LarkConversationsPage: View {
                 } else if old == .tracking && phase != .interacting { pins.cancelDrag() }
             }
             .themedPage()
-            .searchable(text: $query, prompt: "搜索已加载的会话")
+            .pageSearchable(text: $query, prompt: "搜索已加载的会话")
             .navigationTitle("消息")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(shell == nil ? .visible : .hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let shell { topBar(shell) }
             }
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { openConnectionSettings() } label: { Label("飞书设置", systemImage: Theme.Icon.settings) }
                 }

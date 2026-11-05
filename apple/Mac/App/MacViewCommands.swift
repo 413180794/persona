@@ -71,10 +71,11 @@ struct MacViewMenu: Commands {
                                                 set: { grouping = $0 })) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { Text($0.title).tag($0) }
             }
+            // The Agents list is kept behind other sections (`MacPageStack`): only while it shows.
             Button("全部折叠") { MacShellState.shared.agentsList?.collapse() }
-                .disabled(MacShellState.shared.agentsList == nil)
+                .disabled(MacShellState.shared.agentsList == nil || !agentsShown)
             Button("全部展开") { MacShellState.shared.agentsList?.expand() }
-                .disabled(MacShellState.shared.agentsList == nil)
+                .disabled(MacShellState.shared.agentsList == nil || !agentsShown)
             Divider()
             // The iPhone's pull to refresh: a Mac list has no pull. The one ⌘R in the app (the toolbars' 刷新 buttons
             // have none, so two never claim it).
@@ -91,6 +92,8 @@ struct MacViewMenu: Commands {
             Divider()
         }
     }
+
+    private var agentsShown: Bool { MacSection.shown(override: MacShellState.shared.section, tab: model.selectedTab) == .agents }
 
     private func refresh() {
         let section = MacSection.shown(override: MacShellState.shared.section, tab: model.selectedTab)

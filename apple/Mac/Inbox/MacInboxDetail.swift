@@ -29,7 +29,7 @@ struct MacInboxDetail: View {
             }
             .frame(maxWidth: .infinity)
             .navigationTitle(ix.sessionTitle ?? ix.title)
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { state.open(ix, model: model) } label: { Label("打开对话", systemImage: Theme.Icon.conversation) }
                         .help("打开这个 Agent 的对话")

@@ -45,7 +45,8 @@ enum MacSection: String, CaseIterable, Identifiable {
     /// 显示 › 隐藏侧边栏 (⌃⌘S): the sections column folded away, across launches.
     static let sidebarHiddenKey = "mac.sidebar.hidden"
     static func remember(_ s: MacSection?, in d: UserDefaults = .standard) {
-        if let s, s.tab == nil { d.set(s.rawValue, forKey: storageKey) } else { d.removeObject(forKey: storageKey) }
+        // Not at once: a write to UserDefaults draws every `AppStorage` view in every kept page again (#390).
+        DeferredDefaults.set(s.flatMap { $0.tab == nil ? $0.rawValue : nil }, forKey: storageKey, in: d)
     }
     static func remembered(in d: UserDefaults = .standard) -> MacSection? {
         d.string(forKey: storageKey).flatMap(MacSection.init(rawValue:)).flatMap { $0.tab == nil ? $0 : nil }
@@ -177,9 +178,10 @@ private struct MacShell: View {
                 // The section's title in the title bar's row, at this column's edge (not over the sections column):
                 // the row was left empty when the system's title went (#830). Persona's page puts its own header there.
                 // A pushed page that draws its own title there (`pageTitle`, #855) takes the row instead.
+                // The sections' pages put it there themselves (`MacPageRoot`).
                 .overlayPreferenceValue(MacTitleRowTaken.self, alignment: .topLeading) { taken in
-                    if shown != .assistant || pluginPlace != nil, !taken {
-                        MacPageTitle(title: pluginPlace?.title ?? shown.title, leading: sidebarHidden ? Theme.Size.macTitleAfterControls : Theme.Space.l)
+                    if let p = pluginPlace, !taken {
+                        MacPageTitle(title: p.title, leading: sidebarHidden ? Theme.Size.macTitleAfterControls : Theme.Space.l)
                     }
                 }
                 // Pages that draw their own header in that row (Persona's) start it here.
@@ -217,8 +219,8 @@ private struct MacShell: View {
                 // The Agents list's menu (filter, grouping, folding) right after it, in this group. As the list's own
                 // `.navigation` item it jumped in front of this button whenever a page in the detail column brought an
                 // item of its own (a space's ⋯, a machine's ⓘ): the window's toolbar is rebuilt then, list items first.
-                // Only while Agents shows.
-                if shown == .agents, let actions = shell.agentsList {
+                // Only while Agents shows (with the pages' own items, a turn after the page, `MacPageStack`).
+                if pluginPlace == nil, (chrome.toolbarSection ?? shown) == .agents, let actions = shell.agentsList {
                     AgentsListMenu(actions: actions)
                 }
             }
@@ -240,12 +242,16 @@ private struct MacShell: View {
             }
         }
         .onChange(of: model.assistantCurrent) { shell.section = nil; shell.pluginPage = nil }
-        // Let go of the Agents list's menu actions with the section: their closures hold the list's state, and its
-        // AgentsFeed went on copying and sorting every agent on each push from every other section (#1495).
-        .onChange(of: shown) { _, now in if now != .agents { shell.agentsList = nil } }
+        .onChange(of: sidebarHidden, initial: true) { _, hidden in if chrome.sidebarHidden != hidden { chrome.sidebarHidden = hidden } }
+        .onAppear { chrome.openWindow = openWindow }
+        .onChange(of: scenePhase, initial: true) { _, phase in if chrome.scenePhase != phase { chrome.scenePhase = phase } }
     }
 
     @StoredValue(MacSection.sidebarHiddenKey) private var sidebarHidden = false
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.scenePhase) private var scenePhase
+    /// What the kept pages get from the shell (`MacPageStack`).
+    @State private var chrome = MacPageChrome()
 
     /// The section on screen: the one picked in the column, else the tab's.
     private var shown: MacSection { MacSection.shown(override: shell.section, tab: model.selectedTab) }
@@ -307,20 +313,33 @@ private struct MacShell: View {
         return n > 0 ? .count(n) : nil
     }
 
-    @ViewBuilder private var page: some View {
-        if let p = pluginPlace {
-            NavigationStack {
-                ExtensionPageView(plugin: p.plugin, ui: p.id, title: p.title)
-                    .environment(\.macBelowTitleRow, true)
+    /// The sections' pages stay under a plugin's page, all behind it: coming back from it builds none of them again.
+    private var page: some View {
+        // Over them, not beside them in a stack: the sections' pages are laid out as before, the plugin's on top.
+        sectionPage.overlay {
+            if let p = pluginPlace {
+                NavigationStack {
+                    ExtensionPageView(plugin: p.plugin, ui: p.id, title: p.title)
+                        .environment(\.macBelowTitleRow, true)
+                }
+                .id(ExtensionSlots.key(p))
+                .background(Theme.pageBackground)
             }
-            .id(ExtensionSlots.key(p))
-        } else {
-            sectionPage
         }
     }
 
-    @ViewBuilder private var sectionPage: some View {
-        switch shown {
+    /// Kept in the window once shown (#390, `MacPageStack`).
+    private var sectionPage: some View {
+        MacPageStack(shown: pluginPlace == nil ? shown : nil, chrome: chrome) { section in
+            AnyView(sectionView(section).environment(model).macLook(model))
+        }
+        // Up behind the title bar: each page's hosting view takes the window's title bar as its own safe area, as the
+        // page did in the window's tree (its title in that row, its content below it).
+        .ignoresSafeArea(.container, edges: .top)
+    }
+
+    @ViewBuilder private func sectionView(_ section: MacSection) -> some View {
+        switch section {
         case .assistant: AssistantView() // its own headers are the title bar's row (#830, `AssistantView`)
         case .agents: ChatsView()
         case .todos: MacTodosPage()
@@ -336,25 +355,6 @@ extension EnvironmentValues {
     /// Where a page's own header in the title bar's row may start (#830): past the traffic lights and the toolbar's
     /// buttons when the sections column is hidden and the page is at the window's edge, else 0.
     @Entry var macTitleRowLeading: CGFloat = 0
-}
-
-/// A section's title in the title bar's row, over the page's leading edge (#830): a label, so the row still drags the
-/// window.
-private struct MacPageTitle: View {
-    let title: String
-    let leading: CGFloat
-
-    var body: some View {
-        Text(title)
-            .font(Theme.Font.title)
-            .foregroundStyle(Theme.macLabel)
-            .lineLimit(1)
-            .padding(.leading, leading)
-            .frame(height: Theme.Size.macToolbarHeight)
-            .ignoresSafeArea(.container, edges: .top)
-            .allowsHitTesting(false)
-            .accessibilityAddTraits(.isHeader)
-    }
 }
 
 /// The sidebar's 机器: the machines page, pushing a machine's page; its agents open their chats here too

@@ -211,7 +211,7 @@ struct LarkMomentsPostView: View {
             }
             .navigationTitle("公司圈")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .pageToolbar {
                 if !pushed {
                     ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.tint(LarkColor.blue) }
                 }

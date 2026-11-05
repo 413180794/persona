@@ -153,6 +153,11 @@ func (s *meshStore) Interactions(_ context.Context, machine, session string, _ i
 	return out, nil
 }
 
+func (s *meshStore) AllowAlways(context.Context, string, string, []string) error { return nil }
+func (s *meshStore) AlwaysAllowed(context.Context, string, []string) (bool, error) {
+	return false, nil
+}
+
 func (s *meshStore) PutNodeSession(_ context.Context, machine, id string, ns db.NodeSession) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

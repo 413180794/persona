@@ -83,7 +83,7 @@ struct PromptComposer: View {
                     .padding(.top, Theme.Space.m)
             }
             PromptBar(model: bar, sources: mentionRows, commands: commands, models: models, placeholder: placeholder,
-                      options: o, onSend: { _ in if !disabled { stopDictation(); send() } })
+                      options: o, onSend: { _ in if !disabled { stopDictation(); commitTyped(); send() } })
                 #if os(iOS) || os(visionOS)
                 .mask { SendCutout(cut: stopping, control: Self.control, inset: Self.barInset).fill(style: FillStyle(eoFill: true)) }
                 .overlay(alignment: .bottomTrailing) { sharedButtons }
@@ -155,6 +155,13 @@ struct PromptComposer: View {
     #endif
 
     private func stopDictation() { if dictation.isListening { dictation.stop() } }
+
+    /// The keyboard's composition confirmed into the draft before it goes (`TypedText`, #2203).
+    private func commitTyped() {
+        #if os(iOS) || os(visionOS)
+        if focused.wrappedValue { TypedText.commitFocused(into: $text) }
+        #endif
+    }
 
     #if DEBUG
     /// Screenshots: `-showPromptMenu mention|command|attach|model` opens that menu a few seconds in.

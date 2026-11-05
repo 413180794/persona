@@ -37,7 +37,7 @@ private struct SheetCancel: ViewModifier {
 
     private func guarded(_ content: Content) -> some View {
         content
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         #if os(macOS)

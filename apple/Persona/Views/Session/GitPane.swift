@@ -37,7 +37,7 @@ struct GitPane: View {
         .themedPage()
         .refreshable { await load() }
         #if os(macOS)
-        .toolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac
+        .pageToolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac
         #endif
         .task(id: cwd) { await load() }
         .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, group: group, cwd: cwd, root: status?.root, target: t) }
@@ -340,7 +340,7 @@ struct GitDiffSheet: View {
             .navigationTitle(target.file.name)
             .navigationSubtitle(target.file.folder.isEmpty ? "仓库根目录" : target.file.folder)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+            .pageToolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {

@@ -69,7 +69,7 @@ struct ComposerRow<MenuItems: View>: View {
                 .tint(Theme.danger)
                 .accessibilityLabel("中断")
             } else {
-                Button(action: send) {
+                Button(action: sendTyped) {
                     Image(systemName: Theme.Icon.send).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
                 #if os(macOS)
@@ -83,6 +83,16 @@ struct ComposerRow<MenuItems: View>: View {
                 .accessibilityLabel("发送")
             }
         }
+    }
+}
+
+extension ComposerRow {
+    /// Sends what the field shows: the keyboard's composition confirmed into the draft first (`TypedText`, #2203).
+    fileprivate func sendTyped() {
+        #if os(iOS) || os(visionOS)
+        if focused.wrappedValue { TypedText.commitFocused(into: $text) }
+        #endif
+        send()
     }
 }
 

@@ -192,7 +192,7 @@ struct ChatsView: View {
                 }
                 // The Mac's buttons are in the list column's own title row (below); the shell is the phone's.
                 #if os(iOS) || os(visionOS)
-                .toolbar {
+                .pageToolbar {
                     if shell != nil {
                         // The shell's own bar floats over this one (AgentsTopBar): the bar stays for the search field.
                         ToolbarItem(placement: .principal) { Color.clear.frame(width: Theme.Size.hairline) }
@@ -339,7 +339,6 @@ private struct AgentsList: View {
     var menuActions: AgentsListMenu.Actions
 
     @State private var searchClose = SearchCloseWatcher()
-    @Environment(\.tabIsActive) private var tabIsActive
     @StoredValue("dev.machineFilter") private var machineFilter = ""
     /// Several groups of hubs: the one the list shows ("" = all; `HubFilter`).
     @StoredValue(HubFilter.key) private var hubFilter = ""
@@ -672,7 +671,9 @@ private struct AgentsList: View {
         .onAppear { searchClose.foldOnce() } // the search field starts folded away; a pull shows it
         // Back in front (its tab picked again, the shell's Agents): folded again too (#740). Not on the way back from a
         // chat, which keeps the list as it was: that changes the view's appearance, not the tab.
-        .onChange(of: tabIsActive) { _, active in if active { searchClose.refold() } }
+        // From a view of its own: reading `tabIsActive` here drew the whole list again each time the page came to the
+        // front or went behind (the Mac keeps it in the window behind other sections, #390).
+        .background { PageFrontWatcher(initial: false) { [searchClose] active in if active { searchClose.refold() } } }
         #if (DEBUG || PERF_SIGNPOST) && (os(iOS) || os(visionOS))
         .background { if ScreenProbe.enabled { AgentsScrollProbe(page: shell == nil ? nil : "agents") } }
         #endif
@@ -680,8 +681,8 @@ private struct AgentsList: View {
         // always-shown field crowded the top). Safe only because the filter bar is no longer pinned in the safe area
         // on a phone: pinned, it stayed under the folded field (TestFlight 35, ~120 pt of blurred list).
         // On the list itself, before the alerts, as it always was.
-        .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .automatic),
-                    prompt: "搜索空间、标签、会话、内容")
+        .pageSearchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .automatic),
+                        prompt: "搜索空间、标签、会话、内容")
         .refreshable { await model.refresh() }
         #if DEBUG
         // `-openQuietSpaces YES` (with `-tab dev`): every quiet space opened, for screenshots (`-dev.folded` folds spaces).
@@ -716,6 +717,8 @@ private struct AgentsList: View {
             feed.hold.set(.scrolling, phase != .idle)
         }
         .onChange(of: covered, initial: true) { _, covered in feed.hold.set(.outOfSight, covered) }
+        // Another section in front (the page stays in the window behind it, `MacPageStack`).
+        .background { PageFrontWatcher { front in feed.hold.set(.behind, !front) } }
         // The row being read, brought back when a change took it off screen (`ReaderAnchor.reveal`). Around a local:
         // the chain above in a closure is type-checked with all of it.
         ScrollViewReader { proxy in

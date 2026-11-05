@@ -381,11 +381,12 @@ nonisolated enum AssistantCopyText {
 /// every hub push replaces; read in the bar itself, each push rebuilt the bar and its menu (an open menu with it).
 private struct TopBarDot: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.tabIsActive) private var inFront
     let key: SessionKey?
     let machineID: String
 
     var body: some View {
-        PersonaDot(size: Theme.Size.avatarL, state: model.personaState(key, machineID: machineID))
+        PersonaDot(size: Theme.Size.avatarL, state: model.personaState(key, machineID: machineID, inFront: inFront))
     }
 }
 
@@ -398,15 +399,16 @@ extension AppModel {
     /// What the persona's face shows for Persona's conversation `key` (docs/persona.md「状态」): 离线 when the hub or
     /// Persona's machine is out of reach, 等你处理 when the conversation waits on the user, 思考中 / 工作中 while a turn
     /// runs (thinking until it writes or calls a tool), else 空闲. Read only by the face's own view (`TopBarDot`,
-    /// `ShellPersonaButton`): every hub push changes what it reads.
-    func personaState(_ key: SessionKey?, machineID: String) -> PersonaState {
+    /// `ShellPersonaButton`): every hub push changes what it reads. `inFront`: the page's `tabIsActive`; behind another
+    /// section (the Mac keeps the page, `MacPageStack`) the machine is read as it is now, not followed push by push.
+    func personaState(_ key: SessionKey?, machineID: String, inFront: Bool = true) -> PersonaState {
         #if DEBUG
         // `-showPersonaState idle|thinking|working|needs_you|offline`: hold the face in one state (screenshots).
         if let s = UserDefaults.standard.string(forKey: "showPersonaState").flatMap(PersonaState.init(rawValue:)) { return s }
         #endif
         // 更新中… is the hub answering again: not 离线.
         let link = connection.shown
-        if link == .waitingForNetwork || link == .connecting || machine(hubRef(machineID))?.online == false { return .offline }
+        if link == .waitingForNetwork || link == .connecting || machine(hubRef(machineID), inFront: inFront)?.online == false { return .offline }
         guard let key, let session = session(key) else { return .idle }
         if session.state == .needsYou || !interactions(for: key).isEmpty { return .needsYou }
         guard session.state == .working else { return .idle }

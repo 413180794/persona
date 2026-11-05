@@ -62,14 +62,17 @@ struct AgentTally: Equatable {
 struct MachinesView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var phase
+    @Environment(\.tabIsActive) private var inFront
     @State private var metrics: [MachineRef: MachineMetrics] = [:]
     /// The groups whose hub keeps no metrics (404: before machine monitoring): their cards have no CPU / memory / network.
     @State private var unmonitoredGroups = Set<String>()
     private var unmonitored: Bool { !unmonitoredGroups.isEmpty && unmonitoredGroups.count >= model.groupIDs.count }
 
     var body: some View {
-        let machines = model.machines
-        let tallies = Dictionary(machines.map { ($0.ref, AgentTally(MachineDetailView.agents(model, $0.ref))) }, uniquingKeysWith: { a, _ in a })
+        // Behind another section (the Mac keeps the page, `MacPageStack`): as they are now, not followed push by push.
+        let machines = model.machines(inFront: inFront)
+        let agents = MachineDetailView.agentsByMachine(model, inFront: inFront)
+        let tallies = Dictionary(machines.map { ($0.ref, AgentTally(agents[$0.ref] ?? [])) }, uniquingKeysWith: { a, _ in a })
         let alerts = Dictionary(machines.map { ($0.ref, alertLevel($0)) }, uniquingKeysWith: { a, _ in a })
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.m) {
@@ -106,7 +109,7 @@ struct MachinesView: View {
         // Large wherever it is pushed (the Agents list's stack would make it inline, and the principal item below would
         // then hide the title); the bar's middle is only for 连接中… and the like.
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
+        .pageToolbar {
             #if os(macOS)
             // Empty while connected: its glass drew a thin line in the middle of the title bar's row (#830).
             ToolbarItem(placement: .principal) { ConnectionTitle() }.sharedBackgroundVisibility(.hidden)

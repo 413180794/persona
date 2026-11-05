@@ -107,7 +107,7 @@ struct LarkForwardedView: View {
             }
             .navigationTitle(title.isEmpty ? "聊天记录" : title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
+            .pageToolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
         }
     }
 
