@@ -33,5 +33,9 @@
   "mail_line_feishu": "Lark メール",
   "mail_none": "未追加",
   "mail_with_error_other": "{count}件 · エラーあり",
-  "mail_accounts_other": "{count}件のアカウント"
+  "mail_accounts_other": "{count}件のアカウント",
+  "mail_outlook_phone_only": "Outlook は Microsoft アカウントでログインするため、スマートフォンでのみ追加できます",
+  "mail_line_outlook": "Outlook · Microsoft アカウントでログイン",
+  "mail_client_id_empty": "Entra アプリの「アプリケーション (クライアント) ID」を入力してください",
+  "mail_client_id_invalid": "クライアント ID の形式ではありません（xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx）"
 }

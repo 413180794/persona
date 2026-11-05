@@ -293,6 +293,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     聊天类（Telegram）画成气泡（图片、贴纸、视频封面经 `/connectors/<id>/media`，语音和文件只描述），可加载更早；会话页带回复动作（`chat.reply`）时底部有输入框，走 `thread/reply`（聊天可引用某条）。
     读不到会话页（CI 失败这种不是会话的、限流、没有 threads 的连接器）就显示 hub 收集的内容（`GET /inbox/<件>` 的 `context`）和「在 X 打开」；限流 / 不可用时上面说一句原因。
     `can_reply` 的才有「AI 草拟回复」（回复走 `/inbox/<件>/reply`，弹窗里写明回复会到哪、谁能看到）；不能回复的有 `open_url` 就换成「在 Telegram 里回复」「在信息里回复」（`sms:` 带上 AI 分身的草稿），都没有就只有「交给 AI」。交给 AI 的标题是「连接器名 · 标题」，正文带上它的链接。
+  **静音**（#2968，`docs/inbox.md`「静音」）：右键一行是「已处理 / 移回」和这件事能静音的东西（条目的 `mutes`：静音这个仓库 / 会话 / 发件人，名字在右边），
+  条目页标题旁有静音按钮（同一组）；点了这件事和同一来源里覆盖到的打开条目先收进已处理，`POST /inbox/mutes`，失败恢复。列表 ⋯ 里「已静音」打开弹窗，
+  新的在前，每行「取消静音」（`DELETE /inbox/mutes/<id>`），空的时候说怎么静音。截图用 `MOCK_MUTES=1 MOCK_GITHUB_INBOX=1` 的假 hub。
   等你的 Agent（待处理交互，屏蔽的除外）排在需要你最前，点了进那个对话。悬停一行出现「已处理 / 移回」（网页没有左滑），先改本地、失败恢复。
   AI 分身草拟好的行下面是草稿卡片（发送 / 修改），处理中写「AI 分身正在处理：…」。宽时左列表右详情，窄时详情盖住列表；按页面自己的宽度切（容器查询），开着侧边面板也不挤。
   详情：扩展的连接器收进来的事，扩展有 `inbox_item` 时正文由扩展画（见下面「设置」的「UI 插槽」）；其余照旧。
@@ -360,7 +363,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、Skills（`GET /skills`，跑助手那台电脑上的 skill，只读，`settings/Skills.tsx`）、运行在哪（只读；没有模型入口，模型在「模型配置 › 主对话」）；
   「Claude Code」「Codex」（`settings/AgentSettings.tsx`）：选一台在线电脑，白名单设置（开关 / 下拉 / 文字）改了立即 `PUT`，「同时改所有在线机器」默认开，
   每行「⋯」恢复默认（文字项清空也是 null）、推到所有在线机器，失败回滚；
-  「连接器」（`settings/Connectors.tsx`）：邮箱（列表、添加 IMAP / 飞书邮箱、删除；Gmail 只能在手机上加：它的 Google 授权客户端是 iOS 类型，回调是只有 App 能接的自定义 scheme）、
+  「连接器」（`settings/Connectors.tsx`）：邮箱（列表、添加 IMAP / 飞书邮箱、删除；Gmail 只能在手机上加：它的 Google 授权客户端是 iOS 类型，回调是只有 App 能接的自定义 scheme；
+  Outlook 同样在手机上登录（Microsoft 回调 `jarvis-mail-oauth://outlook`），网页的「Outlook」写明这一点，并能先填好这个 hub 的 client ID（`GET` / `PUT /mail/oauth/microsoft/config`，步骤和回调地址照 iOS，#2968）；
+  账号行按 `provider` 标 Gmail / Outlook / 飞书，oauth2 的第二行分「Gmail · Google 账号登录」「Outlook · Microsoft 账号登录」）、
   飞书（`/lark/status` 只读）、飞书机器人（`settings/FeishuBot.tsx`，逻辑 `lib/feishu-bot.ts`，`docs/bots.md`；一行状态，点开是弹窗（`?tab=connectors&connector=feishu-bot` 直接打开）：开关、应用凭证「验证并保存」、
   配对码和倒计时（等配对时每 3 秒刷新）、测试消息、解除配对先确认、「能做什么」六个开关、飞书里聊过的 Agent、怎么建机器人；同 iOS `FeishuBotView`）；
   hub 带 `connectors` 时下面是「更多连接器」（`settings/HubConnector.tsx`，逻辑 `lib/connectors.ts`，`&connector=<id>` 直接进详情，#1324）：
@@ -375,7 +380,8 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   和 iOS 同一套（`docs/extensions.md`「App：设置 › 扩展」）。列表是名字、状态圆点和文字、还缺什么 / 错误，标题旁写个数和几个要处理；详情是状态 · 版本 · 来源、描述、还缺、错误，
   「启用」开关（立即 `PUT …/-/enabled`），按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，对象单独一组），改了底部浮出「还原 / 保存」，整份 `PUT …/-/config`，
   hub 回 `invalid_config` 时把原因写在那一项下面、草稿留着，数字不是数时不能保存；有未保存的改动时点返回先问。密钥每项只显示已设置 / 未设置，点开在弹窗里输入（`type=password`，不回显），
-  已设置的可以清除（再点一次确认）；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
+  已设置的可以清除（再点一次确认）；贡献了 `channel` 的扩展在头部下面有一行「在 设置 › 渠道 里设置 X」（复用 `ChannelLink`，hub 有渠道且有这个渠道时才有）；
+  「提供」之后是「运行隔离」（hub 给了 `sandbox` 才有，照 Android：沙箱正在生效 / 已要求但未生效 / 未启用、原因、经出网代理放行和拒绝的次数、最近拒绝，只看不改，#2968）；「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
   装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad extension`）；hub 有扩展市场（列表回 `markets: true`）时也能从市场装（下面）。截图用 `MOCK_PLUGINS=1` 的假 hub。
   **新老接口**（#1845，`lib/extension-api.ts`，[extensions.md](extensions.md)「命名和兼容」）：hello 的 features 有 `extensions` 时问 `/api/v1/extensions/…`（字段 `extensions` / `extension` / `extension_name`），
   没有（老 hub，或 hello 之前）问 `/api/v1/plugins/…`（`plugins` / `plugin` / `plugin_name`），两套字段都读；市场预览 `{market, extension, plugin}` 两个键都带。
@@ -1018,6 +1024,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 飞书文档的评论：看、回复、解决 / 重新打开、评论全文或选中的一段、@ 人 | 有 | #1290 | 插件声明 `lark_doc_comments` 才能写；只做评论，不改正文；App 是长按段落，网页是选中文字 |
 | 公司圈帖子和评论 | 有 | #297 | 只读 |
 | 连接器的条目（GitHub、Telegram、信息、扩展）：来源筛选、会话页、回复或「在 X 里打开」、交给 AI | 有 | #1324 | GitHub 时间线和 Telegram 气泡只读加回复；表情回应、转发、下载附件不做 |
+| 静音这个仓库 / 会话 / 发件人、「已静音」列表和取消静音 | 有 | #2968 | App 是长按一行；网页是右键一行，或条目页标题旁的静音按钮（触屏用它）；「已静音」在列表 ⋯ 菜单里，是弹窗 |
 
 ### 机器和设置
 
@@ -1042,7 +1049,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 模型供应商的「额度」 | 有 | #1326 | 供应商弹窗里，「可用性」上面 |
 | 助手（主动做事、关于我、记忆、运行在哪） | 有 | #297 | 换助手所在的机器没做（iOS 也不能改） |
 | Claude Code 设置、Codex 设置 | 有 | #297 | |
-| 连接器：邮箱 | 有 | #297 | Gmail 只能在手机上加（Google 授权客户端是 iOS 类型） |
+| 连接器：邮箱 | 有 | #297、#2968 | Gmail、Outlook 只能在手机上加（登录回调是只有 App 能接的自定义 scheme）；Outlook 的 client ID 可以在网页上先填好，账号列表标出 Outlook |
 | 连接器：飞书 | 有 | #297 | 只读状态 |
 | 连接器：飞书 › 首页显示消息 | 有 | #1327 | 只对当前浏览器生效 |
 | 飞书防撤回、编辑历史（风灵月影） | 有 | #2900 | 开关和 lark-connector 网页共用当前账号；加密的旧版本只显示对外展示（iOS 解锁后能看正文） |
@@ -1053,6 +1060,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 连接器：Telegram、扩展提供的连接器（开关、分步登录、进知识库 / 进收件箱、退出、删除） | 有 | #1324、#1425 | 品牌、页脚、「在 X 里回复」按连接器 id 查 `lib/connectors.ts` 的一张表；表里没有的扩展连接器用通用图标和通用文案（带它自己的名字）；微信的品牌图未定，先用通用图标 |
 | 连接器：信息（iMessage） | 有 | #1324、#2898 | 状态、「交给 Persona」开关、删除 hub 上已存的信息；浏览那台 Mac 的会话只在手机上 |
 | 扩展（列表、开关、按 schema 的表单、只写的密钥） | 有 | #1207 | 安装、升级、卸载在 hub 机器上（同 iOS） |
+| 扩展详情的「运行隔离」、渠道扩展去渠道页的入口 | 有 | #2968 | 参考 Android；iOS 还没有（#2919） |
 | 键盘快捷键、命令面板 | 有 | #2330 | 见「快捷键和命令面板」；手机端没有实体键盘 |
 | 翻译 | 有 | #433 | 存在当前浏览器、不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上，网页没有；网页打开时按需翻 |
 | 设备（token 列表、撤销） | 有 | — | |

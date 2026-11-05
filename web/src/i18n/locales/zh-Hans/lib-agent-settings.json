@@ -33,5 +33,9 @@
   "mail_line_feishu": "飞书邮箱",
   "mail_none": "未添加",
   "mail_with_error_other": "{count} 个 · 有错误",
-  "mail_accounts_other": "{count} 个账户"
+  "mail_accounts_other": "{count} 个账户",
+  "mail_outlook_phone_only": "Outlook 要用 Microsoft 账号登录，只能在手机上添加",
+  "mail_line_outlook": "Outlook · Microsoft 账号登录",
+  "mail_client_id_empty": "填 Entra 应用的「应用程序(客户端) ID」",
+  "mail_client_id_invalid": "这不像 client ID，形如 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 }

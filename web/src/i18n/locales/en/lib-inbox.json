@@ -72,6 +72,15 @@
   "reply_failed": "Reply wasn't sent: {error}",
   "status_changed": "Changed \"{name}\" to {value}",
   "status_failed": "Couldn't change it: {error}",
+  "mute_repo": "Mute this repository",
+  "mute_chat": "Mute this chat",
+  "mute_sender": "Mute this sender",
+  "mute_tag_repo": "Repository",
+  "mute_tag_chat": "Chat",
+  "mute_tag_sender": "Sender",
+  "muted_reason": "Muted: {name}",
+  "muted": "Muted “{name}”. It won't come into the Inbox again.",
+  "mute_failed": "Couldn't mute: {error}",
   "ix_elicitation_form": "An MCP form needs you",
   "ix_elicitation_url": "An MCP link needs you"
 }

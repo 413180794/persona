@@ -91,5 +91,8 @@
   "clear": "清除",
   "secret_replace_placeholder": "输入新的值替换",
   "secret_placeholder": "输入",
-  "secret_hint": "存在 hub 上，只交给这个扩展。"
+  "secret_hint": "存在 hub 上，只交给这个扩展。",
+  "sandbox_title": "运行隔离",
+  "sandbox_footer": "沙箱只隔离 hub 运行的已安装扩展；是否生效以上面实际状态为准。只能在 hub 所在的机器或管理界面修改。",
+  "sandbox_last_denied": "最近拒绝：{target}"
 }

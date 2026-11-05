@@ -28,8 +28,17 @@
   "move_back_title": "受信トレイに戻す",
   "mark_done_title": "対応済みにする",
   "move_back": "戻す",
+  "muted_list": "ミュート中",
+  "muted_empty_title": "ミュート中のものはありません",
+  "muted_empty_hint": "受信トレイで項目を右クリックするか、項目のページの「ミュート」で、リポジトリ・チャット・送信者をミュートできます。",
+  "unmute": "ミュート解除",
+  "unmuted": "「{name}」のミュートを解除しました。今後のものは受信トレイに入ります",
+  "unmute_failed": "解除できませんでした：{error}",
+  "mutes_load_failed": "ミュート中の一覧を読み込めません：{error}",
+  "retry": "再試行",
+  "close": "完了",
+  "muted_note": "解除すると今後のものだけが入ります。処理済みにしたものは戻りません。",
   "failed_title": "受信トレイを読み込めませんでした",
   "failed_hint": "接続を確認して、もう一度お試しください。",
-  "retry": "再試行",
   "retrying": "再試行中…"
 }

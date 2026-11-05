@@ -12,12 +12,13 @@ import { composing } from "../../lib/send-history";
 import {
   choiceLabel, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
   placeholder, extensionDetail, extensionState, extensionTone, pointText, readNumber, runNote, same, secretState, setAt, setContribution, setExtensionConfig, setExtensionEnabled,
-  machineStatus, nodeProgramStatus, saveFooter, setExtensionAutoUpgrade, setExtensionSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
-  type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionNodeState, type ExtensionSecret,
+  channelOf, machineStatus, nodeProgramStatus, sandboxEgress, sandboxState, saveFooter, setExtensionAutoUpgrade, setExtensionSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
+  type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionNodeState, type ExtensionSandbox, type ExtensionSecret,
 } from "../../lib/extensions";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { TriageRuleField } from "../../ui/TriageRuleField";
 import { Icon } from "../../ui/icons";
+import { ChannelLink } from "./Channels";
 import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./ExtensionMarket";
 import { ExtensionUI } from "./ExtensionView";
 import { dependencyText, dependentError, type Contribution, type Dependent } from "../../lib/extension-model";
@@ -28,7 +29,7 @@ import { formatList, t } from "../../i18n";
  * The tab's pages, by its `extension` parameter (lib/extension-market.ts extensionsRoute): the list, an extension, a page an extension
  * draws, and the market (its catalog, one extension of it, the markets).
  */
-export function Extensions({ open, onOpen }: { open: string | null; onOpen: (id: string | null) => void }) {
+export function Extensions({ open, onOpen, onChannel }: { open: string | null; onOpen: (id: string | null) => void; onChannel?: (id: string) => void }) {
   const r = extensionsRoute(open);
   const go = (to: Parameters<typeof routeSub>[0]) => onOpen(routeSub(to));
   switch (r.kind) {
@@ -40,6 +41,7 @@ export function Extensions({ open, onOpen }: { open: string | null; onOpen: (id:
           onBack={() => onOpen(null)}
           onPage={(ui) => go({ kind: "page", id: r.id, ui })}
           onUpgrade={(market, id) => go({ kind: "item", market, id })}
+          onChannel={onChannel}
         />
       );
     case "page":
@@ -242,7 +244,7 @@ function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubExtension; busy:
   );
 }
 
-function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: () => void; onPage: (ui: string) => void; onUpgrade: (market: string, id: string) => void }) {
+function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel }: { id: string; onBack: () => void; onPage: (ui: string) => void; onUpgrade: (market: string, id: string) => void; onChannel?: (id: string) => void }) {
   const [removing, setRemoving] = useState(false);
   const [detail, setDetail] = useState<HubExtensionDetail | null>(null);
   const [error, setError] = useState("");
@@ -422,6 +424,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
         )}
       </section>
 
+      {/* a way of talking to Persona: binding it, its switch and where its messages go are on the channel's page */}
+      {p && onChannel && channelOf(p) && <ChannelLink id={channelOf(p)!} onOpen={onChannel} />}
+
       {p && (
         <>
           {p.read_only ? (
@@ -535,6 +540,8 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
             </Group>
           )}
 
+          {p.sandbox && <SandboxGroup s={p.sandbox} />}
+
           {!!p.permissions?.length && (
             <Group title={t("settings-extensions.permissions_title")} footer={t("settings-extensions.permissions_footer")}>
               {p.permissions.map((perm) => (
@@ -581,6 +588,31 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
 
       {secret && <SecretDialog extension={id} secret={secret} onClose={() => setSecret(null)} onDone={secretDone} />}
     </div>
+  );
+}
+
+/** 运行隔离 (Android ExtensionModelParts sandbox()): whether the sandbox is in effect and why, what went through the
+ *  egress proxy and the last thing it refused. Only looked at here; it is changed on the hub's side. */
+export function SandboxGroup({ s }: { s: ExtensionSandbox }) {
+  const egress = sandboxEgress(s);
+  return (
+    <Group title={t("settings-extensions.sandbox_title")} footer={t("settings-extensions.sandbox_footer")}>
+      <div className="flex items-start gap-3 px-4 py-2.5">
+        <Icon name="lock" size={14} className={cx("mt-0.5 shrink-0", s.active ? "text-green" : s.enabled ? "text-orange" : "text-ink-3")} />
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] text-ink">{sandboxState(s)}</div>
+          {s.why && <div className="mt-0.5 text-[11.5px] leading-snug break-words text-ink-3">{s.why}</div>}
+        </div>
+      </div>
+      {egress && (
+        <div className="px-4 py-2.5">
+          <div className="text-[12.5px] text-ink-2">{egress}</div>
+          {s.egress?.last_denied && (
+            <div className="mt-0.5 font-mono text-[11.5px] break-all text-ink-3 select-text">{t("settings-extensions.sandbox_last_denied", { target: s.egress.last_denied })}</div>
+          )}
+        </div>
+      )}
+    </Group>
   );
 }
 

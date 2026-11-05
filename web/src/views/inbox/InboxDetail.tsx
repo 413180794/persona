@@ -2,12 +2,12 @@
 // the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the 公司圈 post — or,
 // when the extension whose connector brought the item in draws its page (inbox_item), the extension's View.
 import { useEffect, useState } from "react";
-import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
+import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, muteItem, muteShortName, muteTitle, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
 import { useInboxItemPlace } from "../../lib/extension-slots";
 import { navigate } from "../../lib/router";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
 import { t } from "../../i18n";
-import { Button, cx, IconButton, Loading } from "../../ui/atoms";
+import { Button, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ConnectorBody, openSystem } from "./ConnectorThread";
 import { DocBody, MailBody, MomentBody } from "./InboxBodies";
@@ -24,6 +24,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
   const prefs = useTranslatePrefs();
   const place = useInboxItemPlace(item?.source);
   const [ownShown, setOwnShown] = useState(false); // under an extension's page: it fell back to the item's own body
+  const muteMenu = useMenu();
   if (!item) {
     return (
       <div className="flex h-full items-center justify-center p-6">
@@ -57,6 +58,11 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
               <p className="mt-0.5 truncate text-[12px] text-ink-3">{[sourceLine(item), shortTime(item.updated_at)].filter(Boolean).join(" · ")}</p>
             </div>
             {item.lark && (!place || ownShown) && <IconButton icon="pin" label={t("inbox-inboxdetail.pin_messages")} onClick={() => setPins(true)} size={32} />}
+            {!!item.mutes?.length && <IconButton icon="bellOff" label={t("inbox-inboxdetail.mute")} onClick={muteMenu.open} active={Boolean(muteMenu.anchor)} size={32} />}
+            {muteMenu.anchor && (
+              <Menu anchor={muteMenu.anchor} onClose={muteMenu.close} align="right" width={224}
+                items={(item.mutes ?? []).map((m) => ({ key: `${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", onSelect: () => void muteItem(item, m) }))} />
+            )}
             {done ? (
               <Button tone="secondary" icon="inbox" onClick={() => void setDone(item, false)}>{t("inbox-inboxdetail.move_back")}</Button>
             ) : (

@@ -7,6 +7,9 @@ import {
   isUnset,
   mailAccountLine,
   mailErrors,
+  mailProviderBadge,
+  clientIDError,
+  MAIL_KINDS,
   mailRequest,
   mailSummary,
   pickMachine,
@@ -83,12 +86,15 @@ describe("mail account form", () => {
     expect(mailErrors({ ...EMPTY_MAIL_FORM, email: "me@", password: "x" }).email).toBe("邮箱地址的格式不对");
     expect(mailErrors({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "x" })).toEqual({});
     expect(mailErrors({ ...EMPTY_MAIL_FORM, kind: "gmail" }).kind).toContain("手机");
+    expect(mailErrors({ ...EMPTY_MAIL_FORM, kind: "outlook" }).kind).toBe("Outlook 要用 Microsoft 账号登录，只能在手机上添加");
+    expect(MAIL_KINDS.map((k) => k.k)).toEqual(["gmail", "outlook", "feishu", "imap"]);
     expect(mailErrors({ ...EMPTY_MAIL_FORM, kind: "feishu", email: "me@example.com" }).password).toContain("飞书");
     expect(mailErrors({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "x", imapHost: "imap.example.com", imapPort: "abc" }).imapPort).toBeTruthy();
   });
 
   it("builds the hub's request", () => {
     expect(mailRequest({ ...EMPTY_MAIL_FORM, kind: "gmail" })).toBeNull();
+    expect(mailRequest({ ...EMPTY_MAIL_FORM, kind: "outlook", email: "me@example.com", password: "pw" })).toBeNull();
     expect(mailRequest({ ...EMPTY_MAIL_FORM, kind: "feishu", email: " me@example.com ", password: "pw", imapHost: "ignored" })).toEqual({
       name: "me@example.com",
       email: "me@example.com",
@@ -111,12 +117,25 @@ describe("mail account form", () => {
   it("describe accounts", () => {
     expect(mailAccountLine({ id: "a", email: "me@example.com", status: "error", error: "auth failed" })).toBe("auth failed");
     expect(mailAccountLine({ id: "a", email: "me@example.com", auth: "oauth2", provider: "gmail" })).toBe("Gmail · Google 账号登录");
+    expect(mailAccountLine({ id: "a", email: "me@example.com", auth: "oauth2", provider: "outlook" })).toBe("Outlook · Microsoft 账号登录");
     expect(mailAccountLine({ id: "a", email: "me@example.com", provider: "feishu" })).toBe("飞书邮箱");
+    expect(mailProviderBadge({ id: "a", email: "x", provider: "outlook" })).toBe("Outlook");
+    expect(mailProviderBadge({ id: "a", email: "x", provider: "gmail" })).toBe("Gmail");
+    expect(mailProviderBadge({ id: "a", email: "x", provider: "feishu" })).toBe("飞书");
+    expect(mailProviderBadge({ id: "a", email: "x", provider: "imap" })).toBeNull();
     expect(mailAccountLine({ id: "a", email: "me@example.com", provider: "imap", imap_host: "imap.example.com" })).toBe("IMAP · imap.example.com");
     expect(mailSummary(null)).toBe("");
     expect(mailSummary([])).toBe("未添加");
     expect(mailSummary([{ id: "a", email: "x", status: "error" }, { id: "b", email: "y" }])).toBe("2 个 · 有错误");
     expect(mailSummary([{ id: "a", email: "x" }])).toBe("1 个账户");
+  });
+});
+
+describe("Outlook client ID", () => {
+  it("checks the shape the hub does", () => {
+    expect(clientIDError("")).toContain("应用程序(客户端) ID");
+    expect(clientIDError("not-an-id")).toContain("不像 client ID");
+    expect(clientIDError(" 00000000-0000-0000-0000-000000000000 ")).toBe("");
   });
 });
 

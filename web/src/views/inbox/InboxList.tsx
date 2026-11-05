@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
+  listInboxMutes, muteItem, muteLine, muteShortName, muteTitle, unmuteInbox,
   BULK_CONFIRM_AT, bulkScope, bulkScopeName, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, reloadInbox, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
-  useInbox, waitingAgents, type BulkAction, type InboxItem, type Tier,
+  useInbox, waitingAgents, type BulkAction, type InboxItem, type InboxMute, type Tier,
 } from "../../lib/inbox";
 import { useMailAccounts } from "../../lib/mail";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
@@ -13,7 +14,10 @@ import { href, onLinkClick } from "../../lib/router";
 import { useStore } from "../../lib/store";
 import type { Interaction } from "../../lib/types";
 import { t } from "../../i18n";
-import { Button, Collapse, cx, Dialog, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
+import { Button, Collapse, cx, Dialog, IconButton, Loading, Menu, toast, useMenu, type MenuItem } from "../../ui/atoms";
+import { errorText } from "../../lib/api";
+import { contextMenuProps } from "../../ui/context-menu";
+import type { MenuAt } from "../../ui/menu-model";
 import { Icon } from "../../ui/icons";
 import { DraftDialog } from "./InboxDialogs";
 import { TriageBanner } from "./TriageBanner";
@@ -45,6 +49,7 @@ export function InboxList({ selected }: { selected?: string }) {
   const [editing, setEditing] = useState<InboxItem | null>(null);
   const accounts = useMailAccounts();
   const more = useMenu();
+  const [mutesOpen, setMutesOpen] = useState(false);
   // 全部已处理 / 全部忽略 over many items asks first; the items are the ones shown when it was asked.
   const [confirm, setConfirm] = useState<{ action: Exclude<BulkAction, "reopen">; items: InboxItem[]; scope: string } | null>(null);
 
@@ -130,8 +135,10 @@ export function InboxList({ selected }: { selected?: string }) {
             items={[
               { key: "all-done", label: t("inbox-inboxlist.mark_all_done"), hint: scope, icon: "check", disabled: !openInView.length, onSelect: () => runBulk("done") },
               { key: "all-dismiss", label: t("inbox-inboxlist.dismiss_all"), hint: scope, icon: "x", disabled: !openInView.length, onSelect: () => runBulk("dismiss") },
+              { key: "muted", label: t("inbox-inboxlist.muted_list"), icon: "bellOff", divider: true, onSelect: () => setMutesOpen(true) },
             ]} />
         )}
+        {mutesOpen && <MutesDialog onClose={() => setMutesOpen(false)} />}
         <BulkConfirm confirm={confirm} onClose={() => setConfirm(null)} />
 
         <TriageBanner triage={triage} />
@@ -219,8 +226,11 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
   const first = rows[0];
   const translated = hubTranslation(it, useTranslatePrefs());
   const from = fromLine(it, translated?.preview);
+  // a right click: 已处理 / 移回, then what it can be muted by (iOS: the row's long press)
+  // (the menu key / Shift+F10 open it next to the row, see ui/context-menu.ts)
+  const [menu, setMenu] = useState<MenuAt | null>(null);
   return (
-    <div data-item={it.id} className={cx("group relative scroll-my-3 rounded-[14px] transition-[background-color,box-shadow] duration-150 hover:bg-inset", selected ? "bg-inset shadow-[0_0_0_1.5px_var(--accent)]" : "bg-surface shadow-card")}>
+    <div data-item={it.id} {...contextMenuProps((at) => setMenu(at))} className={cx("group relative scroll-my-3 rounded-[14px] transition-[background-color,box-shadow] duration-150 hover:bg-inset", selected ? "bg-inset shadow-[0_0_0_1.5px_var(--accent)]" : "bg-surface shadow-card")}>
       <a href={href(to)} onClick={(e) => onLinkClick(e, to)} aria-current={selected ? "page" : undefined} className="flex gap-3 rounded-[14px] p-3 outline-offset-[-2px]">
         <ItemAvatar it={it} />
         <span className="min-w-0 flex-1">
@@ -270,7 +280,82 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
         {done ? <Glyph name="undo" size={12} stroke={2.2} /> : <Icon name="check" size={12} stroke={2.6} />}
         {done ? t("inbox-inboxlist.move_back") : t("inbox-inboxlist.done")}
       </button>
+      {menu && <Menu anchor={menu.anchor ?? null} point={menu.point} onClose={() => setMenu(null)} width={224} items={rowMenu(it, done)} />}
     </div>
+  );
+}
+
+/** A row's menu: 已处理 (or 移回), then 静音这个仓库 / 会话 / 发件人 with the name under it (iOS InboxView.rowMenu). */
+export function rowMenu(it: InboxItem, done: boolean): MenuItem[] {
+  const items: MenuItem[] = [
+    done
+      ? { key: "undone", label: t("inbox-inboxlist.move_back"), icon: "inbox", onSelect: () => void setDone(it, false) }
+      : { key: "done", label: t("inbox-inboxlist.done"), icon: "check", onSelect: () => void setDone(it, true) },
+  ];
+  (it.mutes ?? []).forEach((m, i) => items.push({ key: `mute:${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", divider: i === 0, onSelect: () => void muteItem(it, m) }));
+  return items;
+}
+
+/** 已静音 (the ⋯ menu; iOS InboxMutesView): every source's muted repositories, chats and senders, newest first, each
+ *  with 取消静音. Only what comes in later comes back. */
+function MutesDialog({ onClose }: { onClose: () => void }) {
+  const [list, setList] = useState<InboxMute[] | null>(null);
+  const [failed, setFailed] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = () => {
+    setFailed("");
+    listInboxMutes().then(setList, (e) => setFailed(errorText(e)));
+  };
+  useEffect(load, []);
+  const unmute = async (m: InboxMute) => {
+    setBusy(m.id);
+    try {
+      await unmuteInbox(m.id);
+      setList((l) => (l ?? []).filter((x) => x.id !== m.id));
+      toast(t("inbox-inboxlist.unmuted", { name: m.name }), "ok");
+    } catch (e) {
+      toast(t("inbox-inboxlist.unmute_failed", { error: errorText(e) }), "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <Dialog open onClose={onClose} title={t("inbox-inboxlist.muted_list")} width={420} footer={<Button tone="primary" onClick={onClose}>{t("inbox-inboxlist.close")}</Button>}>
+      {failed ? (
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-[12.5px] break-words text-red">{t("inbox-inboxlist.mutes_load_failed", { error: failed })}</p>
+          <Button tone="secondary" icon="retry" onClick={load}>{t("inbox-inboxlist.retry")}</Button>
+        </div>
+      ) : !list ? (
+        <div className="py-2"><Loading /></div>
+      ) : !list.length ? (
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3">
+            <Icon name="bellOff" size={17} />
+          </span>
+          <p className="text-[13.5px] font-medium text-ink">{t("inbox-inboxlist.muted_empty_title")}</p>
+          <p className="max-w-[300px] text-[12.5px] leading-relaxed text-ink-3">{t("inbox-inboxlist.muted_empty_hint")}</p>
+        </div>
+      ) : (
+        <>
+          <ul className="-mx-1 flex flex-col">
+            {list.map((m) => (
+              <li key={m.id} data-mute={m.id} className="flex items-center gap-3 rounded-control px-1 py-2 hover:bg-hover">
+                <Icon name="bellOff" size={14} className="shrink-0 text-ink-3" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] text-ink" title={m.name}>{m.name}</span>
+                  <span className="mt-0.5 block truncate text-[11.5px] text-ink-3">{muteLine(m)}</span>
+                </span>
+                <Button tone="quiet" busy={busy === m.id} disabled={busy !== null && busy !== m.id} onClick={() => void unmute(m)}>
+                  {t("inbox-inboxlist.unmute")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">{t("inbox-inboxlist.muted_note")}</p>
+        </>
+      )}
+    </Dialog>
   );
 }
 

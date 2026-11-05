@@ -109,6 +109,50 @@ export interface InboxItem {
   translations?: Record<string, { subject: string; preview: string }>;
   /** What it grew out of (docs/inbox.md「线索」): another item, a todo or an agent session ("<machine>/<session>"). */
   parent?: InboxParent;
+  /** What it can be muted by (docs/inbox.md「静音」): its repository, chat or sender in its source. */
+  mutes?: InboxMuteOption[];
+}
+
+/** One thing an item can be muted by: a repository, a chat or a sender of its source. */
+export interface InboxMuteOption {
+  tag: string; // repo | chat | sender
+  value: string;
+  name: string;
+}
+
+/** A mute the user set (GET /api/v1/inbox/mutes): nothing of `value` under `tag` in `source` comes into the inbox. */
+export interface InboxMute extends InboxMuteOption {
+  id: string;
+  source: string;
+  source_name?: string;
+  created_at?: string;
+}
+
+/** The menu's words for a mute option (iOS MuteOption.title). */
+export function muteTitle(o: Pick<InboxMuteOption, "tag">): string {
+  return t(o.tag === "repo" ? "lib-inbox.mute_repo" : o.tag === "chat" ? "lib-inbox.mute_chat" : "lib-inbox.mute_sender");
+}
+
+/** The name under the menu's words, on one line: a repository without its owner (example-repo). */
+export function muteShortName(o: InboxMuteOption): string {
+  return o.tag === "repo" ? o.name.split("/").pop() || o.name : o.name;
+}
+
+/** What kind of thing a mute is, for people: 仓库 / 会话 / 发件人. */
+export function muteTagName(tag: string): string {
+  return t(tag === "repo" ? "lib-inbox.mute_tag_repo" : tag === "chat" ? "lib-inbox.mute_tag_chat" : "lib-inbox.mute_tag_sender");
+}
+
+/** The 已静音 list's second line: the source's name, then 仓库 / 会话 / 发件人. */
+export function muteLine(m: InboxMute): string {
+  return [m.source_name || m.source, muteTagName(m.tag)].join(" · ");
+}
+
+/** The mutes, newest first (iOS InboxMutesView). */
+export function sortMutes(list: InboxMute[]): InboxMute[] {
+  // By time, not by string: RFC3339Nano drops trailing zeros, so "…:05Z" and "…:05.1Z" compare the wrong way.
+  const ts = (m: InboxMute) => (m.created_at ? Date.parse(m.created_at) || 0 : 0);
+  return [...list].sort((a, b) => ts(b) - ts(a));
 }
 
 export type InboxParentKind = "inbox" | "todo" | "session";
@@ -801,6 +845,40 @@ export async function setDone(item: InboxItem, done: boolean): Promise<void> {
     patchItem(item.id, () => before);
     toast(t(done ? "lib-inbox.done_failed" : "lib-inbox.undone_failed", { error: errorText(e) }), "error");
   }
+}
+
+/** Whether a mute covers an item: the same source, still open, and the same thing among what it can be muted by. */
+export function muteCovers(source: string, o: InboxMuteOption, it: InboxItem): boolean {
+  return it.source === source && !isDone(it) && (it.mutes ?? []).some((m) => m.tag === o.tag && m.value === o.value);
+}
+
+/**
+ * 静音这个仓库 / 会话 / 发件人 (iOS InboxStore.mute): the item and the open ones of its source the mute covers go to 已处理
+ * at once (「已静音：<名字>」), the hub keeps the mute and files them too; a failure puts them back.
+ */
+export async function muteItem(item: InboxItem, o: InboxMuteOption): Promise<void> {
+  // Only the covered items are put back: a reload during the request (every hub inbox event reloads) keeps its items.
+  const before = new Map(state.items.filter((it) => muteCovers(item.source, o, it)).map((it) => [it.id, it]));
+  const now = new Date().toISOString();
+  set({ items: state.items.map((it) => (before.has(it.id) ? { ...it, done_at: now, done_by: "read", reason: t("lib-inbox.muted_reason", { name: o.name }) } : it)) });
+  try {
+    await api("/inbox/mutes", { method: "POST", json: { item_id: item.id, tag: o.tag } });
+    toast(t("lib-inbox.muted", { name: o.name }), "ok");
+  } catch (e) {
+    set({ items: state.items.map((it) => before.get(it.id) ?? it) });
+    toast(t("lib-inbox.mute_failed", { error: errorText(e) }), "error");
+  }
+}
+
+/** What the user muted, in every source (GET /api/v1/inbox/mutes), newest first. */
+export async function listInboxMutes(): Promise<InboxMute[]> {
+  const r = await api<{ mutes?: InboxMute[] }>("/inbox/mutes");
+  return sortMutes(r.mutes ?? []);
+}
+
+/** 取消静音: only what comes in later comes back. */
+export function unmuteInbox(id: string): Promise<unknown> {
+  return api(`/inbox/mutes/${enc(id)}`, { method: "DELETE" });
 }
 
 /** What a bulk action does (POST /api/v1/inbox/bulk): 全部标为已处理, 全部忽略 (done_by=dismissed), and 移回 (their 撤销). */

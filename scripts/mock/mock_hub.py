@@ -5165,6 +5165,10 @@ MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com
 # anywhere: what the app posted is in GET /mock/mail. MOCK_MAIL=1 adds whole mails for the reader (an HTML one with a
 # tracking pixel, a script and an attachment; a two-mail thread) and a Gmail account whose authorization ran out and a
 # Feishu one; MOCK_GOOGLE=1 makes google/start answer (with a made-up URL).
+# MOCK_OUTLOOK=1: an Outlook account signed in with Microsoft (the web's Outlook badge and line, #2968).
+if os.environ.get("MOCK_OUTLOOK"):
+    MAIL_ACCOUNTS.append({"id": "acc4", "name": "me@outlook.example", "email": "me@outlook.example", "provider": "outlook", "auth": "oauth2",
+                          "imap_host": "outlook.office365.com", "status": "ok"})
 MAIL_LOG = {"sent": [], "flags": [], "accounts_added": [], "deleted": [], "tested": []}
 MAIL_FULL = {}
 if os.environ.get("MOCK_MAIL"):
@@ -8644,6 +8648,19 @@ if PLUGINS_MODE:
                                 "description": "打开的那台 Mac 上的「信息」由 hub 只读读取（只能开一台：同一个 Apple ID 的 Mac 里是同一份）。开关即时生效。要先在那台 Mac 上给 personad 完全磁盘访问权限，见 设置 › 连接器 › 信息",
                                 "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}}]},
                            "config": {} if _im_off else {"machines": ["macbook"]}, "secrets": [], "permissions": []}
+
+# MOCK_PLUGINS=1 with MOCK_CHANNELS=1: WeChat as an installed extension that contributes the channel (its page links to
+# 设置 › 渠道), run in a sandbox with a few connections through the egress proxy (its 运行隔离 section, #2968).
+if PLUGINS_MODE and os.environ.get("MOCK_CHANNELS"):
+    PLUGINS["wechat"] = {"id": "wechat", "name": "微信", "kind": "", "status": "running", "version": "0.3.1", "source": "installed",
+                         "enabled": True, "description": "在个人微信里私聊机器人：扫码绑定，消息进主对话，回答以纯文字发回。",
+                         "contributes": {"channel": ["wechat"]}, "form": {"fields": []}, "config": {}, "secrets": [], "permissions": [],
+                         "sandbox": {"enabled": True, "default": True, "chosen": False, "active": True,
+                                     "egress": {"allowed": 128, "denied": 2, "last_denied": "tracker.example.com:443", "denied_at": ago(minutes=40)}}}
+    PLUGINS["example-notes"]["sandbox"] = {"enabled": True, "default": True, "chosen": False, "active": False,
+                                           "why": "这台机器上没有 bubblewrap，扩展照常运行、没有隔离",
+                                           "egress": {"allowed": 0, "denied": 0}}
+
 
 def cua_config(pl):
     """The plugin cua's settings as the hub would answer: its machines are the Macs it is on for."""

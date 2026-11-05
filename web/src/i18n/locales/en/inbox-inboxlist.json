@@ -32,8 +32,17 @@
   "move_back_title": "Move back to Inbox",
   "mark_done_title": "Mark as done",
   "move_back": "Move back",
+  "muted_list": "Muted",
+  "muted_empty_title": "Nothing muted",
+  "muted_empty_hint": "Right-click an item in the Inbox, or use Mute on its page, to mute its repository, chat or sender.",
+  "unmute": "Unmute",
+  "unmuted": "Unmuted “{name}”. New ones will come into the Inbox.",
+  "unmute_failed": "Couldn't unmute: {error}",
+  "mutes_load_failed": "Couldn't load what's muted: {error}",
+  "retry": "Retry",
+  "close": "Done",
+  "muted_note": "Unmuting lets new ones in; what was already filed stays filed.",
   "failed_title": "Couldn't load the inbox",
   "failed_hint": "Check the connection and try again.",
-  "retry": "Retry",
   "retrying": "Retrying…"
 }

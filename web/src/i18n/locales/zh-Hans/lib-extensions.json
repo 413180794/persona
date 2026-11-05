@@ -67,5 +67,11 @@
   "count_other": "{count} 个",
   "count_one": "{count} 个",
   "count_attention_other": "{count} 个 · {attention} 个要处理",
-  "count_attention_one": "{count} 个 · {attention} 个要处理"
+  "count_attention_one": "{count} 个 · {attention} 个要处理",
+  "sandbox_active": "沙箱正在生效",
+  "sandbox_inactive": "已要求沙箱，但当前未生效",
+  "sandbox_off": "未启用沙箱",
+  "sandbox_egress": "经出网代理：{allowed} · {denied}",
+  "sandbox_allowed_other": "放行 {count} 次",
+  "sandbox_denied_other": "拒绝 {count} 次"
 }

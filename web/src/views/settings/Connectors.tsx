@@ -2,15 +2,16 @@
 // one with a password or 授权码, delete), 飞书 (lark-connector through the hub, feature `lark`: read-only status), and the hub's other connectors
 // (GitHub, Telegram, an extension's: GET /api/v1/connectors), each with a page of its own (HubConnector.tsx, `&connector=`).
 // 这台 iPhone (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
-// phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone.
+// phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone;
+// Outlook too (Microsoft calls back to a custom scheme only the app catches), though its client ID can be set up here.
 import { useEffect, useState } from "react";
-import { EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailErrors, mailRequest, mailSummary, type MailAccount, type MailForm } from "../../lib/agent-settings";
+import { clientIDError, EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailErrors, mailProviderBadge, mailRequest, mailSummary, signsInOnPhone, type MailAccount, type MailForm, type MicrosoftConfig } from "../../lib/agent-settings";
 import { t } from "../../i18n";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { accountTitle, type LarkAccount, type LarkAccountList } from "../../lib/lark-accounts";
 import { useLarkOn, useStore } from "../../lib/store";
-import { Button, cx, Dialog, IconButton, Loading, toast } from "../../ui/atoms";
+import { Button, copyText, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Count, Monogram } from "../inbox/InboxParts";
 import { ConnectorDetail, ConnectorList } from "./HubConnector";
@@ -107,8 +108,7 @@ function Mail() {
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="truncate text-[13px] text-ink">{a.email}</span>
-                {a.provider === "gmail" && <Pill>Gmail</Pill>}
-                {a.provider === "feishu" && <Pill>{t("settings-connectors.lark")}</Pill>}
+                {mailProviderBadge(a) && <Pill>{mailProviderBadge(a)}</Pill>}
                 {a.status === "error" && <Pill tone="red">{t("settings-connectors.has_error")}</Pill>}
               </div>
               <div className={cx("mt-0.5 truncate text-[11.5px]", a.status === "error" ? "text-red" : "text-ink-3")} title={mailAccountLine(a)}>
@@ -205,7 +205,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
           <Button tone="quiet" onClick={onClose} disabled={busy}>
             {t("common.cancel")}
           </Button>
-          {f.kind !== "gmail" && (
+          {!signsInOnPhone(f.kind) && (
             <Button tone="primary" busy={busy} onClick={() => void save()}>
               {busy ? t("settings-connectors.connecting") : t("settings-connectors.connect")}
             </Button>
@@ -234,15 +234,12 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
         </div>
 
         {f.kind === "gmail" ? (
-          <div className="flex gap-3 rounded-[10px] bg-inset px-3.5 py-3 shadow-hairline">
-            <Icon name="info" size={15} className="mt-0.5 shrink-0 text-ink-3" />
-            <div className="text-[12.5px] leading-relaxed text-ink-2">
-              <p className="font-medium text-ink">{t("settings-connectors.gmail_title")}</p>
-              <p className="mt-1">
-                {t("settings-connectors.gmail_body")}
-              </p>
-            </div>
-          </div>
+          <PhoneOnly title={t("settings-connectors.gmail_title")} body={t("settings-connectors.gmail_body")} />
+        ) : f.kind === "outlook" ? (
+          <>
+            <PhoneOnly title={t("settings-connectors.outlook_title")} body={t("settings-connectors.outlook_body")} />
+            <OutlookClient />
+          </>
         ) : (
           <form
             className="flex flex-col gap-3"
@@ -277,6 +274,127 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
         )}
       </div>
     </Dialog>
+  );
+}
+
+/** Gmail's and Outlook's note in 添加邮箱: they sign in on the provider's page, which returns to the phone app. */
+function PhoneOnly({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex gap-3 rounded-[10px] bg-inset px-3.5 py-3 shadow-hairline">
+      <Icon name="info" size={15} className="mt-0.5 shrink-0 text-ink-3" />
+      <div className="text-[12.5px] leading-relaxed text-ink-2">
+        <p className="font-medium text-ink">{title}</p>
+        <p className="mt-1">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+const OUTLOOK_STEPS = [1, 2, 3, 4, 5, 6].map((n) => `settings-connectors.outlook_step${n}`);
+
+/**
+ * Outlook's client ID (iOS OutlookSignInSection's registration): the app registered in Microsoft Entra that this hub
+ * signs in with. Once the hub has one this says so (and where it came from) with 更换; else the steps, the callback to
+ * register and the field. The sign-in itself stays on the phone.
+ */
+export function OutlookClient() {
+  const [config, setConfig] = useState<MicrosoftConfig | null>(null);
+  const [failed, setFailed] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [id, setId] = useState("");
+  const [tried, setTried] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api<MicrosoftConfig>("/mail/oauth/microsoft/config").then(setConfig, (e) => setFailed(errorText(e)));
+  }, []);
+
+  const problem = tried ? clientIDError(id) : "";
+  const save = async () => {
+    setTried(true);
+    if (clientIDError(id)) return;
+    setBusy(true);
+    setError("");
+    try {
+      const c = await api<MicrosoftConfig>("/mail/oauth/microsoft/config", { method: "PUT", json: { client_id: id.trim() } });
+      setConfig(c);
+      setEditing(false);
+      toast(t("settings-connectors.client_id_saved"), "ok");
+    } catch (e) {
+      setError(t("settings-connectors.client_id_save_failed", { error: errorText(e) }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (failed) return <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">{t("settings-connectors.outlook_config_failed", { error: failed })}</p>;
+  if (!config) return <div className="flex justify-center py-2"><Spinner /></div>;
+  if (config.configured && !editing) {
+    const source = config.source === "config" ? t("settings-connectors.outlook_source_config") : config.source === "app" ? t("settings-connectors.outlook_source_app") : "";
+    return (
+      <div className="flex items-center gap-3 rounded-[10px] bg-inset px-3.5 py-2.5 shadow-hairline">
+        <Icon name="check" size={14} stroke={2.4} className="shrink-0 text-green" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[12.5px] leading-snug text-ink">{t("settings-connectors.outlook_ready")}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-ink-3" title={config.client_id}>
+            {config.client_id}
+          </p>
+          {source && <p className="mt-0.5 truncate text-[11px] text-ink-3">{source}</p>}
+        </div>
+        <Button tone="quiet" onClick={() => (setId(config.client_id ?? ""), setTried(false), setError(""), setEditing(true))}>
+          {t("settings-connectors.outlook_change")}
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="flex flex-col gap-3 rounded-[10px] bg-inset p-3 shadow-hairline"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <div>
+        <p className="text-[12px] font-medium text-ink-2">{t("settings-connectors.outlook_register_title")}</p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">{t("settings-connectors.outlook_register_intro")}</p>
+        <ol className="mt-1 list-decimal pl-5 text-[11.5px] leading-relaxed text-ink-3">
+          {OUTLOOK_STEPS.map((k) => <li key={k}>{t(k)}</li>)}
+        </ol>
+      </div>
+      <div className="min-w-0">
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-connectors.redirect_uri")}</span>
+        <div className="flex items-center gap-1">
+          <code className="h-9 min-w-0 flex-1 truncate rounded-control bg-field px-3 font-mono text-[12.5px] leading-9 text-ink shadow-inset-field select-all">{config.redirect_uri}</code>
+          <IconButton icon="copy" label={t("settings-connectors.copy_redirect")} onClick={() => void copyText(config.redirect_uri)} />
+        </div>
+      </div>
+      <label className="block min-w-0">
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-connectors.client_id")}</span>
+        <input
+          value={id}
+          onChange={(e) => setId(e.target.value)}
+          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+          autoComplete="off"
+          spellCheck={false}
+          disabled={busy}
+          aria-invalid={!!problem}
+          className={cx(fieldClass, "font-mono", problem ? "shadow-[inset_0_0_0_1px_var(--red)]" : "shadow-inset-field")}
+        />
+        {problem && <span className="mt-1 block text-[11px] text-red">{problem}</span>}
+      </label>
+      {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">{error}</p>}
+      <div className="flex justify-end gap-2">
+        {config.configured && (
+          <Button tone="quiet" disabled={busy} onClick={() => setEditing(false)}>
+            {t("settings-connectors.outlook_change_cancel")}
+          </Button>
+        )}
+        <Button tone="primary" type="submit" busy={busy}>
+          {t("settings-connectors.save_client_id")}
+        </Button>
+      </div>
+    </form>
   );
 }
 

@@ -157,10 +157,12 @@ function samePath(pattern: string, path: string, home?: string): boolean {
 
 // ── 连接器 › 邮箱 › 添加 ──
 
-export type MailKind = "gmail" | "feishu" | "imap";
+export type MailKind = "gmail" | "outlook" | "feishu" | "imap";
 
+/** The kinds, in the phone's order (iOS MailAccountForm.Kind). Gmail and Outlook sign in with Google / Microsoft. */
 export const MAIL_KINDS: { k: MailKind; label: string }[] = [
   { k: "gmail", label: "Gmail" },
+  { k: "outlook", label: "Outlook" },
   { k: "feishu", label: t("lib-agent-settings.mail_kind_feishu") },
   { k: "imap", label: t("lib-agent-settings.mail_kind_imap") },
 ];
@@ -198,10 +200,17 @@ const port = (p: string) => {
   return Number.isInteger(n) && n > 0 && n < 65536 ? n : undefined;
 };
 
-/** What is wrong with the form, field by field (empty = can be sent). Gmail is never sent from here. */
+/** Gmail and Outlook sign in on a provider's page that calls back into the phone app (a custom scheme the browser can't
+ *  catch), so they are added on the phone; the web only sets Outlook's client ID up. */
+export function signsInOnPhone(k: MailKind): k is "gmail" | "outlook" {
+  return k === "gmail" || k === "outlook";
+}
+
+/** What is wrong with the form, field by field (empty = can be sent). Gmail and Outlook are never sent from here. */
 export function mailErrors(f: MailForm): Partial<Record<keyof MailForm, string>> {
   const e: Partial<Record<keyof MailForm, string>> = {};
   if (f.kind === "gmail") return { kind: t("lib-agent-settings.mail_gmail_phone_only") };
+  if (f.kind === "outlook") return { kind: t("lib-agent-settings.mail_outlook_phone_only") };
   if (!f.email.trim()) e.email = t("lib-agent-settings.mail_email_empty");
   else if (!EMAIL.test(f.email.trim())) e.email = t("lib-agent-settings.mail_email_invalid");
   if (!f.password) e.password = f.kind === "feishu" ? t("lib-agent-settings.mail_password_feishu") : t("lib-agent-settings.mail_password_empty");
@@ -212,10 +221,10 @@ export function mailErrors(f: MailForm): Partial<Record<keyof MailForm, string>>
   return e;
 }
 
-/** The request for a password account; null for Gmail (Google sign-in, on the phone). Servers left empty are guessed
+/** The request for a password account; null for Gmail and Outlook (Google / Microsoft sign-in, on the phone). Servers left empty are guessed
  * by the hub from the domain; 飞书's are fixed by the hub. SMTP on 587 is STARTTLS, anything else TLS. */
 export function mailRequest(f: MailForm): AddMailAccount | null {
-  if (f.kind === "gmail") return null;
+  if (signsInOnPhone(f.kind)) return null;
   const email = f.email.trim();
   const req: AddMailAccount = { name: email, email, provider: f.kind, auth: "password", password: f.password };
   if (f.kind === "imap") {
@@ -246,9 +255,35 @@ export interface MailAccount {
 /** The line under an account's address: its error, how it signs in, or its server. */
 export function mailAccountLine(a: MailAccount): string {
   if (a.status === "error") return a.error || t("lib-agent-settings.mail_unreachable");
-  if (a.auth === "oauth2") return t("lib-agent-settings.mail_line_gmail");
+  if (a.auth === "oauth2") return a.provider === "outlook" ? t("lib-agent-settings.mail_line_outlook") : t("lib-agent-settings.mail_line_gmail");
   if (a.provider === "feishu") return t("lib-agent-settings.mail_line_feishu");
   return a.imap_host ? `IMAP · ${a.imap_host}` : "IMAP";
+}
+
+/** The badge after an account's address: its provider's name for the ones signed in with a provider (iOS MailProviderMark). */
+export function mailProviderBadge(a: MailAccount): string | null {
+  if (a.provider === "gmail") return "Gmail";
+  if (a.provider === "outlook") return "Outlook";
+  if (a.provider === "feishu") return t("lib-agent-settings.mail_kind_feishu");
+  return null;
+}
+
+/** GET / PUT /api/v1/mail/oauth/microsoft/config (docs/mail.md「Outlook 接入方式」): whether Outlook sign-in can start,
+ *  with which client ID (not a secret) from where (app | config), and the redirect URI to register in Microsoft Entra. */
+export interface MicrosoftConfig {
+  configured: boolean;
+  client_id?: string;
+  source?: string;
+  redirect_uri: string;
+}
+
+const CLIENT_ID = /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/;
+
+/** What is wrong with a typed client ID ("" = fine), the same rule as the hub's. */
+export function clientIDError(id: string): string {
+  const v = id.trim();
+  if (!v) return t("lib-agent-settings.mail_client_id_empty");
+  return CLIENT_ID.test(v) ? "" : t("lib-agent-settings.mail_client_id_invalid");
 }
 
 /** 连接器's summary of the accounts: "2 个账户", "2 个 · 有错误", "未添加". */

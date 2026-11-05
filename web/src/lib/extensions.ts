@@ -38,6 +38,41 @@ export interface HubExtension {
   upgrade_note?: ExtensionUpgradeNote;
   /** An extension with a program on computers: how that program is on each machine it is switched on for. */
   nodes?: ExtensionNodeState[];
+  /** An installed extension's sandbox and its connections through the hub's egress proxy (hub extension_sandbox.go). */
+  sandbox?: ExtensionSandbox;
+}
+
+/** Whether an installed extension runs isolated, and what it reached through the egress proxy (Android ExtensionSandbox). */
+export interface ExtensionSandbox {
+  /** It runs in a sandbox, or would: `active` says whether the sandbox is in effect on the hub's machine, `why` why not. */
+  enabled: boolean;
+  default?: boolean;
+  chosen?: boolean;
+  active: boolean;
+  why?: string;
+  trusted?: boolean;
+  egress?: { allowed: number; denied: number; last_denied?: string; denied_at?: string };
+}
+
+/** The sandbox's state in words: in effect, asked for but not in effect, or off (Android ExtensionModelText.sandbox). */
+export function sandboxState(s: ExtensionSandbox): string {
+  if (s.active) return t("lib-extensions.sandbox_active");
+  return t(s.enabled ? "lib-extensions.sandbox_inactive" : "lib-extensions.sandbox_off");
+}
+
+/** What it reached through the egress proxy: 「经出网代理：N 次放行 · M 次拒绝」, null without counts. */
+export function sandboxEgress(s: ExtensionSandbox): string | null {
+  const e = s.egress;
+  if (!e) return null;
+  return t("lib-extensions.sandbox_egress", {
+    allowed: t("lib-extensions.sandbox_allowed", { count: e.allowed ?? 0 }),
+    denied: t("lib-extensions.sandbox_denied", { count: e.denied ?? 0 }),
+  });
+}
+
+/** The channel an extension contributes (its first `channel` id), whose page is where it is bound. */
+export function channelOf(p: Pick<HubExtension, "contributes">): string | null {
+  return p.contributes?.channel?.find((id) => id.trim() !== "") ?? null;
 }
 
 /** An extension's program on one machine (docs/extensions.md「在电脑上运行的程序」). */

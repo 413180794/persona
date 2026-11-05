@@ -13,6 +13,7 @@ import {
   badgeCount, bulkMessage, bulkScope, bulkScopeName, canDraft, cardText, connectorReference, connectorSources, contextXML, openTitle, openURL, sourceLine, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
   interactionMuted, interactionTitle, itemPath, kindLabel, labelIsUrgent, mailAccounts, mergeMessages, momentText, nextLarkPosition, partRuns, reloadInbox,
   replyLarkMessage, resetInboxForTests, sections, sendLarkMessage, sendReply, setAllDone, setDocStatus, setDone, shortTime, triage, triageBanner, TRIAGE_REASONS, TRIAGE_SETTINGS,
+  listInboxMutes, muteCovers, muteItem, muteLine, muteShortName, muteTitle, unmuteInbox,
   unsentReplies, waitingAgents, withToken, type InboxFilter, type InboxItem, type InboxTriage, type LarkMessage,
 } from "./inbox";
 import { toast } from "../ui/atoms";
@@ -368,6 +369,81 @@ describe("列表状态", () => {
     expect(JSON.parse(init.body)).toEqual({ done: true });
   });
 
+  it("静音：它和同一来源里覆盖到的打开条目先收进已处理，失败恢复", async () => {
+    const sender = { tag: "sender", value: "u1", name: "示例甲" };
+    const a = item("lark:f9:1", { mutes: [sender] });
+    const b = item("lark:f8:1", { mutes: [sender, { tag: "chat", value: "f8", name: "群" }] });
+    const other = item("github:x", { source: "github", mutes: [sender] });
+    fetcher.mockReset().mockResolvedValueOnce(ok({ items: [a, b, other] }));
+    await reloadInbox();
+    let finish: (v: unknown) => void = () => {};
+    fetcher.mockReturnValueOnce(new Promise((r) => (finish = r)));
+    const p = muteItem(a, sender);
+    const [na, nb, no] = getInbox().items;
+    expect(na.done_at && nb.done_at).toBeTruthy();
+    expect(na.reason).toBe("已静音：示例甲");
+    expect(no.done_at).toBeUndefined(); // another source
+    finish(fail(503, "assistant_offline"));
+    await p;
+    expect(getInbox().items.every((x) => !x.done_at)).toBe(true);
+    expect(toast).toHaveBeenLastCalledWith(expect.stringContaining("没静音成"), "error");
+    const [url, init] = fetcher.mock.calls[1];
+    expect(url).toBe("/api/v1/inbox/mutes");
+    expect(JSON.parse(init.body)).toEqual({ item_id: a.id, tag: "sender" });
+
+    fetcher.mockResolvedValueOnce(ok({ mute: { id: "m1", source: "lark", ...sender }, settled: 2 }));
+    await muteItem(a, sender);
+    expect(toast).toHaveBeenLastCalledWith("已静音「示例甲」，以后不再进收件箱", "ok");
+    expect(getInbox().items[0].done_by).toBe("read");
+  });
+
+  it("静音失败只恢复它覆盖到的条目：请求中途重新拉到的新条目还在", async () => {
+    const sender = { tag: "sender", value: "u1", name: "示例甲" };
+    const a = item("lark:f9:1", { mutes: [sender] });
+    const b = item("lark:f8:1", { mutes: [sender] });
+    const fresh = item("lark:f7:1", {});
+    fetcher.mockReset().mockResolvedValueOnce(ok({ items: [a, b] }));
+    await reloadInbox();
+    let finish: (v: unknown) => void = () => {};
+    fetcher.mockReturnValueOnce(new Promise((r) => (finish = r)));
+    const p = muteItem(a, sender);
+    // An inbox event reloads while the POST is in flight: the hub already moved b, and a new item came in.
+    fetcher.mockResolvedValueOnce(ok({ items: [{ ...a, done_at: at(0), done_by: "read" }, { ...b, done_at: at(0), done_by: "read" }, fresh] }));
+    await reloadInbox();
+    finish(fail(503, "assistant_offline"));
+    await p;
+    const list = getInbox().items;
+    expect(ids(list)).toEqual([a.id, b.id, fresh.id]);
+    expect(list[0].done_at).toBeUndefined();
+    expect(list[2].done_at).toBeUndefined();
+  });
+
+  it("已静音：同一秒里带小数的按时间排，不按字符串", async () => {
+    fetcher.mockResolvedValueOnce(ok({ mutes: [
+      { id: "s0", source: "mail", tag: "sender", value: "a", name: "a", created_at: "2026-11-05T01:02:05Z" },
+      { id: "s123", source: "mail", tag: "sender", value: "c", name: "c", created_at: "2026-11-05T01:02:05.123Z" },
+      { id: "s1", source: "mail", tag: "sender", value: "b", name: "b", created_at: "2026-11-05T01:02:05.1Z" },
+      { id: "none", source: "mail", tag: "sender", value: "d", name: "d" },
+    ] }));
+    expect(ids(await listInboxMutes())).toEqual(["s123", "s1", "s0", "none"]);
+  });
+
+  it("已静音：新的在前；取消静音按 id 删", async () => {
+    fetcher.mockResolvedValueOnce(ok({ mutes: [
+      { id: "old", source: "github", source_name: "GitHub", tag: "repo", value: "o/r", name: "o/r", created_at: at(60) },
+      { id: "new", source: "mail", tag: "sender", value: "a@example.com", name: "a@example.com", created_at: at(1) },
+    ] }));
+    const list = await listInboxMutes();
+    expect(ids(list)).toEqual(["new", "old"]);
+    expect(muteLine(list[1])).toBe("GitHub · 仓库");
+    expect(muteLine(list[0])).toBe("mail · 发件人");
+    fetcher.mockResolvedValueOnce(ok({}));
+    await unmuteInbox("a/b");
+    const [url, init] = fetcher.mock.calls[2];
+    expect(url).toBe("/api/v1/inbox/mutes/a%2Fb");
+    expect(init.method).toBe("DELETE");
+  });
+
   it("全部标为已处理：一次请求带版本；有新消息的留着；撤销移回；失败全部恢复", async () => {
     const versioned = [{ ...dm, version: "v1" }, { ...doc, version: "v2" }, { ...mail, version: "v3" }];
     fetcher.mockReset().mockResolvedValueOnce(ok({ items: versioned }));
@@ -530,5 +606,23 @@ describe("等分拣的横幅（#1773）", () => {
   });
   it("去配置打开信息筛选的模型配置", () => {
     expect(TRIAGE_SETTINGS).toBe("/settings?tab=model-config&purpose=inbox.triage");
+  });
+});
+
+describe("静音的文字", () => {
+  it("菜单的字和下面的名字", () => {
+    expect(muteTitle({ tag: "repo" })).toBe("静音这个仓库");
+    expect(muteTitle({ tag: "chat" })).toBe("静音这个会话");
+    expect(muteTitle({ tag: "sender" })).toBe("静音这个发件人");
+    expect(muteShortName({ tag: "repo", value: "o/example-repo", name: "o/example-repo" })).toBe("example-repo");
+    expect(muteShortName({ tag: "chat", value: "f1", name: "a/b 群" })).toBe("a/b 群");
+  });
+
+  it("只覆盖同一来源里还开着、带这一项的", () => {
+    const o = { tag: "chat", value: "f1", name: "群" };
+    expect(muteCovers("lark", o, item("a", { mutes: [o] }))).toBe(true);
+    expect(muteCovers("lark", o, item("b", { mutes: [o], done_at: at(1) }))).toBe(false);
+    expect(muteCovers("lark", o, item("c", { mutes: [{ ...o, value: "f2" }] }))).toBe(false);
+    expect(muteCovers("github", o, item("d", { mutes: [o] }))).toBe(false);
   });
 });

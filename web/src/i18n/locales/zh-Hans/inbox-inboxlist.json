@@ -28,8 +28,17 @@
   "move_back_title": "移回收件箱",
   "mark_done_title": "标为已处理",
   "move_back": "移回",
+  "muted_list": "已静音",
+  "muted_empty_title": "没有静音的",
+  "muted_empty_hint": "在收件箱里右键一条，或在它的页面点「静音」，可以静音它的仓库、会话或发件人。",
+  "unmute": "取消静音",
+  "unmuted": "已取消静音「{name}」，以后的会进收件箱",
+  "unmute_failed": "没取消成：{error}",
+  "mutes_load_failed": "读不到静音的：{error}",
+  "retry": "重试",
+  "close": "完成",
+  "muted_note": "取消后以后的才会进来，已经收掉的不回来。",
   "failed_title": "收件箱没能加载",
   "failed_hint": "检查连接后再试一次。",
-  "retry": "重试",
   "retrying": "正在重试…"
 }

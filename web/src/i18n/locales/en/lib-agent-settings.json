@@ -38,5 +38,9 @@
   "mail_with_error_one": "{count} · has errors",
   "mail_with_error_other": "{count} · has errors",
   "mail_accounts_one": "{count} account",
-  "mail_accounts_other": "{count} accounts"
+  "mail_accounts_other": "{count} accounts",
+  "mail_outlook_phone_only": "Outlook signs in with a Microsoft account and can only be added on your phone",
+  "mail_line_outlook": "Outlook · Microsoft sign-in",
+  "mail_client_id_empty": "Enter your Entra app's Application (client) ID",
+  "mail_client_id_invalid": "That doesn't look like a client ID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
 }

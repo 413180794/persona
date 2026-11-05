@@ -67,5 +67,11 @@
   "count_other": "{count}個",
   "count_one": "{count}個",
   "count_attention_other": "{count}個 · 要対応{attention}個",
-  "count_attention_one": "{count}個 · 要対応{attention}個"
+  "count_attention_one": "{count}個 · 要対応{attention}個",
+  "sandbox_active": "サンドボックス有効",
+  "sandbox_inactive": "サンドボックスを要求済みですが、現在は無効です",
+  "sandbox_off": "サンドボックス未使用",
+  "sandbox_egress": "外部通信プロキシ経由：{allowed}・{denied}",
+  "sandbox_allowed_other": "許可{count}回",
+  "sandbox_denied_other": "拒否{count}回"
 }
