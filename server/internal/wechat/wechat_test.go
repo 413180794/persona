@@ -194,12 +194,6 @@ func (c *clock) now() time.Time {
 	return c.t
 }
 
-func (c *clock) add(d time.Duration) {
-	c.mu.Lock()
-	c.t = c.t.Add(d)
-	c.mu.Unlock()
-}
-
 type rig struct {
 	t       *testing.T
 	ilink   *fakeILink

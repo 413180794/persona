@@ -24,8 +24,7 @@ func TestContributionSwitches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := r.Install(ctx, pv.ID, pv.Digest, "cli")
-	if err != nil {
+	if _, err := r.Install(ctx, pv.ID, pv.Digest, "cli"); err != nil {
 		t.Fatal(err)
 	}
 	*changes = nil
@@ -42,7 +41,7 @@ func TestContributionSwitches(t *testing.T) {
 	if err := r.SetContribution(ctx, "example-notes", "ui", "usage", false, "device:x"); err != nil {
 		t.Fatal(err)
 	}
-	p = r.Get("example-notes")
+	p := r.Get("example-notes")
 	if ids := p.Manifest.Items("providers"); !slices.Equal(ids, []string{"notes-api"}) {
 		t.Fatal("what takes effect:", ids)
 	}

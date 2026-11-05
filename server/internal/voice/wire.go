@@ -57,14 +57,13 @@ const (
 )
 
 type event struct {
-	kind              evKind
-	text              string
-	replace, final    bool
-	audio             []byte
-	id, callID, name  string
-	args, code        string
-	rate              int
-	beforeStartIsFail bool
+	kind             evKind
+	text             string
+	replace, final   bool
+	audio            []byte
+	id, callID, name string
+	args, code       string
+	rate             int
 }
 
 func newWire(dialect string) wire {

@@ -491,15 +491,6 @@ func inboxCall(t *testing.T, h http.Handler, method, path, body string, role ...
 	return w.Code, out
 }
 
-// waitTriage waits for the inbox's background passes (triage, admission, the AI 分身, translation) to be done.
-func (h *inboxHub) waitTriage() {
-	b := &h.inbox
-	for _, mu := range []*sync.Mutex{&b.admitting, &b.triaging, &b.handing, &b.translating} {
-		mu.Lock()
-		mu.Unlock() //nolint:staticcheck // waiting for a pass, not guarding anything
-	}
-}
-
 // rawJSON is v as JSON.
 func rawJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)

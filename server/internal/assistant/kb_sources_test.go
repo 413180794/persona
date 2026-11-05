@@ -17,7 +17,6 @@ import (
 // archiveFake hands out one batch per cursor step and records the cursors it was given.
 type archiveFake struct {
 	cursors []string
-	fail    bool
 }
 
 func (f *archiveFake) Changes(_ context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {

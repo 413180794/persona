@@ -145,12 +145,6 @@ func (b *Bot) saveLocked(ctx context.Context) {
 	}
 }
 
-func (b *Bot) save(ctx context.Context) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.saveLocked(ctx)
-}
-
 func (b *Bot) kick() {
 	select {
 	case b.wake <- struct{}{}:
