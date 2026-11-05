@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.api.ExtensionTheme
 import persona.core.designsystem.*
 
@@ -22,10 +23,10 @@ internal fun ExtensionThemeOptions() {
 
 @Composable
 internal fun ExtensionThemeChoices(themes: List<ExtensionTheme>, selected: ExtensionTheme?, onChoose: (ExtensionTheme?) -> Unit) {
-    JSectionHeader("主题色")
+    JSectionHeader(stringResource(R.string.settings_ext_themes))
     Column {
         JGroupItem(GroupPosition.of(0, themes.size + 1)) {
-            JRow("默认", onClick = { onChoose(null) }, trailing = { JRadio(selected == null, null) })
+            JRow(stringResource(R.string.settings_ext_theme_default), onClick = { onChoose(null) }, trailing = { JRadio(selected == null, null) })
         }
         themes.forEachIndexed { index, theme ->
             JGroupItem(GroupPosition.of(index + 1, themes.size + 1)) {
@@ -34,6 +35,7 @@ internal fun ExtensionThemeChoices(themes: List<ExtensionTheme>, selected: Exten
             }
         }
     }
-    SettingsCaption("只在你选中后更换角色色，界面风格不变；扩展停用或贡献关闭后回到默认。",
+    SettingsCaption(stringResource(R.string.settings_ext_theme_note),
+
         Modifier.padding(vertical = Tokens.Space.s))
 }

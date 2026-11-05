@@ -1,5 +1,9 @@
 package persona.feature.settings
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.api.ExtensionUi
 import persona.core.contracts.api.ExtensionUiContext
 import persona.core.contracts.api.ExtensionUiNotFound
@@ -187,10 +191,10 @@ internal object ExtensionViewText {
     fun percent(item: ExtensionViewItem): String = "${Math.round(ratio(item) * 100)}%"
 
     /** A confirm dialog's title: what is about to happen. */
-    fun confirmTitle(item: ExtensionViewItem): String = item.title?.takeIf { it.isNotBlank() } ?: "确认"
+    fun confirmTitle(res: Resources, item: ExtensionViewItem): String = item.title?.takeIf { it.isNotBlank() } ?: res.getString(R.string.settings_ext_confirm_title)
 
     /** Its button: the pressed button's own words, so 停用 reads 停用. */
-    fun confirmLabel(item: ExtensionViewItem): String = item.title?.takeIf { it.isNotBlank() && it.length <= 8 } ?: "确定"
+    fun confirmLabel(res: Resources, item: ExtensionViewItem): String = item.title?.takeIf { it.isNotBlank() && it.length <= 8 } ?: res.getString(R.string.settings_ext_confirm_ok)
 
     /** A gateway's host for a line of text (`https://gw.example.com/v1` → `gw.example.com`). */
     fun host(url: String?): String? = url?.takeIf { it.isNotBlank() }?.let {
@@ -209,7 +213,7 @@ internal data class ExtensionViewState(
     /** The action on its way (its id): its button spins, the others wait. */
     val acting: String? = null,
     /** Reading the view failed: the page shows it with 重试. */
-    val error: String? = null,
+    val error: ExtensionFailure? = null,
     /** Why reading it last failed (an inbox item's page tells a refusal from a breakdown); none once drawn. */
     val failure: Throwable? = null,
     /**
@@ -234,7 +238,7 @@ internal data class ExtensionViewState(
 internal data class ExtensionActionOutcome(
     val toast: String? = null,
     val openUrl: String? = null,
-    val error: String? = null,
+    val error: ExtensionFailure? = null,
     val push: ExtensionViewPush? = null,
     val pop: Boolean = false,
 )
@@ -277,7 +281,7 @@ internal class ExtensionViewModel(
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: ExtensionUiUnsupported) { mutable.update { it.copy(unsupported = true, error = null) } }
         catch (_: ExtensionUiNotFound) { mutable.update { it.copy(unsupported = true, error = null) } }
-        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}", failure = error) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_load_failed, failureReason(error)), failure = error) } }
         finally { mutable.update { it.copy(loading = false, drawnAt = now()) } }
     }
 
@@ -353,7 +357,7 @@ internal class ExtensionViewModel(
             }
             ExtensionActionOutcome(result.toast?.takeIf { it.isNotBlank() }, result.openUrl?.takeIf(opens), push = result.push, pop = result.pop)
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { ExtensionActionOutcome(error = "没有做成：${failureReason(error)}") }
+        catch (error: Exception) { ExtensionActionOutcome(error = ExtensionFailure(R.string.settings_ext_action_failed, failureReason(error))) }
         finally { if (loadingMore != null) mutable.update { it.copy(loadingMore = null) } }
     }
 
@@ -380,7 +384,7 @@ internal class ExtensionViewModel(
             mutable.update { it.copy(unsupported = true) }
             ExtensionActionOutcome()
         } catch (error: Exception) {
-            ExtensionActionOutcome(error = "没有做成：${failureReason(error)}")
+            ExtensionActionOutcome(error = ExtensionFailure(R.string.settings_ext_action_failed, failureReason(error)))
         } finally { mutable.update { it.copy(acting = null) } }
     }
 }
@@ -422,7 +426,7 @@ internal suspend fun ExtensionViewModel.more(index: Int, section: ExtensionViewS
 internal data class ExtensionPlacesState(
     val places: List<ExtensionUiPlace>? = null,
     val loading: Boolean = false,
-    val error: String? = null,
+    val error: ExtensionFailure? = null,
 )
 
 /** Where extensions draw at one placement: a launcher's sections. */
@@ -437,7 +441,18 @@ internal class ExtensionPlacesModel(private val api: ExtensionUi, private val pl
             val places = api.uiPlaces(placement, context?.launcher, context?.machine).filter { it.placement.isEmpty() || it.placement == placement }
             mutable.update { it.copy(places = places, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "扩展的内容读不到：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_content_failed, failureReason(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 }
+
+/**
+ * Why a view could not be read or a button did not work: the sentence (a string with one `%1$s`) and the reason in it,
+ * put into words where it is shown, in the language shown then.
+ */
+data class ExtensionFailure(@param:StringRes val sentence: Int, val reason: String) {
+    fun text(res: Resources): String = res.getString(sentence, reason)
+}
+
+@Composable
+internal fun ExtensionFailure.text(): String = stringResource(sentence, reason)

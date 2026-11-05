@@ -5,10 +5,19 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.*
 
+/** Robolectric for the words: the app's strings in Simplified Chinese (robolectric.properties). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ExtensionModelTest {
+    private val res get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     @Test fun oldDetailsKeepTheirOldBehaviourAndNewOnesReadContributions() {
         val old = ExtensionDetail.decode(JsonCodec.parseToJsonElement("""{"id":"example","contributes":{"ui":["notes"]}}"""))
         assertNull(old.contributions)
@@ -34,15 +43,15 @@ class ExtensionModelTest {
 
     @Test fun notReadyAndUnknownDependenciesNeverReadAsSatisfied() {
         val d = ExtensionDependency("base", name = "基础扩展", version = ">=1.0.0", state = "not_ready")
-        assertEquals("基础扩展 · >=1.0.0 · 依赖未就绪", ExtensionModelText.dependency(d))
-        assertEquals("基础扩展 · >=1.0.0 · 状态未知，重新预览", ExtensionModelText.dependency(d.copy(state = "new-state")))
-        assertEquals("基础扩展 · >=1.0.0 · 已满足", ExtensionModelText.dependency(d.copy(state = "ok")))
+        assertEquals("基础扩展 · >=1.0.0 · 依赖未就绪", ExtensionModelText.dependency(res, d))
+        assertEquals("基础扩展 · >=1.0.0 · 状态未知，重新预览", ExtensionModelText.dependency(res, d.copy(state = "new-state")))
+        assertEquals("基础扩展 · >=1.0.0 · 已满足", ExtensionModelText.dependency(res, d.copy(state = "ok")))
         val preview = ExtensionPreview(depends = listOf(d))
         val guidance = "还有依赖未就绪，暂时不能安装；先完成依赖扩展的设置，确认其依赖也已就绪，再重新预览。"
-        assertEquals(guidance, ExtensionModelText.blockedPreview(preview))
-        assertEquals(guidance, ExtensionModelText.blockedPreview(ExtensionPreview(bundle = listOf(preview))))
+        assertEquals(guidance, ExtensionModelText.blockedPreview(res, preview))
+        assertEquals(guidance, ExtensionModelText.blockedPreview(res, ExtensionPreview(bundle = listOf(preview))))
         assertEquals("还有依赖没有满足，暂时不能安装；先启用所需扩展，或补齐市场后重新预览。",
-            ExtensionModelText.blockedPreview(preview.copy(depends = listOf(d.copy(state = "disabled")))))
+            ExtensionModelText.blockedPreview(res, preview.copy(depends = listOf(d.copy(state = "disabled")))))
     }
 
     @Test fun switchingOneContributionPreservesUnsavedSettingsAndFailureKeepsItsState() = runTest {
@@ -57,7 +66,7 @@ class ExtensionModelTest {
                 return detail.copy(contributions = listOf(detail.contributions!!.single().copy(enabled = enabled)))
             }
         }
-        val model = ExtensionModel(api, "example")
+        val model = ExtensionModel(api, "example", res)
         model.load(); model.edit(listOf("label"), JsonPrimitive("draft"))
         model.setContribution(contribution, false)
         assertEquals(JsonPrimitive("draft"), model.state.value.draft["label"])
@@ -95,7 +104,7 @@ class ExtensionModelTest {
         val api = object : ExtensionApiStub() {
             override suspend fun previewFromMarket(market: String, extension: String) = ExtensionPreview(unresolved = listOf("missing"))
         }
-        val model = CatalogExtensionModel(api, "market", "example")
+        val model = CatalogExtensionModel(api, "market", "example", res)
         assertTrue(model.preview())
         assertNull(model.confirm())
         assertNotNull(model.state.value.preview)

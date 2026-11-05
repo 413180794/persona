@@ -12,7 +12,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -41,45 +44,46 @@ import kotlinx.serialization.json.contentOrNull
 @Composable
 internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit, onExtension: (String) -> Unit, onMarket: (() -> Unit)? = null) {
     if (extensions == null) {
-        JListPage(title = "扩展", onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
+        JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
     }
-    val model = remember(extensions) { ExtensionListModel(extensions) }
+    val res = LocalResources.current
+    val model = remember(extensions, res) { ExtensionListModel(extensions, res) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(model) { model.load() }
     val list = state.extensions
     val detail = LocalDetailKey.current
-    JListPage(title = "扩展", onBack = onBack, refreshing = state.loading && list != null, onRefresh = { scope.launch { model.load() } }) {
+    JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack, refreshing = state.loading && list != null, onRefresh = { scope.launch { model.load() } }) {
         state.error?.let { error ->
             item("error") {
                 JNotice(error, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou,
-                    actionLabel = "重试", onAction = { scope.launch { model.load() } })
+                    actionLabel = stringResource(R.string.settings_ext_retry), onAction = { scope.launch { model.load() } })
             }
         }
         // 扩展市场 only when the hub has markets (docs/extensions.md「扩展市场」): the one way a phone installs an extension.
         if (state.markets && onMarket != null) item("market") {
             JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-                JRow("扩展市场", subtitle = "浏览、安装和升级市场里的扩展", leadingIcon = PhIcons.Cube,
+                JRow(stringResource(R.string.settings_ext_market), subtitle = stringResource(R.string.settings_ext_market_subtitle), leadingIcon = PhIcons.Cube,
                     selected = detail == ExtensionMarketRoute, onClick = onMarket)
             }
         }
         if (list == null && state.loading) item("loading") { JLoading() }
         if (list != null && list.isEmpty()) item("empty") {
-            JEmptyState("没有扩展", "扩展在 hub 所在的机器上用 personad extension install 安装，装好后在这里开关和设置。", icon = PhIcons.PuzzlePiece)
+            JEmptyState(stringResource(R.string.settings_ext_empty_title), stringResource(R.string.settings_ext_empty_text), icon = PhIcons.PuzzlePiece)
         }
         if (!list.isNullOrEmpty()) {
-            item("top") { JSectionHeader("这台 hub 的扩展", count = list.size) }
+            item("top") { JSectionHeader(stringResource(R.string.settings_ext_list_header), count = list.size) }
             itemsIndexed(list, key = { _, it -> "plugin-${it.id}" }) { index, extension ->
                 JGroupItem(GroupPosition.of(index, list.size)) {
-                    JRow(extension.name.ifBlank { extension.id }, subtitle = ExtensionText.state(extension), leadingIcon = PhIcons.PuzzlePiece,
+                    JRow(extension.name.ifBlank { extension.id }, subtitle = ExtensionText.state(res, extension), leadingIcon = PhIcons.PuzzlePiece,
                         trailing = { ExtensionStateMark(extension) }, chevron = true,
                         selected = detail == ExtensionRoute(extension.id), onClick = { onExtension(extension.id) })
                 }
             }
             item("footer") {
-                SettingsCaption(if (state.markets && onMarket != null) "扩展市场里的扩展可以在这里安装、升级和卸载；别的扩展在 hub 所在的机器上（personad extension）装。这里可以开关、改设置、填密钥。"
-                    else "扩展只能在 hub 所在的机器上安装、升级和卸载（personad extension），这里可以开关、改设置、填密钥。",
+                SettingsCaption(stringResource(if (state.markets && onMarket != null) R.string.settings_ext_list_footer_market
+                    else R.string.settings_ext_list_footer),
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
             }
         }
@@ -91,7 +95,7 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
 private fun ExtensionStateMark(extension: HubExtension?) {
     when {
         extension == null -> JStatusDot(Status.Unknown)
-        ExtensionText.isProblem(extension) -> JIcon(PhIcons.WarningCircle, ExtensionText.state(extension), tint = PersonaTheme.palette.danger.dot)
+        ExtensionText.isProblem(extension) -> JIcon(PhIcons.WarningCircle, ExtensionText.state(LocalResources.current, extension), tint = PersonaTheme.palette.danger.dot)
         else -> JStatusDot(ExtensionText.status(extension))
     }
 }
@@ -108,10 +112,11 @@ fun ExtensionPage(
     onChannel: ((String) -> Unit)? = null,
 ) {
     if (extensions == null) {
-        JListPage(title = "扩展", onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
+        JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
     }
-    val model = remember(extensions, extensionId) { ExtensionModel(extensions, extensionId) }
+    val res = LocalResources.current
+    val model = remember(extensions, extensionId, res) { ExtensionModel(extensions, extensionId, res) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
@@ -120,42 +125,42 @@ fun ExtensionPage(
     LaunchedEffect(model) { model.load() }
     val detail = state.detail
     val hasForm = detail != null && !detail.readOnly && detail.form.isNotEmpty()
-    JListPage(title = detail?.extension?.name?.ifBlank { null } ?: "扩展", onBack = onBack, largeTitle = false,
+    JListPage(title = detail?.extension?.name?.ifBlank { null } ?: stringResource(R.string.settings_ext_title), onBack = onBack, largeTitle = false,
         refreshing = state.loading && detail != null, onRefresh = { scope.launch { model.load() } },
         bottomBar = if (!hasForm) null else ({
             Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
-                JButton("保存", { scope.launch { if (model.save()) feedback?.notice("已保存，扩展会重新启动") } }, Modifier.fillMaxWidth(),
+                JButton(stringResource(R.string.settings_ext_save), { scope.launch { if (model.save()) feedback?.notice(res.getString(R.string.settings_ext_saved_restart)) } }, Modifier.fillMaxWidth(),
                     loading = state.saving, enabled = state.canSave)
             }
         })) {
-        header(extensionId, state, onRetry = { scope.launch { model.load() } })
+        header(extensionId, state, res, onRetry = { scope.launch { model.load() } })
         if (detail != null && onChannel != null) channelLink(detail, onChannel)
         if (detail != null) {
             if (detail.readOnly) item("read-only") {
-                JNotice("这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改。", Modifier.padding(top = Tokens.Space.m))
+                JNotice(stringResource(R.string.settings_ext_read_only), Modifier.padding(top = Tokens.Space.m))
             } else {
                 item("enabled") {
                     JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-                        JSwitchRow("启用", detail.extension.enabled ?: true, { on -> scope.launch { model.setEnabled(on) } }, enabled = !state.busy)
+                        JSwitchRow(stringResource(R.string.settings_ext_enabled), detail.extension.enabled ?: true, { on -> scope.launch { model.setEnabled(on) } }, enabled = !state.busy)
                     }
                 }
-                item("enabled-note") { Note("停用后它不再运行，提供的连接器等也一起关掉；设置和密钥留着。") }
+                item("enabled-note") { Note(stringResource(R.string.settings_ext_enabled_note)) }
             }
             if (onPage != null) extensionPages(detail.ui, onPage)
             if (hasForm) form(detail, state, model, onChoose = { field, path -> choosing = field to path })
             if (!detail.readOnly && detail.secrets.isNotEmpty()) secrets(detail, state, onEdit = { editingSecret = it })
-            contributions(detail, state.busy || state.saving) { item, on -> scope.launch { model.setContribution(item, on) } }
+            contributions(detail, state.busy || state.saving, res) { item, on -> scope.launch { model.setContribution(item, on) } }
             sandbox(detail.extension.sandbox)
             permissions(detail)
-            about(detail)
+            about(detail, res)
         }
     }
     choosing?.let { (field, path) ->
         val current = state.value(path)
-        JActionSheet(listOf(JAction(ExtensionText.placeholder(field), checked = current == null, onClick = { model.edit(path, null) })) +
+        JActionSheet(listOf(JAction(ExtensionText.placeholder(res, field), checked = current == null, onClick = { model.edit(path, null) })) +
             field.enum.orEmpty().map { choice ->
                 JAction(choice.label, checked = current == choice.value, onClick = { model.edit(path, choice.value) })
-            }, { choosing = null }, title = ExtensionText.fieldTitle(field))
+            }, { choosing = null }, title = ExtensionText.fieldTitle(res, field))
     }
     editingSecret?.let { secret ->
         ExtensionSecretSheet(secret, busy = state.busy, onDismiss = { editingSecret = null },
@@ -166,18 +171,18 @@ fun ExtensionPage(
 @Composable
 private fun Note(text: String) = SettingsCaption(text, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
 
-private fun LazyListScope.header(id: String, state: ExtensionState, onRetry: () -> Unit) {
+private fun LazyListScope.header(id: String, state: ExtensionState, res: Resources, onRetry: () -> Unit) {
     val extension = state.detail?.extension
     item("header") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) {
-            JRow(extension?.name?.ifBlank { null } ?: id, subtitle = extension?.let(ExtensionText::stateLine) ?: if (state.loading) "正在读取…" else "读不到",
+            JRow(extension?.name?.ifBlank { null } ?: id, subtitle = extension?.let { ExtensionText.stateLine(res, it) } ?: stringResource(if (state.loading) R.string.settings_ext_loading else R.string.settings_ext_unavailable),
                 leadingIcon = PhIcons.PuzzlePiece, trailing = { if (extension == null && state.loading) JSpinner() else ExtensionStateMark(extension) })
         }
     }
     extension?.description?.takeIf { it.isNotBlank() }?.let { item("description") { Note(it) } }
-    extension?.let(ExtensionText::runNote)?.let { item("run-note") { Note(it) } }
+    extension?.let { ExtensionText.runNote(res, it) }?.let { item("run-note") { Note(it) } }
     extension?.needsSetup?.takeIf { it.isNotEmpty() }?.let { needs ->
-        item("needs") { JInlineStatus("还缺：" + needs.joinToString("、"), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Caution) }
+        item("needs") { JInlineStatus(stringResource(R.string.settings_ext_still_needed, needs.joinToString(res.getString(R.string.settings_ext_list_separator))), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Caution) }
     }
     extension?.error?.takeIf { it.isNotBlank() }?.let { error ->
         item("plugin-error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) }
@@ -186,7 +191,7 @@ private fun LazyListScope.header(id: String, state: ExtensionState, onRetry: () 
         item("error") {
             Column(Modifier.padding(top = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                 JInlineStatus(error, tone = InlineTone.Failed)
-                if (extension == null) JButton("重试", onRetry, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, enabled = !state.loading)
+                if (extension == null) JButton(stringResource(R.string.settings_ext_retry), onRetry, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, enabled = !state.loading)
             }
         }
     }
@@ -200,7 +205,7 @@ private fun LazyListScope.channelLink(detail: ExtensionDetail, onChannel: (Strin
     val id = detail.extension.contributes.orEmpty()["channel"]?.firstOrNull { it.isNotBlank() } ?: return
     item("channel-link") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-            JRow("这是一个对话渠道", subtitle = "在 设置 › 渠道 里设置", leadingIcon = PhIcons.ChatsCircle, onClick = { onChannel(id) })
+            JRow(stringResource(R.string.settings_ext_channel_link), subtitle = stringResource(R.string.settings_ext_channel_link_subtitle), leadingIcon = PhIcons.ChatsCircle, onClick = { onChannel(id) })
         }
     }
 }
@@ -208,10 +213,10 @@ private fun LazyListScope.channelLink(detail: ExtensionDetail, onChannel: (Strin
 private fun LazyListScope.form(detail: ExtensionDetail, state: ExtensionState, model: ExtensionModel, onChoose: (ExtensionField, List<String>) -> Unit) {
     val plain = detail.form.filter { it.type != "object" }
     if (plain.isNotEmpty()) {
-        item("form-title") { JSectionHeader("设置") }
+        item("form-title") { JSectionHeader(stringResource(R.string.settings_ext_settings)) }
         plain.forEach { field -> item("field-${field.name}") { ExtensionFieldBlock(field, listOf(field.name), state, model, onChoose) } }
     }
-    item("form-note") { Note("改完点下面的「保存」；保存后扩展会重新启动。留空的项用扩展的默认值。") }
+    item("form-note") { Note(stringResource(R.string.settings_ext_form_note)) }
     detail.form.filter { it.type == "object" }.forEach { group ->
         item("group-${group.name}") { JSectionHeader(group.label) }
         group.fields.orEmpty().forEach { field ->
@@ -227,7 +232,8 @@ private fun LazyListScope.form(detail: ExtensionDetail, state: ExtensionState, m
  */
 @Composable
 private fun ExtensionFieldBlock(field: ExtensionField, path: List<String>, state: ExtensionState, model: ExtensionModel, onChoose: (ExtensionField, List<String>) -> Unit) {
-    val title = ExtensionText.fieldTitle(field)
+    val res = LocalResources.current
+    val title = ExtensionText.fieldTitle(res, field)
     val error = state.fieldError(path)
     val enabled = !state.saving
     val description = field.description?.takeIf { it.isNotBlank() }
@@ -243,7 +249,7 @@ private fun ExtensionFieldBlock(field: ExtensionField, path: List<String>, state
             field.enum != null -> {
                 val current = state.value(path)
                 val label = field.enum.orEmpty().firstOrNull { it.value == current }?.label
-                    ?: (current as? JsonPrimitive)?.contentOrNull ?: ExtensionText.placeholder(field)
+                    ?: (current as? JsonPrimitive)?.contentOrNull ?: ExtensionText.placeholder(res, field)
                 JGroupItem(GroupPosition.Single) {
                     JRow(title, subtitle = description, value = label, enabled = enabled, onClick = { onChoose(field, path) })
                 }
@@ -252,7 +258,7 @@ private fun ExtensionFieldBlock(field: ExtensionField, path: List<String>, state
                 val key = path.joinToString(".")
                 val text = state.numberText[key] ?: (state.value(path) as? JsonPrimitive)?.contentOrNull.orEmpty()
                 JTextField(text, { model.editNumber(path, it, field.type == "integer") }, Modifier.fillMaxWidth(), label = title,
-                    placeholder = ExtensionText.placeholder(field), supportingText = error ?: description, singleLine = true, enabled = enabled,
+                    placeholder = ExtensionText.placeholder(res, field), supportingText = error ?: description, singleLine = true, enabled = enabled,
                     isError = error != null,
                     keyboardOptions = KeyboardOptions(keyboardType = if (field.type == "integer") KeyboardType.Number else KeyboardType.Decimal))
             }
@@ -260,7 +266,7 @@ private fun ExtensionFieldBlock(field: ExtensionField, path: List<String>, state
                 if (field.name == "triage_rules" && path.size == 1) TriageTemplatePicker(enabled) { model.edit(path, JsonPrimitive(it)) }
                 val text = (state.value(path) as? JsonPrimitive)?.contentOrNull.orEmpty()
                 JTextField(text, { model.edit(path, it.takeIf { v -> v.isNotEmpty() }?.let(::JsonPrimitive)) }, Modifier.fillMaxWidth(),
-                    label = title, placeholder = ExtensionText.placeholder(field), supportingText = error ?: description, singleLine = field.name != "triage_rules",
+                    label = title, placeholder = ExtensionText.placeholder(res, field), supportingText = error ?: description, singleLine = field.name != "triage_rules",
                     enabled = enabled, isError = error != null,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None,
                         keyboardType = when (field.format) { "uri" -> KeyboardType.Uri; "email" -> KeyboardType.Email; else -> KeyboardType.Text }))
@@ -312,93 +318,93 @@ private fun ExtensionListField(field: ExtensionField, title: String, path: List<
         items.forEachIndexed { index, item ->
             JGroupItem(GroupPosition.of(index, items.size)) {
                 JRow(item, trailing = {
-                    JIconButton(PhIcons.X, "删除 $item", { store(items.filterIndexed { i, _ -> i != index }) }, enabled = enabled, raised = false)
+                    JIconButton(PhIcons.X, stringResource(R.string.settings_ext_remove_item, item), { store(items.filterIndexed { i, _ -> i != index }) }, enabled = enabled, raised = false)
                 })
             }
         }
     }
-    JTextField(adding, { adding = it }, Modifier.fillMaxWidth(), placeholder = "添加一项", singleLine = true, enabled = enabled,
+    JTextField(adding, { adding = it }, Modifier.fillMaxWidth(), placeholder = stringResource(R.string.settings_ext_add_item), singleLine = true, enabled = enabled,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { add() }),
-        trailing = { JIconButton(PhIcons.Plus, "添加", ::add, enabled = enabled && adding.isNotBlank(), raised = false) })
+        trailing = { JIconButton(PhIcons.Plus, stringResource(R.string.settings_ext_add), ::add, enabled = enabled && adding.isNotBlank(), raised = false) })
 }
 
 private fun LazyListScope.secrets(detail: ExtensionDetail, state: ExtensionState, onEdit: (ExtensionSecret) -> Unit) {
-    item("secrets-title") { JSectionHeader("密钥") }
+    item("secrets-title") { JSectionHeader(stringResource(R.string.settings_ext_secrets)) }
     itemsIndexed(detail.secrets, key = { _, it -> "secret-${it.name}" }) { index, secret ->
         JGroupItem(GroupPosition.of(index, detail.secrets.size)) {
-            JRow(secret.label, leadingIcon = PhIcons.Key, value = ExtensionText.secretState(secret), enabled = !state.busy && !state.saving,
+            JRow(secret.label, leadingIcon = PhIcons.Key, value = ExtensionText.secretState(LocalResources.current, secret), enabled = !state.busy && !state.saving,
                 onClick = { onEdit(secret) })
         }
     }
-    item("secrets-note") { Note("密钥加密存在 hub 上，只交给这个扩展；存好后不再显示，只能换新的或清除。") }
+    item("secrets-note") { Note(stringResource(R.string.settings_ext_secrets_note)) }
 }
 
 private fun LazyListScope.contributions(
-    detail: ExtensionDetail, busy: Boolean,
+    detail: ExtensionDetail, busy: Boolean, res: Resources,
     change: (persona.core.contracts.api.ExtensionContribution, Boolean) -> Unit,
 ) {
     detail.contributions?.takeIf { it.isNotEmpty() }?.let { list ->
-        item("contributes-title") { JSectionHeader("提供") }
+        item("contributes-title") { JSectionHeader(stringResource(R.string.settings_ext_provides)) }
         itemsIndexed(list, key = { _, it -> "point-${it.point}/${it.id}" }) { index, contribution ->
             JGroupItem(GroupPosition.of(index, list.size)) {
                 if (contribution.canDisable && !detail.readOnly) JSwitchRow(
                     contribution.title?.ifBlank { null } ?: contribution.id, contribution.enabled,
-                    { change(contribution, it) }, subtitle = ExtensionText.point(contribution.point), enabled = !busy,
+                    { change(contribution, it) }, subtitle = ExtensionText.point(res, contribution.point), enabled = !busy,
                 ) else JRow(contribution.title?.ifBlank { null } ?: contribution.id,
-                    subtitle = ExtensionText.point(contribution.point) + when (contribution.via) {
-                        "connector" -> " · 跟随连接器开关，在连接器设置里修改"
-                        "config" -> " · 跟随扩展设置里的开关"
-                        else -> " · 只读"
-                    },
-                    value = if (contribution.enabled) "启用" else "停用")
+                    subtitle = res.getString(when (contribution.via) {
+                        "connector" -> R.string.settings_ext_via_connector
+                        "config" -> R.string.settings_ext_via_config
+                        else -> R.string.settings_ext_via_read_only
+                    }, ExtensionText.point(res, contribution.point)),
+                    value = stringResource(if (contribution.enabled) R.string.settings_ext_enabled else R.string.settings_ext_state_off))
             }
         }
-        item("contributes-note") { Note("关掉一项不会减少扩展的权限；其余贡献照常，修改后扩展会重新启动。") }
+        item("contributes-note") { Note(stringResource(R.string.settings_ext_contributions_note)) }
         return
     }
     val points = detail.extension.contributes.orEmpty().filterValues { it.isNotEmpty() }.toSortedMap().toList()
     if (points.isEmpty()) return
-    item("contributes-title") { JSectionHeader("提供") }
+    item("contributes-title") { JSectionHeader(stringResource(R.string.settings_ext_provides)) }
     itemsIndexed(points, key = { _, it -> "point-${it.first}" }) { index, (point, ids) ->
-        JGroupItem(GroupPosition.of(index, points.size)) { JRow(ExtensionText.point(point), value = ids.joinToString("、")) }
+        JGroupItem(GroupPosition.of(index, points.size)) { JRow(ExtensionText.point(res, point), value = ids.joinToString(res.getString(R.string.settings_ext_list_separator))) }
     }
 }
 
 private fun LazyListScope.permissions(detail: ExtensionDetail) {
     if (detail.permissions.isEmpty()) return
-    item("permissions-title") { JSectionHeader("它可以") }
+    item("permissions-title") { JSectionHeader(stringResource(R.string.settings_ext_it_can)) }
     itemsIndexed(detail.permissions, key = { _, it -> "permission-${it.key}" }) { index, permission ->
         JGroupItem(GroupPosition.of(index, detail.permissions.size)) {
             JRow(permission.title, subtitle = permission.detail?.takeIf { it.isNotBlank() }, subtitleLines = 4)
         }
     }
-    item("permissions-note") { Note("安装时你同意过这些；新版本要得更多时，升级前会再问一次。") }
+    item("permissions-note") { Note(stringResource(R.string.settings_ext_permissions_note)) }
 }
 
-private fun LazyListScope.about(detail: ExtensionDetail) {
+private fun LazyListScope.about(detail: ExtensionDetail, res: Resources) {
     val extension = detail.extension
     val rows = listOfNotNull(
-        extension.version?.takeIf { it.isNotBlank() }?.let { "版本" to it },
-        detail.previousVersion?.takeIf { it.isNotBlank() }?.let { "上一个版本" to it },
-        ExtensionText.source(extension.source)?.let { "来源" to it },
-        detail.publisher?.takeIf { it.isNotBlank() }?.let { "发布者" to it },
+        extension.version?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_ext_about_version) to it },
+        detail.previousVersion?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_ext_about_previous) to it },
+        ExtensionText.source(res, extension.source)?.let { res.getString(R.string.settings_ext_about_source) to it },
+        detail.publisher?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_ext_about_publisher) to it },
     )
     val origin = detail.origin?.takeIf { it.isNotBlank() }
     val homepage = detail.homepage?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
     val count = rows.size + listOfNotNull(origin, homepage).size
     if (count == 0 && extension.warnings.isNullOrEmpty()) return
-    item("about-title") { JSectionHeader("关于") }
+    item("about-title") { JSectionHeader(stringResource(R.string.settings_ext_about)) }
     rows.forEachIndexed { index, (label, value) ->
         item("about-$label") { JGroupItem(GroupPosition.of(index, count)) { JRow(label, value = value) } }
     }
     // Where it was installed from is long (a path or an address): it goes under its label, not beside it.
-    origin?.let { item("about-origin") { JGroupItem(GroupPosition.of(rows.size, count)) { JRow("安装自", subtitle = it, subtitleLines = 3) } } }
+    origin?.let { item("about-origin") { JGroupItem(GroupPosition.of(rows.size, count)) { JRow(stringResource(R.string.settings_ext_about_origin), subtitle = it, subtitleLines = 3) } } }
     homepage?.let { url ->
         item("about-homepage") {
             val uri = LocalUriHandler.current
             JGroupItem(GroupPosition.of(count - 1, count)) {
-                JRow("主页", leadingIcon = PhIcons.ArrowSquareOut, onClick = { runCatching { uri.openUri(url) } })
+                JRow(stringResource(R.string.settings_ext_about_homepage), leadingIcon = PhIcons.ArrowSquareOut, onClick = { runCatching { uri.openUri(url) } })
             }
         }
     }
@@ -417,13 +423,13 @@ private fun ExtensionSecretSheet(
     val scope = rememberCoroutineScope()
     JSheet(onDismiss, title = secret.label, dismissible = !busy) {
         Column(Modifier.padding(vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-            JTextField(value, { value = it }, Modifier.fillMaxWidth(), placeholder = if (secret.set) "输入新的值替换" else "输入", singleLine = true,
+            JTextField(value, { value = it }, Modifier.fillMaxWidth(), placeholder = stringResource(if (secret.set) R.string.settings_ext_secret_replace else R.string.settings_ext_secret_enter), singleLine = true,
                 enabled = !busy, visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-            SettingsCaption(secret.description?.takeIf { it.isNotBlank() } ?: "存在 hub 上，只交给这个扩展。")
-            JButton("保存", { scope.launch { if (save(value)) onDismiss() } }, Modifier.fillMaxWidth(), loading = busy,
+            SettingsCaption(secret.description?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_secret_note))
+            JButton(stringResource(R.string.settings_ext_save), { scope.launch { if (save(value)) onDismiss() } }, Modifier.fillMaxWidth(), loading = busy,
                 enabled = !busy && value.isNotBlank())
-            if (secret.set) JButton("清除", { scope.launch { if (clear()) onDismiss() } }, Modifier.fillMaxWidth(),
+            if (secret.set) JButton(stringResource(R.string.settings_ext_clear), { scope.launch { if (clear()) onDismiss() } }, Modifier.fillMaxWidth(),
                 kind = JButtonKind.Destructive, enabled = !busy)
         }
     }

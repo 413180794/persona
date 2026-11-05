@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -95,7 +96,7 @@ data class ExtensionSlotsState(
     /** The hub has UI slots (`extension_ui_slots`) and the list has been read at least once. */
     val available: Boolean = false,
     val places: List<ExtensionUiPlace> = emptyList(),
-    val error: String? = null,
+    val error: ExtensionFailure? = null,
     /** The pages extensions draw for their connectors' inbox items (`inbox_item`); none on a hub that lists none. */
     val inboxItems: List<ExtensionUiPlace> = emptyList(),
     /** [inboxItems] has been read from this hub; until then an item opened (at launch) may turn out to be an extension's. */
@@ -143,7 +144,7 @@ class ExtensionSlots internal constructor(
             val places = api.uiPlaces("").filter(ExtensionSlotText::known)
             mutable.update { it.copy(available = true, places = places, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "扩展的入口读不到：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_slots_failed, failureReason(error))) } }
         loadInboxItems()
     }
 
@@ -209,7 +210,7 @@ internal fun LazyListScope.extensionSlotItems(
     val pages = state.navPages
     val shown = cards.filter { !it.state.unsupported }
     if (pages.isEmpty() && shown.isEmpty()) return
-    item("slots-title") { JSectionHeader("扩展") }
+    item("slots-title") { JSectionHeader(stringResource(R.string.settings_ext_title)) }
     shown.forEach { card ->
         item("slot-card-${card.place.extension}-${card.place.id}") {
             val opens = ExtensionSlotText.opened(state.places, card.place)
@@ -248,11 +249,11 @@ private fun ExtensionCard(place: ExtensionUiPlace, state: ExtensionViewState, ha
             when {
                 state.view != null -> ExtensionCardContent(state, handle)
                 state.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    JInlineStatus(state.error, Modifier.weight(1f), tone = InlineTone.Failed)
+                    JInlineStatus(state.error.text(), Modifier.weight(1f), tone = InlineTone.Failed)
                     Spacer(Modifier.width(Tokens.Space.s))
-                    JButton("重试", onRetry, kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = !state.loading)
+                    JButton(stringResource(R.string.settings_ext_retry), onRetry, kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = !state.loading)
                 }
-                else -> Text("正在读取…", style = type.caption, color = palette.ink3, maxLines = 1)
+                else -> Text(stringResource(R.string.settings_ext_loading), style = type.caption, color = palette.ink3, maxLines = 1)
             }
         }
     }
@@ -313,10 +314,11 @@ fun rememberMachineExtensionSections(slots: ExtensionSlots?, machineId: String,
             val key = "plugin-${place.extension}-${place.id}"
             item("$key-title") { JSectionHeader(view.view?.title?.takeIf { it.isNotBlank() } ?: place.title.ifBlank { place.id }) }
             if (view.view == null && view.error != null) item("$key-error") {
-                JNotice(view.error, Modifier.padding(top = Tokens.Space.xs), status = Status.NeedsYou, actionLabel = "重试",
+                JNotice(view.error.text(), Modifier.padding(top = Tokens.Space.xs), status = Status.NeedsYou, actionLabel = stringResource(R.string.settings_ext_retry),
                     onAction = { scope.launch { model.load() } })
             } else if (view.error != null) item("$key-error") {
-                JInlineStatus(view.error, Modifier.padding(vertical = Tokens.Space.xs), tone = InlineTone.Failed)
+                JInlineStatus(view.error.text(), Modifier.padding(vertical = Tokens.Space.xs), tone = InlineTone.Failed)
+
             }
             extensionViewItems(key, view, handle, showTitles = true)
         }

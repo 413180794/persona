@@ -1,5 +1,7 @@
 package persona.feature.settings
 
+import androidx.compose.ui.platform.LocalResources
+import android.content.res.Resources
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.*
 import persona.core.contracts.api.ExtensionUiContext
@@ -28,14 +30,14 @@ internal object InboxItemPageText {
      * told; a view with nothing this app draws is quiet. Once a view has been drawn, a failed refresh or button keeps
      * it and says so, as on the extension's other pages; only an extension that then says the item is not its own gives way.
      */
-    fun fallback(state: ExtensionViewState): InboxItemFallback? {
+    fun fallback(res: Resources, state: ExtensionViewState): InboxItemFallback? {
         if (state.unsupported) return InboxItemFallback.Quiet
         val view = state.view
         if (view == null) {
             val failure = state.failure ?: return null
             if (state.loading) return null
             return if (failure is ExtensionUiForbidden) InboxItemFallback.Quiet
-            else InboxItemFallback.Notice("扩展的页面没画出来：${failureReason(failure)}")
+            else InboxItemFallback.Notice(res.getString(R.string.settings_ext_item_page_failed, failureReason(failure)))
         }
         return InboxItemFallback.Quiet.takeIf { view.sections.none { it.items.any(ExtensionViewText::drawable) } }
     }
@@ -71,6 +73,7 @@ fun rememberInboxItemBody(slots: ExtensionSlots?, route: InboxItemUiRoute, revis
         ExtensionViewModel(api, route.extensionId, route.uiId, ExtensionUiContext(item = route.itemId, size = "full"), opens = InboxItemPageText::opens)
     }
     val state by model.state.collectAsState()
+    val res = androidx.compose.ui.platform.LocalResources.current
     val scope = rememberCoroutineScope()
     val source by rememberUpdatedState(onSource)
     val handle = rememberExtensionView(model, appLink = { url -> ExtensionViewText.inboxSource(url)?.let { source(it); true } ?: false })
@@ -81,12 +84,13 @@ fun rememberInboxItemBody(slots: ExtensionSlots?, route: InboxItemUiRoute, revis
         title = state.view?.title?.takeIf { it.isNotBlank() },
         loading = state.view == null && state.failure == null && !state.unsupported,
         refreshing = state.loading && state.view != null,
-        fallback = InboxItemPageText.fallback(state),
+        fallback = InboxItemPageText.fallback(res, state),
         refresh = reload,
     ) {
         // A refresh or a button that failed after the view was drawn: one line above it.
         state.error?.takeIf { state.view != null }?.let { error ->
-            item("item-body-error") { JInlineStatus(error, tone = InlineTone.Failed) }
+            item("item-body-error") { JInlineStatus(error.text(), tone = InlineTone.Failed) }
+
         }
         extensionViewItems("item-body", state, handle)
     }

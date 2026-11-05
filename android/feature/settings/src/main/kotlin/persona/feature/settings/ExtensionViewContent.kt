@@ -1,5 +1,7 @@
 package persona.feature.settings
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +61,7 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     val uri = LocalUriHandler.current
+    val res = LocalResources.current
     val state by model.state.collectAsState()
     var confirming by remember(model) { mutableStateOf<Pair<ExtensionViewItem, ExtensionViewAction>?>(null) }
     var choosing by remember(model) { mutableStateOf<ExtensionViewItem?>(null) }
@@ -68,7 +71,7 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
     val open: (String) -> Unit = { url -> if (!routes(url) && ExtensionViewText.isHttps(url)) runCatching { uri.openUri(url) } }
     fun show(outcome: ExtensionActionOutcome) {
         outcome.toast?.let { feedback?.notice(it) }
-        outcome.error?.let { feedback?.notice(it) }
+        outcome.error?.let { feedback?.notice(it.text(res)) }
         outcome.openUrl?.let(open)
         outcome.push?.let(push)
         if (outcome.pop) pop()
@@ -87,8 +90,8 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
         )
     }
     confirming?.let { (item, action) ->
-        JDialog({ confirming = null }, title = ExtensionViewText.confirmTitle(item), text = action.confirm,
-            confirm = ExtensionViewText.confirmLabel(item) to { confirming = null; run(action) },
+        JDialog({ confirming = null }, title = ExtensionViewText.confirmTitle(res, item), text = action.confirm,
+            confirm = ExtensionViewText.confirmLabel(res, item) to { confirming = null; run(action) },
             destructive = item.role == "destructive")
     }
     choosing?.let { item ->
@@ -166,7 +169,8 @@ internal fun GroupedItem(item: ExtensionViewItem, state: ExtensionViewState, han
             if (item.kind == "toggle") {
                 JSwitchRow(item.label.orEmpty(), value == "true", { on -> handle.edit(name, if (on) "true" else "false") }, enabled = enabled)
             } else {
-                val label = item.choices.orEmpty().firstOrNull { it.value == value }?.label ?: value.ifEmpty { item.placeholder ?: "未选" }
+                val label = item.choices.orEmpty().firstOrNull { it.value == value }?.label ?: value.ifEmpty { item.placeholder ?: stringResource(R.string.settings_ext_not_chosen) }
+
                 JRow(item.label.orEmpty(), value = label, enabled = enabled, onClick = { handle.choose(item) })
             }
         }

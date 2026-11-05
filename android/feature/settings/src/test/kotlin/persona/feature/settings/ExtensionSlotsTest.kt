@@ -12,10 +12,19 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
 // Extensions' UI slots on Android (docs/extensions.md「UI 插槽」): what the settings home, the settings tab's badge and
 // machines' pages get from the hub's list, and the badge events.
+/** Robolectric for the words: the app's strings in Simplified Chinese (robolectric.properties). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ExtensionSlotsTest {
+    private val res get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     private fun nav(id: String, badge: String? = null, icon: String? = "chart") =
         ExtensionUiPlace("example-gateway", id, "用量 $id", "nav_page", icon = icon, badge = badge?.let { ExtensionViewBadge(it, "danger") })
 
@@ -104,7 +113,7 @@ class ExtensionSlotsTest {
         online.value = true
         runCurrent()
         assertEquals(4, api.asked.size)
-        assertEquals("扩展的入口读不到：坏了", slots.state.value.error)
+        assertEquals("扩展的入口读不到：坏了", slots.state.value.error?.text(res))
         assertEquals(1, slots.state.value.navPages.size)
 
         // The hub lost extension_ui_slots (another hub selected, an older one): nothing is drawn.

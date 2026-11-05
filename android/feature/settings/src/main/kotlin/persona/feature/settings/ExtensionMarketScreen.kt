@@ -14,7 +14,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -37,26 +40,27 @@ private const val SearchDelayMillis = 300L
 @Composable
 fun ExtensionMarketPage(extensions: ExtensionManagement?, onBack: () -> Unit, onExtension: (CatalogExtension) -> Unit, onMarkets: () -> Unit) {
     if (extensions == null) {
-        JListPage(title = "扩展市场", onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
+        JListPage(title = stringResource(R.string.settings_ext_market), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
     }
-    val model = remember(extensions) { CatalogModel(extensions) }
+    val res = LocalResources.current
+    val model = remember(extensions, res) { CatalogModel(extensions, res) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     // Typing waits a moment before asking the hub; the market filter asks at once.
     LaunchedEffect(model, state.query) { if (state.catalog != null) delay(SearchDelayMillis); model.load() }
     LaunchedEffect(model, state.market) { if (state.catalog != null) model.load() }
     val catalog = state.catalog
-    JListPage(title = "扩展市场", onBack = onBack, largeTitle = false,
-        actions = { JIconButton(PhIcons.SlidersHorizontal, "管理市场", onMarkets) },
+    JListPage(title = stringResource(R.string.settings_ext_market), onBack = onBack, largeTitle = false,
+        actions = { JIconButton(PhIcons.SlidersHorizontal, stringResource(R.string.settings_ext_manage_markets), onMarkets) },
         refreshing = state.loading && catalog != null, onRefresh = { scope.launch { model.load(refresh = true) } }) {
         item("search") {
-            JSearchField(state.query, model::setQuery, "搜索名字、说明、发布者、标签", Modifier.padding(top = Tokens.Space.s))
+            JSearchField(state.query, model::setQuery, stringResource(R.string.settings_ext_market_search), Modifier.padding(top = Tokens.Space.s))
         }
         if (state.markets.size > 1) item("filter") { MarketFilter(state.markets, state.market, model::setMarket) }
         state.error?.let { error ->
             item("error") {
-                JNotice(error, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = "重试",
+                JNotice(error, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = stringResource(R.string.settings_ext_retry),
                     onAction = { scope.launch { model.load() } })
             }
         }
@@ -64,27 +68,27 @@ fun ExtensionMarketPage(extensions: ExtensionManagement?, onBack: () -> Unit, on
         when {
             catalog == null && state.loading -> item("loading") { JLoading() }
             catalog != null && catalog.markets.isEmpty() -> item("no-markets") {
-                JEmptyState("还没有扩展市场", "扩展市场是一份扩展的清单（一个网站、GitHub 仓库或 git 仓库）。添加一个市场后，就能在这里浏览、安装它提供的扩展。",
-                    icon = PhIcons.Cube, action = { JButton("添加市场", onMarkets, kind = JButtonKind.Secondary, size = JButtonSize.Small) })
+                JEmptyState(stringResource(R.string.settings_ext_no_markets_title), stringResource(R.string.settings_ext_no_markets_text),
+                    icon = PhIcons.Cube, action = { JButton(stringResource(R.string.settings_ext_add_market), onMarkets, kind = JButtonKind.Secondary, size = JButtonSize.Small) })
             }
             catalog != null && catalog.extensions.isEmpty() -> item("empty") {
-                JEmptyState(if (state.query.isBlank()) "这个市场没有扩展" else "没有找到", if (state.query.isBlank()) "市场的清单里还没有扩展。"
-                    else "换个关键词试试；搜索会查名字、说明、发布者和标签。", icon = PhIcons.MagnifyingGlass)
+                JEmptyState(stringResource(if (state.query.isBlank()) R.string.settings_ext_market_empty_title else R.string.settings_ext_market_not_found),
+                    stringResource(if (state.query.isBlank()) R.string.settings_ext_market_empty_text else R.string.settings_ext_market_not_found_text), icon = PhIcons.MagnifyingGlass)
             }
         }
         val list = catalog?.extensions.orEmpty()
         if (list.isNotEmpty()) {
-            item("list-title") { JSectionHeader(if (state.query.isBlank()) "可以安装的扩展" else "搜索结果", count = list.size) }
+            item("list-title") { JSectionHeader(stringResource(if (state.query.isBlank()) R.string.settings_ext_market_list else R.string.settings_ext_market_results), count = list.size) }
             itemsIndexed(list, key = { _, it -> "plugin-${it.market}-${it.id}" }) { index, extension ->
                 JGroupItem(GroupPosition.of(index, list.size)) {
-                    JRow(extension.label, subtitle = catalogSubtitle(extension, showMarket = state.market == null && state.markets.size > 1), subtitleLines = 4,
+                    JRow(extension.label, subtitle = catalogSubtitle(res, extension, showMarket = state.market == null && state.markets.size > 1), subtitleLines = 4,
                         leadingIcon = PhIcons.PuzzlePiece,
-                        trailing = CatalogText.badge(extension)?.let { badge -> { JTag(badge, standingTone(extension)) } },
+                        trailing = CatalogText.badge(res, extension)?.let { badge -> { JTag(badge, standingTone(extension)) } },
                         chevron = true, onClick = { onExtension(extension) })
                 }
             }
             item("footer") {
-                SettingsCaption("装之前会列出它能做什么，你同意了才装。扩展在 hub 所在的机器上运行；安装后的沙箱实际状态在扩展详情里查看。",
+                SettingsCaption(stringResource(R.string.settings_ext_market_footer),
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
             }
         }
@@ -92,11 +96,12 @@ fun ExtensionMarketPage(extensions: ExtensionManagement?, onBack: () -> Unit, on
 }
 
 /** The lines under a catalog extension: its words, how it stands (version, installed, why not), its tags and market. */
-private fun catalogSubtitle(p: CatalogExtension, showMarket: Boolean): String = listOfNotNull(
+private fun catalogSubtitle(res: Resources, p: CatalogExtension, showMarket: Boolean): String = listOfNotNull(
     p.description?.takeIf { it.isNotBlank() },
-    CatalogText.line(p),
+    CatalogText.line(res, p),
     listOfNotNull(p.tags.orEmpty().takeIf { it.isNotEmpty() }?.joinToString(" · ") { "#$it" },
-        p.marketName?.takeIf { showMarket && it.isNotBlank() }).joinToString("　").takeIf { it.isNotBlank() },
+        p.marketName?.takeIf { showMarket && it.isNotBlank() }).joinToString(res.getString(R.string.settings_ext_tags_separator)).takeIf { it.isNotBlank() },
+
 ).joinToString("\n")
 
 internal fun standingTone(p: CatalogExtension): Tone = when (CatalogText.standing(p)) {
@@ -111,7 +116,7 @@ internal fun standingTone(p: CatalogExtension): Tone = when (CatalogText.standin
 private fun MarketFilter(markets: List<ExtensionMarket>, selected: String?, onSelect: (String?) -> Unit) {
     FlowRow(Modifier.padding(top = Tokens.Space.m), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
         verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-        JChip("全部", selected = selected == null, onClick = { onSelect(null) })
+        JChip(stringResource(R.string.settings_ext_market_all), selected = selected == null, onClick = { onSelect(null) })
         markets.forEach { market -> JChip(market.label, selected = selected == market.id, onClick = { onSelect(market.id) }) }
     }
 }
@@ -121,7 +126,7 @@ private fun LazyListScope.marketProblems(markets: List<ExtensionMarket>) {
     markets.forEach { market ->
         market.error?.takeIf { it.isNotBlank() }?.let { error ->
             item("market-error-${market.id}") {
-                JInlineStatus("${market.label}：$error", Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
+                JInlineStatus(stringResource(R.string.settings_ext_labeled, market.label, error), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
             }
         }
     }
@@ -134,10 +139,11 @@ private fun LazyListScope.marketProblems(markets: List<ExtensionMarket>) {
 @Composable
 fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, extensionId: String, onBack: () -> Unit, onInstalled: (String) -> Unit) {
     if (extensions == null) {
-        JListPage(title = "扩展", onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
+        JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
     }
-    val model = remember(extensions, marketId, extensionId) { CatalogExtensionModel(extensions, marketId, extensionId) }
+    val res = LocalResources.current
+    val model = remember(extensions, marketId, extensionId, res) { CatalogExtensionModel(extensions, marketId, extensionId, res) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
@@ -145,15 +151,15 @@ fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, ext
     LaunchedEffect(model) { model.load() }
     val extension = state.extension
     val actions = extension?.let(CatalogText::actions).orEmpty()
-    JListPage(title = extension?.label ?: "扩展", onBack = onBack, largeTitle = false,
+    JListPage(title = extension?.label ?: stringResource(R.string.settings_ext_title), onBack = onBack, largeTitle = false,
         refreshing = state.loading && extension != null, onRefresh = { scope.launch { model.load() } },
         bottomBar = if (actions.isEmpty()) null else ({
             Column(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                if (CatalogAction.Install in actions) JButton("安装", { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
-                    loading = state.previewing, loadingText = "正在下载和检查…", enabled = !state.busy)
-                if (CatalogAction.Upgrade in actions) JButton("升级到 ${extension?.version.orEmpty()}", { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
-                    loading = state.previewing, loadingText = "正在下载和检查…", enabled = !state.busy)
-                if (CatalogAction.Uninstall in actions) JButton("卸载", { removing = true }, Modifier.fillMaxWidth(),
+                if (CatalogAction.Install in actions) JButton(stringResource(R.string.settings_ext_install), { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
+                    loading = state.previewing, loadingText = stringResource(R.string.settings_ext_downloading), enabled = !state.busy)
+                if (CatalogAction.Upgrade in actions) JButton(stringResource(R.string.settings_ext_upgrade_to, extension?.version.orEmpty()), { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
+                    loading = state.previewing, loadingText = stringResource(R.string.settings_ext_downloading), enabled = !state.busy)
+                if (CatalogAction.Uninstall in actions) JButton(stringResource(R.string.settings_ext_uninstall), { removing = true }, Modifier.fillMaxWidth(),
                     kind = JButtonKind.Destructive, size = if (actions.size > 1) JButtonSize.Small else JButtonSize.Large,
                     loading = state.acting && state.preview == null, enabled = !state.busy)
             }
@@ -161,14 +167,14 @@ fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, ext
         when {
             extension == null && state.loading -> item("loading") { JLoading() }
             extension == null && state.error != null -> item("error") {
-                JNotice(state.error!!, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = "重试",
+                JNotice(state.error!!, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = stringResource(R.string.settings_ext_retry),
                     onAction = { scope.launch { model.load() } })
             }
             extension == null && state.missing -> item("missing") {
-                JEmptyState("市场里没有这个扩展了", "市场的清单可能改了，或者这个市场已经删掉。", icon = PhIcons.Cube)
+                JEmptyState(stringResource(R.string.settings_ext_market_missing_title), stringResource(R.string.settings_ext_market_missing_text), icon = PhIcons.Cube)
             }
         }
-        if (extension != null) catalogExtensionBody(extension, state, onOpenInstalled = { onInstalled(extension.id) })
+        if (extension != null) catalogExtensionBody(extension, state, res, onOpenInstalled = { onInstalled(extension.id) })
     }
     state.preview?.let { preview ->
         PreviewSheet(extension, preview, busy = state.acting, onDismiss = model::dismissPreview,
@@ -176,24 +182,24 @@ fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, ext
     }
     if (removing && extension != null) UninstallDialog(extension, onDismiss = { removing = false }) { keep ->
         removing = false
-        scope.launch { if (model.uninstall(keep)) feedback?.notice("已卸载 ${extension.label}") }
+        scope.launch { if (model.uninstall(keep)) feedback?.notice(res.getString(R.string.settings_ext_uninstalled, extension.label)) }
     }
 }
 
-private fun LazyListScope.catalogExtensionBody(extension: CatalogExtension, state: CatalogExtensionState, onOpenInstalled: () -> Unit) {
+private fun LazyListScope.catalogExtensionBody(extension: CatalogExtension, state: CatalogExtensionState, res: Resources, onOpenInstalled: () -> Unit) {
     item("header") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) {
             // Why it cannot be installed is said in red below; the header keeps to the version.
-            val line = if (CatalogText.standing(extension) == CatalogStanding.Unavailable) extension.version else CatalogText.line(extension)
+            val line = if (CatalogText.standing(extension) == CatalogStanding.Unavailable) extension.version else CatalogText.line(res, extension)
             JRow(extension.label, subtitle = line, subtitleLines = 3, leadingIcon = PhIcons.PuzzlePiece,
-                trailing = CatalogText.badge(extension)?.let { badge -> { JTag(badge, standingTone(extension)) } })
+                trailing = CatalogText.badge(res, extension)?.let { badge -> { JTag(badge, standingTone(extension)) } })
         }
     }
     extension.description?.takeIf { it.isNotBlank() }?.let { item("description") { Note(it) } }
     extension.tags.orEmpty().takeIf { it.isNotEmpty() }?.let { tags -> item("tags") { Tags(tags) } }
     state.actionError?.let { error -> item("action-error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }
     state.error?.let { error -> item("error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }
-    CatalogText.noActionReason(extension)?.let { reason ->
+    CatalogText.noActionReason(res, extension)?.let { reason ->
         item("why") {
             JInlineStatus(reason, Modifier.padding(top = Tokens.Space.s),
                 tone = if (CatalogText.standing(extension) == CatalogStanding.Unavailable) InlineTone.Failed else InlineTone.Busy)
@@ -201,25 +207,25 @@ private fun LazyListScope.catalogExtensionBody(extension: CatalogExtension, stat
     }
     if (!extension.installed.isNullOrBlank()) item("installed") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-            JRow("这个扩展的设置", leadingIcon = PhIcons.GearSix, value = "已装 ${extension.installed}", onClick = onOpenInstalled)
+            JRow(stringResource(R.string.settings_ext_its_settings), leadingIcon = PhIcons.GearSix, value = stringResource(R.string.settings_ext_installed_version, extension.installed.orEmpty()), onClick = onOpenInstalled)
         }
     }
-    permissionRows("permissions", "它可以", extension.permissions)
-    item("permissions-note") { Note("安装前会再列一次，你同意了才装；升级时要的权限变多，会单独列出来再问。") }
+    permissionRows("permissions", res.getString(R.string.settings_ext_it_can), extension.permissions)
+    item("permissions-note") { Note(stringResource(R.string.settings_ext_market_permissions_note)) }
     val points = extension.contributes.orEmpty().filterValues { it.isNotEmpty() }.toSortedMap().toList()
     if (points.isNotEmpty()) {
-        item("contributes-title") { JSectionHeader("提供") }
+        item("contributes-title") { JSectionHeader(stringResource(R.string.settings_ext_provides)) }
         itemsIndexed(points, key = { _, it -> "point-${it.first}" }) { index, (point, ids) ->
-            JGroupItem(GroupPosition.of(index, points.size)) { JRow(ExtensionText.point(point), value = ids.joinToString("、")) }
+            JGroupItem(GroupPosition.of(index, points.size)) { JRow(ExtensionText.point(res, point), value = ids.joinToString(res.getString(R.string.settings_ext_list_separator))) }
         }
     }
     val about = listOfNotNull(
-        "版本" to extension.version,
-        state.marketName?.let { "市场" to it },
-        extension.publisher?.takeIf { it.isNotBlank() }?.let { "发布者" to it },
+        res.getString(R.string.settings_ext_about_version) to extension.version,
+        state.marketName?.let { res.getString(R.string.settings_ext_about_market) to it },
+        extension.publisher?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_ext_about_publisher) to it },
     )
     val homepage = extension.homepage?.takeIf { ExtensionViewText.isHttps(it) }
-    item("about-title") { JSectionHeader("关于") }
+    item("about-title") { JSectionHeader(stringResource(R.string.settings_ext_about)) }
     val count = about.size + if (homepage != null) 1 else 0
     about.forEachIndexed { index, (label, value) ->
         item("about-$label") { JGroupItem(GroupPosition.of(index, count)) { JRow(label, value = value) } }
@@ -228,7 +234,7 @@ private fun LazyListScope.catalogExtensionBody(extension: CatalogExtension, stat
         item("about-homepage") {
             val uri = LocalUriHandler.current
             JGroupItem(GroupPosition.of(count - 1, count)) {
-                JRow("主页", leadingIcon = PhIcons.ArrowSquareOut, chevron = false, onClick = { runCatching { uri.openUri(url) } })
+                JRow(stringResource(R.string.settings_ext_about_homepage), leadingIcon = PhIcons.ArrowSquareOut, chevron = false, onClick = { runCatching { uri.openUri(url) } })
             }
         }
     }
@@ -270,22 +276,23 @@ internal fun PreviewSheet(
     val more = CatalogText.asksForMore(preview)
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
-    JSheet(onDismiss, title = if (preview.upgrade) "升级 $name" else "安装 $name", dismissible = !busy, scrollable = true) {
+    JSheet(onDismiss, title = stringResource(if (preview.upgrade) R.string.settings_ext_upgrade_name else R.string.settings_ext_install_name, name), dismissible = !busy, scrollable = true) {
         Column(modifier.padding(vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
             val version = preview.manifest?.version.orEmpty()
-            Text(if (preview.upgrade) "版本 ${preview.from.orEmpty()} → $version" else "版本 $version", style = type.callout, color = palette.ink2)
+            Text(if (preview.upgrade) stringResource(R.string.settings_ext_version_change, preview.from.orEmpty(), version)
+                else stringResource(R.string.settings_ext_version, version), style = type.callout, color = palette.ink2)
             if (more) {
-                JInlineStatus("新版本要的权限变多了", tone = InlineTone.Failed)
-                PermissionList("新增", preview.addedPermissions.orEmpty())
+                JInlineStatus(stringResource(R.string.settings_ext_more_permissions), tone = InlineTone.Failed)
+                PermissionList(stringResource(R.string.settings_ext_added), preview.addedPermissions.orEmpty())
             }
             BundlePreview(preview)
-            PermissionList(if (preview.upgrade) "升级后它可以" else "它可以", preview.permissions)
+            PermissionList(stringResource(if (preview.upgrade) R.string.settings_ext_it_can_after_upgrade else R.string.settings_ext_it_can), preview.permissions)
             preview.warnings.orEmpty().forEach { JInlineStatus(it, tone = InlineTone.Caution) }
-            SettingsCaption("包已经下载并核对过 sha256。扩展在 hub 所在的机器上运行；沙箱是否实际生效以安装后的详情为准。" +
-                (preview.expiresAt?.let(CatalogText::time)?.let { "这次预览到 $it（UTC）失效。" } ?: ""))
-            JButton(CatalogText.confirmLabel(preview), onConfirm, Modifier.fillMaxWidth(),
+            SettingsCaption(stringResource(R.string.settings_ext_preview_note) +
+                (preview.expiresAt?.let(CatalogText::time)?.let { stringResource(R.string.settings_ext_preview_expires, it) } ?: ""))
+            JButton(CatalogText.confirmLabel(LocalResources.current, preview), onConfirm, Modifier.fillMaxWidth(),
                 kind = if (more) JButtonKind.Destructive else JButtonKind.Primary, loading = busy, enabled = !busy && preview.canConfirm)
-            JButton("不装了", onDismiss, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, enabled = !busy)
+            JButton(stringResource(R.string.settings_ext_preview_cancel), onDismiss, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, enabled = !busy)
         }
     }
 }
@@ -309,11 +316,11 @@ internal fun PermissionList(title: String, permissions: List<ExtensionPermission
 @Composable
 private fun UninstallDialog(extension: CatalogExtension, onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
     var keep by remember { mutableStateOf(false) }
-    JDialog(onDismiss, title = "卸载 ${extension.label}？", text = "会停掉它，删掉它的设置和密钥；它提供的连接器也一起去掉。",
-        confirm = "卸载" to { onConfirm(keep) }, destructive = true) {
+    JDialog(onDismiss, title = stringResource(R.string.settings_ext_uninstall_title, extension.label), text = stringResource(R.string.settings_ext_uninstall_text),
+        confirm = stringResource(R.string.settings_ext_uninstall) to { onConfirm(keep) }, destructive = true) {
         Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
             JCheckbox(keep, { keep = it })
-            Text("保留它的数据", Modifier.padding(start = Tokens.Space.s), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
+            Text(stringResource(R.string.settings_ext_keep_data), Modifier.padding(start = Tokens.Space.s), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
         }
     }
 }
@@ -322,10 +329,11 @@ private fun UninstallDialog(extension: CatalogExtension, onDismiss: () -> Unit, 
 @Composable
 fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
     if (extensions == null) {
-        JListPage(title = "管理市场", onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
+        JListPage(title = stringResource(R.string.settings_ext_manage_markets), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
     }
-    val model = remember(extensions) { MarketsModel(extensions) }
+    val res = LocalResources.current
+    val model = remember(extensions, res) { MarketsModel(extensions, res) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
@@ -336,12 +344,12 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
     val uri = LocalUriHandler.current
     LaunchedEffect(model) { model.load() }
     val markets = state.markets
-    JListPage(title = "管理市场", onBack = onBack, largeTitle = false,
-        actions = { JIconButton(PhIcons.Plus, "添加市场", { model.clearAddError(); adding = true }) },
+    JListPage(title = stringResource(R.string.settings_ext_manage_markets), onBack = onBack, largeTitle = false,
+        actions = { JIconButton(PhIcons.Plus, stringResource(R.string.settings_ext_add_market), { model.clearAddError(); adding = true }) },
         refreshing = state.loading && markets != null, onRefresh = { scope.launch { model.load() } }) {
         state.error?.let { error ->
             item("error") {
-                JNotice(error, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = "重试",
+                JNotice(error, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = stringResource(R.string.settings_ext_retry),
                     onAction = { scope.launch { model.load() } })
             }
         }
@@ -349,21 +357,21 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
         when {
             markets == null && state.loading -> item("loading") { JLoading() }
             markets != null && markets.isEmpty() -> item("empty") {
-                JEmptyState("还没有市场", "填一个市场的地址：https://… 的网站、github:owner/repo，或 git:<地址> 的 git 仓库。私有的 GitHub 仓库要一个只读的 token。", icon = PhIcons.Cube,
-                    action = { JButton("添加市场", { model.clearAddError(); adding = true }, kind = JButtonKind.Secondary, size = JButtonSize.Small) })
+                JEmptyState(stringResource(R.string.settings_ext_markets_empty_title), stringResource(R.string.settings_ext_markets_empty_text), icon = PhIcons.Cube,
+                    action = { JButton(stringResource(R.string.settings_ext_add_market), { model.clearAddError(); adding = true }, kind = JButtonKind.Secondary, size = JButtonSize.Small) })
             }
         }
         if (!markets.isNullOrEmpty()) {
-            item("title") { JSectionHeader("这台 hub 读的市场", count = markets.size) }
+            item("title") { JSectionHeader(stringResource(R.string.settings_ext_markets_header), count = markets.size) }
             markets.forEachIndexed { index, market ->
                 item("market-${market.id}") {
                     JGroupItem(GroupPosition.of(index, markets.size)) {
-                        JRow(market.label, subtitle = market.spec + "\n" + CatalogText.marketLine(market), subtitleLines = 3, leadingIcon = PhIcons.Cube,
+                        JRow(market.label, subtitle = market.spec + "\n" + CatalogText.marketLine(res, market), subtitleLines = 3, leadingIcon = PhIcons.Cube,
                             trailing = when {
                                 state.working == market.id -> ({ JSpinner() })
-                                !market.error.isNullOrBlank() -> ({ JIcon(PhIcons.WarningCircle, "读不到", tint = PersonaTheme.palette.danger.dot) })
-                                market.signature?.failed == true -> ({ JIcon(PhIcons.WarningCircle, "签名不对", tint = PersonaTheme.palette.danger.dot) })
-                                market.official -> ({ JTag("官方") })
+                                !market.error.isNullOrBlank() -> ({ JIcon(PhIcons.WarningCircle, stringResource(R.string.settings_ext_unavailable), tint = PersonaTheme.palette.danger.dot) })
+                                market.signature?.failed == true -> ({ JIcon(PhIcons.WarningCircle, stringResource(R.string.settings_ext_market_bad_signature), tint = PersonaTheme.palette.danger.dot) })
+                                market.official -> ({ JTag(stringResource(R.string.settings_ext_market_official)) })
                                 else -> null
                             },
                             chevron = true, enabled = state.working == null, onClick = { acting = market })
@@ -374,54 +382,54 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
             markets.forEach { market ->
                 market.error?.takeIf { it.isNotBlank() }?.let { error ->
                     item("market-error-${market.id}") {
-                        JInlineStatus("${market.label}：$error", Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
+                        JInlineStatus(stringResource(R.string.settings_ext_labeled, market.label, error), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
                     }
                 }
-                CatalogText.signatureProblem(market)?.let { problem ->
+                CatalogText.signatureProblem(res, market)?.let { problem ->
                     item("market-signature-${market.id}") {
-                        JInlineStatus("${market.label}：$problem", Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
+                        JInlineStatus(stringResource(R.string.settings_ext_labeled, market.label, problem), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
                     }
                 }
                 market.warnings.orEmpty().forEachIndexed { w, warning ->
                     item("market-warning-${market.id}-$w") {
-                        JInlineStatus("${market.label}：$warning", Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Caution)
+                        JInlineStatus(stringResource(R.string.settings_ext_labeled, market.label, warning), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Caution)
                     }
                 }
             }
             item("footer") {
-                SettingsCaption("删掉市场后，从它装的扩展留着，只是不能再从这里升级。token 加密存在 hub 上，只发给这个市场，存好后不再显示。",
+                SettingsCaption(stringResource(R.string.settings_ext_markets_footer),
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
             }
         }
     }
     acting?.let { market ->
         JActionSheet(listOfNotNull(
-            JAction("现在重新读取", icon = PhIcons.ArrowClockwise, onClick = {
-                scope.launch { if (model.refresh(market.id)) feedback?.notice("已重新读取 ${market.label}") }
+            JAction(stringResource(R.string.settings_ext_market_reload), icon = PhIcons.ArrowClockwise, onClick = {
+                scope.launch { if (model.refresh(market.id)) feedback?.notice(res.getString(R.string.settings_ext_market_reloaded, market.label)) }
             }),
-            JAction(if (market.hasToken) "换 token" else "设置 token", icon = PhIcons.Key, onClick = { tokenFor = market }),
+            JAction(stringResource(if (market.hasToken) R.string.settings_ext_token_change else R.string.settings_ext_token_set), icon = PhIcons.Key, onClick = { tokenFor = market }),
             market.homepage?.takeIf { ExtensionViewText.isHttps(it) }?.let { url ->
-                JAction("打开主页", icon = PhIcons.ArrowSquareOut, onClick = { runCatching { uri.openUri(url) } })
+                JAction(stringResource(R.string.settings_ext_open_homepage), icon = PhIcons.ArrowSquareOut, onClick = { runCatching { uri.openUri(url) } })
             },
-            JAction("删除市场", icon = PhIcons.Trash, destructive = true, separatorBefore = true, onClick = { removing = market }),
+            JAction(stringResource(R.string.settings_ext_remove_market), icon = PhIcons.Trash, destructive = true, separatorBefore = true, onClick = { removing = market }),
         ), { acting = null }, title = market.label, note = market.description?.takeIf { it.isNotBlank() })
     }
     if (adding) AddMarketSheet(state, onDismiss = { adding = false }) { spec, token ->
-        scope.launch { if (model.add(spec, token)) { adding = false; feedback?.notice("已添加市场") } }
+        scope.launch { if (model.add(spec, token)) { adding = false; feedback?.notice(res.getString(R.string.settings_ext_market_added)) } }
     }
     tokenFor?.let { market ->
         TokenSheet(market, busy = state.working == market.id, onDismiss = { tokenFor = null }) { token ->
             scope.launch {
-                if (model.setToken(market.id, token)) { tokenFor = null; feedback?.notice(if (token.isBlank()) "已去掉 token" else "已换 token") }
+                if (model.setToken(market.id, token)) { tokenFor = null; feedback?.notice(res.getString(if (token.isBlank()) R.string.settings_ext_token_removed else R.string.settings_ext_token_changed)) }
                 else tokenFor = null
             }
         }
     }
     removing?.let { market ->
-        JDialog({ removing = null }, title = "删除 ${market.label}？", text = "hub 不再读这个市场。从它装的扩展留着。",
-            confirm = "删除" to {
+        JDialog({ removing = null }, title = stringResource(R.string.settings_ext_remove_market_title, market.label), text = stringResource(R.string.settings_ext_remove_market_text),
+            confirm = stringResource(R.string.settings_ext_remove) to {
                 removing = null
-                scope.launch { if (model.remove(market.id)) feedback?.notice("已删除市场") }
+                scope.launch { if (model.remove(market.id)) feedback?.notice(res.getString(R.string.settings_ext_market_removed)) }
             }, destructive = true)
     }
 }
@@ -430,20 +438,18 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
 private fun AddMarketSheet(state: MarketsState, onDismiss: () -> Unit, onAdd: (String, String) -> Unit) {
     var spec by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
-    JSheet(onDismiss, title = "添加市场", dismissible = !state.adding) {
+    JSheet(onDismiss, title = stringResource(R.string.settings_ext_add_market), dismissible = !state.adding) {
         Column(Modifier.padding(vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-            JTextField(spec, { spec = it }, Modifier.fillMaxWidth(), label = "地址", placeholder = "https://…、github:owner/repo 或 git:…",
+            JTextField(spec, { spec = it }, Modifier.fillMaxWidth(), label = stringResource(R.string.settings_ext_market_address), placeholder = stringResource(R.string.settings_ext_market_address_hint),
                 singleLine = true, enabled = !state.adding,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, keyboardType = KeyboardType.Uri))
-            SettingsCaption("三种写法：网站 https://example.com/plugins/；GitHub 仓库 github:owner/repo；任意 git 仓库 " +
-                "git:<地址>[#分支]（git@host:path.git、ssh://…、https://…）。")
-            JTextField(token, { token = it }, Modifier.fillMaxWidth(), label = "token（私有的才要）", placeholder = "可以不填", singleLine = true,
+            SettingsCaption(stringResource(R.string.settings_ext_market_address_note))
+            JTextField(token, { token = it }, Modifier.fillMaxWidth(), label = stringResource(R.string.settings_ext_market_token_label), placeholder = stringResource(R.string.settings_ext_optional), singleLine = true,
                 enabled = !state.adding, visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-            SettingsCaption("私有的 GitHub 仓库用只读的 fine-grained token（这个仓库的 Contents 读权限）；git: 市场用 hub 机器自己的 SSH 凭据，不用 token。" +
-                "token 加密存在 hub 上，存好后不再显示。")
+            SettingsCaption(stringResource(R.string.settings_ext_market_token_note))
             state.addError?.let { JInlineStatus(it, tone = InlineTone.Failed) }
-            JButton("添加", { onAdd(spec, token) }, Modifier.fillMaxWidth(), loading = state.adding, loadingText = "正在读取市场…",
+            JButton(stringResource(R.string.settings_ext_add), { onAdd(spec, token) }, Modifier.fillMaxWidth(), loading = state.adding, loadingText = stringResource(R.string.settings_ext_market_reading),
                 enabled = !state.adding && spec.isNotBlank())
         }
     }
@@ -452,14 +458,14 @@ private fun AddMarketSheet(state: MarketsState, onDismiss: () -> Unit, onAdd: (S
 @Composable
 private fun TokenSheet(market: ExtensionMarket, busy: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var token by remember(market.id) { mutableStateOf("") }
-    JSheet(onDismiss, title = if (market.hasToken) "换 token" else "设置 token", dismissible = !busy) {
+    JSheet(onDismiss, title = stringResource(if (market.hasToken) R.string.settings_ext_token_change else R.string.settings_ext_token_set), dismissible = !busy) {
         Column(Modifier.padding(vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-            JTextField(token, { token = it }, Modifier.fillMaxWidth(), placeholder = if (market.hasToken) "输入新的 token 替换" else "输入 token",
+            JTextField(token, { token = it }, Modifier.fillMaxWidth(), placeholder = stringResource(if (market.hasToken) R.string.settings_ext_token_replace else R.string.settings_ext_token_enter),
                 singleLine = true, enabled = !busy, visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-            SettingsCaption("保存后 hub 用新的 token 重新读一次 ${market.label}。")
-            JButton("保存", { onSave(token) }, Modifier.fillMaxWidth(), loading = busy, enabled = !busy && token.isNotBlank())
-            if (market.hasToken) JButton("去掉 token", { onSave("") }, Modifier.fillMaxWidth(), kind = JButtonKind.Destructive, enabled = !busy)
+            SettingsCaption(stringResource(R.string.settings_ext_token_note, market.label))
+            JButton(stringResource(R.string.settings_ext_save), { onSave(token) }, Modifier.fillMaxWidth(), loading = busy, enabled = !busy && token.isNotBlank())
+            if (market.hasToken) JButton(stringResource(R.string.settings_ext_token_remove), { onSave("") }, Modifier.fillMaxWidth(), kind = JButtonKind.Destructive, enabled = !busy)
         }
     }
 }

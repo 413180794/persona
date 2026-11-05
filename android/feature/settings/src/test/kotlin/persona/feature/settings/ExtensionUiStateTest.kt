@@ -12,6 +12,10 @@ import kotlinx.coroutines.test.runTest
 import persona.core.designsystem.JChartKind
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
 private class FakeUi : ExtensionApiStub() {
     var view = ExtensionView(title = "Example 网关", state = "tab=1", sections = listOf(ExtensionViewSection(items = listOf(
@@ -46,7 +50,12 @@ private class FakeUi : ExtensionApiStub() {
     }
 }
 
+/** Robolectric for the words: the app's strings in Simplified Chinese (robolectric.properties). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ExtensionUiStateTest {
+    private val res get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     @Test fun tonesLinksAndItemsTheAppDraws() {
         assertEquals(Tone.Positive, ExtensionViewText.tone("positive"))
         assertEquals(Tone.Danger, ExtensionViewText.tone("danger"))
@@ -76,8 +85,8 @@ class ExtensionUiStateTest {
         assertFalse(ExtensionViewText.isNumber("12a"))
         assertEquals("gw.example.com", ExtensionViewText.host("https://gw.example.com/v1"))
         assertNull(ExtensionViewText.host(""))
-        assertEquals("停用测试 Key", ExtensionViewText.confirmLabel(ExtensionViewItem("button", title = "停用测试 Key")))
-        assertEquals("确定", ExtensionViewText.confirmLabel(ExtensionViewItem("row", title = "一个很长很长很长的按钮名字")))
+        assertEquals("停用测试 Key", ExtensionViewText.confirmLabel(res, ExtensionViewItem("button", title = "停用测试 Key")))
+        assertEquals("确定", ExtensionViewText.confirmLabel(res, ExtensionViewItem("row", title = "一个很长很长很长的按钮名字")))
     }
 
     @Test fun drawsWithTheFieldsAsSentButNeverASecret() = runBlocking {
@@ -139,15 +148,15 @@ class ExtensionUiStateTest {
         val model = ExtensionViewModel(api, "example-gateway", "home")
         api.fail = HubFailure(HubError.Server, "扩展出错了", status = 502, code = "plugin_failed")
         model.load()
-        assertEquals("读取失败：扩展出错了", model.state.value.error)
+        assertEquals("读取失败：扩展出错了", model.state.value.error?.text(res))
         assertNull(model.state.value.view)
         assertFalse(model.state.value.unsupported)
         api.fail = null
         model.load()
-        assertNull(model.state.value.error)
+        assertNull(model.state.value.error?.text(res))
         api.fail = HubFailure(HubError.Server, "超时", status = 502)
         val out = model.press(ExtensionViewAction("save"))
-        assertEquals("没有做成：超时", out.error)
+        assertEquals("没有做成：超时", out.error?.text(res))
         assertNotNull(model.state.value.view)
     }
 
@@ -182,7 +191,7 @@ class ExtensionUiStateTest {
         assertEquals(listOf("panel"), places.state.value.places?.map { it.id })
         api.fail = HubFailure(HubError.Server, "坏了", status = 500)
         places.load()
-        assertEquals("扩展的内容读不到：坏了", places.state.value.error)
+        assertEquals("扩展的内容读不到：坏了", places.state.value.error?.text(res))
         assertEquals(1, places.state.value.places?.size)
     }
 
@@ -251,7 +260,7 @@ class ExtensionUiStateTest {
         assertEquals(1, api.actions.size)
         api.fail = HubFailure(HubError.Server, "坏了", status = 502)
         val out = model.choose(range, "1d")
-        assertEquals("没有做成：坏了", out.error)
+        assertEquals("没有做成：坏了", out.error?.text(res))
         assertEquals("30d", model.state.value.values["range"])
         // Submitting: the page's fields go with it.
         api.fail = null
@@ -304,6 +313,6 @@ class ExtensionUiStateTest {
         val model = ExtensionViewModel(api, "example-gateway", "gpu", ExtensionUiContext(machine = "elsewhere"))
         model.load()
         assertTrue(model.state.value.unsupported)
-        assertNull(model.state.value.error)
+        assertNull(model.state.value.error?.text(res))
     }
 }

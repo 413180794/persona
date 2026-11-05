@@ -9,6 +9,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
 private val marketA = ExtensionMarket("3f2a9c1d0b", "https://plugins.example.com/persona/", "Example 扩展", extensions = 3,
     fetchedAt = "2026-11-04T06:00:00Z")
@@ -58,62 +62,67 @@ private class FakeMarket : ExtensionApiStub() {
     override suspend fun setMarketToken(id: String, token: String): ExtensionMarket { calls += "token $id ${token.isEmpty()}"; check(); return markets.first { it.id == id }.copy(hasToken = token.isNotEmpty()) }
 }
 
+/** Robolectric for the words: the app's strings in Simplified Chinese (robolectric.properties). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ExtensionMarketStateTest {
+    private val res get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     @Test fun whereEachExtensionStandsAndWhatThePageOffers() {
         assertEquals(CatalogStanding.Available, CatalogText.standing(fresh))
         assertEquals(listOf(CatalogAction.Install), CatalogText.actions(fresh))
-        assertNull(CatalogText.badge(fresh))
-        assertEquals("0.9.0", CatalogText.line(fresh))
+        assertNull(CatalogText.badge(res, fresh))
+        assertEquals("0.9.0", CatalogText.line(res, fresh))
 
         assertEquals(CatalogStanding.Upgradable, CatalogText.standing(upgradable))
         assertEquals(listOf(CatalogAction.Upgrade, CatalogAction.Uninstall), CatalogText.actions(upgradable))
-        assertEquals("可升级", CatalogText.badge(upgradable))
-        assertEquals("1.0.0 → 1.1.0", CatalogText.line(upgradable))
+        assertEquals("可升级", CatalogText.badge(res, upgradable))
+        assertEquals("1.0.0 → 1.1.0", CatalogText.line(res, upgradable))
 
         // Installed from a folder on the hub's machine: the phone neither upgrades (not newer) nor removes it.
         assertEquals(CatalogStanding.Installed, CatalogText.standing(elsewhere))
         assertTrue(CatalogText.actions(elsewhere).isEmpty())
-        assertTrue(CatalogText.noActionReason(elsewhere)!!.contains("personad extension"))
+        assertTrue(CatalogText.noActionReason(res, elsewhere)!!.contains("personad extension"))
 
         assertEquals(CatalogStanding.InstalledElsewhere, CatalogText.standing(builtin))
-        assertEquals("2.0.0 · 已装 202611041200（内置）", CatalogText.line(builtin))
+        assertEquals("2.0.0 · 已装 202611041200（内置）", CatalogText.line(res, builtin))
         assertTrue(CatalogText.actions(builtin).isEmpty())
 
         assertEquals(CatalogStanding.Unavailable, CatalogText.standing(broken))
-        assertEquals("装不了", CatalogText.badge(broken))
-        assertEquals(broken.problem, CatalogText.line(broken))
-        assertEquals(broken.problem, CatalogText.noActionReason(broken))
+        assertEquals("装不了", CatalogText.badge(res, broken))
+        assertEquals(broken.problem, CatalogText.line(res, broken))
+        assertEquals(broken.problem, CatalogText.noActionReason(res, broken))
         assertTrue(CatalogText.actions(broken).isEmpty())
         // An upgradable one this hub cannot take is not offered.
         assertTrue(CatalogText.actions(upgradable.copy(problem = "要更新的 hub")).let { CatalogAction.Upgrade !in it })
 
         assertEquals(listOf(CatalogAction.Uninstall), CatalogText.actions(sameMarket))
-        assertEquals("2.3.0 · 已安装", CatalogText.line(sameMarket))
+        assertEquals("2.3.0 · 已安装", CatalogText.line(res, sameMarket))
     }
 
     @Test fun previewsSayWhatTheConfirmDoes() {
         val install = ExtensionPreview("p", permissionsDigest = "d")
-        assertEquals("同意并安装", CatalogText.confirmLabel(install))
+        assertEquals("同意并安装", CatalogText.confirmLabel(res, install))
         assertFalse(CatalogText.asksForMore(install))
         val upgrade = install.copy(upgrade = true, from = "1.0.0")
-        assertEquals("升级", CatalogText.confirmLabel(upgrade))
+        assertEquals("升级", CatalogText.confirmLabel(res, upgrade))
         val more = upgrade.copy(morePermissions = true, addedPermissions = listOf(ExtensionPermission("hub_api", "完整使用 hub")))
-        assertEquals("同意新权限并升级", CatalogText.confirmLabel(more))
+        assertEquals("同意新权限并升级", CatalogText.confirmLabel(res, more))
         assertTrue(CatalogText.asksForMore(more))
     }
 
     @Test fun marketWords() {
-        assertEquals("3 个扩展 · 读取于 2026-11-04 06:00", CatalogText.marketLine(marketA))
-        assertEquals("2 个扩展 · 有 token", CatalogText.marketLine(marketB))
+        assertEquals("3 个扩展 · 读取于 2026-11-04 06:00", CatalogText.marketLine(res, marketA))
+        assertEquals("2 个扩展 · 有 token", CatalogText.marketLine(res, marketB))
         val done = ExtensionDetail(HubExtension("x", "X", version = "1.1.0"))
-        assertEquals("已安装", CatalogText.installed(done, upgrade = false))
-        assertEquals("已升级到 1.1.0", CatalogText.installed(done, upgrade = true))
-        assertEquals("已安装，还缺：密钥「API Key」", CatalogText.installed(FakeMarket().installed, upgrade = false))
+        assertEquals("已安装", CatalogText.installed(res, done, upgrade = false))
+        assertEquals("已升级到 1.1.0", CatalogText.installed(res, done, upgrade = true))
+        assertEquals("已安装，还缺：密钥「API Key」", CatalogText.installed(res, FakeMarket().installed, upgrade = false))
     }
 
     @Test fun theCatalogSearchesAndNarrowsToAMarket() = runBlocking {
         val api = FakeMarket()
-        val model = CatalogModel(api)
+        val model = CatalogModel(api, res)
         model.load()
         assertEquals(4, model.state.value.extensions.size)
         model.setQuery("日历")
@@ -135,7 +144,7 @@ class ExtensionMarketStateTest {
     @Test fun aLateAnswerForAnOlderQueryIsDropped() = runBlocking {
         val api = FakeMarket()
         api.gate = CompletableDeferred()
-        val model = CatalogModel(api)
+        val model = CatalogModel(api, res)
         model.setQuery("slow")
         val slow = async { model.load() }
         yield()
@@ -150,7 +159,7 @@ class ExtensionMarketStateTest {
     @Test fun catalogFailuresSayWhy() = runBlocking {
         val api = FakeMarket()
         api.fail = HubFailure(HubError.Server, "坏了", status = 500)
-        val model = CatalogModel(api)
+        val model = CatalogModel(api, res)
         model.load()
         assertEquals("读取失败：坏了", model.state.value.error)
         assertNull(model.state.value.catalog)
@@ -158,7 +167,7 @@ class ExtensionMarketStateTest {
 
     @Test fun installsOnlyAfterThePreviewIsAgreedTo() = runBlocking {
         val api = FakeMarket()
-        val model = CatalogExtensionModel(api, marketA.id, "example-calendar")
+        val model = CatalogExtensionModel(api, marketA.id, "example-calendar", res)
         model.load()
         assertEquals("Example 日历", model.state.value.extension?.name)
         assertEquals("Example 扩展", model.state.value.marketName)
@@ -180,7 +189,7 @@ class ExtensionMarketStateTest {
     @Test fun anUpgradePreviewUpgrades() = runBlocking {
         val api = FakeMarket()
         api.preview = api.preview.copy(upgrade = true, from = "1.0.0")
-        val model = CatalogExtensionModel(api, marketA.id, "example-gateway")
+        val model = CatalogExtensionModel(api, marketA.id, "example-gateway", res)
         model.load()
         model.preview()
         model.confirm()
@@ -189,7 +198,7 @@ class ExtensionMarketStateTest {
 
     @Test fun failuresKeepThePageAndSayWhy() = runBlocking {
         val api = FakeMarket()
-        val model = CatalogExtensionModel(api, marketA.id, "example-calendar")
+        val model = CatalogExtensionModel(api, marketA.id, "example-calendar", res)
         model.load()
         api.fail = HubFailure(HubError.Server, "sha256 不对", status = 400)
         assertFalse(model.preview())
@@ -205,7 +214,7 @@ class ExtensionMarketStateTest {
 
     @Test fun removesAndSeesAExtensionGone() = runBlocking {
         val api = FakeMarket()
-        val model = CatalogExtensionModel(api, marketA.id, "example-gateway")
+        val model = CatalogExtensionModel(api, marketA.id, "example-gateway", res)
         model.load()
         api.catalog = api.catalog.map { if (it.id == "example-gateway") it.copy(installed = null, fromThisMarket = false, upgradable = false) else it }
         assertTrue(model.uninstall(keepData = true))
@@ -218,7 +227,7 @@ class ExtensionMarketStateTest {
 
     @Test fun managesTheMarkets() = runBlocking {
         val api = FakeMarket()
-        val model = MarketsModel(api)
+        val model = MarketsModel(api, res)
         model.load()
         assertEquals(2, model.state.value.markets?.size)
         // #1373: the address goes to the hub as typed (git:, git@host:path.git, ssh://… and whatever it adds later).
@@ -240,7 +249,7 @@ class ExtensionMarketStateTest {
 
     @Test fun marketFailuresSayWhy() = runBlocking {
         val api = FakeMarket()
-        val model = MarketsModel(api)
+        val model = MarketsModel(api, res)
         model.load()
         api.fail = HubFailure(HubError.Server, "读不到 github:example/private：找不到（404）：地址不对，或者是私有的，要填 token", status = 400)
         assertFalse(model.add("github:example/private", ""))

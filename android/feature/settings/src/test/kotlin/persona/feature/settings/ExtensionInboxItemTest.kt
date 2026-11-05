@@ -11,10 +11,19 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 
 // An inbox item's page drawn by its connector's extension (docs/extensions.md「UI 插槽」inbox_item, #1683): which pages the
 // hub lists, drawing and pressing with the item in the context, and when the item's own page opens instead.
+/** Robolectric for the words: the app's strings in Simplified Chinese (robolectric.properties). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ExtensionInboxItemTest {
+    private val res get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     private val event = ExtensionUiPlace("lark-connector", "event", "事件", "inbox_item", extensionName = "飞书", connector = "lark")
     private val route = InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审")
 
@@ -48,7 +57,7 @@ class ExtensionInboxItemTest {
         hub.failing["inbox_item"] = HubFailure(HubError.Server, "坏了", status = 500)
         slots.load()
         assertEquals(listOf(event), slots.state.value.inboxItems)
-        assertNull(slots.state.value.error)
+        assertNull(slots.state.value.error?.text(res))
 
         // An older hub does not know the slot and lists nothing there; nor does a failing list of the other slots
         // stop the inbox items' pages from being read.
@@ -57,7 +66,7 @@ class ExtensionInboxItemTest {
         hub.byPlacement["inbox_item"] = emptyList()
         slots.load()
         assertTrue(slots.state.value.inboxItems.isEmpty())
-        assertEquals("扩展的入口读不到：坏了", slots.state.value.error)
+        assertEquals("扩展的入口读不到：坏了", slots.state.value.error?.text(res))
 
         // The inbox shows: only the inbox items' pages are read again.
         hub.failing.clear()
@@ -122,10 +131,10 @@ class ExtensionInboxItemTest {
     @Test fun drawsAndPressesWithTheItem() = runTest {
         val extension = FakeExtension()
         val model = itemModel(extension)
-        assertNull("not before it has tried", InboxItemPageText.fallback(model.state.value))
+        assertNull("not before it has tried", InboxItemPageText.fallback(res, model.state.value))
         model.load()
         assertEquals(ExtensionUiContext(item = "lark:F1:1051", size = "full"), extension.renders.single().first)
-        assertNull(InboxItemPageText.fallback(model.state.value))
+        assertNull(InboxItemPageText.fallback(res, model.state.value))
 
         // A button's toast (接着《…》 on an event that is gone); the view stays.
         extension.result = { ExtensionUiResult(toast = "上周的评审已经不在信箱里了") }
@@ -187,7 +196,7 @@ class ExtensionInboxItemTest {
         ).forEach { answer ->
             val model = itemModel(FakeExtension().apply { view = answer })
             model.load()
-            assertEquals(InboxItemFallback.Quiet, InboxItemPageText.fallback(model.state.value))
+            assertEquals(InboxItemFallback.Quiet, InboxItemPageText.fallback(res, model.state.value))
         }
     }
 
@@ -195,10 +204,10 @@ class ExtensionInboxItemTest {
     @Test fun theItemsOwnPageSaysWhenTheExtensionBroke() = runTest {
         val broken = itemModel(FakeExtension().apply { view = { throw HubFailure(HubError.Server, "扩展出错了", status = 502, code = "plugin_failed") } })
         broken.load()
-        assertEquals(InboxItemFallback.Notice("扩展的页面没画出来：扩展出错了"), InboxItemPageText.fallback(broken.state.value))
+        assertEquals(InboxItemFallback.Notice("扩展的页面没画出来：扩展出错了"), InboxItemPageText.fallback(res, broken.state.value))
         val away = itemModel(FakeExtension().apply { view = { throw HubFailure(HubError.Unreachable) } })
         away.load()
-        assertEquals(InboxItemFallback.Notice("扩展的页面没画出来：连不上 hub"), InboxItemPageText.fallback(away.state.value))
+        assertEquals(InboxItemFallback.Notice("扩展的页面没画出来：连不上 hub"), InboxItemPageText.fallback(res, away.state.value))
     }
 
     @Test fun onceDrawnAFailureKeepsThePage() = runTest {
@@ -207,16 +216,16 @@ class ExtensionInboxItemTest {
         model.load()
         extension.view = { throw HubFailure(HubError.Server, "扩展出错了", status = 502) }
         model.load()
-        assertEquals("读取失败：扩展出错了", model.state.value.error)
+        assertEquals("读取失败：扩展出错了", model.state.value.error?.text(res))
         assertNotNull(model.state.value.view)
-        assertNull(InboxItemPageText.fallback(model.state.value))
+        assertNull(InboxItemPageText.fallback(res, model.state.value))
         extension.result = { throw HubFailure(HubError.Server, "扩展出错了", status = 502) }
-        assertEquals("没有做成：扩展出错了", model.press(ExtensionViewAction("reply", submit = true)).error)
-        assertNull(InboxItemPageText.fallback(model.state.value))
+        assertEquals("没有做成：扩展出错了", model.press(ExtensionViewAction("reply", submit = true)).error?.text(res))
+        assertNull(InboxItemPageText.fallback(res, model.state.value))
         // An extension that then says the item is not its own gives way.
         extension.result = { throw ExtensionUiUnsupported() }
         model.press(ExtensionViewAction("continues"))
-        assertEquals(InboxItemFallback.Quiet, InboxItemPageText.fallback(model.state.value))
+        assertEquals(InboxItemFallback.Quiet, InboxItemPageText.fallback(res, model.state.value))
     }
 
     companion object {

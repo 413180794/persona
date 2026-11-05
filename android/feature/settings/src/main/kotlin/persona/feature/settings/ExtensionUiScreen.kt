@@ -1,5 +1,7 @@
 package persona.feature.settings
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +36,7 @@ import kotlinx.coroutines.launch
 fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId: String, title: String, onBack: () -> Unit,
                     initialState: String? = null, depth: Int = 0, onPush: (ExtensionUiRoute) -> Unit = {}) {
     if (extensions == null) {
-        JListPage(title = title, onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
+        JListPage(title = title, onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
     }
     val model = remember(extensions, extensionId, uiId, initialState) {
@@ -54,7 +56,7 @@ fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId:
         refreshing = state.loading && view != null, onRefresh = { scope.launch { model.load() } }) {
         viewStatus("page", state, onRetry = { scope.launch { model.load() } })
         if (view != null && view.sections.none { it.items.any(ExtensionViewText::drawable) }) item("page-empty") {
-            JEmptyState("这里还没有内容", "扩展现在没有要显示的东西，过一会儿再下拉刷新看看。", icon = PhIcons.PuzzlePiece)
+            JEmptyState(stringResource(R.string.settings_ext_page_empty_title), stringResource(R.string.settings_ext_page_empty_text), icon = PhIcons.PuzzlePiece)
         }
         extensionViewItems("page", state, handle)
         item("page-end") { Spacer(Tokens.Space.xxl) }
@@ -65,11 +67,12 @@ fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId:
 private fun LazyListScope.viewStatus(key: String, state: ExtensionViewState, onRetry: () -> Unit) {
     when {
         state.view == null && state.error != null -> item("$key-error") {
-            JNotice(state.error, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = "重试", onAction = onRetry)
+            JNotice(state.error.text(), Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou,
+                actionLabel = stringResource(R.string.settings_ext_retry), onAction = onRetry)
         }
         state.view == null && !state.unsupported -> item("$key-loading") { JLoading() }
         state.error != null -> item("$key-error") {
-            JInlineStatus(state.error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
+            JInlineStatus(state.error.text(), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
         }
     }
 }
@@ -80,7 +83,7 @@ private fun Spacer(height: androidx.compose.ui.unit.Dp) = androidx.compose.found
 /** The pages an extension draws, listed on its page: a row each into it. */
 internal fun LazyListScope.extensionPages(pages: List<ExtensionUiPlace>, onOpen: (ExtensionUiPlace) -> Unit) {
     if (pages.isEmpty()) return
-    item("pages-title") { JSectionHeader("页面") }
+    item("pages-title") { JSectionHeader(stringResource(R.string.settings_ext_pages)) }
     itemsIndexed(pages, key = { _, it -> "page-${it.id}" }) { index, page ->
         JGroupItem(GroupPosition.of(index, pages.size)) {
             JRow(page.title.ifBlank { page.id }, leadingIcon = PhIcons.SquaresFour, onClick = { onOpen(page) })
@@ -97,15 +100,16 @@ internal fun LazyListScope.extensionPages(pages: List<ExtensionUiPlace>, onOpen:
 fun LauncherPage(machines: MachineManagement?, extensions: ExtensionManagement?, machineId: String, name: String, onBack: () -> Unit,
                  machineName: (String) -> String = { it }, onOpen: (ExtensionUiRoute) -> Unit = {}) {
     val scope = rememberCoroutineScope()
+    val res = LocalResources.current
     var launcher by remember(machineId, name) { mutableStateOf<AgentLauncher?>(null) }
     var launcherError by remember(machineId, name) { mutableStateOf<String?>(null) }
     LaunchedEffect(machines, machineId, name) {
         machines ?: return@LaunchedEffect
         try {
             launcher = machines.launchers(machineId).firstOrNull { it.name == name }
-            launcherError = if (launcher == null) "这台机器上没有这个启动器了" else null
+            launcherError = if (launcher == null) res.getString(R.string.settings_ext_launcher_gone) else null
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { launcherError = "读不到启动器：${failureReason(error)}" }
+        catch (error: Exception) { launcherError = res.getString(R.string.settings_ext_launcher_failed, failureReason(error)) }
     }
     val quota = remember(machines, machineId, name) { machines?.let { LauncherQuotaModel(it, machineId, name) } }
     val quotaState = quota?.state?.collectAsState()?.value
@@ -135,19 +139,19 @@ fun LauncherPage(machines: MachineManagement?, extensions: ExtensionManagement?,
             quotaState?.let { it.loading && it.answer != null } == true, onRefresh = { reload() }) {
         item("launcher") {
             JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) {
-                JRow(name, leadingIcon = PhIcons.RocketLaunch, subtitle = "启动器")
+                JRow(name, leadingIcon = PhIcons.RocketLaunch, subtitle = stringResource(R.string.settings_ext_launcher))
             }
         }
         launcherError?.let { item("launcher-error") { JInlineStatus(it, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }
         launcher?.let { l ->
             val rows = listOfNotNull(
-                launcherModel(l)?.let { "模型" to it },
-                ExtensionViewText.host(l.baseUrl)?.let { "网关" to it },
-                "类型" to if (l.agentType == "codex") "Codex" else "Claude Code",
+                launcherModel(l)?.let { R.string.settings_ext_launcher_model to it },
+                ExtensionViewText.host(l.baseUrl)?.let { R.string.settings_ext_launcher_gateway to it },
+                R.string.settings_ext_launcher_type to if (l.agentType == "codex") "Codex" else "Claude Code",
             )
-            item("about-title") { JSectionHeader("启动器") }
+            item("about-title") { JSectionHeader(stringResource(R.string.settings_ext_launcher)) }
             itemsIndexed(rows, key = { _, it -> "about-${it.first}" }) { index, (label, value) ->
-                JGroupItem(GroupPosition.of(index, rows.size)) { JRow(label, value = value) }
+                JGroupItem(GroupPosition.of(index, rows.size)) { JRow(stringResource(label), value = value) }
             }
         }
         // How much is left comes before the extensions' sections, as on iOS and the web.
@@ -156,8 +160,9 @@ fun LauncherPage(machines: MachineManagement?, extensions: ExtensionManagement?,
             placesState.error?.let { error ->
                 item("places-error") {
                     Column(Modifier.padding(top = Tokens.Space.l), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                        JInlineStatus(error, tone = InlineTone.Failed)
-                        JButton("重试", { scope.launch { places?.load() } }, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary,
+                        JInlineStatus(error.text(), tone = InlineTone.Failed)
+                        JButton(stringResource(R.string.settings_ext_retry),
+ { scope.launch { places?.load() } }, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary,
                             enabled = !placesState.loading)
                     }
                 }

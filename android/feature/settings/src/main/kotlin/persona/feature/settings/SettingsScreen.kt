@@ -124,7 +124,7 @@ private fun SettingsContent(
     // The row's count, read again whenever the settings list is shown or the hub reconnects.
     LaunchedEffect(extensionService, extensionsAvailable, page, connection) {
         if (extensionService == null || !extensionsAvailable || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
-        extensionSummary = try { ExtensionText.listSummary(extensionService.extensions()) }
+        extensionSummary = try { ExtensionText.listSummary(context.resources, extensionService.extensions()) }
         catch (error: CancellationException) { throw error } catch (_: Exception) { extensionSummary }
     }
     // Extensions' UI slots (docs/extensions.md「UI 插槽」): read again whenever the settings list shows.

@@ -1,5 +1,7 @@
 package persona.feature.settings
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -58,13 +60,13 @@ fun ExtensionCapsuleCards(api: ExtensionManagement?, onOpen: (ExtensionUiRoute) 
     // Install, enable or invalidate while the card is open: the same list is read again, without a new connection.
     LaunchedEffect(api, places) { api.uiEvents.collect { places.load() } }
     state.error?.let { error ->
-        JInlineStatus(error, tone = InlineTone.Failed)
-        JButton("重试", { scope.launch { places.load() } }, kind = JButtonKind.Secondary,
+        JInlineStatus(error.text(), tone = InlineTone.Failed)
+        JButton(stringResource(R.string.settings_ext_retry), { scope.launch { places.load() } }, kind = JButtonKind.Secondary,
             size = JButtonSize.Small, enabled = !state.loading)
     }
     val cards = state.places.orEmpty().filter(ExtensionCapsuleSlot::accepts)
     if (cards.isEmpty()) return
-    JSectionHeader("扩展")
+    JSectionHeader(stringResource(R.string.settings_ext_title))
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         cards.forEach { place -> key(place.extension, place.id) {
             CapsuleExtensionCard(api, place, onOpen)
@@ -79,10 +81,11 @@ private fun CapsuleExtensionCard(api: ExtensionManagement, place: ExtensionUiPla
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
+    val res = LocalResources.current
     var confirming by remember(model) { mutableStateOf<CapsuleConfirmation?>(null) }
     var message by remember(model) { mutableStateOf<String?>(null) }
     fun outcome(result: ExtensionActionOutcome) {
-        message = result.error ?: result.toast
+        message = result.error?.text(res) ?: result.toast
         result.push?.let { onOpen(ExtensionViewText.opened(place, it)) }
         result.openUrl?.let { if (ExtensionViewText.isHttps(it)) uri.openUri(it) }
     }
@@ -119,26 +122,27 @@ private fun CapsuleExtensionCard(api: ExtensionManagement, place: ExtensionUiPla
                 state.view == null && state.error == null -> JLoading()
             }
             state.error?.let { error ->
-                JInlineStatus(error, tone = InlineTone.Failed)
-                JButton("重试", { scope.launch { model.load() } }, kind = JButtonKind.Secondary,
+                JInlineStatus(error.text(), tone = InlineTone.Failed)
+                JButton(stringResource(R.string.settings_ext_retry), { scope.launch { model.load() } }, kind = JButtonKind.Secondary,
                     size = JButtonSize.Small, enabled = !state.loading)
             }
             confirming?.let { pending ->
                 val item = pending.item
                 val action = pending.action
                 Text(action.confirm.orEmpty(), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink)
-                JButton(ExtensionViewText.confirmLabel(item), {
+                JButton(ExtensionViewText.confirmLabel(res, item), {
                     confirming = null
                     if (pending.choice == null) press(action)
                     else scope.launch { outcome(model.choose(item, pending.choice)) }
                 },
                     kind = if (item.role == "destructive") JButtonKind.Destructive else JButtonKind.Secondary,
                     size = JButtonSize.Small, enabled = !state.busy)
-                JButton("取消", { confirming = null }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+                JButton(stringResource(R.string.settings_ext_cancel), { confirming = null }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
             }
             message?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
             place.opens?.takeIf { it.isNotBlank() }?.let { page ->
-                JButton("打开完整页面", { onOpen(ExtensionUiRoute(place.extension, page, place.title)) },
+                JButton(stringResource(R.string.settings_ext_open_full_page),
+ { onOpen(ExtensionUiRoute(place.extension, page, place.title)) },
                     kind = JButtonKind.Secondary, size = JButtonSize.Small)
             }
         }

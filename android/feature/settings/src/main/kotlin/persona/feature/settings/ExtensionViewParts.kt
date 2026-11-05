@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -192,11 +193,11 @@ internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, 
     }
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         if (search != null) {
-            JSearchField(query, { query = it; typed = true }, search.placeholder?.takeIf { it.isNotBlank() } ?: "搜索", Modifier.weight(1f))
+            JSearchField(query, { query = it; typed = true }, search.placeholder?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_search), Modifier.weight(1f))
         }
         if (filter != null) {
             val current = state.values[filter.name] ?: filter.value
-            val label = filter.choices.firstOrNull { it.value == current }?.label ?: filter.title?.takeIf { it.isNotBlank() } ?: "筛选"
+            val label = filter.choices.firstOrNull { it.value == current }?.label ?: filter.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_filter)
             JChip(label, selected = current != null && current != filter.choices.first().value, icon = PhIcons.FunnelSimple,
                 onClick = { choosing = true })
         }
@@ -217,7 +218,8 @@ internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, 
 internal fun ExtensionMore(index: Int, section: ExtensionViewSection, state: ExtensionViewState, handle: ExtensionViewHandle) {
     val more = section.more ?: return
     LaunchedEffect(section) { handle.more(index, section) }
-    JRow(more.title?.takeIf { it.isNotBlank() } ?: "加载更多",
+    JRow(more.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_load_more),
+
         trailing = if (state.loadingMore == index) ({ JSpinner() }) else null, chevron = false,
         enabled = state.loadingMore == null, onClick = { handle.more(index, section) })
 }

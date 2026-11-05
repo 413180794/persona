@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import android.content.res.Resources
 import persona.core.contracts.api.CatalogExtension
 import persona.core.contracts.api.ExtensionCatalog
 import persona.core.contracts.api.ExtensionDetail
@@ -31,18 +32,19 @@ internal object CatalogText {
     }
 
     /** The short word beside an extension in the catalog. */
-    fun badge(p: CatalogExtension): String? = when (standing(p)) {
-        CatalogStanding.Upgradable -> "可升级"
-        CatalogStanding.Installed, CatalogStanding.InstalledElsewhere -> "已安装"
-        CatalogStanding.Unavailable -> "装不了"
+    fun badge(res: Resources, p: CatalogExtension): String? = when (standing(p)) {
+        CatalogStanding.Upgradable -> res.getString(R.string.settings_ext_badge_upgradable)
+        CatalogStanding.Installed, CatalogStanding.InstalledElsewhere -> res.getString(R.string.settings_ext_source_installed)
+        CatalogStanding.Unavailable -> res.getString(R.string.settings_ext_badge_unavailable)
         CatalogStanding.Available -> null
     }
 
     /** The line under it: the version (and the installed one), or why it cannot be installed. */
-    fun line(p: CatalogExtension): String = when (standing(p)) {
+    fun line(res: Resources, p: CatalogExtension): String = when (standing(p)) {
         CatalogStanding.Upgradable -> "${p.installed} → ${p.version}"
-        CatalogStanding.Installed -> "${p.version} · 已安装"
-        CatalogStanding.InstalledElsewhere -> "${p.version} · 已装 ${p.installed}（${ExtensionText.source(p.installedSource) ?: "别处"}）"
+        CatalogStanding.Installed -> res.getString(R.string.settings_ext_line_installed, p.version)
+        CatalogStanding.InstalledElsewhere -> res.getString(R.string.settings_ext_line_installed_elsewhere, p.version, p.installed.orEmpty(),
+            ExtensionText.source(res, p.installedSource) ?: res.getString(R.string.settings_ext_line_elsewhere))
         CatalogStanding.Unavailable -> p.problem.orEmpty()
         CatalogStanding.Available -> p.version
     }
@@ -59,41 +61,41 @@ internal object CatalogText {
     }
 
     /** Why the page offers nothing: installed some other way (only the hub's machine changes it). */
-    fun noActionReason(p: CatalogExtension): String? = when {
+    fun noActionReason(res: Resources, p: CatalogExtension): String? = when {
         actions(p).isNotEmpty() -> null
         !p.problem.isNullOrBlank() -> p.problem
         !p.installed.isNullOrBlank() && !p.fromThisMarket ->
-            "这个扩展不是从这个市场装的：升级和卸载在 hub 所在的机器上（personad extension）或 hub 的管理界面里做。"
+            res.getString(R.string.settings_ext_not_from_market)
         else -> null
     }
 
     /** The confirm button of a preview: red when an upgrade asks for more. */
-    fun confirmLabel(preview: ExtensionPreview): String = when {
-        !preview.upgrade -> "同意并安装"
-        preview.morePermissions || !preview.addedPermissions.isNullOrEmpty() -> "同意新权限并升级"
-        else -> "升级"
+    fun confirmLabel(res: Resources, preview: ExtensionPreview): String = when {
+        !preview.upgrade -> res.getString(R.string.settings_ext_confirm_install)
+        preview.morePermissions || !preview.addedPermissions.isNullOrEmpty() -> res.getString(R.string.settings_ext_confirm_upgrade_more)
+        else -> res.getString(R.string.settings_ext_upgrade)
     }
 
     fun asksForMore(preview: ExtensionPreview): Boolean = preview.upgrade && (preview.morePermissions || !preview.addedPermissions.isNullOrEmpty())
 
     /** What the page says once it is in. */
-    fun installed(detail: ExtensionDetail, upgrade: Boolean): String {
+    fun installed(res: Resources, detail: ExtensionDetail, upgrade: Boolean): String {
         val missing = detail.extension.needsSetup.orEmpty()
-        val done = if (upgrade) "已升级到 ${detail.extension.version.orEmpty()}".trim() else "已安装"
-        return if (missing.isEmpty()) done else "$done，还缺：" + missing.joinToString("、")
+        val done = if (upgrade) res.getString(R.string.settings_ext_upgraded_to, detail.extension.version.orEmpty()).trim() else res.getString(R.string.settings_ext_source_installed)
+        return if (missing.isEmpty()) done else res.getString(R.string.settings_ext_installed_missing, done, missing.joinToString(res.getString(R.string.settings_ext_list_separator)))
     }
 
     /** A market's line in the list: how many extensions, signed or not, a token, when it was read. */
-    fun marketLine(m: ExtensionMarket): String = listOfNotNull(
-        "${m.extensions} 个扩展",
-        m.signature?.let { if (it.verified) "已签名" else if (it.unsigned) "未签名" else null },
-        "有 token".takeIf { m.hasToken },
-        m.fetchedAt?.let(::time)?.let { "读取于 $it" },
-    ).joinToString(" · ")
+    fun marketLine(res: Resources, m: ExtensionMarket): String = listOfNotNull(
+        res.getQuantityString(R.plurals.settings_ext_market_count, m.extensions, m.extensions),
+        m.signature?.let { if (it.verified) res.getString(R.string.settings_ext_market_signed) else if (it.unsigned) res.getString(R.string.settings_ext_market_unsigned) else null },
+        res.getString(R.string.settings_ext_market_token).takeIf { m.hasToken },
+        m.fetchedAt?.let(::time)?.let { res.getString(R.string.settings_ext_market_read_at, it) },
+    ).joinToString(res.getString(R.string.settings_ext_dot_separator))
 
     /** A market whose signature fails or whose key changed: what the page says under the list (null when it checks out). */
-    fun signatureProblem(m: ExtensionMarket): String? = m.signature?.takeIf { it.failed }?.let { s ->
-        s.detail?.takeIf { it.isNotBlank() } ?: "签名对不上或换了签名 key：hub 先不从这个市场安装和升级，到 hub 所在的机器上确认后恢复。"
+    fun signatureProblem(res: Resources, m: ExtensionMarket): String? = m.signature?.takeIf { it.failed }?.let { s ->
+        s.detail?.takeIf { it.isNotBlank() } ?: res.getString(R.string.settings_ext_market_signature_failed)
     }
 
     /** `2026-11-04T06:00:00Z` → `2026-11-04 06:00` (UTC as the hub wrote it; enough to tell old from fresh). */
@@ -113,7 +115,7 @@ internal data class CatalogState(
 }
 
 /** 扩展市场: the catalog, searched and narrowed to a market by the hub. */
-internal class CatalogModel(private val api: ExtensionMarkets) {
+internal class CatalogModel(private val api: ExtensionMarkets, private val res: Resources) {
     private val mutable = MutableStateFlow(CatalogState())
     val state = mutable.asStateFlow()
     private var generation = 0
@@ -135,7 +137,7 @@ internal class CatalogModel(private val api: ExtensionMarkets) {
                 it.copy(catalog = catalog, error = null, market = keep)
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { if (mine == generation) mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
+        catch (error: Exception) { if (mine == generation) mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReason(error))) } }
         finally { if (mine == generation) mutable.update { it.copy(loading = false) } }
     }
 }
@@ -160,7 +162,7 @@ internal data class CatalogExtensionState(
 }
 
 /** One extension of a market: its permissions, preview → install / upgrade, remove. */
-internal class CatalogExtensionModel(private val api: ExtensionMarkets, private val market: String, private val id: String) {
+internal class CatalogExtensionModel(private val api: ExtensionMarkets, private val market: String, private val id: String, private val res: Resources) {
     private val mutable = MutableStateFlow(CatalogExtensionState())
     val state = mutable.asStateFlow()
 
@@ -175,7 +177,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
                     marketName = catalog.markets.firstOrNull { m -> m.id == market }?.label ?: extension?.marketName)
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReason(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -189,7 +191,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(actionError = "没有拿到安装包：${failureReason(error)}") }
+            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_no_package, failureReason(error))) }
             false
         } finally { mutable.update { it.copy(previewing = false) } }
     }
@@ -205,10 +207,10 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             val detail = if (preview.upgrade) api.upgrade(id, preview) else api.install(preview)
             mutable.update { it.copy(preview = null, acting = false) }
             load()
-            CatalogText.installed(detail, preview.upgrade)
+            CatalogText.installed(res, detail, preview.upgrade)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(preview = null, actionError = (if (preview.upgrade) "没有升级：" else "没有安装：") + failureReason(error)) }
+            mutable.update { it.copy(preview = null, actionError = res.getString(if (preview.upgrade) R.string.settings_ext_not_upgraded else R.string.settings_ext_not_installed, failureReason(error))) }
             null
         } finally { mutable.update { it.copy(acting = false) } }
     }
@@ -223,7 +225,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(actionError = "没有卸载：${failureReason(error)}") }
+            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_not_removed, failureReason(error))) }
             false
         } finally { mutable.update { it.copy(acting = false) } }
     }
@@ -243,7 +245,7 @@ internal data class MarketsState(
 )
 
 /** 管理市场: the markets the hub reads. */
-internal class MarketsModel(private val api: ExtensionMarkets) {
+internal class MarketsModel(private val api: ExtensionMarkets, private val res: Resources) {
     private val mutable = MutableStateFlow(MarketsState())
     val state = mutable.asStateFlow()
 
@@ -254,7 +256,7 @@ internal class MarketsModel(private val api: ExtensionMarkets) {
             val markets = api.markets()
             mutable.update { it.copy(markets = markets, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReason(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -279,27 +281,27 @@ internal class MarketsModel(private val api: ExtensionMarkets) {
         } finally { mutable.update { it.copy(adding = false) } }
     }
 
-    suspend fun remove(id: String): Boolean = working(id, "没有删除") {
+    suspend fun remove(id: String): Boolean = working(id, R.string.settings_ext_market_not_removed) {
         api.removeMarket(id)
         mutable.update { it.copy(markets = it.markets?.filter { m -> m.id != id }) }
     }
 
-    suspend fun refresh(id: String): Boolean = working(id, "没有刷新") { replace(api.refreshMarket(id)) }
+    suspend fun refresh(id: String): Boolean = working(id, R.string.settings_ext_market_not_refreshed) { replace(api.refreshMarket(id)) }
 
     /** A new token, or "" to remove it; the hub reads the market again with it. */
-    suspend fun setToken(id: String, token: String): Boolean = working(id, "没有换成") { replace(api.setMarketToken(id, token.trim())) }
+    suspend fun setToken(id: String, token: String): Boolean = working(id, R.string.settings_ext_market_token_not_changed) { replace(api.setMarketToken(id, token.trim())) }
 
     private fun replace(market: ExtensionMarket) = mutable.update {
         it.copy(markets = it.markets?.map { m -> if (m.id == market.id) market else m })
     }
 
-    private suspend fun working(id: String, failed: String, block: suspend () -> Unit): Boolean {
+    private suspend fun working(id: String, failed: Int, block: suspend () -> Unit): Boolean {
         if (state.value.working != null) return false
         mutable.update { it.copy(working = id, actionError = null) }
         return try { block(); true }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(actionError = "$failed：${failureReason(error)}") }
+            mutable.update { it.copy(actionError = res.getString(failed, failureReason(error))) }
             false
         } finally { mutable.update { it.copy(working = null) } }
     }
