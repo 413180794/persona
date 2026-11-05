@@ -6221,15 +6221,16 @@ def _bar_png(w=360, h=150, heights=(0.45, 0.62, 0.78, 0.93)):
                     c = (31, 111, 235) if bx != 250 else (237, 125, 49)
             if y == h - 1:
                 c = (120, 120, 120)
-            row += bytes(c)
+            row += bytes(255 - v for v in c) if dark else bytes(c)
         rows.append(bytes(row))
     def chunk(t, d):
         return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
 
 
-def _page_png(w=420, h=560):
-    """A picture of a document's first page (title bar, lines of text): the preview inside the mock's .pages."""
+def _page_png(w=420, h=560, dark=False):
+    """A picture of a document's first page (title bar, lines of text): the preview inside the mock's .pages. dark:
+    white on black, as Quick Look draws text documents on a Mac in dark mode."""
     import zlib
     rows = []
     for y in range(h):
@@ -6240,7 +6241,7 @@ def _page_png(w=420, h=560):
                 c = (31, 56, 100)
             elif y >= 100 and (y - 100) % 22 < 8 and 40 <= x < (w - 40 if (y - 100) // 22 % 4 != 3 else 260) and y < h - 60:
                 c = (200, 204, 210)
-            row += bytes(c)
+            row += bytes(255 - v for v in c) if dark else bytes(c)
         rows.append(bytes(row))
     def chunk(t, d):
         return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
@@ -10151,6 +10152,17 @@ class H(BaseHTTPRequestHandler):
         body, _ = mock_file_bytes(p.split("/")[4], q)
         name = os.path.basename(q.get("path", [""])[0]) or "file"
         size = max(32, min(1024, int((q.get("size") or ["256"])[0] or 256)))
+        if body is not None and not shutil.which("qlmanage") and os.environ.get("MOCK_THUMB_PAGES") and name.lower().endswith((".docx", ".xlsx", ".pdf")):
+            # MOCK_THUMB_PAGES=1 where there is no Quick Look (Linux): Word, Excel and PDF get a drawn first page, the
+            # rest still 404, so a screenshot shows both a document card's page and its fallback glyph. =dark: Excel's
+            # page is white on black (Quick Look in dark mode), which the card drops for its glyph.
+            png = _page_png(192, 256, dark=os.environ["MOCK_THUMB_PAGES"] == "dark" and name.lower().endswith(".xlsx"))
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(png)))
+            self.end_headers()
+            self.wfile.write(png)
+            return
         if body is None or not shutil.which("qlmanage"):
             return self.send_json({"error": "no thumbnail", "code": "no_thumbnail"}, 404)
         with tempfile.TemporaryDirectory(prefix="mock-thumb-") as tmp:

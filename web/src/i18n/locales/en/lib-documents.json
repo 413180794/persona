@@ -1,0 +1,11 @@
+{
+  "word": "Word document",
+  "excel": "Excel spreadsheet",
+  "powerpoint": "PowerPoint presentation",
+  "pages": "Pages document",
+  "numbers": "Numbers spreadsheet",
+  "keynote": "Keynote presentation",
+  "rtf": "RTF document",
+  "pdf": "PDF document",
+  "other": "Document"
+}

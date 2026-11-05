@@ -1,0 +1,11 @@
+{
+  "word": "Word 文档",
+  "excel": "Excel 表格",
+  "powerpoint": "PowerPoint 演示文稿",
+  "pages": "Pages 文稿",
+  "numbers": "Numbers 表格",
+  "keynote": "Keynote 演示文稿",
+  "rtf": "RTF 文档",
+  "pdf": "PDF 文档",
+  "other": "文档"
+}

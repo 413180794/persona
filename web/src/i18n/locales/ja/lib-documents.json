@@ -1,0 +1,11 @@
+{
+  "word": "Word 文書",
+  "excel": "Excel スプレッドシート",
+  "powerpoint": "PowerPoint プレゼンテーション",
+  "pages": "Pages 書類",
+  "numbers": "Numbers スプレッドシート",
+  "keynote": "Keynote プレゼンテーション",
+  "rtf": "RTF 文書",
+  "pdf": "PDF 文書",
+  "other": "書類"
+}

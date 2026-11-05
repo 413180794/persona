@@ -1,18 +1,15 @@
 // The pieces of a trace other than tool calls (those are ActionRow.tsx): notices (a background task reporting back,
 // a wake, a plain line), the compaction divider, pictures and their viewer.
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import { imageURL } from "../../lib/api";
-import { useCloseOnBack } from "../../lib/back-close";
 import { compactionLabel } from "../../lib/compaction";
 import { clock } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
 import { getSession } from "../../lib/store";
 import { taskLabel, taskPill, taskSubject, wakeSummary, type Tone } from "../../lib/tasks";
 import type { Item } from "../../lib/types";
-import { Collapse, copyText, cx, EASE } from "../../ui/atoms";
+import { Collapse, copyText, cx } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
-import { NARROW, useMedia } from "../../ui/media-query";
 import { useChatContext } from "./chat-context";
 import { ChatImageViewer } from "./ImageViewer";
 import { t } from "../../i18n";
@@ -241,26 +238,3 @@ export function Thumb({ item, mid, sid, size = 132 }: { item: Item; mid: string;
   );
 }
 
-export function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
-  useCloseOnBack(true, onClose, useMedia(NARROW));
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm"
-      style={{ animation: "fade-in 150ms ease-out both" }}
-      onClick={onClose}
-      onKeyDown={(e) => e.key === "Escape" && onClose()}
-      role="dialog"
-      tabIndex={-1}
-      ref={(el) => el?.focus()}
-    >
-      <img src={src} alt="" className="max-h-full max-w-full rounded-[8px] object-contain shadow-overlay" style={{ animation: `pop-in 220ms ${EASE} both` }} />
-      <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="absolute top-4 right-14 flex size-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25" aria-label={t("chat-steps.open_in_new_tab")}>
-        <Icon name="external" size={15} />
-      </a>
-      <button type="button" onClick={onClose} className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25" aria-label={t("chat-steps.close")}>
-        <Icon name="x" size={15} />
-      </button>
-    </div>,
-    document.body,
-  );
-}

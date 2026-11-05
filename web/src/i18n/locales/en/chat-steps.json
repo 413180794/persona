@@ -1,7 +1,5 @@
 {
   "copy": "Copy",
   "view_output": "View output",
-  "view_image": "View image",
-  "open_in_new_tab": "Open in new tab",
-  "close": "Close"
+  "view_image": "View image"
 }

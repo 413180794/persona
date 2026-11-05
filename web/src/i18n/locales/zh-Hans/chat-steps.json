@@ -1,7 +1,5 @@
 {
   "copy": "拷贝",
   "view_output": "查看输出",
-  "view_image": "查看图片",
-  "open_in_new_tab": "在新标签页打开",
-  "close": "关闭"
+  "view_image": "查看图片"
 }

@@ -538,7 +538,7 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
   **自动刷新**（`lib/fs-live.ts`、`lib/use-fs-live.ts`，`docs/protocol.md`「文件自动刷新」）：面板开着时，页面把打开着的文件夹和是否显示 Git 告诉 hub（`fs_watch`），node 轮询这些文件夹和 `git status`，变了推回 `fs_changed`；页面等 200 ms 去抖后只重新读变了的文件夹、Git 状态和打开着的 diff（原位刷新，不出加载动画）。页面隐藏时不看，回来刷新一遍；socket 重连后也刷新一遍。旧 node 没有 `fs.watch`，面板照旧手动刷新。
   Git 面板标题的副标题和文件面板的 Git 按钮显示 `↑N ↓N *`（领先 / 落后上游的提交、有未提交的改动）；
   查看器：代码带行号和轻量着色（注释 / 字符串 / 数字，只渲染看得见的行，两万行也不卡）、Markdown（可看源码，README 的 HTML 转成 Markdown，相对图片从那台机器读）、
-  JSON（只重新缩进，不改键序、不丢大数精度）、图片、PDF、表格（见下）、分页「继续加载」、打开到某一行、拷贝路径、下载。二进制文件按 `file?stream=1` 只取描述，
+  JSON（只重新缩进，不改键序、不丢大数精度）、图片（点开是和对话里同一个 `ImageViewer`：缩放、拖动、拷贝、下载，顶部是文件名，下载用原文件名，#2982）、PDF、表格（见下）、分页「继续加载」、打开到某一行、拷贝路径、下载。二进制文件按 `file?stream=1` 只取描述，
   图片 / PDF 直接用 `file/download?inline=1` 的地址（浏览器按 Range 读），下载走附件，不再把整份 base64 放进页面（`docs/protocol.md`「文件预览」）；旧 hub 不认 `stream` 时照旧用 base64。Git：分支和上游、改动和 diff（暂存 / 未暂存切换）、提交历史和每个提交的 diff，只读。
   对话里 Read / Edit / Write / MultiEdit / NotebookEdit 的路径可点，打开查看器（Read 带 offset 时到那一行）。
 - **消息里的文件路径**（#1669，`lib/path-refs.ts`、`lib/path-presence.ts`、`ui/PathLinks.tsx`）：用户消息和回答正文里写到的路径，**确认在 Agent 那台电脑上存在后**才变成链接，点开在文件面板里看（Markdown 渲染、代码带行号和着色），写了行号就打开到那一行；⌘ / Ctrl 点是浏览器新标签里的原文件。
@@ -580,6 +580,11 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
 - **媒体**（#1422，`ui/Media.tsx`、`chat/FileCards.tsx`）：文件页的视频、音频直接播放，地址是 `file/download?inline=1`，浏览器按 Range 取，拖动不用等下载完；浏览器放不了的编码（Chrome / Firefox 里的 HEVC、多数 MKV）说清楚并给下载。
   SVG 按图片显示（`<img>` 里它的脚本不运行），可切源码。HEIC / HEIF：Safari 直接显示；别的浏览器 `<img>` 报错后换成那台电脑画的预览（`file/thumb`，最长边 1024），再不行提示下载。
   对话里手机发来的 `<jarvis-file kind="video" …/>`（`docs/protocol.md`「发送视频」）解析成卡片：视频 / 音频就地播放，带文件名、大小、时长，其他文件点开在文件面板里看；标签本身不显示，和 iOS 一致；时长以文件读出来的为准（向下取整，和播放器一致）。回答里写到的绝对路径（`/…`、`~/…`）如果是视频、音频、图片或文档，经 `stat` 确认那台电脑上有这个文件后，在回答下面画成同样的卡片（最多 8 个）。
+  其中的文档（Word / Excel / PowerPoint / Pages / Numbers / Keynote / RTF / PDF，`lib/documents.ts`）同 iOS `DocumentCards`（#2982）：一排横滑的文档卡片（最多 6 个，有更多时边缘渐隐），
+  左边是那台电脑画的首页（`file/thumb`：Mac 上由 Quick Look 画；别的电脑只有 PDF 有首页，要装 pdftoppm），右边是文件名和类型（「Word 文档」「PDF 文档」…），点开在文件面板里看；
+  画不出来（别的电脑上的 Office / iWork / RTF、旧 hub、加载失败）就是文件类型的图标。Quick Look 在深色模式的 Mac 上会把 RTF、文本文档画成黑底，
+  和 iOS 一样，首页缩成 8×8 叠在白底上算平均亮度，低于 0.35 就当没有首页、显示图标。
+  文件面板里 HEIC 换成预览图时，查看器的下载存的是那张 PNG（`原名.png`，类型 `image/png`），顶部仍是原文件名。
 - **对比**（#1437，`session/files/CompareView.tsx`、`lib/compare.ts`；iOS / Mac 是 #1299）：Git 面板里图片、PDF、docx、pptx、xlsx 的改动不再只写「二进制」。
   两个版本从 `git/blob` 取（node 把那个版本写进缓存、回路径，再用 `file/download` 读）：未暂存 = 暂存区 → 工作区，已暂存 = HEAD → 暂存区，提交里的文件 = `<提交>^` → 提交；新增 / 删除的只有一边。
   图片并排或叠在一起拖滑块；文档抽文字（PDF 用 pdf.js，Apache-2.0，逐页；docx 段落，表格一行一行（格子用 ` | ` 连起来，改了的行只把改动的格子标成「旧→新」），按分页符分页；pptx 用 `lib/pptx.ts` 逐张，含表格、图表数据和备注；表格按工作表转成制表符分隔的行），
@@ -907,6 +912,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 图片全屏查看 / 编辑 | 有 | #433、#1753 | 左右翻、框选 / 画笔、滚轮 / 捏合缩放和拖动；「这一轮看过的图片」画廊（`TurnImages.tsx`）同一个查看器，也能缩放（#2029） |
 | 链接在应用内打开 | 有 | #297 | 见「链接在页面里打开」 |
 | 文件（可点的路径、查看器、目录浏览） | 有 | #297、#1669 | 消息正文里的路径先 `/stat` 再内联成链接，带行号跳转（iOS 是消息下方的文件块） |
+| 回答里的文档卡片（首页缩略图、名字、类型） | 有 | #2982 | 同 iOS `DocumentCards`；文件面板的图片也改用对话里的 `ImageViewer`（缩放、拷贝、下载） |
 | Git（改动、diff、提交历史） | 有 | #297 | |
 | 终端：实时流、接管 / 只看、打字 / 滚轮 / 点击、断线重试 | 有 | #297 | |
 | 终端：键栏、快捷命令、往上翻 herdr 历史、换行开关、字号、中文空隙 | 有 | #433 | 见「侧边面板 › 终端」 |

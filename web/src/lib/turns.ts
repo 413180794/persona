@@ -98,7 +98,7 @@ const FILE_RE = /<jarvis-file\b([^>]*?)\/?>(?:\s*<\/jarvis-file>)?/g;
 const VIDEO = ["mp4", "m4v", "mov", "webm", "mkv"];
 const AUDIO = ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus"];
 const IMAGE = ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg"];
-const DOCS = ["pdf", "docx", "pptx", "xlsx", "csv", "ipynb", "html", "zip", "key", "pages", "numbers"];
+const DOCS = ["pdf", "docx", "doc", "pptx", "ppt", "xlsx", "xls", "rtf", "csv", "ipynb", "html", "zip", "key", "pages", "numbers"];
 
 /** What a file is for its card: video / audio play in place, the rest open in the viewer. */
 export function mediaKindOf(path: string): string {

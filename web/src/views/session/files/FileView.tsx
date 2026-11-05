@@ -32,7 +32,7 @@ import { bytes, shortPath } from "../../../lib/format";
 import { Button, copyText, cx, IconButton, Loading, toast } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 import { Markdown } from "../../../ui/Markdown";
-import { Lightbox } from "../../chat/Steps";
+import { ImageViewer, type ViewerImage } from "../../chat/ImageViewer";
 import { PanelHeader } from "../../SidePanel";
 import { BackHeader, Empty, FileGlyph, Segmented, useWindow } from "./parts";
 import { parseNotebook } from "../../../lib/notebook";
@@ -637,7 +637,7 @@ function SheetLoader({ mid, cwd, doc, file, onDownload }: { mid: string; cwd?: s
  * An image; `fallback` is what to show when this browser cannot draw it (HEIC outside Safari): the picture the machine
  * draws for its thumbnail.
  */
-function ImageView({ file, src: original, fallback }: { file: FileContent; src: string; fallback?: string }) {
+export function ImageView({ file, src: original, fallback }: { file: FileContent; src: string; fallback?: string }) {
   const [dims, setDims] = useState<[number, number] | null>(null);
   const [big, setBig] = useState(false);
   const [stage, setStage] = useState<"original" | "fallback" | "failed">("original");
@@ -679,9 +679,18 @@ function ImageView({ file, src: original, fallback }: { file: FileContent; src: 
           />
         </button>
       </div>
-      {big && <Lightbox src={src} onClose={() => setBig(false)} />}
+      {big && <ImageViewer images={[viewerImage(file, src, stage === "fallback")]} start={0} onClose={() => setBig(false)} />}
     </>
   );
+}
+
+/**
+ * What the viewer shows for an image file. On the fallback the picture is the PNG the machine drew (file/thumb), so 下载
+ * saves it as a .png with that type; the caption on top stays the file's own name.
+ */
+export function viewerImage(file: FileContent, src: string, fallback: boolean): ViewerImage {
+  if (!fallback) return { id: file.path, src, mime: file.mime, label: file.name, name: file.name };
+  return { id: file.path, src, mime: "image/png", label: file.name, name: `${file.name.replace(/\.[^.]+$/, "") || file.name}.png` };
 }
 
 /** A video or an audio file, playing from file/download by Range (or the old base64 when it is all there). */

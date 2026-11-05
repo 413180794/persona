@@ -1,12 +1,17 @@
 // Files a message carries as <jarvis-file> tags (docs/protocol.md「发送视频」; iOS draws the same cards), and files an
-// answer names by path that exist on the machine: videos and audio play in place, other files open in the file viewer.
-import { useMemo, useState } from "react";
+// answer names by path that exist on the machine: videos and audio play in place, documents are cards with their first
+// page (iOS DocumentCards), other files open in the file viewer.
+import { useMemo, useRef, useState } from "react";
+import { fileThumbURL } from "../../lib/api";
+import { documentKind, isDarkPage, isDocument, MAX_DOCUMENT_CARDS } from "../../lib/documents";
 import { usePathLinks } from "../../lib/path-presence";
 import { bytes } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
 import { formatDuration, mediaKindOf, replyPaths, type AttachedFile } from "../../lib/turns";
 import { Icon } from "../../ui/icons";
 import { MediaPlayer } from "../../ui/Media";
+import { FileGlyph } from "../session/files/parts";
+import { edgeMask, useEdgeFade } from "./edge-fade";
 
 export function FileCards({ files, mid, align = "end" }: { files: AttachedFile[]; mid: string; align?: "start" | "end" }) {
   if (!files.length) return null;
@@ -60,9 +65,67 @@ export function ReplyFiles({ text, mid, cwd }: { text: string; mid: string; cwd?
       }),
     [paths, key], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  const docs = files.filter((f) => isDocument(f.path)).slice(0, MAX_DOCUMENT_CARDS);
+  const rest = files.filter((f) => !isDocument(f.path));
   return files.length ? (
-    <div className="mt-2">
-      <FileCards files={files} mid={mid} align="start" />
+    <div className="mt-2 flex flex-col gap-1.5">
+      {rest.length > 0 && <FileCards files={rest} mid={mid} align="start" />}
+      {docs.length > 0 && <DocumentCards files={docs} mid={mid} cwd={cwd} />}
     </div>
   ) : null;
+}
+
+/** The documents an answer names, as cards with their first page, in a row that scrolls sideways (iOS DocumentCards). */
+export function DocumentCards({ files, mid, cwd }: { files: AttachedFile[]; mid: string; cwd?: string }) {
+  const row = useRef<HTMLDivElement>(null);
+  const { edges, measure } = useEdgeFade(row, [files.length]);
+  const mask = edgeMask(edges);
+  return (
+    <div
+      ref={row}
+      onScroll={measure}
+      className="flex max-w-full gap-2 overflow-x-auto overscroll-x-contain py-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={{ maskImage: mask, WebkitMaskImage: mask }}
+    >
+      {files.map((f) => (
+        <DocumentCard key={f.path} f={f} mid={mid} cwd={cwd} />
+      ))}
+    </div>
+  );
+}
+
+function DocumentCard({ f, mid, cwd }: { f: AttachedFile; mid: string; cwd?: string }) {
+  // no thumbnail (an old hub, a machine that cannot draw it, the file gone) or a dark page (Quick Look in dark mode):
+  // the file's glyph, as iOS falls back to its symbol
+  const [failed, setFailed] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => openPanel({ kind: "file", mid, path: f.path })}
+      title={f.path}
+      className="flex h-16 w-60 max-w-full shrink-0 items-center gap-3 rounded-[14px] bg-inset px-2 text-left shadow-hairline outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent"
+      style={{ animation: "fade-in 220ms ease-out both" }}
+      data-testid="document-card"
+    >
+      <span className="flex h-12 w-9 shrink-0 items-center justify-center">
+        {failed ? (
+          <FileGlyph name={f.name} size={18} />
+        ) : (
+          <img
+            src={fileThumbURL(mid, f.path, cwd, 128)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onLoad={(e) => isDarkPage(e.currentTarget) && setFailed(true)}
+            onError={() => setFailed(true)}
+            className="max-h-full max-w-full rounded-[4px] bg-white object-contain shadow-hairline"
+          />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-[13px] font-medium text-ink">{f.name}</span>
+        <span className="truncate text-[11.5px] text-ink-3">{documentKind(f.path)}</span>
+      </span>
+    </button>
+  );
 }

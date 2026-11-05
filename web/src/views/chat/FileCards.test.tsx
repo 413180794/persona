@@ -1,0 +1,38 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PathStat } from "../../lib/path-presence";
+import { DocumentCards, ReplyFiles } from "./FileCards";
+
+const stats: Record<string, PathStat> = {
+  "/w/报告.docx": { kind: "file", size: 2048 },
+  "/w/slides.pptx": { kind: "file", size: 4096 },
+  "/w/run.csv": { kind: "file", size: 10 },
+  "/w/gone.pdf": { kind: "missing" },
+};
+vi.mock("../../lib/path-presence", async (orig) => ({
+  ...(await orig<typeof import("../../lib/path-presence")>()),
+  usePathLinks: () => ({ stat: (p: string) => stats[p], key: "k" }),
+}));
+
+describe("documents an answer names (iOS DocumentCards)", () => {
+  beforeEach(() => vi.stubGlobal("localStorage", { getItem: () => "tok" }));
+
+  it("draws each as a card with its first page from file/thumb, its name and what it is", () => {
+    const html = renderToStaticMarkup(<DocumentCards files={[{ kind: "file", path: "/w/报告.docx", name: "报告.docx" }]} mid="m1" cwd="/w" />);
+    expect(html).toContain('data-testid="document-card"');
+    expect(html).toMatch(/src="\/api\/v1\/machines\/m1\/file\/thumb\?path=%2Fw%2F%E6%8A%A5%E5%91%8A\.docx&amp;cwd=%2Fw&amp;size=128/);
+    expect(html).toContain("报告.docx");
+    expect(html).toContain("Word 文档");
+    expect(html).toContain('title="/w/报告.docx"');
+  });
+
+  it("puts the documents that are there in cards, the other files in the plain cards, and leaves out the missing", () => {
+    const html = renderToStaticMarkup(<ReplyFiles text={"写好了 `/w/报告.docx`、`/w/slides.pptx`，日志在 `/w/run.csv`，`/w/gone.pdf` 还没生成"} mid="m1" cwd="/w" />);
+    expect(html.match(/data-testid="document-card"/g)).toHaveLength(2);
+    expect(html).toContain("PowerPoint 演示文稿");
+    expect(html).toContain("run.csv");
+    expect(html).not.toContain("gone.pdf");
+    // the plain card comes first, then the row of documents
+    expect(html.indexOf("run.csv")).toBeLessThan(html.indexOf("报告.docx"));
+  });
+});
