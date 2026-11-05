@@ -3,13 +3,14 @@ import { useDeclaredResult } from "../lib/extension-declared";
 import { allowedTheme, extensionThemeTokens, themeKey, type ExtensionTheme } from "./extension-theme";
 
 const KEY = "persona.extension-theme";
+const AVAILABILITY_CHECK_MS = 30_000;
 interface PaletteState { available: ExtensionTheme[]; selected: string; select: (id: string) => void }
 const PaletteContext = createContext<PaletteState>({ available: [], selected: "", select: () => {} });
 
 export function ExtensionThemeProvider({ children }: { children: ReactNode }) {
-  const result = useDeclaredResult<ExtensionTheme>("themes", "themes");
-  const available = useMemo(() => result.items.filter(allowedTheme), [result.items]);
   const [selected, setSelected] = useState(() => typeof localStorage === "undefined" ? "" : localStorage.getItem(KEY) ?? "");
+  const result = useDeclaredResult<ExtensionTheme>("themes", "themes", selected ? AVAILABILITY_CHECK_MS : 0);
+  const available = useMemo(() => result.items.filter(allowedTheme), [result.items]);
   const select = (id: string) => {
     if (id && !available.some((t) => themeKey(t) === id)) return;
     if (id) localStorage.setItem(KEY, id); else localStorage.removeItem(KEY);
