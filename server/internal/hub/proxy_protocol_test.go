@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 )
 
 func TestProxyProtocolPolicy(t *testing.T) {
@@ -68,20 +70,100 @@ func TestProxyProtocolPolicy(t *testing.T) {
 
 // syncBuffer is a log the servers' goroutines write to while the test reads it.
 type syncBuffer struct {
-	mu sync.Mutex
-	b  bytes.Buffer
+	mu      sync.Mutex
+	b       bytes.Buffer
+	changed chan struct{}
 }
 
 func (s *syncBuffer) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.b.Write(p)
+	n, err := s.b.Write(p)
+	if s.changed != nil {
+		close(s.changed)
+		s.changed = nil
+	}
+	return n, err
 }
 
 func (s *syncBuffer) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.b.String()
+}
+
+func (s *syncBuffer) WaitFor(text string, timeout time.Duration) bool {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		s.mu.Lock()
+		if strings.Contains(s.b.String(), text) {
+			s.mu.Unlock()
+			return true
+		}
+		if s.changed == nil {
+			s.changed = make(chan struct{})
+		}
+		changed := s.changed
+		s.mu.Unlock()
+		select {
+		case <-changed:
+		case <-timer.C:
+			return false
+		}
+	}
+}
+
+func TestSyncBufferWaitFor(t *testing.T) {
+	const target = "refused a connection"
+	t.Run("already written", func(t *testing.T) {
+		var logs syncBuffer
+		_, _ = logs.Write([]byte(target))
+		if !logs.WaitFor(target, time.Second) {
+			t.Fatal("existing log not found")
+		}
+	})
+	t.Run("wait for the complete delayed log", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			var logs syncBuffer
+			done := make(chan bool, 2)
+			for range 2 {
+				go func() { done <- logs.WaitFor(target, 5*time.Second) }()
+			}
+			synctest.Wait()
+			_, _ = logs.Write([]byte("unrelated log\nrefused a "))
+			synctest.Wait()
+			select {
+			case <-done:
+				t.Fatal("wait completed before the target was written")
+			default:
+			}
+			_, _ = logs.Write([]byte("connection\n"))
+			for range 2 {
+				if !<-done {
+					t.Fatal("delayed log not found")
+				}
+			}
+		})
+	})
+	t.Run("missing log times out despite other writes", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			var logs syncBuffer
+			go func() {
+				for range 2 {
+					time.Sleep(2 * time.Second)
+					_, _ = logs.Write([]byte("unrelated log\n"))
+				}
+			}()
+			start := time.Now()
+			if logs.WaitFor(target, 5*time.Second) {
+				t.Fatal("missing log accepted")
+			}
+			if elapsed := time.Since(start); elapsed != 5*time.Second {
+				t.Fatalf("timeout = %s, want 5s", elapsed)
+			}
+		})
+	})
 }
 
 // proxyTestHub is a hub with TLS on loopback, an admin UI open to 192.0.2.0/24 only, and pp as security.proxy_protocol.
@@ -233,7 +315,7 @@ func TestProxyProtocolEndToEnd(t *testing.T) {
 	if _, err := get(t, proxiedClient(t, pin, nil), base+"/api/v1/health", ""); err == nil {
 		t.Fatal("a connection from the proxy's address without a header was served")
 	}
-	if !strings.Contains(logs.String(), "proxy protocol: refused a connection from 127.0.0.1") {
+	if !logs.WaitFor("proxy protocol: refused a connection from 127.0.0.1", 5*time.Second) {
 		t.Fatalf("refusal not logged:\n%s", logs)
 	}
 
