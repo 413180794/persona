@@ -292,6 +292,7 @@ var Features = []string{
 	"connectors",               // GET /api/v1/connectors (docs/plan-connectors.md)
 	"channels",                 // GET /api/v1/channels and each channel's settings, binding, test (docs/channels.md)
 	"runtime_cli",              // phone_runtime_cli kept out of the phone's tools, POST /api/v1/phone/runtime-cli (docs/runtime-cli.md)
+	"task_push",                // Task.push on /api/v1/assistant/tasks: 跑完推送, every run or only what a run sends (docs/assistant.md「跑完推送」)
 }
 
 // Files sent from the phone (POST /api/v1/machines/{mid}/files): the hub streams the body to the node in chunks.

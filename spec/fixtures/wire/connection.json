@@ -66,7 +66,8 @@
         "sessions_delta",
         "connectors",
         "channels",
-        "runtime_cli"
+        "runtime_cli",
+        "task_push"
       ],
       "fp": "",
       "hub_id": "00000000-0000-4000-8000-000000000001",
@@ -145,7 +146,8 @@
           "sessions_delta",
           "connectors",
           "channels",
-          "runtime_cli"
+          "runtime_cli",
+          "task_push"
         ],
         "/type": "hello"
       }
@@ -215,7 +217,8 @@
         "sessions_delta",
         "connectors",
         "channels",
-        "runtime_cli"
+        "runtime_cli",
+        "task_push"
       ],
       "fp": "",
       "hub_id": "00000000-0000-4000-8000-000000000001",
@@ -284,7 +287,8 @@
           "sessions_delta",
           "connectors",
           "channels",
-          "runtime_cli"
+          "runtime_cli",
+          "task_push"
         ],
         "/ok": true,
         "/version": "fixture-version"

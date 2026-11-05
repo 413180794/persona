@@ -24,6 +24,7 @@
   "show_all_runs_other": "Show all {count} runs",
   "row_label": "{title}, {rule}, {next}",
   "created_by_persona": "By Persona",
+  "push_asked": "Alerts only",
   "last_failed": "{text}: {error}",
   "turn_off": "Turn off \"{title}\"",
   "turn_on": "Turn on \"{title}\""

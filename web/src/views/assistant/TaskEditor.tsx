@@ -8,8 +8,9 @@ import { navigate } from "../../lib/router";
 import {
   BYPASS, DAY_NAMES, EFFORTS, everyLabel, fromLocalInput, INTERVALS, lastRunText, MAX_EVERY, MIN_EVERY, momentLabel, nextRun, normalizeDays,
   parseTime, PERMISSION_MODES, repeatsLabel, runDetail, runStatusWord, sameTask, taskBody, taskTitle, toLocalInput, untilLabel, validateTask,
-  WEEKEND, withRepeat, WORKDAYS, type Repeat, type Run, type Task,
+  TASK_PUSH_FEATURE, WEEKEND, withPush, withRepeat, WORKDAYS, type Push, type Repeat, type Run, type Task,
 } from "../../lib/routines";
+import { hubHas, useStore } from "../../lib/store";
 import { Button, cx, Dialog, Spinner, toast, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Field, inputClass, Segmented, SectionTitle, Switch, textareaClass } from "./parts";
@@ -55,6 +56,8 @@ export function TaskEditor({
   const now = useMemo(() => new Date(nowMs), [nowMs]);
   /** The conversation it was scheduled from: 接着原来的对话 can be switched off (and back on before saving). */
   const origin = task.session_id;
+  /** 跑完推送 shows when the hub takes it (task_push), or the task already has it. */
+  const hasPush = useStore((s) => hubHas(s.features, TASK_PUSH_FEATURE)) || task.push === "asked";
 
   useEffect(() => {
     if (!machineID) return;
@@ -351,10 +354,28 @@ export function TaskEditor({
             )}
           </section>
 
+          {hasPush && (
+            <section>
+              <SectionTitle>{t("assistant-taskeditor.section_push")}</SectionTitle>
+              <Segmented<Push>
+                label={t("assistant-taskeditor.section_push")}
+                value={draft.push ?? ""}
+                onChange={(p) => setDraft((d) => withPush(d, p))}
+                options={[
+                  { v: "", label: t("assistant-taskeditor.push_every") },
+                  { v: "asked", label: t("assistant-taskeditor.push_asked") },
+                ]}
+              />
+              <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">
+                {draft.push === "asked" ? t("assistant-taskeditor.push_hint_asked") : t("assistant-taskeditor.push_hint_every")}
+              </p>
+            </section>
+          )}
+
           <section>
             <SectionTitle>{t("assistant-taskeditor.section_chat")}</SectionTitle>
             <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
-              {origin && (
+              {origin && draft.push !== "asked" && (
                 <div className="flex items-center gap-3 px-3.5 py-2.5">
                   <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("assistant-taskeditor.resume_chat")}</span>
                   <Switch checked={!!draft.session_id} label={t("assistant-taskeditor.resume_chat")} onChange={(on) => set({ session_id: on ? origin : undefined })} />

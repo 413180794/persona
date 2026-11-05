@@ -28,6 +28,8 @@
   跑 `python3 scripts/test/web_injected_e2e.py <网页地址> [--shots <目录>]`（桌面 / 手机宽度 × 浅色 / 深色）。
   引用的端到端检查（#2427：引用条、输入框保持空、× 取消、发出去仍是 `> ` 块、气泡和历史消息里的引用卡片能展开）：假 hub 带 `MOCK_QUOTE=1` 起，
   跑 `python3 scripts/test/web_quote_e2e.py <网页地址> [--shots <目录>]`（桌面 / 手机宽度 × 浅色 / 深色；`--before` 只拍改动前的同样几张；任务卡片的引用加 `--tasks`，假 hub 带 `MOCK_TASKS=1` 起）。
+  定时任务「跑完推送」的端到端检查（#2570：hub 有 `task_push` 时编辑页的两个选项、选「只在它自己提醒时」藏起「接着原来的对话」并保存 `push`、列表的标记、选回「每次」；桌面 / 手机宽度 × 浅色 / 深色）：起假 hub 和 `npx vite` 后跑
+  `python3 scripts/test/web_task_push_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`，用法见脚本开头。
   侧栏分组收起的端到端检查（「其他 Agent」收起 / 展开 / 刷新后保持，五种分组方式下每组都能收起，触屏常显箭头，#1417）：假 hub 带 `MOCK_SOURCES=1` 起，再跑
   `python3 scripts/test/web_sidebar_fold_e2e.py <网页地址> [--shots <目录>]`。
   侧边栏收成图标栏的端到端检查（#2524：按钮和 Ctrl+Alt+B、刷新后保持、页面 / Agents / 状态分组收起并保持、窄屏还是抽屉）：假 hub 带 `MOCK_SOURCES=1` 起，

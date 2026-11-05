@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   blankTask, clockLabel, dayLabel, everyLabel, fromLocalInput, fromTemplate, lastRunText, momentLabel, nextHour, nextText, normalizeDays,
-  parseTime, repeatsLabel, ruleText, runDays, runDetail, runsWith, sameTask, splitTasks, taskBody, taskTitle, TEMPLATES, toLocalInput, untilLabel,
+  parseTime, repeatsLabel, ruleText, runDays, runDetail, runsWith, sameTask, splitTasks, taskBody, taskTitle, TEMPLATES, toLocalInput, untilLabel, withPush,
   upcoming, validateTask, withRepeat, type Run, type Task,
 } from "./routines";
 
@@ -126,6 +126,22 @@ describe("the editor", () => {
     expect(once).toMatchObject({ repeat: "once", at: iso(at(2, 15)), launcher: "", effort: "", time: "", weekdays: [] });
     expect(taskBody(task({ repeat: "interval", every_minutes: 45 }))).toMatchObject({ every_minutes: 45, time: "" });
     expect("at" in taskBody(task({ repeat: "interval", every_minutes: 45 }))).toBe(false);
+  });
+
+  it("跑完推送: compared, saved only when changed, and an asked task leaves the conversation it came from", () => {
+    const saved = task({ repeat: "interval", every_minutes: 5, session_id: "main-1" });
+    expect(sameTask(saved, { ...saved, push: "" })).toBe(true); // a hub that does not send it: every run
+    expect(sameTask(saved, { ...saved, push: "asked" })).toBe(false);
+    expect("push" in taskBody(saved, saved)).toBe(false); // unchanged: a hub keeps it, and one that does not know it never gets it
+    expect("push" in taskBody(task({ repeat: "interval", every_minutes: 5 }))).toBe(false); // a new task that pushes every run
+    const asked = withPush(saved, "asked");
+    expect(asked.push).toBe("asked");
+    expect(asked.session_id).toBeUndefined(); // it runs in its own conversation
+    expect(taskBody(asked, saved)).toMatchObject({ push: "asked", session_id: "" });
+    const back = withPush({ ...saved, push: "asked", session_id: undefined }, "");
+    expect(back.push).toBe("");
+    expect(back.session_id).toBeUndefined(); // switched back, it stays in its own conversation
+    expect(taskBody(back, { ...saved, push: "asked" })).toMatchObject({ push: "" });
   });
 
   it("keeps the editor valid when the rule changes", () => {

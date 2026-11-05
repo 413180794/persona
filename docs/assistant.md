@@ -448,7 +448,7 @@ Codex 的 steer 失败转成 start 时，被别的输入的 `turn/started` 认�
 
 App 的 `PUT /api/v1/assistant/tasks/{id}` 请求体里没有 `push` 时保留原值（不认识这个字段的老 App），老 App 的 `PUT /api/v1/assistant/routines` 一律保留；
 `null`、非字符串、不认识的值回 400。助手的 `schedule_routine`、`schedule_followup` 有可选的 `push`（`every` / `asked`），省略时新建的是每次推送、
-已有的保持不变；`schedule_routine` 带 `id` 和 `push` 能改任何一个任务，只改这一项。App 的任务编辑页还没有这个开关（#2570）。
+已有的保持不变；`schedule_routine` 带 `id` 和 `push` 能改任何一个任务，只改这一项。网页的任务编辑页有这个开关（#2570：hub 的 features 里有 `task_push` 才显示，任务已经是 `asked` 的也显示）；iOS / Mac 和 Android 见 #2676。
 
 每个任务可以单独设**启动器（模型）、权限模式、思考强度**（空 = 助手的默认，和以前一样），只能在 App 里改，助手的工具改不了
 （不能自己给自己提权）。`bypassPermissions` 只能在 claude 启动时用 `--permission-mode` 给（控制请求切不过去）：node 新开时不用备用进程，

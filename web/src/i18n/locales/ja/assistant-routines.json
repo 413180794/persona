@@ -22,6 +22,7 @@
   "show_all_runs_other": "{count}回分をすべて表示",
   "row_label": "{title}、{rule}、{next}",
   "created_by_persona": "Personaが作成",
+  "push_asked": "知らせるときだけ",
   "last_failed": "{text}：{error}",
   "turn_off": "「{title}」をオフ",
   "turn_on": "「{title}」をオン"

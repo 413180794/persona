@@ -5,6 +5,12 @@ import { currentLanguage, formatDate, t } from "../i18n";
 
 export type Repeat = "once" | "daily" | "interval";
 
+/** 跑完推送: "" every run's answer is pushed, "asked" only what a run sends itself. */
+export type Push = "" | "asked";
+
+/** The hub feature that says it takes Task.push; without it the editor leaves the setting out. */
+export const TASK_PUSH_FEATURE = "task_push";
+
 export interface Task {
   id: string;
   title: string;
@@ -24,6 +30,9 @@ export interface Task {
   launcher?: string;
   permission_mode?: string;
   effort?: string;
+  /** 跑完推送 (hubs with the task_push feature): "" every run's answer, "asked" only what a run sends with notify_user.
+   *  An "asked" task always runs in its own conversation (docs/assistant.md「跑完推送」). */
+  push?: Push;
   created_by?: string;
   created_at?: string;
   last_run?: string;
@@ -259,6 +268,7 @@ export function sameTask(a: Task, b: Task): boolean {
   if (a.title.trim() !== b.title.trim() || a.prompt.trim() !== b.prompt.trim() || a.repeat !== b.repeat || a.enabled !== b.enabled) return false;
   if ((a.session_id ?? "") !== (b.session_id ?? "") || (a.launcher ?? "") !== (b.launcher ?? "")) return false;
   if ((a.permission_mode ?? "") !== (b.permission_mode ?? "") || (a.effort ?? "") !== (b.effort ?? "")) return false;
+  if ((a.push ?? "") !== (b.push ?? "")) return false;
   switch (a.repeat) {
     case "once":
       return parseTime(a.at)?.getTime() === parseTime(b.at)?.getTime();
@@ -288,7 +298,14 @@ export function taskBody(d: Task, saved?: Task | null): Record<string, unknown> 
   if (at) body.at = at.toISOString();
   if (!saved || (d.launcher ?? "") !== (saved.launcher ?? "")) body.launcher = d.launcher ?? "";
   if (!saved || (d.effort ?? "") !== (saved.effort ?? "")) body.effort = d.effort ?? "";
+  // Only when changed: a hub keeps it when left out, and one that does not know it never gets it.
+  if ((d.push ?? "") !== (saved?.push ?? "")) body.push = d.push ?? "";
   return body;
+}
+
+/** The draft with 跑完推送 set. "asked" runs in the task's own conversation: 接着原来的对话 goes (the hub clears it too). */
+export function withPush(d: Task, push: Push): Task {
+  return push === "asked" ? { ...d, push, session_id: undefined } : { ...d, push };
 }
 
 /** The next whole hour after `now` (a new one-off's time). */

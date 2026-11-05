@@ -258,7 +258,11 @@ function TaskRow({ task, now, onOpen, onToggle }: { task: Task; now: Date; onOpe
           <span className="truncate text-[13.5px] font-medium text-ink">{taskTitle(task)}</span>
           {task.created_by === "assistant" && task.repeat !== "once" && <Pill tone="accent">{t("assistant-routines.created_by_persona")}</Pill>}
         </div>
-        <div className="mt-0.5 truncate text-[12px] text-ink-2">{ruleText(task)}</div>
+        <div className="mt-0.5 truncate text-[12px] text-ink-2">
+          {ruleText(task)}
+          {/* 跑完推送 on the rule's line, not as a pill: two pills squeezed the title away on a phone */}
+          {task.push === "asked" && ` · ${t("assistant-routines.push_asked")}`}
+        </div>
         {next && <div className="mt-0.5 truncate text-[11.5px] text-ink-3 tabular-nums">{next}</div>}
         {with_ && (
           <div className={cx("mt-0.5 flex items-center gap-1 truncate text-[11.5px]", with_.danger ? "font-medium text-red" : "text-ink-3")}>
