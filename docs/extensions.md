@@ -83,6 +83,7 @@ hub 给老路径的每次调用按路由计数（`extension_compat.go` 的 `lega
 | `skills`（版本 1） | — | `id`、`dir`（包里有 `SKILL.md` 的目录） | 纯声明即可 | 助手的技能，和 `assistant.skills` 一样下发，见下面「纯声明贡献」 |
 | `prompts`（版本 1） | — | `id`、`kind`：`instructions`（`file`：包里的 `.md`）/ `quick`（`title`、`text`） | 纯声明即可 | 接在助手 CLAUDE.md 后的说明；App 输入框的快捷提示，见「纯声明贡献」 |
 | `themes`（版本 1） | — | `id`、`name`、`light` / `dark`：角色色 `accent`（必填）、`positive`、`caution`、`danger`、`ai` 的 `#RRGGBB` | 纯声明即可 | 设置 › 外观 › 主题色里多一种，见「纯声明贡献」 |
+| `looks`（版本 1） | — | `id`（`^[a-z0-9][a-z0-9-]{0,31}$`）、`name`、`names?`、`subtitle?`、`subtitles?`、`avatar`（`sizes`：PNG，`svg?`、`safe?`、`dark?`）、`colors?`、`dot?`、`app_icon_fallback`（内置形象的 id） | 纯声明即可；包里有它点名的图 | 设置里的「形象」多一个：Persona 的名字、头像、配色、状态圆点，能换的地方连 App 图标一起换，见下面「形象」 |
 | `triage_templates`（版本 1） | — | `id`、`title`（≤ 40 字）、`text`（≤ 4000 字） | 纯声明即可 | 填收件箱分拣规则（`triage_rules`）时能选的模板，见「纯声明贡献」 |
 | `agent_filters`（版本 1） | — | `id`、`title?`（≤ 40 字）、`when?`（配置里一个布尔字段的名字）、`agents?`（`claude` / `codex`）、`originators?`、`added_dirs?`、`first_message_prefixes?`（至少一种） | 纯声明即可 | 各台电脑上哪些 Agent 会话不进 Agents，见下面「Agent 过滤」 |
 | `messaging`（版本 1，#2138） | — | `id`（`^[a-z][a-z0-9_]{0,31}$`，也是接口路径和事件里的来源 id）、`name`、`icon?`、`capabilities?`、`composer_modes?`、`settings_ui?`（同一个扩展的 `extension_page`）、`links?` | `runtime.http`，`activation_events` 有 `on_startup` | App 的「消息」入口：会话、聊天、发送都走 `/api/v1/messaging/<id>/…`，App 用通用的原生消息组件画，见 [extension-messaging.md](extension-messaging.md) |
@@ -1442,6 +1443,64 @@ App 里是「设置 › 模型供应商 › 新增」的「从扩展添加」（
 - 主题通过 `ColorSpec`／`StyleSpec` 进入设计系统，只有选中「扩展主题」时换色，不改变既有风格或固定主题。拒绝服务端带 `problems`、格式错误或实际背景对比度不合格的项；检查五种风格的深浅色页面和卡片、白字与强调色、气泡文字。缺失角色保留原默认值，不自动调色来通过检查。
 - 主题、提示和模板只在页面及 App 前台读取，前台每 60 秒更新。已选主题的贡献消失或 hub 回 404 时退回跟随风格；同一来源的暂时网络错误保留上一份结果。切换 hub 不借用另一组的主题或提示。
 - 已选主题的离线缓存放本机 Application Support，原子写入且权限为 `0600`；内容变化时才写。未保存表单在 `ExtensionDrafts` 的内存中按 hub 和扩展隔离，外观重建及重新读取不会覆盖它；成功保存后移除，不存密钥或写 UserDefaults。
+
+## 形象（`looks`，#3200）
+
+扩展给 Persona 加形象：名字、头像（多尺寸 PNG，可加 SVG，可分深浅色）、配色、顶栏会动的状态圆点，以及只能用 App 自带图标的地方用哪个内置形象的图标。
+「形象」和「Logo」是一个概念：设置里只有一个「形象」，选了以后头像、品牌标、配色、favicon、（能换的）桌面图标一起换。例子是 `schema/extension/examples/example-looks/`（两个形象，图由 `scripts/assets/make_example_looks.py` 画），装法：`personad extension install dir:schema/extension/examples/example-looks`。
+
+```json
+"looks": [{
+  "id": "aurora", "name": "极光", "names": {"en": "Aurora", "ja": "オーロラ"}, "subtitle": "会发光的小水母",
+  "avatar": {"sizes": {"128": "looks/aurora/avatar-128.png", "256": "looks/aurora/avatar-256.png"}, "svg": "looks/aurora/avatar.svg",
+             "dark": {"sizes": {"256": "looks/aurora/avatar-dark-256.png"}, "svg": "looks/aurora/avatar-dark.svg"}},
+  "colors": {"light": {"primary": "#5B6CFF", "accent": "#3F4FE0", "bubble": "#3F4FE0", "bubble_text": "#FFFFFF"}, "dark": {"accent": "#8C98FF"}},
+  "dot": {"size": 144, "states": {"idle": {"file": "looks/aurora/idle.png", "fps": 6}, "working": {"file": "looks/aurora/working.png"}}},
+  "app_icon_fallback": "persona"
+}]
+```
+
+| 字段 | 规则 |
+| --- | --- |
+| `id` | 形象包的 id 规则（各端拿它当缓存目录名）；`looks` 里全局唯一；不能是内置形象（`persona`、`jarvis`、`jarvis-circuit`）或编进 personad 的形象包（`nwverse`）的 id。`~/.persona/personas/` 里同 id 的形象包优先 |
+| `name` / `names` | 源语言 1–20 字；`names` 只能有 `zh-Hans` / `en` / `ja`，各 1–40 字。各端取 `names[界面语言]` → `names.en` → `name` |
+| `subtitle` / `subtitles` | 设置里卡片的第二行，≤ 40 字 |
+| `avatar.sizes` | 边长（16–1024）→ 包里的正方形 PNG，边长和键一致，至少一张（手表、锁屏、不画 SVG 的地方用位图） |
+| `avatar.svg` / `avatar.dark` / `avatar.safe` | 可选：矢量头像（≤ 256 KB，hub 清洗后下发，网页优先用它）；深色的 `sizes` / `svg`（缺的用浅色的）；同形象包的 `safe` |
+| `colors` | `light` / `dark`，键只能是 `primary`、`secondary`、`accent`、`bubble`、`bubble_text`（对齐 Apple 的 `PersonaPalette`，docs/persona.md「色系」），`#RRGGBB`。对比度不够时各端照形象包的规矩往暗处调，不拒 |
+| `dot` | 可选：五个状态（`idle` 必须有）各一个 APNG 或 PNG，帧边长 ≤ 512，写了 `size` 要一致。没有 `dot` 时 hub 拿最大的头像 PNG 当 `idle` |
+| `app_icon_fallback` | 必须是内置形象的 id：iOS / 安卓桌面图标、已安装的 PWA 图标只能用打包时自带的图，就显示这个内置形象的图标 |
+
+**hub 怎么给出去**（`server/internal/hub/looks.go`）：
+
+- 每个开着的形象当成一个形象包（format 1）：hub 从这一项合成 persona.json（加上 format 1 没有的 `names`、`subtitles`、`avatar.svg`、`avatar.dark`、`app_icon_fallback`、`source`，旧 App 照常忽略），
+  只给它点名的文件（扩展包里别的文件拿不到），SVG 给清洗过的。所以 `GET /api/v1/personas` 也列它，没升级的 App 照样能选。
+- `GET /api/v1/looks` 是新的统一列表：内置形象（`source: builtin`，App 自己画，没有文件）、hub 的形象包（`hub`）、扩展的（`extension`，带 `extension` / `extension_name`），每项有 `app_icon`（内置形象是自己，形象包是 `persona`，扩展的是 `app_icon_fallback`）；`current` 是选中的形象。见 [protocol.md](protocol.md)。
+- **检查**（装的时候查，不过就装不上；每次下发前再查一遍）：文件是包里的普通文件（不跳出包、不是点开头的），PNG ≤ 4 MB、解得开、正方形、边长在范围内且和键一致；SVG ≤ 256 KB 且清洗得了；一个形象 ≤ 16 MB。
+- **SVG 清洗**（`wire.CleanSVG`）：只留画图的元素（`svg g path circle ellipse rect line polyline polygon defs linearGradient radialGradient stop clipPath mask use symbol filter fe… text tspan title desc`），
+  别的（`script`、`foreignObject`、`style`、`image`、`a`、`animate`…）连内容去掉；去掉 `on*` 属性、指到文档外的 `href`、不是 `url(#…)` 的 `url()`、`javascript:`、注释和 DOCTYPE；带实体的拒收；根必须是有 `viewBox` 或宽高的 `<svg>`。
+  响应另带 `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`；网页用 `<img>` 画。
+- **缓存**：同形象包，各端按 `rev` 缓存（合成的 persona.json、清洗后的 SVG 都算在 `rev` 里）；文件 URL 的 `?rev=` 是当前 rev 时响应带 `Cache-Control: private, max-age=31536000, immutable`。
+- 装、卸、升级、停用带形象的扩展都广播 `personas`。
+
+**选中的形象存在 hub**（设置 `look`），一台 hub 是一个人的，各端跟着它：`PUT /api/v1/looks/current {"id"}`，改了广播 `look`。
+
+- **停用**扩展或关掉这一项：选择保留，`current.effective` 回 `persona`；打开就恢复。**卸载**：选的是它的形象就把选择改回 `persona`，广播 `look`。
+- **从各端本地的老设置迁上来**（iOS `UserDefaults persona.id`、安卓 `jarvis-appearance` 的 `persona`、网页 `localStorage jarvis.persona`）：
+  连上有 `/api/v1/looks` 的 hub，hub 上 `current.id` 是 `null` 且本机明确选过 → `PUT {"id": 本机的, "if_unset": true}`，以回来的为准（第一台连上的设备的选择成为大家的）；hub 上有选择 → 用 hub 的；
+  本机没选过 → 不上传；旧 hub（404）→ 照旧用本机的。本机的选择仍作为缓存，启动先显示它，不等 hub。
+
+**各端桌面图标能不能跟着变**：
+
+| 位置 | 能跟到哪 | 为什么 |
+| --- | --- | --- |
+| 网页 favicon、通知图标 | 任何形象（含扩展的） | 运行时换 `link[rel=icon]`，深色头像走 `prefers-color-scheme`；未读角标照旧叠在上面 |
+| 网页 PWA 已安装的图标 | 不跟，一直是团子 | 图标在安装时从 manifest 拿（iOS 加到主屏时定死；Chrome 的 WebAPK 只在定期检查 manifest 时更新还要用户确认），manifest 是静态的、所有人共用 |
+| 安卓桌面图标 | 现在一直是团子 | 只能在 AndroidManifest 预先声明的 `activity-alias` 之间切换；现在只打包了团子一个图标，而且切换会让部分启动器删掉固定的快捷方式和小组件、可能杀掉进程。以后给内置形象加图标时按 `app_icon` 选 |
+| iOS 桌面图标 | 内置形象的图标 | `setAlternateIconName` 只能选打包的图标集，按 `app_icon` 选；Apple 端接入 |
+
+扩展的测试里用 `exttest.CheckLooks(t, manifest, dir)` 按 hub 的规则查一遍形象的文件。
+截图用的假 hub：`MOCK_LOOKS=example python3 scripts/mock/mock_hub.py` 列出示例扩展的两个形象（`/api/v1/looks`、`/api/v1/personas` 都有），`MOCK_LOOK=<id>` 启动时就选着它，`PUT /api/v1/looks/current` 推 `look`。
 
 ## Agent 过滤（#2428）
 

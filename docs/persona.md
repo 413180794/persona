@@ -24,6 +24,10 @@
 - **hub 内置形象**：编进 personad 的形象包（`server/internal/hub/personas/<id>/`），每台 hub 都有，不用手动安装；手机选中时下载并缓存。
   现在只有**奶蛙**（id `nwverse`）：按用户在 NWVERSE 贡献看板上的等级换样子的分级形象，见下面「分级形象」。
 - **其他形象**：放在 hub 机器的 `~/.persona/personas/<id>/`，手机选中时下载并缓存；和内置形象同 id 时目录里的优先（在一台 hub 上先试新图）。
+- **扩展的形象**（#3200）：扩展在清单的 `looks` 里声明，hub 把它当形象包下发（`/api/v1/personas` 也列），见 [extensions.md](extensions.md)「形象」。
+- **选中的形象存在 hub、各端同步**（#3200）：`GET /api/v1/looks` 是内置形象、形象包、扩展形象的统一列表和当前选择，`PUT /api/v1/looks/current` 改，广播 `look`；
+  下面说的各端本地的键（`persona.id`、`AppStyleStore.personaId`、`jarvis.persona`）变成缓存，第一次连上新 hub 时迁上去，规则见 extensions.md「形象」。
+  App 图标并进形象：只能用打包图标的地方按形象的 `app_icon` 选。
 - 体验模式只有默认形象（`AppModel.persona`）。
 
 ## 为什么形象放 hub、不进 App 包

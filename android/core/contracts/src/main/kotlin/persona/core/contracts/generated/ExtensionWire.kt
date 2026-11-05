@@ -233,6 +233,7 @@ data class ExtensionContributes(
     val skills: List<ExtensionSkillItem>? = null,
     val prompts: List<ExtensionPromptItem>? = null,
     val themes: List<ExtensionThemeItem>? = null,
+    val looks: List<ExtensionLookItem>? = null,
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
@@ -258,6 +259,7 @@ private data class ExtensionContributesKnown(
     val skills: List<ExtensionSkillItem>? = null,
     val prompts: List<ExtensionPromptItem>? = null,
     val themes: List<ExtensionThemeItem>? = null,
+    val looks: List<ExtensionLookItem>? = null,
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
@@ -265,7 +267,7 @@ private data class ExtensionContributesKnown(
 
 object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
     private val known = ExtensionContributesKnown.serializer()
-    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging")
+    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging")
     override val descriptor: SerialDescriptor = known.descriptor
 
     override fun deserialize(decoder: Decoder): ExtensionContributes {
@@ -290,6 +292,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             skills = fields.skills,
             prompts = fields.prompts,
             themes = fields.themes,
+            looks = fields.looks,
             triageTemplates = fields.triageTemplates,
             agentFilters = fields.agentFilters,
             messaging = fields.messaging,
@@ -316,6 +319,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             skills = value.skills,
             prompts = value.prompts,
             themes = value.themes,
+            looks = value.looks,
             triageTemplates = value.triageTemplates,
             agentFilters = value.agentFilters,
             messaging = value.messaging,
@@ -390,6 +394,156 @@ data class ExtensionThemeItem(
     val name: String = "",
     val light: ExtensionThemeColors = ExtensionThemeColors(),
     val dark: ExtensionThemeColors = ExtensionThemeColors(),
+)
+
+/**
+ * A look every app draws itself: 团子 (the default), 面罩, 汇流.
+ */
+object ExtensionBuiltinLook {
+    const val PERSONA = "persona"
+    const val JARVIS = "jarvis"
+    const val JARVIS_CIRCUIT = "jarvis-circuit"
+    val ALL = listOf("persona", "jarvis", "jarvis-circuit")
+}
+
+/**
+ * A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub
+ * checks).
+ */
+@Serializable(with = ExtensionLookTextsSerializer::class)
+data class ExtensionLookTexts(
+    /** Extra keys stay at this object's level on the wire; declared fields always win. */
+    val additionalProperties: Map<String, JsonElement> = emptyMap(),
+)
+
+@Serializable
+private class ExtensionLookTextsKnown
+
+object ExtensionLookTextsSerializer : KSerializer<ExtensionLookTexts> {
+    private val known = ExtensionLookTextsKnown.serializer()
+    private val keys = setOf<String>()
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionLookTexts {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionLookTexts needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionLookTexts needs an object")
+        val fields = input.json.decodeFromJsonElement(known, JsonObject(obj.filterKeys { it in keys }))
+        return ExtensionLookTexts(
+            additionalProperties = obj.filterKeys { it !in keys },
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionLookTexts) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionLookTexts needs JSON")
+        val fields = ExtensionLookTextsKnown(
+        )
+        val obj = output.json.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(JsonObject(value.additionalProperties.filterKeys { it !in keys } + obj))
+    }
+}
+
+/**
+ * The face on dark backgrounds; what it leaves out is the light one's.
+ */
+@Serializable
+data class ExtensionLookAvatarDark(
+    /**
+     * Side in pixels → a square PNG of the package.
+     */
+    val sizes: Map<String, String>? = null,
+    /**
+     * An SVG of the package (the hub cleans it).
+     */
+    val svg: String? = null,
+)
+
+/**
+ * The face: square PNGs by their side in pixels (16 to 1024, at least one), an SVG, and the same for dark mode.
+ */
+@Serializable
+data class ExtensionLookAvatar(
+    /**
+     * Side in pixels → a square PNG of the package.
+     */
+    val sizes: Map<String, String> = emptyMap(),
+    /**
+     * An SVG of the package (the hub cleans it: no scripts, nothing from outside it).
+     */
+    val svg: String? = null,
+    /**
+     * The share of the circle what matters stays inside.
+     */
+    val safe: Double? = null,
+    val dark: ExtensionLookAvatarDark? = null,
+)
+
+/**
+ * An appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).
+ */
+@Serializable
+data class ExtensionLookPalette(
+    val primary: String? = null,
+    val secondary: String? = null,
+    val accent: String? = null,
+    val bubble: String? = null,
+    @SerialName("bubble_text") val bubbleText: String? = null,
+)
+
+@Serializable
+data class ExtensionLookColors(
+    val light: ExtensionLookPalette? = null,
+    val dark: ExtensionLookPalette? = null,
+)
+
+@Serializable
+data class ExtensionLookDotState(
+    /**
+     * An APNG (or a still PNG) of the package.
+     */
+    val file: String = "",
+    val fps: Double? = null,
+)
+
+/**
+ * The dot's states; idle is required.
+ */
+@Serializable
+data class ExtensionLookDotStates(
+    val idle: ExtensionLookDotState = ExtensionLookDotState(),
+    val thinking: ExtensionLookDotState? = null,
+    val working: ExtensionLookDotState? = null,
+    @SerialName("needs_you") val needsYou: ExtensionLookDotState? = null,
+    val offline: ExtensionLookDotState? = null,
+)
+
+/**
+ * The animated dot in the Persona tab's top bar; without it the hub takes the largest avatar PNG as idle.
+ */
+@Serializable
+data class ExtensionLookDot(
+    /**
+     * The frames' side in pixels.
+     */
+    val size: Int? = null,
+    val states: ExtensionLookDotStates = ExtensionLookDotStates(),
+)
+
+/**
+ * A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona package;
+ * app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be shown.
+ */
+@Serializable
+data class ExtensionLookItem(
+    val id: String = "",
+    val name: String = "",
+    val names: ExtensionLookTexts? = null,
+    val subtitle: String? = null,
+    val subtitles: ExtensionLookTexts? = null,
+    val avatar: ExtensionLookAvatar = ExtensionLookAvatar(),
+    val colors: ExtensionLookColors? = null,
+    val dot: ExtensionLookDot? = null,
+    @SerialName("app_icon_fallback") val appIconFallback: String = "",
 )
 
 /**

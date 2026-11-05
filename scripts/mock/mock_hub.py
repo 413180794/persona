@@ -6790,6 +6790,9 @@ def personas():
 def persona_file(rest):
     """<id>/<file> inside its package, or None."""
     pid, _, f = rest.partition("/")
+    ext = _ext_looks().get(pid)
+    if ext:
+        return os.path.join(LOOKS_ROOT, f) if f in ext[1] else None
     for base in PERSONA_ROOTS:
         root = os.path.realpath(os.path.join(base, pid))
         p = os.path.realpath(os.path.join(root, f))
@@ -6806,6 +6809,104 @@ def set_persona_tier(key):
             send({"type": "personas"})
         except Exception:
             pass
+
+
+# ---------- looks (docs/extensions.md「形象」, #3200) ----------
+# MOCK_LOOKS=example (or a package directory): an extension's looks (schema/extension/examples/example-looks), listed
+# and served as the hub does (a made persona.json; only the files a look names). GET /api/v1/looks lists the built-in
+# looks, the packages and these; PUT /api/v1/looks/current chooses one (MOCK_LOOK: chosen at start) and pushes "look".
+_LOOKS_ARG = os.environ.get("MOCK_LOOKS", "")
+LOOKS_ROOT = (os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "schema", "extension", "examples", "example-looks")
+              if _LOOKS_ARG == "example" else _LOOKS_ARG)
+LOOK_CHOICE = {"id": os.environ.get("MOCK_LOOK") or None, "updated_at": "2026-11-05T12:00:00Z"}
+BUILTIN_LOOKS = [("persona", "团子", {"en": "Mochi", "ja": "だんご"}), ("jarvis", "面罩", {"en": "Visor", "ja": "バイザー"}),
+                 ("jarvis-circuit", "汇流", {"en": "Circuit", "ja": "サーキット"})]
+
+
+def _ext_looks():
+    """id → (manifest, files, extension id, extension name, app_icon_fallback) of MOCK_LOOKS's looks."""
+    if not LOOKS_ROOT or not os.path.isfile(os.path.join(LOOKS_ROOT, "persona-extension.json")):
+        return {}
+    ext = json.load(open(os.path.join(LOOKS_ROOT, "persona-extension.json")))
+    out = {}
+    for l in ext.get("contributes", {}).get("looks", []):
+        av = l["avatar"]
+        files = sorted(set(av["sizes"].values()) | ({av["svg"]} if av.get("svg") else set())
+                       | set((av.get("dark") or {}).get("sizes", {}).values())
+                       | ({av["dark"]["svg"]} if (av.get("dark") or {}).get("svg") else set())
+                       | {st["file"] for st in (l.get("dot") or {}).get("states", {}).values()})
+        dot = l.get("dot")
+        if not dot:
+            side = max(av["sizes"], key=int)
+            dot = {"size": int(side), "states": {"idle": {"file": av["sizes"][side]}}}
+        m = {"format": 1, "id": l["id"], "name": l["name"], "avatar": av, "dot": dot, "app_icon_fallback": l["app_icon_fallback"],
+             "source": {"kind": "extension", "extension": ext["id"], "extension_name": ext["name"]}}
+        for k in ("subtitle", "names", "subtitles", "colors"):
+            if k in l:
+                m[k] = l[k]
+        out[l["id"]] = (m, files, ext["id"], ext["name"], l["app_icon_fallback"])
+    return out
+
+
+def ext_look_personas():
+    out = []
+    for lid, (m, files, _, _, _) in _ext_looks().items():
+        raw = json.dumps(m, sort_keys=True).encode()
+        rev, total = _persona_rev(LOOKS_ROOT, files, raw)
+        out.append({"id": lid, "rev": rev, "bytes": total + len(raw), "manifest": m})
+    return out
+
+
+def looks_list():
+    out = [{"id": i, "source": "builtin", "name": n, "names": ns, "app_icon": i} for i, n, ns in BUILTIN_LOOKS]
+    ext = _ext_looks()
+    for p in personas() + ext_look_personas():
+        m = p["manifest"]
+        v = {"id": p["id"], "source": "hub", "name": m.get("name", ""), "app_icon": "persona", "rev": p["rev"], "bytes": p["bytes"], "manifest": m}
+        for k in ("names", "subtitle", "subtitles"):
+            if k in m:
+                v[k] = m[k]
+        if p["id"] in ext:
+            _, _, eid, ename, icon = ext[p["id"]]
+            v.update(source="extension", extension=eid, extension_name=ename, app_icon=icon)
+        out.append(v)
+    return out
+
+
+def look_current(looks=None):
+    looks = looks if looks is not None else looks_list()
+    cid = LOOK_CHOICE["id"]
+    eff = cid if cid and any(l["id"] == cid for l in looks) else "persona"
+    cur = {"id": cid, "effective": eff}
+    if cid:
+        cur["updated_at"] = LOOK_CHOICE["updated_at"]
+    return cur
+
+
+def looks_route(handler, method, p, raw):
+    if p == "/api/v1/looks" and method == "GET":
+        looks = looks_list()
+        handler.send_json({"looks": looks, "current": look_current(looks)})
+        return True
+    if p == "/api/v1/looks/current" and method == "PUT":
+        body = json.loads(raw or b"{}")
+        looks = looks_list()
+        if body.get("if_unset") and LOOK_CHOICE["id"]:
+            handler.send_json(look_current(looks))
+            return True
+        if not any(l["id"] == body.get("id") for l in looks):
+            handler.send_json({"error": "no look %r" % body.get("id")}, 404)
+            return True
+        LOOK_CHOICE.update(id=body["id"], updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        cur = look_current(looks)
+        for send, _ in list(LIVE):
+            try:
+                send({"type": "look", "id": cur["id"], "effective": cur["effective"]})
+            except Exception:
+                pass
+        handler.send_json(cur)
+        return True
+    return False
 
 
 # MOCK_STREAM=1: the first conversation keeps working after it is opened: every 2 s a thought, a tool call or a reply
@@ -9987,13 +10088,14 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/agents": return self.send_json({"sources": []})
         if p == "/api/v1/agents/sessions": return self.send_json({"sessions": [], "items": []})
         if p == "/api/v1/agents/prefs": return self.send_json({"pins": [], "view": {}, "sections": [], "assign": {}})
-        if p == "/api/v1/personas": return self.send_json({"personas": personas()})
+        if p == "/api/v1/personas": return self.send_json({"personas": personas() + ext_look_personas()})
+        if looks_route(self, "GET", p, b""): return
         if p.startswith("/api/v1/personas/"):
             f = persona_file(p[len("/api/v1/personas/"):])
             if not f: return self.send_json({"error": "no such file"}, 404)
             body = open(f, "rb").read()
             self.send_response(200)
-            self.send_header("Content-Type", "application/json" if f.endswith(".json") else "image/png")
+            self.send_header("Content-Type", "application/json" if f.endswith(".json") else "image/svg+xml" if f.endswith(".svg") else "image/png")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -10387,6 +10489,7 @@ class H(BaseHTTPRequestHandler):
         if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith("/api/v1/extensions/lark-connector/-/ui/")) and \
                 lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if pins_route(self, p): return
+        if looks_route(self, self.command, p, self.last_body): return
         if providers_route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if doctor_route(self, p, "POST"): return

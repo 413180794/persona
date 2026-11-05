@@ -586,6 +586,11 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 			}
 		}
 	}
+	for _, l := range m.Looks() {
+		if err := CheckLookFiles(l, root); err != nil {
+			return err
+		}
+	}
 	if m.Node != nil {
 		if !NodePrograms {
 			return errors.New("这个版本的 hub 还不能在电脑上运行扩展的程序（node 段），先升级 hub")

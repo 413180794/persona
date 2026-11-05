@@ -182,6 +182,7 @@ export interface Contributes {
   skills?: SkillItem[];
   prompts?: PromptItem[];
   themes?: ThemeItem[];
+  looks?: LookItem[];
   triage_templates?: TriageTemplateItem[];
   agent_filters?: AgentFilterItem[];
   messaging?: MessagingItem[];
@@ -236,6 +237,102 @@ export interface ThemeItem {
   name: string;
   light: ThemeColors;
   dark: ThemeColors;
+}
+
+/**
+ * A look every app draws itself: 团子 (the default), 面罩, 汇流.
+ */
+export type BuiltinLook = "persona" | "jarvis" | "jarvis-circuit" | (string & {});
+export const BUILTIN_LOOKS = ["persona", "jarvis", "jarvis-circuit"] as const;
+
+/**
+ * A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub
+ * checks).
+ */
+export interface LookTexts {
+  /** Extra keys are opaque JSON; declared properties keep their own types. */
+  [key: string]: unknown;
+}
+
+/**
+ * The face on dark backgrounds; what it leaves out is the light one's.
+ */
+export interface LookAvatarDark {
+  /** Side in pixels → a square PNG of the package. */
+  sizes?: Record<string, string>;
+  /** An SVG of the package (the hub cleans it). */
+  svg?: string;
+}
+
+/**
+ * The face: square PNGs by their side in pixels (16 to 1024, at least one), an SVG, and the same for dark mode.
+ */
+export interface LookAvatar {
+  /** Side in pixels → a square PNG of the package. */
+  sizes: Record<string, string>;
+  /** An SVG of the package (the hub cleans it: no scripts, nothing from outside it). */
+  svg?: string;
+  /** The share of the circle what matters stays inside. */
+  safe?: number;
+  dark?: LookAvatarDark;
+}
+
+/**
+ * An appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).
+ */
+export interface LookPalette {
+  primary?: string;
+  secondary?: string;
+  accent?: string;
+  bubble?: string;
+  bubble_text?: string;
+}
+
+export interface LookColors {
+  light?: LookPalette;
+  dark?: LookPalette;
+}
+
+export interface LookDotState {
+  /** An APNG (or a still PNG) of the package. */
+  file: string;
+  fps?: number;
+}
+
+/**
+ * The dot's states; idle is required.
+ */
+export interface LookDotStates {
+  idle: LookDotState;
+  thinking?: LookDotState;
+  working?: LookDotState;
+  needs_you?: LookDotState;
+  offline?: LookDotState;
+}
+
+/**
+ * The animated dot in the Persona tab's top bar; without it the hub takes the largest avatar PNG as idle.
+ */
+export interface LookDot {
+  /** The frames' side in pixels. */
+  size?: number;
+  states: LookDotStates;
+}
+
+/**
+ * A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona package;
+ * app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be shown.
+ */
+export interface LookItem {
+  id: string;
+  name: string;
+  names?: LookTexts;
+  subtitle?: string;
+  subtitles?: LookTexts;
+  avatar: LookAvatar;
+  colors?: LookColors;
+  dot?: LookDot;
+  app_icon_fallback: BuiltinLook;
 }
 
 /**

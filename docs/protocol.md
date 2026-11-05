@@ -618,7 +618,9 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | PUT | `/api/v1/devices/{id}/widgets` | 这台设备屏幕上有哪些扩展的小组件 `{"widgets":[{extension,id,family}]}`（整份替换，最多 64 个）：扩展发 `ui.invalidate` 时 hub 给有这个小组件的设备发后台推送 `extension_widget`（每台每个 15 分钟最多一条），见 `docs/extensions.md`「系统级位置」 |
 | POST | `/api/v1/notify` | 给各台设备发一条提醒（给扩展用，见 `docs/extensions.md`「发通知」）：`{"title","body","machine_id"?,"session_id"?,"level"?:"active\|time-sensitive","id"?,"silent"?,"actions"?,"ui"?,"state"?}`，标题和正文至少一个（标题最多 120 字、正文 1000 字），`machine_id` 和 `session_id` 要么都给要么都不给，`level` 默认 `active`，同一个 `id` 在手机上替换上一条（apns-collapse-id，最长 64 字节），`silent: true` 不带声音。扩展凭据可带最多 3 个 `actions`、`ui` 与 `state`（通知按钮规格见 `docs/extensions.md`「通知按钮」）。带会话时点开进那个会话；会话被屏蔽回 `{"sent":false,"reason":"muted"}`，不发。按设备的 `input` 开关（关掉「需要你」就不收），也照「手机静音」和桌面端在线的规则；常驻连接里是 `notify` 事件，`kind` 为 `alert`（没有会话时 `machine_id`、`session_id` 是空字符串）；推送的 collapse id 是 `notify:<id>`，不会和 hub 自己的推送撞。payload 编码后超过 3500 字节、`machine_id` / `session_id` 超过 128 字节回 400。完整权限的凭据与具有 `notify` 范围的扩展凭据可调用，非扩展凭据带 `actions`/`ui`/`state` 回 400。回 `{"sent":true}` 只表示交给了推送，不保证送到 |
 | GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，personad 内置的包在前（`~/.persona/personas/` 里同 id 的目录优先），再是 `~/.persona/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。分级形象（奶蛙）只给当前档：`manifest` 是这一档自己的 persona.json（文件在 `tiers/<档>/` 下），`rev` 是这一档文件的哈希，换档就是 rev 变了。没有包时是空列表 |
-| GET | `/api/v1/personas/{id}/{file…}` | 包里的一个文件（PNG / persona.json），只给包目录里的普通文件（不跟软链、不给点开头的） |
+| GET | `/api/v1/personas/{id}/{file…}` | 包里的一个文件（PNG / SVG / persona.json），只给包目录里的普通文件（不跟软链、不给点开头的）；扩展的形象只给清单点名的文件，SVG 是清洗过的（带 CSP）；`?rev=` 是当前 rev 时带 `Cache-Control: immutable` |
+| GET | `/api/v1/looks` | 全部形象（#3200，`docs/extensions.md`「形象」）：`{"looks":[{"id","source":"builtin\|hub\|extension","name","names?","subtitle?","subtitles?","app_icon","extension?","extension_name?","rev?","bytes?","manifest?"}],"current":{"id":选的或 null,"effective":该显示的,"updated_at?"}}`；内置形象在前，再是形象包和扩展的形象（`/api/v1/personas` 也列它们） |
+| PUT | `/api/v1/looks/current` | `{"id", "if_unset?"}` 选形象（存 hub，各端同步），回新的 `current`；不在列表里 404；`if_unset` 时 hub 上已经有选择就原样回、不改（各端把老的本机选择迁上来用）。改了广播 `look` |
 | GET | `/api/v1/plugins` | hub 的插件：`{"plugins":[{"id","name","kind","status","error"?, "version", "source", "enabled", "contributes", "needs_setup"?, …}], "can_install"}`，`status` 是 `disabled / needs_setup / incompatible / stopped / starting / running / error`（`docs/extensions.md`「hub 的接口」）；`features` 带 `plugins` 时才有 |
 | GET / PUT / DELETE | `/api/v1/plugins/{id}/-/…`、`/api/v1/plugins/-/…` | 插件的详情、开关、配置、密钥（完整权限的设备），预览 / 安装 / 升级 / 回滚 / 卸载（只认主 token 经回环）；`features` 带 `plugin_manager` 时才有，见 `docs/extensions.md`「hub 的接口」 |
 | GET | `/api/v1/machines/{mid}/ports/{port}` | 端口探测（`docs/ports.md`）：`{"port","listening","http","title"?}`，只看不放行 |
@@ -681,7 +683,8 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `notify` | `kind: interaction / done / assistant`、`machine_id`、`session_id`、`title`、`subtitle`、`body`，交互另带 `interaction_id`；只发给声明 `ws_notify` 的连接，见下文 |
 | `lock_test` | `lock_test_id`、`lock_test_due_at`、`lock_test_sent_at`、`lock_test_title`、`lock_test_body`；只发给本设备声明 `lock_test` 的选定连接，见「锁屏测试」 |
 | `inbox` | 无内容载荷；列表变化提示，客户端重新拉取收件箱 |
-| `personas` | 无内容载荷；形象列表变了（分级形象换了档），客户端重拉 `GET /api/v1/personas`，新的包下载完整后再换（`docs/persona.md`「分级形象」） |
+| `look` | `{"id","effective"}`：选中的形象变了（另一台设备选的、卸载扩展回默认），各端换上 `effective`（#3200） |
+| `personas` | 无内容载荷；形象列表变了（分级形象换了档、装 / 卸 / 停用带形象的扩展），客户端重拉 `GET /api/v1/personas`，新的包下载完整后再换（`docs/persona.md`「分级形象」） |
 | `error` | `machine_id`、`session_id`、`error`；例如订阅补发失败，客户端据此核对会话 |
 | `pong` | `id`（字符串，原样回应客户端应用层 ping） |
 

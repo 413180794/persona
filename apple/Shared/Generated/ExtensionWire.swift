@@ -480,13 +480,14 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     var skills: [ExtensionSkillItem]?
     var prompts: [ExtensionPromptItem]?
     var themes: [ExtensionThemeItem]?
+    var looks: [ExtensionLookItem]?
     var triageTemplates: [ExtensionTriageTemplateItem]?
     var agentFilters: [ExtensionAgentFilterItem]?
     var messaging: [ExtensionMessagingItem]?
     /// Extra keys stay at this object's level on the wire; declared fields always win.
     var additionalProperties: [String: JSONValue]
 
-    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, messaging: [ExtensionMessagingItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
+    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, looks: [ExtensionLookItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, messaging: [ExtensionMessagingItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
         self.connectors = connectors
         self.voice = voice
         self.computer = computer
@@ -503,6 +504,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.skills = skills
         self.prompts = prompts
         self.themes = themes
+        self.looks = looks
         self.triageTemplates = triageTemplates
         self.agentFilters = agentFilters
         self.messaging = messaging
@@ -526,6 +528,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         case skills
         case prompts
         case themes
+        case looks
         case triageTemplates = "triage_templates"
         case agentFilters = "agent_filters"
         case messaging
@@ -549,15 +552,16 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.skills = ExtensionWireJSON.decode([ExtensionSkillItem].self, from: raw["skills"])
         self.prompts = ExtensionWireJSON.decode([ExtensionPromptItem].self, from: raw["prompts"])
         self.themes = ExtensionWireJSON.decode([ExtensionThemeItem].self, from: raw["themes"])
+        self.looks = ExtensionWireJSON.decode([ExtensionLookItem].self, from: raw["looks"])
         self.triageTemplates = ExtensionWireJSON.decode([ExtensionTriageTemplateItem].self, from: raw["triage_templates"])
         self.agentFilters = ExtensionWireJSON.decode([ExtensionAgentFilterItem].self, from: raw["agent_filters"])
         self.messaging = ExtensionWireJSON.decode([ExtensionMessagingItem].self, from: raw["messaging"])
-        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging"]
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"]
         additionalProperties = raw.filter { !known.contains($0.key) }
     }
 
     func encode(to encoder: Encoder) throws {
-        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging"]
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"]
         var fields = additionalProperties.filter { !known.contains($0.key) }
         if let value = connectors { fields["connectors"] = try ExtensionWireJSON.encode(value) }
         if let value = voice { fields["voice"] = try ExtensionWireJSON.encode(value) }
@@ -575,6 +579,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         if let value = skills { fields["skills"] = try ExtensionWireJSON.encode(value) }
         if let value = prompts { fields["prompts"] = try ExtensionWireJSON.encode(value) }
         if let value = themes { fields["themes"] = try ExtensionWireJSON.encode(value) }
+        if let value = looks { fields["looks"] = try ExtensionWireJSON.encode(value) }
         if let value = triageTemplates { fields["triage_templates"] = try ExtensionWireJSON.encode(value) }
         if let value = agentFilters { fields["agent_filters"] = try ExtensionWireJSON.encode(value) }
         if let value = messaging { fields["messaging"] = try ExtensionWireJSON.encode(value) }
@@ -713,6 +718,276 @@ nonisolated struct ExtensionThemeItem: Codable, Hashable, Sendable {
         self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
         self.light = (try? c.decodeIfPresent(ExtensionThemeColors.self, forKey: .light)) ?? ExtensionThemeColors()
         self.dark = (try? c.decodeIfPresent(ExtensionThemeColors.self, forKey: .dark)) ?? ExtensionThemeColors()
+    }
+}
+
+/// A look every app draws itself: 团子 (the default), 面罩, 汇流.
+nonisolated enum ExtensionBuiltinLook {
+    static let persona = "persona"
+    static let jarvis = "jarvis"
+    static let jarvisCircuit = "jarvis-circuit"
+    static let all = ["persona", "jarvis", "jarvis-circuit"]
+}
+
+/// A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub
+/// checks).
+nonisolated struct ExtensionLookTexts: Codable, Hashable, Sendable {
+    /// Extra keys stay at this object's level on the wire; declared fields always win.
+    var additionalProperties: [String: JSONValue]
+
+    init(additionalProperties: [String: JSONValue] = [:]) {
+        self.additionalProperties = additionalProperties
+    }
+
+    init(from decoder: Decoder) throws {
+        additionalProperties = try decoder.singleValueContainer().decode([String: JSONValue].self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(additionalProperties)
+    }
+}
+
+/// The face on dark backgrounds; what it leaves out is the light one's.
+nonisolated struct ExtensionLookAvatarDark: Codable, Hashable, Sendable {
+    /// Side in pixels → a square PNG of the package.
+    var sizes: [String: String]?
+    /// An SVG of the package (the hub cleans it).
+    var svg: String?
+
+    init(sizes: [String: String]? = nil, svg: String? = nil) {
+        self.sizes = sizes
+        self.svg = svg
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case sizes
+        case svg
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.sizes = try? c.decodeIfPresent([String: String].self, forKey: .sizes)
+        self.svg = try? c.decodeIfPresent(String.self, forKey: .svg)
+    }
+}
+
+/// The face: square PNGs by their side in pixels (16 to 1024, at least one), an SVG, and the same for dark mode.
+nonisolated struct ExtensionLookAvatar: Codable, Hashable, Sendable {
+    /// Side in pixels → a square PNG of the package.
+    var sizes: [String: String]
+    /// An SVG of the package (the hub cleans it: no scripts, nothing from outside it).
+    var svg: String?
+    /// The share of the circle what matters stays inside.
+    var safe: Double?
+    var dark: ExtensionLookAvatarDark?
+
+    init(sizes: [String: String] = [:], svg: String? = nil, safe: Double? = nil, dark: ExtensionLookAvatarDark? = nil) {
+        self.sizes = sizes
+        self.svg = svg
+        self.safe = safe
+        self.dark = dark
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case sizes
+        case svg
+        case safe
+        case dark
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.sizes = (try? c.decodeIfPresent([String: String].self, forKey: .sizes)) ?? [:]
+        self.svg = try? c.decodeIfPresent(String.self, forKey: .svg)
+        self.safe = try? c.decodeIfPresent(Double.self, forKey: .safe)
+        self.dark = try? c.decodeIfPresent(ExtensionLookAvatarDark.self, forKey: .dark)
+    }
+}
+
+/// An appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).
+nonisolated struct ExtensionLookPalette: Codable, Hashable, Sendable {
+    var primary: String?
+    var secondary: String?
+    var accent: String?
+    var bubble: String?
+    var bubbleText: String?
+
+    init(primary: String? = nil, secondary: String? = nil, accent: String? = nil, bubble: String? = nil, bubbleText: String? = nil) {
+        self.primary = primary
+        self.secondary = secondary
+        self.accent = accent
+        self.bubble = bubble
+        self.bubbleText = bubbleText
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case primary
+        case secondary
+        case accent
+        case bubble
+        case bubbleText = "bubble_text"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.primary = try? c.decodeIfPresent(String.self, forKey: .primary)
+        self.secondary = try? c.decodeIfPresent(String.self, forKey: .secondary)
+        self.accent = try? c.decodeIfPresent(String.self, forKey: .accent)
+        self.bubble = try? c.decodeIfPresent(String.self, forKey: .bubble)
+        self.bubbleText = try? c.decodeIfPresent(String.self, forKey: .bubbleText)
+    }
+}
+
+nonisolated struct ExtensionLookColors: Codable, Hashable, Sendable {
+    var light: ExtensionLookPalette?
+    var dark: ExtensionLookPalette?
+
+    init(light: ExtensionLookPalette? = nil, dark: ExtensionLookPalette? = nil) {
+        self.light = light
+        self.dark = dark
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case light
+        case dark
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.light = try? c.decodeIfPresent(ExtensionLookPalette.self, forKey: .light)
+        self.dark = try? c.decodeIfPresent(ExtensionLookPalette.self, forKey: .dark)
+    }
+}
+
+nonisolated struct ExtensionLookDotState: Codable, Hashable, Sendable {
+    /// An APNG (or a still PNG) of the package.
+    var file: String
+    var fps: Double?
+
+    init(file: String = "", fps: Double? = nil) {
+        self.file = file
+        self.fps = fps
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case file
+        case fps
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.file = (try? c.decodeIfPresent(String.self, forKey: .file)) ?? ""
+        self.fps = try? c.decodeIfPresent(Double.self, forKey: .fps)
+    }
+}
+
+/// The dot's states; idle is required.
+nonisolated struct ExtensionLookDotStates: Codable, Hashable, Sendable {
+    var idle: ExtensionLookDotState
+    var thinking: ExtensionLookDotState?
+    var working: ExtensionLookDotState?
+    var needsYou: ExtensionLookDotState?
+    var offline: ExtensionLookDotState?
+
+    init(idle: ExtensionLookDotState = ExtensionLookDotState(), thinking: ExtensionLookDotState? = nil, working: ExtensionLookDotState? = nil, needsYou: ExtensionLookDotState? = nil, offline: ExtensionLookDotState? = nil) {
+        self.idle = idle
+        self.thinking = thinking
+        self.working = working
+        self.needsYou = needsYou
+        self.offline = offline
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case idle
+        case thinking
+        case working
+        case needsYou = "needs_you"
+        case offline
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.idle = (try? c.decodeIfPresent(ExtensionLookDotState.self, forKey: .idle)) ?? ExtensionLookDotState()
+        self.thinking = try? c.decodeIfPresent(ExtensionLookDotState.self, forKey: .thinking)
+        self.working = try? c.decodeIfPresent(ExtensionLookDotState.self, forKey: .working)
+        self.needsYou = try? c.decodeIfPresent(ExtensionLookDotState.self, forKey: .needsYou)
+        self.offline = try? c.decodeIfPresent(ExtensionLookDotState.self, forKey: .offline)
+    }
+}
+
+/// The animated dot in the Persona tab's top bar; without it the hub takes the largest avatar PNG as idle.
+nonisolated struct ExtensionLookDot: Codable, Hashable, Sendable {
+    /// The frames' side in pixels.
+    var size: Int?
+    var states: ExtensionLookDotStates
+
+    init(size: Int? = nil, states: ExtensionLookDotStates = ExtensionLookDotStates()) {
+        self.size = size
+        self.states = states
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case size
+        case states
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.size = try? c.decodeIfPresent(Int.self, forKey: .size)
+        self.states = (try? c.decodeIfPresent(ExtensionLookDotStates.self, forKey: .states)) ?? ExtensionLookDotStates()
+    }
+}
+
+/// A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona package;
+/// app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be shown.
+nonisolated struct ExtensionLookItem: Codable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var names: ExtensionLookTexts?
+    var subtitle: String?
+    var subtitles: ExtensionLookTexts?
+    var avatar: ExtensionLookAvatar
+    var colors: ExtensionLookColors?
+    var dot: ExtensionLookDot?
+    var appIconFallback: String
+
+    init(id: String = "", name: String = "", names: ExtensionLookTexts? = nil, subtitle: String? = nil, subtitles: ExtensionLookTexts? = nil, avatar: ExtensionLookAvatar = ExtensionLookAvatar(), colors: ExtensionLookColors? = nil, dot: ExtensionLookDot? = nil, appIconFallback: String = "") {
+        self.id = id
+        self.name = name
+        self.names = names
+        self.subtitle = subtitle
+        self.subtitles = subtitles
+        self.avatar = avatar
+        self.colors = colors
+        self.dot = dot
+        self.appIconFallback = appIconFallback
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case names
+        case subtitle
+        case subtitles
+        case avatar
+        case colors
+        case dot
+        case appIconFallback = "app_icon_fallback"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        self.names = try? c.decodeIfPresent(ExtensionLookTexts.self, forKey: .names)
+        self.subtitle = try? c.decodeIfPresent(String.self, forKey: .subtitle)
+        self.subtitles = try? c.decodeIfPresent(ExtensionLookTexts.self, forKey: .subtitles)
+        self.avatar = (try? c.decodeIfPresent(ExtensionLookAvatar.self, forKey: .avatar)) ?? ExtensionLookAvatar()
+        self.colors = try? c.decodeIfPresent(ExtensionLookColors.self, forKey: .colors)
+        self.dot = try? c.decodeIfPresent(ExtensionLookDot.self, forKey: .dot)
+        self.appIconFallback = (try? c.decodeIfPresent(String.self, forKey: .appIconFallback)) ?? ""
     }
 }
 

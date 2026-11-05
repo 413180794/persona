@@ -309,6 +309,8 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 		}
 	}
 	reg.Reserve("connectors", own...)
+	// The looks the apps draw and the ones built into personad (looks.go): no extension's look takes their ids.
+	reg.Reserve("looks", append(slices.Clone(extension.BuiltinLooks), h.builtinPersonaIDs()...)...)
 	// No agent_sources id is reserved: the hub has no personal agents source of its own (extension_agents.go).
 	if path := siblingProgram(wechat.Program); path != "" {
 		if err := reg.AddBuiltin(wechatManifest(h, path), filepath.Dir(path), true); err != nil {
@@ -384,6 +386,9 @@ func (ps *extensions) changed(c extension.Change) {
 	}
 	if ps.h != nil {
 		ps.h.agentFiltersChanged(ctx) // only when they changed (agent_filters.go)
+	}
+	if ps.h != nil {
+		ps.h.looksChanged(ctx, c, ps.reg.Get(c.ID)) // its looks came or went (looks.go)
 	}
 	if c.ID == cuaExtensionID && ps.h != nil {
 		ps.h.computerChanged(ctx)

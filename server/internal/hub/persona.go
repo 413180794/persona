@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -119,6 +120,8 @@ type personaPackage struct {
 	total int64
 	raw   []byte // persona.json as written
 	m     personaManifest
+	// source is the extension it comes from (looks.go; nil: the hub's own).
+	source *lookSource
 }
 
 func (h *Hub) personasDir() string { return filepath.Join(h.cfg.dir, "personas") }
@@ -170,6 +173,12 @@ func (h *Hub) personaPackages() []*personaPackage {
 			out = append(out, p)
 		}
 	}
+	// Then the extensions' looks (looks.go): a package of the hub's of the same id keeps its place.
+	for _, p := range h.extensionLooks() {
+		if !slices.ContainsFunc(out, func(q *personaPackage) bool { return q.id == p.id }) {
+			out = append(out, p)
+		}
+	}
 	return out
 }
 
@@ -217,6 +226,11 @@ func (h *Hub) personaPackage(id string) (*personaPackage, error) {
 	for _, b := range h.builtinPersonaIDs() {
 		if b == id {
 			return openPersona(mustSub(h.builtinLooks, id), id)
+		}
+	}
+	for _, p := range h.extensionLooks() {
+		if p.id == id {
+			return p, nil
 		}
 	}
 	return nil, dirErr
@@ -493,7 +507,13 @@ func (h *Hub) personaRoutes(api *http.ServeMux) {
 			ct = "application/octet-stream"
 		}
 		w.Header().Set("Content-Type", ct)
-		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// At the rev the apps were told (?rev=), a file never changes: the browser may keep it.
+		immutable := false
+		if rev := r.URL.Query().Get("rev"); rev != "" {
+			info, err := h.personaInfo(p)
+			immutable = err == nil && info.Rev == rev
+		}
+		personaFileHeaders(w, name, immutable)
 		_, _ = io.Copy(w, f)
 	})
 }

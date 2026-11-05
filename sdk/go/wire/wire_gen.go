@@ -167,6 +167,7 @@ type Contributes struct {
 	Skills          []SkillItem          `json:"skills,omitempty"`
 	Prompts         []PromptItem         `json:"prompts,omitempty"`
 	Themes          []ThemeItem          `json:"themes,omitempty"`
+	Looks           []LookItem           `json:"looks,omitempty"`
 	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
 	AgentFilters    []AgentFilterItem    `json:"agent_filters,omitempty"`
 	Messaging       []MessagingItem      `json:"messaging,omitempty"`
@@ -180,7 +181,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging"} {
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -212,7 +213,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters", "messaging":
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -265,6 +266,136 @@ type ThemeItem struct {
 	Name  string      `json:"name"`
 	Light ThemeColors `json:"light"`
 	Dark  ThemeColors `json:"dark"`
+}
+
+// BuiltinLook: A look every app draws itself: 团子 (the default), 面罩, 汇流.
+const (
+	BuiltinLookPersona       = "persona"
+	BuiltinLookJarvis        = "jarvis"
+	BuiltinLookJarvisCircuit = "jarvis-circuit"
+)
+
+// BuiltinLooks are the values of BuiltinLook, in order.
+var BuiltinLooks = []string{"persona", "jarvis", "jarvis-circuit"}
+
+// LookTexts: A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters
+// (the hub checks).
+type LookTexts struct {
+	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
+	AdditionalProperties map[string]json.RawMessage `json:"-"`
+}
+
+func (v *LookTexts) UnmarshalJSON(data []byte) error {
+	var extra map[string]json.RawMessage
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	declared := map[string]json.RawMessage{}
+	for _, key := range []string{} {
+		if value, ok := extra[key]; ok {
+			declared[key] = value
+			delete(extra, key)
+		}
+	}
+	data, err := json.Marshal(declared)
+	if err != nil {
+		return err
+	}
+	type known LookTexts
+	var fields known
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	fields.AdditionalProperties = extra
+	*v = LookTexts(fields)
+	return nil
+}
+
+func (v LookTexts) MarshalJSON() ([]byte, error) {
+	type known LookTexts
+	data, err := json.Marshal(known(v))
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	for key, value := range v.AdditionalProperties {
+		fields[key] = value
+	}
+	return json.Marshal(fields)
+}
+
+// LookAvatarDark: the face on dark backgrounds; what it leaves out is the light one's.
+type LookAvatarDark struct {
+	// Side in pixels → a square PNG of the package.
+	Sizes map[string]string `json:"sizes,omitempty"`
+	// An SVG of the package (the hub cleans it).
+	Svg string `json:"svg,omitempty"`
+}
+
+// LookAvatar: the face: square PNGs by their side in pixels (16 to 1024, at least one), an SVG, and the same for dark
+// mode.
+type LookAvatar struct {
+	// Side in pixels → a square PNG of the package.
+	Sizes map[string]string `json:"sizes"`
+	// An SVG of the package (the hub cleans it: no scripts, nothing from outside it).
+	Svg string `json:"svg,omitempty"`
+	// The share of the circle what matters stays inside.
+	Safe float64         `json:"safe,omitempty"`
+	Dark *LookAvatarDark `json:"dark,omitempty"`
+}
+
+// LookPalette: an appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).
+type LookPalette struct {
+	Primary    string `json:"primary,omitempty"`
+	Secondary  string `json:"secondary,omitempty"`
+	Accent     string `json:"accent,omitempty"`
+	Bubble     string `json:"bubble,omitempty"`
+	BubbleText string `json:"bubble_text,omitempty"`
+}
+
+type LookColors struct {
+	Light *LookPalette `json:"light,omitempty"`
+	Dark  *LookPalette `json:"dark,omitempty"`
+}
+
+type LookDotState struct {
+	// An APNG (or a still PNG) of the package.
+	File string  `json:"file"`
+	Fps  float64 `json:"fps,omitempty"`
+}
+
+// LookDotStates: the dot's states; idle is required.
+type LookDotStates struct {
+	Idle     LookDotState  `json:"idle"`
+	Thinking *LookDotState `json:"thinking,omitempty"`
+	Working  *LookDotState `json:"working,omitempty"`
+	NeedsYou *LookDotState `json:"needs_you,omitempty"`
+	Offline  *LookDotState `json:"offline,omitempty"`
+}
+
+// LookDot: the animated dot in the Persona tab's top bar; without it the hub takes the largest avatar PNG as idle.
+type LookDot struct {
+	// The frames' side in pixels.
+	Size   int           `json:"size,omitempty"`
+	States LookDotStates `json:"states"`
+}
+
+// LookItem: A look (形象, docs/extensions.md「形象」): Persona's name, face, colors and dot. The hub serves it as a persona
+// package; app_icon_fallback is the built-in look whose icon stands for it where only the app's own icons can be
+// shown.
+type LookItem struct {
+	ID              string      `json:"id"`
+	Name            string      `json:"name"`
+	Names           *LookTexts  `json:"names,omitempty"`
+	Subtitle        string      `json:"subtitle,omitempty"`
+	Subtitles       *LookTexts  `json:"subtitles,omitempty"`
+	Avatar          LookAvatar  `json:"avatar"`
+	Colors          *LookColors `json:"colors,omitempty"`
+	Dot             *LookDot    `json:"dot,omitempty"`
+	AppIconFallback string      `json:"app_icon_fallback"`
 }
 
 // TriageTemplateItem: A template of an inbox source's triage rules (triage_rules): settings offer it.
@@ -2103,6 +2234,15 @@ var newDef = map[string]func() any{
 	"PromptItem":                func() any { return new(PromptItem) },
 	"ThemeColors":               func() any { return new(ThemeColors) },
 	"ThemeItem":                 func() any { return new(ThemeItem) },
+	"LookTexts":                 func() any { return new(LookTexts) },
+	"LookAvatarDark":            func() any { return new(LookAvatarDark) },
+	"LookAvatar":                func() any { return new(LookAvatar) },
+	"LookPalette":               func() any { return new(LookPalette) },
+	"LookColors":                func() any { return new(LookColors) },
+	"LookDotState":              func() any { return new(LookDotState) },
+	"LookDotStates":             func() any { return new(LookDotStates) },
+	"LookDot":                   func() any { return new(LookDot) },
+	"LookItem":                  func() any { return new(LookItem) },
 	"TriageTemplateItem":        func() any { return new(TriageTemplateItem) },
 	"AgentFilterItem":           func() any { return new(AgentFilterItem) },
 	"ConnectorItem":             func() any { return new(ConnectorItem) },
