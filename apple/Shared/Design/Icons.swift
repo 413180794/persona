@@ -89,6 +89,8 @@ extension Theme {
         static let gitBranch = "arrow.triangle.branch"
         /// 分支到新聊天: a new conversation from a reply (#2137).
         static let forkChat = "arrow.branch"
+        /// 回退到这里: back to before one of your messages in a Claude session (#2915).
+        static let rewindChat = "clock.arrow.circlepath"
         static let gitUpstream = "cloud"
         static let gitNoUpstream = "icloud.slash"
         static let retry = "arrow.clockwise"

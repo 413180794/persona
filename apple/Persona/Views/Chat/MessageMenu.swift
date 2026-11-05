@@ -30,6 +30,12 @@ final class MessageMenu {
     /// 分支到新聊天 (#2137): a new conversation from the reply with this item id. canFork: the chat's session can.
     @ObservationIgnored var fork: ((String) -> Void)?
     @ObservationIgnored var canFork: () -> Bool = { false }
+    /// 回退到这里 (#2915) on your own message: (item id, its text, what to restore). rewindBlock: nil when the chat's
+    /// session never offers it, else why it is off now ("" when on).
+    @ObservationIgnored var rewind: ((String, String, Rewind.Restore) -> Void)?
+    @ObservationIgnored var rewindBlock: () -> String? = { nil }
+    /// The message of yours whose 回退 was tapped: the chat asks what to restore (a dialog of the page, like `more`).
+    var rewinding: RewindAsk?
     /// The reply whose ⋯ was tapped: the chat shows its menu (a dialog of the page, not of the bar, which the list's
     /// tap-to-close takes away with the same tap).
     var more: String?
@@ -75,6 +81,11 @@ final class MessageMenu {
     func close() {
         if selected != nil { withAnimation(.easeOut(duration: 0.15)) { selected = nil } }
     }
+}
+
+struct RewindAsk: Identifiable, Equatable {
+    var id: String
+    var text: String
 }
 
 struct SelectableText: Identifiable {
@@ -257,12 +268,14 @@ private struct MessageActionBarHost: ViewModifier {
                             // The bar may stick out of a narrow bubble, but not out of the chat.
                             let inArea = geo.frame(in: .named(MessageMenu.area))
                             let areaWidth = max(menu.areaWidth, inArea.maxX)
-                            let width = MessageActionBar.width(isUser: isUser, more: MessageActionBar.forks(id: id, isUser: isUser, menu: menu))
+                            let count = MessageActionBar.count(id: id, isUser: isUser, menu: menu)
+                            // Six actions are wider than a small phone: they share what the chat has.
+                            let width = min(MessageActionBar.width(count: count), max(menu.areaWidth, inArea.maxX) - 16)
                             let x = min(max(inArea.minX + menu.anchor.x, width / 2 + 8), areaWidth - width / 2 - 8) - inArea.minX
                             // Above the finger; below it when that would go under the navigation bar.
                             let above = frame.minY + menu.anchor.y - MessageActionBar.height - 16 > 140
                             let y = menu.anchor.y + (above ? -(MessageActionBar.height / 2 + 16) : MessageActionBar.height / 2 + 24)
-                            MessageActionBar(id: id, text: text, isUser: isUser, date: date, menu: menu)
+                            MessageActionBar(id: id, text: text, isUser: isUser, date: date, menu: menu, itemWidth: MessageActionBar.itemWidth(width, count: count))
                                 .position(x: x, y: y)
                                 .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
@@ -327,10 +340,23 @@ struct MessageActionBar: View {
     var isUser: Bool
     var date: Date?
     var menu: MessageMenu
+    var itemWidth: CGFloat = Self.item
 
     static let height: CGFloat = 62
     static let item: CGFloat = 58
-    static func width(isUser: Bool, more: Bool = false) -> CGFloat { item * CGFloat((isUser ? 5 : 4) + (more ? 1 : 0)) + 12 }
+    static func width(isUser: Bool, more: Bool = false) -> CGFloat { width(count: (isUser ? 5 : 4) + (more ? 1 : 0)) }
+    static func width(count: Int) -> CGFloat { item * CGFloat(count) + 12 }
+    /// Each action's width when the bar is `width` wide.
+    static func itemWidth(_ width: CGFloat, count: Int) -> CGFloat { min(item, (width - 12) / CGFloat(max(count, 1))) }
+    /// How many actions the bar has for this message.
+    static func count(id: String, isUser: Bool, menu: MessageMenu) -> Int {
+        (isUser ? 5 : 4) + (forks(id: id, isUser: isUser, menu: menu) ? 1 : 0) + (rewinds(id: id, isUser: isUser, menu: menu) ? 1 : 0)
+    }
+    /// Your own message ends in 回退 when the chat's session is a Claude agent's and the message is a transcript line
+    /// of its own (`<uuid>#<n>`); while the session cannot, the dialog says why.
+    static func rewinds(id: String, isUser: Bool, menu: MessageMenu) -> Bool {
+        isUser && menu.rewind != nil && menu.rewindBlock() != nil && Rewind.entry(of: id) != nil
+    }
     /// A reply ends in ⋯ with 分支到新聊天 when the session can fork and the reply is a Claude transcript line of its
     /// own (`<uuid>#<n>`).
     static func forks(id: String, isUser: Bool, menu: MessageMenu) -> Bool {
@@ -351,6 +377,9 @@ struct MessageActionBar: View {
             }
             if isUser {
                 action("编辑", "pencil") { menu.edit?(text) }
+            }
+            if Self.rewinds(id: id, isUser: isUser, menu: menu) {
+                action("回退", Theme.Icon.rewindChat) { menu.rewinding = RewindAsk(id: id, text: text) }
             }
             if Self.forks(id: id, isUser: isUser, menu: menu) {
                 action("更多", Theme.Icon.more) { menu.more = id }
@@ -378,7 +407,7 @@ struct MessageActionBar: View {
             Text(title).font(Theme.Font.label).lineLimit(1)
         }
         .foregroundStyle(.white)
-        .frame(width: Self.item, height: Self.height)
+        .frame(width: itemWidth, height: Self.height)
         .contentShape(.rect)
     }
 }

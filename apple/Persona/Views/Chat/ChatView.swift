@@ -1942,6 +1942,7 @@ struct ChatView: View {
                 }
             }
         }
+        .rewindDialogs(menu: menu)
         .sheet(isPresented: Binding(get: { wakeDrawer != nil }, set: { if !$0 { wakeDrawer = nil } })) { wakeDrawerSheet }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
@@ -2750,6 +2751,24 @@ struct ChatView: View {
                     menu.selected = last?.id
                 }
             }
+            if let what = UserDefaults.standard.string(forKey: "showRewind") { // 回退 on the second-to-last message of yours: bar / ask / run
+                Task {
+                    try? await Task.sleep(for: .seconds(6))
+                    let users = model.chat(key).blocks.flatMap { b -> [Item] in
+                        guard case .turn(let t) = b else { return [] }
+                        return t.users.compactMap { if case .user(let i) = $0 { i } else { nil } }
+                    }
+                    guard let pick = users.dropLast().last ?? users.last else { return }
+                    if what == "ask" {
+                        menu.rewinding = RewindAsk(id: pick.id, text: pick.text ?? "")
+                    } else if what == "run" { // what 只回退对话 does, through the hub
+                        menu.rewind?(pick.id, pick.text ?? "", .conversation)
+                    } else {
+                        menu.anchor = CGPoint(x: 260, y: 20)
+                        menu.selected = pick.id
+                    }
+                }
+            }
             if UserDefaults.standard.bool(forKey: "loadAll") {
                 Task {
                     try? await Task.sleep(for: .seconds(3))
@@ -2830,6 +2849,12 @@ struct ChatView: View {
             }
         }
         menu.canFork = { [model, key] in model.session(key)?.canFork == true }
+        menu.rewind = { [model, key] itemID, text, restore in
+            Task { await model.rewind(key, items: model.chat(key).items, at: itemID, text: text, restore: restore) }
+        }
+        menu.rewindBlock = { [model, key] in
+            model.rewinding.contains(key) ? "正在回退" : Rewind.block(model.session(key))
+        }
         menu.agent = { [model, key] in model.session(key)?.agentLabel ?? "Claude" }
         menu.source = { [model, key] in
             let s = model.session(key)

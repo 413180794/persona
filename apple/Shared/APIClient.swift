@@ -690,6 +690,13 @@ nonisolated struct APIClient: Sendable {
     func fork(_ k: SessionKey, at itemID: String) async throws -> String {
         try await post(sp(k) + "/fork", body: ForkBody(at_item_id: itemID), timeout: 60, as: Forked.self).session_id
     }
+    private struct RewindBody: Encodable { var prompt: String; var occurrence: Int; var prompts_after: Int; var restore: String }
+    /// 回退到这里 (#2915): the node walks Claude Code's /rewind to before the message (up to 90 s on the node). Its
+    /// refusals (dialog_open, input_draft, rewind_busy, rewind_nothing, rewind_mismatch…) are 409 with a message to show.
+    func rewind(_ k: SessionKey, prompt: String, occurrence: Int, promptsAfter: Int, restore: String) async throws -> Data {
+        try await post(sp(k) + "/rewind", body: RewindBody(prompt: prompt, occurrence: occurrence, prompts_after: promptsAfter, restore: restore),
+                       timeout: 110)
+    }
     /// 删除对话: the hub takes it out of every app's list; the transcript stays on its computer.
     func deleteSession(_ k: SessionKey) async throws { try await delete(sp(k)) }
 

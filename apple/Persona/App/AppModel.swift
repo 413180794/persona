@@ -100,6 +100,8 @@ final class AppModel {
     @ObservationIgnored private var sessionIndex: [SessionKey: Session] = [:]
     /// Sessions a 分支到新聊天 is being made from (fork): a second tap waits for the first.
     @ObservationIgnored private var forking: Set<SessionKey> = []
+    /// Sessions a 回退到这里 is running in (#2915): the node drives Claude's /rewind, up to a minute and a half.
+    private(set) var rewinding: Set<SessionKey> = []
     /// One observable cell per session a view has looked up (`session(_:)`): a view showing one session is drawn again
     /// when that session changes, not on every push about any of them (the open chat and the tab badges were redrawn
     /// for each machine's list, 2026-10-31). `allSessions` is still there for views about all of them.
@@ -1827,6 +1829,40 @@ final class AppModel {
         } catch {
             show(error)
             return nil
+        }
+    }
+
+    /// 回退到这里 (#2915): the node walks Claude Code's /rewind back to before the message with this item id (`Rewind`).
+    /// `text` (the bubble's words) goes back into the composer when Claude's own box was emptied. One at a time per
+    /// session; the chat's list reloads by itself (the node changes the transcript's `history` token).
+    @discardableResult
+    func rewind(_ key: SessionKey, items: [Item], at itemID: String, text: String, restore: Rewind.Restore) async -> Bool {
+        guard let api = api(key.group), rewinding.insert(key).inserted else { return false }
+        defer { rewinding.remove(key) }
+        toast = Toast("正在回退…")
+        do {
+            var full: String?
+            if let cut = Rewind.cutItem(items, id: itemID) { full = try await api.fullItem(key, id: cut).text }
+            guard let target = Rewind.target(items, id: itemID, full: full) else {
+                toast = Toast("这条消息没有文字，没法回退到它", style: .error)
+                return false
+            }
+            let data = try await api.rewind(key, prompt: target.prompt, occurrence: target.occurrence,
+                                            promptsAfter: target.promptsAfter, restore: restore.rawValue)
+            let result = (try? JSON.decoder.decode(Rewind.Result.self, from: data)) ?? Rewind.Result()
+            if result.inputCleared == true {
+                drafts[key] = text
+                toast = Toast(Rewind.done(result, asked: restore), style: .success)
+            } else {
+                toast = Toast(Rewind.done(result, asked: restore) + "。" + Rewind.inputKept, style: .info)
+            }
+            Haptics.success()
+            return true
+        } catch {
+            if error.isOffline { notDone(); return false }
+            toast = Toast(Rewind.failure(error), style: .error)
+            Haptics.error()
+            return false
         }
     }
 
