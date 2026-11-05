@@ -185,3 +185,123 @@ func TestLinuxSandboxForReal(t *testing.T) {
 		t.Errorf("proxy counts %+v", st)
 	}
 }
+
+func TestLinksOn(t *testing.T) {
+	root := t.TempDir()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.MkdirAll(filepath.Join(root, ".jarvis", "extensions", "data"), 0o700))
+	must(os.MkdirAll(filepath.Join(root, "dotfiles", "real"), 0o700))
+	must(os.Symlink(".jarvis", filepath.Join(root, ".persona")))
+	must(os.Symlink(filepath.Join(root, "dotfiles", "real"), filepath.Join(root, ".jarvis", "extensions", "data", "x")))
+	got := linksOn(filepath.Join(root, ".persona", "extensions", "data", "x", "tmp"))
+	// t.TempDir may itself be reached through a link (/var -> private/var on macOS); every link is named by its real
+	// directory.
+	real, err := filepath.EvalSymlinks(root)
+	must(err)
+	want := append(linksOn(root), filepath.Join(real, ".persona"), filepath.Join(real, ".jarvis", "extensions", "data", "x"))
+	if !slices.Equal(got, want) {
+		t.Errorf("linksOn = %v, want %v", got, want)
+	}
+	if got := linksOn(filepath.Join(real, ".jarvis", "extensions")); len(got) != 0 {
+		t.Errorf("a real path has links %v", got)
+	}
+	if got := linksOn("relative/path"); got != nil {
+		t.Errorf("relative %v", got)
+	}
+	must(os.Symlink("loop", filepath.Join(real, "loop")))
+	if got := linksOn(filepath.Join(real, "loop", "x")); len(got) != 1 {
+		t.Errorf("loop %v", got)
+	}
+}
+
+// TestDarwinSandboxForReal runs a copy of this binary under sandbox-exec from a home directory whose state directory
+// is a symlink (~/.persona -> .jarvis), as the hub names it: it runs, writes its data and temp directories, cannot read
+// or write the rest of the home directory (also not through the link), cannot dial out, and reaches through the
+// proxy only the host it may.
+func TestDarwinSandboxForReal(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin only")
+	}
+	if sup := Probe(); !sup.SandboxExec {
+		t.Skip("no sandbox here: " + sup.Why)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	state := filepath.Join(home, ".persona")
+	pkg, data, run := filepath.Join(state, "extensions", "installed", "probe"), filepath.Join(state, "extensions", "data", "probe"),
+		filepath.Join(state, "extensions", "run", "probe")
+	if err := os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(".jarvis", state); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{pkg, data, run} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The protected fixture is in the real state directory, named through the link.
+	const contents = "synthetic protected home contents"
+	fixture := filepath.Join(home, ".jarvis", homeFixtureName)
+	if err := os.WriteFile(fixture, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	self, _ := os.Executable()
+	bin, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := filepath.Join(pkg, "probe")
+	if err := os.WriteFile(command, bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
+	defer srv.Close()
+	target := strings.TrimPrefix(srv.URL, "http://")
+	px := &egress.Proxy{HubAddr: target, Upstream: func(*url.URL) (*url.URL, error) { return nil, nil },
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("192.0.2.1")}, nil },
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, network, target)
+		}}
+	if err := px.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer px.Close()
+	proxyURL := px.Register("probe", egress.Rule{Hosts: []string{"allowed.test"}})
+
+	plan := Plan{ID: "probe", Command: command, Args: []string{"probe", data, state}, Pkg: pkg, Data: data, Run: run, ProxyURL: proxyURL}
+	name, args, env := Darwin(plan)
+	cmd := exec.Command(name, args...)
+	cmd.Dir = pkg
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s\nprofile:\n%s", err, out, args[1])
+	}
+	got := string(out)
+	for _, want := range []string{"write data: yes", "write home: no", "write tmp: yes", "read home: no", "dial out: no", "get allowed.test: yes", "get denied.test: no"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("want %q in\n%s", want, got)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(data, "x")); err != nil {
+		t.Errorf("its data: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(state, ".persona-sandbox-probe")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("sandbox wrote to the protected home: %v", err)
+	}
+	if got, err := os.ReadFile(fixture); err != nil || string(got) != contents {
+		t.Errorf("protected home fixture changed: %v", err)
+	}
+	if st := px.Stats("probe"); st.Allowed != 1 || st.Denied != 1 {
+		t.Errorf("proxy counts %+v", st)
+	}
+}

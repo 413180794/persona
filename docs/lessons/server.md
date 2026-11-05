@@ -2,6 +2,12 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- macOS 的 sandbox-exec 里，路径上的软链本身也要能读（2026-11-06）：扩展沙箱的 profile 拒绝读家目录、只放行包 / 数据 / 运行目录的真实路径，
+  但 hub 用 `~/.persona/…`（软链到 `.jarvis`，或反过来）称呼它们。内核解析路径时要读软链 `~/.persona`，它在被拒绝的家目录里，于是 `execvp` 报
+  `Operation not permitted`，经软链读写数据目录也失败；只把目录换成真实路径不够，参数、`HOME`、环境变量里的 socket 还是原路径。做法是把路上每个软链按
+  「真实所在目录 + 自己的名字」单独 `(allow file-read* (literal …))`：只能读到它指向哪里，后面的东西仍按真实路径判断（实测经软链读家目录里的其他文件仍被拒）；
+  只放 `file-read-metadata` 不够。测试临时目录本身在 `/var -> private/var` 下，`TestDarwinSandboxForReal` 用软链的状态目录真跑一遍，去掉放行就复现原报错。
+
 - 待办 Agent 的关联与移除要按同一顺序锁行（2026-11-05，#2660）：按会话取事务锁，再按 id 锁目标和其他活动待办的父行，最后更新 Agent 行，避免并发关联／移除的 deadlock 和重复活动链接。自动关联先确认目标不是已有行或 dismissed 标记，再释放旧活动链接，最后插入新行；`todo_agents_active` 是即时唯一索引，先插再释放会报 23505。保留 soft unlink，意外冲突时整笔事务回滚。回归观察真实锁等待并用 `FOR UPDATE NOWAIT` 检查顺序，不靠增加 sleep 或重试绕过。
 
 - 扩展按钮通知要检查普通直连 APNs，不只看 relay（2026-11-05，#2619）：relay 的密文封装已有 `mutable-content: 1`，直连只写动态 category 和 actions 时，App 在后台首次收到新 category 的通知服务扩展不会运行，无法在交付前注册按钮。有扩展按钮时才加这个字段，同时更新 `.apns` 样例；普通、无按钮及静态交互通知保持原行为。回归检查真正进入假 APNs 请求的 JSON，服务端通过不代替 iPhone 首条后台通知验收。

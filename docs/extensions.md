@@ -341,6 +341,9 @@ hub 里有一个**出网代理**（`server/internal/extension/egress`），第�
 **macOS**：`sandbox-exec`，profile 是：默认放行，再拒绝所有出站网络（只放 hub 代理的本机端口和自己运行目录里的 unix socket）、拒绝所有写（只放数据目录、运行目录、`/dev`）、
 拒绝读家目录（只放包、数据、运行目录）。没有网络命名空间，所以代理用本机 TCP 端口加凭据；没有资源上限。2026-11-05 在 macOS 27.2 上实测：写数据可以、写 / 读家目录不行、
 只连得上代理的端口、直连外网不行，包放在家目录下照样能读自己的包。
+  hub 给的路径（包、数据、运行目录、程序本身）常常经过家目录里的软链（`~/.persona -> .jarvis` 或反过来）：sandbox-exec 把读软链本身也当成读家目录，
+  拒绝读家目录就让经过它的整条路径都打不开（`execvp … Operation not permitted`）。profile 用真实路径放行这几个目录，再把路上的每个软链单独放行（`literal`，只能读到它指向哪里，
+  后面的东西仍按真实路径判断），所以 hub 照样用原来的路径（参数、`HOME`、`TMPDIR`、环境变量里的 socket），经软链读不到家目录里别的东西。
 
 **这台机器没有沙箱**（没装 bwrap、内核不让建用户命名空间、别的系统）：沙箱开着的扩展照样跑，只是指向出网代理；扩展的 `sandbox.active` 是 `false`、`sandbox.why`
 和列表的 `warnings` 写「没有沙箱：机器上没有 bwrap（bubblewrap）」。装 bwrap：Debian / Ubuntu `apt install bubblewrap`，没有 root 时可以把静态编译的 bwrap 放进 hub 的 `PATH`。

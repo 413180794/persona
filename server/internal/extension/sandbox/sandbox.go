@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -200,6 +201,26 @@ func Darwin(plan Plan) (string, []string, []string) {
 	tmp := filepath.Join(plan.Data, "tmp")
 	_ = os.MkdirAll(tmp, 0o700)
 	q := strconv.Quote
+	// The hub names these directories, and the program and its arguments, by paths that may go through a symlink in
+	// the home directory (~/.persona -> .jarvis). sandbox-exec checks the link itself as a read under the home
+	// directory, so without these every such path fails (execvp: Operation not permitted). Each link is allowed on
+	// its own (literal): reading it gives only where it points, and what is behind it is checked by its real path.
+	var links []string
+	for _, p := range []string{plan.Pkg, plan.Data, plan.Run, tmp, plan.Command} {
+		for _, l := range linksOn(p) {
+			if !slices.Contains(links, l) {
+				links = append(links, l)
+			}
+		}
+	}
+	linkRule := ""
+	if len(links) > 0 {
+		lits := make([]string, len(links))
+		for i, l := range links {
+			lits[i] = "(literal " + q(l) + ")"
+		}
+		linkRule = "(allow file-read* " + strings.Join(lits, " ") + ")"
+	}
 	profile := strings.Join([]string{
 		"(version 1)",
 		"(allow default)",
@@ -210,10 +231,57 @@ func Darwin(plan Plan) (string, []string, []string) {
 		`(allow file-write* (subpath ` + q(real(plan.Data)) + `) (subpath ` + q(real(plan.Run)) + `) (subpath "/dev"))`,
 		`(deny file-read* (subpath ` + q(real(home)) + `))`,
 		`(allow file-read* (subpath ` + q(real(plan.Pkg)) + `) (subpath ` + q(real(plan.Data)) + `) (subpath ` + q(real(plan.Run)) + `))`,
+		linkRule,
 	}, "\n")
 	args := append([]string{"-p", profile, plan.Command}, plan.Args...)
 	env := append(ProxyEnv(plan.ProxyURL), "HOME="+plan.Data, "TMPDIR="+tmp)
 	return "/usr/bin/sandbox-exec", args, env
+}
+
+// linksOn is every symlink met on the way to the absolute path p, following them as the kernel does (a link's target
+// may hold links too). Each is named by its real directory and its own name, as sandbox-exec sees it.
+func linksOn(p string) []string {
+	if !filepath.IsAbs(p) {
+		return nil
+	}
+	var links []string
+	at := "/"
+	parts := strings.Split(p, "/")
+	for hops := 0; len(parts) > 0; {
+		name := parts[0]
+		parts = parts[1:]
+		switch name {
+		case "", ".":
+			continue
+		case "..":
+			at = filepath.Dir(at)
+			continue
+		}
+		next := filepath.Join(at, name)
+		fi, err := os.Lstat(next)
+		if err != nil {
+			break
+		}
+		if fi.Mode()&os.ModeSymlink == 0 {
+			at = next
+			continue
+		}
+		if hops++; hops > 40 { // a loop: the kernel gives up too
+			break
+		}
+		if !slices.Contains(links, next) {
+			links = append(links, next)
+		}
+		target, err := os.Readlink(next)
+		if err != nil {
+			break
+		}
+		if filepath.IsAbs(target) {
+			at = "/"
+		}
+		parts = append(strings.Split(target, "/"), parts...)
+	}
+	return links
 }
 
 // Run is RunCommand: carry the sandbox's loopback port to the proxy's socket, run the program with this process's
