@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import androidx.annotation.StringRes
 import persona.core.contracts.api.*
 import persona.core.domain.Pairing
 import persona.core.hub.HubError
@@ -73,22 +74,25 @@ fun pairingFailure(error: Throwable): PairingFailure = when (error) {
     else -> error.cause?.takeIf { it !== error }?.let(::pairingFailure) ?: PairingFailure.Unknown
 }
 
-fun PairingFailure.explanation(): String = when (this) {
-    PairingFailure.InvalidCode -> "不是有效的 Persona 配对链接，请检查地址和配对码。"
-    PairingFailure.Dns -> "找不到这个地址，请检查域名或重新扫码。"
-    PairingFailure.Refused -> "hub 没有在这个端口上监听，请确认 hub 正在运行。"
-    PairingFailure.Unreachable -> "当前网络到不了 hub，请切换网络后重试。"
-    PairingFailure.Timeout -> "连不上 hub。在外面时检查路由器是否放行 TLS 端口的 IPv6 入站；在家里检查是否连着同一个网络。"
-    PairingFailure.LocalPermission -> "在家里连 hub，需要允许 Persona 访问本地网络。"
-    PairingFailure.Certificate -> "证书或 hub 身份不符。请在 hub 机器上重新运行 personad hub pair，再扫码。"
-    PairingFailure.Expired -> "配对码已失效或已被用过，请重新运行 personad hub pair。"
-    PairingFailure.Incompatible -> "当前连接组件或 hub 不支持这种配对方式，请更新后重试。"
-    PairingFailure.TlsRequired -> "这个地址需要加密连接，请使用 HTTPS 地址重新配对。"
-    PairingFailure.Unknown -> "连接没有完成，请检查网络后重试，或查看连接诊断。"
+/** What went wrong and what to do, as a string resource. */
+@StringRes
+fun PairingFailure.explanation(): Int = when (this) {
+    PairingFailure.InvalidCode -> R.string.settings_pairing_failure_invalid
+    PairingFailure.Dns -> R.string.settings_pairing_failure_dns
+    PairingFailure.Refused -> R.string.settings_pairing_failure_refused
+    PairingFailure.Unreachable -> R.string.settings_pairing_failure_unreachable
+    PairingFailure.Timeout -> R.string.settings_pairing_failure_timeout
+    PairingFailure.LocalPermission -> R.string.settings_pairing_failure_local
+    PairingFailure.Certificate -> R.string.settings_pairing_failure_certificate
+    PairingFailure.Expired -> R.string.settings_pairing_failure_expired
+    PairingFailure.Incompatible -> R.string.settings_pairing_failure_incompatible
+    PairingFailure.TlsRequired -> R.string.settings_pairing_failure_tls_required
+    PairingFailure.Unknown -> R.string.settings_pairing_failure_unknown
 }
 
-internal enum class PairingRecovery(val label: String) {
-    Retry("重新探测"), Scan("重新扫码"), Permission("去授权"), Update("更新后重试")
+internal enum class PairingRecovery(@StringRes val label: Int) {
+    Retry(R.string.settings_pairing_recovery_retry), Scan(R.string.settings_pairing_rescan),
+    Permission(R.string.settings_pairing_recovery_permission), Update(R.string.settings_pairing_recovery_update)
 }
 
 internal fun PairingFailure.recovery(): PairingRecovery = when (this) {
@@ -147,8 +151,8 @@ internal fun describePairingError(error: Throwable, token: String?): String {
         when (cause) {
             is PairingException -> null
             is HubFailure -> listOfNotNull(cause.kind.name, cause.status?.let { "HTTP $it" }).joinToString(" · ") +
-                cause.message.takeIf { it != cause.kind.name }?.let { "：$it" }.orEmpty()
-            else -> cause.javaClass.simpleName + (cause.message?.let { "：$it" } ?: "")
+                cause.message.takeIf { it != cause.kind.name }?.let { "：$it" }.orEmpty() // i18n-ignore: technical error chain for diagnostics
+            else -> cause.javaClass.simpleName + (cause.message?.let { "：$it" } ?: "") // i18n-ignore: technical error chain for diagnostics
         }
     }.distinct().toList()
     val text = parts.ifEmpty { listOf((error as? PairingException)?.reason?.name ?: error.javaClass.simpleName) }.joinToString(" ← ")
@@ -156,11 +160,13 @@ internal fun describePairingError(error: Throwable, token: String?): String {
     return if (clean.length > 400) clean.take(400) + "…" else clean
 }
 
-fun PairingAttemptStep.label(): String = when (this) {
-    PairingAttemptStep.Parse -> "解析配对链接"
-    PairingAttemptStep.Network -> "连接地址"
-    PairingAttemptStep.Tls -> "TLS 证书"
-    PairingAttemptStep.Http -> "HTTP 请求"
-    PairingAttemptStep.Auth -> "配对码校验"
-    PairingAttemptStep.Protocol -> "hub 的响应"
+/** Where a pairing stopped, as a string resource. */
+@StringRes
+fun PairingAttemptStep.labelRes(): Int = when (this) {
+    PairingAttemptStep.Parse -> R.string.settings_pairing_step_parse
+    PairingAttemptStep.Network -> R.string.settings_pairing_step_network
+    PairingAttemptStep.Tls -> R.string.settings_pairing_step_tls
+    PairingAttemptStep.Http -> R.string.settings_pairing_step_http
+    PairingAttemptStep.Auth -> R.string.settings_pairing_step_auth
+    PairingAttemptStep.Protocol -> R.string.settings_pairing_step_protocol
 }

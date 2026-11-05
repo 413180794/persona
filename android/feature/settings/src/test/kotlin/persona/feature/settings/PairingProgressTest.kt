@@ -11,7 +11,7 @@ class PairingProgressTest {
         val steps = pairingSteps(listOf(
             PairingProgress(PairingStage.Parse),
             PairingProgress(PairingStage.ExchangeCredentials),
-        ), running = false, failed = true)
+        ), running = false, failed = true) { it.name }
         assertEquals(StepState.Complete, steps[PairingStage.Parse.ordinal].state)
         assertEquals(StepState.Pending, steps[PairingStage.Probe.ordinal].state)
         assertEquals(StepState.Pending, steps[PairingStage.VerifyIdentity.ordinal].state)
@@ -26,11 +26,11 @@ class PairingProgressTest {
             PairingProgress(PairingStage.Complete),
             PairingProgress(PairingStage.LoadMachines),
         )
-        val loading = pairingSteps(progress, running = true, failed = false)
+        val loading = pairingSteps(progress, running = true, failed = false) { it.name }
         assertEquals(StepState.Active, loading[PairingStage.LoadMachines.ordinal].state)
         assertEquals(StepState.Pending, loading[PairingStage.Complete.ordinal].state)
         val completed = pairingSteps(progress.filterNot { it.stage == PairingStage.Complete } +
-            PairingProgress(PairingStage.Complete), running = false, failed = false)
+            PairingProgress(PairingStage.Complete), running = false, failed = false) { it.name }
         assertEquals(StepState.Complete, completed[PairingStage.LoadMachines.ordinal].state)
         assertEquals(StepState.Complete, completed[PairingStage.Complete.ordinal].state)
     }

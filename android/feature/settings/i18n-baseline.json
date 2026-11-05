@@ -1,12 +1,1 @@
-{
-  "feature/settings/src/main/kotlin/persona/feature/settings/EndpointEditorState.kt": 18,
-  "feature/settings/src/main/kotlin/persona/feature/settings/EndpointsSection.kt": 42,
-  "feature/settings/src/main/kotlin/persona/feature/settings/EngineScreen.kt": 10,
-  "feature/settings/src/main/kotlin/persona/feature/settings/EngineSelectionState.kt": 1,
-  "feature/settings/src/main/kotlin/persona/feature/settings/HubUpdateScreen.kt": 27,
-  "feature/settings/src/main/kotlin/persona/feature/settings/HubUpdateState.kt": 34,
-  "feature/settings/src/main/kotlin/persona/feature/settings/HubsScreen.kt": 26,
-  "feature/settings/src/main/kotlin/persona/feature/settings/PairingInput.kt": 20,
-  "feature/settings/src/main/kotlin/persona/feature/settings/PairingScreen.kt": 54,
-  "feature/settings/src/main/res/layout/pairing_scan.xml": 4
-}
+{}

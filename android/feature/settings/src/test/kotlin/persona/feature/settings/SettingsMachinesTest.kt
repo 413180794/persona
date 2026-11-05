@@ -20,8 +20,12 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.*
 import org.junit.Test
+import org.robolectric.RuntimeEnvironment
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class EngineSelectionModelTest {
+    private val res = RuntimeEnvironment.getApplication().resources
     private val machine = Machine(id = "m1", online = true, engine = "herdr",
         engines = listOf(DetectedEngine("herdr", "herdr", true), DetectedEngine("orca", "Orca", true)))
 
@@ -43,14 +47,14 @@ class EngineSelectionModelTest {
         val model = EngineSelectionModel(machine, put = { _, _ -> throw HubFailure(HubError.Server, "unknown engine", 400) }, applied = { applied += it })
         model.choose("orca")
         assertFalse(model.save("m1"))
-        assertEquals("保存失败：unknown engine", model.state.value.error)
+        assertEquals("保存失败：unknown engine", model.state.value.error?.resolve(res))
         assertEquals("orca", model.state.value.selected)
         assertTrue(applied.isEmpty())
         model.choose("herdr")
         assertNull(model.state.value.error)
         val offline = EngineSelectionModel(machine, put = { _, _ -> throw java.io.IOException("reset") }, applied = {})
         assertFalse(offline.save("m1"))
-        assertTrue(offline.state.value.error!!.startsWith("保存失败：连不上 hub"))
+        assertTrue(offline.state.value.error!!.resolve(res).startsWith("保存失败：连不上 hub"))
     }
 
     @Test fun offlineMachinesSaveTooAndPushesMoveThePickerUntilEdited() = runBlocking {

@@ -20,7 +20,7 @@ class OnboardingTest {
     }
 
     @Test fun failuresAlwaysOfferRecoveryAndIdentityFailuresNeverRetryCredentials() {
-        PairingFailure.entries.forEach { assertTrue(it.recovery().label.isNotBlank()) }
+        PairingFailure.entries.forEach { assertTrue(it.recovery().label != 0) }
         listOf(PairingFailure.InvalidCode, PairingFailure.Certificate, PairingFailure.Expired,
             PairingFailure.TlsRequired).forEach { assertEquals(PairingRecovery.Scan, it.recovery()) }
         listOf(PairingFailure.Dns, PairingFailure.Refused, PairingFailure.Unreachable,

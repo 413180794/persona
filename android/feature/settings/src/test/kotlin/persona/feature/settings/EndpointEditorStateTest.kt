@@ -10,10 +10,17 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.junit.Assert.*
 import org.junit.Test
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import java.time.LocalDate
 import java.time.ZoneId
 
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class EndpointEditorStateTest {
+    private val res = RuntimeEnvironment.getApplication().resources
     private val manual = EndpointEntry("https://hub.example.com:18662", "name", EndpointSource.Manual)
     private val hub = EndpointEntry("https://[2001:db8::1]:18662", "ipv6", EndpointSource.Hub)
     private val lan = EndpointEntry("http://127.0.0.1:18660", "lan", EndpointSource.Pairing)
@@ -30,12 +37,12 @@ class EndpointEditorStateTest {
         editor.startAdding()
         assertEquals(EndpointSheet(), editor.ui.value.sheet)
         assertFalse(editor.ui.value.sheet!!.canSave)
-        assertNull(editor.ui.value.sheet!!.hint)
+        assertNull(editor.ui.value.sheet!!.hint(res))
 
         editor.updateAddress("hub.example.com")
         val sheet = editor.ui.value.sheet!!
         assertTrue(sheet.check is EndpointCheck.Invalid)
-        assertEquals("地址要以 https:// 或 http:// 开头", sheet.hint)
+        assertEquals("地址要以 https:// 或 http:// 开头", sheet.hint(res))
         assertFalse(sheet.canSave)
         editor.save()
         assertTrue(endpoints.added.isEmpty())
@@ -44,7 +51,7 @@ class EndpointEditorStateTest {
 
         editor.updateAddress("   ")
         assertNull(editor.ui.value.sheet!!.check)
-        assertNull(editor.ui.value.sheet!!.hint)
+        assertNull(editor.ui.value.sheet!!.hint(res))
         assertFalse(editor.ui.value.sheet!!.canSave)
     }
 
@@ -58,7 +65,7 @@ class EndpointEditorStateTest {
         editor.startAdding()
         editor.updateAddress("  https://HUB.example.com:18662/ ")
         assertEquals("https://HUB.example.com:18662/" to null, endpoints.checks.last())
-        assertEquals("将保存为 https://hub.example.com:18662（域名）", editor.ui.value.sheet!!.hint)
+        assertEquals("将保存为 https://hub.example.com:18662（域名）", editor.ui.value.sheet!!.hint(res))
         assertTrue(editor.ui.value.sheet!!.canSave)
 
         val saving = launch { editor.save() }
@@ -101,7 +108,7 @@ class EndpointEditorStateTest {
         assertEquals(manual.url to manual.url, endpoints.checks.last())
         assertTrue(sheet.unchanged)
         assertFalse(sheet.canSave)
-        assertEquals("地址没有改动", sheet.hint)
+        assertEquals("地址没有改动", sheet.hint(res))
 
         editor.updateAddress("https://hub.example.com:443")
         sheet = editor.ui.value.sheet!!
@@ -144,7 +151,7 @@ class EndpointEditorStateTest {
         val editor = EndpointEditorState(endpoints)
         endpoints.refusal = "至少要留一个能用的地址"
         editor.setEnabled(hub.url, false)
-        assertEquals("至少要留一个能用的地址", editor.ui.value.message)
+        assertEquals("至少要留一个能用的地址", editor.ui.value.message?.resolve(res))
         assertFalse(editor.ui.value.busy)
 
         // A refused save keeps the sheet open with the reason and tests nothing.
@@ -152,7 +159,7 @@ class EndpointEditorStateTest {
         editor.startAdding()
         editor.updateAddress("https://hub.example.com:18663")
         editor.save()
-        assertEquals("这个地址已经在列表里", editor.ui.value.sheet!!.error)
+        assertEquals("这个地址已经在列表里", editor.ui.value.sheet!!.error?.resolve(res))
         assertFalse(editor.ui.value.sheet!!.saving)
         assertTrue(endpoints.tested.isEmpty())
         editor.updateAddress("https://hub.example.com:18664")
@@ -166,15 +173,15 @@ class EndpointEditorStateTest {
 
         endpoints.failure = IllegalStateException("storage unavailable")
         editor.setEnabled(hub.url, false)
-        assertEquals("没有改成，请重试。", editor.ui.value.message)
+        assertEquals("没有改成，请重试。", editor.ui.value.message?.resolve(res))
         endpoints.failure = null
 
         endpoints.testFailure = EndpointEditException("这个地址已经不在列表里")
         editor.test(manual.url)
-        assertEquals("这个地址已经不在列表里", editor.ui.value.message)
+        assertEquals("这个地址已经不在列表里", editor.ui.value.message?.resolve(res))
         endpoints.testFailure = IllegalStateException("socket closed")
         editor.test(manual.url)
-        assertEquals("测试没有完成，请重试。", editor.ui.value.message)
+        assertEquals("测试没有完成，请重试。", editor.ui.value.message?.resolve(res))
         assertTrue(editor.ui.value.testing.isEmpty())
     }
 
@@ -236,7 +243,7 @@ class EndpointEditorStateTest {
         editor.moveDown(v4.url)
         editor.moveUp("https://gone.example.com:18662")
         assertTrue("Nothing above the first, below the last, or outside the list", endpoints.reordered.isEmpty())
-        val ends = endpointRows(endpoints.state.value, emptyList())
+        val ends = endpointRows(res, endpoints.state.value, emptyList())
         assertEquals("上移 is off at the top", listOf(false, true, true, true), ends.map { it.canMoveUp })
         assertEquals("下移 is off at the bottom", listOf(true, true, true, false), ends.map { it.canMoveDown })
 
@@ -303,14 +310,14 @@ class EndpointEditorStateTest {
         editor.startDrag(v4.url)
         editor.dragTo(0)
         editor.endDrag()
-        assertEquals("没有保存成功，请重试", editor.ui.value.message)
+        assertEquals("没有保存成功，请重试", editor.ui.value.message?.resolve(res))
         assertNull(editor.ui.value.pending)
         assertEquals(urls(hub, manual, lan, v4), editor.shownUrls())
 
         endpoints.refusal = null
         endpoints.failure = IllegalStateException("disk full")
         editor.moveDown(hub.url)
-        assertEquals("顺序没有保存，请重试。", editor.ui.value.message)
+        assertEquals("顺序没有保存，请重试。", editor.ui.value.message?.resolve(res))
         assertEquals(urls(hub, manual, lan, v4), editor.shownUrls())
         assertFalse(editor.ui.value.busy)
         assertFalse(endpoints.state.value.customOrder)
@@ -507,41 +514,45 @@ class EndpointEditorStateTest {
     }
 }
 
+/** Robolectric for the resources: the texts are the Chinese ones (robolectric.properties). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class EndpointTextTest {
+    private val res = RuntimeEnvironment.getApplication().resources
     private val zone = ZoneId.of("Asia/Shanghai")
     private val today = LocalDate.of(2026, 11, 1)
     private val url = "https://[2001:db8::1]:18662"
 
     @Test fun aTestIsLabelledAsASingleSampleWithItsElapsedTime() {
         val passed = EndpointTestResult(url, passed = true, result = "已通过身份校验", elapsedMillis = 85, testedAt = "2026-11-01T02:03:04Z")
-        assertEquals(EndpointOutcome("已通过身份校验，85\u00A0毫秒（单次）", failed = false, label = "测试 10:03:04"), endpointOutcome(passed, null, zone, today))
+        assertEquals(EndpointOutcome("已通过身份校验，85\u00A0毫秒（单次）", failed = false, label = "测试 10:03:04"), endpointOutcome(res, passed, null, zone, today))
         val timedOut = passed.copy(passed = false, result = "连接超时", elapsedMillis = 8003, testedAt = "2026-10-31T01:00:00Z")
-        assertEquals(EndpointOutcome("连接超时，8003\u00A0毫秒（单次）", failed = true, label = "测试 10-31 09:00:00"), endpointOutcome(timedOut, null, zone, today))
+        assertEquals(EndpointOutcome("连接超时，8003\u00A0毫秒（单次）", failed = true, label = "测试 10-31 09:00:00"), endpointOutcome(res, timedOut, null, zone, today))
     }
 
     @Test fun theNewerOfTestAndAutomaticProbeIsShown() {
         val probe = ConnectionCandidate(url, "ipv6", "已通过身份校验", "2026-11-01T02:00:00Z", probeDurationMillis = 40, sampleCount = 1)
-        assertEquals(EndpointOutcome("已通过身份校验，40\u00A0毫秒（单次）", failed = false, label = "自动探测 10:00:00"), endpointOutcome(null, probe, zone, today))
+        assertEquals(EndpointOutcome("已通过身份校验，40\u00A0毫秒（单次）", failed = false, label = "自动探测 10:00:00"), endpointOutcome(res, null, probe, zone, today))
         val test = EndpointTestResult(url, passed = false, result = "连接超时", elapsedMillis = 5000, testedAt = "2026-11-01T02:03:04Z")
-        assertEquals("测试 10:03:04", endpointOutcome(test, probe, zone, today)!!.label)
+        assertEquals("测试 10:03:04", endpointOutcome(res, test, probe, zone, today)!!.label)
         val later = probe.copy(result = "Timeout", checkedAt = "2026-11-01T02:05:00Z", probeDurationMillis = 5001)
-        assertEquals(EndpointOutcome("Timeout，5001\u00A0毫秒（单次）", failed = true, label = "自动探测 10:05:00"), endpointOutcome(test, later, zone, today))
-        assertEquals("A test wins when the probe time is unreadable", "测试", endpointOutcome(test, later.copy(checkedAt = "刚才"), zone, today)!!.label.take(2))
-        assertNull("Never probed", endpointOutcome(null, ConnectionCandidate(url, "ipv6", "未实测"), zone, today))
+        assertEquals(EndpointOutcome("Timeout，5001\u00A0毫秒（单次）", failed = true, label = "自动探测 10:05:00"), endpointOutcome(res, test, later, zone, today))
+        assertEquals("A test wins when the probe time is unreadable", "测试", endpointOutcome(res, test, later.copy(checkedAt = "刚才"), zone, today)!!.label.take(2))
+        assertNull("Never probed", endpointOutcome(res, null, ConnectionCandidate(url, "ipv6", "未实测"), zone, today))
         assertEquals("已通过身份校验，40\u00A0毫秒（样本数\u00A012）",
-            endpointOutcome(null, probe.copy(sampleCount = 12), zone, today)!!.text)
+            endpointOutcome(res, null, probe.copy(sampleCount = 12), zone, today)!!.text)
         assertEquals("已通过身份校验",
-            endpointOutcome(null, probe.copy(probeDurationMillis = null), zone, today)!!.text)
+            endpointOutcome(res, null, probe.copy(probeDurationMillis = null), zone, today)!!.text)
     }
 
     @Test fun labelsSayWhatKindOfAddressAndWhereItCameFrom() {
         // Built at runtime: the privacy check rejects private dotted quads in the repository.
         val lan = "http://" + listOf(10, 0, 0, 2).joinToString(".") + ":18660"
-        assertEquals("内网，手动添加", EndpointEntry(lan, "lan", EndpointSource.Manual).origin())
-        assertEquals("公网 IPv6，hub 下发", EndpointEntry(url, "ipv6", EndpointSource.Hub).origin())
-        assertEquals("域名，配对时添加", EndpointEntry("https://hub.example.com:18662", "name", EndpointSource.Pairing).origin())
-        assertEquals("公网 IPv4，hub 下发", EndpointEntry("https://192.0.2.10:18662", "ipv4", EndpointSource.Hub).origin())
-        assertEquals("未知类型，手动添加", EndpointEntry("https://hub.example.com:18662", "unknown", EndpointSource.Manual).origin())
+        assertEquals("内网，手动添加", EndpointEntry(lan, "lan", EndpointSource.Manual).origin(res))
+        assertEquals("公网 IPv6，hub 下发", EndpointEntry(url, "ipv6", EndpointSource.Hub).origin(res))
+        assertEquals("域名，配对时添加", EndpointEntry("https://hub.example.com:18662", "name", EndpointSource.Pairing).origin(res))
+        assertEquals("公网 IPv4，hub 下发", EndpointEntry("https://192.0.2.10:18662", "ipv4", EndpointSource.Hub).origin(res))
+        assertEquals("未知类型，手动添加", EndpointEntry("https://hub.example.com:18662", "unknown", EndpointSource.Manual).origin(res))
     }
 
     @Test fun rowsMarkTheAddressInUseDisabledOnesAndFailures() {
@@ -553,7 +564,7 @@ class EndpointTextTest {
             tests = mapOf(ipv6.url to EndpointTestResult(ipv6.url, false, "连接超时", 5000, "2026-11-01T02:03:04Z")),
             testing = setOf(ipv4.url),
         )
-        val rows = endpointRows(routes, emptyList(), zone = zone, today = today)
+        val rows = endpointRows(res, routes, emptyList(), zone = zone, today = today)
         assertEquals(listOf(name.url, ipv6.url, ipv4.url), rows.map { it.url })
         assertEquals(listOf(EndpointTag.Active), rows[0].tags)
         assertEquals(Status.Unread, rows[0].status)
@@ -565,8 +576,8 @@ class EndpointTextTest {
         assertTrue(rows[2].testing)
         assertFalse(rows[1].testing)
         assertTrue("A test started here counts before the connection reports it",
-            endpointRows(routes, emptyList(), testing = setOf(ipv6.url), zone = zone, today = today)[1].testing)
-        val probed = endpointRows(routes.copy(tests = emptyMap()), listOf(ConnectionCandidate(ipv6.url, "ipv6", "Timeout", "2026-11-01T02:00:00Z", 5000, 1)), zone = zone, today = today)
+            endpointRows(res, routes, emptyList(), testing = setOf(ipv6.url), zone = zone, today = today)[1].testing)
+        val probed = endpointRows(res, routes.copy(tests = emptyMap()), listOf(ConnectionCandidate(ipv6.url, "ipv6", "Timeout", "2026-11-01T02:00:00Z", 5000, 1)), zone = zone, today = today)
         assertEquals(Status.NeedsYou, probed[1].status)
         assertNull(probed[0].outcome)
     }
@@ -578,7 +589,7 @@ class EndpointTextTest {
         val alsoOff = EndpointEntry("https://192.0.2.10:18662", "ipv4", EndpointSource.Hub, enabled = false)
         val third = EndpointEntry("https://192.0.2.11:18662", "ipv4", EndpointSource.Hub)
         val entries = listOf(first, off, second, alsoOff, third)
-        val rows = endpointRows(ConnectionEndpointsState(entries = entries), emptyList(), zone = zone, today = today)
+        val rows = endpointRows(res, ConnectionEndpointsState(entries = entries), emptyList(), zone = zone, today = today)
         assertEquals("In the connection's order, disabled ones in place", entries.map { it.url }, rows.map { it.url })
         assertEquals(listOf(1, null, 2, null, 3), rows.map { it.rank })
         assertEquals(listOf(EndpointTag.Disabled), rows[1].tags)
@@ -599,7 +610,7 @@ class EndpointTextTest {
         assertEquals(listOf(b, a, c), shownEntries(entries, pending))
         assertEquals("A drag wins over an order on its way", listOf(c, b, a),
             shownEntries(entries, pending.copy(drag = EndpointDrag(c.url, listOf(c.url, b.url, a.url)))))
-        val rows = endpointRows(ConnectionEndpointsState(entries = entries), emptyList(), entries = shownEntries(entries, pending), zone = zone, today = today)
+        val rows = endpointRows(res, ConnectionEndpointsState(entries = entries), emptyList(), entries = shownEntries(entries, pending), zone = zone, today = today)
         assertEquals(listOf(b.url, a.url, c.url), rows.map { it.url })
         assertEquals(listOf(1, 2, null), rows.map { it.rank })
         assertEquals(listOf(false, true, true), rows.map { it.canMoveUp })
@@ -608,11 +619,11 @@ class EndpointTextTest {
     @Test fun currentRouteFallsBackToTheObservedPath() {
         val entry = EndpointEntry(url, "ipv6", EndpointSource.Hub, active = true)
         val routes = ConnectionEndpointsState(entries = listOf(entry), activeUrl = url)
-        assertEquals(ActiveRoute(url, "公网 IPv6"), activeRoute(routes, null, ConnectionState.Online))
+        assertEquals(ActiveRoute(url, "公网 IPv6"), activeRoute(res, routes, null, ConnectionState.Online))
         val observed = "name · https://hub.example.com:18662"
-        assertEquals(ActiveRoute("https://hub.example.com:18662", "域名"), activeRoute(ConnectionEndpointsState(), observed, ConnectionState.Online))
-        assertEquals(ActiveRoute(null, "正在选路…"), activeRoute(ConnectionEndpointsState(), null, ConnectionState.Connecting))
-        assertEquals(ActiveRoute(null, "未连接"), activeRoute(ConnectionEndpointsState(), null, ConnectionState.WaitingForNetwork))
+        assertEquals(ActiveRoute("https://hub.example.com:18662", "域名"), activeRoute(res, ConnectionEndpointsState(), observed, ConnectionState.Online))
+        assertEquals(ActiveRoute(null, "正在选路…"), activeRoute(res, ConnectionEndpointsState(), null, ConnectionState.Connecting))
+        assertEquals(ActiveRoute(null, "未连接"), activeRoute(res, ConnectionEndpointsState(), null, ConnectionState.WaitingForNetwork))
     }
 }
 

@@ -2,6 +2,8 @@ package persona.feature.settings
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.res.Resources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.navigation3.runtime.NavKey
 import persona.core.contracts.Machine
@@ -42,7 +45,7 @@ internal fun HubUpdatePage(
     onMachine: ((NavKey) -> Unit)? = null,
 ) {
     if (updates == null) {
-        JListPage(title = "hub 版本", onBack = onBack) { item { JNotice("体验模式不会连接 hub，也不会更新它。", Modifier.padding(top = Tokens.Space.m)) } }
+        JListPage(title = stringResource(R.string.settings_hub_update_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_hub_update_demo), Modifier.padding(top = Tokens.Space.m)) } }
         return
     }
     val model = remember(updates) { HubUpdateModel(updates) }
@@ -57,74 +60,75 @@ internal fun HubUpdateContent(
     state: HubUpdateState, machines: List<Machine>, onBack: () -> Unit, onMachine: ((NavKey) -> Unit)?, model: HubUpdateModel?,
 ) {
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var confirmNow by remember { mutableStateOf(false) }
     val s = state.status
-    JListPage(title = "hub 版本", onBack = onBack, refreshing = state.checking && s != null,
+    JListPage(title = stringResource(R.string.settings_hub_update_title), onBack = onBack, refreshing = state.checking && s != null,
         onRefresh = model?.let { m -> { scope.launch { m.check() } } }) {
         when {
-            state.unsupported -> item("unsupported") { JNotice(HubUpdateText.Unsupported, Modifier.padding(top = Tokens.Space.m)) }
+            state.unsupported -> item("unsupported") { JNotice(stringResource(R.string.settings_hub_update_unsupported), Modifier.padding(top = Tokens.Space.m)) }
             s != null -> {
-                state.actionError?.let { item("action-error") { JInlineStatus(it, Modifier.padding(top = Tokens.Space.m), tone = InlineTone.Failed) } }
+                state.actionError?.let { item("action-error") { JInlineStatus(it.text(), Modifier.padding(top = Tokens.Space.m), tone = InlineTone.Failed) } }
                 // Told once that it updates itself (the hub forgets the line once seen or once auto-update was chosen).
                 if (s.autoNotice) item("auto-notice") {
                     // Like the web's line: 关闭 turns auto-update off, 知道了 only hides this (both tell the hub it was seen).
                     JCard(Modifier.padding(top = Tokens.Space.m)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                             JIcon(PhIcons.Info, null, tint = PersonaTheme.palette.accent, decorative = true)
-                            Text(HubUpdateText.AutoNotice, Modifier.weight(1f), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink)
-                            JButton("关闭", { model?.let { m -> scope.launch { m.setAuto(false) } } }, kind = JButtonKind.Quiet, size = JButtonSize.Small, enabled = !state.sending)
-                            JButton("知道了", { model?.let { m -> scope.launch { m.noticeSeen() } } }, kind = JButtonKind.Quiet, size = JButtonSize.Small, enabled = !state.sending)
+                            Text(stringResource(R.string.settings_hub_update_auto_notice), Modifier.weight(1f), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink)
+                            JButton(stringResource(R.string.settings_hub_update_turn_off), { model?.let { m -> scope.launch { m.setAuto(false) } } }, kind = JButtonKind.Quiet, size = JButtonSize.Small, enabled = !state.sending)
+                            JButton(stringResource(R.string.settings_hub_update_got_it), { model?.let { m -> scope.launch { m.noticeSeen() } } }, kind = JButtonKind.Quiet, size = JButtonSize.Small, enabled = !state.sending)
                         }
                     }
                 }
-                version(s, state, onCheck = { model?.let { m -> scope.launch { m.check() } } })
-                update(s, state, onUpdate = { model?.let { m -> scope.launch { m.update(now = false) } } }, onNow = { confirmNow = true })
+                version(s, state, resources, onCheck = { model?.let { m -> scope.launch { m.check() } } })
+                update(s, state, resources, onUpdate = { model?.let { m -> scope.launch { m.update(now = false) } } }, onNow = { confirmNow = true })
                 if (s.canUpdate) item("auto") {
                     Column {
                         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.xl)) {
-                            JSwitchRow("自动更新 hub", s.auto, { on -> model?.let { m -> scope.launch { m.setAuto(on) } } }, enabled = !state.sending)
+                            JSwitchRow(stringResource(R.string.settings_hub_update_auto), s.auto, { on -> model?.let { m -> scope.launch { m.setAuto(on) } } }, enabled = !state.sending)
                         }
-                        Note(HubUpdateText.AutoFooter)
+                        Note(stringResource(R.string.settings_hub_update_auto_footer))
                     }
                 }
                 nodes(machines, onMachine)
                 if (state.history.isNotEmpty()) history(state.history)
             }
             state.error != null -> item("error") {
-                JNotice(state.error, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou,
-                    actionLabel = "重试", onAction = model?.let { m -> { scope.launch { m.load() } } })
+                JNotice(state.error.text(), Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou,
+                    actionLabel = stringResource(R.string.settings_hub_update_retry), onAction = model?.let { m -> { scope.launch { m.load() } } })
             }
             else -> item("loading") { JLoading() }
         }
     }
     if (confirmNow) JDialog(
-        onDismiss = { confirmNow = false }, title = "现在就更新？", text = HubUpdateText.NowWarning, destructive = true,
-        confirm = "现在就更新" to { confirmNow = false; model?.let { m -> scope.launch { m.update(now = true) } }; Unit },
+        onDismiss = { confirmNow = false }, title = stringResource(R.string.settings_hub_update_now_title), text = stringResource(R.string.settings_hub_update_now_warning), destructive = true,
+        confirm = stringResource(R.string.settings_hub_update_now) to { confirmNow = false; model?.let { m -> scope.launch { m.update(now = true) } }; Unit },
     )
 }
 
-private fun LazyListScope.version(s: HubUpdateStatus, state: HubUpdateState, onCheck: () -> Unit) {
+private fun LazyListScope.version(s: HubUpdateStatus, state: HubUpdateState, resources: Resources, onCheck: () -> Unit) {
     val rows = buildList<@Composable () -> Unit> {
-        add { JRow("版本", value = s.version.ifBlank { "未知" }) }
-        add { JRow("渠道", value = HubUpdateText.channel(s.channel)) }
-        HubUpdateText.lastCheck(s)?.let { at -> add { JRow("上次检查", value = at) } }
+        add { JRow(stringResource(R.string.settings_hub_update_version), value = s.version.ifBlank { stringResource(R.string.settings_hub_update_unknown) }) }
+        add { JRow(stringResource(R.string.settings_hub_update_channel), value = HubUpdateText.channel(s.channel, resources)) }
+        HubUpdateText.lastCheck(s)?.let { at -> add { JRow(stringResource(R.string.settings_hub_update_last_check), value = at) } }
         add {
             JRow(onClick = onCheck, enabled = !state.checking && !s.working, chevron = false,
                 trailing = if (state.checking) ({ JSpinner() }) else null) {
-                Text(if (state.checking) "正在检查…" else "检查更新", style = PersonaTheme.type.body, color = PersonaTheme.palette.accent,
+                Text(stringResource(if (state.checking) R.string.settings_hub_update_checking_more else R.string.settings_hub_update_check), style = PersonaTheme.type.body, color = PersonaTheme.palette.accent,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
-    item("version-header") { JSectionHeader("版本") }
+    item("version-header") { JSectionHeader(stringResource(R.string.settings_hub_update_version)) }
     itemsIndexed(rows, key = { index, _ -> "version-$index" }) { index, row -> JGroupItem(GroupPosition.of(index, rows.size)) { row() } }
 }
 
-private fun LazyListScope.update(s: HubUpdateStatus, state: HubUpdateState, onUpdate: () -> Unit, onNow: () -> Unit) {
-    item("update-header") { JSectionHeader("更新") }
+private fun LazyListScope.update(s: HubUpdateStatus, state: HubUpdateState, resources: Resources, onUpdate: () -> Unit, onNow: () -> Unit) {
+    item("update-header") { JSectionHeader(stringResource(R.string.settings_hub_update_header)) }
     item("update") {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            when (val view = HubUpdateText.view(s)) {
+            when (val view = HubUpdateText.view(s, resources)) {
                 HubUpdateView.Docker -> DockerRows(s)
                 is HubUpdateView.Cannot -> JGroupItem(GroupPosition.Single) { JRow { Callout(view.why) } }
                 is HubUpdateView.Newer -> {
@@ -133,24 +137,24 @@ private fun LazyListScope.update(s: HubUpdateStatus, state: HubUpdateState, onUp
                         JRow {
                             Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                                    Text("新版本 ${latest.version}", Modifier.weight(1f, fill = false), style = PersonaTheme.type.bodyStrong,
+                                    Text(stringResource(R.string.settings_hub_update_newer, latest.version), Modifier.weight(1f, fill = false), style = PersonaTheme.type.bodyStrong,
                                         color = PersonaTheme.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    HubUpdateText.released(s)?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 1) }
+                                    HubUpdateText.released(s, resources)?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 1) }
                                 }
                                 latest.notes?.takeIf { it.isNotBlank() }?.let { Callout(it) }
                             }
                         }
                     }
-                    HubUpdateText.latestWarning(s)?.let { JInlineStatus(it, tone = InlineTone.Caution) }
+                    HubUpdateText.latestWarning(s, resources)?.let { JInlineStatus(it, tone = InlineTone.Caution) }
                     if (view.working) Progress(s, onNow)
-                    else JButton("更新 hub", onUpdate, Modifier.fillMaxWidth(), loading = state.sending, loadingText = "正在开始", enabled = !state.sending)
+                    else JButton(stringResource(R.string.settings_hub_update_update_hub), onUpdate, Modifier.fillMaxWidth(), loading = state.sending, loadingText = stringResource(R.string.settings_hub_update_starting), enabled = !state.sending)
                 }
                 HubUpdateView.Working -> Progress(s, onNow)
                 HubUpdateView.Current -> JGroupItem(GroupPosition.Single) {
                     JRow {
                         JIcon(PhIcons.CheckCircle, null, tint = PersonaTheme.palette.positive, decorative = true)
                         Spacer(Modifier.width(Tokens.Space.m))
-                        Text("已是最新", style = PersonaTheme.type.body, color = PersonaTheme.palette.positive, maxLines = 1)
+                        Text(stringResource(R.string.settings_hub_update_state_current), style = PersonaTheme.type.body, color = PersonaTheme.palette.positive, maxLines = 1)
                     }
                 }
             }
@@ -159,7 +163,7 @@ private fun LazyListScope.update(s: HubUpdateStatus, state: HubUpdateState, onUp
             }
         }
     }
-    if (s.canUpdate) item("update-footer") { Note(HubUpdateText.UpdateFooter) }
+    if (s.canUpdate) item("update-footer") { Note(stringResource(R.string.settings_hub_update_footer)) }
 }
 
 /** The update under way, and while it waits for idle what it waits for, with 现在就更新. */
@@ -171,7 +175,7 @@ private fun Progress(s: HubUpdateStatus, onNow: () -> Unit) {
             JRow {
                 JSpinner()
                 Spacer(Modifier.width(Tokens.Space.m))
-                Text(HubUpdateText.state(s), Modifier.weight(1f, fill = false), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink,
+                Text(HubUpdateText.state(s, LocalResources.current), Modifier.weight(1f, fill = false), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 s.progress?.takeIf { s.state == "downloading" && it.isNotBlank() }?.let {
                     Spacer(Modifier.width(Tokens.Space.s))
@@ -179,28 +183,30 @@ private fun Progress(s: HubUpdateStatus, onNow: () -> Unit) {
                 }
             }
         }
-        if (waiting) s.busy.forEach { b -> add { JRow(b.title.ifBlank { "进行中" }, subtitle = b.machine.ifBlank { null }, leadingIcon = PhIcons.HourglassMedium) } }
+        if (waiting) s.busy.forEach { b -> add { JRow(b.title.ifBlank { stringResource(R.string.settings_hub_update_busy) }, subtitle = b.machine.ifBlank { null }, leadingIcon = PhIcons.HourglassMedium) } }
     }
     Column {
         rows.forEachIndexed { index, row -> JGroupItem(GroupPosition.of(index, rows.size)) { row() } }
     }
-    if (waiting) JButton("现在就更新…", onNow, Modifier.fillMaxWidth(), kind = JButtonKind.Destructive)
+    if (waiting) JButton(stringResource(R.string.settings_hub_update_now_more), onNow, Modifier.fillMaxWidth(), kind = JButtonKind.Destructive)
 }
 
 /** A Docker hub updates by a new image: what to run where, each command with a copy button. */
 @Composable
 private fun DockerRows(s: HubUpdateStatus) {
-    val (headline, steps) = HubUpdateText.dockerSteps(s)
     val context = LocalContext.current
+    val (headline, steps) = HubUpdateText.dockerSteps(s, LocalResources.current)
+    val clipLabel = stringResource(R.string.settings_hub_update_clip_label)
+    val copied = stringResource(R.string.settings_hub_update_copied)
     val feedback = LocalAppFeedback.current
     headline?.let { Text(it, Modifier.padding(horizontal = rowPadding), style = PersonaTheme.type.bodyStrong, color = PersonaTheme.palette.ink, maxLines = 1) }
     steps.forEach { step ->
         Text(step.text, Modifier.padding(horizontal = rowPadding), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         JGroupItem(GroupPosition.Single) {
             JRow(trailing = {
-                JIconButton(PhIcons.Copy, "复制", {
-                    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("命令", step.copy))
-                    feedback?.notice("已复制")
+                JIconButton(PhIcons.Copy, stringResource(R.string.settings_hub_update_copy), {
+                    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(clipLabel, step.copy))
+                    feedback?.notice(copied)
                 })
             }) {
                 Text(step.copy, style = PersonaTheme.type.codeSmall, color = PersonaTheme.palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -211,21 +217,21 @@ private fun DockerRows(s: HubUpdateStatus) {
 
 private fun LazyListScope.nodes(machines: List<Machine>, onMachine: ((NavKey) -> Unit)?) {
     if (machines.isEmpty()) return
-    item("nodes-header") { JSectionHeader("各台电脑上的 personad") }
+    item("nodes-header") { JSectionHeader(stringResource(R.string.settings_hub_update_nodes_header)) }
     itemsIndexed(machines, key = { _, m -> "node-${m.id}" }) { index, m ->
         JGroupItem(GroupPosition.of(index, machines.size)) {
-            JRow(m.displayName, value = m.nodeVersion?.takeIf { it.isNotBlank() } ?: if (m.online) "未知" else "离线",
+            JRow(m.displayName, value = m.nodeVersion?.takeIf { it.isNotBlank() } ?: stringResource(if (m.online) R.string.settings_hub_update_unknown else R.string.settings_hub_update_offline),
                 onClick = onMachine?.let { go -> { go(MachineDetailRoute(m.id)) } },
-                trailing = if (m.nodeMismatch == true) ({ JChip("版本不同", status = Status.Working) }) else null,
+                trailing = if (m.nodeMismatch == true) ({ JChip(stringResource(R.string.settings_hub_update_node_mismatch), status = Status.Working) }) else null,
                 chevron = onMachine != null)
         }
     }
-    item("nodes-footer") { Note(HubUpdateText.NodesFooter) }
+    item("nodes-footer") { Note(stringResource(R.string.settings_hub_update_nodes_footer)) }
 }
 
 private fun LazyListScope.history(records: List<HubUpdateRecord>) {
     val shown = records.take(10)
-    item("history-header") { JSectionHeader("更新记录") }
+    item("history-header") { JSectionHeader(stringResource(R.string.settings_hub_update_history_header)) }
     itemsIndexed(shown, key = { index, r -> "record-$index-${r.toBuild}" }) { index, r ->
         JGroupItem(GroupPosition.of(index, shown.size)) { RecordRow(r) }
     }
@@ -238,8 +244,8 @@ private fun RecordRow(r: HubUpdateRecord) {
     JRow {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                Text(HubUpdateText.record(r.result), style = PersonaTheme.type.bodyStrong, color = tone, maxLines = 1)
-                if (r.auto) JChip("自动")
+                Text(HubUpdateText.record(r.result, LocalResources.current), style = PersonaTheme.type.bodyStrong, color = tone, maxLines = 1)
+                if (r.auto) JChip(stringResource(R.string.settings_hub_update_auto_chip))
                 Spacer(Modifier.weight(1f))
                 HubUpdateText.recordTime(r)?.let { Text(it, style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1) }
             }

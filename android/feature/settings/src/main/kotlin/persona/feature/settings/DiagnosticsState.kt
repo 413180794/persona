@@ -68,19 +68,8 @@ internal fun routeKind(kind: String, resources: Resources): String = routeKindRe
 
 @Composable internal fun routeKindText(kind: String): String = routeKindRes(kind)?.let { stringResource(it) } ?: kind
 
-/** Chinese only, for the callers not moved to [routeKindRes] yet (#2453); use [routeKind] with resources instead. */
-@Deprecated("Use routeKindRes, routeKind(kind, resources) or routeKindText")
-internal fun routeKind(kind: String): String = when (kind) {
-    "ipv6" -> "公网 IPv6" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
-    "name" -> "域名" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
-    "lan" -> "内网" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
-    "ipv4" -> "公网 IPv4" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
-    "unknown" -> "未知类型" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
-    else -> kind
-}
-
 /** The rows 连接诊断 shows for the last pairing attempt: a label and its value; [stepLabel] names where it stopped. */
-internal fun PairingAttempt.rows(resources: Resources, stepLabel: String? = step?.label()): List<Pair<String, String?>> = listOf(
+internal fun PairingAttempt.rows(resources: Resources, stepLabel: String? = step?.let { resources.getString(it.labelRes()) }): List<Pair<String, String?>> = listOf(
     resources.getString(R.string.settings_diag_address) to address,
     resources.getString(R.string.settings_diag_result) to (step?.let { resources.getString(R.string.settings_diag_failed_at, stepLabel.orEmpty()) }
         ?: resources.getString(R.string.settings_diag_succeeded)),

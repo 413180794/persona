@@ -1,6 +1,9 @@
 package persona.feature.settings
 
 import android.content.ClipData
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -49,6 +52,8 @@ internal class EndpointsSnapshot(
     val ui: EndpointEditorUi,
     val rows: List<EndpointRow>,
     val drag: EndpointDragState,
+    /** The page's resources, for text built outside composition. */
+    val resources: Resources,
 )
 
 /** Null where the connection cannot change its routes (体验模式); 连接诊断 then stays read-only as before. */
@@ -59,22 +64,23 @@ internal fun rememberEndpointsSnapshot(endpoints: ConnectionEndpoints?, probes: 
     val routes by editor.routes.collectAsStateWithLifecycle()
     val ui by editor.ui.collectAsStateWithLifecycle()
     val shown = remember(routes.entries, ui.drag, ui.pending) { shownEntries(routes.entries, ui) }
-    val rows = remember(routes, probes, ui.testing, shown) { endpointRows(routes, probes, ui.testing, shown) }
+    val resources = LocalResources.current
+    val rows = remember(routes, probes, ui.testing, shown, resources) { endpointRows(resources, routes, probes, ui.testing, shown) }
     val drag = rememberEndpointDrag(list, editor)
-    return EndpointsSnapshot(editor, routes, ui, rows, drag)
+    return EndpointsSnapshot(editor, routes, ui, rows, drag, resources)
 }
 
 /** 「当前连接」 with the url in use; replaces the read-only 当前路径 row. */
 internal fun LazyListScope.editableCurrentConnection(snapshot: EndpointsSnapshot, data: ConnectionDiagnostics, connection: ConnectionState) {
-    val active = activeRoute(snapshot.routes, data.currentPath, connection)
-    item { JSectionHeader("当前连接") }
+    val active = activeRoute(snapshot.resources, snapshot.routes, data.currentPath, connection)
+    item { JSectionHeader(stringResource(R.string.settings_endpoint_current_header)) }
     item {
         JGroupItem(GroupPosition.of(0, 3)) {
-            SelectionContainer { JRow("正在使用", subtitle = active.url, value = active.label, subtitleLines = Int.MAX_VALUE) }
+            SelectionContainer { JRow(stringResource(R.string.settings_endpoint_in_use), subtitle = active.url, value = active.label, subtitleLines = Int.MAX_VALUE) }
         }
     }
-    item { JGroupItem(GroupPosition.of(1, 3)) { DiagnosticValue("最后收包", localTime(data.lastReceivedAt)) } }
-    item { JGroupItem(GroupPosition.of(2, 3)) { DiagnosticValue("最近断线原因", data.lastDisconnectReason) } }
+    item { JGroupItem(GroupPosition.of(1, 3)) { DiagnosticValue(stringResource(R.string.settings_endpoint_last_received), localTime(data.lastReceivedAt)) } }
+    item { JGroupItem(GroupPosition.of(2, 3)) { DiagnosticValue(stringResource(R.string.settings_endpoint_last_disconnect), data.lastDisconnectReason) } }
 }
 
 /**
@@ -85,12 +91,12 @@ internal fun LazyListScope.editableCandidates(snapshot: EndpointsSnapshot, scope
     val editor = snapshot.editor
     val drag = snapshot.drag
     // Adding is the group's last row rather than a header action, which the section header cannot keep flush right.
-    item(key = "endpoints-header") { JSectionHeader("候选地址", count = snapshot.rows.size) }
-    if (snapshot.rows.isNotEmpty()) item(key = "endpoints-rule") { SettingsCaption(RuleNote, Modifier.padding(bottom = Tokens.Space.m)) }
+    item(key = "endpoints-header") { JSectionHeader(stringResource(R.string.settings_endpoint_candidates), count = snapshot.rows.size) }
+    if (snapshot.rows.isNotEmpty()) item(key = "endpoints-rule") { SettingsCaption(stringResource(R.string.settings_endpoint_rule_note), Modifier.padding(bottom = Tokens.Space.m)) }
     snapshot.ui.message?.let { message ->
-        item(key = "endpoints-message") { JNotice(message, Modifier.padding(bottom = Tokens.Space.m), status = Status.NeedsYou) }
+        item(key = "endpoints-message") { JNotice(message.text(), Modifier.padding(bottom = Tokens.Space.m), status = Status.NeedsYou) }
     }
-    if (snapshot.rows.isEmpty()) item(key = "endpoints-empty") { JEmptyState("没有候选地址", "点「添加地址」手动填写 hub 的地址。") }
+    if (snapshot.rows.isEmpty()) item(key = "endpoints-empty") { JEmptyState(stringResource(R.string.settings_endpoint_empty_title), stringResource(R.string.settings_endpoint_empty_body)) }
     val count = snapshot.rows.size + 1
     itemsIndexed(snapshot.rows, key = { _, row -> row.url }, contentType = { _, _ -> "endpoint" }) { index, row ->
         CandidateItem(row, GroupPosition.of(index, count), drag) {
@@ -105,16 +111,16 @@ internal fun LazyListScope.editableCandidates(snapshot: EndpointsSnapshot, scope
     }
     item(key = "endpoints-add") {
         JGroupItem(GroupPosition.of(count - 1, count), Modifier.animateItem(placementSpec = placement())) {
-            JRow("添加地址", leadingIcon = PhIcons.Plus, subtitle = "手动填写 hub 的地址", onClick = editor::startAdding, chevron = false)
+            JRow(stringResource(R.string.settings_endpoint_add), leadingIcon = PhIcons.Plus, subtitle = stringResource(R.string.settings_endpoint_add_subtitle), onClick = editor::startAdding, chevron = false)
         }
     }
     item(key = "endpoints-notes") {
         Column(Modifier.animateItem(placementSpec = placement()).padding(top = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             val custom = snapshot.routes.customOrder
-            JButton("恢复默认顺序", editor::askResetOrder, kind = JButtonKind.Secondary, size = JButtonSize.Small,
+            JButton(stringResource(R.string.settings_endpoint_reset), editor::askResetOrder, kind = JButtonKind.Secondary, size = JButtonSize.Small,
                 icon = PhIcons.ArrowClockwise, enabled = custom)
-            SettingsCaption(OrderNote)
-            SettingsCaption(TestNote)
+            SettingsCaption(stringResource(R.string.settings_endpoint_order_note, stringResource(R.string.settings_endpoint_default_rule)))
+            SettingsCaption(stringResource(R.string.settings_endpoint_test_note))
         }
     }
 }
@@ -166,12 +172,13 @@ private fun EndpointRowView(
 ) {
     val palette = PersonaTheme.palette
     val moves = moveActions(row, onMoveUp, onMoveDown)
+    val turn = turn(row)
     JRow(
         modifier = Modifier.onSecondaryClick(onOpen).semantics {
             customActions = moves
-            stateDescription = row.rank?.let { "第 $it 个尝试" } ?: "已停用，不尝试"
+            stateDescription = turn
         },
-        onClick = onOpen, onLongClick = null, onClickLabel = "更多操作",
+        onClick = onOpen, onLongClick = null, onClickLabel = stringResource(R.string.settings_endpoint_more),
         trailing = {
             // While a test runs the button is disabled; a tap on it must not fall through to the row and open its actions.
             Box(Modifier.pointerInput(row.testing) {
@@ -181,7 +188,7 @@ private fun EndpointRowView(
                 }
             }) {
                 // The icon keeps the width steady when the spinner takes its place.
-                JButton("测试", onTest, kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.Gauge, loading = row.testing)
+                JButton(stringResource(R.string.settings_endpoint_test), onTest, kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.Gauge, loading = row.testing)
             }
         },
     ) {
@@ -197,8 +204,8 @@ private fun EndpointRowView(
                         Modifier.padding(vertical = Tokens.Space.xxs),
                         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
                         verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
-                    ) { row.tags.forEach { JTag(it.label, status = it.status) } }
-                    if (!row.entry.enabled) Text(SkippedNote, style = PersonaTheme.type.caption, color = palette.ink2)
+                    ) { row.tags.forEach { JTag(stringResource(it.label), status = it.status) } }
+                    if (!row.entry.enabled) Text(stringResource(R.string.settings_endpoint_skipped_note), style = PersonaTheme.type.caption, color = palette.ink2)
                     row.outcome?.let {
                         Text(it.text, style = PersonaTheme.type.caption, color = if (it.failed) palette.needsYou.text else palette.ink2)
                         Text(it.label, style = PersonaTheme.type.caption, color = palette.ink3)
@@ -216,11 +223,12 @@ private fun EndpointRowView(
 @Composable
 private fun DragHandle(row: EndpointRow, drag: EndpointDragState, moves: List<CustomAccessibilityAction>) {
     val palette = PersonaTheme.palette
+    val description = stringResource(R.string.settings_endpoint_drag)
     Column(
         Modifier.width(HandleWidth).heightIn(min = Tokens.MinTouch.android)
             .dragHandle(drag, row.url)
             .semantics(mergeDescendants = true) {
-                contentDescription = "拖动排序"
+                contentDescription = description
                 customActions = moves
             },
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -234,10 +242,16 @@ private fun DragHandle(row: EndpointRow, drag: EndpointDragState, moves: List<Cu
     }
 }
 
+@Composable
 private fun moveActions(row: EndpointRow, onMoveUp: () -> Unit, onMoveDown: () -> Unit): List<CustomAccessibilityAction> = listOfNotNull(
-    CustomAccessibilityAction("上移") { onMoveUp(); true }.takeIf { row.canMoveUp },
-    CustomAccessibilityAction("下移") { onMoveDown(); true }.takeIf { row.canMoveDown },
+    CustomAccessibilityAction(stringResource(R.string.settings_endpoint_move_up)) { onMoveUp(); true }.takeIf { row.canMoveUp },
+    CustomAccessibilityAction(stringResource(R.string.settings_endpoint_move_down)) { onMoveDown(); true }.takeIf { row.canMoveDown },
 )
+
+/** 「第 2 个尝试」, or that a disabled row is skipped. */
+@Composable
+private fun turn(row: EndpointRow): String =
+    row.rank?.let { stringResource(R.string.settings_endpoint_turn, it) } ?: stringResource(R.string.settings_endpoint_skipped)
 
 /** The sheets and the dialogs the candidate list opens. */
 @Composable
@@ -246,6 +260,7 @@ internal fun EndpointOverlays(snapshot: EndpointsSnapshot) {
     val clipboard = LocalClipboard.current
     val editor = snapshot.editor
     val ui = snapshot.ui
+    val clipLabel = stringResource(R.string.settings_endpoint_clip_label)
     ui.actions?.let { url ->
         val row = snapshot.rows.firstOrNull { it.url == url }
         if (row == null) LaunchedEffect(url) { editor.closeActions() }
@@ -255,7 +270,7 @@ internal fun EndpointOverlays(snapshot: EndpointsSnapshot) {
             onMoveUp = { scope.launch { editor.moveUp(url) } },
             onMoveDown = { scope.launch { editor.moveDown(url) } },
             onToggle = { scope.launch { editor.setEnabled(url, !row.entry.enabled) } },
-            onCopy = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("hub 地址", url))) } },
+            onCopy = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(clipLabel, url))) } },
             onEdit = { editor.startEditing(url) },
             onDelete = { editor.askDelete(url) },
         )
@@ -267,13 +282,15 @@ internal fun EndpointOverlays(snapshot: EndpointsSnapshot) {
     ui.deleting?.let { url ->
         val delete: () -> Unit = { scope.launch { editor.confirmDelete() } }
         JDialog(
-            onDismiss = editor::cancelDelete, title = "删除这个地址？", text = "$url\n删除后不会再尝试这个地址。",
-            confirm = "删除" to delete, destructive = true, confirmEnabled = !ui.busy,
+            onDismiss = editor::cancelDelete, title = stringResource(R.string.settings_endpoint_delete_title), text = stringResource(R.string.settings_endpoint_delete_body, url),
+            confirm = stringResource(R.string.settings_endpoint_delete) to delete, destructive = true, confirmEnabled = !ui.busy,
         )
     }
     if (ui.resetting) {
         val reset: () -> Unit = { scope.launch { editor.confirmResetOrder() } }
-        JDialog(onDismiss = editor::cancelResetOrder, title = "恢复默认顺序？", text = ResetNote, confirm = "恢复" to reset)
+        JDialog(onDismiss = editor::cancelResetOrder, title = stringResource(R.string.settings_endpoint_reset_title),
+            text = stringResource(R.string.settings_endpoint_reset_note, stringResource(R.string.settings_endpoint_default_rule)),
+            confirm = stringResource(R.string.settings_endpoint_reset_confirm) to reset)
     }
 }
 
@@ -284,47 +301,47 @@ private fun EndpointActions(
 ) {
     val entry = row.entry
     val manual = entry.source == EndpointSource.Manual
-    val turn = row.rank?.let { "第 $it 个尝试" } ?: "已停用，不尝试"
+    val turn = turn(row)
     JActionSheet(
         actions = buildList {
-            add(JAction("测试", PhIcons.Gauge, enabled = !row.testing, onClick = onTest))
-            add(JAction("上移", PhIcons.ArrowUp, enabled = row.canMoveUp, onClick = onMoveUp))
-            add(JAction("下移", PhIcons.ArrowDown, enabled = row.canMoveDown, onClick = onMoveDown))
-            add(JAction(if (entry.enabled) "停用" else "重新启用", if (entry.enabled) PhIcons.Prohibit else PhIcons.CheckCircle, enabled = !busy, onClick = onToggle))
-            add(JAction("拷贝地址", PhIcons.Copy, onClick = onCopy))
+            add(JAction(stringResource(R.string.settings_endpoint_test), PhIcons.Gauge, enabled = !row.testing, onClick = onTest))
+            add(JAction(stringResource(R.string.settings_endpoint_move_up), PhIcons.ArrowUp, enabled = row.canMoveUp, onClick = onMoveUp))
+            add(JAction(stringResource(R.string.settings_endpoint_move_down), PhIcons.ArrowDown, enabled = row.canMoveDown, onClick = onMoveDown))
+            add(JAction(stringResource(if (entry.enabled) R.string.settings_endpoint_disable else R.string.settings_endpoint_enable), if (entry.enabled) PhIcons.Prohibit else PhIcons.CheckCircle, enabled = !busy, onClick = onToggle))
+            add(JAction(stringResource(R.string.settings_endpoint_copy), PhIcons.Copy, onClick = onCopy))
             if (manual) {
-                add(JAction("编辑", PhIcons.PencilSimple, enabled = !busy, separatorBefore = true, onClick = onEdit))
-                add(JAction("删除", PhIcons.Trash, destructive = true, enabled = !busy, onClick = onDelete))
+                add(JAction(stringResource(R.string.settings_endpoint_edit), PhIcons.PencilSimple, enabled = !busy, separatorBefore = true, onClick = onEdit))
+                add(JAction(stringResource(R.string.settings_endpoint_delete), PhIcons.Trash, destructive = true, enabled = !busy, onClick = onDelete))
             }
         },
         onDismiss = onDismiss, title = entry.url,
-        note = "$turn。${row.origin}。" + when {
-            manual -> "只保存在这台手机上。"
-            entry.enabled -> "不能编辑或删除，不想用可以停用。"
-            else -> "不能编辑或删除。"
-        },
+        note = stringResource(when {
+            manual -> R.string.settings_endpoint_note_manual
+            entry.enabled -> R.string.settings_endpoint_note_fixed
+            else -> R.string.settings_endpoint_note_fixed_disabled
+        }, turn, row.origin),
     )
 }
 
 @Composable
 private fun AddressSheet(sheet: EndpointSheet, pinned: Boolean, onChange: (String) -> Unit, onSave: () -> Unit, onDismiss: () -> Unit) {
-    JSheet(onDismiss, title = if (sheet.editing == null) "添加地址" else "编辑地址", dismissible = !sheet.saving, scrollable = true) {
+    JSheet(onDismiss, title = stringResource(if (sheet.editing == null) R.string.settings_endpoint_add else R.string.settings_endpoint_edit_title), dismissible = !sheet.saving, scrollable = true) {
         Column(Modifier.fillMaxWidth().imePadding(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
             JTextField(
-                sheet.address, onChange, Modifier.fillMaxWidth(), placeholder = "https://hub.example.com:18662", label = "地址",
-                supportingText = sheet.hint, singleLine = true, enabled = !sheet.saving, isError = sheet.check is EndpointCheck.Invalid,
+                sheet.address, onChange, Modifier.fillMaxWidth(), placeholder = "https://hub.example.com:18662", label = stringResource(R.string.settings_endpoint_address),
+                supportingText = sheet.hint(LocalResources.current), singleLine = true, enabled = !sheet.saving, isError = sheet.check is EndpointCheck.Invalid,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false,
                     keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done,
                 ),
                 keyboardActions = KeyboardActions(onDone = { if (sheet.canSave) onSave() }),
             )
-            SettingsCaption(AddressForms)
-            if (!pinned) SettingsCaption(UnpinnedNote)
-            sheet.error?.let { JNotice(it, status = Status.NeedsYou) }
+            SettingsCaption(stringResource(R.string.settings_endpoint_address_forms))
+            if (!pinned) SettingsCaption(stringResource(R.string.settings_endpoint_unpinned_note))
+            sheet.error?.let { JNotice(it.text(), status = Status.NeedsYou) }
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                JButton("取消", onDismiss, Modifier.weight(1f), kind = JButtonKind.Quiet, enabled = !sheet.saving)
-                JButton("保存", onSave, Modifier.weight(1f), enabled = sheet.canSave, loading = sheet.saving, loadingText = "正在保存…")
+                JButton(stringResource(R.string.settings_endpoint_cancel), onDismiss, Modifier.weight(1f), kind = JButtonKind.Quiet, enabled = !sheet.saving)
+                JButton(stringResource(R.string.settings_endpoint_save), onSave, Modifier.weight(1f), enabled = sheet.canSave, loading = sheet.saving, loadingText = stringResource(R.string.settings_endpoint_saving))
             }
         }
     }
@@ -339,12 +356,3 @@ private const val LiftScale = 0.02f
 
 /** Disabled candidates read as switched off, like a disabled row. */
 private const val DimmedAlpha = 0.45f
-
-private const val RuleNote = "从上到下依次尝试。拖动左侧手柄或长按一行调整顺序；停用的地址留在原位、不尝试。"
-private const val SkippedNote = "留在原位，连接时跳过"
-private const val DefaultRule = "公网 IPv6 → 域名 → 内网 → 公网 IPv4，同类里 HTTPS 和手动添加的在前"
-private const val OrderNote = "没有调整过顺序时按默认规则排列：$DefaultRule。调整过顺序以后，hub 新发来的地址排在最后，hub 不再提供的地址会消失。"
-private const val ResetNote = "按默认规则重新排列：$DefaultRule。停用的地址仍然停用。"
-private const val TestNote = "「测试」用一条新连接请求一次 hub：单次，样本数 1；耗时包含建立连接，https 地址还包含 TLS 握手，不作为性能基线。"
-private const val AddressForms = "支持 https://域名:端口、https://[IPv6]:端口、https://IPv4:端口；http:// 只能用内网地址。"
-private const val UnpinnedNote = "这次配对没有记录 hub 的证书指纹，https 地址没法校验身份，暂时只能添加内网的 http:// 地址；重新配对后就可以添加 https 地址。"

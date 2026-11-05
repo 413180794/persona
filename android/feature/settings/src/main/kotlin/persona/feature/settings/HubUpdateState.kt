@@ -1,5 +1,9 @@
 package persona.feature.settings
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalResources
 import persona.core.contracts.api.HubUpdateRecord
 import persona.core.contracts.api.HubUpdateStatus
 import persona.core.contracts.api.HubUpdates
@@ -21,9 +25,9 @@ internal data class HubUpdateState(
     /** A start or settings call is on its way: its buttons wait. */
     val sending: Boolean = false,
     /** Reading the status failed (the page has nothing else to show). */
-    val error: String? = null,
+    val error: SettingsUiText? = null,
     /** The last action that failed, for a notice over the groups. */
-    val actionError: String? = null,
+    val actionError: SettingsUiText? = null,
 )
 
 /**
@@ -47,7 +51,7 @@ internal class HubUpdateModel(private val api: HubUpdates) {
         } catch (_: HubUpdatesUnsupported) {
             mutable.update { it.copy(unsupported = true) }
         } catch (error: Exception) {
-            mutable.update { it.copy(error = "读不到 hub 的版本：${failureReason(error)}") }
+            mutable.update { it.copy(error = SettingsUiText.Res(R.string.settings_hub_update_read_failed, listOf(failureReason(error)))) }
         }
     }
 
@@ -72,23 +76,24 @@ internal class HubUpdateModel(private val api: HubUpdates) {
         if (state.value.checking) return
         mutable.update { it.copy(checking = true, actionError = null) }
         try { receive(api.check()) } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(actionError = "检查失败：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(actionError = SettingsUiText.Res(R.string.settings_hub_update_check_failed, listOf(failureReason(error)))) } }
         finally { mutable.update { it.copy(checking = false) } }
     }
 
     /** Starts the update; [now] is the confirmation's 现在就更新 (it does not wait for idle). */
-    suspend fun update(now: Boolean) = send("没能开始更新") { api.start(now) }
+    suspend fun update(now: Boolean) = send(R.string.settings_hub_update_start_failed) { api.start(now) }
 
-    suspend fun setAuto(on: Boolean) = send("保存失败") { api.settings(auto = on) }
+    suspend fun setAuto(on: Boolean) = send(R.string.settings_hub_update_save_failed) { api.settings(auto = on) }
 
     /** 「自动更新已开启」 seen: not shown again. */
-    suspend fun noticeSeen() = send("保存失败") { api.settings(noticeSeen = true) }
+    suspend fun noticeSeen() = send(R.string.settings_hub_update_save_failed) { api.settings(noticeSeen = true) }
 
-    private suspend fun send(failed: String, call: suspend () -> HubUpdateStatus) {
+    /** [failed] is a string resource taking the reason. */
+    private suspend fun send(@StringRes failed: Int, call: suspend () -> HubUpdateStatus) {
         if (state.value.sending) return
         mutable.update { it.copy(sending = true, actionError = null) }
         try { receive(call()) } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(actionError = "$failed：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(actionError = SettingsUiText.Res(failed, listOf(failureReason(error)))) } }
         finally { mutable.update { it.copy(sending = false) } }
     }
 }
@@ -105,78 +110,91 @@ internal sealed interface HubUpdateView {
 /** A line to read and, under it, what to copy (a Docker hub's steps). */
 internal data class CopyStep(val text: String, val copy: String)
 
-/** The page's words, the same as iOS `HubUpdateStatus` / `HubSettingsPage` and the web's `lib/hub-update.ts`. */
+/**
+ * The page's words, the same as iOS `HubUpdateStatus` / `HubSettingsPage` and the web's `lib/hub-update.ts`, in the
+ * language of [Resources] (the page passes its own).
+ */
 internal object HubUpdateText {
     const val DockerCommand = "docker compose pull && docker compose up -d"
 
     fun finished(previous: String?, next: String): Boolean = previous != next && next in setOf("updated", "rolled_back", "failed")
 
-    fun channel(channel: String): String = when (channel) { "release" -> "发布版"; "docker" -> "Docker"; else -> "开发版" }
+    fun channel(channel: String, resources: Resources): String = when (channel) {
+        "release" -> resources.getString(R.string.settings_hub_update_channel_release)
+        "docker" -> "Docker"
+        else -> resources.getString(R.string.settings_hub_update_channel_dev)
+    }
 
-    fun state(s: HubUpdateStatus): String = when (s.state) {
-        "checking" -> "正在检查"
-        "downloading" -> "正在下载"
-        "waiting_idle" -> if (s.busy.isEmpty()) "等助手和 Agent 空闲" else "等 ${s.busy.size} 个在忙的结束"
-        "restarting" -> "正在重启，会断开一会儿"
-        "confirming" -> "新版本正在确认"
-        "updated" -> "已更新"
-        "rolled_back" -> "已回滚"
-        "failed" -> "没更新成功"
-        "available" -> "有新版本"
-        else -> "已是最新"
+    fun state(s: HubUpdateStatus, resources: Resources): String = when (s.state) {
+        "checking" -> resources.getString(R.string.settings_hub_update_state_checking)
+        "downloading" -> resources.getString(R.string.settings_hub_update_state_downloading)
+        "waiting_idle" -> if (s.busy.isEmpty()) resources.getString(R.string.settings_hub_update_state_waiting_idle)
+            else resources.getQuantityString(R.plurals.settings_hub_update_state_waiting_busy, s.busy.size, s.busy.size)
+        "restarting" -> resources.getString(R.string.settings_hub_update_state_restarting)
+        "confirming" -> resources.getString(R.string.settings_hub_update_state_confirming)
+        "updated" -> resources.getString(R.string.settings_hub_update_state_updated)
+        "rolled_back" -> resources.getString(R.string.settings_hub_update_state_rolled_back)
+        "failed" -> resources.getString(R.string.settings_hub_update_state_failed)
+        "available" -> resources.getString(R.string.settings_hub_update_state_available)
+        else -> resources.getString(R.string.settings_hub_update_state_current)
     }
 
     /** The settings row's value (iOS `hubSummary`). */
-    fun summary(s: HubUpdateStatus?): String? = when {
+    fun summary(s: HubUpdateStatus?, resources: Resources): String? = when {
         s == null -> null
-        s.working -> state(s)
-        s.latest?.newer == true -> if (s.channel == "docker") "有新镜像" else "有新版本"
+        s.working -> state(s, resources)
+        s.latest?.newer == true -> resources.getString(
+            if (s.channel == "docker") R.string.settings_hub_update_new_image else R.string.settings_hub_update_state_available)
         else -> s.version.ifBlank { null }
     }
 
-    fun view(s: HubUpdateStatus): HubUpdateView = when {
+    @Composable
+    fun summary(s: HubUpdateStatus?): String? = summary(s, LocalResources.current)
+
+    fun view(s: HubUpdateStatus, resources: Resources): HubUpdateView = when {
         s.channel == "docker" -> HubUpdateView.Docker
-        !s.canUpdate -> HubUpdateView.Cannot(s.whyNot?.takeIf { it.isNotBlank() }?.let { "这个 hub 不会自己更新：$it。" } ?: "这个 hub 不会自己更新。")
+        !s.canUpdate -> HubUpdateView.Cannot(s.whyNot?.takeIf { it.isNotBlank() }
+            ?.let { resources.getString(R.string.settings_hub_update_cannot_why, it) }
+            ?: resources.getString(R.string.settings_hub_update_cannot))
         s.latest?.newer == true -> HubUpdateView.Newer(s.working)
         s.working -> HubUpdateView.Working
         else -> HubUpdateView.Current
     }
 
     /** The warning under a newer release: it went back before, or auto-update holds it back. */
-    fun latestWarning(s: HubUpdateStatus): String? {
+    fun latestWarning(s: HubUpdateStatus, resources: Resources): String? {
         val l = s.latest?.takeIf { it.newer } ?: return null
-        if (l.bad) return "这一版上次装完起不来，已经回滚过；自动更新不会再装它。"
-        if (!l.held.isNullOrBlank() && s.auto) return "自动更新不会装这一版：${l.held}。确认没问题可以手动更新。"
+        if (l.bad) return resources.getString(R.string.settings_hub_update_warning_bad)
+        if (!l.held.isNullOrBlank() && s.auto) return resources.getString(R.string.settings_hub_update_warning_held, l.held)
         return null
     }
 
     /** A Docker hub's lines: what to say and what to copy. */
-    fun dockerSteps(s: HubUpdateStatus): Pair<String?, List<CopyStep>> {
+    fun dockerSteps(s: HubUpdateStatus, resources: Resources): Pair<String?, List<CopyStep>> {
         val l = s.latest?.takeIf { it.newer }
-            ?: return null to listOf(CopyStep("Docker 部署的 hub 由新镜像更新：有新镜像时在 compose 文件所在的目录里运行", DockerCommand))
+            ?: return null to listOf(CopyStep(resources.getString(R.string.settings_hub_update_docker_plain), DockerCommand))
         val image = s.image
         val steps = if (image?.pinned == true) listOf(
             // `pull` alone keeps the version the tag names: the tag changes first.
-            CopyStep("在 hub 所在的机器上，把 compose 文件旁边 .env 里的 JARVIS_IMAGE 改成：", "${image.name}:${l.version}"),
-            CopyStep("再在那个目录里运行：", DockerCommand),
-        ) else listOf(CopyStep("在 hub 所在的机器上，compose 文件所在的目录里运行：", DockerCommand))
-        return "新镜像 ${l.version}" to steps
+            CopyStep(resources.getString(R.string.settings_hub_update_docker_env), "${image.name}:${l.version}"),
+            CopyStep(resources.getString(R.string.settings_hub_update_docker_then), DockerCommand),
+        ) else listOf(CopyStep(resources.getString(R.string.settings_hub_update_docker_run), DockerCommand))
+        return resources.getString(R.string.settings_hub_update_docker_new_image, l.version) to steps
     }
 
-    fun record(result: String): String = when (result) { "updated" -> "已更新"; "rolled_back" -> "已回滚"; "held" -> "没有自动装"; else -> "没更新成功" }
+    fun record(result: String, resources: Resources): String = resources.getString(when (result) {
+        "updated" -> R.string.settings_hub_update_state_updated
+        "rolled_back" -> R.string.settings_hub_update_state_rolled_back
+        "held" -> R.string.settings_hub_update_record_held
+        else -> R.string.settings_hub_update_state_failed
+    })
 
     fun recordTime(r: HubUpdateRecord, now: Instant = Instant.now()): String? =
         parseTime(r.ended ?: r.started)?.let { ChannelText.ago(it, now) }
 
     /** 「3 小时前发布」 under a newer release. */
-    fun released(s: HubUpdateStatus, now: Instant = Instant.now()): String? = parseTime(s.latest?.released)?.let { ChannelText.ago(it, now) + "发布" }
+    fun released(s: HubUpdateStatus, resources: Resources, now: Instant = Instant.now()): String? =
+        parseTime(s.latest?.released)?.let { resources.getString(R.string.settings_hub_update_released, ChannelText.ago(it, now)) }
 
     fun lastCheck(s: HubUpdateStatus, now: Instant = Instant.now()): String? = parseTime(s.lastCheck)?.let { ChannelText.ago(it, now) }
-
-    const val UpdateFooter = "更新会等助手和所有 Agent 都空闲时再重启 hub；新版本起不来会自动回到上一版。重启期间连接会断开一会儿。"
-    const val AutoNotice = "hub 会在空闲时自动更新。"
-    const val AutoFooter = "开着时，有新版本就在助手和所有 Agent 都空闲时自己装上，装完推一条通知。"
-    const val NodesFooter = "hub 更新后会把各台电脑上的 personad 也换成同一个版本；没换上的可以点进去「重新部署」。"
-    const val NowWarning = "不再等它们结束：会中断正在等 hub 的操作（助手这一轮、正在上传的文件、终端连接）。herdr 里的 Agent 不受影响，hub 起来后会自己连回来。"
-    const val Unsupported = "这个 hub 的版本太旧，不支持在 App 里查看和更新版本。在 hub 所在的机器上用 install.sh 更新一次以后就可以了。"
 }

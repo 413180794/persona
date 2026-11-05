@@ -1,5 +1,7 @@
 package persona.feature.settings
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
 import persona.core.contracts.api.*
 import persona.core.designsystem.Status
 import kotlinx.coroutines.CancellationException
@@ -25,17 +27,18 @@ internal data class EndpointSheet(
     val check: EndpointCheck? = null,
     val saving: Boolean = false,
     /** Why the last save was refused, in the connection's words. */
-    val error: String? = null,
+    val error: SettingsUiText? = null,
 ) {
     /** Editing without a change: saving would only reconnect for nothing. */
     val unchanged: Boolean get() = editing != null && (check as? EndpointCheck.Valid)?.url == editing
     val canSave: Boolean get() = check is EndpointCheck.Valid && !unchanged && !saving
 
     /** The line under the field: what is wrong, or the url that will be saved. */
-    val hint: String? get() = when (val result = check) {
+    fun hint(resources: Resources): String? = when (val result = check) {
         null -> null
         is EndpointCheck.Invalid -> result.message
-        is EndpointCheck.Valid -> if (unchanged) "地址没有改动" else "将保存为 ${result.url}（${routeKind(result.kind)}）"
+        is EndpointCheck.Valid -> if (unchanged) resources.getString(R.string.settings_endpoint_hint_unchanged)
+            else resources.getString(R.string.settings_endpoint_hint_will_save, result.url, routeKind(result.kind, resources))
     }
 }
 
@@ -59,7 +62,7 @@ internal data class EndpointEditorUi(
     /** A change (add, edit, delete, disable, reorder) is running; the next one waits for it. */
     val busy: Boolean = false,
     /** Why the last change or test did not go through; the next action replaces it. */
-    val message: String? = null,
+    val message: SettingsUiText? = null,
     /** The row being dragged and the order shown meanwhile. */
     val drag: EndpointDrag? = null,
     /** An order handed to the connection that it has not reported yet. */
@@ -111,7 +114,7 @@ internal class EndpointEditorState(
         if (!sheet.canSave) return
         mutable.update { it.copy(sheet = sheet.copy(saving = true, error = null), message = null) }
         var saved: String? = null
-        var refusal: String? = null
+        var refusal: SettingsUiText? = null
         try {
             changes.withLock {
                 mutable.update { it.copy(busy = true) }
@@ -125,9 +128,9 @@ internal class EndpointEditorState(
         } catch (error: CancellationException) {
             throw error
         } catch (error: EndpointEditException) {
-            refusal = error.message
+            refusal = error.message?.let(SettingsUiText::Raw)
         } catch (_: Exception) {
-            refusal = "没有保存，请重试。"
+            refusal = SettingsUiText.Res(R.string.settings_endpoint_save_failed)
         } finally {
             val done = saved != null
             mutable.update { it.copy(sheet = if (done) null else it.sheet?.copy(saving = false, error = refusal)) }
@@ -166,9 +169,9 @@ internal class EndpointEditorState(
         } catch (error: CancellationException) {
             throw error
         } catch (error: EndpointEditException) {
-            mutable.update { it.copy(message = error.message) }
+            mutable.update { it.copy(message = error.message?.let(SettingsUiText::Raw)) }
         } catch (_: Exception) {
-            mutable.update { it.copy(message = "测试没有完成，请重试。") }
+            mutable.update { it.copy(message = SettingsUiText.Res(R.string.settings_endpoint_test_failed)) }
         } finally {
             mutable.update { it.copy(testing = it.testing - url) }
         }
@@ -242,7 +245,7 @@ internal class EndpointEditorState(
         val id = ++orders
         mutable.update { it.copy(pending = PendingOrder(urls, id), drag = null) }
         try {
-            if (change("顺序没有保存，请重试。") { endpoints.reorder(urls) }) withTimeoutOrNull(reportTimeoutMillis) {
+            if (change(R.string.settings_endpoint_order_failed) { endpoints.reorder(urls) }) withTimeoutOrNull(reportTimeoutMillis) {
                 combine(endpoints.state, mutable) { routes, ui -> ui.pending?.id != id || reports(routes.entries, urls) }.first { it }
             }
         } finally {
@@ -253,7 +256,7 @@ internal class EndpointEditorState(
     private fun entry(url: String) = endpoints.state.value.entries.firstOrNull { it.url == url }
 
     /** Runs [block] after the changes asked before it; false when it did not go through (the message says why). */
-    private suspend fun change(failed: String = "没有改成，请重试。", block: suspend () -> Unit): Boolean {
+    private suspend fun change(@StringRes failed: Int = R.string.settings_endpoint_change_failed, block: suspend () -> Unit): Boolean {
         mutable.update { it.copy(message = null) }
         return changes.withLock {
             mutable.update { it.copy(busy = true) }
@@ -263,10 +266,10 @@ internal class EndpointEditorState(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: EndpointEditException) {
-                mutable.update { it.copy(message = error.message) }
+                mutable.update { it.copy(message = error.message?.let(SettingsUiText::Raw)) }
                 false
             } catch (_: Exception) {
-                mutable.update { it.copy(message = failed) }
+                mutable.update { it.copy(message = SettingsUiText.Res(failed)) }
                 false
             } finally {
                 mutable.update { it.copy(busy = false) }
@@ -344,18 +347,20 @@ internal fun edgeScrollVelocity(
     }
 }
 
-internal val EndpointSource.label: String get() = when (this) {
-    EndpointSource.Manual -> "手动添加"
-    EndpointSource.Hub -> "hub 下发"
-    EndpointSource.Pairing -> "配对时添加"
+@get:StringRes
+internal val EndpointSource.label: Int get() = when (this) {
+    EndpointSource.Manual -> R.string.settings_endpoint_source_manual
+    EndpointSource.Hub -> R.string.settings_endpoint_source_hub
+    EndpointSource.Pairing -> R.string.settings_endpoint_source_pairing
 }
 
 /** 「内网，手动添加」: what kind of address it is and where it came from. */
-internal fun EndpointEntry.origin(): String = "${routeKind(kind)}，${source.label}"
+internal fun EndpointEntry.origin(resources: Resources): String =
+    resources.getString(R.string.settings_endpoint_origin, routeKind(kind, resources), resources.getString(source.label))
 
-internal enum class EndpointTag(val label: String, val status: Status?) {
-    Active("在用", Status.Unread),
-    Disabled("已停用", null),
+internal enum class EndpointTag(@StringRes val label: Int, val status: Status?) {
+    Active(R.string.settings_endpoint_tag_active, Status.Unread),
+    Disabled(R.string.settings_endpoint_tag_disabled, null),
 }
 
 /**
@@ -385,6 +390,7 @@ internal data class EndpointRow(
  * The dot: in use → online; the latest result failed → needs you; else neutral.
  */
 internal fun endpointRows(
+    resources: Resources,
     routes: ConnectionEndpointsState,
     probes: List<ConnectionCandidate>,
     testing: Set<String> = emptySet(),
@@ -395,10 +401,10 @@ internal fun endpointRows(
     var tried = 0
     return entries.mapIndexed { index, entry ->
         val active = entry.active || entry.url == routes.activeUrl
-        val outcome = endpointOutcome(routes.tests[entry.url], probes.firstOrNull { it.url == entry.url }, zone, today)
+        val outcome = endpointOutcome(resources, routes.tests[entry.url], probes.firstOrNull { it.url == entry.url }, zone, today)
         EndpointRow(
             entry = entry,
-            origin = entry.origin(),
+            origin = entry.origin(resources),
             tags = buildList {
                 if (active) add(EndpointTag.Active)
                 if (!entry.enabled) add(EndpointTag.Disabled)
@@ -418,13 +424,14 @@ internal fun endpointRows(
 }
 
 /** What the connection's own probe reports for a candidate that answered (`OkHttpHubConnection`); any other measured result failed. */
-private const val ProbePassed = "已通过身份校验"
+private const val ProbePassed = "已通过身份校验" // i18n-ignore: the connection's probe result this matches
 
 /**
  * The newer of a test started here and the connection's automatic probe of the same url (the test wins a tie or an
  * unreadable time). Both are single samples, and the text says so rather than passing the number off as a baseline.
  */
 internal fun endpointOutcome(
+    resources: Resources,
     test: EndpointTestResult?,
     probe: ConnectionCandidate?,
     zone: ZoneId = ZoneId.systemDefault(),
@@ -432,21 +439,26 @@ internal fun endpointOutcome(
 ): EndpointOutcome? {
     val measured = probe?.takeIf { it.sampleCount > 0 || !it.checkedAt.isNullOrBlank() }
     if (test != null && (measured == null || !isAfter(measured.checkedAt, test.testedAt))) {
-        return EndpointOutcome(measuredText(test.result, test.elapsedMillis, 1), !test.passed,
-            measuredLabel("测试", localTime(test.testedAt, zone, today)))
+        return EndpointOutcome(measuredText(resources, test.result, test.elapsedMillis, 1), !test.passed,
+            measuredLabel(resources, R.string.settings_endpoint_label_test, R.string.settings_endpoint_label_test_at, localTime(test.testedAt, zone, today)))
     }
     if (measured == null) return null
     val millis = measured.probeDurationMillis?.takeIf { measured.sampleCount > 0 }
-    val result = measured.result.ifBlank { "没有结果" }
-    return EndpointOutcome(measuredText(result, millis, measured.sampleCount), result != ProbePassed,
-        measuredLabel("自动探测", localTime(measured.checkedAt, zone, today)))
+    val result = measured.result.ifBlank { resources.getString(R.string.settings_endpoint_no_result) }
+    return EndpointOutcome(measuredText(resources, result, millis, measured.sampleCount), result != ProbePassed,
+        measuredLabel(resources, R.string.settings_endpoint_label_probe, R.string.settings_endpoint_label_probe_at, localTime(measured.checkedAt, zone, today)))
 }
 
-private fun measuredLabel(label: String, time: String?) = listOfNotNull(label, time?.takeIf(String::isNotBlank)).joinToString(" ")
+/** [label] alone, or [labelAt] with the [time] it was checked. */
+private fun measuredLabel(resources: Resources, @StringRes label: Int, @StringRes labelAt: Int, time: String?) =
+    time?.takeIf(String::isNotBlank)?.let { resources.getString(labelAt, it) } ?: resources.getString(label)
 
-/** No break between a number and its unit (U+00A0). */
-private fun measuredText(result: String, millis: Long?, samples: Int): String =
-    result + millis?.takeIf { it >= 0 }?.let { "，$it\u00A0毫秒（${if (samples <= 1) "单次" else "样本数\u00A0$samples"}）" }.orEmpty()
+/** No break between a number and its unit (U+00A0, in the resources). */
+private fun measuredText(resources: Resources, result: String, millis: Long?, samples: Int): String {
+    val ms = millis?.takeIf { it >= 0 } ?: return result
+    return if (samples <= 1) resources.getString(R.string.settings_endpoint_measured_once, result, ms)
+        else resources.getString(R.string.settings_endpoint_measured_samples, result, ms, samples)
+}
 
 private fun isAfter(first: String?, second: String?): Boolean {
     val a = instant(first) ?: return false
@@ -462,13 +474,13 @@ private fun instant(value: String?): Instant? = value?.takeIf(String::isNotBlank
 internal data class ActiveRoute(val url: String?, val label: String?)
 
 /** The url in use: what the connection reports, else the last path it observed (`kind · url`). */
-internal fun activeRoute(routes: ConnectionEndpointsState, currentPath: String?, connection: ConnectionState): ActiveRoute {
+internal fun activeRoute(resources: Resources, routes: ConnectionEndpointsState, currentPath: String?, connection: ConnectionState): ActiveRoute {
     val path = currentPath?.takeIf(String::isNotBlank)?.split(" · ", limit = 2)
     val url = routes.activeUrl ?: path?.last()?.takeIf(String::isNotBlank)
     val kind = routes.entries.firstOrNull { it.url == url }?.kind ?: path?.takeIf { it.size == 2 }?.first()
     return when {
-        url != null -> ActiveRoute(url, kind?.let(::routeKind))
-        connection == ConnectionState.Connecting || connection == ConnectionState.Updating -> ActiveRoute(null, "正在选路…")
-        else -> ActiveRoute(null, "未连接")
+        url != null -> ActiveRoute(url, kind?.let { routeKind(it, resources) })
+        connection == ConnectionState.Connecting || connection == ConnectionState.Updating -> ActiveRoute(null, resources.getString(R.string.settings_endpoint_choosing))
+        else -> ActiveRoute(null, resources.getString(R.string.settings_endpoint_not_connected))
     }
 }

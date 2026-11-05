@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.Resources
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -53,6 +57,7 @@ fun PairingScreen(
     attempts: PairingAttempts? = null,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val paired by pairing.isPaired.collectAsState()
     val records = remember(context) { ReadinessRecords(context) }
@@ -74,7 +79,7 @@ fun PairingScreen(
     var confirm by remember { mutableStateOf<PairingRequest?>(null) }
     var manual by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf(false) }
-    var notice by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<Int?>(null) } // a string resource
     var attempt by remember { mutableStateOf<PairingAttempt?>(null) }
     fun recordAttempt(request: PairingRequest?, error: Throwable?) {
         attempt = pairingAttempt(request, error, progress.lastOrNull()?.stage,
@@ -148,7 +153,7 @@ fun PairingScreen(
                 catch (error: Exception) {
                     // The pairing is saved and the shell refreshes on its own; a slow first list is not a failed pairing.
                     android.util.Log.w("JarvisPairing", "machine list after pairing: " + error.javaClass.name)
-                    notice = "已经连上 hub，机器列表稍后会自动刷新。"
+                    notice = R.string.settings_pairing_notice_list_later
                 }
                 record(PairingProgress(PairingStage.Complete))
                 token = ""; metadata = null; lastRequest = null; manual = false
@@ -171,7 +176,7 @@ fun PairingScreen(
     }
     val localPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) lastRequest?.let(::connect)
-        else { permissionDenied = true; failure = PairingFailure.LocalPermission; notice = "未获得本地网络权限。可以去系统设置授权，再回来重试。" }
+        else { permissionDenied = true; failure = PairingFailure.LocalPermission; notice = R.string.settings_pairing_notice_local_denied }
     }
     fun authorize() {
         if (!PairingLocalNetwork.missing(context)) lastRequest?.let(::connect)
@@ -194,7 +199,7 @@ fun PairingScreen(
     }
     fun scan() { scanner.launch(ScanOptions().setCaptureActivity(PairingScanActivity::class.java).setOrientationLocked(false).setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("").setBeepEnabled(false)) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) scan() else { credentialsSaved = false; lastRequest = null; confirm = null; failure = null; progress = emptyList(); manual = true; notice = "相机权限未开启，可以手动输入地址和配对码。" }
+        if (granted) scan() else { credentialsSaved = false; lastRequest = null; confirm = null; failure = null; progress = emptyList(); manual = true; notice = R.string.settings_pairing_notice_camera_denied }
     }
     fun requestScan() {
         if (context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) scan()
@@ -203,7 +208,7 @@ fun PairingScreen(
     fun paste() {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val value = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
-        if (value.isNullOrBlank()) notice = "剪贴板里没有配对链接。" else accept(value)
+        if (value.isNullOrBlank()) notice = R.string.settings_pairing_notice_clipboard_empty else accept(value)
     }
     fun edit() { credentialsSaved = false; lastRequest = null; confirm = null; failure = null; progress = emptyList(); manual = true }
     BackHandler(!readiness && engineStep == null && !running && (confirm != null || manual || failure != null)) {
@@ -217,109 +222,109 @@ fun PairingScreen(
     } else if (readiness) {
         ReadinessScreen(sessions, diagnostics, notificationsOnly = false,
             onDiagnostics = onDiagnostics, onDone = { records.pending(false); onReady() }, onBack = onBack ?: onReady, footer = footer)
-    } else JListPage(title = "配对", onBack = onBack, largeTitle = false) {
+    } else JListPage(title = stringResource(R.string.settings_pairing_title), onBack = onBack, largeTitle = false) {
         when {
             welcome -> {
-                item { PairingHeading("欢迎使用 Persona", "把 hub 接到手机上，随时查看电脑上的 Agent，处理需要你确认的事。") }
-                item { JGroupItem(GroupPosition.of(0, 3)) { JRow("Agents", leadingIcon = PhIcons.Robot, subtitle = "查看执行过程，回答提问、审批计划和工具操作。", subtitleLines = 3) } }
-                item { JGroupItem(GroupPosition.of(1, 3)) { JRow("收件箱", leadingIcon = PhIcons.Tray, subtitle = "集中查看飞书和邮件，让 AI 帮你分拣、草拟回复。", subtitleLines = 3) } }
-                item { JGroupItem(GroupPosition.of(2, 3)) { JRow("Persona 助手", leadingIcon = PhIcons.Sparkle, subtitle = "连接你的知识库，手机数据会在需要时单独申请授权。", subtitleLines = 3) } }
-                item { SettingsCaption("没有 Google 服务也能收通知：手机通过常驻连接接收 hub 的消息。", Modifier.padding(vertical = Tokens.Space.m)) }
-                item { JButton("连接 hub", { welcome = false }, Modifier.fillMaxWidth()) }
+                item { PairingHeading(stringResource(R.string.settings_pairing_welcome_title), stringResource(R.string.settings_pairing_welcome_body)) }
+                item { JGroupItem(GroupPosition.of(0, 3)) { JRow("Agents", leadingIcon = PhIcons.Robot, subtitle = stringResource(R.string.settings_pairing_welcome_agents), subtitleLines = 3) } }
+                item { JGroupItem(GroupPosition.of(1, 3)) { JRow(stringResource(R.string.settings_pairing_welcome_inbox_title), leadingIcon = PhIcons.Tray, subtitle = stringResource(R.string.settings_pairing_welcome_inbox), subtitleLines = 3) } }
+                item { JGroupItem(GroupPosition.of(2, 3)) { JRow(stringResource(R.string.settings_pairing_welcome_assistant_title), leadingIcon = PhIcons.Sparkle, subtitle = stringResource(R.string.settings_pairing_welcome_assistant), subtitleLines = 3) } }
+                item { SettingsCaption(stringResource(R.string.settings_pairing_welcome_push), Modifier.padding(vertical = Tokens.Space.m)) }
+                item { JButton(stringResource(R.string.settings_pairing_welcome_connect), { welcome = false }, Modifier.fillMaxWidth()) }
             }
             failure != null -> {
                 val reason = requireNotNull(failure)
                 val recovery = reason.recovery()
-                item { PairingHeading("连接未完成", "按下面的提示处理后，再试一次。") }
-                item { JNotice(reason.explanation(), status = Status.NeedsYou) }
+                item { PairingHeading(stringResource(R.string.settings_pairing_failed_title), stringResource(R.string.settings_pairing_failed_body)) }
+                item { JNotice(stringResource(reason.explanation()), status = Status.NeedsYou) }
                 attempt?.takeIf { it.failed }?.let { last ->
-                    item { SettingsCaption("停在「${last.step?.label()}」：${last.error.orEmpty()}", Modifier.padding(top = Tokens.Space.s)) }
+                    item { SettingsCaption(stringResource(R.string.settings_pairing_stopped_at, last.step?.let { stringResource(it.labelRes()) }.orEmpty(), last.error.orEmpty()), Modifier.padding(top = Tokens.Space.s)) }
                 }
                 item {
                     PairingActions {
-                        JButton(if (credentialsSaved && recovery == PairingRecovery.Retry) "重新读取机器" else recovery.label, {
+                        JButton(stringResource(if (credentialsSaved && recovery == PairingRecovery.Retry) R.string.settings_pairing_reload_machines else recovery.label), {
                             when (recovery) {
                                 PairingRecovery.Permission -> authorize()
                                 PairingRecovery.Scan -> requestScan()
                                 PairingRecovery.Retry, PairingRecovery.Update -> lastRequest?.let(::connect) ?: edit()
                             }
                         }, Modifier.fillMaxWidth())
-                        JButton("连接诊断", onDiagnostics, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
-                        if (recovery != PairingRecovery.Scan) JButton("重新扫码", ::requestScan, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, icon = PhIcons.Scan)
-                        JButton("修改地址或配对码", ::edit, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
+                        JButton(stringResource(R.string.settings_pairing_diagnostics), onDiagnostics, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
+                        if (recovery != PairingRecovery.Scan) JButton(stringResource(R.string.settings_pairing_rescan), ::requestScan, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, icon = PhIcons.Scan)
+                        JButton(stringResource(R.string.settings_pairing_edit_address_code), ::edit, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
                     }
                 }
-                if (progress.isNotEmpty()) pairingProgress(progress, running, failed = true)
+                if (progress.isNotEmpty()) pairingProgress(progress, running, failed = true, resources)
             }
             running || progress.isNotEmpty() -> {
-                item { PairingHeading("正在连接 hub", "连接通过身份校验后，才会保存本机凭据。") }
-                pairingProgress(progress, running, failed = false)
+                item { PairingHeading(stringResource(R.string.settings_pairing_connecting_title), stringResource(R.string.settings_pairing_connecting_body)) }
+                pairingProgress(progress, running, failed = false, resources)
             }
             confirm != null -> {
                 val request = requireNotNull(confirm)
-                item { PairingHeading("确认配对", "核对 hub 地址和公钥指纹，确认是你要连接的 hub。") }
-                pairingDetails(request)
-                if (paired) item { JNotice("确认后，手机将改连这个 hub。", title = "将替换当前配对", status = Status.NeedsYou) }
+                item { PairingHeading(stringResource(R.string.settings_pairing_confirm), stringResource(R.string.settings_pairing_confirm_body)) }
+                pairingDetails(request, resources)
+                if (paired) item { JNotice(stringResource(R.string.settings_pairing_replace_body), title = stringResource(R.string.settings_pairing_replace_title), status = Status.NeedsYou) }
                 item {
                     PairingActions {
-                        JButton("确认配对", { confirm = null; connect(request) }, Modifier.fillMaxWidth())
-                        JButton("修改输入", ::edit, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
+                        JButton(stringResource(R.string.settings_pairing_confirm), { confirm = null; connect(request) }, Modifier.fillMaxWidth())
+                        JButton(stringResource(R.string.settings_pairing_edit_input), ::edit, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
                     }
                 }
             }
             manual -> {
-                item { PairingHeading("手动输入", "填写 hub 地址和配对码，也可以粘贴完整的配对链接。") }
+                item { PairingHeading(stringResource(R.string.settings_pairing_manual), stringResource(R.string.settings_pairing_manual_body)) }
                 item {
                     JCard {
                         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                             JTextField(address, { value ->
                                 address = value; metadata = PairingInput.editedAddress(metadata, value)
                                 if (PairingInput.isLink(value)) accept(value)
-                            }, label = "hub 地址或配对链接", modifier = Modifier.fillMaxWidth(),
+                            }, label = stringResource(R.string.settings_pairing_address_label), modifier = Modifier.fillMaxWidth(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), singleLine = true)
-                            JTextField(token, { token = it; metadata = metadata?.copy(token = it) }, label = "配对码",
+                            JTextField(token, { token = it; metadata = metadata?.copy(token = it) }, label = stringResource(R.string.settings_pairing_code_label),
                                 visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                                 modifier = Modifier.fillMaxWidth(), singleLine = true)
-                            if (address.startsWith("http://")) SettingsCaption("HTTP 不加密，只在内网或 VPN 里使用。在外面请使用加密连接。")
+                            if (address.startsWith("http://")) SettingsCaption(stringResource(R.string.settings_pairing_http_warning))
                         }
                     }
                 }
                 item {
                     PairingActions {
-                        JButton("下一步", {
+                        JButton(stringResource(R.string.settings_pairing_next), {
                             try { confirm = metadata ?: PairingInput.manual(address, token) }
                             catch (error: Exception) {
                                 failure = pairingFailure(error)
                                 recordAttempt(PairingRequest(address.trim(), token), error)
                             }
                         }, Modifier.fillMaxWidth(), enabled = address.isNotBlank() && token.isNotBlank())
-                        JButton("粘贴链接", ::paste, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
-                        JTextButton("返回扫码配对", { manual = false })
+                        JButton(stringResource(R.string.settings_pairing_paste), ::paste, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
+                        JTextButton(stringResource(R.string.settings_pairing_back_to_scan), { manual = false })
                     }
                 }
             }
             else -> {
-                item { PairingHeading("连接你的 hub", "在 hub 所在的机器上运行下面的命令，再扫描显示的二维码。") }
+                item { PairingHeading(stringResource(R.string.settings_pairing_connect_title), stringResource(R.string.settings_pairing_connect_body)) }
                 item { JCodeBlock("personad hub pair") }
                 item {
                     PairingActions {
-                        JButton("扫码配对", ::requestScan, Modifier.fillMaxWidth(), icon = PhIcons.Scan)
+                        JButton(stringResource(R.string.settings_pairing_scan), ::requestScan, Modifier.fillMaxWidth(), icon = PhIcons.Scan)
                         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                            JButton("粘贴链接", ::paste, Modifier.weight(1f), kind = JButtonKind.Secondary)
-                            JButton("手动输入", { manual = true }, Modifier.weight(1f), kind = JButtonKind.Secondary)
+                            JButton(stringResource(R.string.settings_pairing_paste), ::paste, Modifier.weight(1f), kind = JButtonKind.Secondary)
+                            JButton(stringResource(R.string.settings_pairing_manual), { manual = true }, Modifier.weight(1f), kind = JButtonKind.Secondary)
                         }
-                        SettingsCaption("没有 Google 服务也能收通知：通知走手机和 hub 的常驻连接。")
+                        SettingsCaption(stringResource(R.string.settings_pairing_connect_push))
                     }
                 }
             }
         }
-        notice?.let { item { JNotice(it, Modifier.padding(top = Tokens.Space.m)) } }
-        item { JTextButton("配对会保存什么", { info = true }, Modifier.padding(top = Tokens.Space.m)) }
+        notice?.let { id -> item { JNotice(stringResource(id), Modifier.padding(top = Tokens.Space.m)) } }
+        item { JTextButton(stringResource(R.string.settings_pairing_saved_title), { info = true }, Modifier.padding(top = Tokens.Space.m)) }
         item { footer() }
     }
-    if (info) JDialog(onDismiss = { info = false }, title = "配对会保存什么",
-        text = "手机保存本机凭据、hub 公钥指纹和地址列表，由连接组件加密存储。hub 保存设备凭据的哈希，你可以撤销设备。Android 通知使用常驻连接。",
-        confirm = "知道了" to { info = false }, dismiss = null)
+    if (info) JDialog(onDismiss = { info = false }, title = stringResource(R.string.settings_pairing_saved_title),
+        text = stringResource(R.string.settings_pairing_saved_body),
+        confirm = stringResource(R.string.settings_pairing_got_it) to { info = false }, dismiss = null)
 }
 
 @Composable
@@ -335,27 +340,30 @@ private fun PairingHeading(title: String, description: String) {
     }
 }
 
-private fun LazyListScope.pairingDetails(request: PairingRequest) {
-    val details = listOf("hub 地址" to request.url,
-        "传输加密" to if (request.url.startsWith("https://")) "HTTPS 加密连接" else "HTTP 地址，未加密",
-        "hub 身份" to (request.hub ?: "未提供"), "公钥指纹" to (request.fp ?: "未提供")) +
-        listOfNotNull(request.tls?.let { "TLS 端口" to it.toString() })
+private fun LazyListScope.pairingDetails(request: PairingRequest, resources: Resources) {
+    val missing = resources.getString(R.string.settings_pairing_detail_missing)
+    val details = listOf(resources.getString(R.string.settings_pairing_detail_address) to request.url,
+        resources.getString(R.string.settings_pairing_detail_transport) to resources.getString(
+            if (request.url.startsWith("https://")) R.string.settings_pairing_detail_https else R.string.settings_pairing_detail_http),
+        resources.getString(R.string.settings_pairing_detail_identity) to (request.hub ?: missing),
+        resources.getString(R.string.settings_pairing_detail_fingerprint) to (request.fp ?: missing)) +
+        listOfNotNull(request.tls?.let { resources.getString(R.string.settings_pairing_detail_tls_port) to it.toString() })
     itemsIndexed(details) { index, (label, value) ->
         JGroupItem(GroupPosition.of(index, details.size)) { PairingDetail(label, value) }
     }
     if (request.url.startsWith("http://")) item {
-        JNotice(if (request.fp != null) "二维码带有公钥指纹，连接时会探测并校验加密地址。"
-            else "HTTP 不加密，只在内网或 VPN 里使用。在外面请使用加密连接。", Modifier.padding(top = Tokens.Space.m))
+        JNotice(stringResource(if (request.fp != null) R.string.settings_pairing_fingerprint_probe
+            else R.string.settings_pairing_http_warning), Modifier.padding(top = Tokens.Space.m))
     }
     if (request.url.startsWith("https://") && request.fp == null) item {
-        JNotice("二维码没有公钥指纹，会按系统信任的证书和域名校验这个 HTTPS 地址。", Modifier.padding(top = Tokens.Space.m))
+        JNotice(stringResource(R.string.settings_pairing_https_no_fingerprint), Modifier.padding(top = Tokens.Space.m))
     }
-    item { JSectionHeader("候选地址") }
+    item { JSectionHeader(stringResource(R.string.settings_pairing_candidates)) }
     val addresses = (listOf(request.url) + request.alt).distinct()
     itemsIndexed(addresses) { index, url ->
-        JGroupItem(GroupPosition.of(index, addresses.size)) { PairingDetail(if (index == 0) "主地址" else "备用地址 $index", url) }
+        JGroupItem(GroupPosition.of(index, addresses.size)) { PairingDetail(if (index == 0) stringResource(R.string.settings_pairing_primary) else stringResource(R.string.settings_pairing_alternate, index), url) }
     }
-    item { SettingsCaption("连接时会核对 hub 身份。", Modifier.padding(vertical = Tokens.Space.s)) }
+    item { SettingsCaption(stringResource(R.string.settings_pairing_identity_note), Modifier.padding(vertical = Tokens.Space.s)) }
 }
 
 @Composable
@@ -366,7 +374,19 @@ private fun PairingDetail(label: String, value: String) {
     }
 }
 
-internal fun pairingSteps(progress: List<PairingProgress>, running: Boolean, failed: Boolean): List<ProgressStep> {
+/** The step names of [pairingSteps], as string resources. */
+@StringRes
+internal fun PairingStage.title(): Int = when (this) {
+    PairingStage.Parse -> R.string.settings_pairing_stage_parse
+    PairingStage.Probe -> R.string.settings_pairing_stage_probe
+    PairingStage.VerifyIdentity -> R.string.settings_pairing_stage_verify
+    PairingStage.ExchangeCredentials -> R.string.settings_pairing_stage_exchange
+    PairingStage.LoadMachines -> R.string.settings_pairing_stage_machines
+    PairingStage.Complete -> R.string.settings_pairing_stage_complete
+}
+
+/** [title] names each stage (its [PairingStage.title] resource in the app). */
+internal fun pairingSteps(progress: List<PairingProgress>, running: Boolean, failed: Boolean, title: (PairingStage) -> String): List<ProgressStep> {
     val current = progress.lastOrNull()?.stage
     return PairingStage.entries.map { stage ->
         val reported = progress.any { it.stage == stage }
@@ -377,19 +397,12 @@ internal fun pairingSteps(progress: List<PairingProgress>, running: Boolean, fai
             stage == PairingStage.Complete && current != PairingStage.Complete -> StepState.Pending
             else -> StepState.Complete
         }
-        ProgressStep(when (stage) {
-            PairingStage.Parse -> "解析二维码"
-            PairingStage.Probe -> "探测地址"
-            PairingStage.VerifyIdentity -> "校验证书和 hub"
-            PairingStage.ExchangeCredentials -> "换本机凭据"
-            PairingStage.LoadMachines -> "读机器列表"
-            PairingStage.Complete -> "完成"
-        }, state)
+        ProgressStep(title(stage), state)
     }
 }
 
-private fun LazyListScope.pairingProgress(progress: List<PairingProgress>, running: Boolean, failed: Boolean) {
-    val steps = pairingSteps(progress, running, failed)
+private fun LazyListScope.pairingProgress(progress: List<PairingProgress>, running: Boolean, failed: Boolean, resources: Resources) {
+    val steps = pairingSteps(progress, running, failed) { resources.getString(it.title()) }
     item { JCard { StepProgress(steps) } }
     PairingStage.entries.forEachIndexed { index, stage ->
         val reported = progress.firstOrNull { it.stage == stage }

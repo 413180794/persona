@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.update
 internal data class EngineSelectionState(
     val selected: String = Engines.DEFAULT,
     val saving: Boolean = false,
-    val error: String? = null,
+    /** Why the last save failed. */
+    val error: SettingsUiText? = null,
     /** The user picked something; pushes about the machine no longer move the choice. */
     val edited: Boolean = false,
 )
@@ -48,7 +49,7 @@ internal class EngineSelectionModel(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            mutable.update { it.copy(error = "保存失败：${failureReason(error)}") }
+            mutable.update { it.copy(error = SettingsUiText.Res(R.string.settings_engine_save_failed, listOf(failureReason(error)))) }
             false
         } finally {
             mutable.update { it.copy(saving = false) }

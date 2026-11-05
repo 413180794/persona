@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.DetectedEngine
 import persona.core.contracts.Machine
@@ -51,9 +52,9 @@ fun EngineSelectionScreen(
     BackHandler(enabled = pairing) { }
     BackHandler(enabled = !pairing && state.saving) { }
     val ready = machine != null && model != null
-    JListPage(title = if (pairing) "选择引擎" else "引擎", onBack = if (pairing) null else onBack, largeTitle = false, bottomBar = if (!ready) null else ({
+    JListPage(title = stringResource(if (pairing) R.string.settings_engine_title_pairing else R.string.settings_engine_title), onBack = if (pairing) null else onBack, largeTitle = false, bottomBar = if (!ready) null else ({
         Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
-            JButton(if (pairing) "确认并继续" else "保存", {
+            JButton(stringResource(if (pairing) R.string.settings_engine_confirm else R.string.settings_engine_save), {
                 val target = machine ?: return@JButton
                 scope.launch {
                     if (model?.save(target.id) == true) {
@@ -67,20 +68,20 @@ fun EngineSelectionScreen(
     })) {
         if (pairing) item("heading") {
             Column(Modifier.padding(vertical = Tokens.Space.l), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                Text("这台电脑用哪个引擎", style = PersonaTheme.type.largeTitle, color = PersonaTheme.palette.ink)
+                Text(stringResource(R.string.settings_engine_heading), style = PersonaTheme.type.largeTitle, color = PersonaTheme.palette.ink)
                 Text(machine?.displayName ?: machineId, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (machine == null || model == null) {
-            if (reading) item("reading") { JLoading(text = "正在读这台机器") }
+            if (reading) item("reading") { JLoading(text = stringResource(R.string.settings_engine_reading)) }
             else item("missing") {
                 Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                    JNotice(if (management == null) "体验模式不能修改引擎。" else if (pairing)
-                        "配对已完成，稍后可以在 Agents 的机器监控里选择引擎。" else "hub 上暂时没有这台机器。",
-                        title = "暂时读不到这台机器", status = Status.NeedsYou)
-                    if (management != null) JButton("重试", { reading = true }, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
-                    if (pairing) JButton("先继续", onDone, Modifier.fillMaxWidth())
+                    JNotice(stringResource(if (management == null) R.string.settings_engine_demo else if (pairing)
+                        R.string.settings_engine_later else R.string.settings_engine_missing),
+                        title = stringResource(R.string.settings_engine_missing_title), status = Status.NeedsYou)
+                    if (management != null) JButton(stringResource(R.string.settings_engine_retry), { reading = true }, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
+                    if (pairing) JButton(stringResource(R.string.settings_engine_continue), onDone, Modifier.fillMaxWidth())
                 }
             }
             return@JListPage
@@ -97,8 +98,8 @@ fun EngineSelectionScreen(
         state.error?.let { error ->
             item("error") {
                 Column(Modifier.padding(top = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                    JInlineStatus(error, tone = InlineTone.Failed)
-                    if (pairing) SettingsCaption("必须选一个引擎才能继续，检查网络后再点一次确认。")
+                    JInlineStatus(error.text(), tone = InlineTone.Failed)
+                    if (pairing) SettingsCaption(stringResource(R.string.settings_engine_must_choose))
                 }
             }
         }
