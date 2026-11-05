@@ -688,6 +688,8 @@ export function useMenu() {
       setAnchor((a) => (a ? null : target));
     },
     close: () => setAnchor(null),
+    /** Opens it at an element of the caller's choosing (another menu's anchor, once that menu has closed). */
+    openAt: (el: HTMLElement | null) => setAnchor(el),
   };
 }
 

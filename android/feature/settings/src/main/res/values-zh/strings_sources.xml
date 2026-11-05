@@ -226,7 +226,7 @@
     <string name="settings_src_model_follows">跟随 %1$s</string>
     <string name="settings_src_model_follow_default">跟随默认</string>
     <string name="settings_src_model_provider_hidden">%1$s（已隐藏）</string>
-    <string name="settings_src_model_provider_unavailable">%1$s（当前引用不可用）</string>
+    <string name="settings_src_model_provider_unavailable">%1$s（已经没有了）</string>
     <string name="settings_src_model_restored">已恢复继承</string>
     <string name="settings_src_model_saved">已保存，下一次运行生效</string>
     <string name="settings_src_model_conflict">配置已在别处修改。你的编辑已保留；重新加载后再修改并保存。</string>
@@ -239,10 +239,10 @@
     <string name="settings_src_model_no_match">没有匹配的用途</string>
     <string name="settings_src_model_no_match_hint">试试其他名称或模型。</string>
     <string name="settings_src_model_reload">重新加载（丢弃编辑）</string>
-    <string name="settings_src_model_sheet_note_inherit">「%1$s」的模型，和在终端里输入 /model 看到的一样。「默认」即留空：继承上一级的设置。没有的可以直接输入 ID。</string>
-    <string name="settings_src_model_sheet_note_default">「%1$s」的模型，和在终端里输入 /model 看到的一样。「默认」即留空：用这个供应商的默认模型。没有的可以直接输入 ID。</string>
-    <string name="settings_src_model_sheet_note_inherit_from">「%1$s」的模型，和在终端里输入 /model 看到的一样 · 来自 %2$s。「默认」即留空：继承上一级的设置。没有的可以直接输入 ID。</string>
-    <string name="settings_src_model_sheet_note_default_from">「%1$s」的模型，和在终端里输入 /model 看到的一样 · 来自 %2$s。「默认」即留空：用这个供应商的默认模型。没有的可以直接输入 ID。</string>
+    <string name="settings_src_model_sheet_note_inherit">「%1$s」的模型，和在终端输入 /model 看到的一样。选「默认」就是不单独设，跟着上一级走；列表里没有的，直接输入 ID。</string>
+    <string name="settings_src_model_sheet_note_default">「%1$s」的模型，和在终端输入 /model 看到的一样。选「默认」就用这个供应商的默认模型；列表里没有的，直接输入 ID。</string>
+    <string name="settings_src_model_sheet_note_inherit_from">「%1$s」的模型，和在终端输入 /model 看到的一样（来自 %2$s）。选「默认」就是不单独设，跟着上一级走；列表里没有的，直接输入 ID。</string>
+    <string name="settings_src_model_sheet_note_default_from">「%1$s」的模型，和在终端输入 /model 看到的一样（来自 %2$s）。选「默认」就用这个供应商的默认模型；列表里没有的，直接输入 ID。</string>
     <string name="settings_src_model_provider">模型供应商</string>
     <string name="settings_src_model_effective_provider">供应商</string>
     <string name="settings_src_model_effective_model">模型</string>

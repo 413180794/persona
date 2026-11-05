@@ -220,7 +220,7 @@ class ModelConfigurationStateTest {
         assertEquals(listOf("", "launcher.claude", "launcher.old"), options.map { it.id })
         assertEquals("旧网关（已隐藏）", options.last().label)
         val gone = providerOptions(res, agent, providers, "launcher.gone")
-        assertEquals("launcher.gone（当前引用不可用）", gone.last().label)
+        assertEquals("launcher.gone（已经没有了）", gone.last().label)
         assertTrue(showsEffort(agent, providers[0]))
         assertFalse(showsEffort(agent, providers[2]))
         assertTrue(showsEffort(agent, providers[2].copy(api = "responses")))

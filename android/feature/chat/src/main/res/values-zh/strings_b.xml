@@ -20,13 +20,13 @@
     <string name="chat_recap_with_time">%1$s · %2$s</string>
     <string name="chat_attach_too_large">「%1$s」超过 200 MB，传不了</string>
     <string name="chat_attach_default_name">附件</string>
-    <string name="chat_attach_lost_permission">附件已失效或无法保留读取权限，请移除后重新选择</string>
+    <string name="chat_attach_lost_permission">这个附件读不了了：文件没了，或者没权限再读。删掉它，重新选一次</string>
     <string name="chat_attach_unreadable">文件无法读取，请重新选择</string>
     <string name="chat_attach_photo">照片 %1$d</string>
     <string name="chat_attach_edit_failed">改过的图片没能上传，原图还在</string>
     <string name="chat_attach_edit_unreadable">这张图片打不开，没法编辑</string>
     <string name="chat_attach_uploaded">已上传，等待发送</string>
-    <string name="chat_attach_no_service">附件服务尚未接入</string>
+    <string name="chat_attach_no_service">还不能加附件</string>
     <string name="chat_attach_uploading">正在上传…</string>
     <string name="chat_attach_retry">重试</string>
     <string name="chat_attach_remove">移除附件</string>
@@ -73,7 +73,7 @@
     <string name="chat_chrome_conn_cert">请检查 hub 的证书，并重新扫码配对。</string>
     <string name="chat_chrome_conn_revoked">请重新扫码配对。</string>
     <string name="chat_chrome_conn_local_network">请在系统设置中允许本地网络访问。</string>
-    <string name="chat_chrome_conn_other">连接恢复后会自动更新对话。当前显示的内容可能尚未同步。</string>
+    <string name="chat_chrome_conn_other">连上以后对话会自己更新。现在看到的可能不是最新的。</string>
     <string name="chat_chrome_conn_details">连接诊断</string>
     <string name="chat_chrome_got_it">知道了</string>
     <string name="chat_composer_placeholder">输入消息</string>
@@ -108,7 +108,7 @@
     <string name="chat_elicit_url_note">打开链接不代表授权成功。完成网页操作后，回到这里点「已打开，继续」。</string>
     <string name="chat_elicit_open_link">打开链接</string>
     <string name="chat_elicit_open_failed">链接未能打开，请重试或到终端处理</string>
-    <string name="chat_elicit_unsupported">这个 MCP 请求暂不支持在手机上填写，请到终端核对并处理。</string>
+    <string name="chat_elicit_unsupported">这个 MCP 请求还不能在手机上填。到终端里看一下再处理。</string>
     <string name="chat_elicit_required">%1$s（必填）</string>
     <string name="chat_elicit_optional">%1$s（选填）</string>
     <string name="chat_elicit_yes">是</string>
@@ -169,7 +169,7 @@
     <string name="chat_screen_command_ids">请求 %1$s，工具调用 %2$s</string>
     <string name="chat_screen_type_answer">输入回答</string>
     <string name="chat_screen_unreadable">暂时读不出这个对话框，请在电脑上核对并处理。</string>
-    <string name="chat_request_unsupported">暂不支持在手机上处理这个请求，请在电脑上核对并处理。</string>
+    <string name="chat_request_unsupported">这个请求还不能在手机上处理。到电脑上看一下再处理。</string>
     <string name="chat_request_terminal_help">终端处理说明</string>
     <string name="chat_request_dismiss">交给电脑处理</string>
     <string name="chat_terminal_help_title">在电脑上处理</string>
@@ -353,7 +353,7 @@
     <string name="chat_search_scope">可搜索正文、思考、工具名、工具输入和输出、系统事件。</string>
     <string name="chat_search_note">仅搜索已加载的内容；未展开的工作记录和截断的全文不在搜索范围内。</string>
     <string name="chat_search_return">返回搜索前位置</string>
-    <string name="chat_search_unlocatable">这条记录暂时无法定位，可返回搜索前位置</string>
+    <string name="chat_search_unlocatable">找不到这条记录在哪，可以回到搜索前的位置</string>
     <string name="chat_search_origin_changed">原来的记录已变化，请继续浏览当前记录</string>
     <string name="chat_slash_continue_title">继续</string>
     <string name="chat_slash_continue_word">/继续</string>

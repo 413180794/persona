@@ -226,7 +226,7 @@
     <string name="settings_src_model_follows">%1$sに従う</string>
     <string name="settings_src_model_follow_default">デフォルトに従う</string>
     <string name="settings_src_model_provider_hidden">%1$s（非表示）</string>
-    <string name="settings_src_model_provider_unavailable">%1$s（現在の参照は利用できません）</string>
+    <string name="settings_src_model_provider_unavailable">%1$s（現在は利用できません）</string>
     <string name="settings_src_model_restored">継承に戻しました</string>
     <string name="settings_src_model_saved">保存しました。次回の実行から反映されます</string>
     <string name="settings_src_model_conflict">設定は別の場所で変更されています。編集内容は保持されています。再読み込みしてから変更して保存してください。</string>
@@ -239,10 +239,10 @@
     <string name="settings_src_model_no_match">一致する用途がありません</string>
     <string name="settings_src_model_no_match_hint">別の名前やモデルで試してください。</string>
     <string name="settings_src_model_reload">再読み込み（編集を破棄）</string>
-    <string name="settings_src_model_sheet_note_inherit">「%1$s」のモデルです。ターミナルで/modelと入力したときと同じです。「デフォルト」は空欄で、上位の設定を継承します。一覧にないものはIDを直接入力できます。</string>
-    <string name="settings_src_model_sheet_note_default">「%1$s」のモデルです。ターミナルで/modelと入力したときと同じです。「デフォルト」は空欄で、このプロバイダーのデフォルトモデルを使います。一覧にないものはIDを直接入力できます。</string>
-    <string name="settings_src_model_sheet_note_inherit_from">「%1$s」のモデルです。ターミナルで/modelと入力したときと同じです（%2$sから取得）。「デフォルト」は空欄で、上位の設定を継承します。一覧にないものはIDを直接入力できます。</string>
-    <string name="settings_src_model_sheet_note_default_from">「%1$s」のモデルです。ターミナルで/modelと入力したときと同じです（%2$sから取得）。「デフォルト」は空欄で、このプロバイダーのデフォルトモデルを使います。一覧にないものはIDを直接入力できます。</string>
+    <string name="settings_src_model_sheet_note_inherit">「%1$s」のモデルです。ターミナルで/modelと入力したときと同じです。「デフォルト」を選ぶと個別に設定せず、上位の設定に従います。一覧にないものはIDを直接入力できます。</string>
+    <string name="settings_src_model_sheet_note_default">「%1$s」のモデルです。ターミナルで/modelと入力したときと同じです。「デフォルト」を選ぶと、このプロバイダーのデフォルトモデルを使います。一覧にないものはIDを直接入力できます。</string>
+    <string name="settings_src_model_sheet_note_inherit_from">「%1$s」のモデルです。ターミナルで/modelと入力したときと同じです（%2$sから取得）。「デフォルト」を選ぶと個別に設定せず、上位の設定に従います。一覧にないものはIDを直接入力できます。</string>
+    <string name="settings_src_model_sheet_note_default_from">「%1$s」のモデルです。ターミナルで/modelと入力したときと同じです（%2$sから取得）。「デフォルト」を選ぶと、このプロバイダーのデフォルトモデルを使います。一覧にないものはIDを直接入力できます。</string>
     <string name="settings_src_model_provider">モデルプロバイダー</string>
     <string name="settings_src_model_effective_provider">プロバイダー</string>
     <string name="settings_src_model_effective_model">モデル</string>

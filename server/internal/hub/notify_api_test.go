@@ -484,3 +484,31 @@ func TestPrefsOnlyDeviceGoesWithItsCredential(t *testing.T) {
 		t.Fatal("revoking the browser forgot the phone")
 	}
 }
+
+// A script's notification within the node's character limits always goes out (docs/script-cli.md: cut, not
+// refused), even when its bytes would not fit a push: 1000 emoji, or 1000 of < (six bytes each in JSON), #3798.
+func TestNodeScriptNotifyCutsToFit(t *testing.T) {
+	h := newTestHub(t)
+	m := &Machine{hub: h, cfg: MachineConfig{ID: "box1", Name: "Studio"}}
+	for _, body := range []string{strings.Repeat("😀", notifyBodyMost), strings.Repeat("<", notifyBodyMost), strings.Repeat("a<b>", notifyBodyMost/4)} {
+		in := notifyRequest{Title: strings.Repeat("标", notifyTitleMost), Body: body, Level: levelActive} // as validate leaves it
+		params, _ := json.Marshal(in)
+		out, err := m.onRequest(context.Background(), "notify", params)
+		if err != nil || out.(map[string]any)["sent"] != true {
+			t.Fatalf("body of %d bytes: %v %v", len(body), out, err)
+		}
+		cut := fitBody(in, "Studio")
+		if !strings.HasSuffix(cut, "…") || !strings.HasPrefix(body, strings.TrimSuffix(cut, "…")) {
+			t.Fatalf("cut body %q", cut)
+		}
+		in.Body = cut
+		raw, _ := json.Marshal(notifyPayload(in, "Studio", ""))
+		if len(raw) > notifyPayloadMost || len(raw) < notifyPayloadMost-16 {
+			t.Fatalf("cut payload is %d bytes, want just under %d", len(raw), notifyPayloadMost)
+		}
+	}
+	// One that fits is left as it is.
+	if in := (notifyRequest{Title: "t", Body: strings.Repeat("a", notifyBodyMost)}); fitBody(in, "Studio") != in.Body {
+		t.Fatal("a body that fits was cut")
+	}
+}

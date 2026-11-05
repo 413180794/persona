@@ -230,7 +230,37 @@ func (m *Machine) scriptNotify(params json.RawMessage) (any, error) {
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
+	in.Body = fitBody(in, m.cfg.Name)
 	return m.hub.deliverNotify(in, m.cfg.Name, "")
+}
+
+// fitBody is in's body cut (ending in …) so that its push fits notifyPayloadMost. The node cuts a script's texts by
+// characters (docs/script-cli.md: cut, not refused), but the payload is bounded in bytes: 1000 emoji, or 1000 of
+// < > & (escaped six bytes each in JSON), would otherwise be refused and the notification lost.
+func fitBody(in notifyRequest, machine string) string {
+	fits := func(body string) bool {
+		in.Body = body
+		raw, _ := json.Marshal(notifyPayload(in, machine, ""))
+		return len(raw) <= notifyPayloadMost
+	}
+	body := in.Body
+	if fits(body) {
+		return body
+	}
+	runes := []rune(body)
+	lo, hi := 0, len(runes)-1 // the longest prefix that fits with "…" after it is in [lo, hi]
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fits(string(runes[:mid]) + "…") {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	if lo == 0 { // not even "…" fits (the title alone is too large): deliverNotify says so
+		return body
+	}
+	return strings.TrimSpace(string(runes[:lo])) + "…"
 }
 
 func (h *Hub) notifyRoutes(api *http.ServeMux) {

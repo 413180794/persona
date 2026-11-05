@@ -101,7 +101,7 @@
     <string name="settings_devices_platform_unknown">平台未提供</string>
     <string name="settings_devices_no_record">尚无记录</string>
     <string name="settings_devices_no_time">时间未提供</string>
-    <string name="settings_diag_no_source">运行连接尚未提供诊断数据，以下项目未实测。</string>
+    <string name="settings_diag_no_source">连接还没送来诊断数据，下面这些都还没测过。</string>
     <string name="settings_diag_history_failed">连接记录暂时读不到，已保留运行连接的观测数据。</string>
     <string name="settings_diag_unmeasured">未实测</string>
     <string name="settings_diag_probe">%1$s（%2$s）</string>
@@ -182,7 +182,7 @@
     <string name="settings_lock_test_due">预约时间：%1$s</string>
     <string name="settings_lock_test_sent">hub 尝试发送：%1$s</string>
     <string name="settings_lock_test_received">hub 收到回报：%1$s</string>
-    <string name="settings_lock_test_shown">App 已提交系统通知，是否响铃、亮屏仍需你确认。</string>
+    <string name="settings_lock_test_shown">App 已经把通知交给系统了。有没有弹出、响铃、亮屏，要你自己看一下。</string>
     <string name="settings_lock_test_not_shown">App 收到了测试事件，但通知未能展示。请检查通知权限和渠道。</string>
     <string name="settings_lock_test_shown_unknown">通知展示结果未知，请按实际情况确认。</string>
     <string name="settings_lock_test_worked">响了，也亮屏了</string>
@@ -194,7 +194,7 @@
     <string name="settings_disconnects_note">并行连接分别计数，hub 重启造成的离线时段不计入最长值。</string>
     <string name="settings_lock_test_refresh">刷新测试结果</string>
     <string name="settings_lock_test_status_scheduled">等待预约到期</string>
-    <string name="settings_lock_test_status_sent">hub 已尝试发送，尚未收到设备回报，不能确认送达。</string>
+    <string name="settings_lock_test_status_sent">hub 试着发了，但设备还没回话，不知道到没到。</string>
     <string name="settings_lock_test_status_received">设备已回报收到测试事件</string>
     <string name="settings_lock_test_status_unavailable">到期时没有可用连接，请检查后台设置后重新测试。</string>
     <string name="settings_lock_test_status_interrupted">测试被 hub 重启中断，请重新预约。</string>
@@ -210,7 +210,7 @@
     <string name="settings_ready_background_detail">受限时，后台连接可能被系统停止。</string>
     <string name="settings_ready_channel_detail">系统渠道级别：%1$d。横幅和锁屏显示仍需在系统里确认。</string>
     <string name="settings_ready_channels">通知渠道</string>
-    <string name="settings_ready_channels_detail">尚未创建通知渠道，请在通知服务启动后再检查。</string>
+    <string name="settings_ready_channels_detail">还没有通知渠道。等通知服务启动后再查一次。</string>
     <string name="settings_ready_vendor_hyperos">打开自启动；电量消耗选“无限制”；允许悬浮和锁屏通知。</string>
     <string name="settings_ready_vendor_coloros">打开自启动；耗电管理中打开“允许完全后台行为”。</string>
     <string name="settings_ready_vendor_originos">打开自启动和“允许后台高耗电”；若曾拒绝通知，请在设置里重新打开。</string>
@@ -219,7 +219,7 @@
     <string name="settings_ready_vendor_anco">在卓易通里允许通知并保持后台运行，体验可能不完整。</string>
     <string name="settings_ready_vendor_other">在应用电池设置里允许后台运行，检查锁屏通知设置。</string>
     <string name="settings_ready_autostart">自启动</string>
-    <string name="settings_ready_autostart_detail">在应用启动管理中允许 Persona 自启动。跳过后，重启手机可能需要先手动打开 Persona。系统无法核验，请设置后确认。</string>
+    <string name="settings_ready_autostart_detail">在应用启动管理里允许 Persona 自启动。不设的话，手机重启后可能要先手动打开一次 Persona。系统查不到你设没设，设好后自己确认一下。</string>
     <string name="settings_ready_vendor">%1$s %2$s 后台设置</string>
     <string name="settings_ready_vendor_detail">%1$s 系统不能查询这些开关，请设置后点“已完成”。跳过可能漏收通知。</string>
     <string name="settings_ready_task_lock">最近任务加锁</string>
@@ -312,7 +312,7 @@
     <string name="settings_ready_about">能检查的项目显示当前状态。系统不允许查询的项目，需要你设置后确认。</string>
     <string name="settings_ready_satisfied">已满足</string>
     <string name="settings_ready_needs_setup">需要设置</string>
-    <string name="settings_ready_confirmed">你已确认完成，系统无法核验</string>
+    <string name="settings_ready_confirmed">你说已经设好了，系统查不到</string>
     <string name="settings_ready_needs_confirm">需要手动确认</string>
     <string name="settings_ready_skipped_note">已跳过，可随时回来设置</string>
     <string name="settings_ready_open">去设置</string>
@@ -329,12 +329,12 @@
     <string name="settings_ready_skip_machines">跳过电脑检查</string>
     <string name="settings_ready_skipped_machines">已跳过电脑检查，稍后可在 Agents 查看在线状态和版本。</string>
     <string name="settings_ready_skip_lock">跳过锁屏测试</string>
-    <string name="settings_ready_skipped_lock">已跳过锁屏测试，暂时无法确认锁屏通知是否正常。</string>
+    <string name="settings_ready_skipped_lock">跳过了锁屏测试，还不知道锁屏通知正不正常。</string>
     <string name="settings_ready_cellular">蜂窝网络</string>
     <string name="settings_ready_cellular_about">关掉 Wi-Fi，用蜂窝网络再试一次，确认在外面也能连上。</string>
     <string name="settings_ready_cellular_works">已试通</string>
     <string name="settings_ready_cellular_recorded">已记录到连接诊断。</string>
-    <string name="settings_ready_skipped_cellular">已跳过蜂窝测试，暂时无法确认外出时能否连接。</string>
+    <string name="settings_ready_skipped_cellular">跳过了蜂窝测试，还不知道出门在外能不能连上。</string>
     <string name="settings_ready_machines_check">电脑检查</string>
     <string name="settings_ready_cellular_test">蜂窝测试</string>
     <string name="settings_ready_skipped_item">%1$s：已跳过</string>

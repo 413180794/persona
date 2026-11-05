@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Interaction, Session } from "../../lib/types";
 import type { AnsweredCard } from "../../lib/store";
-import { Header } from "./ChatView";
+import { Header, spaceAgentsItem } from "./ChatView";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
 import { Composer } from "./Composer";
 import { PendingCards } from "./Interactions";
@@ -46,11 +46,32 @@ describe("Header", () => {
     expect(html).not.toContain("max-lg:w-20");
   });
 
-  it("leaves the title room on a phone: no state pill, 同空间 as an icon and a number", () => {
+  it("leaves the title room on a phone: no state pill, 同空间 only from ⋯ (#3576)", () => {
     const html = header();
     expect(html).toMatch(/<span class="hidden sm:contents"><span[^>]*>.*?需要你/);
-    expect(html).toContain('<span class="max-sm:hidden">同空间</span>');
-    expect(html).toContain('aria-label="同空间 1"');
+    // the 同空间 button is there from sm up, gone below
+    expect(html).toMatch(/<button[^>]*aria-label="同空间 1"[^>]*class="[^"]*\bmax-sm:hidden\b/);
+    expect(html).toContain("<span>同空间</span>");
+  });
+
+  it("marks ⋯ on a phone when a sibling needs you, as the 同空间 button does wider", () => {
+    expect(header()).toMatch(/aria-label="更多"[^]*?<span aria-hidden="true" class="[^"]*bg-red[^"]*sm:hidden"/);
+    const calm = { ...sibling, state: "idle" } as Session;
+    const quiet = { ...session, state: "idle" } as Session;
+    expect(header({ session: quiet, siblings: [quiet, calm] })).not.toMatch(/bg-red[^"]*sm:hidden/);
+  });
+});
+
+describe("spaceAgentsItem, ⋯'s 同空间 row on a phone (#3576)", () => {
+  it("counts the others, opens the space's menu and is red when one needs you", () => {
+    let opened = 0;
+    const item = spaceAgentsItem([sibling], () => opened++);
+    expect(item.label).toBe("同空间 1");
+    expect(item.icon).toBe("layers");
+    expect(item.state).toBe("needs_you");
+    void item.onSelect();
+    expect(opened).toBe(1);
+    expect(spaceAgentsItem([{ ...sibling, state: "working" } as Session], () => {}).state).toBeUndefined();
   });
 });
 
@@ -65,7 +86,18 @@ describe("Header, the 终端 | 对话 switch (#2419)", () => {
   });
   it("is not there without a terminal to switch to, and the old terminal button is gone", () => {
     expect(header()).not.toContain("终端或对话");
-    expect(header({ view: "chat", onView: () => {} })).not.toContain('aria-label="终端"');
+    // the only 终端 button is the phone's one-button switch below
+    expect(header({ view: "chat", onView: () => {} }).match(/aria-label="终端"/g)).toHaveLength(1);
+    expect(header()).not.toContain('aria-label="终端"');
+  });
+
+  it("is one button to the other view on a phone, the two-part switch from sm up (#3576)", () => {
+    const chat = header({ view: "chat", onView: () => {} });
+    expect(chat).toMatch(/<span class="hidden sm:contents"><div[^>]*role="radiogroup" aria-label="终端或对话"/);
+    expect(chat).toMatch(/<span class="relative flex shrink-0 sm:hidden"><button[^>]*aria-label="终端"/);
+    const term = header({ view: "term", onView: () => {} });
+    expect(term).toMatch(/<span class="relative flex shrink-0 sm:hidden"><button[^>]*aria-label="对话"/);
+    expect(header({ view: "term", onView: () => {}, viewDot: true })).toMatch(/aria-label="对话"[^]*?<\/button><span aria-hidden="true" class="pointer-events-none absolute[^"]*bg-red"/);
   });
   it("marks 对话 when the terminal shows and something wants an answer", () => {
     expect(header({ view: "term", onView: () => {}, viewDot: true })).toMatch(/对话<span aria-hidden="true" class="absolute/);

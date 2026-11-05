@@ -24,7 +24,7 @@
     <string name="app_connection_local_network">需要本地网络权限</string>
     <string name="app_connection_certificate">hub 的证书变了</string>
     <string name="app_connection_revoked">配对已失效</string>
-    <string name="app_pairing_unreadable">配对信息暂时无法读取，原数据已保留。</string>
+    <string name="app_pairing_unreadable">现在读不出配对信息。原来的数据还在，没有删。</string>
     <string name="app_retry">重试</string>
     <string name="app_local_network_title">允许访问本地网络</string>
     <string name="app_local_network_denied">本地网络权限未开启。请到应用权限里允许访问本地网络，返回后继续配对。</string>
@@ -40,7 +40,7 @@
     <string name="app_error_request_id">%1$s（请求 %2$s）</string>
     <string name="app_error_update_hub">请更新 hub 后再试</string>
     <string name="app_error_pair_again">请重新配对以获取设备凭据</string>
-    <string name="app_error_lock_test_unsupported">当前 hub 尚未提供锁屏测试接口</string>
+    <string name="app_error_lock_test_unsupported">这个 hub 还不能做锁屏测试</string>
     <string name="app_lock_test_channel">锁屏测试</string>
     <string name="app_error_failed">操作失败</string>
     <string name="app_share_private_file">不能转发应用私有文件</string>
@@ -70,7 +70,7 @@
     <string name="app_share_pairing_changed">配对已变更，请重新分享</string>
     <string name="app_share_queueing">正在加入发送队列…</string>
     <string name="app_share_queued_offline">已加入发送队列，联网后自动发送</string>
-    <string name="app_share_queue_failed">暂时无法加入发送队列，内容已保留，请重试</string>
+    <string name="app_share_queue_failed">没能放进发送队列。内容还在，再试一次</string>
     <string name="app_capsule_open_and_handle">查看并处理</string>
     <string name="app_capsule_main_prompt">想让 Persona 做什么？</string>
     <string name="app_capsule_main_section">主对话</string>

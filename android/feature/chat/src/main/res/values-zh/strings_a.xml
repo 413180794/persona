@@ -8,7 +8,7 @@
     <string name="chat_connection_certificate">hub 的证书变了</string>
     <string name="chat_connection_revoked">配对已失效</string>
     <string name="chat_action_renamed">已重命名</string>
-    <string name="chat_action_info_unavailable">会话信息尚未接入</string>
+    <string name="chat_action_info_unavailable">还看不了会话信息</string>
     <string name="chat_action_interrupt_sent">已发出中断，等电脑确认</string>
     <string name="chat_action_muted">已屏蔽通知</string>
     <string name="chat_action_unmuted">已开启通知</string>
@@ -182,8 +182,8 @@
     <string name="chat_status_reconnect_unavailable">重连服务暂不可用。</string>
     <string name="chat_status_connection_details">连接诊断</string>
     <string name="chat_status_verifying">正在自动核对，在对话记录里查找这条消息。</string>
-    <string name="chat_status_needs_confirmation">自动核对未能确认是否送达，请核对电脑上的对话记录。</string>
-    <string name="chat_status_unconfirmed">尚未确认是否送达，请先核对对话记录。</string>
+    <string name="chat_status_needs_confirmation">自动核对后还是不知道送到没有。去电脑上的对话记录看看。</string>
+    <string name="chat_status_unconfirmed">还不知道送到没有，先看看对话记录。</string>
     <string name="chat_status_dont_resend">没把握时先不要重发，避免电脑收到两遍。</string>
     <string name="chat_status_confirm_delivered">确认已送达</string>
     <string name="chat_status_confirm_not_delivered">确认没送达，保留输入</string>
@@ -214,7 +214,7 @@
     <string name="chat_recovery_reconnect_unknown">重连结果待确认，请刷新状态核对。</string>
     <string name="chat_recovery_machine_unknown">暂时无法确认电脑状态，请稍后刷新。</string>
     <string name="chat_recovery_resume_unknown">恢复结果待确认。再次核对只会读取会话状态，不会重复启动。</string>
-    <string name="chat_recovery_list_stale">%1$s，列表暂未更新，请稍后查看。</string>
+    <string name="chat_recovery_list_stale">%1$s，但列表还没更新，过一会儿再看。</string>
     <string name="chat_content_from">来自 %1$s</string>
     <string name="chat_content_other_session">其他会话</string>
     <string name="chat_content_collapse">收起</string>

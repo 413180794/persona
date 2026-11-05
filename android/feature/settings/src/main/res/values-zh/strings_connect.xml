@@ -216,7 +216,7 @@
     <string name="settings_endpoint_order_failed">顺序没有保存，请重试。</string>
     <string name="settings_endpoint_change_failed">没有改成，请重试。</string>
     <string name="settings_endpoint_source_manual">手动添加</string>
-    <string name="settings_endpoint_source_hub">hub 下发</string>
+    <string name="settings_endpoint_source_hub">来自 hub</string>
     <string name="settings_endpoint_source_pairing">配对时添加</string>
     <string name="settings_endpoint_origin">%1$s，%2$s</string>
     <string name="settings_endpoint_tag_active">在用</string>

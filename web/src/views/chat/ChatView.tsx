@@ -37,7 +37,7 @@ import { FailureNote, showsFailureNote } from "./FailureNote";
 import { DOCK_MAX, turnStart } from "./dock";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
 import { ContextMeter } from "./ContextMeter";
-import { NARROW, SHORT, useFinePointer, useMedia } from "../../lib/viewport";
+import { NARROW, PHONE, SHORT, useFinePointer, useMedia } from "../../lib/viewport";
 import { UserBubble } from "./SegmentView";
 import { scrollsAFold } from "./fold-scroll";
 import { ActivityChips, GoalChip } from "./Activity";
@@ -1152,11 +1152,24 @@ export function Header({
   const openFiles = () => session && togglePanel({ kind: "files", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
   const openGit = () => session && togglePanel({ kind: "git", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
   const othersNeed = others.some((s) => stateOf(s) === "needs_you");
+  const phone = useMedia(PHONE);
+  const spaceRows: MenuItem[] = siblings
+    .slice()
+    .sort((a, b) => (a.slot_index ?? 0) - (b.slot_index ?? 0))
+    .map((s) => ({
+      key: s.session_id,
+      label: `${tabLabel(s) || sessionTitle(s)} · ${sessionTitle(s)}`,
+      state: stateOf(s),
+      checked: s.session_id === session?.session_id,
+      onSelect: () => navigate({ name: "session", mid: s.machine_id, sid: s.session_id }),
+    }));
   const { items: assistantItems, dialogs: assistantDialogs } = useAssistantMenu(assistant ? session : undefined);
   const feishu = externalLink(session);
 
   const own: MenuItem[] = session
     ? [
+        // phone width: 同空间 leaves the header row to the title (#3576) and opens from ⋯ instead
+        ...(phone && others.length > 0 ? [spaceAgentsItem(others, () => tabs.openAt(menu.anchor))] : []),
         ...assistantItems,
         ...(session.todo
           ? [
@@ -1263,10 +1276,10 @@ export function Header({
           onClick={tabs.open}
           aria-label={t("chat-chatview.same_space_count", { count: others.length })}
           title={t("chat-chatview.same_space_count", { count: others.length })}
-          className="touch-hit flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover hover:text-ink max-sm:gap-1 max-sm:px-1.5"
+          className="touch-hit flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover hover:text-ink max-sm:hidden"
         >
           <Icon name="layers" size={13} />
-          <span className="max-sm:hidden">{t("chat-chatview.same_space")}</span> {others.length}
+          <span>{t("chat-chatview.same_space")}</span> {others.length}
           {othersNeed && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red shadow-[0_0_0_2px_var(--page)]" />}
         </button>
       )}
@@ -1277,32 +1290,37 @@ export function Header({
           align="right"
           width={360}
           header={session?.space_name ? t("chat-chatview.space_header", { name: session.space_name }) : undefined}
-          items={siblings
-            .slice()
-            .sort((a, b) => (a.slot_index ?? 0) - (b.slot_index ?? 0))
-            .map((s) => ({
-              key: s.session_id,
-              label: `${tabLabel(s) || sessionTitle(s)} · ${sessionTitle(s)}`,
-              state: stateOf(s),
-              checked: s.session_id === session?.session_id,
-              onSelect: () => navigate({ name: "session", mid: s.machine_id, sid: s.session_id }),
-            }))}
+          items={spaceRows}
         />
       )}
       {showFiles && <IconButton icon="folder" label={t("chat-chatview.files")} onClick={openFiles} active={here(panel, "files") || here(panel, "git")} className="hidden sm:flex" />}
       {view && onView && (
-        <Segmented
-          label={t("chat-chatview.terminal_or_chat")}
-          value={view}
-          onChange={onView}
-          compact
-          options={[
-            { v: "term", label: t("chat-chatview.terminal") },
-            { v: "chat", label: t("chat-chatview.chat"), dot: viewDot },
-          ]}
-        />
+        <span className="hidden sm:contents">
+          <Segmented
+            label={t("chat-chatview.terminal_or_chat")}
+            value={view}
+            onChange={onView}
+            compact
+            options={[
+              { v: "term", label: t("chat-chatview.terminal") },
+              { v: "chat", label: t("chat-chatview.chat"), dot: viewDot },
+            ]}
+          />
+        </span>
       )}
-      {items.length > 0 && <IconButton icon="more" label={t("chat-chatview.more")} onClick={menu.open} active={Boolean(menu.anchor)} />}
+      {/* phone width: one button to the other view, as iOS's header has (#3576) */}
+      {view && onView && (
+        <span className="relative flex shrink-0 sm:hidden">
+          <IconButton icon={view === "chat" ? "terminal" : "chat"} label={t(view === "chat" ? "chat-chatview.terminal" : "chat-chatview.chat")} onClick={flipView} />
+          {view === "term" && viewDot && <span aria-hidden className="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-red" />}
+        </span>
+      )}
+      {items.length > 0 && (
+        <span className="relative flex shrink-0">
+          <IconButton icon="more" label={t("chat-chatview.more")} onClick={menu.open} active={Boolean(menu.anchor)} />
+          {othersNeed && <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red shadow-[0_0_0_2px_var(--page)] sm:hidden" />}
+        </span>
+      )}
       {chrome && <IconButton icon="x" label={t("sidepanel.close")} onClick={chrome.onClose} />}
       </div>
       {pick.anchor && chrome?.agents && <Menu anchor={pick.anchor} onClose={pick.close} items={chrome.agents} width={320} />}
@@ -1316,6 +1334,18 @@ export function Header({
       {assistantDialogs}
     </header>
   );
+}
+
+/** The ⋯ row for the space's other agents on a phone, where the header has no 同空间 button: it opens the same menu
+ *  the button does (`open`, at ⋯), red when one of them needs you. */
+export function spaceAgentsItem(others: Session[], open: () => void): MenuItem {
+  return {
+    key: "space-agents",
+    label: t("chat-chatview.same_space_count", { count: others.length }),
+    icon: "layers",
+    state: others.some((s) => stateOf(s) === "needs_you") ? "needs_you" : undefined,
+    onSelect: open,
+  };
 }
 
 /** The header's side slots around a switch in its middle (narrow screens, header.ts); wide, or without one, no boxes

@@ -253,10 +253,10 @@
     <string name="settings_src_model_no_match">No matching uses</string>
     <string name="settings_src_model_no_match_hint">Try another name or model.</string>
     <string name="settings_src_model_reload">Reload (discard edits)</string>
-    <string name="settings_src_model_sheet_note_inherit">Models from %1$s, the same as typing /model in the terminal. Default means blank: inherit the setting above. You can also type an ID that isn\'t listed.</string>
-    <string name="settings_src_model_sheet_note_default">Models from %1$s, the same as typing /model in the terminal. Default means blank: use this provider\'s default model. You can also type an ID that isn\'t listed.</string>
-    <string name="settings_src_model_sheet_note_inherit_from">Models from %1$s, the same as typing /model in the terminal · from %2$s. Default means blank: inherit the setting above. You can also type an ID that isn\'t listed.</string>
-    <string name="settings_src_model_sheet_note_default_from">Models from %1$s, the same as typing /model in the terminal · from %2$s. Default means blank: use this provider\'s default model. You can also type an ID that isn\'t listed.</string>
+    <string name="settings_src_model_sheet_note_inherit">Models from %1$s, the same as /model shows in a terminal. Default leaves it unset, so it follows the level above. Type an ID for one that isn\'t listed.</string>
+    <string name="settings_src_model_sheet_note_default">Models from %1$s, the same as /model shows in a terminal. Default uses this provider\'s default model. Type an ID for one that isn\'t listed.</string>
+    <string name="settings_src_model_sheet_note_inherit_from">Models from %1$s, the same as /model shows in a terminal (from %2$s). Default leaves it unset, so it follows the level above. Type an ID for one that isn\'t listed.</string>
+    <string name="settings_src_model_sheet_note_default_from">Models from %1$s, the same as /model shows in a terminal (from %2$s). Default uses this provider\'s default model. Type an ID for one that isn\'t listed.</string>
     <string name="settings_src_model_provider">Model provider</string>
     <string name="settings_src_model_effective_provider">Provider</string>
     <string name="settings_src_model_effective_model">Model</string>

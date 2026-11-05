@@ -6,10 +6,10 @@
     <string name="settings_ext_dep_old">版本不足（现在是 %1$s）</string>
     <string name="settings_ext_dep_unknown">状态未知，重新预览</string>
     <string name="settings_ext_sandbox_active">沙箱正在生效</string>
-    <string name="settings_ext_sandbox_inactive">已要求沙箱，但当前未生效</string>
+    <string name="settings_ext_sandbox_inactive">要求了沙箱，但现在没开起来</string>
     <string name="settings_ext_sandbox_off">未启用沙箱</string>
     <string name="settings_ext_sandbox_title">运行隔离</string>
-    <string name="settings_ext_sandbox_note">沙箱只隔离 hub 运行的已安装扩展；是否生效以上面实际状态为准。只能在 hub 所在的机器或管理界面修改。</string>
+    <string name="settings_ext_sandbox_note">沙箱只隔离 hub 上运行的已装扩展；到底开没开，看上面显示的状态。只能在 hub 所在的机器上或管理界面里改。</string>
     <string name="settings_ext_sandbox_egress">经出网代理：%1$s · %2$s</string>
     <plurals name="settings_ext_sandbox_allowed">
         <item quantity="other">放行 %d 次</item>
@@ -217,7 +217,7 @@
     <string name="settings_ext_more_permissions">新版本要的权限变多了</string>
     <string name="settings_ext_added">新增</string>
     <string name="settings_ext_it_can_after_upgrade">升级后它可以</string>
-    <string name="settings_ext_preview_note">包已经下载并核对过 sha256。扩展在 hub 所在的机器上运行；沙箱是否实际生效以安装后的详情为准。</string>
+    <string name="settings_ext_preview_note">包已经下载好，也核对过 sha256。扩展在 hub 所在的机器上运行；沙箱到底开没开，装好以后在详情里看。</string>
     <string name="settings_ext_preview_expires">这次预览到 %1$s（UTC）失效。</string>
     <string name="settings_ext_preview_cancel">不装了</string>
     <string name="settings_ext_uninstall_title">卸载 %1$s？</string>
