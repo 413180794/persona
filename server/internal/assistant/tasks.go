@@ -771,6 +771,9 @@ type receiptBody struct {
 // interruptedSummary is an interrupted task's receipt: the error itself is no conclusion (#1516).
 const interruptedSummary = assistantwire.InterruptedSummary
 
+// silentTurnError is the interrupted receipt's detail for a turn with no output at all (silentTurn, #2349).
+const silentTurnError = "这一轮没有任何输出：Agent 没有回复，也没有调用工具（模型服务可能返回了空内容）"
+
 var prLink = regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/pull/\d+`)
 
 // taskTurnEnded: one of the task's agents (sid on machine) ended a turn. Once none of them works or waits for the
@@ -827,9 +830,21 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		s.quietNotify(cctx, t, name, "interrupted", "", body.Error)
 		return
 	}
+	items, read := s.lastTurnItems(cctx, last.MachineID, last.SessionID)
+	if read && silentTurn(items) {
+		// No reply and no tool call, yet no error either (the model service answered 200 with nothing in it): no end
+		// of the work. Interrupted, as a cut-off turn is, with nothing to judge or close (#2349).
+		s.logf("task %s: interrupted: the turn had no output", t.ID)
+		body := receiptBody{Title: t.Title, State: "interrupted", Summary: interruptedSummary, Machine: name, Error: silentTurnError}
+		if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
+			s.logf("task %s: receipt: %v", t.ID, err)
+		}
+		s.quietNotify(cctx, t, name, "interrupted", "", body.Error)
+		return
+	}
 	// The whole last reply, as Markdown: the session list's last_text is one line cut at 200 characters.
 	text := strings.TrimSpace(last.LastText)
-	if _, answer := s.lastTurn(cctx, last.MachineID, last.SessionID); answer != "" {
+	if _, answer := turnExchange(items); answer != "" {
 		text = answer
 	}
 	body := receiptBody{Title: t.Title, State: "done", Summary: clipMarkdown(text, 600), Machine: name}

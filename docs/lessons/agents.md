@@ -178,6 +178,9 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 - Claude Code 一轮以模型 API 错误结束（「API Error: Connection lost mid-response…」、过载、限流、登录过期）在 herdr 里和正常做完一样是 done，hub 也就算成 unread：
   task_plan 的任务曾因此显示绿色「完成」卡片、摘要就是错误原文，快照里写「做完了」（#1516）。区分它只能看最后一句：hub 在会话停着、`last_text` 以这些错误开头时填 `turn_error`（只认开头，
   回复里提到「API Error」不算），任务判「中断了」、不自动关、回执写 `interrupted`；普通 Agent 的推送也不再是 ✅。
+- **模型服务回 200 但内容是空的，一轮就静默结束**（2026-11-05 实测，网关的一个上游账号）：transcript 里一条 assistant 条目都没有，也没有 `isApiErrorMessage`、error 或 `stop_reason`；
+  Claude Code 补一条 `isMeta` 的「[Your previous response had no visible output. Please continue…]」重试一次，还是空就结束这一轮，终端上不报错，所以没有 `turn_error`。
+  任务曾因此写「完成了」回执、发 done 通知、拿去自动关（#2349）。现在看这一轮的条目：没有回复、工具调用、图片就算中断。
 - **Codex 被模型服务打断时不写回复**（2026-11-05 实测 Codex 0.166，假服务回 503）：rollout 里只有这一轮的 `task_complete`，`last_agent_message`
   是 `null`，错误在它的 `error` 里（`{"message":"unexpected status 503 …","codex_error_info":{"http_connection_failed":{"http_status_code":503}}}`）；
   app-server 是 `turn/completed` 的 `turn.status: "failed"` + `turn.error`（驼峰：`codexErrorInfo`）。只看最后一句的 `turn_error` 对 Codex 永远是空的：

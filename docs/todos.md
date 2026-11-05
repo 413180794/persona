@@ -209,6 +209,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 - 附带说明不影响完成：没截图的平台、没实测的环境、提醒用户的事都不算没做完；交付以后例行的等待（TestFlight 外部组的 Beta 审核、CI 重跑）也不算在等；处理 App Store / Mac App Store 审核意见、提交后在等审核结论的算 `waiting`。
 - 宁可不关：模型不可用、超时、回复不是合法 JSON、结论不是 `done`，都不动待办，只记日志；回执照发。
 - 被模型服务打断的一轮不判断（#1516）：任务的某个 Agent 停在 API 错误上（会话的 `turn_error`：Claude Code 是它最后一句的「API Error: …」等，Codex 是 node 从这一轮的错误报的，#2185），回执写 `state: "interrupted"`（摘要「模型服务出错，中断了」，错误原文放 `error`），不调判断模型、不关待办；`done-check` 读到的最后一句是这种错误时直接答 `not_done`。
+- 没有任何输出的一轮同样不判断（#2349）：最后停下的 Agent 这一轮（node 的 `session.items` `turns: 1`）里没有 assistant 的文字、工具调用或图片，又没有 `turn_error`（模型服务回 200 但内容是空的，Claude Code 补一条看不见的「no visible output」提示重试后静默结束），回执写 `interrupted`（error 是「这一轮没有任何输出：…」），通知用 interrupted，不调判断模型、不关待办。读不到条目（node 调不通、没有条目）和用户自己按 Esc 停的（「已中断」notice）不算。
 - 便宜的线索：最后的回复里有 GitHub PR 链接且提到合并（merged / 已合并 / 合入），或提到 TestFlight 加构建号，助手把这两个线索写进输入，只作提示，不能单凭它判完成。
 - 提示词在 `server/internal/prompts/assistant/task_done.md`、`task_done_input.md`（`docs/prompts.md`）。
 

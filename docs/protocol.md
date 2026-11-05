@@ -1468,6 +1468,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 //   密码字段（Field.secret、屏幕的 secret、MCP 表单的 password / writeOnly、名字像口令 / token 的）只写「（已填写，不保存）」，值不落库。
 // receipt：{"title":"…","state":"done|failed|interrupted","summary":"Agent 最后一条回复（Markdown，按行截到约 600 字，不截在标记中间）","pr":"https://github.com/…/pull/N","machine":"…"}
 //   interrupted（#1516）：Agent 这一轮被模型服务出错打断，summary 是「模型服务出错，中断了」，error 是错误原文；客户端画成红色、带「继续」
+//   这一轮既没回复也没调工具、又没有报错（模型服务回了 200 但内容是空的，#2349）同样是 interrupted，error 是「这一轮没有任何输出：…」
 // routed：{"text":"…"}
 // message：ref 是收件箱条目 id；AI 分身给一条和任务有关的消息起草了回复：
 //         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"原话（截断）","draft":"草稿"}；发送走收件箱的发送接口

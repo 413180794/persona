@@ -114,26 +114,70 @@ func (s *Service) taskReplies(ctx context.Context, t Todo) []prompts.TaskDoneRep
 // reply ("" when the turn cannot be read). The user may have sent the agent a follow-up since the task's prompt: the
 // work to judge is then that.
 func (s *Service) lastTurn(ctx context.Context, machine, sid string) (ask, answer string) {
+	items, _ := s.lastTurnItems(ctx, machine, sid)
+	return turnExchange(items)
+}
+
+// lastTurnItems are the items of the agent's latest turn, as the node pages them (from its last user prompt on);
+// ok is false when the node could not be asked.
+func (s *Service) lastTurnItems(ctx context.Context, machine, sid string) (items []proto.Item, ok bool) {
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if err := s.call(cctx, machine, DeviceSessionItems, map[string]any{"session_id": sid, "turns": 1}, &res); err != nil {
-		return "", ""
+		return nil, false
 	}
-	for _, it := range res.Items {
+	return res.Items, true
+}
+
+// turnExchange is what a turn's items say: the user's ask (its first user message; "" when none) and the agent's
+// last reply ("" when none).
+func turnExchange(items []proto.Item) (ask, answer string) {
+	for _, it := range items {
 		if it.Kind == proto.KindText && it.Role == "user" && strings.TrimSpace(it.Text) != "" {
 			ask = strings.TrimSpace(it.Text)
 			break
 		}
 	}
-	for i := len(res.Items) - 1; i >= 0; i-- {
-		if it := res.Items[i]; it.Kind == proto.KindText && it.Role == "assistant" && strings.TrimSpace(it.Text) != "" {
+	for i := len(items) - 1; i >= 0; i-- {
+		if it := items[i]; it.Kind == proto.KindText && it.Role == "assistant" && strings.TrimSpace(it.Text) != "" {
 			return ask, strings.TrimSpace(it.Text)
 		}
 	}
 	return ask, ""
+}
+
+// userStoppedNotice is the notice the transcript reader puts where the user stopped a turn (Claude Code's "[Request
+// interrupted by user]", Codex's turn_aborted; transcript.go, codex.go).
+const userStoppedNotice = "已中断"
+
+// silentTurn: a turn the node could read (it has items, at least the prompt) in which the agent neither replied nor
+// called a tool. Claude Code ends a turn so, without an error, when the model service answers 200 with nothing in it
+// (it retries once with a hidden "no visible output" prompt, then stops); Codex's rollout maps to the same items.
+// Thinking alone is no output: the user sees nothing.
+func silentTurn(items []proto.Item) bool {
+	if len(items) == 0 {
+		return false // nothing to go by (an older node, a runtime that does not page items): not judged silent
+	}
+	for _, it := range items {
+		if it.Kind == proto.KindNotice && it.Text == userStoppedNotice {
+			return false // the user stopped it (Esc): no failure to report
+		}
+		if it.Role != "assistant" {
+			continue
+		}
+		switch it.Kind {
+		case proto.KindToolUse, proto.KindImage:
+			return false
+		case proto.KindText:
+			if strings.TrimSpace(it.Text) != "" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // sameRequest: ask is the task's own prompt (as sent, maybe with context around it).
