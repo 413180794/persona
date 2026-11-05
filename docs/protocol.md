@@ -319,6 +319,7 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
                    // herdr 的 node 从快照的 layouts 算，宿主不给布局、旧 node、窗格不在布局里时不带（0 照样发，不带才是不知道）。见 docs/agent-states.md「一个 tab 里的几个 pane」
  "agent":"claude","agent_label":"",   // agent_label 只在 App 不认识的 Agent 上有：runtime 的叫法（「DSH」，见「Runtime ↔ node」）
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
+ "origin":"inbox","origin_ref":"<收件箱条目 id>",   // 只在助手对话（assistant: true）上：这段对话是谁开的，见下「助手对话的来源」；没有 = user
  "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字",
      "turn_error":"API Error: Connection lost mid-response…（停着且这一轮被模型 API 错误打断时才有，否则不带；它的任务算「中断了」，#1516。Claude Code：hub 从最后一句的开头认；Codex：node 从 task_complete.error / 失败的 turn/completed 报，#2185）",
      "turn_error_kind":"transient（可选：agent 自己说了错误种类时才有，Codex 的 codex_error_info：transient 值得「继续」，user 要用户处理；没有就按 turn_error 的文字判，docs/agent-work.md「分诊」）","pending_interactions":1,
@@ -492,6 +493,39 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 看板默认关闭（#2475）：`GET /api/v1/workspace-board/settings` 返回 `{enabled,can_write}`，值存在 Postgres 的 `settings` 表（key `workspace_board.settings`，`{"enabled":bool}`），整个 hub 一份，所有浏览器和设备一致。从没设过时，`workspace_board` 的 `revision > 0`（看板被改过）就算打开，否则关闭；推断值不回写，第一次 PUT 才存下。PUT `{enabled}` 仅 `full`，成功后 WS 推送 `{"type":"workspace_board_settings","enabled":bool}`。开关只决定客户端显示不显示：关闭时看板和清单接口照常可用，数据不删。旧 hub 没有这个接口返回 404，客户端按打开处理（旧版本对所有人显示）且不显示开关。
 
 移动、归档等看板修改不调用 Agent 或 Git 操作。成功后 WS 推送 `{"type":"workspace_board","revision":<新版本>}`，客户端据此重读。网页还在看板可见期间每 10 秒刷新发现，回到前台时立即刷新，以补足目录和连接状态变化。
+
+## 助手对话的来源（`origin`，#3264）
+
+助手对话（`assistant: true` 的会话）带 `origin`：这段对话是谁开的。hub 在开对话时记下（助手的 settings `assistant.origins`：会话 id → 来源、`origin_ref`、开始时间），
+经快照（`SessionView.origin` / `origin_ref`）填到发给 App 的会话列表里（`sessions` / `sessions_delta` 推送、`GET /api/v1/sessions`、`GET /api/v1/assistant` 的 `conversations`）。
+来源一旦记下就不变；Agent 会话（`assistant: false`）不带。认这个字段的 hub 在 features 里带 `conversation_origin`。
+
+| `origin` | 谁开的 | `origin_ref` | 侧边栏 |
+| --- | --- | --- | --- |
+| `user`（或不带） | 用户在 App / 网页里新建（含主对话，含在收件箱、飞书会话里点「交给 AI」开的） | — | 最近 |
+| `channel` | 用户在飞书机器人、微信等渠道里 `/new` 开的 | 渠道 id（`feishu`、`wechat`…） | 最近 |
+| `inbox` | 收件箱的 AI 分身起草回复（`docs/inbox.md`） | 收件箱条目 id | 自动 · 收件箱 |
+| `task` | 定时任务和跟进（`schedule_followup`，含 `new_conversation` 的和只推送 `notify_user` 的 `push: "asked"` 任务自己的对话） | 任务 id | 自动 · 定时任务 |
+| `spawned` | 另一段对话用 `conversation_new` 开的 | 开它的那段对话的会话 id | 自动 · 对话派生 |
+| `lark_agent` | 飞书里发 `/agent …`（扩展经 `POST /api/v1/assistant/conversations`，`purpose: "lark.agent"`，`docs/lark-agent.md`） | 扩展 id | 自动 · 飞书 /agent |
+| `extension` | 别的扩展经 `POST /api/v1/assistant/conversations` 开的 | 扩展 id | 自动 · 扩展 |
+
+- 往已有对话里发东西不开新对话，不是来源：任务续在自己的对话里、安静任务的通知（`task_notice`）进主对话、渠道发给主对话的消息、`conversation_send`。
+- **客户端怎么用**：不带、空、`user`、`channel` 算用户自己的；其余都算自动对话，包括以后加的、客户端不认识的值（显示成「其他」）。旧客户端不认识这个字段，照旧全列。
+- **标题**：自动对话的标题一开始就定（不等第一轮、不调模型），沿用「MMDD | 类型 | 主题」：收件箱 `MMDD | 收件箱 | 那件事的标题`，定时任务 `MMDD | 定时 | 任务名`。
+  `收件箱` 不在模型可选的类型里（只有 hub 用）。其余来源照旧在第一轮后起标题（`docs/assistant.md`「对话标题」）。
+- **老对话的回填**：hub 看到助手那台机器的会话列表时，给还没有来源的助手对话补一笔（`by: "backfill"`）：收件箱条目记着的 AI 分身会话 → `inbox`（顺带补标题）；
+  任务记着的对话（`run_session_id`、运行记录里的会话）、标题是「定时」起的 → `task`；第一条消息是收件箱 AI 分身 / 对话转发 / 定时任务的提示词开头 → 对应的来源；
+  其余 → `user`。可以重复跑：已经记下的不动，`POST /api/v1/assistant/origins/backfill`（只给完整权限的设备；`{"redo":true}` 时连 `by: "backfill"` 的也重新判断）
+  → `{"checked","filled":{"inbox":3,…}}`。
+
+### 侧边栏（各端一致）
+
+- 「Persona 对话」里的「最近」只列用户自己的对话（上表「最近」那几种）；置顶的照旧列在置顶里，不管来源。
+- 自动对话收成「最近」下面的一行「自动对话 N」（N 是没归档的自动对话数），**默认收起**，展开状态按设备记住。
+  收起时这行右边照样显示状态：有在跑的显示工作中的圆点，有等你的（`state: needs_you`）显示「需要你」的圆点和个数，不会因为折叠就漏掉。
+- 展开后每个来源一行小标签（收件箱 · 定时任务 · 飞书 /agent · 对话派生 · 扩展 · 其他），带个数和同样的状态点，只列有对话的来源；点一行打开「全部对话」，按这个来源筛好。
+- 「全部对话」顶部加来源筛选（全部 · 我的 · 收件箱 · 定时任务 · …），默认「全部」；搜索照旧搜全部对话，不管来源和折叠。
 
 ## REST（App → hub）
 
