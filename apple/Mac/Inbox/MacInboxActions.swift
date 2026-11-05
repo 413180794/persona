@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// What can be done with an opened inbox item (#831; the iPhone's `InboxActionBar` over the item): the AI's summary,
-/// the AI 分身 at work, and the actions as labelled buttons: AI 草拟回复 / 查看草稿 (or, where the source is answered
+/// the AI 分身 at work, its 线索 (`InboxLineSection`; another item opens through `openItem`), and the actions as
+/// labelled buttons: AI 草拟回复 / 查看草稿 (or, where the source is answered
 /// in its own app, 在信息里回复 / 在 Telegram 里回复 / 打开), 交给 AI, and 已处理 (移回 once filed, the others staying as
 /// on the iPhone). A column at the detail's trailing edge; where the detail is too narrow for one, a strip over the item.
 struct MacInboxActions: View {
@@ -14,8 +15,14 @@ struct MacInboxActions: View {
     var reading = false
     var draft: () -> Void
     var handOff: () -> Void
+    var openItem: ((InboxItem) -> Void)?
+    @State private var line: InboxTree?
 
     var body: some View {
+        bar.inboxLine(item, tree: $line)
+    }
+
+    @ViewBuilder private var bar: some View {
         if column {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.l) {
@@ -72,6 +79,7 @@ struct MacInboxActions: View {
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(column ? 3 : 1)
             }
         }
+        InboxLineSection(tree: line, openItem: openItem)
     }
 
     @ViewBuilder private func buttons(iconsOnly: Bool) -> some View {
@@ -110,8 +118,9 @@ struct MacInboxActions: View {
 
 extension View {
     /// The item's actions (`MacInboxActions`) beside it when the detail has room for a column, over it otherwise.
-    func macInboxActions(_ item: InboxItem, reading: Bool = false, draft: @escaping () -> Void, handOff: @escaping () -> Void) -> some View {
-        modifier(MacInboxActionsHost(item: item, reading: reading, draft: draft, handOff: handOff))
+    func macInboxActions(_ item: InboxItem, reading: Bool = false, draft: @escaping () -> Void, handOff: @escaping () -> Void,
+                         openItem: ((InboxItem) -> Void)? = nil) -> some View {
+        modifier(MacInboxActionsHost(item: item, reading: reading, draft: draft, handOff: handOff, openItem: openItem))
     }
 }
 
@@ -121,6 +130,7 @@ private struct MacInboxActionsHost: ViewModifier {
     var reading: Bool
     var draft: () -> Void
     var handOff: () -> Void
+    var openItem: ((InboxItem) -> Void)?
     @State private var wide = true
     private var room: Bool { wide && !reading }
 
@@ -129,12 +139,12 @@ private struct MacInboxActionsHost: ViewModifier {
     func body(content: Content) -> some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                if !room { MacInboxActions(item: item, column: false, reading: reading, draft: draft, handOff: handOff) }
+                if !room { MacInboxActions(item: item, column: false, reading: reading, draft: draft, handOff: handOff, openItem: openItem) }
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if room {
                 Divider()
-                MacInboxActions(item: item, column: true, draft: draft, handOff: handOff)
+                MacInboxActions(item: item, column: true, draft: draft, handOff: handOff, openItem: openItem)
                     .frame(width: Theme.Size.macInboxActionsWidth)
             }
         }

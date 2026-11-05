@@ -3,12 +3,14 @@ import SwiftUI
 // What can be done with one inbox item besides reading it (docs/inbox.md): AI 草拟回复 (a reply in the user's voice,
 // edited and sent from here), 交给 AI (the item as <jarvis-context> to the assistant or an agent), 已处理.
 
-/// The strip under the navigation bar of an opened item: the AI's summary and the two actions.
+/// The strip under the navigation bar of an opened item: the AI's summary, its 线索 (`InboxLineSection`) and the two
+/// actions.
 struct InboxActionBar: View {
     var item: InboxItem
     var draft: () -> Void
     var handOff: () -> Void
     @Environment(\.openURL) private var openURL
+    @State private var line: InboxTree?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -18,6 +20,7 @@ struct InboxActionBar: View {
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            InboxLineSection(tree: line)
             HStack(spacing: Theme.Space.s) {
                 // A connector's thread that cannot be answered (a CI run) has only 交给 AI.
                 if item.connector.map({ $0.canReply == true }) ?? true {
@@ -37,6 +40,7 @@ struct InboxActionBar: View {
         .padding(.vertical, Theme.Space.m)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
+        .inboxLine(item, tree: $line)
     }
 
     /// What the button that opens the item's `open_url` says: where the user answers it, else just 打开.

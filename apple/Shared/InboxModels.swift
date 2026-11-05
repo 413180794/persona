@@ -41,6 +41,8 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     /// What it holds now, as the hub listed it: a bulk 已处理 sends it back so an item that took new messages since
     /// is left open (older hubs leave it out).
     var version: String?
+    /// What it grew out of (docs/inbox.md「线索」, #2128): another item, a todo or an agent session; older hubs leave it out.
+    var parent: InboxParent?
 
     /// One thing an item can be muted by: a repository, a chat or a sender of its source.
     nonisolated struct MuteOption: Codable, Hashable, Sendable {
@@ -235,7 +237,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations, connector, mutes, version
+        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations, connector, mutes, version, parent
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 
@@ -270,6 +272,57 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         default: nil
         }
     }
+}
+
+/// A node of an item's 线索 (#2128): an inbox item, a todo or an agent session (id `<machine>/<session>`). `by` says
+/// who hung it there: continues | connector | user. Mirrors hub/assistant/inbox_parent.go `InboxParent`.
+nonisolated struct InboxParent: Codable, Hashable, Sendable {
+    var kind: String // inbox | todo | session
+    var id: String
+    var by: String?
+
+    /// The session it names, nil unless a session id with both its halves.
+    var sessionKey: SessionKey? {
+        guard kind == "session", let slash = id.firstIndex(of: "/") else { return nil }
+        let m = String(id[..<slash]), s = String(id[id.index(after: slash)...])
+        return m.isEmpty || s.isEmpty ? nil : SessionKey(machineID: m, sessionID: s)
+    }
+}
+
+/// GET /api/v1/inbox/tree/{kind}/{id}: the node, its ancestors (nearest first; the last may be a todo or a session,
+/// with no item) and the items right under it (oldest first).
+nonisolated struct InboxTree: Decodable, Sendable, Equatable {
+    nonisolated struct Up: Decodable, Sendable, Equatable {
+        var parent: InboxParent
+        /// The item, when the ancestor is one still in the inbox.
+        var item: InboxItem?
+
+        init(parent: InboxParent, item: InboxItem? = nil) { self.parent = parent; self.item = item }
+
+        init(from decoder: Decoder) throws {
+            parent = try InboxParent(from: decoder)
+            item = try decoder.container(keyedBy: Keys.self).decodeIfPresent(InboxItem.self, forKey: .item)
+        }
+        private enum Keys: String, CodingKey { case item }
+    }
+
+    var node: InboxParent
+    var item: InboxItem?
+    var ancestors: [Up]
+    var children: [InboxItem]
+
+    init(node: InboxParent, item: InboxItem? = nil, ancestors: [Up] = [], children: [InboxItem] = []) {
+        self.node = node; self.item = item; self.ancestors = ancestors; self.children = children
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        node = try c.decode(InboxParent.self, forKey: .node)
+        item = try c.decodeIfPresent(InboxItem.self, forKey: .item)
+        ancestors = try c.decodeIfPresent([Up].self, forKey: .ancestors) ?? []
+        children = try c.decodeIfPresent([InboxItem].self, forKey: .children) ?? []
+    }
+    private enum CodingKeys: String, CodingKey { case node, item, ancestors, children }
 }
 
 /// How triage stands (GET /api/v1/inbox `triage`, #1644): new items the hub holds back because the model could not
@@ -326,6 +379,21 @@ extension APIClient {
 
     /// One item with its conversation text.
     func inboxItem(_ id: String) async throws -> InboxItem { try await get("/api/v1/inbox/" + id) }
+
+    /// An item's 线索 (#2128): what it hangs under and what hangs under it. Older hubs answer 404.
+    func inboxTree(_ kind: String, _ id: String) async throws -> InboxTree {
+        try await get(Self.inboxTreePath(kind, id))
+    }
+
+    /// `/api/v1/inbox/tree/<kind>/<id>`: each segment escaped (an id may carry '#', a space…), a session's slash kept
+    /// as the hub's `{id...}` takes it; ':' stays readable as in the item routes.
+    nonisolated static func inboxTreePath(_ kind: String, _ id: String) -> String {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove("/")
+        let segments = kind == "session" ? id.split(separator: "/", omittingEmptySubsequences: false).map(String.init) : [id]
+        let escaped = segments.map { $0.addingPercentEncoding(withAllowedCharacters: allowed) ?? $0 }
+        return "/api/v1/inbox/tree/" + kind + "/" + escaped.joined(separator: "/")
+    }
 
     func setInboxDone(_ id: String, _ done: Bool) async throws {
         try await post("/api/v1/inbox/" + id + "/done", body: ["done": done])

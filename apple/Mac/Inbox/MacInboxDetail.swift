@@ -79,7 +79,9 @@ struct MacInboxItemDetail: View {
         .macLinkPanel($link, wide: true)
         // Outside the link panel: the actions stay at the window's edge, the document opens between them and the item.
         // While a document is open they are a row over the item, and the filters and the list fold away (`reading`).
-        .macInboxActions(current, reading: link != nil, draft: { drafting = true }, handOff: { handingOff = true })
+        // Another item of its 线索 pushes in the column's stack, as a Feishu page does (back returns).
+        .macInboxActions(current, reading: link != nil, draft: { drafting = true }, handOff: { handingOff = true },
+                         openItem: { path.append($0) })
         .onChange(of: link != nil, initial: true) { _, open in MacInboxState.shared.reading = open }
         .onDisappear { if link != nil { MacInboxState.shared.reading = false } }
         .navigationTitle(current.title)
