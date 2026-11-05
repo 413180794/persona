@@ -335,6 +335,13 @@
   `ZONEINFO=<目录>`（里面放 `Asia/Shanghai`）管 `time.LoadLocation`。偏移量要取整到分钟：带秒的偏移会让按分钟写回的时间对不上，
   `TestBackfill` 等无关的测试跟着挂，看着像改坏了。
 
+## hub 端到端测试的等待窗口要盖过管理者的固定延迟（2026-11-05，#2960）
+
+- 管理者有几个写死的延迟：断开后按 `reconnectGrace` 先显示在线 5 秒（`devices/warm.go`），一条路连续失败按 `pathEnded` 退避 2、4、8 秒……（`devices/paths.go`）。
+  `eventually` 的窗口只比它们多一两秒，机器一忙就超时（`TestCenterServiceConnector` 的 10 秒窗口等的是 8 秒的退避）；窗口按要等的延迟留足余量，注释写明在等什么。
+- 用 `taskset -c 0,1` 把同一个测试二进制的 8～16 个副本压在两个核上跑，比 `-count=50` 单跑更容易逼出这类问题；
+  `TestCenterServiceConnector` 这样还逼出了一个真的竞争（探测晚到的回答盖掉了 4002 的「重新配对」），超时不一定只是窗口太紧，先看日志里状态是不是卡住了。
+
 ## Mac 版真窗口验收（2026-11-02，#403）
 
 - 在没签名的模拟器构建上跑 JarvisTests（`CODE_SIGNING_ALLOWED=NO`）时，`NotificationServiceTests.opensWithTheKeyInTheSharedGroup` 一定失败：没签名就没有钥匙串组，

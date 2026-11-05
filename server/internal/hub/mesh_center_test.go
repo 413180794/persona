@@ -754,7 +754,9 @@ func TestCenterServiceConnector(t *testing.T) {
 
 	// The connector is paired with another hub: 4002, and the hub stops trying until it is paired again.
 	fc.repair()
-	eventually(t, 10*time.Second, "example-workstation needs pairing again", func() bool {
+	// The manager shows a machine whose stream just ended as online for its reconnect grace (5 s, devices/warm.go)
+	// before it says why: wait well past that.
+	eventually(t, 20*time.Second, "example-workstation needs pairing again", func() bool {
 		m := center.machines(t, tok)["example-workstation"]
 		return !m.Online && strings.Contains(m.Error, "重新配对")
 	})
@@ -787,7 +789,9 @@ func TestCenterServiceConnector(t *testing.T) {
 	for _, c := range streams { // the connector restarts: the manager connects again, with what the hub keeps now
 		_ = c.Close(websocket.StatusGoingAway, "restarting")
 	}
-	eventually(t, 10*time.Second, "a wrong credential is refused", func() bool {
+	// The path failed three times in a row by now (not paired, paired elsewhere, the restart), so the manager waits
+	// 8 s before it tries again (devices/paths.go pathEnded) and only then hears the 401: wait well past that.
+	eventually(t, 30*time.Second, "a wrong credential is refused", func() bool {
 		return strings.Contains(center.machines(t, tok)["example-workstation"].Error, "不认")
 	})
 }

@@ -178,7 +178,8 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
 - **连**：`GET /api/v1/connector/stream`（WebSocket，`Authorization: Bearer`，permessage-deflate），流上就是 node 的字节；hub 每 10 秒 ping、5 秒没 pong 断开。
   503 `node_unavailable`：把连接器给的原因显示成这台的错误，照常退避。
 - **探测**：每 30 秒 `GET /api/v1/connector/info`（不 attach，不影响在用的连接），回答了而且 `machine` 是这台就算能用，往返时间就是这条路的 RTT；
-  每台 hub 都探自己 hub.json 里的连接器，成员把结果放进记录。
+  每台 hub 都探自己 hub.json 里的连接器，成员把结果放进记录。探测或拨号在路上时流被 4002 关了、或者这台重新配对了，这次的结果作废
+  （#2960：晚到的 200 不能清掉「重新配对」，旧凭据晚到的 401 不能丢掉新凭据、让新配对等 5 分钟）。
 - **退避**：401（连接器不认凭据）5 分钟内不再拨也不再探——连接器按来源计失败，一分钟 10 次封 15 分钟，hub 不能把自己的地址封掉；
   429 按 `Retry-After` 等；流被 **4002** 关（连接器被配给了别的 hub）：标成「连接器已经配对给了别的 hub…重新配对」，**不再试**，直到在管理界面重新配对
   （`POST /api/v1/admin/machines/{id}/connector`）；**1001**（连接器停了或改回主动模式）照常退避重连。

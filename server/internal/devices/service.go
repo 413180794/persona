@@ -93,13 +93,6 @@ func (m *Machine) connectorCred(ctx context.Context) (*connectorCred, error) {
 	return cred, nil
 }
 
-// forgetCred drops the kept credential: the connector refused it (the hub may have another by now).
-func (m *Machine) forgetCred() {
-	m.mu.Lock()
-	m.svc.cred = nil
-	m.mu.Unlock()
-}
-
 // connectorTransport is an HTTP/1.1 transport to a connector pinned to fp, dialing through proxyURL when set.
 func connectorTransport(fp, proxyURL string) (*http.Transport, error) {
 	var dial func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -233,16 +226,8 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 	if err != nil {
 		tr.CloseIdleConnections()
 		if resp != nil && resp.StatusCode != http.StatusSwitchingProtocols {
-			if resp.StatusCode == http.StatusUnauthorized {
-				m.forgetCred()
-			}
 			herr := connectorError(resp)
-			var ce *connectorHTTPError
-			if errors.As(herr, &ce) && ce.retry > 0 {
-				m.mu.Lock()
-				m.svc.wait, m.svc.err = time.Now().Add(ce.retry), herr.Error()
-				m.mu.Unlock()
-			}
+			m.refused(st.pairGen, resp.StatusCode, herr, true)
 			return nil, herr
 		}
 		return nil, err
@@ -294,6 +279,32 @@ func (m *Machine) dialService(ctx context.Context) (*nodePipe, error) {
 			})
 		}}, nil
 }
+
+// refused records a connector's refusal of a request made with pairing gen's credential: a 401 drops the kept
+// credential, a refusal with a retry (401, 429) holds the path off that long (with its reason, withErr). Nothing when
+// the state moved on while the request was out (svcMovedOnLocked): the refusal was of a credential no longer in use.
+func (m *Machine) refused(gen, status int, herr error, withErr bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.svcMovedOnLocked(gen) {
+		return
+	}
+	if status == http.StatusUnauthorized {
+		m.svc.cred = nil
+	}
+	var ce *connectorHTTPError
+	if errors.As(herr, &ce) && ce.retry > 0 {
+		m.svc.wait = time.Now().Add(ce.retry)
+		if withErr {
+			m.svc.err = herr.Error()
+		}
+	}
+}
+
+// svcMovedOnLocked: since a request made with pairing gen's credential went out, the connector was paired again here
+// or ended a stream with 4002 (serviceInvalidated). What that request learned is stale: a probe that answered before
+// the 4002 must not clear 「重新配对」, a refusal of the old credential must not hold off the new one. m.mu held.
+func (m *Machine) svcMovedOnLocked(gen int) bool { return m.svc.invalid || m.svc.pairGen != gen }
 
 const errConnectorInvalid = "连接器已经配对给了别的 hub，原来的凭据失效：在管理界面重新配对这台电脑"
 
@@ -359,6 +370,10 @@ func (m *Machine) probeService(ctx context.Context) {
 	}
 	set := func(ok bool, rtt int, err string, version string) {
 		m.mu.Lock()
+		if m.svcMovedOnLocked(st.pairGen) {
+			m.mu.Unlock()
+			return
+		}
 		was := m.svc.ok
 		m.svc.probed, m.svc.ok, m.svc.rtt, m.svc.err = time.Now(), ok, rtt, err
 		if version != "" {
@@ -399,16 +414,8 @@ func (m *Machine) probeService(ctx context.Context) {
 	defer resp.Body.Close()
 	rtt := max(1, int(time.Since(start).Milliseconds()))
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusUnauthorized {
-			m.forgetCred()
-		}
 		herr := connectorError(resp)
-		var ce *connectorHTTPError
-		if errors.As(herr, &ce) && ce.retry > 0 {
-			m.mu.Lock()
-			m.svc.wait = time.Now().Add(ce.retry)
-			m.mu.Unlock()
-		}
+		m.refused(st.pairGen, resp.StatusCode, herr, false)
 		set(false, 0, herr.Error(), "")
 		return
 	}
