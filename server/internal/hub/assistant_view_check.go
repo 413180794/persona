@@ -10,7 +10,7 @@ import (
 
 func (m *Machine) checkAssistantView(params json.RawMessage) (assistantwire.ViewCheckResponse, error) {
 	var result assistantwire.ViewCheckResponse
-	if !m.hub.cfg.Assistant.PersonaView {
+	if !m.hub.assistantPersonaView() {
 		return result, nil
 	}
 	var input assistantwire.ViewCheckRequest

@@ -35,6 +35,9 @@ type adminState struct {
 	env  *AdminConfig // JARVIS_ADMIN_ACCESS / JARVIS_ADMIN_CIDRS, nil when unset
 	name *string      // hub.json's "name" once the admin UI changed or reloaded it; nil: h.cfg.Name
 	bad  string       // why the configured scope was refused (it then acts as loopback)
+	// personaView is assistant.persona_view once the admin UI changed it; nil: h.cfg's (admin_assistant.go).
+	personaView           *bool
+	personaViewGeneration uint64
 
 	setup          *setupCode  // the first-run setup code (admin_setupcode.go), nil when none is live
 	failures       authLimiter // failed sign-ins per source
@@ -124,6 +127,7 @@ func (h *Hub) adminRoutes(mux *http.ServeMux, api, web http.Handler) http.Handle
 	closed := http.NewServeMux() // signed in
 	h.adminAuthRoutes(open, closed)
 	h.adminHubRoutes(closed)
+	h.adminAssistantRoutes(closed)
 	h.adminMachineRoutes(closed)
 	h.adminUsageRoutes(closed) // the usage sources page (admin_usage.go, #2595)
 	h.adminDeviceRoutes(closed)

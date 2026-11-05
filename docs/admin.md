@@ -117,6 +117,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | 电脑 | `/admin/machines` | 「添加电脑」放在最上面，两种：**电脑来连**（kind link：填 id / 名字，生成 jarvis-link 配对链接，给 Mac / Linux / Windows 的装法）和 **hub 来连**（kind service：粘贴那台 `jarvis-link pair --listen` 打印的链接，可改地址、填 socks5 代理）；不再添加 ssh 电脑。每台的状态（在线 / 离线 / 错误、连接方式、node 版本）和**每条路**（方式、经哪台 hub、能不能用、RTT、哪条在用，[mesh.md](mesh.md)「一台电脑多条路」）；service 电脑的连接器被配给别的 hub 时「重新配对」；重连、删除（只在成员上配的电脑不能在这里删） |
 | 设备 | `/admin/devices` | 设备凭据列表、撤销、生成手机配对二维码；成员 hub 上只提示去中心的管理界面 |
 | 扩展 | `/admin/extensions`（老的 `/admin/plugins` 照样打开） | 这台 hub 的扩展：列表、开关、安装（hub 机器上的目录或包、带 sha256 的 https 链接、上传、remote socket；先预览它能做什么，同意才装）、升级（权限变多明确提示）、回滚、卸载（可留数据），以及扩展市场（登记市场、浏览目录、从市场安装 / 升级），见下面「扩展」和 [extensions.md](extensions.md)「管理界面：扩展」 |
+| 助手卡片 | `/admin/assistant` | 主对话富 UI 的开关 `assistant.persona_view`、各端实际支持、示例卡片的本地预览（下面「助手卡片」） |
 | 用量来源 | `/admin/usage` | 账号池网关（relay-history…）的订阅额度来源（`docs/usage-windows.md`「账号池网关」，#2595）：总开关和读取间隔、来源列表（名字、类型、地址、状态：上次读取、账号 / 窗口数、失败原因；每个来源的开关）、添加 / 编辑（类型、名字、地址、Key）和「测试连接」（只读一次、不保存，报告看到几个账号、几个窗口、各家几个）、删除（就地确认）。Key 只写不读，换了地址要重新填 |
 | 网络与访问 | `/admin/network` | 公网地址 / TLS / 候选地址（可改，重启生效）、`security` 的设置（只读）、管理界面的访问范围（只能收窄）、改管理员密码 |
 | 高级 › 互联 | `/admin/peers` | 一般用不到（推荐只装一台 hub）：组里的 hub（中心 / 成员、在线、任期，「设为中心」，原中心连不上时先确认）、发现到的 hub、生成 / 输入互联码、链路状态和 RTT、断开（[mesh.md](mesh.md)） |
@@ -152,6 +153,8 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | `GET devices` | `{"devices": [{id, name, kind, role, created_at, last_seen, machine_id}]}` |
 | `DELETE devices/{id}` | 撤销 |
 | `POST devices/pair` | 手机配对：`{"pair_url", "url", "expires_at", "fp", "qr": {"size", "rows": ["0101…"]}}`（`rows` 每行一个 `0` / `1` 串，不含留白） |
+| `GET assistant` | `{"persona_view"}`：hub.json 的 `assistant.persona_view`（管理界面改过就是改后的值） |
+| `PUT assistant` `{"persona_view"}` | 写 hub.json 的 `assistant.persona_view`（关 = 删掉这个键），`assistant` 里别的键和文件里别的字段原样保留，hub 侧立刻生效（助手提示词见下面「助手卡片」）；缺字段 400 `bad_request` |
 | `GET network` | `listen`、`public_url`、`tls`（`listen`、`port`、`fp`）、`advertise`、`advertise_ipv6`、`advertise_lan`、`endpoints`、`security`（`trusted_cidrs`、`allow_public_plaintext`）、`admin`（`access`、`cidrs`、`session_hours`、`from_env`、`container`）、`you`（`address`、`tls`、`allowed`：四种范围各自放不放你进来）、`restart` |
 | `PUT network/access` `{"access", "cidrs", "force"}` | 收窄访问范围；403 `widen_cli_only`、409 `from_env` / `would_lock_you_out`、400 `invalid_cidr` |
 | `PUT network/public` `{"public_url", "tls_listen", "advertise"}` | 改公网地址 / TLS 监听 / 候选地址（省略的字段不变），重启生效 |
@@ -199,6 +202,19 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
   「市场里的扩展」可以搜索、按市场筛选，每行是名字、版本、状态（未安装 / 可升级到 x / 已装 / hub 自带 / 装不了）、发布者、市场、说明、标签和装不了的原因；
   「安装」「升级」先 `extensions/-/catalog/preview`，弹出和别的来源一样的预览（权限、权限变多时的红色提示和「新增」、剩几分钟），同意后走上面的 `extensions/install` / `extensions/{id}/upgrade`（带预览的 id 和摘要），装完列表和目录一起刷新。
   从市场装的扩展和别的已装扩展一样，在列表里升级、回滚、卸载。截图：`/admin/extensions?mock=app`，`&dialog=market` 直接打开第一个能升级的扩展的预览，`&dialog=market-add` 打开添加市场（`web/src/admin/mock.ts`）。
+
+## 助手卡片
+
+页面 `web/src/admin/pages/Assistant.tsx`，接口 `server/internal/hub/admin_assistant.go`（#2023，设计见 [assistant-views.md](assistant-views.md)「提示词与开关」）。
+
+- **开关**：`assistant.persona_view`。打开前弹框确认各端版本（iPhone 要等对应的 TestFlight）；关闭不问，助手改回所有客户端都能显示的 persona-card。
+  不用重启 hub：hub 里读这个开关的地方统一走 `h.assistantPersonaView()`（管理界面改过就用改后的值，否则用启动时读到的 `h.cfg`），Hello 也是，改完发 `manager.updated` 给已连上的助手进程（`assistantUpdated`，它自己存一份 Hello），再向它重新要一次工具列表（`assistantToolsFollow`，`view_show` 等随开关出现 / 消失），所以卡片工具和动作、正文卡片登记、渠道转发在一秒内跟上。
+  **助手的提示词不是立刻换**：CLAUDE.md 只在准备助手目录时重写（开新对话，或 App 打开对话页预热新进程），助手进程启动时才读 CLAUDE.md 和工具列表；已经在跑的进程沿用启动时读到的，直到重新启动。新代码读这个开关时不要直接读 `h.cfg.Assistant.PersonaView`。`assistant.html_views` 由 hub 另管（#2019），这页只说明它只在本开关打开、且那一端通过安全验收时运行。
+- **各端支持**：按当前实现写明网页、Apple、Android、手表 / 通知各自能做什么，以各端实际安装的版本为准。
+- **示例预览**：读 `schema/extension/examples/assistant/` 的合成数据，用网页的共用组件（`views/extensions/ViewBody.tsx`）画。只在本页：点选项、填表单、提交只改本页状态，显示「真实对话里会发回……」，
+  不调用任何对话或动作接口；HTML 示例只显示文字 fallback，不建 iframe、不运行脚本。`web/src/admin/assistant-examples.test.tsx` 扫源码确认页面只调用这两个管理接口。
+- 验证：`python3 scripts/test/admin_assistant_e2e.py <网页地址> [--shots <目录>]`（dev server 的 `/admin/assistant?mock=app`；宽 / 窄 × 浅 / 深色，记录预览期间页面发出的请求，必须为零）。
+  截图：`?dialog=enable` 打开确认框，`?dialog=example-form` 等直接选中某个示例。
 
 ## 部署时选择
 

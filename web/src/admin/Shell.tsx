@@ -10,6 +10,7 @@ import { NAV, type Page } from "./nav";
 import { navigate, pathOf, usePage } from "./router";
 import { refreshMesh, share, useShared } from "./store";
 import type { Overview } from "./types";
+import { Assistant } from "./pages/Assistant";
 import { Devices } from "./pages/Devices";
 import { Extensions } from "./pages/Extensions";
 import { Machines } from "./pages/Machines";
@@ -101,6 +102,7 @@ export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => 
             {page === "peers" && <Peers />}
             {page === "devices" && <Devices />}
             {page === "extensions" && <Extensions />}
+            {page === "assistant" && <Assistant />}
             {page === "usage" && <UsageSourcesPage />}
             {page === "network" && <Network />}
           </div>

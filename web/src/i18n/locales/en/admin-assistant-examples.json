@@ -1,0 +1,9 @@
+{
+  "yes": "Yes",
+  "no": "No",
+  "empty": "(empty)",
+  "field_line": "{label}: {value}",
+  "would_push": "In a real chat, this would open the detail page “{title}”",
+  "would_pop": "In a real chat, this would return to the previous page",
+  "would_open": "In a real chat, this would open “{target}” in the app"
+}

@@ -135,7 +135,8 @@ func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	out.Assistant = assistantwire.Placement{MachineID: h.defaultAssistantMachine(), Launcher: h.cfg.Assistant.Launcher, Standby: h.isMember()}
 	out.Assistant.Machines = h.machineIDs()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
-	out.PersonaView = h.cfg.Assistant.PersonaView
+	// The admin UI may have switched it since the hub started (admin_assistant.go).
+	out.PersonaView = h.assistantPersonaView()
 	out.Agents = h.cfg.Agents  // the Agents business's defaults (agents_link.go)
 	out.Models = h.hubModels() // what hub.json says about models (assistant_models.go)
 	return out, nil
@@ -528,14 +529,14 @@ func (h *Hub) assistantConnected() {
 		Tools []proto.Tool `json:"tools"`
 	}
 	h.managerConnected() // agents_link.go
+	generation := h.assistantToolsGeneration()
 	if err := h.callBus(ctx, assistantwire.AssistantID, assistantwire.MethodTools, nil, &res); err != nil {
 		h.logf("assistant: tools: %v", err)
 		return
 	}
-	a := &h.assistant
-	a.toolsMu.Lock()
-	a.tools = res.Tools
-	a.toolsMu.Unlock()
+	if !h.storeAssistantTools(generation, res.Tools) {
+		return
+	}
 	// Connectors register as the hub starts, before the assistant says its tools (builtinTools): one that took a name
 	// of the assistant's gets its calls (connectors are asked first), which is said here.
 	for _, t := range res.Tools {

@@ -1,0 +1,9 @@
+{
+  "yes": "はい",
+  "no": "いいえ",
+  "empty": "（空）",
+  "field_line": "{label}：{value}",
+  "would_push": "実際の会話では詳細ページ「{title}」を開きます",
+  "would_pop": "実際の会話では前のページに戻ります",
+  "would_open": "実際の会話ではアプリ内で「{target}」を開きます"
+}

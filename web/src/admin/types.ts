@@ -354,6 +354,11 @@ export interface LogsPage {
   kept: number;
 }
 
+/** GET/PUT /api/v1/admin/assistant: hub.json's assistant.persona_view (docs/admin.md「助手卡片」). */
+export interface AssistantCards {
+  persona_view: boolean;
+}
+
 // ── usage sources (docs/usage-windows.md「账号池网关」, docs/admin.md): account-pool gateways feeding the sidebar's usage bars ──
 
 export type UsageSourceType = "relay-history" | "generic";

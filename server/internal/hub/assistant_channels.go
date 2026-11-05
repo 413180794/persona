@@ -198,7 +198,7 @@ func (h *Hub) followedItems(machine, session string, items []proto.Item) {
 		return
 	}
 	if !h.followed(machine, session) {
-		if !h.cfg.Assistant.PersonaView {
+		if !h.assistantPersonaView() {
 			return
 		}
 		m := h.localMachine(machine)

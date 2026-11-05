@@ -3,6 +3,7 @@
   "machines": "Computers",
   "devices": "Devices",
   "extensions": "Extensions",
+  "assistant": "Assistant cards",
   "usage": "Usage sources",
   "network": "Network & access",
   "peers": "Linked hubs"

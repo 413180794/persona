@@ -36,6 +36,7 @@ inbox.write          DELETE /api/v1/inbox/mutes/{id}
 todos.write          DELETE /api/v1/todos/{id}/agents/{mid}/{sid}
 todos.write          DELETE /api/v1/todos/{id}/spaces/{mid}/{space...}
 -                    DELETE {base}/markets/{mid}
+-                    GET /api/v1/admin/assistant
 -                    GET /api/v1/admin/devices
 -                    GET /api/v1/admin/extensions
 -                    GET /api/v1/admin/extensions/-/metrics
@@ -313,6 +314,7 @@ todos.write          POST /api/v1/todos
 -                    POST {base}/markets/{mid}/refresh
 -                    POST {base}/markets/{mid}/trust
 -                    POST {peerPairPath}
+-                    PUT /api/v1/admin/assistant
 -                    PUT /api/v1/admin/extensions/{id}/enabled
 -                    PUT /api/v1/admin/extensions/{id}/sandbox
 -                    PUT /api/v1/admin/hub
