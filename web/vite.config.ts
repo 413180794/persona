@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -34,6 +35,8 @@ export default defineConfig({
   },
   // The terminal loads xterm only when opened: pre-bundle it, or the first open in dev re-optimizes and reloads the page.
   optimizeDeps: { include: ["@xterm/xterm", "@xterm/addon-fit", "@xterm/addon-clipboard", "@xterm/addon-web-links", "@xterm/addon-search", "@xterm/addon-webgl"] },
+  // Tests run in zh-Hans, the source language, so their expectations read like the interface (src/i18n/test-setup.ts).
+  test: { setupFiles: ["src/i18n/test-setup.ts"] },
   build: {
     target: "es2022",
     sourcemap: false,

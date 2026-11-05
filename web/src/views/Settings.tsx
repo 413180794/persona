@@ -11,6 +11,7 @@ import { Icon, type IconName } from "../ui/icons";
 import { ExtensionThemePicker } from "../ui/ExtensionThemePicker";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { Group, Row, Pill, RowConfirm, Switch } from "./settings/SettingsParts";
+import { LanguageRow } from "./settings/LanguageRow";
 import { setReplyMotionEnabled, useReplyMotionSetting } from "../ui/stream/motion";
 import { setSidebarTerminals, useSidebarTerminals } from "../lib/sidebar-terminals";
 import { setAttentionSoundEnabled, useAttentionSoundSetting } from "../lib/attention";
@@ -282,6 +283,7 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
           ))}
         </div>
         <ExtensionThemePicker />
+        <LanguageRow />
         <Row label="回复动效" hint="新到的回复逐词淡入；系统开了「减弱动态效果」时不播。">
           <Switch on={replyMotion} onChange={setReplyMotionEnabled} label="回复动效" />
         </Row>

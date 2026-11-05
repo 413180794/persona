@@ -1,8 +1,12 @@
 // The hub admin UI (docs/admin.md): its own page next to the web client, same tokens and atoms.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { AdminApp } from "./App";
+import { initI18n } from "../i18n";
 import "../styles.css";
+
+// The catalog loads before the pages: they call t() as their modules load (docs/web.md「国际化」).
+await initI18n();
+const { AdminApp } = await import("./App");
 
 // Dev only (`npm run dev`, ?mock=<scenario>): canned data instead of a hub, for building and screenshots. The
 // production build drops this branch and the mock module with it.

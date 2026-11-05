@@ -1,0 +1,161 @@
+// @vitest-environment node
+// The catalogs and the code agree (docs/web.md「国际化」): the three languages have the same namespaces, keys and
+// placeholders; every t("literal") key exists; and no interface text is written into the code in Chinese. That last
+// one is a ratchet while the strings move into catalogs: a file may only lose hard-coded strings, never gain them
+// (hardcoded-baseline.json; a file that reaches zero leaves it). Comments and tests don't count; a line that has to
+// keep CJK text (it matches what someone else writes, like a hub's output) says `i18n-ignore` in a comment.
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import ts from "typescript";
+import { describe, expect, it } from "vitest";
+import { LANGS } from "./index";
+
+const SRC = join(__dirname, "..");
+const LOCALES = join(__dirname, "locales");
+const BASELINE = join(__dirname, "hardcoded-baseline.json");
+const PLURAL = /_(zero|one|two|few|many|other)$/;
+const CJK = /[　-〿぀-ヿ㐀-䶿一-鿿！-｠]/;
+
+type Catalog = Record<string, string>;
+
+function catalogs(): Record<string, Record<string, Catalog>> {
+  const out: Record<string, Record<string, Catalog>> = {};
+  for (const lang of LANGS) {
+    out[lang] = {};
+    for (const f of readdirSync(join(LOCALES, lang)).filter((f) => f.endsWith(".json")).sort()) {
+      out[lang][f.replace(/\.json$/, "")] = JSON.parse(readFileSync(join(LOCALES, lang, f), "utf8"));
+    }
+  }
+  return out;
+}
+
+const placeholders = (s: string) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();
+
+/** key without its plural suffix → the placeholders of all its forms */
+function shape(cat: Catalog): Map<string, string[]> {
+  const m = new Map<string, Set<string>>();
+  for (const [k, v] of Object.entries(cat)) {
+    const base = k.replace(PLURAL, "");
+    const set = m.get(base) ?? new Set<string>();
+    for (const p of placeholders(v)) set.add(p);
+    m.set(base, set);
+  }
+  return new Map([...m].map(([k, v]) => [k, [...v].sort()]));
+}
+
+function sourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) {
+      if (p === __dirname) continue; // the catalogs themselves
+      out.push(...sourceFiles(p));
+    } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && !name.endsWith(".d.ts") && !/(^|\/)mock\.ts$/.test(name)) {
+      out.push(p);
+    }
+  }
+  return out.sort();
+}
+
+interface Scan {
+  hardcoded: { line: number; text: string }[];
+  keys: { line: number; key: string }[];
+}
+
+function scan(file: string): Scan {
+  const text = readFileSync(file, "utf8");
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const lines = text.split("\n");
+  const ignored = (line: number) => /i18n-ignore/.test(lines[line] ?? "") || /^\s*\/\/.*i18n-ignore/.test(lines[line - 1] ?? "");
+  const out: Scan = { hardcoded: [], keys: [] };
+  // t / tRich are ours only where the file imports them from src/i18n (some files have a local t)
+  const ours = new Set<string>();
+  for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*["'][./]*i18n(?:\/rich)?["']/g)) {
+    for (const name of m[1].split(",").map((x) => x.trim())) if (name === "t" || name === "tRich") ours.add(name);
+  }
+  const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line;
+  const visit = (n: ts.Node) => {
+    let literal: string | undefined;
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) literal = n.text;
+    else if (ts.isJsxText(n)) literal = n.text;
+    if (literal !== undefined && CJK.test(literal)) {
+      const line = lineOf(n);
+      if (!ignored(line)) out.hardcoded.push({ line: line + 1, text: literal.trim().slice(0, 40) });
+    }
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && ours.has(n.expression.text)) {
+      const a = n.arguments[0];
+      if (a && (ts.isStringLiteral(a) || ts.isNoSubstitutionTemplateLiteral(a))) out.keys.push({ line: lineOf(n) + 1, key: a.text });
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return out;
+}
+
+describe("catalogs", () => {
+  const all = catalogs();
+  const source = all["zh-Hans"];
+
+  it("has the same namespaces in every language", () => {
+    for (const lang of LANGS) expect(Object.keys(all[lang]), lang).toEqual(Object.keys(source));
+  });
+
+  it("has the same keys and placeholders in every language", () => {
+    for (const ns of Object.keys(source)) {
+      const want = shape(source[ns]);
+      for (const lang of LANGS) {
+        const got = shape(all[lang][ns] ?? {});
+        expect([...got.keys()].sort(), `${lang}/${ns}.json keys`).toEqual([...want.keys()].sort());
+        for (const [k, ps] of want) expect(got.get(k), `${lang}/${ns}.json "${k}" placeholders`).toEqual(ps);
+      }
+    }
+  });
+
+  it("gives every plural an _other form and no empty text", () => {
+    for (const lang of LANGS) {
+      for (const [ns, cat] of Object.entries(all[lang])) {
+        for (const [k, v] of Object.entries(cat)) {
+          expect(v.trim(), `${lang}/${ns}.json "${k}" is empty`).not.toBe("");
+          if (PLURAL.test(k)) expect(cat[k.replace(PLURAL, "_other")], `${lang}/${ns}.json "${k}" has no _other`).toBeDefined();
+        }
+      }
+    }
+  });
+
+  it("keeps Persona untranslated", () => {
+    for (const [ns, cat] of Object.entries(source)) {
+      for (const [k, v] of Object.entries(cat)) {
+        if (!v.includes("Persona")) continue;
+        for (const lang of LANGS) expect(all[lang][ns][k], `${lang}/${ns}.json "${k}"`).toContain("Persona");
+      }
+    }
+  });
+});
+
+describe("code", () => {
+  const files = sourceFiles(SRC);
+  const scans = new Map(files.map((f) => [relative(SRC, f), scan(f)]));
+
+  it("only uses keys that exist", () => {
+    const flat = new Set<string>();
+    for (const [ns, cat] of Object.entries(catalogs()["zh-Hans"])) for (const k of Object.keys(cat)) flat.add(`${ns}.${k.replace(PLURAL, "")}`);
+    const missing = [...scans].flatMap(([f, s]) => s.keys.filter((k) => !flat.has(k.key)).map((k) => `${f}:${k.line} ${k.key}`));
+    expect(missing).toEqual([]);
+  });
+
+  it("writes no more interface text in Chinese than before", () => {
+    const counts: Record<string, number> = {};
+    for (const [f, s] of scans) if (s.hardcoded.length) counts[f] = s.hardcoded.length;
+    if (process.env.UPDATE_I18N_BASELINE) {
+      writeFileSync(BASELINE, JSON.stringify(counts, null, 2) + "\n");
+      return;
+    }
+    const baseline: Record<string, number> = JSON.parse(readFileSync(BASELINE, "utf8"));
+    const grew = Object.entries(counts)
+      .filter(([f, n]) => n > (baseline[f] ?? 0))
+      .map(([f, n]) => `${f}: ${n} (baseline ${baseline[f] ?? 0})\n` + scans.get(f)!.hardcoded.map((h) => `  ${f}:${h.line} ${h.text}`).join("\n"));
+    expect(grew, "move these into src/i18n/locales (or mark data with i18n-ignore)").toEqual([]);
+    const stale = Object.entries(baseline).filter(([f, n]) => (counts[f] ?? 0) < n).map(([f]) => f);
+    expect(stale, "fewer hard-coded strings now: run UPDATE_I18N_BASELINE=1 npx vitest run src/i18n/catalog.test.ts").toEqual([]);
+  });
+});

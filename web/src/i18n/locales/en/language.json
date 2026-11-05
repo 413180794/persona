@@ -1,0 +1,6 @@
+{
+  "label": "Language",
+  "system": "Match system",
+  "system_detail": "Match system ({language})",
+  "hint": "Match system uses your browser's first preferred language: Chinese shows 简体中文, Japanese shows 日本語, anything else shows English. The page reloads when you switch, and notifications and assistant replies from the hub switch too."
+}

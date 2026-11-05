@@ -653,6 +653,22 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 - **安全区**：浏览器里左右两侧也留安全区（横屏刘海），底部只在装成 App 时留；抽屉自己也留。
 - **截图和端到端检查**：`scripts/test/web_mobile_{input,read,shell,pages}_e2e.py`，覆盖 390 / 360 / 844×390、深色和浅色。触摸用 CDP 的真实事件，键盘用缩小视口高度来模拟。用法见各脚本开头。没有真机，iOS Safari 的惯性滚动、长按时系统弹的预览、装成 App 后的启动画面都还没验证。
 
+## 国际化（#2452）
+
+约定（语言、回退、术语表）见 [i18n.md](i18n.md)。网页的做法：
+
+- **加载**：`main.tsx` / `admin/main.tsx` 先 `await initI18n()` 载入当前语言的词条，再动态 import 其余模块，所以 `t()` 在模块顶层也能用。
+  语言在页面的整个生命周期里不变；设置 › 通用 › 外观 › 语言改了就 `location.reload()`（选择存在 `localStorage` 的 `persona.language`，没有就跟随系统）。每种语言单独一个 chunk，只下载用到的那种。
+- **词条**：`src/i18n/locales/<语言>/<命名空间>.json`，平铺的 `"名字": "文字"`，key 写成 `命名空间.名字`。**一个页面或一块功能一个命名空间**（`settings-general`、`inbox`、`admin-devices`…），
+  几个人同时改不会撞同一个文件；`common.json` 只放到处都用的（取消、保存、加载中），别往里堆。
+- **写法**：`t("inbox.empty")`、`t("inbox.count", { count })`（有 `_one` / `_other` 时按 `Intl.PluralRules` 选）；带元素的句子用 `tRich("ns.key", { link: <a…/> })`，
+  整句一个词条，不拼半句。日期、数字、列表用 `src/i18n` 的 `formatDate` / `formatNumber` / `formatRelative` / `formatList`（都是 `Intl`），不手拼「月」「日」。
+- **和 hub**：每个请求带 `Accept-Language`（`lib/api.ts`），WebSocket 连上先发 `client_hello.locale`（`lib/store.ts`），hub 据此出错误文案、推送和助手回答的语言（[protocol.md](protocol.md)）。
+- **检查**（`src/i18n/catalog.test.ts`）：三种语言的命名空间、key、占位符一致，`_one` 有 `_other`，「Persona」不翻译；代码里 `t("…")` 的 key 都存在；
+  写死的中文（字符串、JSX 文字，注释和测试不算）按文件只能减少，基线 `src/i18n/hardcoded-baseline.json`，减少后 `UPDATE_I18N_BASELINE=1 npx vitest run src/i18n/catalog.test.ts` 重记。
+  必须保留的中文（要和别人写的原文匹配的，如解析 hub / 飞书的输出）在那一行或上一行注释写 `i18n-ignore`。
+- **测试**：vitest 的 `setupFiles` 先载入 zh-Hans，现有测试照旧按中文断言。
+
 ## 细节约定
 
 - 颜色只走 token（`src/styles.css` 的 `:root` / `.dark`），不写死色值；状态色：需要你红（呼吸）、工作中橙（呼吸）、完成未看绿、已看灰。

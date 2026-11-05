@@ -1,5 +1,7 @@
 // REST client for the hub. The page is served by the hub itself (same origin), so every path is relative.
 
+import { currentLanguage } from "../i18n";
+
 const TOKEN_KEY = "jarvis.token";
 
 export function getToken(): string {
@@ -34,6 +36,8 @@ export function handleUnauthorized(fn: () => void) {
 export async function api<T>(path: string, init: RequestInit & { json?: unknown; token?: string } = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${init.token ?? getToken()}`);
+  // the hub writes its error and status text in the interface language (docs/i18n.md「协议」)
+  if (!headers.has("Accept-Language")) headers.set("Accept-Language", currentLanguage());
   let body = init.body;
   if (init.json !== undefined) {
     headers.set("Content-Type", "application/json");

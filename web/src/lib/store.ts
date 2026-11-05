@@ -5,6 +5,7 @@ import { useRef, useSyncExternalStore } from "react";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents } from "./agents";
 import { applySessionDelta, SESSIONS_DELTA_FEATURE, sessionRefreshed, sessionSnapshot } from "./sessions-delta";
 import { api, ApiError, getToken } from "./api";
+import { currentLanguage } from "../i18n";
 import type { AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
 import { NO_PINS, pinsOf, type AgentPins } from "./pins";
@@ -248,6 +249,8 @@ export function connect() {
   restartNotice = false;
   if (state.conn !== "online") set({ conn: "connecting" });
   sock.onopen = () => {
+    // the interface language: this connection's text, and the user's language for pushes and the assistant (docs/i18n.md)
+    sock.send(JSON.stringify({ type: "client_hello", platform: "web", locale: currentLanguage() }));
     retry = 0;
     fastTries = 0;
     lastMessage = Date.now();
