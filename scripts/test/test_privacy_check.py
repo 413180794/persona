@@ -194,6 +194,15 @@ class LoopbackTests(unittest.TestCase):
         home_lan = "192.168." + "1.10"
         self.assertIn(home_lan, pc.problems("at " + home_lan, []))
 
+    def test_a_period_next_to_an_address_does_not_hide_it(self):
+        # A sentence that ends on an address, or an ellipsis before one (#3924).
+        for text in ("hub is at %s." % PRIVATE_IP, "hub is at %s..." % PRIVATE_IP, "...%s" % PRIVATE_IP,
+                     "(%s.)" % PRIVATE_IP):
+            self.assertIn(PRIVATE_IP, pc.problems(text, []), text)
+        # A longer dotted run is a version or an OID, not an address.
+        for text in ("v%s.5" % PRIVATE_IP, "1.%s" % PRIVATE_IP, "oid 1.3.%s.7" % PRIVATE_IP):
+            self.assertEqual(pc.problems(text, []), [], text)
+
 
 class NpmLockTests(unittest.TestCase):
     def test_public_lockfiles(self):

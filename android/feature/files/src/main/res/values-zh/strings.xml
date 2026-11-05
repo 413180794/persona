@@ -32,7 +32,7 @@
     <string name="files_error_connection">请检查连接后重试。</string>
     <string name="files_error_pairing">配对已失效，请重新扫码。</string>
     <string name="files_error_unreachable">连不上 hub，请检查连接后重试。</string>
-    <string name="files_error_rate_limited">请求太频繁，请稍后重试。</string>
+    <string name="files_error_rate_limited">请求太多了，过一会儿再试。</string>
     <string name="files_share">分享</string>
     <string name="files_share_failed">这个文件分享不了</string>
     <string name="files_time_just_now">刚刚</string>
@@ -63,7 +63,7 @@
     <string name="files_binary_file">二进制文件</string>
     <string name="files_size_truncated">%1$s，只显示前 2 MB</string>
     <string name="files_image_failed">图片无法显示</string>
-    <string name="files_image_failed_message">图片数据不完整，或格式暂不支持。</string>
+    <string name="files_image_failed_message">图片可能不完整，或者是还不支持的格式。</string>
     <string name="files_git_failed">读不到 Git 状态</string>
     <string name="files_git_not_repo">不是 Git 仓库</string>
     <string name="files_git_not_repo_message">这个会话目录没有 Git 仓库。</string>
@@ -121,9 +121,9 @@
     <string name="files_notebook_empty">笔记本是空的</string>
     <string name="files_notebook_empty_message">没有任何单元格。</string>
     <string name="files_notebook_output_image">输出的图片</string>
-    <string name="files_notebook_invalid">不是有效的笔记本文件</string>
-    <string name="files_notebook_invalid_json">不是有效的笔记本文件（JSON 解析失败）</string>
-    <string name="files_notebook_no_cells">不是有效的笔记本文件（没有 cells）</string>
+    <string name="files_notebook_invalid">文件内容不是笔记本格式</string>
+    <string name="files_notebook_invalid_json">文件内容不是笔记本格式（JSON 读不出来）</string>
+    <string name="files_notebook_no_cells">文件内容不是笔记本格式（里面没有 cells）</string>
     <string name="files_audio_cache_failed">写不进缓存。</string>
     <string name="files_audio_node_outdated">这台机器的 node 太旧，不能下载整个文件；更新后再试。</string>
     <string name="files_audio_loading">正在读取音频…</string>

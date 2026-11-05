@@ -162,7 +162,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
                 AgentRow(
                     row.title, row.status, onClick = { feedback = row.title }, onLongClick = { feedback = "长按：${row.title}" }, depth = 1,
                     position = GroupPosition.of(index, rows.size), preview = row.preview, time = row.time, agent = row.agent,
-                    statusText = row.status.label, facts = row.facts, flags = row.flags,
+                    statusText = row.status.localizedLabel, facts = row.facts, flags = row.flags,
                 )
             }
         }
@@ -174,11 +174,11 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             Column {
                 AgentTabRow("#2", lead.title, lead.status, agents = rows.size, folded = folded, onToggle = { folded = !folded },
                     onClick = { feedback = lead.title }, depth = 1, position = GroupPosition(false, folded), preview = lead.preview,
-                    statusText = lead.status.label)
+                    statusText = lead.status.localizedLabel)
                 if (!folded) rows.forEachIndexed { index, row ->
                     AgentRow(row.title, row.status, onClick = { feedback = row.title }, depth = if (row === lead) 2 else 3,
                         position = GroupPosition(false, index == rows.lastIndex), preview = row.preview, time = row.time, agent = row.agent,
-                        statusText = row.status.label, launcher = row === lead, branch = row === branch || row === done)
+                        statusText = row.status.localizedLabel, launcher = row === lead, branch = row === branch || row === done)
                 }
             }
         }
@@ -190,7 +190,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
         item("agents-located") {
             AgentRow(
                 "整理发布说明", Status.Working, onClick = { feedback = "整理发布说明" }, position = GroupPosition(first = true, last = false),
-                preview = "在对比两个版本的改动", time = "1 分钟前", statusText = Status.Working.label,
+                preview = "在对比两个版本的改动", time = "1 分钟前", statusText = Status.Working.localizedLabel,
                 facts = listOf(RowFact("MacBook / blog"), RowFact("循环，下次 10:00")), flags = listOf(RowFlag("已置顶", PhIcons.PushPin)),
             )
         }
@@ -218,7 +218,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             JSwipeActions(end = SwipeAction("关闭", PhIcons.X, Status.NeedsYou, { feedback = "左滑：关闭 Agent" }, destructive = true)) {
                 AgentRow(
                     "整理部署脚本", Status.Working, onClick = { feedback = "向左滑这一行" }, position = GroupPosition(first = true, last = false),
-                    preview = "三个环境的变量合到一个 env 文件里了", time = "刚刚", statusText = Status.Working.label,
+                    preview = "三个环境的变量合到一个 env 文件里了", time = "刚刚", statusText = Status.Working.localizedLabel,
                     facts = listOf(RowFact("Codex 实时 / codex-desk")),
                 )
             }

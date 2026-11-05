@@ -67,7 +67,7 @@ internal fun ChatHeader(
             StatusLineKind.Unconfirmed -> stringResource(R.string.chat_chrome_status_unconfirmed)
             StatusLineKind.NeedsYou -> stringResource(R.string.chat_chrome_status_needs_you)
             StatusLineKind.Stopping -> stringResource(R.string.chat_chrome_status_stopping)
-            else -> status.label
+            else -> status.localizedLabel
         },
         // A session from a Codex app-server, Codex history or an agent runtime names its source first.
         source = listOfNotNull(session?.source?.label, machine?.displayName, session?.cwd?.takeIf(String::isNotBlank))

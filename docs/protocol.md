@@ -740,6 +740,14 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 | GET | `/api/v1/machines/{mid}/launchers?purpose=` | `{"launchers":[Launcher], "default":{provider, model, effort, runtime?}}`：`default` 是「模型配置」里这个用途的生效值（`purpose` 默认 `agent.new`，主对话的选择器传 `assistant`），`provider` 是启动器名，`runtime` 只有 `assistant` 有；客户端显示「默认：…」。不是启动器类的用途 `default` 为 null |
 | GET | `/api/v1/machines/{mid}/launchers/{name}/models?refresh=1` | 这个启动器的 CLI 在 `/model` 里列的模型（新建 Agent 选模型，`docs/model-config.md`「新建 Agent 选模型」）：`{"agent","models":[{"id","name","description"?,"resolved"?,"default"?,"efforts"?,"default_effort"?}],"locked"?}`。`id` 是开始会话时 `model` 填的值；`default` 是不给模型时跑的那个（选它等于不选）；`resolved` 是别名（opus…）按这个启动器的设置对应的模型；`efforts` 是它能用的思考强度，从弱到强；`locked` 是启动器写死了自己的 `--model`、选了也不会生效的原因。没有列表可问的 Agent（TRAEX、runtime 的）回 `models: []`。node 起一次 CLI 去问（几秒），存 10 分钟，`refresh=1` 重新问；列不出来回 502 `{"error"}`；这台电脑的 node 还没有这个功能时回 404 `{"error","code":"node_outdated"}`（和旧 hub 一样，App 不显示模型行） |
 | GET | `/api/v1/model-config/providers/{id}/models?refresh=1&machine=` | 模型配置里启动器类供应商（`launcher.<名字>`）的 `/model` 列表（`docs/model-config.md`「模型配置选模型」）：同上一行的回答，多一个 `machine`（问的是哪台）。在有这个启动器的在线电脑里挑一台：`machine` 指定的、助手所在的、hub 本机、其余的。没有这个供应商、插件 / API 类供应商 404；有它的电脑都不在线 503；node 太旧 404 `node_outdated` |
+| GET | `/api/v1/launchers/presets` | 插件提供的供应商预设 `{"presets":[{id, plugin, name, description?, kind, api?, base_url, model?, small_model?, models?…}]}`（`id` 是 `<扩展>/<供应商>`），新增供应商时「从插件添加」里选；插件问不到时是空列表（[launchers.md](launchers.md)「从插件添加」） |
+| POST | `/api/v1/launchers/test` | 测试连接，不经 node：`{name?, base_url?, auth?, api_key?, headers?, model}` → 总是 200 `{ok, ms, model, error?}`（带 `name` 时没填的取这个已存的供应商的；`base_url` 和存着的不同时不带存着的 Key 和请求头） |
+| POST | `/api/v1/launchers/discover` | 获取模型：同上的请求（不要 `model`）→ 总是 200 `{models:[{id, name?, context_window?…}], error?}` |
+| POST | `/api/v1/launchers/{name}/check?machine=` | 测试可用性：真的发一个请求 → `{machine, check:{ok, agent?, model?, answer?, millis, error?}}`；`machine` 不认识时用助手所在的那台，也没有时 400；Persona 管理的 API 类供应商由管理者直接请求，回 `{check}` 不带 `machine`（[launchers.md](launchers.md)「测试可用性」） |
+| POST | `/api/v1/launchers/{name}/restore` | 取消隐藏 `~/.zshrc` 的启动器 → `{"ok":true}` |
+| GET | `/api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度：`{machine, checked_at, quota}`，查不了时 `{machine, checked_at, error, unsupported}`（仍是 200）；那台电脑离线 503，没有这个启动器 502；缓存一分钟，`refresh=1` 重读（[launchers.md](launchers.md)「额度」） |
+| GET | `/api/v1/launchers/health?state=&machine=` | 启动器健康检查的记录 `{"records":[{machine, launcher, agent?, state, kind?, error?, model?, millis?, checked_at, source, fails?, repairs?, repair?, blocked_reason?}]}`，可按状态、电脑筛（[launcher-health.md](launcher-health.md)「给看板的接口」） |
+| POST | `/api/v1/launchers/health/check?machine=&launcher=` | 马上查：不带参数查全部在线电脑，回这次的 `{"records":[…]}`，最多等 10 分钟 |
 | GET | `/api/v1/todos` | 全部待办（新建的在前）：`{"todos":[Todo]}`，每个待办带 `spaces` 和 `agents`（过滤 dismissed，当前的在前按 `linked_at` 降序，然后是参与过的按 `released_at` 降序） |
 | POST | `/api/v1/todos` | 新建待办 `{"title","notes"?}` → 200 `{"todo":Todo}`；`title` 不能为空（400）；只读设备 403 |
 | PATCH | `/api/v1/todos/{id}` | 修改待办 `{"title"?,"notes"?,"done"?}` → 200 `{"todo":Todo}`；`done: true` 标记完成，`false` 重新打开；不存在 404；只读设备 403 |
@@ -748,6 +756,11 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 | DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → 200 `{"ok":true}`；不存在 404，只读设备 403 |
 | PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 关联已有 Agent → 200 `{"ok":true}`；同一 Agent 原挂在别处标 released，清掉 dismissed，已完成 409，不存在 404，只读设备 403 |
 | POST | `/api/v1/todos/{id}/retry` | 重试没开起来的任务（#1396）：照计划里的这个任务（机器、目录、提示词、启动器 / 模型、权限、标题）在同一个待办上再开 Agent；待办马上重新打开（`done_at`、`start_error` 清空，`reopened_at` 记下），计划里这个任务的 `error` 清空并推 `task_plan`，Agent 在后台开 → 200 `{"todo":Todo}`。已经在重开或已经开起来了也是 200（原样返回，不再开一次）；再失败照常写回 `done_at` + `start_error`、更新计划的 `error`，不追加第二条回执。目标机器离线 409 `「某电脑」现在离线，等它连上再重试`（待办不变），不是助手派出的任务或不是启动失败（比如手动完成的）409，不存在 404，只读设备 403。**未完成的任务**不重开：有 Agent 停在模型 API 错误上（`turn_error`，#1516）时给它发「继续」，200 原样返回待办，同一次打断连点只发一次；那台电脑离线 409；没有被打断的 Agent（在做、等你……）200 原样返回、什么都不发 |
+| POST | `/api/v1/todos/retitle?dry_run=1` | 把以前按提示词第一行起标题的任务待办改成短标题 → `{"dry_run","todos":[{"id","old_title","new_title"}]}`；`dry_run=1` 只列不改；待办还没加载好 503，只读设备 403（[todos.md](todos.md)「待办标题」） |
+| POST | `/api/v1/todos/{id}/done-check` | 照现在的样子跑一次「自动完成」的判断，不写库 → `{"verdict","reason","would_close","skip","replies","signals"}`；判断失败 502，不存在 404，待办还没加载好 503，只读设备 403（[todos.md](todos.md)「自动完成」） |
+| GET | `/api/v1/todos/{id}/decisions?all=1` | 决策列表 `{"decisions":[Decision]}`，按时间先后；默认只给生效的，`all=1` 连被改判的一起给；不存在 404，hub 没有数据库 503（[todos.md](todos.md)「决策记录」） |
+| POST | `/api/v1/todos/{id}/decisions` | 手动记一条 `{"question","choice","reason"?,"supersedes_id"?}` → `{"decision":Decision}`；问题或选择为空 400，`supersedes_id` 不对 400；待办不存在 404，hub 没有数据库 503；只读设备 403 |
+| PATCH | `/api/v1/todos/{id}/decisions/{did}` | 补标改判 `{"supersedes_id"}`（空字符串撤销；不带 400）→ `{"decision":Decision}`；待办或这条不存在 404，hub 没有数据库 503；只读设备 403 |
 | GET | `/api/v1/task-plans/{id}` | 一个计划（`TaskPlan`，见下面「任务和对话动态」） → 200 `{"plan":TaskPlan}`；不存在 404 |
 | POST | `/api/v1/task-plans/{id}/start` | 开始计划 `{"tasks"?:[PlanTask],"remember"?:bool}`：`tasks` 按下标覆盖用户在卡片上改过的字段（空的不改），`remember` 记住「这类以后直接开」；每个任务建一个待办（`origin`、`plan_id`）、在后台开 Agent → 200 `{"plan":TaskPlan}`；已开始或不开了 409，不存在 404，只读设备 403 |
 | POST | `/api/v1/task-plans/{id}/dismiss` | 不开了 → 200 `{"plan":TaskPlan}`；已开始 409 |
@@ -853,6 +866,14 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 | GET | `/api/v1/machines/{mid}/ports/{port}` | 端口探测（`docs/ports.md`）：`{"port","listening","http","title"?}`，只看不放行 |
 | POST | `/api/v1/machines/{mid}/ports/{port}/open` | 用户在 App 里点开一个不在任何 Agent 名下的端口：有东西在听就放行 24 小时、回同上；没有 404；只读设备 403 |
 | GET | `/api/v1/machines/{mid}/ports/{port}/connect` | 端口转发：升级成 WebSocket，二进制消息就是一条 TCP 连接的字节（手机本地监听，浏览器每开一条连接就连一次）。端口必须是这台机器某个会话 `ports` 里的或点开过的，否则 403；没在听 404；只读设备 403；机器离线 503；一台机器同时超过 64 条 429 |
+| GET | `/api/v1/agents/sessions/{id}/messages?cursor=&limit=` | 个人 Agent 一段会话的消息（`id` 是 `<来源>:<sessionKey>`，路径里要百分号编码）→ `{session?, messages, hasMore, nextCursor?}`；往前翻带上次的 `nextCursor`（见下文「个人 Agent 来源状态」） |
+| POST | `/api/v1/agents/sessions/{id}/messages` | 发消息 `{"clientId"?,"text","origin"?}` → `{outbox, duplicate, upstream?}`；`clientId` 不给时 hub 生成，同一个再发不会发两次（`duplicate: true`）；`origin` 默认 `app`；文字为空、`clientId` 不是 UUID 400，超过 20000（按 UTF-16 计）413；`clientId` 用在了别的会话上、会话现在不能发（`canSend=false`）409 |
+| DELETE | `/api/v1/agents/sessions/{id}/messages/{clientId}` | 删掉发件箱里的一条（按 `clientId`）→ `{"ok":true}` |
+| POST | `/api/v1/agents/sessions/{id}/read` | 标这段会话已读 → `{"ok":true}` |
+| GET | `/api/v1/agents/sessions/{id}/avatar` | 会话的头像图片原样返回，带 `ETag`，`If-None-Match` 对上回 304，缓存一天 |
+| GET | `/api/v1/agents/outbox?session_id=&limit=` | 个人 Agent 的发件箱 `{"outbox":[{clientId, sessionId, preview, length, origin?, status, error?, attempts, createdAt, updatedAt}]}`；`status` 是 `sending` / `sent` / `failed` / `deleted`（`failed` 用同一个 `clientId` 重发是安全的） |
+| POST | `/api/v1/channels/{id}/test` | 给渠道绑定的主人发一条测试消息 → `{"ok":true}`；发不出去 502；没有这个渠道 404 `not_found`，只读的、市场里还没装的 409 `read_only`，只读设备 403（[channels.md](channels.md)「六、接口」） |
+| DELETE | `/api/v1/channels/{id}/binding` | 解绑：插件渠道是连接器退出登录，飞书机器人是解除配对；回解绑后的渠道详情；解绑失败 502，其余错误同上一行 |
 | POST | `/api/v1/phone/runtime-cli` | `{cmd, args, timeout}`：让手机上的 DEBUG 包执行一条 Runtime CLI 命令（`docs/runtime-cli.md`「经 hub 连真机」），回 App 的原样回答 `{"ok": …}`。只给 `full` 设备凭据（只读设备 403）；没有登记了 `phone_runtime_cli` 的 App 在线 503 `phone_offline`（不唤醒）；`timeout` 秒内（最多 120）没回答 504；App 说这次调用失败 502。每次调用 hub 记一行日志（命令、调用方设备 id、状态、耗时），不记参数和回答 |
 | 任意 | `/api/v1/plugins/{id}/-/machines/{mid}/{path…}` | 插件在电脑 `mid` 上的程序的 HTTP（`node.http`，`docs/extensions.md`「在电脑上运行的程序」），WebSocket 也是：hub 经 `plugin.node.dial` 开流转发，去掉 `Authorization` 和 `token`；只给完整权限的设备；插件没在这台开 404，机器离线 409，程序不应答 502 |
 | 任意 | `/api/v1/plugins/{id}/{path…}` | 原样转发给插件的 `/{path…}`（`/-/` 开头的不转发）（WebSocket 也是），去掉 `Authorization` 和 `token`；只读设备 403。语音插件的契约见 `docs/extensions.md`「语音」 |
@@ -2025,6 +2046,8 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 | POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}`（发到一半和助手断了：502 `assistant_in_doubt`、`delivered:"unknown"`，可能已经发出去，同一条再发不会发两次）：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。提供 `client_id` 时保存回执，飞书原样透传为上游 `clientId`；不提供时 `clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
 | POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
 | POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表和 `triage`（`?sources=all` 同上）；插件连接器的新条目在后台分拣完才进列表，不等它 |
+| PUT | `/api/v1/inbox/{id}/parent` | `{kind, id}` 设这件的上级（`kind` 是 `inbox` / `todo` / `session`），`null` 或 `{}` 去掉 → 这件 `InboxItem`；没有这件或上级那件 404，上级不合法 400，会连成环 409（[inbox.md](inbox.md)） |
+| GET | `/api/v1/inbox/tree/{kind}/{id...}` | 一个节点的线索：`{node, item?, ancestors:[{kind, id, item?}], children:[InboxItem]}`，下级按开始时间排；没有这件 404，`kind` / `id` 不合法 400 |
 | POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`，顺序不变，模型没给的是空串；target 是 BCP 47（zh-Hans、en、ja…，`docs/ios.md`「翻译」）。和收件箱一样是助手的（经 hub 转），用模型配置的「翻译」用途 |
 | POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?, model_fingerprint?}`：助手请 hub 读这封信（只有 HTML 的转成保留段落和链接的文字），自己翻；收件箱已经用同一个模型翻好的直接给；正文最多 12000 字 |
 
@@ -2054,6 +2077,8 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 | GET | `/api/v1/kb/{kind}/{id}` | `{detail,agents?}`；项目可额外返回相关在线 Agent |
 | PUT | `/api/v1/kb/{kind}/{id}` | body 为 `kb.Update`，可更新名称、标签、重要性、摘要及项目属性；返回 `{id}`，字段见 [knowledge.md](knowledge.md) |
 | GET | `/api/v1/kb-search?q=&messages=0` | `{hits}`；默认包含消息，`messages=0` 排除消息 |
+| GET | `/api/v1/kb/chats/{id}/context` | 知识库对一个会话知道什么：`{chat_id, chat_name, kind, summary, projects:[{name, summary}]}`（前三个项目）；只读，插件的 `/agent` 用；没有这个会话 404（[knowledge.md](knowledge.md)） |
+| GET | `/api/v1/kb/chats/{id}/days/{day}` | 会话某一天的全部消息 `{day, messages, prev, next}`（`prev` / `next` 是前后有消息的那天）；没有 404 |
 
 ### 录音同步（#3235）
 

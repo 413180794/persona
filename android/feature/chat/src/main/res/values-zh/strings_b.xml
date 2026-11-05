@@ -20,7 +20,7 @@
     <string name="chat_recap_with_time">%1$s · %2$s</string>
     <string name="chat_attach_too_large">「%1$s」超过 200 MB，传不了</string>
     <string name="chat_attach_default_name">附件</string>
-    <string name="chat_attach_lost_permission">这个附件读不了了：文件没了，或者没权限再读。删掉它，重新选一次</string>
+    <string name="chat_attach_lost_permission">附件读不了了（文件没了或没权限）。移除后重新选一次</string>
     <string name="chat_attach_unreadable">文件无法读取，请重新选择</string>
     <string name="chat_attach_photo">照片 %1$d</string>
     <string name="chat_attach_edit_failed">改过的图片没能上传，原图还在</string>
@@ -82,7 +82,7 @@
     <string name="chat_composer_no_camera_app">这台手机上没有能拍照的应用</string>
     <string name="chat_composer_camera_failed">无法打开相机，请稍后再试</string>
     <string name="chat_composer_picker_failed">无法打开选择器，请检查是否安装了对应应用</string>
-    <string name="chat_composer_attachment_gone">附件已失效或读取权限已丢失，请移除后重新选择</string>
+    <string name="chat_composer_attachment_gone">附件读不了了（文件没了或没权限）。移除后重新选一次</string>
     <string name="chat_composer_upload_failed">上传失败，请重试；输入已保留</string>
     <string name="chat_composer_add">添加附件和快捷指令</string>
     <string name="chat_composer_dictate">听写</string>
@@ -229,8 +229,8 @@
     <string name="chat_menu_edit">编辑</string>
     <string name="chat_menu_handoff_ask">看看这条消息，告诉我该怎么处理。</string>
     <string name="chat_menu_context_title">%1$s · 消息</string>
-    <string name="chat_draft_read_failed">草稿未能读取，输入会暂留在当前页面</string>
-    <string name="chat_draft_save_failed">草稿未能保存，输入仍在当前页面，请勿退出 App</string>
+    <string name="chat_draft_read_failed">草稿没读出来。打的字先留在这一页</string>
+    <string name="chat_draft_save_failed">草稿没保存上。打的字还在这一页，先别退出 App</string>
     <string name="chat_dictation_prompt">说吧，说完会放进输入框</string>
     <string name="chat_dictation_unavailable">这台手机上没有语音输入</string>
     <string name="chat_injected_open_task">打开任务</string>
@@ -346,7 +346,7 @@
     <string name="chat_search_stop">停止加载</string>
     <string name="chat_search_stopped">已停止，载入的记录已保留</string>
     <string name="chat_search_load_more">加载更早的记录并继续搜</string>
-    <string name="chat_search_load_failed">更早的记录未能载入，请重试</string>
+    <string name="chat_search_load_failed">更早的记录没载入，再试一次</string>
     <string name="chat_search_at_start">已到最早的记录</string>
     <string name="chat_search_enter">输入关键词</string>
     <string name="chat_search_no_match">没有找到匹配记录</string>

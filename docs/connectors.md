@@ -24,7 +24,7 @@
 | `telegram` | Telegram | 扩展市场 `nwverse/persona-extensions` 里的扩展 `telegram`（#1704、#2057，代码不在本仓库），hub 经进程扩展协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
 | `wechat` | 微信 | 内置扩展的单独程序 `jarvisd-wechat`（`docs/wechat.md`）：微信里的机器人，不是数据来源，是渠道（`docs/channels.md`）；连接器只管绑定和状态 | 没有 | 没有 | 没有 | 没有 | `Login` 扫码（`kind: qr`），token 加密存 `connector_secrets` |
 | `lark` | 飞书 | #1571 起由接飞书的扩展注册（原来是 hub 的 lark_connector.go，包住原来的飞书网关代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | 扩展给的收件箱块（块类型在 `assistant/inbox_blocks.go`；原来是 hub 的 inbox_own.go） | `lark_chats/messages/search` | 走接飞书的扩展带的 skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的飞书网关里登录 |
-| `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
+| `mail` | 邮件 | hub 里（`extmgr/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
 
 ### 接口：一份清单，按清单分派
 
@@ -109,7 +109,7 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
 
 1. `connector/<id>` 一个包，实现 `Connector`（含 `Manifest()`）和清单里声明的能力；工具的描述放 `prompts/mcp/<id>/`，收件箱的种类说明放
    `prompts/inbox/kinds/<id>.md`，种类写进清单，加一个 `TestKindsAreDescribed`。
-2. hub.json 加一节配置，`hub/connectors.go` 的 `registerConnectors` 里注册。
+2. hub.json 加一节配置，`extmgr/connectors.go` 的 `registerConnectors` 里注册。
 3. 写操作只做成 `Actions`，`Describe` 的卡片写明谁会看到。
 4. 状态 `Status` 只从内存回答（每次列工具都要问），出错时 `Error` 一句话、能自己修的给 `Guide`。
 5. 日志、错误里不出现正文、号码、token。

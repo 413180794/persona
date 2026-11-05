@@ -36,7 +36,7 @@
 注释里写着规则照飞书机器人）、Siri（App 里）。`/agent` 和语音的形状不一样（一个以我的名义回复、每次新对话；一个自己就是模型），
 列进渠道表，但不进统一管线。
 
-> 盘点时的 bots_runs.go、wechat/turns.go 已删：#1521 起飞书机器人和微信机器人都走统一管线（现在在 `assistant/channels_runs.go`；从对话里读这一轮的回答在 `channel/read.go`，#3497），#2079 起飞书机器人对话的事在助手（`assistant/feishu.go`），hub 只管收发（`hub/bots.go`、`bots_chat.go`）。
+> 盘点时的 bots_runs.go、wechat/turns.go 已删：#1521 起飞书机器人和微信机器人都走统一管线（现在在 `assistant/channels_runs.go`；从对话里读这一轮的回答在 `channel/read.go`，#3497），#2079 起飞书机器人对话的事在助手（`assistant/feishu.go`），hub 只管收发（`extmgr/bots.go`、`bots_chat.go`）。
 
 ## 二、渠道的接口
 
@@ -254,7 +254,7 @@ hub 留下的只有会话列表上的来源标记、完成推送（照快照的 
 
 **一致性测试**：`channel/conformance.Check(t, manifest, run, init)` 在进程扩展协议的检查之外：清单里每个渠道的 `channel.send` 回「发了」或 `cannot_send`，
 同一个 `ref` 两次回得一样（只发一次）；`channel.typing` 收得下；没有 `ref` 的不收；不认识的渠道回 `no_contribution`，不认识的方法回 `unknown_method`。
-微信扩展跑它（`hub/wechat_test.go`）。
+微信扩展跑它（`extmgr/wechat_test.go` 的 `TestWeChatProgramIsAChannel`）。
 
 ### 写一个渠道扩展
 
@@ -266,7 +266,7 @@ Go 的用 `connector/serve.MainWith`，连接器实现 `channel.Transport`（`Se
 - **飞书机器人**：配置、凭据、主人、功能开关原样留在 settings `bots.feishu`（hub 的），`/api/v1/bots/feishu*` 的接口不变（老 App 照用）。聊天状态 `bots.feishu.state`（助手的）里的 `runs`
   第一次读时搬进统一管线的 runs（字段一一对应：`message_id` → `reply_to`，`card` / `reaction` 进 `ext`），`current`、`threads`、`seen` 留在原处。
 - **微信**：插件的密封状态（`connector_secrets` 的 `wechat`）里原来有 `target`、`runs`、`asks`：新版本的 hub 启动时、在起插件程序和助手之前读出这三项，
-  搬进渠道的设置和 runs（`channels`、`channels.state`，助手的键：hub 只在这一次搬的时候写），再把它们从那份状态里删掉（token、游标、`context_token`、去重留给插件，`hub/channels_migrate.go`）。已经绑定的不用重新扫码。
+  搬进渠道的设置和 runs（`channels`、`channels.state`，助手的键：hub 只在这一次搬的时候写），再把它们从那份状态里删掉（token、游标、`context_token`、去重留给插件，`extmgr/channels_migrate.go` 的 `migrateWeChatState`）。已经绑定的不用重新扫码。
   插件和 hub 是同一次构建（`version -v` 不一样就不启动），不存在新插件配老 hub。插件不再要 `hub_api` 权限：hub 不再给它 hub 的 token。
 - **Telegram**：不是渠道，什么都不动；连接器的会话、开关、选项都照旧。
 - **老 App**：新接口都是新增的；会话上多的 `channels`、设置首页的新入口，老 App 不认就不显示。原来的入口（设置 › 连接器 › 飞书机器人 / 微信）照旧在，

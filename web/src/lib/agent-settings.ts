@@ -51,10 +51,23 @@ export function settingDetail(s: Pick<AgentSetting, "key" | "detail">): string {
   return catalogText(`lib-agent-settings.setting_${s.key}_detail`, s.detail);
 }
 
-// An option value's name: Claude Code's effort levels as the session menu calls them, the update channels by name.
+// Codex's option values under one prefix: { "on-request": "lib-agent-settings.approval_on_request" }.
+function codexOptions(prefix: string, options: string[]): Record<string, string> {
+  return Object.fromEntries(options.map((o) => [o, `lib-agent-settings.${prefix}_${o.replace(/-/g, "_")}`]));
+}
+
+// An option value's name: effort levels as the session menu calls them, the update channels and Codex's
+// config.toml values (#3855) by name.
 const OPTION_KEYS: Record<string, Record<string, string>> = {
   effortLevel: { low: "lib-session-actions.effort_low", medium: "lib-session-actions.effort_medium", high: "lib-session-actions.effort_high", xhigh: "lib-session-actions.effort_xhigh", max: "lib-session-actions.effort_max" },
   autoUpdatesChannel: { latest: "lib-agent-settings.channel_latest", stable: "lib-agent-settings.channel_stable" },
+  model_reasoning_effort: Object.fromEntries(
+    ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"].map((o) => [o, `lib-session-actions.codex_effort_${o}`]),
+  ),
+  model_reasoning_summary: codexOptions("summary", ["auto", "concise", "detailed", "none"]),
+  model_verbosity: codexOptions("verbosity", ["low", "medium", "high"]),
+  approval_policy: codexOptions("approval", ["untrusted", "on-failure", "on-request", "never"]),
+  sandbox_mode: codexOptions("sandbox", ["read-only", "workspace-write", "danger-full-access"]),
 };
 
 /** How an enum option reads; an option with no name (a new one, or another agent's) stays as written. */

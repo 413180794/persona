@@ -20,13 +20,13 @@ Persona 和它驱动的 Agent 要用户回答、批准的，以文字发到微�
 | 访问微信 | 权限 `network: *.weixin.qq.com`（展示用，hub 暂不拦截） |
 
 第一版（#1447）用 `hub_api` + `events` 拼：插件拿着 hub 的 token 每 2 秒轮询会话、自己跟踪这一轮、自己把提问写成文字。#1466 把这些搬进 hub 的渠道管线，
-插件不再拿 hub 的 token、不订事件；原来存在插件状态里的「发到哪段对话」、在等的回答和提问，hub 第一次启动新版本时搬过去（`hub/channels_migrate.go`），已经绑定的不用重新扫码。
+插件不再拿 hub 的 token、不订事件；原来存在插件状态里的「发到哪段对话」、在等的回答和提问，hub 第一次启动新版本时搬过去（`extmgr/channels_migrate.go`），已经绑定的不用重新扫码。
 
 进程跟着连接器的开关跑：开着才收微信消息。
 
 代码：程序入口 `server/cmd/personad-wechat`（旧名 `jarvisd-wechat` 是别名）；iLink 协议 `server/internal/wechat/ilink`（不存状态、不打日志，只认腾讯的
 HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存储、`login.go` 扫码、`chat.go` 收消息、发消息、「正在输入」）；声明 `server/internal/wechat/spec`
-（连接器和渠道）；hub 的注册 `server/internal/extmgr/wechat.go`。管线在 `server/internal/assistant/channels*.go`（hub 那头是 `hub/channels_extension.go`），规则在 `server/internal/channel`，
+（连接器和渠道）；hub 的注册 `server/internal/extmgr/wechat.go`。管线在 `server/internal/assistant/channels*.go`（扩展那头是 `extmgr/channels_extension.go`），规则在 `server/internal/channel`，
 发给对话时加的说明 `server/internal/prompts/channel/message.md`。
 
 ## 绑定

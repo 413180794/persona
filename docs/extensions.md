@@ -775,7 +775,7 @@ hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](ad
 - hub 自己有的前缀（任何路由在 `/api/v1/<prefix>` 下）**整段都不给扩展**，只有正在迁出 hub 的前缀例外（`migratablePrefixes`，现在是 `lark`）：扩展提供的优先，
   迁完后 hub 的那份删掉。
 - 连接器同理：正在迁出 hub 的连接器（`connector.MigratableConnectors`，现在是 `lark`）不预留，扩展贡献同一个 id 时，扩展启用期间 hub 自己的那个让出注册表、
-  扩展停用或卸载后放回（`hub/connectors_migrate.go`）。id 不变，知识库的会话（`lark-<feed>`）、收件箱的来源和静音、连接器设置都接得上；
+  扩展停用或卸载后放回（`extmgr/connectors_migrate.go`）。id 不变，知识库的会话（`lark-<feed>`）、收件箱的来源和静音、连接器设置都接得上；
   3c（#1520）之后 hub 没有自己的那份了，迁出的 id 只是不预留。它的收件箱条目怎么保持原样见
   `docs/connector-protocol.md`「迁出 hub 的连接器」。
 - `features` 加进 hello 和 `/health` 的 `features`：客户端照旧按 features 决定显示什么，扩展停用后就没有了。
@@ -1815,7 +1815,7 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
 
 ## 在电脑上运行的程序（`node` 段，#1830）
 
-hub 只存「应该是什么样」：扩展开着、设置齐了、`node.machines` 字段里选了这台、这台的系统有程序，就该在它上面跑（`hub/extension_nodes.go`），
+hub 只存「应该是什么样」：扩展开着、设置齐了、`node.machines` 字段里选了这台、这台的系统有程序，就该在它上面跑（`extmgr/extension_nodes.go`），
 node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时、扩展装 / 开关 / 改配置 / 升级 / 卸载时，都是整份对账，不排队；离线的连上再对。
 
 - **包**：hub 按这台电脑的平台做一份 tar.gz（`extension.NodePackage`：去掉别的平台的程序和 hub 上的程序，固定顺序、不带时间和属主，同一个包每次字节一样），
@@ -1844,19 +1844,19 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
 - **内置的 node 程序（cua、ego，#1830 第 5 步）**：操控电脑和浏览器的 node 侧代码就在 personad 里，不是包，不起子进程（`node/builtin.go`）。
   node 在 `node.info` 的 `builtin_programs` 里报 `["cua", "ego"]`；hub 看到了就经 `plugin.node.call {id, method, params}` 问它们（`status`、`call`、`install`、`grant`、`cancel`、
   `clipboard`、`cursor`、`nolock`、`lock`；ego 的 `status`、`install`、`open`、`cancel`、`call`、`cookies.list/import/clear`），没报的旧 node 照旧用 `computer.*`、`browser.*`
-  （`hub/builtin_programs.go` 的 `callBuiltin`：按 node 自己说的选，不靠出错重试）。新 node 两种名字都答，走同一份代码，旧 hub 不受影响。
+  （`extmgr/builtin_programs.go` 的 `callBuiltin`：按 node 自己说的选，不靠出错重试）。新 node 两种名字都答，走同一份代码，旧 hub 不受影响。
   内置程序不进对账：hub 不给它们发包、不 `plugin.node.start`（node 也拒绝），`node-plugins/` 里没有它们的目录；界面上还是机器页、设置页原来的 Cua / ego 状态，
   `node_machines`、打开前的确认、权限页的 node 那几行都不出现。
   **imessage**（第 6 步）也是内置的：方法名照旧是连接器协议的 `connector.list/chats/older/changes/search`，经 `plugin.node.call {id: "imessage", method: "connector.chats", …}`；
   旧 node 照旧直接调 `connector.*`。内置扩展「信息（iMessage）」的设置只有一个选 Mac 的字段 `machines`（`x-os: darwin`、`maxItems: 1`）：
   已经开着一台时再开另一台，hub 回 400 `invalid_config`，`field: machines`，「只能读一台 Mac，先关掉「<那台>」」。连接器 `imessage` 还是原来那个，
-  只是读哪台改从这里取：扩展开着、选了一台就用它，否则 hub.json 的 `imessage.machine`，都没有就没有这个连接器（`hub/imessage_extension.go`）。
+  只是读哪台改从这里取：扩展开着、选了一台就用它，否则 hub.json 的 `imessage.machine`，都没有就没有这个连接器（`extmgr/imessage_extension.go`）。
   hub.json 的值在 hub 启动时迁一次：名字换成机器 id、打开扩展，迁过记一个标记（`imessage.migrated_to_extension`），用户之后关掉或换一台不会被盖回；
   名字对不上任何机器、写不进去时只记一行日志，下次启动再试，这期间照旧读 hub.json。hub.json 的字段不改不删，保留一个版本。
   三个内置扩展的清单都写 `node: {command: "builtin", machines: "machines"}`（`NodeBuiltin`）。装的包写 `builtin` 装不上，只有 hub 自己的内置扩展能用。
   `Manifest.NodeProgram()` 对它们是 nil：不发包、不进 `plugin.node.sync`、不出 `nodes` / `node_machines`、不补「将在这台电脑上运行…」的确认、
   权限页没有 node 那几行、同意摘要和没有 node 段时一样。所以界面一点不变。凡是和包、状态、确认、同意有关的地方，用 `NodeProgram()`，不直接看 `Node`。
-  电脑连上时的对账（`reconcileNodePrograms`，`hub/builtin_programs.go`）：先做内置程序各自要问的（cua 的状态、不自动锁屏、光标，ego 的状态，
+  电脑连上时的对账（`reconcileNodePrograms`，`extmgr/builtin_programs.go`）：先做内置程序各自要问的（cua 的状态、不自动锁屏、光标，ego 的状态，
   `builtinConnected`；扩展关着也跑，各自知道关着时该说什么），再同步装的包，每样各自起一个 goroutine，互不等待，和以前连上时做的事一样。
 
 ## schema 和四端的类型

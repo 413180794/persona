@@ -241,13 +241,9 @@ fun PersonaPalette.tone(tone: Tone): StatusColors = when (tone) {
     Tone.Neutral -> idle
 }
 
-/**
- * An agent's state (docs/agent-states.md). Pages show [localizedLabel] (or [labelRes] outside composition); [label]
- * stays the Simplified Chinese name for the code outside composition that still reads it.
- */
-enum class Status(val label: String) {
-    NeedsYou("需要你"), Working("工作中"), Unread("完成未看"), Idle("已看"),
-    Offline("未运行"), Unknown("未知"), Waiting("待唤醒"), Muted("已屏蔽");
+/** An agent's state (docs/agent-states.md). Pages show [localizedLabel] (or [labelRes] outside composition). */
+enum class Status {
+    NeedsYou, Working, Unread, Idle, Offline, Unknown, Waiting, Muted;
 
     @get:StringRes val labelRes: Int get() = when (this) {
         NeedsYou -> R.string.designsystem_status_needs_you

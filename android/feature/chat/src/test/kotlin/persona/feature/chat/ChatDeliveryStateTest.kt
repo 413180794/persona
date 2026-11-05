@@ -22,7 +22,8 @@ import org.junit.Test
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class ChatDeliveryStateTest {
-    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
+    private val context get() = ApplicationProvider.getApplicationContext<Context>()
+    private val res get() = context.resources
     @Test fun deliveryActionsUseOriginalIdsAndPreserveDraftsAcrossRaces() = runTest {
         val sender = FakeSender()
         val actions = ChatDeliveryActions(sender)
@@ -126,12 +127,12 @@ class ChatDeliveryStateTest {
         listOf(DeliveryState.Unknown, DeliveryState.Verifying, DeliveryState.NeedsConfirmation).forEach { state ->
             val line = chatStatus(res, snapshot, session, null, listOf(message.copy(state = state)), emptyList(), false)
             assertEquals(StatusLineKind.Unconfirmed, line?.kind)
-            assertEquals("上次操作结果待确认", line?.text)
+            assertEquals("上次操作结果待确认", line?.message?.resolve(context))
         }
         val stopping = chatStatusState(res, snapshot.copy(stopping = true), session, null, emptyList(), emptyList(), false)
         assertEquals(StatusLineKind.Stopping, resolveStatusLine(stopping)?.kind)
-        assertEquals("会话已结束", resolveStatusLine(stopping.copy(ended = true))?.text)
-        assertEquals("已换成新会话", resolveStatusLine(stopping.copy(replaced = true))?.text)
+        assertEquals("会话已结束", resolveStatusLine(stopping.copy(ended = true))?.message?.resolve(context))
+        assertEquals("已换成新会话", resolveStatusLine(stopping.copy(replaced = true))?.message?.resolve(context))
         assertEquals(StatusLineKind.MachineOffline, resolveStatusLine(stopping.copy(machineOffline = true))?.kind)
         assertNull(chatStatus(res, snapshot, session.copy(status = "done"), null, emptyList(), emptyList(), false))
     }

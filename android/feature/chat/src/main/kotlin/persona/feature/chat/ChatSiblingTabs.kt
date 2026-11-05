@@ -96,8 +96,8 @@ internal fun ChatSiblingTabs(session: Session?, sessions: List<Session>, onOpenS
             items(labels, key = { it.session.key.path }) { label ->
                 val tab = label.session
                 val on = tab.key == session.key
-                val description = if (label.launcher) stringResource(R.string.chat_tabs_launcher_description, label.name, tab.status().label)
-                    else stringResource(R.string.chat_tabs_tab_description, label.name, tab.status().label)
+                val description = if (label.launcher) stringResource(R.string.chat_tabs_launcher_description, label.name, tab.status().localizedLabel)
+                    else stringResource(R.string.chat_tabs_tab_description, label.name, tab.status().localizedLabel)
                 JChip(if (label.launcher) stringResource(R.string.chat_tabs_launcher_chip, label.name) else label.name,
                     Modifier.semantics { contentDescription = description },
                     selected = on, status = tab.status(), onClick = { if (!on) onOpenSession(tab.key) })
@@ -110,7 +110,7 @@ internal fun ChatSiblingTabs(session: Session?, sessions: List<Session>, onOpenS
         labels.forEach { label ->
             val tab = label.session
             val on = tab.key == session.key
-            JRow(label.name, subtitle = if (label.launcher) stringResource(R.string.chat_tabs_launcher_subtitle, tab.status().label) else tab.status().label,
+            JRow(label.name, subtitle = if (label.launcher) stringResource(R.string.chat_tabs_launcher_subtitle, tab.status().localizedLabel) else tab.status().localizedLabel,
                 leading = { JStatusDot(tab.status()) }, selected = on, onClick = { all = false; if (!on) onOpenSession(tab.key) })
         }
         Spacer(Modifier.height(Tokens.Space.l))

@@ -80,10 +80,27 @@ describe("agent settings", () => {
     expect(optionText("autoUpdatesChannel", "latest")).toBe("最新版");
     // An option or key the web does not know stays as the node wrote it.
     expect(optionText("effortLevel", "ultra")).toBe("ultra");
-    expect(optionText("approval_policy", "never")).toBe("never");
+    expect(optionText("approval_policy", "later")).toBe("later");
     const unknown: AgentSetting = { key: "newThing", title: "新东西", detail: "说明", type: "bool" };
     expect(settingTitle(unknown)).toBe("新东西");
     expect(settingDetail(unknown)).toBe("说明");
+  });
+
+  it("name Codex's options in words, not config.toml values (#3855)", () => {
+    const options: Record<string, string[]> = {
+      model_reasoning_effort: ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
+      model_reasoning_summary: ["auto", "concise", "detailed", "none"],
+      model_verbosity: ["low", "medium", "high"],
+      approval_policy: ["untrusted", "on-failure", "on-request", "never"],
+      sandbox_mode: ["read-only", "workspace-write", "danger-full-access"],
+    };
+    for (const [key, list] of Object.entries(options)) {
+      for (const o of list) expect(optionText(key, o), `${key}=${o}`).not.toBe(o);
+    }
+    expect(optionText("approval_policy", "never")).toBe("一律不问");
+    expect(optionText("sandbox_mode", "danger-full-access")).toBe("不设限（危险）");
+    const sandbox: AgentSetting = { key: "sandbox_mode", title: "沙箱", detail: "danger-full-access 不设限", type: "enum" };
+    expect(settingDetail(sandbox)).not.toMatch(/[a-z]-[a-z]/);
   });
 
   it("say values in words", () => {

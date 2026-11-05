@@ -1,7 +1,7 @@
 # 操控电脑（Cua Driver / LCU）
 
-Persona 助手操控用户的 Mac：看窗口和屏幕、点按、输入、截图。做成 hub 的**内置插件 `cua`**（[extensions.md](extensions.md)），**默认关**，打开后再**按机器**逐台打开。
-后端有两个，插件设置里的「操控后端」选：
+Persona 助手操控用户的 Mac：看窗口和屏幕、点按、输入、截图。做成 hub 的**内置扩展 `cua`**（[extensions.md](extensions.md)），**默认关**，打开后再**按机器**逐台打开。
+后端有两个，扩展设置里的「操控后端」选：
 
 | 后端 | 是什么 | 什么时候用 |
 | --- | --- | --- |
@@ -22,20 +22,20 @@ Persona 助手操控用户的 Mac：看窗口和屏幕、点按、输入、截�
 
 ## 开关
 
-- **插件 `cua`**：personad 自带的纯声明插件（不跑进程），贡献扩展点 `computer`。在「设置 › 插件」里开关（#1191），
-  或在 hub 机器上 `personad plugin enable cua`。默认关。
-- **按机器**：插件打开后，每台 Mac 的机器页多一节「操控电脑」，开关「允许助手操控这台电脑」
-  （`PUT /api/v1/machines/{mid}/computer`），存在插件配置的 `machines` 里。插件页的「能操控的电脑」是同一个值：只列 Mac，每台一个开关（名字、在线与否、Cua 的状态），即时生效（`format: machine`，[extensions.md](extensions.md)）。
-- **操作前确认**：插件配置的 `confirm`（「操作前在手机上确认」），默认关，见「写操作」。
+- **扩展 `cua`**：personad 自带的纯声明扩展（不跑进程），贡献扩展点 `computer`。在「设置 › 扩展」里开关（#1191），
+  或在 hub 机器上 `personad extension enable cua`（老命令 `personad plugin …` 照旧能用）。默认关。
+- **按机器**：扩展打开后，每台 Mac 的机器页多一节「操控电脑」，开关「允许助手操控这台电脑」
+  （`PUT /api/v1/machines/{mid}/computer`），存在扩展配置的 `machines` 里。扩展页的「能操控的电脑」是同一个值：只列 Mac，每台一个开关（名字、在线与否、Cua 的状态），即时生效（`format: machine`，[extensions.md](extensions.md)）。
+- **操作前确认**：扩展配置的 `confirm`（「操作前在手机上确认」），默认关，见「写操作」。
 
-**插件关着时**：
+**扩展关着时**：
 - hub 不向任何 node 问 cua-driver（node 自己从不探测）。
 - 机器没有 `computer` 字段，机器页什么都不显示。
 - 助手没有 `computer_*` 工具。
 
-**插件开着、某台没打开时**：hub 照样问它的 node（连上时、插件改了时），这台 Mac 的 `computer` 带着状态，只是 `enabled` 为 false：机器页只有开关，插件页的那一行写出 Cua 的状态（「在线 · Cua 没装」）。助手的工具只在至少一台打开后才出现，而且只能操作打开了的机器。
+**扩展开着、某台没打开时**：hub 照样问它的 node（连上时、扩展改了时），这台 Mac 的 `computer` 带着状态，只是 `enabled` 为 false：机器页只有开关，扩展页的那一行写出 Cua 的状态（「在线 · Cua 没装」）。助手的工具只在至少一台打开后才出现，而且只能操作打开了的机器。
 
-关掉插件或某台的开关时，撤掉的是工具和入口；那台 Mac 上装好的 Cua Driver 或 LCU 不动。
+关掉扩展或某台的开关时，撤掉的是工具和入口；那台 Mac 上装好的 Cua Driver 或 LCU 不动。
 
 ## LCU 的确认
 
@@ -64,20 +64,20 @@ Persona 自己的「第一次操作一个 App 时先问」仍然先问一遍（�
 | | 助手（Persona 主对话等） | 电脑上的 Agent（Claude Code、Codex……） |
 | --- | --- | --- |
 | 怎么调 | hub 的 MCP 工具 `computer_state` / `computer_run` → hub → node 的 `computer.call` → Cua Driver 的 `cua-driver call`，或 LCU 的 stdio MCP（`js`） | 在那台电脑的 Agent 里直接注册 Cua Driver 的 MCP：`cua-driver mcp-config --client claude --no-skills` 打印配置，`cua-driver mcp` 保持一个会话。LCU 不从这里登记进 Agent，避免审批出现在 Agent 自己的界面 |
-| 能操作哪台 | 插件打开了的任何一台 Mac | 只有自己所在的那台 |
-| 开关、确认、日志 | 本插件的 | Cua Driver 自己的，以及 Agent 自己的工具授权 |
+| 能操作哪台 | 扩展打开了的任何一台 Mac | 只有自己所在的那台 |
+| 开关、确认、日志 | 本扩展的 | Cua Driver 自己的，以及 Agent 自己的工具授权 |
 
-Agent 那条路不经过 hub，本插件不管。
+Agent 那条路不经过 hub，本扩展不管。
 
 ## 接入（#1182）
 
 ### 能力发现
 
-hub 问 node 的 `computer.status`。只有插件对这台打开时才问，时机：
+hub 问 node 的 `computer.status`。只有扩展对这台打开时才问，时机：
 - 连上时；
 - 打开开关时；
 - 机器页打开时（`GET …/computer`）；
-- 插件开关或配置改了时。
+- 扩展开关或配置改了时。
 
 node 的探测：
 
@@ -143,7 +143,7 @@ node 的探测：
   [macbook] computer_run for 1a2b3c4d: run_steps [click click press_key], 1.2s, ok
   ```
   只记动作名和步数（脚本只记字节数），不记输入的文字、点的是什么。
-- **插件配置打开「操作前在手机上确认」**（`confirm`）后，每次 `computer_run` 先在手机上弹授权卡片：「在「MacBook」上依次执行：click、click、press_key」或「运行脚本：<第一行>」。
+- **扩展配置打开「操作前在手机上确认」**（`confirm`）后，每次 `computer_run` 先在手机上弹授权卡片：「在「MacBook」上依次执行：click、click、press_key」或「运行脚本：<第一行>」。
   - 不批准（或 15 分钟没人理），就告诉助手用户拒绝了，不要重试。
   - 和 `connector_gate` 是同一套卡片（`hub.approve`）。
 
@@ -151,12 +151,12 @@ node 的探测：
 
 - 仓库和测试里没有真实的截图、窗口内容、人名。测试用造的 PNG 和假的 cua-driver 脚本。
 - 真机端到端测试（下面）的截图只落在测试者指定的本地文件。
-- 截图只在助手的 transcript 里（和发给助手的照片一样）。不进 hub 日志，也不进插件审计（`plugin_audit` 只记开关、改了配置，不记值）。
+- 截图只在助手的 transcript 里（和发给助手的照片一样）。不进 hub 日志，也不进扩展审计（`plugin_audit` 只记开关、改了配置，不记值）。
 - Cua Driver 自己的 telemetry：一键安装时会关掉（`cua-driver telemetry disable`，#1183）；手动装的由用户自己决定。
 
 ## 一键安装（#1183）
 
-插件对一台 Mac 打开后，机器页「操控电脑」按状态给按钮，不再让人去那台 Mac 上敲命令：
+扩展对一台 Mac 打开后，机器页「操控电脑」按状态给按钮，不再让人去那台 Mac 上敲命令：
 
 | 状态 | 机器页 |
 | --- | --- |
@@ -195,7 +195,7 @@ node 的探测：
 ### 接口
 
 `POST /api/v1/machines/{mid}/computer/{install|grant|cancel}` → 200 `Computer`（带 `job`）。
-- 插件没对这台打开：404。
+- 扩展没对这台打开：404。
 - 离线、已经有任务在跑、node 太旧：409 `{"error"}`。
 - 「取消」只停安装；授权等的是 Mac 上的系统窗口，那是用户的事。
 
@@ -224,7 +224,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 
 只经 hub 的隧道，不对外开新端口：
 - 客户端 ⇄ hub：WebSocket `GET /api/v1/machines/{mid}/ports/5900/connect?token=…`，二进制帧，原样 TCP 字节（[ports.md](ports.md) 的端口转发）。
-  - 插件 `cua` 或 `ego` 对这台 Mac 打开时，hub 常设放行 5900（`portAllowed`），只放 5900，不用 Agent 在听、也不用手动 `open`。ego 的首次设置要经它在手机上做（#1507 第 6 条），所以不要求同时开着 `cua`；页面先问 `computer`，没开再问 `browser`。
+  - 扩展 `cua` 或 `ego` 对这台 Mac 打开时，hub 常设放行 5900（`portAllowed`），只放 5900，不用 Agent 在听、也不用手动 `open`。ego 的首次设置要经它在手机上做（#1507 第 6 条），所以不要求同时开着 `cua`；页面先问 `computer`，没开再问 `browser`。
   - 接受 noVNC 可能带的 `binary` 子协议。
   - 只读的设备（手表那种）照旧 403。
 - hub ⇄ node：`port.dial`，node 只连本机的 `127.0.0.1:5900`。
@@ -248,7 +248,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
     - 测试：`ScreenViewerTests`、`screen.test.ts`、`TestTheLiveScreenTakesTheAppsDeviceToken`。最后一个用一个替身「屏幕共享」，确认设备 token 能经转发收到它的版本号，错的 token 和编两次的 token 都在拨号之前被拒。
   - 不像网页的登录链接那样换一个新的浏览器 token（那样每打开一次就多一个设备 token）。
   - 网页里已经登录的用户直接用自己的 token。
-- **先问 hub**：有没有这台、在不在线、插件开没开、屏幕共享开没开，各给一句中文说明。然后才连。
+- **先问 hub**：有没有这台、在不在线、扩展开没开、屏幕共享开没开，各给一句中文说明。然后才连。
 - **登录**：屏幕共享要登录时，出一个表单「登录这台 Mac 的屏幕共享」（账号、密码、「连接」）。登录失败就说「账号或密码不对」，可以再试。
 - **连上以后**：
   - 默认「只看」（`viewOnly`），顶栏的「只看 / 接管」切换后，键盘和鼠标（触屏）都交给那台 Mac。
@@ -296,7 +296,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 就绪时给「VNC」。
   - 授权中、或请求过还缺权限时，给突出的「VNC」，在手机上远程点「允许」。
   - 屏幕共享没开时，说明在那台 Mac 的「系统设置 › 通用 › 共享」里打开。
-- **对话页**：工具详情下面也有「VNC」（`ScreenEntry`）。出现在两类工具下面，并且要那台 Mac 的插件开着、屏幕共享开着：
+- **对话页**：工具详情下面也有「VNC」（`ScreenEntry`）。出现在两类工具下面，并且要那台 Mac 的扩展开着、屏幕共享开着：
   - 助手的 `computer_state` / `computer_run`：对应它点名的那台；
   - 电脑上的 Agent 自己注册的 Cua Driver MCP 工具（`mcp__cua-driver__…`）：对应这个 Agent 所在的那台。
 - **整页**（`VNCPage`，#1343）：原生客户端的画面铺满屏幕，在它自己的窗口里（`ScreenWindow`，#1604：iOS 上一个 `UIWindow` 在 shell 之上、toast 之下，Mac 上一个独立窗口，跟着 `AppModel.screenOpen`；以前挂在 `RootView` 的 `fullScreenCover` 上，机器页在 sheet 里时 present 被吞掉）。原来的网页抽屉（WKWebView + noVNC + 桥）去掉了，网页端照旧用 noVNC。
@@ -307,7 +307,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
     - 触控板模式：手指移动指针（相对移动），轻点在指针处点击，轻点后马上拖动是拖拽。指针跑偏了用「指针居中」。
     - 指针画 Mac 发来的光标（Cursor 伪编码），没有时画一个箭头。
   - **键盘**：底栏的键盘弹出系统键盘，打的字直接发给 Mac（`VNCKeyInputView`）。键盘上面一排 Mac 的键（`VNCShortcutBar`，放在页面里，跟着键盘上去）：⌘ ⌥ ⌃ ⇧ 点一下按住、再点松开，Esc、Tab、方向键、⌘C ⌘V ⌘Z ⌘Tab ⌘空格。Latin-1 的字按键发；中文等别的字经剪贴板粘贴过去（放进 Mac 的剪贴板再按 ⌘V）。⌘ 发的是 Super_L（0xffeb），macOS 的屏幕共享当 Command。
-  - **剪贴板**：「从 iPhone 粘贴」把手机剪贴板的字放进 Mac 的剪贴板并按 ⌘V；「只放进 Mac 的剪贴板」不按；「复制到 iPhone」把 Mac 剪贴板的字拿过来。Latin-1 走 RFB 的 cut text，别的字和读 Mac 的剪贴板走 node（`computer.clipboard`：`pbcopy` / `pbpaste`，最多 1 MB；hub 的 `GET/POST /api/v1/machines/{mid}/computer/clipboard`，和 5900 的转发一样要插件 `cua` 或 `ego` 对那台开着）。读手机剪贴板里别的 App 复制的字时，iOS 会问一次「允许粘贴」。
+  - **剪贴板**：「从 iPhone 粘贴」把手机剪贴板的字放进 Mac 的剪贴板并按 ⌘V；「只放进 Mac 的剪贴板」不按；「复制到 iPhone」把 Mac 剪贴板的字拿过来。Latin-1 走 RFB 的 cut text，别的字和读 Mac 的剪贴板走 node（`computer.clipboard`：`pbcopy` / `pbpaste`，最多 1 MB；hub 的 `GET/POST /api/v1/machines/{mid}/computer/clipboard`，和 5900 的转发一样要扩展 `cua` 或 `ego` 对那台开着）。读手机剪贴板里别的 App 复制的字时，iOS 会问一次「允许粘贴」。
   - **我完成了**：Agent 等你在电脑上操作时（它的对话打开了这页），点了往它的对话发「我在电脑上操作完了，你继续吧。」。直接关掉也算交还。
   - **帮助**：「使用 VNC」一页，分移动操作、输入和剪贴板、何时用触控板模式、小窗、交还电脑。
 - **小窗**（`VNCPiP`，#1343）：
@@ -333,7 +333,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 一键解锁（上面方案 a-2）以后用同一份。
 - **从哪里打开**：
   - **正在操作的条**：对话里最近一次操作电脑的工具（助手的 `computer_*`，Agent 的 `mcp__cua-driver__*`）还在跑、或刚结束 6 秒内，输入框上面的任务条最前面多一个「正在操作 MacBook · 点 …」（`ComputerActivityPill`），点它打开那台的画面。
-  - **··· 菜单**（`ScreenMenu`，#1604）：Agent 的对话里直接一项「VNC · <它所在的 Mac>」，那台不是 Mac、插件没开或屏幕共享没开就没有这一项；助手的对话里是它最近操作的那台，没有时才列出能看的 Mac（几台时是子菜单）。
+  - **··· 菜单**（`ScreenMenu`，#1604）：Agent 的对话里直接一项「VNC · <它所在的 Mac>」，那台不是 Mac、扩展没开或屏幕共享没开就没有这一项；助手的对话里是它最近操作的那台，没有时才列出能看的 Mac（几台时是子菜单）。
   - 机器页「操控电脑」和工具详情里的「VNC」（`ScreenEntry`）也是同一个（小窗或整页）。
 - **工具写成人话**（#1323，`ComputerSteps`）：工具详情先是一行步骤（连续的点按合成「点 AC → 6 → × → 7 → =」，计算器的按键名换成符号），再是截图和「VNC」；原来的 JSON 收在「原始参数」里，点开才看。标题里的机器用它的名字（MacBook），按 id 或名字认（和 hub 一样），认不出才照工具里写的；放不下时截掉尾部（文件路径照旧截中间）。
 
@@ -397,7 +397,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 一键解锁打开时，解开以后机器页有「锁上」（`POST …/computer/lock` → node 的 `pmset displaysleepnow`：显示器立即睡，「需要密码」是立即时就锁）。
   - 局限：重启后的 FileVault 解锁、合盖睡着的 MacBook 不行（屏幕共享连不上）。
 
-### b) 防睡眠、不自动锁屏（插件 `cua` 的设置，按机器两个开关）
+### b) 防睡眠、不自动锁屏（扩展 `cua` 的设置，按机器两个开关）
 
 都用 `caffeinate`，不改系统设置（不碰「锁定屏幕」里的时间和「需要密码」）。关掉或 node 退出就恢复原样。
 
@@ -410,33 +410,33 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - `-t`：时长（秒）；
 - `-w <pid>`：那个进程退出就撤。
 
-- **「操作和VNC时保持唤醒」**（已做，插件 `cua` 的 `keep_awake`，默认开）：
-  - 做成插件里的一个总开关，不按 Mac 分开。插件页按机器的开关没法默认开；它又只在操作、VNC期间生效，过后自己撤，按机器分开意义不大。按机器的只有下面的「不自动锁屏」。
+- **「操作和VNC时保持唤醒」**（已做，扩展 `cua` 的 `keep_awake`，默认开）：
+  - 做成扩展里的一个总开关，不按 Mac 分开。扩展页按机器的开关没法默认开；它又只在操作、VNC期间生效，过后自己撤，按机器分开意义不大。按机器的只有下面的「不自动锁屏」。
   - node 持有 `caffeinate -dimsu -t <秒> -w <node 的 pid>`（`node/awake.go`），同一时间只有一个：
     - 助手的 `computer_*` 调用：hub 在 `computer.call` 里带 `keep_awake`，最后一次之后 10 分钟撤；
     - 有人在VNC：hub 在 5900 的 `port.dial` 里带 `keep_awake`，流开着就一直续（快到期时换一个新的，中间不断），流关了就撤。只看不点不算本地活动，以前看着看着就锁了。
   - Agent 自己的 Cua MCP（`mcp__cua-driver__*`）不经 node。Cua 0.37 起每次调用后自己保持 10 分钟，所以 node 不去扫会话。
   - 只在 Mac 上。实测（`TestAwakeOnThisMac`，`PERSONA_AWAKE_E2E=1`）：`pmset -g assertions` 里有这个 caffeinate 的 `PreventUserIdleDisplaySleep`，撤掉后就没了。
 - **锁着时的「解锁」入口**（已做）：机器页「操控电脑」在那台锁屏时写「这台 Mac 锁屏了，解锁后才能操控」。屏幕共享开着时，给「解锁」打开实时画面：切到「接管」，在锁屏上输登录密码。node 的说明也改成「屏幕共享开着时，可以在它的画面上输登录密码解锁」。
-- **「插件开着时不自动锁屏」**（已做，#1507 b2，插件 `cua` 的 `no_auto_lock`：按 Mac 的列表，默认空）：
-  - 打开时先确认：机器页「操控电脑」的开关弹确认框；插件页的按机器开关看 schema 的 `x-confirm`（插件表单的通用扩展，[extensions.md](extensions.md)），App 弹确认框、网页用 `window.confirm`。关掉不问。
-  - 插件对这台开着、开关也开着时，node 持有 `caffeinate -dims -t 1800 -w <node 的 pid>`（`node/awake.go` 的 `computer.nolock`，和「保持唤醒」的那个分开）。
-  - hub 在开关或插件变了、node 连上时说一次，之后每 10 分钟再说一次（`hub/computer_nolock.go`）。node 每次收到都换一个新的 30 分钟；hub 不再说（断开了），30 分钟后自己到期，就恢复按时锁屏。
+- **「扩展开着时不自动锁屏」**（已做，#1507 b2，扩展 `cua` 的 `no_auto_lock`：按 Mac 的列表，默认空）：
+  - 打开时先确认：机器页「操控电脑」的开关弹确认框；扩展页的按机器开关看 schema 的 `x-confirm`（扩展设置表单的通用约定，[extensions.md](extensions.md)），App 弹确认框、网页用 `window.confirm`。关掉不问。
+  - 扩展对这台开着、开关也开着时，node 持有 `caffeinate -dims -t 1800 -w <node 的 pid>`（`node/awake.go` 的 `computer.nolock`，和「保持唤醒」的那个分开）。
+  - hub 在开关或扩展变了、node 连上时说一次，之后每 10 分钟再说一次（`extmgr/computer_nolock.go`）。node 每次收到都换一个新的 30 分钟；hub 不再说（断开了），30 分钟后自己到期，就恢复按时锁屏。
   - 没有 `-u`，所以不会去点亮已经关了的显示器。
-  - 什么时候撤：开关或插件关掉（hub 马上说一次 off）、node 退出、node 和 hub 断开 30 分钟。
+  - 什么时候撤：开关或扩展关掉（hub 马上说一次 off）、node 退出、node 和 hub 断开 30 分钟。
   - 机器页的开关改了，hub 日志记一行（哪台、开或关）。
   - **管不了的**：
     - 手动锁屏（Control-Command-Q、触发角）；
     - 合盖；
     - 快速切换用户；
     - 公司管理的 Mac 上强制的屏保锁定策略。以实测为准。
-  - **安全边界**：这台 Mac 一直不锁，旁边的人能直接用它。机器页和插件页把这一句写在开关下面；hub 日志记开关的时间。
+  - **安全边界**：这台 Mac 一直不锁，旁边的人能直接用它。机器页和扩展页把这一句写在开关下面；hub 日志记开关的时间。
   - **和 Codex 的区别**：Codex 是锁着也能用（要授权插件），这里是不让它锁。实现简单、能完全撤回，但不锁的那段时间 Mac 是敞开的。
 
 ### c) 按 App 批准（已做）
 
 - **怎么问**：
-  - 插件 `cua` 的「第一次操作一个 App 时先问」（`app_approval`），默认开。
+  - 扩展 `cua` 的「第一次操作一个 App 时先问」（`app_approval`），默认开。
   - 助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时，手机上出一张卡片：「让助手操作「MacBook」上的「计算器」」，选项是允许 / 「以后操作「计算器」不再问」/ 拒绝。
   - 选「一直允许」的按 bundle id 记在 hub 的设置里（`computer.apps`，按机器），不再问。
   - 机器页「操控电脑」的「已允许助手操作的 App」逐个列出，「移除」后下次再问（`GET` / `DELETE /api/v1/machines/{mid}/computer/apps[/{bundle}]`）。
@@ -452,13 +452,13 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 
 ### d) 小配置
 
-- **点击音效**（已做，插件 `cua` 的 `click_sound`）：无 / 只前台点击 / 前台和后台点击，默认无。
+- **点击音效**（已做，扩展 `cua` 的 `click_sound`）：无 / 只前台点击 / 前台和后台点击，默认无。
   - Cua 的点按分两种：前台（`delivery_mode: foreground`）把窗口提到前面、动真的鼠标；后台（默认）按进程投递，不动光标。
   - hub 在 `computer.call` 里带上设置，node 数 `run_steps` 里的点按步骤（`click`、`double_click`、`right_click`，`{"click": {…}}` 和 `{tool, args}` 两种写法都认）。有要响的就放一下系统音效（`afplay /System/Library/Sounds/Tink.aiff`，不等它放完），一次调用响一下：这些步骤在 Cua 里一口气跑完，node 不知道每一下是什么时候点的。
   - 管不到的：`run_script` 里的点按（在它的程序里），电脑上的 Agent 自己的 Cua MCP（不经 node）。
-- **显示 Agent 的光标**（已做，插件 `cua` 的 `show_cursor`）：默认开，VNC 时知道它点在哪。
+- **显示 Agent 的光标**（已做，扩展 `cua` 的 `show_cursor`）：默认开，VNC 时知道它点在哪。
   - 光标浮层是 Cua 后台进程的，启动时定，`cua-driver config` 改不了（`agent_cursor.enabled` 只读）。关掉就停掉它、用 `open -g -b com.trycua.driver --args serve --no-overlay` 重新打开（`node/cua_extras.go` 的 `computer.cursor`），之后 node 自己启动它时也带上。正在进行的操作会断一下，设置的说明里写了。
-  - hub 在设置变了、node 连上时说一次（`hub/computer_cursor.go`）：插件对这台开着才照设置说，别的 Mac 都说「开」。
+  - hub 在设置变了、node 连上时说一次（`extmgr/computer_cursor.go`）：扩展对这台开着才照设置说，别的 Mac 都说「开」。
   - 「开」只撤销这个 node 自己关的：用户自己带 `--no-overlay` 启动的 Cua 不去动。后台进程已经是要的样子、或没在跑，都不重启。
   - 电脑上的 Agent 自己的 Cua MCP 用的是同一个后台进程，所以它们的光标也跟着关。
 - **Office、信息（Messages）的单独权限**：不做。这些我们没有专门的接入；要读信息走以后的 iMessage 连接器（[plan-connectors.md](plan-connectors.md)）。
@@ -468,7 +468,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 1. **b**：「Agent 操作期间保持唤醒」，含VNC期间。锁着时给「解锁」入口，打开实时画面。小，先做。
 2. **c**：按 App 批准，先管助手，再管 Agent 的 Cua MCP。
 3. **a-2**：一键解锁，和 #1322 一起。
-4. **b2**：「插件开着时不自动锁屏」（已做）。
+4. **b2**：「扩展开着时不自动锁屏」（已做）。
 5. **d**：点击音效、光标开关（已做）。
 
 每一步都在这台 Mac 上实测，开关、锁屏、恢复都要验证。锁屏的实测要用户在场：锁上以后得有人输密码。
@@ -476,11 +476,11 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 ### 拍板结果（2026-11-04，用户：都按建议）
 
 1. **锁屏**：只做「不让它锁」和「解锁入口」，不做系统授权插件。
-2. **「插件开着时不自动锁屏」**：默认关，打开时在手机上确认；node 和 hub 断开 30 分钟后自动撤掉。
+2. **「扩展开着时不自动锁屏」**：默认关，打开时在手机上确认；node 和 hub 断开 30 分钟后自动撤掉。
 3. **按 App 批准**：默认开。每个 App 第一次操作时问一次，之后记住，设置里可以移除。
 4. **默认拒绝清单**：终端、系统设置、钥匙串访问、密码管理器、Persona，就这些。
 5. **一键解锁**：做。Mac 密码存在手机钥匙串，经 VNC 打进锁屏的密码框。默认关、按 Mac 开，和 #1322「在这台手机上记住」一起做。
-6. **ego**：插件 `ego` 对那台 Mac 开着时，也放行那台的屏幕共享（VNC），页面也认 ego。
+6. **ego**：扩展 `ego` 对那台 Mac 开着时，也放行那台的屏幕共享（VNC），页面也认 ego。
 
 按上面的「顺序」做，每块一个 PR。第 6 条和 b 一起，或者单独一个小 PR 先合。
 
@@ -490,7 +490,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - `server/internal/node/computer_test.go`：解析、就绪判断、用假的 cua-driver 脚本跑 `computer.call`（参数、会话名、截图、拒绝的工具）。
   - `server/internal/node/computer_install_test.go`：假的下载源和安装器，验证三个脚本从磁盘运行、参数和环境变量、关统计、接着授权、不像安装器的不运行、取消。
     `PERSONA_CUA_INSTALLER_CHECK=1` 时对真的 cua.ai 只下载、只检查（2026-11-04 通过）。
-  - `server/internal/extmgr/computer_test.go`：插件默认关、按机器开、工具出现和消失、经假 node 调用、确认被拒。
+  - `server/internal/extmgr/computer_test.go`：扩展默认关、按机器开、工具出现和消失、经假 node 调用、确认被拒。
   - `apple/PersonaTests/ComputerTests.swift`：机器的 `computer` 字段、工具的中文名、步骤写成人话、最近一次操作在结果回来前算在跑。
 - **真机（node 一侧）**：在装好 Cua Driver 的 Mac 上跑 node 包的 `TestCuaEndToEnd`。
   - 打开方式：`PERSONA_CUA_E2E=1`，可选 `PERSONA_CUA_SHOT=<图片路径>`；测试二进制用 `GOOS=darwin go test -c` 编好拷过来。
@@ -505,7 +505,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 连真实 Mac 的登录那一步要那台 Mac 的密码，测试不做。
 - **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|missing|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。
 - **部署后验收**：
-  1. 在「设置 › 插件」打开「操控电脑（Cua）」。
+  1. 在「设置 › 扩展」打开「操控电脑（Cua）」。
   2. 在那台 Mac 的机器页打开开关。
   3. 在手机上对助手说「在 <机器> 上用计算器算 6×7，把截图发给我」。
 

@@ -52,7 +52,7 @@
     <string name="settings_devices_revoke_failed">撤销未完成，请刷新设备列表后重试。</string>
     <string name="settings_disconnect_failed">断开未完成，请重试。</string>
     <string name="settings_disconnected">已断开配对。</string>
-    <string name="settings_cleanup_failed">本机清理未完成，请重试清理。</string>
+    <string name="settings_cleanup_failed">手机上的数据没清理完，再清理一次。</string>
     <string name="settings_devices_title">设备</string>
     <string name="settings_devices_unavailable">设备管理暂不可用</string>
     <string name="settings_check_pairing_and_hub">请检查配对和 hub 版本。</string>
@@ -178,12 +178,12 @@
     <string name="settings_lock_test_scheduling">正在预约</string>
     <string name="settings_lock_test_start">开始锁屏测试</string>
     <string name="settings_lock_test_scheduled">已预约，请现在锁屏。hub 会按预约发送测试通知，回来后查看结果。</string>
-    <string name="settings_lock_test_schedule_failed">预约未确认，请先刷新记录；若仍无记录，请检查连接、hub 版本和本机配对凭据。</string>
+    <string name="settings_lock_test_schedule_failed">不知道约上没有。先刷新记录；还是没有的话，看看连接、hub 版本和这台手机的配对。</string>
     <string name="settings_lock_test_due">预约时间：%1$s</string>
     <string name="settings_lock_test_sent">hub 尝试发送：%1$s</string>
     <string name="settings_lock_test_received">hub 收到回报：%1$s</string>
     <string name="settings_lock_test_shown">App 已经把通知交给系统了。有没有弹出、响铃、亮屏，要你自己看一下。</string>
-    <string name="settings_lock_test_not_shown">App 收到了测试事件，但通知未能展示。请检查通知权限和渠道。</string>
+    <string name="settings_lock_test_not_shown">App 收到了测试，但通知没显示出来。看看通知权限和通知渠道。</string>
     <string name="settings_lock_test_shown_unknown">通知展示结果未知，请按实际情况确认。</string>
     <string name="settings_lock_test_worked">响了，也亮屏了</string>
     <string name="settings_lock_test_failed">没响或没亮屏</string>

@@ -343,7 +343,7 @@ HTTP 状态：新码走 `rpc.Error{Code}`，`apierr.Call` 对 `internal` / `node
 
 总规矩：
 
-- 新字段都可选，老客户端忽略；新接口在 `hello` / `GET /api/v1/health` 的 `features` 里登记（`hub/extension_api.go:86`），客户端看到才走新流程，连老 hub 时退回现在的页面。本节新登记：`assistant_readiness`、`machines_add`、`machine_trust`、`builtin_presets`。
+- 新字段都可选，老客户端忽略；新接口在 `hello` / `GET /api/v1/health` 的 `features` 里登记（`proto/proto.go` 的 `Features`，hub 在 `hub/extensions_link.go` 的 `features` 里再加上扩展的），客户端看到才走新流程，连老 hub 时退回现在的页面。本节新登记：`assistant_readiness`、`machines_add`、`machine_trust`、`builtin_presets`。
 - 枚举都是封闭的：客户端不认识的 `state` 按「还差一步 + `title`」显示；不认识的 `action.id` 只显示文字、不画按钮；不认识的 `code` 显示 `error`。
 - `title` / `detail` / `error` 由服务端按 `Accept-Language` 本地化（`server/internal/i18n/locales/`）。客户端可以用自己的文案覆盖，但必须能只靠服务端的字运行。
 - 不放任何密钥；Key 只回 `has_key`。

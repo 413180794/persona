@@ -36,7 +36,7 @@
     <string name="inbox_mail_starred">スター付き</string>
     <string name="inbox_mail_mark_unread">未読にする</string>
     <string name="inbox_mail_mark_read">既読にする</string>
-    <string name="inbox_mail_seen_failed">既読状態を確認できませんでした。更新してもう一度お試しください。</string>
+    <string name="inbox_mail_seen_failed">既読状態を変更できませんでした。更新してもう一度お試しください。</string>
     <string name="inbox_mail_translation_clipped">メールが長いため、冒頭だけを翻訳しました。全文は原文をご覧ください。</string>
     <string name="inbox_mail_images_allowed">リモート画像を表示中</string>
     <string name="inbox_mail_images_blocked">リモート画像と埋め込みをブロック中</string>

@@ -89,7 +89,7 @@
 | 飞书机器人、插件渠道 | `notify_user` 的转发只说有新消息；定时任务那段对话的回答不镜像；「全部卡片」「全部提问」不包括健康对话的卡（渠道自己正驱动的那段对话照常） | `assistant/feishu_cards.go`、`channels_plugin.go` |
 | `agent_send` / `agent_start` | 每次先在手机上确认，卡片写明交出去以后对方那边的记录不会随健康空间删除 | `assistant/health.go` `confirmOutbound` |
 | `task_plan` | 不自动开始，一律等用户在计划卡上点开始 | `assistant/tasks.go` |
-| `mail_send` 和连接器的写操作 | 每次在手机上确认，闸门的 allow 规则不放行（deny 仍拒绝） | `connector.ConfirmEach`，`hub/connectors.go` |
+| `mail_send` 和连接器的写操作 | 每次在手机上确认，闸门的 allow 规则不放行（deny 仍拒绝） | `connector.ConfirmEach`，`extmgr/connectors.go` 的 `callConnector` |
 | 飞书写操作（lark-cli、命令闸门） | 每次在手机上确认，allow 规则不放行，没有「本会话总是允许」；读照常 | `node/larkgate.go` `larkCheck` |
 
 同一空间里的记忆、对话、提醒不加确认。

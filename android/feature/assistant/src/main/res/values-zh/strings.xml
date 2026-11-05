@@ -13,7 +13,7 @@
     <string name="assistant_info_session">会话信息</string>
     <string name="assistant_info_launcher">启动器</string>
     <string name="assistant_info_schedule_text">体验模式里没有定时任务。连上自己的 hub 以后，可以在这里管理 Persona 的定时任务、跟进和运行记录。</string>
-    <string name="assistant_info_knowledge_text">在这里查看人、群和项目的资料。知识库内容尚未接入。</string>
+    <string name="assistant_info_knowledge_text">在这里查看人、群和项目的资料。现在还看不了知识库。</string>
     <string name="assistant_info_settings_text">体验模式里没有助手设置。连上自己的 hub 以后，可以选 Persona 在哪台机器上运行，改关于我和记忆。</string>
     <string name="assistant_info_session_none">当前还没有打开对话。</string>
     <string name="assistant_info_session_text">当前对话：%1$s</string>

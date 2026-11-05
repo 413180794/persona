@@ -8,22 +8,11 @@ import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 
 /**
- * What to tell the user after an operation failed. [message] and [actionLabel] are the Simplified Chinese words for
- * the code outside composition that still reads them; pages show [localizedMessage] / [localizedActionLabel], and
- * code with a [android.content.Context] resolves [text] and [actionLabelRes].
+ * What to tell the user after an operation failed. [message] holds the Simplified Chinese words for the code outside
+ * composition that still reads it; pages show [localizedMessage] / [localizedActionLabel], and code with a
+ * [android.content.Context] resolves [text] and [actionLabelRes].
  */
 data class OperationFeedback(val message: String, val action: FailureAction, val offline: Boolean = false, val text: UiText = UiText.Plain(message)) {
-    val actionLabel: String? get() = when (action) {
-        FailureAction.None -> null
-        FailureAction.Retry -> "重试"
-        FailureAction.Verify -> "核对"
-        FailureAction.PairAgain -> "重新配对"
-        FailureAction.OpenTerminal -> "打开终端"
-        FailureAction.ReviewInput -> "检查输入"
-        FailureAction.UpdateHub -> "更新 hub"
-        FailureAction.GrantPermission -> "去授权"
-    }
-
     @get:StringRes val actionLabelRes: Int? get() = when (action) {
         FailureAction.None -> null
         FailureAction.Retry -> R.string.designsystem_retry

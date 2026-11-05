@@ -158,7 +158,7 @@ private fun StylePreview(style: AppStyle) {
                             PreviewRows.forEachIndexed { index, row ->
                                 AgentRow(
                                     stringResource(row.title), row.status, onClick = {}, depth = 1, position = GroupPosition.of(index, PreviewRows.size),
-                                    preview = stringResource(row.preview), time = stringResource(row.time), statusText = row.status.label.takeIf { row.status != Status.Idle },
+                                    preview = stringResource(row.preview), time = stringResource(row.time), statusText = row.status.localizedLabel.takeIf { row.status != Status.Idle },
                                 )
                             }
                         }

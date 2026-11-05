@@ -37,7 +37,7 @@
     <string name="inbox_mail_starred">Starred</string>
     <string name="inbox_mail_mark_unread">Mark unread</string>
     <string name="inbox_mail_mark_read">Mark read</string>
-    <string name="inbox_mail_seen_failed">Couldn\'t confirm the read status. Refresh and try again.</string>
+    <string name="inbox_mail_seen_failed">Couldn\'t change the read status. Refresh and try again.</string>
     <string name="inbox_mail_translation_clipped">This mail is long, so only the beginning was translated. See the original for the rest.</string>
     <string name="inbox_mail_images_allowed">Remote images shown</string>
     <string name="inbox_mail_images_blocked">Remote images and embeds blocked</string>

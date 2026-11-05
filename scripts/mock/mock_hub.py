@@ -3253,7 +3253,7 @@ def _codex_settings():  # 设置 › Codex 设置: the node's whitelist (server/
         {"key": "model", "title": "模型", "detail": "没指定模型时 Codex 用哪个，比如 gpt-5.5", "type": "string", "default": "", "value": "gpt-5.5"},
         {"key": "model_reasoning_effort", "title": "思考强度", "detail": "越高越慢、越仔细", "type": "enum",
          "options": ["minimal", "low", "medium", "high", "xhigh"], "default": "medium", "value": "high"},
-        {"key": "approval_policy", "title": "什么时候问你", "detail": "执行命令前要不要先确认；never 一律不问", "type": "enum",
+        {"key": "approval_policy", "title": "什么时候问你", "detail": "执行命令前要不要先问你，也可以一律不问", "type": "enum",
          "options": ["untrusted", "on-failure", "on-request", "never"], "default": "on-request", "value": None},
         {"key": "hide_agent_reasoning", "title": "隐藏思考过程", "detail": "不显示模型的思考事件", "type": "bool", "default": False, "value": None},
     ]

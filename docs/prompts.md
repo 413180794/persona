@@ -32,7 +32,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `agents/answer.md` | 用户在分诊开的卡片上的回答，发回给那个 Agent；助手代答的写明是助手按用户的规则答的、为什么、用户可能改答 | `assistant/agents_triage.go` |
 | `agents/delegate.md`、`delegate_input.md` | Agent 的提问先由助手判断：内部选项代答（选项和理由），红线（不可逆、社交可见）和目标要变的交给用户，补齐这件事是什么、为什么现在问、推荐、不选的代价（[assistant.md](assistant.md)「提问先由助手代答」）；用途 `agent.delegate` | `assistant/delegate.go` |
 | `agents/reanswer.md` | 用户改答助手代答过的提问，新答案发给那个 Agent（带上助手原来答的） | `assistant/fleet_delegate.go` |
-| `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Persona 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `hub/bots_chat.go` `botSend`（`docs/bots.md`） |
+| `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Persona 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `assistant/feishu.go` `botSend`（`docs/bots.md`） |
 | `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `assistant/inbox_triage.go` |
 | `inbox/tiers.md` | 三档的判断标准，分拣和事件合成共用 | 同上 |
 | `inbox/group.md`、`group_input.md` | 事件合成：一个会话的一批新消息各归哪件事，给动到的事写标题、总结、分级；输入里带着这个会话的事和已经调过的工具（`docs/inbox.md`「事件合成」） | `assistant/inbox_group.go` |
@@ -57,7 +57,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
 | `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、有没有函数工具、重连时断之前说过的话） | `voice/session.go` |
 | `voice/delegated.md`、`report.md`、`handoff.md` | 语音里交给主对话的消息、做完后告诉语音模型的话、交出去时先回的那句 | `voice/session.go`、`delegate.go` |
-| `channel/message.md` | 主人在插件渠道（微信等，`docs/channels.md`）里发给机器人的消息进 Persona 对话时的样子：回答发回哪里、什么格式（纯文字或 Markdown）、能不能在那儿答提问，引用的消息、转发的聊天记录、存到电脑上的附件、机器人转不了的东西 | `hub/channels_extension.go` |
+| `channel/message.md` | 主人在插件渠道（微信等，`docs/channels.md`）里发给机器人的消息进 Persona 对话时的样子：回答发回哪里、什么格式（纯文字或 Markdown）、能不能在那儿答提问，引用的消息、转发的聊天记录、存到电脑上的附件、机器人转不了的东西 | `assistant/channels_plugin.go` `channelForward` |
 | `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |
 | `shared/user_rules.md` | 「用户自己定的规则」段（分拣、判断共用） | |
 

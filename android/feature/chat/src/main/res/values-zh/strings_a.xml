@@ -17,7 +17,7 @@
     <string name="chat_action_attached">已实时接入</string>
     <string name="chat_action_deleted">已删除对话</string>
     <string name="chat_action_done_refresh_later">操作已完成，会话信息稍后更新</string>
-    <string name="chat_action_unknown">操作结果待确认，请先核对</string>
+    <string name="chat_action_unknown">还不知道成没成，先看一下</string>
     <string name="chat_delivery_input_draft">电脑上有草稿</string>
     <string name="chat_delivery_dialog_open">请先处理电脑上的对话框</string>
     <string name="chat_delivery_op_id_reused">这条消息的发送标识已被使用</string>
@@ -69,7 +69,7 @@
     <string name="chat_interaction_answered">已回传你的选择</string>
     <string name="chat_interaction_resolved_elsewhere">已在电脑上处理</string>
     <string name="chat_interaction_prompt_changed">屏幕内容已变化，本次未提交。请查看新问题后重新选择</string>
-    <string name="chat_interaction_unknown">回传结果待确认，请先核对请求</string>
+    <string name="chat_interaction_unknown">还不知道你的回答送到没有，先看一下这个请求</string>
     <string name="chat_interaction_already">已经回答过了</string>
     <string name="chat_interaction_already_with">已经回答过了：%1$s</string>
     <string name="chat_interaction_ended_expired">这个请求已经过期，回答没有送到</string>
@@ -127,7 +127,7 @@
     <string name="chat_refusal_confirm_text">将清空以下电脑草稿，再发送刚才被拒绝的消息：</string>
     <string name="chat_refusal_confirm_note">如果电脑草稿已经变化，会再次拒绝发送。</string>
     <string name="chat_screen_delivery_changed">消息状态已变化，请按最新状态操作</string>
-    <string name="chat_screen_delivery_failed">未能更新消息状态，原消息已保留，请再核对一次</string>
+    <string name="chat_screen_delivery_failed">消息状态没更新。消息还在，再看一次</string>
     <string name="chat_screen_context_cleared">上下文已清空，请从会话列表打开新会话</string>
     <string name="chat_screen_clear_sent">已发送 /clear，新会话出现后在列表里打开</string>
     <string name="chat_screen_fold_failed">载入失败</string>
@@ -151,7 +151,7 @@
     <string name="chat_search_category_tool_output">工具输出</string>
     <string name="chat_search_category_tool_name">工具名</string>
     <string name="chat_search_updating">记录正在更新，请稍后继续</string>
-    <string name="chat_search_older_failed">更早的记录未能载入，请重试</string>
+    <string name="chat_search_older_failed">更早的记录没载入，再试一次</string>
     <string name="chat_search_older_none">本次没有载入更早的记录，可稍后重试</string>
     <string name="chat_search_older_limit">本次已加载 %1$d 页，可继续加载</string>
     <string name="chat_photo">照片</string>
@@ -166,14 +166,14 @@
     <string name="chat_status_turn_duration">本轮用时 %1$d 分 %2$d 秒</string>
     <string name="chat_status_draft_failed">草稿保存失败</string>
     <string name="chat_status_draft_failed_default">未能写入本机存储。</string>
-    <string name="chat_status_draft_failed_hint">请先复制输入内容，避免离开后丢失。</string>
+    <string name="chat_status_draft_failed_hint">先把打的字复制下来，不然离开后会丢。</string>
     <string name="chat_status_last_updated">上次更新：%1$s</string>
     <string name="chat_status_no_last_updated">暂无上次更新时间</string>
     <string name="chat_status_open_new">打开新会话</string>
     <string name="chat_status_open_restored">打开已恢复的会话</string>
     <string name="chat_status_check_resume">核对恢复结果</string>
     <string name="chat_status_resume">恢复会话</string>
-    <string name="chat_status_resume_unavailable">恢复服务暂不可用，可复制命令到电脑上运行。</string>
+    <string name="chat_status_resume_unavailable">现在没法在这里恢复会话。可以复制命令，到电脑上运行。</string>
     <string name="chat_status_resume_missing">缺少原启动器或目录，请到电脑上恢复。</string>
     <string name="chat_status_copy_resume">复制恢复命令</string>
     <string name="chat_status_offline_hint">电脑恢复连接后会自动更新状态。</string>

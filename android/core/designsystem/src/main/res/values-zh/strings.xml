@@ -62,7 +62,7 @@
     <string name="designsystem_decision_recommended">建议</string>
     <string name="designsystem_pending_sending">发送中</string>
     <string name="designsystem_pending_waiting">连上后自动发送</string>
-    <string name="designsystem_pending_unconfirmed">结果待确認</string>
+    <string name="designsystem_pending_unconfirmed">结果待确认</string>
     <string name="designsystem_pending_verifying">正在核对</string>
     <string name="designsystem_pending_needs_review">没能确认是否送达</string>
     <string name="designsystem_pending_refused">没有发出</string>

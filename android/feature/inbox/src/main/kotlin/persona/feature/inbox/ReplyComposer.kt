@@ -31,10 +31,10 @@ data class ReplyComposerState(
 ) {
     val canEdit: Boolean get() = !loading && !sending && delivery in setOf(ReplyDelivery.Ready, ReplyDelivery.Refused)
     val actionLabel: String @Composable get() = when {
-        delivery == ReplyDelivery.Verifying -> PendingStatus.Verifying.label
+        delivery == ReplyDelivery.Verifying -> PendingStatus.Verifying.localizedLabel
         delivery in setOf(ReplyDelivery.Unknown, ReplyDelivery.NeedsConfirmation) -> stringResource(R.string.inbox_check_result)
-        delivery in setOf(ReplyDelivery.Queued, ReplyDelivery.WaitingForNetwork) -> PendingStatus.Waiting.label
-        sending -> PendingStatus.Sending.label
+        delivery in setOf(ReplyDelivery.Queued, ReplyDelivery.WaitingForNetwork) -> PendingStatus.Waiting.localizedLabel
+        sending -> PendingStatus.Sending.localizedLabel
         else -> stringResource(R.string.inbox_send)
     }
 }

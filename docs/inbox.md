@@ -321,7 +321,7 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
   分段的「全部看过」「全部清除」照旧走 `/done`。手表上收件箱只有单件已处理，不放这个入口。手表（只能作答的设备）调不了 `/bulk`，扩展要 `inbox.write`。
 - **旧 hub**：没有 `/bulk`（404 / 405）时，已处理和移回退回 `/done`，忽略报错（Apple 端提示「这台 hub 的版本不支持忽略」，列表恢复）。
 - 测试：`inbox_bulk_test.go`（`TestInboxBulkFilterAsOf`：截止之后的新条目和新消息不动、忽略、撤销只移回这次的；ids、单件忽略、坏请求），
-  `hub/inbox_test.go` `TestInboxBulkPermissions`（手表、只有 `inbox.read` 的扩展不行）；网页 `inbox.test.ts`；Android `InboxBulkTest`、`InboxRepositoryTest`、`InboxAssistantTransportTest`；
+  `hub/devicetokens_test.go` `TestAnswerRoleOnlyWhatTheWatchDoes`（手表不行）、`hub/testdata/route_scopes.txt`（扩展要 `inbox.write`）；网页 `inbox.test.ts`；Android `InboxBulkTest`、`InboxRepositoryTest`、`InboxAssistantTransportTest`；
   Apple `InboxBulkTests`（回包和 `undo`、旧 hub 退回、失败回滚、确认门槛）、UI 测试 `InboxMarkAllTests`（全部已处理 / 全部忽略 + 撤销发回 `undo`，`MOCK_INBOX_EXTRA` 时看确认框）。
 
 ## App

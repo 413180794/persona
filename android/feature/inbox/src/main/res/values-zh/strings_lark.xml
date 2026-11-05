@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="inbox_lark_latest_failed">最新消息加载失败，请重试</string>
-    <string name="inbox_lark_older_failed">更早的消息加载失败，请重试</string>
-    <string name="inbox_lark_messages_failed">消息加载失败，请重试</string>
-    <string name="inbox_lark_sent_refresh_failed">消息已发送，刷新失败，请重试</string>
+    <string name="inbox_lark_latest_failed">最新消息没加载出来，再试一次</string>
+    <string name="inbox_lark_older_failed">更早的消息没加载出来，再试一次</string>
+    <string name="inbox_lark_messages_failed">消息没加载出来，再试一次</string>
+    <string name="inbox_lark_sent_refresh_failed">消息已经发出去了，但没刷新出来。再试一次</string>
     <string name="inbox_lark_unconfirmed">还不知道送到没有。不会自动重发</string>
-    <string name="inbox_lark_check_unfinished">核对未完成，请稍后再试</string>
+    <string name="inbox_lark_check_unfinished">没核对成，过一会儿再试</string>
     <string name="inbox_lark_react_failed">回应失败</string>
-    <string name="inbox_lark_refresh_failed">会话刷新失败，请重试</string>
+    <string name="inbox_lark_refresh_failed">会话没刷新出来，再试一次</string>
     <string name="inbox_lark_actions">会话操作</string>
     <string name="inbox_lark_jump_mention">跳到 @我 的消息</string>
     <string name="inbox_lark_refresh">刷新会话</string>
@@ -71,7 +71,7 @@
     <string name="inbox_lark_thread_older">查看更早的回复</string>
     <string name="inbox_lark_thread_no_reply">这个连接还不能回复话题</string>
     <string name="inbox_lark_thread_reply">回复话题</string>
-    <string name="inbox_lark_thread_failed">回复加载失败，请重试</string>
+    <string name="inbox_lark_thread_failed">回复没加载出来，再试一次</string>
     <string name="inbox_lark_emoji_default">默认表情</string>
     <string name="inbox_lark_emoji_group">表情</string>
     <string name="inbox_lark_react">表情回复</string>
@@ -143,7 +143,7 @@
     <string name="inbox_lark_pin_added">已添加 Pin</string>
     <string name="inbox_lark_pin_add_failed">没能添加 Pin，请重试</string>
     <string name="inbox_lark_pin_account_changed">飞书账号已切换，请重新打开会话</string>
-    <string name="inbox_lark_pin_unknown">尚未确认操作结果，请重新加载 Pin 列表查看</string>
+    <string name="inbox_lark_pin_unknown">还不知道成没成。重新加载 Pin 列表看看</string>
     <string name="inbox_lark_pin_upgrade">升级 Hub 后可使用 Pin 消息。请在设置中打开 Hub，检查更新。</string>
     <string name="inbox_lark_pin_unavailable">原消息已不可用</string>
     <string name="inbox_lark_pin_message">消息</string>

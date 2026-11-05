@@ -155,7 +155,7 @@ internal fun MachinesScreen(
                     AgentState.Offline -> Status.Offline; AgentState.Unknown -> Status.Unknown
                 }
                 JCard(Modifier.padding(bottom = 12.dp), onClick = { navigator.navigate(ChatRoute(machineId, session.sessionId)) }, status = status) {
-                    JRow(session.displayTitle, leading = { JStatusDot(status) }, trailing = { JTag(status.label, status = status) })
+                    JRow(session.displayTitle, leading = { JStatusDot(status) }, trailing = { JTag(status.localizedLabel, status = status) })
                     Text(session.agentLabel, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                     Text(session.cwd, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }

@@ -176,11 +176,8 @@ data class StatusLineState(
     val waitingDetail: String? = null,
 )
 
-/**
- * [text] is the line in Simplified Chinese for the code outside composition that still reads it; pages show
- * [message] (`message.text()`, or [localizedText]) in their own language.
- */
-data class StatusLineContent(val kind: StatusLineKind, val text: String, val status: Status, val message: UiText = UiText.Plain(text)) {
+/** Pages show [message] (`message.text()`, or [localizedText]) in their own language. */
+data class StatusLineContent(val kind: StatusLineKind, val status: Status, val message: UiText) {
     val localizedText: String @Composable get() = message.text()
 
     val actionable: Boolean get() = kind != StatusLineKind.Submitting && kind != StatusLineKind.Stopping
@@ -188,27 +185,26 @@ data class StatusLineContent(val kind: StatusLineKind, val text: String, val sta
 
 /** Resolves only session state. Hub connectivity belongs in the page title. */
 fun resolveStatusLine(state: StatusLineState): StatusLineContent? = with(state) {
-    fun line(kind: StatusLineKind, text: String, status: Status, @StringRes id: Int, vararg args: Any) =
-        StatusLineContent(kind, text, status, UiText.Res(id, args.toList()))
+    fun line(kind: StatusLineKind, status: Status, @StringRes id: Int, vararg args: Any) =
+        StatusLineContent(kind, status, UiText.Res(id, args.toList()))
     val minutes = lastUpdatedMinutes?.coerceAtLeast(0)
     val detail = workDetail?.takeIf { it.isNotBlank() }
     when {
-        ended || replaced -> line(StatusLineKind.Ended, if (replaced) "已换成新会话" else "会话已结束", Status.Offline, if (replaced) R.string.designsystem_line_replaced else R.string.designsystem_line_ended)
-        machineOffline -> StatusLineContent(StatusLineKind.MachineOffline,
-            "电脑离线，状态可能过时" + (minutes?.let { "（$it 分钟前）" } ?: ""), Status.Offline,
+        ended || replaced -> line(StatusLineKind.Ended, Status.Offline, if (replaced) R.string.designsystem_line_replaced else R.string.designsystem_line_ended)
+        machineOffline -> StatusLineContent(StatusLineKind.MachineOffline, Status.Offline,
             minutes?.let { UiText.Plural(R.plurals.designsystem_line_machine_offline_since, it) } ?: UiText.Res(R.string.designsystem_line_machine_offline))
-        submitting || answering -> line(StatusLineKind.Submitting, if (answering) "正在回传你的选择…" else "正在发送…", Status.Idle, if (answering) R.string.designsystem_line_answering else R.string.designsystem_line_sending)
-        unconfirmed -> line(StatusLineKind.Unconfirmed, "上次操作结果待确认", Status.Unknown, R.string.designsystem_line_unconfirmed)
+        submitting || answering -> line(StatusLineKind.Submitting, Status.Idle, if (answering) R.string.designsystem_line_answering else R.string.designsystem_line_sending)
+        unconfirmed -> line(StatusLineKind.Unconfirmed, Status.Unknown, R.string.designsystem_line_unconfirmed)
         pendingRequests > 0 || blocked -> when {
-            pendingRequests > 1 -> StatusLineContent(StatusLineKind.NeedsYou, "等你处理 $pendingRequests 件", Status.NeedsYou,
+            pendingRequests > 1 -> StatusLineContent(StatusLineKind.NeedsYou, Status.NeedsYou,
                 UiText.Plural(R.plurals.designsystem_line_needs_you_count, pendingRequests))
-            !requestSummary.isNullOrBlank() -> line(StatusLineKind.NeedsYou, "等你处理：$requestSummary", Status.NeedsYou, R.string.designsystem_line_needs_you_about, requestSummary)
-            else -> line(StatusLineKind.NeedsYou, "等你处理", Status.NeedsYou, R.string.designsystem_line_needs_you)
+            !requestSummary.isNullOrBlank() -> line(StatusLineKind.NeedsYou, Status.NeedsYou, R.string.designsystem_line_needs_you_about, requestSummary)
+            else -> line(StatusLineKind.NeedsYou, Status.NeedsYou, R.string.designsystem_line_needs_you)
         }
-        stopping -> line(StatusLineKind.Stopping, "已发出中断，等电脑确认", Status.Working, R.string.designsystem_line_stopping)
-        working -> if (detail != null) line(StatusLineKind.Working, "正在工作：$detail", Status.Working, R.string.designsystem_line_working_on, detail) else line(StatusLineKind.Working, "正在工作", Status.Working, R.string.designsystem_line_working)
-        waiting -> waitingDetail?.takeIf { it.isNotBlank() }?.let { StatusLineContent(StatusLineKind.Waiting, it, Status.Waiting) }
-            ?: line(StatusLineKind.Waiting, "等待下一次任务", Status.Waiting, R.string.designsystem_line_waiting)
+        stopping -> line(StatusLineKind.Stopping, Status.Working, R.string.designsystem_line_stopping)
+        working -> if (detail != null) line(StatusLineKind.Working, Status.Working, R.string.designsystem_line_working_on, detail) else line(StatusLineKind.Working, Status.Working, R.string.designsystem_line_working)
+        waiting -> waitingDetail?.takeIf { it.isNotBlank() }?.let { StatusLineContent(StatusLineKind.Waiting, Status.Waiting, UiText.Plain(it)) }
+            ?: line(StatusLineKind.Waiting, Status.Waiting, R.string.designsystem_line_waiting)
         else -> null
     }
 }

@@ -4,13 +4,13 @@
 为什么这样设计、和在 hub 里跑的连接器什么关系，见 `docs/connectors.md`「二 · 4」。代码：程序一侧 `server/internal/connector/serve`，
 hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/connector/conformance`。
 
-**它现在是插件协议的 `connector` 命名空间**（#1101，`docs/extensions.md`「进程扩展协议」）：连接器程序是一个贡献了 `connectors` 扩展点的插件，
-hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `connector.`（`status` → `connector.status`），参数里多一个 `contribution`（连接器的 id），
+**它现在是进程扩展协议的 `connector` 命名空间**（#1101，`docs/extensions.md`「进程扩展协议」）：连接器程序是一个贡献了 `connectors` 扩展点的扩展，
+hub 用进程扩展协议的 `initialize` 打开它，下面每个方法名前加 `connector.`（`status` → `connector.status`），参数里多一个 `contribution`（连接器的 id），
 参数、结果、硬性规定一个都不变。程序调 hub 的 `secrets.*` 和事件 `changed` 也一样加前缀、带 `contribution`。进程什么时候起、怎么停、
-怎么重启、配置和用户填的密钥怎么给，都是插件底座的事（`docs/extensions.md`）。
+怎么重启、配置和用户填的密钥怎么给，都是扩展底座的事（`docs/extensions.md`）。
 
-`connector/serve` 同时认两种开头：插件协议的 `initialize` + `connector.*`（hub 现在只用这种），和下面原来的 `init` + 不带前缀的方法名（单独的连接器协议，
-保留一个发布周期，下一次改协议时删）。Go 写的连接器程序用 `serve.MainWith`，它在插件开头里还能拿到用户填的密钥（`Init.Declared`）和数据目录。
+`connector/serve` 同时认两种开头：进程扩展协议的 `initialize` + `connector.*`（hub 现在只用这种），和下面原来的 `init` + 不带前缀的方法名（单独的连接器协议，
+保留一个发布周期，下一次改协议时删）。Go 写的连接器程序用 `serve.MainWith`，它在进程扩展协议的开头里还能拿到用户填的密钥（`Init.Declared`）和数据目录。
 
 ## 传输
 
@@ -85,12 +85,12 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 `url`、`open_url`、`reply_to`、`can_reply`、`tier`（`action` / `fyi` / `noise`，空的交给模型）、`why`、`done`（`read` / `replied`：这件事结束了）、
 `read`、`tags: [{key, value, name}]`（`repo` / `chat` / `sender` 能被用户静音）、`rules`、`extra`（见下）、`group`、`id`、`meta`（见下面「事件合成」）。
 
-- `rules`：用户给这件事定的分拣规则，原话（这个来源、这个账号的，比如插件设置里的 `triage_rules`，`docs/extensions.md`「约定的设置项」）。
+- `rules`：用户给这件事定的分拣规则，原话（这个来源、这个账号的，比如扩展设置里的 `triage_rules`，`docs/extensions.md`「约定的设置项」）。
   有就**只用它**，不用 hub 的全局 `inbox.rules`；空的用全局。hub 的默认判断标准照旧在下面，用户的规则优先。可以有换行；最多 4000 字，多了截掉。和别的字段一样在 thing 的第一层，迁出 hub 的连接器（带 `extra` 的）也是。
   旧 hub 不认这个字段，照旧用全局规则。
 - 声明了 `fallback` 的连接器每个条目都带 `extra.rule_tier`：这件事的兜底分级，模型照样先分，分不了时按它进收件箱（不带 `tier` 时也一样；
-  普通连接器的 `extra` hub 只读这一项）。没声明 `fallback` 的插件连接器要有能用的分拣模型才能启用（`docs/extensions.md`「收件箱的通用规则」）。
-- `tier` 是这件事的兜底：模型分不了（没配、没额度、出错、超时）时按它进收件箱。插件提供的连接器（不是 personad 自带的）`tier` 为空的没有兜底，
+  普通连接器的 `extra` hub 只读这一项）。没声明 `fallback` 的扩展连接器要有能用的分拣模型才能启用（`docs/extensions.md`「收件箱的通用规则」）。
+- `tier` 是这件事的兜底：模型分不了（没配、没额度、出错、超时）时按它进收件箱。扩展提供的连接器（不是 personad 自带的）`tier` 为空的没有兜底，
   它的新条目先分拣再进收件箱（`docs/inbox.md`「AI 分拣」），模型分不了时**这一轮不进收件箱**，
   hub 也不存；下一轮 `inbox.collect` 再交回来（本来就是从内存回答，不用为此做什么），模型好了就进来。hub 在 `GET /api/v1/inbox` 的 `triage` 里说有几件在等（`docs/inbox.md`「AI 分拣」）。
 
@@ -134,9 +134,9 @@ hub 只对这些连接器读它，而且只有 `extra` 里带了上面那几个�
   `at`、`last` 是最新一条的。hub 按 `id` 写进收件箱，标题、总结、分级用模型的（`triaged_by: "model"`）；兜底时分级用 `group.fallback` 给的 `rule_tier`
   （已有的事用回来的 thing 的 `rule_tier`），标题用程序的，理由「按规则」（`triaged_by: "rules"`），这一版不再交给模型。`last` 没变的回答当作重发，不再存、不再推。
 - **旧 hub**：没有 #1680 的 hub 不认 `group`，声明了它的连接器**整个注册不上**（`unknown capability`），也不认 `meta_description`（清单装不上）。
-  声明 `group` 的插件在 `engines.persona` 里写上带 #1680 的 hub 构建号（`">=YYYYMMDDHHMM"`：hub 的构建号是构建时的 UTC 时间，取 #1680 合入的时间），
+  声明 `group` 的扩展在 `engines.persona` 里写上带 #1680 的 hub 构建号（`">=YYYYMMDDHHMM"`：hub 的构建号是构建时的 UTC 时间，取 #1680 合入的时间），
   让旧 hub 拒绝安装、升级，而不是升上去以后连接器没了；开发构建（构建号 0）不查。
-- **以后的新能力**：从 #1680 起，hub 对**插件提供的**连接器声明的、自己不认识的能力只记一行日志（每个插件每个能力一次），去掉它照常跑；
+- **以后的新能力**：从 #1680 起，hub 对**扩展提供的**连接器声明的、自己不认识的能力只记一行日志（每个扩展每个能力一次），去掉它照常跑；
   hub 自己的连接器照旧严格（不认识就注册不上）。所以以后再加能力，老 hub 不会因为它把整个连接器丢掉，但已经部署的、没有 #1680 的 hub 还是会。
 
 ## 程序调 hub
@@ -153,7 +153,7 @@ hub 只对这些连接器读它，而且只有 `extra` 里带了上面那几个�
 | `archive.chats` | `{source?}` → `{chats: [{id, name, cursor, last_at, messages}]}` | 知识库里这个连接器某个名字（空着是 id，或 `archive_sources` 之一）下的会话：来源那边的 id 和读到哪。接续用：连接器第一次归档时从这里接着，不重复、不漏 |
 | 事件 `changed` | `{scope}` | `chats`、`items`、`inbox`：有新东西，hub 尽快来取；不认识的 scope 被丢掉并记日志 |
 
-插件同时贡献了 `events`（`docs/extensions.md`「事件」）时，hub 发来的 `event.<名字>` 交给实现了 `serve.Listener` 的连接器（`Hear(ctx, 名字, 参数)`，
+扩展同时贡献了 `events`（`docs/extensions.md`「事件」）时，hub 发来的 `event.<名字>` 交给实现了 `serve.Listener` 的连接器（`Hear(ctx, 名字, 参数)`，
 在自己的 goroutine 里，不回应）；没实现的照旧丢掉。微信机器人用它听 `agent.needs_you`（`docs/wechat.md`）。
 
 ### 知识库
@@ -209,7 +209,7 @@ hub 只对这些连接器读它，而且只有 `extra` 里带了上面那几个�
 
 `conformance.Check(t, c)` 把一个 Go 连接器放在协议的程序一侧（`serve.Serve`，经一对管道），对清单声明的每个能力既直接调、也经协议调，
 两边的结果编成 JSON 必须一字不差：字段在线上丢了、类型变了都会挂。两种开头各跑一遍（`init` + 原方法名，`initialize` + `connector.*`）；
-插件开头那一遍还查 `initialize` 回的贡献和清单一致、不认识的连接器回 `no_contribution`。程序整体是否守插件协议，由 `extension/conformance` 查（`docs/extensions.md`「一致性测试」）。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
+进程扩展协议开头那一遍还查 `initialize` 回的贡献和清单一致、不认识的连接器回 `no_contribution`。程序整体是否守进程扩展协议，由 `extension/conformance` 查（`docs/extensions.md`「一致性测试」）。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
 线上的每个字段都有明确的 snake_case 名字。用 Go 写的第三方程序可以照着 `serve.Serve` 的接法，用同一份测试检查自己。
 
 ### 别的语言写的程序：`CheckProgram`
@@ -240,7 +240,7 @@ hub 只对这些连接器读它，而且只有 `extra` 里带了上面那几个�
 （那是用户按的发送）。选项：`WithLogin(values)` 按字段名填登录的每一步，之后程序必须是 `ok`（只给装在夹具上的后端用，别给真账号的密钥），回应里出现了给它的密钥就挂；
 `RequireData()` 让 `inbox.collect`、`thread.page`、`archive.changes` 回空也算挂，免得什么都不回的程序也过。
 
-给自己的程序用：先用 `extension/conformance` 查它作为插件的起停和握手，再用一份新起的程序跑 `CheckProgram`（`internal/` 包挡住了别的仓库的导入，所以测试放在这个仓库里）：
+给自己的程序用：先用 `extension/conformance` 查它作为扩展的起停和握手，再用一份新起的程序跑 `CheckProgram`（`internal/` 包挡住了别的仓库的导入，所以测试放在这个仓库里）：
 
 ```go
 m, _ := extension.Parse(manifestJSON)                                // persona-plugin.json
@@ -252,15 +252,15 @@ conformance.CheckProgram(t, m, progconf.Program(t, "bin/my-connector"), plugin.I
 **线上夹具**：`server/internal/connector/testdata/wire/<程序>/*.json` 是程序对每个方法回的 JSON，**合成数据**（没有真账号、名字、群名、地址，示例只用
 `https://wechat-connector.example.com`、`wxid_example_a`、`127.0.0.1`），连同一份 `persona-plugin.json`。`Testwechat-connectorWireFixtures` 把每个夹具按上表严格解码、过不变量，
 一份没在表里的夹具也会挂；`TestCheckProgramCatchesDrift` 拿夹具喂一个纯 Go 的假程序，看改了字段名、顺序、游标时 `CheckProgram` 会不会红。所以即使 CI 里没有 Node，
-Persona 一改 Go 类型（改名、删字段）这些测试就红，提醒程序一侧跟上。`wechat-connector` 这一组按当前插件包的真实输出整理（标识换成上面的示例值），插件的输出变了要在这里同步；它不会自动跟着插件更新。
+Persona 一改 Go 类型（改名、删字段）这些测试就红，提醒程序一侧跟上。`wechat-connector` 这一组按当前扩展包的真实输出整理（标识换成上面的示例值），扩展的输出变了要在这里同步；它不会自动跟着扩展更新。
 
 **跨仓库活测试**：`Testwechat-connectorProgramLive` 跑任意一个实现了连接器协议的外部程序，对着任意一个兼容 wechat-connector 开发者 API 的夹具服务。
-路径由两个环境变量给出：`PERSONA_TEST_wechat-connector_PROGRAM` 指向连接器程序的启动脚本（插件清单 `runtime.command` 指向的那个程序）；`wechat-connector_FIXTURE_SERVER` 指向夹具服务的脚本，
+路径由两个环境变量给出：`PERSONA_TEST_wechat-connector_PROGRAM` 指向连接器程序的启动脚本（扩展清单 `runtime.command` 指向的那个程序）；`wechat-connector_FIXTURE_SERVER` 指向夹具服务的脚本，
 测试用 Node 运行它（`PORT=0`，起在回环地址上）。需要 Node，两个环境变量有一个没设就 `t.Skip`，所以现有的测试和 CI 不受影响：
 
 ```sh
 cd server
-PERSONA_TEST_wechat-connector_PROGRAM=<插件目录>/<runtime.command> \
+PERSONA_TEST_wechat-connector_PROGRAM=<扩展目录>/<runtime.command> \
 wechat-connector_FIXTURE_SERVER=<夹具服务脚本> \
 go test ./internal/connector/conformance -run wechat-connector -v
 ```
@@ -269,7 +269,7 @@ go test ./internal/connector/conformance -run wechat-connector -v
 
 ```sh
 cd server
-PERSONA_TEST_CONNECTOR_PROGRAM=<仓库>/<插件>/bin/<程序> go test ./internal/connector/conformance -run ConnectorProgramLive -v
+PERSONA_TEST_CONNECTOR_PROGRAM=<仓库>/<扩展>/bin/<程序> go test ./internal/connector/conformance -run ConnectorProgramLive -v
 ```
 
 程序所在的包里 `persona-plugin.json` 在 `bin/` 的上一级。夹具服务起来后在 stdout 打印**一行** JSON：`base_url`、`outbound_sends_enabled`，和 `accounts`（每个账号的 `key` 是读取 + 事件的应用密钥，另有带发送范围的 `send_key`）。

@@ -103,3 +103,15 @@ func TestCodexSettingsOnTheNode(t *testing.T) {
 		t.Fatalf("mode %v", st.Mode())
 	}
 }
+
+// The app shows the node's details as written (iOS does not look them up): they say what an option does in plain
+// words and never name a config.toml value (#3855).
+func TestCodexDetailsNameNoOptionValue(t *testing.T) {
+	for _, s := range codexSettings {
+		for _, o := range s.Options {
+			if strings.Contains(s.Detail, o) {
+				t.Errorf("%s: detail %q names the option %q", s.Key, s.Detail, o)
+			}
+		}
+	}
+}

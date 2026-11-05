@@ -15,10 +15,10 @@ import (
 var codexSettings = []ClaudeSetting{
 	{Key: "model", Title: "模型", Detail: "没指定模型时 Codex 用哪个，比如 gpt-5.5", Type: "string", Default: ""},
 	{Key: "model_reasoning_effort", Title: "思考强度", Detail: "越高越慢、越仔细", Type: "enum", Options: codexEffortLevels, Default: "medium"},
-	{Key: "model_reasoning_summary", Title: "思考摘要", Detail: "把模型的思考整理成摘要显示，none 不显示", Type: "enum", Options: []string{"auto", "concise", "detailed", "none"}, Default: "auto"},
+	{Key: "model_reasoning_summary", Title: "思考摘要", Detail: "把模型的思考整理成摘要显示，也可以不显示", Type: "enum", Options: []string{"auto", "concise", "detailed", "none"}, Default: "auto"},
 	{Key: "model_verbosity", Title: "回答详细程度", Detail: "回答写多长", Type: "enum", Options: []string{"low", "medium", "high"}, Default: "medium"},
-	{Key: "approval_policy", Title: "什么时候问你", Detail: "执行命令前要不要先确认；never 一律不问", Type: "enum", Options: []string{"untrusted", "on-failure", "on-request", "never"}, Default: "on-request"},
-	{Key: "sandbox_mode", Title: "沙箱", Detail: "命令能读写哪些地方；danger-full-access 不设限", Type: "enum", Options: []string{"read-only", "workspace-write", "danger-full-access"}, Default: "read-only"},
+	{Key: "approval_policy", Title: "什么时候问你", Detail: "执行命令前要不要先问你，也可以一律不问", Type: "enum", Options: []string{"untrusted", "on-failure", "on-request", "never"}, Default: "on-request"},
+	{Key: "sandbox_mode", Title: "沙箱", Detail: "命令能读写哪些地方，也可以完全不设限", Type: "enum", Options: []string{"read-only", "workspace-write", "danger-full-access"}, Default: "read-only"},
 	{Key: "hide_agent_reasoning", Title: "隐藏思考过程", Detail: "不显示模型的思考事件", Type: "bool", Default: false},
 	{Key: "show_raw_agent_reasoning", Title: "显示原始思考", Detail: "模型给出原始思考内容时照原样显示", Type: "bool", Default: false},
 }

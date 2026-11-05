@@ -179,7 +179,9 @@ def module_paths():
     return re.compile("|".join(re.escape("/".join(p)) for p in out), re.I) if out else None
 
 
-IPV4 = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])")
+# Not part of a longer dotted run of digits (a version, an OID): a digit, or a dot with a digit past it, on either side.
+# A dot alone is punctuation, the end of a sentence or an ellipsis, and does not hide the address (#3924).
+IPV4 = re.compile(r"(?<!\d)(?<!\d\.)(\d{1,3}(?:\.\d{1,3}){3})(?!\d|\.\d)")
 # Documentation ranges (RFC 5737): what redacted fixtures and docs use for addresses. Also the IETF protocol
 # assignments block (RFC 6890): Python counts it private, but it is nobody's intranet (bundled SDKs list 192.0.0.192
 # as a cloud metadata address).

@@ -73,7 +73,7 @@ Claude 再调一次会再问一次。
 
 ## 邮箱工具（mail_*）
 
-邮箱工具由 hub 的邮件连接器提供（`server/internal/extmgr/mail_connector.go`，描述和参数在 `server/internal/prompts/mcp/mail/`），在 hub 上连 IMAP / SMTP，不经过手机。
+邮箱工具由 hub 的邮件连接器提供（`server/internal/extmgr/mail_connector.go` 的 `mailConnector`，描述和参数在 `server/internal/prompts/mcp/mail/`），在 hub 上连 IMAP / SMTP，不经过手机。
 助手和 Agent 都能用（连接器的 `AgentTools: mail_*`）。账号和凭据见 `docs/mail.md`。
 
 | 工具 | 需确认 | 说明 |

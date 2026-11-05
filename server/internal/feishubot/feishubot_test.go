@@ -46,6 +46,11 @@ func TestParseContent(t *testing.T) {
 	if c := ParseContent("text", `{"text":"@_user_1 帮我看下"}`, mentions); c.Text != "@Persona 帮我看下" {
 		t.Fatalf("text: %q", c.Text)
 	}
+	// A mention without a key must not be spliced between every rune of the text.
+	keyless := []Mention{{Name: "Nobody"}}
+	if c := ParseContent("text", `{"text":"你好"}`, keyless); c.Text != "你好" {
+		t.Fatalf("keyless mention: %q", c.Text)
+	}
 	post := `{"title":"周报","content":[[{"tag":"text","text":"见 "},{"tag":"a","text":"文档","href":"https://example.com/d"}],[{"tag":"img","image_key":"img_1"}],[{"tag":"code_block","language":"GO","text":"x := 1\n"}]]}`
 	c := ParseContent("post", post, nil)
 	if !strings.Contains(c.Text, "**周报**") || !strings.Contains(c.Text, "[文档](https://example.com/d)") || !strings.Contains(c.Text, "```go\nx := 1\n```") {
@@ -69,6 +74,39 @@ func TestParseContent(t *testing.T) {
 	}
 	if c := ParseContent("interactive", `{"title":"告警","elements":[[{"tag":"text","text":"CPU 高"}]]}`, nil); !strings.Contains(c.Text, "告警") || !strings.Contains(c.Text, "CPU 高") {
 		t.Fatalf("card: %q", c.Text)
+	}
+}
+
+func TestParsePostAtFallback(t *testing.T) {
+	mentions := []Mention{{
+		Key:  "@_user_1",
+		ID:   UserID{OpenID: "ou_mentioned", UnionID: "on_mentioned", UserID: "u_mentioned"},
+		Name: "Mentioned",
+	}}
+	cases := []struct {
+		name     string
+		node     string
+		mentions []Mention
+		want     string
+	}{
+		{"user name", `{"tag":"at","user_id":"ou_mentioned","user_name":"Named"}`, nil, "@Named"},
+		{"open id resolved via mentions", `{"tag":"at","user_id":"ou_mentioned"}`, mentions, "@Mentioned"},
+		{"union id resolved via mentions", `{"tag":"at","user_id":"on_mentioned"}`, mentions, "@Mentioned"},
+		{"user id resolved via mentions", `{"tag":"at","user_id":"u_mentioned"}`, mentions, "@Mentioned"},
+		{"id without mentions", `{"tag":"at","user_id":"ou_unknown"}`, nil, "@ou_unknown"},
+		{"resolved mention with empty name", `{"tag":"at","user_id":"ou_nameless"}`, []Mention{{
+			Key: "@_user_2", ID: UserID{OpenID: "ou_nameless"},
+		}}, "@ou_nameless"},
+		{"at all", `{"tag":"at","user_id":"all"}`, nil, "@所有人"},
+		{"empty at node", `{"tag":"at"}`, nil, "@某人"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := `{"title":"","content":[[{"tag":"text","text":"见 "},` + tc.node + `]]}`
+			if got := ParseContent("post", content, tc.mentions).Text; got != "见 "+tc.want {
+				t.Fatalf("got %q, want %q", got, "见 "+tc.want)
+			}
+		})
 	}
 }
 

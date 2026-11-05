@@ -113,7 +113,7 @@ internal fun ChatSessionInfoSheet(
             Text(session.displayTitle, style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink, maxLines = 2,
                 overflow = TextOverflow.Ellipsis)
             val status = Status.entries.firstOrNull { it.name == session.agentState.name }
-            Text(listOfNotNull(status?.label, machine?.displayName ?: session.machineId, session.spaceName?.takeIf(String::isNotBlank))
+            Text(listOfNotNull(status?.localizedLabel, machine?.displayName ?: session.machineId, session.spaceName?.takeIf(String::isNotBlank))
                 .joinToString(" / "), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }

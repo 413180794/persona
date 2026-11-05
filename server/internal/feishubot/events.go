@@ -185,7 +185,7 @@ func ParseContent(msgType, content string, mentions []Mention) Content {
 		_ = json.Unmarshal([]byte(content), &v)
 		c.Text = v.Text
 	case "post":
-		c = parsePost(content)
+		c = parsePost(content, mentions)
 	case "image":
 		var v struct {
 			ImageKey string `json:"image_key"`
@@ -237,6 +237,10 @@ func ParseContent(msgType, content string, mentions []Mention) Content {
 		c.Text = "[" + msgType + " 消息]"
 	}
 	for _, m := range mentions {
+		// An empty key is not a placeholder: ReplaceAll("", …) would insert between every rune.
+		if m.Key == "" {
+			continue
+		}
 		c.Text = strings.ReplaceAll(c.Text, m.Key, "@"+m.Name)
 	}
 	c.Text = strings.TrimSpace(c.Text)
@@ -245,12 +249,14 @@ func ParseContent(msgType, content string, mentions []Mention) Content {
 
 // parsePost flattens rich text: paragraphs become lines, links Markdown links, code blocks fenced; images are media.
 // A received post is {"title","content":[[…]]}; one read back may be keyed by language ({"zh_cn":{…}}).
-func parsePost(content string) Content {
+// mentions give names for at nodes that carry a user_id without a user_name.
+func parsePost(content string, mentions []Mention) Content {
 	type node struct {
 		Tag      string `json:"tag"`
 		Text     string `json:"text"`
 		Href     string `json:"href"`
 		UserName string `json:"user_name"`
+		UserID   string `json:"user_id"`
 		ImageKey string `json:"image_key"`
 		FileKey  string `json:"file_key"`
 		Language string `json:"language"`
@@ -292,7 +298,20 @@ func parsePost(content string) Content {
 			case "a":
 				fmt.Fprintf(&b, "[%s](%s)", n.Text, n.Href)
 			case "at":
-				b.WriteString("@" + n.UserName)
+				switch {
+				case n.UserName != "":
+					b.WriteString("@" + n.UserName)
+				case n.UserID == "all":
+					b.WriteString("@所有人")
+				case n.UserID != "":
+					if name := mentionName(n.UserID, mentions); name != "" {
+						b.WriteString("@" + name)
+					} else {
+						b.WriteString("@" + n.UserID)
+					}
+				default:
+					b.WriteString("@某人")
+				}
 			case "img":
 				if n.ImageKey != "" {
 					c.Media = append(c.Media, Media{Kind: "image", Key: n.ImageKey})
@@ -315,6 +334,17 @@ func parsePost(content string) Content {
 	}
 	c.Text = strings.Join(lines, "\n")
 	return c
+}
+
+// mentionName resolves an at node's user_id through the event's mentions; the id may be an open_id,
+// a user_id or a union_id depending on the tenant's id type.
+func mentionName(id string, mentions []Mention) string {
+	for _, m := range mentions {
+		if m.ID.OpenID == id || m.ID.UserID == id || m.ID.UnionID == id {
+			return m.Name
+		}
+	}
+	return ""
 }
 
 // cardText pulls the readable text out of a card someone forwarded (any shape: every "content" / "text" string).

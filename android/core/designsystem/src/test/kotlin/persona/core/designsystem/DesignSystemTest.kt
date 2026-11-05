@@ -19,7 +19,7 @@ class DesignSystemTest {
         state = state.copy(submitting = false)
         assertEquals(StatusLineKind.Unconfirmed, resolveStatusLine(state)?.kind)
         state = state.copy(unconfirmed = false)
-        assertEquals("等你处理 3 件", resolveStatusLine(state)?.text)
+        assertEquals(UiText.Plural(R.plurals.designsystem_line_needs_you_count, 3), resolveStatusLine(state)?.message)
         state = state.copy(pendingRequests = 0)
         assertEquals(StatusLineKind.Stopping, resolveStatusLine(state)?.kind)
         assertFalse(resolveStatusLine(state)!!.actionable)
@@ -28,8 +28,8 @@ class DesignSystemTest {
         state = state.copy(working = false)
         assertEquals(StatusLineKind.Waiting, resolveStatusLine(state)?.kind)
         assertNull(resolveStatusLine(state.copy(waiting = false)))
-        assertEquals("已换成新会话", resolveStatusLine(StatusLineState(replaced = true, working = true))?.text)
-        assertEquals("正在回传你的选择…", resolveStatusLine(StatusLineState(answering = true, blocked = true))?.text)
+        assertEquals(UiText.Res(R.string.designsystem_line_replaced), resolveStatusLine(StatusLineState(replaced = true, working = true))?.message)
+        assertEquals(UiText.Res(R.string.designsystem_line_answering), resolveStatusLine(StatusLineState(answering = true, blocked = true))?.message)
     }
 
     @Test
