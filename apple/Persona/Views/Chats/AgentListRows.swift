@@ -65,7 +65,7 @@ struct AgentListRows {
 
     /// A working tree's agents, then its nested spaces' while its「N 个子项」is open (`ChatsView.childWorktreeRows`).
     private func worktree(_ w: RepoTree.Worktree) -> [Session] {
-        let quiet = all && w.allSessions.allSatisfy { !order.stays($0) }
+        let quiet = all && w.treeSessions.allSatisfy { !order.stays($0) }
         let open = searching || (quiet ? expandedQuiet.contains(w.id) : !isFolded(w.id))
         guard open else { return [] }
         let own = quiet ? entryRows(TabPanes.entries(order.ordered(w.sessions))) : agentRows(w.sessions, key: w.id)

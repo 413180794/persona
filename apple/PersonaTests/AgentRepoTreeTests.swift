@@ -128,7 +128,7 @@ struct AgentRepoTreeTests {
                                             "tree/space/machine-a/orca:w-metrics"])
         #expect(main.childrenFoldID == "tree/machine-a//code/app" + RepoTree.childFoldSuffix)
         #expect(repo.sessions.map(\.sessionID).sorted() == ["c1", "c2", "g1", "p"])
-        #expect(main.allSessions.count == 4)
+        #expect(main.treeSessions.count == 4)
     }
 
     @Test func aChildWhoseParentIsNotListedStaysAtTheTop() {

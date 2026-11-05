@@ -68,7 +68,7 @@ nonisolated struct RepoTree {
         /// The fold id of its「N 个子项」row; folded until opened (`childFoldSuffix`).
         var childrenFoldID: String { id + RepoTree.childFoldSuffix }
         /// Its agents and its children's.
-        var allSessions: [Session] { sessions + children.flatMap(\.sessions) }
+        var treeSessions: [Session] { sessions + children.flatMap(\.sessions) }
     }
 
     /// One repository on one machine.
@@ -80,7 +80,7 @@ nonisolated struct RepoTree {
         var path: String
         /// The main checkout first, then by name.
         var worktrees: [Worktree]
-        var sessions: [Session] { worktrees.flatMap(\.allSessions) }
+        var sessions: [Session] { worktrees.flatMap(\.treeSessions) }
         /// Only its main checkout, nothing nested under it: its agents sit right under it, with no working-tree level.
         var flat: Bool { worktrees.count == 1 && worktrees[0].main && worktrees[0].children.isEmpty }
     }

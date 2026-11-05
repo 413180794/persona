@@ -1271,7 +1271,7 @@ private struct AgentsList: View {
     /// Whether a working tree has nothing going on (its children included: it then folds as a quiet space does, not
     /// remembered) and whether it is open.
     private func worktreeFold(_ w: RepoTree.Worktree) -> (quiet: Bool, open: Bool) {
-        let quiet = quick == .all && w.allSessions.allSatisfy { !stays($0) }
+        let quiet = quick == .all && w.treeSessions.allSatisfy { !stays($0) }
         return (quiet, !query.isEmpty || (quiet ? expandedQuiet.contains(w.id) : !isFolded(w.id)))
     }
 
