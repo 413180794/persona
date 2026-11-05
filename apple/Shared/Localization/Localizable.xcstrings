@@ -8970,6 +8970,50 @@
         }
       }
     },
+    "Meta 眼镜没有准备好：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Meta glasses are not ready: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meta メガネの準備ができていません：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meta 眼镜没有准备好：%@"
+          }
+        }
+      }
+    },
+    "Meta 眼镜还没有准备好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Meta glasses are not ready yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meta メガネの準備ができていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meta 眼镜还没有准备好"
+          }
+        }
+      }
+    },
     "Monitor 事件": {
       "localizations": {
         "en": {
@@ -28537,6 +28581,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "原消息已不可用"
+          }
+        }
+      }
+    },
+    "去允许": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "許可する"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去允许"
           }
         }
       }
@@ -49352,6 +49418,28 @@
         }
       }
     },
+    "手机麦克风": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phone Microphone"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone のマイク"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手机麦克风"
+          }
+        }
+      }
+    },
     "手表上的 Persona 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。": {
       "localizations": {
         "en": {
@@ -49392,6 +49480,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "手表电量过低，已保存的录音不会丢失"
+          }
+        }
+      }
+    },
+    "打不开眼镜的摄像头，请再试一次": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't open the glasses' camera. Try again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メガネのカメラを開けませんでした。もう一度お試しください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打不开眼镜的摄像头，请再试一次"
           }
         }
       }
@@ -52107,6 +52217,28 @@
         }
       }
     },
+    "拍一张": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take Photo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撮影"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍一张"
+          }
+        }
+      }
+    },
     "拍照": {
       "localizations": {
         "en": {
@@ -52125,6 +52257,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "拍照"
+          }
+        }
+      }
+    },
+    "拍照没有成功，请再试一次": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The photo didn't work. Try again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撮影できませんでした。もう一度お試しください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照没有成功，请再试一次"
+          }
+        }
+      }
+    },
+    "拍照超时，请确认眼镜还连着再试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taking the photo timed out. Check the glasses are still connected and try again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撮影がタイムアウトしました。メガネが接続されているか確認してもう一度お試しください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照超时，请确认眼镜还连着再试"
           }
         }
       }
@@ -66534,6 +66710,28 @@
         }
       }
     },
+    "正在拍照，请稍等": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taking a photo, one moment"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撮影中です。少々お待ちください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在拍照，请稍等"
+          }
+        }
+      }
+    },
     "正在操作 %@ · %@": {
       "localizations": {
         "zh-Hans": {
@@ -67158,6 +67356,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在连接…"
+          }
+        }
+      }
+    },
+    "正在连接眼镜": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting to the glasses"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メガネに接続中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在连接眼镜"
           }
         }
       }
@@ -69565,6 +69785,28 @@
         }
       }
     },
+    "没有找到眼镜或蓝牙耳机的麦克风，已改用手机麦克风": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No glasses or Bluetooth headset microphone found; using the phone's microphone"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メガネや Bluetooth ヘッドセットのマイクが見つからないため、iPhone のマイクを使います"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有找到眼镜或蓝牙耳机的麦克风，已改用手机麦克风"
+          }
+        }
+      }
+    },
     "没有描述": {
       "localizations": {
         "en": {
@@ -70265,6 +70507,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有这篇文档的访问权限"
+          }
+        }
+      }
+    },
+    "没有连上眼镜，请确认眼镜已戴上并和 Meta AI 连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The glasses are not connected. Make sure you are wearing them and they are connected to Meta AI"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メガネに接続されていません。メガネを装着し、Meta AI に接続されているか確認してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有连上眼镜，请确认眼镜已戴上并和 Meta AI 连接"
           }
         }
       }
@@ -73132,6 +73396,28 @@
         }
       }
     },
+    "照片读不出来，请再拍一次": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't read the photo. Take it again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真を読み込めませんでした。もう一度撮影してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "照片读不出来，请再拍一次"
+          }
+        }
+      }
+    },
     "版本": {
       "localizations": {
         "en": {
@@ -73814,6 +74100,28 @@
         }
       }
     },
+    "用 Meta 眼镜拍一张": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take one with the Meta glasses"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meta メガネで 1 枚撮影"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用 Meta 眼镜拍一张"
+          }
+        }
+      }
+    },
     "用%@扫码，扫码的人就是这个渠道的主人；登录状态加密存在 hub 上，解除绑定时删掉。": {
       "localizations": {
         "en": {
@@ -74097,6 +74405,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "用编造的数据看看每个页面，不连接任何服务器"
+          }
+        }
+      }
+    },
+    "用这张": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use This Photo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この写真を使う"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用这张"
           }
         }
       }
@@ -75572,6 +75902,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "真的发一个只回答一个词的请求（花几个 token），看能不能回答、要多久、是哪个模型答的。"
+          }
+        }
+      }
+    },
+    "眼镜 / 蓝牙耳机": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glasses / Bluetooth Headset"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メガネ / Bluetooth ヘッドセット"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "眼镜 / 蓝牙耳机"
+          }
+        }
+      }
+    },
+    "眼镜已断开，没有拍到照片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The glasses disconnected; no photo was taken"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メガネの接続が切れたため、写真を撮れませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "眼镜已断开，没有拍到照片"
+          }
+        }
+      }
+    },
+    "眼镜拍照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glasses Photo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メガネで撮影"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "眼镜拍照"
           }
         }
       }
@@ -81854,6 +82250,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "要做的事"
+          }
+        }
+      }
+    },
+    "要在 Meta AI 里允许 Persona 使用眼镜摄像头，会跳到 Meta AI。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Persona to use the glasses' camera in Meta AI. This opens Meta AI."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meta AI で Persona にメガネのカメラの使用を許可してください。Meta AI が開きます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要在 Meta AI 里允许 Persona 使用眼镜摄像头，会跳到 Meta AI。"
           }
         }
       }
@@ -88579,6 +88997,28 @@
         }
       }
     },
+    "还没有连上眼镜，请先等预览出现": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The glasses aren't connected yet. Wait for the preview first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだメガネに接続されていません。プレビューが表示されるまでお待ちください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有连上眼镜，请先等预览出现"
+          }
+        }
+      }
+    },
     "还没有连接 hub": {
       "localizations": {
         "en": {
@@ -89697,6 +90137,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个渠道在别处设置（hub.json 或它自己的页面），这里只看状态。"
+          }
+        }
+      }
+    },
+    "这个版本没有内置 Meta 眼镜支持": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This build has no Meta glasses support"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このビルドには Meta メガネのサポートが含まれていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个版本没有内置 Meta 眼镜支持"
           }
         }
       }
@@ -92385,6 +92847,28 @@
         }
       }
     },
+    "连接 Meta 眼镜": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect Meta Glasses"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meta メガネを接続"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接 Meta 眼镜"
+          }
+        }
+      }
+    },
     "连接 hub": {
       "localizations": {
         "en": {
@@ -94664,6 +95148,28 @@
         }
       }
     },
+    "重拍": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retake"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撮り直す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重拍"
+          }
+        }
+      }
+    },
     "重新写入并重画": {
       "localizations": {
         "en": {
@@ -96464,6 +96970,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要你授权"
+          }
+        }
+      }
+    },
+    "需要先在 Meta AI 里连上眼镜。点下面的按钮会跳到 Meta AI，连好后再回到 Persona。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect your glasses in Meta AI first. The button below opens Meta AI; come back to Persona once they are connected."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先に Meta AI でメガネを接続してください。下のボタンで Meta AI が開きます。接続したら Persona に戻ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要先在 Meta AI 里连上眼镜。点下面的按钮会跳到 Meta AI，连好后再回到 Persona。"
           }
         }
       }
@@ -98299,6 +98827,28 @@
         }
       }
     },
+    "麦克风": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイク"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "麦克风"
+          }
+        }
+      }
+    },
     "麦克风发生变化，录音已暂停": {
       "localizations": {
         "en": {
@@ -98427,6 +98977,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "麦克风正在用于听写，请先结束听写再录音"
+          }
+        }
+      }
+    },
+    "麦克风：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイク：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "麦克风：%@"
           }
         }
       }

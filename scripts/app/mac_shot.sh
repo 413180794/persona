@@ -25,9 +25,9 @@ app=${APP:-$derived/Build/Products/Debug/Persona.app}
 if [[ "${BUILD:-0}" == 1 ]]; then
     (
         cd "$root/apple"
+        eval "$(python3 ../scripts/jarvis_config.py env)"
         python3 ../scripts/jarvis_config.py xcconfig >/dev/null
         xcodegen generate -q
-        eval "$(python3 ../scripts/jarvis_config.py env)"
         xcodebuild build -project Persona.xcodeproj -scheme PersonaMac -configuration Debug -destination "platform=macOS" \
             -derivedDataPath "$derived" CODE_SIGNING_ALLOWED=NO -quiet
     )

@@ -66,6 +66,7 @@ type Conn struct {
 	state ConnState
 	ping  time.Duration
 	parts map[string]*partial
+	now   func() time.Time // the current moment (time.Now; overridable in tests)
 }
 
 type partial struct {
@@ -74,7 +75,7 @@ type partial struct {
 }
 
 func NewConn(api *Client, handler Handler, logf func(string, ...any)) *Conn {
-	return &Conn{api: api, handler: handler, logf: logf, ping: defaultPing, parts: map[string]*partial{}}
+	return &Conn{api: api, handler: handler, logf: logf, ping: defaultPing, parts: map[string]*partial{}, now: time.Now}
 }
 
 // State is the connection's state now.
@@ -209,6 +210,9 @@ func (c *Conn) once(ctx context.Context) error {
 				stop()
 				return
 			}
+			// A split message whose rest never arrives leaves a partial (up to the read limit in
+			// size); piggyback the sweep on the ping so it is reaped even with no more data frames.
+			c.sweepParts()
 			select {
 			case <-cctx.Done():
 				return
@@ -297,23 +301,29 @@ func (c *Conn) data(ctx context.Context, f *Frame, write func(*Frame) error) {
 }
 
 // combine collects the parts of a split message; it returns the whole payload once every part is in.
+// The expiry clock restarts with every arriving part: a part proves the sender is still sending the
+// message, so a slow link must not discard a message whose parts arrive more than partsLifetime apart.
 func (c *Conn) combine(id string, sum, seq int, b []byte) []byte {
+	now := c.now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for k, p := range c.parts {
-		if time.Since(p.at) > partsLifetime {
-			delete(c.parts, k)
-		}
-	}
 	if seq < 0 || seq >= sum {
 		return nil
 	}
 	p := c.parts[id]
 	if p == nil || len(p.bufs) != sum {
-		p = &partial{bufs: make([][]byte, sum), at: time.Now()}
+		p = &partial{bufs: make([][]byte, sum)}
 		c.parts[id] = p
 	}
+	p.at = now
 	p.bufs[seq] = b
+	// Other messages' partials expire against the clock of their own last arriving part; the id a
+	// part just arrived for is live by definition and is deleted below when the message is complete.
+	for k, q := range c.parts {
+		if k != id && now.Sub(q.at) > partsLifetime {
+			delete(c.parts, k)
+		}
+	}
 	var all []byte
 	for _, part := range p.bufs {
 		if part == nil {
@@ -323,4 +333,17 @@ func (c *Conn) combine(id string, sum, seq int, b []byte) []byte {
 	}
 	delete(c.parts, id)
 	return all
+}
+
+// sweepParts drops partials whose last part arrived more than partsLifetime ago. The ping tick
+// calls it so abandoned partials are reaped even when no more split frames arrive.
+func (c *Conn) sweepParts() {
+	now := c.now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k, p := range c.parts {
+		if now.Sub(p.at) > partsLifetime {
+			delete(c.parts, k)
+		}
+	}
 }

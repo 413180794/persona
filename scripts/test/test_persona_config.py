@@ -64,5 +64,41 @@ class PersonaConfigTests(unittest.TestCase):
             self.assertEqual(shell.stdout, 'http://hub.example.com|http://hub.example.com|test-private-value')
 
 
+class MetaWearablesConfigTests(unittest.TestCase):
+    def test_env_enables_the_meta_wearables_include_only_when_configured(self):
+        cases = {
+            'enabled': ({'app': {'meta_wearables': {'enabled': True}}}, 'YES'),
+            'disabled': ({'app': {'meta_wearables': {'enabled': False}}}, 'NO'),
+            'missing section': ({'app': {'bundle_id': 'com.example.assistant'}}, 'NO'),
+            'missing app': ({}, 'NO'),
+            'not a boolean': ({'app': {'meta_wearables': {'enabled': 'yes'}}}, 'NO'),
+        }
+        for name, (cfg, expected) in cases.items():
+            with self.subTest(case=name):
+                generated = config.env(cfg)
+                self.assertEqual(generated['JARVIS_META_WEARABLES'], expected)
+                self.assertEqual(generated['PERSONA_META_WEARABLES'], expected)
+
+    def test_xcconfig_writes_meta_app_id_and_client_token(self):
+        cases = {
+            'configured': ({'app': {'meta_wearables': {'enabled': True, 'app_id': '1234567890',
+                                                       'client_token': 'AR|token|value'}}},
+                           'PERSONA_META_APP_ID = 1234567890', 'PERSONA_META_CLIENT_TOKEN = AR|token|value'),
+            'developer mode': ({'app': {'meta_wearables': {'enabled': False, 'app_id': '', 'client_token': ''}}},
+                               'PERSONA_META_APP_ID = 0', 'PERSONA_META_CLIENT_TOKEN = '),
+            'missing section': ({'app': {'bundle_id': 'com.example.assistant'}},
+                                'PERSONA_META_APP_ID = 0', 'PERSONA_META_CLIENT_TOKEN = '),
+        }
+        for name, (cfg, app_line, token_line) in cases.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / 'apple').mkdir()
+                with patch.object(config, 'ROOT', str(root)):
+                    config.xcconfig(cfg)
+                lines = (root / 'apple' / 'Config.xcconfig').read_text().splitlines()
+                self.assertIn(app_line, lines)
+                self.assertIn(token_line, lines)
+
+
 if __name__ == '__main__':
     unittest.main()

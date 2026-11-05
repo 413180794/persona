@@ -1,4 +1,9 @@
 name: Persona
+# Meta glasses (docs/meta-glasses.md): the Wearables SDK, its keys and the glasses' Bluetooth and network strings are
+# merged in only when config.json app.meta_wearables.enabled is true (PERSONA_META_WEARABLES=YES, set by env).
+include:
+  - path: meta-wearables.yml
+    enable: ${PERSONA_META_WEARABLES}
 # Bundle id and team come from Config.xcconfig, generated from the personal config by scripts/jarvis_config.py
 # (docs/config.md); this file and the Info.plists only say $(JARVIS_BUNDLE_ID).
 configFiles:

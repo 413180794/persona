@@ -247,6 +247,8 @@ extension Theme {
         static let photo = "photo"
         static let photos = "photo.on.rectangle"
         static let camera = "camera"
+        /// 眼镜拍照: a photo taken with the Meta glasses (Persona/Glasses), the composer's glasses item.
+        static let glasses = "eyeglasses"
         static let list = "list.bullet.rectangle"
         static let text = "text.alignleft"
         static let machines = "macbook.and.iphone"
@@ -401,17 +403,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu [removed] words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

@@ -180,9 +180,10 @@ struct PromptComposer: View {
 
 /// What the composer's menus offer.
 enum PromptItems {
-    static func attachments(camera: Bool) -> [PromptSource] {
+    static func attachments(camera: Bool, glasses: Bool = false) -> [PromptSource] {
         var out = [PromptSource(id: "photo", name: String(localized: "照片"), detail: String(localized: "照片或视频，最多 4 个"), icon: .symbol("photo.on.rectangle"), kind: .attach)]
         if camera { out.append(PromptSource(id: "camera", name: String(localized: "拍照"), detail: String(localized: "用相机拍一张"), icon: .symbol("camera"), kind: .attach)) }
+        if glasses { out.append(PromptSource(id: "glasses", name: String(localized: "眼镜拍照"), detail: String(localized: "用 Meta 眼镜拍一张"), icon: .symbol(Theme.Icon.glasses), kind: .attach)) }
         out.append(PromptSource(id: "file", name: String(localized: "文件"), detail: String(localized: "传到那台电脑，路径插进输入框"), icon: .symbol("doc"), kind: .attach))
         return out
     }

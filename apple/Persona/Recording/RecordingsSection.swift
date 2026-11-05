@@ -1,5 +1,8 @@
 #if os(iOS) || os(visionOS)
 import SwiftUI
+#if os(iOS)
+import AVFoundation
+#endif
 
 /// 知识库 › 录音 (docs/recording.md): start a recording, see this device's recordings (the watch's arrive here) with
 /// where each one is (recording, transcribing, synced), open one for its transcript. The text goes to the knowledge base
@@ -93,15 +96,47 @@ struct RecordingStatusText: View {
 struct RecordingCaptureControls: View {
     @State private var capture = RecordingCapture.shared
     @State private var locale = "zh-CN"
+    #if os(iOS)
+    @AppStorage(RecordingInput.storageKey) private var inputRaw = RecordingInput.phone.rawValue
+    @State private var hasBluetooth = false
+    #endif
 
     var body: some View {
+        #if os(iOS) // Bluetooth input is iPhone-only (`RecordingInput`); visionOS records with its own microphone
+        controls
+            .task { // the 麦克风 picker shows only while a Bluetooth device (glasses, headset) is on the route
+                refreshBluetooth()
+                for await _ in NotificationCenter.default.notifications(named: AVAudioSession.routeChangeNotification) { refreshBluetooth() }
+            }
+        #else
+        controls
+        #endif
+    }
+
+    /// The microphone a recording starts with: the Bluetooth one only when chosen and still connected.
+    private var input: RecordingInput {
+        #if os(iOS)
+        hasBluetooth ? (RecordingInput(rawValue: inputRaw) ?? .phone) : .phone
+        #else
+        .phone
+        #endif
+    }
+
+    @ViewBuilder private var controls: some View {
         if capture.state == .idle {
             Picker("录音语言", selection: $locale) {
                 Text("中文").tag("zh-CN")
                 Text("英语").tag("en-US")
                 Text("日语").tag("ja-JP")
             }.font(Theme.Font.body)
-            Button { Task { await capture.start(locale: locale) } } label: {
+            #if os(iOS)
+            if hasBluetooth {
+                Picker("麦克风", selection: $inputRaw) {
+                    ForEach(RecordingInput.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
+                }.font(Theme.Font.body)
+            }
+            #endif
+            Button { let chosen = input; Task { await capture.start(locale: locale, input: chosen) } } label: {
                 Label("开始录音", systemImage: Theme.Icon.recording).lineLimit(1)
             }.accessibilityIdentifier("recording-start")
         } else if capture.state == .starting {
@@ -113,6 +148,11 @@ struct RecordingCaptureControls: View {
                 Spacer()
                 Text(capture.state == .paused ? "已暂停" : "正在录音").font(Theme.Font.secondary).foregroundStyle(Theme.danger)
             }
+            #if os(iOS)
+            if hasBluetooth, RecordingInput(rawValue: inputRaw) == .bluetooth, let name = capture.inputName {
+                Text("麦克风：\(name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            #endif
             HStack(spacing: Theme.Space.m) {
                 Button { capture.togglePause() } label: {
                     Label(capture.state == .paused ? "继续" : "暂停", systemImage: capture.state == .paused ? Theme.Icon.run : Theme.Icon.pause).lineLimit(1)
@@ -124,7 +164,14 @@ struct RecordingCaptureControls: View {
             Text("离开此页或锁屏仍会继续录音，结束时请点「结束」。").font(Theme.Font.caption).foregroundStyle(.secondary)
         }
         if let error = capture.error { Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger) }
+        if let notice = capture.notice { Text(notice).font(Theme.Font.secondary).foregroundStyle(.secondary) }
     }
+
+    #if os(iOS)
+    private func refreshBluetooth() {
+        hasBluetooth = RecordingInput.bluetoothConnected
+    }
+    #endif
 }
 
 /// One recording's transcript, with re-transcribing in another language and delete (here and in the knowledge base).

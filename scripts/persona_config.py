@@ -85,6 +85,8 @@ def env(cfg: dict) -> dict:
         # Where scripts/release/publish.sh puts jarvisd and install.sh (the site/ worker's domain), and the wrangler to run.
         "JARVIS_PUBLISH_URL": get(cfg, "publish.site_url", "").rstrip("/"),
         "JARVIS_WRANGLER": os.path.expanduser(get(cfg, "publish.wrangler", "")),
+        # Meta glasses (docs/meta-glasses.md): the project.yml include that adds the Meta Wearables SDK is on only for YES.
+        "JARVIS_META_WEARABLES": "YES" if get(cfg, "app.meta_wearables.enabled", False) is True else "NO",
     }
     # Which Xcode builds (and releases) the app; a DEVELOPER_DIR already in the environment wins. iPhone Duo needs
     # Xcode 27 or later: built with an older one, the app does not reach under the status bar and the camera.
@@ -115,6 +117,9 @@ def xcconfig(cfg: dict):
         f.write("DEVELOPMENT_TEAM = %s\n" % get(cfg, "app.team_id", ""))
         # The push relay the app registers with (docs/push-relay.md); "//" starts a comment in xcconfig, hence $().
         f.write("JARVIS_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))
+        # Meta Wearables (docs/meta-glasses.md): 0 means Developer Mode (no attestation), as Meta's docs say.
+        f.write("PERSONA_META_APP_ID = %s\n" % (str(get(cfg, "app.meta_wearables.app_id", "") or "") or "0"))
+        f.write("PERSONA_META_CLIENT_TOKEN = %s\n" % (get(cfg, "app.meta_wearables.client_token", "") or ""))
 
 
 def export_options(cfg: dict, out: str, destination: str = "upload"):

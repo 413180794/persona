@@ -85,7 +85,12 @@ nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
     }
 
     func resume() throws {
-        if engine.inputNode.numberOfInputs == 0 { throw RecorderError.noInput }
+        let input = engine.inputNode
+        if input.numberOfInputs == 0 { throw RecorderError.noInput }
+        if converter?.inputFormat != input.outputFormat(forBus: 0) {
+            try restartAfterConfigurationChange()
+            return
+        }
         try engine.start()
         shared.withLock { $0.running = true }
     }

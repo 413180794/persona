@@ -16,13 +16,17 @@ final class RecordingCapture {
     private(set) var elapsed: Double = 0
     private(set) var recordingID: UUID?
     var error: String?
+    /// Non-blocking hint, e.g. the Bluetooth microphone was not found and the phone mic is used.
+    private(set) var notice: String?
     var onSaved: ((UUID) -> Void)?
+    @ObservationIgnored private var input: RecordingInput = .phone
     @ObservationIgnored private var writer: RecordingSegmentWriter?
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var interrupted = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private let microphoneOwner = UUID()
+    @ObservationIgnored private var activeMicOwner: UUID?
+    @ObservationIgnored private var resumeTask: Task<Void, Never>?
 
     private init() {
         RecordingLibrary.shared.recover(source: Self.source)
@@ -54,18 +58,60 @@ final class RecordingCapture {
         #endif
     }
 
-    private func configureSession() throws {
+    private func configureSession(token: UUID) async throws {
         let session = AVAudioSession.sharedInstance()
+        guard generation == token else { return }
+        notice = nil
         #if os(iOS) || os(visionOS)
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-        #else
-        try session.setCategory(.record, mode: .default)
+        #if os(iOS)
+        if input == .bluetooth {
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP])
+            try session.setActive(true)
+            if let port = await bluetoothInput(session, token: token) {
+                guard generation == token else { return }
+                try session.setPreferredInput(port)
+                return
+            }
+            guard generation == token else { return }
+            notice = String(localized: "没有找到眼镜或蓝牙耳机的麦克风，已改用手机麦克风")
+        }
         #endif
+        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
         try session.setActive(true)
-        #if os(iOS) || os(visionOS)
+        #if os(iOS)
+        let ports = session.availableInputs ?? []
+        if let index = RecordingInput.preferredIndex(ports.map(\.portType), for: .phone) {
+            try session.setPreferredInput(ports[index])
+        }
+        #else
         if let mic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) { try session.setPreferredInput(mic) }
         #endif
+        #else
+        try session.setCategory(.record, mode: .default)
+        try session.setActive(true)
+        #endif
     }
+
+    #if os(iOS)
+    /// The Bluetooth HFP input appears only after the route settles, so poll for up to two seconds.
+    private func bluetoothInput(_ session: AVAudioSession, token: UUID) async -> AVAudioSessionPortDescription? {
+        var waited = 0
+        while generation == token, !Task.isCancelled {
+            let ports = session.availableInputs ?? []
+            if let index = RecordingInput.preferredIndex(ports.map(\.portType), for: .bluetooth) { return ports[index] }
+            guard waited < 10 else { return nil }
+            do { try await Task.sleep(for: .milliseconds(200)) } catch { return nil }
+            waited += 1
+        }
+        return nil
+    }
+
+    /// Name of the input the current route records from, shown while recording.
+    var inputName: String? {
+        guard state == .recording || state == .paused else { return nil }
+        return AVAudioSession.sharedInstance().currentRoute.inputs.first?.portName
+    }
+    #endif
 
     private static func permission() async -> Bool {
         if #available(iOS 17.0, watchOS 10.0, *) { return await AVAudioApplication.requestRecordPermission() }
@@ -74,19 +120,24 @@ final class RecordingCapture {
         }
     }
 
-    func start(locale: String = "zh-CN") async {
+    func start(locale: String = "zh-CN", input: RecordingInput = .phone) async {
         guard state == .idle else { return }
         generation = UUID(); let token = generation
-        state = .starting; error = nil
+        state = .starting; error = nil; notice = nil
+        self.input = input
         let allowed = await Self.permission()
         guard generation == token, state == .starting else { return }
         guard allowed else { state = .idle; error = String(localized: "请在系统设置中允许 Persona 使用麦克风"); return }
         if let problem = Self.resourceProblem(starting: true) { state = .idle; error = problem; return }
-        guard RecordingMicrophone.shared.claim(microphoneOwner) else {
+        let micOwner = UUID()
+        guard RecordingMicrophone.shared.claim(micOwner) else {
             state = .idle; error = String(localized: "麦克风正在用于听写，请先结束听写再录音"); return
         }
+        activeMicOwner = micOwner
         do {
-            try configureSession()
+            try await configureSession(token: token)
+            // Cancelled while Bluetooth discovery was running: cancelStarting() already released the session and mic.
+            guard generation == token else { return }
             let entry = try RecordingLibrary.shared.create(source: Self.source, locale: locale)
             recordingID = entry.id
             let writer = RecordingSegmentWriter(directory: RecordingLibrary.shared.folder(entry.id))
@@ -101,26 +152,40 @@ final class RecordingCapture {
             elapsed = 0; state = .recording
             startTicker()
         } catch {
+            guard generation == token else { return }
             if let id = recordingID { RecordingLibrary.shared.change(id) { $0.active = false; $0.expectedSegments = 0 } }
             recordingID = nil; state = .idle
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            RecordingMicrophone.shared.release(microphoneOwner)
+            releaseAudioSession()
             self.error = String(localized: "麦克风打不开，请稍后重试")
         }
     }
 
     func cancelStarting() {
         guard state == .starting else { return }
-        generation = UUID(); state = .idle
+        generation = UUID(); state = .idle; notice = nil
+        releaseAudioSession()
     }
 
     func togglePause() {
         guard let writer else { return }
         interrupted = false
-        if state == .recording { writer.pause(); state = .paused }
-        else if state == .paused {
-            do { try configureSession(); try writer.resume(); state = .recording }
-            catch { self.error = String(localized: "麦克风打不开，录音仍已保存") }
+        if state == .recording {
+            resumeTask?.cancel(); resumeTask = nil
+            writer.pause(); state = .paused
+        } else if state == .paused, resumeTask == nil {
+            let token = generation
+            resumeTask = Task { @MainActor [weak self] in
+                defer { self?.resumeTask = nil }
+                guard let self else { return }
+                do {
+                    try await self.configureSession(token: token)
+                    guard self.generation == token, self.writer === writer, self.state == .paused else { return }
+                    try writer.resume(); self.state = .recording
+                } catch {
+                    guard self.generation == token else { return }
+                    self.error = String(localized: "麦克风打不开，录音仍已保存")
+                }
+            }
         }
     }
 
@@ -136,6 +201,8 @@ final class RecordingCapture {
     @discardableResult func stop() -> UUID? {
         if state == .starting { cancelStarting(); return nil }
         guard let writer, let id = recordingID else { return nil }
+        generation = UUID()
+        resumeTask?.cancel(); resumeTask = nil
         ticker?.cancel(); ticker = nil
         writer.stop()
         // 停止在分段边界时没有尾段，必须取所有定稿部分再写结束消息。
@@ -144,11 +211,21 @@ final class RecordingCapture {
             entry.active = false
             entry.expectedSegments = (entry.segments.map(\.index).max() ?? -1) + 1
         }
-        self.writer = nil; recordingID = nil; state = .idle; interrupted = false
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        RecordingMicrophone.shared.release(microphoneOwner)
+        self.writer = nil; recordingID = nil; state = .idle; interrupted = false; notice = nil
+        releaseAudioSession()
         onSaved?(id)
         return id
+    }
+
+    private func releaseAudioSession() {
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setPreferredInput(nil)
+        #endif
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if let owner = activeMicOwner {
+            activeMicOwner = nil
+            RecordingMicrophone.shared.release(owner)
+        }
     }
 
     private func save(_ segment: RecordingSegmentWriter.Segment, id: UUID) {

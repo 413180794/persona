@@ -3423,6 +3423,7 @@ struct Composer: View, Equatable {
     @State private var picks: [PhotosPickerItem] = []
     @State private var showPhotos = false
     @State private var showCamera = false
+    @State private var showGlasses = false // 眼镜拍照 (Persona/Glasses), only when MetaGlasses.isBuiltIn
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var editingIndex: Int?
     @State private var showFiles = false
@@ -3630,6 +3631,9 @@ struct Composer: View, Equatable {
                     if CameraPicker.isAvailable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
                     }
+                    if MetaGlasses.isBuiltIn {
+                        Button { showGlasses = true } label: { Label("眼镜拍照", systemImage: Theme.Icon.glasses).lineLimit(1) }
+                    }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
                     extensionPrompts
                     if !shellChat { quickCommands } // an agent's, as its composer offered them before the shell's
@@ -3643,7 +3647,7 @@ struct Composer: View, Equatable {
                                text: textBinding, selection: $selection, focused: $focused,
                                hasAttachments: hasAttachments,
                                stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
-                               attach: PromptItems.attachments(camera: CameraPicker.isAvailable),
+                               attach: PromptItems.attachments(camera: CameraPicker.isAvailable, glasses: MetaGlasses.isBuiltIn),
                                mentions: mentions,
                                commands: promptCommands,
                                models: canPickModel ? PromptItems.claudeModels : [],
@@ -3654,6 +3658,7 @@ struct Composer: View, Equatable {
                                    switch source.id {
                                    case "photo": showPhotos = true
                                    case "camera": showCamera = true
+                                   case "glasses": showGlasses = true
                                    default: showFiles = true
                                    }
                                },
@@ -3689,6 +3694,9 @@ struct Composer: View, Equatable {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
+                    }
+                    if MetaGlasses.isBuiltIn {
+                        Button { showGlasses = true } label: { Label("眼镜拍照", systemImage: Theme.Icon.glasses).lineLimit(1) }
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
                     extensionPrompts
@@ -3821,6 +3829,11 @@ struct Composer: View, Equatable {
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker { img in add(img) }.ignoresSafeArea()
         }
+        #if os(iOS)
+        .sheet(isPresented: $showGlasses) {
+            GlassesCaptureSheet { img in add(img) }
+        }
+        #endif
         .onChange(of: picks) { _, items in
             guard !items.isEmpty else { return }
             Task { await load(items) }

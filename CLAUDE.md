@@ -273,6 +273,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/computer-use.md` | 操控电脑：内置插件 `cua`（默认关、按机器开），助手经 hub → node → Cua Driver 看窗口、点按、截图（`computer_state` / `computer_run`），能力发现、会话、截图、写操作的日志和确认；一键安装和实时画面（屏幕共享经 hub 隧道）的方案 |
 | `docs/office.md` | 生成 Word / PowerPoint / Excel（`personad office`，M9）：Markdown 生成 docx / pptx，JSON / CSV 生成 xlsx（写时算好公式的值），check 读回结构；为什么做进 personad、支持什么、QuickLook 的限制 |
 | `docs/recording.md` | 手机和 Apple Watch 录音进知识库：分段、本机转写、可靠回传、只传文字的同步（幂等、补全、删除）、保留期与验证边界 |
+| `docs/meta-glasses.md` | Meta 智能眼镜：眼镜麦克风（蓝牙 HFP）作为录音输入、按配置接入 Meta DAT SDK 的眼镜拍照，为什么不叠在滚动录音上，Xcode 26.4 和审核风险，Meta 侧的申请 |
 
 ### 客户端
 

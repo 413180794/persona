@@ -25,6 +25,8 @@
   已传的 revision、待删、被拒（400）和 `days` 记在录音目录的 `sync.json`，重启只传变了的。连不上 / 503 按 5 秒起翻倍、最多 10 分钟重试，回到前台、新的保存都会立刻再试；
   启动、回到前台（最多每 10 分钟一次）对账。410 或对账里 `deleted` 有的：在别处（网页等）删过，本机也删。没有一句文字的录音（没识别到语音）不上传。
 
+手机录音可以选眼镜或蓝牙耳机的麦克风（蓝牙 HFP），见 `docs/meta-glasses.md`。
+
 ## 迁移来源与边界
 
 复用 Hourhand 的 `Shared/SegmentRecorder.swift`（AAC 分段）、`HourhandWatch/TransferQueue.swift`（持久化、回传退避）、`Hourhand/Transcription/SpeechEngines.swift`（本机引擎和时间戳）。迁移后统一使用 `Recording` 前缀，去掉产品账号、付费、云端、位置和独立录音库导航。

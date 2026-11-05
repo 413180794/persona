@@ -16,6 +16,7 @@ struct PersonaApp: App {
                 .environment(model)
                 .task(id: model.fleetLook) { LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces } }
                 .onOpenURL { url in
+                    if MetaGlasses.shared.handle(url) { return } // the Meta AI app's callback (docs/meta-glasses.md)
                     #if os(iOS)
                     if let link = FleetLink.session(url) { // tapped the Live Activity
                         // "group|machine" for another group's row (FleetMerge); a row the hub pushed names no group.
@@ -68,6 +69,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         _ = KeyboardState.shared // watches the keyboard from the start: a card may come while it is already up
         UNUserNotificationCenter.current().delegate = self
         Task { await ExtensionNotificationActions.preserveAndRegister { NotificationActions.categories } }
+        MetaGlasses.shared.configure() // a no-op without the Meta Wearables SDK (docs/meta-glasses.md)
         #if os(iOS)
         QuickAction.publish()
         #endif
