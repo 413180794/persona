@@ -156,3 +156,85 @@ export function dockerSteps(s: HubUpdateStatus): { headline?: string; steps: { t
   }
   return { steps: [{ text: t("lib-hub-update.docker_how"), copy: DOCKER_COMMAND }] };
 }
+
+/** The one quiet line over the Agents list about the hub (docs/hub-update.md「App 里」, iOS / Android `HubNotice`),
+ *  the most pressing first. The app's two compatibility lines (app / hub too old) don't apply: the hub serves this
+ *  page itself, so the two are always the same version. */
+export type HubNotice =
+  | { kind: "updating"; what: string }
+  | { kind: "rolled_back"; why: string; build: number }
+  | { kind: "auto_on" }
+  | { kind: "available"; version: string; build: number }
+  | { kind: "new_image"; version: string };
+
+/** What closing the line remembers, so this one does not come back (null: it cannot be closed). Same keys as the app's. */
+export function hubNoticeKey(n: HubNotice): string | null {
+  switch (n.kind) {
+    case "rolled_back":
+      return `rolledBack:${n.build}`;
+    case "available":
+      return `build:${n.build}`;
+    case "new_image":
+      return `image:${n.version}`;
+    default:
+      return null;
+  }
+}
+
+/** Every line that applies, the most pressing first. */
+export function hubNoticeCandidates(s: HubUpdateStatus | null | undefined): HubNotice[] {
+  if (!s) return [];
+  const out: HubNotice[] = [];
+  if (updateWorking(s)) out.push({ kind: "updating", what: updateStateTitle(s) });
+  if (s.state === "rolled_back" && s.error && s.latest?.build != null) out.push({ kind: "rolled_back", why: s.error, build: s.latest.build });
+  if (s.auto_notice) out.push({ kind: "auto_on" });
+  const l = s.latest;
+  if (l?.newer) {
+    if (s.channel === "docker") out.push({ kind: "new_image", version: l.version });
+    // held: auto-update will not install it by itself either
+    else if (s.can_update && (!s.auto || l.held) && !l.bad) out.push({ kind: "available", version: l.version, build: l.build });
+  }
+  return out;
+}
+
+/** The line to show, past the ones the user closed (`dismissed`: their `hubNoticeKey`s). */
+export function hubNotice(s: HubUpdateStatus | null | undefined, dismissed: readonly string[] = []): HubNotice | null {
+  return hubNoticeCandidates(s).find((n) => {
+    const key = hubNoticeKey(n);
+    return key === null || !dismissed.includes(key);
+  }) ?? null;
+}
+
+export function hubNoticeText(n: HubNotice): string {
+  switch (n.kind) {
+    case "updating":
+      return t("lib-hub-update.notice_updating", { what: n.what });
+    case "rolled_back":
+      return n.why; // the hub's own words
+    case "auto_on":
+      return t("lib-hub-update.notice_auto_on");
+    case "available":
+      return t("lib-hub-update.notice_available", { version: n.version });
+    case "new_image":
+      return t("lib-hub-update.notice_new_image", { version: n.version });
+  }
+}
+
+const DISMISSED_KEY = "persona.hubNotice.dismissed";
+
+/** The lines the user closed, the last few (like the app's `hubNotice.dismissed`). */
+export function dismissedHubNotices(store: Pick<Storage, "getItem"> = localStorage): string[] {
+  try {
+    const v: unknown = JSON.parse(store.getItem(DISMISSED_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Remembers `key` as closed and returns the new list (the last 8). */
+export function dismissHubNotice(key: string, store: Pick<Storage, "getItem" | "setItem"> = localStorage): string[] {
+  const next = [...dismissedHubNotices(store).filter((k) => k !== key), key].slice(-8);
+  store.setItem(DISMISSED_KEY, JSON.stringify(next));
+  return next;
+}

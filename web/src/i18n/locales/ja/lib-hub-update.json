@@ -21,5 +21,14 @@
   "docker_set_image": "ハブのマシンで、composeファイルと同じ場所にある.envのJARVIS_IMAGEを次に変更します：",
   "docker_then_run": "続いて、そのディレクトリで実行します：",
   "docker_run": "ハブのマシンで、composeファイルのあるディレクトリで実行します：",
-  "docker_how": "Dockerで動くハブは新しいイメージで更新します。新しいイメージがあれば、composeファイルのあるディレクトリで実行します："
+  "docker_how": "Dockerで動くハブは新しいイメージで更新します。新しいイメージがあれば、composeファイルのあるディレクトリで実行します：",
+  "notice_updating": "ハブを更新中：{what}",
+  "notice_auto_on": "ハブはアイドル時に自動で更新されます",
+  "notice_available": "ハブの新しいバージョン {version} があります",
+  "notice_new_image": "ハブの新しいイメージ {version} があります",
+  "notice_update": "更新",
+  "notice_turn_off": "オフにする",
+  "notice_got_it": "了解",
+  "notice_dismiss": "今後表示しない",
+  "notice_open": "設定 › ハブを開く"
 }

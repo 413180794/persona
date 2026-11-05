@@ -22,5 +22,14 @@
   "docker_set_image": "On the hub machine, set JARVIS_IMAGE in the .env next to the compose file to:",
   "docker_then_run": "Then run in that folder:",
   "docker_run": "On the hub machine, run in the compose file's folder:",
-  "docker_how": "A Docker hub updates with a new image. When there is one, run this in the compose file's folder:"
+  "docker_how": "A Docker hub updates with a new image. When there is one, run this in the compose file's folder:",
+  "notice_updating": "Hub updating: {what}",
+  "notice_auto_on": "The hub updates itself when idle",
+  "notice_available": "Hub version {version} is available",
+  "notice_new_image": "A new hub image {version} is available",
+  "notice_update": "Update",
+  "notice_turn_off": "Turn off",
+  "notice_got_it": "Got it",
+  "notice_dismiss": "Don't show again",
+  "notice_open": "Open Settings › Hub"
 }

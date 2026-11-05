@@ -33,6 +33,7 @@ import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, type MenuItem } from
 import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
 import { HerdrNotices } from "./agents/HerdrNotices";
+import { HubNoticeLine } from "./agents/HubNoticeRow";
 import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { NodeMenu } from "./NodeMenu";
@@ -506,6 +507,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       <div inert={folded || undefined}>
       <FilterBar selection={filter} counts={filterTotals} onChoose={choose} botmux={botmuxCount > 0 || botmuxHidden ? { hidden: botmuxHidden, onToggle: toggleBotmux } : undefined} />
       {/* 「<电脑> 的 herdr 没在运行」with 启动 (#1916): before a message to an agent there fails */}
+      {/* the one line about the hub (#2897): updating, rolled back, a newer version or image */}
+      {!folded && <HubNoticeLine />}
       {!folded && <HerdrNotices />}
 
       {unreadShown.length > 0 && (

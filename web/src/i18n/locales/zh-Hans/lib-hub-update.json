@@ -21,5 +21,14 @@
   "docker_set_image": "在 hub 所在的机器上，把 compose 文件旁边 .env 里的 JARVIS_IMAGE 改成：",
   "docker_then_run": "再在那个目录里运行：",
   "docker_run": "在 hub 所在的机器上，compose 文件所在的目录里运行：",
-  "docker_how": "Docker 部署的 hub 由新镜像更新：有新镜像时在 compose 文件所在的目录里运行"
+  "docker_how": "Docker 部署的 hub 由新镜像更新：有新镜像时在 compose 文件所在的目录里运行",
+  "notice_updating": "hub 正在更新：{what}",
+  "notice_auto_on": "hub 会在空闲时自动更新",
+  "notice_available": "hub 有新版本 {version}",
+  "notice_new_image": "hub 有新镜像 {version}",
+  "notice_update": "更新",
+  "notice_turn_off": "关闭",
+  "notice_got_it": "知道了",
+  "notice_dismiss": "不再提示",
+  "notice_open": "打开设置 › hub"
 }
