@@ -311,7 +311,7 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 		defer n.mu.Unlock()
 		return strings.Join(n.kept, " ") == "main-0001 trip-0002"
 	})
-	if got := h.taskOfConversation(ctx, "server", "trip-0002"); got != "早报" {
-		t.Fatalf("the bot names a task's conversation: %q", got)
+	if tasks, ok := h.assistantTasks(); !ok || len(tasks) != 1 || tasks[0].RunSessionID != "trip-0002" {
+		t.Fatalf("the tasks as reported: %+v", tasks)
 	}
 }

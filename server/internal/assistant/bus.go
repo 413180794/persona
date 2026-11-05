@@ -48,6 +48,11 @@ type BusHub struct {
 
 	events  chan busEvent // the hub's events, taken in the order they came
 	pending atomic.Int64  // events received and not yet taken
+
+	// deltas are the text a followed conversation writes (session.delta), the latest one per conversation: one waits
+	// in events for each at most, so they never crowd out the others (bus_events.go).
+	deltaMu sync.Mutex
+	deltas  map[string]json.RawMessage
 }
 
 type busEvent struct {
@@ -73,15 +78,7 @@ func NewBusHub(o BusOptions) *BusHub {
 		},
 		OnHello:   b.onHello,
 		OnRequest: b.answer,
-		OnEvent: func(event string, params json.RawMessage) {
-			b.pending.Add(1)
-			select {
-			case b.events <- busEvent{event, params}:
-			default:
-				b.pending.Add(-1)
-				o.Logf("assistant: %s dropped: too many events waiting", event)
-			}
-		},
+		OnEvent:   b.queueEvent,
 	}
 	return b
 }
@@ -123,6 +120,7 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	b.mu.Unlock()
 	if svc != nil {
 		go svc.Resync(context.WithoutCancel(ctx))
+		go svc.channelsReconnected(context.WithoutCancel(ctx)) // the conversations the channels follow (channels.go)
 		// Turns the hub sent as it connected can be taken before this answer is kept (events come on their own
 		// goroutine): without the hub's kb settings they could not be filed and wait — now they can.
 		go svc.kbFileWaiting(context.WithoutCancel(ctx))
@@ -323,6 +321,27 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 			return nil, err
 		}
 		return s.Rename(ctx, p)
+	// The channels' (channels.go, feishu.go).
+	case assistantwire.MethodChannelReceive:
+		var p ChannelReceive
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return map[string]any{}, s.ChannelReceive(ctx, p)
+	case assistantwire.MethodFeishuMessage:
+		var p FeishuMessage
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return map[string]any{}, s.FeishuMessage(ctx, p)
+	case assistantwire.MethodFeishuAction:
+		var p FeishuAction
+		if err := decode(&p); err != nil {
+			return nil, err
+		}
+		return s.FeishuAction(ctx, p)
+	case assistantwire.MethodFeishuView:
+		return s.FeishuView(ctx), nil
 	}
 	if out, ok, err := s.kbRequest(ctx, method, params); ok { // the knowledge base's (kb_bus.go)
 		return out, err
@@ -389,6 +408,9 @@ func (b *BusHub) takeEvents(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case ev := <-b.events:
+			if ev.name == assistantwire.EventSessionDelta {
+				ev.params = b.takeDelta(ev.params)
+			}
 			if err := b.event(ctx, ev); err != nil {
 				b.opts.Logf("assistant: %s: %v", ev.name, err)
 			}
@@ -459,6 +481,43 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		s.TodoSpaceRenamed(ctx, p)
+	// The channels' (channels.go, feishu.go).
+	case assistantwire.EventInteractionAnnounced:
+		var p InteractionAnnounced
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.InteractionAnnounced(ctx, p)
+	case assistantwire.EventInteractionEnded:
+		var p InteractionEnded
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.InteractionEnded(ctx, p)
+	case assistantwire.EventSessionItems:
+		var p SessionItems
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.SessionItems(ctx, p)
+	case assistantwire.EventSessionDelta:
+		var p SessionDelta
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.SessionDelta(ctx, p)
+	case assistantwire.EventFeishuOwner:
+		var p FeishuOwner
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.FeishuOwner(ctx, p)
+	case assistantwire.EventChannelNoted:
+		var p ChannelNoted
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.ChannelNoted(ctx, p)
 	case "managers": // the bus's roster: nothing the assistant needs
 	default:
 		if ok, err := s.kbEvent(ctx, ev.name, ev.params); ok { // the knowledge base's (kb_bus.go)

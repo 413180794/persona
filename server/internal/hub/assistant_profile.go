@@ -6,9 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -17,18 +15,18 @@ import (
 )
 
 // The assistant's settings are its own (internal/assistant, profile.go): the hub keeps the profile it last reported
-// (Snapshot.Profile) for its own features — the Feishu bot and the channels talk to the main conversation, the model
-// configuration runs 主对话 on the assistant's machine, the user's time zone, the conversations the nodes keep listing —
-// and asks the assistant about its conversations (assistant.start, assistant.send_params, assistant.rename). Before
+// (Snapshot.Profile) for its own features — the model configuration runs 主对话 on the assistant's machine, a phone's
+// message to the main conversation, the user's time zone, the conversations the nodes keep listing — and asks the
+// assistant about its conversations (assistant.start, assistant.send_params, assistant.rename). The Feishu bot and the
+// channels are the assistant's own (assistant_channels.go): they do not go by it. Before
 // the first report since it started the hub goes by the copy it kept (loadAssistantProfile); with none, by hub.json's
 // assistant section: its machine (else the hub's own, else the first), its launcher, no main conversation, the hub's
 // own time zone, and nothing said to the nodes about what they keep.
 
 // assistantProfileKey is the hub's own copy of the profile the assistant last reported (the hub writes and reads it,
 // the assistant never does): what the hub's features go by after a restart, before the assistant reports again. The
-// knowledge base and the plugins start before it connects, and they need the user's time zone; the Feishu bot needs
-// the main conversation. Without it they went by the hub's own zone and no main conversation for those seconds (the
-// knowledge base filed itself into the hub's zone and back, a message from Feishu started a second main conversation).
+// knowledge base and the plugins start before it connects, and they need the user's time zone. Without it they went by
+// the hub's own zone for those seconds (the knowledge base filed itself into the hub's zone and back).
 const assistantProfileKey = "hub.assistant_profile"
 
 // loadAssistantProfile takes up the profile the hub kept (assistantProfileKey) before the assistant reports one. The
@@ -218,12 +216,6 @@ func (a assistantRemote) Rename(ctx context.Context, machine, session string, pa
 	return out, err
 }
 
-// startAssistantConversation starts a conversation of the assistant's for one of the hub's features (the Feishu bot,
-// a channel): the main one when main, else a new side one. The assistant names it.
-func (h *Hub) startAssistantConversation(ctx context.Context, main bool, text string, images []proto.Image) (*proto.Session, error) {
-	return h.asst().Start(ctx, assistantwire.StartParams{Text: text, Images: images, Main: main})
-}
-
 // assistantSend fills p, a message for the assistant's conversation sid on m, as the assistant runs it.
 func (h *Hub) assistantSend(ctx context.Context, m *Machine, sid string, p map[string]any) error {
 	out, err := h.asst().SendParams(ctx, m.cfg.ID, sid, p)
@@ -290,33 +282,6 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_, _ = w.Write(out)
-}
-
-// conversationName is how the Feishu bot calls an assistant conversation (the assistant has the same for its tools).
-func conversationName(s proto.Session, main string) string {
-	if s.SessionID == main {
-		return "主对话"
-	}
-	// Not named yet: the node's title is then the directory's name ("assistant") or Claude Code's default.
-	if t := strings.TrimSpace(s.Title); t != "" && t != "Claude Code" && t != path.Base(s.Cwd) {
-		return t
-	}
-	return "新对话"
-}
-
-// assistantConversations are the assistant's conversations on its machine that are not archived (the Feishu bot's
-// /list), and its main one.
-func (h *Hub) assistantConversations() ([]proto.Session, string) {
-	p := h.assistantProfile()
-	out := []proto.Session{}
-	if m := h.localMachine(p.MachineID); m != nil {
-		for _, s := range h.decorated(m) {
-			if s.Assistant && !s.Archived {
-				out = append(out, s)
-			}
-		}
-	}
-	return out, p.Main
 }
 
 // jsonSame: a and b say the same in JSON (a nil profile is not the same as any).

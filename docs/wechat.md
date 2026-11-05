@@ -10,7 +10,7 @@ Persona 和它驱动的 Agent 要用户回答、批准的，以文字发到微�
 
 只对一个服务有意义的东西做成插件（`docs/extensions.md`），不往 hub 里加：它是 personad 旁边的单独程序 `jarvisd-wechat`，和 Telegram 的一样注册成**内置插件**
 `wechat`（同一次构建发布、自动更新时一起换，`version -v` 和 hub 不一样就不启动）。它是一个**渠道**（`docs/channels.md`）：程序只管和微信说话，
-「消息进哪个对话、等这一轮答完、答案发回、Agent 的提问」都是 hub 的统一管线（和飞书机器人是同一份）。
+「消息进哪个对话、等这一轮答完、答案发回、Agent 的提问」都是统一管线（和飞书机器人是同一份，2026-11-04 起在助手里：hub 收发、助手管对话，`docs/channels.md`「谁管什么」）。
 
 | 要做的事 | 用什么 |
 | --- | --- |
@@ -26,7 +26,7 @@ Persona 和它驱动的 Agent 要用户回答、批准的，以文字发到微�
 
 代码：程序入口 `server/cmd/personad-wechat`（旧名 `jarvisd-wechat` 是别名）；iLink 协议 `server/internal/wechat/ilink`（不存状态、不打日志，只认腾讯的
 HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存储、`login.go` 扫码、`chat.go` 收消息、发消息、「正在输入」）；声明 `server/internal/wechat/spec`
-（连接器和渠道）；hub 的注册 `server/internal/hub/wechat.go`。管线在 `server/internal/hub/channels*.go`，规则在 `server/internal/channel`，
+（连接器和渠道）；hub 的注册 `server/internal/hub/wechat.go`。管线在 `server/internal/assistant/channels*.go`（hub 那头是 `hub/channels_extension.go`），规则在 `server/internal/channel`，
 发给对话时加的说明 `server/internal/prompts/channel/message.md`。
 
 ## 绑定
@@ -45,9 +45,9 @@ HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存�
    别人发来的只回一句「这个机器人只为绑定它的人服务。」，不交给 hub。
 2. 主人的消息整理成 `channel.Message` 交给 hub（`channel.receive`）：文字（语音用微信自己的转写）、引用、图片（最多 4 张，解密后）；
    文件、视频还转不了，写进 `unsupported`（「文件「…」」）。
-3. 之后都是 hub 的（`docs/channels.md`「一条消息怎么走」）：去重、命令、回答在等的提问、发进主对话或 `/new` 开的对话（`client_msg_id` 是 `wechat-<消息 id>`）、
+3. 之后都是管线的（hub 交给助手，`docs/channels.md`「一条消息怎么走」）：去重、命令、回答在等的提问、发进主对话或 `/new` 开的对话（`client_msg_id` 是 `wechat-<消息 id>`）、
    跟踪这一轮（找到这条消息、等它答完、后台任务答两次、合并、超时）、处理期间每 5 秒叫程序「正在输入」。
-4. 答案发回：hub 按 3500 字拆好发给程序（`channel.send`），程序去掉微信显示不好的 Markdown（图片、删除线、五六级标题，中文上的斜体；粗体和代码保留）再发。
+4. 答案发回：助手按 3500 字拆好，经 hub 发给程序（`channels.send` → `channel.send`），程序去掉微信显示不好的 Markdown（图片、删除线、五六级标题，中文上的斜体；粗体和代码保留）再发。
    主人还没发过消息（没有 `context_token`）时程序回 `cannot_send`。
 
 ## 提问和批准
@@ -69,15 +69,15 @@ HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存�
 
 ## 命令
 
-hub 的渠道管线统一实现：`/help`、`/new [第一句话]`（之后的消息发给新开的对话）、`/main`（回到主对话）、`/stop`（停下当前目标这一轮，不再等它的回答）、
+渠道管线（助手）统一实现：`/help`、`/new [第一句话]`（之后的消息发给新开的对话）、`/main`（回到主对话）、`/stop`（停下当前目标这一轮，不再等它的回答）、
 `/status`（发给谁、在等几个回答、几个问题）。「消息发到」也能在 设置 › 插件 › 渠道 › 微信 里选。
 
 ## 和飞书机器人比
 
 | | 飞书机器人（`docs/bots.md`） | 微信机器人（这里） |
 | --- | --- | --- |
-| 在哪 | hub 里（`hub/bots*.go`） | 内置插件，单独的程序，只管和微信说话（`channel` 扩展点） |
-| 跟踪这一轮 | hub 的渠道管线（同一份，`hub/channels_runs.go`） | 同左 |
+| 在哪 | 收发在 hub 里（`hub/bots*.go`），对话的事在助手（`assistant/feishu*.go`） | 内置插件，单独的程序，只管和微信说话（`channel` 扩展点） |
+| 跟踪这一轮 | 助手的渠道管线（同一份，`assistant/channels_runs.go`） | 同左 |
 | 绑定 | 填自建应用的 App ID / Secret，再发配对码 | 扫码 |
 | 提问和批准 | 卡片按钮 | 文字往返 |
 | 进度 | 进度卡片 | 「对方正在输入」 |

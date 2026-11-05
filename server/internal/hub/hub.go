@@ -106,6 +106,8 @@ type Hub struct {
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots     botHub
 	channels channelsHub
+	// chans is what the assistant reports of the channels, and the conversations they follow (assistant_channels.go).
+	chans managerChannels
 	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
 	launchers     launcherState
 	launchersSeen map[string][]proto.Launcher
@@ -359,6 +361,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.expireLoop(ctx)
 	go h.terminalKeepalive(ctx)
 	go h.live.run(ctx)
+	h.migrateWeChatState(ctx)    // into the channels' state before the assistant and the WeChat program read it (channels_migrate.go)
 	go h.superviseAssistant(ctx) // the assistant, its own process on the bus (assistant_process.go)
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
@@ -732,8 +735,7 @@ func (h *Hub) announce(ix proto.Interaction) {
 	if !h.muted(ix.MachineID, ix.SessionID) {
 		h.notifyInteraction(ix, h.machineName(ix.MachineID))
 	}
-	h.botInteraction(ix)
-	h.channelInteraction(ix)
+	h.channelsAnnounce(ix) // the Feishu bot's cards, the channels that ask in text (assistant_channels.go)
 }
 
 func (h *Hub) machineName(id string) string {
@@ -946,7 +948,7 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		if err != nil {
 			status = "failed"
 		} else {
-			h.botResolution(p.ix, r)
+			h.channelsEnded(p.ix, &r)
 		}
 		// What was typed into a terminal may be a password: the history keeps that something was, not what.
 		kept := redacted(p.ix, r)
@@ -960,7 +962,7 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 	}
 	kept := redacted(p.ix, r)
 	h.recordEnd(id, status, &kept)
-	h.botResolution(p.ix, r)
+	h.channelsEnded(p.ix, &r)
 	go h.taskAnswered(p.ix, r, status)
 	select {
 	case p.done <- r:
@@ -1009,8 +1011,7 @@ func (h *Hub) finished(p *pending) {
 	h.mu.Lock()
 	answeredBy := p.answeredBy
 	h.mu.Unlock()
-	h.botInteractionDone(p.ix, "已结束")
-	h.channelInteractionDone(p.ix)
+	h.channelsEnded(p.ix, nil)
 	event := map[string]any{"type": "interaction_resolved", "id": id}
 	if answeredBy != "" {
 		event["answered_by"] = answeredBy // the app marks a question the assistant answered (docs/assistant.md)

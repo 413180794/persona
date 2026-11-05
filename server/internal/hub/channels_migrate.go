@@ -13,8 +13,15 @@ import (
 
 // Before the channels' pipeline the WeChat program kept, in its own sealed state, where the owner's messages went
 // (/new), the turns it waited on and what it had asked in text. migrateWeChatState moves those three over to the
-// hub's (channels.go, channels_runs.go) once, before the program starts: the new program keeps only its token, cursor,
-// context token and the messages it saw, and would drop the rest the first time it saves.
+// channels' state (settings channels and channels.state, the assistant's since) once, before the program starts and
+// before the hub starts the assistant: the new program keeps only its token, cursor, context token and the messages it
+// saw, and would drop the rest the first time it saves. The hub reads the sealed state, so the move is its.
+
+// The assistant's keys and what of them the move writes (the assistant's channels.go keeps the rest as it is).
+const (
+	channelsKey      = "channels"
+	channelsStateKey = "channels.state"
+)
 
 type wechatLegacy struct {
 	Target *struct {
@@ -70,33 +77,65 @@ func (h *Hub) migrateWeChatState(ctx context.Context) {
 		h.logf("channels: wechat's old state does not read: %v", err)
 		return
 	}
-	c := &h.channels
-	c.mu.Lock()
-	h.loadChannelsLocked(ctx)
-	h.loadChannelStateLocked(ctx)
-	if p := h.channelPrefLocked(wechat.ID); p.Target == nil && old.Target != nil {
+	prefs := map[string]map[string]json.RawMessage{}
+	state := map[string]json.RawMessage{}
+	if _, err := h.store.Setting(ctx, channelsKey, &prefs); err != nil {
+		h.logf("channels: wechat's old state: %v", err)
+		return
+	}
+	if _, err := h.store.Setting(ctx, channelsStateKey, &state); err != nil {
+		h.logf("channels: wechat's old state: %v", err)
+		return
+	}
+	if prefs == nil {
+		prefs = map[string]map[string]json.RawMessage{}
+	}
+	if state == nil {
+		state = map[string]json.RawMessage{}
+	}
+	if pref := prefs[wechat.ID]; pref == nil || pref["target"] == nil {
+		var t *channel.Target
 		switch {
+		case old.Target == nil:
 		case old.Target.Fresh:
-			p.Target = &channel.Target{Kind: channel.TargetNew}
+			t = &channel.Target{Kind: channel.TargetNew}
 		case old.Target.Session != "":
-			p.Target = &channel.Target{Kind: channel.TargetConversation, MachineID: old.Target.Machine, SessionID: old.Target.Session}
+			t = &channel.Target{Kind: channel.TargetConversation, MachineID: old.Target.Machine, SessionID: old.Target.Session}
+		}
+		if t != nil {
+			if pref == nil {
+				pref = map[string]json.RawMessage{}
+				prefs[wechat.ID] = pref
+			}
+			pref["target"], _ = json.Marshal(t)
 		}
 	}
+	var runs []*channel.Run
+	var asks []*channel.Ask
+	_ = json.Unmarshal(state["runs"], &runs)
+	_ = json.Unmarshal(state["asks"], &asks)
 	for i, o := range old.Runs {
 		if o.Session == "" {
 			continue
 		}
-		c.st.Runs = append(c.st.Runs, &channel.Run{ID: fmt.Sprintf("%s_migrated_%d", wechat.ID, i), Channel: wechat.ID,
+		runs = append(runs, &channel.Run{ID: fmt.Sprintf("%s_migrated_%d", wechat.ID, i), Channel: wechat.ID,
 			MachineID: o.Machine, SessionID: o.Session, TargetKind: channel.TargetConversation, Base: o.Base, MsgIDs: o.MsgIDs, Probe: o.Probe,
 			Started: o.Started, Seen: o.Seen, Held: o.Held})
 	}
 	for _, o := range old.Asks {
-		c.st.Asks = append(c.st.Asks, &channel.Ask{ID: o.ID, Channel: wechat.ID, MachineID: o.Machine, SessionID: o.Session, Kind: o.Kind,
+		asks = append(asks, &channel.Ask{ID: o.ID, Channel: wechat.ID, MachineID: o.Machine, SessionID: o.Session, Kind: o.Kind,
 			Title: o.Title, Questions: o.Questions, Answers: o.Answers, Step: o.Step, Options: o.Options, At: o.At})
 	}
-	h.saveChannelsLocked()
-	h.saveChannelStateLocked()
-	c.mu.Unlock()
+	state["runs"], _ = json.Marshal(runs)
+	state["asks"], _ = json.Marshal(asks)
+	if err := h.store.PutSetting(ctx, channelsKey, prefs); err != nil {
+		h.logf("channels: wechat's old state: %v", err)
+		return
+	}
+	if err := h.store.PutSetting(ctx, channelsStateKey, state); err != nil {
+		h.logf("channels: wechat's old state: %v", err)
+		return
+	}
 	delete(raw, "target")
 	delete(raw, "runs")
 	delete(raw, "asks")
@@ -105,5 +144,5 @@ func (h *Hub) migrateWeChatState(ctx context.Context) {
 		h.logf("channels: wechat's state: %v", err)
 		return
 	}
-	h.logf("channels: wechat's target, %d turns and %d questions moved to the hub", len(old.Runs), len(old.Asks))
+	h.logf("channels: wechat's target, %d turns and %d questions moved to the channels' state", len(old.Runs), len(old.Asks))
 }

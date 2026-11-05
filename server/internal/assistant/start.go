@@ -148,8 +148,8 @@ func (s *Service) startConversation(ctx context.Context, p startParams) (proto.S
 	return s.start(ctx, StartParams{Text: p.Text, PermissionMode: p.PermissionMode, Purpose: p.Purpose})
 }
 
-// Start is assistant.start: a conversation one of the hub's features starts (the Feishu bot, a channel, the inbox's AI
-// 分身). It is named after its first turn like the app's, unless it is untitled.
+// Start is assistant.start: a conversation one of the hub's features starts (the inbox's AI 分身), or the channels'
+// (feishu.go, channels_plugin.go). It is named after its first turn like the app's, unless it is untitled.
 func (s *Service) Start(ctx context.Context, p StartParams) (proto.Session, error) {
 	sess, err := s.start(ctx, p)
 	if err != nil {

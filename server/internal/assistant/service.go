@@ -52,6 +52,8 @@ type Service struct {
 	questions questions    // tools.go (ask_user)
 	live      contextState // context.go
 	todos     todoBook     // todos.go
+	chans     channelsBook // channels.go
+	fbot      feishuBook   // feishu.go
 	kb        kbState      // kb.go
 }
 
@@ -73,6 +75,7 @@ func New(o Options) *Service {
 	s.taskRoutes()
 	s.todayRoutes()
 	s.todoRoutes()
+	s.channelRoutes()
 	s.kbInit(o.KB)
 	s.kbRoutes()
 	return s
@@ -277,6 +280,8 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	snap.Partial = snap.Partial || snap.Todos == nil
 	snap.Profile = s.profile(ctx, snap.Tasks)
 	snap.Partial = snap.Partial || snap.Profile == nil
+	snap.Channels = s.channelsReport()
+	snap.Partial = snap.Partial || snap.Channels == nil
 	here := s.settings(ctx).MachineID
 	queued, ok := s.queuedRelays()
 	snap.Partial = snap.Partial || !ok
@@ -313,6 +318,7 @@ func (s *Service) TurnStarted(ctx context.Context, r SessionRef) {
 // named after its first turn.
 func (s *Service) TurnEnded(ctx context.Context, r SessionRef) {
 	go s.taskTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID)
+	go s.channelTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID) // a channel's answer, the sync mirror
 	s.titleAfterTurn(ctx, r.MachineID, r.SessionID)
 }
 

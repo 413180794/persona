@@ -178,8 +178,8 @@ type Notification struct {
 	Subtitle  string `json:"subtitle,omitempty"`  // the line under the title: where it comes from
 	DeviceID  string `json:"device_id,omitempty"` // the machine of the session it opens
 	SessionID string `json:"session_id,omitempty"`
-	// Asked: the conversation asked for this push itself (notify_user). It goes to the Feishu bot too (when its
-	// pushes are on), and the conversation's own finished push is left out.
+	// Asked: the conversation asked for this push itself (notify_user): the conversation's own finished push is left
+	// out. (The assistant sends it to the Feishu bot and the channels with pushes on itself.)
 	Asked bool `json:"asked,omitempty"`
 }
 
@@ -205,13 +205,15 @@ type Snapshot struct {
 	// Interactions are the questions it asks on the phone (ask_user: headless Claude has no AskUserQuestion). The hub
 	// shows each like any agent's and sends the answer back (Handler.Action); one that leaves the list is withdrawn.
 	Interactions []proto.Interaction `json:"interactions"`
-	// Tasks are its scheduled tasks, as the hub's other parts need them (the model configuration's 「定时任务」, the
-	// Feishu bot naming a task's conversation); null while they could not be read.
+	// Tasks are its scheduled tasks, as the hub's other parts need them (the model configuration's 「定时任务」); null
+	// while they could not be read.
 	Tasks []TaskView `json:"tasks"`
 	// Todos is which todo each agent works for (TodoReport); null while the todos could not be read.
 	Todos *TodoReport `json:"todos"`
 	// Profile is its settings as the hub's own features need them; null while they could not be read.
 	Profile *Profile `json:"profile"`
+	// Channels is what the hub shows of the channels (ChannelsReport); null while it could not be read.
+	Channels *ChannelsReport `json:"channels"`
 }
 
 // TaskView is one scheduled task in the snapshot.
@@ -555,6 +557,12 @@ var Routes = []string{
 	"POST /api/v1/assistant/conversations",
 	"POST /api/v1/assistant/conversations/{id}/compact",
 	"POST /api/v1/assistant/main/new",
+	// The channels (channels.go there, docs/channels.md「接口」).
+	"GET /api/v1/channels",
+	"GET /api/v1/channels/{id}",
+	"PUT /api/v1/channels/{id}",
+	"DELETE /api/v1/channels/{id}/binding",
+	"POST /api/v1/channels/{id}/test",
 	// The knowledge base (the assistant's kb_routes.go, docs/knowledge.md「App 接口」).
 	"GET /api/v1/kb/{kind}",
 	"GET /api/v1/kb/{kind}/{id}",
@@ -568,8 +576,9 @@ var Routes = []string{
 // ---- the assistant's settings, and the conversations the hub's features start (docs/assistant.md「和 hub 的边界」) ----
 
 // Profile is the assistant's settings (settings `assistant`, its own) as the hub's own features need them, in every
-// snapshot: the Feishu bot and the channels talk to the main conversation on its machine, the model configuration's
-// 主对话 runs there, the hub reads times in the user's zone, and the nodes keep listing Keep. The hub keeps the last
+// snapshot: a phone's message to the main conversation is told apart, the model configuration's 主对话 runs on its
+// machine, the hub reads times in the user's zone, and the nodes keep listing Keep (the Feishu bot and the channels are
+// the assistant's own). The hub keeps the last
 // one; before one came in it goes by hub.json's assistant section, its own time zone and no main conversation.
 type Profile struct {
 	MachineID string `json:"machine_id"` // where its conversations run
@@ -585,11 +594,10 @@ type Profile struct {
 
 // The hub asks the assistant (Handler) for what its own features need of the assistant's conversations.
 const (
-	// MethodStart: StartParams → {session}: a conversation the hub's features start (the Feishu bot, a channel, the
-	// inbox's AI 分身).
+	// MethodStart: StartParams → {session}: a conversation the hub's features start (the inbox's AI 分身).
 	MethodStart = "assistant.start"
-	// MethodSendParams: SendParams → {params}: a message for one of its conversations (the phone's, the Feishu bot's
-	// and a channel's to the main one, one the node sends by itself) with the launcher and model it runs on, and what
+	// MethodSendParams: SendParams → {params}: a message for one of its conversations (the phone's, one the node sends
+	// by itself) with the launcher and model it runs on, and what
 	// the old main conversation left before the text of the first one to a new main conversation started empty.
 	MethodSendParams = "assistant.send_params"
 	// MethodRename: RenameParams → the node's answer: the user renames one of its conversations in the app (the main
@@ -691,4 +699,227 @@ type Setting struct {
 	About   string   `json:"about"`
 	Value   string   `json:"value,omitempty"` // what set / add take, for the model
 	Actions []string `json:"actions"`
+}
+
+// ---- the channels: the Feishu bot and the chat app bots (docs/channels.md, docs/bots.md) ----
+
+// Which conversation a channel talks to, following the turn and sending its answer back, what is asked there and its
+// answer, the commands, the pushes and the sync mirror are the assistant's; the hub keeps the transport — the Feishu
+// open platform's long connection and REST (pairing among them), the plugins' channel programs — and hands the
+// assistant what comes in. The channels' routes are the assistant's (Routes) but binding (POST …/bind: credentials,
+// sign-in fields, pairing): no secret of a channel or the bot passes through the assistant. /api/v1/bots/feishu* stays
+// the hub's. What answers a card in a channel carries the owner's action (OwnerAction): the hub issued it when it
+// handed the owner's press or message over, and takes it once — the assistant can't approve anything on its own.
+const (
+	// MethodChannelReceive: ChannelReceive → {}: the owner's message from a plugin's channel, taken (not its turn).
+	MethodChannelReceive = "channels.receive"
+	// MethodFeishuMessage: FeishuMessage → {}: the owner's message in the Feishu bot's private chat, taken.
+	MethodFeishuMessage = "feishu.message"
+	// MethodFeishuAction: FeishuAction → the card callback's answer (feishubot.CardResponse): the owner pressed one
+	// of the bot's cards. Feishu waits 3 seconds for it.
+	MethodFeishuAction = "feishu.card_action"
+	// MethodFeishuView: {} → FeishuView, what GET /api/v1/bots/feishu shows of the bot's chat.
+	MethodFeishuView = "feishu.view"
+
+	// EventInteractionAnnounced: InteractionAnnounced, one way: a new card (not a quiet task's).
+	EventInteractionAnnounced = "interaction.announced"
+	// EventInteractionEnded: InteractionEnded, one way: a card is over — answered (with the resolution), withdrawn,
+	// expired.
+	EventInteractionEnded = "interaction.ended"
+	// EventSessionItems and EventSessionDelta: SessionItems / SessionDelta, one way: a conversation the assistant
+	// follows (DeviceSessionFollow) has new items, or is writing text.
+	EventSessionItems = "session.items"
+	EventSessionDelta = "session.delta"
+	// EventFeishuOwner: FeishuOwner, one way: the Feishu bot was paired with its owner, or unpaired.
+	EventFeishuOwner = "feishu.owner"
+	// EventChannelNoted: ChannelNoted, one way: a channel's message went into a conversation through the apps' routes
+	// (a voice conversation's errand: client_msg_id voice-…).
+	EventChannelNoted = "channels.noted"
+
+	// The hub's device methods for the channels' turns.
+	// DeviceSessionFollow: {session_id} → {}: the conversation's new items and the text it writes come as
+	// EventSessionItems / EventSessionDelta until DeviceSessionUnfollow, or until the assistant disconnects.
+	DeviceSessionFollow   = "session.follow"
+	DeviceSessionUnfollow = "session.unfollow"
+	// DeviceSessionSendOnce: the node's session.send params (with client_msg_id) → {}: sent under the apps' once-only
+	// guard — a message id already delivered is not sent again, one whose send was cut off is refused.
+	DeviceSessionSendOnce = "session.send_once"
+
+	// AppFeishu is the Feishu bot's transport (the open platform, as the paired owner's bot).
+	AppFeishu = "feishu"
+	// FeishuStatusGet: {} → FeishuStatus.
+	FeishuStatusGet = "feishu.status"
+	// FeishuPost: {reply_to?, card, fallback?} → {message_id}: a card (JSON 2.0) as a reply, else into the owner's
+	// chat; one Feishu refuses goes again as rich text (fallback, Markdown).
+	FeishuPost = "feishu.post"
+	// FeishuText: {reply_to?, text} → {message_id}: plain text as a reply, else into the owner's chat.
+	FeishuText = "feishu.text"
+	// FeishuUpdateCard: {message_id, card} → {}.
+	FeishuUpdateCard = "feishu.update_card"
+	// FeishuReact: {message_id, emoji} → {reaction_id}; FeishuUnreact: {message_id, reaction_id} → {}.
+	FeishuReact   = "feishu.react"
+	FeishuUnreact = "feishu.unreact"
+	// FeishuMessages: {message_id} → {items: [feishubot.Item]}: a message read back (a quote; a merged forward with
+	// the messages in it).
+	FeishuMessages = "feishu.messages"
+	// FeishuResource: {message_id, key, kind} → {data, mime}: an image of a message the bot received (at most 3 MB).
+	FeishuResource = "feishu.resource"
+	// FeishuSave: {message_id, key, kind, name, machine_id} → {path}: a file (or a large image) of a message saved on
+	// a machine (its temp directory, like the apps' uploads), at most 50 MB.
+	FeishuSave = "feishu.save"
+	// FeishuUserName: {open_id} → {name}: a user's name ("某人" when it can't be read; the owner's falls back to hub.json's).
+	FeishuUserName = "feishu.user_name"
+	// FeishuConfigure: {enabled?, features?: {id: on}} → {}: the bot switched, its feature switches changed (only
+	// those given).
+	FeishuConfigure = "feishu.configure"
+	// FeishuTest: {} → {}: the test card to the owner.
+	FeishuTest = "feishu.test"
+
+	// AppChannels is the plugins' channel programs, and the list of every channel as the transport has it.
+	AppChannels = "channels"
+	// ChannelsList: {} → {channels: [channel.View]}: every channel without what is the assistant's (targets, the
+	// plugin channels' features); the Feishu bot's features are its switches.
+	ChannelsList = "channels.list"
+	// ChannelsSend: {channel, ref, text, kind, reply_to?} → {message_id?}: one piece to the owner (retried with the same
+	// ref); CodeCannotSend when there is nowhere to send to yet.
+	ChannelsSend = "channels.send"
+	// ChannelsTyping: {channel, on} → {}.
+	ChannelsTyping = "channels.typing"
+	// ChannelsEnable: {channel, on} → {}: the plugin (and its connector), or the Feishu bot, switched.
+	ChannelsEnable = "channels.enable"
+	// ChannelsUnbind: {channel} → {}: signed out, unpaired.
+	ChannelsUnbind = "channels.unbind"
+
+	// InteractionsResolve: {interaction_id, resolution, action} → {ok, status}: the card answered as the user answered
+	// it in a channel. action is the owner's action the hub handed over with that press or message (single use; a
+	// card's is for that card only); without one the hub refuses. ok false (status as InteractionsGet's) when it is no
+	// longer pending, an error when the answer does not fit it.
+	InteractionsResolve = "interactions.resolve"
+
+	// CodeCannotSend: a channel has nowhere to send to yet (channel.CodeCannotSend); CodeNeedsTriageModel: a plugin
+	// can't be switched on before the inbox's triage model is set (409 to the app).
+	CodeCannotSend       = "cannot_send"
+	CodeNeedsTriageModel = "needs_triage_model"
+	// CodeTryAgain: the assistant could not take an owner's message now (what it needs of the hub did not answer):
+	// the hub hands it over again, as after a cut-off call.
+	CodeTryAgain = "try_again"
+)
+
+// ChannelReceive is channels.receive's params.
+type ChannelReceive struct {
+	Channel string          `json:"channel"`
+	Message json.RawMessage `json:"message"` // channel.Message
+	// Action is the owner's action: what answers a card with this message passes it (InteractionsResolve).
+	Action string `json:"action,omitempty"`
+}
+
+// FeishuMessage is feishu.message's params: im.message.receive_v1's event as Feishu sent it (the owner's, in the
+// bot's private chat).
+type FeishuMessage struct {
+	Event json.RawMessage `json:"event"`
+}
+
+// FeishuAction is feishu.card_action's params: card.action.trigger's event as Feishu sent it (the owner's press), and
+// the owner's action for the card it presses (InteractionsResolve).
+type FeishuAction struct {
+	Event  json.RawMessage `json:"event"`
+	Action string          `json:"action,omitempty"`
+}
+
+// FeishuView is feishu.view's answer.
+type FeishuView struct {
+	Target string        `json:"target,omitempty"` // where the chat's messages go now
+	Agents []FeishuAgent `json:"agents,omitempty"` // agents bound to threads of the chat
+}
+
+// FeishuAgent is an agent bound to a thread of the bot's chat.
+type FeishuAgent struct {
+	Title     string `json:"title"`
+	MachineID string `json:"machine_id"`
+	SessionID string `json:"session_id"`
+}
+
+// ChannelNoted is channels.noted's params.
+type ChannelNoted struct {
+	Channel   string `json:"channel"`
+	MachineID string `json:"machine_id"`
+	SessionID string `json:"session_id"`
+}
+
+// FeishuOwner is feishu.owner's params.
+type FeishuOwner struct {
+	Paired bool `json:"paired"`
+}
+
+// FeishuFeatures are the Feishu bot's switches (settings bots.feishu, the hub's with its credentials).
+type FeishuFeatures struct {
+	Main     bool `json:"main"`
+	Cards    bool `json:"cards"`
+	AllCards bool `json:"all_cards"`
+	Pushes   bool `json:"pushes"`
+	Sync     bool `json:"sync"`
+	Agents   bool `json:"agents"`
+}
+
+// FeishuStatus is feishu.status's answer.
+type FeishuStatus struct {
+	// Ready: switched on, connected and paired: the bot can post now.
+	Ready    bool           `json:"ready"`
+	Enabled  bool           `json:"enabled"`
+	Features FeishuFeatures `json:"features"`
+	Owner    string         `json:"owner,omitempty"` // the owner's open id ("" before pairing)
+	// PairedAt is when the owner paired: with Owner, which pairing the chat's state belongs to (a new one, or none,
+	// starts it afresh).
+	PairedAt time.Time `json:"paired_at,omitzero"`
+	// PublicURL is the hub's web app (a card's 「打开网页版」).
+	PublicURL string `json:"public_url,omitempty"`
+}
+
+// InteractionAnnounced is interaction.announced's params.
+type InteractionAnnounced struct {
+	Interaction proto.Interaction `json:"interaction"`
+}
+
+// InteractionEnded is interaction.ended's params: Resolution when it was answered (how, for its cards), nil when it
+// ended otherwise (withdrawn, expired, answered and gone).
+type InteractionEnded struct {
+	Interaction proto.Interaction `json:"interaction"`
+	Resolution  *proto.Resolution `json:"resolution,omitempty"`
+}
+
+// SessionItems is session.items's params.
+type SessionItems struct {
+	MachineID string       `json:"machine_id"`
+	SessionID string       `json:"session_id"`
+	Items     []proto.Item `json:"items"`
+}
+
+// SessionDelta is session.delta's params: the text the conversation is writing now.
+type SessionDelta struct {
+	MachineID string `json:"machine_id"`
+	SessionID string `json:"session_id"`
+	Text      string `json:"text"`
+}
+
+// ChannelsReport is what the hub shows of the channels, in the snapshot (Snapshot.Channels): which channels each
+// conversation's messages came from (the session lists' channels), and the conversations whose turn a channel follows
+// now or answered lately (the hub's finished push leaves those out: the answer is in the channel). Small, whole every
+// time; null while the channels' state could not be read (the hub keeps the last).
+type ChannelsReport struct {
+	Marks []ChannelMark `json:"marks"`
+	Turns []ChannelTurn `json:"turns"`
+}
+
+// ChannelMark is one conversation's channels, newest first.
+type ChannelMark struct {
+	MachineID string   `json:"machine_id"`
+	SessionID string   `json:"session_id"`
+	Channels  []string `json:"channels"`
+}
+
+// ChannelTurn is a conversation a channel's turn is followed in (Answered zero) or was answered in at Answered.
+type ChannelTurn struct {
+	MachineID string    `json:"machine_id"`
+	SessionID string    `json:"session_id"`
+	Answered  time.Time `json:"answered,omitzero"`
 }

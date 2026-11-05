@@ -137,6 +137,9 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 	if m == nil {
 		return nil, noDevice(p.Device)
 	}
+	if out, ok, err := h.channelsDeviceCall(ctx, m, p); ok { // following a turn, sending once (assistant_channels.go)
+		return out, err
+	}
 	switch p.Method {
 	case assistantwire.DeviceSessionsList:
 		return json.Marshal(map[string]any{"sessions": h.decorated(m)})
@@ -160,6 +163,9 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, error) {
 	h := l.h
 	if out, ok, err := h.assistantAppCall(ctx, p); ok { // assistant_apps.go
+		return out, err
+	}
+	if out, ok, err := h.channelsAppCall(ctx, p); ok { // the channels' transport (assistant_channels.go)
 		return out, err
 	}
 	if out, ok, err := h.kbSourcesCall(ctx, p); ok { // the knowledge base's sources (kb_sources.go)
@@ -314,9 +320,7 @@ func (l assistantLink) NotifyRequest(_ context.Context, p assistantwire.NotifyRe
 		return fmt.Errorf("unknown notification kind %q", n.Kind)
 	}
 	h.notifyDone("assistant", n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body, pushWants{})
-	if n.Asked { // the conversation pushed what matters itself (notify_user)
-		h.botPush(n.DeviceID, n.SessionID, n.Title, n.Body)
-		h.channelPush(n.Title, n.Body)
+	if n.Asked { // the conversation pushed what matters itself (notify_user; the assistant sends it to the channels)
 		h.mu.Lock()
 		if h.notified == nil {
 			h.notified = map[string]time.Time{}
@@ -361,6 +365,11 @@ func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (as
 	h.askOnPhone(s.Interactions)
 	machines := changedMachines(old, views)
 	for _, mid := range h.takeTodoReport(s.Todos) { // the todos' (assistant_todos.go)
+		if !slices.Contains(machines, mid) {
+			machines = append(machines, mid)
+		}
+	}
+	for _, mid := range h.takeChannelsReport(s.Channels) { // the channels' (assistant_channels.go)
 		if !slices.Contains(machines, mid) {
 			machines = append(machines, mid)
 		}

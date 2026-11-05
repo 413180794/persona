@@ -12,14 +12,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/feishubot"
 )
 
-// The bot channel (docs/bots.md): the user talks to Persona through a chat app's bot — a Feishu / Lark custom app.
-// A message to the bot goes into Persona' main conversation (or the conversation / coding agent the chat is on now) and
-// the answer comes back as a card; Persona' questions and approvals can be answered there, its pushes can go there too,
-// and agents on every computer can be driven from it. Only the paired user is answered, only in the bot's private
-// chat. Everything is off until switched on in the app (设置 › 连接器 › 飞书机器人).
+// The Feishu bot (docs/bots.md): the user talks to Persona through a Feishu / Lark custom app's bot. The hub keeps its
+// transport: the app's credentials, the long connection to the open platform, pairing with its owner, sending and
+// changing messages and cards. What the chat does — where a message goes, following its turn and the answer cards,
+// what is asked there, the commands, pushes and the sync mirror — is the assistant's (internal/assistant, feishu*.go):
+// the owner's messages and card presses go to it over the bus (assistant_channels.go), and it posts through the hub.
+// Only the paired user is answered, only in the bot's private chat. Everything is off until switched on in the app
+// (设置 › 连接器 › 飞书机器人).
 
 // BotsConfig is hub.json "bots".
 type BotsConfig struct {
@@ -45,7 +48,8 @@ type FeishuBotSettings struct {
 	Pairing   *botPairing `json:"pairing,omitempty"`
 }
 
-// BotFeatures are the parts that can be switched on one by one.
+// BotFeatures are the parts that can be switched on one by one: kept here with the credentials, acted on by the
+// assistant (assistantwire.FeishuFeatures is the same).
 type BotFeatures struct {
 	Main     bool `json:"main"`      // messages go to Persona: the main conversation, unless the chat switched to another
 	Cards    bool `json:"cards"`     // questions and approvals of what the chat drives show there as cards
@@ -73,70 +77,24 @@ type botPairing struct {
 
 const (
 	botSettingsKey = "bots.feishu"
-	botStateKey    = "bots.feishu.state"
 	botPairFor     = 10 * time.Minute
 	botPairTries   = 5
-)
-
-// botTarget is where a message goes: Persona' main conversation (whichever it is when the message is sent), another
-// Persona conversation, or a coding agent.
-type botTarget struct {
-	Kind      string `json:"kind"` // main | jarvis | agent
-	MachineID string `json:"machine_id,omitempty"`
-	SessionID string `json:"session_id,omitempty"`
-}
-
-const (
-	targetMain   = "main"
-	targetJarvis = "jarvis"
-	targetAgent  = "agent"
-)
-
-func (t botTarget) agent() bool { return t.Kind == targetAgent }
-
-// botThread is a message the bot posted for a target (an agent picked with /agents): replies to it, and messages in its
-// thread, go to that target.
-type botThread struct {
-	Target botTarget `json:"target"`
-	Title  string    `json:"title,omitempty"`
-	At     time.Time `json:"at"`
-}
-
-// botState is the chat's state, in settings (botStateKey): where messages go, the threads bound to targets, the turns
-// being answered (so a restart still delivers their answers), and the messages already handled.
-type botState struct {
-	Current botTarget             `json:"current"`
-	Threads map[string]*botThread `json:"threads,omitempty"`
-	// Runs are an older hub's turns being answered: moved to the channels' state at start (migrateBotRuns).
-	Runs []*botRun `json:"runs,omitempty"`
-	Seen []string  `json:"seen,omitempty"`
-}
-
-const (
-	botSeenKeep    = 300
-	botThreadsKeep = 100
 )
 
 type botHub struct {
 	mu     sync.Mutex
 	loaded bool
 	set    FeishuBotSettings
-	st     botState
 	api    *feishubot.Client
 	conn   *feishubot.Conn
 	stop   context.CancelFunc
 	info   feishubot.BotInfo
 	base   context.Context
-	cards  map[string]botCard   // interaction id -> the card asking it
 	told   map[string]time.Time // sender -> when the bot last told them it is not theirs / not paired
 	names  map[string]string    // open id -> name
-	// now and post are replaced in tests.
+	seen   []string             // the messages taken lately (Feishu delivers some again), memory only
+	// now is replaced in tests.
 	now func() time.Time
-}
-
-type botCard struct {
-	MessageID string
-	Root      string
 }
 
 func (b *botHub) clock() time.Time {
@@ -146,7 +104,7 @@ func (b *botHub) clock() time.Time {
 	return time.Now()
 }
 
-// loadBotsLocked reads the settings and the state once; b.mu is held.
+// loadBotsLocked reads the settings once; b.mu is held. The chat's state (bots.feishu.state) is the assistant's.
 func (h *Hub) loadBotsLocked(ctx context.Context) {
 	b := &h.bots
 	if b.loaded {
@@ -158,15 +116,6 @@ func (h *Hub) loadBotsLocked(ctx context.Context) {
 		if _, err := h.store.Setting(ctx, botSettingsKey, &b.set); err != nil {
 			h.logf("bots: load settings: %v", err)
 		}
-		if _, err := h.store.Setting(ctx, botStateKey, &b.st); err != nil {
-			h.logf("bots: load state: %v", err)
-		}
-	}
-	if b.st.Threads == nil {
-		b.st.Threads = map[string]*botThread{}
-	}
-	if b.st.Current.Kind == "" {
-		b.st.Current = botTarget{Kind: targetMain}
 	}
 }
 
@@ -178,33 +127,6 @@ func (h *Hub) saveBotSettingsLocked() {
 	defer cancel()
 	if err := h.store.PutSetting(ctx, botSettingsKey, h.bots.set); err != nil {
 		h.logf("bots: save settings: %v", err)
-	}
-}
-
-func (h *Hub) saveBotStateLocked() {
-	b := &h.bots
-	if len(b.st.Seen) > botSeenKeep {
-		b.st.Seen = b.st.Seen[len(b.st.Seen)-botSeenKeep:]
-	}
-	if len(b.st.Threads) > botThreadsKeep {
-		var oldest string
-		for len(b.st.Threads) > botThreadsKeep {
-			oldest = ""
-			for id, t := range b.st.Threads {
-				if oldest == "" || t.At.Before(b.st.Threads[oldest].At) {
-					oldest = id
-				}
-			}
-			delete(b.st.Threads, oldest)
-		}
-	}
-	if h.store == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := h.store.PutSetting(ctx, botStateKey, b.st); err != nil {
-		h.logf("bots: save state: %v", err)
 	}
 }
 
@@ -228,12 +150,7 @@ func (h *Hub) startBots(ctx context.Context) {
 	h.bots.base = ctx
 	h.loadBotsLocked(ctx)
 	h.bots.mu.Unlock()
-	h.migrateBotRuns(ctx)
-	h.channels.mu.Lock()
-	h.loadChannelsLocked(ctx) // the conversations' channels (decorated)
-	h.channels.mu.Unlock()
 	h.restartBot()
-	go h.botLoop(ctx)
 }
 
 // restartBot drops the connection and, if the bot is on and configured, opens a new one. A member hub keeps it closed:
@@ -280,8 +197,6 @@ func (h *Hub) restartBot() {
 		}
 		b.mu.Unlock()
 	}()
-	// Turns that were being answered when the hub stopped: watch them again.
-	go h.sweepChannelRuns()
 }
 
 // botAPI is the client while the bot is on and paired (nil otherwise), with the settings it runs under (a copy).
@@ -315,20 +230,22 @@ func (s FeishuBotSettings) copy() FeishuBotSettings {
 // --- the app's settings page ---
 
 type feishuBotView struct {
-	Enabled     bool           `json:"enabled"`
-	AppID       string         `json:"app_id"`
-	Domain      string         `json:"domain"`
-	HasSecret   bool           `json:"has_secret"`
-	FromConfig  bool           `json:"from_config"` // the credentials are hub.json's
-	Features    BotFeatures    `json:"features"`
-	Connected   bool           `json:"connected"`
-	Error       string         `json:"error,omitempty"`
-	LastEventAt int64          `json:"last_event_at,omitempty"`
-	BotName     string         `json:"bot_name,omitempty"`
-	Owner       *botOwnerView  `json:"owner,omitempty"`
-	Pairing     *botPairView   `json:"pairing,omitempty"`
-	Target      string         `json:"target,omitempty"` // where the chat's messages go now
-	Agents      []botAgentView `json:"agents,omitempty"` // agents bound to threads of the chat
+	Enabled     bool          `json:"enabled"`
+	AppID       string        `json:"app_id"`
+	Domain      string        `json:"domain"`
+	HasSecret   bool          `json:"has_secret"`
+	FromConfig  bool          `json:"from_config"` // the credentials are hub.json's
+	Features    BotFeatures   `json:"features"`
+	Connected   bool          `json:"connected"`
+	Error       string        `json:"error,omitempty"`
+	LastEventAt int64         `json:"last_event_at,omitempty"`
+	BotName     string        `json:"bot_name,omitempty"`
+	Owner       *botOwnerView `json:"owner,omitempty"`
+	Pairing     *botPairView  `json:"pairing,omitempty"`
+	// Target and Agents are the assistant's (feishu.view): where the chat's messages go now, the agents bound to
+	// threads of the chat; left out while it is not connected.
+	Target string                      `json:"target,omitempty"`
+	Agents []assistantwire.FeishuAgent `json:"agents,omitempty"`
 }
 
 type botOwnerView struct {
@@ -339,12 +256,6 @@ type botOwnerView struct {
 type botPairView struct {
 	Code      string `json:"code"`
 	ExpiresAt int64  `json:"expires_at"`
-}
-
-type botAgentView struct {
-	Title     string `json:"title"`
-	MachineID string `json:"machine_id"`
-	SessionID string `json:"session_id"`
 }
 
 func (h *Hub) botView(ctx context.Context) feishuBotView {
@@ -370,18 +281,15 @@ func (h *Hub) botView(ctx context.Context) feishuBotView {
 	if p := s.Pairing; p != nil && b.clock().Before(p.Expires) {
 		v.Pairing = &botPairView{Code: p.Code, ExpiresAt: p.Expires.Unix()}
 	}
-	cur := b.st.Current
-	for _, t := range b.st.Threads {
-		if t.Target.agent() {
-			v.Agents = append(v.Agents, botAgentView{Title: t.Title, MachineID: t.Target.MachineID, SessionID: t.Target.SessionID})
-		}
-	}
 	b.mu.Unlock()
-	v.Target = h.targetLabel(ctx, cur)
+	if chat, err := h.feishuChatView(ctx); err == nil {
+		v.Target, v.Agents = chat.Target, chat.Agents
+	}
 	return v
 }
 
 func (h *Hub) botRoutes(api *http.ServeMux) {
+	h.channelBindRoute(api) // binding a channel carries its secrets: the hub's, never relayed
 	api.HandleFunc("GET /api/v1/bots/feishu", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, h.botView(r.Context()))
 	})
@@ -439,17 +347,15 @@ func botPairCode() string {
 	return fmt.Sprintf("%06d", 100000+n.Int64())
 }
 
-// unpairBot forgets the owner (and the chat's state).
+// unpairBot forgets the owner; the assistant forgets the chat's state (feishu.owner).
 func (h *Hub) unpairBot(ctx context.Context) {
 	b := &h.bots
 	b.mu.Lock()
 	h.loadBotsLocked(ctx)
 	b.set.Owner, b.set.Pairing = nil, nil
-	b.st = botState{Current: botTarget{Kind: targetMain}, Threads: map[string]*botThread{}, Seen: b.st.Seen}
 	h.saveBotSettingsLocked()
-	h.saveBotStateLocked()
 	b.mu.Unlock()
-	h.forgetChannelTurns(feishuChannelID)
+	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventFeishuOwner, assistantwire.FeishuOwner{})
 }
 
 var errBotOff = errors.New("机器人没打开或还没配对")
@@ -536,18 +442,4 @@ func (h *Hub) updateBot(ctx context.Context, enabled *bool, appID, secret, domai
 		h.restartBot()
 	}
 	return nil
-}
-
-// botLoop sweeps: turns whose end was missed (every channel's, channels_runs.go).
-func (h *Hub) botLoop(ctx context.Context) {
-	t := time.NewTicker(5 * time.Second)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		h.sweepChannelRuns()
-	}
 }

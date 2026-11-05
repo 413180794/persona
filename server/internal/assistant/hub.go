@@ -73,6 +73,55 @@ type (
 	KBSettings          = assistantwire.KBSettings
 )
 
+// The channels' (channels.go, feishu.go).
+type (
+	ChannelsReport       = assistantwire.ChannelsReport
+	ChannelMark          = assistantwire.ChannelMark
+	ChannelTurn          = assistantwire.ChannelTurn
+	ChannelReceive       = assistantwire.ChannelReceive
+	ChannelNoted         = assistantwire.ChannelNoted
+	FeishuMessage        = assistantwire.FeishuMessage
+	FeishuAction         = assistantwire.FeishuAction
+	FeishuView           = assistantwire.FeishuView
+	FeishuAgent          = assistantwire.FeishuAgent
+	FeishuOwner          = assistantwire.FeishuOwner
+	FeishuFeatures       = assistantwire.FeishuFeatures
+	FeishuStatus         = assistantwire.FeishuStatus
+	InteractionAnnounced = assistantwire.InteractionAnnounced
+	InteractionEnded     = assistantwire.InteractionEnded
+	SessionItems         = assistantwire.SessionItems
+	SessionDelta         = assistantwire.SessionDelta
+)
+
+const (
+	DeviceSessionFollow   = assistantwire.DeviceSessionFollow
+	DeviceSessionUnfollow = assistantwire.DeviceSessionUnfollow
+	DeviceSessionSendOnce = assistantwire.DeviceSessionSendOnce
+	AppFeishu             = assistantwire.AppFeishu
+	FeishuStatusGet       = assistantwire.FeishuStatusGet
+	FeishuPost            = assistantwire.FeishuPost
+	FeishuText            = assistantwire.FeishuText
+	FeishuUpdateCard      = assistantwire.FeishuUpdateCard
+	FeishuReact           = assistantwire.FeishuReact
+	FeishuUnreact         = assistantwire.FeishuUnreact
+	FeishuMessages        = assistantwire.FeishuMessages
+	FeishuResource        = assistantwire.FeishuResource
+	FeishuSave            = assistantwire.FeishuSave
+	FeishuUserName        = assistantwire.FeishuUserName
+	FeishuConfigure       = assistantwire.FeishuConfigure
+	FeishuTest            = assistantwire.FeishuTest
+	AppChannels           = assistantwire.AppChannels
+	ChannelsList          = assistantwire.ChannelsList
+	ChannelsSend          = assistantwire.ChannelsSend
+	ChannelsTyping        = assistantwire.ChannelsTyping
+	ChannelsEnable        = assistantwire.ChannelsEnable
+	ChannelsUnbind        = assistantwire.ChannelsUnbind
+	InteractionsGet       = assistantwire.InteractionsGet
+	InteractionsResolve   = assistantwire.InteractionsResolve
+	CodeCannotSend        = assistantwire.CodeCannotSend
+	CodeTryAgain          = assistantwire.CodeTryAgain
+)
+
 // The todos' (todos.go).
 type (
 	TodoReport        = assistantwire.TodoReport

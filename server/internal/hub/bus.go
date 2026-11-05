@@ -364,6 +364,9 @@ func (h *Hub) busEnded(c *busConn) {
 	h.bus.mu.Unlock()
 	if current {
 		h.logf("bus: [%s] disconnected", c.ident.ID)
+		if c.ident.ID == assistantwire.AssistantID {
+			h.dropFollows() // the conversations its channels followed (assistant_channels.go)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		h.busRosterChanged(ctx, nil)

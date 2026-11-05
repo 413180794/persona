@@ -1,0 +1,836 @@
+package assistant
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The turns channels wait on (docs/channels.md「跟踪这一轮」): one copy for every channel. A message from a channel
+// starts a run; the assistant follows the conversation (the hub sends on its items and the text it writes, like an
+// open chat in the app), shows progress where the channel can (a card it changes, 「正在输入」), and when the turn
+// ends sends its answer back through the channel's sink. The rules are channel.Run's; what reaches the chat app is
+// the sink's.
+
+// channelSink is how a channel's runs reach its chat app.
+type channelSink interface {
+	// answer sends a run's answer and note (into its progress message when there is one). final: the run is over
+	// (its messages are marked done); quiet: there is nothing to say (a held run whose background work ended). An
+	// error: it did not go out and may when tried again (the same run, the same refs).
+	answer(ctx context.Context, r *channel.Run, answer, note string, took time.Duration, final, quiet bool) error
+}
+
+// channelProgress is a sink that shows a run's progress in a message it changes (the Feishu bot's card).
+type channelProgress interface {
+	progress(ctx context.Context, r *channel.Run, took time.Duration, steps []string, live string)
+	// folded: o went into a later run; its progress message says so.
+	folded(ctx context.Context, o *channel.Run)
+}
+
+// channelTyping is a sink that shows 「正在输入」 while a run goes on.
+type channelTyping interface {
+	typing(ctx context.Context, on bool)
+}
+
+// chanLive is a run's live state, in memory only.
+type chanLive struct {
+	mu       chanMutex // held while its progress is being written
+	steps    []string
+	live     string
+	dirty    bool
+	updated  time.Time
+	checked  time.Time // the answer was last read (while the turn was not seen to end, or the message not found)
+	notFound bool      // the last read did not find the message in the conversation yet
+	finished bool
+	done     chan struct{}
+	// checking is held by checkChannelRun: the watch loop and a turn's end may both check at once, and two checks
+	// would send the same answer twice.
+	checking chanMutex
+	failing  time.Time // its answer first failed to go out (answerAgain)
+}
+
+// chanMutex is a mutex the watch loop can try without blocking.
+type chanMutex chan struct{}
+
+func newChanMutex() chanMutex { return make(chanMutex, 1) }
+func (m chanMutex) Lock()     { m <- struct{}{} }
+func (m chanMutex) Unlock()   { <-m }
+func (m chanMutex) TryLock() bool {
+	select {
+	case m <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// claimChannelMessage: the first time channel id's message is seen.
+func (s *Service) claimChannelMessage(id, msg string) bool {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s.loadChannelStateLocked(context.Background())
+	seen := c.st.Seen[id]
+	if msg == "" || slices.Contains(seen, msg) {
+		return false
+	}
+	seen = append(seen, msg)
+	if len(seen) > channelSeenKeep {
+		seen = seen[len(seen)-channelSeenKeep:]
+	}
+	c.st.Seen[id] = seen
+	s.saveChannelStateLocked()
+	return true
+}
+
+// sinkFor is how channel id's runs reach it: nil when it has gone (a plugin uninstalled), an error when that can't be
+// told now (the hub could not be asked).
+func (s *Service) sinkFor(ctx context.Context, id string) (channelSink, error) {
+	if id == channel.Feishu {
+		return feishuSink{s}, nil
+	}
+	_, ok, err := s.pluginChannelNow(ctx, id)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return extensionSink{s: s, id: id}, nil
+}
+
+// channelRuns are channel id's runs now (copies; "" is every channel's).
+func (s *Service) channelRuns(id string) []channel.Run {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s.loadChannelStateLocked(context.Background())
+	var out []channel.Run
+	for _, r := range c.st.Runs {
+		if id == "" || r.Channel == id {
+			out = append(out, *r)
+		}
+	}
+	return out
+}
+
+// startChannelRun records a run and watches it. An earlier run of the same channel on the same conversation that has
+// not answered yet is folded into this one: one answer covers both messages.
+func (s *Service) startChannelRun(r *channel.Run) {
+	if r.MachineID == "" || r.SessionID == "" {
+		s.logf("channels: %s: no conversation to follow", r.ID)
+		return
+	}
+	c := &s.chans
+	c.mu.Lock()
+	s.loadChannelStateLocked(context.Background())
+	var folded []*channel.Run
+	keep := c.st.Runs[:0]
+	for _, o := range c.st.Runs {
+		if o.Channel == r.Channel && o.MachineID == r.MachineID && o.SessionID == r.SessionID && !c.answering[o.ID] {
+			folded = append(folded, o)
+			r.Fold(o)
+			continue
+		}
+		keep = append(keep, o)
+	}
+	c.st.Runs = append(keep, r)
+	gone := map[string]*chanLive{}
+	for _, o := range folded {
+		if p := c.live[o.ID]; p != nil {
+			gone[o.ID] = p
+			delete(c.live, o.ID)
+		}
+	}
+	s.saveChannelStateLocked()
+	c.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	sink, _ := s.sinkFor(ctx, r.Channel)
+	for _, o := range folded {
+		ended := true
+		if p := gone[o.ID]; p != nil {
+			p.mu.Lock()
+			ended = !p.finished // finishChannelRun may have answered it just now: then its message holds the answer
+			if ended {
+				p.finished = true
+				close(p.done)
+			}
+			p.mu.Unlock()
+		}
+		if fs, ok := sink.(channelProgress); ok && ended {
+			fs.folded(ctx, o)
+		}
+	}
+	s.noteChannelConversation(r.Channel, r.MachineID, r.SessionID)
+	s.channelsChanged()
+	if ts, ok := sink.(channelTyping); ok {
+		ts.typing(ctx, true)
+	}
+	go s.watchChannelRun(r)
+}
+
+func (s *Service) channelRunByID(id string) (*channel.Run, *chanLive) {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, r := range c.st.Runs {
+		if r.ID == id {
+			return r, c.live[id]
+		}
+	}
+	return nil, nil
+}
+
+// followSession has the hub send on a conversation's items and the text it writes (session.follow), once for every
+// run on it; unfollowSession is the other end.
+func (s *Service) followSession(ctx context.Context, machine, session string) {
+	k := [2]string{machine, session}
+	c := &s.chans
+	c.mu.Lock()
+	if c.follows == nil {
+		c.follows = map[[2]string]int{}
+	}
+	c.follows[k]++
+	first := c.follows[k] == 1
+	c.mu.Unlock()
+	if first {
+		if err := s.call(ctx, machine, DeviceSessionFollow, map[string]any{"session_id": session}, nil); err != nil {
+			s.logf("channels: follow %s: %v", short(session), err)
+		}
+	}
+}
+
+func (s *Service) unfollowSession(machine, session string) {
+	k := [2]string{machine, session}
+	c := &s.chans
+	c.mu.Lock()
+	c.follows[k]--
+	last := c.follows[k] <= 0
+	if last {
+		delete(c.follows, k)
+	}
+	c.mu.Unlock()
+	if last {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = s.call(ctx, machine, DeviceSessionUnfollow, map[string]any{"session_id": session}, nil)
+	}
+}
+
+// deviceKnown: the hub has machine id (an error: it could not be asked).
+func (s *Service) deviceKnown(ctx context.Context, id string) (Device, bool, error) {
+	var res struct {
+		Devices []Device `json:"devices"`
+	}
+	if err := s.call(ctx, DeviceAll, DeviceDevicesList, map[string]any{}, &res); err != nil {
+		return Device{}, false, err
+	}
+	for _, d := range res.Devices {
+		if d.ID == id {
+			return d, true, nil
+		}
+	}
+	return Device{}, false, nil
+}
+
+// watchChannelRun follows a run until it is answered: the conversation's items come to the assistant (followed), for
+// the progress shown meanwhile.
+func (s *Service) watchChannelRun(r *channel.Run) {
+	c := &s.chans
+	ctx := context.Background()
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	_, known, err := s.deviceKnown(cctx, r.MachineID)
+	cancel()
+	if err == nil && !known { // the machine left the configuration: nothing will answer it
+		c.mu.Lock()
+		c.st.Runs = slices.DeleteFunc(c.st.Runs, func(o *channel.Run) bool { return o == r })
+		s.saveChannelStateLocked()
+		c.mu.Unlock()
+		s.channelsChanged()
+		return
+	}
+	c.mu.Lock()
+	if c.live == nil {
+		c.live = map[string]*chanLive{}
+	}
+	if c.live[r.ID] != nil {
+		c.mu.Unlock()
+		return // already watched
+	}
+	prog := &chanLive{mu: newChanMutex(), checking: newChanMutex(), done: make(chan struct{})}
+	c.live[r.ID] = prog
+	c.mu.Unlock()
+	s.followSession(ctx, r.MachineID, r.SessionID)
+	defer s.unfollowSession(r.MachineID, r.SessionID)
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-prog.done:
+			return
+		case <-t.C:
+		}
+		if run, _ := s.channelRunByID(r.ID); run == nil { // dropped (unbound, folded into a later message)
+			c.mu.Lock()
+			if c.live[r.ID] == prog {
+				delete(c.live, r.ID)
+			}
+			c.mu.Unlock()
+			return
+		}
+		s.checkChannelRun(r.ID)
+		s.channelProgressTick(r.ID)
+	}
+}
+
+// sessionNow is a conversation as the hub lists it now; an error when the hub could not be asked.
+func (s *Service) sessionNow(ctx context.Context, machine, session string) (proto.Session, bool, error) {
+	var res struct {
+		Session proto.Session `json:"session"`
+		OK      bool          `json:"ok"`
+	}
+	if err := s.call(ctx, machine, DeviceSessionGet, map[string]any{"session_id": session}, &res); err != nil {
+		return proto.Session{}, false, err
+	}
+	return res.Session, res.OK, nil
+}
+
+func working(c proto.Session) bool { return c.Status == proto.StatusWorking || c.Starting }
+
+// channelProgressTick shows a run's progress when it is due: the progress message after a few seconds and then every
+// few, 「正在输入」 again every few seconds.
+func (s *Service) channelProgressTick(id string) {
+	r, prog := s.channelRunByID(id)
+	if r == nil || prog == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	sink, _ := s.sinkFor(ctx, r.Channel)
+	c := &s.chans
+	if ts, ok := sink.(channelTyping); ok {
+		c.mu.Lock()
+		now := c.clock()
+		maybe := !prog.finished && now.Sub(prog.updated) >= channel.TypingEvery
+		held := r.Held
+		c.mu.Unlock()
+		if !maybe {
+			return
+		}
+		if held {
+			if sess, _, err := s.sessionNow(ctx, r.MachineID, r.SessionID); err != nil || !working(sess) {
+				return
+			}
+		}
+		c.mu.Lock()
+		prog.updated = now
+		c.mu.Unlock()
+		ts.typing(ctx, true)
+		return
+	}
+	ps, ok := sink.(channelProgress)
+	if !ok || !prog.mu.TryLock() {
+		return
+	}
+	defer prog.mu.Unlock()
+	c.mu.Lock()
+	card, started := r.Ext["card"], r.Started
+	c.mu.Unlock()
+	if card == "" {
+		sess, _, err := s.sessionNow(ctx, r.MachineID, r.SessionID)
+		if err != nil || !working(sess) {
+			return // nothing going on to show (a held run waiting on its background work)
+		}
+	}
+	c.mu.Lock()
+	now := c.clock()
+	steps, live, dirty := append([]string{}, prog.steps...), prog.live, prog.dirty
+	due := !prog.finished && (card == "" && now.Sub(started) >= channel.ProgressAfter ||
+		card != "" && (dirty && now.Sub(prog.updated) >= channel.ProgressEvery || now.Sub(prog.updated) >= channel.ProgressIdle))
+	if due {
+		prog.dirty, prog.updated = false, now
+	}
+	c.mu.Unlock()
+	if !due {
+		return
+	}
+	ps.progress(ctx, r, now.Sub(started), steps, live)
+}
+
+// setRunExt sets one of a run's channel values and keeps it.
+func (s *Service) setRunExt(r *channel.Run, key, value string) {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if r.Ext == nil {
+		r.Ext = map[string]string{}
+	}
+	r.Ext[key] = value
+	s.saveChannelStateLocked()
+}
+
+// SessionItems is session.items: new items of a conversation the runs follow; they note the steps.
+func (s *Service) SessionItems(_ context.Context, p SessionItems) {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.live) == 0 {
+		return
+	}
+	for _, r := range c.st.Runs {
+		if r.MachineID != p.MachineID || r.SessionID != p.SessionID {
+			continue
+		}
+		lp := c.live[r.ID]
+		if lp == nil {
+			continue
+		}
+		for _, it := range p.Items {
+			if it.Seq <= r.Base {
+				continue
+			}
+			if st := botStep(it); st != "" {
+				lp.steps = append(lp.steps, st)
+				lp.dirty = true
+			}
+			if it.Kind == proto.KindText && it.Role == "assistant" {
+				lp.live = ""
+			}
+		}
+		if len(lp.steps) > 200 {
+			lp.steps = lp.steps[len(lp.steps)-200:]
+		}
+	}
+}
+
+// SessionDelta is session.delta: the text a followed conversation is writing right now.
+func (s *Service) SessionDelta(_ context.Context, p SessionDelta) {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.live) == 0 {
+		return
+	}
+	for _, r := range c.st.Runs {
+		if r.MachineID == p.MachineID && r.SessionID == p.SessionID {
+			if lp := c.live[r.ID]; lp != nil && lp.live != p.Text {
+				lp.live, lp.dirty = p.Text, true
+			}
+		}
+	}
+}
+
+// hasPending: a card of the conversation waits for an answer.
+func (s *Service) hasPending(ctx context.Context, machine, session string) bool {
+	var res struct {
+		Interactions []proto.Interaction `json:"interactions"`
+	}
+	if err := s.call(ctx, DeviceAll, DeviceInteractionsList, map[string]any{}, &res); err != nil {
+		return false
+	}
+	return slices.ContainsFunc(res.Interactions, func(ix proto.Interaction) bool { return ix.MachineID == machine && ix.SessionID == session })
+}
+
+// pendingIDs are the cards waiting for an answer now (nil when the hub could not be asked).
+func (s *Service) pendingIDs(ctx context.Context) map[string]bool {
+	var res struct {
+		Interactions []proto.Interaction `json:"interactions"`
+	}
+	if err := s.call(ctx, DeviceAll, DeviceInteractionsList, map[string]any{}, &res); err != nil {
+		return nil
+	}
+	out := make(map[string]bool, len(res.Interactions))
+	for _, ix := range res.Interactions {
+		out[ix.ID] = true
+	}
+	return out
+}
+
+// checkChannelRun answers a run whose turn ended (channel.Run.Check and Decide).
+func (s *Service) checkChannelRun(id string) {
+	r, prog := s.channelRunByID(id)
+	if r == nil || prog == nil {
+		return
+	}
+	if !prog.checking.TryLock() {
+		return // another check is on it
+	}
+	defer prog.checking.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	sess, exists, err := s.sessionNow(ctx, r.MachineID, r.SessionID)
+	if err != nil {
+		return // the hub could not be asked: next tick
+	}
+	look := channel.Look{Exists: exists, Working: working(sess), Offline: sess.Status == proto.StatusOffline, Background: channel.Background(sess)}
+	if !exists {
+		d, _, _ := s.deviceKnown(ctx, r.MachineID)
+		look.Online = d.Online
+	} else if !look.Working {
+		look.Waiting = sess.Status == proto.StatusBlocked || s.hasPending(ctx, r.MachineID, r.SessionID)
+	}
+	c := &s.chans
+	c.mu.Lock()
+	look.Now = c.clock()
+	step := r.Check(look)
+	snap := *r
+	snap.MsgIDs = slices.Clone(r.MsgIDs)
+	c.mu.Unlock()
+	switch step.Do {
+	case channel.Wait:
+		return
+	case channel.Finish:
+		s.finishChannelRun(r, &channel.Result{Note: step.Note, Quiet: step.Note == ""})
+		return
+	}
+	// The end was not seen (it came before the watch, or never), or the message was not there last time: look now and
+	// then, not every second.
+	c.mu.Lock()
+	if (!snap.Seen || prog.notFound) && look.Now.Sub(prog.checked) < 10*time.Second {
+		c.mu.Unlock()
+		return
+	}
+	prog.checked = look.Now
+	c.mu.Unlock()
+	rd, err := s.readTurn(ctx, &snap)
+	if err != nil {
+		s.logf("channels: read the answer: %v", err)
+		return // next tick
+	}
+	c.mu.Lock()
+	prog.notFound = !rd.Found
+	c.mu.Unlock()
+	if !rd.Found {
+		if look.Now.Sub(snap.Started) < channel.QueuedMost {
+			return // the message waits behind the turn that just ended: it starts the next one
+		}
+		s.logf("channels: %s: the message never showed in the conversation; answering with its last words", r.ID)
+		snap.MsgIDs, snap.Probe = nil, ""
+		if rd, err = s.readTurn(ctx, &snap); err != nil {
+			return
+		}
+	}
+	res := snap.Decide(rd, look)
+	if res == nil {
+		return
+	}
+	s.finishChannelRun(r, res)
+}
+
+// readTurn is what the conversation answered after the run's base: after its message when the run names one. It
+// reads to the end of the transcript (a long turn has more lines than one page), keeping the items from that message
+// on, or the last ones without one.
+func (s *Service) readTurn(ctx context.Context, r *channel.Run) (channel.Reading, error) {
+	machine, sid := r.MachineID, r.SessionID
+	holds := func(it proto.Item) bool {
+		if strings.Contains(it.Text, r.Probe) {
+			return true
+		}
+		if it.FullSize == 0 {
+			return false
+		}
+		// A long message (a forwarded chat) is cut in pages, maybe before what the user wrote.
+		var full proto.Item
+		return s.call(ctx, machine, "session.item", map[string]any{"session_id": sid, "item_id": it.ID}, &full) == nil && strings.Contains(full.Text, r.Probe)
+	}
+	named := len(r.MsgIDs) > 0 || r.Probe != ""
+	var kept []proto.Item
+	found := !named
+	after := r.Base
+	for page := 0; page < 100; page++ {
+		var res struct {
+			Items     []proto.Item `json:"items"`
+			MoreAfter bool         `json:"more_after"`
+			ToSeq     int          `json:"to_seq"`
+		}
+		if err := s.call(ctx, machine, DeviceSessionItems, map[string]any{"session_id": sid, "after_seq": after, "lazy_images": true}, &res); err != nil {
+			return channel.Reading{Last: r.Base}, err
+		}
+		if named {
+			if i, ok := r.Find(res.Items, holds); ok {
+				kept, found = slices.Clone(res.Items[i:]), true
+			} else if found {
+				kept = append(kept, res.Items...)
+			}
+		} else {
+			kept = append(kept, res.Items...)
+			if len(kept) > 1000 { // the answer is at the end
+				kept = slices.Clone(kept[len(kept)-1000:])
+			}
+		}
+		if res.ToSeq > after {
+			after = res.ToSeq
+		}
+		if !res.MoreAfter {
+			break
+		}
+	}
+	if !found || !holdsNewest(r, kept) {
+		return channel.Reading{Last: after}, nil
+	}
+	var out []string
+	for _, it := range channel.Answer(kept) {
+		text := it.Text
+		if it.FullSize > 0 {
+			var full proto.Item
+			if err := s.call(ctx, machine, "session.item", map[string]any{"session_id": sid, "item_id": it.ID}, &full); err == nil && full.Text != "" {
+				text = full.Text
+			}
+		}
+		out = append(out, strings.TrimSpace(text))
+	}
+	return channel.Reading{Answer: strings.Join(out, "\n\n"), Found: true, Last: after}, nil
+}
+
+// holdsNewest: the run's newest message is in items. A run that took in later messages (folded: one answer for
+// all) is found by its first one; the turn that answers the first may end before the next is in the conversation
+// (the owner sent several at once, a backlog handed over as the hub started), and its words are not the answer to
+// all. Without client message ids on the items (an older node) it can't be told: as found.
+func holdsNewest(r *channel.Run, items []proto.Item) bool {
+	if len(r.MsgIDs) < 2 {
+		return true
+	}
+	newest, ids := r.MsgIDs[len(r.MsgIDs)-1], false
+	for _, it := range items {
+		if it.ClientMsgID == newest {
+			return true
+		}
+		ids = ids || it.ClientMsgID != ""
+	}
+	return !ids
+}
+
+// finishChannelRun sends a run's answer and ends it, or — held — keeps it for the turn its background work starts.
+// The run stays until its answer is handed to the hub: a sink that can't be reached now (the bus, the hub, a
+// plugin's program restarting) is tried again on the next look, for a while (channelAnswerTries), with the same
+// refs (a plugin sends a ref once).
+func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
+	c := &s.chans
+	c.mu.Lock()
+	prog := c.live[r.ID]
+	c.mu.Unlock()
+	if prog == nil {
+		return
+	}
+	prog.mu.Lock()
+	defer prog.mu.Unlock()
+	if prog.finished {
+		return
+	}
+	c.mu.Lock()
+	now := c.clock()
+	took := now.Sub(r.Started)
+	snap := *r
+	snap.Ext = cloneExt(r.Ext)
+	snap.Folded = slices.Clone(r.Folded)
+	if c.answering == nil {
+		c.answering = map[string]bool{}
+	}
+	c.answering[r.ID] = true // not folded into a later message while its answer goes out
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		delete(c.answering, r.ID)
+		c.mu.Unlock()
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	sink, err := s.sinkFor(ctx, r.Channel)
+	if err != nil {
+		if s.answerAgain(prog, now) {
+			s.logf("channels: %s: where to answer: %v; trying again", r.ID, err)
+			return
+		}
+		s.logf("channels: %s: where to answer: %v; giving up on it", r.ID, err)
+	}
+	if sink != nil {
+		quiet := res.Quiet || strings.TrimSpace(res.Answer) == "" && res.Note == "" && snap.Held
+		answer := res.Answer
+		if strings.TrimSpace(answer) == "" && res.Note == "" && !quiet {
+			answer = "（这一轮没有文字回答）"
+		}
+		if err := sink.answer(ctx, &snap, answer, res.Note, took, !res.Held, quiet); err != nil {
+			if s.answerAgain(prog, now) {
+				s.logf("channels: %s: the answer did not go out: %v; trying again", r.ID, err)
+				return
+			}
+			s.logf("channels: %s: the answer did not go out: %v; giving up on it", r.ID, err)
+		}
+	}
+	c.mu.Lock()
+	prog.failing = time.Time{}
+	if res.Held {
+		r.Hold(res.Last, now.UTC())
+		delete(r.Ext, "card") // the next turn gets its own progress message
+		prog.steps, prog.live, prog.dirty = nil, "", false
+	} else {
+		prog.finished = true
+		delete(c.live, r.ID)
+		c.st.Runs = slices.DeleteFunc(c.st.Runs, func(o *channel.Run) bool { return o == r })
+		if c.answered == nil {
+			c.answered = map[[2]string]time.Time{}
+		}
+		for k, at := range c.answered {
+			if now.Sub(at) > time.Hour {
+				delete(c.answered, k)
+			}
+		}
+		c.answered[[2]string{r.MachineID, r.SessionID}] = now
+	}
+	others := slices.ContainsFunc(c.st.Runs, func(o *channel.Run) bool { return o.Channel == r.Channel })
+	s.saveChannelStateLocked()
+	c.mu.Unlock()
+	if res.Held {
+		return
+	}
+	close(prog.done)
+	s.channelsChanged()
+	if ts, ok := sink.(channelTyping); ok && !others {
+		ts.typing(ctx, false)
+	}
+}
+
+// channelAnswerTries is how long an answer that can't be handed over is tried again before the run gives up on it.
+var channelAnswerTries = 2 * time.Minute
+
+// answerAgain: the answer failed now; true while it is worth trying again (the first failure starts the clock).
+func (s *Service) answerAgain(prog *chanLive, now time.Time) bool {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if prog.failing.IsZero() {
+		prog.failing = now
+	}
+	prog.checked = time.Time{} // the next look reads again at once
+	return now.Sub(prog.failing) < channelAnswerTries
+}
+
+func cloneExt(m map[string]string) map[string]string {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+// channelAnswered: the conversation's turn is (or just was) answered in a channel, so the sync mirror leaves it
+// alone (the hub's finished push goes by the same, from the snapshot). "Just": within the finished push's delay.
+func (s *Service) channelAnswered(ctx context.Context, machine, session string) bool {
+	window := 30*time.Second + time.Duration(s.hello(ctx).DoneDelayMS)*time.Millisecond
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s.loadChannelStateLocked(ctx)
+	for _, r := range c.st.Runs {
+		if r.SessionID == session {
+			return true
+		}
+	}
+	at, ok := c.answered[[2]string{machine, session}]
+	return ok && c.clock().Sub(at) < window
+}
+
+// channelTurnEnded: a conversation finished a turn (session.turn_ended). Its runs are checked at once rather than on
+// the next tick; a turn nobody asked for in a channel is mirrored to those that sync.
+func (s *Service) channelTurnEnded(ctx context.Context, machine, session string) {
+	c := &s.chans
+	c.mu.Lock()
+	s.loadChannelStateLocked(ctx)
+	var ids []string
+	for _, r := range c.st.Runs {
+		if r.MachineID == machine && r.SessionID == session {
+			r.Seen = true
+			if p := c.live[r.ID]; p != nil {
+				p.checked = time.Time{} // a turn ended: look now, whatever the last look found
+			}
+			ids = append(ids, r.ID)
+		}
+	}
+	c.mu.Unlock()
+	for _, id := range ids {
+		s.checkChannelRun(id)
+	}
+	if len(ids) == 0 && !s.channelAnswered(ctx, machine, session) {
+		s.feishuMirror(ctx, machine, session)
+		s.extensionMirror(ctx, machine, session)
+	}
+}
+
+// sweepChannelRuns makes sure every run has its watcher (one lost to a restart).
+func (s *Service) sweepChannelRuns() {
+	c := &s.chans
+	c.mu.Lock()
+	s.loadChannelStateLocked(context.Background())
+	var lost []*channel.Run
+	for _, r := range c.st.Runs {
+		if c.live[r.ID] == nil {
+			lost = append(lost, r)
+		}
+	}
+	c.mu.Unlock()
+	if len(lost) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	for _, r := range lost {
+		if s.sinkReady(ctx, r.Channel) {
+			go s.watchChannelRun(r)
+		}
+	}
+}
+
+// sinkReady: channel id can be answered now (the Feishu bot is connected and paired; a plugin's is there).
+func (s *Service) sinkReady(ctx context.Context, id string) bool {
+	if id == channel.Feishu {
+		st, err := s.feishuStatusKept(ctx)
+		return err == nil && st.Ready
+	}
+	_, ok := s.pluginChannel(ctx, id)
+	return ok
+}
+
+// forgetChannelTurns drops what channel id waits on (unbound).
+func (s *Service) forgetChannelTurns(id string) {
+	c := &s.chans
+	c.mu.Lock()
+	s.loadChannelStateLocked(context.Background())
+	c.st.Runs = slices.DeleteFunc(c.st.Runs, func(r *channel.Run) bool { return r.Channel == id })
+	c.st.Asks = slices.DeleteFunc(c.st.Asks, func(a *channel.Ask) bool { return a.Channel == id })
+	s.saveChannelStateLocked()
+	c.mu.Unlock()
+	s.channelsChanged()
+}
+
+// channelWaiting is how many answers and questions channel id waits on.
+func (s *Service) channelWaiting(id string) channel.Waiting {
+	c := &s.chans
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s.loadChannelStateLocked(context.Background())
+	var w channel.Waiting
+	for _, r := range c.st.Runs {
+		if r.Channel == id {
+			w.Answers++
+		}
+	}
+	for _, a := range c.st.Asks {
+		if a.Channel == id {
+			w.Asks++
+		}
+	}
+	return w
+}
+
+// errCannotSend: the channel has nowhere to send to yet (WeChat before the owner's first message); errNoChannel: the
+// channel is gone (a plugin uninstalled).
+var (
+	errCannotSend = errors.New("cannot send yet")
+	errNoChannel  = errors.New("no channel")
+)

@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -257,6 +259,7 @@ func newBotWorld(t *testing.T) *botWorld {
 	h.startBots(ctx)
 	mux := http.NewServeMux()
 	h.botRoutes(mux)
+	h.assistantRoutesRelayed(mux) // the channels' routes are the assistant's
 	w := &botWorld{h: h, api: api, node: node, m: m, mux: mux, ctx: ctx}
 	if code, out := w.do(t, "PUT", "/api/v1/bots/feishu",
 		fmt.Sprintf(`{"enabled":true,"app_id":"cli_test","app_secret":"s3cret","domain":%q,"features":{"main":true,"cards":true}}`, api.srv.URL)); code != 200 {
@@ -378,9 +381,10 @@ func TestBotMessageGoesToTheMainConversationAndTheAnswerComesBack(t *testing.T) 
 	if n := len(w.node.sends); n != 1 {
 		t.Fatalf("%d sends, want 1", n)
 	}
-	if !w.h.channelAnswered("main-1") {
-		t.Fatal("the turn answered in Feishu must not also push 完成 to the phone")
-	}
+	// The assistant reports the turn answered (its snapshot): the phone's 完成 push leaves it alone.
+	eventually(t, 5*time.Second, "the turn answered in Feishu must not also push 完成 to the phone", func() bool {
+		return w.h.channelAnswered("main-1")
+	})
 }
 
 // A question Persona asks shows as a card in the chat; a button there answers it like the app would, and the card says
@@ -469,43 +473,6 @@ func TestTurnAnswerIsTheLastWords(t *testing.T) {
 	}
 }
 
-func TestResolutionText(t *testing.T) {
-	yes, no := true, false
-	q := proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "a"}, {Question: "b"}}}
-	for _, c := range []struct {
-		ix   proto.Interaction
-		r    proto.Resolution
-		want string
-	}{
-		{q, proto.Resolution{Answers: map[string]string{"a": "1", "b": "2"}}, "已回答：1；2"},
-		{proto.Interaction{Kind: proto.IxPlan}, proto.Resolution{Approve: &yes, Mode: "acceptEdits"}, "已批准，自动接受编辑"},
-		{proto.Interaction{Kind: proto.IxPlan}, proto.Resolution{Approve: &no, Feedback: "拆小点"}, "已打回：拆小点"},
-		{proto.Interaction{Kind: proto.IxPermission}, proto.Resolution{Allow: &yes, Always: true}, "已允许（本会话不再问）"},
-		{proto.Interaction{Kind: proto.IxPermission}, proto.Resolution{Allow: &no}, "已拒绝"},
-		{proto.Interaction{}, proto.Resolution{Dismiss: true}, "已忽略"},
-	} {
-		if got := resolutionText(c.ix, c.r); got != c.want {
-			t.Errorf("%+v: %q, want %q", c.r, got, c.want)
-		}
-	}
-}
-
-func TestBotStepAndStripContext(t *testing.T) {
-	if s := botStep(proto.Item{Kind: proto.KindToolUse, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"go test ./...\nmore"}`)}); s != "运行 `go test ./...`" {
-		t.Fatalf("bash step %q", s)
-	}
-	if s := botStep(proto.Item{Kind: proto.KindToolUse, ToolName: "mcp__jarvis__kb_search", ToolInput: json.RawMessage(`{"query":"周报"}`)}); s != "kb_search `周报`" {
-		t.Fatalf("mcp step %q", s)
-	}
-	if s := botStep(proto.Item{Kind: proto.KindText}); s != "" {
-		t.Fatalf("text step %q", s)
-	}
-	in := "<jarvis-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</jarvis-context>\n真正的问题"
-	if got := stripContext(in); got != "真正的问题" {
-		t.Fatalf("strip %q", got)
-	}
-}
-
 // A message sent while a turn is going on waits behind it: the end of that turn is not its answer.
 func TestBotAnswerWaitsForTheTurnOfItsOwnMessage(t *testing.T) {
 	w := newBotWorld(t)
@@ -536,8 +503,8 @@ func TestBotAnswerWaitsForTheTurnOfItsOwnMessage(t *testing.T) {
 	w.api.find(t, "第二个问题的回答")
 }
 
-// Wrong codes end the pairing after a few tries; "/new <text>" starts a conversation with just the text.
-func TestBotPairingGivesUpOnGuessesAndNewTakesTheRest(t *testing.T) {
+// Wrong codes end the pairing after a few tries; a new code pairs.
+func TestBotPairingGivesUpOnGuesses(t *testing.T) {
 	w := newBotWorld(t)
 	if code, _ := w.do(t, "POST", "/api/v1/bots/feishu/pair", ""); code != 200 {
 		t.Fatal(code)
@@ -556,13 +523,7 @@ func TestBotPairingGivesUpOnGuessesAndNewTakesTheRest(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	w.pair(t)
-	if h, rest := w.h.botCommand(w.ctx, nil, FeishuBotSettings{Features: BotFeatures{Main: true}, Owner: &BotOwner{ChatID: "oc"}}, "om", "/new 帮我写周报"); h || rest != "帮我写周报" {
-		t.Fatalf("/new with text: handled=%v rest=%q", h, rest)
-	}
-	if h, rest := w.h.botCommand(w.ctx, nil, FeishuBotSettings{Owner: &BotOwner{ChatID: "oc"}}, "om", "/compact"); h || rest != "/compact" {
-		t.Fatalf("an unknown command goes on as it is: handled=%v rest=%q", h, rest)
-	}
+	w.pair(t) // "/new <text>" taking the rest is the assistant's (TestBotCommandsPassTheRestOn there)
 }
 
 // The watch loop and a turn's end check at the same time: the answer is posted once.
@@ -580,12 +541,10 @@ func TestBotAnswerIsPostedOnceWhenChecksRace(t *testing.T) {
 	w.node.mu.Unlock()
 	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusWorking}})
 	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusDone}})
-	var wg sync.WaitGroup
+	// The turn's end told the assistant again and again at once (each runs on its own there).
 	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() { defer wg.Done(); w.h.channelTurnEnded("box", "main-1") }()
+		w.h.asst().TurnEnded(context.Background(), assistantwire.SessionRef{MachineID: "box", SessionID: "main-1"})
 	}
-	wg.Wait()
 	w.api.find(t, "只答一次")
 	time.Sleep(1500 * time.Millisecond)
 	if n := w.api.count("只答一次"); n != 1 {
@@ -612,10 +571,9 @@ func TestBotSideConversationLauncherFallback(t *testing.T) {
 	})
 	w.m.mu.Unlock()
 	w.pair(t)
-
-	w.h.bots.mu.Lock()
-	w.h.bots.st.Current = botTarget{Kind: targetJarvis, MachineID: "box", SessionID: "side-1"}
-	w.h.bots.mu.Unlock()
+	if code, out := w.do(t, "PUT", "/api/v1/channels/feishu", `{"target":{"kind":"conversation","machine_id":"box","session_id":"side-1"}}`); code != 200 {
+		t.Fatalf("set target: %d %v", code, out)
+	}
 
 	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_side", "ou_me", "text", textContent("发给旁支"), nil))
 	sent := w.node.sent(t, 0)
@@ -630,3 +588,147 @@ func TestBotSideConversationLauncherFallback(t *testing.T) {
 	}
 }
 
+// stopAssistant stops h's assistant and waits until the hub sees it gone.
+func stopAssistant(t *testing.T, h *Hub) {
+	t.Helper()
+	a := assistantOf(t, h)
+	a.stop()
+	<-a.done
+	eventually(t, 5*time.Second, "the assistant disconnected", func() bool { return h.busConnOf(assistantwire.AssistantID) == nil })
+}
+
+// While the assistant is not connected the bot still takes the owner's messages: each is answered that the assistant
+// can't be reached, nothing goes to the conversation; a press on a card says so too. Back, it takes messages again.
+func TestBotSaysTheAssistantIsAwayAndRecovers(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	shortInboundWait(t)
+	stopAssistant(t, w.h)
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_away", "ou_me", "text", textContent("在吗？"), nil))
+	w.api.find(t, "/messages/om_away/reply", "助手暂时连不上")
+	b, _ := json.Marshal(map[string]any{"schema": "2.0", "header": map[string]any{"event_type": "card.action.trigger"},
+		"event": map[string]any{"operator": map[string]any{"open_id": "ou_me"},
+			"action": map[string]any{"value": map[string]any{"a": "ix", "id": "ix_x"}, "tag": "button"}}})
+	res, _ := w.h.botEvent(w.ctx, b)
+	if raw, _ := json.Marshal(res); !strings.Contains(string(raw), "助手暂时连不上") {
+		t.Fatalf("a press while away: %s", raw)
+	}
+	if code, _ := w.do(t, "GET", "/api/v1/bots/feishu", ""); code != 200 {
+		t.Fatalf("the bot's own settings page stays the hub's: %d", code)
+	}
+	// Binding carries credentials: the hub's route, answered without the assistant.
+	if code, out := w.do(t, "POST", "/api/v1/channels/feishu/bind", ""); code != 200 || out["step"] == nil && out["done"] == nil {
+		t.Fatalf("bind while the assistant is away: %d %v", code, out)
+	}
+	if code, _ := w.do(t, "GET", "/api/v1/channels", ""); code != 503 {
+		t.Fatalf("the channels' page is the assistant's: %d, want 503", code)
+	}
+	w.node.mu.Lock()
+	n := len(w.node.sends)
+	w.node.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("a message reached the conversation while the assistant was away: %v", w.node.sends)
+	}
+	connectAssistant(t, w.h)
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_back", "ou_me", "text", textContent("回来了吗？"), nil))
+	if sent := w.node.sent(t, 0); sent["client_msg_id"] != "feishu-om_back" {
+		t.Fatalf("send %v", sent)
+	}
+}
+
+// shortInboundWait has an owner's message wait for the assistant only briefly (a test of it being away).
+func shortInboundWait(t *testing.T) {
+	old := inboundWait
+	inboundWait = 300 * time.Millisecond
+	t.Cleanup(func() { inboundWait = old })
+}
+
+// A message that comes while the assistant is away for a moment (a hub start, an assistant restart) waits for it and
+// is answered as usual: nothing the bot took is dropped, and nobody is told the assistant is away.
+func TestBotMessageWaitsForTheAssistant(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	stopAssistant(t, w.h)
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_wait", "ou_me", "text", textContent("等一下再答"), nil))
+	time.Sleep(300 * time.Millisecond)
+	connectAssistant(t, w.h)
+	if sent := w.node.sent(t, 0); sent["client_msg_id"] != "feishu-om_wait" {
+		t.Fatalf("send %v", sent)
+	}
+	if n := w.api.count("助手暂时连不上"); n != 0 {
+		t.Fatalf("the owner was told the assistant is away (%d)", n)
+	}
+}
+
+// Answering a card from a channel takes the owner's action the hub handed over with that press or message: none,
+// another card's, or one used already is refused, so the assistant can't approve anything by itself.
+func TestChannelAnswersNeedTheOwnersAction(t *testing.T) {
+	h := newTestHub(t)
+	h.store = newBotStore()
+	ix := proto.Interaction{ID: "ix_plan", MachineID: "box", SessionID: "s1", Kind: proto.IxPlan, ExpiresAt: time.Now().Add(time.Minute)}
+	got := make(chan proto.Resolution, 1)
+	go func() {
+		r, _ := h.waitInteraction(context.Background(), ix)
+		got <- r
+	}()
+	eventually(t, 5*time.Second, "the plan waits", func() bool { return len(h.pendingInteractions()) == 1 })
+	resolve := func(action string) error {
+		p, _ := json.Marshal(map[string]any{"interaction_id": "ix_plan", "action": action,
+			"resolution": map[string]any{"approve": true, "mode": "bypassPermissions", "answered_by": "assistant"}})
+		_, err := h.resolveFromChannel(context.Background(), p)
+		return err
+	}
+	if err := resolve(""); !errors.Is(err, errNoOwnerAction) {
+		t.Fatalf("no owner action: %v", err)
+	}
+	if err := resolve(h.issueOwnerAction(channel.Feishu, "ix_other")); !errors.Is(err, errNoOwnerAction) {
+		t.Fatalf("another card's press: %v", err)
+	}
+	a := h.issueOwnerAction(channel.Feishu, "ix_plan")
+	if err := resolve(a); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case r := <-got:
+		if r.Approve == nil || !*r.Approve || r.AnsweredBy != "" {
+			t.Fatalf("resolution %+v: the owner's own answer", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("not answered")
+	}
+	if err := resolve(a); !errors.Is(err, errNoOwnerAction) {
+		t.Fatalf("an owner action used twice: %v", err)
+	}
+}
+
+// Two messages sent together (a backlog handed over at once) are one run: the turn that answers the first ends
+// before the second is in the conversation, and its words are not posted as the answer; the second's turn is.
+func TestBotFoldedMessagesWaitForTheNewest(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_f1", "ou_me", "text", textContent("第一条"), nil))
+	first, _ := w.node.sent(t, 0)["text"].(string)
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_f2", "ou_me", "text", textContent("第二条"), nil))
+	second, _ := w.node.sent(t, 1)["text"].(string)
+	w.node.mu.Lock()
+	w.node.items = []proto.Item{{Seq: 11, Role: "user", Kind: proto.KindText, Text: first, ClientMsgID: "feishu-om_f1"},
+		{Seq: 12, Role: "assistant", Kind: proto.KindText, Text: "只答了第一条"}}
+	w.node.last = 12
+	w.node.mu.Unlock()
+	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusWorking}})
+	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusDone}})
+	time.Sleep(1500 * time.Millisecond)
+	if n := w.api.count("只答了第一条"); n != 0 {
+		t.Fatal("the first message's turn was posted as the answer to both")
+	}
+	w.node.mu.Lock()
+	w.node.items = append(w.node.items, proto.Item{Seq: 13, Role: "user", Kind: proto.KindText, Text: second, ClientMsgID: "feishu-om_f2"},
+		proto.Item{Seq: 14, Role: "assistant", Kind: proto.KindText, Text: "两条都答了"})
+	w.node.last = 14
+	w.node.mu.Unlock()
+	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusWorking}})
+	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusDone}})
+	w.api.find(t, "两条都答了")
+	w.api.find(t, "/messages/om_f1/reactions", "DONE")
+	w.api.find(t, "/messages/om_f2/reactions", "DONE")
+}

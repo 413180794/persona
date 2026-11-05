@@ -352,7 +352,6 @@ func (m *Machine) setSessions(list []proto.Session) {
 			go m.notifyFinished(s.SessionID, m.hub.turns.ended(key, now))
 			// A new assistant conversation is named after its first turn; a task from one may be done.
 			go m.hub.asst().TurnEnded(context.Background(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: s.SessionID})
-			go m.hub.channelTurnEnded(m.cfg.ID, s.SessionID)
 			go m.hub.workTurnEnded(m, s.SessionID) // triage the turn: done, or blocked on what (work.go)
 		}
 	}
@@ -464,7 +463,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		m.mu.Unlock()
 		m.hub.itemsToSubscribers(m.cfg.ID, p.SessionID, p.Items, p.itemSpan)
-		m.hub.channelItems(m.cfg.ID, p.SessionID, p.Items)
+		m.hub.followedItems(m.cfg.ID, p.SessionID, p.Items) // the assistant's channels follow it (assistant_channels.go)
 	case "session.screen":
 		var p struct {
 			SessionID string `json:"session_id"`
@@ -510,7 +509,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		if json.Unmarshal(params, &p) == nil {
 			m.hub.rememberLiveText(m.cfg.ID, p.SessionID, p.Text)
 			m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "delta", "machine_id": m.cfg.ID, "session_id": p.SessionID, "text": p.Text})
-			m.hub.channelDelta(m.cfg.ID, p.SessionID, p.Text)
+			m.hub.followedDelta(m.cfg.ID, p.SessionID, p.Text)
 		}
 	case "state.put":
 		var p struct {

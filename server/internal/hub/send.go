@@ -165,7 +165,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	defer cancel()
 	id, _ := p["client_msg_id"].(string)
 	if ch := channel.FromClientMsgID(id, []string{"voice"}); ch != "" {
-		h.noteChannelConversation(ch, m.cfg.ID, sid) // a voice conversation's errand (docs/channels.md「来源标记」)
+		h.channelNoted(ch, m.cfg.ID, sid) // a voice conversation's errand (docs/channels.md「来源标记」)
 	}
 	external := false
 	if s, ok := m.session(sid); ok {

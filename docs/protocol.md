@@ -1211,7 +1211,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`、`assistant.context {session_id}` → `{text,…}`（node 每条消息前要）、`assistant.tasks {}` → `{tasks:[…]}`、
   `assistant.card_sent {card_id,item_id}` → `{sent}`（收件箱从消息卡片「发送」前问：发过的不再发）、`assistant.cards_sent {item_id,at,text?}` → `{}`（这个条目的回复发出去了，它的卡片记下、告诉 App）、
   `assistant.todo_handoff {todo_id,text?}` → `{found,title?,done_at?,text?}`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id`：待办在不在、完成没有，`text` 前面拼上生效的决策）、`assistant.todo_link {todo_id,machine_id,session_id,title?,cwd?,agent?}` → `{}`（交出去以后挂上；待办没了、完成了回错误）。
-  `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}`（飞书机器人、渠道插件、收件箱的 AI 分身开对话）、
+  `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}`（收件箱的 AI 分身开对话；飞书机器人和渠道 2026-11-04 起由助手自己开）、
   `assistant.send_params {machine_id,session_id,params}` → `{params}`（发给它某段对话的消息跑在哪个启动器和模型上、新主对话第一条前面带的背景）、
   `assistant.rename {machine_id,session_id,params}` → node 的回答（App 给它的对话改名）；这几个请求本身不对时回 `bad_request`，hub 回 App 400。
   知识库（2026-11-04）：`kb.context {chat_id}` → `{context}`（收件箱 AI 分身）、`kb.projects {machine_id,cwd}` → `{projects:[{slug,name}]}`（分诊）、`kb.forget {source}` → `{chats,people}`（删除来源的数据）、
@@ -1241,6 +1241,34 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 - 助手没连着、或在请求中途断开回 `503 assistant_offline`，它回的 `rpc.Error` 变成 `502`（带它的 `code`）；没给期限的请求 5 分钟后放弃。
 
 **发给 App 的消息**：助手发单向事件 `ws.broadcast {message}`，`message` 是一个带字符串 `type` 的 JSON 对象（`assistant_schedule`、`assistant_feed`、`task_plan`），hub 原样发给每个 App 的 WebSocket（加上每条消息都有的 `event_seq`）；没有 `type` 的丢掉。
+
+### 渠道用的方法（2026-11-04）
+
+飞书机器人和插件渠道「和 Persona 对话」的那一半是助手的（`docs/channels.md`「谁管什么」）：hub 只管收发，主人的消息和按钮交给助手，助手要发、要改的叫 hub 做。
+类型在 `assistantwire` 的渠道一节；hub 那头是 `hub/assistant_channels.go`，助手那头是 `assistant/channels*.go`、`feishu*.go`。
+
+- hub → 助手，调用：`channels.receive {channel, message, action}` → `{}`（插件渠道主人的一条消息，`message` 是 `channel.Message`）、`feishu.message {event}` → `{}`（飞书私聊里主人的一条消息，`im.message.receive_v1` 的 `event` 原样）：
+  助手按消息 id 去重、收下就回，处理在后台（飞书的先读 `feishu.status`，读不到回 `try_again`，没收下）；`feishu.card_action {event, action}` → 卡片回调的回答（`{toast?, card?}`，飞书等 3 秒，hub 给 2.5 秒）；`feishu.view {}` → `{target?, agents?}`（`GET /api/v1/bots/feishu` 里助手的那两项）。
+  `action` 是 hub 发的一次性**主人操作**（`oa_…`，10 分钟内有效；按卡片的只能答那一张卡）：助手答卡片（`interactions.resolve`）要带上它。
+  主人的消息 hub 先等助手连上最多 60 秒（同时最多 500 条），调用断了、超时、`try_again` 就再交一次（助手按 id 只收一次）；等不到 hub 自己回主人：飞书「没能发出去：助手暂时连不上，稍后再试」，卡片 toast「助手暂时连不上，稍后再试」，插件渠道 `channel.send`（`kind: note`）「没发出去：助手暂时连不上，稍后再试」（同一条只回一次）。
+- hub → 助手，单向事件：`interaction.announced {interaction}`（新的卡片，安静的任务的除外）、`interaction.ended {interaction, resolution?}`（卡片结束了：答了的带回答，撤回、过期的不带；同一张卡先带回答再不带地各来一次）、
+  `session.items {machine_id, session_id, items}`、`session.delta {machine_id, session_id, text}`（助手跟着的对话的新条目和正在写的字）、`feishu.owner {paired}`（机器人配对 / 解除配对）、
+  `channels.noted {channel, machine_id, session_id}`（渠道来的消息经 App 的接口进了对话：语音的 `voice-…`）。
+- 助手 → hub，`device.call`（hub 自己答的）：`session.follow {session_id}` / `session.unfollow {session_id}` → `{}`（跟一段对话：hub 像 App 打开它那样 watch，把新条目和字转过去；助手断开时 hub 全部放掉，助手连回来再跟）、
+  `session.send_once {session_id, text, client_msg_id, images?, …}` → `{}`（node 的 `session.send`，带着和 App 一样的只发一次的保护：发过的不再发，上次发到一半断了的拒绝）。
+- 助手 → hub，`app.call`：
+  - `feishu`：`feishu.status {}` → `{ready, enabled, features, owner?, paired_at?, public_url?}`（`owner` + `paired_at` 是哪一次配对：变了，或没了，助手的聊天状态从头来）；`feishu.post {reply_to?, card, fallback?}` → `{message_id}`（卡片回复那条消息，否则发进主人的私聊；飞书拒收的卡片改发富文本）、
+    `feishu.text {reply_to?, text}` → `{message_id}`、`feishu.update_card {message_id, card}`、`feishu.react {message_id, emoji}` → `{reaction_id}`、`feishu.unreact {message_id, reaction_id}`、
+    `feishu.messages {message_id}` → `{items}`（引用、合并转发）、`feishu.resource {message_id, key, kind}` → `{data, mime}` 或 `{mime, too_large: true}`（超过 3 MB 的图片）、
+    `feishu.save {message_id, key, kind, name, machine_id}` → `{path}`（文件存到那台电脑的临时目录，最多 50 MB，不经总线带内容）、`feishu.user_name {open_id}` → `{name}`、
+    `feishu.configure {enabled?, features?: {id: on}}`、`feishu.test {}`。机器人没开、没连上或没配对时（`ready` 是 false）发、改的方法回错误「机器人没打开或还没配对」；只发给配对的主人。
+  - `channels`：`channels.list {}` → `{channels: [channel.View]}`（每个渠道的传输状态：不带目标、插件渠道的功能，助手填）、`channels.send {channel, ref, text, kind, reply_to?}` → `{message_id?}`（一段，失败按同一个 `ref` 重试；还没地方发回错误码 `cannot_send`）、
+    `channels.typing {channel, on}`、`channels.enable {channel, on}`（插件和它的连接器、飞书机器人的开关；收件箱的分拣模型没配时回 `needs_triage_model`）、`channels.unbind {channel}`。绑定不在这里：`POST /api/v1/channels/{id}/bind` 是 hub 自己的路由（凭证不经过助手）。
+  - `interactions`：`interactions.resolve {interaction_id, resolution, action}` → `{ok, status?}`（按用户在渠道里的回答答掉这张卡；`action` 是那一下的主人操作，没有、用过、是别的卡的一律拒绝，记成用户自己答的；已经不在等了 `ok` 是 false）。
+- 快照多了 `channels: {marks:[{machine_id, session_id, channels}], turns:[{machine_id, session_id, answered?}]}`：hub 照 `marks` 给会话填 `channels`（变了推那台机器的会话列表），
+  照 `turns`（`answered` 空着是正在跟，否则是答完的时间，一小时内的）不推那段对话这一轮的「完成」；`null`（读不出来，快照算不完整）时留着上一份。
+- 助手的路由多了 `/api/v1/channels*`，绑定 `POST …/bind` 除外（`docs/channels.md`「接口」）。
+- 助手这边的事件队列：`session.delta` 每段对话只排一条（新的字顶掉旧的），队列满了只丢 `session.delta`、`session.items`，别的等有空再进，不丢。
 
 ### 服务这一侧（`server/internal/bus`）
 

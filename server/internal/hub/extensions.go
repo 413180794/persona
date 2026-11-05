@@ -327,8 +327,7 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 	ps.mu.Lock()
 	ps.reg = reg
 	ps.mu.Unlock()
-	ps.loadSandboxes(ctx)     // before any of them starts (extension_sandbox.go)
-	h.migrateWeChatState(ctx) // before its program starts (channels_migrate.go)
+	ps.loadSandboxes(ctx) // before any of them starts (extension_sandbox.go)
 	for _, p := range reg.List() {
 		if len(p.Manifest.Items("connectors")) > 0 {
 			ps.apply(ctx, p.Record.ID)

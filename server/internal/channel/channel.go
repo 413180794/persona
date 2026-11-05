@@ -1,8 +1,10 @@
 // Package channel is what every way of talking to Persona has in common (docs/channels.md): the Persona apps, the
 // WeChat bot, the Feishu bot, /agent in Feishu, voice. A channel brings the owner's message into a conversation, the
-// hub follows the turn and sends its answer back the same way; what the conversation's agents ask goes there too.
+// assistant follows the turn and sends its answer back the same way (the hub carries the messages); what the
+// conversation's agents ask goes there too.
 //
-// This package is plain data and plain rules, with no hub in it: the hub, channel programs and tests all use it. The
+// This package is plain data and plain rules, with no hub in it: the hub, the assistant, channel programs and tests all
+// use it. The
 // turn's rules (Check, Answer), splitting an answer (Split), asking and answering in text (AskText, ReadAnswer) were
 // written twice before (hub/bots_runs.go, wechat/turns.go); this is the one copy.
 package channel

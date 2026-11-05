@@ -4,10 +4,18 @@
 某台电脑上的 Claude Code / Codex），这一轮的回答以机器人的身份发回飞书；Persona 和 Agent 要用户回答、批准的，在飞书里发卡片，
 点一下就答了；推送和主对话在别处的回答也可以发一份到飞书。每一项单独开关，默认全关（2026-11-02 用户要求：「P1/2/3 都做吧，可选开启」，issue #322）。
 
-它是渠道 `feishu`（`docs/channels.md`）：跟踪这一轮走 hub 的统一管线（`hub/channels_runs.go`，规则在 `server/internal/channel`，和微信同一份），
-这里的代码只管飞书那一头（进度卡、答案卡、表情、提问卡片、命令）。
+它是渠道 `feishu`（`docs/channels.md`）：跟踪这一轮走统一管线（`assistant/channels_runs.go`，规则在 `server/internal/channel`，和微信同一份），
+这里讲飞书那一头（进度卡、答案卡、表情、提问卡片、命令）。
 
-代码：`server/internal/feishubot`（长连接、REST、事件和消息内容、卡片）、`server/internal/hub/bots*.go`（配对、路由、卡片、推送；`bots_runs.go` 是统一管线里飞书的那一头）；
+**谁管什么**（2026-11-04 起，`docs/channels.md`「谁管什么」）：hub 只管传输——应用凭证和功能开关（`bots.feishu`）、开放平台的长连接、配对、只认主人和只在私聊、发 / 回 / 改消息和卡片、
+表情、读消息和下载资源；主人的消息和按卡片交给助手（总线的 `feishu.message`、`feishu.card_action`）。消息进哪段对话、命令、跟踪这一轮、进度卡和答案卡、
+提问卡片和按钮的回答、推送和同步是助手的（`personad assistant`），聊天状态 `bots.feishu.state` 也是它的；它要发、要改的经 `app.call feishu.*` 叫 hub 做。
+助手没连着时，主人的消息先等它最多 60 秒（hub 刚起来、助手在重启），等不到才回「没能发出去：助手暂时连不上，稍后再试」；按卡片回 toast「助手暂时连不上，稍后再试」；
+配对、绑定和这里的设置页照常能用（见 `docs/channels.md`「助手不在的时候」）。按卡片答提问 / 批准时，hub 交给助手的是一个一次性的「主人操作」，只能答那一张卡，
+助手自己批准不了任何东西（`docs/channels.md`「谁管什么」「批准类不代答」）。换了配对（包括助手不在时换的）聊天从头来：回主对话、话题绑定和在等的回答清掉。
+
+代码：`server/internal/feishubot`（长连接、REST、事件和消息内容、卡片）、`server/internal/hub/bots*.go`（配对、路由、传输：长连接上的事件交给助手，`assistant_channels.go` 是 hub 给助手的 `feishu.*`）、
+`server/internal/assistant/feishu*.go`（目标、命令、发进对话、卡片、推送、同步，统一管线里飞书的那一头）；
 提示词 `server/internal/prompts/bot/message.md`；App 的页面 `apple/Persona/Views/Settings/FeishuBotView.swift`（设置 › 连接器 › 飞书机器人）。
 
 ## 和飞书 `/agent` 的区别
@@ -58,14 +66,14 @@
 
 ## 一条消息怎么走
 
-1. `im.message.receive_v1` → 去重 → 不是主人 / 不是私聊就停。以 `/` 开头的先当命令（下面）；不认识的命令原样发过去（可能是 Agent 自己的，比如 `/compact`）。
+1. `im.message.receive_v1` → 去重 → 不是主人 / 不是私聊就停（到这里是 hub；主人的消息交给助手，助手再按 message_id 去重一次、存下来）。以 `/` 开头的先当命令（下面）；不认识的命令原样发过去（可能是 Agent 自己的，比如 `/compact`）。
 2. 目标：回复的是机器人发过的某条消息（或在它的话题里）就发给那条消息绑定的对话 / Agent（`threads`），否则发给当前目标（`current`：`main` / 某段 Persona 对话 / 某个 Agent）。
 3. 内容：文字（富文本转成 Markdown，@ 换回名字）；图片（最多 4 张）作为图片附件；文件、语音、视频和多出来的图片下载后经 node 的
    `file.upload.*` 存到那台电脑的临时目录，路径写进消息；引用的消息、合并转发的聊天记录（逐条读出来，一行一条）放进 `<jarvis-context>`；
    发给 Persona 的再加一段说明「回答会发回飞书，结论先行、不用 notify_user」（提示词 `bot/message.md`）。
-4. 发送：Persona 的对话走 `session.send`（主对话照 App 一样跟着设置 › 助手的启动器），`client_msg_id` 是 `feishu-<message_id>`，
+4. 发送：Persona 的对话走 `session.send`（主对话照 App 一样跟着设置 › 助手的启动器；助手经 hub 的 `session.send_once` 发），`client_msg_id` 是 `feishu-<message_id>`，
    和 App 共用 `sent_messages` 的去重：重发的事件不会打两遍。还没有主对话时新开一段并设为主对话。消息上点「OnIt」表情。
-5. 跟踪回答（统一管线的 run，存在 `channels.state`，hub 重启后接着等；老版本存在 `bots.feishu.state` 里的启动时搬过去）：hub 像 App 打开对话那样 watch 这段对话；5 秒后还没答完就回一张进度卡
+5. 跟踪回答（统一管线的 run，存在 `channels.state`，助手或 hub 重启后接着等；老版本存在 `bots.feishu.state` 里的第一次读时搬过去）：助手像 App 打开对话那样跟着这段对话（`session.follow`，hub 把新条目和正在写的字转给它）；5 秒后还没答完就回一张进度卡
    （在做什么：运行 / 读 / 改 / 搜……最近 4 步，正在写的字，用时），3 秒最多改一次。这一轮结束（不在工作、没有在等你的卡片）时取**这条消息之后**
    的最后一段回答（最后一次工具调用之后的文字），写进进度卡（没有就回复一张新卡片），表情换成「DONE」。
    - 消息发出时对话正在忙：它排在当前这一轮后面。那一轮结束时 transcript 里还没有这条消息，不能把那一轮的结尾当成回答，所以按这条消息的 `client_msg_id`（`feishu-<message_id>`，老 node 没有时按消息开头的一段字 `probe`）
@@ -101,7 +109,9 @@
 "bots": { "feishu": { "app_id": "cli_…", "app_secret": "…", "domain": "feishu" } }
 ```
 
-`domain`：`feishu`（默认）、`lark`，或私有部署的开放平台地址。开关、功能、配对都在 App 里，存 settings `bots.feishu`；聊天的状态（当前目标、话题绑定、在等的回答、处理过的消息）存 `bots.feishu.state`。
+`domain`：`feishu`（默认）、`lark`，或私有部署的开放平台地址。开关、功能、配对都在 App 里，存 settings `bots.feishu`（hub 读写）；聊天的状态（当前目标、话题绑定、处理过的消息）存 `bots.feishu.state`（助手读写），在等的回答在 `channels.state`。
+
+这些路由是 hub 的；回答里的 `target`、`agents` 是 hub 当场问助手的（`feishu.view`），助手没连着时这两项不出现，其余照常。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -128,6 +138,8 @@
 
 ## 验证
 
-服务端：`go test ./internal/feishubot ./internal/hub -run 'Bot|Frame|Conn|TurnAnswer|ResolutionText'`（帧和 SDK 的字节一致、分片、ping、
-卡片回调的回答、配对 / 只认主人 / 群消息不处理、发进主对话只发一次、回答取自这条消息之后、提问卡片答题、命令）；提示词 golden `bot_message.*`。
+服务端：`go test ./internal/feishubot ./internal/hub ./internal/assistant -run 'Bot|Frame|Conn|TurnAnswer|ResolutionText|Feishu'`（帧和 SDK 的字节一致、分片、ping、
+卡片回调的回答、配对 / 只认主人 / 群消息不处理、发进主对话只发一次、回答取自这条消息之后、提问卡片答题、命令、助手不在时回「暂时连不上」再恢复；
+hub 的测试连着真的助手，经真的总线）；提示词 golden `bot_message.*`。
+端到端（2026-11-04）：隔离的 hub + 助手 + node + 假的 claude，hub 连一个假的开放平台（HTTP 加长连接的 WebSocket，protobuf 帧），配对、发消息、答案卡和表情、助手被杀掉时回「暂时连不上」、回来和 hub 重启后照常。
 App：`FeishuBotModelTests`（加载、功能整体提交、凭证保存与报错）；截图用 mock hub（`MOCK_BOT=pairing` / `off` 看配对中和没配置时）+ `-openConnectorBot YES`。

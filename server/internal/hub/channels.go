@@ -18,82 +18,18 @@ import (
 )
 
 // Channels (docs/channels.md): every way of talking to Persona in one list — the apps, the Feishu bot, /agent in
-// Feishu, voice, and the chat app bots plugins contribute (the channel extension point). 设置 › 扩展 › 渠道 lists them,
-// says which are connected, and sets each up: on and off, binding, where its messages go, what it does.
+// Feishu, voice, and the chat app bots plugins contribute (the channel extension point). What a channel does with its
+// messages is the assistant's (internal/assistant, channels*.go), and so are its routes (/api/v1/channels…, relayed);
+// the hub keeps the transport: the list as the plugins, connectors and the Feishu bot have it (channels.list), the
+// switches, binding, and sending (assistant_channels.go).
 
-// channelsKey holds each channel's settings the hub keeps for it: {"wechat": {"target": …, "features": …}}. The
-// Feishu bot keeps its own (bots.feishu): this is for the channels the hub's pipeline runs.
-const channelsKey = "channels"
-
-type channelPrefs struct {
-	Target   *channel.Target `json:"target,omitempty"`
-	Features map[string]bool `json:"features,omitempty"`
-	// Recent are the conversations its messages went to lately (newest first, a few).
-	Recent []channel.Conversation `json:"recent,omitempty"`
-}
-
-const channelRecentKeep = 5
-
+// channelsHub is the plugins' channel programs as the hub reaches them.
 type channelsHub struct {
-	mu     sync.Mutex
-	loaded bool
-	prefs  map[string]*channelPrefs
-	// st is what the pipeline waits on (channels_runs.go), loaded apart from prefs.
-	st       channelsState
-	stLoaded bool
-	live     map[string]*chanLive // run id -> its live progress (not persisted)
-	// answered: conversation -> when its last run was answered (no "finished" push, no mirror for it)
-	answered map[string]time.Time
+	mu sync.Mutex
 	// statuses: what the channels without a connector last said of themselves (channel.status)
 	statuses map[string]*channel.StatusParams
-	now      func() time.Time // tests
 	// call, when set, stands for the channels' programs (tests).
 	call func(ctx context.Context, id, method string, params, out any) error
-}
-
-func (h *Hub) loadChannelsLocked(ctx context.Context) {
-	c := &h.channels
-	if c.loaded {
-		return
-	}
-	c.prefs = map[string]*channelPrefs{}
-	if h.store != nil {
-		if _, err := h.store.Setting(ctx, channelsKey, &c.prefs); err != nil {
-			h.logf("channels: load: %v", err)
-			return // not marked loaded: the next look tries again
-		}
-	}
-	if c.prefs == nil {
-		c.prefs = map[string]*channelPrefs{}
-	}
-	c.loaded = true
-}
-
-func (h *Hub) saveChannelsLocked() {
-	if h.store == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := h.store.PutSetting(ctx, channelsKey, h.channels.prefs); err != nil {
-		h.logf("channels: save: %v", err)
-	}
-}
-
-// channelPref is channel id's settings (created on first use; the caller holds h.channels.mu).
-func (h *Hub) channelPrefLocked(id string) *channelPrefs {
-	p := h.channels.prefs[id]
-	if p == nil {
-		p = &channelPrefs{}
-		h.channels.prefs[id] = p
-	}
-	if p.Features == nil {
-		p.Features = map[string]bool{}
-		for k, v := range channel.DefaultFeatures {
-			p.Features[k] = v
-		}
-	}
-	return p
 }
 
 // pluginChannel is a channel a plugin contributes, as the registry has it now.
@@ -168,6 +104,9 @@ func appChannel() channel.View {
 			Push: true, Typing: true, Progress: true}}
 }
 
+// botAnswerPiece is how many runes one of the bot's cards holds (a card holds about 30 KB).
+const botAnswerPiece = 6000
+
 // feishuCapabilities are the Feishu bot's (docs/bots.md): cards for answers, progress and what is asked.
 var feishuCapabilities = channel.Capabilities{ImagesIn: true, FilesIn: true, VoiceIn: true, Format: channel.FormatMarkdown, MaxText: botAnswerPiece,
 	Asks: channel.AsksButtons, Push: true, Progress: true, Threads: true}
@@ -200,24 +139,6 @@ func (h *Hub) feishuChannel(ctx context.Context) channel.View {
 	if v.LastEventAt > 0 {
 		out.LastEventAt = time.Unix(v.LastEventAt, 0).UTC()
 	}
-	b := &h.bots
-	b.mu.Lock()
-	cur := b.st.Current
-	b.mu.Unlock()
-	t := channel.Target{Kind: channel.TargetMain}
-	switch cur.Kind {
-	case targetJarvis:
-		t = channel.Target{Kind: channel.TargetConversation, MachineID: cur.MachineID, SessionID: cur.SessionID}
-		if cur.SessionID == "" {
-			t = channel.Target{Kind: channel.TargetNew}
-		}
-	case targetAgent:
-		t = channel.Target{Kind: channel.TargetAgent, MachineID: cur.MachineID, SessionID: cur.SessionID}
-	}
-	if t.Kind != channel.TargetMain {
-		t.Title = v.Target
-	}
-	out.Target = &t
 	f := v.Features
 	out.Features = []channel.Feature{
 		{ID: "main", Title: "和 Persona 对话", Description: "消息发进主对话；/new 开新对话、/list 选最近的对话、/main 回主对话", On: f.Main},
@@ -304,38 +225,14 @@ func (h *Hub) extensionChannelView(ctx context.Context, pc extensionChannel) cha
 	if !st.LastEvent.IsZero() {
 		out.LastEventAt = st.LastEvent.UTC()
 	}
-	c := &h.channels
-	c.mu.Lock()
-	h.loadChannelsLocked(ctx)
-	pref := h.channelPrefLocked(it.ID)
-	t := channel.Target{Kind: channel.TargetMain}
-	if pref.Target != nil {
-		t = *pref.Target
-	}
-	features := channel.PluginFeatures(caps, pref.Features)
-	c.mu.Unlock()
-	if t.Kind == channel.TargetConversation && t.Title == "" {
-		t.Title = h.conversationTitle(ctx, t.MachineID, t.SessionID)
-	}
-	out.Target, out.Features = &t, features
-	return out
-}
-
-// conversationTitle is how a conversation is called in the channel's settings.
-func (h *Hub) conversationTitle(ctx context.Context, machine, session string) string {
-	m := h.localMachine(machine)
-	if m == nil {
-		return ""
-	}
-	s, ok := m.session(session)
-	if !ok {
-		return ""
-	}
-	return conversationName(s, h.assistantProfile().Main)
+	return out // its target and features are the assistant's
 }
 
 // marketChannels are the channels plugins in the markets would contribute, not installed (have lists the rest).
 func (h *Hub) marketChannels(have []channel.View) []channel.View {
+	if h.extensions == nil {
+		return nil // no plugins (a test's hub): no markets either
+	}
 	var out []channel.View
 	seen := map[string]bool{}
 	for _, v := range have {
@@ -357,146 +254,26 @@ func (h *Hub) marketChannels(have []channel.View) []channel.View {
 	return out
 }
 
-func (h *Hub) channelView(ctx context.Context, id string) (channel.View, bool) {
-	for _, v := range h.channelList(ctx) {
-		if v.ID == id {
-			return v, true
+// channelBindRoute is POST /api/v1/channels/{id}/bind: a step of binding (a plugin channel's connector signs in, the
+// Feishu bot takes its credentials, then a pairing code). The channels' other routes are the assistant's; this one
+// carries credentials and sign-in fields, which never pass through the assistant.
+func (h *Hub) channelBindRoute(api *http.ServeMux) {
+	api.HandleFunc("POST /api/v1/channels/{id}/bind", func(w http.ResponseWriter, r *http.Request) {
+		if principalOf(r.Context()).Role != roleFull {
+			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+			return
 		}
-	}
-	return channel.View{}, false
-}
-
-func (h *Hub) channelDetail(ctx context.Context, id string) (channel.Detail, bool) {
-	v, ok := h.channelView(ctx, id)
-	if !ok {
-		return channel.Detail{}, false
-	}
-	d := channel.Detail{View: v}
-	switch id {
-	case channel.Feishu:
-		d.SettingsURL = "settings/connectors/feishu-bot"
-		d.Waiting = h.channelWaiting(id)
-		b := &h.bots
-		b.mu.Lock()
-		d.Waiting.Asks = len(b.cards)
-		b.mu.Unlock()
-	case channel.App:
-	default:
-		if v.Source == channel.SourcePlugin && v.Plugin != "" {
-			d.SettingsURL = "settings/plugins/" + v.Plugin
-		}
-		d.Waiting = h.channelWaiting(id)
-	}
-	c := &h.channels
-	c.mu.Lock()
-	h.loadChannelsLocked(ctx)
-	if p := c.prefs[id]; p != nil {
-		d.Conversations = slices.Clone(p.Recent)
-	}
-	c.mu.Unlock()
-	for i := range d.Conversations {
-		if t := h.conversationTitle(ctx, d.Conversations[i].MachineID, d.Conversations[i].SessionID); t != "" {
-			d.Conversations[i].Title = t
-		}
-	}
-	return d, true
-}
-
-// noteChannelConversation remembers that channel id's message went to a conversation (the detail's recent list).
-func (h *Hub) noteChannelConversation(id, machine, session string) {
-	c := &h.channels
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	h.loadChannelsLocked(context.Background())
-	p := h.channelPrefLocked(id)
-	p.Recent = slices.DeleteFunc(p.Recent, func(x channel.Conversation) bool { return x.MachineID == machine && x.SessionID == session })
-	p.Recent = append([]channel.Conversation{{MachineID: machine, SessionID: session, At: time.Now().UTC()}}, p.Recent...)
-	if len(p.Recent) > channelRecentKeep {
-		p.Recent = p.Recent[:channelRecentKeep]
-	}
-	h.saveChannelsLocked()
-}
-
-// channelsOfConversations are, by conversation, the channels messages came into it from (newest first): what the
-// conversation list draws next to a title.
-func (h *Hub) channelsOfConversations() map[[2]string][]string {
-	c := &h.channels
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.loaded {
-		return nil // loaded at start (startBots): not here, on every list of sessions
-	}
-	out := map[[2]string][]string{}
-	type mark struct {
-		id string
-		at time.Time
-	}
-	marks := map[[2]string][]mark{}
-	for id, p := range c.prefs {
-		for _, r := range p.Recent {
-			k := [2]string{r.MachineID, r.SessionID}
-			marks[k] = append(marks[k], mark{id, r.At})
-		}
-	}
-	for k, ms := range marks {
-		slices.SortFunc(ms, func(a, b mark) int { return b.at.Compare(a.at) })
-		for _, m := range ms {
-			out[k] = append(out[k], m.id)
-		}
-	}
-	return out
-}
-
-// --- the app's interface ---
-
-func (h *Hub) channelRoutes(api *http.ServeMux) {
-	api.HandleFunc("GET /api/v1/channels", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"channels": h.channelList(r.Context())})
-	})
-	api.HandleFunc("GET /api/v1/channels/{id}", func(w http.ResponseWriter, r *http.Request) {
-		d, ok := h.channelDetail(r.Context(), r.PathValue("id"))
-		if !ok {
+		id := r.PathValue("id")
+		list := h.channelList(r.Context())
+		i := slices.IndexFunc(list, func(v channel.View) bool { return v.ID == id })
+		if i < 0 {
 			writeErrCode(w, http.StatusNotFound, "not_found", errors.New("no such channel"))
 			return
 		}
-		writeJSON(w, d)
-	})
-	full := func(f func(w http.ResponseWriter, r *http.Request, v channel.View)) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			if principalOf(r.Context()).Role != roleFull {
-				writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
-				return
-			}
-			v, ok := h.channelView(r.Context(), r.PathValue("id"))
-			if !ok {
-				writeErrCode(w, http.StatusNotFound, "not_found", errors.New("no such channel"))
-				return
-			}
-			if v.ReadOnly || v.Source == channel.SourceMarket {
-				writeErrCode(w, http.StatusConflict, "read_only", fmt.Errorf("%s 不在这里设置", v.Name))
-				return
-			}
-			f(w, r, v)
-		}
-	}
-	api.HandleFunc("PUT /api/v1/channels/{id}", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
-		var in struct {
-			Enabled  *bool           `json:"enabled"`
-			Target   *channel.Target `json:"target"`
-			Features map[string]bool `json:"features"`
-		}
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+		if v := list[i]; v.ReadOnly || v.Source == channel.SourceMarket {
+			writeErrCode(w, http.StatusConflict, "read_only", fmt.Errorf("%s 不在这里设置", v.Name))
 			return
 		}
-		if err := h.updateChannel(r.Context(), v, in.Enabled, in.Target, in.Features); err != nil {
-			writeExtensionErr(w, http.StatusBadRequest, "invalid", err)
-			return
-		}
-		d, _ := h.channelDetail(r.Context(), v.ID)
-		writeJSON(w, d)
-	}))
-	api.HandleFunc("POST /api/v1/channels/{id}/bind", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
 		var in struct {
 			Step   string            `json:"step"`
 			Values map[string]string `json:"values"`
@@ -507,7 +284,7 @@ func (h *Hub) channelRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		p, err := h.bindChannel(r.Context(), v, in.Step, in.Values)
+		p, err := h.bindChannel(r.Context(), id, in.Step, in.Values)
 		if err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 			return
@@ -517,97 +294,35 @@ func (h *Hub) channelRoutes(api *http.ServeMux) {
 			return
 		}
 		writeJSON(w, p)
-	}))
-	api.HandleFunc("DELETE /api/v1/channels/{id}/binding", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
-		if err := h.unbindChannel(r.Context(), v); err != nil {
-			writeErr(w, http.StatusBadGateway, err)
-			return
-		}
-		d, _ := h.channelDetail(r.Context(), v.ID)
-		writeJSON(w, d)
-	}))
-	api.HandleFunc("POST /api/v1/channels/{id}/test", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-		defer cancel()
-		if err := h.testChannel(ctx, v); err != nil {
-			writeErr(w, http.StatusBadGateway, err)
-			return
-		}
-		writeJSON(w, map[string]any{"ok": true})
-	}))
+	})
 }
 
-// updateChannel applies the app's changes: only what is given.
-func (h *Hub) updateChannel(ctx context.Context, v channel.View, enabled *bool, target *channel.Target, features map[string]bool) error {
-	if target != nil {
-		if err := target.Check(); err != nil {
+// enableChannel switches a channel on or off (channels.enable): a plugin's program and its connector, the Feishu
+// bot.
+func (h *Hub) enableChannel(ctx context.Context, id string, on bool) error {
+	if id == channel.Feishu {
+		return h.updateBot(ctx, &on, nil, nil, nil, nil)
+	}
+	pc, ok := h.extensionChannel(id)
+	if !ok {
+		return fmt.Errorf("没有渠道 %s", id)
+	}
+	if on && !pc.extension.Record.Enabled {
+		if err := h.extensions.reg.SetEnabled(ctx, pc.extension.Record.ID, true, actorOf(ctx)); err != nil {
 			return err
 		}
-		if target.Kind == channel.TargetConversation {
-			ok := false
-			if m := h.localMachine(target.MachineID); m != nil {
-				s, found := m.session(target.SessionID)
-				ok = found && isAssistant(s, m.assistantCwd())
-			}
-			if !ok {
-				return errors.New("只能选助手的对话")
-			}
-		}
 	}
-	known := map[string]bool{}
-	for _, f := range v.Features {
-		known[f.ID] = true
+	if pc.item.Connector != "" {
+		return h.setConnectorEnabled(ctx, pc.item.Connector, on)
 	}
-	for id := range features {
-		if !known[id] {
-			return fmt.Errorf("%s 没有「%s」这个功能", v.Name, id)
-		}
+	if !on {
+		return h.extensions.reg.SetEnabled(ctx, pc.extension.Record.ID, false, actorOf(ctx))
 	}
-	if v.ID == channel.Feishu {
-		return h.updateFeishuChannel(ctx, enabled, target, features)
-	}
-	pc, ok := h.extensionChannel(v.ID)
-	if !ok {
-		return fmt.Errorf("%s 不在这里设置", v.Name)
-	}
-	if enabled != nil {
-		if *enabled && !pc.extension.Record.Enabled {
-			if err := h.extensions.reg.SetEnabled(ctx, pc.extension.Record.ID, true, actorOf(ctx)); err != nil {
-				return err
-			}
-		}
-		if pc.item.Connector != "" {
-			if err := h.setConnectorEnabled(ctx, pc.item.Connector, *enabled); err != nil {
-				return err
-			}
-		} else if !*enabled {
-			if err := h.extensions.reg.SetEnabled(ctx, pc.extension.Record.ID, false, actorOf(ctx)); err != nil {
-				return err
-			}
-		}
-	}
-	c := &h.channels
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	h.loadChannelsLocked(ctx)
-	p := h.channelPrefLocked(v.ID)
-	if target != nil {
-		t := *target
-		t.Title = ""
-		p.Target = &t
-	}
-	for id, on := range features {
-		p.Features[id] = on
-		if id == channel.FeatureAllAsks && on {
-			p.Features[channel.FeatureAsks] = true
-		}
-	}
-	h.saveChannelsLocked()
 	return nil
 }
 
-// updateFeishuChannel maps the channel's settings onto the Feishu bot's own.
-func (h *Hub) updateFeishuChannel(ctx context.Context, enabled *bool, target *channel.Target, features map[string]bool) error {
+// configureFeishu applies the assistant's changes to the bot's switches (feishu.configure): only what is given.
+func (h *Hub) configureFeishu(ctx context.Context, enabled *bool, features map[string]bool) error {
 	var fs *BotFeatures
 	if len(features) > 0 {
 		f := h.botFeatures()
@@ -628,32 +343,17 @@ func (h *Hub) updateFeishuChannel(ctx context.Context, enabled *bool, target *ch
 				f.Sync = on
 			case "agents":
 				f.Agents = on
+			default:
+				return fmt.Errorf("飞书机器人没有「%s」这个功能", id)
 			}
 		}
 		fs = &f
 	}
-	if err := h.updateBot(ctx, enabled, nil, nil, nil, fs); err != nil {
-		return err
-	}
-	if target != nil {
-		t := botTarget{Kind: targetMain}
-		switch target.Kind {
-		case channel.TargetNew:
-			t = botTarget{Kind: targetJarvis}
-		case channel.TargetConversation:
-			t = botTarget{Kind: targetJarvis, MachineID: target.MachineID, SessionID: target.SessionID}
-		}
-		b := &h.bots
-		b.mu.Lock()
-		h.loadBotsLocked(ctx)
-		b.st.Current = t
-		h.saveBotStateLocked()
-		b.mu.Unlock()
-	}
-	return nil
+	return h.updateBot(ctx, enabled, nil, nil, nil, fs)
 }
 
-// actorOf is who changes a plugin from the channel's page, for the plugin's audit.
+// actorOf is who changes a plugin from the channel's page, for the plugin's audit (the assistant relays the
+// channels' routes: the device is not known here).
 func actorOf(ctx context.Context) string {
 	if p := principalOf(ctx); p.ID != "" {
 		return "device:" + p.ID
@@ -667,12 +367,16 @@ const PromptPairCode = "pair_code"
 
 // bindChannel takes a step of binding: a plugin channel's connector signs in; the Feishu bot takes its credentials,
 // then a pairing code.
-func (h *Hub) bindChannel(ctx context.Context, v channel.View, step string, values map[string]string) (connector.Prompt, error) {
-	if v.ID == channel.Feishu {
+func (h *Hub) bindChannel(ctx context.Context, id, step string, values map[string]string) (connector.Prompt, error) {
+	if id == channel.Feishu {
 		return h.bindFeishu(ctx, step, values)
 	}
-	pc, ok := h.extensionChannel(v.ID)
-	if !ok || pc.item.Connector == "" {
+	pc, ok := h.extensionChannel(id)
+	if !ok {
+		return connector.Prompt{}, fmt.Errorf("没有渠道 %s", id)
+	}
+	v := channel.View{Name: pc.item.Name}
+	if pc.item.Connector == "" {
 		return connector.Prompt{}, fmt.Errorf("%s 不用绑定", v.Name)
 	}
 	c := h.connectors.Get(pc.item.Connector)
@@ -735,13 +439,17 @@ func (h *Hub) bindFeishu(ctx context.Context, step string, values map[string]str
 }
 
 // unbindChannel undoes the binding: a plugin channel's connector signs out, the Feishu bot forgets its owner.
-func (h *Hub) unbindChannel(ctx context.Context, v channel.View) error {
-	if v.ID == channel.Feishu {
+func (h *Hub) unbindChannel(ctx context.Context, id string) error {
+	if id == channel.Feishu {
 		h.unpairBot(ctx)
 		return nil
 	}
-	pc, ok := h.extensionChannel(v.ID)
-	if !ok || pc.item.Connector == "" {
+	pc, ok := h.extensionChannel(id)
+	if !ok {
+		return fmt.Errorf("没有渠道 %s", id)
+	}
+	v := channel.View{Name: pc.item.Name}
+	if pc.item.Connector == "" {
 		return fmt.Errorf("%s 没有绑定", v.Name)
 	}
 	c := h.connectors.Get(pc.item.Connector)
@@ -752,22 +460,7 @@ func (h *Hub) unbindChannel(ctx context.Context, v channel.View) error {
 	if !ok {
 		return fmt.Errorf("%s 没有绑定", v.Name)
 	}
-	if err := l.Logout(ctx); err != nil {
-		return err
-	}
-	h.forgetChannelTurns(v.ID)
-	return nil
-}
-
-// testChannel sends the owner (only them) a line, to see the channel reaches them.
-func (h *Hub) testChannel(ctx context.Context, v channel.View) error {
-	if v.State != channel.StateConnected {
-		return fmt.Errorf("%s 还没连上", v.Name)
-	}
-	if v.ID == channel.Feishu {
-		return h.testFeishuBot(ctx)
-	}
-	return h.channelTell(ctx, v.ID, "", "这是来自 Persona 的测试消息：这个渠道能联系到你。", channel.OutNote)
+	return l.Logout(ctx) // the assistant forgets what the channel waited on
 }
 
 func firstNonEmpty(s ...string) string {

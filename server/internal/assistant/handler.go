@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -34,8 +35,7 @@ type Handler interface {
 	CardSent(ctx context.Context, p CardSentParams) (bool, error)
 	// CardsSent is assistant.cards_sent: the reply to an inbox item went out; the cards about it say so from now on.
 	CardsSent(ctx context.Context, p CardsSentParams)
-	// Start is assistant.start: one of the hub's features starts a conversation (the Feishu bot, a channel, the inbox's
-	// AI 分身).
+	// Start is assistant.start: one of the hub's features starts a conversation (the inbox's AI 分身).
 	Start(ctx context.Context, p StartParams) (proto.Session, error)
 	// SendParams is assistant.send_params: what a message for one of its conversations runs on, and its text.
 	SendParams(ctx context.Context, p SendParams) (map[string]any, error)
@@ -69,6 +69,27 @@ type Handler interface {
 	TodoLink(ctx context.Context, p TodoLinkParams) error
 	// TodoSpaceRenamed is todos.space_renamed: the hub renamed a workspace.
 	TodoSpaceRenamed(ctx context.Context, r TodoSpaceRenamed)
+
+	// The channels (channels.go, feishu.go): the hub hands over what comes in from the chat apps.
+	// ChannelReceive is channels.receive: the owner's message from a plugin's channel.
+	ChannelReceive(ctx context.Context, p ChannelReceive) error
+	// FeishuMessage is feishu.message: the owner's message to the Feishu bot.
+	FeishuMessage(ctx context.Context, p FeishuMessage) error
+	// FeishuAction is feishu.card_action: the owner pressed one of the bot's cards.
+	FeishuAction(ctx context.Context, p FeishuAction) (*feishubot.CardResponse, error)
+	// FeishuView is feishu.view: what the bot's settings page shows of its chat.
+	FeishuView(ctx context.Context) FeishuView
+	// FeishuOwner is feishu.owner: the bot was paired or unpaired.
+	FeishuOwner(ctx context.Context, p FeishuOwner)
+	// InteractionAnnounced and InteractionEnded are interaction.announced / interaction.ended: a card came, a card
+	// is over.
+	InteractionAnnounced(ctx context.Context, p InteractionAnnounced)
+	InteractionEnded(ctx context.Context, p InteractionEnded)
+	// SessionItems and SessionDelta are session.items / session.delta: a conversation the channels follow.
+	SessionItems(ctx context.Context, p SessionItems)
+	SessionDelta(ctx context.Context, p SessionDelta)
+	// ChannelNoted is channels.noted: a channel's message went in through the apps' routes.
+	ChannelNoted(ctx context.Context, p ChannelNoted)
 }
 
 // roleFull is a device that may do everything (an answer-only watch may not).

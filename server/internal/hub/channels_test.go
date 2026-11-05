@@ -3,7 +3,6 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -127,7 +126,6 @@ func newChannelWorld(t *testing.T) *channelWorld {
 	ch := &fakeChannel{}
 	w.h.channels.call = ch.call
 	w.h.channels.statuses = map[string]*channel.StatusParams{"examplechat": {State: channel.StateConnected, Account: &channel.Account{Name: "示例账号"}}}
-	w.h.channelRoutes(w.mux.(*http.ServeMux))
 	return &channelWorld{botWorld: w, ch: ch}
 }
 
@@ -137,6 +135,17 @@ func (w *channelWorld) receive(t *testing.T, id, text string) {
 	if _, err := w.h.extensionChannelCall("example-chat", channel.MReceive, p); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// waitingAsks is how many asks examplechat waits on, as its page says.
+func (w *channelWorld) waitingAsks(t *testing.T) int {
+	t.Helper()
+	code, out := w.do(t, "GET", "/api/v1/channels/examplechat", "")
+	if code != 200 {
+		t.Fatalf("detail %d %v", code, out)
+	}
+	n, _ := out["waiting"].(map[string]any)["asks"].(float64)
+	return int(n)
 }
 
 func (w *channelWorld) turn(items ...proto.Item) {
@@ -176,9 +185,9 @@ func TestChannelMessageGoesToTheMainConversationAndTheAnswerComesBack(t *testing
 	if n := len(w.node.sends); n != 1 {
 		t.Fatalf("%d sends, want 1", n)
 	}
-	if !w.h.channelAnswered("main-1") {
-		t.Fatal("a turn answered in a channel must not also push 完成 to the phone")
-	}
+	eventually(t, 5*time.Second, "a turn answered in a channel must not also push 完成 to the phone", func() bool {
+		return w.h.channelAnswered("main-1")
+	})
 	w.ch.mu.Lock()
 	typing := append([]bool(nil), w.ch.typing...)
 	pieces := len(w.ch.sent)
@@ -186,10 +195,11 @@ func TestChannelMessageGoesToTheMainConversationAndTheAnswerComesBack(t *testing
 	if len(typing) < 2 || !typing[0] || typing[len(typing)-1] || pieces < 2 {
 		t.Fatalf("typing %v, %d pieces", typing, pieces)
 	}
-	// The conversation says where its messages came from.
-	if got := w.h.decorated(w.m); len(got) != 1 || len(got[0].Channels) != 1 || got[0].Channels[0] != "examplechat" {
-		t.Fatalf("channels on the conversation: %+v", got)
-	}
+	// The conversation says where its messages came from (the assistant's report).
+	eventually(t, 5*time.Second, "the conversation's channels", func() bool {
+		got := w.h.decorated(w.m)
+		return len(got) == 1 && len(got[0].Channels) == 1 && got[0].Channels[0] == "examplechat"
+	})
 }
 
 // A permission asked in a conversation the channel drives goes there as text; 「允许」 answers it.
@@ -232,9 +242,7 @@ func TestChannelAskAnsweredElsewhere(t *testing.T) {
 	if err := w.h.resolve("ix_e", proto.Resolution{Allow: new(bool)}); err != nil {
 		t.Fatal(err)
 	}
-	if n := w.h.channelWaiting("examplechat").Asks; n != 0 {
-		t.Fatalf("%d asks still wait", n)
-	}
+	eventually(t, 5*time.Second, "no ask waits", func() bool { return w.waitingAsks(t) == 0 })
 	w.receive(t, "m4", "允许")
 	if text, _ := w.node.sent(t, 0)["text"].(string); !strings.HasSuffix(text, "允许") {
 		t.Fatalf("send %q", text)
@@ -248,7 +256,7 @@ func TestChannelCannotSendAsksNothing(t *testing.T) {
 	ix := proto.Interaction{ID: "ix_n", MachineID: "box", SessionID: "main-1", Kind: proto.IxPermission, ToolName: "Bash", ExpiresAt: time.Now().Add(time.Minute)}
 	go func() { _, _ = w.h.waitInteraction(context.Background(), ix) }()
 	time.Sleep(300 * time.Millisecond)
-	if n := w.h.channelWaiting("examplechat").Asks; n != 0 {
+	if n := w.waitingAsks(t); n != 0 {
 		t.Fatalf("%d asks kept", n)
 	}
 }
@@ -326,38 +334,52 @@ func TestChannelTestMessage(t *testing.T) {
 	w.ch.find(t, "测试消息")
 }
 
-// The WeChat program's state from before the pipeline: where its messages went, its turns and asks move to the hub;
-// its token stays its own.
+// The WeChat program's state from before the pipeline: where its messages went, its turns and asks move to the
+// channels' state (the assistant's keys, before it starts); its token stays its own.
 func TestWeChatStateMoves(t *testing.T) {
-	w := newBotWorld(t)
-	sec := w.h.secretsFor("wechat")
+	h := newTestHub(t)
+	st := newBotStore()
+	h.store = st
+	ctx := context.Background()
+	sec := h.secretsFor("wechat")
 	old := `{"creds":{"token":"BT"},"cursor":"c9","context":"ctx","target":{"machine":"box","session":"conv-2"},` +
 		`"runs":[{"machine":"box","session":"main-1","base":10,"msg_ids":["wechat-message:1"],"started":"2026-11-04T09:00:00Z"}],` +
 		`"asks":[{"id":"ix9","machine":"box","session":"main-1","kind":"permission","at":"2026-11-04T09:00:00Z"}]}`
-	if err := sec.Save(context.Background(), []byte(old)); err != nil {
+	if err := sec.Save(ctx, []byte(old)); err != nil {
 		t.Fatal(err)
 	}
-	w.h.migrateWeChatState(context.Background())
-	data, _ := sec.Load(context.Background())
+	_ = st.PutSetting(ctx, channelsKey, map[string]any{"examplechat": map[string]any{"features": map[string]bool{"sync": true}}})
+	h.migrateWeChatState(ctx)
+	data, _ := sec.Load(ctx)
 	var left map[string]any
 	_ = json.Unmarshal(data, &left)
 	if left["target"] != nil || left["runs"] != nil || left["asks"] != nil || left["cursor"] != "c9" || left["creds"] == nil {
 		t.Fatalf("left %s", data)
 	}
-	runs := w.h.channelRuns("wechat")
-	if len(runs) != 1 || runs[0].SessionID != "main-1" || runs[0].MsgIDs[0] != "wechat-message:1" {
-		t.Fatalf("runs %+v", runs)
+	var state struct {
+		Runs []channel.Run `json:"runs"`
+		Asks []channel.Ask `json:"asks"`
 	}
-	w.h.channels.mu.Lock()
-	tg := w.h.channels.prefs["wechat"].Target
-	asks := len(w.h.channels.st.Asks)
-	w.h.channels.mu.Unlock()
-	if tg == nil || tg.Kind != channel.TargetConversation || tg.SessionID != "conv-2" || asks != 1 {
-		t.Fatalf("target %+v, %d asks", tg, asks)
+	var prefs map[string]struct {
+		Target   *channel.Target `json:"target"`
+		Features map[string]bool `json:"features"`
 	}
-	w.h.migrateWeChatState(context.Background()) // once
-	if n := len(w.h.channelRuns("wechat")); n != 1 {
-		t.Fatalf("%d runs after a second move", n)
+	read := func() {
+		state.Runs, state.Asks, prefs = nil, nil, nil
+		_, _ = st.Setting(ctx, channelsStateKey, &state)
+		_, _ = st.Setting(ctx, channelsKey, &prefs)
+	}
+	read()
+	if len(state.Runs) != 1 || state.Runs[0].SessionID != "main-1" || state.Runs[0].MsgIDs[0] != "wechat-message:1" || len(state.Asks) != 1 {
+		t.Fatalf("state %+v", state)
+	}
+	if tg := prefs["wechat"].Target; tg == nil || tg.Kind != channel.TargetConversation || tg.SessionID != "conv-2" || !prefs["examplechat"].Features["sync"] {
+		t.Fatalf("prefs %+v", prefs)
+	}
+	h.migrateWeChatState(ctx) // once
+	read()
+	if len(state.Runs) != 1 {
+		t.Fatalf("%d runs after a second move", len(state.Runs))
 	}
 }
 
@@ -397,3 +419,25 @@ func TestChannelSideConversationLauncherFallback(t *testing.T) {
 	}
 }
 
+// While the assistant is not connected a channel's message is answered that it can't be reached (once, however
+// often the chat app delivers it); back, the channel works again.
+func TestChannelSaysTheAssistantIsAwayAndRecovers(t *testing.T) {
+	w := newChannelWorld(t)
+	shortInboundWait(t)
+	stopAssistant(t, w.h)
+	w.receive(t, "a1", "在吗？")
+	w.receive(t, "a1", "在吗？")
+	away := w.ch.find(t, "助手暂时连不上")
+	if away.ReplyTo != "a1" || away.Kind != channel.OutNote {
+		t.Fatalf("note %+v", away)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if n := w.ch.count("助手暂时连不上"); n != 1 {
+		t.Fatalf("told %d times", n)
+	}
+	connectAssistant(t, w.h)
+	w.receive(t, "a2", "回来了吗？")
+	if sent := w.node.sent(t, 0); sent["client_msg_id"] != "examplechat-a2" {
+		t.Fatalf("send %v", sent)
+	}
+}
