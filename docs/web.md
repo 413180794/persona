@@ -294,9 +294,13 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **机器**：每台电脑一张卡片，CPU / 内存 / 磁盘当前值和最近一小时 CPU 曲线（`/api/v1/metrics`，10 秒刷新；空档断线），离线的能重连；点名字或「详情 ›」进机器页。
 - **机器页**（`/machines/<机器>`，`src/views/machines/`）：在线状态、系统、hub 和线路（多台 hub 时）；离线时的错误和「重新连接」（之后最多再查 10 次等它上线）、
   版本不一致时「重新部署」；这台的 Agent 按空间列出；1 / 6 / 24 小时的 CPU、内存、网络曲线（`/machines/{id}/metrics?range=`，三张同步的悬停读数，键盘左右也能移，
-  整段没数据时只给一张卡片和「看最近 24 小时」），只在页面可见时刷新（1 小时档 10 秒、另两档每分钟，照 iOS）；系统信息、启动器。引擎切换在 #254。
+  整段没数据时只给一张卡片和「看最近 24 小时」），只在页面可见时刷新（1 小时档 10 秒、另两档每分钟，照 iOS）；系统信息、启动器。
   #433 加了「负载（1 分钟）」曲线（四张图 2×2，虚线标出核数，颜色 token `--chart-load` 取 iOS `MetricColor.load`）和「每个核心」柱状图（`latest.cores` 有两个以上且在线时，即 Linux 的 node，
   右上「最忙 X%」，悬停看每核数值）。
+  「引擎」（#2071，`machines/EngineSection.tsx`，逻辑 `lib/engines.ts`，照 iOS `EngineSelectionModel` / `EngineSelectionView`，[engines.md](engines.md)）：在 Agent 下面，选这台电脑的会话从哪个引擎来。
+  列出 node 上报的 `engines`（名字、「检测到可用 · 版本」/「没检测到」、`note` 用橙色写为什么用不了，网页还不认识的新引擎也列出来）；离线或老 hub 没有上报时列出已知的五个（herdr、Herdr App、herdr + Herdr App、Orca、Paseo）。
+  已知的引擎随时能选（离线也能，连上后生效），不认识的只在 node 报可用时能选；当前的标「当前」。选了别的才出现「还原 / 保存」，保存走 `PUT /machines/{id}/engine`，
+  hub 回的机器立刻写进列表（随后的 `machines` 推送是同样的值）；失败时选择保留，红字「保存失败：…」，可以再点保存。没开始改时跟着推送更新。截图用默认的假 hub（`MOCK_ENGINE_ERROR=1` 让保存失败）。
   「操控电脑」（#1326，`machines/ComputerSection.tsx`，逻辑 `lib/computer.ts`，照 iOS `ComputerSection`，[computer-use.md](computer-use.md)）：hub 的扩展 cua 打开、这台是 Mac 时（机器带 `computer`）
   在 Agent 下面多一节：开关「允许助手操控这台电脑」（`PUT …/computer`，离线时不能改），打开后按状态给一行说明和下一步：没装时「安装 Cua Driver」（先弹窗确认）、
   安装中的步骤和「取消」、缺权限时「去授权」、授权窗口弹出后「再请求一次」、可以操控时版本；那台 Mac 开着屏幕共享时有「VNC」（新标签页打开 `/screen/<机器>`），
@@ -588,7 +592,8 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 机器详情（Agent、1 / 6 / 24 小时曲线、系统信息、启动器） | 有 | #297 | |
 | 机器详情的「操控电脑」（开关、安装 Cua Driver、授权、屏幕共享、VNC） | 有 | #1326 | 「VNC」在新标签页打开网页的 `/screen/<机器>`（iOS 在 App 内的 WebView） |
 | 负载曲线、Linux 每核柱状图 | 有 | #433 | |
-| 终端引擎切换、Orca 启动器 | 另有 PR | — | #254 |
+| 机器详情的「引擎」（node 检测到的引擎、版本和说明，离线也能选，保存失败可重试） | 有 | #2071 | 在机器页里直接选，不像 iOS 另开一页 |
+| Orca 启动器、在 Orca 里新建 Agent | 没有 | — | #254（服务端在 #924 / #929） |
 | 外观：跟随系统 / 浅色 / 深色 | 有 | — | |
 | 界面风格、主题色、布局 | 不适用 | — | 网页只有 Beautiful UI 一套；新风格按 CLAUDE.md 做成新选项 |
 | 形象 | 有 | #433 | 设置 › 通用、资料页 |

@@ -392,6 +392,13 @@ export function setMutes(mutes: AgentMutes) {
   set({ mutes });
 }
 
+/** One machine as the hub answered a change to it (PUT …/engine), over what the list has: the hub's next \`machines\`
+ * push says the same, this only does not wait for it (iOS AppModel.applyMachine). */
+export function applyMachine(m: Machine) {
+  if (!state.machines.some((x) => x.id === m.id)) return;
+  set({ machines: state.machines.map((x) => (x.id === m.id ? { ...x, ...m } : x)) });
+}
+
 /** Replace the pins after a PUT /pins (optimistic; put back on failure). */
 export function setPins(pins: AgentPins) {
   set({ pins });

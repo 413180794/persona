@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { dropAnswered, endInteraction, getState, hubHas, larkOn, refresh, refreshTodos, reset, setSpacesSupported } from "./store";
+import { applyMachine, dropAnswered, endInteraction, getState, hubHas, larkOn, refresh, refreshTodos, reset, setSpacesSupported } from "./store";
 
 describe("待办 store 与 404 兼容 (C2)", () => {
   beforeEach(() => {
@@ -219,5 +219,29 @@ describe("待回答的卡片：刷新不复活已结束的卡片 (#1673)", () =>
   it("没有答案（交回电脑、已过期）只收起卡片", () => {
     endInteraction("ix_q");
     expect(getState().answered).toEqual({});
+  });
+});
+
+describe("applyMachine (PUT …/engine answers the machine)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    reset();
+  });
+
+  it("takes the hub's answer over the listed machine and keeps what it does not say", async () => {
+    reset();
+    vi.stubGlobal("localStorage", { getItem: () => "mock-token", setItem: () => {}, removeItem: () => {} });
+    const machines = [
+      { id: "a", name: "A", online: true, engine: "herdr", hub_name: "家里" },
+      { id: "b", name: "B", online: false },
+    ];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => Promise.resolve(new Response(JSON.stringify(url.includes("/machines") ? { machines } : {}), { status: 200 }))));
+    await refresh();
+    const b = getState().machines[1];
+    applyMachine({ id: "a", name: "A", online: true, engine: "herdr-core" });
+    expect(getState().machines[0]).toMatchObject({ engine: "herdr-core", hub_name: "家里" });
+    expect(getState().machines[1]).toBe(b);
+    applyMachine({ id: "gone", name: "?", online: false });
+    expect(getState().machines.map((m) => m.id)).toEqual(["a", "b"]);
   });
 });

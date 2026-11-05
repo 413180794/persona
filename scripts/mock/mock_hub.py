@@ -610,9 +610,15 @@ PINS = {"spaces": ["macbook/weather"], "sessions": []}  # GET / PUT /api/v1/pins
 
 def mark_seen(sid):
     SEEN.append(sid)
+    changed = None
     for s in SESSIONS:
         if s["session_id"] == sid and s["state"] == "unread":
             s.update(state="idle", status="idle", seen_at=ago())
+            changed = s["machine_id"]
+    # The hub pushes the machine's list when a session's state changes: that is how the app knows a seen sent over the
+    # socket landed (SeenOutbox, #1588). Without it the app sends every one again over HTTP 5 s later (#2061).
+    if changed:
+        push_machine(changed)
 
 
 HITS = {}  # "GET /api/v1/machines" -> how many (GET /mock/hits): pull to refresh and reloads
@@ -9215,7 +9221,7 @@ class H(BaseHTTPRequestHandler):
             if machine is None: return self.send_json({"error": "找不到机器"}, 404)
             body = json.loads(self.last_body or b"{}")
             engine = body.get("engine")
-            if engine not in ("herdr", "herdr-core", "orca") and not any(
+            if engine not in ("herdr", "herdr-core", "herdr-both", "orca", "paseo") and not any(
                     e["id"] == engine and e["available"] for e in machine["engines"]):
                 return self.send_json({"error": "未知引擎"}, 400)
             if os.environ.get("MOCK_ENGINE_ERROR"): return self.send_json({"error": "暂时无法保存"}, 503)

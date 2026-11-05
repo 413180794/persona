@@ -2,6 +2,15 @@
 
 export type AgentState = "needs_you" | "working" | "unread" | "idle" | "offline" | "unknown";
 
+/** An engine as the machine's node found it (docs/engines.md): `note` says why one that is there cannot be used. */
+export interface DetectedEngine {
+  id: string;
+  name: string;
+  available: boolean;
+  version?: string;
+  note?: string;
+}
+
 export interface Machine {
   id: string;
   name: string;
@@ -19,7 +28,9 @@ export interface Machine {
   deploy_phase?: "waiting_idle" | "transferring" | "restarting" | "confirming";
   deploy_error?: string;
   system?: { name?: string; model?: string; cpu?: string; cores?: number; memory?: number };
+  /** The terminal engine its sessions come from (herdr when absent); `engines`: what its node found, empty while offline. */
   engine?: string;
+  engines?: DetectedEngine[];
   kind?: string;
   arch?: string;
   home?: string;

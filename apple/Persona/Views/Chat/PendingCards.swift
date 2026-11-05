@@ -81,8 +81,13 @@ struct PendingCards: View {
             // Scrolling only when the cards do not fit: an area with nothing to scroll neither moves nor bounces. Not
             // `scrollDisabled`, which passes down and stopped a card's own form from scrolling (#1912).
             .scrollBounceBehavior(.basedOnSize)
-            .scrollClipDisabled(!over)
-            // Scrolling, room for the first card's shadow under the clipped top edge (it showed as a flat band).
+            // Scrolling, what scrolls out is hidden by a mask, not the area's own clip: clipped to the area's rectangle,
+            // a card's shadow (wider than the card) was cut flush with its sides and showed as a gray block with square
+            // corners behind it (#2065). The mask reaches out to the footer's margins at the sides and fades out in the
+            // margins above and below, where the shadow is.
+            .scrollClipDisabled()
+            .mask { edgeFade(over: over) }
+            // Scrolling, room for the first card's shadow under the top edge.
             .contentMargins(.top, over ? Theme.Space.l : 0, for: .scrollContent)
             .contentMargins(.bottom, over ? Theme.Space.s : 0, for: .scrollContent)
             // As tall as the cards as measured, at most the cap; before the first measure, its own size.
@@ -102,6 +107,18 @@ struct PendingCards: View {
         .onChange(of: cards.map(\.id)) { old, new in
             if over, !Set(new).isSubset(of: Set(old)) { withAnimation(Theme.Motion.standard) { position.scrollTo(edge: .top) } }
         }
+    }
+
+    /// The cards' mask: while they scroll, clear at the area's top and bottom edges and opaque from the cards' margins
+    /// in, out to the footer's margins at the sides; while they fit, the area and some room around it for the shadows.
+    private func edgeFade(over: Bool) -> some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: over ? Theme.Space.l : 0)
+            Rectangle()
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: over ? Theme.Space.s : 0)
+        }
+        .padding(.horizontal, -Theme.Space.m)
+        .padding(.vertical, over ? 0 : -Theme.Space.xl)
     }
 
     /// How tall the cards may be before they scroll: half the page. While the keyboard is up (the page is short, and a
