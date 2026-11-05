@@ -1,6 +1,6 @@
 // The session header's model name and thin context bar (#2430): `opus 5.5 ▬▬ 61%`, the tooltip 「还剩 61% 上下文」
-// (「已用 39%」 with 设置 › 外观 › 上下文显示为已用). Always shown, like Moshi's session header (the user asked to follow
-// Moshi); 「Agent 行显示详情」 only gates the sidebar rows' second line.
+// (「已用 39%」 with 设置 › 外观 › 上下文显示为已用). Always shown from sm up, like Moshi's session header (the user asked to follow
+// Moshi); 「Agent 行显示详情」 only gates the sidebar rows' second line. Below sm the header hides it so the title fits (#3532).
 import { contextLabel, contextShown, contextTier, contextTooltip, contextUsage, modelShort, useContextAsUsed, type ContextTier } from "../../lib/context-usage";
 import { cx, EASE } from "../../ui/atoms";
 import type { Session } from "../../lib/types";
@@ -17,7 +17,7 @@ export function ContextMeter({ session }: { session: Session }) {
   const tip = usage ? contextTooltip(usage, asUsed) : undefined;
   return (
     <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11.5px] text-ink-3" title={[model, tip].filter(Boolean).join(" · ")}>
-      {model && <span className="max-w-28 truncate max-sm:hidden">{model}</span>}
+      {model && <span className="max-w-28 truncate">{model}</span>}
       {usage && (
         <>
           <div

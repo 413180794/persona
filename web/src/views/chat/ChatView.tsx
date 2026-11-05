@@ -1243,7 +1243,8 @@ export function Header({
           )}
           {/* a panel is a phone's width: the dot says the state there too */}
           {session && !assistant && !chrome && state !== "idle" && <span className="hidden sm:contents"><StatePill state={state} /></span>}
-          {session && !assistant && <ContextMeter session={session} />}
+          {/* narrow: the context bar gives way to the title too (#3532); 会话信息 still has the token count */}
+          {session && !assistant && <span className="hidden sm:contents"><ContextMeter session={session} /></span>}
         </div>
         {sub && !todoLine && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
         {/* the todo it works for, up top (#1836): opens the todo, 改挂 picks another */}
