@@ -53,3 +53,64 @@ func (h *Hub) newShell(w http.ResponseWriter, r *http.Request, m *Machine) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_, _ = w.Write(out)
 }
+
+// The terminal browser's and the sidebar's context menus change things on a computer (docs/terminal.md「节点菜单」):
+// close a tab or a pane, split a pane, rename a tab, run an agent in a plain shell pane, fetch / pull / push. Each is
+// a route of its own that a full device alone may call; an answer-only device (the watch) and the tokens an extension
+// holds are refused here and by the lists of what they may call (devicetokens.go, extension_scopes.go). The body is
+// read field by field: only the named string fields reach the node, so a request cannot name a directory or a command.
+
+type nodeAction struct {
+	method   string
+	timeout  time.Duration
+	required []string
+	optional []string
+}
+
+func (h *Hub) nodeAction(a nodeAction) http.HandlerFunc {
+	return h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
+		if principalOf(r.Context()).Role != roleFull {
+			writeErr(w, http.StatusForbidden, errors.New("changing a computer's terminals needs a full device"))
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body); err != nil {
+			writeErr(w, http.StatusBadRequest, errors.New("bad request body"))
+			return
+		}
+		params := map[string]any{}
+		for _, k := range append(append([]string{}, a.required...), a.optional...) {
+			if v, ok := body[k].(string); ok && v != "" {
+				params[k] = v
+			}
+		}
+		for _, k := range a.required {
+			if params[k] == nil {
+				writeErr(w, http.StatusBadRequest, errors.New(k+" is required"))
+				return
+			}
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), a.timeout)
+		defer cancel()
+		var out json.RawMessage
+		if err := m.call(ctx, a.method, params, &out); err != nil {
+			callErr(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if len(out) == 0 {
+			out = json.RawMessage(`{}`)
+		}
+		_, _ = w.Write(out)
+	})
+}
+
+// nodeActions are the routes of those menu items, by path under /api/v1/machines/{mid}/.
+var nodeActions = map[string]nodeAction{
+	"panes/close": {method: "panes.close", timeout: 30 * time.Second, required: []string{"pane"}},
+	"panes/split": {method: "panes.split", timeout: 30 * time.Second, required: []string{"pane", "direction"}},
+	"panes/agent": {method: "panes.agent", timeout: 120 * time.Second, required: []string{"pane", "launcher"}},
+	"panes/git":   {method: "panes.git", timeout: 90 * time.Second, required: []string{"op"}, optional: []string{"pane", "workspace_id", "kind"}},
+	"tabs/close":  {method: "tabs.close", timeout: 30 * time.Second, required: []string{"tab_id"}, optional: []string{"kind"}},
+	"tabs/rename": {method: "tabs.rename", timeout: 30 * time.Second, required: []string{"tab_id", "label"}, optional: []string{"kind"}},
+}

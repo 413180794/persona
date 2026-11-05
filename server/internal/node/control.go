@@ -146,7 +146,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if err != nil {
 		screen, _ := n.readPane(ctx, pane, "recent-unwrapped", 30)
 		// Close the tab: a claude that comes up after we gave up would sit there unbound, and a retry opens another.
-		if org, ok := launch.(host.Organizer); ok {
+		if org, ok := launch.(host.Organizer); ok && adoptedPane(ctx) == nil { // a pane the user picked stays
 			space := ws
 			if space == "" {
 				space = created.SpaceID

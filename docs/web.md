@@ -52,7 +52,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **终端**（`/terminal`、`/terminal/<机器>/<终端 id>`，`src/views/terminal/TerminalPage.tsx`、`src/lib/terminals.ts`，`docs/terminal.md` 第十九节）：不开 Agent 也能开终端。
   机器 → herdr 空间 → 标签页 → 窗格，Agent 带状态点，普通 shell 是终端图标；点一个窗格在右边（窄屏整页）打开成终端，里面就是「侧边面板 › 终端」的那个 `TerminalPanel`，接管 / 只看 / 键栏 / 历史都一样。
   空间旁的「+」新建一个 shell 标签页（`POST /machines/{mid}/panes`，电脑上不抢焦点）；列表上面的输入框是 Jump To（标题 / 目录 / 分支 / 机器，↑ ↓ 回车）；每台机器最近打开的 2 个终端挂着，切换立即有画面，
-  标签页进后台时只留正在看的那个，离开页面全部放手。窗格终端等于那台电脑的 shell，只有完整设备能开（手表令牌、扩展令牌都不行）。截图用 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 的假 hub。
+  机器 / 工作区 / 标签页都能折叠，每个节点有右键菜单（「节点菜单」）。标签页进后台时只留正在看的那个，离开页面全部放手。窗格终端等于那台电脑的 shell，只有完整设备能开（手表令牌、扩展令牌都不行）。截图用 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 的假 hub。
   路由为什么是整页而不是侧边面板：侧边面板挨着一段对话，没有对话时没有可挨的；整页有地址，可以收藏和前进后退。
 
 - **侧边栏**（宽屏常驻，窄屏是抽屉，两者同一份）：连接状态和在线电脑数、⌘K 搜索（会话和终端窗格，`>` 是命令，见「快捷键和命令面板」）；第一项是 **Persona**（形象头像、加粗，打开主对话，主对话在工作 / 需要你时带状态点或件数），
@@ -95,8 +95,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     计数同 iOS（屏蔽的未读 / 工作中不算，屏蔽的需要你算）；选中时匹配的记下来，点开的未读变已看不会从筛选里跳走，再点胶囊才重算。有筛选时「最近」不显示、空闲的空间不折。
   - **全部标为已读**（iOS `AppModel.markSeen`）：筛「未读」时列表最上面一行、空间标题的菜单、总览「做完了，还没看」右侧，都先确认；本地立刻改成已看（WS `seen`，断线时 `POST …/seen`）。
   - **置顶**（`GET / PUT /pins`，key 同 iOS：`机器/空间名`、`机器/会话 id`）：最上面一段「置顶」，置顶的空间在按项目分组里排最前、空闲也不折；先改本地、失败恢复。
-  - **行菜单 / 空间菜单**（iOS `AgentRowMenu` / `SpaceMenuItems`，`src/views/AgentMenus.tsx`）：Agent 行悬停的 ⋯ 或右键：置顶、重命名、屏蔽通知、交给 Persona、拷贝目录 / 恢复命令；
-    空间标题的 ⋯：全部标为已读、重命名空间、置顶空间、屏蔽这个空间。悬停时行尾的提示和角标让开，不被 ⋯ 盖住一半。
+  - **行菜单 / 空间菜单**（iOS `AgentRowMenu` / `SpaceMenuItems`，`src/views/AgentMenus.tsx`）：Agent 行悬停的 ⋯ 或右键（右键在鼠标位置打开）：置顶、重命名、屏蔽通知、交给 Persona、拷贝目录 / 恢复命令，
+    再接上每个节点都有的那一组（复制会话 id / herdr id、新建窗格、Git、关闭窗格，见下面「节点菜单」）；
+    空间标题的 ⋯：全部标为已读、重命名空间、置顶空间、屏蔽这个空间，再接上折叠、新建 Agent、Git、复制路径。悬停时行尾的提示和角标让开，不被 ⋯ 盖住一半。
     「交给 Persona」（iOS `AgentHandoff`）把这个 Agent 的情况作为上下文卡片发进主对话，走跨页的待发消息（见下面「Persona」），跳过去就看到气泡。
 - **待办**（`/todos`，`src/views/Todos.tsx`）：左侧列表右侧详情。列表按未完成（等你 > 待查看 > 进行中 > 待跟进 > 未开始）和创建时间排序，已完成收在底部；每行显示状态、关联 Agent 数和最要紧 Agent 的最后一句。详情可就地修改标题和说明，列出当前关联的 Agents（点击进对话、启动失败可移除）与参与过的历史；可「交给 Agent」（新开一个或交给已有的，带待办上下文卡片和 `todo_id`）、「完成 / 重新打开」或删除。对话页 ⋯ 菜单和会话信息展示「待办：X」；hub 不支持待办接口（404）时隐藏入口。
 - **新建 Agent**：首条消息支持选择、粘贴、拖入图片或文件，附件先在本地预览并可移除；图片随消息发送，其他文件后台上传到所选电脑后把路径带入消息。
@@ -360,7 +361,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   #2331 补上（对照 Moshi 网页版的细节；逻辑在 `lib/terminal-details.ts`、`lib/terminal-search.ts`，都有单元测试）：
   - **输出里的网址可点**：载入 `@xterm/addon-web-links`，点一下经 `openLink` 打开（和对话里的链接同一条路），只认 http(s)（`webLink`），程序用 OSC 8 写的链接也走同一个过滤；
     点链接不会同时给程序发一次 `terminal_click`。换行模式下页面自己画屏幕，没有链接（同 OSC 8）。
-  - **右键菜单**：终端里右键不出浏览器菜单，出一个小菜单——复制（有选中才能点）、粘贴（接管时）、全选、搜索…、清除选区；用 `ui/atoms.tsx` 的 `Menu`，在鼠标位置放一个零大小的锚点当 `anchor`。
+  - **右键菜单**：终端里右键不出浏览器菜单，出一个小菜单——复制（有选中才能点）、粘贴（接管时）、全选、搜索…、清除选区；用 `ui/atoms.tsx` 的 `Menu`，`point` 参数就是鼠标位置（#2329 前是放一个零大小的锚点）。
     按住 Shift 右键仍是浏览器自己的菜单；触屏长按不拦（长按要用来选字）。
   - **Mac 行编辑键**（接管时，在 xterm 的自定义按键处理里，`lineEdit`）：⌘⌫ → ^U、⌘← → ^A、⌘→ → ^E，和已有的 Shift+Enter（ESC CR）并列；带其他修饰键的组合不动。
   - **终端设置新增**：光标样式（方块 / 竖线 / 下划线）、光标闪烁、WebGL 渲染（`@xterm/addon-webgl`，第一次打开才加载，关掉或 context 丢失就释放并退回默认渲染）。
@@ -466,6 +467,42 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **侧边栏的小接口**（`lib/sidebar-api.ts`，`Sidebar.tsx` 只多几行订阅）：`setAllFolded`（`useFolded` 订阅，折叠 / 展开写进同一个 `fold:*` 键）、`cycleGrouping`（写同一个 `jarvis.agentGrouping`，`AgentsBlock` 订阅）、`stepSidebarRow`（在带 `data-sidebar-rows` 的列表里找看得见的行，点它）。
   布局状态（`lib/layout.ts`：侧边栏列收起、最大化）只在当前页面里，刷新就回来，不会因为忘了键而找不到侧边栏。
 - 测试：`lib/shortcuts.test.ts`（解析 / 格式化 / 冲突 / 保留 / 事件转键 / 分发 / 终端放行）、`lib/palette.test.ts`、`lib/shortcut-nav.test.ts`、`lib/sidebar-api.test.ts`、`views/Palette.test.tsx`。
+
+### 节点菜单（#2329）
+
+侧边栏 Agents 树和 `/terminal` 页树上的每个节点（机器、工作区 / 空间、标签页、窗格 / Agent 行）都有同一种上下文菜单，照 Moshi：右键在鼠标位置打开，行尾的 ⋯、菜单键、Shift+F10 在行旁打开
+（触屏的入口还是 ⋯，不靠长按；侧边栏的机器标题只有右键 / 菜单键，没加 ⋯，样子不变）。菜单引擎是 `ui/atoms.tsx` 的 `Menu`（老用法不变），纯逻辑在 `ui/menu-model.ts`：
+
+- 键盘：↑ ↓ / Home End 移动，→ 打开子菜单、← 回上一层，Enter 选，Esc 关；行尾的字母直接选那一行（大小写都行，带 Ctrl / ⌘ / Alt 的留给页面，页面上别的输入框里打字不触发）；⌫ / Delete 选「关闭」那一行。
+  鼠标悬停子菜单行约 100 ms 后展开；位置会翻到屏幕里（贴右边向左开、贴底向上开）；窄屏照旧不被软键盘盖住。
+- 危险的行（`confirm`）要第二次：第一次点 / 按键把这一行变成「确认关闭」，第二次才执行；换到别的行、4 秒没人理都会收回。
+- 重命名（`rename`）：选中后那一行变成输入框，Enter 提交，Esc 取消回到菜单，没改或空的不提交。
+- 忙和错（`inline`）：行尾转圈，失败的原因显示在菜单里（菜单不关），成功才关。子菜单可以是函数（打开时才读，「读取中…」）。
+
+菜单项由 `src/lib/node-actions.ts` 的 `nodeActions(node, deps)` 生成，所有树共用，命令面板也用它（见下）：
+
+| 节点 | 项 |
+| --- | --- |
+| 机器 | 折叠 / 展开 Z、刷新 R（终端页）、复制机器 id I |
+| 工作区 | 折叠 Z、新建 Agent… N、新建终端 T（终端页）、重命名… R（终端页，行内）、Git ▸ G（拉取 P / 推送 U / 获取 F / 复制分支名 B）、复制路径 C、复制 herdr id I |
+| 标签页 | 重命名… R（行内；有 Agent 的标签页走原来的重命名接口）、新建窗格 ▸ N（向右 / 向下）、在这里运行 Agent… ▸ A（单个普通 shell 窗格）、Git ▸ G、复制路径 C、复制会话 id S、复制 herdr id I、关闭标签页 ⌫ |
+| 窗格 | 新建窗格 N、在这里运行 Agent… A（普通 shell）、Git G、复制路径 C、复制会话 id S、复制 herdr id I、关闭窗格 ⌫ |
+
+改电脑的项（关闭、拆分、重命名标签页、运行 Agent、Git）只在 herdr 宿主、机器在线时出现；只读的复制项到处都有，没有的值（没有分支、没有会话）不出现。
+Agent 行的菜单保留原来的全部项（置顶 P、重命名 R、拷贝目录 C……），后面接上这一组；已有重命名对话框的行（Agent 行、侧边栏空间）不再加行内重命名。
+
+接口（都是 `POST /api/v1/machines/{mid}/…`，**只有 `full` 设备**；`answer` 设备和扩展令牌被拒，route scopes 里是「仅凭据」）：`panes/close {pane}`、`panes/split {pane, direction: right|down}`、
+`panes/agent {pane, launcher}`、`panes/git {op: pull|push|fetch, pane | workspace_id+kind}`、`tabs/close {tab_id, kind?}`、`tabs/rename {tab_id, label, kind?}`；工作区重命名用原来的 `spaces/{wid}/rename`。
+请求只带这些字段（别的会被丢掉），不能指定目录或命令，细节见 `docs/terminal.md` 第二十一节。
+
+- **`/terminal` 页**：机器、工作区、标签页三层都能折叠（点标题；左边出一个小箭头，悬停时显示，折叠后一直显示；键 `fold:term:…`，机器 / 工作区名为键，herdr 重启后 id 变了也保留），搜索时不管折叠。
+  行尾悬停出 ⋯（触屏一直在）。
+- **侧边栏显示终端**（设置 › 通用 › 外观，默认关，只对这个浏览器；`lib/sidebar-terminals.ts`）：Agents 按机器分组里，每台电脑的 Agent 下面多一组「终端」，列它终端里的**普通 shell**（Agent 在上面已经有了），点开是 `/terminal/<机器>/<id>`，同一套菜单。
+  关着时侧边栏和以前逐像素一样。
+- **命令面板**：`lib/node-palette.ts` 向 `registerContextCommands` 登记，在 `>` 命令模式里把当前节点的菜单项列在最前（「Workspace · 窗格标题」「Workspace · 工作区名」两节）；
+  重命名弹一个小对话框问名字，危险的再确认一次，失败弹 toast。当前节点来自会话页的对话（`ctx.pane`）或终端页的窗格（终端页把读到的树交给它）。
+- 测试：`ui/menu-model.test.ts`（键、字母、确认、重命名、右键位置）、`ui/atoms.test.tsx`、`ui/overlay.test.ts`、`lib/node-actions.test.ts`、`lib/node-palette.test.ts`；浏览器里用
+  `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1`（可加 `MOCK_SPLIT_TAB=1`，侧边栏出现一个两窗格的标签页）的假 hub，动作记在 `/mock/node_actions`。
 
 ### 链接在页面里打开
 

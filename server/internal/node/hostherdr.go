@@ -24,6 +24,8 @@ var (
 	_ host.Watcher    = (*herdrHost)(nil)
 	_ host.Launcher   = (*herdrHost)(nil)
 	_ host.Organizer  = (*herdrHost)(nil)
+	_ host.SlotCloser = (*herdrHost)(nil)
+	_ host.Splitter   = (*herdrHost)(nil)
 	_ host.Streamer   = (*herdrHost)(nil)
 	_ host.Controller = (*herdrHost)(nil)
 )
@@ -199,6 +201,23 @@ func (h *herdrHost) Close(ctx context.Context, pane host.PaneRef, space, slot st
 		return h.c.PaneClose(ctx, pane.ID)
 	}
 	return h.c.TabClose(ctx, slot)
+}
+
+// CloseSlot closes the whole tab, every pane in it.
+func (h *herdrHost) CloseSlot(ctx context.Context, slot string) error {
+	return h.c.TabClose(ctx, slot)
+}
+
+// Split splits the pane; the new pane keeps the host's kind (herdr panes carry no prefix).
+func (h *herdrHost) Split(ctx context.Context, pane host.PaneRef, direction, cwd string) (host.PaneRef, error) {
+	id, err := h.c.PaneSplit(ctx, pane.ID, direction, cwd)
+	if err != nil {
+		return host.PaneRef{}, err
+	}
+	if id == "" {
+		return host.PaneRef{}, errors.New("herdr did not return the new pane")
+	}
+	return host.PaneRef{Kind: pane.Kind, ID: id}, nil
 }
 
 // observeSupport, controlSupport cache whether this herdr has `terminal session observe` / `control` (herdr 0.9 on

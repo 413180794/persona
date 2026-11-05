@@ -1,0 +1,241 @@
+import { describe, expect, it, vi } from "vitest";
+import type { MenuItem } from "../ui/menu-model";
+import { canChangeHost, machineNode, nodeActions, sessionNode, termPaneNode, termSpaceNode, termTabNode, type MenuNode, type NodeActionDeps } from "./node-actions";
+import { buildTerminalTree, shellsOnly, type PanesResponse } from "./terminals";
+import type { Session } from "./types";
+
+function deps(over: Partial<NodeActionDeps> = {}): NodeActionDeps {
+  return {
+    post: vi.fn(async () => ({ message: "已是最新" })),
+    renameWorkspace: vi.fn(async () => {}),
+    renameTab: vi.fn(async () => {}),
+    launchers: vi.fn(async () => [{ name: "claude" }, { name: "work", model: "m1" }, { name: "cx", agent: "codex" }]),
+    newAgent: vi.fn(),
+    copy: vi.fn(),
+    notify: vi.fn(),
+    changed: vi.fn(),
+    ...over,
+  };
+}
+
+const keys = (items: MenuItem[]) => items.map((i) => i.key);
+const by = (items: MenuItem[], key: string) => items.find((i) => i.key === key)!;
+
+const tab: MenuNode = { kind: "tab", mid: "m1", host: "herdr", label: "build", workspaceId: "w1", tabId: "w1:t2", paneId: "w1:p2", agent: "", sessionId: "", cwd: "/home/me/proj", branch: "main" };
+
+describe("a tab's menu", () => {
+  it("offers rename, split, run an agent, git, copies and close", () => {
+    expect(keys(nodeActions(tab, deps()))).toEqual([
+      "node-rename", "node-split", "node-agent", "node-git", "node-copy-path", "node-copy-id", "node-close-tab",
+    ]);
+  });
+
+  it("hairlines between the groups, and the close action is the danger row that asks first", () => {
+    const items = nodeActions(tab, deps());
+    expect(items.filter((i) => i.divider).map((i) => i.key)).toEqual(["node-split", "node-copy-path", "node-close-tab"]);
+    const close = by(items, "node-close-tab");
+    expect(close).toMatchObject({ danger: true, closes: true, confirm: "确认关闭", inline: true });
+  });
+
+  it("closing the tab posts its id and the host, then tells the tree", async () => {
+    const d = deps();
+    await by(nodeActions(tab, d), "node-close-tab").onSelect();
+    expect(d.post).toHaveBeenCalledWith("m1", "tabs/close", { tab_id: "w1:t2", kind: "herdr" });
+    expect(d.notify).toHaveBeenCalledWith("已关闭标签页", "ok");
+    expect(d.changed).toHaveBeenCalled();
+  });
+
+  it("a refused close is an error the menu shows, and the tree is not told", async () => {
+    const d = deps({ post: vi.fn(async () => { throw new Error("tab w1:t2 is not running"); }) });
+    await expect(by(nodeActions(tab, d), "node-close-tab").onSelect()).rejects.toThrow("关闭失败：tab w1:t2 is not running");
+    expect(d.changed).not.toHaveBeenCalled();
+  });
+
+  it("renames inline, through the session's tab when an agent runs there", async () => {
+    const d = deps();
+    const rename = by(nodeActions({ ...tab, tabSessionId: "sid-1" }, d), "node-rename").rename!;
+    expect(rename.value).toBe("build");
+    await rename.commit("deploy");
+    expect(d.renameTab).toHaveBeenCalledWith(expect.objectContaining({ tabSessionId: "sid-1", tabId: "w1:t2" }), "deploy");
+    expect(d.notify).toHaveBeenCalledWith("已重命名标签页", "ok");
+  });
+
+  it("a failed rename says why", async () => {
+    const d = deps({ renameTab: vi.fn(async () => { throw new Error("busy"); }) });
+    await expect(by(nodeActions(tab, d), "node-rename").rename!.commit("x")).rejects.toThrow("没改成：busy");
+  });
+});
+
+describe("splitting and running an agent", () => {
+  it("splits right or down in the node's pane", async () => {
+    const d = deps();
+    const split = by(nodeActions(tab, d), "node-split");
+    const [right, down] = split.children as MenuItem[];
+    expect([right.accel, down.accel]).toEqual(["r", "d"]);
+    await right.onSelect();
+    await down.onSelect();
+    expect(d.post).toHaveBeenNthCalledWith(1, "m1", "panes/split", { pane: "w1:p2", direction: "right" });
+    expect(d.post).toHaveBeenNthCalledWith(2, "m1", "panes/split", { pane: "w1:p2", direction: "down" });
+  });
+
+  it("lists the launchers that start Claude Code when the submenu opens, and starts the one picked in the pane", async () => {
+    const d = deps();
+    const agent = by(nodeActions(tab, d), "node-agent");
+    expect(typeof agent.children).toBe("function");
+    const list = await (agent.children as () => Promise<MenuItem[]>)();
+    expect(list.map((i) => i.label)).toEqual(["claude", "work"]); // a Codex launcher needs a first message
+    expect(list[1].hint).toBe("m1");
+    await list[1].onSelect();
+    expect(d.post).toHaveBeenCalledWith("m1", "panes/agent", { pane: "w1:p2", launcher: "work" });
+  });
+
+  it("is for a plain shell only", () => {
+    const withAgent = nodeActions({ ...tab, agent: "claude", sessionId: "sid-1" }, deps());
+    expect(keys(withAgent)).not.toContain("node-agent");
+    expect(keys(nodeActions({ ...tab, agent: undefined }, deps()))).not.toContain("node-agent");
+  });
+});
+
+describe("git", () => {
+  it("pull, push and fetch in the pane's directory", async () => {
+    const d = deps();
+    const git = by(nodeActions(tab, d), "node-git");
+    expect(git.hint).toBe("main");
+    const ops = git.children as MenuItem[];
+    // the branch is copied from the Git menu, as Moshi's is
+    expect(ops.map((i) => [i.label, i.accel])).toEqual([["拉取", "p"], ["推送", "u"], ["获取", "f"], ["复制分支名", "b"]]);
+    await ops[1].onSelect();
+    expect(d.post).toHaveBeenCalledWith("m1", "panes/git", { op: "push", pane: "w1:p2" });
+    expect(d.notify).toHaveBeenCalledWith("推送：已是最新", "ok");
+  });
+
+  it("a workspace without a pane is named by its id and host", async () => {
+    const d = deps();
+    const ws: MenuNode = { kind: "workspace", mid: "m1", host: "herdr", workspaceId: "w1", label: "proj" };
+    await (by(nodeActions(ws, d), "node-git").children as MenuItem[])[0].onSelect();
+    expect(d.post).toHaveBeenCalledWith("m1", "panes/git", { op: "pull", workspace_id: "w1", kind: "herdr" });
+  });
+
+  it("git's failure reaches the menu as it is", async () => {
+    const d = deps({ post: vi.fn(async () => { throw new Error("不是 Git 仓库"); }) });
+    await expect((by(nodeActions(tab, d), "node-git").children as MenuItem[])[0].onSelect()).rejects.toThrow("不是 Git 仓库");
+  });
+});
+
+describe("read-only items", () => {
+  const pane: MenuNode = { kind: "pane", mid: "m1", host: "herdr", paneId: "w1:p3", sessionId: "sid-1", agent: "claude", cwd: "/home/me/proj", branch: "feat/x" };
+  it("copies the path, the session id, the herdr id and the branch", () => {
+    const d = deps();
+    const items = nodeActions(pane, d);
+    for (const [key, text] of [["node-copy-path", "/home/me/proj"], ["node-copy-session", "sid-1"], ["node-copy-id", "w1:p3"]] as const) {
+      by(items, key).onSelect();
+      expect(d.copy).toHaveBeenLastCalledWith(text);
+    }
+    (by(items, "node-git").children as MenuItem[]).find((i) => i.key === "node-copy-branch")!.onSelect();
+    expect(d.copy).toHaveBeenLastCalledWith("feat/x");
+  });
+  it("leaves out what is not known", () => {
+    const k = keys(nodeActions({ kind: "pane", mid: "m1", paneId: "w1:p3", agent: "" }, deps()));
+    expect(k).not.toContain("node-copy-path");
+    expect(k).not.toContain("node-copy-session");
+    expect(k).not.toContain("node-copy-branch");
+    expect(k).toContain("node-copy-id");
+  });
+  it("copies the branch from the top level when there is no Git menu to hold it", () => {
+    expect(keys(nodeActions({ ...tab, host: "orca" }, deps()))).toContain("node-copy-branch");
+  });
+  it("leaves out what the row's own menu has", () => {
+    expect(keys(nodeActions(pane, deps(), { omit: ["node-copy-path", "node-rename"] }))).not.toContain("node-copy-path");
+  });
+  it("a pane closes itself, not its tab", async () => {
+    const d = deps();
+    await by(nodeActions(pane, d), "node-close-pane").onSelect();
+    expect(d.post).toHaveBeenCalledWith("m1", "panes/close", { pane: "w1:p3" });
+    expect(keys(nodeActions(pane, d))).not.toContain("node-close-tab");
+  });
+});
+
+describe("what a computer that cannot be changed is offered", () => {
+  it("an offline machine or another host's node only copies", () => {
+    for (const node of [{ ...tab, online: false }, { ...tab, host: "orca" }, { ...tab, host: "botmux" }]) {
+      const k = keys(nodeActions(node, deps()));
+      expect(k).toEqual(["node-copy-path", "node-copy-id", "node-copy-branch"]);
+    }
+    expect(canChangeHost(undefined)).toBe(true);
+    expect(canChangeHost("herdr")).toBe(true);
+    expect(canChangeHost("herdr-core")).toBe(false);
+  });
+});
+
+describe("machine and workspace", () => {
+  it("a machine folds, refreshes and copies its id", () => {
+    const toggle = vi.fn();
+    const items = nodeActions(machineNode({ id: "m1", name: "桌面", online: true } as never, { fold: { folded: false, toggle }, onRefresh: vi.fn() }), deps());
+    expect(keys(items)).toEqual(["node-fold", "node-refresh", "node-copy-machine"]);
+    expect(by(items, "node-fold").label).toBe("折叠");
+    by(items, "node-fold").onSelect();
+    expect(toggle).toHaveBeenCalled();
+    expect(by(nodeActions(machineNode({ id: "m1", name: "桌面", online: true } as never, { fold: { folded: true, toggle } }), deps()), "node-fold").label).toBe("展开");
+  });
+
+  it("a workspace renames inline through the space route, opens a shell, and has no close", async () => {
+    const d = deps();
+    const onOpenShell = vi.fn();
+    const ws: MenuNode = { kind: "workspace", mid: "m1", host: "herdr", label: "proj", workspaceId: "w1", cwd: "/home/me/proj", branch: "main", onOpenShell };
+    const items = nodeActions(ws, d);
+    expect(keys(items)).toEqual(["node-new-agent", "node-shell", "node-rename", "node-git", "node-copy-path", "node-copy-id"]);
+    await by(items, "node-rename").rename!.commit("docs");
+    expect(d.renameWorkspace).toHaveBeenCalledWith(ws, "docs");
+    by(items, "node-shell").onSelect();
+    expect(onOpenShell).toHaveBeenCalled();
+    by(items, "node-new-agent").onSelect();
+    expect(d.newAgent).toHaveBeenCalledWith("m1", "/home/me/proj");
+  });
+});
+
+describe("the nodes of the two trees", () => {
+  const s = { machine_id: "m1", session_id: "sid-1", cwd: "/p", title: "t", status: "idle", space_kind: "herdr", space_id: "w1", workspace_id: "w1", slot_id: "w1:t1", tab_id: "w1:t1", pane_id: "w1:p1", slot_name: "agent-1" } as Session;
+  it("a session is its pane", () => {
+    expect(sessionNode(s, true)).toMatchObject({ kind: "pane", mid: "m1", host: "herdr", workspaceId: "w1", tabId: "w1:t1", paneId: "w1:p1", sessionId: "sid-1", agent: "claude", cwd: "/p", online: true });
+  });
+
+  const res: PanesResponse = {
+    hosts: [{
+      kind: "herdr", stream: true, control: true, new_tab: true,
+      workspaces: [{ id: "w1", label: "proj", cwd: "/home/me/proj", branch: "main" }],
+      tabs: [{ id: "w1:t1", workspace_id: "w1", label: "agent-1" }, { id: "w1:t2", workspace_id: "w1", label: "shell" }, { id: "w1:t3", workspace_id: "w1", label: "split" }],
+      panes: [
+        { pane: "w1:p1", terminal: "pane:w1:p1", tab_id: "w1:t1", workspace_id: "w1", agent: "claude", status: "idle", cwd: "/home/me/proj", session_id: "sid-1" },
+        { pane: "w1:p2", terminal: "pane:w1:p2", tab_id: "w1:t2", workspace_id: "w1", title: "zsh", cwd: "/home/me/proj/web" },
+        { pane: "w1:p3", terminal: "pane:w1:p3", tab_id: "w1:t3", workspace_id: "w1", title: "zsh", cwd: "/home/me/proj" },
+        { pane: "w1:p4", terminal: "pane:w1:p4", tab_id: "w1:t3", workspace_id: "w1", title: "zsh", cwd: "/home/me/proj" },
+      ],
+    }],
+  };
+  const [sp] = buildTerminalTree(res, []);
+
+  it("a workspace carries its directory and branch", () => {
+    expect(termSpaceNode("m1", sp, true)).toMatchObject({ kind: "workspace", workspaceId: "w1", cwd: "/home/me/proj", branch: "main", host: "herdr" });
+  });
+  it("a tab with one pane is that pane too", () => {
+    const shell = termTabNode("m1", sp, sp.tabs[1], true);
+    expect(shell).toMatchObject({ kind: "tab", tabId: "w1:t2", paneId: "w1:p2", agent: "", cwd: "/home/me/proj/web" });
+    expect(keys(nodeActions(shell, deps()))).toContain("node-agent");
+    const agent = termTabNode("m1", sp, sp.tabs[0], true);
+    expect(agent).toMatchObject({ sessionId: "sid-1", agent: "claude" });
+    expect(keys(nodeActions(agent, deps()))).toContain("node-copy-session");
+    expect(keys(nodeActions(agent, deps()))).not.toContain("node-agent");
+  });
+  it("a tab with several leaves the pane open, a pane is its own", () => {
+    const split = termTabNode("m1", sp, sp.tabs[2], true);
+    expect(split.agent).toBeUndefined();
+    expect(keys(nodeActions(split, deps()))).not.toContain("node-agent");
+    expect(termPaneNode("m1", sp, sp.tabs[2], sp.tabs[2].panes[1], true)).toMatchObject({ kind: "pane", paneId: "w1:p4", agent: "" });
+  });
+  it("the sidebar lists the plain shells only", () => {
+    const shells = shellsOnly([sp]);
+    expect(shells[0].tabs.map((t) => t.label)).toEqual(["shell", "split"]);
+    expect(shells[0].tabs.flatMap((t) => t.panes.map((p) => p.pane))).toEqual(["w1:p2", "w1:p3", "w1:p4"]);
+    expect(shellsOnly([{ ...sp, tabs: [sp.tabs[0]] }])).toEqual([]);
+  });
+});

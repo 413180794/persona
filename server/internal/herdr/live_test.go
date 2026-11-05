@@ -160,3 +160,54 @@ func TestLiveControlWheel(t *testing.T) {
 	}
 	t.Logf("%s scrolled and came back", pane)
 }
+
+// The menu actions against a throwaway tab of the workspace named by HERDR_LIVE_WORKSPACE (it creates the tab and
+// closes it): go test -tags herdrlive -run TestLiveMenuActions ./internal/herdr/
+func TestLiveMenuActions(t *testing.T) {
+	ws := os.Getenv("HERDR_LIVE_WORKSPACE")
+	if ws == "" {
+		t.Skip("HERDR_LIVE_WORKSPACE is not set")
+	}
+	ctx := context.Background()
+	c := New()
+	dir := t.TempDir()
+	created, err := c.TabCreate(ctx, ws, dir, "menu-live-check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tab, root := created.Tab.ID, created.RootPane.ID
+	closed := false
+	t.Cleanup(func() {
+		if !closed {
+			_ = c.TabClose(ctx, tab)
+		}
+	})
+	t.Logf("tab %s pane %s", tab, root)
+	if err := c.TabRename(ctx, tab, "menu-live-renamed"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	split, err := c.PaneSplit(ctx, root, "right", dir)
+	if err != nil || split == "" || split == root {
+		t.Fatalf("split = %q, %v", split, err)
+	}
+	if n, err := c.TabPanes(ctx, ws, tab); err != nil || n != 2 {
+		t.Fatalf("panes after split = %d, %v", n, err)
+	}
+	down, err := c.PaneSplit(ctx, split, "down", "")
+	if err != nil || down == "" {
+		t.Fatalf("split down = %q, %v", down, err)
+	}
+	if err := c.PaneClose(ctx, down); err != nil {
+		t.Fatalf("close pane: %v", err)
+	}
+	if n, _ := c.TabPanes(ctx, ws, tab); n != 2 {
+		t.Fatalf("panes after closing one = %d", n)
+	}
+	if err := c.TabClose(ctx, tab); err != nil {
+		t.Fatalf("close tab: %v", err)
+	}
+	closed = true
+	if n, _ := c.TabPanes(ctx, ws, tab); n != 0 {
+		t.Fatalf("panes after closing the tab = %d", n)
+	}
+}

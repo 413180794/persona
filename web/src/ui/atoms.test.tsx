@@ -120,3 +120,41 @@ describe("icon button", () => {
     expect(html).toContain("width:20px");
   });
 });
+
+describe("menu with the new row kinds", () => {
+  function render(items: React.ComponentProps<typeof Menu>["items"], extra: Partial<React.ComponentProps<typeof Menu>> = {}) {
+    vi.stubGlobal("document", { body: {} });
+    return renderToStaticMarkup(<Menu anchor={null} onClose={() => {}} items={items} {...extra} />);
+  }
+
+  it("shows a row's letter, and ⌫ on the close action", () => {
+    const html = render([
+      { key: "copy", label: "复制路径", accel: "c", onSelect: () => {} },
+      { key: "close", label: "关闭标签页", danger: true, closes: true, confirm: "确认关闭", onSelect: () => {} },
+    ]);
+    expect(html).toContain('aria-keyshortcuts="c"');
+    expect(html).toMatch(/>C<\/span>/);
+    expect(html).toContain("⌫");
+    // the question is not asked until the row is chosen
+    expect(html).toContain("关闭标签页");
+    expect(html).not.toContain("确认关闭");
+  });
+
+  it("marks a row with a submenu", () => {
+    const html = render([{ key: "git", label: "Git", children: [], onSelect: () => {} }]);
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain("-rotate-90");
+  });
+
+  it("is the same markup as before for a plain row", () => {
+    const html = render([{ key: "a", label: "拷贝目录", icon: "folder", onSelect: () => {} }]);
+    expect(html).not.toContain("aria-haspopup");
+    expect(html).not.toContain("aria-keyshortcuts");
+    expect(html).not.toContain("bg-red-tint");
+    expect(html).toContain('data-menu="');
+  });
+
+  it("opens at a pointer with no anchor", () => {
+    expect(render([{ key: "a", label: "复制", onSelect: () => {} }], { point: { x: 10, y: 20 } })).toContain("复制");
+  });
+});

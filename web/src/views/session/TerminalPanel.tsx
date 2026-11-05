@@ -66,7 +66,6 @@ export function TerminalPanel({
   const root = useRef<HTMLDivElement>(null);
   const [find, dispatchFind] = useReducer(findReducer, FIND_CLOSED);
   const [menu, setMenu] = useState<{ x: number; y: number; selection: boolean } | null>(null);
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const atBottom = useRef(true);
   const lastTop = useRef(0);
   const lastHeight = useRef(0);
@@ -340,19 +339,16 @@ export function TerminalPanel({
         />
       )}
       {menu && (
-        <>
-          <div ref={setMenuAnchor} aria-hidden className="pointer-events-none fixed size-0" style={{ left: menu.x, top: menu.y }} />
-          <Menu
-            items={menuItems()}
-            anchor={menuAnchor}
-            onClose={() => {
-              closeMenu();
-              setMenuAnchor(null);
-              setTimeout(refocus, 0); // after Esc or a choice: back to the terminal, unless the choice went elsewhere (the find field)
-            }}
-            width={176}
-          />
-        </>
+        <Menu
+          items={menuItems()}
+          anchor={null}
+          point={{ x: menu.x, y: menu.y }}
+          onClose={() => {
+            closeMenu();
+            setTimeout(refocus, 0); // after Esc or a choice: back to the terminal, unless the choice went elsewhere (the find field)
+          }}
+          width={176}
+        />
       )}
       <ShortcutsEditor
         open={editing}

@@ -10,7 +10,10 @@ import { isMuted } from "../lib/session-actions";
 import { getState, markSeen, refresh, refreshTodos, setSpacesSupported, useStore } from "../lib/store";
 import { findTodoForSpace, isLegacySpacesRouteError, unlinkAgentFromTodo, unlinkSpaceFromTodo } from "../lib/todos";
 import type { Session } from "../lib/types";
-import { Button, copyText, Dialog, Menu, toast, type MenuItem } from "../ui/atoms";
+import { sessionNode, type MenuNode } from "../lib/node-actions";
+import { Button, copyText, Dialog, toast, type MenuItem } from "../ui/atoms";
+import type { MenuAt } from "../ui/menu-model";
+import { NodeMenu } from "./NodeMenu";
 
 /** What a row's ⋯ (and its right click) offers. `onLinkTodo`: the row can hang on a todo (关联到待办…, and 解除关联 when
  *  it does). Everything a row offers is here, so a touch screen (no right click; iOS Safari sends no contextmenu on a
@@ -18,13 +21,13 @@ import { Button, copyText, Dialog, Menu, toast, type MenuItem } from "../ui/atom
 export function agentRowMenuItems(s: Session, o: { pinned: boolean; muted: boolean; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void }): MenuItem[] {
   const { onRename, onDelete, onLinkTodo } = o;
   return [
-    { key: "pin", label: o.pinned ? "取消置顶" : "置顶", icon: "pin", onSelect: () => void flipPin(s) },
-    ...(sessionCan(s, "send") && !s.source_kind ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => onRename(s) }] : []),
+    { key: "pin", label: o.pinned ? "取消置顶" : "置顶", icon: "pin", accel: "p", onSelect: () => void flipPin(s) },
+    ...(sessionCan(s, "send") && !s.source_kind ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, accel: "r", onSelect: () => onRename(s) }] : []),
     { key: "mute", label: o.muted ? "恢复通知" : "屏蔽通知", icon: o.muted ? "bell" : "bellOff", onSelect: () => void flipMute(s) },
     { key: "jarvis", label: "交给 Persona", icon: "spark", onSelect: () => void handToPersona(s, machineWithHub(s.machine_id, getState().machines)) },
     ...(onLinkTodo ? [{ key: "link-todo", label: "关联到待办…", icon: "todo" as const, divider: true, onSelect: () => onLinkTodo(s) }] : []),
     ...(onLinkTodo && s.todo ? [{ key: "unlink-todo", label: "解除关联", icon: "x" as const, onSelect: () => void unlinkTodo(s, s.todo!.id) }] : []),
-    ...(s.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, onSelect: () => copyText(s.cwd) }] : []),
+    ...(s.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, accel: "c", onSelect: () => copyText(s.cwd) }] : []),
     ...(sessionMenuActions(s).includes("resume") ? [{ key: "resume", label: "拷贝恢复命令", icon: "terminal" as const, onSelect: () => copyText(resumeCommand(s)) }] : []),
     ...(sessionDeletable(s) ? [{ key: "delete", label: "删除对话…", icon: "trash" as const, danger: true, onSelect: () => onDelete(s) }] : []),
   ];
@@ -41,15 +44,20 @@ async function unlinkTodo(s: Session, todo: string) {
   }
 }
 
-export function AgentRowMenu({ s, anchor, onClose, ...o }: { s: Session; anchor: HTMLElement; onClose: () => void; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void }) {
+/** The row's menu, then what any pane offers (copy its ids, split, git, close): src/lib/node-actions.ts. The path and the
+ *  rename are the row's own above. `at`: where a right click opened it (the pointer); without it, beside `anchor`. */
+export function AgentRowMenu({ s, anchor, at, onClose, ...o }: { s: Session; anchor: HTMLElement; at?: MenuAt; onClose: () => void; onRename: (s: Session) => void; onDelete: (s: Session) => void; onLinkTodo?: (s: Session) => void }) {
   const pinned = useStore((st) => isPinned(s, st.pins));
   const muted = useStore((st) => isMuted(s, st.mutes));
-  return <Menu anchor={anchor} onClose={onClose} align="right" items={agentRowMenuItems(s, { pinned, muted, ...o })} />;
+  const online = useStore((st) => st.machines.find((m) => m.id === s.machine_id)?.online !== false);
+  return <NodeMenu node={sessionNode(s, online)} at={at ?? { anchor }} onClose={onClose} before={agentRowMenuItems(s, { pinned, muted, ...o })} omit={["node-copy-path", "node-rename"]} />;
 }
 
 export function SpaceMenu({
   sp,
   anchor,
+  at,
+  fold,
   onClose,
   onRename,
   onMarkSeen,
@@ -57,6 +65,10 @@ export function SpaceMenu({
 }: {
   sp: SpaceLike;
   anchor: HTMLElement;
+  /** Where a right click opened it (the pointer); without it, beside `anchor`. */
+  at?: MenuAt;
+  /** The space's fold, when it has one to toggle. */
+  fold?: MenuNode["fold"];
   onClose: () => void;
   onRename: (s: Session) => void;
   onMarkSeen: (list: Session[]) => void;
@@ -72,6 +84,7 @@ export function SpaceMenu({
   const muted = isSpaceMuted(sp, mutes);
   const unread = unreadOf(sp.sessions);
   const first = sp.sessions[0];
+  const online = useStore((st) => st.machines.find((m) => m.id === sp.machineId)?.online !== false);
 
   const supportSpaces = todosLoaded && todosSupported !== false && spacesSupported !== false;
   const linkedTodo = supportSpaces ? findTodoForSpace(todos, sp.machineId, sp.name) : undefined;
@@ -120,7 +133,8 @@ export function SpaceMenu({
     { key: "pin", label: pinned ? "取消置顶空间" : "置顶空间", icon: "pin", onSelect: () => void flipSpacePin(sp.machineId, sp.name) },
     { key: "mute", label: muted ? "取消屏蔽空间" : "屏蔽这个空间", icon: muted ? "bell" : "bellOff", onSelect: () => void flipSpaceMute(sp.machineId, sp.name) },
   ];
-  return <Menu anchor={anchor} onClose={onClose} align="right" header={`空间 ${sp.name}`} items={items} />;
+  const node: MenuNode = { kind: "workspace", mid: sp.machineId, online, host: first?.space_kind, label: sp.name, workspaceId: first?.workspace_id ?? first?.space_id, paneId: first?.pane_id, cwd: first?.cwd, fold };
+  return <NodeMenu node={node} at={at ?? { anchor }} onClose={onClose} header={`空间 ${sp.name}`} before={items} omit={["node-rename"]} />;
 }
 
 /** 全部标为已读, asked first: it changes what the other devices show too. */

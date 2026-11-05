@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -129,6 +130,107 @@ func TestPaneRoutesAreNotForAnswerOnlyDevices(t *testing.T) {
 	} {
 		if allowed(principal{ID: "dev_watch", Role: roleAnswer}, tc[0], tc[1]) {
 			t.Errorf("an answer-only device may %s %s", tc[0], tc[1])
+		}
+	}
+}
+
+// ── the menu actions (close / split / rename / run an agent / git) ──────────────────────────────────────────────
+
+var actionBodies = map[string]string{
+	"panes/close": `{"pane":"w1:p2"}`,
+	"panes/split": `{"pane":"w1:p2","direction":"right"}`,
+	"panes/agent": `{"pane":"w1:p2","launcher":"claude"}`,
+	"panes/git":   `{"pane":"w1:p2","op":"fetch"}`,
+	"tabs/close":  `{"tab_id":"w1:t2"}`,
+	"tabs/rename": `{"tab_id":"w1:t2","label":"build"}`,
+}
+
+func postAction(h *Hub, role, path, body string) int {
+	r := httptest.NewRequest("POST", "/api/v1/machines/m1/"+path, strings.NewReader(body))
+	r.SetPathValue("mid", "m1")
+	r = r.WithContext(context.WithValue(r.Context(), principalKey{}, principal{Role: role, ID: "dev"}))
+	w := httptest.NewRecorder()
+	h.nodeAction(nodeActions[path])(w, r)
+	return w.Code
+}
+
+// Every one of them changes a computer: answer-only devices and extension tokens are refused before the node hears of
+// it, a full device gets through.
+func TestNodeActionsNeedAFullDevice(t *testing.T) {
+	if len(actionBodies) != len(nodeActions) {
+		t.Fatalf("a menu action has no test body: %d bodies for %d routes", len(actionBodies), len(nodeActions))
+	}
+	tn := newTermNode(t)
+	for path, body := range actionBodies {
+		for _, role := range []string{roleAnswer, roleExtension} {
+			if code := postAction(tn.hub, role, path, body); code != http.StatusForbidden {
+				t.Errorf("%s: %s was let through: %d", path, role, code)
+			}
+		}
+	}
+	if got := tn.await(t, 0); len(got) != 0 {
+		t.Fatalf("the node heard of a refused request: %q", got)
+	}
+	for path, body := range actionBodies {
+		if code := postAction(tn.hub, roleFull, path, body); code != http.StatusOK {
+			t.Errorf("%s: full device = %d", path, code)
+		}
+	}
+	want := map[string]bool{"panes.close": true, "panes.split": true, "panes.agent": true, "panes.git": true, "tabs.close": true, "tabs.rename": true}
+	for _, m := range tn.await(t, len(want)) {
+		delete(want, m)
+	}
+	if len(want) != 0 {
+		t.Errorf("never reached the node: %v", want)
+	}
+}
+
+// What a request may carry is the named fields: a directory or a command in the body is dropped, a missing field is a
+// 400 and the node is not called.
+func TestNodeActionsPassOnlyTheirFields(t *testing.T) {
+	tn := newTermNode(t)
+	h := tn.hub
+	if code := postAction(h, roleFull, "panes/git", `{"pane":"w1:p2","op":"push","cwd":"/etc","command":"rm -rf ~","force":"true"}`); code != http.StatusOK {
+		t.Fatalf("git = %d", code)
+	}
+	tn.await(t, 1)
+	tn.mu.Lock()
+	got := tn.args["panes.git"]
+	tn.mu.Unlock()
+	if got != `{"op":"push","pane":"w1:p2"}` {
+		t.Errorf("the node was sent %s", got)
+	}
+	for path, body := range map[string]string{
+		"panes/close": `{}`, "panes/split": `{"pane":"w1:p2"}`, "panes/agent": `{"pane":"w1:p2"}`, "panes/git": `{"pane":"w1:p2"}`,
+		"tabs/close": `{"tab_id":7}`, "tabs/rename": `{"tab_id":"w1:t2"}`, "panes/close ": `not json`,
+	} {
+		path = strings.TrimSpace(path)
+		if code := postAction(h, roleFull, path, body); code != http.StatusBadRequest {
+			t.Errorf("%s %s = %d", path, body, code)
+		}
+	}
+	if got := tn.await(t, 1); len(got) != 1 {
+		t.Errorf("a refused request reached the node: %q", got)
+	}
+}
+
+// Not on the lists of what an answer-only device may call, and credentials-only in the extension scopes.
+func TestNodeActionRoutesAreFullCredentialsOnly(t *testing.T) {
+	data, err := os.ReadFile("testdata/route_scopes.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path := range nodeActions {
+		url := "/api/v1/machines/m1/" + path
+		if allowed(principal{ID: "dev_watch", Role: roleAnswer}, http.MethodPost, url) {
+			t.Errorf("an answer-only device may POST %s", url)
+		}
+		if allowed(principal{ID: "dev_link", Role: roleLink}, http.MethodPost, url) {
+			t.Errorf("a link may POST %s", url)
+		}
+		line := "-                    POST /api/v1/machines/{mid}/" + path + "\n"
+		if !strings.Contains(string(data), line) {
+			t.Errorf("route_scopes.txt has no full-credentials-only line for %s", path)
 		}
 	}
 }

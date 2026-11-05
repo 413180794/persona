@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeMenu, trapTab } from "./overlay";
+import { placeMenu, placeSubmenu, trapTab } from "./overlay";
 
 describe("Tab inside a dialog", () => {
   it("wraps from the last control to the first and back", () => {
@@ -48,5 +48,36 @@ describe("menu placement", () => {
     const up = placeMenu({ left: 10, right: 40, top: 600, bottom: 630 }, 100, { ...wide, side: "top", screenW: 390, screenH: 844, view: { top: 300, height: 300 } });
     expect(up.top).toBeGreaterThanOrEqual(308);
     expect(up.top + 100).toBeLessThanOrEqual(592);
+  });
+});
+
+describe("menu at the cursor", () => {
+  const point = { left: 300, right: 300, top: 200, bottom: 200 };
+  it("opens at the pointer, with no gap", () => {
+    expect(placeMenu(point, 160, { ...wide, gap: 0 })).toEqual({ left: 300, top: 200, width: 208 });
+  });
+  it("flips above the pointer near the bottom and stays inside on the right", () => {
+    const low = { left: 1200, right: 1200, top: 700, bottom: 700 };
+    expect(placeMenu(low, 160, { ...wide, gap: 0 })).toEqual({ left: 1064, top: 540, width: 208 });
+  });
+});
+
+describe("submenu placement", () => {
+  const row = { left: 100, right: 308, top: 120, bottom: 152 };
+  const o = { width: 208, screenW: 1280, screenH: 800 };
+  it("opens beside the row, lined up with it and overlapping the parent a little", () => {
+    expect(placeSubmenu(row, 120, o)).toEqual({ left: 304, top: 116, width: 208 });
+  });
+  it("opens on the left when the right has no room", () => {
+    const edge = { left: 1000, right: 1208, top: 120, bottom: 152 };
+    expect(placeSubmenu(edge, 120, o).left).toBe(796);
+  });
+  it("slides up to stay on screen and never above the top", () => {
+    expect(placeSubmenu({ ...row, top: 700, bottom: 732 }, 200, o).top).toBe(592);
+    expect(placeSubmenu({ ...row, top: 0, bottom: 32 }, 200, o).top).toBe(8);
+  });
+  it("keeps to what the keyboard leaves on a phone", () => {
+    const view = { top: 0, height: 400 };
+    expect(placeSubmenu({ ...row, top: 300, bottom: 332 }, 300, { ...o, view })).toEqual({ left: 304, top: 92, width: 208, maxHeight: 384 });
   });
 });

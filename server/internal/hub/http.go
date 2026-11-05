@@ -152,6 +152,13 @@ func (h *Hub) routes() http.Handler {
 	// 新建终端. A pane is full shell access on the computer: full devices only (paneRoutesFullOnly).
 	api.HandleFunc("GET /api/v1/machines/{mid}/panes", h.proxy("panes.list", nil))
 	api.HandleFunc("POST /api/v1/machines/{mid}/panes", h.withMachine(h.newShell))
+	// close / split / run an agent / git in a pane, close / rename a tab: full devices only (panes.go)
+	api.HandleFunc("POST /api/v1/machines/{mid}/panes/close", h.nodeAction(nodeActions["panes/close"]))
+	api.HandleFunc("POST /api/v1/machines/{mid}/panes/split", h.nodeAction(nodeActions["panes/split"]))
+	api.HandleFunc("POST /api/v1/machines/{mid}/panes/agent", h.nodeAction(nodeActions["panes/agent"]))
+	api.HandleFunc("POST /api/v1/machines/{mid}/panes/git", h.nodeAction(nodeActions["panes/git"]))
+	api.HandleFunc("POST /api/v1/machines/{mid}/tabs/close", h.nodeAction(nodeActions["tabs/close"]))
+	api.HandleFunc("POST /api/v1/machines/{mid}/tabs/rename", h.nodeAction(nodeActions["tabs/rename"]))
 	api.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"interactions": visibleInteractions(h.pendingInteractions(), h.requestHasElicitation(r))})
 	})

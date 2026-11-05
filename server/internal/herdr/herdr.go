@@ -450,6 +450,26 @@ func (c *Client) PaneClose(ctx context.Context, pane string) error {
 	return c.call(ctx, "pane.close", map[string]any{"pane_id": pane}, nil, "pane", "close", pane)
 }
 
+// PaneSplit splits a pane (direction "right" or "down") without moving the computer's focus, the new pane starting
+// in cwd (the host's choice when empty). It returns the new pane's id.
+func (c *Client) PaneSplit(ctx context.Context, pane, direction, cwd string) (string, error) {
+	var res struct {
+		Pane struct {
+			ID string `json:"pane_id"`
+		} `json:"pane"`
+	}
+	params := map[string]any{"target_pane_id": pane, "direction": direction, "focus": false}
+	cli := []string{"pane", "split", pane, "--direction", direction, "--no-focus"}
+	if cwd != "" {
+		params["cwd"] = cwd
+		cli = append(cli, "--cwd", cwd)
+	}
+	if err := c.call(ctx, "pane.split", params, &res, cli...); err != nil {
+		return "", err
+	}
+	return res.Pane.ID, nil
+}
+
 // TabPanes counts the panes in a tab (a split tab holds more than the agent's own).
 func (c *Client) TabPanes(ctx context.Context, workspace, tab string) (int, error) {
 	var res struct {

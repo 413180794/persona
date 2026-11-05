@@ -117,6 +117,17 @@ type Organizer interface {
 	Close(ctx context.Context, pane PaneRef, space, slot string) error
 }
 
+// SlotCloser closes a whole slot (herdr: a tab) with every pane in it, whatever runs there.
+type SlotCloser interface {
+	CloseSlot(ctx context.Context, slot string) error
+}
+
+// Splitter splits a pane in two; direction is "right" (side by side) or "down" (stacked). The new pane starts in cwd
+// (the host's choice when empty) and takes no focus. It returns the new pane.
+type Splitter interface {
+	Split(ctx context.Context, pane PaneRef, direction, cwd string) (PaneRef, error)
+}
+
 // Streamer streams a pane's terminal as it changes, at the pane's own size, without resizing it.
 type Streamer interface {
 	// CanObserve reports whether this host can stream (herdr: a version with `terminal session observe`).

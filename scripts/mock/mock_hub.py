@@ -410,6 +410,9 @@ SESSIONS = [
          "PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。", seen_at=ago(minutes=80)),
     sess("macbook", RELEASE, "整理发布说明", "/Users/me/code/weather", "done", "unread", "weather", 1, "release", 4, 3,
          "发布说明整理好了，按功能分了三段，中英文各一份。"),
+    # MOCK_SPLIT_TAB=1: a second agent in the weather space's first tab (a tab with two panes: its own menu in the sidebar)
+    *([sess("macbook", "a1f3c2d4-0000-4000-8000-0000000000a9", "核对降雨概率的格式", "/Users/me/code/weather", "idle", "idle", "weather", 1,
+            "widget", 1, 20, "格式核对完了。", pane_id="w1:p9")] if os.environ.get("MOCK_SPLIT_TAB") else []),
     sess("studio", BLOG, "博客迁移到 Astro", "/Users/me/code/blog", "done", "unread", "blog", 2, "1", 1, 12,
          "迁移完成：32 篇文章都能正常构建，旧链接全部加了 301 跳转，Lighthouse 性能分从 71 提到 98。"),
     sess("studio", PHOTOS, "照片同步脚本支持 HEIC", "/Users/me/code/photo-sync", "blocked", "needs_you", "photo-sync", 3, "1", 1, 6,
@@ -2282,6 +2285,10 @@ def cell_width(ch):
 # workspaces, tabs and panes of the machines (agents of the mock sessions and plain shells, GET /api/v1/machines/{mid}/panes);
 # POST there opens a new shell tab. A terminal addressed "pane:<id>" is a made-up shell, not the Claude screen.
 PANES_NEW = {}  # machine id -> [(workspace id, pane)] opened by POST
+# The menu actions (close / split / rename / run an agent / git), recorded at GET /mock/node_actions and applied to the
+# layout above: a closed pane or tab is gone, a renamed tab has its new name, a split adds a shell.
+NODE_ACTIONS = []
+CLOSED_PANES, CLOSED_TABS, TAB_NAMES, SPLIT_PANES = set(), set(), {}, {}
 
 
 def mock_panes(mid):
@@ -2304,7 +2311,38 @@ def mock_panes(mid):
         panes.append(extra)
         if not any(t["id"] == extra["tab_id"] for t in tabs):
             tabs.append({"id": extra["tab_id"], "workspace_id": wid, "label": "shell-2", "number": 3})
+    for pane in SPLIT_PANES.get(mid, []):
+        panes.append(pane)
+    panes = [p for p in panes if p["pane"] not in CLOSED_PANES and p["tab_id"] not in CLOSED_TABS]
+    tabs = [dict(t, label=TAB_NAMES.get(t["id"], t["label"])) for t in tabs if t["id"] not in CLOSED_TABS]
     return {"hosts": [{"kind": "herdr", "stream": True, "control": True, "new_tab": True, "workspaces": ws, "tabs": tabs, "panes": panes}]}
+
+
+def node_action(h, p, body):
+    """POST /api/v1/machines/{mid}/{panes,tabs}/{close,split,agent,git,rename}: what the menus ask of a computer."""
+    mid, area, verb = p.split("/")[4], p.split("/")[5], p.split("/")[6]
+    NODE_ACTIONS.append({"machine": mid, "route": area + "/" + verb, **body})
+    if area == "panes" and verb == "close":
+        CLOSED_PANES.add(body.get("pane"))
+    elif area == "tabs" and verb == "close":
+        CLOSED_TABS.add(body.get("tab_id"))
+    elif area == "tabs" and verb == "rename":
+        TAB_NAMES[body.get("tab_id")] = body.get("label")
+    elif area == "panes" and verb == "split":
+        n = len(SPLIT_PANES.setdefault(mid, [])) + 20
+        src = body.get("pane", "w1:p2")
+        ws = src.split(":")[0]
+        tab = {"w1:p2": "w1:t2", "w1:p3": "w1:t2"}.get(src, "w1:t1" if ws == "w1" else ws + ":t1")
+        SPLIT_PANES[mid].append({"pane": "%s:p%d" % (ws, n), "terminal": "pane:%s:p%d" % (ws, n), "tab_id": tab, "workspace_id": ws, "title": "zsh", "cwd": "/home/me/persona"})
+    elif area == "panes" and verb == "git":
+        if body.get("workspace_id") == "w2" or str(body.get("pane", "")).startswith("w2:"):
+            return h.send_json({"error": "不是 Git 仓库"}, 400)
+        if body.get("op") == "push":
+            return h.send_json({"error": "推送失败（不会强制推送）：git push: ! [rejected] main -> main (fetch first)"}, 409)
+        return h.send_json({"op": body.get("op"), "message": "已是最新" if body.get("op") == "pull" else "已获取远端更新"})
+    elif area == "panes" and verb == "agent":
+        time.sleep(0.6)
+    return h.send_json({})
 
 
 def shell_screen(cols, rows, typed="", tick=0):
@@ -8698,6 +8736,7 @@ class H(BaseHTTPRequestHandler):
             del SCHEDULE_RAN[:]
             return self.send_json({"ok": True})
         if p == "/mock/renamed": return self.send_json({"renamed": RENAMED})
+        if p == "/mock/node_actions": return self.send_json({"actions": NODE_ACTIONS})
         if p == "/mock/served": return self.send_json({"served": SERVED})
         if p == "/api/v1/inbox":
             # MOCK_INBOX_DELAY_MS=<ms>: a slow hub, for the inbox refreshing in the background (#1947, docs/testing.md)
@@ -9058,6 +9097,11 @@ class H(BaseHTTPRequestHandler):
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if history_route(self, p, parse_qs(urlparse(self.path).query)): return
         if plugins_route(self, p, self.last_body): return
+        if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/(panes/(close|split|agent|git)|tabs/(close|rename))", p):
+            return node_action(self, p, json.loads(self.last_body or b"{}"))
+        if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/spaces/[^/]+/rename", p):
+            NODE_ACTIONS.append({"machine": p.split("/")[4], "route": "spaces/rename", "workspace_id": p.split("/")[6], **json.loads(self.last_body or b"{}")})
+            return self.send_json({})
         if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/panes", p):  # 新建终端
             mid, req = p.split("/")[4], json.loads(self.last_body or b"{}")
             n = len(PANES_NEW.setdefault(mid, [])) + 4

@@ -362,6 +362,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		FromSeq          int           `json:"from_seq"`
 		ThroughSeq       int           `json:"through_seq"`
 		Name             string        `json:"name"`
+		Pane             string        `json:"pane"`      // panes.*: a pane the host lists
+		Direction        string        `json:"direction"` // panes.split: right or down
+		TabID            string        `json:"tab_id"`    // tabs.*
+		Label            string        `json:"label"`     // tabs.rename
+		Kind             string        `json:"kind"`      // tabs.*, panes.git: the host kind ("" the engine's)
+		Op               string        `json:"op"`        // panes.git: fetch, pull or push
 		TabName          *string       `json:"tab_name"`
 		TZ               string        `json:"tz"` // the user's time zone
 		// HTTP is a quota plugin's request to send to a launcher's gateway (launchers.http); nil asks for the gateway.
@@ -724,6 +730,26 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		_ = json.Unmarshal(params, &a)
 		return n.newShell(ctx, a.Kind, a.WorkspaceID)
+	case "panes.close":
+		return ok(n.closePane(ctx, p.Pane))
+	case "panes.split":
+		return n.splitPane(ctx, p.Pane, p.Direction)
+	case "panes.agent": // 在这里运行 Agent…: a launcher's agent in a plain shell pane (panes_actions.go)
+		s, err := n.runAgentInPane(ctx, p.Pane, p.Launcher)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"session_id": s.SessionID}, nil
+	case "panes.git":
+		dir, err := n.gitDirOf(ctx, p.Pane, p.WorkspaceID, p.Kind)
+		if err != nil {
+			return nil, err
+		}
+		return n.gitOp(ctx, dir, p.Op)
+	case "tabs.close":
+		return ok(n.closeTab(ctx, p.Kind, p.TabID))
+	case "tabs.rename":
+		return ok(n.renameTab(ctx, p.Kind, p.TabID, p.Label))
 	case "terminal.unwatch":
 		n.terminalUnwatch(p.SessionID)
 		return ok(nil)

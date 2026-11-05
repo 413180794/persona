@@ -180,6 +180,9 @@ func (n *Node) resumeCodex(ctx context.Context, launch host.Launcher, id string,
 // newTab opens a tab in workspace ws for cwd, named tabName (or agent-<n>); with no workspace, a new one named after
 // the directory, whose first tab it is.
 func (n *Node) newTab(ctx context.Context, launch host.Launcher, cwd, ws, tabName string) (*host.Created, error) {
+	if c := adoptedPane(ctx); c != nil { // 在这里运行 Agent: the pane the user picked, not a new tab (panes_actions.go)
+		return c, nil
+	}
 	var created *host.Created
 	var err error
 	if ws == "" {

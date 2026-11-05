@@ -464,6 +464,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
 | GET | `/api/v1/machines/{mid}/panes` | 终端浏览器的树（feature `terminal_panes`，仅 `full`）：`{hosts:[{kind, stream, control, new_tab, workspaces:[{id,label,number?,cwd?,branch?}], tabs:[{id,workspace_id,label,number?}], panes:[{pane, terminal, tab_id, workspace_id, agent?, status?, title?, cwd?, session_id?}]}]}`；包括没有 Agent 的 shell 窗格。`terminal` 是终端流用的地址 `pane:<pane>`，`session_id` 是跑在那个窗格里的 Agent 会话（有就用它开终端） |
 | POST | `/api/v1/machines/{mid}/panes` | `{workspace_id, kind?}`：在这个空间新开一个 shell 标签页（不抢电脑上的焦点，目录是空间自己的，请求不能指定）→ `{pane, terminal, tab_id}`；仅 `full`，只有用户点了才调用 |
+| POST | `/api/v1/machines/{mid}/panes/close` · `…/panes/split` · `…/panes/agent` · `…/panes/git` · `…/tabs/close` · `…/tabs/rename` | 终端节点菜单的动作（`docs/terminal.md` 第二十一节），仅 `full`：`{pane}` 关窗格；`{pane, direction: right\|down}` 拆分 → `{pane, terminal}`；`{pane, launcher}` 在 shell 窗格里启动 Agent → `{session_id}`；`{op: pull\|push\|fetch, pane \| workspace_id+kind?}` → `{op, message, output?}`；`{tab_id, kind?}` 关标签页；`{tab_id, label, kind?}` 改标签页名。只认这些字段，不能指定目录或命令 |
 | PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"\|"paseo"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
 | GET | `/api/v1/machines/{mid}/computer` | 这台 Mac 现在有没有 Cua Driver、能不能被助手操控（hub 当场问 node 的 `computer.status`）→ 200 `Computer`（`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, screen_sharing, ready, note?, job?}`，[computer-use.md](computer-use.md)）；插件 `cua` 没开、或不是 Mac → 404 |
 | PUT | `/api/v1/machines/{mid}/computer` | `{"enabled": bool}`：机器页「允许助手操控这台电脑」开关，写进插件 `cua` 配置里的 `machines` → 200 `Computer`；插件没开、不是 Mac → 404。改完照常推 `machines` |
@@ -1061,6 +1062,7 @@ hub → node 请求：
 | `session.screen` | `{session_id, lines, source, format?}` → `{text, status}`（`format: "ansi"` 带颜色） |
 | `panes.list` | `{}` → `{hosts:[…]}`，同 REST `/machines/{mid}/panes`：node 用最近一次宿主快照（超过 3 秒才再拍一次）回空间 / 标签页 / 全部窗格，不另起轮询 |
 | `panes.new` | `{workspace_id, kind?}` → `{pane, terminal, tab_id}`：宿主的 `CreateSlot` 开一个 shell 标签页（目录取空间自己的）；空间不在、宿主不会开标签页时报错 |
+| `panes.close` / `panes.split` / `panes.agent` / `panes.git` / `tabs.close` / `tabs.rename` | 节点菜单的动作，参数同上面的 REST；窗格 / 标签页必须是宿主列出的（没有就先拍一次快照再认），目录取窗格自己的；Agent 的窗格关闭走 `session.close`（先请它退出）；`panes.agent` 复用新建 Agent 的整条启动流程（同一个启动器命令、等会话就绪、绑定），失败时不关这个窗格 |
 | `terminal.watch` / `terminal.unwatch` | `{session_id, control?: {cols, rows, takeover}}`；watch → `{cols, rows, control}`，之后 node 推 `terminal.frame`；已经在推时 watch 会重开一条流（新 epoch、从整帧开始）。herdr 没有 observe 时报 `unsupported: …`。带 `control` 时 node 用 `herdr terminal session control` 接管（回包 `control: true`；旧 node 没有这个字段），槽位被占着又没 `takeover` 时报错 `code: attach_busy` |
 | `git.pull` | `{cwd}` → `{status, updated}`，同 REST 的安全拉取 |
 | `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |

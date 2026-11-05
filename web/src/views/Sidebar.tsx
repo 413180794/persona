@@ -17,9 +17,9 @@ import { NAV_PAGES, firstAndCurrent, otherConversations, extensionNavKey, sideba
 import { useExtensionSlot } from "../lib/extension-slots";
 import { toneOf } from "../lib/extension-ui";
 import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
-import { href, navigate, type Route } from "../lib/router";
+import { href, navigate, useRoute, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
-import { reset, useLarkOn, useStore } from "../lib/store";
+import { refresh, reset, useLarkOn, useStore } from "../lib/store";
 import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
 import type { AgentState, Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, type MenuItem } from "../ui/atoms";
@@ -27,47 +27,23 @@ import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
 import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
+import { NodeMenu } from "./NodeMenu";
+import { NodePrompt } from "./NodePrompt";
+import "../lib/node-palette";
+import { machineNode, termPaneNode, termSpaceNode, termTabNode, type MenuNode } from "../lib/node-actions";
+import { contextMenuProps } from "../ui/context-menu";
+import type { MenuAt } from "../ui/menu-model";
+import { useSidebarTerminals } from "../lib/sidebar-terminals";
+import { usePanes } from "../lib/terminal-panes";
+import { buildTerminalTree, shellsOnly, type TermSpace } from "../lib/terminals";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
 import { PersonaAvatar } from "./assistant/Persona";
-import { foldedNow } from "../lib/fold";
-import { onFoldAll, onGrouping } from "../lib/sidebar-api";
+import { useFolded } from "../lib/use-folded";
+import { onGrouping } from "../lib/sidebar-api";
 import { jumpHint, useBindings } from "../lib/shortcuts";
-
-// follow: until the user folds or opens it, the section takes its default as it is now, not as it was on the first
-// render (未归属 is folded only once the todos above it have loaded, #2249); other sections keep their first default.
-// holds: the section has the open conversation's row (#2283); it opens when it comes to hold it (opening the
-// conversation from anywhere shows its row), without storing that, and can still be folded by hand after.
-function useFolded(key: string, initial = false, { follow = false, holds = false } = {}): [boolean, () => void] {
-  const [stored, setStored] = useState(() => localStorage.getItem(`fold:${key}`));
-  const [first] = useState(initial);
-  const [opened, setOpened] = useState(holds);
-  const [held, setHeld] = useState(holds);
-  if (held !== holds) {
-    // adjusted while rendering, so the row is laid out (and scrolled to) in the same frame
-    setHeld(holds);
-    if (holds) setOpened(true);
-  }
-  const folded = !opened && foldedNow(stored, follow ? initial : first);
-  // 折叠 / 展开全部 (the keyboard shortcut, lib/sidebar-api.ts)
-  useEffect(() => onFoldAll((all) => {
-    const next = all ? "1" : "0";
-    localStorage.setItem(`fold:${key}`, next);
-    setStored(next);
-    setOpened(false);
-  }), [key]);
-  return [
-    folded,
-    () => {
-      const next = folded ? "0" : "1";
-      localStorage.setItem(`fold:${key}`, next);
-      setStored(next);
-      setOpened(false);
-    },
-  ];
-}
 
 /** The open row's own fill (#2283): it stays while the pointer is elsewhere in the list, a step darker than hover. */
 const CURRENT_ROW = "bg-hover-2";
@@ -245,6 +221,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         {/* the phone's Agents page shows them already: the drawer over it doesn't build them twice */}
         {!(narrow && route.name === "agent-list") && <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} onNavigate={onNavigate} />}
       </div>
+      <NodePrompt />
     </aside>
   );
 }
@@ -359,14 +336,23 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
     setKept(matchingKeys(live, f, mutes));
     hover(null);
   };
-  const [rowMenu, setRowMenu] = useState<{ s: Session; anchor: HTMLElement } | null>(null);
-  const [spaceMenu, setSpaceMenu] = useState<{ sp: Space; anchor: HTMLElement } | null>(null);
+  // 设置 › 外观 › 侧边栏显示终端 (off): the plain shells of each machine's terminal host, under its agents in 按机器
+  const showTerminals = useSidebarTerminals() && shownGrouping === "machine";
+  const { listing: panes, refresh: refreshPanes } = usePanes(machines, showTerminals);
+  const shellTrees = useMemo(() => {
+    if (!showTerminals) return undefined;
+    return Object.fromEntries(machines.map((m) => [m.id, shellsOnly(buildTerminalTree(panes[m.id]?.data, []))])) as Record<string, TermSpace[]>;
+  }, [showTerminals, machines, panes]);
+  const [rowMenu, setRowMenu] = useState<{ s: Session; anchor: HTMLElement; at?: MenuAt } | null>(null);
+  const [spaceMenu, setSpaceMenu] = useState<{ sp: Space; anchor: HTMLElement; at?: MenuAt; fold?: MenuNode["fold"] } | null>(null);
+  const [nodeMenu, setNodeMenu] = useState<{ node: MenuNode; at: MenuAt; header?: string } | null>(null);
   const [renaming, setRenaming] = useState<Session | null>(null);
   const [renamingSpace, setRenamingSpace] = useState<Session | null>(null);
   const [deleting, setDeleting] = useState<Session | null>(null);
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
-  const onRowMenu = (s: Session, anchor: HTMLElement) => setRowMenu((m) => (m?.anchor === anchor ? null : { s, anchor }));
-  const onSpaceMenu = (sp: Space, anchor: HTMLElement) => setSpaceMenu((m) => (m?.anchor === anchor ? null : { sp, anchor }));
+  const onRowMenu: RowMenuFn = (s, anchor, at) => setRowMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at }));
+  const onSpaceMenu: SpaceMenuFn = (sp, anchor, at, fold) => setSpaceMenu((m) => (!at && m?.anchor === anchor ? null : { sp, anchor, at, fold }));
+  const onNodeMenu: NodeMenuFn = (node, at, header, toggle) => setNodeMenu((m) => (toggle && m?.at.anchor && m.at.anchor === at.anchor ? null : { node, at, header }));
   const [recentFolded, toggleRecent] = useFolded("recent", true, { holds: holdsRow(recent, activeKey) });
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
   const [pinnedFolded, togglePinned] = useFolded("agents-pinned", false, { holds: holdsRow(pinnedAgents, activeKey) });
@@ -381,7 +367,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const busy = (sp: Space) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
   // pinned spaces lead; under a quick filter nothing folds into 「空闲的空间」
   const { active, idle } = arrangeSpaces(spaces, { pins, mutes, filtered, busy });
-  const tree = { machines, reg, hover, activeKey, go, mutes, onSpaceMenu, onRowMenu, onNavigate };
+  const tree = { machines, reg, hover, activeKey, go, mutes, onSpaceMenu, onRowMenu, onNodeMenu, onNavigate };
 
   return (
     <>
@@ -448,7 +434,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       {loose.length > 0 && <LooseSection sessions={loose} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />}
 
       </> : shownGrouping === "machine" ? machineTree.map((m) => (
-        <MachineSection key={m.key} m={m} {...tree} />
+        <MachineSection key={m.key} m={m} shells={shellTrees?.[m.machine.id]} {...tree} />
       )) : shownGrouping === "repo" ? (
         repoMachines.map((m) => (
           <RepoMachineSection key={m.key} m={m} flat={repoMachines.length <= 1} machines={machines} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />
@@ -471,17 +457,20 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       )}
       {/* the row's ⋯ (and its right click): pin, rename, mute, the todo it hangs on, delete — a long press on iOS
           Safari sends no contextmenu, so nothing lives only there */}
-      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} onLinkTodo={setLinkTargetSession} />}
+      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} at={rowMenu.at} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} onLinkTodo={setLinkTargetSession} />}
       {spaceMenu && (
         <SpaceMenu
           sp={spaceMenu.sp}
           anchor={spaceMenu.anchor}
+          at={spaceMenu.at}
+          fold={spaceMenu.fold}
           onClose={() => setSpaceMenu(null)}
           onRename={setRenamingSpace}
           onMarkSeen={setConfirmSeen}
           onLinkTodo={(sp) => setLinkTargetSpace({ machineId: sp.machineId, space: sp.name })}
         />
       )}
+      {nodeMenu && <NodeMenu node={nodeMenu.node} at={nodeMenu.at} header={nodeMenu.header} onClose={() => setNodeMenu(null)} changed={() => { void refresh().catch(() => {}); void refreshPanes(); }} />}
       {renaming && <RenameDialog open session={renaming} onClose={() => setRenaming(null)} />}
       {renamingSpace && <RenameSpaceDialog open session={renamingSpace} onClose={() => setRenamingSpace(null)} />}
       {deleting && <DeleteSessionDialog open session={deleting} machineName={machineWithHub(deleting.machine_id, machines)} onClose={() => setDeleting(null)} />}
@@ -576,10 +565,10 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
 }
 
 // Every group in the sidebar is one of these: its title folds it, and the fold is kept in this browser (useFolded).
-function Section({ title, children, folded, onToggle, right }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode }) {
+function Section({ title, children, folded, onToggle, right, onMenu }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void }) {
   return (
     <div className="mt-3">
-      <div className="group/sec flex items-center gap-1 px-2 pb-1">
+      <div className="group/sec flex items-center gap-1 px-2 pb-1" {...(onMenu ? contextMenuProps(onMenu) : {})}>
         <button type="button" aria-expanded={!folded} onClick={onToggle} className="touch-hit relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
           <span className="min-w-0 truncate">{title}</span>
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
@@ -714,7 +703,7 @@ function RepoWorktreeRows({ w, repo, row, activeKey }: { w: RepoWorktree; repo: 
   );
 }
 
-function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onNavigate }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
+function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onNavigate }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: SpaceMenuFn; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
   const allIdle = sp.sessions.every(isQuiet);
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3, { holds: holdsRow(sp.sessions, activeKey) });
 
@@ -722,6 +711,7 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
     <Section
       folded={folded}
       onToggle={toggle}
+      onMenu={(at, el) => onMenu(sp, el, at, { folded, toggle })}
       title={
         <span className="flex items-center gap-1.5">
           <span className="truncate normal-case tracking-normal text-[11.5px] text-ink-2">{sp.name}</span>
@@ -794,16 +784,18 @@ function SpaceMenuButton({ sp, onMenu }: { sp: Space; onMenu: (sp: Space, anchor
   );
 }
 
-type TreeProps = { machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; mutes: AgentMutes; onSpaceMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onNavigate?: () => void };
+type SpaceMenuFn = (sp: Space, anchor: HTMLElement, at?: MenuAt, fold?: MenuNode["fold"]) => void;
+type TreeProps = { machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; mutes: AgentMutes; onSpaceMenu: SpaceMenuFn; onRowMenu: RowMenuFn; onNodeMenu: NodeMenuFn; onNavigate?: () => void };
 
 // 按机器 (lib/herdr-tree.ts): one machine as herdr lays it out, its workspaces, their tabs, then「其他」. A machine that
 // is away starts folded; its agents are under「最近（未运行）」.
-function MachineSection({ m, ...p }: { m: HerdrMachine } & TreeProps) {
+function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpace[] } & TreeProps) {
   const online = m.machine.online;
   const [folded, toggle] = useFolded(m.foldKey, !online, { holds: holdsRow(m.sessions, p.activeKey) });
+  const name = machineWithHub(m.machine.id, p.machines);
   return (
     <div className="mt-3">
-      <div className="group/sec flex items-center gap-1 px-2 pb-0.5">
+      <div className="group/sec flex items-center gap-1 px-2 pb-0.5" {...contextMenuProps((at) => p.onNodeMenu(machineNode(m.machine, { fold: { folded, toggle } }), at, name))}>
         <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left [@media(pointer:coarse)]:min-h-11">
           <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", online ? "bg-green" : "bg-line-strong")} />
           <span className={cx("min-w-0 truncate text-[12.5px] font-semibold", online ? "text-ink" : "text-ink-3")}>{machineWithHub(m.machine.id, p.machines)}</span>
@@ -823,6 +815,7 @@ function MachineSection({ m, ...p }: { m: HerdrMachine } & TreeProps) {
       <Collapse open={!folded}>
         <div className="flex flex-col gap-px" inert={folded || undefined}>
           {m.spaces.map((sp) => <WorkspaceBlock key={sp.key} sp={sp} {...p} />)}
+          {shells && shells.length > 0 && <ShellTree mid={m.machine.id} online={online} spaces={shells} {...p} />}
           {m.other.length > 0 && (
             // 「其他」: the machine's agents outside any workspace (Codex threads, runtimes without spaces)
             <TreeBlock foldKey={m.otherFoldKey} sessions={m.other} activeKey={p.activeKey} title={<span className="min-w-0 truncate font-medium">其他</span>} right={(folded) => <SessionTally sessions={m.other} folded={folded} />}>
@@ -837,11 +830,11 @@ function MachineSection({ m, ...p }: { m: HerdrMachine } & TreeProps) {
 }
 
 // A workspace or「其他」in the tree: its title row folds what is under it, the fold kept by 机器/空间名.
-function TreeBlock({ foldKey, sessions, activeKey, state, title, right, children }: { foldKey: string; sessions: Session[]; activeKey: string; state?: AgentState; title: React.ReactNode; right: (folded: boolean) => React.ReactNode; children: React.ReactNode }) {
+function TreeBlock({ foldKey, sessions, activeKey, state, title, right, children, onMenu }: { foldKey: string; sessions: Session[]; activeKey: string; state?: AgentState; title: React.ReactNode; right: (folded: boolean) => React.ReactNode; children: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement, fold: { folded: boolean; toggle: () => void }) => void }) {
   const [folded, toggle] = useFolded(foldKey, sessions.every(isQuiet) && sessions.length > 3, { holds: holdsRow(sessions, activeKey) });
   return (
     <div>
-      <div className="group/sec flex items-center gap-1 pr-2 pl-2">
+      <div className="group/sec flex items-center gap-1 pr-2 pl-2" {...(onMenu ? contextMenuProps((at, el) => onMenu(at, el, { folded, toggle })) : {})}>
         <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left text-[12px] text-ink-2 hover:text-ink [@media(pointer:coarse)]:min-h-11">
           <Icon name="chevron" size={9} stroke={2.4} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
           {state ? <StatusDot state={state} size={6} /> : <span className="size-1.5 shrink-0" />}
@@ -864,6 +857,7 @@ function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
       sessions={sp.tree}
       activeKey={p.activeKey}
       state={sp.state}
+      onMenu={(at, el, fold) => p.onSpaceMenu(sp, el, at, fold)}
       title={<><span className="min-w-0 truncate font-medium">{sp.name}</span><SpaceMarks pinned={sp.pinned} muted={isSpaceMuted(sp, p.mutes)} /></>}
       right={(folded) => (
         <span className="flex shrink-0 items-center gap-1">
@@ -924,9 +918,26 @@ function TreeSessionRow({ s, reg, hover, activeKey, go, onRowMenu }: { s: Sessio
   return <SessionRow s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} showTodoTag onMenu={onRowMenu} />;
 }
 
+/** The menu node of a tab of the sidebar's tree: its most urgent pane stands for it. */
+function tabNode(t: HerdrTab, machines: Machine[]): MenuNode {
+  const s = t.lead;
+  return {
+    kind: "tab",
+    mid: s.machine_id,
+    online: machines.find((m) => m.id === s.machine_id)?.online !== false,
+    host: s.space_kind,
+    label: s.slot_name,
+    workspaceId: t.spaceId,
+    tabId: t.slotId,
+    paneId: s.pane_id,
+    tabSessionId: s.session_id,
+    cwd: s.cwd,
+  };
+}
+
 // One herdr tab: `#N` (or its name) and what its most urgent pane is doing; it opens on that pane, the others are the
 // chat's pane tabs (PaneTabs). A tab with one pane has that agent's ⋯.
-function TabRow({ t, reg, hover, activeKey, go, onRowMenu }: { t: HerdrTab } & TreeProps) {
+function TabRow({ t, reg, hover, activeKey, go, onRowMenu, onNodeMenu, machines }: { t: HerdrTab } & TreeProps) {
   const open = t.sessions.find((x) => rowKey(x) === activeKey);
   const k = open ? activeKey : `t:${t.key}`;
   const n = t.sessions.length;
@@ -944,8 +955,56 @@ function TabRow({ t, reg, hover, activeKey, go, onRowMenu }: { t: HerdrTab } & T
       prefix={t.label && <span className="shrink-0 text-[11.5px] text-ink-3 tabular-nums">{t.label}</span>}
       hint={single ? undefined : `${n} 个 Agent`}
       showTodoTag={single}
-      onMenu={single ? onRowMenu : undefined}
+      // a tab with several panes has a menu of its own: rename, split, git, close it
+      onMenu={single ? onRowMenu : (_s, anchor, at) => onNodeMenu(tabNode(t, machines), at ?? { anchor }, `标签页 ${t.label || ""}`.trim(), !at)}
+      menuLabel={single ? undefined : "标签页的操作"}
     />
+  );
+}
+
+// 终端 under a machine (设置 › 外观 › 侧边栏显示终端): its terminal host's workspaces and the plain shells in them, each
+// opening the 终端 page on that pane. Folds are kept by 机器/工作区名 like the Agents' above.
+function ShellTree({ mid, online, spaces, reg, hover, go, activeKey, onNodeMenu }: { mid: string; online: boolean; spaces: TermSpace[] } & TreeProps) {
+  const route = useRoute();
+  const shown = route.name === "terminal" && route.mid === mid ? route.id : undefined;
+  const count = spaces.reduce((n, sp) => n + sp.tabs.reduce((m, t) => m + t.panes.length, 0), 0);
+  return (
+    <TreeBlock foldKey={`term:${mid}`} sessions={[]} activeKey={activeKey} title={<span className="min-w-0 truncate font-medium">终端</span>} right={() => <span className="text-[10.5px] text-ink-3 tabular-nums">{count}</span>}>
+      {spaces.map((sp) => (
+        <TreeBlock
+          key={`${sp.host}/${sp.id}`}
+          foldKey={`term:${mid}/${sp.host}:${sp.label}`}
+          sessions={[]}
+          activeKey={activeKey}
+          title={<span className="min-w-0 truncate font-medium">{sp.label}</span>}
+          right={() => null}
+          onMenu={(at) => onNodeMenu(termSpaceNode(mid, sp, online), at, `空间 ${sp.label}`)}
+        >
+          {sp.tabs.flatMap((t) =>
+            t.panes.map((p) => {
+              const k = `term:${mid}/${p.id}`;
+              const node = t.panes.length === 1 ? termTabNode(mid, sp, t, online) : termPaneNode(mid, sp, t, p, online);
+              return (
+                <NavRow
+                  key={k}
+                  k={k}
+                  reg={reg}
+                  hover={hover}
+                  active={shown === p.id}
+                  to={{ name: "terminal", mid, id: p.id }}
+                  go={go}
+                  icon="terminal"
+                  label={t.panes.length > 1 ? `${t.label} · ${p.title}` : p.title}
+                  title={p.detail ? `${p.title}\n${p.detail}` : p.title}
+                  menuLabel="终端的操作"
+                  onMenu={(at, _el, button) => onNodeMenu(node, at, t.label, button)}
+                />
+              );
+            }),
+          )}
+        </TreeBlock>
+      ))}
+    </TreeBlock>
   );
 }
 
@@ -983,7 +1042,10 @@ const rowKey = (s: Pick<Session, "machine_id" | "session_id">) => `s:${agentKey(
 /** Whether the open row (`activeKey`) is one of these agents': its group opens for it (useFolded). */
 const holdsRow = (sessions: readonly Session[], activeKey: string) => sessions.some((s) => rowKey(s) === activeKey);
 type GoFn = (to: Route) => (e: React.MouseEvent) => void;
-type RowMenuFn = (s: Session, anchor: HTMLElement) => void;
+/** `at`: where a right click or the menu key opened it; without it (the ⋯) the row's menu toggles beside its button. */
+type RowMenuFn = (s: Session, anchor: HTMLElement, at?: MenuAt) => void;
+/** A machine's, a workspace's or a tab's menu (src/lib/node-actions.ts); `toggle`: from its ⋯, which closes it again. */
+type NodeMenuFn = (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean) => void;
 
 // Persona's main conversation: the first and strongest entry (its face, always in ink), with the conversation's state
 // when it is working or wants you.
@@ -1031,10 +1093,15 @@ function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?
 
 const BADGE_CLASS = { red: "bg-red-tint text-red", orange: "bg-orange-tint text-orange", green: "bg-green-tint text-green", accent: "bg-accent-tint text-accent-ink" } as const;
 
-function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title }: { k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string }) {
-  return (
+function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title, onMenu, menuLabel }: { onMenu?: (at: MenuAt, el: HTMLElement, button: boolean) => void; menuLabel?: string; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string }) {
+  const row = useRef<HTMLAnchorElement | null>(null);
+  const link = (
     <a
-      ref={reg(k)}
+      ref={(el) => {
+        row.current = el;
+        reg(k)(el);
+      }}
+      {...(onMenu ? contextMenuProps((at, el) => onMenu(at, el, false)) : {})}
       href={href(to)}
       title={title}
       onClick={go(to)}
@@ -1056,9 +1123,27 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
       )}
     </a>
   );
+  if (!onMenu) return link;
+  // the ⋯ shows over the row's end on hover (a pointer); on a touch screen it stays, in the room the row leaves for it
+  return (
+    <div className="group/row relative">
+      {link}
+      <button
+        type="button"
+        aria-label={menuLabel}
+        aria-haspopup="menu"
+        title="更多"
+        tabIndex={-1}
+        onClick={() => row.current && onMenu({ anchor: row.current }, row.current, true)}
+        className="absolute top-1/2 right-1 z-20 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink group-hover/row:flex [@media(hover:none)]:right-0 [@media(hover:none)]:flex [@media(hover:none)]:size-11 [@media(hover:none)]:bg-transparent"
+      >
+        <Icon name="more" size={14} />
+      </button>
+    </div>
+  );
 }
 
-export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn }) {
+export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu, menuLabel = "Agent 的操作" }: { menuLabel?: string; s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn }) {
   const st = stateOf(s);
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
@@ -1073,12 +1158,8 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
       }}
       href={href(to)}
       onClick={go(to)}
-      onContextMenu={(e) => {
-        // right click (or the menu key): the row's menu, the same as its ⋯
-        if (!onMenu) return;
-        e.preventDefault();
-        onMenu(s, e.currentTarget);
-      }}
+      // right click (at the pointer), the menu key and Shift+F10 (beside the row): the row's menu, the same as its ⋯
+      {...(onMenu ? contextMenuProps((at, el) => onMenu(s, el, at)) : {})}
       onMouseEnter={() => hover(k)}
       onFocus={() => hover(k)}
       onBlur={() => hover(null)}
@@ -1117,7 +1198,7 @@ export function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefi
       {link}
       <button
         type="button"
-        aria-label="Agent 的操作"
+        aria-label={menuLabel}
         aria-haspopup="menu"
         title="更多"
         tabIndex={-1}

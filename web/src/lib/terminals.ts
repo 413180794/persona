@@ -62,6 +62,10 @@ export interface TermPane {
   /** The pane's working directory ("" when the host does not say). */
   cwd: string;
   state: PaneState;
+  /** The host's own id for the pane ("w1:p2"), what the menu's actions name; `id` is what the terminal opens by. */
+  pane: string;
+  /** The agent session in the pane, "" for a plain shell. */
+  sessionId: string;
   /** What the filter matches: everything the row shows, and the names around it. */
   haystack: string;
 }
@@ -146,6 +150,8 @@ export function buildTerminalTree(res: PanesResponse | undefined, sessions: read
                 agent: p.agent ?? "",
                 cwd: p.cwd ?? "",
                 state: paneState(p, session),
+                pane: p.pane,
+                sessionId: p.session_id ?? "",
                 haystack: [row.title, row.detail, p.cwd, label, w.label, w.branch].join(" ").toLowerCase(),
               };
             }),
@@ -232,4 +238,14 @@ export function keepOnlyShown(list: readonly OpenTerminal[], shown: OpenTerminal
 /** A terminal id as the address carries it ("pane:w1:p2" holds colons: encoded). */
 export function isPaneAddress(id: string): boolean {
   return id.startsWith("pane:");
+}
+
+/** Only the plain shells of a tree (the sidebar lists the agents already): tabs and workspaces left with none are dropped. */
+export function shellsOnly(spaces: readonly TermSpace[]): TermSpace[] {
+  const out: TermSpace[] = [];
+  for (const sp of spaces) {
+    const tabs = sp.tabs.map((t) => ({ ...t, panes: t.panes.filter((p) => p.state === "shell") })).filter((t) => t.panes.length > 0);
+    if (tabs.length) out.push({ ...sp, tabs });
+  }
+  return out;
 }

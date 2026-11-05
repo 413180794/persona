@@ -58,3 +58,17 @@ type NewShellResult struct {
 	Terminal string `json:"terminal"`
 	TabID    string `json:"tab_id,omitempty"`
 }
+
+// PaneSplitResult is what panes.split opened: the new pane next to the one split.
+type PaneSplitResult struct {
+	Pane     string `json:"pane"`
+	Terminal string `json:"terminal"`
+}
+
+// PaneGitResult is what panes.git did in a pane's or workspace's directory. Message is a one-line summary for a toast,
+// Output what git printed (cut short).
+type PaneGitResult struct {
+	Op      string `json:"op"`
+	Message string `json:"message"`
+	Output  string `json:"output,omitempty"`
+}

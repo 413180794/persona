@@ -2,12 +2,13 @@
 // opened as a terminal (docs/terminal.md「独立终端」, docs/web.md). The list is on the left (a page of its own on a
 // phone), the terminal on the right: the session terminal's own panel, kept for the last two panes of each machine so
 // going back is instant, and let go when the page goes to the background or is left.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
+import { usePanes, type Listing } from "../../lib/terminal-panes";
 import { machineWithHub } from "../../lib/mesh";
 import { href, navigate, onLinkClick, type Route } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
-import { useStore } from "../../lib/store";
+import { refresh as refreshSessions, useStore } from "../../lib/store";
 import {
   buildTerminalTree,
   filterTerminalTree,
@@ -18,69 +19,29 @@ import {
   paneTrail,
   sameTerminal,
   type OpenTerminal,
-  type PanesResponse,
   type TermSpace,
+  type TermTab,
 } from "../../lib/terminals";
 import type { Machine } from "../../lib/types";
-import { cx, IconButton, Loading, StatusDot, toast } from "../../ui/atoms";
+import { Collapse, cx, IconButton, Loading, StatusDot, toast } from "../../ui/atoms";
+import { contextMenuProps } from "../../ui/context-menu";
+import type { MenuAt } from "../../ui/menu-model";
+import { machineNode, termPaneNode, termSpaceNode, termTabNode, type MenuNode } from "../../lib/node-actions";
+import { useFolded } from "../../lib/use-folded";
+import { NodeMenu } from "../NodeMenu";
+import { onNodeChanged, setKnownTree } from "../../lib/node-palette";
 import { Icon } from "../../ui/icons";
 import { Empty } from "../session/files/parts";
 import { TerminalPanel } from "../session/TerminalPanel";
 
 type TerminalRoute = Extract<Route, { name: "terminal" }>;
 
-/** How often the layout is read again while the page is in front (agents' states are live already, from the sessions). */
-const REFRESH_MS = 8000;
-
-interface Listing {
-  data?: PanesResponse;
-  error?: string;
-}
-
-/** Each online machine's panes: read when the page opens, every few seconds while it is in front, and on demand. */
-function usePanes(machines: Machine[]) {
-  const [listing, setListing] = useState<Record<string, Listing>>({});
-  const [busy, setBusy] = useState(false);
-  const online = machines.filter((m) => m.online).map((m) => m.id);
-  const key = online.join("\n");
-
-  const load = useCallback(async (ids: string[]) => {
-    await Promise.all(
-      ids.map((mid) =>
-        api<PanesResponse>(`/machines/${enc(mid)}/panes`).then(
-          (data) => setListing((l) => ({ ...l, [mid]: { data } })),
-          // a failed read keeps what was seen: the list does not blink out
-          (e) => setListing((l) => ({ ...l, [mid]: { data: l[mid]?.data, error: errorText(e) } })),
-        ),
-      ),
-    );
-  }, []);
-
-  useEffect(() => {
-    const ids = key ? key.split("\n") : [];
-    let dead = false;
-    setBusy(true);
-    void load(ids).finally(() => !dead && setBusy(false));
-    const t = setInterval(() => document.visibilityState === "visible" && void load(ids), REFRESH_MS);
-    return () => {
-      dead = true;
-      clearInterval(t);
-    };
-  }, [key, load]);
-
-  const refresh = useCallback(async () => {
-    setBusy(true);
-    await load(key ? key.split("\n") : []);
-    setBusy(false);
-  }, [key, load]);
-  return { listing, busy, refresh, reload: load };
-}
-
 export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute; onToggleSidebar: () => void }) {
   const machines = useStore((s) => s.machines);
   const sessions = useStore((s) => s.sessions);
   const { listing, busy, refresh, reload } = usePanes(machines);
   const [query, setQuery] = useState("");
+  const [menu, setMenu] = useState<{ node: MenuNode; at: MenuAt; header?: string } | null>(null);
   const shown: OpenTerminal | undefined = route.mid && route.id ? { mid: route.mid, id: route.id } : undefined;
 
   const trees = useMemo(() => {
@@ -88,6 +49,12 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
     for (const m of machines) out[m.id] = buildTerminalTree(listing[m.id]?.data, sessions[m.id] ?? []);
     return out;
   }, [machines, listing, sessions]);
+
+  // the palette's node commands (lib/node-palette.ts) read the panes from here, and say when they changed some
+  useEffect(() => {
+    for (const m of machines) setKnownTree(m.id, trees[m.id] ?? []);
+  }, [machines, trees]);
+  useEffect(() => onNodeChanged(() => void refresh()), [refresh]);
 
   // ── the terminals kept open: the one on screen and the one before it, per machine ──
   const [open, setOpen] = useState<OpenTerminal[]>([]);
@@ -193,12 +160,25 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
                   activeItem={query.trim() ? activeItem : undefined}
                   onOpenShell={(sp) => void openShell(mid, sp)}
                   onRetry={() => void refresh()}
+                  open={(node, at, header, toggle) => setMenu((m) => (toggle && at.anchor && m?.at.anchor === at.anchor ? null : { node, at, header }))}
                 />
               );
             })}
             {query.trim() && flat.length === 0 && machines.length > 0 && <p className="px-3 py-8 text-center text-[12.5px] text-ink-3">没有找到「{query.trim()}」</p>}
           </div>
         </section>
+        {menu && (
+          <NodeMenu
+            node={menu.node}
+            at={menu.at}
+            header={menu.header}
+            onClose={() => setMenu(null)}
+            changed={() => {
+              void refresh();
+              void refreshSessions().catch(() => {});
+            }}
+          />
+        )}
         <section aria-label="终端" className={cx("relative flex min-h-0 min-w-0 flex-1 flex-col", termHidden)}>
           {stable.map((t) => {
             const on = sameTerminal(t, shown);
@@ -229,6 +209,44 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
   );
 }
 
+/** A fold's chevron, in the room the row leaves on its left (no row moves for it): on hover, and on a touch screen; a
+ *  folded row shows it. */
+function FoldMark({ folded, className }: { folded: boolean; className: string }) {
+  return (
+    <Icon
+      name="chevron"
+      size={9}
+      stroke={2.4}
+      className={cx("pointer-events-none absolute text-ink-3 transition-[opacity,transform] duration-200 group-hover/fold:opacity-100 [@media(hover:none)]:opacity-100", folded ? "opacity-100" : "opacity-0", className)}
+      style={{ transform: folded ? "rotate(-90deg)" : "none" }}
+    />
+  );
+}
+
+/** A row's ⋯ (the menu for a touch screen and for a mouse that has not right clicked): on hover, always on a touch screen. */
+function MoreButton({ label, onOpen, className = "" }: { label: string; onOpen: (el: HTMLElement) => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-haspopup="menu"
+      title="更多"
+      onClick={(e) => onOpen(e.currentTarget.parentElement ?? e.currentTarget)}
+      className={cx(
+        "touch-hit absolute top-1/2 right-1 z-10 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink focus-visible:flex group-hover/fold:flex [@media(hover:none)]:flex [@media(hover:none)]:bg-transparent",
+        className,
+      )}
+    >
+      <Icon name="more" size={14} />
+    </button>
+  );
+}
+
+interface Menus {
+  /** `toggle`: from a ⋯, which closes its own menu again. */
+  open: (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean) => void;
+}
+
 function MachineBlock({
   machine,
   named,
@@ -240,6 +258,7 @@ function MachineBlock({
   activeItem,
   onOpenShell,
   onRetry,
+  open,
 }: {
   machine: Machine;
   named: boolean;
@@ -251,66 +270,126 @@ function MachineBlock({
   activeItem?: OpenTerminal;
   onOpenShell: (space: TermSpace) => void;
   onRetry: () => void;
-}) {
+} & Menus) {
   const mid = machine.id;
+  const [folded, toggle] = useFolded(`term:m:${mid}`);
   if (searching && spaces.length === 0) return null;
+  const hide = named && folded && !searching; // a search shows what it found, whatever is folded
+  const name = machine.name;
+  const node = machineNode(machine, { fold: { folded, toggle }, onRefresh: onRetry });
   return (
     <div className="mt-2">
       {named && (
-        <div className="flex h-7 items-center gap-2 px-2.5">
-          <Icon name="machine" size={12} className={machine.online ? "text-ink-2" : "text-ink-3"} />
-          <span className={cx("min-w-0 flex-1 truncate text-[12.5px] font-semibold", machine.online ? "text-ink" : "text-ink-3")}>{machine.name}</span>
-          {!machine.online && <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">离线</span>}
+        <div className="group/fold relative flex h-7 items-center" {...contextMenuProps((at) => open(node, at, name))}>
+          <button type="button" aria-expanded={!hide} onClick={toggle} className="flex h-7 min-w-0 flex-1 items-center gap-2 px-2.5 text-left">
+            <Icon name="machine" size={12} className={machine.online ? "text-ink-2" : "text-ink-3"} />
+            <span className={cx("min-w-0 flex-1 truncate text-[12.5px] font-semibold", machine.online ? "text-ink" : "text-ink-3")}>{machine.name}</span>
+            {!machine.online && <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">离线</span>}
+          </button>
+          <FoldMark folded={hide} className="top-1/2 left-0.5 -translate-y-1/2" />
+          <MoreButton label={`${name} 的操作`} onOpen={(el) => open(node, { anchor: el }, name, true)} />
         </div>
       )}
-      {machine.online && !listing && loading && <p className="px-2.5 py-2 text-[12px] text-ink-3">读取中…</p>}
-      {machine.online && listing?.error && !listing.data && (
-        <p className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-red">
-          <span className="min-w-0 flex-1 truncate">{listing.error}</span>
-          <button type="button" onClick={onRetry} className="shrink-0 whitespace-nowrap rounded-control px-2 py-0.5 text-ink-2 hover:bg-hover hover:text-ink">
-            重试
-          </button>
-        </p>
-      )}
-      {machine.online && listing?.data && spaces.length === 0 && !searching && <p className="px-2.5 py-2 text-[12px] text-ink-3">没有窗格</p>}
-      {spaces.map((sp) => (
-        <div key={`${sp.host}/${sp.id}`} className="mt-1">
-          <div className="group/space flex h-7 items-center gap-1.5 pr-1 pl-2.5">
-            <Icon name="layers" size={12} className="shrink-0 text-ink-3" />
-            <span className="min-w-0 truncate text-[12px] font-medium text-ink-2">{sp.label}</span>
-            {sp.branch && <span className="min-w-0 shrink truncate rounded-chip bg-field px-1.5 text-[10.5px] text-ink-3">{sp.branch}</span>}
-            <span className="flex-1" />
-            {sp.canOpen && <IconButton icon="plus" label={`在「${sp.label}」新建终端`} size={24} iconSize={13} onClick={() => onOpenShell(sp)} />}
-          </div>
-          {sp.tabs.map((t) => (
-            <div key={t.id}>
-              {(sp.tabs.length > 1 || t.panes.length > 1) && <div className="truncate px-2.5 pt-1 pl-7 text-[11px] text-ink-3">{t.label}</div>}
-              {t.panes.map((p) => {
-                const to: Route = { name: "terminal", mid, id: p.id };
-                const on = sameTerminal(shown, { mid, id: p.id });
-                const hot = sameTerminal(activeItem, { mid, id: p.id });
-                return (
-                  <a
-                    key={p.id}
-                    href={href(to)}
-                    onClick={(e) => onLinkClick(e, to)}
-                    aria-current={on ? "page" : undefined}
-                    className={cx("flex min-h-9 items-center gap-2.5 rounded-[7px] py-1 pr-2.5 pl-7 transition-colors", on ? "bg-hover" : "hover:bg-hover", hot && !on && "bg-inset")}
-                  >
-                    <span className="flex size-4 shrink-0 items-center justify-center text-ink-3">
-                      {p.state === "shell" ? <Icon name="terminal" size={13} /> : <StatusDot state={p.state} />}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={cx("block truncate text-[12.5px]", on ? "font-medium text-ink" : "text-ink")}>{p.title}</span>
-                      {p.detail && <span className="block truncate text-[11px] text-ink-3">{p.detail}</span>}
-                    </span>
-                  </a>
-                );
-              })}
-            </div>
+      <Collapse open={!hide}>
+        <div inert={hide || undefined}>
+          {machine.online && !listing && loading && <p className="px-2.5 py-2 text-[12px] text-ink-3">读取中…</p>}
+          {machine.online && listing?.error && !listing.data && (
+            <p className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-red">
+              <span className="min-w-0 flex-1 truncate">{listing.error}</span>
+              <button type="button" onClick={onRetry} className="shrink-0 whitespace-nowrap rounded-control px-2 py-0.5 text-ink-2 hover:bg-hover hover:text-ink">
+                重试
+              </button>
+            </p>
+          )}
+          {machine.online && listing?.data && spaces.length === 0 && !searching && <p className="px-2.5 py-2 text-[12px] text-ink-3">没有窗格</p>}
+          {spaces.map((sp) => (
+            <SpaceBlock key={`${sp.host}/${sp.id}`} machine={machine} sp={sp} searching={searching} shown={shown} activeItem={activeItem} onOpenShell={onOpenShell} open={open} />
           ))}
         </div>
-      ))}
+      </Collapse>
+    </div>
+  );
+}
+
+function SpaceBlock({ machine, sp, searching, shown, activeItem, onOpenShell, open }: { machine: Machine; sp: TermSpace; searching: boolean; shown?: OpenTerminal; activeItem?: OpenTerminal; onOpenShell: (space: TermSpace) => void } & Menus) {
+  const mid = machine.id;
+  const [folded, toggle] = useFolded(`term:w:${mid}/${sp.host}:${sp.label}`);
+  const hide = folded && !searching;
+  const node = termSpaceNode(mid, sp, machine.online, { fold: { folded, toggle }, onOpenShell: sp.canOpen ? () => onOpenShell(sp) : undefined });
+  return (
+    <div className="mt-1">
+      <div className="group/fold relative flex h-7 items-center gap-1.5 pr-1 pl-2.5" {...contextMenuProps((at) => open(node, at, `空间 ${sp.label}`))}>
+        <button type="button" aria-expanded={!hide} onClick={toggle} className="flex h-7 min-w-0 flex-1 items-center gap-1.5 text-left">
+          <Icon name="layers" size={12} className="shrink-0 text-ink-3" />
+          <span className="min-w-0 truncate text-[12px] font-medium text-ink-2">{sp.label}</span>
+          {sp.branch && <span className="min-w-0 shrink truncate rounded-chip bg-field px-1.5 text-[10.5px] text-ink-3">{sp.branch}</span>}
+          <span className="flex-1" />
+        </button>
+        <FoldMark folded={hide} className="top-1/2 left-0.5 -translate-y-1/2" />
+        {sp.canOpen && <IconButton icon="plus" label={`在「${sp.label}」新建终端`} size={24} iconSize={13} onClick={() => onOpenShell(sp)} />}
+        <MoreButton label={`${sp.label} 的操作`} onOpen={(el) => open(node, { anchor: el }, `空间 ${sp.label}`, true)} className="right-8" />
+      </div>
+      <Collapse open={!hide}>
+        <div inert={hide || undefined}>
+          {sp.tabs.map((t) => (
+            <TabBlock key={t.id} machine={machine} sp={sp} t={t} searching={searching} shown={shown} activeItem={activeItem} open={open} />
+          ))}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
+function TabBlock({ machine, sp, t, searching, shown, activeItem, open }: { machine: Machine; sp: TermSpace; t: TermTab; searching: boolean; shown?: OpenTerminal; activeItem?: OpenTerminal } & Menus) {
+  const mid = machine.id;
+  const labelled = sp.tabs.length > 1 || t.panes.length > 1; // the tab's name is shown (and folds) when it tells tabs or panes apart
+  const [folded, toggle] = useFolded(`term:t:${mid}/${sp.host}:${sp.label}/${t.label}`);
+  const hide = labelled && folded && !searching;
+  const tabNode = termTabNode(mid, sp, t, machine.online, { fold: labelled ? { folded, toggle } : undefined });
+  const tabHeader = `标签页 ${t.label}`;
+  return (
+    <div>
+      {labelled && (
+        <div className="group/fold relative" {...contextMenuProps((at) => open(tabNode, at, tabHeader))}>
+          <button type="button" aria-expanded={!hide} onClick={toggle} className="block w-full truncate px-2.5 pt-1 pl-7 text-left text-[11px] text-ink-3">
+            {t.label}
+          </button>
+          <FoldMark folded={hide} className="top-[calc(50%+2px)] left-4 -translate-y-1/2" />
+          {t.panes.length > 1 && <MoreButton label={`${t.label} 的操作`} onOpen={(el) => open(tabNode, { anchor: el }, tabHeader, true)} />}
+        </div>
+      )}
+      <Collapse open={!hide}>
+        <div inert={hide || undefined}>
+          {t.panes.map((p) => {
+            const to: Route = { name: "terminal", mid, id: p.id };
+            const on = sameTerminal(shown, { mid, id: p.id });
+            const hot = sameTerminal(activeItem, { mid, id: p.id });
+            // a tab with one pane is that pane: its menu has the tab's rename and close too
+            const node = t.panes.length === 1 ? termTabNode(mid, sp, t, machine.online) : termPaneNode(mid, sp, t, p, machine.online);
+            const header = t.panes.length === 1 ? tabHeader : p.title;
+            return (
+              <div key={p.id} className="group/fold relative">
+                <a
+                  href={href(to)}
+                  onClick={(e) => onLinkClick(e, to)}
+                  aria-current={on ? "page" : undefined}
+                  {...contextMenuProps((at) => open(node, at, header))}
+                  className={cx("flex min-h-9 items-center gap-2.5 rounded-[7px] py-1 pr-2.5 pl-7 transition-colors", on ? "bg-hover" : "hover:bg-hover", hot && !on && "bg-inset")}
+                >
+                  <span className="flex size-4 shrink-0 items-center justify-center text-ink-3">
+                    {p.state === "shell" ? <Icon name="terminal" size={13} /> : <StatusDot state={p.state} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={cx("block truncate text-[12.5px]", on ? "font-medium text-ink" : "text-ink")}>{p.title}</span>
+                    {p.detail && <span className="block truncate text-[11px] text-ink-3">{p.detail}</span>}
+                  </span>
+                </a>
+                <MoreButton label={`${p.title} 的操作`} onOpen={(el) => open(node, { anchor: el }, header, true)} />
+              </div>
+            );
+          })}
+        </div>
+      </Collapse>
     </div>
   );
 }

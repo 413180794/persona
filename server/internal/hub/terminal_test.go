@@ -111,6 +111,7 @@ func TestTerminalFramesFanOutFromAWholeFrame(t *testing.T) {
 type termNode struct {
 	mu    sync.Mutex
 	log   []string
+	args  map[string]string // the params of each other request, by method
 	busy  bool
 	old   bool
 	hub   *Hub
@@ -150,6 +151,10 @@ func newTermNode(t *testing.T) *termNode {
 			return map[string]any{"cols": 172, "rows": 45, "control": false}, nil
 		}
 		tn.log = append(tn.log, method)
+		if tn.args == nil {
+			tn.args = map[string]string{}
+		}
+		tn.args[method] = string(params)
 		return map[string]any{}, nil
 	}
 	nodeSide.OnEvent = func(event string, params json.RawMessage) {

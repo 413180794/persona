@@ -37,7 +37,7 @@ export interface MenuPlace {
 export function placeMenu(
   anchor: { left: number; right: number; top: number; bottom: number },
   h: number,
-  o: { width: number; align: "left" | "right"; side: "top" | "bottom"; screenW: number; screenH: number; view?: { top: number; height: number } },
+  o: { width: number; align: "left" | "right"; side: "top" | "bottom"; screenW: number; screenH: number; view?: { top: number; height: number }; gap?: number },
 ): MenuPlace {
   const width = Math.min(o.width, o.screenW - 16);
   const left = Math.max(8, Math.min(o.align === "left" ? anchor.left : anchor.right - width, o.screenW - width - 8));
@@ -45,9 +45,33 @@ export function placeMenu(
   const hi = o.view ? o.view.top + o.view.height - 8 : o.screenH - 8;
   const maxHeight = o.view ? Math.max(0, hi - lo) : undefined;
   const fit = Math.min(h, maxHeight ?? h);
-  let top = o.side === "bottom" ? anchor.bottom + 6 : anchor.top - fit - 6;
-  if (o.side === "bottom" && top + fit > hi) top = anchor.top - fit - 6;
+  const gap = o.gap ?? 6; // a menu at the cursor has none: it opens at the pointer
+  let top = o.side === "bottom" ? anchor.bottom + gap : anchor.top - fit - gap;
+  if (o.side === "bottom" && top + fit > hi) top = anchor.top - fit - gap;
   if (top < lo) top = lo;
   if (o.view && top + fit > hi) top = Math.max(lo, hi - fit);
+  return maxHeight === undefined ? { left, top, width } : { left, top, width, maxHeight };
+}
+
+/** Where a submenu of height `h` and width `width` opens next to the row (`row`) that opened it: beside it on the right,
+ *  flush with the row's top and overlapping the parent by a few px so the pointer crosses no gap; on the left when the
+ *  right has no room; kept 8px inside the area it may use (see placeMenu). */
+export function placeSubmenu(
+  row: { left: number; right: number; top: number; bottom: number },
+  h: number,
+  o: { width: number; screenW: number; screenH: number; view?: { top: number; height: number } },
+): MenuPlace {
+  const width = Math.min(o.width, o.screenW - 16);
+  const overlap = 4;
+  let left = row.right - overlap;
+  if (left + width > o.screenW - 8) left = row.left - width + overlap;
+  left = Math.max(8, Math.min(left, o.screenW - width - 8));
+  const lo = (o.view?.top ?? 0) + 8;
+  const hi = o.view ? o.view.top + o.view.height - 8 : o.screenH - 8;
+  const maxHeight = o.view ? Math.max(0, hi - lo) : undefined;
+  const fit = Math.min(h, maxHeight ?? h);
+  let top = row.top - overlap; // the menu's own padding: the first row lines up with the one that opened it
+  if (top + fit > hi) top = hi - fit;
+  if (top < lo) top = lo;
   return maxHeight === undefined ? { left, top, width } : { left, top, width, maxHeight };
 }

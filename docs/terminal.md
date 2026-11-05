@@ -619,3 +619,22 @@ xterm 在网页里 `scrollback: 0`（herdr 在原地重画网格，没有东西�
 `web/src/lib/terminal-details.test.ts`（Mac 键、链接过滤、右键菜单、焦点决定、选项）、`web/src/lib/terminal-search.test.ts`（行匹配、两份匹配的顺序、查找条状态、快捷键）；
 截图和交互用 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 的假 hub（接管时 shell 窗格会回显打进去的字，网址就是这样打进屏幕的；只看时有 430 行编造的历史）。
 没有在真 herdr 上试：这批改动不碰协议。
+
+## 二十一、节点菜单：关闭、拆分、重命名、在 shell 里启动 Agent、Git（2026-11-05，网页，#2329）
+
+终端页和侧边栏树上的节点菜单（`docs/web.md`「节点菜单」）里改电脑的那几项。都是 hub 上只有 `full` 设备能调的路由（`hub/panes.go` 的 `nodeAction`：`answer` 设备和扩展令牌 403，`route_scopes.txt` 里是 `-`），
+node 里对应 `panes.close` / `panes.split` / `panes.agent` / `panes.git` / `tabs.close` / `tabs.rename`（`node/panes_actions.go`）。共同的规矩：只认宿主列出的窗格 / 标签页 / 工作区（找不到先拍一次快照），目录是窗格自己的，请求里没有地方写目录或命令。
+
+- **宿主能力**：`host.SlotCloser`（关整个标签页）、`host.Splitter`（拆分），只有 herdr 宿主实现；Orca、herdr-core、botmux 报 `unsupported`，网页也不显示这些项。herdr 侧是 `tab close` / `pane split` / `tab rename` / `pane close`（socket 方法 `pane.split` 等，CLI 退路 `herdr pane split <pane> --direction right --no-focus --cwd …`）。
+- **关闭窗格**：Agent 的窗格走 `session.close`（先 ^C 两次请它退出，再关）；shell 窗格走宿主的 `Close`——标签页只剩它就关标签页，有别的窗格只关它。**关闭标签页**直接关整个标签页。
+- **新建窗格**：`pane split <窗格> --direction right|down`，不抢电脑上的焦点，新窗格在被拆窗格的目录；返回 `pane:<id>`。
+- **改标签页名**：1–80 个字，空白合并成一个空格；有 Agent 的标签页网页走原来的 `session.rename`，没有的走 `tabs.rename`。
+- **在这里运行 Agent…**：只给 shell 提示符下的窗格（窗格没有 Agent、没有绑定的会话、前台程序全是 shell，读不到前台程序也拒绝）。`panes.agent {pane, launcher}` 复用 `start` 的整条流程——
+  同一个启动器命令、同样的信任对话框处理、等会话就绪、绑定窗格、续接命令——只是不新开标签页，用 `context` 里的「已选窗格」（`withAdoptedPane`）换掉 `newTab`；启动失败也**不**关这个窗格（新开标签页的启动失败会关那个标签页）。
+  网页只列启动 Claude Code 的启动器（Codex / TRAEX 的启动要第一条消息，菜单里没有输入框）。
+- **Git**：在窗格的目录（工作区则是它自己的目录）里跑，不是 Git 仓库就拒绝（「不是 Git 仓库」）。**拉取**是现成的 `gitPull`：只快进，有未提交的改动就拒绝；**获取**是 `git fetch --no-recurse-submodules`；
+  **推送**要有分支和上游，且有要推的提交（没有就说「没有要推送的提交」），用显式的 `refs/heads/<分支>:<上游分支>`（没有 `+`），所以不会强推，配置里的 `remote.<名>.push = +…` 也不起作用；落后时被远端拒绝，原因原样回到菜单里。
+  全部有 60 秒超时，不问密码（`GIT_TERMINAL_PROMPT=0`、askpass 指向 `false`），输出只留最后 2 KB。
+- **实测**（herdr 0.9.5，本机一个临时标签页）：`go test -tags herdrlive -run TestLiveMenuActions ./internal/herdr/`（`HERDR_LIVE_WORKSPACE=<工作区 id>`）建标签页、改名、拆分两次、关窗格、关标签页，结果和 node 单测里的假 herdr 一致。
+- **测试**：`node/panes_actions_test.go`（假 herdr：关 / 改名 / 拆分的调用、被拒绝时不碰 herdr、shell 窗格里运行、拒绝和失败不关窗格；真 git 仓库：fetch / pull / push、强推的配置不起作用、非仓库 / 脏工作区 / 分离 HEAD 拒绝）、
+  `hub/panes_test.go`（每条路由 `answer` / 扩展令牌被拒、node 没听到；只转发点名的字段；不在 `answer` 的允许列表、route scopes 里是 `-`）。

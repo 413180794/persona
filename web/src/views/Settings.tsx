@@ -12,6 +12,7 @@ import { ExtensionThemePicker } from "../ui/ExtensionThemePicker";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { Group, Row, Pill, RowConfirm, Switch } from "./settings/SettingsParts";
 import { setReplyMotionEnabled, useReplyMotionSetting } from "../ui/stream/motion";
+import { setSidebarTerminals, useSidebarTerminals } from "../lib/sidebar-terminals";
 import { setAttentionSoundEnabled, useAttentionSoundSetting } from "../lib/attention";
 import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
@@ -244,6 +245,7 @@ interface AssistantState {
 function General({ onTriageModel }: { onTriageModel: () => void }) {
   const theme = useTheme();
   const replyMotion = useReplyMotionSetting();
+  const sidebarTerminals = useSidebarTerminals();
   const attentionSound = useAttentionSoundSetting();
   const machines = useStore((s) => s.machines);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
@@ -285,6 +287,9 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
         </Row>
         <Row label="提示音" hint="需要你或完成时响一声；正在看的会话不响。">
           <Switch on={attentionSound} onChange={setAttentionSoundEnabled} label="提示音" />
+        </Row>
+        <Row label="侧边栏显示终端" hint="在 Agent 按机器分组里，每台电脑的 Agent 下面列出它终端里的普通 shell，点开就是「终端」页。默认关；只对这个浏览器生效。">
+          <Switch on={sidebarTerminals} onChange={setSidebarTerminals} label="侧边栏显示终端" />
         </Row>
       </Group>
 
