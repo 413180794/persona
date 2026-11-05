@@ -27,5 +27,9 @@
   "more_rows_other": "+{count} 行",
   "move_back_title": "移回收件箱",
   "mark_done_title": "标为已处理",
-  "move_back": "移回"
+  "move_back": "移回",
+  "failed_title": "收件箱没能加载",
+  "failed_hint": "检查连接后再试一次。",
+  "retry": "重试",
+  "retrying": "正在重试…"
 }

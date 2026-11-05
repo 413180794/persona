@@ -13,6 +13,7 @@ import { href, navigate, onLinkClick, routePath, useRoute } from "./lib/router";
 import { ago, sessionTitle, shortPath } from "./lib/format";
 import type { Session } from "./lib/types";
 import { unreachable } from "./lib/shell";
+import { ConnectionPill } from "./views/ConnectionPill";
 import { NARROW, useKeyboardFrame, useMedia } from "./lib/viewport";
 import { connect, disconnect, reset, useStore } from "./lib/store";
 import { t } from "./i18n";
@@ -351,12 +352,10 @@ function Shell() {
         onClick={close}
       />
       <main ref={mainBox} inert={a11y.modal || undefined} className="relative min-w-0 flex-1">
-        {conn === "offline" && !offline && (
-          <div className="absolute inset-x-0 top-14 z-10 flex justify-center px-4 pt-2" style={{ animation: `slide-up 220ms ${EASE} both` }}>
-            <div className="flex items-center gap-2 rounded-full bg-tooltip-bg px-3 py-1.5 text-[12px] text-tooltip-fg shadow-overlay">
-              <span className="size-1.5 rounded-full bg-red" />
-              {t("app.reconnecting")}
-            </div>
+        {/* dropped after loading: which phase, and a click explains with 立即重试 (views/ConnectionPill.tsx) */}
+        {conn !== "online" && loaded && !offline && (
+          <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-4 pt-2" style={{ animation: `slide-up 220ms ${EASE} both` }}>
+            <ConnectionPill />
           </div>
         )}
         <PageBoundary page={href(route)}><Suspense fallback={<div className="flex h-full items-center justify-center"><Loading /></div>}>{main}</Suspense></PageBoundary>

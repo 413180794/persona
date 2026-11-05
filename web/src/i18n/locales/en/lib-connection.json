@@ -1,0 +1,22 @@
+{
+  "online": "Connected to the hub",
+  "online_detail": "Messages and status are up to date.",
+  "no_network": "No network",
+  "no_network_detail": "This device has no network right now. It reconnects on its own once the network is back.",
+  "restarting": "Hub is updating…",
+  "restarting_detail": "The hub is restarting (a new version or a planned restart). It drops for a moment and reconnects on its own.",
+  "connecting": "Connecting…",
+  "unreachable_detail": "The network is up, but the hub can't be reached (its computer may be off, asleep or offline). It keeps retrying on its own.",
+  "retry_in_one": "Retrying in {count} second",
+  "retry_in_other": "Retrying in {count} seconds",
+  "retrying": "Retrying…",
+  "last_online": "Last connected: {ago}",
+  "seconds_ago_one": "{count} second ago",
+  "seconds_ago_other": "{count} seconds ago",
+  "minutes_ago_one": "{count} minute ago",
+  "minutes_ago_other": "{count} minutes ago",
+  "retry_now": "Retry now",
+  "show_details": "{state}, show connection details",
+  "not_done_hub": "Can't reach the hub. That didn't go through",
+  "not_done_network": "No network. That didn't go through"
+}

@@ -16,6 +16,8 @@ import type { AgentLaunch } from "./new-agent";
 import { isSpacesSupported, type Todo } from "./todos";
 import { releaseAttachments } from "./attachments";
 import type { OutboxEntry } from "./outbox";
+import { NO_LINK, RESTARTING_MS, type ConnLink } from "./connection";
+import { setOfflineProbe } from "./feedback";
 import { afterEvent, afterHello, graceUntil, isResumed, NO_CURSOR, RESTART_FAST_MS, retryDelay, shownConn, wsQuery, type Drop, type EventCursor } from "./reconnect";
 
 export type Conn = "connecting" | "online" | "offline";
@@ -29,6 +31,8 @@ export interface AnsweredCard {
 
 export interface State {
   conn: Conn;
+  /** What is behind `conn` once it dropped: since when, the next try, a restart, the network (lib/connection.ts). */
+  link: ConnLink;
   version: string;
   /** What the hub can do (hello `features`): terminal_stream, terminal_control… */
   features: string[];
@@ -56,6 +60,7 @@ export interface State {
 
 let state: State = {
   conn: "connecting",
+  link: { ...NO_LINK, networkUp: networkUp() },
   version: "",
   features: [],
   hubName: "",
@@ -248,7 +253,8 @@ export function connect() {
   const sock = new WebSocket(`${proto}//${location.host}${BASE}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE])}`);
   ws = sock;
   restartNotice = false;
-  if (state.conn !== "online") set({ conn: "connecting" });
+  // an attempt does not move offline back to connecting: the pill stays on one phase while the hub is down instead of
+  // flipping at every backoff tick (the app's ConnectionTitle); shownConn decides it when the attempt fails
   sock.onopen = () => {
     // the interface language: this connection's text, and the user's language for pushes and the assistant (docs/i18n.md)
     sock.send(JSON.stringify({ type: "client_hello", platform: "web", locale: currentLanguage() }));
@@ -286,7 +292,9 @@ export function connect() {
     if (fast) fastTries++;
     retry++;
     const conn = shownConn(drop, retry - 1, now);
-    if (conn !== state.conn) set({ conn }); // inside the grace: nothing changes
+    // what the pill's details say (the facts change on every attempt; only the pill and its details read them)
+    const link: ConnLink = { ...state.link, lastOnline: drop?.at ?? state.link.lastOnline, nextTry: now + wait, restarting: Boolean(drop?.restart) && now - (drop?.at ?? now) < RESTARTING_MS };
+    set(conn !== state.conn ? { conn, link } : { link }); // inside the grace: the page still looks online
     retryTimer = window.setTimeout(connect, wait);
   };
 }
@@ -301,6 +309,19 @@ function back() {
   drop = null;
   clearTimeout(graceTimer);
 }
+
+/** 立即重试 (the pill's details): try now instead of waiting for the backoff. */
+export function reconnectNow() {
+  if (stopped) return;
+  connect();
+}
+
+function networkUp(): boolean {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+// An action that failed while the hub is out of reach says so once, calmly (lib/feedback.ts, ui/atoms toast).
+setOfflineProbe(() => (!networkUp() ? "network" : state.conn !== "online" || drop ? "hub" : null));
 
 export function disconnect() {
   stopped = true;
@@ -319,7 +340,11 @@ if (typeof document !== "undefined") {
   });
 }
 if (typeof window !== "undefined") {
-  window.addEventListener("online", () => !stopped && connect());
+  window.addEventListener("online", () => {
+    set({ link: { ...state.link, networkUp: true } });
+    if (!stopped) connect();
+  });
+  window.addEventListener("offline", () => set({ link: { ...state.link, networkUp: false } }));
 }
 
 function onMessage(msg: Record<string, unknown>) {
@@ -329,6 +354,7 @@ function onMessage(msg: Record<string, unknown>) {
       const mesh = (msg.mesh as { hubs?: MeshHub[] } | undefined)?.hubs;
       set({
         conn: "online",
+        link: { ...state.link, nextTry: 0, restarting: false, networkUp: true },
         version: String(msg.server_version ?? ""),
         features: Array.isArray(msg.features) ? (msg.features as string[]) : [],
         hubName: typeof msg.hub_name === "string" ? msg.hub_name : "",
@@ -633,5 +659,6 @@ export function reset() {
     spacesSupported: true,
     loaded: false,
     conn: "connecting",
+    link: { ...NO_LINK, networkUp: networkUp() },
   });
 }

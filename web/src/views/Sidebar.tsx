@@ -25,6 +25,7 @@ import { href, navigate, useRoute, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
+import { BREATHING, connPhase, connStatus, phaseTone, type ConnPhase } from "../lib/connection";
 import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
 import { buildTodoTree, treeStateLabel, type TodoTree, type TreeAgent, type TreeState, type TreeTodo } from "../lib/todo-tree";
 import { findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
@@ -207,7 +208,7 @@ export type NavPage = { k: string; to: Route; icon: IconName; label: string; sho
 
 /** The sidebar's pages (总览 … 设置, the extensions' pages) and the connection, shared by the sidebar and its rail. */
 function useNavPages() {
-  const conn = useStore((s) => s.conn);
+  const phase = connPhase(useStore((s) => s.conn), useStore((s) => s.link));
   const machines = useStore((s) => s.machines);
   // 终端 (docs/terminal.md「独立终端」) is there where the hub can list panes
   const terminalPanes = useStore((s) => s.features.includes("terminal_panes"));
@@ -252,14 +253,14 @@ function useNavPages() {
     ...(page[k] ? [page[k]] : []),
   ]);
 
-  return { conn, online, total: machines.length, main, pages };
+  return { phase, online, total: machines.length, main, pages };
 }
 
 export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Route; onSearch: () => void; onNewAgent: () => void; onNavigate?: () => void }) {
   const bindings = useBindings();
   const searchHint = jumpHint(bindings);
   const assistant = useStore((s) => s.assistant);
-  const { conn, online, total, main: mainConversation, pages } = useNavPages();
+  const { phase, online, total, main: mainConversation, pages } = useNavPages();
   // a phone's drawer has the pages as two rows of icons, so its first screen reaches the Agents (#1996)
   const narrow = useMedia(NARROW);
   const activeKey = useActiveKey(route);
@@ -274,7 +275,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
     <aside className="flex h-full w-full flex-col bg-canvas">
       <div className="px-2.5 pt-2.5">
         <div className="mb-2 flex items-center gap-1">
-          <div className="min-w-0 flex-1"><AccountRow conn={conn} online={online} total={total} /></div>
+          <div className="min-w-0 flex-1"><AccountRow phase={phase} online={online} total={total} /></div>
           {/* folds the column to the rail of icons (a wide screen; the drawer closes by its scrim) */}
           {!narrow && <CollapseButton collapsed={false} chord={bindings["left-sidebar"]} />}
         </div>
@@ -669,7 +670,7 @@ function FilterBar({ selection, counts, onChoose, botmux }: { selection: AgentFi
   );
 }
 
-function AccountRow({ conn, online, total }: { conn: string; online: number; total: number }) {
+function AccountRow({ phase, online, total }: { phase: ConnPhase; online: number; total: number }) {
   const menu = useMenu();
   const theme = useTheme();
   const otherHubs = hubMenuItems(useHubs());
@@ -693,8 +694,8 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] leading-tight font-medium text-ink">Persona</span>
           <span className="flex items-center gap-1.5 truncate text-[11px] leading-tight text-ink-3">
-            <span className={cx("size-1.5 rounded-full", conn === "online" ? "bg-green" : conn === "connecting" ? "bg-orange" : "bg-red")} style={conn === "connecting" ? { animation: "breathe 1.4s ease-in-out infinite" } : undefined} />
-            {conn === "online" ? t("sidebar.computers_online", { online, total, count: total }) : conn === "connecting" ? t("sidebar.connecting") : t("sidebar.unreachable")}
+            <span aria-hidden data-conn-dot className={cx("size-1.5 rounded-full", phaseTone(phase).color)} style={phaseTone(phase).breathing ? BREATHING : undefined} />
+            {connStatus(phase, online, total)}
           </span>
         </span>
         <Icon name="chevron" size={12} stroke={2} className="text-ink-3" />
@@ -1825,11 +1826,11 @@ const RAIL_ITEM = "touch-hit relative flex size-9 shrink-0 items-center justify-
  * conversations are what fold away; ⌘K finds any of them.
  */
 export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onSearch: () => void; onNewAgent: () => void }) {
-  const { conn, online, total, main, pages } = useNavPages();
+  const { phase, online, total, main, pages } = useNavPages();
   const bindings = useBindings();
   const activeKey = useActiveKey(route);
   const go = useGo();
-  const status = conn === "online" ? t("sidebar.computers_online", { online, total, count: total }) : conn === "connecting" ? t("sidebar.connecting") : t("sidebar.unreachable");
+  const status = connStatus(phase, online, total);
   const st = main ? stateOf(main) : undefined;
   const pending = main?.pending_interactions ?? 0;
   const link = (k: string, to: Route, label: string, icon: React.ReactNode, dot?: React.ReactNode, title?: string) => {
@@ -1880,7 +1881,7 @@ export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onS
       </nav>
       <span role="img" aria-label={status} title={status} className="relative mt-2 flex shrink-0">
         <AppMark size={26} radius={7} className="shadow-hairline" />
-        <span className={cx("absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-canvas", conn === "online" ? "bg-green" : conn === "connecting" ? "bg-orange" : "bg-red")} style={conn === "connecting" ? { animation: "breathe 1.4s ease-in-out infinite" } : undefined} />
+        <span className={cx("absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-canvas", phaseTone(phase).color)} style={phaseTone(phase).breathing ? BREATHING : undefined} />
       </span>
     </aside>
   );

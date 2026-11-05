@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import type { AgentState } from "../lib/types";
 import { Icon, type IconName } from "./icons";
 import { collapseMounted } from "../lib/disclosure";
+import { FeedbackGate, offlineNow } from "../lib/feedback";
 import { useCloseOnBack } from "../lib/back-close";
 import { keyboardFrame } from "../lib/viewport";
 import { accelLabel, activation, edge, enabled, keyIntent, renameCommit, rowLabel, type MenuItem } from "./menu-model";
@@ -779,12 +780,19 @@ function dropToast(id: number) {
   toastListeners.forEach((l) => l());
 }
 
+const gate = new FeedbackGate();
+
+/** Shows a line at the bottom. While the hub is out of reach an error that is about it (lib/feedback.ts
+ *  isOfflineError) is one calm "didn't go through" at most every few seconds; any other error keeps its words. The
+ *  same line again within a few seconds is folded; one with a button always shows. */
 export function toast(text: string, tone: Toast["tone"] = "info", action?: ToastAction) {
+  const shown = action ? { text, tone } : gate.pass(text, tone, offlineNow(), Date.now());
+  if (!shown) return;
   const id = ++toastId;
-  toasts = [...toasts.slice(-2), { id, text, tone, action }];
+  toasts = [...toasts.slice(-2), { id, text: shown.text, tone: shown.tone, action }];
   toastListeners.forEach((l) => l());
   // One with a button stays long enough to reach it.
-  setTimeout(() => dropToast(id), action ? 6000 : tone === "error" ? 5200 : 2800);
+  setTimeout(() => dropToast(id), action ? 6000 : shown.tone === "error" ? 5200 : 2800);
 }
 
 export function Toasts() {

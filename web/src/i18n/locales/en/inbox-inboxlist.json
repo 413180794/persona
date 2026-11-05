@@ -31,5 +31,9 @@
   "more_rows_other": "+{count} rows",
   "move_back_title": "Move back to Inbox",
   "mark_done_title": "Mark as done",
-  "move_back": "Move back"
+  "move_back": "Move back",
+  "failed_title": "Couldn't load the inbox",
+  "failed_hint": "Check the connection and try again.",
+  "retry": "Retry",
+  "retrying": "Retrying…"
 }

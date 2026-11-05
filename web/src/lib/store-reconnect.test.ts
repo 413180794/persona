@@ -1,7 +1,8 @@
 // The socket's side of #1574: a drop is invisible inside the grace, a restart retries at once, and a resumed hello
 // refetches nothing while an ordinary one refreshes everything as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connect, getState, onHubEvent, reset } from "./store";
+import { connect, getState, onHubEvent, reconnectNow, reset } from "./store";
+import { offlineNow } from "./feedback";
 import { liveEntry, resetLive } from "./live";
 
 class FakeSocket {
@@ -161,5 +162,79 @@ describe("live pushes (#1963)", () => {
     s.push({ type: "live", machine_id: "m", session_id: "x", live: null });
     expect(liveEntry("m", "x")).toBeUndefined();
     resetLive();
+  });
+});
+
+describe("the facts behind the pill (lib/connection.ts)", () => {
+  it("a drop records since when and the next try; a restart is told; hello clears them", () => {
+    const s = online();
+    vi.setSystemTime(50_000);
+    s.push({ type: "hub_restarting" });
+    s.drop(1001);
+    const link = getState().link;
+    expect(link.lastOnline).toBe(50_000);
+    expect(link.restarting).toBe(true);
+    expect(link.nextTry).toBeGreaterThan(50_000);
+    vi.advanceTimersByTime(400);
+    last().open();
+    last().push({ type: "hello", server_version: "v1", event_stream: "s1", event_seq: 5, resumed: true });
+    expect(getState().link.restarting).toBe(false);
+    expect(getState().link.nextTry).toBe(0);
+  });
+
+  it("立即重试 opens a socket now instead of waiting for the backoff", () => {
+    const s = online();
+    s.drop();
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(20_000);
+      if (last().readyState === 0) last().drop();
+    }
+    const before = FakeSocket.all.length;
+    reconnectNow();
+    expect(FakeSocket.all.length).toBe(before + 1);
+  });
+
+  it("the phase stays put while the hub is down: a new attempt does not move offline back to connecting", () => {
+    const s = online();
+    s.drop();
+    vi.advanceTimersByTime(9_000); // past the grace
+    for (let i = 0; i < 6 && getState().conn !== "offline"; i++) {
+      if (last().readyState === 0) last().drop();
+      vi.advanceTimersByTime(20_000);
+    }
+    expect(getState().conn).toBe("offline");
+    // every later attempt, while its socket is opening and after it fails
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(20_000); // the next attempt has started
+      expect(last().readyState).toBe(0);
+      expect(getState().conn).toBe("offline");
+      last().drop();
+      expect(getState().conn).toBe("offline");
+    }
+    reconnectNow();
+    expect(getState().conn).toBe("offline");
+  });
+
+  it("a restart is told for 5 minutes at most, then it is just out of reach", () => {
+    const s = online();
+    vi.setSystemTime(100_000);
+    s.push({ type: "hub_restarting" });
+    s.drop(1001);
+    vi.advanceTimersByTime(60_000);
+    if (last().readyState === 0) last().drop();
+    expect(getState().link.restarting).toBe(true);
+    for (let t = 0; t < 300_000; t += 15_000) {
+      vi.advanceTimersByTime(15_000);
+      if (last().readyState === 0) last().drop();
+    }
+    expect(getState().link.restarting).toBe(false);
+    expect(getState().conn).toBe("offline");
+  });
+
+  it("an error toast while out of reach is the calm line (the probe the store registers)", () => {
+    const s = online();
+    expect(offlineNow()).toBeNull();
+    s.drop();
+    expect(offlineNow()).toBe("hub"); // inside the grace too: the socket is gone
   });
 });

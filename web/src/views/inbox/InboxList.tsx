@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
-  BULK_CONFIRM_AT, bulkScope, bulkScopeName, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
+  BULK_CONFIRM_AT, bulkScope, bulkScopeName, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, reloadInbox, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
   useInbox, waitingAgents, type BulkAction, type InboxItem, type Tier,
 } from "../../lib/inbox";
 import { useMailAccounts } from "../../lib/mail";
@@ -58,6 +58,7 @@ export function InboxList({ selected }: { selected?: string }) {
   const agents = useMemo(() => waitingAgents(interactions, sessions, mutes, { source, kind, query }), [interactions, sessions, mutes, source, kind, query]);
   const chips = mailAccounts(accounts, items);
   const connectors = useMemo(() => connectorSources(items), [items]);
+  const failed = Boolean(error) && !items.length;
   const empty = !s.tiers.action.length && !s.tiers.fyi.length && !s.tiers.noise.length && !agents.length;
   // 全部标为已处理: the open items the list shows (its filters and search); the agents waiting are not items.
   const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.fyi, ...s.tiers.noise];
@@ -134,9 +135,24 @@ export function InboxList({ selected }: { selected?: string }) {
         <BulkConfirm confirm={confirm} onClose={() => setConfirm(null)} />
 
         <TriageBanner triage={triage} />
-        {error && !items.length && <p className="mt-4 text-[12.5px] text-red">{error}</p>}
+        {/* never loaded (an error and no items): its own empty state with 重试, not 都处理完了 under the error (#2970);
+            with agents waiting the list is not empty, so the reason stays a line over it */}
+        {failed && !empty && <p className="mt-4 text-[12.5px] text-red">{error}</p>}
         {!loaded && <div className="mt-6 px-1"><Loading /></div>}
-        {loaded && empty && (
+        {failed && empty && (
+          <div className="mt-10 flex flex-col items-center gap-2 text-center" role="status" data-inbox-failed>
+            <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3">
+              <Icon name="inbox" size={17} />
+            </span>
+            <p className="text-[13.5px] font-medium text-ink">{t("inbox-inboxlist.failed_title")}</p>
+            <p className="max-w-80 text-[12.5px] text-ink-3">{t("inbox-inboxlist.failed_hint")}</p>
+            <p className="max-w-80 text-[11.5px] break-words text-ink-3">{error}</p>
+            <Button tone="secondary" icon="retry" busy={loading} onClick={() => void reloadInbox()} className="mt-2">
+              {loading ? t("inbox-inboxlist.retrying") : t("inbox-inboxlist.retry")}
+            </Button>
+          </div>
+        )}
+        {loaded && empty && !failed && (
           <div className="mt-10 flex flex-col items-center gap-2 text-center">
             <span className="flex size-10 items-center justify-center rounded-full bg-green-tint text-green">
               <Icon name="check" size={17} stroke={2.6} />

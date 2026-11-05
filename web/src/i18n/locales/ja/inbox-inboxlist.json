@@ -27,5 +27,9 @@
   "more_rows_other": "+{count}行",
   "move_back_title": "受信トレイに戻す",
   "mark_done_title": "対応済みにする",
-  "move_back": "戻す"
+  "move_back": "戻す",
+  "failed_title": "受信トレイを読み込めませんでした",
+  "failed_hint": "接続を確認して、もう一度お試しください。",
+  "retry": "再試行",
+  "retrying": "再試行中…"
 }
