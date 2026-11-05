@@ -51,12 +51,18 @@ private fun MachinesRouteContent(
         val actions = management?.let {
             viewModel(key = "machine-actions:${System.identityHashCode(it)}:${id.orEmpty()}") { MachineActionsViewModel(it, sessions) }
         }
+        val health = management?.let {
+            viewModel(key = "machine-health:${System.identityHashCode(it)}:${id.orEmpty()}") { MachineHealthViewModel(it) }
+        }
         val lifecycle = LocalLifecycleOwner.current.lifecycle
         LaunchedEffect(model, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { model.poll() } }
         val feedback = LocalAppFeedback.current
         val resources = LocalResources.current
         LaunchedEffect(actions, feedback, resources) { actions?.notices?.collect { feedback?.notice(it.text(resources)) } }
+        LaunchedEffect(health, feedback, resources) { health?.notices?.collect { feedback?.notice(it.text(resources)) } }
+        // 订阅额度 on the overview, once a minute while it is in front.
+        if (id == null && health != null) LaunchedEffect(health, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { health.pollUsage() } }
         val extensions = if (id != null && extensionSections != null) extensionSections(id) else null
-        MachinesScreen(id, model, navigator, actions, launcherPages = launchers, extensionSections = extensions)
+        MachinesScreen(id, model, navigator, actions, launcherPages = launchers, extensionSections = extensions, health = health)
     }
 }

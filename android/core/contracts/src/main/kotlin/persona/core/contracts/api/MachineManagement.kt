@@ -56,6 +56,26 @@ interface MachineManagement {
 
     /** `PUT /api/v1/machines/{id}/codex-settings`: [value] [JsonNull] removes the key, back to Codex's default. */
     suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting>
+
+    /** `GET /api/v1/machines/{id}/doctor`: what `personad node doctor` finds there (full devices only). */
+    suspend fun doctor(machineId: String): DoctorReport = throw UnsupportedOperationException("doctor")
+
+    /** `POST /api/v1/machines/{id}/doctor/fix`: the node writes Persona's own generated files again and re-checks. */
+    suspend fun fixDoctor(machineId: String): DoctorReport = throw UnsupportedOperationException("doctor/fix")
+
+    /** `GET /api/v1/machines/{id}/browser`: ego lite there, asked of the node now. */
+    suspend fun browser(machineId: String): persona.core.contracts.MachineBrowser = throw UnsupportedOperationException("browser")
+
+    /** `PUT /api/v1/machines/{id}/browser`: whether the assistant may drive that Mac's ego lite. */
+    suspend fun setBrowser(machineId: String, enabled: Boolean): persona.core.contracts.MachineBrowser =
+        throw UnsupportedOperationException("browser")
+
+    /** `POST /api/v1/machines/{id}/browser/{action}`: install | cancel | open. */
+    suspend fun browserJob(machineId: String, action: String): persona.core.contracts.MachineBrowser =
+        throw UnsupportedOperationException("browser")
+
+    /** `GET /api/v1/usage/windows` of the selected hub: the subscription accounts and their windows (#2432). */
+    suspend fun usageWindows(): List<UsageAccount> = emptyList()
 }
 
 /**

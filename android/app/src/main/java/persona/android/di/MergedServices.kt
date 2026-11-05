@@ -106,7 +106,11 @@ internal fun mergedPreferences(stacks: GroupStacks): HubPreferences = object : H
  * names ([routes]: that group's service, already speaking merged ids), so another group's machine is no longer asked of the
  * selected group's hub. Hub-level services (模型配置, 语音) stay with the selected group, like the other hub-level pages.
  */
-internal fun mergedMachineManagement(routes: MachineRoutes): MachineManagement = object : MachineManagement {
+internal fun mergedMachineManagement(
+    routes: MachineRoutes,
+    /** The selected group's own, for what belongs to a hub rather than a machine (订阅额度). */
+    selected: (suspend () -> MachineManagement)? = null,
+): MachineManagement = object : MachineManagement {
     override suspend fun launchers(machineId: String) = routes.on(machineId) { it.launchers(machineId) }
     override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) =
         routes.on(machineId) { it.launcherQuota(machineId, name, refresh) }
@@ -121,6 +125,12 @@ internal fun mergedMachineManagement(routes: MachineRoutes): MachineManagement =
     override suspend fun codexSettings(machineId: String) = routes.on(machineId) { it.codexSettings(machineId) }
     override suspend fun setCodexSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
         routes.on(machineId) { it.setCodexSetting(machineId, key, value) }
+    override suspend fun doctor(machineId: String) = routes.on(machineId) { it.doctor(machineId) }
+    override suspend fun fixDoctor(machineId: String) = routes.on(machineId) { it.fixDoctor(machineId) }
+    override suspend fun browser(machineId: String) = routes.on(machineId) { it.browser(machineId) }
+    override suspend fun setBrowser(machineId: String, enabled: Boolean) = routes.on(machineId) { it.setBrowser(machineId, enabled) }
+    override suspend fun browserJob(machineId: String, action: String) = routes.on(machineId) { it.browserJob(machineId, action) }
+    override suspend fun usageWindows() = selected?.invoke()?.usageWindows().orEmpty()
 }
 
 /** Runs a call on the machine management of the group [machineId] names, in that group's lifetime (GroupStacks.use). */

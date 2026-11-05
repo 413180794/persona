@@ -22,9 +22,6 @@
     </plurals>
     <string name="agents_requests_history">リクエストと履歴</string>
     <string name="agents_mark_all_read">すべて既読にする</string>
-    <string name="agents_empty_no_match">一致するセッションはありません</string>
-    <string name="agents_empty_none">セッションはまだありません</string>
-    <string name="agents_empty_hint">フィルターを切り替えるか、下に引いて更新してください。</string>
     <plurals name="agents_count_repos">
         <item quantity="other">リポジトリ%1$d個</item>
     </plurals>
@@ -378,4 +375,34 @@
     <string name="agents_picker_current">現在</string>
     <!-- A herdr tab's row (#2320): the most urgent agent's latest words, after its name -->
     <string name="agents_tab_lead_words">%1$s：%2$s</string>
+    <string name="agents_filter_feishu">Feishu グループ</string>
+    <string name="agents_filter_terminal">ターミナル</string>
+    <string name="agents_botmux">botmux</string>
+    <string name="agents_botmux_hide">botmux のセッションを隠す</string>
+    <string name="agents_botmux_show">botmux のセッションを表示</string>
+    <string name="agents_menu_sort">並び順：%1$s</string>
+    <string name="agents_sort_state">状態優先</string>
+    <string name="agents_sort_updated">最近の更新</string>
+    <string name="agents_empty_search_title">「%1$s」は見つかりません</string>
+    <string name="agents_empty_search_hint">スペース、タブ、セッションのタイトルと内容を検索できます。別の言葉で試してください。</string>
+    <string name="agents_empty_first_title">最初の開発セッションを始めましょう</string>
+    <string name="agents_empty_machine_title">このコンピュータにはセッションがありません</string>
+    <string name="agents_empty_first_hint">どのコンピュータでも herdr で Claude を起動すると、ここでリアルタイムに見て、いつでも引き継げます。</string>
+    <string name="agents_empty_filter_title">%1$sのセッションはありません</string>
+    <string name="agents_empty_filter_hint">各コンピュータの Agent に動きがあるとここに表示されます。</string>
+    <string name="agents_empty_filter_machine_hint">このコンピュータの Agent に動きがあるとここに表示されます。</string>
+    <string name="agents_empty_show_all">すべて表示</string>
+    <string name="agents_herdr_failure">起動しませんでした：%1$s</string>
+    <string name="agents_herdr_copy_detail">詳細をコピー</string>
+    <string name="agents_herdr_why_no_answer">起動を依頼しましたが、herdr がまだ応答しません</string>
+    <string name="agents_herdr_why_exited">herdr は起動直後に終了しました</string>
+    <string name="agents_herdr_why_exited_code">herdr は起動直後に終了しました（終了コード %1$s）</string>
+    <string name="agents_herdr_why_killed">herdr は起動直後に停止されました（%1$s）</string>
+    <string name="agents_herdr_why_not_installed">このコンピュータに herdr がありません（PATH にもログインシェルにも herdr コマンドがありません）</string>
+    <string name="agents_herdr_why_silent">herdr は起動しましたが応答がありません</string>
+    <string name="agents_herdr_why_silent_for">herdr は起動しましたが %1$s 秒以内に応答がありません</string>
+    <string name="agents_herdr_why_command">herdr コマンドを実行できませんでした</string>
+    <string name="agents_herdr_why_old_node">このコンピュータの Persona が古く herdr を起動できません。更新してからもう一度試してください。</string>
+    <string name="agents_herdr_why_offline">このコンピュータは現在オフラインです</string>
+    <string name="agents_herdr_why_timeout">herdr の起動に時間がかかっています。しばらくしてからもう一度確認してください</string>
 </resources>

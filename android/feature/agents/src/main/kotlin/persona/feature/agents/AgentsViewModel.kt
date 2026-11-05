@@ -26,6 +26,8 @@ internal data class AgentsPageState(
     val machineTotal: Int = 0,
     /** Sessions of each hub group by its namespace, whichever group the list shows (AgentGroups.kt). */
     val groupCounts: Map<String?, Int> = emptyMap(),
+    /** botmux's sessions in the list's range, hidden or not: the 「botmux」 switch shows while there are any (#2786). */
+    val botmuxCount: Int = 0,
 )
 
 /** Where an answer to a request stands; the screen says it (AgentRequests.kt). */
@@ -145,8 +147,8 @@ internal class AgentsViewModel(
         // A partial machine snapshot must not hide sessions in machine grouping.
         val knownMachines = machines + sessions.map { it.machineId }.distinct().filter { id -> machines.none { it.id == id } }
             .map { Machine(it) } // named by the list as not updated yet (AgentsScreen.kt)
-        val effective = settings.copy(grouping = prefs.grouping)
-        val context = listOf(prefs.range, effective.grouping, effective.quick, effective.query, effective.machineFilter, prefs.pins, todos)
+        val effective = settings.copy(grouping = prefs.grouping, sort = prefs.sort, hideBotmux = prefs.hideBotmux && !settings.quick.showsBotmux)
+        val context = listOf(prefs.range, effective.grouping, effective.sort, effective.hideBotmux, effective.quick, effective.query, effective.machineFilter, prefs.pins, todos)
         if (context != previousContext) previous = null
         previousContext = context
         val sorted = scopedAgentList(rows, knownMachines, prefs, effective, todos)
@@ -157,7 +159,10 @@ internal class AgentsViewModel(
         val everywhere = scopedAgentList(rows, knownMachines, prefs, effective.copy(machineFilter = "", kept = emptySet()), todos)
             .groups.flatMap { it.rows }
         AgentsPageState(sessions, knownMachines, prefs, effective, result, all.groups.sumOf { it.rows.size },
-            machineCounts(knownMachines, everywhere), everywhere.size, groupCounts(everySession, everyMachine, prefs, effective, ops))
+            machineCounts(knownMachines, everywhere), everywhere.size, groupCounts(everySession, everyMachine, prefs, effective, ops),
+            // With botmux shown, 全部's own 飞书群 count is it; hidden, counted without a fourth list.
+            botmuxCount = if (effective.hideBotmux) botmuxCount(rows, prefs, effective)
+                else all.counts[AgentQuickFilter.Feishu] ?: 0)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentsPageState())
 
     init {
@@ -210,7 +215,20 @@ internal class AgentsViewModel(
         }
     }
 
-    fun filter(filter: AgentQuickFilter) { previous = null; settings.update { it.copy(quick = filter, kept = emptySet()) } }
+    fun filter(filter: AgentQuickFilter) {
+        previous = null
+        settings.update { it.copy(quick = filter, kept = emptySet()) }
+        // Choosing 飞书群 shows botmux again (web `botmuxAndFilter`).
+        if (filter.showsBotmux && page.value.preferences.hideBotmux) localChange { preferences.hideBotmux(false) }
+    }
+    fun sort(sort: AgentSort) = localChange { previous = null; preferences.sort(sort) }
+    /** The botmux show / hide switch (#2786); hiding it under 飞书群 goes back to 全部. */
+    fun toggleBotmux() = localChange {
+        val hide = !page.value.preferences.hideBotmux
+        previous = null
+        if (hide && page.value.settings.quick.showsBotmux) settings.update { it.copy(quick = AgentQuickFilter.All, kept = emptySet()) }
+        preferences.hideBotmux(hide)
+    }
     fun range(range: AgentRange) = localChange {
         previous = null
         settings.update { it.copy(quick = AgentQuickFilter.All, kept = emptySet(), folded = emptySet()) }

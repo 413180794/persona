@@ -84,5 +84,25 @@ fun Session.resumeCommand(cwd: String = this.cwd, id: String = sourceThreadId?.t
     return (cwd.takeIf(String::isNotBlank)?.let { "cd -- ${quote(it)} && " } ?: "") + "$command ${quote(id)}"
 }
 
+/** Where an agent was opened (#2526): a botmux session is a Feishu group's topic, a herdr pane a terminal. */
+enum class AgentSource { Feishu, Terminal }
+
+/** The terminal host a pane id names (`orca:…`, `botmux:…`), herdr for a bare id; empty without a pane (web `sessionHost`). */
+val Session.hostKind: String
+    get() {
+        val pane = paneId?.takeIf(String::isNotEmpty) ?: return ""
+        val kind = pane.substringBefore(':', "")
+        return if (kind in HOST_KINDS) kind else "herdr"
+    }
+val Session.isBotmux: Boolean get() = hostKind == "botmux"
+/** Null for the rest (Orca, runtimes, apps), which carry no source label (iOS `Session.source`). */
+val Session.agentSource: AgentSource?
+    get() = when (hostKind) {
+        "botmux" -> AgentSource.Feishu
+        "herdr", "herdr-core" -> AgentSource.Terminal
+        else -> null
+    }
+private val HOST_KINDS = setOf("orca", "herdr-core", "botmux")
+
 val READ_ONLY = CoreText.of(Key.SessionReadOnly)
 private const val READ_ONLY_PREFIX = "仅查看：" // i18n-ignore: the node's prefix it strips

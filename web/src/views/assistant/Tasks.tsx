@@ -2,7 +2,7 @@
 // task cards that follow their agents, the hub's lines (answered, receipt, routed), the 今天 card, message cards about
 // a task, quick results, the dock above the composer, the tasks' questions, the route chip, and a task's detail in the
 // side panel.
-import { useId, useMemo, useState } from "react";
+import { memo, useId, useMemo, useState } from "react";
 import {
   answeredItems,
   cardSent,
@@ -273,6 +273,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const status = todo ? statusOf(todo, lookup, plans) : undefined;
   const menu = useTaskMenu(todo, status);
   const retrying = useRetrying(todoId);
+  useStore((s) => s.machines); // place() reads machine names from the store: draw again when they load or change
   useNow(30_000, status === "working"); // how long its step has gone on
   if (!todo || !status) return null;
   const lead = mostUrgentAgent(todo, lookup)?.session;
@@ -423,7 +424,9 @@ export function TaskLine({ todoId }: { todoId: string }) {
 
 // ── the hub's lines ──
 
-export function FeedLineView({ item }: { item: FeedItem }) {
+// Memoized: the chat re-renders on every streamed item and session push, while an item keeps its identity until its body
+// changes (mergeInto); the plan, todo and 稍后 it shows come through its own selectors.
+export const FeedLineView = memo(function FeedLineView({ item }: { item: FeedItem }) {
   const plan = useFeed((s) => (item.kind === "plan" && item.ref ? s.plans[item.ref] : undefined));
   const isLater = useFeed((s) => (item.ref ? s.later[item.ref] : false));
   const title = useStore((s) => s.todos.find((todo) => todo.id === item.ref)?.title) ?? t("assistant-tasks.task_fallback");
@@ -457,7 +460,7 @@ export function FeedLineView({ item }: { item: FeedItem }) {
     default:
       return null;
   }
-}
+});
 
 /** A card of a task's agent the user dealt with, kept as a line「✓ 任务 · 回答」. Click it for every question with its
  *  answer in full (#1231), selectable, and again to fold it; the task's name opens the task. */

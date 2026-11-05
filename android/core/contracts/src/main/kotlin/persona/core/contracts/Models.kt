@@ -63,10 +63,42 @@ data class Machine(
     @SerialName("deploying") val deploying: Boolean = false,
     /** Why the last 重新部署 did not work. */
     @SerialName("deploy_error") val deployError: String? = null,
+    /** ego lite on a Mac while the hub's browser plugin is on (docs/plan-ego-browser.md); absent otherwise. */
+    @SerialName("browser") val browser: MachineBrowser? = null,
     /** How Cua Driver is on this Mac (docs/computer-use.md), while the cua extension is on; null elsewhere. */
     @SerialName("computer") val computer: MachineComputer? = null,
 ) {
     val displayName: String get() = name.ifEmpty { id }
+}
+
+/** `GET /api/v1/machines/{id}/browser` (and the machine's `browser`): ego lite there and how far its setup is. */
+@Serializable
+data class MachineBrowser(
+    @SerialName("enabled") val enabled: Boolean = false,
+    @SerialName("installed") val installed: Boolean = false,
+    @SerialName("version") val version: String? = null,
+    /** Its first-run setup is done; [imported], that setup took another browser's data. */
+    @SerialName("set_up") val setUp: Boolean = false,
+    @SerialName("imported") val imported: Boolean = false,
+    /** Chromium's usage statistics: on | off | unknown. */
+    @SerialName("analytics") val analytics: String? = null,
+    @SerialName("ready") val ready: Boolean = false,
+    @SerialName("note") val note: String? = null,
+    @SerialName("screen_sharing") val screenSharing: Boolean = false,
+    @SerialName("job") val job: MachineJob? = null,
+)
+
+/** Installing or opening something on the machine (the page's buttons): the running one, or the last. */
+@Serializable
+data class MachineJob(
+    /** install | open | grant */
+    @SerialName("kind") val kind: String = "",
+    /** running | done | failed | cancelled */
+    @SerialName("state") val state: String = "",
+    @SerialName("step") val step: String? = null,
+    @SerialName("error") val error: String? = null,
+) {
+    val running: Boolean get() = state == "running"
 }
 
 /**

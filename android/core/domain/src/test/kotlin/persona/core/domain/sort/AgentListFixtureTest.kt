@@ -41,7 +41,7 @@ class AgentListFixtureTest internal constructor(private val fixture: ListFixture
                     expandedIdle = settings.strings("expanded_idle").toSet(), expandedQuiet = settings.strings("expanded_quiet").toSet(),
                 ))
                 val output = linkedMapOf<String, Any?>(
-                    "counts" to result.counts.mapKeys { it.key.name.replaceFirstChar(Char::lowercase) },
+                    "counts" to result.counts.filterKeys { it.source == null }.mapKeys { it.key.name.replaceFirstChar(Char::lowercase) },
                     "groups" to result.groups.map { group ->
                         linkedMapOf<String, Any?>(
                             "id" to group.id, "title" to group.title, "rows" to group.rows.map { it.id },

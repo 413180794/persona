@@ -162,4 +162,41 @@ class HerdrNoticeTest {
         starter.start("desk"); runCurrent()
         assertTrue(api.calls.isEmpty())
     }
+
+    @Test fun aFailedStartStaysOnTheRowUntilTheNextStartOrUntilHerdrRuns() = runTest {
+        val api = Api()
+        val repository = Repository(stopped)
+        val starter = HerdrStarter(api, repository, Connection(), backgroundScope) { }
+        starter.refresh()
+        starter.start("desk"); runCurrent()
+        api.answer.completeExceptionally(IllegalStateException("engine_missing")); runCurrent()
+        val failure = starter.failures.value.getValue("desk")
+        assertEquals(AgentText.raw("engine_missing"), failure.text)
+        assertEquals("engine_missing", failure.detail)
+        api.status = { HerdrState(false, true, true) }
+        starter.refresh()
+        assertTrue(starter.failures.value.isEmpty())
+    }
+
+    @Test fun anUnconfirmedReplyIsKeptAsItsOwnFailure() = runTest {
+        val api = Api()
+        val starter = HerdrStarter(api, Repository(stopped), Connection(), backgroundScope) { }
+        starter.refresh()
+        starter.start("desk"); runCurrent()
+        api.answer.complete(HerdrState(true, false, true)); runCurrent()
+        assertEquals(AgentText(R.string.agents_herdr_why_no_answer), starter.failures.value.getValue("desk").text)
+    }
+
+    @Test fun theNodesKnownFailuresAreSaidInWords() {
+        assertEquals(AgentText(R.string.agents_herdr_why_exited_code, "2"),
+            HerdrFailure.says("herdr server stopped right after starting: exit status 2"))
+        assertEquals(AgentText(R.string.agents_herdr_why_killed, "killed"),
+            HerdrFailure.says("herdr server stopped right after starting: signal: killed"))
+        assertEquals(AgentText(R.string.agents_herdr_why_not_installed), HerdrFailure.says("herdr is not installed"))
+        assertEquals(AgentText(R.string.agents_herdr_why_silent_for, "15"), HerdrFailure.says("herdr did not answer on sock within 15s"))
+        assertEquals(AgentText(R.string.agents_herdr_why_old_node), HerdrFailure.says("unknown method herdr.server.start"))
+        assertEquals(AgentText(R.string.agents_herdr_why_timeout), HerdrFailure.says("context deadline exceeded"))
+        assertEquals(AgentText(R.string.agents_herdr_why_timeout), HerdrFailure.says("Request Timed Out"))
+        assertEquals(AgentText.raw("something else"), HerdrFailure.says(" something else "))
+    }
 }

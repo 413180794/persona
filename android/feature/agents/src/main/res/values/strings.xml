@@ -27,9 +27,6 @@
     </plurals>
     <string name="agents_requests_history">Requests and history</string>
     <string name="agents_mark_all_read">Mark all as read</string>
-    <string name="agents_empty_no_match">No matching sessions</string>
-    <string name="agents_empty_none">No sessions yet</string>
-    <string name="agents_empty_hint">Try another filter, or pull down to refresh.</string>
     <plurals name="agents_count_repos">
         <item quantity="one">1 repository</item>
         <item quantity="other">%1$d repositories</item>
@@ -391,4 +388,34 @@
     <string name="agents_picker_current">Current</string>
     <!-- A herdr tab's row (#2320): the most urgent agent's latest words, after its name -->
     <string name="agents_tab_lead_words">%1$s: %2$s</string>
+    <string name="agents_filter_feishu">Feishu groups</string>
+    <string name="agents_filter_terminal">Terminal</string>
+    <string name="agents_botmux">botmux</string>
+    <string name="agents_botmux_hide">Hide botmux sessions</string>
+    <string name="agents_botmux_show">Show botmux sessions</string>
+    <string name="agents_menu_sort">Sort: %1$s</string>
+    <string name="agents_sort_state">Status first</string>
+    <string name="agents_sort_updated">Recently updated</string>
+    <string name="agents_empty_search_title">Nothing found for “%1$s”</string>
+    <string name="agents_empty_search_hint">Spaces, tabs, and session titles and contents are all searched. Try another word.</string>
+    <string name="agents_empty_first_title">Start your first coding session</string>
+    <string name="agents_empty_machine_title">No sessions on this computer</string>
+    <string name="agents_empty_first_hint">Start Claude in herdr on any of your computers, then follow it live here and take over anytime.</string>
+    <string name="agents_empty_filter_title">No %1$s sessions</string>
+    <string name="agents_empty_filter_hint">New activity from the agents on your computers shows up here.</string>
+    <string name="agents_empty_filter_machine_hint">New activity from the agents on this computer shows up here.</string>
+    <string name="agents_empty_show_all">Show all</string>
+    <string name="agents_herdr_failure">Didn\'t start: %1$s</string>
+    <string name="agents_herdr_copy_detail">Copy details</string>
+    <string name="agents_herdr_why_no_answer">asked it to start, but herdr hasn\'t answered yet</string>
+    <string name="agents_herdr_why_exited">herdr quit right after starting</string>
+    <string name="agents_herdr_why_exited_code">herdr quit right after starting (exit code %1$s)</string>
+    <string name="agents_herdr_why_killed">herdr was stopped right after starting (%1$s)</string>
+    <string name="agents_herdr_why_not_installed">herdr isn\'t installed on this computer (no herdr command in PATH or the login shell)</string>
+    <string name="agents_herdr_why_silent">herdr started but never answered</string>
+    <string name="agents_herdr_why_silent_for">herdr started but didn\'t answer within %1$s seconds</string>
+    <string name="agents_herdr_why_command">couldn\'t run the herdr command</string>
+    <string name="agents_herdr_why_old_node">Persona on this computer is too old to start herdr. Update it and try again.</string>
+    <string name="agents_herdr_why_offline">this computer is offline</string>
+    <string name="agents_herdr_why_timeout">herdr took too long to come up; check again in a moment</string>
 </resources>

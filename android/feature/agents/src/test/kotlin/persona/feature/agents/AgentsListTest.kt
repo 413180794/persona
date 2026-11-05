@@ -40,6 +40,24 @@ class AgentsListTest {
         assertNotEquals(agentRangeKey("first/pairing"), agentRangeKey("second/pairing"))
     }
 
+    @Test fun botmuxCountMatchesTheListsOwnFeishuCountInEveryRange() {
+        val live = Session(machineId = "machine", sessionId = "live", status = "working", cwd = "/code/a", paneId = "botmux:1", title = "group a")
+        val old = live.copy(sessionId = "old", status = "offline", paneId = "botmux:2", title = "group b")
+        val elsewhere = live.copy(machineId = "other", sessionId = "elsewhere", paneId = "botmux:3")
+        val pane = live.copy(sessionId = "pane", paneId = "w1:p1")
+        val assistant = live.copy(sessionId = "assistant", assistant = true)
+        val rows = listOf(live, old, elsewhere, pane, assistant).map(::AgentSession)
+        val machines = listOf(Machine("machine"), Machine("other"))
+        for (range in AgentRange.entries) for (settings in listOf(AgentListSettings(), AgentListSettings(machineFilter = "machine"),
+            AgentListSettings(query = "group b"), AgentListSettings(query = "nothing"))) {
+            val prefs = AgentsPreferencesSnapshot(range = range)
+            val expected = scopedAgentList(rows, machines, prefs, settings).counts[AgentQuickFilter.Feishu] ?: 0
+            assertEquals("$range $settings", expected, botmuxCount(rows, prefs, settings.copy(hideBotmux = true)))
+        }
+        assertEquals(3, botmuxCount(rows, AgentsPreferencesSnapshot(range = AgentRange.Running), AgentListSettings(hideBotmux = true)))
+        assertEquals(1, botmuxCount(rows, AgentsPreferencesSnapshot(range = AgentRange.History), AgentListSettings(hideBotmux = true)))
+    }
+
     @Test fun missingRequestSourceIsOmittedWhileKnownSourcesRemain() {
         val request = Interaction("request", kind = "permission")
         assertNull(request.sourceLabel(res, AgentsMetadata()))

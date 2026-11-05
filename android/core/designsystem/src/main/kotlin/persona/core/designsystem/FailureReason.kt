@@ -42,3 +42,30 @@ fun failureReasonText(error: Throwable): UiText {
     if (error is SerializationException) return UiText.Res(R.string.designsystem_reason_unreadable)
     return error.message?.takeIf { it.isNotBlank() }?.let { UiText.Plain(it) } ?: UiText.Res(R.string.designsystem_reason_unknown)
 }
+
+/** The hub's own words when it answered with a status (null when it did not), for a page that reads them itself. */
+fun hubMessage(error: Throwable): String? {
+    if (error !is IOException && generateSequence(error) { it.cause }.take(16).none { it is HubFailure }) return null
+    val failure = HubFailure.from(error)
+    return failure.message.takeIf { failure.status != null && it.isNotBlank() }
+}
+
+/** What 复制详情 copies for a report: the hub's message, its HTTP status and error code, or the exception as it came. */
+fun failureDetail(error: Throwable): String {
+    val failure = generateSequence(error) { it.cause }.take(16).filterIsInstance<HubFailure>().firstOrNull()
+    if (failure?.status == null) return error.message?.takeIf(String::isNotBlank) ?: error.toString()
+    return buildString {
+        append(failure.message)
+        append("\nHTTP ").append(failure.status)
+        failure.code?.let { append("\n").append(it) }
+    }
+}
+
+/** How the hub answered a refused call: its status, its words, and whether the body was JSON (an old hub's 404 is not). */
+data class HubAnswer(val status: Int, val message: String, val json: Boolean)
+
+fun hubAnswer(error: Throwable): HubAnswer? {
+    val failure = generateSequence(error) { it.cause }.take(16).filterIsInstance<HubFailure>().firstOrNull() ?: return null
+    val status = failure.status ?: return null
+    return HubAnswer(status, failure.message, failure.body?.trimStart()?.startsWith("{") == true)
+}

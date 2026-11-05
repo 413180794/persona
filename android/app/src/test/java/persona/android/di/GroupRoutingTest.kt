@@ -176,6 +176,18 @@ class GroupRoutingTest {
         override suspend fun codexSettings(machineId: String) = emptyList<ClaudeSetting>().also { calls += "codex settings $machineId" }
         override suspend fun setCodexSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
             emptyList<ClaudeSetting>().also { calls += "set codex $machineId $key" }
+        override suspend fun doctor(machineId: String) =
+            persona.core.contracts.api.DoctorReport(dir = hub).also { calls += "doctor $machineId" }
+        override suspend fun fixDoctor(machineId: String) =
+            persona.core.contracts.api.DoctorReport(fixed = listOf(hub)).also { calls += "fix $machineId" }
+        override suspend fun browser(machineId: String) =
+            persona.core.contracts.MachineBrowser(note = hub).also { calls += "browser $machineId" }
+        override suspend fun setBrowser(machineId: String, enabled: Boolean) =
+            persona.core.contracts.MachineBrowser(enabled = enabled).also { calls += "browser $machineId $enabled" }
+        override suspend fun browserJob(machineId: String, action: String) =
+            persona.core.contracts.MachineBrowser(note = action).also { calls += "browser $machineId $action" }
+        override suspend fun usageWindows() =
+            listOf(persona.core.contracts.api.UsageAccount(hub)).also { calls += "usage" }
     }
 
     @Test fun anotherGroupsMachineIsManagedOnItsOwnHub() = runBlocking<Unit> {
@@ -209,6 +221,31 @@ class GroupRoutingTest {
         assertEquals("macbook", managed.setEngine("macbook", "herdr").id)
         val plain = FakeMachines("solo")
         assertSame(plain, plain.inGroup(primary))
+    }
+
+    @Test fun selfCheckAndBrowserReachTheMachinesGroupAndUsageTheSelectedHub() = runBlocking<Unit> {
+        val home = FakeMachines("home")
+        val work = FakeMachines("work")
+        val routes = object : MachineRoutes {
+            override suspend fun <T> on(machineId: String, call: suspend (MachineManagement) -> T): T =
+                if (other.owns(machineId)) call(work.inGroup(other)) else call(home.inGroup(primary))
+        }
+        val managed = mergedMachineManagement(routes, selected = { work.inGroup(other) })
+        assertEquals("work", managed.doctor("macbook~g0a1b2c3d").dir)
+        assertEquals(listOf("work"), managed.fixDoctor("macbook~g0a1b2c3d").fixed)
+        assertEquals("work", managed.browser("macbook~g0a1b2c3d").note)
+        assertTrue(managed.setBrowser("macbook~g0a1b2c3d", true).enabled)
+        assertEquals("install", managed.browserJob("macbook~g0a1b2c3d", "install").note)
+        assertEquals(listOf("work"), managed.usageWindows().map { it.id })
+        assertEquals(listOf("doctor macbook", "fix macbook", "browser macbook", "browser macbook true",
+            "browser macbook install", "usage"), work.calls)
+        // the primary group's machine with the same plain id stays on its own hub
+        assertEquals("home", managed.doctor("macbook").dir)
+        assertEquals("home", managed.browser("macbook").note)
+        assertEquals(listOf("doctor macbook", "browser macbook"), home.calls)
+        // usage limits belong to a hub: without a selected group there are none, and no machine's hub is asked
+        assertEquals(emptyList<persona.core.contracts.api.UsageAccount>(), mergedMachineManagement(routes).usageWindows())
+        assertEquals(listOf("doctor macbook", "browser macbook"), home.calls)
     }
 
     @Test fun fleetsAddUpAndTheMostUrgentPhaseWins() {

@@ -41,6 +41,8 @@ class AgentsPreferences @Inject constructor(private val store: DataStore<Prefere
             range = AgentRange.entries.firstOrNull { it.name == p[agentRangeKey(scope)] } ?: AgentRange.Running,
             grouping = AgentGrouping.fromPreference(p[stringPreferencesKey("grouping")]),
             compact = p[booleanPreferencesKey("compact")] ?: false,
+            sort = AgentSort.fromPreference(p[stringPreferencesKey("sort")]),
+            hideBotmux = p[booleanPreferencesKey("hide-botmux")] ?: false,
             foldedTabs = p[foldedTabsKey].orEmpty(),
             pins = AgentPreferences(remote.pins.spaces, remote.pins.sessions, remote.pins.allowed),
             mutes = AgentPreferences(remote.mutes.spaces, remote.mutes.sessions, remote.mutes.allowed),
@@ -63,6 +65,8 @@ class AgentsPreferences @Inject constructor(private val store: DataStore<Prefere
         }
     }
     suspend fun grouping(value: AgentGrouping) { store.edit { it[stringPreferencesKey("grouping")] = value.name } }
+    suspend fun sort(value: AgentSort) { store.edit { it[stringPreferencesKey("sort")] = value.name } }
+    suspend fun hideBotmux(value: Boolean) { store.edit { it[booleanPreferencesKey("hide-botmux")] = value } }
     suspend fun range(scope: String, value: AgentRange) { store.edit { it[agentRangeKey(scope)] = value.name } }
     suspend fun compact(value: Boolean) { store.edit { it[booleanPreferencesKey("compact")] = value } }
     /** Folds or opens a herdr tab's agents in the list (#2320), kept on this phone by [AgentTab.foldKey]. */
@@ -83,6 +87,9 @@ private val foldedTabsKey = stringSetPreferencesKey("folded-tabs")
 data class AgentsPreferencesSnapshot(
     val grouping: AgentGrouping = AgentGrouping.Repo,
     val compact: Boolean = false,
+    val sort: AgentSort = AgentSort.State,
+    /** botmux's sessions hidden from the list on this phone (web #2786). */
+    val hideBotmux: Boolean = false,
     /** The herdr tabs whose agents the list folds to the tab's row ([AgentTab.foldKey]); every other tab is open. */
     val foldedTabs: Set<String> = emptySet(),
     val pins: AgentPreferences = AgentPreferences(),

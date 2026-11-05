@@ -182,6 +182,12 @@ internal fun MachineManagement.inGroup(names: GroupNames): MachineManagement {
         override suspend fun codexSettings(machineId: String) = source.codexSettings(names.rawMachine(machineId))
         override suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement) =
             source.setCodexSetting(names.rawMachine(machineId), key, value)
+        override suspend fun doctor(machineId: String) = source.doctor(names.rawMachine(machineId))
+        override suspend fun fixDoctor(machineId: String) = source.fixDoctor(names.rawMachine(machineId))
+        override suspend fun browser(machineId: String) = source.browser(names.rawMachine(machineId))
+        override suspend fun setBrowser(machineId: String, enabled: Boolean) = source.setBrowser(names.rawMachine(machineId), enabled)
+        override suspend fun browserJob(machineId: String, action: String) = source.browserJob(names.rawMachine(machineId), action)
+        override suspend fun usageWindows() = source.usageWindows()
     }
 }
 

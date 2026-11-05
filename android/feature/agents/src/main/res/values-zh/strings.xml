@@ -22,9 +22,6 @@
     </plurals>
     <string name="agents_requests_history">请求列表与历史</string>
     <string name="agents_mark_all_read">全部标为已读</string>
-    <string name="agents_empty_no_match">没有匹配的会话</string>
-    <string name="agents_empty_none">暂无会话</string>
-    <string name="agents_empty_hint">可以切换筛选，或下拉刷新</string>
     <plurals name="agents_count_repos">
         <item quantity="other">%1$d 个仓库</item>
     </plurals>
@@ -378,4 +375,34 @@
     <string name="agents_picker_current">当前</string>
     <!-- A herdr tab's row (#2320): the most urgent agent's latest words, after its name -->
     <string name="agents_tab_lead_words">%1$s：%2$s</string>
+    <string name="agents_filter_feishu">飞书群</string>
+    <string name="agents_filter_terminal">终端</string>
+    <string name="agents_botmux">botmux</string>
+    <string name="agents_botmux_hide">隐藏 botmux 会话</string>
+    <string name="agents_botmux_show">显示 botmux 会话</string>
+    <string name="agents_menu_sort">排序：%1$s</string>
+    <string name="agents_sort_state">状态优先</string>
+    <string name="agents_sort_updated">最近更新</string>
+    <string name="agents_empty_search_title">没有找到「%1$s」</string>
+    <string name="agents_empty_search_hint">空间、标签、会话的标题和内容都能搜，换个词试试。</string>
+    <string name="agents_empty_first_title">开始第一个开发会话</string>
+    <string name="agents_empty_machine_title">这台机器上没有会话</string>
+    <string name="agents_empty_first_hint">在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。</string>
+    <string name="agents_empty_filter_title">没有%1$s的会话</string>
+    <string name="agents_empty_filter_hint">各台电脑上的 Agent 有新动静会出现在这里。</string>
+    <string name="agents_empty_filter_machine_hint">这台机器上的 Agent 有新动静会出现在这里。</string>
+    <string name="agents_empty_show_all">看全部</string>
+    <string name="agents_herdr_failure">没启动：%1$s</string>
+    <string name="agents_herdr_copy_detail">复制详情</string>
+    <string name="agents_herdr_why_no_answer">叫它启动了，但 herdr 还没有应答</string>
+    <string name="agents_herdr_why_exited">herdr 起来后马上退出了</string>
+    <string name="agents_herdr_why_exited_code">herdr 起来后马上退出了（退出码 %1$s）</string>
+    <string name="agents_herdr_why_killed">herdr 起来后马上被结束了（%1$s）</string>
+    <string name="agents_herdr_why_not_installed">这台电脑上没装 herdr（PATH 和登录 shell 里都找不到 herdr 命令）</string>
+    <string name="agents_herdr_why_silent">herdr 启动了，但一直没有应答</string>
+    <string name="agents_herdr_why_silent_for">herdr 启动了，但 %1$s 秒内没有应答</string>
+    <string name="agents_herdr_why_command">没能运行 herdr 命令</string>
+    <string name="agents_herdr_why_old_node">这台电脑上的 Persona 版本太旧，不会启动 herdr，更新后再试</string>
+    <string name="agents_herdr_why_offline">这台电脑现在离线</string>
+    <string name="agents_herdr_why_timeout">等了很久 herdr 还没起来，稍后再看看</string>
 </resources>

@@ -142,6 +142,87 @@ class HttpMachineManagementTest {
         assertTrue(cleared.single().isDefault)
     }
 
+    /** Like [withHub], and keeps each call's read timeout. */
+    private fun <T> withTimedHub(block: suspend (MockWebServer, HttpMachineManagement, List<Long?>) -> T): T = runBlocking {
+        MockWebServer().use { server ->
+            val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
+            val timeouts = mutableListOf<Long?>()
+            block(server, HttpMachineManagement { path, method, body, timeout ->
+                timeouts += timeout
+                http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
+            }, timeouts)
+        }
+    }
+
+    @Test fun doctorAndItsFixWaitLongerThanTheHubGivesTheNode() = withTimedHub { server, machines, timeouts ->
+        server.enqueue(MockResponse().setBody("""{"ok":false,"dir":"~/.persona","checks":[{"name":"node.sock","status":"fail",
+            "state":"missing","detail":"no socket","hint":"restart","items":["a"]}],"newer":1}"""))
+        val report = machines.doctor("mac/one")
+        server.takeRequest().let {
+            assertEquals("GET", it.method)
+            assertEquals("/api/v1/machines/mac%2Fone/doctor", it.path)
+        }
+        assertFalse(report.ok)
+        assertEquals(DoctorCheck("node.sock", "fail", "missing", "no socket", "restart", listOf("a")), report.checks.single())
+
+        server.enqueue(MockResponse().setBody("""{"ok":true,"checks":[{"name":"node.sock"}],"fixed":["hooks.json","mcp.json"]}"""))
+        val fixed = machines.fixDoctor("mac")
+        server.takeRequest().let {
+            assertEquals("POST", it.method)
+            assertEquals("/api/v1/machines/mac/doctor/fix", it.path)
+            assertEquals("{}", it.body.readUtf8())
+        }
+        assertEquals(listOf("hooks.json", "mcp.json"), fixed.fixed)
+        // server/internal/hub/node_doctor.go: 45 s to check, 60 s to rewrite and check again.
+        assertTrue(requireNotNull(timeouts[0]) > 45)
+        assertTrue(requireNotNull(timeouts[1]) > 60)
+    }
+
+    @Test fun browserReadsSwitchesAndRunsJobsOnTheMachine() = withHub { server, machines ->
+        server.enqueue(MockResponse().setBody("""{"enabled":true,"installed":true,"version":"1.2","set_up":true,"imported":true,
+            "analytics":"off","ready":true,"screen_sharing":true,"job":{"kind":"open","state":"done"}}"""))
+        val read = machines.browser("mac/one")
+        server.takeRequest().let { assertEquals("GET", it.method); assertEquals("/api/v1/machines/mac%2Fone/browser", it.path) }
+        assertTrue(read.ready && read.setUp && read.imported && read.screenSharing)
+        assertEquals("off", read.analytics)
+        assertEquals(persona.core.contracts.MachineJob("open", "done"), read.job)
+
+        server.enqueue(MockResponse().setBody("""{"enabled":false}"""))
+        assertFalse(machines.setBrowser("mac", false).enabled)
+        server.takeRequest().let {
+            assertEquals("PUT", it.method)
+            assertEquals("/api/v1/machines/mac/browser", it.path)
+            assertEquals("""{"enabled":false}""", it.body.readUtf8())
+        }
+
+        for (action in listOf("install", "cancel", "open")) {
+            server.enqueue(MockResponse().setBody("""{"enabled":true,"job":{"kind":"install","state":"running","step":"download"}}"""))
+            assertTrue(requireNotNull(machines.browserJob("mac", action).job).running)
+            server.takeRequest().let {
+                assertEquals("POST", it.method)
+                assertEquals("/api/v1/machines/mac/browser/$action", it.path)
+                assertEquals("{}", it.body.readUtf8())
+            }
+        }
+        assertTrue(runCatching { machines.browserJob("mac", "rm") }.exceptionOrNull() is IllegalArgumentException)
+        assertEquals("an unknown action never reaches the hub", 5, server.requestCount)
+    }
+
+    @Test fun usageWindowsReadsTheAccounts() = withHub { server, machines ->
+        server.enqueue(MockResponse().setBody("""{"accounts":[{"id":"a1","provider":"anthropic","name":"Claude","plan":"max",
+            "windows":[{"label":"5h","window_minutes":300,"used_percent":42.5,"resets_at":"2026-11-05T12:00:00Z"}],
+            "sampled_at":"2026-11-05T09:00:00Z","stale":true}]}"""))
+        val account = machines.usageWindows().single()
+        server.takeRequest().let { assertEquals("GET", it.method); assertEquals("/api/v1/usage/windows", it.path) }
+        assertEquals("a1", account.id)
+        assertEquals("max", account.plan)
+        assertTrue(account.stale)
+        assertEquals(UsageWindow("5h", 300, 42.5, "2026-11-05T12:00:00Z"), account.windows.single())
+
+        server.enqueue(MockResponse().setBody("{}"))
+        assertEquals(emptyList<UsageAccount>(), machines.usageWindows())
+    }
+
     @Test fun codexSettingsUseTheirOwnPathAndTheSameBody() = withHub { server, machines ->
         // The shape scripts/mock/mock_hub.py and server/internal/node/codexconfig.go answer with.
         val table = """{"settings":[{"key":"model_reasoning_effort","title":"思考强度","detail":"越高越慢、越仔细","type":"enum",

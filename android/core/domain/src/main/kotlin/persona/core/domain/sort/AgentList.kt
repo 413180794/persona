@@ -17,7 +17,22 @@ data class AgentListSettings(
     val folded: Set<String> = emptySet(),
     val expandedIdle: Set<String> = emptySet(),
     val expandedQuiet: Set<String> = emptySet(),
+    /** 状态优先 (default) or 最近更新 (iOS `AgentSort`, kept on this phone). */
+    val sort: AgentSort = AgentSort.State,
+    /** botmux's sessions hidden from this list (web #2786, kept on this phone); 飞书群 shows them again. */
+    val hideBotmux: Boolean = false,
 )
+
+/**
+ * How the list orders its agents (iOS `AgentSort`): the state first, or the latest update only. Under 按状态 the
+ * sections stay the states; only the rows' order inside them is by time either way.
+ */
+enum class AgentSort {
+    State, Updated;
+    companion object {
+        fun fromPreference(value: String?): AgentSort = entries.firstOrNull { it.name == value } ?: State
+    }
+}
 
 enum class AgentGrouping {
     Repo, MachineSpace, State, Todo,
@@ -38,9 +53,25 @@ enum class AgentGrouping {
 
 /** A group's place in 按仓库: a repository, or one of its working trees (the main checkout or another). */
 enum class RepoLevel { Repository, MainCheckout, Worktree }
-enum class AgentQuickFilter(val state: AgentState?) {
-    All(null), NeedsYou(AgentState.NeedsYou), Unread(AgentState.Unread), Working(AgentState.Working);
-    fun matches(session: AgentSession) = state == null || session.state == state
+enum class AgentQuickFilter(val state: AgentState?, val source: AgentSource? = null) {
+    All(null), NeedsYou(AgentState.NeedsYou), Unread(AgentState.Unread), Working(AgentState.Working),
+    /** Where the agent was opened (#2526): a botmux session (its Feishu group) or a herdr pane. */
+    Feishu(null, AgentSource.Feishu), Terminal(null, AgentSource.Terminal);
+    fun matches(session: AgentSession) = when {
+        source != null -> session.session.agentSource == source
+        else -> state == null || session.state == state
+    }
+    /** 飞书群 matches botmux sessions only, so it and a hidden botmux cannot both hold (web `botmuxAndFilter`). */
+    val showsBotmux: Boolean get() = this == Feishu
+
+    companion object {
+        /**
+         * 全部, and the filters with agents right now; the chosen one stays while it empties, so it can be left (iOS
+         * `QuickFilterBar`, web `shownFilters`). When the rest still do not fit a row, the bar scrolls sideways.
+         */
+        fun shown(selected: AgentQuickFilter, counts: Map<AgentQuickFilter, Int>): List<AgentQuickFilter> =
+            entries.filter { it == All || it == selected || (counts[it] ?: 0) > 0 }
+    }
 }
 
 data class AgentListGroup(
@@ -88,6 +119,11 @@ fun agentRank(session: AgentSession, mutes: AgentPreferences = AgentPreferences(
     else -> 5
 }
 
+/** The list's own filter before the quick filter and the botmux switch: not the assistant, the machine, the search. */
+fun AgentListSettings.admits(s: persona.core.contracts.Session): Boolean =
+    !s.assistant && (machineFilter.isEmpty() || machineFilter == s.machineId) &&
+        (query.isEmpty() || listOf(s.title, s.cwd, s.lastText, s.spaceName, s.slotName).any { it?.contains(query, ignoreCase = true) == true })
+
 fun buildAgentList(
     sessions: List<AgentSession>,
     machines: List<Machine> = emptyList(),
@@ -96,19 +132,17 @@ fun buildAgentList(
     settings: AgentListSettings = AgentListSettings(),
     todos: List<Todo> = emptyList(),
 ): AgentListResult {
-    val base = sessions.filter { row ->
-        val s = row.session
-        !s.assistant && (settings.machineFilter.isEmpty() || settings.machineFilter == s.machineId) &&
-            (settings.query.isEmpty() || listOf(s.title, s.cwd, s.lastText, s.spaceName, s.slotName)
-                .any { it?.contains(settings.query, ignoreCase = true) == true })
-    }
+    val base = sessions.filter { settings.admits(it.session) && !(settings.hideBotmux && it.session.isBotmux) }
     val counts = AgentQuickFilter.entries.filter { it != AgentQuickFilter.All }
         .associateWith { filter -> base.count(filter::matches) }
     val filtered = base.filter { settings.quick.matches(it) || it.id in settings.kept }
     val pinned = filtered.filter { it.id in pins.sessions }.sortedBy { pins.sessions.indexOf(it.id) }
     val live = filtered.filter { it.id !in pins.sessions && it.isLive }
     val quick = settings.quick != AgentQuickFilter.All
-    val comparator = compareBy<AgentSession> { if (quick) 0 else agentRank(it, mutes) }
+    // Under a quick filter, or sorted by 最近更新, rows go by time only (iOS `AgentListOrder.byRank`).
+    val byRank = !quick && settings.sort == AgentSort.State
+    val latest = settings.sort == AgentSort.Updated
+    val comparator = compareBy<AgentSession> { if (byRank) agentRank(it, mutes) else 0 }
         .thenByDescending { it.sortDate }.thenBy { it.session.sessionId }.thenBy { it.id }
     fun ordered(rows: List<AgentSession>) = rows.sortedWith(comparator)
     fun stays(row: AgentSession) = !row.isQuiet || row.isWaiting
@@ -145,7 +179,12 @@ fun buildAgentList(
                 val members = live.filter { it.session.machineId == machine.id }
                 if (members.isEmpty()) return@mapNotNull null
                 val machineFolded = "machine/${machine.id}" in settings.folded
-                val repos = agentRepos(members).sortedBy { quiet(it.members) }
+                // 最近更新: the busy repositories by their latest agent (iOS `RepoTree` under `AgentSort.updated`).
+                val repos = agentRepos(members).let { all ->
+                    if (latest) all.sortedWith(compareBy<AgentRepo> { quiet(it.members) }
+                        .thenByDescending { repo -> repo.members.mapNotNull { it.sortDate }.maxOrNull() }.thenBy { it.id })
+                    else all.sortedBy { quiet(it.members) }
+                }
                 val groups = repos.flatMap { repo ->
                     // A quiet repository opens to all its sessions in one list, as iOS's 空闲的仓库 does. A repository with only
                     // its main checkout is drawn as one level but keeps the checkout's id, so a session opened under a quick
@@ -241,7 +280,8 @@ fun buildAgentList(
                 )
             }
         }
-        AgentGrouping.Machine -> machines.forEach { machine ->
+        AgentGrouping.Machine -> (if (latest) machines.sortedByDescending { m ->
+            live.filter { it.session.machineId == m.id }.mapNotNull { it.sortDate }.maxOrNull() } else machines).forEach { machine ->
             val rows = ordered(live.filter { it.session.machineId == machine.id })
             if (rows.isNotEmpty()) result += group("machine/${machine.id}", CoreText.plain(machine.name), rows,
                 if (quick || showIdle("machine-${machine.id}")) rows else rows.filter(::stays))
@@ -254,8 +294,11 @@ fun buildAgentList(
             val active = spaces.filter(::leading) + if (quick) {
                 spaces.filterNot(::leading).sortedWith(compareByDescending<AgentSpace> { it.updatedAt }.thenBy { it.id })
             } else {
-                spaces.filter { !it.quiet && !pinnedSpace(it) && !mutedSpace(it) } +
-                    spaces.filter { !it.quiet && mutedSpace(it) }
+                // 最近更新: the busy spaces by their latest agent, not by state (muted ones still after the rest).
+                val busy = if (latest) spaces.sortedWith(compareByDescending<AgentSpace> { space -> space.members.mapNotNull { it.sortDate }.maxOrNull() }
+                    .thenBy { it.id }) else spaces
+                busy.filter { !it.quiet && !pinnedSpace(it) && !mutedSpace(it) } +
+                    busy.filter { !it.quiet && mutedSpace(it) }
             }
             val quiet = if (quick) emptyList() else spaces.filter { it.quiet && !leading(it) }
             if (quiet.isNotEmpty()) quietTitle = CoreText.of(Key.AgentsQuietSpaces)

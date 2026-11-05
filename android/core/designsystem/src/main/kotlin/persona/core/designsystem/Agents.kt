@@ -494,6 +494,11 @@ private fun HolderGlyph(status: Status) {
 
 // ------------------------------------------------------------------ quick filters
 
+/** The narrowest a board bay gets before the board scrolls instead: room for a short label like "Terminal" or 「飞书群」. */
+private val BoardBayMinWidth = 92.dp
+/** How much of the next bay a scrolled board shows at its edge. */
+private const val BoardBayPeek = 0.4f
+
 /** One quick filter: a label, its count, and the status it filters by. */
 @Immutable
 data class Bay(val label: String, val count: Int? = null, val status: Status? = null)
@@ -510,15 +515,25 @@ fun QuickFilterBar(bays: List<Bay>, selected: Int, onSelect: (Int) -> Unit, modi
         AppStyle.Glass -> Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             bays.forEachIndexed { index, bay -> JChip(bay.label, selected = index == selected, onClick = { onSelect(index) }, status = bay.status, count = bay.count) }
         }
-        AppStyle.Brief -> JSegmented(bays.map { JSegment(it.label, it.count) }, selected, onSelect, modifier)
-        AppStyle.Board -> {
+        // Tabs that do not fit scroll sideways rather than being cut off at the edge.
+        AppStyle.Brief -> JSegmented(bays.map { JSegment(it.label, it.count) }, selected, onSelect, modifier.horizontalScroll(rememberScrollState()))
+        AppStyle.Board -> BoxWithConstraints(modifier.fillMaxWidth()) {
             val shape = RoundedCornerShape(10.dp)
-            Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(shape).background(palette.surface).border(1.dp, palette.line, shape)) {
+            // Each bay is a share of the width while its label fits; more bays than that (the Agents list's six) keep
+            // their width and the board scrolls sideways instead of cutting every label short.
+            val fits = maxWidth / bays.size.coerceAtLeast(1) >= BoardBayMinWidth
+            // Scrolled, as many whole bays as fit and part of the next, so the board reads as one that scrolls.
+            val whole = (maxWidth / BoardBayMinWidth).toInt().coerceAtLeast(1)
+            val bayWidth = maxWidth / (whole + BoardBayPeek)
+            val frame = Modifier.fillMaxWidth().clip(shape).background(palette.surface).border(1.dp, palette.line, shape)
+            val row = if (fits) frame.height(IntrinsicSize.Min) else frame.horizontalScroll(rememberScrollState()).height(IntrinsicSize.Min)
+            Row(row) {
                 bays.forEachIndexed { index, bay ->
                     if (index > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(palette.line))
                     val on = index == selected
                     val color = bay.status?.let { palette.status(it).dot } ?: palette.ink
-                    Box(Modifier.weight(1f).clickable(role = Role.Tab) { onSelect(index) }.semantics { this.selected = on }) {
+                    val cell = if (fits) Modifier.weight(1f) else Modifier.widthIn(min = bayWidth)
+                    Box(cell.clickable(role = Role.Tab) { onSelect(index) }.semantics { this.selected = on }) {
                         Column(Modifier.padding(start = 12.dp, top = 10.dp, bottom = 12.dp, end = 6.dp)) {
                             Text("${bay.count ?: "—"}", style = type.number, color = if ((bay.count ?: 0) == 0) palette.ink3 else palette.ink, maxLines = 1)
                             Spacer(Modifier.height(2.dp))

@@ -6,6 +6,7 @@ import persona.core.contracts.SessionKey
 import persona.core.contracts.api.HubPreferences
 import persona.core.contracts.api.HubPreferencesSnapshot
 import persona.core.domain.sort.AgentGrouping
+import persona.core.domain.sort.AgentSort
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -37,5 +38,13 @@ class AgentsPreferencesTest {
         preferences.grouping(AgentGrouping.MachineSpace)
         assertEquals("MachineSpace", store.data.value[stringPreferencesKey("grouping")])
         assertEquals(AgentGrouping.MachineSpace, preferences.snapshots.first().grouping)
+        // 状态优先 until 最近更新 is chosen (iOS dev.sort); botmux shown until hidden (#2786)
+        assertEquals(AgentSort.State, preferences.snapshots.first().sort)
+        assertEquals(false, preferences.snapshots.first().hideBotmux)
+        preferences.sort(AgentSort.Updated); preferences.hideBotmux(true)
+        assertEquals(AgentSort.Updated, preferences.snapshots.first().sort)
+        assertEquals(true, preferences.snapshots.first().hideBotmux)
+        store.data.value = preferencesOf(stringPreferencesKey("sort") to "removed-value")
+        assertEquals(AgentSort.State, preferences.snapshots.first().sort)
     }
 }

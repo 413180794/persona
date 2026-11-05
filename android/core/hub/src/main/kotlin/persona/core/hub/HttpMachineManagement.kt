@@ -7,6 +7,10 @@ import persona.core.contracts.api.ClaudeSetting
 import persona.core.contracts.api.LauncherQuotaAnswer
 import persona.core.contracts.api.HerdrState
 import persona.core.contracts.api.MachineManagement
+import persona.core.contracts.MachineBrowser
+import persona.core.contracts.api.DoctorReport
+import persona.core.contracts.api.UsageAccount
+import persona.core.contracts.api.UsageWindows
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -77,6 +81,27 @@ class HttpMachineManagement internal constructor(
             put("value", value)
         }))
     }
+
+    // The hub gives the node 45 s to check and 60 s to rewrite and check again (server/internal/hub/node_doctor.go).
+    override suspend fun doctor(machineId: String): DoctorReport =
+        JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "doctor"), "GET", timeout = 50))
+
+    override suspend fun fixDoctor(machineId: String): DoctorReport =
+        JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "doctor", "fix"), "POST", buildJsonObject { }, timeout = 65))
+
+    override suspend fun browser(machineId: String): MachineBrowser =
+        JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "browser"), "GET"))
+
+    override suspend fun setBrowser(machineId: String, enabled: Boolean): MachineBrowser =
+        JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "browser"), "PUT", buildJsonObject { put("enabled", enabled) }))
+
+    override suspend fun browserJob(machineId: String, action: String): MachineBrowser {
+        require(action in setOf("install", "cancel", "open"))
+        return JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "browser", action), "POST", buildJsonObject { }))
+    }
+
+    override suspend fun usageWindows(): List<UsageAccount> =
+        JsonCodec.decodeFromJsonElement<UsageWindows>(call(api("usage", "windows"), "GET")).accounts
 
     private fun settings(body: JsonObject): List<ClaudeSetting> =
         (body["settings"] as? JsonArray).orEmpty().map { JsonCodec.decodeFromJsonElement<ClaudeSetting>(it) }

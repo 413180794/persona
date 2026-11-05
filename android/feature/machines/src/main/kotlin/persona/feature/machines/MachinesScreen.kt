@@ -23,6 +23,8 @@ internal fun MachinesScreen(
     machineId: String?, model: MachinesViewModel, navigator: Navigator, actions: MachineActionsViewModel? = null, launcherPages: Boolean = false,
     /** What extensions draw on this machine's page, after its own sections (docs/extensions.md「UI 插槽」). */
     extensionSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
+    /** 这台电脑能做什么, 浏览器 and 订阅额度; null in 体验模式. */
+    health: MachineHealthViewModel? = null,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val machines by model.sessions.machines.collectAsStateWithLifecycle()
@@ -42,6 +44,19 @@ internal fun MachinesScreen(
     val online = ids.count { metrics[it]?.online ?: machines.firstOrNull { m -> m.id == it }?.online ?: false }
     val attention = metrics.values.count { alerts(it.current(state.now), it.system?.cores).isNotEmpty() }
     val locale = currentLocale
+    val healthState = health?.state?.collectAsStateWithLifecycle()?.value ?: MachineHealthState()
+    var allChecks by rememberSaveable(machineId) { mutableStateOf(false) }
+    var confirmFix by remember { mutableStateOf(false) }
+    if (health != null && machineId != null) {
+        LaunchedEffect(health, machineId, machine?.online) { health.open(machineId, machine?.online == true) }
+        LaunchedEffect(health, machine?.browser) { health.browserFromList(machine?.browser) }
+        val enabled = (healthState.browser ?: machine?.browser)?.enabled == true
+        // ego lite is asked again when the page opens, and every few seconds while a job runs or its setup is under way.
+        LaunchedEffect(health, machineId, machine?.online, enabled) { if (machine?.online == true && enabled) health.refreshBrowser(machineId) }
+        val watching = health.watchesBrowser(machine?.online == true)
+        LaunchedEffect(health, machineId, watching) { if (watching) health.watchBrowser(machineId) { health.watchesBrowser(machine?.online == true) } }
+    }
+    if (confirmFix && health != null && machineId != null) FixDialog(healthState, { confirmFix = false }) { health.fix(machineId) }
     JListPage(
         title = if (machineId == null) stringResource(R.string.machines_title) else machine?.displayName ?: stringResource(R.string.machines_title_detail),
         summary = if (machineId == null) stringResource(R.string.machines_summary, online, ids.size, attention) else null,
@@ -52,6 +67,7 @@ internal fun MachinesScreen(
         state.failure?.let { failure -> item("failure") { JNotice(stringResource(failure.text)) } }
         if (state.sessionsFailure) item("sessions-failure") { JNotice(stringResource(R.string.machines_sessions_failure)) }
         if (machineId == null) {
+            usageWindows(healthState.usage, java.time.Instant.ofEpochSecond(state.now))
             if (!state.loading && ids.isEmpty()) item("empty") {
                 JEmptyState(stringResource(if (state.failure == null) R.string.machines_empty_title else R.string.machines_empty_unavailable),
                     stringResource(R.string.machines_empty_body))
@@ -72,6 +88,13 @@ internal fun MachinesScreen(
             if (machine == null && machines.isNotEmpty()) item("gone") { JNotice(stringResource(R.string.machines_gone)) }
             if (machine != null && actions != null) machineControls(machine, acting.reconnecting,
                 onEngine = { navigator.navigate(EngineRoute(machine.id)) }, onReconnect = { actions.reconnect(machine.id) })
+            // As iOS: what the computer can do and its browser come before the monitoring.
+            if (machine != null && health != null) {
+                machineHealth(machine, healthState, allChecks, { allChecks = !allChecks }, { health.check(machine.id) }, { confirmFix = true },
+                    onDeploy = actions?.let { { it.deploy(machine.id) } })
+                machineBrowser(machine, healthState, { health.setBrowser(machine.id, it) }, { health.browserJob(machine.id, it) },
+                    { health.recheckBrowser(machine.id) })
+            }
             item("now") {
                 JSectionHeader(stringResource(R.string.machines_now),
                     trailing = uptimeText(system?.bootTime, state.now)?.takeIf { metric.online }?.let { stringResource(R.string.machines_up_for, it) })

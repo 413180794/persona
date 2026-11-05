@@ -16,6 +16,8 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -52,6 +54,9 @@ internal fun AgentsScreen(
     val hubNotice by model.hubNotice.collectAsStateWithLifecycle()
     val herdrStates by (model.herdr?.states ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, HerdrState>())).collectAsStateWithLifecycle()
     val startingHerdr by (model.herdr?.starting ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet<String>())).collectAsStateWithLifecycle()
+    val botmuxHide = stringResource(R.string.agents_botmux_hide)
+    val botmuxShow = stringResource(R.string.agents_botmux_show)
+    val herdrFailures by (model.herdr?.failures ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, HerdrFailure>())).collectAsStateWithLifecycle()
     val operations by model.operationState.collectAsStateWithLifecycle()
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
     var pickingTodoForSession by remember { mutableStateOf<Session?>(null) }
@@ -216,9 +221,19 @@ internal fun AgentsScreen(
                 MachineFilterRow(chips, page.machineTotal, page.settings.machineFilter, { id -> model.machine(id); onMachineSelected(id) })
             }
             item("quick-filters") {
-                QuickFilterBar(AgentQuickFilter.entries.map { filter ->
+                // 飞书群 / 终端 (#2526) only while they have agents (or are chosen), as iOS and the web.
+                val shown = AgentQuickFilter.shown(page.settings.quick, page.list.counts)
+                QuickFilterBar(shown.map { filter ->
                     Bay(filter.label, if (filter == AgentQuickFilter.All) page.allCount else page.list.counts[filter] ?: 0, filter.state?.designStatus)
-                }, AgentQuickFilter.entries.indexOf(page.settings.quick), { model.filter(AgentQuickFilter.entries[it]) }, Modifier.padding(vertical = Tokens.Space.s))
+                }, shown.indexOf(page.settings.quick), { model.filter(shown[it]) }, Modifier.padding(vertical = Tokens.Space.s))
+            }
+            // 「botmux」 (web #2786): show or hide botmux's sessions in this list, kept on this phone.
+            if (page.botmuxCount > 0 || page.preferences.hideBotmux) item("botmux") {
+                val shownBotmux = !page.settings.hideBotmux
+                JChip(stringResource(R.string.agents_botmux), Modifier.padding(bottom = Tokens.Space.s).semantics {
+                    contentDescription = if (shownBotmux) botmuxHide else botmuxShow
+                }, selected = shownBotmux, onClick = model::toggleBotmux, icon = PhIcons.Eye,
+                    count = page.botmuxCount.takeIf { it > 0 })
             }
             val currentNotice = hubNotice
             if (currentNotice != null && page.settings.query.isEmpty() && page.preferences.range != AgentRange.History) {
@@ -238,7 +253,8 @@ internal fun AgentsScreen(
             if (model.herdr != null && connection == ConnectionState.Online && page.preferences.range != AgentRange.History) {
                 items(page.machines.filter { it.herdrStopped(herdrStates[it.id]) && (page.settings.machineFilter.isEmpty() || page.settings.machineFilter == it.id) },
                     key = { "herdr:${it.id}" }) { machine ->
-                    HerdrNotice(names[machine.id] ?: machine.displayName, machine.id in startingHerdr) { model.herdr.start(machine.id) }
+                    HerdrNotice(names[machine.id] ?: machine.displayName, machine.id in startingHerdr, { model.herdr.start(machine.id) },
+                        failure = herdrFailures[machine.id])
                 }
             }
             if (page.preferences.range != AgentRange.History && requests.isNotEmpty()) {
@@ -260,9 +276,22 @@ internal fun AgentsScreen(
                 JTextButton(stringResource(R.string.agents_mark_all_read), { model.markRead(page.list.groups.flatMap { it.rows }.filter { it.state == AgentState.Unread }) })
             }
             if (page.list.groups.isEmpty()) item("empty") {
-                JEmptyState(stringResource(if (page.settings.query.isNotEmpty()) R.string.agents_empty_no_match else R.string.agents_empty_none),
-                    stringResource(R.string.agents_empty_hint), icon = PhIcons.Robot,
-                    action = { JButton(stringResource(R.string.agents_action_new_session), { newSession() }) })
+                // Three cases, as iOS: a search with no result (no 新建会话, which read as if the agents were gone), no
+                // sessions at all, and a quick filter with nothing left (看全部).
+                when {
+                    page.allCount == 0 && page.settings.query.isNotEmpty() -> JEmptyState(
+                        stringResource(R.string.agents_empty_search_title, page.settings.query),
+                        stringResource(R.string.agents_empty_search_hint), icon = PhIcons.MagnifyingGlass)
+                    page.allCount == 0 -> JEmptyState(
+                        stringResource(if (page.settings.machineFilter.isEmpty()) R.string.agents_empty_first_title else R.string.agents_empty_machine_title),
+                        stringResource(R.string.agents_empty_first_hint), icon = PhIcons.Robot,
+                        action = { JButton(stringResource(R.string.agents_action_new_session), { newSession() }) })
+                    else -> JEmptyState(
+                        stringResource(R.string.agents_empty_filter_title, page.settings.quick.label),
+                        stringResource(if (page.settings.machineFilter.isEmpty()) R.string.agents_empty_filter_hint else R.string.agents_empty_filter_machine_hint),
+                        icon = PhIcons.CheckCircle,
+                        action = { JButton(stringResource(R.string.agents_empty_show_all), { model.filter(AgentQuickFilter.All) }, kind = JButtonKind.Secondary) })
+                }
             }
             tree.forEach { entry ->
                 when (entry) {
@@ -330,6 +359,8 @@ internal fun AgentsScreen(
     if (menu) JActionSheet(buildList {
         AgentRange.entries.forEach { range -> add(JAction(stringResource(R.string.agents_menu_range, range.label), checked = page.preferences.range == range, onClick = { model.range(range) })) }
         AgentGrouping.selectable.forEach { grouping -> add(JAction(grouping.label, checked = page.preferences.grouping == grouping, onClick = { model.grouping(grouping) })) }
+        AgentSort.entries.forEachIndexed { index, sort -> add(JAction(stringResource(R.string.agents_menu_sort, sort.label), icon = sort.icon,
+            checked = page.preferences.sort == sort, separatorBefore = index == 0, onClick = { model.sort(sort) })) }
         add(JAction(stringResource(R.string.agents_menu_compact), checked = page.preferences.compact, onClick = { if (!page.preferences.compact) model.compact() }))
         add(JAction(stringResource(R.string.agents_menu_detailed), checked = !page.preferences.compact, onClick = { if (page.preferences.compact) model.compact() }))
         add(JAction(stringResource(R.string.agents_menu_collapse_all), checked = page.list.groups.isNotEmpty() && page.list.groups.all { it.folded } && page.list.machines.all { it.folded }, onClick = { model.foldAll(true) }))
@@ -588,7 +619,17 @@ private val AgentQuickFilter.label: String @Composable get() = stringResource(wh
     AgentQuickFilter.NeedsYou -> R.string.agents_filter_needs_you
     AgentQuickFilter.Unread -> R.string.agents_filter_unread
     AgentQuickFilter.Working -> R.string.agents_filter_working
+    AgentQuickFilter.Feishu -> R.string.agents_filter_feishu
+    AgentQuickFilter.Terminal -> R.string.agents_filter_terminal
 })
+private val AgentSort.label: String @Composable get() = stringResource(when (this) {
+    AgentSort.State -> R.string.agents_sort_state
+    AgentSort.Updated -> R.string.agents_sort_updated
+})
+private val AgentSort.icon get() = when (this) {
+    AgentSort.State -> PhIcons.FunnelSimple
+    AgentSort.Updated -> PhIcons.Clock
+}
 internal val AgentRange.label: String @Composable get() = stringResource(when (this) {
     AgentRange.Running -> R.string.agents_range_running
     AgentRange.All -> R.string.agents_range_all
