@@ -21,6 +21,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var modesTitle: SessionModes.ComposerTitle?
     /// What goes with the message, quoted at the top of the card (#986); quotes keep it open (`hasAttachments`).
     var quotes: Binding<[ContextRef]>? = nil
+    /// While typing, a button beside [+] puts the keyboard away (`Keyboard.dismiss`): in its own row over the composer
+    /// it took a line from what sits above, a question card with the keyboard up (#1912).
+    var dismissesKeyboard = false
     var send: () -> Void
     @ViewBuilder var attach: () -> Attach
     @ViewBuilder var modes: () -> Modes
@@ -73,6 +76,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
             if expanded {
                 HStack(spacing: Theme.Space.xs) {
                     plus
+                    if dismissesKeyboard && focused.wrappedValue { dismissKeyboard.transition(.opacity) }
                     Spacer(minLength: Theme.Space.s)
                     if let modesTitle {
                         Menu { modes() } label: { modesLabel(modesTitle) }
@@ -104,6 +108,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         .shellScaled()
         .animation(Theme.Motion.layout, value: expanded)
         .animation(Theme.Motion.state, value: canSend)
+        .animation(Theme.Motion.standard, value: focused.wrappedValue)
         .onDisappear { if dictation.isListening { dictation.stop() } }
     }
 
@@ -120,6 +125,19 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         .buttonStyle(.plain)
         .accessibilityLabel("添加照片或文件")
         .accessibilityIdentifier("shell-composer-add")
+    }
+
+    private var dismissKeyboard: some View {
+        Button { Haptics.tap(); Keyboard.dismiss() } label: {
+            Image(systemName: Theme.Icon.dismissKeyboard)
+                .font(Theme.Font.heading)
+                .fontWeight(.medium)
+                .foregroundStyle(ink)
+                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("收起键盘")
     }
 
     /// The model button's face, ChatGPT's: the model in the text's ink, a little bold, then the effort in the quieter

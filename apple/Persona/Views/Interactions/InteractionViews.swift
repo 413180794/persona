@@ -228,61 +228,39 @@ struct InteractionPanel: View {
     /// What the page has (PendingCards measures it): the form's cap. Not `containerRelativeFrame`: inside the cards'
     /// scroll area the container is that area, and every card cut itself off at half of it (#926).
     @Environment(\.cardRoom) private var room
+    @Environment(\.cardFits) private var fits
+    /// The header row's height: with the card's margins, what of `fits` the form may not have.
+    @State private var headerHeight: CGFloat = 0
     /// The plan full screen. Its button sits in this header: floating over the plan it covered the last line.
     @State private var showFullPlan = false
 
+    /// The form's cap while the keyboard is up (`cardFits`): the area less the card's header and margins; at least a tap
+    /// target, so a sliver of a form never shows (a small iPhone with the shell's composer leaves the cards little more).
+    private var fitsCap: CGFloat {
+        guard fits > 0, headerHeight > 0 else { return .infinity }
+        let row = headerAway ? 0 : headerHeight + Theme.Space.m // the row and the gap under it
+        return max(fits - row - Theme.Space.m - Theme.Space.l, Theme.Size.tapTarget) // and the margins
+    }
+
+    /// The keyboard leaves the card so little that under its header row the form would show the question and hardly
+    /// a choice (a small iPhone, the shell's composer): the row (its title, ⋯ and fold) steps aside while the keyboard
+    /// is up, so the first choice shows (#1912). The question's own line (`header · 1/2`) stays.
+    private var headerAway: Bool {
+        guard fits > 0, headerHeight > 0, !collapsed else { return false }
+        return fits - headerHeight - Theme.Space.m - Theme.Space.m - Theme.Space.l < Theme.Size.box120
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: Theme.Space.sm) {
-                Image(systemName: interaction.kind.symbol)
-                    .font(Theme.Font.labelStrong)
-                    .foregroundStyle(StatusPalette.needsYou.dot)
-                Text(panelTitle).font(Theme.Font.labelStrong).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
-                if collapsed {
-                    Text(previewText).font(Theme.Font.secondary).foregroundStyle(.primary).lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                if interaction.kind == .plan && !collapsed {
-                    Button { showFullPlan = true } label: {
-                        Image(systemName: Theme.Icon.enlarge)
-                            .font(Theme.Font.captionStrong)
-                            .foregroundStyle(.secondary)
-                            .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("全屏查看计划")
-                }
-                Menu {
-                    Button { Task { await model.resolve(interaction, .dismissed) } } label: {
-                        Label("交给电脑上的终端处理", systemImage: Theme.Icon.machine)
-                    }
-                } label: {
-                    Image(systemName: Theme.Icon.more)
-                        .font(Theme.Font.captionStrong)
-                        .foregroundStyle(.secondary)
-                        .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
-                        .contentShape(.rect)
-                }
-                .labelOnlyMenu() // just the ⋯, next to the fold ⌄
-                #if os(macOS)
-                .help("更多")
-                #endif
-                Image(systemName: Theme.Icon.expand)
-                    .font(Theme.Font.captionStrong)
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(collapsed ? 180 : 0))
-                    .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
-            }
-            .contentShape(.rect)
-            .onTapGesture { withAnimation(Theme.Motion.standard) { collapsed.toggle() } }
+            if !headerAway { header }
             if !collapsed {
                 ScrollView {
                     form.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { formHeight = $0 }
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                // At most a little over half of what the page has (not the screen: iPhone Duo's displays differ).
-                .frame(height: room > 0 ? min(formHeight == 0 ? room : formHeight, room * 0.55) : nil)
+                // At most a little over half of what the page has (not the screen: iPhone Duo's displays differ), and
+                // with the keyboard up no more than lets the whole card fit the cards' area.
+                .frame(height: room > 0 ? min(formHeight == 0 ? room : formHeight, room * 0.55, fitsCap) : nil)
                 .transition(.opacity)
             }
         }
@@ -291,6 +269,54 @@ struct InteractionPanel: View {
         .padding(.bottom, Theme.Space.l)
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// The title, ⋯ and fold; a tap anywhere on it folds the card.
+    private var header: some View {
+        HStack(spacing: Theme.Space.sm) {
+            Image(systemName: interaction.kind.symbol)
+                .font(Theme.Font.labelStrong)
+                .foregroundStyle(StatusPalette.needsYou.dot)
+            Text(panelTitle).font(Theme.Font.labelStrong).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
+            if collapsed {
+                Text(previewText).font(Theme.Font.secondary).foregroundStyle(.primary).lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            if interaction.kind == .plan && !collapsed {
+                Button { showFullPlan = true } label: {
+                    Image(systemName: Theme.Icon.enlarge)
+                        .font(Theme.Font.captionStrong)
+                        .foregroundStyle(.secondary)
+                        .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("全屏查看计划")
+            }
+            Menu {
+                Button { Task { await model.resolve(interaction, .dismissed) } } label: {
+                    Label("交给电脑上的终端处理", systemImage: Theme.Icon.machine)
+                }
+            } label: {
+                Image(systemName: Theme.Icon.more)
+                    .font(Theme.Font.captionStrong)
+                    .foregroundStyle(.secondary)
+                    .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
+                    .contentShape(.rect)
+            }
+            .labelOnlyMenu() // just the ⋯, next to the fold ⌄
+            #if os(macOS)
+            .help("更多")
+            #endif
+            Image(systemName: Theme.Icon.expand)
+                .font(Theme.Font.captionStrong)
+                .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(collapsed ? 180 : 0))
+                .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
+        }
+        .contentShape(.rect)
+        .onTapGesture { withAnimation(Theme.Motion.standard) { collapsed.toggle() } }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
     }
 
     @ViewBuilder private var form: some View {

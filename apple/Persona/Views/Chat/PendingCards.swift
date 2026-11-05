@@ -4,12 +4,28 @@ import SwiftUI
 /// itself by. A class of its own so that only the views reading it are redrawn as it changes (the keyboard sliding).
 @Observable final class FooterRoom {
     var height: CGFloat = 0
+    /// The footer's own height (the cards, the composer and what is between them): the conversation has the rest.
+    var footer: CGFloat = 0
+    /// How short the conversation's list may get besides what the header covers (its margin and the hairline).
+    var listFloor: CGFloat = 0
+    /// The header over the list: its height now (the Agents header folds to a slim bar), read only while the keyboard is
+    /// up. Nil: a fixed one (`fixedHeader`).
+    @ObservationIgnored weak var chrome: ChatChrome?
+    var fixedHeader: CGFloat = 0
+    var header: CGFloat {
+        guard let chrome else { return fixedHeader }
+        return chrome.height - min(max(chrome.collapse, 0), chrome.maxCollapse)
+    }
 }
 
 extension EnvironmentValues {
     /// The height a pending card's form measures its cap by: the length of the container the cards sit in (the page's
     /// window or column), as `containerRelativeFrame` gives it outside their scroll area. 0 until measured.
     @Entry var cardRoom: CGFloat = 0
+    /// The height a whole card may take while the keyboard is up (the cards' area): its form scrolls inside so that the
+    /// card fits it. A card taller than the area, its form scrolling inside too, took the swipes, and the area never
+    /// showed its last options (#1912). 0: no such limit.
+    @Entry var cardFits: CGFloat = 0
 }
 
 /// The agent's pending cards (questions, permissions) above the composer. Where they fit they are laid out as they
@@ -27,6 +43,8 @@ struct PendingCards: View {
     var cards: [Card]
     var room: FooterRoom
     @State private var contentHeight: CGFloat = 0
+    /// The height the cards' area has now (what `height(over:cap:)` gave it last).
+    @State private var shown: CGFloat = 0
     /// The cards' container's length (see `cardRoom`).
     @State private var containerLength: CGFloat = 0
     @State private var position = ScrollPosition(edge: .top)
@@ -35,10 +53,14 @@ struct PendingCards: View {
     private static let share: CGFloat = 0.5
 
     var body: some View {
-        let cap = room.height * Self.share
-        let over = cap > 0 && contentHeight > cap + 1
+        let cap = cap
+        // With the keyboard up the area is laid out as scrolling whether or not the cards fit: its margins, count and clip
+        // then do not change as a card's form fits itself to it, so nothing goes back and forth.
+        let keyboard = keyboardRoom
+        let over = cap > 0 && (keyboard || contentHeight > cap + 1)
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            if over {
+            // Not over a lone card with the keyboard up: it says nothing there, and the room is the card's.
+            if over, !(keyboard && cards.count == 1) {
                 Text("\(cards.count) 个待处理")
                     .font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
                     .padding(.horizontal, Theme.Space.xs)
@@ -56,16 +78,20 @@ struct PendingCards: View {
             .scrollPosition($position)
             .accessibilityIdentifier("pending-cards")
             // Fitting, it is the stack it always was: not scrollable, nothing clipped (the cards' shadows).
-            .scrollDisabled(!over)
+            // Scrolling only when the cards do not fit: an area with nothing to scroll neither moves nor bounces. Not
+            // `scrollDisabled`, which passes down and stopped a card's own form from scrolling (#1912).
+            .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled(!over)
             // Scrolling, room for the first card's shadow under the clipped top edge (it showed as a flat band).
             .contentMargins(.top, over ? Theme.Space.l : 0, for: .scrollContent)
             .contentMargins(.bottom, over ? Theme.Space.s : 0, for: .scrollContent)
             // As tall as the cards as measured, at most the cap; before the first measure, its own size.
-            .frame(height: height(over: over, cap: cap))
+            .frame(height: height(over: over, cap: cap, keyboard: keyboard))
             .fixedSize(horizontal: false, vertical: contentHeight == 0)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { shown = $0 }
         }
         .environment(\.cardRoom, containerLength)
+        .environment(\.cardFits, keyboard ? cap - Theme.Space.l - Theme.Space.s : 0)
         // The container's length, read out here where the container is still the page's, not the scroll area.
         .background {
             Color.clear.containerRelativeFrame(.vertical)
@@ -78,8 +104,25 @@ struct PendingCards: View {
         }
     }
 
-    private func height(over: Bool, cap: CGFloat) -> CGFloat? {
-        contentHeight == 0 ? nil : over ? cap : contentHeight
+    /// How tall the cards may be before they scroll: half the page. While the keyboard is up (the page is short, and a
+    /// card is often what is being answered) they take what the conversation has, down to the list's floor, so the card
+    /// is whole or scrolls in all the room there is and the composer stays over the keyboard (#1912: half of what the
+    /// keyboard left showed a question's first two options, and on a small iPhone pushed the composer under it).
+    /// The keyboard is up and the page's room is known: the cards take the conversation's room (`cap`).
+    private var keyboardRoom: Bool { KeyboardState.shared.isUp && room.footer > 0 }
+
+    private var cap: CGFloat {
+        let half = room.height * Self.share
+        guard keyboardRoom else { return half }
+        return max(Theme.Size.tapTarget, shown + room.height - room.footer - room.header - room.listFloor)
+    }
+
+    /// As tall as the cards (with the scrolling margins), at most the cap; with the keyboard up no taller than they need,
+    /// so a card that fits sits right over the composer.
+    private func height(over: Bool, cap: CGFloat, keyboard: Bool) -> CGFloat? {
+        guard contentHeight > 0 else { return nil }
+        guard over else { return contentHeight }
+        return keyboard ? min(cap, contentHeight + Theme.Space.l + Theme.Space.s) : cap
     }
 
     /// Permissions first (they hold a tool call back), then everything newest first.

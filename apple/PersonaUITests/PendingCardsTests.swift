@@ -33,6 +33,12 @@ final class PendingCardsTests: XCTestCase {
         a.name = "cards \(name) \(UITestStyle.name)"
         a.lifetime = .keepAlways
         add(a)
+        // TEST_RUNNER_JARVIS_SHOTS keeps them as files too, named by TEST_RUNNER_JARVIS_SHOT_TAG (layout, look, device).
+        let env = ProcessInfo.processInfo.environment
+        if let dir = env["JARVIS_SHOTS"] {
+            let tag = env["JARVIS_SHOT_TAG"].map { "-" + $0 } ?? ""
+            try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "cards-\(name)-\(UITestStyle.name)\(tag).png"))
+        }
     }
 
     /// The chat's back button, on screen and in reach.
@@ -54,6 +60,74 @@ final class PendingCardsTests: XCTestCase {
         XCTAssertTrue(outside.isEmpty, "cut off: \(outside.map { $0.label }) outside \(cards.frame)")
         assertBackInReach()
         shot("one")
+    }
+
+    /// The keyboard up to answer (#1912): the question card is whole above the composer, or scrolls in all the room the
+    /// conversation had, so every option and 其他回答 can be reached and tapped. It was held to half of the short page
+    /// the keyboard leaves: its first two options, cut off.
+    func testKeyboardKeepsTheQuestionInReach() {
+        launch(chat: Self.widget, ["-showSampleQuestion", "YES"])
+        XCTAssertTrue(app.buttons["work-head"].firstMatch.waitForExistence(timeout: 15), "the chat")
+        sleep(2)
+        shot("question")
+        // The composer: 「给 … 发消息」, or 「补充说明（会排队发送）」 while the agent works.
+        let field = app.descendants(matching: .any).matching(NSPredicate(format: "placeholderValue BEGINSWITH %@ OR placeholderValue BEGINSWITH %@", "给", "补充说明")).firstMatch
+        XCTAssertTrue(field.exists, "the composer")
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard did not come up")
+        sleep(1)
+        shot("question-keyboard")
+        let cards = app.scrollViews["pending-cards"]
+        XCTAssertTrue(cards.exists, "the cards' area")
+        XCTAssertLessThanOrEqual(cards.frame.maxY, field.frame.minY + 1, "the cards end above the composer")
+        // The composer whole above the keyboard: its field and its buttons can be tapped (the keyboard's frame in XCUITest
+        // starts under its suggestion bar, so a frame check misses a composer half under it).
+        let keyboardTop = app.keyboards.firstMatch.frame.minY
+        XCTAssertLessThanOrEqual(field.frame.maxY, keyboardTop + 1, "the composer is above the keyboard (\(field.frame) over \(keyboardTop))")
+        let end = app.buttons.matching(NSPredicate(format: "label IN %@", ["中断", "发送"])).firstMatch
+        if end.exists {
+            XCTAssertTrue(end.isHittable, "the composer's \(end.label) button is under the keyboard (\(end.frame), keyboard from \(keyboardTop))")
+        }
+        // Whole, or scrolling in the room up to the chat's header (its back button): not half of what the keyboard left.
+        let head = app.buttons.matching(NSPredicate(format: "label == %@", "返回")).allElementsBoundByIndex.filter { $0.isHittable }.map { $0.frame.maxY }.max() ?? 0
+        let count = app.staticTexts["pending-cards-count"]
+        if count.exists { // before the fix: 120 pt on both iPhones
+            XCTAssertLessThan(count.frame.minY - head, 80, "the cards scroll in a strip \(cards.frame.height) pt high, under \(count.frame.minY - head) pt of conversation")
+        }
+        XCTAssertLessThan(cards.frame.minY - head, 80, "the card is \(cards.frame.height) pt high under \(cards.frame.minY - head) pt of conversation")
+        // Down to the composer: in the shell the keyboard's button is in the composer's row, not a row of its own between.
+        if app.buttons["shell-composer-add"].exists {
+            XCTAssertLessThan(field.frame.minY - cards.frame.maxY, 40, "a gap between the card (\(cards.frame)) and the composer (\(field.frame))")
+            let dismiss = app.buttons["收起键盘"]
+            XCTAssertTrue(dismiss.exists && dismiss.isHittable && dismiss.frame.minY > field.frame.minY, "收起键盘 in the composer's row")
+        }
+        // The first option shows at once (a small iPhone: before, the question alone; the card's header row steps aside).
+        let first = cards.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "取最长的那段")).firstMatch
+        XCTAssertTrue(first.exists && first.frame.minY < cards.frame.maxY - 16 * 3,
+                      "the first option does not show (\(first.exists ? "\(first.frame)" : "not drawn") in \(cards.frame))")
+        // Every option and 其他回答 can be brought into the area and tapped there.
+        // Short drags inside the card's form, held at the end (no momentum), whichever way the option is: a swipe threw a
+        // form as short as a small iPhone's past it, and one that starts on the card's header row does not scroll.
+        let area = cards.frame.insetBy(dx: -1, dy: -1)
+        let title = cards.staticTexts["Claude 在问你"].firstMatch
+        let top = (title.exists ? title.frame.maxY : cards.frame.minY) + 16, bottom = cards.frame.maxY - 16 * 2
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let start = origin.withOffset(CGVector(dx: cards.frame.midX, dy: (top + bottom) / 2))
+        let step = max(24, min(48, (bottom - top) / 3))
+        for label in ["取最长的那段", "永远取最后一段", "永远取唤醒前那段", "其他回答"] {
+            // 其他回答 is a field in BeautifulUI's card (its placeholder, no label).
+            let el = cards.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ OR placeholderValue BEGINSWITH %@", label, label)).firstMatch
+            for _ in 0..<20 where !(el.exists && el.isHittable && area.contains(el.frame)) {
+                let dy = el.exists && el.frame.minY < top ? step : -step // not drawn yet: further down
+                start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: dy)), withVelocity: .slow, thenHoldForDuration: 0.3)
+            }
+            if !(el.exists && el.isHittable && area.contains(el.frame)) { shot("unreachable") }
+            // Options further down are drawn once scrolled to: one that is not there has no frame to report.
+            let at = el.exists ? "\(el.frame)" : "not drawn"
+            XCTAssertTrue(el.exists && el.isHittable && area.contains(el.frame), "\(label) out of reach (\(at) in \(cards.frame))")
+        }
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "the keyboard stays up while the card scrolls")
+        shot("question-keyboard-end")
     }
 
     func testThreeCardsScrollUnderTheHeader() {

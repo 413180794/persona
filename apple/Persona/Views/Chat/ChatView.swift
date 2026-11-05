@@ -1165,13 +1165,26 @@ struct ChatView: View {
                     .overlay(alignment: .topLeading) { if ScreenProbe.enabled { rowsProbe } }
                     #endif
             }
+            // It may get as short as the cards make it while the keyboard is up (its margins set no minimum of their own).
+            .frame(minHeight: .zero)
             ChatRegion(name: "ChatFooter.body") { footer }
+                // What the footer takes of the page: the pending cards grow into the rest while the keyboard is up.
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                    if abs(footerRoom.footer - h) >= 1 { footerRoom.footer = h }
+                }
         }
         // The height the page offers, even when what is in it is taller: the pending cards size themselves by it. A
         // frame with both bounds takes the offered size whatever the content (not a design value: no token for it).
         .frame(minHeight: .zero, maxHeight: .infinity)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
             if abs(footerRoom.height - h) >= 1 { footerRoom.height = h }
+        }
+        // As short as the list may get while the keyboard is up: the header over it (folded or not), its top margin and the
+        // hairline above it. The cards take the rest (#1912).
+        .onChange(of: headerRoom, initial: true) { _, h in
+            footerRoom.listFloor = Self.newestMargin + Theme.Size.line + Theme.Space.s // and a gap over 「N 个待处理」
+            footerRoom.fixedHeader = h
+            footerRoom.chrome = style == .dev && !sideBars ? chrome : nil
         }
         .environment(\.openSubagent, actions.openSubagent)
         .environment(\.openFold, actions.openFold)
@@ -1403,8 +1416,9 @@ struct ChatView: View {
                 // In the shell the modes are in the composer's model menu (ShellComposerBar, #1091).
                 let modes = viewing == nil && !usesShellComposer && session?.canSend == true && (session.map({ $0.assistant || $0.isClaude }) ?? true)
                 // While typing, a button at the row's end puts the keyboard away: the iPhone keyboard has no key for it
-                // and on iPhone Duo's side bars a drag on the few rows left is easy to miss (2026-11-04).
-                if modes || composerTyping {
+                // and on iPhone Duo's side bars a drag on the few rows left is easy to miss (2026-11-04). The shell's
+                // composer has it in its own row (`dismissesKeyboard`): a row for it alone was a gap over the composer.
+                if modes || (composerTyping && !usesShellComposer) {
                     HStack(spacing: Theme.Space.s) {
                         if modes { SessionModeBar(key: key, session: session) } else { Spacer(minLength: 0) }
                         if composerTyping { KeyboardDismissChip().transition(.opacity) }
@@ -2815,6 +2829,7 @@ struct Composer: View, Equatable {
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                  modesTitle: modesTitle,
                                  quotes: contexts,
+                                 dismissesKeyboard: true,
                                  send: { Task { await sendText(text) } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {
