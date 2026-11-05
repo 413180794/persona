@@ -2,6 +2,7 @@
 import { screen } from "./screen/take";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { ExtensionThemeProvider } from "./ui/ExtensionThemePicker";
 import { App } from "./App";
 import { startPWA } from "./lib/pwa";
 import "./styles.css";
@@ -21,7 +22,7 @@ if (target) {
 } else {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <App />
+      <ExtensionThemeProvider><App /></ExtensionThemeProvider>
     </StrictMode>,
   );
 }

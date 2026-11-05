@@ -8,6 +8,7 @@ import { install, useInstall, type InstallState } from "../lib/pwa";
 import { reset, useStore } from "../lib/store";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
+import { ExtensionThemePicker } from "../ui/ExtensionThemePicker";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { Group, Row, Pill, RowConfirm, Switch } from "./settings/SettingsParts";
 import { setReplyMotionEnabled, useReplyMotionSetting } from "../ui/stream/motion";
@@ -278,6 +279,7 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
             </button>
           ))}
         </div>
+        <ExtensionThemePicker />
         <Row label="回复动效" hint="新到的回复逐词淡入；系统开了「减弱动态效果」时不播。">
           <Switch on={replyMotion} onChange={setReplyMotionEnabled} label="回复动效" />
         </Row>
