@@ -17,6 +17,22 @@ describe("a message card", () => {
     expect(html).toContain("发送");
   });
 
+  it("names the draft's editor by its visible heading (axe: label)", () => {
+    const html = renderToStaticMarkup(<FeedLineView item={card()} />);
+    const by = html.match(/<textarea[^>]*aria-labelledby="([^"]+)"/)?.[1];
+    expect(by).toBeTruthy();
+    const at = html.indexOf(`<span id="${by}"`);
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(html.slice(at, html.indexOf("</span>", at))).toContain("按任务进度起草的回复");
+  });
+
+  it("draws a token focus ring on the draft's editor, since the global ring covers only buttons and links", () => {
+    const html = renderToStaticMarkup(<FeedLineView item={card()} />);
+    const cls = html.match(/<textarea[^>]*class="([^"]+)"/)?.[1] ?? "";
+    expect(cls).toContain("focus-visible:ring-2");
+    expect(cls).toContain("focus-visible:ring-accent");
+  });
+
   it("shows what went out, and no 发送, once the hub says it was sent", () => {
     const html = renderToStaticMarkup(<FeedLineView item={card({ sent_at: "2026-11-04T10:23:00Z", sent: "确实是 bug，谢谢指出（改过）" })} />);
     expect(html).toContain("已以你的名义回复");

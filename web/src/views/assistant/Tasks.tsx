@@ -2,7 +2,7 @@
 // task cards that follow their agents, the hub's lines (answered, receipt, routed), the 今天 card, message cards about
 // a task, quick results, the dock above the composer, the tasks' questions, the route chip, and a task's detail in the
 // side panel.
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   answeredItems,
   cardSent,
@@ -662,6 +662,7 @@ function MessageCard({ item }: { item: FeedItem }) {
   const sent = cardSent(item);
   const busy = useFeed((s) => !!s.busy[item.id]);
   const [text, setText] = useState<string | null>(null);
+  const headingId = useId();
   const draft = text ?? field(item, "draft") ?? "";
   const blank = sent ? undefined : draftPlaceholder(draft);
   const send = async () => {
@@ -690,13 +691,20 @@ function MessageCard({ item }: { item: FeedItem }) {
         </button>
       )}
       <div className={cx("flex flex-col gap-1 rounded-control p-3", sent ? "bg-green-tint" : "bg-accent-tint")}>
-        <span className={cx("flex items-center gap-1 text-[12px] font-semibold", sent ? "text-green" : "text-accent")}>
+        <span id={headingId} className={cx("flex items-center gap-1 text-[12px] font-semibold", sent ? "text-green" : "text-accent")}>
           <Icon name={sent ? "check" : "pencil"} size={12} />
           {sent ? t("assistant-tasks.replied_as_you") : t("assistant-tasks.draft_from_progress")}
           {sent && <span className="ml-auto font-normal text-ink-3">{clock(sent.at)}</span>}
         </span>
         {!sent ? (
-          <textarea value={draft} onChange={(e) => setText(e.target.value)} rows={Math.min(6, Math.max(2, draft.split("\n").length))} className="resize-none bg-transparent text-[14.5px] outline-none" />
+          // Named by the visible heading above it; the global focus ring covers only buttons and links, so it draws its own.
+          <textarea
+            value={draft}
+            onChange={(e) => setText(e.target.value)}
+            aria-labelledby={headingId}
+            rows={Math.min(6, Math.max(2, draft.split("\n").length))}
+            className="-mx-1.5 resize-none rounded-control bg-transparent px-1.5 text-[14.5px] outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          />
         ) : (
           <div className="whitespace-pre-line text-[14.5px]">{sent.text}</div>
         )}
