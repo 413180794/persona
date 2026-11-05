@@ -1731,7 +1731,7 @@ hub 会以「用户输入」的身份往对话里发一些给模型看的消息�
   "kind": "task_notice|followup|system",
   "state": "…",            // 见下表
   "title": "README 去掉扩展列表", // 任务名 / 定时任务的标题 / 叫醒时在等的事；可能空
-  "machine": "公司 example-machine",  // 仅 task_notice：Agent 在哪台电脑（名字，可能空）
+  "machine": "<电脑名>",  // 仅 task_notice：Agent 在哪台电脑（名字，可能空）
   "todo_id": "td_…",        // 仅 task_notice：hub 认得出是哪个任务时（任务还开着、标题唯一）；可能空，客户端再按标题去找同一对话的任务卡
   "line": "任务「README 去掉扩展列表」做完了", // 给人看的一句话，直接显示
   "detail": "…"             // 仅 followup 的 once / daily / interval：任务本身的要求（用户在定时任务里写的那段），可以折叠着给人看；其余为空
