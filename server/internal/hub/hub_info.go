@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// hostname is os.Hostname; tests replace it.
-var hostname = os.Hostname
-
 // containerHost is what Docker names a container's host by default: its id, which says nothing to a person.
 var containerHost = regexp.MustCompile(`^[0-9a-f]{12}([0-9a-f]{52})?$`)
 
@@ -28,6 +25,10 @@ func (h *Hub) hubName() string {
 // defaultHubName is the short host name of its machine; in a container, whose host name is its id,
 // hub-<the first 6 characters of hub_id>.
 func (h *Hub) defaultHubName() string {
+	hostname := os.Hostname
+	if h.hostname != nil {
+		hostname = h.hostname
+	}
 	host, _ := hostname()
 	short := strings.TrimSpace(strings.Split(host, ".")[0])
 	if short == "" || short == "localhost" || containerHost.MatchString(strings.ToLower(short)) || identity.Getenv("JARVIS_LOCAL_NODE") == "0" {

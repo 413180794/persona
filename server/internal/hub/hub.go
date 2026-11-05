@@ -39,6 +39,8 @@ type Hub struct {
 	relay         relayState           // the connections relayed to the manager: Persona Link (devices_relay.go)
 	linkPing      [2]time.Duration     // tests: heartbeat interval and timeout of new links
 	bus           busState             // the services' connections and the roster (bus.go)
+	// tests: replaces os.Hostname
+	hostname func() (string, error)
 
 	cfg         *Config
 	version     string

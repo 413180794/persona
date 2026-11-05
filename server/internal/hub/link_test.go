@@ -431,9 +431,7 @@ func TestHubName(t *testing.T) {
 	h := newTestHub(t)
 	h.public.id = "3f2a9c1b-0000-4000-8000-000000000000"
 	host := ""
-	old := hostname
-	hostname = func() (string, error) { return host, nil }
-	t.Cleanup(func() { hostname = old })
+	h.hostname = func() (string, error) { return host, nil }
 	for _, tc := range []struct{ name, host, local, want string }{
 		{"", "nas.local", "", "nas"},
 		{"", "MacBook-Pro", "", "MacBook-Pro"},
