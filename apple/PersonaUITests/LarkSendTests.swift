@@ -47,29 +47,59 @@ final class LarkSendTests: XCTestCase {
         app.buttons["发送"].tap()
     }
 
-    /// `element` is the end of the list, whole and right above the box (and the quote bar over it), not under them
-    /// and not left further up. The list glides there, so this waits for it a moment.
+    /// `element` is the end of the list, whole above the box (and the quote bar over it), not under them and not left
+    /// further up. The list glides there, so this waits for it a moment.
+    /// The end is the list's content end, not a distance from the box: a chat opened at a message (an inbox item, the first unread)
+    /// keeps its rows at the top when they fit (`LarkChatView.openingAnchor`), and without the soft keyboard (a
+    /// simulator that has seen a hardware keyboard) the 设计评审 chat fits, its last row ~98 pt above the box (#1891).
     @MainActor private func assertAtEnd(_ app: XCUIApplication, _ element: XCUIElement, box boxID: String = "lark.box",
                                         _ what: String, file: StaticString = #filePath, line: UInt = #line) {
         // Any type: the box grows to several lines (TextField(axis: .vertical)) and is not always a text field.
         let box = app.descendants(matching: .any).matching(identifier: boxID).firstMatch
         let bar = app.descendants(matching: .any).matching(identifier: "lark.replyBar").firstMatch
-        var gap: CGFloat = .infinity
-        var seen = ""
+        var seen = "not seen"
         let deadline = Date().addingTimeInterval(3)
         repeat {
             // Snapshots, not .frame: a sending mark goes away when the send is done, between asking and reading.
-            let es = try? element.snapshot(), bs = try? box.snapshot()
+            let es = try? element.snapshot(), bs = try? box.snapshot(), whole = try? app.snapshot()
             if es == nil || bs == nil { seen = "it there: \(es != nil), the box there: \(bs != nil)" }
-            if let e = es, let b = bs {
+            if let e = es, let b = bs, let whole {
                 let floor = (try? bar.snapshot())?.frame.minY ?? b.frame.minY
-                gap = floor - e.frame.maxY
-                seen = "it \(e.frame), the box \(b.frame)"
-                if gap >= -2 && gap < 100 { return } // a point or two of rounding where the box's frame starts
+                let end = Self.listEnd(of: e, in: whole, floor: floor)
+                seen = "it \(e.frame), the box \(b.frame), " + end.why
+                if end.ok { return }
             }
             usleep(100_000)
         } while Date() < deadline
-        XCTFail("\(what): \(gap) pt between it and the box (under it when negative); \(seen)", file: file, line: line)
+        XCTFail("\(what): \(seen)", file: file, line: line)
+    }
+
+    /// Whether `e` is the last row of its list, whole above `floor`, with the list at its end: the content ends at
+    /// most `rowEnd` below `e` (its bubble, read mark and the list's padding) and not under `floor`, and either ends
+    /// right above `floor` (scrolled to the end) or all of it is on screen (it fits; nothing is above to scroll back).
+    @MainActor private static func listEnd(of e: XCUIElementSnapshot, in app: XCUIElementSnapshot, floor: CGFloat) -> (ok: Bool, why: String) {
+        let rowEnd: CGFloat = 40, nearFloor: CGFloat = 60, rounding: CGFloat = 2
+        guard floor - e.frame.maxY >= -rounding else { return (false, "under the box by \(e.frame.maxY - floor) pt") }
+        guard let content = content(around: e, in: app) else { return (false, "its list not found") }
+        let c = content.frame
+        let why = "the list's content \(c)"
+        guard c.maxY - e.frame.maxY <= rowEnd else { return (false, why + ": rows below it") }
+        guard c.maxY <= floor + rounding else { return (false, why + ": ends under the box") }
+        guard floor - c.maxY <= nearFloor || c.minY >= 0 else { return (false, why + ": left further up") }
+        return (true, why)
+    }
+
+    /// The content of the scroll view that holds `e` (its child around `e`; the largest, if they nest).
+    @MainActor private static func content(around e: XCUIElementSnapshot, in node: XCUIElementSnapshot,
+                                           scroll: XCUIElementSnapshot? = nil) -> XCUIElementSnapshot? {
+        let scroll = node.elementType == .scrollView ? node : scroll
+        if node.elementType == e.elementType, node.frame == e.frame, node.label == e.label, let scroll {
+            return scroll.children.filter { $0.frame.contains(e.frame) }.max { $0.frame.height < $1.frame.height }
+        }
+        for child in node.children {
+            if let found = content(around: e, in: child, scroll: scroll) { return found }
+        }
+        return nil
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
