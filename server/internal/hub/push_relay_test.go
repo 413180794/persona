@@ -240,7 +240,7 @@ func (s *deviceRows) UpsertDevice(_ context.Context, d db.Device) error {
 	return nil
 }
 
-func (s *deviceRows) SetDevicePrefs(_ context.Context, id string, prefs json.RawMessage) error {
+func (s *deviceRows) SetDevicePrefs(_ context.Context, id, _ string, prefs json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d := s.rows[id]
