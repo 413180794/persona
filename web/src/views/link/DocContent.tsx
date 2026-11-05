@@ -87,7 +87,7 @@ function Block({ node, number }: { node: DocNode; number?: number }) {
   switch (node.type) {
     case "paragraph":
       return kids.length ? (
-        <p style={align(node)}>
+        <p style={align(node)} data-block={attr(node, "id")}>
           <Inline nodes={kids} />
         </p>
       ) : (
@@ -97,7 +97,7 @@ function Block({ node, number }: { node: DocNode; number?: number }) {
       const level = num(node, "level") ?? 1;
       const Tag = (level <= 1 ? "h1" : level === 2 ? "h2" : level === 3 ? "h3" : "h4") as "h1" | "h2" | "h3" | "h4";
       return (
-        <Tag style={align(node)}>
+        <Tag style={align(node)} data-block={attr(node, "id")}>
           <Inline nodes={kids} />
         </Tag>
       );

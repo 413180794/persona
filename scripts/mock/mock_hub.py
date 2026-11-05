@@ -10440,7 +10440,9 @@ MOCK_HELP.append("MOCK_INBOX_TRIAGE=<状态>[:<条数>[:<来源名，逗号隔�
 # threads for every document (a passage, the whole document, a resolved one), and the plugin's write routes change
 # them: POST /api/v1/lark/documents/comments (the whole document, or a passage with `quote`), …/comments/{thread}/replies,
 # …/comments/{thread}/resolve, GET /api/v1/lark/documents/people?q= for @. GET /mock/doc-comments lists what was written.
-DOC_COMMENTS = os.environ.get("MOCK_DOC_COMMENTS") == "1"
+# MOCK_DOC_COMMENTS=read: a plugin without the writes (no lark_doc_comments, no write routes): the threads only.
+DOC_COMMENTS = os.environ.get("MOCK_DOC_COMMENTS") in ("1", "read")
+DOC_COMMENT_WRITES = os.environ.get("MOCK_DOC_COMMENTS") == "1"
 DOC_WRITES = []
 
 
@@ -10476,7 +10478,7 @@ if DOC_COMMENTS:
     _features_before_doc_comments = features
 
     def features():
-        return _features_before_doc_comments() + ["lark_doc_comments"]
+        return _features_before_doc_comments() + (["lark_doc_comments"] if DOC_COMMENT_WRITES else [])
 
     _get_before_doc_comments, _post_before_doc_comments = H.do_GET, H.do_POST
 
@@ -10499,7 +10501,7 @@ if DOC_COMMENTS:
 
     def _doc_post(handler):
         p = urlparse(handler.path).path
-        if not p.startswith("/api/v1/lark/documents/comments"):
+        if not DOC_COMMENT_WRITES or not p.startswith("/api/v1/lark/documents/comments"):
             return _post_before_doc_comments(handler)
         try:
             b = json.loads(handler.body() or b"{}")
@@ -10531,6 +10533,8 @@ if DOC_COMMENTS:
 
     H.do_GET = _doc_get
     H.do_POST = _doc_post
+    # The web's reader opens from a link in a chat: the widget session ends with the made-up document's.
+    ITEMS[WIDGET].append(it("assistant", "text", 0, text="评审文档在这里：[新版图标评审](https://example.feishu.cn/docx/AbC123)，评论里还有两条没解决。"))
 # ---------- area: hub restarts the app does not notice (docs/hub-restart.md, #1634) ----------
 # MOCK_RESTART=1: hello carries event_stream / event_seq / resumed and the numbered broadcasts are kept, like the hub's
 # event log; GET /mock/restart?gap_ms=1500&missed=todos,inbox says hub_restarting and closes every socket with 1001,
@@ -10650,7 +10654,7 @@ if RESTART_MODE:
     H.do_GET, H.do_POST = _restart_get, _restart_post
 MOCK_HELP.append("MOCK_RESTART=1  hub 无感重启（#1634）：hello 带 event_stream / event_seq / resumed；GET /mock/restart?gap_ms=1500&missed=todos,inbox[&drop_post=1] 模拟一次计划内重启（hub_restarting + 1001，期间的连接排队，漏掉的广播在续传时补发），?event=todos 发一条带序号的广播，不带参数看连接 / 续传 / op id / GET 次数")
 
-MOCK_HELP.append("MOCK_DOC_COMMENTS=1  飞书文档阅读页能写评论（#1290）：features 带 lark_doc_comments，每篇文档三条编造的评论，回复 / 新评论 / 解决 / 重新打开 / @人都改它们；GET /mock/doc-comments 看写了什么")
+MOCK_HELP.append("MOCK_DOC_COMMENTS=1  飞书文档阅读页能写评论（#1290）：features 带 lark_doc_comments，每篇文档三条编造的评论，回复 / 新评论 / 解决 / 重新打开 / @人都改它们；GET /mock/doc-comments 看写了什么；「给天气 App 加主屏幕小组件」最后一条带这篇文档的链接（网页从这里打开阅读页）；=read 是不能写的插件（没有 lark_doc_comments，只读评论）")
 
 
 # ---------- area: an inbox item's page drawn by a plugin (docs/extensions.md「收件箱条目」, #1681) ----------

@@ -1,15 +1,18 @@
 // A link opened in the side panel (CLAUDE.md「链接在 App 内打开」, docs/web.md「链接」): Feishu documents in a reader
 // (the phone's FeishuDocReader), 公司圈 posts as the post, while the hub reads Feishu (feature `lark`); any other page belongs in a browser tab (lib/links.ts says
 // why), so one that lands here says so and opens the tab. Text selected in the reader can go to the agent:
-// 「作为上下文」 rides along with the next message, 「AI 修改」 asks for a change at once (<jarvis-context>).
+// 「作为上下文」 rides along with the next message, 「AI 修改」 asks for a change at once (<jarvis-context>). A document's
+// comments open over it (DocComments.tsx, #1290); with the plugin's `lark_doc_comments` the selection bar's 「评论」
+// comments on the passage.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, getToken } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { DOC_LABEL, docKind, linkRoute, newContext, type ContextRef } from "../../lib/links";
-import { useLarkOn } from "../../lib/store";
+import { useDocCommentsOn, useLarkOn } from "../../lib/store";
 import { Button, copyText, cx, Dialog, EASE, IconButton, Menu, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { PanelHeader } from "../SidePanel";
+import { DocCommentsView, useDocComments } from "./DocComments";
 import { DocMarkdown, DocTree } from "./DocContent";
 import { loadDoc, mediaURL, prepareMarkdown, readInfo, type DocContent, type DocInfo } from "./feishu-doc";
 import { giveContext, giveEdit, handoffLabel } from "./handoff";
@@ -71,6 +74,27 @@ function ContextButton({ onClick, label = "作为上下文（整篇）" }: { onC
   );
 }
 
+/** 评论 in the header, with how many threads are open. */
+function CommentsButton({ count, active, onClick }: { count: number; active: boolean; onClick: () => void }) {
+  const label = count ? `评论（${count} 条未解决）` : "评论";
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
+      onClick={onClick}
+      className={cx(
+        "flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 text-[12px] font-medium tabular-nums transition-[background-color,color,transform] duration-150 active:scale-[0.94]",
+        active ? "bg-hover text-ink" : "text-ink-3 hover:bg-hover hover:text-ink",
+      )}
+    >
+      <Icon name="chat" size={15} />
+      {count > 0 && <span>{count}</span>}
+    </button>
+  );
+}
+
 // ── Feishu documents ──
 
 function DocPanel({ url, title, onClose }: { url: string; title?: string; onClose: () => void }) {
@@ -80,6 +104,18 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
   const [info, setInfo] = useState<DocInfo | null>(null);
   const [round, setRound] = useState(0);
   const [editing, setEditing] = useState<ContextRef | null>(null);
+  const writes = useDocCommentsOn();
+  const comments = useDocComments(url, content !== null && content.kind !== "unsupported");
+  const [showComments, setShowComments] = useState(false);
+  const [resolvedTab, setResolvedTab] = useState(false);
+  // bumped to put the caret in the comment box (评论 on the selection bar, 写评论)
+  const [focus, setFocus] = useState(0);
+  const [of, setOf] = useState(url);
+  if (of !== url) {
+    setOf(url);
+    setShowComments(false);
+    setResolvedTab(false);
+  }
 
   useEffect(() => {
     let live = true;
@@ -110,6 +146,20 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
     },
     [docTitle, url],
   );
+  const { setTarget } = comments;
+  const openComments = useCallback(
+    (passage?: { quote: string; blockId?: string }) => {
+      if (passage) {
+        setTarget({ kind: "passage", quote: passage.quote, blockId: passage.blockId });
+        setResolvedTab(false);
+      }
+      setShowComments(true);
+      if (passage || writes) setFocus((n) => n + 1);
+    },
+    [setTarget, writes],
+  );
+  const openCount = comments.threads?.filter((t) => !t.resolved).length ?? 0;
+  const hasComments = comments.threads !== null || writes;
 
   return (
     <>
@@ -121,24 +171,39 @@ function DocPanel({ url, title, onClose }: { url: string; title?: string; onClos
         actions={
           <>
             {/* the agent reads the document itself: the whole of it can go along even before (or without) it reading here */}
+            {content && content.kind !== "unsupported" && hasComments && <CommentsButton count={openCount} active={showComments} onClick={() => (showComments ? setShowComments(false) : openComments())} />}
             {content?.kind !== "unsupported" && <ContextButton onClick={() => pick("", "context")} />}
             <IconButton icon="external" label="在新标签页打开" onClick={() => openTab(url)} />
-            <MoreMenu url={url} onReload={() => setRound((n) => n + 1)} />
+            <MoreMenu
+              url={url}
+              onReload={() => {
+                setRound((n) => n + 1);
+                comments.reload();
+              }}
+            />
           </>
         }
       />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[760px] px-5 pt-5 pb-10 sm:px-6">
-          {content?.kind === "unsupported" ? (
-            <Unsupported content={content} url={url} />
-          ) : content ? (
-            <DocBody content={content} info={info} onPick={pick} url={url} />
-          ) : error ? (
-            <Failed message={error} onRetry={() => setRound((n) => n + 1)} url={url} />
-          ) : (
-            <Skeleton title={title} />
-          )}
+      {/* the comments lie over the document, which keeps its place underneath */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto" inert={showComments}>
+          <div className="mx-auto w-full max-w-[760px] px-5 pt-5 pb-10 sm:px-6">
+            {content?.kind === "unsupported" ? (
+              <Unsupported content={content} url={url} />
+            ) : content ? (
+              <DocBody content={content} info={info} onPick={pick} onComment={writes ? (quote, blockId) => openComments({ quote, blockId }) : undefined} comments={hasComments ? { open: openCount, onOpen: () => openComments(), writes } : undefined} url={url} />
+            ) : error ? (
+              <Failed message={error} onRetry={() => setRound((n) => n + 1)} url={url} />
+            ) : (
+              <Skeleton title={title} />
+            )}
+          </div>
         </div>
+        {showComments && (
+          <div className="absolute inset-0 z-10">
+            <DocCommentsView url={url} model={comments} writes={writes} resolved={resolvedTab} onResolved={setResolvedTab} focus={focus} onBack={() => setShowComments(false)} />
+          </div>
+        )}
       </div>
       <EditDialog editing={editing} onClose={() => setEditing(null)} />
     </>
@@ -156,19 +221,38 @@ function metaLine(info: DocInfo | null) {
   return parts.join(" · ");
 }
 
-function DocBody({ content, info, onPick, url }: { content: Extract<DocContent, { kind: "markdown" | "tree" }>; info: DocInfo | null; onPick: (text: string, kind: ContextRef["kind"]) => void; url: string }) {
+function DocBody({
+  content,
+  info,
+  onPick,
+  onComment,
+  comments,
+  url,
+}: {
+  content: Extract<DocContent, { kind: "markdown" | "tree" }>;
+  info: DocInfo | null;
+  onPick: (text: string, kind: ContextRef["kind"]) => void;
+  onComment?: (quote: string, blockId?: string) => void;
+  comments?: { open: number; onOpen: () => void; writes: boolean };
+  url: string;
+}) {
   const markdown = useMemo(() => (content.kind === "markdown" ? prepareMarkdown(content.markdown, content.title, getToken()) : ""), [content]);
   const meta = metaLine(info);
   return (
     <div style={{ animation: `fade-in 200ms ease-out both` }}>
-      <Pickable enabled={content.copy} onPick={onPick}>
+      <Pickable enabled={content.copy} onPick={onPick} onComment={onComment}>
         <h1 className="text-[22px] leading-[1.3] font-semibold tracking-tight text-ink">{content.title}</h1>
         {meta && <div className="mt-2 text-[12px] text-ink-3">{meta}</div>}
         <div className="mt-5">{content.kind === "markdown" ? <DocMarkdown markdown={markdown} /> : <DocTree doc={content.doc} />}</div>
       </Pickable>
       {content.partial && <p className="mt-4 text-[12px] text-ink-3">文档较长，只显示了前面的部分。</p>}
       {!content.copy && <p className="mt-4 text-[12px] text-ink-3">作者禁止复制这篇文档，不能选中文字；可以用右上角的「作为上下文」带上整篇。</p>}
-      <div className="mt-10 flex justify-center border-t border-line pt-5">
+      <div className="mt-10 flex flex-wrap justify-center gap-2 border-t border-line pt-5">
+        {comments && (comments.open > 0 || comments.writes) && (
+          <Button icon="chat" onClick={comments.onOpen}>
+            {comments.open > 0 ? `${comments.open} 条评论` : "写评论"}
+          </Button>
+        )}
         <Button icon="external" onClick={() => openTab(url)}>
           在新标签页打开
         </Button>
@@ -407,15 +491,26 @@ interface Tip {
   y: number;
   below: boolean;
   text: string;
+  /** The document block the selection lies in, when it is one (a JSON-tree paragraph or heading). */
+  block?: string;
+}
+
+/** The `data-block` both ends of the range are in, when they are in the same one. */
+function blockOf(range: Range): string | undefined {
+  const at = (n: Node) => (n instanceof Element ? n : n.parentElement)?.closest<HTMLElement>("[data-block]");
+  const a = at(range.startContainer);
+  return a && a === at(range.endContainer) ? a.dataset.block || undefined : undefined;
 }
 
 /**
- * Content whose selected text can be handed on: a small bar over the selection with 「作为上下文」 and 「AI 修改」
- * (mouse, keyboard and touch selections alike; it shows once the pointer is up, not while dragging).
+ * Content whose selected text can be handed on: a small bar over the selection with 「作为上下文」 and 「AI 修改」, and
+ * 「评论」 where the document takes comments (mouse, keyboard and touch selections alike; it shows once the pointer is
+ * up, not while dragging).
  */
-function Pickable({ enabled, onPick, children }: { enabled: boolean; onPick: (text: string, kind: ContextRef["kind"]) => void; children: React.ReactNode }) {
+function Pickable({ enabled, onPick, onComment, children }: { enabled: boolean; onPick: (text: string, kind: ContextRef["kind"]) => void; onComment?: (quote: string, blockId?: string) => void; children: React.ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<Tip | null>(null);
+  const wide = Boolean(onComment);
 
   useEffect(() => {
     if (!enabled) return;
@@ -434,9 +529,9 @@ function Pickable({ enabled, onPick, children }: { enabled: boolean; onPick: (te
       const scroller = el.closest(".overflow-y-auto");
       const top = scroller ? scroller.getBoundingClientRect().top : 0;
       const below = r.top - Math.max(top, 0) < 52;
-      const half = 92;
+      const half = wide ? 124 : 92; // half the bar: it stays inside the content
       const x = Math.min(Math.max(r.left + r.width / 2 - b.left, half), Math.max(half, b.width - half));
-      setTip({ x, y: below ? r.bottom - b.top + 8 : r.top - b.top - 8, below, text });
+      setTip({ x, y: below ? r.bottom - b.top + 8 : r.top - b.top - 8, below, text, block: blockOf(range) });
     };
     const onDown = (e: PointerEvent) => {
       if ((e.target as HTMLElement).closest?.("[data-pickbar]")) return;
@@ -462,11 +557,12 @@ function Pickable({ enabled, onPick, children }: { enabled: boolean; onPick: (te
       document.removeEventListener("pointerup", onUp, true);
       document.removeEventListener("selectionchange", onChange);
     };
-  }, [enabled]);
+  }, [enabled, wide]);
 
-  const choose = (kind: ContextRef["kind"]) => {
+  const choose = (kind: ContextRef["kind"] | "comment") => {
     if (!tip) return;
-    onPick(tip.text, kind);
+    if (kind === "comment") onComment?.(tip.text, tip.block);
+    else onPick(tip.text, kind);
     getSelection()?.removeAllRanges();
     setTip(null);
   };
@@ -489,6 +585,11 @@ function Pickable({ enabled, onPick, children }: { enabled: boolean; onPick: (te
           <PickButton onClick={() => choose("edit")} label="AI 修改" title={`写下要怎么改，立即发给${handoffLabel()}`}>
             <Icon name="spark" size={12} />
           </PickButton>
+          {onComment && (
+            <PickButton onClick={() => choose("comment")} label="评论" title="在飞书文档里评论这段">
+              <Icon name="chat" size={12} />
+            </PickButton>
+          )}
         </div>
       )}
     </div>

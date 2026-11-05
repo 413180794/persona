@@ -155,6 +155,20 @@ export function useLarkOn(): boolean {
   return useStore(larkOn);
 }
 
+/**
+ * The Feishu plugin writes document comments for the user (feature `lark_doc_comments`, #1290): the reader can reply,
+ * comment, resolve and reopen. Not "unknown is what it used to do": a hub that does not say so has no such routes.
+ */
+export const LARK_DOC_COMMENTS_FEATURE = "lark_doc_comments";
+
+export function docCommentsOn(s: Pick<State, "features"> = state): boolean {
+  return larkOn(s) && s.features.includes(LARK_DOC_COMMENTS_FEATURE);
+}
+
+export function useDocCommentsOn(): boolean {
+  return useStore(docCommentsOn);
+}
+
 // ── item stream (subscribed sessions) ───────────────────
 
 export interface ItemsEvent {
