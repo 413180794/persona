@@ -190,6 +190,9 @@ targets:
         # Remote push (PushRegistrar; macOS's name for iOS's aps-environment). The archive says development; the App
         # Store export signs it production (checked by scripts/release/entitlements.py check on the .pkg).
         com.apple.developer.aps-environment: development
+        # Time-sensitive pushes break through Focus on the Mac too (#1655, the iPhone's #1572); the App ID is the
+        # iPhone's (UNIVERSAL), so asc_signing.py's USERNOTIFICATIONS_TIMESENSITIVE covers it.
+        com.apple.developer.usernotifications.time-sensitive: true
         # The relay's push key, shared with JarvisMacNotify (PushCrypto, in the data protection keychain on a Mac).
         # The app's own group first: it stays the default.
         keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]

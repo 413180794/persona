@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/nwverse/persona/server/internal/db/dbtest"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -331,6 +334,40 @@ func TestInteractions(t *testing.T) {
 	}
 	if st, res, err := d.InteractionOutcome(ctx, "nope"); err != nil || st != "" || res != nil {
 		t.Fatalf("outcome of a missing one %q %+v %v", st, res, err)
+	}
+}
+
+// The startup lookup of pending interactions can use the partial index instead of scanning every past interaction.
+func TestPendingInteractionsIndexed(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// A test table is too small for the planner to prefer any index on its own; rule the scan out to see the choice.
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		sql  string
+		args []any
+	}{
+		{resumablePendingSQL, nil},
+		{cancelPendingSQL, []any{[]string{}}},
+	} {
+		q := c.sql
+		rows, err := tx.Query(ctx, `EXPLAIN `+q, c.args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan := strings.Join(lines, "\n"); !strings.Contains(plan, "interactions_pending") {
+			t.Fatalf("%s\nplan:\n%s", q, plan)
+		}
 	}
 }
 

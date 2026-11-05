@@ -430,7 +430,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | `phone_tools` | iPhone 最近一次声明的 phone_* 工具（手机离线时 Claude 也能看到） |
 | `node_sessions` | 每台机器上 Persona 启动过的会话：pane、启动器、目录（node 经 hub RPC `state.load` / `state.put` 读写，Mac 不直连数据库） |
 | `mail_accounts` | 邮箱账号：非敏感字段 jsonb + AES-GCM 密文；密钥 `~/.persona/secret.key` 不进数据库 |
-| `interactions` | 每次提问 / 计划 / 授权 / 终端交互及结局（resolved / dismissed / expired / cancelled）；hub 重启时把残留的 pending 标成 cancelled |
+| `interactions` | 每次提问 / 计划 / 授权 / 终端交互及结局（resolved / dismissed / expired / cancelled）；hub 重启时把残留的 pending 标成 cancelled（经部分索引 `interactions_pending` 找，不扫历史）；目前不清理已结束的行，保留期见 #2615 |
 | `settings` | App 里改的全局设置（如助手的启动器），以及持久化的 `hub_id` |
 | `pair_tokens` | 临时配对 token 的哈希、到期和兑换记录，重启后仍有效 |
 

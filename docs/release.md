@@ -123,7 +123,9 @@ App Group 的 ID 本身不带团队前缀，Info.plist 里直接写 `$(JARVIS_AP
   （`asc_signing.py` 会开，开了之后旧描述文件失效，要重跑一次重建）；`entitlements.py check` 发现导出的 App 少了它会报错。
   **合并 #1572 之后、下一次发版之前，先跑一次 `python3 scripts/release/asc_signing.py`**（签开发包的再加 `--dev` 重建 Development 描述文件）。
   `release.sh` 开头会跑 `asc_signing.py --check`，能力没开或描述文件失效时在归档前就停下，不再等到导出时才失败。
-  Mac App 暂时没加这一项（Mac 上开着专注模式同样不突破），另见后续 issue。
+  Mac App 也要了这一项（#1655，`project.yml` 的 PersonaMac）：Mac 和 iPhone 是同一个 App ID（UNIVERSAL），上面开的能力同样覆盖 Mac；
+  `entitlements.py check` 对 Mac 的 .pkg / 归档同样要求它（target 要了就查，`scripts/release/test_entitlements.py`）。
+  还没在能发 Mac 版的环境里导出过一次 .pkg 核对、也没在 Mac 上开着专注模式看过横幅，这一步做完再关 #1655。
 
 ## App Group（2026-11-02）
 

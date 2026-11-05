@@ -520,11 +520,19 @@ func (d *DB) Interactions(ctx context.Context, machine, session string, limit in
 	})
 }
 
+// The startup statements of ExpireStaleInteractions. Both must stay answerable from the interactions_pending
+// partial index (migration 0393); TestPendingInteractionsIndexed checks the plans of these exact constants.
+const (
+	resumablePendingSQL = `SELECT payload FROM interactions WHERE status = 'pending'
+		AND (payload->>'resumable')::boolean IS TRUE AND (payload->>'expires_at')::timestamptz > now()`
+	cancelPendingSQL = `UPDATE interactions SET status = 'cancelled', resolved_at = now()
+		WHERE status = 'pending' AND NOT (id = ANY($1))`
+)
+
 // ExpireStaleInteractions marks interactions left pending by a previous hub process cancelled, and returns the
 // resumable ones not yet expired instead: their hooks reconnect and claim them again.
 func (d *DB) ExpireStaleInteractions(ctx context.Context) ([]proto.Interaction, error) {
-	rows, err := d.pool.Query(ctx, `SELECT payload FROM interactions WHERE status = 'pending'
-		AND (payload->>'resumable')::boolean IS TRUE AND (payload->>'expires_at')::timestamptz > now()`)
+	rows, err := d.pool.Query(ctx, resumablePendingSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -543,8 +551,7 @@ func (d *DB) ExpireStaleInteractions(ctx context.Context) ([]proto.Interaction, 
 	for i, ix := range keep {
 		ids[i] = ix.ID
 	}
-	_, err = d.pool.Exec(ctx, `UPDATE interactions SET status = 'cancelled', resolved_at = now()
-		WHERE status = 'pending' AND NOT (id = ANY($1))`, ids)
+	_, err = d.pool.Exec(ctx, cancelPendingSQL, ids)
 	return keep, err
 }
 
