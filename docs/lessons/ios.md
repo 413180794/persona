@@ -1001,3 +1001,17 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - 真实 WKWebView 验证中，直接从子帧发消息被 `isMainFrame` 拒绝，但同源 `srcdoc` 子帧借父页面 bridge 发出的消息会被识别为主帧消息；当前实例 nonce 也不能区别这两种调用。该用例中，CSP 的 `frame-src 'none'` 没有阻止子帧执行。
 - 助手卡片不需要子帧，导航代理不再放行 `about:`／`data:` 子帧，统一拒绝。回归必须保留借父 bridge 的真实请求用例，不能只测伪造 handler 参数。修复后九项常规 WebKit 安全用例通过；无限循环及宿主恢复单独验证，不能由常规测试推导。
 - 内容进程退出时撤销 bridge 实例、加载票据和脚本，转为原生 fallback；同一 HTML 的重试必须创建新实例，不能被 `loaded == html` 去重挡住。调用公开 delegate 回调能验证这条恢复逻辑，但不等于实际触发了 OS 终止。
+
+## 返回手势还没走完就改导航路径：栈里留下一页空白（2026-11-05，#1941）
+
+TestFlight 上新外壳的 Agents 页偶发只剩系统导航栏、下面一片空白（深色下是全黑）。复现靠 `AgentsPushPopRaceTests`：
+用 runtime CLI 的 `navigate … keep` 在返回手势途中从外面开一个对话（和点通知一样走 `model.openChat`），约 300 次里中 2 次
+（BeautifulUI，从左边缘一直划到底、开的时机在手指抬起前后）。那时 SwiftUI 的 `path` 已经是空的（外壳的顶栏只在根上才出来），
+UIKit 的栈却还推着一页，上面只有系统的返回按钮「Agents」，内容是空的。
+
+- 在 `UINavigationController` 还有 `transitionCoordinator`（推进 / 返回的动画、手势还在走）时改 `NavigationPath`，
+  SwiftUI 收下了，栈却没跟上，两边从此对不上。
+- 从列表外面开页面（通知、Siri、启动）一律先等栈停下：`StackStillWatcher.whenStill`（`ChatsView.takeOpenChat`）。
+  栈本来就停着就马上推，启动和列表上点通知照旧不等。
+- 这种时机靠手点复现不了：写 UI 测试，从测试进程直接连 App 的 runtime CLI 端口在指定的毫秒发命令，按几十毫秒一档扫时机，
+  每档多跑几轮；判断「空白」要看导航栏上有没有系统的 `BackButton`，不能只看列表的元素在不在（有一次它们还在无障碍树里）。

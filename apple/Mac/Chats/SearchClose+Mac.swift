@@ -18,3 +18,14 @@ struct SearchCloseProbe: View {
     let watcher: SearchCloseWatcher
     var body: some View { EmptyView() }
 }
+
+/// The Mac's `StackStillWatcher` (iOS: `Views/Chats/ChatsView.swift`): its stack has no back swipe to wait for.
+@MainActor final class StackStillWatcher {
+    func whenStill(_ done: @escaping () -> Void) { done() }
+}
+
+/// Nothing to find on a Mac (see `StackStillWatcher`).
+struct StackStillProbe: View {
+    let watcher: StackStillWatcher
+    var body: some View { EmptyView() }
+}

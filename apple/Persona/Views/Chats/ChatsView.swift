@@ -1,4 +1,5 @@
 import BeautifulUI
+import OSLog
 import SwiftUI
 
 /// Agents that share a space (a herdr workspace, or whatever groups agents in another host) on one machine.
@@ -188,6 +189,8 @@ struct ChatsView: View {
 
     /// The list has appeared once: pushes made before that are held back (`model.openChat`, #2061).
     @State private var rootShown = false
+    /// Whether the stack is in the middle of a push or a pop: a chat opened from outside waits for it (#1941).
+    @State private var stackStill = StackStillWatcher()
 
     /// An active search keeps the system navigation bar up over what is pushed (the chat showed it over its own
     /// header; closing the search once pushed is too late): opening something from the results closes the search
@@ -214,6 +217,7 @@ struct ChatsView: View {
                 // The shell's top bar floats over the navigation bar: this page's own bar makes room for it (not the
                 // navigation container: a chat pushed on it must not move, nor the list on the way back, #340).
                 .background { ShellNavigationClearance(active: shell != nil && !searching) }
+                .background { StackStillProbe(watcher: stackStill) }
                 #if os(macOS)
                 .onAppear { MacShellState.shared.agentsList = menuActions } // the shell's toolbar menu, 显示 › 全部折叠 / 全部展开
                 #endif
@@ -333,7 +337,15 @@ struct ChatsView: View {
     }
 
     /// The chat asked for from outside the list (a notification, a launch onto it): open, and the request taken.
+    /// Not while the stack is still moving (a back swipe under the finger or let go, a pop or push on its way): set then,
+    /// the path and the stack fell apart, the stack left with a page of nothing over the list under the shell's bar,
+    /// which shows at the root only (#1941, AgentsPushPopRaceTests). Once it is still, at once.
     private func takeOpenChat() {
+        guard model.openChat != nil else { return }
+        stackStill.whenStill { pushOpenChat() }
+    }
+
+    private func pushOpenChat() {
         guard let key = model.openChat else { return }
         path = NavigationPath([key])
         #if DEBUG
@@ -2867,6 +2879,52 @@ private struct TopBar<Bar: View>: ViewModifier {
         }
         return nil
     }
+}
+
+/// Runs something once the navigation stack the probe is in has stopped moving: no push or pop on its way, no back
+/// swipe under the finger or still settling after it was let go. A path set meanwhile was taken by SwiftUI and lost by
+/// the stack (#1941). Still now: at once (a launch, a notification tapped on the list), so nothing waits a turn.
+@MainActor final class StackStillWatcher {
+    fileprivate weak var view: UIView?
+    private static let log = Logger(subsystem: "jarvis", category: "stack")
+
+    func whenStill(_ done: @escaping () -> Void) {
+        let start = Date.now
+        func check() {
+            if navigation?.transitionCoordinator == nil || Date.now.timeIntervalSince(start) > 2 {
+                let waited = Int(Date.now.timeIntervalSince(start) * 1000)
+                if waited > 0 { Self.log.notice("an open waited \(waited) ms for the stack (found: \(self.navigation != nil))") }
+                done()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03, execute: check)
+            }
+        }
+        check()
+    }
+
+    /// The stack the list is the root of: the navigation controller of the first view controller up from the probe.
+    private var navigation: UINavigationController? {
+        var r: UIResponder? = view
+        while let next = r?.next {
+            if let vc = next as? UIViewController { return vc.navigationController }
+            r = next
+        }
+        return nil
+    }
+}
+
+/// Where `StackStillWatcher` finds the stack from.
+private struct StackStillProbe: UIViewRepresentable {
+    let watcher: StackStillWatcher
+
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView()
+        v.isUserInteractionEnabled = false
+        watcher.view = v
+        return v
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) { watcher.view = uiView }
 }
 
 /// Where `SearchCloseWatcher` finds the page's search controller from.
