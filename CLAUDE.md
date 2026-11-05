@@ -288,6 +288,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 文档 | 内容 |
 | --- | --- |
 | `docs/plan-orca-support.md` | 计划：支持 Orca（进行中）：先把宿主（herdr、Orca）和 Agent 分开、抽出宿主接口，再接 Orca 来源；每一步的范围、Orca 能提供什么、风险 |
+| `docs/plan-tmux-support.md` | 计划：tmux 引擎（#1180，待定）：多个 server 怎么找、session / window / pane 对应空间 / 槽位、读屏和控制模式的实时流、输入一律走 paste-buffer（复制模式、同步输入的坑）、状态来源、botmux 去重、实测结论、测试方案和要维护者定的点 |
 | `docs/plan-connectors.md` | 计划：连接器（先接 GitHub 和 iMessage）：能力可选的 Connector 接口、内置 / 外部进程 / node 本地三种形态、飞书邮件的迁移步骤、隐私和拍板项 |
 | `docs/plan-hub-mesh.md` | 计划：hub 互联（探测、双向链路、组内电脑去重和选路、归属）、links、多 hub 客户端、hub 管理界面（访问范围）、网页对齐；各路之间的接口约定和分工 |
 | `docs/plan-hub-center.md` | 计划第二版：有且只有一台中心 hub（其余 hub 当成员、把电脑交给中心）、电脑经预装服务接入（连接器主动 / 被动两种模式，不用 SSH）、一台电脑多条路去重选路；两路分工和被动模式协议 |
