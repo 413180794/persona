@@ -175,8 +175,18 @@ const emit = (p: Partial<ListState>) => {
 };
 
 let inflight: Promise<void> | null = null;
+// A call while a pull is on the way: that pull may have been answered before the change the call is for, so one more
+// pull follows it (one, however many calls came meanwhile).
+let queued: Promise<void> | null = null;
 export function refreshAgentSessions(): Promise<void> {
-  inflight ??= Promise.all([fetchSessions(), fetchSources().catch(() => null)])
+  if (inflight) {
+    queued ??= inflight.then(() => {
+      queued = null;
+      return refreshAgentSessions();
+    });
+    return queued;
+  }
+  inflight = Promise.all([fetchSessions(), fetchSources().catch(() => null)])
     .then(([sessions, sources]) => emit({ sessions, loaded: true, error: "", ...(sources ? { hints: setupHints(sources) } : {}) }))
     .catch((e) => emit({ loaded: true, error: e instanceof Error ? e.message : String(e) }))
     .finally(() => (inflight = null));
