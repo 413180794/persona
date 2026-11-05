@@ -7,6 +7,7 @@ import { Button, copyText, cx, EASE, IconButton, PixelGrid, Shimmer } from "../u
 import { errorText } from "./api";
 import { AdminIcon, type AdminIconName } from "./icons";
 import { qrPath } from "./logic";
+import { SegmentedTrack } from "../ui/Segmented";
 
 export type Tone = "green" | "red" | "orange" | "accent" | "gray";
 
@@ -312,24 +313,25 @@ export function Segmented<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className={cx("inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline", className)}>
+    <SegmentedTrack role="radiogroup" label={label} className={cx("inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-control p-0.5", className)} thumbClassName="rounded-[7px]">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           role="radio"
           aria-checked={value === o.value}
+          data-selected={value === o.value}
           onClick={() => onChange(o.value)}
           className={cx(
-            "flex h-7 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 text-[12px] transition-[background-color,color] duration-150",
-            value === o.value ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
+            "relative z-[1] flex h-7 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 text-[12px] transition-colors duration-150",
+            value === o.value ? "font-medium text-ink" : "text-ink-3 hover:text-ink-2",
           )}
         >
           {o.icon && <AdminIcon name={o.icon} size={13} />}
           {o.label}
         </button>
       ))}
-    </div>
+    </SegmentedTrack>
   );
 }
 

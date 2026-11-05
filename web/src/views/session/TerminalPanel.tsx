@@ -47,6 +47,7 @@ import { Surface } from "./terminal/Surface";
 import { TerminalOptions } from "./terminal/TerminalOptions";
 import { UploadStatus } from "./terminal/UploadStatus";
 import { t } from "../../i18n";
+import { SegmentedTrack } from "../../ui/Segmented";
 
 const nothing = () => () => {};
 
@@ -597,23 +598,24 @@ function ModeSwitch({ drive, onChange }: { drive: boolean; onChange: (drive: boo
     [t("session-terminalpanel.mode_watch"), false, t("session-terminalpanel.mode_watch_hint")],
   ];
   return (
-    <div role="radiogroup" aria-label={t("session-terminalpanel.mode_label")} className="flex h-7 shrink-0 items-center rounded-control bg-field p-0.5">
+    <SegmentedTrack role="radiogroup" label={t("session-terminalpanel.mode_label")} className="flex h-7 shrink-0 items-center rounded-control p-0.5" thumbClassName="rounded-chip">
       {options.map(([label, value, title]) => (
         <button
           key={label}
           type="button"
           role="radio"
           aria-checked={drive === value}
+          data-selected={drive === value}
           title={title}
           onClick={() => onChange(value)}
           className={cx(
-            "h-6 whitespace-nowrap rounded-chip px-2 text-[12px] font-medium transition-[background-color,color,box-shadow] duration-150",
-            drive === value ? "bg-surface text-ink shadow-btn" : "text-ink-3 hover:text-ink",
+            "relative z-[1] h-6 whitespace-nowrap rounded-chip px-2 text-[12px] font-medium transition-colors duration-150",
+            drive === value ? "text-ink" : "text-ink-3 hover:text-ink",
           )}
         >
           {label}
         </button>
       ))}
-    </div>
+    </SegmentedTrack>
   );
 }

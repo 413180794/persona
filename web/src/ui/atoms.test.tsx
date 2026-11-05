@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { stateColor, STATE_LABEL } from "../lib/format";
 import type { AgentState } from "../lib/types";
 import { copyText, Dialog, IconButton, Menu, useMenu } from "./atoms";
+import { markOf } from "./StatusMark";
 
 vi.mock("react", async (importOriginal) => ({
   ...await importOriginal<typeof import("react")>(),
@@ -47,7 +48,8 @@ describe("agent status in menus", () => {
   it.each(Object.keys(STATE_LABEL) as AgentState[])("shows the %s dot and readable status", (state) => {
     const html = renderMenu(state);
     expect(html).toContain(`aria-label="${STATE_LABEL[state]}"`);
-    expect(html).toContain(`background:${stateColor(state)}`);
+    expect(html).toContain(`--mark-color:${stateColor(state)}`);
+    expect(html).toContain(`data-shape="${markOf(state).shape}"`);
     expect(html).toContain(`>${STATE_LABEL[state]}</span>`);
     expect(html).toContain(`title="#1 · 示例任务 · ${STATE_LABEL[state]}"`);
     expect(html).toContain("#1 · 示例任务</span>");

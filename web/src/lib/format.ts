@@ -78,7 +78,7 @@ export function stateColor(st: AgentState): string {
     case "unread":
       return "var(--status-unread)";
     case "offline":
-      return "var(--line-strong)";
+      return "var(--status-offline)";
     default:
       return "var(--status-idle)";
   }

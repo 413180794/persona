@@ -35,7 +35,8 @@ import {
   taskNow,
 } from "../lib/todos";
 import type { Interaction, Launcher, Machine } from "../lib/types";
-import { Button, cx, Dialog, IconButton, Loading, Menu, StatusDot, toast, useMenu } from "../ui/atoms";
+import { Button, cx, Dialog, IconButton, Loading, Menu, toast, useMenu } from "../ui/atoms";
+import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
 import { t } from "../i18n";
 import { groupTodosByProject, treeStateLabel, type TodoProjectGroup, type TreeState } from "../lib/todo-tree";
@@ -471,7 +472,7 @@ function TodoListItem({
 
         {/* Status Line */}
         <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px]">
-          {!todo.done_at && <StatusDot state={dotState} size={6} />}
+          {!todo.done_at && <StatusMark state={dotState} size="sm" />}
           <span className={cx("shrink-0 whitespace-nowrap font-medium", toneClass)}>{todoStatusLabel(todo, status)}</span>
           {!todo.done_at && activeCount > 0 && (
             <>
@@ -671,7 +672,7 @@ function TodoDetail({
       {/* Meta Line */}
       <div className="mt-2.5 flex flex-wrap items-center gap-2.5 text-[12.5px] text-ink-2">
         <span className={cx("inline-flex h-5.5 items-center gap-1.5 rounded-md px-2 text-[12px] font-semibold", toneClass)}>
-          <StatusDot state={dotState} size={6} />
+          <StatusMark state={dotState} size="sm" />
           {todoStatusLabel(todo, status)}
         </span>
         <span className="text-ink-3">·</span>
@@ -789,7 +790,7 @@ function TodoDetail({
                   )}
                 >
                   <div className="mt-1">
-                    <StatusDot state={agent.start_error ? "offline" : isExpired ? "offline" : st} size={7} />
+                    <StatusMark state={agent.start_error ? "offline" : isExpired ? "offline" : st} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -1451,7 +1452,7 @@ function HandoverDialog({
                       )}
                     >
                       <div className="flex min-w-0 items-center gap-2">
-                        <StatusDot state={st} size={6} />
+                        <StatusMark state={st} size="sm" />
                         <span className="truncate font-medium">{s.title || s.cwd || t("todos.unnamed")}</span>
                         <span className={cx("text-[11px]", isSel ? "text-white/80" : "text-ink-3")}>
                           {s.space_name || s.machine_id}

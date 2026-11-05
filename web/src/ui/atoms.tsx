@@ -1,9 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { stateColor, STATE_LABEL } from "../lib/format";
+import { STATE_LABEL } from "../lib/format";
 import { t } from "../i18n";
 import type { AgentState } from "../lib/types";
 import { Icon, type IconName } from "./icons";
+import { StatusMark } from "./StatusMark";
 import { collapseMounted } from "../lib/disclosure";
 import { FeedbackGate, offlineNow } from "../lib/feedback";
 import { useCloseOnBack } from "../lib/back-close";
@@ -70,24 +71,6 @@ export function Loading({ label = t("common.loading") }: { label?: string }) {
   );
 }
 
-export function StatusDot({ state, size = 8, ring }: { state: AgentState; size?: number; ring?: boolean }) {
-  const breathe = state === "needs_you" || state === "working";
-  return (
-    <span
-      role="img"
-      aria-label={STATE_LABEL[state]}
-      className={cx("inline-block shrink-0 rounded-full", breathe && BUSY_MOTION)}
-      style={{
-        width: size,
-        height: size,
-        background: stateColor(state),
-        boxShadow: ring ? "0 0 0 2px var(--surface)" : undefined,
-        animation: breathe ? "breathe 1.8s ease-in-out infinite" : undefined,
-      }}
-    />
-  );
-}
-
 export function StatePill({ state }: { state: AgentState }) {
   const tone: Record<AgentState, string> = {
     needs_you: "bg-red-tint text-red",
@@ -99,7 +82,7 @@ export function StatePill({ state }: { state: AgentState }) {
   };
   return (
     <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium ${tone[state]}`}>
-      {(state === "working" || state === "needs_you") && <StatusDot state={state} size={6} />}
+      {(state === "working" || state === "needs_you") && <StatusMark state={state} size="sm" label={false} />}
       {STATE_LABEL[state]}
     </span>
   );
@@ -649,7 +632,7 @@ function MenuRow({ item: it, asking, working, refCb, onHover, onChoose }: { item
         asking && "bg-red-tint font-medium",
       )}
     >
-      {it.state && <StatusDot state={it.state} />}
+      {it.state && <StatusMark state={it.state} />}
       {it.icon && <Icon name={it.icon} size={14} className={it.danger ? "" : "text-ink-3"} />}
       <span className="min-w-0 flex-1 truncate">{rowLabel(it, asking ? it.key : null)}</span>
       {it.state && <StatePill state={it.state} />}

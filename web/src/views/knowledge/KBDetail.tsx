@@ -35,7 +35,8 @@ import { openPanel } from "../../lib/panel";
 import { href, onLinkClick } from "../../lib/router";
 import { getState, useStore } from "../../lib/store";
 import type { Session } from "../../lib/types";
-import { Button, Collapse, copyText, cx, IconButton, Loading, StatePill, StatusDot, toast } from "../../ui/atoms";
+import { Button, Collapse, copyText, cx, IconButton, Loading, StatePill, toast } from "../../ui/atoms";
+import { StatusMark } from "../../ui/StatusMark";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { known, remember } from "./cache";
@@ -495,7 +496,7 @@ function Agents({ agents }: { agents: Session[] }) {
           return (
             <a key={`${s.machine_id}/${s.session_id}`} href={href(to)} onClick={(ev) => onLinkClick(ev, to)} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-hover">
               <span className="flex w-3 shrink-0 justify-center">
-                <StatusDot state={st} />
+                <StatusMark state={st} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium text-ink">{sessionTitle(s)}</span>

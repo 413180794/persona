@@ -14,6 +14,7 @@ import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { cardFold, cardLine, PLAN_MAX, showsAnswered } from "./dock";
 import { t } from "../../i18n";
+import { StatusMark } from "../../ui/StatusMark";
 
 async function resolve(ix: Interaction, body: Record<string, unknown>) {
   if (!sessionCan(getSession(ix.machine_id, ix.session_id), "approve")) {
@@ -46,7 +47,7 @@ function Card({ title, kicker, onDismiss, children, footer }: { title: string; k
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-medium text-red">
-              <span className={`size-1.5 rounded-full bg-red ${BUSY_MOTION}`} style={{ animation: "breathe 1.8s ease-in-out infinite" }} />
+              <StatusMark state="needs_you" size="sm" label={false} />
               {kicker}
             </div>
             <div className="text-[13.5px] font-medium text-ink">{title}</div>

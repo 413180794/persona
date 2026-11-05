@@ -3,7 +3,8 @@
 import { useStore } from "../../lib/store";
 import { subagentParent, subagentTitle } from "../../lib/tasks";
 import { workflowAgentFor, workflowName } from "../../lib/workflows";
-import { StatusDot } from "../../ui/atoms";
+import {  } from "../../ui/atoms";
+import { StatusMark } from "../../ui/StatusMark";
 import { PanelHeader } from "../SidePanel";
 import { ChatView } from "./ChatView";
 import { t } from "../../i18n";
@@ -20,7 +21,7 @@ export function SubagentPanel({ mid, sid, onClose }: { mid: string; sid: string;
         icon="agent"
         title={
           <span className="flex min-w-0 items-center gap-1.5">
-            <StatusDot state={running ? "working" : "unread"} size={7} />
+            <StatusMark state={running ? "working" : "unread"} />
             <span className="truncate">{agent ? subagentTitle(agent) : wf?.agent.label || t("chat-subagentpanel.subagent")}</span>
           </span>
         }

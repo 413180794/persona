@@ -16,7 +16,8 @@ import { useStore } from "../lib/store";
 import { buildTerminalTree, type PanesResponse } from "../lib/terminals";
 import type { Session } from "../lib/types";
 import { AgentMark, SessionMark } from "../ui/AgentMark";
-import { EASE, Kbd, StatusDot, toast } from "../ui/atoms";
+import { EASE, Kbd, toast } from "../ui/atoms";
+import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
 import { copyFileMention, FilesHeading, FilesNotice, FileResultRow, openFileHit, usePaletteFiles, type FileRow } from "./palette/FilesSection";
 import { t } from "../i18n";
@@ -312,7 +313,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 <div key={r.key}>
                 {sessionsHeading}
                 <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
-                  <span className="flex size-5 shrink-0 items-center justify-center">{h.state === "shell" ? <Icon name="terminal" size={13} className="text-ink-3" /> : <StatusDot state={h.state} />}</span>
+                  <span className="flex size-5 shrink-0 items-center justify-center">{h.state === "shell" ? <Icon name="terminal" size={13} className="text-ink-3" /> : <StatusMark state={h.state} />}</span>
                   {h.state !== "shell" && h.agent && <AgentMark agent={h.agent} size={14} />}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium text-ink">{h.title}</span>
@@ -330,7 +331,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
               <div key={h.key}>
               {sessionsHeading}
               <button ref={ref} type="button" onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
-                <span className="flex size-5 shrink-0 items-center justify-center">{h.assistant ? <Icon name="spark" size={13} className="text-ink-3" /> : <StatusDot state={st} />}</span>
+                <span className="flex size-5 shrink-0 items-center justify-center">{h.assistant ? <Icon name="spark" size={13} className="text-ink-3" /> : <StatusMark state={st} />}</span>
                 {!h.assistant && <SessionMark s={h.s} size={14} />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-medium text-ink">{sessionTitle(h.s)}</span>

@@ -32,6 +32,8 @@
   跑 `python3 scripts/test/web_comments_e2e.py <网页地址> [--only transcript|code|diff] [--shots <目录>]`（浏览器用已装的 Chrome，或 `PERSONA_E2E_CHROMIUM` 指的那个）。
   定时任务「跑完推送」的端到端检查（#2570：hub 有 `task_push` 时编辑页的两个选项、选「只在它自己提醒时」藏起「接着原来的对话」并保存 `push`、列表的标记、选回「每次」；桌面 / 手机宽度 × 浅色 / 深色）：起假 hub 和 `npx vite` 后跑
   `python3 scripts/test/web_task_push_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`，用法见脚本开头。
+  状态标记 / 折叠计数 / 分段滑块的端到端检查（#3559：每种状态的形状和光晕、转动的弧、折叠机器行的计数、会话头 / 终端树 / 命令面板、滑块滑到一半的位置、减弱动态；浅色 / 深色 × 宽屏 / 390；Python Playwright）：假 hub 带 `MOCK_AGENT_MARKS=1 MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 起，网页用 `npx vite`，再跑
+  `python3 scripts/test/web_status_visuals_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`。
   视觉打磨的端到端检查（#3475：减弱动态时转圈和工作中圆点仍以 2.4 秒转 / 呼吸、其他动画被压掉；侧边栏机器行和工作区行的计数右缘对齐，⋯ 叠在计数上、悬停 / 键盘焦点才出现，触屏一直在；上下文条 ≥ 90% 变红；toast 的错误图标和关闭按钮；浅色 / 深色 × 宽屏 / 390 抽屉 × 减弱动态开 / 关，再加一个触屏）：假 hub 带 `MOCK_SPLIT_TABS=1 MOCK_SOURCES=1 MOCK_CONTEXT_DANGER=1` 起，网页用 `npx vite`（toast 检查要从它 import 应用自己的模块），
   跑 `python3 scripts/test/web_visual_polish_e2e.py <网页地址> [--shots <目录>]`。
   侧栏分组收起的端到端检查（「其他 Agent」收起 / 展开 / 刷新后保持，五种分组方式下每组都能收起，触屏常显箭头，#1417）：假 hub 带 `MOCK_SOURCES=1` 起，再跑
@@ -944,7 +946,11 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 
 ## 细节约定
 
-- 颜色只走 token（`src/styles.css` 的 `:root` / `.dark`），不写死色值；状态色：需要你红（呼吸）、工作中橙（呼吸）、完成未看绿、已看灰。
+- 颜色只走 token（`src/styles.css` 的 `:root` / `.dark`），不写死色值；状态色：需要你红、工作中橙、完成未看绿、已看灰。
+- **状态标记**（#3559，照 Moshi；`src/ui/StatusMark.tsx`）：Agent 的状态在侧边栏行、会话头、/terminal 树、命令面板、PaneTabs、子 Agent 卡片里都用同一个 `StatusMark` 画，形状各不相同，不只靠颜色：工作中是转动的短弧（`stroke-dasharray` 28/72，0.9 秒一圈，带 `busy-motion`，减弱动态时放慢到 2.4 秒），需要你是带光晕和细环的圆点，完成未看是带光晕的圆点，已看 / 未知是素圆点，未运行是空心圆环。
+  尺寸（`--mark-dot` 7px、`--mark-spin` 9px、`sm` 档 6 / 8px）、光晕（`--mark-glow`）、转速（`--mark-spin-dur`）都是 token，写在 `styles.css` 里标着 #3559 的那一块。
+  折叠的分组 / 空间 / 机器行不再只给一个红色徽标，而是按「需要你 → 工作中 → 完成」各给一个小标记加等宽数字（`StateTally`，数字来自 `lib/folded-counts.ts`）；展开时保持原样。
+- **分段控件**（#3559）：所有分段控件（助手 / 设置 / 文件 / 管理页 / 知识库 / 扩展视图 / 终端的接管 · 只看）共用 `src/ui/Segmented.tsx` 的 `SegmentedTrack`：约 7% 墨色的底，一块滑动的滑块（`transform` 200 毫秒、设计系统的 ease，`--seg-dur`），选中项只改文字；ARIA 角色和键盘不变；减弱动态时滑块直接到位，不滑动。
 - 主题：跟随系统 / 浅色 / 深色（左上角菜单），`index.html` 里在首帧前就决定，深色不闪白。
 - 品牌标志：侧边栏左上角（32 px、圆角 8）和登录页（44 px、圆角 12）是 iOS App 图标原图（`AppMark`，`public/app-icon.png` / `app-icon-dark.png`，
   从 `AppIcon.appiconset` 的 `icon.png` / `icon-dark.png` 缩出来，不重画），按页面的深浅色换；favicon 是同一份的 64 px 版，按系统深浅色换（`<link media>`），管理页也用它。

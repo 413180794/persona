@@ -294,3 +294,31 @@ button:disabled { cursor: default; }
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select { font-size: max(16px, 1em); }
 }
+
+/* ══ #3559 status marks and the segmented thumb (follows Moshi; own block, kept apart from the reduced-motion work of #3475) ══ */
+/* One mark per agent state (ui/StatusMark.tsx). Shapes differ so state does not rest on color alone: working is an arc
+   that turns, needs-you a glowing dot with a ring, done a glowing dot, idle a plain dot, offline a hollow ring. All
+   marks take the same layout box (the dot's); the arc is bigger and overhangs it. */
+:root {
+  --mark-dot: 7px; --mark-dot-sm: 6px; --mark-spin: 9px; --mark-spin-sm: 8px;
+  --mark-glow: 6px; --mark-glow-mix: 50%; --mark-ring-gap: 1.5px; --mark-ring-mix: 40%; --mark-hollow: 1.5px;
+  --mark-spin-dur: .9s;
+  --status-offline: var(--ink-3);
+  --seg-track: color-mix(in srgb, var(--ink) 7%, transparent); --seg-dur: 200ms;
+}
+@theme inline { --color-seg-track: var(--seg-track); }
+.status-mark { --mark-size: var(--mark-dot); --mark-spin-size: var(--mark-spin); display: inline-block; flex-shrink: 0; box-sizing: border-box; width: var(--mark-size); height: var(--mark-size); border-radius: 9999px; }
+.status-mark[data-size="sm"] { --mark-size: var(--mark-dot-sm); --mark-spin-size: var(--mark-spin-sm); }
+.status-mark[data-shape="dot"] { background: var(--mark-color); }
+.status-mark[data-shape="glow"], .status-mark[data-shape="alert"] { background: var(--mark-color); box-shadow: 0 0 var(--mark-glow) color-mix(in srgb, var(--mark-color) var(--mark-glow-mix), transparent); }
+.status-mark[data-shape="alert"] { outline: 1px solid color-mix(in srgb, var(--mark-color) var(--mark-ring-mix), transparent); outline-offset: var(--mark-ring-gap); }
+.status-mark[data-shape="ring"] { box-shadow: inset 0 0 0 var(--mark-hollow) var(--mark-color); }
+.status-mark[data-shape="arc"] { width: var(--mark-spin-size); height: var(--mark-spin-size); margin: calc((var(--mark-size) - var(--mark-spin-size)) / 2); color: var(--mark-color); border-radius: 0; will-change: transform; animation: spin var(--mark-spin-dur) linear infinite; }
+/* Under reduced motion the arc carries .busy-motion (lib/busy-motion.ts): it turns at 2.4s instead of freezing. */
+/* A folded group's tally: the mark, then a monospace count (ui/StatusMark.tsx StateTally). */
+.state-tally { display: inline-flex; align-items: center; gap: 6px; }
+.state-tally > span { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--ink-3); }
+/* The segmented control's thumb (ui/Segmented.tsx): one element that slides under the chosen segment. */
+.seg-thumb { position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none; background: var(--surface); box-shadow: var(--shadow-btn); transition: transform var(--seg-dur) var(--ease-out-strong), width var(--seg-dur) var(--ease-out-strong), height var(--seg-dur) var(--ease-out-strong); }
+.seg-thumb[data-ready="false"] { transition: none; }
+@media (prefers-reduced-motion: reduce) { .seg-thumb { transition: none !important; } }

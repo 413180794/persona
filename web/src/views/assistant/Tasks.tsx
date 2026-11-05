@@ -40,7 +40,8 @@ import { LiveCard } from "../../ui/AssistantCard";
 import type { AssistantView } from "../../lib/extension-wire";
 import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
-import { Button, Collapse, cx, Dialog, IconButton, Menu, StatusDot, toast, useNow } from "../../ui/atoms";
+import { Button, Collapse, cx, Dialog, IconButton, Menu, toast, useNow } from "../../ui/atoms";
+import { StatusMark } from "../../ui/StatusMark";
 import { Icon, type IconName } from "../../ui/icons";
 import { ReviewBadge, ReviewLine } from "./Supervision";
 import { AnsweredCard, InteractionCard } from "../chat/Interactions";
@@ -114,7 +115,7 @@ function TaskMark({ status, size = 9 }: { status: TodoStatus; size?: number }) {
   if (status === "failed" || status === "interrupted") return <Icon name="info" size={size + 4} stroke={2.4} className="text-red" />;
   if (status === "done" || status === "unread")
     return <Icon name="check" size={size + 4} stroke={2.4} className={status === "done" ? "text-ink-3" : "text-green"} />;
-  return <StatusDot state={dotState(status)} size={size} />;
+  return <StatusMark state={dotState(status)} />;
 }
 
 function place(todo: Todo, lead?: Session): string {
@@ -895,7 +896,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
               onClick={() => openPanel({ kind: "agent", mid: s.machine_id, sid: s.session_id })}
               className={cx(pill, state === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
             >
-              <StatusDot state={state} size={8} />
+              <StatusMark state={state} />
               <Icon name="agent" size={13} className={cx("shrink-0", state !== "needs_you" && "text-ink-2")} />
               <span className="truncate">{sessionTitle(s)}</span>
               {state === "needs_you" && <span className="shrink-0">{t("assistant-tasks.waiting")}</span>}
@@ -1047,7 +1048,7 @@ export function TaskBoard({ open, conversation, onClose }: { open: boolean; conv
                     className="flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-left hover:bg-hover"
                   >
                     <span className="flex w-4 shrink-0 justify-center">
-                      <StatusDot state={state} size={8} />
+                      <StatusMark state={state} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate text-[13.5px] font-medium text-ink">{sessionTitle(s)}</span>

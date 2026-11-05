@@ -9,7 +9,8 @@ import { useAgentSessions, useCounts } from "../lib/sessions";
 import { useStore } from "../lib/store";
 import { BUSY_MOTION } from "../lib/busy-motion";
 import type { AgentState, Interaction, Session } from "../lib/types";
-import { Button, cx, EASE, IconButton, Loading, StatusDot, useNow } from "../ui/atoms";
+import { Button, cx, EASE, IconButton, Loading, useNow } from "../ui/atoms";
+import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
 import { MarkSeenDialog } from "./AgentMenus";
 import { OverviewCards } from "./extensions/ExtensionSlots";
@@ -213,7 +214,7 @@ function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: s
         <>
           <span className="flex shrink-0 items-center gap-1 text-[12px] whitespace-nowrap text-ink-3 tabular-nums" title={g.sessions.map((x) => `${agentLabel(x)} · ${sessionTitle(x)} · ${STATE_LABEL[stateOf(x)]}`).join("\n")}>
             <span aria-hidden className="flex items-center gap-0.5">
-              {g.sessions.map((x) => <StatusDot key={x.session_id} state={stateOf(x)} size={6} />)}
+              {g.sessions.map((x) => <StatusMark key={x.session_id} state={stateOf(x)} size="sm" />)}
             </span>
             <span className="max-sm:sr-only">{t("home.machine_agents", { count: g.sessions.length })}</span>
           </span>
@@ -276,7 +277,7 @@ function Badge({ state }: { state: AgentState }) {
     );
   return (
     <span className="flex size-6 shrink-0 items-center justify-center">
-      <StatusDot state={state} />
+      <StatusMark state={state} />
     </span>
   );
 }

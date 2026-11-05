@@ -7,7 +7,8 @@ import { launcherOf } from "../../lib/herdr-tree";
 import { agentLabel } from "../../lib/mentions";
 import type { Session } from "../../lib/types";
 import { NARROW, useMedia } from "../../lib/viewport";
-import { cx, StatusDot } from "../../ui/atoms";
+import { cx } from "../../ui/atoms";
+import { StatusMark } from "../../ui/StatusMark";
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";
 
@@ -79,7 +80,7 @@ export function PaneTabs({ sessions, current, onSelect }: { sessions: Session[];
               on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-2 hover:bg-hover hover:text-ink",
             )}
           >
-            <StatusDot state={st} size={6} />
+            <StatusMark state={st} size="sm" />
             {/* a phone's three tabs share its width: the 发起者's mark stands in for its agent's name (the title says it) */}
             <span className={cx("shrink-0", on ? "text-ink-2" : "text-ink-3", first && fit === "fill" && "max-sm:hidden")}>{agentLabel(s)}</span>
             {first && (

@@ -1,6 +1,7 @@
 // Small controls the assistant pages share (定时任务, 全部对话, 设置 › 助手). Tokens only (src/styles.css).
 import { cx, EASE } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { SegmentedTrack } from "../../ui/Segmented";
 
 export const inputClass =
   "h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
@@ -40,25 +41,26 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
 /** A row of mutually exclusive choices (一次 / 每天 / 每隔). `compact`: tighter segments for a crowded bar; `dot` on an option: something there wants a look. */
 export function Segmented<T extends string>({ value, options, onChange, label, compact }: { value: T; options: { v: T; label: string; dot?: boolean }[]; onChange: (v: T) => void; label: string; compact?: boolean }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline">
+    <SegmentedTrack role="radiogroup" label={label} className="flex gap-0.5 rounded-control p-0.5" thumbClassName="rounded-[7px]">
       {options.map((o) => (
         <button
           key={o.v}
           type="button"
           role="radio"
           aria-checked={value === o.v}
+          data-selected={value === o.v}
           onClick={() => onChange(o.v)}
           className={cx(
-            "relative h-7 flex-1 whitespace-nowrap rounded-[7px] text-[12.5px] transition-[background-color,color] duration-150",
+            "relative z-[1] h-7 flex-1 whitespace-nowrap rounded-[7px] text-[12.5px] transition-colors duration-150",
             compact ? "px-2.5" : "px-3",
-            value === o.v ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
+            value === o.v ? "font-medium text-ink" : "text-ink-3 hover:text-ink-2",
           )}
         >
           {o.label}
           {o.dot && <span aria-hidden className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-red" />}
         </button>
       ))}
-    </div>
+    </SegmentedTrack>
   );
 }
 

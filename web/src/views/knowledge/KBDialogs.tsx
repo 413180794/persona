@@ -23,26 +23,28 @@ import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { Marked } from "./KBParts";
 import { t } from "../../i18n";
+import { SegmentedTrack } from "../../ui/Segmented";
 
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: readonly { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex max-w-full flex-wrap gap-0.5 rounded-[9px] bg-field p-0.5">
+    <SegmentedTrack role="radiogroup" label={label} className="inline-flex max-w-full flex-wrap gap-0.5 rounded-[9px] p-0.5" thumbClassName="rounded-[7px]">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           role="radio"
           aria-checked={value === o.value}
+          data-selected={value === o.value}
           onClick={() => onChange(o.value)}
           className={cx(
-            "h-7 whitespace-nowrap rounded-[7px] px-3 text-[12.5px] font-medium transition-[background-color,color,box-shadow] duration-150",
-            value === o.value ? "bg-surface text-ink shadow-btn" : "text-ink-2 hover:text-ink",
+            "relative z-[1] h-7 whitespace-nowrap rounded-[7px] px-3 text-[12.5px] font-medium transition-colors duration-150",
+            value === o.value ? "text-ink" : "text-ink-2 hover:text-ink",
           )}
         >
           {o.label}
         </button>
       ))}
-    </div>
+    </SegmentedTrack>
   );
 }
 

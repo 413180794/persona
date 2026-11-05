@@ -20,6 +20,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { Pill, Switch } from "../settings/SettingsParts";
 import { Breadcrumb, CodeView, CommentThread, Composer, FileTree, Header } from "./CodeViews";
 import { DiffView } from "./DiffReview";
+import { SegmentedTrack } from "../../ui/Segmented";
 
 const TEXT: Record<UITone, string> = { neutral: "text-ink", positive: "text-green", caution: "text-orange", danger: "text-red" };
 const BAR: Record<UITone, string> = { neutral: "bg-accent", positive: "bg-green", caution: "bg-orange", danger: "bg-red" };
@@ -428,7 +429,7 @@ function Segmented({ item, value, busy, pending, onChoose }: { item: UIItem; val
   const choices = item.choices ?? [];
   return (
     <div className="flex items-center gap-2 px-4 py-2.5">
-      <div role="radiogroup" aria-label={item.label || item.name} className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline">
+      <SegmentedTrack role="radiogroup" label={item.label || item.name || ""} className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-control p-0.5" thumbClassName="rounded-[7px]">
         {choices.map((c) => {
           const on = c.value === value;
           return (
@@ -437,18 +438,19 @@ function Segmented({ item, value, busy, pending, onChoose }: { item: UIItem; val
               type="button"
               role="radio"
               aria-checked={on}
+              data-selected={on}
               disabled={busy && !on}
               onClick={() => !on && onChoose(c.value)}
               className={cx(
-                "flex h-7 shrink-0 items-center whitespace-nowrap rounded-[7px] px-2.5 text-[12px] transition-[background-color,color] duration-150 disabled:opacity-60",
-                on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
+                "relative z-[1] flex h-7 shrink-0 items-center whitespace-nowrap rounded-[7px] px-2.5 text-[12px] transition-colors duration-150 disabled:opacity-60",
+                on ? "font-medium text-ink" : "text-ink-3 hover:text-ink-2",
               )}
             >
               {c.title || c.value}
             </button>
           );
         })}
-      </div>
+      </SegmentedTrack>
       {pending && <Spinner />}
     </div>
   );

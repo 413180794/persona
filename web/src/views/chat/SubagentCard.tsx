@@ -8,7 +8,8 @@ import { agentSummary, nestedSubagents, subagentFor, subagentTitle } from "../..
 import { segments } from "../../lib/turns";
 import type { Item, ItemsPage, Subagent } from "../../lib/types";
 import { tsMs, workDuration, type AgentStatus, type ToolStep } from "../../lib/work-groups";
-import { Collapse, cx, Spinner, StatusDot, useNow } from "../../ui/atoms";
+import { Collapse, cx, Spinner, useNow } from "../../ui/atoms";
+import { StatusMark } from "../../ui/StatusMark";
 import { Icon } from "../../ui/icons";
 import { ActionRow } from "./ActionRow";
 import { useChatContext } from "./chat-context";
@@ -95,7 +96,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
                     style={{ paddingLeft: 8 + depth * 16 }}
                   >
                     {depth > 0 && <span aria-hidden className="h-2 w-2.5 shrink-0 rounded-bl-[4px] border-b border-l border-line-strong" />}
-                    <StatusDot state={a.running ? "working" : "unread"} size={6} />
+                    <StatusMark state={a.running ? "working" : "unread"} size="sm" />
                     <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{subagentTitle(a)}</span>
                     <span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3">{a.running ? t("chat-subagentcard.status_running") : t("chat-subagentcard.ended")}</span>
                   </button>

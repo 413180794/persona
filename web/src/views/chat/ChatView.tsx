@@ -26,7 +26,8 @@ import { sendDraft } from "../../lib/drafts";
 import { chatLines, freshWords, openRecap, parseUserText, segments, type UserMessage } from "../../lib/turns";
 import type { Item, Session } from "../../lib/types";
 import { anchoredScroll, followsAgain, isScrollbarPress, jumpLabel, leavesOnKey, leavesOnScrollbarDrag, leavesOnTouch, leavesOnWheel, followsAfterUnfold, UNFOLD_PAUSE, type ScrollAnchor } from "../../lib/disclosure";
-import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, type MenuItem } from "../../ui/atoms";
+import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, toast, useMenu, type MenuItem } from "../../ui/atoms";
+import { StatusMark } from "../../ui/StatusMark";
 import { Icon } from "../../ui/icons";
 import { scrollBehavior } from "../../ui/stream/motion";
 import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
@@ -1054,7 +1055,7 @@ function AttentionNote({ session }: { session: Session }) {
   const link = externalLink(session);
   return (
     <div role="status" data-testid="chat-attention" className="flex items-start gap-2 rounded-[12px] bg-red-tint px-3 py-2 text-[12.5px]" style={{ animation: "fade-up 200ms ease-out both" }}>
-      <span className="flex h-[18px] shrink-0 items-center"><StatusDot state="needs_you" size={7} /></span>
+      <span className="flex h-[18px] shrink-0 items-center"><StatusMark state="needs_you" /></span>
       <span className="line-clamp-3 min-w-0 flex-1 text-ink-2">{reason}</span>
       {link && (
         <a href={link} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-accent hover:underline">
@@ -1232,7 +1233,7 @@ export function Header({
       </div>
       <div className={cx("min-w-0 flex-1", Boolean(topCenter) && "max-lg:hidden")}>
         <div className="flex min-w-0 items-center gap-2">
-          {session && !assistant && <StatusDot state={state} />}
+          {session && !assistant && <StatusMark state={state} />}
           {session && !assistant && <SessionMark s={session} size={16} />}
           {assistant && <AssistantFace session={session} last={last} />}
           {/* narrow: the dot before the title says the state; the pill would leave the title a word or two */}

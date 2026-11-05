@@ -25,7 +25,8 @@ import {
 } from "../../lib/terminals";
 import type { Machine } from "../../lib/types";
 import { AgentMark } from "../../ui/AgentMark";
-import { Collapse, cx, IconButton, Loading, StatusDot, toast } from "../../ui/atoms";
+import { Collapse, cx, IconButton, Loading, toast } from "../../ui/atoms";
+import { StatusMark } from "../../ui/StatusMark";
 import { contextMenuProps } from "../../ui/context-menu";
 import type { MenuAt } from "../../ui/menu-model";
 import { machineNode, termPaneNode, termSpaceNode, termTabNode, type MenuNode } from "../../lib/node-actions";
@@ -382,7 +383,7 @@ function TabBlock({ machine, sp, t: tab, searching, shown, activeItem, open }: {
                   className={cx("flex min-h-9 items-center gap-2.5 rounded-[7px] py-1 pr-2.5 pl-7 transition-colors", on ? "bg-hover" : "hover:bg-hover", hot && !on && "bg-inset")}
                 >
                   <span className="flex size-4 shrink-0 items-center justify-center text-ink-3">
-                    {p.state === "shell" ? <Icon name="terminal" size={13} /> : <StatusDot state={p.state} />}
+                    {p.state === "shell" ? <Icon name="terminal" size={13} /> : <StatusMark state={p.state} />}
                   </span>
                   {p.state !== "shell" && p.agent && <AgentMark agent={p.agent} size={14} />}
                   <span className="min-w-0 flex-1">

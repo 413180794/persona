@@ -36,7 +36,9 @@ import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
 import { buildTodoTree, treeStateLabel, type TodoTree, type TreeAgent, type TreeState, type TreeTodo } from "../lib/todo-tree";
 import { findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
 import type { AgentState, Machine, Session } from "../lib/types";
-import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, useNow, type MenuItem } from "../ui/atoms";
+import { Collapse, cx, EASE, Kbd, Menu, useMenu, useNow, type MenuItem } from "../ui/atoms";
+import { StatusMark, StateTally } from "../ui/StatusMark";
+import { foldedCounts, hasFoldedCounts } from "../lib/folded-counts";
 import { runningWorkflows, workflowLine, workflowShortLine } from "../lib/workflows";
 import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
@@ -694,7 +696,7 @@ function FilterBar({ selection, counts, onChoose, botmux }: { selection: AgentFi
               on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-2 hover:bg-hover hover:text-ink",
             )}
           >
-            {f.state && <StatusDot state={f.state} size={6} />}
+            {f.state && <StatusMark state={f.state} size="sm" />}
             {f.label}
             {n !== undefined && <span className={cx("tabular-nums", on ? "text-ink-2" : "text-ink-3")}>{n}</span>}
           </button>
@@ -791,7 +793,7 @@ function TallyMark({ tally }: { tally: OriginTally }) {
   if (tally.working > 0) {
     return (
       <span title={t("sidebar.auto_working", { count: tally.working })} className="flex">
-        <StatusDot state="working" size={6} />
+        <StatusMark state="working" size="sm" />
       </span>
     );
   }
@@ -885,7 +887,7 @@ function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey
     </span>
   ) : (
     <span className="flex min-w-0 items-center gap-1.5">
-      {group.state && <span aria-hidden><StatusDot state={group.state} size={6} /></span>}
+      {group.state && <span aria-hidden><StatusMark state={group.state} size="sm" /></span>}
       <span className="truncate">{group.name}</span>
     </span>
   );
@@ -1016,7 +1018,7 @@ function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRo
           <span className="sr-only">{online ? t("sidebar.online") : t("sidebar.offline")}</span>
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
-        {m.needs > 0 ? (
+        {m.needs > 0 && !(folded && online) ? (
           <span title={t("sidebar.needs_you_count", { count: m.needs })} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
             {m.needs}<span className="sr-only"> {t("sidebar.needs_you_suffix", { count: m.needs })}</span>
           </span>
@@ -1189,7 +1191,7 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
           <span className="sr-only">{online ? t("sidebar.online") : t("sidebar.offline")}</span>
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
-        {m.needs > 0 ? (
+        {m.needs > 0 && !(folded && online) ? (
           <span title={t("sidebar.needs_you_count", { count: m.needs })} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
             {m.needs}<span className="sr-only"> {t("sidebar.needs_you_suffix", { count: m.needs })}</span>
           </span>
@@ -1224,7 +1226,7 @@ function TreeBlock({ foldKey, sessions, activeKey, state, title, right, children
       <div className="group/sec relative flex items-center gap-1 pr-2 pl-2 [@media(hover:none)]:pr-11" {...(onMenu ? contextMenuProps((at, el) => onMenu(at, el, { folded, toggle })) : {})}>
         <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left text-[12px] text-ink-2 hover:text-ink [@media(pointer:coarse)]:min-h-11">
           <Icon name="chevron" size={9} stroke={2.4} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
-          {state ? <StatusDot state={state} size={6} /> : <span className="size-1.5 shrink-0" />}
+          {state ? <StatusMark state={state} size="sm" /> : <span className="size-1.5 shrink-0" />}
           {title}
         </button>
         {right(folded)}
@@ -1299,7 +1301,7 @@ function ChildSummary({ counts }: { counts: ChildStates }) {
     <span title={t("sidebar.children_title", { list: parts.map((k) => t(`sidebar.child_${k}`, { count: counts[k] })).join(t("sidebar.list_separator")) })} className="flex items-center gap-1.5 text-[10.5px] text-ink-3 tabular-nums">
       {parts.map((k) => (
         <span key={k} className="flex items-center gap-0.5">
-          <span aria-hidden className="flex"><StatusDot state={k === "done" ? "unread" : k} size={6} /></span>
+          <span aria-hidden className="flex"><StatusMark state={k === "done" ? "unread" : k} size="sm" /></span>
           {counts[k]}
           <span className="sr-only"> {t(`sidebar.child_sr_${k}`, { count: counts[k] })}</span>
         </span>
@@ -1476,21 +1478,11 @@ function LooseSection({ sessions, reg, hover, activeKey, go, onRowMenu }: { sess
   );
 }
 
-// A group's count; folded, the states that want a look instead, so a folded group doesn't hide them.
+// A group's count; folded, the states that want a look instead (a mark and a count each, needs you first, #3559), so a
+// folded group doesn't hide them.
 function SessionTally({ sessions, folded }: { sessions: Session[]; folded: boolean }) {
-  const states = sessions.map(stateOf);
-  const dots = (["needs_you", "unread", "working"] as const).filter((s) => states.includes(s));
-  if (folded && dots.length) {
-    const label = t("sidebar.folded_states", { list: dots.map((d) => t(`sidebar.folded_${d}`, { count: states.filter((x) => x === d).length })).join(t("sidebar.list_separator")) });
-    return (
-      <span title={label} className="flex items-center gap-1">
-        <span className="sr-only">{label}</span>
-        {dots.map((d) => (
-          <StatusDot key={d} state={d} size={6} />
-        ))}
-      </span>
-    );
-  }
+  const counts = foldedCounts(sessions);
+  if (folded && hasFoldedCounts(counts)) return <StateTally counts={counts} />;
   return <GroupCount n={sessions.length} label={t("sidebar.agent_count", { count: sessions.length })} />;
 }
 
@@ -1555,7 +1547,7 @@ export function PersonaRow({ reg, hover, active, go, main, onMenu }: { reg: RegF
       {pending > 0 ? (
         <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums", aside)}>{pending}</span>
       ) : st === "working" || st === "needs_you" || st === "unread" ? (
-        <span className={cx("flex", aside)}><StatusDot state={st} size={7} /></span>
+        <span className={cx("flex", aside)}><StatusMark state={st} /></span>
       ) : null}
     </a>
   );
@@ -1633,7 +1625,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
         <Icon name={icon} size={14} stroke={1.8} />
       </span>
       <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : "text-ink-2")}>{label}</span>
-      {dot && <StatusDot state={dot} size={6} />}
+      {dot && <StatusMark state={dot} size="sm" />}
       {hint && <span className="text-[11px] text-ink-3 tabular-nums">{hint}</span>}
       {badge !== undefined && (
         <span className={cx("flex h-4.5 min-w-4.5 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1 text-[10.5px] font-semibold tabular-nums", BADGE_CLASS[badgeTone ?? "accent"])} style={{ animation: `pop-in 250ms ${EASE} both` }} key={badge}>
@@ -1742,7 +1734,7 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
       className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, // room for 「N 个 Agent」 and the ⋯ beside it (instead of the ⋯'s own)
         endRoom ? "pr-[108px] [@media(hover:none)]:pr-[120px]" : cx(onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11"))}
     >
-      <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
+      <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusMark state={st} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SessionMark s={s} size={14} />}
       {showState && !s.assistant && <SourceTag s={s} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
@@ -2096,7 +2088,7 @@ export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onS
           pending > 0 ? `Persona ${pending}` : "Persona",
           <PersonaAvatar size={20} fallback={<span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-ink text-surface"><Icon name="spark" size={12} stroke={2} /></span>} />,
           pending > 0 ? <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-red ring-2 ring-canvas" />
-            : st === "working" || st === "needs_you" || st === "unread" ? <span aria-hidden className="absolute top-0.5 right-0.5 flex rounded-full ring-2 ring-canvas"><StatusDot state={st} size={7} /></span> : null,
+            : st === "working" || st === "needs_you" || st === "unread" ? <span aria-hidden className="absolute top-0.5 right-0.5 flex rounded-full ring-2 ring-canvas"><StatusMark state={st} /></span> : null,
           t("sidebar.persona_main"),
         )}
         {pages.map((p) => link(

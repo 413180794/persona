@@ -13,7 +13,8 @@ import { navigate } from "../../lib/router";
 import { refreshAssistant, useStore } from "../../lib/store";
 import type { Session } from "../../lib/types";
 import { t } from "../../i18n";
-import { Button, cx, Dialog, Loading, StatusDot, toast } from "../../ui/atoms";
+import { Button, cx, Dialog, Loading, toast } from "../../ui/atoms";
+import { StatusMark } from "../../ui/StatusMark";
 import { Icon } from "../../ui/icons";
 import { Spark } from "./InboxParts";
 
@@ -268,7 +269,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
             onPick={() => setTarget(s)}
             title={sessionTitle(s)}
             sub={[machineWithHub(s.machine_id, machines), s.space_name].filter(Boolean).join(" › ")}
-            icon={<span className="flex size-6 items-center justify-center"><StatusDot state={stateOf(s)} /></span>}
+            icon={<span className="flex size-6 items-center justify-center"><StatusMark state={stateOf(s)} /></span>}
           />
         ))}
       </div>

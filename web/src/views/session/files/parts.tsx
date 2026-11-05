@@ -5,6 +5,7 @@ import { gitTone, glyphOf } from "../../../lib/files";
 import { cx, IconButton } from "../../../ui/atoms";
 import { Icon, type IconName } from "../../../ui/icons";
 import { t } from "../../../i18n";
+import { SegmentedTrack } from "../../../ui/Segmented";
 
 /** A panel header whose leading square is a back button (sub-views); PanelHeader's look otherwise. */
 export function BackHeader({
@@ -71,23 +72,24 @@ export function GitDot({ letter }: { letter: string }) {
 /** Two (or a few) ways to show the same thing; single-line labels. */
 export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="tablist" aria-label={label} className="flex h-7 shrink-0 items-center rounded-[8px] bg-field p-0.5">
+    <SegmentedTrack role="tablist" label={label} className="flex h-7 shrink-0 items-center rounded-[8px] p-0.5" thumbClassName="rounded-[6px]">
       {options.map(([v, text]) => (
         <button
           key={v}
           type="button"
           role="tab"
           aria-selected={v === value}
+          data-selected={v === value}
           onClick={() => onChange(v)}
           className={cx(
-            "h-6 whitespace-nowrap rounded-[6px] px-2 text-[12px] font-medium transition-[background-color,color,box-shadow] duration-150",
-            v === value ? "bg-surface text-ink shadow-btn" : "text-ink-3 hover:text-ink",
+            "relative z-[1] h-6 whitespace-nowrap rounded-[6px] px-2 text-[12px] font-medium transition-colors duration-150",
+            v === value ? "text-ink" : "text-ink-3 hover:text-ink",
           )}
         >
           {text}
         </button>
       ))}
-    </div>
+    </SegmentedTrack>
   );
 }
 
