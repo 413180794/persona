@@ -302,7 +302,16 @@ internal enum class ToolVerb(@StringRes val label: Int, @StringRes val running: 
 
 internal data class ToolPresentation(
     val title: String, val verb: String, val detail: String? = null, val mono: Boolean = false, val kind: ToolVerb = ToolVerb.Use,
-)
+    /** A tool with words of its own (「操控电脑」, `namedToolVerb`): the running line says them, not 「正在执行 x」. */
+    val named: Boolean = false,
+) {
+    /** The running line's words for this call: 「正在读取 x」, or a named tool's 「操控电脑 x」. */
+    fun running(res: Resources): String = when {
+        !named -> res.getString(kind.running, title)
+        title == verb -> verb
+        else -> res.getString(R.string.chat_tool_running_named, verb, title)
+    }
+}
 
 internal fun toolPresentation(res: Resources, item: Item): ToolPresentation {
     val input = item.toolInput as? JsonObject
@@ -320,7 +329,9 @@ internal fun toolPresentation(res: Resources, item: Item): ToolPresentation {
         "AskUserQuestion" -> ToolVerb.Ask
         else -> ToolVerb.Use
     }
-    val verb = res.getString(kind.label)
+    // Persona's own tools, the computer's and the phone's have words of their own (iOS ToolPresentation.verb).
+    val named = if (kind == ToolVerb.Use) persona.core.domain.namedToolVerb(name)?.resolve(res) else null
+    val verb = named ?: res.getString(kind.label)
     val path = input?.string("file_path") ?: input?.string("notebook_path")
     if (!path.isNullOrBlank()) {
         val normalized = path.replace('\\', '/')
@@ -330,12 +341,12 @@ internal fun toolPresentation(res: Resources, item: Item): ToolPresentation {
         val command = input?.string("command")?.lineSequence()?.firstOrNull().orEmpty()
         return ToolPresentation(command.ifBlank { res.getString(R.string.chat_tool_command) }, verb, input?.string("description"), mono = true, kind = kind)
     }
-    val subject = persona.core.domain.toolSubject(item).trim()
+    val subject = persona.core.domain.toolSubjectText(item).resolve(res).trim()
     return ToolPresentation(subject.ifBlank { when (name) {
         "TodoWrite" -> res.getString(R.string.chat_tool_todo_list)
         "Task", "Agent" -> res.getString(R.string.chat_tool_subagent)
         else -> verb
-    } }, verb, mono = name == "Bash", kind = kind)
+    } }, verb, mono = name == "Bash", kind = kind, named = named != null)
 }
 
 /**
@@ -357,7 +368,7 @@ internal fun workSummary(res: Resources, line: ChatLine.Work, recordedDuration: 
         val working = res.getString(R.string.chat_work_working)
         val action = when (current) {
             is WorkItem.Tool -> if (current.call.running)
-                toolPresentation(res, current.call.use.item).let { res.getString(it.kind.running, it.title) } else working
+                toolPresentation(res, current.call.use.item).running(res) else working
             is WorkItem.Thought -> if (current.item.kind == "thinking") res.getString(R.string.chat_work_thinking) else working
             else -> working
         }

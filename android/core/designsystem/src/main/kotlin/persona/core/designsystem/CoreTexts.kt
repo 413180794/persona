@@ -207,6 +207,42 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.ToolEnterPlan -> R.string.designsystem_core_tool_enter_plan
     CoreText.Key.ToolLoadTools -> R.string.designsystem_core_tool_load_tools
     CoreText.Key.ToolSkill -> R.string.designsystem_core_tool_skill
+    CoreText.Key.ToolMonitor -> R.string.designsystem_core_tool_monitor
+    CoreText.Key.ToolPhone -> R.string.designsystem_core_tool_phone
+    CoreText.Key.ToolMail -> R.string.designsystem_core_tool_mail
+    CoreText.Key.ToolConversationsList -> R.string.designsystem_core_tool_conversations_list
+    CoreText.Key.ToolConversationRead -> R.string.designsystem_core_tool_conversation_read
+    CoreText.Key.ToolConversationRename -> R.string.designsystem_core_tool_conversation_rename
+    CoreText.Key.ToolConversationArchive -> R.string.designsystem_core_tool_conversation_archive
+    CoreText.Key.ToolConversationUnarchive -> R.string.designsystem_core_tool_conversation_unarchive
+    CoreText.Key.ToolConversationNew -> R.string.designsystem_core_tool_conversation_new
+    CoreText.Key.ToolConversationSend -> R.string.designsystem_core_tool_conversation_send
+    CoreText.Key.ToolComputerState -> R.string.designsystem_core_tool_computer_state
+    CoreText.Key.ToolWholeScreen -> R.string.designsystem_core_tool_whole_screen
+    CoreText.Key.ToolComputerRun -> R.string.designsystem_core_tool_computer_run
+    CoreText.Key.ToolBrowserRun -> R.string.designsystem_core_tool_browser_run
+    CoreText.Key.ToolBrowserLook -> R.string.designsystem_core_tool_browser_look
+    CoreText.Key.ToolAgentRead -> R.string.designsystem_core_tool_agent_read
+    CoreText.Key.ToolAgentSend -> R.string.designsystem_core_tool_agent_send
+    CoreText.Key.ToolAgentsList -> R.string.designsystem_core_tool_agents_list
+    CoreText.Key.ToolAgentStart -> R.string.designsystem_core_tool_agent_start
+    CoreText.Key.ToolInteractionAnswer -> R.string.designsystem_core_tool_interaction_answer
+    CoreText.Key.ToolAskPersona -> R.string.designsystem_core_tool_ask_persona
+    CoreText.Key.ToolKbSearch -> R.string.designsystem_core_tool_kb_search
+    CoreText.Key.ToolKbUpdate -> R.string.designsystem_core_tool_kb_update
+    CoreText.Key.ToolAskYou -> R.string.designsystem_core_tool_ask_you
+    CoreText.Key.ToolNotifyYou -> R.string.designsystem_core_tool_notify_you
+    CoreText.Key.ToolFollowup -> R.string.designsystem_core_tool_followup
+    CoreText.Key.ToolFollowupsList -> R.string.designsystem_core_tool_followups_list
+    CoreText.Key.ToolFollowupCancel -> R.string.designsystem_core_tool_followup_cancel
+    CoreText.Key.ToolRoutineSchedule -> R.string.designsystem_core_tool_routine_schedule
+    CoreText.Key.ToolRoutineDelete -> R.string.designsystem_core_tool_routine_delete
+    CoreText.Key.ToolInboxDraft -> R.string.designsystem_core_tool_inbox_draft
+    CoreText.Key.ToolPersonaSettings -> R.string.designsystem_core_tool_persona_settings
+    CoreText.Key.ToolViewShow -> R.string.designsystem_core_tool_view_show
+    CoreText.Key.ToolViewGet -> R.string.designsystem_core_tool_view_get
+    CoreText.Key.ToolViewUpdate -> R.string.designsystem_core_tool_view_update
+    CoreText.Key.ToolPersonaCall -> R.string.designsystem_core_tool_persona_call
     CoreText.Key.ToolGeneric -> R.string.designsystem_core_tool_generic
     CoreText.Key.ToolWithSubject -> R.string.designsystem_core_tool_with_subject
     CoreText.Key.ContextQuote -> R.string.designsystem_core_context_quote

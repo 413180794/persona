@@ -337,6 +337,7 @@
     <string name="chat_tool_running_plan">%1$sを計画中</string>
     <string name="chat_tool_running_ask">%1$sを質問中</string>
     <string name="chat_tool_running_use">%1$sを実行中</string>
+    <string name="chat_tool_running_named">%1$s %2$s</string>
     <string name="chat_tool_command">コマンド</string>
     <string name="chat_tool_todo_list">タスクリスト</string>
     <string name="chat_tool_subagent">サブエージェント</string>

@@ -104,14 +104,14 @@ func TestWorkspacesListKeepsSameNamedSourcesAndReportsFailure(t *testing.T) {
 	if len(w) != 2 || w[0].Source == w[1].Source || w[0].SourceID != w[1].SourceID || w[0].Cwd != "" {
 		t.Fatalf("workspaces = %+v", w)
 	}
-	b.err = host.ErrNotRunning
+	b.err = errors.New("doc.get: unavailable")
 	partial, err := n.listWorkspaces(context.Background())
 	if err != nil || len(partial.Workspaces) != 1 || partial.Workspaces[0].Source != host.Orca ||
-		len(partial.Errors) != 1 || partial.Errors[0].Source != host.HerdrCore || partial.Errors[0].Error != host.ErrNotRunning.Error() {
+		len(partial.Errors) != 1 || partial.Errors[0].Source != host.HerdrCore || partial.Errors[0].Error != b.err.Error() {
 		t.Fatalf("partial catalog = %+v, %v", partial, err)
 	}
 	a.err = host.ErrUnsupported
-	if _, err := n.listWorkspaces(context.Background()); !errors.Is(err, host.ErrNotRunning) || !errors.Is(err, host.ErrUnsupported) {
+	if _, err := n.listWorkspaces(context.Background()); !errors.Is(err, host.ErrUnsupported) || !strings.Contains(err.Error(), "unavailable") {
 		t.Fatalf("all hosts failed = %v", err)
 	}
 	n.hosts = host.NewRegistry()
@@ -122,7 +122,7 @@ func TestWorkspacesListKeepsSameNamedSourcesAndReportsFailure(t *testing.T) {
 
 func TestWorkspacesListEmptyHostWithFailedSource(t *testing.T) {
 	empty := &workspaceHost{bareHost: bareHost{kind: host.Herdr}}
-	failed := &workspaceHost{bareHost: bareHost{kind: host.Botmux}, err: host.ErrNotRunning}
+	failed := &workspaceHost{bareHost: bareHost{kind: host.Botmux}, err: errors.New("botmux observe: timeout")}
 	n := &Node{hosts: host.NewRegistry(empty, failed), state: newState()}
 	raw, err := n.handle(context.Background(), "workspaces.list", nil)
 	if err != nil {
@@ -130,13 +130,39 @@ func TestWorkspacesListEmptyHostWithFailedSource(t *testing.T) {
 	}
 	got := raw.(proto.WorkspacesResponse)
 	if got.Workspaces == nil || len(got.Workspaces) != 0 || len(got.Errors) != 1 ||
-		got.Errors[0].Source != host.Botmux || got.Errors[0].Error != host.ErrNotRunning.Error() {
+		got.Errors[0].Source != host.Botmux || got.Errors[0].Error != failed.err.Error() {
 		t.Fatalf("empty successful source with failure = %+v", got)
 	}
 	failed.err = nil
 	got, err = n.listWorkspaces(context.Background())
 	if err != nil || len(got.Errors) != 0 {
 		t.Fatalf("recovered source = %+v, %v", got, err)
+	}
+}
+
+// An engine that is not running on this computer (Orca not started, botmux without a daemon or too old) has no
+// workspaces: not a source error for the board, and not a failure even when nothing else runs (#3023).
+func TestWorkspacesListSkipsHostsNotRunning(t *testing.T) {
+	herdr := &workspaceHost{bareHost: bareHost{kind: host.Herdr}, spaces: []host.Space{{ID: "w1", Label: "project"}}}
+	orca := &workspaceHost{bareHost: bareHost{kind: host.Orca},
+		err: host.Mark(errors.New("orca is not running: open orca-runtime.json: no such file or directory"), host.ErrNotRunning)}
+	botmux := &workspaceHost{bareHost: bareHost{kind: host.Botmux},
+		err: host.Mark(errors.New("botmux is too old to list its sessions"), host.ErrNotRunning)}
+	n := &Node{hosts: host.NewRegistry(herdr, orca, botmux), state: newState()}
+	got, err := n.listWorkspaces(context.Background())
+	if err != nil || len(got.Workspaces) != 1 || got.Workspaces[0].Source != host.Herdr || len(got.Errors) != 0 {
+		t.Fatalf("with engines not running = %+v, %v", got, err)
+	}
+	n.hosts = host.NewRegistry(orca, botmux)
+	got, err = n.listWorkspaces(context.Background())
+	if err != nil || got.Workspaces == nil || len(got.Workspaces) != 0 || len(got.Errors) != 0 {
+		t.Fatalf("nothing running = %+v, %v", got, err)
+	}
+	// A real failure next to one not running is still reported, and alone it is still an error.
+	botmux.err = errors.New("botmux observe: signal: killed")
+	got, err = n.listWorkspaces(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "killed") {
+		t.Fatalf("real failure = %+v, %v", got, err)
 	}
 }
 

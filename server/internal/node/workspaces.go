@@ -105,6 +105,11 @@ func (n *Node) listWorkspaces(ctx context.Context) (proto.WorkspacesResponse, er
 				err = fmt.Errorf("unsupported: host returned no workspace layout")
 			}
 		}
+		if errors.Is(err, host.ErrNotRunning) {
+			// Not running on this computer (Orca not started, no botmux daemon): it has no workspaces, as in the agents
+			// list. Not a source error the board should show.
+			continue
+		}
 		if err != nil {
 			failures = append(failures, fmt.Errorf("%s workspaces: %w", h.Kind(), err))
 			out.Errors = append(out.Errors, proto.WorkspaceSourceError{Source: h.Kind(), Error: err.Error()})
@@ -127,7 +132,8 @@ func (n *Node) listWorkspaces(ctx context.Context) (proto.WorkspacesResponse, er
 				Title: s.Label, Cwd: cwd, Branch: s.Branch, Online: true, Available: true})
 		}
 	}
-	if succeeded == 0 {
+	if succeeded == 0 && len(failures) > 0 {
+		// Every source that runs here failed: an error, not an empty catalog.
 		return proto.WorkspacesResponse{}, errors.Join(failures...)
 	}
 	return out, nil

@@ -337,6 +337,7 @@
     <string name="chat_tool_running_plan">正在规划 %1$s</string>
     <string name="chat_tool_running_ask">正在询问 %1$s</string>
     <string name="chat_tool_running_use">正在执行 %1$s</string>
+    <string name="chat_tool_running_named">%1$s %2$s</string>
     <string name="chat_tool_command">命令</string>
     <string name="chat_tool_todo_list">任务清单</string>
     <string name="chat_tool_subagent">子 Agent</string>

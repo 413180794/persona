@@ -361,7 +361,8 @@ fun WorkStep(
                     else -> mark()
                 }
                 Spacer(Modifier.width(8.dp))
-                verb?.let { Text(it, style = type.caption, color = palette.ink3, maxLines = 1, modifier = Modifier.width(36.dp)) }
+                // At least the width of 读取 / 运行, so those line up; a named tool's longer words (看浏览器) are not cut.
+                verb?.let { Text(it, style = type.caption, color = palette.ink3, maxLines = 1, modifier = Modifier.widthIn(min = 36.dp).padding(end = 6.dp)) }
                 Column(Modifier.weight(1f)) {
                     Text(title, style = titleStyle, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     detail?.let { Text(it, style = type.caption.copy(fontWeight = FontWeight.Normal, fontSize = androidx.compose.ui.unit.TextUnit(12f, androidx.compose.ui.unit.TextUnitType.Sp)), color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis) }

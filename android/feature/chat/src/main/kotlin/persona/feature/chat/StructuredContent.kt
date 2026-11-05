@@ -168,7 +168,7 @@ internal fun ThoughtContent(text: String, id: String, collapsed: Boolean, last: 
     }
 }
 
-internal fun toolCategory(name: String) = when (name) {
+internal fun toolCategory(name: String) = when (val base = persona.core.domain.toolBaseName(name)) {
     "Read", "LS" -> PhIcons.Eye
     "Edit", "MultiEdit", "NotebookEdit" -> PhIcons.PencilSimple
     "Write" -> PhIcons.File
@@ -178,7 +178,17 @@ internal fun toolCategory(name: String) = when (name) {
     "Task", "Agent" -> PhIcons.Robot
     "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList" -> PhIcons.ListChecks
     "EnterPlanMode", "ExitPlanMode" -> PhIcons.Lightbulb
-    else -> PhIcons.Wrench
+    // Persona's own tools (iOS ToolPresentation.symbol).
+    "conversation_rename" -> PhIcons.PencilSimple
+    "conversation_archive", "conversation_unarchive" -> PhIcons.Archive
+    "conversations_list", "conversation_read", "conversation_new", "conversation_send" -> PhIcons.ChatCircle
+    "computer_state", "computer_run" -> PhIcons.Desktop
+    "browser_run", "browser_look" -> PhIcons.GlobeSimple
+    else -> when {
+        base.startsWith("phone_") -> PhIcons.DeviceMobile
+        base.startsWith("mail_") -> PhIcons.EnvelopeSimple
+        else -> PhIcons.Wrench
+    }
 }
 
 @Composable

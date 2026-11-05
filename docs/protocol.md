@@ -1159,7 +1159,7 @@ hub → node 请求：
 | `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`：同 REST 的 `…/launchers/{name}/models`；`agent_type` 是 hub 配置里这个启动器的类型（不给就按 node 自己认出的） |
 | `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
 | `dirs.list` | `{path}` → 同 REST |
-| `workspaces.list` | `{}` → `{workspaces:[Workspace],errors?:[{source,error}]}`；Workspace 同「工作区看板」，node 省略 machine_id，id/source_id 为宿主本地 ID。包含没有运行 Agent 的空间；各来源分别报告错误，全部失败返回 RPC error，不能伪装成空成功 |
+| `workspaces.list` | `{}` → `{workspaces:[Workspace],errors?:[{source,error}]}`；Workspace 同「工作区看板」，node 省略 machine_id，id/source_id 为宿主本地 ID。包含没有运行 Agent 的空间；各来源分别报告错误，全部失败返回 RPC error，不能伪装成空成功。这台电脑上没在运行的来源（`host.ErrNotRunning`：Orca 没开、botmux 没有 daemon 或版本太旧没有 `observe`）算没有工作区，不报错；只有没运行的来源时回空列表 |
 | `workspace.resolve` | `{path}` → `Workspace`；校验真实目录、解析符号链接，成功 source 为 `directory`、id/source_id/cwd 为物理路径、available 为 true；支持本机绝对路径或 `~/`，拒绝不存在、非目录及受保护的 iCloud 路径，不执行宿主、Agent 或 Git 操作 |
 | `sessions.list` | → `{sessions}` |
 | `session.start` | `{cwd, launcher, agent_type?, prompt?, resume_session_id?, workspace_id?, permission_mode?, effort?, tab_name?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`）；Codex 启动器同步、必须带 `prompt`（`node/codex_start.go`） |

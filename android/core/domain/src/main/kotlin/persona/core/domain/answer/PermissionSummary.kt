@@ -5,6 +5,7 @@ import persona.core.contracts.CoreText
 import persona.core.contracts.Interaction
 import persona.core.contracts.Item
 import persona.core.domain.toolSubject
+import persona.core.domain.toolSubjectText
 import persona.core.domain.toolVerb
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -22,8 +23,8 @@ fun Interaction.permissionSummary(): PermissionSummary {
         field("command")?.let { return PermissionSummary(CoreText.plain(it), description, monospace = true) }
         if (description != null) return PermissionSummary(CoreText.plain(description))
     }
-    val subject = toolSubject(Item(id = id, toolName = toolName, toolInput = toolInput)).takeIf(String::isNotBlank)
-    if (subject != null) return PermissionSummary(CoreText.of(Key.ToolWithSubject, toolVerb(toolName), subject))
+    val item = Item(id = id, toolName = toolName, toolInput = toolInput)
+    if (toolSubject(item).isNotBlank()) return PermissionSummary(CoreText.of(Key.ToolWithSubject, toolVerb(toolName), toolSubjectText(item)))
     if (description != null) return PermissionSummary(CoreText.plain(description))
     val raw = toolInput?.toString().orEmpty()
     return PermissionSummary(if (raw.isBlank()) toolVerb(toolName) else CoreText.plain(raw.take(240) + if (raw.length > 240) "…" else ""))

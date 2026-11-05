@@ -356,6 +356,7 @@
     <string name="chat_tool_running_plan">Planning %1$s</string>
     <string name="chat_tool_running_ask">Asking %1$s</string>
     <string name="chat_tool_running_use">Using %1$s</string>
+    <string name="chat_tool_running_named">%1$s %2$s</string>
     <string name="chat_tool_command">Command</string>
     <string name="chat_tool_todo_list">Task list</string>
     <string name="chat_tool_subagent">Subagent</string>

@@ -299,6 +299,22 @@ func TestBotmuxObserveIsReusedAndOfflineIsEmpty(t *testing.T) {
 	}
 }
 
+// A botmux from before `observe` prints its usage and exits 0: that is botmux not running here, saying to upgrade, not
+// a parse error (#3023). Valid JSON of another schema is still an error.
+func TestBotmuxTooOldIsNotRunning(t *testing.T) {
+	usage := []byte("\nbotmux v3.13.0 — IM ↔ AI 编程 CLI 桥接\n\n命令:\n  setup  交互式配置\n")
+	h := &botmuxHost{run: func(context.Context, ...string) ([]byte, error) { return usage, nil }}
+	_, err := h.Agents(context.Background())
+	if !errors.Is(err, host.ErrNotRunning) || !strings.Contains(err.Error(), "botmux upgrade") {
+		t.Fatalf("old botmux: %v", err)
+	}
+	h = &botmuxHost{run: func(context.Context, ...string) ([]byte, error) { return []byte(`{"schemaVersion":2}`), nil }}
+	_, err = h.Agents(context.Background())
+	if err == nil || errors.Is(err, host.ErrNotRunning) || !strings.Contains(err.Error(), "schema 2") {
+		t.Fatalf("other schema: %v", err)
+	}
+}
+
 // A message goes to botmux as a turn of the session — a running one and a parked one alike (botmux resumes it; no
 // claude --resume in herdr) — with the dashboard's token, asked of botmux again once it was rotated.
 func TestBotmuxReplyIsDeliveredByBotmux(t *testing.T) {

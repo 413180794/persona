@@ -795,6 +795,7 @@ Debug 包的设置页底部另有一行「组件目录（调试版）」，自�
 - 进行中那一轮（2026-11-04 照网页 #1990 改，#2252）：Agent 对话里工作行写「正在工作…」，旁边是每秒走的用时（单独一小块 `WorkClock`，只重画它自己），下面就地露出最新的计划卡和最新 5 步
   （工具调用和有内容的思考，中间回复、通知、折叠段、子 Agent（Task / Agent）不算；同一串读文件里重复读同一个文件只算一次；思考在这里只占一行，截断，`workPeek`）；点开照旧列出全部步骤，做完收成「做了 N 步，用时 X，K 项失败」。
   Persona 自己的对话（`ChatRenderStyle.Assistant`，`compactToolSummary`）不变：仍是一行「正在运行 swift test，第 5 步，1 分 20 秒」（R1），没有预览。
+- 工具的名字照 iOS（`ToolViews.swift`、`PersonaToolNames.swift`，#2753）：Persona 自己的工具、管理对话的 `conversation_*`、操控电脑的 `computer_*` / `browser_*`、`phone_*`、`mail_*` 按去掉 `mcp__x__` 前缀的名字给词（「重命名对话」「操控电脑」「手机」「读 Agent 对话」…，三种语言）、图标和一句主题，运行中的工作行写「操控电脑 macbook」，没给 app 的 `computer_state` 写「macbook · 整个屏幕」（随界面语言），`ask_user` 写第一个问题，`Monitor` 写描述或命令第一行；Persona 服务器上没认出来的写「调用 Persona · github read」，别的没认出来的照旧是原名（`core/domain` 的 `namedToolVerb`，单测 `ToolVerbTest`、`feature/chat` 的 `ToolPresentationTest`）。
 - 计划（TodoWrite）画成计划卡（设计系统 `PlanCard`）：标题是「完成数/总数」和正在做的那项（进行中的用它的 activeForm），右边「Step N/M」（全部做完是一个对勾），
   点标题收起成一条进度细线；列表里做完的变淡打勾，进行中的在跑时转圈，待办是空心圆；更新失败写「更新失败」（收起时也显示，`planProgress`）。
   和网页 `planSteps` 一样，一个工作行只画最新一份两项以上的计划（`latestPlan`）：更早的 TodoWrite、清空用的空列表、只有一项的都不画；没写 content 的项用它的 activeForm。

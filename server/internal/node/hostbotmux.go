@@ -239,6 +239,11 @@ func (h *botmuxHost) observe(parent context.Context) ([]botmuxRow, error) {
 		h.err = host.Mark(fmt.Errorf("botmux observe: %w", err), host.ErrNotRunning)
 	case err != nil:
 		h.err = fmt.Errorf("botmux observe: %w", err)
+	case !json.Valid(out):
+		// A botmux from before `observe` prints its usage instead (and exits 0): it cannot list sessions here, which is
+		// botmux not running for the node, with what to do about it.
+		h.err = host.Mark(errors.New("botmux is too old to list its sessions (no `botmux observe`): run `botmux upgrade`"),
+			host.ErrNotRunning)
 	case json.Unmarshal(out, &doc) != nil || doc.SchemaVersion != 1:
 		h.err = fmt.Errorf("botmux observe: unexpected output (schema %d)", doc.SchemaVersion)
 	default:

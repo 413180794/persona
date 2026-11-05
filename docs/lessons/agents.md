@@ -308,3 +308,4 @@ Persona 只看 herdr 和 hook，于是 3 个被挡住的 Agent 显示成「完�
 2026-11-05：一个 Agent 用 Workflow 工具在后台跑多 agent 审计，主轮结束等通知，hub 把它判成「完成未看」、待办判完成并推了「做完了」，按 #1696 还可能被自动关掉、连带杀掉 workflow。
 原因是 node 只认 Bash / Agent 的后台任务：Workflow 的结果文案是「Workflow launched in background. Task ID: …」，它的 agent 也不在 `subagents/agent-*.meta.json`，而在 `subagents/workflows/<run>/` 下，一个都没扫到。
 Claude Code 新加的后台类工具（Workflow、Monitor）都要在 `transcript.trackBackground` 和 node 的 `bgMarkers` 里登记，否则「这一轮结束但还有后台活」就会被当成做完；`turn_duration` 的 `pending*Count` 字段可以用来发现新的种类。
+- 「没在运行」的宿主别报成看板的来源错误（2026-11-05，#3023）：Agents 列表早把 `host.ErrNotRunning` 当作「没有窗格」，`workspaces.list` 却把它写进 `errors`，工作区看板在没开 Orca 的 Linux 机器上一直显示 `orca is not running`。新加按来源列东西的 RPC，先想好「没运行」和「出错」怎么分。另外老版 botmux（如 3.13）没有 `observe`：不报错、退出码 0、在 stdout 打印帮助，按 JSON 解析只会得到 `schema 0`；输出不是 JSON 就当作没运行并提示 `botmux upgrade`。
