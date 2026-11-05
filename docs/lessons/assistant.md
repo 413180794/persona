@@ -26,6 +26,9 @@
 - Codex 助手的记忆和 Claude 共用助手目录的 auto memory（`docs/assistant.md`「Codex」）。Codex 的 `untrusted` 连 `head` 都要批准，
   不单独放行的话每次读记忆都在手机上弹卡片（2026-11-01 实测）；记忆目录在助手目录外，不加进 `writableRoots` 写不进去。
   Codex 自己的 `~/.codex/memories` 是整台机器共用的，别给助手打开。
+- Codex 在 macOS 的沙箱拒绝路径里带软链接的可写目录（`/tmp`、`/var` 这类顶层的除外），每条命令执行前就报 `symlinked writable roots are not supported`（#1751）。
+  助手目录走旧名 `~/.jarvis`（指向 `.persona`）、`~/.claude` 放在 dotfiles 里都会撞上；cwd 和记忆目录两个可写目录都要解析成真实路径再交给 Codex（`codexDirs`），只改 cwd 不够。
+  报错里的 `allow_symlinked_codex_home` 只放行 CODEX_HOME 下面的，别拿它放宽。验证：用 `command/exec` 和 `thread/fork`（`ephemeral: true`，不碰原会话）带同样的参数跑 `pwd`。
 - 在 hub 机器上用假 HOME 起测试 hub 时，`~/.local/bin/codex` 包装脚本按 `$HOME/.npm-global` 找安装目录，假 HOME 里要软链过去，否则 app-server 一启动就退出。
 - 假 HOME 的测试 hub 不等于隔离：node 读的是启动器指定的 Claude 配置目录，启动器（`claude-aster` 这类）写死了 `CLAUDE_CONFIG_DIR` 时，测试对话的 transcript 会写进真实的配置目录，而且 node 按 cwd 以 `/.jarvis/assistant` 结尾认助手对话，真实的那些也会出现在测试 hub 的列表里、测试助手能改它们（2026-11-01 测对话管理工具时）。做法：假 HOME 里放一份启动器的拷贝，`CLAUDE_CONFIG_DIR` 改到假 HOME 下（settings.json 拷一份），`_claude_launchers` 也写进假 HOME 的 .bashrc；提示词只让它动自己开的对话；测完删掉整个假 HOME（拷贝里有 key）。
 - node 的 `assistant.send` 带一个它不认识的 session id 时不报错：找不到 transcript 就用这个 id 起一段**空白**的新对话。要「续上，续不上就告诉我」的调用

@@ -192,13 +192,14 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	if err := os.MkdirAll(cwd, 0o700); err != nil {
 		return nil, err
 	}
+	root, memDir := n.codexDirs(cwd)
 	key := "proc-" + randHex(8)
 	shell, err := interactiveShell()
 	if err != nil {
 		return nil, err
 	}
 	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "jarvis"}, codexArgs(n.bin, key)...)...)
-	cmd.Dir = cwd
+	cmd.Dir = root
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1")
 	cmd.Env = identity.Environment(cmd.Env, n.assistantLarkEnv(cwd)...)
 	cmd.SysProcAttr = osproc.GroupAttr()
@@ -219,10 +220,6 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	}
 	p := &assistantProc{id: id, agent: "codex", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
 		born: time.Now(), lastActive: time.Now(), model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
-	memDir := n.memoryDir(cwd)
-	if err := os.MkdirAll(memDir, 0o700); err != nil {
-		n.logger.Printf("assistant codex: memory dir: %v", err)
-	}
 	c := &codexConn{n: n, p: p, key: key, memDir: memDir, pending: map[int64]chan codexReply{}, asks: map[string]context.CancelFunc{}, files: map[string][]string{}}
 	p.cx = c
 	n.mu.Lock()
@@ -266,7 +263,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 
 	ctx, cancel := context.WithTimeout(context.Background(), codexStartTimeout)
 	defer cancel()
-	if err := c.start(ctx, id, cwd, resume); err != nil {
+	if err := c.start(ctx, id, root, resume); err != nil {
 		p.stop()
 		return nil, fmt.Errorf("%s（codex app-server）没有启动起来: %w", launcher, err)
 	}
@@ -276,6 +273,26 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 		n.mu.Unlock()
 	}
 	return p, nil
+}
+
+// codexDirs is the workspace and the memory directory (made if missing) as Codex gets them, symlinks resolved: both
+// are writable roots, and its macOS sandbox refuses one with a symlink in it (~/.jarvis → .persona, a ~/.claude kept in
+// dotfiles), turning every command down before it runs. Only Codex sees the real paths; the session keeps its cwd.
+func (n *Node) codexDirs(cwd string) (root, memDir string) {
+	memDir = n.memoryDir(cwd)
+	if err := os.MkdirAll(memDir, 0o700); err != nil {
+		n.logger.Printf("assistant codex: memory dir: %v", err)
+	}
+	return n.realDir(cwd), n.realDir(memDir)
+}
+
+func (n *Node) realDir(dir string) string {
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		n.logger.Printf("assistant codex: resolve %s: %v", dir, err)
+		return dir
+	}
+	return real
 }
 
 // start does the handshake and opens the thread: thread/start for a new conversation (Codex picks the id),
@@ -958,7 +975,7 @@ func readsOnlyMemory(command, cwd, dir string) bool {
 				return false // a sed script that writes (w file) or runs (e) something
 			}
 			if strings.Contains(a, "/") && !strings.HasPrefix(a, "-") {
-				if p := a; !allUnder([]string{p}, cwd, dir) && filepath.Clean(p) != filepath.Clean(dir) {
+				if p := a; !allUnder([]string{p}, cwd, dir) && realPath(filepath.Clean(p)) != realPath(dir) {
 					return false
 				}
 				touched = true
@@ -973,16 +990,29 @@ func allUnder(paths []string, cwd, dir string) bool {
 	if dir == "" || len(paths) == 0 {
 		return false
 	}
+	dir = realPath(dir)
 	for _, p := range paths {
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(cwd, p)
 		}
-		rel, err := filepath.Rel(dir, filepath.Clean(p))
+		rel, err := filepath.Rel(dir, realPath(filepath.Clean(p)))
 		if err != nil || rel == ".." || strings.HasPrefix(rel, "../") || rel == "." {
 			return false
 		}
 	}
 	return true
+}
+
+// realPath is p with its symlinks resolved as far as it exists (a file about to be written has a parent that does), so a
+// path written through a link (~/.claude/...) and the resolved memory directory compare.
+func realPath(p string) string {
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		return real
+	}
+	if real, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
+		return filepath.Join(real, filepath.Base(p))
+	}
+	return p
 }
 
 // codexMemoryPrompt tells Codex about the assistant's memory: the same directory and format as Claude Code's

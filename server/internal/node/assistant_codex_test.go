@@ -588,3 +588,104 @@ func TestReadsOnlyMemory(t *testing.T) {
 		}
 	}
 }
+
+// Codex's macOS sandbox refuses a writable root with a symlink in it, so the workspace and the memory directory reach
+// it resolved (#1751): the state directory is reached through the old name (~/.jarvis → .persona) and the Claude
+// config directory is often a link into dotfiles. Plain directories go as they are.
+func TestCodexGetsRealWritableRoots(t *testing.T) {
+	noLinks := func(what, p string) {
+		t.Helper()
+		if real, err := filepath.EvalSymlinks(p); err != nil || real != p {
+			t.Fatalf("%s %s has a symlink in it (real %s, %v)", what, p, real, err)
+		}
+	}
+	for _, linked := range []bool{true, false} {
+		t.Run(map[bool]string{true: "symlinked", false: "plain"}[linked], func(t *testing.T) {
+			t.Setenv("CLAUDE_CONFIG_DIR", "")
+			n := codexTestNode(t)
+			withFakeHub(t, n)
+			home := n.home
+			cwd := filepath.Join(home, ".persona", "assistant")
+			if err := os.MkdirAll(cwd, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			claude := filepath.Join(home, ".claude")
+			if linked {
+				if err := os.Symlink(".persona", filepath.Join(home, ".jarvis")); err != nil {
+					t.Fatal(err)
+				}
+				cwd = filepath.Join(home, ".jarvis", "assistant")
+				claude = filepath.Join(home, "dotfiles", "claude")
+				if err := os.Symlink(claude, filepath.Join(home, ".claude")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.MkdirAll(filepath.Join(claude, "projects"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			real := func(p string) string {
+				t.Helper()
+				r, err := filepath.EvalSymlinks(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return r
+			}
+			root, mem := n.codexDirs(cwd)
+			noLinks("workspace", root)
+			noLinks("memory", mem)
+			if want := real(cwd); root != want {
+				t.Fatalf("workspace %s, want %s", root, want)
+			}
+			shown := n.memoryDir(cwd) // the one the app's 记忆 page shows, maybe through a link
+			if want := real(shown); mem != want {
+				t.Fatalf("memory %s, want %s", mem, want)
+			}
+			// A path written through the link (an older turn's) is still inside the memory, and nothing climbs out.
+			if !readsOnlyMemory("cat "+filepath.Join(shown, "MEMORY.md"), root, mem) || !allUnder([]string{filepath.Join(shown, "new.md")}, root, mem) ||
+				allUnder([]string{filepath.Join(shown, "..", "evil.md")}, root, mem) {
+				t.Fatalf("memory paths through %s are not matched against %s", shown, mem)
+			}
+
+			p, c, f := newFakeCodex(t, n, cwd)
+			c.memDir = mem
+			f.results["thread/resume"] = map[string]any{"thread": map[string]any{"id": testThread}}
+			f.results["turn/start"] = map[string]any{"turn": map[string]any{"id": "turn-1", "status": "inProgress"}}
+			ctx := context.Background()
+			if err := c.start(ctx, testThread, root, true); err != nil {
+				t.Fatal(err)
+			}
+			params := func(method string, v any) {
+				t.Helper()
+				sent := f.sent(method)
+				if len(sent) != 1 {
+					t.Fatalf("%s sent %d times", method, len(sent))
+				}
+				if err := json.Unmarshal(sent[0].Params, v); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var resume struct{ Cwd, ThreadID string }
+			params("thread/resume", &resume)
+			if resume.ThreadID != testThread {
+				t.Fatalf("resumed %q, want the old thread", resume.ThreadID)
+			}
+			noLinks("thread cwd", resume.Cwd)
+			if p.cwd != cwd {
+				t.Fatalf("the session's cwd changed to %s", p.cwd)
+			}
+			n.noteModes(testThread, "default", "")
+			if err := c.deliver(ctx, "", "看一下", nil); err != nil {
+				t.Fatal(err)
+			}
+			var turn struct {
+				SandboxPolicy struct{ WritableRoots []string }
+			}
+			params("turn/start", &turn)
+			if roots := turn.SandboxPolicy.WritableRoots; len(roots) != 1 || roots[0] != mem {
+				t.Fatalf("writable roots %v, want the memory directory %s", roots, mem)
+			}
+		})
+	}
+}
