@@ -42,6 +42,10 @@ struct ChatView: View {
     @State private var showInfo = false
     @State private var showTodoDetail = false
     @State private var showLink = false
+    /// The Mac's chat column has room for its title in the title bar's row (`macTitleRow`).
+    @State private var macWide = true
+    /// The row is the title bar's: the chat is in the main window's split, with room beside the search field.
+    private var macInTitleBar: Bool { macWide && split?.ownWindow != true }
     @State private var pane: SessionPane = .chat
     @State private var git: GitStatus?
     @State private var menu = MessageMenu()
@@ -113,8 +117,10 @@ struct ChatView: View {
     @Environment(\.shellChat) private var shellChat
     @Environment(\.shell) private var shell
     /// The shell's composer (`ShellComposerBar`): the assistant's conversation and, in the shell, an agent's too, in every
-    /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them.
-    private var usesShellComposer: Bool { shellChat || shell != nil }
+    /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them. On the Mac
+    /// the card in every style but BeautifulUI's (its prompt bar is already one): the field, and under it 添加, the model
+    /// and its modes, send / stop, as Codex's and ChatGPT's desktop apps (#2113).
+    private var usesShellComposer: Bool { shellChat || shell != nil || ChatComposerKind.macCard }
     /// The system presents bars down the side of the screen (iPhone Duo closed, or open in landscape).
     @State private var barsVertical = false
     /// The slim header's height while the actions are in the side column (`sideHeader`).
@@ -217,15 +223,151 @@ struct ChatView: View {
         .toolbarVisibility(sideBars ? .visible : .hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(sideBars)
         .pageToolbar { if sideBars { sideBarItems } }
+        #if os(macOS)
+        // On the Mac an Agents chat's title, state and actions are in the title bar's row of its column (#2113), not
+        // in a header of its own over the chat: `macTitleRow`, and `macChrome` for what has no place there.
+        .modifier(MacChatTitle(on: style == .dev, title: title, subtitle: subtitle))
+        // In the title bar's row where the column has room beside the window's search field; in a narrow column the
+        // field spans the row, and the title and buttons are a slim row under it instead.
+        // A chat window of its own has the window's title bar (its title and state there): the row goes under it.
+        .overlay(alignment: .topLeading) { if style == .dev && macInTitleBar { macTitleRow(inTitleBar: true) } }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if style == .dev && !macInTitleBar { macTitleRow(inTitleBar: false).background(Theme.pageBackground) }
+        }
+        .onGeometryChange(for: Bool.self) { $0.size.width >= Theme.Size.macDetailMin + Theme.Size.box240 } action: { macWide = $0 }
+        #endif
         .readsVerticalBars($barsVertical)
         #if DEBUG
         // `-sideBars YES`: lay the chat out as under iPhone Duo's side bars on any simulator (screenshots, tests).
         .onAppear { if UserDefaults.standard.bool(forKey: "sideBars") { barsVertical = true } }
         #endif
         .overlay(alignment: .top) {
+            #if os(macOS)
+            if style == .dev { macChrome }
+            #else
             if style == .dev { if sideBars { sideHeader } else { devChrome } }
+            #endif
         }
     }
+
+    #if os(macOS)
+    /// The Mac's chat header, in the title bar's row of the chat's column as a detail page's title (`MacDetailBack`,
+    /// #2113): ‹ when there is somewhere to go back to (out of 文件 / Git, off a pushed page), the title over its state
+    /// line (a click opens the session's info, as ⌥⌘I does), then round buttons as the Agents list's
+    /// (`MacTitleRowButton`): the space's other agents, a /loop or background work, and ⋯. Not window toolbar items: those
+    /// follow the window's middle, not their column (#1302). The row's end is left to the search field.
+    private func macTitleRow(inTitleBar: Bool) -> some View {
+        HStack(spacing: Theme.Space.s) {
+            if pane != .chat || !hidesBack {
+                Button { back() } label: {
+                    Image(systemName: Theme.Icon.back).font(Theme.Font.heading)
+                        .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon).contentShape(.rect)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help(pane != .chat ? "回到对话" : "返回")
+                .accessibilityLabel("返回")
+            }
+            Button {
+                if model.connection.shown != .online { showLink = true } else { showInfo.toggle() }
+            } label: {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).font(Theme.Font.heading).foregroundStyle(Theme.macLabel).lineLimit(1)
+                    Group {
+                        if model.connection.shown != .online {
+                            ConnectionLabel(phase: model.connection.shown, compact: true)
+                        } else if let s = session {
+                            devSubtitle(s)
+                        }
+                    }
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .help("会话信息")
+            .layoutPriority(-1) // the title gives way to the buttons
+            Spacer(minLength: Theme.Space.s)
+            macTitleButtons
+        }
+        .padding(.leading, pane != .chat || !hidesBack ? Theme.Space.s : Theme.Space.l)
+        // The row's end is the window's search field's (the Agents list's, at the window's trailing edge).
+        .padding(.trailing, inTitleBar ? Theme.Size.box320 : Theme.Space.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: Theme.Size.macToolbarHeight)
+        .ignoresSafeArea(.container, edges: inTitleBar ? .top : [])
+    }
+
+    @ViewBuilder private var macTitleButtons: some View {
+        let siblings = model.siblings(of: key)
+        if siblings.count > 1 {
+            Menu {
+                ForEach(siblings) { s in
+                    let name = s.title.isEmpty ? s.agentLabel : s.title
+                    Button { if s.key != key { switchTo(s.key) } } label: {
+                        if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.state.label)") }
+                    }
+                }
+            } label: {
+                Image(systemName: Theme.Icon.space).font(Theme.Font.heading).foregroundStyle(Color.primary)
+                    .scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.avatarL)
+                    .surface(interactive: true, in: .circle)
+            }
+            .labelOnlyMenu()
+            .fixedSize()
+            .help("同空间的 \(siblings.count) 个 Agent")
+            .accessibilityLabel("同空间的 Agent")
+        }
+        if session?.loop != nil || !(session?.background ?? []).isEmpty {
+            MacTitleRowButton(macActivityTitle, symbol: session?.loop != nil ? Theme.Icon.inProgress : Theme.Icon.backgroundTaskFilled) {
+                showActivity = true
+            }
+        }
+        Menu { moreMenuItems } label: {
+            Image(systemName: Theme.Icon.more).font(Theme.Font.heading).foregroundStyle(Color.primary)
+                .scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.avatarL)
+                .surface(interactive: true, in: .circle)
+        }
+        .labelOnlyMenu()
+        .fixedSize()
+        .help("更多")
+        .accessibilityLabel("更多")
+    }
+
+    /// The activity button's name: the /loop's next run and the background work, as their chips said.
+    private var macActivityTitle: String {
+        let loop = session?.loop.map { "循环 · " + ActivityChips.shortLoopLabel($0, now: .now) }
+        let background = (session?.background ?? []).isEmpty ? nil : "后台 \((session?.background ?? []).count)"
+        return [loop, background].compactMap { $0 }.joined(separator: "，")
+    }
+
+    /// What of the header has no place in the toolbar: the ports it listens on and the running subagents, a row over
+    /// the chat only while there are any.
+    @ViewBuilder private var macChrome: some View {
+        let ports = session?.ports ?? []
+        let all = session?.subagents ?? []
+        if !ports.isEmpty || (pane == .chat && !all.isEmpty) {
+            VStack(spacing: Theme.Space.s) {
+                if !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
+                if pane == .chat, !all.isEmpty {
+                    AgentStrip(agents: all.filter { $0.running || $0.id == viewing?.id }, all: all, viewing: viewing?.id) { a in view(a) }
+                }
+            }
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.s)
+            .frame(maxWidth: .infinity)
+            .background(Theme.pageBackground)
+        }
+        Color.clear.hidden()
+            .sheet(isPresented: $showActivity) {
+                ActivitySheet(loop: session?.loop, background: session?.background ?? [], stopLoop: { model.stopLoop(key) }) { t in
+                    showActivity = false
+                    if let out = t.outputFile { file = FileRef(group: key.group, machineID: key.machineID, path: out, cwd: session?.cwd) }
+                }
+            }
+    }
+    #endif
 
     private var chatPresentation: some View {
         AnyView(chatSurface) // see chatActivity
@@ -2801,6 +2943,35 @@ struct SuggestionPill: View {
     }
 }
 
+#if os(macOS)
+/// An Agents chat's title and state as the window's (the Window menu), on the Mac; the row draws them (`macTitleRow`).
+private struct MacChatTitle: ViewModifier {
+    var on: Bool
+    var title: String
+    var subtitle: String
+
+    func body(content: Content) -> some View {
+        if on {
+            content.navigationTitle(title).navigationSubtitle(subtitle) // the window's, for the Window menu
+        } else {
+            content
+        }
+    }
+}
+#endif
+
+/// Which composer the chat draws where it is not the shell's choice (`usesShellComposer`).
+enum ChatComposerKind {
+    /// The Mac draws the shell's card (`ShellComposerBar`, always open) unless the style is BeautifulUI's.
+    static var macCard: Bool {
+        #if os(macOS)
+        !AppStyle.current.usesBeautifulUI
+        #else
+        false
+        #endif
+    }
+}
+
 struct Composer: View, Equatable {
     /// What the page hands in; the rest it reads from the model itself. The page re-evaluates on every hub push for its
     /// conversation, and the composer (a text field, its buttons, the mode chips) used to go with it.
@@ -2812,8 +2983,10 @@ struct Composer: View, Equatable {
     @Environment(\.shellChat) private var shellChat
     @Environment(\.shell) private var shell
     /// The shell's composer (`ShellComposerBar`): the assistant's conversation and, in the shell, an agent's too, in every
-    /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them.
-    private var usesShellComposer: Bool { shellChat || shell != nil }
+    /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them. On the Mac
+    /// the card in every style but BeautifulUI's (its prompt bar is already one): the field, and under it 添加, the model
+    /// and its modes, send / stop, as Codex's and ChatGPT's desktop apps (#2113).
+    private var usesShellComposer: Bool { shellChat || shell != nil || ChatComposerKind.macCard }
     let key: SessionKey
     var status: SessionStatus
     var placeholder: String?
@@ -2959,6 +3132,7 @@ struct Composer: View, Equatable {
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                  modesTitle: modesTitle,
                                  quotes: contexts,
+                                 alwaysOpen: ChatComposerKind.macCard,
                                  send: { Task { await sendText(text) } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {

@@ -147,6 +147,9 @@ struct SidebarTopFill: ViewModifier {
 struct SplitDetail: Equatable {
     /// The page is the first one the list opened: there is nothing to go back to (the list is beside it).
     var isFirstPage: Bool
+    /// The page is a window of its own (the Mac's chat window), not a split's detail column: the window's title bar has
+    /// its title.
+    var ownWindow = false
 }
 
 extension EnvironmentValues {

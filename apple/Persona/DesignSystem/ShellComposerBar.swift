@@ -21,6 +21,8 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var modesTitle: SessionModes.ComposerTitle?
     /// What goes with the message, quoted at the top of the card (#986); quotes keep it open (`hasAttachments`).
     var quotes: Binding<[ContextRef]>? = nil
+    /// Always the card, never the one line (the Mac: the field and its row of buttons stay, as a desktop app's box).
+    var alwaysOpen = false
     var send: () -> Void
     @ViewBuilder var attach: () -> Attach
     @ViewBuilder var modes: () -> Modes
@@ -39,7 +41,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         return Theme.Shell.composerRadius - well / 2 - (Theme.Size.tapTarget - well) / 2
     }
 
-    private var expanded: Bool { focused.wrappedValue || !text.isEmpty || hasAttachments }
+    private var expanded: Bool { alwaysOpen || focused.wrappedValue || !text.isEmpty || hasAttachments }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -61,6 +63,10 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     }
                     #endif
                     .focused(focused)
+                    #if os(macOS)
+                    .textFieldStyle(.plain) // the card is the field's box; the Mac's own bezel drew a second one inside
+                    .macComposerKeys(focused: focused.wrappedValue, canSend: canSend, send: send) // ⏎ sends, ⇧⏎ a new line
+                    #endif
                     .padding(.horizontal, expanded ? Theme.Space.l : Theme.Space.xs)
                     .padding(.top, expanded ? Theme.Space.l : 0)
                     .scaledFrame(minHeight: Theme.Size.tapTarget)
