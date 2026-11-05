@@ -13,7 +13,7 @@
   "cmd_help": "キーボードショートカット",
   "cmd_settings": "設定を開く",
   "cmd_machine": "コンピューター1～9に切り替え",
-  "cmd_left_sidebar": "サイドバーの表示 / 非表示",
+  "cmd_left_sidebar": "サイドバーの折りたたみ / 展開",
   "cmd_maximize": "中央エリアを最大化",
   "cmd_terminal_chat": "ターミナル ⇄ チャット",
   "cmd_right_panel": "右パネルの表示 / 非表示",

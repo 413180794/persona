@@ -110,5 +110,7 @@
   "delete_group": "删除分组",
   "delete_group_named": "删除分组 {name}",
   "delete_group_confirm": "删除分组「{name}」？会话会回到原来的位置。",
-  "personal_actions": "个人 Agent 的操作"
+  "personal_actions": "个人 Agent 的操作",
+  "collapse": "收起侧边栏",
+  "expand": "展开侧边栏"
 }

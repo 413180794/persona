@@ -50,7 +50,8 @@ import { PersonaAvatar } from "./assistant/Persona";
 import { useFolded } from "../lib/use-folded";
 import { clipsOverflow, glideBox, sameBox, type GlideBox, type Span } from "../lib/glide";
 import { onGrouping } from "../lib/sidebar-api";
-import { jumpHint, useBindings } from "../lib/shortcuts";
+import { formatChord, jumpHint, useBindings } from "../lib/shortcuts";
+import { toggleSidebarColumn } from "../lib/layout";
 
 /** The open row's own fill (#2283): it stays while the pointer is elsewhere in the list, a step darker than hover. */
 const CURRENT_ROW = "bg-hover-2";
@@ -198,9 +199,9 @@ function useGo(onNavigate?: () => void): GoFn {
 /** One entry of the pages under Persona (总览, 收件箱 … 设置, and the extensions' pages). */
 export type NavPage = { k: string; to: Route; icon: IconName; label: string; short?: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string };
 
-export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Route; onSearch: () => void; onNewAgent: () => void; onNavigate?: () => void }) {
+/** The sidebar's pages (总览 … 设置, the extensions' pages) and the connection, shared by the sidebar and its rail. */
+function useNavPages() {
   const conn = useStore((s) => s.conn);
-  const searchHint = jumpHint(useBindings());
   const machines = useStore((s) => s.machines);
   // 终端 (docs/terminal.md「独立终端」) is there where the hub can list panes
   const terminalPanes = useStore((s) => s.features.includes("terminal_panes"));
@@ -218,16 +219,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const extensionPages = useExtensionSlot("nav_page");
   // off unless turned on in 设置 › 通用 › Agent (#2475)
   const boardOn = useWorkspaceBoardSetting().enabled === true;
-  // a phone's drawer has the pages as two rows of icons, so its first screen reaches the Agents (#1996)
-  const narrow = useMedia(NARROW);
-  const activeKey = useActiveKey(route);
-  const convs = otherConversations(assistant?.conversations ?? [], assistant?.main, 5, activeKey.startsWith("j:") ? activeKey.slice(2) : undefined);
-  const [jarvisFolded, toggleJarvis] = useFolded("jarvis", false, { holds: activeKey === "history" || convs.some((c) => activeKey === `j:${c.session_id}`) });
-  const { nav, reg, hover, highlight } = useGlide(activeKey);
-  const go = useGo(onNavigate);
 
   const online = machines.filter((m) => m.online).length;
-  const mainConversation = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
+  const main = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
   const page: Record<(typeof NAV_PAGES)[number], NavPage | false> = {
     home: { k: "home", to: { name: "home" }, icon: "home", label: t("sidebar.nav_home"), badge: counts.badge || undefined, badgeTone: "red" },
     inbox: { k: "inbox", to: { name: "inbox" }, icon: "inbox", label: t("sidebar.nav_inbox"), badge: inbox || undefined, badgeTone: "red" },
@@ -251,10 +245,32 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
     ...(page[k] ? [page[k]] : []),
   ]);
 
+  return { conn, online, total: machines.length, main, pages };
+}
+
+export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Route; onSearch: () => void; onNewAgent: () => void; onNavigate?: () => void }) {
+  const bindings = useBindings();
+  const searchHint = jumpHint(bindings);
+  const assistant = useStore((s) => s.assistant);
+  const { conn, online, total, main: mainConversation, pages } = useNavPages();
+  // a phone's drawer has the pages as two rows of icons, so its first screen reaches the Agents (#1996)
+  const narrow = useMedia(NARROW);
+  const activeKey = useActiveKey(route);
+  const convs = otherConversations(assistant?.conversations ?? [], assistant?.main, 5, activeKey.startsWith("j:") ? activeKey.slice(2) : undefined);
+  const [jarvisFolded, toggleJarvis] = useFolded("jarvis", false, { holds: activeKey === "history" || convs.some((c) => activeKey === `j:${c.session_id}`) });
+  // the pages fold under their own title (#2524); the drawer's grid of icons doesn't
+  const [pagesFolded, togglePages] = useFolded("pages", false, { all: false });
+  const { nav, reg, hover, highlight } = useGlide(activeKey);
+  const go = useGo(onNavigate);
+
   return (
     <aside className="flex h-full w-full flex-col bg-canvas">
       <div className="px-2.5 pt-2.5">
-        <AccountRow conn={conn} online={online} total={machines.length} />
+        <div className="mb-2 flex items-center gap-1">
+          <div className="min-w-0 flex-1"><AccountRow conn={conn} online={online} total={total} /></div>
+          {/* folds the column to the rail of icons (a wide screen; the drawer closes by its scrim) */}
+          {!narrow && <CollapseButton collapsed={false} chord={bindings["left-sidebar"]} />}
+        </div>
         <button type="button" onClick={onSearch} className="touch-hit mb-1 flex h-8 w-full items-center gap-2 rounded-control bg-inset px-2.5 text-left shadow-hairline transition-colors hover:bg-hover">
           <Icon name="search" size={12} stroke={2} className="text-ink-3" />
           <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-3">{t("sidebar.search_sessions")}</span>
@@ -266,8 +282,13 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         {highlight}
         <div className="flex flex-col gap-px pt-1">
           <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} />
-          {narrow ? <NavGrid pages={pages} activeKey={activeKey} go={go} /> : pages.map((p) => <NavRow key={p.k} {...p} reg={reg} hover={hover} active={activeKey === p.k} go={go} />)}
+          {narrow && <NavGrid pages={pages} activeKey={activeKey} go={go} />}
         </div>
+        {!narrow && (
+          <Section title={t("sidebar.pages")} folded={pagesFolded} onToggle={togglePages} right={pagesFolded ? <PagesTally pages={pages} /> : undefined} first>
+            {pages.map((p) => <NavRow key={p.k} {...p} reg={reg} hover={hover} active={activeKey === p.k} go={go} />)}
+          </Section>
+        )}
 
         {assistant && (
           <Section title={t("sidebar.persona_chats")} folded={jarvisFolded} onToggle={toggleJarvis} right={<SectionAdd label={t("sidebar.new_chat")} to={{ name: "persona-new" }} go={go} />}>
@@ -281,7 +302,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         <PersonalAgents reg={reg} hover={hover} activeKey={activeKey} go={go} />
 
         {/* the phone's Agents page shows them already: the drawer over it doesn't build them twice */}
-        {!(narrow && route.name === "agent-list") && <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} onNavigate={onNavigate} />}
+        {!(narrow && route.name === "agent-list") && <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} onNavigate={onNavigate} foldable />}
       </div>
       <NodePrompt />
     </aside>
@@ -340,7 +361,7 @@ export function NavGrid({ pages, activeKey, go }: { pages: NavPage[]; activeKey:
 
 /** The sidebar's「Agents」: grouping, the quick filter, 置顶, 正在启动, the groups (spaces, machines, repositories,
  *  states or todos) and 最近. The drawer and the phone's Agents page both show it. `add`: the title row's「+」. */
-function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = true }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onNewAgent: () => void; onNavigate?: () => void; add?: boolean }) {
+function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = true, foldable = false }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onNewAgent: () => void; onNavigate?: () => void; add?: boolean; foldable?: boolean }) {
   const machines = useStore((s) => s.machines);
   const all = useAgentSessions();
   const mutes = useStore((s) => s.mutes);
@@ -419,6 +440,9 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
   const [pinnedFolded, togglePinned] = useFolded("agents-pinned", false, { holds: holdsRow(pinnedAgents, activeKey) });
   const [launchesFolded, toggleLaunches] = useFolded("agents-launching", false, { holds: launches.some((l) => activeKey === `s:${l.machineId}/${l.id}`) });
+  // the whole block folds under its title in the sidebar (#2524); the phone's Agents page is the block, it doesn't
+  const [blockFolded, toggleBlock] = useFolded("agents", false, { all: false });
+  const folded = foldable && blockFolded;
   const [showAllRecent, setShowAllRecent] = useState(false);
   const recentShown = showAllRecent ? recent : firstAndCurrent(recent, 8, (s) => rowKey(s) === activeKey);
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
@@ -433,8 +457,16 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
 
   return (
     <>
-      <div className="mt-3 flex items-center gap-1 px-2">
-        <span className="min-w-0 flex-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
+      <div className="group/sec mt-3 flex items-center gap-1 px-2">
+        {foldable ? (
+          <button type="button" aria-expanded={!folded} onClick={toggleBlock} className="touch-hit relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
+            <span className="min-w-0 truncate">Agents</span>
+            <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
+        )}
+        {folded && <SessionTally sessions={live} folded />}
         <button type="button" aria-label={t("sidebar.grouping_label", { grouping: groupingLabel })} aria-haspopup="menu" aria-expanded={Boolean(groupingMenu.anchor)} onClick={groupingMenu.open} className="touch-hit relative z-10 flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
           {groupingLabel}
           <Icon name="chevron" size={10} stroke={2} />
@@ -447,6 +479,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
           onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); hover(null); },
         }))} />
       )}
+      <Collapse open={!folded}>
+      <div inert={folded || undefined}>
       <FilterBar selection={filter} counts={filterTotals} onChoose={choose} />
 
       {unreadShown.length > 0 && (
@@ -517,6 +551,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
           )}
         </Section>
       )}
+      </div>
+      </Collapse>
       {/* the row's ⋯ (and its right click): pin, rename, mute, the todo it hangs on, delete — a long press on iOS
           Safari sends no contextmenu, so nothing lives only there */}
       {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} at={rowMenu.at} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} onLinkTodo={setLinkTargetSession} />}
@@ -596,7 +632,7 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
   };
   return (
     <>
-      <button type="button" onClick={menu.open} className="mb-2 flex w-full items-center gap-2.5 rounded-control p-1.5 text-left transition-[background-color,transform] duration-100 hover:bg-hover active:scale-[0.98]">
+      <button type="button" onClick={menu.open} className="flex w-full items-center gap-2.5 rounded-control p-1.5 text-left transition-[background-color,transform] duration-100 hover:bg-hover active:scale-[0.98]">
         <AppMark size={32} radius={8} className="shadow-hairline" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] leading-tight font-medium text-ink">Persona</span>
@@ -627,9 +663,9 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
 }
 
 // Every group in the sidebar is one of these: its title folds it, and the fold is kept in this browser (useFolded).
-function Section({ title, children, folded, onToggle, right, onMenu }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void }) {
+function Section({ title, children, folded, onToggle, right, onMenu, first }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode; onMenu?: (at: MenuAt, el: HTMLElement) => void; first?: boolean }) {
   return (
-    <div className="mt-3">
+    <div className={first ? "mt-1" : "mt-3"}>
       <div className="group/sec flex items-center gap-1 px-2 pb-1" {...(onMenu ? contextMenuProps(onMenu) : {})}>
         <button type="button" aria-expanded={!folded} onClick={onToggle} className="touch-hit relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
           <span className="min-w-0 truncate">{title}</span>
@@ -1556,5 +1592,108 @@ export function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: Age
         <Icon name="more" size={14} />
       </button>
     </div>
+  );
+}
+
+// ── the rail: the sidebar folded to its icons on a wide screen (#2524) ──
+
+/** The badge of a folded page, as a dot on its icon. */
+const DOT_CLASS = { red: "bg-red", orange: "bg-orange", green: "bg-green", accent: "bg-accent" } as const;
+
+/** The button that folds the sidebar to the rail and opens it again (⌘⌥B by default; the hint follows a rebinding). */
+export function CollapseButton({ collapsed, chord }: { collapsed: boolean; chord?: string }) {
+  const label = collapsed ? t("sidebar.expand") : t("sidebar.collapse");
+  return (
+    <button
+      type="button"
+      onClick={toggleSidebarColumn}
+      aria-label={label}
+      aria-expanded={!collapsed}
+      title={chord ? `${label} (${formatChord(chord)})` : label}
+      className="touch-hit relative z-10 flex size-8 shrink-0 items-center justify-center rounded-control text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink active:scale-[0.94]"
+    >
+      <Icon name="sidebar" size={15} stroke={1.8} />
+    </button>
+  );
+}
+
+/** The folded 页面 title's right side: a dot when a page in it has a badge, so folding hides nothing to look at. */
+function PagesTally({ pages }: { pages: NavPage[] }) {
+  const tones = [...new Set(pages.filter((p) => p.badge !== undefined).map((p) => p.badgeTone ?? "accent"))];
+  if (!tones.length) return null;
+  return (
+    <span className="flex items-center gap-1" aria-hidden>
+      {tones.map((tone) => <span key={tone} className={cx("size-1.5 rounded-full", DOT_CLASS[tone])} />)}
+    </span>
+  );
+}
+
+const RAIL_ITEM = "touch-hit relative flex size-9 shrink-0 items-center justify-center rounded-[9px] transition-[background-color,color,transform] duration-150 active:scale-[0.94]";
+
+/**
+ * The sidebar folded on a wide screen: one column of icons, the open page filled, a page's count turned into a dot on
+ * its icon (the count is in its label and tooltip). Why a rail rather than nothing: the pages stay one click away, and
+ * the way back is on screen, so the fold can be kept across reloads (lib/layout.ts). The Agents' list and the
+ * conversations are what fold away; ⌘K finds any of them.
+ */
+export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onSearch: () => void; onNewAgent: () => void }) {
+  const { conn, online, total, main, pages } = useNavPages();
+  const bindings = useBindings();
+  const activeKey = useActiveKey(route);
+  const go = useGo();
+  const status = conn === "online" ? t("sidebar.computers_online", { online, total, count: total }) : conn === "connecting" ? t("sidebar.connecting") : t("sidebar.unreachable");
+  const st = main ? stateOf(main) : undefined;
+  const pending = main?.pending_interactions ?? 0;
+  const link = (k: string, to: Route, label: string, icon: React.ReactNode, dot?: React.ReactNode, title?: string) => {
+    const active = activeKey === k;
+    return (
+      <a
+        key={k}
+        href={href(to)}
+        onClick={go(to)}
+        aria-label={label}
+        title={title ?? label}
+        aria-current={active ? "page" : undefined}
+        className={cx(RAIL_ITEM, active ? cx(CURRENT_ROW, "text-ink") : "text-ink-3 hover:bg-hover hover:text-ink")}
+      >
+        {icon}
+        {dot}
+      </a>
+    );
+  };
+  return (
+    <aside className="flex h-full w-full flex-col items-center bg-canvas py-2.5">
+      <CollapseButton collapsed chord={bindings["left-sidebar"]} />
+      <button type="button" onClick={onSearch} aria-label={t("sidebar.search_sessions")} title={`${t("sidebar.search_sessions")} (${jumpHint(bindings)})`} className={cx(RAIL_ITEM, "mt-1 text-ink-3 hover:bg-hover hover:text-ink")}>
+        <Icon name="search" size={15} stroke={1.8} />
+      </button>
+      <span aria-hidden className="my-2 h-px w-6 shrink-0 bg-line" />
+      <nav aria-label={t("sidebar.pages")} className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overscroll-contain">
+        {link(
+          "persona",
+          { name: "jarvis" },
+          pending > 0 ? `Persona ${pending}` : "Persona",
+          <PersonaAvatar size={20} fallback={<span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-ink text-surface"><Icon name="spark" size={12} stroke={2} /></span>} />,
+          pending > 0 ? <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-red ring-2 ring-canvas" />
+            : st === "working" || st === "needs_you" || st === "unread" ? <span aria-hidden className="absolute top-0.5 right-0.5 flex rounded-full ring-2 ring-canvas"><StatusDot state={st} size={7} /></span> : null,
+          t("sidebar.persona_main"),
+        )}
+        {pages.map((p) => link(
+          p.k,
+          p.to,
+          p.badge !== undefined ? `${p.label} ${p.badge}` : p.label,
+          <Icon name={p.icon} size={16} stroke={1.8} />,
+          p.badge !== undefined ? <span aria-hidden className={cx("absolute top-1.5 right-1.5 size-2 rounded-full ring-2 ring-canvas", DOT_CLASS[p.badgeTone ?? "accent"])} /> : null,
+          [p.title ?? p.label, p.badge ?? p.hint].filter((x) => x !== undefined).join(" · "),
+        ))}
+        <button type="button" onClick={onNewAgent} aria-label={t("sidebar.new_agent")} title={t("sidebar.new_agent")} className={cx(RAIL_ITEM, "mt-1 text-ink-3 hover:bg-hover hover:text-ink")}>
+          <Icon name="plus" size={15} stroke={1.8} />
+        </button>
+      </nav>
+      <span role="img" aria-label={status} title={status} className="relative mt-2 flex shrink-0">
+        <AppMark size={26} radius={7} className="shadow-hairline" />
+        <span className={cx("absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-canvas", conn === "online" ? "bg-green" : conn === "connecting" ? "bg-orange" : "bg-red")} style={conn === "connecting" ? { animation: "breathe 1.4s ease-in-out infinite" } : undefined} />
+      </span>
+    </aside>
   );
 }

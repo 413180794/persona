@@ -7,7 +7,9 @@ import { onFoldAll } from "./sidebar-api";
 // render (未归属 is folded only once the todos above it have loaded, #2249); other sections keep their first default.
 // holds: the section has the open conversation's row (#2283); it opens when it comes to hold it (opening the
 // conversation from anywhere shows its row), without storing that, and can still be folded by hand after.
-export function useFolded(key: string, initial = false, { follow = false, holds = false } = {}): [boolean, () => void] {
+// all: 折叠 / 展开全部 moves it too; off for the blocks that hold the groups (页面, Agents, #2524), so folding every
+// group still leaves their titles to read.
+export function useFolded(key: string, initial = false, { follow = false, holds = false, all = true } = {}): [boolean, () => void] {
   const [stored, setStored] = useState(() => localStorage.getItem(`fold:${key}`));
   const [first] = useState(initial);
   const [opened, setOpened] = useState(holds);
@@ -19,12 +21,12 @@ export function useFolded(key: string, initial = false, { follow = false, holds 
   }
   const folded = !opened && foldedNow(stored, follow ? initial : first);
   // 折叠 / 展开全部 (the keyboard shortcut, lib/sidebar-api.ts)
-  useEffect(() => onFoldAll((all) => {
-    const next = all ? "1" : "0";
+  useEffect(() => all ? onFoldAll((folded) => {
+    const next = folded ? "1" : "0";
     localStorage.setItem(`fold:${key}`, next);
     setStored(next);
     setOpened(false);
-  }), [key]);
+  }) : undefined, [key, all]);
   return [
     folded,
     () => {

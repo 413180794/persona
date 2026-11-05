@@ -110,5 +110,7 @@
   "delete_group": "Delete group",
   "delete_group_named": "Delete group {name}",
   "delete_group_confirm": "Delete the group \"{name}\"? Its chats go back where they were.",
-  "personal_actions": "Personal agent actions"
+  "personal_actions": "Personal agent actions",
+  "collapse": "Collapse sidebar",
+  "expand": "Expand sidebar"
 }

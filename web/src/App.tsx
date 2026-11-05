@@ -30,9 +30,9 @@ import { StartingAgent } from "./views/StartingAgent";
 import { Palette } from "./views/Palette";
 import { ShortcutHelp } from "./views/ShortcutHelp";
 import { closePalette, openPalette, usePalette } from "./lib/palette";
-import { sidebarShown, useLayout } from "./lib/layout";
+import { sidebarRail, sidebarShown, useLayout } from "./lib/layout";
 import { SIDEBAR_LABEL, useShortcuts } from "./lib/use-shortcuts";
-import { Sidebar } from "./views/Sidebar";
+import { Sidebar, SidebarRail } from "./views/Sidebar";
 import { SidePanel } from "./views/SidePanel";
 import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
 import { useExtensionPlace } from "./lib/extension-slots";
@@ -171,6 +171,8 @@ function Shell() {
   const scrim = useRef<HTMLDivElement>(null);
   const mainBox = useRef<HTMLElement>(null);
   const a11y = drawerA11y(narrow, drawer);
+  // folded to its icons on a wide screen (⌘⌥B, kept in this browser); a narrow screen keeps the full drawer
+  const rail = !narrow && sidebarRail(layout);
   useEffect(() => {
     if (!narrow) setDrawer(false);
   }, [narrow]);
@@ -324,12 +326,13 @@ function Shell() {
         className={cx(
           "fixed inset-y-0 left-0 z-30 w-[284px] border-r border-line transition-transform duration-300 max-lg:w-[calc(284px+env(safe-area-inset-left))] max-lg:bg-canvas max-lg:pb-[env(safe-area-inset-bottom)] max-lg:pl-[env(safe-area-inset-left)] lg:static lg:z-auto lg:translate-x-0 lg:shadow-none",
           drawer ? "translate-x-0 shadow-overlay" : "-translate-x-full",
-          // ⌘⌥B / ⌘⇧↵ on a wide screen
+          // ⌘⌥B folds it to the rail, ⌘⇧↵ hides it, on a wide screen
+          rail && "lg:w-14",
           !sidebarShown(layout) && "lg:hidden",
         )}
         style={{ transitionTimingFunction: EASE }}
       >
-        <Sidebar route={route} onSearch={() => openPalette("jump")} onNewAgent={openNewAgent} onNavigate={close} />
+        {rail ? <SidebarRail route={route} onSearch={() => openPalette("jump")} onNewAgent={openNewAgent} /> : <Sidebar route={route} onSearch={() => openPalette("jump")} onNewAgent={openNewAgent} onNavigate={close} />}
       </div>
       {/* the scrim fades out as well as in; a drag sets its opacity as it goes (lib/drawer.ts) */}
       <div

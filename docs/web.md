@@ -28,6 +28,8 @@
   跑 `python3 scripts/test/web_quote_e2e.py <网页地址> [--shots <目录>]`（桌面 / 手机宽度 × 浅色 / 深色；`--before` 只拍改动前的同样几张；任务卡片的引用加 `--tasks`，假 hub 带 `MOCK_TASKS=1` 起）。
   侧栏分组收起的端到端检查（「其他 Agent」收起 / 展开 / 刷新后保持，五种分组方式下每组都能收起，触屏常显箭头，#1417）：假 hub 带 `MOCK_SOURCES=1` 起，再跑
   `python3 scripts/test/web_sidebar_fold_e2e.py <网页地址> [--shots <目录>]`。
+  侧边栏收成图标栏的端到端检查（#2524：按钮和 Ctrl+Alt+B、刷新后保持、页面 / Agents / 状态分组收起并保持、窄屏还是抽屉）：假 hub 带 `MOCK_SOURCES=1` 起，
+  网页用 `npx vite preview`（开发服务器在刷新时偶尔中断模块加载），跑 `python3 scripts/test/web_sidebar_collapse_e2e.py <网页地址> [--shots <目录>]`。
   对话停在最新处的端到端检查（首次打开、刷新、侧栏切换、内容一块块进来、输入框变高、往上翻了不被拉回、慢网分页，主对话和 Agent 对话、宽屏和窄屏，#1340）：
   假 hub 带 `MOCK_TASKS=1 MOCK_LONG_ASSISTANT=1 MOCK_LONG_HISTORY=1` 起，再跑 `python3 scripts/test/web_chat_scroll_e2e.py <网页地址> [--hub <假 hub 地址>] [--shots <目录>]`。
   主对话任务坞的端到端检查（「全部 N」和胶囊同高、上下边对齐，胶囊行没有滚动条、仍能横滑；Chrome 开着常显的滚动条跑，WebKit 可选）：假 hub 带
@@ -76,7 +78,11 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   当前会话不在「Persona 对话」最近 5 段里（从「全部对话」、⌘K、收件箱、链接打开更早的一段）时补在这 5 段后面；「最近（未运行）」超过 8 条、个人 Agent 超过 5 个时也一样。
   它所在的分组（含默认收起的）在它打开时展开一次，之后照样能手动收起，记下的收起状态不变；列表把它滚到中间，在用户自己滚动、点按或按键之前，上面的内容加载出来把它挤出可视区域也会再滚回来。
   当前行的 ⋯（Agent）和置顶按钮（个人 Agent）常驻，不用悬停；行尾给它留出位置，提示和角标不再让开。
-  **侧边栏的每个分组都能收起**（#1417）：Persona 对话、个人 Agent、置顶、正在启动、各种分组方式下的每一组、空闲的空间、其他 Agent、最近（未运行）都是同一个
+  **整个侧边栏能收成图标栏**（#2524，只在宽屏）：顶部账号行右边的按钮或 ⌘⌥B / Ctrl+Alt+B 收起，变成 56px 宽的一列图标（展开按钮、搜索、Persona、各页面、新建 Agent，底部是连接状态），
+  当前页有底色，页面的件数变成图标角上的小圆点（件数在无障碍标签和悬停提示里）。选图标栏而不是整个藏掉：页面还是点一下就到，展开的按钮一直在屏幕上，所以收起状态可以放心记住；
+  会话和 Agents 列表收起后用 ⌘K 找。⌘B 已经是右侧面板、⌘⇧B 是浏览器的书签栏，所以沿用 Moshi 键位的 ⌘⌥B（设置里能改）。窄屏还是完整的抽屉，不看这个状态。
+  **侧边栏的每个分组都能收起**（#1417）：「页面」（总览…设置，标题是 #2524 加的，Persona 那一行在它上面不收）和整个 Agents 块（分组方式和「+」留在标题行）也能收起，
+  这两块不跟「折叠 / 展开全部分组」走，收起全部时还能看到各组标题。Persona 对话、个人 Agent、置顶、正在启动、各种分组方式下的每一组、空闲的空间、其他 Agent、最近（未运行）都是同一个
   `Section`（`folded` / `onToggle` 是必填的），点标题收起 / 展开，收起状态存在这个浏览器（`localStorage` 的 `fold:<键>`），刷新后保持；没有悬停的触屏上折叠箭头常显。
   标题右边是件数，收起时换成里面「需要你 / 完成未看 / 工作中」的状态点，收起不会把要看的藏掉。
   「其他 Agent」（不在任何空间里的 Agent，比如 Codex、DSH 的会话）按空间的规则决定默认：多于 3 个且都没什么要看的（已看、在等）时默认收起，否则展开。
@@ -483,7 +489,7 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
 | Mod+1…9 | 切到第 N 台电脑（机器详情页，按侧边栏的顺序） | 切机器 |
 | Mod+J | 会话页：中间在对话和终端之间切换（记住每个 Agent 上次的）；终端页：Agent 的窗格回到它的对话（普通 shell 没有对话） | 终端 ⇄ 对话 |
 | Mod+B | 右侧面板收起 / 恢复（恢复上一次关的；没有就开这条对话的文件） | 右面板 |
-| Mod+Alt+B | 宽屏：收起 / 显示侧边栏列；窄屏：抽屉 | 左侧栏 |
+| Mod+Alt+B | 宽屏：侧边栏收成图标栏 / 展开（记在这个浏览器）；窄屏：抽屉 | 左侧栏 |
 | Mod+Shift+Enter | 宽屏：只留中间（侧边栏和右侧面板不画，面板里的终端照常挂着）；再按恢复 | 最大化中间 |
 | Mod+I | 聚焦这页的输入框（对话），没有就聚焦正在看的终端 | 聚焦输入 |
 | Mod+E | 切换侧边栏 Agents 的分组方式（按机器 / 仓库 / 项目 / 状态 / 待办），和分组菜单是同一个设置 | 侧边栏模式 |
@@ -507,7 +513,8 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
 - **给别的模块的钩子**：`registerContextCommands(provider)`（`lib/palette.ts`）。provider 在每次列命令时被调用，参数是 `{ route, pane }`（当前页和页面上的对话），返回 `PaletteCommand[]`（`id`、`title`、`section`、`icon`、`chord`、`keywords`、`danger`、`run`）；抛错的 provider 被跳过，重复 id 取第一个，返回值是取消登记的函数。
   这些命令排在命令模式的最前面，用自己的 `section` 当分组标题。用法：`useEffect(() => registerContextCommands((ctx) => ctx.pane ? nodeActions(ctx.pane) : []), [])`。每个节点的操作（重命名、复制路径、置顶、关闭……）由节点菜单那条线提供，合并后在这里接上，不需要改面板。
 - **侧边栏的小接口**（`lib/sidebar-api.ts`，`Sidebar.tsx` 只多几行订阅）：`setAllFolded`（`useFolded` 订阅，折叠 / 展开写进同一个 `fold:*` 键）、`cycleGrouping`（写同一个 `jarvis.agentGrouping`，`AgentsBlock` 订阅）、`stepSidebarRow`（在带 `data-sidebar-rows` 的列表里找看得见的行，点它）。
-  布局状态（`lib/layout.ts`：侧边栏列收起、最大化）只在当前页面里，刷新就回来，不会因为忘了键而找不到侧边栏。
+  布局状态（`lib/layout.ts`）：侧边栏收成图标栏记在这个浏览器（`localStorage` 的 `persona.sidebarCollapsed`，刷新后保持，别的标签页跟着变）；
+  图标栏上一直有展开按钮，不会因为忘了键而找不到侧边栏。最大化只在当前页面里，刷新就回来。
 - 测试：`lib/shortcuts.test.ts`（解析 / 格式化 / 冲突 / 保留 / 事件转键 / 分发 / 终端放行）、`lib/palette.test.ts`、`lib/shortcut-nav.test.ts`、`lib/sidebar-api.test.ts`、`views/Palette.test.tsx`。
 
 ### 节点菜单（#2329）

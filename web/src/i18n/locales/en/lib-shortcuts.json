@@ -13,7 +13,7 @@
   "cmd_help": "Keyboard shortcuts",
   "cmd_settings": "Open Settings",
   "cmd_machine": "Switch to computer 1–9",
-  "cmd_left_sidebar": "Show or hide the sidebar",
+  "cmd_left_sidebar": "Collapse or expand the sidebar",
   "cmd_maximize": "Maximize the center area",
   "cmd_terminal_chat": "Terminal ⇄ chat",
   "cmd_right_panel": "Show or hide the right panel",
