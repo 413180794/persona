@@ -61,6 +61,34 @@ struct AssistantCardTextTests {
         #expect(AssistantCardText.replacingCards(other) == other)
     }
 
+    @Test func exampleCardsInsideOtherFencesStayCode() {
+        let example = "````markdown\n示例：\n```persona-view\n{\"fallback\":\"这是示例，不是卡片\"}\n```\n````"
+        let live = "```persona-view\n{\"fallback\":\"实际卡片\"}\n```"
+        #expect(AssistantCardText.replacingCards(example) == example)
+        #expect(AssistantCardText.replacingCards(example + "\n" + live) == example + "\n实际卡片")
+        // An unfinished ordinary code block still owns every line after its opening fence.
+        let streamingExample = "````markdown\n```persona-view\n{\"fallback\":\"示例\"}\n```"
+        #expect(AssistantCardText.replacingCards(streamingExample) == streamingExample)
+    }
+
+    @Test func lineEndingsAndLanguageCase() {
+        for ending in ["\n", "\r\n", "\r"] {
+            for language in ["persona-view", "PERSONA-VIEW", "Persona-View"] {
+                let input = ["前文", "```" + language, "{\"fallback\":\"进度 50%\"}", "```", "后文", ""].joined(separator: ending)
+                let expected = ["前文", "进度 50%", "后文", ""].joined(separator: ending)
+                #expect(AssistantCardText.replacingCards(input) == expected)
+                #expect(!WatchText.shown(input).contains("fallback"))
+            }
+        }
+    }
+
+    @Test func shorterOrMixedClosingFencesDoNotFinishACard() {
+        let shorter = "````persona-view\n{\"fallback\":\"未闭合\"}\n```"
+        let mixed = "~~~persona-view\n{\"fallback\":\"未闭合\"}\n```"
+        #expect(AssistantCardText.replacingCards(shorter) == AssistantCardText.mark)
+        #expect(AssistantCardText.replacingCards(mixed) == AssistantCardText.mark)
+    }
+
     @Test func twoCardsInOneReply() {
         let two = "```persona-view\n{\"fallback\":\"一\"}\n```\n中间\n```persona-view\n{\"fallback\":\"二\"}\n```"
         #expect(AssistantCardText.replacingCards(two) == "一\n中间\n二")

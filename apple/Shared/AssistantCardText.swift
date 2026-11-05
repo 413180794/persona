@@ -11,23 +11,43 @@ nonisolated enum AssistantCardText {
 
     /// `text` with every card block replaced by its words; anything else is left as it is.
     static func replacingCards(_ text: String) -> String {
-        guard text.contains(view) || text.contains(card) else { return text }
-        var out: [String] = []
-        var lines = text.components(separatedBy: "\n")[...]
-        while let line = lines.popFirst() {
-            guard let open = Fence(opening: line), open.language == view || open.language == card else {
-                out.append(line)
-                continue
+        guard text.range(of: view, options: .caseInsensitive) != nil || text.range(of: card, options: .caseInsensitive) != nil else { return text }
+        var out = ""
+        var inside: Fence?
+        var body = ""
+        for line in lines(text) {
+            if let fence = inside {
+                if fence.closes(line.text) {
+                    out += fence.isCard ? words(fence.language, json: body) + line.ending : line.text + line.ending
+                    inside = nil
+                    body = ""
+                } else if fence.isCard {
+                    body += line.text + line.ending
+                } else {
+                    out += line.text + line.ending
+                }
+            } else if let fence = Fence(opening: line.text) {
+                inside = fence
+                if !fence.isCard { out += line.text + line.ending }
+            } else {
+                out += line.text + line.ending
             }
-            var body: [String] = []
-            var closed = false
-            while let next = lines.popFirst() {
-                if open.closes(next) { closed = true; break }
-                body.append(next)
-            }
-            out.append(closed ? words(open.language, json: body.joined(separator: "\n")) : mark)
         }
-        return out.joined(separator: "\n")
+        if inside?.isCard == true { out += mark }
+        return out
+    }
+
+    /// Keep the original line endings outside cards. Swift treats CRLF as one newline character, just like LF or CR.
+    private static func lines(_ text: String) -> [(text: String, ending: String)] {
+        var out: [(text: String, ending: String)] = []
+        var start = text.startIndex
+        for i in text.indices where text[i].isNewline {
+            let next = text.index(after: i)
+            out.append((String(text[start..<i]), String(text[i..<next])))
+            start = next
+        }
+        if start < text.endIndex { out.append((String(text[start...]), "")) }
+        return out
     }
 
     /// The words for one block's content.
@@ -50,6 +70,7 @@ nonisolated enum AssistantCardText {
         var char: Character
         var count: Int
         var language: String
+        var isCard: Bool { language == AssistantCardText.view || language == AssistantCardText.card }
 
         init?(opening line: String) {
             let indent = line.prefix { $0 == " " }
