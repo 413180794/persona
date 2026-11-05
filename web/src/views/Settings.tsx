@@ -36,6 +36,7 @@ import { LauncherExtensionSections } from "./settings/ExtensionView";
 import { hubHasExt } from "../lib/extension-api";
 import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
 import { Segmented } from "./assistant/parts";
+import { TerminalModeRow } from "./settings/TerminalModeSetting";
 import { FROM_LIST, LIST_GROUPS, openedFromList, settingsAt, settingsHref, TAB_INFO, TABS, type Tab } from "./settings/nav";
 import { SHEET_QUERY, useMedia } from "../ui/overlay";
 import { formatList, t } from "../i18n";
@@ -297,6 +298,7 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
         <Row label={t("settings.sound")} hint={t("settings.sound_hint")}>
           <Switch on={attentionSound} onChange={setAttentionSoundEnabled} label={t("settings.sound")} />
         </Row>
+        <TerminalModeRow />
         <Row label={t("settings.sidebar_terminals")} hint={t("settings.sidebar_terminals_hint")}>
           <Switch on={sidebarTerminals} onChange={setSidebarTerminals} label={t("settings.sidebar_terminals")} />
         </Row>

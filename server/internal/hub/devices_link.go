@@ -705,6 +705,7 @@ func (h *Hub) watchAgain(list []*Machine) {
 func (h *Hub) connectionEnded(m *Machine, why string) {
 	h.forgetLiveText(m.cfg.ID) // the node that was generating it is gone: the transcript has what was finished
 	h.terminalsEnded(m.cfg.ID, why)
+	h.fullsOffline(m.cfg.ID) // the full herdr views ran on that connection too
 	h.cancelMachineInteractions(m.cfg.ID)
 }
 

@@ -158,6 +158,35 @@ type Controller interface {
 	Control(ctx context.Context, pane PaneRef, cols, rows int, takeover bool, fn func(Frame)) (Control, error)
 }
 
+// FullClienter runs the host's own interactive client in a terminal of the node's, for the web's full herdr view: the
+// host's sidebar, tabs and splits instead of one pane (docs/terminal.md「完整 herdr 界面」).
+type FullClienter interface {
+	// CanFullClient reports whether this host can, on this machine (herdr on Unix, with sessions to attach to).
+	CanFullClient() bool
+	// StartFullClient runs the client at cols × rows and gives what it draws to onData, in order, from one goroutine;
+	// onData may block, which stops the client drawing (flow control), and must not keep the slice. With a pane, the
+	// host first shows that pane's tab (the host's focus is shared by all its clients).
+	StartFullClient(ctx context.Context, opts FullClientOptions, onData func([]byte)) (FullClient, error)
+}
+
+// FullClientOptions says how to run a full client.
+type FullClientOptions struct {
+	Cols, Rows int
+	Pane       *PaneRef
+}
+
+// FullClient is a running full client (FullClienter.StartFullClient).
+type FullClient interface {
+	// Write types into the client.
+	Write(p []byte) error
+	Resize(cols, rows int) error
+	// Done closes when the client is gone; Err then says why (nil after Close).
+	Done() <-chan struct{}
+	Err() error
+	// Close ends the client and waits for it to be gone.
+	Close()
+}
+
 // MetadataReporter reports and clears pane metadata tokens (docs/todos.md, #762).
 type MetadataReporter interface {
 	ReportMetadata(ctx context.Context, pane PaneRef, source string, tokens map[string]*string) error

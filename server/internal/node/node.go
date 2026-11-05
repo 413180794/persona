@@ -86,6 +86,7 @@ type Node struct {
 	paneSeen  map[string]time.Time       // claude pane without a host session id -> first seen (zero: there when node started)
 	modes     map[string]sessionModes    // session id -> mode / effort set from the app (modes.go)
 	terms     map[string]*termStream     // session id -> its terminal streaming to the hub (terminal.go)
+	fulls     map[string]*fullClient     // client id -> a full herdr client running for the web (fullclient.go)
 	suggests  map[string]*suggestState   // session id -> Claude's suggested next message (suggestion.go)
 	driving   map[string]bool            // session id -> Persona is working its TUI (a picker it opened is not "blocked")
 	firstWait sync.WaitGroup             // first messages being checked (firstprompt.go)
@@ -243,8 +244,9 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	n.peer.OnRequest = n.handle
 	n.streams = streams.New(n.peer.Notify)
 	defer n.streams.CloseAll()
+	defer n.closeFulls() // none of the web's full herdr clients outlives this hub connection (fullclient.go)
 	n.peer.OnEvent = func(event string, params json.RawMessage) {
-		if !n.streams.Event(event, params) {
+		if !n.streams.Event(event, params) && !n.onFullEvent(event, params) {
 			n.onTerminalEvent(event, params)
 		}
 	}
@@ -800,6 +802,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "terminal.unwatch":
 		n.terminalUnwatch(p.SessionID)
 		return ok(nil)
+	case "herdr.client.open": // the web's full herdr view: herdr's own client in a PTY (fullclient.go)
+		return n.fullOpen(ctx, params)
 	case "session.image":
 		var a struct {
 			ItemID string `json:"item_id"`

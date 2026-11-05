@@ -242,6 +242,7 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   { id: "left-sidebar", label: t("lib-shortcuts.cmd_left_sidebar"), chord: "Mod+Alt+B", scope: "global", icon: "sidebar" },
   { id: "maximize", label: t("lib-shortcuts.cmd_maximize"), chord: "Mod+Shift+Enter", scope: "global", icon: "layers" },
   { id: "terminal-chat", label: t("lib-shortcuts.cmd_terminal_chat"), chord: "Mod+J", scope: "session", icon: "terminal" },
+  { id: "terminal-mode", label: t("terminal-full.cmd_terminal_mode"), chord: "Mod+Alt+F", scope: "session", icon: "sidebar" },
   { id: "right-panel", label: t("lib-shortcuts.cmd_right_panel"), chord: "Mod+B", scope: "session", icon: "sidebar" },
   { id: "focus-input", label: t("lib-shortcuts.cmd_focus_input"), chord: "Mod+I", scope: "session", icon: "keyboard" },
   { id: "prev-tab", label: t("lib-shortcuts.cmd_prev_tab"), chord: "Mod+Alt+Left", scope: "session", icon: "arrowLeft" },

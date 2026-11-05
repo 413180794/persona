@@ -953,6 +953,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		h.terminalDrop(c)
+		h.fullDrop(c)
 	}()
 
 	// Track registration too: shutdown must not miss a newly hijacked connection.
@@ -1043,6 +1044,14 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		Cwd   string   `json:"cwd"`
 		Paths []string `json:"paths"`
 		Git   bool     `json:"git"`
+		// herdr_open, herdr_input, herdr_resize, herdr_ack: the web's full herdr view (herdrclient.go)
+		ID    string `json:"id"`
+		Data  string `json:"data"`
+		B64   string `json:"b64"`
+		Cols  int    `json:"cols"`
+		Rows  int    `json:"rows"`
+		Bytes int64  `json:"bytes"`
+		Focus bool   `json:"focus"`
 	}
 	if json.Unmarshal(data, &msg) != nil {
 		return
@@ -1077,6 +1086,16 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 			return
 		}
 		h.fsWatchSet(c, msg.MachineID, cleanFsWatch(msg.Cwd, msg.Paths, msg.Git))
+	case "herdr_open":
+		h.herdrOpen(ctx, c, msg.MachineID, msg.ID, msg.SessionID, msg.Cols, msg.Rows, msg.Focus)
+	case "herdr_input":
+		h.herdrInput(c, msg.ID, msg.Data, msg.B64)
+	case "herdr_resize":
+		h.herdrResize(c, msg.ID, msg.Cols, msg.Rows)
+	case "herdr_ack":
+		h.herdrAck(c, msg.ID, msg.Bytes)
+	case "herdr_close":
+		h.herdrClose(c, msg.ID)
 	case "subscribe":
 		m := h.localMachine(msg.MachineID)
 		if m == nil {

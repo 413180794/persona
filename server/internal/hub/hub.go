@@ -61,7 +61,8 @@ type Hub struct {
 	quotas            quotaCache // launcherquota.go
 	agents            *agents.Service
 
-	terms terminals // the terminal tab's live streams (terminal.go)
+	terms terminals  // the terminal tab's live streams (terminal.go)
+	fulls fullRelays // the web's full herdr views (herdrclient.go)
 
 	devices devicesState // the manager's machines as it reports them (devices_link.go)
 
@@ -359,6 +360,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.initMesh(ctx) // before the manager connects: a member leaves its computers to the center (mesh_group.go)
 	go h.expireLoop(ctx)
 	go h.terminalKeepalive(ctx)
+	go h.fullKeepalive(ctx)
 	go h.live.run(ctx)
 	h.migrateWeChatState(ctx) // into the channels' state before the assistant and the WeChat program read it (channels_migrate.go)
 	// The assistant, its own process on the bus (assistant_process.go); it carries the machines, so the hub's stop

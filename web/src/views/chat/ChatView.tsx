@@ -740,8 +740,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       </ViewLayer>
       {switchable && termKept && (
         <ViewLayer on={view === "term"} from="end" enter layerRef={termLayer}>
-          {/* Files opens beside it (the Files panel, as on the 终端 page); × goes back to the conversation */}
-          <TerminalPanel mid={mid} sid={sid} onFiles={session?.cwd ? openFiles : undefined} onClose={() => setView("chat")} />
+          {/* Files opens beside it (the Files panel, as on the 终端 page); the page's header is the panel's, so the panel keeps a toolbar of its own controls (单窗格 / 完整界面…) */}
+          <TerminalPanel mid={mid} sid={sid} onFiles={session?.cwd ? openFiles : undefined} onClose={() => setView("chat")} embedded />
         </ViewLayer>
       )}
       </div>

@@ -485,6 +485,7 @@ Persona 网页看的是 observe / control 流，「实测」一节是它们给�
 不进窗格级别的流。
 
 没验证的一条：完整 TUI 客户端（`herdr session attach`）是否一定带出 OSC 52。要 attach 到用户正在用的会话，会多一个客户端，可能影响布局和焦点，没有做。
+**（2026-11-05 更新：在自己建的临时会话里量过了，带出；见第二十四节。）**
 
 ### herdr 自己的复制能不能送到网页
 
@@ -494,6 +495,7 @@ Persona 网页看的是 observe / control 流，「实测」一节是它们给�
 - 事件只有 `layout_updated`、`pane_*`、`tab_*`、`workspace_*`、`worktree_*`、`pane_output_changed`（不带内容）。
 - 可能的做法是让 node 作为一个隐藏的完整 herdr 客户端（PTY 里 `herdr session attach`）常驻、解析它的输出里的 OSC 52。代价大：多一个客户端的尺寸和焦点、占资源，也要用户那边设 `SSH_CONNECTION`。这次不做。
   如果 herdr 以后加「剪贴板」事件，再接：node 订阅 → hub 转发 → 网页弹「已复制到剪贴板」+ 「复制」按钮（浏览器要手势）。网页这边的按钮已经有（程序 OSC 52 到达时用，见上）。
+  **（2026-11-05：第二十四节做了这条路——「完整界面」就是 node 在 PTY 里跑的完整客户端，OSC 52 在那里走通；单窗格的流里依旧没有。）**
 
 ### 颜色查询：没做，因为到不了浏览器
 
@@ -672,3 +674,124 @@ Moshi 是同一个会话页，中间区域在 Term 和 Chat 之间原地切换�
   创建中按钮转圈、对话框不能关；失败显示在对话框里（「没能新建 worktree：…」），旧 hub / 旧 node 没有这个接口时说「这台电脑上的 Persona 版本太旧，更新后才能新建 worktree」；成功后 toast、读一遍树、跳到新工作区的终端。
 - **测试**：`node/worktree_test.go`（真 git 仓库 + 假 herdr：prepare 的仓库名 / 分支 / 配置的目录 / linked worktree / 分离 HEAD / 非仓库；经 herdr 创建新分支和已有分支；各种被拒绝的路径和分支名不碰 herdr；git 的拒绝原因；退回 git 的路径和重复检出；`panes.list` 带 `worktree`）、
   `herdr/worktrees_test.go`（配置解析、slug、socket 参数和 CLI 退路）、`hub/panes_test.go`（权限、只转发点名的字段）、`web/src/lib/worktree.test.ts`、`node-actions.test.ts`、`node-palette.test.ts`、`views/NewWorktree.test.tsx`。
+
+## 二十四、完整 herdr 界面：PTY 里的 herdr 客户端，和单窗格并排可切换（2026-11-05，#2357）
+
+起因：Moshi 的网页端默认就是一个完整的 herdr 客户端（herdr 自己的侧边栏、标签页、分屏），它的「Control mode」才是只看选中的一个窗格——那就是 Persona 一直以来的做法（observe / control，第一到二十节）。用户要 Persona 两种都有、方便切换、有一点动画，
+**并且 2026-11-05 拍板：打开终端默认用完整界面**（单窗格留作可切换的另一种，和机器 / herdr / 系统不支持、或客户端起不来时的自动回退）。
+
+### 为什么当初没用 `terminal attach` / `session attach`，现在为什么可以
+
+第一节和第十一节拒绝它们的理由是：`terminal attach` 占着窗格唯一的 attach 槽位，还会把窗格改成客户端的尺寸；而且它输出的是 herdr 重画的网格，不是程序的原始字节。
+**这一节用的是另一个东西**：`herdr session attach <会话名>`，就是在电脑上敲 `herdr` 看到的那个完整 TUI 客户端，不占任何窗格的槽位；
+它的字节流是客户端自己画的整个界面（备用屏 + 光标定位），正是浏览器里 xterm 要原样显示的。代价是它和电脑上的 herdr 窗口共用同一份布局，见下面的实测。
+第十八节说的「OSC 52 只到得了完整客户端」也在这里兑现。
+
+### 链路
+
+```
+浏览器 xterm ──herdr_open / herdr_input / herdr_resize / herdr_ack / herdr_close──▶ hub ──herdr.client.open（RPC）+ .input / .resize / .ack / .close / .keepalive（事件）──▶ node
+浏览器 xterm ◀──herdr_state / herdr_data（base64）/ herdr_end───────────────────────── hub ◀──herdr.client.data / .end（事件）────────────────────────────────── node ◀─PTY─ herdr session attach <会话名>
+```
+
+**为什么不复用 `terminal_subscribe`**：那条中继是按（机器，会话）共用一路流、留最近的整帧给重连的 App 补发（epoch / seq）；完整客户端是每个浏览器视图一个进程、没有可补发的帧（重连就是新开一个视图）、
+流控靠浏览器的 ack。硬塞进同一套机制要给每个分支加条件，另起一组 `herdr_*` 消息更清楚，也不会影响旧 App（它们不发这些消息）。
+
+### node（`server/internal/node/fullclient.go`、`server/internal/herdr/fullclient*.go`）
+
+- **启动**：`herdr session attach <会话名>`，在一个新的 PTY 里（`github.com/creack/pty` v1.1.24：本来就在 go.sum 里（tailscale 的间接依赖），这次把它升成直接依赖，没有新增下载）。
+  会话名不让用户填：node 的 herdr 客户端有自己的 socket 路径，按 `herdr session list --json` 里的 `socket_path` 找出对应的会话（默认会话就是 `default`）；socket 不属于任何会话时回 `unsupported`。
+  `session attach` 对没在跑的会话也会把它起起来，所以 node 只对「host 已经在用的那个 socket」起客户端。
+- **环境**：继承 node 的，去掉 `HERDR_*`、`TMUX*`、`STY`、`SSH_*`（免得 herdr 以为自己在窗格里 / 另一个复用器里），再加 `TERM=xterm-256color`、`COLORTERM=truecolor`、
+  `SSH_CONNECTION=127.0.0.1 1 127.0.0.1 2`（回环占位，让 herdr 把自己当成远程、复制时走 OSC 52 而不是电脑上的剪贴板工具；做法同有人给 moshi-hook 配的 systemd drop-in）。
+- **初始焦点**：herdr 没有「按窗格 id 聚焦」，只有 `workspace.focus` / `tab.focus`。打开时带 `focus`，node 先聚焦那个窗格所在的空间和标签页（窗格在标签页里是 herdr 上次聚焦的那个）。
+  **焦点是整个 herdr 会话共享的**（实测见下），所以电脑上的窗口也跟着跳——和用户在完整客户端里点一下标签页是同样的效果，所以默认就这样做。Moshi 的网页端不选，显示的是 herdr 当前聚焦的窗格。
+- **上限**：每台电脑最多 4 个完整客户端（`fullMaxClients`），第 5 个回 `too_many`；一个浏览器连接在 hub 上最多 4 个视图。
+- **流控**：node 给 hub 发出去、浏览器还没 ack 的字节超过 256 KB（`fullWindow`）就不再读 PTY——herdr 客户端写满终端缓冲区就自己停住，node 里不攒东西。ack 是累计的字节数，超过已发出的不算。
+  浏览器 60 秒一个 ack 都没有（窗口一直满着）就当它不读了，结束这个视图。hub 这一侧另有上限：给某个浏览器的未 ack 字节超过 1 MiB 就结束视图并让 node 关掉客户端（node 或浏览器不守规矩时 hub 也不会无限攒）；浏览器的发送队列满了结束这个视图，不断整条连接。
+- **输入**：hub 转来的键由单独的 goroutine 按顺序写进 PTY（队列 256 条）；客户端不收输入时 node 的事件循环不会被堵住，队列满了就结束它。
+- **关掉就不留进程**：视图的每一种结局都会结束客户端进程——hub 说关（`herdr.client.close`）、hub 连接断了（`Serve` 返回时 `closeFulls`）、租约到期（hub 每 20 秒 `herdr.client.keepalive`，75 秒没听到就关）、浏览器不读、客户端自己退出（`herdr client exited: N`，会告诉 hub）。
+  关法：先关 PTY 主端（客户端收到挂断就退，**只退客户端，herdr 服务和窗格都在**——实测），2 秒不退发 TERM（给它的整个进程组），再 2 秒发 KILL。Windows 返回 `unsupported`。
+- **测试**：`TestFullClient…`（node：流、改尺寸、打字、关、窗口满了停读、乱 ack 不开窗口、浏览器不读被结束、租约、客户端退出、上限、`closeFulls` 后没进程）和 herdr 包的 PTY 生命周期（含忽略 HUP / TERM 的客户端会被 KILL），用假的 `herdr` 脚本；
+  `-tags herdrlive` 的 `TestLiveFullClient` / `TestLiveFocusPane` 对着自己建的临时会话跑真 herdr（`PERSONA_LIVE_FULL_SESSION=<会话名>`，绝不连默认会话）。
+
+### hub（`server/internal/hub/herdrclient.go`）
+
+| 浏览器 → hub | 字段 |
+| --- | --- |
+| `herdr_open` | `id`（浏览器自己取，≤ 64 字符）, `machine_id`, `session_id`（可选，会话 id 或 `pane:` 地址：先聚焦它）, `cols`, `rows`, `focus` |
+| `herdr_input` | `id`, `data`（文字，原样写进去）或 `b64`（字节）；一条最多 1 MiB（网页自己拆成 32K 一条） |
+| `herdr_resize` | `id`, `cols`, `rows`（1–500 × 1–300） |
+| `herdr_ack` | `id`, `bytes`：浏览器已经解析了的总字节数（累计） |
+| `herdr_close` | `id` |
+
+hub → 浏览器：`herdr_state {id, state: "open", cols, rows}`、`herdr_data {id, data}`（base64，一条最多 32 KB）、`herdr_end {id, error?, code?, unsupported?}`（`code`：`forbidden`、`too_many`、`bad_request`、`offline`）。
+
+- **权限**：只有 `full` 角色的设备能开（完整客户端能在那台电脑的 herdr 里做任何事：在任何窗格里跑命令、关窗格）；手表这类只能回答的设备回 `forbidden`，**连看也不行**；扩展令牌连 WebSocket 都进不去（`GET /api/v1/ws` 在 `route_scopes.txt` 里本来就是 `-`），所以没有新的路由要登记。
+  每个视图只属于开它的连接：别的连接猜到 id 也碰不到（`fullOf` 按连接找）。node 发来的 data / end 只认自己机器上的视图。
+- **hub 里的生命周期**：连接断了 → `fullDrop`，对每个视图让 node 关客户端；电脑掉线 → `fullsOffline`，浏览器收到 `herdr_end {code: "offline"}`；hub 每 20 秒给 node 发 `herdr.client.keepalive`（node 的租约 75 秒）。
+- **兼容**：feature `herdr_client`。旧 hub 没有它，网页不显示切换、设置里也不出这一项，终端照旧是单窗格；hub 新而 node 旧（`unknown method herdr.client.open`）或 herdr / 系统不行时，视图以 `unsupported` 结束，网页自动回退到单窗格并提示原因。
+
+### 网页（`web/src/views/session/TerminalPanel.tsx`、`terminal/FullTerminal.tsx`、`terminal/full.ts`、`terminal/Surface.tsx`、`lib/terminal-mode.ts`）
+
+- **切换**：终端面板（侧边面板和 /terminal 页是同一个组件）头上的分段控件「单窗格 / 完整界面」，窄的时候只剩图标；记住的只有最近一次选择（`jarvis.terminal.mode`）。Mod+Alt+F 也能切（快捷键注册表的 `terminal-mode`，面板在前面时才生效）。
+  面板的 props 没变（`mid, sid, onClose, label, cwd, onFiles`），两个界面各自把自己的头部按钮画进面板头的同一个槽里，切换控件始终在原处。
+  会话页里终端是原地的一个视图（第二十二节，页面自己已有标题和「终端 | 对话」），那里面板多收一个 `embedded`：自己的头收成一条 40 px 的工具栏（左边是这个切换，右边是状态、文件、键栏、重新连接），不再有第二个标题栏。
+- **设置 › 终端界面**：完整界面（默认，不写任何键）/ 单窗格 / 记住上次（新终端从上次的选择开始）。hub 没有 `herdr_client` 时这一项不显示。
+- **动画**：两个界面一个往里滑 + 淡入、一个往外滑 + 淡出（14 px、220 ms，`--ease-out-strong`），全是 CSS transition，没有新的动画库；`styles.css` 里已有的 reduced-motion 规则把时长压到 1 ms，面板另外在该设置下立刻卸掉退出的那个。
+  滑动结束后元素上没有 transform（有 transform 的盒子会困住 fixed 定位的菜单）。单窗格 → 完整界面时，完整界面等单窗格淡出后才开（淡出期间单窗格还在接管自己的窗格）；完整界面 → 单窗格时，完整界面立刻放手。
+- **完整界面本身**：一个普通的 xterm（滚动历史 5000 行、`@xterm/addon-clipboard`（OSC 52 写进剪贴板，读一律拒绝）、`addon-web-links`、`addon-search`），行高 1（herdr 用框线字符画边框和条，行与行之间有缝就变成虚线）。
+  键栏、查找条（⌘F / Ctrl+Shift+F）、右键菜单（复制 / 粘贴 / 全选 / 搜索… / 清除选区）、存好的命令和单窗格共用同一批组件；herdr 开着鼠标上报时右键是 herdr 自己的（有选中文字时才出网页菜单）。按住 Shift 拖选是 xterm 自己的选择。
+- **应答 herdr 的提问**（Moshi 同样）：herdr 客户端启动时问 `CSI ? 996 n`（配色）、开 DEC 2031（配色变化通知）、问 `OSC 10;? / 11;?`（前景 / 背景色）、`CSI ? u`（kitty 键盘）、DA1、`CSI 16 t`。网页回答 `CSI ? 997 ; 1|2 n`（深 / 浅）、`CSI ? 2031 ; 1|2 $ y`，
+  页面切深浅色时若 herdr 开了 2031 就主动再报一次颜色和配色；OSC 10/11、DA1 由 xterm 自己答。（第十八节说「颜色查询到不了浏览器」是单窗格流的事，这里它们到得了。）
+- **流控**：xterm 每解析完一段（`write` 的回调）累计字节数，满 64 KB 或距上次告诉 hub 过了 250 ms 就发一条 `herdr_ack`（Moshi 同样的数）。
+- **状态**：头上一个小圆点 + 「连接中 / 已连接 / 已断开 / 出错了 / 不支持 / 没有权限」和格数，鼠标放上去是原因；视图结束时原因以暗色一行写在终端里（同 Moshi 的 `close.reason`），底部浮出「重新连接」。
+  hub 的 WebSocket 断了又连上：旧视图随连接没了，页面清屏后自动开新的。
+- **停用**：终端页「挂着但不在前面」的终端（`inert`）和正在淡出的界面，会放掉电脑上的客户端（不占那 4 个名额、不抢布局），回到前面时重连。
+- **自动回退到单窗格**：视图在**还没连上过**时就结束（`unsupported`、`forbidden`、`too_many`、客户端一起来就退出……电脑离线除外），面板提示「完整界面没能打开：原因。改用单窗格」并切过去；
+  这台电脑在这个页面存活期间记为不支持，它的其他终端直接用单窗格（用切换控件手动选完整界面会再试一次）。
+- **首次提示**：第一次连上时提示一次「完整界面是 herdr 自己的客户端：在这里操作时，电脑上的窗格会按这个面板的大小排版；回到电脑上操作又会换回去。」（`jarvis.terminal.fullHint`）。
+
+### 实测（herdr 0.9.5，自己建的临时会话 `persona-fullui-test`，没碰默认会话；测完 `session stop` + `session delete`）
+
+用 Python `pty` 起两个 `herdr --session persona-fullui-test` 客户端（A 模拟电脑上的窗口 120×34，B 模拟浏览器），用 `herdr pane layout` 看布局、用 pyte 看各自的屏幕：
+
+| 情形 | 窗格布局区域（`pane layout` 的 `area`） |
+| --- | --- |
+| 没有客户端 | 120×40（停在上次的尺寸） |
+| A（120×34）连上 | 94×33（= 终端宽 − 侧边栏 26，高 − 1 行状态栏） |
+| A + B（80×24）连上 | 54×23（**B 的**） |
+| B 改成 100×30 | 74×29 |
+| A 改成 140×40 | 114×39（**A 的**） |
+| B 改成 60×20 | 60×18（窄于 64 列走 herdr 的手机单列布局，不再留侧边栏） |
+| B 退出 | 114×39（回到 A 的） |
+| A 在 B 之后打一个字 | 回到 A 的尺寸；B 再打一个字又回到 B 的 |
+
+- **谁说了算：最近一个有动作的客户端**（连上、改尺寸、打字），不是最小的也不是最大的。布局和窗格里程序看到的尺寸是整个会话一份——**浏览器连着完整界面时，电脑上正在跑的 Claude 会按浏览器的尺寸重排版，直到在电脑上敲一个键又换回去**；
+  两边轮流敲键就会来回换。这和单窗格的「接管」是同一类代价（第十一节），所以首次提示里说了，默认值也因此是用户拍板的而不是我们自己定的。
+- 电脑上那个窗口（A）在 B 连上后的一秒里只收到 55 个字节，它画的窗格几何没变（pyte 里看；pyte 不是完整的终端仿真，只能说没看到整屏重画），直到它自己下一次有动作。没有量到「电脑上的窗口布局被改乱」，量到的是窗格里程序的尺寸变了。
+- **焦点（当前的空间 / 标签页）是整个会话共享的**：`tab focus` 一下，A 和 B 两边都跳；B 连上时显示的就是当前聚焦的标签页。所以「用打开它的那个窗格作初始焦点」只能通过改共享焦点实现（上面「初始焦点」）。
+- **OSC 52**：herdr 里鼠标拖选（SGR 鼠标事件按下、拖、松开）选中后，客户端输出里有 `ESC ] 52 ; c ; <base64> BEL`；窗格里的程序自己发的 OSC 52 也原样出现在客户端输出里。
+  这台机器上没有显示环境（或给一个不存在的 `WAYLAND_DISPLAY`）时，带不带 `SSH_CONNECTION` 都发 OSC 52；有显示环境和剪贴板工具时的行为没量（怕写到用户真的剪贴板），所以仍然设置 `SSH_CONNECTION`。
+  **真 herdr → 浏览器剪贴板**：`scripts/test/web_herdr_full_live.py`（假 hub 的 `MOCK_TERMINAL_FULL_EXEC` 在 PTY 里跑真的 `herdr session attach`，Chrome 里鼠标拖选 herdr 屏幕上的 `LIVE_COPY_MARK`，剪贴板读出来就是 `LIVE_COPY_MARK`）通过。
+- **客户端启动时发给终端的序列**（`TERM=xterm-256color`）：`?1049h` 备用屏、`>7u` 和 `?u`（kitty 键盘）、DA1、`?1016$p`、`?1000/1002/1003/1015/1006h`（鼠标）、`?2004h`（括号粘贴）、`?1004h`（焦点事件）、`?2031h`、`OSC 10;? / 11;?`、`CSI ? 996 n`、`CSI 16 t`、`?2026h`（同步输出）。
+- herdr 配置 `[ui] mobile_width_threshold = 64`：终端宽度 ≤ 64 列时是单列布局，所以手机上（390 px 约 46 列）完整界面没有侧边栏，只是一个窗格加标签页条。
+- `sidebar_collapsed_mode` 是 herdr 的**共享配置**：Moshi 的「Hide collapsed Herdr sidebar」改的就是它（网关 `POST /gateway/v1/pty?mux=herdr&hideSidebar=…`，并提示 "Changes Herdr's shared config"）。Persona 不改用户的 herdr 配置；侧边栏用 herdr 自己的 prefix+b 收起。
+
+### 和 Moshi 的差别
+
+| Moshi | 这里 | 为什么 |
+| --- | --- | --- |
+| `GET /gateway/v1/pty?mux=herdr…` 的 WebSocket，二进制帧 | 复用已有的应用 WebSocket，JSON + base64 | 不用再开一条连接、一套鉴权；多约 33% 字节，局域网 / 公网上都不是瓶颈，有 ack 兜底 |
+| 默认完整界面，Control mode（`herdrPaneStreams`）是另一个设置 | 默认完整界面（用户拍板），头上的开关随时换，设置里选默认 | 开关放在要用的地方；记住上次可选 |
+| ack：每 64 KB 或 250 ms，累计字节 | 一样 | |
+| 重连：先踢掉本机最近 2 个分离的终端再重试 | 每台电脑 4 个名额，满了回 `too_many`；终端页挂着的不在前面的会放掉客户端 | 名额是 node 管的，不靠客户端互相踢 |
+| Hide collapsed Herdr sidebar（改 herdr 共享配置） | 不做 | 不改用户的 herdr 配置 |
+| 选哪个会话 / 窗格：不选（显示 herdr 当前聚焦的） | 打开时把那个窗格所在的标签页聚焦 | 从 /terminal 里点了一个窗格，期望看到它 |
+| 关页面（`pagehide`）时销毁所有终端 | 连接断了 hub 关；组件卸载发 `herdr_close`；租约兜底 | node 侧不留进程，是测试过的 |
+
+### 验证
+
+- Go：`go test -count=1 ./internal/herdr ./internal/host ./internal/node ./internal/hub ./internal/proto`；对真 herdr：`PERSONA_LIVE_FULL_SESSION=<临时会话> go test -tags herdrlive -run 'TestLiveFullClient|TestLiveFocusPane' ./internal/herdr/`。
+- 网页：`cd web && npm test && npm run build`（`terminal-mode.test.ts`、`Surface.test.tsx`、快捷键表）。
+- 端到端：`scripts/test/web_herdr_full_e2e.py`（假 hub 的 `MOCK_TERMINAL_FULL=1`，用法见脚本开头：默认完整界面、ack、配色应答、打字、OSC 52 到剪贴板、切换 / 动画中间态 / 记住选择 / 快捷键 / 改尺寸 / 关闭、设置、减弱动态、结束后重连、不支持时回退、旧 hub 没有开关；截图深浅色 × 宽 / 390 px）和 `scripts/test/web_herdr_full_live.py`（真 herdr，见上）。

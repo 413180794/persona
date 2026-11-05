@@ -3,33 +3,49 @@
 // pane's (只看). Watching, scrolling up reads herdr's history above the screen and 换行 folds long rows at the panel's
 // width; driving, the key bar has the keys a phone's keyboard lacks. The logic is in terminal/feed.ts; xterm loads only
 // when a terminal opens.
+//
+// Beside that single-pane surface the panel has a second, 完整界面 (docs/terminal.md「完整 herdr 界面」): herdr's own
+// client with its sidebar, tabs and splits (terminal/FullTerminal.tsx). The header's switch chooses, and the two give
+// way to each other with a short slide and fade. Each surface draws its own controls into the header's slot.
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { sessionTitle } from "../../lib/format";
 import { machineWithHub } from "../../lib/mesh";
+import { registerShortcut } from "../../lib/shortcuts";
 import { getSession, useStore } from "../../lib/store";
 import { lineCount } from "../../lib/terminal";
 import { shouldRefocus, terminalMenu, wantsOwnMenu, type TerminalMenuKey } from "../../lib/terminal-details";
 import { FIND_CLOSED, findReducer, isFindShortcut, queryFromSelection } from "../../lib/terminal-search";
-import { Button, cx, Dialog, IconButton, Loading, Menu, Spinner, type MenuItem } from "../../ui/atoms";
+import {
+  LAST_MODE_KEY,
+  PREFERENCE_KEY,
+  SURFACE_MS,
+  noFullClient,
+  otherMode,
+  pickMode,
+  parseMode,
+  parsePreference,
+  slideFrom,
+  surfacesReducer,
+  type TerminalMode,
+} from "../../lib/terminal-mode";
+import { Button, cx, Dialog, IconButton, Loading, Menu, Spinner, toast, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { prefersReducedMotion } from "../../ui/stream/motion";
 import { PanelHeader } from "../SidePanel";
 import { DrawnRows, rowsStyle } from "./terminal/DrawnRows";
 import { TerminalFeed, type FeedView } from "./terminal/feed";
 import { FindBar } from "./terminal/FindBar";
 import { focusFacts, selectionInside } from "./terminal/focus";
+import { FullTerminal, useUnseen } from "./terminal/FullTerminal";
 import { KeyBar } from "./terminal/KeyBar";
+import { KEYBAR_KEY, savedKeyBar } from "./terminal/keybar-pref";
 import { LinkStatus } from "./terminal/LinkStatus";
+import { ModeToggle } from "./terminal/ModeToggle";
 import { ShortcutsEditor } from "./terminal/Shortcuts";
+import { Surface } from "./terminal/Surface";
 import { TerminalOptions } from "./terminal/TerminalOptions";
 import { t } from "../../i18n";
-
-const KEYBAR_KEY = "jarvis.terminal.keyBar";
-
-/** The key bar: as chosen in this browser, else up where the pointer is a finger (a phone's keyboard has no Esc / Ctrl). */
-function savedKeyBar(): boolean {
-  const v = localStorage.getItem(KEYBAR_KEY);
-  return v === null ? matchMedia("(pointer: coarse)").matches : v === "1";
-}
 
 const nothing = () => () => {};
 
@@ -37,25 +53,24 @@ function useFeed(feed: TerminalFeed | null): FeedView | null {
   return useSyncExternalStore(feed?.subscribe ?? nothing, () => feed?.snapshot() ?? null);
 }
 
-export function TerminalPanel({
+/** The single-pane surface: the panel as it has always been, less its header (the panel draws that; this draws its controls into `slot`). */
+function PaneTerminal({
   mid,
   sid,
-  label,
   cwd,
   onFiles,
-  onClose,
+  slot,
+  live,
 }: {
   mid: string;
   sid: string;
-  label?: string;
-  /** The pane's working directory when the page knows it (else the session's): dropped Files entries are named relative to it. */
   cwd?: string;
-  /** Opens the Files panel beside the terminal (the terminal page; as a side panel the Files panel would replace this one). */
   onFiles?: () => void;
-  onClose: () => void;
+  slot: HTMLElement | null;
+  /** False while this surface is on its way out. */
+  live: boolean;
 }) {
   const session = useStore(() => getSession(mid, sid));
-  const machine = useStore((s) => machineWithHub(mid, s.machines));
   const canDrive = useStore((s) => s.features.includes("terminal_control"));
   const host = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
@@ -84,7 +99,6 @@ export function TerminalPanel({
     if (feed) feed.cwd = dir;
   }, [feed, dir]);
 
-  const subtitle = [label ?? (session ? sessionTitle(session) : ""), machine].filter(Boolean).join(" · ");
   const streaming = v?.mode === "stream";
   const takeBack = Boolean(v && streaming && v.wants && v.control === "declined" && v.why !== "unsupported");
   const driving = v?.control === "active" || v?.control === "starting";
@@ -208,12 +222,7 @@ export function TerminalPanel({
       tabIndex={-1} // a click anywhere in the panel leaves the focus in it, so ⌘F finds in the terminal (watching, nothing else takes it)
       className="@container flex min-h-0 flex-1 flex-col outline-none"
     >
-      <PanelHeader
-        icon="terminal"
-        title={t("session-terminalpanel.title")}
-        subtitle={subtitle}
-        onClose={onClose}
-        actions={
+      {slot && live && createPortal(
           <>
             {v && <SizeLabel v={v} />}
             {feed && v && canDrive && streaming && <ModeSwitch drive={v.wants} onChange={(on) => feed.setWants(on)} />}
@@ -237,9 +246,9 @@ export function TerminalPanel({
               }}
             />
             <IconButton icon="retry" label={t("session-terminalpanel.reconnect")} onClick={() => feed?.retry()} disabled={!feed} />
-          </>
-        }
-      />
+          </>,
+          slot,
+        )}
       {feed && v && !driving && v.loaded && !v.offline && <HistoryStatus v={v} onLoad={() => void feed.loadOlder()} />}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
@@ -394,6 +403,152 @@ export function TerminalPanel({
       >
         <p className="text-[13px] leading-relaxed text-ink-2">{t("session-terminalpanel.paste_detail")}</p>
       </Dialog>
+    </div>
+  );
+}
+
+/** Terminals whose mode was chosen with the switch in this page's life (the last choice and 设置 decide for the others). */
+const chosen = new Map<string, TerminalMode>();
+
+function modeFor(key: string, mid: string, supported: boolean): TerminalMode {
+  return pickMode({
+    own: chosen.get(key),
+    supported,
+    noFull: noFullClient.has(mid),
+    pref: parsePreference(localStorage.getItem(PREFERENCE_KEY)),
+    last: parseMode(localStorage.getItem(LAST_MODE_KEY)),
+  });
+}
+
+export function TerminalPanel({
+  mid,
+  sid,
+  label,
+  cwd,
+  onFiles,
+  onClose,
+  embedded,
+}: {
+  mid: string;
+  sid: string;
+  label?: string;
+  /** The pane's working directory when the page knows it (else the session's): dropped Files entries are named relative to it. */
+  cwd?: string;
+  /** Opens the Files panel beside the terminal (the terminal page; as a side panel the Files panel would replace this one). */
+  onFiles?: () => void;
+  onClose: () => void;
+  /** Shown under a header of the page's own (a session's terminal view): this panel's header shrinks to a toolbar of its controls. */
+  embedded?: boolean;
+}) {
+  const session = useStore(() => getSession(mid, sid));
+  const machine = useStore((s) => machineWithHub(mid, s.machines));
+  const supported = useStore((s) => s.features.includes("herdr_client"));
+  const key = `${mid}\n${sid}`;
+  const root = useRef<HTMLDivElement>(null);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [surfaces, dispatch] = useReducer(surfacesReducer, undefined, () => ({ shown: modeFor(key, mid, supported), leaving: null, from: null }));
+  const unseen = useUnseen(root);
+
+  // The hub's features can arrive after the panel does: a terminal nobody chose a mode for takes the one 设置 says then.
+  useEffect(() => {
+    const want = modeFor(key, mid, supported);
+    if (surfaces.leaving === null && want !== surfaces.shown && (!supported || !chosen.has(key))) dispatch({ type: "adopt", mode: want });
+  }, [key, mid, supported, surfaces.shown, surfaces.leaving]);
+
+  const choose = useCallback(
+    (mode: TerminalMode) => {
+      if (!supported) return;
+      chosen.set(key, mode);
+      if (mode === "full") noFullClient.delete(mid); // asked for by hand: tried again
+      try {
+        localStorage.setItem(LAST_MODE_KEY, mode);
+      } catch {
+        // not kept: the next terminal starts as 设置 says
+      }
+      dispatch({ type: "choose", mode });
+    },
+    [key, mid, supported],
+  );
+  const toggle = useCallback(() => choose(otherMode(surfaces.shown)), [choose, surfaces.shown]);
+
+  // Mod+Alt+F (lib/shortcuts.ts), while this panel is the one in front.
+  useEffect(() => {
+    if (!supported || unseen) return;
+    return registerShortcut("terminal-mode", () => void toggle());
+  }, [supported, unseen, toggle]);
+
+  // The surface that gave way is let go once it has faded (at once under reduced motion).
+  useEffect(() => {
+    if (!surfaces.leaving) return;
+    if (prefersReducedMotion()) return void dispatch({ type: "done" });
+    const t = setTimeout(() => dispatch({ type: "done" }), SURFACE_MS + 60);
+    return () => clearTimeout(t);
+  }, [surfaces.leaving]);
+
+  // The client did not start (an old node, no herdr, a refusal): this terminal is a single pane after all, and says why once.
+  const fallBack = useCallback(
+    (why: string) => {
+      noFullClient.add(mid);
+      chosen.set(key, "pane");
+      dispatch({ type: "choose", mode: "pane" });
+      toast(t("terminal-full.fallback", { why }), "info");
+    },
+    [key, mid],
+  );
+
+  const dir = cwd || session?.cwd || "";
+  const subtitle = [label ?? (session ? sessionTitle(session) : ""), machine].filter(Boolean).join(" · ");
+  // pane → full: the pane surface still drives its own pane while it fades, so the other opens after it
+  const waitFor = (mode: TerminalMode) => (surfaces.from === "pane" && mode === "full" ? SURFACE_MS + 40 : 0);
+  const order: TerminalMode[] = surfaces.leaving ? [surfaces.leaving, surfaces.shown] : [surfaces.shown];
+
+  return (
+    <div ref={root} className="@container flex min-h-0 flex-1 flex-col">
+      {embedded ? (
+        // the page has its header (title, 终端 | 对话, close): this is a toolbar of the terminal's own controls under it
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
+          {supported && <ModeToggle mode={surfaces.shown} onChange={choose} />}
+          <span className="flex-1" />
+          <span ref={setSlot} className="contents" />
+        </div>
+      ) : (
+        <PanelHeader
+          icon="terminal"
+          title={t("session-terminalpanel.title")}
+          subtitle={subtitle}
+          onClose={onClose}
+          actions={
+            <>
+              {supported && <ModeToggle mode={surfaces.shown} onChange={choose} />}
+              <span ref={setSlot} className="contents" />
+            </>
+          }
+        />
+      )}
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {order.map((mode) => {
+          const leaving = mode === surfaces.leaving;
+          return (
+            <Surface key={mode} leaving={leaving} enter={!leaving && surfaces.from !== null} dir={slideFrom(surfaces.shown)}>
+              {mode === "pane" ? (
+                <PaneTerminal mid={mid} sid={sid} cwd={cwd} onFiles={onFiles} slot={slot} live={!leaving} />
+              ) : (
+                <FullTerminal
+                  mid={mid}
+                  sid={sid}
+                  cwd={dir}
+                  onFiles={onFiles}
+                  slot={slot}
+                  live={!leaving}
+                  delay={waitFor(mode)}
+                  onFallback={() => choose("pane")}
+                  onFailed={fallBack}
+                />
+              )}
+            </Surface>
+          );
+        })}
+      </div>
     </div>
   );
 }

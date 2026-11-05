@@ -5,8 +5,12 @@ import { useEffect, useRef } from "react";
 import { findLabel, type FindState } from "../../../lib/terminal-search";
 import { cx, EASE, IconButton } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
-import type { FeedView, TerminalFeed } from "./feed";
 import { t } from "../../../i18n";
+
+/** What the bar searches with: the pane's feed, or the full surface's. */
+export interface FindFeed {
+  find(query: string, caseSensitive: boolean, dir: 0 | 1 | -1): void;
+}
 
 export function FindBar({
   feed,
@@ -16,8 +20,8 @@ export function FindBar({
   onToggleCase,
   onClose,
 }: {
-  feed: TerminalFeed;
-  v: FeedView;
+  feed: FindFeed;
+  v: { find: { index: number; count: number } | null };
   state: FindState;
   onQuery: (query: string) => void;
   onToggleCase: () => void;

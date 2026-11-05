@@ -178,6 +178,7 @@ describe("the registry", () => {
       jump: "Mod+K",
       commands: "Mod+Shift+P",
       "terminal-chat": "Mod+J",
+      "terminal-mode": "Mod+Alt+F",
       "right-panel": "Mod+B",
       "left-sidebar": "Mod+Alt+B",
       "sidebar-grouping": "Mod+E",

@@ -378,6 +378,10 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 	case "terminal.frame":
 		m.hub.onTerminalFrame(m.cfg.ID, params)
+	case "herdr.client.data":
+		m.hub.onHerdrClientData(m.cfg.ID, params)
+	case "herdr.client.end":
+		m.hub.onHerdrClientEnd(m.cfg.ID, params)
 	case "terminal.end":
 		var p struct {
 			SessionID string `json:"session_id"`

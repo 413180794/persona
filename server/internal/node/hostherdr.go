@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"runtime"
 	"sync"
 	"time"
 
@@ -20,15 +21,16 @@ type herdrHost struct{ c *herdr.Client }
 func herdrHosts(c *herdr.Client) *host.Registry { return host.NewRegistry(&herdrHost{c: c}) }
 
 var (
-	_ host.Host       = (*herdrHost)(nil)
-	_ host.Watcher    = (*herdrHost)(nil)
-	_ host.Launcher   = (*herdrHost)(nil)
-	_ host.Organizer  = (*herdrHost)(nil)
-	_ host.SlotCloser = (*herdrHost)(nil)
-	_ host.Splitter   = (*herdrHost)(nil)
-	_ host.Worktreer  = (*herdrHost)(nil)
-	_ host.Streamer   = (*herdrHost)(nil)
-	_ host.Controller = (*herdrHost)(nil)
+	_ host.Host         = (*herdrHost)(nil)
+	_ host.Watcher      = (*herdrHost)(nil)
+	_ host.Launcher     = (*herdrHost)(nil)
+	_ host.Organizer    = (*herdrHost)(nil)
+	_ host.SlotCloser   = (*herdrHost)(nil)
+	_ host.Splitter     = (*herdrHost)(nil)
+	_ host.Streamer     = (*herdrHost)(nil)
+	_ host.Controller   = (*herdrHost)(nil)
+	_ host.FullClienter = (*herdrHost)(nil)
+	_ host.Worktreer    = (*herdrHost)(nil)
 )
 
 // herdrPaneEnv is the variable herdr sets in every pane.
@@ -340,4 +342,30 @@ func fromHerdrAgent(a herdr.Agent) host.Agent {
 		out.AgentSession = &host.AgentSession{Kind: a.AgentSession.Kind, Value: a.AgentSession.Value}
 	}
 	return out
+}
+
+// CanFullClient: herdr on Unix, with this client's socket one of herdr's sessions.
+func (h *herdrHost) CanFullClient() bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := h.c.SessionName(ctx)
+	return err == nil
+}
+
+func (h *herdrHost) StartFullClient(ctx context.Context, opts host.FullClientOptions, onData func([]byte)) (host.FullClient, error) {
+	session, err := h.c.SessionName(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if opts.Pane != nil && opts.Pane.ID != "" {
+		_ = h.c.FocusPane(ctx, opts.Pane.ID) // the client then opens on it; not worth failing the open for
+	}
+	fc, err := h.c.StartFull(herdr.FullOptions{Session: session, Cols: opts.Cols, Rows: opts.Rows}, onData)
+	if err != nil {
+		return nil, err
+	}
+	return fc, nil
 }

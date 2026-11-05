@@ -31,7 +31,7 @@ def features():
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
             "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else []) + (
-                ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (
+                ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] if FULL else []) + (
                 ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else [])
 
 
@@ -2509,6 +2509,215 @@ def phone_screen(cols, rows, typed="", tick=0):
     return lines, len(lines) - 3
 
 
+# MOCK_TERMINAL_FULL=1: the hub says herdr_client and answers herdr_open with a made-up herdr client (a sidebar, a tab bar
+# and two panes, or one pane at a phone's width as herdr's mobile layout). What it is told is kept (GET
+# /mock/herdr_client): open, input, resize, ack, close. Typing shows in the shell pane's prompt; Ctrl+Y makes it copy
+# "copied by herdr" the way herdr does (OSC 52). MOCK_TERMINAL_FULL_EXEC="cmd args": instead run that command in a PTY and
+# relay its bytes, with the same window of unacknowledged bytes the node keeps (a real herdr client, for a live test).
+# MOCK_TERMINAL_FULL_REFUSE=forbidden|unsupported|too_many answers herdr_open with that end; MOCK_TERMINAL_FULL_END_AFTER=
+# seconds ends a view after that long (the Reconnect button).
+FULL = bool(os.environ.get("MOCK_TERMINAL_FULL"))
+FULL_EXEC = os.environ.get("MOCK_TERMINAL_FULL_EXEC", "")
+FULL_LOG = []
+FULL_WINDOW = 256 << 10
+
+
+def _fit(s, n):
+    out, w = "", 0
+    for ch in s:
+        cw = cell_width(ch)
+        if w + cw > n: break
+        out += ch; w += cw
+    return out + " " * (n - w)
+
+
+def herdr_screen(cols, rows, typed="", tick=0):
+    """What herdr's client draws at cols × rows: the sidebar (wide), the tab bar, the panes, the status line."""
+    E = "\x1b["
+    mobile = cols <= 64
+    sw = 0 if mobile else 26
+    out = [E + "?2026h", E + "?25l", E + "2J"]
+
+    def at(r, c, s):
+        out.append(E + "%d;%dH" % (r, c) + s)
+
+    if sw:
+        at(1, 1, E + "1m" + _fit(" spaces", sw - 1) + E + "0m")
+        for i, (name, st) in enumerate([("persona", "●"), ("docs", "○"), ("scratch", "○")]):
+            at(3 + i, 1, (E + "7m" if i == 0 else E + "2m") + _fit(" %s %s" % (st, name), sw - 1) + E + "0m")
+        at(rows - 3, 1, E + "2m" + _fit(" new", sw - 1) + E + "0m")
+        at(rows - 1, 1, E + "1m" + _fit(" agents", sw - 1) + E + "0m")
+        at(rows, 1, E + "2m" + _fit(" 工作中 1 · 等你 0", sw - 1) + E + "0m")
+        for r in range(1, rows + 1):
+            at(r, sw, E + "2m│" + E + "0m")
+    x0, w = sw + 1, cols - sw
+    at(1, x0, E + "2m" + _fit("", w) + E + "0m")
+    at(1, x0, E + "7m 1 main " + E + "0m" + E + "2m  2 logs   + " + E + "0m")
+    top, bottom = 2, rows - 1
+    h = bottom - top + 1
+
+    def box(r0, c0, bw, bh, title, lines, focus=False):
+        col = E + ("36m" if focus else "2m")
+        at(r0, c0, col + "┌" + _fit("─ " + title + " ", bw - 2).replace(" ", "─", 0) + "┐" + E + "0m")
+        for i in range(1, bh - 1):
+            at(r0 + i, c0, col + "│" + E + "0m" + _fit(lines[i - 1] if i - 1 < len(lines) else "", bw - 2) + col + "│" + E + "0m")
+        at(r0 + bh - 1, c0, col + "└" + "─" * (bw - 2) + "┘" + E + "0m")
+
+    prompt = "me@host ~/persona $ "
+    spin = "✻✽✶✳"[tick % 4]
+    agent = ["● Claude Code · 工作中", "", "  ⏺ Read(src/lib/terminal.ts)", "  ⎿  Read 412 lines", "", "  %s Brewing… (%ds)" % (spin, 12 + tick), "", "  > 请帮我看看终端的换行", "  ⏵⏵ accept edits on"]
+    shell = ["me@host ~/persona $ git status", "On branch main", "nothing to commit", prompt + typed]
+    if mobile or w < 60:
+        box(top, x0, w, h, "persona · main", shell, True)
+        cur = (top + len(shell), x0 + 1 + sum(cell_width(c) for c in prompt + typed))
+    else:
+        lw = w // 2
+        box(top, x0, lw, h, "claude", agent)
+        box(top, x0 + lw, w - lw, h, "zsh", shell, True)
+        cur = (top + len(shell), x0 + lw + 1 + sum(cell_width(c) for c in prompt + typed))
+    at(rows, x0, E + "2m" + _fit(" %d×%d · prefix ctrl+b" % (cols, rows), w) + E + "0m")
+    out.append(E + "%d;%dH" % cur + E + "?25h" + E + "?2026l")
+    return "".join(out)
+
+
+class HerdrFake:
+    """The made-up client of one view: redraws on a size or a key, and every MOCK_TERMINAL_INTERVAL for its spinner."""
+
+    def __init__(self, vid, cols, rows, send):
+        self.id, self.cols, self.rows, self.send, self.typed, self.tick, self.alive = vid, cols, rows, send, "", 0, True
+        self.lock = threading.Lock()
+        # what a herdr client asks of the terminal it is in: the colour scheme, to be told of changes, the colours
+        self.emit("\x1b[?2031h\x1b[?996n\x1b]11;?\x1b\\")
+        self.draw()
+        threading.Thread(target=self.ticks, daemon=True).start()
+        end = os.environ.get("MOCK_TERMINAL_FULL_END_AFTER")
+        if end:
+            def finish():
+                time.sleep(float(end))
+                if self.alive:
+                    self.alive = False
+                    send({"type": "herdr_end", "id": vid, "error": "herdr client exited: 0"})
+            threading.Thread(target=finish, daemon=True).start()
+
+    def emit(self, text):
+        try:
+            self.send({"type": "herdr_data", "id": self.id, "data": base64.b64encode(text.encode()).decode()})
+        except OSError:
+            self.alive = False
+
+    def draw(self):
+        with self.lock:
+            self.emit(herdr_screen(self.cols, self.rows, self.typed, self.tick))
+
+    def ticks(self):
+        while self.alive:
+            time.sleep(float(os.environ.get("MOCK_TERMINAL_INTERVAL", "1")))
+            if not self.alive: break
+            self.tick += 1
+            self.draw()
+
+    def input(self, data):
+        if data == "\x19":  # Ctrl+Y: herdr copies (OSC 52)
+            return self.emit("\x1b]52;c;" + base64.b64encode(b"copied by herdr").decode() + "\x07")
+        if data.startswith("\x1b"): return  # mouse reports, arrows, replies to its questions: nothing to type
+        for ch in data:
+            if ch == "\x7f": self.typed = self.typed[:-1]
+            elif ch == "\r": self.typed = ""
+            elif ch >= " ": self.typed += ch
+        self.draw()
+
+    def resize(self, cols, rows):
+        self.cols, self.rows = cols, rows
+        self.draw()
+
+    def acked(self, n): pass
+
+    def close(self): self.alive = False
+
+
+class HerdrLive:
+    """A real command (a herdr client) in a PTY, relayed as the node does: no more than a window ahead of the acks."""
+
+    def __init__(self, vid, cols, rows, send, cmd):
+        import pty, fcntl, termios
+        self.id, self.send, self.sent, self.ack, self.alive = vid, send, 0, 0, True
+        self.cv = threading.Condition()
+        env = {k: v for k, v in os.environ.items() if not k.startswith("HERDR_") and k not in ("TMUX", "WAYLAND_DISPLAY", "DISPLAY", "SSH_CONNECTION")}
+        env.update(TERM="xterm-256color", COLORTERM="truecolor", SSH_CONNECTION="127.0.0.1 1 127.0.0.1 2")
+        self.pid, self.fd = pty.fork()
+        if self.pid == 0:
+            os.execvpe(cmd[0], cmd, env)
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        threading.Thread(target=self.pump, daemon=True).start()
+
+    def pump(self):
+        while self.alive:
+            with self.cv:
+                while self.alive and self.sent - self.ack >= FULL_WINDOW:
+                    self.cv.wait(1)
+            try:
+                d = os.read(self.fd, 32 << 10)
+            except OSError:
+                d = b""
+            if not d:
+                if self.alive: self.send({"type": "herdr_end", "id": self.id, "error": "herdr client exited"})
+                self.alive = False
+                return
+            self.sent += len(d)
+            try:
+                self.send({"type": "herdr_data", "id": self.id, "data": base64.b64encode(d).decode()})
+            except OSError:
+                self.alive = False
+
+    def input(self, data):
+        try: os.write(self.fd, data.encode())
+        except OSError: pass
+
+    def resize(self, cols, rows):
+        import fcntl, termios
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        try: os.kill(self.pid, signal.SIGWINCH)
+        except OSError: pass
+
+    def acked(self, n):
+        with self.cv:
+            self.ack = max(self.ack, min(n, self.sent))
+            self.cv.notify_all()
+
+    def close(self):
+        self.alive = False
+        with self.cv: self.cv.notify_all()
+        try: os.kill(self.pid, signal.SIGHUP)
+        except OSError: pass
+        try: os.waitpid(self.pid, 0)
+        except OSError: pass
+
+
+def herdr_message(msg, send, views):
+    """The app's herdr_* messages on one connection; True when it was one."""
+    t, vid = msg.get("type"), msg.get("id")
+    if not (isinstance(t, str) and t.startswith("herdr_")): return False
+    entry = {k: v for k, v in msg.items() if k != "data" or len(str(v)) < 200}
+    FULL_LOG.append(entry)
+    if t == "herdr_open":
+        refuse = os.environ.get("MOCK_TERMINAL_FULL_REFUSE")
+        if refuse:
+            send({"type": "herdr_end", "id": vid, "error": {"forbidden": "forbidden: the full herdr view needs a full device", "unsupported": "unsupported: this machine has no host that can run a full client",
+                                                              "too_many": "this computer already runs 4 full herdr views"}.get(refuse, refuse),
+                  "code": refuse if refuse in ("forbidden", "too_many") else "", **({"unsupported": True} if refuse == "unsupported" else {})})
+            return True
+        cols, rows = int(msg.get("cols") or 80), int(msg.get("rows") or 24)
+        send({"type": "herdr_state", "id": vid, "state": "open", "cols": cols, "rows": rows})
+        views[vid] = HerdrLive(vid, cols, rows, send, FULL_EXEC.split()) if FULL_EXEC else HerdrFake(vid, cols, rows, send)
+    elif vid in views:
+        v = views[vid]
+        if t == "herdr_input": v.input(msg.get("data") or base64.b64decode(msg.get("b64") or "").decode("utf-8", "replace"))
+        elif t == "herdr_resize": v.resize(int(msg["cols"]), int(msg["rows"]))
+        elif t == "herdr_ack": v.acked(int(msg.get("bytes") or 0))
+        elif t == "herdr_close": views.pop(vid).close()
+    return True
+
+
 # MOCK_TERMINAL_SCROLL=1 (with MOCK_TERMINAL_CONTROL): at the phone's grid Claude writes a numbered line every tick,
 # so the screen scrolls; every row is redrawn one up (as herdr does), and the app keeps what goes off the top
 # (the terminal's 选择文本 shows it). MOCK_TERMINAL_INTERVAL sets the tick.
@@ -3776,66 +3985,12 @@ def lark_pin_rows():
     return rows
 
 LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
-                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB"))}
-# MOCK_LARK_OLD_DISPLAY=1: a Feishu extension older than 0.10.0, whose settings have no [removed] switch.
-if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
+                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB""MOCK_LARK_OLD_DISPLAY"):
     del LARK_DISPLAY["brave_climb_codec"]
 
 BRAVE_CLIMB_ALPHABET = "[removed]"
 def brave_climb(text):
-    """"""
-    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
-    while True:
-        n, d = divmod(n, 34)
-        out = BRAVE_CLIMB_ALPHABET[d] + out
-        if n == 0:
-            return "**字" + out + "**"
-
-# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and 设计评审 (f2) has [removed] words: a whole message, one split over
-# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
-# the list is words too.
-if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
-    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
-    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
-    words = brave_climb("标签栏改粗一号")
-    split = _lm("211", "Lucy Wang", words, mins=39)
-    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
-    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
-    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
-    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
-    reply = _lm("214", "我", "好的", mine=True, mins=36)
-    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
-    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
-    LARK_CHATS[0]["preview"] = whole["text"]
-if os.environ.get("MOCK_LARK_TRAINER"):
-    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
-    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
-    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
-    missing.update(recalled=True, retained=False)
-    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
-    edited.update(edited=True, edit_history=[
-        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
-        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
-            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
-    ])
-    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
-    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
-    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
-    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
-    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
-    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
-    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
-
-# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
-# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
-# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
-# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose lark-connector
-# lost its Feishu session.
-LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
-_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
-                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
-# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+    """lark-connector''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}
@@ -9028,6 +9183,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/queue": return self.send_json(queue_messages(q.get("text", [None])[0], "clear" in q))
         if p == "/mock/queue_edits": return self.send_json({"edits": QUEUE_EDITS})
         if p == "/mock/terminal_input": return self.send_json({"input": TERMINAL_INPUT})
+        if p == "/mock/herdr_client": return self.send_json({"log": FULL_LOG})
         if p == "/mock/kb_updates": return self.send_json({"updates": KB_UPDATES})
         if p == "/mock/inbox_drafts": return self.send_json({"drafts": INBOX_DRAFTS})
         if p == "/mock/inbox_bulk": return self.send_json({"requests": INBOX_BULK})
@@ -10699,6 +10855,7 @@ class H(BaseHTTPRequestHandler):
         with FAULT_LOCK:
             CLIENTS[self.connection] = client
         drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
+        full_views = {}  # the full herdr views of this connection (MOCK_TERMINAL_FULL)
         send({"type": "machines", "machines": out_machines()})
         by = {}
         for s in out_by_machine(all_sessions()): by.setdefault(s["machine_id"], []).append(s)
@@ -10770,6 +10927,8 @@ class H(BaseHTTPRequestHandler):
                     continue
                 if msg.get("type") == "seen":
                     mark_seen(msg.get("session_id"))
+                    continue
+                if FULL and herdr_message(msg, send, full_views):
                     continue
                 if msg.get("type") == "terminal_input" and drive:
                     TERMINAL_INPUT.append(msg)
@@ -10892,6 +11051,9 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             LOG.write("  WS closed %r\n" % e); LOG.flush()
         SOCKETS.discard(self.connection)
+        for vid, v in list(full_views.items()):  # the hub lets go of an app's views with its connection
+            FULL_LOG.append({"type": "herdr_dropped", "id": vid})
+            v.close()
         with hb_condition:
             hb_state["closed"] = True
             hb_condition.notify()

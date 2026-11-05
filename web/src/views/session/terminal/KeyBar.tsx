@@ -3,12 +3,31 @@
 // second tap locks it, holding keeps it down), esc, tab, a ⌃C that goes out at once, the saved commands, copy and paste, then
 // the arrows and return. The keys keep the focus in the terminal, so a phone's keyboard stays up.
 import { useEffect, useRef, useState } from "react";
-import type { ModifierKey, ModifierState } from "../../../lib/terminal";
+import type { ModifierKey, ModifierState, Modifiers } from "../../../lib/terminal";
 import { cx } from "../../../ui/atoms";
 import { Icon, type IconName } from "../../../ui/icons";
-import type { FeedView, TerminalFeed } from "./feed";
 import { ShortcutsPopover } from "./Shortcuts";
 import { t } from "../../../i18n";
+
+/** What the bar drives: the pane's feed, or the full surface's (both answer the same calls). */
+export interface KeyFeed {
+  snapshot(): { mods: Modifiers };
+  pressKey(name: string): void;
+  pressBare(name: string): void;
+  tapModifier(k: ModifierKey, quick: boolean): void;
+  holdModifier(k: ModifierKey): void;
+  releaseModifier(k: ModifierKey): void;
+  typeText(text: string, run: boolean): void;
+  copySelection(): void;
+  pasteClipboard(): Promise<void>;
+}
+
+/** What the bar shows of it: keys go in only while `control` is "active". */
+export interface KeyView {
+  control: string;
+  mods: Modifiers;
+  selection: boolean;
+}
 
 const HOLD_MS = 350;
 const DOUBLE_TAP_MS = 350;
@@ -60,7 +79,7 @@ function Key({
 }
 
 /** ctrl / alt / shift: down and up are tracked by hand, a tap, a quick second tap and a hold all mean something else. */
-function ModifierKeyCap({ k, label, name, feed, state, disabled }: { k: ModifierKey; label: string; name: string; feed: TerminalFeed; state: ModifierState; disabled: boolean }) {
+function ModifierKeyCap({ k, label, name, feed, state, disabled }: { k: ModifierKey; label: string; name: string; feed: KeyFeed; state: ModifierState; disabled: boolean }) {
   const down = useRef<number | null>(null);
   const timer = useRef(0);
   const lastTap = useRef(0);
@@ -113,7 +132,7 @@ function ModifierKeyCap({ k, label, name, feed, state, disabled }: { k: Modifier
   );
 }
 
-export function KeyBar({ feed, v, onEditShortcuts }: { feed: TerminalFeed; v: FeedView; onEditShortcuts: () => void }) {
+export function KeyBar({ feed, v, onEditShortcuts }: { feed: KeyFeed; v: KeyView; onEditShortcuts: () => void }) {
   const [shortcuts, setShortcuts] = useState(false);
   const off = v.control !== "active";
   const k = (name: string) => () => feed.pressKey(name);
