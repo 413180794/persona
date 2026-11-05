@@ -175,4 +175,34 @@
     <plurals name="inbox_lark_doc_comments">
         <item quantity="other">%d 条评论</item>
     </plurals>
+    <string name="inbox_lark_doc_comments_title">评论</string>
+    <string name="inbox_lark_doc_comments_open">未解决</string>
+    <string name="inbox_lark_doc_comments_resolved">已解决</string>
+    <string name="inbox_lark_doc_comments_whole">全文评论</string>
+    <string name="inbox_lark_doc_comments_partial">部分可见</string>
+    <string name="inbox_lark_doc_comments_reply">回复</string>
+    <string name="inbox_lark_doc_comments_resolve">解决</string>
+    <string name="inbox_lark_doc_comments_reopen">重新打开</string>
+    <string name="inbox_lark_doc_comments_none_open">没有未解决的评论</string>
+    <string name="inbox_lark_doc_comments_none_resolved">没有已解决的评论</string>
+    <string name="inbox_lark_doc_comments_none_open_write">在下面写一条。</string>
+    <string name="inbox_lark_doc_comments_none_open_read">在飞书里对文档发表的评论会出现在这里</string>
+    <string name="inbox_lark_doc_comments_none_resolved_text">解决后的评论会收在这里</string>
+    <string name="inbox_lark_doc_comments_placeholder_document">评论全文</string>
+    <string name="inbox_lark_doc_comments_placeholder_reply">回复</string>
+    <string name="inbox_lark_doc_comments_placeholder_passage">评论这段</string>
+    <string name="inbox_lark_doc_comments_replying_to">回复 %1$s</string>
+    <string name="inbox_lark_doc_comments_cancel_reply">不回复了</string>
+    <string name="inbox_lark_doc_comments_on_passage">评论这段</string>
+    <string name="inbox_lark_doc_comments_cancel_passage">不评论这段</string>
+    <string name="inbox_lark_doc_comments_send_failed">没发出去：%1$s</string>
+    <string name="inbox_lark_doc_comments_resolve_failed">没能标为已解决：%1$s</string>
+    <string name="inbox_lark_doc_comments_reopen_failed">没能重新打开：%1$s</string>
+    <string name="inbox_lark_doc_comments_load_failed">评论读取失败</string>
+    <string name="inbox_lark_doc_comments_unsupported">这种文档不能在这里评论</string>
+    <string name="inbox_lark_doc_comments_unreachable">连不上 hub</string>
+    <string name="inbox_lark_doc_comments_unnamed">飞书用户</string>
+    <plurals name="inbox_lark_doc_comments_images">
+        <item quantity="other">%d 张图片</item>
+    </plurals>
 </resources>

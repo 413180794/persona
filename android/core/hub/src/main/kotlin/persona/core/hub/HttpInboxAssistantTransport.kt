@@ -144,6 +144,37 @@ class HttpInboxAssistantTransport private constructor(
 
     private val documentExtras = setOf("reader/info", "header", "ai-summary")
 
+    private fun documentUrl(url: String) {
+        val target = url.toHttpUrl()
+        require(target.scheme in setOf("http", "https") && target.username.isEmpty() && target.password.isEmpty())
+    }
+
+    override suspend fun documentComments(url: String): JsonObject {
+        documentUrl(url)
+        return json(this.url("api", "v1", "lark", "raw", "documents", "comments").newBuilder().addQueryParameter("url", url).build())
+    }
+
+    override suspend fun writeDocumentComment(thread: String?, body: JsonObject): JsonObject {
+        documentUrl((body["url"] as? JsonPrimitive)?.contentOrNull.orEmpty())
+        require(thread == null || thread.isNotBlank())
+        val target = if (thread == null) url("api", "v1", "lark", "documents", "comments")
+            else url("api", "v1", "lark", "documents", "comments", thread, "replies")
+        return json(target, body)
+    }
+
+    override suspend fun resolveDocumentComment(thread: String, url: String, resolved: Boolean): JsonObject {
+        documentUrl(url)
+        require(thread.isNotBlank())
+        return json(this.url("api", "v1", "lark", "documents", "comments", thread, "resolve"),
+            buildJsonObject { put("url", url); put("resolved", resolved) })
+    }
+
+    override suspend fun documentPeople(url: String, query: String): JsonObject {
+        documentUrl(url)
+        return json(this.url("api", "v1", "lark", "documents", "people").newBuilder()
+            .addQueryParameter("url", url).addQueryParameter("q", query).build())
+    }
+
     override suspend fun documentMedia(ref: String): ByteArray {
         val base = mediaOrigin()
         val path = base.hubResolve(ref)?.let(base::hubPath)

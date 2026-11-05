@@ -1,6 +1,8 @@
 package persona.core.contracts
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LarkFeaturesTest {
@@ -22,5 +24,13 @@ class LarkFeaturesTest {
     @Test fun hubFromBeforeTheExtensionServesFeishuItself() {
         assertEquals(LarkFeatures.All, LarkFeatures.of(setOf("client_ops", "lark_attachments")))
         assertEquals(LarkFeatures.All, LarkFeatures.of(setOf("lark_attachments", "lark_native_encryption")))
+    }
+
+    @Test fun onlyAnExtensionThatSaysSoWritesDocumentComments() {
+        assertTrue(LarkFeatures.of(setOf("lark", "lark_doc_comments")).docComments)
+        assertFalse(LarkFeatures.of(setOf("lark")).docComments)
+        assertFalse(LarkFeatures.of(setOf("lark_doc_comments", "client_ops")).docComments) // not without the extension's lark
+        // Unknown is everything, but not the comments: a hub that does not say so has no such routes.
+        assertFalse(LarkFeatures.of(emptySet()).docComments)
     }
 }

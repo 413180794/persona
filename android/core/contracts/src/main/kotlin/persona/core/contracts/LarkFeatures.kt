@@ -16,6 +16,11 @@ data class LarkFeatures(
     val chats: Boolean,
     /** `lark_moments`: company-feed posts open in the native reader (only with [chats]). */
     val moments: Boolean,
+    /**
+     * `lark_doc_comments`: the document reader can reply to, write, resolve and reopen comments (#1290, only with
+     * [chats]). Not part of "unknown is everything": a hub that does not say so has no such routes.
+     */
+    val docComments: Boolean = false,
 ) {
     companion object {
         val All = LarkFeatures(chats = true, moments = true)
@@ -25,7 +30,8 @@ data class LarkFeatures(
         fun of(features: Collection<String>): LarkFeatures = when {
             features.isEmpty() -> All // no hello yet
             "lark" !in features && "lark_attachments" in features -> All // a hub that serves Feishu itself
-            else -> LarkFeatures(chats = "lark" in features, moments = "lark" in features && "lark_moments" in features)
+            else -> LarkFeatures(chats = "lark" in features, moments = "lark" in features && "lark_moments" in features,
+                docComments = "lark" in features && "lark_doc_comments" in features)
         }
     }
 }

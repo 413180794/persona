@@ -48,6 +48,20 @@ interface InboxAssistantTransport {
      * (owner, counts), `header` (who edited it last, when) or `ai-summary` (Feishu's cached summary).
      */
     suspend fun documentExtra(path: String, url: String): JsonObject = throw UnsupportedOperationException("Document details unavailable")
+    /** A document's comment threads (`GET /api/v1/lark/raw/documents/comments?url=`, `{threads:[…]}`). */
+    suspend fun documentComments(url: String): JsonObject = throw UnsupportedOperationException("Document comments unavailable")
+    /**
+     * The user's own write on a document's comments (#1290; the plugin's `lark_doc_comments`): [thread] null posts a
+     * new comment (`POST /api/v1/lark/documents/comments`), else a reply to that thread (`…/{thread}/replies`).
+     * [body] is `{url, content, mentions, quote?, block_id?, client_id}`; answers `{ok, threads}`.
+     */
+    suspend fun writeDocumentComment(thread: String?, body: JsonObject): JsonObject =
+        throw UnsupportedOperationException("Document comments unavailable")
+    /** Resolves a thread or reopens it (`POST /api/v1/lark/documents/comments/{thread}/resolve {url, resolved}`). */
+    suspend fun resolveDocumentComment(thread: String, url: String, resolved: Boolean): JsonObject =
+        throw UnsupportedOperationException("Document comments unavailable")
+    /** People to @ in a document's comment, by name (`GET /api/v1/lark/documents/people?url=&q=`, `{members:[…]}`). */
+    suspend fun documentPeople(url: String, query: String): JsonObject = throw UnsupportedOperationException("Document people unavailable")
     suspend fun momentsPost(postId: String): JsonObject = throw UnsupportedOperationException("Moments post unavailable")
     suspend fun momentsComments(postId: String): JsonObject = throw UnsupportedOperationException("Moments comments unavailable")
     suspend fun urlPreview(messageId: String, url: String): JsonObject = throw UnsupportedOperationException("URL preview unavailable")

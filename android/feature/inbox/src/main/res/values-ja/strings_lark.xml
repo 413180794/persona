@@ -175,4 +175,34 @@
     <plurals name="inbox_lark_doc_comments">
         <item quantity="other">%d 件のコメント</item>
     </plurals>
+    <string name="inbox_lark_doc_comments_title">コメント</string>
+    <string name="inbox_lark_doc_comments_open">未解決</string>
+    <string name="inbox_lark_doc_comments_resolved">解決済み</string>
+    <string name="inbox_lark_doc_comments_whole">ドキュメント全体へのコメント</string>
+    <string name="inbox_lark_doc_comments_partial">一部の人のみ表示</string>
+    <string name="inbox_lark_doc_comments_reply">返信</string>
+    <string name="inbox_lark_doc_comments_resolve">解決</string>
+    <string name="inbox_lark_doc_comments_reopen">再開</string>
+    <string name="inbox_lark_doc_comments_none_open">未解決のコメントはありません</string>
+    <string name="inbox_lark_doc_comments_none_resolved">解決済みのコメントはありません</string>
+    <string name="inbox_lark_doc_comments_none_open_write">下から書き込めます。</string>
+    <string name="inbox_lark_doc_comments_none_open_read">Feishu でこのドキュメントに付いたコメントがここに表示されます</string>
+    <string name="inbox_lark_doc_comments_none_resolved_text">解決したコメントはここにまとめられます</string>
+    <string name="inbox_lark_doc_comments_placeholder_document">ドキュメントにコメント</string>
+    <string name="inbox_lark_doc_comments_placeholder_reply">返信</string>
+    <string name="inbox_lark_doc_comments_placeholder_passage">この段落にコメント</string>
+    <string name="inbox_lark_doc_comments_replying_to">%1$s に返信</string>
+    <string name="inbox_lark_doc_comments_cancel_reply">返信をやめる</string>
+    <string name="inbox_lark_doc_comments_on_passage">この段落にコメント</string>
+    <string name="inbox_lark_doc_comments_cancel_passage">この段落へのコメントをやめる</string>
+    <string name="inbox_lark_doc_comments_send_failed">送信できませんでした：%1$s</string>
+    <string name="inbox_lark_doc_comments_resolve_failed">解決にできませんでした：%1$s</string>
+    <string name="inbox_lark_doc_comments_reopen_failed">再開できませんでした：%1$s</string>
+    <string name="inbox_lark_doc_comments_load_failed">コメントを読み込めませんでした</string>
+    <string name="inbox_lark_doc_comments_unsupported">この種類のドキュメントにはここからコメントできません</string>
+    <string name="inbox_lark_doc_comments_unreachable">hub に接続できません</string>
+    <string name="inbox_lark_doc_comments_unnamed">Feishu ユーザー</string>
+    <plurals name="inbox_lark_doc_comments_images">
+        <item quantity="other">%d 枚の画像</item>
+    </plurals>
 </resources>

@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -178,6 +179,11 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
     val outline = remember(document) { document?.outline().orEmpty() }
     // The body's first item is the title block, so block i is item i + 1.
     val jump: (Int) -> Unit = { index -> outlineShown = false; scope.launch { list.animateScrollToItem(index + 1) } }
+    // Comments (#2964): read where the hub has Feishu, written where its plugin says `lark_doc_comments`.
+    val lark = LocalLarkFeatures.current
+    val unnamed = stringResource(R.string.inbox_lark_doc_comments_unnamed)
+    val comments = remember(url, source?.scope) { source?.let { LarkDocCommentsModel(url, LarkDocCommentsTransport(it.transport), unnamed = unnamed) } }
+    var commentsShown by remember(url, source?.scope) { mutableStateOf(false) }
     val connectionDetails = rememberConnectionDetails(connection, navigator?.let { nav -> { nav.navigate(ConnectionSettingsRoute) } })
     JPage(title = if (connection == ConnectionState.Online) document?.title?.ifBlank { null } ?: stringResource(R.string.inbox_lark_doc) else inboxTitle(connection), modifier = modifier,
         titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
@@ -186,6 +192,8 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
         topBar = if (showConnectionTitle) null else ({}),
         actions = {
             if (!webpage && outline.isNotEmpty()) JIconButton(PhIcons.ListChecks, stringResource(R.string.inbox_lark_doc_outline), { outlineShown = true })
+            if (!webpage && comments != null && document != null) JIconButton(PhIcons.ChatCircle, stringResource(R.string.inbox_lark_doc_comments_title),
+                { commentsShown = true }, Modifier.testTag("docComments.open"))
             JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true })
         }) { padding ->
         if (webpage) {
@@ -210,6 +218,7 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
                             LarkDocumentMeta(details)
                             if (!showConnectionTitle) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                                 if (outline.isNotEmpty()) JTextButton(stringResource(R.string.inbox_lark_doc_outline), { outlineShown = true }, icon = PhIcons.ListChecks)
+                                if (comments != null) JTextButton(stringResource(R.string.inbox_lark_doc_comments_title), { commentsShown = true }, icon = PhIcons.ChatCircle)
                                 JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true })
                             }
                             if (details.summary.isNotBlank()) LarkDocumentSummary(details.summary)
@@ -246,6 +255,7 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
             LarkSelectable(loaded.copyAllowed, selectionPicks) { body() }
         }
     }
+    if (commentsShown && comments != null) LarkDocCommentsSheet(comments, lark.docComments, onDismiss = { commentsShown = false })
     if (outlineShown) JSheet(onDismiss = { outlineShown = false }, title = stringResource(R.string.inbox_lark_doc_outline), scrollable = false) {
         LazyColumn(Modifier.fillMaxWidth()) {
             items(outline) { (index, heading) ->

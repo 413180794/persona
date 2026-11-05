@@ -183,4 +183,35 @@
         <item quantity="one">%d comment</item>
         <item quantity="other">%d comments</item>
     </plurals>
+    <string name="inbox_lark_doc_comments_title">Comments</string>
+    <string name="inbox_lark_doc_comments_open">Open</string>
+    <string name="inbox_lark_doc_comments_resolved">Resolved</string>
+    <string name="inbox_lark_doc_comments_whole">On the whole document</string>
+    <string name="inbox_lark_doc_comments_partial">Partly visible</string>
+    <string name="inbox_lark_doc_comments_reply">Reply</string>
+    <string name="inbox_lark_doc_comments_resolve">Resolve</string>
+    <string name="inbox_lark_doc_comments_reopen">Reopen</string>
+    <string name="inbox_lark_doc_comments_none_open">No open comments</string>
+    <string name="inbox_lark_doc_comments_none_resolved">No resolved comments</string>
+    <string name="inbox_lark_doc_comments_none_open_write">Write one below.</string>
+    <string name="inbox_lark_doc_comments_none_open_read">Comments made on this document in Feishu show up here.</string>
+    <string name="inbox_lark_doc_comments_none_resolved_text">Resolved comments are kept here.</string>
+    <string name="inbox_lark_doc_comments_placeholder_document">Comment on the document</string>
+    <string name="inbox_lark_doc_comments_placeholder_reply">Reply</string>
+    <string name="inbox_lark_doc_comments_placeholder_passage">Comment on this passage</string>
+    <string name="inbox_lark_doc_comments_replying_to">Reply to %1$s</string>
+    <string name="inbox_lark_doc_comments_cancel_reply">Stop replying</string>
+    <string name="inbox_lark_doc_comments_on_passage">Comment on this passage</string>
+    <string name="inbox_lark_doc_comments_cancel_passage">Don\'t comment on this passage</string>
+    <string name="inbox_lark_doc_comments_send_failed">Not sent: %1$s</string>
+    <string name="inbox_lark_doc_comments_resolve_failed">Couldn\'t resolve: %1$s</string>
+    <string name="inbox_lark_doc_comments_reopen_failed">Couldn\'t reopen: %1$s</string>
+    <string name="inbox_lark_doc_comments_load_failed">Couldn\'t read the comments.</string>
+    <string name="inbox_lark_doc_comments_unsupported">this kind of document can\'t be commented on here</string>
+    <string name="inbox_lark_doc_comments_unreachable">can\'t reach the hub</string>
+    <string name="inbox_lark_doc_comments_unnamed">Feishu user</string>
+    <plurals name="inbox_lark_doc_comments_images">
+        <item quantity="one">%d image</item>
+        <item quantity="other">%d images</item>
+    </plurals>
 </resources>

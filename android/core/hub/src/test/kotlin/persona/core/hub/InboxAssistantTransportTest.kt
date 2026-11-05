@@ -83,6 +83,46 @@ class InboxAssistantTransportTest {
         }
     }
 
+    @Test fun documentCommentsReadAndWriteThePluginsRoutes() = runBlocking {
+        MockWebServer().use { server ->
+            val transport = HttpInboxAssistantTransport("scope", server.url("/").toString(), "test-token", OkHttpClient())
+            val doc = "https://example.com/docx/token"
+            server.enqueue(MockResponse().setBody("{\"threads\":[]}"))
+            transport.documentComments(doc)
+            server.takeRequest().let {
+                assertEquals("GET", it.method)
+                assertEquals("/api/v1/lark/raw/documents/comments", it.requestUrl?.encodedPath)
+                assertEquals(doc, it.requestUrl?.queryParameter("url"))
+            }
+            val body = kotlinx.serialization.json.buildJsonObject { put("url", kotlinx.serialization.json.JsonPrimitive(doc)); put("content", kotlinx.serialization.json.JsonPrimitive("好")) }
+            server.enqueue(MockResponse().setBody("{\"ok\":true}"))
+            transport.writeDocumentComment(null, body)
+            server.takeRequest().let {
+                assertEquals("POST", it.method)
+                assertEquals("/api/v1/lark/documents/comments", it.path)
+                assertEquals(body.toString(), it.body.readUtf8())
+            }
+            server.enqueue(MockResponse().setBody("{\"ok\":true}"))
+            transport.writeDocumentComment("th/1", body)
+            assertEquals("/api/v1/lark/documents/comments/th%2F1/replies", server.takeRequest().path)
+            server.enqueue(MockResponse().setBody("{\"ok\":true}"))
+            transport.resolveDocumentComment("th1", doc, resolved = false)
+            server.takeRequest().let {
+                assertEquals("/api/v1/lark/documents/comments/th1/resolve", it.path)
+                assertEquals("""{"url":"$doc","resolved":false}""", it.body.readUtf8())
+            }
+            server.enqueue(MockResponse().setBody("{\"members\":[]}"))
+            transport.documentPeople(doc, "李")
+            server.takeRequest().let {
+                assertEquals("/api/v1/lark/documents/people", it.requestUrl?.encodedPath)
+                assertEquals("李", it.requestUrl?.queryParameter("q"))
+            }
+            try { transport.documentComments("https://user:pass@example.com/docx/token"); fail("credentials in the link must be rejected") }
+            catch (_: IllegalArgumentException) { }
+            assertEquals(5, server.requestCount)
+        }
+    }
+
     @Test fun repliesPreserveClientIdAndMediaNeverForwardsCredentialsOffOrigin() = runBlocking {
         MockWebServer().use { server ->
             val transport = HttpInboxAssistantTransport("scope", server.url("/").toString(), "test-token", OkHttpClient())
