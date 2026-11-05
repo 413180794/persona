@@ -400,6 +400,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Label            string        `json:"label"`     // tabs.rename
 		Kind             string        `json:"kind"`      // tabs.*, panes.git: the host kind ("" the engine's)
 		Op               string        `json:"op"`        // panes.git: fetch, pull or push
+		Action           string        `json:"action"`    // launchers.repair: which of its fixed repairs
 		Branch           string        `json:"branch"`    // worktree.create
 		TabName          *string       `json:"tab_name"`
 		TZ               string        `json:"tz"` // the user's time zone
@@ -612,6 +613,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"definition": def}, err
 	case "launchers.check":
 		return n.launcherCheck(ctx, p.Name), nil
+	case "launchers.repair": // the hub's launcher health (docs/launcher-health.md)
+		if err := n.runnableLauncher(ctx, p.Name, false); err != nil {
+			return nil, err
+		}
+		return n.launcherRepair(ctx, p.Name, p.Action)
 	case "launchers.probe":
 		if err := n.runnableLauncher(ctx, p.Name, p.Configured); err != nil {
 			return nil, err

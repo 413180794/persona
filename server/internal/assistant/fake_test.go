@@ -80,9 +80,18 @@ type fakeHub struct {
 	tabReply    string
 	tabAsked    []string
 	muted       map[string][]string
-	hubCards    []proto.Interaction                // interactions.list: what the hub has up
-	failSend    error                              // session.send fails with it
-	onSend      func(f *fakeHub, p map[string]any) // runs (under the fake's lock) after each session.send
+	hubCards    []proto.Interaction // interactions.list: what the hub has up
+	failSend    error               // session.send fails with it
+
+	// The launchers' health (launcher_health.go): launchers.check's answers by "machine/launcher" (none: it works),
+	// the checks and repairs asked for, launchers.repair's answer (nil: the node has no such method) and what a repair
+	// does to the checks.
+	checks    map[string]proto.LauncherCheck
+	checked   []string
+	repairs   []map[string]any
+	repairRes *proto.LauncherRepair
+	onRepair  func(f *fakeHub)
+	onSend    func(f *fakeHub, p map[string]any) // runs (under the fake's lock) after each session.send
 }
 
 type modelCall struct{ System, User string }
@@ -148,6 +157,22 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 	case DeviceSessionRename:
 		f.sends = append(f.sends, map[string]any{"rename": a})
 		return json.RawMessage(`{"ok":true}`), nil
+	case assistantwire.DeviceLaunchersCheck:
+		name, _ := a["name"].(string)
+		f.checked = append(f.checked, p.Device+"/"+name)
+		if c, ok := f.checks[p.Device+"/"+name]; ok {
+			return json.Marshal(c)
+		}
+		return json.Marshal(proto.LauncherCheck{OK: true, Agent: launcherAgent(name), Model: "m", Answer: "ok"})
+	case assistantwire.DeviceLaunchersRepair:
+		f.repairs = append(f.repairs, a)
+		if f.repairRes == nil {
+			return nil, errors.New("unknown method launchers.repair")
+		}
+		if f.onRepair != nil {
+			f.onRepair(f)
+		}
+		return json.Marshal(f.repairRes)
 	case DeviceLaunchersProbe: // a launcher named after the agent it starts
 		name, _ := a["name"].(string)
 		return json.Marshal(map[string]any{"detail": proto.LauncherDetail{Agent: launcherAgent(name)}})

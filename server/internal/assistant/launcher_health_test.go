@@ -1,0 +1,280 @@
+package assistant
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+// The errors seen on broken machines (placeholders for the machines; the texts as the CLIs and gateways wrote them).
+func TestClassifyLauncherError(t *testing.T) {
+	for text, want := range map[string]string{
+		`API Error: 400 {"error":{"message":"Bare Claude model name cannot be routed"}}`: errKindModelRoute,
+		`API Error: 400 no account match for model speech_o50`:                           errKindModelRoute,
+		`session.start: context deadline exceeded`:                                       errKindTimeout,
+		`90 秒内没有回答`:                                                                      errKindTimeout,
+		`API Error: 401 {"error":"invalid or missing API key"}`:                          errKindAuth,
+		`Not logged in · Please run /login`:                                              errKindAuth,
+		`error: unknown option '--plugin-dir'`:                                           errKindCLIOutdated,
+		`Claude Code version 2.0.1 is no longer supported, please update`:                errKindCLIOutdated,
+		`zsh: command not found: work`:                                                   errKindOther,
+	} {
+		if got := classifyLauncherError(text); got != want {
+			t.Errorf("%q: %s, want %s", text, got, want)
+		}
+	}
+}
+
+// launcherHealthHub is a hub with three machines (the assistant's "server", a broken "l4", a healthy "box") that all run the
+// launcher "work", which 模型配置 › Agents starts with.
+func launcherHealthHub(t *testing.T) (*Service, *fakeHub) {
+	return launcherHealthHubOn(t, newTestService)
+}
+
+// launcherHealthHubOn is launcherHealthHub with the service made by mk (newStorelessService keeps plans in memory;
+// with no database 模型配置 stays as it is, so tasks name the launcher).
+func launcherHealthHubOn(t *testing.T, mk func(*testing.T, *fakeHub) *Service) (*Service, *fakeHub) {
+	t.Helper()
+	f := newFakeHub().withMachine()
+	f.sessions["l4"], f.sessions["box"] = nil, nil
+	f.devices = []Device{
+		{ID: "server", Name: "server", Home: "/home/me", Online: true, Reachable: true},
+		{ID: "l4", Name: "l4", Home: "/home/me", SSHHost: "l4-ssh", Online: true, Reachable: true},
+		{ID: "box", Name: "box", Home: "/Users/me", Online: true, Reachable: true},
+	}
+	f.launcherList = []proto.Launcher{{Name: "work"}}
+	f.checks = map[string]proto.LauncherCheck{
+		"l4/work": {Agent: "claude", Error: `API Error: 400 Bare Claude model name cannot be routed`},
+	}
+	f.hello.Agents.LauncherHealth.Enabled = new(true) // off unless hub.json says so
+	s := mk(t, f)
+	if s.store() != nil {
+		setModel(t, s, "agent.new", ModelBinding{Provider: "launcher.work"})
+	}
+	return s, f
+}
+
+func healthState(s *Service, machine, launcher string) LauncherHealth {
+	r, _ := s.launcherHealth(context.Background(), machine, launcher)
+	return r
+}
+
+// A round checks every launcher once per interval; one that fails a known way, with no repair configured, is blocked;
+// agents_list shows it, and agent_start goes to a machine where it works (the directory follows the home).
+func TestLauncherHealthRoundAndDetour(t *testing.T) {
+	s, f := launcherHealthHub(t)
+	f.checks["server/work"] = proto.LauncherCheck{Error: "90 秒内没有回答"} // a first timeout: not repaired yet, not used either
+	ctx := context.Background()
+	s.healthRound(ctx, true)
+	r := healthState(s, "l4", "work")
+	if r.State != healthBlocked || r.Kind != errKindModelRoute || !strings.Contains(r.BlockedReason, "no repair agent") || r.Source != "check" {
+		t.Fatalf("l4: %+v", r)
+	}
+	if ok := healthState(s, "box", "work"); ok.State != healthOK || ok.Model != "m" {
+		t.Fatalf("box: %+v", ok)
+	}
+	if r := healthState(s, "server", "work"); r.State != healthFailing || r.Kind != errKindTimeout || len(f.starts) != 0 {
+		t.Fatalf("server: %+v (starts %v)", r, f.starts)
+	}
+	n := len(f.checked)
+	s.healthRound(ctx, true)
+	if len(f.checked) != n {
+		t.Fatalf("checked again within the interval: %v", f.checked[n:])
+	}
+	if len(f.pushes) != 0 {
+		t.Fatalf("pushed: %+v", f.pushes)
+	}
+
+	list := s.describeAgents(ctx, "all", "", "")
+	if !strings.Contains(list, "machine=l4 launcher=work · blocked · model_route") || !strings.Contains(list, "machine=server launcher=work · failing · timeout") ||
+		strings.Contains(list, "machine=box") {
+		t.Fatalf("agents_list:\n%s", list)
+	}
+	res, err := s.runTool(ctx, "server", "conv9", "agent_start", json.RawMessage(`{"machine":"l4","cwd":"/home/me/code/app","prompt":"修 CI"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.starts) != 1 || f.starts[0]["cwd"] != "/Users/me/code/app" || !strings.Contains(res, "runs on box instead") {
+		t.Fatalf("start %v: %s", f.starts, res)
+	}
+	var route struct {
+		Launchers []launcherWithHealth `json:"launchers"`
+	}
+	body := getJSON(t, s, "/api/v1/machines/l4/launchers")
+	if err := json.Unmarshal(body, &route); err != nil || len(route.Launchers) == 0 || route.Launchers[0].Health == nil || route.Launchers[0].Health.State != healthBlocked {
+		t.Fatalf("picker: %s", body)
+	}
+	if body := getJSON(t, s, "/api/v1/launchers/health?state=blocked"); !strings.Contains(string(body), `"machine":"l4"`) || strings.Contains(string(body), `"machine":"box"`) {
+		t.Fatalf("health: %s", body)
+	}
+
+	// Fixed by hand: the next check (forced here) makes it usable again.
+	delete(f.checks, "l4/work")
+	postJSON(t, s, "/api/v1/launchers/health/check?machine=l4&launcher=work")
+	if r := healthState(s, "l4", "work"); r.State != healthOK || r.BlockedReason != "" || r.Fails != 0 {
+		t.Fatalf("after the fix: %+v", r)
+	}
+}
+
+// Off unless hub.json turns it on: no checks, no repairs; a failed start still counts.
+func TestLauncherHealthOffByDefault(t *testing.T) {
+	s, f := launcherHealthHub(t)
+	f.hello.Agents.LauncherHealth.Enabled = nil
+	f.hello.Agents.LauncherHealth.Repair.Skill = "agent-cli-setup"
+	s.healthRound(context.Background(), true)
+	if len(f.checked) != 0 || len(f.starts) != 0 || len(s.healthRecords(context.Background(), "", "")) != 0 {
+		t.Fatalf("checked %v, starts %v", f.checked, f.starts)
+	}
+	f.mu.Lock()
+	f.checks["box/work"] = proto.LauncherCheck{Error: "90 秒内没有回答"} // the follow-up check fails too
+	f.failStart = errors.New("session.start: context deadline exceeded")
+	f.mu.Unlock()
+	if _, err := s.runTool(context.Background(), "server", "conv9", "agent_start", json.RawMessage(`{"machine":"box","cwd":"/Users/me/x","prompt":"hi"}`)); err == nil {
+		t.Fatal("started")
+	}
+	if r := healthState(s, "box", "work"); r.Fails == 0 || r.State != healthFailing {
+		t.Fatalf("not recorded: %+v", r)
+	}
+}
+
+// A CLI too old is the node's to update; the launcher checks again and works.
+func TestLauncherHealthUpgradesTheCLI(t *testing.T) {
+	s, f := launcherHealthHub(t)
+	f.checks["l4/work"] = proto.LauncherCheck{Agent: "claude", Error: "error: unknown option '--plugin-dir'"}
+	f.repairRes = &proto.LauncherRepair{OK: true, Output: "Successfully updated"}
+	f.onRepair = func(f *fakeHub) { delete(f.checks, "l4/work") }
+	s.healthRound(context.Background(), true)
+	r := healthState(s, "l4", "work")
+	if r.State != healthOK || r.Repair == nil || r.Repair.Action != launcherRepairUpgrade || !r.Repair.OK || len(f.repairs) != 1 || f.repairs[0]["action"] != "upgrade_cli" {
+		t.Fatalf("%+v (repairs %v)", r, f.repairs)
+	}
+}
+
+// Without a node that can update it, and with a repair skill configured, an agent on the assistant's machine gets the
+// broken launchers (on a quiet todo); once it stops they are checked again: fixed, or blocked with what it said.
+func TestLauncherHealthRepairAgent(t *testing.T) {
+	for _, fixed := range []bool{true, false} {
+		s, f := launcherHealthHub(t)
+		f.hello.Agents.LauncherHealth.Repair.Skill = "agent-cli-setup"
+		ctx := context.Background()
+		s.healthRound(ctx, true)
+		r := healthState(s, "l4", "work")
+		if r.State != healthRepairing || r.Repair == nil || r.Repair.Action != "agent" || len(f.starts) != 1 {
+			t.Fatalf("repairing: %+v, starts %v", r, f.starts)
+		}
+		start := f.starts[0]
+		prompt, _ := start["prompt"].(string)
+		if start["cwd"] != "/home/me" || start["launcher"] != "work" || start["permission_mode"] != "bypassPermissions" || !strings.Contains(prompt, "agent-cli-setup") ||
+			!strings.Contains(prompt, "Bare Claude model name") || !strings.Contains(prompt, "ssh l4-ssh") {
+			t.Fatalf("repair start: %v", start)
+		}
+		todo := onlyTodo(s)
+		if !todo.Quiet || todo.Origin != "" || len(todo.Agents) != 1 || todo.Agents[0].MachineID != "server" {
+			t.Fatalf("todo: %+v", todo)
+		}
+		// Not before it has had a moment, nor while it works.
+		f.mu.Lock()
+		f.sessions["server"] = []proto.Session{{SessionID: "s1", MachineID: "server", State: proto.StateWorking, Status: proto.StatusWorking}}
+		f.mu.Unlock()
+		s.followRepairs(ctx, s.healthConfig(ctx))
+		if healthState(s, "l4", "work").State != healthRepairing {
+			t.Fatal("followed too early")
+		}
+		s.health.mu.Lock()
+		s.health.repairs["l4"].StartedAt = time.Now().Add(-3 * time.Minute)
+		s.health.mu.Unlock()
+		s.followRepairs(ctx, s.healthConfig(ctx))
+		if healthState(s, "l4", "work").State != healthRepairing {
+			t.Fatal("followed while it works")
+		}
+		f.mu.Lock()
+		f.sessions["server"] = []proto.Session{{SessionID: "s1", MachineID: "server", State: proto.StateUnread, Status: proto.StatusIdle, LastText: "reconfigured the gateway"}}
+		if fixed {
+			delete(f.checks, "l4/work")
+		}
+		f.mu.Unlock()
+		s.followRepairs(ctx, s.healthConfig(ctx))
+		r = healthState(s, "l4", "work")
+		if fixed && (r.State != healthOK || r.Repair == nil || !r.Repair.OK) {
+			t.Fatalf("fixed: %+v", r)
+		}
+		if !fixed && (r.State != healthBlocked || !strings.Contains(r.BlockedReason, "reconfigured the gateway")) {
+			t.Fatalf("not fixed: %+v", r)
+		}
+		if len(s.health.repairs) != 0 || len(f.pushes) != 0 {
+			t.Fatalf("repairs left %v, pushes %v", s.health.repairs, f.pushes)
+		}
+	}
+}
+
+// A start that fails counts against the launcher there (a check follows to confirm); a dropped link does not.
+func TestLauncherHealthRecordsFailedStarts(t *testing.T) {
+	s, f := launcherHealthHub(t)
+	delete(f.checks, "l4/work")
+	f.checks["box/work"] = proto.LauncherCheck{Error: "90 秒内没有回答"}
+	f.failStart = errors.New("session.start: context deadline exceeded")
+	ctx := context.Background()
+	if _, err := s.runTool(ctx, "server", "conv9", "agent_start", json.RawMessage(`{"machine":"box","cwd":"/Users/me/x","prompt":"hi"}`)); err == nil {
+		t.Fatal("started")
+	}
+	waitFor(t, "the follow-up check", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.checked) > 0
+	})
+	waitFor(t, "the record", func() bool { r := healthState(s, "box", "work"); return r.Source == "check" && r.Fails == 2 })
+	if r := healthState(s, "box", "work"); r.State != healthFailing || r.Kind != errKindTimeout {
+		t.Fatalf("%+v", r)
+	}
+	s.recordStartFailure(ctx, "l4", "work", fmt.Errorf("session.start: %w", rpc.ErrClosed))
+	if _, ok := s.launcherHealth(ctx, "l4", "work"); ok {
+		t.Fatal("a dropped link counted")
+	}
+}
+
+// A task planned on a machine whose launcher does not work there is put on one where it does, and says why.
+func TestLauncherHealthMovesPlannedTasks(t *testing.T) {
+	s, f := launcherHealthHubOn(t, newStorelessService)
+	f.checks["server/work"] = proto.LauncherCheck{Error: "90 秒内没有回答"}
+	ctx := context.Background()
+	s.healthRound(ctx, true)
+	res, err := s.toolTaskPlan(ctx, "conv9", json.RawMessage(`{"tasks":[{"title":"修 CI","prompt":"修 CI","machine":"l4","cwd":"~/code/app","launcher":"work",
+		"readonly":false,"user_requested":false,"why":"代码在那"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := regexp.MustCompile(`plan_[0-9a-f]+`).FindString(res)
+	p, err := s.loadPlan(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task := p.Tasks[0]; task.Machine != "box" || task.Cwd != "/Users/me/code/app" || !strings.Contains(task.Why, "failed its health check on l4") {
+		t.Fatalf("task: %+v", task)
+	}
+}
+
+func getJSON(t *testing.T, s *Service, path string) []byte {
+	t.Helper()
+	w := serve(s, "GET", path, "")
+	if w.Code != 200 {
+		t.Fatalf("GET %s: %d %s", path, w.Code, w.Body)
+	}
+	return w.Body.Bytes()
+}
+
+func postJSON(t *testing.T, s *Service, path string) []byte {
+	t.Helper()
+	w := serve(s, "POST", path, "")
+	if w.Code != 200 {
+		t.Fatalf("POST %s: %d %s", path, w.Code, w.Body)
+	}
+	return w.Body.Bytes()
+}

@@ -206,14 +206,26 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if err := s.applyModel(sctx, "agent.new", params); err != nil {
 			return "", err
 		}
+		// A launcher that failed its health check here runs on a machine where it works (launcher_health.go).
+		picked, _ := params["launcher"].(string)
+		launcher := s.startLauncher(ctx, picked)
+		alt, note, moved := s.healthDetour(ctx, am, launcher)
+		if moved {
+			a.Cwd = rehome(a.Cwd, am, alt)
+			params["cwd"], am = a.Cwd, alt
+		}
+		if note != "" {
+			note = " Note: " + note + "."
+		}
 		if err := s.call(sctx, am.ID, DeviceSessionStart, params, &res); err != nil {
+			s.recordStartFailure(ctx, am.ID, launcher, err)
 			return "", err
 		}
 		if s.quietAgentTask(ctx, self, am, a.Cwd, a.Prompt, params["tab_name"], res.Session.SessionID) {
 			return fmt.Sprintf("Started on %s in %s: session %s, a task of this conversation (its card is in the conversation; "+
-				"you are told here when it is done or waits for the user, nothing else notifies the user).", am.Name, a.Cwd, res.Session.SessionID), nil
+				"you are told here when it is done or waits for the user, nothing else notifies the user).%s", am.Name, a.Cwd, res.Session.SessionID, note), nil
 		}
-		return fmt.Sprintf("Started on %s in %s: session %s. It shows up in the app's Agents tab.", am.Name, a.Cwd, res.Session.SessionID), nil
+		return fmt.Sprintf("Started on %s in %s: session %s. It shows up in the app's Agents tab.%s", am.Name, a.Cwd, res.Session.SessionID, note), nil
 	}
 	return "", fmt.Errorf("unknown tool %s", name)
 }
@@ -511,6 +523,9 @@ func (s *Service) describeAgents(ctx context.Context, state, machine, query stri
 	}
 	if len(offline) > 0 {
 		fmt.Fprintf(&b, "(offline machines: %s)\n", strings.Join(offline, ", "))
+	}
+	if machine == "" || wanted {
+		b.WriteString(s.healthLines(ctx, want.ID))
 	}
 	return b.String()
 }

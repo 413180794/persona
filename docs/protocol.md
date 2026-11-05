@@ -1155,6 +1155,7 @@ hub → node 请求：
 | `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent（切换前开始、切换后才回来的刷新结果作废）、结束所有终端流（每个推 `terminal.end`，error 说引擎换了）、换事件流，并推一次 `sessions.changed`。多个 `engine.use` 依次执行 |
 | `launchers.list` | → `{launchers}` |
 | `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`：这台机器 `~/.zshrc`（`$ZDOTDIR` 优先）里 `alias x="K=V … claude [args]"` 形式的行，只列 `command` 是 claude 的。`env` 带 key，只经这条 RPC 交给管理者（导入，经 hub 到 node 的连接），不写日志；旧 node 回 `unknown method` |
+| `launchers.repair` | `{name, action: "upgrade_cli"}` → `{ok, unsupported?, output?}`：启动器健康检查的自动修复（`docs/launcher-health.md`），node 只做固定的修法（Claude 的跑 `claude update`），不接受命令；旧 node 回 `unknown method` |
 | `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`：同 REST 的 `…/launchers/{name}/models`；`agent_type` 是 hub 配置里这个启动器的类型（不给就按 node 自己认出的） |
 | `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
 | `dirs.list` | `{path}` → 同 REST |

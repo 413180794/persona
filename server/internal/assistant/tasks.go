@@ -266,6 +266,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		if !s.placeTask(ctx, t) {
 			return "", fmt.Errorf("task %d: unknown machine %q (machines: %s)", i+1, t.Machine, s.machineIDs(ctx))
 		}
+		s.healthyPlace(ctx, t) // the card shows where it will really run
 	}
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return "", fmt.Errorf("todos are unavailable: %v", err)
@@ -480,15 +481,26 @@ const taskStartTimeout = 5 * time.Minute
 func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, retry bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), taskStartTimeout)
 	defer cancel()
-	sid, err := s.startTaskAgent(ctx, t)
-	if err != nil && transientStartErr(err) && ctx.Err() == nil {
-		// The machine's link dropped (a node restarting, a tunnel blinking): try once more after a moment.
-		s.logf("task %s: start: %v; retrying", t.TodoID, err)
-		select {
-		case <-time.After(taskStartRetryDelay):
-			sid, err = s.startTaskAgent(ctx, t)
-		case <-ctx.Done():
+	placed := t.Machine
+	sid, err := s.startTaskAgent(ctx, &t)
+	if err != nil && ctx.Err() == nil {
+		// The machine's link dropped (a node restarting, a tunnel blinking): try once more after a moment. Any other
+		// failure now counts against the launcher there, so the retry goes to a machine where it works, if one has it.
+		retry := transientStartErr(err)
+		if !retry {
+			_, _, retry = s.healthDetour(ctx, Device{ID: t.Machine}, s.startLauncher(ctx, t.Launcher))
 		}
+		if retry {
+			s.logf("task %s: start: %v; retrying", t.TodoID, err)
+			select {
+			case <-time.After(taskStartRetryDelay):
+				sid, err = s.startTaskAgent(ctx, &t)
+			case <-ctx.Done():
+			}
+		}
+	}
+	if t.Machine != placed { // the card shows where it runs
+		s.updatePlanTask(ctx, planID, i, t)
 	}
 	if err == nil {
 		m, _ := s.machineByName(ctx, t.Machine)
@@ -698,8 +710,27 @@ func transientStartErr(err error) bool {
 		errors.As(err, &re) && re.Message == rpc.ErrClosed.Error()
 }
 
-// startTaskAgent starts the agent for t on its machine and answers its session id.
-func (s *Service) startTaskAgent(ctx context.Context, t PlanTask) (string, error) {
+// healthyPlace moves t off a machine where its launcher failed its health check, to one where it works
+// (launcher_health.go); its why says so. False: it stays.
+func (s *Service) healthyPlace(ctx context.Context, t *PlanTask) bool {
+	m, ok := s.machineByName(ctx, t.Machine)
+	if !ok {
+		return false
+	}
+	alt, note, moved := s.healthDetour(ctx, m, s.startLauncher(ctx, t.Launcher))
+	if note != "" && !strings.Contains(t.Why, note) {
+		t.Why = strings.TrimSpace(t.Why + "（" + note + "）")
+	}
+	if moved {
+		t.Machine, t.Cwd = alt.ID, rehome(t.Cwd, m, alt)
+	}
+	return moved
+}
+
+// startTaskAgent starts the agent for t on its machine (another when its launcher does not work there: t says which)
+// and answers its session id. A failed start counts against the launcher there.
+func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (string, error) {
+	s.healthyPlace(ctx, t)
 	m, ok := s.machineByName(ctx, t.Machine)
 	if !ok {
 		return "", fmt.Errorf("unknown machine %q", t.Machine)
@@ -718,9 +749,25 @@ func (s *Service) startTaskAgent(ctx context.Context, t PlanTask) (string, error
 		Session proto.Session `json:"session"`
 	}
 	if err := s.call(ctx, m.ID, DeviceSessionStart, params, &res); err != nil {
+		picked, _ := params["launcher"].(string)
+		s.recordStartFailure(ctx, m.ID, s.startLauncher(ctx, picked), err)
 		return "", err
 	}
 	return res.Session.SessionID, nil
+}
+
+// updatePlanTask keeps the machine, directory and why task i of started plan planID runs with now.
+func (s *Service) updatePlanTask(ctx context.Context, planID string, i int, t PlanTask) {
+	p, err := s.loadPlan(ctx, planID)
+	if err != nil || i >= len(p.Tasks) {
+		return
+	}
+	p.Tasks[i].Machine, p.Tasks[i].Cwd, p.Tasks[i].Why = t.Machine, t.Cwd, t.Why
+	if _, err := s.movePlan(ctx, p, planStarted); err != nil {
+		s.logf("plan %s: %v", planID, err)
+		return
+	}
+	s.event(ctx, map[string]any{"type": "task_plan", "plan": p})
 }
 
 func (s *Service) dismissPlan(ctx context.Context, id string) (*TaskPlan, error) {

@@ -340,6 +340,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `agents.triage`：一轮停下后的分诊（[agent-work.md](agent-work.md)「开关」）。开关在 App 的「设置 › 会话分诊」里（存 hub 的 settings，默认全关），
   这里只放上限：`max_retries`（自动继续最多几次，默认 3）、`max_wakes`（叫醒最多几次，默认 6）、`settle_seconds`（停下多久才分诊，默认 15）；
   `enabled` / `auto_continue` / `wake` / `decide` 只是 App 里从没保存过时的初始值（不写就是关）。分诊是管理者（助手进程）做的，这一节经握手交给它，改了重启 hub 后生效。
+- `agents.launcher_health`：启动器健康检查和自动修复（[launcher-health.md](launcher-health.md)）：`enabled`（默认关，写 `true` 才定期检查和自动修）、`interval_minutes`（默认 30）、
+  `repair`（修复 Agent：`skill` 不写就没有修复 Agent，只做升级 CLI；`machine` 默认助手所在的电脑、`cwd` 默认 home、`launcher` 默认一个能用的、`permission` 权限模式，默认 `bypassPermissions`）。
 - `notify`：「做完了」推送的时机（`hub/notify.go`，不写就用默认值）：`done_delay_seconds`（做完后等多久没人看才推，默认 60）、
   `long_turn_seconds`（多长的一轮算「长任务」，默认 60）、`background_hold_minutes`（等后台任务结束最多等多久，默认 120）、
   `live_metrics_seconds`（实时活动只有数字变了时，给一台设备推送的最短间隔，默认 60；`docs/live-activity.md`「推送预算」）。

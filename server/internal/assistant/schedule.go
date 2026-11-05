@@ -818,6 +818,7 @@ func (s *Service) Run(ctx context.Context) {
 	go s.channelLoop(ctx)    // the channels' runs that lost their watcher (channels.go)
 	go s.kbLoop(ctx)         // the knowledge base (kb.go)
 	go s.viewActionLoop(ctx) // durable card reply outbox
+	go s.healthLoop(ctx)     // each machine's launchers (launcher_health.go)
 	s.scheduleLoop(ctx)
 }
 

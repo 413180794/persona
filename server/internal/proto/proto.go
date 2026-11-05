@@ -459,6 +459,13 @@ type LauncherCheck struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// LauncherRepair is what a node did for launchers.repair (docs/launcher-health.md): one of its fixed repairs.
+type LauncherRepair struct {
+	OK          bool   `json:"ok"`
+	Unsupported bool   `json:"unsupported,omitempty"` // this repair does not apply to the launcher's agent
+	Output      string `json:"output,omitempty"`      // the command's last lines, secrets as •••
+}
+
 type LauncherModel struct {
 	Role  string `json:"role"` // 主模型, Opus, 小模型, 子 Agent…
 	Env   string `json:"env"`

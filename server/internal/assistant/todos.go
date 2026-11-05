@@ -282,12 +282,17 @@ func (s *Service) quietTask(ctx context.Context, origin string) bool {
 // createTodo makes a todo (origin and planID set when a plan from an assistant conversation opens it as a task) and
 // tells the apps.
 func (s *Service) createTodo(ctx context.Context, title, notes, origin, planID string) (Todo, error) {
+	return s.newTodo(ctx, title, notes, origin, planID, s.quietTask(ctx, origin))
+}
+
+// newTodo is createTodo, quiet or not as given (a launcher repair's has no conversation and is quiet,
+// launcher_repair.go).
+func (s *Service) newTodo(ctx context.Context, title, notes, origin, planID string, quiet bool) (Todo, error) {
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return Todo{}, err
 	}
 	now := time.Now().UTC()
 	id := "todo_" + randomHex(8)
-	quiet := s.quietTask(ctx, origin)
 	if st := s.todoDB(); st != nil {
 		row := db.TodoRow{ID: id, Title: title, Notes: notes, CreatedAt: now, UpdatedAt: now, Origin: origin, PlanID: planID, Quiet: quiet}
 		if err := st.CreateTodo(ctx, row); err != nil {

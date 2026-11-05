@@ -48,3 +48,23 @@ type AgentAnswerItem struct {
 }
 
 func RenderAgentAnswer(a AgentAnswer) string { return render("agents/answer", a) }
+
+// LauncherRepair is the first message of the agent that repairs a machine's launchers (agents/launcher_repair,
+// docs/launcher-health.md).
+type LauncherRepair struct {
+	Skill     string // the skill that sets up and repairs the agent CLIs
+	Machine   string // the broken machine's id
+	Name      string // its name, "" when the same as the id
+	SSHHost   string // the hub machine's ssh alias for it, "" when none
+	Launchers []LauncherRepairItem
+}
+
+// LauncherRepairItem is one launcher that failed its check there.
+type LauncherRepairItem struct {
+	Name  string
+	Agent string // claude, codex…
+	Kind  string // the hub's class of the error (model_route, auth, cli_outdated, timeout, other)
+	Error string
+}
+
+func RenderLauncherRepair(r LauncherRepair) string { return render("agents/launcher_repair", r) }

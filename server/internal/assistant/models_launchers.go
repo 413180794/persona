@@ -98,7 +98,7 @@ func launcherView(l storedLauncher) LauncherView {
 var managedLauncherName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
 // reservedLauncherNames are taken by claude itself and the /api/v1/launchers/<word> routes.
-var reservedLauncherNames = []string{"claude", "presets", "test", "discover", "import"}
+var reservedLauncherNames = []string{"claude", "presets", "test", "discover", "import", "health"}
 
 // ---- the key ----
 
@@ -855,7 +855,8 @@ func (s *Service) machineLauncherRoutes() {
 		for _, l := range ls {
 			discovered = append(discovered, ConfiguredLauncher{Launcher: l})
 		}
-		apierr.WriteJSON(w, map[string]any{"launchers": sessionLaunchers(discovered, s.hello(ctx).Models.Launchers[mid]), "default": s.pickerDefault(ctx, r)})
+		apierr.WriteJSON(w, map[string]any{"launchers": s.withHealth(ctx, mid, sessionLaunchers(discovered, s.hello(ctx).Models.Launchers[mid])),
+			"default": s.pickerDefault(ctx, r)})
 	})
 	s.handle("GET /api/v1/machines/{mid}/launchers/{name}/models", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 70*time.Second)

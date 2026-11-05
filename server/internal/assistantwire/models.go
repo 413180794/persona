@@ -41,6 +41,7 @@ const (
 	DeviceLaunchersShow       = "launchers.show"        // {name} → {definition}
 	DeviceLaunchersCheck      = "launchers.check"       // {name} → proto.LauncherCheck
 	DeviceLaunchersHTTP       = "launchers.http"        // {name, http?, configured?} → {base_url} or quota.Response
+	DeviceLaunchersRepair     = "launchers.repair"      // {name, action: "upgrade_cli"} → proto.LauncherRepair
 )
 
 const (
@@ -135,6 +136,8 @@ var modelRoutes = []string{
 	"PUT /api/v1/launchers/{name}",
 	"DELETE /api/v1/launchers/{name}",
 	"POST /api/v1/launchers/{name}/check",
+	"GET /api/v1/launchers/health",
+	"POST /api/v1/launchers/health/check",
 	"POST /api/v1/launchers/{name}/restore",
 	"GET /api/v1/launchers/{name}/quota",
 	"GET /api/v1/machines/{mid}/launchers",

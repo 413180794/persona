@@ -64,6 +64,7 @@ type Service struct {
 	inbox      inboxBook         // inbox.go
 	viewEvents viewNotifications // views.go: only coalesced notifications; contents are stored first
 	models     modelsState       // models.go: the model configuration
+	health     healthBook        // launcher_health.go: each machine's launchers
 }
 
 var _ Handler = (*Service)(nil)
@@ -98,6 +99,7 @@ func New(o Options) *Service {
 	s.launcherQuotaRoutes()
 	s.providerProbeRoutes()
 	s.launcherImportRoutes()
+	s.launcherHealthRoutes()
 	return s
 }
 

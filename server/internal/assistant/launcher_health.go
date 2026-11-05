@@ -1,0 +1,663 @@
+package assistant
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"path"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// Launcher health (docs/launcher-health.md): every launcher on every machine is checked now and then with the same
+// one-word request 测试可用性 sends (launchers.check); a failed start counts too. A launcher whose latest result is a
+// failure is not used for a new agent while another machine has a healthy one; known errors are repaired (the node
+// updates its CLI, else an agent with the configured skill), and what stays broken is blocked for the user to see.
+// Nothing is pushed.
+
+const launchersHealthKey = "launchers.health"
+
+// The launcher's states.
+const (
+	healthOK        = "ok"
+	healthFailing   = "failing"   // failed, not repaired yet
+	healthRepairing = "repairing" // a repair agent is on it
+	healthBlocked   = "blocked"   // repairs did not help (or there is none): the user's to fix
+)
+
+// The classes of a launcher's error (classifyLauncherError).
+const (
+	errKindModelRoute  = "model_route"
+	errKindAuth        = "auth"
+	errKindCLIOutdated = "cli_outdated"
+	errKindTimeout     = "timeout"
+	errKindOther       = "other"
+)
+
+var (
+	// healthTick is how often the loop looks at the machines; a launcher is checked again after the interval.
+	healthTick = 5 * time.Minute
+	// healthOnlineRecheck: a machine that comes online gets its launchers checked unless checked this recently (the
+	// hub's restarts would otherwise check everything each time).
+	healthOnlineRecheck = 10 * time.Minute
+	// healthStale: a failure older than this no longer keeps a launcher from being used.
+	healthStale = 6 * time.Hour
+	// healthMaxRepairs: repair rounds for one run of failures before the launcher is blocked.
+	healthMaxRepairs = 2
+	// repairSettle and repairDeadline: a repair agent that stopped is rechecked once it has run this long; one that
+	// has not stopped by the deadline is rechecked anyway.
+	repairSettle   = 2 * time.Minute
+	repairDeadline = 45 * time.Minute
+	// healthCheckTimeout bounds one check (the node's own is 90 seconds).
+	healthCheckTimeout = 100 * time.Second
+)
+
+const defaultHealthInterval = 30 * time.Minute
+
+// defaultRepairPermission: the repair agent runs ssh and edits CLI settings; under the default mode it would stop on
+// an approval card for each step (2026-11-05 user decision).
+const defaultRepairPermission = "bypassPermissions"
+
+// LauncherHealth is one launcher on one machine as last checked.
+type LauncherHealth struct {
+	Machine   string    `json:"machine"`
+	Launcher  string    `json:"launcher"`
+	Agent     string    `json:"agent,omitempty"` // claude, codex… (as the check ran it)
+	State     string    `json:"state"`
+	Kind      string    `json:"kind,omitempty"` // the error's class; "" when it works
+	Error     string    `json:"error,omitempty"`
+	Model     string    `json:"model,omitempty"` // which model answered
+	Millis    int       `json:"millis,omitempty"`
+	CheckedAt time.Time `json:"checked_at"`
+	Source    string    `json:"source"`          // check | start (an agent's start failed)
+	Fails     int       `json:"fails,omitempty"` // failures in a row
+	// Repairs are this run of failures' repair rounds; BlockedReason says why it was given up on.
+	Repairs       int            `json:"repairs,omitempty"`
+	Repair        *LauncherFixed `json:"repair,omitempty"`
+	BlockedReason string         `json:"blocked_reason,omitempty"`
+}
+
+// LauncherFixed is the latest repair of a launcher.
+type LauncherFixed struct {
+	Action    string    `json:"action"` // upgrade_cli | agent
+	At        time.Time `json:"at"`
+	OK        bool      `json:"ok"`
+	Output    string    `json:"output,omitempty"`
+	Machine   string    `json:"machine,omitempty"` // the repair agent's
+	SessionID string    `json:"session_id,omitempty"`
+	TodoID    string    `json:"todo_id,omitempty"`
+}
+
+// machineRepair is a repair agent at work on one machine's launchers.
+type machineRepair struct {
+	Machine      string    `json:"machine"` // the broken one
+	Launchers    []string  `json:"launchers"`
+	AgentMachine string    `json:"agent_machine"`
+	SessionID    string    `json:"session_id"`
+	TodoID       string    `json:"todo_id,omitempty"`
+	StartedAt    time.Time `json:"started_at"`
+}
+
+// healthStore is what launchersHealthKey holds.
+type healthStore struct {
+	Records []LauncherHealth `json:"records"`
+	Repairs []machineRepair  `json:"repairs,omitempty"`
+}
+
+type healthBook struct {
+	mu       sync.Mutex
+	loaded   bool
+	recs     map[string]*LauncherHealth // by healthKey
+	repairs  map[string]*machineRepair  // by broken machine
+	online   map[string]bool            // reachable at the last look
+	checking map[string]bool            // machines being checked now
+}
+
+func healthKey(machine, launcher string) string { return machine + "/" + launcher }
+
+// healthConfig is hub.json agents.launcher_health with its defaults.
+type healthConfig struct {
+	on       bool
+	interval time.Duration
+	repair   assistantwire.LauncherRepairConfig
+}
+
+func (s *Service) healthConfig(ctx context.Context) healthConfig {
+	c := s.hello(ctx).Agents.LauncherHealth
+	out := healthConfig{on: c.Enabled != nil && *c.Enabled, interval: defaultHealthInterval, repair: c.Repair}
+	if out.repair.Permission == "" {
+		out.repair.Permission = defaultRepairPermission
+	}
+	if c.IntervalMinutes > 0 {
+		out.interval = time.Duration(c.IntervalMinutes) * time.Minute
+	}
+	return out
+}
+
+// ---- what is stored ----
+
+// healthLoadLocked reads the records once (b.mu held).
+func (s *Service) healthLoadLocked(ctx context.Context) {
+	b := &s.health
+	if b.loaded {
+		return
+	}
+	b.recs, b.repairs = map[string]*LauncherHealth{}, map[string]*machineRepair{}
+	if b.online == nil {
+		b.online, b.checking = map[string]bool{}, map[string]bool{}
+	}
+	var stored healthStore
+	if st := s.store(); st != nil {
+		if _, err := st.Setting(ctx, launchersHealthKey, &stored); err != nil {
+			s.logf("launcher health: read: %v", err)
+			return // read again next time
+		}
+	}
+	for i := range stored.Records {
+		r := stored.Records[i]
+		b.recs[healthKey(r.Machine, r.Launcher)] = &r
+	}
+	for i := range stored.Repairs {
+		r := stored.Repairs[i]
+		b.repairs[r.Machine] = &r
+	}
+	b.loaded = true
+}
+
+// healthSaveLocked writes the records (b.mu held); no database keeps them in memory only.
+func (s *Service) healthSaveLocked(ctx context.Context) {
+	st := s.store()
+	b := &s.health
+	if st == nil || !b.loaded {
+		return // not over what could not be read
+	}
+	out := healthStore{Records: make([]LauncherHealth, 0, len(b.recs))}
+	for _, r := range b.recs {
+		out.Records = append(out.Records, *r)
+	}
+	sort.Slice(out.Records, func(i, j int) bool {
+		return healthKey(out.Records[i].Machine, out.Records[i].Launcher) < healthKey(out.Records[j].Machine, out.Records[j].Launcher)
+	})
+	for _, r := range b.repairs {
+		out.Repairs = append(out.Repairs, *r)
+	}
+	sort.Slice(out.Repairs, func(i, j int) bool { return out.Repairs[i].Machine < out.Repairs[j].Machine })
+	if err := st.PutSetting(context.WithoutCancel(ctx), launchersHealthKey, out); err != nil {
+		s.logf("launcher health: save: %v", err)
+	}
+}
+
+// healthRecords are the records, by machine and launcher; state and machine filter them when set.
+func (s *Service) healthRecords(ctx context.Context, state, machine string) []LauncherHealth {
+	b := &s.health
+	b.mu.Lock()
+	s.healthLoadLocked(ctx)
+	out := []LauncherHealth{}
+	for _, r := range b.recs {
+		if (state == "" || r.State == state) && (machine == "" || r.Machine == machine) {
+			out = append(out, *r)
+		}
+	}
+	b.mu.Unlock()
+	sort.Slice(out, func(i, j int) bool {
+		return healthKey(out[i].Machine, out[i].Launcher) < healthKey(out[j].Machine, out[j].Launcher)
+	})
+	return out
+}
+
+// launcherHealth is launcher's record on machine.
+func (s *Service) launcherHealth(ctx context.Context, machine, launcher string) (LauncherHealth, bool) {
+	b := &s.health
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	s.healthLoadLocked(ctx)
+	if r := b.recs[healthKey(machine, launcher)]; r != nil {
+		return *r, true
+	}
+	return LauncherHealth{}, false
+}
+
+// unusable: the record says the launcher does not work (its latest result, failed within healthStale).
+func (r LauncherHealth) unusable() bool {
+	return r.State != "" && r.State != healthOK && time.Since(r.CheckedAt) < healthStale
+}
+
+// launcherUnusable is launcher's record on machine when it does not work.
+func (s *Service) launcherUnusable(ctx context.Context, machine, launcher string) (LauncherHealth, bool) {
+	r, ok := s.launcherHealth(ctx, machine, launcher)
+	return r, ok && r.unusable()
+}
+
+// ---- recording ----
+
+// healthResult is one check's or start's outcome.
+type healthResult struct {
+	ok           bool
+	agent, model string
+	millis       int
+	err          string
+	source       string
+}
+
+// recordHealth keeps r as launcher's latest on machine; the apps are told when its state changes.
+func (s *Service) recordHealth(ctx context.Context, machine, launcher string, r healthResult) LauncherHealth {
+	b := &s.health
+	b.mu.Lock()
+	s.healthLoadLocked(ctx)
+	key := healthKey(machine, launcher)
+	rec := b.recs[key]
+	if rec == nil {
+		rec = &LauncherHealth{Machine: machine, Launcher: launcher}
+		b.recs[key] = rec
+	}
+	before := rec.State
+	rec.CheckedAt, rec.Source, rec.Millis = time.Now().UTC(), r.source, r.millis
+	if r.agent != "" {
+		rec.Agent = r.agent
+	}
+	if r.ok {
+		rec.State, rec.Kind, rec.Error, rec.Fails, rec.Repairs, rec.BlockedReason = healthOK, "", "", 0, 0, ""
+		rec.Model = r.model
+	} else {
+		rec.Fails++
+		rec.Error = clip(oneLine(r.err), 400)
+		rec.Kind = classifyLauncherError(r.err)
+		if rec.State == "" || rec.State == healthOK {
+			rec.State = healthFailing
+		}
+	}
+	out := *rec
+	s.healthSaveLocked(ctx)
+	b.mu.Unlock()
+	if before != out.State {
+		s.healthChanged(ctx, out, before)
+	}
+	return out
+}
+
+// setHealthState moves launcher on machine to state ("": it stays; why: the blocked reason) and keeps fixed as its
+// latest repair, one more round of this run of failures. Nothing changes once a check passed meanwhile.
+func (s *Service) setHealthState(ctx context.Context, machine, launcher, state, why string, fixed *LauncherFixed) {
+	b := &s.health
+	b.mu.Lock()
+	s.healthLoadLocked(ctx)
+	rec := b.recs[healthKey(machine, launcher)]
+	if rec == nil || rec.State == healthOK {
+		b.mu.Unlock()
+		return
+	}
+	before := rec.State
+	if state != "" {
+		rec.State = state
+	}
+	if state == healthBlocked {
+		rec.BlockedReason = clip(oneLine(why), 600)
+	}
+	if fixed != nil {
+		f := *fixed
+		rec.Repair = &f
+		rec.Repairs++
+	}
+	out := *rec
+	s.healthSaveLocked(ctx)
+	b.mu.Unlock()
+	if before != out.State {
+		s.healthChanged(ctx, out, before)
+	}
+}
+
+// repairWorked marks launcher's latest repair on machine as the one that fixed it (its check passed after).
+func (s *Service) repairWorked(ctx context.Context, machine, launcher string, fixed LauncherFixed) {
+	b := &s.health
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	s.healthLoadLocked(ctx)
+	if rec := b.recs[healthKey(machine, launcher)]; rec != nil && rec.State == healthOK {
+		fixed.OK = true
+		rec.Repair = &fixed
+		s.healthSaveLocked(ctx)
+	}
+}
+
+// healthChanged logs a launcher's new state and tells the apps (an event, not a push).
+func (s *Service) healthChanged(ctx context.Context, r LauncherHealth, before string) {
+	if before == "" {
+		before = "new"
+	}
+	if r.State == healthOK {
+		s.logf("launcher health: %s on %s: %s → ok", r.Launcher, r.Machine, before)
+	} else {
+		s.logf("launcher health: %s on %s: %s → %s (%s: %s)", r.Launcher, r.Machine, before, r.State, r.Kind, clip(r.Error, 160))
+	}
+	s.event(ctx, map[string]any{"type": "launcher_health", "record": r})
+}
+
+// recordStartFailure: an agent did not start with launcher on machine. A dropped link says nothing about the
+// launcher; anything else counts, and a check follows at once to tell a blink from a broken launcher.
+func (s *Service) recordStartFailure(ctx context.Context, machine, launcher string, err error) {
+	if err == nil || launcher == "" || transientStartErr(err) || errors.Is(err, ErrNoDevice) {
+		return
+	}
+	s.recordHealth(ctx, machine, launcher, healthResult{err: err.Error(), source: "start"})
+	go func() {
+		ctx := context.WithoutCancel(ctx)
+		if res, ok := s.probeLauncherHealth(ctx, machine, launcher); ok {
+			s.recordHealth(ctx, machine, launcher, res)
+		}
+	}()
+}
+
+// ---- classifying ----
+
+var launcherErrorKinds = []struct {
+	kind string
+	re   *regexp.Regexp
+}{
+	{errKindModelRoute, regexp.MustCompile(`(?i)bare claude model name|cannot be routed|no account match|model[^.\n]{0,60}(not found|not supported|not available|does not exist|unknown)|unknown model|invalid model`)},
+	{errKindAuth, regexp.MustCompile(`(?i)\b40[13]\b|invalid (or missing )?(api[ _-]?key|x-api-key|token|bearer)|authentication_error|unauthori[sz]ed|not logged in|please run /login|token (has )?expired|permission_error|forbidden`)},
+	{errKindCLIOutdated, regexp.MustCompile(`(?i)unknown option|unrecognized option|unexpected argument|please (update|upgrade)|(update|upgrade) (claude|codex|your)|version[^.\n]{0,40}(too old|no longer supported|not supported|outdated)|minimum (required )?version|requires (a )?newer`)},
+	{errKindTimeout, regexp.MustCompile(`(?i)context deadline exceeded|deadline exceeded|timed? ?out|秒内没有回答`)},
+}
+
+// classifyLauncherError names the class of a launcher's error, the first that matches.
+func classifyLauncherError(text string) string {
+	for _, k := range launcherErrorKinds {
+		if k.re.MatchString(text) {
+			return k.kind
+		}
+	}
+	return errKindOther
+}
+
+// repairNow: a failure the repairs know right away; the others wait for a second one in a row.
+func (r LauncherHealth) repairNow() bool {
+	switch r.Kind {
+	case errKindModelRoute, errKindAuth, errKindCLIOutdated:
+		return true
+	}
+	return r.Fails >= 2
+}
+
+// ---- checking ----
+
+// probeLauncherHealth runs launchers.check for launcher on machine; false when the machine could not be asked (no result).
+func (s *Service) probeLauncherHealth(ctx context.Context, machine, launcher string) (healthResult, bool) {
+	ctx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
+	defer cancel()
+	var res proto.LauncherCheck
+	if err := s.call(ctx, machine, assistantwire.DeviceLaunchersCheck, map[string]any{"name": launcher}, &res); err != nil {
+		s.logf("launcher health: check %s on %s: %v", launcher, machine, err)
+		return healthResult{}, false
+	}
+	return healthResult{ok: res.OK, agent: res.Agent, model: res.Model, millis: res.Millis, err: res.Error, source: "check"}, true
+}
+
+// healthLaunchers are the launchers to check on machine: those it can start (its ~/.zshrc's, the managed ones) and
+// the default one; not a runtime's (they are not run with a prompt) nor an API provider's.
+func (s *Service) healthLaunchers(ctx context.Context, machine string) ([]string, error) {
+	list, err := s.machineLaunchers(ctx, machine)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, l := range list {
+		if l.Source == "" || l.Source == "zshrc" || l.Source == "jarvis" {
+			out = append(out, l.Name)
+		}
+	}
+	if d := s.startLauncher(ctx, ""); !slices.Contains(out, d) {
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+// startLauncher is the launcher a start with launcher runs: itself, else 模型配置 › Agents', else claude.
+func (s *Service) startLauncher(ctx context.Context, launcher string) string {
+	if launcher != "" {
+		return launcher
+	}
+	if b, err := s.resolveModel(ctx, "agent.new"); err == nil {
+		if name, ok := strings.CutPrefix(b.Provider, "launcher."); ok && name != "" {
+			return name
+		}
+	}
+	return "claude"
+}
+
+// healthRound is one look at the machines: the launchers due on each reachable one are checked (each machine's one
+// after another, the machines side by side), then repaired; the repair agents at work are followed. wait: return
+// when it is all done (tests, a forced check), else it goes on in the background.
+func (s *Service) healthRound(ctx context.Context, wait bool) {
+	cfg := s.healthConfig(ctx)
+	devices := s.devices(ctx)
+	b := &s.health
+	var wg sync.WaitGroup
+	for _, d := range devices {
+		b.mu.Lock()
+		s.healthLoadLocked(ctx)
+		cameOnline := d.Reachable && !b.online[d.ID]
+		b.online[d.ID] = d.Reachable
+		busy := b.checking[d.ID]
+		if d.Reachable && cfg.on && !busy {
+			b.checking[d.ID] = true
+		}
+		b.mu.Unlock()
+		if !d.Reachable || !cfg.on || busy {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				b.mu.Lock()
+				delete(b.checking, d.ID)
+				b.mu.Unlock()
+			}()
+			s.checkMachine(ctx, d, cfg, cameOnline, "")
+			s.repairMachine(ctx, d, cfg)
+		}()
+	}
+	if wait {
+		wg.Wait()
+	}
+	s.followRepairs(ctx, cfg)
+}
+
+// checkMachine checks machine d's launchers that are due (only: one by that name, at once); the records of launchers
+// it no longer has go.
+func (s *Service) checkMachine(ctx context.Context, d Device, cfg healthConfig, cameOnline bool, only string) []LauncherHealth {
+	names, err := s.healthLaunchers(ctx, d.ID)
+	if err != nil {
+		s.logf("launcher health: %s: launchers: %v", d.ID, err)
+		return nil
+	}
+	b := &s.health
+	b.mu.Lock()
+	for key, r := range b.recs {
+		if r.Machine == d.ID && !slices.Contains(names, r.Launcher) {
+			delete(b.recs, key)
+		}
+	}
+	b.mu.Unlock()
+	var out []LauncherHealth
+	for _, name := range names {
+		if ctx.Err() != nil {
+			break
+		}
+		if only != "" && name != only {
+			continue
+		}
+		if only == "" {
+			r, ok := s.launcherHealth(ctx, d.ID, name)
+			since := time.Since(r.CheckedAt)
+			if ok && since < cfg.interval && !(cameOnline && since >= healthOnlineRecheck) {
+				continue
+			}
+		}
+		if res, ok := s.probeLauncherHealth(ctx, d.ID, name); ok {
+			out = append(out, s.recordHealth(ctx, d.ID, name, res))
+		}
+	}
+	return out
+}
+
+// ---- picking a machine ----
+
+// healthyMachine is another reachable machine that runs launcher and whose check of it did not fail: one where it
+// passed first, then one where it was never checked.
+func (s *Service) healthyMachine(ctx context.Context, launcher, except string) (Device, bool) {
+	best, rank := Device{}, 3
+	for _, d := range s.devices(ctx) {
+		if d.ID == except || !d.Reachable {
+			continue
+		}
+		r, ok := s.launcherHealth(ctx, d.ID, launcher)
+		n := 1
+		switch {
+		case ok && r.unusable():
+			continue
+		case ok && r.State == healthOK:
+			n = 0
+		}
+		if n >= rank || !s.launcherOn(ctx, d.ID, launcher) {
+			continue
+		}
+		best, rank = d, n
+	}
+	return best, rank < 3
+}
+
+// launcherOn: machine has launcher (a managed one is on every machine; a failed list says no).
+func (s *Service) launcherOn(ctx context.Context, machine, launcher string) bool {
+	if launcher == "claude" || slices.ContainsFunc(s.storedLaunchers(ctx), func(l storedLauncher) bool { return l.Name == launcher && l.Kind != "api" }) {
+		return true
+	}
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	list, err := s.machineLaunchers(cctx, machine)
+	return err == nil && slices.ContainsFunc(list, func(l proto.Launcher) bool { return l.Name == launcher })
+}
+
+// rehome moves dir from one machine's home to another's (a path outside the home stays).
+func rehome(dir string, from, to Device) string {
+	if from.Home == "" || to.Home == "" || from.Home == to.Home {
+		return dir
+	}
+	if dir == from.Home {
+		return to.Home
+	}
+	if rest, ok := strings.CutPrefix(dir, from.Home+"/"); ok {
+		return path.Join(to.Home, rest)
+	}
+	return dir
+}
+
+// healthDetour is where a start with launcher on machine m goes instead: another machine when its last check failed
+// there and another has it healthy (moved), with a line saying so for whoever started it; no other: m, and the line
+// says it may fail.
+func (s *Service) healthDetour(ctx context.Context, m Device, launcher string) (Device, string, bool) {
+	r, bad := s.launcherUnusable(ctx, m.ID, launcher)
+	if !bad {
+		return m, "", false
+	}
+	why := fmt.Sprintf("%s: %s", r.Kind, clip(r.Error, 160))
+	if alt, ok := s.healthyMachine(ctx, launcher, m.ID); ok {
+		return alt, fmt.Sprintf("launcher %s failed its health check on %s (%s), so this runs on %s instead", launcher, m.ID, why, alt.ID), true
+	}
+	return m, fmt.Sprintf("launcher %s failed its last health check on %s (%s) and no other machine has it healthy; started there anyway", launcher, m.ID, why), false
+}
+
+// healthLines are agents_list's lines about the launchers that do not work (machine: only there).
+func (s *Service) healthLines(ctx context.Context, machine string) string {
+	var b strings.Builder
+	for _, r := range s.healthRecords(ctx, "", machine) {
+		if !r.unusable() {
+			continue
+		}
+		if b.Len() == 0 {
+			b.WriteString("Launchers that do not work now (agent_start / task_plan move off them):\n")
+		}
+		fmt.Fprintf(&b, "- machine=%s launcher=%s · %s · %s: %s · checked %s\n", r.Machine, r.Launcher, r.State, r.Kind, clip(r.Error, 200), ago(r.CheckedAt))
+	}
+	return b.String()
+}
+
+// launcherWithHealth is a launcher of 新建 Agent's picker with how its last check went on that machine.
+type launcherWithHealth struct {
+	ConfiguredLauncher
+	Health *launcherHealthView `json:"health,omitempty"`
+}
+
+type launcherHealthView struct {
+	State     string    `json:"state"`
+	Kind      string    `json:"kind,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	CheckedAt time.Time `json:"checked_at"`
+}
+
+// withHealth puts machine's health records on its launchers (none: never checked).
+func (s *Service) withHealth(ctx context.Context, machine string, list []ConfiguredLauncher) []launcherWithHealth {
+	out := make([]launcherWithHealth, 0, len(list))
+	for _, l := range list {
+		v := launcherWithHealth{ConfiguredLauncher: l}
+		if r, ok := s.launcherHealth(ctx, machine, l.Name); ok && (r.State == healthOK || r.unusable()) { // not a failure too old to count
+			v.Health = &launcherHealthView{State: r.State, Kind: r.Kind, Error: r.Error, CheckedAt: r.CheckedAt}
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+// ---- the loop and the routes ----
+
+// healthLoop checks the launchers every healthTick until ctx ends (Run).
+func (s *Service) healthLoop(ctx context.Context) {
+	t := time.NewTicker(healthTick)
+	defer t.Stop()
+	for {
+		if !s.hello(ctx).Assistant.Standby { // a member hub's machines are its center's to check
+			s.healthRound(ctx, false)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+func (s *Service) launcherHealthRoutes() {
+	s.handle("GET /api/v1/launchers/health", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		apierr.WriteJSON(w, map[string]any{"records": s.healthRecords(r.Context(), q.Get("state"), q.Get("machine"))})
+	})
+	// A check now: of one launcher on one machine, all of a machine's, or every reachable machine's.
+	s.handle("POST /api/v1/launchers/health/check", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+		defer cancel()
+		q := r.URL.Query()
+		machine, launcher := q.Get("machine"), q.Get("launcher")
+		cfg := s.healthConfig(ctx)
+		cfg.interval = 0 // everything is due
+		var out []LauncherHealth
+		for _, d := range s.devices(ctx) {
+			if (machine != "" && d.ID != machine) || !d.Reachable {
+				continue
+			}
+			out = append(out, s.checkMachine(ctx, d, cfg, false, launcher)...)
+		}
+		if out == nil {
+			out = []LauncherHealth{}
+		}
+		apierr.WriteJSON(w, map[string]any{"records": out})
+	})
+}

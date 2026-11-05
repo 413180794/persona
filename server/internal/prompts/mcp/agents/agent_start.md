@@ -1,4 +1,4 @@
-Start a new Claude Code agent in herdr on one of the user's computers, in a project directory, with a first prompt. Use for real development work instead of doing it here. Returns the new session id.
+Start a new Claude Code agent in herdr on one of the user's computers, in a project directory, with a first prompt. Use for real development work instead of doing it here. Returns the new session id. When the launcher failed its last health check on that machine, the agent starts on a machine where it works (a directory under the home moves to that home) and the answer says so.
 
 ```json
 {

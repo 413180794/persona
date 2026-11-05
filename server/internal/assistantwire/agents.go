@@ -18,6 +18,30 @@ import (
 // AgentsConfig is hub.json "agents" (Hello.Agents): what the manager does about agents' turns by default.
 type AgentsConfig struct {
 	Triage TriageConfig `json:"triage,omitzero"`
+	// LauncherHealth is hub.json agents.launcher_health: checking each machine's launchers (docs/launcher-health.md).
+	LauncherHealth LauncherHealthConfig `json:"launcher_health,omitzero"`
+}
+
+// LauncherHealthConfig is hub.json agents.launcher_health: how often each machine's launchers are checked, and the agent
+// that repairs the ones a node cannot repair itself.
+type LauncherHealthConfig struct {
+	// Enabled: check on a schedule and repair what fails (unset: off). Off, failed starts are still recorded and
+	// steer new agents away.
+	Enabled *bool `json:"enabled,omitempty"`
+	// IntervalMinutes between two checks of one launcher on one machine. Default 30.
+	IntervalMinutes int                  `json:"interval_minutes,omitempty"`
+	Repair          LauncherRepairConfig `json:"repair,omitzero"`
+}
+
+// LauncherRepairConfig is the agent that repairs a machine's launchers: started on Machine (default: the assistant's)
+// in Cwd (default: home) with Launcher (default: a healthy one there) and Permission (a permission mode; default:
+// bypassPermissions, so it repairs without waiting on approvals), told to use Skill. No Skill: no repair agent.
+type LauncherRepairConfig struct {
+	Skill      string `json:"skill,omitempty"`
+	Machine    string `json:"machine,omitempty"`
+	Cwd        string `json:"cwd,omitempty"`
+	Launcher   string `json:"launcher,omitempty"`
+	Permission string `json:"permission,omitempty"`
 }
 
 // TriageConfig is hub.json agents.triage: the limits, and the switches a hub whose user never saved them starts with
