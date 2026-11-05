@@ -652,6 +652,9 @@ private struct AgentsList: View {
                             NavigationLink(value: ix.sessionKey) {
                                 CompactInteractionRow(interaction: ix, machine: machine(ix.machineRef)?.title)
                             }
+                            #if os(macOS)
+                            .macOptionClick { MacShellState.shared.chatWindow = ix.sessionKey } // ⌥-click: in a window of its own
+                            #endif
                             .listRowInsets(CompactList.rowInsets)
                             .accessibilityIdentifier("agents.interaction")
                         } else if capsules {
@@ -1636,6 +1639,9 @@ private struct AgentsList: View {
                         #endif
                         .macHoverShade(in: RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous), outset: Theme.Space.xs)
                 }
+                #if os(macOS)
+                .macOptionClick { MacShellState.shared.chatWindow = s.key } // ⌥-click: in a window of its own
+                #endif
             }
         }
             .accessibilityIdentifier(compact ? "agents.compactRow" : "agents.row")

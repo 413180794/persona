@@ -91,7 +91,7 @@
   空间标题 5、没变的用户气泡 2、回复正文 2.3。Mac 自己的壳（`MacShell` / `MacRootView`）每轮 0 次，菜单栏图标 2 次（只数一遍会话）：
   多出来的都在和 iOS 共用的对话页 / 列表里（没变的行每轮还在重算），要减得在 iOS 一起改、跑 `LiveUpdateTests`，不在 Mac 这边单独动。
   同日 06:00 复测（菜单栏图标上挂了开窗口的 opener 之后）：每轮约 43 ms，壳 0 次、菜单栏图标 2 次，没变。
-  ⌥ 点列表行在新窗口打开也没做：锁屏时发不了真的点击，验不了它会不会同时触发 NavigationLink。
+  ⌥ 点列表行在新窗口打开：2026-11-05 做了（#3223），见下面「窗口」。
 
   2026-11-02 用户反馈「点起来卡卡的」之后量的（体验模式，真窗口，cua-driver 点侧栏，`ps` 取进程 CPU 时间，`sample` 看主线程）：
   - 切侧栏分区（#390）：每次主线程约 240 ms，Debug 和 Release（`-O` 全模块）一样，不是调试版的问题。
@@ -484,7 +484,10 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 ## 对话单独开窗口（Mac）
 
 `apple/Mac/App/MacChatWindow.swift`：`WindowGroup("对话", id: "chat", for: SessionKey.self)`，里面就是对话页本身，窗口标题是对话标题，
-几个 Agent 可以并排或放到另一块屏幕上。入口：Agents 列表行的右键菜单「在新窗口打开」、Agent 菜单「在新窗口打开」。
+几个 Agent 可以并排或放到另一块屏幕上。入口：Agents 列表行的右键菜单「在新窗口打开」、Agent 菜单「在新窗口打开」、按住 ⌥ 点 Agents 列表的行（含「需要你处理」的细列表行）。
+⌥ 点（#3223，`apple/Mac/App/MacOptionClick.swift`，`MacOptionClickTests`）：行上盖一层 AppKit 视图，只有「只按着 ⌥ 的左键点按」命中它（`hitTest` 看正在分发的事件），
+别的点按、悬停、滚轮都穿过去，所以行的 NavigationLink、列表的选中和行里的按钮都收不到这一下：主窗口不跟着跳，收件箱的选中不变。收件箱的行 ⌥ 点同 ⏎ / 双击（这件事的窗口），
+Agent 的行打开它的对话窗口。测试里经真的 `NSWindow.sendEvent` 分发：普通点按按到下面的按钮、⌥ 点只到这一层；在屏幕上的窗口里真按没试过（这台机器不能发合成点击），列表里的 NavigationLink 也只经这条推断。
 菜单（Commands）没有自己的 `openWindow`，经 `MacShellState.chatWindow` 交给主窗口的 `MacWindowOpener` 打开。
 DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗口另存成 `<名字>.chat.png`。
 窗口里的对话是这个窗口的第一页（`SplitDetail(isFirstPage: true)`），对话页自己画的返回箭头不显示。
@@ -564,7 +567,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   `MacInboxList`（列表栏）、`MacInboxDetail`（详情栏）。三者共用 `MacInboxState.shared`（筛选沿用 iOS 的 `inbox.source` / `inbox.kind`、搜索词、选中、展开的分组、邮箱列表、要打开的弹层）。
   A 接好三栏之前，`MacInboxPage`（筛选列 | 列表 | 详情，列表宽度可拖、记在 `mac.inbox.listWidth`）放在壳的「收件箱」里。
 - 列表：系统选中（⇧ / ⌘ 多选），↑↓ 移动，选中显示成和壳一样的灰色圆角底（`MacHoverRow`：系统在活跃窗口里把选中行填成主题色，
-  行里自带颜色的字和按钮——草稿卡片的标题、「修改」、AI 的星标——被盖住），**E 或 ⌫ 标为已处理**并选中下一件（像 Mail 删信），⏎ / 双击在新窗口打开（Agent 行：打开它的对话），
+  行里自带颜色的字和按钮——草稿卡片的标题、「修改」、AI 的星标——被盖住），**E 或 ⌫ 标为已处理**并选中下一件（像 Mail 删信），⏎ / 双击 / ⌥ 点在新窗口打开（Agent 行：打开它的对话），
   右键：在新窗口打开、AI 草拟回复 / 查看草稿、交给 AI、已处理 / 移回（多选时「N 件都标为已处理」）、拷贝内容、在飞书中打开；触控板左滑 = 已处理；悬停有浅底。
   工具栏：刷新（⌘R 是 显示 › 刷新，收件箱在屏幕上时刷新它）、写邮件 ⌥⌘N、管理邮箱；搜索在工具栏（`.searchable(placement: .toolbar)`）。分组标题可点开 / 收起，「全部看过」「全部清除」照旧。
 - 详情：飞书会话（从第一条新消息开始）/ 邮件 / 云文档条目；右侧一栏（`Mac/Inbox/MacInboxActions.swift`，#831，2026-11-03 用户：放在工具栏里只有图标、不起眼，要像 iOS 一样醒目）：AI 摘要、「AI 分身正在处理」、「线索」（#3071，见 `docs/inbox.md`「App」），下面是带文字的按钮：AI 草拟回复 / 查看草稿（主按钮；只能在原 App 回的来源换成 在信息里回复 / 在 Telegram 里回复 / 打开）、交给 AI、已处理（已处理的换成 移回，其余照旧，同 iOS）。列表栏默认宽度从 380 改成 340，默认窗口下放得下这一栏。详情窄得放不下这一栏（`Theme.Size.macInboxActionsWidth` 加上留给条目的 `macInboxActionsPageMin`）时，同样的内容变成条目上方的一条，按钮放不下文字就只留图标（悬停有说明）。工具栏里不再放这几个。

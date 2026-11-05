@@ -200,6 +200,7 @@ struct MacInboxList: View {
 
     private func agentRow(_ ix: Interaction) -> some View {
         MacInboxAgentRow(interaction: ix)
+            .macOptionClick { MacShellState.shared.chatWindow = ix.sessionKey } // ⌥-click: its conversation's window
             .tag(MacInboxSelection.agent(ix.id))
             .macHoverRow(.agent(ix.id))
     }
@@ -208,6 +209,7 @@ struct MacInboxList: View {
         InboxRow(item: it, showAccount: state.accounts.count > 1, sending: store.sending.contains(it.id),
                  send: { text in Task { await store.send(it, text: text, changes: it.agent?.changes ?? []) } },
                  edit: { state.editingDraft = it })
+            .macOptionClick { openWindow(id: MacInboxItemWindow.id, value: it.id) } // ⌥-click: as ⏎ / a double click
             .tag(MacInboxSelection.item(it.id))
             .macHoverRow(.item(it.id))
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
