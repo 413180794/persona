@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -16,6 +18,13 @@ import (
 
 	"github.com/nwverse/persona/server/internal/db"
 )
+
+// failingDeleteStore is adminMemStore whose session delete fails, as when Postgres is down.
+type failingDeleteStore struct{ *adminMemStore }
+
+func (failingDeleteStore) DeleteAdminSession(context.Context, string) error {
+	return errors.New("connection refused")
+}
 
 // ip4 builds private addresses from their numbers, so fixtures do not look like someone's real hosts (like
 // ingress_test.go; scripts/privacy_check.py flags private literals).
@@ -519,6 +528,42 @@ func TestAdminSetupLoginSessionCSRF(t *testing.T) {
 	}
 	if code, _, _ := b.do("GET", "/api/v1/admin/overview", ""); code != http.StatusUnauthorized {
 		t.Fatalf("other browser after the change: %d", code)
+	}
+}
+
+// A sign-out that could not delete the session says so (and logs it) instead of reporting ok.
+func TestAdminLogoutDeleteFails(t *testing.T) {
+	h, store, mux := adminTestHub(t)
+	var mu sync.Mutex
+	var logs strings.Builder
+	h.logger = log.New(lockedWriter{&mu, &logs}, "", 0)
+	c := &adminClient{t: t, h: mux, remote: ip4(192, 168, 1, 20) + ":5000"}
+	if code, _, _ := c.do("POST", "/api/v1/admin/setup", `{"password":"a good password"}`); code != 200 || c.cookie == nil {
+		t.Fatalf("setup: %d", code)
+	}
+	value := c.cookie.Value
+	h.store = failingDeleteStore{store}
+	code, out, w := c.do("POST", "/api/v1/admin/logout", `{}`)
+	if code != http.StatusInternalServerError || out["code"] != "logout_failed" || out["ok"] == true {
+		t.Fatalf("logout with a failing delete: %d %v", code, out)
+	}
+	cleared := false
+	for _, ck := range w.Result().Cookies() {
+		if ck.Name == "jarvis_admin" && ck.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared || c.cookie != nil {
+		t.Fatalf("cookie not cleared: %v", w.Header().Values("Set-Cookie"))
+	}
+	if len(store.sessions) != 1 {
+		t.Fatalf("sessions: %d", len(store.sessions))
+	}
+	mu.Lock()
+	logged := logs.String()
+	mu.Unlock()
+	if !strings.Contains(logged, "could not end the session") || !strings.Contains(logged, "connection refused") || strings.Contains(logged, value) {
+		t.Fatalf("log: %q", logged)
 	}
 }
 

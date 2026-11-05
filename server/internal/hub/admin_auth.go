@@ -387,8 +387,15 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 		h.adminSignedIn(w, r, store)
 	}))
 	open.HandleFunc("POST /api/v1/admin/logout", withStore(func(w http.ResponseWriter, r *http.Request, store adminStore) {
+		// The browser forgets the cookie either way; when the row could not be deleted, say so,
+		// because a copy of the cookie still signs in until the session expires.
 		if c, err := r.Cookie(adminCookieName(r)); err == nil && c.Value != "" {
-			_ = store.DeleteAdminSession(r.Context(), sha256Hex(c.Value))
+			if err := store.DeleteAdminSession(r.Context(), sha256Hex(c.Value)); err != nil {
+				h.logf("admin: sign-out from %s could not end the session: %v", maskedSource(r), err)
+				clearAdminCookie(w, r)
+				writeErrCode(w, http.StatusInternalServerError, "logout_failed", errors.New("signed out here, but the session could not be ended on the hub: it may still be valid"))
+				return
+			}
 		}
 		clearAdminCookie(w, r)
 		writeJSON(w, map[string]any{"ok": true})

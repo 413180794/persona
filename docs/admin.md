@@ -137,7 +137,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | `POST setup-code` | `personad hub admin setup-code` 用：只认回环 + 主 token，回 `{"code", "expires_at"}`；设过密码 409 `already_set` |
 | `POST reload` | `personad hub admin access` 写完 hub.json 后用：只认回环 + 主 token，重读 `admin` 和 `name` |
 | `POST login` `{"password"}` | 回 state；401 `bad_password`、429 `rate_limited`（`retry_after` 秒） |
-| `POST logout` | 退出 |
+| `POST logout` | 退出；库里的会话没删掉时照样清 cookie，但回 500 `logout_failed`（cookie 的副本在过期前仍能登录） |
 | `POST password` `{"current", "new"}` | 改密码，别的会话全部失效 |
 | `GET overview` | `hub`（`hub_id`、`name`、`name_set`、`default_name`、`version`、`started_at`、`os`、`arch`、`container`、`can_restart`）、`listen`、`public_url`、`tls`（`listen`、`port`、`fp`；没开是 null）、`endpoints`、`machines`（`total`、`online`）、`devices`、`restart` |
 | `PUT hub` `{"name"}` | 改 hub 名字（空串 = 用默认名），立刻生效 |

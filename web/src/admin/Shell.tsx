@@ -44,7 +44,7 @@ export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => 
     try {
       await adminApi("/logout", "POST");
     } catch {
-      // the session is gone either way
+      // the cookie is cleared either way; a logout_failed means the server row may outlive it until it expires
     }
     onLogout();
   };
