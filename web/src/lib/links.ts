@@ -6,6 +6,7 @@
 //
 // Also the hand-off between the reader and the composers: text picked in the panel goes to the composer the user is
 // writing in, as <jarvis-context> tags in the next message (docs/protocol.md「消息里的标签」).
+import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { uuid } from "./format";
 import { openPanel } from "./panel";
@@ -73,16 +74,16 @@ export function docKind(url: string): DocKind {
 }
 
 export const DOC_LABEL: Record<DocKind, string> = {
-  doc: "文档",
-  sheet: "表格",
-  bitable: "多维表格",
-  mindnote: "思维笔记",
-  file: "文件",
-  slides: "幻灯片",
-  wiki: "知识库",
-  page: "页面",
-  whiteboard: "画板",
-  other: "文档",
+  doc: t("lib-links.doc"),
+  sheet: t("lib-links.sheet"),
+  bitable: t("lib-links.bitable"),
+  mindnote: t("lib-links.mindnote"),
+  file: t("lib-links.file"),
+  slides: t("lib-links.slides"),
+  wiki: t("lib-links.wiki"),
+  page: t("lib-links.page"),
+  whiteboard: t("lib-links.whiteboard"),
+  other: t("lib-links.doc"),
 };
 
 /** A 公司圈 share link's post id (LarkMoments.postID). */
@@ -196,6 +197,7 @@ export interface ContextRef {
   text: string;
 }
 
+// i18n-ignore: a marker inside <jarvis-context>, the app (QuoteViews.swift) matches it
 export const WHOLE = "（整篇）";
 
 function escAttr(s: string) {
@@ -210,16 +212,16 @@ export function contextXML(r: Pick<ContextRef, "kind" | "title" | "url" | "text"
 
 /** A message with its picked contexts in front (ChatView.swift sendText). */
 export function withContexts(refs: Pick<ContextRef, "kind" | "title" | "url" | "text">[], text: string, hasImages = false): string {
-  const t = text.trim();
-  if (!refs.length) return t;
-  const body = t || (hasImages ? "请看图片" : "参考上面的内容。");
+  const typed = text.trim();
+  if (!refs.length) return typed;
+  const body = typed || (hasImages ? t("lib-links.see_images") : t("lib-links.see_context"));
   return `${refs.map(contextXML).join("\n")}\n\n${body}`;
 }
 
 /** 「AI 修改」: the picked text and what to do with it, sent at once (LinkSheet.swift sendEdit). */
 export function editMessage(r: Pick<ContextRef, "title" | "url" | "text">, ask: string): string {
   const a = ask.trim();
-  return `${contextXML({ ...r, kind: "edit" })}\n\n${a ? `按要求修改上面选中的内容：${a}` : "按上面选中的内容修改。"}`;
+  return `${contextXML({ ...r, kind: "edit" })}\n\n${a ? t("lib-links.edit_with_ask", { ask: a }) : t("lib-links.edit_plain")}`;
 }
 
 export function newContext(kind: ContextRef["kind"], title: string, url: string, text: string): ContextRef {

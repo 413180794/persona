@@ -1,0 +1,14 @@
+{
+  "unit_seconds_one": "{count} second",
+  "unit_seconds_other": "{count} seconds",
+  "unit_minutes_one": "{count} minute",
+  "unit_minutes_other": "{count} minutes",
+  "unit_hours_one": "{count} hour",
+  "unit_hours_other": "{count} hours",
+  "unit_days_one": "{count} day",
+  "unit_days_other": "{count} days",
+  "every_no_task": "Every {every}: no task yet",
+  "usage": "Format: /loop [interval] task, e.g. /loop 10m check CI. Without an interval, Claude sets the pace.",
+  "every_task": "Repeats every {every}: {task}",
+  "self_paced_task": "Repeats at Claude's pace: {task}"
+}

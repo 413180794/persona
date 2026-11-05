@@ -1,0 +1,6 @@
+{
+  "kind_api": "直接API",
+  "kind_launcher": "Claude Codeランチャー",
+  "name_invalid": "名前には英字、数字、_、-のみ使えます。先頭は英字か_にしてください",
+  "name_reserved": "{name}という名前は使えません"
+}

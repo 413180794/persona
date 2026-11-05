@@ -3,6 +3,8 @@
 // The list holds names and addresses only and lives in this origin's localStorage; a switch carries it along in the
 // address (`#hubs=`, never sent to a server) so the next hub's page knows the same hubs.
 
+import { t } from "../i18n";
+
 export interface SavedHub {
   /** The hub's origin, `scheme://host[:port]` as `URL.origin` writes it. */
   url: string;
@@ -19,17 +21,17 @@ export const MAX_HUBS = 20;
 /** The origin for what the user typed, or why it is not one. No scheme means https. */
 export function normalizeHubURL(input: string): { url: string } | { error: string } {
   const raw = input.trim();
-  if (!raw) return { error: "填 hub 的地址" };
+  if (!raw) return { error: t("lib-hubs.url_empty") };
   let u: URL;
   try {
     u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
   } catch {
-    return { error: "不是一个地址" };
+    return { error: t("lib-hubs.url_invalid") };
   }
-  if (u.protocol !== "http:" && u.protocol !== "https:") return { error: "只能是 http:// 或 https:// 的地址" };
-  if (u.username || u.password) return { error: "地址里不要带用户名和密码" };
-  if ((u.pathname && u.pathname !== "/") || u.search || u.hash) return { error: "只填 hub 的地址，不要带路径" };
-  if (!u.hostname) return { error: "不是一个地址" };
+  if (u.protocol !== "http:" && u.protocol !== "https:") return { error: t("lib-hubs.url_scheme") };
+  if (u.username || u.password) return { error: t("lib-hubs.url_credentials") };
+  if ((u.pathname && u.pathname !== "/") || u.search || u.hash) return { error: t("lib-hubs.url_path") };
+  if (!u.hostname) return { error: t("lib-hubs.url_invalid") };
   return { url: u.origin };
 }
 
@@ -105,8 +107,8 @@ export function addHub(input: string, label = ""): { list: SavedHub[] } | { erro
   const n = normalizeHubURL(input);
   if (!("url" in n)) return n;
   const list = loadHubs();
-  if (list.some((h) => h.url === n.url)) return { error: "这台 hub 已经在列表里" };
-  if (list.length >= MAX_HUBS) return { error: `最多记 ${MAX_HUBS} 台 hub` };
+  if (list.some((h) => h.url === n.url)) return { error: t("lib-hubs.already_added") };
+  if (list.length >= MAX_HUBS) return { error: t("lib-hubs.too_many", { count: MAX_HUBS }) };
   return { list: saveHubs([...list, { url: n.url, ...(label.trim() ? { label: label.trim() } : {}) }]) };
 }
 

@@ -1,0 +1,9 @@
+{
+  "attachments_too_large_start": "Attachments are over the message size limit. Remove some images, then start.",
+  "launcher_no_attachments": "This launcher can't take attachments in the first message. Pick another launcher, or start with text and send the attachments in the session.",
+  "launcher_needs_text": "This launcher needs a first message. Type one, then start.",
+  "attachments_too_large_retry": "Attachments are over the message size limit. Remove some images and try again.",
+  "start_failed": "Couldn't start: {error}",
+  "first_message_failed": "First message wasn't delivered: {error}",
+  "attachments_failed": "Couldn't process attachments: {error}"
+}

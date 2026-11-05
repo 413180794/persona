@@ -6,6 +6,7 @@
 // The pure parts (filters, sections, labels, the 交给 AI message, Feishu message parts) are plain functions so the
 // tests can run them without a DOM.
 
+import { formatDate, t } from "../i18n";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { api, enc, errorText, getToken } from "./api";
 import type { AgentMutes } from "./agent-groups";
@@ -158,9 +159,9 @@ export interface MailAccount {
 
 export type Tier = "action" | "fyi" | "noise";
 export const TIERS: { key: Tier; title: string }[] = [
-  { key: "action", title: "需要你" },
-  { key: "fyi", title: "知悉即可" },
-  { key: "noise", title: "已折叠" },
+  { key: "action", title: t("lib-inbox.tier_action") },
+  { key: "fyi", title: t("lib-inbox.tier_fyi") },
+  { key: "noise", title: t("lib-inbox.tier_noise") },
 ];
 
 /** Items not triaged yet count as 需要你 until the AI says otherwise. */
@@ -190,8 +191,8 @@ export function canDraft(it: InboxItem): boolean {
 /** The button that opens a connector item's `open_url`, where the user answers it. */
 export function openTitle(it: InboxItem): string {
   const url = it.connector?.open_url;
-  if (url?.startsWith("sms:")) return "在信息里回复";
-  return connectorOpenTitle(it.source) ?? (url ? `在 ${it.account_name || it.source} 里打开` : "打开");
+  if (url?.startsWith("sms:")) return t("lib-inbox.reply_in_messages");
+  return connectorOpenTitle(it.source) ?? (url ? t("lib-inbox.open_in", { name: it.account_name || it.source }) : t("lib-inbox.open"));
 }
 
 /** A connector item's `open_url` as the browser opens it; an sms: one carries the AI 分身's draft as its body. */
@@ -202,20 +203,22 @@ export function openURL(it: InboxItem): string | undefined {
   return raw.startsWith("sms:") && draft ? `${raw}&body=${encodeURIComponent(draft)}` : raw;
 }
 
+const AT_ME = t("lib-inbox.kind_at_me");
+
 /** The short tag next to the title. */
 export function kindLabel(it: InboxItem): string | undefined {
   if (it.connector) return it.connector.label || undefined;
   switch (it.kind) {
     case "dm":
-      return "私聊";
+      return t("lib-inbox.kind_dm");
     case "mention":
-      return it.lark?.at_all ? "@所有人" : "@我";
+      return it.lark?.at_all ? t("lib-inbox.kind_at_all") : AT_ME;
     case "bot":
-      return "机器人";
+      return t("lib-inbox.kind_bot");
     case "doc":
-      return it.doc?.notice === "comment" || it.doc?.notice === "reply" ? "评论" : "@我";
+      return it.doc?.notice === "comment" || it.doc?.notice === "reply" ? t("lib-inbox.kind_comment") : AT_ME;
     case "moment":
-      return it.moment?.notice?.startsWith("atIn") ? "@我" : "公司圈";
+      return it.moment?.notice?.startsWith("atIn") ? AT_ME : t("lib-inbox.moments");
     default:
       return undefined;
   }
@@ -223,20 +226,20 @@ export function kindLabel(it: InboxItem): string | undefined {
 
 /** @我 is red (it is about you); every other tag is neutral. */
 export function labelIsUrgent(it: InboxItem): boolean {
-  return it.kind === "mention" || kindLabel(it) === "@我";
+  return it.kind === "mention" || kindLabel(it) === AT_ME;
 }
 
 export function docTypeName(type?: string): string {
   switch (type) {
     case "sheet":
-      return "表格";
+      return t("lib-inbox.doc_sheet");
     case "base":
-      return "多维表格";
+      return t("lib-inbox.doc_base");
     case "docx":
     case "doc":
-      return "文档";
+      return t("lib-inbox.doc_doc");
     default:
-      return "云文档";
+      return t("lib-inbox.doc_cloud");
   }
 }
 
@@ -244,25 +247,26 @@ export function docTypeName(type?: string): string {
  * translation of a foreign mail's when it is shown. */
 export function fromLine(it: InboxItem, preview?: string): string {
   if (it.doc) return `${docTypeName(it.doc.type)} · ${it.preview}`; // the preview names who: 李雷提及了你
-  if (it.moment) return `${it.sender ?? ""}：${it.preview}`;
+  if (it.moment) return t("lib-inbox.sender_line", { sender: it.sender ?? "", text: it.preview });
   if (it.connector) {
     // example-org/example-repo#12 · bob：请看一下
-    const who = [it.sender ?? "", it.preview].filter(Boolean).join("：");
+    const who = [it.sender ?? "", it.preview].filter(Boolean).join(t("lib-inbox.sender_separator"));
     return [connectorReference(it) ?? "", who].filter(Boolean).join(" · ");
   }
-  if (preview && it.sender) return `${it.sender}：${preview}`;
+  if (preview && it.sender) return t("lib-inbox.sender_line", { sender: it.sender, text: preview });
   // a Feishu direct chat's title already is the sender
   if (!it.sender || (isLark(it) && it.lark && !it.lark.is_group)) return it.preview;
-  return `${it.sender}：${it.preview}`;
+  return t("lib-inbox.sender_line", { sender: it.sender, text: it.preview });
 }
 
 /** Where it came from, for the detail page's subtitle. */
 export function sourceLine(it: InboxItem): string {
   if (it.doc) return [docTypeName(it.doc.type), it.preview].filter(Boolean).join(" · ");
-  if (it.moment) return it.moment.my_post ? "公司圈 · 你的帖子" : "公司圈";
+  if (it.moment) return it.moment.my_post ? t("lib-inbox.moments_my_post") : t("lib-inbox.moments");
   if (it.connector) return [it.account_name || it.source, connectorReference(it)].filter(Boolean).join(" · ");
   // 飞书 · <name> while the hub reads more than one Feishu account
-  if (isLark(it)) return [it.account_name?.startsWith("飞书 · ") ? it.account_name : "飞书", it.lark?.is_group ? "群聊" : it.kind === "bot" ? "机器人" : "私聊"].join(" · ");
+  // i18n-ignore: the hub names its Lark accounts 「飞书 · <name>」
+  if (isLark(it)) return [it.account_name?.startsWith("飞书 · ") ? it.account_name : t("lib-inbox.lark"), it.lark?.is_group ? t("lib-inbox.kind_group") : it.kind === "bot" ? t("lib-inbox.kind_bot") : t("lib-inbox.kind_dm")].join(" · ");
   const from = it.mail?.from;
   return [it.account_name, from?.name && from.email ? `${from.name} <${from.email}>` : from?.email || it.sender].filter(Boolean).join(" · ");
 }
@@ -280,7 +284,7 @@ export function docChangeLine(change: DocChange, doc?: InboxDoc): string {
   const row = doc?.rows?.find((r) => r.ref === change.ref);
   const st = row?.status?.find((s) => s.field === change.field);
   if (!row || !st) return change.value;
-  return `${st.name}：${st.value || "未设置"} → ${change.value} · ${row.title}`;
+  return t("lib-inbox.doc_change", { field: st.name, from: st.value || t("lib-inbox.not_set"), to: change.value, row: row.title });
 }
 
 /** The part of an address before the @ (chips stay short), unless that alone says nothing ("c@…"). */
@@ -309,9 +313,9 @@ export function shortTime(iso?: string, now = new Date()): string {
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((day(now) - day(d)) / 86400_000);
   if (days <= 0) return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  if (days === 1) return "昨天";
-  if (now.getTime() - d.getTime() < 6 * 86400_000) return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][d.getDay()];
-  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日`;
+  if (days === 1) return t("lib-inbox.yesterday");
+  if (now.getTime() - d.getTime() < 6 * 86400_000) return formatDate(d, { weekday: "short" });
+  if (d.getFullYear() === now.getFullYear()) return formatDate(d, { month: "short", day: "numeric" });
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -325,10 +329,10 @@ export interface InboxFilter {
 }
 
 export const KIND_FILTERS: { key: string; label: string }[] = [
-  { key: "mention", label: "@我" },
-  { key: "dm", label: "私聊" },
-  { key: "group", label: "群聊" },
-  { key: "mail", label: "邮件" },
+  { key: "mention", label: AT_ME },
+  { key: "dm", label: t("lib-inbox.kind_dm") },
+  { key: "group", label: t("lib-inbox.kind_group") },
+  { key: "mail", label: t("lib-inbox.kind_mail") },
   { key: "agent", label: "Agent" },
 ];
 
@@ -342,7 +346,7 @@ export function matches(it: InboxItem, f: InboxFilter): boolean {
   if (f.source && f.source !== "feishu" && it.account !== f.source && it.mail?.account_id !== f.source) return false;
   if (f.kind === "agent") return false; // only the waiting agents
   if (f.kind) {
-    const ok = it.kind === f.kind || (f.kind === "group" && it.kind === "bot") || (f.kind === "mention" && (it.kind === "doc" || (it.kind === "moment" && kindLabel(it) === "@我")));
+    const ok = it.kind === f.kind || (f.kind === "group" && it.kind === "bot") || (f.kind === "mention" && (it.kind === "doc" || (it.kind === "moment" && kindLabel(it) === AT_ME)));
     if (!ok) return false;
   }
   return hasText([it.title, it.sender, it.preview, it.summary], f.query);
@@ -402,11 +406,11 @@ export function interactionMuted(ix: Interaction, sessions: Record<string, Sessi
 
 /** What it waits for: 「Claude 在问你」, 「计划等你审批」…; Persona's ask_user and other agents by name. */
 export function interactionTitle(ix: Interaction): string {
-  if (ix.tool_name === "ask_user") return "Persona 在问你";
+  if (ix.tool_name === "ask_user") return t("lib-inbox.ix_persona_asks");
   const name = ix.agent === "codex" ? "Codex" : ix.agent === "traex" ? "TRAEX" : ix.agent && ix.agent !== "claude" ? ix.agent : "";
-  if (name && ix.kind === "question") return `${name} 在问你`;
-  if (name && ix.kind === "permission") return `${name} 需要你授权`;
-  return { question: "Claude 在问你", plan: "计划等你审批", permission: "需要你授权", screen: "终端等你处理" }[ix.kind];
+  if (name && ix.kind === "question") return t("lib-inbox.ix_named_asks", { name });
+  if (name && ix.kind === "permission") return t("lib-inbox.ix_named_permission", { name });
+  return { question: t("lib-inbox.ix_claude_asks"), plan: t("lib-inbox.ix_plan"), permission: t("lib-inbox.ix_permission"), screen: t("lib-inbox.ix_screen") }[ix.kind];
 }
 
 /** What it asks, in a line. */
@@ -445,7 +449,7 @@ export function conversationRoute(mid: string, sid: string, sessions: Record<str
 
 // ── 交给 AI ──────────────────────────────────────────────
 
-export const HANDOFF_PRESETS = ["总结一下，告诉我要做什么，给出建议的回复", "查清楚背景再告诉我", "直接帮我处理，回复前先问我"];
+export const HANDOFF_PRESETS = [t("lib-inbox.handoff_summarize"), t("lib-inbox.handoff_research"), t("lib-inbox.handoff_handle")];
 
 function escAttr(s: string) {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -458,16 +462,16 @@ export function contextXML(kind: string, title: string, url: string, text: strin
 
 /** The item as context the chat shows as a chip, then what to do with it (InboxHandOffSheet.message). */
 export function handOffMessage(it: InboxItem, ask: string): string {
-  const title = (it.connector ? `${it.account_name || it.source} · ` : isLark(it) ? "飞书 · " : "邮件 · ") + it.title;
-  let text = it.context?.trim() ? it.context : [it.sender ?? "", it.preview].filter(Boolean).join("：");
+  const title = `${it.connector ? it.account_name || it.source : isLark(it) ? t("lib-inbox.lark") : t("lib-inbox.kind_mail")} · ${it.title}`;
+  let text = it.context?.trim() ? it.context : [it.sender ?? "", it.preview].filter(Boolean).join(t("lib-inbox.sender_separator"));
   if (it.lark) {
     const ol = it.lark.ol_account;
-    const account = ol ? `，在飞书账号 ${ol}（lark_messages 传 account=${ol}，ol 命令前加 lark-connector_ACCOUNT=${ol}）` : "";
-    text += `\n\n（飞书会话 feedId ${it.lark.feed_id}${account}，可用飞书工具读更多上下文或回复）`;
+    const account = ol ? t("lib-inbox.handoff_lark_account", { account: ol }) : "";
+    text += `\n\n${t("lib-inbox.handoff_lark", { feed: it.lark.feed_id, account })}`;
   }
-  if (it.connector?.url) text += `\n\n（${it.account_name || it.source}：${it.connector.url}）`;
+  if (it.connector?.url) text += `\n\n${t("lib-inbox.handoff_connector", { name: it.account_name || it.source, url: it.connector.url })}`;
   const uid = it.mail?.uids[it.mail.uids.length - 1];
-  if (it.mail && uid !== undefined) text += `\n\n（邮件 account_id ${it.mail.account_id}，mailbox ${it.mail.mailbox}，uid ${uid}，可用 mail_read 读全文、mail_send 回复）`;
+  if (it.mail && uid !== undefined) text += `\n\n${t("lib-inbox.handoff_mail", { account: it.mail.account_id, mailbox: it.mail.mailbox, uid })}`;
   return `${contextXML("context", title, "", text)}\n\n${ask.trim() || HANDOFF_PRESETS[0]}`;
 }
 
@@ -661,11 +665,11 @@ export interface InboxTriageSource {
 
 /** What a state says when the hub gives no reason (the same words on iOS and Android). */
 export const TRIAGE_REASONS: Record<string, string> = {
-  unconfigured: "还没配分拣模型",
-  paused: "分拣模型暂停了",
-  error: "分拣模型出错了",
-  timeout: "分拣模型太慢了",
-  behind: "新消息太多，正在排队",
+  unconfigured: t("lib-inbox.triage_unconfigured"),
+  paused: t("lib-inbox.triage_paused"),
+  error: t("lib-inbox.triage_error"),
+  timeout: t("lib-inbox.triage_timeout"),
+  behind: t("lib-inbox.triage_behind"),
 };
 
 /** The model settings 去配置 opens: 信息筛选, the purpose that sorts the inbox. */
@@ -677,13 +681,15 @@ export const TRIAGE_SETTINGS = "/settings?tab=model-config&purpose=inbox.triage"
  * state's words (an unknown state without a reason says only how many wait). `configure`: 去配置, only for a model
  * not set up.
  */
-export function triageBanner(t: InboxTriage | null | undefined): { text: string; configure: boolean } | null {
-  if (!t || typeof t !== "object" || !t.state || t.state === "ok" || !(Number(t.waiting) > 0)) return null;
-  const sources = (Array.isArray(t.sources) ? t.sources : []).filter((x) => x && Number(x.waiting) > 0);
+export function triageBanner(tr: InboxTriage | null | undefined): { text: string; configure: boolean } | null {
+  if (!tr || typeof tr !== "object" || !tr.state || tr.state === "ok" || !(Number(tr.waiting) > 0)) return null;
+  const sources = (Array.isArray(tr.sources) ? tr.sources : []).filter((x) => x && Number(x.waiting) > 0);
   const name = sources.length === 1 ? (sources[0].name ?? "").trim() : "";
-  const reason = (t.reason ?? "").trim() || TRIAGE_REASONS[t.state] || "";
-  const text = `有 ${t.waiting} 条${name}消息在等分拣${reason ? `：${reason}` : ""}`;
-  return { text, configure: t.state === "unconfigured" };
+  const reason = (tr.reason ?? "").trim() || TRIAGE_REASONS[tr.state] || "";
+  const count = Number(tr.waiting);
+  const waiting = name ? t("lib-inbox.triage_waiting_named", { count, name }) : t("lib-inbox.triage_waiting", { count });
+  const text = reason ? t("lib-inbox.triage_waiting_reason", { waiting, reason }) : waiting;
+  return { text, configure: tr.state === "unconfigured" };
 }
 
 // ── the list, shared by the page and the sidebar badge ───
@@ -767,7 +773,7 @@ export async function refreshInbox(): Promise<void> {
     const r = await api<{ items?: InboxItem[]; triage?: InboxTriage }>("/inbox/refresh?sources=all", { method: "POST" });
     set({ items: r.items ?? [], triage: r.triage ?? null, loaded: true, error: "" });
   } catch (e) {
-    toast(`没刷新成功：${errorText(e)}`, "error");
+    toast(t("lib-inbox.refresh_failed", { error: errorText(e) }), "error");
   } finally {
     set({ loading: false });
   }
@@ -782,7 +788,7 @@ export async function setDone(item: InboxItem, done: boolean): Promise<void> {
     await api(`${itemPath(item.id)}/done`, { method: "POST", json: { done } });
   } catch (e) {
     patchItem(item.id, () => before);
-    toast(`${done ? "没标成已处理" : "没移回"}：${errorText(e)}`, "error");
+    toast(t(done ? "lib-inbox.done_failed" : "lib-inbox.undone_failed", { error: errorText(e) }), "error");
   }
 }
 
@@ -794,15 +800,15 @@ export type BulkResult = { changed: InboxItem[]; unchanged: string[]; skipped: {
 export function bulkMessage(done: boolean, r: BulkResult): string {
   const moved = r.changed.length;
   const fresh = r.skipped.filter((s) => s.reason === "changed").length;
-  const head = done ? (moved ? `已将 ${moved} 件标为已处理` : "没有要标的") : (moved ? `已移回 ${moved} 件` : "没有要移回的");
-  return fresh ? `${head}，${fresh} 件有新消息，留在收件箱` : head;
+  const head = done ? (moved ? t("lib-inbox.bulk_done", { count: moved }) : t("lib-inbox.bulk_done_none")) : moved ? t("lib-inbox.bulk_undone", { count: moved }) : t("lib-inbox.bulk_undone_none");
+  return fresh ? t("lib-inbox.bulk_fresh", { head, count: fresh }) : head;
 }
 
 /** What 全部标为已处理 covers, for its label: the filters' names and the search, or 全部. */
 export function bulkScope(filters: string[], query: string, count: number): string {
   const parts = filters.filter(Boolean);
-  if (query.trim()) parts.push(`搜索「${query.trim()}」`);
-  return count ? `${parts.length ? parts.join(" · ") : "全部"} · ${count} 件` : "没有未处理的";
+  if (query.trim()) parts.push(t("lib-inbox.scope_search", { query: query.trim() }));
+  return count ? t("lib-inbox.scope_count", { scope: parts.length ? parts.join(" · ") : t("lib-inbox.scope_all"), count }) : t("lib-inbox.scope_none");
 }
 
 /** 全部标为已处理 (the view's open items), 全部看过 / 全部清除 (a section), and their 撤销: one request for them all,
@@ -827,10 +833,10 @@ export async function setAllDone(items: InboxItem[], done: boolean, undoable = t
     set({ items: state.items.map((it) => fresh.get(it.id) ?? (left.has(it.id) ? before.get(it.id) ?? it : it)) });
     if ((r.skipped ?? []).some((s) => s.reason === "changed")) void reloadInbox();
     const moved = r.changed ?? [];
-    toast(bulkMessage(done, r), "ok", undoable && moved.length ? { label: "撤销", run: () => void setAllDone(moved, !done, false) } : undefined);
+    toast(bulkMessage(done, r), "ok", undoable && moved.length ? { label: t("lib-inbox.undo"), run: () => void setAllDone(moved, !done, false) } : undefined);
   } catch (e) {
     set({ items: state.items.map((it) => before.get(it.id) ?? it) });
-    toast(`${done ? "没标成已处理" : "没移回"}：${errorText(e)}`, "error");
+    toast(t(done ? "lib-inbox.done_failed" : "lib-inbox.undone_failed", { error: errorText(e) }), "error");
   }
 }
 
@@ -845,12 +851,12 @@ export async function sendReply(item: InboxItem, text: string, changes: DocChang
   try {
     const r = await api<InboxItem>(`${itemPath(item.id)}/reply`, { method: "POST", json: { text, changes: changes.length ? changes : undefined } });
     if (r?.id === item.id) replaceItem(r);
-    toast("已发送，标为已处理", "ok");
+    toast(t("lib-inbox.sent_done"), "ok");
     return true;
   } catch (e) {
     if (before) patchItem(item.id, () => before);
     if (text) unsentReplies.set(item.id, text);
-    toast(`回复没发出去：${errorText(e)}`, "error");
+    toast(t("lib-inbox.reply_failed", { error: errorText(e) }), "error");
     return false;
   } finally {
     set({ sending: state.sending.filter((x) => x !== item.id) });
@@ -878,10 +884,10 @@ export async function setDocStatus(item: InboxItem, row: DocRow, status: DocStat
   try {
     const fresh = await api<InboxItem>(`${itemPath(item.id)}/doc/status`, { method: "POST", json: { ref: row.ref, field: status.field, value } });
     if (fresh?.id === item.id) replaceItem(fresh);
-    toast(`「${status.name}」改成了${value}`, "ok");
+    toast(t("lib-inbox.status_changed", { name: status.name, value }), "ok");
   } catch (e) {
     if (before) patchItem(item.id, () => before);
-    toast(`没改成：${errorText(e)}`, "error");
+    toast(t("lib-inbox.status_failed", { error: errorText(e) }), "error");
   } finally {
     set({ moving: state.moving.filter((x) => x !== key) });
   }

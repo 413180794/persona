@@ -252,7 +252,7 @@ export function buildMachineTree(machines: Machine[], sessions: Session[], opts:
       foldKey: `tree:${m.id}`,
       spaces: nestChildren(m.id, built),
       other: mine.filter((s) => !s.space_id).sort(paneOrder),
-      otherFoldKey: `tree:${m.id}/其他`,
+      otherFoldKey: `tree:${m.id}/其他`, // i18n-ignore: a stored fold key, not text
       sessions: mine,
       state: summaryState(mine),
       needs: mine.filter((s) => stateOf(s) === "needs_you").length,

@@ -1,6 +1,7 @@
 // 新建 Agent's model picker (#794): the models a launcher's agent lists in its own /model menu
 // (GET /machines/{mid}/launchers/{name}/models, node/launcher_models.go), which launcher the picker asks, searching the
 // list, the thinking efforts a pick allows, and what a start sends. A pick is for one start only: nothing is saved.
+import { t } from "../i18n";
 import { api, ApiError, enc } from "./api";
 import type { ModelBinding } from "./model-config";
 import { EFFORTS } from "./session-actions";
@@ -122,7 +123,7 @@ function matches(fields: (string | undefined)[], query: string): boolean {
  *  matches, then the rest in the agent's order. */
 export function modelRows(models: AgentModel[], query: string, followed: ModelBinding = {}): { showDefault: boolean; rows: AgentModel[] } {
   const d = defaultModel(models);
-  const showDefault = !query.trim() || matches(["默认", "default", defaultDetail(models, followed), d && modelName(d), d?.name, d?.id, d?.resolved, d?.description], query);
+  const showDefault = !query.trim() || matches([t("lib-launcher-models.default"), "default", defaultDetail(models, followed), d && modelName(d), d?.name, d?.id, d?.resolved, d?.description], query);
   const rows = models.filter((m) => m !== d && matches([modelName(m), m.name, m.id, m.resolved, m.description], query));
   return { showDefault, rows };
 }

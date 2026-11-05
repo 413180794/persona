@@ -1,0 +1,8 @@
+{
+  "preview_mine": "我：{text}",
+  "preview_sender": "{sender}：{text}",
+  "not_logged_in": "hub 连接的 lark-connector 没有登录飞书。在 hub 所在的机器上登录后再试。",
+  "not_configured": "hub 还没接飞书：在 hub 所在的机器上运行 lark-connector，并在 hub.json 的 lark 里填上它。",
+  "load_failed": "读不到飞书会话：{error}",
+  "account_changed": "飞书账号已切换"
+}

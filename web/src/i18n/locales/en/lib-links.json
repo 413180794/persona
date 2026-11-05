@@ -1,0 +1,15 @@
+{
+  "doc": "Doc",
+  "sheet": "Sheet",
+  "bitable": "Base",
+  "mindnote": "Mindnote",
+  "file": "File",
+  "slides": "Slides",
+  "wiki": "Wiki",
+  "page": "Page",
+  "whiteboard": "Whiteboard",
+  "see_images": "See the images",
+  "see_context": "Refer to the content above.",
+  "edit_with_ask": "Edit the selected content above as asked: {ask}",
+  "edit_plain": "Edit based on the selected content above."
+}

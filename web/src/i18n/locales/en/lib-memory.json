@@ -1,0 +1,6 @@
+{
+  "type_user": "User",
+  "type_feedback": "Feedback",
+  "type_project": "Project",
+  "type_reference": "Reference"
+}

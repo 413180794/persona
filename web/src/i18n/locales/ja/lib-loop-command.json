@@ -1,0 +1,10 @@
+{
+  "unit_seconds_other": "{count}秒",
+  "unit_minutes_other": "{count}分",
+  "unit_hours_other": "{count}時間",
+  "unit_days_other": "{count}日",
+  "every_no_task": "{every}ごと：まだタスクがありません",
+  "usage": "形式：/loop [間隔] タスク（例：/loop 10m CIを確認）。間隔を省くとClaudeがペースを決めます",
+  "every_task": "{every}ごとに繰り返し：{task}",
+  "self_paced_task": "Claudeのペースで繰り返し：{task}"
+}

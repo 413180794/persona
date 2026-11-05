@@ -1,0 +1,10 @@
+{
+  "url_empty": "Enter the hub's address",
+  "url_invalid": "Not a valid address",
+  "url_scheme": "Use an http:// or https:// address",
+  "url_credentials": "Leave the username and password out of the address",
+  "url_path": "Enter only the hub's address, without a path",
+  "already_added": "This hub is already in the list",
+  "too_many_one": "You can save up to {count} hub",
+  "too_many_other": "You can save up to {count} hubs"
+}

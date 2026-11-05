@@ -1,0 +1,11 @@
+{
+  "task_done": "任务「{title}」做完了",
+  "task_needs": "任务「{title}」在等你",
+  "task_interrupted": "任务「{title}」被打断了",
+  "task_failed": "任务「{title}」没开起来",
+  "wake": "Persona 叫醒了它：看看「{title}」好了没有",
+  "followup_due": "跟进「{title}」到时间了",
+  "scheduled_started": "定时任务「{title}」开始运行",
+  "lost_tasks_count_other": "node 重启过，{count} 个后台任务停了",
+  "lost_tasks": "node 重启过，后台任务停了"
+}

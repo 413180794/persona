@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { isEcho, type Seen } from "./echo";
 import { api, ApiError, errorText, sessionPath } from "./api";
 import { parseUserText } from "./turns";
@@ -68,7 +69,7 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
   update({ phase: launch.session ? "uploading" : "creating", error: undefined, uncertain: false, clearable: undefined, draft: undefined });
   try {
     const imageBytes = launch.attachments.filter((a) => a.mime.startsWith("image/")).reduce((total, a) => total + Math.ceil(a.file.size / 3) * 4, 0);
-    if (imageBytes + new TextEncoder().encode(launch.text).byteLength > 31 * 1024 * 1024) throw new Error("附件总大小超过消息上限，请减少图片后再启动。");
+    if (imageBytes + new TextEncoder().encode(launch.text).byteLength > 31 * 1024 * 1024) throw new Error(t("lib-new-agent.attachments_too_large_start"));
     if (!launch.session) {
       let session: Session;
       try {
@@ -76,8 +77,8 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
         session = r.session;
       } catch (e) {
         if (!(e instanceof ApiError) || e.code !== "codex_needs_prompt") throw e;
-        if (launch.attachments.length) throw new Error("这个启动器暂不支持首条消息带附件，请选择其他启动器；也可以先用文字启动，再在会话里发送附件。");
-        if (!launch.text) throw new Error("这个启动器需要第一条消息，请填写后再启动。");
+        if (launch.attachments.length) throw new Error(t("lib-new-agent.launcher_no_attachments"));
+        if (!launch.text) throw new Error(t("lib-new-agent.launcher_needs_text"));
         // A Codex start takes the picked model but no effort.
         const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, model: launch.model || undefined, prompt: launch.text, todo_id: launch.todoId || undefined } });
         session = r.session;
@@ -111,7 +112,7 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
     if (out.text || out.images.length) {
       update({ phase: "sending" });
       const payload = { ...out, client_msg_id: launchMessageId(launch), clear_draft: clearDraft, todo_id: launch.todoId || undefined };
-      if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > 32 * 1024 * 1024) throw new Error("附件总大小超过消息上限，请减少图片后重试。");
+      if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > 32 * 1024 * 1024) throw new Error(t("lib-new-agent.attachments_too_large_retry"));
       await api(`${sessionPath(launch.machineId, launch.session!.session_id)}/messages`, {
         method: "POST", signal: controller.signal, json: payload,
       });
@@ -127,7 +128,7 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
     const creating = phase === "creating";
     const uncertain = (creating || sending) && (e instanceof TypeError || (e instanceof DOMException && e.name === "AbortError") || (e instanceof ApiError && (e.body.delivered === "unknown" || (e.status >= 500 && e.body.delivered !== "none"))));
     update({ phase: "failed", uncertain, retryNeedsNewId: e instanceof ApiError && e.body.delivered === "unknown",
-      error: `${creating ? "没启动起来" : sending ? "第一条消息没送达" : "附件处理失败"}：${errorText(e)}`,
+      error: t(creating ? "lib-new-agent.start_failed" : sending ? "lib-new-agent.first_message_failed" : "lib-new-agent.attachments_failed", { error: errorText(e) }),
       clearable: e instanceof ApiError && e.code === "input_draft" && typeof e.body.clearable === "string" ? e.body.clearable : undefined,
       draft: e instanceof ApiError && e.code === "input_draft" ? String(e.body.draft ?? "") : undefined,
     });

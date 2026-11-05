@@ -2,6 +2,7 @@
 // mode its menu items are listed as commands, under 「Workspace · <the pane's title>」 and 「Workspace · <its workspace>」
 // like Moshi's. They are the same items the node's context menu has (lib/node-actions.ts): a rename asks for the name in
 // a small dialog, a close asks once more, a failure is a toast. Registered when this module is first imported.
+import { t } from "../i18n";
 import { errorText } from "./api";
 import { defaultNodeDeps, nodeActions, sessionNode, termPaneNode, termSpaceNode, termTabNode, type MenuNode } from "./node-actions";
 import { registerContextCommands, type PaletteCommand, type PaletteContext } from "./palette";
@@ -113,12 +114,12 @@ function failed(e: unknown) {
 async function perform(item: MenuItem) {
   try {
     if (item.rename) {
-      const name = await askText(item.label.replace(/…$/, ""), item.rename.placeholder ?? "名称", item.rename.value);
+      const name = await askText(item.label.replace(/…$/, ""), item.rename.placeholder ?? t("lib-node-palette.name_placeholder"), item.rename.value);
       const next = name?.trim();
       if (next && next !== item.rename.value.trim()) await item.rename.commit(next);
       return;
     }
-    if (item.confirm && !(await askConfirm(item.label, "窗格里运行的程序会一起结束。", item.confirm))) return;
+    if (item.confirm && !(await askConfirm(item.label, t("lib-node-palette.close_confirm"), item.confirm))) return;
     await item.onSelect();
   } catch (e) {
     failed(e);

@@ -2,6 +2,8 @@
 // frontmatter (name, description, type), plus the index MEMORY.md whose lines "- [标题](file.md) — 说明" give friendlier
 // titles than the slugs. The iOS app's AssistantMemoryEntry / AssistantMemoryView, as pure functions.
 
+import { t } from "../i18n";
+
 export const MEMORY_INDEX = "MEMORY.md";
 
 export interface MemoryFile {
@@ -44,7 +46,7 @@ export function indexTitles(index: string): Record<string, { title: string; hook
   for (const line of index.split("\n")) {
     const m = /\[([^\]]+)\]\(([^)\s]+)\)(.*)$/.exec(line);
     if (!m) continue;
-    const hook = m[3].replace(/^[\s—–\-:：]+/, "").trim();
+    const hook = m[3].replace(/^[\s—–\-:：]+/, "").trim(); // i18n-ignore: separators written in the index
     out[m[2]] = { title: m[1].trim(), hook: hook || undefined };
   }
   return out;
@@ -79,13 +81,13 @@ export type MemoryTone = "accent" | "orange" | "green" | "neutral";
 export function memoryTypeLabel(type?: string): string | undefined {
   switch (type) {
     case "user":
-      return "用户";
+      return t("lib-memory.type_user");
     case "feedback":
-      return "反馈";
+      return t("lib-memory.type_feedback");
     case "project":
-      return "项目";
+      return t("lib-memory.type_project");
     case "reference":
-      return "参考";
+      return t("lib-memory.type_reference");
     default:
       return type || undefined;
   }

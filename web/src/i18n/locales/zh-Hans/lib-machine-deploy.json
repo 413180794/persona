@@ -1,0 +1,19 @@
+{
+  "waiting_idle": "等待空闲",
+  "waiting_idle_message": "正在等待这台电脑上的 Agent 空闲后更新 node…",
+  "transferring": "传输中",
+  "transferring_message": "正在把 hub 这一版的 node 传到这台电脑…",
+  "restarting": "重启中",
+  "restarting_message": "正在重启这台电脑上的 node…",
+  "confirming": "确认中",
+  "confirming_message": "正在等待 node 重新连接，并确认与 hub 的版本一致…",
+  "reason_local": "这是 hub 所在的机器，请在本机升级 hub 和 node。",
+  "reason_linked": "请先在这台电脑上本地升级 node，并将 hub 升级到支持链路更新的版本。",
+  "reason_unsupported": "这台电脑暂不支持远程更新，请先在本机升级 node。",
+  "reason_offline": "这台电脑离线，重新连接后才能更新 node。",
+  "deploying": "部署中",
+  "redeploy": "重新部署",
+  "deploying_message": "正在更新 node，完成后还需确认与 hub 的版本一致…",
+  "mismatch": "这台电脑上的 node 和 hub 不是同一版。",
+  "last_failed": "上次部署没成：{error}"
+}

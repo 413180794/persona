@@ -1,0 +1,10 @@
+{
+  "unit_seconds_other": "{count} 秒",
+  "unit_minutes_other": "{count} 分钟",
+  "unit_hours_other": "{count} 小时",
+  "unit_days_other": "{count} 天",
+  "every_no_task": "每 {every}：还没写要做的事",
+  "usage": "格式：/loop [间隔] 要做的事，如 /loop 10m 看下 CI；不写间隔由 Claude 自己定节奏",
+  "every_task": "每 {every}重复：{task}",
+  "self_paced_task": "由 Claude 自己定节奏重复：{task}"
+}

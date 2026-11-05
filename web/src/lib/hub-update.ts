@@ -1,6 +1,7 @@
 // 设置 › hub (docs/hub-update.md「App 里」, the app's HubUpdateModel / HubUpdateStatus): the hub's version and channel,
 // checking for and installing a release, what an update waits for, auto-update, the history; and the assistant's
 // skills (GET /api/v1/skills). Pure helpers here; the page is views/settings/HubSettings.tsx.
+import { t } from "../i18n";
 import { api } from "./api";
 
 export interface BusyItem {
@@ -76,36 +77,36 @@ export function updateFinished(prev: string | undefined, next: string): boolean 
 }
 
 export function channelTitle(channel: string): string {
-  return channel === "release" ? "发布版" : channel === "docker" ? "Docker" : "开发版";
+  return channel === "release" ? t("lib-hub-update.channel_release") : channel === "docker" ? "Docker" : t("lib-hub-update.channel_dev");
 }
 
 export function updateStateTitle(s: HubUpdateStatus): string {
   switch (s.state) {
     case "checking":
-      return "正在检查";
+      return t("lib-hub-update.state_checking");
     case "downloading":
-      return "正在下载";
+      return t("lib-hub-update.state_downloading");
     case "waiting_idle":
-      return s.busy.length ? `等 ${s.busy.length} 个在忙的结束` : "等助手和 Agent 空闲";
+      return s.busy.length ? t("lib-hub-update.state_waiting_busy", { count: s.busy.length }) : t("lib-hub-update.state_waiting_idle");
     case "restarting":
-      return "正在重启，会断开一会儿";
+      return t("lib-hub-update.state_restarting");
     case "confirming":
-      return "新版本正在确认";
+      return t("lib-hub-update.state_confirming");
     case "updated":
-      return "已更新";
+      return t("lib-hub-update.result_updated");
     case "rolled_back":
-      return "已回滚";
+      return t("lib-hub-update.result_rolled_back");
     case "failed":
-      return "没更新成功";
+      return t("lib-hub-update.result_failed");
     case "available":
-      return "有新版本";
+      return t("lib-hub-update.state_available");
     default:
-      return "已是最新";
+      return t("lib-hub-update.state_current");
   }
 }
 
 export function recordTitle(result: string): string {
-  return result === "updated" ? "已更新" : result === "rolled_back" ? "已回滚" : result === "held" ? "没有自动装" : "没更新成功";
+  return t(result === "updated" ? "lib-hub-update.result_updated" : result === "rolled_back" ? "lib-hub-update.result_rolled_back" : result === "held" ? "lib-hub-update.result_held" : "lib-hub-update.result_failed");
 }
 
 export function recordTone(result: string): "green" | "orange" | "red" {
@@ -123,7 +124,7 @@ export type UpdateView =
 
 export function updateView(s: HubUpdateStatus): UpdateView {
   if (s.channel === "docker") return { kind: "docker" };
-  if (!s.can_update) return { kind: "cannot", why: s.why_not ? `这个 hub 不会自己更新：${s.why_not}。` : "这个 hub 不会自己更新。" };
+  if (!s.can_update) return { kind: "cannot", why: s.why_not ? t("lib-hub-update.cannot_update_why", { why: s.why_not }) : t("lib-hub-update.cannot_update") };
   const working = updateWorking(s);
   if (s.latest?.newer) return { kind: "newer", working };
   return working ? { kind: "working" } : { kind: "current" };
@@ -133,8 +134,8 @@ export function updateView(s: HubUpdateStatus): UpdateView {
 export function latestWarning(s: HubUpdateStatus): string | null {
   const l = s.latest;
   if (!l?.newer) return null;
-  if (l.bad) return "这一版上次装完起不来，已经回滚过；自动更新不会再装它。";
-  if (l.held && s.auto) return `自动更新不会装这一版：${l.held}。确认没问题可以手动更新。`;
+  if (l.bad) return t("lib-hub-update.warning_bad");
+  if (l.held && s.auto) return t("lib-hub-update.warning_held", { why: l.held });
   return null;
 }
 
@@ -144,14 +145,14 @@ export function dockerSteps(s: HubUpdateStatus): { headline?: string; steps: { t
   if (l?.newer) {
     if (s.image?.pinned) {
       return {
-        headline: `新镜像 ${l.version}`,
+        headline: t("lib-hub-update.new_image", { version: l.version }),
         steps: [
-          { text: "在 hub 所在的机器上，把 compose 文件旁边 .env 里的 JARVIS_IMAGE 改成：", copy: `${s.image.name}:${l.version}` },
-          { text: "再在那个目录里运行：", copy: DOCKER_COMMAND },
+          { text: t("lib-hub-update.docker_set_image"), copy: `${s.image.name}:${l.version}` },
+          { text: t("lib-hub-update.docker_then_run"), copy: DOCKER_COMMAND },
         ],
       };
     }
-    return { headline: `新镜像 ${l.version}`, steps: [{ text: "在 hub 所在的机器上，compose 文件所在的目录里运行：", copy: DOCKER_COMMAND }] };
+    return { headline: t("lib-hub-update.new_image", { version: l.version }), steps: [{ text: t("lib-hub-update.docker_run"), copy: DOCKER_COMMAND }] };
   }
-  return { steps: [{ text: "Docker 部署的 hub 由新镜像更新：有新镜像时在 compose 文件所在的目录里运行", copy: DOCKER_COMMAND }] };
+  return { steps: [{ text: t("lib-hub-update.docker_how"), copy: DOCKER_COMMAND }] };
 }

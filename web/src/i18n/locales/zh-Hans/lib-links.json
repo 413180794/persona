@@ -1,0 +1,15 @@
+{
+  "doc": "文档",
+  "sheet": "表格",
+  "bitable": "多维表格",
+  "mindnote": "思维笔记",
+  "file": "文件",
+  "slides": "幻灯片",
+  "wiki": "知识库",
+  "page": "页面",
+  "whiteboard": "画板",
+  "see_images": "请看图片",
+  "see_context": "参考上面的内容。",
+  "edit_with_ask": "按要求修改上面选中的内容：{ask}",
+  "edit_plain": "按上面选中的内容修改。"
+}

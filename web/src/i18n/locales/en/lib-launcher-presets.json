@@ -1,0 +1,6 @@
+{
+  "kind_api": "Direct API",
+  "kind_launcher": "Claude Code launcher",
+  "name_invalid": "Use only letters, digits, _ and -, starting with a letter or _",
+  "name_reserved": "Can't be named {name}"
+}

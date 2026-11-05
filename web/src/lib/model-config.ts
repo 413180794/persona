@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { api, enc } from "./api";
 
 export interface ModelBinding {
@@ -83,7 +84,7 @@ export function providersFor(p: ModelPurpose, providers: ModelProvider[]): Model
 
 export function modelSummary(p: ModelPurpose, providers: ModelProvider[] = []): string {
   const name = providers.find((v) => v.id === p.effective?.provider)?.name ?? p.effective?.provider;
-  return [name, p.effective?.model, p.effective?.effort && `思考 ${p.effective.effort}`].filter(Boolean).join(" · ") || "未配置";
+  return [name, p.effective?.model, p.effective?.effort && t("lib-model-config.effort", { effort: p.effective.effort })].filter(Boolean).join(" · ") || t("lib-model-config.not_configured");
 }
 
 export function purposeGroups(purposes: ModelPurpose[], query: string): [string, ModelPurpose[]][] {
@@ -91,7 +92,7 @@ export function purposeGroups(purposes: ModelPurpose[], query: string): [string,
   const groups = new Map<string, ModelPurpose[]>();
   for (const p of purposes) {
     if (q && ![p.name, p.group, p.id, modelSummary(p)].some((s) => s.toLocaleLowerCase().includes(q))) continue;
-    const group = p.group || "其他";
+    const group = p.group || t("lib-model-config.group_misc");
     groups.set(group, [...(groups.get(group) ?? []), p]);
   }
   return [...groups.entries()];

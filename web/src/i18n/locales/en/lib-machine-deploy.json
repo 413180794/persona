@@ -1,0 +1,19 @@
+{
+  "waiting_idle": "Waiting for idle",
+  "waiting_idle_message": "Waiting for the agents on this computer to go idle before updating the node…",
+  "transferring": "Transferring",
+  "transferring_message": "Sending the hub's node version to this computer…",
+  "restarting": "Restarting",
+  "restarting_message": "Restarting the node on this computer…",
+  "confirming": "Confirming",
+  "confirming_message": "Waiting for the node to reconnect and match the hub's version…",
+  "reason_local": "This is the hub machine. Update the hub and node on it directly.",
+  "reason_linked": "Update the node locally on this computer first, and update the hub to a version that can update over the link.",
+  "reason_unsupported": "This computer can't be updated remotely yet. Update the node on it first.",
+  "reason_offline": "This computer is offline. The node can be updated once it reconnects.",
+  "deploying": "Deploying",
+  "redeploy": "Redeploy",
+  "deploying_message": "Updating the node; then it must match the hub's version…",
+  "mismatch": "The node on this computer isn't the same version as the hub.",
+  "last_failed": "Last deploy failed: {error}"
+}

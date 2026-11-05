@@ -1,6 +1,7 @@
 // Several Feishu accounts on the hub's lark-connector (docs/feishu.md「多账号」, iOS LarkAccounts.swift). A request about
 // another account than the hub's own (lark.account) names it with `ol_account`; the media URLs the hub hands out for
 // such an account already carry it. The 消息 page shows one account's chats at a time: the choice is kept per browser.
+import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { api, ApiError } from "./api";
 
@@ -30,7 +31,7 @@ export function larkPath(path: string, ol?: number): string {
   return `${path}${path.includes("?") ? "&" : "?"}ol_account=${ol}`;
 }
 
-export const accountTitle = (a: Pick<LarkAccount, "id" | "name">) => a.name?.trim() || `账号 ${a.id}`;
+export const accountTitle = (a: Pick<LarkAccount, "id" | "name">) => a.name?.trim() || t("lib-lark-accounts.account_fallback", { id: a.id });
 
 /** What an item's or a chat's `ol_account` is: a positive account number, else the hub's own (undefined). */
 export function olAccount(v: unknown): number | undefined {

@@ -1,6 +1,7 @@
 // Mail beyond the inbox's own reply (docs/mail.md): writing a new mail or answering one by hand (the app's ComposeView),
 // and marking a mail read once it is opened (MailDetailView). The accounts are read once per page load and shared.
 
+import { t } from "../i18n";
 import { useEffect, useState } from "react";
 import { api, enc } from "./api";
 import type { MailAccount } from "./inbox";
@@ -48,7 +49,7 @@ export function newDraft(accountID: string): ComposeDraft {
 /** Addresses typed into one field: separated by commas (either width), semicolons or new lines; `Name <a@b>` keeps the name. */
 export function parseAddresses(s: string): MailAddress[] {
   return s
-    .split(/[,，;；\n]/)
+    .split(/[,，;；\n]/) // i18n-ignore: full-width separators people type
     .map((x) => x.trim())
     .filter(Boolean)
     .map((x) => {
@@ -84,13 +85,13 @@ function quoteDate(iso?: string): string {
 export function replyDraft(accountID: string, msg: MailMessage): ComposeDraft {
   const subject = msg.subject ?? "";
   const quoted = (msg.text ?? "").split("\n").slice(0, 40).map((l) => `> ${l}`).join("\n");
-  const head = [quoteDate(msg.date), addressText(msg.from)].filter(Boolean).join("，");
+  const head = [quoteDate(msg.date), addressText(msg.from)].filter(Boolean).join(t("lib-mail.quote_head_separator"));
   return {
     accountID,
     to: msg.from?.email ?? "",
     cc: "",
     subject: /^re:/i.test(subject) ? subject : `Re: ${subject}`,
-    body: `\n\n${head} 写道：\n${quoted}`,
+    body: `\n\n${t("lib-mail.quote_head", { head })}\n${quoted}`,
     inReplyTo: msg.message_id || undefined,
     references: [...(msg.references ?? []), ...(msg.message_id ? [msg.message_id] : [])],
   };

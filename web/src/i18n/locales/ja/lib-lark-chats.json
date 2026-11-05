@@ -1,0 +1,8 @@
+{
+  "preview_mine": "自分：{text}",
+  "preview_sender": "{sender}：{text}",
+  "not_logged_in": "ハブに接続されたlark-connectorがLarkにログインしていません。ハブのマシンでログインしてから、もう一度お試しください。",
+  "not_configured": "ハブはまだLarkに接続されていません。ハブのマシンでlark-connectorを起動し、hub.jsonのlarkに設定してください。",
+  "load_failed": "Larkのチャットを読み込めません：{error}",
+  "account_changed": "Larkアカウントが切り替わりました"
+}

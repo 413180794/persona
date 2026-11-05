@@ -1,0 +1,5 @@
+{
+  "quote_session": "別のセッション：{title}（{agent}）",
+  "quote_cwd": "フォルダ：{cwd}",
+  "quote_last": "最近の発言：{text}"
+}

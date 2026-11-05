@@ -1,0 +1,9 @@
+{
+  "url_empty": "填 hub 的地址",
+  "url_invalid": "不是一个地址",
+  "url_scheme": "只能是 http:// 或 https:// 的地址",
+  "url_credentials": "地址里不要带用户名和密码",
+  "url_path": "只填 hub 的地址，不要带路径",
+  "already_added": "这台 hub 已经在列表里",
+  "too_many_other": "最多记 {count} 台 hub"
+}

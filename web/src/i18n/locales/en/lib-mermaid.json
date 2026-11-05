@@ -1,0 +1,5 @@
+{
+  "syntax_error_line": "This diagram has a syntax error (line {line})",
+  "syntax_error": "This diagram has a syntax error",
+  "render_failed": "Couldn't draw this diagram"
+}

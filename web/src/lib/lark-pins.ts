@@ -2,6 +2,7 @@
 // messages, jumping to one in the chat, adding and removing. lark-connector marks Pins read when the list is read, so it is
 // read only when the list is opened or a Pin was changed, never ahead of time. The list lives in memory while it is
 // open (the hub answers no-store). An unknown write result is never retried: the list is read again to see.
+import { t } from "../i18n";
 import { api, ApiError, enc, errorText } from "./api";
 import type { LarkMessage, LarkPage } from "./inbox";
 import { larkPath } from "./lark-accounts";
@@ -28,7 +29,7 @@ export interface ChatPinTarget {
   page: LarkPage;
 }
 
-export const HUB_UPGRADE = "升级 Hub 后可使用 Pin 消息。请在设置中打开 Hub，检查更新。";
+export const HUB_UPGRADE = t("lib-lark-pins.hub_upgrade");
 
 /** A hub from before Pins has no such route: a bare 404 / 405 (not one about a missing message) means update the hub. */
 export function pinRouteError(e: unknown): unknown {
@@ -46,9 +47,9 @@ async function pinRequest<T>(path: string, init?: Parameters<typeof api>[1]): Pr
   }
 }
 
-export const accountChanged = () => new ApiError(409, "飞书账号已切换，请重新打开会话", { code: "lark_account_changed" });
-export const resultUnknown = () => new ApiError(502, "尚未确认操作结果，请重新加载 Pin 列表查看；不会自动重试", { code: "lark_pin_result_unknown" });
-const incomplete = () => new ApiError(502, "Pin 列表暂时不完整，请重新加载", { code: "lark_pin_page_incomplete" });
+export const accountChanged = () => new ApiError(409, t("lib-lark-pins.account_changed"), { code: "lark_account_changed" });
+export const resultUnknown = () => new ApiError(502, t("lib-lark-pins.result_unknown"), { code: "lark_pin_result_unknown" });
+const incomplete = () => new ApiError(502, t("lib-lark-pins.page_incomplete"), { code: "lark_pin_page_incomplete" });
 
 /** `ol`: the Feishu account the chat is in (`ol_account`, lark-accounts.ts); undefined: the hub's own. */
 export function fetchChatPins(feed: string, account: string | undefined, cursor: string | undefined, ol?: number): Promise<ChatPinsPage> {
@@ -89,10 +90,10 @@ export const canOpenPin = (p: ChatPin) => Boolean(p.message) && !p.message?.dele
 /** One line of what was pinned (the hub sends only what may be shown: the public face of an encrypted message). */
 export function pinSummary(p: ChatPin): string {
   const m = p.message;
-  if (!m || m.deleted) return "原消息已不可用";
-  if (m.recalled) return "消息已撤回";
+  if (!m || m.deleted) return t("lib-lark-pins.message_unavailable");
+  if (m.recalled) return t("lib-lark-pins.message_recalled");
   const text = (m.text || (m.parts ?? []).map((x) => x.text ?? "").join("")).trim();
-  const fallback = m.type === "IMAGE" ? "[图片]" : m.type === "FILE" ? "[文件]" : "消息";
+  const fallback = m.type === "IMAGE" ? t("lib-lark-pins.fallback_image") : m.type === "FILE" ? t("lib-lark-pins.fallback_file") : t("lib-lark-pins.fallback_message");
   return text || fallback;
 }
 
@@ -103,8 +104,8 @@ export function isPinNotice(e: unknown): boolean {
 /** What the list says when something failed: the hub's own text for Pin problems and upgrades. */
 export function pinProblemText(e: unknown): string {
   if (isPinNotice(e)) return (e as ApiError).message;
-  if (e instanceof ApiError && e.code === "lark_not_logged_in") return "hub 连接的 lark-connector 没有登录飞书";
-  return `读不到 Pin 消息：${errorText(e)}`;
+  if (e instanceof ApiError && e.code === "lark_not_logged_in") return t("lib-lark-pins.not_logged_in");
+  return t("lib-lark-pins.load_failed", { error: errorText(e) });
 }
 
 /** After this failure the outcome of a write is not known: read the list before writing again. */

@@ -1,0 +1,8 @@
+{
+  "preview_mine": "Me: {text}",
+  "preview_sender": "{sender}: {text}",
+  "not_logged_in": "The hub's lark-connector isn't signed in to Lark. Sign in on the hub machine, then try again.",
+  "not_configured": "The hub isn't connected to Lark yet: run lark-connector on the hub machine and add it under lark in hub.json.",
+  "load_failed": "Couldn't load Lark chats: {error}",
+  "account_changed": "The Lark account changed"
+}

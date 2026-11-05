@@ -1,0 +1,5 @@
+{
+  "quote_session": "Another session: {title} ({agent})",
+  "quote_cwd": "Folder: {cwd}",
+  "quote_last": "Last said: {text}"
+}

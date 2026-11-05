@@ -1,6 +1,7 @@
 // 设置 › 模型 › 新增供应商 › 从扩展添加 (docs/extensions.md「模型供应商」, iOS LauncherPresetModel): the model providers the
 // hub's extensions offer (GET /api/v1/launchers/presets). A launcher added from one sends only its name, its key, the preset
 // and maybe another of the provider's models; the hub fills in the address, the kind and the rest.
+import { t } from "../i18n";
 import { api, ApiError } from "./api";
 
 export interface PresetModel {
@@ -47,7 +48,7 @@ export const presetModelLabel = (m: PresetModel) => m.name || m.id;
 
 /** "直接 API · api.example.com", "Claude Code 启动器 · gateway.example.com". */
 export function presetSubtitle(p: LauncherPreset): string {
-  const kind = p.kind === "api" ? "直接 API" : "Claude Code 启动器";
+  const kind = p.kind === "api" ? t("lib-launcher-presets.kind_api") : t("lib-launcher-presets.kind_launcher");
   try {
     const host = new URL(p.base_url).host;
     return host ? `${kind} · ${host}` : kind;
@@ -60,8 +61,8 @@ export function presetSubtitle(p: LauncherPreset): string {
 export function launcherNameProblem(name: string): string {
   const n = name.trim();
   if (!n) return "";
-  if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(n)) return "名字只能用字母、数字、_ 和 -，以字母或 _ 开头";
-  if (n === "claude" || n === "presets") return `不能叫 ${n}`;
+  if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(n)) return t("lib-launcher-presets.name_invalid");
+  if (n === "claude" || n === "presets") return t("lib-launcher-presets.name_reserved", { name: n });
   return "";
 }
 

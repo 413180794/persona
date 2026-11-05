@@ -1,13 +1,15 @@
 // /loop typed in an agent's composer (#1586): Claude Code's own command, `/loop [interval] <what to do>`, which re-runs
 // the prompt on a schedule. The composer only helps write it; the node types it into Claude as it is.
 
+import { t } from "../i18n";
+
 /** The command word, as the "/" menu puts it in the box (the interval and the task follow). */
 export const LOOP_TEXT = "/loop ";
 
 /** Claude Code's interval forms: a number and s / m / h / d (seconds round up to a minute). */
 const INTERVAL = /^(\d+)([smhd])$/i;
 
-const UNIT: Record<string, string> = { s: "秒", m: "分钟", h: "小时", d: "天" };
+const UNIT: Record<string, string> = { s: "lib-loop-command.unit_seconds", m: "lib-loop-command.unit_minutes", h: "lib-loop-command.unit_hours", d: "lib-loop-command.unit_days" };
 
 /** The draft is a /loop command: the word alone or followed by a space (not "/looping"). */
 export function isLoopDraft(draft: string): boolean {
@@ -31,17 +33,17 @@ export function loopHint(draft: string): LoopHint | null {
     return {
       missing: true,
       text: m
-        ? `每 ${every(m)}：还没写要做的事`
-        : "格式：/loop [间隔] 要做的事，如 /loop 10m 看下 CI；不写间隔由 Claude 自己定节奏",
+        ? t("lib-loop-command.every_no_task", { every: every(m) })
+        : t("lib-loop-command.usage"),
     };
   }
-  return { missing: false, text: m ? `每 ${every(m)}重复：${task}` : `由 Claude 自己定节奏重复：${task}` };
+  return { missing: false, text: m ? t("lib-loop-command.every_task", { every: every(m), task }) : t("lib-loop-command.self_paced_task", { task }) };
 }
 
 function every(m: RegExpExecArray): string {
   const n = Number(m[1]);
   const unit = m[2].toLowerCase();
-  return `${n} ${UNIT[unit]}`;
+  return t(UNIT[unit], { count: n });
 }
 
 /** Claude Code has /loop; Codex, TRAEX and other runtimes do not. */

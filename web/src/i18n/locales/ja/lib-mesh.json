@@ -1,0 +1,6 @@
+{
+  "via_local": "このマシン",
+  "via_link": "コンピューターリンク",
+  "via_peer": "ハブ連携経由",
+  "hops_other": "{count}ホップ"
+}

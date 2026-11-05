@@ -2,12 +2,13 @@
 // list grouping and ranking, search results merged by entry with the words marked, which tags a row has room for,
 // the timeline, the profile without what the header shows, and the message 问 Persona sends. The iOS app is the
 // reference (apple/Persona/Views/Knowledge/KnowledgeView.swift, apple/Shared/Knowledge.swift).
+import { formatDate, t } from "../i18n";
 import type { Session } from "./types";
 
 export const KB_KINDS = ["projects", "chats", "people", "docs", "meetings", "events"] as const;
 export type KBKind = (typeof KB_KINDS)[number];
 
-export const KIND_TITLE: Record<KBKind, string> = { projects: "项目", chats: "会话", people: "人", docs: "文档", meetings: "会议", events: "日程" };
+export const KIND_TITLE: Record<KBKind, string> = { projects: t("lib-kb.kind_projects"), chats: t("lib-kb.kind_chats"), people: t("lib-kb.kind_people"), docs: t("lib-kb.kind_docs"), meetings: t("lib-kb.kind_meetings"), events: t("lib-kb.kind_events") };
 
 export function isKind(k: unknown): k is KBKind {
   return typeof k === "string" && (KB_KINDS as readonly string[]).includes(k);
@@ -55,7 +56,7 @@ export interface KBMomentRef {
 
 /** What to call a post's feed: its archived name, else 公司圈. */
 export function momentFeed(m: Pick<KBMomentRef, "feed">): string {
-  return m.feed?.trim() || "公司圈";
+  return m.feed?.trim() || t("lib-kb.moments");
 }
 
 export interface KBDetail {
@@ -146,10 +147,10 @@ export function projectInfo(e: Pick<KBEntry, "kind" | "extra">): ProjectInfo | n
 /** 短期 / 长期, only when the hub said which. */
 export function projectKindLabel(e: Pick<KBEntry, "kind" | "extra">): string | null {
   if (e.kind !== "projects" || !e.extra) return null;
-  return e.extra.startsWith("long") ? "长期" : "短期";
+  return e.extra.startsWith("long") ? t("lib-kb.project_long") : t("lib-kb.project_short");
 }
 
-const STATUS_LABEL: Record<string, string> = { paused: "暂停", done: "已完成", ignored: "不是项目", merged: "已合并" };
+const STATUS_LABEL: Record<string, string> = { paused: t("lib-kb.status_paused"), done: t("lib-kb.status_done"), ignored: t("lib-kb.status_ignored"), merged: t("lib-kb.status_merged") };
 
 /** A project's status when it is not the usual 进行中. */
 export function statusLabel(status?: string): string | null {
@@ -200,15 +201,15 @@ export function groupEntries(kind: KBKind, items: KBEntry[], tag?: string): Entr
     const focus = active.filter((e) => e.importance === "P0" || e.importance === "P1");
     const rest = active.filter((e) => e.importance !== "P0" && e.importance !== "P1");
     out = [
-      { key: "focus", title: "重点", items: focus },
-      { key: "active", title: focus.length ? "其他进行中" : "进行中", items: rest },
-      { key: "done", title: "已完成", items: list.filter((e) => st(e) === "done") },
+      { key: "focus", title: t("lib-kb.section_focus"), items: focus },
+      { key: "active", title: focus.length ? t("lib-kb.section_other_active") : t("lib-kb.status_active"), items: rest },
+      { key: "done", title: t("lib-kb.status_done"), items: list.filter((e) => st(e) === "done") },
       {
         key: "ignored",
-        title: "不是项目",
+        title: t("lib-kb.status_ignored"),
         items: list.filter((e) => st(e) === "ignored"),
         fold: true,
-        footer: "只在通知、营销邮件、机器人会话里出现的，不会再更新。打标里改回「进行中」就恢复。",
+        footer: t("lib-kb.ignored_footer"),
       },
     ];
   } else if (tag) {
@@ -217,13 +218,13 @@ export function groupEntries(kind: KBKind, items: KBEntry[], tag?: string): Entr
     const ranked = list.filter((e) => e.importance);
     const rest = list.filter((e) => !e.importance);
     out = [
-      { key: "ranked", title: "按重要级和相关性", items: ranked },
+      { key: "ranked", title: t("lib-kb.section_ranked"), items: ranked },
       {
         key: "rest",
-        title: ranked.length ? "还没整理的" : "全部",
+        title: ranked.length ? t("lib-kb.section_unsorted") : t("lib-kb.section_all"),
         items: rest,
         fold: ranked.length > 0,
-        footer: ranked.length ? `只在群里出现过、还没有打标的${KIND_TITLE[kind]}。和你说过话、或在重要会话里的会被 AI 整理出来。` : undefined,
+        footer: ranked.length ? t(`lib-kb.unsorted_footer_${kind}`) : undefined,
       },
     ];
   }
@@ -232,7 +233,7 @@ export function groupEntries(kind: KBKind, items: KBEntry[], tag?: string): Entr
 
 /** 1985 → "1985" (no grouping comma, the chip is narrow), past 9999 → "1万+". */
 export function countLabel(n: number): string {
-  return n > 9999 ? "1万+" : String(n);
+  return n > 9999 ? t("lib-kb.count_over") : String(n);
 }
 
 /**
@@ -257,7 +258,7 @@ export function rowTags(e: Pick<KBEntry, "tags">, filter?: string, max = 3): str
 export function parseTags(input: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const raw of input.split(/[\s,，、;；]+/)) {
+  for (const raw of input.split(/[\s,，、;；]+/)) { // i18n-ignore: full-width separators people type
     const t = raw.replace(/^#+/, "").trim();
     if (!t || seen.has(t.toLowerCase())) continue;
     seen.add(t.toLowerCase());
@@ -266,7 +267,7 @@ export function parseTags(input: string): string[] {
   return out;
 }
 
-const SKIP_INITIAL = new Set([..."#@（(【[「『《〈\"'“‘"]);
+const SKIP_INITIAL = new Set([..."#@（(【[「『《〈\"'“‘"]); // i18n-ignore: punctuation skipped in names
 
 /** A person's or chat's tile: the first character that says something, uppercased. */
 export function initial(name: string): string {
@@ -369,10 +370,10 @@ export function hitView(f: Pick<KBFound, "path" | "line">, now = new Date()): { 
   const day = hitDay(f.path);
   if (day) {
     const m = parseMessageLine(hitText(f.line));
-    return { source: `聊天记录 · ${dayTitle(day, now)}${m.time ? ` ${m.time}` : ""}`, text: m.sender ? `${m.sender}：${m.text}` : m.text, day };
+    return { source: t("lib-kb.hit_chat", { day: `${dayTitle(day, now)}${m.time ? ` ${m.time}` : ""}` }), text: m.sender ? t("lib-kb.hit_sender", { sender: m.sender, text: m.text }) : m.text, day };
   }
   const file = f.path.split("/").pop() ?? f.path;
-  const source = file === "summary.md" ? "档案" : file === "log.md" ? "时间线" : file.endsWith(".json") ? "资料" : file;
+  const source = file === "summary.md" ? t("lib-kb.hit_profile") : file === "log.md" ? t("lib-kb.hit_timeline") : file.endsWith(".json") ? t("lib-kb.hit_data") : file;
   return { source, text: hitText(f.line), day: null };
 }
 
@@ -425,6 +426,7 @@ export function profile(md: string | undefined, oneLine?: string, name?: string)
     .filter((line) => {
       const t = line.trim();
       if (title && /^#{1,6} /.test(t) && t.replace(/^#+ /, "").trim() === title) return false;
+      // i18n-ignore: the importance line the hub writes into a profile
       return !(t.startsWith("重要级 ") && t.includes("相关性")) && (!one || t !== one);
     })
     .join("\n")
@@ -459,7 +461,7 @@ export interface LinkGroup {
 
 /** Related entries by kind, in the kinds' order. */
 export function linkGroups(links?: KBEntry[] | null): LinkGroup[] {
-  return KB_KINDS.map((kind) => ({ kind, title: `关联的${KIND_TITLE[kind]}`, items: (links ?? []).filter((e) => e.kind === kind) })).filter((g) => g.items.length);
+  return KB_KINDS.map((kind) => ({ kind, title: t(`lib-kb.related_${kind}`), items: (links ?? []).filter((e) => e.kind === kind) })).filter((g) => g.items.length);
 }
 
 /** A project's code directories, `<machine>:<path>`. */
@@ -484,19 +486,21 @@ export interface Facts {
 export function factsOf(kind: string, meta?: Record<string, unknown> | null): Facts | null {
   if (kind !== "docs" && kind !== "meetings" && kind !== "events") return null;
   const at = str(meta?.at);
-  const t = at ? Date.parse(at) : NaN;
+  const ms = at ? Date.parse(at) : NaN;
   const url = str(meta?.url)?.trim();
   const f: Facts = {
-    at: Number.isFinite(t) && t > 0 ? at : undefined, // Go's zero time is none
+    at: Number.isFinite(ms) && ms > 0 ? at : undefined, // Go's zero time is none
     url: url || undefined,
-    whenLabel: kind === "docs" ? "提到的时间" : kind === "meetings" ? "开会时间" : "时间",
-    openLabel: kind === "docs" ? "打开文档" : kind === "meetings" ? "打开会议纪要" : "打开日程",
+    whenLabel: kind === "docs" ? t("lib-kb.when_doc") : kind === "meetings" ? t("lib-kb.when_meeting") : t("lib-kb.when_event"),
+    openLabel: kind === "docs" ? t("lib-kb.open_doc") : kind === "meetings" ? t("lib-kb.open_meeting") : t("lib-kb.open_event"),
   };
   return f.at || f.url ? f : null;
 }
 
-const WEEKDAY = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const pad = (n: number) => String(n).padStart(2, "0");
+const monthDay = (d: Date) => formatDate(d, { month: "short", day: "numeric" });
+const yearMonthDay = (d: Date) => formatDate(d, { year: "numeric", month: "short", day: "numeric" });
+const weekday = (d: Date) => formatDate(d, { weekday: "short" });
 
 /** "10月30日 周五 14:00" (24-hour), with the year instead of the weekday when it is not this one. */
 export function formatAt(iso: string, now = new Date()): string {
@@ -504,8 +508,8 @@ export function formatAt(iso: string, now = new Date()): string {
   if (Number.isNaN(d.getTime())) return iso;
   const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   return d.getFullYear() === now.getFullYear()
-    ? `${d.getMonth() + 1}月${d.getDate()}日 ${WEEKDAY[d.getDay()]} ${hm}`
-    : `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+    ? t("lib-kb.at_this_year", { date: monthDay(d), weekday: weekday(d), time: hm })
+    : t("lib-kb.at_other_year", { date: yearMonthDay(d), time: hm });
 }
 
 /** "2026-10-30" → "10月30日 周五", with the year when it is not this one. */
@@ -513,8 +517,7 @@ export function dayTitle(day: string, now = new Date()): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
   if (!m) return day;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  const md = `${d.getMonth() + 1}月${d.getDate()}日 ${WEEKDAY[d.getDay()]}`;
-  return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}年${md}`;
+  return t(d.getFullYear() === now.getFullYear() ? "lib-kb.day_this_year" : "lib-kb.day_other_year", { date: d.getFullYear() === now.getFullYear() ? monthDay(d) : yearMonthDay(d), weekday: weekday(d) });
 }
 
 export interface RecentDay {
@@ -568,14 +571,14 @@ export function contextXml(c: { kind: string; title: string; url?: string; text:
 /** An entry as context: its profile, recent timeline and folder. */
 function entryText(e: Pick<KBEntry, "one_line">, d?: Pick<KBDetail, "summary" | "log" | "path"> | null): string {
   let text = d?.summary || e.one_line || "";
-  if (d?.log?.length) text += `\n\n时间线（最近）：\n${d.log.slice(-10).join("\n")}`;
-  if (d?.path) text += `\n\n知识库目录：${d.path}`;
+  if (d?.log?.length) text += `\n\n${t("lib-kb.context_timeline")}\n${d.log.slice(-10).join("\n")}`;
+  if (d?.path) text += `\n\n${t("lib-kb.context_folder", { path: d.path })}`;
   return text.trim();
 }
 
 /** What 问 Persona sends to the main conversation: the entry's profile, recent timeline and folder, then the ask. */
 export function askPersonaText(e: Pick<KBEntry, "name" | "one_line">, d?: Pick<KBDetail, "summary" | "log" | "path"> | null): string {
-  return `${contextXml({ kind: "context", title: `知识库 · ${e.name}`, url: "", text: entryText(e, d) })}\n\n说说「${e.name}」现在怎么样了：最新进展、在等我的事、接下来该做什么，能替我处理的先处理。`;
+  return `${contextXml({ kind: "context", title: t("lib-kb.context_title", { name: e.name }), url: "", text: entryText(e, d) })}\n\n${t("lib-kb.ask_persona", { name: e.name })}`;
 }
 
 /**
@@ -597,14 +600,14 @@ export function agentPreset(
 
 export const IMPORTANCE = ["P0", "P1", "P2", "P3"] as const;
 export const PROJECT_KINDS = [
-  { value: "short", label: "短期（需求）" },
-  { value: "long", label: "长期（使命）" },
+  { value: "short", label: t("lib-kb.project_short_detail") },
+  { value: "long", label: t("lib-kb.project_long_detail") },
 ] as const;
 export const PROJECT_STATUSES = [
-  { value: "active", label: "进行中" },
-  { value: "paused", label: "暂停" },
-  { value: "done", label: "已完成" },
-  { value: "ignored", label: "不是项目" },
+  { value: "active", label: t("lib-kb.status_active") },
+  { value: "paused", label: t("lib-kb.status_paused") },
+  { value: "done", label: t("lib-kb.status_done") },
+  { value: "ignored", label: t("lib-kb.status_ignored") },
 ] as const;
 
 export interface TagForm {

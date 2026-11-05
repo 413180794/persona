@@ -2,6 +2,7 @@
 // sidebar's Agents tree and on the 终端 page. One builder for all of them, so a menu offers the same things wherever the
 // node is listed (and the command palette can ask it later). What changes a computer goes through routes only a full
 // device may call (server/internal/hub/panes.go); copying and folding are local.
+import { t } from "../i18n";
 import { api, enc, errorText, sessionPath } from "./api";
 import type { TermPane, TermSpace, TermTab } from "./terminals";
 import type { Launcher, Machine, Session } from "./types";
@@ -83,9 +84,9 @@ export const canChangeHost = (host: string | undefined) => !host || host === "he
 export const launchableHere = (l: Launcher) => (l.agent_type || l.agent || "claude") === "claude";
 
 export const GIT_OPS = [
-  { op: "pull", label: "拉取", accel: "p", done: "拉取" },
-  { op: "push", label: "推送", accel: "u", done: "推送" },
-  { op: "fetch", label: "获取", accel: "f", done: "获取" },
+  { op: "pull", label: t("lib-node-actions.git_pull"), accel: "p", done: "lib-node-actions.git_pull_done" },
+  { op: "push", label: t("lib-node-actions.git_push"), accel: "u", done: "lib-node-actions.git_push_done" },
+  { op: "fetch", label: t("lib-node-actions.git_fetch"), accel: "f", done: "lib-node-actions.git_fetch_done" },
 ] as const;
 
 /** The menu items of a node, in groups (a hairline between them): fold and open, rename, make and run, copy, close. */
@@ -94,7 +95,7 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
   const online = node.online !== false;
   const writes = online && canChangeHost(node.host);
   const kind = node.host ? { kind: node.host } : {};
-  const fail = (what: string, e: unknown) => new Error(`${what}：${errorText(e)}`);
+  const fail = (key: string, e: unknown) => new Error(t(key, { error: errorText(e) }));
 
   // where a git command runs: a pane's own directory, else the workspace's
   const gitTarget = node.paneId ? { pane: node.paneId } : node.workspaceId ? { workspace_id: node.workspaceId, ...kind } : null;
@@ -111,10 +112,10 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
 
   // ── fold and open ──
   group(
-    node.fold && { key: "node-fold", label: node.fold.folded ? "展开" : "折叠", icon: node.fold.folded ? "arrowDown" : "chevron", accel: "z", onSelect: node.fold.toggle },
-    node.kind === "workspace" && online && Boolean(node.cwd) && { key: "node-new-agent", label: "新建 Agent…", icon: "agent", accel: "n", onSelect: () => deps.newAgent(mid, node.cwd!) },
-    node.kind === "workspace" && online && node.onOpenShell && { key: "node-shell", label: "新建终端", icon: "terminal", accel: "t", onSelect: node.onOpenShell },
-    node.kind === "machine" && node.onRefresh && { key: "node-refresh", label: "刷新", icon: "retry", accel: "r", onSelect: node.onRefresh },
+    node.fold && { key: "node-fold", label: node.fold.folded ? t("lib-node-actions.expand") : t("lib-node-actions.collapse"), icon: node.fold.folded ? "arrowDown" : "chevron", accel: "z", onSelect: node.fold.toggle },
+    node.kind === "workspace" && online && Boolean(node.cwd) && { key: "node-new-agent", label: t("lib-node-actions.new_agent"), icon: "agent", accel: "n", onSelect: () => deps.newAgent(mid, node.cwd!) },
+    node.kind === "workspace" && online && node.onOpenShell && { key: "node-shell", label: t("lib-node-actions.new_terminal"), icon: "terminal", accel: "t", onSelect: node.onOpenShell },
+    node.kind === "machine" && node.onRefresh && { key: "node-refresh", label: t("lib-node-actions.refresh"), icon: "retry", accel: "r", onSelect: node.onRefresh },
   );
 
   // ── rename ──
@@ -122,32 +123,32 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
   group(
     node.kind === "workspace" && writes && Boolean(node.workspaceId) && {
       key: "node-rename",
-      label: "重命名…",
+      label: t("lib-node-actions.rename"),
       icon: "pencil",
       accel: "r",
       onSelect: noop,
       rename: {
         value: renameValue,
-        placeholder: "工作区名称",
+        placeholder: t("lib-node-actions.workspace_name"),
         commit: async (name) => {
-          await deps.renameWorkspace(node, name).catch((e) => Promise.reject(fail("没改成", e)));
-          deps.notify("已重命名工作区", "ok");
+          await deps.renameWorkspace(node, name).catch((e) => Promise.reject(fail("lib-node-actions.rename_failed", e)));
+          deps.notify(t("lib-node-actions.workspace_renamed"), "ok");
           deps.changed();
         },
       },
     },
     node.kind === "tab" && writes && Boolean(node.tabId) && {
       key: "node-rename",
-      label: "重命名…",
+      label: t("lib-node-actions.rename"),
       icon: "pencil",
       accel: "r",
       onSelect: noop,
       rename: {
         value: renameValue,
-        placeholder: "标签页名称",
+        placeholder: t("lib-node-actions.tab_name"),
         commit: async (name) => {
-          await deps.renameTab(node, name).catch((e) => Promise.reject(fail("没改成", e)));
-          deps.notify("已重命名标签页", "ok");
+          await deps.renameTab(node, name).catch((e) => Promise.reject(fail("lib-node-actions.rename_failed", e)));
+          deps.notify(t("lib-node-actions.tab_renamed"), "ok");
           deps.changed();
         },
       },
@@ -161,8 +162,8 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
     accel,
     inline: true,
     onSelect: async () => {
-      await deps.post(mid, "panes/split", { pane: node.paneId, direction }).catch((e) => Promise.reject(fail("新建窗格失败", e)));
-      deps.notify("已新建窗格", "ok");
+      await deps.post(mid, "panes/split", { pane: node.paneId, direction }).catch((e) => Promise.reject(fail("lib-node-actions.split_failed", e)));
+      deps.notify(t("lib-node-actions.pane_created"), "ok");
       deps.changed();
     },
   });
@@ -173,7 +174,7 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
     inline: true,
     onSelect: async () => {
       const res = (await deps.post(mid, "panes/git", { op: op.op, ...gitTarget }).catch((e) => Promise.reject(new Error(errorText(e))))) as { message?: string } | undefined;
-      deps.notify(`${op.done}：${res?.message ?? "完成"}`, "ok");
+      deps.notify(t(op.done, { message: res?.message ?? t("lib-node-actions.git_done_fallback") }), "ok");
       deps.changed();
     },
   });
@@ -183,8 +184,8 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
     hint: l.model,
     inline: true,
     onSelect: async () => {
-      await deps.post(mid, "panes/agent", { pane: node.paneId, launcher: l.name }).catch((e) => Promise.reject(fail("启动失败", e)));
-      deps.notify(`已在窗格里启动 ${l.name}`, "ok");
+      await deps.post(mid, "panes/agent", { pane: node.paneId, launcher: l.name }).catch((e) => Promise.reject(fail("lib-node-actions.start_failed", e)));
+      deps.notify(t("lib-node-actions.started_in_pane", { name: l.name }), "ok");
       deps.changed();
     },
   });
@@ -192,15 +193,15 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
   group(
     writes && Boolean(node.paneId) && node.kind !== "machine" && node.kind !== "workspace" && {
       key: "node-split",
-      label: "新建窗格",
+      label: t("lib-node-actions.new_pane"),
       icon: "layers",
       accel: "n",
       onSelect: noop,
-      children: [split("right", "向右拆分", "r"), split("down", "向下拆分", "d")],
+      children: [split("right", t("lib-node-actions.split_right"), "r"), split("down", t("lib-node-actions.split_down"), "d")],
     },
     writes && isShell && Boolean(node.paneId) && {
       key: "node-agent",
-      label: "在这里运行 Agent…",
+      label: t("lib-node-actions.run_agent_here"),
       icon: "agent",
       accel: "a",
       onSelect: noop,
@@ -213,47 +214,47 @@ export function nodeActions(node: MenuNode, deps: NodeActionDeps, opts: NodeActi
       accel: "g",
       hint: node.branch,
       onSelect: noop,
-      children: [...GIT_OPS.map(git), ...(node.branch ? [copy("node-copy-branch", "复制分支名", "b", node.branch) as MenuItem] : [])],
+      children: [...GIT_OPS.map(git), ...(node.branch ? [copy("node-copy-branch", t("lib-node-actions.copy_branch"), "b", node.branch) as MenuItem] : [])],
     },
   );
 
   // ── copy ──
   const herdrId = node.kind === "pane" ? node.paneId : node.kind === "tab" ? node.tabId : node.kind === "workspace" ? node.workspaceId : undefined;
   group(
-    node.kind !== "machine" && copy("node-copy-path", "复制路径", "c", node.cwd),
-    node.kind !== "machine" && node.kind !== "workspace" && copy("node-copy-session", "复制会话 id", "s", node.sessionId),
-    node.kind !== "machine" && copy("node-copy-id", "复制 herdr id", "i", herdrId),
-    node.kind !== "machine" && !gitMenu && copy("node-copy-branch", "复制分支名", "b", node.branch),
-    node.kind === "machine" && copy("node-copy-machine", "复制机器 id", "i", mid),
+    node.kind !== "machine" && copy("node-copy-path", t("lib-node-actions.copy_path"), "c", node.cwd),
+    node.kind !== "machine" && node.kind !== "workspace" && copy("node-copy-session", t("lib-node-actions.copy_session_id"), "s", node.sessionId),
+    node.kind !== "machine" && copy("node-copy-id", t("lib-node-actions.copy_herdr_id"), "i", herdrId),
+    node.kind !== "machine" && !gitMenu && copy("node-copy-branch", t("lib-node-actions.copy_branch"), "b", node.branch),
+    node.kind === "machine" && copy("node-copy-machine", t("lib-node-actions.copy_machine_id"), "i", mid),
   );
 
   // ── close ──
   group(
     node.kind === "tab" && writes && Boolean(node.tabId) && {
       key: "node-close-tab",
-      label: "关闭标签页",
+      label: t("lib-node-actions.close_tab"),
       icon: "x",
       danger: true,
       closes: true,
-      confirm: "确认关闭",
+      confirm: t("lib-node-actions.close_confirm"),
       inline: true,
       onSelect: async () => {
-        await deps.post(mid, "tabs/close", { tab_id: node.tabId, ...kind }).catch((e) => Promise.reject(fail("关闭失败", e)));
-        deps.notify("已关闭标签页", "ok");
+        await deps.post(mid, "tabs/close", { tab_id: node.tabId, ...kind }).catch((e) => Promise.reject(fail("lib-node-actions.close_failed", e)));
+        deps.notify(t("lib-node-actions.tab_closed"), "ok");
         deps.changed();
       },
     },
     node.kind === "pane" && writes && Boolean(node.paneId) && {
       key: "node-close-pane",
-      label: "关闭窗格",
+      label: t("lib-node-actions.close_pane"),
       icon: "x",
       danger: true,
       closes: true,
-      confirm: "确认关闭",
+      confirm: t("lib-node-actions.close_confirm"),
       inline: true,
       onSelect: async () => {
-        await deps.post(mid, "panes/close", { pane: node.paneId }).catch((e) => Promise.reject(fail("关闭失败", e)));
-        deps.notify("已关闭窗格", "ok");
+        await deps.post(mid, "panes/close", { pane: node.paneId }).catch((e) => Promise.reject(fail("lib-node-actions.close_failed", e)));
+        deps.notify(t("lib-node-actions.pane_closed"), "ok");
         deps.changed();
       },
     },

@@ -1,0 +1,13 @@
+{
+  "hub_upgrade": "ピン留めメッセージを使うにはハブを更新してください。設定でハブを開き、アップデートを確認してください。",
+  "account_changed": "Larkアカウントが切り替わりました。チャットを開き直してください",
+  "result_unknown": "操作結果をまだ確認できていません。ピン留め一覧を再読み込みして確認してください。自動では再試行しません",
+  "page_incomplete": "ピン留め一覧が一時的に不完全です。再読み込みしてください",
+  "message_unavailable": "元のメッセージは利用できません",
+  "message_recalled": "メッセージは取り消されました",
+  "fallback_image": "[画像]",
+  "fallback_file": "[ファイル]",
+  "fallback_message": "メッセージ",
+  "not_logged_in": "ハブに接続されたlark-connectorがLarkにログインしていません",
+  "load_failed": "ピン留めメッセージを読み込めません：{error}"
+}

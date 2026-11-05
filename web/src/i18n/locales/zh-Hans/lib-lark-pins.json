@@ -1,0 +1,13 @@
+{
+  "hub_upgrade": "升级 Hub 后可使用 Pin 消息。请在设置中打开 Hub，检查更新。",
+  "account_changed": "飞书账号已切换，请重新打开会话",
+  "result_unknown": "尚未确认操作结果，请重新加载 Pin 列表查看；不会自动重试",
+  "page_incomplete": "Pin 列表暂时不完整，请重新加载",
+  "message_unavailable": "原消息已不可用",
+  "message_recalled": "消息已撤回",
+  "fallback_image": "[图片]",
+  "fallback_file": "[文件]",
+  "fallback_message": "消息",
+  "not_logged_in": "hub 连接的 lark-connector 没有登录飞书",
+  "load_failed": "读不到 Pin 消息：{error}"
+}

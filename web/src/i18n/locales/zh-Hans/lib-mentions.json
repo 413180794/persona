@@ -1,0 +1,5 @@
+{
+  "quote_session": "另一个会话：{title}（{agent}）",
+  "quote_cwd": "目录：{cwd}",
+  "quote_last": "它最近说：{text}"
+}

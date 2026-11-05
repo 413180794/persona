@@ -1,0 +1,5 @@
+{
+  "syntax_error_line": "この図に構文エラーがあります（{line}行目）",
+  "syntax_error": "この図に構文エラーがあります",
+  "render_failed": "この図を描画できません"
+}

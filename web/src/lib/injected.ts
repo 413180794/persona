@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Todo } from "./todos";
 import type { Injected, Item } from "./types";
 
@@ -6,16 +7,16 @@ import type { Injected, Item } from "./types";
 // (docs/protocol.md「Persona 注入的消息」). The hub marks them (`injected`); an older hub does not, so the text is read
 // the same way it does (prompts.ParseInjected; spec/fixtures/injected is shared with it).
 
-const NOTICE_HEAD = /^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$/u;
-const FOLLOWUP_HEAD = /^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$/u;
-const WAKE_HEAD = /^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」/u;
+const NOTICE_HEAD = /^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$/u; // i18n-ignore: matches the hub's injected text
+const FOLLOWUP_HEAD = /^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$/u; // i18n-ignore: matches the hub's injected text
+const WAKE_HEAD = /^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」/u; // i18n-ignore: matches the hub's injected text
 const LEAD_CONTEXT = /^\s*<jarvis-context\b[^>]*>[\s\S]*?<\/jarvis-context>/;
-const NOTICE_MARKER = "这是 Persona 的任务通知";
-const LOST_TASKS_HEAD = "⚠️ 运行你的 node 刚重启过";
-const KB_HINT_HEAD = "（知识库";
+const NOTICE_MARKER = "这是 Persona 的任务通知"; // i18n-ignore: matches the hub's injected text
+const LOST_TASKS_HEAD = "⚠️ 运行你的 node 刚重启过"; // i18n-ignore: matches the hub's injected text
+const KB_HINT_HEAD = "（知识库"; // i18n-ignore: matches the hub's injected text
 
-const NOTICE_STATES: Record<string, string> = { 做完了: "done", 在等用户: "needs", 被模型服务出错打断了: "interrupted", 没开起来: "failed" };
-const NOTICE_LINES: Record<string, string> = { done: "做完了", needs: "在等你", interrupted: "被打断了", failed: "没开起来" };
+const NOTICE_STATES: Record<string, string> = { 做完了: "done", 在等用户: "needs", 被模型服务出错打断了: "interrupted", 没开起来: "failed" }; // i18n-ignore: matches the hub's injected text
+const NOTICE_LINES: Record<string, string> = { done: "lib-injected.task_done", needs: "lib-injected.task_needs", interrupted: "lib-injected.task_interrupted", failed: "lib-injected.task_failed" };
 
 /** What text is when it is one of Persona's messages for the model; null for anything else. */
 export function parseInjected(raw: string): Injected | null {
@@ -25,27 +26,28 @@ export function parseInjected(raw: string): Injected | null {
   const nl = text.indexOf("\n");
   const head = nl < 0 ? text : text.slice(0, nl);
   const rest = nl < 0 ? "" : text.slice(nl + 1);
-  if (head.startsWith("🔔 任务「")) {
+  if (head.startsWith("🔔 任务「")) { // i18n-ignore: matches the hub's injected text
     const m = NOTICE_HEAD.exec(head);
     if (!m || !rest.includes(NOTICE_MARKER)) return null;
     const state = NOTICE_STATES[m[2]];
-    return { kind: "task_notice", state, title: m[1], machine: m[3] || undefined, line: `任务「${m[1]}」${NOTICE_LINES[state]}` };
+    return { kind: "task_notice", state, title: m[1], machine: m[3] || undefined, line: t(NOTICE_LINES[state] ?? "lib-injected.task_done", { title: m[1] }) };
   }
-  if (head.startsWith("⏰（")) {
+  if (head.startsWith("⏰（")) { // i18n-ignore: matches the hub's injected text
     const m = WAKE_HEAD.exec(head);
-    return m ? { kind: "followup", state: "wake", title: m[1], line: `Persona 叫醒了它：看看「${m[1]}」好了没有` } : null;
+    return m ? { kind: "followup", state: "wake", title: m[1], line: t("lib-injected.wake", { title: m[1] }) } : null;
   }
   if (head.startsWith("⏰ ")) {
     const m = FOLLOWUP_HEAD.exec(head);
     if (!m) return null;
     const detail = followupDetail(rest) || undefined;
-    if (m[2] === "你之前安排的跟进") return { kind: "followup", state: "once", title: m[1], line: `跟进「${m[1]}」到时间了`, detail };
-    const state = m[2].startsWith("定时任务，每 ") ? "interval" : "daily";
-    return { kind: "followup", state, title: m[1], line: `定时任务「${m[1]}」开始运行`, detail };
+    // i18n-ignore: matches the hub's injected text
+    if (m[2] === "你之前安排的跟进") return { kind: "followup", state: "once", title: m[1], line: t("lib-injected.followup_due", { title: m[1] }), detail };
+    const state = m[2].startsWith("定时任务，每 ") ? "interval" : "daily"; // i18n-ignore: matches the hub's injected text
+    return { kind: "followup", state, title: m[1], line: t("lib-injected.scheduled_started", { title: m[1] }), detail };
   }
   if (head.startsWith(LOST_TASKS_HEAD)) {
     const n = rest.split("\n").filter((l) => l.startsWith("- ")).length;
-    return { kind: "system", state: "lost_tasks", line: n ? `node 重启过，${n} 个后台任务停了` : "node 重启过，后台任务停了" };
+    return { kind: "system", state: "lost_tasks", line: n ? t("lib-injected.lost_tasks_count", { count: n }) : t("lib-injected.lost_tasks") };
   }
   return null;
 }

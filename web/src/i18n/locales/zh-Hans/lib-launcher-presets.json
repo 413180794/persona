@@ -1,0 +1,6 @@
+{
+  "kind_api": "直接 API",
+  "kind_launcher": "Claude Code 启动器",
+  "name_invalid": "名字只能用字母、数字、_ 和 -，以字母或 _ 开头",
+  "name_reserved": "不能叫 {name}"
+}

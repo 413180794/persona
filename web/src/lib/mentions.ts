@@ -2,6 +2,7 @@
 // read or wrote and the session's folder (picking one types `@path`, which Claude Code and Codex read as that file),
 // then other agents' sessions (picking one quotes it as a <jarvis-context> before the message). No DOM here.
 
+import { t } from "../i18n";
 import type { Item, Session } from "./types";
 
 export interface MentionToken {
@@ -97,8 +98,8 @@ function folderName(cwd?: string): string {
 
 /** A session's title as the @ menu shows it (Session.displayTitle). */
 export function displayTitle(s: Pick<Session, "title" | "cwd">): string {
-  const t = s.title?.trim();
-  return !t || t === "Claude Code" ? folderName(s.cwd) || "未命名会话" : t;
+  const title = s.title?.trim();
+  return !title || title === "Claude Code" ? folderName(s.cwd) || t("lib-format.untitled_session") : title;
 }
 
 /** Other agents' sessions, most recently active first, at most `limit` (PromptItems.sessions). */
@@ -117,8 +118,8 @@ export function sessionDetail(s: Session): string {
 
 /** The quote for a picked session, sent as a <jarvis-context> before the message (PromptItems.quote). */
 export function sessionQuote(s: Session): { title: string; url: string; text: string } {
-  const lines = [`另一个会话：${displayTitle(s)}（${agentLabel(s)}）`, `目录：${s.cwd}`];
+  const lines = [t("lib-mentions.quote_session", { title: displayTitle(s), agent: agentLabel(s) }), t("lib-mentions.quote_cwd", { cwd: s.cwd })];
   const last = s.last_text?.trim();
-  if (last) lines.push(`它最近说：${[...last].slice(0, 600).join("")}`);
+  if (last) lines.push(t("lib-mentions.quote_last", { text: [...last].slice(0, 600).join("") }));
   return { title: displayTitle(s), url: `jarvis://session/${s.machine_id}/${s.session_id}`, text: lines.join("\n") };
 }

@@ -4,6 +4,7 @@
 // page at a time and the pinned conversations on top. A chat opens in the inbox's Feishu chat view (LarkThread).
 // Each Feishu account has its own list (docs/feishu.md「多账号」, lark-accounts.ts); rows carry the account they are in.
 // Nothing is written to disk: the last list lives in memory for this tab only.
+import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { api, ApiError, enc, errorText } from "./api";
 import { larkPath } from "./lark-accounts";
@@ -102,8 +103,8 @@ export function filterConversations(list: readonly LarkConversation[], query: st
 export function conversationPreview(c: Pick<LarkConversation, "preview" | "preview_sender" | "is_mine" | "is_group">): string {
   const text = c.preview?.trim() ?? "";
   if (!text) return "";
-  if (c.is_mine) return `我：${text}`;
-  if (c.is_group && c.preview_sender) return `${c.preview_sender}：${text}`;
+  if (c.is_mine) return t("lib-lark-chats.preview_mine", { text });
+  if (c.is_group && c.preview_sender) return t("lib-lark-chats.preview_sender", { sender: c.preview_sender, text });
   return text;
 }
 
@@ -126,10 +127,10 @@ export type LarkListProblem = { kind: "not_logged_in" | "not_configured" | "othe
 
 export function listProblem(e: unknown): LarkListProblem {
   if (e instanceof ApiError) {
-    if (e.code === "lark_not_logged_in") return { kind: "not_logged_in", text: "hub 连接的 lark-connector 没有登录飞书。在 hub 所在的机器上登录后再试。" };
-    if (e.status === 404 && !e.code) return { kind: "not_configured", text: "hub 还没接飞书：在 hub 所在的机器上运行 lark-connector，并在 hub.json 的 lark 里填上它。" };
+    if (e.code === "lark_not_logged_in") return { kind: "not_logged_in", text: t("lib-lark-chats.not_logged_in") };
+    if (e.status === 404 && !e.code) return { kind: "not_configured", text: t("lib-lark-chats.not_configured") };
   }
-  return { kind: "other", text: `读不到飞书会话：${errorText(e)}` };
+  return { kind: "other", text: t("lib-lark-chats.load_failed", { error: errorText(e) }) };
 }
 
 // ── the store ────────────────────────────────────────────
@@ -216,7 +217,7 @@ export class LarkChatsStore {
         let read = 0;
         do {
           const p = await this.deps.page(cursor, account);
-          if (account && p.account_id && p.account_id !== account) throw new ApiError(409, "飞书账号已切换", { code: "lark_account_changed" });
+          if (account && p.account_id && p.account_id !== account) throw new ApiError(409, t("lib-lark-chats.account_changed"), { code: "lark_account_changed" });
           account = p.account_id || account;
           rows = mergeConversations(rows, p.conversations ?? []);
           read += 1;
@@ -267,7 +268,7 @@ export class LarkChatsStore {
         this.set({ loadingMore: false });
         return;
       }
-      if (account && p.account_id && p.account_id !== account) throw new ApiError(409, "飞书账号已切换", { code: "lark_account_changed" });
+      if (account && p.account_id && p.account_id !== account) throw new ApiError(409, t("lib-lark-chats.account_changed"), { code: "lark_account_changed" });
       const next = p.next_cursor && p.next_cursor !== cursor ? p.next_cursor : undefined;
       this.set({ rows: mergeConversations(this.s.rows, p.conversations ?? []), cursor: next, pages: this.s.pages + 1, loadingMore: false });
     } catch (e) {
@@ -305,6 +306,6 @@ export async function larkAccount(ol?: number): Promise<string> {
   const known = larkChatsFor(ol).state.account;
   if (known) return known;
   const p = await api<LarkConversationPage>(larkPath("/lark/conversations?scope=chats&limit=1&account_bound=1", ol));
-  if (!p.account_id) throw new ApiError(426, "升级 Hub 后可使用 Pin 消息。请在设置中打开 Hub，检查更新。", { code: "lark_hub_upgrade_required" });
+  if (!p.account_id) throw new ApiError(426, t("lib-lark-pins.hub_upgrade"), { code: "lark_hub_upgrade_required" });
   return p.account_id;
 }

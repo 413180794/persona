@@ -3,6 +3,8 @@
 // go one at a time (Mermaid keeps global state while it draws), and each diagram is kept per theme, so a conversation
 // re-rendering or scrolling back never draws it twice.
 
+import { t } from "../i18n";
+
 type Mermaid = (typeof import("mermaid"))["default"];
 
 let loader: Promise<Mermaid> | null = null;
@@ -59,6 +61,6 @@ export function mermaidProblem(e: unknown): { summary: string; detail: string } 
   const raw = (e instanceof Error ? e.message : String(e)).trim();
   const line = /\bline (\d+)/i.exec(raw)?.[1];
   const syntax = /parse error|syntax|expecting|lexical/i.test(raw);
-  const summary = syntax ? `这张图有语法错误${line ? `（第 ${line} 行）` : ""}` : "这张图画不出来";
+  const summary = syntax ? (line ? t("lib-mermaid.syntax_error_line", { line }) : t("lib-mermaid.syntax_error")) : t("lib-mermaid.render_failed");
   return { summary, detail: raw || summary };
 }

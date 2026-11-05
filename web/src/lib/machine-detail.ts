@@ -1,5 +1,6 @@
 // 机器详情 (docs/machines.md「App」): the pure part of the page — ranges, the metric charts' scales, gaps, ticks and
 // the hover read-out, the number formats, the agents by space and the system facts. MachineDetail.tsx only draws.
+import { formatDate, t } from "../i18n";
 import { stateOf, tabLabel } from "./format";
 import type { AgentState, Machine, Session } from "./types";
 import type { MachineComputer } from "./computer";
@@ -70,9 +71,9 @@ export type MetricRange = "1h" | "6h" | "24h";
 /** The hub's steps per range (10 / 60 / 240 s, about 360 points), and how often the page refetches it: the hour
  * every 10 s, the longer ranges once a minute (a new point there comes only every 1 or 4 minutes), as on iOS. */
 export const RANGES: Record<MetricRange, { label: string; secs: number; step: number; poll: number }> = {
-  "1h": { label: "1 小时", secs: 3600, step: 10, poll: 10_000 },
-  "6h": { label: "6 小时", secs: 6 * 3600, step: 60, poll: 60_000 },
-  "24h": { label: "24 小时", secs: 86400, step: 240, poll: 60_000 },
+  "1h": { label: t("lib-machine-detail.range_hours", { count: 1 }), secs: 3600, step: 10, poll: 10_000 },
+  "6h": { label: t("lib-machine-detail.range_hours", { count: 6 }), secs: 6 * 3600, step: 60, poll: 60_000 },
+  "24h": { label: t("lib-machine-detail.range_hours", { count: 24 }), secs: 86400, step: 240, poll: 60_000 },
 };
 
 export const RANGE_KEYS = Object.keys(RANGES) as MetricRange[];
@@ -236,9 +237,9 @@ export function uptime(bootSec: number, nowSec: number): string {
   const d = Math.floor(s / 86400),
     h = Math.floor((s % 86400) / 3600),
     m = Math.floor((s % 3600) / 60);
-  if (d > 0) return h > 0 ? `${d} 天 ${h} 小时` : `${d} 天`;
-  if (h > 0) return `${h} 小时 ${m} 分钟`;
-  return `${m} 分钟`;
+  if (d > 0) return h > 0 ? t("lib-machine-detail.uptime_days_hours", { d, h }) : t("lib-machine-detail.uptime_days", { d });
+  if (h > 0) return t("lib-machine-detail.uptime_hours_minutes", { h, m });
+  return t("lib-machine-detail.uptime_minutes", { m });
 }
 
 /** "14:05" on the local clock (`tz` as in timeTicks). */
@@ -276,7 +277,7 @@ export function agentsBySpace(sessions: Session[]): SpaceGroup[] {
   const map = new Map<string, SpaceGroup & { index: number }>();
   for (const s of live) {
     const key = s.space_id || "";
-    if (!map.has(key)) map.set(key, { key, name: s.space_id ? s.space_name || s.space_id : "不在空间里", sessions: [], counts: { needs: 0, working: 0, unread: 0 }, index: s.space_id ? (s.space_index ?? 0) : Number.MAX_SAFE_INTEGER });
+    if (!map.has(key)) map.set(key, { key, name: s.space_id ? s.space_name || s.space_id : t("lib-machine-detail.no_space"), sessions: [], counts: { needs: 0, working: 0, unread: 0 }, index: s.space_id ? (s.space_index ?? 0) : Number.MAX_SAFE_INTEGER });
     const g = map.get(key)!;
     g.sessions.push(s);
     const st = stateOf(s);
@@ -292,7 +293,7 @@ export function agentsBySpace(sessions: Session[]): SpaceGroup[] {
 
 /** "1 个需要你 · 2 个工作中" for a space's header; "" when all are quiet. */
 export function countsText(c: SpaceGroup["counts"]): string {
-  return [c.needs && `${c.needs} 个需要你`, c.working && `${c.working} 个工作中`, c.unread && `${c.unread} 个完成未看`].filter(Boolean).join(" · ");
+  return [c.needs && t("lib-machine-detail.count_needs", { count: c.needs }), c.working && t("lib-machine-detail.count_working", { count: c.working }), c.unread && t("lib-machine-detail.count_unread", { count: c.unread })].filter(Boolean).join(" · ");
 }
 
 /** The tab label and, for anything but Claude Code, which agent it is: "#2 · Codex". */
@@ -311,38 +312,38 @@ export function loudState(st: AgentState): boolean {
 /** One line under the name: "macOS 26.1 · MacBook Pro · Apple M4 Pro · 14 核 · 48 GB". */
 export function systemLine(system: SystemInfo | undefined, m?: DetailMachine): string {
   if (!system) return [m?.os, m?.arch].filter(Boolean).join(" · ") || m?.hostname || "";
-  return [system.name || m?.os, system.model, system.cpu, system.cores ? `${system.cores} 核` : "", system.memory ? bytesBin(system.memory).replace(/\.00 /, " ") : ""].filter(Boolean).join(" · ");
+  return [system.name || m?.os, system.model, system.cpu, system.cores ? t("lib-machine-detail.cores", { count: system.cores }) : "", system.memory ? bytesBin(system.memory).replace(/\.00 /, " ") : ""].filter(Boolean).join(" · ");
 }
 
 /** How the hub reaches the machine. */
 export function connectionText(m: DetailMachine): string {
-  if (m.kind === "local") return "hub 所在的机器，直接运行 node";
-  if (m.kind === "ssh" || m.ssh_host) return `hub 通过 ssh ${m.ssh_host || m.id} 接入`;
-  if (m.kind === "link") return "这台电脑主动连 hub（电脑链路）";
-  return m.kind ? `接入方式：${m.kind}` : "";
+  if (m.kind === "local") return t("lib-machine-detail.conn_local");
+  if (m.kind === "ssh" || m.ssh_host) return t("lib-machine-detail.conn_ssh", { host: m.ssh_host || m.id });
+  if (m.kind === "link") return t("lib-machine-detail.conn_link");
+  return m.kind ? t("lib-machine-detail.conn_kind", { kind: m.kind }) : "";
 }
 
 /** 系统: what it is, what it runs on, since when, and the versions (label, value, mono?). */
 export function systemFacts(system: SystemInfo | undefined, m: DetailMachine | undefined, nowSec: number, tz = 0): [string, string, boolean?][] {
   const out: [string, string, boolean?][] = [];
-  if (system?.name) out.push(["系统", system.name + (system.build ? `（${system.build}）` : "")]);
-  if (system?.kernel) out.push(["内核", system.kernel, true]);
+  if (system?.name) out.push([t("lib-machine-detail.fact_system"), system.build ? t("lib-machine-detail.fact_system_build", { name: system.name, build: system.build }) : system.name]);
+  if (system?.kernel) out.push([t("lib-machine-detail.fact_kernel"), system.kernel, true]);
   const arch = system?.arch || m?.arch;
-  if (arch) out.push(["架构", arch, true]);
-  if (system?.model) out.push(["型号", system.model]);
-  if (system?.cpu) out.push(["处理器", system.cpu]);
-  if (system?.cores) out.push(["核心", `${system.cores} 核`]);
-  if (system?.memory) out.push(["内存", bytesBin(system.memory).replace(/\.00 /, " ")]);
-  if (m?.hostname) out.push(["主机名", m.hostname, true]);
+  if (arch) out.push([t("lib-machine-detail.fact_arch"), arch, true]);
+  if (system?.model) out.push([t("lib-machine-detail.fact_model"), system.model]);
+  if (system?.cpu) out.push([t("lib-machine-detail.fact_cpu"), system.cpu]);
+  if (system?.cores) out.push([t("lib-machine-detail.fact_cores"), t("lib-machine-detail.cores", { count: system.cores })]);
+  if (system?.memory) out.push([t("lib-machine-detail.fact_memory"), bytesBin(system.memory).replace(/\.00 /, " ")]);
+  if (m?.hostname) out.push([t("lib-machine-detail.fact_hostname"), m.hostname, true]);
   if (system?.boot_time) {
     const d = new Date((system.boot_time + tz) * 1000);
-    const day = `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${hm(system.boot_time, tz)}`;
-    out.push(["开机于", m?.online ? `${day}（已运行 ${uptime(system.boot_time, nowSec)}）` : day]);
+    const day = `${formatDate(d, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })} ${hm(system.boot_time, tz)}`;
+    out.push([t("lib-machine-detail.fact_boot"), m?.online ? t("lib-machine-detail.fact_boot_uptime", { day, uptime: uptime(system.boot_time, nowSec) }) : day]);
   }
   if (m?.claude_version) out.push(["Claude Code", m.claude_version, true]);
   if (m?.herdr_version) out.push(["herdr", m.herdr_version, true]);
   if (m?.node_version) out.push(["jarvisd", m.node_version, true]);
   const conn = m ? connectionText(m) : "";
-  if (conn) out.push(["接入", conn]);
+  if (conn) out.push([t("lib-machine-detail.fact_connection"), conn]);
   return out;
 }
