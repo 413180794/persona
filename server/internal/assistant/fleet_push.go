@@ -57,6 +57,8 @@ type turn struct {
 	endedAt    time.Time
 	gen        int
 	background bool // ended once with background work still running; the next end decides
+	// sawBackground: background work was seen running during the turn (holdIfBackground)
+	sawBackground bool
 }
 
 func newTurnTracker() *turnTracker { return &turnTracker{turns: map[string]*turn{}} }
@@ -102,6 +104,28 @@ func (t *turnTracker) ended(key string, now time.Time, background bool) int {
 		tr.background = true
 	}
 	return tr.gen
+}
+
+// sawBackground: the session's turn has background work running (as a working session's list shows it).
+func (t *turnTracker) sawBackground(key string, now time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	tr := t.turns[key]
+	if tr == nil { // the manager came up mid-turn: count from now
+		tr = &turn{start: now}
+		t.turns[key] = tr
+	}
+	tr.sawBackground = true
+}
+
+// holdIfBackground: the session's turn stopped and a report woke it unseen (stop and wake in one list): held as
+// ended would have, when the turn had background work running.
+func (t *turnTracker) holdIfBackground(key string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if tr := t.turns[key]; tr != nil && tr.sawBackground {
+		tr.background = true
+	}
 }
 
 // drop forgets the session's turn that ended as gen, when nothing happened since, and says when it started (ok): a

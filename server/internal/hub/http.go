@@ -616,8 +616,11 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(p.NameHint) != "" {
 		nameFrom = p.NameHint
 	}
-	if p.TodoID != "" {
-		// The decisions go to the agent, not into its tab's name (nameFrom is taken before).
+	if p.TodoID != "" && p.ResumeSessionID == "" {
+		// The project background and the decisions go to the agent, not into its tab's name (nameFrom is taken
+		// before, #1618, #2820).
+		p.Prompt = h.withTodoStart(r.Context(), p.TodoID, m.cfg.ID, startCwd(m, p.Cwd), p.Prompt)
+	} else if p.TodoID != "" {
 		p.Prompt = h.withTodoDecisions(r.Context(), p.TodoID, p.Prompt)
 	}
 	async := startsAsync(p.Async, p.ResumeSessionID, p.AgentType)
@@ -656,6 +659,13 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	res.Session.MachineID = m.cfg.ID
 	if shown, ok := h.awaitListed(ctx, m, res.Session.SessionID); ok {
 		res.Session.State = shown.State // as the manager works it out (fleet_link.go)
+	}
+	if p.TodoID != "" && p.ResumeSessionID == "" && strings.TrimSpace(p.Prompt) == "" {
+		cwd := res.Session.Cwd
+		if cwd == "" {
+			cwd = startCwd(m, p.Cwd)
+		}
+		h.fresh.add(m.cfg.ID, res.Session.SessionID, p.TodoID, cwd) // its first message gets the background
 	}
 	if p.TodoID != "" {
 		title := res.Session.Title

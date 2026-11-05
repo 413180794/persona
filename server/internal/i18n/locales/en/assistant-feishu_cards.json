@@ -110,5 +110,12 @@
   "directory_placeholder": "~/code/project",
   "what_to_do": "What should it do",
   "what_to_do_placeholder": "Optional; you can say it here later",
-  "start": "Start"
+  "start": "Start",
+  "elicitation_title": "{where} needs you to authorize or fill in",
+  "elicitation_summary": "Needs you to authorize: {message}",
+  "elicitation_open": "Authorize",
+  "elicitation_fields": "To fill in: {fields}",
+  "elicitation_in_app": "Fill it in and submit it in the Persona app.",
+  "elicitation_host": "Opens: {host}",
+  "elicitation_confirm_in_app": "After authorizing, confirm in the Persona app."
 }

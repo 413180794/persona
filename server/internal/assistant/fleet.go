@@ -704,9 +704,9 @@ func (s *Service) mutedSessions(mid string, list []proto.Session) []string {
 // setSessions takes a node's session list: the turns it shows starting and ending (the finished push, the
 // assistant's own business), then the list the apps get.
 func (s *Service) setSessions(machine string, list []proto.Session) {
-	before := map[string]string{}
+	before := map[string]proto.Session{}
 	for _, sess := range s.fleetPrevious(machine) {
-		before[sess.SessionID] = sess.Status
+		before[sess.SessionID] = sess
 	}
 	now := time.Now()
 	for i := range list {
@@ -716,7 +716,15 @@ func (s *Service) setSessions(machine string, list []proto.Session) {
 	}
 	for _, sess := range list {
 		// Any agent (herdr or headless, started by Persona or not) finishing a turn may notify the phone.
-		prev, key := before[sess.SessionID], machine+"/"+sess.SessionID
+		was, key := before[sess.SessionID], machine+"/"+sess.SessionID
+		prev := was.Status
+		// The turn stopped on background work and its report woke it again within one of the node's list ticks: the
+		// stop never showed, only the woken flag turning on. It is held work all the same (#4187, #4419). By the
+		// background seen during the turn, not only in the last list: the list's background and its woken flag are
+		// not always read together.
+		if prev == proto.StatusWorking && sess.WokeByTask && !was.WokeByTask {
+			s.turnsBook().holdIfBackground(key)
+		}
 		switch {
 		case sess.Status == proto.StatusWorking && prev != proto.StatusWorking:
 			s.turnsBook().working(key, now)
@@ -728,6 +736,9 @@ func (s *Service) setSessions(machine string, list []proto.Session) {
 			// items of the turn (a channel's answer is read from them).
 			ref := SessionRef{MachineID: machine, SessionID: sess.SessionID}
 			s.inOrder(func() { go s.TurnEnded(context.Background(), ref) })
+		}
+		if sess.Status == proto.StatusWorking && backgroundRunning(sess) {
+			s.turnsBook().sawBackground(key, now)
 		}
 	}
 	s.fleetKeepPrevious(machine, list)

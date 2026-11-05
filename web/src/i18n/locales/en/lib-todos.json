@@ -17,6 +17,7 @@
   "decision_manual": "Added by hand",
   "decision_agent_question": "Answered in an agent's question",
   "decision_in_question": "Answered in a question from \"{title}\"",
+  "decision_outcome": "Recorded when the agent finished",
   "with_project_named": "With project {name}",
   "with_project": "With project",
   "spawned_by": "Spawned by {title}",

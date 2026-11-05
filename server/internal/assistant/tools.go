@@ -222,7 +222,9 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		// conversation's turn and given agentStartTimeout instead of the old 100s.
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), agentStartTimeout)
 		defer cancel()
-		params := map[string]any{"cwd": a.Cwd, "launcher": a.Launcher, "prompt": a.Prompt, "tab_name": s.tabName(sctx, a.Prompt)}
+		// The tab is named from the prompt as written; the agent gets its project's background before it (#2820).
+		params := map[string]any{"cwd": a.Cwd, "launcher": a.Launcher, "tab_name": s.tabName(sctx, a.Prompt)}
+		params["prompt"] = s.withProjectContext(sctx, am.ID, a.Cwd, a.Prompt)
 		if err := s.applyModel(sctx, "agent.new", params); err != nil {
 			return "", err
 		}

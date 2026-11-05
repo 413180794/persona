@@ -273,7 +273,7 @@ func TestAcceptanceAskEndedElsewhere(t *testing.T) {
 			s.todos.mu.Unlock()
 		}, false},
 		{"closed by a review", func(ctx context.Context, s *Service, id string) {
-			if ok, err := s.reviewDoneTodo(ctx, id, "验收通过"); err != nil || !ok {
+			if ok, err := s.reviewDoneTodo(ctx, id, "验收通过", true); err != nil || !ok {
 				t.Fatalf("review done: %v %v", ok, err)
 			}
 		}, false},

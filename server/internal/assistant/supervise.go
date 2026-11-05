@@ -829,7 +829,7 @@ func (s *Service) toolTaskReview(ctx context.Context, self string, args json.Raw
 			reason = "取消：" + cmp.Or(clip(oneLine(note), 80), "不做了")
 		}
 		if t.DoneAt == nil {
-			closed, err := s.reviewDoneTodo(ctx, t.ID, reason)
+			closed, err := s.reviewDoneTodo(ctx, t.ID, reason, verdict == reviewAccepted)
 			if err != nil {
 				return "", err
 			}
@@ -878,8 +878,10 @@ type reviewFeedBody struct {
 	Checks  []ReviewCheck `json:"checks,omitempty"`
 }
 
-// reviewDoneTodo closes todo id after its review (done_by review, with reason); false when it was done already.
-func (s *Service) reviewDoneTodo(ctx context.Context, id, reason string) (bool, error) {
+// reviewDoneTodo closes todo id after its review (done_by review, with reason); false when it was done already. An
+// accepted task's outcome is recorded, as when it closes by itself or the user closes it (todo_outcome.go, #2820); a
+// cancelled one came to nothing and records none.
+func (s *Service) reviewDoneTodo(ctx context.Context, id, reason string, accepted bool) (bool, error) {
 	now := time.Now().UTC()
 	var row db.TodoRow
 	if st := s.supervisionDB(); st != nil && s.todoDB() != nil {
@@ -897,7 +899,17 @@ func (s *Service) reviewDoneTodo(ctx context.Context, id, reason string) (bool, 
 			ReopenedAt: t.ReopenedAt, Quiet: t.Quiet}
 		row.DoneAt, row.DoneBy, row.DoneReason, row.UpdatedAt = &now, db.DoneByReview, reason, now
 	}
-	_, ok := s.applyTodoRow(ctx, id, row, func(t *Todo) bool { return t.DoneAt == nil || s.supervisionDB() != nil })
+	var before Todo
+	_, ok := s.applyTodoRow(ctx, id, row, func(t *Todo) bool {
+		if t.DoneAt == nil || s.supervisionDB() != nil {
+			before = copyTodoLocked(t) // its agents as they worked on it, before done releases them
+			return true
+		}
+		return false
+	})
+	if ok && accepted && row.DoneAt != nil {
+		go s.recordTaskOutcome(before, *row.DoneAt)
+	}
 	return ok, nil
 }
 

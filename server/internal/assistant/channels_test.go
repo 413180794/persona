@@ -649,6 +649,48 @@ func TestBotTextInLanguages(t *testing.T) {
 	}
 }
 
+// An MCP server asking to authorize or to fill in a form says on the card what it asks: its message, the link as a
+// button; a form's fields by name only (filled in the app), no inputs in Feishu.
+func TestFeishuElicitationCardSaysWhatItAsks(t *testing.T) {
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	s := newTestService(t, f)
+	ctx := context.Background()
+	link := proto.Interaction{ID: "e1", MachineID: "server", SessionID: "a1", Kind: proto.IxElicitation,
+		Elicitation: &proto.Elicitation{Mode: "url", Message: "登录 GitHub 授权这个 MCP 服务", URL: "https://github.com/login/device"}}
+	b, _ := json.Marshal(s.interactionCard(ctx, link))
+	got := string(b)
+	if !strings.Contains(got, "登录 GitHub 授权这个 MCP 服务") || !strings.Contains(got, `"default_url":"https://github.com/login/device"`) ||
+		!strings.Contains(got, "去授权") || !strings.Contains(got, "要你授权：") || strings.Contains(got, `"template":"grey"`) {
+		t.Fatalf("link card %s", got)
+	}
+	if !strings.Contains(got, "将打开：") || !strings.Contains(got, "github.com") || !strings.Contains(got, "回到 Persona App 点确认") {
+		t.Fatalf("link card host / confirm note %s", got)
+	}
+	// A link with a user in it reads as one site and opens another: refused, as the apps refuse it.
+	for _, bad := range []string{"https://github.com@evil.example/login", "https://user:pw@example.com/", "https:///example.com", "https:example.com"} {
+		ix := link
+		ix.Elicitation = &proto.Elicitation{Mode: "url", Message: "登录 GitHub 授权", URL: bad}
+		b, _ := json.Marshal(s.interactionCard(ctx, ix))
+		if c := string(b); strings.Contains(c, "evil.example") || strings.Contains(c, "去授权") || strings.Contains(c, "将打开") {
+			t.Fatalf("%q: %s", bad, c)
+		}
+	}
+	// The button opens the link exactly as given.
+	if lk, host := elicitationTarget(" https://example.com/a?b=c%20d "); lk != "https://example.com/a?b=c%20d" || host != "example.com" {
+		t.Fatalf("target %q %q", lk, host)
+	}
+	form := proto.Interaction{ID: "e2", MachineID: "server", SessionID: "a1", Kind: proto.IxElicitation,
+		Elicitation: &proto.Elicitation{Mode: "form", Message: "填写连接信息", URL: "javascript:alert(1)",
+			RequestedSchema: json.RawMessage(`{"properties":{"token":{"title":"访问令牌","writeOnly":true},"host":{}}}`)}}
+	b, _ = json.Marshal(s.interactionCard(ctx, form))
+	got = string(b)
+	if !strings.Contains(got, "填写连接信息") || !strings.Contains(got, "访问令牌") || !strings.Contains(got, "host") ||
+		!strings.Contains(got, "到 Persona App 里填写") || strings.Contains(got, "javascript:") || strings.Contains(got, `"tag":"input"`) ||
+		strings.Contains(got, "去授权") {
+		t.Fatalf("form card %s", got)
+	}
+}
+
 // A synced turn goes to Feishu whole, laid out like the bot's answers (more cards when long), where it came from and
 // the open button under the last card only; a reply to any card goes back to that conversation.
 func TestFeishuMirrorSendsTheWholeAnswer(t *testing.T) {

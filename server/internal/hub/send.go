@@ -119,8 +119,16 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			writeErr(w, http.StatusConflict, errors.New("todo is already completed"))
 			return
 		}
-		// Handed to the agent for the todo: the calls already made on it go first (#1618).
-		if text, ok := p["text"].(string); ok {
+	}
+	fresh := false
+	if text, ok := p["text"].(string); ok && strings.TrimSpace(text) != "" && !answerOnly(r) {
+		if f, ok := h.fresh.peek(m.cfg.ID, sid); ok && (todoID == "" || todoID == f.todoID) {
+			fresh = true
+			// The first message of an agent started for a todo with none: a new agent's first prompt, with its
+			// project's background and the todo's decisions first (#2820; iOS and Android send it without todo_id).
+			p["text"] = h.withTodoStart(r.Context(), f.todoID, m.cfg.ID, f.cwd, text)
+		} else if todoID != "" {
+			// Handed to the agent for the todo: the calls already made on it go first (#1618).
 			p["text"] = h.withTodoDecisions(r.Context(), todoID, text)
 		}
 	}
@@ -185,6 +193,9 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	}
 	if id == "" {
 		status, body := h.deliver(ctx, m, p)
+		if status == http.StatusOK && fresh {
+			h.fresh.done(m.cfg.ID, sid)
+		}
 		if status == http.StatusOK && todoID != "" {
 			var title, cwd, agent string
 			if s, ok := m.session(sid); ok {
@@ -245,6 +256,9 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		}
 	}
 	close(f.done)
+	if f.status == http.StatusOK && fresh {
+		h.fresh.done(m.cfg.ID, sid)
+	}
 	if f.status == http.StatusOK && todoID != "" {
 		var title, cwd, agent string
 		if s, ok := m.session(sid); ok {

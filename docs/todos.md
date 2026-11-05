@@ -13,7 +13,7 @@
 - **助手**：存储（下面的四张表，还在 hub 的 Postgres 里、没有迁移，只有助手的进程读写）、下面「接口概要」里待办的全部接口、随项目自动挂和派生跟随、herdr 标记的对账、Agent 标题和启动错误的快照、决策记录、自动完成、做完的任务关掉 Agent。
   hub 收到某台电脑的会话列表时发 `sessions.changed`，用户处理了卡片发 `interaction.resolved`，这几件事都从这两个事件来。
 - **hub**：只转发待办的接口（`assistantwire.Routes`，调用方的角色一起带过去，只读角色照旧 403），给 App 的会话列表、提问卡片、推送用助手在快照里报的那份（`todos`：每个 Agent 在为哪个未完成的待办干活、哪些 Agent 是安静的，`hub/assistant_todos.go`；安静的只报未完成或完成不到 7 天的安静任务的 Agent（`quietKeep`），让这份报告保持小，更早的任务的 Agent 再干活时照常推送）；
-  `POST /api/v1/sessions`、`POST /api/v1/sessions/{mid}/{sid}/messages` 带 `todo_id` 时先问助手这个待办在不在、完成没有、要交给 Agent 的话前面拼上决策（`assistant.todo_handoff`），交出去以后让助手挂上（`assistant.todo_link`）；经 hub 改工作区名字时告诉助手（`todos.space_renamed`）。协议见 `docs/protocol.md`「总线」。
+  `POST /api/v1/sessions`、`POST /api/v1/sessions/{mid}/{sid}/messages` 带 `todo_id` 时先问助手这个待办在不在、完成没有、要交给 Agent 的话前面拼上决策、新开的 Agent 再拼上项目背景（`assistant.todo_handoff`），交出去以后让助手挂上（`assistant.todo_link`）；经 hub 改工作区名字时告诉助手（`todos.space_renamed`）。协议见 `docs/protocol.md`「总线」。
 - **助手没连着时**（hub 刚起来、助手的进程在重启）：待办的接口回 `503 assistant_offline`「助手暂时连不上，稍后再试」，带 `todo_id` 的新建会话和发消息同样 503（不知道待办在不在）；会话列表上的待办、安静的标记照 hub 留着的最后一份显示（hub 刚起来、助手还没报的那一两秒里没有）；这期间 hub 不发事件，所以自动挂、标记对账、决策记录要等它连上以后的下一份会话列表或下一次回答，经 hub 改名的工作区不迁移。
 
 ## 数据模型
@@ -71,7 +71,7 @@
 - `id` (text, PK)：`dec_` 开头的不透明标识。
 - `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE)。
 - `question` / `choice` / `reason` (text)：问题、选了什么、原因（原因可空）。
-- `source` (text, NOT NULL, DEFAULT 'manual')：`manual` 在待办里手动记的；`card` 用户答 Agent 的提问卡片时自动记的。
+- `source` (text, NOT NULL, DEFAULT 'manual')：`manual` 在待办里手动记的；`card` 用户答 Agent 的提问卡片时自动记的；`outcome` 任务做完时从 Agent 最后的回复里抽的结论、决定和踩坑（见下面「做完记结论」）。
 - `source_machine` / `source_session` / `source_message` (text)：出处，`card` 时是提问的 Agent 和那张卡片（interaction id），手动记的为空。
 - `supersedes_id` (text, FK → `todo_decisions(id)` ON DELETE SET NULL)：这条改判了哪一条更早的决策。
 - `created_at` (timestamptz, NOT NULL)。
@@ -293,6 +293,25 @@ curl -X POST '<hub 地址>/api/v1/todos/retitle' -H 'Authorization: Bearer <toke
 - 记一条、改判都会更新待办的 `updated_at` 并广播 `{"type":"todos"}`，客户端据此重新拉决策。
 
 还没做：Agent 侧按待办随时取决策的 MCP 工具（压缩后重拿）、安卓 / iOS 的决策列表。
+
+## 做完记结论
+
+三循环第 3 步（#2820）：Agent 做完的结论自动沉淀到待办和知识库，用户不用点进 Agent 看；下次派同项目的活自动带上（`server/internal/assistant/todo_outcome.go`）。
+
+- **什么时候记**：主对话派出的任务（待办的 `origin` 不为空）变成完成时：主对话验收通过（`task_review` 的 `accepted`，`reviewDoneTodo`：主对话派出的任务都有督办，不自己关，等验收），自动完成判定做完了（`autoDoneTodo`，没有督办的任务），或用户点了完成（`PATCH /api/v1/todos/{id}` 的 `done: true`）。手动记的待办、启动失败结束的任务、验收时取消（`cancelled`）的任务不记。在后台做，不拖慢完成本身。
+- **抽什么**：读这个任务上每个还挂着的 Agent 最后一轮的回复（读不到就用会话列表的 `last_text`；被模型服务打断的不算），用模型（用途 `kb.project`，提示词 `server/internal/prompts/todo/outcome.md`、`outcome_input.md`）抽出：一句话结论（最多 120 字）、PR / 部署链接（最多 3 个）、做过的决定、踩坑（各最多 5 条），回复里没交代的不编。读回复最多 1 分钟、等模型最多 90 秒，写决策和时间线另给 45 秒，模型慢了也不耽误写。
+  模型不可用（没配、额度、回复解析不了）时，结论退回回执里的那段文字（最新那个 Agent 的回复压成一行，最多 120 字），链接只取回复里的 GitHub PR，不抽决定和踩坑。
+- **写进决策区**：结论（「做完的结论」+ 结论和链接）、每条决定（问题 / 选了 / 原因）、每条踩坑（「踩过的坑」）各记一条决策，`source = "outcome"`，出处是最新那个 Agent（`source_machine` / `source_session`）。
+  同一次完成只记一次：`source_message` 是 `outcome:<待办 id>:<完成时间>#<序号>`，同一次完成重复触发（两条路同时走到、hub 重启后再来）先查库里有没有这次的；结论那一条最先写，写进去的才接着写决定、踩坑和时间线（两个助手共用一个库时只有一个写成），待办已经删了也就不写；重新打开再完成是新的一次，另记。网页决策区的出处显示「Agent 做完时记的」；交给 Agent 时这几条也在「已定的决策」里，标着「Agent 做完时记的，不是用户定的」。
+- **写进知识库**：每个 Agent 的工作目录对应的项目（`kb.Engine.ProjectsForWork`：先按项目登记的代码目录 `dirs`；一个都对不上时，按目录名找没登记任何代码目录的项目，名字、slug 或别名一样就算，登记了目录的项目不按名字找），
+  在 `log.md` 追加一行「结论：<结论> <最多两个链接>」（一行最多 200 字：链接整个保留，结论按剩下的地方截短），来源「待办 · <标题>」（标题去掉 ` · `，最长 60 字），一个项目只记一行。不受 `kb.agent_turn` 每个 Agent 30 分钟一条的限制。知识库还没打开时等 30 秒再试一次，仍不行就只记决策。
+- **派活带背景**：开一个新的 Agent 时，按它的目标目录（同上的找法）找到项目，把项目一句话和项目时间线里最近 5 条「待办 ·」结论（新的在前；只认来源以「待办 · 」开头、正文以「结论：」开头的行，同名的群聊记录不算）拼成一段 `<jarvis-context kind="context" title="项目 · <名字> · 背景">`（提示词 `server/internal/prompts/todo/project.md`）放在 prompt 最前面；一个目录属于多个项目时最多带两个。没有项目、项目既没一句话也没结论、知识库没开时原样发。
+  - 助手的 `task_plan`（`startTaskAgent`，重试时连待办的决策一起带）、`agent_start`：直接拼；tab 名字仍按原来的标题 / prompt 起。
+  - App「交给 Agent → 新开」走 hub：`POST /api/v1/sessions` 带 `todo_id` 和 `prompt` 时，hub 问助手（`assistant.todo_handoff` 带 `new: true`、`machine_id`、`cwd`，`cwd` 按那台电脑的家目录展开 `~/` 和空值），项目背景放在决策前面。
+    各端的 Claude 是先后台开、再发第一条消息（`async`，prompt 为空）：hub 记下「这个会话是为这个待办新开的」（内存，15 分钟），它的第一条消息当作新 Agent 的第一句，带上项目背景和决策；iOS / 安卓的第一条消息不带 `todo_id` 也认。发送成功才忘掉这条记录，没发出去（被拒、什么都没打进去）再发时照样带；只答复的设备发的消息不算。hub 在这之间重启过就原样发。
+  - 交给已有的 Agent（发消息）只带决策，不带项目背景。
+
+还没做：结论的人工编辑和撤销（现在能在决策区标「取代」）、飞书汇报（#2768）、iOS / 安卓的决策列表。
 
 ## 各端交互设计
 

@@ -129,7 +129,7 @@ enum LinkText {
         switch s {
         case ..<60: return "不到 1 分钟"
         case ..<3600: return "\(s / 60) 分钟"
-        case ..<86400: return "\(s / 3600) 小时 \(s % 3600 / 60) 分"
+        case ..<86400: return "\(s / 3600) 小时 \(s % 3600 / 60) 分钟"
         default: return "\(s / 86400) 天 \(s % 86400 / 3600) 小时"
         }
     }
@@ -138,7 +138,7 @@ enum LinkText {
     static func hub(name: String, mesh: Int?) -> String {
         switch mesh {
         case let n? where n > 1: "hub「\(name)」· 互联组共 \(n) 台 hub"
-        case 1: "hub「\(name)」· 没有互联别的 hub"
+        case 1: "hub「\(name)」· 没和别的 hub 互联"
         default: "hub「\(name)」"
         }
     }
@@ -456,8 +456,12 @@ enum LinkText {
 
     /// The order jarvis-link tries them in (internal/link ranked).
     static func ranked(_ eps: [LinkEndpoint]) -> [LinkEndpoint] {
+        // Same URL may arrive both manually and from the hub; keep the first occurrence like the Go reference (manual
+        // ones are ordered first upstream), then rank.
+        var seen = Set<String>()
+        let unique = eps.filter { seen.insert($0.url).inserted }
         let rank = ["lan": 0, "ipv6": 1, "name": 2]
-        return eps.enumerated().sorted { a, b in
+        return unique.enumerated().sorted { a, b in
             let ra = rank[a.element.kind] ?? 3, rb = rank[b.element.kind] ?? 3
             if ra != rb { return ra < rb }
             let ma = a.element.manual == true, mb = b.element.manual == true
@@ -474,29 +478,81 @@ enum LinkText {
     /// Runs the helper once: `message` is its stdout when it worked, else its stderr (or stdout); `out` and `err` apart.
     nonisolated static func runHelper(_ args: [String], stdin: String?, split: Bool) async
         -> (ok: Bool, message: String, out: String, err: String) {
+        await runHelper(executable: helperURL, arguments: args, stdin: stdin, environment: helperEnvironment, split: split)
+    }
+
+    /// Runs an executable once with the given environment (testable seam): `message` is its stdout when it worked,
+    /// else its stderr (or stdout); `out` and `err` apart.
+    nonisolated static func runHelper(executable: URL, arguments: [String], stdin: String?, environment: [String: String],
+                                     split: Bool) async
+        -> (ok: Bool, message: String, out: String, err: String) {
         await withCheckedContinuation { done in
             let p = Process()
-            p.executableURL = helperURL
-            p.environment = helperEnvironment
-            p.arguments = args
+            p.executableURL = executable
+            p.environment = environment
+            p.arguments = arguments
             let out = Pipe(), err = Pipe(), input = Pipe()
             p.standardOutput = out
             p.standardError = err
             p.standardInput = input
+            // The termination handler runs on a background queue while launch/stdin errors throw on the caller's
+            // queue, so both finishing paths go through this once-guard: the continuation resumes exactly once.
+            let once = Once()
+            let finish: @Sendable (Bool, String, String, String) -> Void = { ok, message, o, e in
+                guard once.claim() else { return }
+                done.resume(returning: (ok, message, o, e))
+            }
             p.terminationHandler = { proc in
                 let o = (String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 let e = (String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 let ok = proc.terminationStatus == 0
-                done.resume(returning: (ok, ok ? o : (e.isEmpty ? o : e), o, e))
+                finish(ok, ok ? o : (e.isEmpty ? o : e), o, e)
             }
             do {
                 try p.run()
-                if let stdin { input.fileHandleForWriting.write(Data(stdin.utf8)) }
-                try? input.fileHandleForWriting.close()
             } catch {
-                done.resume(returning: (false, "后台程序启动不了：\(error.localizedDescription)", "", ""))
+                finish(false, "后台程序启动不了：\(error.localizedDescription)", "", "")
+                return
+            }
+            if let stdin {
+                do {
+                    try Self.writeAll(input.fileHandleForWriting, Data(stdin.utf8))
+                } catch {
+                    // The helper quit before reading stdin (broken pipe). Its termination handler may still win
+                    // the race; if it does not, say the send failed rather than blaming the launch.
+                    finish(false, "给后台程序发送数据失败：\(error.localizedDescription)", "", "")
+                }
+            }
+            try? input.fileHandleForWriting.close()
+        }
+    }
+
+    /// GUI apps launched from the Finder already run with SIGPIPE ignored; a CLI launch (debugger, xctest) does
+    /// not, where a broken-pipe helper write would kill the process. Install the GUI disposition once.
+    private static let installIgnoredSigpipe: Void = {
+        Darwin.signal(SIGPIPE, SIG_IGN)
+    }()
+
+    /// Writes every byte to a pipe.
+    ///
+    /// `FileHandle.write` raises an uncatchable ObjC exception on EPIPE (with SIGPIPE ignored, the write fails
+    /// with EPIPE rather than raising a signal), so go through `write(2)` and let a helper that exits before
+    /// reading its stdin fail as a normal Swift error.
+    nonisolated static func writeAll(_ handle: FileHandle, _ data: Data) throws {
+        _ = installIgnoredSigpipe
+        let fd = handle.fileDescriptor
+        try data.withUnsafeBytes { raw in
+            guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return }
+            var sent = 0
+            while sent < raw.count {
+                let written = Darwin.write(fd, base.advanced(by: sent), raw.count - sent)
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                }
+                sent += written
             }
         }
     }
@@ -515,4 +571,22 @@ enum LinkText {
         }
         return d
     }()
+}
+
+/// A thread-safe one-shot gate: only the first claim wins.
+///
+/// A `Process` runs its `terminationHandler` on a background queue while a launch or stdin error throws on the
+/// caller's queue, so code that must finish exactly once (a checked continuation) claims it through this gate.
+final class Once: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+
+    /// Returns true for exactly one caller, ever; every later claim returns false.
+    func claim() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if claimed { return false }
+        claimed = true
+        return true
+    }
 }

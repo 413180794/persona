@@ -110,5 +110,12 @@
   "directory_placeholder": "~/code/project",
   "what_to_do": "依頼内容",
   "what_to_do_placeholder": "空欄可。あとからここで伝えられます",
-  "start": "開始"
+  "start": "開始",
+  "elicitation_title": "{where}が認証または入力を求めています",
+  "elicitation_summary": "認証が必要です：{message}",
+  "elicitation_open": "認証する",
+  "elicitation_fields": "入力項目：{fields}",
+  "elicitation_in_app": "Persona Appで入力して送信してください。",
+  "elicitation_host": "開くサイト：{host}",
+  "elicitation_confirm_in_app": "認証後、Persona Appに戻って確定してください。"
 }

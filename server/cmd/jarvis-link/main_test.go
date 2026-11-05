@@ -170,7 +170,7 @@ func TestInstallWritesTheUnitStartsItAndWaitsForTheLink(t *testing.T) {
 	}
 	out := f.out.String()
 	for _, want := range []string{"装好了 " + f.binPath(), "装好了 systemd 用户服务", "sudo loginctl enable-linger pi",
-		"连上了：「家里」，没有互联别的 hub，内网 192.0.2.10:18662；本机 node 在线。"} {
+		"连上了：「家里」，没和别的 hub 互联，内网 192.0.2.10:18662；本机 node 在线。"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -318,7 +318,7 @@ func TestStatus(t *testing.T) {
 		t.Fatalf("connected: %v", err)
 	}
 	want := `模式：我去连 hub（主动）
-链路：已连接 · 内网 192.0.2.10:18662 · 已连 2 小时 3 分
+链路：已连接 · 内网 192.0.2.10:18662 · 已连 2 小时 3 分钟
 hub：「家里」，互联组共 3 台 hub
 本机 node：在线
 这台电脑：hub 上的「pi」
@@ -581,7 +581,7 @@ func TestHubText(t *testing.T) {
 		want      string
 	}{
 		{"家里", 3, "h1", true, "「家里」，互联组共 3 台 hub"},
-		{"家里", 1, "h1", true, "「家里」，没有互联别的 hub"},
+		{"家里", 1, "h1", true, "「家里」，没和别的 hub 互联"},
 		{"家里", 0, "h1", false, "「家里」"},
 		{"", 0, "h1", true, "h1（旧版 hub 不报名字）"},
 		{"", 0, "h1", false, "h1"}, // not connected yet: nothing known about its version

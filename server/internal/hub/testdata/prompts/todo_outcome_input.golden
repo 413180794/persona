@@ -1,0 +1,10 @@
+任务：修登录页横屏崩溃
+
+派活时的要求：
+iPad 横屏时登录页崩溃，修好并补测试
+
+Agent（box · /code/weather/ios）最后的回复：
+修好了，PR https://github.com/example/weather/pull/12 已合并。
+
+Agent（laptop）最后的回复：
+测试补好了。

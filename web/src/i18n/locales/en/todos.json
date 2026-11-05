@@ -69,7 +69,7 @@
   "add_decision": "Add",
   "decisions_failed": "Couldn't load decisions: {error}",
   "retry": "Retry",
-  "decisions_empty": "Decisions made on this to-do go here. Your answers to an agent's questions are recorded automatically, and you can add your own. The current ones go along when you hand it to an agent.",
+  "decisions_empty": "Decisions made on this to-do go here. Your answers to an agent's questions are recorded automatically, and so are the outcome, decisions and pitfalls when a task is finished; you can add your own. The current ones go along when you hand it to an agent.",
   "chose": "Chose: ",
   "reason": "Reason: ",
   "superseded": "Revised",

@@ -57,17 +57,19 @@ type fakeHub struct {
 	snaps         []Snapshot
 
 	// Agents a task starts (session.start a1, a2…) and what was sent to them; a machine offline, a node refusing.
-	starts    []map[string]any
-	agentSent []map[string]any
-	agents    int
-	offline   map[string]bool
-	failStart error
-	slowStart bool     // session.start blocks until the call's context ends, then answers with its error (a node that builds the session before answering late)
-	judged    int      // the done judge's calls to the model
-	judge     string   // what they answer ("": an error)
-	retired   []string // session.retire's session ids
-	retireErr error
-	tokens    map[string][]map[string]map[string]string // todo.sync_session_tokens, by machine, in order
+	starts       []map[string]any
+	agentSent    []map[string]any
+	agents       int
+	offline      map[string]bool
+	failStart    error
+	slowStart    bool   // session.start blocks until the call's context ends, then answers with its error (a node that builds the session before answering late)
+	judged       int    // the done judge's calls to the model
+	judge        string // what they answer ("": an error)
+	outcome      string // what the outcome model answers (todo_outcome.go; "": an error)
+	outcomeAsked []modelCall
+	retired      []string // session.retire's session ids
+	retireErr    error
+	tokens       map[string][]map[string]map[string]string // todo.sync_session_tokens, by machine, in order
 
 	// The hub's other apps as a test answers them (answerApp), and the calls they got.
 	apps     map[string]appAnswer
@@ -553,6 +555,19 @@ func newKBService(t *testing.T, f *fakeHub) *Service {
 	return s
 }
 
+// newKBServiceOn is newKBService with st as its database.
+func newKBServiceOn(t *testing.T, f *fakeHub, st Store) *Service {
+	t.Helper()
+	f.mu.Lock()
+	if f.hello.KB == nil {
+		f.hello.KB = &KBSettings{}
+	}
+	f.mu.Unlock()
+	s := withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}}))
+	t.Cleanup(s.kbClose)
+	return s
+}
+
 // kbEng is s's knowledge base, open now.
 func kbEng(t *testing.T, s *Service) *kb.Engine {
 	t.Helper()
@@ -784,6 +799,9 @@ func (f *fakeHub) fakeModel(t *testing.T) {
 		case strings.Contains(in.System, "先替用户判断 Agent 的提问"): // the delegate (delegate.go)
 			f.delegateAsked = append(f.delegateAsked, modelCall{strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(in.System), jsonOnly)), user})
 			reply, fail = f.delegate, f.delegate == ""
+		case strings.Contains(in.System, "给一件做完的任务记结论"): // the outcome of a finished task (todo_outcome.go)
+			f.outcomeAsked = append(f.outcomeAsked, modelCall{in.System, user})
+			reply, fail = f.outcome, f.outcome == ""
 		case strings.HasSuffix(strings.TrimSpace(in.System), jsonOnly):
 			f.judged++
 			reply, fail = f.judge, f.judge == ""

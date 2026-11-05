@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -314,8 +316,70 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 			c.Note(i18n.T(l, "assistant-feishu_cards.secret_in_app"))
 		}
 		return c.Buttons(open)
+	case proto.IxElicitation:
+		return s.elicitationCard(ctx, ix, open)
 	}
 	return feishubot.NewCard(where, feishubot.Grey, "").Buttons(open)
+}
+
+// elicitationTarget is the link an elicitation may open and its host: an absolute http(s) URL with a host and no
+// user or password (like the apps' urlTarget, web/src/lib/elicitation.ts), exactly as given; "" otherwise. A link
+// such as https://github.com@evil.example/ reads as one site and opens another.
+func elicitationTarget(raw string) (string, string) {
+	target := strings.TrimSpace(raw)
+	if !elicitationURLRe.MatchString(target) {
+		return "", ""
+	}
+	u, err := url.Parse(target)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil {
+		return "", ""
+	}
+	return target, u.Hostname()
+}
+
+// elicitationURLRe: http(s):// and then a host at once (not https:///host or https:host, which parsers forgive).
+var elicitationURLRe = regexp.MustCompile(`(?i)^https?://[^/\\?#@]`)
+
+// elicitationCard is an MCP server asking to authorize (a link) or to fill in a form: what it asks on the card, its
+// link as a button; a form is filled in the app (its values may be secrets), so only its fields' names are shown.
+func (s *Service) elicitationCard(ctx context.Context, ix proto.Interaction, open feishubot.Button) *feishubot.Card {
+	l := s.botLang(ctx)
+	var msg, link, host string
+	var fields []string
+	if e := ix.Elicitation; e != nil {
+		msg = strings.TrimSpace(e.Message)
+		link, host = elicitationTarget(e.URL)
+		var schema struct {
+			Properties map[string]struct {
+				Title string `json:"title"`
+			} `json:"properties"`
+		}
+		if json.Unmarshal(e.RequestedSchema, &schema) == nil {
+			for k, p := range schema.Properties {
+				if t := strings.TrimSpace(p.Title); t != "" {
+					k = t
+				}
+				fields = append(fields, k)
+			}
+			slices.Sort(fields)
+		}
+	}
+	c := feishubot.NewCard("🔑 "+i18n.T(l, "assistant-feishu_cards.elicitation_title", i18n.Args{"where": s.ixWhere(ctx, ix)}), feishubot.Orange,
+		i18n.T(l, "assistant-feishu_cards.elicitation_summary", i18n.Args{"message": clip(oneLine(msg), 60)}))
+	if msg != "" {
+		c.Markdown(feishubot.EscapeMarkdown(clip(msg, 2000)))
+	}
+	if link != "" {
+		// The host on its own line: the link's text could look like another site's (as the apps show it).
+		c.Markdown(i18n.T(l, "assistant-feishu_cards.elicitation_host", i18n.Args{"host": feishubot.Code(host)}))
+		c.Note(i18n.T(l, "assistant-feishu_cards.elicitation_confirm_in_app"))
+		return c.Buttons(feishubot.LinkBtn(i18n.T(l, "assistant-feishu_cards.elicitation_open"), link), open)
+	}
+	if len(fields) > 0 {
+		c.Note(i18n.T(l, "assistant-feishu_cards.elicitation_fields", i18n.Args{"fields": clip(strings.Join(fields, "、"), 200)}))
+	}
+	c.Note(i18n.T(l, "assistant-feishu_cards.elicitation_in_app"))
+	return c.Buttons(open)
 }
 
 func firstQuestion(ix proto.Interaction) string {

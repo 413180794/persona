@@ -228,7 +228,9 @@ func (s *Service) todoDecisionsContext(ctx context.Context, todoID string) strin
 	d := prompts.TodoDecisions{Title: contextText(title)}
 	for i, r := range list {
 		from := ""
-		if r.Source == db.DecisionCard {
+		if r.Source == db.DecisionOutcome {
+			from = "Agent 做完时记的，不是用户定的" // todo_outcome.go: pulled out of a reply, the user did not make it
+		} else if r.Source == db.DecisionCard {
 			from = "在 Agent 的提问里答的"
 			if t := strings.TrimSpace(agents[[2]string{r.SourceMachine, r.SourceSession}]); t != "" {
 				from = "在「" + contextText(oneLine(t)) + "」的提问里答的"

@@ -15,10 +15,12 @@ var (
 	ErrDecisionSupersede = errors.New("a decision can only supersede an earlier decision of the same todo")
 )
 
-// Decision sources: written in the todo by hand, or from the user's answer to an agent's question card.
+// Decision sources: written in the todo by hand, from the user's answer to an agent's question card, or what a task
+// came to when it was finished (its outcome, decisions and pitfalls, #2820).
 const (
-	DecisionManual = "manual"
-	DecisionCard   = "card"
+	DecisionManual  = "manual"
+	DecisionCard    = "card"
+	DecisionOutcome = "outcome"
 )
 
 // TodoDecisionRow is one call the user made on a todo (#1618). SupersedesID names the earlier decision this one

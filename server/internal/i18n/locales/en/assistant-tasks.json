@@ -13,5 +13,7 @@
   "done": "Done",
   "route_no_task": "This chat doesn’t have that task",
   "route_no_agent": "This task has no running agent",
-  "route_offline": "That computer is offline"
+  "route_offline": "That computer is offline",
+  "outcome_question": "Outcome",
+  "outcome_pitfall": "Pitfall"
 }

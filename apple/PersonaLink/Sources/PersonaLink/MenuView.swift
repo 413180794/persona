@@ -222,7 +222,7 @@ extension StatusBlock {
         case "unpaired":
             var out = [Line(symbol: "link.badge.plus", text: "在监听，等 hub 来配对", primary: true), mode]
             if let until = s.codeExpires, until > now {
-                out.append(Line(symbol: "hourglass", text: "配对链接还有 \(LinkText.left(until, now: now))有效：粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」"))
+                out.append(Line(symbol: "hourglass", text: "配对链接还剩 \(LinkText.left(until, now: now))：粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」"))
             } else {
                 out.append(Line(symbol: "info.circle", text: "点「配对 / 修改连接…」生成给 hub 的配对链接"))
             }

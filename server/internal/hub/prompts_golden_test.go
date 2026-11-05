@@ -264,6 +264,29 @@ func TestGoldenTaskDone(t *testing.T) {
 			Text: "挪好了，PR 已合并，TestFlight 构建号 202611040923。没截图的：Mac。"}}, Build: true}))
 }
 
+// What a finished task came to (todo/outcome, #2820): the system prompt, and the task with two agents' last replies.
+func TestTodoOutcomeGolden(t *testing.T) {
+	golden(t, "todo_outcome", prompts.RenderTodoOutcome(prompts.TodoOutcome{Owner: "示例用户"}))
+	golden(t, "todo_outcome_input", prompts.RenderTodoOutcomeInput(prompts.TodoOutcomeInput{Title: "修登录页横屏崩溃",
+		Prompt: "iPad 横屏时登录页崩溃，修好并补测试", Replies: []prompts.TodoOutcomeReply{
+			{Machine: "box", Cwd: "/code/weather/ios", Text: "修好了，PR https://github.com/example/weather/pull/12 已合并。"},
+			{Machine: "laptop", Text: "测试补好了。"},
+		}}))
+}
+
+// The project background a new agent gets (todo/project, #2820): the one line and two outcomes; nothing without either.
+func TestTodoProjectGolden(t *testing.T) {
+	if got := prompts.RenderTodoProject(prompts.TodoProject{Name: "x"}); got != "" {
+		t.Fatalf("nothing to say = %q, want nothing", got)
+	}
+	golden(t, "todo_project", prompts.RenderTodoProject(prompts.TodoProject{Name: `天气 App "1.3"`, OneLine: "天气 App 的 iOS 和安卓版",
+		Outcomes: []prompts.TodoProjectOutcome{
+			{When: "2026-11-05 10:02", Title: "修登录页横屏崩溃", Text: "结论：修好了 https://github.com/example/weather/pull/12"},
+			{When: "2026-11-04 18:30", Title: "发 1.3 版", Text: "结论：发了 TestFlight"},
+		}}))
+	golden(t, "todo_project.no_outcomes", prompts.RenderTodoProject(prompts.TodoProject{Name: "天气 App", OneLine: "天气 App 的 iOS 和安卓版"}))
+}
+
 // The decisions a handoff carries for a todo (todo/decisions, #1618): one by hand with a reason, one from a card.
 func TestTodoDecisionsGolden(t *testing.T) {
 	if got := prompts.RenderTodoDecisions(prompts.TodoDecisions{Title: "x"}); got != "" {

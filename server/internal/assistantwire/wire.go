@@ -468,6 +468,11 @@ type TodoLink struct {
 type TodoHandoff struct {
 	TodoID string `json:"todo_id"`
 	Text   string `json:"text,omitempty"`
+	// New: Text is a new agent's first prompt; the background of the project its directory (Cwd on MachineID) belongs
+	// to goes before it too (#2820). An older assistant ignores these.
+	New       bool   `json:"new,omitempty"`
+	MachineID string `json:"machine_id,omitempty"`
+	Cwd       string `json:"cwd,omitempty"`
 }
 
 // TodoHandoffResult is assistant.todo_handoff's answer: the todo (Found false: no such todo) and Text with the todo's

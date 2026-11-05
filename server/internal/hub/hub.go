@@ -95,6 +95,7 @@ type Hub struct {
 	devtok devTokens   // device token lookups (devicetokens.go)
 	public publicState // TLS identity, listener and advertised addresses (public.go)
 	sends  sendLog     // messages being / just sent, by client_msg_id (send.go)
+	fresh  freshStarts // agents started for a todo without a prompt, until their first message (assistant_todos.go)
 	// ext is what the hub keeps of the extensions, connectors and bots, the manager's (extensions_link.go).
 	ext   extLink
 	admin adminState // the admin UI (admin.go, docs/admin.md)

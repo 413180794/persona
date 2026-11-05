@@ -604,6 +604,11 @@ func (s *Service) todoRoutes() {
 		}
 
 		resTodo, _ := s.applyTodoRow(r.Context(), id, *updatedRow, nil)
+		if cur.DoneAt == nil && updatedRow.DoneAt != nil {
+			// Done by the user: what the task came to goes in its decisions and its projects' timelines (#2820). cur
+			// still has the agents that were working on it.
+			go s.recordTaskOutcome(cur, *updatedRow.DoneAt)
+		}
 		apierr.WriteJSON(w, map[string]any{"todo": resTodo})
 	})
 
@@ -1265,12 +1270,20 @@ func (s *Service) autoDoneTodo(ctx context.Context, id, reason string, work time
 			ReopenedAt: t.ReopenedAt}
 		row.DoneAt, row.DoneBy, row.DoneReason, row.UpdatedAt = &now, db.DoneByAuto, reason, now
 	}
+	var before Todo
 	_, ok := s.applyTodoRow(ctx, id, row, func(t *Todo) bool {
 		if t.UpdatedAt.After(row.UpdatedAt) { // the user changed it after the store did: theirs stands
 			return false
 		}
-		return st != nil || t.DoneAt == nil && (t.ReopenedAt == nil || t.ReopenedAt.Before(work))
+		if st != nil || t.DoneAt == nil && (t.ReopenedAt == nil || t.ReopenedAt.Before(work)) {
+			before = copyTodoLocked(t) // its agents as they worked on it, before done releases them
+			return true
+		}
+		return false
 	})
+	if ok && row.DoneAt != nil {
+		go s.recordTaskOutcome(before, *row.DoneAt) // what the task came to (todo_outcome.go, #2820)
+	}
 	return ok, nil
 }
 
@@ -1333,7 +1346,7 @@ func (s *Service) reopenFailedTodo(ctx context.Context, id string) (Todo, bool, 
 // ---- what the hub asks about them ----
 
 // TodoHandoff: an agent is handed work for todo h.TodoID (assistant.todo_handoff): the todo as it is, and the text
-// with the todo's decisions in effect before it.
+// with the todo's decisions in effect before it (and, for a new agent, its project's background before those).
 func (s *Service) TodoHandoff(ctx context.Context, h TodoHandoff) (TodoHandoffResult, error) {
 	t, ok, err := s.todo(ctx, h.TodoID)
 	if err != nil {
@@ -1342,7 +1355,11 @@ func (s *Service) TodoHandoff(ctx context.Context, h TodoHandoff) (TodoHandoffRe
 	if !ok {
 		return TodoHandoffResult{Text: h.Text}, nil
 	}
-	return TodoHandoffResult{Found: true, Title: t.Title, DoneAt: t.DoneAt, Text: s.withTodoDecisions(ctx, h.TodoID, h.Text)}, nil
+	text := s.withTodoDecisions(ctx, h.TodoID, h.Text)
+	if h.New {
+		text = s.withProjectContext(ctx, h.MachineID, h.Cwd, text) // a new agent: its project's background first (#2820)
+	}
+	return TodoHandoffResult{Found: true, Title: t.Title, DoneAt: t.DoneAt, Text: text}, nil
 }
 
 // TodoLink: the agent handed work for a todo works for it from now on (assistant.todo_link).

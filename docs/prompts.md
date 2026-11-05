@@ -54,6 +54,8 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
 | `todo/title.md`、`title_input.md` | 给 `task_plan` / `agent_start` 开的待办起短标题（20 字以内，去掉给 Agent 的指令和来历）；用途 `todo.title`（`docs/todos.md`「待办标题」） | `assistant/todo_titles.go` |
 | `todo/decisions.md` | 交给 Agent 时消息前面的 `<jarvis-context>`：这个待办上现在生效的决策（`docs/todos.md`「决策记录」） | `assistant/todo_decisions.go` |
+| `todo/outcome.md`、`outcome_input.md` | 任务做完时从 Agent 最后的回复里抽结论、链接、决定、踩坑（JSON；`docs/todos.md`「做完记结论」） | `assistant/todo_outcome.go` |
+| `todo/project.md` | 新开 Agent 时第一句前面的 `<jarvis-context>`：工作目录所属项目的一句话和最近几条「待办 ·」结论 | `assistant/todo_outcome.go` |
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
 | `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、函数工具：全部 / 只有 `ask_jarvis`（别的扩展调来的通话）/ 没有，重连时断之前说过的话） | `voice/session.go` |
 | `voice/delegated.md` | 语音里交给主对话的消息：第一行是任务（找这条消息用），后面 `<jarvis-context kind="context" title="语音对话">`（转述、可能听错、回复简短些、刚才的几句原话） | `voice/runs.go` |

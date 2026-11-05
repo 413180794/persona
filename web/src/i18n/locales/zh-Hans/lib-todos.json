@@ -17,6 +17,7 @@
   "decision_manual": "手动记的",
   "decision_agent_question": "在 Agent 的提问里答的",
   "decision_in_question": "在「{title}」的提问里答的",
+  "decision_outcome": "Agent 做完时记的",
   "with_project_named": "随项目 {name}",
   "with_project": "随项目",
   "spawned_by": "由 {title} 派出",

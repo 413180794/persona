@@ -260,7 +260,7 @@ func (r report) passiveText(line func(string, ...any), now time.Time, live bool)
 		line("配对：还没有 hub 来配对。jarvis-link pair --listen 打印链接，粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」")
 	}
 	if p != nil && p.CodeExpires != nil {
-		line("配对链接：还有 %s有效（只能用一次）", duration(p.CodeExpires.Sub(now)))
+		line("配对链接：还剩 %s（只能用一次）", duration(p.CodeExpires.Sub(now)))
 	}
 	if paired {
 		hub := "hub" + passiveHubText(&link.Passive{HubID: p.HubID, HubName: p.HubName})
@@ -356,7 +356,7 @@ func hubText(name string, mesh int, id string, connected bool) string {
 	case mesh > 1:
 		s += fmt.Sprintf("，互联组共 %d 台 hub", mesh)
 	case mesh == 1:
-		s += "，没有互联别的 hub"
+		s += "，没和别的 hub 互联"
 	}
 	return s
 }
@@ -433,7 +433,7 @@ func duration(d time.Duration) string {
 	case s < 3600:
 		return fmt.Sprintf("%d 分钟", s/60)
 	case s < 86400:
-		return fmt.Sprintf("%d 小时 %d 分", s/3600, s%3600/60)
+		return fmt.Sprintf("%d 小时 %d 分钟", s/3600, s%3600/60)
 	}
 	return fmt.Sprintf("%d 天 %d 小时", s/86400, s%86400/3600)
 }

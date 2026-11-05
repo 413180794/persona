@@ -171,6 +171,118 @@ func TestFinishedPushAfterQuickBackground(t *testing.T) {
 	}
 }
 
+// The same, when the stop and the report's wake fall in one of the node's list ticks: the hub never sees the turn
+// stop, only the woken flag turn on while it works. The woken turn's end is still the one push of the work.
+func TestFinishedPushAfterBackgroundWakeInOneTick(t *testing.T) {
+	for name, merged := range map[string]func(work proto.Session) []proto.Session{
+		// stop + wake in one list, then the woken turn ends
+		"woken while working": func(work proto.Session) []proto.Session {
+			woken := work
+			woken.WokeByTask = true
+			finished := woken
+			finished.Status, finished.LastText = proto.StatusDone, "全部通过"
+			return []proto.Session{woken, finished}
+		},
+		// the transcript is re-read at most every few seconds: the report (the background gone, the woken flag) comes
+		// with the woken turn's end
+		"report comes with the end": func(work proto.Session) []proto.Session {
+			finished := work
+			finished.Status, finished.LastText, finished.WokeByTask = proto.StatusDone, "全部通过", true
+			return []proto.Session{finished}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ft := newFleetTestNoStore(t)
+			ft.f.mu.Lock()
+			ft.f.hello.Notify = assistantwire.NotifyTimings{DoneDelayMS: 300, LongTurnMS: 60_000}
+			ft.f.mu.Unlock()
+			work := proto.Session{SessionID: "s1", Title: "跑测试", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking,
+				PaneID: "p1", UpdatedAt: time.Now()}
+			ft.sessions("mac", work)
+			work.Background = []proto.BackgroundTask{{ID: "b1", Kind: "shell"}} // the turn puts the tests in the background
+			ft.sessions("mac", work)
+			work.Background = nil // reported back by the next list
+			for _, sess := range merged(work) {
+				ft.sessions("mac", sess)
+			}
+			got := ft.pushesOf(assistantwire.NotifyDone, 1, 2*time.Second)
+			if len(got) != 1 || got[0].Body != "全部通过" {
+				t.Fatalf("pushes %+v", got)
+			}
+		})
+	}
+}
+
+// The background seen earlier in the turn counts, though the list just before the wake no longer has it (its
+// background and its woken flag are read apart), and so does one seen when the manager came up mid-turn.
+func TestFinishedPushAfterBackgroundGoneBeforeWake(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	ft.f.mu.Lock()
+	ft.f.hello.Notify = assistantwire.NotifyTimings{DoneDelayMS: 300, LongTurnMS: 60_000}
+	ft.f.mu.Unlock()
+	work := proto.Session{SessionID: "s1", Title: "跑测试", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1",
+		UpdatedAt: time.Now(), Background: []proto.BackgroundTask{{ID: "b1", Kind: "shell"}}}
+	ft.sessions("mac", work) // the first list the manager sees: already working, with background
+	work.Background = nil    // the report read before the wake
+	ft.sessions("mac", work)
+	woken := work
+	woken.WokeByTask = true
+	ft.sessions("mac", woken)
+	finished := woken
+	finished.Status, finished.LastText = proto.StatusDone, "全部通过"
+	ft.sessions("mac", finished)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 1, 2*time.Second); len(got) != 1 || got[0].Body != "全部通过" {
+		t.Fatalf("pushes %+v", got)
+	}
+}
+
+// A turn with no background work whose woken flag turns on while it works (a /loop firing seen late) is no held
+// work: its end is not pushed.
+func TestNoPushForWakeWithoutBackground(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	ft.f.mu.Lock()
+	ft.f.hello.Notify = assistantwire.NotifyTimings{DoneDelayMS: 200, LongTurnMS: 60_000}
+	ft.f.mu.Unlock()
+	work := proto.Session{SessionID: "s1", Title: "跑测试", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1",
+		UpdatedAt: time.Now()}
+	ft.sessions("mac", work)
+	woken := work
+	woken.WokeByTask = true
+	ft.sessions("mac", woken)
+	finished := woken
+	finished.Status, finished.LastText = proto.StatusDone, "又跑了一次"
+	ft.sessions("mac", finished)
+	time.Sleep(500 * time.Millisecond)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 1, 0); len(got) != 0 {
+		t.Fatalf("pushes %+v", got)
+	}
+}
+
+// A turn a background task started after the user looked at the stop (it was seen, the hold dropped) is still no push.
+func TestNoPushForWakeAfterSeenStop(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	ft.f.mu.Lock()
+	ft.f.hello.Notify = assistantwire.NotifyTimings{DoneDelayMS: 200, LongTurnMS: 60_000}
+	ft.f.mu.Unlock()
+	work := proto.Session{SessionID: "s1", Title: "跑测试", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1",
+		UpdatedAt: time.Now()}
+	ft.sessions("mac", work)
+	idle := work
+	idle.Status = proto.StatusIdle // looked at in herdr
+	ft.sessions("mac", idle)
+	time.Sleep(400 * time.Millisecond)
+	woken := work
+	woken.WokeByTask = true
+	ft.sessions("mac", woken)
+	finished := woken
+	finished.Status, finished.LastText = proto.StatusDone, "又跑了一次"
+	ft.sessions("mac", finished)
+	time.Sleep(500 * time.Millisecond)
+	if got := ft.pushesOf(assistantwire.NotifyDone, 1, 0); len(got) != 0 {
+		t.Fatalf("pushes %+v", got)
+	}
+}
+
 // The own conversation of a scheduled task that pushes only what its runs send (#2396) is known by the task list the
 // snapshot has; other tasks' conversations, a task without one yet and the main conversation are not.
 func TestQuietTaskConversation(t *testing.T) {

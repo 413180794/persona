@@ -108,11 +108,14 @@ type tasksState struct {
 	receipted map[string]time.Time
 	// retrying: the tasks whose agent is starting again after a failed start (one start at a time, #1396).
 	retrying map[string]bool
+	// outcomes: the completions whose outcome was recorded (todo_outcome.go, outcomeKey).
+	outcomes map[string]time.Time
 }
 
 func newTasksState() tasksState {
 	return tasksState{plans: map[string]*TaskPlan{}, feed: map[string][]FeedItem{},
-		working: map[string]time.Time{}, receipted: map[string]time.Time{}, retrying: map[string]bool{}}
+		working: map[string]time.Time{}, receipted: map[string]time.Time{}, retrying: map[string]bool{},
+		outcomes: map[string]time.Time{}}
 }
 
 // ---- plans and the feed: storage ----
@@ -769,6 +772,9 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (mid, sid str
 	if len(t.DoneWhen) > 0 { // what the supervisor will check (supervise.go)
 		prompt += "\n\n" + prompts.RenderTaskDoneWhen(t.DoneWhen)
 	}
+	// The project background, and the todo's decisions (a task started again may have some), go before the prompt
+	// (#2820, #1618); the tab is named from the title.
+	prompt = s.withProjectContext(ctx, m.ID, t.Cwd, s.withTodoDecisions(ctx, t.TodoID, prompt))
 	params := map[string]any{"cwd": t.Cwd, "launcher": t.Launcher, "prompt": prompt, "tab_name": s.tabName(ctx, t.Title)}
 	if t.Model != "" {
 		params["model"] = t.Model

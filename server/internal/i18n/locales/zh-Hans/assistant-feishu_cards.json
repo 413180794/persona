@@ -110,5 +110,12 @@
   "directory_placeholder": "~/code/项目",
   "what_to_do": "要它做什么",
   "what_to_do_placeholder": "可以留空，之后在这里接着说",
-  "start": "开始"
+  "start": "开始",
+  "elicitation_title": "{where} 要你授权或填写",
+  "elicitation_summary": "要你授权：{message}",
+  "elicitation_open": "去授权",
+  "elicitation_fields": "要填写：{fields}",
+  "elicitation_in_app": "到 Persona App 里填写和提交。",
+  "elicitation_host": "将打开：{host}",
+  "elicitation_confirm_in_app": "授权后回到 Persona App 点确认。"
 }
