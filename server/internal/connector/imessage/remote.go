@@ -103,6 +103,9 @@ func (c *Remote) Detail(ctx context.Context) Detail {
 	return Detail{Machine: c.machine, Status: st.State, Error: st.Error, Guide: c.guide, Via: c.via, AI: c.AI()}
 }
 
+// Machine is the Mac it reads, as it was configured (an id, or hub.json's name).
+func (c *Remote) Machine() string { return c.cfg.Machine }
+
 // MachineOnline: the Mac just connected, so look again.
 func (c *Remote) MachineOnline(id string) {
 	if id == c.cfg.Machine {

@@ -321,6 +321,9 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 	if err := reg.AddBuiltin(egoManifest(h), "", false); err != nil { // the same, for ego lite (browser.go)
 		h.logf("plugin ego: %v", err)
 	}
+	if err := reg.AddBuiltin(imessageManifest(h), "", false); err != nil { // which Mac's Messages (imessage_extension.go)
+		h.logf("plugin imessage: %v", err)
+	}
 	if err := reg.Load(ctx); err != nil {
 		h.logf("plugins: %v", err)
 	}
@@ -378,6 +381,9 @@ func (ps *extensions) changed(c extension.Change) {
 	}
 	if c.ID == egoExtensionID && ps.h != nil {
 		ps.h.browserChanged(ctx)
+	}
+	if c.ID == imessageExtensionID && ps.h != nil {
+		ps.h.applyIMessage() // its Mac changed, or it went on or off (imessage_extension.go)
 	}
 	if c.Kind == "removed" && c.Old != nil && ps.h != nil {
 		now := ps.reg.Get(c.ID) // a built-in the removed plugin had taken the place of (Yields) keeps its connectors' sign-in

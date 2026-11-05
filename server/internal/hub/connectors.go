@@ -501,6 +501,8 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 func (h *Hub) startConnectors(ctx context.Context) {
 	h.registerConnectors()
 	h.attachExtensions(ctx) // the plugins' connectors, after the hub's own: those ids are taken
+	h.migrateIMessage(ctx)  // hub.json's imessage.machine into 设置 › 扩展 › 信息, once (imessage_extension.go)
+	h.applyIMessage()       // 信息 on the Mac picked there, else hub.json's
 	h.restoreConnectorSwitches(ctx)
 	h.restoreGitHubSource(ctx)
 	h.connectors.Start(ctx, h.connectorChanged, h.logf) // GitHub's old muted repositories move when the manager connects
@@ -536,11 +538,8 @@ func (h *Hub) registerConnectors() {
 	if err := h.addConnector(ghc); err != nil {
 		h.logf("github connector: %v", err)
 	}
-	if im := h.cfg.IMessage; im.Configured() {
-		if err := h.addIMessage(*im); err != nil {
-			h.logf("imessage connector: %v", err)
-		}
-	}
+	// 信息 (imessage) is registered once the extensions are there: its Mac is the extension's, else hub.json's
+	// (applyIMessage, startConnectors).
 }
 
 // siblingProgram is a program released with jarvisd (update.ProgramNames) next to the running jarvisd ("" when there

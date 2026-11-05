@@ -34,6 +34,7 @@ func imessageNode(t *testing.T, h *Hub, answer func(method string, params json.R
 	var mu sync.Mutex
 	calls := &[]string{}
 	nodeSide.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		method, params = fakeBuiltinRoute(t, method, params) // either way the hub asks, the same answers (#1830 step 6)
 		mu.Lock()
 		*calls = append(*calls, method)
 		mu.Unlock()
@@ -44,6 +45,7 @@ func imessageNode(t *testing.T, h *Hub, answer func(method string, params json.R
 	t.Cleanup(func() { cancel(); _ = h2nW.Close(); _ = n2hW.Close() })
 	m := newMachine(h, MachineConfig{ID: "mac", Name: "示例 Mac", Kind: "ssh"})
 	m.peer = hubSide
+	m.info = proto.NodeInfo{OS: "darwin", BuiltinPrograms: fakeBuiltinPrograms()}
 	h.byID["mac"] = m
 	h.machines = append(h.machines, m)
 	return m, calls

@@ -28,6 +28,10 @@ func TestBuiltinProgramsAnswerLikeTheirOldNames(t *testing.T) {
 		{"computer.nolock", "cua", "nolock", map[string]any{"on": false}},
 		{"browser.status", "ego", "status", map[string]any{}},
 		{"browser.call", "ego", "call", map[string]any{}},
+		// imessage keeps the connector protocol's names (#1830 step 6); not a Mac here: the same list and refusals.
+		{"connector.list", "imessage", "connector.list", map[string]any{}},
+		{"connector.chats", "imessage", "connector.chats", map[string]any{"id": "imessage", "limit": 5}},
+		{"connector.changes", "imessage", "connector.changes", map[string]any{"id": "imessage"}},
 	} {
 		oldOut, oldErr := pluginCall(t, n, c.old, c.params)
 		raw, _ := json.Marshal(c.params)
@@ -108,7 +112,7 @@ func TestEveryOldNameIsABuiltinMethod(t *testing.T) {
 // them on disk.
 func TestBuiltinProgramsInInfoAndNeverAPackage(t *testing.T) {
 	n, _ := pluginTestNode(t)
-	if !slices.Equal(builtinProgramIDs, []string{"cua", "ego"}) {
+	if !slices.Equal(builtinProgramIDs, []string{"cua", "ego", "imessage"}) {
 		t.Fatalf("builtin_programs %v", builtinProgramIDs)
 	}
 	for _, id := range builtinProgramIDs {

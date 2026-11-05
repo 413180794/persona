@@ -1007,7 +1007,7 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
   `version` 是各自报的版本，没有就不带。旧 node 只报前两个。
 - `node.info` 的 `herdr_running` / `herdr_running_known`：经典 herdr 的 server 现在答不答话，以及 node 能不能判断（用 herdr-core
   的机器没有那个 socket，两个都不带）。老 node 两个都不带，hub 据此区分「没在跑」和「不清楚」（`docs/engines.md`）。
-- `node.info` 的 `builtin_programs`：personad 里内置的扩展程序（`["cua", "ego"]`，#1830 第 5 步）。报了的 node，hub 经 `plugin.node.call {id, method, params}` 问它们；
+- `node.info` 的 `builtin_programs`：personad 里内置的扩展程序（`["cua", "ego", "imessage"]`，#1830 第 5、6 步；imessage 的方法名照旧是 `connector.*`）。报了的 node，hub 经 `plugin.node.call {id, method, params}` 问它们；
   老 node 不带，hub 照旧用 `computer.*`、`browser.*`（新 node 也照答）。见 `docs/extensions.md`「内置的 node 程序」。
 - `herdr.server.start`（hub → node，无参数，回 `{running}`）：用户点了 Agents 列表的「启动」。不受 `herdr_autostart` 约束，
   起不来时按 `engine_missing` 那一套回原因。老 node 没有这个方法，hub 回 502 而不是说 herdr 起不来。
@@ -1474,7 +1474,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/v1/imessage` | `{machine, status, error?, guide?:[…], via?, ai}`：信息连接器（hub.json `imessage.machine`）的状态，当场问那台 Mac（刚开了权限，刷新就是新的）；没有完全磁盘访问权限时 `guide` 是在那台 Mac 上一步步怎么开，`via` 是那台 Mac 的 node 怎么跑（`ssh` / `launchd`，两种开法不一样）。没设置是 404 `not_configured` |
+| GET | `/api/v1/imessage` | `{machine, status, error?, guide?:[…], via?, ai}`：信息连接器（读哪台在 设置 › 扩展 › 信息 选，没选时是 hub.json 的 `imessage.machine`）的状态，当场问那台 Mac（刚开了权限，刷新就是新的）；没有完全磁盘访问权限时 `guide` 是在那台 Mac 上一步步怎么开，`via` 是那台 Mac 的 node 怎么跑（`ssh` / `launchd`，两种开法不一样）。没设置是 404 `not_configured` |
 | PUT | `/api/v1/imessage/settings` | `{ai: bool}`：「交给 Persona」开关（存在 hub，默认开）；开着时真正的会话进知识库、收件箱，助手有 `imessage_*` 工具；关掉立刻停。回 `GET /api/v1/imessage` 的样子（多一个 `ai`） |
 | DELETE | `/api/v1/imessage/data` | 删掉 hub 上存下的信息：知识库里的信息会话和人（连同索引、项目里的引用和它们写的时间线、归档游标，项目标成待重写）、收件箱里的信息条目 → `{chats, people, inbox}`。「交给 Persona」开着时 409 `ai_on`（先关掉，不然下一轮又同步回来）；那台 Mac 上的消息不受影响 |
 | GET | `/api/v1/imessage/chats?limit=&before=` | 那台 Mac 的会话，新的在前（node 的 `connector.chats`，字段见下面「hub ↔ node」）。只读、不存、不交给模型。没权限 403 `no_permission`，Mac 不在线 503 `offline`，node 太旧 409 `node_outdated` |

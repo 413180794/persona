@@ -18,7 +18,7 @@ var fakeNodesBuiltin bool
 
 func fakeBuiltinPrograms() []string {
 	if fakeNodesBuiltin {
-		return []string{"cua", "ego"}
+		return []string{"cua", "ego", "imessage"}
 	}
 	return nil
 }
@@ -32,6 +32,9 @@ func fakeBuiltinRoute(t *testing.T, method string, params json.RawMessage) (stri
 		if !fakeNodesBuiltin {
 			t.Errorf("plugin.node.call %s.%s to a node without built-in programs", c.ID, c.Method)
 		}
+		if c.ID == imessageExtensionID { // its methods keep their names (connector.*)
+			return c.Method, c.Params
+		}
 		for prefix, id := range builtinPrefixes {
 			if id == c.ID {
 				return prefix + c.Method, c.Params
@@ -40,7 +43,7 @@ func fakeBuiltinRoute(t *testing.T, method string, params json.RawMessage) (stri
 		t.Errorf("plugin.node.call to %q", c.ID)
 		return method, params
 	}
-	for prefix := range builtinPrefixes {
+	for _, prefix := range []string{"computer.", "browser.", "connector."} {
 		if strings.HasPrefix(method, prefix) && fakeNodesBuiltin {
 			t.Errorf("%s by its old name to a node with built-in programs", method)
 		}
@@ -64,6 +67,11 @@ func TestBuiltinProgramsSameFlows(t *testing.T) {
 		"ComputerAppsAreAskedOnce":                       TestComputerAppsAreAskedOnce,
 		"EgoExtension":                                   TestEgoExtension,
 		"BrowserCookies":                                 TestBrowserCookies,
+		"IMessageThroughTheHub":                          TestIMessageThroughTheHub,
+		"IMessageOldOrOfflineMac":                        TestIMessageOldOrOfflineMac,
+		"IMessageAISwitch":                               TestIMessageAISwitch,
+		"IMessageArchive":                                TestIMessageArchive,
+		"IMessageExtensionPicksTheMac":                   TestIMessageExtensionPicksTheMac,
 	} {
 		t.Run(name, test)
 	}

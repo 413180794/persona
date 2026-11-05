@@ -203,6 +203,15 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		if !readExtensionJSON(w, r, &in) {
 			return
 		}
+		if p.Record.ID == imessageExtensionID { // one Mac only, the other named (imessage_extension.go)
+			if fe := h.imessageOneMac(in.Config); fe != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				// The sentence alone as the error too: the web app shows it as is (没有保存：…), not as "machines: …".
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": fe.Message, "code": "invalid_config", "field": fe.Path, "message": fe.Message})
+				return
+			}
+		}
 		if err := ps().reg.SetConfig(r.Context(), p.Record.ID, in.Config, actor(r)); err != nil {
 			var fe *extension.FieldError
 			if errors.As(err, &fe) {

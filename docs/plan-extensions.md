@@ -332,8 +332,18 @@ hub.json 的旧配置迁到扩展：装上扩展后在 设置 › 扩展（或 `
    （做完：node 在 `node.info` 报 `builtin_programs`，hub 对报了的 node 经 `plugin.node.call` 问、对旧 node 照旧用 `computer.*` / `browser.*`，见 `docs/extensions.md`「内置的 node 程序」。
    清单里写 `node.command: "builtin"` 和把重连钩子收进 `plugin.node.sync` 放到下一个 PR：这一步只换路，清单、同意摘要、界面都不动。）
 6. iMessage 迁成扩展，迁移 hub.json 里的配置。
+   （做完：内置扩展「信息（iMessage）」，设置里一个选 Mac 的字段，只能开一台；连接器还是原来那个，读哪台从扩展取，没选再看 hub.json；
+   hub.json 的值启动时迁一次（名字换成 id、打开扩展、记标记），迁不了就继续读 hub.json；node 的 `builtin_programs` 加 `imessage`，
+   方法名照旧 `connector.*`。见 `docs/extensions.md`「内置的 node 程序」和下面「第 6 步拍板结果」。）
 
 第 1–3 步做完就能装第三方的 node 侧扩展；第 5、6 步各自一个 PR。
+
+### 第 6 步拍板结果（2026-11-05，用户「都按建议」）
+
+- 设置 › 扩展 加一行「信息（iMessage）」；设置 › 连接器 › 信息没配置时，提示去 设置 › 扩展 › 信息 选一台 Mac。
+- 已经开着一台时再开另一台：hub 拒绝，提示「只能读一台 Mac，先关掉 <那台>」。
+- 用户的 hub 没配 iMessage：按开源通用的迁移做（用户那边没有要迁的值）。
+- 方案里说的「管理界面把 hub.json 的那一项标成只读」不用做：管理界面本来就没有 iMessage 这一项。
 
 ### 拍板结果（2026-11-05，用户四点都按方案定）
 

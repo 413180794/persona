@@ -37,3 +37,19 @@ func (m *Machine) callBuiltin(ctx context.Context, method string, params any, ou
 	}
 	return m.call(ctx, method, params, out)
 }
+
+// callBuiltinProgram asks m's built-in program id for method, a name it has kept over plugin.node.call (imessage's
+// connector.*): that way to a node that says it has the program, as is to one from before.
+func (m *Machine) callBuiltinProgram(ctx context.Context, id, method string, params any, out any) error {
+	m.mu.Lock()
+	has := slices.Contains(m.info.BuiltinPrograms, id)
+	m.mu.Unlock()
+	if !has {
+		return m.call(ctx, method, params, out)
+	}
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	return m.call(ctx, "plugin.node.call", proto.PluginNodeCall{ID: id, Method: method, Params: raw}, out)
+}

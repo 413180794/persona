@@ -45,7 +45,7 @@ func (h *Hub) imessageAI(ctx context.Context) bool {
 	return on
 }
 
-var errNotAMachine = errors.New("imessage.machine is not a machine in hub.json")
+var errNotAMachine = errors.New("信息's Mac is not a machine of this hub")
 
 // imessageCall asks the Mac's node, turning its failures into the connector's errors.
 func (h *Hub) imessageCall(machine string) imessage.Caller {
@@ -54,7 +54,7 @@ func (h *Hub) imessageCall(machine string) imessage.Caller {
 		if m == nil {
 			return errNotAMachine
 		}
-		err := m.call(ctx, method, params, out)
+		err := m.callBuiltinProgram(ctx, imessageExtensionID, method, params, out)
 		var re *rpc.Error
 		switch {
 		case err == nil:
@@ -83,7 +83,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/imessage", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
-			writeCode(w, http.StatusNotFound, "not_configured", "没有设置「信息」：在 hub.json 的 imessage.machine 写要读哪台 Mac", nil)
+			writeCode(w, http.StatusNotFound, "not_configured", errNoIMessageMac.Error(), nil)
 			return
 		}
 		c.Check(r.Context())

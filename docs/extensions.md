@@ -1427,7 +1427,13 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
   `clipboard`、`cursor`、`nolock`、`lock`；ego 的 `status`、`install`、`open`、`cancel`、`call`、`cookies.list/import/clear`），没报的旧 node 照旧用 `computer.*`、`browser.*`
   （`hub/builtin_programs.go` 的 `callBuiltin`：按 node 自己说的选，不靠出错重试）。新 node 两种名字都答，走同一份代码，旧 hub 不受影响。
   内置程序不进对账：hub 不给它们发包、不 `plugin.node.start`（node 也拒绝），`node-plugins/` 里没有它们的目录；界面上还是机器页、设置页原来的 Cua / ego 状态，
-  `node_machines`、打开前的确认、权限页的 node 那几行都不出现。重连时的 `refreshComputer`、`refreshBrowser`、`tellNoLock` 先照旧，等两条路在真机上稳了再收进 `plugin.node.sync`。
+  `node_machines`、打开前的确认、权限页的 node 那几行都不出现。
+  **imessage**（第 6 步）也是内置的：方法名照旧是连接器协议的 `connector.list/chats/older/changes/search`，经 `plugin.node.call {id: "imessage", method: "connector.chats", …}`；
+  旧 node 照旧直接调 `connector.*`。内置扩展「信息（iMessage）」的设置只有一个选 Mac 的字段 `machines`（`x-os: darwin`、`maxItems: 1`）：
+  已经开着一台时再开另一台，hub 回 400 `invalid_config`，`field: machines`，「只能读一台 Mac，先关掉「<那台>」」。连接器 `imessage` 还是原来那个，
+  只是读哪台改从这里取：扩展开着、选了一台就用它，否则 hub.json 的 `imessage.machine`，都没有就没有这个连接器（`hub/imessage_extension.go`）。
+  hub.json 的值在 hub 启动时迁一次：名字换成机器 id、打开扩展，迁过记一个标记（`imessage.migrated_to_extension`），用户之后关掉或换一台不会被盖回；
+  名字对不上任何机器、写不进去时只记一行日志，下次启动再试，这期间照旧读 hub.json。hub.json 的字段不改不删，保留一个版本。重连时的 `refreshComputer`、`refreshBrowser`、`tellNoLock` 先照旧，等两条路在真机上稳了再收进 `plugin.node.sync`。
 
 ## schema 和四端的类型
 

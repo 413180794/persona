@@ -581,7 +581,7 @@ func (ph *pluginHost) status() proto.PluginNodeStates {
 }
 
 func (ph *pluginHost) call(ctx context.Context, p proto.PluginNodeCall) (json.RawMessage, error) {
-	if _, ok := builtinPrograms[p.ID]; ok { // cua, ego: in this process, always there (builtin.go)
+	if _, ok := builtinPrograms[p.ID]; ok { // cua, ego, imessage: in this process, always there (builtin.go)
 		return callBuiltin(ctx, p.ID, p.Method, p.Params)
 	}
 	ph.mu.Lock()

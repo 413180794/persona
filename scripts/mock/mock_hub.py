@@ -7469,6 +7469,19 @@ if MOCK_BROWSER:
                       "config": {"machines": ["macbook"]}, "secrets": [], "permissions": []}
 
 
+# 信息（iMessage） as a built-in extension (#1830 step 6): which Mac's Messages the connector reads, one Mac only.
+# MOCK_PLUGINS=1 lists it on MacBook; MOCK_IMESSAGE_EXT=off lists it off with no Mac (a hub without iMessage).
+if PLUGINS_MODE:
+    _im_off = os.environ.get("MOCK_IMESSAGE_EXT") == "off"
+    PLUGINS["imessage"] = {"id": "imessage", "name": "信息（iMessage）", "kind": "", "status": "disabled" if _im_off else "running",
+                           "version": "202611051200", "source": "builtin", "enabled": not _im_off, "contributes": {},
+                           "description": "读你一台 Mac 上「信息」App 的短信和 iMessage（只读，不发送），交给收件箱、知识库和助手。读哪台在这里选；「交给 Persona」和删除已存的数据在 设置 › 连接器 › 信息。",
+                           "form": {"fields": [
+                               {"name": "machines", "type": "array", "title": "读哪台 Mac", "unique_items": True, "max_items": 1,
+                                "description": "打开的那台 Mac 上的「信息」由 hub 只读读取（只能开一台：同一个 Apple ID 的 Mac 里是同一份）。开关即时生效。要先在那台 Mac 上给 personad 完全磁盘访问权限，见 设置 › 连接器 › 信息",
+                                "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}}]},
+                           "config": {} if _im_off else {"machines": ["macbook"]}, "secrets": [], "permissions": []}
+
 def cua_config(pl):
     """The plugin cua's settings as the hub would answer: its machines are the Macs it is on for."""
     machines = [m["id"] for m in MACHINES if m.get("computer", {}).get("enabled")]
@@ -8016,6 +8029,12 @@ def plugins_route(handler, p, body):
         pl["status"] = "disabled" if not pl["enabled"] else ("needs_setup" if pl["source"] == "installed" else "running")
     elif rest == ["config"] and method == "PUT":
         cfg = req.get("config") or {}
+        if pl["id"] == "imessage" and len(cfg.get("machines") or []) > 1:  # one Mac only, the one on named (the hub's imessageOneMac)
+            on = next((m for m in (cfg.get("machines") or []) if m in (pl["config"].get("machines") or [])), cfg["machines"][0])
+            name = next((m["name"] for m in MACHINES if m["id"] == on), on)
+            msg = "只能读一台 Mac，先关掉「" + name + "」"
+            handler.send_json({"error": msg, "code": "invalid_config", "field": "machines", "message": msg}, 400)
+            return True
         url = cfg.get("base_url", "https://x")
         if not str(url).startswith(("http://", "https://")):
             handler.send_json({"error": "base_url: 要是一个网址", "code": "invalid_config", "field": "base_url", "message": "要是一个网址"}, 400)

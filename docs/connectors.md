@@ -68,7 +68,8 @@ hub 收到不认识的档就丢掉、交给模型分拣。
   `persona-plugin.json`），所以从没启动过、默认关着的连接器也报得出能力、能登录和退出（#666）；`init` 回的程序清单
   （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。内置插件的程序（微信机器人）必须和 hub 同一次构建（`version -v` 一字不差）；协议有版本号（v2，`docs/connector-protocol.md`）。
 - **node 中转**：数据只在某台 Mac 上（`chat.db`）。node 上有一个读本地数据的 `Reader`，hub 经 node 的 RPC（`connector.list/chats/older/changes/search`，
-  `node/node.go` 里写死的 5 个方法）去读，hub 一侧的 `imessage.Remote` 才是连接器。
+  `node/node.go` 里写死的 5 个方法；新 node 也经 `plugin.node.call {id: "imessage"}` 答，见 `docs/extensions.md`「内置的 node 程序」）去读，
+  hub 一侧的 `imessage.Remote` 才是连接器。读哪台 Mac 在内置扩展「信息（iMessage）」里选（#1830 第 6 步），没选时看 hub.json 的 `imessage.machine`。
 
 ### 闸门
 

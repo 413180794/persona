@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"errors"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -62,6 +63,7 @@ type extensionStore struct {
 	secrets map[string]map[string]string
 	audit   []string
 	markets map[string]extension.MarketRecord
+	failPut bool // every PutExtension fails (a database that cannot be written)
 }
 
 func (s *extensionStore) Extensions(context.Context) ([]extension.Record, error) {
@@ -76,6 +78,9 @@ func (s *extensionStore) Extensions(context.Context) ([]extension.Record, error)
 func (s *extensionStore) PutExtension(_ context.Context, r extension.Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.failPut {
+		return errors.New("the database cannot be written")
+	}
 	s.rows[r.ID] = r
 	return nil
 }
