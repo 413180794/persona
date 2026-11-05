@@ -1,3 +1,4 @@
+import PersonaKit
 import SwiftUI
 
 /// What the connector page needs from the app (tests: a FakeHub client).
@@ -373,7 +374,7 @@ struct ConnectorSignInSteps: View {
                 } else if p.isQRCode {
                     qrCode(p)
                 } else if p.cannotDraw {
-                    Text(Self.cannotDrawNote(p, name: name))
+                    Text(p.cannotDrawNote(name: name))
                         .font(Theme.Font.secondary).foregroundStyle(Theme.cautionText)
                         .accessibilityIdentifier("connector.cannotDraw")
                 } else {
@@ -469,13 +470,6 @@ struct ConnectorSignInSteps: View {
                 Text(footer)
             }
         }
-    }
-
-    /// Why a step is not drawn and what to do: update the app; a QR code can also be scanned from the hub's web page,
-    /// which draws it (设置 › 连接器, #1693).
-    static func cannotDrawNote(_ p: ConnectorPrompt, name: String) -> String {
-        let note = "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试"
-        return p.kind == "qr" ? note + "，或在 hub 的网页版 设置 › 连接器 › \(name) 里扫码。" : note + "。"
     }
 
     /// The code to enter on the sign-in page (GitHub's device flow): large, copyable; the page asks the hub again on

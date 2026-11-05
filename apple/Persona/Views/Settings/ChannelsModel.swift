@@ -1,4 +1,5 @@
 import Observation
+import PersonaKit
 import SwiftUI
 
 // 设置 › 渠道 (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in

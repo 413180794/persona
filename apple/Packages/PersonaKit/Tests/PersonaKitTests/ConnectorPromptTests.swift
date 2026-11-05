@@ -1,12 +1,12 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 /// A sign-in step as the hub sends it: fields to fill in, a code to enter on a web page (GitHub's device flow), or a QR
 /// code to scan with another app (WeChat).
 struct ConnectorPromptTests {
     private func prompt(_ json: String) throws -> ConnectorPrompt {
-        try JSON.decoder.decode(ConnectorPrompt.self, from: Data(json.utf8))
+        try JSONDecoder().decode(ConnectorPrompt.self, from: Data(json.utf8))
     }
 
     @Test func aDeviceCode() throws {
@@ -62,9 +62,9 @@ struct ConnectorPromptTests {
 
     @Test func theNoteSaysWhatToDo() throws {
         let qr = try prompt(#"{"step":"qr","kind":"qr"}"#)
-        #expect(ConnectorSignInSteps.cannotDrawNote(qr, name: "微信") == "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试，或在 hub 的网页版 设置 › 连接器 › 微信 里扫码。")
+        #expect(qr.cannotDrawNote(name: "微信") == "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试，或在 hub 的网页版 设置 › 连接器 › 微信 里扫码。")
         let other = try prompt(#"{"step":"auth","kind":"open_url"}"#)
-        #expect(ConnectorSignInSteps.cannotDrawNote(other, name: "Example") == "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试。")
+        #expect(other.cannotDrawNote(name: "Example") == "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试。")
     }
 
     /// A new code (it expired and the connector made another) restarts the polling.

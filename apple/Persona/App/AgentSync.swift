@@ -1,4 +1,5 @@
 import Foundation
+import PersonaKit
 
 /// Keeps the recent agents' conversations current while the app is open and online, the way an IM client syncs:
 /// the hub pushes a tiny "this transcript changed" (each session's `rev`, in the session list and the `revs` event)
@@ -13,11 +14,8 @@ final class AgentSync {
     static let recentWindow: TimeInterval = 24 * 3600
     static let maxSessions = 40
     static let concurrency = 3
-    /// A working agent's chat is pulled at most this often: its transcript grows every second or two, and each pull is
-    /// a request, a decode of the chat's whole disk cache and a write of it again. The moment its turn ends or it
-    /// needs the user (when it is likely to be opened) it is pulled at once. Opening it brings the rest over its own
-    /// subscription (docs/ios.md「后台同步」).
-    nonisolated static let workingGap: TimeInterval = 60
+    /// A working agent's chat is pulled at most this often (`AgentSyncPacing`, in PersonaKit).
+    nonisolated static let workingGap = AgentSyncPacing.workingGap
 
     private var known: [SessionKey: Int64] = [:]
     /// What has been pulled, by rev ("<machine>/<session>" → rev); kept across launches, beside the chats' disk cache it
@@ -102,11 +100,9 @@ final class AgentSync {
         if let later { replan(at: later) }
     }
 
-    /// When a chat with news is pulled: now (nil), or once `workingGap` has passed since its last pull while its
-    /// agent is still working.
+    /// When a chat with news is pulled (`AgentSyncPacing.heldUntil`).
     nonisolated static func heldUntil(working: Bool, lastPull: Date?, now: Date) -> Date? {
-        guard working, let lastPull, now.timeIntervalSince(lastPull) < workingGap else { return nil }
-        return lastPull.addingTimeInterval(workingGap)
+        AgentSyncPacing.heldUntil(working: working, lastPull: lastPull, now: now)
     }
 
     private func replan(at date: Date) {

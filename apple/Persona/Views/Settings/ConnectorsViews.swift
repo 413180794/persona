@@ -1,3 +1,4 @@
+import PersonaKit
 import SwiftUI
 
 // 设置 › 连接器 (2026-11-01): where Persona' data comes from and acts — this device's data (phone_* tools), the mail
@@ -177,60 +178,6 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     /// starting. Its capabilities come from the program, so an empty list (nil is a hub from before them) does not
     /// mean it signs in on the hub's side.
     var undescribed: Bool { capabilities?.isEmpty == true }
-}
-
-/// One step of a connector's sign-in (POST /api/v1/connectors/{id}/login): the fields to fill in, or done.
-nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
-    nonisolated struct Field: Codable, Equatable, Sendable, Identifiable {
-        var name: String
-        var label: String
-        var secret: Bool?
-        var placeholder: String?
-        var id: String { name }
-    }
-    var step: String?
-    var fields: [Field]?
-    var hint: String?
-    var error: String?
-    var done: Bool?
-    var account: String?
-    /// "device_code": show `userCode` to enter at `url`; "qr": show `qr`, the code of `url`, to scan with another app;
-    /// "pair_code": show `userCode` to send to a bot from its chat app (a channel's binding, docs/channels.md). For all
-    /// three the same step is sent again every `interval` seconds.
-    var kind: String?
-    var url: String?
-    var userCode: String?
-    var interval: Int?
-    /// The QR code's modules, drawn by the hub for a "qr" step.
-    var qr: QRModules?
-
-    nonisolated struct QRModules: Codable, Equatable, Sendable {
-        var size: Int
-        var rows: [String]
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case step, fields, hint, error, done, account, kind, url, interval, qr
-        case userCode = "user_code"
-    }
-
-    /// A code to enter on a web page (GitHub's device flow), asked again until the user has.
-    var isDeviceCode: Bool { kind == "device_code" && userCode != nil }
-    /// A QR code to scan with another app (WeChat), asked again until it is scanned and confirmed there.
-    var isQRCode: Bool { kind == "qr" && !(qr?.rows.isEmpty ?? true) }
-    /// A code to send to a bot from its chat app (the Feishu bot's pairing), asked again until the bot has it.
-    var isPairCode: Bool { kind == "pair_code" && userCode != nil }
-    /// The step is asked again on its own until the user has acted somewhere else.
-    var polls: Bool { isDeviceCode || isQRCode || isPairCode }
-    /// What the polling follows: a new code starts it over.
-    var pollKey: String? { isDeviceCode || isPairCode ? userCode : isQRCode ? qr?.rows.joined() : nil }
-    /// A step this app cannot draw (#1693): a kind it does not know (a newer hub's), a code or QR code that came
-    /// without the code, or a form with no fields. Drawn as a form it was an empty card with a 下一步 that could never
-    /// light up; the page says so instead, with 重新开始.
-    var cannotDraw: Bool {
-        if isDeviceCode || isQRCode || isPairCode { return false }
-        return !(kind ?? "").isEmpty || (fields ?? []).isEmpty
-    }
 }
 
 /// Where a hub connector's things go besides the assistant's tools, each switched on its page.

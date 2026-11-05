@@ -14,7 +14,8 @@ cd apple/Packages/PersonaKit && swift test                             # Persona
 改一个文件后约 2 秒（同样的测试经 `PersonaTests` 跑，冷的约 140 秒、改一个文件后约 45 秒：要编整个 App、起模拟器）。改了包里的代码，合并前跑一遍 `swift test`；
 它不在 `PersonaTests` 里，也没有 CI job。iOS / Mac / visionOS 三个 App 依赖它，手表和小组件不依赖。
 
-- 现在在包里的：`Notebook`、`HTMLResources`、`ChatFollow`、`PathRefs`（连同 `PathRef`、`PathLinkURL`、`PathMarkdown`），第 2 批的 `DocumentText`（连同 `TextCompare`）、`TableParsing`（`ZipArchive`、`XLSXReader`、`DelimitedParser`、`TableSheet`）、`MathMarkdown`、`Links`，以及从视图文件里抽出来的纯函数 `ConversationTitle`、`DirectoryPath`、`StreamChunks`、`MarkdownHTML`、`APIErrorInfo`、`ZoomMath`、`LarkChangeGate`（视图只是改成调用它们）。`Links`、`ConversationTitle` 原来在 `apple/Shared`，手表和小组件都没用它们，挪走后手表照旧不依赖这个包。
+- 现在在包里的：`Notebook`、`HTMLResources`、`ChatFollow`、`PathRefs`（连同 `PathRef`、`PathLinkURL`、`PathMarkdown`），第 2 批的 `DocumentText`（连同 `TextCompare`）、`TableParsing`（`ZipArchive`、`XLSXReader`、`DelimitedParser`、`TableSheet`）、`MathMarkdown`、`Links`，以及从视图文件里抽出来的纯函数 `ConversationTitle`、`DirectoryPath`、`StreamChunks`、`MarkdownHTML`、`APIErrorInfo`、`ZoomMath`、`LarkChangeGate`（视图只是改成调用它们），第 3 批的 `AgentSyncPacing`（`AgentSync` 的拉取节奏，`AgentSync.heldUntil` / `workingGap` 转给它）、`ConnectorPrompt`（连同 `cannotDrawNote`）。
+  `OpRetry`、`BrowserCookies`、`MachineMetrics` 先不挪：`Shared/APIClient.swift` 用它们，挪了手表就得依赖这个包（watchOS 10），另行评估。`Links`、`ConversationTitle` 原来在 `apple/Shared`，手表和小组件都没用它们，挪走后手表照旧不依赖这个包。
 - 挪进来的类型和 App 用到的成员要写 `public`（结构体要 `public init`），用到它的 App 文件加 `import PersonaKit`。包里的测试照旧用 `@testable import PersonaKit`。
 - 用到 App 类型的断言（视图、`FilePaths`）留在 `PersonaTests`，那个文件也加 `import PersonaKit`。
 - 包里只放 Foundation 能编的代码：不 import SwiftUI / UIKit，不用 App 的 `Theme`、`AppModel`。设计系统的源码检查（`TokenRatchetTests` 等）不扫这个包。
