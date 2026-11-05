@@ -55,6 +55,7 @@ nonisolated enum ServerEvent: Sendable {
     /// The personas the hub offers changed, e.g. a tiered look moved to another tier (docs/persona.md): list them again.
     case personas
     case assistantFeed(FeedItem)
+    case assistantView(ExtensionAssistantView)
     case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
     /// A plugin changed the badge on one of its main-navigation entries (docs/extensions.md「UI 插槽」角标): nil clears it.
@@ -115,6 +116,8 @@ nonisolated enum ServerEvent: Sendable {
         var hubName: String?
         var mesh: MeshField?
         var item: FeedItem?
+        var view: ExtensionAssistantView?
+        var conversation: String?
         var plan: TaskPlan?
         var plugin: String?
         /// extension_ui's (plugin_ui says `plugin`).
@@ -124,7 +127,7 @@ nonisolated enum ServerEvent: Sendable {
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
-            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, plan
+            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, conversation, plan
             case plugin, badge, invalidate
             case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build"
@@ -189,6 +192,10 @@ nonisolated enum ServerEvent: Sendable {
         case "todos": return .todos
         case "personas": return .personas
         case "assistant_feed": return e.item.map { .assistantFeed($0) }
+        case "assistant_view":
+            guard let view = e.view, !view.id.isEmpty, view.version > 0,
+                  !view.conversation.isEmpty, view.conversation == e.conversation else { return nil }
+            return .assistantView(view)
         case "task_plan": return e.plan.map { .taskPlan($0) }
         case "fleet": return e.fleet.map { .fleet($0) }
         case "desktops": return .desktops(e.desktops ?? [])
@@ -232,7 +239,7 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .personas, .assistantFeed, .taskPlan, .pluginBadge, .extensionInvalidate: return self
+             .personas, .assistantFeed, .assistantView, .taskPlan, .pluginBadge, .extensionInvalidate: return self
         }
     }
 }

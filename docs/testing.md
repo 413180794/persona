@@ -390,6 +390,16 @@ Agents 列表、Agent 对话、Persona 对话各拖、甩约 20 秒，同时 moc
   而且一次只拖三分之一屏（`swipeUp` 会甩过头）。
 - 对话页有两个「终端」按钮（展开的页头在时钟下面、折叠后的小页头里），取 `frame.minY > 40` 且能点的那个。
 
+### 助手活卡片的快照与事件（`AssistantLiveViewTests`，#2024）
+
+用 `python3 scripts/mock/assistant_views_hub.py --port 0 --port-file /tmp/view-hub.port` 启动专用 loopback mock，端口由系统分配；读取端口后把本地地址传给
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/AssistantLiveViewTests`。
+fixture 读取 `schema/extension/examples/assistant/progress.json` 和 `progress-updated.json`，初始快照为 version 1，`POST /mock/views/update` 推 version 2，
+`POST /mock/views/stale` 再推 version 1，但不改服务端最新快照。测试在实际 App 中检查进度文字就地更新、只有一条 feed 行，旧版本不能覆盖新版本；深浅色各跑一次并看截图。
+
+状态层单元测试 `AssistantViewsStoreTests` 检查 hub 组／对话隔离、版本单调、创建事件与快照乱序、无效归属、重连恢复、切换后旧请求不能回填，以及旧 hub 无 views 字段的兼容。
+当前没有接统一组件时只显示 fallback；这组通过不代表交互动作、HTML 或完整共享组件已验收。
+
 ### 助手的 HTML 卡片（`HTMLCardTests`、`AssistantHTMLCardTests`，#2025）
 
 不用 hub：`-showSampleHTMLCard YES` 打开两张示例卡片（一张用于测试手动「运行」、一张可见时自动运行），截图看深浅色。`-showSampleHTMLCard open` 使用链接确认示例。

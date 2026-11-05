@@ -464,6 +464,7 @@ struct TaskLine: View {
 /// One line the hub added to the conversation (docs/protocol.md「任务和对话动态」).
 struct FeedLine: View {
     var item: FeedItem
+    var group: String = ""
     @Environment(\.shellChat) private var shellChat
     private var store: TasksStore { .shared }
 
@@ -483,6 +484,18 @@ struct FeedLine: View {
         case .answered: AnsweredLine(item: item, taskTitle: taskTitle)
         case .receipt: ReceiptCard(item: item)
         case .routed: routed
+        case .view:
+            // Until the shared interactive renderer is connected, show the current card's plain-text fallback.
+            if let id = item.ref,
+               let view = AssistantViewsStore.shared.view(id, conversation: item.conversation, group: group) ?? item.assistantView,
+               view.id == id, view.conversation == item.conversation {
+                Text(WatchText.shown(view.view.fallback ?? AssistantCardText.mark))
+                    .font(Theme.Font.body)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card(padding: Theme.Space.m)
+                    .accessibilityIdentifier("assistant-live-view-fallback")
+            }
         case .unknown: EmptyView()
         }
     }

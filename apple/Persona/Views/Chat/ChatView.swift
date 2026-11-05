@@ -925,7 +925,7 @@ struct ChatView: View {
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
         switch line.content {
         case .row(let r): rowView(r, isLatest: false, live: true)
-        case .feed(let item): FeedLine(item: item)
+        case .feed(let item): FeedLine(item: item, group: shownKey.group)
         case .quick(let result): QuickResultCard(result: result)
         case .day(let date): DayLine(date: date)
         case .apiError(let item, let info, let count):

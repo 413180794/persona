@@ -1326,7 +1326,9 @@ final class AppModel {
             // The new tier's package is downloaded whole before the face changes (PersonaStore.load).
             if isHub { Task { await personas.refresh(api) } }
         case .assistantFeed(let item):
-            if isHub { TasksStore.shared.received(item) }
+            if isHub { TasksStore.shared.received(item, group: group) }
+        case .assistantView(let view):
+            AssistantViewsStore.shared.receive(view, conversation: view.conversation, group: group)
         case .taskPlan(let plan):
             if isHub { TasksStore.shared.received(plan) }
         case .fleet(let state):
@@ -1408,6 +1410,7 @@ final class AppModel {
         case .todos: "todos"
         case .personas: "personas"
         case .assistantFeed: "assistant_feed"
+        case .assistantView: "assistant_view"
         case .taskPlan: "task_plan"
         case .fleet: "fleet"
         case .hubUpdate: "hub_update"

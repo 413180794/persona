@@ -53,7 +53,7 @@ nonisolated struct TaskPlan: Codable, Hashable, Identifiable, Sendable {
 /// An item the hub inserted into an assistant conversation; drawn among the transcript's lines by `at`.
 nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case plan, task, answered, receipt, routed, today, message, unknown
+        case plan, task, answered, receipt, routed, today, message, view, unknown
         init(from decoder: Decoder) throws {
             self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
         }
@@ -73,6 +73,12 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     var plan: TaskPlan? {
         guard case .object(let o)? = body, let p = o["plan"] else { return nil }
         return try? JSON.decoder.decode(TaskPlan.self, from: JSONEncoder().encode(p))
+    }
+
+    /// A live card's creation record; newer content comes from the feed snapshot or assistant_view event.
+    var assistantView: ExtensionAssistantView? {
+        guard kind == .view, case .object(let o)? = body, let view = o["view"] else { return nil }
+        return try? JSON.decoder.decode(ExtensionAssistantView.self, from: JSONEncoder().encode(view))
     }
 
     private func string(_ key: String) -> String? {
@@ -453,6 +459,7 @@ nonisolated extension APIClient {
     struct FeedResponse: Decodable, Sendable {
         var items: [FeedItem]
         var plans: [String: TaskPlan]?
+        var views: [String: ExtensionAssistantView]?
     }
 
     private struct PlanResponse: Decodable { var plan: TaskPlan }
@@ -461,7 +468,7 @@ nonisolated extension APIClient {
 
     /// A conversation's feed after `since` (nil: all of it), with the plans its `plan` items name.
     func feed(conversation: String, since: Date? = nil) async throws -> FeedResponse {
-        let id = conversation.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? conversation
+        let id = conversation.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/?#"))) ?? conversation
         var query: [String: String] = [:]
         if let since { query["since"] = Self.feedTime.string(from: since) }
         return try await get("/api/v1/assistant/conversations/\(id)/feed", query: query)

@@ -7,7 +7,7 @@ import Observation
 /// sessions and interactions, so a card follows them like the Agents page does.
 @MainActor @Observable
 final class TasksStore {
-    static let shared = TasksStore()
+    static let shared = TasksStore(viewStore: .shared)
 
     var todos: [String: TodoItem] { todoStore.byID }
     private(set) var plans: [String: TaskPlan] = [:]
@@ -33,14 +33,23 @@ final class TasksStore {
     var error: String?
 
     @ObservationIgnored private let todoStore: TodoStore
+    @ObservationIgnored private let viewStore: AssistantViewsStore
+    @ObservationIgnored private var generation: UInt = 0
     @ObservationIgnored private var loading: [String: Task<Void, Never>] = [:]
     /// Conversation id → the day its 今天 card was asked for (once a day).
     @ObservationIgnored private var todayAsked: [String: String] = [:]
 
-    init(todoStore: TodoStore = .shared) { self.todoStore = todoStore }
+    init(todoStore: TodoStore = .shared, viewStore: AssistantViewsStore = AssistantViewsStore()) {
+        self.todoStore = todoStore
+        self.viewStore = viewStore
+    }
 
     /// Entering or leaving 体验模式, or another hub: nothing of the other side may show.
     func forget() {
+        generation &+= 1
+        for task in loading.values { task.cancel() }
+        loading = [:]
+        viewStore.forget()
         plans = [:]
         feeds = [:]
         routes = [:]
@@ -63,11 +72,16 @@ final class TasksStore {
         guard let api = injected ?? AppModel.shared.api else { return nil }
         if refreshTodos { reloadTodos(api: injected) }
         let since = feeds[conversation]?.last?.at
+        let ticket = generation
         let task = Task {
-            defer { loading[conversation] = nil }
-            guard let res = try? await api.feed(conversation: conversation, since: since) else { return }
-            for (id, plan) in res.plans ?? [:] where plans[id] != plan { plans[id] = plan }
-            merge(res.items, into: conversation)
+            defer { if generation == ticket { loading[conversation] = nil } }
+            guard let res = try? await api.feed(conversation: conversation, since: since),
+                  !Task.isCancelled, generation == ticket else { return }
+            viewStore.receive(res.views ?? [:], conversation: conversation, group: api.group)
+            let items = res.items.filter { $0.conversation == conversation }
+            for item in items { viewStore.receive(item, group: api.group) }
+            for (id, plan) in res.plans ?? [:] where plan.conversation == conversation && plans[id] != plan { plans[id] = plan }
+            merge(items, into: conversation)
         }
         loading[conversation] = task
         return task
@@ -79,7 +93,8 @@ final class TasksStore {
         feeds.keys.compactMap { load($0, refreshTodos: false, api: api) }
     }
 
-    func received(_ item: FeedItem) {
+    func received(_ item: FeedItem, group: String = "") {
+        viewStore.receive(item, group: group)
         merge([item], into: item.conversation)
         if item.kind == .task || item.kind == .receipt { reloadTodos() }
     }

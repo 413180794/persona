@@ -28,6 +28,7 @@
 
 - 截图验证别靠 computer-use 点模拟器（Mac 锁屏时拿不到窗口，没锁时会抢用户的鼠标）：用 DEBUG 启动参数（`docs/ios.md`）直达页面再截图。
 - `xcodebuild test` 会启动不带 `-pairURL` 的 App 申请通知权限，之后这台模拟器的截图都会被授权弹窗挡住，跑完测试要重启模拟器再截图。
+  活卡片测试也要先处理弹窗（#2024）：HTTP 已载入卡片不代表 App 已进入前台或完成 WebSocket 连接；推更新前等 mock 的实际升级连接，不能依赖可选的 `client_hello` 声明，因为兼容客户端可能不发送它。
 - 新装（或换了签名重装）的 App 第一次带 `-pairURL` 启动就弹通知授权，弹框在的时候 App 一直不是活跃状态，收件箱不刷新：
   新外壳顶栏形象的收件箱角标不出来，`ShellAvatarTests` 报「no inbox mark」，截图整屏发灰（2026-11-04）。`simctl privacy grant` 给不了通知权限
   （Operation not permitted）；UI 测试启动后在 springboard 上点「允许」（`ShellAvatarTests.launch`），手动截图前先跑一次这样的测试。
