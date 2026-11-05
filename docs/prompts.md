@@ -22,6 +22,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；用判断模型 `inbox.judge` | `assistant/done.go` |
 | `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
 | `assistant/lost_tasks.md` | personad 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
+| `assistant/usage_retry.md` | 网关报了不可能的用量、Claude Code 回「Prompt is too long」，修好 transcript 后续上这一轮（只有 `<persona-context>`，App 不显示，`docs/assistant.md`「网关报的不可能的用量」） | `node/assistant_usage.go` |
 | `assistant/main_handoff.md` | 新建主对话后第一条消息前面的 `<jarvis-context>`：旧主对话的 id、最近一次压缩的摘要、之后的几条消息（`docs/assistant.md`「新建主对话」） | `assistant/start.go` `renderHandoff` `startMain` |
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |

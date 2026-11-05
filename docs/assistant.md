@@ -383,6 +383,19 @@ lark-connector 的 `lark-connector-agent` 带一套控制命令（上游 agent-h
   「压缩上下文」提示（以前显示成用户发的消息，还会让对话变成未看）。
 - **Codex**：`-c model_auto_compact_token_limit=200000`（Codex 配置文档的顶层键）。Codex 有 `thread/compact/start`，空闲压缩暂时没接。
 
+### 网关报的不可能的用量（2026-11-06，#3300）
+
+Claude Code 按最后一条回复的 `usage` 估算上下文。有的模型网关给一轮里每条回复都报 0，最后一条报整轮所有请求加起来的输入（8.5 万的对话报了 170 万）：
+下一条消息开始前 Claude Code 认为超过窗口，先自动压缩——成功了上下文白白丢掉，摘要也失败就回「Prompt is too long · automatic compaction failed」，之后每条消息都一样，对话永远用不了。
+
+- **不可能的用量**（`transcript.PlausibleContext`）：一次请求的输入超过 100 万（最大的上下文窗口），或比 transcript 的字节数多出 20 万以上（一个 token 至少约一个字节，20 万留给系统提示、工具、记忆）。
+  这种数不进上下文用量（`ContextTokens`）和 node 的 `p.context`，不会触发空闲压缩。
+- **修复**（`node/assistant_usage.go`）：claude 每一轮的 `result` 后查 transcript（每个进程第一次查整份，之后从上次查到的位置往后），把不可能的 `input_tokens` / `cache_*_input_tokens` 原地改成 0
+  （用空格补齐长度，文件大小、inode 不变，读的人偏移照旧；子代理的行不动），改之前在旁边留一份 `<transcript>.usage-backup-<时间>`。数在进程内存里，所以修完让进程退出（有后台任务在跑就不退，文件照样修，下次启动用）。
+- **重发**：这一轮是「Prompt is too long」时，修完用 `assistant/usage_retry`（只有一个 `<persona-context>` 块，App 里不显示气泡）续上；同一段对话 10 分钟内最多一次，transcript 里没有不可能的用量就不重发（真的太长，错误照旧）。
+- 实测（Claude Code 2.1.318，transcript 副本 + 假 API）：原样 resume 先要压缩（`pre_tokens` 170 万），摘要为空时回「Prompt is too long」；用量改成 0 后不压缩，直接发出请求。
+  之前没送到的几条用户消息还在 transcript 里，Claude Code 把它们和新的一条合成一个用户轮次发出（合成的错误回复不进请求），所以重发不用再带原文。
+
 ### 手动压缩（2026-11-04，#1727）
 
 用户在主对话的菜单里点「压缩上下文」：`POST /api/v1/assistant/conversations/{id}/compact` → node 的 `assistant.compact`（`node/assistant_compact.go`）。

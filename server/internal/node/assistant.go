@@ -24,6 +24,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // The assistant (the app's 对话 tab) runs Claude Code headless — `<launcher> -p --input-format stream-json
@@ -118,6 +119,10 @@ type assistantProc struct {
 	runtime     string   // proto.AssistantRuntimeAgentSDK when it runs on the bridge (assistant_sdk.go), "" on the CLI
 	fallback    string   // why it runs on the CLI though asked to run on the Agent SDK
 	sdkVersion  string   // the bridge's SDK version (its ready line)
+
+	// usageChecked: how far the transcript was checked for an impossible usage at the end of its turns
+	// (assistant_usage.go); 0: from the start.
+	usageChecked int64
 
 	turnError     string // the latest turn failed on the model service (#2571)
 	turnErrorKind string // proto.TurnErrorTransient or proto.TurnErrorUser
@@ -875,8 +880,12 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				p.busy = true
 				p.lastActive = time.Now()
 				first := false
-				if ev.ParentToolUseID == nil { // a subagent's requests are its own context
-					p.context = u.Input + u.CacheRead + u.CacheCreate
+				if tokens := u.Input + u.CacheRead + u.CacheCreate; ev.ParentToolUseID == nil && (tokens == 0 || transcript.PlausibleContext(tokens, 0)) {
+					// a subagent's requests are its own context; a gateway's impossible number is none (assistant_usage.go),
+					// and the zeros it reports on the other replies of a turn say nothing either: the last real one stands
+					if tokens > 0 {
+						p.context = tokens
+					}
 					first, p.requested = !p.requested, true
 				}
 				p.mu.Unlock()
@@ -929,6 +938,7 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			}
 			n.emitDelta(p.id, "")
 			n.notifySessions()
+			go n.checkTurnUsage(p, ev.IsError && promptTooLong(ev.Result))
 		}
 	}
 }

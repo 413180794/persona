@@ -118,6 +118,10 @@ type Node struct {
 	sysOnce   sync.Once       // system: read once (metrics.go)
 	sys       proto.System
 
+	// usageRetried: when a conversation's message was last sent again after its transcript's usage was repaired
+	// (assistant_usage.go): once in a while at most. Under mu; nil until the first.
+	usageRetried map[string]time.Time
+
 	// runtimes: agent runtimes without a terminal, connected on runtime.sock (runtimes.go); runtimeSock overrides the
 	// socket path (tests).
 	runtimes    *runtimeRegistry

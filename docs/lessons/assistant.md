@@ -86,3 +86,6 @@
   类型不合就用它自己的、或同类的 `claude` / `codex`；查这类问题先 `rg <id> ~/.persona/node-attach.log`，看是哪个启动器、什么时候开始退的。
 - 助手对话（`claude -p`）被停时 transcript 里没有「已中断」（2026-11-06，#3308）：`assistantInterrupt` 直接杀进程，不会写 `[Request interrupted by user]`，
   所以插件从 `items` 看不出这一轮是被 App 的停止按钮停的，只会把半截的最后一段当答案发出去。要知道「被停了」只能靠 hub：interrupt 路由停的是助手对话时发 `session.user_stopped`，助手记下来，插件读 `GET /api/v1/assistant/reporters`。
+- 模型网关报的 `usage` 不一定是一次请求的（2026-11-06，#3300）：有的网关给中间回复报 0、给最后一条报整轮加起来的输入，Claude Code 按最后一条估上下文，
+  于是白白自动压缩，摘要也失败时对话从此每条都是「Prompt is too long」。用 usage 的地方都要先过 `transcript.PlausibleContext`；坏了的 transcript 由 node 原地改 0 修好
+  （`docs/assistant.md`「网关报的不可能的用量」）。`stream-json` 的 `result.usage` 是 Claude Code 自己把一轮加起来的数，本来就会超过窗口，不能拿来判断上下文。

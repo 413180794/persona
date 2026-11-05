@@ -219,6 +219,11 @@ func RenderLostTasks(tasks []string) string {
 	return render("assistant/lost_tasks", struct{ Tasks []string }{tasks})
 }
 
+// RenderUsageRetry sends a conversation's message to the model again after a gateway's impossible usage made Claude
+// Code refuse it as too long and Persona repaired the transcript (assistant/usage_retry, node/assistant_usage.go). It
+// is a <persona-context> block only: the apps show no bubble for it.
+func RenderUsageRetry() string { return render("assistant/usage_retry", nil) }
+
 // TaskNotice tells the main conversation (or a reporting one) about one of its quiet tasks (#1731): it was done, waits for the user, was
 // cut off by the model service or did not start. The assistant decides what to tell the user.
 type TaskNotice struct {

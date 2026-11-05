@@ -312,7 +312,11 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		meta.Compactions++
 	case e.Type == "assistant" && e.Message != nil && e.Message.Usage != nil && !e.IsSidechain:
 		u := e.Message.Usage
-		meta.ContextTokens = u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+		// A gateway's sum of a whole turn is not a context, nor the zeros it reports on the turn's other replies
+		// (usage.go): the last real one stands.
+		if tokens := u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens; tokens > 0 && PlausibleContext(tokens, 0) {
+			meta.ContextTokens = tokens
+		}
 		if e.Message.ID != meta.lastMessageID { // every content block repeats the message's usage
 			meta.OutputTokens += u.OutputTokens
 			meta.lastMessageID = e.Message.ID
