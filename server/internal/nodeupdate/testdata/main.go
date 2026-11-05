@@ -66,13 +66,13 @@ func main() {
 	}
 	cwd, _ := os.Getwd()
 	proof, _ := json.Marshal(map[string]any{"version": version, "pid": os.Getpid(), "args": os.Args, "cwd": cwd, "home": os.Getenv("HOME"), "root": os.Getenv("PERSONA_HOME"), "sentinel": os.Getenv("FIXTURE_SENTINEL")})
-	_ = os.WriteFile(os.Getenv("FIXTURE_PROOF"), proof, 0600)
 	path := filepath.Join(os.Getenv("PERSONA_HOME"), "fixture.sock")
 	_ = os.Remove(path)
 	ln, err := net.Listen("unix", path)
 	if err != nil {
 		panic(err)
 	}
+	_ = os.WriteFile(os.Getenv("FIXTURE_PROOF"), proof, 0600)
 	go func() { <-restart; _ = ln.Close() }()
 	for {
 		c, err := ln.Accept()
