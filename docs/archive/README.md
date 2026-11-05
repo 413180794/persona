@@ -26,4 +26,5 @@
 | `android-capsule-drafts-2124.md` | 2026-11-05 Android 胶囊的草稿经过完成提示和自动收回后仍保留（#2124） |
 | `extension-model-web-1854.md` | 2026-11-05 扩展模型网页验收：贡献开关、依赖链停用、合集安装 / 卸载确认（#1854） |
 | `extension-model-apple-acceptance.md` | 2026-11-05 Apple 扩展模型设置验收：贡献、合集与声明管理，iOS 构建与测试结果（#1861） |
+| `assistant-rich-ui-predeployment-2026-11-06.md` | 2026-11-06 主对话富 UI：统一正式源码的真实模型预部署闭环、旧失败记录、SDK looks 未过与生产暂停边界（#2017） |
 | `plan-telegram.md` | 2026-11-03 Telegram 连接器的方案（gotd、分步登录、收件箱、`tg` 命令行）；2026-11-05 起它是扩展（#1704；0.1.3 起代码在 `nwverse/persona-extensions`，#2057），不在本仓库 |
