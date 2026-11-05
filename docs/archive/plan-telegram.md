@@ -1,6 +1,6 @@
 # 计划：Telegram 连接器（用户自己的账号）
 
-> 已结束（2026-11-05）：Telegram 连接器搬出了开源仓库，成了私有扩展市场里的扩展 `telegram`（#1704）。
+> 已结束（2026-11-05）：Telegram 连接器搬出了开源仓库，成了扩展 `telegram`（#1704）：先在私有的扩展市场，0.1.3 起在 `nwverse/persona-extensions`（#2057）。
 > 连接器 id 不变，登录、收件箱、知识库照旧接着用；代码、`tg` 命令行（现在是 `personad tool --cli telegram`）、telegram 技能都在扩展里。
 > 这里只作当时的设计记录，文中的路径（`connector/telegram`、`jarvisd-telegram`、`personad tg`）在本仓库里已经没有了。
 

@@ -10,7 +10,7 @@
   **2026-11-03 已拍板**（结果在第四部分，正文已按拍板改好）；V1、V3–V6 已做完，V2、V7 决定不做，v2 已收尾。
 - **三、迁移顺序**，**四、拍板结果**。
 
-过程和历史（为什么这样拆、每一步的验收）在 `docs/plan-connectors.md`；Telegram 的在 `docs/archive/plan-telegram.md`（2026-11-05 起它是私有扩展，#1704）。
+过程和历史（为什么这样拆、每一步的验收）在 `docs/plan-connectors.md`；Telegram 的在 `docs/archive/plan-telegram.md`（2026-11-05 起它是扩展，#1704；代码在 `nwverse/persona-extensions`，#2057）。
 
 ## 一、现在的样子（v1）
 
@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `github` | GitHub | hub 里（`connector/github`） | `Archive`（`updated_at` 游标） | 有，规则定档 + 降噪（`rules.go`） | `github_search/read/diff/checks` | `github_comment`、`github_review`（过闸门） | 读某台电脑上 `gh` 的登录（`credential.gh_token`） |
 | `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 personad 完全磁盘访问权限） |
-| `telegram` | Telegram | 私有扩展市场里的扩展 `telegram`（#1704，代码不在本仓库），hub 经插件协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
+| `telegram` | Telegram | 扩展市场 `nwverse/persona-extensions` 里的扩展 `telegram`（#1704、#2057，代码不在本仓库），hub 经插件协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
 | `wechat` | 微信 | 内置插件的单独程序 `jarvisd-wechat`（`docs/wechat.md`）：微信里的机器人，不是数据来源，是渠道（`docs/channels.md`）；连接器只管绑定和状态 | 没有 | 没有 | 没有 | 没有 | `Login` 扫码（`kind: qr`），token 加密存 `connector_secrets` |
 | `lark` | 飞书 | hub 里（`hub/lark_connector.go`，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | hub 自己的收件箱块（`inbox_own.go`） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
 | `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |

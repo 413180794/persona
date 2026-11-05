@@ -167,6 +167,7 @@ func (s *Service) kbAgentTurn(ctx context.Context, t assistantwire.KBAgentTurn) 
 		s.kb.mu.Lock()
 		s.kb.waiting = queueTurn(s.kb.waiting, t, kbWaitingMost)
 		s.kb.mu.Unlock()
+		s.kbWake() // the loop tries again in a second, not at its next round
 		return
 	}
 	if e == nil {

@@ -1451,7 +1451,7 @@ hub.json 里写 `"command": "/usr/bin/node"`、`"args": ["…/main.mjs"]` 的外
 
 ## Telegram：从内置扩展到扩展（#1704）
 
-Telegram 连接器原来是内置扩展 `telegram`（`jarvisd-telegram`，在 personad 旁边）。2026-11-05 起它是私有扩展市场里的扩展 `telegram`，代码不在本仓库：
+Telegram 连接器原来是内置扩展 `telegram`（`jarvisd-telegram`，在 personad 旁边）。2026-11-05 起它是扩展 `telegram`，代码不在本仓库：0.1.2 之前在私有的 `nwverse/persona-removed`，0.1.3 起在 `nwverse/persona-extensions` 的 `extensions/telegram/`（#2057），从那个市场装和升级。它经 TCP 直连 Telegram 的数据中心，不能在沙箱里跑（官方市场装的默认不进沙箱，见「沙箱」）。
 连接器 id 还是 `telegram`，所以 `connector_secrets` 里的登录、收件箱、知识库、连接器的开关和选项都按同一个 id 接着用，装上不用重新登录。
 交接时注册表让内置的给同 id 的已装扩展让位（`Registry.Yields`）：先停掉内置的进程再起扩展的，同一个 Telegram 会话不会两边同时连。
 内置的删掉以后，没装扩展的 hub 上就没有 Telegram 连接器（App 按 hub 列出的连接器显示，不出现）；那一行登录留在库里，装上扩展接着用。

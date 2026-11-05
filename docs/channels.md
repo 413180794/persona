@@ -26,7 +26,7 @@
 | 飞书机器人 | hub 里（`hub/bots*.go`、`feishubot/`，`docs/bots.md`） | 主对话、`/new` 的对话、`/agents` 选的 Agent、回复绑定了目标的那条消息 | hub 内部 watch 会话，进度卡 + 答案卡 | 卡片按钮 | 渠道 `feishu`（内置） |
 | 飞书里的 `/agent` | `hub/lark_agent.go`、`lark_agent_docs.go`（`docs/lark-agent.md`） | 每个请求 / 话题一段新的无头对话 | Agent 调 `lark_agent_reply`，以**我的名义**回复那条消息 / 评论 | 没有 | 渠道 `lark_agent`（内置，只读设置） |
 | 语音 | hub.json 的插件 `voice`、内置语音插件（`server/internal/voice`，`docs/extensions.md`「语音」） | 语音模型自己说；要交给主对话的事经 hub 的 API 发进主对话 | 声音 | 没有 | 渠道 `voice`（插件贡献的 `voice` 扩展点，列出来但不走下面的管线） |
-| Telegram | 扩展 `telegram` 的**连接器**（私有扩展市场；用户自己的账号，MTProto，#1704） | —— | —— | —— | **不是渠道**：只是数据来源。现在没有 Telegram 的对话机器人；以后做就是一个插件渠道（Bot API），见「还没做」 |
+| Telegram | 扩展 `telegram` 的**连接器**（扩展市场 `nwverse/persona-extensions`；用户自己的账号，MTProto，#1704） | —— | —— | —— | **不是渠道**：只是数据来源。现在没有 Telegram 的对话机器人；以后做就是一个插件渠道（Bot API），见「还没做」 |
 | 邮件 | 连接器 `mail` | 收件箱 | AI 分身起草、点一下发送 | —— | 不是渠道（数据来源） |
 | 收件箱的 AI 分身、定时任务、飞书机器人的 `pushes` / `sync` | hub | hub 自己发起的对话 | 推送、飞书 | —— | 不是入口：hub 发起的。它们**往外发**时用渠道的「推送」能力（见「推送和同步」） |
 | botmux | node 的宿主（`docs/engines.md`「botmux」） | 飞书话题 ↔ 某台电脑上的 Claude Code | botmux 自己 | botmux 自己 | 不是 Persona 的渠道：那是 Agent 自己的入口，Agents 页照常显示 |

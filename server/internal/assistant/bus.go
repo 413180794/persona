@@ -123,6 +123,9 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	b.mu.Unlock()
 	if svc != nil {
 		go svc.Resync(context.WithoutCancel(ctx))
+		// Turns the hub sent as it connected can be taken before this answer is kept (events come on their own
+		// goroutine): without the hub's kb settings they could not be filed and wait — now they can.
+		go svc.kbFileWaiting(context.WithoutCancel(ctx))
 	}
 	return nil
 }

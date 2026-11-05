@@ -43,6 +43,9 @@ const (
 	kbItemsPoll   = 30 * time.Minute
 	kbCompressMax = 8   // chats compressed per run
 	kbWaitingMost = 200 // agents' turns kept until it opens
+	// kbRetryWaiting is how soon the loop tries to open again while agents' turns wait for it (the user's zone not
+	// read yet, the data directory still locked by the process before): not at the next round, two minutes on.
+	kbRetryWaiting = time.Second
 )
 
 var (
@@ -56,6 +59,7 @@ var (
 type kbState struct {
 	dir, keyDir string // "" dir: none (unit tests that do not need one)
 	kick        chan struct{}
+	wake        chan struct{}            // the loop looks again at once (kbWake)
 	cur         atomic.Pointer[kbOpened] // nil while not open
 
 	open    sync.Mutex // opening and closing
@@ -87,6 +91,7 @@ type kbIndex interface {
 // kbInit records where the knowledge base is (nil: none); it opens when it is first needed (kbGet).
 func (s *Service) kbInit(o *KBOptions) {
 	s.kb.kick = make(chan struct{}, 1)
+	s.kb.wake = make(chan struct{}, 1)
 	if o != nil {
 		s.kb.dir, s.kb.keyDir = o.Dir, o.KeyDir
 	}
@@ -265,6 +270,36 @@ func (s *Service) kbRezone(st *kb.Store, loc *time.Location) {
 	}
 }
 
+// kbFileWaiting files the agents' turns that wait for the knowledge base, when it can open now (the hub's settings
+// just came, kept from the hello).
+func (s *Service) kbFileWaiting(ctx context.Context) {
+	if !s.kbWaiting() {
+		return
+	}
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if e, err := s.kbGet(cctx); err == nil {
+		s.kbTakeWaiting(e)
+	} else {
+		s.kbWake() // the loop tries again (the user's zone not read yet, the data directory still locked)
+	}
+}
+
+// kbWaiting: agents' turns wait for the knowledge base to open.
+func (s *Service) kbWaiting() bool {
+	s.kb.mu.Lock()
+	defer s.kb.mu.Unlock()
+	return len(s.kb.waiting) > 0
+}
+
+// kbWake has the loop look again now, without kbKick's wait for more news.
+func (s *Service) kbWake() {
+	select {
+	case s.kb.wake <- struct{}{}:
+	default:
+	}
+}
+
 // kbKick has the loop go round soon (a source has something new).
 func (s *Service) kbKick() {
 	select {
@@ -295,12 +330,19 @@ func (s *Service) kbLoop(ctx context.Context) {
 			s.kbClose()
 		case !s.hello(ctx).Assistant.Standby:
 			if e, err := s.kbGet(ctx); err == nil {
+				s.kbTakeWaiting(e) // turns that came while it could not open, also when another call opened it
 				s.kbRound(ctx, e, &r)
 			}
+		}
+		var soon <-chan time.Time
+		if s.kbWaiting() {
+			soon = time.After(kbRetryWaiting)
 		}
 		select {
 		case <-ctx.Done():
 			return
+		case <-soon:
+		case <-s.kb.wake:
 		case <-t.C:
 		case <-s.kb.kick:
 			select {
