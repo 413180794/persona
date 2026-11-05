@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -311,4 +312,44 @@ func waitUntil(t *testing.T, ok func() bool) {
 		}
 	}
 	t.Fatal("timed out")
+}
+
+// A folded run's answer: each of its messages' own answer, in the conversation's order, once all are in; a part the
+// conversation went on from (it took the next message in mid-turn) has its answer in the next one; an older node
+// (no client message ids on the items) gets the last words, as before.
+func TestFoldedRunAnswer(t *testing.T) {
+	r := &channel.Run{MsgIDs: []string{"wechat-1", "wechat-2"}}
+	user := func(id, text string) proto.Item {
+		return proto.Item{Role: "user", Kind: proto.KindText, Text: text, ClientMsgID: id}
+	}
+	say := func(text string) proto.Item { return proto.Item{Role: "assistant", Kind: proto.KindText, Text: text} }
+	tool := proto.Item{Role: "assistant", Kind: proto.KindToolUse}
+	result := proto.Item{Role: "user", Kind: proto.KindToolResult}
+	texts := func(items []proto.Item) string {
+		var out []string
+		for _, it := range items {
+			out = append(out, it.Text)
+		}
+		return strings.Join(out, "|")
+	}
+	for _, c := range []struct {
+		name  string
+		items []proto.Item
+		want  string
+		all   bool
+	}{
+		{"two turns", []proto.Item{user("wechat-1", "一"), tool, result, say("答一"), user("wechat-2", "二"), tool, result, say("答二")}, "答一|答二", true},
+		{"the later one first", []proto.Item{user("wechat-2", "二"), say("答二"), user("wechat-1", "一"), say("答一")}, "答二|答一", true},
+		{"taken in mid-turn", []proto.Item{user("wechat-1", "一"), tool, user("wechat-2", "二"), result, say("一起答")}, "一起答", true},
+		{"one not in yet", []proto.Item{user("wechat-1", "一"), say("答一")}, "", false},
+		{"an older node", []proto.Item{{Role: "user", Kind: proto.KindText, Text: "一"}, say("答一"), {Role: "user", Kind: proto.KindText, Text: "二"}, say("答二")}, "答二", true},
+	} {
+		got, all := runAnswer(r, c.items)
+		if all != c.all || texts(got) != c.want {
+			t.Errorf("%s: %q, %v; want %q, %v", c.name, texts(got), all, c.want, c.all)
+		}
+	}
+	if got, _ := runAnswer(&channel.Run{MsgIDs: []string{"wechat-1"}}, []proto.Item{user("wechat-1", "一"), say("答一"), user("x", "y"), say("答y")}); texts(got) != "答y" {
+		t.Errorf("one message: %q (as before: the last words)", texts(got))
+	}
 }

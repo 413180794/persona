@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -161,7 +162,25 @@ type Meta struct {
 	Cwd      string
 	Model    string
 	LastText string
-	Updated  time.Time
+	// LastTextAt is when the agent last wrote text, botmux's sentinel included (it ends a turn that answered in the
+	// Feishu topic): zero when it never did.
+	LastTextAt time.Time
+	Updated    time.Time
+}
+
+// botmuxSentinel is the line a botmux session's agent ends a turn with when its answer went to the Feishu topic
+// through `botmux send`: a word for botmux, not the answer.
+const botmuxSentinel = "BOTMUX_NOTHING_TO_SEND"
+
+// withoutBotmuxSentinel is text without its botmux sentinel lines, "" when that is all it says (LastText then stays the
+// turn's earlier words).
+func withoutBotmuxSentinel(text string) string {
+	if !strings.Contains(text, botmuxSentinel) {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	lines = slices.DeleteFunc(lines, func(l string) bool { return strings.TrimSpace(l) == botmuxSentinel })
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 // pastedRe matches the wrapper Claude Code puts around long pasted input (also what herdr's bracketed paste from
@@ -503,7 +522,10 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				}
 				it := mk(i, "assistant", proto.KindText)
 				it.Text = clip(b.Text)
-				meta.LastText = b.Text
+				if t := withoutBotmuxSentinel(b.Text); t != "" {
+					meta.LastText = t
+				}
+				meta.LastTextAt = e.Timestamp
 				out = append(out, it)
 			case "thinking":
 				if strings.TrimSpace(b.Thinking) == "" {

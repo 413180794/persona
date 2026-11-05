@@ -568,11 +568,12 @@ func (s *Service) readTurn(ctx context.Context, r *channel.Run) (channel.Reading
 			break
 		}
 	}
-	if !found || !holdsNewest(r, kept) {
+	answer, all := runAnswer(r, kept)
+	if !found || !all {
 		return channel.Reading{Last: after}, nil
 	}
 	var out []string
-	for _, it := range channel.Answer(kept) {
+	for _, it := range answer {
 		text := it.Text
 		if it.FullSize > 0 {
 			var full proto.Item
@@ -585,22 +586,62 @@ func (s *Service) readTurn(ctx context.Context, r *channel.Run) (channel.Reading
 	return channel.Reading{Answer: strings.Join(out, "\n\n"), Found: true, Last: after}, nil
 }
 
-// holdsNewest: the run's newest message is in items. A run that took in later messages (folded: one answer for
-// all) is found by its first one; the turn that answers the first may end before the next is in the conversation
-// (the owner sent several at once, a backlog handed over as the hub started), and its words are not the answer to
-// all. Without client message ids on the items (an older node) it can't be told: as found.
-func holdsNewest(r *channel.Run, items []proto.Item) bool {
+// runAnswer is the answer to the run's messages in items (the transcript from the first of them on), and whether all
+// of them are there. A run that took in later messages (folded: the owner sent another before the first was answered,
+// a backlog handed over at once as the hub started) answers them together, once all are in the conversation: in the
+// order the conversation has them (not the order they were sent: a message that had to start the conversation first
+// comes later), each message's own answer — the words after it, up to the next of them. A part that ends without
+// words (the conversation took the next message in mid-turn and went on) has its answer in the next one. Without
+// client message ids on the items (an older node) they can't be told apart: one answer, the last words, as before.
+func runAnswer(r *channel.Run, items []proto.Item) ([]proto.Item, bool) {
 	if len(r.MsgIDs) < 2 {
-		return true
+		return channel.Answer(items), true
 	}
-	newest, ids := r.MsgIDs[len(r.MsgIDs)-1], false
+	ours := map[string]bool{}
+	for _, id := range r.MsgIDs {
+		ours[id] = true
+	}
+	var parts [][]proto.Item
+	seen, cur, ids := map[string]bool{}, "", false
 	for _, it := range items {
-		if it.ClientMsgID == newest {
+		ids = ids || it.ClientMsgID != ""
+		if ours[it.ClientMsgID] && it.ClientMsgID != cur || len(parts) == 0 {
+			if ours[it.ClientMsgID] {
+				cur, seen[it.ClientMsgID] = it.ClientMsgID, true
+			}
+			parts = append(parts, nil)
+		}
+		parts[len(parts)-1] = append(parts[len(parts)-1], it)
+	}
+	if !ids {
+		return channel.Answer(items), true
+	}
+	if len(seen) < len(ours) {
+		return nil, false // one of its messages is not in the conversation yet: its answer is still to come
+	}
+	var out []proto.Item
+	for i, p := range parts {
+		if i < len(parts)-1 && !endsInWords(p) {
+			continue
+		}
+		out = append(out, channel.Answer(p)...)
+	}
+	return out, true
+}
+
+// endsInWords: the last of items that says anything is the assistant's text (a turn that ended with its answer).
+func endsInWords(items []proto.Item) bool {
+	for i := len(items) - 1; i >= 0; i-- {
+		it := items[i]
+		switch {
+		case it.Kind == proto.KindThinking, it.Kind == proto.KindText && strings.TrimSpace(it.Text) == "":
+			continue
+		case it.Role == "assistant" && it.Kind == proto.KindText:
 			return true
 		}
-		ids = ids || it.ClientMsgID != ""
+		return false
 	}
-	return !ids
+	return false
 }
 
 // finishChannelRun sends a run's answer and ends it, or — held — keeps it for the turn its background work starts.

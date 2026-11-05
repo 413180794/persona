@@ -99,3 +99,27 @@ func TestLastToolFromACodexRollout(t *testing.T) {
 		t.Fatalf("codex command: %+v", m.LastTool)
 	}
 }
+
+// botmux's sentinel is not the agent's last words: a turn that answered in the Feishu topic and ended on it keeps the
+// words before; one ending its text with it keeps that text without it. The item itself still shows as written.
+func TestLastTextSkipsTheBotmuxSentinel(t *testing.T) {
+	var m Meta
+	parse := func(text string) {
+		t.Helper()
+		b, _ := json.Marshal(text)
+		ParseLine(0, []byte(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":`+string(b)+`}]}}`), &m)
+	}
+	parse("结论已发到话题")
+	parse("BOTMUX_NOTHING_TO_SEND")
+	if m.LastText != "结论已发到话题" {
+		t.Fatalf("the sentinel alone: %q", m.LastText)
+	}
+	parse("重试已提交，等它跑完。\n\nBOTMUX_NOTHING_TO_SEND")
+	if m.LastText != "重试已提交，等它跑完。" {
+		t.Fatalf("the sentinel after text: %q", m.LastText)
+	}
+	parse("说明里提到 BOTMUX_NOTHING_TO_SEND 这个词")
+	if m.LastText != "说明里提到 BOTMUX_NOTHING_TO_SEND 这个词" {
+		t.Fatalf("the word inside a line is the text: %q", m.LastText)
+	}
+}

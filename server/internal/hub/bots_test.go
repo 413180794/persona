@@ -701,34 +701,49 @@ func TestChannelAnswersNeedTheOwnersAction(t *testing.T) {
 	}
 }
 
-// Two messages sent together (a backlog handed over at once) are one run: the turn that answers the first ends
-// before the second is in the conversation, and its words are not posted as the answer; the second's turn is.
-func TestBotFoldedMessagesWaitForTheNewest(t *testing.T) {
-	w := newBotWorld(t)
-	w.pair(t)
-	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_f1", "ou_me", "text", textContent("第一条"), nil))
-	first, _ := w.node.sent(t, 0)["text"].(string)
-	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_f2", "ou_me", "text", textContent("第二条"), nil))
-	second, _ := w.node.sent(t, 1)["text"].(string)
-	w.node.mu.Lock()
-	w.node.items = []proto.Item{{Seq: 11, Role: "user", Kind: proto.KindText, Text: first, ClientMsgID: "feishu-om_f1"},
-		{Seq: 12, Role: "assistant", Kind: proto.KindText, Text: "只答了第一条"}}
-	w.node.last = 12
-	w.node.mu.Unlock()
-	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusWorking}})
-	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusDone}})
-	time.Sleep(1500 * time.Millisecond)
-	if n := w.api.count("只答了第一条"); n != 0 {
-		t.Fatal("the first message's turn was posted as the answer to both")
+// Two messages sent before the first is answered (the owner writing again, a backlog handed over at once as the hub
+// starts) are one run, answered once both are in the conversation, with each one's own answer in the order the
+// conversation has them: the turn that answers one is not posted as the answer to both, and neither answer is lost
+// — also when the later message reaches the conversation first (the first had to start the conversation again).
+func TestBotFoldedMessagesAreAnsweredTogether(t *testing.T) {
+	for _, laterFirst := range []bool{false, true} {
+		t.Run(map[bool]string{false: "in the order sent", true: "the later one first"}[laterFirst], func(t *testing.T) {
+			w := newBotWorld(t)
+			w.pair(t)
+			_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_f1", "ou_me", "text", textContent("第一条"), nil))
+			first, _ := w.node.sent(t, 0)["text"].(string)
+			_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_f2", "ou_me", "text", textContent("第二条"), nil))
+			second, _ := w.node.sent(t, 1)["text"].(string)
+			type msg struct{ text, id, answer string }
+			turns := []msg{{first, "feishu-om_f1", "第一条的回答"}, {second, "feishu-om_f2", "第二条的回答"}}
+			if laterFirst {
+				turns[0], turns[1] = turns[1], turns[0]
+			}
+			turn := func(m msg) {
+				w.node.mu.Lock()
+				w.node.items = append(w.node.items, proto.Item{Seq: w.node.last + 1, Role: "user", Kind: proto.KindText, Text: m.text, ClientMsgID: m.id},
+					proto.Item{Seq: w.node.last + 2, Role: "assistant", Kind: proto.KindText, Text: m.answer})
+				w.node.last += 2
+				w.node.mu.Unlock()
+				w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusWorking}})
+				w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusDone}})
+			}
+			turn(turns[0])
+			time.Sleep(1500 * time.Millisecond)
+			if n := w.api.count(turns[0].answer); n != 0 {
+				t.Fatal("one message's turn was posted before the other message was in the conversation")
+			}
+			turn(turns[1])
+			both := w.api.find(t, turns[0].answer, turns[1].answer)
+			if strings.Index(both, turns[0].answer) > strings.Index(both, turns[1].answer) {
+				t.Fatalf("the answers are not in the conversation's order: %s", both)
+			}
+			w.api.find(t, "/messages/om_f1/reactions", "DONE")
+			w.api.find(t, "/messages/om_f2/reactions", "DONE")
+			time.Sleep(500 * time.Millisecond)
+			if n := w.api.count(turns[1].answer); n != 1 {
+				t.Fatalf("the answer was posted %d times", n)
+			}
+		})
 	}
-	w.node.mu.Lock()
-	w.node.items = append(w.node.items, proto.Item{Seq: 13, Role: "user", Kind: proto.KindText, Text: second, ClientMsgID: "feishu-om_f2"},
-		proto.Item{Seq: 14, Role: "assistant", Kind: proto.KindText, Text: "两条都答了"})
-	w.node.last = 14
-	w.node.mu.Unlock()
-	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusWorking}})
-	w.m.setSessions([]proto.Session{{SessionID: "main-1", Cwd: "/home/u/.jarvis/assistant", Status: proto.StatusDone}})
-	w.api.find(t, "两条都答了")
-	w.api.find(t, "/messages/om_f1/reactions", "DONE")
-	w.api.find(t, "/messages/om_f2/reactions", "DONE")
 }

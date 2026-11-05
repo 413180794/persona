@@ -2,6 +2,7 @@ package node
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -193,6 +194,12 @@ type botmuxRow struct {
 		} `json:"agentAttention"`
 		// FeishuThreadLink opens the session's topic in Feishu (a raw field: shown when present).
 		FeishuThreadLink string `json:"feishuThreadLink"`
+		// The last reply botmux posted in the topic (the full text and its first words) and whether it answers the
+		// latest message ("replied") or that one still waits ("waiting").
+		PreviewBotFullText string `json:"previewBotFullText"`
+		PreviewBotText     string `json:"previewBotText"`
+		PreviewBotState    string `json:"previewBotState"`
+		PreviewBotAt       int64  `json:"previewBotAt"` // epoch ms
 	} `json:"raw"`
 }
 
@@ -292,11 +299,26 @@ func (r botmuxRow) agent() (host.Agent, bool) {
 		}
 	}
 	a.Title = a.Name
+	// The answer is what botmux posted in the topic: the transcript's last words are often only botmux's sentinel. A
+	// turn under way, or a message not answered yet, reads from the transcript (what it does now); so does a session
+	// waiting for the user, whose reply in the topic is often the attention reason itself.
+	if a.AgentStatus != proto.StatusWorking && a.AgentStatus != proto.StatusBlocked && r.Raw.PreviewBotState == "replied" {
+		a.LastText = botmuxReply(cmp.Or(r.Raw.PreviewBotFullText, r.Raw.PreviewBotText))
+		if r.Raw.PreviewBotAt > 0 {
+			a.LastTextAt = time.UnixMilli(r.Raw.PreviewBotAt)
+		}
+	}
 	if strings.HasPrefix(r.Raw.FeishuThreadLink, "https://") {
 		a.ExternalURL = r.Raw.FeishuThreadLink
 	}
 	return a, true
 }
+
+// botmuxCard is how botmux records a card it posted: "[卡片: <title>]" on the first line, then the card's text.
+var botmuxCard = regexp.MustCompile(`^\[卡片: ([^\]\n]*)\]`)
+
+// botmuxReply is a reply as botmux recorded it, a card's title without botmux's label (the first words are the summary).
+func botmuxReply(s string) string { return botmuxCard.ReplaceAllString(s, "$1") }
 
 // botmuxTitle is a session's title on one line (botmux keeps the first words of the topic until it is renamed).
 func botmuxTitle(s string) string { return strings.Join(strings.Fields(s), " ") }

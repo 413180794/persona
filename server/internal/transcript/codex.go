@@ -264,8 +264,8 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 		kind := proto.KindText
 		if it.Phase == "commentary" {
 			kind = proto.KindThinking
-		} else {
-			meta.LastText = text
+		} else if t := withoutBotmuxSentinel(text); t != "" {
+			meta.LastText = t
 		}
 		a := mk(0, it.ID, "assistant", kind)
 		a.Text = clip(text)

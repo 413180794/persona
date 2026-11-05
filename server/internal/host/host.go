@@ -11,6 +11,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Host kinds. Herdr panes are stored and sent without a prefix (see PaneRef).
@@ -230,6 +231,11 @@ type Agent struct {
 	Attention string
 	// ExternalURL opens the agent where the host shows it (a botmux session's Feishu topic), "" when there is none.
 	ExternalURL string
+	// LastText is the agent's last answer as the host recorded it (the last reply botmux posted in the topic), "" when
+	// the host keeps none: the transcript's last words then.
+	LastText string
+	// LastTextAt is when the host recorded LastText, zero when it does not say.
+	LastTextAt time.Time
 }
 
 // SessionID is the session id the host reported, "" when none. A reported file names its session: pi's are

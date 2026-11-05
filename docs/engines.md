@@ -95,6 +95,9 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
 - **为什么等你、在飞书打开**：botmux 举手（`botmux send --attention`）时带的原因，会话在「需要你」时放进 `attention_reason`，
   App 在列表行和对话页顶上显示；observe 原始数据里的话题链接（`feishuThreadLink`，只认 https）放进 `external_url`，对话页的「在飞书打开」用它。
   两个都是 botmux 的原始字段，不是稳定接口：没有就不显示。
+- **摘要（`last_text`）**：会话不在工作中、不在「需要你」、botmux 已经回了最新一条消息（`previewBotState` 是 `replied`）时，用 botmux 记下的最后一条回复（`previewBotFullText`，没有就用 `previewBotText`；卡片记成「[卡片: 标题]」，去掉标签只留标题）：
+  Agent 的回答走 `botmux send` 发到飞书，对话记录的最后一句常常只是 `BOTMUX_NOTHING_TO_SEND`。工作中、还没回、「需要你」（话题里的回复常常就是等你的原因），或者对话记录里在这条回复 10 分钟之后还有文字（在 botmux 之外接着做了）的，照旧取对话记录的最后一段文字。
+  对话记录里单独一行的 `BOTMUX_NOTHING_TO_SEND` 不算文字（任何会话都一样）：整轮只有它时，保留之前的文字；只说过它的对话记录也算说过话，挂起超过 7 天后照样按「未运行」列出。
 - **不重复**：botmux 用 herdr 后端时，它的会话本来就是 herdr 的窗格，botmux 宿主不再列。botmux 的 Codex 会话同时出现在 Codex 历史或 Codex 桌面版的列表里时（同一份 rollout），
   只留 botmux 的那一行（能经 botmux 发消息，不是只读的历史）。botmux 的 Codex / TRAEX 会话不接 app-server（不 `thread/resume`）、不读屏幕出提问 / 审批卡片、发消息前不查输入框：
   这些和它的 Claude Code 会话一样留在飞书和电脑上。挂起超过 7 天、botmux 不再列的 Codex 会话按 Codex 历史只读显示，去飞书里回。

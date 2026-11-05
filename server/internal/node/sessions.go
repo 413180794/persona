@@ -126,6 +126,8 @@ type quickMeta struct {
 	cwd      string
 	model    string
 	lastText string
+	// lastTextAt is when the agent last wrote text (botmux's sentinel included: it said something, it is no probe).
+	lastTextAt time.Time
 	// doing / doingAt: what the agent's latest tool call does, when no text came after it (transcript.Activity).
 	doing    string
 	doingAt  time.Time
@@ -147,6 +149,9 @@ type quickMeta struct {
 }
 
 const offlineWindow = 7 * 24 * time.Hour
+
+// hostTextSlack: the transcript's words this long after the host's record of the answer still belong to that turn.
+const hostTextSlack = 10 * time.Minute
 
 // quickTail: how much of a transcript's end readQuickMeta reads for its title and last words. One line can fill it:
 // Claude Code writes its api-request-blob lines whole (300–500 KB each, 2026-11).
@@ -244,7 +249,7 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 		}
 	}
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
-	m.wake, m.turnClosed = tm.LastTurnWake, tm.TurnClosed
+	m.wake, m.turnClosed, m.lastTextAt = tm.LastTurnWake, tm.TurnClosed, tm.LastTextAt
 	if m.lastText == "" && off > 0 {
 		// An agent that said a line and then ran tools for a while: their results and hook lines push its words out of
 		// the tail (a 1.5 MB transcript whose last text was 900 KB back, 2026-11-04) and its task card said 还没有动静.
@@ -586,9 +591,12 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			s.AttentionReason = a.Attention
 		}
 		s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
+		// textAt: when the transcript last had the agent's words.
+		var textAt time.Time
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
 				m := n.meta(p, st)
+				textAt = m.lastTextAt
 				if m.title != "" && a.Agent != "codex" && a.Agent != traexAgent {
 					s.Title = m.title
 				}
@@ -615,6 +623,12 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				s.Loop = m.loop
 				s.Subagents = n.subagents(id)
 			}
+		}
+		// The host's record of the answer (botmux's reply in the topic), unless the transcript has words well after it:
+		// the session went on outside the host (a `claude --resume` in a terminal). Text written in the same turn
+		// right after the reply (the sentinel, a closing line) comes within minutes.
+		if a.LastText != "" && (a.LastTextAt.IsZero() || !textAt.After(a.LastTextAt.Add(hostTextSlack))) {
+			s.LastText = snippet(a.LastText)
 		}
 		if a.Agent == piAgent {
 			n.mergePiRow(&s) // its conversation is the extension's (pi.go)
@@ -764,7 +778,7 @@ func (n *Node) scanOffline() []proto.Session {
 		// one only had its tail read, and a tail of tool calls under one huge line says nothing; the main conversation is
 		// listed whatever its tail holds. Dropping it left the app and the web with no session for 主对话, and its composer
 		// disabled (#1163: its last turn stopped mid tool call, under a 377 KB line).
-		if m.lastText == "" && m.title == "" && !keep[id] && c.st.Size() <= quickTail {
+		if m.lastText == "" && m.lastTextAt.IsZero() && m.title == "" && !keep[id] && c.st.Size() <= quickTail {
 			continue
 		}
 		n.setGuessedPath(id, c.path)

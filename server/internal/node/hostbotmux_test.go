@@ -221,6 +221,61 @@ func TestBotmuxAttentionReasonAndTopicLink(t *testing.T) {
 	}
 }
 
+// A session's last words are the reply botmux posted in the topic (a card's title without botmux's label): its
+// transcript often ends on botmux's sentinel only. A turn under way, a message botmux has not answered yet, a session
+// waiting for the user, and one whose transcript has words well after the reply show the transcript's words.
+func TestBotmuxLastTextIsTheTopicReply(t *testing.T) {
+	n, f, _, home := bmxNode(t)
+	replyAt := time.Now().Add(-time.Hour)
+	replied := func(id, liveness, turn, state string) map[string]any {
+		r := bmxRow(id, "claude-code", liveness, turn, false, "t")
+		r["raw"] = map[string]any{"title": "t", "previewBotState": state, "previewBotText": "结论：已修好 …",
+			"previewBotFullText": "结论：已修好\n测试 9 个通过", "previewBotAt": replyAt.UnixMilli()}
+		return r
+	}
+	const sidH, sidI = "0d000000-0000-4000-8000-000000000013", "0d000000-0000-4000-8000-000000000014"
+	short := replied(sidE, "not_running", "unknown", "replied")
+	short["raw"].(map[string]any)["previewBotFullText"] = ""
+	blocked := replied(sidF, "alive", "idle", "replied")
+	blocked["tuiPromptActive"] = true
+	card := replied(sidG, "not_running", "unknown", "replied")
+	card["raw"].(map[string]any)["previewBotFullText"] = "[卡片: 部署完成]\n**结论**：三台都在线"
+	f.rows = []map[string]any{
+		replied(sidA, "alive", "idle", "replied"),
+		replied(sidB, "alive", "working", "replied"),
+		replied(sidC, "alive", "idle", "waiting"),
+		bmxRow(sidD, "claude-code", "alive", "idle", false, "no reply"),
+		short, blocked, card,
+		replied(sidH, "not_running", "unknown", "replied"),
+		replied(sidI, "not_running", "unknown", "replied"),
+	}
+	text := func(at time.Time, s string) string {
+		return `{"type":"assistant","timestamp":"` + at.UTC().Format(time.RFC3339) +
+			`","message":{"role":"assistant","content":[{"type":"text","text":"` + s + `"}]}}`
+	}
+	for _, id := range []string{sidA, sidB, sidC, sidD, sidE, sidF, sidG, sidH, sidI} {
+		at := replyAt.Add(time.Minute) // the sentinel closing the turn of the reply
+		lines := []string{`{"type":"user","message":{"role":"user","content":"hi"}}`, text(at, "已发到话题"),
+			text(at, "BOTMUX_NOTHING_TO_SEND")}
+		switch id {
+		case sidH: // answered later outside botmux (a resume in a terminal)
+			lines = append(lines, text(time.Now().Add(-time.Minute), "在终端里接着做完了"))
+		case sidI: // within the slack of the reply: the same turn
+			lines = append(lines, text(replyAt.Add(5*time.Minute), "收尾"))
+		}
+		writeTranscript(t, home, bmxCwd, id, time.Now().Add(-time.Minute), lines...)
+	}
+	m := byID(listSessions(t, n))
+	want := map[string]string{sidA: "结论：已修好 测试 9 个通过", sidB: "已发到话题", sidC: "已发到话题", sidD: "已发到话题",
+		sidE: "结论：已修好 …", sidF: "已发到话题", sidG: "部署完成 **结论**：三台都在线", sidH: "在终端里接着做完了",
+		sidI: "结论：已修好 测试 9 个通过"}
+	for id, text := range want {
+		if got := m[id].LastText; got != text {
+			t.Errorf("%s: last text %q, want %q", id, got, text)
+		}
+	}
+}
+
 // One observe answers the refreshes of a moment; botmux not running is no sessions, not a failure.
 func TestBotmuxObserveIsReusedAndOfflineIsEmpty(t *testing.T) {
 	_, f, _, _ := bmxNode(t)
@@ -658,6 +713,21 @@ func awaitPush(t *testing.T, pushes <-chan hubPush, want func(hubPush) bool, wha
 		case <-timeout:
 			t.Fatal(what)
 		}
+	}
+}
+
+// A transcript whose agent only said botmux's sentinel (its answers all went to the topic) is a conversation, not a
+// probe: it is listed offline once botmux no longer lists it.
+func TestSentinelOnlyTranscriptIsListedOffline(t *testing.T) {
+	n, _, _, home := bmxNode(t)
+	pad := strings.Repeat("x", 2048) // offline listing skips files under 2 KB
+	writeTranscript(t, home, bmxCwd, sidA, time.Now().Add(-time.Minute),
+		`{"type":"user","message":{"role":"user","content":"`+pad+`"}}`,
+		`{"type":"assistant","timestamp":"`+time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)+
+			`","message":{"role":"assistant","content":[{"type":"text","text":"BOTMUX_NOTHING_TO_SEND"}]}}`)
+	s, ok := byID(listSessions(t, n))[sidA]
+	if !ok || s.Status != proto.StatusOffline || s.LastText != "" {
+		t.Fatalf("listed %v: %+v", ok, s)
 	}
 }
 
