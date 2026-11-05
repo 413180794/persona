@@ -904,8 +904,16 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		if c.UpdatedAt.After(last.UpdatedAt) {
 			last = c
 		}
-		if c.TurnError != "" && (cut.SessionID == "" || c.UpdatedAt.After(cut.UpdatedAt)) {
+		// The node's word, whatever the state now; or, once it stopped, Claude Code's last words when they are the
+		// error ("API Error: …", "Not logged in · …"): the node's raw list has no turn error for those (fleet.go
+		// turnError reads them for the apps).
+		text, kind := strings.TrimSpace(c.TurnError), c.TurnErrorKind
+		if text == "" {
+			text, kind = turnError(c)
+		}
+		if text != "" && (cut.SessionID == "" || c.UpdatedAt.After(cut.UpdatedAt)) {
 			cut = c
+			cut.TurnError, cut.TurnErrorKind = text, kind
 		}
 	}
 	s.tasks.mu.Lock()

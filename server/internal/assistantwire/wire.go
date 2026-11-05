@@ -414,9 +414,11 @@ type MessageCard struct {
 
 // APIErrorMarkers start what Claude Code answers when the model call itself failed (an error card in the app). Both
 // sides read a turn by them: the hub's session lists say an agent's turn was cut off (proto.Session.TurnError), the
-// assistant's scheduled runs and tasks act on it.
+// assistant's scheduled runs and tasks act on it. "Not logged in · Please run /login" is what Claude Code answers when
+// it has no credentials (a model of its own, "<synthetic>"): the turn did not run, the user must sign in
+// (docs/onboarding.md 4.4). Its separator is in the marker, so a reply that talks about being logged out is a reply.
 var APIErrorMarkers = []string{"API Error:", "There's an issue with the selected model", "Failed to authenticate",
-	"OAuth token has expired", "Invalid API key"}
+	"OAuth token has expired", "Invalid API key", "Not logged in ·"}
 
 // InterruptedSummary is what is said of a turn the model service cut off, instead of its last words (the error is no
 // conclusion, #1516): an interrupted task's receipt, the push.

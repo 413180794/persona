@@ -2,11 +2,15 @@ package node
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // shortStartRetries makes the retries of a launcher whose command is missing quick for a test.
@@ -69,6 +73,11 @@ func TestAssistantSendSaysTheCommandIsMissing(t *testing.T) {
 	if !strings.Contains(msg, "没有启动起来") || !strings.Contains(msg, "command not found") || strings.Contains(msg, "file already closed") {
 		t.Fatalf("error: %q", msg)
 	}
+	// Coded, so the app is told Claude Code is missing on that machine (docs/onboarding.md 4.6); nothing was delivered.
+	var re *rpc.Error
+	if !errors.As(err, &re) || re.Code != proto.CodeClaudeMissing || re.Message != msg || !strings.Contains(string(re.Data), `"delivered":"none"`) {
+		t.Fatalf("not coded claude_missing: %#v", err)
+	}
 	if elapsed := time.Since(start); elapsed < 3*100*time.Millisecond {
 		t.Fatalf("gave up after %v, before its %d retries", elapsed, assistantStartRetries)
 	}
@@ -92,5 +101,34 @@ func TestAssistantSendDoesNotRetryOtherStartFailures(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed >= 2*time.Second {
 		t.Fatalf("waited %v: a failure other than a missing command was retried", elapsed)
+	}
+}
+
+// What a failed start was missing, by what the shell or personad launch printed.
+func TestMissingFrom(t *testing.T) {
+	for _, tc := range []struct {
+		launcher string
+		lines    []string
+		notFound bool
+		want     string
+	}{
+		{"claude", []string{"zsh:1: command not found: claude"}, true, proto.CodeClaudeMissing},
+		{"cc_work", []string{"cc_work:1: command not found: claude"}, true, proto.CodeClaudeMissing}, // a ~/.zshrc function calling claude
+		{"cc_gone", []string{"zsh:1: command not found: cc_gone"}, true, proto.CodeLauncherMissing},
+		{"cc_gone", []string{"bash: line 1: cc_gone: command not found"}, true, proto.CodeLauncherMissing},
+		{"claude", []string{"bash: claude: command not found"}, true, proto.CodeClaudeMissing},
+		{"work", []string{"jarvisd launch: claude not found in PATH or the usual install locations"}, false, proto.CodeClaudeMissing},
+		{"claude", nil, true, proto.CodeClaudeMissing},
+		{"cc_gone", nil, true, proto.CodeLauncherMissing},
+		{"claude", []string{"Error: unknown option '--plugin-dir'"}, false, ""},
+		// ~/.zshrc noise under zsh -ic says nothing about why the start failed
+		{"cc_work", []string{"/home/u/.zshrc:12: command not found: compdef", "Error: unknown option '--plugin-dir'"}, false, ""},
+		{"cc_work", []string{"/home/u/.zshrc:12: command not found: compdef", "zsh:1: command not found: nvm"}, true, ""},
+		{"cc_gone", []string{"/home/u/.zshrc:12: command not found: compdef", "zsh:1: command not found: cc_gone"}, true, proto.CodeLauncherMissing},
+		{"cc_work", []string{"/home/u/.zshrc:12: command not found: compdef", "cc_work:1: command not found: claude"}, true, proto.CodeClaudeMissing},
+	} {
+		if got := missingFrom(tc.launcher, tc.lines, tc.notFound); got != tc.want {
+			t.Errorf("missingFrom(%s, %q, %v) = %q, want %q", tc.launcher, tc.lines, tc.notFound, got, tc.want)
+		}
 	}
 }

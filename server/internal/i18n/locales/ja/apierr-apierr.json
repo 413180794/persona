@@ -1,0 +1,8 @@
+{
+  "no_machine": "Persona はお使いのコンピューターの 1 台で作業します。まだコンピューターが接続されていません。",
+  "machine_pending": "このコンピューターはまだあなたのものとして確認されていません。",
+  "claude_missing": "{machine} にはまだ Claude Code がインストールされていません。",
+  "claude_missing_here": "このコンピューターにはまだ Claude Code がインストールされていません。",
+  "launcher_missing": "{machine} でモデルの入口「{launcher}」が見つかりません。削除された可能性があります。",
+  "launcher_missing_here": "このコンピューターでモデルの入口「{launcher}」が見つかりません。削除された可能性があります。"
+}

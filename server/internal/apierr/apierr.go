@@ -12,6 +12,7 @@ import (
 	"net/http"
 
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -153,6 +154,62 @@ func Call(w http.ResponseWriter, err error) {
 			body["error"] = re.Message
 		}
 		body["code"] = code
+		if _, ok := codeActions[code]; ok {
+			explain(body, code, re.Message, i18n.OfWriter(w))
+		}
 	}
 	WriteBody(w, status, body)
+}
+
+// codeActions are the refusals whose words the hub writes itself, wherever they came from (the assistant, a node),
+// with what a client offers to fix each (docs/onboarding.md 4.6, 5.2).
+var codeActions = map[string]string{
+	proto.CodeNoMachine:       "add_computer",
+	proto.CodeMachinePending:  "confirm_computer",
+	proto.CodeClaudeMissing:   "install_claude",
+	proto.CodeLauncherMissing: "connect_model",
+}
+
+// OnMachine is err naming the machine (its display name) it was refused on, when it is one of the refusals the hub
+// words itself and does not name one yet: what the sentence says instead of 「这台电脑」. Anything else is err.
+func OnMachine(err error, name string) error {
+	var re *rpc.Error
+	if name == "" || !errors.As(err, &re) {
+		return err
+	}
+	if _, ok := codeActions[re.Code]; !ok {
+		return err
+	}
+	data := map[string]any{}
+	if len(re.Data) > 0 && json.Unmarshal(re.Data, &data) != nil {
+		return err
+	}
+	if n, _ := data["machine_name"].(string); n != "" {
+		return err
+	}
+	data["machine_name"] = name
+	raw, merr := json.Marshal(data)
+	if merr != nil {
+		return err
+	}
+	return &rpc.Error{Code: re.Code, Message: re.Message, Data: raw}
+}
+
+// explain makes body say code's refusal in plain words in l (none: the default language): error is the sentence for
+// people, detail what the caller wrote (the shell's own words: only for the 详情), action what to do unless the caller
+// said. The caller's data may name the machine (machine_name, OnMachine; else the text says 这台电脑) and the launcher.
+func explain(body map[string]any, code, message string, l i18n.Lang) {
+	name, _ := body["machine_name"].(string)
+	launcher, _ := body["launcher"].(string)
+	key := "apierr-apierr." + code
+	if name == "" && i18n.Has(key+"_here") {
+		key += "_here" // 这台电脑
+	}
+	body["error"] = i18n.T(l, key, i18n.Args{"machine": name, "launcher": launcher})
+	if d, _ := body["detail"].(string); d == "" {
+		body["detail"] = message
+	}
+	if a, _ := body["action"].(string); a == "" {
+		body["action"] = codeActions[code]
+	}
 }

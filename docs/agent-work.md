@@ -99,7 +99,7 @@
      `turn_error`，还按 Codex 的错误种类（`codex_error_info`）报 `turn_error_kind`（#2185，下面「Codex 的错误种类」）。
    - 有 `turn_error_kind` 就按它；没有就按文字：
    - 瞬时的（5xx、`overloaded`、`Connection error`、`timed out`、`socket hang up`、`ECONNRESET`、`fetch failed`、`no eligible upstream`、429）→ `transient`，安排自动「继续」；
-   - 其余（`Failed to authenticate`、`OAuth token has expired`、`Invalid API key`、401 / 403、选的模型不可用）→ `blocked · user`，卡片「模型服务需要你处理：<原文>」，选项「已处理，继续」「先不管」。
+   - 其余（`Failed to authenticate`、`OAuth token has expired`、`Invalid API key`、`Not logged in · Please run /login`（没登录，Claude Code 合成的回答）、401 / 403、选的模型不可用）→ `blocked · user`，卡片「模型服务需要你处理：<原文>」，选项「已处理，继续」「先不管」。
 
    **Codex 的错误种类**（`transcript/codex_error.go`；rollout 里是 `server_overloaded`，app-server 里是 `serverOverloaded`，同一个东西）：
 

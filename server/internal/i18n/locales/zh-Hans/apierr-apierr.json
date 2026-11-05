@@ -1,0 +1,8 @@
+{
+  "no_machine": "Persona 要在你的一台电脑上干活，现在还没接上电脑。",
+  "machine_pending": "这台电脑还没确认是你的。",
+  "claude_missing": "{machine} 上还没装 Claude Code。",
+  "claude_missing_here": "这台电脑上还没装 Claude Code。",
+  "launcher_missing": "在 {machine} 上找不到「{launcher}」这个模型入口，可能被删了。",
+  "launcher_missing_here": "在这台电脑上找不到「{launcher}」这个模型入口，可能被删了。"
+}

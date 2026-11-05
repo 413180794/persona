@@ -45,7 +45,7 @@ func TestGoldenVoicePrompts(t *testing.T) {
 		{Status: "done", Text: "明天下午三点有会"},
 		{Status: "done"},
 		{Status: "needs_you"},
-		{Status: "failed", Text: "assistant machine is not configured"},
+		{Status: "failed", Text: "Persona 要在你的一台电脑上干活，现在还没接上电脑。"}, // the hub's no_machine (docs/onboarding.md 5.2)
 		{Status: "timeout"},
 	} {
 		name := "report." + d.Status

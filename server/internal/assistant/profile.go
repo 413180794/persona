@@ -500,7 +500,7 @@ func (s *Service) warm(launcher string) {
 func (s *Service) memory(ctx context.Context, op map[string]any, out any) error {
 	d, ok := s.device(ctx, s.settings(ctx).MachineID)
 	if !ok {
-		return errors.New("assistant machine is not configured")
+		return errNoAssistantMachine
 	}
 	space, _ := op["space"].(string)
 	delete(op, "space")

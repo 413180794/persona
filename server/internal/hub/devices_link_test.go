@@ -343,7 +343,7 @@ func TestDeviceErrorsKeepWhatMayHaveBeenDone(t *testing.T) {
 	}
 	// The bus dropping with the call out: the app is told the manager is gone (503 assistant_offline), a send that
 	// was out is unknown (above).
-	if code, b := callErrBytes(deviceError("box", fmt.Errorf("assistant: %w", errBusDropped))); code != http.StatusServiceUnavailable ||
+	if code, b := callErrBytes("", deviceError("box", fmt.Errorf("assistant: %w", errBusDropped))); code != http.StatusServiceUnavailable ||
 		!strings.Contains(string(b), "assistant_offline") {
 		t.Errorf("a read cut short by the manager going: %d %s", code, b)
 	}

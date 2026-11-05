@@ -140,6 +140,7 @@ WS `hello` 同样携带候选。地址列表变化时发送 `{"type":"endpoints"
 | `too_large` | 413，或 node RPC 映射的 409 | 请求 / 文件超过限制 |
 | `timeout` | 408 / 504，node 调用常为 502 | 超时；执行结果不能仅靠这个码判断 |
 | `node_unreachable` | 502 / 503 | node 离线或连接中断；明确离线时 `retryable: true`、`delivered: none`，连接中断未必如此 |
+| `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` | 409 | 主对话（和其他助手对话）起不来：没有电脑 / 电脑还没确认 / 那台电脑上没装 Claude Code / 找不到启动器。`error` 是 hub 按请求语言写的一句人话（说是哪台电脑），`detail` 是原文（shell 的报错，只放「详情」），`action` 是建议的动作（`add_computer` / `confirm_computer` / `install_claude` / `connect_model`），另带 `machine_name`、`launcher`（有时）和 `delivered: none`。`machine_pending` 已定义，待确认电脑落地后才会出现。设计见新用户上手的方案（#287、#3339）第 4.6、5.2 节 |
 | `center_unreachable` | 503 | 连的是互联组里的成员 hub，组的中心 hub 现在连不上（带 `center: {hub_id, name}`）；成员不会自己接管，换一台或等中心回来（[mesh.md](mesh.md)「中心」） |
 | `internal` | 5xx | 其他内部错误 |
 
@@ -326,7 +327,8 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
  "origin":"inbox","origin_ref":"<收件箱条目 id>",   // 只在助手对话（assistant: true）上：这段对话是谁开的，见下「助手对话的来源」；没有 = user
  "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字",
      "turn_error":"API Error: Connection lost mid-response…（停着且这一轮被模型 API 错误打断时才有，否则不带；它的任务算「中断了」，#1516。Claude Code：hub 从最后一句的开头认；Codex：node 从 task_complete.error / 失败的 turn/completed 报，#2185）",
-     "turn_error_kind":"transient（可选：agent 自己说了错误种类时才有，Codex 的 codex_error_info：transient 值得「继续」，user 要用户处理；没有就按 turn_error 的文字判，docs/agent-work.md「分诊」）","pending_interactions":1,
+     "turn_error_kind":"transient（可选：agent 自己说了错误种类时才有，Codex 的 codex_error_info：transient 值得「继续」，user 要用户处理；没有就按 turn_error 的文字判，docs/agent-work.md「分诊」；Claude Code 的「Not logged in」、Key 不对、模型不对 hub 补成 user）",
+     "turn_error_code":"not_logged_in（可选：hub 从 turn_error 认出是什么问题时才有：not_logged_in / auth_failed / model_route / rate_limited，客户端据此画「去修」的卡片，见新用户上手的方案 5.2 节）","pending_interactions":1,
  "work":{"phase":"blocked","on":"external","line":"等部署跑完再跑线上测试","wait":"部署跑完","then":"跑线上测试","every_minutes":5,
          "wake_at":"...","attempts":1,"max":6,"turn_at":"...","at":"...","by":"model"},
      // 工作态（docs/agent-work.md）：phase working | blocked | done；blocked 的 on 是 user（等你决定，questions / link /

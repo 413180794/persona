@@ -24,6 +24,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
@@ -206,6 +207,68 @@ func (p *assistantProc) missingCommand() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return slices.ContainsFunc(p.stderrTail, func(l string) bool { return strings.Contains(l, "command not found") })
+}
+
+// startRefusal is err, the failed start of p, coded when what is missing is plain from what it printed
+// (docs/onboarding.md 4.6): Claude Code itself (claude_missing: the shell has no claude, or `personad launch` found
+// none), or the launcher (launcher_missing: a ~/.zshrc function or alias that is gone). The hub says it in plain words
+// and keeps err's text as the detail (apierr.Call); nothing was delivered.
+func (p *assistantProc) startRefusal(err error) error {
+	p.mu.Lock()
+	tail := slices.Clone(p.stderrTail)
+	p.mu.Unlock()
+	code := missingFrom(p.launcher, tail, p.missingCommand())
+	if code == "" {
+		return err
+	}
+	data, _ := json.Marshal(map[string]string{"delivered": "none", "launcher": p.launcher})
+	return &rpc.Error{Code: code, Message: err.Error(), Data: data}
+}
+
+// zshNotFound and bashNotFound find the command a shell could not find: zsh's "zsh:1: command not found: x", bash's
+// "bash: x: command not found" (also "bash: line 1: x: command not found").
+var (
+	zshNotFound  = regexp.MustCompile(`command not found: (\S+)`)
+	bashNotFound = regexp.MustCompile(`([^\s:]+): command not found`)
+)
+
+// missingFrom is what the start of launcher was missing by the lines it printed: proto.CodeClaudeMissing,
+// proto.CodeLauncherMissing, or "" when that is not what failed. Only a missing "claude" or a missing launcher
+// itself is coded, the last such line winning: the launcher runs under `zsh -ic`, so ~/.zshrc often prints
+// "command not found" for other commands (compdef, nvm…) that have nothing to do with the failure. notFound: it
+// exited as a missing command does (status 127); without a line naming the command, that alone codes it, unless a
+// line names some other missing command (then which one failed is not plain).
+func missingFrom(launcher string, lines []string, notFound bool) string {
+	for _, l := range lines {
+		if strings.Contains(l, "claude not found in PATH") { // claudeExecutable, from a managed launcher's personad launch
+			return proto.CodeClaudeMissing
+		}
+	}
+	code, other := "", false
+	for _, l := range lines {
+		m := zshNotFound.FindStringSubmatch(l)
+		if m == nil {
+			m = bashNotFound.FindStringSubmatch(l)
+		}
+		switch {
+		case m == nil:
+		case m[1] == "claude":
+			code = proto.CodeClaudeMissing
+		case launcher != "" && m[1] == launcher:
+			code = proto.CodeLauncherMissing
+		default:
+			other = true
+		}
+	}
+	switch {
+	case code != "":
+		return code
+	case !notFound || other:
+		return ""
+	case launcher == "" || launcher == "claude":
+		return proto.CodeClaudeMissing
+	}
+	return proto.CodeLauncherMissing
 }
 
 func (p *assistantProc) alive() bool {
@@ -454,13 +517,13 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		}
 		n.stopAssistant(id)
 		if !p.missingCommand() || attempt > assistantStartRetries {
-			return "", werr
+			return "", p.startRefusal(werr)
 		}
 		// Its command is missing, most likely for the moment Claude Code is being reinstalled: start it again.
 		n.logf("assistant %s: %s (attempt %d), starting it again in %s", id[:8], werr, attempt, assistantStartRetryDelay)
 		select {
 		case <-ctx.Done():
-			return "", werr
+			return "", p.startRefusal(werr)
 		case <-time.After(assistantStartRetryDelay):
 		}
 		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false, execution); err != nil {

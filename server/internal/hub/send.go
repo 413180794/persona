@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -206,7 +207,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if external && h.store == nil {
-		f.status, f.body = callErrBytes(&rpc.Error{Code: "codex_send_guard", Message: i18n.T(l, "hub-send.guard_no_record"), Data: json.RawMessage(`{"delivered":"none"}`)})
+		f.status, f.body = callErrBytes(l, &rpc.Error{Code: "codex_send_guard", Message: i18n.T(l, "hub-send.guard_no_record"), Data: json.RawMessage(`{"delivered":"none"}`)})
 		close(f.done)
 		h.sends.forget(id, f)
 		writeRaw(w, f.status, f.body)
@@ -217,7 +218,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		var err error
 		if state, err = h.store.ClaimSend(ctx, id, m.cfg.ID, sid); err != nil {
 			if external {
-				f.status, f.body = callErrBytes(&rpc.Error{Code: "codex_send_guard", Message: i18n.T(l, "hub-send.guard_no_record"), Data: json.RawMessage(`{"delivered":"none"}`)})
+				f.status, f.body = callErrBytes(l, &rpc.Error{Code: "codex_send_guard", Message: i18n.T(l, "hub-send.guard_no_record"), Data: json.RawMessage(`{"delivered":"none"}`)})
 				close(f.done)
 				h.sends.forget(id, f)
 				writeRaw(w, f.status, f.body)
@@ -230,7 +231,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	case sendDelivered:
 		f.status, f.body = http.StatusOK, []byte("{}\n")
 	case sendSending, sendUnknown: // an earlier hub or connection was sending it and never learned the outcome
-		f.status, f.body = callErrBytes(unknownDelivery(l, "hub-send.lost_before"))
+		f.status, f.body = callErrBytes(l, unknownDelivery(l, "hub-send.lost_before"))
 	default:
 		var outcome string
 		f.status, f.body, outcome = h.deliverOnce(ctx, m, p)
@@ -268,10 +269,11 @@ func (h *Hub) deliverOnce(ctx context.Context, m *Machine, p map[string]any) (in
 		}
 		return http.StatusOK, append(out, '\n'), outcome
 	case outcome == sendUnknown && !hasDelivered(err):
-		status, body := callErrBytes(unknownDelivery(h.contextLang(ctx), "hub-send.lost_during"))
+		l := h.contextLang(ctx)
+		status, body := callErrBytes(l, unknownDelivery(l, "hub-send.lost_during"))
 		return status, body, outcome
 	default:
-		status, body := callErrBytes(err)
+		status, body := callErrBytes(h.contextLang(ctx), apierr.OnMachine(err, m.cfg.Name)) // claude_missing on 小林的 MacBook
 		return status, body, outcome
 	}
 }
@@ -315,8 +317,9 @@ func unknownDelivery(l i18n.Lang, why string) error {
 }
 
 // callErrBytes is callErr's response as bytes, so waiting retries can get the same one.
-func callErrBytes(err error) (int, []byte) {
-	rec := &bufferedResponse{header: http.Header{}}
+// callErrBytes is what callErr answers for err, in language l (coded refusals are explained in it, apierr.Call).
+func callErrBytes(l i18n.Lang, err error) (int, []byte) {
+	rec := &bufferedResponse{header: http.Header{}, lang: l}
 	callErr(rec, err)
 	return rec.status, rec.body.Bytes()
 }
@@ -325,7 +328,10 @@ type bufferedResponse struct {
 	header http.Header
 	status int
 	body   bytes.Buffer
+	lang   i18n.Lang
 }
+
+func (b *bufferedResponse) Lang() i18n.Lang { return b.lang } // i18n.Carrier
 
 func (b *bufferedResponse) Header() http.Header         { return b.header }
 func (b *bufferedResponse) Write(p []byte) (int, error) { return b.body.Write(p) }

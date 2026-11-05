@@ -18,4 +18,7 @@ trap 'rm -f "$msg"' EXIT
 gh pr view "$pr" --json title,body -q '.title + "\n\n" + .body' > "$msg"
 python3 "$root/scripts/privacy_check.py" --range "origin/$base..$head" --message "$msg" \
   || { echo "merge-pr: #$pr not merged: fix the hits above in the PR first" >&2; exit 1; }
-gh pr merge "$pr" --squash --delete-branch --match-head-commit "$head"
+# From outside the repository, by name: gh then only merges and deletes the branch on GitHub. Inside a worktree it also
+# tries to check out the base branch locally and fails when another worktree holds it, after merging.
+repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+(cd / && gh pr merge "$pr" --repo "$repo" --squash --delete-branch --match-head-commit "$head")

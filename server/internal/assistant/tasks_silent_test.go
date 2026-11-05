@@ -21,6 +21,8 @@ func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 		agent     string
 		items     []proto.Item
 		turnError string
+		lastText  string // the session's last words, as the node lists them
+		endState  string // the session's state when its turn ended (unread when "")
 		state     string // the receipt's
 		summary   string
 		errText   string
@@ -40,6 +42,15 @@ func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 		{name: "a model API error", items: []proto.Item{prompt}, turnError: "API Error: 529 overloaded",
 			state: "interrupted", summary: interruptedSummary, errText: "API Error: 529 overloaded",
 			notice: []string{"被模型服务出错打断了", "529 overloaded"}},
+		// The node's word counts whatever the state now: an agent gone offline after the error was still cut off.
+		{name: "a model API error, now unknown", items: []proto.Item{prompt}, turnError: "API Error: 529 overloaded", endState: proto.StateUnknown,
+			state: "interrupted", summary: interruptedSummary, errText: "API Error: 529 overloaded",
+			notice: []string{"被模型服务出错打断了", "529 overloaded"}},
+		// Claude Code without credentials answers with a message of its own: the turn never ran (docs/onboarding.md 4.4).
+		{name: "not logged in", items: []proto.Item{prompt, {Kind: proto.KindText, Role: "assistant", Text: "Not logged in · Please run /login"}},
+			lastText: "Not logged in · Please run /login",
+			state:    "interrupted", summary: interruptedSummary, errText: "Not logged in · Please run /login",
+			notice: []string{"被模型服务出错打断了", "Not logged in"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, f := newQuietService(t)
@@ -51,7 +62,7 @@ func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 				Status: proto.StatusWorking, State: proto.StateWorking, UpdatedAt: time.Now()})
 			s.taskWorking(ctx, "box", "s1")
 			f.setSessions("box", proto.Session{SessionID: "s1", MachineID: "box", Cwd: "/code/app", Agent: cmp.Or(c.agent, "claude"),
-				Status: proto.StatusDone, State: proto.StateUnread, TurnError: c.turnError, UpdatedAt: time.Now()})
+				Status: proto.StatusDone, State: cmp.Or(c.endState, proto.StateUnread), TurnError: c.turnError, LastText: c.lastText, UpdatedAt: time.Now()})
 			s.taskTurnEnded(ctx, "box", "s1")
 
 			items, _, _ := s.feed(ctx, "conv1", time.Time{})

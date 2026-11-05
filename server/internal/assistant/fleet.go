@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -847,6 +848,15 @@ func (s *Service) decorated(machine string) []proto.Session {
 		localizeSession(lang, &list[i]) // the node's Chinese activity line… (fleet_text.go)
 		list[i].State, list[i].BackgroundWorking = stateWithBackground(agentState(list[i], list[i].SeenAt), list[i])
 		list[i].TurnError, list[i].TurnErrorKind = turnError(list[i])
+		list[i].TurnErrorCode = ""
+		if list[i].TurnError != "" {
+			list[i].TurnErrorCode = turnErrorCode(list[i].TurnError)
+			// Not worth a 继续: the user signs in, fixes the key or the model. Only where agents_work would not retry it
+			// anyway: a gateway's 5xx that mentions the model stays transient.
+			if list[i].TurnErrorKind == "" && userTurnError(list[i].TurnErrorCode) && !transientError(list[i].TurnError) {
+				list[i].TurnErrorKind = proto.TurnErrorUser
+			}
+		}
 		s.decorateWork(machine, &list[i], asking)
 	}
 	s.decorateTodos(machine, list)
@@ -995,6 +1005,41 @@ func turnError(sess proto.Session) (text, kind string) {
 		return text, ""
 	}
 	return "", ""
+}
+
+// rateLimited: a turn error that says the requests came too fast or used up a limit.
+var rateLimited = regexp.MustCompile(`(?i)\b429\b|rate[ _-]?limit|too many requests|usage limit`)
+
+// turnErrorCode is what a turn's model API error says is wrong, for a card that says what to fix (Session.TurnErrorCode,
+// docs/onboarding.md 5.2); "" when it does not say.
+func turnErrorCode(text string) string {
+	t := strings.TrimSpace(text)
+	switch {
+	case strings.HasPrefix(strings.ToLower(t), "not logged in"):
+		return proto.TurnErrorNotLoggedIn
+	case strings.Contains(t, "There's an issue with the selected model"):
+		return proto.TurnErrorModelRoute
+	}
+	switch classifyLauncherError(t) { // the launcher health checks' classes (launcher_health.go)
+	case errKindAuth:
+		return proto.TurnErrorAuthFailed
+	case errKindModelRoute:
+		return proto.TurnErrorModelRoute
+	}
+	if rateLimited.MatchString(t) {
+		return proto.TurnErrorRateLimited
+	}
+	return ""
+}
+
+// userTurnError: a turn error with code is the user's to fix; a rate limit passes (or is the user's when the
+// agent's record says so).
+func userTurnError(code string) bool {
+	switch code {
+	case proto.TurnErrorNotLoggedIn, proto.TurnErrorAuthFailed, proto.TurnErrorModelRoute:
+		return true
+	}
+	return false
 }
 
 type stateMark struct {

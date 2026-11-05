@@ -706,7 +706,7 @@ func turnErrorTransient(c proto.Session) bool {
 // (sign-in, key, the model picked).
 func transientError(text string) bool {
 	t := strings.ToLower(text)
-	for _, w := range []string{"failed to authenticate", "oauth token has expired", "invalid api key", "issue with the selected model",
+	for _, w := range []string{"failed to authenticate", "oauth token has expired", "invalid api key", "not logged in", "issue with the selected model",
 		" 401", " 403", "permission_error", "authentication_error", "credit balance", "billing"} {
 		if strings.Contains(t, w) {
 			return false

@@ -25,8 +25,11 @@ import (
 // configuration applied, then the node's assistant.send. The main conversation is one of them; putting it away for a
 // new one keeps what it left for the next one's first message.
 
-// errNoAssistantMachine: the hub has no machine for the assistant.
-var errNoAssistantMachine = errors.New("assistant machine is not configured")
+// errNoAssistantMachine: the hub has no machine for the assistant. Coded, so the app is told why in plain words with
+// what to do (apierr.Call: 409 no_machine, docs/onboarding.md 5.2); its message stays the words logs and runs record.
+// The main conversation's start and the memory (memory) both refuse with it.
+var errNoAssistantMachine error = &rpc.Error{Code: proto.CodeNoMachine, Message: "assistant machine is not configured",
+	Data: json.RawMessage(`{"delivered":"none"}`)}
 
 // mainTitle is the main conversation's title on the lists the apps get: it has no title of its own
 // (conversation_rename refuses it, the apps show the persona there), so neither its first message (the node's title for
@@ -133,6 +136,9 @@ func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (p
 		SessionID string `json:"session_id"`
 	}
 	if err := s.call(ctx, machine, DeviceAssistantSend, params, &res); err != nil {
+		if d, ok := s.device(ctx, machine); ok {
+			err = apierr.OnMachine(err, d.Name) // claude_missing on 小林的 MacBook (docs/onboarding.md 4.6)
+		}
 		return proto.Session{}, err
 	}
 	sess := proto.Session{SessionID: res.SessionID, Cwd: cwd, Status: proto.StatusWorking, Launcher: used, PermissionMode: p.PermissionMode,

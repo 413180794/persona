@@ -90,6 +90,7 @@ type fakeHub struct {
 	hubCards       []proto.Interaction // interactions.list: what the hub has up
 	told           []told              // the manager's fleet.* events (Tell)
 	failSend       error               // session.send fails with it
+	failAssistant  error               // assistant.send fails with it (a launcher that cannot start)
 
 	// The launchers' health (launcher_health.go): launchers.check's answers by "machine/launcher" (none: it works),
 	// the checks and repairs asked for, launchers.repair's answer (nil: the node has no such method) and what a repair
@@ -245,6 +246,9 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 		f.tokens[p.Device] = append(f.tokens[p.Device], t.Tokens)
 		return json.RawMessage(`{}`), nil
 	case DeviceAssistantSend:
+		if f.failAssistant != nil {
+			return nil, f.failAssistant
+		}
 		f.sends = append(f.sends, a)
 		id, _ := a["session_id"].(string)
 		if id == "" { // a new conversation

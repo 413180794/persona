@@ -762,6 +762,9 @@ type Session struct {
 	// TurnErrorKind is what the agent's record says of TurnError, when it says (Codex's error kinds):
 	// TurnErrorTransient (worth a 继续) or TurnErrorUser (the user must act); empty: read off the text.
 	TurnErrorKind string `json:"turn_error_kind,omitempty"`
+	// TurnErrorCode says what is wrong when the hub can tell from TurnError (docs/onboarding.md 5.2): one of the
+	// TurnErrorCode* values, for a card that says what to fix (sign in, the key, the model). Empty: not known.
+	TurnErrorCode string `json:"turn_error_code,omitempty"`
 	// Work is where the session stands in its work (docs/agent-work.md): working, blocked on a named precondition, or
 	// done, with a line saying what it waits for or what it concluded. Set by the hub; absent before the hub has
 	// triaged a stopped session's turn.
@@ -828,6 +831,23 @@ const (
 const (
 	TurnErrorTransient = "transient" // the model service failed for a moment: worth a 继续
 	TurnErrorUser      = "user"      // sign-in, usage limit, context window, the model…: the user must act
+)
+
+// Session.TurnErrorCode values (docs/onboarding.md 4.6).
+const (
+	TurnErrorNotLoggedIn = "not_logged_in" // Claude Code on that machine is not signed in
+	TurnErrorAuthFailed  = "auth_failed"   // the key or token was refused or has expired
+	TurnErrorModelRoute  = "model_route"   // the model name is not one the service or gateway knows
+	TurnErrorRateLimited = "rate_limited"  // too many requests, or a usage limit
+)
+
+// Codes a call refuses with when the assistant's conversation cannot start on a machine (docs/onboarding.md 4.6, 5.2):
+// rpc.Error codes the hub answers 409 with, the text in the request's language (apierr.Call).
+const (
+	CodeNoMachine       = "no_machine"       // no machine to run the main conversation on
+	CodeMachinePending  = "machine_pending"  // the machine has not been confirmed as the user's yet
+	CodeClaudeMissing   = "claude_missing"   // Claude Code is not installed (or not on the launcher's PATH) there
+	CodeLauncherMissing = "launcher_missing" // the launcher (a ~/.zshrc function or alias) is not there
 )
 
 // WorkState is a session's work state (Session.Work).
