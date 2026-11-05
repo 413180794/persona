@@ -4011,6 +4011,8 @@ struct SessionInfoSheet: View {
                     }
                     Section("用量") {
                         row(Theme.Icon.context, "上下文", Self.tokens(info.contextTokens) + " tokens")
+                        // The share of the window, live from the session list (#3289); nil while the window is unknown.
+                        if let usage = ContextUsage(model.session(key) ?? session) { ContextUsageRow(usage: usage) }
                         if info.compactions > 0 { row("rectangle.compress.vertical", "压缩", "\(info.compactions) 次") }
                         row(Theme.Icon.conversation, "对话", "\(info.turns) 轮")
                         row("text.word.spacing", "共生成", Self.tokens(info.outputTokens) + " tokens")

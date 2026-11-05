@@ -535,6 +535,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// The levels `effort` may be set to when they are not Claude Code's (`SessionModes.effortOptions`): a Codex thread
     /// the hub drives through its app-server, where only the effort changes (node/codex_effort.go). Nil elsewhere.
     var efforts: [String]? = nil
+    /// What the model saw in the agent's latest reply, and the model's window (#3289, node: `context_tokens` /
+    /// `context_window`, #2430); nil while the node cannot tell (no reply yet, a window it does not know, an older node).
+    var contextTokens: Int? = nil
+    var contextWindow: Int? = nil
     var startedByJarvis: Bool
     var assistant: Bool
     /// An assistant conversation moved out of the sidebar (listed under 已归档; nothing is deleted).
@@ -706,6 +710,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case codexRoute = "codex_route", codexRouteNote = "codex_route_note"
         case agentLabelHint = "agent_label"
         case permissionMode = "permission_mode"
+        case contextTokens = "context_tokens", contextWindow = "context_window"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
              assistantSpace = "space",
@@ -747,6 +752,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         permissionMode = try c.decodeIfPresent(String.self, forKey: .permissionMode)
         effort = try c.decodeIfPresent(String.self, forKey: .effort)
         efforts = try c.decodeIfPresent([String].self, forKey: .efforts)
+        contextTokens = try? c.decodeIfPresent(Int.self, forKey: .contextTokens) // an odd one never drops the session
+        contextWindow = try? c.decodeIfPresent(Int.self, forKey: .contextWindow)
         startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
         assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
         archived = try c.decodeIfPresent(Bool.self, forKey: .archived)
