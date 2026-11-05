@@ -44,7 +44,7 @@
 
 1. TestFlight / Xcode 装上后先打开一次 App（配好对），再进一次 Agents › 个人 Agent，让会话被索引。
 2. 对 Siri 说「问 Persona」，说一个问题：应读出回答，卡片显示全文；App 里主对话多了这一轮。
-3. 说「用 Persona 让 Agent 去做」，选会话、说任务：应回「已交给「…」」；lark-connector 里那个会话收到消息。同一任务不会重复（clientId）。
+3. 说「用 Persona 让 Agent 去做」，选会话、说任务：应回「已交给「…」」；飞书网关里那个会话收到消息。同一任务不会重复（clientId）。
 4. 说「Persona Agent 有什么新消息」。
 5. 说「用 Persona 新建待办」，说一个标题：应回「已记下待办：「…」」，App 的待办页多了这一条。
 6. 快捷指令 App › Persona 能看到这些动作；操作按钮里能选；控制中心 › 添加控件 › Persona 有两个控件。

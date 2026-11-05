@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// Several Feishu accounts on the hub's lark-connector (docs/feishu.md「多账号」).
+/// Several Feishu accounts on the hub's Lark gateway (docs/feishu.md「多账号」).
 @MainActor struct LarkAccountsTests {
     @Test func aScopedClientNamesItsAccountOnFeishuRequestsOnly() async throws {
         let hub = FakeHub()

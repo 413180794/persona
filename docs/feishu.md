@@ -1,6 +1,6 @@
 # 飞书在 Persona 里的定位
 
-> **2026-11-04 起（#1520，插件第 3 步 3c）**：经 lark-connector 接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
+> **2026-11-04 起（#1520，插件第 3 步 3c）**：经飞书网关接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
 > 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的扩展提供（`docs/extensions.md`，`docs/plan-extensions.md`「第 3 步」）。
 > 下文描述的行为由扩展照原样提供；文中提到的 hub 源文件（`hub/lark*.go`、`internal/lark` 的客户端……）已删。开源版只留官方 lark-cli、飞书机器人、飞书邮箱。
 
@@ -9,9 +9,9 @@
 公司圈 feed、飞书邮箱、收藏、话题、会话信息、今日——全部删除。）不恢复这些功能页面。
 
 **#392 的明确例外**：用户要求在飞书设置增加默认关闭的「首页显示消息」开关，开启后首页增加「消息」，浏览全部私聊与群聊。
-它与收件箱共用账号、聊天页、发件箱和同步，不增加第二套实现；其他飞书功能页仍不迁入。详见 [飞书能力整合](lark-connector-migration.md)。
+它与收件箱共用账号、聊天页、发件箱和同步，不增加第二套实现；其他飞书功能页仍不迁入。详见 [飞书能力整合](lark-migration.md)。
 
-飞书有三种接入：lark-connector（私有扩展 `lark-connector`）、官方 `lark-cli`（`docs/plan-lark-cli.md`）和 LarkAgentX（私有扩展 `larkx`），都在 hub 上可选。这篇写的是 lark-connector 这一路。
+飞书有三种接入：经飞书网关（以用户本人身份登录的第三方飞书网页客户端，由私有的接飞书的扩展接入）、官方 `lark-cli`（`docs/plan-lark-cli.md`）和 LarkAgentX（私有扩展 `larkx`），都在 hub 上可选。这篇写的是飞书网关这一路；网关本身的部署、变量和命令见接飞书的扩展的说明。
 
 ## 保留什么
 
@@ -30,18 +30,18 @@
 
 ## 数据通道
 
-- `GET /api/v1/lark/raw/<path>` = lark-connector `GET /agent/v1/<path>`（只读；JSON 里的 `/api/...` 媒体路径已改写回 hub）。
+- `GET /api/v1/lark/raw/<path>` = 飞书网关 `GET /agent/v1/<path>`（只读；JSON 里的 `/api/...` 媒体路径已改写回 hub）。
   `POST` 只放行 `search/page`、`search/mention-history`（只读搜索，POST 是因为 body 大）。助手的 `lark_*` MCP 工具走同一套白名单（`lark.Read`）。
-- **助手自己调 lark-connector**（2026-10-30）：用 lark-connector 自带的 lark-connector skill（#1571 起由接飞书的扩展提供，仓库里不再有副本；装在跑助手那台机器的 `~/.persona/skills/`），
-  `ol METHOD PATH [JSON]` 直连 lark-connector 的 agent API，读写都能做；写操作先过 node 的闸门（会被别人看到的在手机上确认）。
-  详见 `docs/assistant.md`「飞书：lark-connector skill」。下面的接口速查是这边实测的补充，lark-connector 的 references 更全，以它和 `ol GET /` 为准。
+- **助手自己调飞书网关**（2026-10-30）：用网关自带的 skill（#1571 起由接飞书的扩展提供，仓库里不再有副本），
+  扩展的命令直连网关的 agent API，读写都能做；写操作先过 node 的闸门（会被别人看到的在手机上确认）。
+  详见 `docs/assistant.md`「飞书：接飞书的扩展带的 skill」。下面的接口速查是这边实测的补充，网关 skill 的 references 更全，以它为准。
 - 会话、消息、已读、发消息、表情回复、卡片按钮走 hub 的专用路由（`docs/protocol.md` 飞书 API）。
-- **没有 lark-connector 时用官方 lark-cli**（`docs/plan-lark-cli.md`，#273）：已经做了助手侧（hub.json `lark.cli`，助手的 PATH 上有 `lark-cli`，
-  写操作过同一个闸门，`docs/assistant.md`「飞书：lark-cli」）；收件箱、知识库、`/agent`、App 的飞书页面还只认 lark-connector，按方案的 L2–L6 逐步加。
+- **没有飞书网关时用官方 lark-cli**（`docs/plan-lark-cli.md`，#273）：已经做了助手侧（hub.json `lark.cli`，助手的 PATH 上有 `lark-cli`，
+  写操作过同一个闸门，`docs/assistant.md`「飞书：lark-cli」）；收件箱、知识库、`/agent`、App 的飞书页面还只认飞书网关，按方案的 L2–L6 逐步加。
 
-## lark-connector 与 hub 分机部署
+## 飞书网关与 hub 分机部署
 
-lark-connector 的 Agent API 保持只监听源端回环地址。源端能主动访问 hub 时，可用专用 SSH 用户建立反向隧道，
+飞书网关的 Agent API 保持只监听源端回环地址。源端能主动访问 hub 时，可用专用 SSH 用户建立反向隧道，
 把 hub 的回环端口转发到源端 Agent API；由源端用户级 systemd 服务维护，配置 `Restart=always`、
 `ExitOnForwardFailure=yes` 和 SSH keepalive，并开启 linger，避免依赖开发机在线。源端必须固定 hub 的 SSH host key。
 
@@ -54,27 +54,27 @@ hub 的 `hub.json` 配置 `lark.base_url=http://127.0.0.1:<隧道端口>/agent/v
 Token 从源端环境安全传递，不打印、不入库；变更前备份配置。验证回环监听、无凭据 health 返回 401、
 授权 health 和会话读取，以及 `/events` WebSocket；重启后再次检查。验证过程不需要发送消息或更改已读状态。
 
-lark-connector 和 hub 在同一台机器的 docker 里、又不想把 token 写进配置时，可以只配 `lark.container`（容器名，没有默认值），
-hub 从容器环境读 `lark-connector_AGENT_TOKEN`；容器重建换了 token，401 后会重新读。
+飞书网关和 hub 在同一台机器的 docker 里、又不想把 token 写进配置时，可以只配 `lark.container`（容器名，没有默认值），
+从容器环境读网关的 agent token；容器重建换了 token，401 后会重新读（现在由接飞书的扩展读，设置项见它的说明）。
 
-401 有两种，要分开（2026-10-31 踩过）：lark-connector 自己掉了飞书登录时回 401 + `AUTH_SESSION_EXPIRED` 等 `AUTH_*` 错误码，
+401 有两种，要分开（2026-10-31 踩过）：飞书网关自己掉了飞书登录时回 401 + `AUTH_SESSION_EXPIRED` 等 `AUTH_*` 错误码，
 token 是好的；以前 hub 把所有 401 都当 token 错，丢掉配置里的 token 去 `docker inspect` 一个默认容器，之后所有飞书请求和实时事件
-一直失败到 personad 重启。现在 `AUTH_*` 报「lark-connector 未登录飞书」（接口回 502 + `lark_not_logged_in`，日志、收件箱和 App 的报错里都能看到；这段逻辑现在在接飞书的扩展里），
+一直失败到 personad 重启。现在 `AUTH_*` 报「飞书网关未登录飞书」（接口回 502 + `lark_not_logged_in`，日志、收件箱和 App 的报错里都能看到；这段逻辑现在在接飞书的扩展里），
 配置的 token 永远不丢，实时事件按退避（最长 1 分钟）重连、同一个错误只记一次日志，用户重新登录后自己恢复。
 
 ## 多账号
 
-lark-connector 一个实例里可以登录多个飞书账号（它的 x-multi-account：`GET /agent/v1/accounts` 列出，请求用 `x-lark-connector-account`
-头或 `ol_account` 参数选账号，账号编号是 `/accounts` 的 `id`，不是飞书用户 ID；添加账号的账号的资源 URL 自带 `ol_account`）。
+飞书网关一个实例里可以登录多个飞书账号（它的 x-multi-account：`GET /agent/v1/accounts` 列出，请求用网关的账号请求头
+或 `ol_account` 参数选账号，账号编号是 `/accounts` 的 `id`，不是飞书用户 ID；添加账号的账号的资源 URL 自带 `ol_account`）。
 Persona 都读（#1321，之前只读 `lark.account` 一个）：
 
-- **默认账号**：不带 `ol_account` 的 `/api/v1/lark/*` 请求由扩展按自己的 lark-connector 配置选默认账号（hub 不把 `hub.json` 的 `lark.account` 交给扩展；这个字段现在只给助手的收件箱用，省略是主账号 1）。旧客户端（Android、网页）
+- **默认账号**：不带 `ol_account` 的 `/api/v1/lark/*` 请求由扩展按自己的飞书网关配置选默认账号（hub 不把 `hub.json` 的 `lark.account` 交给扩展；这个字段现在只给助手的收件箱用，省略是主账号 1）。旧客户端（Android、网页）
   不带 `ol_account`，照旧只看到默认账号。助手（`lark_*` 工具、`ol`）、知识库、`/agent`、风灵月影设置、文档阅读也只用它；助手的 `lark_messages` 可传 `account`
-  读别的账号的会话，`ol` 前加 `lark-connector_ACCOUNT=<编号>`。
-- **按请求选账号**：`/api/v1/lark/*` 全部认 `ol_account=<编号>`（接飞书的扩展提供，原来是 hub 的 lark_accounts.go，每个账号一个 lark-connector 客户端）；编号不合法回 400，不存在由 lark-connector 拒绝，不会落回默认账号。媒体 URL 里带的 `ol_account` 原样带回来就对了。
-  raw 代理把查询原样转给 lark-connector，客户端的 `x-lark-connector-account` 头不透传。不要把查询串塞进 `base_url`。
-- **账号列表** `GET /api/v1/lark/accounts`：每分钟最多读一次 lark-connector，用来决定收件箱和实时事件读哪些账号（已登录、没被隔离的）。
-  没有 `/accounts` 的旧 lark-connector 当作只有默认账号。
+  读别的账号的会话，扩展的命令怎么选账号见扩展带的说明。
+- **按请求选账号**：`/api/v1/lark/*` 全部认 `ol_account=<编号>`（接飞书的扩展提供，原来是 hub 的 lark_accounts.go，每个账号一个飞书网关客户端）；编号不合法回 400，不存在由飞书网关拒绝，不会落回默认账号。媒体 URL 里带的 `ol_account` 原样带回来就对了。
+  raw 代理把查询原样转给飞书网关，客户端的账号请求头不透传。不要把查询串塞进 `base_url`。
+- **账号列表** `GET /api/v1/lark/accounts`：每分钟最多读一次飞书网关，用来决定收件箱和实时事件读哪些账号（已登录、没被隔离的）。
+  没有 `/accounts` 的旧飞书网关当作只有默认账号。
 - **实时事件**：默认账号一条连接，其他已登录账号每两分钟按账号列表开 / 关各自的连接。推给 App 的 `lark` 事件带 `account`，
   非默认账号的再带 `ol_account`（App 据此定位会话缓存）。`/agent`、个人 Agent、知识库只跟默认账号的事件。
 - **收件箱**：每轮依次读每个已登录账号的未读和 @我；默认账号出错是这一轮的错，其他账号出错只记日志。条目带 `lark.account_id`
@@ -88,7 +88,7 @@ Persona 都读（#1321，之前只读 `lark.account` 一个）：
   （`larkChatsFor`），会话头写「群聊 · <名字>」；收件箱条目按 `lark.ol_account` 打开；设置 › 连接器 › 飞书列出账号。
   端到端：`scripts/test/web_lark_accounts_e2e.py`（`MOCK_LARK_ACCOUNTS=1` 的 mock）。Android 还没有账号切换，只用默认账号。
 
-## 接口速查（hub 机器上实测过；助手现在用 lark-connector skill，lark-connector 的 references 为准）
+## 接口速查（hub 机器上实测过；助手现在用扩展带的 skill，以网关的 references 为准）
 
 ### 搜索
 - `search/page`（POST）body `{tab,query,cursor,limit,senderIds,chatIds,feedId,startTime,endTime,attachmentTypes,chatType,docTypes,ownerIds,sortType}`
@@ -103,7 +103,7 @@ Persona 都读（#1321，之前只读 `lark.account` 一个）：
 - `documents/read?url=&format=markdown`；403 `DOCUMENT_EXPORT_FORBIDDEN` / 422 `DOCUMENT_FORMAT_UNSUPPORTED` 时改 `format=json`
   （ProseMirror 风格节点树）。多维表格 / 文件 / 画板给「在飞书中打开」。另有 `documents/header`、`documents/reader/info`、
   `documents/ai-summary`（只读缓存）、`documents/comments`。
-- Markdown 导出开头固定是 `# 标题` + `[Source](<url>)`；图片是 lark-connector 的绝对地址，客户端改写到 `/api/v1/lark/raw/documents/…`。
+- Markdown 导出开头固定是 `# 标题` + `[Source](<url>)`；图片是飞书网关的绝对地址，客户端改写到 `/api/v1/lark/raw/documents/…`。
 - JSON 树：每个列表项单独一个 `bulletList` / `orderedList`，编号要跨兄弟节点连续数；表格 `colwidth` 是像素，`rowspan` 占位要自己补。
   渲染细节见 `FeishuDocRenderer.swift` 和 `PersonaTests/FeishuDocsTests.swift`。
 - `authority.copy=false` 时正文不可选择。
@@ -130,7 +130,7 @@ Persona 都读（#1321，之前只读 `lark.account` 一个）：
 
 ### 话题分页限制（H06）
 
-2026-10-31 只读核对 lark-connector 源码，版本 `2da814b1da1fd2ddd0cb9df05c419f7c87421739`：
+2026-10-31 只读核对飞书网关源码，版本 `2da814b1da1fd2ddd0cb9df05c419f7c87421739`：
 `GET /agent/v1/messages/:messageId/thread` 支持最新页和 `beforePosition` 前翻，**不支持向后读取更新的一页**。依据如下：
 
 - `src/server/routes/api.ts` 的话题路由只读取 `beforePosition`、`limit`，将前者传给 `hydrateThread` 和 `threadPage`；传入 `afterPosition` 会被忽略，无 `beforePosition` 时仍按最新页处理。

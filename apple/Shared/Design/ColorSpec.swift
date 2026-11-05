@@ -46,7 +46,7 @@ nonisolated struct ColorSpec: Sendable {
     var larkMyBubble: Color
     var extensionRoles: ExtensionThemePalette? = nil
 
-    /// `larksOwn`: 飞书's chrome takes the bubble as it is (飞书蓝, lark-connector's own); otherwise a pale bubble of the accent.
+    /// `larksOwn`: 飞书's chrome takes the bubble as it is (飞书蓝, the Lark gateway's own); otherwise a pale bubble of the accent.
     init(title: String, subtitle: String, accent: Pair, bubble: Color, bubbleText: Color, deepensBubble: Bool,
          wash: Wash? = nil, larksOwn: Bool = false) {
         self.title = title

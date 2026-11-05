@@ -2,7 +2,7 @@ import PersonaKit
 import SwiftUI
 
 // 设置 › 连接器 (2026-11-01): where Persona' data comes from and acts — this device's data (phone_* tools), the mail
-// accounts, 飞书 (the hub's lark-connector), and the 飞书机器人 the user talks to Persona through (FeishuBotView). Mail used to be managed from the inbox's ⋯ menu, this device's data was 手机数据.
+// accounts, 飞书 (the hub's Lark gateway), and the 飞书机器人 the user talks to Persona through (FeishuBotView). Mail used to be managed from the inbox's ⋯ menu, this device's data was 手机数据.
 
 /// What a connector is called and says in the settings list.
 enum ConnectorText {
@@ -244,7 +244,7 @@ nonisolated enum ConnectorRow: Hashable, Identifiable {
 
     /// A hub that lists Feishu says whether it has mail; one that does not (from before M6, or no list yet) gets both
     /// rows, as before. Feishu's row (its page reads `/api/v1/lark/…`) is there only while the hub has Feishu chats
-    /// (`LarkFeatures`, the lark-connector plugin).
+    /// (`LarkFeatures`, the Lark extension).
     static func rows(_ list: [HubConnector], lark: Bool = true) -> [ConnectorRow] {
         let listed = list.contains { $0.id == "lark" }
         let legacy: [ConnectorRow] = listed ? (list.contains { $0.id == "mail" } ? [.mail, .lark] : [.lark]) : [.mail, .lark]
@@ -346,7 +346,7 @@ private struct ConnectorRowLabel: View {
     }
 }
 
-/// 设置 › 连接器 › 飞书: whether the hub reaches lark-connector, who is signed in, and what Persona does with it. The account
+/// 设置 › 连接器 › 飞书: whether the hub reaches the Lark gateway, who is signed in, and what Persona does with it. The account
 /// itself is signed in on the hub's machine (docs/feishu.md), not here.
 struct FeishuConnectorView: View {
     @Environment(AppModel.self) private var model
@@ -384,8 +384,8 @@ struct FeishuConnectorView: View {
                 }
             } footer: {
                 Text(status?.configured == false
-                     ? "hub 还没接飞书：在 hub 所在的机器上运行 lark-connector，并在 hub.json 的 lark 里填上它（docs/feishu.md）。"
-                     : "飞书账号在 hub 所在机器的 lark-connector 里登录，会话与收件箱共用这个账号，无需再次登录。")
+                     ? "hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在 hub.json 的 lark 里填上它（docs/feishu.md）。"
+                     : "飞书账号在 hub 所在机器的飞书网关里登录，会话与收件箱共用这个账号，无需再次登录。")
             }
 
             if let accounts, accounts.accounts.count > 1 {
@@ -396,7 +396,7 @@ struct FeishuConnectorView: View {
                 } header: {
                     Text("账号")
                 } footer: {
-                    Text("已登录的账号都会收进收件箱，「消息」页可以切换账号。/agent、助手和知识库使用默认账号；在 lark-connector 里添加或退出账号。")
+                    Text("已登录的账号都会收进收件箱，「消息」页可以切换账号。/agent、助手和知识库使用默认账号；在飞书网关里添加或退出账号。")
                 }
             }
 
@@ -438,7 +438,7 @@ struct FeishuConnectorView: View {
     private var stateText: String {
         guard let st = status else { return loading ? "正在检查…" : "读不到状态" }
         if !st.configured { return "未配置" }
-        return st.connected ? "已连接" : "连不上 lark-connector"
+        return st.connected ? "已连接" : "连不上飞书网关"
     }
 
     private func accountRow(_ account: LarkAccount, isDefault: Bool) -> some View {
@@ -459,7 +459,7 @@ struct FeishuConnectorView: View {
     }
 
     private func accountDetail(_ account: LarkAccount) -> String {
-        if account.quarantined == true { return "无法打开，请在 lark-connector 里重试或移除" }
+        if account.quarantined == true { return "无法打开，请在飞书网关里重试或移除" }
         if !account.signedIn { return "未登录" }
         return account.tenant?.isEmpty == false ? account.tenant! : "已登录"
     }

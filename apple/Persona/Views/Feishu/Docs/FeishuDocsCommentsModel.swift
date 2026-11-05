@@ -155,7 +155,7 @@ final class FeishuDocsCommentsModel {
 
     func people(_ query: String) async throws -> [LarkMember] { try await api.docPeople(url: url, query: query) }
 
-    /// What the hub said (the plugin's words: 「lark-connector 未登录飞书」…), else what the docs pages say for the error.
+    /// What the hub said (the plugin's words: 「…未登录飞书」…), else what the docs pages say for the error.
     private static func reason(_ error: Error) -> String {
         if let e = error as? APIError, !e.message.isEmpty { return e.message }
         return error.feishuDocsMessage ?? error.localizedDescription

@@ -25,7 +25,7 @@ sealed interface LarkNativeLink {
 }
 
 /**
- * The native view [url] opens in while the hub has what it reads ([lark], the lark-connector extension's features, #1530);
+ * The native view [url] opens in while the hub has what it reads ([lark], the Lark extension's features, #1530);
  * null: an ordinary web page, as every Feishu link is on a hub without the extension.
  */
 fun larkNativeLink(url: String, lark: LarkFeatures): LarkNativeLink? = when {
@@ -124,7 +124,7 @@ fun parseLarkDocumentDetails(info: JsonObject?, header: JsonObject?, summary: Js
     )
 }
 
-/** An ISO time, or epoch seconds / milliseconds (lark-connector writes either). */
+/** An ISO time, or epoch seconds / milliseconds (the Lark gateway writes either). */
 internal fun larkInstant(value: JsonElement): java.time.Instant? {
     val p = value as? JsonPrimitive ?: return null
     p.longOrNull?.let { return if (it > 100_000_000_000) java.time.Instant.ofEpochMilli(it) else java.time.Instant.ofEpochSecond(it) }

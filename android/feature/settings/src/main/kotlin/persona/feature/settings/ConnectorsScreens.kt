@@ -429,7 +429,7 @@ internal fun AddMailAccountPage(
 }
 
 /**
- * 设置 › 连接器 › 飞书 (iOS `FeishuConnectorView`): connection state of lark-connector on the hub,
+ * 设置 › 连接器 › 飞书 (iOS `FeishuConnectorView`): connection state of the Lark gateway on the hub,
  * signed-in accounts, and features powered by Feishu.
  */
 @Composable

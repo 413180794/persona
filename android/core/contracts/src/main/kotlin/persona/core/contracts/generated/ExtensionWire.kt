@@ -225,6 +225,7 @@ data class ExtensionContributes(
     val providers: List<ExtensionProviderItem>? = null,
     val api: List<ExtensionAPIItem>? = null,
     val assistant: List<ExtensionAssistantItem>? = null,
+    @SerialName("mcp_servers") val mcpServers: List<ExtensionMCPServerItem>? = null,
     val ui: List<ExtensionUIItem>? = null,
     @SerialName("agent_sources") val agentSources: List<ExtensionAgentSourceItem>? = null,
     val channel: List<ExtensionChannelItem>? = null,
@@ -251,6 +252,7 @@ private data class ExtensionContributesKnown(
     val providers: List<ExtensionProviderItem>? = null,
     val api: List<ExtensionAPIItem>? = null,
     val assistant: List<ExtensionAssistantItem>? = null,
+    @SerialName("mcp_servers") val mcpServers: List<ExtensionMCPServerItem>? = null,
     val ui: List<ExtensionUIItem>? = null,
     @SerialName("agent_sources") val agentSources: List<ExtensionAgentSourceItem>? = null,
     val channel: List<ExtensionChannelItem>? = null,
@@ -267,7 +269,7 @@ private data class ExtensionContributesKnown(
 
 object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
     private val known = ExtensionContributesKnown.serializer()
-    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging")
+    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging")
     override val descriptor: SerialDescriptor = known.descriptor
 
     override fun deserialize(decoder: Decoder): ExtensionContributes {
@@ -284,6 +286,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             providers = fields.providers,
             api = fields.api,
             assistant = fields.assistant,
+            mcpServers = fields.mcpServers,
             ui = fields.ui,
             agentSources = fields.agentSources,
             channel = fields.channel,
@@ -311,6 +314,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             providers = value.providers,
             api = value.api,
             assistant = value.assistant,
+            mcpServers = value.mcpServers,
             ui = value.ui,
             agentSources = value.agentSources,
             channel = value.channel,
@@ -671,6 +675,41 @@ data class ExtensionAssistantItem(
     val skills: List<String>? = null,
     val instructions: String? = null,
     val gate: String? = null,
+)
+
+/**
+ * An MCP server for the Claude assistant (docs「MCP 服务器」): a command line on the assistant's machine, its tools as
+ * mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment. Not a shell or
+ * an interpreter.
+ */
+@Serializable
+data class ExtensionMCPServerItem(
+    /**
+     * The server's name for the assistant; not jarvis or persona.
+     */
+    val id: String = "",
+    /**
+     * Looked up on PATH, then in ~/bin.
+     */
+    val command: String = "",
+    /**
+     * A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+     * leave the server out.
+     */
+    val env: String? = null,
+    val args: List<String>? = null,
+    /**
+     * Words `<command> --help` must print; otherwise the server is left out.
+     */
+    val requires: List<String>? = null,
+    /**
+     * Tools that run without asking.
+     */
+    val allow: List<String>? = null,
+    /**
+     * Tools never callable. Any other tool goes by the conversation's permission mode.
+     */
+    val deny: List<String>? = null,
 )
 
 /**

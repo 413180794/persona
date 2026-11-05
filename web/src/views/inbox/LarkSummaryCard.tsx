@@ -1,4 +1,4 @@
-// Cards lark-connector summarises itself, drawn by their `metadata.variant` (#3032, iOS LarkSummaryCards.swift): a
+// Cards the Lark gateway summarises itself, drawn by their `metadata.variant` (#3032, iOS LarkSummaryCards.swift): a
 // merge-forward opens every forwarded message in a dialog; group / contact cards show their picture, name and facts;
 // meetings, events, votes, tasks and the rest an accent bar, a glyph, eyebrow, title, status, facts and footer.
 import { useState } from "react";

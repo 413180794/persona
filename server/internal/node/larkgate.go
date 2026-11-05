@@ -712,7 +712,7 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 	defer cancel()
 	var cfg proto.AssistantLark
 	if err := n.peer.Call(ctx, "assistant.lark", map[string]any{}, &cfg); err != nil {
-		n.logger.Printf("assistant: lark-connector config from hub: %v", err) // never the config itself
+		n.logger.Printf("assistant: Feishu gate config from hub: %v", err) // never the config itself
 		return cached
 	}
 	n.mu.Lock()
@@ -797,7 +797,7 @@ func (n *Node) assistantLarkEnv(cwd string) (env []string, release func()) {
 				continue
 			}
 			p := filepath.Join(bin, e.Name())
-			if b, err := os.ReadFile(p); err == nil && (strings.Contains(string(b), gateWrapperMark) || strings.Contains(string(b), "lark-connector's helper")) {
+			if b, err := os.ReadFile(p); err == nil && (strings.Contains(string(b), gateWrapperMark) || strings.Contains(string(b), legacyWrapperMark)) {
 				_ = os.Remove(p)
 			}
 		}
@@ -807,6 +807,10 @@ func (n *Node) assistantLarkEnv(cwd string) (env []string, release func()) {
 }
 
 const gateWrapperMark = "# a skill's gated command"
+
+// legacyWrapperMark is in the wrapper an older node wrote for the one gated command it had, before gates were the
+// extensions' ("# <helper> (<skill>), on the assistant's PATH (node/larkgate.go)."): it goes like any gone gate's.
+const legacyWrapperMark = ", on the assistant's PATH (node/larkgate.go)."
 
 var envName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 

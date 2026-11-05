@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 #endif
 
-// Native rendering of `documents/read?format=json` (ProseMirror-style nodes, see lark-connector
+// Native rendering of `documents/read?format=json` (ProseMirror-style nodes, see the Lark gateway's
 // src/server/lark/domains/documents-content.ts for what each docx block becomes). Used when the owner forbids
 // export (no Markdown), and for mind notes / slides that arrive as trees. Top-level blocks are separate lazy rows so
 // a 400-block document scrolls smoothly and the outline can jump to any heading.

@@ -209,6 +209,36 @@ type AssistantItem struct {
 	Gate string `json:"gate,omitempty"`
 }
 
+// MCPServerItem is a contribution to mcp_servers: a command line on the assistant's machine that the Claude assistant
+// gets as an MCP server of its own, its tools as mcp__<id>__<tool> (docs/extensions.md「MCP 服务器」). The command reads
+// its own configuration; Persona adds nothing to its environment (Claude starts it with the assistant process's, as
+// any MCP server). Without the command there (or when `<command> --help` does not mention every word of Requires)
+// nothing is added. Installing the extension trusts it to run that command on the assistant's machine, as its
+// skills' scripts do; a shell or an interpreter, which would run whatever Args say, is refused.
+type MCPServerItem struct {
+	ID string `json:"id"` // the server's name for the assistant
+	// Command is looked up on PATH, then in ~/bin; Env names a PERSONA_ variable (JARVIS_ read too) that, when set,
+	// replaces the lookup: a path, or "" / 0 / off / false to leave the server out on that machine.
+	Command  string   `json:"command"`
+	Env      string   `json:"env,omitempty"`
+	Args     []string `json:"args,omitempty"`
+	Requires []string `json:"requires,omitempty"`
+	// Allow are the tools that run without asking; Deny are never callable. Any other tool goes by the
+	// conversation's permission mode (asked on the phone by default).
+	Allow []string `json:"allow,omitempty"`
+	Deny  []string `json:"deny,omitempty"`
+}
+
+var (
+	mcpEnvName  = regexp.MustCompile(`^PERSONA_[A-Z0-9_]{1,56}$`)
+	mcpToolName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+	// mcpRunners are commands that run whatever their arguments say: never an MCP server's command.
+	mcpRunners = []string{"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh", "env", "sudo", "doas", "xargs",
+		"nohup", "timeout", "nice", "exec", "eval", "python", "python2", "python3", "perl", "ruby", "php", "lua", "tclsh",
+		"node", "deno", "bun", "npx", "bunx", "uvx", "pipx", "osascript", "awk", "gawk", "sed", "ssh", "nc", "ncat",
+		"socat", "curl", "wget", "docker", "podman", "kubectl", "powershell", "pwsh", "cmd"}
+)
+
 // GateFile is an assistant contribution's gate file: a command gate (proto.CommandGate) without the credentials'
 // values. Env are the names assistant.credentials may fill; Connector is the connector whose connector_gate rules go
 // before Rules (the user's say first).
@@ -508,6 +538,38 @@ var Points = map[string]Point{
 			}
 		}
 		return a.ID, nil
+	}},
+	// mcp_servers: an MCP server of the assistant, a command line on its machine (MCPServerItem).
+	"mcp_servers": {Name: "mcp_servers", Namespace: "mcp", Version: 1, Item: func(raw json.RawMessage) (string, error) {
+		var m MCPServerItem
+		if err := strict(raw, &m); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(m.ID) || m.ID == "jarvis" || m.ID == "persona" {
+			return m.ID, fmt.Errorf("mcp_servers id %q: a-z0-9_-, not jarvis or persona", m.ID)
+		}
+		if !cliName.MatchString(m.Command) || slices.Contains(reservedCommands, m.Command) || slices.Contains(mcpRunners, m.Command) {
+			return m.ID, fmt.Errorf("mcp_servers %s: command %q: a lowercase command name (letters, digits, -), not one the assistant has already nor a shell or interpreter", m.ID, m.Command)
+		}
+		if m.Env != "" && !mcpEnvName.MatchString(m.Env) {
+			return m.ID, fmt.Errorf("mcp_servers %s: env %q: a PERSONA_ variable name (A-Z0-9_)", m.ID, m.Env)
+		}
+		for _, w := range m.Requires {
+			if strings.TrimSpace(w) == "" {
+				return m.ID, fmt.Errorf("mcp_servers %s: an empty word in requires", m.ID)
+			}
+		}
+		for _, t := range append(append([]string{}, m.Allow...), m.Deny...) {
+			if !mcpToolName.MatchString(t) {
+				return m.ID, fmt.Errorf("mcp_servers %s: tool %q: A-Za-z0-9_-", m.ID, t)
+			}
+		}
+		for _, t := range m.Allow {
+			if slices.Contains(m.Deny, t) {
+				return m.ID, fmt.Errorf("mcp_servers %s: %s both allowed and denied", m.ID, t)
+			}
+		}
+		return m.ID, nil
 	}},
 	// messaging: a messaging source (docs/extension-messaging.md, #2138): the app's 消息 entry, its API under
 	// /api/v1/messaging/<id>/ on the extension's HTTP side.

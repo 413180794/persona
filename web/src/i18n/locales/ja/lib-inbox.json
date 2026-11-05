@@ -34,7 +34,7 @@
   "handoff_summarize": "要約して、やるべきことと返信案を教えてください",
   "handoff_research": "背景を調べてから教えてください",
   "handoff_handle": "代わりに対応してください。返信前に確認してください",
-  "handoff_lark_account": "、Larkアカウント{account}（lark_messagesにはaccount={account}を渡し、olコマンドの前にlark-connector_ACCOUNT={account}を付ける）",
+  "handoff_lark_account": "、Larkアカウント{account}（lark_messagesにはaccount={account}を渡す）",
   "handoff_lark": "（Larkチャット feedId {feed}{account}。Larkツールでさらに文脈を読んだり返信したりできます）",
   "handoff_connector": "（{name}：{url}）",
   "handoff_mail": "（メール account_id {account}、mailbox {mailbox}、uid {uid}。mail_readで全文を読み、mail_sendで返信できます）",

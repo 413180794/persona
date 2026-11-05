@@ -739,6 +739,13 @@ func (m *Manifest) Assistants() []AssistantItem {
 	return out
 }
 
+// MCPServers are the manifest's contributions to mcp_servers.
+func (m *Manifest) MCPServers() []MCPServerItem {
+	var out []MCPServerItem
+	_ = json.Unmarshal(m.Contributes["mcp_servers"], &out)
+	return out
+}
+
 // UIs are the manifest's contributions to ui.
 func (m *Manifest) UIs() []UIItem {
 	var out []UIItem

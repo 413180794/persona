@@ -190,3 +190,38 @@ func TestDialsInterruptibly(t *testing.T) {
 		t.Fatal("personad tool must dial with node.DialSocketInterruptible")
 	}
 }
+
+// The kind the hub, the node or the connector names decides the exit code, whatever the error's words (#3779): a
+// decline in other words, a rate limit with its own retry_after or one said the connector's way, a plain failure.
+// With no kind named (an older hub), the words still decide.
+func TestKindBeforeWords(t *testing.T) {
+	cases := []struct {
+		res   proto.ToolResult
+		code  int
+		retry int
+	}{
+		{proto.ErrorResult(proto.ToolErrorDeclined, "主人在手机上拒绝了", 0), exitDeclined, 0},
+		{proto.ErrorResult(proto.ToolErrorUnavailable, "Telegram 没登录", 0), exitUnavailable, 0},
+		{proto.ErrorResult(proto.ToolErrorRateLimited, "too many requests", 30), exitRateLimited, 30},
+		{proto.ErrorResult(proto.ToolErrorRateLimited, "Telegram is not available: Telegram 限流，12 秒后再试", 0), exitRateLimited, 12},
+		{proto.ErrorResult(proto.ToolErrorRateLimited, "slow down", 0), exitRateLimited, 0},
+		{proto.TextResult("The user declined example_say.", true), exitDeclined, 0},
+		{proto.TextResult("Telegram 限流，45 秒后再试", true), exitRateLimited, 45},
+		{proto.TextResult("chat not found", true), exitFailed, 0},
+		{proto.ErrorResult("something_new", "chat not found", 0), exitFailed, 0},
+	}
+	for _, c := range cases {
+		res := c.res
+		call = func(context.Context, string, any) (proto.ToolResult, error) { return res, nil }
+		var out, errOut bytes.Buffer
+		code := Main(context.Background(), []string{"example_list"}, strings.NewReader(""), &out, &errOut)
+		var got struct {
+			Kind       string `json:"kind"`
+			RetryAfter int    `json:"retry_after"`
+		}
+		_ = json.Unmarshal(errOut.Bytes(), &got)
+		if code != c.code || got.RetryAfter != c.retry || got.Kind != kinds[c.code] {
+			t.Errorf("%+v: exit %d %q, want %d retry %d", c.res, code, errOut.String(), c.code, c.retry)
+		}
+	}
+}

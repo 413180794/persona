@@ -449,6 +449,42 @@ func TestAPIAndAssistantPoints(t *testing.T) {
 	}
 }
 
+func TestMCPServersPoint(t *testing.T) {
+	server := func(change func(map[string]any)) func(m map[string]any) {
+		return func(m map[string]any) {
+			s := map[string]any{"id": "example", "command": "example-agent", "env": "PERSONA_EXAMPLE_AGENT",
+				"args": []any{"mcp-server"}, "requires": []any{"mcp-server"}, "allow": []any{"list"}, "deny": []any{"decide"}}
+			if change != nil {
+				change(s)
+			}
+			m["contributes"] = map[string]any{"mcp_servers": []any{s}}
+		}
+	}
+	m, err := Parse(with(t, server(nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := m.MCPServers(); len(s) != 1 || s[0].Command != "example-agent" || s[0].Deny[0] != "decide" {
+		t.Fatalf("%+v", s)
+	}
+	for name, change := range map[string]func(map[string]any){
+		"the assistant's own name": func(s map[string]any) { s["id"] = "jarvis" },
+		"a path as command":        func(s map[string]any) { s["command"] = "/usr/bin/x" },
+		"a reserved command":       func(s map[string]any) { s["command"] = "bash" },
+		"env name":                 func(s map[string]any) { s["env"] = "lower" },
+		"env not Persona's":        func(s map[string]any) { s["env"] = "SHELL" },
+		"an interpreter":           func(s map[string]any) { s["command"] = "zsh" },
+		"tool name":                func(s map[string]any) { s["allow"] = []any{"a b"} },
+		"allowed and denied":       func(s map[string]any) { s["allow"] = []any{"decide"} },
+		"empty required word":      func(s map[string]any) { s["requires"] = []any{" "} },
+		"unknown field":            func(s map[string]any) { s["cwd"] = "/tmp" },
+	} {
+		if _, err := Parse(with(t, server(change))); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+}
+
 func TestUIAndEventsPoints(t *testing.T) {
 	m, err := Parse(with(t, func(m map[string]any) {
 		m["permissions"] = map[string]any{"launcher_keys": true}

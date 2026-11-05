@@ -46,7 +46,7 @@ class HistoryFixture:
                 if change.get("reset"): self.reset()
                 self.state.update({k: v for k, v in change.items() if k in self.state and k != "jump_feed"})
                 if "unread" in change: self.jump_chat()
-                # A message arriving while history is read: one more at the newest end, pushed like lark-connector's events.
+                # A message arriving while history is read: one more at the newest end, pushed like the Lark gateway's events.
                 if change.get("arrive"):
                     self.state["total"] += int(change["arrive"])
                     self.push("f1"); self.push("f2"); self.push(self.state["jump_feed"])

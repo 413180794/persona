@@ -114,7 +114,7 @@ final class ShellPagerTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-demo.on", "NO", "-ui.oldLayout", "NO", "-probes", "YES", "-newAssistant", "YES",
-                               "-dev.openChat", "", "-tab", "assistant", "-integrations.lark-connector.enabled", "YES"]
+                               "-dev.openChat", "", "-tab", "assistant", "-integrations.lark.enabled", "YES"]
         app.launchPinned()
         XCTAssertTrue(app.buttons["assistant-sidebar-button"].firstMatch.waitForExistence(timeout: 20), "no shell")
         sleep(2)

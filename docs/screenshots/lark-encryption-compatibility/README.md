@@ -5,7 +5,7 @@ iPhone 18 Pro / iOS 27，隔离 mock Hub；无真实账号、密码或发送。
 | 场景 | 浅色玻璃 | 深色 BeautifulUI |
 | --- | --- | --- |
 | Hub 缺少接口 | [升级 Hub](light-unavailable-hub.png) | [升级 Hub](dark-unavailable-hub.png) |
-| lark-connector 缺少接口 | [升级 lark-connector](light-unavailable-lark-connector.png) | [升级 lark-connector](dark-unavailable-lark-connector.png) |
+| 飞书网关缺少接口 | [升级飞书网关](light-unavailable-gateway.png) | [升级飞书网关](dark-unavailable-gateway.png) |
 | 缺少独立原生授权 | [开启授权](light-unavailable-authorization.png) | [开启授权](dark-unavailable-authorization.png) |
 | 升级后重新检查 | [选择外显](light-upgrade-recovered.png) | [选择外显](dark-upgrade-recovered.png) |
 

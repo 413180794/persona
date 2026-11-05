@@ -1,12 +1,12 @@
 {
   "recalled": "消息已撤回",
   "recalled_kept": "{text} · 已撤回",
-  "not_logged_in": "hub 连接的 lark-connector 没有登录飞书，请到 hub 所在的机器上重新登录。",
-  "upgrade_read": "要用消息显示设置，先更新 hub 和 lark-connector。",
+  "not_logged_in": "hub 连接的飞书网关没有登录飞书，请到 hub 所在的机器上重新登录。",
+  "upgrade_read": "要用消息显示设置，先更新 hub 和飞书网关。",
   "read_failed": "没读到设置。连上以后再试。",
   "conflict": "设置或账号刚变过。重新加载一下再改。",
   "forbidden": "这个连接没有权限改设置。",
-  "upgrade_write": "要改这些设置，先更新 lark-connector。",
+  "upgrade_write": "要改这些设置，先更新飞书网关。",
   "write_unknown": "不确定保存上没有。重新加载设置看看。",
   "encrypted": "加密消息"
 }

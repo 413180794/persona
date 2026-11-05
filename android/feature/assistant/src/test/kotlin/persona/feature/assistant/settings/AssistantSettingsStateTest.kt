@@ -38,7 +38,7 @@ class AssistantSettingsStateTest {
         val saved = mutableListOf<Pair<String, String>>()
         val deleted = mutableListOf<String>()
         var fail = false
-        var skillsAnswer: () -> AssistantSkills = { AssistantSkills("server", "服务器", listOf(AgentSkill("lark-connector", "飞书", "builtin"))) }
+        var skillsAnswer: () -> AssistantSkills = { AssistantSkills("server", "服务器", listOf(AgentSkill("lark-gateway", "飞书", "builtin"))) }
 
         override suspend fun config(): AssistantConfig { check(!fail) { "hub unreachable" }; return config }
         override suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig {
@@ -323,7 +323,7 @@ class AssistantSettingsStateTest {
         assertFalse("nothing is shown as empty before the hub answers", state.state.value.skills.empty)
         state.loadSkills()
         with(state.state.value.skills) {
-            assertEquals(listOf("lark-connector"), list?.skills?.map { it.name })
+            assertEquals(listOf("lark-gateway"), list?.skills?.map { it.name })
             assertTrue(list!!.skills.single().builtin)
             assertEquals("服务器", list?.machine)
             assertFalse(empty)

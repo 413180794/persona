@@ -101,7 +101,7 @@ ORDERED=()
 for t in "${TARGETS[@]}"; do [ "$t" != "$HUB" ] && ORDERED+=("$t"); done
 for t in "${TARGETS[@]}"; do [ "$t" = "$HUB" ] && ORDERED+=("$t"); done
 TARGETS=("${ORDERED[@]}")
-# machine <id> <field>: a field of a machine in the config (ssh host, os, hostnames).
+# machine <id> <field>: a field of a machine in the config (ssh host, os, arch, hostnames, via).
 field() { python3 ../scripts/jarvis_config.py machine "$1" | python3 -c "import json,sys;v=json.load(sys.stdin).get('$2','');print(' '.join(v) if isinstance(v,list) else v)"; }
 state_root() { python3 ../scripts/persona_identity.py --service "${1:-hub}" --prepare; }
 state_prefix() { python3 ../scripts/persona_identity.py --service "${1:-hub}" --prepare --prefix -; }
@@ -118,8 +118,12 @@ COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
 LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$COMMIT${JARVIS_PUBLISH_URL:+ -X main.updateURL=$JARVIS_PUBLISH_URL/dl}"
 # The runtime packages jarvisd carries (the DSH plugin's code, docs/runtimes.md「自动更新」), from integrations/.
 go generate ./internal/runtimepkg
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-linux-amd64 ./cmd/personad
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-darwin-arm64 ./cmd/personad
+# Every platform a machine can run, the same four the release and the Docker image build (docs/release.md): each
+# machine gets the one it runs (machine_platform), and the hub keeps all four for 重新部署 (#3103).
+PLATFORMS=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)
+for plat in "${PLATFORMS[@]}"; do
+  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "bin/jarvisd-$plat" ./cmd/personad
+done
 echo "built $VERSION"
 # The web client goes with the hub: built here with the binaries, uploaded after the hub restarts.
 if [[ " ${TARGETS[*]} " == *" $HUB "* ]]; then build_web; fi
@@ -136,32 +140,100 @@ is_here() {
   return 1
 }
 
-install_bin() { # machine-id binary
-  local id=$1 bin=$2 host via root command keep role=node
+# machine_platform <machine id>: the os-arch of the binary that machine runs ("<os>-<arch>", bin/jarvisd-<os>-<arch>).
+# `os` and `arch` in the config win; whatever it leaves out is asked of the machine itself (`uname -s` / `uname -m`,
+# the mapping scripts/deploy/install.sh makes), so an Intel Mac is not handed an Apple-silicon build and an ARM Linux
+# box not an amd64 one. A platform there is no build for is an error, never a silent install (#3103).
+# Returns 3 when the machine could not be asked at all (asleep, no route): that is an unreachable machine, which is a
+# normal deploy (`unreachable, skipped`), not a platform the hub has no build for. 1 is a platform it cannot run.
+machine_platform() {
+  local id=$1 host via vh os arch said answered said_os said_arch
+  os=$(field "$id" os)
+  arch=$(field "$id" arch)
+  if [ -z "$os" ] || [ -z "$arch" ]; then
+    host=$(field "$id" ssh); host=${host:-$id}
+    via=$(field "$id" via)
+    if is_here "$id"; then
+      said=$(uname -s 2>/dev/null; uname -m 2>/dev/null) || said=
+      answered=1
+    elif [ -n "$via" ]; then
+      vh=$(field "$via" ssh); vh=${vh:-$via}
+      if said=$(ssh -o ConnectTimeout=10 "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host 'uname -s; uname -m'" 2>/dev/null); then answered=1; else said=; fi
+    else
+      if said=$(ssh -o ConnectTimeout=10 "$host" 'uname -s; uname -m' 2>/dev/null); then answered=1; else said=; fi
+    fi
+    # The last two lines of the answer: a login shell that prints a banner first does not hide them.
+    said_arch=${said##*$'\n'}
+    said_os=${said%$'\n'*}
+    said_os=${said_os##*$'\n'}
+    case "$said_os" in
+      Linux) said_os=linux ;;
+      Darwin) said_os=darwin ;;
+      *) said_os= ;;
+    esac
+    case "$said_arch" in
+      x86_64 | amd64) said_arch=amd64 ;;
+      arm64 | aarch64) said_arch=arm64 ;;
+      *) said_arch= ;;
+    esac
+    os=${os:-${said_os:-}}
+    arch=${arch:-${said_arch:-}}
+  fi
+  if [ -z "$os" ] || [ -z "$arch" ]; then
+    if [ -z "$answered" ]; then
+      echo "$id: could not reach it to ask its os and arch; write os / arch for it in the config (machines[])" >&2
+      return 3
+    fi
+    echo "$id: could not tell its os and arch; write os / arch for it in the config (machines[])" >&2
+    return 1
+  fi
+  case "$os-$arch" in
+    linux-amd64 | linux-arm64 | darwin-amd64 | darwin-arm64) printf '%s-%s\n' "$os" "$arch" ;;
+    *)
+      echo "$id: no jarvisd build for $os/$arch (linux or darwin; amd64 or arm64)" >&2
+      return 1 ;;
+  esac
+}
+
+# install_bin <machine-id> <binary>: put the binary in place and check that it runs there before the node restarts
+# onto it: a build of another platform cannot exec, and that was the deploy saying "installed" anyway (#3103).
+install_bin() {
+  local id=$1 bin=$2 host via root command keep out role=node plat
+  plat=${bin##*/jarvisd-}
   [ "$id" != "$HUB" ] || role=hub
   host=$(field "$id" ssh); host=${host:-$id}
   via=$(field "$id" via)
   if is_here "$id"; then
     root=$(state_root "$role")
-    mkdir -p "$root/bin"
+    mkdir -p "$root/bin" || return 1
     # The hub's binary before it is replaced: hub-systemd.sh switches the running edge to the new one and goes back
     # to this one if it fails while taking over (docs/hub-restart.md「蓝绿切换」).
-    if [ "$role" = hub ] && [ -f "$root/bin/jarvisd" ]; then cp -p "$root/bin/jarvisd" "$root/bin/jarvisd.prev"; fi
-    cp "$bin" "$root/bin/jarvisd.new" && mv "$root/bin/jarvisd.new" "$root/bin/jarvisd"
-    [ ! -d "$root/bin/personad" ] && ln -sfn jarvisd "$root/bin/personad"
+    if [ "$role" = hub ] && [ -f "$root/bin/jarvisd" ]; then cp -p "$root/bin/jarvisd" "$root/bin/jarvisd.prev" || return 1; fi
+    { cp "$bin" "$root/bin/jarvisd.new" && mv "$root/bin/jarvisd.new" "$root/bin/jarvisd"; } || return 1
+    [ -d "$root/bin/personad" ] || ln -sfn jarvisd "$root/bin/personad" || return 1
+    if ! out=$(PERSONA_HOME="$root" JARVIS_HOME="$root" "$root/bin/jarvisd" version 2>&1); then
+      echo "$id: the $plat build does not run there: $out" >&2
+      return 1
+    fi
     PERSONA_HOME="$root" JARVIS_HOME="$root" restart_resident
   else
     keep=
     [ "$role" = hub ] && keep='{ [ ! -f "$PERSONA_HOME/bin/jarvisd" ] || cp -p "$PERSONA_HOME/bin/jarvisd" "$PERSONA_HOME/bin/jarvisd.prev"; } && '
-    command=$keep'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/jarvisd.new" && chmod 755 "$PERSONA_HOME/bin/jarvisd.new" && mv "$PERSONA_HOME/bin/jarvisd.new" "$PERSONA_HOME/bin/jarvisd" && [ ! -d "$PERSONA_HOME/bin/personad" ] && ln -sfn jarvisd "$PERSONA_HOME/bin/personad"'
+    command=$keep'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/jarvisd.new" && chmod 755 "$PERSONA_HOME/bin/jarvisd.new" && mv "$PERSONA_HOME/bin/jarvisd.new" "$PERSONA_HOME/bin/jarvisd" && ( [ ! -d "$PERSONA_HOME/bin/personad" ] && ln -sfn jarvisd "$PERSONA_HOME/bin/personad"; true ) && "$PERSONA_HOME/bin/jarvisd" version >/dev/null'
     if [ -n "$via" ]; then
       local vh quoted
       vh=$(field "$via" ssh); vh=${vh:-$via}
       quoted=$(python3 -c 'import shlex,sys; print(shlex.quote(sys.argv[1]))' "$(state_prefix "$role")
 $command")
-      ssh -o ConnectTimeout=10 "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host $quoted" < "$bin"
+      if ! out=$(ssh -o ConnectTimeout=10 "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host $quoted" < "$bin" 2>&1); then
+        echo "$id: the $plat build is not installed or does not run there: $out" >&2
+        return 1
+      fi
     else
-      remote_state "$host" "$command" "$role" < "$bin" || return 1
+      if ! out=$(remote_state "$host" "$command" "$role" < "$bin" 2>&1); then
+        echo "$id: the $plat build is not installed or does not run there: $out" >&2
+        return 1
+      fi
       python3 ../scripts/persona_identity.py --service node --prefix ../scripts/deploy/node-launchd.sh | ssh "$host" 'bash -s restart-idle' 2>/dev/null || true
     fi
   fi
@@ -230,10 +302,10 @@ for t in "${TARGETS[@]}"; do
   case "$t" in
     "$HUB")
       python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/db.sh | ssh "$JARVIS_HUB_SSH" 'bash -s'
-      for node in bin/jarvisd-linux-amd64 bin/jarvisd-darwin-arm64; do
-        remote_state "$JARVIS_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin/nodes"; cat > "$PERSONA_HOME/bin/nodes/'"${node##*/}"'"' < "$node"
+      for plat in "${PLATFORMS[@]}"; do
+        remote_state "$JARVIS_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin/nodes"; cat > "$PERSONA_HOME/bin/nodes/'"jarvisd-$plat"'"' < "bin/jarvisd-$plat"
       done
-      hub_plat="$(field "$t" os)-$( [ "$(field "$t" os)" = darwin ] && echo arm64 || echo amd64)"
+      hub_plat=$(machine_platform "$t") || exit 2
       install_bin "$t" "bin/jarvisd-$hub_plat"
       install_program "$t" "$hub_plat" wechat
       ensure_herdr "$t"
@@ -243,8 +315,19 @@ for t in "${TARGETS[@]}"; do
       upload_web ;;
     *)
       [[ " $JARVIS_MACHINES " == *" $t "* ]] || { echo "unknown machine $t (not in the config)" >&2; exit 2; }
-      os=$(field "$t" os); os=${os:-darwin}
-      bin="bin/jarvisd-$os-$( [ "$os" = darwin ] && echo arm64 || echo amd64)"
-      if install_bin "$t" "$bin"; then echo "$t: installed"; ensure_herdr "$t"; else echo "$t: unreachable, skipped"; fi ;;
+      # A machine that could not be asked is unreachable (asleep, no route), exactly as before: it is skipped and the
+      # run still succeeds. A platform there is no build for is skipped by name and fails the run at the end (#3103).
+      if plat=$(machine_platform "$t"); then
+        if install_bin "$t" "bin/jarvisd-$plat"; then echo "$t: installed"; ensure_herdr "$t"; else echo "$t: not installed, skipped" >&2; fi
+      elif [ $? = 3 ]; then
+        echo "$t: unreachable, skipped" >&2
+      else
+        echo "$t: skipped" >&2
+        NO_PLATFORM=1
+      fi ;;
   esac
 done
+if [ -n "${NO_PLATFORM:-}" ]; then
+  echo "deploy: some machines have no jarvisd build for their platform (see above)" >&2
+  exit 2
+fi

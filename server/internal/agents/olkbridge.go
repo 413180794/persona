@@ -1,6 +1,6 @@
 package agents
 
-// OLKBridge is the personal agents source lark-connector's agent-bridge had in the hub; a plugin serves it now, under the
+// OLKBridge is the personal agents source the Lark gateway's agent-bridge had in the hub; a plugin serves it now, under the
 // same name so the sessions keep their ids.
 const OLKBridge = "olk-bridge"
 

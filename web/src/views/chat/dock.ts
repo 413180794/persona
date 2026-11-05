@@ -2,7 +2,7 @@
 // the queue. Without a limit, two or three cards (or a keyboard) pushed the conversation away and the composer off the
 // screen. The heights follow the visible viewport (`--kb-h`, lib/viewport.ts), so they shrink with the keyboard.
 import { interactionAsk, interactionTitle } from "../../lib/inbox";
-import type { Interaction } from "../../lib/types";
+import type { AgentState, Interaction } from "../../lib/types";
 import type { Segment } from "../../lib/turns";
 
 /** A share of the visible height, capped at `cap` px, as a CSS length. */
@@ -54,4 +54,19 @@ export function cardLine(ix: Interaction): string {
 /** When the turn going on started: its message, else its first item (SegmentView's 正在工作… counts from the same). */
 export function turnStart(seg: Pick<Segment, "user" | "start"> | undefined): string | undefined {
   return seg?.user?.ts ?? seg?.start;
+}
+
+/** How long a message of yours, the newest thing in the chat, counts as the start of a turn the hub has not reported yet. */
+export const AWAIT_MS = 60_000;
+
+/**
+ * A message of yours is the newest thing and nothing has answered it, while the session's state still says it is not
+ * at work (#3654): the transcript has the message before the node's next sessions push says working, and in between the
+ * chat showed nothing. True for AWAIT_MS after the message; never while offline or waiting on you.
+ */
+export function awaitingTurn(last: Pick<Segment, "user" | "steps" | "answer"> | undefined, state: AgentState, now: number): boolean {
+  if (!last?.user || last.steps.length || last.answer) return false;
+  if (state !== "idle" && state !== "unread" && state !== "unknown") return false;
+  const at = last.user.ts ? Date.parse(last.user.ts) : NaN;
+  return !Number.isNaN(at) && now - at < AWAIT_MS;
 }

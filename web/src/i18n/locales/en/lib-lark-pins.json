@@ -8,7 +8,7 @@
   "fallback_image": "[Image]",
   "fallback_file": "[File]",
   "fallback_message": "Message",
-  "not_logged_in": "The hub's lark-connector isn't signed in to Lark",
+  "not_logged_in": "The hub's Lark gateway isn't signed in to Lark",
   "load_failed": "Couldn't load pinned messages: {error}",
   "recalled_kept": "{text} · Recalled"
 }

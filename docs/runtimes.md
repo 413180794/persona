@@ -234,11 +234,12 @@ runtime 可以当「Persona」tab 的助手、AI 分身、飞书 `/agent`、定�
 声明了 `caps.assistant` 的 runtime 要做到：
 
 1. **助手对话**（`assistant: true` 起的，或目录是助手目录的）的授权和提问一律先给手机（有 hub 时），不看本地界面开没开。
-2. `mcp.tools {assistant: true}` 拿到的工具（手机的、邮箱的，再加助手专用的 `ask_user`、`schedule_followup`…和 node 自己的 `lark-connector`）
+2. `mcp.tools {assistant: true}` 拿到的工具（手机的、邮箱的，再加助手专用的 `ask_user`、`schedule_followup`…和扩展命令闸门声明的工具）
    挂给模型；助手专用的只给助手对话，调用时 `mcp.call {…, assistant: true}`。node 只在「这个 runtime 声明了助手、会话归它、是助手对话」时
    当成助手的调用，否则照普通工具（助手专用的就没有）。
-3. 飞书一律走 `lark-connector` 工具：node 先过飞书闸门（读放行、会被别人看到的写在手机上确认、配置的规则拒绝），再在 node 上带 token 跑
-   lark-connector skill 的 `ol.sh`；token 不进 runtime。shell 里直接跑 `ol` 拦下并说明。
+3. 飞书一律走扩展命令闸门声明的工具（`proto.CommandGate.Tool`）：node 先过飞书闸门（读放行、会被别人看到的写在手机上确认、配置的规则拒绝），再在 node 上
+   跑技能里的脚本；凭据只在 node 的代理上，不进 runtime。工具带着 `shell`（命令名和技能脚本的路径），runtime 在助手对话的 shell 里
+   见到它们就拦下，说用哪个工具（DSH 的 `onPreExecute`）。
 4. `context` 放在用户的字前面交给模型，聊天里不显示（`<jarvis-context>` 不带属性的块；手机引用的上下文带属性，照常显示）。
 5. 按 `mode` 设自己的权限（计划 = 只读）；`memory_dir` 里的改动在非计划模式下不问。
 

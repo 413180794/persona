@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Feishu (lark-connector) wire types
+// MARK: - Feishu (Lark gateway) wire types
 
 nonisolated struct LarkConversation: Codable, Identifiable, Hashable, Sendable {
     var id: String
@@ -70,7 +70,7 @@ extension LarkMessage {
     nonisolated static func cacheName(_ c: LarkConversation) -> String { "lark-chat-" + c.key }
 }
 
-/// One Feishu account signed in on the hub's lark-connector (`GET /api/v1/lark/accounts`).
+/// One Feishu account signed in on the hub's Lark gateway (`GET /api/v1/lark/accounts`).
 nonisolated struct LarkAccount: Codable, Identifiable, Hashable, Sendable {
     var id: Int
     var name: String?
@@ -110,7 +110,7 @@ nonisolated struct LarkLabel: Codable, Identifiable, Hashable, Sendable {
     var count: Int?
 }
 
-/// One element of a message as lark-connector projects it (`MessagePart`): text runs, mentions, links, images,
+/// One element of a message as the Lark gateway projects it (`MessagePart`): text runs, mentions, links, images,
 /// emoji, files, media, code and cards. `metadata` stays raw JSON: cards carry their whole element tree there.
 nonisolated struct LarkPart: Codable, Hashable, Sendable {
     var kind: String
@@ -212,7 +212,7 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var isSystem: Bool { type == "SYSTEM" || (parts?.first?.metaBool("system") ?? false) }
 }
 
-/// A message inside a merge-forward card: lark-connector's own `MessageView` shape (camelCase), media already
+/// A message inside a merge-forward card: the Lark gateway's own `MessageView` shape (camelCase), media already
 /// pointing at the hub.
 nonisolated struct LarkForwardedMessage: Decodable, Identifiable, Hashable, Sendable {
     var id: String
@@ -284,7 +284,7 @@ extension APIClient {
         /// lark.account: the one requests without `ol_account` are about.
         var `default`: Int
     }
-    /// The accounts on the hub's lark-connector; a hub from before there were several answers 404.
+    /// The accounts on the hub's Lark gateway; a hub from before there were several answers 404.
     func larkAccounts() async throws -> LarkAccounts { try await get("/api/v1/lark/accounts") }
 
     /// One page of a feed scope: `chats` (消息), `unread`, `done` (已完成), `label:<id>`.
@@ -327,7 +327,7 @@ extension APIClient {
                                     query: ["before": before ?? "", "after": after ?? "", "around": around ?? "", "limit": "40", "topic": topic ? "1" : ""])
     }
     /// Replies in one message's thread (decoded off the main thread, like `larkMessages`).
-    /// A page of a thread, oldest first: the newest `limit` replies, or those before `before`. lark-connector puts the thread's
+    /// A page of a thread, oldest first: the newest `limit` replies, or those before `before`. The Lark gateway puts the thread's
     /// first message (a topic) in front of every page (`replies(of:)` drops it).
     func larkThread(_ messageID: String, before: String? = nil, limit: Int = 60) async throws -> LarkMessages {
         try await getDecodedOffMain("/api/v1/lark/messages/\(messageID)/thread", query: ["before": before ?? "", "limit": String(limit)])
@@ -341,7 +341,7 @@ extension APIClient {
         var mentions: [LarkMention]?
         enum CodingKeys: String, CodingKey { case text, mentions, clientID = "client_id" }
     }
-    /// lark-connector can take a while to confirm a send; a retry after an early timeout is what sent twice.
+    /// The Lark gateway can take a while to confirm a send; a retry after an early timeout is what sent twice.
     static let larkSendTimeout: TimeInterval = 45
     @discardableResult
     func larkSend(_ id: String, text: String, clientID: String? = nil, mentions: [LarkMention] = []) async throws -> LarkSendReceipt {
@@ -406,7 +406,7 @@ extension APIClient {
     }
 }
 
-/// A person's profile card (lark-connector `UserProfileDetail`, the fields the card shows).
+/// A person's profile card (the Lark gateway's `UserProfileDetail`, the fields the card shows).
 nonisolated struct LarkProfile: Decodable, Sendable {
     struct Field: Decodable, Hashable, Sendable {
         var key: String

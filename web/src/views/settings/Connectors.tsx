@@ -1,5 +1,5 @@
 // 设置 › 连接器 (iOS ConnectorsSection, docs/mail.md): where Persona's data comes from — the mail accounts (list, add
-// one with a password or 授权码, delete), 飞书 (lark-connector through the hub, feature `lark`: read-only status), and the hub's other connectors
+// one with a password or 授权码, delete), 飞书 (the Lark gateway through the hub, feature `lark`: read-only status), and the hub's other connectors
 // (GitHub, Telegram, an extension's: GET /api/v1/connectors), each with a page of its own (HubConnector.tsx, `&connector=`).
 // 这台 iPhone (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
 // phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone;
@@ -31,7 +31,7 @@ interface LarkStatus {
 export function Connectors({ open, onOpen, onChannel }: { open: string | null; onOpen: (id: string | null) => void; onChannel?: (id: string) => void }) {
   // An older hub has no connectors API (feature "connectors"): only mail and Feishu, as before.
   const hasConnectors = useStore((s) => s.features.includes("connectors"));
-  // 飞书 (lark-connector through /api/v1/lark/…) only on a hub that has it (feature `lark`); 飞书机器人 is the hub's own.
+  // 飞书 (the Lark gateway through /api/v1/lark/…) only on a hub that has it (feature `lark`); 飞书机器人 is the hub's own.
   const lark = useLarkOn();
   // "feishu-bot" is not a hub connector: FeishuBot reads it and opens its own dialog.
   if (open && open !== "feishu-bot") return <ConnectorDetail key={open} id={open} onBack={() => onOpen(null)} onChannel={onChannel} />;
@@ -429,7 +429,7 @@ function Feishu() {
   const [loading, setLoading] = useState(true);
   const load = () => {
     setLoading(true);
-    // the Feishu accounts on the hub's lark-connector (docs/feishu.md「多账号」); a hub from before them has none to list
+    // the Feishu accounts on the hub's Lark gateway (docs/feishu.md「多账号」); a hub from before them has none to list
     api<LarkAccountList>("/lark/accounts").then(setAccounts).catch(() => setAccounts(null));
     api<LarkStatus>("/lark/status")
       .then((r) => (setSt(r), setError("")))

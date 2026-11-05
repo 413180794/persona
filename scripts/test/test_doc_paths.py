@@ -68,7 +68,6 @@ GENERATED_SCREENSHOTS = {
 ELSEWHERE = {
     "docs/guide.pdf",  # mock_hub.py's fake browse tree (docs/android.md)
     "docs/icon.png",  # a file the mock hub does not have (docs/mac.md)
-    "scripts/ol.sh",  # inside skills/lark-connector/ (docs/assistant.md)
     "sdk/VERSION",  # written by scripts/gen/sync-sdk.sh into the extension repository (docs/extensions.md)
     # The Go check's overlay maps this absent path to a test source in /tmp (spec/fixtures/sort/README.md).
     "server/internal/hub/spec_sort_fixture_test.go",

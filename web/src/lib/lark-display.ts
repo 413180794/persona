@@ -1,5 +1,5 @@
-// Feishu message display settings (风灵月影, docs/lark-connector-migration.md「风灵月影消息显示」, iOS LarkMessageDisplay.swift):
-// lark-connector's per-account switches for showing a recalled message's retained content (防撤回) and a message's earlier
+// Feishu message display settings (风灵月影, docs/lark-migration.md「风灵月影消息显示」, iOS LarkMessageDisplay.swift):
+// the Lark gateway's per-account switches for showing a recalled message's retained content (防撤回) and a message's earlier
 // versions (编辑历史). They only decide what is shown: the hub sends retained content whatever they say, so anything
 // unknown (not read yet, a failed read, an account that changed) hides it. A write carries the account and the old value;
 // a conflict or an unknown result is never retried, the settings are read again.
@@ -15,7 +15,7 @@ export interface LarkMessageDisplay {
   account_id: string;
   anti_recall: boolean;
   show_edit_history: boolean;
-  /** lark-connector's [removed] switch; absent from a Feishu extension that has no such setting. */
+  /** The Lark gateway's [removed] switch; absent from a Feishu extension that has no such setting. */
   brave_climb_codec?: boolean;
 }
 

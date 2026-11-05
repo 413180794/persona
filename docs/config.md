@@ -64,12 +64,12 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
    ]
    ```
 
-   `ssh` 是**开发机** SSH 到这台的主机名；`os` 决定装哪个二进制；`hostnames` 是这台自己的主机名（`hostname -s`，macOS 上也可以写 LocalHostName），部署脚本跑在这台上时据此直接本地拷贝、不走 SSH。
+   `ssh` 是**开发机** SSH 到这台的主机名；`os`（`linux` / `darwin`）和可选的 `arch`（`amd64` / `arm64`）决定装哪个二进制，两个都不写或只写一个时，部署脚本直接问那台机器（`uname -s` / `uname -m`），所以漏写也不会装错（Intel 的 Mac 拿到 `darwin/amd64`、ARM 的 Linux 拿到 `linux/arm64`）；问不到（关机、连不上）的机器按连不上跳过，不算平台写错，只有写出来或答出来的平台没有对应构建才报错、整次部署以非零退出；`hostnames` 是这台自己的主机名（`hostname -s`，macOS 上也可以写 LocalHostName），部署脚本跑在这台上时据此直接本地拷贝、不走 SSH。
    **在哪台上跑部署，就给哪台写上 `hostnames`**：没写的机器一律当成远端经 SSH 安装（跑部署的这台没写，就 SSH 连自己）。
    开发机连不上、只有另一台（通常是 hub 机器）连得上的电脑（密钥只在那台上、路由不通）写 `"via": "<那台的 id>"`：
    部署时先拷到那台、再从那台装过去，这时 `ssh` 是**那台**上的主机名。
 
-2. **部署**：`./scripts/deploy/deploy.sh`。编译 Linux / macOS 两份 `personad`，按 `os` 装到每台电脑的 `~/.persona/bin/`；在 hub 机器上
+2. **部署**：`./scripts/deploy/deploy.sh`。编译四个平台（`linux` / `darwin` × `amd64` / `arm64`，和发布、Docker 镜像一样）的 `personad`，每台电脑拿到它自己跑的那个（装完在那台机器上跑一次 `version` 自检，跑不起来就报错、不打印 installed）；在 hub 机器上
    起 Postgres 容器、把 `personad hub` 装成 systemd 用户服务并启动。
 
 3. **hub 机器：告诉 hub 接入哪些电脑**。第一次启动会生成 `~/.persona/hub.json`（0600），里面只有它自己。补上其他电脑和手机访问的地址：
@@ -142,7 +142,7 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
 | `app_store.*` | `release.sh` / `asc*.py`（`asc_cli.py` 把它们交给 App Store Connect CLI，`docs/release.md`「用 asc 发版」）：API key（`key_id`、`issuer_id`、`key_path`）、App 记录的数字 ID、内部测试员、TestFlight 反馈邮箱；`external` 是外部测试（群组名、公开链接开关和人数上限（`public_link_limit`，0 为不限）、隐私政策地址、另外按邮箱邀请的测试员、Beta App Review 联系人和备注，`docs/release.md`）。环境变量 `ASC_KEY_ID` 等仍可覆盖（key 文件路径 `ASC_KEY_PATH` 或 `ASC_PRIVATE_KEY_PATH`） |
 | `hub.machine` | hub 跑在哪台机器（`machines` 里的 id）：`deploy.sh` 在它上面起 Postgres 和 systemd 服务，`test-server.sh` 在它上面跑测试，`sim.sh` 从它上面读 token |
 | `hub.url` | `sim.sh` 配对模拟器用的地址；示例中的 HTTP 仅用于内网 / VPN，公网入口另配 `hub.json` 的 `public` |
-| `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh；跑部署的那台要写上，没写的一律走 ssh）；`via` 是另一台的 id：开发机连不上这台时，经那台再 ssh 一次把二进制传过去（那台上不留文件），这时 `ssh` 是那台上的主机名 |
+| `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os`（`linux` / `darwin`）和 `arch`（`amd64` / `arm64`，可选）决定装哪个二进制，缺的那个问机器自己（`uname`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh；跑部署的那台要写上，没写的一律走 ssh）；`via` 是另一台的 id：开发机连不上这台时，经那台再 ssh 一次把二进制传过去（那台上不留文件），这时 `ssh` 是那台上的主机名 |
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
 | `publish.site_url` | `publish.sh` 把 `personad` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 personad」）；不写就不发布 |
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |
@@ -269,23 +269,23 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID
   （一般不用写：用户在 App 里填自己在 Microsoft Entra 注册的那个，加密存 hub，优先于这里）；`redirect_uri` 默认
   `jarvis-mail-oauth://outlook`，改了要和 Entra 里登记的一致。
-- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token`（老写法，**不再生效**）：#1571 起经 lark-connector 接飞书由扩展提供
-  （`docs/feishu.md` 开头、`docs/extensions.md`），hub 还会读到这几个键，但不拿它们连 lark-connector，也不交给助手；写了 `token` 或 `container` 时
+- `lark.token` / `lark.container` / `lark.base_url` / `lark.native_olk_token`（老写法，**不再生效**）：#1571 起经飞书网关接飞书由扩展提供
+  （`docs/feishu.md` 开头、`docs/extensions.md`），hub 还会读到这几个键，但不拿它们连飞书网关，也不交给助手；写了 `token` 或 `container` 时
   hub 启动时在日志里提示一行。Agent token、容器、地址和加密消息的独立授权（`native_olk_token`）改在接飞书扩展的设置里填，hub.json 里的可以删掉。
-- `lark.account`（可选整数，仍生效）：默认的 lark-connector 账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号，允许范围 1–999999999，
-  例如 `"lark": {"account": 2}`。账号编号来自 lark-connector `/accounts` 的 `id`，不是飞书用户 ID。收件箱里来自默认账号的飞书条目操作时不带 `ol_account`，
+- `lark.account`（可选整数，仍生效）：默认的飞书网关账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号，允许范围 1–999999999，
+  例如 `"lark": {"account": 2}`。账号编号来自飞书网关 `/accounts` 的 `id`，不是飞书用户 ID。收件箱里来自默认账号的飞书条目操作时不带 `ol_account`，
   来自其他账号的带上它们自己的编号；收件箱 Agent 处理飞书条目时也以它为默认账号（`docs/feishu.md`「多账号」）。修改后重启 hub（`systemctl --user restart jarvisd`）。
   不同账号的服务端收件箱记录隔离并保留，切回后可继续查看。
-- `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为接飞书扩展（lark-connector）之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
+- `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为接飞书扩展（飞书网关）之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
   `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`。`bin` 是命令名或绝对路径，默认 `lark-cli`，不是绝对路径时在登录 shell 里找
   （npm 全局装的常在 nvm 这类目录下，systemd 的 PATH 里没有）；`profile` 是 lark-cli 的 `--profile`，空的用它的默认档。
   应用和用户的登录都留在 lark-cli 自己那里（`~/.lark-cli`），不进 `hub.json`：在助手所在的机器上自己跑一次
   `lark-cli auth login --domain all`（全部领域的用户权限；没有浏览器加 `--no-wait --json`，在手机上点链接授权），一周内没用过要重新登录。
   现在（L1）只给助手用：它的 PATH 上有 `lark-cli`（带上配置的 `profile`），写操作过闸门（`docs/assistant.md`「飞书：lark-cli」）。
-- `lark.prefer`（可选）：接飞书的扩展（lark-connector）和 lark-cli 都有时谁是主来源，`lark-connector`（默认）或 `cli`；现在只影响助手的提示词怎么分工。
+- `lark.prefer`（可选）：接飞书的扩展（经飞书网关）和 lark-cli 都有时谁是主来源：不写（默认，扩展这一路优先）或 `cli`；其他值是提供飞书的扩展自己的来源名，原样交给它、由它校验；现在只影响助手的提示词怎么分工。
 - `lark_gate`（可选，老写法，照样生效；新规则写进下面的 `connector_gate`，`connector` 写 `lark`）：助手写飞书时的闸门规则（接飞书扩展的命令闸门，以及 lark-cli），排在 `connector_gate` 的 `lark` 规则之后、内置规则前面，第一条匹配的说了算：
   `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]`（`action` 是 `allow` / `confirm` / `deny`，可加 `body` 按顶层字段匹配；
-  `docs/assistant.md`「飞书：lark-connector skill」）。lark-cli 的命令写成 `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
+  `docs/assistant.md`「飞书：接飞书的扩展带的 skill」）。lark-cli 的命令写成 `{"method":"CLI","path":"/im/+messages-send","action":"allow"}`
   （`path` 是命令的词用 `/` 连起来，`*` / `**` 通配同上），匹配上就不再看 lark-cli 自报的风险等级。
 - `connector_gate`（可选）：连接器写操作（`github_comment` 这类）的闸门规则，第一条匹配的说了算，没有匹配的就在手机上逐次确认：
   `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
@@ -293,7 +293,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。扩展清单里 `confirm_always` 命中的写操作，`allow` 规则也会被钳成 `confirm`（`docs/extensions.md`）。
   助手写飞书的规则也写这里：`connector` 写 `lark`，`action` 写「方法 路径」，如 `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`、
   lark-cli 的 `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}`（路径里 `*` 一段、`**` 剩下的全部，`"*"` 是任何调用；`match` 按 body 的顶层字段）。
-  它们排在老的 `lark_gate` 前面，再往后是内置规则（`docs/assistant.md`「飞书：lark-connector skill」）。
+  它们排在老的 `lark_gate` 前面，再往后是内置规则（`docs/assistant.md`「飞书：接飞书的扩展带的 skill」）。
 - `github`（可选）：GitHub 连接器。`{"auth": {"from_machine": "<机器 id>"}}`：用那台机器上 `gh` 的登录（hub 经 node 跑 `gh auth token`，
   token 只在 hub 内存里，不落库、不写日志、不给 App 和助手）。那台机器要保持 `gh` 登录，而且登录存在 `~/.config/gh/hosts.yml`
   （钥匙串里的经 ssh 读不到：`gh auth login --insecure-storage`）。`auth.host` 默认 `github.com`，GitHub Enterprise 的主机名写这里（还没做）。

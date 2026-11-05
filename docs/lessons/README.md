@@ -15,7 +15,7 @@
 | `assistant.md` | 改「Persona」tab 的无头助手：ask_user、权限、后台任务、定时任务、飞书写操作闸门 |
 | `server.md` | 改 hub / node 的进程、连接、推送、代理、端口转发、来源判断（PROXY protocol）、机器监控、远程部署、知识库的写入和保留期；工作区独立发现、物理目录和动态机器 alias；知识库人工更正、来源删除与扩展权限 |
 | `transcript.md` | 改 transcript / rollout 解析、会话列表、分页、后台同步、折叠、App 的会话缓存 |
-| `lark-mail.md` | 改飞书（lark-connector）和邮件（IMAP / SMTP / Gmail）、云文档通知 |
+| `lark-mail.md` | 改飞书和邮件（IMAP / SMTP / Gmail）、云文档通知 |
 | `terminal.md` | 改终端 tab：herdr 读屏 / observe / 接管、滚动、键盘输入、宽字符 |
 | `ios.md` | 改 iOS 界面：聊天列表与滚动、导航、布局与组件、Swift 与编译、系统能力与页面约定、SSH 隧道、密钥输入框不弹「保存密码？」、要能取消的确认用 alert、列表结构一变每行修饰链重建 |
 | `android.md` | 改 Android App：Compose 与玻璃（Haze）、切页面闪烁、平板 / 折叠屏、深浅色、前台服务、模拟器和真机调试 |

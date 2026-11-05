@@ -791,7 +791,8 @@ export function createRuntime(driver, options) {
     },
     /**
      * The hub's tools for this runtime's agents (mcp.tools: the phone's phone_*, mail_*), [] without a node or hub.
-     * @returns {Promise<{name: string, description: string, input_schema: object}[]>}
+     * @returns {Promise<{name: string, description: string, input_schema: object, shell?: string[]}[]>} - shell: a gated
+     *   command's words, which the runtime refuses in an assistant conversation's shell
      */
     async tools({ assistant = false } = {}) {
       const p = peer

@@ -162,7 +162,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
       toast(t("inbox-larkbraveclimb.text_only"), "error");
       return;
     }
-    // [removed] words go encoded, as lark-connector's web sends them; refused here keeps the text in the box
+    // [removed] words go encoded, as the Lark gateway's web sends them; refused here keeps the text in the box
     const trimmed = text.trim() && climb.prepare(text.trim());
     if (trimmed === undefined) return;
     setSending(true);

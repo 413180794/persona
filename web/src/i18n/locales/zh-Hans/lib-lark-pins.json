@@ -8,7 +8,7 @@
   "fallback_image": "[图片]",
   "fallback_file": "[文件]",
   "fallback_message": "消息",
-  "not_logged_in": "hub 连接的 lark-connector 没有登录飞书",
+  "not_logged_in": "hub 连接的飞书网关没有登录飞书",
   "load_failed": "读不到 Pin 消息：{error}",
   "recalled_kept": "{text} · 已撤回"
 }

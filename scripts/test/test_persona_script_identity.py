@@ -357,7 +357,9 @@ sys.exit(2)
 
     def test_actual_hub_deploy_replaces_service_binary_and_web_in_its_installed_profile(self):
         self.run_script('scripts/deploy/deploy.sh', '--admin-access', 'lan', 'hub-fixture')
-        for name in ('jarvisd', 'jarvisd-wechat', 'nodes/jarvisd-linux-amd64', 'nodes/jarvisd-darwin-arm64'):
+        # Every platform a node can run, the ones 重新部署 takes a machine's build from (#3103).
+        for name in ('jarvisd', 'jarvisd-wechat', 'nodes/jarvisd-linux-amd64', 'nodes/jarvisd-linux-arm64',
+                     'nodes/jarvisd-darwin-amd64', 'nodes/jarvisd-darwin-arm64'):
             self.assertTrue((self.state / 'bin' / name).is_file(), name)
         self.assertTrue(os.path.samefile(self.state / 'bin/jarvisd', self.state / 'bin/personad'))
         self.assertTrue(os.path.samefile(self.state / 'bin/jarvisd-wechat', self.state / 'bin/personad-wechat'))
@@ -384,6 +386,23 @@ sys.exit(2)
         self.run_script('scripts/deploy/deploy.sh', 'web')
         self.assertEqual((self.state / 'web/index.html').read_text(), 'Persona fixture web')
         self.assertFalse((self.remote / '.persona').exists())
+
+    def test_a_build_that_cannot_run_there_fails_the_deploy_before_installed(self):
+        # The #3103 symptom: the wrong platform's build was copied in and the deploy printed "installed" anyway. A
+        # binary that cannot exec here stands in for it; the `version` check has to catch it before the hub restarts.
+        executable(self.commands / 'go', '#!' + sys.executable + '\n' + r'''
+import pathlib, sys
+if sys.argv[1] == 'generate': sys.exit(0)
+if sys.argv[1] == 'build':
+    p = pathlib.Path(sys.argv[sys.argv.index('-o')+1]); p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b'\x7fELF built for another platform'); p.chmod(0o755); sys.exit(0)
+sys.exit(2)
+''')
+        result = subprocess.run(['bash', str(self.repo / 'scripts/deploy/deploy.sh'), '--admin-access', 'lan', 'hub-fixture'],
+                                env=self.env, capture_output=True, text=True, timeout=DEPLOY_TIMEOUT)
+        self.assertNotEqual(result.returncode, 0, result.stdout + '\n' + result.stderr)
+        self.assertIn('does not run there', result.stderr)
+        self.assertNotIn('hub restarted', result.stdout)
 
     def test_a_checkout_missing_master_commits_deploys_nothing(self):
         # merge-base --is-ancestor fails: HEAD does not contain origin/master (#1314)

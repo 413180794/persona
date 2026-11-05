@@ -19,7 +19,7 @@ import (
 	"github.com/srwiley/rasterx"
 )
 
-// Avatars come from lark-connector's feed as data: URLs (Grok Bot's generated one-path SVGs, Muse's JPEGs) or https URLs.
+// Avatars come from the Lark gateway's feed as data: URLs (Grok Bot's generated one-path SVGs, Muse's JPEGs) or https URLs.
 // The list carries only hasAvatar + avatarVersion; GET /api/v1/agents/sessions/{id}/avatar serves the image. SVGs are
 // rasterized here to PNG because iOS cannot draw SVG data with public APIs.
 

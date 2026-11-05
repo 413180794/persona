@@ -64,7 +64,7 @@ struct PersonalAgentEntityQuery: EntityQuery, EntityStringQuery {
 struct AgentTaskIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "让 Agent 去做"
     nonisolated static let description = IntentDescription(
-        "把一件事发给某个个人 Agent 会话（lark-connector agent-bridge），由它去做。不选会话时发给最近活跃、能发送的那个。",
+        "把一件事发给某个个人 Agent 会话（飞书网关的 agent-bridge），由它去做。不选会话时发给最近活跃、能发送的那个。",
         categoryName: "个人 Agent",
         searchKeywords: ["Agent", "个人 Agent", "任务", "让它去做", "task"]
     )
@@ -167,7 +167,7 @@ nonisolated enum PersonalAgentIntentPicker {
 }
 
 nonisolated enum PersonalAgentIntentText {
-    static let noSession = "还没有能发消息的个人 Agent 会话。先在 lark-connector 里开一个。"
+    static let noSession = "还没有能发消息的个人 Agent 会话。先在飞书网关里开一个。"
 
     static func name(title: String, id: String) -> String {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)

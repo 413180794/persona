@@ -1,7 +1,7 @@
 {
-  "setup_missing": "This version of lark-connector has no personal agents. Update lark-connector and try again.",
-  "setup_disabled": "Personal agents are off in lark-connector: set lark-connector_AGENT_BRIDGE=true in its deployment and restart it",
-  "setup_no_accounts": "No personal agent accounts connected yet: add Cue or Grok Bot in lark-connector's settings",
+  "setup_missing": "This version of the Lark gateway has no personal agents. Update the Lark gateway and try again.",
+  "setup_disabled": "The extension that provides personal agents has not turned them on: turn them on as its guide says, then restart",
+  "setup_no_accounts": "No personal agent accounts connected yet: add Cue or Grok Bot in the Lark gateway's settings",
   "other": "Other",
   "group_date": "Date",
   "group_provider": "Source",

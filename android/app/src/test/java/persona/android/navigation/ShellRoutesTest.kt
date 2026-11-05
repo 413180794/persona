@@ -74,8 +74,8 @@ class ShellRoutesTest {
     @Test fun inboxLinksOpenTheExtensionsPageOfAnItem() {
         val lark = InboxRecord(InboxItem("lark-item", kind = "group", title = "评审"), feedId = "chat", startPosition = 42, source = "lark")
         val mail = InboxRecord(InboxItem("mail-item", kind = "mail"), source = "mail")
-        val pages = InboxItemPages(listOf(ExtensionUiPlace("lark-connector", "event", "事件", "inbox_item", connector = "lark")))
-        assertEquals(InboxDestination.Open(InboxItemUiRoute("lark-item", "lark-connector", "event", "评审")),
+        val pages = InboxItemPages(listOf(ExtensionUiPlace("larkext", "event", "事件", "inbox_item", connector = "lark")))
+        assertEquals(InboxDestination.Open(InboxItemUiRoute("lark-item", "larkext", "event", "评审")),
             inboxDestination(InboxItemRoute("lark-item"), listOf(lark, mail), false, pages))
         assertEquals(InboxDestination.Open(MailRoute("mail-item")), inboxDestination(InboxItemRoute("mail-item"), listOf(lark, mail), false, pages))
         assertEquals(InboxDestination.Open(LarkRoute("chat", "lark-item", 42)), inboxDestination(LarkChatRoute("chat"), listOf(lark), false, pages))

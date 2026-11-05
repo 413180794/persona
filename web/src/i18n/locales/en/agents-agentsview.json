@@ -1,7 +1,7 @@
 {
   "sidebar": "Sidebar",
   "title": "Personal agents",
-  "subtitle": "Personal agents paired in lark-connector",
+  "subtitle": "Personal agents paired in the Lark gateway",
   "search_placeholder": "Search chats",
   "no_match": "No matching chats",
   "empty": "No personal agent chats yet",

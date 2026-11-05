@@ -519,7 +519,7 @@ describe("列表状态", () => {
     expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ text: "好的" });
     expect(toast).toHaveBeenLastCalledWith("已发送，标为已处理", "ok");
 
-    fetcher.mockResolvedValueOnce(fail(502, "lark-connector: send timed out"));
+    fetcher.mockResolvedValueOnce(fail(502, "lark: send timed out"));
     expect(await sendReply(dm, "能赶上")).toBe(false);
     expect(getInbox().items[0].done_at).toBeUndefined();
     expect(unsentReplies.get(dm.id)).toBe("能赶上");

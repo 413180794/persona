@@ -1,7 +1,7 @@
 import Foundation
 import PersonaKit
 
-/// Keeps Feishu current while the app is open and online. Push: the hub relays lark-connector's realtime events as
+/// Keeps Feishu current while the app is open and online. Push: the hub relays the Lark gateway's realtime events as
 /// `lark` (which conversations changed); the inbox and an open chat refresh on them instead of waiting for a poll.
 /// Pull: the latest page of each changed conversation goes into the cache its chat paints from, so opening it shows
 /// the new messages at once; on (re)connect the first page of the inbox is checked the same way.
@@ -115,7 +115,7 @@ final class LarkSync {
     func reconnected() {
         tellLists(LarkListChange(everything: true))
         Task {
-            // A hub without Feishu chats (no lark-connector plugin, `LarkFeatures`) has nothing to pull.
+            // A hub without Feishu chats (no Lark extension, `LarkFeatures`) has nothing to pull.
             guard AppModel.shared.larkFeatures.chats, let api = AppModel.shared.api,
                   let r = try? await api.larkConversations() else { return }
             know(r.conversations)

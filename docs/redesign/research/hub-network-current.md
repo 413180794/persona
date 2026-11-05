@@ -456,6 +456,6 @@ TLS 指纹本身也能标识 hub，但内网明文连接没有指纹，数据作
 
 - **未实测**（按用户规则，下面都不能给数字）：hub 机器上 `:18660` 是否真的双栈（`ss -ltnp`）；手机蜂窝网络能否经 IPv6 直达 hub；hub 机器 TUN 代理对入站连接回包的影响；光猫 / 路由器的入站 IPv6 策略；运营商 / NAT 的 TCP 空闲超时；不同心跳间隔的耗电。
 - **待真机验证**：iOS 在 ATS 开启（或保留 `NSAllowsArbitraryLoads`）时，自定义信任评估接受自签证书的具体限制；watchOS 能否直连公网 IPv6 的 hub（手表经手机代理 / Wi-Fi / 蜂窝时行为不同）；Android 本地网络权限对「同一局域网内的全局 IPv6 地址」算不算本地。
-- **没查**：更早的 App 构建是否用过 `?token=`；`mail` 子路由、lark-connector 代理、Gmail OAuth 回调在公网暴露后有没有额外风险（它们都在 `h.auth` 之后，OAuth state 已加密自包含，`docs/mail.md:52`，但没逐个审）；hub ↔ node（SSH）不在本次范围。
+- **没查**：更早的 App 构建是否用过 `?token=`；`mail` 子路由、飞书网关代理、Gmail OAuth 回调在公网暴露后有没有额外风险（它们都在 `h.auth` 之后，OAuth state 已加密自包含，`docs/mail.md:52`，但没逐个审）；hub ↔ node（SSH）不在本次范围。
 - **设计上要拍板**：两个端口还是同端口嗅探（4a）；已配对设备是否允许在内网通道上「首次信任」指纹（8.4）；`/api/v1/health` 要不要继续公开版本号和 features（3.1）；开公网后主 token 是否限制为只接受回环 / 内网来源（4c）。
 - **既有资料的行号已漂移**：`docs/redesign/research/jarvis-protocol.md:26` 引用的 `config.go:144-147`，现在是 `config.go:148-151`。

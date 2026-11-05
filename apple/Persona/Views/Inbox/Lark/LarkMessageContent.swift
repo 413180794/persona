@@ -32,7 +32,7 @@ extension MarkdownUI.Theme {
 
 // MARK: - Rich-text tree
 
-/// lark-connector records each leaf's block ancestors; consecutive leaves sharing an ancestor share the block
+/// The Lark gateway records each leaf's block ancestors; consecutive leaves sharing an ancestor share the block
 /// (port of `rich-blocks.ts`).
 indirect enum LarkRichNode {
     case leaf(LarkPart)

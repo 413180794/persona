@@ -19,12 +19,12 @@ class InboxItemPagesTest {
     private val lark = InboxRecord(InboxItem("lark:F1:1051", kind = "group", title = "周四的评审"), feedId = "F1", startPosition = 1051, source = "lark")
     private val mail = InboxRecord(InboxItem("mail-1", kind = "mail", title = "订单"), source = "mail")
     private val moment = InboxRecord(InboxItem("moment-1", kind = "moment"), source = "lark", moment = InboxMomentRef(postId = "post-1"))
-    private val event = ExtensionUiPlace("lark-connector", "event", "事件", "inbox_item", connector = "lark")
+    private val event = ExtensionUiPlace("larkext", "event", "事件", "inbox_item", connector = "lark")
 
     @Test fun aConnectorsExtensionDrawsItsItems() {
         val pages = InboxItemPages(listOf(event))
-        assertEquals(InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审"), pages.route(lark))
-        assertEquals(InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审"), inboxOpenPage(lark, pages))
+        assertEquals(InboxItemUiRoute("lark:F1:1051", "larkext", "event", "周四的评审"), pages.route(lark))
+        assertEquals(InboxItemUiRoute("lark:F1:1051", "larkext", "event", "周四的评审"), inboxOpenPage(lark, pages))
         // Every item of the connector: a 公司圈 post from it too.
         assertEquals("moment-1", pages.route(moment)?.itemId)
         // Another connector's items keep their own page.
@@ -48,7 +48,7 @@ class InboxItemPagesTest {
 
     @Test fun theFirstListedPageWins() {
         val pages = InboxItemPages(listOf(event.copy(connector = "github"), event, event.copy(extension = "another", id = "thread")))
-        assertEquals("lark-connector" to "event", pages.place(lark)?.let { it.extension to it.id })
+        assertEquals("larkext" to "event", pages.place(lark)?.let { it.extension to it.id })
     }
 
     @Test fun theOwnPageIsWhatTheListOpenedBefore() {
@@ -107,7 +107,7 @@ class InboxItemPagesTest {
         // Known: nothing is provisional, whatever opens.
         val known = InboxItemPages(listOf(event), provisional = { heard += it })
         heard.clear()
-        assertEquals(InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审"), known.open(lark))
+        assertEquals(InboxItemUiRoute("lark:F1:1051", "larkext", "event", "周四的评审"), known.open(lark))
         known.open(mail)
         assertTrue(heard.isEmpty())
 
@@ -115,7 +115,7 @@ class InboxItemPagesTest {
         val stack = listOf(persona.core.navigation.InboxRoute, LarkRoute("F1", "lark:F1:1051", 1051), MailRoute("mail-1"), chatLink)
         val provisional = setOf(LarkRoute("F1", "lark:F1:1051", 1051), MailRoute("mail-1"))
         // The Feishu item becomes the extension's page; the mail has no extension; a chat link was never provisional.
-        assertEquals(listOf(LarkRoute("F1", "lark:F1:1051", 1051) to InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审")),
+        assertEquals(listOf(LarkRoute("F1", "lark:F1:1051", 1051) to InboxItemUiRoute("lark:F1:1051", "larkext", "event", "周四的评审")),
             known.swaps(stack, provisional, listOf(lark, mail, moment)))
         // An older hub lists no pages: nothing changes.
         assertTrue(InboxItemPages().swaps(stack, provisional, listOf(lark, mail)).isEmpty())
@@ -124,13 +124,13 @@ class InboxItemPagesTest {
     }
 
     @Test fun theListMarksTheItemItsExtensionPageShows() {
-        val shown = InboxItemUiRoute("lark:F1:1051", "lark-connector", "event")
+        val shown = InboxItemUiRoute("lark:F1:1051", "larkext", "event")
         assertTrue(isInboxItemSelected(shown, "lark:F1:1051", "F1"))
         assertFalse(isInboxItemSelected(shown, "lark:F1:1200", "F1"))
         assertFalse(isInboxItemSelected(shown, "mail-1", null))
     }
 
-    // #2323: a Feishu document's notice (lark-connector's `doc` block, no chat behind it) opened the mail page, which failed
+    // #2323: a Feishu document's notice (the Lark extension's `doc` block, no chat behind it) opened the mail page, which failed
     // with 「邮件加载失败」. Only a mail opens the mail page; a document, and an item of a shape the app does not know,
     // open the item's detail page.
     @Test fun aDocumentsNoticeOpensItsOwnPageAndOnlyMailOpensTheMailPage() {
@@ -171,7 +171,7 @@ class InboxItemPagesTest {
         // An extension's page that was opened before the list was known gives way for a document too.
         val pages = InboxItemPages(listOf(event))
         val key = InboxItemDetailRoute("doc:T1:1730700000000")
-        assertEquals(listOf(key to InboxItemUiRoute("doc:T1:1730700000000", "lark-connector", "event", "Q4 计划")),
+        assertEquals(listOf(key to InboxItemUiRoute("doc:T1:1730700000000", "larkext", "event", "Q4 计划")),
             pages.swaps(listOf(key), setOf(key), listOf(doc)))
     }
 }

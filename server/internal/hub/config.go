@@ -115,8 +115,8 @@ type Config struct {
 	DatabaseURL string `json:"database_url"`
 	// AI configures the Messages API used for in-app AI helpers (defaults to the launcher's gateway on the hub machine).
 	AI ai.Config `json:"ai"`
-	// Lark is how the hub and the assistant run lark-cli, and the lark-connector account Feishu items a plugin hands over
-	// came to (internal/lark). lark-connector itself is a plugin's now; its old fields here are not read.
+	// Lark is how the hub and the assistant run lark-cli, and the gateway account Feishu items a plugin hands over
+	// came to (internal/lark). The Lark gateway itself is an extension's now; its old fields here are not read.
 	Lark lark.Config `json:"lark"`
 	// LarkGate: extra rules for the assistant's Feishu writes through the Feishu plugin's command gate, after
 	// connector_gate's lark rules and before the built-in ones (connector.LarkRules, node/larkgate.go; e.g.

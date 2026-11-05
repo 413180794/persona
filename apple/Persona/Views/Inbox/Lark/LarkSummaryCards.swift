@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Cards lark-connector summarises itself (`metadata.variant`): forwarded chats, group / contact cards, meetings,
+/// Cards the Lark gateway summarises itself (`metadata.variant`): forwarded chats, group / contact cards, meetings,
 /// calendar events, votes, tasks, red packets (port of `SummaryCardView`).
 struct LarkSummaryCardView: View {
     var meta: JSONValue
@@ -111,7 +111,7 @@ struct LarkForwardedView: View {
         }
     }
 
-    /// Avatars inside forwarded messages are lark-connector paths; the hub serves them under /api/v1/lark.
+    /// Avatars inside forwarded messages are Lark gateway paths; the hub serves them under /api/v1/lark.
     static func hubURL(_ s: String) -> String {
         if s.hasPrefix("/api/media/") { return "/api/v1/lark/media/" + s.dropFirst(11) }
         return s

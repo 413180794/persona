@@ -273,8 +273,8 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.persona/bin/personad
 - 网页依赖固定从官方 npm 源装（`npm ci --registry=https://registry.npmjs.org/`，`JARVIS_NPM_REGISTRY` 可改），不跟本机的 npm 配置：`package-lock.json` 本来就指向官方源，本机配的镜像可能缺包（2026-11-06 缺 `elkjs`，发布停在打包网页前）。
 - 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`，写进 `channel=release`、build 号（UTC `YYYYMMDDHHMM`）和 `updateURL`：
   - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.persona/web` 时就用二进制里的；有就照旧用目录里的。
-  - **不带任何 skill**：lark-connector 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.persona/skills/`，
-    所以只有一种二进制，我们自己的 hub 也用它（`docs/hub-update.md`）。脚本会确认二进制里没有 lark-connector。
+  - **不带任何 skill**：接飞书网关的 skill 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.persona/skills/`，
+    所以只有一种二进制，我们自己的 hub 也用它（`docs/hub-update.md`）。脚本会确认二进制里只带登记为可再分发的 skill（`scripts/release/check_bundle_skills.py`）。
     `-tags public` 不改变任何代码（`TestOneBuild`），只是给隐私扫描的标记。
   - **版本清单** `dl/latest.json`（各平台压缩包和解压后的 sha256、build 号、commit），不签名（用户的决定，取舍见 `docs/hub-update.md`「安全」）；
     发布前检查 build 号比线上的大、线上那版的 commit 是这次的祖先，server/、web/ 没有没提交的改动。清单带着这次包含的所有提交（`ancestors`）：

@@ -35,10 +35,10 @@ nonisolated enum ServerEvent: Sendable {
     case hookEvent(SessionKey, event: String, message: String?, lastText: String?)
     /// Transcripts that grew on a machine (session id → rev): pull them before they are opened.
     case revs(machineID: String, [String: Int64])
-    /// Feishu conversations with new or changed messages (lark-connector's realtime events, relayed by the hub); account:
+    /// Feishu conversations with new or changed messages (the Lark gateway's realtime events, relayed by the hub); account:
     /// the Feishu account they are in when it is not the hub's own (`ol_account`).
     case lark(feedIDs: [String], settingsChanged: Bool, account: Int?)
-    /// Personal agent sessions (lark-connector agent-bridge, hub/agents.go) that changed: `<source>:<sessionKey>` ids, empty
+    /// Personal agent sessions (the gateway's agent-bridge, hub/agents.go) that changed: `<source>:<sessionKey>` ids, empty
     /// for "something changed, re-pull the list".
     case agents(sessionIDs: [String])
     /// The unified inbox changed (hub/inbox.go): pull it.

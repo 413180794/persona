@@ -37,7 +37,7 @@ describe("lark summary cards", () => {
     expect(forwardedText({ text: "**好的**，下午  给你" })).toBe("好的，下午 给你");
   });
 
-  it("maps lark-connector media paths onto the hub", () => {
+  it("maps Lark gateway media paths onto the hub", () => {
     expect(hubMediaURL("/api/media/avatar-1")).toBe("/api/v1/lark/media/avatar-1");
     expect(hubMediaURL("/api/v1/lark/media/x")).toBe("/api/v1/lark/media/x");
     expect(hubMediaURL(undefined)).toBeUndefined();

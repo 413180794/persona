@@ -105,7 +105,7 @@ var generatedGroups = []string{"claude-settings.json", "claude-hooks", "assistan
 const agentPluginGroup = "agent-plugin"
 
 // hookSettings is the settings with Persona's hooks for a claude whose program is bin: the agents' (assistant false)
-// or the assistant's, which add the lark-connector gate on Bash (larkgate.go).
+// or the assistant's, which add the Feishu gate on Bash (larkgate.go).
 func hookSettings(bin string, assistant bool) map[string]any {
 	cmd := shellQuote(bin) + " hook"
 	blocking := func(matcher string) map[string]any {

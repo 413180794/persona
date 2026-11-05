@@ -159,6 +159,7 @@ type Contributes struct {
 	Providers       []ProviderItem       `json:"providers,omitempty"`
 	API             []APIItem            `json:"api,omitempty"`
 	Assistant       []AssistantItem      `json:"assistant,omitempty"`
+	McpServers      []MCPServerItem      `json:"mcp_servers,omitempty"`
 	UI              []UIItem             `json:"ui,omitempty"`
 	AgentSources    []AgentSourceItem    `json:"agent_sources,omitempty"`
 	Channel         []ChannelItem        `json:"channel,omitempty"`
@@ -181,7 +182,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"} {
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -213,7 +214,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging":
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -493,6 +494,26 @@ type AssistantItem struct {
 	Skills       []string `json:"skills,omitempty"`
 	Instructions string   `json:"instructions,omitempty"`
 	Gate         string   `json:"gate,omitempty"`
+}
+
+// MCPServerItem: an MCP server for the Claude assistant (docs「MCP 服务器」): a command line on the assistant's machine,
+// its tools as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment.
+// Not a shell or an interpreter.
+type MCPServerItem struct {
+	// The server's name for the assistant; not jarvis or persona.
+	ID string `json:"id"`
+	// Looked up on PATH, then in ~/bin.
+	Command string `json:"command"`
+	// A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+	// leave the server out.
+	Env  string   `json:"env,omitempty"`
+	Args []string `json:"args,omitempty"`
+	// Words `<command> --help` must print; otherwise the server is left out.
+	Requires []string `json:"requires,omitempty"`
+	// Tools that run without asking.
+	Allow []string `json:"allow,omitempty"`
+	// Tools never callable. Any other tool goes by the conversation's permission mode.
+	Deny []string `json:"deny,omitempty"`
 }
 
 // UIItem: A place in the apps the extension draws (docs「UI 插槽」).
@@ -1824,12 +1845,7 @@ type MessagingReaction struct {
 	Key   string   `json:"key"`
 	Count int      `json:"count"`
 	Mine  bool     `json:"mine,omitempty"`
-	Users []string `json:"users,omitempty"`
-}
-
-// MessagingDecoration: A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
-type MessagingDecoration struct {
-	Text string `json:"text"`
+	Users []string `json:"users,omitempty"``json:"text"`
 	Icon string `json:"icon,omitempty"`
 	Tone string `json:"tone,omitempty"`
 }
@@ -2311,6 +2327,7 @@ var newDef = map[string]func() any{
 	"APIItem":                   func() any { return new(APIItem) },
 	"APIReceipt":                func() any { return new(APIReceipt) },
 	"AssistantItem":             func() any { return new(AssistantItem) },
+	"MCPServerItem":             func() any { return new(MCPServerItem) },
 	"UIItem":                    func() any { return new(UIItem) },
 	"AgentSourceItem":           func() any { return new(AgentSourceItem) },
 	"ChannelItem":               func() any { return new(ChannelItem) },

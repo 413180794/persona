@@ -866,7 +866,7 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - #1598 把其余的也换了：配对的 Token（iOS）、模型供应商的 API Key（自己填写 / 从插件添加）、飞书机器人的 App Secret（iOS）、连接器登录步骤里的隐藏字段（iOS；Telegram 的 api_hash、两步验证密码，渠道的令牌）、
   权限表单的隐藏字段、终端要的密码（sudo）、邮箱的密码 / 授权码。邮箱密码虽然是真的登录密码，但它属于邮件服务器、只在添加时填一次、hub 加密保存，
   存进「密码」只会挂在 Persona 名下成一条孤儿记录，国内邮箱填的还多是给单个客户端生成的授权码，所以也不让系统保存。
-  故意没换的：飞书加密消息的解锁框（lark-connector 登录密码 / 密钥库密码）每次解锁都要输、hub 不保存，`.textContentType(.password)` 是有意让用户从「密码」里自动填充；
+  故意没换的：飞书加密消息的解锁框（飞书网关登录密码 / 密钥库密码）每次解锁都要输、hub 不保存，`.textContentType(.password)` 是有意让用户从「密码」里自动填充；
   sheet 里只有这一个框、点「解锁」时先清空，不像登录表单（`LarkNativeEncryptionFlowTests` 解锁后也查 `PasswordPrompt.assertNone`）。Mac 上各处照旧是 `SecureField`。
   UI 测试 `SecretFieldTests`（供应商 Key × 2、机器人、邮箱、终端密码），以及 `PermissionInputUITests`、`ChannelSettingsTests.testBindWithAToken`、`TelegramConnectorTests`、`EngineChoiceTests.testManualPairingShowsEngineStep` 末尾的 `PasswordPrompt.assertNone`。
 - `SecretField` 是 UIKit 的框，SwiftUI 的 `.font`、`.multilineTextAlignment` 不会自己传过去：对齐在 `updateUIView` 里按环境的 `multilineTextAlignment` 设（表单行里值靠右），字体固定 `Theme.Font.uiBody`；

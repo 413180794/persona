@@ -7,7 +7,7 @@ import org.junit.Test
 class LarkRichContentTest {
     private fun json(value: String) = Json.parseToJsonElement(value).jsonObject
 
-    @Test fun lark-connectorCardKeepsFieldsReadOnlyButtonsImagesAndUnknownSummaries() {
+    @Test fun larkCardKeepsFieldsReadOnlyButtonsImagesAndUnknownSummaries() {
         val card = parseLarkCard(json("""{
           "header":{"tag":"card_header","children":[{"tag":"plain_text","text":"状态更新"}]},
           "body":{"tag":"body","children":[

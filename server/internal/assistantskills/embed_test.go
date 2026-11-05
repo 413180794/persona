@@ -56,11 +56,11 @@ func TestSyncLinksTheUsersSkills(t *testing.T) {
 	}
 }
 
-// What an older jarvisd copied in (lark-connector, with its stamp) moves to the user's space once and is linked back.
+// What an older jarvisd copied in (a skill, with its stamp) moves to the user's space once and is linked back.
 func TestSyncMovesTheOldCopy(t *testing.T) {
 	user, dir := filepath.Join(t.TempDir(), "skills"), t.TempDir()
-	skill(t, dir, "lark-connector", "Feishu through lark-connector")
-	if err := os.WriteFile(filepath.Join(dir, "lark-connector", "scripts", "ol.sh"), []byte("#!/bin/bash\n"), 0o755); err != nil {
+	skill(t, dir, "lark-gateway", "Feishu through a Lark gateway")
+	if err := os.WriteFile(filepath.Join(dir, "lark-gateway", "scripts", "ol.sh"), []byte("#!/bin/bash\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, legacyStamp), []byte("abc\n"), 0o644); err != nil {
@@ -70,13 +70,13 @@ func TestSyncMovesTheOldCopy(t *testing.T) {
 	if err := Sync(dir, user, nil, func(f string, a ...any) { said = append(said, f) }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(user, "lark-connector", "scripts", "ol.sh")); err != nil {
+	if _, err := os.Stat(filepath.Join(user, "lark-gateway", "scripts", "ol.sh")); err != nil {
 		t.Fatalf("not moved: %v", err)
 	}
-	if st, err := os.Lstat(filepath.Join(dir, "lark-connector")); err != nil || st.Mode()&os.ModeSymlink == 0 {
+	if st, err := os.Lstat(filepath.Join(dir, "lark-gateway")); err != nil || st.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("not linked back: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "lark-connector", "scripts", "ol.sh")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "lark-gateway", "scripts", "ol.sh")); err != nil {
 		t.Fatalf("ol.sh is not reachable where the node looks: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, legacyStamp)); !os.IsNotExist(err) {
@@ -87,30 +87,46 @@ func TestSyncMovesTheOldCopy(t *testing.T) {
 	}
 }
 
-// The user already has lark-connector in their space: the old copy goes, theirs is linked.
+// The user already has the skill in their space: the old copy goes, theirs is linked.
 func TestSyncOldCopyGivesWayToTheUsers(t *testing.T) {
 	user, dir := t.TempDir(), t.TempDir()
-	skill(t, user, "lark-connector", "mine")
-	skill(t, dir, "lark-connector", "old copy")
+	skill(t, user, "lark-gateway", "mine")
+	skill(t, dir, "lark-gateway", "old copy")
 	if err := os.WriteFile(filepath.Join(dir, legacyStamp), []byte("abc\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := Sync(dir, user, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
-	if target, _ := os.Readlink(filepath.Join(dir, "lark-connector")); target != filepath.Join(user, "lark-connector") {
-		t.Fatalf("lark-connector points at %q", target)
+	if target, _ := os.Readlink(filepath.Join(dir, "lark-gateway")); target != filepath.Join(user, "lark-gateway") {
+		t.Fatalf("lark-gateway points at %q", target)
+	}
+}
+
+// An extension's skill copied in next to the old stamp stays the extension's: only what the old jarvisd left moves.
+func TestSyncOldCopyLeavesExtensionSkills(t *testing.T) {
+	user, dir := t.TempDir(), t.TempDir()
+	skill(t, dir, "from-extension", "an extension's")
+	if err := os.WriteFile(filepath.Join(dir, "from-extension", pluginStamp), []byte("ext abc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, legacyStamp), []byte("abc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	migrate(dir, user, quiet)
+	if _, err := os.Stat(filepath.Join(user, "from-extension")); !os.IsNotExist(err) {
+		t.Fatal("an extension's skill moved into the user's space")
 	}
 }
 
 // Without the stamp nothing moves: a directory the user put there is theirs.
 func TestNoStampNoMove(t *testing.T) {
 	user, dir := t.TempDir(), t.TempDir()
-	skill(t, dir, "lark-connector", "placed by hand")
+	skill(t, dir, "lark-gateway", "placed by hand")
 	if err := Sync(dir, user, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(user, "lark-connector")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(user, "lark-gateway")); !os.IsNotExist(err) {
 		t.Fatal("moved a directory jarvisd never put there")
 	}
 }
@@ -120,13 +136,6 @@ func TestBuiltinsAreRedistributable(t *testing.T) {
 	for _, n := range builtinNames() {
 		if Redistributable[n] == "" {
 			t.Errorf("built-in skill %s is not registered as redistributable (embed.go)", n)
-		}
-	}
-	for _, n := range legacyBundled {
-		for _, b := range builtinNames() {
-			if b == n {
-				t.Errorf("%s is copied from elsewhere: it belongs in the user's space, not in jarvisd", n)
-			}
 		}
 	}
 }

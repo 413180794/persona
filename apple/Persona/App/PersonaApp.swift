@@ -100,9 +100,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             ScreenCredentials.forgetAll()
             ScreenUnlock.forgetAll()
         }
-        // `-lark-connectorSendFresh YES`: no Feishu draft and no outbox (unsent, failed messages) from an earlier run:
+        // `-showLarkSendFresh YES`: no Feishu draft and no outbox (unsent, failed messages) from an earlier run:
         // LarkSendTests found earlier runs' failed messages and drafts in the chat (#1627).
-        if d.bool(forKey: "lark-connectorSendFresh") {
+        if d.bool(forKey: "showLarkSendFresh") {
             StateCache.remove(LarkDrafts.stateName)
             for dir in ["lark-outbox-v2", "lark-outbox-v1"] {
                 try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: dir))
@@ -132,7 +132,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 AppModel.shared.openChat = key
             }
         }
-        if d.string(forKey: "lark-connector") != nil { AppModel.shared.selectedTab = .mail }
+        if d.string(forKey: "showLark") != nil { AppModel.shared.selectedTab = .mail }
         if let open = d.string(forKey: "openAssistant"), let key = AppModel.shared.resolve(path: open) {
             AppModel.shared.selectedTab = .assistant
             AppModel.shared.assistantCurrent = key

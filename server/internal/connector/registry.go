@@ -3,7 +3,9 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"regexp"
 	"slices"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 var validID = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
@@ -315,7 +318,11 @@ func (r *Registry) call(ctx context.Context, name string, args json.RawMessage, 
 		if why == "" {
 			why = st.State
 		}
-		return proto.TextResult(fmt.Sprintf("%s is not available: %s", c.Name(), why), true)
+		kind := proto.ToolErrorUnavailable
+		if st.State == StateRateLimited {
+			kind = proto.ToolErrorRateLimited
+		}
+		return proto.ErrorResult(kind, fmt.Sprintf("%s is not available: %s", c.Name(), why), 0)
 	}
 	if t, ok := As[ReadTools](c); ok && has(t.Tools(), name) {
 		return result(t.Call(ctx, name, args))
@@ -335,11 +342,20 @@ func (r *Registry) call(ctx context.Context, name string, args json.RawMessage, 
 	return result(a.Do(ctx, name, args))
 }
 
+// result is a tool's answer, or its error: a program's error with code rate_limited (serve.CodeRateLimited) is a
+// rate limit, its data's retry_after how long it lasts.
 func result(text string, err error) proto.ToolResult {
-	if err != nil {
-		return proto.TextResult(err.Error(), true)
+	if err == nil {
+		return proto.TextResult(text, false)
 	}
-	return proto.TextResult(text, false)
+	if re := (*rpc.Error)(nil); errors.As(err, &re) && re.Code == proto.ToolErrorRateLimited {
+		var data struct {
+			RetryAfter float64 `json:"retry_after"`
+		}
+		_ = json.Unmarshal(re.Data, &data)
+		return proto.ErrorResult(proto.ToolErrorRateLimited, err.Error(), int(math.Ceil(data.RetryAfter)))
+	}
+	return proto.TextResult(err.Error(), true)
 }
 
 // Info is one connector as GET /api/v1/connectors lists it.

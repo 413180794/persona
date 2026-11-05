@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import persona.core.contracts.LarkFeatures
 
-/** Feishu links open in native views only while the hub has the lark-connector extension's features (#1530). */
+/** Feishu links open in native views only while the hub has the Lark extension's features (#1530). */
 class LarkNativeLinkTest {
     private val doc = "https://example.feishu.cn/docx/token"
     private val post = "https://applink.feishu.cn/client/moments/detail?postId=post-1"

@@ -20,7 +20,7 @@
 - 带很多截图的会话，一页更早的消息有 1–5 MB（图片 base64 内嵌）：分页在后台线程解码，最早的十几行一出现就预取前一页。
 - 后台同步别靠「订阅所有会话」：订阅会让 node 每 250ms 刷 transcript、每 400ms 读一次终端（herdr 进程调用）。改成 IM 式的推拉结合：
   hub 只推每个会话的 `rev`（transcript 字节数），App 按 `after_seq` 拉增量（`docs/ios.md` 后台同步）。整个会话列表约 130 KB，
-  别为 rev 变化重发列表，用单独的 `revs` 事件。lark-connector 有实时事件 WebSocket（`/agent/v1/events`，`message.upserted` /
+  别为 rev 变化重发列表，用单独的 `revs` 事件。飞书网关有实时事件 WebSocket（`/agent/v1/events`，`message.upserted` /
   `conversation.upserted`），飞书的推送从这里来。
 - 改 transcript 解析或同步协议，用真实语料验证（`docs/archive/lanes/msg-render-verification.md`）：`corpus_test.go` 让新旧解析器逐文件对比，
   `continuity_corpus_test.go` 按 App 的规则模拟丢推送 / 补洞 / 重写。语料只放 `~/jarvis-corpus`；活跃会话的文件会一边读一边长，对比前先拷一份快照。

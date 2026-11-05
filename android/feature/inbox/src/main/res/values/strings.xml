@@ -56,7 +56,7 @@
     <string name="inbox_empty_search_title">No results</string>
     <string name="inbox_empty_search_text">No messages or mail match “%1$s”.</string>
     <string name="inbox_empty_title">Your inbox is empty</string>
-    <string name="inbox_empty_text">Once the hub has Lark (lark-connector) set up or you add a mail account in Settings, messages and mail that need you show up here.</string>
+    <string name="inbox_empty_text">Once the hub has Lark (a Lark gateway) set up or you add a mail account in Settings, messages and mail that need you show up here.</string>
     <string name="inbox_empty_filtered_title">All caught up</string>
     <string name="inbox_empty_filtered_text">Nothing under this filter.</string>
     <string name="inbox_group_fyi">FYI</string>

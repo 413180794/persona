@@ -26,7 +26,7 @@
   - **消息**（#3162，iOS 的 #392 / #530）：只在 设置 › 连接器 › 飞书 打开「首页显示消息」、且 hub 有飞书会话（`LarkHomePreference.shows`）时出现，在收件箱上面，⌘8；开关关掉时窗口回到原来的分区。
     飞书的私聊和群聊列表在左（约 340pt，宽度可拖、记住，`MacListBeside`），点一个在右边打开聊天（收件箱同一个 `LarkChatView`，可以直接发消息），列表里选中那个；没选时右边一行提示。
     和 iPhone 的「消息」页同一个列表模型、同一种行（`LarkConversationRow`）、账号胶囊（`LarkAccountChips`）和置顶栏（`LarkPinnedShelf`，Mac 上用「展开 / 收起」按钮，没有下拉展开）；搜索在工具栏，标题行右端是「飞书设置」。
-    聊天里点开的人、别的会话在右栏里推进（‹ 在标题行），飞书文档、网页在右侧的链接面板里开，同收件箱（`Mac/Inbox/MacLarkMessagesPage.swift`）。截图：`-integrations.lark-connector.enabled YES -macSection messages`，加 `-openMacLarkChat <会话名>` 打开一个。
+    聊天里点开的人、别的会话在右栏里推进（‹ 在标题行），飞书文档、网页在右侧的链接面板里开，同收件箱（`Mac/Inbox/MacLarkMessagesPage.swift`）。截图：`-integrations.lark.enabled YES -macSection messages`，加 `-openMacLarkChat <会话名>` 打开一个。
   - **收件箱**：全部 / 飞书 / 各个邮箱 / @我 / 私聊 / 群聊 / 邮件 / Agent。
   - **知识库**：项目 / 会话 / 人 / 文档 / 会议 / 日程。
     列表在左（约 340pt，宽度可拖、记住，`MacListBeside`），点一条在右边打开详情、列表里选中那条（`macSelected`），没选时右边一行提示；搜索结果同样在右边打开，详情里再点进去的（某一天、关联条目、合并到的项目）在右栏里推进，‹ 和标题在右栏的标题行（`MacKnowledgePage`、`KBOpenEntry`，#2318）。手机和 Persona 里推进去的知识库照旧是推页面。
@@ -217,7 +217,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 - 配置里没有 `app.bundle_id` 时编出来的 App 一启动就崩（Info.plist 没有 bundle id），本机自用可以在 xcodebuild 后面加 `JARVIS_BUNDLE_ID=<反向域名>`（`docs/lessons/macos.md`）。
 
 - 启动参数和 iOS 一样（`MacLaunchArguments`，只在 DEBUG）：`-pairURL`、`-tab dev|mail|settings|assistant`、`-openSession <machine>/<session>`、
-  `-openAssistant`、`-newAssistant`、`-showNewChat`、`-openChatsFresh`、`-openAgentsFresh`、`-lark-connector`、`-simulateTap`；体验模式 `-demo.on YES`。
+  `-openAssistant`、`-newAssistant`、`-showNewChat`、`-openChatsFresh`、`-openAgentsFresh`、`-showLark`、`-simulateTap`；体验模式 `-demo.on YES`。
 - 截图（**锁屏也能拍**）：`scripts/app/mac_shot.sh <名字> [启动参数…]`，浅色、深色各一张写到 `/tmp/jarvis-mac-shots/<名字>-{light,dark}.png`。
   配对后的「选择引擎」一步：`-openEngineStep <机器 id>`（体验模式的 `server` 就行）。看玻璃材质要截真窗口，见 `docs/lessons/macos.md`。
   默认体验模式；`BUILD=1` 先编译，`APP=` 指定 .app，`SIZE=1280x820`，`DELAY=4`，`APPEARANCES="light dark"`。
@@ -676,7 +676,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
   - 要到 Mac 前看：在对话里往上翻，⌘Q 后重开，看是不是回到同一行（⌘Q 不一定触发 onDisappear）。只带 `-app.tab chats -dev.openChat …` 启动时回到了 Agents 和那个对话，tab 和对话的恢复看过。
   - Mac（2026-11-03 Mac mini 真窗口）：⌘Q 后不带参数重开，回到 Agents 和上次打开的对话；同一次运行里切到别的对话再切回来，回到原来看的那一行。冷启动后的阅读位置原来停在最底部（#597：冷启动只有最近两轮，找不到那一行就放弃），修好后（2026-11-03）离屏截图复验：假 hub 像真 hub 一样分页（`/mock/paging?on=1`），先打开一次写下缓存，再带 `-chat.read.<会话> <「第 5 个问题」的行 id>` 冷启动，落在第 4–9 轮（修之前是第 15 轮和最底部）；iOS 上 `ChatFollowTests` 的冷启动用例管着。
-- [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminalPane, -lark-connector, etc. list in docs/ios.md) — App/PersonaApp.swift + views
+- [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminalPane, -showLark, etc. list in docs/ios.md) — App/PersonaApp.swift + views
   - Mac 上截图一直靠它们：`-tab`、`-openSession`、`-openTerminalPane`、`-openTerminalSettings`、`-openAssistantPage`、`-showInboxAction`、`-showNewChat`、`-addMail`、`-openWelcome`、`-showKnowledgeEntry` 都试过；Mac 自己的另见各节（`-macSection`、`-macAgentAsk`、`-openChatWindow`、`-macWindowLog`…）。
 
 ## 1. Persona tab (assistant)

@@ -174,6 +174,7 @@ export interface Contributes {
   providers?: ProviderItem[];
   api?: APIItem[];
   assistant?: AssistantItem[];
+  mcp_servers?: MCPServerItem[];
   ui?: UIItem[];
   agent_sources?: AgentSourceItem[];
   channel?: ChannelItem[];
@@ -444,6 +445,30 @@ export interface AssistantItem {
   skills?: string[];
   instructions?: string;
   gate?: string;
+}
+
+/**
+ * An MCP server for the Claude assistant (docs「MCP 服务器」): a command line on the assistant's machine, its tools as
+ * mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment. Not a shell or
+ * an interpreter.
+ */
+export interface MCPServerItem {
+  /** The server's name for the assistant; not jarvis or persona. */
+  id: string;
+  /** Looked up on PATH, then in ~/bin. */
+  command: string;
+  /**
+   * A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+   * leave the server out.
+   */
+  env?: string;
+  args?: string[];
+  /** Words `<command> --help` must print; otherwise the server is left out. */
+  requires?: string[];
+  /** Tools that run without asking. */
+  allow?: string[];
+  /** Tools never callable. Any other tool goes by the conversation's permission mode. */
+  deny?: string[];
 }
 
 /**

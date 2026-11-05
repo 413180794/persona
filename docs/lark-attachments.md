@@ -1,6 +1,6 @@
 # 原生飞书图片与文件发送（#410）
 
-> **2026-11-04 起（#1520，插件第 3 步 3c）**：经 lark-connector 接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
+> **2026-11-04 起（#1520，插件第 3 步 3c）**：经飞书网关接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
 > 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/extensions.md`，`docs/plan-extensions.md`「第 3 步」）。
 > 下文描述的行为由插件照原样提供；文中提到的 hub 源文件（`hub/lark*.go`、`internal/lark` 的客户端……）已删。开源版只留官方 lark-cli、飞书机器人、飞书邮箱。
 
@@ -17,9 +17,9 @@
 
 ## Hub 接口
 
-专用 `images` / `files` 接口绑定 Hub 配置的 lark-connector 账号，复用设备认证与角色权限，不开放通用写代理。
-图片校验编码大小与真实 MIME，文件流式上传并限制 Content-Length；保留 lark-connector 的登录失效错误码。老 Hub 提示先升级后发送附件。
-引用 / 话题（扩展的 `lark_attachment_reply`）：`images` 的 JSON 多 `reply_to`（引用的消息）和 `thread`（进它的话题）；`files` 的查询多 `reply_to` 和 `thread_root`（话题根）。上游对应 lark-connector 的 `images` + `replyTo`、`image-uploads` + `messages/{id}/replies`（`replyMode: thread`）、`files` + `replyTo` / `threadRootId`；文件不经 lark-connector 发件箱，没有幂等重试，结果未知时先查历史，不自动重传。
+专用 `images` / `files` 接口绑定 Hub 配置的飞书网关账号，复用设备认证与角色权限，不开放通用写代理。
+图片校验编码大小与真实 MIME，文件流式上传并限制 Content-Length；保留飞书网关的登录失效错误码。老 Hub 提示先升级后发送附件。
+引用 / 话题（扩展的 `lark_attachment_reply`）：`images` 的 JSON 多 `reply_to`（引用的消息）和 `thread`（进它的话题）；`files` 的查询多 `reply_to` 和 `thread_root`（话题根）。上游对应飞书网关的 `images` + `replyTo`、`image-uploads` + `messages/{id}/replies`（`replyMode: thread`）、`files` + `replyTo` / `threadRootId`；文件不经飞书网关发件箱，没有幂等重试，结果未知时先查历史，不自动重传。
 
 ## 限制与回归
 
@@ -28,7 +28,7 @@
 
 发送前先原子保存“清空草稿 + 新增发件箱”，成功后才清空输入并请求网络。保存失败保留原草稿；在发出网络请求前持久化尝试标记。重启时仅已尝试提交的消息变为“发送结果待确认”；排队中尚未提交的消息可显式重试，均不自动重发。已确认回执按 client_id / message_id 对账；已不在最新一页的消息按原消息 ID 只读核验，不把旧附件永久留在底部。
 
-注意：lark-connector 的文件上传不走文字/单图的 outbox 重试协议。文件收到明确拒绝或确认未能联网 / 建连时允许重试；超时、连接中断、服务端错误或损坏回执时只提供“检查发送结果”和“移除本机记录”，不重新上传，也不放回输入框后生成新 ID。成功的文件回执可以省略 message_id，此时保持“已发送”，不提供重发；提供“移除本机记录”，只移除手机端记录，不撤回已发出的飞书消息，不按同名文件猜测回显。保留 client_id 本身不能证明文件重试幂等。上游发送状态只读接口的补齐另见 nwverse/lark-connector#967。
+注意：飞书网关的文件上传不走文字/单图的 outbox 重试协议。文件收到明确拒绝或确认未能联网 / 建连时允许重试；超时、连接中断、服务端错误或损坏回执时只提供“检查发送结果”和“移除本机记录”，不重新上传，也不放回输入框后生成新 ID。成功的文件回执可以省略 message_id，此时保持“已发送”，不提供重发；提供“移除本机记录”，只移除手机端记录，不撤回已发出的飞书消息，不按同名文件猜测回显。保留 client_id 本身不能证明文件重试幂等。上游发送状态只读接口的补齐另见飞书网关上游的对应 issue（记在接飞书的扩展的说明里）。
 
 重启恢复仅在打开该会话时加载和核对，不在后台批量重发。状态文件损坏或版本过新时停止发送，用户可点“恢复输入”，确认“清除草稿并重新开始”后删除此会话的本机记录及媒体，同时清理旧版恢复备份；存储读写失败仅提供重试，不伪装成版本不兼容。临时选取副本随引用释放；持久副本在新状态原子写入后清理。
 
@@ -36,10 +36,10 @@
 `LarkAttachmentFlowTests` 和 `LarkSendTests` 使用本地 mock Hub 验证预览、下拉关闭、失败退出重进、重试、普通文字、引用和话题回复。
 截图见 [附件回归记录](screenshots/lark-attachments/README.md) 和 [持久化回归记录](screenshots/lark-durable/README.md)。真实账号仅只读检查，不发送测试消息。
 
-2026-11-03 只读核对真实 lark-connector：两条已同步消息（一条自己的消息、一条他人消息）的 `GET /agent/v1/messages/{id}` 均返回 `item.id/feedId/isMine/localState`，身份、会话与消息 ID 一致。Hub 的只读透传保留这些字段；mock 同步补齐精确消息路由。未记录消息正文、ID 或凭据，未发送消息 / 已读回执。
+2026-11-03 只读核对真实飞书网关：两条已同步消息（一条自己的消息、一条他人消息）的 `GET /agent/v1/messages/{id}` 均返回 `item.id/feedId/isMine/localState`，身份、会话与消息 ID 一致。Hub 的只读透传保留这些字段；mock 同步补齐精确消息路由。未记录消息正文、ID 或凭据，未发送消息 / 已读回执。
 
-上传总时限按文件大小估算（128 KiB/s 加一分钟处理时间，至少三分钟，100 MiB 约十四分钟），手机与 Hub 使用相同预算；用户取消会立即向上游传递取消。lark-connector 的 pending / failed 本地副本不显示为已发送消息。
+上传总时限按文件大小估算（128 KiB/s 加一分钟处理时间，至少三分钟，100 MiB 约十四分钟），手机与 Hub 使用相同预算；用户取消会立即向上游传递取消。飞书网关的 pending / failed 本地副本不显示为已发送消息。
 
 文字编辑合并为一秒一次的磁盘事务；附件变动、页面离开和切入后台立即保存，发送与放回输入框取消旧的延迟保存。输入框只在本机提交事务期间锁定，网络发送、核对与拉取最新消息不阻塞继续输入。断开 Hub / 移除组时先使队列失效并取消任务，再删除该组的草稿、附件与账号绑定；迟到的 HTTP 或磁盘回调不能恢复已清理的数据。
 
-2026-11-03 只读核对真实 lark-connector `/agent/v1/accounts`：`activeId` 和账号 `id` 均为字符串，选中账号唯一，包含布尔 `signedIn` 和非空字符串 `userId`。按 Hub 请求选择的账号匹配，不用列表中第一个 primary 账号代替；不记录实际 ID、账号或凭据。
+2026-11-03 只读核对真实飞书网关 `/agent/v1/accounts`：`activeId` 和账号 `id` 均为字符串，选中账号唯一，包含布尔 `signedIn` 和非空字符串 `userId`。按 Hub 请求选择的账号匹配，不用列表中第一个 primary 账号代替；不记录实际 ID、账号或凭据。

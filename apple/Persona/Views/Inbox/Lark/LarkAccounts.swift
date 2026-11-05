@@ -27,7 +27,7 @@ final class LarkAccountChoice {
         }
     }
 
-    /// The signed-in accounts, in lark-connector's order; empty from a hub that has no account list (one account).
+    /// The signed-in accounts, in the Lark gateway's order; empty from a hub that has no account list (one account).
     private(set) var accounts: [LarkAccount] = []
     private(set) var defaultID: Int?
     private var selected: Int?

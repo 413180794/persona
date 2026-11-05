@@ -66,7 +66,7 @@
   两家网关的读法迁到私有扩展仓库（归属见 `CLAUDE.local.md`）。规格在 `docs/extensions.md`「额度」「模型供应商」。
 - [ ] 第 2 步（App，#1259，进行中）：额度的网关名用 hub 给的 `gateway_name`（不再写死），假 hub 的示例网关换成中性的；设置 › 模型供应商 › 新增「从扩展添加」。
 - [x] 两个额度扩展已在私有扩展仓库，装在用户的 hub 上实测：经 node 代发查到 `~/.zshrc` 启动器的额度，不认识的网关回「查不了」。
-- [x] 第 3 步（服务端）：lark-connector 整条飞书链路（含公司圈）迁成私有扩展，hub 自己的那份已删（3c，#1520），见下面「第 3 步的方案」「第 3 步做下来」。TRAEX 留在开源仓库（已拍板）。
+- [x] 第 3 步（服务端）：飞书网关整条飞书链路（含公司圈）迁成私有扩展，hub 自己的那份已删（3c，#1520），见下面「第 3 步的方案」「第 3 步做下来」。TRAEX 留在开源仓库（已拍板）。
 - [x] 第 3 步（客户端，3d，#1530）：飞书界面按 `features` 的 `lark` / `lark_moments` 显示（网页 #1542、iOS / Mac #1575、Android #1622），「公司圈」的通用叫法，帖子标题用存档的 feed 名。
 - [x] **第 4 步（服务端，#1284）**：扩展点 `ui`（`plugin_page` / `launcher_section`，`ui.render` / `ui.action`，View 是几种固定的条目，hub 按 `extension.CheckView` 把关；
   启动器页的一节经 `gateway.http` 用 Key 访问网关，扩展看不到 Key）和 `events`（`inbox.changed`、`agent.needs_you`、`agent.finished`，只通知，订阅随权限一起同意）。
@@ -80,13 +80,13 @@
 - [x] git 仓库作为市场（#1373）：`git:<地址>`，hub 浅克隆、用 hub 机器的 SSH 凭据，给没有 token 读文件接口的私有 git 托管用。
 - [ ] 扩展市场（客户端）：iOS / Mac、Android、网页、管理界面的「扩展市场」页。
 
-## 第 3 步的方案：lark-connector 迁成扩展
+## 第 3 步的方案：飞书网关迁成扩展
 
-审计（2026-11-04）：开源仓库里只对特定服务有意义的东西，最大的一块是经 **lark-connector**（第三方、非官方的飞书网页客户端，以用户身份登录）接的整条飞书链路：
-`server/internal/lark` 包（约 3000 行）、hub 的 `lark*.go`、公司圈（飞书 Moments）的收件箱 / 知识库爬取和关联、`lark-connector` 工具、`skills/lark-connector`、node 的写闸门、
-一批提示词和 golden，以及客户端按 lark-connector 的数据形状画的飞书聊天页。已拍板：**整条迁到私有扩展仓库**；开源版保留官方 `lark-cli`、飞书机器人、飞书邮箱这些公开能力。
+审计（2026-11-04）：开源仓库里只对特定服务有意义的东西，最大的一块是经 **飞书网关**（第三方、非官方的飞书网页客户端，以用户身份登录）接的整条飞书链路：
+`server/internal/lark` 包（约 3000 行）、hub 的 `lark*.go`、公司圈（飞书 Moments）的收件箱 / 知识库爬取和关联、node 内置的飞书工具、`skills/` 下飞书网关的 skill 副本、node 的写闸门、
+一批提示词和 golden，以及客户端按飞书网关的数据形状画的飞书聊天页。已拍板：**整条迁到私有扩展仓库**；开源版保留官方 `lark-cli`、飞书机器人、飞书邮箱这些公开能力。
 
-目标：装上扩展，飞书在 App 里和现在一模一样；不装，开源版没有 lark-connector 相关的任何东西（代码、提示词、文档、测试数据），飞书只走 `lark-cli`。
+目标：装上扩展，飞书在 App 里和现在一模一样；不装，开源版没有飞书网关相关的任何东西（代码、提示词、文档、测试数据），飞书只走 `lark-cli`。
 
 ### 新扩展点（开源仓库，通用）
 
@@ -99,8 +99,8 @@
 ### 分阶段
 
 1. **3a 扩展点**（开源仓库，#1262 已做）：`api`、`assistant`、连接器的种类说明；hub 里飞书相关的入口改成走注册表（没有提供 `lark` 的扩展时，飞书相关的接口、工具、收件箱来源都不出现，App 按 `features` 不显示）。
-2. **3b 扩展**（私有扩展仓库 `lark-connector/`）：把 `internal/lark` 和 hub 里 lark-connector 的逻辑搬过去，做成进程扩展：`api`（现有 `/api/v1/lark/…` 接口原样，数据形状不变，App 不用改）、`connectors`（工具、收件箱、知识库归档和条目、实时事件）、`assistant`（lark-connector 技能和说明、写闸门规则）、`/agent`（经 `hub_api`）。对着用户 hub 上的真实 lark-connector 验证。
-3. **3c 清理**（开源仓库）：删掉 `internal/lark` 里 lark-connector 的部分、hub 的 `lark*.go` / 公司圈、提示词和 golden、`skills/lark-connector`、node 的写闸门、同步脚本、文档和测试数据里的相关内容；`lark-cli`、飞书机器人、飞书邮箱留着。部署，在用户的 hub 上装扩展，确认飞书收件箱、聊天、知识库、助手都和以前一样。
+2. **3b 扩展**（私有扩展仓库里接飞书的扩展）：把 `internal/lark` 和 hub 里飞书网关的逻辑搬过去，做成进程扩展：`api`（现有 `/api/v1/lark/…` 接口原样，数据形状不变，App 不用改）、`connectors`（工具、收件箱、知识库归档和条目、实时事件）、`assistant`（飞书网关的技能和说明、写闸门规则）、`/agent`（经 `hub_api`）。对着用户 hub 上的真实飞书网关验证。
+3. **3c 清理**（开源仓库）：删掉 `internal/lark` 里飞书网关的部分、hub 的 `lark*.go` / 公司圈、提示词和 golden、`skills/` 下飞书网关的 skill 副本、node 的写闸门、同步脚本、文档和测试数据里的相关内容；`lark-cli`、飞书机器人、飞书邮箱留着。部署，在用户的 hub 上装扩展，确认飞书收件箱、聊天、知识库、助手都和以前一样。
 4. **3d 客户端**：飞书聊天页按 `features` 显示（扩展提供时）；公司圈的界面改成通用的「飞书公司圈（Moments）」，名字和分组来自扩展，不写死任何租户的名称。
 
 每一阶段一个 PR；3b、3c 互相依赖，3c 在扩展装好验证后再合。
@@ -130,7 +130,7 @@
 - **数据的接续靠 id 不变**：连接器 id、知识库的会话 id（`<来源>-<id>`）、收件箱条目 id、个人 Agent 的会话 id、发送回执的派生 id 都照原样，
   扩展第一次接手时从 hub 已有的状态接着（`archive.chats`、旧条目按块对上），不重读、不重复、不漏。
 - **扩展仓库里的代码可以有内部细节，开源仓库只留扩展点**：闸门规则、提示词、技能、客户端数据形状里只对一个服务有意义的部分都放进扩展包，hub 只认通用的格式。
-- 没装扩展时，开源版和「没配 lark-connector」时一样：飞书只走 lark-cli 和机器人；hub.json 里旧的 `lark.container / token / base_url`、`lark_agent`、`kb.moments` 不再读，
+- 没装扩展时，开源版和「没配飞书网关」时一样：飞书只走 lark-cli 和机器人；hub.json 里旧的 `lark.container / token / base_url`、`lark_agent`、`kb.moments` 不再读，
   有的话 hub 启动时记一行日志，迁到扩展配置（容器名、地址、账号、/agent 开关和启动器、公司圈全量）的步骤见下。
 
 hub.json 的旧配置迁到扩展：装上扩展后在 设置 › 扩展（或 `personad extension config <id> key=value`）填容器名（或地址 + 密钥里的 token）、账号；

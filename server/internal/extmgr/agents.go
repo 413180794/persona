@@ -10,7 +10,7 @@ import (
 )
 
 // agentsPollFallback re-lists agent sessions in case realtime agent-bridge.updated events are missed (the stream
-// is down, or lark-connector predates the event); only sessions whose rank or unread count moved are reported.
+// is down, or the Lark gateway predates the event); only sessions whose rank or unread count moved are reported.
 const agentsPollFallback = 60 * time.Second
 
 func (h *Manager) initAgents() {

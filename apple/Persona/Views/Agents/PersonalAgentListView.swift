@@ -3,7 +3,7 @@ import SwiftUI
 /// Opens the personal agents page from the Agents tab.
 struct PersonalAgentsRoute: Hashable {}
 
-/// lark-connector personal agents (grok_bot, muse, …) with a view menu like lark-connector's (分组方式 / 排序方式 / 显示 /
+/// The Lark gateway's personal agents (grok_bot, muse, …) with a view menu like the Lark gateway's (分组方式 / 排序方式 / 显示 /
 /// 新建分组 / 重置为默认 / 查看全部), search, pins (swipe or long-press) and custom sections. Prefs are shared with
 /// the web through the hub. Re-pulls on the hub's `agents` events.
 struct PersonalAgentListView: View {

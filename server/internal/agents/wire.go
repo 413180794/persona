@@ -5,7 +5,7 @@ import (
 )
 
 // The personal agents' wire shapes: what a source answers and the apps read (docs/protocol.md「个人 Agent」), the same
-// fields every source uses (they began as lark-connector's agent-bridge's, which a plugin serves now).
+// fields every source uses (they began as the Lark gateway's agent-bridge's, which a plugin serves now).
 
 // AgentMaxText is the longest message a source accepts (characters, as JavaScript counts them).
 const AgentMaxText = 20000
@@ -102,4 +102,4 @@ type AgentSearchHit struct {
 	Provider     string `json:"provider"`
 }
 
-// AgentFeed is GET /agent-bridge/feed: sessions shaped as lark-connector feed items (ids prefixed "agent:"); kept raw.
+// AgentFeed is GET /agent-bridge/feed: sessions shaped as Lark gateway feed items (ids prefixed "agent:"); kept raw.

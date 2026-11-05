@@ -133,9 +133,9 @@ class AssistantManagementTest {
         MockWebServer().use { server ->
             val api = HttpAssistantManagement(server.url("/").toString(), "test-token", OkHttpClient())
             server.enqueue(MockResponse().setBody("""{"machine_id":"macbook","machine":"MacBook","skills":[
-                {"name":"lark-connector","description":"Feishu / Lark","source":"builtin"},
+                {"name":"lark-gateway","description":"Feishu / Lark","source":"builtin"},
                 {"name":"weekly-report","source":"user","extra":1},{"name":""}]}"""))
-            assertEquals(AssistantSkills("macbook", "MacBook", listOf(AgentSkill("lark-connector", "Feishu / Lark", "builtin"), AgentSkill("weekly-report", null, "user"))),
+            assertEquals(AssistantSkills("macbook", "MacBook", listOf(AgentSkill("lark-gateway", "Feishu / Lark", "builtin"), AgentSkill("weekly-report", null, "user"))),
                 api.skills())
             val get = server.takeRequest()
             assertEquals("GET", get.method)

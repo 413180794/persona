@@ -1,7 +1,7 @@
 {
   "sidebar": "サイドバー",
   "title": "個人エージェント",
-  "subtitle": "lark-connectorでペアリングした個人エージェント",
+  "subtitle": "Lark ゲートウェイでペアリングした個人エージェント",
   "search_placeholder": "チャットを検索",
   "no_match": "一致するチャットはありません",
   "empty": "個人エージェントのチャットはまだありません",

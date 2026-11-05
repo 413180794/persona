@@ -1025,7 +1025,7 @@ if os.environ.get("MOCK_ORIGINS") == "1":
         ("inbox", "mail:3", "1106 | 收件箱 | 报销单要补发票", 90, "需要你确认：发票抬头用哪个？", "needs_you"),
         ("inbox", "lark:f4:2", "1105 | 收件箱 | 设计评审的时间", 60 * 20, "草稿：周四下午三点可以。", "idle"),
         ("task", "evening", "1105 | 定时 | 晚间复盘", 60 * 16, "今天完成了 4 件事……", "working"),
-        ("lark_agent", "lark-connector", "1105 | 研究 | 群里的发布计划", 60 * 30, "整理好了，三个风险点……", "idle"),
+        ("lark_agent", "larkext", "1105 | 研究 | 群里的发布计划", 60 * 30, "整理好了，三个风险点……", "idle"),
         ("spawned", ASK1, "1105 | 研究 | 竞品定价", 60 * 40, "三家的定价对比如下……", "idle"),
     ]):
         c = assistant_sess(f"auto{i:04d}-0000-4000-8000-{i:012d}", title, minutes, last)
@@ -2444,7 +2444,7 @@ if os.environ.get("MOCK_SCREEN_CHAT"):
 # glyphs must not show on the Agents card).
 if os.environ.get("MOCK_SCREEN_RAW"):
     INTERACTIONS.append(
-        {"id": "scr_macbook_raw", "machine_id": "macbook", "session_id": REVIEW, "session_title": "lark-connector 自动回复逻辑",
+        {"id": "scr_macbook_raw", "machine_id": "macbook", "session_id": REVIEW, "session_title": "飞书自动回复逻辑",
          "cwd": "/Users/me/code/weather", "kind": "screen", "created_at": ago(minutes=1), "expires_at": later(hours=24),
          "screen": "⏺ Bash(git stash && git rebase origin/master)\n  ⎿  Saved working directory and index state\n"
                    "     … 40 more files changed\n  ⎿  (a git step in this command can move the working tree, so the hook stopped it)\n"
@@ -3238,13 +3238,13 @@ TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
 ]
 def _claude_settings():  # 设置 › Claude Code 设置: the node's whitelist (server/internal/node/claudeconfig.go)
     return [
-        {"key": "awaySummaryEnabled", "title": "离开回顾（recap）", "detail": "离开 5 分钟以上回来时，Claude 先写一段进展回顾",
+        {"key": "awaySummaryEnabled", "title": "回来时先说进展", "detail": "离开 5 分钟以上再回来时，Claude 先简单说说这段时间做了什么",
          "type": "bool", "default": True, "value": None},
-        {"key": "alwaysThinkingEnabled", "title": "总是深度思考", "detail": "每轮都开启 extended thinking", "type": "bool",
+        {"key": "alwaysThinkingEnabled", "title": "每次都先想清楚", "detail": "每次回答前都先仔细想一想，更准，但更慢、更费额度", "type": "bool",
          "default": False, "value": True},
-        {"key": "effortLevel", "title": "思考强度", "detail": "越高越慢、越仔细", "type": "enum",
+        {"key": "effortLevel", "title": "思考强度", "detail": "越高想得越仔细，也越慢", "type": "enum",
          "options": ["low", "medium", "high", "xhigh", "max"], "default": "high", "value": None},
-        {"key": "language", "title": "回复语言", "detail": "Claude 回复用的语言，比如「中文」", "type": "string", "default": "", "value": "中文"},
+        {"key": "language", "title": "回复语言", "detail": "Claude 回答用哪种语言，比如「中文」", "type": "string", "default": "", "value": "中文"},
     ]
 
 
@@ -4440,7 +4440,7 @@ LARK_CHATS = [{"id": "f2", "is_mine": False, "name": "设计评审", "is_group":
                "preview_sender": "Tom", "read_position": "299", "updated_at": ago(minutes=30)},
               {"id": "f1", "is_mine": False, "name": "韩梅梅", "is_group": False, "unread": 2, "at_me": False, "muted": False, "preview": "新包发你了",
                "read_position": "99", "updated_at": ago(minutes=2)}]
-# MOCK_LARK_ACCOUNTS=1: a second Feishu account signed in on the lark-connector (docs/feishu.md「多账号」): GET
+# MOCK_LARK_ACCOUNTS=1: a second Feishu account signed in on the Lark gateway (docs/feishu.md「多账号」): GET
 # /api/v1/lark/accounts lists both, ol_account=2 reads its own chats, and the inbox has an item from it.
 LARK_ACCOUNTS = [{"id": 1, "name": "我", "tenant": "示例公司", "signed_in": True, "primary": True, "unread": 17},
                  {"id": 2, "name": "工作号", "tenant": "示例集团", "signed_in": True, "unread": 4},
@@ -4527,11 +4527,11 @@ LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_
 
 BRAVE_CLIMB_ALPHABET = "[removed]"
 def brave_climb(text):
-    """lark-connector''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+    """The Lark gateway''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}
-# GET /api/v1/lark/reactions/quick: what the hub answers when lark-connector has no recent ones (lark.Client.QuickReactions).
+# GET /api/v1/lark/reactions/quick: what the hub answers when the Lark gateway has no recent ones (lark.Client.QuickReactions).
 LARK_QUICK = ["THUMBSUP", "HEART", "SMILE", "LAUGH", "SURPRISED", "CRY", "OK", "DONE"]
 
 
@@ -4595,7 +4595,7 @@ LARK_MESSAGES["f1"] = [_lm(str(pos), who, text, mine=who == "我", mins=mins) fo
     (102, "我", "能赶上，下午三点前给你确认", 8), (103, "我", "文档我晚上看", 5), (104, "我", "新包发你了", 2))]
 
 # Read receipts of my messages (POST /api/v1/lark/conversations/{id}/read-states): (read, unread) by message id; None is
-# a message lark-connector has no receipt for (left out of the answer). My messages not listed here, e.g. ones sent while
+# a message the Lark gateway has no receipt for (left out of the answer). My messages not listed here, e.g. ones sent while
 # the mock runs, are unread by everyone else in the chat (LARK_MEMBER_COUNT - 1).
 LARK_MEMBER_COUNT = {"f1": 2, "f2": 6, "f3": 6}
 LARK_READ_STATES = {
@@ -4875,7 +4875,7 @@ for _c in LARK_CHATS + FS_CONVS:
         _c.setdefault(_k, False)
 
 # MOCK_LARK_TOPIC=1 (#1087): a topic group, 版本发布 (inbox f4, and on the 消息 page). Each message is a topic, its replies
-# are in its thread, which lark-connector answers with the topic first and then the newest replies (`limit` of them). What the
+# are in its thread, which the Lark gateway answers with the topic first and then the newest replies (`limit` of them). What the
 # topic cards have to draw: three topics in a row from the release bot (each its own card, not run together like chat
 # messages), a card taller than the fold (展开 / 收起), one of mine, a link, and topics with 0, 1, 2 and 6 replies.
 LARK_TOPIC_FEEDS = set()
@@ -4905,7 +4905,7 @@ if os.environ.get("MOCK_LARK_TOPIC"):
               "修复深色模式下二维码看不清", "安装包小了 8 MB"]  # long enough that what the fold hides reaches past the card's foot
     LARK_MESSAGES["f4"] = [
         # 风灵月影 (LarkMessageDisplayTests' f2, as topics): an edited topic with an old version kept, whose newest reply
-        # was recalled with its text kept; a recalled topic lark-connector kept (with reactions and a reply, which a recalled
+        # was recalled with its text kept; a recalled topic the Lark gateway kept (with reactions and a reply, which a recalled
         # topic does not show), and one it did not (the text must never show).
         _topic(397, "Tom", "周四上架，商店审核预计一天", mins=29 * 60, edited=True, edit_history=[
             {"edited_at": "2026-01-01T10:00:00Z", "text": "周三上架", "parts": [{"kind": "text", "text": "周三上架"}]}],
@@ -4968,7 +4968,7 @@ if os.environ.get("MOCK_LARK_RICH"):
                 {"kind": "text", "text": "周日休息", "metadata": {"blocks": _fsblk(("l", "ordered-list"), ("i2", "list-item"))}},
                 {"kind": "text", "text": "装备清单见上面", "metadata": {"marks": ["italic"], "blocks": _fsblk(("q", "quote"))}}])
 
-# GET /mock/lark_churn?feed=f3&n=16&ms=500: n rounds, ms apart, of the hub relaying lark-connector's realtime events for one
+# GET /mock/lark_churn?feed=f3&n=16&ms=500: n rounds, ms apart, of the hub relaying the Lark gateway's realtime events for one
 # chat ({"type":"lark"}, lark_events.go). &new=1: someone writes in the chat first each round (a busy group); &inbox=1:
 # the chat's inbox item changes too and `inbox` is pushed, as the hub's collection after the event does.
 # GET /mock/lark_churned tells how many rounds have gone out. Without MOCK_LARK (the chats of LARK_MESSAGES).
@@ -5020,7 +5020,7 @@ def fs_page(feed, q):
 
 
 def fs_push(feed):
-    """{"type":"lark"} to every open socket (the hub relays lark-connector's realtime events like this)."""
+    """{"type":"lark"} to every open socket (the hub relays the Lark gateway's realtime events like this)."""
     for send, _ in list(LIVE):
         try: send({"type": "lark", "feed_ids": [feed]})
         except Exception: pass
@@ -8054,7 +8054,7 @@ HUB_UPDATE_HISTORY = [
      "started": ago(hours=40), "ended": ago(hours=40), "result": "rolled_back", "reason": "这些机器 2 分钟内没连回来：构建服务器", "auto": True},
 ]
 
-MOCK_SKILLS = [{"name": "lark-connector", "description": "Feishu / Lark through lark-connector's agent API: messages, docs, calendar, tasks.", "source": "user"},
+MOCK_SKILLS = [{"name": "lark-gateway", "description": "Feishu / Lark through a Lark gateway's agent API: messages, docs, calendar, tasks.", "source": "user"},
                {"name": "weekly-report", "description": "Draft the week's report from the calendar, docs and chats.", "source": "user"}]
 
 LIVE = []  # (send, subscribed session ids) of each open WebSocket
@@ -10307,7 +10307,7 @@ class H(BaseHTTPRequestHandler):
             f = file_read(q.get("path", [""])[0], q.get("cwd", [""])[0], int(q.get("offset", ["0"])[0] or 0), q.get("stream", [""])[0] == "1")
             if not f: return self.send_json({"error": "stat %s: no such file or directory" % q.get("path", [""])[0]}, 404)
             return self.send_json(file_streamed(f, q))
-        # lark-connector's personal agents (hub agents.go): none here, as on a hub without lark-connector; the web's sidebar hid
+        # The Lark extension's personal agents (hub agents.go): none here, as on a hub without the Lark extension; the web's sidebar hid
         # the section only after these answered, and showed 「个人 Agent 加载失败」 on the 404 instead.
         if p == "/api/v1/agents": return self.send_json({"sources": []})
         if p == "/api/v1/agents/sessions": return self.send_json({"sessions": [], "items": []})
@@ -10413,10 +10413,10 @@ class H(BaseHTTPRequestHandler):
             unavailable = LARK_NATIVE_OLK.get("unavailable", "")
             if unavailable == "hub":
                 return self.send_json({"error": "not found"}, 404)
-            if unavailable == "lark-connector":
-                return self.send_json({"code": "lark_lark-connector_upgrade_required", "error": "升级 lark-connector 后可使用加密消息。请在 Hub 连接的 lark-connector 中检查更新，升级后重新检查即可继续。"}, 426)
+            if unavailable == "gateway":
+                return self.send_json({"code": "lark_gateway_upgrade_required", "error": "升级飞书网关后可使用加密消息。请在 Hub 连接的飞书网关中检查更新，升级后重新检查即可继续。"}, 426)
             if unavailable == "authorization":
-                return self.send_json({"code": "OLK_VAULT_NATIVE_NOT_AUTHORIZED", "error": "尚未开启手机加密。请在 Hub 和 lark-connector 的部署配置中开启原生加密授权，再重新检查。"}, 403)
+                return self.send_json({"code": "OLK_VAULT_NATIVE_NOT_AUTHORIZED", "error": "尚未开启手机加密。请在 Hub 和飞书网关的部署配置中开启原生加密授权，再重新检查。"}, 403)
             return self.send_json({"accountId": "123", "configured": True, "locked": LARK_NATIVE_OLK["locked"], "unifiedPassword": False})
         if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
             return self.send_json(LARK_PIN_FIXTURE)
@@ -10456,7 +10456,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(page)
         if p.startswith("/api/v1/lark/messages/") and p.endswith("/thread"):
             thread = LARK_THREADS.get(p.split("/")[5], [])
-            if thread and thread[0].get("thread_id"):  # a topic: lark-connector puts it first, then the newest `limit` replies
+            if thread and thread[0].get("thread_id"):  # a topic: the Lark gateway puts it first, then the newest `limit` replies
                 page = lark_window(thread[1:], q)
                 return self.send_json(dict(page, messages=thread[:1] + page["messages"]))
             return self.send_json(lark_window(thread, q))
@@ -10710,7 +10710,7 @@ class H(BaseHTTPRequestHandler):
             return self.upload()
         self.last_body = self.body()
         p = urlparse(self.path).path
-        if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith("/api/v1/extensions/lark-connector/-/ui/")) and \
+        if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith("/api/v1/extensions/%s/-/ui/" % lark_messaging.EXTENSION)) and \
                 lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if pins_route(self, p): return
         if looks_route(self, self.command, p, self.last_body): return
@@ -11243,15 +11243,15 @@ class H(BaseHTTPRequestHandler):
             if body.get("name") == "idless-receipt.txt":
                 return self.send_json({"message_id": ""})
             return self.send_json({"message_id": m["id"]})
-        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # 飞书发消息: lark-connector takes a moment
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # 飞书发消息: the Lark gateway takes a moment
             body, feed = json.loads(self.last_body or b"{}"), p.split("/")[5]
             if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
-            if body.get("text", "").startswith("**字") and not LARK_DISPLAY.get("brave_climb_codec"):  # lark-connector refuses them
+            if body.get("text", "").startswith("**字") and not LARK_DISPLAY.get("brave_climb_codec"):  # the Lark gateway refuses them
                 return self.send_json({"error": "Enable the Brave Climb message codec in FLiNG Trainer before sending encoded messages",
                                        "code": "BRAVE_CLIMB_CODEC_DISABLED"}, 403)
             time.sleep(lark_send_seconds())
             if "#fail" in body.get("text", ""):
-                return self.send_json({"error": "lark-connector: send timed out"}, 502)
+                return self.send_json({"error": "lark: send timed out"}, 502)
             msgs = LARK_MESSAGES.setdefault(feed, [])
             pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
             m = _lm(pos, "我", body.get("text", ""), mine=True, mins=0)
@@ -11268,7 +11268,7 @@ class H(BaseHTTPRequestHandler):
             if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
             time.sleep(lark_send_seconds())
             if "#fail" in body.get("text", ""):
-                return self.send_json({"error": "lark-connector: reply timed out"}, 502)
+                return self.send_json({"error": "lark: reply timed out"}, 502)
             now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             feed, target = next(((f, m) for f, ms in LARK_MESSAGES.items() for m in ms if m["id"] == mid), (None, None))
             if body.get("thread"):
@@ -11945,7 +11945,7 @@ class H(BaseHTTPRequestHandler):
                 n = len(data)
                 hdr = bytes([0x81]) + (bytes([n]) if n < 126 else bytes([126]) + struct.pack(">H", n) if n < 65536 else bytes([127]) + struct.pack(">Q", n))
                 self.wfile.write(hdr + data); self.wfile.flush()
-            if MOCK_MESSAGING and obj.get("type") == "lark":  # what the lark-connector extension's messaging.changed becomes
+            if MOCK_MESSAGING and obj.get("type") == "lark":  # what the Lark extension's messaging.changed becomes
                 send(lark_messaging.event_of(obj))
 
         SOCKETS.add(self.connection)
@@ -12400,7 +12400,7 @@ MOCK_HELP.append("MOCK_AUTO_CONVERSATIONS=1  助手对话带来源 origin（feat
 
 
 
-# ---------- area: Feishu through the lark-connector plugin (#1530) ----------
+# ---------- area: Feishu through the Lark extension (#1530) ----------
 # The plugin adds `lark` (the 消息 page, the chats, the native readers of documents and 公司圈 posts, /api/v1/lark/…) and
 # `lark_moments` (公司圈) to the features, its `lark_attachments` / `lark_native_encryption` with them. MOCK_NO_LARK=1: a
 # hub without the plugin: none of those features, /api/v1/lark/… 404 and no 飞书 connector.
@@ -12437,7 +12437,7 @@ if os.environ.get("MOCK_MOMENTS_FEED"):  # the project's posts say which feed th
         for _m in _d.get("moments") or []:
             _m["feed"] = os.environ["MOCK_MOMENTS_FEED"]
 MOCK_HELP.append("MOCK_MOMENTS_FEED=<名字>  知识库的公司圈帖子带 feed（项目的「相关<名字>」和存档帖子页的标题用它；不设时叫「公司圈」）")
-MOCK_HELP.append("MOCK_NO_LARK=1  没装 lark-connector 插件的 hub：features 里没有 lark / lark_moments / lark_attachments，/api/v1/lark/… 404，连接器里没有飞书")
+MOCK_HELP.append("MOCK_NO_LARK=1  没装接飞书的扩展的 hub：features 里没有 lark / lark_moments / lark_attachments，/api/v1/lark/… 404，连接器里没有飞书")
 MOCK_HELP.append("MOCK_INBOX_TRIAGE=<状态>[:<条数>[:<来源名，逗号隔开>[:<原因>]]]  收件箱列表带 triage（新条目在等分拣，#1773）：unconfigured / paused / error / timeout / behind / ok；不设时没有 triage（老 hub）")
 
 # ---------- area: commenting in the Feishu document reader (#1290) ----------
@@ -12452,7 +12452,7 @@ DOC_WRITES = []
 
 
 def _doc_reply(rid, name, text, minutes, mention=None, mentions=()):
-    """A reply as lark-connector gives it: text, with each @ a mention segment of its own."""
+    """A reply as the Lark gateway gives it: text, with each @ a mention segment of its own."""
     content = [{"kind": "text", "text": text}]
     if mention:
         content = [{"kind": "mention", "text": "@" + mention}, {"kind": "text", "text": " " + text}]
@@ -12493,7 +12493,7 @@ if DOC_COMMENTS:
         if u.path == "/api/v1/lark/raw/documents/comments":
             return handler.send_json({"threads": DOC_THREADS})
         if u.path == "/api/v1/lark/raw/documents/read" and (q.get("format") or [""])[0] == "markdown":
-            # The reader asks for Markdown first: the made-up document as lark-connector exports it.
+            # The reader asks for Markdown first: the made-up document as the Lark gateway exports it.
             return handler.send_json({"type": "docx", "token": "AbC123", "title": LARK_DOCUMENT["title"], "url": (q.get("url") or [""])[0],
                                       "authority": {"copy": True, "print": True, "export": True},
                                       "markdown": "# 新版图标评审\n\n这一版统一了圆角和描边，深色模式单独调了对比度。\n\n## 待确认\n\n- 圆角统一成 12 还是 14\n- 小尺寸下描边是否加粗\n"})

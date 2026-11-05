@@ -100,7 +100,7 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun larkPinTarget(feedId: String, messageId: String, accountId: String, topic: Boolean): LarkPinTarget = error("Chat pins unavailable")
     /** 添加 Pin ([pinId] null) or 移除 Pin; throws [LarkPinFailure] when the hub answers otherwise. */
     suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String?): Unit = error("Chat pins unavailable")
-    /** Read receipts of my messages; ones lark-connector has none for are left out. */
+    /** Read receipts of my messages; ones the Lark gateway has none for are left out. */
     suspend fun larkReadStates(feedId: String, messageIds: List<String>): List<LarkReadState> = emptyList()
     /** The account''t be read (then kept content stays hidden and nothing is decoded). */
     suspend fun larkMessageDisplay(): LarkMessageDisplay? = null

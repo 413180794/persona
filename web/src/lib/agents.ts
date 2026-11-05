@@ -1,4 +1,4 @@
-// 个人 Agent: lark-connector's paired personal agents through the hub's /api/v1/agents (docs/protocol.md). A session id is
+// 个人 Agent: the Lark gateway's paired personal agents through the hub's /api/v1/agents (docs/protocol.md). A session id is
 // "<source>:<sessionKey>" and bridge keys contain "/", so the whole id is percent-encoded in paths.
 import { useSyncExternalStore } from "react";
 import { t } from "../i18n";

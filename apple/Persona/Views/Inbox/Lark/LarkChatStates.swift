@@ -3,7 +3,7 @@ import Foundation
 /// Why a Feishu chat could not be loaded, in the page's words: what happened (`title`), what to do (`message`).
 nonisolated struct LarkLoadProblem: Equatable, Sendable {
     enum Kind: Equatable, Sendable {
-        /// lark-connector on the hub's machine lost its Feishu login: only signing in there again helps.
+        /// The Lark gateway on the hub's machine lost its Feishu login: only signing in there again helps.
         case notLoggedIn
         /// The phone cannot reach the hub.
         case offline
@@ -19,16 +19,16 @@ nonisolated struct LarkLoadProblem: Equatable, Sendable {
     /// network is left to the title bar, as everywhere else (Error.shown).
     var inline: String?
 
-    /// The hub's code for lark-connector without a Feishu login (docs/protocol.md, Feishu routes).
+    /// The hub's code for the Lark gateway without a Feishu login (docs/protocol.md, Feishu routes).
     static let notLoggedInCode = "lark_not_logged_in"
 
     /// `subject` names what did not load in the catch-all title (这个会话, 这个话题).
     static func of(_ error: Error, subject: String = "这个会话") -> LarkLoadProblem {
         if isNotLoggedIn(error) {
             return LarkLoadProblem(kind: .notLoggedIn, title: "飞书登录已失效",
-                                   message: "hub 所在机器上的 lark-connector 没有登录飞书。在那台机器上重新登录 lark-connector，再回来重试。",
+                                   message: "hub 所在机器上的飞书网关没有登录飞书。在那台机器上重新登录飞书网关，再回来重试。",
                                    symbol: Theme.Icon.credentials,
-                                   inline: "飞书登录已失效：在 hub 所在的机器上重新登录 lark-connector")
+                                   inline: "飞书登录已失效：在 hub 所在的机器上重新登录飞书网关")
         }
         if error.isOffline {
             return LarkLoadProblem(kind: .offline, title: "连不上 hub", message: "检查网络连接后重试。",
@@ -42,7 +42,7 @@ nonisolated struct LarkLoadProblem: Equatable, Sendable {
                                symbol: Theme.Icon.error, inline: error.shown)
     }
 
-    /// The hub's code says so; a hub from before the code (502 with lark-connector's「未登录飞书」) is read by its words.
+    /// The hub's code says so; a hub from before the code (502 with the Lark gateway's「未登录飞书」) is read by its words.
     static func isNotLoggedIn(_ error: Error) -> Bool {
         guard let e = error as? APIError else { return false }
         return e.code == notLoggedInCode || (e.status == 502 && e.message.contains("未登录飞书"))

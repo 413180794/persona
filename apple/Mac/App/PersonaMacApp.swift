@@ -283,7 +283,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
 
 #if DEBUG
 /// The iOS app's DEBUG launch arguments (`PersonaApp.swift`), read the same way: `-pairURL`, `-tab`, `-openSession`,
-/// `-openAssistant`, `-newAssistant`, `-showNewChat`, `-openChatsFresh`, `-openAgentsFresh`, `-lark-connector`, `-simulateTap`.
+/// `-openAssistant`, `-newAssistant`, `-showNewChat`, `-openChatsFresh`, `-openAgentsFresh`, `-showLark`, `-simulateTap`.
 /// `-demo.on YES` needs nothing here: AppModel reads it from the defaults.
 enum MacLaunchArguments {
     @MainActor static func apply() {
@@ -302,7 +302,7 @@ enum MacLaunchArguments {
         }
         // A tab, a chat or a conversation named on the command line shows that, not the 知识库 / 机器 remembered
         // from last time (MacShell's onChange is not there yet to clear it).
-        if ["tab", "openSession", "openAssistant", "newAssistant", "lark-connector"].contains(where: { d.object(forKey: $0) != nil }) {
+        if ["tab", "openSession", "openAssistant", "newAssistant", "showLark"].contains(where: { d.object(forKey: $0) != nil }) {
             MacShellState.shared.section = nil
         }
         switch d.string(forKey: "tab") {
@@ -327,7 +327,7 @@ enum MacLaunchArguments {
                 model.openChat = key
             }
         }
-        if d.string(forKey: "lark-connector") != nil { model.selectedTab = .mail }
+        if d.string(forKey: "showLark") != nil { model.selectedTab = .mail }
         if let key = sessionKey(d.string(forKey: "openAssistant")) {
             model.selectedTab = .assistant
             model.assistantCurrent = key

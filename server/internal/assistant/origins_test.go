@@ -127,8 +127,8 @@ func TestOriginOfARequest(t *testing.T) {
 	}
 	for _, c := range []struct{ role, ext, purpose, origin, ref string }{
 		{"", "", "", OriginUser, ""},
-		{"full", "lark-connector", "", OriginUser, ""},
-		{"extension", "lark-connector", "lark.agent", OriginLarkAgent, "lark-connector"},
+		{"full", "larkext", "", OriginUser, ""},
+		{"extension", "larkext", "lark.agent", OriginLarkAgent, "larkext"},
 		{"extension", "github", "", OriginExtension, "github"},
 	} {
 		id := post(c.role, c.ext, c.purpose)

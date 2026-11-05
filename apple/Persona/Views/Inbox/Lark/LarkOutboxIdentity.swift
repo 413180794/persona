@@ -31,7 +31,7 @@ nonisolated struct LarkOutboxIdentity: Hashable, Sendable {
 }
 
 extension APIClient {
-    /// The agent route reports the account selected by the Hub's lark-connector account header.
+    /// The agent route reports the account selected by the Hub's gateway account header.
     /// A primary account elsewhere in the list must never override the selected account.
     func larkAccountID() async throws -> String {
         if config.isDemo { return "demo" }

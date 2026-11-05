@@ -3,7 +3,7 @@ import SwiftUI
 import Testing
 @testable import Jarvis
 
-@MainActor struct lark-connectorShellTests {
+@MainActor struct LarkMessagesShellTests {
     @Test func messagesLaunchBuildsOnlyItsPageAndKeepsSettingsOnIt() {
         let model = AppModel()
         model.selectedTab = .feishu

@@ -1,7 +1,7 @@
 {
-  "setup_missing": "lark-connector 的版本还没有个人 Agent，升级 lark-connector 后再试",
-  "setup_disabled": "lark-connector 没有开启个人 Agent：在它的部署里设置 lark-connector_AGENT_BRIDGE=true 后重启",
-  "setup_no_accounts": "还没有连接个人 Agent 账号：在 lark-connector 的设置里添加 Cue 或 Grok Bot",
+  "setup_missing": "飞书网关的版本还没有个人 Agent，升级飞书网关后再试",
+  "setup_disabled": "提供个人 Agent 的扩展没有开启它：按扩展的说明开启后重启",
+  "setup_no_accounts": "还没有连接个人 Agent 账号：在飞书网关的设置里添加 Cue 或 Grok Bot",
   "other": "其他",
   "group_date": "日期",
   "group_provider": "来源",

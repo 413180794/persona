@@ -12,7 +12,10 @@ import {
   MAIL_KINDS,
   mailRequest,
   mailSummary,
+  optionText,
   pickMachine,
+  settingDetail,
+  settingTitle,
   textValue,
   valueText,
   withValue,
@@ -70,11 +73,26 @@ describe("agent settings", () => {
     expect(applySummary([{ id: "b", name: "NAS", error: "x" }]).text).toBe("没有改成（NAS：x）");
   });
 
+  it("name Claude Code's options in plain words, without the settings-file key (#3599)", () => {
+    expect(settingTitle(recap)).toBe("回来时先说进展");
+    expect(settingDetail(recap)).toContain("离开 5 分钟");
+    expect(optionText("effortLevel", "xhigh")).toBe("很高");
+    expect(optionText("autoUpdatesChannel", "latest")).toBe("最新版");
+    // An option or key the web does not know stays as the node wrote it.
+    expect(optionText("effortLevel", "ultra")).toBe("ultra");
+    expect(optionText("approval_policy", "never")).toBe("never");
+    const unknown: AgentSetting = { key: "newThing", title: "新东西", detail: "说明", type: "bool" };
+    expect(settingTitle(unknown)).toBe("新东西");
+    expect(settingDetail(unknown)).toBe("说明");
+  });
+
   it("say values in words", () => {
     expect(valueText(true)).toBe("开");
     expect(valueText(false)).toBe("关");
     expect(valueText(null)).toBe("默认");
     expect(valueText("high")).toBe("high");
+    expect(valueText("high", "effortLevel")).toBe("高");
+    expect(valueText("stable", "autoUpdatesChannel")).toBe("稳定版");
     expect(AGENT_TEXT.codex.path).toBe("codex-settings");
     expect(AGENT_TEXT.claude.footer).toContain("~/.claude/settings.json");
   });

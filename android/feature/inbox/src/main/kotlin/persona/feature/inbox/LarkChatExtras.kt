@@ -29,7 +29,7 @@ import java.time.format.FormatStyle
 fun LarkMessageDisplay.showsBody(message: LarkMessage): Boolean =
     !message.recalled || (antiRecall && message.retained && message.parts.isNotEmpty())
 
-/** 已编辑 opens the earlier versions with 编辑历史 on, when lark-connector kept any. */
+/** 已编辑 opens the earlier versions with 编辑历史 on, when the Lark gateway kept any. */
 fun LarkMessageDisplay.showsHistory(message: LarkMessage): Boolean =
     showEditHistory && showsBody(message) && message.editHistory.isNotEmpty()
 
@@ -235,7 +235,7 @@ private fun larkPinTime(text: String): String? = runCatching {
 
 // MARK: Read receipts
 
-/** lark-connector's read receipt of one of my messages: how many in the chat have read it and how many have not. */
+/** The Lark gateway's read receipt of one of my messages: how many in the chat have read it and how many have not. */
 data class LarkReadState(val messageId: String, val readCount: Int, val unreadCount: Int) {
     /** Read by everyone it went to: it will not change, so it is not asked about again. */
     val isFinal: Boolean get() = unreadCount == 0 && readCount > 0

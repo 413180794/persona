@@ -22,7 +22,7 @@ import Testing
 
     @Test func nativeFailuresPreserveAuthorizationAndAccountErrors() async throws {
         let hub = FakeHub()
-        for (status, code) in [(403, "OLK_VAULT_NATIVE_NOT_AUTHORIZED"), (401, "lark_not_logged_in"), (404, "conversation_not_found"), (426, "lark_lark-connector_upgrade_required")] {
+        for (status, code) in [(403, "OLK_VAULT_NATIVE_NOT_AUTHORIZED"), (401, "lark_not_logged_in"), (404, "conversation_not_found"), (426, "lark_gateway_upgrade_required")] {
             hub.on("GET", "/api/v1/lark/encryption") { _ in throw APIError(status: status, message: "fixture", fields: ["code": code]) }
             do {
                 _ = try await hub.client.larkEncryptionStatus()

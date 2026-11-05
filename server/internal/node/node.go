@@ -162,7 +162,7 @@ type Node struct {
 	fileUse map[string]uint64
 	useTick uint64
 
-	// lark-connector for the assistant (larkgate.go): the hub's config, cached, and the writes 本会话总是允许 let through.
+	// The Feishu gate for the assistant (larkgate.go): the hub's config, cached, and the writes 本会话总是允许 let through.
 	larkCfg     proto.AssistantLark
 	larkCfgAt   time.Time
 	larkAllowed map[string]bool

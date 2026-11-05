@@ -1,4 +1,4 @@
-// A personal agent session's avatar: the hub serves lark-connector's image at /agents/sessions/{id}/avatar (SVGs already
+// A personal agent session's avatar: the hub serves the Lark gateway's image at /agents/sessions/{id}/avatar (SVGs already
 // rasterized to PNG); an <img> can't send a header, so the token rides in the query like other hub images. The
 // version keys the browser cache; without an avatar (or if it fails to load) the title's first letter is shown.
 import { BASE } from "../../lib/base";

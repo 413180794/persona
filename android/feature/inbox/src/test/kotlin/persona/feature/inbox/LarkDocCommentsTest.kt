@@ -114,10 +114,10 @@ class LarkDocCommentsTest {
         val api = FakeApi()
         val model = LarkDocCommentsModel(doc, api)
         model.draft = "好"
-        api.fail = HubFailure(HubError.Server, "lark-connector 未登录飞书", status = 401)
+        api.fail = HubFailure(HubError.Server, "飞书网关未登录飞书", status = 401)
         model.send()
         assertEquals("好", model.draft)
-        assertEquals(LarkDocCommentFailure(R.string.inbox_lark_doc_comments_send_failed, "lark-connector 未登录飞书"), model.failure)
+        assertEquals(LarkDocCommentFailure(R.string.inbox_lark_doc_comments_send_failed, "飞书网关未登录飞书"), model.failure)
         model.send()
         assertEquals(api.writes[0].second["client_id"], api.writes[1].second["client_id"])
         model.draft = "好的"

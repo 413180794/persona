@@ -28,7 +28,6 @@ SERVICE_SHORT_REF = re.compile(r"(?<![\w/])wechat-connector(?:-[\w-]+)?#\d+", re
 
 # Repositories Persona depends on in the open; the docs and code cite them as sources.
 ALLOWED_REPOS = {
-    "lark-connector": "the Lark gateway Persona's Lark connector runs on (docs/lark-*.md)",
     "contribution": "the public contribution board Persona tiers are read from (persona_tiers.go)",
     "relay-history": "the usage gateway Persona reads quotas from (usagesource/relay-history.go)",
 }

@@ -1,4 +1,4 @@
-// 个人 Agent: one lark-connector personal agent session — its messages (older pages on demand), a send box with an
+// 个人 Agent: one Lark gateway personal agent session — its messages (older pages on demand), a send box with an
 // idempotent clientId, marked read on open; re-pulled when the hub broadcasts {"type":"agents"}.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AgentAvatar, type AvatarSession } from "./AgentAvatar";

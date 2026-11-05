@@ -28,6 +28,7 @@ let replies: number[] = [];
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { "Content-Type": "application/json" } });
 function hub(input: RequestInfo | URL): Promise<Response> {
   const path = String(input).split("?")[0]!;
+  if (path.endsWith("/reconnect")) return Promise.resolve(json({ ok: true }));
   if (path !== "/api/v1/metrics") return Promise.resolve(json({ error: "not found" }, 404));
   const status = replies.length > 1 ? replies.shift()! : replies[0] ?? 200;
   return Promise.resolve(status === 200 ? json({ machines: [] }) : json({ error: "unavailable" }, status));
@@ -45,6 +46,7 @@ beforeEach(() => {
   replies = [];
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   vi.stubGlobal("fetch", vi.fn(hub));
+  history.replaceState(null, "", "/machines");
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -86,6 +88,56 @@ describe("Machines", () => {
     const labels = [...host.querySelectorAll("button")].map((b) => b.textContent?.trim());
     expect(labels).toContain("重新连接");
     expect(labels).not.toContain("重连");
+  });
+
+  // #3578: on a phone the card's 详情 link alone was a 48 × 17 target; a tap anywhere on the card opens the machine.
+  const click = (el: Element) => act(() => void el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })));
+  const card = () => host.querySelector("section")!;
+
+  it("opens the machine from a tap on the card's blank space", async () => {
+    fake.machines = [{ id: "mac", name: "电脑 A", online: true }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    const cpu = [...card().querySelectorAll("div")].find((d) => d.textContent === "CPU")!;
+    expect(cpu.closest("a, button")).toBeNull(); // really blank space, not inside a link
+    click(cpu);
+    expect(location.pathname).toBe("/machines/mac");
+  });
+
+  it("keeps 重新连接 its own: it reconnects and does not open the machine", async () => {
+    fake.machines = [{ id: "mac", name: "电脑 A", online: false }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    const button = [...card().querySelectorAll("button")].find((b) => b.textContent?.trim() === "重新连接")!;
+    click(button);
+    await flush();
+    expect(location.pathname).toBe("/machines");
+    expect(vi.mocked(fetch).mock.calls.map(([u]) => String(u))).toContain("/api/v1/machines/mac/reconnect");
+  });
+
+  it("does not open the machine while text on the card is being selected", async () => {
+    fake.machines = [{ id: "mac", name: "电脑 A", online: true }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    const range = document.createRange();
+    range.selectNodeContents(card().querySelector("h2")!);
+    getSelection()!.addRange(range);
+    click(card());
+    getSelection()!.removeAllRanges();
+    expect(location.pathname).toBe("/machines");
+  });
+
+  it("leaves the card a plain region: keyboards reach the title link, and no control sits in another", async () => {
+    fake.machines = [{ id: "mac", name: "电脑 A", online: false }];
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    const c = card();
+    expect(c.getAttribute("role")).toBeNull();
+    expect(c.hasAttribute("tabindex")).toBe(false);
+    expect(c.querySelector("a a, a button, button a, button button")).toBeNull();
+    const first = c.querySelector<HTMLAnchorElement>("a[href]")!;
+    expect(first.getAttribute("href")).toBe("/machines/mac");
+    expect(first.textContent).toContain("电脑 A");
   });
 
   it("says it cannot see the machines when the first load fails", async () => {

@@ -17,8 +17,13 @@ export const RUNTIME_VERSION = '0.5.0'
 const DEFAULT_PRESETS = { default: 'workspace-write', acceptEdits: 'workspace-write', auto: 'workspace-write',
   plan: 'read-only', bypassPermissions: 'danger-full-access' }
 
-// ol (the lark-connector skill's helper) run in the shell, as a command word.
-const OL_IN_SHELL = /(^|[\s;&|(`$])(ol|[^\s;&|]*lark-connector\/scripts\/ol\.sh)(\s|$)/
+/** A regex for a gated command's shell words (its command, its skill's script by path), as a command word. */
+function shellWordsRe(words) {
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const alts = words.filter((w) => typeof w === 'string' && w !== '')
+    .map((w) => (w.includes('/') ? `[^\\s;&|]*${esc(w)}` : esc(w)))
+  return alts.length ? new RegExp(`(^|[\\s;&|(\`$])(${alts.join('|')})(\\s|$)`) : null
+}
 
 /** cwd is the Persona assistant's directory (~/.jarvis/assistant, as the node and the hub tell its conversations). */
 function assistantDir(cwd) {
@@ -333,9 +338,12 @@ export function createDshRuntime(deps, options = {}) {
     tools.refreshing = true
     try {
       const list = await rt.tools()
-      // The assistant's own tools (ask_user, schedule_followup, lark-connector…) only for its conversations.
+      // The assistant's own tools (ask_user, schedule_followup…) only for its conversations.
       const plain = new Set(list.map((t) => t.name))
       const all = options.assistant ? await rt.tools({ assistant: true }) : list
+      // A gated command's tool: its words in an assistant conversation's shell are refused (onPreExecute).
+      tools.shell = all.filter((t) => Array.isArray(t.shell)).map((t) => ({ name: t.name, command: t.shell[0], re: shellWordsRe(t.shell) }))
+        .filter((g) => g.re)
       const key = JSON.stringify(all.map((t) => [t.name, t.description, t.input_schema, plain.has(t.name)]))
       if (key === tools.key) return
       dropTools()
@@ -702,14 +710,15 @@ export function createDshRuntime(deps, options = {}) {
   }
 
   /**
-   * In an assistant conversation, lark-connector goes through the lark-connector tool (the node holds the token and confirms
-   * writes on the phone): ol run in the shell is stopped with that said.
+   * In an assistant conversation a gated command goes through its tool (the node runs the gate, confirms writes on the
+   * phone and holds the credentials): the command run in the shell is stopped with that said.
    */
   function onPreExecute(exec, next) {
     const id = String(exec?.agent?.session?.id ?? exec?.agent?.id ?? '')
     const cmd = exec?.name === 'bash' && typeof exec?.arguments?.command === 'string' ? exec.arguments.command : ''
-    if (id && isAssistant(id) && OL_IN_SHELL.test(cmd)) {
-      return { kind: 'deny', reason: '飞书（lark-connector）在这里用 lark-connector 工具：参数就是 ol 后面那些词；shell 里的 ol 拿不到 token。' }
+    const gate = id && cmd && isAssistant(id) ? (tools.shell ?? []).find((g) => g.re.test(cmd)) : undefined
+    if (gate) {
+      return { kind: 'deny', reason: `这里用 ${gate.name} 工具：参数就是 ${gate.command} 后面那些词；shell 里的 ${gate.command} 拿不到凭据。` }
     }
     return next()
   }

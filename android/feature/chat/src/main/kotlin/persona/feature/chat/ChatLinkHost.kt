@@ -177,7 +177,7 @@ fun ChatLinkHost(
             url?.let { target ->
                 // A page whose renderer went away is loaded anew (a new view) when the user asks.
                 var generation by remember(target) { mutableIntStateOf(0) }
-                // A Feishu link the hub shows natively (the lark-connector extension, #1530): a document's reader or a 公司圈 post.
+                // A Feishu link the hub shows natively (the Lark extension, #1530): a document's reader or a 公司圈 post.
                 val native = remember(target, lark) { larkNativeLink(target, lark) }
                 // Whether that native view switched to the web page (切换网页, or a read that failed): then the card's
                 // 刷新, progress and crash row are the page's again.

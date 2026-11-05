@@ -14,9 +14,9 @@
 | 收件箱 | `collectLark`、`collectDocs`（`inbox.go`、`inbox_docs.go`） | `collectMoments`（`inbox_moments.go`） | `collectMail`（`inbox.go`） |
 | 收件箱条目 | `Source: "lark"` 写死，`Lark` / `Doc` / `Moment` 各一个块 | 同左 | `Source: "mail"`，`Mail` 块 |
 | 回复 | `replyInbox` 里按 `Moment` / `Doc` / `Lark` / `Mail` 哪个不为空走 `switch` | 同左 | 同左 |
-| AI 的读工具 | `lark_chats` / `lark_messages` / `lark_search`（`assistantTools(withLark, withMail)` 写死名字），lark-connector skill | 走 lark-connector skill | `mail_*`（`mail/mcp.go`） |
+| AI 的读工具 | `lark_chats` / `lark_messages` / `lark_search`（`assistantTools(withLark, withMail)` 写死名字），飞书网关的 skill | 走飞书网关的 skill | `mail_*`（`mail/mcp.go`） |
 | 写操作的闸门 | node 的 Bash 闸门（`node/larkgate.go`，hub.json `lark_gate` 规则） | 同左 | `hub.approve`（`mail_send` 自己调） |
-| 实时 | lark-connector 事件 WebSocket（`lark_events.go`）踢收件箱和归档 | 跟飞书一起轮询 | 轮询（收件箱 3 分钟、归档 6 分钟） |
+| 实时 | 飞书网关事件 WebSocket（`lark_events.go`）踢收件箱和归档 | 跟飞书一起轮询 | 轮询（收件箱 3 分钟、归档 6 分钟） |
 | App 链接 | `FeishuLinks.route` → 文档 / 公司圈原生，其余 `LinkSheet` 网页 | 同左 | — |
 | 设置 › 连接器 | `FeishuConnectorView`（`GET /api/v1/lark/status`） | — | 邮箱页 |
 
@@ -53,7 +53,7 @@ type Connector interface {
 type Status struct {
     State     string    // ok | not_configured | not_signed_in | no_permission | rate_limited | error | disabled（用户关掉的，#533）
     Account   string    // 显示的账号名（飞书的名字、GitHub 的 login、「这台 Mac 上的信息」）
-    Error     string    // 给人看的一句话（「lark-connector 未登录飞书」「没有完全磁盘访问权限」）
+    Error     string    // 给人看的一句话（「飞书网关未登录飞书」「没有完全磁盘访问权限」）
     LastSync  time.Time
     LastEvent time.Time
 }
@@ -184,7 +184,7 @@ type Actions interface {
   走现有的 `hub.approve`（`IxPermission` 卡片，15 分钟过期，「本会话总是允许」）。规则是 hub.json 的 `connector_gate: [{connector, action, match?, decision}]`，
   第一条匹配的说了算，和 `lark_gate` 一个写法；`mail_send` 迁过来后行为不变。
 - 收件箱里「发送」按钮本身就是用户的确认，`Reply` 不再弹卡片（和现在飞书 / 邮件一样）；AI 分身只能起草（`inbox_draft`），它的提示词照旧禁止直接发。
-- 飞书的写操作还是 lark-connector skill + node 的 Bash 闸门（命令行里才知道是读是写），不搬；只把规则的存放和卡片的样子统一。
+- 飞书的写操作还是飞书网关的 skill + node 的 Bash 闸门（命令行里才知道是读是写），不搬；只把规则的存放和卡片的样子统一。
 
 ### 8. 链接（`Links`）
 
@@ -269,9 +269,9 @@ node → hub 事件：`connector.changed {id, scope}`。
 
 - **现有测试全绿**：`./scripts/test/test-server.sh`（hub 机器、真 Postgres）、`go test ./...`、App 的 `JarvisTests` 和收件箱 / 知识库的 UI 测试。
 - **golden 逐字节不变**：提示词、MCP 工具列表（`mcp_tools.*`、`mail_tools`）。
-- **新增的对照测试**（第 M0 步先写，用旧代码生成基线）：假 lark-connector + 假邮箱（合成数据）跑一轮归档 + 收件箱采集，
+- **新增的对照测试**（第 M0 步先写，用旧代码生成基线）：假飞书网关 + 假邮箱（合成数据）跑一轮归档 + 收件箱采集，
   把结果（知识库目录树和每个文件的内容、`InboxItem` 的 JSON）存成 golden；之后每步都必须一致。
-- **真实数据对照**（只读、只打印数字）：`jarvisd dev connector-diff`（只在 DEBUG 构建 / 测试里），在 hub 机器上用真实的 lark-connector 和邮箱，
+- **真实数据对照**（只读、只打印数字）：`jarvisd dev connector-diff`（只在 DEBUG 构建 / 测试里），在 hub 机器上用真实的飞书网关和邮箱，
   旧代码和新代码各跑一轮，写到两个临时目录（不碰 `~/.persona/data`、不写库、不标已读），比较：每个会话的行数和内容哈希、收件箱条目的 id / kind / 线程归属。
   只打印「一致 / 第几个会话不一致、差几行」，不打印内容。对照完删掉临时目录。
 

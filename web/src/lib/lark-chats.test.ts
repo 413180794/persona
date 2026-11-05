@@ -58,7 +58,7 @@ describe("conversation helpers", () => {
     expect(r.rest.map((x) => x.id)).toEqual(["a", "c"]);
   });
 
-  it("tells a signed-out lark-connector and a hub without Feishu apart", () => {
+  it("tells a signed-out Lark gateway and a hub without Feishu apart", () => {
     expect(listProblem(new ApiError(502, "x", { code: "lark_not_logged_in" })).kind).toBe("not_logged_in");
     expect(listProblem(new ApiError(404, "x", {})).kind).toBe("not_configured");
     expect(listProblem(new ApiError(502, "boom", {}))).toEqual({ kind: "other", text: "读不到飞书会话：boom" });

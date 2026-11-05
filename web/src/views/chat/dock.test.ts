@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Interaction } from "../../lib/types";
-import { cardFold, cardLine, DOCK_MAX, INPUT_MAX, PLAN_MAX, turnStart, visibleShare, showsAnswered } from "./dock";
+import { AWAIT_MS, awaitingTurn, cardFold, cardLine, DOCK_MAX, INPUT_MAX, PLAN_MAX, turnStart, visibleShare, showsAnswered } from "./dock";
 
 describe("visibleShare", () => {
   it("is a share of the visible height, capped when asked", () => {
@@ -71,5 +71,28 @@ describe("turnStart", () => {
     expect(showsAnswered({ narrow: true, keyboard: false, open: true, short: true })).toBe(true);
     expect(showsAnswered({ narrow: true, keyboard: false, open: false })).toBe(true);
     expect(showsAnswered({ narrow: false, keyboard: true, open: false })).toBe(true);
+  });
+});
+
+describe("awaitingTurn (#3654)", () => {
+  const at = Date.parse("2026-11-05T10:00:00Z");
+  const user = { id: "u1", text: "hi", images: [], contexts: [], ts: "2026-11-05T10:00:00Z" };
+  const seg = (o: Record<string, unknown> = {}) => ({ user, steps: [], ...o }) as never;
+
+  it("is on while your message is the newest thing and the hub has not said working", () => {
+    expect(awaitingTurn(seg(), "idle", at + 2_000)).toBe(true);
+    expect(awaitingTurn(seg(), "unread", at + 2_000)).toBe(true);
+  });
+  it("stops after a minute without anything", () => {
+    expect(awaitingTurn(seg(), "idle", at + AWAIT_MS)).toBe(false);
+  });
+  it("is off once something answered, or without a message of yours last", () => {
+    expect(awaitingTurn(seg({ steps: [{ kind: "text" }] }), "idle", at)).toBe(false);
+    expect(awaitingTurn(seg({ answer: { id: "a" } }), "idle", at)).toBe(false);
+    expect(awaitingTurn({ steps: [] } as never, "idle", at)).toBe(false);
+    expect(awaitingTurn(undefined, "idle", at)).toBe(false);
+  });
+  it("leaves the hub's own states alone", () => {
+    for (const st of ["working", "needs_you", "offline"] as const) expect(awaitingTurn(seg(), st, at)).toBe(false);
   });
 });

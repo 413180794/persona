@@ -195,7 +195,7 @@ internal fun LarkBubble(
 ) {
     val display = LocalLarkMessageDisplay.current
     val message = remember(original, display) { original.shown(display) }
-    // 防撤回 shows what lark-connector kept of a recalled message, marked 已撤回; otherwise it is one line.
+    // 防撤回 shows what the Lark gateway kept of a recalled message, marked 已撤回; otherwise it is one line.
     if (message.system && !(message.recalled && display.showsBody(message))) {
         TimelineMark(if (message.recalled) stringResource(R.string.inbox_lark_recalled)
             else message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }, modifier)

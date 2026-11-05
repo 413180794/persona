@@ -5,7 +5,7 @@ nonisolated struct LarkMessageDisplay: Codable, Equatable, Sendable {
     var accountID: String
     var antiRecall: Bool
     var showEditHistory: Bool
-    /// lark-connector''s parts as the chat shows them: [removed] words decoded while the switch is on, as they came otherwise.
+    /// The Lark gateway''s parts as the chat shows them: [removed] words decoded while the switch is on, as they came otherwise.
     func shown(_ parts: [LarkPart]) -> [LarkPart] { climbs ? LarkBraveClimb.decode(parts) ?? parts : parts }
     /// A message's text as the chat shows it (see `shown(_:)`).
     func shown(_ text: String) -> String { climbs ? LarkBraveClimbCodec.decodeText(text) ?? text : text }
@@ -112,7 +112,7 @@ extension APIClient {
                 if LarkLoadProblem.isNotLoggedIn(error) {
                     problem = LarkLoadProblem.of(error).message
                 } else {
-                    problem = (error as? APIError)?.status == 404 ? "请先更新 Hub 和 lark-connector，再使用消息显示设置。" : "暂时无法读取设置，请连接后重试。"
+                    problem = (error as? APIError)?.status == 404 ? "请先更新 Hub 和飞书网关，再使用消息显示设置。" : "暂时无法读取设置，请连接后重试。"
                 }
             }
         }
@@ -133,7 +133,7 @@ extension APIClient {
                 switch (error as? APIError)?.status {
                 case 409: problem = "设置或账号已变化，请重新读取后再修改。"
                 case 403: problem = "当前连接没有修改权限。"
-                case 404: problem = "请先更新 lark-connector，再修改这些设置。"
+                case 404: problem = "请先更新飞书网关，再修改这些设置。"
                 default: problem = "暂时无法确认保存结果，请重新读取设置。"
                 }
             }
@@ -161,7 +161,7 @@ private struct LarkMessageDisplaySettingsContent: View {
         List {
             Section {
                 setting("防撤回", key: "anti_recall", value: state.policy.antiRecall)
-            } footer: { Text("查看 lark-connector 已留存的撤回内容，保留「已撤回」标记。未留存的内容无法恢复。") }
+            } footer: { Text("查看飞书网关已留存的撤回内容，保留「已撤回」标记。未留存的内容无法恢复。") }
             Section {
                 setting("编辑历史", key: "show_edit_history", value: state.policy.showEditHistory)
             } footer: { Text("点击消息下方的「已编辑」，查看已留存的旧版本。") }
@@ -176,7 +176,7 @@ private struct LarkMessageDisplaySettingsContent: View {
                     Text(problem).font(Theme.Font.label).foregroundStyle(.secondary)
                     Button("重新读取") { Task { await state.refresh(using: link.api) } }.lineLimit(1)
                 }
-            } footer: { Text("与 lark-connector 网页共用当前飞书账号的设置。") }
+            } footer: { Text("与飞书网关的网页共用当前飞书账号的设置。") }
         }
         .themedPage()
         .task { await state.refresh(using: link.api) }

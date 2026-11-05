@@ -349,7 +349,7 @@ struct InboxHandOffSheet: View {
         let title = (it.connector != nil ? it.accountName + " · " : it.isLark ? "飞书 · " : "邮件 · ") + it.title
         var text = it.context?.isEmpty == false ? it.context! : [it.sender ?? "", it.preview].filter { !$0.isEmpty }.joined(separator: "：")
         if let l = it.lark {
-            let account = l.olAccount.map { "，在飞书账号 \($0)（lark_messages 传 account=\($0)，ol 命令前加 lark-connector_ACCOUNT=\($0)）" } ?? ""
+            let account = l.olAccount.map { "，在飞书账号 \($0)（lark_messages 传 account=\($0)）" } ?? ""
             text += "\n\n（飞书会话 feedId \(l.feedID)\(account)，可用飞书工具读更多上下文或回复）"
         }
         if let c = it.connector, let url = c.url { text += "\n\n（\(it.accountName)：\(url)）" }

@@ -602,10 +602,10 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 {
   "id": "3f9c…",                 // 操作 id
   "kind": "install",             // install | upgrade | uninstall
-  "extension": "lark-connector",       // 扩展 id（预览前只知道市场里的 id）
-  "name": "飞书（lark-connector）",    // 给人看的名字，知道了才有
+  "extension": "larkext",        // 扩展 id（预览前只知道市场里的 id）
+  "name": "飞书",                // 给人看的名字，知道了才有
   "market": "c0bbc68b20",        // 从哪个市场来，可选
-  "source": "market:c0bbc68b20/lark-connector", // 安装来源（同扩展的 origin），可选
+  "source": "market:c0bbc68b20/larkext", // 安装来源（同扩展的 origin），可选
   "version": "0.11.1",           // 要装的版本，知道了才有
   "from": "0.10.0",              // 升级前的版本，只有 upgrade
   "actor": "网页",               // 谁发起的：设备名、personad extension、hub（自动升级）
@@ -864,7 +864,7 @@ hub 读不到待确认的电脑（数据库不通）时，每台电脑都按待�
 | `task_plan` | `plan`（`TaskPlan`）：计划交给用户、开始、不开了、某个任务没开起来（`tasks[i].error`） |
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`；可选 `attention_reason`：会话在「需要你」时，宿主说的原因（botmux 的 attention reason）；可选 `external_url`：在 Persona 之外打开它的地方（botmux 会话的飞书话题），见 `docs/engines.md`「botmux」） |
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
-| `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话）；`settings_changed`（可选布尔值，默认 false，本批包含消息展示设置变化，与会话 ID 独立；客户端同时重读设置）；`account`（这些会话所在的 lark-connector 账号编号）；`ol_account`（只在不是默认账号时有，等于 `account`：读这些会话要带的参数，`docs/feishu.md`「多账号」）。hub 跟随 lark-connector 每个已登录账号的实时事件 `/agent/v1/events`，每个账号每 400ms 最多发一次，推给所有客户端。 |
+| `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话）；`settings_changed`（可选布尔值，默认 false，本批包含消息展示设置变化，与会话 ID 独立；客户端同时重读设置）；`account`（这些会话所在的飞书网关账号编号）；`ol_account`（只在不是默认账号时有，等于 `account`：读这些会话要带的参数，`docs/feishu.md`「多账号」）。hub 跟随飞书网关每个已登录账号的实时事件 `/agent/v1/events`，每个账号每 400ms 最多发一次，推给所有客户端。 |
 | `messaging` | `source`（消息来源 id）、`conversations`（有变化的会话 id）、`account`（可选，哪个账号的）、`settings_changed`（可选）：扩展 `messaging.changed` 合并一秒后推给所有客户端（`docs/extension-messaging.md`「九」） |
 | `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束）。约每 80 ms 一条；App 每个对话最多每秒画 5 次，停顿后的第一条立刻画、之后画最新的，空串立刻画，消息落进 transcript 或重连时丢掉还没画的（`DeltaPacer`） |
@@ -1376,7 +1376,7 @@ hub → node 请求：
 | `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`：这台机器 `~/.zshrc`（`$ZDOTDIR` 优先）里 `alias x="K=V … claude [args]"` 形式的行，只列 `command` 是 claude 的。`env` 带 key，只经这条 RPC 交给管理者（导入，经 hub 到 node 的连接），不写日志；旧 node 回 `unknown method` |
 | `launchers.repair` | `{name, action: "upgrade_cli"}` → `{ok, unsupported?, output?}`：启动器健康检查的自动修复（`docs/launcher-health.md`），node 只做固定的修法（Claude 的跑 `claude update`），不接受命令；旧 node 回 `unknown method` |
 | `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`：同 REST 的 `…/launchers/{name}/models`；`agent_type` 是 hub 配置里这个启动器的类型（不给就按 node 自己认出的） |
-| `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
+| `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了飞书网关的 skill（老版本把它编在二进制里） |
 | `dirs.list` | `{path}` → 同 REST |
 | `workspaces.list` | `{}` → `{workspaces:[Workspace],errors?:[{source,error}]}`；Workspace 同「工作区看板」，node 省略 machine_id，id/source_id 为宿主本地 ID。包含没有运行 Agent 的空间；各来源分别报告错误，全部失败返回 RPC error，不能伪装成空成功。这台电脑上没在运行的来源（`host.ErrNotRunning`：Orca 没开、botmux 没有 daemon 或版本太旧没有 `observe`）算没有工作区，不报错；只有没运行的来源时回空列表 |
 | `workspace.resolve` | `{path}` → `Workspace`；校验真实目录、解析符号链接，成功 source 为 `directory`、id/source_id/cwd 为物理路径、available 为 true；支持本机绝对路径或 `~/`，拒绝不存在、非目录及受保护的 iCloud 路径，不执行宿主、Agent 或 Git 操作 |
@@ -1453,7 +1453,7 @@ node → hub 事件：`fs.changed {dirs?, git?}`（#2439：`fs.watch` 里的文�
 
 node → 管理者 / hub 请求（`interaction.create`、`mcp.*`、`assistant.lark` 管理者答，`notify` hub 答）：
 - `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）
-- `mcp.tools {}` → `{tools}`；`mcp.call {name, args, session_id}` → `{content, is_error}`
+- `mcp.tools {}` → `{tools}`；`mcp.call {name, args, session_id}` → `{content, is_error, error_kind?, retry_after?}`（`error_kind` 是失败的类别：`declined` 用户或 `connector_gate` 没同意、`unavailable` 连接器没登录 / 连不上、`rate_limited` 限流，`retry_after` 是限流还要几秒；hub 知道时才带，`personad tool` 按它定退出码，#3779）
 - `assistant.view.check {session_id, message}` → `{reason?}`：可信助手 Stop 的 persona-view 检查，devices 管理者透传给 hub。hub 按当前 persona_view 开关和会话身份决定是否检查；reason 非空时 node 第一次返回 decision=block，stop_hook_active=true 时不再请求。最多 1 MB 的回复、4 条各 2000 字的错误，node 等待最多 5 秒；不适用、旧 hub 或断线保留原 Stop 行为。不是公开 App／扩展动作接口，不接收客户端提供的机器身份。
 - `notify {title, body?, level?, silent?, id?, session_id?}` → `{sent, reason?}`（`personad notify`：`machine_id` 是这条连接的机器，不接受扩展的 `actions` / `ui` / `state`；其余同 `POST /api/v1/notify`，静音和「需要你」偏好一样生效；旧 hub 报 unknown method）
 
@@ -1808,7 +1808,7 @@ runtime → node：
 | 请求 `interaction.create {interaction, timeout_seconds?}` → `Resolution` | 提问（`question`）、计划（`plan`）、授权（`permission`）三种，形状同上面的 `Interaction`；node 补 `created_at` / `expires_at`（默认同 hook 的 30 分钟，`timeout_seconds` 只能更短）、会话标题、目录，以及 `agent` / `agent_label`（runtime 跑的 Agent 和它的名字；跑 Claude Code 的不标，App 画成 Claude 的卡），经 hub 推给手机，阻塞到回答。没人回答（过期、手机「交回电脑」、没有 hub）回 `{dismiss: true}`，runtime 就交给自己的界面。带 `tool_use_id` 的交互 `resumable`：runtime 给的 `id`（或 node 按 runtime + 会话 + 种类 + tool_use_id 算的）不变，node 中途没了时回错误 `code: node_gone`，runtime 连上下一个 node 后用同一个 id 再问，hub 挂回原来的卡 |
 | 事件 `interaction.cancel {id}` | runtime 那边这次交互没了（工具调用被取消）：撤掉手机上的卡 |
 | 请求 `runtime.package {name}` → `{name, hash, version, files: [{path, data}]}` | 自动更新（`docs/runtimes.md`「自动更新」）：hello 里 `package` 说 runtime 跑的代码（包名和哈希）；node 带着这个名字、哈希不同的包时，回复带 `update`，runtime 用这个请求取文件（`data` 是 base64），自己核对哈希后换上。包在 personad 里（`internal/runtimepkg`，构建时从 `integrations/` 生成）；daemon 拿不到（不带 `update`，这个请求回 `unsupported`）；没有这个包回 `not_found` |
-| 请求 `mcp.tools {assistant?}` → `{tools: [{name, description, input_schema}]}`、`mcp.call {name, args, session_id, assistant?}` → `ToolResult` | hub 的工具（手机的 `phone_*`、`mail_*`），转给 hub；没有 hub 时 `mcp.tools` 是空的、`mcp.call` 回一个出错的结果。runtime 把它们给自己的 Agent 用（DSH：`docs/dsh.md`「手机工具」）。`assistant: true` 只对声明了 `caps.assistant` 的 runtime 有用：`mcp.tools` 多出助手专用的工具和 node 自己的 `lark-connector`；`mcp.call` 只在会话归这个 runtime、而且是助手对话时按助手的调用处理（否则当普通调用），`lark-connector` 由 node 自己跑（`docs/runtimes.md`「助手」） |
+| 请求 `mcp.tools {assistant?}` → `{tools: [{name, description, input_schema, shell?}]}`、`mcp.call {name, args, session_id, assistant?}` → `ToolResult` | hub 的工具（手机的 `phone_*`、`mail_*`），转给 hub；没有 hub 时 `mcp.tools` 是空的、`mcp.call` 回一个出错的结果。runtime 把它们给自己的 Agent 用（DSH：`docs/dsh.md`「手机工具」）。`assistant: true` 只对声明了 `caps.assistant` 的 runtime 有用：`mcp.tools` 多出助手专用的工具和扩展命令闸门声明的工具；`mcp.call` 只在会话归这个 runtime、而且是助手对话时按助手的调用处理（否则当普通调用），闸门声明的工具由 node 自己跑，它的 `shell` 是在 shell 里直接跑它的词（命令名、技能脚本的路径），runtime 在助手对话的 shell 里拦下（`docs/runtimes.md`「助手」） |
 
 node → runtime 的事件：`runtime.hub {connected}`，hub 连上 / 断开时发给每个 runtime。
 
@@ -1988,7 +1988,7 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 `InboxItem`：`id`、`source`（lark / mail，或连接器的 id：github）、`kind`（dm / mention / group / bot / mail；连接器的是它自己的：review_requested / mention / team_mention / author / ci_failed / assign）、`account`（`feishu` 或邮箱账号 id）、
 `account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
 `tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / dismissed / read / replied；dismissed 是用户「忽略」的）、`version`（这件现在装着什么，有新消息并进来就变；批量已处理时带回，旧 hub 没有）、
-`lark{account_id,ol_account,feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}`（`account_id`：会话所在的 lark-connector 账号编号，旧记录为 0 = 账号 1；`ol_account`：不是默认账号时有，打开会话、调飞书接口要带的 `ol_account`；`read_position`：这个会话在飞书里的已读位置，每次采集都刷新；`reply_to`：最后一条别人发的消息的 id，`thread_kind`：它在哪，空 = 在会话里、`topic` = 话题群的话题、`thread` = 普通群里的话题回复，这两个在采到新消息时刷新，旧数据没有）、`conversation{source,id,account?,start_position?,read_position?,mention_position?}`（列表里有：飞书条目在消息来源里打开的位置，`source` 是连接器 id，`account` 是非默认账号时要带的 `account`；有这个来源的 App 用它，`docs/extension-messaging.md`「九」）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
+`lark{account_id,ol_account,feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}`（`account_id`：会话所在的飞书网关账号编号，旧记录为 0 = 账号 1；`ol_account`：不是默认账号时有，打开会话、调飞书接口要带的 `ol_account`；`read_position`：这个会话在飞书里的已读位置，每次采集都刷新；`reply_to`：最后一条别人发的消息的 id，`thread_kind`：它在哪，空 = 在会话里、`topic` = 话题群的话题、`thread` = 普通群里的话题回复，这两个在采到新消息时刷新，旧数据没有）、`conversation{source,id,account?,start_position?,read_position?,mention_position?}`（列表里有：飞书条目在消息来源里打开的位置，`source` 是连接器 id，`account` 是非默认账号时要带的 `account`；有这个来源的 App 用它，`docs/extension-messaging.md`「九」）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
 `translations{<目标语言>:{subject,preview}}`（hub 提前翻好的外文邮件，`docs/ios.md`「翻译」）、`doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
 （`kind=doc`，`docs/inbox.md`「云文档」）；`agent.changes:[{ref,field,value}]` 是 AI 分身随草稿提议的改状态；
 `connector{thread,label,url,open_url,reply_to,can_reply,rule_tier}`：连接器的一件（`docs/inbox.md`「连接器：GitHub」），App 只画这一个块、不认识具体来源：
@@ -2050,57 +2050,57 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 
 扩展点 `messaging` 的来源（第一个是飞书）：`GET /api/v1/messaging` 列来源，`/api/v1/messaging/{source}/…` 是会话、消息、发送等，hub 鉴权后转给扩展、按 schema 查回答。规格见 [extension-messaging.md](extension-messaging.md)；下面的 `/api/v1/lark` 是迁移前的老接口，Mac、Android、网页迁完前保留（#2138）。
 
-## 飞书 API（lark-connector）
+## 飞书 API（飞书网关）
 
-这些路由不是 hub 自己的代码：#1571（3c）删掉了 hub 直连 lark-connector 的那条路，`server/internal/lark` 现在只剩 hub.json 的 `lark` 配置。`/api/v1/lark/…` 由飞书插件的 `api` 贡献提供，`lark` 是正在迁出 hub 的前缀（`migratablePrefixes`，`server/internal/extmgr/extension_api.go`），插件提供的优先。hub 先鉴权，去掉 `Authorization` 和 `token`，带上 `X-Persona-Device` / `X-Persona-Role`，再原样转给插件，插件再去问 lark-connector（[extensions.md](extensions.md)「App 接口」）。没有插件提供时这些路由 404。下面写的是插件要守的接口约定，文中的「hub」多指 hub 转给的插件；插件声明的 `receipts` 由 hub 套上发送回执。
+这些路由不是 hub 自己的代码：#1571（3c）删掉了 hub 直连飞书网关的那条路，`server/internal/lark` 现在只剩 hub.json 的 `lark` 配置。`/api/v1/lark/…` 由飞书插件的 `api` 贡献提供，`lark` 是正在迁出 hub 的前缀（`migratablePrefixes`，`server/internal/extmgr/extension_api.go`），插件提供的优先。hub 先鉴权，去掉 `Authorization` 和 `token`，带上 `X-Persona-Device` / `X-Persona-Role`，再原样转给插件，插件再去问飞书网关（[extensions.md](extensions.md)「App 接口」）。没有插件提供时这些路由 404。下面写的是插件要守的接口约定，文中的「hub」多指 hub 转给的插件；插件声明的 `receipts` 由 hub 套上发送回执。
 
-下面的路由都认查询参数 `ol_account=<lark-connector 账号编号>`：这次请求是哪个飞书账号的（不合法回 400）；不带时是插件的默认账号，由插件按自己的 lark-connector 配置决定：hub 不把 hub.json 的 `lark.account` 交给插件，它只给助手的收件箱用（`server/internal/lark/config.go`，`docs/feishu.md`「多账号」）。交出的别的账号的媒体 URL 已经带着它。
+下面的路由都认查询参数 `ol_account=<飞书网关账号编号>`：这次请求是哪个飞书账号的（不合法回 400）；不带时是插件的默认账号，由插件按自己的飞书网关配置决定：hub 不把 hub.json 的 `lark.account` 交给插件，它只给助手的收件箱用（`server/internal/lark/config.go`，`docs/feishu.md`「多账号」）。交出的别的账号的媒体 URL 已经带着它。
 
-lark-connector 出错时插件回 502 `{"error"}`；其中 lark-connector 自己丢了飞书登录（`AUTH_*`）的，回 `{"error","code":"lark_not_logged_in"}`，App 据此提示去 lark-connector 重新登录飞书。`/raw/…` 例外，原样转发 lark-connector 自己的回答。
+飞书网关出错时插件回 502 `{"error"}`；其中飞书网关自己丢了飞书登录（`AUTH_*`）的，回 `{"error","code":"lark_not_logged_in"}`，App 据此提示去飞书网关重新登录飞书。`/raw/…` 例外，原样转发飞书网关自己的回答。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/v1/lark/accounts` | `{"accounts":[{"id","name"?,"avatar"?,"tenant"?,"user_id"?,"signed_in","primary"?,"unread","quarantined"?}],"default"}`：lark-connector 上登录的飞书账号（按 lark-connector 的顺序，`signed_in` 对被隔离的账号为 false）和默认账号的编号。没有账号列表的旧 lark-connector 只回默认账号；旧 hub 没有这条路由（404），App 不显示账号切换 |
-| GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured 由插件按自己的 lark-connector 配置给出（3c 以前是「hub.json 有 lark」）；connected 每次现问 lark-connector 的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
+| GET | `/api/v1/lark/accounts` | `{"accounts":[{"id","name"?,"avatar"?,"tenant"?,"user_id"?,"signed_in","primary"?,"unread","quarantined"?}],"default"}`：飞书网关上登录的飞书账号（按飞书网关的顺序，`signed_in` 对被隔离的账号为 false）和默认账号的编号。没有账号列表的旧飞书网关只回默认账号；旧 hub 没有这条路由（404），App 不显示账号切换 |
+| GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured 由插件按自己的飞书网关配置给出（3c 以前是「hub.json 有 lark」）；connected 每次现问飞书网关的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
 | GET | `/api/v1/lark/message-display` | `{"account_id","anti_recall","show_edit_history"}`：当前选中飞书账号的展示设置；只返回这两个开关和实际用户 ID，不返回脚本/自动发送配置 |
-| POST | `/api/v1/lark/message-display` | `{"account_id","key","value","expected"}`：key 为 `anti_recall` 或 `show_edit_history`，value/expected 为布尔值；完整设备权限，body ≤1 KiB，未知字段拒绝；通过 lark-connector 受限 PATCH 保留其他字段。账号/旧值冲突 409，未授权 403，旧服务无接口 404；登录失效 502 + `lark_not_logged_in`。成功返回与 GET 相同结构并推送带 `settings_changed=true` 的 `lark` 事件，不自动重试未知结果 |
-| GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store`。插件在 `api` 的 `features` 里声明 `lark_native_encryption`，hub 并进自己的 features；上游缺少原生接口返回 426 + `lark_lark-connector_upgrade_required`，独立授权缺失返回 403 + `OLK_VAULT_NATIVE_NOT_AUTHORIZED` |
+| POST | `/api/v1/lark/message-display` | `{"account_id","key","value","expected"}`：key 为 `anti_recall` 或 `show_edit_history`，value/expected 为布尔值；完整设备权限，body ≤1 KiB，未知字段拒绝；通过飞书网关受限 PATCH 保留其他字段。账号/旧值冲突 409，未授权 403，旧服务无接口 404；登录失效 502 + `lark_not_logged_in`。成功返回与 GET 相同结构并推送带 `settings_changed=true` 的 `lark` 事件，不自动重试未知结果 |
+| GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store`。插件在 `api` 的 `features` 里声明 `lark_native_encryption`，hub 并进自己的 features；上游缺少原生接口返回 426 + `lark_gateway_upgrade_required`，独立授权缺失返回 403 + `OLK_VAULT_NATIVE_NOT_AUTHORIZED` |
 | POST | `/api/v1/lark/encryption/unlock` | `{account_id,password}` → 同上。只允许完整写权限；按实际飞书账号校验，共享网页的密码尝试限制；密码不存储 |
-| POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`；候选历史外显复用 lark-connector 网页规则 |
+| POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`；候选历史外显复用飞书网关网页规则 |
 | POST | `/api/v1/lark/conversations/{id}/encryption/prepare` | `{account_id,text,cover}` → `{accountId,feedId,messages:[{text}]}`。只生成带外显的密文，不发送；身份不一致、未授权、未解锁或无收件公钥时拒绝 |
 | POST | `/api/v1/lark/conversations/{id}/encrypted-messages` | `{account_id,ciphertext,client_id,reply_id?}` → `{ok,message_id?}`。必需稳定 UUID，仅接受 OLK2/OLK3 wire shape，重新校验原生授权与实际账号；上游写入携带 `expectedSenderId`。多段按顺序发送，仅最后一段可引用；每段单独保存去重回执。所有原生加密响应 `no-store`，失败不会改走普通文字接口；协议与限制见 [加密消息](lark-encryption.md) |
 | GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`；scope：`chats`（默认，飞书「消息」：不含已完成 / 折叠，按标签显示规则过滤）、`unread`、`done`（已完成）、`label:<id>`、`inbox`、`mentions`、`muted`、`p2p`、`group`、`thread`、`later` |
 | GET | `/api/v1/lark/pinned` | 全部置顶会话（持续读取 inbox + done 的置顶头部，合并去重后按置顶时间排序）；分页异常返回错误，不把截断集合当作成功结果 |
 | GET | 上述 `/conversations`、`/pinned` 加 `account_bound=1` | 额外返回实际选中账号 `account_id`，集合为空时为 `[]`，禁止中间缓存。可带预期 `account_id`；请求前后身份变化或预期不匹配返回 409 `lark_account_changed`，不带会话数据。未登录沿用 `lark_not_logged_in`；旧调用不加参数，保持原契约 |
-| GET | `/api/v1/lark/conversations/{id}/pins?account_id=&cursor=&limit=` | 聊天内 Pin 列表：`{account_id,items:[{id,message_id,message?:LarkMessage,operator_name?,created_at}],next_cursor,total}`。limit 默认 50、最大 100。完整保留上游分页，重复/缺失游标返回错误；此读取会清除 lark-connector 的 Pin 未读标记，禁止首页预取 |
+| GET | `/api/v1/lark/conversations/{id}/pins?account_id=&cursor=&limit=` | 聊天内 Pin 列表：`{account_id,items:[{id,message_id,message?:LarkMessage,operator_name?,created_at}],next_cursor,total}`。limit 默认 50、最大 100。完整保留上游分页，重复/缺失游标返回错误；此读取会清除飞书网关的 Pin 未读标记，禁止首页预取 |
 | GET | `/api/v1/lark/conversations/{id}/pin-messages/{message}?account_id=&topic=` | 定位 Pin：`{account_id,target:{message,root?,page}}`，page 与聊天/话题分页同结构。普通消息返回 around 窗口；回复返回话题根和包含目标的回复窗口（最多 20×100 条）；没有找到目标返回 409 `lark_pin_no_position`，客户端保留当前窗口 |
-| POST | `/api/v1/lark/conversations/{id}/pins` | `{account_id,message_id,pin_id?,remove}` → `{account_id,pinned}`。remove=true 时必须有对应 pin_id；写前核实消息 feed、capabilities、Pin 归属和实际账号。未知结果返回 `lark_pin_result_unknown`，必须重新读取确认，不自动重试。三条 Pin API 均 `no-store`，换号 409 `lark_account_changed` 不带数据；旧 lark-connector 路由 426 `lark_lark-connector_upgrade_required`，不存在的原消息为 `lark_pin_not_found` |
+| POST | `/api/v1/lark/conversations/{id}/pins` | `{account_id,message_id,pin_id?,remove}` → `{account_id,pinned}`。remove=true 时必须有对应 pin_id；写前核实消息 feed、capabilities、Pin 归属和实际账号。未知结果返回 `lark_pin_result_unknown`，必须重新读取确认，不自动重试。三条 Pin API 均 `no-store`，换号 409 `lark_account_changed` 不带数据；旧飞书网关路由 426 `lark_gateway_upgrade_required`，不存在的原消息为 `lark_pin_not_found` |
 | GET | `/api/v1/lark/labels` | `{"labels":[{"id","name","count"}]}` |
 | GET | `/api/v1/lark/unread-count` | `{"count"}`：「未读 N」（不含免打扰） |
 | GET | `/api/v1/lark/flags` | 标记：`{"conversations":[LarkConversation],"messages":[{"feed_id","chat_name","chat_avatar","flagged_at","message":LarkMessage}]}` |
 | GET | `/api/v1/lark/conversations/{id}/labels` | `{"label_ids":[…],"labels":[{"id","name"}]}`（这个会话在哪些标签里 / 可选标签） |
-| POST | `/api/v1/lark/conversations/{id}/settings` | `{"done"?,"pinned"?,"flagged"?,"muted"?,"label_ids"?}` → lark-connector `PATCH settings`（isArchived / isShortcut / isFlagged / isMuted / labelIds，labelIds 是全量） |
+| POST | `/api/v1/lark/conversations/{id}/settings` | `{"done"?,"pinned"?,"flagged"?,"muted"?,"label_ids"?}` → 飞书网关 `PATCH settings`（isArchived / isShortcut / isFlagged / isMuted / labelIds，labelIds 是全量） |
 | POST | `/api/v1/lark/conversations/{id}/unread` | `{"unread":true}` 标为未读 / `false` 清除未读 |
 | GET | `/api/v1/lark/conversations/{id}/messages?before=&after=&around=&limit=&topic=` | `{"messages":[LarkMessage],"has_older","has_newer","older_cursor","newer_cursor"}`，旧→新；不带游标 = 最新一页；`around=<读到的位置+1>` 从第一条未读打开；`topic=1` 时取话题群的话题列表（只能往前翻） |
 | GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | 话题 / 回复串里的消息，格式同上；只支持 `before` 前翻，无游标时读取最新页；不支持 `after`，上游未提供更新方向分页与游标，见 [话题分页限制](feishu.md#话题分页限制h06) |
-| POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?,"mentions"?}` 以本人身份发送，回 `{"ok":true,"message_id"?}`。`client_id` 是 App 生成的 UUID，原样交给 lark-connector 的 `clientId` 并在 hub 保存回执：同一条消息重发时带同一个，只会发出一条；不传或不是 UUID 时 hub 自己生成。`mentions` 是 `[{"user_id","name"}]`（最多 100 个，超过或缺 `user_id` / `name` 回 400），`text` 里要有字面的 `@name`，hub 不改写文字，原样交给 lark-connector 的 `mentions`；@所有人是 `{"user_id":"all","name":"所有人"}` |
-| POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?,"mentions"?}` 以本人身份回复这条消息，回 `{"ok":true,"message_id"?}`。`thread=false`（默认）在原会话里引用这条；`thread=true` 发进这条所在的话题（是普通群里的顶层消息时以它为根开一个话题；话题群里落进它的话题）。代理 lark-connector `POST /messages/{id}/replies`，`client_id` 原样透传为 `clientId` 并保存回执，`mentions` 同上一行；目标可以是根消息或话题中的回复，由上游解析话题归属。`text` 为空 400 |
+| POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?,"mentions"?}` 以本人身份发送，回 `{"ok":true,"message_id"?}`。`client_id` 是 App 生成的 UUID，原样交给飞书网关的 `clientId` 并在 hub 保存回执：同一条消息重发时带同一个，只会发出一条；不传或不是 UUID 时 hub 自己生成。`mentions` 是 `[{"user_id","name"}]`（最多 100 个，超过或缺 `user_id` / `name` 回 400），`text` 里要有字面的 `@name`，hub 不改写文字，原样交给飞书网关的 `mentions`；@所有人是 `{"user_id":"all","name":"所有人"}` |
+| POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?,"mentions"?}` 以本人身份回复这条消息，回 `{"ok":true,"message_id"?}`。`thread=false`（默认）在原会话里引用这条；`thread=true` 发进这条所在的话题（是普通群里的顶层消息时以它为根开一个话题；话题群里落进它的话题）。代理飞书网关 `POST /messages/{id}/replies`，`client_id` 原样透传为 `clientId` 并保存回执，`mentions` 同上一行；目标可以是根消息或话题中的回复，由上游解析话题归属。`text` 为空 400 |
 | GET | `/api/v1/lark/conversations/{id}/members?q=&limit=` | @人用的成员：`{"members":[{"user_id","name","avatar"?}]}`。`q` 为空列出成员，不为空按名字 / 群昵称 / 拼音搜；`limit` 默认 50，最多 200；`name` 群昵称优先，没有时用显示名 |
 | POST | `/api/v1/lark/conversations/{id}/images` | `{"client_id","name","mime","data"}`；data 为 base64，解码后最大 7.5 MiB，校验图片格式；回 `{"message_id"}` |
 | POST | `/api/v1/lark/conversations/{id}/files?client_id=&name=&mime=` | `application/octet-stream` 原始字节，必须有 Content-Length，1 字节至 100 MiB；回 `{"message_id"}`；Hub 流式转发 |
 | POST | `/api/v1/lark/conversations/{id}/read` | `{"position","badge_count"?,"message_ids"?}`：上报看到的消息（最高位置、该条的 badge_count、其间别人发的未读消息 id），只在消息真正上屏后发 |
-| POST | `/api/v1/lark/conversations/{id}/read-states` | `{"message_ids":[…]}`（最多 100 个，超过 400）：这些消息的已读回执，回 `{"states":[{"message_id","read_count","unread_count"}]}`。lark-connector 没给回执的（还在发送、不认识的）不出现在 `states` 里；旧 hub 没有这条路由时 App 不显示回执 |
+| POST | `/api/v1/lark/conversations/{id}/read-states` | `{"message_ids":[…]}`（最多 100 个，超过 400）：这些消息的已读回执，回 `{"states":[{"message_id","read_count","unread_count"}]}`。飞书网关没给回执的（还在发送、不认识的）不出现在 `states` 里；旧 hub 没有这条路由时 App 不显示回执 |
 | GET | `/api/v1/lark/media/{key}?size=` | 图片 / 贴纸 / 头像 / 视频 / 文件原样转发（`size` 为 24 的倍数、≤624 时返回缩略图） |
 | GET | `/api/v1/lark/messages/{id}/media/{key}` | 消息作用域的媒体（同上） |
 | GET | `/api/v1/lark/emojis` | `{"emojis":{"<小写 key>":{"label","url"}}}`，含肤色变体 key；hub 缓存一天 |
-| POST | `/api/v1/lark/messages/{id}/card-actions/{actionId}` | 以本人身份按下卡片回调按钮（body 原样转给 lark-connector） |
-| GET / POST | `/api/v1/lark/raw/{path...}` | lark-connector `/agent/v1/<path>` 的只读代理，转发查询与允许的只读 POST；不作为通用写接口 |
+| POST | `/api/v1/lark/messages/{id}/card-actions/{actionId}` | 以本人身份按下卡片回调按钮（body 原样转给飞书网关） |
+| GET / POST | `/api/v1/lark/raw/{path...}` | 飞书网关 `/agent/v1/<path>` 的只读代理，转发查询与允许的只读 POST；不作为通用写接口 |
 | GET | `/api/v1/lark/reactions/quick` | `{keys}`：快捷表情 |
 | POST | `/api/v1/lark/messages/{id}/reactions` | `{key,remove?}`：添加或撤销表情，返回 `{ok:true}` |
 | GET | `/api/v1/lark/users/{id}?feed_id=` | 用户资料，原样转发上游 JSON |
 | POST | `/api/v1/lark/users/{id}/chat` | 打开私聊，返回 `{feed_id}` |
 | GET | `/api/v1/lark/messages/{id}/url-preview?url=` | 消息内链接预览，原样转发上游 JSON |
-| POST | `/api/v1/lark/documents/comments` | `{url, content, mentions?:[{user_id,name}], quote?, block_id?, client_id}`：以用户本人在文档上发一条新评论（#1290）。没有 `quote` 是全文评论，有 `quote`（和它所在的块 `block_id`）是对那段正文的评论；`content` 里每个被 @ 的人写成 `@名字`，和发消息一样。回 `{ok, threads, anchored?}`：`threads` 是写完后读回的全部线程（同 `documents/comments` 的形状，读不回时为 null，评论已经发出），对一段正文的评论另带 `anchored`（`false`：找不到那段所在的块，改成在全文评论里引用那段话）。正文锚点走 lark-connector 的 inline 评论，块由插件按 `quote` 在文档的 JSON 里找（App 知道 `block_id` 时直接带上）。插件声明 `lark_doc_comments` 才有这几条路由；是用户自己设备上的写，不过 AI 的闸门；写进回执（`client_id` 派生回执 id，同一个 id 重试不会发两次） |
+| POST | `/api/v1/lark/documents/comments` | `{url, content, mentions?:[{user_id,name}], quote?, block_id?, client_id}`：以用户本人在文档上发一条新评论（#1290）。没有 `quote` 是全文评论，有 `quote`（和它所在的块 `block_id`）是对那段正文的评论；`content` 里每个被 @ 的人写成 `@名字`，和发消息一样。回 `{ok, threads, anchored?}`：`threads` 是写完后读回的全部线程（同 `documents/comments` 的形状，读不回时为 null，评论已经发出），对一段正文的评论另带 `anchored`（`false`：找不到那段所在的块，改成在全文评论里引用那段话）。正文锚点走飞书网关的 inline 评论，块由插件按 `quote` 在文档的 JSON 里找（App 知道 `block_id` 时直接带上）。插件声明 `lark_doc_comments` 才有这几条路由；是用户自己设备上的写，不过 AI 的闸门；写进回执（`client_id` 派生回执 id，同一个 id 重试不会发两次） |
 | POST | `/api/v1/lark/documents/comments/{thread}/replies` | `{url, content, mentions?, client_id}`：回复这条评论线程，回 `{ok, threads}` |
 | POST | `/api/v1/lark/documents/comments/{thread}/resolve` | `{url, resolved}`：标为已解决（`true`）或重新打开（`false`），回 `{ok, threads}`；内容不对 400 `comment_invalid`、这种文档不能这样评论 400 `comment_unsupported` |
 | GET | `/api/v1/lark/documents/people?url=&q=` | `{members:[{user_id,name,avatar?}]}`：评论里 @ 的候选人，按名字找（和群的 `members` 同一个形状） |
@@ -2122,23 +2122,23 @@ lark-connector 出错时插件回 502 `{"error"}`；其中 lark-connector 自己
 {"id","position","sender_id","sender_name","sender_avatar","sender_type":"user|bot","is_mine",
  "type":"TEXT|POST|IMAGE|CARD|SYSTEM|FILE|MEDIA|STICKER|MERGE_FORWARD…","text":"纯文本预览","created_at",
  "recalled","retained"?,"edited","reply_count","thread_reply_count","badge_count","at_me","is_read",
- "parts":[MessagePart],                       // lark-connector 原样（见下），媒体 URL 已改写到 /api/v1/lark/
+ "parts":[MessagePart],                       // 飞书网关原样（见下），媒体 URL 已改写到 /api/v1/lark/
  "olk"?:{…},                                 // 加密投影：状态、公开外显、授权解密正文、密钥分发信息
  "edit_history"?:[{"edited_at","text","parts"?,"olk"?}],
  "reply_to":{"id","sender_name","text","recalled","retained"?,"parts","olk"?},
  "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["示例成员甲","示例成员乙"]}]}
-// MessagePart（lark-connector 的 MessagePart，不改字段名）
+// MessagePart（飞书网关的 MessagePart，不改字段名）
 {"kind":"text|at|link|image|file|code|emotion|media|card|docs|interactive|table",
  "text","url","refId","metadata":{…}}   // 卡片的整棵元素树在 metadata.body / header；富文本块祖先在 metadata.blocks
 ```
 
-附件发送要求完整设备权限（answer-only 不可用），共用插件绑定的 lark-connector 账号；不接受调用方覆盖账号。插件声明 `lark_attachments`，hub 并进 hello/health 的 features。
+附件发送要求完整设备权限（answer-only 不可用），共用插件绑定的飞书网关账号；不接受调用方覆盖账号。插件声明 `lark_attachments`，hub 并进 hello/health 的 features。
 `client_id` 必须为 UUID，同一消息重试保持不变；消息读取额外保留可选 `client_id`、`local_state`，用于消除发送超时后的迟到回显。`local:` 和 pending/failed 副本不算发送确认。
 
 媒体改写规则：parts JSON 里所有 `"/api/media/` → `"/api/v1/lark/media/`，`"/api/messages/` → `"/api/v1/lark/messages/`
 （合并转发卡片里嵌套的消息也一并改写）。
 
-`retained=true` 表示 lark-connector 已留存撤回原内容，不是恢复权限；展示时仍保留 `recalled`，不能据此开放回复、表情或卡片写操作。两个展示开关不删除服务端留存，也不限制原有消息读取权限；客户端在设置关闭/未知时隐藏撤回原文和编辑历史入口。历史、引用、转发的 OLK 投影沿用当前授权，锁定时只显示公开内容，手机缓存清除解密正文。
+`retained=true` 表示飞书网关已留存撤回原内容，不是恢复权限；展示时仍保留 `recalled`，不能据此开放回复、表情或卡片写操作。两个展示开关不删除服务端留存，也不限制原有消息读取权限；客户端在设置关闭/未知时隐藏撤回原文和编辑历史入口。历史、引用、转发的 OLK 投影沿用当前授权，锁定时只显示公开内容，手机缓存清除解密正文。
 
 ## 个人 Agent 来源状态
 
@@ -2147,7 +2147,7 @@ hub 自己没有个人 Agent 来源，来源全部来自在跑的扩展的 `agen
 有来源时 `GET /api/v1/agents` 每个来源一项：`{"sources":[{"source":"<贡献 id>","enabled","error?","setup?","providers":[…],"accounts":[…]}]}`；
 飞书插件的来源 id 是 `removedbridge`（沿用 hub 以前那个来源的名字，会话 id 不变）。
 `setup` 说明来源能连上、但还没有可列的东西的原因，客户端在会话列表为空时把它换成一句提示：
-`missing`（后端不支持个人 Agent，如没有 agent-bridge 的 lark-connector）、`disabled`（支持但没打开，如 lark-connector 没设置 `lark-connector_AGENT_BRIDGE=true`）、
+`missing`（后端不支持个人 Agent，如没有 agent-bridge 的飞书网关）、`disabled`（支持但没打开，如飞书网关没打开 agent-bridge）、
 `no_accounts`（开了但还没连接账号）；这几种时这个来源没有会话。其他失败（连不上之类）放在 `error` 里，会话接口照常报错（有几个来源、又没指定 `source` 时跳过出错的那个）。
 
 ## 个人 Agent 列表偏好

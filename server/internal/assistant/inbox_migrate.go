@@ -145,7 +145,7 @@ func blocksDiffer(it *InboxItem, x *connector.ThingExtra) bool {
 }
 
 // replyMigrated sends the reply (and a document's status moves) of a Feishu item through the plugin. The client id
-// is the one the hub would have used itself, so a retry across the move is still dropped by lark-connector.
+// is the one the hub would have used itself, so a retry across the move is still dropped by the Lark gateway.
 func (s *Service) replyMigrated(ctx context.Context, r inboxReplyReq) (bool, error) {
 	it := r.item
 	b := &s.inbox
@@ -195,7 +195,7 @@ func (s *Service) migratedDocStatus(ctx context.Context, it *InboxItem, ch DocCh
 	return out, nil
 }
 
-// The client ids a Feishu reply goes with (the same the plugin, and the hub before it, derive): lark-connector drops a
+// The client ids a Feishu reply goes with (the same the plugin, and the hub before it, derive): the Lark gateway drops a
 // repeat with the same id.
 // clientIDNamespace is the UUIDv5 namespace of namedClientID. Fixed forever: changing it would let a retry of an
 // already delivered message post again.
@@ -212,7 +212,7 @@ func namedClientID(name string) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// validClientID reports whether s is a UUID lark-connector accepts as a clientId (version 1-8, RFC variant, any case).
+// validClientID reports whether s is a UUID the Lark gateway accepts as a clientId (version 1-8, RFC variant, any case).
 func validClientID(s string) bool {
 	if len(s) != 36 {
 		return false

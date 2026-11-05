@@ -24,12 +24,12 @@
 | 运行记录 | 每次运行（成功开起对话 / 没跑起来 / 停机错过而跳过）记进 settings `assistant.runs`（最近 200 条），`GET /api/v1/assistant/runs[?ref=]`；定时任务带上次状态 `last_status` |
 | 到点 | 调度按下一个到期时间设定时器（最长睡 30 秒，列表一改就重算），不再是 20 秒轮询；hub 停机期间错过的跟进回来后照跑一次，提示词里写明晚了多久 |
 | 后台任务 / Monitor | 助手可以用 Bash 的 `run_in_background` 和 Monitor 盯事件，然后结束这一轮；命令跑完 / 事件来时 claude 自己开新一轮（node 把它当成工作中，跑完照常推送）。node 从 stream-json 的 `system/background_tasks_changed` 知道还有哪些在跑：有任务时不回收进程（最长 12 小时），任务列表记在 `node_sessions.tasks`；personad 重启（部署）会把它们连同进程一起杀掉，node 起来后给这些对话发一条说明，让助手决定要不要重开 |
-| 不用批准的工具 | 助手进程带 `--allowedTools mcp__jarvis`：Persona 自己的工具（notify_user、schedule_followup、agents_list、kb_*…）不再每次在手机上要批准；会替用户出面的（mail_send、手机写操作）hub 自己先问，飞书写操作由 Bash 闸门先问（见下「飞书：lark-connector skill」）。其他 Bash / Monitor 仍按会话的权限模式 |
+| 不用批准的工具 | 助手进程带 `--allowedTools mcp__jarvis`：Persona 自己的工具（notify_user、schedule_followup、agents_list、kb_*…）不再每次在手机上要批准；会替用户出面的（mail_send、手机写操作）hub 自己先问，飞书写操作由 Bash 闸门先问（见下「飞书：接飞书的扩展带的 skill」）。其他 Bash / Monitor 仍按会话的权限模式 |
 | Agents | `agents_list` / `agent_read` / `agent_send` / `agent_start`：直接用 hub 的会话状态（`decorated`）和 node 的 `session.items` / `session.send` / `session.start`，不走 ssh |
 | 代答提问 | `interaction_answer`：主人说「帮我回那个问题，选 A」时，助手替他把别的 Agent 的**提问类**交互答掉。只认 `kind: question` 且不是助手自己的对话——`permission` / `plan` / `screen` 一律拒绝并说明只有主人能在 App 里答（批准类不代答是硬边界）。答案逐题核对：每题都要答、键必须是题目原文、选项必须在列表里、单选只能一个，多选按 App 的格式拼成 `A, B`；自由文本拒收（那要在 App 里答，或用 `agent_send`）。过期、已答、已忽略、已取消、不存在各自给出对应错误（后四种查交互历史）。`Resolution.AnsweredBy = "assistant"` 随交互历史（`GET /api/v1/interactions/history`）和 `interaction_resolved` 广播带出去，App 据此标「Jarvis 代答」。Agent 的提问出现时先由助手自己判断要不要代答，见下「提问先由助手代答」。`agents_list` 的「等你」行带上 `interaction_id` 和每道题的选项，助手不必再查一次（工具和这些规则都在助手：`assistant/tools_apps.go` `toolInteractionAnswer`，测试 `assistant/tools_apps_test.go`；交互队列也在管理者这边：`interactions.get` 给出这条交互、不在等了就给交互历史里的结局，`interactions.answer` 把核对过的答案记成助手代答，进程内直接答，`assistant/fleet_routes.go`） |
 | 派发任务 | `task_plan`：把要 Agent 干的活交给用户，一个任务一个待办（`origin` = 这段对话）；只读的、用户记住过的直接开，其余在对话里成计划卡等用户「开始」，不阻塞这一轮。任务的进展在实时快照的「从对话开的任务」里，完成回执、答过的问题、直接对任务说的话进对话动态（[unified-entry.md](unified-entry.md)，`assistant/tasks.go`） |
 | Telegram | 装了 Telegram 扩展（扩展市场 `nwverse/persona-extensions`，#1704、#2057）才有：只读 MCP `telegram_chats` / `telegram_messages` / `telegram_search`；更灵活的读和写用扩展带的 telegram skill（Bash 里 `tg …`，即 `personad tool --cli telegram`，经 hub，写操作手机上确认），`tg` 只在 Telegram 登录着时在 PATH 上（`docs/connector-protocol.md`「命令行」） |
-| 飞书 | 开源版用飞书官方的 lark-cli（见下「飞书：lark-cli」）。装了经 lark-connector 接飞书的插件时，主要用插件给的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；MCP `lark_chats` / `lark_messages` / `lark_search` 也由插件提供（#1571 起 hub 里没有 lark-connector 客户端，`docs/plan-extensions.md`「第 3 步」）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
+| 飞书 | 开源版用飞书官方的 lark-cli（见下「飞书：lark-cli」）。装了经飞书网关接飞书的扩展时，主要用扩展给的 skill（Bash 里扩展的命令，读写都能做），见下「飞书：接飞书的扩展带的 skill」；MCP `lark_chats` / `lark_messages` / `lark_search` 也由扩展提供（#1571 起 hub 里没有飞书网关的客户端，`docs/plan-extensions.md`「第 3 步」）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
 | 操作 Persona 自己 | `jarvis_settings`（先 `list`，助手自己的工具，`assistant/settings_tool.go`：关于我、默认启动器、`main_tasks_quiet` 是助手自己的设置，它自己读写、自己在手机上弹确认卡片；其余是 hub 的设置，清单经 `app.call settings.list` 拿，读写经 `app.tool jarvis_settings` 交给 hub，hub 自己弹卡片）：读写分拣规则（全局的 `inbox.rules`，和设置里声明了 `triage_rules` 的插件来源各自的 `inbox.rules.<插件>`，有就代替全局的）、AI 分身规则、关于我、默认启动器、「主对话派的任务只在主对话里通知」（`assistant.main_tasks_quiet`）、各台机器屏蔽的 Claude 配置目录（`agents.blocked_claude_dirs`），以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
 | 实时快照 | 每条发给助手的消息开头一个 `<persona-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。Agent 和任务各带网页版的链接：hub 的 `public_url`（没写时是默认的 `http://<主机名>:18660`）加 `/s/<机器>/<会话 id>`、`/todos?id=<待办 id>`，助手提到它们时写成 Markdown 链接；hub 没答上地址时不带（#2194）。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，Persona 工具不再延迟加载 |
@@ -173,53 +173,42 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
   第二条 WebSocket `GET /api/v1/bus/relay`（同一个 token）接 hub 转过来的 Persona Link 和经别的 hub 的 node 流；停的时候先把在线机器交给下一个（warm start），再断开它们。
   它没连着时机器显示离线、机器的接口回 `503 assistant_offline`；回来后自己把电脑连回来。
 
-## 飞书：lark-connector skill（2026-10-30）
+## 飞书：接飞书的扩展带的 skill（2026-10-30）
 
-> **2026-11-04 起（#1468）**：闸门是通用的「命令闸门」：命令名、脚本、凭据、规则都由插件的 `assistant.gate` 给（`docs/extensions.md`「助手」），
-> node 里不再有 lark-connector 的默认规则；装了经 lark-connector 接飞书的插件时 `ol` 的闸门和凭据来自插件，没装时 hub 自己的 lark-connector 合成同样的闸门（3c 删掉）。
-> 下面说的行为（读放行、别人看得到的写在手机上确认、拒绝 token / 直接 curl）不变。3c（#1520）之后 hub 不再合成这个闸门，lark-connector 技能、
-> 闸门规则和凭据只来自插件；仓库里的 `skills/lark-connector` 副本和同步脚本已删。
->
-> **2026-11-05 起（#1317）**：token 不再进助手的进程。`lark-connector_AGENT_BASE` 是 node 本机代理上这个进程自己的地址，没有 `lark-connector_AGENT_TOKEN`；
-> ol.sh 没有 token 就不带 `Authorization`，代理替它加上，并按闸门的规则检查每个实际请求（`docs/extensions.md`「助手」的「凭据」）。
-> 所以下面「token」一条的「只放进这个进程的环境变量」不再成立；`env`、`printenv` 打出来的只是一个只能本机用、写操作照样要确认的地址。
-> 闸门读不懂的命令里有 `ol` 的写时，从「整条命令弹卡片」改成直接拒绝，提示单独一条发（下面「别的命令」一条）。
+> 历史：这一路最早是 hub 自己接飞书网关，仓库里放着网关上游 skill 的原样副本（`SKILL.md`、`references/`、命令脚本）和同步上游的脚本；
+> 2026-11-04（#1468）闸门改成通用的「命令闸门」，#1571 / 3c（#1520）起副本、同步脚本和 hub 合成的闸门都删了，skill、说明、闸门规则和凭据只来自扩展。
+> 2026-11-05（#1317）起凭据也不进助手的进程（见下面「凭据」）。
 
-用户要求：「lark-connector 自带 skill……现在只走我们的 MCP lark_* 工具，自由度低」「skill 弄一个副本就行，不搞整个 lark-connector 仓库丢进去」。
+用户要求：助手不能只走 MCP 的 `lark_*` 工具（自由度低），要能直接用飞书网关自带的 skill 读写；skill 弄一个副本就行，不把整个上游仓库丢进来。
 
-- **副本**：原来仓库里有一份 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、`scripts/ol.sh`，
-  带来源 commit 和同步上游的脚本）；#1571 起副本和脚本都删了，skill 由接飞书的插件提供（`docs/lark-agent.md` 开头的说明）。
-- **怎么到助手手里**（2026-11-02 起，`docs/hub-update.md`「skill 从二进制里拿出来」）：它**不在 personad 里**（不能再分发），
-  放在跑助手那台机器的 `~/.persona/skills/lark-connector`（用户自己的 skill 空间），node 每次起助手进程时把它链接到 `~/.persona/assistant/.claude/skills/lark-connector`。
-  旧版本 jarvisd 装进去的副本，node 第一次起助手时自动搬到 `~/.persona/skills/`。没有这个 skill 时没有 `ol`，助手的 CLAUDE.md 也改成只用 MCP 的 `lark_*`。
-  有的话 `~/.persona/assistant-bin/ol` 是一行包装，放在助手进程的 PATH 最前，助手直接 `ol GET /me`。
-- **token**（#1317、#1571 之前的做法，现在不成立：token 留在 node 的代理里，hub.json 的 `lark.base_url`、`lark.token` 已不生效，见 `docs/config.md`）：node 起进程前向 hub 要（RPC `assistant.lark`，只回给 assistant 所在的机器）：hub.json `lark.base_url` 去掉 `/agent/v1` 作为
-  `lark-connector_AGENT_BASE`，`lark.token`（没写就照旧从 lark-connector 容器读）作为 `lark-connector_AGENT_TOKEN`，只放进这个进程的环境变量，不落盘、不进日志。
-  ol.sh 找 token 的顺序是这个环境变量 → `lark-connector_ENV_FILE` → 所在仓库的 `.env`；副本不在仓库里，只靠环境变量（实测通）。
+现在的做法全是通用机制，具体的命令、路由和变量名见扩展自己的说明（例如接飞书的扩展）：
+
+- **怎么到助手手里**：扩展贡献 `assistant`（`docs/extensions.md`「助手」）：技能目录和一段说明。技能**不在 personad 里**（上游的不能再分发，`docs/hub-update.md`「skill 从二进制里拿出来」），
+  node 放在跑助手那台机器上、每次起助手进程时链接进 `~/.persona/assistant/.claude/skills/`；用户自己 `~/.persona/skills/` 里的同名技能优先。
+  有闸门的命令在 `~/.persona/assistant-bin/<命令>` 写一行包装，放在助手进程的 PATH 最前；没有这个技能时没有这个命令，助手的 CLAUDE.md 也只讲 MCP 的 `lark_*`。
+- **凭据**：hub 只给跑助手的那台 node（RPC `assistant.lark`），由扩展的 `assistant.credentials` 给；凭据留在 node 的本机代理里（`node/gateproxy.go`），
+  助手进程只拿到一个只能本机用、写操作照样要确认的地址，`env`、`printenv` 打不出凭据。
 - **闸门**（`node/larkgate.go`）：助手进程用单独的一组 hooks（插件 `assistant-hooks`，更老的 Claude Code 是 `assistant-settings.json`，`docs/claude-integration.md`「Hooks」），多一个 Bash 的 PreToolUse hook（herdr 里的 Agent 不受影响）。
   hook 读整条命令：
-  - 只有 `ol` 调用（和 jq / head / grep / echo / cd / `timeout N` 这类只输出的命令）时逐个判断：读（GET、只读的 POST 如 `/context/harvest`、
-    `/search/page`）直接放行；只影响他自己的（标已读、`/todos/*/complete` 带 `scope:self`、找单聊 `POST /conversations {type:p2p}`）放行；
-    其余写（发 / 回复 / 撤回 / 转发、表情、文档、日程、审批、邮件、群设置……）在手机上弹「飞书」批准卡片：做什么（发消息 / 表情回复 / 建改日程…）、
-    会话名（hub 查）、method、路径和要发的 body（`@file` 会读出来）。拒绝时把用户的话作为原因还给助手；「本会话总是允许」记住这类路由（id 抹掉）。
-  - 碰 `lark-connector_AGENT_TOKEN`、`/proc/*/environ`、直接 curl lark-connector、给 ol 加 `-v` / `--trace` / `-w` 这类会把请求头打出来的参数：直接拒绝。
-  - 别的命令（接 python、写到 /tmp 以外、`$(…)`）：闸门不管，按权限模式走普通的 Bash 批准；但只要里面有 `ol` 的写（`ol POST …`），
-    不管权限模式（包括 bypass）都弹「飞书」卡片，整条命令给他看。#1317 之后（凭据在代理）改成直接拒绝、提示单独一条 `ol` 发：
-    代理只放行闸门读出来、确认过的那一次调用，整条命令确认了也发不出去。
+  - 只有闸门命令（和 jq / head / grep / echo / cd / `timeout N` 这类只输出的命令）时逐个判断：读直接放行；只影响他自己的（标已读、完成自己的待办）放行；
+    其余写（发 / 回复 / 撤回 / 转发、表情、文档、日程、审批、邮件、群设置……）在手机上弹「飞书」批准卡片：做什么、会话名（扩展的 `assistant.summary` 查）、
+    method、路径和要发的 body（`@file` 会读出来）。拒绝时把用户的话作为原因还给助手；「本会话总是允许」记住这类路由（id 抹掉）。
+  - 碰凭据变量、`/proc/*/environ`、直接 curl 网关、给命令加 `-v` / `--trace` / `-w` 这类会把请求头打出来的参数：直接拒绝。
+  - 别的命令（接 python、写到 /tmp 以外、`$(…)`）：闸门不管，按权限模式走普通的 Bash 批准；但只要里面有闸门命令的写，直接拒绝、提示单独一条发：
+    代理只放行闸门读出来、确认过的那一次调用，整条命令确认了也发不出去（#1317 之前是整条命令弹卡片）。
   - 规则是配置：写在 hub.json `connector_gate`，和其他连接器的写操作一个写法，`connector` 写 `lark`，`action` 写「方法 路径」（path 里 `*` 一段、`**` 剩下的全部，
-    `"*"` 是任何调用），`match` 按 body 的顶层字段，`decision` 是 `allow|confirm|deny`；排在内置规则前面，第一条匹配的说了算。
+    `"*"` 是任何调用），`match` 按 body 的顶层字段，`decision` 是 `allow|confirm|deny`；排在扩展给的规则前面，第一条匹配的说了算。
     比如以后想让发消息不再确认：`{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`。
     老的 `lark_gate`（`{method, path, body?, action}`）照样生效，排在 `connector_gate` 的飞书规则后面；hub 把两份合成一份交给 node（`connector.LarkRules`，2026-11-03 迁移 M5）。
-- 早报、「今天要我处理什么」可以用 `ol POST /context/harvest '{"preset":"today"}'`（@我、日程、待办、我的审批，一次拿到）。
 
 ## 飞书：lark-cli（2026-11-03，#273 的 L1）
 
-没有 lark-connector 的 hub 也能让助手读写飞书：用飞书官方的开放平台命令行 lark-cli（`@larksuite/cli`），方案和后面几步见 `docs/plan-lark-cli.md`。
-这一步只做助手，收件箱、知识库、`/agent` 还是只认 lark-connector。
+没有飞书网关的 hub 也能让助手读写飞书：用飞书官方的开放平台命令行 lark-cli（`@larksuite/cli`），方案和后面几步见 `docs/plan-lark-cli.md`。
+这一步只做助手，收件箱、知识库、`/agent` 还是只认飞书网关。
 
 - **怎么开**：hub.json `lark.cli`（`docs/config.md`），lark-cli 装在助手所在的机器上，用户自己 `lark-cli auth login --domain all` 登录一次。
-  lark-connector 可以同时配着，`lark.prefer` 定提示词里谁优先。
-- **怎么到助手手里**：node 起助手进程前向 hub 要配置（RPC `assistant.lark` 多了 `cli`、`prefer`；只配 lark-cli 时不去问 lark-connector；现在 hub 本来就不再给 lark-connector 的 token），
+  飞书网关可以同时配着，`lark.prefer` 定提示词里谁优先。
+- **怎么到助手手里**：node 起助手进程前向 hub 要配置（RPC `assistant.lark` 多了 `cli`、`prefer`；只配 lark-cli 时不去问飞书网关；现在 hub 本来就不再给飞书网关的 token），
   在 `~/.persona/assistant-bin/lark-cli` 写一行包装：配置的那个 lark-cli（不是绝对路径时在登录 shell 里找）加上配置的 `--profile`，
   并把 lark-cli 所在目录放进 PATH（npm 的 lark-cli 是 `env node` 的脚本，要找得到 node）。没配 `lark.cli` 或找不到 lark-cli 就不写。
   lark-cli 的凭据留在它自己的 `~/.lark-cli`，hub 和 node 都不碰。
@@ -227,8 +216,8 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
   跟版本走的领域说明，参数用 `--help` / `lark-cli schema`。只有 lark-cli 时说明没有未读和公司圈、`lark_*` MCP 工具用不了，找要处理的消息用
   `im +messages-search --is-at-me / --chat-type p2p`；两个都有时按 `lark.prefer` 分工（golden `assistant_claude_md.lark_cli`、`.both`）。
   发消息、回复消息让它用应用的机器人（`--as bot`）：用户身份要应用开 `im:message.send_as_user`，默认的应用没有（2026-11-04 实测）；其余读写用用户身份。
-  只配了 lark-cli 时，机器上留着的 lark-connector skill（旧版 jarvisd 拷进助手目录的）不算：没有 lark-connector 可连，CLAUDE.md 里不提 `ol`
-  （2026-11-03 部署到 hub 机器时撞上：说明书先推荐 `ol`，又说没有 lark-connector）。
+  只配了 lark-cli 时，机器上留着的飞书网关 skill（旧版 jarvisd 拷进助手目录的）不算：没有网关可连，CLAUDE.md 里不提它的命令
+  （2026-11-03 部署到 hub 机器时撞上：说明书先推荐网关的命令，又说没有网关）。
 - **闸门**（`node/larkcligate.go`，接在 `ol` 的闸门里，同一个 `larkCheck`，Codex 也走它）：lark-cli 自己知道哪些命令会写，每个命令的 `--help` 都打印
   `Risk: read / write / high-risk-write`，node 第一次见到一个命令时问一次（按命令缓存，约 50 ms）：
   - `read` 直接放行；`write`、`high-risk-write`、问不出来的都在手机上弹「飞书」卡片，写的是谁做（带 `--as bot` 是「以机器人身份」，否则「以你的身份」）、做什么（发消息、回复、表情、撤回…）和整条命令，
@@ -239,22 +228,14 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
   - 闸门读不懂的命令（循环、`$(…)`、接 python）里有 lark-cli：只要有一个不是已知的读，就整条命令在手机上确认，不管权限模式。
   - hub.json 的规则先匹配：`connector_gate` 里 `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}`（老的 `lark_gate` 写法
     `{"method":"CLI","path":"/im/+messages-send","action":"allow"}` 也行）。
-- **还没做**：runtime 助手（DSH、pi）的提示词和 `lark-connector` 工具还只认 lark-connector；设置页的 lark-cli 状态、缺的权限（L2）。
+- **还没做**：runtime 助手（DSH、pi）的提示词和扩展闸门声明的工具还只认飞书网关；设置页的 lark-cli 状态、缺的权限（L2）。
 
-## lark-connector agent hub：带领个人 Agent 与查看审批（2026-11-01，仅限 Claude 助手）
+## 扩展的 MCP 服务器（2026-11-01，仅限 Claude 助手）
 
-lark-connector 的 `lark-connector-agent` 带一套控制命令（上游 agent-hub 的 control CLI，JSON 输出）：看 lark-connector hub 认识的 Agent、
-等人处理的车道、待审批的请求，读写个人 Agent（Muse、Dots、Grok Bot…）的会话。
-助手所在的机器上有支持 `mcp-server --control` 的这个 CLI 时，node 起 **Claude 助手**时把它作为第二个 MCP 服务器挂上（`lark-connector-agent mcp-server --control`，
-工具名 `mcp__lark-connector__*`，`node/lark-connector.go`；仅限 Claude 助手，Codex 和 runtime 助手不挂），助手就能调度这些个人 Agent 并查看待办审批。
-
-- **找 CLI 与开关**：环境变量 `PERSONA_lark-connector_AGENT` 优先（兼容 `JARVIS_lark-connector_AGENT`）指定路径；设为空字符串 `""`、`0` 或 `off` 可显式禁用；未设置时依次找 `PATH`、`~/bin/lark-connector-agent`。挂载前会探测一次 `lark-connector-agent --help`，确认输出包含 `mcp-server` 与 `--control` 才启用（普通未带 `--control` 的 `lark-connector-agent` 不会误挂）；都没有或不支持就不挂，助手没有这组工具。
-- **凭据隔离**：配置和 token 全在 CLI 自己的 `~/.config/lark-connector-agent/config.json`（0600）或它的 `lark-connector_*` 环境变量里，Persona 不读、不传、不记日志。
-- **只读工具直接放行**：`hub_agents`、`hub_attention`、`approvals_list`、`agent_sessions`、`agent_search`、`agent_messages` 放进 `--allowedTools`，不用每次在手机上批准。
-- **发消息走会话权限模式**：`agent_send`（给个人 Agent 发消息，CLI 自动加 `[jarvis] ` 前缀）走会话的权限模式——默认模式下先在手机上询问，而在 `bypassPermissions` 模式下会直接执行、不再弹手机确认。
-- **禁用重叠的 Herdr / Orca 工具**：Herdr 窗格和 Orca 终端统一由 Persona 自己的 `mcp__jarvis__agents_*` 工具管理（带 hub 的安全检查与状态同步），因此 `lark-connector` MCP 上的 `herdr_prompt` / `herdr_rename` / `herdr_answer`、`orca_read` / `orca_history` / `orca_wait` / `orca_send` 一律通过 `--disallowedTools` 禁用。
-- **审批只转给用户，从不代批**：`approval_decide` 始终用 `--disallowedTools` 禁掉（不管 CLI 的 `approvals.enabled` 怎么设）；
-  助手只用 `approvals_list` 看有什么在等，再告诉用户去处理。配对、解绑、凭据这类操作 CLI 本身就不提供。
+扩展可以贡献 `mcp_servers`（`docs/extensions.md`「MCP 服务器」）：跑助手的那台电脑上装着它点名的命令行时，node 起 **Claude 助手**时把它作为又一个 MCP 服务器挂上
+（工具名 `mcp__<id>__*`，`node/assistant_mcp.go`；Codex 和 runtime 助手不挂）。命令读它自己的配置，Persona 不读、不传凭据；扩展列出的只读工具直接放行，
+点名禁掉的永远调不了，其余按对话的权限模式在手机上问。例如接飞书的扩展用它挂上游的个人 Agent 控制工具，让助手调度个人 Agent、查看待审批的请求
+（审批只转给用户、从不代批；和 Persona 自己的 `mcp__jarvis__agents_*` 重叠的 Herdr / Orca 工具禁掉），具体工具和开关见扩展的说明。
 
 ## 本会话总是允许（2026-11-05，#2202）
 
@@ -625,7 +606,7 @@ thread id 就是会话 id（Codex 自己定，新对话要先 `thread/start` 才
 | 思考强度 | `--effort` / 控制请求 | `turn/start` 的 `effort`（原样传 low…max，网关认不认看模型） |
 | 图片 | base64 image 块 | 存成文件（`~/.persona/uploads/日期/`），`localImage`；rollout 记路径，App 当缩略图显示 |
 | 指令 | `CLAUDE.md` | `AGENTS.md`（`assistant.prepare` 同时写两份，内容一样）；Codex 还会读用户自己的 `~/.codex/AGENTS.md` |
-| lark-connector skill | `.claude/skills/lark-connector` | 同一个目录作为 extra skill root（格式相同，`skills/list` 里能看到）；`ol` 在 PATH 上，token 在进程环境里（`shell_environment_policy.ignore_default_excludes=true`，否则 Codex 默认把 `*TOKEN*` 变量从命令环境里去掉） |
+| 扩展的 skill | `.claude/skills/<名字>` | 同一个目录作为 extra skill root（格式相同，`skills/list` 里能看到）；闸门命令在 PATH 上，凭据留在 node 的代理里（以前 token 在进程环境里时要设 `shell_environment_policy.ignore_default_excludes=true`，否则 Codex 默认把 `*TOKEN*` 变量从命令环境里去掉） |
 | 记忆 | Claude Code 的 auto memory（助手目录专属） | **同一份**（2026-11-01 用户选的）：`developerInstructions` 里带上目录、格式（一条一个文件 + `MEMORY.md` 索引，和 Claude 一样）和当前的索引（`codexMemoryPrompt`）；目录加进沙箱的 `writableRoots`，在里面改文件（apply_patch）和只读它的命令（cat / head / rg …，`readsOnlyMemory`）不问，计划模式下写也要问。Codex 自己的记忆（`~/.codex/memories`，整台机器所有 Codex 共用一份，由它自己从 rollout 提炼）对助手关掉（`features.memories=false`） |
 | 后台任务 / Monitor | `background_tasks_changed`，任务跑完 claude 自己开新一轮 | 每轮结束读 `thread/backgroundTerminals/list` 记成任务（有就不回收进程，重启后告诉对话丢了什么）；**跑完不会自己唤醒对话**，Codex 没有 Monitor |
 | 备用进程（预热） | 有 | 有（预先 `thread/start`，新对话直接用它的 thread，实测 50 ms 返回） |
@@ -637,7 +618,7 @@ thread id 就是会话 id（Codex 自己定，新对话要先 `thread/start` 才
 - 拒绝时的理由会以一条「（没有执行）…」出现在对话里（Codex 的拒绝本身不带话）。
 - 用户自己 `~/.codex/config.toml` 里的 MCP server、`hooks.json`、`AGENTS.md` 也会加载（和 claude 读用户自己的设置一样）；别的 MCP server 的调用在非「全部放行」时要在手机上批准。
 
-实测（2026-11-01，hub 机器上的测试 hub：假 HOME、独立端口和库，真实的 cx_gpt 启动器和 lark-connector）：新对话（快照、`agents_list` 不用批准）、续聊、
+实测（2026-11-01，hub 机器上的测试 hub：假 HOME、独立端口和库，真实的 cx_gpt 启动器和飞书网关）：新对话（快照、`agents_list` 不用批准）、续聊、
 ask_user 卡片答完拿到答案、`ol GET /me` 直接放行、`ol POST …/messages` 弹「飞书」卡片并在卡片上拒绝（模型停下没重试，消息没发出）、
 全部放行下命令不问、插话进同一轮、中断（即时，`sleep` 一起停掉）、hub + node 重启后续聊记得上文、思考强度和模式重启后读回、流式输出约 120 ms 一段、
 发图片认出颜色、预热的备用进程；记忆（同一天补测）：预置的「喜欢的茶」默认模式下直接读到（不弹卡片），
@@ -657,8 +638,8 @@ AI 分身 / 飞书 `/agent` / 定时任务（都走 `assistant.send`）。
 
 不一样的：
 
-- **飞书**：token 不进运行时。模型用 `lark-connector` 工具（参数就是 `ol` 后面的词），node 先过同一个飞书闸门（`larkCheck`），再在 node 上
-  带 token 跑 lark-connector skill 的 `ol.sh`；shell 里直接跑 `ol` 被拦下（拿不到 token，也绕不过闸门）。
+- **飞书**：凭据不进运行时。模型用扩展闸门声明的工具（`proto.CommandGate.Tool`，参数就是命令后面的词），node 先过同一个飞书闸门（`larkCheck`），再在 node 上
+  跑技能里的脚本，凭据只在 node 的代理上；shell 里直接跑命令拿不到凭据，也绕不过闸门。
 - **模型和思考强度**在运行时里选（DSH 的 Web GUI），模型配置对这种启动器不选具体模型；**预热**不需要（运行时常驻）。
 - 关闭对话只停正在跑的这一轮，对话留在运行时里；一段对话换成 Claude / Codex（或反过来）要新建对话：发消息时指定了别的启动器，node 仍交给这个运行时（`assistantResumeLauncher`）。
 - 运行时没连上（`dsh web` 没在跑）时发消息回 `runtime_away`，什么都没发。
@@ -734,17 +715,4 @@ App 在后台 / 锁屏时：推送（APNs alert）和静默唤醒都不依赖 Ap
 端到端（2026-10-26）：新对话 10 秒内用快照 + `agents_list` + `lark_api calendar/week` 回答「谁在等我、今天还有什么会」；
 ask_user 在 App 里显示为原生提问卡片并拿到答案；`schedule_followup 2m` 准点触发并 `notify_user`。
 
-### lark-connector skill 实测（2026-10-30，hub 机器上的测试 hub：独立端口、独立库，用线上的 lark-connector 和 token；对话以「【Jarvis 能力测试，可忽略】」开头）
-
-| 测的 | 结果 |
-| --- | --- |
-| ol.sh 经 tailscale 地址（反代） | `/health` `{ok:true,role:agent}`、`/me`、`GET /conversations` 都通；写请求带 ol.sh 自动加的 Origin，没有 `CROSS_ORIGIN_REQUEST`（发空消息拿到的是 400 `INVALID_MESSAGE`，说明过了 Origin 检查） |
-| 助手找到 skill 和 ol | 自己调 `Skill lark-connector`，`command -v ol` → `~/.jarvis/assistant-bin/ol`；读直接执行，没弹卡片 |
-| 给自己发消息 | 弹「飞书」卡片：「以你的身份在飞书上发消息 · 会话：「（本人）」 · POST /conversations/…/messages · {text}」；批准后发出，读回正文一致 |
-| 回 OK 表情 | 卡片「表情回复 · POST /messages/…/reactions {key:OK}」；批准后读回 `OK` 计数 1、是本人 |
-| 明天 10:00 的日程 | 卡片「建 / 改日程 · POST /calendar/events {title, startAt, endAt, timezone, calendarId}」；批准后读回 02:00–02:15Z、0 个参会人 |
-| 自己的文档写一段 | 建文档、写正文各一张卡片（正文那条命令带循环和 `$(…)`，现在会以「命令较复杂，整条显示」的飞书卡片出现）；读回 Markdown 正文一致 |
-| 拒绝 | 手机上拒绝发消息 → 助手拿到「测试：拒绝」，停下没换法子；读回会话里没有这条 |
-| token | `echo $lark-connector_AGENT_TOKEN \| wc -c` 被拒（「不要读取、打印…」）；token 在测试 hub 的日志、助手 transcript、jarvisd 日志里都搜不到 |
-
-测试日程已删除（明天的日历里 0 条）、测试文档进了回收站；给自己发的那条测试消息留着（标了可忽略）。
+接飞书的扩展带的 skill 在真实飞书上的实测（2026-10-30）记在扩展自己的说明里。

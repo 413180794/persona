@@ -119,7 +119,7 @@ struct LarkEncryptionUnlockSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    SecureField(unified ? "lark-connector 登录密码" : "密钥库密码", text: $password)
+                    SecureField(unified ? "飞书网关登录密码" : "密钥库密码", text: $password)
                         .textContentType(.password)
                         .accessibilityIdentifier("lark.encryption.password")
                     if let problem { Text(problem).font(Theme.Font.secondary).foregroundStyle(Theme.danger) }

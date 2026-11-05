@@ -8,7 +8,7 @@ vi.mock("./extensions", async (original) => ({ ...(await original<typeof import(
 const op = (over: Partial<ExtensionOperation> = {}): ExtensionOperation => ({
   id: "op1",
   kind: "install",
-  extension: "lark-connector",
+  extension: "larkext",
   market: "m1",
   state: "running",
   step: "download",
@@ -62,9 +62,9 @@ describe("extension operations", () => {
     track(op({ updated_at: "2026-11-06T00:00:00Z", step: "verify" })); // older: ignored
     expect(operations()[0].step).toBe("download");
     track(op({ id: "op2", started_at: "2026-11-06T00:01:00Z", updated_at: "2026-11-06T00:01:00Z" }));
-    expect(latestFor(operations(), "lark-connector", "m1")?.id).toBe("op2");
-    expect(latestFor(operations(), "lark-connector", "other")).toBeUndefined();
+    expect(latestFor(operations(), "larkext", "m1")?.id).toBe("op2");
+    expect(latestFor(operations(), "larkext", "other")).toBeUndefined();
     forget("op2");
-    expect(latestFor(operations(), "lark-connector")?.id).toBe("op1");
+    expect(latestFor(operations(), "larkext")?.id).toBe("op1");
   });
 });

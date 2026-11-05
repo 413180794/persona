@@ -1,19 +1,27 @@
 // Package lark is hub.json's "lark": how the hub and the assistant run lark-cli, Feishu's official open-platform CLI
-// (docs/plan-lark-cli.md). Feishu through lark-connector (the user's own web client) is a plugin's now
+// (docs/plan-lark-cli.md). Feishu through a Lark gateway (the user's own web client) is an extension's now
 // (docs/plan-extensions.md「第 3 步」); its old fields are still read, only to say so.
 package lark
 
-import "errors"
+import (
+	"errors"
+	"regexp"
+)
+
+// sourceName is a lark.prefer value: "cli" or an extension's own source.
+var sourceName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // Config is hub.json's lark.
 type Config struct {
 	// CLI is lark-cli; nil: not used.
 	CLI *CLIConfig `json:"cli,omitempty"`
-	// Prefer is the primary source when a plugin serves Feishu as well: "lark-connector" or "cli".
+	// Prefer is the primary source when an extension serves Feishu as well: "cli" (lark-cli), or the extension's own
+	// source by the name it gives it (the extension reads and checks that; the hub passes it on). "" leaves it to
+	// the extension.
 	Prefer string `json:"prefer,omitempty"`
 
-	// Account, BaseURL, Container, Token and NativeOLKToken pointed the hub at lark-connector before a plugin served it:
-	// not used any more (the hub logs a line when they are there), except Account, the lark-connector account the
+	// Account, BaseURL, Container, Token and NativeOLKToken pointed the hub at a Lark gateway before an extension served
+	// it: not used any more (the hub logs a line when they are there), except Account, the gateway account the
 	// Feishu items a plugin hands over came to.
 	Account        int    `json:"account,omitempty"`
 	BaseURL        string `json:"base_url,omitempty"`
@@ -31,17 +39,18 @@ type CLIConfig struct {
 // MaxAccount is the largest account number.
 const MaxAccount = 999999999
 
-// lark-connectorConfigured: the old lark-connector fields are there (the hub says they are not read any more).
-func (cfg Config) lark-connectorConfigured() bool { return cfg.Token != "" || cfg.Container != "" }
+// LegacyGatewayConfigured: the old Lark gateway fields are there (the hub says they are not read any more).
+func (cfg Config) LegacyGatewayConfigured() bool { return cfg.Token != "" || cfg.Container != "" }
 
 func (cfg Config) Validate() error {
 	if cfg.Account < 0 || cfg.Account > MaxAccount {
 		return errors.New("lark.account must be an integer between 1 and 999999999 (or 0 for the primary account)")
 	}
-	switch cfg.Prefer {
-	case "", "lark-connector", "cli":
-	default:
-		return errors.New(`lark.prefer must be "lark-connector" or "cli"`)
+	switch {
+	case cfg.Prefer == "lark-cli":
+		return errors.New(`lark.prefer: lark-cli is "cli"`)
+	case cfg.Prefer != "" && !sourceName.MatchString(cfg.Prefer):
+		return errors.New(`lark.prefer must be "cli" or the name of the extension's own source (a-z0-9-)`)
 	}
 	return nil
 }

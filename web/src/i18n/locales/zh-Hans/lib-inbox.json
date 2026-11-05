@@ -34,7 +34,7 @@
   "handoff_summarize": "总结一下，告诉我要做什么，给出建议的回复",
   "handoff_research": "查清楚背景再告诉我",
   "handoff_handle": "直接帮我处理，回复前先问我",
-  "handoff_lark_account": "，在飞书账号 {account}（lark_messages 传 account={account}，ol 命令前加 lark-connector_ACCOUNT={account}）",
+  "handoff_lark_account": "，在飞书账号 {account}（lark_messages 传 account={account}）",
   "handoff_lark": "（飞书会话 feedId {feed}{account}，可用飞书工具读更多上下文或回复）",
   "handoff_connector": "（{name}：{url}）",
   "handoff_mail": "（邮件 account_id {account}，mailbox {mailbox}，uid {uid}，可用 mail_read 读全文、mail_send 回复）",

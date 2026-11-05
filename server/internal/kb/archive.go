@@ -36,7 +36,7 @@ type SourceMessage struct {
 	SenderHandles []Handle `json:"sender_handles,omitempty"`
 }
 
-// Source is where chats come from (Feishu through lark-connector).
+// Source is where chats come from (Feishu through the Lark extension).
 type Source interface {
 	Name() string // "lark"
 	Chats(ctx context.Context, limit int) ([]SourceChat, error)

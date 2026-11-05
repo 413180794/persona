@@ -1,5 +1,5 @@
 // Comments on a Feishu document in the reader (#1290; the phone's FeishuDocsComments / FeishuDocsCommentsModel):
-// the threads from the hub's read-only lark-connector window, and, when the plugin says `lark_doc_comments`, the user's own
+// the threads from the hub's read-only Lark gateway window, and, when the plugin says `lark_doc_comments`, the user's own
 // writes from this browser: a comment on the whole document or on a passage, a reply to a thread, resolve and reopen.
 // They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol.md 飞书 API.
 // No DOM here.
@@ -101,7 +101,7 @@ function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** The hub's words for a failed write (the plugin's: 「lark-connector 未登录飞书」…), else what went wrong. */
+/** The hub's words for a failed write (the plugin's: 「飞书网关未登录飞书」…), else what went wrong. */
 export function writeErrorText(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.code === "comment_unsupported") return t("lib-doc-comments.comment_unsupported");
@@ -112,7 +112,7 @@ export function writeErrorText(e: unknown): string {
 }
 
 // ── the routes ──
-// The token is passed explicitly: an lark-connector 401 (Feishu signed out) must not sign this browser out of the hub.
+// The token is passed explicitly: a Lark gateway 401 (Feishu signed out) must not sign this browser out of the hub.
 
 const opts = (json?: unknown) => (json === undefined ? { token: getToken() } : { method: "POST", json, token: getToken() });
 

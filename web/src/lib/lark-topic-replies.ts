@@ -1,6 +1,6 @@
-// The newest replies of a Feishu topic group's topics, shown on their cards as lark-connector does (#2903, iOS
+// The newest replies of a Feishu topic group's topics, shown on their cards as the Lark gateway does (#2903, iOS
 // LarkTopicReplies.swift). A topic's are read when its card comes on screen, `PARALLEL` topics at a time (a screen holds
-// a dozen cards, and the hub passes each read on to lark-connector), and kept with the reply count they were read at: a topic
+// a dozen cards, and the hub passes each read on to the Lark gateway), and kept with the reply count they were read at: a topic
 // is read again only when its count changes (also while it is being read), or after a read failed: on retry, or when
 // its card comes on screen again.
 import type { LarkMessage } from "./inbox";

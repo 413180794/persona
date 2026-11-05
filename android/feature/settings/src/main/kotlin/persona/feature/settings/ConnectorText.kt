@@ -150,7 +150,7 @@ internal class ConnectorSignInModel(private val api: ConnectorsManagement, priva
 internal sealed interface ConnectorRow {
     data object Phone : ConnectorRow
     data object Mail : ConnectorRow
-    /** 飞书: its page reads `/api/v1/lark/…`, the lark-connector extension's (`LarkFeatures`, #1530). */
+    /** 飞书: its page reads `/api/v1/lark/…`, the Lark extension's (`LarkFeatures`, #1530). */
     data object Lark : ConnectorRow
     data class Hub(val connector: HubConnector) : ConnectorRow
 }

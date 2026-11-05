@@ -9,7 +9,7 @@ final class LarkEntryTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", connector ? "settings" : "assistant", "-demo.on", "NO",
                                "-ui.oldLayout", "NO", "-openConnectorFeishu", connector ? "YES" : "NO",
-                               "-integrations.lark-connector.enabled", "NO"]
+                               "-integrations.lark.enabled", "NO"]
         app.launchPinned()
         return app
     }
@@ -87,7 +87,7 @@ final class LarkEntryTests: XCTestCase {
         XCTAssertTrue(toggle.waitForExistence(timeout: 20))
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         app.terminate()
-        if let index = app.launchArguments.firstIndex(of: "-integrations.lark-connector.enabled") {
+        if let index = app.launchArguments.firstIndex(of: "-integrations.lark.enabled") {
             app.launchArguments.removeSubrange(index...index + 1)
         }
         if let index = app.launchArguments.firstIndex(of: "-tab") { app.launchArguments[index + 1] = "assistant" }

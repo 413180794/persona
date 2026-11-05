@@ -1,6 +1,6 @@
 import Foundation
 
-// Personal agents: the hub's /api/v1/agents/* (server/internal/agents), lark-connector's agent-bridge for now. A session
+// Personal agents: the hub's /api/v1/agents/* (server/internal/agents), the gateway's agent-bridge for now. A session
 // id is "<source>:<sessionKey>"; bridge keys contain "/" and ":", so ids are fully percent-encoded in paths.
 
 nonisolated struct PersonalAgentSession: Codable, Identifiable, Hashable, Sendable {
@@ -48,9 +48,9 @@ nonisolated struct PersonalAgentSourceStatus: Codable, Hashable, Sendable {
     /// What to do so this source lists agents, for an empty list; nil when it is set up.
     var setupHint: String? {
         switch setup {
-        case "missing": return "lark-connector 的版本还没有个人 Agent，升级 lark-connector 后再试"
-        case "disabled": return "lark-connector 没有开启个人 Agent：在它的部署里设置 lark-connector_AGENT_BRIDGE=true 后重启"
-        case "no_accounts": return "还没有连接个人 Agent 账号：在 lark-connector 的设置里添加 Cue 或 Grok Bot"
+        case "missing": return "飞书网关的版本还没有个人 Agent，升级飞书网关后再试"
+        case "disabled": return "提供个人 Agent 的扩展没有开启它：按扩展的说明开启后重启"
+        case "no_accounts": return "还没有连接个人 Agent 账号：在飞书网关的设置里添加 Cue 或 Grok Bot"
         default: return nil
         }
     }

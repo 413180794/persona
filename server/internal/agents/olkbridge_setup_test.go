@@ -48,7 +48,7 @@ func TestBridgeSetup(t *testing.T) {
 		}
 	}
 
-	// Other failures stay errors: a down lark-connector must not read as "nothing set up".
+	// Other failures stay errors: a down Lark gateway must not read as "nothing set up".
 	b := testBridge{API: &setupBridge{err: &apiError{Status: http.StatusBadGateway}}}
 	if st, err := b.Status(ctx); err == nil || st.Error == "" || st.Setup != "" {
 		t.Errorf("502: status %+v, %v; want an error", st, err)

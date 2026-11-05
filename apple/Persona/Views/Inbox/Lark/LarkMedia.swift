@@ -195,7 +195,7 @@ struct LarkRemoteImage: View {
     }
 }
 
-/// Hub thumbnails come in steps of 24 px up to 624 (lark-connector's `MEDIA_THUMBNAIL_EDGES`); larger is the original.
+/// Hub thumbnails come in steps of 24 px up to 624 (the Lark gateway's `MEDIA_THUMBNAIL_EDGES`); larger is the original.
 nonisolated func larkThumbEdge(points: CGFloat) -> Int? {
     let edge = Int((points * 3 / 24).rounded(.up)) * 24
     return edge > 0 && edge <= 624 ? edge : nil

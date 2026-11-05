@@ -212,7 +212,7 @@ type InboxConfig struct {
 	Rules      string           `json:"rules,omitempty"`
 	AgentRules string           `json:"agent_rules,omitempty"`
 	Agent      InboxAgentConfig `json:"agent"`
-	// LarkAccount is hub.json's lark.account: the lark-connector account Feishu items came to unless they say another.
+	// LarkAccount is hub.json's lark.account: the gateway account Feishu items came to unless they say another.
 	LarkAccount int `json:"lark_account,omitempty"`
 	// Translate are the languages some device wants mail translated into (设置 › 翻译).
 	Translate []string `json:"translate,omitempty"`

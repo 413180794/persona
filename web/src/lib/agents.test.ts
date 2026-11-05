@@ -122,7 +122,7 @@ describe("setupHints", () => {
       { source: "d", enabled: true, setup: "later" },
     ]);
     expect(h).toHaveLength(2);
-    expect(h[0]).toContain("lark-connector_AGENT_BRIDGE");
+    expect(h[0]).toContain("扩展");
     expect(h[1]).toContain("账号");
   });
 });

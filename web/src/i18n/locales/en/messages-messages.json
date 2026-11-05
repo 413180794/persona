@@ -3,7 +3,7 @@
   "title": "Messages",
   "off_title": "Messages page is off",
   "off_hint": "Turn on “Show messages on home” in Settings › Connectors › Lark to add Messages to this browser's sidebar.",
-  "lark-connector_settings": "lark-connector settings",
+  "goto_lark_settings": "Go to Lark settings",
   "no_lark_title": "The hub isn't connected to Lark messages",
   "no_lark_hint": "Once the hub has an extension that provides Lark, all your direct and group chats will be listed here.",
   "back": "Back to Messages",

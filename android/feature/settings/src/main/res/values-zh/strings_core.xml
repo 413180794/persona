@@ -285,7 +285,7 @@
     <string name="settings_row_mail">邮箱</string>
     <string name="settings_row_mail_subtitle">Gmail、飞书邮箱和其他 IMAP</string>
     <string name="settings_row_lark">飞书</string>
-    <string name="settings_row_lark_subtitle">lark-connector 连接状态与账号</string>
+    <string name="settings_row_lark_subtitle">飞书网关连接状态与账号</string>
     <string name="settings_connectors_caption">Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。</string>
     <string name="settings_section_appearance">外观</string>
     <string name="settings_section_about">关于</string>

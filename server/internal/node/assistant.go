@@ -51,7 +51,7 @@ const (
 const assistantTaskMaxIdle = 12 * time.Hour
 
 // assistantAllowedTools run without asking: Persona's own tools (the hub asks the phone itself before the ones that
-// send something on the user's behalf — mail_send, phone writes; Feishu writes through the lark-connector skill pass larkgate.go). Without this every notify_user or
+// send something on the user's behalf — mail_send, phone writes; Feishu writes through an extension's gated command pass larkgate.go). Without this every notify_user or
 // schedule_followup waited for a tap on the phone, so a follow-up firing at night just stalled.
 const assistantAllowedTools = "mcp__jarvis"
 
@@ -619,18 +619,16 @@ func (n *Node) claudeAssistantMCPAndTools(id, cwd string) (mcpJSON string, toolF
 	servers := map[string]any{"jarvis": map[string]any{
 		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
 	}}
-	// lark-connector's agent hub control tools, when its CLI with `--control` is on this machine (lark-connector.go).
-	olBin := lark-connectorAgentBin()
-	if olBin != "" {
-		servers[lark-connectorServer] = lark-connectorMCP(olBin)
+	// The extensions' MCP servers whose command is on this machine (assistant_mcp.go).
+	extra, allow, deny := assistantMCPServers(n.assistantLark(context.Background()).MCPServers)
+	for name, s := range extra {
+		servers[name] = s
 	}
-	allowed, disallowed := assistantToolFlags(n.assistantTools(), olBin != "")
 	mcp, _ := json.Marshal(map[string]any{"mcpServers": servers})
-	toolFlags = []string{"--mcp-config", string(mcp), "--allowedTools", allowed}
+	toolFlags = []string{"--mcp-config", string(mcp), "--allowedTools", strings.Join(append([]string{n.assistantTools()}, allow...), ",")}
 	// One --disallowedTools with a word per rule (it takes several, up to the next flag): a path may hold a comma.
-	var deny []string
-	if disallowed != "" {
-		deny = append(deny, disallowed)
+	if len(deny) > 0 {
+		deny = []string{strings.Join(deny, ",")}
 	}
 	deny = append(deny, n.healthDenyRules(cwd)...) // healthdeny.go
 	if len(deny) > 0 {
@@ -695,7 +693,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	var cmd *exec.Cmd
 	var first []byte // the bridge's persona_start
 	if bridge.script != "" {
-		// The Agent SDK runtime gets only Persona's own MCP server: it has no --disallowedTools, so lark-connector's
+		// The Agent SDK runtime gets only Persona's own MCP server: it has no --disallowedTools, so the Lark extension's
 		// control tools (whose approval_decide must stay off) are not mounted here.
 		mcpConfig := map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{
 			"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},

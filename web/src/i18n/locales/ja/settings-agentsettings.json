@@ -21,5 +21,7 @@
   "push_all": "オンラインの全マシンに適用",
   "others_hint_other": "ほか{count}台",
   "no_others": "なし",
-  "unset": "未設定"
+  "unset": "未設定",
+  "key_hint": "設定項目 {key}",
+  "copy_key": "設定項目名をコピー"
 }

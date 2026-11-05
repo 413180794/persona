@@ -42,7 +42,7 @@ describe("pin helpers", () => {
     expect(pinProblemText(old)).toContain("先更新 hub");
     const gone = new ApiError(404, "原消息已不可用，请重新加载 Pin 列表", { code: "lark_pin_not_found" });
     expect(pinRouteError(gone)).toBe(gone);
-    expect(pinProblemText(new ApiError(426, "升级 lark-connector 后可使用 Pin 消息。", { code: "lark_lark-connector_upgrade_required" }))).toBe("升级 lark-connector 后可使用 Pin 消息。");
+    expect(pinProblemText(new ApiError(426, "升级飞书网关后可使用 Pin 消息。", { code: "lark_gateway_upgrade_required" }))).toBe("升级飞书网关后可使用 Pin 消息。");
     expect(pinProblemText(new ApiError(500, "boom", {}))).toBe("读不到 Pin 消息：boom");
   });
 

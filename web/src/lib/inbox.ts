@@ -96,7 +96,7 @@ export interface InboxItem {
   version?: string;
   lark?: {
     feed_id: string; is_group: boolean; is_topic?: boolean; start_position?: string; mention_position?: string; at_all?: boolean;
-    /** The lark-connector account the chat is in; `ol_account` only when that is not the hub's own (docs/feishu.md「多账号」). */
+    /** The Lark gateway account the chat is in; `ol_account` only when that is not the hub's own (docs/feishu.md「多账号」). */
     account_id?: number; ol_account?: number;
   };
   mail?: { account_id: string; mailbox: string; uids: number[]; message_id?: string; from?: { name?: string; email?: string }; direct?: boolean; thread?: string };
@@ -548,7 +548,7 @@ export interface LarkMessage {
   text?: string;
   created_at?: string;
   recalled?: boolean;
-  /** lark-connector kept a recalled message's content (lark-display.ts): shown only with 防撤回 on, still marked 已撤回. */
+  /** The Lark gateway kept a recalled message's content (lark-display.ts): shown only with 防撤回 on, still marked 已撤回. */
   retained?: boolean;
   edited?: boolean;
   /** An edited message's earlier versions, oldest first (lark-display.ts, shown with 编辑历史 on). */
@@ -564,7 +564,7 @@ export interface LarkMessage {
   sending?: boolean;
   failed?: boolean;
   client_id?: string;
-  /** lark-connector's capabilities as the hub passes them on: whether a Pin may be added / removed (lark-pins.ts). */
+  /** The Lark gateway's capabilities as the hub passes them on: whether a Pin may be added / removed (lark-pins.ts). */
   can_pin?: boolean;
   can_unpin?: boolean;
   deleted?: boolean;

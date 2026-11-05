@@ -1,6 +1,6 @@
 import Foundation
 
-// Wire types of lark-connector's document, drive, wiki and docs-notification routes (src/shared/contracts/documents.ts,
+// Wire types of the Lark gateway's document, drive, wiki and docs-notification routes (src/shared/contracts/documents.ts,
 // drive-space.ts, wiki.ts, docs-notifications.ts, document-*.ts), plus the pure logic the screens share.
 // Times stay strings: some lists send "" (discover), which JSON.decoder would turn into 1970.
 
@@ -378,9 +378,9 @@ nonisolated struct FeishuDocsMarkdownBody: Sendable, Equatable {
 }
 
 nonisolated enum FeishuDocsMarkdownExport {
-    /// Turns lark-connector's export into what the reader shows:
+    /// Turns the Lark gateway's export into what the reader shows:
     /// - drops the leading `# Title` and `[Source](<url>)` lines (the reader draws its own title),
-    /// - points media at the hub (`http://<lark-connector>/api/documents/…` → `/api/v1/lark/raw/documents/…`),
+    /// - points media at the hub (`http://<lark-gateway>/api/documents/…` → `/api/v1/lark/raw/documents/…`),
     /// - splits at headings outside code fences (and at blank lines in long runs), so one long document is many lazy rows,
     /// - lifts top-level tables into chunks of their own (the reader sizes their columns to the screen),
     /// - collects the headings (the outline) and every image (the gallery).
@@ -464,7 +464,7 @@ nonisolated enum FeishuDocsMarkdownExport {
         return !(line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("+ ") || line.range(of: #"^\d+\. "#, options: .regularExpression) != nil)
     }
 
-    /// lark-connector writes absolute links to its own `/api/documents/…` media; the phone reaches them through the hub.
+    /// The Lark gateway writes absolute links to its own `/api/documents/…` media; the phone reaches them through the hub.
     static func rewriteMedia(_ s: String) -> String {
         s.replacingOccurrences(of: #"https?://[A-Za-z0-9.\-]+(:\d+)?/api/(?!v1/)"#, with: "/api/v1/lark/raw/", options: .regularExpression)
     }
@@ -712,7 +712,7 @@ nonisolated struct FeishuDocsMarkdownTable: Equatable, Sendable {
 
 // MARK: - Errors
 
-/// A failed lark-connector read: the HTTP status and its `error.code` (DOCUMENT_EXPORT_FORBIDDEN, DOCUMENT_FORMAT_UNSUPPORTED…).
+/// A failed Lark gateway read: the HTTP status and its `error.code` (DOCUMENT_EXPORT_FORBIDDEN, DOCUMENT_FORMAT_UNSUPPORTED…).
 nonisolated struct FeishuDocsFailure: LocalizedError, Sendable {
     var status: Int
     var code: String?
@@ -736,7 +736,7 @@ nonisolated struct FeishuDocsFailure: LocalizedError, Sendable {
         }
     }
 
-    /// `{"error":{"code":…}}` (lark-connector) or `{"error":"…"}` (hub).
+    /// `{"error":{"code":…}}` (the Lark gateway) or `{"error":"…"}` (hub).
     static func code(from data: Data) -> String? {
         guard let v = try? JSON.decoder.decode(JSONValue.self, from: data), let e = v["error"] else { return nil }
         return e["code"]?.string ?? e.string

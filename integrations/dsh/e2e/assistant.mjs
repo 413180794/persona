@@ -2,16 +2,15 @@
 // the plugin (isolated DSH_HOME, DSH's own mock model), a real `jarvisd node --stdio` (the harness plays the hub). The
 // "hub" sends assistant messages with the DSH launcher, as the Persona tab, AI 分身, Feishu /agent and scheduled tasks
 // do (all go through assistant.send): a new conversation in the assistant's directory, the live snapshot and the
-// memory with the first message, ask_user and the other assistant tools, Feishu through lark-connector (reads run, a write
-// is confirmed on the phone and a refusal is not run, ol in the shell is stopped), the permission mode, an interrupt,
-// and the conversation going on after the node restarts.
+// memory with the first message, the user's skills in the assistant's directory, ask_user and the other assistant
+// tools, the permission mode, an interrupt, and the conversation going on after the node restarts.
 //
 //   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/dsh/e2e/assistant.mjs
 //
 // Nothing outside fresh temp directories is touched.
 
 import { spawn } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -45,19 +44,12 @@ async function cleanup() {
 }
 process.on('SIGINT', () => cleanup().finally(() => process.exit(130)))
 
-// A stand-in for the lark-connector skill in the user's skill space: its ol.sh records what it ran and whether it got the
-// token, and prints a line.
-const olLog = join(root, 'ol.log')
-const olScript = join(home, '.jarvis', 'skills', 'lark-connector', 'scripts', 'ol.sh')
-mkdirSync(dirname(olScript), { recursive: true })
-writeFileSync(join(home, '.jarvis', 'skills', 'lark-connector', 'SKILL.md'), '---\nname: lark-connector\ndescription: e2e stand-in\n---\n')
-writeFileSync(olScript, `#!/bin/bash
-# Test fixture (the lark-connector skill's helper): records the call, prints what a read would.
-echo "$* token=\${lark-connector_AGENT_TOKEN:+yes}" >> ${JSON.stringify(olLog)}
-echo "{\\"ok\\":true,\\"ran\\":\\"$*\\",\\"token\\":\\"\${lark-connector_AGENT_TOKEN:+yes}\\"}"
-`)
-chmodSync(olScript, 0o755)
-const olRuns = () => (existsSync(olLog) ? readFileSync(olLog, 'utf8').trim().split('\n').filter(Boolean) : [])
+// A skill in the user's skill space, to see it linked into the assistant's directory.
+const skillDir = join(home, '.jarvis', 'skills', 'e2e-skill')
+mkdirSync(join(skillDir, 'scripts'), { recursive: true })
+writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: e2e-skill\ndescription: e2e stand-in\n---\n')
+writeFileSync(join(skillDir, 'scripts', 'hello.sh'), '#!/bin/bash\necho hello\n')
+chmodSync(join(skillDir, 'scripts', 'hello.sh'), 0o755)
 
 const model = await scriptedModel(dshCheckout)
 const assistantDir = join(home, '.jarvis', 'assistant')
@@ -66,7 +58,6 @@ async function startTheNode() {
   node = await startNode({ jarvisd, keep: true, home })
   node.assistantTools = [{ name: 'ask_user', description: 'Ask the user on the phone', input_schema: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] } }]
   node.assistantContext = () => '- 现在：e2e 测试时间 JARVIS_E2E_SNAPSHOT\n- 在线电脑：测试机'
-  node.lark = { base: 'http://127.0.0.1:9/agent/v1', token: 'e2e-token' }
   node.callTool = (p) => p.name === 'ask_user' ? { content: [{ type: 'text', text: `the user answered postgres (assistant=${p.assistant === true})` }], is_error: false }
     : { content: [{ type: 'text', text: `${p.name} ran` }], is_error: false }
 }
@@ -147,8 +138,8 @@ try {
   check('the chat shows what was typed, not the snapshot', shown.length === 1 && shown[0] === 'hello assistant', JSON.stringify(shown))
   const first = userTexts(await dshEvents(sid)).join('\n')
   check('the model got the live snapshot with the message', first.includes('JARVIS_E2E_SNAPSHOT') && first.includes('<persona-context>'))
-  check('…and the memory directory and the lark-connector note with the first one', first.includes('MEMORY.md') && first.includes('lark-connector'))
-  check('the skills are in the assistant\'s directory for DSH', existsSync(join(assistantDir, '.agents', 'skills', 'lark-connector', 'scripts', 'ol.sh')))
+  check('…and the memory directory with the first one', first.includes('MEMORY.md'))
+  check('the skills are in the assistant\'s directory for DSH', existsSync(join(assistantDir, '.agents', 'skills', 'e2e-skill', 'scripts', 'hello.sh')))
   await idle(sid)
 
   // ask_user, the assistant's own tool: through the node to the hub as the assistant's.
@@ -159,30 +150,6 @@ try {
   check('ask_user reaches the hub as the assistant\'s, with the conversation', ask?.assistant === true && ask?.session_id === sid, JSON.stringify(ask))
   check('…and its answer reaches the agent', Boolean(await toolResult(sid, /assistant=true/)))
   await until('the reply after ask_user', () => assistantSays(sid, 'Using postgres'), 60_000)
-  await idle(sid)
-
-  // Feishu: a read through lark-connector runs at once, with the token, on the node.
-  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__jarvis__lark-connector', toolArguments: JSON.stringify({ args: ['GET', '/me'] }), successText: 'Read Feishu' })
-  await send(sid, 'who am i on feishu')
-  await until('the lark-connector read', () => toolResult(sid, /"ran":"GET \/me"/), 60_000)
-  check('an lark-connector read runs on the node with the token, unasked', olRuns().some((l) => l === 'GET /me token=yes') && !node.asked.some((x) => x.tool_name === '飞书'), olRuns().join(' | '))
-  await idle(sid)
-
-  // A write is confirmed on the phone; refused, it does not run and the words reach the agent.
-  node.resolve = (ix) => (ix.kind === 'permission' && ix.tool_name === '飞书' ? { allow: false, message: 'not now JARVIS_E2E_NO' } : { dismiss: true })
-  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__jarvis__lark-connector', toolArguments: JSON.stringify({ args: ['POST', '/conversations/oc_test/messages', '{"text":"hi"}'] }), successText: 'Not sent' })
-  await send(sid, 'send hi on feishu')
-  await until('the refusal', () => toolResult(sid, /JARVIS_E2E_NO/), 60_000)
-  const card = node.asked.find((x) => x.tool_name === '飞书')
-  check('a Feishu write asks the phone first', Boolean(card), card?.summary?.split('\n')[0])
-  check('…refused, it does not run', !olRuns().some((l) => l.startsWith('POST')), olRuns().join(' | '))
-  await idle(sid)
-
-  // ol in the shell is stopped: Feishu goes through lark-connector.
-  await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'bash', toolArguments: JSON.stringify({ command: 'ol GET /me', description: 'e2e' }), successText: 'Stopped' })
-  await send(sid, 'run ol in the shell')
-  await until('the shell ol stopped', () => toolResult(sid, /lark-connector/), 60_000)
-  check('ol in the shell is stopped with a pointer to lark-connector', olRuns().length === 1)
   await idle(sid)
 
   // The permission mode: plan mode goes with the next message as DSH's preset for it.

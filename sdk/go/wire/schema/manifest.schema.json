@@ -192,6 +192,7 @@
         "providers": {"type": "array", "items": {"$ref": "#/$defs/ProviderItem"}},
         "api": {"type": "array", "items": {"$ref": "#/$defs/APIItem"}},
         "assistant": {"type": "array", "items": {"$ref": "#/$defs/AssistantItem"}},
+        "mcp_servers": {"type": "array", "items": {"$ref": "#/$defs/MCPServerItem"}},
         "ui": {"type": "array", "items": {"$ref": "#/$defs/UIItem"}},
         "agent_sources": {"type": "array", "items": {"$ref": "#/$defs/AgentSourceItem"}},
         "channel": {"type": "array", "items": {"$ref": "#/$defs/ChannelItem"}},
@@ -468,6 +469,21 @@
         "gate": {"type": "string"}
       },
       "required": ["id"]
+    },
+    "MCPServerItem": {
+      "description": "An MCP server for the Claude assistant (docs「MCP 服务器」): a command line on the assistant's machine, its tools as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment. Not a shell or an interpreter.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/ID", "description": "The server's name for the assistant; not jarvis or persona."},
+        "command": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$", "description": "Looked up on PATH, then in ~/bin."},
+        "env": {"type": "string", "pattern": "^PERSONA_[A-Z0-9_]{1,56}$", "description": "A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or \"\" / 0 / off / false to leave the server out."},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "requires": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Words `<command> --help` must print; otherwise the server is left out."},
+        "allow": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"}, "description": "Tools that run without asking."},
+        "deny": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"}, "description": "Tools never callable. Any other tool goes by the conversation's permission mode."}
+      },
+      "required": ["id", "command"]
     },
     "UIItem": {
       "description": "A place in the apps the extension draws (docs「UI 插槽」).",

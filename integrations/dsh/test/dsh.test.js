@@ -449,17 +449,21 @@ test('the assistant\'s approvals go to the phone even with the Web GUI open; its
   assert.equal(n.asked.length, 2, 'a write elsewhere is')
 })
 
-test('ol in an assistant conversation\'s shell is stopped; elsewhere it runs as before', async (t) => {
-  const { n, ctl, ev, rt } = await setup(t, { assistant: true })
+test('a gated command in an assistant conversation\'s shell is stopped; elsewhere it runs as before', async (t) => {
+  const gated = { name: 'example_api', description: 'Example', input_schema: { type: 'object' }, shell: ['ex', 'example/scripts/ex.sh'] }
+  const { n, ctl, ev, rt } = await setup(t, { assistant: true, registerTool: () => () => {}, tools: [gated] })
   ctl.add('session-asst', { cwd: '/home/u/.jarvis/assistant' })
   rt.start()
   await n.ready
   await until('listed', () => n.last('runtime.sessions'))
+  await rt.refreshTools()
   const pre = (sid, command) => ev.waterfall('tools/pre-execute', { name: 'bash', arguments: { command }, agent: { session: { id: sid } } }, () => ({ kind: 'allow' }))
-  assert.equal((await pre('session-asst', 'ol GET /me')).kind, 'deny')
-  assert.equal((await pre('session-asst', 'bash ~/.jarvis/skills/lark-connector/scripts/ol.sh POST /x')).kind, 'deny')
-  assert.equal((await pre('session-asst', 'echo olive && ls')).kind, 'allow')
-  assert.equal((await pre('session-other', 'ol GET /me')).kind, 'allow')
+  const denied = await pre('session-asst', 'ex GET /me')
+  assert.equal(denied.kind, 'deny')
+  assert.match(denied.reason, /example_api/)
+  assert.equal((await pre('session-asst', 'bash ~/.jarvis/skills/example/scripts/ex.sh POST /x')).kind, 'deny')
+  assert.equal((await pre('session-asst', 'echo exit && ls')).kind, 'allow')
+  assert.equal((await pre('session-other', 'ex GET /me')).kind, 'allow')
 })
 
 test('the assistant\'s own tools are only for its conversations, called as the assistant\'s', async (t) => {

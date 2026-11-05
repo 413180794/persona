@@ -17,7 +17,7 @@ final class LarkChatPinFlowTests: XCTestCase {
         let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock",
-            "-tab", "feishu", "-demo.on", "NO", "-ui.oldLayout", "NO", "-integrations.lark-connector.enabled", "YES",
+            "-tab", "feishu", "-demo.on", "NO", "-ui.oldLayout", "NO", "-integrations.lark.enabled", "YES",
             "-UIPreferredContentSizeCategoryName", large ? "UICTContentSizeCategoryAccessibilityXXXL" : "UICTContentSizeCategoryL"]
         app.launchPinned()
         XCTAssertTrue(app.buttons["shell-feishu"].firstMatch.waitForExistence(timeout: 20))
@@ -90,8 +90,8 @@ final class LarkChatPinFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "升级 Hub")).firstMatch.waitForExistence(timeout: 10))
         shot(app, "chat-pins-upgrade-hub")
         _ = try await fixture(["error": "upstream"])
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "升级 lark-connector")).firstMatch.waitForExistence(timeout: 10))
-        shot(app, "chat-pins-upgrade-lark-connector")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "升级飞书网关")).firstMatch.waitForExistence(timeout: 10))
+        shot(app, "chat-pins-upgrade-gateway")
         _ = try await fixture(["error": "", "account": "changed-owner"])
         XCTAssertTrue(app.staticTexts["飞书账号已切换，请重新打开会话"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["lark.pin.1000"].exists)

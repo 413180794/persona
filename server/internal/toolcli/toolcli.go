@@ -110,7 +110,7 @@ func Main(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 	}
 	text := firstText(res)
 	if res.IsError {
-		code, retry := classify(text)
+		code, retry := classify(res)
 		return out.fail(code, text, retry)
 	}
 	fmt.Fprintln(stdout, text)
@@ -164,7 +164,7 @@ func commandLine(ctx context.Context, conn string, args []string, stdin io.Reade
 		return out.fail(exitUnavailable, fmt.Sprintf("the Persona node on this machine is not reachable (%v): is the hub connected?", err), 0)
 	}
 	if res.IsError {
-		code, retry := classify(firstText(res))
+		code, retry := classify(res)
 		return out.fail(code, firstText(res), retry)
 	}
 	var p plan
@@ -200,7 +200,7 @@ func commandLine(ctx context.Context, conn string, args []string, stdin io.Reade
 	}
 	text := firstText(res)
 	if res.IsError {
-		code, retry := classify(text)
+		code, retry := classify(res)
 		return out.fail(code, text, retry)
 	}
 	if format != "text" || p.Render == "" {
@@ -256,11 +256,30 @@ func firstText(res proto.ToolResult) string {
 	return ""
 }
 
-// waitFor is how the hub and the connectors say how long a rate limit lasts.
-var waitFor = regexp.MustCompile(`(?:还要 |限流中，)(\d+) 秒`)
+// byKind is the exit code of each kind of failure the hub, the node and the connectors name (proto.ToolError*).
+var byKind = map[string]int{proto.ToolErrorDeclined: exitDeclined, proto.ToolErrorUnavailable: exitUnavailable,
+	proto.ToolErrorRateLimited: exitRateLimited}
 
-// classify is a failure's exit code by what the node, the hub and the connector say, and how long a rate limit lasts.
-func classify(text string) (int, int) {
+// waitFor is how the hub and the connectors say how long a rate limit lasts, for those that do not say it in
+// retry_after (an older hub, a connector's status).
+var waitFor = regexp.MustCompile(`(?:还要 |限流中?，)(\d+) 秒`)
+
+// classify is a failure's exit code and how long a rate limit lasts: by the kind the hub, the node or the connector
+// named (error_kind, retry_after), or, when none is named (an older hub or node), by what the error says.
+func classify(res proto.ToolResult) (int, int) {
+	text := firstText(res)
+	if code, ok := byKind[res.ErrorKind]; ok {
+		retry := res.RetryAfter
+		if m := waitFor.FindStringSubmatch(text); code == exitRateLimited && retry <= 0 && m != nil {
+			retry, _ = strconv.Atoi(m[1])
+		}
+		return code, max(retry, 0)
+	}
+	return guess(text)
+}
+
+// guess is a failure's exit code by what the error says, from a hub or node that names no kind.
+func guess(text string) (int, int) {
 	if m := waitFor.FindStringSubmatch(text); m != nil {
 		n, _ := strconv.Atoi(m[1])
 		return exitRateLimited, n

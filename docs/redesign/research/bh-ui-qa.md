@@ -41,7 +41,7 @@
    - 用一个 `adaptive(light:dark:)` 函数把十六进制值转成跟随系统外观的颜色，同时兼容 UIKit 和 AppKit。
 2. **HerdrStyle**（「森林绿 + 奶油白」，给 Agent 页用），定义在 `BH:.../DesignSystem/HerdrStyle.swift:4-17`：
    - 语义色更完整：`canvas`、`surface`、`field`、`raised`、`line`、`outgoing`、`blue`（实际是绿）、`green`、`ink`、`secondary`、`onAccent`、`orange`、`red`，全部有浅深两个值。
-   - 注释写明「Herdr's palette is independent of the lark-connector workspace chrome」（`:3`）。
+   - 注释写明「Herdr's palette is independent of the Lark gateway workspace chrome」（`:3`）。
 - 按 tab 切换的方式（`BH:App/removedApp.swift:199-205`）：
   - tint 按 tab 换：Agent tab 用 `HerdrStyle.blue`，其余用 `WorkspaceStyle.blue`。
   - Agent tab 的深浅色不跟随系统：由 `@AppStorage("herdr.lightAppearance")` 决定，默认深色（`:41`、`:203`）。
@@ -116,7 +116,7 @@
 | --- | --- | --- |
 | 整页：未配置 / 连不上 | `ServiceStatusView`（图标、标题、说明、一个主按钮：「配置连接」「重试」「前往消息」） | `BH:App/removedApp.swift:261`、`:272`；`MessagingView.swift:22`、`:91`；`AgentsView.swift:76` |
 | 列表为空 | 系统 `ContentUnavailableView`（本次 grep 98 处）。文案按筛选范围区分，常在下面补一个能走出空态的按钮，例如「查看全部会话」 | `AgentFleetView.swift:455-459`；没有主机时是「连接你的开发主机」加「添加第一台主机」（`:63-66`） |
-| 加载 | 整页 `ProgressView("正在连接 lark-connector…")`；局部 `ProgressView("读取密钥库…")`；按钮里的进度：「正在保存…」加禁用 | `MessagingView.swift:73`；`SSHKeyLibraryView.swift:41-42`；`SSHKeyImportView.swift:70-76` |
+| 加载 | 整页 `ProgressView("正在连接飞书网关…")`；局部 `ProgressView("读取密钥库…")`；按钮里的进度：「正在保存…」加禁用 | `MessagingView.swift:73`；`SSHKeyLibraryView.swift:41-42`；`SSHKeyImportView.swift:70-76` |
 | 局部错误 | 在出错的位置显示 `Label(错误, systemImage: "exclamationmark.circle/triangle")`，红色或橙色，紧跟一个「重新读取…」按钮；只有操作失败才弹 alert「操作失败」 | `ConnectionsView.swift:119-130`、`:188-190`；`SSHKeyLibraryView.swift:36-40`；`MessagingView.swift:222-239` |
 | 缓存态 | 「已显示本机会话记录」或「正在更新本机会话…」，配 `internaldrive` 图标 | `MessagingView.swift:218-221` |
 | 破坏性确认 | `confirmationDialog`，正文写清后果和范围（「同时删除此连接保存的登录凭据。主机上的服务和会话会继续运行。」） | `ConnectionsView.swift:170-183`；`SSHKeyDetailView.swift:124-129`（列出这把密钥在哪些主机上用） |
@@ -291,7 +291,7 @@
 | 本机真实服务的集成测试 | `SSHIntegrationTests.swift` | 起一个回环 NIOSSH 服务器，用真实 `ssh-keygen` 生成的密钥，覆盖指纹核对早于认证、超时和取消隔离等；主机端组件另跑 `node --test host/removed-bridge/test/*.test.mjs`（`BH:README.md:47-53`） |
 | 对固定上游的契约测试 | `BH:scripts/check-*-upstream.{mts,mjs}`（22 个） | 直接 import 钉在某个提交的上游源码里的 service 和路由，用 fastify `inject` 跑真实路由；最后打印一行 JSON 证据，形如 `{passed, httpReads, httpMutations, realNetworkCalls:0, …}`（例：`check-workplace-upstream.mts`） |
 | fixture 自洽检查 | `BH:scripts/check-*-fixture.mjs`（60 个） | 检查合成服务的各种故障模式（`applied503` / `unapplied503` / `missingReceipt` / `missing`）行为正确，并打印证据 JSON（例：`check-workplace-fixture.mjs`） |
-| 合成 UI 验收 | `BH:scripts/fixtures/` 下 72 个模块（入口 `lark-connector-ui.mjs`）；Debug 启动参数：本次 grep 到 23 个 `--removed-*`，其中 agent 相关 17 个，另有语音、视频、滚动调试等 | 详见 4.2 |
+| 合成 UI 验收 | `BH:scripts/fixtures/` 下 72 个模块（入口是网关的 UI 夹具脚本 `*-ui.mjs`）；Debug 启动参数：本次 grep 到 23 个 `--removed-*`，其中 agent 相关 17 个，另有语音、视频、滚动调试等 | 详见 4.2 |
 | 真实环境 | 真实账号只读、真实 SSH 主机、真机覆盖安装 | Device Hub / CUA 同机对照；「真实环境已验证」一节（`VALIDATION.md`） |
 
 - 每层都在两代系统上跑：iOS 18.5 和 27.1，外加 macOS。最近一次完整回归的计数（`VALIDATION.md`「自动化验证」表）是：
@@ -312,7 +312,7 @@
 - **魔法输入**：在 Agent 隔离 fixture 里输入 `100100` 会返回一份 Markdown 样例；输入包含 `900900` 会模拟「结果未知」（`fixtures/README.md`「Herdr 隔离恢复验收」）。
 - **隔离状态文件**：每个 fixture 启动参数用自己的一组 runtime / state / reading / navigation 文件，不碰真实数据（`BH:App/removedApp.swift:157-166`）；Release 包不启用这些参数。
 - **故障注入**：`DebugAgentReplyFault` 只在模拟器、只对回环主机、只在显式参数下生效，只触发一次，丢掉一次「已提交」回执来制造「结果未知」（`BH:App/DebugAgentFixture.swift:8-60`）。
-- **固定上游**：协议依据钉在上游的某个提交，接口清单用 AST 扫描生成（`BH:docs/FEISHU_PARITY.md`「核查基线」；`BH:scripts/audit-lark-connector.mjs`）。
+- **固定上游**：协议依据钉在上游的某个提交，接口清单用 AST 扫描生成（`BH:docs/FEISHU_PARITY.md`「核查基线」；`BH:scripts/audit-*.mjs`（网关接口审计））。
 
 ### 4.3 Persona 的对应物【事实】
 
@@ -502,6 +502,6 @@
 - 顶层脚本 84 个：
   - `check-*-fixture.mjs` 60 个：检查合成服务的行为和故障模式是否自洽，打印证据 JSON；
   - `check-*-upstream.{mts,mjs}` 22 个：直接调用钉在某个提交的上游源码，用 fastify inject 做契约对照；
-  - `audit-lark-connector.mjs`：用 AST 扫描上游源码，生成接口清单，输出到 `docs/audits/*.json`；
+  - 网关接口审计脚本（`audit-*.mjs`）：用 AST 扫描上游源码，生成接口清单，输出到 `docs/audits/*.json`；
   - `make-qr-ui-fixtures.swift`：生成二维码相关的 UI fixture。
 - `fixtures/` 下：72 个合成服务模块，加 1 个 `README.md`（各验收场景的开关、控制接口、统计字段说明）。

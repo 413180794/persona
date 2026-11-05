@@ -305,9 +305,9 @@ final class LarkChatOutbox {
         snapshot = LarkOutboxSnapshot()
     }
 
-    /// lark-connector may publish its local pending copy before returning the receipt. Draw our row only once.
+    /// The Lark gateway may publish its local pending copy before returning the receipt. Draw our row only once.
     func hidesEcho(_ message: LarkMessage) -> Bool {
-        // lark-connector's unconfirmed local rows must not become ordinary sent bubbles after a local discard.
+        // The Lark gateway's unconfirmed local rows must not become ordinary sent bubbles after a local discard.
         if message.localState == "pending" || message.localState == "failed" || message.id.hasPrefix("local:") { return true }
         return message.isMine && items.contains { message.id == "local:" + $0.clientID || message.clientID?.lowercased() == $0.clientID }
     }

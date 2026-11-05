@@ -496,7 +496,7 @@ removed 的做法【事实】：本地 SPM 包 `Packages/removedKit/Package.swif
 建议吸收的：①纯类型与传输分开；②Feature 只依赖契约，便于用假实现测试 / 预览；③单测跑在包里，不需要宿主 App；④每个 Feature 一个 target，消除单命名空间撞名。
 
 不照搬的：
-1. removed 对接 lark-connector 的十几个领域，每个领域三件套（约 30 个 target）；Persona 只有一个后端（hub），**一个 Contracts target 按目录分领域**即可，整体控制在 10 个左右的 target。
+1. removed 对接飞书网关的十几个领域，每个领域三件套（约 30 个 target）；Persona 只有一个后端（hub），**一个 Contracts target 按目录分领域**即可，整体控制在 10 个左右的 target。
 2. removed 的组合根把 40 多个 journal / store 作为 `App` struct 的字段（`removed/App/removedApp.swift:30-90`），自身又成了大文件；Persona 用一个普通的 `AppContainer` 类集中构造、按 Feature 注入。
 3. removed 的终端用 SwiftTerm；Persona 已论证自写 VT 子集更合适（`docs/terminal.md:58-78`），保留并独立成 `TerminalCore`——它也是最容易逐行移植到 Kotlin 的部分。
 4. Persona 的契约有三个消费方（Go hub、iOS、Android），所以 Contracts 除了 Swift 类型还要产出**语言无关的 JSON 夹具 / 规格**，这是 removed 没有的需求。

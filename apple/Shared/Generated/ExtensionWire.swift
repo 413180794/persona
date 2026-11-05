@@ -472,6 +472,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     var providers: [ExtensionProviderItem]?
     var api: [ExtensionAPIItem]?
     var assistant: [ExtensionAssistantItem]?
+    var mcpServers: [ExtensionMCPServerItem]?
     var ui: [ExtensionUIItem]?
     var agentSources: [ExtensionAgentSourceItem]?
     var channel: [ExtensionChannelItem]?
@@ -487,7 +488,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     /// Extra keys stay at this object's level on the wire; declared fields always win.
     var additionalProperties: [String: JSONValue]
 
-    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, looks: [ExtensionLookItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, messaging: [ExtensionMessagingItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
+    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, mcpServers: [ExtensionMCPServerItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, looks: [ExtensionLookItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, messaging: [ExtensionMessagingItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
         self.connectors = connectors
         self.voice = voice
         self.computer = computer
@@ -496,6 +497,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.providers = providers
         self.api = api
         self.assistant = assistant
+        self.mcpServers = mcpServers
         self.ui = ui
         self.agentSources = agentSources
         self.channel = channel
@@ -520,6 +522,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         case providers
         case api
         case assistant
+        case mcpServers = "mcp_servers"
         case ui
         case agentSources = "agent_sources"
         case channel
@@ -544,6 +547,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.providers = ExtensionWireJSON.decode([ExtensionProviderItem].self, from: raw["providers"])
         self.api = ExtensionWireJSON.decode([ExtensionAPIItem].self, from: raw["api"])
         self.assistant = ExtensionWireJSON.decode([ExtensionAssistantItem].self, from: raw["assistant"])
+        self.mcpServers = ExtensionWireJSON.decode([ExtensionMCPServerItem].self, from: raw["mcp_servers"])
         self.ui = ExtensionWireJSON.decode([ExtensionUIItem].self, from: raw["ui"])
         self.agentSources = ExtensionWireJSON.decode([ExtensionAgentSourceItem].self, from: raw["agent_sources"])
         self.channel = ExtensionWireJSON.decode([ExtensionChannelItem].self, from: raw["channel"])
@@ -556,12 +560,12 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.triageTemplates = ExtensionWireJSON.decode([ExtensionTriageTemplateItem].self, from: raw["triage_templates"])
         self.agentFilters = ExtensionWireJSON.decode([ExtensionAgentFilterItem].self, from: raw["agent_filters"])
         self.messaging = ExtensionWireJSON.decode([ExtensionMessagingItem].self, from: raw["messaging"])
-        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"]
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"]
         additionalProperties = raw.filter { !known.contains($0.key) }
     }
 
     func encode(to encoder: Encoder) throws {
-        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"]
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "messaging"]
         var fields = additionalProperties.filter { !known.contains($0.key) }
         if let value = connectors { fields["connectors"] = try ExtensionWireJSON.encode(value) }
         if let value = voice { fields["voice"] = try ExtensionWireJSON.encode(value) }
@@ -571,6 +575,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         if let value = providers { fields["providers"] = try ExtensionWireJSON.encode(value) }
         if let value = api { fields["api"] = try ExtensionWireJSON.encode(value) }
         if let value = assistant { fields["assistant"] = try ExtensionWireJSON.encode(value) }
+        if let value = mcpServers { fields["mcp_servers"] = try ExtensionWireJSON.encode(value) }
         if let value = ui { fields["ui"] = try ExtensionWireJSON.encode(value) }
         if let value = agentSources { fields["agent_sources"] = try ExtensionWireJSON.encode(value) }
         if let value = channel { fields["channel"] = try ExtensionWireJSON.encode(value) }
@@ -1344,6 +1349,57 @@ nonisolated struct ExtensionAssistantItem: Codable, Hashable, Sendable {
         self.skills = try? c.decodeIfPresent([String].self, forKey: .skills)
         self.instructions = try? c.decodeIfPresent(String.self, forKey: .instructions)
         self.gate = try? c.decodeIfPresent(String.self, forKey: .gate)
+    }
+}
+
+/// An MCP server for the Claude assistant (docs「MCP 服务器」): a command line on the assistant's machine, its tools as
+/// mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment. Not a shell
+/// or an interpreter.
+nonisolated struct ExtensionMCPServerItem: Codable, Hashable, Sendable {
+    /// The server's name for the assistant; not jarvis or persona.
+    var id: String
+    /// Looked up on PATH, then in ~/bin.
+    var command: String
+    /// A PERSONA_ variable (JARVIS_ read too) that, when set, replaces the lookup: a path, or "" / 0 / off / false to
+    /// leave the server out.
+    var env: String?
+    var args: [String]?
+    /// Words `<command> --help` must print; otherwise the server is left out.
+    var requires: [String]?
+    /// Tools that run without asking.
+    var allow: [String]?
+    /// Tools never callable. Any other tool goes by the conversation's permission mode.
+    var deny: [String]?
+
+    init(id: String = "", command: String = "", env: String? = nil, args: [String]? = nil, requires: [String]? = nil, allow: [String]? = nil, deny: [String]? = nil) {
+        self.id = id
+        self.command = command
+        self.env = env
+        self.args = args
+        self.requires = requires
+        self.allow = allow
+        self.deny = deny
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case command
+        case env
+        case args
+        case requires
+        case allow
+        case deny
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.command = (try? c.decodeIfPresent(String.self, forKey: .command)) ?? ""
+        self.env = try? c.decodeIfPresent(String.self, forKey: .env)
+        self.args = try? c.decodeIfPresent([String].self, forKey: .args)
+        self.requires = try? c.decodeIfPresent([String].self, forKey: .requires)
+        self.allow = try? c.decodeIfPresent([String].self, forKey: .allow)
+        self.deny = try? c.decodeIfPresent([String].self, forKey: .deny)
     }
 }
 

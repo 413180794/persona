@@ -132,7 +132,7 @@ node 的 `gateTools` 经 `runtime.sock` 交给运行时（`node/assistant_runtim
 
 MCP 工具的 golden 是 `hub/mcp_tools_golden_test.go`（助手有 / 没有飞书、普通对话三种列表）和 `mail/mcp_golden_test.go`，比的是 `json.Marshal` 发出去的内容（golden 里缩进了方便看，缩进前后一一对应）。
 
-`hub/prompts_golden_test.go`、`assistant/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的 lark-connector、假的模型记下收到的
+`hub/prompts_golden_test.go`、`assistant/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的飞书网关、假的模型记下收到的
 system / user、临时目录的知识库），所以数据转换也一起测到。快照里「现在」那行的时钟换成占位后再比。
 2026-11-01 搬家前先用原来的代码生成了这些 golden，搬完后同样的输入逐字节一致。
 2026-11-04 助手的业务逻辑搬进 `server/internal/assistant`（`docs/assistant.md`「和 hub 的边界」）时，它写的提示词的 golden 跟着搬到 `assistant/testdata/prompts/`，文件原样挪过去，没有重新生成。同一天助手的设置、主对话和开对话也搬过去后，`assistant_claude_md.*`、`main_handoff*` 的 golden 也原样挪到 `assistant/testdata/prompts/`（`assistant/claude_md_test.go`），逐字节一致。同一天收件箱挪到管理者后，`inbox_triage.*`、`inbox_draft.*`、`inbox_judge*`、`inbox_agent.*`、`inbox_group.*` 的 golden 也原样挪到 `assistant/testdata/prompts/`（`assistant/inbox_golden_test.go`），没有重新生成，逐字节一致；翻译跟着挪过去后 `translate_*` 也原样挪到那里（`assistant/inbox_translate_test.go`），同样逐字节一致。

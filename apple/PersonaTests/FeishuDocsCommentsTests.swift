@@ -23,15 +23,15 @@ struct FeishuDocsCommentsTests {
         }
         func docComment(_ c: FeishuDocsCommentWrite) async throws {
             writes.append(("comment", c))
-            if fail { throw APIError(status: 502, message: "lark-connector 未登录飞书") }
+            if fail { throw APIError(status: 502, message: "飞书网关未登录飞书") }
         }
         func docReply(thread: String, _ c: FeishuDocsCommentWrite) async throws {
             writes.append(("reply:" + thread, c))
-            if fail { throw APIError(status: 502, message: "lark-connector 未登录飞书") }
+            if fail { throw APIError(status: 502, message: "飞书网关未登录飞书") }
         }
         func docResolve(thread: String, url: String, resolved: Bool) async throws {
             resolves.append((thread, resolved))
-            if fail { throw APIError(status: 502, message: "lark-connector 未登录飞书") }
+            if fail { throw APIError(status: 502, message: "飞书网关未登录飞书") }
             if let i = threads.firstIndex(where: { $0.id == thread }) { threads[i].resolved = resolved }
         }
         func docPeople(url: String, query: String) async throws -> [LarkMember] {
@@ -95,7 +95,7 @@ struct FeishuDocsCommentsTests {
         await m.send()
         #expect(m.draft == "好的")
         #expect(m.target == .thread(id: "c1", name: "韩梅梅", text: "圆角统一成多少？"))
-        #expect(m.writeError?.contains("lark-connector 未登录飞书") == true)
+        #expect(m.writeError?.contains("飞书网关未登录飞书") == true)
         await m.send()
         #expect(api.writes[0].write?.clientID == api.writes[1].write?.clientID)
         api.fail = false

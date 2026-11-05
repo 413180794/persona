@@ -351,7 +351,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     不像聊天那样把同一个人连着发的并成一串；超过 320 px 的折起来（渐隐 +「展开 / 收起」）。卡片下露出最新两条回复（「名字：一行摘要」），更多时上面写「查看更早 N 条回复」；
     卡片进入视口 200 ms 后才读（`GET /lark/messages/{话题}/thread?limit=3`），同时最多读 3 个话题，按读时的回复数记住，数变了再读，读失败可「重试」；没读到之前先占着两行的位置，卡片不因回复到来变高。
     点回复预览在「话题」对话框里看全部回复（可加载更早）；表情回复不做。截图用 `MOCK_LARK_TOPIC=1` 的假 hub（收件箱「版本发布」）。
-  - **飞书汇总卡片**（#3032，`inbox/LarkSummaryCard.tsx`、`lib/lark-summary.ts`，照 iOS `LarkSummaryCards.swift`）：lark-connector 自己汇总的卡片（卡片 part 的 `metadata.variant`）按类型画，没有 `variant` 的照旧画通用卡片。
+  - **飞书汇总卡片**（#3032，`inbox/LarkSummaryCard.tsx`、`lib/lark-summary.ts`，照 iOS `LarkSummaryCards.swift`）：飞书网关自己汇总的卡片（卡片 part 的 `metadata.variant`）按类型画，没有 `variant` 的照旧画通用卡片。
     合并转发（`merge-forward`）是标题、前四条预览（「名字：内容」，撤回 / 加密的只说一句）、「聊天记录 · N 条」，点开在对话框里看全部转发的消息（头像、名字、时间、内容，内容和聊天里画法相同）；
     群名片 / 个人名片（`share-group` / `share-user`）是头像、名字、字段，底部写是哪种名片、已解散的标出来；会议、日程、投票、任务、红包等是左侧色条、图标或图片、眉题、标题、状态、描述、投票选项、字段表和页脚，字段里的 ISO 时间显示成本地时间，会议号可拷贝。
     截图用 `MOCK_LARK=1` 的假 hub（收件箱「设计评审」里的聊天记录和视频会议）。
@@ -360,20 +360,20 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     先发文字，再逐个发附件（`POST …/images` 是 JSON + base64，`POST …/files` 是原始字节），各有自己的 `client_id`，马上画出本地那条，hub 的同 `client_id` 那条回来就替换。
     引用一条消息时附件带 `reply_to`；展开的话题下面有回复框（文字走 `replies` 的 `thread: true`，附件带 `reply_to` + `thread` / `thread_root`）。这两种要扩展声明 `lark_attachment_reply`：没有时引用发附件提示「需要更新 Hub 上的飞书扩展…」、什么都不发、内容留在输入框，话题回复框不给附件。
     失败的点一下用同一个 `client_id` 重发；文件传到一半断了（超时、断线、5xx、回执读不懂）写「发送结果未知」，只给「检查发送结果」（重读最新一页按 `client_id` 找）和「移除本机记录」，不自动重传。发件箱只在这个页面的内存里，刷新网页不恢复。
-  - **飞书聊天的 Pin**（#1327，`lib/lark-pins.ts`、`inbox/LarkPins.tsx`，照 iOS `LarkChatPins`，`docs/lark-connector-migration.md`「聊天内 Pin 消息」）：飞书详情头部的图钉按钮打开 Pin 列表（对话框），
-    `GET /lark/conversations/{id}/pins` 按游标翻页、接近底部自动加载；lark-connector 读列表会把 Pin 标为已读，所以只在打开列表、改了 Pin、列表开着时收到这个会话的 `lark` 推送才读，不预取，只放页面内存。
+  - **飞书聊天的 Pin**（#1327，`lib/lark-pins.ts`、`inbox/LarkPins.tsx`，照 iOS `LarkChatPins`，`docs/lark-migration.md`「聊天内 Pin 消息」）：飞书详情头部的图钉按钮打开 Pin 列表（对话框），
+    `GET /lark/conversations/{id}/pins` 按游标翻页、接近底部自动加载；飞书网关读列表会把 Pin 标为已读，所以只在打开列表、改了 Pin、列表开着时收到这个会话的 `lark` 推送才读，不预取，只放页面内存。
     点一条先 `GET …/pin-messages/{消息}` 确认能定位，再关列表：普通消息把聊天换成它周围那一页、滚到它并闪一下；话题里的回复在「话题」对话框里打开（话题首条 + 回复，高亮那条）；找不到时留在列表、聊天位置不动。
     消息悬停条的「Pin」（hub 给的 `can_pin`，撤回 / 删除 / 发送中的不给）先确认再 `POST …/pins`，带当前飞书账号；列表里有 `can_unpin` 的可移除（行内确认）。
-    写入结果不明（超时、`lark_pin_result_unknown`）不重试，先重新读列表；换号 / 退出登录清空并停住。旧 hub（没有这个路由的 404 / 405）提示升级 Hub，旧 lark-connector 的 426 提示升级 lark-connector，原消息不存在不误报。
-  - **防撤回、编辑历史**（#2900，`lib/lark-display.ts`、`inbox/LarkEditHistory.tsx`、`settings/LarkDisplaySettings.tsx`，照 iOS #933，`docs/lark-connector-migration.md`「风灵月影消息显示」）：
+    写入结果不明（超时、`lark_pin_result_unknown`）不重试，先重新读列表；换号 / 退出登录清空并停住。旧 hub（没有这个路由的 404 / 405）提示升级 Hub，旧飞书网关的 426 提示升级飞书网关，原消息不存在不误报。
+  - **防撤回、编辑历史**（#2900，`lib/lark-display.ts`、`inbox/LarkEditHistory.tsx`、`settings/LarkDisplaySettings.tsx`，照 iOS #933，`docs/lark-migration.md`「风灵月影消息显示」）：
     聊天打开时、页面回到前台时、收到带 `settings_changed` 的 `lark` 推送时读 `GET /lark/message-display`（每个飞书账号一份，只在页面内存里）；没读到、读失败、没有账号时一律当作两个开关都关。
-    防撤回开着且 lark-connector 留存了原文（`retained`）时，撤回的消息、引用、Pin 摘要显示原文并标「已撤回」，系统消息和没留存的仍只写已撤回；悬停条照旧不给回复 / Pin（撤回标记仍管写操作）。
+    防撤回开着且飞书网关留存了原文（`retained`）时，撤回的消息、引用、Pin 摘要显示原文并标「已撤回」，系统消息和没留存的仍只写已撤回；悬停条照旧不给回复 / Pin（撤回标记仍管写操作）。
     编辑历史开着且有 `edit_history` 时「已编辑」可点，对话框列出旧版本；加密的旧版本只显示 `olk.publicParts`（网页不解密）。话题群的话题卡片同样按防撤回显示留存原文，卡片上的「已编辑」还不能点开历史。两个开关在「设置 › 连接器 › 飞书 › 风灵月影」，写入带账号和旧值，冲突 / 结果不明不重试、清掉设置等用户「重新读取」。
-  - **[removed]编码文字**（#3102，`lib/lark-brave-climb.ts`、`inbox/LarkBraveClimb.tsx`，照 iOS #2109，`docs/lark-connector-migration.md`「[removed]」）：编解码用 BigInt，与 lark-connector 网页逐字节一致（单测用 iOS 的已知向量），旧的四字编码也能读。
+  - **[removed]编码文字**（#3102，`lib/lark-brave-climb.ts`、`inbox/LarkBraveClimb.tsx`，照 iOS #2109，`docs/lark-migration.md`「[removed]」）：编解码用 BigInt，与飞书网关网页逐字节一致（单测用 iOS 的已知向量），旧的四字编码也能读。
     `message-display` 的 `brave_climb_codec` 为 true 时，聊天、话题卡片、编辑历史里的编码文字解码显示，下面标「[removed] · 已解码」；富文本拆成几段的先拼起来再解，句中夹着的只替换那几段。引用、Pin 摘要、「消息」页的会话摘要也解码。
-    关着时气泡保持原文，一行摘要里整条编码写「[removed]编码消息」。输入框左边的「[removed]」开关只在开关打开、不是话题群时出现，发出编码后的文字；超过 lark-connector 的 10000 字上限时提示、文字留在输入框；
+    关着时气泡保持原文，一行摘要里整条编码写「[removed]编码消息」。输入框左边的「[removed]」开关只在开关打开、不是话题群时出现，发出编码后的文字；超过飞书网关的 10000 字上限时提示、文字留在输入框；
     开关在别处被关掉后再发，提示去设置里打开，不发送。设置 › 连接器 › 飞书 › 风灵月影 多一行「[removed]编码」，扩展没有这个字段（0.10.0 以前）时不出现。网页的输入框没有草稿，所选模式不保存。
-- **消息**（`/messages`、`/messages/<会话>`，`src/views/messages/`，`src/lib/lark-chats.ts`，`docs/lark-connector-migration.md`「入口」）：#392 的窄例外，
+- **消息**（`/messages`、`/messages/<会话>`，`src/views/messages/`，`src/lib/lark-chats.ts`，`docs/lark-migration.md`「入口」）：#392 的窄例外，
   只在这个浏览器打开了「设置 › 连接器 › 飞书 › 首页显示消息」（默认关，存 `localStorage` 的 `lark.homeMessages`，和 iOS 存在本机一样，不同步到 hub）时侧边栏才有「消息」；hub 的 features 里还要有 `lark`（#1530）。
   浏览全部私聊和群聊：`GET /lark/conversations?scope=chats&account_bound=1`（60 条一页，滚到底加载更多）和 `GET /lark/pinned?account_bound=1`（置顶一排头像，顺序和未读跟服务端）；
   点进去复用收件箱的飞书聊天页（`LarkThread`：消息流、回复、可见即读、Pin）。搜索只搜已加载的会话。`lark` 推送后重读已加载的分页窗口，整批成功才替换（退出的会话这时消失），失败保留原列表；
@@ -385,7 +385,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   全文搜索按条目合并（最多两处命中、加粗）；条目页：在做它的 Agent、时间线、档案、关联、代码目录、最近 7 天消息（某一天在弹窗里看）、目录路径，
   「打标」改重要级 / 相关性 / 标签 / 项目类型和状态，「问 Persona」发进主对话（没有就新开）。宽窄同收件箱，条目页盖住列表时列表不卸载，滚动和搜索都留着。
   `<jarvis-context>` 的属性按 `kind`、`title`、`url` 的顺序写：iOS 的解析要求这个顺序，否则手机上不显示卡片。
-- **个人 Agent**（`/a`、`/a/<整个 id 编码>`，`src/lib/agents.ts`、`src/views/agents/`）：lark-connector 配对的个人 Agent（`/api/v1/agents/*`，
+- **个人 Agent**（`/a`、`/a/<整个 id 编码>`，`src/lib/agents.ts`、`src/views/agents/`）：飞书网关配对的个人 Agent（`/api/v1/agents/*`，
   `docs/protocol.md`）。侧边栏「个人 Agent」按 provider 分组、组内按最近排序，带未读数，会话多于 6 个时可筛选；`/a` 是带搜索的全量列表。
   会话页：打开即 `POST …/read`；「加载更早的消息」用 `nextCursor`，按 `externalId` 去重、按 `position` 排序；tool-call 折叠，未知 block 原样显示 JSON。
   发送带新的 UUID `clientId`，失败可重试（同一个 `clientId`，hub 幂等）；持久化后的消息没有 `clientId`，本地气泡按文本 + 时间收敛；`canSend=false` 时输入框禁用。
@@ -823,7 +823,7 @@ CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App�
 推送丢了页面也不会停在那里（#3139，`lib/stale-page.ts`）：会话列表的 `updated_at`（子 Agent 的取父会话 `subagents` 里它那条）比页面手上最新的 item 新，且 4 秒没来过 items，就静默按 `after_seq` 拉一次（每个会话最多 10 秒一次，页面在前台才拉，拉到的合并进去、不重复）；
 连续 2 次拉到了本该由推送带来的 item（或连续拉失败），对话顶部出「不是实时的 · 重新加载」，推送恢复后消失。检查：`scripts/test/web_chat_stale_e2e.py`（假 hub 的 `/mock/say?drop=1` 写入回复、更新 `updated_at` 但不推 items）。
 store 自己不存的推送（`inbox`、`lark`、`terminal`、`terminal_control`、`assistant_schedule`……）由用到的页面按类型订阅（`onHubEvent(type, fn)`，`src/lib/store.ts`）；
-hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector 的飞书由扩展提供（feature `lark`，公司圈 `lark_moments`）：依赖 `/api/v1/lark/…` 的地方——「消息」页和侧边栏入口、设置 › 连接器 › 飞书、翻译里的飞书会话、飞书文档 / 公司圈帖子的阅读器——都按 `store.larkOn()` / `useLarkOn()` 显示；hub 还没说 features（hello 之前）时照旧显示。收件箱里带 `lark` / `doc` / `moment` 块的条目照常画（只有扩展在时才有）。知识库的帖子存档带 `feed` 时用它当帖子页标题，没有时叫「公司圈」（#1530）。
+hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经飞书网关的飞书由扩展提供（feature `lark`，公司圈 `lark_moments`）：依赖 `/api/v1/lark/…` 的地方——「消息」页和侧边栏入口、设置 › 连接器 › 飞书、翻译里的飞书会话、飞书文档 / 公司圈帖子的阅读器——都按 `store.larkOn()` / `useLarkOn()` 显示；hub 还没说 features（hello 之前）时照旧显示。收件箱里带 `lark` / `doc` / `moment` 块的条目照常画（只有扩展在时才有）。知识库的帖子存档带 `feed` 时用它当帖子页标题，没有时叫「公司圈」（#1530）。
 
 ## 安装成 App（PWA，#1772）
 

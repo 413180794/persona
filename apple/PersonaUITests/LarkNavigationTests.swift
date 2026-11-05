@@ -9,7 +9,7 @@ final class LarkNavigationTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", inbox == nil ? "assistant" : "mail", "-demo.on", "NO",
-                               "-ui.oldLayout", oldLayout ? "YES" : "NO", "-integrations.lark-connector.enabled", "YES",
+                               "-ui.oldLayout", oldLayout ? "YES" : "NO", "-integrations.lark.enabled", "YES",
                                "-inbox.kind", inbox.map { $0.contains("f3") ? "group" : "dm" } ?? "", "-inbox.source", ""]
         // Navigate through the actual inbox. Its debug deep link replaces the shell's path and skips that page.
         app.launchPinned()

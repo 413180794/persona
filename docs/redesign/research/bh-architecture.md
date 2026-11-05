@@ -13,7 +13,7 @@
 - Swift 源码约 9.0 万行（`Packages/removedKit/Sources`），测试约 6.6 万行（173 个文件），App 壳 1,235 行（2 个文件），主机组件（Node）源码 5.5K 行 + 测试 7.1K 行。合计与"约 17 万行"吻合（源码+测试）。
 - 一个本地 Swift Package `removedKit`：39 个 target + 1 个测试 target（`BH:Packages/removedKit/Package.swift:43-83`）；26 个 library product（同文件 7-34）。
 - Xcode 工程只有 1 个 App target 和 1 个 unit-test bundle，**没有 UI Test target**（`removed.xcodeproj/project.pbxproj` 的 productType 统计）。界面验收靠模拟器 + 合成 fixture 服务 + DEBUG 启动参数。
-- 运行形态：手机直连两类后端——lark-connector（HTTP + WebSocket，上游不可改）和 Herdr 主机（SSH exec 一请求一进程的 NDJSON bridge + SSH PTY）（`BH:docs/ARCHITECTURE.md:11-21`，`BH:docs/ADR-001-SSH-EXEC.md:5-11`）。**没有任何常开中转服务**，这是理解它所有"重型可靠性设计"的前提。
+- 运行形态：手机直连两类后端——飞书网关（HTTP + WebSocket，上游不可改）和 Herdr 主机（SSH exec 一请求一进程的 NDJSON bridge + SSH PTY）（`BH:docs/ARCHITECTURE.md:11-21`，`BH:docs/ADR-001-SSH-EXEC.md:5-11`）。**没有任何常开中转服务**，这是理解它所有"重型可靠性设计"的前提。
 
 ---
 
@@ -35,9 +35,9 @@
 
 ### 1.2 为什么这样分（文档原话要点）【事实】
 
-- 业务模块族（lark-connectorKit / HerdrKit / AgentKit）是**组织边界**，"不是承载所有功能的大 Client 类"（`BH:docs/ARCHITECTURE.md:25`）；"不能只把所有请求拆进几个文件，却继续共用一个全局业务 Store 或数据库模型"（同 71）。
+- 业务模块族（LarkGatewayKit / HerdrKit / AgentKit）是**组织边界**，"不是承载所有功能的大 Client 类"（`BH:docs/ARCHITECTURE.md:25`）；"不能只把所有请求拆进几个文件，却继续共用一个全局业务 Store 或数据库模型"（同 71）。
 - 每个领域拥有自己的同步规则、分页游标、缓存和失败恢复；切换账号/连接时统一取消旧作用域任务（同 107）。
-- "各 Feature 只注入所需的小接口，不依赖一个暴露全部业务方法的 lark-connectorClient"（同 121）。
+- "各 Feature 只注入所需的小接口，不依赖一个暴露全部业务方法的 LarkGatewayClient"（同 121）。
 - 运行时（Herdr）与 Agent（Claude/Codex）两种变化分开：Herdr API 升级改运行时适配，Agent 记录格式变化改各自 adapter；**记录解析与 hooks 适配集中在主机端，iOS 只消费归一化协议**（同 125-140）。
 - 页面不能到处写 `if agent == claude`，而是按能力声明决定是否显示审批/提问/停止（同 138）。
 - 先用一个本地 package 承载 target，等需要独立发布/编译隔离时再拆 package；"不为每个目录机械建立三个 target"、不提前建未来模块的空实现（同 47,111,119）。
@@ -46,7 +46,7 @@
 
 - **注入方式 = 构造函数注入协议存在类型**：模型拿 `any LarkPeople`、`any LarkDoNotDisturbJournaling`、`isValid: @MainActor () -> Bool`、`onError: (Error) -> Void`（`BH:Packages/removedKit/Sources/Features/PeopleFeature/LarkDoNotDisturbModel.swift:71-76`）。没有 DI 容器、没有 TCA。
 - **可选能力用协议向下转型探测**：`people as? any LarkDoNotDisturbReading / Managing`（同文件 96,143）；App 里 `workspace.people as? any LarkTranslationSettingsManaging`（`BH:App/removedApp.swift:427`）。一个实现类实现很多窄协议：`SSHAgentBridgeClient` 同时符合约 20 个窄协议（`BH:.../AgentKit/BridgeClient/SSHAgentBridgeClient.swift:5`）。
-- **跨 Feature 通信**：(a) 有类型的结果/资源引用，如搜索结果 `LarkSearchSelection.person/chat/message(feedID,messageID,position)`（`BH:.../lark-connectorKit/Search/Contracts/Search.swift:114-116`），交给工作区解析后导航；(b) App 注入的异步闭包，如通讯录"发消息"闭包里 `openDirect → showConversation → selectedTab = .messages`（`BH:App/removedApp.swift:255-259`），工作台闭包里异步解析后再检查 `canNavigate()`（同 266-270）；(c) 跨模块流程（消息→任务等）由 App 编排，不假设跨服务事务（`BH:docs/ARCHITECTURE.md:113-117`）。
+- **跨 Feature 通信**：(a) 有类型的结果/资源引用，如搜索结果 `LarkSearchSelection.person/chat/message(feedID,messageID,position)`（`BH:.../LarkGatewayKit/Search/Contracts/Search.swift:114-116`），交给工作区解析后导航；(b) App 注入的异步闭包，如通讯录"发消息"闭包里 `openDirect → showConversation → selectedTab = .messages`（`BH:App/removedApp.swift:255-259`），工作台闭包里异步解析后再检查 `canNavigate()`（同 266-270）；(c) 跨模块流程（消息→任务等）由 App 编排，不假设跨服务事务（`BH:docs/ARCHITECTURE.md:113-117`）。
 - **导航**：顶层是 App 持有的 `selectedTab`（`removedApp.swift:40,598`）；各 Feature 内部用 `NavigationStack` + **值式、带类型的路由枚举**（如 `AgentFleetNavigationRoute`，`BH:.../AgentsFeature/AgentFleetNavigation.swift:44-47`），路由状态是可单测的值类型，迟到的恢复回调不能复活已弹出的页面（同 50-80）。sheet 用"包住模型身份的 Identifiable 展示结构体"，作用域身份一变就自动关闭（`removedApp.swift:221-243,506-619`）。导航持久化（上次打开的会话）独立存储，恢复时要求在当前会话列表里**唯一**匹配完整身份（`BH:.../AgentsFeature/AgentNavigationStore.swift:5-30`）。
 
 ### 1.4 文档与代码的落差【事实】
@@ -75,7 +75,7 @@
 - **共享观察任务（引用计数订阅者）**：多个页面 `observe()` 共用一个轮询 Task，最后一个订阅者取消时才停（`BH:.../AgentsFeature/AgentWorkspaceModel.swift:1933-1973`）。
 - **有界并发**：多主机刷新最多 3 个 SSH 任务并发，空出一个槽立刻补（`BH:.../AgentsFeature/AgentFleetModel.swift:74-100`）。
 - **生命周期**：App 层 `scenePhase == .background` 时 `pauseUpdates()`，回前台 `resumeUpdates()`（`removedApp.swift:186-191`）；按连接配置身份用 `.task(id:)` 重建运行时（同 183-185,281-311）；多主机按连接身份 diff，配置变化才停旧建新（`AgentFleetModel.swift:52-65`）。
-- **有界流**：WebSocket 事件流 `bufferingNewest(128)`，溢出当作网络错误（`BH:.../SharedKit/HTTPTransport/HTTPTransport.swift:217-229`）；实时变化流 `bufferingNewest(32)`，溢出时补发 `.connected` 让消费者整体重读（`BH:.../lark-connectorKit/Realtime/LarkRealtimeClient.swift:8-30`）。WebSocket 先启动接收循环再等首个 pong（`HTTPTransport.swift:220-246`，`BH:docs/ARCHITECTURE.md:395`）——与 Persona CLAUDE.md 里"sendPing 回调需要挂着 receive"的经验一致。
+- **有界流**：WebSocket 事件流 `bufferingNewest(128)`，溢出当作网络错误（`BH:.../SharedKit/HTTPTransport/HTTPTransport.swift:217-229`）；实时变化流 `bufferingNewest(32)`，溢出时补发 `.connected` 让消费者整体重读（`BH:.../LarkGatewayKit/Realtime/LarkRealtimeClient.swift:8-30`）。WebSocket 先启动接收循环再等首个 pong（`HTTPTransport.swift:220-246`，`BH:docs/ARCHITECTURE.md:395`）——与 Persona CLAUDE.md 里"sendPing 回调需要挂着 receive"的经验一致。
 - **意图 + 确认 token 两步提交**：`prepareSave()` 生成带 UUID 的确认对象并记下 revision 和草稿 id；`process(confirmation)` 只在 id、revision、草稿都还是当前的时候才派发——旧确认框无法提交（`LarkDoNotDisturbModel.swift:134-181`，测试 `BH:.../Tests/removedKitTests/DoNotDisturbModelTests.swift:28-34`）。
 - 视图持有的详情模型用 `@State private var model`（16 处），避免父视图重绘反复创建加载任务（`BH:docs/ARCHITECTURE.md:579`）；其余页面 `@Bindable var model`（54 处）。
 
@@ -138,7 +138,7 @@
 
 | 数据 | 位置 | 细节 |
 | --- | --- | --- |
-| lark-connector 会话 Cookie、证书信任、离线 owner 绑定 | Keychain | `KeychainSecretStore` actor，`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`；引用名含连接 ID + 地址摘要；删除连接时按前缀吊销，吊销后迟到的写入直接失败（`BH:.../CredentialStore/KeychainSecretStore.swift:5-60`）。离线 owner 记录绑定凭据和证书的摘要，任一变化即失效（`LarkAPITransport.swift:151-205`） |
+| 飞书网关会话 Cookie、证书信任、离线 owner 绑定 | Keychain | `KeychainSecretStore` actor，`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`；引用名含连接 ID + 地址摘要；删除连接时按前缀吊销，吊销后迟到的写入直接失败（`BH:.../CredentialStore/KeychainSecretStore.swift:5-60`）。离线 owner 记录绑定凭据和证书的摘要，任一变化即失效（`LarkAPITransport.swift:151-205`） |
 | SSH 私钥/口令、主机指纹（含跳板） | Keychain | `reference + ".host-key"` 等（`AgentWorkspaceModel.swift:416-429`）；私钥库 `SSHKeyLibrary`（`HerdrContracts/SSHKeyLibrary.swift:181`） |
 | 连接配置 | `Application Support/removed/connections.json` | 版本化 envelope（1/2/3）、原子写、`completeUntilFirstUserAuthentication` 文件保护；只引用凭据，不含秘密（`BH:.../ConnectionStorage/JSONConnectionRepository.swift:4-27`） |
 | 各类 journal、草稿、阅读位置、导航 | `Application Support/removed/*.json` | 每个一个 actor；原子写、目录 0700/文件 0600、iOS 文件保护、大小/条数上限；队列相关还 fsync 文件和目录、用 digest 检测外部修改、lstat 拒绝符号链接和他人文件（`AgentLocalStateStore.swift:197-263`；`LarkDoNotDisturbJournal.swift:77-120`） |
@@ -175,7 +175,7 @@
   6. 测试四件套：ClientTests / JournalTests / ModelTests / WorkspaceTests；
   7. fixture 服务模块（`scripts/fixtures/do-not-disturb.mjs`）+ 上游 oracle 检查（`scripts/check-do-not-disturb-fixture.mjs`）；
   8. 文档 + VALIDATION 记录 + 对齐清单。
-- 流程方法：先跑通一条纵向流程再加下一组接口（`BH:docs/ARCHITECTURE.md:224,347-354`）；先做 M0 风险验证再投入界面（`BH:docs/PHASE1_PLAN.md`「开发里程碑」）；"上游接口 → UI 调用"映射由脚本从源码生成 + 人工注释，未注释=未核查而非不需要（`BH:docs/audits/API_UI_MAP.md:1-9`，`scripts/audit-lark-connector.mjs`）；联调记录区分"真实环境 / 自动化 / 隔离模拟器"三类证据，模拟器通过不等于真机通过（`BH:docs/VALIDATION.md` 各节，`BH:README.md:157,167`）。
+- 流程方法：先跑通一条纵向流程再加下一组接口（`BH:docs/ARCHITECTURE.md:224,347-354`）；先做 M0 风险验证再投入界面（`BH:docs/PHASE1_PLAN.md`「开发里程碑」）；"上游接口 → UI 调用"映射由脚本从源码生成 + 人工注释，未注释=未核查而非不需要（`BH:docs/audits/API_UI_MAP.md:1-9`，`scripts/audit-*.mjs`（网关接口审计））；联调记录区分"真实环境 / 自动化 / 隔离模拟器"三类证据，模拟器通过不等于真机通过（`BH:docs/VALIDATION.md` 各节，`BH:README.md:157,167`）。
 
 ---
 
@@ -288,7 +288,7 @@
 
 **A13. 接口 → UI 的对齐清单（由脚本生成 + 人工注释）**
 - 是什么：脚本从服务端源码枚举所有 API 入口，生成表格，再叠加人工维护的"客户端在哪里用、范围到哪"注释；未注释 = 未核查，不等于不需要。
-- removed：`docs/audits/API_UI_MAP.md:1-9`；`scripts/audit-lark-connector.mjs`；`docs/audits/ios-api-mappings.json`。
+- removed：`docs/audits/API_UI_MAP.md:1-9`；`scripts/audit-*.mjs`（网关接口审计）；`docs/audits/ios-api-mappings.json`。
 - Persona 解决：复刻 Android 版最大的风险是"iOS 有、Android 漏了"。从 hub 的 Go 路由表 + WS 事件类型生成清单，每项标注 iOS / Android 的接入位置和状态，就是 Android 对齐的验收表。
 - Android：同一张表的另一列。
 
@@ -308,7 +308,7 @@
 
 ## 10. B) removed 里过度设计 / 不适合 Persona 的地方（【判断】）
 
-前提差异：removed 手机直连不可改的上游（lark-connector）和用户的主机（SSH），没有常开中转；Persona 手机只连自己写的 hub，hub 常开、有 Postgres、负责推送和状态存储，且 hub/node 代码同仓可改。
+前提差异：removed 手机直连不可改的上游（飞书网关）和用户的主机（SSH），没有常开中转；Persona 手机只连自己写的 hub，hub 常开、有 Postgres、负责推送和状态存储，且 hub/node 代码同仓可改。
 
 - **B1. 手机侧第二套持久队列与人工核对体系**：removed 的手机 prompt outbox + 主机 SQLite 持久队列（queued/claimed/executing/confirming/submitted/cancelled/rejected、lease、墓碑、用户服务监督）（`docs/HERDR_PROMPT_QUEUE.md`）是因为没有中转。Persona 只需"把消息可靠交给 hub"（hub 落库即 accepted），排队/投递/重试/核对放 hub+node；手机端 journal 只覆盖"交给 hub 之前"这一段。
 - **B2. 每个操作一个手写 journal、一个超大工作区模型**：31 个 journal、4,088 行，App 持有约 30 个 journal，`LarkMessagingModel` 3,846 行、init 约 38 个参数（`removedApp.swift:46-84,298-308`）。Persona 的设置类写操作（通知偏好、置顶、模式）由 hub 存，丢回执重读即可，不需要 journal；高风险写操作用一个泛型 journal；子模型由"作用域容器"懒创建。

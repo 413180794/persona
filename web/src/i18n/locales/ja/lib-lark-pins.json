@@ -8,7 +8,7 @@
   "fallback_image": "[画像]",
   "fallback_file": "[ファイル]",
   "fallback_message": "メッセージ",
-  "not_logged_in": "ハブに接続されたlark-connectorがLarkにログインしていません",
+  "not_logged_in": "ハブに接続されたLark ゲートウェイがLarkにログインしていません",
   "load_failed": "ピン留めメッセージを読み込めません：{error}",
   "recalled_kept": "{text} · 取り消し済み"
 }

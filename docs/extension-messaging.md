@@ -1,7 +1,7 @@
 # 扩展点 `messaging`：消息来源（#2138）
 
 App 的「消息」入口（会话列表、聊天、发送、置顶、话题、表情回应、已读……）由扩展提供：App 里只有一套**通用的原生消息组件**，
-**数据和动作**来自贡献 `messaging` 的扩展。第一个来源是飞书（lark-connector 扩展），以后别的 IM（Telegram……）用同一份协议。
+**数据和动作**来自贡献 `messaging` 的扩展。第一个来源是飞书（接飞书的扩展），以后别的 IM（Telegram……）用同一份协议。
 
 为什么不是网页 / 下发代码：iOS 在运行时强制代码签名（App Store、TestFlight、ad-hoc 都一样），原生代码不能从扩展下载执行；网页 / JavaScript 虽然能下发，
 但聊天这种重交互界面体验差，而且扩展代码会跑在手机里、碰得到 App 的凭据，和「扩展不在 App 里跑代码」（`docs/extensions.md`「声明式 UI」）冲突。
@@ -235,13 +235,13 @@ App 原生画，点评论、选中正文发评论（`doc_comments`）。来源�
 ## 十二、版本和兼容
 
 - 扩展点 `messaging` 版本 1；hub 的 `features` 有 `messaging`，App 看到它才走这一套。
-- 迁移期间 lark-connector 扩展同时提供老的 `/api/v1/lark`（Mac、Android、网页还在用）和 `messaging`；iOS 有 `messaging` 就用新的，没有就用老的。
+- 迁移期间接飞书的扩展同时提供老的 `/api/v1/lark`（Mac、Android、网页还在用）和 `messaging`；iOS 有 `messaging` 就用新的，没有就用老的。
   iOS 的老实现在 iOS 验收通过后删掉（#2138 阶段 4）；老接口等四端都迁完再删。
 - 加字段向后兼容：老 App 不认识的字段、片段、能力跳过；扩展不能靠新字段表达老 App 必须懂的意思（那就是新版本）。
 
-## 十三、飞书怎么对上（lark-connector 的实现要点）
+## 十三、飞书怎么对上（接飞书的扩展的实现要点）
 
-| 飞书 / lark-connector | 这份协议 |
+| 飞书 / 飞书网关 | 这份协议 |
 | --- | --- |
 | `ol_account`（数字） | `account`（不透明字符串） |
 | `/raw/accounts` 的 `userId` 核对 | `GET me` |

@@ -1290,6 +1290,10 @@ type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"input_schema"`
+	// Shell are the words that run a gated command's tool in a shell instead (its command, its skill's script): a
+	// runtime refuses them in an assistant conversation's shell, where the gate and its credentials are not
+	// (integrations/dsh), and points at the tool.
+	Shell []string `json:"shell,omitempty"`
 }
 
 // Content is an MCP tool result content block.
@@ -1303,10 +1307,29 @@ type Content struct {
 type ToolResult struct {
 	Content []Content `json:"content"`
 	IsError bool      `json:"is_error"`
+	// ErrorKind is what kind of failure an error is, for a program to act on (personad tool's exit code), when the
+	// hub, the node or the connector knows: one of the ToolError* below; empty is a plain failure, or an older hub's.
+	ErrorKind string `json:"error_kind,omitempty"`
+	// RetryAfter is how many seconds a rate limit lasts (ErrorKind rate_limited), when it is known.
+	RetryAfter int `json:"retry_after,omitempty"`
 }
+
+// The kinds of a tool's failure (ToolResult.ErrorKind), as personad tool's exit codes have them.
+const (
+	ToolErrorDeclined    = "declined"     // the user (or connector_gate) did not allow the write
+	ToolErrorUnavailable = "unavailable"  // the node, the hub or the connector cannot be reached or is not signed in
+	ToolErrorRateLimited = "rate_limited" // the connector waits out a rate limit (RetryAfter seconds)
+)
 
 func TextResult(text string, isErr bool) ToolResult {
 	return ToolResult{Content: []Content{{Type: "text", Text: text}}, IsError: isErr}
+}
+
+// ErrorResult is a failure of a known kind (ToolError*), retryAfter seconds for a rate limit (0: not known).
+func ErrorResult(kind, text string, retryAfter int) ToolResult {
+	res := TextResult(text, true)
+	res.ErrorKind, res.RetryAfter = kind, max(retryAfter, 0)
+	return res
 }
 
 // BackgroundTask is a Bash command, subagent, Monitor or workflow Claude runs in the background (run_in_background).
@@ -1443,7 +1466,7 @@ type UsageBucket struct {
 	Requests   int    `json:"req,omitempty"` // model replies
 }
 
-// LarkRule is one rule of the assistant's Feishu write gate (node/larkgate.go): an lark-connector agent API call matching
+// LarkRule is one rule of the assistant's Feishu write gate (node/larkgate.go): a Lark gateway agent API call matching
 // Method ("*" for any), Path (segments; "*" one segment, "**" the rest) and, when set, the top-level fields of its
 // JSON body, gets Action: "allow" (run it), "confirm" (the user approves it on the phone first) or "deny".
 // hub.json's lark_gate rules come first, then the built-in ones; the first match decides.
@@ -1456,15 +1479,31 @@ type LarkRule struct {
 
 // AssistantLark is what the assistant's machine needs to gate its skills' Feishu commands: the write gate's extra
 // rules, lark-cli and the plugins' command gates. Sent by the hub to the assistant's node only; never written to disk
-// or logs. (It no longer carries lark-connector's base and token: lark-connector is a plugin's now, which supplies its own gate
+// or logs. (It no longer carries the Lark gateway's base and token: that is an extension's now, which supplies its own gate
 // and credentials through Gates; an older hub's "account", "base" and "token" are unknown keys and ignored.)
 type AssistantLark struct {
 	Rules  []LarkRule `json:"rules,omitempty"`
 	CLI    *LarkCLI   `json:"cli,omitempty"`    // lark-cli is configured (hub.json lark.cli, docs/plan-lark-cli.md)
-	Prefer string     `json:"prefer,omitempty"` // "lark-connector" | "cli": the primary source when both are there
+	Prefer string     `json:"prefer,omitempty"` // "cli", or the serving extension's own source: the primary one when both are there
 	// Gates are the command gates of the assistant's skills (plugins' assistant.gate, docs/extensions.md「助手」):
 	// a command calling an HTTP API as the user, its credentials and the rules its calls go by.
 	Gates []CommandGate `json:"gates,omitempty"`
+	// MCPServers are the extensions' MCP servers for the assistant (mcp_servers, docs/extensions.md「MCP 服务器」).
+	MCPServers []AssistantMCPServer `json:"mcp_servers,omitempty"`
+}
+
+// AssistantMCPServer is one extension's MCP server for the Claude assistant: a command line on its machine, its tools
+// as mcp__<ID>__<tool> (node/assistant_mcp.go). Allow run without asking, Deny are never callable, the rest go by the
+// conversation's permission mode.
+type AssistantMCPServer struct {
+	Plugin   string   `json:"plugin,omitempty"`
+	ID       string   `json:"id"`
+	Command  string   `json:"command"`
+	Env      string   `json:"env,omitempty"`
+	Args     []string `json:"args,omitempty"`
+	Requires []string `json:"requires,omitempty"`
+	Allow    []string `json:"allow,omitempty"`
+	Deny     []string `json:"deny,omitempty"`
 }
 
 // CommandGate is one skill command that calls an HTTP API as the user (`<command> METHOD PATH [BODY] [curl flags]`),

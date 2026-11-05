@@ -16,7 +16,7 @@
 
 这一组文档回答四件事：
 
-1. removed（作者的另一个原生 iOS 项目：lark-connector 飞书客户端 + 手机经 SSH 驱动 herdr 里的 Claude Code）有哪些长处值得搬；
+1. removed（作者的另一个原生 iOS 项目：飞书网关飞书客户端 + 手机经 SSH 驱动 herdr 里的 Claude Code）有哪些长处值得搬；
 2. 重设计后的目标结构和交互：这一轮先在 Android 上落地，iOS 以后再跟进；
 3. 怎么照着重设计后的样子做一个 Android 版；
 4. 已经合入 master 的 Android 第一版（PR #84，Agents 部分）哪些选型比本方案好、哪些要按本方案替换（[android.md](android.md) 第 1 节）。
@@ -96,7 +96,7 @@
 | | Persona iOS | Persona Android（PR #84，已合入） | removed |
 | --- | --- | --- | --- |
 | 规模 | 约 4.2 万行 Swift（生产约 3.76 万），单个 XcodeGen 工程，`Shared/` 以源码形式编进 App、手表、小组件三个 target | 约 2.7 千行 Kotlin，单模块 `:app`，只有 Agents 部分 | 约 17 万行 Swift（源码约 9 万 + 测试约 6.6 万）+ 主机组件（Node）约 1.3 万行；一个本地 SPM 包，39 个 target |
-| 后端 | 自己的 hub（Go + Postgres），手机只连 hub；hub 经 SSH 起各台电脑上的 node | 同一个 hub，没改服务端 | 没有中转：手机直连 lark-connector（HTTP + WS）和各台主机（SSH exec + PTY） |
+| 后端 | 自己的 hub（Go + Postgres），手机只连 hub；hub 经 SSH 起各台电脑上的 node | 同一个 hub，没改服务端 | 没有中转：手机直连飞书网关（HTTP + WS）和各台主机（SSH exec + PTY） |
 | 测试 | 24 个单测文件约 2.7 千行；16 个 UI 测试 + Python 写的 mock hub；约 80 个 DEBUG 启动参数 | 10 个 JUnit（本机已跑通）；模拟器 + 一台没有 Google 服务的真机手动验证 | 173 个测试文件约 6.6 万行，没有 UI 测试；用合成服务 + 隔离模拟器 + 契约脚本验收 |
 | 突出的地方 | 实时推拉同步、推送和锁屏实时活动、多机器状态模型、对话展示、终端、无头助手 | 不靠推送服务的通知（前台服务常驻连接）、通知上直接作答 | 可靠性工程（结果三态、幂等回执）、编译期分层、聊天列表的正确性、原生交互的完整度、评审和验收方法 |
 

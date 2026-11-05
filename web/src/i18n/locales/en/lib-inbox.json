@@ -34,7 +34,7 @@
   "handoff_summarize": "Summarize it, tell me what to do, and suggest a reply",
   "handoff_research": "Look into the background, then tell me",
   "handoff_handle": "Handle it for me, but ask before replying",
-  "handoff_lark_account": ", in Lark account {account} (pass account={account} to lark_messages; prefix ol commands with lark-connector_ACCOUNT={account})",
+  "handoff_lark_account": ", in Lark account {account} (pass account={account} to lark_messages)",
   "handoff_lark": "(Lark chat feedId {feed}{account}; use the Lark tools to read more context or reply)",
   "handoff_connector": "({name}: {url})",
   "handoff_mail": "(Mail account_id {account}, mailbox {mailbox}, uid {uid}; use mail_read for the full text and mail_send to reply)",

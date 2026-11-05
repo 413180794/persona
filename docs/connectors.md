@@ -23,7 +23,7 @@
 | `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 personad 完全磁盘访问权限） |
 | `telegram` | Telegram | 扩展市场 `nwverse/persona-extensions` 里的扩展 `telegram`（#1704、#2057，代码不在本仓库），hub 经进程扩展协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
 | `wechat` | 微信 | 内置扩展的单独程序 `jarvisd-wechat`（`docs/wechat.md`）：微信里的机器人，不是数据来源，是渠道（`docs/channels.md`）；连接器只管绑定和状态 | 没有 | 没有 | 没有 | 没有 | `Login` 扫码（`kind: qr`），token 加密存 `connector_secrets` |
-| `lark` | 飞书 | #1571 起由接飞书的扩展注册（原来是 hub 的 lark_connector.go，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | 扩展给的收件箱块（块类型在 `assistant/inbox_blocks.go`；原来是 hub 的 inbox_own.go） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
+| `lark` | 飞书 | #1571 起由接飞书的扩展注册（原来是 hub 的 lark_connector.go，包住原来的飞书网关代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | 扩展给的收件箱块（块类型在 `assistant/inbox_blocks.go`；原来是 hub 的 inbox_own.go） | `lark_chats/messages/search` | 走接飞书的扩展带的 skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的飞书网关里登录 |
 | `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
 
 ### 接口：一份清单，按清单分派
@@ -82,7 +82,7 @@ hub 收到不认识的档就丢掉、交给模型分拣。
   （`POST …/thread/reply`）从用户自己登录的设备（手机、Mac、网页的 full 设备 token）发来，就走 `Registry.Run` 直接做，不弹卡片，
   `deny` 规则也不拦。按 hub 鉴权得到的身份判断（`hub.byOwnDevice`），不看客户端自报的字段；hub.json 的配对 token、配对码、
   机器 / 互联凭据不算设备，照旧过闸门。飞书的发消息、收件箱的「发送」本来就不过闸门。
-- 飞书的写操作不是工具：助手用 lark-connector skill 的 `ol` / lark-cli，node 的 Bash 钩子（`node/larkgate.go`）读命令判断读写，规则是
+- 飞书的写操作不是工具：助手用接飞书的扩展带的 skill 里的命令 / lark-cli，node 的 Bash 钩子（`node/larkgate.go`）读命令判断读写，规则是
   `connector_gate` 里 `connector:"lark"` 的（`action` 写「方法 路径」）加上老的 `lark_gate`，再加内置规则（M5）。
 - 收件箱里点「发送」本身就是确认，`Reply` 不再弹卡片；会话页回复框同理（见上）。
 
@@ -342,7 +342,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 现状（不变）：
 
 - 连接器的写操作都是 `Actions`，AI 调的都过闸门（`github_comment`、`github_review`、`mail_send`）；用户在 App 里自己点发送的不过（#1190，见「闸门」）。
-- 飞书的写操作是例外：lark-connector skill 的 `ol` 和 lark-cli，node 的 Bash 钩子按命令判断读写（M5 后规则也写在 `connector_gate`），不管权限模式都要确认。
+- 飞书的写操作是例外：接飞书的扩展带的 skill 里的命令和 lark-cli，node 的 Bash 钩子按命令判断读写（M5 后规则也写在 `connector_gate`），不管权限模式都要确认。
 - 用户自己放进 `~/.persona/skills` 的 skill 都会链接进助手的目录；助手调这些 skill 的脚本走 Claude Code 自己的权限流程。
 
 曾经的提案是把 `larkgate.go` 的「按命令判断」推广到所有 skill（skill 在 `jarvis.json` 里声明写脚本，执行时手机上确认，#654 / #657）。

@@ -191,7 +191,7 @@ OK_EMAIL_DOMAINS = re.compile(r"(^|\.)(example(\.(com|org|net))?|test|invalid|lo
                               r"apple\.com|gmail\.com|googlemail\.com|outlook\.com|hotmail\.com|icloud\.com|yahoo\.com|"
                               r"qq\.com|163\.com|126\.com|foxmail\.com|"
                               r"substack\.com|beehiiv\.com|"  # newsletter platforms (kb tests that their senders are not people)
-                              r"b\.com)$")  # a@b.com: the placeholder in lark-connector's skill (assistantskills/)
+                              r"b\.com)$")  # a@b.com: the placeholder in the Lark extension's skill (assistantskills/)
 REAL_TLDS = {"com", "net", "org", "io", "cn", "dev", "app", "ai", "co", "me", "cc", "info", "so", "xyz", "top", "edu",
              "gov", "uk", "jp", "us", "de", "fr", "hk", "tw", "sg", "in", "ru", "kr", "tech", "cloud", "site", "work", "biz"}
 # The public site (site/) shows a contact address on purpose: the OAuth consent screen requires one.

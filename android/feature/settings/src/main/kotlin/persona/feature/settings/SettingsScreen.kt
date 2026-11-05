@@ -164,7 +164,7 @@ private fun SettingsContent(
         if (connectorsService == null || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
         try {
             mailAccounts = runCatching { connectorsService.mailAccounts() }.getOrNull()
-            // 飞书's status is the lark-connector extension's (`/api/v1/lark/status`): only asked while the hub has it.
+            // 飞书's status is the Lark extension's (`/api/v1/lark/status`): only asked while the hub has it.
             larkStatus = if (larkChats) runCatching { connectorsService.larkStatus() }.getOrNull() else null
             hubConnectors = runCatching { connectorsService.connectors(all = true) }.getOrDefault(emptyList())
         } catch (_: Exception) {}

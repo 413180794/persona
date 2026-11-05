@@ -222,7 +222,8 @@ func (n *Node) gateTools() []proto.Tool {
 		if !fileExists(filepath.Join(assistantskills.UserDir(), filepath.FromSlash(g.Script))) && n.gateScript(identity.AssistantDir(n.home), &g) == "" {
 			continue
 		}
-		out = append(out, proto.Tool{Name: g.Tool.Name, Description: g.Tool.Description, InputSchema: gateToolSchema(g)})
+		out = append(out, proto.Tool{Name: g.Tool.Name, Description: g.Tool.Description, InputSchema: gateToolSchema(g),
+			Shell: []string{g.Command, g.Script}})
 	}
 	return out
 }

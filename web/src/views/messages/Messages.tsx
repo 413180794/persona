@@ -1,4 +1,4 @@
-// 消息 (docs/lark-connector-migration.md「入口」, #392's narrow exception): every Feishu private and group chat, for a browser
+// 消息 (docs/lark-migration.md「入口」, #392's narrow exception): every Feishu private and group chat, for a browser
 // that turned on 设置 › 连接器 › 飞书 › 首页显示消息, on a hub that reads Feishu (feature `lark`). Not a second Feishu: one list and the inbox's own chat view
 // (LarkThread: reading, sending, Pins), no contacts or workbench. Wide: the list (380px) and the chat side by side;
 // narrow: the chat takes the list's place, with a way back. The pinned chats sit on top as a row of faces.
@@ -77,7 +77,7 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
             <>
               <p className="text-[13.5px] font-medium text-ink">{t("messages-messages.off_title")}</p>
               <p className="max-w-[340px] text-[12.5px] text-ink-3">{t("messages-messages.off_hint")}</p>
-              <Button tone="secondary" icon="gear" className="mt-2" onClick={() => navigate(SETTINGS)}>{t("messages-messages.lark-connector_settings")}</Button>
+              <Button tone="secondary" icon="gear" className="mt-2" onClick={() => navigate(SETTINGS)}>{t("messages-messages.goto_lark_settings")}</Button>
             </>
           ) : (
             <>
@@ -229,7 +229,7 @@ function ChatList({ selected, store: larkChats, accounts }: { selected?: string;
   );
 }
 
-/** 置顶: the pinned chats, a row of faces with their names and unread counts (lark-connector's order). */
+/** 置顶: the pinned chats, a row of faces with their names and unread counts (the Lark gateway's order). */
 function PinnedShelf({ chats, selected }: { chats: LarkConversation[]; selected?: string }) {
   return (
     <section aria-label={t("messages-messages.pinned_label")} className="mt-3">

@@ -1809,7 +1809,7 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
   );
 }, sameRow);
 
-// 个人 Agent: lark-connector's personal agents with a view menu (分组 / 排序 / 显示), a search field, pins and custom
+// 个人 Agent: the Lark gateway's personal agents with a view menu (分组 / 排序 / 显示), a search field, pins and custom
 // sections — the prefs live on the hub so iOS sees the same pins.
 type MenuPage = "root" | "group" | "sort" | "show";
 function agentViewItems(page: MenuPage, setPage: (p: MenuPage) => void, p: AgentPrefs, providers: string[]): MenuItem[] {

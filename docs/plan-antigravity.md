@@ -118,12 +118,12 @@
 | `ask_user` 等手机 | ✅ MCP 工具调用默认 180 秒超时，`timeoutSeconds: -1` 关掉 | 同左 | [D8] |
 | 它自己的提问 | ❌ 无头时自己定主意，不问 | ✅ elicitation 表单 | [C2][D5] |
 | 命令 / 改文件审批到手机 | ❌ 要批准的一律软拒绝（stderr 一行 + `denied_actions`），只能靠 `PreToolUse` hook 去问手机 | ✅ 授权请求给客户端 | [D3][C2][D5] |
-| 飞书写操作经闸门 | `PreToolUse` hook 匹配 `run_command`，跑 node 的 `larkCheck`，写操作问手机，拒绝回 `deny` + `reason`（理由交给模型） | 同左（hook 在 ACP 里也生效**没验证**）；或者照 DSH 走 `lark-connector` 工具 | [D6] |
+| 飞书写操作经闸门 | `PreToolUse` hook 匹配 `run_command`，跑 node 的 `larkCheck`，写操作问手机，拒绝回 `deny` + `reason`（理由交给模型） | 同左（hook 在 ACP 里也生效**没验证**）；或者照 DSH 走扩展命令闸门声明的工具 | [D6] |
 | 权限模式 | `--mode accept-edits / auto / plan`，或默认；`--dangerously-skip-permissions` 全放行 | 只有 `default` / `accept-edits` / `plan`；`auto` 只给个人账号、要沙箱 | [D2][C1] |
 | 思考强度 | `--effort low…max`（本机 help 写到 `xhigh` / `max`） | 每个会话可设 | [L1][D5] |
 | 图片 | ❌ 输入只收 `text` 块，别的直接报错退出 | ✅ | [D3][D5] |
 | 指令文件 | ✅ 工作目录的 `AGENTS.md` / `GEMINI.md`；还会读用户自己的 `~/.gemini/AGENTS.md` 等 | 同左 | [D10] |
-| lark-connector skill | ✅ 工作目录的 `.agents/skills/`；没有「额外 skill 目录」的选项 | 同左 | [D11] |
+| 扩展的 skill（如飞书网关的） | ✅ 工作目录的 `.agents/skills/`；没有「额外 skill 目录」的选项 | 同左 | [D11] |
 | 记忆（和 Claude / Codex 共用一份） | 照 Codex 的做法写进指令；agy 自己有 memory / knowledge（二进制里有 `GetCascadeMemories`、目录里有 `knowledge/`），怎么关**没查清** | 同左 | [L2] |
 | 后台任务 | 1.5.0 起没设 `--print-timeout` 时等后台任务跑完；有 `schedule` 工具 | ❓ | [C1][L2] |
 | 预热 | 预先起进程 | 预先起 `agy acp`、`session/new` | — |
@@ -154,7 +154,7 @@ hook 的位置只有工作目录（`.agents/hooks.json`）、全局（`~/.gemini
 1. **runtime `antigravity`**（放在 integrations/antigravity，建在 runtime-sdk 上）：伴随进程，读 `transcript.jsonl` 给列表和内容；没有终端的会话（手机新建、手机接着、助手）在它管的 `agy acp` 里跑，
    授权、提问、逐字、中断、插话都从 ACP 转到 SDK。最低版本 1.5.0，低了就只读不跑，并在列表上说明。
 2. **窗格里的 `agy`**：herdr 已经认；node 认 Agent `agy`，和伴随进程的行合成一行（照 pi）；发消息经 herdr；授权到手机靠一个 Persona 的 Antigravity 插件（`PreToolUse` hook 问伴随进程）。
-3. **助手**：伴随进程声明 `caps.assistant`，走现成的 `assistant_runtime.go`（DSH 那条路），飞书走 `lark-connector` 工具、`run_command` 里的 `ol` 由 hook 拦下；
+3. **助手**：伴随进程声明 `caps.assistant`，走现成的 `assistant_runtime.go`（DSH 那条路），飞书走扩展命令闸门声明的工具、`run_command` 里的闸门命令由 hook 拦下；
    这样 node 里不加按 Antigravity 写的代码。issue 原文写的是「像 Codex 一样单独一个文件」，两种做法的取舍放在下一节。
 4. 先做不碰账号条款的部分：存储读法和语料测试、映射、herdr 合并；真的跑 `agy` 的端到端用 API key 或 Enterprise 账号。
 
@@ -163,7 +163,7 @@ hook 的位置只有工作目录（`.agents/hooks.json`）、全局（`~/.gemini
 1. **个人 Google 账号接不接**（最要紧）。选项：a) 只支持 `GEMINI_API_KEY` / Gemini Enterprise / ADC，个人 OAuth 账号的会话只读不驱动；b) 都支持，在文档和启动器上写明封号风险；c) 先问 Google 拿到明确答复再做。
    建议 a：只读本机的对话记录不算「包进第三方应用」，驱动它才算；API key 下只有 Gemini 模型，这个差别写进文档。
 2. **形态**：a) herdr Agent + 伴随进程 runtime（上面第 7 节，建议）；b) 只做 runtime，窗格里的 `agy` 只显示成「未运行」的对话记录；c) 只做 herdr Agent，node 里写读 transcript 的 Go 代码。
-3. **助手后端**：a) 伴随进程声明 `caps.assistant`、走 `assistant_runtime.go`（不加 Go 代码，飞书走 `lark-connector` 工具，建议）；b) 照 issue 写 `assistant_antigravity.go`，node 直接起 `agy acp`（和 Codex 对称，多一套 Go 代码，飞书闸门要在 ACP 授权和 hook 两处接）。
+3. **助手后端**：a) 伴随进程声明 `caps.assistant`、走 `assistant_runtime.go`（不加 Go 代码，飞书走扩展命令闸门声明的工具，建议）；b) 照 issue 写 `assistant_antigravity.go`，node 直接起 `agy acp`（和 Codex 对称，多一套 Go 代码，飞书闸门要在 ACP 授权和 hook 两处接）。
 4. **最低版本**：要求 ≥ 1.5.0（ACP）。低于它时只列会话、只读，还是完全不接。
 5. **窗格里授权到手机要不要改用户的全局配置**：a) 发一个 Antigravity 插件，用户自己 `agy plugin install`（建议，可卸）；b) node 自动写 `~/.gemini/config/hooks.json`；c) 不做，只靠读屏回答授权框。
 6. **同一个会话两边都开着**：如果 agy 不拒绝第二个进程，手机发到 ACP 的消息和电脑上 TUI 会同时写一份存储。是一律以 herdr 窗格为准、ACP 不碰正在 TUI 里开着的会话（建议），还是别的规则。

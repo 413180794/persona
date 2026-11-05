@@ -4,11 +4,11 @@
 
 ## 附件发送
 
-- 不要把文字/图片的 client_id 幂等性推断到文件：lark-connector 的直接文件上传不进入 outbox，未知结果不能重新上传。API 返回成功却丢失或无法解析回执也属于未知；只有明确拒绝才允许重试。测试 mock 必须区分 429 拒绝与已接受后回执丢失，不能一律返回 502 再假设重试安全。
+- 不要把文字/图片的 client_id 幂等性推断到文件：飞书网关的直接文件上传不进入 outbox，未知结果不能重新上传。API 返回成功却丢失或无法解析回执也属于未知；只有明确拒绝才允许重试。测试 mock 必须区分 429 拒绝与已接受后回执丢失，不能一律返回 502 再假设重试安全。
 - 强退恢复时，草稿清空与待发送记录必须在同一个原子快照里；媒体先复制，再提交引用。保存失败不能清空输入或开始网络请求。回执已收到但落盘失败，不得把已经发送的消息改成“发送失败”。
 
 - 附件乐观回显不能沿用纯文本的「文字相同 + 20 秒超时删除」：图片文字可能为空，同名文件也不是同一条。
-  保留 client_id 与 message_id，确认回显后替换；lark-connector 的 local: 暂存消息不能当成发送确认。请求超时以后到达的确认推送仍要合并，不能一直留着失败气泡。
+  保留 client_id 与 message_id，确认回显后替换；飞书网关的 local: 暂存消息不能当成发送确认。请求超时以后到达的确认推送仍要合并，不能一直留着失败气泡。
 - 原生发送队列不能串行等待消息回显的轮询延迟；只串行网络提交，回显同步独立进行。文件选择后持有私有副本直到移除或回显确认，重试不再读取可能变化的原始文件。
 
 - iOS 27 的 Quick Look 先显示关闭按钮，再加载文件内容；初始占位阶段的点击可能没有关闭预览。UI 回归要等待文件内容工具栏出现，并断言预览确已消失，再操作聊天输入区，避免点到预览的共享按钮。
@@ -29,16 +29,16 @@
 
 ## 消息与文档
 
-- 飞书消息渲染照搬 lark-connector（`docs/ios.md`「飞书消息渲染」）：hub 原样转发 `parts`，只把媒体 URL 改写到 `/api/v1/lark/media/`；
-  看 lark-connector 源码直接 `git clone https://github.com/Eric-2369/lark-connector`（hub 机器上只有部署产物）。
-- 个人 Agent 的来源先看 hub 的 `GET /api/v1/agents`：未配置 lark-connector 或仅配置飞书 CLI 时返回 `{"sources":[]}`，会话接口返回 `{"sessions":[]}`，均为 HTTP 200；飞书 CLI 不提供个人 Agent bridge。
-  Bridge 只在 `lark-connectorConfigured()` 为真时注册；无条件注册会使未配置时的列表请求因「lark-connector is not configured」返回 502。配置了 lark-connector 后，其 agent-bridge 默认仍是关的：要在部署里设置 `lark-connector_AGENT_BRIDGE=true` 并重启，否则 `/agent-bridge` 返回 `enabled:false`，
-  会话为空；更早的 lark-connector 版本没有这个接口，hub 拿到的是 404。开了以后还要在 lark-connector 的设置里添加 Cue / Grok Bot 账号（只有主人登录的网页接口能加，
+- 飞书消息渲染照搬飞书网关的网页（`docs/ios.md`「飞书消息渲染」）：hub 原样转发 `parts`，只把媒体 URL 改写到 `/api/v1/lark/media/`；
+  看网关源码去克隆它的上游仓库（地址见接飞书的扩展的说明；hub 机器上只有部署产物）。
+- 个人 Agent 的来源先看 hub 的 `GET /api/v1/agents`：未配置飞书网关或仅配置飞书 CLI 时返回 `{"sources":[]}`，会话接口返回 `{"sessions":[]}`，均为 HTTP 200；飞书 CLI 不提供个人 Agent bridge。
+  Bridge 只在 `LegacyGatewayConfigured()` 为真时注册（#1571 起个人 Agent 来源由扩展提供）；无条件注册会使未配置时的列表请求因「未配置网关」返回 502。配置了网关后，其 agent-bridge 默认仍是关的：要在网关的部署里打开（变量见接飞书的扩展的说明）并重启，否则 `/agent-bridge` 返回 `enabled:false`，
+  会话为空；更早的飞书网关版本没有这个接口，hub 拿到的是 404。开了以后还要在飞书网关的设置里添加 Cue / Grok Bot 账号（只有主人登录的网页接口能加，
   Agent API 只读）。来源已注册时，`setup` 是 `missing` / `disabled` / `no_accounts` 就是没配好，`lastError` 是账号同步失败。
-  lark-connector 自动更新后检查部署配置里这个开关还在不在。
-- lark-connector Agent API 的资源地址使用 `/agent/v1/media/`、`/agent/v1/messages/`；hub 改写要同时兼容这些前缀和旧的 `/api/` 地址，保留查询参数。
+  飞书网关自动更新后检查部署配置里这个开关还在不在。
+- 飞书网关 Agent API 的资源地址使用 `/agent/v1/media/`、`/agent/v1/messages/`；hub 改写要同时兼容这些前缀和旧的 `/api/` 地址，保留查询参数。
   只检查 HTTP 200 不够：未改写的图片路径会落入 hub 网页并返回 HTML，手机还会在解码前把它缓存。验证消息返回的新 URL、图片 MIME 和实际字节；改写为正确代理地址也会改变手机缓存键。
-- lark-connector 会话列表的坑（`docs/protocol.md` 飞书 API）：`isDone` 字段不可靠（done scope 里全是 false），已完成以 scope 为准；
+- 飞书网关会话列表的坑（`docs/protocol.md` 飞书 API）：`isDone` 字段不可靠（done scope 里全是 false），已完成以 scope 为准；
   置顶看 `onTopRankAt`（`settings.isShortcut` 也不准），且置顶会话分散在 inbox 和 done 两个 scope；未知 scope 会被静默当成 inbox。
 - 置顶集合不能固定读三页就宣告完整。读到第一个非置顶项或没有下一页才结束；隐藏项可能让整页过滤为空，仍应跟随游标。重复／缺失游标和安全上限都返回错误，不能让客户端用残缺数据覆盖缓存。置顶时间要解析后比较：带毫秒的 ISO 时间与整秒字符串直接排序会颠倒顺序。
 - 打开飞书会话不能用 `tail=1`（那是「回到最新」）：有未读时要 `aroundPosition=readPosition+1`，已读只上报真正上屏的消息。
@@ -54,7 +54,7 @@
 - 按 UID 记游标要同时记 UIDVALIDITY：服务端重建 / 迁移邮箱后 UID 从头编号（RFC 3501 2.3.1.1），新邮件的 UID 都比旧游标小，只比 UID 会什么都不归档，直到新 UID 涨过旧的最大值。
   游标也不能直接跳到「最新一页的最大 UID」：两次之间来了超过一页，中间的就永远读不到了。知识库的邮件归档（`hub/mail_connector.go`）现在记 `<账号>#v`，
   一页没读到旧游标时记下空洞（`#f` < UID < `#h`）按页往下补，UIDVALIDITY 变了从最新一页重新开始、只收比已归档最新一封（`#t`）更晚的（#2633）。
-- 飞书文档 / 表格 / 多维表格里 @我、评论我，不进 IM 会话列表（没有「云文档助手」会话），只在 lark-connector 的文档通知中心
+- 飞书文档 / 表格 / 多维表格里 @我、评论我，不进 IM 会话列表（没有「云文档助手」会话），只在飞书网关的文档通知中心
   `documents/notifications`，而且卡片只说「谁提及了你」，不说哪一行：要自己读表按「@名字」找（`docs/inbox.md`「云文档」）。
   表格里带下拉的格子 `sheet/edit` 一律报 `DOCUMENT_EDIT_UNSUPPORTED`，改值要用 `sheet/structure` 的 `choose`；多维表格 `base/edit` 的
   `expect` 指纹要按当前值算（`BaseCell.Fingerprint`），人员字段的 id 格式和 `accounts` 给的 userId 不一样（写不进去，读得出）。
@@ -85,7 +85,7 @@ Agent 返回的普通文字不能用于猜测是否加密。新增的 `olk` 投�
 - 长连接的事件要在 3 秒内回执，不然飞书重发同一事件：处理放后台，按 message_id 去重。
 - 一条消息发给正在忙的对话会排在当前这一轮后面：那一轮的结束不是它的回答，要在 transcript 里找到这条消息再取它后面的回答（`botRun.Probe`）。
 
-- lark-connector 文件发送的 201 回执可能只有 `fileKey/name/size`，`messageId` 是可选字段，不能因此把已发送文件报成失败并鼓励重发。图片 JSON 的 base64 斜杠也可能被全部转义，HTTP body 上限要覆盖这个合法编码，实际图片大小仍按解码后的 7.5 MiB 限制。
+- 飞书网关文件发送的 201 回执可能只有 `fileKey/name/size`，`messageId` 是可选字段，不能因此把已发送文件报成失败并鼓励重发。图片 JSON 的 base64 斜杠也可能被全部转义，HTTP body 上限要覆盖这个合法编码，实际图片大小仍按解码后的 7.5 MiB 限制。
 - 未发送附件是用户数据，选取后的私有副本放 Application Support 并排除备份；不能放在「清除缓存」会删除的 tmp/uploads 或 tmp/lark-drafts。
 
 ## 全部会话的分页刷新（#530 审查）
@@ -99,24 +99,24 @@ Agent 返回的普通文字不能用于猜测是否加密。新增的 `olk` 投�
 - 会话列表不等于消息订阅名单；列出全部群不应让所有活跃群都持续预取聊天内容。
 
 - 持久化发送队列要单独记录是否已尝试提交。重启时只有已开始提交、结果未知的文件需要检查；排队中从未发出的文件应保留显式重试。离线、DNS 或建连失败也不能误判为已上传但未知。
-- lark-connector 成功文件回执允许省略消息 ID；客户端和 Hub 都必须承认成功，不能在客户端再次把可选字段变为发送失败。
+- 飞书网关成功文件回执允许省略消息 ID；客户端和 Hub 都必须承认成功，不能在客户端再次把可选字段变为发送失败。
 
 - Application Support 的选取临时副本不会被系统自动清理；进程重启后先清理旧 UUID 目录，再开始新的选取。清理只运行一次，与选取共用锁，不能删除当前进程新建的副本或独立的持久化媒体目录。
-- 流式上传的超时包含手机上传时间，应按文件大小给手机和 Hub 相同预算；lark-connector 的 pending / failed 本地消息即使已从本机发件箱删除，也不能变成普通已发送气泡。
+- 流式上传的超时包含手机上传时间，应按文件大小给手机和 Hub 相同预算；飞书网关的 pending / failed 本地消息即使已从本机发件箱删除，也不能变成普通已发送气泡。
 
 ## 风灵月影与账号设置
 
 整份 local settings PUT 会覆盖网页或另一客户端刚改的字段。手机只通过受限 PATCH 修改两个展示开关，并携带旧值；未知结果先重读，不能自动重试。Hub 返回实际选中账号的用户 ID，不能用账号列表里另一个 primary 用户代替。前后身份校验可以拒绝换号响应，但不是跨登录操作的数据库事务。
 
-防撤回的原内容就在 lark-connector 的 parts 中，必须另看 hasRetainedRecallContent，不能把系统撤回提示误当原文。展示与权限分离：保留 recalled 标记；未开启时正文、引用和转发都走撤回提示。编辑版本有自己的 OLK 投影，不能只清主消息和引用的磁盘明文而漏掉 editHistory。
+防撤回的原内容就在飞书网关的 parts 中，必须另看 hasRetainedRecallContent，不能把系统撤回提示误当原文。展示与权限分离：保留 recalled 标记；未开启时正文、引用和转发都走撤回提示。编辑版本有自己的 OLK 投影，不能只清主消息和引用的磁盘明文而漏掉 editHistory。
 
 合并转发卡片的 metadata 同时包含 messages 和复制出来的 previews；不能只处理展开后的正文。预览按原记录的撤回状态/OLK 投影生成；落盘递归去除记录及历史的解密正文，再重建预览，避免无 OLK 标记的复制文本漏进缓存。编辑时间可能包含毫秒，沿用 JSON.parseDate，不能仅用默认 ISO8601DateFormatter。
 
 设置变更推送可能早于保存请求的 HTTP 回执，也可能在旧账号的读取尚未结束时到达。不能因为 `loading` / `saving` 就丢掉刷新：合并期间的通知，在当前请求结束后用最近一次客户端补读，不发布已被通知取代的旧响应。补读由设置模型持有，离开先前页面或取消该页面的等待不能同时取消新的实时变更；写操作仍只提交一次。
 
-Hub 在 400ms 内合并事件时，设置变化必须独立累积为 `settings_changed`，不能依赖空 `feed_ids` 表示；同一批有新消息时仍须重读设置。未登录错误沿用 `lark_not_logged_in`，指向 Hub 所在机器的 lark-connector 登录入口，不能建议无效的反复重读。
+Hub 在 400ms 内合并事件时，设置变化必须独立累积为 `settings_changed`，不能依赖空 `feed_ids` 表示；同一批有新消息时仍须重读设置。未登录错误沿用 `lark_not_logged_in`，指向 Hub 所在机器的飞书网关登录入口，不能建议无效的反复重读。
 
-这两个开关控制展示，沿用 lark-connector 的语义，不是留存或访问授权：关闭后并不删除服务端留存，Hub 仍向已有消息读取权限的客户端返回原内容与版本，普通未加密内容仍可能进入本地缓存。OLK 解密正文与此独立，持久化必须清理。现有收件箱分拣及助手引用仍可能使用已撤回的 `Text`；其 AI 上下文策略在 #882 后续单独统一，本阶段不宣称已改变。
+这两个开关控制展示，沿用飞书网关的语义，不是留存或访问授权：关闭后并不删除服务端留存，Hub 仍向已有消息读取权限的客户端返回原内容与版本，普通未加密内容仍可能进入本地缓存。OLK 解密正文与此独立，持久化必须清理。现有收件箱分拣及助手引用仍可能使用已撤回的 `Text`；其 AI 上下文策略在 #882 后续单独统一，本阶段不宣称已改变。
 
 ## 消息列表行间距
 
@@ -128,7 +128,7 @@ SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 
 
 - When merging message-display controls with interactive quotes, keep the shared `QuoteCard` and `larkJump` action. Apply recall visibility to the card summary before rendering; UI tests should query the quote button, not the former static text.
 
-- 原生消息新能力必须在入口核验当前会话所用 Hub 的接口，并给出明确的升级对象。客户端更新早于 Hub 时，普通 404 不能直接展示成 not found；上游接口缺失须由 Hub 区分为 lark-connector 需要升级，未授权不能误报旧版本。保留加密草稿和重新检查入口，避免失败后隐式改成普通发送。
+- 原生消息新能力必须在入口核验当前会话所用 Hub 的接口，并给出明确的升级对象。客户端更新早于 Hub 时，普通 404 不能直接展示成 not found；上游接口缺失须由 Hub 区分为飞书网关需要升级，未授权不能误报旧版本。保留加密草稿和重新检查入口，避免失败后隐式改成普通发送。
 
 ## 采集读消息时条目被标处理（#1105）
 
@@ -144,16 +144,16 @@ SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 
 
 ## 聊天内 Pin
 
-- lark-connector 的 `GET /conversations/F/pins` 会调用标记 Pin 已读，不能因为是 GET 就用于真实账号的自动化「只读验收」。只在用户主动打开列表或操作 Pin 后读取；测试写与 Pin 读取使用隔离 mock。
+- 飞书网关的 `GET /conversations/F/pins` 会调用标记 Pin 已读，不能因为是 GET 就用于真实账号的自动化「只读验收」。只在用户主动打开列表或操作 Pin 后读取；测试写与 Pin 读取使用隔离 mock。
 - `pins.updated` 表示列表变化，`pins.read-state.updated` 是已读状态变化。订阅后者再刷新 Pin 列表会形成自触发循环。
-- `capabilities` 是部分覆盖：对象存在但没有某个键时沿用 lark-connector 的默认值；整个对象缺失表示旧响应、不能推定写权限。正常消息 `localState` 是 `synced`，不能以非空为由禁用；撤回/删除禁止添加，但移除旧 Pin 仍按 `unpin` 权限。
+- `capabilities` 是部分覆盖：对象存在但没有某个键时沿用飞书网关的默认值；整个对象缺失表示旧响应、不能推定写权限。正常消息 `localState` 是 `synced`，不能以非空为由禁用；撤回/删除禁止添加，但移除旧 Pin 仍按 `unpin` 权限。
 - Pin 写请求没有客户端幂等键，不能照搬文字发送的自动重试。网络失败、服务端 5xx、成功但回执缺字段都按未知处理，重新读列表后再由用户决定。定位也先获取完整目标窗口，失败不清空聊天。
 
-## lark-connector 多账号（#1321）
+## 飞书网关多账号（#1321）
 
-- `GET /agent/v1/accounts` 不管问的是哪个账号，列表都按 lark-connector 的顺序，主账号 1 在最前；哪个是这次请求的账号看 `activeId`（旧版看 `active`）。
-  以前 `lark.Client.Me` 取「第一个 `active || primary`」，带 `x-lark-connector-account: 2` 问到的也是账号 1 的身份；现在先按 `activeId` 找。
+- `GET /agent/v1/accounts` 不管问的是哪个账号，列表都按飞书网关的顺序，主账号 1 在最前；哪个是这次请求的账号看 `activeId`（旧版看 `active`）。
+  以前 `lark.Client.Me` 取「第一个 `active || primary`」，带 网关的账号请求头 `2` 问到的也是账号 1 的身份；现在先按 `activeId` 找。
 - 同一个群可以同时在两个账号里，feed id 一样：收件箱条目、App 的聊天缓存（`lark-chat-<key>`）和实时监听都要按「账号 + feed」区分，
   不能只按 feed。因此 hub 也不按 feed 猜账号（旧客户端打开别的账号的会话时就用默认账号，宁可读不到也不能以错的身份发出去）。
-- 添加的账号的资源 URL（头像、图片、文件）lark-connector 自带 `ol_account`，hub 改写成 `/api/v1/lark/media/…?ol_account=N` 后原样带回来就对，
+- 添加的账号的资源 URL（头像、图片、文件）飞书网关自带 `ol_account`，hub 改写成 `/api/v1/lark/media/…?ol_account=N` 后原样带回来就对，
   App 给这类 URL 加账号时不能覆盖它已有的 `ol_account`。

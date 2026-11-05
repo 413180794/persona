@@ -24,8 +24,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 class ExtensionInboxItemTest {
     private val res get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
 
-    private val event = ExtensionUiPlace("lark-connector", "event", "事件", "inbox_item", extensionName = "飞书", connector = "lark")
-    private val route = InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审")
+    private val event = ExtensionUiPlace("larkext", "event", "事件", "inbox_item", extensionName = "飞书", connector = "lark")
+    private val route = InboxItemUiRoute("lark:F1:1051", "larkext", "event", "周四的评审")
 
     private class FakeHub(val byPlacement: MutableMap<String, List<ExtensionUiPlace>>) : ExtensionApiStub() {
         val asked = mutableListOf<String>()
@@ -39,7 +39,7 @@ class ExtensionInboxItemTest {
 
     @Test fun readsTheInboxItemPagesByTheirPlacement() = runTest {
         val hub = FakeHub(mutableMapOf(
-            "" to listOf(ExtensionUiPlace("lark-connector", "accounts", "账号", "nav_page")),
+            "" to listOf(ExtensionUiPlace("larkext", "accounts", "账号", "nav_page")),
             // One without a connector draws for nobody's items; another slot listed here is not an item's page.
             "inbox_item" to listOf(event, event.copy(id = "loose", connector = null), event.copy(id = "card", placement = "overview_card")),
         ))
@@ -114,7 +114,7 @@ class ExtensionInboxItemTest {
         var view: () -> ExtensionView = { eventView }
         var result: () -> ExtensionUiResult = { ExtensionUiResult() }
         override suspend fun renderUi(extension: String, ui: String, context: ExtensionUiContext?, state: String?): ExtensionView {
-            assertEquals("lark-connector" to "event", extension to ui)
+            assertEquals("larkext" to "event", extension to ui)
             renders += context to state
             return view()
         }
@@ -164,7 +164,7 @@ class ExtensionInboxItemTest {
         extension.result = { ExtensionUiResult(openUrl = "persona://open?target=settings") }
         assertNull(model.press(ExtensionViewAction("other")).openUrl)
         // Any other extension page opens https only.
-        val page = ExtensionViewModel(extension, "lark-connector", "event")
+        val page = ExtensionViewModel(extension, "larkext", "event")
         page.load()
         extension.result = { ExtensionUiResult(openUrl = "persona://inbox/lark:F1:1051/source") }
         assertNull(page.press(ExtensionViewAction("open_chat")).openUrl)

@@ -28,7 +28,7 @@ type Rule struct {
 	Decision  string         `json:"decision"`
 }
 
-// Lark is the connector id whose rules are the assistant's Feishu writes (lark-connector's ol, lark-cli). Those run on
+// Lark is the connector id whose rules are the assistant's Feishu writes (an extension's gated command, lark-cli). Those run on
 // the assistant's machine, where node/larkgate.go reads the command: they are not the Registry's actions, so a rule
 // of connector "lark" goes there instead (LarkRules) and its action is "<METHOD> <path>" in lark_gate's terms —
 // "POST /conversations/*/messages", "CLI /im/+messages-send", "*" for any call.
@@ -153,7 +153,7 @@ func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string
 	}
 	switch d {
 	case Deny:
-		res := proto.TextResult("The hub's rules (connector_gate) do not allow "+name+".", true)
+		res := proto.ErrorResult(proto.ToolErrorDeclined, "The hub's rules (connector_gate) do not allow "+name+".", 0)
 		return &res
 	case Confirm:
 		act, summary, err := a.Describe(ctx, name, args)
@@ -166,7 +166,7 @@ func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string
 			summary += "\n\n谁会看到：" + act.Visible
 		}
 		if ask == nil || !ask(ctx, summary, args) {
-			res := proto.TextResult("The user declined "+name+".", true)
+			res := proto.ErrorResult(proto.ToolErrorDeclined, "The user declined "+name+".", 0)
 			return &res
 		}
 	}

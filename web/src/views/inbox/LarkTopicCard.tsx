@@ -1,4 +1,4 @@
-// A Feishu topic group drawn the way lark-connector draws one (#2903, iOS LarkTopicCard.swift): a card per topic with the
+// A Feishu topic group drawn the way the Lark gateway draws one (#2903, iOS LarkTopicCard.swift): a card per topic with the
 // poster's avatar, name and time on top and the topic under them, folded behind 展开 past 320 px, then its newest
 // replies (lib/lark-topic-replies.ts). A tap on the replies opens the topic's thread in a dialog. Topics are never run
 // together like a chat's messages: where a bot posts a topic a minute, each one still has its own card, name and time.
@@ -14,7 +14,7 @@ import { Button, cx, Dialog, Loading } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
 
-/** The fold: a topic taller than this shows its top under a fade (lark-connector folds at 320 px). */
+/** The fold: a topic taller than this shows its top under a fade (the Lark gateway folds at 320 px). */
 const FOLD = 320;
 /** A card on screen this long has its replies read (not one flung past). */
 const SETTLE_MS = 200;

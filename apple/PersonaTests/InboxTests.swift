@@ -79,7 +79,7 @@ struct InboxTests {
         #expect(FeishuLinks.route(minutes, lark: .all) == nil) // a web page in the link sheet
     }
 
-    /// Without the lark-connector plugin (no `lark` in the hub's features) the native readers have nothing to read:
+    /// Without the Lark extension (no `lark` in the hub's features) the native readers have nothing to read:
     /// Feishu documents and company-feed posts are ordinary web pages in the link sheet (#1530).
     @Test func feishuLinksWithoutTheExtensionAreWebPages() throws {
         let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument

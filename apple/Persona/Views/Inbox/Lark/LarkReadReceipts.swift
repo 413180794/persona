@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// lark-connector's read receipt of one of my messages: how many in the chat have read it and how many have not
+/// The Lark gateway's read receipt of one of my messages: how many in the chat have read it and how many have not
 /// (`POST /api/v1/lark/conversations/{id}/read-states`).
 nonisolated struct LarkReadState: Codable, Hashable, Sendable {
     var messageID: String
@@ -23,7 +23,7 @@ nonisolated enum LarkReadMark: Equatable {
     /// Some of a group have read it: `read` of `total`.
     case progress(read: Int, total: Int)
 
-    /// Nil without a receipt (not asked yet, lark-connector has none, an old hub) or with nobody to read it: nothing is
+    /// Nil without a receipt (not asked yet, the Lark gateway has none, an old hub) or with nobody to read it: nothing is
     /// shown rather than a read state that was never reported.
     init?(state: LarkReadState?, isGroup: Bool) {
         guard let s = state, s.readCount >= 0, s.unreadCount >= 0, s.readCount + s.unreadCount > 0 else { return nil }
@@ -61,7 +61,7 @@ nonisolated enum LarkReadMark: Equatable {
 /// A change in the chat asks again about mine on screen. An old hub without the route (404) is not asked again during
 /// the visit.
 nonisolated struct LarkReadReceipts {
-    /// lark-connector's own cap per batch (the hub answers 400 above it).
+    /// The Lark gateway's own cap per batch (the hub answers 400 above it).
     static let batchLimit = 100
     /// Opening a chat, scrolling and a burst of pushes make one request every few seconds, not one per row.
     static let minGap: TimeInterval = 3
@@ -125,7 +125,7 @@ nonisolated struct LarkReadReceipts {
 }
 
 extension APIClient {
-    /// Read receipts of my messages in a chat (at most `LarkReadReceipts.batchLimit` ids); ones lark-connector has no
+    /// Read receipts of my messages in a chat (at most `LarkReadReceipts.batchLimit` ids); ones the Lark gateway has no
     /// receipt for are left out.
     func larkReadStates(_ feed: String, ids: [String]) async throws -> [LarkReadState] {
         struct Body: Encodable { var message_ids: [String] }

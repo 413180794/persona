@@ -116,7 +116,7 @@ func newFakeCodex(t *testing.T, n *Node, cwd string) (*assistantProc, *codexConn
 	return p, c, f
 }
 
-// fakeHub answers the node's calls the way the hub would: lark-connector config, the snapshot, and the phone's answers.
+// fakeHub answers the node's calls the way the hub would: the Feishu gate config, the snapshot, and the phone's answers.
 type fakeHub struct {
 	mu      sync.Mutex
 	asked   []proto.Interaction

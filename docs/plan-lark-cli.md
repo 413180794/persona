@@ -1,17 +1,17 @@
-# 计划：没有 lark-connector 时用 lark-cli 接飞书
+# 计划：没有飞书网关时用 lark-cli 接飞书
 
 状态：方案（#273），用户拍板的事项见「已拍板」，按「分步计划」做，做完的步骤打勾；全部做完后把设计部分并进
 `docs/feishu.md`、`docs/knowledge.md`、`docs/inbox.md`，删掉这份计划。
 
 ## 背景
 
-现在 persona 的飞书能力全部建立在 lark-connector 上（`docs/feishu.md`）：收件箱、知识库归档、实时事件、AI 分身、飞书里的 `/agent`、
-助手的 lark-connector skill。没有 lark-connector 的 hub 就完全没有飞书。
+现在 persona 的飞书能力全部建立在飞书网关上（`docs/feishu.md`）：收件箱、知识库归档、实时事件、AI 分身、飞书里的 `/agent`、
+助手的飞书网关 skill。没有飞书网关的 hub 就完全没有飞书。
 
 飞书官方的 [lark-cli](https://github.com/larksuite/cli)（npm `@larksuite/cli`，MIT）用开放平台应用 + 用户授权读写飞书，任何人都能装。
-目标：只装 lark-cli、不配 lark-connector 的 hub 也能给 Persona 和 AI 分身提供飞书上下文。lark-connector 的现有行为不变，只是多一种来源。
+目标：只装 lark-cli、不配飞书网关的 hub 也能给 Persona 和 AI 分身提供飞书上下文。飞书网关的现有行为不变，只是多一种来源。
 
-不做：不为飞书做浏览页面（`docs/feishu.md`「不做第二个飞书」）；不替换 lark-connector。
+不做：不为飞书做浏览页面（`docs/feishu.md`「不做第二个飞书」）；不替换飞书网关。
 
 ## lark-cli 能做什么（1.0.72 实测，2026-11-02）
 
@@ -23,7 +23,7 @@
 | 读消息 | `im +chat-messages-list`、`im +threads-messages-list`、`im +messages-mget` | `message_id`、`create_time`、发送者（带名字）、`content`（开放平台的 JSON）、话题位置 |
 | 搜消息 | `im +messages-search` | 不带关键词也能搜：只给 `--start` 就是这段时间里我能看到的全部消息；`--is-at-me`、`--chat-type p2p`、`--sender`、`--query` 可叠加；结果带会话名、`mentions`、`thread_id` |
 | 发送 | `im +messages-send`、`im +messages-reply`（可回在话题里、markdown）、`im reactions create / delete` | 用机器人身份（`--as bot`）：用户身份要应用开 `im:message.send_as_user`，默认的应用没有（2026-11-04 实测 `missing_scope`）；机器人只能发给能看到这个应用的人和它所在的群 |
-| 文档 | `docs +fetch --doc-format markdown`、`drive +search`、评论（`drive`）、`sheets`、`base` | 没有 lark-connector 那种 JSON 节点树、`header`、`ai-summary` |
+| 文档 | `docs +fetch --doc-format markdown`、`drive +search`、评论（`drive`）、`sheets`、`base` | 没有飞书网关那种 JSON 节点树、`header`、`ai-summary` |
 | 日程 / 会议 / 妙记 | `calendar +agenda`、`vc +search / +detail`、`minutes +search / +detail` | |
 | 人 | `contact` | 按姓名搜、按 id 查 |
 | 实时事件 | `event consume <EventKey>` | IM 类事件（`im.message.receive_v1` 等）**只推给机器人**；用户身份只有审批、妙记、会议、任务几类 |
@@ -31,7 +31,7 @@
 | 登录 | `auth login`（Device Flow，没有浏览器的机器也能登，手机上点链接完成）、`auth status`、`whoami`（JSON） | access token 2 小时，refresh token 7 天（`auth status` 的 `refreshExpiresAt`）：一周没用过就要重新登录 |
 | 领域说明 | `lark-cli skills list / read <名字>` | skill 编进 CLI，和版本同步；Agent 按需读，不用拷进仓库 |
 
-## 对照表：现在用到的 lark-connector 能力
+## 对照表：现在用到的飞书网关能力
 
 「需要」一栏：未读 = 飞书里的未读 / 已读位置；feed = 会话列表的未读 / @我 / 完成标记；事件 = 实时推送。这几样开放平台都没有。
 
@@ -77,7 +77,7 @@
 
 | 现在 | lark-cli | 降级 |
 | --- | --- | --- |
-| lark-connector skill：`ol METHOD PATH` | `lark-cli <领域> <命令>`；Persona 内置一个短 skill 指路，细节让 Agent 用 `lark-cli skills read` 读 | 能做 |
+| 飞书网关的 skill：`<命令> METHOD PATH` | `lark-cli <领域> <命令>`；Persona 内置一个短 skill 指路，细节让 Agent 用 `lark-cli skills read` 读 | 能做 |
 | 写操作过 `ol` 闸门、手机确认 | 闸门认 `lark-cli`，按它自报的风险等级判断（见下面「闸门」） | 能做 |
 | `lark_chats`（未读 / @我 / 最近） | 最近：`+chat-list`；@我：搜索 | 没有「未读」过滤 |
 | `lark_messages`、`lark_search`（消息、文档、人、日程、妙记、待办、邮件） | `+chat-messages-list`；`+messages-search`、`drive +search`、`contact`、`calendar`、`minutes`、`task`、`mail` | 能做 |
@@ -95,15 +95,15 @@
 ## 形态
 
 - **连接器**：做成 `docs/plan-connectors.md` 框架上一个内置连接器 `larkcli`。框架里已有 `Accounts`、`ReadTools`、`Actions`、`Inbox`、`Archive`、`Runner`，
-  它按需实现这些能力，hub 自动接到知识库、收件箱、助手和 App；框架里还没有的（比如 `Items`）按连接器计划在用到的那一步补上。lark-connector 的管道一行不改，等连接器计划的 M1–M6 再搬；不在各条管道里写 `if lark-connector … else …`。
-- **两种来源可以并存**（用户 2026-11-03 定）：lark-connector（`lark.token` / `lark.container`）和 lark-cli（`lark.cli`）可以同时配。规则：
-  - **每样能力一个主来源**：`lark.prefer`（默认 `lark-connector`）先用；它没有这项能力（文档评论、妙记…以实际实现为准），或者连不上、掉了飞书登录，就用另一个。
+  它按需实现这些能力，hub 自动接到知识库、收件箱、助手和 App；框架里还没有的（比如 `Items`）按连接器计划在用到的那一步补上。飞书网关的管道一行不改，等连接器计划的 M1–M6 再搬；不在各条管道里写 `if 网关 … else …`。
+- **两种来源可以并存**（用户 2026-11-03 定）：飞书网关（`lark.token` / `lark.container`）和 lark-cli（`lark.cli`）可以同时配。规则：
+  - **每样能力一个主来源**：`lark.prefer`（默认是飞书网关这一路）先用；它没有这项能力（文档评论、妙记…以实际实现为准），或者连不上、掉了飞书登录，就用另一个。
     切换写进日志和设置页，不静默。
   - **收件箱和知识库同一时刻只从一个来源收**，另一个只在主来源不可用时接上，避免同一条消息进来两次。
-    两边的 id 不同（开放平台是 `oc_` / `om_`，lark-connector 是 feed id 和 position）：知识库按来源分 id 前缀（lark-connector 照旧，lark-cli 用 `larkcli`），不会相互覆盖；
-    切换来源期间的同一条消息按「会话 + 发送者 + 发送时间 + 正文」去重。同一个会话能不能对上两边的 id（lark-connector 的会话信息里有没有开放平台的 `chat_id`）L3 先查，
+    两边的 id 不同（开放平台是 `oc_` / `om_`，飞书网关是 feed id 和 position）：知识库按来源分 id 前缀（飞书网关照旧，lark-cli 用 `larkcli`），不会相互覆盖；
+    切换来源期间的同一条消息按「会话 + 发送者 + 发送时间 + 正文」去重。同一个会话能不能对上两边的 id（飞书网关的会话信息里有没有开放平台的 `chat_id`）L3 先查，
     对得上就合成一个会话。
-  - **助手两个都给**：lark-connector skill 和 lark-cli 都装着时，提示词说明各自擅长什么（lark-connector：未读、feed、公司圈；lark-cli：开放平台的文档、日程、妙记、审批…），闸门两个都认。
+  - **助手两个都给**：飞书网关的 skill 和 lark-cli 都装着时，提示词说明各自擅长什么（飞书网关：未读、feed、公司圈；lark-cli：开放平台的文档、日程、妙记、审批…），闸门两个都认。
 - **调 CLI，不直接调开放平台**：hub 以子进程跑 `lark-cli … --as user --format json`。凭据和刷新都留在 lark-cli 自己的存储里，hub 不碰应用密钥和 token；
   一次调用 100–300 ms，轮询的量够用。所有调用和 JSON 适配集中在一个包（`internal/larkcli`），用录下的 JSON 做契约测试，固定支持的最低版本。
 - **装在哪**：hub 所在的机器（也是助手跑的机器）。`lark-cli auth login` 由用户自己在那台机器上做，hub 只读 `auth status`。
@@ -114,13 +114,13 @@
 ```json
 "lark": {
   "cli": { "bin": "lark-cli", "profile": "" },
-  "prefer": "lark-connector"
+  "prefer": ""
 }
 ```
 
 - `lark.cli.bin`：命令名或绝对路径，默认在登录 shell 的 PATH 里找（npm 全局装的常在 nvm 目录）。没有 `lark.cli` 就不启用。
 - `lark.cli.profile`：可选，lark-cli 的配置档（`--profile`）；空的用它的默认档。hub 和助手的每次调用都带上它。
-- `lark.prefer`：两种来源都配了时谁是主来源，`lark-connector`（默认）或 `cli`（见「形态」）。
+- `lark.prefer`：两种来源都配了时谁是主来源：不写（默认，飞书网关这一路）或 `cli`；其他值原样交给提供飞书的扩展（见「形态」）。
 - 应用凭据不进 `hub.json`：lark-cli 用它自己 `config` 里绑定的应用。
 - **权限能开的都开**（用户 2026-11-03 定）：登录用 `lark-cli auth login --domain all`（全部领域的用户权限；没有浏览器的机器加 `--no-wait --json` 走 Device Flow，
   在手机上点链接授权）。要管理员审批的权限审批前拿不到：设置页用 `auth check` 列出还缺哪些，缺了的功能说明是哪个权限，不报成连不上。
@@ -164,14 +164,14 @@ Codex 的 app-server 审批走同一个 `larkCheck`。
 - [x] **L1 助手**：闸门认 lark-cli（`node/larkcligate.go`）；配置 `lark.cli`、`lark.prefer`；助手 PATH 上的 `lark-cli` 包装；提示词（CLAUDE.md 多一段，
   不另做内置 skill：领域说明让 Agent 用 `lark-cli skills read` 读 CLI 自带的）按配了哪些来源说明用哪个；`docs/feishu.md`、`docs/config.md`、
   `docs/assistant.md`「飞书：lark-cli」，写明 `auth login --domain all`。
-  验收：助手能查最近的消息、文档、日程；发消息弹确认卡片，拒绝后不发；配了 lark-connector 的 hub 行为不变（原有 golden 不变）。
+  验收：助手能查最近的消息、文档、日程；发消息弹确认卡片，拒绝后不发；配了飞书网关的 hub 行为不变（原有 golden 不变）。
 - [ ] **L2 连接器骨架**：`internal/larkcli` 适配层 + `larkcli` 连接器的 `Accounts`（`auth status`、过期提醒，接设置页）和 `ReadTools`（`lark_chats` / `lark_messages` / `lark_search` 的 lark-cli 版）。
-- [ ] **L3 知识库**：`Archive`（会话、消息、人、群：搜索轮询 + 往回补；附件）、`Items`（日程、会议、妙记、文档标题）。验收：知识库里有飞书会话和人，格式和 lark-connector 来源一样。
-- [ ] **L4 收件箱**：`Inbox`：@我、私聊、我参与的话题的回复（「收件箱收什么」）；和 lark-connector 并存时只从主来源收；回复走 `Actions`，经闸门和手机卡片。
+- [ ] **L3 知识库**：`Archive`（会话、消息、人、群：搜索轮询 + 往回补；附件）、`Items`（日程、会议、妙记、文档标题）。验收：知识库里有飞书会话和人，格式和飞书网关来源一样。
+- [ ] **L4 收件箱**：`Inbox`：@我、私聊、我参与的话题的回复（「收件箱收什么」）；和飞书网关并存时只从主来源收；回复走 `Actions`，经闸门和手机卡片。
 - [ ] **L5 `/agent`**：搜索轮询认请求、表情、上下文、回复；文档评论里的 `/agent` 不做。
 - [ ] **L6 App**：会话页的消息、发送、回复、表情、媒体接到 lark-cli（同样的 JSON）；文档阅读器用 markdown；未读、标签、公司圈在这个来源下隐藏。
 
-每一步一个 PR，配了 lark-connector 的 hub 现有测试全过。
+每一步一个 PR，配了飞书网关的 hub 现有测试全过。
 
 ## 已拍板（用户 2026-11-03）
 

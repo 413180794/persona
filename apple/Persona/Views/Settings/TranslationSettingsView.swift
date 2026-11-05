@@ -29,7 +29,7 @@ struct TranslationSettingsView: View {
                 }
                 Section {
                     Toggle(isOn: $mail) { Label("邮件", systemImage: Theme.Icon.mail) }
-                    // Feishu chats are picked from the hub's (`/api/v1/lark/…`, the lark-connector plugin's).
+                    // Feishu chats are picked from the hub's (`/api/v1/lark/…`, the Lark extension's).
                     if larkChats {
                         Button { picking = true } label: {
                             LabeledContent {

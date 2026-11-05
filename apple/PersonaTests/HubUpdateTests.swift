@@ -141,9 +141,9 @@ struct HubUpdateTests {
 
     @Test func skills() async {
         let hub = FakeHub()
-        hub.on("GET", "/api/v1/skills", json: #"{"machine":"服务器","skills":[{"name":"lark-connector","description":"飞书","source":"user"}]}"#)
+        hub.on("GET", "/api/v1/skills", json: #"{"machine":"服务器","skills":[{"name":"lark-gateway","description":"飞书","source":"user"}]}"#)
         let m = SkillsModel(api: { hub.client })
         await m.load()
-        #expect(m.skills.map(\.name) == ["lark-connector"] && m.machine == "服务器")
+        #expect(m.skills.map(\.name) == ["lark-gateway"] && m.machine == "服务器")
     }
 }

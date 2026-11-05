@@ -37,7 +37,7 @@ internal fun readableLarkText(value: String): String = Jsoup.parse(
     value.replace(Regex("(?i)<br\\s*/?>"), "\n").replace("\n", "<br>"),
 ).body().wholeText().replace('\u00a0', ' ')
 
-/** lark-connector's projected CardNode tree, with the raw card element shape as a fallback. */
+/** The Lark gateway's projected CardNode tree, with the raw card element shape as a fallback. */
 fun parseLarkCard(meta: JsonObject, fallback: String): LarkCardContent {
     var remaining = 512
     fun plain(value: JsonElement?, depth: Int = 0): String {

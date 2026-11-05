@@ -21,14 +21,14 @@ type ClaudeSetting struct {
 }
 
 var claudeSettings = []ClaudeSetting{
-	{Key: "awaySummaryEnabled", Title: "离开回顾（recap）", Detail: "离开 5 分钟以上回来时，Claude 先写一段进展回顾", Type: "bool", Default: true},
-	{Key: "alwaysThinkingEnabled", Title: "总是深度思考", Detail: "每轮都开启 extended thinking", Type: "bool", Default: false},
-	{Key: "effortLevel", Title: "思考强度", Detail: "越高越慢、越仔细", Type: "enum", Options: []string{"low", "medium", "high", "xhigh", "max"}, Default: "high"},
-	{Key: "language", Title: "回复语言", Detail: "Claude 回复用的语言，比如「中文」", Type: "string", Default: ""},
-	{Key: "promptSuggestionEnabled", Title: "输入建议", Detail: "在输入框里预测下一句", Type: "bool", Default: true},
-	{Key: "spinnerTipsEnabled", Title: "等待时的小提示", Detail: "工作中在状态行显示使用技巧", Type: "bool", Default: true},
-	{Key: "prefersReducedMotion", Title: "减少动效", Detail: "终端里少用动画", Type: "bool", Default: false},
-	{Key: "autoUpdatesChannel", Title: "更新渠道", Detail: "Claude Code 自动更新跟随的版本线", Type: "enum", Options: []string{"latest", "stable"}, Default: "latest"},
+	{Key: "awaySummaryEnabled", Title: "回来时先说进展", Detail: "离开 5 分钟以上再回来时，Claude 先简单说说这段时间做了什么", Type: "bool", Default: true},
+	{Key: "alwaysThinkingEnabled", Title: "每次都先想清楚", Detail: "每次回答前都先仔细想一想，更准，但更慢、更费额度", Type: "bool", Default: false},
+	{Key: "effortLevel", Title: "思考强度", Detail: "越高想得越仔细，也越慢", Type: "enum", Options: []string{"low", "medium", "high", "xhigh", "max"}, Default: "high"},
+	{Key: "language", Title: "回复语言", Detail: "Claude 回答用哪种语言，比如「中文」", Type: "string", Default: ""},
+	{Key: "promptSuggestionEnabled", Title: "猜你下一句", Detail: "在输入框里先替你写出可能要说的下一句", Type: "bool", Default: true},
+	{Key: "spinnerTipsEnabled", Title: "等待时的小提示", Detail: "Claude 干活时，在终端底部显示使用小技巧", Type: "bool", Default: true},
+	{Key: "prefersReducedMotion", Title: "减少动画", Detail: "终端里少放动画", Type: "bool", Default: false},
+	{Key: "autoUpdatesChannel", Title: "更新渠道", Detail: "Claude Code 自己更新时，装最新版还是稳定版", Type: "enum", Options: []string{"latest", "stable"}, Default: "latest"},
 }
 
 // claudeSettingsPath is settings.json of the config directory most running claudes use (claudedirs.go).

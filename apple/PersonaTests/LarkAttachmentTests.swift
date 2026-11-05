@@ -212,7 +212,7 @@ import Testing
         #expect(LarkAttachment.uploadTimeout(bytes: 1) == 180)
     }
 
-    @Test func orphanedlark-connectorPendingAndFailedCopiesAreNeverRenderedAsSent() {
+    @Test func orphanedGatewayPendingAndFailedCopiesAreNeverRenderedAsSent() {
         let queue = LarkChatOutbox()
         var message = LarkMessage(id: "local:orphan", position: "1", senderName: "我", isMine: true, type: "IMAGE", text: "", recalled: false, replyCount: 0)
         #expect(queue.hidesEcho(message))

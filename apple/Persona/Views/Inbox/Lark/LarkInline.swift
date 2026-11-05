@@ -10,7 +10,7 @@ nonisolated enum LarkColor {
     /// Chrome color (links, selection, the "new messages" line): Feishu blue in the 飞书 style, else the style's accent.
     /// Card content keeps Feishu's own palette (`text(_:)` / `hue(_:)`).
     static var blue: Color { StyleSpec.current.lark.blue }
-    /// lark-connector's --message-outgoing / --message-incoming, tinted with the style's accent elsewhere.
+    /// The Lark gateway's --message-outgoing / --message-incoming, tinted with the style's accent elsewhere.
     static var myBubble: Color { StyleSpec.current.lark.myBubble }
     static var otherBubble: Color { StyleSpec.current.lark.otherBubble }
     static var cardBackground: Color { StyleSpec.current.lark.cardBackground }

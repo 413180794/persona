@@ -63,7 +63,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
         return obj.compactMapValues { $0.string }
     }
 
-    /// The hub's `{"error":"…"}`, or lark-connector's `{"error":{"code","message"}}` passed through the read-only proxy.
+    /// The hub's `{"error":"…"}`, or the Lark gateway's `{"error":{"code","message"}}` passed through the read-only proxy.
     static func message(in data: Data) -> String? {
         if let flat = (try? JSON.decoder.decode([String: String].self, from: data))?["error"] { return flat }
         guard let obj = try? JSON.decoder.decode(JSONValue.self, from: data), let err = obj["error"] else { return nil }
@@ -104,7 +104,7 @@ nonisolated struct APIClient: Sendable {
     /// The group of paired hubs this client talks to (docs/multi-hub.md): put on the sessions, machines,
     /// interactions and keys it returns. "" = the default group.
     var group: String = ""
-    /// The Feishu account (lark-connector account number) the `/api/v1/lark` requests are about, sent as `ol_account`
+    /// The Feishu account (gateway account number) the `/api/v1/lark` requests are about, sent as `ol_account`
     /// (docs/feishu.md「多账号」). nil: the hub's own (lark.account).
     var larkAccount: Int?
     /// The hub has the extension routes (`features` has `extensions`, #1844): extension requests go to

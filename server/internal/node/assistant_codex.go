@@ -35,7 +35,7 @@ import (
 //   - live text: item/agentMessage/delta → session.delta;
 //   - stop: turn/interrupt (the process stays);
 //   - approvals come to the node as requests (commands, file changes, MCP tool calls, permissions, request_user_input):
-//     the lark-connector gate first (larkCheck), Persona's own MCP tools pass, the rest by the conversation's mode, asking
+//     the Feishu gate first (larkCheck), Persona's own MCP tools pass, the rest by the conversation's mode, asking
 //     the phone like Claude's PermissionRequest hook does. The approval policy is always one that asks (codexPolicy),
 //     so the gate sees every command that is not on Codex's read-only list, bypassPermissions included.
 
@@ -321,7 +321,7 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 	if err := c.send(map[string]any{"jsonrpc": "2.0", "method": "initialized"}); err != nil {
 		return err
 	}
-	// The lark-connector skill is installed for Claude under .claude/skills (assistantLarkEnv); Codex reads the same format.
+	// The extensions' skills are installed for Claude under .claude/skills (assistantLarkEnv); Codex reads the same format.
 	if err := c.call(ctx, "skills/extraRoots/set", map[string]any{"extraRoots": []string{filepath.Join(cwd, ".claude", "skills")}}, nil); err != nil {
 		n.logger.Printf("assistant codex: skills root: %v", err)
 	}
@@ -366,7 +366,7 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 
 // codexPolicy maps the app's permission mode to Codex's approval policy and sandbox. Every mode asks (untrusted:
 // anything not on Codex's read-only list; on-request: what needs to leave the sandbox), so commands reach the node,
-// which runs the lark-connector gate and then answers by the mode (codexDecide): bypassPermissions is "ask, and the node
+// which runs the Feishu gate and then answers by the mode (codexDecide): bypassPermissions is "ask, and the node
 // says yes", not Codex's never.
 func codexPolicy(mode string) (approval, sandbox string) {
 	switch mode {
@@ -381,7 +381,7 @@ func codexPolicy(mode string) (approval, sandbox string) {
 }
 
 // codexSandboxPolicy is the turn's sandbox. The network is open in workspace-write where every command is asked
-// about anyway (lark-connector's ol, ssh to the user's computers); in auto it stays closed, so going out (ol included)
+// about anyway (the Lark extension's ol, ssh to the user's computers); in auto it stays closed, so going out (ol included)
 // is an escalation that comes to the node. The memory directory (outside the assistant's own) is writable.
 func codexSandboxPolicy(mode, memDir string) map[string]any {
 	roots := []string{}

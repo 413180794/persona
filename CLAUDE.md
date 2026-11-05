@@ -51,7 +51,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - **不做第二个飞书**：App 是把各处信息收到一起交给 AI，不是把飞书的功能页面搬过来。飞书只保留
   消息（进收件箱）、链接在 App 内渲染（文档、公司圈单帖），其余能力只做在 hub / AI 侧（搜索、读取作为上下文），见 `docs/feishu.md`。
   用户明确允许的窄例外（#392）：飞书设置里默认关闭的「首页显示消息」开关，开启后增加「消息」页，浏览全部私聊和群聊；
-  复用收件箱的账号、聊天页、发件箱和同步，不另做客户端，不恢复通讯录、工作台等页面。见 `docs/lark-connector-migration.md`。
+  复用收件箱的账号、聊天页、发件箱和同步，不另做客户端，不恢复通讯录、工作台等页面。见 `docs/lark-migration.md`。
   别的数据源同理：不要为某个来源做一套浏览页面。
 - **链接在 App 内打开**：会话里出现的任何链接（飞书文档、公司圈、网页……）都在当前 App 里打开，参考 Telegram：
   底部浮起的卡片，打开即铺满屏幕（不是半屏），下拉到 0.6 时不挡 Agent 的操作（对话照常滚动、输入），再下拉关闭。打开速度和顺滑优先，不在乎本地空间：预加载、本地缓存、
@@ -208,7 +208,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/hub-update.md` | hub 的版本、检测更新和自动更新（方案）：skill 从二进制拿出来、一种二进制、签名的版本清单、自动发布和灰度、下载 → 校验 → 等空闲 → 重启 → 回滚、App 里怎么显示 |
 | `docs/push-relay.md` | 推送中继（端到端加密）：没有 APNs key 的 hub 经发布方的 `personad relay` 推送，正文用手机公钥加密、通知服务扩展解密；谁知道什么、防滥用、接口、部署 |
 | `docs/extensions.md` | 扩展（原「插件」，#1843）：术语（扩展 / 扩展点 / 贡献）、命名和兼容（老名字照旧能用、保留到何时）、内置 / hub.json / 安装的三种来源、扩展点、清单 `persona-extension.json`（字段、配置表单的 schema 子集、权限）、安装 / 升级 / 回滚 / 卸载和 `personad extension`、扩展市场和自动升级、按需激活和崩溃降级、配置和密钥怎么到扩展、`/api/v1/extensions` 接口、进程扩展协议和一致性测试；语音扩展和 App 之间的契约；内置的 GPT-Live 语音扩展 `personad voice` |
-| `docs/extension-messaging.md` | 扩展点 `messaging`（#2138）：App 里一套通用的原生消息组件，会话、消息和动作由扩展提供；清单、能力、接口、发送、输入框模式、发件箱 / 草稿 / 账号、实时事件和收件箱、版本兼容，飞书（lark-connector）怎么对上 |
+| `docs/extension-messaging.md` | 扩展点 `messaging`（#2138）：App 里一套通用的原生消息组件，会话、消息和动作由扩展提供；清单、能力、接口、发送、输入框模式、发件箱 / 草稿 / 账号、实时事件和收件箱、版本兼容，飞书（接飞书的扩展）怎么对上 |
 | `docs/ports.md` | 端口转发：node 找出 Agent 在监听的端口、App 认出回答里的 localhost 链接，手机本地监听 + WebSocket 经 hub 转到那台机器，取舍和安全边界 |
 | `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、App 的「机器」页（Agent 和监控合在一起）和机器详情 |
@@ -258,7 +258,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/connector-protocol.md` | 连接器协议 v2：子进程 / 第三方连接器和 hub 之间的一行一条 JSON：握手和清单、每个方法的参数和结果、程序调 hub 的 `secrets.*` 和 `changed`、错误码、硬性规定、版本规则、一致性测试 |
 | `docs/inbox.md` | 收件箱：飞书和邮件合成一个列表，一行一件事，AI 分拣、已处理、交给 AI；AI 分身（分拣 → 判断 → Agent 处理并草拟回复，点一下发送） |
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（使用 Google 账号登录，OAuth2 + XOAUTH2）、飞书邮箱（larkoffice.com / feishu.cn 两组服务器，添加时选先登录成功的）、凭据存储 |
-| `docs/lark-connector-migration.md` | 飞书迁移的授权范围：可选消息页与现有收件箱共用能力 |
+| `docs/lark-migration.md` | 飞书迁移的授权范围：可选消息页与现有收件箱共用能力 |
 | `docs/feishu.md` | 飞书在 Persona 里的定位（不做第二个飞书）：保留哪些、经插件的飞书（`/api/v1/lark/…` 由插件提供）、给 AI 用的接口速查 |
 | `docs/lark-attachments.md` | iOS 飞书聊天发图片和文件（#410）：选择、预览、发送和确认 |
 | `docs/lark-encryption.md` | 飞书加密消息（#689）：读取展示（`olk` 投影、解密失败时的对外展示）、手机解锁后发加密文字、部署与授权、版本不支持时、重试与本机存储、验证 |
@@ -310,7 +310,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/plan-hub-mesh.md` | 计划：hub 互联（探测、双向链路、组内电脑去重和选路、归属）、links、多 hub 客户端、hub 管理界面（访问范围）、网页对齐；各路之间的接口约定和分工 |
 | `docs/plan-hub-center.md` | 计划第二版：有且只有一台中心 hub（其余 hub 当成员、把电脑交给中心）、电脑经预装服务接入（连接器主动 / 被动两种模式，不用 SSH）、一台电脑多条路去重选路；两路分工和被动模式协议 |
 | `docs/redesign/` | 客户端重设计与 Android 首版的方案（2026-10-30 草案）：功能对齐矩阵、交互规格、流程图、hub 改动；外观部分已被 `docs/android-design.md` 取代，调研笔记在 `research/` |
-| `docs/plan-lark-cli.md` | 计划：没有 lark-connector 时用官方 lark-cli 接飞书：能力对照和降级、两种来源并存、做成连接器、闸门认 lark-cli、收件箱收什么、分步计划和已拍板项 |
+| `docs/plan-lark-cli.md` | 计划：没有飞书网关时用官方 lark-cli 接飞书：能力对照和降级、两种来源并存、做成连接器、闸门认 lark-cli、收件箱收什么、分步计划和已拍板项 |
 | `docs/plan-discord.md` | 计划：Discord 连接器（#2828）：Discord 只允许用自己的机器人（不做 self-bot），机器人看到的服务器频道 + 自己点「发给 Persona」的消息，扩展的形态、登录、知识库（不建人）、收件箱、工具、网络、Discord 开发者政策的约束、分步和已拍板项 |
 | `docs/plan-ego-browser.md` | 计划：ego lite 浏览器插件（#1304）：照 Cua 插件的模式接入（默认关、按 Mac 开、安装校验、首次设置引导），助手的 `browser_*` 工具和 Agent 用自带 skill 的分工，看浏览器（实时画面 / 定时截图 / CDP 投屏），导入 cookies 的来源、存储与安全、写入方式，要拍板的 |
 | `docs/plan-antigravity.md` | 计划：支持 Antigravity CLI（#281，第 0 步调研，待定）：能接入的口子（TUI、`agy -p`、`agy acp`、hooks、MCP）、会话存储、herdr Agent 还是 runtime、无头能力表、账号和条款风险、要维护者定的 |

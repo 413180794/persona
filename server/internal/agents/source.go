@@ -1,6 +1,6 @@
 // Package agents is Persona' single view of the agents it can reach. The hub has no Source of its own: every one is
 // a running plugin's agent_sources contribution (hub/extension_agents.go), e.g. the Feishu plugin's "removedbridge".
-// A session's public id is "<source>:<sessionKey>" (lark-connector's own keys already start with "agent:").
+// A session's public id is "<source>:<sessionKey>" (the Lark gateway's own keys already start with "agent:").
 package agents
 
 import (
@@ -20,7 +20,7 @@ type Session struct {
 	ID     string `json:"id"` // <source>:<sessionKey>
 	Source string `json:"source"`
 	AgentSession
-	// AvatarURL is lark-connector's avatar (data: or https URL); only its presence and version go to the apps, which load
+	// AvatarURL is the gateway's avatar (data: or https URL); only its presence and version go to the apps, which load
 	// the image from /api/v1/agents/sessions/{id}/avatar.
 	AvatarURL     string `json:"-"`
 	HasAvatar     bool   `json:"hasAvatar,omitempty"`
@@ -54,8 +54,8 @@ type Status struct {
 
 // Status.Setup values.
 const (
-	SetupMissing    = "missing"     // the backend has no agent support (an lark-connector from before agent-bridge)
-	SetupDisabled   = "disabled"    // supported but turned off (lark-connector: lark-connector_AGENT_BRIDGE unset)
+	SetupMissing    = "missing"     // the backend has no agent support (a Lark gateway from before agent-bridge)
+	SetupDisabled   = "disabled"    // supported but turned off (by the extension's own settings)
 	SetupNoAccounts = "no_accounts" // on, but no agent account is connected yet
 )
 

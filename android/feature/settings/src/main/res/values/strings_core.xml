@@ -286,7 +286,7 @@
     <string name="settings_row_mail">Mail</string>
     <string name="settings_row_mail_subtitle">Gmail, Lark Mail and other IMAP</string>
     <string name="settings_row_lark">Lark</string>
-    <string name="settings_row_lark_subtitle">lark-connector connection and account</string>
+    <string name="settings_row_lark_subtitle">Lark gateway connection and account</string>
     <string name="settings_connectors_caption">The data sources Persona can read and act on: the assistant, AI twin and agents use them to check your calendar, read messages and send mail. Anything done on your behalf asks you first.</string>
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_section_about">About</string>

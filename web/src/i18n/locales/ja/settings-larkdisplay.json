@@ -1,11 +1,11 @@
 {
   "title": "メッセージ表示",
   "anti_recall": "取り消し防止",
-  "anti_recall_hint": "lark-connector が保存した取り消し済みメッセージの内容を表示し、「取り消し済み」の表示は残します。保存されていない内容は復元できません。",
+  "anti_recall_hint": "Lark ゲートウェイ が保存した取り消し済みメッセージの内容を表示し、「取り消し済み」の表示は残します。保存されていない内容は復元できません。",
   "edit_history": "編集履歴",
   "edit_history_hint": "メッセージ横の「編集済み」をクリックすると、保存された以前の版を表示します。",
   "reload": "再読み込み",
-  "shared": "hub の現在の Lark アカウントの設定を lark-connector の Web ページと共有します。表示だけを変え、保存には影響しません。",
+  "shared": "hub の現在の Lark アカウントの設定を Lark ゲートウェイの Web ページと共有します。表示だけを変え、保存には影響しません。",
   "brave_climb": "",
   "brave_climb_hint": ""
 }

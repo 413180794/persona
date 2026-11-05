@@ -105,11 +105,12 @@ hub 有两种部署方式，功能一样：**原生二进制**（下面，`syste
 `#setup=` 的管理界面地址。重跑是安全的：已有的值不改，没变的服务不重启。`--json` 一行一步，给 Persona Link 调用。
 
 ```sh
-./scripts/deploy/deploy.sh                    # 编译 linux/amd64 + darwin/arm64，装到所有机器，重启 hub
+./scripts/deploy/deploy.sh                    # 编译 linux / darwin × amd64 / arm64，每台机器装它自己跑的那个，重启 hub
 ./scripts/deploy/deploy.sh <机器 id> <机器 id> # 只装部分机器
 ```
 
 - 二进制：每台机器 `~/.persona/bin/personad`。node 由 hub 经 `ssh <别名> ~/.persona/bin/personad node --stdio` 拉起，Mac 上不用常驻服务。
+  装哪个平台看配置的 `os` / `arch`，没写的直接问那台机器（`uname -s` / `uname -m`）；装完跑一次 `version` 自检，跑不起来就报错、不打印 installed。四个平台的二进制同时放在 hub 的 `bin/nodes/`，App 里的「重新部署」按机器自己的平台取（`docs/config.md`）。
 - hub：hub 机器上的 `systemd --user` 服务 `jarvisd`，HTTP `listen` 默认 `:18660`，另用 `public.tls_listen` 开启 TLS（如 `:18662`）。公网只放行 TLS 端口，IPv6 入站、主机防火墙和 TUN 回包排查见 [网络文档](network.md)。`journalctl --user -u jarvisd -f` 看日志。
   Docker 部署的 hub 不归 `deploy.sh` 管（它的配置里别把 hub 机器写进 `machines`，或只部署各台电脑：`deploy.sh <机器 id>`），
   升级是拉新镜像；「重新部署」用镜像里带的 node 构建。
@@ -289,7 +290,7 @@ ssh <nas> 'umask 077; mkdir -p ~/.jarvis/bin && cat > ~/.jarvis/bin/jarvisd.new 
 4. 在容器里 `pg_dump -Fc` 导出到 `~/.jarvis/backups/jarvis-<时间>.dump`（0600）。停服后再导出，和旧二进制留下的状态一致。
 5. 用 `mv` 换上新二进制，启动容器。
 6. 等 `/api/v1/health`，核对版本号是新的、TLS 公钥指纹没变。
-7. 打印最新三条迁移和启动以来的日志（隐藏已知的 lark-connector 报错）。
+7. 打印最新三条迁移和启动以来的日志（隐藏已知的飞书网关报错）。
 8. 打印对应的回滚命令。健康检查不过、版本不对或指纹变了时，退出码非零。
 
 ### 回滚
@@ -315,8 +316,8 @@ sudo /usr/local/bin/docker logs -f jarvisd
 sudo /usr/local/bin/docker restart jarvisd    # 改了 hub.json 以后
 ```
 
-`hub.json` 没配 `lark` 时，日志里会一直有 `read lark-connector token …` 报错，不影响运行。要接 lark-connector，得先在 lark-connector 那边开启 agent API，
-再在 `lark` 里填 `base_url` 和 `token`。hub 的容器里没有 docker CLI，读不了别的容器的环境变量。
+老版本的 hub 在 `hub.json` 没配 `lark` 时，日志里会一直有读飞书网关 token 失败的报错，不影响运行。现在接飞书网关由接飞书的扩展做，
+先在网关那边开启 agent API，再在扩展的设置里填地址和 token（见扩展的说明）。hub 的容器里没有 docker CLI，读不了别的容器的环境变量。
 
 ## hub 连不进去的电脑（jarvis-link）
 

@@ -3,7 +3,7 @@ import Testing
 @testable import Jarvis
 
 /// A topic group's cards show their topics' newest replies (`LarkTopicReplies`, #1087): which replies and how many
-/// earlier ones (lark-connector's topic-reply-preview cases), what a reply's line says (风灵月影, encryption), at most three
+/// earlier ones (the Lark gateway's topic-reply-preview cases), what a reply's line says (风灵月影, encryption), at most three
 /// reads at a time, read again only when a reply count changes (also during a read) or 重试 asks.
 @MainActor struct LarkTopicRepliesTests {
     private func msg(_ id: String, replies: Int = 0, threadReplies: Int? = nil) -> LarkMessage {

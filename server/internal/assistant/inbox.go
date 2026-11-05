@@ -161,7 +161,7 @@ type InboxMail struct {
 func (it *InboxItem) open() bool { return it.DoneAt == nil }
 
 // conversationOf is where a chat item opens in its messaging source: the source is the connector's id ("lark", the
-// lark-connector extension's source of the same id), the account the one the apps would pass as ol_account.
+// Lark extension's source of the same id), the account the one the apps would pass as ol_account.
 func conversationOf(it *InboxItem) *wire.MessagingConversationRef {
 	if it.Lark == nil || it.Lark.FeedID == "" || it.Source == "" {
 		return nil
@@ -431,7 +431,7 @@ func (b *inboxBook) larkRequestAccount(it *InboxItem) {
 	}
 }
 
-// larkItemAccount is the lark-connector account a Feishu item came from; zero in rows from before accounts were recorded
+// larkItemAccount is the gateway account a Feishu item came from; zero in rows from before accounts were recorded
 // is account 1.
 func larkItemAccount(it *InboxItem) int {
 	if it.Lark == nil {

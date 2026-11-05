@@ -558,7 +558,7 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 ## 飞书经扩展：按 hub 的 features 显示（#1530）
 
-经 lark-connector 接飞书由私有扩展提供，hub 只在装了扩展时有 `/api/v1/lark/…`，扩展往 hello 的 features 里加 `lark`、`lark_moments`（还有 `lark_attachments`、`lark_native_encryption`）。
+经飞书网关接飞书由私有扩展提供，hub 只在装了扩展时有 `/api/v1/lark/…`，扩展往 hello 的 features 里加 `lark`、`lark_moments`（还有 `lark_attachments`、`lark_native_encryption`）。
 Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和 iOS `LarkFeatures`、网页 `larkOn` 同一个规则）：features 为空（还没收到 hello）或只有 `lark_attachments` 没有 `lark`（扩展之前自己接飞书的 hub）按原样全部显示；否则 `chats` 看 `lark`，`moments` 还要 `lark_moments`。
 外壳从选中的 hub 的 hello 算出来，经 `LocalLarkFeatures`（`core/designsystem`）给各页；体验模式一律全部显示（演示数据自带飞书）。
 
@@ -569,7 +569,7 @@ Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和
 - 文档评论（#2964，对齐 iOS `FeishuDocsComments` / 网页 `DocComments`）：原生阅读器的标题栏和标题下面有「评论」，打开一个浮层（`LarkDocCommentsSheet.kt`，逻辑在 `LarkDocComments.kt` 的 `LarkDocCommentsModel`）：「未解决 N / 已解决 N」两栏，每条线程写引用的那段（全文评论写「全文评论」）、已解决 / 部分可见标签和各条回复（@ 和链接用强调色、已编辑、N 张图片）。读 `GET /api/v1/lark/raw/documents/comments`；扩展声明了 `lark_doc_comments`（`LarkFeatures.docComments`，要和 `lark` 一起，没收到 hello 时也不算有）才能写：线程下「回复」「解决 / 重新打开」，底部的框默认评论全文，点了回复就是「回复 某某」（× 回到全文），打 @ 按名字找人（`/api/v1/lark/documents/people`），发出的 `mentions` 只留正文里还在的。每次写带 `client_id`，同样的话发到同一处重试沿用；失败留着草稿，写「没发出去：<hub 的原因>」；写完用回答里的线程，没有就重新读。评论正文的一段（对齐 iOS #1729，同样只在 `lark_doc_comments` 时）：文档允许复制时，长按选中文字，选区菜单在「复制」后面多一个「评论」，评论选中的那几个字（不知道块，插件按引用找）；不允许复制时，长按段落或标题弹出「评论这段」，带上整段和它的块 id（JSON 树的 `attrs.id`）。两种都打开评论浮层，框上方写「评论这段」和引用，× 回到全文评论；发出的评论带 `quote`（和 `block_id`）。接口见 [protocol.md](protocol.md)「飞书 API」。截图：`./gradlew :feature:inbox:testDebugUnitTest --tests '*LarkDocCommentsShotsTest*' --tests '*LarkDocPassageCommentTest*'`。
 - 文档缓存和预读（#3064，对齐网页 `loadDoc` / iOS 预加载跳过飞书链接）：读过的文档正文在内存里每个配对各留最近 12 篇（`LarkDocumentCache.shared`，读失败的不留），再打开直接显示；所有者、阅读数、AI 摘要这些不缓存，每次打开和刷新都重新读（和网页、iOS 一样），预读也只读正文。原生视图打开的飞书链接不进 WebView 池预加载，打开时也不加载网页，点「切换网页」（或读失败自动退回网页）才取 WebView 加载，这之后卡片的刷新、进度条和「网页意外退出了 / 重新载入」都按网页走。飞书文档改成预读进这个缓存。
 - 收件箱里带 `lark` / `doc` / `moment` 的事项只有扩展给，照常画，点开照旧进飞书会话 / 云文档事项页 / 公司圈帖子页（云文档见「收件箱：云文档事项」）。Android 没有「消息」页和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
-- [removed]编码（#882）：开关打开时会话里解码显示、输入框可以选这个模式发送，开关本身在网页 / iOS 改，见 [lark-connector-migration.md](lark-connector-migration.md)「[removed]」。
+- [removed]编码（#882）：开关打开时会话里解码显示、输入框可以选这个模式发送，开关本身在网页 / iOS 改，见 [lark-migration.md](lark-migration.md)「[removed]」。
 - 「removed」一律叫「公司圈」。单测 `LarkFeaturesTest`（`core:contracts`）、`LarkNativeLinkTest`（`feature:inbox`）、`SettingsConnectorsTest.feishuRowOnlyWhileTheHubHasFeishu`；截图用 `MOCK_NO_LARK=1` 的假 hub 对比设置页。
 
 ## 助手回答里的 hub 链接（#2680）
@@ -1318,7 +1318,7 @@ Agent 对话页 ⋯「文件」「Git · N」打开会话目录的文件和 Git�
 
 - 待办（旧 App #427）：**没有**，`android/` 下没有任何待办的接口、页面或分组。→ #815（侧边栏入口、列表和详情、交给 Agent、Agents 按待办分组、对话里的关联待办）。
 - 邮件阅读和写信（旧 App #320）：**读信已有**，`feature/inbox/MailScreen.kt`：线程按「第 N 封 / 最新一封」切换、锁住的 WebView + jsoup 清洗渲染 HTML（`MailHtml.kt`）、附件下载、手动标已读 / 未读、AI 摘要、AI 草拟回复、交给 AI、已处理。**缺**写信（新邮件、回复全部、转发、抄送 / 密送、信里的 `mailto:`）、「显示图片」（现在远程图片一律屏蔽）、打开即已读、星标 → #816。
-- 设置 › 连接器（旧 App #320）：**没有**，设置里只有单独的「手机数据」页；邮箱的添加 / 测试 / 删除、Gmail 登录（`android.google_oauth_scheme`、`OAuthRedirectActivity`）、飞书 lark-connector 状态都没有 → #817（按 iOS 当前的连接器分组做，hub 后来还加了通用的 `/api/v1/connectors` 和 Microsoft 登录）。
+- 设置 › 连接器（旧 App #320）：**没有**，设置里只有单独的「手机数据」页；邮箱的添加 / 测试 / 删除、Gmail 登录（`android.google_oauth_scheme`、`OAuthRedirectActivity`）、飞书飞书网关状态都没有 → #817（按 iOS 当前的连接器分组做，hub 后来还加了通用的 `/api/v1/connectors` 和 Microsoft 登录）。
 - 飞书会话（旧 App #365）：**会话页已有**，`feature/inbox/LarkScreen.kt` 等：按 `start_position` 打开、上下翻页、可见即上报已读、`lark` 事件刷新、窗口缓存、跳到 @我、引用、撤回 / 系统消息、话题浮层（`feature/inbox/LARK_THREAD.md`）、图片和文件（点图片全屏查看，会话里的图片可以左右滑，#2981 对齐 iOS `LarkImageGallery`；卡片、链接封面、话题浮层和合并转发详情里的图片同样能点，`LocalLarkImageOpener`）、卡片的静态展示、发送。**缺**表情回应、富文本（现在按纯文本 + 链接）、合并转发 / 语音 / 视频 / 表情包（现在是「在飞书中打开」）、卡片按钮回调（现在禁用）、名片、媒体的磁盘缓存、飞书色板的设计 token → #818。
 - 公司圈（旧 App #365）：**没有**，`InboxItem` 不解析 `moment`，收件箱里公司圈那件打不开帖子 → #819。
 - 收件箱：别处已读的 @我 / @所有人 不再显示 @ 标签（旧 App #246，#821）：**已有**，`RealInboxRepository` 把 hub 的 `read` 带进 `InboxRecord`，已读的 `mention` 在行内显示「群聊」；未读的继续显示「@我」/「@所有人」。客户端保留原来的 kind 和分层，和 `docs/inbox.md` 的已读规则一致。

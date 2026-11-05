@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The newest replies of a topic group's topics, shown on their cards as lark-connector does (#1087). A topic's are read
+/// The newest replies of a topic group's topics, shown on their cards as the Lark gateway does (#1087). A topic's are read
 /// when its card comes on screen, `parallel` topics at a time (a screen holds a dozen cards, and the hub passes each
-/// read on to lark-connector), and kept with the reply count they were read at: a topic is read again only when its count
+/// read on to the Lark gateway), and kept with the reply count they were read at: a topic is read again only when its count
 /// changes (also while it is being read), or after a read failed: on 重试, or when its card comes on screen again.
 @MainActor @Observable
 final class LarkTopicReplies {
@@ -41,7 +41,7 @@ final class LarkTopicReplies {
 
     /// A reply's line on its topic's card, shown and read out alike: a recalled one only with 防撤回 on and its content
     /// kept, then marked 已撤回, as a chat's row shows it (`LarkMessageDisplay.showsBody`); an encrypted one by its cover,
-    /// as lark-connector's card.
+    /// as the Lark gateway's card.
     static func line(of reply: LarkMessage, display: LarkMessageDisplay) -> String {
         guard display.showsBody(of: reply) else { return "消息已撤回" }
         let text = reply.olk.map { $0.cached.summary } ?? display.summary(LarkReply.summary(of: reply))

@@ -8,9 +8,9 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 - **第 1 步（一种二进制和版本清单）已做**（这一节以下的「现状」是开工前的样子）：
   - skill 拿出二进制：`internal/assistantskills` 只放内置 skill（现在为空）；node 每次起助手时 `Sync`：链接 `~/.persona/skills/` 里用户的 skill，
-    删掉失效的链接，旧版本装的 lark-connector 自动搬过去（`TestSyncMovesTheOldCopy`）；`ol` 只在有 lark-connector 时出现（`TestOlOnlyWithTheSkill`）；
-    助手的 CLAUDE.md 在没有 lark-connector 时只讲 MCP 的 `lark_*`（golden `assistant_claude_md.no_lark-connector`），hub 问 node 的 `skills.list`；
-    `GET /api/v1/skills` 给 App 的只读列表。lark-connector 的副本挪到仓库的 `skills/lark-connector`（#1571 已删这份副本和同步脚本，skill 由接飞书的插件提供）。
+    删掉失效的链接，旧版本装进助手目录的 skill 自动搬过去（`TestSyncMovesTheOldCopy`）；闸门命令只在有带它的 skill 时出现（`TestGatedCommandOnlyWithTheSkill`）；
+    助手的 CLAUDE.md 在没有它时只讲 MCP 的 `lark_*`（golden `assistant_claude_md.bare`），hub 问 node 的 `skills.list`；
+    `GET /api/v1/skills` 给 App 的只读列表。飞书网关 skill 的副本当时挪到仓库的 `skills/` 下（#1571 已删这份副本和同步脚本，skill 由接飞书的扩展提供）。
   - 一种二进制：没有按 `public` 区分的文件了（`TestOneBuild`）；publish.sh 留着 `-tags public` 只当隐私扫描的标记（扫描靠它认出可以跳过的依赖常量）。
   - 渠道和 build 号：`main.channel`、`main.build`、`main.updateURL`；publish.sh、deploy.sh 打 `release`，Docker 打 `docker`；
     `personad version -v` 显示渠道和 build 号；`/api/v1/health`、`hello` 带 `channel`、`build`、`protocol`、`min_app_build`。
@@ -33,8 +33,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - `GET /api/v1/health` 返回 `{ok, version, features}`，WebSocket 的 `hello` 带 `server_version`；
   - node 版本和 hub 不同时机器列表标出来，可以「重新部署」（`devices/deploy.go`，用 hub 机器上 `~/.persona/bin/nodes/` 里的二进制）。
 - 完整版和公开版**唯一的区别**是 `-tags public`：
-  - 完整版用 `go:embed` 把 lark-connector skill 编进二进制（`internal/assistantskills`，从上游拷来，不能再分发）；
-  - node 起助手进程时把它装到助手目录的 `.claude/skills/`，并把 `ol` 放进 PATH（`node/larkgate.go`）；
+  - 完整版用 `go:embed` 把飞书网关的 skill 编进二进制（`internal/assistantskills`，从上游拷来，不能再分发）；
+  - node 起助手进程时把它装到助手目录的 `.claude/skills/`，并把它的命令放进 PATH（`node/larkgate.go`）；
   - 公开版不带。
 - 发布：`publish.sh` 构建四个平台的公开版，gzip 后连同 `SHA256SUMS`、`VERSION` 用 wrangler 发到 `publish.site_url` 的 `dl/`（Cloudflare Workers 静态资源），
   只保留最新一版。wrangler 用的是 OAuth 登录，大约一小时过期，没法无人值守。
@@ -65,18 +65,16 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
      用户改了 skill，下一次起助手就生效；Claude Code 读 skill 只读文件，符号链接没问题。
   2. 删掉指向 `~/.persona/skills/` 但已经没了的链接；用户直接放在 `.claude/skills/` 里的真目录不碰。
   3. 二进制里自带的内置 skill（只放我们能再分发的，现在是空的）照旧按版本戳复制进去；用户空间里同名的优先。
-  4. `ol` 只在装了 `lark-connector` skill 时才放进 PATH；助手的提示词（`prompts/assistant/claude_md.md`）里关于 lark-connector 的那段，也只在装了时才写进去。
+  4. 闸门命令只在装了带它的 skill 时才放进 PATH；助手的提示词（`prompts/assistant/claude_md.md`）里关于它的那段，也只在装了时才写进去。
 - **迁移**：两种方式，都只做一次。
-  - **自动**：node 起助手时，`~/.persona/skills/lark-connector` 不存在，而 `<助手目录>/.claude/skills/lark-connector` 是旧 personad 装的真目录（旁边有 `.jarvis-skills` 版本戳），
-    就把它搬到 `~/.persona/skills/lark-connector`，原地换成符号链接，打一行日志。
-  - **手动**（我们的 hub 上，主会话执行）：
-    `mkdir -p ~/.persona/skills && cp -R <仓库>/skills/lark-connector ~/.persona/skills/lark-connector`，
-    或者从助手目录的 `.claude/skills/lark-connector` 拷过去。
-    （#1571 起仓库里没有 `skills/lark-connector` 了，第一种拷法的源路径不存在；skill 由接飞书的插件提供，见 `docs/lark-agent.md` 开头。）
-  - 这样新版本起来时助手照常有 lark-connector。lark-connector 的副本挪到仓库的 `skills/lark-connector`（同步上游的脚本照旧，改成写那里），不进任何二进制；
+  - **自动**：node 起助手时，`<助手目录>/.claude/skills/` 下旧 personad 装的每个真目录（旁边有 `.jarvis-skills` 版本戳），`~/.persona/skills/` 里还没有同名的，
+    就搬到 `~/.persona/skills/<名字>`，原地换成符号链接，打一行日志；已经有同名的用户 skill 时用户的优先。
+  - **手动**（我们的 hub 上，主会话执行）：从助手目录的 `.claude/skills/<名字>` 拷到 `~/.persona/skills/<名字>`。
+    （#1571 起这类 skill 由接飞书的扩展提供，见 `docs/lark-agent.md` 开头，不用再手动拷。）
+  - 这样新版本起来时助手照常有原来的 skill。当时上游 skill 的副本挪到仓库的 `skills/` 下（同步上游的脚本照旧，改成写那里），不进任何二进制；
     公开版没有它也不要紧，用户把它（或自己的 skill）放进 `~/.persona/skills/` 就行。
 - **去掉 `-tags public`**：两边没有区别了，`files_public.go` / `files_bundled.go` 合成一个只放内置 skill 的 embed。
-  - 发布前的隐私扫描照旧，还要检查二进制里没有 `name: lark-connector`；
+  - 发布前的隐私扫描照旧，还要检查二进制里带的 skill 都登记为可再分发（`assistantskills.Redistributable`）；
   - 测试守住：内置 skill 目录里只能有登记为可再分发的 skill。
 - **App**：设置 › 助手 › Skills，只读列表（名字、`SKILL.md` 里的说明、来自「我的 skill」还是「内置」）。
   接口 `GET /api/v1/skills`，hub 问跑助手的那台 node 拿。管理（增删改）以后再说。
@@ -146,7 +144,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   （Worker 部署是原子切换，不会半新半旧；中继代码有改动时也随这次发布上线）。
 - 发布前照旧要过测试，加上 `publish.sh` 自己的检查（任何一项不过就不发布）：
   1. 读线上的 `latest.json`（有的话）：新 build 号必须更大，线上那版的 commit 必须是这次的祖先（`git merge-base --is-ancestor`）；
-  2. 构建四个平台（`channel=release`、`build`、`updateURL` 都写进去），隐私扫描（二进制里不能有 lark-connector）；
+  2. 构建四个平台（`channel=release`、`build`、`updateURL` 都写进去），隐私扫描（二进制里只能有可再分发的 skill）；
   3. 生成 `latest.json`（版本、build 号、commit、它包含的提交 `ancestors`、发布时间、各平台压缩包和解压后的 sha256、`min_app_build`、`min_node_build`、`protocol`）；
      工作区的 server/、web/ 有没提交的改动时不发布（`NO_DEPLOY=1` 照样编，二进制里的提交带 `-dirty`）：清单说的是哪个提交，二进制就得是它；
   4. 发布后读回 `VERSION`、`SHA256SUMS`、`latest.json`，和本地的比一遍。
@@ -352,7 +350,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - 下载中断后重试；sha256 不对时删掉、不替换；
   - 新版本起不来：用测试里编的一个故意起不来的二进制，确认新进程自检和看门狗都能回滚，坏版本记下、不再自动试；
   - 等空闲：助手或任何 Agent 忙时不重启（自动和手动都是），`now` 跳过等待；
-  - skill：符号链接建立和清理、旧安装的自动迁移、同名时用户的优先、`ol` 只在有 lark-connector 时出现；内置 skill 目录只有可再分发的；
+  - skill：符号链接建立和清理、旧安装的自动迁移、同名时用户的优先、闸门命令只在有它的 skill 时出现；内置 skill 目录只有可再分发的；
   - dev / docker 渠道不管清单多新都不安装（接口 409）；
   - **不降级**（`TestNoDowngrade`）：直接部署的二进制（build 号是编译时间）看到 build 号更小或相等的清单不装；更大的才装；
 - publish.sh：build 号不递增、线上 commit 不是祖先，都不发布。
@@ -363,7 +361,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 
 1. **一种二进制和版本清单**：skill 拿出来（用户空间、符号链接、迁移、`ol` 和提示词按需、只读列表的接口）、去掉 `-tags public`、
    渠道和 build 号（publish.sh、deploy.sh、Docker）、`internal/update`（清单、发布前检查）、publish.sh 发清单并做两项单调检查；
-   `/api/v1/health` 带新字段。部署前把 lark-connector 放进我们 hub 的 `~/.persona/skills/`（或者靠自动迁移）。
+   `/api/v1/health` 带新字段。部署前把飞书网关的 skill 放进我们 hub 的 `~/.persona/skills/`（或者靠自动迁移）。
 2. **hub 更新和回滚**：检测、下载校验、等空闲（「现在就更新」）、替换、看门狗、坏版本、记录、不降级；node 跟着更新（补 `via` 和 tailcat）。
 3. **App**：设置的 hub 一行、第一次告知、提示条、进度、在等哪些、更新记录、不兼容提示、Skills 列表。
 4. **Docker 检测和提示**。

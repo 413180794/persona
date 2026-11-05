@@ -1,7 +1,7 @@
 {
   "sidebar": "侧边栏",
   "title": "个人 Agent",
-  "subtitle": "lark-connector 里配对的个人 Agent",
+  "subtitle": "飞书网关里配对的个人 Agent",
   "search_placeholder": "搜索会话",
   "no_match": "没有匹配的会话",
   "empty": "还没有个人 Agent 会话",

@@ -1,8 +1,8 @@
 // Package assistantskills puts the assistant's skills in its directory (<assistant dir>/.claude/skills,
 // docs/hub-update.md「skill 从二进制里拿出来」): the user's own, kept in ~/.jarvis/skills/<name> on the machine that runs
 // the assistant and linked in, and the built-in ones this binary carries, copied in. Built-in skills are only those
-// Persona may redistribute (persona-office, personad office's): a copied one, like lark-connector, lives in the user's
-// space. jarvisd never writes that space, so an update cannot touch the user's skills.
+// Persona may redistribute (persona-office, personad office's): a copied one, like an extension's skill a user put
+// there by hand, lives in the user's space. jarvisd never writes that space, so an update cannot touch the user's skills.
 package assistantskills
 
 import (
@@ -48,10 +48,6 @@ func wanted(name string, connectors []string) bool {
 	need, ok := Requires[name]
 	return !ok || slices.Contains(connectors, need)
 }
-
-// legacyBundled are the skills older jarvisd binaries copied into the assistant's directory: moved to the user's
-// space once (migrate).
-var legacyBundled = []string{"lark-connector"}
 
 const (
 	builtinStamp = ".jarvis-builtin" // the built-in skills last copied in
@@ -149,18 +145,22 @@ func Sync(dir, user string, connectors []string, logf func(string, ...any)) erro
 	return nil
 }
 
-// migrate moves the skills an older jarvisd copied into dir (the stamp says it did) into the user's space, once: the
-// user keeps them (lark-connector on the hub that had it), and Sync links them back.
+// migrate moves the skills an older jarvisd copied into dir (the stamp says it did: every real directory there but
+// the built-in ones) into the user's space, once: the user keeps them, and Sync links them back.
 func migrate(dir, user string, logf func(string, ...any)) {
 	if _, err := os.Stat(filepath.Join(dir, legacyStamp)); err != nil {
 		return
 	}
-	for _, name := range legacyBundled {
-		from, to := filepath.Join(dir, name), filepath.Join(user, name)
-		st, err := os.Lstat(from)
-		if err != nil || !st.IsDir() {
-			continue
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		name := e.Name()
+		if !e.IsDir() || strings.HasPrefix(name, ".") || slices.Contains(builtinNames(), name) {
+			continue // a link (the user's), a stamp, or what installBuiltins puts in
 		}
+		if _, err := os.Stat(filepath.Join(dir, name, pluginStamp)); err == nil {
+			continue // an extension's skill (installPlugins): it stays the extension's
+		}
+		from, to := filepath.Join(dir, name), filepath.Join(user, name)
 		if _, err := os.Stat(to); err == nil {
 			_ = os.RemoveAll(from) // the user's space has its own: the old copy goes, Sync links theirs
 			continue

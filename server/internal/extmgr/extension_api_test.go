@@ -96,7 +96,8 @@ func apiPackage(t *testing.T) string {
 			"api": [{"id": "feed", "prefix": "examplefeed", "features": ["example_feed"], "events": ["examplefeed"],
 			         "receipts": [{"method": "POST", "path": "/rooms/*/send", "kind": "examplefeed_send"}]},
 			        {"id": "lark", "prefix": "lark"}, {"id": "mine", "prefix": "machines"}],
-			"assistant": [{"id": "feed", "skills": ["skills/example-feed"], "instructions": "assistant.md", "gate": "gate.json"}]}}`, runtime.GOOS+"-"+runtime.GOARCH)
+			"assistant": [{"id": "feed", "skills": ["skills/example-feed"], "instructions": "assistant.md", "gate": "gate.json"}],
+			"mcp_servers": [{"id": "feed", "command": "feed-agent", "args": ["mcp"], "allow": ["list"], "deny": ["decide"]}]}}`, runtime.GOOS+"-"+runtime.GOARCH)
 	_ = os.WriteFile(filepath.Join(dir, extension.ManifestFile), []byte(manifest), 0o644)
 	return dir
 }
@@ -218,6 +219,11 @@ func TestExtensionAPI(t *testing.T) {
 	if len(g.Rules) != 2 || g.Rules[0].Action != "deny" || g.Rules[0].Path != "/posts" || g.Rules[1].Action != "allow" {
 		t.Fatalf("rules %+v", g.Rules)
 	}
+	// Its MCP server reaches the assistant's machine as declared.
+	if len(lk.MCPServers) != 1 || lk.MCPServers[0].Plugin != "example-feed" || lk.MCPServers[0].Command != "feed-agent" ||
+		lk.MCPServers[0].Allow[0] != "list" || lk.MCPServers[0].Deny[0] != "decide" {
+		t.Fatalf("mcp servers %+v", lk.MCPServers)
+	}
 	if s, ok := h.extensions.assistantSummary(context.Background(), "示例", "POST /channels/c42/posts"); !ok || s != "POST /channels/示例频道/posts" {
 		t.Fatalf("summary %q %v", s, ok)
 	}
@@ -230,8 +236,8 @@ func TestExtensionAPI(t *testing.T) {
 	if slices.Contains(h.features(), "example_feed") || len(h.extensions.extensionSkills()) != 0 {
 		t.Fatal("switched off, it adds nothing")
 	}
-	if lk, _ := h.assistantLark(context.Background()); len(lk.Gates) != 0 {
-		t.Fatalf("switched off, its gate stays: %+v", lk.Gates)
+	if lk, _ := h.assistantLark(context.Background()); len(lk.Gates) != 0 || len(lk.MCPServers) != 0 {
+		t.Fatalf("switched off, its gate or MCP server stays: %+v", lk)
 	}
 }
 

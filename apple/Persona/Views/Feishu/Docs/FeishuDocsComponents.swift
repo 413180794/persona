@@ -6,7 +6,7 @@ import UIKit
 // MARK: - API
 
 extension APIClient {
-    /// Like `larkRaw`, but a failure keeps lark-connector's error code (`{"error":{"code":…}}`), which the reader needs to
+    /// Like `larkRaw`, but a failure keeps the Lark gateway's error code (`{"error":{"code":…}}`), which the reader needs to
     /// tell "export forbidden" (→ read the JSON tree) from "format unsupported" (→ open in Feishu). `APIClient.request`
     /// only keeps flat `{"error":"…"}` messages, so this does the GET itself.
     func feishuDocsGet<T: Decodable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {

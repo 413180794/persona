@@ -2,7 +2,7 @@ package node
 
 import "strings"
 
-// shellSeg is one simple command of a Bash command line, for the lark-connector gate (larkgate.go).
+// shellSeg is one simple command of a Bash command line, for the Feishu gate (larkgate.go).
 type shellSeg struct {
 	words    []string // quotes removed
 	text     string   // as written

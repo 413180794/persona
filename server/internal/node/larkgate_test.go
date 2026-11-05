@@ -70,9 +70,20 @@ func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 	if _, err := os.Stat(ex); !os.IsNotExist(err) {
 		t.Fatal("ex stayed after the skill was removed")
 	}
+	// The wrapper an older node wrote for its one gated command goes as well; a file of the user's stays.
+	old, mine := filepath.Join(n.dir, "assistant-bin", "ol"), filepath.Join(n.dir, "assistant-bin", "mine")
+	_ = os.WriteFile(old, []byte("#!/bin/sh\n# The helper (the skill), on the assistant's PATH (node/larkgate.go).\nexec bash x \"$@\"\n"), 0o755)
+	_ = os.WriteFile(mine, []byte("#!/bin/sh\necho hi\n"), 0o755)
+	n.assistantLarkEnv(cwd)
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatal("the older node's wrapper stayed")
+	}
+	if _, err := os.Stat(mine); err != nil {
+		t.Fatalf("a file of the user's went: %v", err)
+	}
 }
 
-// The assistant's Bash calls to lark-connector: which run at once, which the phone approves, which are refused, and which
+// The assistant's Bash calls to the Lark gateway: which run at once, which the phone approves, which are refused, and which
 // the gate leaves to the usual permission flow.
 func TestLarkGate(t *testing.T) {
 	cwd := t.TempDir()

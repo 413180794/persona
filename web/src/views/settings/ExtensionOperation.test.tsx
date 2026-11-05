@@ -9,7 +9,7 @@ import { OperationSteps } from "./ExtensionOperation";
 const base: ExtensionOperation = {
   id: "op1",
   kind: "install",
-  extension: "lark-connector",
+  extension: "larkext",
   state: "running",
   step: "download",
   steps: [

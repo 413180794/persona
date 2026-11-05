@@ -1,4 +1,4 @@
-# removed 的 lark-connector 飞书客户端：对 Persona 收件箱 / 飞书会话页（及 Agents 对话页）可迁移的模式
+# removed 的飞书网关飞书客户端：对 Persona 收件箱 / 飞书会话页（及 Agents 对话页）可迁移的模式
 
 调研日期 2026-10-30。只读调研，未改任何仓库文件。
 
@@ -6,10 +6,10 @@
 
 - 路径前缀：
   - `MF/` = removed `Packages/removedKit/Sources/Features/MessagingFeature/`
-  - `OLK/` = removed `Packages/removedKit/Sources/lark-connectorKit/`
+  - `OLK/` = removed 里飞书网关的业务模块（下称 `LarkGatewayKit`，`Packages/removedKit/Sources/` 下）
   - `BH-docs/` = removed `docs/`
   - `J/` = Persona 仓库根（worktree）
-  - `OL/` = 上游 lark-connector 源码（本机 zoekt 索引里的 `lark-connector` 仓库，即 github.com/Eric-2369/lark-connector）
+  - `OL/` = 上游飞书网关的源码（本机 zoekt 索引里的上游仓库）
 - 标记：**【事实】** = 代码 / 文档里直接看到的（带出处）；**【判断】** = 我的推断或建议；**【未查清】** = 没有证据下结论。
 - 性能数字只引用文档里写明的实测值；没有实测的一律不写数字。
 - 隐私：不抄任何真实账号 / 群名 / 人名 / 消息内容 / 内网地址；removed 文档里的验收截图目录、真实群名一律不引用。
@@ -24,7 +24,7 @@
   - 渲染：`RichMessageContentView`、`InlineMessageTextView`、`MessageVersionContentView`（编辑历史）、`MergedForwardView`、`ReceivedGroupCardView`、`VideoMessageViews`、`AudioMessageCard`、`ChatFileViews`、`MessageImageGallery`
   - 话题：`LarkThread*`（ListModel / ReaderModel / ReadingModel / ComposerModel / ControlsModel / RealtimeHub / VisibilityModel）、`ThreadViews`
   - 大量「飞书功能对齐」：标签、分组设置、置顶、标记、收藏、加急、定时、翻译、表情库 / 贴纸、群管理、群日历 / 任务 / Tab / 机器人、扫码、加密、语音转文字……（对 Persona 基本都不该搬，见 §4）
-- `lark-connectorKit` 分层：`Messaging/Contracts`（领域模型 + 窄协议）、`Messaging/Client`（`LarkMessagingClient` + `LarkMessagingResponseCache`）、`Realtime/LarkRealtimeClient`、`Media/`（下载 + 磁盘缓存）、`ResourceUI/`（图片加载器、头像、图集、动图）、`Resources/Contracts`、`Transport/`（认证传输）。另有 `People/`、`Search/`、`Approval/`、`Workplace/`、`Auth/`。
+- `LarkGatewayKit` 分层：`Messaging/Contracts`（领域模型 + 窄协议）、`Messaging/Client`（`LarkMessagingClient` + `LarkMessagingResponseCache`）、`Realtime/LarkRealtimeClient`、`Media/`（下载 + 磁盘缓存）、`ResourceUI/`（图片加载器、头像、图集、动图）、`Resources/Contracts`、`Transport/`（认证传输）。另有 `People/`、`Search/`、`Approval/`、`Workplace/`、`Auth/`。
 - 设计原则（`BH-docs/ARCHITECTURE.md:69-121`）：每个业务域自有模型 / 窄接口 / 缓存 / 失败恢复，不共用全局 Store；Feature 只注入需要的小协议（`any LarkMessaging`、`LarkMessagingCaching`、`LarkThreadReading`…），能力用 `messaging is any XxxProtocol` 动态判断。
 
 【判断】removed 的价值不在功能面（它的目标是「飞书移动端完全对齐」，和 Persona 方向相反），而在**聊天列表的正确性工程**：阅读位置、只报真正看过的已读、发送的写前日志与未知结果核对、窗口完整性校验、迟到结果隔离（代次 / revision）。这些可以抽象成与「飞书」无关的聊天基础设施，Persona 的飞书会话页和 Agents 对话页都能用。
@@ -146,7 +146,7 @@ removed【事实】
 - 会话列表摘要前缀 `[发送中] / [待送达] / [发送失败] / [结果待核对]`（`MF/ConversationPreviewPresentation.swift:46-81`）。
 - 日志版本化 v12，读 v1–v11；损坏 / 过新 / 写失败时保留原文件并**阻止新的发送**（`LarkOutgoingJournal.swift:61-71`；`ARCHITECTURE.md:67, 323`）。
 
-上游 lark-connector 的相关能力【事实】
+上游飞书网关的相关能力【事实】
 - 发送接口接受 `clientId`，不传则服务端随机生成（`OL/src/server/routes/api.ts:3747-3757`）；`/agent/v1` 前缀走同步 `messenger.send`（:3775-3782）。
 - `send` 按 clientId 幂等：已有 intent 复用；`createOutbox` 是 `onConflictDoNothing`；若该 clientId 已经 `sent`，直接返回原 messageId 不再发（`OL/src/server/services/messenger-service.ts:7261-7318`；`OL/src/server/repositories/messenger-repository.ts:6680-6705`）。
 - `GET /api/outbox/:clientId`（查状态）**只在 owner UI 的 `/api` 上，`/agent/v1` 没有**（`OL/src/server/routes/api.ts:1396-1415` 注释）；`POST .../outbox/:clientId/retry` 注册在通用域 API 里，`/agent/v1` 也有（:3810-3838）。
@@ -159,7 +159,7 @@ Persona 现状【事实】
 - Agents 对话页已有出站队列（`J/ios/Jarvis/App/Outbox.swift`：等待中的消息存盘、按序发、同一条重发带同一个 `client_msg_id`；`J/docs/ios.md:288-291`）。
 
 【判断】
-- 飞书发送直接复用 Agents 的 Outbox 模型：手机生成 clientId（UUID）并持久化 → hub 把它原样透传给 lark-connector（改 `lark.Send` 签名）→ 上游按 clientId 幂等，「等网络恢复后自动重发」就安全了（已 sent 的直接返回原 id）。
+- 飞书发送直接复用 Agents 的 Outbox 模型：手机生成 clientId（UUID）并持久化 → hub 把它原样透传给飞书网关（改 `lark.Send` 签名）→ 上游按 clientId 幂等，「等网络恢复后自动重发」就安全了（已 sent 的直接返回原 id）。
 - hub 把 `clientId`、`localState` 透传进 `LarkMessage`，App 用它精确消掉出站气泡（不按文字比）。上游 agent 面没有 outbox 状态查询，必要时 hub 可以在发送时自己记 clientId → messageId，或用「最新页里有没有这个 clientId」核对。
 - removed 的「unknown 绝不自动重发、只读核对」是因为它直连、没有可依赖的幂等保证；Persona 如果打通了 clientId 幂等，可以比它简单：unknown 也能用同一个 clientId 自动补发。附件（图片 / 文件）不在 Persona 飞书页范围内。
 - 收件箱 `POST /api/v1/inbox/{id}/reply` 同理需要幂等键（hub 内部是否也走 `lark.Send` 待确认，见 §6）。
@@ -193,7 +193,7 @@ removed【事实】
 - **互动卡片基本没做**：机器人菜单、互动 / 应用 / 投票卡片「待实现；未知内容仅作可读回退」（`BH-docs/FEISHU_PARITY.md:103`），气泡里未知 part 显示成「[kind 消息]」标签（`MessagingView.swift:1898`）。
 - 损坏的可选摘要字段（`textPreview`、引用 / 编辑历史摘要）独立容错，不能连累有效正文（`BH-docs/FEISHU_PARITY.md:1086-1101`）。
 
-Persona 现状【事实】已照搬 lark-connector 网页渲染器：富文本块树、代码块轻量高亮、系统消息、完整卡片元素（column_set 窄屏重排、table、collapsible_panel、chart、按钮回调……）、合并转发 / 名片 / 日程等摘要卡（`J/docs/ios.md:307-326`）。
+Persona 现状【事实】已照搬飞书网关网页渲染器：富文本块树、代码块轻量高亮、系统消息、完整卡片元素（column_set 窄屏重排、table、collapsible_panel、chart、按钮回调……）、合并转发 / 名片 / 日程等摘要卡（`J/docs/ios.md:307-326`）。
 
 【判断】卡片渲染 Persona 明显领先，不需要向 removed 学。可搬的是：①解析预算 + 超限分页回退（防止超大消息卡死主线程，和 Persona「行 body 反复求值要缓存」的经验一致）；②可选展示字段独立容错（坏的 preview 不应让整条消息变占位）；③长文本折叠。
 
@@ -233,7 +233,7 @@ removed【事实】
 - 实测（`BH-docs/FEISHU_PARITY.md:1009`）：隔离环境里「返回重进聊天的消息请求数 1→1」（在线复用不重复读），断线期间被静默编辑 / 删除的消息在重连后正确更新 / 消失。
 
 Persona 现状【事实】
-- hub 跟随 lark-connector `/agent/v1/events`，每 400 ms 最多推一次 `lark{feed_ids}`（`J/docs/protocol.md:160`）；App 端 `LarkSync`（`J/ios/Jarvis/App/LarkSync.swift`）：每个监听者 `bufferingNewest(1)`（:34-40）；收到就让对应会话页 `refreshLatest`，并在后台给收件箱里的会话取最新一页进缓存（并发 2、同一会话 3 s 内最多一次，:11-15, :83-103）。
+- hub 跟随飞书网关 `/agent/v1/events`，每 400 ms 最多推一次 `lark{feed_ids}`（`J/docs/protocol.md:160`）；App 端 `LarkSync`（`J/ios/Jarvis/App/LarkSync.swift`）：每个监听者 `bufferingNewest(1)`（:34-40）；收到就让对应会话页 `refreshLatest`，并在后台给收件箱里的会话取最新一页进缓存（并发 2、同一会话 3 s 内最多一次，:11-15, :83-103）。
 - **重连时只通知 feed == nil 的监听者（收件箱），已打开的会话页不收到**（:60-61），后台补拉又跳过打开着的会话（:73-81）→ 打开着的会话页要等 60 s 轮询兜底（`LarkChatView.swift:132-135`）。
 - **`refreshLatest` 取最新一页（limit 40）并把「比当前最后一条新」的直接拼到末尾**（`LarkChatView.swift:300-312`）：两次刷新之间来了超过一页的新消息时，中间会**静默缺一段**，没有缺口检测。
 - hub 的页投影丢掉了上游的 `syncState`，删除的消息直接过滤掉（`J/server/internal/lark/lark.go:282-305`）→ App 无从判断窗口是否完整。
@@ -303,7 +303,7 @@ removed【事实】（`BH-docs/LARK_INBOX_UI_REVIEW.md`、`BH-docs/FEISHU_PARITY
 
 | 优先级 | 模式 | removed 出处 | 落在 Persona 哪里 |
 | --- | --- | --- | --- |
-| P0 | 发送幂等：客户端 clientId 透传到 lark-connector；出站气泡 + 持久化 + 断网等待；按 clientId / remoteId 精确消气泡，不按文字比 | §2.6 | App Outbox 复用；hub `lark.Send` 加 clientId 参数；`LarkMessage` 透传 `client_id` / `local_state` |
+| P0 | 发送幂等：客户端 clientId 透传到飞书网关；出站气泡 + 持久化 + 断网等待；按 clientId / remoteId 精确消气泡，不按文字比 | §2.6 | App Outbox 复用；hub `lark.Send` 加 clientId 参数；`LarkMessage` 透传 `client_id` / `local_state` |
 | P0 | 刷新不拼缺口：`after(最后一条)` 追平，追不上就整窗换 latest + 提示；重连通知打开着的会话 | §2.11 | `LarkChatView.refreshLatest`、`LarkSync.reconnected` |
 | P0 | 收件箱入口的分界线 / 缓存先画 / 已读语义（先定产品语义） | §2.2、§2.4、§2.12 | `LarkChatView` focus 路径 |
 | P1 | 飞书页换成与 Agents 同一套倒置列表引擎；定位按 id 跳 + 实测修正，去掉固定 sleep | §2.1、§2.3 | 共用聊天列表组件 |
@@ -359,7 +359,7 @@ removed【事实】（`BH-docs/LARK_INBOX_UI_REVIEW.md`、`BH-docs/FEISHU_PARITY
 
 - 收件箱 focus 路径不上报初始窗口已读、不显示分界线：是有意的产品选择还是遗漏？（`LarkChatView.swift:257-260` vs `J/docs/ios.md:14`）
 - 「`refreshLatest` 拼接缺口」只是代码路径推断，没有在真实会话里复现；需要一个单测（一次刷新间隔里来 41+ 条）确认。
-- lark-connector `/agent/v1` 面没有按 clientId 查发送状态的接口（`OL/src/server/routes/api.ts:1396-1399` 注释明确只在 `/api`），hub 若要「未知结果核对」只能靠消息里的 `clientId` 或自己记录；`send` 在 outbox 状态为 pending（在途）时被同一 clientId 再次调用会怎样，没读完（`OL/src/server/services/messenger-service.ts:7305` 之后的分支）。
+- 飞书网关 `/agent/v1` 面没有按 clientId 查发送状态的接口（`OL/src/server/routes/api.ts:1396-1399` 注释明确只在 `/api`），hub 若要「未知结果核对」只能靠消息里的 `clientId` 或自己记录；`send` 在 outbox 状态为 pending（在途）时被同一 clientId 再次调用会怎样，没读完（`OL/src/server/services/messenger-service.ts:7305` 之后的分支）。
 - （已核对，移出未查清）上游消息页接口用 `registerDomainApi` 的 `p()` 同时注册在 `/api` 和 `/agent/v1`（`OL/src/server/routes/api.ts:3378-3380`），所以 agent 面同样返回 `syncState`，取值有 `complete` / `local` / `gap`（`OL/src/server/repositories/messenger-repository.ts:4192, 4232, 4304`）。hub 只需把它透传出来（现在被丢弃，`J/server/internal/lark/lark.go:282-293`）。
 - removed 的阅读位置 / 已读门禁、像素锚点在真机上的表现：它自己的文档也写着真机触摸、帧率、快速拖动空白帧仍待验（`BH-docs/LARK_CHAT_UI_REVIEW.md:23, 31`），不能把它当成已被验证的最佳实践照抄。
 - Agents 对话页是否已有「已看」门禁、`ChatView` 的修正时机——本次没读 `ChatView.swift`，以 `J/docs/ios.md` 描述为准。

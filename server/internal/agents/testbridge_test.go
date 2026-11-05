@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-// testBridge is a source over a fake API with the shape lark-connector's agent-bridge had (the hub's own source before a
+// testBridge is a source over a fake API with the shape the Lark gateway's agent-bridge had (the hub's own source before a
 // plugin served it): the service's tests go through it.
 
 type AgentBridgeState struct {
@@ -37,8 +37,8 @@ type BridgeAPI interface {
 	AgentMarkRead(ctx context.Context, key string) error
 }
 
-// Bridge is lark-connector's agent-bridge as a Source. Providers: cue, grok_bot (server), muse, dots, claude_duet (browser).
-// Only the hub's one configured lark-connector account is queried: the bridge's state is deployment-wide (verified: account 1
+// Bridge is the Lark gateway's agent-bridge as a Source. Providers: cue, grok_bot (server), muse, dots, claude_duet (browser).
+// Only the hub's one configured gateway account is queried: the bridge's state is deployment-wide (verified: account 1
 // sees all sessions; other selectors are rejected), so querying more accounts would only repeat it.
 type testBridge struct{ API BridgeAPI }
 
@@ -46,7 +46,7 @@ func (b testBridge) Name() string { return OLKBridge }
 
 func wrap(s AgentSession) Session { return Wrap(OLKBridge, s, "") }
 
-// missingBridge is lark-connector answering 404 for the bridge's own routes: a build from before agent-bridge existed.
+// missingBridge is the Lark gateway answering 404 for the bridge's own routes: a build from before agent-bridge existed.
 func missingBridge(err error) bool {
 	var ae *apiError
 	return errors.As(err, &ae) && ae.Status == http.StatusNotFound
@@ -70,7 +70,7 @@ func (b testBridge) Status(ctx context.Context) (Status, error) {
 	return out, nil
 }
 
-// Sessions is empty, not an error, on an lark-connector without the bridge: Status says why (SetupMissing).
+// Sessions is empty, not an error, on a Lark gateway without the bridge: Status says why (SetupMissing).
 func (b testBridge) Sessions(ctx context.Context) ([]Session, error) {
 	ss, err := b.API.AgentSessions(ctx)
 	if missingBridge(err) {

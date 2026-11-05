@@ -1,6 +1,6 @@
 import XCTest
 
-/// A Feishu topic group lists its topics as cards, as lark-connector does (#1087): three topics in a row from one bot each
+/// A Feishu topic group lists its topics as cards, as the Lark gateway does (#1087): three topics in a row from one bot each
 /// keep their own card with the name and time (a chat runs them together under one name), a long topic folds behind
 /// 展开 (what it hides takes no taps), a tap on a topic opens its thread as 话题详情 from the group, and a tap on a link
 /// in a topic opens the link only. Under a topic are its newest two replies (查看更早 N 条回复 above them), then 表情回复
@@ -36,7 +36,7 @@ final class LarkTopicGroupTests: XCTestCase {
     }
 
     /// 风灵月影 on a topic card as on a chat's row (LarkMessageDisplayTests): a recalled topic says so, keeps what it
-    /// said to itself and has no menu to copy it, until 防撤回 is on and lark-connector kept it; 已编辑 opens the old versions
+    /// said to itself and has no menu to copy it, until 防撤回 is on and the Lark gateway kept it; 已编辑 opens the old versions
     /// once 编辑历史 is on.
     @MainActor func testRecalledAndEditedTopicsFollowTheDisplaySettings() async throws {
         try await display("anti_recall", false)
@@ -64,8 +64,8 @@ final class LarkTopicGroupTests: XCTestCase {
         XCTAssertTrue(kept.waitForExistence(timeout: 15), "防撤回 is on, yet the kept topic does not show:\n\(app.debugDescription)")
         XCTAssertTrue(topic("已留存的话题原文").staticTexts["已撤回"].exists, "a kept recalled topic does not say 已撤回")
         noReactionsOrReplies(topic("已留存的话题原文"))
-        XCTAssertTrue(topic("小周 撤回了一条消息").exists, "a recalled topic lark-connector did not keep lost its notice")
-        XCTAssertFalse(app.staticTexts["不能展示的话题原文"].exists, "a recalled topic lark-connector did not keep shows its text")
+        XCTAssertTrue(topic("小周 撤回了一条消息").exists, "a recalled topic the Lark gateway did not keep lost its notice")
+        XCTAssertFalse(app.staticTexts["不能展示的话题原文"].exists, "a recalled topic the Lark gateway did not keep shows its text")
         let history = topic("周四上架").buttons["查看编辑历史"]
         XCTAssertTrue(history.waitForExistence(timeout: 10), "编辑历史 is on, yet 已编辑 is not a button")
         let keptReply = NSPredicate { _, _ in preview.label.contains("小周：已留存的回复原文：我周三请假 · 已撤回") }

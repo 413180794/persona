@@ -20,7 +20,7 @@ Agents 的「空闲的空间」展开后，普通卡片、细列表、胶囊样�
 按机器（每台机器一段，标题有在线状态和状态计数，段内按状态排、同状态按最后更新时间、空闲折叠）；按仓库（`RepoTree`，照 Orca 的项目侧栏）：最外层按电脑分段（电脑标题贴页边、比分组标题大一级，带各状态计数，点标题折叠整台电脑，和按机器共用折叠记录；电脑按 hub 的顺序），段内是这台电脑上的仓库（按名字排，和 Finder 一样 app2 在 app10 前面），仓库卡片里是它的工作树（⌂ 主工作树排第一，其余按名字；只有主工作树的仓库省掉这一层），工作树下面缩进一级是 Agent；全是空闲的工作树收成一行「空闲」，全是空闲的仓库收进这台电脑末尾的「空闲的仓库」。带 `parent_space_id` 的空间（Orca 的子工作区，#3075，网页同 #2073）不按自己的 cwd 推断仓库，挂在顶层父空间所在的工作树下：工作树的 Agent 后面一行「N 个子项」（带子项的状态计数，默认收起，`<工作树>/子项` 记住），展开是各子空间，每个一行工作树、下面一级是它的 Agent，多层的按深度优先摊平；父空间不在列表里或成环时子空间照旧按 cwd 排；其他分组还平铺。仓库和工作树从 cwd 推断，规则和网页的按仓库一样（`.worktrees/`、`.claude/worktrees/`、`.herdr/worktrees/`，见 `docs/web.md`）；仓库的 Agent 都在一个 herdr 空间里时（通常如此），这个空间的置顶 / 屏蔽标记、待办和 ⋯ 菜单就是仓库的，分在几个空间里时 ⋯ 只有「全部标为已读」。按项目也先按电脑分段，空间标题不再写电脑名，每台电脑末尾各有自己的「空闲的空间」。只有一台电脑有 Agent（或选了机器筛选）时不画电脑这一层。「全部折叠」仍只折叠空间和仓库（每个一行，一眼看全），电脑标题不动。快捷筛选先挑出 Agent 再分组，电脑标题按筛选前算，切筛选不会多出或少掉电脑；不按项目时行末的元信息带「空间 › tab」（按状态时还带机器名）；三种分组用同一个顺序（`ChatsView.rank`）：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，同一状态按最后更新时间排（新的在上）；屏蔽了的工作中 / 完成未看 / 待唤醒的 Agent 算「已屏蔽」（需要你的照旧排第一）。按项目时：原来的会话列表（不含助手对话）：「需要你处理」卡片 → 置顶的 Agent（置顶的 Agent 只在这里出现一次、和别的行一样只靠圆点表达状态，不再出现在空间 / 状态 / 机器分组里；空间内的 Agent 按上面的状态顺序排（空间页 `SpaceView` 仍按 tab 顺序，和 herdr 一致）；手表仍按 `AgentState.priority`） → 置顶的空间 → 进行中 → 刚完成 → 屏蔽但有 Agent 在跑的空间（弱显示）→ 空闲的空间（折叠，屏蔽的空闲空间也在这里）；搜索、按机器筛选、左滑置顶 / 中断、右滑关闭（长按菜单、对话页「…」也有「关闭 Agent…」，herdr 里的任何 Agent 都能关，先从底部弹出确认卡片 `CloseAgentSheet`：哪个 Agent、在哪台机器哪个标签页、关了会怎样，「停止并关闭」/「取消」）；空间标题 ⋯ 置顶空间。置顶存在 hub（`/api/v1/pins`）。`/loop` 驱动的 Agent 带「⟳ 下次 12:20」标记、不折进空闲；轮次结束但还有后台命令 / 子代理在跑的 Agent 带琥珀色「⚙ 后台 N」，状态是工作中（#2228），同样不折进空闲，它所在的空间也不算空闲空间，长按可停止循环。改名（空间：标题 ⋯ / 空间页菜单「重命名空间」，同步改 herdr workspace；Agent：长按 / 对话页「…」「重命名…」，一次改 herdr tab 名和 Claude 会话名，Mac 上 herdr 和 claude --resume 看到的一致）。屏蔽（Agent：长按或对话页「…」菜单；空间：标题右侧的 ⋯，或空间页右上角菜单——列表分组标题上的长按菜单触发不了）：不再推送通知（空间屏蔽时，其中的 Agent 可以单独「开启通知」，反之亦然——每个 Agent 的开关叠在空间的设置上，`Pins.togglingMute`）；列表里弱化（状态色变灰、🔕、不透明度 0.8——比工作中的弱，不比空闲的空间淡），在跑的照常显示不折叠，屏蔽且没在跑的空间就是普通的空闲空间；Agents tab 角标不计（`/api/v1/mutes`）。同一个菜单的「排序」（`AgentSort`，`dev.sort`，记住；按状态分组时不显示，它本来就按状态分段、段内按时间）可以换成「最近更新」（#823）：行只按最后更新时间排、不看状态；按仓库时每台电脑里的仓库、按项目时进行中的空间、按机器时各台机器也按其中最近更新的 Agent 排（屏蔽的空间仍在后面）；置顶、需要你处理、空闲折叠都不变。时间用 `sortDate`：工作中的 Agent 按开始工作的时间，不会每走一步就换位置。默认「状态优先」，和原来一样。 |
 | 收件箱 | 飞书消息和邮件在一个列表里，一行一件事（一个会话的新消息、一个邮件线程），AI 分拣，左滑已处理；筛选来源 / 账号 / 类型（`docs/inbox.md`）。点开飞书是会话页，同飞书手机版：别人的消息在左侧带头像，群聊里连续消息的第一条显示名字；自己的在右侧、不带自己的头像和名字，气泡蓝色（#D1E3FF / 深色 #133063）；点头像或名字看资料卡；点表情回应切换自己的回应；长按菜单最上面一排 6 个常用表情（hub 的 `reactions/quick`），点一下就回应并收起菜单，「☺︎」或长按「表情回复」打开常用 + 全部表情；公司圈分享链接渲染成卡片，点开看帖子全文、图片和评论。打开时停在这件事的第一条新消息，只把上过屏的消息上报为已读。卡片渲染等见下文「飞书消息渲染」；邮件：详情、回复、写信、「让 Claude 处理」、邮箱管理（右上角菜单），添加邮箱（也可以在 Persona 里说「帮我添加邮箱」，它用 `mail_account_add` 加，手机上确认） |
 | 待办 | 待办列表与详情（侧边栏「待办」入口，带未完成数量角标；新外壳在侧边栏）：按状态优先级排（等你 > 待查看 > 进行中 > 待跟进 > 未开始），已完成收到底部；支持新建（标题 + 说明）、点圆圈或右滑完成、右滑重新打开、左滑删除。详情页支持编辑标题和说明、展示当前运行与参与过的 Agent 会话，支持移除启动失败项；底部「交给 Agent」可新开或指定已有 Agent 会话派活，附带结构化待办上下文卡片 |
-| 设置 | 助手（不显示、不配置模型，模型在「模型配置 › 主对话」，#1291；「主动做事和记忆」四页，`AssistantProactiveViews.swift`：定时任务——列表行尾开关直接启停，编辑已有的离开页面即保存，新建（＋，可选会前准备 / 周报 / Agent 巡检 / 下班前盘点模板）是带「取消 / 添加」的浮层，避免试一下模板就建出来；立即运行 / 查看上次结果切到「对话」打开那段对话；一次性跟进、按间隔重复的任务和定时任务在同一页、同一个编辑页（运行方式：模型、权限模式、思考强度，全部放行先确认）；记忆——解析 frontmatter，标题优先取 MEMORY.md 索引里的中文标题，类型标签，详情 Markdown 渲染，「编辑」改整个文件，左滑删除，索引单独一行只读；关于我——编辑 notes，离开即保存）、Claude Code 设置（各机器 `~/.claude/settings.json` 的白名单项：离开回顾 recap、思考强度、总是思考、回复语言等，可一键应用到所有机器）、机器（二级页：在线状态、会话数、版本、启动器、重连）、连接器（2026-11-01：这台 iPhone = 原来的手机数据开关和授权、邮箱 = 原来收件箱 ⋯ 里的管理邮箱、飞书 = hub 的 lark-connector 连接状态和用途，`ConnectorsViews.swift`，hub `GET /api/v1/lark/status`；
+| 设置 | 助手（不显示、不配置模型，模型在「模型配置 › 主对话」，#1291；「主动做事和记忆」四页，`AssistantProactiveViews.swift`：定时任务——列表行尾开关直接启停，编辑已有的离开页面即保存，新建（＋，可选会前准备 / 周报 / Agent 巡检 / 下班前盘点模板）是带「取消 / 添加」的浮层，避免试一下模板就建出来；立即运行 / 查看上次结果切到「对话」打开那段对话；一次性跟进、按间隔重复的任务和定时任务在同一页、同一个编辑页（运行方式：模型、权限模式、思考强度，全部放行先确认）；记忆——解析 frontmatter，标题优先取 MEMORY.md 索引里的中文标题，类型标签，详情 Markdown 渲染，「编辑」改整个文件，左滑删除，索引单独一行只读；关于我——编辑 notes，离开即保存）、Claude Code 设置（各机器 `~/.claude/settings.json` 的白名单项：离开回顾 recap、思考强度、总是思考、回复语言等，可一键应用到所有机器）、机器（二级页：在线状态、会话数、版本、启动器、重连）、连接器（2026-11-01：这台 iPhone = 原来的手机数据开关和授权、邮箱 = 原来收件箱 ⋯ 里的管理邮箱、飞书 = hub 的飞书网关连接状态和用途，`ConnectorsViews.swift`，hub `GET /api/v1/lark/status`；
 hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加行（2026-11-02，先有 GitHub：状态、账号、「来自 <机器> 的 gh 登录」、最近一次同步，通用的 `HubConnectorView`，DEBUG `-openConnectorGitHub YES`；要在 App 里登录的连接器（Telegram，`signsInHere`）多出开关、分步登录、退出登录、删除已存的数据，`ConnectorSignInSections`，DEBUG `-openConnectorTelegram YES`））、通知、重新配对 |
 
 对话页：
@@ -52,7 +52,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   Agents（`AgentSync`）：会话列表 / `revs` 事件里的 `rev` 和本地记下的不同，就按 `after_seq` 拉新内容，内存里有这个对话就合并进去，
   没有就写进磁盘缓存（`ChatCache.folder`，现在是 `chats-v3`），打开时直接就是最新的；范围是活着的 Agent + 24 小时内用过的会话（最多 40 个，最近的先拉，并发 3），
   正在看的对话靠自己的订阅，不重复拉。工作中的 Agent 每个对话最多一分钟拉一次（`AgentSync.workingGap`；每次都要把那个对话的整份磁盘缓存解码、再写回），
-  轮次结束、需要你的那一刻立刻拉（这时最可能被打开）；真实 hub 录的 19 分钟回放：每分钟 45 次 → 9 次（2026-11-02，耗电排查）。飞书（`LarkSync`）：hub 转发 lark-connector 的实时事件（`lark`），收件箱里的飞书会话和打开的会话收到就刷新
+  轮次结束、需要你的那一刻立刻拉（这时最可能被打开）；真实 hub 录的 19 分钟回放：每分钟 45 次 → 9 次（2026-11-02，耗电排查）。飞书（`LarkSync`）：hub 转发飞书网关的实时事件（`lark`），收件箱里的飞书会话和打开的会话收到就刷新
   （轮询只作兜底：列表 90 秒、会话 60 秒）；收件箱里有变化的会话在后台取最新一页写进 `lark-chat-<id>` 缓存，连上 hub 时把最近 20 个
   补一遍；未读会话的缓存覆盖到第一条未读时也直接用缓存打开。
 - 设置 › 存储空间（`StorageView`）：App 在这台手机上占用的空间，按类别（Agent 对话、对话图片、飞书图片和文件、列表和飞书会话、网页、
@@ -327,8 +327,8 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 
 用户要求（2026-11-01）：照 ChatGPT 的 iOS App 重排 iPhone 的外壳，「聊天是 Persona（大改），工作是 Agents（改个入口）」，
 两页叫「助手」「Agents」（2026-11-01 用户要求，原来叫「聊天」「工作」）；新对话页和旧布局一样是欢迎页（2026-11-02 用户要回来的，原来没有待办时什么都不放，整页空白）；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
-#392：飞书设置打开「首页显示消息」后，顶部增加第三页「消息」，默认仍是两页；旧布局与 iPad 对应增加 Tab。它只浏览会话并复用现有聊天页，边界见 [飞书迁移](lark-connector-migration.md)。
-#1530：经 lark-connector 接飞书由私有插件提供，依赖 `/api/v1/lark/…` 的入口只在 hub 的 features 里有 `lark` 时出现（`LarkFeatures`，`App/LarkFeatures.swift`）：「消息」页和它的切换按钮 / Tab（开关保留原值，装上插件就回来）、设置 › 连接器 › 飞书、翻译里的「飞书会话」、链接打开飞书文档的原生阅读器；公司圈帖子的原生阅读器还要 `lark_moments`。没有时飞书文档和公司圈链接照普通网页打开；收件箱里带 `lark` / `doc` / `moment` 块的条目只有插件给，照常画。features 为空（还没收到 hello、体验模式）或只有 `lark_attachments` 没有 `lark`（插件之前自己接飞书的 hub）按原样全部显示。假 hub 用 `MOCK_NO_LARK=1` 模拟没装插件。
+#392：飞书设置打开「首页显示消息」后，顶部增加第三页「消息」，默认仍是两页；旧布局与 iPad 对应增加 Tab。它只浏览会话并复用现有聊天页，边界见 [飞书迁移](lark-migration.md)。
+#1530：经飞书网关接飞书由私有插件提供，依赖 `/api/v1/lark/…` 的入口只在 hub 的 features 里有 `lark` 时出现（`LarkFeatures`，`App/LarkFeatures.swift`）：「消息」页和它的切换按钮 / Tab（开关保留原值，装上插件就回来）、设置 › 连接器 › 飞书、翻译里的「飞书会话」、链接打开飞书文档的原生阅读器；公司圈帖子的原生阅读器还要 `lark_moments`。没有时飞书文档和公司圈链接照普通网页打开；收件箱里带 `lark` / `doc` / `moment` 块的条目只有插件给，照常画。features 为空（还没收到 hello、体验模式）或只有 `lark_attachments` 没有 `lark`（插件之前自己接飞书的 hub）按原样全部显示。假 hub 用 `MOCK_NO_LARK=1` 模拟没装插件。
 只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变（iPad 和 iPhone Duo 打开时 Persona 的侧边栏照抽屉排，见「iPad」）。代码在 `Persona/Views/Shell/`，组件在
 `DesignSystem/ShellComponents.swift`、`ShellComposerBar.swift`，颜色和尺寸是 `Theme.Shell`（各风格都用这一套中性色）。
 
@@ -590,7 +590,7 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
   `Theme` 的颜色按当前的组合取值（设置里的预览卡用 `StyleSpec.compose` 算别的组合）；面板用 `.surface(tint:interactive:in:)`、
   按钮用 `.themedButton(prominent:)`、列表页面 `.themedPage()`、plain 列表的行 `.themedRow()`，不要直接写 `glassEffect` / `.glass`。
   切换风格或主题色时 RootView 以 `AppModel.look` 为 id 整棵重建（token 是静态的），当前 tab 和打开的会话本来就会记住。飞书页面的框架色
-  （`LarkColor.blue` 链接 / 选中 / 新消息线、自己的气泡）跟着主题色走（主题色「飞书蓝」是 lark-connector 自己的那套），卡片底和描边跟着风格走，卡片内容的飞书具名色板不变。
+  （`LarkColor.blue` 链接 / 选中 / 新消息线、自己的气泡）跟着主题色走（主题色「飞书蓝」是飞书网关自己的那套），卡片底和描边跟着风格走，卡片内容的飞书具名色板不变。
   调试：`-ui.style glass|clay|island|lark|beautiful`、`-ui.color style|persona|blue|coral|lavender|teal|lark`（UserDefaults 参数域，Release 也认，不算 DEBUG 开关；
   `-ui.style claude` 仍当液态玻璃 + 珊瑚橙）。
 - **深浅色**（2026-11-03，#710）：设置 › 外观 › 深浅色，跟随系统（默认，和以前一样）/ 浅色 / 深色（`ColorSchemeChoice`，存 `ui.scheme`，只在 iPhone / iPad）。
@@ -1009,7 +1009,7 @@ Markdown 的情况再说两点：
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES|0.5`（Persona tab 的侧边栏开着 / 停在一半）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-showScrollState YES|visible`（对话列表在哪、跟不跟随，给 UI 测试读，`visible` 画出来）、`-openTerminalPane YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开公司圈帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openHubUpdate YES`（设置 › hub，`docs/hub-update.md`）、`-tab settings -openSkills YES`（设置 › 助手 › Skills）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/app/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES|0.5`（Persona tab 的侧边栏开着 / 停在一半）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-showScrollState YES|visible`（对话列表在哪、跟不跟随，给 UI 测试读，`visible` 画出来）、`-openTerminalPane YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-showLark YES`（直接到收件箱）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开公司圈帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openHubUpdate YES`（设置 › hub，`docs/hub-update.md`）、`-tab settings -openSkills YES`（设置 › 助手 › Skills）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/app/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-showFromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-openFilePath <路径>`（打开会话后打开这个文件，`-openFileLine <行>` 跳到那一行）、`-showFilePerf YES`（把打开文件的耗时和每秒帧数写进 Caches/file-perf.log，`-showFileAutoScroll YES` 让文件自己匀速滚，`-showFileAutoScrollSpeed 1500` 换速度）；`-showMenu YES` 在最后一条回复（配合 `-showFromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
@@ -1020,15 +1020,15 @@ Markdown 的情况再说两点：
 
 ## 飞书消息渲染（`Persona/Views/Inbox/Lark/`）
 
-照搬 lark-connector（github.com/Eric-2369/lark-connector，`src/ui/message-renderers/`）的消息渲染，数据是 hub 原样转发的 `parts`：
+照搬飞书网关网页（上游的消息渲染器）的消息渲染，数据是 hub 原样转发的 `parts`：
 
 发消息不等飞书（`LarkOutbox.swift`）：点发送就清空输入框、把消息画在会话最下面（气泡旁一个小转圈，和飞书一样），后台按写的顺序一条条发；
 发出去后等飞书自己的那条（同样文字、我发的、不早于发送时间）出现就换掉，最多等 20 秒。顺序只管发送请求本身：等副本在旁边各自进行，下一条不用等上一条的副本（#851，会话页和话题面板都是）。没发出去的留在原处，气泡旁是红色的失败图标（`Theme.Icon.errorFilled`），点它可以重发、放回输入框或删除。还在发、没发出去的行和飞书的消息在同一个列表里，按写的时间排（`LarkChatRows`）：之后发出去的、别人之后的回答都排在它下面；重发不挪位置。
-已读回执（`LarkReadReceipts.swift`）：我的消息旁边，私聊写「已读 / 未读」，群里是进度圆环（全部已读换成勾）；没有回执（还没取到、lark-connector 没给、旧 hub 没有这个路由）时什么都不画。
+已读回执（`LarkReadReceipts.swift`）：我的消息旁边，私聊写「已读 / 未读」，群里是进度圆环（全部已读换成勾）；没有回执（还没取到、飞书网关没给、旧 hub 没有这个路由）时什么都不画。
 只查屏幕上我的消息（`POST …/conversations/{id}/read-states`，一次最多 100 条），同一会话至少隔 3 秒查一次；全部已读的不再查；这个会话有实时更新（或前台时每分钟的兜底轮询）时，屏幕上还没全部已读的重查；旧 hub 回 404 后这次打开就不再查。
 收件箱里回复 AI 分身的草稿也一样：点发送就关掉、标为已处理，失败了放回未处理，再打开回复页时是刚才那段文字（`InboxStore.unsentReplies`）。
 
-| 文件 | 对应 lark-connector | 内容 |
+| 文件 | 对应飞书网关 | 内容 |
 | --- | --- | --- |
 | `LarkModels.swift` | contracts `MessageView` / `MessagePart` | 线上类型、API |
 | `LarkMedia.swift` | `removedimage` / `image-viewer` / `message-video` / `chat-file-preview` | 带鉴权的媒体加载（内存 + 磁盘缓存、ImageIO 降采样）、表情目录、全屏图集、播放器、Quick Look |
@@ -1036,13 +1036,13 @@ Markdown 的情况再说两点：
 | `LarkMessageContent.swift` | `index.tsx` `renderPart` / `rich-blocks.ts` | 富文本块树（段落、有序 / 无序列表、引用、标题）、图片、贴纸、文件卡、视频、语音、代码块（轻量高亮）、系统消息 |
 | `LarkCard.swift` | `card-renderer.tsx` | 卡片元素：header 主题色、markdown、column_set（权重 / 固定 / auto 列宽 + bisect / trisect / stretch 窄屏重排）、table、list、collapsible_panel、note、text_tag、icon、按钮（链接 / 回调）、select / input / picker（只读）、overflow、img、chart（Swift Charts）…… |
 | `LarkSummaryCards.swift` | `SummaryCardView` | 合并转发（点开看全部消息）、群 / 个人名片、视频会议、日程、投票等摘要卡 |
-| `LarkChatView.swift` | messenger 气泡 | 头像、发送者 + 机器人标、同一发送者（按 id）连发合并、时间只在居中的分隔里（换天或隔 5 分钟以上，`LarkChatLayout`）、回复引用、表情回应、已编辑；卡片 / 图片 / 文件无气泡；话题群（`is_topic`）照 lark-connector 网页一个话题一张卡片（`LarkTopicCard.swift`：头像、名字和时间各自带着，不按聊天合并；内容高过 320 pt 收起成「展开」；下面露出最新两条回复和「查看更早 N 条回复」，卡片上了屏才读、同时最多读 3 个、回复数没变不再读（`LarkTopicReplies`）；底部「表情回复」「回复」；点正文或回复打开「话题详情」；撤回和编辑过的话题、撤回的回复和聊天里的消息一样按「风灵月影」的防撤回、编辑历史显示，#1087） |
+| `LarkChatView.swift` | messenger 气泡 | 头像、发送者 + 机器人标、同一发送者（按 id）连发合并、时间只在居中的分隔里（换天或隔 5 分钟以上，`LarkChatLayout`）、回复引用、表情回应、已编辑；卡片 / 图片 / 文件无气泡；话题群（`is_topic`）照飞书网关网页一个话题一张卡片（`LarkTopicCard.swift`：头像、名字和时间各自带着，不按聊天合并；内容高过 320 pt 收起成「展开」；下面露出最新两条回复和「查看更早 N 条回复」，卡片上了屏才读、同时最多读 3 个、回复数没变不再读（`LarkTopicReplies`）；底部「表情回复」「回复」；点正文或回复打开「话题详情」；撤回和编辑过的话题、撤回的回复和聊天里的消息一样按「风灵月影」的防撤回、编辑历史显示，#1087） |
 
 要点：
 - 行内内容拼成一个 `Text`（`Text("\(a)\(b)")` 插值拼接），表情图用 `Text(Image(uiImage:))` 嵌进行内，未加载时先显示 `[标签]`，
   加载完 `LarkMedia.emojiVersion` 变化触发重绘。
 - 卡片里 `plain_text` 在 markdown 上下文要解 `&nbsp;` 等实体和 `<br>` / `<a href>` / `<font color>`（飞书网关留下的标记）。
-- 卡片回调按钮只在 `actionMethod == 2` 时可按（走 lark-connector 的 card-actions 接口）；select / input 等表单控件只显示当前值。
+- 卡片回调按钮只在 `actionMethod == 2` 时可按（走飞书网关的 card-actions 接口）；select / input 等表单控件只显示当前值。
 - 自定义 `Layout` 拿到的 `proposal.width` 可能是 `.infinity`（ScrollView / 测量 ideal size 时），换算整数前必须判 `isFinite`，否则直接崩。
 
 ## 引擎选择

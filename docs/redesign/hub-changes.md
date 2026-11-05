@@ -194,7 +194,7 @@ Go 对通配地址开的是双栈 socket，IPv6 本来就能连进来；能不�
 - `lark.Send`（`server/internal/lark/lark.go`）现在每次随机生成 clientId。改成接收调用方给的 clientId：
   - 会话页发送：手机生成；
   - 收件箱回复、AI 分身发送、助手工具 `lark_send`：hub 按件或按工具调用生成并落库。
-- lark-connector 本来就按 clientId 幂等（已发出的直接返回原消息 id）。
+- 飞书网关本来就按 clientId 幂等（已发出的直接返回原消息 id）。
 - 消息投影（`lark.go`）透传 `clientId` 和 `localState`，App 用它们精确地消掉自己的出站气泡。
 - 分页结果透传上游的 `syncState`（`complete` / `local` / `gap`），不再丢掉。App 只在 `complete` 时删本地的行。
 

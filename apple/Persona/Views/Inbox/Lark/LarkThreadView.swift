@@ -16,7 +16,7 @@ struct LarkThreadView: View {
     var pinTarget: LarkChatPinTarget? = nil
     var pinAPI: APIClient? = nil
     private var api: APIClient? { pinAPI ?? model.api?.lark(account) }
-    /// Opened from a topic group's card: 话题详情, 来自 <the group> (lark-connector's topic page).
+    /// Opened from a topic group's card: 话题详情, 来自 <the group> (the Lark gateway's topic page).
     var chatName: String? = nil
     @State private var person: LarkPersonRef?
     /// The replies loaded so far (never the root) and where paging stands (LarkPager).
@@ -389,7 +389,7 @@ struct LarkThreadView: View {
 
     private func refreshLatest() async {
         guard !loading, let api = api, let r = try? await api.larkThread(root.id) else { return }
-        problem = nil // it answers again (lark-connector signed in again, the network is back)
+        problem = nil // it answers again (the Lark gateway signed in again, the network is back)
         let fresh = pager.refresh(with: r.replies(of: root.id))
         guard !fresh.isEmpty else { return }
         withAnimation(Theme.Motion.standard) { pager.add(fresh) }

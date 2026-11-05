@@ -178,9 +178,9 @@ func (h *Manager) connectorThreadRoutes(api *http.ServeMux) {
 		if res.IsError {
 			status := http.StatusBadGateway
 			switch {
-			case strings.HasPrefix(text, "The user declined"), strings.Contains(text, "(connector_gate) do not allow"):
+			case res.ErrorKind == proto.ToolErrorDeclined:
 				status = http.StatusForbidden
-			case connector.StatusOf(r.Context(), c).State == connector.StateRateLimited:
+			case res.ErrorKind == proto.ToolErrorRateLimited, connector.StatusOf(r.Context(), c).State == connector.StateRateLimited:
 				status = http.StatusTooManyRequests
 			}
 			writeErrCode(w, status, map[int]string{http.StatusForbidden: "declined", http.StatusTooManyRequests: "rate_limited"}[status], errors.New(text))

@@ -1,12 +1,12 @@
 {
   "recalled": "メッセージは取り消されました",
   "recalled_kept": "{text} · 取り消し済み",
-  "not_logged_in": "hub に接続された lark-connector が Lark にログインしていません。hub のマシンで再ログインしてください。",
-  "upgrade_read": "メッセージ表示の設定を使うには、ハブとlark-connectorを更新してください。",
+  "not_logged_in": "hub に接続された Lark ゲートウェイが Lark にログインしていません。hub のマシンで再ログインしてください。",
+  "upgrade_read": "メッセージ表示の設定を使うには、ハブとLark ゲートウェイを更新してください。",
   "read_failed": "設定を読み込めません。接続後に再試行してください。",
   "conflict": "設定またはアカウントが変わりました。再読み込みしてから変更してください。",
   "forbidden": "この接続には設定を変更する権限がありません。",
-  "upgrade_write": "これらの設定を変更するには lark-connector を更新してください。",
+  "upgrade_write": "これらの設定を変更するには Lark ゲートウェイ を更新してください。",
   "write_unknown": "保存できたか分かりません。設定を再読み込みして確認してください。",
   "encrypted": "暗号化メッセージ"
 }

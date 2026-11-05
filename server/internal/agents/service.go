@@ -306,7 +306,7 @@ func NewClientID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// TextLen counts like JavaScript's String.length (UTF-16 units), which is what lark-connector's 20000 limit measures.
+// TextLen counts like JavaScript's String.length (UTF-16 units), which is what the Lark gateway's 20000 limit measures.
 func TextLen(s string) int { return len(utf16.Encode([]rune(s))) }
 
 func preview(s string) string {
@@ -319,7 +319,7 @@ func preview(s string) string {
 
 // Send posts text into a session as the user. clientID (a UUID; generated when empty) makes it idempotent: a
 // clientId the outbox already saw sent is answered from the outbox without calling the source, and one that failed
-// or never got an answer is retried with the same clientId, which lark-connector itself deduplicates.
+// or never got an answer is retried with the same clientId, which the Lark gateway itself deduplicates.
 func (s *Service) Send(ctx context.Context, id, clientID, text, origin string) (*SendResult, error) {
 	src, key, err := s.source(id)
 	if err != nil {

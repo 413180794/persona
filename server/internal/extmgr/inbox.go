@@ -94,7 +94,7 @@ type inboxRound int
 
 const (
 	// roundChats follows a Feishu realtime event: the Feishu chats only. Document and 公司圈 notices and the other
-	// connectors wait for the next poll; reading them on every event was most of the hub's lark-connector calls in a
+	// connectors wait for the next poll; reading them on every event was most of the hub's Lark gateway calls in a
 	// busy group (#674).
 	roundChats inboxRound = iota
 	roundPoll             // every inboxPoll and on a connector's kick: every source but the slow ones

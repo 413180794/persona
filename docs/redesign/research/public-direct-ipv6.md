@@ -446,7 +446,7 @@
   来源：https://www.rfc-editor.org/rfc/rfc7707.html （查于 2026-10-30）。
 - 【事实】证书透明日志（CT）：IMC 2018 的蜜罐实验里，子域名只经 CT 日志泄露，**发证后 73 秒到约 3 分钟**就出现第一批 DNS 查询，随后有端口扫描；EuroS&P 2023 用 200 天的蜜罐复现，扫描在证书签发和续期后几乎立即激增。
   来源：https://dl.acm.org/doi/10.1145/3278532.3278562 ；https://sites.cs.ucsb.edu/~chris/research/doc/eurosnp23_certvuln.pdf （查于 2026-10-30）。
-- 【事实】光猫多数只有「IPv6 防火墙 开 / 关」两档（1.4 节）——关掉后 hub 机器上**所有**监听 `::` 的服务都直接暴露（SSH、lark-connector 等其他容器……）。Docker 官方文档：「Docker and ufw use firewall rules in ways that make them incompatible」，经 Docker 发布的端口「gets diverted before it goes through the ufw firewall settings」。本仓库的 Postgres 容器已经只绑 `127.0.0.1`（`scripts/db.sh`）。
+- 【事实】光猫多数只有「IPv6 防火墙 开 / 关」两档（1.4 节）——关掉后 hub 机器上**所有**监听 `::` 的服务都直接暴露（SSH、飞书网关等其他容器……）。Docker 官方文档：「Docker and ufw use firewall rules in ways that make them incompatible」，经 Docker 发布的端口「gets diverted before it goes through the ufw firewall settings」。本仓库的 Postgres 容器已经只绑 `127.0.0.1`（`scripts/db.sh`）。
   来源：https://docs.docker.com/engine/network/packet-filtering-firewalls/ （查于 2026-10-30）。
 - 【判断】由此：
   1. **固定接口标识用随机的 64 位值**，不要用 `::1` / `::1234` 这种低字节，也不要 EUI-64（2.3 节建议用固定 token 时同样适用）；

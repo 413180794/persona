@@ -248,7 +248,7 @@ func TestGatedToolGoesThroughTheGate(t *testing.T) {
 	n.mu.Lock()
 	n.larkCfg, n.larkCfgAt = proto.AssistantLark{Gates: []proto.CommandGate{g}}, time.Now().Add(time.Hour)
 	n.mu.Unlock()
-	const lark-connectorTool = "example_api"
+	const gatedTool = "example_api"
 	host := dialRuntime(t, n, assistantRuntimeHello())
 	sid := startedAssistant(t, n, host)
 
@@ -258,12 +258,12 @@ func TestGatedToolGoesThroughTheGate(t *testing.T) {
 	if err := host.peer.Call(context.Background(), "mcp.tools", map[string]any{"assistant": true}, &tools); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(toolList(tools.Tools), lark-connectorTool) {
+	if !strings.Contains(toolList(tools.Tools), gatedTool) {
 		t.Fatalf("tools %v", toolList(tools.Tools))
 	}
 	run := func(args ...string) proto.ToolResult {
 		var res proto.ToolResult
-		if err := host.peer.Call(context.Background(), "mcp.call", map[string]any{"name": lark-connectorTool, "args": map[string]any{"args": args}, "session_id": sid, "assistant": true}, &res); err != nil {
+		if err := host.peer.Call(context.Background(), "mcp.call", map[string]any{"name": gatedTool, "args": map[string]any{"args": args}, "session_id": sid, "assistant": true}, &res); err != nil {
 			t.Fatal(err)
 		}
 		return res
@@ -292,7 +292,7 @@ func TestGatedToolGoesThroughTheGate(t *testing.T) {
 	}
 	// Not the assistant's conversation: the gated tool is not run here (it goes to the hub, which has no such tool).
 	var res proto.ToolResult
-	if err := host.peer.Call(context.Background(), "mcp.call", map[string]any{"name": lark-connectorTool, "args": map[string]any{"args": []string{"GET", "/other"}}, "session_id": "session-other", "assistant": true}, &res); err != nil {
+	if err := host.peer.Call(context.Background(), "mcp.call", map[string]any{"name": gatedTool, "args": map[string]any{"args": []string{"GET", "/other"}}, "session_id": "session-other", "assistant": true}, &res); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(ran); strings.Contains(string(b), "/other") {

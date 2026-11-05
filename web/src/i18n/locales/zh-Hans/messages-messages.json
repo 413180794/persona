@@ -3,7 +3,7 @@
   "title": "消息",
   "off_title": "消息页没有打开",
   "off_hint": "在设置 › 连接器 › 飞书里打开「首页显示消息」，这个浏览器的侧边栏会多一个「消息」。",
-  "lark-connector_settings": "打开飞书设置",
+  "goto_lark_settings": "打开飞书设置",
   "no_lark_title": "hub 没有接入飞书消息",
   "no_lark_hint": "hub 装好提供飞书的扩展后，这里会列出全部私聊和群聊。",
   "back": "返回消息",

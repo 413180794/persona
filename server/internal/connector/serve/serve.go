@@ -237,6 +237,8 @@ const (
 	CodeNoCapability   = "no_capability"
 	CodeUnknownMethod  = "unknown_method"
 	CodeWrongProtocol  = "wrong_protocol"
+	// CodeRateLimited: tools.call / actions.do waits out a rate limit; data {retry_after} is how many seconds.
+	CodeRateLimited = "rate_limited"
 )
 
 // Build makes the connector once the hub has sent its configuration (hub.json's section for it); secrets is the

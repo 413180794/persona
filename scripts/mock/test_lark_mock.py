@@ -90,7 +90,7 @@ class LarkTopicGroupTests(unittest.TestCase):
         self.assertEqual([m["position"] for m in page["messages"] if m.get("sender_type") == "bot"], ["401", "402", "403"])
 
     def test_the_topic_group_has_recalled_and_edited_topics(self):
-        # 风灵月影 on topic cards: an edited topic with an old version, recalled topics kept and not kept by lark-connector, and
+        # 风灵月影 on topic cards: an edited topic with an old version, recalled topics kept and not kept by the Lark gateway, and
         # a recalled reply (kept) as the edited topic's newest.
         page = self.hub.get("/api/v1/lark/conversations/f4/messages?topic=1")
         by = {m["position"]: m for m in page["messages"]}

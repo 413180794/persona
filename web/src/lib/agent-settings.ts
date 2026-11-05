@@ -1,6 +1,6 @@
 // 设置 › Claude Code / Codex 设置 (the node's whitelist of ~/.claude/settings.json and ~/.codex/config.toml keys,
 // iOS ClaudeSettingsView) and 设置 › 连接器 › 邮箱's add form (iOS MailAccountForm, docs/mail.md): the pure part.
-import { t } from "../i18n";
+import { hasKey, t } from "../i18n";
 import type { Machine } from "./types";
 
 // ── agent settings ──
@@ -34,6 +34,34 @@ export const AGENT_TEXT: Record<AgentKind, { name: string; path: string; file: s
     footer: t("lib-agent-settings.codex_footer"),
   },
 };
+
+// Claude Code's options in plain words (#3599). The node sends a title and detail too (claudeconfig.go); the page's
+// language wins when the catalog has the key, so a key the web does not know yet still reads as the node wrote it.
+function catalogText(key: string, fallback: string): string {
+  return hasKey(key) ? t(key) : fallback;
+}
+
+/** What a row is called. */
+export function settingTitle(s: Pick<AgentSetting, "key" | "title">): string {
+  return catalogText(`lib-agent-settings.setting_${s.key}`, s.title);
+}
+
+/** What a row does, in a sentence. */
+export function settingDetail(s: Pick<AgentSetting, "key" | "detail">): string {
+  return catalogText(`lib-agent-settings.setting_${s.key}_detail`, s.detail);
+}
+
+// An option value's name: Claude Code's effort levels as the session menu calls them, the update channels by name.
+const OPTION_KEYS: Record<string, Record<string, string>> = {
+  effortLevel: { low: "lib-session-actions.effort_low", medium: "lib-session-actions.effort_medium", high: "lib-session-actions.effort_high", xhigh: "lib-session-actions.effort_xhigh", max: "lib-session-actions.effort_max" },
+  autoUpdatesChannel: { latest: "lib-agent-settings.channel_latest", stable: "lib-agent-settings.channel_stable" },
+};
+
+/** How an enum option reads; an option with no name (a new one, or another agent's) stays as written. */
+export function optionText(key: string, option: string): string {
+  const k = OPTION_KEYS[key]?.[option];
+  return k ? catalogText(k, option) : option;
+}
 
 /** The value in effect: what is set, else the default. */
 export function effective(s: AgentSetting): SettingValue {
@@ -76,11 +104,11 @@ export function applySummary(results: ApplyResult[]): { ok: boolean; text: strin
   return { ok: false, text: done ? t("lib-agent-settings.partly_applied", { done, failed: failed.length, why }) : t("lib-agent-settings.not_applied", { why }) };
 }
 
-/** How a value reads in a message: 开 / 关, the option, or 默认. */
-export function valueText(v: SettingValue): string {
+/** How a value reads in a message: 开 / 关, the option's name (given the setting's key), or 默认. */
+export function valueText(v: SettingValue, key?: string): string {
   if (v === null || v === undefined || v === "") return t("lib-agent-settings.value_default");
   if (typeof v === "boolean") return v ? t("lib-agent-settings.value_on") : t("lib-agent-settings.value_off");
-  return v;
+  return key ? optionText(key, v) : v;
 }
 
 // ── Claude Code › 屏蔽的配置目录 (GET /machines/{mid}/claude-dirs, docs/claude-integration.md「屏蔽配置目录」) ──

@@ -67,7 +67,7 @@ class ChatPinsFixture:
             return reply(dict(self.state, count=len(self.rows)))
         if self.state["offline"]: return fail("lark_pins_unavailable", "暂时无法加载 Pin 消息，请稍后重试", 503)
         if self.state["error"] == "hub": return reply(dict(error="not found"), 404)
-        if self.state["error"] == "upstream": return fail("lark_lark-connector_upgrade_required", "升级 lark-connector 后可使用 Pin 消息。请在 Hub 连接的 lark-connector 中检查更新。", 426)
+        if self.state["error"] == "upstream": return fail("lark_gateway_upgrade_required", "升级飞书网关后可使用 Pin 消息。请在 Hub 连接的飞书网关中检查更新。", 426)
         if self.state["error"] == "forbidden": return fail("lark_pin_forbidden", "没有权限查看或修改这条 Pin", 403)
         body = json.loads(h.last_body or b"{}") if h.command == "POST" else {}
         owner = body.get("account_id") or q.get("account_id", [self.state["account"]])[0]

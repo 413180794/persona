@@ -37,7 +37,7 @@ flowchart LR
   H -- "SSH" --> N2["personad node<br/>电脑 B"]
   N1 --> C1["herdr 里的<br/>Claude Code / Codex"]
   N2 --> C2["herdr 里的<br/>Claude Code / Codex"]
-  H --> X["飞书（lark-connector）<br/>邮箱（IMAP / SMTP）"]
+  H --> X["飞书<br/>邮箱（IMAP / SMTP）"]
 ```
 
 ## 2. 配对

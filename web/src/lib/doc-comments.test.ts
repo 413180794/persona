@@ -50,7 +50,7 @@ describe("client_id：重试不发两次", () => {
 
 describe("writeErrorText", () => {
   it("用 hub 的原话；不支持的文档说清楚", () => {
-    expect(writeErrorText(new ApiError(502, "lark-connector 未登录飞书", { error: "lark-connector 未登录飞书" }))).toBe("lark-connector 未登录飞书");
+    expect(writeErrorText(new ApiError(502, "飞书网关未登录飞书", { error: "飞书网关未登录飞书" }))).toBe("飞书网关未登录飞书");
     expect(writeErrorText(new ApiError(400, "x", { error: "x", code: "comment_unsupported" }))).toBe("这种文档不能这样评论");
     expect(writeErrorText(new TypeError("Failed to fetch"))).toBe("连不上 hub");
   });
@@ -105,7 +105,7 @@ describe("请求", () => {
   });
 
   it("写失败时抛出 hub 的话", async () => {
-    vi.stubGlobal("fetch", answer({ error: "lark-connector 未登录飞书" }, 502));
-    await expect(sendComment(URL1, ON_DOCUMENT, "好", [], "id5")).rejects.toThrow("lark-connector 未登录飞书");
+    vi.stubGlobal("fetch", answer({ error: "飞书网关未登录飞书" }, 502));
+    await expect(sendComment(URL1, ON_DOCUMENT, "好", [], "id5")).rejects.toThrow("飞书网关未登录飞书");
   });
 });

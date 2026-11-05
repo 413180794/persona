@@ -8,7 +8,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", inbox ? "mail" : "feishu", "-demo.on", "NO",
-            "-ui.oldLayout", "NO", "-integrations.lark-connector.enabled", "YES",
+            "-ui.oldLayout", "NO", "-integrations.lark.enabled", "YES",
             "-inbox.source", "", "-inbox.kind", "mention", "-openInboxFirst", "NO"]
         app.launchPinned()
         if !inbox {
@@ -46,7 +46,7 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         if let value = field.value as? String, !value.hasPrefix("回复 ") { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count)) }
         XCTAssertTrue((field.value as? String ?? "").isEmpty || field.value as? String == field.placeholderValue)
         field.typeText("Keep this private draft")
-        for (kind, text) in [("hub", "升级 Hub 后"), ("lark-connector", "升级 lark-connector 后"), ("authorization", "尚未开启手机加密")] {
+        for (kind, text) in [("hub", "升级 Hub 后"), ("gateway", "升级飞书网关后"), ("authorization", "尚未开启手机加密")] {
             try await resetMock(unavailable: kind)
             app.buttons["lark.encryption.mode"].tapCenter()
             app.buttons["lark.encryption.encrypted"].tapCenter()

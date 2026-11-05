@@ -18,6 +18,12 @@
 - 环检查要用完整候选图，预览后提交还要重查；检查和发布注册表状态必须串行，否则两个各自通过预览的安装可以并发闭环。旧环记录保留并诊断，允许修复和无关安装，不能删数据解决。
 - exporter 的初始化与变化事件都过滤未就绪的贡献；底层依赖、配置或密钥变化同样需要更新上层贡献所到达的 exporter，而不只是被直接修改扩展的导出目标。
 
+- 部署时按 `os` 猜架构会装错二进制，而且装完不检查能不能跑（2026-11-05，#3103）：配置里只有 `os`，`deploy.sh` 把它翻译成 darwin→arm64、其它→amd64，
+  于是漏写 `os` 的 Linux 机器和 Intel Mac 都拿到 `darwin-arm64`；远端只做 `cat >`，ssh 成功就打印 `installed`，那台机器的 node 起不来或者一直是旧版。
+  做法是编齐四个平台（linux / darwin × amd64 / arm64，和发布、Docker 镜像一致），配置里缺的 `os` / `arch` 直接问机器自己（`uname -s` / `uname -m`），
+  装完在目标机器上跑一次 `version` 自检；hub 的 `bin/nodes/` 也要四个平台都有，否则「重新部署」对别的平台只会说「hub 上没有 … 的 jarvisd」。
+  测试单独跑 `deploy.sh` 里的这个函数（`scripts/test/test_deploy_platform.py`），不要为它起假机器。
+
 - macOS 的 sandbox-exec 里，路径上的软链本身也要能读（2026-11-06）：扩展沙箱的 profile 拒绝读家目录、只放行包 / 数据 / 运行目录的真实路径，
   但 hub 用 `~/.persona/…`（软链到 `.jarvis`，或反过来）称呼它们。内核解析路径时要读软链 `~/.persona`，它在被拒绝的家目录里，于是 `execvp` 报
   `Operation not permitted`，经软链读写数据目录也失败；只把目录换成真实路径不够，参数、`HOME`、环境变量里的 socket 还是原路径。做法是把路上每个软链按
@@ -540,7 +546,7 @@ Windows 上 `git archive` 会按 `core.autocrlf` 导出 CRLF，传到 Linux 的�
 
 ## 装扩展慢：卡在下载，不是编译或启动（2026-11-06，#3277）
 
-在隔离的测试 hub 上实测装 lark-connector、github、codebase 等：落盘、写库、启动加起来不到 1 秒，几乎全部时间都在「预览」里的下载。
+在隔离的测试 hub 上实测装接飞书的扩展、github、codebase 等：落盘、写库、启动加起来不到 1 秒，几乎全部时间都在「预览」里的下载。
 线上 hub 的日志里 `catalog/preview` 有 1–5 分钟才 400 的：GitHub 市场的包从 Release 下（14–17 MB），hub 的进程没有代理，
 市场的 HTTP 客户端也不读 hub.json 的 `github.proxy`，直连 GitHub 时有时 2–3 秒，有时一直只来一半数据，等满 5 分钟的超时才失败。
 同一个包经代理稳定 1.6 秒。改成：市场读 GitHub 走 `github.proxy`；下载 30 秒没有新数据就停（`download_stalled`），不再等 5 分钟；

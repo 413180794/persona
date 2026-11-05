@@ -53,7 +53,7 @@
 - **零时间**：Go 的 `omitempty` 不省略 `time.Time`，没值的时间字段会是 `0001-01-01T00:00:00Z`（如 `seen_at`、`state_since`、`last_run`、`next_run`）。
   iOS 把早于 2000-01-01 的一律当空（`Date.realDate`，`ios/Shared/APIClient.swift:743-746`）。Android 解析器要同样处理。
 - 错误：`{"error":"…"}` + 4xx/5xx。node 返回带 code 的错误时 hub 回 **409** 并把 `code` 和附加字段平铺在顶层（`delivered`、`draft`、`clearable`…）；
-  机器离线 503；其他 node 错误 502（`http.go:253-274`）。飞书只读代理可能透传 lark-connector 的 `{"error":{"code","message"}}`（`APIClient.swift:49-61`）。
+  机器离线 503；其他 node 错误 502（`http.go:253-274`）。飞书只读代理可能透传飞书网关的 `{"error":{"code","message"}}`（`APIClient.swift:49-61`）。
   **未知路径 / 方法不匹配**时主 API 的 ServeMux 回的是 Go 默认纯文本（只有邮件子路由把 404/405 改写成 JSON，`server/internal/mail/http.go:28-55`），客户端要容忍非 JSON 错误体。
 - 请求 ID：每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制或 `-`），hub 沿用它记日志（`http.go:196-218`）。iOS 在 5xx 报错后面附「（请求 id）」。
 - 缓存：所有 API 响应 `Cache-Control: no-store`（`http.go:179-181`）；例外：会话图片 `private, max-age=31536000, immutable`（`http.go:355`），飞书表情 1 小时（`server/internal/hub/lark.go:163`）。
@@ -184,17 +184,17 @@
 | POST `/api/v1/inbox/refresh` | 立即采集，返回列表 |
 InboxItem 还有 protocol.md 没列的 `agent`（AI 分身的处理结果，`server/internal/extmgr/inbox.go:54-84`）。
 
-### 3.10 飞书代理（lark-connector）
+### 3.10 飞书代理（飞书网关）
 protocol.md 已列：conversations / pinned / labels / unread-count / flags / conversations/{id}/labels / settings / unread / messages（GET、POST）/ read / thread / media / messages/{id}/media / emojis / card-actions。
 代码里另有 **[未文档于 protocol.md]**（部分在 `docs/feishu.md`）：
 
 | 方法 路径 | 用途 |
 | --- | --- |
-| GET `/api/v1/lark/raw/{path...}` | lark-connector agent API 只读窗口（`docs/feishu.md` 提过）；JSON 里媒体路径已改写回 hub |
+| GET `/api/v1/lark/raw/{path...}` | 飞书网关 agent API 只读窗口（`docs/feishu.md` 提过）；JSON 里媒体路径已改写回 hub |
 | POST `/api/v1/lark/raw/{path...}` | 同上的 POST（body ≤1 MB；助手工具说明里只用于 `search/page`） |
 | GET `/api/v1/lark/reactions/quick` | `{keys}` 常用表情回应 |
 | POST `/api/v1/lark/messages/{id}/reactions` | `{key, remove?}` |
-| GET `/api/v1/lark/users/{id}?feed_id=` | 个人资料（lark-connector 原样 JSON） |
+| GET `/api/v1/lark/users/{id}?feed_id=` | 个人资料（飞书网关原样 JSON） |
 | POST `/api/v1/lark/users/{id}/chat` | → `{feed_id}` 打开单聊 |
 | GET `/api/v1/lark/messages/{id}/url-preview?url=` | 链接预览 |
 | GET `/api/v1/lark/moments/posts/{id}`、`…/comments` | 帖子 / 评论 |

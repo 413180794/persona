@@ -1,11 +1,11 @@
 {
   "title": "Message display",
   "anti_recall": "Keep recalled messages",
-  "anti_recall_hint": "Show what lark-connector kept of recalled messages, still marked Recalled. Content that was not kept cannot be restored.",
+  "anti_recall_hint": "Show what the Lark gateway kept of recalled messages, still marked Recalled. Content that was not kept cannot be restored.",
   "edit_history": "Edit history",
   "edit_history_hint": "Click Edited next to a message to see its kept earlier versions.",
   "reload": "Reload",
-  "shared": "Shared with lark-connector's web page for the hub's current Lark account. Only changes what is shown, not what is kept.",
+  "shared": "Shared with the Lark gateway's web page for the hub's current Lark account. Only changes what is shown, not what is kept.",
   "brave_climb": "",
   "brave_climb_hint": ""
 }

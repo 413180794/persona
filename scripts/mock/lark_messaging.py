@@ -8,7 +8,7 @@ import urllib.request
 import uuid
 
 SOURCE = "lark"
-EXTENSION = "lark-connector"
+EXTENSION = "larkext"
 CAPABILITIES = ["accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions",
                 "read_receipts", "chat_pins", "profiles", "url_previews", "posts", "edit_history", "translation"]
 MODES = [{"id": "sealed", "title": "加密消息", "icon": "lock", "description": "只有拥有密钥的成员能读到正文",
@@ -390,7 +390,7 @@ def event_of(ev):
 # The routes.
 
 class _Lark:
-    """The mock's own /api/v1/lark/…, called the way the extension calls lark-connector."""
+    """The mock's own /api/v1/lark/…, called the way the Lark extension calls its gateway."""
 
     def __init__(self, handler, account):
         port = handler.server.server_address[1]
@@ -740,7 +740,7 @@ def compose(handler, lark, feed, body):
     values = req.get("values") or {}
     status, st = lark.json("GET", "/encryption")
     if status != 200 or not st.get("configured"):
-        return handler.send_json({"error": "请先在 lark-connector 网页创建密钥库", "code": "unsupported"}, 409 if status == 200 else status)
+        return handler.send_json({"error": "请先在飞书网关的网页创建密钥库", "code": "unsupported"}, 409 if status == 200 else status)
     account_id = st.get("accountId", "")
     if st.get("locked"):
         if values.get("password"):
@@ -831,7 +831,7 @@ def settings_page(handler, body):
                 d = d2
             else:
                 toast = "设置已变化，请重新读取"
-    rows = [("anti_recall", "防撤回", "查看 lark-connector 已留存的撤回内容，保留「已撤回」标记。"),
+    rows = [("anti_recall", "防撤回", "查看飞书网关已留存的撤回内容，保留「已撤回」标记。"),
             ("show_edit_history", "编辑历史", "点击消息下方的「已编辑」，查看已留存的旧版本。"),
             ("brave_climb_codec", "", "")]
     items = []
@@ -839,7 +839,7 @@ def settings_page(handler, body):
         if key in d:
             items.append({"type": "row", "key": key, "title": title, "subtitle": sub, "value": "开" if d[key] else "关",
                           "action": {"id": "toggle:" + key}})
-    out = {"view": {"title": "风灵月影", "sections": [{"footer": "与 lark-connector 网页共用当前飞书账号的设置。", "items": items}]}}
+    out = {"view": {"title": "风灵月影", "sections": [{"footer": "与飞书网关的网页共用当前飞书账号的设置。", "items": items}]}}
     if toast:
         out["toast"] = toast
     return handler.send_json(out)

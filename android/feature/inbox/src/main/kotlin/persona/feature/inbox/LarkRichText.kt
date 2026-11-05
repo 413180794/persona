@@ -68,7 +68,7 @@ object LarkEmojiHelper {
     }
 }
 
-/** Ancestor chain block descriptor from lark-connector rich text metadata. */
+/** Ancestor chain block descriptor from the Lark gateway's rich text metadata. */
 data class LarkRichBlock(
     val id: String,
     val type: String,
@@ -195,7 +195,7 @@ object LarkMarkdown {
     }
 }
 
-/** Structured rich node tree for lark-connector messages. */
+/** Structured rich node tree for Lark gateway messages. */
 sealed interface LarkRichNode {
     data class Leaf(val part: LarkRawPart) : LarkRichNode
     data class Block(val block: LarkRichBlock, val children: List<LarkRichNode>) : LarkRichNode
@@ -386,7 +386,7 @@ fun LarkRichInlineText(
     )
 }
 
-/** Renders a tree of lark-connector rich blocks: headings, lists, quotes, code, paragraphs. */
+/** Renders a tree of the Lark gateway's rich blocks: headings, lists, quotes, code, paragraphs. */
 @Composable
 fun LarkRichBlockView(
     nodes: List<LarkRichNode>,

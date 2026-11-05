@@ -97,13 +97,13 @@ struct LarkMessageDisplayTests {
         let failure = APIError(status: 502, message: "signed out", fields: ["code": "lark_not_logged_in"])
         hub.on("GET", path) { _ in throw failure }
         await state.refresh(using: hub.client)
-        #expect(state.snapshot == nil && state.problem?.contains("重新登录 lark-connector") == true)
+        #expect(state.snapshot == nil && state.problem?.contains("重新登录飞书网关") == true)
         hub.on("GET", path, json: #"{"account_id":"a","anti_recall":true,"show_edit_history":true}"#)
         await state.refresh(using: hub.client)
         hub.on("POST", path) { _ in throw failure }
         await state.set("anti_recall", value: false, using: hub.client)
         #expect(!state.policy.antiRecall && !state.policy.showEditHistory)
-        #expect(state.problem?.contains("重新登录 lark-connector") == true)
+        #expect(state.problem?.contains("重新登录飞书网关") == true)
         #expect(hub.sent("POST", path).count == 1)
     }
 

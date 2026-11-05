@@ -23,7 +23,7 @@ type memoryOp struct {
 }
 
 type MemoryFile struct {
-	Name      string    `json:"name"` // file name, e.g. "lark-connector-access.md"
+	Name      string    `json:"name"` // file name, e.g. "lark-access.md"
 	Content   string    `json:"content"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

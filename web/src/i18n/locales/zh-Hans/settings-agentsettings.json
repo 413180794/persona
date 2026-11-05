@@ -21,5 +21,7 @@
   "push_all": "应用到所有在线机器",
   "others_hint_other": "另外 {count} 台",
   "no_others": "没有别的",
-  "unset": "未设置"
+  "unset": "未设置",
+  "key_hint": "配置项 {key}",
+  "copy_key": "复制配置项名"
 }

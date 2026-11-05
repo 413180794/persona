@@ -67,7 +67,7 @@ data class GoogleStart(
 @Serializable
 data class GoogleFinish(val state: String, val code: String? = null, val error: String? = null)
 
-/** `GET /api/v1/lark/status` (设置 › 连接器 › 飞书): whether the hub reaches lark-connector and who is signed in there. */
+/** `GET /api/v1/lark/status` (设置 › 连接器 › 飞书): whether the hub reaches the Lark gateway and who is signed in there. */
 @Serializable
 data class LarkStatus(
     val configured: Boolean = false,
@@ -126,7 +126,7 @@ data class ConnectorDataDeleted(
 
 /**
  * 设置 › 连接器 (docs/connectors.md, docs/mail.md): managing mail accounts, Google OAuth,
- * lark-connector Feishu connection status and accounts, and general hub connectors.
+ * Lark gateway Feishu connection status and accounts, and general hub connectors.
  */
 interface ConnectorsManagement {
     /** `GET /api/v1/connectors?all=1`. */
@@ -197,7 +197,7 @@ interface ConnectorsManagement {
     /** `POST /api/v1/mail/oauth/microsoft/finish`: the callback as it came (an error too: the hub says what to do). */
     suspend fun microsoftSignInFinish(finish: MicrosoftFinish): MailAccount = throw UnsupportedOperationException("Outlook sign-in unavailable")
 
-    // 设置 › 飞书 › 风灵月影 (iOS `LarkMessageDisplay`): shared with lark-connector's web for the signed-in account.
+    // 设置 › 飞书 › 风灵月影 (iOS `LarkMessageDisplay`): shared with the Lark gateway's web for the signed-in account.
 
     /** `GET /api/v1/lark/message-display`. */
     suspend fun larkMessageDisplay(): LarkMessageDisplay = throw UnsupportedOperationException("Message display unavailable")
@@ -241,7 +241,7 @@ data class MicrosoftFinish(
 )
 
 /**
- * 风灵月影 for the signed-in Feishu account: 防撤回 (a recalled message's kept words), 编辑历史 and lark-connector''s thread. */
+ * 风灵月影 for the signed-in Feishu account: 防撤回 (a recalled message's kept words), 编辑历史 and the Lark gateway''s thread. */
 @Serializable
 data class ConnectorThreadPerson(val id: String? = null, val name: String = "", val avatar: String? = null)
 

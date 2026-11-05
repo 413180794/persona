@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One topic of a Feishu topic group, drawn the way lark-connector draws a topic group (#1087): a card per topic with the
+/// One topic of a Feishu topic group, drawn the way the Lark gateway draws a topic group (#1087): a card per topic with the
 /// poster's avatar, name and time on top and the topic under them, folded behind 展开 past `Theme.Size.box320`, then
 /// its newest replies (`LarkTopicReplies`), its reactions and 表情回复 / 回复.
 /// A tap on the topic (not on its links or a card's buttons) or on its replies opens its thread; a long press has the
@@ -104,7 +104,7 @@ struct LarkTopicCard: View {
         }
     }
 
-    /// 表情回复 and 回复 under the topic (lark-connector's card footer), 已撤回 and 已编辑 at the other end. A recalled topic
+    /// 表情回复 and 回复 under the topic (the Lark gateway's card footer), 已撤回 and 已编辑 at the other end. A recalled topic
     /// has neither button; it says 已撤回 when its body shows.
     private var actions: some View {
         HStack(spacing: Theme.Space.s) {
@@ -166,7 +166,7 @@ private struct LarkTopicThreadOpening: Identifiable {
     var focus: Bool
 }
 
-/// A topic's newest two replies, a line each, under 查看更早 N 条回复 when there are more (lark-connector's topic card).
+/// A topic's newest two replies, a line each, under 查看更早 N 条回复 when there are more (the Lark gateway's topic card).
 /// Until they are read, the lines they will take are there already, as placeholders: a card does not grow when its
 /// replies come in (in a list anchored at its newest end, cards growing as they come on screen moved the cards around
 /// them on and off screen, again and again). A tap opens the thread. A view of its own: a read coming in redraws these
@@ -259,7 +259,7 @@ private struct LarkTopicContent: View {
     }
 }
 
-/// A topic taller than the fold shows its top under a fade with 展开 over it; open, 收起 under it (lark-connector folds a
+/// A topic taller than the fold shows its top under a fade with 展开 over it; open, 收起 under it (the Lark gateway folds a
 /// topic at 320 px). It is laid out no taller than the fold from the start and measured as it is, so a long topic never
 /// shows whole first and then jumps shut. What the fold hides takes no taps.
 private struct LarkTopicFold<Content: View>: View {

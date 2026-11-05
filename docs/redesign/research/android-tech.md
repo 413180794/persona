@@ -10,7 +10,7 @@
 
 - 手机只连自建 hub（Go，`jarvisd hub`，默认 `:18660`），HTTP + WebSocket，Bearer token（每台设备一个 `jd_…` token，手表是 `answer` 角色）。
   hub **常在内网 / VPN 里用明文 HTTP**。JSON 字段一律 snake_case，时间 RFC3339。
-- 四个 tab：Persona（无头 Claude 助手，逐字流式）/ 开发（Agents 列表 + 对话页）/ 收件箱（飞书 + 邮件，飞书卡片照 lark-connector 渲染、飞书文档原生阅读器）/ 设置。
+- 四个 tab：Persona（无头 Claude 助手，逐字流式）/ 开发（Agents 列表 + 对话页）/ 收件箱（飞书 + 邮件，飞书卡片照飞书网关渲染、飞书文档原生阅读器）/ 设置。
 - 对话页难点：倒置聊天列表（最新在偏移 0），几百步的工作过程每步都是独立懒加载行，轮次折叠（工作行、唤醒、recap、排队消息），
   Markdown（表格、代码块）、工具卡片、红绿 diff（横滑）、图片按需加载 + 全屏查看 / 编辑、长按操作条、分享卡片、子 Agent、
   提问 / 计划 / 授权 / 终端对话框交互面板、发送中气泡 + 离线 outbox（`client_msg_id` 去重，落盘）。

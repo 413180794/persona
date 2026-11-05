@@ -418,7 +418,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     // i18n-ignore: the request to the assistant is a prompt, written in one language (docs/i18n.md「提示词」)
     const chatTitle = chat.title || "飞书会话"; // i18n-ignore
     const where = ol ? `，在飞书账号 ${ol}：lark_messages 传 account=${ol}` : ""; // i18n-ignore: prompt
-    const prompt = `读取我飞书会话「${chatTitle}」（lark-connector feedId ${feed}${where}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`; // i18n-ignore: prompt
+    const prompt = `读取我飞书会话「${chatTitle}」（飞书网关 feedId ${feed}${where}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`; // i18n-ignore: prompt
     toast(t("inbox-larkthread.summarizing"), "ok");
     try {
       const r = await api<{ session: Session }>("/assistant/conversations", {
@@ -1285,7 +1285,7 @@ function Block({ p, mid }: { p: LarkPart; mid?: string }) {
     case "code":
       return <pre className="overflow-x-auto rounded-[8px] bg-inset px-3 py-2 font-mono text-[12px] leading-relaxed shadow-hairline">{p.text}</pre>;
     case "card": {
-      // Cards lark-connector summarises itself (merge-forward, group / contact cards, meetings, votes…), by their variant.
+      // Cards the Lark gateway summarises itself (merge-forward, group / contact cards, meetings, votes…), by their variant.
       if (isSummaryCard(meta)) return <LarkSummaryCard meta={meta} fallbackTitle={p.text ?? ""} renderParts={(parts) => <Parts parts={parts} />} />;
       const c = cardText(meta);
       return (

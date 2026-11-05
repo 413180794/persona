@@ -126,18 +126,18 @@ func TestParkedPaneShowingItsJob(t *testing.T) {
 	n, f, home := herdrNode(t)
 	cwd := home
 	bgTranscript(t, home, cwd, sidA, "lookup")
-	bgTranscript(t, home, cwd, sidB, "lark-connector lookup")
+	bgTranscript(t, home, cwd, sidB, "lark lookup")
 	writeClaudeProc(t, home, os.Getppid(), map[string]any{"sessionId": sidA, "cwd": cwd, "kind": "interactive",
 		"entrypoint": "cli", "status": "idle", "parkedJobId": sidB[:8]})
 	writeClaudeProc(t, home, os.Getpid(), map[string]any{"sessionId": sidB, "cwd": cwd, "kind": "bg", "entrypoint": "cli",
-		"status": "idle", "jobId": sidB[:8], "name": "lark-connector lookup"})
+		"status": "idle", "jobId": sidB[:8], "name": "lark lookup"})
 	shown := func(title string) map[string]proto.Session {
 		f.reply("session.snapshot", snapshot(nil, nil, []any{
 			claudeAgent(sidA, proto.StatusIdle, "w1:p4", "w1:t4", "w1", cwd, title)}, nil))
 		return byID(listSessions(t, n))
 	}
 
-	m := shown("lark-connector lookup")
+	m := shown("lark lookup")
 	if b := m[sidB]; b.PaneID != "w1:p4" || b.TabID != "w1:t4" || b.SourceKind == sourceClaudeBg || b.ReadOnlyReason != "" {
 		t.Errorf("job shown in the pane = %+v", b)
 	}

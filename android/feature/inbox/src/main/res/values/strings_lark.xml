@@ -22,7 +22,7 @@
     <string name="inbox_lark_brave_climb_decoded">Brave Climb · decoded</string>
     <string name="inbox_lark_brave_climb_placeholder">Brave Climb encoded message</string>
     <string name="inbox_lark_brave_climb_mode">Brave Climb code</string>
-    <string name="inbox_lark_brave_climb_off">Turn on Brave Climb code in lark-connector\'s settings first</string>
+    <string name="inbox_lark_brave_climb_off">Turn on Brave Climb code in the Lark gateway\'s settings first</string>
     <plurals name="inbox_lark_replies">
         <item quantity="one">%1$d reply</item>
         <item quantity="other">%1$d replies</item>
@@ -35,7 +35,7 @@
     <string name="inbox_lark_video">Video</string>
     <string name="inbox_lark_audio">Voice</string>
     <string name="inbox_lark_card">Card</string>
-    <string name="inbox_lark_cannot_open">Can\'t lark-connector. Make sure Lark is installed.</string>
+    <string name="inbox_lark_cannot_open">Can\'t launch Lark. Make sure Lark is installed.</string>
     <string name="inbox_lark_conversation">Lark chat</string>
     <string name="inbox_lark_recalled">Message recalled</string>
     <string name="inbox_lark_sticker">Sticker</string>

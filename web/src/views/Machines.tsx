@@ -6,7 +6,7 @@ import { bytes, stateOf } from "../lib/format";
 import { hubLabel, routeText } from "../lib/mesh";
 import { machineDeployment } from "../lib/machine-deploy";
 import { classifyConnection } from "../lib/node-health";
-import { href, onLinkClick } from "../lib/router";
+import { href, navigate, onLinkClick, type Route } from "../lib/router";
 import { useAgentSessions } from "../lib/sessions";
 import { useStore } from "../lib/store";
 import type { MachineMetrics, MetricPoint } from "../lib/types";
@@ -81,7 +81,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             const { expectedDisconnect } = machineDeployment(m);
             const connFailure = expectedDisconnect ? null : classifyConnection(m); // why it is offline, from the error text, and what to do
             return (
-              <section key={m.id} className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${i * 60}ms both` }}>
+              <section key={m.id} onClick={(e) => openFromCard(e, detail)} className="cursor-pointer overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${i * 60}ms both` }}>
                 <div className="flex items-start gap-3 px-4 pt-3.5">
                   <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[9px]", m.online ? "bg-field text-ink-2" : "bg-inset text-ink-3")}>
                     <Icon name="machine" size={16} />
@@ -138,6 +138,18 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       </div>
     </div>
   );
+}
+
+// Elements that keep their own click inside a card (the links, 重新连接, 部署 …).
+const INTERACTIVE = "a,button,input,select,textarea,label,summary,[role=button],[tabindex]";
+
+// A tap anywhere else on a machine's card opens its page (#3578): on a phone the 详情 link alone is a 48 × 17 target.
+// The card stays a plain section; the title link is what keyboards and screen readers use, so no control nests in another.
+function openFromCard(e: React.MouseEvent<HTMLElement>, to: Route) {
+  const own = e.target instanceof Element ? e.target.closest(INTERACTIVE) : null;
+  if (own && e.currentTarget.contains(own)) return;
+  if (e.button !== 0 || window.getSelection()?.toString()) return; // selecting the error text to copy it is not a tap
+  navigate(to);
 }
 
 function Stat({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {

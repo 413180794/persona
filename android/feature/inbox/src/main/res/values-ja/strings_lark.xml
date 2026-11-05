@@ -22,7 +22,7 @@
     <string name="inbox_lark_brave_climb_decoded">[removed] · デコード済み</string>
     <string name="inbox_lark_brave_climb_placeholder">[removed]コードのメッセージ</string>
     <string name="inbox_lark_brave_climb_mode">[removed]コード</string>
-    <string name="inbox_lark_brave_climb_off">先に lark-connector の設定で[removed]コードをオンにしてください</string>
+    <string name="inbox_lark_brave_climb_off">先に Lark ゲートウェイの設定で[removed]コードをオンにしてください</string>
     <plurals name="inbox_lark_replies">
         <item quantity="other">%1$d件の返信</item>
     </plurals>

@@ -241,8 +241,8 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.push = newPusher(cfg.dir, h.store, h.logf)
 	h.push.desktopOnline = h.desktopOnline
 	h.push.desktopOpen = h.desktopOpen
-	if cfg.Lark.lark-connectorConfigured() {
-		h.logf("hub.json lark.container / token / base_url are not read any more: Feishu through lark-connector is a plugin's now; set them in its settings (docs/feishu.md)")
+	if cfg.Lark.LegacyGatewayConfigured() {
+		h.logf("hub.json lark.container / token / base_url are not read any more: Feishu through a Lark gateway is an extension's now; set them in its settings (docs/feishu.md)")
 	}
 	h.push.hubID = h.hubID
 	h.push.userLang = h.userLang

@@ -285,7 +285,7 @@
     <string name="settings_row_mail">メール</string>
     <string name="settings_row_mail_subtitle">Gmail、Larkメール、その他のIMAP</string>
     <string name="settings_row_lark">Lark</string>
-    <string name="settings_row_lark_subtitle">lark-connectorの接続状態とアカウント</string>
+    <string name="settings_row_lark_subtitle">Lark ゲートウェイの接続状態とアカウント</string>
     <string name="settings_connectors_caption">Personaが読み取り、代わりに操作できるデータソースです。アシスタント、AI分身、エージェントはこれを使って予定の確認、メッセージの閲覧、メールの送信を行います。あなたの代わりに行う操作は、必ず先に確認します。</string>
     <string name="settings_section_appearance">外観</string>
     <string name="settings_section_about">情報</string>

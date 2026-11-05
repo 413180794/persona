@@ -253,5 +253,30 @@ func (h *Manager) assistantLark(ctx context.Context) (proto.AssistantLark, error
 		}
 		return connector.GateRules(h.cfg.ConnectorGate, id)
 	})
+	out.MCPServers = h.extensions.assistantMCPServers()
 	return out, nil
+}
+
+// assistantMCPServers are the enabled extensions' mcp_servers, the first of an id winning (by extension id).
+func (ps *extensions) assistantMCPServers() []proto.AssistantMCPServer {
+	var out []proto.AssistantMCPServer
+	if ps == nil {
+		return out
+	}
+	seen := map[string]bool{}
+	for _, p := range ps.reg.List() {
+		if !p.Record.Enabled || p.Problem != "" {
+			continue
+		}
+		for _, m := range p.Manifest.MCPServers() {
+			if seen[m.ID] {
+				ps.logf("plugin %s: mcp server %s: another extension has it already", p.Record.ID, m.ID)
+				continue
+			}
+			seen[m.ID] = true
+			out = append(out, proto.AssistantMCPServer{Plugin: p.Record.ID, ID: m.ID, Command: m.Command, Env: m.Env,
+				Args: m.Args, Requires: m.Requires, Allow: m.Allow, Deny: m.Deny})
+		}
+	}
+	return out
 }

@@ -31,7 +31,7 @@ export interface DocInfo {
   comments?: number;
 }
 
-/** A failed read: lark-connector's `{"error":{"code"}}` or the hub's `{"error":"…"}`. */
+/** A failed read: the Lark gateway's `{"error":{"code"}}` or the hub's `{"error":"…"}`. */
 export class DocError extends Error {
   status: number;
   code?: string;
@@ -74,8 +74,8 @@ export function docErrorText(status: number, code?: string, raw?: string): strin
     case 502:
     case 503:
     case 504:
-      // i18n-ignore: matches the hub / lark-connector error text
-      return /lark|lark-connector|飞书/i.test(text) ? t("link-feishu-doc.lark_unreachable") : t("link-feishu-doc.lark_unavailable");
+      // i18n-ignore: matches the hub / Lark gateway error text
+      return /lark|飞书/i.test(text) ? t("link-feishu-doc.lark_unreachable") : t("link-feishu-doc.lark_unavailable");
   }
   return code || text || `HTTP ${status}`;
 }
@@ -83,7 +83,7 @@ export function docErrorText(status: number, code?: string, raw?: string): strin
 export function docErrorFromBody(status: number, body: Record<string, unknown>): DocError {
   const e = body.error;
   const obj = e && typeof e === "object" ? (e as { code?: unknown; message?: unknown }) : undefined;
-  // lark-connector: {"error":{"code","message"}}; the hub's own errors: {"error":"…","code":<its generic code>}
+  // The Lark gateway: {"error":{"code","message"}}; the hub's own errors: {"error":"…","code":<its generic code>}
   const code = typeof obj?.code === "string" ? obj.code : typeof e === "string" && /^[A-Z][A-Z_]+$/.test(e) ? e : undefined;
   const raw = typeof e === "string" ? e : typeof obj?.message === "string" ? obj.message : undefined;
   return new DocError(status, code, docErrorText(status, code, raw));
@@ -91,7 +91,7 @@ export function docErrorFromBody(status: number, body: Record<string, unknown>):
 
 export type Get = (path: string) => Promise<Record<string, unknown>>;
 
-// Through the hub's read-only lark-connector window. The token is passed explicitly: an lark-connector 401 (Feishu signed out)
+// Through the hub's read-only Lark gateway window. The token is passed explicitly: a Lark gateway 401 (Feishu signed out)
 // must not sign this browser out of the hub (api() does that on any 401 when it picks the token itself).
 const hubGet: Get = async (path) => {
   try {
@@ -135,7 +135,7 @@ export async function readDoc(url: string, title: string | undefined, get: Get =
         const name = (typeof r.title === "string" && r.title) || title || DOC_LABEL[kind];
         return { kind: "markdown", title: name, markdown: r.markdown, copy: bool((r.authority as Authority | undefined)?.copy, true), partial: r.partial === true };
       }
-      // an lark-connector (or the mock hub) that answers with the tree anyway: no second request
+      // a Lark gateway (or the mock hub) that answers with the tree anyway: no second request
       if (r.content && typeof r.content === "object") return fromTree(r, url, title);
     } catch (e) {
       if (!(e instanceof DocError && (e.code === "DOCUMENT_EXPORT_FORBIDDEN" || e.code === "DOCUMENT_FORMAT_UNSUPPORTED" || e.status === 422))) throw e;
@@ -164,9 +164,9 @@ export async function readInfo(url: string, get: Get = hubGet): Promise<DocInfo>
 export const BR = "\u2028";
 
 /**
- * lark-connector's export as the panel shows it (FeishuDocsMarkdownExport.prepare):
+ * The Lark gateway's export as the panel shows it (FeishuDocsMarkdownExport.prepare):
  * - drops the leading `# Title` and `[Source](<url>)` lines (the panel draws its own title),
- * - points media at the hub (`http://<lark-connector>/api/documents/…` → `/api/v1/lark/raw/documents/…`), with the token
+ * - points media at the hub (`http://<lark-gateway>/api/documents/…` → `/api/v1/lark/raw/documents/…`), with the token
  *   an <img> cannot send as a header,
  * - turns `<br>` (table cells, mostly) into breaks; code is left alone.
  */
@@ -249,7 +249,7 @@ export function plainText(n: DocNode): string {
   return (n.content ?? []).map(plainText).join("");
 }
 
-/** Media under the hub (`/api/v1/…`) needs the token on the URL; an lark-connector path is moved under the hub first. */
+/** Media under the hub (`/api/v1/…`) needs the token on the URL; a Lark gateway path is moved under the hub first. */
 export function mediaURL(src: string, token = getToken()): string {
   const u = src.replace(/^https?:\/\/[A-Za-z0-9.-]+(:\d+)?\/api\/(?!v1\/)/, "/api/v1/lark/raw/");
   if (!u.startsWith("/api/v1/")) return u;

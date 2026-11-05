@@ -108,14 +108,14 @@ func TestAdminExtensionPathsOldAndNew(t *testing.T) {
 
 func TestLegacyRoute(t *testing.T) {
 	for path, want := range map[string]string{
-		"/api/v1/plugins":                        "/api/v1/plugins",
-		"/api/v1/plugins/":                       "/api/v1/plugins",
-		"/api/v1/plugins/-/markets":              "/api/v1/plugins/-/markets",
-		"/api/v1/plugins/-/markets/abc/refresh":  "/api/v1/plugins/-/markets/…",
-		"/api/v1/plugins/voice/ws":               "/api/v1/plugins/{id}/…",
-		"/api/v1/plugins/lark-connector/-/":            "/api/v1/plugins/{id}/-",
-		"/api/v1/plugins/lark-connector/-/secrets/key": "/api/v1/plugins/{id}/-/secrets/…",
-		"/api/v1/plugins/lark-connector":               "/api/v1/plugins/{id}",
+		"/api/v1/plugins":                       "/api/v1/plugins",
+		"/api/v1/plugins/":                      "/api/v1/plugins",
+		"/api/v1/plugins/-/markets":             "/api/v1/plugins/-/markets",
+		"/api/v1/plugins/-/markets/abc/refresh": "/api/v1/plugins/-/markets/…",
+		"/api/v1/plugins/voice/ws":              "/api/v1/plugins/{id}/…",
+		"/api/v1/plugins/example/-/":            "/api/v1/plugins/{id}/-",
+		"/api/v1/plugins/example/-/secrets/key": "/api/v1/plugins/{id}/-/secrets/…",
+		"/api/v1/plugins/example":               "/api/v1/plugins/{id}",
 	} {
 		if got := legacyRoute(path, "/api/v1/plugins"); got != want {
 			t.Errorf("%s: %s, want %s", path, got, want)

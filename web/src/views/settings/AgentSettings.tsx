@@ -8,7 +8,10 @@ import {
   applySummary,
   effective,
   isUnset,
+  optionText,
   pickMachine,
+  settingDetail,
+  settingTitle,
   textValue,
   valueText,
   withValue,
@@ -22,7 +25,7 @@ import { t } from "../../i18n";
 import { machineWithHub } from "../../lib/mesh";
 import { composing } from "../../lib/send-history";
 import { useStore } from "../../lib/store";
-import { Button, cx, EASE, IconButton, Loading, Menu, Spinner, toast, useMenu } from "../../ui/atoms";
+import { Button, copyText, cx, EASE, IconButton, Loading, Menu, Spinner, toast, useMenu } from "../../ui/atoms";
 import { ClaudeDirs } from "./ClaudeDirs";
 import { Group, Switch } from "./SettingsParts";
 
@@ -95,7 +98,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
     );
     setBusy(null);
     const sum = applySummary(results);
-    toast(sum.ok ? t("settings-agentsettings.toast_value", { title: s.title, value: valueText(value), summary: sum.text }) : t("settings-agentsettings.toast_failed", { title: s.title, summary: sum.text }), sum.ok ? "ok" : "error");
+    toast(sum.ok ? t("settings-agentsettings.toast_value", { title: settingTitle(s), value: valueText(value, s.key), summary: sum.text }) : t("settings-agentsettings.toast_failed", { title: settingTitle(s), summary: sum.text }), sum.ok ? "ok" : "error");
   };
 
   // ⋯ › 应用到所有在线机器: this computer's value (unset = the default) on every other online one.
@@ -113,7 +116,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
     );
     setBusy(null);
     const sum = applySummary(results);
-    toast(sum.ok ? t("settings-agentsettings.pushed_to_others", { title: s.title, value: valueText(s.value ?? null), count: results.length }) : t("settings-agentsettings.toast_failed", { title: s.title, summary: sum.text }), sum.ok ? "ok" : "error");
+    toast(sum.ok ? t("settings-agentsettings.pushed_to_others", { title: settingTitle(s), value: valueText(s.value ?? null, s.key), count: results.length }) : t("settings-agentsettings.toast_failed", { title: settingTitle(s), summary: sum.text }), sum.ok ? "ok" : "error");
   };
 
   if (!online.length) {
@@ -175,33 +178,35 @@ function SettingRow({ s, i, busy, others, onChange, onPushAll }: { s: AgentSetti
   const menu = useMenu();
   const v = effective(s);
   const unset = isUnset(s);
+  const title = settingTitle(s);
+  const detail = settingDetail(s);
   return (
     <div className="flex items-center gap-3 px-4 py-2.5" style={{ animation: `fade-up 320ms ${EASE} ${Math.min(i, 8) * 30}ms both` }}>
-      <div className="min-w-0 flex-1">
+      {/* The settings-file key only on hover and in ⋯ (#3599): the row says what the option does. */}
+      <div className="min-w-0 flex-1" title={t("settings-agentsettings.key_hint", { key: s.key })}>
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-[13px] text-ink">{s.title}</span>
+          <span className="truncate text-[13px] text-ink">{title}</span>
           {unset && <span className="shrink-0 text-[11px] text-ink-3">{t("settings-agentsettings.default")}</span>}
-          <span className="hidden truncate font-mono text-[10.5px] text-ink-3 sm:inline">{s.key}</span>
         </div>
-        {s.detail && <div className="mt-0.5 text-[11.5px] leading-snug text-ink-3">{s.detail}</div>}
+        {detail && <div className="mt-0.5 text-[11.5px] leading-snug text-ink-3">{detail}</div>}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         {busy && <Spinner />}
         {s.type === "bool" ? (
-          <Switch on={v === true} onChange={(on) => onChange(on)} disabled={busy} label={s.title} />
+          <Switch on={v === true} onChange={(on) => onChange(on)} disabled={busy} label={title} />
         ) : s.type === "enum" ? (
-          <select value={typeof v === "string" ? v : ""} disabled={busy} onChange={(e) => onChange(e.target.value)} className={cx(controlClass, "max-w-[180px]")} aria-label={s.title}>
+          <select value={typeof v === "string" ? v : ""} disabled={busy} onChange={(e) => onChange(e.target.value)} className={cx(controlClass, "max-w-[180px]")} aria-label={title}>
             {typeof v !== "string" && <option value="">{t("settings-agentsettings.unset_option")}</option>}
             {(s.options ?? []).map((o) => (
               <option key={o} value={o}>
-                {o === s.default ? t("settings-agentsettings.option_default", { option: o }) : o}
+                {o === s.default ? t("settings-agentsettings.option_default", { option: optionText(s.key, o) }) : optionText(s.key, o)}
               </option>
             ))}
           </select>
         ) : (
-          <TextSetting s={s} disabled={busy} onSave={onChange} />
+          <TextSetting s={s} label={title} disabled={busy} onSave={onChange} />
         )}
-        <IconButton icon="more" label={t("settings-agentsettings.more", { title: s.title })} onClick={menu.open} active={!!menu.anchor} />
+        <IconButton icon="more" label={t("settings-agentsettings.more", { title })} onClick={menu.open} active={!!menu.anchor} />
         {menu.anchor && (
           <Menu
             anchor={menu.anchor}
@@ -209,8 +214,9 @@ function SettingRow({ s, i, busy, others, onChange, onPushAll }: { s: AgentSetti
             align="right"
             width={220}
             items={[
-              { key: "reset", label: t("settings-agentsettings.reset"), hint: s.default !== undefined && s.default !== "" ? valueText(s.default ?? null) : undefined, icon: "retry", disabled: unset || busy, onSelect: () => onChange(null) },
+              { key: "reset", label: t("settings-agentsettings.reset"), hint: s.default !== undefined && s.default !== "" ? valueText(s.default ?? null, s.key) : undefined, icon: "retry", disabled: unset || busy, onSelect: () => onChange(null) },
               { key: "all", label: t("settings-agentsettings.push_all"), hint: others > 0 ? t("settings-agentsettings.others_hint", { count: others }) : t("settings-agentsettings.no_others"), icon: "machine", disabled: others < 1 || busy, onSelect: onPushAll },
+              { key: "key", label: t("settings-agentsettings.copy_key"), hint: s.key, icon: "copy", divider: true, onSelect: () => void copyText(s.key) },
             ]}
           />
         )}
@@ -220,7 +226,7 @@ function SettingRow({ s, i, busy, others, onChange, onPushAll }: { s: AgentSetti
 }
 
 // A text option: saved on Enter or when the field loses focus with a change; Esc puts the saved value back.
-function TextSetting({ s, disabled, onSave }: { s: AgentSetting; disabled: boolean; onSave: (v: string | null) => void }) {
+function TextSetting({ s, label, disabled, onSave }: { s: AgentSetting; label: string; disabled: boolean; onSave: (v: string | null) => void }) {
   const saved = typeof s.value === "string" ? s.value : "";
   const [text, setText] = useState(saved);
   useEffect(() => setText(saved), [saved]);
@@ -241,7 +247,7 @@ function TextSetting({ s, disabled, onSave }: { s: AgentSetting; disabled: boole
       placeholder={typeof s.default === "string" && s.default ? s.default : t("settings-agentsettings.unset")}
       spellCheck={false}
       autoComplete="off"
-      aria-label={s.title}
+      aria-label={label}
       className={cx(controlClass, "w-[180px] placeholder:text-ink-3")}
     />
   );

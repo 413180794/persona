@@ -144,7 +144,7 @@ describe("hub features", () => {
     expect(hubHas(["terminal_stream", "lark"], "lark")).toBe(true);
   });
 
-  it("has Feishu through lark-connector only with lark, as before while the hub has not said", () => {
+  it("has Feishu through the Lark gateway only with lark, as before while the hub has not said", () => {
     expect(larkOn({ features: [] })).toBe(true);
     expect(larkOn({ features: ["plugins", "lark_attachments", "lark_native_encryption"] })).toBe(false);
     expect(larkOn({ features: ["plugins", "lark", "lark_moments"] })).toBe(true);

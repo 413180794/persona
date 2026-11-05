@@ -34,7 +34,7 @@ import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
 import { agentCommands } from "../../lib/composer-commands";
 import { PendingCards } from "./Interactions";
 import { FailureNote, showsFailureNote } from "./FailureNote";
-import { DOCK_MAX, turnStart } from "./dock";
+import { AWAIT_MS, awaitingTurn, DOCK_MAX, turnStart } from "./dock";
 import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
 import { ContextMeter } from "./ContextMeter";
 import { NARROW, PHONE, SHORT, useFinePointer, useMedia } from "../../lib/viewport";
@@ -180,7 +180,22 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const outgoing = shownPending.length + outbox.filter((e) => e.state !== "failed").length;
   const persona = usePersona();
   const state = session ? stateOf(session) : "unknown";
-  const working = state === "working" || Boolean(tr.streaming) || outgoing > 0;
+  // the message is in, the hub has not said working yet (#3654): the live row covers that wait too
+  const segs = useMemo(() => segments(tr.items), [tr.items]);
+  const lastSeg = segs[segs.length - 1];
+  const [awaitNow, setAwaitNow] = useState(() => Date.now());
+  const awaiting = !readOnly && awaitingTurn(lastSeg, state, awaitNow);
+  useEffect(() => {
+    // draw again when the wait runs out, so a message nobody picks up stops looking worked on
+    const at = lastSeg?.user?.ts ? Date.parse(lastSeg.user.ts) : NaN;
+    if (Number.isNaN(at)) return;
+    setAwaitNow(Date.now());
+    const left = at + AWAIT_MS - Date.now();
+    if (left <= 0) return;
+    const timer = window.setTimeout(() => setAwaitNow(Date.now()), left + 10);
+    return () => clearTimeout(timer);
+  }, [lastSeg, state]);
+  const working = state === "working" || Boolean(tr.streaming) || outgoing > 0 || awaiting;
   // still starting only until the conversation has anything in it: the flag the caller passes may outlive the start
   const starting = Boolean(launching) && !tr.items.length && !tr.streaming && state !== "working";
 
@@ -205,7 +220,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     return () => document.removeEventListener("visibilitychange", hide);
   }, []);
 
-  const segs = useMemo(() => segments(tr.items), [tr.items]);
 
   // what the messages' menus, the image viewer and the @ menu read from this chat (chat-actions.ts)
   const items = useRef(tr.items);
@@ -732,7 +746,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const planPill = plan && planOut && (lastLive || !planProgress(plan.todos).allDone) ? (
     <PlanPill todos={plan.todos} onClick={() => scroller.current?.querySelector(`[data-plan-id="${CSS.escape(plan.id)}"]`)?.scrollIntoView({ block: "center", behavior: scrollBehavior() })} />
   ) : null;
-  const running = session && !assistant ? <RunningStatusBar mid={mid} sid={sid} working={state === "working"} startedAt={runStart} /> : null;
+  // Persona's own chats too (#3654), and from the moment the message is in, not from the hub's next push
+  const running = session ? <RunningStatusBar mid={mid} sid={sid} working={state === "working" || awaiting} startedAt={runStart} /> : null;
   const queue = session && queued.length > 0 ? <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} compact={short} /> : null;
   // with the plan's pill showing, 跳到底部 goes beside it (over the chat, they hid each other)
   const jumpInDock = Boolean(planPill) && !readOnly;

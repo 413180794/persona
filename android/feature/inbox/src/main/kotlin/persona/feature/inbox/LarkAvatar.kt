@@ -28,7 +28,7 @@ import persona.core.designsystem.JAvatar
 internal const val LarkAvatarPixels = 144
 
 /**
- * [ref] at the hub's thumbnail size (lark-connector's steps of 24 px), as iOS asks for it; a URL not on the hub, or one that
+ * [ref] at the hub's thumbnail size (the Lark gateway's steps of 24 px), as iOS asks for it; a URL not on the hub, or one that
  * already names a size, is left as it is.
  */
 internal fun larkAvatarRef(ref: String): String =

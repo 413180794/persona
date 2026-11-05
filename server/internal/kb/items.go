@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// ItemSource lists documents, meetings and calendar events (Feishu through lark-connector).
+// ItemSource lists documents, meetings and calendar events (Feishu through the Lark extension).
 type ItemSource interface {
 	Items(ctx context.Context) ([]Item, error)
 	// DocTitle looks up a document's title by its link ("" when it cannot).

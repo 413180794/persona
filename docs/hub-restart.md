@@ -31,7 +31,7 @@
 | 进行中的 HTTP 请求 | `Shutdown` 最多等 2 s，超过就强关；这 1.3 s 里新发的请求被拒绝 | `public.go` 的 `serveHTTP` |
 | 各台电脑的 node | hub 的 ctx 一取消就杀掉 `jarvisd node --stdio` / `ssh` 子进程（SIGKILL，`devices/machine.go` 的 `open` 里 `WaitDelay` 2 s），**同时**把机器标成离线、广播 `machines`、结束这台机器上不可续的交互（`devices/conn.go` 的 `detach`），这些广播客户端在被断开前就收到了 | `devices/machine.go` 的 `command`、`open` |
 | 本机 node | 是 hub 的子进程（`node --stdio`），和 hub 一起被 systemd 的 cgroup 杀掉 | `devices/machine.go` 的 `command`（`local` 那支） |
-| 插件（lark-connector 插件、removed 等） | hub 的子进程（stdio RPC），随 hub 的 cgroup 被杀，新 hub 再拉起；登录态在插件自己的目录里，重启只丢 hub 侧的会话和就绪状态 | `extension/host/host.go` 的 `spawn` |
+| 插件（接飞书的扩展、removed 等） | hub 的子进程（stdio RPC），随 hub 的 cgroup 被杀，新 hub 再拉起；登录态在插件自己的目录里，重启只丢 hub 侧的会话和就绪状态 | `extension/host/host.go` 的 `spawn` |
 | 连接器程序（telegram、wechat） | 同上，退避 5 s 起 | `connector/proc/proc.go` 的 `Conn.Run`（`restartFirst`） |
 | jarvis-link（kind link 的电脑） | 收到 1001，1–60 s 指数退避重连，状态文字「hub 重启了」 | `link/client.go` 的 `backoff`、`summary` |
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the hub offers of Feishu through lark-connector (#1530). That path is a plugin's now: the hub has
+/// What the hub offers of Feishu through the Lark gateway (#1530). That path is a plugin's now: the hub has
 /// `/api/v1/lark/…` only while the plugin is installed, and the plugin adds `lark` (the 消息 page, the chat views, the
 /// native readers of Feishu documents and company-feed posts, every `/api/v1/lark/…` route) and `lark_moments` (the
 /// company feed) to the hello's features. Without them the app shows nothing that needs those routes: Feishu links
@@ -44,6 +44,6 @@ nonisolated struct LarkFeatures: Hashable, Sendable {
 }
 
 extension AppModel {
-    /// What the hub-level group's hub offers of Feishu through lark-connector (`LarkFeatures`).
+    /// What the hub-level group's hub offers of Feishu through the Lark gateway (`LarkFeatures`).
     var larkFeatures: LarkFeatures { LarkFeatures(hub: hubFeatures) }
 }

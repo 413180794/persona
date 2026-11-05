@@ -7,7 +7,7 @@ import Testing
 /// 重试 when the plugin failed), and 在会话里看 (persona://inbox/<id>/source) back to today's body.
 @MainActor struct InboxItemSlotTests {
     private static let list = #"""
-    {"ui":[{"plugin":"lark-connector","plugin_name":"飞书（lark-connector）","id":"event","title":"事件","placement":"inbox_item","size":"full",
+    {"ui":[{"plugin":"larkext","plugin_name":"飞书","id":"event","title":"事件","placement":"inbox_item","size":"full",
             "connector":"lark"},
            {"plugin":"other","id":"nowhere","title":"没有连接器","placement":"inbox_item"},
            {"plugin":"example-gateway","id":"usage","title":"用量","placement":"nav_page"}]}
@@ -47,7 +47,7 @@ import Testing
         #expect(!s.plain(lark) && !s.plain(mail), "nothing known yet: an item waits for the list")
         await s.reload(for: "https://hub-a.example")
         #expect(s.places?.map(\.id) == ["event"], "only inbox_item contributions that name their connector")
-        #expect(s.place(for: "lark")?.plugin == "lark-connector" && s.place(for: "mail") == nil)
+        #expect(s.place(for: "lark")?.plugin == "larkext" && s.place(for: "mail") == nil)
         #expect(!s.plain(lark) && s.plain(mail))
         #expect(InboxItemSlotModel(item: mail, slots: s).phase == .plain, "known not to be a plugin's: no spinner first")
         #expect(InboxItemSlotModel(item: lark, slots: s).phase == .asking)
@@ -68,7 +68,7 @@ import Testing
         // Opened at launch, before the hub's hello: not settled as today's detail for want of its features.
         let hub = FakeHub()
         listing(hub)
-        hub.on("POST", "/api/v1/plugins/lark-connector/-/ui/event", json: Self.event)
+        hub.on("POST", "/api/v1/plugins/larkext/-/ui/event", json: Self.event)
         let s = slots(hub, features: [])
         let slot = InboxItemSlotModel(item: try item("lark:F1:1051", source: "lark"), slots: s, deps: .init(api: { hub.client }))
         #expect(slot.phase == .asking)
@@ -100,7 +100,7 @@ import Testing
         let hub = FakeHub()
         listing(hub)
         var bodies: [JSONValue] = []
-        hub.on("POST", "/api/v1/plugins/lark-connector/-/ui/event") { req in
+        hub.on("POST", "/api/v1/plugins/larkext/-/ui/event") { req in
             bodies.append(try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data()))
             if bodies.last?["action"] == .string("reply") { return Data(#"{"toast":"已回复"}"#.utf8) }
             return Data(Self.event.utf8)
@@ -140,7 +140,7 @@ import Testing
                         APIError(status: 404, message: "no such item", fields: ["code": "not_found"])] {
             let hub = FakeHub()
             listing(hub)
-            hub.on("POST", "/api/v1/plugins/lark-connector/-/ui/event") { _ in throw refusal }
+            hub.on("POST", "/api/v1/plugins/larkext/-/ui/event") { _ in throw refusal }
             let slot = InboxItemSlotModel(item: try item("lark:F1:1051", source: "lark"), slots: slots(hub),
                                           deps: .init(api: { hub.client }))
             await slot.start()
@@ -155,20 +155,20 @@ import Testing
                         APIError(status: 0, message: "连不上 hub")] {
             let hub = FakeHub()
             listing(hub)
-            hub.on("POST", "/api/v1/plugins/lark-connector/-/ui/event") { _ in throw failure }
+            hub.on("POST", "/api/v1/plugins/larkext/-/ui/event") { _ in throw failure }
             let slot = InboxItemSlotModel(item: try item("lark:F1:1051", source: "lark"), slots: slots(hub),
                                           deps: .init(api: { hub.client }))
             await slot.start()
-            #expect(slot.phase == .plain && slot.failure == failure.message && slot.place?.pluginName == "飞书（lark-connector）")
+            #expect(slot.phase == .plain && slot.failure == failure.message && slot.place?.pluginName == "飞书")
 
             // 重试 once the plugin is back: its page.
-            hub.on("POST", "/api/v1/plugins/lark-connector/-/ui/event", json: Self.event)
+            hub.on("POST", "/api/v1/plugins/larkext/-/ui/event", json: Self.event)
             await slot.retry()
             #expect(slot.phase == .plugin && slot.failure == nil && slot.page?.view != nil)
         }
         let hub = FakeHub()
         listing(hub)
-        hub.on("POST", "/api/v1/plugins/lark-connector/-/ui/event", json: #"{}"#)
+        hub.on("POST", "/api/v1/plugins/larkext/-/ui/event", json: #"{}"#)
         let slot = InboxItemSlotModel(item: try item("lark:F1:1051", source: "lark"), slots: slots(hub), deps: .init(api: { hub.client }))
         await slot.start()
         #expect(slot.phase == .plain && slot.failure != nil, "no view in the answer: the plugin drew nothing")
@@ -194,7 +194,7 @@ import Testing
     @Test func openInChatShowsTheItemsOwnSource() async throws {
         let hub = FakeHub()
         listing(hub)
-        hub.on("POST", "/api/v1/plugins/lark-connector/-/ui/event") { req in
+        hub.on("POST", "/api/v1/plugins/larkext/-/ui/event") { req in
             let b = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data())
             switch b["action"]?.string {
             case "open": return Data(#"{"open_url":"persona://inbox/lark:F1:1051/source"}"#.utf8)

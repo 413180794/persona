@@ -56,7 +56,7 @@ import java.io.File
 class InboxItemShotsTest {
     @get:Rule val rule = createComposeRule()
 
-    private val route = InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审")
+    private val route = InboxItemUiRoute("lark:F1:1051", "larkext", "event", "周四的评审")
 
     private class EventExtension : ExtensionApiStub() {
         override suspend fun renderUi(extension: String, ui: String, context: ExtensionUiContext?, state: String?) = ExtensionInboxItemTest.eventView

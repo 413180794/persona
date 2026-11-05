@@ -147,7 +147,7 @@ function deltaOn(): boolean {
 }
 
 /**
- * Feishu through lark-connector (feature `lark`, which an extension brings): /api/v1/lark/…, the 消息 page, the 飞书 settings,
+ * Feishu through the Lark gateway (feature `lark`, which an extension brings): /api/v1/lark/…, the 消息 page, the 飞书 settings,
  * the side panel's readers for Feishu documents and 公司圈 posts. Without it those links are ordinary links.
  */
 export const LARK_FEATURE = "lark";

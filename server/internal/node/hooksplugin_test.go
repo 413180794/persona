@@ -46,7 +46,7 @@ func TestHooksPluginsCarryTheSettingsHooks(t *testing.T) {
 			t.Errorf("%s: the plugin's hooks %v, the settings' %v", kind, inPlugin, inSettings)
 		}
 	}
-	// The assistant's have the lark-connector gate on Bash; the agents' do not.
+	// The assistant's have the Feishu gate on Bash; the agents' do not.
 	bash := func(kind string) bool {
 		pre := readSettings(t, filepath.Join(n.dir, kind+"-hooks", "hooks", "hooks.json"))["hooks"].(map[string]any)["PreToolUse"].([]any)
 		return slices.ContainsFunc(pre, func(m any) bool { return m.(map[string]any)["matcher"] == "Bash" })

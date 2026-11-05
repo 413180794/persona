@@ -285,7 +285,7 @@ struct LarkChatView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         if isTopic && row.outgoing == nil {
                             // A topic group lists topics: each its own card with its time, never run together like a
-                            // chat's messages (lark-connector's topic list); a system line stays a line.
+                            // chat's messages (the Lark gateway's topic list); a system line stays a line.
                             Group {
                                 if m.isSystem {
                                     LarkMessageRow(message: m, grouped: false, isGroup: true, feedID: conversation.id)
@@ -705,7 +705,7 @@ struct LarkChatView: View {
     private func refreshLatest(untouchedSince: Int? = nil) async {
         guard !pager.hasNewer, let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic),
               !pager.hasNewer else { return } // (the window may have moved away meanwhile)
-        problem = nil // it answers again (lark-connector signed in again, the network is back)
+        problem = nil // it answers again (the Lark gateway signed in again, the network is back)
         switch pager.latest(r) {
         case .fresh(let fresh):
             guard !fresh.isEmpty else { return }
@@ -1117,7 +1117,7 @@ struct LarkChatView: View {
                 guard encryptionDraft != nil else { return }
                 encryptionStatus = status
                 guard status.configured else {
-                    encryptionProblem = "请先在 lark-connector 网页创建密钥库，再回来重新检查。已输入的内容会保留。"
+                    encryptionProblem = "请先在飞书网关的网页创建密钥库，再回来重新检查。已输入的内容会保留。"
                     return
                 }
                 if openCovers { showEncryptionCovers = true }
@@ -1151,7 +1151,7 @@ struct LarkChatView: View {
         }
         var batch: [LarkOutgoing] = []
         if climbing {
-            // The words go encoded, as the web sends them; lark-connector refuses them while the switch is off.
+            // The words go encoded, as the web sends them; the Lark gateway refuses them while the switch is off.
             guard chatLink?.larkDisplay.policy.climbs == true else {
                 model.toast = Toast("", style: .error); return
             }
@@ -1173,7 +1173,7 @@ struct LarkChatView: View {
                     guard status.accountId == identity.account, outbox === queue, !queue.invalidated else { throw LarkOutboxIdentity.Failure.changed }
                     encryptionStatus = status
                     guard status.configured else {
-                        model.toast = Toast("请先在 lark-connector 网页创建密钥库", style: .error); return
+                        model.toast = Toast("请先在飞书网关的网页创建密钥库", style: .error); return
                     }
                     if status.locked { showEncryptionUnlock = true; return }
                     let payload = try await api.larkPrepareEncryption(account: identity.account, feed: conversation.id, text: t, cover: encrypted.cover)
@@ -1213,7 +1213,7 @@ struct LarkChatView: View {
 
     private func askJarvis() async {
         guard let api = chatAPI else { return }
-        let prompt = "读取我飞书会话「\(conversation.name)」（lark-connector feedId \(conversation.id)）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。"
+        let prompt = "读取我飞书会话「\(conversation.name)」（飞书网关 feedId \(conversation.id)）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。"
         do {
             let s = try await api.startConversation(prompt: prompt)
             model.began(s, text: prompt)
@@ -1547,7 +1547,7 @@ struct LarkMessageRow: View {
 }
 
 extension LarkMessage {
-    /// The message with my reaction `key` toggled (lark-connector's optimistic update: remove if mine, else add).
+    /// The message with my reaction `key` toggled (the Lark gateway's optimistic update: remove if mine, else add).
     func togglingReaction(_ key: String, me: String) -> (LarkMessage, remove: Bool) {
         var m = self
         var list = m.reactions ?? []

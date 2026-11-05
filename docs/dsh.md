@@ -153,12 +153,12 @@ hub 连着时（hello 之后、`runtime.hub` 说 hub 回来时，之后每 5 分
 | ask_user | 同一个工具，会话 id 本来就知道 |
 | DSH 自己的提问 / 计划 | 插件已有：提问链，含计划卡片和迟到的回答；助手对话一律先给手机 |
 | 命令 / 改文件的审批 | `approval/request` 链，助手对话一律先给手机（DSH 只在出沙箱这类情况才问） |
-| 飞书写操作的确认 | 插件命令闸门声明的工具（`proto.CommandGate.Tool`，名字由插件定；node 的 `gateTools` 只在技能在这台机器上时列出）：参数就是 `ol` 后面的词，node 先过闸门（`larkCheck`：读放行、写在手机上确认、配置的规则拒绝），再在 node 上跑技能里的脚本，凭据只在 node（#1317 起在 node 的闸门代理上）；凭据不进 DSH。shell 里直接跑 `ol` 被 `tools/pre-execute` 拦下并说明。#1571 起 node 不再内置 `lark-connector` 工具，经 lark-connector 接飞书的插件提供（`docs/lark-agent.md`） |
+| 飞书写操作的确认 | 插件命令闸门声明的工具（`proto.CommandGate.Tool`，名字由插件定；node 的 `gateTools` 只在技能在这台机器上时列出）：参数就是命令后面的词，node 先过闸门（`larkCheck`：读放行、写在手机上确认、配置的规则拒绝），再在 node 上跑技能里的脚本，凭据只在 node（#1317 起在 node 的闸门代理上）；凭据不进 DSH，shell 里直接跑命令拿不到凭据，也绕不过 node 的闸门代理。#1571 起 node 不再内置这个工具，由接飞书的扩展声明（`docs/lark-agent.md`） |
 | 权限模式 | 每条消息带上，插件设 DSH 的权限预设（`permissionPresets.set`）：默认 / 自动接受编辑 / 自动 → `workspace-write`，计划 → `read-only`，全部放行 → `danger-full-access`（飞书闸门仍在：它在 node 上，不靠 DSH 的授权）；`config.presets` 可以改 |
 | 思考强度、模型 | 在 DSH 里选（Web GUI，或 DSH 的默认模型）；Persona 的模型配置对 `dsh` 不选具体模型 |
 | 图片 | 插件已有：base64 图片块 |
 | 指令 | DSH 读助手目录的 `AGENTS.md` / `CLAUDE.md`（`assistant.prepare` 两份都写，内容一样时只加载一份），加上用户自己的 `$DSH_HOME/AGENTS.md` |
-| 插件的 skill（如 lark-connector） | 助手目录的 `.agents/skills/`（DSH 读这里），命令经上面闸门声明的工具跑 |
+| 插件的 skill（如接飞书的扩展带的） | 助手目录的 `.agents/skills/`（DSH 读这里），命令经上面闸门声明的工具跑 |
 | 记忆 | 和 Claude、Codex **同一份**：新对话的第一条消息前面带上记忆目录、格式和当前索引（`prompts/assistant/runtime_instructions.md`），改那个目录里的文件在非计划模式下不问 |
 | 后台任务 | DSH 自己的后台任务（`job_*`），在跑的列在会话的 `background` 里（见「子 Agent 和后台任务」）；跑完会不会叫醒对话照 DSH 的规则，node 不另记 |
 | 预热 | 不需要：`dsh web` 常驻，新对话直接 `sessionController.create` |
@@ -224,8 +224,8 @@ hub 的「完成」推送等这些跑完、父会话被叫醒的那一轮结束�
   （`loader.test.js`：换版本、哈希不对不换、起不来回旧的、等手机上的卡、手动装的优先、daemon 不换）。
 
 - 助手：`node integrations/dsh/e2e/assistant.mjs`（同样两个环境变量）。「hub」用 `assistant.send` 选 `dsh` 启动器新建对话（在助手目录里、
-  第一条带上快照和记忆，聊天里只显示打的字）、`ask_user` 作为助手的调用到 hub、`lark-connector` 读直接跑（带 token）、写在手机上拒绝后不跑、
-  shell 里的 `ol` 被拦、计划模式设成 DSH 的预设、中断、node 重启后接着发。2026-11-02 实测 17/17 通过（当时 `lark-connector` 是 node 内置的工具；#1571 起由插件的命令闸门声明）。
+  第一条带上快照和记忆，聊天里只显示打的字）、`ask_user` 作为助手的调用到 hub、计划模式设成 DSH 的预设、中断、node 重启后接着发。2026-11-02 实测通过；当时还测了 node 内置的飞书工具，
+  #1571 起它由扩展的命令闸门声明，这部分从脚本里去掉了。
 
 ## 以后
 

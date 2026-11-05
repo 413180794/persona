@@ -9,14 +9,14 @@ nonisolated extension ComponentSpec {
             surface: .hairline, buttons: .bordered, fontDesign: .default, previewCorner: 10, components: .jarvis,
             canvas: .neutral(page: Color(light: 0xF5F6F7, dark: 0x141414), card: Color(light: 0xFFFFFF, dark: 0x1F1F1F)),
             cardStroke: stroke,
-            // lark-connector's --message-incoming and its card chrome.
+            // The Lark gateway's --message-incoming and its card chrome.
             larkOtherBubble: StyleSpec.larkGrayBubble, larkCard: Color(light: 0xFFFFFF, dark: 0x1E1F23),
             colors: .lark)
     }()
 }
 
 nonisolated extension ColorSpec {
-    /// 飞书's blue (飞书's own); 飞书's pages keep lark-connector's --message-outgoing bubble.
+    /// 飞书's blue (飞书's own); 飞书's pages keep the Lark gateway's --message-outgoing bubble.
     static let lark = ColorSpec(
         title: "飞书蓝", subtitle: "飞书",
         accent: Pair(light: 0x3370FF, dark: 0x4C88FF),

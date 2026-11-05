@@ -2,11 +2,11 @@ import SwiftUI
 
 // MARK: - API
 
-/// Feishu data beyond chats comes through the hub's read-only window onto lark-connector's agent API:
-/// `/api/v1/lark/raw/<path>` = lark-connector `/agent/v1/<path>` (see docs/protocol.md 飞书 API). Media / API paths inside
+/// Feishu data beyond chats comes through the hub's read-only window onto the Lark gateway's agent API:
+/// `/api/v1/lark/raw/<path>` = the Lark gateway's `/agent/v1/<path>` (see docs/protocol.md 飞书 API). Media / API paths inside
 /// the JSON already point back at the hub, so they load with `LarkRemoteImage` / `LarkMedia`.
 extension APIClient {
-    /// GET one lark-connector agent route, decoded. `path` has no leading slash, e.g. "documents/recent".
+    /// GET one Lark gateway agent route, decoded. `path` has no leading slash, e.g. "documents/recent".
     func larkRaw<T: Decodable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
         try await get("/api/v1/lark/raw/" + path, query: query)
     }
@@ -16,7 +16,7 @@ extension APIClient {
         try await get("/api/v1/lark/raw/" + path, query: query)
     }
 
-    /// lark-connector's paged, filtered search (`POST search/page`, read-only): tab, query, cursor, limit and filters
+    /// The Lark gateway's paged, filtered search (`POST search/page`, read-only): tab, query, cursor, limit and filters
     /// (senderIds, chatIds, feedId, startTime, endTime, docTypes, ownerIds, sortType…).
     func larkSearchPage<T: Decodable>(_ body: [String: JSONValue], as: T.Type = T.self) async throws -> T {
         try JSON.decoder.decode(T.self, from: try await request("POST", "/api/v1/lark/raw/search/page", body: body))

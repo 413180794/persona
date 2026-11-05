@@ -66,7 +66,7 @@ App 的 `InboxModule` 已按配对注入 `RealInboxRepository`、共享偏好／
 
 ## 飞书卡片与原生文档
 
-`LarkCardContent.kt` 解析 lark-connector 的 `metadata.header/body` 节点树，`LarkCardView.kt` 显示标题、字段列、只读按钮和鉴权图片。连续短字段共用一行，长字段独占一行；列按父容器宽度和权重分配，窄屏改为纵排。未知节点保留文字，整张卡片无法解析出正文时显示摘要。按钮不发送回调，也不打开操作链接，文案保持单行。
+`LarkCardContent.kt` 解析飞书网关的 `metadata.header/body` 节点树，`LarkCardView.kt` 显示标题、字段列、只读按钮和鉴权图片。连续短字段共用一行，长字段独占一行；列按父容器宽度和权重分配，窄屏改为纵排。未知节点保留文字，整张卡片无法解析出正文时显示摘要。按钮不发送回调，也不打开操作链接，文案保持单行。
 
 `LarkDocument.kt` 将文档 JSON 树转成标题、段落、列表、代码和图片。`LarkDocumentReader.kt` 负责阅读、网页降级和浮层。文档图片地址改写到 hub 的只读代理，经原配对鉴权读取；网页容器不接收配对凭据。尊重文档的复制权限，部分内容和未支持的块有提示，用户也可主动切换网页。
 

@@ -148,8 +148,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 飞书多账号（#1321）：mock 加 `MOCK_LARK_ACCOUNTS=1`，`/api/v1/lark/accounts` 有「我」「工作号」和一个未登录的账号，`ol_account=2` 读到工作号自己的会话，收件箱最上面一件来自工作号；`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `LarkAccountsFlowTests`（「消息」页切换账号、打开工作号的会话、设置 › 飞书的账号列表；`JARVIS_SHOTS` 存截图）；网页用 `scripts/test/web_lark_accounts_e2e.py <网页地址> [--shots <目录>]`（用法见脚本开头）。
 - 飞书加密消息（#689、#1664）：mock 加 `MOCK_LARK_NATIVE_OLK=1`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `LarkNativeEncryptionFlowTests`（「消息」页打开「设计评审」、选对外展示、解锁、发送、失败重发、收件箱不能把加密草稿当普通消息发；解锁后查不弹「保存密码」）；`JARVIS_SHOTS` 存截图（`docs/screenshots/lark-native-encryption/`）。多账号的用例里第二个账号置顶了「季度规划」，它只在置顶栏（`feishu-pin-w1`），不在列表里（#1342）。
 - [removed]（#882）：mock 加 `MOCK_LARK_BRAVE_CLIMB=1`（开关打开，「设计评审」里有整条、拆成两段、句中夹着、旧四字编码的编码文字和一条引用，列表摘要也是编码），`TEST_RUNNER_JARVIS_MOCK_HUB` 跑 `LarkBraveClimbFlowTests`（开着：列表、聊天解码，选「[removed]编码」发出去的是编码；关着：气泡原样、摘要显示「[removed]编码消息」、模式菜单没有这一项，另一设备打开后当前聊天跟着解码）。`MOCK_LARK_OLD_DISPLAY=1` 模拟没有这个开关的旧扩展。
-- 消息来源（扩展点 `messaging`，#2138）：mock 加 `MOCK_MESSAGING=1`，`GET /api/v1/messaging` 列出来源 `lark`（扩展 `lark-connector`），`/api/v1/messaging/lark/…` 按 `docs/extension-messaging.md` 的格式回答：`scripts/mock/lark_messaging.py` 读 mock 自己的 `/api/v1/lark/…` 再转换，[removed]解码、加密外显 / 解开、撤回和编辑历史按显示设置这些扩展的处理在它里面做；设置页是扩展的整页 UI `POST /api/v1/extensions/lark-connector/-/ui/display`；hello / health 的 `features` 多 `messaging`，每个 `{type: lark}` 推送同时发一个 `{type: messaging}`。能和别的飞书 fixture 同开（`MOCK_LARK=1`、`MOCK_LARK_TRAINER=1`、`MOCK_LARK_BRAVE_CLIMB=1`、`MOCK_LARK_NATIVE_OLK=1`……）。`python3 scripts/mock/test_lark_messaging.py` 查每个回答合 schema、扩展的处理做了。
-- 没装 lark-connector 插件的 hub（#1530）：mock 默认在 features 里带 `lark`、`lark_moments`（插件给的）；加 `MOCK_NO_LARK=1` 去掉它们和 `lark_attachments`，`/api/v1/lark/…` 一律 404、连接器里没有飞书，看「消息」页、设置 › 连接器 › 飞书、翻译的「飞书会话」都不出现，飞书文档 / 公司圈链接照普通网页打开。
+- 消息来源（扩展点 `messaging`，#2138）：mock 加 `MOCK_MESSAGING=1`，`GET /api/v1/messaging` 列出来源 `lark`（扩展 `larkext`），`/api/v1/messaging/lark/…` 按 `docs/extension-messaging.md` 的格式回答：`scripts/mock/lark_messaging.py` 读 mock 自己的 `/api/v1/lark/…` 再转换，[removed]解码、加密外显 / 解开、撤回和编辑历史按显示设置这些扩展的处理在它里面做；设置页是扩展的整页 UI `POST /api/v1/extensions/larkext/-/ui/display`；hello / health 的 `features` 多 `messaging`，每个 `{type: lark}` 推送同时发一个 `{type: messaging}`。能和别的飞书 fixture 同开（`MOCK_LARK=1`、`MOCK_LARK_TRAINER=1`、`MOCK_LARK_BRAVE_CLIMB=1`、`MOCK_LARK_NATIVE_OLK=1`……）。`python3 scripts/mock/test_lark_messaging.py` 查每个回答合 schema、扩展的处理做了。
+- 没装飞书网关插件的 hub（#1530）：mock 默认在 features 里带 `lark`、`lark_moments`（插件给的）；加 `MOCK_NO_LARK=1` 去掉它们和 `lark_attachments`，`/api/v1/lark/…` 一律 404、连接器里没有飞书，看「消息」页、设置 › 连接器 › 飞书、翻译的「飞书会话」都不出现，飞书文档 / 公司圈链接照普通网页打开。
 - 飞书 /agent 的上下文（#876）：mock 加 `MOCK_LARK_AGENT=1`，「帮我约周五…」变成一条飞书 /agent 请求（说明和 7 项上下文在 `<jarvis-context>` 里，标签外只有请求）；`-openSession server/b2e4d6f8-0000-4000-8000-000000000003`，`-showContexts YES` 让上下文组和第一项打开。
 - Persona 侧栏：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`，「最近」多 36 个对话（超过显示的 30 个，出「查看全部」），前三个依次是需要你（红点）、未读（蓝点）、工作中（转圈）。
 - 跟到最新（`ChatFollowTests`，`MOCK_LONG_HISTORY=1`）：长会话打开在底部；在底部时来回复会跟到底（Persona 页的回复先按 `delta` 流式出）；往上翻出现「回到最新」、
@@ -220,11 +220,11 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   发的评论在 `/mock/sent`，并加到时间线末尾。`github:ci7`（CI 失败）不是 PR，打开是 hub 收集的文本。数据在 `mock_hub.py` 的 `gh_thread_page`。
 - 飞书会话页：`-tab mail -openInboxItem lark:f3:300`（收件箱的「周末徒步群」）打开一个画全了的会话：三天的消息（日期分隔）、第一条未读前不止一页（往上翻、`has_older`）、
   图片、引用回复、表情回复、机器人、一个 75 条回复的话题（话题浮层翻页）；从第 300 条起 12 条未读，已读到 299（`read_position`）。
-  `MOCK_LARK_LOGGED_OUT=1` 启动 mock 时会话列表、会话和话题都回 502「lark-connector 未登录飞书」（带 `code: lark_not_logged_in`，和 hub 一样），看错误态。数据全是编的，在 `mock_hub.py` 的 `_lark_f3`。
+  `MOCK_LARK_LOGGED_OUT=1` 启动 mock 时会话列表、会话和话题都回 502「飞书网关未登录飞书」（带 `code: lark_not_logged_in`，和 hub 一样），看错误态。数据全是编的，在 `mock_hub.py` 的 `_lark_f3`。
   已读回执（`POST …/read-states`）：f3 里我的消息 282 全部已读、296 部分已读、306 都未读；私聊 f1「韩梅梅」（`-openInboxItem lark:f1:100`）里我的消息有已读、未读（103）和没有回执（104）三种，mock 运行中新发的消息算都未读。
   头像：f3 里 Tom 的头像能加载，天气助手的头像地址 404（看加载失败退回首字），其他人没有头像。
   @人：f2、f3 有成员（`GET …/members`，Tom 和 Mia 有头像，阿杰的群昵称是「杰哥」）；带 `mentions` 发送或回复时，mock 把文字里的 `@name` 存成 `at` 片段。
-  话题群（#1087）：`MOCK_LARK_TOPIC=1` 启动 mock，`-tab mail -openInboxItem lark:f4:405` 打开「版本发布」话题群（消息页里也有）：发布机器人隔两分钟连发三个话题（各自一张卡片）、一个高过 320 pt 要收起的长卡片、我发的话题、带链接的话题，0 / 1 / 2 / 6 条回复的话题，还有撤回的话题（lark-connector 留存了和没留存的各一个）和编辑过的话题（最新一条回复是撤回的），给「风灵月影」用；话题的回复和 lark-connector 一样先回话题本身、再回最新的 `limit` 条。不要和 `MOCK_LARK=1` 同开：那时飞书的读取先由它接管，「版本发布」不出现。
+  话题群（#1087）：`MOCK_LARK_TOPIC=1` 启动 mock，`-tab mail -openInboxItem lark:f4:405` 打开「版本发布」话题群（消息页里也有）：发布机器人隔两分钟连发三个话题（各自一张卡片）、一个高过 320 pt 要收起的长卡片、我发的话题、带链接的话题，0 / 1 / 2 / 6 条回复的话题，还有撤回的话题（飞书网关留存了和没留存的各一个）和编辑过的话题（最新一条回复是撤回的），给「风灵月影」用；话题的回复和飞书网关一样先回话题本身、再回最新的 `limit` 条。不要和 `MOCK_LARK=1` 同开：那时飞书的读取先由它接管，「版本发布」不出现。
 
 ## UI 测试（`scripts/app/ui-test.sh`）
 

@@ -1,5 +1,5 @@
-// Cards lark-connector summarises itself (a card part's `metadata.variant`): forwarded chats, group / contact cards,
-// meetings, calendar events, votes, tasks, red packets (#3032, iOS LarkSummaryCards.swift, lark-connector's SummaryCardView).
+// Cards the Lark gateway summarises itself (a card part's `metadata.variant`): forwarded chats, group / contact cards,
+// meetings, calendar events, votes, tasks, red packets (#3032, iOS LarkSummaryCards.swift, the Lark gateway's SummaryCardView).
 // Pure reading of the metadata; the drawing is views/inbox/LarkSummaryCard.tsx.
 import type { LarkPart } from "./inbox";
 
@@ -51,7 +51,7 @@ export function stripHTML(s: string): string {
   return entities(s.replace(/<br\s*\/?>|<\/p>|<\/div>/gi, "\n").replace(/<[^>]+>/g, "")).trim();
 }
 
-/** A message inside a merge-forward card: lark-connector's own MessageView shape (camelCase), media pointing at the hub. */
+/** A message inside a merge-forward card: the Lark gateway's own MessageView shape (camelCase), media pointing at the hub. */
 export interface ForwardedMessage {
   id: string;
   senderName?: string;
@@ -70,7 +70,7 @@ export function forwardedMessages(meta: Meta): ForwardedMessage[] {
   return arr(meta.messages).map((m, i) => ({ ...(m as unknown as ForwardedMessage), id: str(m.id) || `fw-${i}` }));
 }
 
-/** The previews a merge-forward card shows (its first few messages when lark-connector gave no previews). */
+/** The previews a merge-forward card shows (its first few messages when the Lark gateway gave no previews). */
 export function forwardPreviews(meta: Meta): Meta[] {
   const messages = arr(meta.messages);
   return (messages.length ? messages : arr(meta.previews)).slice(0, 4);
@@ -90,7 +90,7 @@ export function forwardedText(m: Meta): string {
   return text.replace(/\*\*|__|`/g, "").replace(/\s+/g, " ").trim();
 }
 
-/** Avatars inside forwarded messages are lark-connector paths; the hub serves them under /api/v1/lark. */
+/** Avatars inside forwarded messages are Lark gateway paths; the hub serves them under /api/v1/lark. */
 export function hubMediaURL(s: string | undefined): string | undefined {
   if (!s) return undefined;
   if (s.startsWith("/api/media/")) return "/api/v1/lark/media/" + s.slice("/api/media/".length);

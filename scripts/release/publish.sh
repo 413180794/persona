@@ -138,14 +138,12 @@ done
 cleanup
 sed "s|@JARVIS_DL@|$JARVIS_PUBLISH_URL/dl|" scripts/deploy/install.sh > "$OUT/install.sh"
 
-# Anyone can download these: no private values in them (CLAUDE.md), and no copied skill (lark-connector is the user's, in
-# ~/.jarvis/skills). install.sh is the repo's (scripts/privacy_check.py covers it) plus the site's address, which is
-# public on purpose.
+# Anyone can download these: no private values in them (CLAUDE.md), and no copied skill (only the built-in ones
+# assistantskills.Redistributable lists; a copied skill lives in the user's ~/.jarvis/skills or comes with its
+# extension). install.sh is the repo's (scripts/privacy_check.py covers it) plus the site's address, which is public
+# on purpose.
 python3 scripts/release/check_bundle_privacy.py --whole-short "$OUT/bin"
-if strings "$OUT/bin/jarvisd-linux-amd64" | grep -q "name: lark-connector"; then
-  echo "the lark-connector skill is in the public build" >&2
-  exit 1
-fi
+python3 scripts/release/check_bundle_skills.py "$OUT/bin/jarvisd-linux-amd64"
 host_bin="$OUT/bin/jarvisd-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 [ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built jarvisd does not report $VERSION" >&2; exit 1; }
 host_link="$OUT/bin/jarvis-link-${host_bin##*/jarvisd-}"

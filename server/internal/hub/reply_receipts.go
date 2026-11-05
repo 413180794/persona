@@ -13,7 +13,7 @@ import (
 // Namespacing keeps arbitrary upstream client IDs separate from explicit operation UUIDs.
 func (h *Hub) withReplyReceipt(kind string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if h.store == nil { // no receipts without the database: lark-connector still drops a repeat by its clientId
+		if h.store == nil { // no receipts without the database: the Lark gateway still drops a repeat by its clientId
 			next(w, r)
 			return
 		}
@@ -28,7 +28,7 @@ func (h *Hub) withReplyReceipt(kind string, next http.HandlerFunc) http.HandlerF
 			ClientID string `json:"client_id"`
 		}
 		if json.Unmarshal(raw, &in) == nil && in.ClientID != "" {
-			// Keep the original client_id in the body for lark-connector; only the receipt key is derived.
+			// Keep the original client_id in the body for the Lark gateway; only the receipt key is derived.
 			sum := sha256.Sum256([]byte("jarvis:reply:" + kind + ":" + in.ClientID))
 			sum[6], sum[8] = sum[6]&0x0f|0x80, sum[8]&0x3f|0x80
 			r = r.Clone(r.Context())

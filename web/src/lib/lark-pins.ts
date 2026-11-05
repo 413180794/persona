@@ -1,5 +1,5 @@
-// Feishu chat Pins (docs/lark-connector-migration.md「聊天内 Pin 消息」, iOS LarkChatPins.swift): the list of a chat's pinned
-// messages, jumping to one in the chat, adding and removing. lark-connector marks Pins read when the list is read, so it is
+// Feishu chat Pins (docs/lark-migration.md「聊天内 Pin 消息」, iOS LarkChatPins.swift): the list of a chat's pinned
+// messages, jumping to one in the chat, adding and removing. The Lark gateway marks Pins read when the list is read, so it is
 // read only when the list is opened or a Pin was changed, never ahead of time. The list lives in memory while it is
 // open (the hub answers no-store). An unknown write result is never retried: the list is read again to see.
 import { t } from "../i18n";
@@ -78,7 +78,7 @@ export async function changeChatPin(feed: string, message: string, pin: string |
   if (r.pinned !== !pin) throw resultUnknown();
 }
 
-/** The message may get a Pin: the hub says so (from lark-connector's capabilities), and it is a real, settled message. */
+/** The message may get a Pin: the hub says so (from the Lark gateway's capabilities), and it is a real, settled message. */
 export function canAddPin(m: LarkMessage): boolean {
   return m.can_pin === true && !m.recalled && !m.deleted && m.local_state !== "pending" && m.local_state !== "failed" && !m.sending && !m.failed && m.type !== "SYSTEM";
 }

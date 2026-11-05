@@ -17,7 +17,7 @@
 - 助手按时做的事只能有一张表（2026-10-31，`docs/assistant.md`「定时任务」）：以前定时任务和跟进分两套，重复的巡检只能一轮接一轮地
   `schedule_followup`，跑起来那一刻就从列表消失，卡在审批上的一个多小时里用户看不到、停不了。重复就做成重复（`every`），
   一轮重排自己时 hub 认出是同一个任务；任务的模型 / 权限模式只让用户在 App 里改，助手不能自己提权。`bypassPermissions` 对无头 claude 只能启动时给。
-- 助手调飞书用 lark-connector 自带的 lark-connector skill（副本在 `server/internal/assistantskills/`，编进 jarvisd，起助手时装到它的 `.claude/skills`；
+- 助手调飞书用飞书网关自带的 skill（副本在 `server/internal/assistantskills/`，编进 jarvisd，起助手时装到它的 `.claude/skills`；
   同步上游的脚本；2026-11-04 起技能在接飞书的插件里）。token 只进助手进程的环境变量（#1317 起连环境也不进了，见下面「凭据别放进 Agent 进程的环境」）；
   写操作靠 node 的 Bash PreToolUse 闸门（`node/larkgate.go`），
   只给助手用的那组 hooks（`assistant-hooks` 插件和 `assistant-settings.json`）带这个 hook。闸门读不懂的命令里只要有 `ol POST/PUT/PATCH/DELETE` 也要手机确认，否则 bypass 模式会直接放过
@@ -25,8 +25,8 @@
   在 hub 上起测试实例用独立 HOME / 端口 / 库（`/tmp/jt`），别碰线上 jarvisd；`ssh … 'pkill -f 模式'` 会匹配到 ssh 自己的命令行把会话杀掉，模式写成 `[/]tmp/…`。
   `[x]` 的写法只在同一条 ssh 命令里别处没再出现原文时才管用：2026-11-01 `pkill -f "[d]rive.py x"` 后面还跟着 `python3 drive.py x …`，
   `pgrep -f jarvis_args` 再按进程组杀，都把 ssh 自己杀了（exit 255）。最稳的是按完整路径锚定（`pgrep -f '^/tmp/jt/…/jarvisd'`）拿 pid 再杀，一条 ssh 只做这一件事。
-- 凭据别放进 Agent 进程的环境，再靠读命令拦（#1317，2026-11-05）：`env`、`printenv lark-connector_AGENT_TOKE""N`、`cat /proc/self/env*`、
-  `${!OPEN*}`、`python3 -c 'import os…'` 都绕得过字面黑名单，评审又试出 `nohup env`、`compgen -e`、`ps eww`、`eval` 拼名字、`env -u HOME printenv`……补不完；
+- 凭据别放进 Agent 进程的环境，再靠读命令拦（#1317，2026-11-05）：`env`、`printenv <拆开拼的变量名>`、`cat /proc/self/env*`、
+  `${!前缀*}`、`python3 -c 'import os…'` 都绕得过字面黑名单，评审又试出 `nohup env`、`compgen -e`、`ps eww`、`eval` 拼名字、`env -u HOME printenv`……补不完；
   更要紧的是拿到 token 的脚本直接调接口，写操作的手机确认就没了。改成凭据留在 node、本机代理按同一份规则查每个实际请求（`node/gateproxy.go`）。
   代理要挂在常驻 node 的整个进程上（`assistantKeeper`），不能挂在每个连接的 `Node` 上：hub 一重连就换一个 `Node`，留下来的对话还拿着旧地址，
   新 `Node` 放行的调用到不了旧代理，确认过的写也发不出去。

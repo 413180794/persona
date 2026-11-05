@@ -8,7 +8,7 @@
 
 ## 话题发送
 
-浮层已接入 `POST /api/v1/lark/messages/{id}/replies`，请求带 `thread: true`，hub 转发 `replyMode: "thread"`（不带时是在会话里引用回复），由 lark-connector 解析原消息的话题归属。`HttpInboxAssistantTransport` 与会话包装传输都提供 `LarkThreadReplyTransport`；本模块新增对 `:core:hub` 的依赖，复用随消息绑定的配对传输，不需要修改 App 或共享契约。
+浮层已接入 `POST /api/v1/lark/messages/{id}/replies`，请求带 `thread: true`，hub 转发 `replyMode: "thread"`（不带时是在会话里引用回复），由飞书网关解析原消息的话题归属。`HttpInboxAssistantTransport` 与会话包装传输都提供 `LarkThreadReplyTransport`；本模块新增对 `:core:hub` 的依赖，复用随消息绑定的配对传输，不需要修改 App 或共享契约。
 
 编辑器复用 `ReplyComposer`，按根消息隔离草稿。发送前通过当前配对的草稿存储保存文本和 `client_id`，另存一份待确认请求；这两个存储键只用于本地保存，不调用普通会话发送。丢回执、关闭浮层或进程中断后恢复原请求，锁定编辑，点击「核对结果」以相同目标、文本和 ID 请求 hub 重放回执。`202` 保持待确认，成功后清理对应草稿并重读话题末页。上游错误保留原请求，核对会重放原错误，不会生成新 ID 冒险重发。
 

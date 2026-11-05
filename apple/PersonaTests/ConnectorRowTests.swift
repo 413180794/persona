@@ -22,7 +22,7 @@ import Testing
         #expect(ConnectorRow.rows([c("lark"), c("github")]).map(\.id) == ["lark", "github"])
     }
 
-    /// Feishu's page reads `/api/v1/lark/…`: without the lark-connector plugin (no `lark` in the features) it has no row,
+    /// Feishu's page reads `/api/v1/lark/…`: without the Lark extension (no `lark` in the features) it has no row,
     /// whatever the list says (#1530).
     @Test func noFeishuRowWithoutTheExtension() {
         #expect(ConnectorRow.rows([], lark: false).map(\.id) == ["mail"])

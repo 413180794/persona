@@ -63,18 +63,18 @@ func (n *Node) mayCall(tool string) bool {
 // it.
 func (n *Node) cliCall(ctx context.Context, c net.Conn, req sockRequest) proto.ToolResult {
 	if !n.mayCall(req.Name) {
-		return proto.TextResult(req.Name+" is not available: the command line calls only the tools of the hub's connectors that are signed in", true)
+		return proto.ErrorResult(proto.ToolErrorUnavailable, req.Name+" is not available: the command line calls only the tools of the hub's connectors that are signed in", 0)
 	}
 	session, ok := n.assistantCaller(c)
 	if !ok {
-		return proto.TextResult("这个命令只能在助手的对话里用：这个进程不是 Persona 为助手起的", true)
+		return proto.ErrorResult(proto.ToolErrorUnavailable, "这个命令只能在助手的对话里用：这个进程不是 Persona 为助手起的", 0)
 	}
 	if n.peer == nil {
-		return proto.TextResult("Persona hub error: not connected", true)
+		return proto.ErrorResult(proto.ToolErrorUnavailable, "Persona hub error: not connected", 0)
 	}
 	var res proto.ToolResult
 	if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": session, "assistant": true}, &res); err != nil {
-		return proto.TextResult("Persona hub error: "+err.Error(), true)
+		return proto.ErrorResult(proto.ToolErrorUnavailable, "Persona hub error: "+err.Error(), 0)
 	}
 	return res
 }

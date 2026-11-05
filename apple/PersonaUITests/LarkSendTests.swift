@@ -18,9 +18,9 @@ final class LarkSendTests: XCTestCase {
     }
 
     /// A failed case leaves the screen it failed on in JARVIS_SHOTS (the attachments only record events).
-    /// No draft and no failed or unsent message from an earlier run (`-lark-connectorSendFresh`, #1627): they are kept on
+    /// No draft and no failed or unsent message from an earlier run (`-showLarkSendFresh`, #1627): they are kept on
     /// disk, and an earlier run's failed messages filled the chat and its leftover draft hid the thread box's placeholder.
-    static let fresh = ["-lark-connectorSendFresh", "YES"]
+    static let fresh = ["-showLarkSendFresh", "YES"]
 
     override func tearDown() {
         if slowedSend { _ = try? mockSendDelay(nil) } // the cases after this one see the mock's own 2 s

@@ -419,7 +419,7 @@ nonisolated enum Theme {
         static let box260: CGFloat = 260
         static let box280: CGFloat = 280
         static let box300: CGFloat = 300
-        /// A Feishu topic folds behind 展开 past this (lark-connector's topic cards).
+        /// A Feishu topic folds behind 展开 past this (the Lark gateway's topic cards).
         static let box320: CGFloat = 320
         static let box380: CGFloat = 380
         // Wide screens (iPad).

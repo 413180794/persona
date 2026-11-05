@@ -11,7 +11,7 @@
 | --- | --- |
 | [bh-architecture.md](bh-architecture.md) | removed 的整体架构与工程方法：分层、并发模板、结果三态与幂等回执、作用域与代次、能力协商、存储、测试；借鉴 / 不借鉴清单 |
 | [bh-herdr.md](bh-herdr.md) | removed 的 Herdr / Claude Code 客户端：会话页、原生交互、写操作安全、阅读工具；和 Persona Agents 的逐项对照 |
-| [bh-lark.md](bh-lark.md) | removed 的 lark-connector 飞书客户端：阅读位置、已读门禁、发送幂等、断线补洞；Persona 飞书页的问题；搬 / 不搬清单 |
+| [bh-lark.md](bh-lark.md) | removed 的飞书网关飞书客户端：阅读位置、已读门禁、发送幂等、断线补洞；Persona 飞书页的问题；搬 / 不搬清单 |
 | [bh-ui-qa.md](bh-ui-qa.md) | removed 的设计系统、首次接入、原型与评审、验收分级、测试金字塔；Persona 设计系统的现状与采用率 |
 | [jarvis-ios-arch.md](jarvis-ios-arch.md) | Persona iOS 的现状架构与技术债：`AppModel` 职责、同步、缓存、规则多处实现、平台无关逻辑清单（Android 必须一致的部分） |
 | [jarvis-features.md](jarvis-features.md) | Persona iOS 的完整功能清单（213 项）与 Android 对应做法（[../parity.md](../parity.md) 的底稿） |

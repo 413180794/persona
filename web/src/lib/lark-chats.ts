@@ -1,4 +1,4 @@
-// 消息 (docs/lark-connector-migration.md「入口」, the narrow exception of #392): every Feishu private and group chat in one
+// 消息 (docs/lark-migration.md「入口」, the narrow exception of #392): every Feishu private and group chat in one
 // list, shown only when this browser turned on 设置 › 连接器 › 飞书 › 首页显示消息 (off by default, kept per browser like
 // the app keeps it per device). The list reads the hub's account-bound snapshots (`account_bound=1`): conversations a
 // page at a time and the pinned conversations on top. A chat opens in the inbox's Feishu chat view (LarkThread).

@@ -310,7 +310,7 @@ describe("reading a Feishu document", () => {
   it("explains failures", async () => {
     await expect(readDoc(url, undefined, async () => { throw fail(404, { error: { code: "DOCUMENT_NOT_FOUND" } }); })).rejects.toThrow("文档不存在或已被删除");
     expect(fail(401, { error: { code: "AUTH_SESSION_EXPIRED" } }).message).toContain("没有登录飞书");
-    expect(fail(502, { error: "lark: lark-connector is not configured (set lark.token or lark.container in hub.json)", code: "upstream_error" }).message).toContain("没有接入飞书");
+    expect(fail(502, { error: "lark: the Lark gateway is not configured (set lark.token or lark.container in hub.json)", code: "upstream_error" }).message).toContain("没有接入飞书");
     expect(fail(403, { error: "forbidden", code: "forbidden" }).message).toBe("没有访问权限");
   });
 });
