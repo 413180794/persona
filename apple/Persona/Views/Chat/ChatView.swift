@@ -125,7 +125,7 @@ struct ChatView: View {
     /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them. On the Mac
     /// the card in every style but BeautifulUI's (its prompt bar is already one): the field, and under it 添加, the model
     /// and its modes, send / stop, as Codex's and ChatGPT's desktop apps (#2113).
-    private var usesShellComposer: Bool { shellChat || shell != nil || ChatComposerKind.macCard }
+    private var usesShellComposer: Bool { shellChat || shell != nil || ChatComposerKind.card }
     /// The system presents bars down the side of the screen (iPhone Duo closed, or open in landscape).
     @State private var barsVertical = false
     /// The slim header's height while the actions are in the side column (`sideHeader`).
@@ -3088,6 +3088,20 @@ enum ChatComposerKind {
         false
         #endif
     }
+
+    /// The iPad (and an open iPhone Duo): a regular width keeps the tabs and the split, not the shell, but draws the
+    /// iPhone's composer (`ShellComposerBar`, one line that grows into a card) in every style, as the shell does, unless
+    /// 旧布局 is on (#2779). The page caps its width (`ChatView.readableWidth`), the composer with it.
+    static var padCard: Bool {
+        #if os(iOS)
+        !AppModel.shared.oldLayout
+        #else
+        false
+        #endif
+    }
+
+    /// The shell's composer where there is no shell: the Mac's card or the iPad's.
+    static var card: Bool { macCard || padCard }
 }
 
 struct Composer: View, Equatable {
@@ -3105,7 +3119,7 @@ struct Composer: View, Equatable {
     /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them. On the Mac
     /// the card in every style but BeautifulUI's (its prompt bar is already one): the field, and under it 添加, the model
     /// and its modes, send / stop, as Codex's and ChatGPT's desktop apps (#2113).
-    private var usesShellComposer: Bool { shellChat || shell != nil || ChatComposerKind.macCard }
+    private var usesShellComposer: Bool { shellChat || shell != nil || ChatComposerKind.card }
     let key: SessionKey
     var status: SessionStatus
     var placeholder: String?

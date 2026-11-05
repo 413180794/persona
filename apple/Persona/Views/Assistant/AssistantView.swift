@@ -118,7 +118,8 @@ struct AssistantView: View {
                 if let key = current, pending == nil {
                     ChatView(key: key, style: .assistant)
                         .id(key)
-                        .environment(\.shellChat, shell != nil)
+                        // The iPad draws the shell's composer too (`ChatComposerKind.padCard`): the assistant's, as on the iPhone.
+                        .environment(\.shellChat, shell != nil || ChatComposerKind.padCard)
                 } else if shell != nil {
                     ShellHome(pending: pending, error: startError, launcher: $starterLauncher, mode: $starterMode,
                               effort: $starterEffort, openInbox: { path.append($0) }) { text, images in
@@ -354,18 +355,24 @@ struct AssistantHome: View {
             // The chips' row a step off the field (2026-11-04: with Theme.Space.s it sat right on it, and the
             // suggestion cards were cut off hard just above it).
             VStack(alignment: .leading, spacing: Theme.Space.m) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Theme.Space.s) {
-                        // The BeautifulUI style picks the launcher in the prompt bar's model menu.
-                        if !AppStyle.current.usesBeautifulUI { StarterModelChip(launcher: $launcher) }
-                        NewSessionModePicker(mode: $mode, effort: $effort, modes: SessionModes.assistantModes)
-                    }
-                    .padding(.horizontal, Theme.Space.xs)
-                }
-                if AppStyle.current.usesBeautifulUI {
-                    BeautifulStarterComposer(disabled: pending != nil, launcher: $launcher, send: send)
+                if ChatComposerKind.padCard {
+                    // The iPad: the iPhone's composer, the launcher, mode and effort in its model menu (#2779).
+                    StarterComposer(disabled: pending != nil, shell: StarterComposer.ShellModes(launcher: $launcher, mode: $mode, effort: $effort),
+                                    send: send)
                 } else {
-                    StarterComposer(disabled: pending != nil, send: send)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Theme.Space.s) {
+                            // The BeautifulUI style picks the launcher in the prompt bar's model menu.
+                            if !AppStyle.current.usesBeautifulUI { StarterModelChip(launcher: $launcher) }
+                            NewSessionModePicker(mode: $mode, effort: $effort, modes: SessionModes.assistantModes)
+                        }
+                        .padding(.horizontal, Theme.Space.xs)
+                    }
+                    if AppStyle.current.usesBeautifulUI {
+                        BeautifulStarterComposer(disabled: pending != nil, launcher: $launcher, send: send)
+                    } else {
+                        StarterComposer(disabled: pending != nil, send: send)
+                    }
                 }
             }
             .padding(.horizontal, Theme.Space.m)

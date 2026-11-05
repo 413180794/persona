@@ -162,6 +162,9 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   （/clear 弹原来的确认框）；填进去的就是一条命令（如 /context）时列表不再弹出，改了草稿才重新判断。超过五行半时列表内部滚动。
   助手对话和网页一样没有这个列表。列表放在 `Composer` 的 VStack 里、不是浮层，因为输入框在自己的宿主控制器里，浮出边界的部分点不到（#518）。
   + 菜单的「快捷指令」不变。截图用 `-openSlashMenu YES`；UI 测试 `PersonaUITests/SlashMenuTests`（两种布局都跑）。
+- **iPad（regular 宽度，iPhone Duo 展开同理）也用这一个 `ShellComposerBar`**（#2779）：它不进新外壳（`RootView.usesShell` 只看 compact），
+  环境里没有 `shell`，以前退回 `ComposerRow`，和 iPhone 不一样。现在 `ChatComposerKind.padCard`（iOS 且没开旧布局）让 Agent 对话、助手对话
+  （`shellChat`）和助手新对话（`AssistantHome` 交给 `StarterComposer(shell:)`，模式 chip 收进模型菜单）都画它，宽度跟对话页一起限在 `ChatView.readableWidth` 并居中。
 - 旧布局（`-ui.oldLayout YES`）和 Mac 不变：Agent 对话和助手新对话共用 `ComposerRow`（+、玻璃胶囊输入框、发送，Agent 工作中且没打字时是红色的中断，
   没有听写），输入框上方是权限 / 思考强度两个胶囊（`SessionModeBar`）。
 - **听写和中断按钮只有一份**（#1079）：`DesignSystem/ComposerButtons.swift` 的 `ComposerMicButton`（线条麦克风，听写中变实心、红色、脉动）和
