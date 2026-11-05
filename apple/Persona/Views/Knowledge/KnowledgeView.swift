@@ -23,14 +23,37 @@ struct KnowledgeView: View {
     @State private var showIgnored = false
     #if DEBUG
     @State private var debugEntry: KBEntry?
+    #if os(iOS) || os(visionOS)
+    @State private var debugRecording: UUID?
+    #endif
+    #endif
+    #if os(iOS) || os(visionOS)
+    @State private var recordings = RecordingLibrary.shared
     #endif
     /// Where entries open beside the list instead of pushing (the Mac's 知识库 section).
     @Environment(\.kbOpenEntry) private var opener
 
     private var list: KBList? { lists[kind] }
 
+    /// 录音 on a phone is this device's own list (with what is still recording or transcribing), not the hub's copy.
+    private var localRecordings: Bool {
+        #if os(iOS) || os(visionOS)
+        true
+        #else
+        false
+        #endif
+    }
+
+    private var counts: [KBKind: Int] {
+        var out = lists.mapValues { $0.items.count }
+        #if os(iOS) || os(visionOS)
+        out[.recordings] = recordings.entries.count
+        #endif
+        return out
+    }
+
     private var kindBar: some View {
-        KBKindBar(kind: $kind, counts: lists.mapValues { $0.items.count })
+        KBKindBar(kind: $kind, counts: counts)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
     }
@@ -48,6 +71,10 @@ struct KnowledgeView: View {
             }
             if !query.isEmpty {
                 searchResults
+            } else if kind == .recordings, localRecordings {
+                #if os(iOS) || os(visionOS)
+                RecordingsSection()
+                #endif
             } else if let list {
                 content(list)
             } else if let error {
@@ -67,7 +94,7 @@ struct KnowledgeView: View {
             #if os(macOS)
             MacToolbarMiddle() // the menu by the search field, clear of the title row's 知识库 (#830)
             #endif
-            ToolbarItem(placement: .topBarTrailing) { tagMenu }
+            ToolbarItem(placement: .topBarTrailing) { if !(kind == .recordings && localRecordings) { tagMenu } }
         }
         // Always shown: the drawer that hides on scroll folded away as soon as results replaced the list (the chips
         // row goes), taking the typed text out of sight (2026-10-31).
@@ -89,7 +116,14 @@ struct KnowledgeView: View {
         .navigationDestination(item: $debugEntry) { e in
             KnowledgeDetailView(entry: e, query: UserDefaults.standard.string(forKey: "showKnowledgeSearch"))
         }
+        #if os(iOS) || os(visionOS)
+        // `-showRecordingSample YES`: a made-up recording (no microphone); with `-openRecording YES` its page.
+        .navigationDestination(item: $debugRecording) { RecordingDetailView(id: $0) }
+        #endif
         .onAppear {
+            #if os(iOS) || os(visionOS)
+            if let id = RecordingSamples.installIfAsked(), UserDefaults.standard.bool(forKey: "openRecording") { debugRecording = id }
+            #endif
             if let q = UserDefaults.standard.string(forKey: "showKnowledgeSearch") { query = q }
             if let k = UserDefaults.standard.string(forKey: "showKnowledgeKind").flatMap(KBKind.init(rawValue:)) { kind = k }
             if let ref = UserDefaults.standard.string(forKey: "showKnowledgeEntry"), let slash = ref.firstIndex(of: "/") {
@@ -253,7 +287,7 @@ struct KnowledgeView: View {
     }
 
     private func load() async {
-        guard let api = model.api else { return }
+        guard !(kind == .recordings && localRecordings), let api = model.api else { return }
         do {
             let l = try await api.kbList(kind, tag: tag)
             lists[kind] = l

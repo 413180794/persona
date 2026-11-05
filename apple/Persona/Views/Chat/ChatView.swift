@@ -3288,7 +3288,6 @@ struct Composer: View, Equatable {
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var editingIndex: Int?
     @State private var showFiles = false
-    @State private var showRecording = false
     @State private var uploads = FileUploads()
     @State private var videos = VideoAttachments()
     @State private var selection: TextSelection?
@@ -3472,7 +3471,6 @@ struct Composer: View, Equatable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
-                    Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
                     extensionPrompts
                     if !shellChat { quickCommands } // an agent's, as its composer offered them before the shell's
                 } modes: {
@@ -3496,7 +3494,6 @@ struct Composer: View, Equatable {
                                    switch source.id {
                                    case "photo": showPhotos = true
                                    case "camera": showCamera = true
-                                   case "recording": showRecording = true
                                    default: showFiles = true
                                    }
                                },
@@ -3527,7 +3524,6 @@ struct Composer: View, Equatable {
                         Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
-                    Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
                     extensionPrompts
                     quickCommands
                 }
@@ -3622,7 +3618,6 @@ struct Composer: View, Equatable {
         } message: {
             Text("\(model.session(key)?.agentLabel ?? "Claude") 会开一个新会话，这段对话留在历史里，页面会跳到新会话。")
         }
-        .recordingContextSheet(isPresented: $showRecording) { contexts.wrappedValue.append($0) }
         .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             uploads.start(urls, machine: key.machineRef, model: model) { insertPath($0) }

@@ -1,11 +1,16 @@
 #if DEBUG
 import Foundation
 
-/// 演示与截图只使用虚构文字，不启动麦克风、不连接 hub。
+/// 演示与截图只使用虚构文字，不启动麦克风；配对了 hub 时照常同步进它的知识库（UI 测试用 mock hub 验这一步）。
 enum RecordingSamples {
+    /// Once per launch: the page appears again after its recording was deleted, and must not bring it back.
+    nonisolated(unsafe) private static var installed = false
+
     static func installIfAsked() -> UUID? {
-        guard UserDefaults.standard.bool(forKey: "showRecordingSample") else { return nil }
+        guard UserDefaults.standard.bool(forKey: "showRecordingSample"), !installed else { return nil }
+        installed = true
         let id = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        RecordingLibrary.shared.restore(id)
         var entry = RecordingEntry(id: id, createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .watch,
                                    title: "项目讨论", active: false, expectedSegments: 1)
         entry.segments = [RecordingSegment(index: 0, start: 0, duration: 90, sentences: [

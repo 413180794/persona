@@ -649,8 +649,6 @@ struct StarterComposer: View {
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var showPhotos = false
     @State private var showFiles = false
-    @State private var showRecording = false
-    @State private var recordingContexts: [ContextRef] = []
     @State private var uploads = FileUploads()
     @State private var videos = VideoAttachments()
     @State private var selection: TextSelection?
@@ -658,24 +656,22 @@ struct StarterComposer: View {
 
     private var canSend: Bool {
         !disabled && !videos.busy
-            && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !videos.ready.isEmpty || !recordingContexts.isEmpty)
+            && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !videos.ready.isEmpty)
     }
 
     private func submit() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let files = videos.ready
-        // Nothing to send: a second ⏎ on the Mac before the field redraws (#785) would start a conversation with the
-        // recording placeholder.
-        guard !videos.busy, !t.isEmpty || !images.isEmpty || !files.isEmpty || !recordingContexts.isEmpty else { return }
-        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? "参考录音内容。" : "请看视频") : "请看图片") : t, files: files)
+        // Nothing to send: a second ⏎ on the Mac before the field redraws (#785) would start an empty conversation.
+        guard !videos.busy, !t.isEmpty || !images.isEmpty || !files.isEmpty else { return }
+        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? "请看视频" : "请看图片") : t, files: files)
         // The keyboard goes down with the send: the conversation that takes over has a field of its own, and the keyboard
         // coming back up and going down again on the way moved the first message up and down with it (#1911).
         focused = false
-        send(recordingContexts.isEmpty ? body : recordingContexts.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
+        send(body, images.map(\.1))
         text = ""
         images = []
         videos.sent()
-        recordingContexts = []
     }
 
     /// The assistant's machine (the hub's unless set otherwise): files and videos go to its temp directory.
@@ -685,7 +681,6 @@ struct StarterComposer: View {
     @ViewBuilder private var attachments: some View {
         Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
         Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
-        Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
     }
 
     var body: some View {
@@ -695,9 +690,9 @@ struct StarterComposer: View {
             if !images.isEmpty { ComposerImages(images: $images) }
             if let shell {
                 ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
-                                 canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty || !recordingContexts.isEmpty,
+                                 canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty,
                                  modesTitle: StarterModesMenu.title(modes: shell, launchers: launchers, model: model),
-                                 quotes: $recordingContexts, history: "assistant.new", send: submit) {
+                                 history: "assistant.new", send: submit) {
                     attachments
                 } modes: {
                     StarterModesMenu(modes: shell, launchers: launchers)
@@ -705,12 +700,11 @@ struct StarterComposer: View {
                 .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID)))?.filter(\.runsAssistant) ?? [] }
             } else {
                 ComposerRow(placeholder: placeholder ?? "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
-                            send: submit, quotes: $recordingContexts, history: "assistant.new") {
+                            send: submit, history: "assistant.new") {
                     attachments
                 }
             }
         }
-        .recordingContextSheet(isPresented: $showRecording) { recordingContexts.append($0) }
         .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
@@ -763,7 +757,6 @@ struct BeautifulStarterComposer: View {
     @State private var launchers: [Launcher] = []
     @State private var showPhotos = false
     @State private var showFiles = false
-    @State private var showRecording = false
     @State private var uploads = FileUploads()
     @State private var videos = VideoAttachments()
     @State private var selection: TextSelection?
@@ -799,7 +792,6 @@ struct BeautifulStarterComposer: View {
                            onAttach: { source in
                                switch source.id {
                                case "photo": showPhotos = true
-                               case "recording": showRecording = true
                                default: showFiles = true
                                }
                            },
@@ -830,7 +822,6 @@ struct BeautifulStarterComposer: View {
         }
         // Again once the hub is paired: on a fresh launch the first try runs before there is one.
         .task(id: launcherMachine) { launchers = (try? await model.launchers(model.hubRef(launcherMachine))) ?? [] }
-        .recordingContextSheet(isPresented: $showRecording) { quotes.append($0) }
         .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.

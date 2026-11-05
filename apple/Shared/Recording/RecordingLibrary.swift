@@ -11,6 +11,8 @@ final class RecordingLibrary {
     private(set) var error: String?
     @ObservationIgnored nonisolated let root: URL
     @ObservationIgnored private var deleted: Set<UUID> = []
+    /// Called after a recording is saved (the phone syncs its text to the knowledge base from here).
+    @ObservationIgnored var didChange: ((UUID) -> Void)?
 
     init(root: URL = RecordingLibrary.directory) {
         self.root = root
@@ -41,13 +43,29 @@ final class RecordingLibrary {
 
     func save(_ entry: RecordingEntry) throws {
         guard !deleted.contains(entry.id) else { throw CocoaError(.fileNoSuchFile) }
+        var entry = entry
+        // Strictly later than the copy it replaces, even within one millisecond or after the clock went back.
+        let floor = (self.entry(entry.id)?.updatedAt ?? entry.updatedAt ?? entry.createdAt).addingTimeInterval(0.001)
+        entry.updatedAt = max(Date.now, floor)
         try FileManager.default.createDirectory(at: folder(entry.id), withIntermediateDirectories: true)
         try JSONEncoder().encode(entry).write(to: folder(entry.id).appendingPathComponent("recording.json"), options: .atomic)
         entries.removeAll { $0.id == entry.id }
         entries.append(entry)
         entries.sort { $0.createdAt > $1.createdAt }
         error = nil
+        didChange?(entry.id)
     }
+
+    #if DEBUG
+    /// Screenshots and UI tests put the same made-up recording back after a run deleted it.
+    func restore(_ id: UUID) {
+        guard deleted.remove(id) != nil else { return }
+        try? JSONEncoder().encode(deleted).write(to: root.appendingPathComponent("deleted.json"), options: .atomic)
+    }
+    #endif
+
+    /// Whether this id was deleted here (its tombstone stops late watch segments from recreating it).
+    func isDeleted(_ id: UUID) -> Bool { deleted.contains(id) }
 
     func change(_ id: UUID, _ edit: (inout RecordingEntry) -> Void) {
         guard var entry = entry(id) else { return }

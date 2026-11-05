@@ -5,7 +5,7 @@ import type { Session } from "../../lib/types";
 import { getFeedState, setRoute } from "../../lib/feed";
 import { toast } from "../../ui/atoms";
 import { t } from "../../i18n";
-import { ChatView } from "./ChatView";
+import { ChatView, footerRows } from "./ChatView";
 
 const captured = vi.hoisted(() => ({
   onSend: undefined as ((out: Outgoing) => Promise<boolean>) | undefined,
@@ -105,5 +105,22 @@ describe("ChatView composer task routing", () => {
     const [url, init] = fetcher.mock.calls[0];
     expect(url).toBe("/api/v1/sessions/hub/c1/messages");
     expect(JSON.parse(init.body)).toMatchObject({ text: "Look at this", images: [image] });
+  });
+});
+
+describe("composer footer rows (#3533)", () => {
+  it("lists launcher, model and folder in full, each labelled", () => {
+    const s = { machine_id: "m", session_id: "s", launcher: "claude", model: "anthropic/claude-opus-5-5", cwd: "/Users/me/code/weather" } as Session;
+    expect(footerRows(s).map((r) => [r.key, r.label, r.hint])).toEqual([
+      ["launcher", "claude", t("chat-sessiondialogs.launcher")],
+      ["model", "claude-opus-5-5", t("chat-sessiondialogs.model")],
+      ["folder", "~/code/weather", t("chat-sessiondialogs.folder")],
+    ]);
+  });
+  it("leaves out what is missing and, in a Persona conversation, the launcher and model", () => {
+    const s = { machine_id: "m", session_id: "s", launcher: "claude", model: "opus", cwd: "/code" } as Session;
+    expect(footerRows(s, true)).toEqual([]);
+    expect(footerRows(s).every((r) => r.wrap)).toBe(true);
+    expect(footerRows({ machine_id: "m", session_id: "s" } as Session)).toEqual([]);
   });
 });

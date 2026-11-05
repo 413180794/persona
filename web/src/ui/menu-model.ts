@@ -38,6 +38,8 @@ export interface MenuItem {
   /** Awaits `onSelect` inside the menu: the row says 处理中…, an error shows under the rows and the menu stays, and
    *  the menu closes once it succeeds. Without it the menu closes at once, as it always did. */
   inline?: boolean;
+  /** The label wraps (breaking anywhere) instead of ending in …: a value that must be read in full, like a path. */
+  wrap?: boolean;
 }
 
 export const enabled = (it: MenuItem | undefined): it is MenuItem => Boolean(it) && !it!.disabled;

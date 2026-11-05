@@ -1058,6 +1058,7 @@ function JumpPill({ label, onClick, inline }: { label: string; onClick: () => vo
 function ComposerFooter({ session, assistant }: { session: Session; assistant?: boolean }) {
   // a Persona conversation's launcher and model are its chip (they switch there)
   const parts = [sourceSubtitle(session), ...(assistant ? [] : [session.launcher, session.model?.split("/").pop(), shortPath(session.cwd)])].filter(Boolean);
+  const info = useMenu();
   // a Persona conversation (the main one too) switches its modes whatever its state: the hub applies them (#2416)
   const modes = assistant || (hasModes(session) && stateOf(session) !== "offline");
   const effortOnly = !assistant && hasEffortOnly(session) && stateOf(session) !== "offline"; // a Codex thread on its app-server
@@ -1065,9 +1066,26 @@ function ComposerFooter({ session, assistant }: { session: Session; assistant?: 
     <span className="flex min-w-0 items-center gap-2">
       {(modes || effortOnly) && <ModeChips session={session} effortOnly={effortOnly} assistant={assistant} />}
       {assistant && <AssistantLauncherChip session={session} />}
-      {parts.length > 0 && <span className="min-w-0 truncate" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>}
+      {parts.length > 0 && <span className="min-w-0 truncate max-sm:hidden" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>}
+      {/* phone width (#3533): the line would show a letter or two, so it is a button that lists the parts in full */}
+      {parts.length > 0 && <IconButton icon="info" label={t("chat-chatview.session_info")} onClick={info.open} active={Boolean(info.anchor)} size={22} iconSize={13} className="sm:hidden" />}
+      {info.anchor && <Menu anchor={info.anchor} onClose={info.close} side="top" align="right" width={280} header={t("chat-chatview.session_info")} items={footerRows(session, assistant)} />}
     </span>
   );
+}
+
+/** The composer footer's parts as menu rows (#3533): the value in full (wrapped), what it is beside it; choosing one
+ *  copies it, except the source, which is a sentence to read rather than a value to paste. */
+export function footerRows(session: Session, assistant?: boolean): MenuItem[] {
+  const rows: [string, string, string | undefined][] = [
+    ["source", t("chat-chatview.composer_source"), sourceSubtitle(session)],
+    ...(assistant ? [] : ([
+      ["launcher", t("chat-sessiondialogs.launcher"), session.launcher],
+      ["model", t("chat-sessiondialogs.model"), session.model?.split("/").pop()],
+      ["folder", t("chat-sessiondialogs.folder"), shortPath(session.cwd)],
+    ] as [string, string, string | undefined][])),
+  ];
+  return rows.filter(([, , v]) => v).map(([key, what, v]) => ({ key, label: v!, hint: what, wrap: true, onSelect: key === "source" ? () => {} : () => void copyText(key === "folder" ? session.cwd! : v!) }));
 }
 
 /** Above the composer while a session needs you and its host says why (a botmux attention, iOS AttentionNote):

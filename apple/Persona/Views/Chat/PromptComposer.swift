@@ -184,7 +184,6 @@ enum PromptItems {
         var out = [PromptSource(id: "photo", name: "照片", detail: "照片或视频，最多 4 个", icon: .symbol("photo.on.rectangle"), kind: .attach)]
         if camera { out.append(PromptSource(id: "camera", name: "拍照", detail: "用相机拍一张", icon: .symbol("camera"), kind: .attach)) }
         out.append(PromptSource(id: "file", name: "文件", detail: "传到那台电脑，路径插进输入框", icon: .symbol("doc"), kind: .attach))
-        out.append(PromptSource(id: "recording", name: "录音上下文", detail: "手机或手表录音，本机转写后确认", icon: .symbol(Theme.Icon.recording), kind: .attach))
         return out
     }
 

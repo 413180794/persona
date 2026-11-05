@@ -1605,6 +1605,52 @@ KB = {
 }
 KB_TAGS = {"projects": ["iOS", "前端", "个人"]}
 KB_UPDATES = []  # what 打标 saved (read back at /mock/kb_updates)
+# Recordings synced from the phone (docs/protocol.md「录音同步」, #3235): uuid → the last body PUT; deleted ids are
+# tombstones (a later PUT gets 410). GET /mock/recordings reads both back. MOCK_RECORDINGS_DOWN=1: 503 (the hub away).
+RECORDINGS = {}
+RECORDINGS_DELETED = set()
+RECORDING_PUTS = [0]  # every PUT, stored or refused
+RECORDING_DAYS = int(os.environ.get("MOCK_RECORDING_DAYS", "14"))
+
+
+def recordings_route(h, method, p):
+    """The hub's recording sync, and its copy in the knowledge base (KB["recordings"])."""
+    if p == "/mock/recordings" and method == "GET":
+        return h.send_json({"recordings": RECORDINGS, "deleted": sorted(RECORDINGS_DELETED), "puts": RECORDING_PUTS[0]}) or True
+    if not (p == "/api/v1/recordings" or p.startswith("/api/v1/recordings/")): return False
+    if os.environ.get("MOCK_RECORDINGS_DOWN") == "1":
+        return h.send_json({"error": "知识库暂时不可用", "code": "kb_unavailable"}, 503) or True
+    if p == "/api/v1/recordings" and method == "GET":
+        return h.send_json({"days": RECORDING_DAYS, "deleted": sorted(RECORDINGS_DELETED),
+                            "recordings": [{"id": k, "revision": v["revision"], "complete": v.get("complete", False),
+                                            "started_at": v["started_at"]} for k, v in RECORDINGS.items()]}) or True
+    rid = p.split("/")[4].lower()
+    if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", rid):
+        return h.send_json({"error": "录音 id 不对"}, 400) or True
+    kb = KB.setdefault("recordings", [])
+    if method == "DELETE":
+        existed = rid in RECORDINGS
+        RECORDINGS.pop(rid, None); RECORDINGS_DELETED.add(rid)
+        kb[:] = [e for e in kb if e["id"] != rid]; KB_DETAIL.pop(("recordings", rid), None)
+        return h.send_json({"deleted": existed}) or True
+    if method != "PUT": return h.send_json({"error": "method"}, 405) or True
+    RECORDING_PUTS[0] += 1
+    if rid in RECORDINGS_DELETED: return h.send_json({"error": "这条录音已删除", "code": "recording_deleted"}, 410) or True
+    body = json.loads(h.last_body or b"{}")
+    if not isinstance(body.get("revision"), int) or body["revision"] <= 0 or not body.get("started_at") \
+            or body.get("device") not in ("phone", "watch"):
+        return h.send_json({"error": "参数不对"}, 400) or True
+    have = RECORDINGS.get(rid)
+    if have and have["revision"] > body["revision"]:
+        return h.send_json({"id": rid, "revision": have["revision"], "status": "stale"}) or True
+    RECORDINGS[rid] = body
+    text = "\n".join("[%d:%02d] %s" % (int(x["start"]) // 60, int(x["start"]) % 60, x["text"]) for x in body.get("segments", []))
+    entry = {"kind": "recordings", "id": rid, "name": body.get("title") or "录音", "relevance": 0, "tags": [],
+             "one_line": (body.get("segments") or [{"text": ""}])[0]["text"], "updated": body["started_at"]}
+    kb[:] = [e for e in kb if e["id"] != rid] + [entry]
+    KB_DETAIL[("recordings", rid)] = {"meta": {k: body.get(k) for k in ("started_at", "ended_at", "duration", "language", "device", "complete")},
+                                      "summary": text, "segments": body.get("segments", [])}
+    return h.send_json({"id": rid, "revision": body["revision"], "status": "stored"}) or True
 KB_DETAIL = {
     ("projects", "weather-app"): {"summary": "# 天气 App\n\n给自己用的天气 App 和桌面小组件。\n\n- **现在**：小组件按小时刷新\n- **下一步**：中号布局的降雨条",
                                   "log": ["- 2026-10-24 09:10 · 飞书 · 天气 App 项目群 · 定了小组件先做小号和中号",
@@ -4473,61 +4519,54 @@ LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {
     {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "导出尺寸"}]},
     {"type": "paragraph", "content": [{"type": "text", "text": "16、20、24、32 四档，每档单独微调。"}]},
 ]}}
-# GET /api/v1/lark/raw/documents/ai-summary: Feishu's cached AI summary of a document (the reader's summary card).
-LARK_DOC_SUMMARY = {"state": "ready", "summary": "这篇评审确定了新版图标的方向：统一圆角和描边，深色模式单独调对比度。\n\n- 还要确认：主色是否再暖一点、小尺寸下的描边粗细\n- 导出四档尺寸，每档单独微调\n- 下周一前出第二版"}
+# GET /api/v1/lark/raw/documents/ai-summary: Feishu's cached AI summary of a document (the reader''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
+    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
+    while True:
+        n, d = divmod(n, 34)
+        out = BRAVE_CLIMB_ALPHABET[d] + out
+        if n == 0:
+            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
+    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
+    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
+    words = brave_climb("标签栏改粗一号")
+    split = _lm("211", "Lucy Wang", words, mins=39)
+    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
+    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
+    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
+    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
+    reply = _lm("214", "我", "好的", mine=True, mins=36)
+    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
+    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
+    LARK_CHATS[0]["preview"] = whole["text"]
+if os.environ.get("MOCK_LARK_TRAINER"):
+    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
+    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
+    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
+    missing.update(recalled=True, retained=False)
+    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
+    edited.update(edited=True, edit_history=[
+        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
+        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
+            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
+    ])
+    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
+    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
+    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
+    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
+    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
+    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
+    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
 
-LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
-
-# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
-if os.environ.get("MOCK_LARK_OLK"):
-    def _olk(pos, state, body, cover, handout=False):
-        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
-        m["parts"] = [{"kind": "text", "text": m["text"]}]
-        m["olk"] = {"version": 1, "state": state,
-                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
-        if state == "decrypted":
-            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
-        return m
-    LARK_MESSAGES["f2"] = [
-        _olk(200, "decrypted", "", "稍等", True),
-        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
-        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
-        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
-        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
-    ]
-    LARK_MESSAGES["f2"][2]["reply_to"] = {
-        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
-        "olk": LARK_MESSAGES["f2"][1]["olk"],
-    }
-    LARK_MESSAGES["f2"][4]["reply_to"] = {
-        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
-        "olk": LARK_MESSAGES["f2"][3]["olk"],
-    }
-
-LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
-# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
-LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
-def lark_pin_rows():
-    rows = [dict(c) for c in LARK_CHATS]
-    for i in range(1, 81):
-        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
-                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
-                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
-    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
-    if LARK_PIN_FIXTURE["newest"]:
-        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
-        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
-    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
-        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
-    return rows
-
-LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
-                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB""MOCK_LARK_OLD_DISPLAY"):
-    del LARK_DISPLAY["brave_climb_codec"]
-
-BRAVE_CLIMB_ALPHABET = "[removed]"
-def brave_climb(text):
-    """The Lark gateway''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
+# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
+# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
+# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose Lark gateway
+# lost its Feishu session.
+LARK_LOGGED_OUT = "lark: 飞书网关未登录飞书 (AUTH_SESSION_EXPIRED)"
+_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
+                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
+# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}
@@ -9982,6 +10021,7 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if self.token_refused(): return
+        if recordings_route(self, "GET", p): return
         if providers_route(self, "GET", p, q, b""): return
         if MOCK_MESSAGING and p.startswith("/api/v1/messaging") and lark_messaging.route(self, "GET", p, q, b""): return
         if net_control(p, q): return self.send_json({"ok": True, **NET})
@@ -10717,6 +10757,7 @@ class H(BaseHTTPRequestHandler):
                 lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if pins_route(self, p): return
         if looks_route(self, self.command, p, self.last_body): return
+        if recordings_route(self, self.command, p): return
         if providers_route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if doctor_route(self, p, "POST"): return

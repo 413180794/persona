@@ -74,5 +74,6 @@
   "route_no_images": "タスクへの直接送信では画像はまだ使えません。画像を外してもう一度お試しください。",
   "not_live": "リアルタイムではありません",
   "not_live_reload": "再読み込み",
-  "switch_agent": "Agent を切り替え"
+  "switch_agent": "Agent を切り替え",
+  "composer_source": "ソース"
 }

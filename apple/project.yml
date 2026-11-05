@@ -164,7 +164,7 @@ targets:
         NSHealthUpdateUsageDescription: "Persona saves health data only after you approve it on your iPhone, one entry at a time, for example a weight or last night's sleep you told Claude about."
         NSPhotoLibraryUsageDescription: "Persona lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
         NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
-        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
+        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone and only the text is saved to the knowledge base on your hub; the audio stays on your iPhone."
         NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # The native macOS app (docs/mac.md): the iOS app's logic and content views, compiled for macOS, inside a Mac
   # shell (Mac/): windows, sidebar, toolbar, menus, keyboard shortcuts, Settings, the menu bar. iOS-only parts are
@@ -256,7 +256,7 @@ targets:
         NSLocationUsageDescription: "Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
         NSPhotoLibraryUsageDescription: "Persona lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
         NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
-        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
+        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone and only the text is saved to the knowledge base on your hub; the audio stays on your iPhone."
         NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # The native visionOS app (docs/vision.md): the iOS app's logic and content views, compiled for visionOS (UIKit, so
   # most of it as is), inside a visionOS shell (Vision/): an ornament for the tabs, a window per conversation, the
@@ -335,7 +335,7 @@ targets:
         NSLocationWhenInUseUsageDescription: "Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
         NSPhotoLibraryUsageDescription: "Persona lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
         NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
-        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your device before you choose to share the text with your assistant."
+        NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your device and only the text is saved to the knowledge base on your hub; the audio stays on your device."
         NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # Draws the Fleet Live Activity. The app starts it and reports its tokens; the hub pushes its content.
   PersonaWidgets:
@@ -452,7 +452,7 @@ targets:
         WKApplication: true
         WKCompanionAppBundleIdentifier: $(JARVIS_BUNDLE_ID)
         UIBackgroundModes: [audio]
-        NSMicrophoneUsageDescription: "Persona records audio you start on Apple Watch, for example a meeting or a spoken note, then transfers it to your iPhone for on-device transcription before you choose to share the text with your assistant."
+        NSMicrophoneUsageDescription: "Persona records audio you start on Apple Watch, for example a meeting or a spoken note, then transfers it to your iPhone for on-device transcription; only the text is saved to the knowledge base on your hub."
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     settings:

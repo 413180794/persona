@@ -29,6 +29,11 @@ nonisolated struct RecordingEntry: Codable, Identifiable, Hashable, Sendable {
     var segments: [RecordingSegment] = []
     var marks: [Double] = []
     var endDelivered = false
+    /// Last local change: the knowledge-base revision (ms) the phone uploads it as (docs/recording.md「同步进知识库」).
+    var updatedAt: Date? = nil
+
+    /// Monotonic per recording: every save moves `updatedAt` forward, so a later upload always carries a larger one.
+    var revision: Int64 { Int64(((updatedAt ?? createdAt).timeIntervalSince1970 * 1000).rounded()) }
 
     var duration: Double { segments.map { $0.start + $0.duration }.max() ?? 0 }
     var displayTitle: String { title.isEmpty ? "录音 · " + createdAt.formatted(date: .abbreviated, time: .shortened) : title }

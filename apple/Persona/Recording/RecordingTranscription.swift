@@ -89,13 +89,3 @@ final class RecordingTranscription {
         }
     }
 }
-
-extension RecordingEntry {
-    /// 只发文字和时间戳，不发本机文件路径、UUID 或原始音频。
-    var context: ContextRef? {
-        guard transcribedAll, !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        let marksText = marks.isEmpty ? "" : "\n书签：" + marks.map(RecordingFormat.clock).joined(separator: "、")
-        return ContextRef(kind: "context", title: displayTitle, url: "", text:
-            "来源：\(sourceTitle)\n录音时长：\(RecordingFormat.clock(duration))\(marksText)\n\n\(transcript)")
-    }
-}

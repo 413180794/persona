@@ -3,27 +3,32 @@ import Testing
 @testable import Jarvis
 
 @MainActor struct RecordingTranscriptionTests {
-    @Test func timestampsAndContextAreLocalOnly() {
-        var entry = RecordingEntry(id: UUID(), createdAt: .now, source: .watch, title: "现场记录", active: false, expectedSegments: 1)
+    @Test func uploadCarriesTextAndTimestampsOnly() throws {
+        var entry = RecordingEntry(id: UUID(), createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .watch,
+                                   title: "现场记录", active: false, expectedSegments: 1)
         entry.segments = [RecordingSegment(index: 0, start: 0, duration: 30,
-            sentences: [RecordingSentence(start: 12, end: 16, text: "下周检查进度。")])]
-        let ref = entry.context
-        #expect(ref != nil)
-        #expect(ref?.text.contains("[0:12] 下周检查进度。") == true)
-        #expect(ref?.text.contains(entry.id.uuidString) == false)
-        #expect(ref?.url == "")
-        let parsed = ContextRef.parse(ref!.xml + "\n请整理待办")
-        #expect(parsed.refs.count == 1)
-        #expect(parsed.rest == "请整理待办")
+            sentences: [RecordingSentence(start: 12, end: 16, text: "下周检查进度。"), RecordingSentence(start: 20, end: 21, text: "  ")])]
+        entry.marks = [12]
+        let body = RecordingUpload(entry)
+        #expect(body.complete)
+        #expect(body.device == "watch")
+        #expect(body.segments.map(\.text) == ["下周检查进度。"]) // blank text dropped
+        #expect(body.bookmarks.map(\.at) == [12])
+        #expect(body.endedAt == entry.createdAt.addingTimeInterval(30))
+        let json = String(decoding: try JSON.encoder.encode(body), as: UTF8.self)
+        #expect(json.contains("\"started_at\""))
+        #expect(!json.contains(".m4a"))
+        #expect(!json.contains(entry.id.uuidString))
     }
 
-    @Test func incompleteOrSilentRecordingCannotAttach() {
+    @Test func incompleteOrSilentRecordingIsNotUploadable() {
         var entry = RecordingEntry(id: UUID(), createdAt: .now, source: .phone, active: false, expectedSegments: 2)
         entry.segments = [RecordingSegment(index: 0, start: 0, duration: 30, sentences: [])]
-        #expect(entry.context == nil)
+        #expect(!RecordingSync.uploadable(entry))
+        #expect(!RecordingUpload(entry).complete)
         entry.expectedSegments = 1
         #expect(entry.transcribedAll)
-        #expect(entry.context == nil)
+        #expect(!RecordingSync.uploadable(entry))
     }
 
     @Test func sentencesSplitOnPunctuationAndPause() {

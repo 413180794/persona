@@ -3,7 +3,7 @@ import Foundation
 /// The knowledge base under the hub's ~/.jarvis/data (docs/knowledge.md): projects, chats, people, docs, meetings and
 /// events, each ranked by importance (P0–P3) and relevance to the user, with free tags.
 nonisolated enum KBKind: String, CaseIterable, Identifiable, Sendable {
-    case projects, chats, people, docs, meetings, events
+    case projects, chats, people, docs, meetings, events, recordings
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -13,6 +13,7 @@ nonisolated enum KBKind: String, CaseIterable, Identifiable, Sendable {
         case .docs: "文档"
         case .meetings: "会议"
         case .events: "日程"
+        case .recordings: "录音"
         }
     }
     var symbol: String {
@@ -23,6 +24,7 @@ nonisolated enum KBKind: String, CaseIterable, Identifiable, Sendable {
         case .docs: "doc.text"
         case .meetings: "video"
         case .events: "calendar"
+        case .recordings: Theme.Icon.recording
         }
     }
 }

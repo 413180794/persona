@@ -627,14 +627,15 @@ function MenuRow({ item: it, asking, working, refCb, onHover, onChoose }: { item
       onMouseEnter={onHover}
       onClick={onChoose}
       className={cx(
-        "relative z-10 flex h-8 w-full items-center gap-2 rounded-[6px] px-2 pointer-coarse:min-h-11 text-left text-[12.5px] disabled:opacity-40",
+        "relative z-10 flex w-full items-center gap-2 rounded-[6px] px-2 pointer-coarse:min-h-11 text-left text-[12.5px] disabled:opacity-40",
+        it.wrap ? "min-h-8 py-1.5" : "h-8",
         it.danger ? "text-red" : "text-ink",
         asking && "bg-red-tint font-medium",
       )}
     >
       {it.state && <StatusMark state={it.state} />}
       {it.icon && <Icon name={it.icon} size={14} className={it.danger ? "" : "text-ink-3"} />}
-      <span className="min-w-0 flex-1 truncate">{rowLabel(it, asking ? it.key : null)}</span>
+      <span className={cx("min-w-0 flex-1", it.wrap ? "break-all" : "truncate")}>{rowLabel(it, asking ? it.key : null)}</span>
       {it.state && <StatePill state={it.state} />}
       {working ? <Spinner size={12} /> : it.hint && <span className="shrink-0 text-[11px] text-ink-3">{it.hint}</span>}
       {it.checked !== undefined && <Icon name="check" size={13} stroke={2.5} className={it.checked ? "text-ink" : "invisible"} />}

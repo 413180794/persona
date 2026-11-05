@@ -233,7 +233,7 @@ struct WatchRootView: View {
             } else {
                 List {
                     NavigationLink { WatchRecordingView() } label: {
-                        Label("录音上下文", systemImage: Theme.Icon.recording).font(Theme.Font.secondaryMedium).lineLimit(1)
+                        Label("录音", systemImage: Theme.Icon.recording).font(Theme.Font.secondaryMedium).lineLimit(1)
                     }.watchCard()
                     // A group the phone could not get the watch a credential for: none of its agents is below (#1185).
                     if !model.missing.isEmpty {
@@ -633,7 +633,7 @@ struct WatchPairView: View {
                 WatchSyncButton()
                 // In the scroll view: beside it, it squeezed the page until the sync button was out of sight.
                 NavigationLink { WatchRecordingView() } label: {
-                    Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1)
+                    Label("录音", systemImage: Theme.Icon.recording).lineLimit(1)
                 }
                 .padding(.top, Theme.Space.s)
             }

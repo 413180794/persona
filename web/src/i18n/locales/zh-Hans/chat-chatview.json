@@ -74,5 +74,6 @@
   "route_no_images": "直接发给任务暂不支持图片，请移除图片后重试",
   "not_live": "不是实时的",
   "not_live_reload": "重新加载",
-  "switch_agent": "切换 Agent"
+  "switch_agent": "切换 Agent",
+  "composer_source": "来源"
 }

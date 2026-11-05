@@ -49,7 +49,7 @@ struct WatchRecordingView: View {
                 if let error = capture.error ?? transfer.error ?? library.error {
                     Text(error).font(Theme.Font.caption).foregroundStyle(Theme.caution)
                 }
-                Text("回传手机后本机转写，在手机上确认后才能交给 Persona。")
+                Text("回传手机后本机转写，文字自动进知识库，音频不上传。")
                     .font(Theme.Font.caption).foregroundStyle(.secondary)
                 ForEach(Array(library.entries.filter { $0.source == .watch }.prefix(10))) { entry in
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -63,7 +63,7 @@ struct WatchRecordingView: View {
                 }
             }.padding(Theme.Space.m)
         }
-        .navigationTitle("录音上下文")
+        .navigationTitle("录音")
         .onAppear { transfer.start() }
     }
 }
