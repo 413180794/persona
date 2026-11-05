@@ -76,9 +76,9 @@ func dialAssistantWithStore(t *testing.T, h *Hub, url string, schedule bool, sto
 		}
 	}
 	// The hub's test machines are its devices unless the test gives it the real ones (startTestManager): what comes
-	// from the nodes is the manager's (fleet_mirror_test.go).
+	// from the nodes is the manager's (fleet_mirror_test.go); its extensions are faked (extensions_fake_test.go).
 	o := assistant.BusOptions{Hub: url, Token: tok, Backoff: 50 * time.Millisecond, Version: "test", Deploy: "test", Logf: logf,
-		Devices: mirrorOf(h)}
+		Devices: mirrorOf(h), Extensions: fakeExtOf(h)}
 	for _, f := range opts {
 		f(&o)
 	}
@@ -90,6 +90,7 @@ func dialAssistantWithStore(t *testing.T, h *Hub, url string, schedule bool, sto
 		s, _ := h.store.(assistant.Store)
 		return s
 	}, KB: testKBOf(h)}) // the knowledge base a test gave it (kb_test.go)
+	svc.SetExtensions(fakeExtOf(h)) // the extensions' tools, the manager's (faked)
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &testAssistant{svc: svc, bh: bh, stop: cancel, done: make(chan struct{}), token: tok}
 	testAssistants.Store(h, a)

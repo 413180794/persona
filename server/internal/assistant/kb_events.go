@@ -13,7 +13,7 @@ type kbEventPublisher interface {
 	KBEvent(event string, params any) error
 }
 
-func (b *BusHub) KBEvent(event string, params any) error { return b.client.Notify(event, params) }
+func (b *BusHub) KBEvent(event string, params any) error { return b.notifyHub(event, params) }
 
 type kbNotice struct {
 	event   string

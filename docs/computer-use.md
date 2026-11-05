@@ -458,7 +458,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - `server/internal/node/computer_test.go`：解析、就绪判断、用假的 cua-driver 脚本跑 `computer.call`（参数、会话名、截图、拒绝的工具）。
   - `server/internal/node/computer_install_test.go`：假的下载源和安装器，验证三个脚本从磁盘运行、参数和环境变量、关统计、接着授权、不像安装器的不运行、取消。
     `PERSONA_CUA_INSTALLER_CHECK=1` 时对真的 cua.ai 只下载、只检查（2026-11-04 通过）。
-  - `server/internal/hub/computer_test.go`：插件默认关、按机器开、工具出现和消失、经假 node 调用、确认被拒。
+  - `server/internal/extmgr/computer_test.go`：插件默认关、按机器开、工具出现和消失、经假 node 调用、确认被拒。
   - `apple/PersonaTests/ComputerTests.swift`：机器的 `computer` 字段、工具的中文名、步骤写成人话、最近一次操作在结果回来前算在跑。
 - **真机（node 一侧）**：在装好 Cua Driver 的 Mac 上跑 node 包的 `TestCuaEndToEnd`。
   - 打开方式：`PERSONA_CUA_E2E=1`，可选 `PERSONA_CUA_SHOT=<图片路径>`；测试二进制用 `GOOS=darwin go test -c` 编好拷过来。

@@ -62,6 +62,13 @@ type Options struct {
 	DialRelay func(ctx context.Context, query string) (Relay, error)
 	// Connected says whether the connection to the hub is up now (nil: always).
 	Connected func() bool
+	// Own is the manager's own part of a node's new connection (the extensions' agent filters, internal/extmgr):
+	// added to node.configure beside the hub's, given whether the hub is there or not. OnConnected is told once the
+	// node is configured and listed (the extensions' programs, Cua and the connectors start their work there);
+	// OnEvent sees each of the node's events before the hub does (handled: not passed on).
+	Own         func(ctx context.Context, machine string) map[string]json.RawMessage
+	OnConnected func(machine string)
+	OnEvent     func(machine, event string, params json.RawMessage) (handled bool)
 	// DialNode replaces every way to a machine's node with a connection to an in-process one (tests; nil for a
 	// machine: its own ways).
 	DialNode func(machine string) func(context.Context) (net.Conn, error)
@@ -547,6 +554,45 @@ func (d *Devices) List() []Summary {
 		out = append(out, s)
 	}
 	return out
+}
+
+// View is one machine with what its node said of itself (node.info), and its sessions as the node listed them.
+type View struct {
+	Summary
+	Info     proto.NodeInfo
+	Sessions []proto.Session
+}
+
+// Views are the machines with their node.info (the extensions' code reads the computers' OS, programs, capabilities).
+func (d *Devices) Views() []View {
+	out := []View{}
+	for _, m := range d.machinesNow() {
+		m.mu.Lock()
+		v := View{Summary: Summary{ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, SSHHost: m.cfg.SSHHost, Home: m.info.Home,
+			DataDir: m.info.DataDir, Online: m.online}, Info: m.info, Sessions: slices.Clone(m.sessions)}
+		m.mu.Unlock()
+		v.Reachable = m.reachable()
+		out = append(out, v)
+	}
+	return out
+}
+
+// Relist asks a machine's node for its sessions again and passes the list on (what it leaves out changed: the
+// extensions' agent filters).
+func (d *Devices) Relist(ctx context.Context, id string) error {
+	m := d.machineByID(id)
+	if m == nil {
+		return ErrNoMachine
+	}
+	var list struct {
+		Sessions []proto.Session `json:"sessions"`
+	}
+	if err := m.call(ctx, "sessions.list", json.RawMessage(`{}`), &list); err != nil {
+		return err
+	}
+	m.setSessions(list.Sessions)
+	d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
+	return nil
 }
 
 // Summary is one machine for the assistant (assistantwire.Device).

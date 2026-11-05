@@ -7,9 +7,10 @@ import (
 	"github.com/nwverse/persona/server/internal/secretkey"
 )
 
-// secret.key in the hub's data directory seals the hub's own secrets in Postgres (the bots' app secrets, the
-// connectors' credentials, the plugins' secrets, the peers' tokens): internal/secretkey. The model providers' keys are
-// sealed with the same file by the manager (internal/assistant): the hub never opens those.
+// secret.key in the hub's data directory seals the hub's own secrets in Postgres (the peers' tokens, the computers'
+// connector credentials): internal/secretkey. The manager seals with the same file what is its own (the model
+// providers' keys, internal/assistant; the extensions' secrets, the connectors' credentials and the bots' app secrets,
+// internal/extmgr): the hub never opens those.
 
 type secretState struct {
 	once sync.Once

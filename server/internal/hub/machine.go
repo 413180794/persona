@@ -378,8 +378,6 @@ func (m *Machine) watchAgainFresh(ctx context.Context, id string) {
 
 func (m *Machine) onEvent(event string, params json.RawMessage) {
 	switch event {
-	case "plugin.node.state", "plugin.node.event": // plugins' programs on this computer (extension_nodes.go)
-		m.hub.extensionNodeEvent(m, event, params)
 	case "fs.changed": // a folder or Git directory a web panel has open changed (fswatch.go)
 		var p struct {
 			Dirs []string `json:"dirs"`

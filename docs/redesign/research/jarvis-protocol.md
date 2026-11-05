@@ -182,7 +182,7 @@
 | POST `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}` |
 | POST `/api/v1/inbox/{id}/reply` | `{text}` 发送并标已处理 |
 | POST `/api/v1/inbox/refresh` | 立即采集，返回列表 |
-InboxItem 还有 protocol.md 没列的 `agent`（AI 分身的处理结果，`server/internal/hub/inbox.go:54-84`）。
+InboxItem 还有 protocol.md 没列的 `agent`（AI 分身的处理结果，`server/internal/extmgr/inbox.go:54-84`）。
 
 ### 3.10 飞书代理（lark-connector）
 protocol.md 已列：conversations / pinned / labels / unread-count / flags / conversations/{id}/labels / settings / unread / messages（GET、POST）/ read / thread / media / messages/{id}/media / emojis / card-actions。

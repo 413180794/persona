@@ -41,22 +41,12 @@ const (
 	AppPhone   = "phone"
 	PhoneTools = "phone.tools" // {} → {tools}
 	PhoneCall  = "phone.call"  // {name, args} → proto.ToolResult
-	// AppHub is the hub's other tools for the nodes: the connectors', Cua's, ego's; the extensions' text for a gated
-	// command's card, and lark-cli's settings for the assistant's machine.
-	AppHub              = "hub"
-	HubTools            = "hub.tools"             // {assistant} → {tools}
-	HubAssistantSummary = "hub.assistant_summary" // {tool_name, summary} → {summary, ok}
-	HubAssistantLark    = "hub.assistant_lark"    // {} → proto.AssistantLark
 )
 
-// InteractionsOwnerAction has the hub take the owner action it handed over with a channel's press or message, for
-// the card the manager is about to answer with it ({interaction_id, action} → {}; an error: refused).
+// InteractionsOwnerAction has the manager's channels take the owner action they handed over with a channel's press or
+// message, for the card the assistant is about to answer with it ({interaction_id, action} → {}; an error: refused).
+// Answered in the manager's process (internal/extmgr channels_bus.go).
 const InteractionsOwnerAction = "interactions.owner_action"
-
-// MethodFleetTool is a node's MCP call that is one of the hub's tools (a connector's, Cua's, ego's):
-// {machine_id, session_id, name, args, assistant} → {handled, result}. Its caller going away (the node cancels the
-// call) cancels it at the hub too, and with it a card the tool waits on.
-const MethodFleetTool = "fleet.tool"
 
 // MethodFleetAsk is a card one of the hub's own features asks the user (a mail send, Cua's apps, jarvis_settings):
 // {interaction} → proto.Resolution, when it is answered, expires or the call ends.

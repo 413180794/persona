@@ -28,14 +28,14 @@ func (w pushWants) fn() func(NotifyPrefs) bool {
 // devices: a member's computers are the center's machines.
 func (h *Hub) notifyDone(kind, machineID, machine, sessionID, title, text string, wants pushWants) {
 	build := func(l i18n.Lang) map[string]any { return donePayloadIn(l, machineID, machine, sessionID, title, text) }
-	h.extensions.emit("agent.finished", map[string]any{"machine_id": machineID, "machine": machine, "session_id": sessionID, "title": title})
+	h.emitToExtensions("agent.finished", map[string]any{"machine_id": machineID, "machine": machine, "session_id": sessionID, "title": title})
 	h.push.sendLocalized(build, "", wants.fn())
 	h.notifyWSIn(kind, build, wants.fn())
 }
 
 func (h *Hub) notifyInteraction(ix proto.Interaction, machine string) {
 	build := func(l i18n.Lang) map[string]any { return interactionPayloadIn(l, ix, machine) }
-	h.extensions.emit("agent.needs_you", map[string]any{"machine_id": ix.MachineID, "machine": machine, "session_id": ix.SessionID,
+	h.emitToExtensions("agent.needs_you", map[string]any{"machine_id": ix.MachineID, "machine": machine, "session_id": ix.SessionID,
 		"interaction_id": ix.ID, "kind": ix.Kind, "summary": ix.Summary})
 	wants := pushWants{Kind: "input"}
 	if ix.Kind == proto.IxElicitation {

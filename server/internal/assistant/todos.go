@@ -1274,6 +1274,34 @@ func (s *Service) autoDoneTodo(ctx context.Context, id, reason string, work time
 	return ok, nil
 }
 
+// reopenTodo reopens done todo id as the user's PATCH {done: false} does (reopened_at set: the stretch of work before
+// does not close it again); a todo open by then is left as it is.
+func (s *Service) reopenTodo(ctx context.Context, id string) error {
+	if err := s.ensureTodosLoaded(ctx); err != nil {
+		return err
+	}
+	cur, ok := s.todoNow(id)
+	if !ok {
+		return db.ErrTodoNotFound
+	}
+	if cur.DoneAt == nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	row := &db.TodoRow{ID: cur.ID, Title: cur.Title, Notes: cur.Notes, CreatedAt: cur.CreatedAt, UpdatedAt: now,
+		Origin: cur.Origin, PlanID: cur.PlanID, ReopenedAt: &now, Quiet: cur.Quiet}
+	if st := s.todoDB(); st != nil {
+		open := false
+		r, err := st.UpdateTodo(ctx, id, nil, nil, &open, now)
+		if err != nil {
+			return err
+		}
+		row = r
+	}
+	s.applyTodoRow(ctx, id, *row, nil)
+	return nil
+}
+
 // reopenFailedTodo reopens a task whose agent did not start, for its start again (retryTask): its error cleared, the
 // same todo; not ok when another assistant sharing the store reopened it first (the todo as it is then).
 func (s *Service) reopenFailedTodo(ctx context.Context, id string) (Todo, bool, error) {

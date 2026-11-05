@@ -293,7 +293,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	}
 
 	// The hub's part (Codex, managed launchers, its sends; it starts the plugins' work on the computer) with it.
-	m.configureNode(ctx, c.peer, m.d.hubConnected(ctx, m, connectedAt))
+	m.configureNode(ctx, c.peer, m.d.withOwn(ctx, m.cfg.ID, m.d.hubConnected(ctx, m, connectedAt)))
 	var list struct {
 		Sessions []proto.Session `json:"sessions"`
 	}
@@ -303,6 +303,9 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 		m.nodeUpdateConnected(ctx, c.peer, info)
 	}
 	m.firstTried() // configured and listed: the calls that waited for it go now
+	if f := m.d.opts.OnConnected; f != nil {
+		go f(m.cfg.ID)
+	}
 	for id, since := range rewatch {
 		_ = c.peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil)
 	}

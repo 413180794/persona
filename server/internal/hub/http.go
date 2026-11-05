@@ -38,20 +38,6 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"machines": h.machineList()})
 	})
 	h.deviceRoutesRelayed(api) // the manager's own: reconnect, engine, herdr, deploy, claude-dirs (devices_link.go)
-	api.HandleFunc("GET /api/v1/machines/{mid}/computer", h.withMachine(h.getComputer))
-	api.HandleFunc("PUT /api/v1/machines/{mid}/computer", h.withMachine(h.putComputer))
-	api.HandleFunc("POST /api/v1/machines/{mid}/computer/{action}", h.withMachine(h.postComputerJob))
-	api.HandleFunc("GET /api/v1/machines/{mid}/computer/clipboard", h.withMachine(h.computerClipboard))
-	api.HandleFunc("POST /api/v1/machines/{mid}/computer/clipboard", h.withMachine(h.computerClipboard))
-	api.HandleFunc("GET /api/v1/machines/{mid}/computer/apps", h.withMachine(h.getComputerApps))
-	api.HandleFunc("DELETE /api/v1/machines/{mid}/computer/apps/{bundle}", h.withMachine(h.deleteComputerApp))
-	api.HandleFunc("GET /api/v1/machines/{mid}/browser", h.withMachine(h.getBrowser))
-	api.HandleFunc("PUT /api/v1/machines/{mid}/browser", h.withMachine(h.putBrowser))
-	api.HandleFunc("POST /api/v1/machines/{mid}/browser/{action}", h.withMachine(h.postBrowserJob))
-	// sign-ins in ego lite (browser_cookies.go): only the user's own apps, the hub keeps nothing
-	api.HandleFunc("GET /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
-	api.HandleFunc("POST /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
-	api.HandleFunc("DELETE /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path")}
 	}))
@@ -197,20 +183,14 @@ func (h *Hub) routes() http.Handler {
 	h.notifyRoutes(api)
 	h.personaRoutes(api)
 	h.lookRoutes(api)
-	h.botRoutes(api) // the channels' routes are the assistant's (assistantwire.Routes)
-	h.agentRoutes(api)
 	// usage windows (#2432)
 	h.usageWindowRoutes(api)
 	h.inboxRoutesRelayed(api)
-	h.connectorRoutes(api)
-	h.extensionRoutes(api)
+	// the extensions', connectors', bots', mail's, Cua's and ego's: the manager's (extensions_link.go)
+	h.extensionRoutesRelayed(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)
-	if h.mail != nil {
-		api.Handle("/api/v1/mail/", h.mail.Handler())
-	}
 	h.tokenRoutes(api)
 	h.portRoutes(api)
-	h.messagingRoutes(api)
 	h.pairRoutes(api)
 	h.linkRoutes(api)
 	h.publicRoutes(api)
@@ -246,7 +226,13 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 		if tok == "" {
 			tok = r.URL.Query().Get("token")
 		}
-		p, ok := h.authenticate(r.Context(), tok)
+		var p principal
+		var ok bool
+		if strings.HasPrefix(tok, extTokenPrefix) {
+			p, ok, p.extOpens, p.extScope = h.authorizeExtension(r.Context(), tok, r)
+		} else {
+			p, ok = h.authenticate(r.Context(), tok)
+		}
 		if !ok {
 			failures := 0
 			if limited {
@@ -260,12 +246,13 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 			return
 		}
 		if p.Role == roleExtension {
+			// (authenticate asked the manager whose it is and whether it opens this route: authorizeExtension)
 			// An extension's token is for the hub it runs beside, on this machine (hub.url).
 			if public {
 				h.securityError(w, r, http.StatusForbidden, "extension_token_local_only", 0)
 				return
 			}
-			if ok, scope := h.extensionMay(p, r); !ok {
+			if ok, scope := p.extOpens, p.extScope; !ok {
 				body := errorBody(http.StatusForbidden, "permission_denied", errors.New("this extension was not granted this part of the hub's API"))
 				if scope != "" {
 					body["scope"] = scope

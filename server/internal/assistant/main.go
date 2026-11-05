@@ -20,14 +20,19 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devices"
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/extmgr"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/update"
 )
 
 // Main is `personad assistant`: the assistant as its own process, on the hub's bus. The hub starts one beside itself
 // (hub/assistant_process.go) and hands it its token on stdin; one run elsewhere (hub.json assistant.external) gets it
 // from PERSONA_ASSISTANT_TOKEN (`personad hub assistant-token` makes one). It keeps its state in the hub's Postgres,
 // found as the hub finds it: hub.json's database_url, PERSONA_DATABASE_URL over it.
-func Main(ctx context.Context, version string, stdin io.Reader) error {
+func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
+	version := build.Version
 	logger := log.New(os.Stderr, "assistant: ", log.LstdFlags)
 	cfg, err := readHubConfig()
 	if err != nil {
@@ -70,6 +75,7 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 	// The user's computers are the manager's: it connects them itself (internal/devices, docs/machines.md「谁连电脑」).
 	var bh *BusHub
 	var svc *Service
+	var ext *extmgr.Manager
 	devs := devices.New(devices.Options{Store: database, Logf: log.New(os.Stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 			if out, ok, err := svc.NodeAnswer(ctx, machine, method, params); ok {
@@ -80,6 +86,10 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 		Event:    func(machine, event string, params json.RawMessage) bool { return svc.NodeEvent(machine, event, params) },
 		Detached: func(machine string) { svc.NodeDetached(machine) },
 		Location: func() *time.Location { return svc.location(context.Background()) },
+		// The extensions' part of a node's connection and its events (internal/extmgr).
+		Own:         func(ctx context.Context, machine string) map[string]json.RawMessage { return ext.Own(ctx, machine) },
+		OnConnected: func(machine string) { ext.NodeConnected(machine) },
+		OnEvent:     func(machine, event string, params json.RawMessage) bool { return ext.NodeEvent(machine, event, params) },
 		// A node's new connection gets the launchers added in Persona, with their keys (models_launchers.go).
 		NodeCalls: func(ctx context.Context, machine string) []devicewire.NodeCall {
 			b, err := json.Marshal(map[string]any{"launchers": svc.managedForNodes(ctx)})
@@ -93,20 +103,44 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 		},
 		Connected: func() bool { return bh.Client().Peer() != nil },
 		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
-	bh = NewBusHub(BusOptions{Hub: hub, Token: token, Version: version, Deploy: deploy, Logf: logger.Printf, Devices: devs})
-	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
+	// The extensions, connectors and bots (internal/extmgr): the hub.json and secret.key of the data directory here.
 	home := identity.HomeDir()
+	ext = extmgr.New(extmgr.Options{Dir: home, Store: database, Build: build,
+		Logf: log.New(os.Stderr, "extensions: ", log.LstdFlags).Printf,
+		Hub:  lazyHost{func() *bus.Client { return bh.Client() }}, Devices: devs,
+		Assistant: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+			return bh.Answer(ctx, method, params)
+		},
+		AssistantEvent:   func(event string, params json.RawMessage) { bh.TellLocal(event, params) },
+		AssistantTools:   func() []proto.Tool { return svc.toolsNow() },
+		AssistantMachine: func() string { return svc.mainMachine(context.Background()) },
+		Ask:              func(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) { return svc.AskCard(ctx, ix) },
+		DialRelay: func(ctx context.Context, query string) (*websocket.Conn, error) {
+			return bus.DialAt(ctx, hub, token, nil, devicewire.RelayPath, query)
+		},
+		Connected: func() bool { return bh.Client().Peer() != nil },
+		Lang:      func() i18n.Lang { return svc.lang(context.Background()) },
+		Timezone:  func() string { return svc.userTZ() }})
+	bh = NewBusHub(BusOptions{Hub: hub, Token: token, Version: version, Deploy: deploy, Logf: logger.Printf, Devices: devs, Extensions: ext})
+	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
 	// The model providers' keys are sealed with secret.key beside hub.json (the hub's; one elsewhere needs a copy).
 	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf, Devices: devs,
 		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}, SecretKey: filepath.Join(home, "secret.key")})
+	svc.SetExtensions(ext) // the connectors', Cua's and ego's tools, in this process (fleet_tools.go)
 	logger.Printf("connecting to %s", hub)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		_ = devs.Run(ctx) // after ctx: hands the machines over to the next manager, then lets them go
 	}()
+	extDone := make(chan struct{})
+	go func() {
+		defer close(extDone)
+		_ = ext.Run(ctx) // after ctx: stops the extensions' programs (they are the manager's children)
+	}()
 	err = bh.Run(ctx, svc)
 	<-done
+	<-extDone
 	if err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}

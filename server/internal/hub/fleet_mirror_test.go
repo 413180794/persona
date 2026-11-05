@@ -198,12 +198,12 @@ func nodeAsks(ctx context.Context, m *Machine, method string, params json.RawMes
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, err
 		}
-		if r, ok := h.hubTool(ctx, m.cfg.ID, p.SessionID, p.Name, p.Args, p.Assistant); ok {
+		if r, ok := fakeExtOf(h).CallTool(ctx, m.cfg.ID, p.SessionID, p.Name, p.Args, p.Assistant); ok {
 			return r, nil
 		}
 		return h.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
-	case "assistant.lark":
-		return h.assistantLark(ctx)
+	case "assistant.lark": // the extensions' (the manager's, faked)
+		return fakeExtOf(h).AssistantLark(ctx)
 	}
 	return m.onRequest(ctx, method, params)
 }

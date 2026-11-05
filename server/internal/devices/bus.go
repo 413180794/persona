@@ -113,6 +113,28 @@ func (d *Devices) hubConnected(ctx context.Context, m *Machine, at time.Time) *d
 	return &out
 }
 
+// withOwn adds the manager's own part of a connection (Options.Own) to the hub's reply (nil: the hub is not there).
+func (d *Devices) withOwn(ctx context.Context, machine string, hub *devicewire.ConnectedReply) *devicewire.ConnectedReply {
+	if d.opts.Own == nil {
+		return hub
+	}
+	own := d.opts.Own(ctx, machine)
+	if len(own) == 0 {
+		return hub
+	}
+	out := &devicewire.ConnectedReply{Configure: map[string]json.RawMessage{}}
+	if hub != nil {
+		out.Calls = hub.Calls
+		for k, v := range hub.Configure {
+			out.Configure[k] = v
+		}
+	}
+	for k, v := range own {
+		out.Configure[k] = v
+	}
+	return out
+}
+
 // rehook does the hub's part of every live connection again: the hub is new (it restarted) or the manager's
 // connection to it is.
 func (d *Devices) rehook(ctx context.Context) {
@@ -125,7 +147,7 @@ func (d *Devices) rehook(ctx context.Context) {
 		}
 		go func() {
 			if reply := d.hubConnected(ctx, m, at); reply != nil {
-				m.configureNode(ctx, peer, reply)
+				m.configureNode(ctx, peer, d.withOwn(ctx, m.cfg.ID, reply))
 			}
 		}()
 	}

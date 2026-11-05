@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -53,7 +53,8 @@ func (s selfSetting) actions() []string {
 	return a
 }
 
-// selfSettings is the registry (what this hub has: mail only with mail set up).
+// selfSettings is the registry of the hub's own; the manager's (mail, the sources' own rules) are listed beside them
+// (managerSettings).
 func (h *Hub) selfSettings() []selfSetting {
 	l := h.userLang() // the titles are on the phone's card
 	rulesTitle, agentRulesTitle := ss(l, "title_inbox_rules"), ss(l, "title_agent_rules")
@@ -77,15 +78,6 @@ func (h *Hub) selfSettings() []selfSetting {
 	if h.store != nil {
 		out = append(out, h.blockedClaudeDirsSetting())
 	}
-	out = append(out, h.sourceRulesSettings()...)
-	if h.mail != nil {
-		out = append(out, selfSetting{key: "mail.accounts", title: ss(l, "title_mail"),
-			about: "the user's mail accounts: Persona reads them in the inbox and mail_* use them. add connects (IMAP and SMTP) before saving; " +
-				"the password is typed on the phone, never pass one. Gmail can only be added in the app (Google sign-in)",
-			value: `add: {"email", "provider": "imap|feishu" (default imap; feishu = Feishu / Lark mail), "name"?, "username"?, "imap_host"?, ` +
-				`"imap_port"?, "smtp_host"?, "smtp_port"?, "smtp_security"?: "tls|starttls"}; most providers need only the email. remove: the account id`,
-			get: h.getMailAccounts, add: h.addMailAccount, remove: h.removeMailAccount})
-	}
 	sort.Slice(out, func(i, j int) bool { return out[i].key < out[j].key })
 	return out
 }
@@ -108,6 +100,18 @@ func (h *Hub) toolJarvisSettings(ctx context.Context, m *Machine, sessionID stri
 		}
 	}
 	if s == nil {
+		for _, ms := range h.managerSettings(ctx) { // the manager's (mail, the sources' own rules): it does the change
+			if ms.Key == a.Key {
+				var res struct {
+					Text string `json:"text"`
+				}
+				if err := h.extCall(ctx, extwire.HubSettingsTool, map[string]any{"machine_id": m.cfg.ID, "session_id": sessionID,
+					"arguments": args}, &res); err != nil {
+					return "", err
+				}
+				return res.Text, nil
+			}
+		}
 		return "", fmt.Errorf("no setting %q (action list shows them)", a.Key)
 	}
 	var change *selfChange
@@ -217,111 +221,18 @@ func (h *Hub) textSetting(ctx context.Context, v json.RawMessage, title string, 
 		}}, nil
 }
 
-// ---- mail accounts ----
-
-func (h *Hub) getMailAccounts(context.Context) (string, error) {
-	as, err := h.mail.ListAccounts()
-	if err != nil {
-		return "", err
+// managerSettings are the manager's jarvis_settings entries (none while it is away).
+func (h *Hub) managerSettings(ctx context.Context) []extwire.Setting {
+	if h.busConnOf(devicesOwner) == nil {
+		return nil
 	}
-	if len(as) == 0 {
-		return "（无）", nil
+	var res struct {
+		Settings []extwire.Setting `json:"settings"`
 	}
-	var b strings.Builder
-	for _, a := range as {
-		fmt.Fprintf(&b, "- %s (id %s): %s, provider %s\n", a.Name, a.ID, a.Email, a.Provider)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := h.extCall(ctx, extwire.HubSettingsList, map[string]any{}, &res); err != nil {
+		h.logf("settings: the manager's: %v", err)
 	}
-	return b.String(), nil
-}
-
-func (h *Hub) addMailAccount(_ context.Context, v json.RawMessage) (*selfChange, error) {
-	l := h.userLang()
-	req, summary, err := mailAccountRequest(l, v)
-	if err != nil {
-		return nil, err
-	}
-	return &selfChange{summary: summary,
-		fields: []proto.Field{{Key: "password", Label: ss(l, "field_password"), Placeholder: ss(l, "field_password_hint"), Secret: true}},
-		apply: func(_ context.Context, values map[string]string) (string, error) {
-			req.Password = values["password"]
-			a, err := h.mail.AddAccount(req)
-			if err != nil {
-				return "", fmt.Errorf("could not add %s: %w (nothing saved; a login error usually means the provider wants an app password / 授权码)", req.Email, err)
-			}
-			h.broadcast(map[string]any{"type": "mail_accounts"})
-			return fmt.Sprintf("Added %s (account id %s, provider %s): the inbox reads it from its next collection; mail_* can use it now.",
-				a.Email, a.ID, a.Provider), nil
-		}}, nil
-}
-
-// mailAccountRequest reads add's value into the request and what the card says. Gmail is an error: Google sign-in
-// only happens in the app.
-func mailAccountRequest(l i18n.Lang, v json.RawMessage) (mail.AddAccountRequest, string, error) {
-	var a struct {
-		Email        string `json:"email"`
-		Provider     string `json:"provider"`
-		Name         string `json:"name"`
-		Username     string `json:"username"`
-		IMAPHost     string `json:"imap_host"`
-		IMAPPort     int    `json:"imap_port"`
-		SMTPHost     string `json:"smtp_host"`
-		SMTPPort     int    `json:"smtp_port"`
-		SMTPSecurity string `json:"smtp_security"`
-	}
-	if err := json.Unmarshal(v, &a); err != nil {
-		return mail.AddAccountRequest{}, "", fmt.Errorf("value: %w", err)
-	}
-	email := strings.ToLower(strings.TrimSpace(a.Email))
-	if !strings.Contains(email, "@") {
-		return mail.AddAccountRequest{}, "", errors.New("email is required")
-	}
-	if a.Provider == "gmail" || strings.HasSuffix(email, "@gmail.com") || strings.HasSuffix(email, "@googlemail.com") {
-		return mail.AddAccountRequest{}, "", errors.New("Gmail is added with Google sign-in, which only works in the app: " +
-			"ask the user to open 设置 › 邮箱 › 添加邮箱, pick Gmail and tap 使用 Google 账号登录")
-	}
-	provider := a.Provider
-	if provider == "" {
-		provider = mail.ProviderIMAP
-	}
-	req := mail.AddAccountRequest{Name: strings.TrimSpace(a.Name), Email: email, Provider: provider, Auth: mail.AuthPassword,
-		Username: a.Username, IMAPHost: a.IMAPHost, IMAPPort: a.IMAPPort, SMTPHost: a.SMTPHost, SMTPPort: a.SMTPPort,
-		SMTPSecurity: a.SMTPSecurity}
-	servers := ss(l, "servers_auto")
-	if provider == mail.ProviderFeishu {
-		servers = ss(l, "servers_feishu")
-	} else if a.IMAPHost != "" || a.SMTPHost != "" {
-		servers = fmt.Sprintf("IMAP %s · SMTP %s", hostPort(l, a.IMAPHost, a.IMAPPort), hostPort(l, a.SMTPHost, a.SMTPPort))
-	}
-	return req, ss(l, "add_mail", i18n.Args{"email": email, "servers": servers}), nil
-}
-
-func hostPort(l i18n.Lang, host string, port int) string {
-	switch {
-	case host == "":
-		return ss(l, "auto")
-	case port == 0:
-		return host
-	}
-	return fmt.Sprintf("%s:%d", host, port)
-}
-
-func (h *Hub) removeMailAccount(_ context.Context, id string) (*selfChange, error) {
-	as, err := h.mail.ListAccounts()
-	if err != nil {
-		return nil, err
-	}
-	for _, a := range as {
-		if a.ID == id || strings.EqualFold(a.Email, id) {
-			acct := a
-			return &selfChange{summary: ss(h.userLang(), "remove_mail", i18n.Args{"email": acct.Email}),
-				apply: func(context.Context, map[string]string) (string, error) {
-					if err := h.mail.DeleteAccount(acct.ID); err != nil {
-						return "", err
-					}
-					h.broadcast(map[string]any{"type": "mail_accounts"})
-					return "Removed " + acct.Email + ".", nil
-				}}, nil
-		}
-	}
-	return nil, fmt.Errorf("no mail account %q (get lists them)", id)
+	return res.Settings
 }

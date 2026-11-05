@@ -1,0 +1,217 @@
+{
+  "assistant_tools": [
+    {
+      "name": "imessage_chats",
+      "description": "List the user's iMessage / SMS conversations (the Messages app on their Mac), newest first: each one's name, id, whether it is a group and who is in it, when the last message came, how many are unread and the last message. Only real conversations are listed (someone in the user's contacts, or the user has written there); one-time codes are masked. Use imessage_read with an id to read a conversation, imessage_search to find messages by what they say.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "How many conversations (default 30)"
+          },
+          "before": {
+            "type": "string",
+            "description": "The before value a previous answer gave, for older conversations"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "imessage_read",
+      "description": "Read one iMessage / SMS conversation of the user's: its newest messages, oldest first, with who wrote each one and when (what a reply answers, attachments as [图片] / [文件 name] / [语音], group changes as lines; one-time codes masked). Ask again with the before value it gives for earlier messages.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "chat": {
+            "type": "string",
+            "description": "The conversation's id (imessage-\u003c12 hex\u003e) from imessage_chats or imessage_search"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "How many messages (default 40)"
+          },
+          "before": {
+            "type": "string",
+            "description": "The before value a previous answer gave, for earlier messages"
+          }
+        },
+        "required": [
+          "chat"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "imessage_search",
+      "description": "Search the user's iMessage / SMS messages for a word or phrase (plain substring, any case; not a query language): the newest matching messages, each with its conversation's name and id, who wrote it and when. Covers the last year by default. Only real conversations are searched (someone in the user's contacts, or the user has written there); one-time codes are masked. Read the conversation around a hit with imessage_read.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Text the message contains"
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650,
+            "description": "How far back to look, in days (default 365)"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "How many messages (default 20)"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "tools": [
+    {
+      "name": "mail_accounts",
+      "description": "List the mail accounts the user has configured (name, address, provider). Call this before searching or sending mail so you know which account_id to use.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mail_search",
+      "description": "Search mail. Returns message summaries (uid, subject, from, date, snippet). Use account_id from mail_accounts; omit it to search every account's inbox at once. For Gmail the query uses Gmail search syntax (from:, subject:, has:attachment, newer_than:7d); other providers search the full text on their server. Some servers do not search at all (NetEase 163 finds nothing for any word): when the server finds nothing, subjects, senders and recipients are matched instead (every word must appear, case does not matter; bodies are not searched), a stretch of the newest mail at a time, and the result says which before_uid looks further back.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "description": "Account id from mail_accounts; omit to search all inboxes"
+          },
+          "mailbox": {
+            "type": "string",
+            "description": "Mailbox name, default INBOX"
+          },
+          "query": {
+            "type": "string",
+            "description": "Search text or Gmail query"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max results, default 20, max 200"
+          },
+          "before_uid": {
+            "type": "integer",
+            "description": "Return messages with UID lower than this, for paging"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mail_read",
+      "description": "Read one message in full: headers, plain text, HTML and the attachment list. Does not mark the message as read.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "integer"
+          },
+          "mailbox": {
+            "type": "string",
+            "description": "Mailbox name, default INBOX"
+          }
+        },
+        "required": [
+          "account_id",
+          "uid"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mail_send",
+      "description": "Send an email from one of the user's accounts. The user must approve each send on their phone before it goes out, so fill in a clear subject and body. To reply, pass in_reply_to with the original Message-ID and references with the original References chain plus that Message-ID.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/address"
+            }
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/address"
+            }
+          },
+          "bcc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/address"
+            }
+          },
+          "subject": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "Plain-text body"
+          },
+          "html": {
+            "type": "string",
+            "description": "Optional HTML body"
+          },
+          "in_reply_to": {
+            "type": "string",
+            "description": "Message-ID being replied to"
+          },
+          "references": {
+            "type": "string",
+            "description": "Space-separated Message-IDs from the original thread"
+          }
+        },
+        "required": [
+          "account_id",
+          "to",
+          "subject",
+          "text"
+        ],
+        "$defs": {
+          "address": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "email"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

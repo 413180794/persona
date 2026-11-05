@@ -1,0 +1,314 @@
+{
+  "assistant_tools": [
+    {
+      "name": "github_search",
+      "description": "Search GitHub as the user (their gh login on one of their machines). kind \"issues\" (default) finds issues and pull requests with GitHub's search syntax, e.g. \"is:pr is:open review-requested:@me\", \"involves:@me is:open updated:\u003e2026-01-01\", \"repo:owner/name label:bug\"; add involves:@me unless the user asked about something wider. kind \"code\" searches code (\"repo:owner/name symbol\"). Returns one line per result with its repo#number, state, title, author, last update and URL; read one with github_read.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "GitHub search query"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "issues",
+              "code"
+            ],
+            "description": "issues (issues and pull requests, the default) or code"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "How many results (default 20)"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "github_read",
+      "description": "Read one GitHub pull request or issue: title, state, author, labels, the description, and for a pull request its branches, merge state, requested reviewers and reviews; then its comments, newest first (long texts are cut). Use github_diff for what a pull request changes and github_checks for its CI.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string",
+            "description": "owner/name"
+          },
+          "number": {
+            "type": "integer",
+            "description": "The issue or pull request number"
+          },
+          "comments": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50,
+            "description": "How many of the newest comments and reviews to include (default 15)"
+          }
+        },
+        "required": [
+          "repo",
+          "number"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "github_diff",
+      "description": "What a GitHub pull request changes. Without path: every changed file with its status and lines added / removed. With path: that file's patch (cut when very long; a file too big for GitHub to show has only its counts).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string",
+            "description": "owner/name"
+          },
+          "number": {
+            "type": "integer",
+            "description": "The pull request number"
+          },
+          "path": {
+            "type": "string",
+            "description": "One changed file's path, for its patch"
+          }
+        },
+        "required": [
+          "repo",
+          "number"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "github_checks",
+      "description": "The checks (CI) of a GitHub pull request's head commit, or of a commit / branch: each check's name, status and conclusion. For failed GitHub Actions jobs it adds the last part of the job's log, where the error usually is.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string",
+            "description": "owner/name"
+          },
+          "number": {
+            "type": "integer",
+            "description": "A pull request number (its head commit is checked)"
+          },
+          "ref": {
+            "type": "string",
+            "description": "A commit SHA or branch name, instead of number"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "github_comment",
+      "description": "Comment on a GitHub pull request or issue as the user. Everyone who can see the repository sees it (for a public repository, everyone), so the user approves each comment on their phone before it is posted, unless their rules allow it. Write what the user would write; never post on your own initiative what they have not asked for.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string",
+            "description": "owner/name"
+          },
+          "number": {
+            "type": "integer",
+            "description": "The issue or pull request number"
+          },
+          "body": {
+            "type": "string",
+            "description": "The comment, Markdown"
+          }
+        },
+        "required": [
+          "repo",
+          "number",
+          "body"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "github_review",
+      "description": "Submit a review on a GitHub pull request as the user: approve it, request changes, or comment. The user approves it on their phone first (an approval says so in bold), unless their rules allow it. Only approve when the user has said to.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string",
+            "description": "owner/name"
+          },
+          "number": {
+            "type": "integer",
+            "description": "The pull request number"
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REQUEST_CHANGES",
+              "COMMENT"
+            ],
+            "description": "APPROVE, REQUEST_CHANGES (body required) or COMMENT (body required)"
+          },
+          "body": {
+            "type": "string",
+            "description": "The review's text, Markdown"
+          }
+        },
+        "required": [
+          "repo",
+          "number",
+          "event"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "tools": [
+    {
+      "name": "mail_accounts",
+      "description": "List the mail accounts the user has configured (name, address, provider). Call this before searching or sending mail so you know which account_id to use.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mail_search",
+      "description": "Search mail. Returns message summaries (uid, subject, from, date, snippet). Use account_id from mail_accounts; omit it to search every account's inbox at once. For Gmail the query uses Gmail search syntax (from:, subject:, has:attachment, newer_than:7d); other providers search the full text on their server. Some servers do not search at all (NetEase 163 finds nothing for any word): when the server finds nothing, subjects, senders and recipients are matched instead (every word must appear, case does not matter; bodies are not searched), a stretch of the newest mail at a time, and the result says which before_uid looks further back.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "description": "Account id from mail_accounts; omit to search all inboxes"
+          },
+          "mailbox": {
+            "type": "string",
+            "description": "Mailbox name, default INBOX"
+          },
+          "query": {
+            "type": "string",
+            "description": "Search text or Gmail query"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max results, default 20, max 200"
+          },
+          "before_uid": {
+            "type": "integer",
+            "description": "Return messages with UID lower than this, for paging"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mail_read",
+      "description": "Read one message in full: headers, plain text, HTML and the attachment list. Does not mark the message as read.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "integer"
+          },
+          "mailbox": {
+            "type": "string",
+            "description": "Mailbox name, default INBOX"
+          }
+        },
+        "required": [
+          "account_id",
+          "uid"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mail_send",
+      "description": "Send an email from one of the user's accounts. The user must approve each send on their phone before it goes out, so fill in a clear subject and body. To reply, pass in_reply_to with the original Message-ID and references with the original References chain plus that Message-ID.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/address"
+            }
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/address"
+            }
+          },
+          "bcc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/address"
+            }
+          },
+          "subject": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "Plain-text body"
+          },
+          "html": {
+            "type": "string",
+            "description": "Optional HTML body"
+          },
+          "in_reply_to": {
+            "type": "string",
+            "description": "Message-ID being replied to"
+          },
+          "references": {
+            "type": "string",
+            "description": "Space-separated Message-IDs from the original thread"
+          }
+        },
+        "required": [
+          "account_id",
+          "to",
+          "subject",
+          "text"
+        ],
+        "$defs": {
+          "address": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "email"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

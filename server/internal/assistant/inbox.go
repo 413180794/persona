@@ -80,8 +80,8 @@ type InboxItem struct {
 	// Conversation is where the item opens in a messaging source (docs/extension-messaging.md「九」, #2138): listed
 	// only, from Lark; an app with the source opens it there, an older one uses Lark.
 	Conversation *wire.MessagingConversationRef `json:"conversation,omitempty"`
-	Mail        *InboxMail `json:"mail,omitempty"`
-	Doc         *InboxDoc  `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_blocks.go)
+	Mail         *InboxMail                     `json:"mail,omitempty"`
+	Doc          *InboxDoc                      `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_blocks.go)
 	// Translations by target language: new foreign mail, translated before it is opened (inbox_translate.go).
 	Translations map[string]*InboxTranslation `json:"translations,omitempty"`
 	Moment       *InboxMoment                 `json:"moment,omitempty"` // a 公司圈 post's comments / @me (inbox_blocks.go)

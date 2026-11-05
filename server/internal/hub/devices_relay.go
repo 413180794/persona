@@ -236,18 +236,29 @@ func (h *Hub) relayLinkConn(w http.ResponseWriter, r *http.Request, a devicewire
 // handToManager has the manager take a connection the hub holds: it dials the relay with the id and the hub waits
 // for it.
 func (h *Hub) handToManager(ctx context.Context, a devicewire.Accept) (*relayTaken, error) {
+	return h.handToManagerVia(ctx, devicewire.MethodAccept, &a)
+}
+
+// handToManagerVia is handToManager with the manager's method that takes it: the devices' (devices.accept, a) or the
+// extensions' relayed requests (extensions.accept, a nil: only the id).
+func (h *Hub) handToManagerVia(ctx context.Context, method string, a *devicewire.Accept) (*relayTaken, error) {
 	rs := &h.relay
-	a.ID = randomHex(12)
+	id := randomHex(12)
 	ch := make(chan *relayTaken, 1)
 	rs.mu.Lock()
 	if rs.pending == nil {
 		rs.pending = map[string]chan *relayTaken{}
 	}
-	rs.pending[a.ID] = ch
+	rs.pending[id] = ch
 	rs.mu.Unlock()
 	cctx, cancel := context.WithTimeout(ctx, relayWait)
 	defer cancel()
-	err := h.callBus(cctx, devicesOwner, devicewire.MethodAccept, a, nil)
+	var params any = map[string]string{"id": id}
+	if a != nil {
+		a.ID = id
+		params = *a
+	}
+	err := h.callBus(cctx, devicesOwner, method, params, nil)
 	if err == nil {
 		select {
 		case t := <-ch:
@@ -259,7 +270,7 @@ func (h *Hub) handToManager(ctx context.Context, a devicewire.Accept) (*relayTak
 	// Not wanted any more; one the manager dialed just now goes away (serveRelay delivers under rs.mu, and the close
 	// handshake is not waited for under it).
 	rs.mu.Lock()
-	delete(rs.pending, a.ID)
+	delete(rs.pending, id)
 	var late *relayTaken
 	select {
 	case late = <-ch:

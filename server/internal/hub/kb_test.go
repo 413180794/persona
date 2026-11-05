@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -14,7 +12,6 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/assistantwire"
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
 )
 
@@ -145,51 +142,8 @@ func TestKBRoutesRelayed(t *testing.T) {
 	}
 }
 
-// archiveExample is a connector whose archive hands over one chat (two messages) the first time.
-type archiveExample struct{ calls int }
-
-func (*archiveExample) ID() string   { return "example" }
-func (*archiveExample) Name() string { return "Example" }
-func (*archiveExample) Manifest() connector.Manifest {
-	return connector.Manifest{Capabilities: []connector.Capability{connector.CapArchive}}
-}
-func (a *archiveExample) Changes(_ context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {
-	a.calls++
-	if cursor != "" {
-		return nil, cursor, false, nil
-	}
-	at := time.Now().Add(-time.Hour)
-	return []connector.ChatBatch{{Chat: kb.SourceChat{ID: "g1", Name: "示例群", Kind: "group"},
-		Messages: []kb.SourceMessage{{ID: "m1", SenderID: "u1", SenderName: "示例用户", Type: "TEXT", Text: "周五发布", At: at},
-			{ID: "m2", SenderID: "u2", SenderName: "另一位", Type: "TEXT", Text: "收到", At: at.Add(time.Minute)}}}}, "1", false, nil
-}
-
-// The assistant's knowledge base reads a connector through the hub (connectors.archives, connectors.changes) and
-// keeps it in its own files: the chat, its messages, the cursor.
-func TestKBArchivesThroughTheHub(t *testing.T) {
-	h := newTestHub(t)
-	h.connectors = connector.NewRegistry(nil)
-	f := &archiveExample{}
-	if err := h.addConnector(f); err != nil {
-		t.Fatal(err)
-	}
-	e := withKB(t, h)
-	connectAssistantRunning(t, h) // its loop: the first round reads every connector
-	eventually(t, 10*time.Second, "the connector's chat in the knowledge base", func() bool {
-		c, ok := e.Store.Chat(kb.ChatID("example", "g1"))
-		return ok && c.Messages == 2
-	})
-	if text := e.Store.Since(kb.ChatID("example", "g1"), time.Time{}, 10000); !strings.Contains(text, "周五发布") || !strings.Contains(text, "收到") {
-		t.Fatalf("archived:\n%s", text)
-	}
-	eventually(t, 5*time.Second, "the cursor", func() bool { // written after the batch went in
-		b, err := os.ReadFile(filepath.Join(e.Store.Dir, "cursors", "example.json"))
-		return err == nil && string(b) == `{"cursor":"1"}`
-	})
-}
-
-// hub.json kb.enabled false: the assistant is told (hello) and opens none, and the hub hands nothing over itself: no
-// sources listed or read, no posts taken, nothing asked to delete.
+// hub.json kb.enabled false: the assistant is told (hello) and opens none. (The manager hands nothing over then:
+// extmgr's TestKBOffAtTheSources.)
 func TestKBOffAtTheHub(t *testing.T) {
 	h := newTestHub(t)
 	off := false
@@ -200,38 +154,5 @@ func TestKBOffAtTheHub(t *testing.T) {
 	}
 	if hello, _ := (assistantLink{h}).Hello(context.Background()); hello.KB == nil || !hello.KB.Off {
 		t.Fatalf("hello %+v", hello.KB)
-	}
-	h.connectors = connector.NewRegistry(nil)
-	f := &archiveExample{}
-	if err := h.addConnector(f); err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	raw, ok, err := h.kbSourcesCall(ctx, assistantwire.AppCall{AppID: assistantwire.AppConnectors, Method: assistantwire.ConnectorsArchives})
-	if !ok || err != nil || string(raw) != `{"archives":[],"items":[]}` {
-		t.Fatalf("archives: %s %v", raw, err)
-	}
-	if _, _, err := h.kbSourcesCall(ctx, assistantwire.AppCall{AppID: assistantwire.AppConnectors, Method: assistantwire.ConnectorsChanges,
-		Params: json.RawMessage(`{"id":"example"}`)}); err == nil || f.calls != 0 {
-		t.Fatalf("changes read with the knowledge base off: %v", err)
-	}
-	if _, err := h.kbFor("example").PendingPosts(ctx, 10); err == nil || err.Error() != "这台 hub 没开知识库" {
-		t.Fatalf("posts: %v", err)
-	}
-	if c, p, err := h.forgetArchive(ctx, "example"); c != 0 || p != 0 || err != nil {
-		t.Fatalf("forget asked: %d %d %v", c, p, err)
-	}
-}
-
-// An attachment for an assistant on another machine is at most kbMediaExternal (one bus message must not hold a slow
-// link past its keepalive).
-func TestKBMediaForAnExternalAssistant(t *testing.T) {
-	h := newTestHub(t)
-	if h.kbMediaMost() != connector.ArchiveMediaMost {
-		t.Fatal("the assistant beside the hub gets less than the whole")
-	}
-	h.cfg.Assistant.External = true
-	if h.kbMediaMost() != kbMediaExternal {
-		t.Fatal("an external assistant gets the whole")
 	}
 }

@@ -1,13 +1,34 @@
 # Every route of the hub (as registered) and the scope an extension's token needs for it; - is full credentials only.
-# Kept by TestRouteScopes (hub/extension_scopes_test.go); PERSONA_UPDATE_ROUTE_SCOPES=1 rewrites it.
+# Kept by TestRouteScopes (hub/route_scopes_test.go); PERSONA_UPDATE_ROUTE_SCOPES=1 rewrites it.
 -                    /
 -                    /api/
 -                    /api/v1/admin/
 -                    /api/v1/admin/cli/
+-                    /api/v1/admin/extensions
+-                    /api/v1/admin/extensions/
+-                    /api/v1/agents
+-                    /api/v1/agents/
+-                    /api/v1/bots/
+-                    /api/v1/channels/{id}/bind
+-                    /api/v1/connectors
+-                    /api/v1/connectors/
+-                    /api/v1/devices/{id}/widgets
+-                    /api/v1/extensions
+-                    /api/v1/extensions/
 extensions.call:{id} /api/v1/extensions/{id}/
 -                    /api/v1/extensions/{id}/-/machines/{mid}/
+-                    /api/v1/imessage
+-                    /api/v1/imessage/
+-                    /api/v1/machines/{mid}/browser
+-                    /api/v1/machines/{mid}/browser/
+-                    /api/v1/machines/{mid}/computer
+-                    /api/v1/machines/{mid}/computer/
 -                    /api/v1/mail/
+-                    /api/v1/messaging
+-                    /api/v1/messaging/
 -                    /api/v1/messaging/{source}/{rest...}
+-                    /api/v1/plugins
+-                    /api/v1/plugins/
 -                    DELETE /api/v1/admin/devices/{id}
 -                    DELETE /api/v1/admin/extensions/{id}
 -                    DELETE /api/v1/admin/machines/{id}

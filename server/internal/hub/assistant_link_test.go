@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
-	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -228,8 +227,7 @@ func testDB(t *testing.T) *db.DB {
 	return database
 }
 
-// The hub answers the assistant's schedule calls with its own functions: the machines, their launchers, the plugins'
-// providers, the knowledge base; a push like an agent's, a live update as it is; the tasks it reports are what the hub reads.
+// The hub answers the assistant's schedule calls with its own functions: the machines; a push like an agent's, a live update as it is; the tasks it reports are what the hub reads.
 func TestAssistantLinkScheduleCalls(t *testing.T) {
 	h, n := conversationsHub(t)
 	link := assistantLink{h}
@@ -238,17 +236,8 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 	if err != nil || string(raw) != `{"devices":[{"id":"server","name":"server","kind":"local","home":"/home/me","online":false,"reachable":true}],"phone_online":false}` {
 		t.Fatalf("devices.list: %s %v", raw, err)
 	}
-	// What the model configuration (the assistant's) asks of the hub: the plugins' providers and models.
-	for method, want := range map[string]string{assistantwire.PluginsPresets: `{"presets":[]}`, assistantwire.PluginsVoice: `{"plugins":[]}`,
-		assistantwire.PluginsNeedTriage: `{"names":[]}`} {
-		if raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppPlugins, Method: method}); err != nil || string(raw) != want {
-			t.Fatalf("%s: %s %v", method, raw, err)
-		}
-	}
-	if raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppConnectors, Method: assistantwire.ConnectorsArchives}); err != nil ||
-		string(raw) != `{"archives":[],"items":[]}` {
-		t.Fatalf("connectors.archives: %s %v", raw, err)
-	}
+	// (What the model configuration asks of the extensions, plugins.*, is the manager's: extmgr answers it in its process.)
+	// (The knowledge base's sources, connectors.archives…, are the manager's: extmgr's kb_sources_test.go.)
 	// One of the hub's features starts a conversation: the assistant prepares its directory and starts it on the
 	// purpose's model.
 	s, err := h.asst().Start(ctx, assistant.StartParams{Text: "hi", PermissionMode: "plan", Purpose: "assistant"})

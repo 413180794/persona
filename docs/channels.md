@@ -101,6 +101,10 @@
 
 ### 谁管什么（2026-11-04，从 hub 挪进助手）
 
+2026-11-05 起表里「hub（传输）」那一列也在管理者里（`server/internal/extmgr`：飞书开放平台的长连接、凭证、配对、插件渠道的程序、绑定，`docs/extensions.md`「谁管什么」）：
+它和助手在同一个进程，下面说的总线消息照旧（方法和参数一样），只是在进程里直接调；`/api/v1/bots…` 和绑定 `POST /api/v1/channels/{id}/bind` 由 hub 原样转给管理者。
+hub 留下的只有会话列表上的来源标记、完成推送（照快照的 `channels`）、跟对话（`session.follow` 等）和卡片本身；渠道里主人的回答经 `app.call hub interactions.resolve_owner` 让 hub 答卡片（主人的操作在管理者里核）。
+
 | | hub（传输） | 助手（管理者，`personad assistant`） |
 | --- | --- | --- |
 | 飞书机器人 | 应用凭证（`bots.feishu`，连同功能开关）、开放平台的长连接、配对和「只认主人」「只在私聊」、发 / 回 / 改消息和卡片、表情、读引用和转发、下载图片和文件；`/api/v1/bots/feishu*` 的路由 | 消息进哪段对话（当前目标、话题绑定、`/main` `/new` `/list` `/agents` `/start` 这些命令）、组织内容、发进对话、跟踪这一轮、进度卡和答案卡、提问和批准的卡片和按钮的回答、推送和同步；聊天状态 `bots.feishu.state` |

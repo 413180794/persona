@@ -176,3 +176,56 @@ func TestUnacceptedInTheMorningBriefing(t *testing.T) {
 		t.Fatalf("still listed after 通过: %+v", got)
 	}
 }
+
+// A change asked for on the card of a task the hub closed meanwhile reopens it: while its agent works on the change
+// the task is open, and the agent's next turn is followed again — the next deploy gets a new 请验收 card (#3457).
+func TestAcceptanceFeedbackReopensTheClosedTask(t *testing.T) {
+	s, f, posts := acceptService(t)
+	todo := startedTask(t, s, f)
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+	waitFor(t, "the 请验收 card", func() bool { return acceptCardOf(posts()) != "" })
+	ctx := context.Background()
+	if ok, err := s.autoDoneTodo(ctx, todo.ID, "做完了", time.Now().Add(-time.Minute)); err != nil || !ok {
+		t.Fatalf("auto done: %v %v", ok, err)
+	}
+	mid := askOf(s, todo.ID).MessageID
+	// The agent may take the change up at once: by the time it is sent, the task must follow the agent again.
+	followedAtSend := false
+	f.mu.Lock()
+	f.onSend = func(*fakeHub, map[string]any) { _, followedAtSend = s.taskOf(ctx, "box", "s1") }
+	f.mu.Unlock()
+	if !s.acceptReply(ctx, "om_r2", "按钮改成蓝色", mid, "") {
+		t.Fatal("not taken")
+	}
+	f.mu.Lock()
+	f.onSend = nil
+	f.mu.Unlock()
+	if !followedAtSend {
+		t.Fatal("the change was sent while the task was still closed: the agent's turn would not be followed")
+	}
+	got := onlyTodo(s)
+	if got.DoneAt != nil || got.ReopenedAt == nil || got.DoneBy != "" {
+		t.Fatalf("still closed after a change was asked for: %+v", got)
+	}
+	if _, ok := s.taskOf(ctx, "box", "s1"); !ok {
+		t.Fatal("the agent no longer counts for the task")
+	}
+	n := 0
+	for _, p := range posts() {
+		if strings.Contains(p, "请验收") {
+			n++
+		}
+	}
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+	waitFor(t, "a new 请验收 card", func() bool {
+		m := 0
+		for _, p := range posts() {
+			if strings.Contains(p, "请验收") {
+				m++
+			}
+		}
+		return m == n+1
+	})
+}

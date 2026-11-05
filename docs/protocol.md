@@ -1575,7 +1575,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   - `fleet.sessions {machine_id, sessions, muted?}`：一台机器的会话列表，App 拿到的样子（统一状态、需要你的卡片数、看过、工作状态、待办、渠道……）；变了才发，每次握手后每台一次。hub 存成机器的 `sessions`，推给 App（`sessions` / `sessions_delta`），答 `GET /api/v1/sessions`。
   - `fleet.interaction {interaction}`：新的或又显示一次的卡片；`fleet.interaction_resolved {id, answered_by?}`：结束了；`fleet.interactions {interactions}`：全部待处理的，每次握手后一次，hub 整份换掉（没了的对 App 发 `interaction_resolved`）。hub 照旧推 `interaction` / `interaction_resolved` 事件、答 `GET /api/v1/interactions`。
   - `fleet.live {state, stats}`：实时活动的内容（`FleetState`，没填设备那几项）和灵动岛的数字，变了才发（数字每 15 秒看一次）。
-- 管理者 → hub（调用）：`notify.request {notification}`，`kind` 除了助手的 `assistant` 还有 `done`（一轮结束：`took_ms`、`long_ms`，设备按「只推长的」挑）和 `input`（一张卡：`interaction`）；`app.call phone`（`phone.tools`、`phone.call`）、`fleet.tool {machine_id, session_id, name, args, assistant}` → `{handled, result}`（连接器、Cua、ego 的工具；node 不等了，管理者的调用跟着取消（`rpc.cancel`），hub 那边等着的卡片撤掉）、`app.call hub`（`hub.tools`、`hub.assistant_summary`、`hub.assistant_lark`）、`app.call interactions` 的 `interactions.owner_action`（渠道回答卡片前 hub 收回主人动作）。
+- 管理者 → hub（调用）：`notify.request {notification}`，`kind` 除了助手的 `assistant` 还有 `done`（一轮结束：`took_ms`、`long_ms`，设备按「只推长的」挑）和 `input`（一张卡：`interaction`）；`app.call phone`（`phone.tools`、`phone.call`）（连接器、Cua、ego 的工具、门禁命令的说法、`assistant.lark` 是管理者进程里的扩展答的，不过总线）、`app.call interactions` 的 `interactions.owner_action`（渠道回答卡片前 hub 收回主人动作）。
 - hub → 管理者：调用 `fleet.ask {interaction}` → `Resolution`（hub 自己的功能要问的卡片；hub 不等了就取消，卡片撤掉）；单向 `fleet.clients {elicitation}`（有没有收 MCP 表单的 App）、`fleet.seen {machine_id, session_id}`（App 的 WebSocket `seen`）、`fleet.mutes {}`（静音改了，管理者重读 settings `mutes`）。
 - App 的路由 hub 转给管理者（`http.request`，管理者不在 `503 assistant_offline`）：`POST /api/v1/interactions/{id}/resolve`、`GET /api/v1/interactions/history`（带 `X-Persona-Elicitation: 1` 才有 MCP 表单）、`POST /api/v1/sessions/{mid}/{sid}/seen`、`GET /api/v1/metrics`、`GET /api/v1/machines/{id}/metrics`、`GET /api/v1/usage`。形状和以前 hub 答的一样。
 
@@ -1613,6 +1613,19 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 - 管理者没连着时：机器显示离线（`error`「助手暂时连不上，稍后再试」），要经它的接口回 `503 assistant_offline`，终端流以同一句话结束，转发的端口关掉，`/api/v1/link` 回 503；
   hub 刚起来、管理者还没第一次上报的那 30 秒里，调用等它而不是立刻失败（机器按管理者交接的显示），`/api/v1/link` 和成员的 `/api/v1/peer/node` 最多等 5 秒。
 - node 的一条消息超过 60 MiB 时管理者不转（总线一行最多 64 MiB）：事件丢掉，调用回 `too_large`。
+
+### 扩展、连接器和机器人（extensions.*，2026-11-05）
+
+都是管理者的（`docs/extensions.md`「谁管什么」），消息在 `server/internal/extwire`：
+
+| 方向 | 方法 / 事件 | 做什么 |
+| --- | --- | --- |
+| hub → 管理者，调用 | `extensions.accept {id}` → `{}` | hub 替管理者接着 App 的一个请求（`extwire.Routes`、扩展的 API 前缀、管理界面的扩展页面）：管理者用这个 id 拨 `/api/v1/bus/relay`，在这条流上答这一次 HTTP（SSE、WebSocket 照样是流）；谁在问在 `X-Persona-*` 头里 |
+| | `extensions.authorize {hash, pattern, method, path}` → `{ok, extension, name, scopes, scope?}` | 扩展的 token 打 hub 的路由：是谁的、开不开这条路由（`extension` 空：没有这个 token） |
+| | `extensions.hub_call {method, params}` → 结果 | hub 自己的功能问扩展：`github_login`、`settings.list`、`settings.tool`（node 的 MCP 工具、门禁命令的说法、`assistant.lark` 是管理者进程里直接问的，不过总线）；调用方不等了会发 `rpc.cancel`（卡片跟着撤） |
+| hub → 管理者，事件 | `extensions.emit {event, params}` | 扩展订阅的事：`agent.finished`、`agent.needs_you` |
+| 管理者 → hub，事件 | `extensions.report {features, apis, machines, screen_keep_awake}` | 整份：扩展的功能、API 前缀和回执、每台机器的 `computer` / `browser`；hub 留着（存在 `hub.extensions_report`） |
+| 管理者 → hub，`app.call`（应用 `hub`） | `push.localized`、`push.background`、`push.mail_targets` | 推送（卡片在助手的交互队列，进程内）。模型配置的 `plugins.*` 和 `models.*` 在管理者进程里，不过 hub |
 
 ### 渠道用的方法（2026-11-04）
 
@@ -1875,7 +1888,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 
 ## 收件箱 API
 
-hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）聚合成「件」（`docs/inbox.md`「谁管什么」：条目在 `server/internal/assistant/inbox.go`，来源在 `server/internal/hub/inbox.go`），这些接口经 hub 转给它，管理者没连着时回 `503 assistant_offline`。
+hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）聚合成「件」（`docs/inbox.md`「谁管什么」：条目在 `server/internal/assistant/inbox.go`，来源在 `server/internal/extmgr/inbox.go`），这些接口经 hub 转给它，管理者没连着时回 `503 assistant_offline`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -1963,7 +1976,7 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 
 ## 飞书 API（lark-connector）
 
-这些路由不是 hub 自己的代码：#1571（3c）删掉了 hub 直连 lark-connector 的那条路，`server/internal/lark` 现在只剩 hub.json 的 `lark` 配置。`/api/v1/lark/…` 由飞书插件的 `api` 贡献提供，`lark` 是正在迁出 hub 的前缀（`migratablePrefixes`，`server/internal/hub/extension_api.go`），插件提供的优先。hub 先鉴权，去掉 `Authorization` 和 `token`，带上 `X-Persona-Device` / `X-Persona-Role`，再原样转给插件，插件再去问 lark-connector（[extensions.md](extensions.md)「App 接口」）。没有插件提供时这些路由 404。下面写的是插件要守的接口约定，文中的「hub」多指 hub 转给的插件；插件声明的 `receipts` 由 hub 套上发送回执。
+这些路由不是 hub 自己的代码：#1571（3c）删掉了 hub 直连 lark-connector 的那条路，`server/internal/lark` 现在只剩 hub.json 的 `lark` 配置。`/api/v1/lark/…` 由飞书插件的 `api` 贡献提供，`lark` 是正在迁出 hub 的前缀（`migratablePrefixes`，`server/internal/extmgr/extension_api.go`），插件提供的优先。hub 先鉴权，去掉 `Authorization` 和 `token`，带上 `X-Persona-Device` / `X-Persona-Role`，再原样转给插件，插件再去问 lark-connector（[extensions.md](extensions.md)「App 接口」）。没有插件提供时这些路由 404。下面写的是插件要守的接口约定，文中的「hub」多指 hub 转给的插件；插件声明的 `receipts` 由 hub 套上发送回执。
 
 下面的路由都认查询参数 `ol_account=<lark-connector 账号编号>`：这次请求是哪个飞书账号的（不合法回 400）；不带时是插件的默认账号，由插件按自己的 lark-connector 配置决定：hub 不把 hub.json 的 `lark.account` 交给插件，它只给助手的收件箱用（`server/internal/lark/config.go`，`docs/feishu.md`「多账号」）。交出的别的账号的媒体 URL 已经带着它。
 

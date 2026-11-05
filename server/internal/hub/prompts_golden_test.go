@@ -131,14 +131,19 @@ func snapshotHub(t *testing.T, full bool) *Hub {
 	h.cfg.PublicURL = "http://hub.example.com:18660" // the default names this machine, and it shows in the links
 	putAssistantSettings(t, h, assistant.Settings{Timezone: "Asia/Shanghai"})
 	goldenMachines(h)
-	h.connectors = connector.NewRegistry(nil)
 	if !full { // no live state: chats and calendar left out
 		connectAssistant(t, h)
 		return h // no database: the assistant's schedule is its default routines, no follow-ups
 	}
-	if err := h.addConnector(goldenSnapshot{}); err != nil {
-		t.Fatal(err)
-	}
+	// The chat service's live state, as the manager's connectors hand it to the assistant in its process.
+	fakeExtOf(h).onApp(assistantwire.AppConnectors, assistantwire.ConnectorsSnapshots, func(raw json.RawMessage) (any, error) {
+		var a struct {
+			TZ string `json:"tz"`
+		}
+		_ = json.Unmarshal(raw, &a)
+		d, err := goldenSnapshot{}.Snapshot(context.Background(), a.TZ)
+		return map[string]any{"snapshots": []connector.SnapshotData{d}}, err
+	})
 	h.byID["server"].online = true
 	h.byID["laptop"].online = true
 	now := time.Now()

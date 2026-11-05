@@ -775,20 +775,11 @@ func (h *Hub) machineConnected(ctx context.Context, m *Machine, at time.Time) de
 	if b, err := json.Marshal(m.codexConfig(ctx)); err == nil {
 		out.Configure["codex"] = b
 	}
-	if b, err := json.Marshal(h.agentFilters()); err == nil { // the extensions' agent filters (agent_filters.go)
-		out.Configure["agent_filters"] = b
-	}
 	if list := m.echoesToSend(ctx); len(list) > 0 {
 		if b, err := json.Marshal(map[string]any{"echoes": list}); err == nil {
 			out.Calls = append(out.Calls, devicewire.NodeCall{MachineID: m.cfg.ID, Method: "session.echoes", Params: b})
 		}
 	}
-	h.connectors.MachineOnline(m.cfg.ID)
-	bg := context.WithoutCancel(ctx)
-	go func() {
-		time.Sleep(100 * time.Millisecond) // after the manager configured the node
-		h.reconcileNodePrograms(bg, m)     // cua, ego and the plugins' programs on this computer (builtin_programs.go)
-	}()
 	return out
 }
 

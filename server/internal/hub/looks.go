@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extwire"
 )
 
 // Looks (形象, docs/extensions.md「形象」, docs/persona.md): one list of every look a user can choose — the ones the apps
@@ -81,44 +82,38 @@ type extensionLookCache struct {
 
 var extLooks = &extensionLookCache{pkgs: map[string]*personaPackage{}}
 
-// extensionLooks are the packages of the looks of the extensions that are on (each look that is on), by extension.
+// extensionLooks are the packages of the looks of the extensions that are on, as the manager reports them (its
+// extensions: extwire.Report.Looks), kept while it is away. A look with the id of one of the hub's own packages is
+// left out (the hub's wins).
 func (h *Hub) extensionLooks() []*personaPackage {
 	var out []*personaPackage
-	h.extensions.declared(func(p *extension.Extension) {
-		if p.Dir == "" {
-			return
+	own := h.builtinPersonaIDs()
+	for _, lp := range h.extReport().Looks {
+		var l extension.LookItem
+		if err := json.Unmarshal(lp.Item, &l); err != nil || slices.Contains(own, l.ID) {
+			continue
 		}
-		for _, l := range p.Manifest.Looks() {
-			pkg, err := extensionLookPackage(p, l)
-			if err != nil {
-				h.logf("look %s of %s left out: %v", l.ID, p.Record.ID, err)
-				continue
-			}
-			out = append(out, pkg)
+		pkg, err := extensionLookPackage(lp, l)
+		if err != nil {
+			h.logf("look %s of %s left out: %v", l.ID, lp.Extension, err)
+			continue
 		}
-	})
+		out = append(out, pkg)
+	}
 	return out
 }
 
-// extensionLookPackage is the persona package of an extension's look: its made persona.json and the files it names
-// (cleaned SVGs), checked as any package is.
-func extensionLookPackage(p *extension.Extension, l extension.LookItem) (*personaPackage, error) {
+// extensionLookPackage is the persona package of an extension's look: its made persona.json and the files it names,
+// checked as any package is.
+func extensionLookPackage(lp extwire.LookPackage, l extension.LookItem) (*personaPackage, error) {
 	var key strings.Builder
-	fmt.Fprintf(&key, "%s\x00%s\x00%s\x00%s", p.Record.ID, p.Record.Version, p.Dir, l.ID)
-	raw, _ := json.Marshal(l)
-	key.Write(raw)
-	files := map[string][]byte{}
+	fmt.Fprintf(&key, "%s\x00%s\x00%s", lp.Extension, lp.Version, l.ID)
+	key.Write(lp.Item)
 	for _, f := range l.Files() {
-		b, err := extension.ReadLookFile(p.Dir, f)
-		if err != nil {
-			return nil, err
+		b, ok := lp.Files[f]
+		if !ok {
+			return nil, fmt.Errorf("%s: missing", f)
 		}
-		if strings.HasSuffix(f, ".svg") {
-			if b, err = extension.CleanSVG(b); err != nil {
-				return nil, fmt.Errorf("%s: %v", f, err)
-			}
-		}
-		files[f] = b
 		fmt.Fprintf(&key, "\x00%s\x00%d\x00%x", f, len(b), fnv64(b))
 	}
 	extLooks.mu.Lock()
@@ -128,19 +123,19 @@ func extensionLookPackage(p *extension.Extension, l extension.LookItem) (*person
 	}
 	extLooks.mu.Unlock()
 
-	manifest, err := json.Marshal(lookManifest(p, l))
+	manifest, err := json.Marshal(lookManifest(lp, l))
 	if err != nil {
 		return nil, err
 	}
 	fsys := fstest.MapFS{"persona.json": &fstest.MapFile{Data: manifest, Mode: 0o644}}
-	for f, b := range files {
-		fsys[f] = &fstest.MapFile{Data: b, Mode: 0o644}
+	for _, f := range l.Files() {
+		fsys[f] = &fstest.MapFile{Data: lp.Files[f], Mode: 0o644}
 	}
 	pkg, err := openPersona(fsys, l.ID)
 	if err != nil {
 		return nil, err
 	}
-	pkg.source = &lookSource{extension: p.Record.ID, name: p.Full.Name, appIcon: l.AppIconFallback}
+	pkg.source = &lookSource{extension: lp.Extension, name: lp.ExtensionName, appIcon: l.AppIconFallback}
 	extLooks.mu.Lock()
 	if len(extLooks.pkgs) > 256 { // versions come and go; a hub has a handful of looks
 		clear(extLooks.pkgs)
@@ -162,7 +157,7 @@ func fnv64(b []byte) uint64 {
 // lookManifest is the persona.json (format 1) of an extension's look, with what format 1 does not have beside it
 // (names, the SVGs, the dark avatar, app_icon_fallback, source), which the apps that do not know it leave alone. A look
 // without a dot gets one: its largest avatar PNG as idle.
-func lookManifest(p *extension.Extension, l extension.LookItem) map[string]any {
+func lookManifest(lp extwire.LookPackage, l extension.LookItem) map[string]any {
 	avatar := map[string]any{"sizes": l.Avatar.Sizes}
 	if l.Avatar.Safe > 0 {
 		avatar["safe"] = l.Avatar.Safe
@@ -186,7 +181,7 @@ func lookManifest(p *extension.Extension, l extension.LookItem) map[string]any {
 	m := map[string]any{
 		"format": personaFormat, "id": l.ID, "name": l.Name, "avatar": avatar, "dot": dot,
 		"app_icon_fallback": l.AppIconFallback,
-		"source":            map[string]any{"kind": "extension", "extension": p.Record.ID, "extension_name": p.Full.Name},
+		"source":            map[string]any{"kind": "extension", "extension": lp.Extension, "extension_name": lp.ExtensionName},
 	}
 	if l.Subtitle != "" {
 		m["subtitle"] = l.Subtitle
@@ -270,20 +265,29 @@ func (h *Hub) chooseLook(ctx context.Context, id string, looks []lookView) (look
 	return cur, nil
 }
 
-// looksChanged is an extension's news for the looks: the list changed when it had looks or has them now; when it was
-// removed and the chosen look was one of its own (and no one else gives it now), the choice goes back to the default.
-func (h *Hub) looksChanged(ctx context.Context, c extension.Change, now *extension.Extension) {
-	had := c.Old != nil && len(c.Old.Full.Looks()) > 0
-	has := now != nil && len(now.Full.Looks()) > 0
-	if !had && !has {
-		return
+// looksReported is the manager's news for the extensions' looks (a new report): the apps are told the list changed.
+func (h *Hub) looksReported(old, now []extwire.LookPackage) {
+	key := func(list []extwire.LookPackage) []string {
+		var out []string
+		for _, lp := range list {
+			out = append(out, lp.Extension+"\x00"+lp.Version+"\x00"+string(lp.Item))
+		}
+		slices.Sort(out)
+		return out
 	}
-	h.broadcast(map[string]any{"type": "personas"})
-	if c.Kind != "removed" || !had || h.store == nil {
+	if !slices.Equal(key(old), key(now)) {
+		h.broadcast(map[string]any{"type": "personas"})
+	}
+}
+
+// looksGone: an extension with looks was removed. When the chosen look was one of its own and no one gives it now,
+// the choice goes back to the default (switched off, the choice stays: the default only shows meanwhile).
+func (h *Hub) looksGone(ctx context.Context, ids []string) {
+	if h.store == nil {
 		return
 	}
 	chosen := h.lookChoice(ctx)
-	if chosen == nil || !slices.ContainsFunc(c.Old.Full.Looks(), func(l extension.LookItem) bool { return l.ID == chosen.ID }) {
+	if chosen == nil || !slices.Contains(ids, chosen.ID) {
 		return
 	}
 	looks := h.looks()
@@ -291,7 +295,7 @@ func (h *Hub) looksChanged(ctx context.Context, c extension.Change, now *extensi
 		return
 	}
 	if _, err := h.chooseLook(ctx, extension.DefaultLook, looks); err != nil {
-		h.logf("look: back to the default after %s went: %v", c.ID, err)
+		h.logf("look: back to the default after %s went: %v", chosen.ID, err)
 	}
 }
 
@@ -344,4 +348,3 @@ func personaFileHeaders(w http.ResponseWriter, name string, immutable bool) {
 		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	}
 }
-

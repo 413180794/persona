@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/connector"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/extwire"
 )
 
 // The tier a tiered persona shows (docs/persona.md「分级形象」): the level of the user on the board the package names,
@@ -111,19 +112,15 @@ func (h *Hub) personaLogin(ctx context.Context) (login string, known bool) {
 	if l := strings.TrimSpace(h.cfg.Personas.GitHubLogin); l != "" {
 		return l, true
 	}
-	if h.connectors == nil {
-		return "", true
+	// The GitHub connector is the manager's: while it is away the tiers stay as they are.
+	var res struct {
+		Login string `json:"login"`
+		Known bool   `json:"known"`
 	}
-	c := h.connectors.Get("github") // the hub's own, or an extension's that took its place
-	if c == nil {
-		return "", true
+	if h.busConnOf(devicesOwner) == nil || h.extCall(ctx, extwire.HubGitHubLogin, map[string]any{}, &res) != nil {
+		return "", false
 	}
-	st := connector.StatusOf(ctx, c)
-	// The account stays when the token is out of reach for a while (its computer offline): it is still the user.
-	if st.Account != "" {
-		return st.Account, true
-	}
-	return "", st.State != ""
+	return res.Login, res.Known
 }
 
 // refreshPersonaTiers reads the boards and moves each tiered package to the user's tier.

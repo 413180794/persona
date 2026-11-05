@@ -132,13 +132,8 @@ const screenPort = 5900
 // portAllowed: an agent on the machine listens on port, or the user opened it, or it is the screen of a Mac the
 // plugin cua or ego is on for (ego's first-run setup is done over it, #1507).
 func (h *Hub) portAllowed(m *Machine, port int) bool {
-	if port == screenPort {
-		if c := h.computerOf(m); c != nil && c.Enabled {
-			return true
-		}
-		if b := h.browserOf(m); b != nil && b.Enabled {
-			return true
-		}
+	if port == screenPort && h.screenAllowed(m) { // the manager's report: cua or ego is on for it
+		return true
 	}
 	m.mu.Lock()
 	for _, s := range m.sessions {
@@ -185,7 +180,7 @@ func (h *Hub) connectPort(w http.ResponseWriter, r *http.Request, m *Machine) {
 	}
 	dctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	dial := map[string]any{"id": id, "port": port}
-	if port == screenPort && h.cua().awake() {
+	if port == screenPort && h.extReport().ScreenKeepAwake {
 		dial["keep_awake"] = true // someone is watching the Mac: it stays awake until this closes (node/awake.go)
 	}
 	err = m.call(dctx, "port.dial", dial, nil)

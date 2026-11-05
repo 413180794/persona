@@ -1,0 +1,502 @@
+package hub
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"slices"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/coder/websocket"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/extwire"
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The extensions, the connectors and the bots are the manager's (internal/extmgr, docs/extensions.md「谁管什么」): the
+// registry, the programs, their secrets and tokens, every source, mail, the Feishu and WeChat bots. The hub relays:
+//
+//   - the apps' requests on their routes (extwire.Routes, the admin UI's /api/v1/admin/extensions…, and the parts of
+//     the API the running extensions serve, the report's APIs) go to the manager over a relay stream as they are, so
+//     an extension's SSE or WebSocket streams as it did; who asked goes with them (extwire.Header*);
+//   - an extension's token on one of the hub's own routes is the manager's to judge (extensions.authorize);
+//   - what the hub's own features need of them (the MCP tools of connectors, Cua and ego, a voice extension's
+//     models, a quota, the presets) is asked over the bus (extensions.hub_call);
+//   - what it shows of them (features, the extensions' prefixes, Cua's and ego's state on each machine) is the
+//     manager's last report (extensions.report), kept while the manager is away, as are the last answers of the GET
+//     routes the apps draw from (extwire.KeptRoutes).
+//
+// While the manager is away the routes answer 503 assistant_offline (the kept GETs their last answer).
+
+// extLink is what the hub keeps of the manager's extensions.
+type extLink struct {
+	report atomic.Pointer[extwire.Report]
+	keptMu sync.Mutex
+	kept   map[string]keptAnswer // GET path?query → its last answer
+}
+
+type keptAnswer struct {
+	header http.Header
+	body   []byte
+}
+
+// keptMost bounds a kept answer.
+const keptMost = 4 << 20
+
+func init() {
+	handleBusEvent(extwire.EventReport, func(h *Hub, c *busConn, params json.RawMessage) {
+		var r extwire.Report
+		if err := json.Unmarshal(params, &r); err != nil {
+			h.logf("bus: [%s] extensions.report: %v", c.ident.ID, err)
+			return
+		}
+		old := h.ext.report.Swap(&r)
+		if old == nil || !slices.Equal(old.Features, r.Features) || !machineExtrasEqual(old.Machines, r.Machines) {
+			h.broadcastMachines()
+		}
+		var oldLooks []extwire.LookPackage
+		if old != nil {
+			oldLooks = old.Looks
+		}
+		h.looksReported(oldLooks, r.Looks) // the extensions' looks (looks.go)
+		if h.store != nil {
+			if err := h.store.PutSetting(context.Background(), extReportKey, r); err != nil {
+				h.logf("extensions: keep the report: %v", err)
+			}
+		}
+	})
+}
+
+func init() {
+	handleBusEvent(extwire.EventLooksGone, func(h *Hub, _ *busConn, params json.RawMessage) {
+		var g extwire.LooksGone
+		if json.Unmarshal(params, &g) == nil {
+			go h.looksGone(context.Background(), g.IDs)
+		}
+	})
+}
+
+// extReportKey keeps the manager's last report across a hub restart (the hub's own key).
+const extReportKey = "hub.extensions_report"
+
+// loadExtReport is the report kept before the hub restarted, until the manager reports again.
+func (h *Hub) loadExtReport(ctx context.Context) {
+	if h.store == nil {
+		return
+	}
+	var r extwire.Report
+	if ok, err := h.store.Setting(ctx, extReportKey, &r); err == nil && ok {
+		h.ext.report.CompareAndSwap(nil, &r)
+	}
+}
+
+func machineExtrasEqual(a, b map[string]extwire.MachineExtras) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, x := range a {
+		y, ok := b[k]
+		if !ok || string(x.Computer) != string(y.Computer) || string(x.Browser) != string(y.Browser) || x.ScreenPort != y.ScreenPort {
+			return false
+		}
+	}
+	return true
+}
+
+// extReport is the manager's last report (empty before the first).
+func (h *Hub) extReport() extwire.Report {
+	if r := h.ext.report.Load(); r != nil {
+		return *r
+	}
+	return extwire.Report{}
+}
+
+// features are the hub's features with those of the extensions serving part of the API.
+func (h *Hub) features() []string {
+	out := slices.Clone(proto.Features)
+	// The assistant's card interfaces that answer now (docs/assistant-views.md): assistant_views is declarative actions
+	// (expected_version), live cards and transcript cards; assistant_html_bridge is …/html-actions with both switches
+	// on. Neither says a client may run HTML: that is each platform's own security sign-off, else fallback.
+	if views, bridge := h.assistantCards(); views {
+		out = append(out, "assistant_views")
+		if bridge {
+			out = append(out, "assistant_html_bridge")
+		}
+	}
+	for _, f := range h.extReport().Features {
+		if !slices.Contains(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// computerOf / browserOf are machine m's Cua and ego state as the manager reports it (nil when not on).
+func (h *Hub) computerOf(m *Machine) *proto.Computer {
+	x, ok := h.extReport().Machines[m.cfg.ID]
+	if !ok || len(x.Computer) == 0 {
+		return nil
+	}
+	var c proto.Computer
+	if json.Unmarshal(x.Computer, &c) != nil {
+		return nil
+	}
+	return &c
+}
+
+func (h *Hub) browserOf(m *Machine) *proto.Browser {
+	x, ok := h.extReport().Machines[m.cfg.ID]
+	if !ok || len(x.Browser) == 0 {
+		return nil
+	}
+	var b proto.Browser
+	if json.Unmarshal(x.Browser, &b) != nil {
+		return nil
+	}
+	return &b
+}
+
+// screenAllowed: the app may open m's screen (cua or ego is on for it).
+func (h *Hub) screenAllowed(m *Machine) bool { return h.extReport().Machines[m.cfg.ID].ScreenPort }
+
+// extCall asks the manager what the hub's own features need of the extensions (extwire.Hub*).
+func (h *Hub) extCall(ctx context.Context, method string, params, out any) error {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	return h.callBus(ctx, devicesOwner, extwire.MethodHubCall, extwire.HubCall{Method: method, Params: raw}, out)
+}
+
+// emitToExtensions tells the extensions something the hub saw (agent.finished, agent.needs_you).
+func (h *Hub) emitToExtensions(event string, params any) {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return
+	}
+	_ = h.notifyBus(devicesOwner, extwire.EventEmit, extwire.Emit{Event: event, Params: raw})
+}
+
+// ---- the routes ----
+
+// extensionRoutesRelayed relays the apps' requests on the manager's routes.
+func (h *Hub) extensionRoutesRelayed(api *http.ServeMux) {
+	for _, pattern := range extwire.Routes {
+		api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h.relayToManager(w, r, false) })
+	}
+}
+
+// adminExtensionRoutes relays the admin UI's extension pages (a signed-in admin session).
+func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
+	for _, pattern := range []string{"/api/v1/admin/extensions", "/api/v1/admin/extensions/", "/api/v1/admin/plugins", "/api/v1/admin/plugins/"} {
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h.relayToManager(w, r, true) })
+	}
+}
+
+// adminUploadPath is where the browser uploads a package (its body is not JSON); legacyAdminUploadPath before #1844.
+const (
+	adminUploadPath       = "/api/v1/admin/extensions/upload"
+	legacyAdminUploadPath = "/api/v1/admin/plugins/upload"
+)
+
+// extensionAPIs serves the requests for an extension's part of the API (the report's prefixes): before the hub's own
+// routes for a prefix being moved out of the hub (migratablePrefixes: the extension's wins), after them otherwise (an
+// extension cannot take the hub's own API). A send it declared a receipt for keeps the hub's receipt, like the hub's
+// own sends (GET /api/v1/ops/{id}).
+func (h *Hub) extensionAPIs(next http.Handler, mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		seg, under, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/api/v1/"), "/")
+		var api *extwire.APIPrefix
+		rep := h.extReport()
+		for i := range rep.APIs {
+			if rep.APIs[i].Prefix == seg {
+				api = &rep.APIs[i]
+				break
+			}
+		}
+		if api == nil || (!slices.Contains(migratablePrefixes, seg) && hubOwns(mux, seg)) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		for _, rc := range api.Receipts {
+			if rc.Matches(r.Method, "/"+under) {
+				h.withReplyReceipt(rc.Kind, func(w http.ResponseWriter, r *http.Request) { h.relayToManager(w, r, false) })(w, r)
+				return
+			}
+		}
+		h.relayToManager(w, r, false)
+	})
+}
+
+// migratablePrefixes are the hub's own prefixes an extension may take over while they move out of the hub.
+var migratablePrefixes = []string{"lark"}
+
+// hubOwns says whether the hub has any route under /api/v1/<prefix>: probed once per prefix.
+func hubOwns(mux *http.ServeMux, prefix string) bool {
+	if v, ok := ownedPrefixes.Load(prefix); ok {
+		return v.(bool)
+	}
+	owned := false
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
+		for _, p := range []string{"/api/v1/" + prefix, "/api/v1/" + prefix + "/", "/api/v1/" + prefix + "/x", "/api/v1/" + prefix + "/x/y"} {
+			req, _ := http.NewRequest(method, p, nil)
+			if _, pattern := mux.Handler(req); pattern != "" {
+				owned = true
+			}
+		}
+	}
+	ownedPrefixes.Store(prefix, owned)
+	return owned
+}
+
+var ownedPrefixes sync.Map
+
+// relayToManager passes r on to the manager over a relay stream and streams its answer back. Who asked goes with it
+// in the hub's headers (any the client sent are dropped); the hub's credentials stay with the hub. While the manager
+// is away: 503 assistant_offline, or the last answer of a kept GET.
+func (h *Hub) relayToManager(w http.ResponseWriter, r *http.Request, admin bool) {
+	keep := r.Method == http.MethodGet && slices.Contains(extwire.KeptRoutes, r.URL.Path)
+	key := r.URL.Path + "?" + r.URL.RawQuery
+	if h.busConnOf(devicesOwner) == nil && !h.awaitManager(r.Context(), linkManagerWait) {
+		if keep && h.writeKept(w, key) {
+			return
+		}
+		writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
+		return
+	}
+	for k := range r.Header {
+		if strings.HasPrefix(strings.ToLower(k), "x-persona-") {
+			r.Header.Del(k)
+		}
+	}
+	p := principalOf(r.Context())
+	set := func(k, v string) {
+		if v != "" {
+			r.Header.Set(k, v)
+		}
+	}
+	set(extwire.HeaderDevice, p.ID)
+	set(extwire.HeaderDeviceName, p.Name)
+	set(extwire.HeaderRole, p.Role)
+	set(extwire.HeaderExtension, p.Extension)
+	set(extwire.HeaderScopes, strings.Join(p.Scopes, ","))
+	set(extwire.HeaderLang, string(h.requestLang(r)))
+	set(extwire.HeaderRemote, remoteIP(r).String())
+	if p.PairHash != "" {
+		set(extwire.HeaderPaired, "1")
+	}
+	if h.fromThisMachine(r) {
+		set(extwire.HeaderOwner, "1")
+	}
+	if admin {
+		set(extwire.HeaderAdmin, "1")
+	}
+	var rec *keptRecorder
+	if keep {
+		rec = &keptRecorder{ResponseWriter: w, status: http.StatusOK}
+		w = rec
+	}
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Scheme, pr.Out.URL.Host = "http", "manager"
+			pr.Out.Host = "manager"
+			pr.Out.Header.Del("Authorization")
+			pr.Out.Header.Del("Cookie")
+			if q := pr.Out.URL.Query(); q.Has("token") { // a WebSocket's credential in the query: the hub's too
+				q.Del("token")
+				pr.Out.URL.RawQuery = q.Encode()
+			}
+			pr.Out.Header["X-Forwarded-For"] = nil
+		},
+		Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return h.dialManager(ctx)
+		}, DisableKeepAlives: true, ResponseHeaderTimeout: 5 * time.Minute},
+		FlushInterval: -1,
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			if errors.Is(err, errBusOffline) || h.busConnOf(devicesOwner) == nil {
+				writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
+				return
+			}
+			writeErr(w, http.StatusBadGateway, err)
+		},
+	}
+	proxy.ServeHTTP(w, r)
+	if rec != nil && rec.status == http.StatusOK && !rec.over {
+		h.ext.keptMu.Lock()
+		if h.ext.kept == nil {
+			h.ext.kept = map[string]keptAnswer{}
+		}
+		h.ext.kept[key] = keptAnswer{header: rec.Header().Clone(), body: rec.body}
+		h.ext.keptMu.Unlock()
+	}
+}
+
+// fromThisMachine says whether r carries the master token over loopback: installing runs code on this machine, so
+// only its owner there (`personad extension`) may.
+func (h *Hub) fromThisMachine(r *http.Request) bool {
+	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	return remoteIP(r).IsLoopback() && tok != "" && h.cfg != nil && tok == h.cfg.Token
+}
+
+// writeKept answers with the last answer kept for key; false when there is none.
+func (h *Hub) writeKept(w http.ResponseWriter, key string) bool {
+	h.ext.keptMu.Lock()
+	k, ok := h.ext.kept[key]
+	h.ext.keptMu.Unlock()
+	if !ok {
+		return false
+	}
+	for name, v := range k.header {
+		w.Header()[name] = v
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(k.body)
+	return true
+}
+
+// keptRecorder copies what it writes, to keep it.
+type keptRecorder struct {
+	http.ResponseWriter
+	status int
+	body   []byte
+	over   bool
+}
+
+func (k *keptRecorder) WriteHeader(code int) { k.status = code; k.ResponseWriter.WriteHeader(code) }
+
+func (k *keptRecorder) Write(p []byte) (int, error) {
+	if !k.over {
+		if len(k.body)+len(p) > keptMost {
+			k.over, k.body = true, nil
+		} else {
+			k.body = append(k.body, p...)
+		}
+	}
+	return k.ResponseWriter.Write(p)
+}
+
+func (k *keptRecorder) Flush() {
+	if f, ok := k.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (k *keptRecorder) Unwrap() http.ResponseWriter { return k.ResponseWriter }
+
+// dialManager opens a relay stream the manager serves HTTP on (extwire.MethodAccept).
+func (h *Hub) dialManager(ctx context.Context) (net.Conn, error) {
+	if h.busConnOf(devicesOwner) == nil {
+		return nil, errBusOffline
+	}
+	taken, err := h.handToManagerVia(ctx, extwire.MethodAccept, nil)
+	if err != nil {
+		return nil, err
+	}
+	cctx, cancel := context.WithCancel(context.Background())
+	nc := websocket.NetConn(cctx, taken.conn, websocket.MessageBinary)
+	return &relayConn{Conn: nc, done: func() {
+		cancel()
+		close(taken.done)
+	}}, nil
+}
+
+// relayConn ends its relay when it is closed.
+type relayConn struct {
+	net.Conn
+	once sync.Once
+	done func()
+}
+
+func (c *relayConn) Close() error {
+	err := c.Conn.Close()
+	c.once.Do(c.done)
+	return err
+}
+
+// ---- an extension's token on the hub's own routes ----
+
+// extTokenPrefix starts every extension's token (the manager makes them).
+const extTokenPrefix = "pext_"
+
+// roleExtension is an extension's token.
+const roleExtension = "extension"
+
+// authorizeExtension asks the manager whose token tok is and whether it opens r's route on the hub's mux: the
+// principal (ok false: no such token), and when it does not open the route, the scope it lacks (opens false).
+func (h *Hub) authorizeExtension(ctx context.Context, tok string, r *http.Request) (p principal, ok, opens bool, scope string) {
+	pattern, method, path := "", "", ""
+	if h.apiMux != nil && r != nil {
+		_, pattern = h.apiMux.Handler(r)
+		method, path = r.Method, r.URL.Path
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var a extwire.Authorized
+	if err := h.callBus(ctx, devicesOwner, extwire.MethodAuthorize, extwire.Authorize{Hash: hashToken(tok), Pattern: pattern,
+		Method: method, Path: path}, &a); err != nil || a.Extension == "" {
+		return principal{}, false, false, ""
+	}
+	p = principal{ID: "extension:" + a.Extension, Name: a.Name, Role: roleExtension, Extension: a.Extension, Scopes: a.Scopes}
+	return p, true, a.OK, a.Scope
+}
+
+// answerOnly says whether the request comes from an answer-only device (a watch).
+func answerOnly(r *http.Request) bool { return principalOf(r.Context()).Role == roleAnswer }
+
+// ---- what the manager asks of the hub (app.call hub.*) ----
+
+func (h *Hub) extAppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, bool, error) {
+	if p.AppID != extwire.AppHub {
+		return nil, false, nil
+	}
+	var out any
+	var err error
+	var a struct {
+		Interaction   proto.Interaction         `json:"interaction"`
+		InteractionID string                    `json:"interaction_id"`
+		Resolution    proto.Resolution          `json:"resolution"`
+		Payload       map[string]any            `json:"payload"`
+		Payloads      map[string]map[string]any `json:"payloads"`
+		CollapseID    string                    `json:"collapse_id"`
+		Devices       []string                  `json:"devices"`
+		Purpose       string                    `json:"purpose"`
+		Name          string                    `json:"name"`
+		Machine       string                    `json:"machine"`
+		Sender        string                    `json:"sender"`
+		Request       json.RawMessage           `json:"request"`
+	}
+	if len(p.Params) > 0 {
+		if err := json.Unmarshal(p.Params, &a); err != nil {
+			return nil, true, err
+		}
+	}
+	switch p.Method {
+	case extwire.HubPushLocalized:
+		h.push.sendLocalized(func(l i18n.Lang) map[string]any { return a.Payloads[string(l)] }, a.CollapseID, nil)
+		out = map[string]any{}
+	case extwire.HubPushBackground:
+		h.push.sendAs(a.Payload, "", "background", "5", func(d Device) bool { return slices.Contains(a.Devices, d.DeviceID) })
+		out = map[string]any{}
+	case extwire.HubMailTargets:
+		out = map[string]any{"targets": h.push.mailTargets()}
+	default:
+		return nil, true, errors.New("hub: no method " + p.Method)
+	}
+	if err != nil {
+		return nil, true, err
+	}
+	raw, err := json.Marshal(out)
+	return raw, true, err
+}

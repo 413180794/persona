@@ -13,10 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/agents"
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
-	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/update"
 )
@@ -41,12 +38,10 @@ type Hub struct {
 	logger      *log.Logger
 	machines    []*Machine
 	byID        map[string]*Machine
-	mail        Mail
 	push        *Pusher
-	agentWork   agentWork  // whether the manager is there to ask (agents_link.go)
-	store       Store      // nil in unit tests: nothing is persisted
-	workspaceMu sync.Mutex // serializes read-only workspace discovery and snapshot commits
-	agents      *agents.Service
+	agentWork   agentWork    // whether the manager is there to ask (agents_link.go)
+	store       Store        // nil in unit tests: nothing is persisted
+	workspaceMu sync.Mutex   // serializes read-only workspace discovery and snapshot commits
 	lockTests   lockTestWake // wakes the lock test dispatcher when a test is scheduled (locktest.go)
 
 	terms terminals  // the terminal tab's live streams (terminal.go)
@@ -85,22 +80,17 @@ type Hub struct {
 	assistant assistantState
 	// userLocale: the user's language, an i18n.Lang (locale.go)
 	userLocale atomic.Value
-	deleted    deletedBook  // conversations taken out of the apps' lists (deleted_sessions.go)
-	inbox      inboxSources // the inbox's sources and wake-ups; the inbox itself is the manager's (inbox.go)
-	kb         kbLink       // what the hub keeps for the knowledge base, the assistant's (kb.go)
-	// bots: the chat apps' bots the user talks to Persona through (bots.go).
-	bots     botHub
-	channels channelsHub
+	deleted    deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
+	kb         kbLink      // what the hub keeps for the knowledge base, the assistant's (kb.go)
 	// chans is what the assistant reports of the channels, and the conversations they follow (assistant_channels.go).
-	chans       managerChannels
-	secret      secretState // secretkey.go
-	devtok      devTokens   // device token lookups (devicetokens.go)
-	extTokens   extTokens   // the extensions' tokens (extension_scopes.go)
-	public      publicState // TLS identity, listener and advertised addresses (public.go)
-	sends       sendLog     // messages being / just sent, by client_msg_id (send.go)
-	extensions  *extensions // the extension registry and what runs of it (extensions.go, docs/extensions.md)
-	legacyCalls legacyCalls // calls under the old /api/v1/plugins paths (extension_compat.go)
-	admin       adminState  // the admin UI (admin.go, docs/admin.md)
+	chans  managerChannels
+	secret secretState // secretkey.go
+	devtok devTokens   // device token lookups (devicetokens.go)
+	public publicState // TLS identity, listener and advertised addresses (public.go)
+	sends  sendLog     // messages being / just sent, by client_msg_id (send.go)
+	// ext is what the hub keeps of the extensions, connectors and bots, the manager's (extensions_link.go).
+	ext   extLink
+	admin adminState // the admin UI (admin.go, docs/admin.md)
 
 	apiMux *http.ServeMux // the API's routes: the one a request goes to decides what an extension's token may do
 
@@ -108,13 +98,6 @@ type Hub struct {
 	fleet fleet     // guards machines and byID (machines.go)
 
 	todoLinks todoLinks // what the assistant reports of its todos' agents (assistant_todos.go)
-
-	connectors *connector.Registry // sources of the user's information (connectors.go)
-	// migrated are the hub's own connectors a plugin took over (connectors_migrate.go): id → the hub's, for when the plugin goes.
-	migrated sync.Map
-	media    mediaCache // connectors' media as the app's thread pages show them (connector_threads.go)
-	// connectorsOff start switched off until the user turns them on (addConnectorOff).
-	connectorsOff map[string]bool
 
 	// The looks built into personad (persona.go; nil in unit tests) and the tier each tiered look shows (persona_tiers.go).
 	builtinLooks fs.FS
@@ -125,24 +108,6 @@ type Hub struct {
 	// usageGW: the account-pool gateways that add accounts to it (usagegateways.go, #2595)
 	usageGW usageGateways
 }
-
-// Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
-type Mail interface {
-	Handler() http.Handler
-	Tools() []proto.Tool
-	Call(ctx context.Context, name string, args json.RawMessage, approve func(ctx context.Context, summary string, input json.RawMessage) bool) proto.ToolResult
-	ListAccounts() ([]mail.MailAccount, error)
-	ListMessages(ctx context.Context, opts mail.ListOptions) (*mail.ListResult, error)
-	GetMessage(ctx context.Context, accountID string, uid uint32, mailbox string) (*mail.MailMessage, error)
-	Send(ctx context.Context, req mail.SendRequest) error
-	// AddAccount connects with the settings and saves the account when IMAP and SMTP work; DeleteAccount removes one
-	// (jarvis_settings mail.accounts, self_settings.go).
-	AddAccount(req mail.AddAccountRequest) (*mail.MailAccount, error)
-	DeleteAccount(id string) error
-}
-
-// NewMail is set by the mail integration (see mail_glue.go).
-var NewMail func(dataDir string, store Store, google GoogleConfig, microsoft MicrosoftConfig) (Mail, error)
 
 // Store is the hub's persistence (internal/db on Postgres).
 type Store interface {
@@ -175,14 +140,9 @@ type Store interface {
 	SetDevicePrefs(ctx context.Context, id, credential string, prefs json.RawMessage) error
 	LiveActivities(ctx context.Context) ([]db.LiveActivity, error)
 	SaveLiveActivity(ctx context.Context, v db.LiveActivity) error
-	MailAccounts(ctx context.Context) ([]db.MailAccountRow, error)
-	ReplaceMailAccounts(ctx context.Context, rows []db.MailAccountRow) error
 	Setting(ctx context.Context, key string, out any) (bool, error)
 	PutSetting(ctx context.Context, key string, v any) error
 	TakeSetting(ctx context.Context, key string, out any) (bool, error)
-	ConnectorSecret(ctx context.Context, connector string) (string, bool, error)
-	PutConnectorSecret(ctx context.Context, connector, sealed string) error
-	DeleteConnectorSecret(ctx context.Context, connector string) error
 	CreateDeviceToken(ctx context.Context, t db.DeviceToken, hash string) error
 	DeviceTokenByHash(ctx context.Context, hash string) (*db.DeviceToken, error)
 	DeviceTokens(ctx context.Context) ([]db.DeviceToken, error)
@@ -271,11 +231,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.importLegacy(ctx)
 	h.loadUserLang(ctx)
 	h.loadPhoneTools()
-	if NewMail != nil {
-		if h.mail, err = NewMail(cfg.dir, h.store, cfg.Google, cfg.Microsoft); err != nil {
-			h.logf("mail disabled: %v", err)
-		}
-	}
 	h.push = newPusher(cfg.dir, h.store, h.logf)
 	h.push.desktopOnline = h.desktopOnline
 	h.push.desktopOpen = h.desktopOpen
@@ -284,8 +239,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	}
 	h.push.hubID = h.hubID
 	h.push.userLang = h.userLang
-	h.initAgents()
-	h.connectors = connector.NewRegistry(cfg.ConnectorGate)
 	// The machines are the manager's to connect (devices_link.go); until it reports them they show as before a
 	// restart (what it handed over), before the assistant's process starts and takes that hand-over.
 	h.startDevices(ctx)
@@ -293,7 +246,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.terminalKeepalive(ctx)
 	go h.fullKeepalive(ctx)
 	go h.live.run(ctx)
-	h.migrateWeChatState(ctx) // into the channels' state before the assistant and the WeChat program read it (channels_migrate.go)
 	// The assistant, its own process on the bus (assistant_process.go); it carries the machines, so the hub's stop
 	// waits for it as it waited for the node connections.
 	h.nodeWorkers.Add(1)
@@ -301,25 +253,12 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		defer h.nodeWorkers.Done()
 		h.superviseAssistant(ctx)
 	}()
-	h.startBots(ctx)
-	go h.agentsLoop(ctx)
-	go h.inboxLoop(ctx)
 	h.usageGW.init(cfg.Usage, h.usageWin.invalidate, h.logf) // account-pool gateways' usage windows (usagegateways.go, #2595)
 	go h.usageGW.run(ctx)
-	go h.noLockLoop(ctx)         // 「扩展开着时不自动锁屏」 said again to its Macs (computer_nolock.go)
-	go h.extensionLeaseLoop(ctx) // plugins' programs on computers keep running (extension_nodes.go)
-	h.extensions = newExtensions(cfg.dir, cfg.extensionConfigs(h.logf), h.logf)
-	// The hub's token, whatever extension's log it turns up in (extension_metrics.go).
-	h.extensions.stats.redact = h.redactOwnSecrets
 	h.loadAssistantProfile(ctx) // the user's zone and the main conversation before the assistant reports (assistant_profile.go)
-	h.startConnectors(ctx)      // the plugins' connectors join here (attachPlugins)
+	h.loadExtReport(ctx)        // what the apps saw of the extensions, until the manager reports (extensions_link.go)
 	go h.personaTiersLoop(ctx)
 	h.upd.start(ctx)
-	h.startExtensions(ctx)
-	// Market plugins' newer versions (extension_autoupgrade.go).
-	go h.extensionUpgradeLoop(ctx)
-	// How they run, to the database once an hour (extension_metrics.go).
-	go h.extensionMetricsLoop(ctx)
 	go h.adminStartup(ctx) // the admin UI's first-run setup code, while it has no password (admin_setupcode.go)
 	if err := h.startPublic(ctx); err != nil {
 		return err

@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"testing/fstest"
+
+	"github.com/nwverse/persona/server/internal/extwire"
 )
 
 // tierManifestJSON is a tier's persona.json: the package's id, its files under tiers/<key>/.
@@ -216,6 +218,15 @@ func TestPersonaTiersWithoutLogin(t *testing.T) {
 	if tier, _ := shownTier(t, srv, h.cfg.Token, "nwverse"); tier != "cosmic" {
 		t.Fatalf("tier %q, want the one seen last", tier)
 	}
+	// The GitHub connector is the manager's: away, it can't say, and the tier stays.
+	h.refreshPersonaTiers(context.Background())
+	if tier, _ := shownTier(t, srv, h.cfg.Token, "nwverse"); tier != "cosmic" {
+		t.Fatalf("manager away: tier %q, want the one seen last", tier)
+	}
+	// It says GitHub is not signed in.
+	extTokensOf(t, h).on(extwire.HubGitHubLogin, func(json.RawMessage) (any, error) {
+		return map[string]any{"login": "", "known": true}, nil
+	})
 	h.refreshPersonaTiers(context.Background())
 	if tier, _ := shownTier(t, srv, h.cfg.Token, "nwverse"); tier != "unhatched" {
 		t.Fatalf("no login: tier %q, want unhatched", tier)

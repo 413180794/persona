@@ -5,86 +5,10 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
-	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
-
-type selfSettingsMail struct {
-	Mail
-	added []mail.AddAccountRequest
-}
-
-func (f *selfSettingsMail) Tools() []proto.Tool { return nil }
-func (f *selfSettingsMail) AddAccount(req mail.AddAccountRequest) (*mail.MailAccount, error) {
-	f.added = append(f.added, req)
-	return &mail.MailAccount{ID: "acc_1", Email: req.Email, Provider: req.Provider}, nil
-}
-
-func TestSelfSettingsMailRequest(t *testing.T) {
-	req, summary, err := mailAccountRequest(i18n.Default, json.RawMessage(`{"email":" Me@Example.com ","imap_host":"imap.example.com","imap_port":993,"smtp_host":"smtp.example.com"}`))
-	if err != nil || req.Email != "me@example.com" || req.Password != "" || req.Provider != mail.ProviderIMAP || !strings.Contains(summary, "imap.example.com:993") {
-		t.Fatalf("request %+v, summary %q, error %v", req, summary, err)
-	}
-	for _, input := range []string{`{"email":"a@gmail.com"}`, `{"email":"a@example.com","provider":"gmail"}`, `{"email":"nope"}`} {
-		if _, _, err := mailAccountRequest(i18n.Default, json.RawMessage(input)); err == nil {
-			t.Fatalf("accepted %s", input)
-		}
-	}
-}
-
-func TestSelfSettingsMailNeedsPhoneInput(t *testing.T) {
-	for _, allow := range []bool{false, true} {
-		h := newTestHub(t)
-		fm := &selfSettingsMail{}
-		h.mail = fm
-		connectAssistant(t, h) // the card is the manager's: it checks that the form is filled in
-		m := newMachine(h, MachineConfig{ID: "server", Name: "server"})
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		done := make(chan error, 1)
-		go func() {
-			_, err := h.toolJarvisSettings(ctx, m, "s1", json.RawMessage(`{"action":"add","key":"mail.accounts","value":{"email":"me@example.com"}}`))
-			done <- err
-		}()
-		var ix proto.Interaction
-		for ctx.Err() == nil {
-			if pending := h.pendingInteractions(); len(pending) == 1 {
-				ix = pending[0]
-				break
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-		if ix.ID == "" || len(ix.Fields) != 1 || !ix.Fields[0].Secret || len(fm.added) != 0 {
-			t.Fatal("missing secure approval card")
-		}
-		if allow {
-			if err := h.resolve(ix.ID, proto.Resolution{Allow: &allow}); err == nil || len(h.pendingInteractions()) != 1 {
-				t.Fatal("quick approval consumed an incomplete form")
-			}
-		}
-		if err := h.resolve(ix.ID, proto.Resolution{Allow: &allow, Values: map[string]string{"password": "example-password"}}); err != nil {
-			t.Fatal(err)
-		}
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Fatal(err)
-			}
-		case <-ctx.Done():
-			t.Fatal("settings operation did not complete")
-		}
-		if allow != (len(fm.added) == 1) {
-			t.Fatal("account was not gated by approval")
-		}
-		if allow && fm.added[0].Password != "example-password" {
-			t.Fatal("phone input was not passed to mail")
-		}
-	}
-}
 
 func TestSelfSettingsRedactsSecretsWithoutChangingDelivery(t *testing.T) {
 	// The history's redaction is the manager's (assistant TestRedacted); the push offers no quick approval.

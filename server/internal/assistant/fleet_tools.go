@@ -11,7 +11,7 @@ import (
 
 // The nodes' MCP tools (mcp.tools / mcp.call): an assistant conversation's or an agent's Persona tools. The manager
 // lists and routes them: the phone's (the hub runs them on the connected phone), the connectors', Cua's and ego's
-// (still the hub's to run: app.call hub), and the assistant's own (here). The skills' gated commands' settings go to
+// (the extensions', in this process: ExtensionTools, internal/extmgr), and the assistant's own (here). The skills' gated commands' settings go to
 // the assistant's machine only (assistant.lark).
 
 // runtimeCLITool is the DEBUG app's own channel, for the user's scripts only: never a node's.
@@ -27,17 +27,14 @@ func (s *Service) mcpTools(ctx context.Context, assistant bool) []proto.Tool {
 	if err := s.appCall(ctx, assistantwire.AppPhone, assistantwire.PhoneTools, map[string]any{}, &phone); err != nil {
 		s.logf("mcp tools: the phone's: %v", err)
 	}
-	var hub struct {
-		Agents    []proto.Tool `json:"agents"`
-		Assistant []proto.Tool `json:"assistant"`
+	var agents, assistantOnly []proto.Tool
+	if s.ext != nil {
+		agents, assistantOnly = s.ext.AgentTools(ctx, assistant)
 	}
-	if err := s.appCall(ctx, assistantwire.AppHub, assistantwire.HubTools, map[string]any{"assistant": assistant}, &hub); err != nil {
-		s.logf("mcp tools: the hub's: %v", err)
-	}
-	tools := append(phone.Tools, hub.Agents...)
+	tools := append(phone.Tools, agents...)
 	if assistant {
 		tools = append(tools, s.Tools(ctx)...)
-		tools = append(tools, hub.Assistant...)
+		tools = append(tools, assistantOnly...)
 	}
 	return tools
 }
@@ -45,17 +42,10 @@ func (s *Service) mcpTools(ctx context.Context, assistant bool) []proto.Tool {
 // mcpCall runs one: a connector's, Cua's or ego's at the hub (it says whether it is one of them), else the
 // assistant's own (for its conversations), else the phone's.
 func (s *Service) mcpCall(ctx context.Context, machine, session, name string, args json.RawMessage, assistant bool) proto.ToolResult {
-	var hub struct {
-		Handled bool             `json:"handled"`
-		Result  proto.ToolResult `json:"result"`
-	}
-	err := s.hub.Call(ctx, assistantwire.MethodFleetTool, map[string]any{"machine_id": machine, "session_id": session,
-		"name": name, "args": args, "assistant": assistant}, &hub)
-	switch {
-	case err != nil:
-		s.logf("mcp call %s: the hub: %v", name, err)
-	case hub.Handled:
-		return hub.Result
+	if s.ext != nil { // the connectors', Cua's, ego's: ctx is the node's call (its caller going away withdraws a card)
+		if res, ok := s.ext.CallTool(ctx, machine, session, name, args, assistant); ok {
+			return res
+		}
 	}
 	if assistant && s.isOwnTool(ctx, name) {
 		return s.Tool(ctx, ToolCall{Name: name, Arguments: args, MachineID: machine, SessionID: session})
@@ -90,9 +80,10 @@ func (s *Service) assistantLark(ctx context.Context, machine string) (proto.Assi
 	if machine != s.settings(ctx).MachineID {
 		return proto.AssistantLark{}, nil
 	}
-	var out proto.AssistantLark
-	err := s.appCall(ctx, assistantwire.AppHub, assistantwire.HubAssistantLark, map[string]any{}, &out)
-	return out, err
+	if s.ext == nil {
+		return proto.AssistantLark{}, nil
+	}
+	return s.ext.AssistantLark(ctx)
 }
 
 // assistantSummary is the text a gated command's card shows, as its plugin names what the ids are; false: none.
@@ -100,13 +91,8 @@ func (s *Service) assistantSummary(ctx context.Context, tool, summary string) (s
 	if tool == "" {
 		return summary, false
 	}
-	var res struct {
-		Summary string `json:"summary"`
-		OK      bool   `json:"ok"`
-	}
-	if err := s.appCall(ctx, assistantwire.AppHub, assistantwire.HubAssistantSummary, map[string]any{"tool_name": tool,
-		"summary": summary}, &res); err != nil || !res.OK {
+	if s.ext == nil {
 		return summary, false
 	}
-	return res.Summary, true
+	return s.ext.AssistantSummary(ctx, tool, summary)
 }

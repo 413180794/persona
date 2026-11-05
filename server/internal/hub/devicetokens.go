@@ -46,6 +46,9 @@ type principal struct {
 	// roleExtension: the extension the token was made for and the scopes it opens (extension_scopes.go).
 	Extension string
 	Scopes    []string
+	// extOpens, extScope: an extension's token opens the request's route (the manager said), else the scope it lacks.
+	extOpens bool
+	extScope string
 }
 
 type principalKey struct{}
@@ -116,8 +119,9 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 	if subtle.ConstantTimeCompare([]byte(tok), []byte(h.cfg.Token)) == 1 {
 		return principal{Role: roleFull}, true
 	}
-	if strings.HasPrefix(tok, extTokenPrefix) {
-		return h.extTokens.lookup(tok)
+	if strings.HasPrefix(tok, extTokenPrefix) { // the manager made it and says whose it is (extensions_link.go)
+		p, ok, _, _ := h.authorizeExtension(ctx, tok, nil)
+		return p, ok
 	}
 	if h.store == nil {
 		return principal{}, false

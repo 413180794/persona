@@ -80,3 +80,14 @@ func (c *client) lang() i18n.Lang {
 	}
 	return i18n.Default
 }
+
+// contextLang is the language of what ctx is doing for people: its request's (i18n.With), else the user's.
+func (h *Hub) contextLang(ctx context.Context) i18n.Lang {
+	if l := i18n.From(ctx); i18n.Valid(l) {
+		return l
+	}
+	if h == nil {
+		return i18n.Default
+	}
+	return h.userLang()
+}

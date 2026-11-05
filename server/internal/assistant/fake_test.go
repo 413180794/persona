@@ -676,20 +676,6 @@ func todoCount(s *Service) int {
 	return len(s.todos.todos)
 }
 
-// Call is the manager's own call to the hub (fleet.tool): the fake has none of the hub's tools.
-func (f *fakeHub) Call(_ context.Context, method string, _, out any) error {
-	if method == assistantwire.MethodFleetTool {
-		if p, ok := out.(*struct {
-			Handled bool             `json:"handled"`
-			Result  proto.ToolResult `json:"result"`
-		}); ok {
-			p.Handled = false
-		}
-		return nil
-	}
-	return fmt.Errorf("no method %s", method)
-}
-
 // Tell keeps what the manager told the hub of the nodes (fleet.*).
 func (f *fakeHub) Tell(event string, params any) error {
 	b, err := json.Marshal(params)

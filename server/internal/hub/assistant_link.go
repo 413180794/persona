@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -164,30 +163,11 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 	if out, ok, err := h.assistantAppCall(ctx, p); ok { // assistant_apps.go
 		return out, err
 	}
-	if out, ok, err := h.modelsAppCall(ctx, p); ok { // the plugins' providers and models (assistant_models.go)
-		return out, err
-	}
-	if out, ok, err := h.channelsAppCall(ctx, p); ok { // the channels' transport (assistant_channels.go)
-		return out, err
-	}
-	if out, ok, err := h.kbSourcesCall(ctx, p); ok { // the knowledge base's sources (kb_sources.go)
-		return out, err
-	}
-	if out, ok, err := h.inboxAppCall(ctx, p); ok { // the inbox's sources (inbox.go)
+	if out, ok, err := h.extAppCall(ctx, p); ok { // what the manager's extensions ask of the hub (extensions_link.go)
 		return out, err
 	}
 	if out, ok, err := h.fleetAppCall(ctx, p); ok { // what the hub still runs for the nodes (fleet_link.go)
 		return out, err
-	}
-	switch p.AppID + " " + p.Method {
-	case assistantwire.AppConnectors + " " + assistantwire.ConnectorsSnapshots:
-		var a struct {
-			TZ string `json:"tz"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		return json.Marshal(map[string]any{"snapshots": h.connectorSnapshots(ctx, a.TZ)})
 	}
 	if p.Method == assistantwire.AppTool {
 		return h.appTool(ctx, p.AppID, p.Params)
@@ -363,7 +343,6 @@ func (h *Hub) assistantUpdated() {
 // may have others) and kept for when it is not connected (its tools then answer assistant_offline); what waited for it
 // goes.
 func (h *Hub) assistantConnected() {
-	go h.inboxManagerConnected() // its inbox gets a full round (inbox.go)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var res struct {
@@ -378,13 +357,6 @@ func (h *Hub) assistantConnected() {
 	}
 	if !h.storeAssistantTools(generation, res.Tools) {
 		return
-	}
-	// Connectors register as the hub starts, before the assistant says its tools (builtinTools): one that took a name
-	// of the assistant's gets its calls (connectors are asked first), which is said here.
-	for _, t := range res.Tools {
-		if h.connectors != nil && h.connectors.Offers(t.Name) {
-			h.logf("assistant: a connector offers %s, the assistant's tool: the connector answers it", t.Name)
-		}
 	}
 }
 
@@ -508,39 +480,3 @@ func (a assistantRemote) TodoSpaceRenamed(_ context.Context, r assistantwire.Tod
 // ---- the hub's own parts that tell the assistant, or ask it ----
 
 // ---- what the hub answers the assistant from its other parts ----
-
-// connectorSnapshots are the live states of the signed-in connectors that keep one (connector.Snapshot: a chat service
-// through a plugin), asked at once and waited for 3 seconds; those that do not answer in time are left out
-// (connectors.snapshots; tz is the user's zone, "" the hub's guess).
-func (h *Hub) connectorSnapshots(ctx context.Context, tz string) []connector.SnapshotData {
-	out := []connector.SnapshotData{}
-	if h.connectors == nil {
-		return out
-	}
-	if tz == "" {
-		tz = h.userLocation().String()
-	}
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for _, c := range h.connectors.All() {
-		sn, ok := connector.As[connector.Snapshot](c)
-		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK {
-			continue
-		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			d, err := sn.Snapshot(ctx, tz)
-			if err != nil {
-				return
-			}
-			mu.Lock()
-			out = append(out, d)
-			mu.Unlock()
-		}()
-	}
-	wg.Wait()
-	return out
-}

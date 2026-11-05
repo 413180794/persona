@@ -127,10 +127,14 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 **为什么照总线来画**：接口就是线上的消息，hub 那头的 `assistantLink` 是唯一的实现，总线上只多了编解码；hub 这边不再算助手的状态（标题、归档、排队、提问都是助手报什么就显示什么），也不再懂助手的语义（工具清单、提示词、提问的意思都在助手那边）。
 好处：谁管什么清楚了；助手崩了、卡住了不拖垮 hub（反过来也一样），可以单独重启、单独升级；助手可以跑在别处，以后可以接不止一个；hub 不再随助手的功能长出新的状态。
 
+**扩展、连接器和机器人也是助手的进程的**（2026-11-05，[extensions.md](extensions.md)「谁管什么」）：`internal/extmgr` 在同一个进程里跑扩展、连接器、邮件、飞书和微信机器人；
+`assistant/extensions.go` 把 hub 的 `extensions.*` 调用、事件交给它，助手自己对 `inbox`、`feishu`、`channels`、`connectors`、`plugins` 这几个应用的 `app.call`（收件箱和知识库的来源、渠道的传输、目录里的连接器和扩展的技能）直接在进程里由它答，不再过 hub；
+助手要发给 hub 的 `inbox.changed`、`kb.changed`、`kb.forgotten` 也先给它（扩展订阅的那部分）。它要 hub 做的（卡片、推送、模型配置的几问）经 `app.call` 的 `hub` 应用。上面说「hub 转给助手」的渠道消息（`channels.receive`、`feishu.message`、`feishu.card_action`）和收件箱的 `inbox.collected` 现在是它在进程里交给助手，方法和参数不变。
+
 **还留在 hub 的**（后续再挪）：
 
 - App 的重命名接口（`renameSession`）还是 hub 的：助手的对话交给助手（`assistant.rename`），别的照旧。
-- 只给助手用、但做的是 hub 的事的工具：`jarvis_settings` 里 hub 自己的设置（分拣规则、屏蔽的配置目录、邮箱）经 `app.tool` 回到 hub 执行；飞书的工具是飞书插件（连接器）的，本来就不是助手的。
+- 只给助手用、但做的是 hub 的事的工具：`jarvis_settings` 里 hub 自己的设置（分拣规则、屏蔽的配置目录）经 `app.tool` 回到 hub 执行（邮箱和来源自己的分拣规则是管理者的扩展的，hub 再交给它：`extensions.hub_call settings.*`）；飞书的工具是飞书插件（连接器）的，本来就不是助手的。
 - `findAgent`、`machineByName` 两边各一份（hub 的找 `*Machine`、给操控电脑用，`hub/tools_shared.go`；助手的经总线问 `devices.list` / `sessions.list`）。`conversationName` 只剩助手的一份（飞书机器人挪过去了）。
   `clip`、`oneLine`、`firstLine`、`ago`、`short`、`agentLabel`、`stateNames` 只有一份（`server/internal/textfmt`），两边各自用原来的小写名字指向它。
 

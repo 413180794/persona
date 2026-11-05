@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"syscall"
@@ -110,4 +111,16 @@ func AssistantToken(ctx context.Context, out io.Writer) error {
 	_, err = fmt.Fprintf(out, "%s\n\n在跑助手的机器上：PERSONA_ASSISTANT_TOKEN=<上面的 token> PERSONA_ASSISTANT_HUB=<hub 地址> personad assistant\n"+
 		"（hub.json 的 assistant.external 要是 true，否则 hub 每次启动都换掉这个 token、自己起一个助手）\n", tok)
 	return err
+}
+
+// hubLocalURL is the hub on this machine, from its listen address.
+func hubLocalURL(listen string) string {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return "http://127.0.0.1:18660"
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port)
 }

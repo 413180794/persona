@@ -6,8 +6,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // echoMem keeps sent_messages.echo like the table does (db.RecordEcho / Echoes).
@@ -87,7 +85,6 @@ func TestEchoesAreKeptAndHandedBack(t *testing.T) {
 
 	// What the hub hands a node that connects (devices.connected: the manager makes the calls right after its
 	// configuration, before anything asks it for items).
-	h.connectors = connector.NewRegistry(nil)
 	reply := h.machineConnected(context.Background(), m, time.Now())
 	var got []string
 	var handed []struct {

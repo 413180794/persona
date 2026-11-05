@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -63,8 +62,19 @@ func TestAgentsListAndFind(t *testing.T) {
 
 func TestAssistantToolsOnlyForAssistant(t *testing.T) {
 	h := newTestHub(t)
-	h.connectors = connector.NewRegistry(nil)
-	h.registerConnectors()
+	// The connectors' tools are the manager's: it says which are the assistant's only (lark_*).
+	fakeExtOf(h).on(fakeConnectorTools, func(raw json.RawMessage) (any, error) {
+		var a struct {
+			Assistant bool `json:"assistant"`
+		}
+		_ = json.Unmarshal(raw, &a)
+		tools := []proto.Tool{{Name: "examplenotes_search", InputSchema: json.RawMessage(`{"type":"object"}`)}}
+		only := []proto.Tool{}
+		if a.Assistant {
+			only = append(only, proto.Tool{Name: "lark_search", InputSchema: json.RawMessage(`{"type":"object"}`)})
+		}
+		return map[string]any{"tools": tools, "assistant_tools": only}, nil
+	})
 	connectAssistant(t, h)
 	for _, tool := range h.mcpTools(false) {
 		if h.isAssistantTool(context.Background(), tool.Name) || strings.HasPrefix(tool.Name, "lark_") {
@@ -79,7 +89,7 @@ func TestAssistantToolsOnlyForAssistant(t *testing.T) {
 			t.Fatalf("%s schema: %v", tool.Name, err)
 		}
 	}
-	for _, want := range []string{"ask_user", "notify_user", "schedule_followup", "agents_list", "agent_read"} {
+	for _, want := range []string{"ask_user", "notify_user", "schedule_followup", "agents_list", "agent_read", "lark_search", "examplenotes_search"} {
 		if !names[want] {
 			t.Fatalf("assistant is missing %s", want)
 		}

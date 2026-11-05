@@ -129,19 +129,18 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 // left out: they are the manager's).
 func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 	ctx := context.Background()
-	tools := append(h.phoneToolList(), h.connectors.ToolsFor(ctx, true)...)
+	agents, assistantOnly := fakeExtOf(h).AgentTools(ctx, assistant) // the extensions' (the manager's, faked)
+	tools := append(h.phoneToolList(), agents...)
 	if assistant {
 		tools = append(tools, h.asst().Tools(ctx)...) // the assistant's own, when one is connected
-		tools = append(tools, h.computerTools()...)
-		tools = append(tools, h.browserTools()...)
-		tools = append(tools, h.connectors.ToolsFor(ctx, false)...)
+		tools = append(tools, assistantOnly...)
 	}
 	return tools
 }
 
 // callTool is a node's MCP call as the manager routes it to the hub (app.call hub, then phone).
 func (h *Hub) callTool(ctx context.Context, machineID, name string, args json.RawMessage) proto.ToolResult {
-	if r, ok := h.hubTool(ctx, machineID, "", name, args, false); ok {
+	if r, ok := fakeExtOf(h).CallTool(ctx, machineID, "", name, args, false); ok {
 		return r
 	}
 	b, _ := json.Marshal(map[string]any{"name": name, "args": args})

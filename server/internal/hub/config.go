@@ -23,9 +23,6 @@ import (
 	"github.com/mdp/qrterminal/v3"
 
 	"github.com/nwverse/persona/server/internal/ai"
-	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/connector/github"
-	"github.com/nwverse/persona/server/internal/connector/imessage"
 	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -79,14 +76,6 @@ type MachineConfig struct {
 	ClaudeStartDir string `json:"claude_start_dir,omitempty"`
 }
 
-// GoogleConfig is a Google Cloud OAuth client of type iOS (no secret: the client ID is public), plus the proxy
-// Gmail traffic takes (some networks reach few of Google's IPv4 addresses; docs/mail.md).
-type GoogleConfig struct {
-	ClientID string `json:"client_id"`
-	// Proxy is an http:// proxy for Gmail IMAP / SMTP and Google's OAuth / Gmail API, e.g. a local proxy on the hub's machine.
-	Proxy string `json:"proxy,omitempty"`
-}
-
 // TailcatConfig: DERPMapURL is a DERP map of your own relays (a derper) instead of Tailscale's public ones; the nodes
 // were set up with the same (`jarvisd node tailcat init --derp-map-url`).
 type TailcatConfig struct {
@@ -113,13 +102,6 @@ type AssistantProfile struct {
 // HTMLViewsOn is assistant.html_views with its default (on); it means nothing while PersonaView is off.
 func (p AssistantProfile) HTMLViewsOn() bool { return p.HTMLViews == nil || *p.HTMLViews }
 
-// MicrosoftConfig is Outlook's "Sign in with Microsoft" (docs/mail.md「Outlook 接入方式」): an optional default client
-// ID (the user normally enters their own in the app; it is never built in) and the redirect URI registered with it.
-type MicrosoftConfig struct {
-	ClientID    string `json:"client_id,omitempty"`
-	RedirectURI string `json:"redirect_uri,omitempty"`
-}
-
 type Config struct {
 	// Name is what people see this hub as (hubName); empty: its machine's host name.
 	Name string `json:"name,omitempty"`
@@ -140,20 +122,7 @@ type Config struct {
 	// connector_gate's lark rules and before the built-in ones (connector.LarkRules, node/larkgate.go; e.g.
 	// {"method":"POST","path":"/conversations/*/messages","action":"allow"}).
 	LarkGate []proto.LarkRule `json:"lark_gate,omitempty"`
-	// ConnectorGate: rules for connectors' writes (github_comment…), the first match decides; without one the user
-	// allows each write on the phone (internal/connector/gate.go; e.g. {"connector":"github","action":"github_comment",
-	// "match":{"repo":"example-org/*"},"decision":"allow"}).
-	ConnectorGate []connector.Rule `json:"connector_gate,omitempty"`
-	// GitHub is the GitHub connector: whose gh login it reads (connector/github, docs/plan-connectors.md).
-	GitHub *github.Config `json:"github,omitempty"`
-	// IMessage is the Messages connector: which Mac's Messages the app may read (connector/imessage). The messages
-	// are not given to any model.
-	IMessage *imessage.Config `json:"imessage,omitempty"`
-	// Google is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
-	Google GoogleConfig `json:"google"`
-	// Microsoft: Outlook's sign-in (optional; the app asks for the client ID when there is none).
-	Microsoft MicrosoftConfig `json:"microsoft,omitempty"`
-	Machines  []MachineConfig `json:"machines"`
+	Machines []MachineConfig  `json:"machines"`
 	// Assistant personalizes the 对话 tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
 	// know about them and their setup (where code lives, which skills reach work data, machines to stay out of).
 	Assistant AssistantProfile `json:"assistant"`
@@ -171,17 +140,8 @@ type Config struct {
 	Security SecurityConfig `json:"security,omitempty"`
 	// Admin is who may open the admin UI (docs/admin.md).
 	Admin AdminConfig `json:"admin,omitempty"`
-	// Extensions are processes the hub runs to add things to the app, e.g. the voice conversation
-	// (docs/extensions.md「hub.json 里的扩展」); LegacyExtensions are the same under the old key "plugins", still read.
-	Extensions       []ExtensionConfig `json:"extensions,omitempty"`
-	LegacyExtensions []ExtensionConfig `json:"plugins,omitempty"`
-	// TrustedExtensionMarkets are markets' signing keys (key ids, or ed25519:<key> from a market.pub) whose extensions
-	// run outside a sandbox unless the owner says otherwise, like the official ones (docs/extensions.md「沙箱」).
-	TrustedExtensionMarkets []string `json:"trusted_extension_markets,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
-	// Bots: talking to Persona through a chat app's bot (bots.go, docs/bots.md); switched on in the app.
-	Bots BotsConfig `json:"bots,omitempty"`
 	// Mesh tunes the links to other hubs (docs/mesh.md, config_mesh.go).
 	Mesh MeshConfig `json:"mesh,omitempty"`
 	// Personas tunes the looks: whose level a tiered look shows (persona_tiers.go, docs/persona.md).
@@ -280,9 +240,6 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("%s: token is empty", path)
 	}
 	if err := cfg.Lark.Validate(); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	if err := connector.ValidateRules(cfg.ConnectorGate); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if cfg.HookTimeoutMinutes <= 0 {
@@ -411,4 +368,14 @@ func writePair(w io.Writer, cfg *Config) {
 	fmt.Fprintf(w, "Server: %s\nToken:  %s\n\n用 Persona App 扫码配对：\n\n", cfg.PublicURL, cfg.Token)
 	qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, w)
 	fmt.Fprintf(w, "\nMac 上拷贝这条链接，在 Persona 的「连接 hub」里粘贴：\n%s\n", cfg.PairURL())
+}
+
+// InboxConfig is hub.json's inbox: the hub reads the triage models (its model configuration's defaults) and the
+// rules (jarvis_settings); the inbox's sources are the manager's (internal/extmgr), which reads the same section.
+type InboxConfig struct {
+	Rules    string     `json:"rules,omitempty"`
+	TriageAI *ai.Config `json:"triage_ai,omitempty"`
+	JudgeAI  *ai.Config `json:"judge_ai,omitempty"`
+	// Agent (model 3) works on the items the judge hands over and drafts the reply (the manager's inbox_agent.go).
+	Agent assistantwire.InboxAgentConfig `json:"agent,omitempty"`
 }

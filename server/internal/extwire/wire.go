@@ -1,0 +1,207 @@
+// Package extwire is what the hub and the manager say to each other about the extensions, the connectors and the
+// bots (docs/extensions.md「谁管什么」): the manager (internal/extmgr, in `personad assistant`) has all of them — the
+// registry with its secrets, the programs, the connectors and their credentials, mail, the Feishu and WeChat bots —
+// and answers their routes; the hub relays the apps' requests to it as they are and keeps the last of what the
+// manager reports for the apps (features, the extensions' parts of the API). Both import this package, neither
+// imports the other.
+package extwire
+
+import (
+	"encoding/json"
+
+	"github.com/nwverse/persona/server/internal/extension"
+)
+
+// Routes are the routes the manager answers (net/http patterns): the hub relays each request on them to the manager
+// over a relay stream (RelayKind), so a response streams (SSE, a WebSocket) as it did. The manager registers these
+// and no others (extmgr.TestRoutesAreTheWireOnes).
+var Routes = []string{
+	"/api/v1/extensions",
+	"/api/v1/extensions/",
+	"/api/v1/admin/extensions",
+	"/api/v1/admin/extensions/",
+	"/api/v1/plugins",
+	"/api/v1/plugins/",
+	"/api/v1/connectors",
+	"/api/v1/connectors/",
+	"/api/v1/bots/",
+	"/api/v1/channels/{id}/bind",
+	"/api/v1/mail/",
+	"/api/v1/imessage",
+	"/api/v1/imessage/",
+	"/api/v1/agents",
+	"/api/v1/agents/",
+	"/api/v1/messaging",
+	"/api/v1/messaging/",
+	"/api/v1/devices/{id}/widgets",
+	"/api/v1/machines/{mid}/computer",
+	"/api/v1/machines/{mid}/computer/",
+	"/api/v1/machines/{mid}/browser",
+	"/api/v1/machines/{mid}/browser/",
+}
+
+// KeptRoutes are GET routes whose last answer the hub keeps and gives while the manager is away, so the apps keep
+// drawing what the extensions put in them (their UI, themes, widgets, shortcuts, prompts) until it is back.
+var KeptRoutes = []string{
+	"/api/v1/extensions",
+	"/api/v1/extensions/-/ui",
+	"/api/v1/extensions/-/themes",
+	"/api/v1/extensions/-/prompts",
+	"/api/v1/extensions/-/widgets",
+	"/api/v1/extensions/-/shortcuts",
+	"/api/v1/extensions/-/triage-templates",
+}
+
+// Headers the hub sets on a relayed request: who asked, as its auth found it. Any the client sent are dropped.
+const (
+	HeaderDevice     = "X-Persona-Device"      // the device token's id ("" for the master token)
+	HeaderDeviceName = "X-Persona-Device-Name" // its name
+	HeaderRole       = "X-Persona-Role"        // full | answer | extension | …
+	HeaderPaired     = "X-Persona-Paired"      // "1": a pairing token, not one of the user's own signed-in apps
+	HeaderExtension  = "X-Persona-Extension"   // an extension token's extension
+	HeaderScopes     = "X-Persona-Scopes"      // its scopes, comma-separated
+	HeaderOwner      = "X-Persona-Owner"       // "1": the master token over loopback (installing runs code here)
+	HeaderAdmin      = "X-Persona-Admin"       // "1": a signed-in admin session (the admin UI's routes)
+	HeaderRemote     = "X-Persona-Remote"      // the caller's address
+	HeaderLang       = "X-Persona-Lang"        // the language the hub would answer it in
+)
+
+// Hub → manager.
+const (
+	// MethodAuthorize: Authorize → Authorized. An extension's token on one of the hub's own routes: the manager made
+	// the token and says whose it is and whether its scopes open the route.
+	MethodAuthorize = "extensions.authorize"
+	// EventEmit: Emit, one-way: something the hub saw that the extensions subscribe to (agent.finished, agent.needs_you).
+	EventEmit = "extensions.emit"
+	// MethodHubCall: HubCall → the answer: what the hub's own features ask of the manager's (Hub*).
+	MethodHubCall = "extensions.hub_call"
+)
+
+// What the hub's own features ask of the manager (HubCall.Method).
+const (
+	// HubGitHubLogin: {} → {login}: the GitHub connector's signed-in login (the persona tiers).
+	HubGitHubLogin = "github_login"
+)
+
+// Manager → hub.
+const (
+	// EventReport: Report, one-way: what the hub shows of the extensions while it relays (and after, while the
+	// manager is away). Whole each time.
+	EventReport = "extensions.report"
+	// EventLooksGone: LooksGone, one-way: an extension with looks was removed (after the report without them): a
+	// chosen look of its that no one gives now goes back to the default.
+	EventLooksGone = "extensions.looks_gone"
+	// MethodAppCall is app.call (assistantwire.AppCall) with these apps.
+)
+
+// The hub's apps the manager calls (assistantwire.AppCall.AppID / Method).
+const (
+	AppHub = "hub"
+	// HubPushBackground: {payload, devices} → {}: a silent push to those devices (an extension's widget).
+	HubPushBackground = "push.background"
+)
+
+// Authorize is MethodAuthorize's params: the token's hash, and the route the request is for (its pattern on the
+// hub's mux, its method and path).
+type Authorize struct {
+	Hash    string `json:"hash"`
+	Pattern string `json:"pattern"`
+	Method  string `json:"method"`
+	Path    string `json:"path"`
+}
+
+// Authorized is MethodAuthorize's answer. OK false with Extension set: a live token without the scope (Scope says
+// which); Extension "": no such token.
+type Authorized struct {
+	OK        bool     `json:"ok"`
+	Extension string   `json:"extension,omitempty"`
+	Name      string   `json:"name,omitempty"`
+	Scopes    []string `json:"scopes,omitempty"`
+	Scope     string   `json:"scope,omitempty"`
+}
+
+// Emit is EventEmit's params.
+type Emit struct {
+	Event  string          `json:"event"`
+	Params json.RawMessage `json:"params"`
+}
+
+// HubCall is MethodHubCall's params.
+type HubCall struct {
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params,omitempty"`
+}
+
+// Report is EventReport's params.
+type Report struct {
+	// Features are the extensions' features the apps see beside the hub's (hello, health).
+	Features []string `json:"features,omitempty"`
+	// APIs are the parts of the app's API under /api/v1/<prefix>/ the running extensions serve.
+	APIs []APIPrefix `json:"apis,omitempty"`
+	// Machines are what the hub shows on each machine of the built-in extensions (cua, ego).
+	Machines map[string]MachineExtras `json:"machines,omitempty"`
+	// ScreenKeepAwake: a Mac whose screen the app watches stays awake meanwhile (the plugin cua's setting).
+	ScreenKeepAwake bool `json:"screen_keep_awake,omitempty"`
+	// Looks are the looks of the extensions that are on (docs/extensions.md「形象」), with their files: the hub serves
+	// them as persona packages beside its own.
+	Looks []LookPackage `json:"looks,omitempty"`
+}
+
+// LookPackage is one extension's look: the manifest's item and the files it names (SVGs cleaned).
+type LookPackage struct {
+	Extension     string            `json:"extension"`
+	ExtensionName string            `json:"extension_name"`
+	Version       string            `json:"version"`
+	Item          json.RawMessage   `json:"item"`
+	Files         map[string][]byte `json:"files"`
+}
+
+// APIPrefix is one extension's part of the API. Receipts: the sends under it the hub keeps a receipt for, as for its
+// own (GET /api/v1/ops/{id}).
+type APIPrefix struct {
+	Prefix   string                 `json:"prefix"`
+	Receipts []extension.APIReceipt `json:"receipts,omitempty"`
+}
+
+// MachineExtras is one machine's computer (Cua) and browser (ego) state, nil when not on.
+type MachineExtras struct {
+	Computer json.RawMessage `json:"computer,omitempty"`
+	Browser  json.RawMessage `json:"browser,omitempty"`
+	// ScreenPort: the computer's screen may be opened (the plugin cua or ego is on for it).
+	ScreenPort bool `json:"screen_port,omitempty"`
+}
+
+// Setting is one of the manager's jarvis_settings entries (HubSettingsList).
+type Setting struct {
+	Key     string   `json:"key"`
+	Title   string   `json:"title"`
+	About   string   `json:"about"`
+	Value   string   `json:"value,omitempty"`
+	Actions []string `json:"actions"`
+}
+
+// More of what the hub asks of the manager (HubCall.Method).
+const (
+	// HubSettingsList: {} → {settings: [Setting]}: the manager's jarvis_settings entries (mail, sources' rules).
+	HubSettingsList = "settings.list"
+	// HubSettingsTool: {machine_id, session_id, arguments} → {text}: jarvis_settings on one of them (the card is the
+	// hub's: the manager asks HubWaitInteraction).
+	HubSettingsTool = "settings.tool"
+	// HubKBArchives, … see the routes.
+)
+
+// More of the hub's apps the manager calls.
+const (
+	// HubPushLocalized: {payloads: {lang: payload}} → {}: a push to every device in its language.
+	HubPushLocalized = "push.localized"
+	// HubMailTargets: {} → {targets}: the languages the devices want mail translated into.
+	HubMailTargets = "push.mail_targets"
+)
+
+// MethodAccept: {id} → {}: the hub holds a request for the manager (a relayed route): it dials the relay with the id.
+const MethodAccept = "extensions.accept"
+
+// LooksGone is EventLooksGone's params: the removed extension's looks' ids.
+type LooksGone struct {
+	IDs []string `json:"ids"`
+}

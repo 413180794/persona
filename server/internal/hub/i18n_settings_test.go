@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -28,13 +27,6 @@ func TestSettingsTextsInEachLanguage(t *testing.T) {
 		t.Errorf("default alert: %q", body)
 	}
 
-	if got := computerSummary(i18n.En, "Studio", "run_script", "open -a Notes\nsecond", nil); got != "Run a script on “Studio”: open -a Notes" {
-		t.Errorf("computer en: %q", got)
-	}
-	if got := computerSummary(i18n.ZhHans, "Studio", "run_script", "open -a Notes", nil); got != "在「Studio」上运行脚本：open -a Notes" {
-		t.Errorf("computer zh: %q", got)
-	}
-
 	if got := unknownDelivery(i18n.Ja, "hub-send.lost_during").Error(); got != "送信中にコンピューターとの接続が切れました：すでにコンピューターに届いている可能性があります。チャットを確認してから再送するか決めてください" {
 		t.Errorf("send ja: %q", got)
 	}
@@ -44,10 +36,7 @@ func TestSettingsTextsInEachLanguage(t *testing.T) {
 	if got := changeSummary(i18n.ZhHans, "规则", "", "新"); got != "改规则：（无） → 新" {
 		t.Errorf("change zh: %q", got)
 	}
-	_, summary, err := mailAccountRequest(i18n.En, json.RawMessage(`{"email":"me@example.com"}`))
-	if err != nil || summary != "Add mail account me@example.com (servers detected automatically). After you enter the password it connects once before saving" {
-		t.Errorf("mail en: %q %v", summary, err)
-	}
+	// (The mail account's and the computer's cards are the manager's: extmgr's TestMailAccountRequestInEnglish.)
 }
 
 func TestSelfUpdateWhyNotInEachLanguage(t *testing.T) {

@@ -7,7 +7,7 @@
 它是渠道 `feishu`（`docs/channels.md`）：跟踪这一轮走统一管线（`assistant/channels_runs.go`，规则在 `server/internal/channel`，和微信同一份），
 这里讲飞书那一头（进度卡、答案卡、表情、提问卡片、命令）。
 
-**谁管什么**（2026-11-04 起，`docs/channels.md`「谁管什么」）：hub 只管传输——应用凭证和功能开关（`bots.feishu`）、开放平台的长连接、配对、只认主人和只在私聊、发 / 回 / 改消息和卡片、
+**谁管什么**（2026-11-04 起，`docs/channels.md`「谁管什么」；2026-11-05 起传输也在管理者里，`server/internal/extmgr`，`docs/extensions.md`「谁管什么」，下面说「hub」的传输部分都是管理者做）：传输只有——应用凭证和功能开关（`bots.feishu`）、开放平台的长连接、配对、只认主人和只在私聊、发 / 回 / 改消息和卡片、
 表情、读消息和下载资源；主人的消息和按卡片交给助手（总线的 `feishu.message`、`feishu.card_action`）。消息进哪段对话、命令、跟踪这一轮、进度卡和答案卡、
 提问卡片和按钮的回答、推送和同步是助手的（`personad assistant`），聊天状态 `bots.feishu.state` 也是它的；它要发、要改的经 `app.call feishu.*` 叫 hub 做。
 助手没连着时，主人的消息先等它最多 60 秒（hub 刚起来、助手在重启），等不到才回「没能发出去：助手暂时连不上，稍后再试」；按卡片回 toast「助手暂时连不上，稍后再试」；

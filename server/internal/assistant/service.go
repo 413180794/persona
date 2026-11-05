@@ -36,6 +36,9 @@ type Options struct {
 
 // Service is the assistant. It implements Handler.
 type Service struct {
+	// ext is the extensions' tools in this process (extensions.go SetExtensions); nil: none (tests).
+	ext ExtensionTools
+
 	hub   Hub
 	store func() Store
 	logf  func(format string, args ...any)

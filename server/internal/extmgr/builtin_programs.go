@@ -1,0 +1,84 @@
+package extmgr
+
+import (
+	"context"
+	"encoding/json"
+	"slices"
+	"strings"
+
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// builtinNode is a built-in extension's node section: its program is in personad (node.command "builtin",
+// node/builtin.go), on the computers picked in its field machines. No package, lease, state rows or consent of its own
+// (Manifest.NodeProgram is nil for it): what it is on each machine shows as it always did (the machine page, the
+// settings' rows).
+func builtinNode(machines string) *extension.NodeRuntime {
+	return &extension.NodeRuntime{Command: extension.Command{Path: extension.NodeBuiltin}, Machines: machines}
+}
+
+// builtinConnected are the built-in programs' part of a machine's reconcile when it connects (reconcileNodePrograms):
+// what each asks of the machine again. They run whether the extension is on or not: each knows what to do when it is
+// off (tellNoLock says off again, the rest ask nothing).
+var builtinConnected = []func(h *Manager, ctx context.Context, m *Machine){
+	func(h *Manager, ctx context.Context, m *Machine) { h.refreshComputer(ctx, m) }, // cua: only when it is on for m (computer.go)
+	func(h *Manager, ctx context.Context, m *Machine) { h.tellNoLock(ctx, m) },      // cua's 「扩展开着时不自动锁屏」 (computer_nolock.go)
+	func(h *Manager, ctx context.Context, m *Machine) { h.tellCursor(ctx, m) },      // cua's 「显示 Agent 的光标」 (computer_cursor.go)
+	func(h *Manager, ctx context.Context, m *Machine) { h.refreshBrowser(ctx, m) },  // ego (browser.go)
+}
+
+// reconcileNodePrograms brings a machine that just connected in line with what should run on it: the built-in
+// programs ask what they need (builtinConnected), the packaged ones are synced (plugin.node.sync). Each on its own,
+// none waits for another.
+func (h *Manager) reconcileNodePrograms(ctx context.Context, m *Machine) {
+	for _, connected := range builtinConnected {
+		go connected(h, ctx, m)
+	}
+	go h.syncExtensionNodes(ctx, m) // plugins' programs on this computer (extension_nodes.go)
+}
+
+// builtinPrefixes are the extensions whose programs are built into personad (cua, ego; node/builtin.go) by the prefix of
+// their old method names.
+var builtinPrefixes = map[string]string{"computer.": "cua", "browser.": "ego"}
+
+// callBuiltin asks m's built-in program for method, given by its old name (computer.status, browser.cookies.list…):
+// over plugin.node.call {id, method} on a node that says it has the program (node.info's builtin_programs, #1830
+// step 5), by the old name on one from before. Which way is m's own word, never a retry: an older node gets exactly
+// the call it always got.
+func (m *Machine) callBuiltin(ctx context.Context, method string, params any, out any) error {
+	for prefix, id := range builtinPrefixes {
+		short, ok := strings.CutPrefix(method, prefix)
+		if !ok {
+			continue
+		}
+		m.mu.Lock()
+		has := slices.Contains(m.info.BuiltinPrograms, id)
+		m.mu.Unlock()
+		if !has {
+			break
+		}
+		raw, err := json.Marshal(params)
+		if err != nil {
+			return err
+		}
+		return m.call(ctx, "plugin.node.call", proto.PluginNodeCall{ID: id, Method: short, Params: raw}, out)
+	}
+	return m.call(ctx, method, params, out)
+}
+
+// callBuiltinProgram asks m's built-in program id for method, a name it has kept over plugin.node.call (imessage's
+// connector.*): that way to a node that says it has the program, as is to one from before.
+func (m *Machine) callBuiltinProgram(ctx context.Context, id, method string, params any, out any) error {
+	m.mu.Lock()
+	has := slices.Contains(m.info.BuiltinPrograms, id)
+	m.mu.Unlock()
+	if !has {
+		return m.call(ctx, method, params, out)
+	}
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	return m.call(ctx, "plugin.node.call", proto.PluginNodeCall{ID: id, Method: method, Params: raw}, out)
+}

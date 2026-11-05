@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -163,22 +162,6 @@ func TestRouteErrorsJSON(t *testing.T) {
 	mux.ServeHTTP(w, localRequest("GET", "/api/v1/health"))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"error_codes"`) {
 		t.Fatalf("health: %d %s", w.Code, w.Body.String())
-	}
-}
-
-func TestMailRoutingErrorsUnchanged(t *testing.T) {
-	h := newTestHub(t)
-	h.mail = &mail.Service{}
-	for _, tt := range []struct{ method, path string }{{"GET", "/api/v1/mail/missing"}, {"DELETE", "/api/v1/mail/accounts"}} {
-		r := localRequest(tt.method, tt.path)
-		r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
-		want := httptest.NewRecorder()
-		h.mail.Handler().ServeHTTP(want, r)
-		got := httptest.NewRecorder()
-		h.routes().ServeHTTP(got, r)
-		if got.Code != want.Code || got.Body.String() != want.Body.String() || got.Header().Get("Allow") != want.Header().Get("Allow") {
-			t.Fatalf("mail error changed: %d %s", got.Code, got.Body.String())
-		}
 	}
 }
 

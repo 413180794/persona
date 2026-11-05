@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/extmgr"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/osproc"
 
@@ -195,7 +196,7 @@ func main() {
 			err = fmt.Errorf("unknown hub command %q", sub)
 		}
 	case "assistant": // the assistant as its own process on the hub's bus (the hub starts it, docs/assistant.md)
-		err = assistant.Main(ctx, buildInfo().Version, os.Stdin)
+		err = assistant.Main(ctx, buildInfo(), os.Stdin)
 	case "node":
 		if len(os.Args) > 2 && os.Args[2] == "--attach" {
 			err = runResident(ctx)
@@ -261,7 +262,7 @@ func main() {
 	case "voice":
 		err = voice.Run(ctx)
 	case "extension", "ext", "plugin": // plugin: its name before #1844
-		err = hub.ExtensionCommand(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr)
+		err = extmgr.ExtensionCommand(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr)
 	case "sysmon":
 		n := 3
 		if len(os.Args) > 2 {

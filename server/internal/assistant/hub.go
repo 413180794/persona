@@ -35,8 +35,6 @@ type Hub interface {
 	Snapshot(ctx context.Context, s Snapshot) (SnapshotResult, error)
 	// InboxChanged is inbox.changed: inbox items changed (inbox.go); the hub tells the extensions and the apps. One way.
 	InboxChanged(ctx context.Context, c assistantwire.InboxChanged)
-	// Call is one of the manager's own calls to the hub (fleet.tool), out read from its answer.
-	Call(ctx context.Context, method string, params, out any) error
 	// Tell is one of the manager's one-way events to the hub (fleet.*: what the apps get of the nodes, fleet.go);
 	// an error: not connected.
 	Tell(event string, params any) error

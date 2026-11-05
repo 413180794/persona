@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
@@ -134,11 +135,9 @@ func (h *Hub) groupChanged(oldCenter, newCenter string) {
 	case oldCenter == self && newCenter != self:
 		h.logf("mesh: this hub is a member now: its apps go to the center, its computers too")
 		h.becameMember()
-		go h.extensions.roleChanged(context.Background())
 	case oldCenter != self && newCenter == self:
 		h.logf("mesh: this hub is the center now")
 		h.becameCenter()
-		go h.extensions.roleChanged(context.Background())
 	case oldCenter != newCenter:
 		h.dropAppConnections("the group has another center") // passing on to the old one: reconnect to the new one
 	}
@@ -155,14 +154,12 @@ func (h *Hub) groupChanged(oldCenter, newCenter string) {
 func (h *Hub) becameMember() {
 	h.dropAppConnections("this hub joined a group: the center serves the apps now")
 	h.fleetRegroup() // the manager parks the machines: the center connects them through this hub
-	h.restartBot()   // the center's Feishu bot answers for the group
 }
 
 // becameCenter: this hub drives the computers again, its own and the members'.
 func (h *Hub) becameCenter() {
 	h.dropAppConnections("this hub is the center now")
 	h.fleetRegroup() // the manager connects the computers again, its own and the members'
-	h.restartBot()
 }
 
 // dropAppConnections closes every app WebSocket this hub serves itself, and every request it is passing on to a

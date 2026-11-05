@@ -1,0 +1,90 @@
+package extmgr
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// The mail accounts in jarvis_settings are the manager's (mail is); the card is the hub's (the fake hub here).
+
+type selfSettingsMail struct {
+	Mail
+	added []mail.AddAccountRequest
+}
+
+func (f *selfSettingsMail) Tools() []proto.Tool { return nil }
+func (f *selfSettingsMail) AddAccount(req mail.AddAccountRequest) (*mail.MailAccount, error) {
+	f.added = append(f.added, req)
+	return &mail.MailAccount{ID: "acc_1", Email: req.Email, Provider: req.Provider}, nil
+}
+
+func TestSelfSettingsMailRequest(t *testing.T) {
+	req, summary, err := mailAccountRequest(i18n.Default, json.RawMessage(`{"email":" Me@Example.com ","imap_host":"imap.example.com","imap_port":993,"smtp_host":"smtp.example.com"}`))
+	if err != nil || req.Email != "me@example.com" || req.Password != "" || req.Provider != mail.ProviderIMAP || !strings.Contains(summary, "imap.example.com:993") {
+		t.Fatalf("request %+v, summary %q, error %v", req, summary, err)
+	}
+	for _, input := range []string{`{"email":"a@gmail.com"}`, `{"email":"a@example.com","provider":"gmail"}`, `{"email":"nope"}`} {
+		if _, _, err := mailAccountRequest(i18n.Default, json.RawMessage(input)); err == nil {
+			t.Fatalf("accepted %s", input)
+		}
+	}
+}
+
+// Adding an account asks on the phone, the password typed there (a secret field): declined, or approved without it,
+// nothing is added; approved with it, mail gets it.
+func TestSelfSettingsMailNeedsPhoneInput(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		answer   proto.Resolution
+		added    bool
+		wantsErr bool
+	}{
+		{"declined", proto.Resolution{Allow: new(false)}, false, false},
+		{"approved without the password", proto.Resolution{Allow: new(true)}, false, true},
+		{"approved", proto.Resolution{Allow: new(true), Values: map[string]string{"password": "example-password"}}, true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestManager(t)
+			fm := &selfSettingsMail{}
+			h.mail = fm
+			hubOf(h).answer = func(proto.Interaction) proto.Resolution { return tt.answer }
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, err := h.toolJarvisSettings(ctx, "server", "s1", json.RawMessage(`{"action":"add","key":"mail.accounts","value":{"email":"me@example.com"}}`))
+			asked := hubOf(h).asked()
+			if len(asked) != 1 || len(asked[0].Fields) != 1 || !asked[0].Fields[0].Secret || asked[0].MachineID != "server" {
+				t.Fatalf("missing secure approval card: %+v", asked)
+			}
+			if (err != nil) != tt.wantsErr {
+				t.Fatalf("error %v", err)
+			}
+			if tt.added != (len(fm.added) == 1) {
+				t.Fatal("account was not gated by approval")
+			}
+			if tt.added && fm.added[0].Password != "example-password" {
+				t.Fatal("phone input was not passed to mail")
+			}
+		})
+	}
+}
+
+// What the card says, in each language.
+func TestMailAccountRequestInEnglish(t *testing.T) {
+	_, summary, err := mailAccountRequest(i18n.En, json.RawMessage(`{"email":"me@example.com"}`))
+	if err != nil || summary != "Add mail account me@example.com (servers detected automatically). After you enter the password it connects once before saving" {
+		t.Errorf("mail en: %q %v", summary, err)
+	}
+	if got := computerSummary(i18n.En, "Studio", "run_script", "open -a Notes\nsecond", nil); got != "Run a script on “Studio”: open -a Notes" {
+		t.Errorf("computer en: %q", got)
+	}
+	if got := computerSummary(i18n.ZhHans, "Studio", "run_script", "open -a Notes", nil); got != "在「Studio」上运行脚本：open -a Notes" {
+		t.Errorf("computer zh: %q", got)
+	}
+}

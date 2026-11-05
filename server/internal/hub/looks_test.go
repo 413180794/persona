@@ -1,14 +1,19 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extwire"
 )
 
 // copyDir copies the example package so a test may change it.
@@ -49,10 +54,55 @@ func lookByID(t *testing.T, out map[string]any, id string) map[string]any {
 	return nil
 }
 
-// The example extension's looks: listed with the built-in ones, served as persona packages (only the files they name,
-// SVGs cleaned), chosen for every device, the default again when switched off or removed.
+// lookReport is the example extension's looks as the manager reports them (extwire.Report.Looks), SVGs cleaned.
+func lookReport(t *testing.T, dir string, ids ...string) []extwire.LookPackage {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(dir, extension.ManifestFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := extension.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []extwire.LookPackage
+	for _, l := range m.Looks() {
+		if len(ids) > 0 && !slices.Contains(ids, l.ID) {
+			continue
+		}
+		files := map[string][]byte{}
+		for _, f := range l.Files() {
+			b, err := extension.ReadLookFile(dir, f)
+			if err == nil && strings.HasSuffix(f, ".svg") {
+				b, err = extension.CleanSVG(b)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[f] = b
+		}
+		item, _ := json.Marshal(l)
+		out = append(out, extwire.LookPackage{Extension: m.ID, ExtensionName: m.Name, Version: m.Version, Item: item, Files: files})
+	}
+	return out
+}
+
+// reportLooks is the manager's report of the extensions' looks as the hub takes it (extensions.report).
+func reportLooks(h *Hub, looks []extwire.LookPackage) {
+	r := extwire.Report{Looks: looks}
+	var was []extwire.LookPackage
+	if old := h.ext.report.Swap(&r); old != nil {
+		was = old.Looks
+	}
+	h.looksReported(was, looks)
+}
+
+// The extensions' looks the manager reports: listed with the built-in ones, served as persona packages (only the
+// files they name), chosen for every device, the default again when no longer reported (switched off), for good when
+// removed (extmgr TestExtensionLooksReported has the manager's side).
 func TestExtensionLooks(t *testing.T) {
-	h, _ := extensionTestHub(t)
+	h := newTestHub(t)
+	h.store = &settingsStore{vals: map[string][]byte{}}
 	mux := h.routes()
 	master := h.cfg.Token
 	app := appClient(h)
@@ -66,14 +116,10 @@ func TestExtensionLooks(t *testing.T) {
 	}
 
 	dir := exampleLooksDir(t)
-	_ = os.WriteFile(filepath.Join(dir, "secret.txt"), []byte("not a look's"), 0o644)
-	// An SVG with a script in it installs: the hub serves it cleaned.
-	svg, _ := os.ReadFile(filepath.Join(dir, "looks", "aurora", "avatar.svg"))
-	_ = os.WriteFile(filepath.Join(dir, "looks", "aurora", "avatar.svg"),
-		[]byte(strings.Replace(string(svg), "<title>", `<script>alert(1)</script><title>`, 1)), 0o644)
-	installForTest(t, h, dir)
+	both := lookReport(t, dir)
+	reportLooks(h, both)
 	if n := broadcasts(app, "personas"); n == 0 {
-		t.Fatal("installed: the apps are not told the list changed")
+		t.Fatal("reported: the apps are not told the list changed")
 	}
 
 	_, out = call(t, mux, "GET", "/api/v1/looks", master, "")
@@ -128,9 +174,6 @@ func TestExtensionLooks(t *testing.T) {
 	if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "default-src 'none'") || !strings.Contains(resp.Header.Get("Cache-Control"), "immutable") {
 		t.Fatalf("%v", resp.Header)
 	}
-	if code, _ := getPersonaFile(t, srv, master, "aurora/secret.txt"); code != 404 {
-		t.Fatalf("a file the look does not name: %d", code)
-	}
 	if code, _ := getPersonaFile(t, srv, master, "aurora/persona-extension.json"); code != 404 {
 		t.Fatalf("the manifest: %d", code)
 	}
@@ -158,14 +201,12 @@ func TestExtensionLooks(t *testing.T) {
 	}
 
 	// Switched off: the choice stays, the default shows; on again, back.
-	if code, out := call(t, mux, "PUT", "/api/v1/extensions/example-looks/-/contributions/looks/aurora", master, `{"enabled": false}`); code != 200 {
-		t.Fatalf("%d %v", code, out)
-	}
+	reportLooks(h, lookReport(t, dir, "pebble"))
 	_, out = call(t, mux, "GET", "/api/v1/looks", master, "")
 	if c := out["current"].(map[string]any); c["id"] != "aurora" || c["effective"] != "persona" || lookByID(t, out, "aurora") != nil {
 		t.Fatalf("%v", out)
 	}
-	_, _ = call(t, mux, "PUT", "/api/v1/extensions/example-looks/-/contributions/looks/aurora", master, `{"enabled": true}`)
+	reportLooks(h, both)
 	_, out = call(t, mux, "GET", "/api/v1/looks", master, "")
 	if c := out["current"].(map[string]any); c["effective"] != "aurora" {
 		t.Fatalf("%v", c)
@@ -173,42 +214,13 @@ func TestExtensionLooks(t *testing.T) {
 
 	// Removed: back to the default for good.
 	_ = broadcasts(app, "look")
-	if code, out := call(t, mux, "DELETE", "/api/v1/extensions/example-looks/-/", master, ""); code != 200 {
-		t.Fatalf("%d %v", code, out)
-	}
+	reportLooks(h, nil)
+	h.looksGone(context.Background(), []string{"aurora", "pebble"}) // extensions.looks_gone
 	_, out = call(t, mux, "GET", "/api/v1/looks", master, "")
 	if c := out["current"].(map[string]any); c["id"] != "persona" || c["effective"] != "persona" || len(out["looks"].([]any)) != 3 {
 		t.Fatalf("%v", out)
 	}
 	if n := broadcasts(app, "look"); n != 1 {
 		t.Fatalf("%d look broadcasts after the removal", n)
-	}
-}
-
-// An extension's look may not take a built-in look's id, nor one built into personad; one with a bad picture does not
-// install.
-func TestExtensionLooksRefused(t *testing.T) {
-	h, _ := extensionTestHub(t)
-	mux := h.routes()
-	for name, edit := range map[string]func(dir string){
-		"a built-in id": func(dir string) {
-			b, _ := os.ReadFile(filepath.Join(dir, "persona-extension.json"))
-			_ = os.WriteFile(filepath.Join(dir, "persona-extension.json"), []byte(strings.Replace(string(b), `"id": "pebble"`, `"id": "jarvis"`, 1)), 0o644)
-		},
-		"a picture that is not a PNG": func(dir string) {
-			_ = os.WriteFile(filepath.Join(dir, "looks", "pebble", "avatar-256.png"), []byte("gif"), 0o644)
-		},
-		"a missing picture": func(dir string) { _ = os.Remove(filepath.Join(dir, "looks", "aurora", "working.png")) },
-	} {
-		dir := exampleLooksDir(t)
-		edit(dir)
-		code, out := call(t, mux, "POST", "/api/v1/extensions/-/preview", h.cfg.Token, `{"source": "dir:`+dir+`"}`)
-		if code == 200 {
-			code, out = call(t, mux, "POST", "/api/v1/extensions/-/install", h.cfg.Token,
-				`{"preview_id": "`+out["preview_id"].(string)+`", "permissions_digest": "`+out["permissions_digest"].(string)+`"}`)
-		}
-		if code == 200 {
-			t.Errorf("%s: installed (%v)", name, out)
-		}
 	}
 }

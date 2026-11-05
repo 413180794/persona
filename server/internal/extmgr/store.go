@@ -1,0 +1,55 @@
+package extmgr
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// Store is the hub's Postgres as this code keeps its state in it (internal/db; the same keys and tables as when
+// they were the hub's: plugins, plugin_secrets, plugin_audit, the markets, connector_secrets, mail_accounts, the
+// settings of the connectors, bots and channels). The registry's own tables are extension.Store's.
+type Store interface {
+	Setting(ctx context.Context, key string, out any) (bool, error)
+	PutSetting(ctx context.Context, key string, v any) error
+}
+
+// secretStore keeps the connectors' credentials (connector_secrets).
+type secretStore interface {
+	ConnectorSecret(ctx context.Context, connector string) (string, bool, error)
+	PutConnectorSecret(ctx context.Context, connector, sealed string) error
+	DeleteConnectorSecret(ctx context.Context, connector string) error
+}
+
+// sendStore is the once-only guard of sends (sent_messages).
+type sendStore interface {
+	ClaimSend(ctx context.Context, id, machine, session string) (string, error)
+	SettleSend(ctx context.Context, id, state string) error
+}
+
+// mailStore keeps the mail accounts (mail_accounts; mail seals their secrets itself).
+type mailStore interface {
+	Store
+	MailAccounts(ctx context.Context) ([]db.MailAccountRow, error)
+	ReplaceMailAccounts(ctx context.Context, rows []db.MailAccountRow) error
+}
+
+// Mail is implemented by internal/mail; an interface so the manager can run without it.
+type Mail interface {
+	Handler() http.Handler
+	Tools() []proto.Tool
+	Call(ctx context.Context, name string, args json.RawMessage, approve func(ctx context.Context, summary string, input json.RawMessage) bool) proto.ToolResult
+	ListAccounts() ([]mail.MailAccount, error)
+	ListMessages(ctx context.Context, opts mail.ListOptions) (*mail.ListResult, error)
+	GetMessage(ctx context.Context, accountID string, uid uint32, mailbox string) (*mail.MailMessage, error)
+	Send(ctx context.Context, req mail.SendRequest) error
+	AddAccount(req mail.AddAccountRequest) (*mail.MailAccount, error)
+	DeleteAccount(id string) error
+}
+
+// NewMail is set by the mail integration (mail_glue.go).
+var NewMail func(dataDir string, store mailStore, google GoogleConfig, microsoft MicrosoftConfig) (Mail, error)

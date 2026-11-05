@@ -3,7 +3,7 @@
 Persona 的扩展底座（#1101）：开源仓库只放通用能力和**扩展点**，只对某个公司、某个服务有意义的东西做成扩展，装上就有，不装也能跑。
 骨架学 VS Code（清单 + `contributes` + 按需激活 + 独立进程），权限学 Chrome（显式声明、安装时展示），WordPress 只借事件通知、不借 filter。
 设计取舍、分步和还没做的在 `docs/plan-extensions.md`。代码：清单、schema 子集、权限、注册表 `server/internal/extension`，进程宿主 `extension/host`，
-程序一侧是官方 SDK `sdk/go/ext`（hub 内置的程序经 `extension/serve` 用它），一致性测试 `extension/conformance`；hub 里的接线 `server/internal/hub/extensions.go`、`extension_routes.go`、`extension_cli.go`，管理界面的接口 `admin_extensions.go`。
+程序一侧是官方 SDK `sdk/go/ext`（内置的程序经 `extension/serve` 用它），一致性测试 `extension/conformance`；接线在管理者里（下面「谁管什么」）：`server/internal/extmgr/extensions.go`、`extension_routes.go`、`extension_cli.go`，管理界面的接口 `admin_extensions.go`。
 
 扩展从三个地方来，App 和接口里是同一个列表：
 
@@ -15,6 +15,42 @@ Persona 的扩展底座（#1101）：开源仓库只放通用能力和**扩展�
 
 三种形态：**纯声明**（只有清单，不跑代码）、**进程扩展**（hub 起子进程，stdin / stdout 上说进程扩展协议，可以同时在 unix socket 上起 HTTP）、
 **远端**（跑在别处，hub 经 unix socket 接入）。
+
+## 谁管什么（2026-11-05）
+
+用户拍板：扩展、连接器和聊天机器人都是**管理者**（助手的进程 `personad assistant`）的，按原样从 hub 挪过去，不改设计；hub 只做通信中心，App 看到的路由、字段、事件和错误都不变，客户端不用改。
+
+| 部分 | 代码 |
+| --- | --- |
+| 管理者这一侧：扩展的注册表和它的表（`plugins`、`plugin_secrets`、`plugin_audit`、市场）、安装 / 预览 / 升级 / 回滚 / 卸载 / 上传、市场和自动升级、进程宿主（`extension/host`、沙箱、出网代理、运行情况和日志、开发时的日志流）、配置和密钥（只有它解密）、扩展的 token 和范围检查、每个贡献的消费方（UI、主题、小组件、快捷指令、个人 Agent 来源和 Agent 过滤、模型供应商和额度、cua / ego / imessage、电脑上的程序、助手的技能、知识库和渠道的那部分、消息 `messaging`）；连接器框架和全部来源（`connector_secrets`、收件箱的采集轮次、邮件含飞书邮箱、GitHub、iMessage、Telegram、lark-cli、各连接器的登录）；飞书机器人的开放平台长连接和微信机器人、配对、凭证和 `/api/v1/bots…` | `server/internal/extmgr/`（从 hub 原样挪来的文件，接收者从 `Hub` 换成 `Manager`；`manager.go`、`serve.go` 是它在管理者里怎么跑，`machines.go` 经管理者自己的 devices 连电脑，`hubglue.go` 是还要问 hub 的几件事） |
+| 两边共用的消息 | `server/internal/extwire/`（管理者回答的路由 `Routes`、断线时 hub 留着上一次回答的 `KeptRoutes`、转发时带的头、方法名、报告、扩展 token 的路由范围表 `RouteScopes`） |
+| hub 这一侧：转发、它留的那份、它自己的功能要问的 | `server/internal/hub/extensions_link.go`、`extensions_models.go`、`extension_presets.go`、`inbox_routes.go` |
+| 助手进程里接起来 | `server/internal/assistant/main.go`、`extensions.go`；共用的密钥文件 `server/internal/secretkey/` |
+
+**管理者做的**（`internal/extmgr`，hub 不 import 它，它也不 import hub）：
+
+- 启动顺序和以前 hub 的一样：邮件、个人 Agent、连接器注册表、微信状态的迁移、机器人、各个循环（收件箱、Agent 来源、不锁屏、电脑上的程序的租约、自动升级、运行情况）、扩展；扩展的程序是**管理者的子进程**：hub 重启不再重启它们，管理者重启才会。
+- 读同一个 `~/.persona` 的 `hub.json`（扩展、连接器和机器人那几节，键不变）和同一个 `secret.key`（`internal/secretkey`，不重新加密；跑在别处的管理者要带一份）；表和设置的键都不变，不迁数据。
+- 回答 `extwire.Routes`：`/api/v1/extensions…`、`/api/v1/admin/extensions…`、兼容的 `/api/v1/plugins…`、扩展自己的 HTTP / WebSocket / SSE（`/api/v1/extensions/{id}/…`，以及扩展的 `api` 贡献的前缀，比如飞书扩展的 `/api/v1/lark/…`）、`/api/v1/connectors…`、`/api/v1/bots…`、`/api/v1/channels/{id}/bind`、`/api/v1/mail/…`、`/api/v1/imessage…`、`/api/v1/agents…`、`/api/v1/messaging…`、机器的 `…/computer…`、`…/browser…`、`/api/v1/devices/{id}/widgets`。
+- 收件箱和知识库的来源、渠道的传输、连接器给助手的目录都在**同一个进程里**直接给助手（以前是 hub 经总线的 `inbox.collected`、`channels.receive`、`feishu.*`、`connectors.*`、`kb.*`，方法和参数照旧，只是不过总线）；助手发给 hub 的 `inbox.changed`、`kb.changed` 也先给它（推给扩展、给 App 推 `{"type":"inbox"}`）。
+- 电脑是它自己的 devices 连的：node 一连上，它把扩展的 Agent 过滤加进 `node.configure`，再开始 Cua / ego 的状态、扩展在电脑上的程序、连接器（以前在 hub 的 `devices.connected` 里做）；node 的 `plugin.node.*` 事件和它自己开的流（`mx…`）不再交给 hub；`assistant.lark` 它自己答（只给助手那台）。
+- 给 hub 的报告 `extensions.report`（每次变了整份发）：扩展的功能（hello、`/health` 的 `features`）、扩展服务的 API 前缀和它们声明的回执、每台机器上 Cua / ego 的状态和能不能开屏幕、看屏幕时保持唤醒。
+
+**hub 做的**：
+
+- 把这些路由**原样转给管理者**：经 `/api/v1/bus/relay` 开一条流（`extensions.accept`），在上面跑这一次 HTTP，所以 SSE 和 WebSocket 照样是流；谁在问放在 `X-Persona-*` 头里（设备、角色、是不是主人在本机用主 token、管理界面的会话、语言、地址），客户端自己带的这些头一律去掉，hub 的凭证不转。管理界面的扩展页面只从管理界面那组路由转（带管理会话的头）。
+- 扩展的 token 打 hub 自己的路由时问管理者（`extensions.authorize`：token 的哈希、hub 路由的模式），管理者说是谁的、开不开这个范围；表在 `extwire.RouteScopes`（`TestRouteScopes` 照旧看着）。
+- 留着管理者最后一份报告（也存在 hub 自己的键 `hub.extensions_report`，hub 重启后、管理者还没报时用）：hello 的 `features`、机器列表里的 `computer` / `browser`、屏幕端口；扩展的 API 前缀照它转，声明了回执的发送照旧由 hub 记回执。
+- 它自己的功能要的经 `extensions.hub_call` 问：GitHub 登录（形象分级）、管理者的 `jarvis_settings`（邮箱、来源自己的分拣规则）。node 的 MCP 工具（`mcp.tools` / `mcp.call`）、门禁命令卡片上扩展的说法和 `assistant.lark` 是管理者的（`docs/machines.md`「谁处理电脑的事件」）：助手的 `fleet_tools.go` 在同一个进程里直接问扩展（`extmgr` 的 `AgentTools`、`CallTool`、`AssistantSummary`、`AssistantLark`，顺序和以前一样），不过 hub；调用方不等了（node 取消了这次调用），它等的卡片跟着撤。模型配置是助手的（`docs/model-config.md`），它要扩展的（供应商、语音扩展的模型、需要分拣模型的扩展、额度插件：`app.call plugins.*`）和扩展要它的（`models.usable`、`models.launcher_http`、`models.launchers`）都在管理者的进程里直接问，不过 hub（`extmgr/models_link.go`、`launcherquota.go`）。
+- 卡片（发邮件、Cua 的应用、`jarvis_settings`）在助手的交互队列里等，也在同一个进程（`Options.Ask` → 助手的 `askHub`）；渠道里主人的回答由助手答卡片，之前先让扩展核掉那一下的主人操作（`app.call interactions.owner_action`，进程内）。管理者要 hub 做的经 `app.call` 的 `hub` 应用：推送（`push.localized`、`push.background`）、邮件翻译的语言（`push.mail_targets`）。
+
+**管理者不在的时候**：这些路由回 `503 assistant_offline`「助手暂时连不上，稍后再试」，`KeptRoutes`（`GET /api/v1/extensions`、`…/-/ui`、`…/-/themes`、`…/-/prompts`、`…/-/widgets`、`…/-/shortcuts`、`…/-/triage-templates`）回上一次的回答，App 照旧画扩展的界面和主题；hello 照旧带最后报的功能；连接器、Cua、ego 的工具这时不在 Agent 的列表里（调用回同一句）；hub 的其他功能照常。回来以后它把扩展、连接器、机器人都起起来，收件箱来一轮完整的采集，再报一次整份。
+
+和以前能看出来的差别：
+
+- 扩展的程序在 hub 重启时不再重启（管理者重启时重启）。
+- 管理者不在时扩展的接口回 503（以前 hub 在扩展就在），App 画的扩展界面用 hub 留着的上一次回答。
+- 扩展 token 的每个请求多一次总线往返（同一台机器上，不到一毫秒）。
 
 ## 术语
 
@@ -251,7 +287,7 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `todos.write` | 新建和修改待办、把对话挂到待办上 | `POST /api/v1/todos`、`PATCH /api/v1/todos/{id}`、待办的 `agents/{mid}/{sid}` 和 `spaces/{mid}/{space…}`（`PUT` / `DELETE`）；删待办、决定、完成检查、重试照旧只认完整权限 |
 | `extensions.call:<扩展 id>` | 调用扩展「…」的接口 | 那个扩展自己的 HTTP：`/api/v1/extensions/<id>/…`（不含 hub 的 `/-/` 接口） |
 
-- **哪条路由属于哪个范围**登记在 `server/internal/hub/extension_scopes.go` 的 `routeScopes`（按路由注册时的 pattern）；**没登记的路由只认完整的凭据**，扩展的 token 一律 403。
+- **哪条路由属于哪个范围**登记在 `server/internal/extmgr/extension_scopes.go` 的 `routeScopes`（按路由注册时的 pattern）；**没登记的路由只认完整的凭据**，扩展的 token 一律 403。
   hub 的全部路由和各自的决定列在 `server/internal/hub/testdata/route_scopes.txt`（`-` 是只认完整凭据），`TestRouteScopes` 守着它：加了路由测试就失败，
   要先决定扩展能不能调（要的话加进 `routeScopes`），再 `PERSONA_UPDATE_ROUTE_SCOPES=1 go test ./internal/hub -run TestRouteScopes`，在 diff 里看清楚。
 - **token**：`pext_` 开头。hub 每次启动扩展的程序时签一个新的（旧的同时作废），经环境变量 `PERSONA_HUB_URL` / `PERSONA_HUB_TOKEN`（旧名 `JARVIS_*` 一起给）
@@ -501,7 +537,7 @@ personad extension pack [<目录>] [--platforms …] [--out dist] [--split]
 ## 扩展市场
 
 一个仓库或网站发布一份**索引** `persona-extensions.json`，声明它提供的所有扩展；hub 登记这个市场以后，App、网页、管理界面和命令行都能浏览、搜索、
-安装、升级、卸载里面的扩展。只预置一个官方市场（见下面「官方市场」），别的市场都由用户自己登记。代码在 `server/internal/extension/market.go`（索引、下载、校验）和 `server/internal/hub/extension_market.go`（登记、目录、接口）。
+安装、升级、卸载里面的扩展。只预置一个官方市场（见下面「官方市场」），别的市场都由用户自己登记。代码在 `server/internal/extension/market.go`（索引、下载、校验）和 `server/internal/extmgr/extension_market.go`（登记、目录、接口）。
 
 **市场的地址**：
 
@@ -610,7 +646,7 @@ README 写了只用 openssl 验证的步骤。
 ## 自动升级
 
 从扩展市场装的扩展（来源 `market:<市场 id>/<扩展 id>`），市场里出了新版本时 hub 自己升级（#1699）。内置的、hub.json 里的、从别处装的
-（`dir:`、`file:`、`https://…`、`remote:`）一律不参与。代码在 `server/internal/hub/extension_autoupgrade.go`。
+（`dir:`、`file:`、`https://…`、`remote:`）一律不参与。代码在 `server/internal/extmgr/extension_autoupgrade.go`。
 
 - **读市场**：hub 每分钟看一次哪些市场该读了：上次读过 6 小时（每个市场再加一个 0–30 分钟的随机量，错开）；读失败的按 15 分钟、30 分钟……翻倍退避，最多 6 小时。
   日志只在一个市场读不到时记一行、恢复时记一行，不每次都记。App 打开目录（`catalog`）时照旧会在后台重读超过 6 小时的。
@@ -660,7 +696,7 @@ README 写了只用 openssl 验证的步骤。
 
 ## 运行情况（#1857）
 
-hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](admin.md)「扩展」）。代码在 `server/internal/hub/extension_metrics.go`，
+hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](admin.md)「扩展」）。代码在 `server/internal/extmgr/extension_metrics.go`，
 宿主一侧（每次调用、每次运行、每行日志）是 `extension/host` 的 `Observer`。
 
 - **调用**：按方法（`connector.status`、`ui.render`……）记次数、错误数（按错误码）、延迟的直方图（1 ms 到 60 s 的 15 个桶，再慢的一个桶；p50 / p95 / p99 在桶里线性插值）。
@@ -1305,7 +1341,7 @@ hub 照常校验（`lines` 的上限、`items` 按插槽校验、`line_url` 只�
 
 扩展的东西放到 **App 外**：主屏幕小组件、锁屏和 Apple Watch 表盘上的复杂功能（`ui` 的插槽 `widget`），快捷指令和 Siri 里的动作（扩展点 `shortcuts`），
 以及扩展发的通知上的按钮。扩展仍然不在 App 里跑代码：小组件画的是声明式 View 的一个子集，按钮和快捷指令的动作回到扩展。
-服务端的实现在 `server/internal/hub/extension_system.go`（小组件、快捷指令、设备的小组件）和 `server/internal/extension/ui.go` 的 `FitWidget`；
+服务端的实现在 `server/internal/extmgr/extension_system.go`（小组件、快捷指令、设备的小组件）和 `server/internal/extension/ui.go` 的 `FitWidget`；
 schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`、`DeviceWidget`、`ShortcutItem`、`ShortcutResult`、`NotifyAction`、`ExtensionNotification`），
 四端的类型由它生成。**Apple 端怎么做见 #1862**；安卓的主屏幕小组件（Glance）以后可以照同一套接口做，这次不做。
 
@@ -1435,7 +1471,7 @@ schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`
 - **扩展发给 hub 的事件** `agentsrc.updated {contribution?, session_keys?}`：这些会话变了（新消息、未读、标题），没有 `session_keys` 就是列表变了。
   hub 清掉缓存、推 `{"type":"agents","session_ids":[…]}`，App 立刻重拉。只认这个扩展自己的来源。hub 自己的发送之后也会推，并在 4 / 15 / 45 秒再推一次；
   hub 每 60 秒还会兜底重新列一遍各来源。
-- 实现：`server/internal/hub/extension_agents.go`；测试 `TestExtensionAgentSource`（`extension_agents_test.go`，假扩展经协议走一遍）、
+- 实现：`server/internal/extmgr/extension_agents.go`；测试 `TestExtensionAgentSource`（`extension_agents_test.go`，假扩展经协议走一遍）、
   `agents.TestAddAndRemoveSources`、`TestExtensionTakesOverOLKBridge`（接管和放回）。
 
 ## 事件
@@ -1578,7 +1614,7 @@ App 里是「设置 › 模型供应商 › 新增」的「从扩展添加」（
   这个字段就是它唯一的开关：贡献列表里显示成 `via: "config"`、`can_disable: false`，单独开关它回 409。不写 `when` 的跟着扩展的开关，也能在贡献列表里单独关。扩展停用、卸载，规则就没了。
 - **不会拿掉的**：助手的会话、保留的会话（主对话）、分支出来的会话、宿主里的 Agent（herdr 的窗格、runtime）。规则只看磁盘上找到的 transcript / rollout。
 - **代价**：node 读每个文件开头（最多 512 KB，读到第一条消息后不再读），结果按文件缓存；Claude 的会话在「最新 80 个」截断之前过滤，平台的会话不会把自己的挤出去。
-- 代码：`server/internal/extension/agentfilters.go`（扩展点和校验）、`server/internal/hub/agent_filters.go`（下发）、`server/internal/node/agentfilters.go`（读标记、过滤）、`server/internal/proto/agentfilters.go`（规则和匹配）。
+- 代码：`server/internal/extension/agentfilters.go`（扩展点和校验）、`server/internal/extmgr/agent_filters.go`（下发）、`server/internal/node/agentfilters.go`（读标记、过滤）、`server/internal/proto/agentfilters.go`（规则和匹配）。
 
 ## App：设置 › 扩展
 

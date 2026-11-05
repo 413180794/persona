@@ -39,7 +39,7 @@
 **hub 做的**：
 
 - 把 hub.json 的 `machines`（加上管理界面运行中加的）作为默认值交给管理者：握手回答里的 `devices`，变了（加了电脑、互联组变了、hub 的地址或名字变了）发 `devices.config`。
-- 留着管理者报的那份（`devices.state`：每台的快照，带监控的 `system`、`node.info`、连没连着、这条连接从什么时候开始、warm 到什么时候、它的几条路），按它的顺序给 App 列，再加上 hub 自己的：`computer` / `browser`（Cua、ego 插件的状态）。
+- 留着管理者报的那份（`devices.state`：每台的快照，带监控的 `system`、`node.info`、连没连着、这条连接从什么时候开始、warm 到什么时候、它的几条路），按它的顺序给 App 列，再加上管理者的扩展报的 `computer` / `browser`（Cua、ego 插件的状态，`extensions.report`，`docs/extensions.md`「谁管什么」）。
 - App 对机器的调用和流照旧经 hub：调用是 `devices.call`（带期限），发给 node 的单向事件（终端输入、转发端口的字节）是 `devices.notify`，node 的事件（items、终端帧、端口的字节……）从 `devices.event` 回来，
   hub 推给订阅的 App；交互、状态、推送这些是管理者的（「谁处理电脑的事件」）。所以终端、端口转发、屏幕、下载都走总线这一条连接，不另开通道。
   调用的期限管理者那头少一点（十分之一，最多 500 毫秒），它的「超时」先回来；没期限的调用（插件的 `nodes.call`）也不加期限。发出去以后才出的事——node 的连接断了、时间到了、总线断了——都算「可能已经做了」：
@@ -47,7 +47,7 @@
 - hub 的自更新确认「之前在线的机器都连回来了」、之后让管理者更新各台的 node，看的是报来的 `connected`（node 真连着），不是 App 看到的在线（管理者重启后的暖启动也显示在线）。
 - 管理者和 hub 的连接每次新握手，经上一条连接开着的转发流和终端两边都结束：hub 结束它那边（终端以「助手暂时连不上，稍后再试」结束，App 重新打开），管理者在 node 上关掉（`stream.close`、`terminal.unwatch`），免得 hub 重启后 node 还开着没人要的端口连接、终端还一直推帧。
   App 正在看的会话 hub 让新连接再 watch，同时最多 8 个，一台慢的电脑不耽误别的。
-- node 一连上，管理者先问 hub 它的那部分（`devices.connected`）：要加进 `node.configure` 的（Codex 的设置）和紧接着要发的（托管的启动器、hub 记着的发送），然后才问会话列表；hub 同时开始它在连上时要做的（Cua / ego 的状态、扩展在电脑上的程序、监控的系统信息、连接器）。
+- node 一连上，管理者先问 hub 它的那部分（`devices.connected`）：要加进 `node.configure` 的（Codex 的设置）和紧接着要发的（托管的启动器、hub 记着的发送），然后才问会话列表；hub 同时开始它在连上时要做的（监控的系统信息）；Cua / ego 的状态、扩展在电脑上的程序、连接器、加进 `node.configure` 的扩展的 Agent 过滤是管理者自己的扩展做的（2026-11-05，`docs/extensions.md`「谁管什么」），hub 不在时也照做。
   管理者和 hub 的连接每次新连上，这一步对每台在线的机器再做一遍。
 - 一台机器的连接断了（报来的 `connected` 变成 false 或者 `connected_at` 换了），hub 结束这条连接上的：终端流、正在生成的文字；还在等的不可续交互是管理者结束的（`devices.Options.Detached`）。
 
@@ -111,7 +111,7 @@ hub 的监听比管理者先起来：这几秒里来的 App 请求、管理者�
 - 投递推送：管理者决定推什么（`notify.request`，`kind` 是 `assistant` / `done` / `input`），hub 按每台设备的设置挑设备、写成设备的语言、经 APNs / 中继发、给开着 `ws_notify` 的 App 发 `notify` 事件、告诉扩展（`agent.finished`、`agent.needs_you`）。实时活动的推送节奏（每台设备多久一次、开始和结束）也是 hub 的，内容是管理者算的。
 - 把 App 的回答、历史、看过、监控这几个路由转给管理者（`http.request`）：`POST /api/v1/interactions/{id}/resolve`（只能回答的设备先在 hub 这里查）、`GET /api/v1/interactions/history`（App 收不收 MCP 表单由 hub 带上 `X-Persona-Elicitation`）、`POST /api/v1/sessions/{mid}/{sid}/seen`、`GET /api/v1/metrics`、`GET /api/v1/machines/{id}/metrics`、`GET /api/v1/usage`。
 - 告诉管理者 App 那边的事：有没有收 MCP 表单的 App（`fleet.clients`）、WebSocket 的 `seen`（`fleet.seen`）、静音改了（`fleet.mutes`）。
-- 替管理者跑还在 hub 的：手机的工具（`app.call phone`：列工具、在连着的手机上跑，必要时静默推送叫醒）、连接器 / Cua / ego 的工具（`fleet.tool`，node 不等了就跟着取消）、扩展给写操作卡片起的说明、lark-cli 的设置（`app.call hub`），渠道回答卡片时的主人动作（`interactions.owner_action`）。
+- 替管理者跑还在 hub 的：手机的工具（`app.call phone`：列工具、在连着的手机上跑，必要时静默推送叫醒）。连接器 / Cua / ego 的工具、扩展给写操作卡片起的说明、lark-cli 的设置和渠道回答卡片时的主人动作是管理者自己的扩展的（`internal/extmgr`，同一个进程里直接问，node 不等了就跟着取消，`docs/extensions.md`「谁管什么」）。
 
 管理者不在的时候：列表和卡片是最后那份，回答、看过、历史、监控回 `503 assistant_offline`，什么都不丢；它回来后先把全量交互和列表交给 hub，hook 再来认领可续的卡片（同一张卡，不再推）。
 

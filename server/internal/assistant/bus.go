@@ -37,6 +37,8 @@ type BusOptions struct {
 	Logf       func(format string, args ...any)
 	// Devices is the manager's own connections to the computers (devices.go); nil: the hub has them (tests).
 	Devices Devices
+	// Extensions is the manager's extensions, connectors and bots (extensions.go); nil: none here (tests).
+	Extensions Extensions
 }
 
 // BusHub is Hub over the bus.
@@ -79,7 +81,9 @@ func NewBusHub(o BusOptions) *BusHub {
 	b := &BusHub{opts: o, events: make(chan busEvent, 1024), helloed: make(chan struct{})}
 	host, _ := os.Hostname()
 	b.client = &bus.Client{
-		Hub: o.Hub, Token: o.Token, HTTPClient: o.HTTPClient, Logf: o.Logf, Backoff: o.Backoff,
+		// The manager's extensions stop waiting for a card when their caller does (extmgr's interactions.wait).
+		Cancels: map[string]bool{assistantwire.MethodApp: true},
+		Hub:     o.Hub, Token: o.Token, HTTPClient: o.HTTPClient, Logf: o.Logf, Backoff: o.Backoff,
 		HelloMethod: assistantwire.MethodHello,
 		HelloParams: func() any {
 			return map[string]any{"id": assistantwire.AssistantID, "host": host, "os": runtime.GOOS, "arch": runtime.GOARCH,
@@ -87,11 +91,13 @@ func NewBusHub(o BusOptions) *BusHub {
 		},
 		OnHello: b.onHello,
 		// A node's tool call that its caller stopped waiting for ends at the hub too (fleet_tools.go).
-		Cancels:   map[string]bool{assistantwire.MethodFleetTool: true},
 		OnRequest: b.answer,
 		OnEvent: func(event string, params json.RawMessage) {
 			if o.Devices != nil && o.Devices.Event(event, params) {
 				return // the computers' (devices.go), in the order they came
+			}
+			if o.Extensions != nil && o.Extensions.Event(event, params) {
+				return // the extensions' (extensions.go)
 			}
 			b.queueEvent(event, params)
 		},
@@ -134,6 +140,14 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	b.mu.Lock()
 	svc, ctx := b.svc, b.ctx
 	b.mu.Unlock()
+	if e := b.opts.Extensions; e != nil && ctx != nil {
+		e.Hello(res)
+		go func() {
+			if b.client.Wait(ctx) == nil {
+				e.BusUp()
+			}
+		}()
+	}
 	if d := b.opts.Devices; d != nil && ctx != nil {
 		d.Hello(res)
 		go func() { // once the connection counts as up (after this returns)
@@ -209,6 +223,9 @@ func (b *BusHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, error
 	if d, ok := ctx.Deadline(); ok { // the hub stops when the caller stops waiting (a model call it would go on with)
 		p.TimeoutMS = max(time.Until(d).Milliseconds(), 1)
 	}
+	if out, ok, err := b.localAppCall(ctx, p); ok { // the manager's extensions, connectors and bots (extensions.go)
+		return out, err
+	}
 	var out json.RawMessage
 	err := b.client.Call(ctx, assistantwire.MethodApp, p, &out)
 	return out, busError(err)
@@ -219,10 +236,6 @@ func (b *BusHub) NotifyRequest(ctx context.Context, p NotifyRequest) error {
 }
 
 func (b *BusHub) Tell(event string, params any) error { return b.client.Notify(event, params) }
-
-func (b *BusHub) Call(ctx context.Context, method string, params, out any) error {
-	return busError(b.client.Call(ctx, method, params, out))
-}
 
 func (b *BusHub) Broadcast(_ context.Context, m Broadcast) {
 	if err := b.client.Notify(assistantwire.EventBroadcast, m); err != nil {
@@ -406,6 +419,11 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 	}
 	if out, ok, err := inboxRequest(ctx, s, method, decode); ok { // the inbox's (inbox_bus.go)
 		return out, err
+	}
+	if e := b.opts.Extensions; e != nil {
+		if out, ok, err := e.Request(ctx, method, params); ok { // extensions.* (extensions.go)
+			return out, err
+		}
 	}
 	if out, ok, err := s.modelsRequest(ctx, method, params); ok { // the hub's plugins' (models_hub.go)
 		return out, err

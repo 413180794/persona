@@ -93,16 +93,6 @@ func init() {
 		}
 		h.takeFleetInteractions(p.Interactions)
 	})
-	handleBusCall(assistantwire.MethodFleetTool, func(h *Hub, ctx context.Context, p struct {
-		MachineID string          `json:"machine_id"`
-		SessionID string          `json:"session_id"`
-		Name      string          `json:"name"`
-		Args      json.RawMessage `json:"args"`
-		Assistant bool            `json:"assistant"`
-	}) (map[string]any, error) {
-		res, handled := h.hubTool(ctx, p.MachineID, p.SessionID, p.Name, p.Args, p.Assistant)
-		return map[string]any{"handled": handled, "result": res}, nil
-	})
 	handleBusEvent(assistantwire.EventFleetLive, func(h *Hub, _ *busConn, params json.RawMessage) {
 		var p assistantwire.FleetLive
 		if json.Unmarshal(params, &p) != nil {
@@ -346,9 +336,9 @@ func (h *Hub) fleetRoutesRelayed(api *http.ServeMux) {
 
 // ---- what the manager asks of the hub for the nodes ----
 
-// fleetAppCall answers the manager's app.call for what is still the hub's to run for the nodes: the phone's tools,
-// the connectors', Cua's and ego's, the extensions' text for a gated command, lark-cli's settings, a channel's owner
-// action; false for the others.
+// fleetAppCall answers the manager's app.call for what is still the hub's to run for the nodes: the phone's tools;
+// false for the others. (The connectors', Cua's and ego's tools, the gated commands' text, lark-cli's settings and the
+// channels' owner actions are the manager's extensions': internal/extmgr, in its process.)
 func (h *Hub) fleetAppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, bool, error) {
 	var a struct {
 		Assistant     bool            `json:"assistant"`
@@ -376,49 +366,11 @@ func (h *Hub) fleetAppCall(ctx context.Context, p assistantwire.AppCall) (json.R
 		} else {
 			out = h.callPhone(ctx, a.Name, a.Args)
 		}
-	case assistantwire.AppHub + " " + assistantwire.HubTools:
-		ctx := context.Background()
-		agents := h.connectors.ToolsFor(ctx, true)
-		var asst []proto.Tool
-		if a.Assistant {
-			asst = append(asst, h.computerTools()...)
-			asst = append(asst, h.browserTools()...)
-			asst = append(asst, h.connectors.ToolsFor(ctx, false)...)
-		}
-		out = map[string]any{"agents": agents, "assistant": asst}
-	case assistantwire.AppHub + " " + assistantwire.HubAssistantSummary:
-		s, ok := h.extensions.assistantSummary(ctx, a.ToolName, a.Summary)
-		out = map[string]any{"summary": s, "ok": ok}
-	case assistantwire.AppHub + " " + assistantwire.HubAssistantLark:
-		lark, err := h.assistantLark(ctx)
-		if err != nil {
-			return nil, true, err
-		}
-		out = lark
-	case assistantwire.AppInteractions + " " + assistantwire.InteractionsOwnerAction:
-		if err := h.takeOwnerAction(a.Action, strings.TrimSpace(a.InteractionID)); err != nil {
-			return nil, true, err
-		}
-		out = map[string]any{}
 	default:
 		return nil, false, nil
 	}
 	b, err := json.Marshal(out)
 	return b, true, err
-}
-
-// hubTool runs a node's MCP call when it is one of the hub's: a connector's (for an agent only those that give
-// theirs to agents), Cua's or ego's (an assistant conversation's); false: none of them.
-func (h *Hub) hubTool(ctx context.Context, machine, session, name string, args json.RawMessage, assistant bool) (proto.ToolResult, bool) {
-	switch {
-	case h.connectors.Offers(name) && (assistant || h.connectors.ForAgents(name)):
-		return h.callConnector(ctx, asker{machine, session}, name, args), true
-	case assistant && isComputerTool(name):
-		return h.callComputerTool(ctx, session, name, args), true
-	case assistant && isBrowserTool(name):
-		return h.callBrowserTool(ctx, session, name, args), true
-	}
-	return proto.ToolResult{}, false
 }
 
 // ---- the pushes the manager decided on ----

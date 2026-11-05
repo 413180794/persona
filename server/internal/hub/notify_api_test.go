@@ -244,7 +244,7 @@ func TestNotifyAPI(t *testing.T) {
 	}
 
 	// Extension with notify scope calling notify with actions / ui / state:
-	extTok := h.extTokens.issue("example-gateway", "Example Gateway", []string{extension.ScopeNotify})
+	extTok := extTokensOf(t, h).issue("example-gateway", "Example Gateway", []string{extension.ScopeNotify})
 	code, out = post(extTok, `{"title":"Example 网关面板","body":"今天的预算用了 90%","ui":"usage","state":"range=1d","actions":[{"id":"raise","title":"预算加 ¥10"},{"id":"note","title":"回复","input":{"placeholder":"说点什么"}},{"id":"stop","title":"停用这个 Key","role":"destructive","foreground":true}]}`)
 	if code != 200 || out["sent"] != true {
 		t.Fatalf("extension send: %d %v", code, out)
@@ -263,7 +263,7 @@ func TestNotifyAPI(t *testing.T) {
 	}
 
 	// Extension without notify scope cannot call notify.
-	badExtTok := h.extTokens.issue("other-extension", "Other", []string{extension.ScopeMachinesRead})
+	badExtTok := extTokensOf(t, h).issue("other-extension", "Other", []string{extension.ScopeMachinesRead})
 	if code, _ := post(badExtTok, `{"title":"t"}`); code != http.StatusForbidden {
 		t.Fatalf("extension without notify scope: %d", code)
 	}
@@ -331,7 +331,7 @@ func TestNotifyAPNs(t *testing.T) {
 	}
 
 	// Extension notification carries aps.category, thread-id, and extension_notification:
-	extTok := h.extTokens.issue("example-gateway", "Example Gateway", []string{extension.ScopeNotify})
+	extTok := extTokensOf(t, h).issue("example-gateway", "Example Gateway", []string{extension.ScopeNotify})
 	beforeExt := len(f.calls(t, 2))
 	post(extTok, `{"title":"预算超了","body":"90%","ui":"usage","state":"range=1d","actions":[{"id":"raise","title":"加预算"},{"id":"stop","title":"停用","role":"destructive"}]}`)
 	callsExt := f.calls(t, beforeExt+2)[beforeExt:]

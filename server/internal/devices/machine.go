@@ -520,6 +520,9 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		m.d.usage.apply(m.cfg.ID, params, time.Now())
 		return
 	}
+	if f := m.d.opts.OnEvent; f != nil && f(m.cfg.ID, event, params) {
+		return
+	}
 	m.d.forward(m.cfg.ID, event, params)
 }
 

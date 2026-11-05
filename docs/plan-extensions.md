@@ -146,7 +146,7 @@ hub.json 的旧配置迁到扩展：装上扩展后在 设置 › 扩展（或 `
   唯一的变化是退避上限从 60 秒变成 5 分钟。
 - `GET /api/v1/extensions` 的老字段不变（Android 的语音入口按 `kind == "voice"` 和 `status == "running"` 找），只多字段。
 - 语音的配置（`providers` 是对象数组）超出表单的子集，第 1 步不进注册表的配置，照旧在 hub.json；以后子集支持对象数组了再说。
-- 现有的 `server/internal/hub/extensions_test.go` 不改断言，照旧要过。
+- 现有的 `server/internal/extmgr/extensions_test.go` 不改断言，照旧要过。
 
 ### Telegram（连接器 v2）
 

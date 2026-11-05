@@ -191,8 +191,7 @@ func TestAppHandlersBodyLimitTooLarge(t *testing.T) {
 		{"POST", "/api/v1/sessions/m1/s1/rewind", "", rewindMaxPrompt + 4<<10},
 		{"POST", "/api/v1/sessions", "", 4 << 20},
 		{"POST", "/api/v1/notify", "", 16 << 10},
-		{"PUT", "/api/v1/agents/prefs", "", 1 << 20},
-		{"POST", "/api/v1/agents/sessions/x/messages", "", 1 << 20},
+		// (/api/v1/agents/… are the manager's: extmgr TestAgentRoutesBodyLimitTooLarge.)
 		{"POST", "/api/v1/machines/m1/panes", "", 4 << 10},
 		{"POST", "/api/v1/machines/m1/panes/close", "", 4 << 10},
 		{"POST", "/api/v1/phone/runtime-cli", "", 1 << 20},

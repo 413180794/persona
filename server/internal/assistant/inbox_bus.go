@@ -59,7 +59,7 @@ func inboxRequest(ctx context.Context, s *Service, method string, decode func(an
 
 // InboxChanged tells the hub inbox items changed (inbox.changed, one way).
 func (b *BusHub) InboxChanged(_ context.Context, c assistantwire.InboxChanged) {
-	if err := b.client.Notify(assistantwire.EventInboxChanged, c); err != nil {
+	if err := b.notifyHub(assistantwire.EventInboxChanged, c); err != nil {
 		b.opts.Logf("assistant: %s: %v", assistantwire.EventInboxChanged, err)
 	}
 }

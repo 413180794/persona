@@ -230,6 +230,14 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 			s.decisionsChanged(ctx, id, at)
 		}
 	}
+	// Not accepted: the work goes on. A task the hub (or the user) closed meanwhile is open again before its agent is
+	// told, so the turn the change starts is followed (receipt, judgment, the next 请验收) and the task shows as in
+	// progress, not done (#3457). It stays open when the send fails: the change is still to be made.
+	if t.StartError == "" {
+		if err := s.reopenTodo(ctx, id); err != nil {
+			s.logf("task %s: acceptance reopen: %v", id, err)
+		}
+	}
 	msg := i18n.T(l, "assistant-reports.accept_to_agent", i18n.Args{"feedback": text})
 	if _, err := s.routeToTask(ctx, t.Origin, id, msg); err != nil {
 		s.logf("task %s: acceptance to agent: %v", id, err)
