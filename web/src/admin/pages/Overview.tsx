@@ -1,6 +1,7 @@
 // 概览: the hub at a glance — its name, build, uptime, how it listens, the addresses it hands out, counts, doctor. With
 // no computer but its own yet, adding one comes first (docs/plan-hub-center.md 0).
 import { useState } from "react";
+import { t } from "../../i18n";
 import { Button, cx, IconButton, toast, useNow } from "../../ui/atoms";
 import { adminApi, errorText } from "../api";
 import { AdminIcon } from "../icons";
@@ -24,59 +25,59 @@ export function OverviewPage() {
   const empty = list.data ? needsMachines(list.data.machines) : list.error ? o.machines.total === 0 : false;
   return (
     <>
-      <PageHeader title="概览" subtitle="这台 hub 的状态。改动会写回 hub 机器上的 hub.json。" />
+      <PageHeader title={t("admin-pages-overview.title")} subtitle={t("admin-pages-overview.subtitle")} />
       {empty && <AddFirst />}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat icon="pulse" label="已运行" value={uptime(o.hub.started_at, now)} hint={`自 ${dateTime(o.hub.started_at)}`} />
-        <Stat icon="machine" label="电脑在线" value={`${o.machines.online}/${o.machines.total}`} hint="查看电脑" onClick={() => navigate("machines")} />
-        <Stat icon="phone" label="设备" value={o.devices} hint="凭据和配对" onClick={() => navigate("devices")} />
-        <Stat icon="lock" label="TLS" value={o.tls ? "已开启" : "未开启"} hint={o.tls ? `端口 ${o.tls.port || o.tls.listen}` : "去网络与访问开启"} onClick={() => navigate("network")} />
+        <Stat icon="pulse" label={t("admin-pages-overview.stat_uptime")} value={uptime(o.hub.started_at, now)} hint={t("admin-pages-overview.stat_uptime_since", { time: dateTime(o.hub.started_at) })} />
+        <Stat icon="machine" label={t("admin-pages-overview.stat_computers_online")} value={`${o.machines.online}/${o.machines.total}`} hint={t("admin-pages-overview.stat_view_computers")} onClick={() => navigate("machines")} />
+        <Stat icon="phone" label={t("admin-pages-overview.stat_devices")} value={o.devices} hint={t("admin-pages-overview.stat_devices_hint")} onClick={() => navigate("devices")} />
+        <Stat icon="lock" label="TLS" value={o.tls ? t("admin-pages-overview.tls_on") : t("admin-pages-overview.tls_off")} hint={o.tls ? t("admin-pages-overview.tls_port", { port: o.tls.port || o.tls.listen }) : t("admin-pages-overview.tls_enable_hint")} onClick={() => navigate("network")} />
       </div>
 
       <Card title="hub">
         <NameLine o={o} onSaved={(name, nameSet) => set({ ...o, hub: { ...o.hub, name, name_set: nameSet } })} />
-        <Line label="版本">
+        <Line label={t("admin-pages-overview.version")}>
           <CopyValue value={o.hub.version} />
         </Line>
-        <Line label="系统">
+        <Line label={t("admin-pages-overview.system")}>
           <span className="font-mono text-[12px]">
             {o.hub.os}/{o.hub.arch}
           </span>
-          {o.hub.container && <Tag>容器</Tag>}
+          {o.hub.container && <Tag>{t("admin-pages-overview.container")}</Tag>}
         </Line>
-        <Line label="hub ID" hint="互联、配对时用来核对是不是这台 hub">
+        <Line label={t("admin-pages-overview.hub_id")} hint={t("admin-pages-overview.hub_id_hint")}>
           <CopyValue value={o.hub.hub_id} />
         </Line>
       </Card>
 
-      <Card title="连接" footer="明文端口只该在局域网或 VPN 里用；公网只放行 TLS 端口。">
-        <Line label="明文监听" hint="App 和网页在内网用的 HTTP 端口">
+      <Card title={t("admin-pages-overview.connection")} footer={t("admin-pages-overview.connection_footer")}>
+        <Line label={t("admin-pages-overview.plain_listen")} hint={t("admin-pages-overview.plain_listen_hint")}>
           <span className="font-mono text-[12px]">{o.listen}</span>
         </Line>
-        <Line label="对外地址" hint="配对二维码里的地址（public_url）">
+        <Line label={t("admin-pages-overview.public_url")} hint={t("admin-pages-overview.public_url_hint")}>
           <CopyValue value={o.public_url || "—"} />
         </Line>
         {o.tls ? (
           <>
-            <Line label="TLS 监听" hint="HTTPS / WSS，公网和互联只走这个端口">
+            <Line label={t("admin-pages-overview.tls_listen")} hint={t("admin-pages-overview.tls_listen_hint")}>
               <span className="font-mono text-[12px]">{o.tls.listen}</span>
-              <Tag tone="green">已开启</Tag>
+              <Tag tone="green">{t("admin-pages-overview.tls_on")}</Tag>
             </Line>
-            <Line label="公钥指纹" hint="客户端钉扎的就是它；换了密钥要重新配对">
+            <Line label={t("admin-pages-overview.fingerprint")} hint={t("admin-pages-overview.fingerprint_hint")}>
               <CopyValue value={o.tls.fp} className="max-w-[340px]" />
             </Line>
           </>
         ) : (
-          <Line label="TLS 监听" hint="没开 TLS 时不能从公网安全访问，也不能和别的 hub 互联">
-            <Tag>未开启</Tag>
+          <Line label={t("admin-pages-overview.tls_listen")} hint={t("admin-pages-overview.tls_off_hint")}>
+            <Tag>{t("admin-pages-overview.tls_off")}</Tag>
             <Button className="h-7 px-2.5" onClick={() => navigate("network")}>
-              去开启
+              {t("admin-pages-overview.enable")}
             </Button>
           </Line>
         )}
       </Card>
 
-      <Card title="候选地址" footer="hub 在本机发现或配置的地址，鉴权后下发给 App 选路；不代表公网能连通。">
+      <Card title={t("admin-pages-overview.endpoints")} footer={t("admin-pages-overview.endpoints_footer")}>
         <Endpoints list={o.endpoints} />
       </Card>
 
@@ -94,13 +95,13 @@ function AddFirst() {
         <AdminIcon name="machine" size={19} />
       </span>
       <div className="min-w-[220px] flex-1">
-        <div className="text-[14px] font-semibold text-ink">添加你的电脑</div>
+        <div className="text-[14px] font-semibold text-ink">{t("admin-pages-overview.add_first_title")}</div>
         <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-2">
-          这台 hub 还没有连别的电脑。全家只要这一台 hub；其他电脑都装 node 服务，再在这里添加：笔记本选「电脑来连」，服务器、开发工作站选「hub 来连」。
+          {t("admin-pages-overview.add_first_body")}
         </p>
       </div>
       <Button tone="primary" icon="plus" onClick={() => navigate("machines")}>
-        添加电脑
+        {t("admin-pages-overview.add_computer")}
       </Button>
     </section>
   );
@@ -118,7 +119,7 @@ function NameLine({ o, onSaved }: { o: Overview; onSaved: (name: string, nameSet
       onSaved(r.name, r.name_set);
       share({ hubName: r.name });
       setEditing(false);
-      toast("已保存", "ok");
+      toast(t("admin-pages-overview.saved"), "ok");
     } catch (err) {
       toast(errorText(err), "error");
     } finally {
@@ -128,34 +129,34 @@ function NameLine({ o, onSaved }: { o: Overview; onSaved: (name: string, nameSet
   if (editing)
     return (
       <form onSubmit={save} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-        <span className="min-w-[120px] flex-1 text-[13px] text-ink">名字</span>
+        <span className="min-w-[120px] flex-1 text-[13px] text-ink">{t("admin-pages-overview.name")}</span>
         <input
           autoFocus
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={o.hub.default_name}
-          aria-label="hub 名字"
+          aria-label={t("admin-pages-overview.name_label")}
           maxLength={64}
           className="h-8 w-[220px] max-w-full rounded-control bg-inset px-2.5 text-[13px] text-ink shadow-hairline outline-none placeholder:text-ink-3 focus:shadow-[0_0_0_1px_var(--line-strong),0_0_0_3px_var(--accent-tint)]"
         />
         <Button tone="quiet" className="h-8" onClick={() => setEditing(false)}>
-          取消
+          {t("common.cancel")}
         </Button>
         <Button tone="primary" type="submit" className="h-8" busy={busy}>
-          保存
+          {t("common.save")}
         </Button>
       </form>
     );
   return (
-    <Line label="名字" hint={o.hub.name_set ? "App 和别的 hub 看到的名字" : `没起名字，用默认的「${o.hub.default_name}」`}>
+    <Line label={t("admin-pages-overview.name")} hint={o.hub.name_set ? t("admin-pages-overview.name_hint") : t("admin-pages-overview.name_default_hint", { name: o.hub.default_name })}>
       <span className="text-[13px] font-medium text-ink">{o.hub.name}</span>
-      <IconButton icon="write" label="改名字" size={26} iconSize={13} onClick={() => (setValue(o.hub.name_set ? o.hub.name : ""), setEditing(true))} />
+      <IconButton icon="write" label={t("admin-pages-overview.rename")} size={26} iconSize={13} onClick={() => (setValue(o.hub.name_set ? o.hub.name : ""), setEditing(true))} />
     </Line>
   );
 }
 
 export function Endpoints({ list }: { list: Endpoint[] }) {
-  if (!list.length) return <div className="px-4 py-3 text-[12.5px] text-ink-3">没有候选地址。检查 public.advertise 和网卡地址。</div>;
+  if (!list.length) return <div className="px-4 py-3 text-[12.5px] text-ink-3">{t("admin-pages-overview.endpoints_empty")}</div>;
   return (
     <>
       {list.map((e) => (
@@ -185,17 +186,17 @@ function Doctor() {
   const g = report ? groupDoctor(report.items) : null;
   return (
     <Card
-      title="检查"
+      title={t("admin-pages-overview.doctor")}
       right={
         <Button className="h-7 px-2.5" busy={busy} onClick={run}>
           {!busy && <AdminIcon name="radar" size={13} />}
-          {report ? "再查一次" : "运行检查"}
+          {report ? t("admin-pages-overview.doctor_rerun") : t("admin-pages-overview.doctor_run")}
         </Button>
       }
-      footer={report ? `${dateTime(report.ran_at)} 检查。只读，不改配置；不测公网能不能连进来。` : "和在 hub 机器上运行 jarvisd hub doctor 一样：配置、TLS 证书、候选地址、IPv6、防火墙。只读。"}
+      footer={report ? t("admin-pages-overview.doctor_ran", { time: dateTime(report.ran_at) }) : t("admin-pages-overview.doctor_footer")}
     >
       {!g ? (
-        <div className="px-4 py-3 text-[12.5px] text-ink-3">还没检查。</div>
+        <div className="px-4 py-3 text-[12.5px] text-ink-3">{t("admin-pages-overview.doctor_none")}</div>
       ) : (
         <>
           {[...g.problem, ...g.ok, ...g.info].map((it, i) => (
@@ -211,7 +212,7 @@ function Doctor() {
           ))}
           {report!.next.length > 0 && (
             <div className="bg-inset px-4 py-3">
-              <div className="mb-1.5 text-[12px] font-medium text-ink-2">下一步</div>
+              <div className="mb-1.5 text-[12px] font-medium text-ink-2">{t("admin-pages-overview.next_steps")}</div>
               <ol className="list-decimal space-y-1 pl-4 text-[12px] leading-relaxed text-ink-2 marker:text-ink-3">
                 {report!.next.map((s, i) => (
                   <li key={i} className="break-words">

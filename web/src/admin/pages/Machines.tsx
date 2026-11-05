@@ -3,6 +3,8 @@
 // 4): the computer dials the hub (kind link, a jarvis-link pairing link) or the hub dials the computer's connector
 // (kind service, the jarvis://connector link it prints). Both connect at once; removing waits for a restart.
 import { useEffect, useState } from "react";
+import { t } from "../../i18n";
+import { tRich } from "../../i18n/rich";
 import { ago } from "../../lib/format";
 import { Button, Collapse, cx, Dialog, IconButton, toast, useNow } from "../../ui/atoms";
 import { adminApi, AdminError, addLinkMachine, addServiceMachine, errorText, linkPair, repairConnector } from "../api";
@@ -17,7 +19,7 @@ const enc = encodeURIComponent;
 
 type AddWay = "link" | "service";
 
-const LEGACY_TIP = "ssh 已不推荐：在那台电脑上装 node 服务，用「电脑来连」或「hub 来连」重新添加，确认在线后删掉这一条。";
+const LEGACY_TIP = t("admin-pages-machines.legacy_tip");
 
 export function Machines() {
   const { mesh, hubId, tls } = useShared();
@@ -46,8 +48,8 @@ export function Machines() {
   // Online state and the paths' round trips move on their own.
   useEffect(() => {
     if (!data) return;
-    const t = setInterval(reload, 15_000);
-    return () => clearInterval(t);
+    const timer = setInterval(reload, 15_000);
+    return () => clearInterval(timer);
   }, [data, reload]);
 
   const changed = (r?: Restart) => {
@@ -57,18 +59,18 @@ export function Machines() {
 
   return (
     <>
-      <PageHeader title="电脑" subtitle="hub 连着的电脑。全家只要这一台 hub，其他电脑都装 node 服务，再在这里添加。" />
+      <PageHeader title={t("admin-pages-machines.title")} subtitle={t("admin-pages-machines.subtitle")} />
       <AddCard onPick={setAdding} noTLS={tls === null} />
       {!data ? (
         loading ? <Loader /> : <ErrorBox error={error} onRetry={reload} />
       ) : (
         <Card
-          title={`${data.machines.length} 台`}
-          footer="添加立刻生效；删除写进 hub.json，重启 hub 后生效。一台电脑有几条路时同一时刻只用一条：本机优先，其次直接连，最后经成员 hub；断了马上换下一条。"
+          title={t("admin-pages-machines.count", { count: data.machines.length })}
+          footer={t("admin-pages-machines.list_footer")}
         >
           {data.machines.length === 0 ? (
-            <EmptyState icon="machine" title="还没有电脑">
-              在上面选一种方式添加：笔记本选「电脑来连」，服务器选「hub 来连」。
+            <EmptyState icon="machine" title={t("admin-pages-machines.empty_title")}>
+              {t("admin-pages-machines.empty_body")}
             </EmptyState>
           ) : (
             data.machines.map((m) => (
@@ -91,23 +93,23 @@ function AddCard({ onPick, noTLS }: { onPick: (w: AddWay) => void; noTLS: boolea
     {
       w: "link",
       icon: "link",
-      title: "电脑来连",
-      fit: "笔记本、会换网络的电脑",
-      desc: "那台电脑上的 Persona Link 主动连 hub：在 NAT 后面、换了网络也能连上。",
-      note: noTLS ? "要先开 TLS" : undefined,
+      title: t("admin-pages-machines.way_link"),
+      fit: t("admin-pages-machines.way_link_fit"),
+      desc: t("admin-pages-machines.way_link_desc"),
+      note: noTLS ? t("admin-pages-machines.way_link_needs_tls") : undefined,
     },
     {
       w: "service",
       icon: "machine",
-      title: "hub 来连",
-      fit: "服务器、开发工作站这类地址固定的电脑",
-      desc: "hub 按地址连那台电脑上的连接器，也能经 SOCKS 代理连过去。",
+      title: t("admin-pages-machines.way_service"),
+      fit: t("admin-pages-machines.way_service_fit"),
+      desc: t("admin-pages-machines.way_service_desc"),
     },
   ];
   return (
     <section className="mb-6">
       <div className="mb-1.5 flex min-h-6 items-end px-1">
-        <h2 className="text-[12px] font-medium text-ink-3">添加电脑</h2>
+        <h2 className="text-[12px] font-medium text-ink-3">{t("admin-pages-machines.add_computer")}</h2>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {ways.map((o) => (
@@ -171,7 +173,7 @@ function MachineRow({
   const paths = pathRows(m, mesh, selfId);
   const now = paths.find((p) => p.active);
   // How it is reached now: the path in use (through a member: which one), else how it is configured.
-  const how = now ? (now.via === "hub" ? `经成员「${now.hub}」` : now.label) : viaLabel(m.transport) || viaLabel(m.kind);
+  const how = now ? (now.via === "hub" ? t("admin-pages-machines.via_member", { hub: now.hub }) : now.label) : viaLabel(m.transport) || viaLabel(m.kind);
   const member = m.kind === "hub" ? paths[0]?.hub || mesh?.hubs.find((h) => h.hub_id === m.hub_id)?.name || "" : "";
   const repair = needsRepair(m);
   const icon: AdminIconName = m.kind === "hub" ? "mesh" : m.kind === "link" ? "link" : "machine";
@@ -203,7 +205,7 @@ function MachineRow({
               ),
               m.proxy && (
                 <span key="proxy" className="whitespace-nowrap">
-                  经代理 <span className="font-mono">{m.proxy}</span>
+                  {tRich("admin-pages-machines.via_proxy", { proxy: <span className="font-mono">{m.proxy}</span> })}
                 </span>
               ),
               m.ssh_host && (
@@ -218,45 +220,45 @@ function MachineRow({
               ),
               !m.online && active && m.last_seen && (
                 <span key="seen" className="whitespace-nowrap">
-                  最后在线 {ago(m.last_seen)}
+                  {t("admin-pages-machines.last_seen", { time: ago(m.last_seen) })}
                 </span>
               ),
             ]
               .filter(Boolean)
               .flatMap((el, i) => [<span key={`sep${i}`}>·</span>, el])}
-            {m.node_mismatch && <Tag tone="orange" title="这台电脑的 node 不是 hub 的版本：到那台电脑上更新 node 服务">版本不一致</Tag>}
-            {isLegacy(m) && <Tag title={LEGACY_TIP}>ssh 已不推荐，迁移见文档</Tag>}
+            {m.node_mismatch && <Tag tone="orange" title={t("admin-pages-machines.version_mismatch_hint")}>{t("admin-pages-machines.version_mismatch")}</Tag>}
+            {isLegacy(m) && <Tag title={LEGACY_TIP}>{t("admin-pages-machines.legacy_tag")}</Tag>}
           </div>
-          {member && <div className="mt-1 text-[11.5px] leading-relaxed text-ink-3">只在成员「{member}」上配置，中心经它连这台；要删到那台 hub 的管理界面。</div>}
+          {member && <div className="mt-1 text-[11.5px] leading-relaxed text-ink-3">{t("admin-pages-machines.member_only", { member })}</div>}
           {m.error && active && <div className="mt-1 text-[11.5px] leading-relaxed break-words text-red">{m.error}</div>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {repair && active && (
             <Button tone="primary" className="h-7 px-2.5" onClick={onRepair}>
               <AdminIcon name="link" size={13} />
-              重新配对
+              {t("admin-pages-machines.repair")}
             </Button>
           )}
           {m.kind === "link" && active && (
-            <Button className="h-7 px-2.5" onClick={onPair} title={tls ? "给这台电脑的 Persona Link 生成配对链接" : "电脑来连只走 TLS，先在网络与访问开启"}>
+            <Button className="h-7 px-2.5" onClick={onPair} title={tls ? t("admin-pages-machines.pair_link_hint") : t("admin-pages-machines.pair_link_no_tls")}>
               <AdminIcon name="link" size={13} />
-              生成配对链接
+              {t("admin-pages-machines.make_pair_link")}
             </Button>
           )}
           {active && (
             <IconButton
               icon="retry"
-              label="重连"
+              label={t("admin-pages-machines.reconnect")}
               disabled={busy !== ""}
-              onClick={() => act("reconnect", () => adminApi(`/machines/${enc(m.id)}/reconnect`, "POST"), "正在重连")}
+              onClick={() => act("reconnect", () => adminApi(`/machines/${enc(m.id)}/reconnect`, "POST"), t("admin-pages-machines.reconnecting"))}
             />
           )}
           {canRemove(m) && (
             <ConfirmButton
-              label="删除"
-              confirm="删除"
+              label={t("admin-pages-machines.delete")}
+              confirm={t("admin-pages-machines.delete")}
               busy={busy === "delete"}
-              onConfirm={() => act("delete", () => adminApi(`/machines/${enc(m.id)}`, "DELETE"), m.state === "pending_add" ? "已撤回" : "已删除，重启 hub 后生效")}
+              onConfirm={() => act("delete", () => adminApi(`/machines/${enc(m.id)}`, "DELETE"), m.state === "pending_add" ? t("admin-pages-machines.withdrawn") : t("admin-pages-machines.deleted"))}
             />
           )}
         </div>
@@ -269,18 +271,18 @@ function MachineRow({
 // Paths: every way to a computer — how, through which hub, whether it works, its round trip, the one in use.
 function Paths({ rows }: { rows: ReturnType<typeof pathRows> }) {
   return (
-    <div className="mt-2 ml-12 max-w-[560px] divide-y divide-line overflow-hidden rounded-control bg-inset shadow-hairline" role="list" aria-label="路">
+    <div className="mt-2 ml-12 max-w-[560px] divide-y divide-line overflow-hidden rounded-control bg-inset shadow-hairline" role="list" aria-label={t("admin-pages-machines.paths")}>
       {rows.map((r) => (
         <div key={r.key} role="listitem" className="px-2.5 py-1.5 text-[11.5px]">
           <div className="flex items-center gap-2.5">
             <Dot tone={r.ok ? "green" : r.error ? "red" : "gray"} />
             <span className="w-[68px] shrink-0 whitespace-nowrap text-ink-2">{r.label}</span>
-            <span className="flex min-w-0 flex-1 items-center gap-1 text-ink-3" title={`经过 ${r.hub}`}>
+            <span className="flex min-w-0 flex-1 items-center gap-1 text-ink-3" title={t("admin-pages-machines.path_through", { hub: r.hub })}>
               <AdminIcon name="mesh" size={11} className="shrink-0" />
               <span className="truncate">{r.hub}</span>
             </span>
             {r.rtt !== undefined && <span className="shrink-0 font-mono text-ink-3 tabular-nums">{r.rtt} ms</span>}
-            {r.active ? <Tag tone="accent">在用</Tag> : r.ok ? <Tag>备用</Tag> : <Tag tone="red">不通</Tag>}
+            {r.active ? <Tag tone="accent">{t("admin-pages-machines.path_active")}</Tag> : r.ok ? <Tag>{t("admin-pages-machines.path_standby")}</Tag> : <Tag tone="red">{t("admin-pages-machines.path_down")}</Tag>}
           </div>
           {r.error && (
             <div className="mt-0.5 truncate pl-[18px] text-red" title={r.error}>
@@ -294,9 +296,9 @@ function Paths({ rows }: { rows: ReturnType<typeof pathRows> }) {
 }
 
 const ICONS: { value: string; label: string }[] = [
-  { value: "laptop", label: "笔记本" },
-  { value: "desktop", label: "台式机" },
-  { value: "server", label: "服务器" },
+  { value: "laptop", label: t("admin-pages-machines.icon_laptop") },
+  { value: "desktop", label: t("admin-pages-machines.icon_desktop") },
+  { value: "server", label: t("admin-pages-machines.icon_server") },
 ];
 
 // MachineFields: id, name and icon, the same for both ways.
@@ -325,12 +327,12 @@ function MachineFields({
   return (
     <>
       <div className="grid gap-3.5 sm:grid-cols-2">
-        <Field label="id" hint="App 里用的标识，之后不能改" value={id} onChange={(v) => setId(v.toLowerCase())} placeholder={example.id} mono error={idErr || undefined} autoFocus={autoFocus} maxLength={63} />
-        <Field label="名字" hint="App 里显示的名字，不填就用 id" value={name} onChange={setName} placeholder={example.name} maxLength={40} />
+        <Field label="id" hint={t("admin-pages-machines.id_hint")} value={id} onChange={(v) => setId(v.toLowerCase())} placeholder={example.id} mono error={idErr || undefined} autoFocus={autoFocus} maxLength={63} />
+        <Field label={t("admin-pages-machines.name")} hint={t("admin-pages-machines.name_hint")} value={name} onChange={setName} placeholder={example.name} maxLength={40} />
       </div>
       <div>
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">图标</span>
-        <Segmented label="图标" value={icon} options={ICONS} onChange={setIcon} />
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("admin-pages-machines.icon")}</span>
+        <Segmented label={t("admin-pages-machines.icon")} value={icon} options={ICONS} onChange={setIcon} />
       </div>
     </>
   );
@@ -338,8 +340,8 @@ function MachineFields({
 
 function idError(id: string, existing: string[]): string {
   if (!id) return "";
-  if (!validMachineId(id)) return "只能用小写字母、数字和 - _ .，以字母或数字开头";
-  return existing.includes(id) ? "已经有这个 id 了" : "";
+  if (!validMachineId(id)) return t("admin-pages-machines.id_invalid");
+  return existing.includes(id) ? t("admin-pages-machines.id_taken") : "";
 }
 
 // AddLink: the computer dials the hub. Make the entry, then the jarvis-link pairing link right away.
@@ -374,20 +376,20 @@ function AddLink({ open, onClose, existing, onAdded }: { open: boolean; onClose:
     <Dialog
       open={open}
       onClose={close}
-      title={added ? `配对「${added.name || added.id}」` : "添加电脑 · 电脑来连"}
+      title={added ? t("admin-pages-machines.pair_title", { name: added.name || added.id }) : t("admin-pages-machines.add_link_title")}
       width={540}
       footer={
         added ? (
           <Button tone="primary" onClick={close}>
-            完成
+            {t("admin-pages-machines.done")}
           </Button>
         ) : (
           <>
             <Button tone="quiet" onClick={close}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="primary" busy={busy} disabled={!ok} onClick={() => submit()}>
-              添加并生成配对链接
+              {t("admin-pages-machines.add_and_pair")}
             </Button>
           </>
         )
@@ -398,9 +400,9 @@ function AddLink({ open, onClose, existing, onAdded }: { open: boolean; onClose:
       ) : (
         <form onSubmit={submit} className="space-y-3.5">
           <p className="text-[12.5px] leading-relaxed text-ink-2">
-            那台电脑上的 Persona Link 主动连这台 hub，适合笔记本、会换网络的电脑。加好之后马上生成配对链接，到那台电脑上粘贴。
+            {t("admin-pages-machines.add_link_body")}
           </p>
-          <MachineFields example={{ id: "laptop", name: "笔记本" }} id={id} setId={setId} name={name} setName={setName} icon={icon} setIcon={setIcon} existing={existing} autoFocus />
+          <MachineFields example={{ id: "laptop", name: t("admin-pages-machines.icon_laptop") }} id={id} setId={setId} name={name} setName={setName} icon={icon} setIcon={setIcon} existing={existing} autoFocus />
           {error && <FormError text={error} />}
           <button type="submit" hidden />
         </form>
@@ -434,8 +436,8 @@ function PairPanel({ machine, onClose }: { machine: AdminMachine; onClose: () =>
   const tls = error instanceof AdminError && error.code === "tls_required";
   if (tls)
     return (
-      <Notice tone="orange" icon="lock" title="电脑来连只走 TLS" action={<Button onClick={() => (onClose(), navigate("network"))}>去开启</Button>}>
-        这台电脑已经加好了，但 hub 还没开 TLS 端口。在「网络与访问」里填上 TLS 监听、重启 hub 后，到「电脑」列表里给它「配对链接」。
+      <Notice tone="orange" icon="lock" title={t("admin-pages-machines.link_needs_tls")} action={<Button onClick={() => (onClose(), navigate("network"))}>{t("admin-pages-machines.enable")}</Button>}>
+        {t("admin-pages-machines.link_needs_tls_body")}
       </Notice>
     );
   if (error)
@@ -443,35 +445,30 @@ function PairPanel({ machine, onClose }: { machine: AdminMachine; onClose: () =>
       <div className="flex flex-wrap items-center gap-3 py-3">
         <p className="min-w-0 flex-1 text-[12.5px] text-red">{errorText(error)}</p>
         <Button icon="retry" onClick={() => setRound((r) => r + 1)}>
-          重试
+          {t("admin-pages-machines.retry")}
         </Button>
       </div>
     );
-  if (!pair) return <div className="py-8 text-center text-[12.5px] text-ink-3">正在生成配对链接…</div>;
+  if (!pair) return <div className="py-8 text-center text-[12.5px] text-ink-3">{t("admin-pages-machines.making_pair_link")}</div>;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-ink-2">
-          链接只能用一次，
-          {left ? (
-            <>
-              还有 <span className="font-mono text-ink tabular-nums">{left}</span> 过期。
-            </>
-          ) : (
-            <span className="text-red">已经过期了。</span>
-          )}
+          {left
+            ? tRich("admin-pages-machines.pair_left", { left: <span className="font-mono text-ink tabular-nums">{left}</span> })
+            : tRich("admin-pages-machines.pair_expired", { expired: <span className="text-red">{t("admin-pages-machines.expired")}</span> })}
         </p>
         <Button tone={left ? "quiet" : "primary"} icon="retry" className="h-7 px-2.5" onClick={() => setRound((r) => r + 1)}>
-          重新生成
+          {t("admin-pages-machines.regenerate")}
         </Button>
       </div>
       <div className={cx("rounded-control bg-inset p-2.5 shadow-hairline transition-opacity", !left && "opacity-50")}>
-        <div className="mb-1 text-[11px] font-medium text-ink-3">配对链接</div>
-        <CopyValue value={pair.pair_url} label="拷贝配对链接" />
+        <div className="mb-1 text-[11px] font-medium text-ink-3">{t("admin-pages-machines.pair_link")}</div>
+        <CopyValue value={pair.pair_url} label={t("admin-pages-machines.copy_pair_link")} />
       </div>
       <div>
         <Segmented
-          label="那台电脑的系统"
+          label={t("admin-pages-machines.platform")}
           value={platform}
           onChange={setPlatform}
           options={[
@@ -483,29 +480,29 @@ function PairPanel({ machine, onClose }: { machine: AdminMachine; onClose: () =>
         <div className="mt-2.5 text-[12.5px] leading-relaxed text-ink-2" style={{ animation: "fade-in 160ms ease-out both" }} key={platform}>
           {platform === "mac" && (
             <ol className="list-decimal space-y-1 pl-4 marker:text-ink-3">
-              <li>装 Persona Link（菜单栏 App，自带 node 服务），打开它。</li>
-              <li>点菜单栏里的 Persona Link ›「配对 / 修改连接…」，粘贴上面的链接。</li>
-              <li>菜单里显示已连接，这里的列表里它就在线了。</li>
+              <li>{t("admin-pages-machines.mac_step1")}</li>
+              <li>{t("admin-pages-machines.mac_step2")}</li>
+              <li>{t("admin-pages-machines.mac_step3")}</li>
             </ol>
           )}
           {platform === "linux" && (
             <div className="space-y-2">
-              <p>在那台电脑上装好连接器 Persona Link（命令名 jarvis-link，新装的也叫 persona-link）后运行，一条命令配对、装成 systemd 用户服务并连上：</p>
-              <CodeBlock value={linuxInstallCommand(pair.pair_url)} copyLabel="拷贝命令" />
-              <p className="text-[11.5px] text-ink-3">没人登录时也要连着的话，再运行 sudo loginctl enable-linger 加你的用户名。</p>
+              <p>{t("admin-pages-machines.linux_body")}</p>
+              <CodeBlock value={linuxInstallCommand(pair.pair_url)} copyLabel={t("admin-pages-machines.copy_command")} />
+              <p className="text-[11.5px] text-ink-3">{t("admin-pages-machines.linux_linger")}</p>
             </div>
           )}
-          {platform === "windows" && <p>Windows 的托盘程序还在做，做好后在托盘菜单里粘贴同一个链接。</p>}
+          {platform === "windows" && <p>{t("admin-pages-machines.windows_body")}</p>}
         </div>
       </div>
-      <p className="text-[11.5px] leading-relaxed text-ink-3">链接相当于这台电脑的凭据，别发到群里。过期了可以随时在「电脑」列表里重新生成。</p>
+      <p className="text-[11.5px] leading-relaxed text-ink-3">{t("admin-pages-machines.pair_link_warning")}</p>
     </div>
   );
 }
 
 function PairLinkDialog({ machine, onClose }: { machine: AdminMachine | null; onClose: () => void }) {
   return (
-    <Dialog open={Boolean(machine)} onClose={onClose} title={machine ? `「${machine.name || machine.id}」的配对链接` : ""} width={540}>
+    <Dialog open={Boolean(machine)} onClose={onClose} title={machine ? t("admin-pages-machines.pair_link_title", { name: machine.name || machine.id }) : ""} width={540}>
       {machine && <PairPanel machine={machine} onClose={onClose} />}
     </Dialog>
   );
@@ -517,14 +514,16 @@ function ConnectorLinkField({ value, onChange, autoFocus }: { value: string; onC
   const bad = value.trim() !== "" && !parsed;
   return (
     <div>
-      <Field label="配对链接" value={value} onChange={onChange} placeholder="jarvis://connector?addr=…&fp=…&code=…" mono multiline autoFocus={autoFocus} error={bad ? "这不是连接器的配对链接（jarvis://connector?…），整条拷过来" : undefined} />
+      <Field label={t("admin-pages-machines.pair_link")} value={value} onChange={onChange} placeholder="jarvis://connector?addr=…&fp=…&code=…" mono multiline autoFocus={autoFocus} error={bad ? t("admin-pages-machines.connector_link_invalid") : undefined} />
       {parsed && (
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-ink-3" style={{ animation: "fade-in 160ms ease-out both" }}>
           <span>
-            地址 <span className="font-mono text-ink-2">{parsed.addrs.length ? parsed.addrs.join("、") : "链接里没有，下面填上"}</span>
+            {tRich("admin-pages-machines.address_value", {
+              value: <span className="font-mono text-ink-2">{parsed.addrs.length ? parsed.addrs.join(t("admin-pages-machines.address_separator")) : t("admin-pages-machines.address_missing")}</span>,
+            })}
           </span>
           <span className="min-w-0 truncate">
-            指纹 <span className="font-mono text-ink-2">{parsed.fp.slice(0, 12)}…</span>
+            {tRich("admin-pages-machines.fingerprint_value", { value: <span className="font-mono text-ink-2">{parsed.fp.slice(0, 12)}…</span> })}
           </span>
         </div>
       )}
@@ -548,8 +547,8 @@ function AddService({ open, onClose, existing, onAdded }: { open: boolean; onClo
 
   const parsed = link.trim() ? parseConnectorLink(link) : null;
   const needAddress = Boolean(parsed && parsed.addrs.length === 0);
-  const addrErr = address.trim() && !validHostPort(address) ? "写成 主机:端口，IPv6 带方括号，例如 [2001:db8::30]:18663" : "";
-  const proxyErr = proxy.trim() && !validProxy(proxy) ? "写成 socks5://主机:端口" : "";
+  const addrErr = address.trim() && !validHostPort(address) ? t("admin-pages-machines.address_invalid_example") : "";
+  const proxyErr = proxy.trim() && !validProxy(proxy) ? t("admin-pages-machines.proxy_invalid") : "";
   const ok = parsed && id && !idError(id, existing) && !addrErr && !proxyErr && (!needAddress || address.trim());
   useEffect(() => {
     if (needAddress) setMore(true);
@@ -579,20 +578,20 @@ function AddService({ open, onClose, existing, onAdded }: { open: boolean; onClo
     <Dialog
       open={open}
       onClose={close}
-      title={added ? "已添加" : "添加电脑 · hub 来连"}
+      title={added ? t("admin-pages-machines.added") : t("admin-pages-machines.add_service_title")}
       width={560}
       footer={
         added ? (
           <Button tone="primary" onClick={close}>
-            完成
+            {t("admin-pages-machines.done")}
           </Button>
         ) : (
           <>
             <Button tone="quiet" onClick={close} disabled={busy}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="primary" busy={busy} disabled={!ok} onClick={() => submit()}>
-              配对并添加
+              {t("admin-pages-machines.pair_and_add")}
             </Button>
           </>
         )
@@ -604,15 +603,15 @@ function AddService({ open, onClose, existing, onAdded }: { open: boolean; onClo
             <AdminIcon name="check" size={17} stroke={2.4} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-[13.5px] font-medium text-ink">已和「{added.name || added.id}」配对</div>
-            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-2">hub 正在连它，几秒后在列表里显示在线。</p>
+            <div className="text-[13.5px] font-medium text-ink">{t("admin-pages-machines.paired_with", { name: added.name || added.id })}</div>
+            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-2">{t("admin-pages-machines.paired_connecting")}</p>
             {added.address && (
               <p className="mt-1.5 text-[11.5px] text-ink-3">
-                地址 <span className="font-mono text-ink-2">{added.address}</span>
+                {tRich("admin-pages-machines.address_value", { value: <span className="font-mono text-ink-2">{added.address}</span> })}
                 {added.proxy && (
                   <>
                     {" "}
-                    · 经代理 <span className="font-mono text-ink-2">{added.proxy}</span>
+                    · {tRich("admin-pages-machines.via_proxy", { proxy: <span className="font-mono text-ink-2">{added.proxy}</span> })}
                   </>
                 )}
               </p>
@@ -622,35 +621,35 @@ function AddService({ open, onClose, existing, onAdded }: { open: boolean; onClo
       ) : (
         <form onSubmit={submit} className="space-y-3.5">
           <div>
-            <p className="mb-2 text-[12.5px] leading-relaxed text-ink-2">hub 按地址连那台电脑上的连接器，适合服务器、开发工作站这类地址固定、hub 连得到的电脑。先在那台电脑上运行：</p>
-            <CodeBlock value="jarvis-link pair --listen" copyLabel="拷贝命令" />
+            <p className="mb-2 text-[12.5px] leading-relaxed text-ink-2">{t("admin-pages-machines.add_service_body")}</p>
+            <CodeBlock value="jarvis-link pair --listen" copyLabel={t("admin-pages-machines.copy_command")} />
             <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-3">
-              Mac 的菜单栏、Windows 的托盘里选「让 hub 来连」也一样。它会打印一条 jarvis://connector?… 链接，10 分钟内有效，只能用一次。
+              {t("admin-pages-machines.add_service_note")}
             </p>
           </div>
           <ConnectorLinkField value={link} onChange={setLink} autoFocus />
-          <MachineFields example={{ id: "example-workstation", name: "开发机" }} id={id} setId={setId} name={name} setName={setName} icon={icon} setIcon={setIcon} existing={existing} />
+          <MachineFields example={{ id: "example-workstation", name: t("admin-pages-machines.example_workstation") }} id={id} setId={setId} name={name} setName={setName} icon={icon} setIcon={setIcon} existing={existing} />
           <div>
             <button type="button" onClick={() => setMore((v) => !v)} aria-expanded={more} className="flex items-center gap-1 text-[12px] font-medium whitespace-nowrap text-ink-2 hover:text-ink">
               <AdminIcon name="chevronRight" size={13} className="transition-transform duration-200" style={{ transform: more ? "rotate(90deg)" : undefined }} />
-              地址和代理{needAddress ? "" : "（可选）"}
+              {needAddress ? t("admin-pages-machines.address_and_proxy") : t("admin-pages-machines.address_and_proxy_optional")}
             </button>
             <Collapse open={more}>
               <div className="grid gap-3.5 pt-3 sm:grid-cols-2">
                 <Field
-                  label={needAddress ? "地址" : "地址（可选）"}
-                  hint={needAddress ? "链接里没有地址：填 hub 能连到它的 主机:端口" : "不填就用链接里的；hub 要按别的地址连它时填"}
+                  label={needAddress ? t("admin-pages-machines.address") : t("admin-pages-machines.address_optional")}
+                  hint={needAddress ? t("admin-pages-machines.address_required_hint") : t("admin-pages-machines.address_optional_hint")}
                   value={address}
                   onChange={setAddress}
                   placeholder={parsed?.addrs[0] || "192.0.2.30:18663"}
                   mono
                   error={addrErr || undefined}
                 />
-                <Field label="代理（可选）" hint="hub 只能经某台机器上的 SOCKS 代理连到它时填" value={proxy} onChange={setProxy} placeholder="socks5://192.0.2.5:1080" mono error={proxyErr || undefined} />
+                <Field label={t("admin-pages-machines.proxy_optional")} hint={t("admin-pages-machines.proxy_hint")} value={proxy} onChange={setProxy} placeholder="socks5://192.0.2.5:1080" mono error={proxyErr || undefined} />
               </div>
             </Collapse>
           </div>
-          {busy && <p className="text-[12.5px] text-ink-3">正在配对：hub 正在连那台电脑，最多要几十秒…</p>}
+          {busy && <p className="text-[12.5px] text-ink-3">{t("admin-pages-machines.pairing_long")}</p>}
           {error && <FormError text={error} />}
           <button type="submit" hidden />
         </form>
@@ -672,7 +671,7 @@ function RepairDialog({ machine, onClose, onDone }: { machine: AdminMachine | nu
     setError("");
   }, [machine]);
   const parsed = link.trim() ? parseConnectorLink(link) : null;
-  const addrErr = address.trim() && !validHostPort(address) ? "写成 主机:端口，IPv6 带方括号" : "";
+  const addrErr = address.trim() && !validHostPort(address) ? t("admin-pages-machines.address_invalid") : "";
   const ok = parsed && !addrErr;
   const close = () => !busy && onClose();
   const submit = async (e?: React.FormEvent) => {
@@ -682,7 +681,7 @@ function RepairDialog({ machine, onClose, onDone }: { machine: AdminMachine | nu
     setError("");
     try {
       const r = await repairConnector(machine.id, link.trim(), address.trim());
-      toast(r.restart_required ? "已重新配对；地址变了，重启 hub 后按新地址连" : "已重新配对，正在连接", "ok");
+      toast(r.restart_required ? t("admin-pages-machines.repaired_restart") : t("admin-pages-machines.repaired"), "ok");
       onDone();
       onClose();
     } catch (err) {
@@ -695,27 +694,26 @@ function RepairDialog({ machine, onClose, onDone }: { machine: AdminMachine | nu
     <Dialog
       open={Boolean(machine)}
       onClose={close}
-      title={machine ? `重新配对「${machine.name || machine.id}」` : ""}
+      title={machine ? t("admin-pages-machines.repair_title", { name: machine.name || machine.id }) : ""}
       width={540}
       footer={
         <>
           <Button tone="quiet" onClick={close} disabled={busy}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={busy} disabled={!ok} onClick={() => submit()}>
-            重新配对
+            {t("admin-pages-machines.repair")}
           </Button>
         </>
       }
     >
       <form onSubmit={submit} className="space-y-3.5">
         <p className="text-[12.5px] leading-relaxed text-ink-2">
-          这台电脑上的连接器不认这台 hub 了：它配对给了别的 hub，或者重装过。在那台电脑上再运行一次 <code className="font-mono text-[12px] text-ink">jarvis-link pair --listen</code>
-          （或在菜单栏 / 托盘里选「让 hub 来连」），把新打印的链接粘贴进来。
+          {tRich("admin-pages-machines.repair_body", { command: <code className="font-mono text-[12px] text-ink">jarvis-link pair --listen</code> })}
         </p>
         <ConnectorLinkField value={link} onChange={setLink} autoFocus />
-        <Field label="地址（可选）" hint="不填就用原来的地址；地址变了才填" value={address} onChange={setAddress} placeholder={machine?.address || "192.0.2.30:18663"} mono error={addrErr || undefined} />
-        {busy && <p className="text-[12.5px] text-ink-3">正在配对：hub 正在连那台电脑…</p>}
+        <Field label={t("admin-pages-machines.address_optional")} hint={t("admin-pages-machines.repair_address_hint")} value={address} onChange={setAddress} placeholder={machine?.address || "192.0.2.30:18663"} mono error={addrErr || undefined} />
+        {busy && <p className="text-[12.5px] text-ink-3">{t("admin-pages-machines.pairing")}</p>}
         {error && <FormError text={error} />}
         <button type="submit" hidden />
       </form>

@@ -1,6 +1,8 @@
 // 网络与访问: how the hub is reached (public URL, TLS, advertised addresses — restart to apply), the security settings
 // (read only), who may open this admin UI (narrow only: widening is the hub machine's call), the admin password.
 import { useEffect, useState } from "react";
+import { t } from "../../i18n";
+import { tRich } from "../../i18n/rich";
 import { Button, cx, Dialog, toast } from "../../ui/atoms";
 import { adminApi, AdminError, errorText } from "../api";
 import { AdminIcon } from "../icons";
@@ -23,14 +25,14 @@ export function Network() {
   if (!data) return loading ? <Loader /> : <ErrorBox error={error} onRetry={reload} />;
   return (
     <>
-      <PageHeader title="网络与访问" subtitle="hub 怎么被访问，以及谁能打开这个管理界面。" />
+      <PageHeader title={t("admin-pages-network.title")} subtitle={t("admin-pages-network.subtitle")} />
       <AccessCard v={data} onSaved={update} />
       <PublicCard v={data} onSaved={update} />
-      <Card title="候选地址" footer="自动发现的 IPv6 / 局域网地址加上面配置的地址；重启后按新配置重新发现。">
+      <Card title={t("admin-pages-network.endpoints")} footer={t("admin-pages-network.endpoints_footer")}>
         <Endpoints list={data.endpoints} />
       </Card>
-      <Card title="安全" footer="这些会影响 App 的信任判断，只能在 hub 机器上改 hub.json 的 security。">
-        <Line label="受信网段" hint="security.trusted_cidrs：命中的来源按局域网处理">
+      <Card title={t("admin-pages-network.security")} footer={t("admin-pages-network.security_footer")}>
+        <Line label={t("admin-pages-network.trusted_cidrs")} hint={t("admin-pages-network.trusted_cidrs_hint")}>
           {data.security.trusted_cidrs.length ? (
             <span className="flex flex-wrap justify-end gap-1">
               {data.security.trusted_cidrs.map((c) => (
@@ -40,11 +42,11 @@ export function Network() {
               ))}
             </span>
           ) : (
-            <span className="text-ink-3">没有</span>
+            <span className="text-ink-3">{t("admin-pages-network.none")}</span>
           )}
         </Line>
-        <Line label="公网明文" hint="security.allow_public_plaintext：允许公网经明文 HTTP 访问 App 接口">
-          {data.security.allow_public_plaintext ? <Tag tone="red">已开启</Tag> : <Tag tone="green">已关闭</Tag>}
+        <Line label={t("admin-pages-network.public_plaintext")} hint={t("admin-pages-network.public_plaintext_hint")}>
+          {data.security.allow_public_plaintext ? <Tag tone="red">{t("admin-pages-network.on")}</Tag> : <Tag tone="green">{t("admin-pages-network.off")}</Tag>}
         </Line>
       </Card>
       <PasswordCard />
@@ -77,7 +79,7 @@ function AccessCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
     try {
       const r = await adminApi<NetworkView>("/network/access", "PUT", { access: pick, cidrs: pick === "cidrs" ? list : [], force });
       setConfirm(false);
-      toast("访问范围已改，立刻生效", "ok");
+      toast(t("admin-pages-network.access_saved"), "ok");
       onSaved(r);
     } catch (e) {
       if (e instanceof AdminError && e.code === "would_lock_you_out" && !force) setConfirm(true);
@@ -89,23 +91,22 @@ function AccessCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
 
   return (
     <Card
-      title="管理界面的访问范围"
+      title={t("admin-pages-network.access_title")}
       right={<Tag tone={cur === "any" ? "orange" : "gray"}>{ACCESS_INFO[cur].label}</Tag>}
       footer={
         <>
-          范围外的人打开 /admin 和打不存在的地址一样，看不出有管理界面。这里只能收窄；放宽到更大的范围只能在 hub 机器上运行{" "}
-          <span className="font-mono">jarvisd hub admin access &lt;范围&gt;</span>，或者用部署脚本。
+          {tRich("admin-pages-network.access_footer", { command: <span className="font-mono">{t("admin-pages-network.access_command")}</span> })}
         </>
       }
     >
       {locked && (
         <div className="px-4 pt-3">
-          <Notice tone="gray" icon="lock" title="由部署时的 JARVIS_ADMIN_ACCESS 决定">
-            这台 hub 的环境变量指定了访问范围，这里不能改。改 .env（或 systemd 的 Environment）里的值后重启 hub。
+          <Notice tone="gray" icon="lock" title={t("admin-pages-network.access_env_title")}>
+            {t("admin-pages-network.access_env_body")}
           </Notice>
         </div>
       )}
-      <div role="radiogroup" aria-label="访问范围" className="grid gap-2 p-3 sm:grid-cols-2">
+      <div role="radiogroup" aria-label={t("admin-pages-network.access_label")} className="grid gap-2 p-3 sm:grid-cols-2">
         {ACCESS_ORDER.map((a) => {
           const allowed = !locked && canChoose(cur, a);
           const on = pick === a;
@@ -116,7 +117,7 @@ function AccessCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
               role="radio"
               aria-checked={on}
               disabled={!allowed}
-              title={!allowed && !locked ? "比现在的范围大，只能在 hub 机器上放宽" : undefined}
+              title={!allowed && !locked ? t("admin-pages-network.access_wider") : undefined}
               onClick={() => setPick(a)}
               className={cx(
                 "rounded-card px-3 py-2.5 text-left transition-[background-color,box-shadow,opacity] duration-150 disabled:cursor-not-allowed",
@@ -127,7 +128,7 @@ function AccessCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
               <div className="flex items-center gap-2">
                 <span className={cx("text-[13px] font-medium", on ? "text-accent-ink" : "text-ink")}>{ACCESS_INFO[a].label}</span>
                 <span className="font-mono text-[11px] text-ink-3">{a}</span>
-                {a === cur && <span className="ml-auto text-[11px] text-ink-3">当前</span>}
+                {a === cur && <span className="ml-auto text-[11px] text-ink-3">{t("admin-pages-network.current")}</span>}
                 {a !== cur && !allowed && !locked && <AdminIcon name="lock" size={12} className="ml-auto text-ink-3" />}
               </div>
               <div className="mt-1 text-[11.5px] leading-snug text-ink-2">{ACCESS_INFO[a].detail}</div>
@@ -139,48 +140,50 @@ function AccessCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
       {pick === "cidrs" && !locked && (
         <div className="px-4 pb-3">
           <Field
-            label="网段"
-            hint={cur === "cidrs" ? "一行一个。只能删掉网段或换成更小的。" : "一行一个，例如 192.0.2.0/24 或 VPN 的网段。"}
+            label={t("admin-pages-network.cidrs")}
+            hint={cur === "cidrs" ? t("admin-pages-network.cidrs_hint_narrow") : t("admin-pages-network.cidrs_hint")}
             value={cidrs}
             onChange={setCidrs}
             placeholder={"192.0.2.0/24\n2001:db8::/48"}
             mono
             multiline
-            error={badCidr ? `「${badCidr}」不是网段` : undefined}
+            error={badCidr ? t("admin-pages-network.cidr_invalid", { value: badCidr }) : undefined}
           />
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-inset px-4 py-2.5">
         <span className="min-w-0 flex-1 text-[12px] text-ink-2">
-          你现在从 <span className="font-mono text-ink">{v.you.address}</span>
-          {v.you.tls ? "（TLS）" : ""} 访问
-          {dirty && lockout && <span className="text-red">；改成「{ACCESS_INFO[pick].label}」后你就进不来了</span>}
+          {tRich(v.you.tls ? "admin-pages-network.you_from_tls" : "admin-pages-network.you_from", { address: <span className="font-mono text-ink">{v.you.address}</span> })}
+          {dirty && lockout && <span className="text-red">{t("admin-pages-network.you_locked_out", { scope: ACCESS_INFO[pick].label })}</span>}
         </span>
         {error && <span className="w-full text-[12px] text-red sm:order-last">{error}</span>}
         {!locked && (
           <Button tone={dirty && lockout ? "danger" : "primary"} disabled={!dirty || Boolean(badCidr) || (pick === "cidrs" && list.length === 0)} busy={busy} onClick={() => (dirty && lockout ? setConfirm(true) : save())}>
-            应用
+            {t("admin-pages-network.apply")}
           </Button>
         )}
       </div>
       <Dialog
         open={confirm}
         onClose={() => setConfirm(false)}
-        title="改完你就进不来了"
+        title={t("admin-pages-network.lockout_title")}
         footer={
           <>
             <Button tone="quiet" onClick={() => setConfirm(false)}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button tone="danger" busy={busy} onClick={() => save(true)}>
-              仍然修改
+              {t("admin-pages-network.lockout_confirm")}
             </Button>
           </>
         }
       >
         <p className="text-[13px] leading-relaxed text-ink-2">
-          你现在的地址 <span className="font-mono text-ink">{v.you.address}</span> 不在「{ACCESS_INFO[pick].label}」里。改完这个页面会变成打不开；要再放宽，只能到 hub 机器上运行{" "}
-          <span className="font-mono">jarvisd hub admin access</span>。
+          {tRich("admin-pages-network.lockout_body", {
+            address: <span className="font-mono text-ink">{v.you.address}</span>,
+            scope: ACCESS_INFO[pick].label,
+            command: <span className="font-mono">jarvisd hub admin access</span>,
+          })}
         </p>
       </Dialog>
     </Card>
@@ -205,7 +208,7 @@ function PublicCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
     setError("");
     try {
       const r = await adminApi<NetworkView>("/network/public", "PUT", { public_url: url.trim(), tls_listen: tls.trim(), advertise: lines(adv) });
-      toast("已保存，重启 hub 后生效", "ok");
+      toast(t("admin-pages-network.public_saved"), "ok");
       onSaved(r);
     } catch (e) {
       setError(errorText(e));
@@ -214,31 +217,31 @@ function PublicCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
     }
   };
   return (
-    <Card title="公网和 TLS" footer="保存后写进 hub.json，重启 hub 才生效。只填地址不会开端口、放行防火墙或更新 DNS。">
+    <Card title={t("admin-pages-network.public_title")} footer={t("admin-pages-network.public_footer")}>
       <div className="space-y-3.5 px-4 py-3.5">
         {v.public_url_from_env ? (
-          <Field label="对外地址（public_url）" hint="由部署时的 JARVIS_PUBLIC_URL 决定（Docker 的 .env），在那里改" value={url} onChange={() => {}} mono disabled />
+          <Field label={t("admin-pages-network.public_url")} hint={t("admin-pages-network.public_url_env")} value={url} onChange={() => {}} mono disabled />
         ) : (
-          <Field label="对外地址（public_url）" hint="配对二维码里的地址，旧客户端也用它" value={url} onChange={setUrl} placeholder="http://hub.example.com:18660" mono />
+          <Field label={t("admin-pages-network.public_url")} hint={t("admin-pages-network.public_url_hint")} value={url} onChange={setUrl} placeholder="http://hub.example.com:18660" mono />
         )}
         <Field
-          label="TLS 监听（public.tls_listen）"
-          hint={v.tls ? `正在监听 ${v.tls.listen}，指纹 ${v.tls.fp.slice(0, 12)}…；留空关掉 TLS（Persona Link、互联都要它）` : "例如 :18662。开启后公网和互联只走这个端口；第一次开会生成自签证书"}
+          label={t("admin-pages-network.tls_listen")}
+          hint={v.tls ? t("admin-pages-network.tls_listen_on", { listen: v.tls.listen, fp: v.tls.fp.slice(0, 12) }) : t("admin-pages-network.tls_listen_hint")}
           value={tls}
           onChange={setTls}
           placeholder=":18662"
           mono
         />
-        <Field label="额外候选地址（public.advertise）" hint="一行一个，推荐完整的 HTTPS URL，例如用 DDNS 维护的域名" value={adv} onChange={setAdv} placeholder="https://hub.example.com:18662" mono multiline />
+        <Field label={t("admin-pages-network.advertise")} hint={t("admin-pages-network.advertise_hint")} value={adv} onChange={setAdv} placeholder="https://hub.example.com:18662" mono multiline />
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-ink-3">
           <span>
-            自动发布 IPv6：<span className="text-ink-2">{v.advertise_ipv6 ? "开" : "关"}</span>
+            {tRich("admin-pages-network.advertise_ipv6", { value: <span className="text-ink-2">{v.advertise_ipv6 ? t("admin-pages-network.yes") : t("admin-pages-network.no")}</span> })}
           </span>
           <span>
-            自动发布局域网地址：<span className="text-ink-2">{v.advertise_lan ? "开" : "关"}</span>
+            {tRich("admin-pages-network.advertise_lan", { value: <span className="text-ink-2">{v.advertise_lan ? t("admin-pages-network.yes") : t("admin-pages-network.no")}</span> })}
           </span>
           <span>
-            明文监听：<span className="font-mono text-ink-2">{v.listen}</span>
+            {tRich("admin-pages-network.plain_listen", { value: <span className="font-mono text-ink-2">{v.listen}</span> })}
           </span>
         </div>
         {error && (
@@ -249,10 +252,10 @@ function PublicCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
       </div>
       <div className="flex items-center justify-end gap-2 bg-inset px-4 py-2.5">
         <Button tone="quiet" disabled={!dirty} onClick={reset}>
-          还原
+          {t("admin-pages-network.revert")}
         </Button>
         <Button tone="primary" disabled={!dirty} busy={busy} onClick={save}>
-          保存
+          {t("common.save")}
         </Button>
       </div>
     </Card>
@@ -278,7 +281,7 @@ function PasswordCard() {
       setCur("");
       setPw("");
       setAgain("");
-      toast("密码已改，别处登录的都已退出", "ok");
+      toast(t("admin-pages-network.password_saved"), "ok");
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -286,18 +289,18 @@ function PasswordCard() {
     }
   };
   return (
-    <Card title="管理员密码" footer="改密码后，别的浏览器上的登录全部失效。忘了密码在 hub 机器上运行 jarvisd hub admin reset-password。">
+    <Card title={t("admin-pages-network.password_title")} footer={t("admin-pages-network.password_footer")}>
       <form onSubmit={save}>
         <div className="grid gap-3 px-4 py-3.5 sm:grid-cols-3">
-          <Field label="现在的密码" type="password" value={cur} onChange={setCur} autoComplete="current-password" />
-          <Field label="新密码" type="password" value={pw} onChange={setPw} autoComplete="new-password" error={short ? "至少 8 个字符" : undefined} />
-          <Field label="再输一遍" type="password" value={again} onChange={setAgain} autoComplete="new-password" error={mismatch ? "两次不一样" : undefined} />
+          <Field label={t("admin-pages-network.password_current")} type="password" value={cur} onChange={setCur} autoComplete="current-password" />
+          <Field label={t("admin-pages-network.password_new")} type="password" value={pw} onChange={setPw} autoComplete="new-password" error={short ? t("admin-pages-network.password_short") : undefined} />
+          <Field label={t("admin-pages-network.password_again")} type="password" value={again} onChange={setAgain} autoComplete="new-password" error={mismatch ? t("admin-pages-network.password_mismatch") : undefined} />
         </div>
         <div className="flex items-center justify-end gap-3 bg-inset px-4 py-2.5">
           {error && <span className="min-w-0 flex-1 text-[12px] text-red">{error}</span>}
           <Button type="submit" tone="primary" busy={busy} disabled={!ok}>
             <AdminIcon name="key" size={13} />
-            改密码
+            {t("admin-pages-network.password_change")}
           </Button>
         </div>
       </form>
