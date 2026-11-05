@@ -265,6 +265,7 @@ func (h *Hub) routes() http.Handler {
 	}
 	h.tokenRoutes(api)
 	h.portRoutes(api)
+	h.messagingRoutes(api)
 	h.pairRoutes(api)
 	h.linkRoutes(api)
 	h.publicRoutes(api)

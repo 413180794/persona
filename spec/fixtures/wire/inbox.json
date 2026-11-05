@@ -29,6 +29,12 @@
             "start_position": "10",
             "mention_position": "10"
           },
+          "conversation": {
+            "source": "lark",
+            "id": "feed_example",
+            "start_position": "10",
+            "mention_position": "10"
+          },
           "agent": {
             "state": "drafted",
             "machine_id": "m1",

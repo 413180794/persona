@@ -105,7 +105,7 @@ App 调 hub：`/api/v1/messaging` 和 `/api/v1/messaging/{source}/…`。hub 鉴
 更新的扩展发来 hub 不认识的片段 `kind`，hub 把它换成它 `text` 的文字片段（没有字就去掉），不认识的文档块换成段落，再查一遍（`fitMessagingAnswer`）；其余不认识的枚举值仍是 502，要加就升版本。App 拿到的都是它认得的。字符串、数组有上限（schema 里写着），超了也是 502。
 
 **发送不重复**：hub 不给 `messaging` 的发送套回执（回执会把「先去设置里打开」「加密内容过期」这类可以改正后重试的拒绝也存下来、按同一个 `client_id` 一直重放）。
-扩展自己按 `client_id` 去重：同一个 `client_id` 只发出一次，重试回第一次的结果；被拒绝（`input_required`、`unsupported`、`not_signed_in`、`account_changed`、`rate_limited`）的不算发过，改正后用同一个 `client_id` 再发。
+扩展自己按 `client_id` 去重：同一个 `client_id` 只发出一次，重试回第一次的结果；还没开始写 vendor 就失败的（读账号超时、正文不合格、被拒绝）和被拒绝（`input_required`、`unsupported`、`not_signed_in`、`account_changed`、`rate_limited`）的都不算发过，改正后用同一个 `client_id` 再发。同一个 `client_id` 上一次还没结束、或扩展自己也不知道发没发出去时，回 502 `result_unknown`（不要回没有 `message_id` 的 2xx）；App 不自动重发，读一次确认。
 
 **错误**：`{error: "给人看的一句", code?}`，`code` 只用下面这些（App 按它们做事，别的当一般错误，显示 `error`）：
 

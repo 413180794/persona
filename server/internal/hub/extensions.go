@@ -131,6 +131,8 @@ type extensions struct {
 	ctx  context.Context
 	mu   sync.Mutex
 	byID map[string]*hubExtension
+	// messaging coalesces the messaging sources' changes before they reach the apps (extension_messaging.go).
+	messaging messagingChanges
 	// skillsSent remembers which skill digests each machine was sent (machine id → *sync.Map of name → digest), so
 	// the files go once (again after the hub restarts).
 	skillsSent sync.Map
@@ -798,6 +800,10 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 	s.OnEvent = func(event string, params json.RawMessage) {
 		if event == "api.broadcast" {
 			ps.apiBroadcast(id, params)
+			return
+		}
+		if event == "messaging.changed" {
+			ps.messagingChanged(id, params)
 			return
 		}
 		if event == "agentsrc.updated" {

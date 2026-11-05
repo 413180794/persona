@@ -57,6 +57,10 @@ func TestMain(m *testing.M) {
 		serveQuotaExtensionForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "messaging" {
+		serveMessagingExtensionForTest()
+		return
+	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "api" {
 		serveAPIExtensionForTest()
 		return

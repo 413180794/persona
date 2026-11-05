@@ -14,6 +14,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/channel"
 )
 
@@ -431,6 +432,25 @@ func (m *Manifest) Validate() error {
 				}
 			}
 		}
+		if name == "messaging" {
+			if !slices.Contains(m.Activation(), OnStartup) {
+				bad("contributes.messaging: the 消息 entry is there all the time and pushes changes: activation_events on_startup")
+			}
+			pages := map[string]bool{}
+			for _, u := range m.UIs() {
+				pages[u.ID] = u.Placement == "extension_page" || u.Placement == "plugin_page"
+			}
+			for _, it := range m.Messaging() {
+				if it.SettingsUI != "" && !pages[it.SettingsUI] {
+					bad("contributes.messaging: %s: settings_ui %q is not an extension_page of this extension", it.ID, it.SettingsUI)
+				}
+				for _, l := range it.Links {
+					if ui, ok := strings.CutPrefix(l.Opens, "ui:"); ok && !pages[ui] {
+						bad("contributes.messaging: %s: a link opens %q, not an extension_page of this extension", it.ID, ui)
+					}
+				}
+			}
+		}
 		if name == "events" && !slices.Contains(m.Activation(), OnStartup) {
 			bad("contributes.events: events are told to a plugin that runs: activation_events on_startup")
 		}
@@ -695,6 +715,13 @@ func (m *Manifest) Connectors() []ConnectorItem {
 func (m *Manifest) APIs() []APIItem {
 	var out []APIItem
 	_ = json.Unmarshal(m.Contributes["api"], &out)
+	return out
+}
+
+// Messaging are the manifest's contributions to messaging: its messaging sources.
+func (m *Manifest) Messaging() []wire.MessagingItem {
+	var out []wire.MessagingItem
+	_ = json.Unmarshal(m.Contributes["messaging"], &out)
 	return out
 }
 

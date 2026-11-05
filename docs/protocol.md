@@ -630,6 +630,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`；可选 `attention_reason`：会话在「需要你」时，宿主说的原因（botmux 的 attention reason）；可选 `external_url`：在 Persona 之外打开它的地方（botmux 会话的飞书话题），见 `docs/engines.md`「botmux」） |
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
 | `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话）；`settings_changed`（可选布尔值，默认 false，本批包含消息展示设置变化，与会话 ID 独立；客户端同时重读设置）；`account`（这些会话所在的 lark-connector 账号编号）；`ol_account`（只在不是默认账号时有，等于 `account`：读这些会话要带的参数，`docs/feishu.md`「多账号」）。hub 跟随 lark-connector 每个已登录账号的实时事件 `/agent/v1/events`，每个账号每 400ms 最多发一次，推给所有客户端。 |
+| `messaging` | `source`（消息来源 id）、`conversations`（有变化的会话 id）、`account`（可选，哪个账号的）、`settings_changed`（可选）：扩展 `messaging.changed` 合并一秒后推给所有客户端（`docs/extension-messaging.md`「九」） |
 | `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束）。约每 80 ms 一条；App 每个对话最多每秒画 5 次，停顿后的第一条立刻画、之后画最新的，空串立刻画，消息落进 transcript 或重连时丢掉还没画的（`DeltaPacer`） |
 | `live` | `machine_id`, `session_id`, `live`（`SessionLive` 或 `null`）：工作中的 Claude 的状态行，只发给订阅了该会话并声明 `session_live` 的连接，见下「实时状态」 |
@@ -1692,7 +1693,7 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 `InboxItem`：`id`、`source`（lark / mail，或连接器的 id：github）、`kind`（dm / mention / group / bot / mail；连接器的是它自己的：review_requested / mention / team_mention / author / ci_failed / assign）、`account`（`feishu` 或邮箱账号 id）、
 `account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
 `tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / dismissed / read / replied；dismissed 是用户「忽略」的）、`version`（这件现在装着什么，有新消息并进来就变；批量已处理时带回，旧 hub 没有）、
-`lark{account_id,ol_account,feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}`（`account_id`：会话所在的 lark-connector 账号编号，旧记录为 0 = 账号 1；`ol_account`：不是默认账号时有，打开会话、调飞书接口要带的 `ol_account`；`read_position`：这个会话在飞书里的已读位置，每次采集都刷新；`reply_to`：最后一条别人发的消息的 id，`thread_kind`：它在哪，空 = 在会话里、`topic` = 话题群的话题、`thread` = 普通群里的话题回复，这两个在采到新消息时刷新，旧数据没有）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
+`lark{account_id,ol_account,feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}`（`account_id`：会话所在的 lark-connector 账号编号，旧记录为 0 = 账号 1；`ol_account`：不是默认账号时有，打开会话、调飞书接口要带的 `ol_account`；`read_position`：这个会话在飞书里的已读位置，每次采集都刷新；`reply_to`：最后一条别人发的消息的 id，`thread_kind`：它在哪，空 = 在会话里、`topic` = 话题群的话题、`thread` = 普通群里的话题回复，这两个在采到新消息时刷新，旧数据没有）、`conversation{source,id,account?,start_position?,read_position?,mention_position?}`（列表里有：飞书条目在消息来源里打开的位置，`source` 是连接器 id，`account` 是非默认账号时要带的 `account`；有这个来源的 App 用它，`docs/extension-messaging.md`「九」）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
 `translations{<目标语言>:{subject,preview}}`（hub 提前翻好的外文邮件，`docs/ios.md`「翻译」）、`doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
 （`kind=doc`，`docs/inbox.md`「云文档」）；`agent.changes:[{ref,field,value}]` 是 AI 分身随草稿提议的改状态；
 `connector{thread,label,url,open_url,reply_to,can_reply,rule_tier}`：连接器的一件（`docs/inbox.md`「连接器：GitHub」），App 只画这一个块、不认识具体来源：
@@ -1713,6 +1714,10 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 | GET | `/api/v1/kb/{kind}/{id}` | `{detail,agents?}`；项目可额外返回相关在线 Agent |
 | PUT | `/api/v1/kb/{kind}/{id}` | body 为 `kb.Update`，可更新名称、标签、重要性、摘要及项目属性；返回 `{id}`，字段见 [knowledge.md](knowledge.md) |
 | GET | `/api/v1/kb-search?q=&messages=0` | `{hits}`；默认包含消息，`messages=0` 排除消息 |
+
+## 消息来源 API（`/api/v1/messaging`）
+
+扩展点 `messaging` 的来源（第一个是飞书）：`GET /api/v1/messaging` 列来源，`/api/v1/messaging/{source}/…` 是会话、消息、发送等，hub 鉴权后转给扩展、按 schema 查回答。规格见 [extension-messaging.md](extension-messaging.md)；下面的 `/api/v1/lark` 是迁移前的老接口，Mac、Android、网页迁完前保留（#2138）。
 
 ## 飞书 API（lark-connector）
 

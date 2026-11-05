@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
@@ -76,6 +77,9 @@ type InboxItem struct {
 	DoneAt      *time.Time `json:"done_at,omitempty"`
 	DoneBy      string     `json:"done_by,omitempty"` // user | dismissed | read | replied
 	Lark        *InboxLark `json:"lark,omitempty"`
+	// Conversation is where the item opens in a messaging source (docs/extension-messaging.md「九」, #2138): listed
+	// only, from Lark; an app with the source opens it there, an older one uses Lark.
+	Conversation *wire.MessagingConversationRef `json:"conversation,omitempty"`
 	Mail        *InboxMail `json:"mail,omitempty"`
 	Doc         *InboxDoc  `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_blocks.go)
 	// Translations by target language: new foreign mail, translated before it is opened (inbox_translate.go).
@@ -156,6 +160,20 @@ type InboxMail struct {
 
 func (it *InboxItem) open() bool { return it.DoneAt == nil }
 
+// conversationOf is where a chat item opens in its messaging source: the source is the connector's id ("lark", the
+// lark-connector extension's source of the same id), the account the one the apps would pass as ol_account.
+func conversationOf(it *InboxItem) *wire.MessagingConversationRef {
+	if it.Lark == nil || it.Lark.FeedID == "" || it.Source == "" {
+		return nil
+	}
+	ref := &wire.MessagingConversationRef{Source: it.Source, ID: it.Lark.FeedID, StartPosition: it.Lark.StartPosition,
+		ReadPosition: it.Lark.ReadPosition, MentionPosition: it.Lark.MentionPosition}
+	if it.Lark.OLAccount > 0 {
+		ref.Account = strconv.Itoa(it.Lark.OLAccount)
+	}
+	return ref
+}
+
 // listed is the item as the list shows it (no context).
 func (it *InboxItem) listed() InboxItem {
 	c := *it
@@ -164,6 +182,7 @@ func (it *InboxItem) listed() InboxItem {
 	c.Meta, c.Group = nil, nil
 	c.Mutes = mutesOf(it)
 	c.Version = inboxVersion(it)
+	c.Conversation = conversationOf(it)
 	if it.Agent != nil { // the copy is encoded after the lock is released
 		a := *it.Agent
 		c.Agent = &a

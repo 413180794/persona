@@ -114,6 +114,11 @@ struct MacAgentMenu: Commands {
             }
             .keyboardShortcut("j", modifiers: .command)
             .disabled(key.flatMap { model.session($0) } == nil || key.flatMap { model.session($0)?.assistant } == true)
+            // ⌘I: back to the chat's composer from its messages, the inspector or the link panel, as the web's Mod+I
+            // (web/src/lib/shortcuts.ts `focus-input`). The chat's composer listens for `composerFocus`.
+            Button("聚焦输入框") { if let key { model.composerFocus = key } }
+                .keyboardShortcut("i", modifiers: .command)
+                .disabled(key == nil)
             Button("显示会话信息") { ask(.inspector) }
                 .keyboardShortcut("i", modifiers: [.command, .option])
                 .disabled(key == nil)

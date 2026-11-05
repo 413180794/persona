@@ -458,6 +458,18 @@ var Points = map[string]Point{
 		}
 		return a.ID, nil
 	}},
+	// messaging: a messaging source (docs/extension-messaging.md, #2138): the app's 消息 entry, its API under
+	// /api/v1/messaging/<id>/ on the extension's HTTP side.
+	"messaging": {Name: "messaging", Namespace: "messaging", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
+		var m wire.MessagingItem
+		if err := strict(raw, &m); err != nil {
+			return "", err
+		}
+		if err := wire.ValidateJSON("MessagingItem", raw); err != nil {
+			return m.ID, fmt.Errorf("messaging %s: %w", m.ID, err)
+		}
+		return m.ID, nil
+	}},
 	"ui": {Name: "ui", Namespace: "ui", Version: UIVersion, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
 		var u UIItem
 		if err := strict(raw, &u); err != nil {

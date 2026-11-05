@@ -32,7 +32,8 @@ def features():
             "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click", "terminal_mouse"] if TERMINAL_CONTROL else []) + (
                 ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] if FULL else []) + (
-                ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else [])
+                ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else []) + (
+                ["messaging"] if os.environ.get("MOCK_MESSAGING") == "1" else [])
 
 
 def identity():
@@ -7365,6 +7366,13 @@ MOCK_SKILLS = [{"name": "lark-connector", "description": "Feishu / Lark through 
                {"name": "weekly-report", "description": "Draft the week's report from the calendar, docs and chats.", "source": "user"}]
 
 LIVE = []  # (send, subscribed session ids) of each open WebSocket
+# MOCK_MESSAGING=1 (#2138): the messaging extension point over the mock's Feishu (scripts/mock/lark_messaging.py):
+# GET /api/v1/messaging lists the source lark, /api/v1/messaging/lark/… answers in the protocol's shapes, the feature
+# messaging is on, every {type: lark} push goes out as {type: messaging} too.
+MOCK_MESSAGING = os.environ.get("MOCK_MESSAGING") == "1"
+if MOCK_MESSAGING:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lark_messaging
 
 
 def sessions_for_delta_app(obj, have):
@@ -9196,6 +9204,7 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if self.token_refused(): return
+        if MOCK_MESSAGING and p.startswith("/api/v1/messaging") and lark_messaging.route(self, "GET", p, q, b""): return
         if net_control(p, q): return self.send_json({"ok": True, **NET})
         if p == "/mock/fs-watch" and FS_LIVE:  # what the browsers asked to watch now
             with FAULT_LOCK:
@@ -9845,6 +9854,8 @@ class H(BaseHTTPRequestHandler):
             return self.upload()
         self.last_body = self.body()
         p = urlparse(self.path).path
+        if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith("/api/v1/extensions/lark-connector/-/ui/")) and \
+                lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if pins_route(self, p): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if doctor_route(self, p, "POST"): return
@@ -11042,6 +11053,8 @@ class H(BaseHTTPRequestHandler):
                 n = len(data)
                 hdr = bytes([0x81]) + (bytes([n]) if n < 126 else bytes([126]) + struct.pack(">H", n) if n < 65536 else bytes([127]) + struct.pack(">Q", n))
                 self.wfile.write(hdr + data); self.wfile.flush()
+            if MOCK_MESSAGING and obj.get("type") == "lark":  # what the lark-connector extension's messaging.changed becomes
+                send(lark_messaging.event_of(obj))
 
         SOCKETS.add(self.connection)
         subscribed = set()
