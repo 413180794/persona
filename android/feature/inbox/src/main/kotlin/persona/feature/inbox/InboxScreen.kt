@@ -101,6 +101,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     var composeDraft by remember { mutableStateOf<MailDraft?>(null) }
     val mailTransport by repository.mailTransport.collectAsStateWithLifecycle()
 
+    val haptics = rememberHaptics()
     fun refresh(collectNow: Boolean = true) {
         if (refreshing) return
         refreshing = true
@@ -115,6 +116,8 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     fun markDone(id: String, done: Boolean) {
         if (id in pending) return
         pending[id] = done
+        // As iOS InboxStore: filing buzzes success at once, putting back a light tap.
+        haptics(doneHaptic(done))
         scope.launch {
             try { repository.setDone(id, done); error = null }
             catch (e: CancellationException) { throw e }
@@ -129,6 +132,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         val asked = targets.filter { it.id !in pending }
         if (asked.isEmpty()) return
         asked.forEach { pending[it.id] = done }
+        haptics(doneHaptic(done))
         scope.launch {
             try {
                 val result = repository.bulk(asked, action)
@@ -146,6 +150,8 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         }
     }
     LaunchedEffect(repository) { refresh(collectNow = false) }
+    // The title while the hub is out of reach opens why, since when and 立即重试 in place (iOS ConnectionTitle).
+    val connectionDetails = rememberConnectionDetails(shownConnection, { navigator.navigate(ConnectionSettingsRoute) }, onRetry = { refresh(collectNow = false) })
     val bulk = bulkTargets(groups, records)
     val scopeText = bulkScope(res, section, sources.firstOrNull { it.first == source && source.isNotEmpty() }?.second,
         if (kind == "agent") "Agent" else kindLabel(res, kind), query)
@@ -210,7 +216,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             summary = inboxSummary(res, overall, ::working),
             subtitle = inboxTitle(shownConnection).takeIf { shownConnection != ConnectionState.Online },
             titleBusy = shownConnection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
-            onTitleClick = if (shownConnection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
+            onTitleClick = if (shownConnection == ConnectionState.Online) null else connectionDetails,
             state = scroll, refreshing = refreshing, onRefresh = { refresh() },
             actions = {
                 if (mailTransport != null) {
@@ -458,3 +464,6 @@ internal fun ReplyStatus(state: ReplyComposerState) {
         ?: if (state.sending) PendingBadge(PendingStatus.Sending) else Unit
     state.error?.let { JNotice(androidx.compose.ui.res.stringResource(it.text), status = Status.NeedsYou) }
 }
+
+/** As iOS InboxStore: filing an item as 已处理 buzzes success at once, putting it back a light tap. */
+internal fun doneHaptic(done: Boolean): Haptic = if (done) Haptic.Success else Haptic.Tap

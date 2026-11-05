@@ -28,21 +28,25 @@ class FeedbackGate(
         if (error is CancellationException || !operation) return true
         val feedback = operationFeedback(error)
         val message = localize?.invoke(feedback.text) ?: feedback.message
-        if (connection() != ConnectionState.Online) {
+        val offline = connection() != ConnectionState.Online
+        if (offline) {
             val now = clock()
             if (lastOffline[message]?.let { now - it < 4_000 } == true) return true
             lastOffline[message] = now
         }
-        return notice(message)
+        // As iOS: a failure buzzes as an error; one that only waits for the hub, as a nudge (Haptic.Attention).
+        return emit(message, if (offline) Haptic.Attention else Haptic.Error)
     }
 
     @Synchronized
-    override fun notice(message: String): Boolean {
+    override fun notice(message: String): Boolean = emit(message, null)
+
+    private fun emit(message: String, haptic: Haptic?): Boolean {
         val now = clock()
         lastNotices.entries.removeAll { now - it.value >= 4_000 }
         if (lastNotices[message]?.let { now - it < 4_000 } == true) return true
         lastNotices[message] = now
-        queue.tryEmit(FeedbackNotice(message))
+        queue.tryEmit(FeedbackNotice(message, haptic = haptic))
         return true
     }
 

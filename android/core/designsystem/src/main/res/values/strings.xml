@@ -256,6 +256,42 @@
     <string name="designsystem_queue_actions">Queued message actions</string>
     <string name="designsystem_queue_item">Item %1$d: %2$s</string>
     <string name="designsystem_draft_ready">Persona drafted a reply</string>
+    <!-- Connection details (the title's sheet while the hub is out of reach) -->
+    <string name="designsystem_connection_online">Connected to the hub</string>
+    <string name="designsystem_connection_connecting">Connecting…</string>
+    <string name="designsystem_connection_updating">Updating…</string>
+    <string name="designsystem_connection_waiting">Waiting for network</string>
+    <string name="designsystem_connection_local_network">Needs local network access</string>
+    <string name="designsystem_connection_certificate">The hub\'s certificate changed</string>
+    <string name="designsystem_connection_revoked">Pairing is no longer valid</string>
+    <string name="designsystem_connection_online_text">Messages and status are up to date.</string>
+    <string name="designsystem_connection_connecting_text">There is a network, but the hub can\'t be reached (its computer may be off, asleep or offline). It keeps retrying by itself.</string>
+    <string name="designsystem_connection_updating_text">Connected again. Catching up on the messages and requests from while it was away.</string>
+    <string name="designsystem_connection_waiting_text">This phone has no network right now. It reconnects once the network is back, and messages written meanwhile go out by themselves.</string>
+    <string name="designsystem_connection_local_network_text">To reach a hub on this network, Persona needs local network access. Allow it in connection settings.</string>
+    <string name="designsystem_connection_certificate_text">The hub\'s certificate no longer matches the one from pairing, so Persona won\'t connect. Check it in connection settings.</string>
+    <string name="designsystem_connection_revoked_text">This phone\'s pairing was revoked. Pair again in connection settings.</string>
+    <string name="designsystem_connection_retry">Retry now</string>
+    <string name="designsystem_connection_settings">Connection settings</string>
+    <string name="designsystem_connection_last_failure">Last failure: %1$s</string>
+    <string name="designsystem_connection_retrying">Retrying…</string>
+    <string name="designsystem_connection_last_online">Last connected: %1$s</string>
+    <plurals name="designsystem_connection_retry_in">
+        <item quantity="one">Retrying in %1$d second</item>
+        <item quantity="other">Retrying in %1$d seconds</item>
+    </plurals>
+    <plurals name="designsystem_connection_waiting_messages">
+        <item quantity="one">%1$d message sends once connected</item>
+        <item quantity="other">%1$d messages send once connected</item>
+    </plurals>
+    <plurals name="designsystem_connection_seconds_ago">
+        <item quantity="one">%1$d second ago</item>
+        <item quantity="other">%1$d seconds ago</item>
+    </plurals>
+    <plurals name="designsystem_connection_minutes_ago">
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
     <string name="designsystem_workflow_show_agents">Show agents</string>
     <string name="designsystem_workflow_hide_agents">Hide agents</string>
 </resources>

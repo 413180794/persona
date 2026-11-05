@@ -17,6 +17,15 @@ internal enum class InteractionSubmission(@androidx.annotation.StringRes val not
     ResolvedElsewhere(R.string.chat_interaction_resolved_elsewhere, true),
     PromptChanged(R.string.chat_interaction_prompt_changed, true),
     Unknown(R.string.chat_interaction_unknown, false),
+    ;
+
+    /** As iOS AppModel.resolve: answered buzzes success, a changed dialog a nudge, an unconfirmed answer an error. */
+    val haptic: persona.core.designsystem.Haptic? get() = when (this) {
+        Answered -> persona.core.designsystem.Haptic.Success
+        PromptChanged -> persona.core.designsystem.Haptic.Attention
+        Unknown -> persona.core.designsystem.Haptic.Error
+        ResolvedElsewhere -> null
+    }
 }
 
 internal suspend fun submitInteraction(submit: suspend () -> Unit): InteractionSubmission = try {

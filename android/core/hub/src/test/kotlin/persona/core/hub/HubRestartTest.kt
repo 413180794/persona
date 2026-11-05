@@ -145,6 +145,32 @@ class HubRestartTest {
         }
     }
 
+    @Test fun theBackoffSaysWhenTheNextTryIsAndAConnectionClearsTheFailure() = runBlocking {
+        Fixture().use { fixture ->
+            val first = fixture.start()
+            val seen = java.util.Collections.synchronizedList(mutableListOf<persona.core.contracts.api.ConnectionDiagnostics>())
+            val watcher = CoroutineScope(StandardTestDispatcher(fixture.scheduler)).launch { fixture.connection.diagnostics.collect { seen += it } }
+            fixture.reachable = false
+            first.fail()
+            fixture.pump(3_000)
+            // While it waits between attempts it says when the next is, and why the last one failed (in the user's words).
+            val waiting = seen.filter { it.nextRetryAt != null }
+            assertTrue("no backoff seen: $seen", waiting.isNotEmpty())
+            assertTrue(waiting.all { it.lastAttemptFailure == endpointResultLabel(HubError.Transport) })
+
+            fixture.reachable = true
+            fixture.connection.reconnect()
+            fixture.pump(2_000)
+            assertEquals(ConnectionState.Online, fixture.connection.state.value)
+            val now = fixture.connection.diagnostics.value
+            assertNull(now.nextRetryAt)
+            assertNull(now.lastAttemptFailure)
+            // Settings keep the raw reason for diagnosis.
+            assertNotNull(now.lastDisconnectReason)
+            watcher.cancel()
+        }
+    }
+
     @Test fun aFreshStartAfterAVisibleLengthDropSurfacesSoScreensRefetch() = runBlocking {
         Fixture().use { fixture ->
             val first = fixture.start()

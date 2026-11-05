@@ -110,6 +110,10 @@ internal fun AgentsScreen(
     }
     fun open(session: SessionKey) { navigator.navigate(ChatRoute(session.machineId, session.sessionId)) }
     fun connectionSettings() { navigator.navigate(ConnectionSettingsRoute) }
+    // The title while the hub is out of reach opens why, since when and 立即重试 in place (iOS ConnectionTitle).
+    val haptics = persona.core.designsystem.rememberHaptics()
+    LaunchedEffect(model) { model.haptics.collect { haptics(it) } }
+    val connectionDetails = persona.core.designsystem.rememberConnectionDetails(connection, ::connectionSettings, onRetry = model::refresh)
     fun openRow(row: AgentSession) {
         if (!row.session.isLive) {
             historyMachine = row.session.machineId
@@ -189,9 +193,10 @@ internal fun AgentsScreen(
     }
     Box(Modifier.fillMaxSize()) {
         JListPage(
-            title = names[page.settings.machineFilter] ?: "Agents", summary = summary, subtitle = subtitle, greet = true,
+            title = if (connection == ConnectionState.Online) names[page.settings.machineFilter] ?: "Agents" else connection.title,
+            summary = summary, subtitle = subtitle, greet = true,
             titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
-            onTitleClick = ::connectionSettings, refreshing = refreshing, onRefresh = model::refresh,
+            onTitleClick = if (connection == ConnectionState.Online) null else connectionDetails, refreshing = refreshing, onRefresh = model::refresh,
             actions = {
                 JIconButton(PhIcons.ListChecks, stringResource(R.string.agents_action_todos), { navigator.navigate(persona.core.navigation.TodosRoute) })
                 JIconButton(PhIcons.Plus, stringResource(R.string.agents_action_new_session), { newSession() })

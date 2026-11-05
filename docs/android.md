@@ -106,6 +106,17 @@ Android 使用 `:platform:notify` 的前台服务共用 hub WebSocket，不依�
 - 假 hub：`MOCK_SOURCES=1` 多三个会话：「整理部署脚本」（Codex 实时，能发送、能实时接入，没接入前不能审批，带一张有 `always_label` 的 Codex 授权卡）、「迁移日志采集」（Codex 历史，只读，带 `read_only_reason`）、「生成季度报表」（DSH runtime，`agent_label: DSH`，没有终端，带一张没有 `always_label` 的授权卡）；`POST …/attach` 把 `attached` 置真并放开审批，对不能接入的回 403 `codex_read_only`。`/info` 对 Codex 会话回 Codex 的模型和版本。`MOCK_SCREEN_CHAT=1` 多一个带 header（「计划模式」）和转回对话选项的终端对话框（「照片同步脚本支持 HEIC」），看交互面板的标签、编号和「改在对话里说」。想看「全部放行」时的模式按钮，可以直接 `POST /api/v1/sessions/{mid}/{sid}/modes {"permission_mode":"bypassPermissions"}` 给假 hub。
 - 单测：`core:domain` 的 `SessionSourceTest`（旧 `SessionSourcesTest` 的用例 + runtime、恢复命令）、`AgentCloseTest`、`AlwaysOfferTest` 和 answer / approval 夹具；`core:contracts` 的 `ModelsTest`（新字段、`agentLabel`、`SessionInfo`）；`core:hub` 的 `HttpChatActionsTest`（attach、queue、info）、`HttpAgentOperationsTest`（attach）；`feature:chat` 的 `SessionModesTest`（旧 `SessionModesTest`、`ModelPickerTest`）、`ChatSessionInfoTest`（旧 `SessionInfoTest`）、`InteractionOptionsTest`；`feature:agents` 的 `AgentsListInfoTest`；`platform:notify` 的 `NotificationExecutionTest`（不能审批的会话不回传）。
 
+## 连接详情和触感反馈（#3054，对齐 iOS）
+
+- **连接详情**：Agents、收件箱、飞书会话、飞书文档阅读页的标题在连不上 hub 时换成连接状态（Agents 页以前一直显示机器名），点一下在原地弹出「连接详情」浮层（设计系统 `ConnectionDetails.kt`，照 iOS `ConnectionDetails`），不再跳到设置 tab。浮层写现在的状态和原因（等待网络 / 连接中… / 更新中…，以及本地网络权限、证书变了、配对失效），下面几行事实：上次失败的原因和「N 秒后重试」（只在连接中时）、「上次连上：N 秒前 / N 分钟前 / 时刻」、「N 条消息连上后自动发送」。能重试的状态有「立即重试」（`HubConnection.reconnect()` 后刷新这一页）和「连接设置」；证书、配对、权限这三种重试没用，只给「连接设置」。在线时标题不能点（以前 Agents 页在线也会跳设置）。
+  - 数据：`ConnectionDiagnostics.nextRetryAt` 是 `OkHttpHubConnection` 在两次尝试之间等待时写的下次时刻；「上次失败」读 `lastAttemptFailure`（按失败种类给的本地化文案，和设置里候选地址的结果同一套，连上一次就清掉，照 iOS 只在最近一次失败时显示；设置的诊断页仍显示原始的 `lastDisconnectReason`）；「上次连上」用 `lastReceivedAt`（最后一次收到 hub 的消息）；待发数是 outbox 里发送中 / 排队 / 等网络的条数。外壳按选中的组提供 `LocalConnectionDetails`（`Root.kt`），体验模式没有诊断，只显示状态。
+  - 截图：`core:designsystem` 的 `ConnectionDetailsShotsTest`，三套风格 × 深浅色的连接中，加等待网络和配对失效，输出到 `build/connection-details-shots/`。
+- **触感反馈**（设计系统 `Haptics.kt`，四种和 iOS `Haptics` 对应：Tap → ContextClick、Success → Confirm、Attention → GestureThresholdActivate、Error → Reject，系统的触感设置照样生效）：
+  - 回答 / 批准（Agents 页和对话页一样）：发出去成功是 Success；「终端上的对话框变了」是 Attention；已经在别处处理掉的不震；结果不明是 Error；Agents 页离线时点了是 Attention。
+  - 收件箱：标已处理（单条、全部、飞书会话页的按钮）立刻 Success，放回去是 Tap。
+  - 操作失败：经 `AppFeedback.failure` 弹出的提示，在线时是 Error，连不上 hub 时是 Attention（`FeedbackNotice.haptic`，外壳弹出时播放）。
+  - 点连接状态标题、「立即重试」是 Tap。
+
 ## 多 hub（同时连接多组 hub）
 
 #295，方案和各路的接口约定见 [plan-hub-mesh.md](plan-hub-mesh.md) 第 4 节和 2.6 节，iOS 是 #256。手机可以配对多台 hub：

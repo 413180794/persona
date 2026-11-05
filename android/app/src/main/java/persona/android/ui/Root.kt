@@ -121,9 +121,11 @@ private fun PersonaRootContent(
         else if (hub == null) entering = true
     }
     val link = MainActivity.pendingPairLink.value
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     LaunchedEffect(shell) {
         shell.feedback.notices.collect { notice ->
             snackbar.currentSnackbarData?.dismiss()
+            notice.haptic?.let { haptics.play(it) }
             // A notice with 撤销 waits its own few seconds; collecting the next one dismisses it, as for the others.
             launch {
                 val result = snackbar.showSnackbar(notice.message, actionLabel = notice.action?.label, duration = SnackbarDuration.Short)
@@ -170,7 +172,16 @@ private fun PersonaRootContent(
                     key(displayed.identity) {
                         // Demo mode has only the default face (docs/persona.md), like iOS.
                         val demo = displayed.demo != null
+                        // What the pages' connection titles open (ConnectionDetails.kt): this hub's transport and outbox.
+                        val connectionDetails = remember(displayed) {
+                            ConnectionDetailsSource(
+                                diagnostics = (displayed.connection as? persona.core.contracts.api.ConnectionDiagnosticsSource)?.diagnostics,
+                                outbox = displayed.sender.outbox,
+                                reconnect = displayed.connection::reconnect,
+                            )
+                        }
                         CompositionLocalProvider(
+                            LocalConnectionDetails provides connectionDetails,
                             persona.core.designsystem.LocalPersonaDesign provides if (demo) persona.core.designsystem.PersonaDesign.Default else persona.core.designsystem.LocalPersonaDesign.current,
                             persona.core.designsystem.LocalPersonaPack provides if (demo) null else persona.core.designsystem.LocalPersonaPack.current,
                             persona.core.designsystem.LocalPersonaName provides if (demo) "Persona" else persona.core.designsystem.LocalPersonaName.current,

@@ -5,8 +5,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 /** A button on a notice (撤销): its label, kept to a word or two, and what it does. */
 class FeedbackAction(val label: String, val run: () -> Unit)
 
-/** A notice as the shell shows it: the words, and a button when there is one. */
-class FeedbackNotice(val message: String, val action: FeedbackAction? = null)
+/** A notice as the shell shows it: the words, a button when there is one, and the [Haptic] it plays when shown. */
+class FeedbackNotice(val message: String, val action: FeedbackAction? = null, val haptic: Haptic? = null)
 
 /** Return true when the shell owns presentation, including deliberately silent refresh failures. */
 interface AppFeedback {

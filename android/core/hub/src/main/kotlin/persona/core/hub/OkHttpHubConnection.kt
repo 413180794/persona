@@ -372,6 +372,7 @@ class OkHttpHubConnection(
                 return
             }
             publishState(ConnectionState.Connecting)
+            updateDiagnostics { it.copy(nextRetryAt = null) }
             try {
                 val candidates = usableEndpoints()
                 if (candidates.isEmpty() && permissionMissing()) {
@@ -385,7 +386,7 @@ class OkHttpHubConnection(
                 attemptOwner = owner
                 _route.value = selected
                 updateDiagnostics { it.copy(currentPath = "${selected.endpoint.kind} · ${selected.endpoint.url}") }
-                runSocket(selected) { backoff = 1L }
+                runSocket(selected) { backoff = 1L; updateDiagnostics { it.copy(lastAttemptFailure = null) } }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -400,15 +401,21 @@ class OkHttpHubConnection(
                 if (!failure.retryable || revoked) return
                 // A restarting hub is back within seconds: retry soon and steadily, and do not count it toward the backoff.
                 if (policy.restarting(restartSince, clockMillis())) {
-                    delay(policy.restartDelay(restartAttempts++))
+                    waitToRetry(policy.restartDelay(restartAttempts++))
                     continue
                 }
                 val retryMillis = failure.retryAfterSeconds?.let { it.coerceAtMost(86400) * 1000 }
                     ?: (backoff * 1000 * Random.nextDouble(0.8, 1.0)).toLong()
-                delay(retryMillis)
+                waitToRetry(retryMillis)
                 backoff = (backoff * 2).coerceAtMost(20)
             }
         }
+    }
+
+    /** Waits [millis] before the next attempt, saying when it is (the connection details' "N 秒后重试"). */
+    private suspend fun waitToRetry(millis: Long) {
+        updateDiagnostics { it.copy(nextRetryAt = Instant.now().plusMillis(millis).toString()) }
+        try { delay(millis) } finally { updateDiagnostics { it.copy(nextRetryAt = null) } }
     }
 
     private suspend fun runSocket(selected: HubRoute, ready: () -> Unit): Unit = coroutineScope {
@@ -842,7 +849,7 @@ class OkHttpHubConnection(
             remaining = routes().isNotEmpty()
             if (remaining) {
                 _failure.value = error
-                updateDiagnostics { it.copy(lastDisconnectReason = error.message) }
+                updateDiagnostics { it.copy(lastDisconnectReason = error.message, lastAttemptFailure = endpointResultLabel(error.kind)) }
                 socket?.cancel()
                 socket = null
                 clearRoute()
@@ -859,7 +866,7 @@ class OkHttpHubConnection(
     private fun recordTerminal(error: HubFailure) = synchronized(lock) {
         if (revoked) return@synchronized
         _failure.value = error
-        updateDiagnostics { it.copy(lastDisconnectReason = error.message) }
+        updateDiagnostics { it.copy(lastDisconnectReason = error.message, lastAttemptFailure = endpointResultLabel(error.kind)) }
         // A socket that went silent was already gone for a long while: say so at once, unless the hub is restarting.
         if (error.kind == HubError.Timeout && !policy.restarting(restartSince, clockMillis())) setState(ConnectionState.Connecting)
         when (error.kind) {

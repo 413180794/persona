@@ -138,9 +138,10 @@ fun LarkDocumentReader(url: String, source: LarkContentSource?, repository: Inbo
     }
     val navigator = LocalInboxNavigator.current
     val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
+    val connectionDetails = rememberConnectionDetails(connection, navigator?.let { nav -> { nav.navigate(ConnectionSettingsRoute) } })
     JPage(title = if (connection == ConnectionState.Online) document?.title?.ifBlank { null } ?: stringResource(R.string.inbox_lark_doc) else inboxTitle(connection), modifier = modifier,
         titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
-        onTitleClick = if (connection == ConnectionState.Online || navigator == null) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
+        onTitleClick = if (connection == ConnectionState.Online) null else connectionDetails,
         onBack = navigator?.let { { it.back() } },
         topBar = if (showConnectionTitle) null else ({}),
         actions = { JTextButton(stringResource(R.string.inbox_lark_switch_web), { webpage = true }) }) { padding ->

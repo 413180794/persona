@@ -8,6 +8,7 @@ import persona.core.domain.answer.*
 import persona.core.domain.sort.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
+import persona.core.designsystem.Haptic
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.UUID
@@ -65,6 +66,12 @@ internal class AgentsViewModel(
     private val _notice = MutableStateFlow<AgentText?>(null)
     val notice = _notice.asStateFlow()
     val herdr = machineManagement?.let { HerdrStarter(it, repository, connection, viewModelScope) { _notice.value = it } }
+    private val _haptics = MutableSharedFlow<Haptic>(extraBufferCapacity = 4)
+    /**
+     * What the screen plays as the answers land (iOS AppModel.resolve): success; a nudge when the terminal's dialog
+     * changed or the hub is out of reach; nothing when it was already answered elsewhere; an error otherwise.
+     */
+    val haptics = _haptics.asSharedFlow()
     private val _failure = MutableStateFlow<Throwable?>(null)
     val failure = _failure.asStateFlow()
     fun clearFailure() { _failure.value = null }
@@ -412,7 +419,9 @@ internal class AgentsViewModel(
         if (page.value.sessions.firstOrNull { it.key == latest.sessionKey }?.canApprove == false) {
             _notice.value = AgentText(R.string.agents_notice_approve_blocked); return
         }
-        if (connection.state.value != ConnectionState.Online) { _notice.value = AgentText(R.string.agents_notice_answer_offline); return }
+        if (connection.state.value != ConnectionState.Online) {
+            _notice.value = AgentText(R.string.agents_notice_answer_offline); _haptics.tryEmit(Haptic.Attention); return
+        }
         val result = AnswerBuilder.build(latest, action, draft, AnswerContext(fullPlanRead = fullPlanRead))
         val resolution = result.resolution ?: return
         _delivery.update { it + (interaction.id to RequestDelivery.Sending) }
@@ -421,12 +430,14 @@ internal class AgentsViewModel(
                 interactions.resolve(interaction.id, resolution)
                 _delivery.update { it + (interaction.id to RequestDelivery.Sent) }
                 _notice.value = AgentText(R.string.agents_request_sent)
+                _haptics.tryEmit(Haptic.Success)
             } catch (e: CancellationException) {
                 _delivery.update { it + (interaction.id to RequestDelivery.Unknown) }
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // A lost acknowledgement must never cause an automatic duplicate approval.
                 _delivery.update { it + (interaction.id to RequestDelivery.Unknown) }
+                answerFailureHaptic(e)?.let(_haptics::tryEmit)
             }
         }
     }
@@ -437,4 +448,11 @@ internal class AgentsViewModel(
             catch (e: Exception) { _failure.value = e }
         }
     }
+}
+
+/** As iOS AppModel.resolve: a changed dialog nudges, one already answered elsewhere plays nothing, the rest is an error. */
+internal fun answerFailureHaptic(error: Exception): Haptic? = when (error) {
+    is InteractionPromptChangedException -> Haptic.Attention
+    is InteractionGoneException -> null
+    else -> Haptic.Error
 }

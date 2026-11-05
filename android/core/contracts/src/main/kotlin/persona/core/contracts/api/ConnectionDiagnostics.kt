@@ -22,6 +22,13 @@ data class ConnectionDiagnostics(
     val heartbeatSeconds: Int? = null,
     val pongTimeoutSeconds: Int? = null,
     val lastReceivedAt: String? = null,
+    /** When the connection tries the hub again (ISO instant), while it waits between attempts; null otherwise. */
+    val nextRetryAt: String? = null,
+    /**
+     * Why the latest attempt failed, in the user's words; null once a connection got through. Unlike
+     * [lastDisconnectReason] (the raw message settings keep for diagnosis), it never outlives a successful connection.
+     */
+    val lastAttemptFailure: CoreText? = null,
     val unmeasuredFields: Map<String, CoreText> = emptyMap(),
 )
 

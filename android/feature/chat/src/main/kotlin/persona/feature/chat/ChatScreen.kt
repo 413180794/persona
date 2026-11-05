@@ -103,6 +103,7 @@ private fun ChatPage(
     historyReadOnly: Boolean, historyFooter: (@Composable () -> Unit)?,
 ) {
     val scope = rememberCoroutineScope()
+    val haptics = persona.core.designsystem.rememberHaptics()
     val res = LocalResources.current
     val recovery = remember(key, statusBindings.recovery) { ChatStatusRecovery(res, statusBindings.recovery, scope, sessions::refresh) }
     val source = remember(repository, key) { repository.observe(key) }
@@ -520,6 +521,7 @@ private fun ChatPage(
                                     scope.launch {
                                         try {
                                             val result = submitInteraction { interactions.resolve(interaction.id, resolution) }
+                                            result.haptic?.let(haptics)
                                             if (result.withdraw) {
                                                 resolved = resolved + interaction.id
                                                 uncertain = uncertain - interaction.id

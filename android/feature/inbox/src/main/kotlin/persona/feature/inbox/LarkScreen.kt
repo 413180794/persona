@@ -256,15 +256,18 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         add(JAction(res.getString(R.string.inbox_lark_refresh), PhIcons.ArrowClockwise, enabled = !refreshing) { refreshConversation() })
     })
     val title = conversation.title.ifBlank { stringResource(R.string.inbox_lark_conversation) }
+    val connectionDetails = rememberConnectionDetails(connection, { navigator.navigate(ConnectionSettingsRoute) }, onRetry = { refreshConversation() })
+    val haptics = rememberHaptics()
     JPage(title = title, topBar = {
         ChatTopBar(title = title, onBack = navigator::back,
             statusText = if (connection == ConnectionState.Online) stringResource(R.string.inbox_source_lark) else inboxTitle(connection),
             busy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
-            onTitleClick = if (connection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
+            onTitleClick = if (connection == ConnectionState.Online) null else connectionDetails,
             actions = {
                 if (record != null) JIconButton(PhIcons.CheckCircle, stringResource(if (record.item.isDone) R.string.inbox_move_back else R.string.inbox_done),
                     enabled = !markingDone, onClick = {
                         markingDone = true
+                        haptics(doneHaptic(!record.item.isDone))
                         scope.launch {
                             try { repository.setDone(record.item.id, !record.item.isDone); error = null; navigator.back() }
                             catch (e: CancellationException) { throw e }

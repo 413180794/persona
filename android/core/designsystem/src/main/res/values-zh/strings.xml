@@ -228,6 +228,38 @@
     <string name="designsystem_queue_actions">排队消息的操作</string>
     <string name="designsystem_queue_item">第 %1$d 条：%2$s</string>
     <string name="designsystem_draft_ready">Persona 拟好了回复</string>
+    <!-- Connection details (the title's sheet while the hub is out of reach) -->
+    <string name="designsystem_connection_online">已连上 hub</string>
+    <string name="designsystem_connection_connecting">连接中…</string>
+    <string name="designsystem_connection_updating">更新中…</string>
+    <string name="designsystem_connection_waiting">等待网络</string>
+    <string name="designsystem_connection_local_network">需要本地网络权限</string>
+    <string name="designsystem_connection_certificate">hub 的证书变了</string>
+    <string name="designsystem_connection_revoked">配对已失效</string>
+    <string name="designsystem_connection_online_text">消息和状态都是最新的。</string>
+    <string name="designsystem_connection_connecting_text">有网络，但连不上 hub（它所在的机器可能关机、休眠或断网）。会一直自动重试。</string>
+    <string name="designsystem_connection_updating_text">已经连上，正在补上断开期间的消息和待处理的请求。</string>
+    <string name="designsystem_connection_waiting_text">手机现在没有网络。网络恢复后会自动连上，期间写的消息会自动发出去。</string>
+    <string name="designsystem_connection_local_network_text">要连同一网络里的 hub，需要本地网络权限。到连接设置里允许。</string>
+    <string name="designsystem_connection_certificate_text">hub 的证书和配对时的不一样，为了安全先不连。到连接设置里核对。</string>
+    <string name="designsystem_connection_revoked_text">这台手机的配对已被撤销，到连接设置里重新配对。</string>
+    <string name="designsystem_connection_retry">立即重试</string>
+    <string name="designsystem_connection_settings">连接设置</string>
+    <string name="designsystem_connection_last_failure">上次失败：%1$s</string>
+    <string name="designsystem_connection_retrying">正在重试…</string>
+    <string name="designsystem_connection_last_online">上次连上：%1$s</string>
+    <plurals name="designsystem_connection_retry_in">
+        <item quantity="other">%1$d 秒后重试</item>
+    </plurals>
+    <plurals name="designsystem_connection_waiting_messages">
+        <item quantity="other">%1$d 条消息连上后自动发送</item>
+    </plurals>
+    <plurals name="designsystem_connection_seconds_ago">
+        <item quantity="other">%1$d 秒前</item>
+    </plurals>
+    <plurals name="designsystem_connection_minutes_ago">
+        <item quantity="other">%1$d 分钟前</item>
+    </plurals>
     <string name="designsystem_workflow_show_agents">展开 agent</string>
     <string name="designsystem_workflow_hide_agents">收起 agent</string>
 </resources>

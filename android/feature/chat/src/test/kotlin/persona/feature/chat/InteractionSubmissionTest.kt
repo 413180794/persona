@@ -27,6 +27,16 @@ class InteractionSubmissionTest {
         } catch (_: CancellationException) { }
     }
 
+    // As iOS AppModel.resolve: answered succeeds, a changed dialog nudges, gone plays nothing, unconfirmed is an error.
+    @Test fun eachOutcomePlaysWhatIosPlays() {
+        assertEquals(mapOf(
+            InteractionSubmission.Answered to persona.core.designsystem.Haptic.Success,
+            InteractionSubmission.ResolvedElsewhere to null,
+            InteractionSubmission.PromptChanged to persona.core.designsystem.Haptic.Attention,
+            InteractionSubmission.Unknown to persona.core.designsystem.Haptic.Error,
+        ), InteractionSubmission.entries.associateWith { it.haptic })
+    }
+
     @Test fun passwordPreservesWhitespaceOnTheWireButNeverEntersSavedDrafts() {
         val request = Interaction("request", kind = "screen", secret = true)
         val draft = AnswerDraft(text = "  sample input  ", other = mapOf("question" to "sample input"))
