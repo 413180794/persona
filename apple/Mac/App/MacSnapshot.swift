@@ -57,6 +57,13 @@ import SwiftUI
                     let wrote = capture(to: chatURL, window: chat)
                     FileHandle.standardError.write(Data("macSnapshot \(wrote ? "wrote" : "FAILED") \(chatURL.path)\n".utf8))
                 }
+                // A popover is a window of its own too (the composer's ⌃R search): <name>.popover.png.
+                if let pop = NSApp.windows.first(where: { $0.isVisible && $0.className.contains("Popover") }) {
+                    let url = URL(fileURLWithPath: path)
+                    let popURL = url.deletingPathExtension().appendingPathExtension("popover").appendingPathExtension(url.pathExtension)
+                    let wrote = capture(to: popURL, window: pop)
+                    FileHandle.standardError.write(Data("macSnapshot \(wrote ? "wrote" : "FAILED") \(popURL.path)\n".utf8))
+                }
                 if d.bool(forKey: "macSnapshotQuit") {
                     NSApp.terminate(nil)
                     // A sheet with a text editor in it holds termination off: leave anyway.

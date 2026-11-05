@@ -15,6 +15,8 @@ struct ComposerRow<MenuItems: View>: View {
     var send: () -> Void
     /// What goes with the message, quoted over the field inside its box (#986).
     var quotes: Binding<[ContextRef]>? = nil
+    /// The conversation whose sent messages ↑ / ↓ and ⌃R bring back (the Mac, `MacSendHistory`); nil: none.
+    var history: String? = nil
     @ViewBuilder var menu: () -> MenuItems
 
     /// The symbols' frame: the button styles pad it to about 44 pt, the field's height.
@@ -47,7 +49,8 @@ struct ComposerRow<MenuItems: View>: View {
                     .lineLimit(1...6)
                     #if os(macOS)
                     .textFieldStyle(.plain) // the surface below is the field's box; the Mac's own bezel drew a second one inside
-                    .macComposerKeys(focused: focused.wrappedValue, canSend: canSend, send: send) // ⏎ sends, ⇧⏎ a new line
+                    .macComposerKeys(focused: focused.wrappedValue, canSend: canSend, // ⏎ sends, ⇧⏎ a new line
+                                     history: history.map { MacComposerHistory(key: $0, text: $text, focus: { focused.wrappedValue = true }) }, send: send)
                     #endif
                     .focused(focused)
                     .padding(.horizontal, Theme.Space.l)
@@ -91,6 +94,9 @@ extension ComposerRow {
     fileprivate func sendTyped() {
         #if os(iOS) || os(visionOS)
         if focused.wrappedValue { TypedText.commitFocused(into: $text) }
+        #endif
+        #if os(macOS)
+        if let history { MacSendHistory.shared.record(history, text) }
         #endif
         send()
     }

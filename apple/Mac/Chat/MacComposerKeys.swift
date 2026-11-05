@@ -58,22 +58,190 @@ nonisolated enum MacComposerWheel {
     }
 }
 
+/// A composer's send history (`MacSendHistory`): the conversation it is kept under and the field's text.
+struct MacComposerHistory {
+    var key: String
+    var text: Binding<String>
+    /// Gives the field the focus back (the search took it).
+    var focus: () -> Void
+}
+
 extension View {
     /// ⏎ sends and ⇧⏎ starts a new line in a focused composer's field (`MacComposerKeys`); the wheel scrolls a field
-    /// grown past its last line (`MacComposerWheel`).
-    func macComposerKeys(focused: Bool, canSend: Bool, send: @escaping () -> Void) -> some View {
-        modifier(MacComposerEventMonitor(focused: focused, matching: [.keyDown, .scrollWheel]) { event in
-            guard let editor = event.window?.firstResponder as? NSTextView else { return event }
-            if event.type == .scrollWheel { return MacComposerWheel.scroll(event, in: editor) ? nil : event }
-            switch MacComposerKeys.action(keyCode: event.keyCode, modifiers: event.modifierFlags,
-                                          composing: editor.hasMarkedText(), canSend: canSend) {
-            case .pass: return event
-            case .send: send()
-            case .newline: editor.insertNewlineIgnoringFieldEditor(nil)
-            case .ignore: break
+    /// grown past its last line (`MacComposerWheel`). With `history`: ↑ / ↓ bring back what was sent and ⌃R searches it
+    /// (`MacSendHistory`), and ⏎ remembers what it sends.
+    func macComposerKeys(focused: Bool, canSend: Bool, history: MacComposerHistory? = nil, send: @escaping () -> Void) -> some View {
+        modifier(MacComposerKeysModifier(focused: focused, canSend: canSend, history: history, send: send))
+    }
+}
+
+private struct MacComposerKeysModifier: ViewModifier {
+    var focused: Bool
+    var canSend: Bool
+    var history: MacComposerHistory?
+    var send: () -> Void
+    @State private var recall = Recall()
+    @State private var searching = false
+
+    /// Where ↑ / ↓ are: the index (oldest first) of the message the box shows, and that message; -1 / nil when the
+    /// box holds something else.
+    final class Recall {
+        var index = -1
+        var shown: String?
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(MacComposerEventMonitor(focused: focused, matching: [.keyDown, .scrollWheel]) { event in
+                guard let editor = event.window?.firstResponder as? NSTextView else { return event }
+                if event.type == .scrollWheel { return MacComposerWheel.scroll(event, in: editor) ? nil : event }
+                if let history, let key = MacSendHistory.key(keyCode: event.keyCode, modifiers: event.modifierFlags,
+                                                             composing: editor.hasMarkedText()) {
+                    switch key {
+                    case .openSearch:
+                        searching = true
+                        return nil
+                    case .recall(let dir):
+                        return walk(dir, history, editor) ? nil : event
+                    }
+                }
+                switch MacComposerKeys.action(keyCode: event.keyCode, modifiers: event.modifierFlags,
+                                              composing: editor.hasMarkedText(), canSend: canSend) {
+                case .pass: return event
+                case .send:
+                    if let history { MacSendHistory.shared.record(history.key, history.text.wrappedValue) }
+                    recall.index = -1
+                    recall.shown = nil
+                    send()
+                case .newline: editor.insertNewlineIgnoringFieldEditor(nil)
+                case .ignore: break
+                }
+                return nil
+            })
+            // A popover over the field (the web's panel above the box): the composer's card clips what it holds.
+            .popover(isPresented: $searching, arrowEdge: .top) {
+                if let history {
+                    MacSentSearch(seed: Self.debugSeed) { text in
+                        searching = false
+                        recall.index = -1
+                        recall.shown = nil
+                        history.text.wrappedValue = text
+                        history.focus()
+                    } cancel: {
+                        searching = false
+                        history.focus()
+                    }
+                }
+            }
+            #if DEBUG
+            .onAppear {
+                // `-openSentSearch <query>`: the search open over an agent's composer (not Persona's starter), that typed in.
+                if Self.debugSeed != nil, !Self.debugOpened, let history, history.key != "assistant.new" {
+                    Self.debugOpened = true
+                    Task { try? await Task.sleep(for: .seconds(1)); searching = true }
+                }
+            }
+            #endif
+    }
+
+    #if DEBUG
+    private static let debugSeed = UserDefaults.standard.string(forKey: "openSentSearch")
+    private static var debugOpened = false
+    #else
+    private static let debugSeed: String? = nil
+    #endif
+
+    /// ↑ / ↓ in the field: the next message of the history into the box. false leaves the key to the field (moving
+    /// through its own lines, or nothing to recall).
+    private func walk(_ dir: MacSendHistory.Direction, _ history: MacComposerHistory, _ editor: NSTextView) -> Bool {
+        let draft = history.text.wrappedValue
+        let lines = MacSendHistory.lines(editor.string, cursor: editor.selectedRange())
+        guard MacSendHistory.canRecall(draft: draft, shown: recall.shown, dir, firstLine: lines.first, lastLine: lines.last)
+        else { return false }
+        if draft.isEmpty { recall.index = -1 }
+        let list = MacSendHistory.shared.history(history.key)
+        let next = MacSendHistory.step(count: list.count, index: recall.index, dir)
+        if next == recall.index { return !draft.isEmpty } // at the oldest: stay there; an empty box with nothing: the field's
+        recall.index = next
+        let text = next < 0 ? "" : list[next].text
+        recall.shown = next < 0 ? nil : text
+        history.text.wrappedValue = text
+        return true
+    }
+}
+
+/// ⌃R over the composer, a terminal's reverse search: what every conversation sent, filtered as you type, newest
+/// first. ↑↓ / ⌃R ⌃P / ⌃S ⌃N move, ⏎ or Tab puts it in the box (it is not sent), Esc or ⌃G cancels.
+struct MacSentSearch: View {
+    var seed: String?
+    var pick: (String) -> Void
+    var cancel: () -> Void
+    @State private var query = ""
+    @State private var active = 0
+    @State private var candidates = MacSendHistory.shared.everything()
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let rows = MacSendHistory.search(candidates, query)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: Theme.Space.s) {
+                Text("^R").font(Theme.Font.code).foregroundStyle(.secondary).accessibilityHidden(true)
+                TextField("搜索已发送的消息", text: $query)
+                    .textFieldStyle(.plain)
+                    .focused($focused)
+                    .accessibilityLabel("搜索已发送的消息")
+            }
+            .padding(Theme.Space.m)
+            Divider()
+            if rows.isEmpty {
+                Text(candidates.isEmpty ? "还没有发过消息" : "没有匹配的消息")
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(.secondary)
+                    .padding(Theme.Space.m)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(rows.enumerated()), id: \.offset) { i, text in
+                                Text(text)
+                                    .lineLimit(2)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .foregroundStyle(i == active ? .white : .primary)
+                                    .padding(.horizontal, Theme.Space.s)
+                                    .padding(.vertical, Theme.Space.xs)
+                                    .background(i == active ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: Theme.Radius.badge))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { pick(text) }
+                                    .onHover { if $0 { active = i } }
+                                    .id(i)
+                                    .accessibilityAddTraits(i == active ? [.isButton, .isSelected] : .isButton)
+                            }
+                        }
+                        .padding(Theme.Space.xs)
+                    }
+                    .frame(maxHeight: Theme.Size.macQuickOpenListMax)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onChange(of: active) { _, i in proxy.scrollTo(i) }
+                }
+            }
+        }
+        .frame(width: Theme.Size.macQuickOpenWidth)
+        .modifier(MacComposerEventMonitor(focused: true) { event in
+            let editor = event.window?.firstResponder as? NSTextView
+            guard let action = MacSendHistory.searchAction(keyCode: event.keyCode, modifiers: event.modifierFlags,
+                                                           composing: editor?.hasMarkedText() ?? false) else { return event }
+            switch action {
+            case .up, .down: active = MacSendHistory.move(active, count: rows.count, action)
+            case .pick: if rows.indices.contains(active) { pick(rows[active]) } else { cancel() }
+            case .cancel: cancel()
             }
             return nil
         })
+        .onAppear {
+            if let seed { query = seed }
+            focused = true
+        }
+        .onChange(of: query) { active = 0 }
     }
 }
 

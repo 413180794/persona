@@ -3344,6 +3344,7 @@ struct Composer: View, Equatable {
                                  modesTitle: modesTitle,
                                  quotes: contexts,
                                  alwaysOpen: ChatComposerKind.macCard,
+                                 history: key.path,
                                  send: { Task { await sendText(text) } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {
@@ -3398,7 +3399,7 @@ struct Composer: View, Equatable {
                 ComposerRow(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
                             text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                             stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
-                            send: { Task { await sendText(text) } }, quotes: contexts) {
+                            send: { Task { await sendText(text) } }, quotes: contexts, history: key.path) {
                     // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {

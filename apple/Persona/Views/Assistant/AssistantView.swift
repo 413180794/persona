@@ -664,7 +664,7 @@ struct StarterComposer: View {
                 ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
                                  canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty || !recordingContexts.isEmpty,
                                  modesTitle: StarterModesMenu.title(modes: shell, launchers: launchers, model: model),
-                                 quotes: $recordingContexts, send: submit) {
+                                 quotes: $recordingContexts, history: "assistant.new", send: submit) {
                     attachments
                 } modes: {
                     StarterModesMenu(modes: shell, launchers: launchers)
@@ -672,7 +672,7 @@ struct StarterComposer: View {
                 .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID)))?.filter(\.runsAssistant) ?? [] }
             } else {
                 ComposerRow(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
-                            send: submit, quotes: $recordingContexts) {
+                            send: submit, quotes: $recordingContexts, history: "assistant.new") {
                     attachments
                 }
             }
