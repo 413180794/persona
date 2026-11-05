@@ -13,7 +13,7 @@
 import { setTransport } from "./api";
 import { installMockFollower, mockLogs, mockMetrics, mockOverview } from "./mock-metrics";
 import type { CatalogItem, Market } from "../lib/extension-market";
-import type { AdminMachine, AdminExtension, AdminState, Device, DiscoveredHub, MeshView, MetricsWindow, NetworkView, Overview, Peer, PermissionLine, ExtensionPreview } from "./types";
+import type { UsageSource, UsageSources, AdminMachine, AdminExtension, AdminState, Device, DiscoveredHub, MeshView, MetricsWindow, NetworkView, Overview, Peer, PermissionLine, ExtensionPreview } from "./types";
 
 const SELF = "0d9e8f7a-6b5c-4d3e-8f2a-1b0c9d8e7f6a";
 const OFFICE = "6f1c2a9e-0b7d-4c55-9e3a-2b8f41d07c11";
@@ -60,6 +60,18 @@ export function installMock(scenario: string) {
   };
   let restart = { required: scenario === "app", reasons: scenario === "app" ? ["添加电脑「studio」", "TLS 监听改成 :18662"] : [] };
   const startedAt = iso(60 * 26 + 17);
+  // Usage sources (docs/usage-windows.md「账号池网关」): one relay-history that works, one generic that does not answer. Any key
+  // other than "wrong" tests fine; an address containing "dead" does not connect. The key is never given back.
+  const usage: UsageSources = {
+    enabled: true,
+    poll_minutes: 5,
+    limit: 8,
+    sources: [
+      { id: "src-1a2b3c4d", name: "relay-history", type: "relay-history", url: "https://gateway.example.com", has_key: true, enabled: true, status: { ok_at: iso(2), tried_at: iso(2), seen: { accounts: 12, windows: 31, listed: 14, providers: { codex: 8, claude: 4 } } } },
+      { id: "src-5e6f7a8b", name: "Team pool", type: "generic", url: "https://pool.example.com/persona/usage", has_key: true, enabled: true, status: { ok_at: iso(95), tried_at: iso(1), error: "unreachable", seen: { accounts: 3, windows: 5, listed: 3, providers: { kimi: 3 } } } },
+    ],
+  };
+  const usageSource = (id: string) => usage.sources.find((x) => x.id === id);
   const local: AdminMachine = { id: "server", name: "服务器", kind: "local", icon: "server", online: true, transport: "local", node_version: VERSION, os: "linux", state: "active", hub_id: SELF, paths: [{ via: "local", hub_id: SELF, id: "server", ok: true, active: true }] };
   const machines: AdminMachine[] =
     scenario === "center"
@@ -399,6 +411,28 @@ export function installMock(scenario: string) {
           : { ...base, manifest };
         return json(pending);
       }
+      case "GET /usage-sources":
+        return json(usage);
+      case "PUT /usage-sources":
+        if (typeof body.enabled === "boolean") usage.enabled = body.enabled;
+        if (typeof body.poll_minutes === "number") usage.poll_minutes = body.poll_minutes;
+        return json(usage);
+      case "POST /usage-sources": {
+        if (usage.sources.length >= usage.limit) return fail(409, "too_many", "最多 8 个来源");
+        if (!/^https?:\/\//.test(String(body.url ?? ""))) return fail(400, "invalid_url", "地址要写成 http(s)://主机[:端口]");
+        const src: UsageSource = { id: `src-${Math.random().toString(16).slice(2, 10)}`, name: String(body.name || "relay-history"), type: body.type, url: String(body.url).replace(/\/+$/, ""), has_key: Boolean(body.key), enabled: true, status: {} };
+        usage.sources.push(src);
+        return json({ source: src });
+      }
+      case "POST /usage-sources/test": {
+        await wait(400);
+        const url = String(body.url ?? "");
+        if (url.includes("dead")) return json({ ok: false, code: "unreachable" });
+        const saved = body.id ? usageSource(String(body.id)) : undefined;
+        const key = body.key || (saved && saved.url === url ? "saved" : "");
+        if (!key || key === "wrong") return json({ ok: false, code: "unauthorized" });
+        return json({ ok: true, accounts: 12, windows: 31, listed: 14, providers: { codex: 8, claude: 4 } });
+      }
       case "GET /mesh":
         return scenario === "nopeers" ? fail(501, "not_implemented") : json(mesh);
       case "GET /devices":
@@ -437,6 +471,21 @@ export function installMock(scenario: string) {
         peers = [...peers, p];
         return json(p);
       }
+    }
+    const us = /^\/usage-sources\/([^/?]+)$/.exec(path);
+    if (us) {
+      const src = usageSource(decodeURIComponent(us[1]));
+      if (!src) return fail(404, "not_found", "没有这个来源");
+      if (method === "DELETE") {
+        usage.sources.splice(usage.sources.indexOf(src), 1);
+        return json({ ok: true });
+      }
+      const moved = (typeof body.url === "string" && body.url !== src.url) || (typeof body.type === "string" && body.type !== src.type);
+      if (moved && !body.key && !body.clear_key) return fail(400, "key_required", "要填这个来源的 Key（换了地址或类型时需要重新填）");
+      for (const k of ["name", "type", "url", "enabled"] as const) if (body[k] !== undefined) (src as unknown as Record<string, unknown>)[k] = body[k];
+      if (body.key) src.has_key = true;
+      if (body.clear_key) src.has_key = false;
+      return json({ source: src });
     }
     const m = /^\/machines\/([^/]+)(\/.*)?$/.exec(path);
     if (m) {

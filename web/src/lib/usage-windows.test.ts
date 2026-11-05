@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countdown, fullest, liveAccounts, pace, resetLabel, sampleAge, topAccounts, windowMinutes, type UsageAccount, type UsageWindow } from "./usage-windows";
+import { countdown, fullest, liveAccounts, pace, planNote, resetLabel, sampleAge, sourceNames, topAccounts, windowKey, windowMinutes, type UsageAccount, type UsageWindow } from "./usage-windows";
 
 const NOW = new Date(2026, 10, 5, 10, 0, 0).getTime(); // local time, so same-day checks do not depend on the zone
 const at = (ms: number) => new Date(NOW + ms).toISOString();
@@ -101,5 +101,29 @@ describe("which accounts show", () => {
     expect(topAccounts(list).map((a) => a.id)).toEqual(["c", "d"]);
     expect(topAccounts([account("a", 20), account("b", 90, { stale: true })]).map((a) => a.id)).toEqual(["a", "b"]);
     expect(fullest({ ...account("x", 1), windows: [win("5h", 300, 30), win("7d", 10080, 70)] })).toBe(70);
+  });
+});
+
+describe("accounts with several sources and per-model windows (#2595)", () => {
+  const account = (o: Partial<UsageAccount> = {}): UsageAccount => ({ id: "a", provider: "claude", name: "seat", sampled_at: at(-1000), windows: [win("5h", 300, 30, 2 * H), win("7d", 10080, 40, 24 * H)], ...o });
+  it("sorts by the plan's own fullest window, not a model's that ran out", () => {
+    const scoped = { ...win("7d", 10080, 100, 24 * H), model: "Fable" };
+    const a = account({ windows: [win("7d", 10080, 40, 24 * H), scoped] });
+    expect(fullest(a)).toBe(40);
+    expect(fullest(account({ windows: [scoped] }))).toBe(100); // nothing else to go by
+    expect(topAccounts([account({ id: "x", windows: [scoped, win("7d", 10080, 10, 24 * H)] }), account({ id: "y" })], 1)[0].id).toBe("y");
+  });
+  it("names where an account was seen", () => {
+    expect(sourceNames(account({ local: true, sources: ["relay-history"] }))).toEqual(["本机", "relay-history"]);
+    expect(sourceNames(account({ sources: ["relay-history", "Team pool"] }))).toEqual(["relay-history", "Team pool"]);
+    expect(sourceNames(account())).toEqual([]); // an older hub says nothing about it
+  });
+  it("shows the plan unless the name has it", () => {
+    expect(planNote(account({ name: "Codex Pro", plan: "pro" }))).toBe("");
+    expect(planNote(account({ name: "work seat", plan: "Pro" }))).toBe("Pro");
+    expect(planNote(account({ plan: " " }))).toBe("");
+  });
+  it("tells windows of one length apart by model", () => {
+    expect(windowKey(win("7d", 10080, 1))).not.toBe(windowKey({ ...win("7d", 10080, 1), model: "Fable" }));
   });
 });

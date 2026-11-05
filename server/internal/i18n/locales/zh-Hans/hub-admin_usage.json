@@ -1,0 +1,11 @@
+{
+  "invalid_type": "类型只能是 relay-history 或 generic",
+  "invalid_url": "地址要写成 http(s)://主机[:端口][/路径]，不要把 Key 写进地址里",
+  "invalid_name": "名字不能为空，最多 40 个字，不能换行",
+  "invalid_key": "Key 不能有空白或控制字符，最长 512 个字符",
+  "key_required": "要填这个来源的 Key（换了地址或类型时需要重新填）",
+  "invalid_poll": "查询间隔是 1 到 1440 分钟",
+  "too_many": "最多 {n} 个来源",
+  "not_found": "没有这个来源",
+  "busy": "上一次测试还没结束，稍后再试"
+}

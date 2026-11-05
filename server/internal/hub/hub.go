@@ -141,6 +141,8 @@ type Hub struct {
 
 	// usageWin: subscription rate-limit windows across machines (usagewindows.go, #2432)
 	usageWin usageWindowsHub
+	// usageGW: the account-pool gateways that add accounts to it (usagegateways.go, #2595)
+	usageGW usageGateways
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -374,6 +376,8 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
+	h.usageGW.init(cfg.Usage, h.usageWin.invalidate, h.logf) // account-pool gateways' usage windows (usagegateways.go, #2595)
+	go h.usageGW.run(ctx)
 	go h.noLockLoop(ctx)         // 「扩展开着时不自动锁屏」 said again to its Macs (computer_nolock.go)
 	go h.extensionLeaseLoop(ctx) // plugins' programs on computers keep running (extension_nodes.go)
 	h.extensions = newExtensions(cfg.dir, cfg.extensionConfigs(h.logf), h.logf)

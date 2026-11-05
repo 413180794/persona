@@ -10,6 +10,8 @@ export interface UsageWindow {
   window_minutes: number;
   used_percent: number;
   resets_at?: string;
+  /** An allowance a provider keeps for one model next to the plan's own (#2595); absent for the plan's window. */
+  model?: string;
 }
 export interface UsageAccount {
   id: string;
@@ -19,6 +21,11 @@ export interface UsageAccount {
   windows: UsageWindow[];
   sampled_at: string;
   stale?: boolean;
+  /** Where the numbers came from (#2595): an agent's files on one of the computers, and/or account-pool gateways by name. */
+  local?: boolean;
+  sources?: string[];
+  /** "unreachable" | "error": the gateway could not read the account just now and the numbers are its last. */
+  problem?: string;
 }
 
 /** Samples older than this are dropped (a source that went quiet for days says nothing about now). */
@@ -115,10 +122,25 @@ export function liveAccounts(accounts: UsageAccount[], now = Date.now()): UsageA
   return out;
 }
 
-/** The used percentage of an account's fullest window. */
+/** The used percentage of an account's fullest window. A per-model allowance does not count while the plan's own windows
+ *  are there: one model running out is not the account running out. */
 export function fullest(a: UsageAccount): number {
-  return a.windows.reduce((m, w) => Math.max(m, w.used_percent), 0);
+  const plan = a.windows.filter((w) => !w.model);
+  return (plan.length ? plan : a.windows).reduce((m, w) => Math.max(m, w.used_percent), 0);
 }
+
+/** Where an account was seen, for people: "This computer", then the gateways' names. */
+export function sourceNames(a: UsageAccount): string[] {
+  return [...(a.local ? [tr("usage.source_local")] : []), ...(a.sources ?? [])];
+}
+
+/** The plan to write beside the name, unless the name already says it ("Codex Pro" and plan "pro"). */
+export function planNote(a: UsageAccount): string {
+  const plan = (a.plan ?? "").trim();
+  return plan && !a.name.toLowerCase().includes(plan.toLowerCase()) ? plan : "";
+}
+
+export const windowKey = (w: UsageWindow) => `${w.label}:${w.window_minutes}:${w.model ?? ""}`;
 
 /** The accounts the sidebar draws bars for: the two with the fullest window, stale ones last. */
 export function topAccounts(accounts: UsageAccount[], n = 2): UsageAccount[] {

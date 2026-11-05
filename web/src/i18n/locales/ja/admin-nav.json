@@ -3,6 +3,7 @@
   "machines": "コンピューター",
   "devices": "デバイス",
   "extensions": "拡張機能",
+  "usage": "使用量ソース",
   "network": "ネットワークとアクセス",
   "peers": "ハブ連携"
 }

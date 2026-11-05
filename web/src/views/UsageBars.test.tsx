@@ -64,3 +64,42 @@ describe("the popover", () => {
     expect(renderToStaticMarkup(<UsagePopover accounts={[account("a", 1, 1)]} now={NOW} />)).toContain('role="dialog" aria-label="订阅额度"');
   });
 });
+
+describe("where the numbers came from (#2595)", () => {
+  const mixed = (): UsageAccount[] => [
+    account("a", 20, 30, { name: "work-claude", plan: "Max", local: true, sources: ["relay-history"] }),
+    account("b", 5, 10, { name: "team-seat", plan: "Plus", sources: ["relay-history", "Team pool"] }),
+    account("c", 40, 50, { name: "Codex Pro", plan: "pro", local: true }),
+    account("d", 1, 2, { name: "team-seat-3", sources: ["relay-history"], stale: true, problem: "unreachable" }),
+  ];
+  it("names the sources of each account in the popover, this computer first", () => {
+    const html = renderToStaticMarkup(<UsagePopover accounts={mixed()} now={NOW} />);
+    expect(html).toContain("本机 · relay-history");
+    expect(html).toContain("relay-history · Team pool");
+    expect(html.match(/data-usage-source/g)).toHaveLength(4); // every account has a source line (the plan or the sources)
+  });
+  it("writes the plan beside the name unless the name already says it", () => {
+    const html = renderToStaticMarkup(<UsagePopover accounts={mixed()} now={NOW} />);
+    expect(html).toContain(">Max<");
+    expect(html).toContain(">Plus<");
+    expect(html).not.toContain(">pro<"); // "Codex Pro" says it already
+  });
+  it("says when the gateway could not be read and these are its last numbers", () => {
+    const html = renderToStaticMarkup(<UsagePopover accounts={mixed()} now={NOW} />);
+    expect(html).toContain("网关暂时读不到，显示的是上次的数字");
+    expect(html.match(/网关暂时读不到/g)).toHaveLength(1);
+  });
+  it("labels a per-model window by its model, and keeps it apart from the plan's own", () => {
+    const a = account("m", 10, 20, { name: "claude-seat", sources: ["relay-history"] });
+    a.windows.push({ label: "7d", window_minutes: 10080, used_percent: 100, resets_at: iso(2 * 24 * H + 3 * H), model: "Fable" });
+    const html = renderToStaticMarkup(<UsagePopover accounts={[a]} now={NOW} />);
+    expect(html).toContain("data-usage-model");
+    expect(html).toContain(">Fable<");
+    expect(html).toContain("claude-seat 7d（Fable）：100%已用");
+    expect(html.match(/role="progressbar"/g)).toHaveLength(3);
+  });
+  it("puts the sources in the tooltip of a sidebar bar", () => {
+    const html = renderToStaticMarkup(<UsageBars accounts={mixed().slice(0, 1)} now={NOW} />);
+    expect(html).toContain("来源：本机 · relay-history");
+  });
+});

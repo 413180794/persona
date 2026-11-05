@@ -173,6 +173,9 @@ type Config struct {
 	Mesh MeshConfig `json:"mesh,omitempty"`
 	// Personas tunes the looks: whose level a tiered look shows (persona_tiers.go, docs/persona.md).
 	Personas PersonasConfig `json:"personas,omitempty"`
+	// Usage: account-pool gateways whose accounts' subscription windows join the ones read on the machines
+	// (usagegateways.go, docs/usage-windows.md「账号池网关」, #2595).
+	Usage UsageConfig `json:"usage,omitempty"`
 
 	dir string
 }

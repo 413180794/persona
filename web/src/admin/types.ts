@@ -353,3 +353,54 @@ export interface LogsPage {
   next: number;
   kept: number;
 }
+
+// ── usage sources (docs/usage-windows.md「账号池网关」, docs/admin.md): account-pool gateways feeding the sidebar's usage bars ──
+
+export type UsageSourceType = "relay-history" | "generic";
+
+export interface UsageSeen {
+  accounts: number;
+  windows: number;
+  /** accounts with a drawable window, by provider */
+  providers: Record<string, number>;
+  /** accounts the gateway listed at all */
+  listed: number;
+}
+
+export interface UsageSourceStatus {
+  ok_at?: string;
+  tried_at?: string;
+  /** the code of the last failed read (unauthorized, unreachable…); empty when it worked */
+  error?: string;
+  seen?: UsageSeen;
+}
+
+export interface UsageSource {
+  id: string;
+  name: string;
+  type: UsageSourceType;
+  url: string;
+  /** whether a key is saved: the key itself is never sent back */
+  has_key: boolean;
+  enabled: boolean;
+  status: UsageSourceStatus;
+}
+
+export interface UsageSources {
+  enabled: boolean;
+  poll_minutes: number;
+  sources: UsageSource[];
+  limit: number;
+}
+
+export interface UsageSourceInput {
+  name?: string;
+  type?: UsageSourceType;
+  url?: string;
+  /** a new key; left out or empty keeps the saved one */
+  key?: string;
+  clear_key?: boolean;
+  enabled?: boolean;
+}
+
+export type UsageTestResult = ({ ok: true } & Pick<UsageSeen, "accounts" | "windows" | "providers" | "listed">) | { ok: false; code: string };

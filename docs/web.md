@@ -675,7 +675,9 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 侧边栏最下面（Agents 列表之下）：最满的两个订阅账号各一条细条，≥ 80% 变警示色；点开是浮层，每个账号每个窗口一行（长度、已用 %、条、重置倒计时、节奏提示），
 标题右边是采样时间。**没有数据时整块不画**。数据来自 `GET /api/v1/usage/windows`（每台电脑的 node 读本机文件，hub 合并同一个账号），
 每分钟刷新一次，页面不在前台时不请求。节奏、倒计时的算法和 Claude 额度怎么接入见 [usage-windows.md](usage-windows.md)。
-代码：`lib/usage-windows.ts`（纯函数，有单测）、`views/UsageBars.tsx`；假 hub 有 `MOCK_USAGE=none` 模拟没有数据。
+账号来自电脑上读到的文件和 hub 去问的账号池网关（#2595）：浮层里每个账号标题下一行写计划和来源（「本机 · relay-history」，只有一个来源写那一个），
+单模型的窗口在长度旁写模型名（不参与排序），网关读不到时写一句「显示的是上次的数字」；侧边栏细条的提示里也写来源。网关在管理界面的「用量来源」里配（`docs/admin.md`）。
+代码：`lib/usage-windows.ts`（纯函数，有单测）、`views/UsageBars.tsx`；假 hub 有 `MOCK_USAGE=none` 模拟没有数据、`MOCK_USAGE=gateways` 模拟电脑和网关混合的账号。
 
 ## 注意力信号（标签页标题、图标角标、提示音，#2332）
 

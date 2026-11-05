@@ -8009,6 +8009,21 @@ def mock_usage_windows():
     now = time.time()
     iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
     win = lambda label, mins, used, left: {"label": label, "window_minutes": mins, "used_percent": used, "resets_at": iso(now + left)}
+    if os.environ.get("MOCK_USAGE") == "gateways":  # #2595: accounts of the machines and of an account-pool gateway, mixed
+        week = (2 * 24 + 3) * 3600
+        scoped = {**win("7d", 10080, 100, week), "model": "Fable"}
+        return {"accounts": [
+            {"id": "claude-1", "provider": "claude", "name": "work-claude", "plan": "Max", "sampled_at": iso(now - 12), "local": True, "sources": ["relay-history"],
+             "windows": [win("5h", 300, 86, 55 * 60), win("7d", 10080, 41, week), scoped]},
+            {"id": "codex-1", "provider": "codex", "name": "Codex Pro", "plan": "pro", "sampled_at": iso(now - 190), "local": True,
+             "windows": [win("5h", 300, 22, 4 * 3600), win("7d", 10080, 63, (3 * 24 + 5) * 3600)]},
+            {"id": "codex-3", "provider": "codex", "name": "team-seat-2", "plan": "ChatGPT Plus", "sampled_at": iso(now - 40 * 60), "sources": ["relay-history"],
+             "windows": [win("5h", 300, 8, 2 * 3600), win("7d", 10080, 31, 4 * 24 * 3600)]},
+            {"id": "codex-4", "provider": "codex", "name": "team-seat-3", "plan": "ChatGPT Plus", "sampled_at": iso(now - 9 * 3600), "stale": True,
+             "sources": ["relay-history"], "problem": "unreachable", "windows": [win("7d", 10080, 54, 3 * 24 * 3600)]},
+            {"id": "kimi-1", "provider": "kimi", "name": "kimi-spare", "sampled_at": iso(now - 20 * 60), "sources": ["relay-history", "Team pool"],
+             "windows": [win("7d", 10080, 5, 6 * 24 * 3600)]},
+        ], "checked_at": iso(now)}
     return {"accounts": [
         {"id": "claude-1", "provider": "claude", "name": "Claude", "sampled_at": iso(now - 12),
          "windows": [win("5h", 300, 86, 55 * 60), win("7d", 10080, 41, (2 * 24 + 3) * 3600)]},

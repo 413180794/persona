@@ -3,6 +3,7 @@
   "machines": "Computers",
   "devices": "Devices",
   "extensions": "Extensions",
+  "usage": "Usage sources",
   "network": "Network & access",
   "peers": "Linked hubs"
 }

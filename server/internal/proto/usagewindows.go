@@ -18,6 +18,9 @@ type UsageWindow struct {
 	UsedPercent   float64 `json:"used_percent"`
 	// ResetsAt is when the window starts over; nil when the source did not say.
 	ResetsAt *time.Time `json:"resets_at,omitempty"`
+	// Model names the one model this window measures, for an allowance a provider keeps per model next to the plan's
+	// own (#2595); empty for the plan's window. Such a window never identifies an account.
+	Model string `json:"model,omitempty"`
 }
 
 // UsageAccount is one subscription account as one source saw it (a node's answer) or as the hub merged it.
@@ -34,6 +37,18 @@ type UsageAccount struct {
 	// Stale: the sample is older than the collector's schedule allows (its source has not been written to for a
 	// while, or the machine that had it is offline).
 	Stale bool `json:"stale,omitempty"`
+
+	// Where the numbers came from (#2595), set by the hub. Local: an agent's own files on one of the machines
+	// (docs/usage-windows.md); Sources: the names of the account-pool gateways that reported it
+	// (docs/usage-windows.md「账号池网关」). An account both saw lists both.
+	Local   bool     `json:"local,omitempty"`
+	Sources []string `json:"sources,omitempty"`
+	// Problem: "error" when the gateway could not read the account's numbers just now (it kept the stored ones),
+	// "unreachable" when the gateway itself could not be asked and this is its last answer. Never carries the text.
+	Problem string `json:"problem,omitempty"`
+	// Ref is the account's identity at its gateway ("<source id>:<account id>"), when the source has one. Hub-internal:
+	// it is never sent out. Two samples with refs from one source but different accounts are never merged.
+	Ref string `json:"-"`
 }
 
 // UsageSnapshot is what a node answers to usage.windows.

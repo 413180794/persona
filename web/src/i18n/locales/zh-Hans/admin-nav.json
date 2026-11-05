@@ -3,6 +3,7 @@
   "machines": "电脑",
   "devices": "设备",
   "extensions": "扩展",
+  "usage": "用量来源",
   "network": "网络与访问",
   "peers": "互联"
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,6 +48,15 @@ type usageWindowsHub struct {
 	merged    []proto.UsageAccount
 	at        time.Time
 	loading   chan struct{} // closed when the poll in flight is done
+	// gateways gives the samples of the account-pool gateways (usagegateways.go, #2595); nil: none.
+	gateways func(now time.Time) []proto.UsageAccount
+}
+
+// invalidate drops the merged list so that the next read builds it again (a gateway answered or was edited).
+func (u *usageWindowsHub) invalidate() {
+	u.mu.Lock()
+	u.at = time.Time{}
+	u.mu.Unlock()
 }
 
 // usageSources are the machines whose node may be asked: the off switch in hub.json is honoured here as well as by
@@ -72,7 +82,7 @@ func (h *Hub) usageSources() []usageSource {
 // poll asks the online machines (in parallel) and returns the merged accounts. Concurrent callers share one poll.
 func (u *usageWindowsHub) poll(ctx context.Context, sources []usageSource, now time.Time) []proto.UsageAccount {
 	u.mu.Lock()
-	if u.merged != nil && now.Sub(u.at) < usageHubFresh {
+	if u.merged != nil && !u.at.IsZero() && now.Sub(u.at) < usageHubFresh {
 		out := u.merged
 		u.mu.Unlock()
 		return out
@@ -138,7 +148,13 @@ func (u *usageWindowsHub) poll(ctx context.Context, sources []usageSource, now t
 			delete(u.byMachine, id)
 			continue
 		}
-		all = append(all, a.accounts...)
+		for _, acct := range a.accounts {
+			acct.Local, acct.Sources, acct.Problem, acct.Ref = true, nil, "", "" // what a node says of where it came from is not taken
+			all = append(all, acct)
+		}
+	}
+	if u.gateways != nil {
+		all = append(all, u.gateways(now)...)
 	}
 	u.merged, u.at = mergeUsageAccounts(all, now), now
 	u.loading = nil
@@ -150,10 +166,13 @@ func (u *usageWindowsHub) poll(ctx context.Context, sources []usageSource, now t
 // the result for the sidebar.
 //
 // Two samples are the same account when they are of one provider and share a window: the same length that resets
-// at the same second (a window's reset time is the account's, wherever it was read). Their windows are then taken
-// per length from the newest sample, so a machine that was idle since the 5-hour window rolled over does not bring
-// the old one back. Windows that have reset by now are dropped (their number is the last period's) and an account
-// with none left is not listed. Older than usageHubMaxAge is dropped, older than usageHubStaleAfter is marked stale.
+// at the same second (a window's reset time is the account's, wherever it was read: on a machine or at a gateway).
+// A per-model window never counts for this, and two accounts of one gateway (different refs) are never one. Their
+// windows are then taken per length (and model) from the newest sample, so a machine that was idle since the 5-hour
+// window rolled over does not bring the old one back. Windows that have reset by now are dropped (their number is
+// the last period's) and an account with none left is not listed. Older than usageHubMaxAge is dropped; older than
+// usageHubStaleAfter (a gateway's: usageGatewayStaleAfter, or what it reported itself) is marked stale. The account
+// is named by a gateway when one knows it (a name somebody gave it), and says where it was seen (Local, Sources).
 // The most used account comes first, stale ones last; two accounts with one name are numbered by their id.
 func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAccount {
 	var live []proto.UsageAccount
@@ -196,15 +215,19 @@ func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAcc
 	seen := map[key]int{}
 	for i, a := range live {
 		for _, w := range a.Windows {
-			if w.ResetsAt == nil {
+			if w.ResetsAt == nil || w.Model != "" {
 				continue
 			}
 			k := key{a.Provider, w.WindowMinutes, w.ResetsAt.Unix()}
-			if j, ok := seen[k]; ok {
-				parent[find(i)] = find(j)
-			} else {
+			j, ok := seen[k]
+			if !ok {
 				seen[k] = i
+				continue
 			}
+			if sameSourceOtherAccount(live[i].Ref, live[j].Ref) {
+				continue
+			}
+			parent[find(i)] = find(j)
 		}
 	}
 	groups := map[int][]proto.UsageAccount{}
@@ -221,24 +244,58 @@ func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAcc
 	for _, r := range order {
 		members := groups[r]
 		sort.SliceStable(members, func(i, j int) bool { return members[i].SampledAt.After(members[j].SampledAt) })
-		acct := proto.UsageAccount{Provider: members[0].Provider, Name: members[0].Name, Plan: members[0].Plan, SampledAt: members[0].SampledAt}
-		byLen := map[int]proto.UsageWindow{}
+		newest := members[0]
+		acct := proto.UsageAccount{Provider: newest.Provider, Name: newest.Name, Plan: newest.Plan, SampledAt: newest.SampledAt, Problem: newest.Problem}
+		// A gateway's name is one somebody gave the account; the machines only know "Codex Pro".
+		naming := -1
+		for i, m := range members {
+			if len(m.Sources) > 0 && !m.Local {
+				naming = i
+				break
+			}
+		}
+		if naming >= 0 {
+			acct.Name, acct.Plan = members[naming].Name, members[naming].Plan
+		}
+		type slot struct {
+			minutes int
+			model   string
+		}
+		bySlot := map[slot]proto.UsageWindow{}
+		var sources []string
 		for _, m := range members {
 			if acct.Plan == "" && m.Plan != "" { // the newest sample that knows the plan names the account
-				acct.Plan, acct.Name = m.Plan, m.Name
+				acct.Plan = m.Plan
+				if naming < 0 {
+					acct.Name = m.Name
+				}
 			}
+			acct.Local = acct.Local || m.Local
+			sources = append(sources, m.Sources...)
 			for _, w := range m.Windows {
-				if _, ok := byLen[w.WindowMinutes]; !ok {
-					byLen[w.WindowMinutes] = w
+				k := slot{w.WindowMinutes, w.Model}
+				if _, ok := bySlot[k]; !ok {
+					bySlot[k] = w
 				}
 			}
 		}
-		for _, w := range byLen {
+		for _, w := range bySlot {
 			acct.Windows = append(acct.Windows, w)
 		}
-		sort.Slice(acct.Windows, func(i, j int) bool { return acct.Windows[i].WindowMinutes < acct.Windows[j].WindowMinutes })
+		sort.Slice(acct.Windows, func(i, j int) bool {
+			a, b := acct.Windows[i], acct.Windows[j]
+			if a.WindowMinutes != b.WindowMinutes {
+				return a.WindowMinutes < b.WindowMinutes
+			}
+			return a.Model < b.Model
+		})
+		acct.Sources = uniqueSorted(sources)
 		acct.ID = usageAccountID(acct)
-		acct.Stale = now.Sub(acct.SampledAt) > usageHubStaleAfter
+		if len(newest.Sources) > 0 && !newest.Local {
+			acct.Stale = newest.Stale || now.Sub(acct.SampledAt) > usageGatewayStaleAfter
+		} else {
+			acct.Stale = now.Sub(acct.SampledAt) > usageHubStaleAfter
+		}
 		out = append(out, acct)
 	}
 
@@ -263,6 +320,14 @@ func mergeUsageAccounts(in []proto.UsageAccount, now time.Time) []proto.UsageAcc
 	return out
 }
 
+// sameSourceOtherAccount: both refs name an account of one gateway ("<source id>:<account id>") and they are not the
+// same account. A gateway knows its accounts apart, whatever their reset times look like.
+func sameSourceOtherAccount(a, b string) bool {
+	sa, _, okA := strings.Cut(a, ":")
+	sb, _, okB := strings.Cut(b, ":")
+	return okA && okB && sa == sb && a != b
+}
+
 func mostUsed(a proto.UsageAccount) float64 {
 	var m float64
 	for _, w := range a.Windows {
@@ -275,6 +340,12 @@ func mostUsed(a proto.UsageAccount) float64 {
 // only change when that window rolls over (a week), not with every number.
 func usageAccountID(a proto.UsageAccount) string {
 	w := a.Windows[len(a.Windows)-1]
+	for i := len(a.Windows) - 1; i >= 0; i-- { // the longest window of the plan itself, not of one model
+		if a.Windows[i].Model == "" {
+			w = a.Windows[i]
+			break
+		}
+	}
 	var resets int64
 	if w.ResetsAt != nil {
 		resets = w.ResetsAt.Unix()
@@ -287,6 +358,7 @@ func usageAccountID(a proto.UsageAccount) string {
 // local files on the machines (docs/usage-windows.md); an empty list when no machine has any.
 // (#2432: its own block so that merges with the other route blocks stay additive.)
 func (h *Hub) usageWindowRoutes(api *http.ServeMux) {
+	h.usageWin.gateways = h.usageGW.accounts
 	api.HandleFunc("GET /api/v1/usage/windows", func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		accounts := h.usageWin.poll(r.Context(), h.usageSources(), now)

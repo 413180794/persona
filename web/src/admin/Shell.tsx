@@ -16,6 +16,7 @@ import { Machines } from "./pages/Machines";
 import { Network } from "./pages/Network";
 import { OverviewPage } from "./pages/Overview";
 import { Peers } from "./pages/Peers";
+import { UsageSourcesPage } from "./pages/UsageSources";
 
 export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => void }) {
   const page = usePage();
@@ -100,6 +101,7 @@ export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => 
             {page === "peers" && <Peers />}
             {page === "devices" && <Devices />}
             {page === "extensions" && <Extensions />}
+            {page === "usage" && <UsageSourcesPage />}
             {page === "network" && <Network />}
           </div>
         </div>

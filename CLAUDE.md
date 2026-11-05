@@ -208,7 +208,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/ports.md` | 端口转发：node 找出 Agent 在监听的端口、App 认出回答里的 localhost 链接，手机本地监听 + WebSocket 经 hub 转到那台机器，取舍和安全边界 |
 | `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、App 的「机器」页（Agent 和监控合在一起）和机器详情 |
-| `docs/usage-windows.md` | 订阅额度窗口（#2432）：Codex rollout 的 `rate_limits`、Claude 状态栏落盘的 `rate_limits`（可选接入），为什么不用 OAuth / 登录 token 的账号接口；node 采集、hub 按重置时间合并同一账号、节奏和倒计时算法、侧边栏底部的细条和浮层 |
+| `docs/usage-windows.md` | 订阅额度窗口（#2432）：Codex rollout 的 `rate_limits`、Claude 状态栏落盘的 `rate_limits`（可选接入），为什么不用 OAuth / 登录 token 的账号接口；node 采集、hub 按重置时间合并同一账号、账号池网关（relay-history…，`usage.sources`）作为来源和为什么不做成扩展、节奏和倒计时算法、侧边栏底部的细条和浮层 |
 | `docs/admin.md` | hub 管理界面（`/admin`）：访问范围 `admin.access`（loopback / lan / cidrs / any）和来源判断、管理员密码 / 会话 / CSRF / 限流、改 hub.json、页面和接口、部署时怎么选 |
 | `docs/mesh.md` | hub 互联（单中心）：互联码配对、链路、中心和任期（加入组、设为中心、中心不可达）、成员把 App 请求和电脑交给中心、凭据交接、一台电脑多条路的去重和选路、kind service（hub 拨连接器）、ssh 迁移、管理接口和命令行、怎么验证 |
 | `docs/link.md` | 连接器 Persona Link（命令 `persona-link`，旧名 jarvis-link 照样认）和 node 服务：一条命令 / 一个 App 装好常驻 node + 连接器；主动模式（电脑连 hub 的链路）和被动模式（hub 连电脑：监听、配对码、接口、限流、安全边界）；Mac 菜单栏 App「Persona Link」；Linux headless 的 `jarvis-link install / status / mode / node / logs / uninstall` |

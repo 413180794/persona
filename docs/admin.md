@@ -116,6 +116,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | 电脑 | `/admin/machines` | 「添加电脑」放在最上面，两种：**电脑来连**（kind link：填 id / 名字，生成 jarvis-link 配对链接，给 Mac / Linux / Windows 的装法）和 **hub 来连**（kind service：粘贴那台 `jarvis-link pair --listen` 打印的链接，可改地址、填 socks5 代理）；不再添加 ssh 电脑。每台的状态（在线 / 离线 / 错误、连接方式、node 版本）和**每条路**（方式、经哪台 hub、能不能用、RTT、哪条在用，[mesh.md](mesh.md)「一台电脑多条路」）；service 电脑的连接器被配给别的 hub 时「重新配对」；重连、删除（只在成员上配的电脑不能在这里删） |
 | 设备 | `/admin/devices` | 设备凭据列表、撤销、生成手机配对二维码；成员 hub 上只提示去中心的管理界面 |
 | 扩展 | `/admin/extensions`（老的 `/admin/plugins` 照样打开） | 这台 hub 的扩展：列表、开关、安装（hub 机器上的目录或包、带 sha256 的 https 链接、上传、remote socket；先预览它能做什么，同意才装）、升级（权限变多明确提示）、回滚、卸载（可留数据），以及扩展市场（登记市场、浏览目录、从市场安装 / 升级），见下面「扩展」和 [extensions.md](extensions.md)「管理界面：扩展」 |
+| 用量来源 | `/admin/usage` | 账号池网关（relay-history…）的订阅额度来源（`docs/usage-windows.md`「账号池网关」，#2595）：总开关和读取间隔、来源列表（名字、类型、地址、状态：上次读取、账号 / 窗口数、失败原因；每个来源的开关）、添加 / 编辑（类型、名字、地址、Key）和「测试连接」（只读一次、不保存，报告看到几个账号、几个窗口、各家几个）、删除（就地确认）。Key 只写不读，换了地址要重新填 |
 | 网络与访问 | `/admin/network` | 公网地址 / TLS / 候选地址（可改，重启生效）、`security` 的设置（只读）、管理界面的访问范围（只能收窄）、改管理员密码 |
 | 高级 › 互联 | `/admin/peers` | 一般用不到（推荐只装一台 hub）：组里的 hub（中心 / 成员、在线、任期，「设为中心」，原中心连不上时先确认）、发现到的 hub、生成 / 输入互联码、链路状态和 RTT、断开（[mesh.md](mesh.md)） |
 
@@ -169,6 +170,12 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | `GET extensions/-/markets`、`POST extensions/-/markets` `{"spec", "token"?}`、`DELETE extensions/-/markets/{id}`、`POST extensions/-/markets/{id}/refresh`、`PUT extensions/-/markets/{id}/token` `{"token"}` | 扩展市场，和 App 的 `/api/v1/extensions/-/markets…` 同一套（[extensions.md](extensions.md)「扩展市场」）；登记前先读一次索引，读不到 400 `market_failed`（`error` 是给人看的原因），token 只写不回显 |
 | `GET extensions/-/catalog?q=&market=&refresh=1`、`POST extensions/-/catalog/preview` `{"market", "extension"}`（老键 `plugin` 也认） | 市场的目录（`{markets, extensions, platform}`），和从市场预览（回同样的预览，多一个 `market`）；拿到预览后照常 `extensions/install` / `extensions/{id}/upgrade` |
 | `GET extensions/-/metrics?window=`、`GET extensions/{id}/metrics?window=`、`GET extensions/{id}/logs?since=&q=&limit=`、`GET extensions/{id}/logs/stream?since=` | 扩展的运行情况（调用次数、错误率、延迟、重启）和日志（server-sent events 实时跟），见 [extensions.md](extensions.md)「运行情况」 |
+| `GET usage-sources` | `{"enabled", "poll_minutes", "limit", "sources": [{id, name, type, url, has_key, enabled, status: {ok_at?, tried_at?, error?, seen?: {accounts, windows, listed, providers}}}]}`；**从不带 Key**，只有 `has_key`。`error` 是读失败的代码（`unauthorized`、`forbidden`、`not_found`、`unreachable`、`timeout`、`bad_response`、`too_large`、`redirect`、`server_error`） |
+| `PUT usage-sources` `{"enabled"?, "poll_minutes"?}` | 总开关和读取间隔（1–1440），写回 hub.json，立刻生效，回同上；400 `invalid_poll` |
+| `POST usage-sources` `{"type", "url", "key", "name"?, "enabled"?}` | 添加，回 `{"source"}`；400 `invalid_type` / `invalid_url`（要 http(s)，不能带用户名密码）/ `invalid_name` / `invalid_key` / `key_required`（relay-history 必须有 Key）、409 `too_many`（最多 8 个） |
+| `PUT usage-sources/{id}` `{"name"?, "type"?, "url"?, "key"?, "clear_key"?, "enabled"?}` | 改；不带 `key` 保留原来的，**但改了 `url` 或 `type` 必须重新带 `key`**（400 `key_required`：已保存的 Key 不会跟着换去新地址）；404 `not_found` |
+| `DELETE usage-sources/{id}` | 删除；404 `not_found` |
+| `POST usage-sources/test` `{"type", "url", "key"?, "id"?}` | 只读地读一次，什么都不保存：`{"ok": true, "accounts", "windows", "listed", "providers"}` 或 `{"ok": false, "code"}`（读失败是结果，不是 HTTP 错误）。不带 `key` 且带 `id` 时用已保存的 Key，**只对已保存的那个地址**；同时只跑一个（429 `busy`），最长 25 秒 |
 | 没有扩展底座的 hub | `extensions*` 写操作 503 `no_plugins`；更老的 hub 没有这些路由（404），页面提示先升级 hub |
 | 老路径 `plugins…` | #1844 之前的路由，hub 照样认，回老字段名（`plugins`、`plugin`、`plugin_name`，市场的个数 `plugins`）；页面先读一次列表，`extensions` 回 404 就整页改用老路由（老 hub，`web/src/admin/api.ts`） |
 

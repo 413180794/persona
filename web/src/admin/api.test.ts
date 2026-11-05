@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { addLinkMachine, addServiceMachine, adminApi, AdminError, errorText, handleLoginRequired, getExtensions, getMarkets, installExtension, linkPair, previewExtension, repairConnector, resetExtensionRoot, setCenter, setCsrf, setTransport, uninstallExtension, uploadExtension } from "./api";
+import { addUsageSource, editUsageSource, getUsageSources, removeUsageSource, saveUsageSettings, testUsageSource, addLinkMachine, addServiceMachine, adminApi, AdminError, errorText, handleLoginRequired, getExtensions, getMarkets, installExtension, linkPair, previewExtension, repairConnector, resetExtensionRoot, setCenter, setCsrf, setTransport, uninstallExtension, uploadExtension } from "./api";
 
 type Call = { url: string; init: RequestInit };
 
@@ -168,5 +168,29 @@ describe("extensions", () => {
     expect((await getExtensions()).extensions.map((e) => e.id)).toEqual(["b"]);
     expect((await getMarkets()).map((m) => m.extensions)).toEqual([2]);
     expect(calls.map((c) => c.url)).toEqual(["/api/v1/admin/extensions", "/api/v1/admin/plugins", "/api/v1/admin/plugins/-/markets"]);
+  });
+});
+
+describe("usage sources (docs/usage-windows.md「账号池网关」)", () => {
+  it("reads, saves, edits, tests and removes through /usage-sources, with the CSRF token on writes", async () => {
+    setCsrf("tok");
+    const calls = stub(200, { source: { id: "s1" }, sources: [] });
+    await getUsageSources();
+    await saveUsageSettings({ enabled: false, poll_minutes: 15 });
+    await addUsageSource({ type: "relay-history", url: "https://gateway.example.com", key: "k" });
+    await editUsageSource("a/b", { enabled: false });
+    await testUsageSource({ id: "s1", type: "generic", url: "https://gateway.example.com/u" });
+    await removeUsageSource("s1");
+    expect(calls.map((c) => `${c.init.method} ${c.url.replace("/api/v1/admin", "")}`)).toEqual([
+      "GET /usage-sources",
+      "PUT /usage-sources",
+      "POST /usage-sources",
+      "PUT /usage-sources/a%2Fb",
+      "POST /usage-sources/test",
+      "DELETE /usage-sources/s1",
+    ]);
+    expect(JSON.parse(String(calls[1].init.body))).toEqual({ enabled: false, poll_minutes: 15 });
+    expect(JSON.parse(String(calls[4].init.body))).toEqual({ id: "s1", type: "generic", url: "https://gateway.example.com/u" });
+    for (const c of calls.slice(1)) expect((c.init.headers as Record<string, string>)["X-Jarvis-CSRF"]).toBe("tok");
   });
 });

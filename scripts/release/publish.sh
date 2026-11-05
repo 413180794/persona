@@ -185,7 +185,8 @@ if [ -n "${NO_DEPLOY:-}" ]; then
 fi
 # The downloads first, into the slot no one is served from; then the deploy that points dl/SLOT at it.
 command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true
-for gz in "$OUT/bin/"*.gz; do
+# Absolute paths: wr runs wrangler inside the site copy.
+for gz in "$PWD/$OUT/bin/"*.gz; do
   wr "$OUT/site" r2 object put "$DL_BUCKET/$SLOT/${gz##*/}" --file "$gz" --content-type application/gzip --remote \
     >>"$OUT/upload.log" 2>&1 || { tail -20 "$OUT/upload.log" >&2; echo "upload of ${gz##*/} to R2 failed; see $OUT/upload.log" >&2; exit 1; }
 done
