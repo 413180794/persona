@@ -10,6 +10,7 @@ SIM=${SIM:?SIM=<simulator udid>}; PORT=${PORT:-18831}; OUT=${OUT:-/tmp/stream-sh
 CASES=${*:-testFollowingWhileAReplyStreams testFollowingWhenTheClearComesFirst testReadingWhileAReplyStreams testArrowWhileAReplyStreams testDragAwayWhileAReplyStreams testFollowingARunningTurn testFollowingAnAgentAtWork testReadingWhileAnAgentWorks}
 BUNDLE=$(cd "$ROOT" && python3 scripts/jarvis_config.py env | sed -n 's/^export JARVIS_BUNDLE_ID=//p')
 cd "$ROOT" && eval "$(python3 scripts/jarvis_config.py env)" >/dev/null
+SIM=$(scripts/app/sim-boot.sh "$SIM") || { echo "RESULT no simulator"; exit 1; }
 cd apple && xcodegen generate -q
 COMMON=(-project Persona.xcodeproj -scheme Jarvis -destination "id=$SIM" -derivedDataPath "$ROOT/build/DerivedData")
 [ -n "${SPM:-}" ] && COMMON+=(-clonedSourcePackagesDirPath "$SPM" -disableAutomaticPackageResolution)

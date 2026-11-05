@@ -1,7 +1,8 @@
 #!/bin/bash
 # Optionally slim a simulator for UI tests with simslim (https://github.com/mobai-app/simslim): turns off the
 # background services the tests don't use (docs/testing.md「UI 测试」). Without simslim it changes nothing.
-#   scripts/app/slim-sim.sh <udid> [profile]   # profile: default apple/simslim/ui.json
+#   scripts/app/slim-sim.sh <udid> [profile]   # profile: default apple/simslim/default.json
+# Usually called by scripts/app/sim-boot.sh (the entry that picks the profile and never reboots a booted simulator).
 # Run it after taking the ui lock (it boots the simulator) and before the tests. A shut-down simulator ends up
 # booted (the read-back needs it). A booted one that already matches the profile is only verified, not rebooted;
 # one that drifted (services missing, or more disabled than the profile, e.g. slimmed fully before) is rebooted
@@ -15,7 +16,7 @@ UDID="${1:-}"
 PROFILE="${2:-}"
 if [ -n "$PROFILE" ] && [ "${PROFILE#/}" = "$PROFILE" ]; then PROFILE="$PWD/$PROFILE"; fi
 cd "$(dirname "$0")/../.." || exit 2
-PROFILE="${PROFILE:-$PWD/apple/simslim/ui.json}"
+PROFILE="${PROFILE:-$PWD/apple/simslim/default.json}"
 
 done_with() { echo "slim-sim: $1 $UDID"; exit "${2:-0}"; }
 
@@ -64,8 +65,8 @@ for runtime, devices in json.load(sys.stdin)["devices"].items():
             print(d["state"].replace(" ", "_"), runtime.rsplit(".", 1)[-1].split("-")[0])
 ' "$UDID")
 [ -n "${STATE:-}" ] || { echo "slim-sim: no simulator $UDID" >&2; exit 2; }
-if [ "$PLATFORM" != iOS ]; then
-  echo "slim-sim: skipped ($PLATFORM simulator; the profile is for iPhone UI tests)"
+if [ "$PLATFORM" != iOS ] && [ "$PLATFORM" != watchOS ]; then
+  echo "slim-sim: skipped ($PLATFORM simulator; the profiles are for iPhone and Apple Watch)"
   done_with skipped
 fi
 

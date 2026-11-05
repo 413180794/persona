@@ -51,7 +51,7 @@
 - UI 测试锁了模拟器屏幕却没解锁（模拟器上按 Home 不解锁，要上滑），下一次 `xcodebuild test` 报「test runner hung before establishing connection」。
   模拟器系统语言是英文时，系统授权弹窗的按钮叫「Allow」，UI 测试两种都要认。
 - 模拟器会被 XCUITest 的 typeText 切成「硬件键盘」模式：之后软键盘不再弹出（键盘按钮显示已弹起，但屏幕上没有键盘），依赖键盘高度的测试全挂。
-  这台机器没有 Simulator.app，`defaults write com.apple.iphonesimulator …ConnectHardwareKeyboard` 改不回来：`simctl create` 一台新的跑。
+  这台机器没有 Simulator.app，`defaults write com.apple.iphonesimulator …ConnectHardwareKeyboard` 改不回来：`scripts/app/sim-boot.sh "<新名字>"` 建一台新的跑。
 - XCUITest 在键盘弹起的动画中点键栏会点空（键栏正跟着键盘移动）：先等键盘出现、停一下再点。
 - XCUITest 的 `typeText` 绕过输入法直接插字，测不到拼音的 marked text：要走输入法就点屏幕键盘的键（`app.keys["y"].tap()`，空格选第一个候选）。
   第三方键盘（2026-11-03，#909）：在仓库外做一个只有键盘扩展的小 App，按钮里用 `textDocumentProxy` 的 `setMarkedText` / `unmarkText` / `insertText` 打一段固定的字；

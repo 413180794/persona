@@ -311,7 +311,7 @@ herdr 看程序有没有开鼠标上报，开了（Claude 全屏渲染）就转�
   Ctrl / Esc / Tab 用 JetBrains Mono，其余是 SF Symbols 图标（Moshi 用 Lucide，没引入）；双击键盘键 = 回车。原来是一排 40pt 的玻璃圆键。
 - 会话页顶栏不再有「对话 / 终端 / Git / 文件」选项卡：终端是右上角的按钮，文件 / Git 往左划或 ··· 菜单（`docs/ios.md`）。
 - 键盘弹起时终端让出行数（`testDrivingTheTerminalSendsItsBytes`）。注意：模拟器会被 XCUITest 的打字切成「硬件键盘」模式，之后软键盘不再出现、终端不让行，
-  这个测试就失败（干净的 master 上也一样）；没有 Simulator.app 时改不回来，新建一台模拟器跑。
+  这个测试就失败（干净的 master 上也一样）；没有 Simulator.app 时改不回来，用 `scripts/app/sim-boot.sh "<新名字>"` 新建一台跑。
 
 ## 十五、点终端 = 点在终端里；键盘只从键栏的按钮出来（2026-10-30，用户要求）
 

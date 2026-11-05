@@ -1,0 +1,15 @@
+{
+  "name": "persona-watch",
+  "description": "scripts/app/sim-boot.sh --profile watch, for both simulators of a paired iPhone + Apple Watch (simslim v0.14.0, watchOS 26.5): the default profile plus connectivity (pairing, WatchConnectivity, Continuity), messaging (identityservicesd, which Watch pairing and WCSession transfers go through) and health (HealthKit: the phone_health tools and the watch app). simslim keeps com.apple.homed on watchOS by itself.",
+  "except": [
+    "photos",
+    "widgets",
+    "connectivity",
+    "messaging",
+    "health"
+  ],
+  "keep": [
+    "com.apple.apsd",
+    "com.apple.linkd"
+  ]
+}

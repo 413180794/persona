@@ -1,0 +1,13 @@
+{
+  "name": "persona-live-activity",
+  "description": "scripts/app/sim-boot.sh --profile live-activity (simslim v0.14.0, iOS 27.0): the default profile plus store (App Store, Push & Media), for Live Activity work that goes through real APNs: push-to-start and update tokens, TestManualLiveActivityPush. The default profile already keeps widgets (chronod, liveactivitiesd), linkd and apsd, which LiveActivityActionTests / LiveActivityShots need; measured on iOS 27.0, turning widgets off saved nothing (2.34 GB / 86 processes with it, 2.77 GB / 88 without), so default keeps it.",
+  "except": [
+    "photos",
+    "widgets",
+    "store"
+  ],
+  "keep": [
+    "com.apple.apsd",
+    "com.apple.linkd"
+  ]
+}

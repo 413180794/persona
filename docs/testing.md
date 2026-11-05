@@ -4,10 +4,12 @@
 
 ```sh
 cd server && go test ./... && go vet ./...                    # 服务端
-cd apple && xcodegen generate -q && xcodebuild -project Persona.xcodeproj -scheme Persona \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
+SIM=$(scripts/app/sim-boot.sh "Persona Tests <issue 号>")              # 自己的模拟器，瘦身启动（「模拟器」）
+cd apple && xcodegen generate -q && ~/.local/bin/xcode-slot xcodebuild -project Persona.xcodeproj -scheme Persona \
+  -destination "id=$SIM" test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
 ./scripts/app/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
 cd apple/Packages/PersonaKit && swift test                             # PersonaKit 的单测：在 Mac 上直接跑，不编 App、不开模拟器
+python3 -B scripts/test/test_sim_boot.py                               # sim-boot.sh（假的 xcrun / simslim，不开模拟器）
 ```
 
 **PersonaKit**（`apple/Packages/PersonaKit`，#2095）：App 里不碰界面的逻辑挪进这个包，它的测试用 `swift test` 在 Mac 上跑，冷的约 10 秒、
@@ -66,8 +68,7 @@ transcript 解析用真实样本做 golden 测试（`server/internal/transcript/
 
 ```sh
 python3 scripts/mock/mock_hub.py &                                  # 127.0.0.1:18760
-SIM=$(xcrun simctl create "Jarvis Shots" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro <iOS 26 runtime>)
-scripts/app/slim-sim.sh "$SIM"                                      # 可选：装了 simslim 才瘦身（「UI 测试」），没装自动跳过
+SIM=$(scripts/app/sim-boot.sh "Persona Shots <issue 号>")          # 新建并瘦身启动（「模拟器」），没装 simslim 时普通启动
 xcrun simctl status_bar $SIM override --time "$(date +%H:%M)" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
 xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   -pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A18760&token=mock" [-tab dev|mail] [-openSession <machine>/<session>]
@@ -184,43 +185,71 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 ## UI 测试（`scripts/app/ui-test.sh`）
 
 `apple/PersonaUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
-`SIM=<udid> ./scripts/app/ui-test.sh [machine/session]`。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
+`SIM=<udid 或名字> ./scripts/app/ui-test.sh [machine/session]`（模拟器经 `sim-boot.sh` 瘦身启动，见下面「模拟器」）。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
 长按消息的操作条（`MessageMenuTests`，按 0.4 / 0.8 / 1.5 / 2.5 秒松手都要留下，点列表、滑动会关）连 `scripts/mock/mock_hub.py`，不用真实 hub：
 `TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests`。
 写 UI 测试时先在没有修复的代码上跑一次确认它会失败，再上修复。
 
-### 模拟器瘦身（可选，simslim，#2287）
+### 模拟器：一律经 `scripts/app/sim-boot.sh`，默认瘦身（simslim，#2287、#2801）
 
-新建的 iPhone 模拟器静置就占约 6 GB（272 个进程），大多是测试用不上的系统服务；
-[simslim](https://github.com/mobai-app/simslim) 把它们关掉，本机实测（同一台设备、重启后静置 90 s）全关 65 个进程、1.17 GB，默认配置 94 个进程、1.86 GB，多个 Agent 并行跑 UI 测试时省下的是内存。
-默认配置 `apple/simslim/ui.json` 留着实时活动（widgets）、照片（photos）、apsd 和 linkd（App Intents，实时活动上的按钮靠它），理由写在它的 `description` 里。
+**新建、复用、启动模拟器都走 `scripts/app/sim-boot.sh`**，别直接 `simctl create` / `simctl boot` / 让 `xcodebuild test` 去开一台：
+它按名字复用或新建，用 [simslim](https://github.com/mobai-app/simslim) 按用途的 profile 关掉用不上的系统服务后启动，读回校验（`simslim verify`）、
+查这一用途要的功能（`simslim doctor --requires …`），最后在 stdout 打印 udid。`sim.sh`、`ui-test.sh`、`relay_sim_e2e.sh`、`diag/stream-scroll/run-ios.sh` 都已经经过它。
 
-- 安装（可选）：`go install github.com/mobai-app/simslim/cmd/simslim@v0.14.0`（能固定版本，`simslim version` 显示 dev），brew 也可以（装的是最新版）。
-  没装时 `scripts/app/slim-sim.sh` 只打印 skipped、退出 0，一切照旧；不在 PATH 里用 `SIMSLIM=<路径>` 指过去。
-- 用法：`scripts/app/slim-sim.sh <udid> [profile]`。它会启动模拟器，所以**放在拿到 ui 锁之后、跑测试之前**；关着的设备瘦完是开着的（要开着才能读回校验），
-  已经瘦好、开着的设备只校验一遍，不重启；和配置对不上的（少关了，或者之前全关过、比配置多关了）会按配置重启一次。
-  profile 不是合法 JSON、udid 为空或不存在时退出 2，什么都不动。最后一行是结论 `slim-sim: slim|skipped|failed→stock <udid>`，写进报告；
-  出错时它先 `simslim off` 回到原版再退出 0，测试照跑，只是没瘦。
-- 新建、`simctl erase`、换 runtime 新建之后都要重跑（瘦身状态记在那台设备上，erase 和新建出来的都是原版）。
-- 不要用 `simslim watch`：它会改本机所有模拟器，包括别人正在用的。也不要对不是自己建的模拟器 on / off。
-- 手工验证推送、Spotlight、听写、手表配对这类功能时，用 `simslim off <udid>` 或者新建一台原版。测试只在瘦模拟器上挂，先在原版上复跑一次再判断是不是代码的问题。
-- 测试类需要更多服务时临时放开：开着的设备 `simslim enable <udid> <类别或 launchd 名>`，不重启、下次 `on` 或重启前有效；
-  要从头按带上它的配置瘦，用 `simslim on <udid> --except photos,widgets,<类别> --keep com.apple.apsd,com.apple.linkd`（会重启）。
-  `on --no-reboot` 只会多关、不会重新打开已关的服务，放开不了。类别见 `simslim profiles`。
+```sh
+SIM=$(scripts/app/sim-boot.sh "Persona Shots <issue 号>")       # 没有这个名字就新建（iPhone 17 Pro、能跑它的最新 runtime）
+SIM=$(scripts/app/sim-boot.sh --profile watch --device-type "Apple Watch Series 11 (46mm)" "Persona Watch <issue 号>")
+SIM_PROFILE=stock SIM=<udid> ./scripts/app/ui-test.sh           # 脚本里用环境变量选 profile
+```
 
-| 测试 / 功能 | 需要的类别（默认配置之外再加的） |
+本机实测（2026-11-05，同一台 iPhone 17 Pro / iOS 27.0，重启后静置 90 s，`simslim measure`，机器负载 300–1000）：
+
+| | 进程 | 内存（phys_footprint） |
+| --- | --- | --- |
+| 原版 | 244 | 10.87 GB |
+| `default` | 86 | 2.34 GB |
+| `default` 再关 widgets（实时活动） | 88 | 2.77 GB（省不下来，所以 default 留着它） |
+
+Profile（`apple/simslim/<名字>.json`，理由写在各自的 `description`）：
+
+| profile | 用途 | 在全关的基础上留着 |
+| --- | --- | --- |
+| `default` | UI 测试、截图、平常跑 App | widgets（实时活动、灵动岛、小组件）、photos（照片选择、存图）、`com.apple.apsd`（推送）、`com.apple.linkd`（App Intents：实时活动上的按钮、快捷指令） |
+| `watch` | 配对的 iPhone + Apple Watch（两台都用它） | default 的全部，加 connectivity（配对、WatchConnectivity）、messaging（identityservicesd）、health（HealthKit、手机健康工具） |
+| `live-activity` | 走真实 APNs 的实时活动（push-to-start、`TestManualLiveActivityPush`；还没在真实 APNs 上跑过） | default 的全部，加 store（App Store、推送、媒体） |
+| `stock` | 不瘦身：断言「系统没弹窗」的测试、键盘高度相关的截图、Siri / Spotlight / 听写，或排除瘦身的影响 | 全部 |
+
+Persona 没有 Universal Links（没有 associated domains），所以没留 web；没有内购，没留 storekit。
+
+- **已经开着的模拟器一律不重启**（可能是别的 Agent 在用）：瘦好的只校验；没瘦或和 profile 对不上的照原样用，打一行警告，结论是 `in-use-not-slim`。
+  确定是自己的才加 `--reslim`（会重启它）。不要对别人的模拟器 `simslim on / off`，也不要开 `simslim watch`（改本机所有模拟器）。
+- 没装 simslim 时退回普通 `simctl boot`，提示安装，结论 `stock-no-simslim`。安装：`brew install mobai-app/tap/simslim`，
+  或 `go install github.com/mobai-app/simslim/cmd/simslim@v0.14.0`（固定版本，`simslim version` 显示 dev）；不在 PATH 里用 `SIMSLIM=<路径>`。
+- stderr 的倒数第一行是结论 `sim-boot: slim|stock|stock-no-simslim|in-use-not-slim|failed→stock <profile> <udid>`，写进报告；
+  瘦身出错时它先 `simslim off` 回到原版再继续（`failed→stock`），测试照跑。用法错误（profile 不存在、udid 不存在、同名的有几台）退出 2，什么都不动。
+- 真正瘦身的是 `scripts/app/slim-sim.sh <udid> [profile JSON]`（关着的设备一次启动瘦好；开着的和配置对不上会重启），一般不直接调它。
+- 新建、`simctl erase`、换 runtime 之后瘦身状态就没了（记在那台设备上），重跑 sim-boot.sh 即可。用完 `xcrun simctl shutdown <udid>`，任务结束 `xcrun simctl delete <udid>`。
+- 测试只在瘦模拟器上挂，先用 `--profile stock` 新建一台（或对自己的那台 `simslim off <udid>`）复跑，再当成代码的问题。
+- 临时多开一类服务：开着的设备 `simslim enable <udid> <类别或 launchd 名>`，不重启、下次 `on` 或重启前有效；
+  要长期带上它，加进对应的 profile（`simslim enable … --save apple/simslim/<名字>.json`）再 `--reslim`。`on --no-reboot` 只会多关、不会重新打开，放开不了。类别见 `simslim profiles`，功能见 `simslim doctor --list`。
+
+| 测试 / 功能 | profile 或要多开的 |
 | --- | --- |
-| `LiveActivityActionTests`、`LiveActivityShots` | widgets 和 linkd（默认已开）。重启后的第一次运行在原版上也会挂（锁屏上没有活动），复跑一次 |
-| `PhotoSaveTests`、`VideoSendTests`、`LarkAttachmentTests` | photos（默认已开） |
-| `TestManualLiveActivityPush`（真实 APNs） | apsd（默认已留） |
+| `LiveActivityActionTests`、`LiveActivityShots` | 先用 stock。iOS 27.0 上（2026-11-05，#2801）原版 2 次过 1 次（重启后第一次挂，锁屏上没有活动），default 5 次只过 1 次，还没查清是瘦身的问题还是负载下本来就不稳；查清前别拿瘦模拟器上的结果下结论 |
+| `PhotoSaveTests`、`VideoSendTests`、`LarkAttachmentTests` | default（photos 已开） |
+| `NotificationActionTests`、`relay_sim_e2e.sh`（本地通知 / `simctl push`） | default（apsd 已留） |
+| `TestManualLiveActivityPush`（真实 APNs） | live-activity |
 | `QuickLookFileTests` 分享面板卡住或变慢时 | `--keep com.apple.peopled,com.apple.suggestd` |
 | 手工：Spotlight、文件选择器的「最近」 | search |
 | 手工：听写、录音转写、快捷指令 | siri，另 `--keep com.apple.mobileassetd`（linkd 默认已留） |
-| 断言「系统没弹窗」的测试（`PasswordPrompt.assertNone`：`SecretFieldTests`、`ChannelSettingsTests`、`EngineChoiceTests`、`ExtensionMarketTests`、`ExtensionSettingsTests`、`LarkNativeEncryptionFlowTests`、`PermissionInputUITests`），键盘高度相关的截图 | 在原版上跑。web、icloud、siri 关掉后系统可能根本不弹「保存密码？」、候选栏也可能变，瘦模拟器上通过不算防回归的证据（还没做过回退修复的负面对照） |
-| 手工：健康工具、手表配对 | health、connectivity、messaging |
+| 断言「系统没弹窗」的测试（`PasswordPrompt.assertNone`：`SecretFieldTests`、`ChannelSettingsTests`、`EngineChoiceTests`、`ExtensionMarketTests`、`ExtensionSettingsTests`、`LarkNativeEncryptionFlowTests`、`PermissionInputUITests`），键盘高度相关的截图 | stock。web、icloud、siri 关掉后系统可能根本不弹「保存密码？」、候选栏也可能变，瘦模拟器上通过不算防回归的证据 |
+| 手工：健康工具、手表配对 | watch |
 
-坑：模拟器 create 之后的首次启动很慢（负载高时瘦身连首启 439 s，原版首启 285 s；之后每次启动约 28 s）。
-要反复新建，就先做一台瘦好的模板，用 `simslim clone <模板 udid> <名字>` 复制（会带上瘦身配置；`simctl clone` 不带，克隆后要重跑 slim-sim.sh）。
+坑：
+- 模拟器 create 之后的首次启动很慢（负载高时瘦身连首启 439 s，原版首启 167–285 s；之后每次启动约 12–28 s）；把开着的原版改成瘦的（`--reslim`）负载 300+ 时要 12 分钟。
+  要反复新建，就先做一台瘦好的模板，用 `simslim clone <模板 udid> <名字>` 复制（会带上瘦身配置；`simctl clone` 不带，克隆后要重跑 sim-boot.sh）。
+- 负载高时 App（连系统「设置」）刚打开的头一分钟可能是白屏，原版也一样，等一会儿再截图，别当成瘦身关坏了。
+- iOS 27.1 的 runtime 没有 iPhone 17 Pro 这类设备类型，`simctl create` 报 Incompatible device：sim-boot.sh 自动挑能跑这个设备类型的最新 runtime，`--runtime` 指定。
 
 对话输入区（#2200）：先确认端口空闲，再 `PORT=<独立端口> python3 scripts/mock/composer_hub.py`。
 这个独立入口复用编造数据，只把主对话和 Agents 对话的模型改成短／长 GPT ID，不修改其他车道的 mock 夹具。

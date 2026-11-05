@@ -91,7 +91,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 ## 构建与验证
 
 - 服务端：`./scripts/test/test-server.sh`（在 hub 机器上连真实 Postgres 跑全部测试）；部署 `./scripts/deploy/deploy.sh [机器 id…]`（默认配置里的全部机器）。
-- iOS：`./scripts/app/sim.sh [-openSession <machine>/<session>]` 编译、装到配置里的模拟器、自动配对 hub；截图 `xcrun simctl io <udid> screenshot`。
+- iOS：`./scripts/app/sim.sh [-openSession <machine>/<session>]` 编译、装到配置里的模拟器（经 `sim-boot.sh` 瘦身启动）、自动配对 hub；截图 `xcrun simctl io <udid> screenshot`。
   直接用 xcodegen / Xcode 前先 `python3 scripts/persona_config.py xcconfig`（生成 bundle id、团队）。
 - Android：`./scripts/app/android.sh [install|apk|test|lint]`（`docs/android.md`）。
 - 网页：`cd web && npm test && npm run build`；部署 `./scripts/deploy/deploy.sh web`（`docs/web.md`）。
@@ -108,7 +108,8 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
   push 前 `git diff origin/master...HEAD --stat` 只能有自己的文件。数据库迁移号挑之前先看所有 worktree。（`workflow.md`）
 - 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论。
 - 手动 `xcodebuild` 前先 `eval "$(python3 scripts/persona_config.py env)"`（`DEVELOPER_DIR`），否则用的是旧 Xcode，报一堆像别人代码坏了的错。（`testing.md`）
-- 测试只在瘦身的模拟器上挂（`scripts/app/slim-sim.sh` 输出 slim），先 `simslim off <udid>` 或新建一台原版复跑，再当成代码的问题；反过来，断言「系统没弹窗」的测试（`PasswordPrompt.assertNone`）在瘦模拟器上通过不算证据，要在原版上跑；别开 `simslim watch`（改本机所有模拟器）。（`testing.md`「模拟器瘦身」）
+- **模拟器一律经 `scripts/app/sim-boot.sh` 建 / 开**（`SIM=$(scripts/app/sim-boot.sh "<名字>")`，按用途 `--profile default|watch|live-activity|stock`，默认用 simslim 瘦身，原版约 11 GB → 2.3 GB），不直接 `simctl create/boot`、不用 `-destination name=…` 让 xcodebuild 自己开；它不重启已经开着的模拟器（可能是别人的），自己的才 `--reslim`。（`testing.md`「模拟器」）
+- 测试只在瘦身的模拟器上挂（`sim-boot.sh` 输出 slim），先 `--profile stock` 新建一台原版复跑，再当成代码的问题；反过来，断言「系统没弹窗」的测试（`PasswordPrompt.assertNone`）在瘦模拟器上通过不算证据，要在原版上跑；别开 `simslim watch`（改本机所有模拟器）。（`testing.md`「模拟器瘦身」）
 - UI 测试一律 `app.launchPinned()` 启动：固定风格（默认液态玻璃，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 整套换），布局同 `launchPersona()`（`launchJarvis()` 兼容入口保留）。（`testing.md`）
 - DEBUG 启动参数的名字不能和任何 Swift 标识符（类型成员、存储属性）同名，否则 `release.sh` 的 strings 检查拦下 TestFlight；新开关用 `open…` / `show…` 并加进 release.sh 的列表。（`ios.md`）
 - Release 的 `SWIFT_REFLECTION_METADATA_LEVEL` 必须是 `all`：App Intents 靠反射里的属性名给 `@Parameter` 传值，去掉名字后快捷指令 / Siri 的参数全是空的、App 崩溃，Debug 和模拟器上看不出来（`lessons/ios.md`「快捷指令运行「问 Persona」」）。
@@ -290,7 +291,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 
 | 文档 | 内容 |
 | --- | --- |
-| `docs/testing.md` | 测试命令、模拟器截图检查清单、可选的模拟器瘦身（simslim，`scripts/app/slim-sim.sh`） |
+| `docs/testing.md` | 测试命令、模拟器截图检查清单、模拟器统一入口 `scripts/app/sim-boot.sh`（simslim 瘦身，按用途的 profile） |
 | `docs/runtime-cli.md` | DEBUG 构建里的命令通道（`scripts/app/personactl.py`，旧 `jarvisctl.py` 兼容）：运行中读状态、等画面停下、截图，协议和安全约束 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 

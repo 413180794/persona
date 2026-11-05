@@ -1,6 +1,0 @@
-{
-  "name": "persona-ui",
-  "description": "Default for PersonaUITests on a new iPhone simulator (simslim v0.14.0, iOS 26.0; scripts/app/slim-sim.sh, docs/testing.md「UI 测试」). Everything else off. widgets on: with widgets off LiveActivityActionTests finds no activity on the lock screen (2/2 runs, #2287). linkd kept: it runs the App Intent behind the activity's buttons; without it the tap reaches no hub (2/2 runs), with it the test passes like stock (both fail the first run after a reboot, then pass). photos on: VideoSendTests (simctl addmedia + the out-of-process PhotosPicker) and LarkAttachmentTests need assetsd; not run slim, kept to be safe. apsd kept: the pushType .token path was never run slim.",
-  "except": ["photos", "widgets"],
-  "keep": ["com.apple.apsd", "com.apple.linkd"]
-}

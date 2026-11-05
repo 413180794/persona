@@ -6,6 +6,8 @@ cd "$(dirname "$0")/../.."
 eval "$(python3 scripts/jarvis_config.py env)"
 python3 scripts/jarvis_config.py xcconfig
 SIM="${SIM:-$JARVIS_SIM}"
+# boots it slim (SIM_PROFILE=default|watch|live-activity|stock), docs/testing.md「模拟器」
+SIM=$(scripts/app/sim-boot.sh "$SIM") || exit 1
 RESOLVER=$(python3 scripts/persona_identity.py --service hub --prefix -)
 TOKEN=$(ssh "$JARVIS_HUB_SSH" "$RESOLVER
 python3 -c 'import json,os;print(json.load(open(os.path.join(os.environ[\"PERSONA_HOME\"],\"hub.json\")))[\"token\"])'")

@@ -4,7 +4,7 @@
 
 | 目录 | 内容 | 常用入口 |
 | --- | --- | --- |
-| `app/` | iOS / macOS / Android 构建、运行、截图，DEBUG runtime CLI 和场景脚本，Mac 菜单栏 App「Persona Link」 | `app/sim.sh`、`app/android.sh`、`app/mac_shot.sh`、`app/jarvisctl.py`、`app/mac-link.sh` |
+| `app/` | iOS / macOS / Android 构建、运行、截图，DEBUG runtime CLI 和场景脚本，Mac 菜单栏 App「Persona Link」 | `app/sim-boot.sh`（建 / 开模拟器的唯一入口，simslim 瘦身）、`app/sim.sh`、`app/android.sh`、`app/mac_shot.sh`、`app/jarvisctl.py`、`app/mac-link.sh` |
 | `deploy/` | hub / node 部署、数据库准备、安装器、skills 同步，Linux 上连接器的 systemd 包装 | `deploy/deploy.sh`、`deploy/install.sh`、`deploy/link-systemd.sh` |
 | `release/` | App 和公开 personad 发版、TestFlight、App Store Connect、签名、bundle 隐私和权限文案检查 | `release/release.sh`、`release/publish.sh`、`release/asc_testflight.py`、`release/entitlements.py` |
 | `mock/` | 假 hub、运行中切换场景、体验模式数据生成 | `mock/mock_hub.py`、`mock/mock_scenarios.py`、`mock/make_demo_data.py` |

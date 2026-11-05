@@ -8,10 +8,11 @@ python3 scripts/jarvis_config.py xcconfig
 RESOLVER=$(python3 scripts/persona_identity.py --service hub --prefix -)
 cd apple
 SIM="${SIM:-$JARVIS_SIM}"
-[ -n "$SIM" ] || { echo "set SIM=<udid> or \"simulator\" in the config (docs/config.md)" >&2; exit 2; }
+[ -n "$SIM" ] || { echo "set SIM=<udid or name> or \"simulator\" in the config (docs/config.md)" >&2; exit 2; }
+# boots it slim (SIM_PROFILE picks the simslim profile; a booted one is used as it is), docs/testing.md「模拟器」
+SIM=$(../scripts/app/sim-boot.sh "$SIM") || exit 1
 xcodegen generate -q
 xcodebuild -project Persona.xcodeproj -scheme Persona -destination "id=$SIM" -derivedDataPath ../build/DerivedData build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" | sort -u
-xcrun simctl boot "$SIM" 2>/dev/null || true
 xcrun simctl uninstall "$SIM" "$JARVIS_BUNDLE_ID" 2>/dev/null || true
 xcrun simctl install "$SIM" ../build/DerivedData/Build/Products/Debug-iphonesimulator/Persona.app
 TOKEN=$(ssh "$JARVIS_HUB_SSH" "$RESOLVER

@@ -11,6 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 : "${SIM:?set SIM=<simulator udid>}"
+SIM=$(scripts/app/sim-boot.sh "$SIM")   # boots it slim if it is shut down (default profile keeps apsd)
 OUT=${OUT:-/tmp/relay-e2e}
 BUNDLE=$(python3 scripts/jarvis_config.py get app.bundle_id)
 TMP=$(mktemp -d)
