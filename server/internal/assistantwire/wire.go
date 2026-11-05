@@ -588,6 +588,7 @@ var Routes = []string{
 	"PATCH /api/v1/todos/{id}/decisions/{did}",
 	"POST /api/v1/todos/{id}/done-check",
 	"POST /api/v1/todos/{id}/retry",
+	"POST /api/v1/todos/retitle",
 	// Its settings and its main conversation (profile.go, start.go).
 	"GET /api/v1/assistant",
 	"PUT /api/v1/assistant",

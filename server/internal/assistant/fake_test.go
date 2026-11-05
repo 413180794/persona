@@ -79,10 +79,14 @@ type fakeHub struct {
 	triageAsked []modelCall
 	tabReply    string
 	tabAsked    []string
-	muted       map[string][]string
-	hubCards    []proto.Interaction // interactions.list: what the hub has up
-	told        []told              // the manager's fleet.* events (Tell)
-	failSend    error               // session.send fails with it
+	// The todo titles' model (todo.title): its answer, an error instead, and what it was asked.
+	todoTitleReply string
+	todoTitleErr   error
+	todoTitleAsked []modelCall
+	muted          map[string][]string
+	hubCards       []proto.Interaction // interactions.list: what the hub has up
+	told           []told              // the manager's fleet.* events (Tell)
+	failSend       error               // session.send fails with it
 
 	// The launchers' health (launcher_health.go): launchers.check's answers by "machine/launcher" (none: it works),
 	// the checks and repairs asked for, launchers.repair's answer (nil: the node has no such method) and what a repair
@@ -741,6 +745,9 @@ func (f *fakeHub) fakeModel(t *testing.T) {
 		case in.System == tabName:
 			f.tabAsked = append(f.tabAsked, in.System+"\n---\n"+user)
 			reply = f.tabReply
+		case strings.Contains(in.System, "起一个待办标题"): // a task's todo (todo_titles.go): none unless the test gives one
+			f.todoTitleAsked = append(f.todoTitleAsked, modelCall{in.System, user})
+			reply, fail = f.todoTitleReply, f.todoTitleErr != nil
 		case strings.Contains(in.System, "盯着用户电脑上的编程 Agent"): // the Agents triage (agents_triage.go)
 			f.triageAsked = append(f.triageAsked, modelCall{strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(in.System), jsonOnly)), user})
 			reply, fail = f.triage, f.triage == ""

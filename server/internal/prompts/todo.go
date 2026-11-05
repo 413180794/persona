@@ -23,3 +23,18 @@ func RenderTodoDecisions(d TodoDecisions) string {
 	}
 	return render("todo/decisions", d)
 }
+
+// TodoTitle is the system prompt naming a todo a task opened after what the agent is asked to do (todo/title, #2775,
+// docs/todos.md「待办标题」).
+type TodoTitle struct {
+	// Language is the title's language by its own name ("English", "日本語"); "" is Chinese.
+	Language string
+	Max      int // characters
+}
+
+func RenderTodoTitle(t TodoTitle) string { return render("todo/title", t) }
+
+// RenderTodoTitleInput is what the title model reads: the task's prompt (the todo's notes).
+func RenderTodoTitleInput(prompt string) string {
+	return render("todo/title_input", struct{ Prompt string }{prompt})
+}

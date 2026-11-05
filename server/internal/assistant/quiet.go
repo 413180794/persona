@@ -176,17 +176,22 @@ func (s *Service) quietAgentTask(ctx context.Context, conversation string, m Dev
 	if _, reports := s.reporterOf(ctx, conversation); !reports && !s.isMain(ctx, conversation) {
 		return false
 	}
-	title, _ := tab.(string)
-	if p := clip(oneLine(prompt), 40); p != "" {
-		title = p
-	}
 	if !s.quietTask(ctx, conversation) {
 		return false
+	}
+	// The prompt cleaned up now, the model's name for it later (todo_titles.go); the tab name when nothing is left.
+	tabName, _ := tab.(string)
+	title, retitle := s.taskTitle(ctx, "", prompt)
+	if title == "" {
+		title, retitle = tabName, false
 	}
 	todo, err := s.createTodo(ctx, title, prompt, conversation, "")
 	if err != nil {
 		s.logf("agent_start %s: todo: %v", short(sid), err)
 		return false
+	}
+	if retitle {
+		s.nameTodoLater(ctx, todo.ID, title, prompt)
 	}
 	if err := s.linkTodoAgent(ctx, todo.ID, m.ID, sid, title, cwd, ""); err != nil {
 		s.logf("agent_start %s: link %s: %v", short(sid), todo.ID, err)

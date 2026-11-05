@@ -196,6 +196,22 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 	return &updated, nil
 }
 
+// RetitleTodo replaces a todo's title with to only while it is still from: an automatic title (#2775) never writes
+// over one the user gave meanwhile. False (and no error) when the title had changed or the todo is gone.
+func (d *DB) RetitleTodo(ctx context.Context, id, from, to string, at time.Time) (*TodoRow, bool, error) {
+	var r TodoRow
+	err := d.pool.QueryRow(ctx, `UPDATE todos SET title = $3, updated_at = $4 WHERE id = $1 AND title = $2
+		RETURNING `+todoColumns, id, from, to, at).
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt, &r.Quiet)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return &r, true, nil
+}
+
 // FailTodo ends a todo whose agent did not start: done (unless it already was) with why (#1077).
 func (d *DB) FailTodo(ctx context.Context, id, startError string, at time.Time) (*TodoRow, error) {
 	var r TodoRow

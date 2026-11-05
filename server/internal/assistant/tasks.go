@@ -423,10 +423,14 @@ func (s *Service) startPlan(ctx context.Context, id string, edits []PlanTask, re
 	}
 	for i := range p.Tasks {
 		t := &p.Tasks[i]
-		todo, err := s.createTodo(ctx, t.Title, t.Prompt, p.Conversation, p.ID)
+		title, retitle := s.taskTitle(ctx, t.Title, t.Prompt) // the assistant's own title stays when it is a real one
+		todo, err := s.createTodo(ctx, title, t.Prompt, p.Conversation, p.ID)
 		if err != nil {
 			t.Error = err.Error()
 			continue
+		}
+		if retitle {
+			s.nameTodoLater(ctx, todo.ID, title, t.Prompt)
 		}
 		t.TodoID = todo.ID
 		if _, err := s.appendFeed(ctx, p.Conversation, feedTask, todo.ID, nil); err != nil {

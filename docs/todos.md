@@ -91,6 +91,7 @@
 | GET | `/api/v1/todos` | 全部待办列表（`created_at` 降序），每个待办包含 `spaces` 列表和 `agents` 列表（过滤掉已移出行；活跃在前按 `linked_at` 降序，参与过在后按 `released_at` 降序） |
 | POST | `/api/v1/todos` | 新建待办 `{"title", "notes"?}` → `{"todo": Todo}`；`title` 不能为空（400）；只读角色（手表）403 |
 | PATCH | `/api/v1/todos/{id}` | 修改待办 `{"title"?, "notes"?, "done"?}` → `{"todo": Todo}`；只修改传入的字段；用户改完成状态时清掉 `done_by` / `done_reason`，从已完成改回未完成时记 `reopened_at`；不存在 404；只读角色 403 |
+| POST | `/api/v1/todos/retitle` | 把以前按 prompt 第一行起标题的任务待办改成短标题（见「待办标题」）→ `{"dry_run", "todos": [{"id", "old_title", "new_title"}]}`；`?dry_run=1` 只列不改；只读角色 403 |
 | POST | `/api/v1/todos/{id}/done-check` | 只读地跑一次「自动完成」的判断 → `{"verdict", "reason", "would_close", "skip", "replies", "signals"}`，不写库（见「自动完成」）；不存在 404；只读角色 403 |
 | DELETE | `/api/v1/todos/{id}` | 删除待办及其关联 → `{"ok": true}`；Agent 会话本身不动；不存在 404；只读角色 403 |
 | PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 整组挂工作区项目到待办 → `{"ok": true, "linked": N}`；`space` 为 URL 编码的项目名（通配路径）；已完成待办不可挂（409）；不存在 404；只读角色 403 |
@@ -195,6 +196,22 @@ botmux 会话没有 herdr pane，不带 `persona_from`。node 从 `botmux observ
 - 待办列表排序：未完成的在前（同状态按 `created_at` 降序），已完成的收起在列表底部。
 - 完成即代表该事项结束：事项下所有 Agent 的会话中不再标注当前在为该待办干活；如需继续可「重新打开」。
 - 任务还在开 Agent 时用户点了完成（机器忙时能开几分钟，`done_at` 先落下）：不算「没开起来」，待办保持已完成、没有 `start_error`；已经开起来的 Agent 挂在这个已完成的待办上，交给「做完的任务关掉 Agent」按原有规则（空闲够久才关）回收（#2954）。
+
+## 待办标题
+
+`task_plan` 和 `agent_start` 开的待办（#2775）以前直接用 prompt 第一行当标题，开头常是给 Agent 的话（「ultrathink ultracode 主人 11-05 19:47 的反馈，已授权直接开工：…」「秘书派活（主人授权过…）」），看不出是什么事。现在分两步（`assistant/todo_titles.go`）：
+
+1. **建待办时**同步给一个清理过的标题：去掉开头的 ultrathink / ultracode / think hard 之类的关键词、「主人 11-05 19:47 的反馈」这种来历和时间戳、「秘书派活（…）」「【…】」这种括号说明、「已授权直接开工」，截到 20 个字（日语 20、其他语言 40 个字符）。不调模型，不挡任务开工。
+2. **后台**用小任务模型（模型配置里的「待办标题」`todo.title`，继承「知识整理」那一类，和对话标题 `assistant.title` 一样经 `models.complete`）读 prompt 起一个说清是什么事的短标题，替换第 1 步的。模型不可用、出错、回空就保留第 1 步的。替换时核对标题还是第 1 步给的那个（库里是带条件的 `UPDATE … WHERE title = 旧标题`），用户在这之间改过的不覆盖。提示词是 `prompts/todo/title.md`、`title_input.md`。
+
+`task_plan` 里助手自己给的标题：不超过上限、开头没有上面那些前缀的照用，不调模型；是 prompt 第一行、太长或带前缀的才走上面两步。
+
+**已有待办批量改**：`POST /api/v1/todos/retitle` 只挑任务开的待办（`origin` 不为空），而且标题看起来是 prompt：超过上限或带前缀，并且是 `notes` 的开头（截断、带不带「…」都算）或带前缀。其余的当成助手或用户起的，不动（待办没有记谁起的标题，这是能做到的最保守判断）。每个用模型起标题（4 个并发），模型没有就用第 1 步的清理结果；改之前同样核对标题没变。
+
+```sh
+curl -X POST '<hub 地址>/api/v1/todos/retitle?dry_run=1' -H 'Authorization: Bearer <token>'   # 先看会改哪些
+curl -X POST '<hub 地址>/api/v1/todos/retitle' -H 'Authorization: Bearer <token>'             # 再改
+```
 
 ## 自动完成
 

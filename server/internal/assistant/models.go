@@ -97,6 +97,7 @@ var modelPurposes = []ModelPurpose{
 	{ID: "kb.moments", Group: "group_processing", Kind: "api", Parent: "kb"},
 	{ID: "assistant.title", Group: "group_processing", Kind: "api", Parent: "kb"},
 	{ID: "agent.title", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "todo.title", Group: "group_processing", Kind: "api", Parent: "kb"}, // a task's todo (assistant/todo_titles.go)
 	// Scheduled tasks (早报…) run in the assistant's directory with its instructions, memory and tools: they are the
 	// assistant's conversations, on 主对话's model, not new Agents (#1544; #697 had them under Agents, plain Claude Code
 	// by default, which is not logged in on every hub machine).

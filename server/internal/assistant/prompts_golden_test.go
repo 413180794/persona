@@ -92,3 +92,17 @@ func TestGoldenDefaultRoutines(t *testing.T) {
 		golden(t, "routine."+r.ID, r.Prompt)
 	}
 }
+
+func TestGoldenTodoTitle(t *testing.T) {
+	f := newFakeHub()
+	f.todoTitleReply = "待办改用短标题"
+	s := newTestService(t, f)
+	if got := s.todoTitleFromModel(context.Background(), "ultrathink 主人 11-05 19:47 的反馈：agent_start 建的待办标题太难看了，改成短标题"); got != "待办改用短标题" {
+		t.Fatalf("%q", got)
+	}
+	golden(t, "todo_title.system", f.todoTitleAsked[0].System)
+	golden(t, "todo_title.user", f.todoTitleAsked[0].User)
+	f.hello.Locale = "en"
+	s.todoTitleFromModel(context.Background(), "fix the login crash")
+	golden(t, "todo_title.system_en", f.todoTitleAsked[1].System)
+}

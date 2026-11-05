@@ -80,6 +80,7 @@ type todoStore interface {
 	ListAllTodoAgents(ctx context.Context) ([]db.TodoAgentRow, error)
 	CreateTodo(ctx context.Context, t db.TodoRow) error
 	UpdateTodo(ctx context.Context, id string, title *string, notes *string, done *bool, updatedAt time.Time) (*db.TodoRow, error)
+	RetitleTodo(ctx context.Context, id, from, to string, at time.Time) (*db.TodoRow, bool, error)
 	FailTodo(ctx context.Context, id, startError string, at time.Time) (*db.TodoRow, error)
 	AutoDoneTodo(ctx context.Context, id, reason string, at, workSince time.Time) (*db.TodoRow, bool, error)
 	RetryTodo(ctx context.Context, id string, at time.Time) (*db.TodoRow, bool, error)
@@ -119,6 +120,8 @@ type todoBook struct {
 	tokensMu sync.Mutex
 	tokens   map[string]*tokenSync // by machine (todo_sessions.go)
 	linked   map[[2]string]string  // the links the marks were last synced for: todo id and title, by agent
+
+	titling sync.WaitGroup // the model naming tasks' todos (todo_titles.go)
 }
 
 // spaceKey computes the unified space key string ("machineID/space").
@@ -461,6 +464,7 @@ var errTodosUnavailable = errors.New("todos service unavailable")
 
 func (s *Service) todoRoutes() {
 	s.todoDecisionRoutes()
+	s.todoRetitleRoute()
 	// GET /api/v1/todos: list all todos (newest created_at first), agents sorted (active first, then released)
 	s.handle("GET /api/v1/todos", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.ensureTodosLoaded(r.Context()); err != nil {
