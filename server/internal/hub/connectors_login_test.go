@@ -6,7 +6,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
 )
@@ -245,11 +247,8 @@ func TestConnectorDataDelete(t *testing.T) {
 	h.inbox.init()
 	_ = h.addConnector(&exampleConnector{})
 	mux := h.routes()
-	kst, err := kb.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.kb.eng = &kb.Engine{Store: kst}
+	kst := withKB(t, h).Store // the assistant's: the hub asks it to delete (kb.forget)
+	connectAssistant(t, h)
 	_ = kst.PutChat(&kb.Chat{ID: "example-c1", Source: "example", Name: "示例群"})
 	_ = kst.PutChat(&kb.Chat{ID: "lark-f1", Source: "lark", Name: "需求群"})
 	_ = kst.PutPerson(&kb.Person{ID: "example-p1", Source: "example", Name: "示例用户"})
@@ -277,6 +276,23 @@ func TestConnectorDataDelete(t *testing.T) {
 	}
 	if _, ok := h.inbox.items["lark:f1:1"]; !ok {
 		t.Error("Feishu's inbox item is gone")
+	}
+
+	// The assistant away: the inbox's items go all the same; the knowledge base's part waits (503, asked again).
+	h.inbox.items["example:c2"] = &InboxItem{ID: "example:c2", Source: "example", Title: "示例群二"}
+	_ = kst.PutChat(&kb.Chat{ID: "example-c2", Source: "example", Name: "示例群二"})
+	a := assistantOf(t, h)
+	a.stop()
+	<-a.done
+	eventually(t, 5*time.Second, "the hub sees the assistant gone", func() bool { return h.busConnOf(assistantwire.AssistantID) == nil })
+	if code, out := call(t, mux, "DELETE", "/api/v1/connectors/example/data", h.cfg.Token, ""); code != 503 || out["code"] != assistantwire.CodeAssistantOffline {
+		t.Fatalf("with the assistant away: %d %v", code, out)
+	}
+	if _, ok := h.inbox.items["example:c2"]; ok {
+		t.Error("the inbox item waited for the knowledge base")
+	}
+	if _, ok := kst.Chat("example-c2"); !ok {
+		t.Error("the chat went with the assistant away")
 	}
 }
 

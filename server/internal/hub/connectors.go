@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
-	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -169,7 +169,7 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 		res, err := h.forgetSource(r.Context(), id)
 		if err != nil {
 			h.logf("connector %s: delete: %v", id, err)
-			writeErr(w, http.StatusInternalServerError, err)
+			writeForgetErr(w, err)
 			return
 		}
 		h.logf("connector %s: deleted %d chat(s), %d person(s), %d inbox item(s)", id, res.Chats, res.People, res.Inbox)
@@ -191,7 +191,7 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 		var err error
 		if res.Chats, res.People, err = h.forgetArchive(r.Context(), id); err != nil {
 			h.logf("connector %s: delete the archive: %v", id, err)
-			writeErr(w, http.StatusInternalServerError, err)
+			writeForgetErr(w, err)
 			return
 		}
 		h.logf("connector %s: deleted %d chat(s), %d person(s) from the knowledge base", id, res.Chats, res.People)
@@ -210,37 +210,48 @@ type sourceForgotten struct {
 
 // forgetSource removes what the hub kept of a source (a connector's id): the knowledge base's chats and people (and
 // their index rows, their places in projects, the cursor) and the inbox's items. The caller stops the source first.
+// The inbox's items go whatever the knowledge base answers (the assistant away, a reply that came too late): asked
+// again, the deletion finishes what is left.
 func (h *Hub) forgetSource(ctx context.Context, source string) (sourceForgotten, error) {
 	var out sourceForgotten
-	var err error
-	if out.Chats, out.People, err = h.forgetArchive(ctx, source); err != nil {
-		return out, err
-	}
-	out.Inbox, err = h.forgetInbox(ctx, source)
-	return out, err
+	var kerr, ierr error
+	out.Chats, out.People, kerr = h.forgetArchive(ctx, source)
+	out.Inbox, ierr = h.forgetInbox(ctx, source)
+	return out, errors.Join(kerr, ierr)
 }
 
 // forgetArchive removes a source's chats and people from the knowledge base, with their index rows, their places in
 // projects and the cursor; it says how many chats and people went.
 func (h *Hub) forgetArchive(ctx context.Context, source string) (int, int, error) {
-	if h.kb.eng == nil {
+	if h.kbOff() {
 		return 0, 0, nil
 	}
-	f, err := h.kb.eng.ForgetSource(source)
-	if err != nil {
+	// A big source takes a while (every chat's directory, the projects' timelines): longer than a call's default, and
+	// not cut short when the app gives up waiting.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), kbForgetWait)
+	defer cancel()
+	var f assistantwire.KBForgotten
+	if err := h.kbAsk(ctx, assistantwire.MethodKBForget, map[string]any{"source": source}, &f); err != nil {
 		return 0, 0, err
 	}
-	if idx, ok := h.store.(interface {
-		DeleteKBEntities(ctx context.Context, kind string, ids []string) error
-	}); ok {
-		if err := idx.DeleteKBEntities(ctx, kb.KindChat, f.Chats); err != nil {
-			return 0, 0, err
-		}
-		if err := idx.DeleteKBEntities(ctx, kb.KindPerson, f.People); err != nil {
-			return 0, 0, err
-		}
+	return f.Chats, f.People, nil
+}
+
+// kbForgetWait is how long deleting a source's data waits for the knowledge base.
+const kbForgetWait = 10 * time.Minute
+
+// writeForgetErr answers a deletion that failed: 503 assistant_offline while the knowledge base (the assistant's)
+// is not there (its part was not deleted: the user tries again), else 500.
+func writeForgetErr(w http.ResponseWriter, err error) {
+	var re *rpc.Error
+	switch {
+	case errors.As(err, &re) && re.Code == assistantwire.CodeKBUnavailable: // connected, its knowledge base not open yet
+		writeErrCode(w, http.StatusServiceUnavailable, re.Code, errors.New(re.Message))
+	case kbOffline(err):
+		writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
+	default:
+		writeErr(w, http.StatusInternalServerError, err)
 	}
-	return len(f.Chats), len(f.People), nil
 }
 
 // forgetInbox removes a source's inbox items; it says how many went.

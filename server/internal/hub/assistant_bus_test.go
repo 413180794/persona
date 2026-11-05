@@ -70,7 +70,7 @@ func dialAssistant(t *testing.T, h *Hub, url string, schedule bool, opts ...func
 	svc := assistant.New(assistant.Options{Hub: bh, Logf: logf, Store: func() assistant.Store {
 		s, _ := h.store.(assistant.Store)
 		return s
-	}})
+	}, KB: testKBOf(h)}) // the knowledge base a test gave it (kb_test.go)
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &testAssistant{svc: svc, bh: bh, stop: cancel, done: make(chan struct{})}
 	testAssistants.Store(h, a)

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -255,7 +256,7 @@ func testDB(t *testing.T) *db.DB {
 }
 
 // The hub answers the assistant's schedule calls with its own functions: the machines, the model configuration, the
-// knowledge base; a push like an agent's, a live update as it is; the tasks it reports are what the hub reads.
+// knowledge base's sources; a push like an agent's, a live update as it is; the tasks it reports are what the hub reads.
 func TestAssistantLinkScheduleCalls(t *testing.T) {
 	h, n := conversationsHub(t)
 	link := assistantLink{h}
@@ -273,8 +274,9 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 	if err != nil || string(raw) != `{"provider":"launcher.claude"}` {
 		t.Fatalf("models.resolve: %s %v", raw, err)
 	}
-	if raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppKB, Method: assistant.KBStatus}); err != nil || string(raw) != `{"ready":false}` {
-		t.Fatalf("kb.status: %s %v", raw, err)
+	if raw, err = link.AppCall(ctx, assistant.AppCall{AppID: assistant.AppConnectors, Method: assistantwire.ConnectorsArchives}); err != nil ||
+		string(raw) != `{"archives":[],"items":[]}` {
+		t.Fatalf("connectors.archives: %s %v", raw, err)
 	}
 	// One of the hub's features starts a conversation: the assistant prepares its directory and starts it on the
 	// purpose's model.

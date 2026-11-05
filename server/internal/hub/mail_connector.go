@@ -19,6 +19,9 @@ import (
 // 设置 › 连接器 draws its row from the connectors list (?all=1, migration M3–M6).
 type mailConnector struct{ h *Hub }
 
+// kbMailPoll is how often the knowledge base asks mail for changes (its manifest's Poll).
+const kbMailPoll = 6 * time.Minute
+
 func (mailConnector) ID() string   { return "mail" }
 func (mailConnector) Name() string { return "邮件" }
 

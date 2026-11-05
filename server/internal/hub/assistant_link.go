@@ -102,7 +102,7 @@ type assistantLink struct{ h *Hub }
 // the hub's own the assistant needs.
 func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	h := l.h
-	out := assistantwire.Hello{}
+	out := assistantwire.Hello{KB: h.kbSettings()} // hub.json's kb section: the knowledge base it keeps (kb.go)
 	if h.cfg == nil {
 		return out, nil
 	}
@@ -162,6 +162,9 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 	if out, ok, err := h.assistantAppCall(ctx, p); ok { // assistant_apps.go
 		return out, err
 	}
+	if out, ok, err := h.kbSourcesCall(ctx, p); ok { // the knowledge base's sources (kb_sources.go)
+		return out, err
+	}
 	switch p.AppID + " " + p.Method {
 	case assistantwire.AppModels + " " + assistantwire.ModelsComplete:
 		var a struct {
@@ -207,15 +210,22 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 		return json.Marshal(b)
 	case assistantwire.AppModels + " " + assistantwire.ModelsJSON:
 		var a struct {
-			Purpose string `json:"purpose"`
-			System  string `json:"system"`
-			Input   string `json:"input"`
+			Purpose   string `json:"purpose"`
+			System    string `json:"system"`
+			Input     string `json:"input"`
+			MaxTokens int    `json:"max_tokens"`
 		}
 		if err := json.Unmarshal(p.Params, &a); err != nil {
 			return nil, err
 		}
 		var out json.RawMessage
-		if err := h.purposeModel(a.Purpose).JSON(ctx, a.System, a.Input, &out); err != nil {
+		var err error
+		if a.MaxTokens > 0 { // the knowledge base's calls say how much room the answer needs
+			err = h.purposeModel(a.Purpose).JSONMax(ctx, a.System, a.Input, a.MaxTokens, &out)
+		} else {
+			err = h.purposeModel(a.Purpose).JSON(ctx, a.System, a.Input, &out)
+		}
+		if err != nil {
 			return nil, err
 		}
 		return out, nil
@@ -227,20 +237,6 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 			return nil, err
 		}
 		return json.Marshal(map[string]any{"name": h.autoTabName(ctx, a.Prompt)})
-	case assistantwire.AppKB + " " + assistantwire.KBStatus:
-		return json.Marshal(map[string]any{"ready": h.kb.eng != nil})
-	case assistantwire.AppKB + " " + assistantwire.KBPrompt:
-		var a struct {
-			Projects int `json:"projects"`
-			Chats    int `json:"chats"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		if h.kb.eng == nil {
-			return nil, errors.New("no knowledge base")
-		}
-		return json.Marshal(map[string]any{"text": h.kb.eng.Prompt(a.Projects, a.Chats)})
 	case assistantwire.AppConnectors + " " + assistantwire.ConnectorsSnapshots:
 		var a struct {
 			TZ string `json:"tz"`
@@ -259,13 +255,6 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 		return json.Marshal(map[string]any{"replied": h.inboxRepliedAt(a.IDs)})
 	case assistantwire.AppInbox + " " + assistantwire.InboxDraft:
 		out, err := h.inboxDraftCall(ctx, p.Params)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(out)
-	case assistantwire.AppKB + " " + assistantwire.KBSearch, assistantwire.AppKB + " " + assistantwire.KBList,
-		assistantwire.AppKB + " " + assistantwire.KBGet, assistantwire.AppKB + " " + assistantwire.KBUpdate:
-		out, err := h.kbCall(p.Method, p.Params)
 		if err != nil {
 			return nil, err
 		}
@@ -455,6 +444,11 @@ func init() {
 		return out, busCodedError(err)
 	})
 	handleBusCall(assistantwire.MethodApp, func(h *Hub, ctx context.Context, p assistantwire.AppCall) (json.RawMessage, error) {
+		if p.TimeoutMS > 0 { // the assistant stops waiting then: so does the hub (a model call)
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, time.Duration(p.TimeoutMS)*time.Millisecond)
+			defer cancel()
+		}
 		out, err := assistantLink{h}.AppCall(ctx, p)
 		return out, busCodedError(err)
 	})
@@ -533,8 +527,10 @@ func (h *Hub) assistantUpdated() {
 }
 
 // assistantConnected runs when the assistant's handshake went through: its tools are asked for again (a new build
-// may have others) and kept for when it is not connected (its tools then answer assistant_offline).
+// may have others) and kept for when it is not connected (its tools then answer assistant_offline); what waited for it
+// goes.
 func (h *Hub) assistantConnected() {
+	h.kbFlush() // the agents' turns that waited for it (kb.go)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var res struct {

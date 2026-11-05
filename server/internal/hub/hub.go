@@ -79,19 +79,18 @@ type Hub struct {
 	stopping atomic.Bool
 	// deltas: the live text of each session's message being generated, as last relayed (machine, session -> text): a
 	// client subscribing in the middle of it gets it after the backlog instead of waiting for the next token.
-	deltas        map[[2]string]string
-	interactions  map[string]*pending
-	phoneTools    map[string]db.PhoneToolRegistration
-	calls         map[string]chan proto.ToolResult
-	seen          map[[2]string]time.Time // (machine, session) -> when the user last looked at it
-	stateSince    map[[2]string]stateMark // (machine, session) -> its state and when it entered it
-	wokeAt        map[string]time.Time    // device -> last silent push to wake it for a tool call
-	notified      map[string]time.Time    // assistant conversation -> when it last pushed with notify_user
-	kbAgentLogged map[string]time.Time    // agent -> when its result last went into a project timeline (kb.go)
-	turns         *turnTracker            // "machine/session" -> the turn in progress, for the finished push (notify.go)
-	live          *liveActivities         // the lock screen / Dynamic Island activity (liveactivity.go)
-	usage         usageBook               // token usage of every machine (usage.go)
-	metrics       metricsBook             // OS and load of every machine (metrics.go)
+	deltas       map[[2]string]string
+	interactions map[string]*pending
+	phoneTools   map[string]db.PhoneToolRegistration
+	calls        map[string]chan proto.ToolResult
+	seen         map[[2]string]time.Time // (machine, session) -> when the user last looked at it
+	stateSince   map[[2]string]stateMark // (machine, session) -> its state and when it entered it
+	wokeAt       map[string]time.Time    // device -> last silent push to wake it for a tool call
+	notified     map[string]time.Time    // assistant conversation -> when it last pushed with notify_user
+	turns        *turnTracker            // "machine/session" -> the turn in progress, for the finished push (notify.go)
+	live         *liveActivities         // the lock screen / Dynamic Island activity (liveactivity.go)
+	usage        usageBook               // token usage of every machine (usage.go)
+	metrics      metricsBook             // OS and load of every machine (metrics.go)
 
 	// codexAnnounced: Codex card id -> when it was announced (codexcards.go)
 	codexAnnounced map[string]time.Time
@@ -103,7 +102,7 @@ type Hub struct {
 	keepMu  sync.Mutex
 	deleted deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
 	inbox   inbox       // the unified inbox (inbox.go)
-	kb      kbState     // the knowledge base under ~/.jarvis/data (kb.go)
+	kb      kbLink      // what the hub keeps for the knowledge base, the assistant's (kb.go)
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots     botHub
 	channels channelsHub
@@ -374,7 +373,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.loadAssistantProfile(ctx) // the user's zone and the main conversation before the assistant reports (assistant_profile.go)
 	h.startConnectors(ctx)      // the plugins' connectors join here (attachPlugins)
 	h.upd.start(ctx)
-	h.startKB(ctx, cfg.KB, cfg.dir)
 	h.startExtensions(ctx)
 	// Market plugins' newer versions (plugin_autoupgrade.go).
 	go h.extensionUpgradeLoop(ctx)

@@ -97,14 +97,18 @@ func (b *BusHub) Run(ctx context.Context, svc *Service) error {
 	return b.Serve(ctx, svc)
 }
 
-// Serve is Run without svc's own work: the connection alone.
+// Serve is Run without svc's own work: the connection alone. It lets svc's knowledge base go when it ends.
 func (b *BusHub) Serve(ctx context.Context, svc *Service) error {
 	b.mu.Lock()
 	b.svc, b.ctx = svc, ctx
 	b.mu.Unlock()
+	defer svc.kbClose()
 	go b.takeEvents(ctx)
 	return b.client.Run(ctx)
 }
+
+// Connected: the connection to the hub is up now (the knowledge base closes while it is not, kb.go).
+func (b *BusHub) Connected() bool { return b.client.Peer() != nil }
 
 // onHello keeps the hub's answer to manager.hello. A new connection: the hub shows nothing of the assistant until it
 // reports the whole of it again.
@@ -147,6 +151,9 @@ func (b *BusHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage,
 }
 
 func (b *BusHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, error) {
+	if d, ok := ctx.Deadline(); ok { // the hub stops when the caller stops waiting (a model call it would go on with)
+		p.TimeoutMS = max(time.Until(d).Milliseconds(), 1)
+	}
 	var out json.RawMessage
 	err := b.client.Call(ctx, assistantwire.MethodApp, p, &out)
 	return out, busError(err)
@@ -314,6 +321,9 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		}
 		return s.Rename(ctx, p)
 	}
+	if out, ok, err := s.kbRequest(ctx, method, params); ok { // the knowledge base's (kb_bus.go)
+		return out, err
+	}
 	return nil, &rpc.Error{Code: bus.CodeUnknownMethod, Message: "unknown method " + method}
 }
 
@@ -448,6 +458,9 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 		s.TodoSpaceRenamed(ctx, p)
 	case "managers": // the bus's roster: nothing the assistant needs
 	default:
+		if ok, err := s.kbEvent(ctx, ev.name, ev.params); ok { // the knowledge base's (kb_bus.go)
+			return err
+		}
 		return fmt.Errorf("unknown event")
 	}
 	return nil

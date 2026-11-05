@@ -11,11 +11,7 @@ import (
 // the hub's own lark_agent_reply out of the way while a plugin serves Feishu.
 func TestAgentAPIForExtensions(t *testing.T) {
 	h := newTestHub(t)
-	st, err := kb.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.kb.eng = &kb.Engine{Store: st}
+	st := withKB(t, h).Store // the assistant's (relayed to it)
 	if err := st.PutChat(&kb.Chat{ID: "lark-7", Source: "lark", SourceID: "7", Kind: "group", Name: "示例群"}); err != nil {
 		t.Fatal(err)
 	}

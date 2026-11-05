@@ -70,6 +70,7 @@ type (
 	SendParams          = assistantwire.SendParams
 	RenameParams        = assistantwire.RenameParams
 	Setting             = assistantwire.Setting
+	KBSettings          = assistantwire.KBSettings
 )
 
 // The todos' (todos.go).
@@ -105,15 +106,11 @@ const (
 	ModelsResolve            = assistantwire.ModelsResolve
 	ModelsJSON               = assistantwire.ModelsJSON
 	ModelsTabName            = assistantwire.ModelsTabName
-	AppKB                    = assistantwire.AppKB
-	KBStatus                 = assistantwire.KBStatus
-	KBPrompt                 = assistantwire.KBPrompt
 	ModelsRecord             = assistantwire.ModelsRecord
 	ModelsSave               = assistantwire.ModelsSave
 	ModelsApplyPicked        = assistantwire.ModelsApplyPicked
 	ModelsLaunchers          = assistantwire.ModelsLaunchers
 	ModelsLauncherCheck      = assistantwire.ModelsLauncherCheck
-	KBDirs                   = assistantwire.KBDirs
 	ConnectorsSignedIn       = assistantwire.ConnectorsSignedIn
 	AppPlugins               = assistantwire.AppPlugins
 	PluginsAssistant         = assistantwire.PluginsAssistant

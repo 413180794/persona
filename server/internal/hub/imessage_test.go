@@ -239,26 +239,24 @@ func TestIMessageArchive(t *testing.T) {
 	}
 	c := h.imessage()
 	c.Check(context.Background())
-	st, err := kb.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := &kb.Engine{Store: st}
-	n, err := archiveConnector(context.Background(), e, imessage.ID, c)
-	if err != nil || n != 2 {
-		t.Fatalf("%d lines, %v", n, err)
-	}
-	chat, ok := st.Chat("imessage-0123456789ab")
-	if !ok || chat.Name != "张三" || chat.Kind != "dm" || chat.Pending != 2 {
+	st := withKB(t, h).Store
+	connectAssistantRunning(t, h) // the knowledge base, the assistant's, reads it through the hub
+	eventually(t, 10*time.Second, "the Mac's messages in the knowledge base", func() bool {
+		chat, ok := st.Chat("imessage-0123456789ab")
+		return ok && chat.Pending == 2
+	})
+	chat, _ := st.Chat("imessage-0123456789ab")
+	if chat.Name != "张三" || chat.Kind != "dm" {
 		t.Fatalf("chat %+v", chat)
 	}
 	people := st.People()
 	if len(people) != 1 || people[0].ID != "imessage-"+imessage.PersonKey("+15550100") || people[0].Name != "张三" {
 		t.Fatalf("people %+v", people)
 	}
-	if raw, _ := os.ReadFile(filepath.Join(st.Dir, "cursors", "imessage.json")); !strings.Contains(string(raw), `"9"`) {
-		t.Errorf("cursor %s", raw)
-	}
+	eventually(t, 5*time.Second, "the cursor", func() bool {
+		raw, _ := os.ReadFile(filepath.Join(st.Dir, "cursors", "imessage.json"))
+		return strings.Contains(string(raw), `"9"`)
+	})
 	var names []string
 	_ = filepath.WalkDir(st.Dir, func(p string, _ fs.DirEntry, _ error) error {
 		names = append(names, p)
@@ -283,11 +281,8 @@ func TestIMessageDelete(t *testing.T) {
 	if err := h.addIMessage(imessage.Config{Machine: "mac"}); err != nil {
 		t.Fatal(err)
 	}
-	st, err := kb.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.kb.eng = &kb.Engine{Store: st}
+	st := withKB(t, h).Store // the assistant's: the hub asks it to delete (kb.forget)
+	connectAssistant(t, h)
 	_ = st.PutChat(&kb.Chat{ID: "imessage-0123456789ab", Source: "imessage", Name: "张三"})
 	_ = st.PutChat(&kb.Chat{ID: "lark-f1", Source: "lark", Name: "需求群"})
 	_ = st.PutPerson(&kb.Person{ID: "imessage-a1b2c3d4e5f6", Source: "imessage", Name: "张三"})

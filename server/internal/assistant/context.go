@@ -97,11 +97,8 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 	}
 	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Working = s.snapshotAgents(ctx, devices)
 	snap.Tasks = s.snapshotTasks(ctx)
-	var kb struct {
-		Text string `json:"text"`
-	}
-	if s.appCall(ctx, AppKB, KBPrompt, map[string]any{"projects": 6, "chats": 8}, &kb) == nil {
-		snap.KB = kb.Text
+	if e, err := s.kbGet(ctx); err == nil {
+		snap.KB = e.Prompt(6, 8)
 	}
 	snap.Followups = s.snapshotSchedule(ctx, loc)
 	wg.Wait()

@@ -39,16 +39,9 @@ var errRenameMain = errors.New("主对话没有标题可以改")
 // work only for an assistant on the hub's own machine, and a link (or tailcat) machine has no ssh at all; from anywhere
 // else there is no command to give, only the Agents tools.
 func (s *Service) claudeMD(ctx context.Context, here string, larkCLI bool) string {
-	var dirs struct {
-		KnowledgeDir string   `json:"knowledge_dir"`
-		ExtraDirs    []string `json:"extra_dirs"`
-	}
-	if err := s.appCall(ctx, AppKB, KBDirs, map[string]any{}, &dirs); err != nil {
-		s.logf("assistant: knowledge base directories: %v", err)
-	}
 	hello := s.hello(ctx)
-	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(hello.Owner), Notes: s.notes(ctx), ExtraDirs: dirs.ExtraDirs,
-		KnowledgeDir: dirs.KnowledgeDir, LarkCLI: larkCLI, PersonaView: hello.PersonaView}
+	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(hello.Owner), Notes: s.notes(ctx), ExtraDirs: s.kbExtraDirs(ctx),
+		KnowledgeDir: s.kb.dir, LarkCLI: larkCLI, PersonaView: hello.PersonaView}
 	devices := s.devices(ctx)
 	if i := slices.IndexFunc(devices, func(d Device) bool { return d.ID == here }); i >= 0 {
 		d.OnHub = devices[i].Kind == "local"

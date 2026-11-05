@@ -29,13 +29,14 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 		Device{ID: "desk", Name: "台式机", Kind: "ssh"})
 	f.hello.Owner = "示例用户"
 	f.hello.OwnerNotes = "  我在示例公司做后端。\n常用 skills：demo-skill。  "
-	f.kbDir, f.kbExtra = "<hub>/data", []string{"/home/me/notes", "/home/me/facts"}
+	f.hello.KB = &KBSettings{ExtraDirs: []string{"/home/me/notes", "/home/me/facts"}} // hub.json's kb section
 	s := newTestService(t, f)
+	s.kb.dir = "<hub>/data"
 	golden(t, "assistant_claude_md.full", s.claudeMD(ctx, "server", false))
 
 	bare := claudeMDHub(Device{ID: "server", Name: "服务器", Kind: "local"})
-	bare.kbDir = "<hub>/data"
 	s = newTestService(t, bare)
+	s.kb.dir = "<hub>/data"
 	golden(t, "assistant_claude_md.bare", s.claudeMD(ctx, "server", false))
 	// lark-cli (docs/plan-lark-cli.md).
 	golden(t, "assistant_claude_md.lark_cli", s.claudeMD(ctx, "server", true))
@@ -59,8 +60,8 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 func TestAssistantPromptUsesReportedStorageRoots(t *testing.T) {
 	ctx := context.Background()
 	f := claudeMDHub(Device{ID: "server", Name: "服务器", Kind: "local", Home: "/home/example", DataDir: "/var/lib/assistant-state"})
-	f.kbDir = "/var/lib/hub state/data"
 	s := newTestService(t, f)
+	s.kb.dir = "/var/lib/hub state/data"
 	text := s.claudeMD(ctx, "server", false)
 	for _, want := range []string{"/var/lib/assistant-state/assistant", "/var/lib/hub state/data"} {
 		if !strings.Contains(text, want) {

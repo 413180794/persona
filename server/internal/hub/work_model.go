@@ -52,13 +52,7 @@ func (h *Hub) triageTurnModel(ctx context.Context, m *Machine, s proto.Session) 
 		Now: time.Now().In(h.userLocation()).Format("2006-01-02 15:04 Mon"), Agent: agentLabel(s), Machine: m.cfg.Name,
 		Cwd: s.Cwd, Ask: clipMiddleRunes(ask, 500), Reply: clipMiddleRunes(reply, 1500), Others: others,
 	}
-	if e := h.kb.eng; e != nil {
-		var names []string
-		for _, p := range e.ProjectsForDir(m.cfg.ID, s.Cwd) {
-			names = append(names, p.Name)
-		}
-		in.Project = strings.Join(first(names, 3), "、")
-	}
+	in.Project = strings.Join(first(h.kbProjectNames(ctx, m.cfg.ID, s.Cwd), 3), "、") // the knowledge base's (kb.go)
 	var out triageOut
 	if err := h.purposeModel("agent.triage").JSON(ctx, prompts.RenderAgentTriage(prompts.AgentTriage{Owner: h.ownerName()}),
 		prompts.RenderAgentTriageInput(in), &out); err != nil {

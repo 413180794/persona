@@ -13,6 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -36,9 +37,6 @@ type fakeHub struct {
 	sends         []map[string]any // assistant.send params, and {"rename": params}
 	prepared      []map[string]any // assistant.prepare params
 	launcher      string           // what the model configuration runs a purpose on ("" = claude)
-	kbReady       bool
-	kbDir         string
-	kbExtra       []string
 	larkCLI       bool
 	slowSnapshots time.Duration // the connectors' live states come this late (nothing: there are none)
 	replies       []string      // the model's answers, in turn (the last one again when they run out)
@@ -252,8 +250,6 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 		}
 		_ = json.Unmarshal(p.Params, &a)
 		return json.Marshal(map[string]any{"available": !f.gone[a.Launcher], "model_ok": !f.gone[a.Launcher+"/"+a.Model]})
-	case AppKB + " " + KBDirs:
-		return json.Marshal(map[string]any{"knowledge_dir": f.kbDir, "extra_dirs": f.kbExtra})
 	case AppConnectors + " " + ConnectorsSignedIn:
 		return json.Marshal(map[string]any{"connectors": []string{}, "clis": map[string]string{}, "lark_cli": f.larkCLI})
 	case AppPlugins + " " + PluginsAssistant:
@@ -263,8 +259,6 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 			Value: "a string", Actions: []string{"get", "set"}}}})
 	case AppSettings + " " + AppTool:
 		return json.Marshal(proto.TextResult("the hub's: "+string(p.Params), false))
-	case AppKB + " " + KBStatus:
-		return json.Marshal(map[string]any{"ready": f.kbReady})
 	case AppInbox + " " + InboxReplied:
 		return json.Marshal(map[string]any{"replied": map[string]any{}})
 	case AppModels + " " + ModelsTabName:
@@ -440,6 +434,31 @@ func newTestService(t *testing.T, f *fakeHub) *Service {
 	t.Helper()
 	st := &memStore{}
 	return withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf}))
+}
+
+// newKBService is newTestService with a knowledge base in a directory of its own (kb.go), on as the hub says (its
+// hello's kb section, the defaults unless the test set one).
+func newKBService(t *testing.T, f *fakeHub) *Service {
+	t.Helper()
+	st := &memStore{}
+	f.mu.Lock()
+	if f.hello.KB == nil {
+		f.hello.KB = &KBSettings{}
+	}
+	f.mu.Unlock()
+	s := withSettings(t, f, New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf, KB: &KBOptions{Dir: t.TempDir()}}))
+	t.Cleanup(s.kbClose)
+	return s
+}
+
+// kbEng is s's knowledge base, open now.
+func kbEng(t *testing.T, s *Service) *kb.Engine {
+	t.Helper()
+	e, err := s.kbGet(context.Background())
+	if err != nil {
+		t.Fatalf("the knowledge base did not open: %v", err)
+	}
+	return e
 }
 
 // newStorelessService is an assistant on f with no database: its state lives in memory only.

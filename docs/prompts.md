@@ -12,7 +12,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 
 | 文件 | 是什么 | 谁用 |
 | --- | --- | --- |
-| `assistant/claude_md.md` | 助手目录 `~/.persona/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `assistant/start.go` `claudeMD`（照 hub 给的事实写：`devices.list`、`kb.dirs`、`connectors.signed_in`） |
+| `assistant/claude_md.md` | 助手目录 `~/.persona/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `assistant/start.go` `claudeMD`（照 hub 给的事实写：`devices.list`、`connectors.signed_in`；知识库目录是助手自己的） |
 | `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `assistant/context.go` |
 | `assistant/turn_context.md` | 消息开头的 `<jarvis-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |

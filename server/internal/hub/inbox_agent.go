@@ -186,15 +186,30 @@ func (h *Hub) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	}
 	sort.Slice(queued, func(i, j int) bool { return queued[i].UpdatedAt.After(queued[j].UpdatedAt) })
 	queued = queued[:min(len(queued), max(cfg.concurrency()-running, 0))]
+	chats := make([]string, len(queued))
+	for i, it := range queued {
+		chats[i] = kbChatOf(it)
+	}
+	h.inbox.mu.Unlock()
+	// What the knowledge base knows of each one's chat is the assistant's to say (a bus call): asked outside the lock,
+	// so the inbox goes on meanwhile; one no longer queued by then is left alone (one pass at a time: handInbox).
+	contexts := make([]*prompts.KBContext, len(queued))
+	for i, id := range chats {
+		contexts[i] = h.kbChatContext(id)
+	}
 	type job struct {
 		it     *InboxItem
 		prompt string
 	}
 	jobs := make([]job, 0, len(queued))
 	now := time.Now().UTC()
-	for _, it := range queued {
+	h.inbox.mu.Lock()
+	for i, it := range queued {
+		if it.Agent == nil || it.Agent.State != AgentQueued || !it.open() {
+			continue
+		}
 		it.Agent.State, it.Agent.StartedAt = AgentRunning, &now
-		jobs = append(jobs, job{it, inboxAgentPromptFor(it, h.ownerName(), h.kbContextFor(it), linked[it.Agent.TodoID], max(h.inbox.larkAccount, 1))})
+		jobs = append(jobs, job{it, inboxAgentPromptFor(it, h.ownerName(), contexts[i], linked[it.Agent.TodoID], max(h.inbox.larkAccount, 1))})
 	}
 	h.inbox.mu.Unlock()
 	for _, j := range jobs {

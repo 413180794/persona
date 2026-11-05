@@ -135,7 +135,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 		res, err := h.forgetIMessage(r.Context())
 		if err != nil {
 			h.logf("imessage: delete: %v", err)
-			writeErr(w, http.StatusInternalServerError, err)
+			writeForgetErr(w, err)
 			return
 		}
 		h.logf("imessage: deleted %d chat(s), %d person(s), %d inbox item(s)", res.Chats, res.People, res.Inbox)

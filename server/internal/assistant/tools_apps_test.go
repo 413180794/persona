@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -29,116 +31,99 @@ func runTool(s *Service, self, name string, args any) (string, error) {
 
 // ---- kb_* ----
 
-// The kb_* tools read the hub's knowledge base as data and write what the model reads: defaults and caps of their
+// The kb_* tools read the assistant's knowledge base and write what the model reads: defaults and caps of their
 // arguments, the lines, the list, an entry with its meta.json as the file has it and dates in the user's zone.
 func TestKBToolsFormatTheData(t *testing.T) {
 	f := newFakeHub()
-	f.kbReady = true
-	hits := []kb.Hit{{Path: "messages/lark-f1/2026-11-04.md", Line: "张三：周五灰度"}}
-	f.answerApp(AppKB, assistantwire.KBSearch, func(json.RawMessage) (any, error) {
-		out := hits
-		hits = nil // found nothing the next time
-		return map[string]any{"dir": "/data", "hits": out}, nil
-	})
-	items := []kb.Entry{{Kind: "projects", ID: "jarvis-发布", Name: "Jarvis 发布", Importance: "P0", Relevance: 95, Tags: []string{"发布", "客户端"},
-		Extra: "long · 进行中", OneLine: "周五灰度"}, {Kind: "projects", ID: "other", Name: "别的"}}
-	f.answerApp(AppKB, assistantwire.KBList, func(json.RawMessage) (any, error) {
-		out := items
-		items = []kb.Entry{}
-		return map[string]any{"items": out}, nil
-	})
-	f.answerApp(AppKB, assistantwire.KBGet, func(params json.RawMessage) (any, error) {
-		var a struct{ ID string }
-		_ = json.Unmarshal(params, &a)
-		if a.ID == "nope" {
-			return nil, errors.New("not found")
-		}
-		return map[string]any{"detail": kb.Detail{Kind: "projects", ID: "jarvis-发布", Path: "/data/projects/jarvis-发布",
-			Meta: json.RawMessage(`{"name":"Jarvis 发布","tags":["发布"]}`), Summary: "在推发布", Log: []string{"- 定了周五灰度"},
-			Moments: []kb.MomentRef{{ID: "p1", At: time.Date(2026, 11, 3, 20, 0, 0, 0, time.UTC), Comments: 2, Note: "讲发布", Text: "发布了"}},
-			Recent:  "张三：周五灰度"}}, nil
-	})
-	f.answerApp(AppKB, assistantwire.KBUpdate, func(json.RawMessage) (any, error) {
-		return map[string]any{"id": "jarvis-发布"}, nil
-	})
-	s := newTestService(t, f)
+	s := newKBService(t, f)
 	setSettings(t, s, func(v *Settings) { v.Timezone = "Asia/Shanghai" })
+	e := kbEng(t, s)
+	dir := e.Store.Dir
+	c := &kb.Chat{ID: kb.ChatID("lark", "f1"), Source: "lark", SourceID: "f1", Kind: "group", Name: "发布群", Created: time.Now()}
+	_ = e.Store.PutChat(c)
+	_ = e.Store.AppendMessages(c, []kb.Line{{At: time.Now(), Sender: "张三", Text: "周五灰度"}, {At: time.Now(), Sender: "李四", Text: "灰度名单"}})
 
-	if out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度"}); err != nil || out != "messages/lark-f1/2026-11-04.md: 张三：周五灰度\n" {
+	out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度"})
+	if err != nil || strings.Count(out, "\n") != 2 || !strings.Contains(out, "chats/lark-f1/messages/") || !strings.Contains(out, ": - ") {
 		t.Fatalf("search: %q %v", out, err)
 	}
-	if out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度", "messages": false, "limit": 500}); err != nil || out != "No match in /data." {
-		t.Fatalf("search, nothing found: %q %v", out, err)
+	if out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度", "limit": 1}); err != nil || strings.Count(out, "\n") != 1 {
+		t.Fatalf("search, one: %q %v", out, err)
 	}
-	if p := f.appParams(AppKB, assistantwire.KBSearch); len(p) != 2 || p[0]["messages"] != true || p[0]["limit"] != 40.0 ||
-		p[1]["messages"] != false || p[1]["limit"] != 200.0 || p[1]["query"] != "灰度" {
-		t.Fatalf("search params: %v", p)
+	if out, err := runTool(s, "c1", "kb_search", map[string]any{"query": "灰度", "messages": false}); err != nil || out != "No match in "+dir+"." {
+		t.Fatalf("search without the messages: %q %v", out, err)
 	}
 
-	out, err := runTool(s, "c1", "kb_list", map[string]any{"kind": "projects"})
-	if err != nil || out != "- jarvis-发布 · Jarvis 发布 [P0 相关95] 发布,客户端 long · 进行中 — 周五灰度\n- other · 别的 [- 相关0]  \n" {
+	if out, err := runTool(s, "c1", "kb_update", map[string]any{"kind": "projects", "id": "Jarvis 发布", "project_kind": "long", "importance": "P0",
+		"relevance": 95, "tags": []string{"发布", "客户端"}, "log": "定了周五灰度", "chats": []string{"lark-f1"}}); err != nil || out != "Saved projects/jarvis-发布." {
+		t.Fatalf("update: %q %v", out, err)
+	}
+	if _, err := runTool(s, "c1", "kb_update", map[string]any{"kind": "projects", "id": "别的"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runTool(s, "c1", "kb_update", map[string]any{"kind": "projects", "id": "x", "relevance": "high"}); err == nil {
+		t.Fatal("an update that does not parse was applied")
+	}
+	if _, ok := e.Store.Project("x"); ok {
+		t.Fatal("an update that does not parse made a project")
+	}
+
+	out, err = runTool(s, "c1", "kb_list", map[string]any{"kind": "projects"})
+	if err != nil || !strings.HasPrefix(out, "- jarvis-发布 · Jarvis 发布 [P0 相关95] 发布,客户端 ") || !strings.Contains(out, "\n- 别的 · 别的 [- 相关0] ") {
 		t.Fatalf("list: %q %v", out, err)
 	}
-	if out, err := runTool(s, "c1", "kb_list", map[string]any{"kind": "chats", "tag": "发布", "limit": 5}); err != nil || out != "Nothing yet." {
+	if out, err := runTool(s, "c1", "kb_list", map[string]any{"kind": "projects", "limit": 1}); err != nil || strings.Count(out, "\n") != 1 {
+		t.Fatalf("list, one: %q %v", out, err)
+	}
+	if out, err := runTool(s, "c1", "kb_list", map[string]any{"kind": "meetings"}); err != nil || out != "Nothing yet." {
 		t.Fatalf("list, empty: %q %v", out, err)
 	}
-	if p := f.appParams(AppKB, assistantwire.KBList); len(p) != 2 || p[0]["limit"] != 30.0 || p[1]["limit"] != 5.0 || p[1]["tag"] != "发布" {
-		t.Fatalf("list params: %v", p)
-	}
 
+	// A project's 公司圈 posts, dated in the user's zone (20:00 UTC is the next day in Shanghai).
+	if err := e.Store.PutMomentPost(&kb.MomentPost{ID: "p1", Author: "王五", Text: "发布了", CommentCount: 2,
+		At: time.Date(2026, 11, 3, 20, 0, 0, 0, time.UTC)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := e.Store.Project("jarvis-发布")
+	p.Moments = []kb.ProjectMoment{{ID: "p1", Note: "讲发布"}}
+	_ = e.Store.PutProject(p)
+	_ = e.Store.PutSummary(kb.KindProject, "jarvis-发布", "在推发布")
 	out, err = runTool(s, "c1", "kb_get", map[string]any{"kind": "projects", "id": "Jarvis 发布"})
-	want := "Path: /data/projects/jarvis-发布\n\nmeta.json:\n{\n  \"name\": \"Jarvis 发布\",\n  \"tags\": [\n    \"发布\"\n  ]\n}\n\n" +
-		"\nsummary.md:\n在推发布\n\nlog.md (latest):\n- 定了周五灰度\n" +
-		"\n公司圈 posts about it (full text: moments/posts/<id>.md):\n- p1 2026-11-04 · 2 comments · 讲发布 — 发布了\n" +
-		"\nMessages, last 7 days:\n张三：周五灰度\n"
-	if err != nil || out != want {
-		t.Fatalf("get:\n%q\nwant\n%q (%v)", out, want, err)
+	if err != nil || !strings.HasPrefix(out, "Path: "+dir+"/projects/jarvis-发布\n\nmeta.json:\n{\n  \"") ||
+		!strings.Contains(out, "}\n\n\nsummary.md:\n在推发布\n") || !strings.Contains(out, "\nlog.md (latest):\n- ") || !strings.Contains(out, "定了周五灰度") ||
+		!strings.Contains(out, "\n公司圈 posts about it (full text: moments/posts/<id>.md):\n- p1 2026-11-04 · 2 comments · 讲发布 — 发布了\n") {
+		t.Fatalf("get:\n%s (%v)", out, err)
+	}
+	// A chat's latest messages; meta.json as the file has it.
+	meta, _ := os.ReadFile(filepath.Join(dir, "chats", "lark-f1", "meta.json"))
+	if out, err := runTool(s, "c1", "kb_get", map[string]any{"kind": "chats", "id": "lark-f1"}); err != nil ||
+		!strings.Contains(out, "meta.json:\n"+strings.TrimSpace(string(meta))+"\n\n") || !strings.Contains(out, "\nMessages, last 7 days:\n") ||
+		!strings.Contains(out, "周五灰度") {
+		t.Fatalf("get chat: %q %v", out, err)
 	}
 	if _, err := runTool(s, "c1", "kb_get", map[string]any{"kind": "projects", "id": "nope"}); err == nil || err.Error() != "projects/nope: not found" {
 		t.Fatalf("get, not found: %v", err)
 	}
-	if p := f.appParams(AppKB, assistantwire.KBGet); len(p) != 2 || p[0]["id"] != "Jarvis 发布" || p[0]["recent"] != 12000.0 {
-		t.Fatalf("get params: %v", p)
-	}
-
-	if out, err := runTool(s, "c1", "kb_update", map[string]any{"kind": "projects", "id": "Jarvis 发布", "project_kind": "long",
-		"relevance": 95, "log": "定了周五灰度", "chats": []string{"lark-f1"}}); err != nil || out != "Saved projects/jarvis-发布." {
-		t.Fatalf("update: %q %v", out, err)
-	}
-	p := f.appParams(AppKB, assistantwire.KBUpdate)
-	if len(p) != 1 || p[0]["kind"] != "projects" || p[0]["id"] != "Jarvis 发布" {
-		t.Fatalf("update params: %v", p)
-	}
-	if u, _ := p[0]["update"].(map[string]any); u["project_kind"] != "long" || u["relevance"] != 95.0 || u["log"] != "定了周五灰度" || u["kind"] != nil {
-		t.Fatalf("update: %v", p[0]["update"])
-	}
-	if _, err := runTool(s, "c1", "kb_update", map[string]any{"kind": "projects", "id": "x", "relevance": "high"}); err == nil {
-		t.Fatal("an update that does not parse was sent")
-	}
-	if len(f.appParams(AppKB, assistantwire.KBUpdate)) != 1 {
-		t.Fatal("an update that does not parse went to the hub")
+	// One edited by hand into something else reads as its text.
+	_ = os.WriteFile(filepath.Join(dir, "chats", "lark-f1", "meta.json"), []byte("not json"), 0o600)
+	if out, err := runTool(s, "c1", "kb_get", map[string]any{"kind": "chats", "id": "lark-f1"}); err != nil || !strings.Contains(out, "meta.json:\nnot json\n") {
+		t.Fatalf("get, meta not JSON: %q %v", out, err)
 	}
 }
 
-// Without a knowledge base on the hub the kb_* tools say it is off (and how to turn it on).
+// Without a knowledge base (hub.json kb.enabled false) the kb_* tools say it is off (and how to turn it on).
 func TestKBToolsKnowledgeBaseOff(t *testing.T) {
 	f := newFakeHub()
-	for _, m := range []string{assistantwire.KBSearch, assistantwire.KBList, assistantwire.KBGet, assistantwire.KBUpdate} {
-		f.answerApp(AppKB, m, func(json.RawMessage) (any, error) { return nil, errors.New("no knowledge base") })
-	}
-	s := newTestService(t, f)
+	f.hello.KB = &KBSettings{Off: true}
+	s := withSettings(t, f, New(Options{Hub: f, Logf: t.Logf, KB: &KBOptions{Dir: t.TempDir()}}))
 	for _, name := range []string{"kb_search", "kb_list", "kb_get", "kb_update"} {
 		if _, err := runTool(s, "c1", name, map[string]any{"kind": "projects", "id": "x", "query": "x"}); err == nil ||
 			err.Error() != "the knowledge base is off (hub.json kb.enabled)" {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
-	// With one, the hub's error is said as it is.
-	f.mu.Lock()
-	f.kbReady = true
-	f.mu.Unlock()
-	if _, err := runTool(s, "c1", "kb_search", map[string]any{"query": "x"}); err == nil || err.Error() != "no knowledge base" {
-		t.Fatalf("an error with the knowledge base on: %v", err)
+	if s.kbReady(context.Background()) || s.kb.dir == "" {
+		t.Fatal("off, yet ready; or its directory forgotten (CLAUDE.md names it)")
 	}
 }
 

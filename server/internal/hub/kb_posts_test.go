@@ -3,35 +3,31 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/proc"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/kb"
 )
 
-// postsHub is a hub with a knowledge base and a program connector "feed" (an archive, also filing under "posts"),
-// as the program reaches the hub through it.
+// postsHub is a hub whose assistant keeps a knowledge base, and a program connector "feed" (an archive, also filing
+// under "posts"), as the program reaches the hub through it (the hub passes its calls on to the assistant).
 func postsHub(t *testing.T) (*Hub, *kb.Store, *proc.Conn) {
 	t.Helper()
 	h := newTestHub(t)
-	st, err := kb.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.kb.eng = &kb.Engine{Store: st}
+	e := withKB(t, h)
 	h.connectors = connector.NewRegistry(nil)
 	c := proc.New(proc.Config{ID: "feed", Name: "Feed", KB: h.kbFor("feed"),
 		Manifest: connector.Manifest{Capabilities: []connector.Capability{connector.CapArchive}, ArchiveSources: []string{"posts"}}})
 	if err := h.connectors.Add(c); err != nil {
 		t.Fatal(err)
 	}
-	return h, st, c
+	connectAssistant(t, h)
+	return h, e.Store, c
 }
 
 func progCall[T any](t *testing.T, c *proc.Conn, method string, params any) (T, error) {
@@ -123,10 +119,6 @@ func TestConnectorPostsIntoTheKnowledgeBase(t *testing.T) {
 	if p2, md, _ := st.MomentArchived("p2"); p2.CommentsOf != 1 || !p2.Concerns || !strings.Contains(md, "好帖") {
 		t.Fatalf("seen again, p2 lost what it had: %+v\n%s", p2, md)
 	}
-	h.kbPostsUpkeep(false)
-	if idx, _ := os.ReadFile(filepath.Join(st.Dir, "moments", "index.jsonl")); strings.Count(string(idx), "\n") != 4 {
-		t.Fatalf("index:\n%s", idx)
-	}
 	// archive.chats: the conversations under its names, and only its.
 	chats, err := progCall[serve.ArchiveChatsResult](t, c, serve.MArchiveChats, serve.ArchiveChatsParams{Source: "posts"})
 	if err != nil || len(chats.Chats) != 1 || chats.Chats[0].ID != "p2" || chats.Chats[0].Cursor != "1700000000000" {
@@ -142,13 +134,25 @@ func TestConnectorPostsIntoTheKnowledgeBase(t *testing.T) {
 	if _, err := progCall[serve.PostsPutResult](t, c, serve.MPostsPut, put); err == nil {
 		t.Fatal("posts went in with 进知识库 off")
 	}
+	// The assistant away: the program's calls wait a while, then fail (its round ends; it reads the same again next round).
+	if err := h.connectors.SetFeed("feed", connector.FeedArchive, true); err != nil {
+		t.Fatal(err)
+	}
+	old := kbPostsWait
+	kbPostsWait = 300 * time.Millisecond
+	t.Cleanup(func() { kbPostsWait = old })
+	a := assistantOf(t, h)
+	a.stop()
+	<-a.done
+	eventually(t, 5*time.Second, "the hub sees the assistant gone", func() bool { return h.busConnOf(assistantwire.AssistantID) == nil })
+	if _, err := progCall[serve.PostsPendingResult](t, c, serve.MPostsPending, serve.PostsPendingParams{}); err == nil || !kbOffline(err) {
+		t.Fatalf("posts.pending with the assistant away: %v", err)
+	}
 }
 
 // A connector without an archive cannot write to the knowledge base.
 func TestConnectorPostsNeedAnArchive(t *testing.T) {
 	h := newTestHub(t)
-	st, _ := kb.NewStore(t.TempDir())
-	h.kb.eng = &kb.Engine{Store: st}
 	c := proc.New(proc.Config{ID: "tools", Name: "Tools", KB: h.kbFor("tools"),
 		Manifest: connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus}}})
 	if _, err := progCall[serve.PostsPutResult](t, c, serve.MPostsPut, serve.PostsPutParams{}); err == nil || !strings.Contains(err.Error(), "archive") {
@@ -156,34 +160,38 @@ func TestConnectorPostsNeedAnArchive(t *testing.T) {
 	}
 }
 
-// sourcedArchive hands one batch under the connector's other name, one under a name it never declared.
-type sourcedArchive struct{}
-
-func (sourcedArchive) Changes(_ context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {
-	at := time.Now().Add(-time.Hour)
-	msg := []kb.SourceMessage{{ID: "c1", SenderName: "王五", Type: "TEXT", Text: "评论", At: at, Position: "1"}}
-	return []connector.ChatBatch{
-		{Source: "posts", Chat: kb.SourceChat{ID: "p9", Name: "公司圈 · 帖子", Kind: "moment"}, Messages: msg},
-		{Source: "mail", Chat: kb.SourceChat{ID: "x", Name: "冒名", Kind: "mail"}, Messages: msg},
-		{Chat: kb.SourceChat{ID: "chat1", Name: "群", Kind: "group"}, Messages: msg},
-	}, "1", false, nil
-}
-
-// A batch filed under one of the connector's archive sources becomes "<source>-<id>"; one under any other name is
-// dropped.
-func TestArchiveConnectorFilesUnderItsSources(t *testing.T) {
-	st, _ := kb.NewStore(t.TempDir())
-	e := &kb.Engine{Store: st}
-	if _, err := archiveConnector(context.Background(), e, "feed", sourcedArchive{}, "posts"); err != nil {
+// A program's call while the assistant is not connected yet (the programs start with the hub, before it) waits for
+// it a while instead of failing at once.
+func TestConnectorPostsWaitForTheAssistant(t *testing.T) {
+	old := kbPostsWait
+	kbPostsWait = 10 * time.Second
+	t.Cleanup(func() { kbPostsWait = old })
+	h := newTestHub(t)
+	withKB(t, h)
+	h.connectors = connector.NewRegistry(nil)
+	c := proc.New(proc.Config{ID: "feed", Name: "Feed", KB: h.kbFor("feed"),
+		Manifest: connector.Manifest{Capabilities: []connector.Capability{connector.CapArchive}}})
+	if err := h.connectors.Add(c); err != nil {
 		t.Fatal(err)
 	}
-	if c, ok := st.Chat(kb.ChatID("posts", "p9")); !ok || c.Source != "posts" || c.Kind != "moment" {
-		t.Fatalf("posts-p9 %+v", c)
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Handle(context.Background(), serve.MPostsPending, json.RawMessage(`{}`))
+		done <- err
+	}()
+	time.Sleep(300 * time.Millisecond)
+	select {
+	case err := <-done:
+		t.Fatalf("answered before the assistant came: %v", err)
+	default:
 	}
-	if _, ok := st.Chat(kb.ChatID("mail", "x")); ok {
-		t.Fatal("a batch under an undeclared name went in")
-	}
-	if _, ok := st.Chat(kb.ChatID("feed", "chat1")); !ok {
-		t.Fatal("its own chat is missing")
+	connectAssistant(t, h)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("after the assistant came: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("still waiting after the assistant came")
 	}
 }

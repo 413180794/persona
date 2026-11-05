@@ -62,7 +62,10 @@ func Main(ctx context.Context, version string, stdin io.Reader) error {
 	}
 	defer database.Close()
 	bh := NewBusHub(BusOptions{Hub: hub, Token: token, Version: version, Deploy: deploy, Logf: logger.Printf})
-	svc := New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf})
+	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
+	home := identity.HomeDir()
+	svc := New(Options{Hub: bh, Store: func() Store { return database }, Logf: logger.Printf,
+		KB: &KBOptions{Dir: filepath.Join(home, "data"), KeyDir: home}})
 	logger.Printf("connecting to %s", hub)
 	if err := bh.Run(ctx, svc); err != nil && !errors.Is(err, context.Canceled) {
 		return err

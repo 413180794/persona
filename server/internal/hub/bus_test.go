@@ -232,7 +232,8 @@ func TestBusHello(t *testing.T) {
 	f.hello(t, &reply)
 	want := busHelloReply{Name: "助手", Role: bus.RoleManager,
 		Managers: []busManagerBrief{{ID: "assistant", Name: "助手", Role: bus.RoleManager, Online: true}, {ID: "desk", Name: "工作", Role: bus.RoleManager}},
-		Hello:    assistantwire.Hello{Owner: "主人", OwnerNotes: notes, DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds()}}
+		Hello: assistantwire.Hello{Owner: "主人", OwnerNotes: notes, DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds(),
+			KB: &assistantwire.KBSettings{}}} // hub.json's kb section (the defaults): the assistant's knowledge base
 	if !jsonEqual(reply, want) {
 		t.Fatalf("hello answer %+v, want %+v", reply, want)
 	}

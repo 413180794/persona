@@ -15,29 +15,17 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The tools on what the hub keeps (docs/assistant.md「和 hub 的边界」): its knowledge base (kb_*), its interaction
-// queue (interaction_answer) and its inbox (inbox_draft). The hub offers them as apps that take and return data
-// (app.call kb / interactions / inbox); the arguments, the rules and what the model reads are here.
+// The tools on the knowledge base, which is the assistant's own (kb_*, kb.go), and on what the hub keeps: its
+// interaction queue (interaction_answer) and its inbox (inbox_draft), apps that take and return data (app.call
+// interactions / inbox). The arguments, the rules and what the model reads are here.
 
 // ---- kb_* (prompts/mcp/kb) ----
 
-var errKBOff = errors.New("the knowledge base is off (hub.json kb.enabled)")
-
-// kbCall is one of the knowledge base's methods; errKBOff when the hub has no knowledge base.
-func (s *Service) kbCall(ctx context.Context, method string, params, out any) error {
-	err := s.appCall(ctx, AppKB, method, params, out)
-	if err != nil {
-		var st struct {
-			Ready bool `json:"ready"`
-		}
-		if s.appCall(ctx, AppKB, KBStatus, map[string]any{}, &st) == nil && !st.Ready {
-			return errKBOff
-		}
-	}
-	return err
-}
-
 func (s *Service) toolKB(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	e, err := s.kbGet(ctx)
+	if err != nil {
+		return "", err
+	}
 	switch name {
 	case "kb_search":
 		a := struct {
@@ -49,19 +37,12 @@ func (s *Service) toolKB(ctx context.Context, name string, args json.RawMessage)
 		if a.Limit <= 0 {
 			a.Limit = 40
 		}
-		var res struct {
-			Dir  string   `json:"dir"`
-			Hits []kb.Hit `json:"hits"`
-		}
-		if err := s.kbCall(ctx, assistantwire.KBSearch, map[string]any{"query": a.Query, "messages": a.Messages == nil || *a.Messages,
-			"limit": min(a.Limit, 200)}, &res); err != nil {
-			return "", err
-		}
-		if len(res.Hits) == 0 {
-			return "No match in " + res.Dir + ".", nil
+		hits := e.Search(a.Query, a.Messages == nil || *a.Messages, min(a.Limit, 200))
+		if len(hits) == 0 {
+			return "No match in " + e.Store.Dir + ".", nil
 		}
 		var b strings.Builder
-		for _, hit := range res.Hits {
+		for _, hit := range hits {
 			fmt.Fprintf(&b, "%s: %s\n", hit.Path, hit.Line)
 		}
 		return b.String(), nil
@@ -74,17 +55,15 @@ func (s *Service) toolKB(ctx context.Context, name string, args json.RawMessage)
 		if a.Limit <= 0 {
 			a.Limit = 30
 		}
-		var res struct {
-			Items []kb.Entry `json:"items"`
+		items := e.List(a.Kind, a.Tag)
+		if len(items) > a.Limit {
+			items = items[:a.Limit]
 		}
-		if err := s.kbCall(ctx, assistantwire.KBList, map[string]any{"kind": a.Kind, "tag": a.Tag, "limit": a.Limit}, &res); err != nil {
-			return "", err
-		}
-		if len(res.Items) == 0 {
+		if len(items) == 0 {
 			return "Nothing yet.", nil
 		}
 		var b strings.Builder
-		for _, x := range res.Items {
+		for _, x := range items {
 			fmt.Fprintf(&b, "- %s · %s [%s 相关%d] %s %s%s\n", x.ID, x.Name, orDash(x.Importance), x.Relevance,
 				strings.Join(x.Tags, ","), x.Extra, prefix(" — ", x.OneLine))
 		}
@@ -92,23 +71,20 @@ func (s *Service) toolKB(ctx context.Context, name string, args json.RawMessage)
 	case "kb_get":
 		var a struct{ Kind, ID string }
 		_ = json.Unmarshal(args, &a)
-		var res struct {
-			Detail kb.Detail `json:"detail"`
-		}
-		if err := s.kbCall(ctx, assistantwire.KBGet, map[string]any{"kind": a.Kind, "id": a.ID, "recent": 12000}, &res); err != nil {
-			if errors.Is(err, errKBOff) {
-				return "", err
+		id := a.ID
+		if a.Kind == kb.KindProject { // a project by its name too
+			if p := e.FindProject(id); p != nil {
+				id = p.Slug
 			}
+		}
+		d, err := e.Get(a.Kind, id, 12000)
+		if err != nil {
 			return "", fmt.Errorf("%s/%s: %w", a.Kind, a.ID, err)
 		}
-		d := res.Detail
-		// meta.json as the file has it (the bus carries it compact; one that is not JSON comes as a string of its text).
-		meta := d.Meta
+		// meta.json as the file has it (one edited by hand into something else: its text, as it is).
+		meta := []byte(d.Meta)
 		var indented bytes.Buffer
-		var text string
-		if json.Unmarshal(d.Meta, &text) == nil {
-			meta = []byte(text)
-		} else if json.Indent(&indented, d.Meta, "", "  ") == nil {
+		if json.Valid(d.Meta) && json.Indent(&indented, bytes.TrimSpace(d.Meta), "", "  ") == nil {
 			meta = append(indented.Bytes(), '\n')
 		}
 		var b strings.Builder
@@ -139,13 +115,11 @@ func (s *Service) toolKB(ctx context.Context, name string, args json.RawMessage)
 		if err := json.Unmarshal(args, &a); err != nil {
 			return "", err
 		}
-		var res struct {
-			ID string `json:"id"`
-		}
-		if err := s.kbCall(ctx, assistantwire.KBUpdate, map[string]any{"kind": a.Kind, "id": a.ID, "update": a.Update}, &res); err != nil {
+		id, err := e.Apply(a.Kind, a.ID, a.Update)
+		if err != nil {
 			return "", err
 		}
-		return "Saved " + a.Kind + "/" + res.ID + ".", nil
+		return "Saved " + a.Kind + "/" + id + ".", nil
 	}
 	return "", fmt.Errorf("unknown tool %s", name)
 }

@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"crypto/rand"
@@ -9,7 +9,8 @@ import (
 	"path/filepath"
 )
 
-// handleKey is the hub's key for the senders' identity hints (kb/handles.go): ~/.jarvis/handles.key, 32 random bytes
+// handleKey is the knowledge base's key for the senders' identity hints (kb/handles.go): handles.key in the data home
+// (~/.persona, the hub's own when the assistant runs beside it, so the hashes stay the same), 32 random bytes
 // made on first use, 0600, never in the database or a log. Losing it only means later hints hash differently.
 func handleKey(dir string) ([]byte, error) {
 	p := filepath.Join(dir, "handles.key")

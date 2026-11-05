@@ -1,0 +1,406 @@
+package assistant
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+// The knowledge base is the assistant's (docs/knowledge.md「谁管什么」): the engine (internal/kb), its loop, its files
+// under the data directory and its index rows in Postgres. Only the assistant writes them. The hub keeps the sources:
+// what its connectors deliver is read over the bus (kb_sources.go), the posts their programs hand it come over the bus
+// (kb_posts.go), and the hub's features that read the knowledge base ask here (kb_bus.go). The kb_* tools, the live
+// context and the apps' /api/v1/kb routes (kb_routes.go) are local calls.
+//
+// How it is kept is the hub's hub.json kb section, which the hub hands over in its hello (also to an assistant on
+// another machine). The knowledge base opens (kbGet) once that came, the user's time zone could be read (the archive is
+// put into it first, so nothing is written in another zone) and the data directory's lock is this process's; it
+// closes while the assistant is not connected to the hub, so a process the hub no longer takes (its token replaced)
+// lets the data directory go to the one it does.
+
+// KBOptions is where the assistant keeps the knowledge base.
+type KBOptions struct {
+	// Dir is the data directory (~/.persona/data, the hub's own when the assistant runs beside it).
+	Dir string
+	// KeyDir holds handles.key, the key of the senders' identity hints (kb/handles.go); "": none are kept.
+	KeyDir string
+}
+
+const (
+	kbPoll        = 2 * time.Minute
+	kbDebounce    = 5 * time.Second
+	kbItemsPoll   = 30 * time.Minute
+	kbCompressMax = 8   // chats compressed per run
+	kbWaitingMost = 200 // agents' turns kept until it opens
+)
+
+var (
+	errKBOff = errors.New("the knowledge base is off (hub.json kb.enabled)")
+	// errKBNotOpen: it is on but not open yet (no word from the hub yet, the user's time zone not readable, the data
+	// directory another process's).
+	errKBNotOpen = errors.New("the knowledge base is not open yet; try again in a moment")
+)
+
+// kbState is the knowledge base's part of the Service.
+type kbState struct {
+	dir, keyDir string // "" dir: none (unit tests that do not need one)
+	kick        chan struct{}
+	cur         atomic.Pointer[kbOpened] // nil while not open
+
+	open    sync.Mutex // opening and closing
+	store   *kb.Store
+	key     []byte
+	unlock  func()
+	passed  bool // the one-time passes ran (once a process)
+	notOpen time.Time
+
+	mu         sync.Mutex
+	archivedAt map[string]time.Time        // connector id → when its archive was last asked (kb_sources.go)
+	agentAt    map[string]time.Time        // agent → when its turn last went into a project timeline (kb_bus.go)
+	waiting    []assistantwire.KBAgentTurn // turns that came before it opened
+	postsDirty atomic.Bool                 // posts came in since the post archive's index was written (kb_posts.go)
+}
+
+// kbOpened is the open knowledge base and the hub's settings it was opened with.
+type kbOpened struct {
+	eng *kb.Engine
+	set assistantwire.KBSettings
+}
+
+// kbIndex is the optional Postgres index of the entities (internal/db implements it).
+type kbIndex interface {
+	PutKBEntity(ctx context.Context, kind, id, name, importance string, relevance int, tags []string, oneLine string, updated time.Time) error
+	DeleteKBEntities(ctx context.Context, kind string, ids []string) error
+}
+
+// kbInit records where the knowledge base is (nil: none); it opens when it is first needed (kbGet).
+func (s *Service) kbInit(o *KBOptions) {
+	s.kb.kick = make(chan struct{}, 1)
+	if o != nil {
+		s.kb.dir, s.kb.keyDir = o.Dir, o.KeyDir
+	}
+}
+
+// kbSettings is hub.json's kb section as the hub said it; nil before it did.
+func (s *Service) kbSettings(ctx context.Context) *assistantwire.KBSettings {
+	if s.kb.dir == "" {
+		return &assistantwire.KBSettings{Off: true}
+	}
+	return s.hello(ctx).KB
+}
+
+// kbOn: the hub keeps a knowledge base (open or not yet).
+func (s *Service) kbOn(ctx context.Context) bool {
+	set := s.kbSettings(ctx)
+	return set != nil && !set.Off
+}
+
+// kbGet is the knowledge base, opened with the hub's settings now: errKBOff when the hub has none, errKBNotOpen while
+// it cannot open yet.
+func (s *Service) kbGet(ctx context.Context) (*kb.Engine, error) {
+	set := s.kbSettings(ctx)
+	switch {
+	case set == nil:
+		return nil, errKBNotOpen
+	case set.Off:
+		return nil, errKBOff
+	}
+	if o := s.kb.cur.Load(); o != nil && sameKBSettings(o.set, *set) {
+		return o.eng, nil
+	}
+	return s.kbOpen(ctx, *set)
+}
+
+func sameKBSettings(a, b assistantwire.KBSettings) bool {
+	return a.Off == b.Off && a.TextDays == b.TextDays && a.AttachmentDays == b.AttachmentDays && slices.Equal(a.ExtraDirs, b.ExtraDirs)
+}
+
+// kbOpen opens the knowledge base with set: the data directory's lock, the store put into the user's zone, the
+// one-time passes, an engine with set's limits (a new one when the hub's settings changed).
+func (s *Service) kbOpen(ctx context.Context, set assistantwire.KBSettings) (*kb.Engine, error) {
+	k := &s.kb
+	k.open.Lock()
+	if o := k.cur.Load(); o != nil && sameKBSettings(o.set, set) {
+		k.open.Unlock()
+		return o.eng, nil
+	}
+	e, err := s.kbOpenLocked(ctx, set)
+	k.open.Unlock()
+	if err != nil {
+		if time.Since(k.notOpen) > time.Minute { // said once a minute
+			k.notOpen = time.Now()
+			s.logf("kb: not open: %v", err)
+		}
+		return nil, errKBNotOpen
+	}
+	s.kbTakeWaiting(e)
+	return e, nil
+}
+
+func (s *Service) kbOpenLocked(ctx context.Context, set assistantwire.KBSettings) (*kb.Engine, error) {
+	k := &s.kb
+	loc, ok := s.kbZone(ctx)
+	if !ok {
+		return nil, errors.New("the user's time zone could not be read")
+	}
+	if k.store == nil {
+		if err := os.MkdirAll(k.dir, 0o700); err != nil {
+			return nil, err
+		}
+		unlock, err := lockKBDir(k.dir)
+		if err != nil {
+			return nil, err
+		}
+		st, err := kb.NewStore(k.dir)
+		if err != nil {
+			unlock()
+			return nil, err
+		}
+		if k.keyDir != "" && k.key == nil {
+			if key, err := handleKey(k.keyDir); err != nil {
+				s.logf("kb: identity hints off: %v", err) // never the key
+			} else {
+				k.key = key
+			}
+		}
+		k.store, k.unlock = st, unlock
+	}
+	s.kbRezone(k.store, loc)
+	e := &kb.Engine{Store: k.store, Model: s.kbModel("inbox.triage"), ModelFor: func(id string) kb.Model { return s.kbModel(id) },
+		Owner: s.owner(ctx), Logf: s.logf, TextDays: set.TextDays, AttachmentDays: set.AttachmentDays, HandleKey: k.key, Index: s.kbIndexEntity}
+	for _, d := range set.ExtraDirs {
+		if d = expandHome(strings.TrimSpace(d)); filepath.IsAbs(d) {
+			e.ExtraDirs = append(e.ExtraDirs, d)
+		}
+	}
+	if !k.passed {
+		k.passed = true
+		// Projects from before keywords existed get them at their next rewrite: the active ones are rewritten now (a
+		// few a run), so their 公司圈 posts can be found.
+		if n := e.SeedKeywords(60 * 24 * time.Hour); n > 0 {
+			s.logf("kb: %d project(s) to be rewritten for their keywords", n)
+		}
+		if n := e.IgnoreNoiseProjects(); n > 0 {
+			s.logf("kb: %d project(s) from notifications marked ignored", n)
+		}
+		if n := e.RetagMail(); n > 0 {
+			s.logf("kb: %d mail chat(s) queued to be tagged again under the current rules", n)
+		}
+	}
+	k.cur.Store(&kbOpened{eng: e, set: set})
+	return e, nil
+}
+
+// kbClose lets the knowledge base go (the data directory's lock with it): the assistant is not connected, or stops.
+// It opens again when it is next needed.
+func (s *Service) kbClose() {
+	k := &s.kb
+	k.open.Lock()
+	defer k.open.Unlock()
+	k.cur.Store(nil)
+	if k.unlock != nil {
+		k.unlock()
+	}
+	k.store, k.unlock = nil, nil
+}
+
+// kbError is what the hub gets for a call the knowledge base cannot take now: kb_unavailable while it is not open
+// (the hub answers 503, try again).
+func kbError(err error) error {
+	if errors.Is(err, errKBNotOpen) {
+		return &rpc.Error{Code: assistantwire.CodeKBUnavailable, Message: err.Error()}
+	}
+	return err
+}
+
+// kbIndexEntity mirrors an entity into the index table, when the store has one.
+func (s *Service) kbIndexEntity(kind, id, name string, t kb.Tagging, one string, updated time.Time) {
+	idx, ok := s.store().(kbIndex)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := idx.PutKBEntity(ctx, kind, id, name, t.Importance, t.Relevance, t.Tags, one, updated); err != nil {
+		s.logf("kb index: %v", err)
+	}
+}
+
+// kbZone is the user's time zone the archive is written in (as location reads it); false while the assistant's
+// settings cannot be read: then the archive is not moved (into the machine's zone, and back a round later) and nothing
+// is written.
+func (s *Service) kbZone(ctx context.Context) (*time.Location, bool) {
+	v, ok := s.savedSettings(ctx)
+	if !ok {
+		return nil, false
+	}
+	if v.Timezone != "" {
+		if loc, err := time.LoadLocation(v.Timezone); err == nil {
+			return loc, true
+		}
+	}
+	return time.Local, true
+}
+
+// kbRezone keeps the archive in the user's time zone (kb/zone.go): the days and times written in another (the hub's
+// own, UTC, or before the user moved) are moved into it.
+func (s *Service) kbRezone(st *kb.Store, loc *time.Location) {
+	n, err := st.Rezone(loc)
+	if n > 0 {
+		s.logf("kb: %d chat(s) / timeline(s) moved into %s", n, loc)
+	}
+	if err != nil {
+		s.logf("kb: %v", err)
+	}
+}
+
+// kbKick has the loop go round soon (a source has something new).
+func (s *Service) kbKick() {
+	select {
+	case s.kb.kick <- struct{}{}:
+	default:
+	}
+}
+
+// kbConnected: the assistant is connected to the hub now (true for a hub that cannot tell, the unit tests' fake).
+func (s *Service) kbConnected() bool {
+	c, ok := s.hub.(interface{ Connected() bool })
+	return !ok || c.Connected()
+}
+
+// kbLoop archives, compresses and keeps up the knowledge base, every two minutes (five seconds after a kick), from
+// when the assistant first connected until ctx ends. While it is not connected the knowledge base is closed. A mesh
+// member's waits: the center's knowledge base is the group's (docs/mesh.md), this one's stays as it was.
+func (s *Service) kbLoop(ctx context.Context) {
+	if s.kb.dir == "" {
+		return
+	}
+	var r kbRounds
+	t := time.NewTicker(kbPoll)
+	defer t.Stop()
+	for {
+		switch {
+		case !s.kbConnected():
+			s.kbClose()
+		case !s.hello(ctx).Assistant.Standby:
+			if e, err := s.kbGet(ctx); err == nil {
+				s.kbRound(ctx, e, &r)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		case <-s.kb.kick:
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(kbDebounce):
+			}
+		}
+	}
+}
+
+// kbRounds is when the loop last did what it does less often than every round.
+type kbRounds struct{ items, prune, links time.Time }
+
+// kbRound is one go of the loop.
+func (s *Service) kbRound(ctx context.Context, e *kb.Engine, r *kbRounds) {
+	loc, ok := s.kbZone(ctx)
+	if !ok {
+		s.logf("kb: the user's time zone could not be read: archiving waits for the next round")
+		return
+	}
+	kbRun(ctx, func() { s.kbRezone(e.Store, loc) })
+	e.Owner = s.owner(ctx)                        // only this loop reads it (the models' prompts)
+	kbRun(ctx, func() { s.kbConnectors(ctx, e) }) // mail, GitHub, the plugins'…, each when it is due
+	for i, c := range e.DueForCompression(time.Now()) {
+		if i >= kbCompressMax || ctx.Err() != nil {
+			break
+		}
+		if err := e.Compress(ctx, c); err != nil {
+			if ai.IsPaused(err) { // the chats stay due: compressed once the connection is back
+				break
+			}
+			s.logf("kb: compress %s: %v", c.ID, err)
+		}
+	}
+	e.RefreshProjects(ctx, 3)
+	// Same work under two names, and the 公司圈 posts about each project: a few model calls every half hour.
+	if time.Since(r.links) >= kbItemsPoll {
+		r.links = time.Now()
+		kbRun(ctx, func() {
+			if n := e.DedupeProjects(ctx, 4); n > 0 {
+				s.logf("kb: merged %d duplicate project(s)", n)
+			}
+			if n := e.LinkMoments(ctx, 3); n > 0 {
+				s.logf("kb: linked %d 公司圈 post(s) to projects", n)
+			}
+		})
+	}
+	if time.Since(r.items) >= kbItemsPoll {
+		r.items = time.Now()
+		kbRun(ctx, func() { s.kbCollectItems(ctx, e) })
+	}
+	daily := time.Since(r.prune) >= 24*time.Hour
+	if daily {
+		r.prune = time.Now()
+		if n := e.Prune(time.Now()); n > 0 {
+			s.logf("kb: pruned %d day(s)", n)
+		}
+	}
+	kbRun(ctx, func() { s.kbPostsUpkeep(e, daily) })
+}
+
+// kbRun calls f, turning a panic into a log line: one malformed message must not stop the loop.
+func kbRun(ctx context.Context, f func()) {
+	defer func() { _ = recover() }()
+	if ctx.Err() == nil {
+		f()
+	}
+}
+
+// kbTextRetention is how long the knowledge base keeps text (kb.text_days, a year by default).
+func kbTextRetention(e *kb.Engine) time.Duration {
+	days := e.TextDays
+	if days <= 0 {
+		days = 365
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
+// expandHome turns a leading "~/" into this machine's home.
+func expandHome(p string) string {
+	if rest, ok := strings.CutPrefix(p, "~/"); ok {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, rest)
+		}
+	}
+	return p
+}
+
+func clipRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
+}
+
+// kbExtraDirs are hub.json's kb.extra_dirs as written, for CLAUDE.md (none while the knowledge base is off).
+func (s *Service) kbExtraDirs(ctx context.Context) []string {
+	if set := s.kbSettings(ctx); set != nil && !set.Off {
+		return set.ExtraDirs
+	}
+	return nil
+}

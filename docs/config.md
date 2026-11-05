@@ -332,6 +332,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `kb`：知识库（`docs/knowledge.md`）：`enabled`（默认开）、`text_days`（文字保留天数，365）、`attachment_days`（附件，30）、
   `ai`（压缩和打标的模型，字段同 `ai`；不写用 `inbox.triage_ai`，再没有用 `ai`）、`extra_dirs`（hub 机器上你自己维护的笔记目录，
   比如一个记事实 / 经验的 git 仓库：`kb_search` 也搜这些目录里的 Markdown（只读，跳过 `.git` 这类点开头的目录），助手的 CLAUDE.md 会提到它们；`~/` 是那台的家目录）。
+  知识库是助手（管理者）的，hub 在握手时把这一节交给它（`ai` 除外：那是 hub 的模型配置读的），助手跑在别处也以 hub 这份为准；
+  `assistant.external` 时 `extra_dirs` 是助手那台机器上的路径（`docs/knowledge.md`「谁管什么」）。
 - `inbox.rules`：收件箱 AI 分拣的个人规则（自然语言，比如「某某找我的都算需要我」「某告警群只算噪音」），附在分拣提示词最后、优先于默认判断（`docs/inbox.md`）。
   连接器的条目带了自己的规则（`rules`，如插件设置的 `triage_rules`）时用那一份，不用这里的。
 - `bots.feishu`（可选）：在飞书里和 Persona 对话的机器人的应用凭证 `app_id`、`app_secret`、`domain`（`feishu` / `lark` / 开放平台地址），

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path"
 	"sync"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -75,12 +74,6 @@ func (h *Hub) assistantAppCall(ctx context.Context, p assistantwire.AppCall) (js
 			modelOK := !available || a.Model == "" || h.launcherHasModel(ctx, m, a.Launcher, a.Model)
 			out = map[string]any{"available": available, "model_ok": modelOK}
 		}
-	case assistantwire.AppKB + " " + assistantwire.KBDirs:
-		res := map[string]any{"knowledge_dir": "", "extra_dirs": h.kb.cfg.ExtraDirs}
-		if h.cfg != nil && h.cfg.dir != "" {
-			res["knowledge_dir"] = path.Join(h.cfg.dir, "data")
-		}
-		out = res
 	case assistantwire.AppConnectors + " " + assistantwire.ConnectorsSignedIn:
 		signedIn := h.signedInConnectors(ctx)
 		clis := map[string]string{}

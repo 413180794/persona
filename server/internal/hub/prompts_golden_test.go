@@ -124,13 +124,11 @@ func (goldenSnapshot) Snapshot(context.Context, string) (connector.SnapshotData,
 }
 
 // goldenKB is a knowledge base with one chat, its summary and two projects.
-func goldenKB(t *testing.T) *kb.Engine {
+// goldenKB is the knowledge base h's assistant keeps once it connects (withKB), with a few projects and chats.
+func goldenKB(t *testing.T, h *Hub) *kb.Engine {
 	t.Helper()
-	st, err := kb.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := &kb.Engine{Store: st, Owner: "示例用户"}
+	e := withKB(t, h)
+	st := e.Store
 	now := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
 	for _, p := range []*kb.Project{
 		{Slug: "demo-release", Name: "示例发布", Kind: "short", Status: "active", Tagging: kb.Tagging{Importance: "P0", Relevance: 95}, OneLine: "周五灰度", Updated: now},
@@ -204,7 +202,7 @@ func snapshotHub(t *testing.T, full bool) *Hub {
 		working = append(working, proto.Session{SessionID: "w" + string(rune('a'+i)), Cwd: "/code/w" + string(rune('a'+i)), Status: proto.StatusWorking, UpdatedAt: now})
 	}
 	h.byID["laptop"].sessions = working
-	h.kb.eng = goldenKB(t)
+	goldenKB(t, h)
 	at := time.Date(2099, 1, 2, 1, 30, 0, 0, time.UTC)
 	seedTasks(t, h, // the assistant's, which it reports to the hub
 		assistant.Task{ID: "a", Title: "看 CI", Repeat: "once", At: at, Enabled: true},
@@ -383,7 +381,8 @@ func TestGoldenInboxAgentPrompt(t *testing.T) {
 	}
 	// With the knowledge base: the chat's summary and projects follow.
 	h := agentHub(t)
-	h.kb.eng = goldenKB(t)
+	goldenKB(t, h)
+	connectAssistant(t, h) // the knowledge base is the assistant's: the hub asks it (kb.context)
 	it := *items["mention"]
 	golden(t, "inbox_agent.mention_kb", inboxAgentPrompt(&it, h.ownerName(), h.kbContextFor(&it)))
 	// A chat in another Feishu account than lark.account: the prompt names it for lark_messages.

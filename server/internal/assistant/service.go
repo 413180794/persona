@@ -24,6 +24,8 @@ type Options struct {
 	// in memory only.
 	Store func() Store
 	Logf  func(format string, args ...any)
+	// KB is the knowledge base it keeps (kb.go); nil: none.
+	KB *KBOptions
 }
 
 // Service is the assistant. It implements Handler.
@@ -50,6 +52,7 @@ type Service struct {
 	questions questions    // tools.go (ask_user)
 	live      contextState // context.go
 	todos     todoBook     // todos.go
+	kb        kbState      // kb.go
 }
 
 var _ Handler = (*Service)(nil)
@@ -70,6 +73,8 @@ func New(o Options) *Service {
 	s.taskRoutes()
 	s.todayRoutes()
 	s.todoRoutes()
+	s.kbInit(o.KB)
+	s.kbRoutes()
 	return s
 }
 
@@ -208,13 +213,8 @@ func (s *Service) resolveModel(ctx context.Context, purpose string) (ModelBindin
 	return b, err
 }
 
-// kbReady: the hub has a knowledge base.
-func (s *Service) kbReady(ctx context.Context) bool {
-	var res struct {
-		Ready bool `json:"ready"`
-	}
-	return s.appCall(ctx, AppKB, KBStatus, map[string]any{}, &res) == nil && res.Ready
-}
+// kbReady: there is a knowledge base (kb.go; on, opened or about to).
+func (s *Service) kbReady(ctx context.Context) bool { return s.kbOn(ctx) }
 
 // push asks the hub to push n to the user (notify.request).
 func (s *Service) push(ctx context.Context, n Notification) {

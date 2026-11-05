@@ -2,10 +2,12 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
 )
@@ -49,11 +51,6 @@ func TestConnectorFeedsTurnedOff(t *testing.T) {
 	h.store = st
 	h.connectors = connector.NewRegistry(nil)
 	h.inbox.init()
-	kst, err := kb.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.kb.eng = &kb.Engine{Store: kst}
 	f := &feedConnector{}
 	if err := h.addConnector(f); err != nil {
 		t.Fatal(err)
@@ -67,9 +64,13 @@ func TestConnectorFeedsTurnedOff(t *testing.T) {
 	if code != 200 || out["archive"] != false || out["inbox"] != true || out["enabled"] != true {
 		t.Fatalf("archive off: %d %v", code, out)
 	}
-	h.kbConnectors(ctx)
-	if f.changes != 0 {
-		t.Fatalf("asked for changes %d time(s) with 进知识库 off", f.changes)
+	// The knowledge base (the assistant's) reads the connectors the hub lists, through the hub (kb_sources.go).
+	if a := h.kbArchives(ctx); len(a.Archives) != 0 {
+		t.Fatalf("listed for the knowledge base with 进知识库 off: %+v", a)
+	}
+	if _, _, err := h.kbSourcesCall(ctx, assistantwire.AppCall{AppID: assistantwire.AppConnectors, Method: assistantwire.ConnectorsChanges,
+		Params: json.RawMessage(`{"id":"example"}`)}); err == nil || f.changes != 0 {
+		t.Fatalf("asked for changes %d time(s) with 进知识库 off (%v)", f.changes, err)
 	}
 	h.collectConnectors(ctx)
 	if f.collects != 1 || len(openItems(h)) != 1 {
@@ -102,9 +103,12 @@ func TestConnectorFeedsTurnedOff(t *testing.T) {
 	if code, out := call(t, mux, "PUT", "/api/v1/connectors/example/settings", h.cfg.Token, `{"archive":true}`); code != 200 || out["archive"] != true {
 		t.Fatalf("archive back on: %d %v", code, out)
 	}
-	h.kbConnectors(ctx)
-	if f.changes != 1 {
-		t.Fatalf("not archived once back on: %d", f.changes)
+	if a := h.kbArchives(ctx); len(a.Archives) != 1 || a.Archives[0].ID != "example" {
+		t.Fatalf("not listed once back on: %+v", a)
+	}
+	if raw, _, err := h.kbSourcesCall(ctx, assistantwire.AppCall{AppID: assistantwire.AppConnectors, Method: assistantwire.ConnectorsChanges,
+		Params: json.RawMessage(`{"id":"example","cursor":"c"}`)}); err != nil || f.changes != 1 || string(raw) != `{"batches":[],"next":"c"}` {
+		t.Fatalf("not archived once back on: %d %s %v", f.changes, raw, err)
 	}
 	if !strings.Contains(st.settings[connectorSettingsKey], `"archive":{"example":true}`) {
 		t.Fatalf("turning it back on is not kept: %s", st.settings[connectorSettingsKey])
@@ -132,11 +136,8 @@ func TestConnectorArchiveDelete(t *testing.T) {
 	h.inbox.init()
 	_ = h.addConnector(&feedConnector{})
 	mux := h.routes()
-	kst, err := kb.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.kb.eng = &kb.Engine{Store: kst}
+	kst := withKB(t, h).Store // the assistant's: the hub asks it to delete (kb.forget)
+	connectAssistant(t, h)
 	_ = kst.PutChat(&kb.Chat{ID: "example-c1", Source: "example", Name: "示例群"})
 	_ = kst.PutChat(&kb.Chat{ID: "lark-f1", Source: "lark", Name: "需求群"})
 	_ = kst.PutPerson(&kb.Person{ID: "example-p1", Source: "example", Name: "示例用户"})
@@ -154,6 +155,18 @@ func TestConnectorArchiveDelete(t *testing.T) {
 	}
 	if !h.connectors.Enabled("example") || !h.connectors.Feeds("example", connector.FeedInbox) {
 		t.Fatal("the connector or its inbox was switched off")
+	}
+	// The assistant away: nothing is deleted, the app is told to try again (503 assistant_offline).
+	_ = kst.PutChat(&kb.Chat{ID: "example-c2", Source: "example", Name: "示例群二"})
+	a := assistantOf(t, h)
+	a.stop()
+	<-a.done
+	eventually(t, 5*time.Second, "the hub sees the assistant gone", func() bool { return h.busConnOf(assistantwire.AssistantID) == nil })
+	if code, out := call(t, mux, "DELETE", "/api/v1/connectors/example/archive", h.cfg.Token, ""); code != 503 || out["code"] != assistantwire.CodeAssistantOffline {
+		t.Fatalf("with the assistant away: %d %v", code, out)
+	}
+	if _, ok := kst.Chat("example-c2"); !ok {
+		t.Error("deleted with the assistant away")
 	}
 	if _, ok := kst.Chat("example-c1"); ok {
 		t.Error("the chat is still there")

@@ -27,6 +27,8 @@ type Hello struct {
 	DoneDelayMS int64 `json:"done_delay_ms"`
 	// PersonaView is hub.json's assistant.persona_view: teach ```persona-view rather than ```persona-card (#1850).
 	PersonaView bool `json:"persona_view,omitempty"`
+	// KB is hub.json's kb section: the knowledge base the assistant keeps (kb.go).
+	KB *KBSettings `json:"kb,omitempty"`
 }
 
 // Placement is the hub's defaults for where the assistant runs.
@@ -94,6 +96,8 @@ type AppCall struct {
 	AppID  string          `json:"app_id"`
 	Method string          `json:"method"`
 	Params json.RawMessage `json:"params,omitempty"`
+	// TimeoutMS is how long the caller waits for the answer (its context's deadline); the hub stops there too. 0: none.
+	TimeoutMS int64 `json:"timeout_ms,omitempty"`
 }
 
 // The apps the hub runs for the assistant and their methods.
@@ -107,17 +111,11 @@ const (
 	ModelsApply = "models.apply"
 	// ModelsResolve: {purpose} → ModelBinding, what the purpose runs on.
 	ModelsResolve = "models.resolve"
-	// ModelsJSON: {purpose, system, input} → the JSON object the model answered.
+	// ModelsJSON: {purpose, system, input, max_tokens?} → the JSON object the model answered (max_tokens: the room
+	// for the answer, asked once more with twice that when it is cut off; the knowledge base's calls give it).
 	ModelsJSON = "models.json"
 	// ModelsTabName: {prompt} → {name}, a herdr tab's name for an agent started with prompt ("" when none).
 	ModelsTabName = "models.tab_name"
-
-	// AppKB is the hub's knowledge base (docs/knowledge.md).
-	AppKB = "kb"
-	// KBStatus: {} → {ready}.
-	KBStatus = "kb.status"
-	// KBPrompt: {projects, chats} → {text}, what the live context says about it ("" without one).
-	KBPrompt = "kb.prompt"
 
 	// AppConnectors is the hub's connectors (docs/connectors.md).
 	AppConnectors = "connectors"
@@ -139,21 +137,9 @@ const (
 	AppTool = "app.tool"
 )
 
-// What the knowledge base, the interaction queue and the inbox offer the assistant: data in, data out. The tools on
-// them (kb_*, interaction_answer, inbox_draft) are the assistant's, with their rules and wording.
+// What the interaction queue and the inbox offer the assistant: data in, data out. The tools on them
+// (interaction_answer, inbox_draft) are the assistant's, with their rules and wording.
 const (
-	// KBSearch: {query, messages, limit} → {dir, hits: [kb.Hit]}, the lines with every word of query (the message
-	// archive's too when messages), at most limit (60 when 0); dir is where the knowledge base is.
-	KBSearch = "kb.search"
-	// KBList: {kind, tag, limit} → {items: [kb.Entry]}, the kind's entries (with the tag when one is given), ranked;
-	// at most limit, all when 0.
-	KBList = "kb.list"
-	// KBGet: {kind, id, recent} → {detail: kb.Detail}, one entry (a project by its name too); recent bounds a chat's
-	// latest messages (characters, 0: none).
-	KBGet = "kb.get"
-	// KBUpdate: {kind, id, update: kb.Update} → {id}, the entry changed (a project made when it is new).
-	KBUpdate = "kb.update"
-
 	// InteractionsGet: {interaction_id} → {interaction, ok}, the interaction while it is pending; when it is not (ok
 	// false), status says how it ended (resolved, dismissed, expired, cancelled; "" when there is no such interaction).
 	InteractionsGet = "interactions.get"
@@ -569,6 +555,14 @@ var Routes = []string{
 	"POST /api/v1/assistant/conversations",
 	"POST /api/v1/assistant/conversations/{id}/compact",
 	"POST /api/v1/assistant/main/new",
+	// The knowledge base (the assistant's kb_routes.go, docs/knowledge.md「App 接口」).
+	"GET /api/v1/kb/{kind}",
+	"GET /api/v1/kb/{kind}/{id}",
+	"PUT /api/v1/kb/{kind}/{id}",
+	"GET /api/v1/kb/moments/{id}",
+	"GET /api/v1/kb/chats/{id}/context",
+	"GET /api/v1/kb/chats/{id}/days/{day}",
+	"GET /api/v1/kb-search",
 }
 
 // ---- the assistant's settings, and the conversations the hub's features start (docs/assistant.md「和 hub 的边界」) ----
@@ -671,9 +665,6 @@ const (
 	// ModelsLauncherCheck: {machine_id, launcher, model?} → {available, model_ok}: whether a message can still run on
 	// them (not a renamed launcher, not a model its gateway dropped); true when it can't be told.
 	ModelsLauncherCheck = "models.launcher_check"
-
-	// KBDirs: {} → {knowledge_dir, extra_dirs}: where the knowledge base keeps its files, and the user's other notes.
-	KBDirs = "kb.dirs"
 
 	// ConnectorsSignedIn: {} → {connectors, clis, lark_cli}: the connectors switched on and signed in (rate limited
 	// counts), their command lines (name → connector id), and whether hub.json sets up lark-cli.
