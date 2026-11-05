@@ -78,8 +78,8 @@ object TerminalWrap {
             Character.DECIMAL_DIGIT_NUMBER.toInt(), Character.LETTER_NUMBER.toInt(), Character.OTHER_NUMBER.toInt(),
         )
 
-    private val closing = "，。、：；！？）】」』》”’,.:;!?)]}".map { it.toString() }.toSet()
-    private val opening = "（【「『《“‘([{".map { it.toString() }.toSet()
+    private val closing = "，。、：；！？）】」』》”’,.:;!?)]}".map { it.toString() }.toSet()  // i18n-ignore: line-break punctuation matched against terminal cells, not shown
+    private val opening = "（【「『《“‘([{".map { it.toString() }.toSet()  // i18n-ignore: line-break punctuation matched against terminal cells, not shown
     private val borders = setOf("│", "┃", "║", "▏", "▎")
     private val markers = setOf("⏺", "⎿", "❯", "›", ">", "•", "·", "-", "*", "+", "✻", "✶", "✳", "◦", "▸", "▪", "☐", "☒", "✔", "✘")
 }

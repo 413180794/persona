@@ -344,11 +344,21 @@ internal fun AgentsScreen(
                             }, menu = space?.let { { spaceMenu(it, true) } }, icon = group.repo?.icon,
                             kind = group.repo?.kind ?: stringResource(R.string.agents_kind_space))
                         else if (group.id.startsWith("todo/") && group.id != TodoNoneGroup && group.id != TodoManualGroup) {
+                            // 按待办: a todo under its project (#3156), one step in; the arrow opens the todo.
                             val todoId = group.id.removePrefix("todo/")
+                            AgentSpaceHeader(groupTitle, group.folded, { model.fold(group) }, depth = entry.depth, first = entry.first,
+                                counts = group.headingCounts, icon = PhIcons.ListChecks, kind = stringResource(R.string.agents_kind_todo),
+                                menu = { HeadingAction(PhIcons.CaretRight, stringResource(R.string.agents_view_todo),
+                                    { navigator.navigate(persona.core.navigation.TodoDetailRoute(todoId)) }) })
+                        } else if (group.id.startsWith(TodoLoosePrefix)) {
+                            // 手动开的 / 没有待办's agents of one project
+                            AgentSpaceHeader(groupTitle, group.folded, { model.fold(group) }, depth = entry.depth, first = entry.first,
+                                counts = group.headingCounts, icon = PhIcons.Folder, kind = stringResource(R.string.agents_kind_project))
+                        } else if (group.id.startsWith(TodoProjectPrefix)) {
+                            val todoCount = page.list.groups.count { it.under == group.id }
                             AgentTreeHeader(groupTitle, group.folded, { model.fold(group) }, first = entry.first,
-                                icon = PhIcons.ListChecks, counts = group.headingCounts,
-                                onAction = { navigator.navigate(persona.core.navigation.TodoDetailRoute(todoId)) },
-                                actionIcon = PhIcons.CaretRight, actionLabel = stringResource(R.string.agents_view_todo))
+                                icon = PhIcons.Folder, counts = group.headingCounts,
+                                detail = pluralStringResource(R.plurals.agents_count_todos, todoCount, todoCount))
                         } else AgentTreeHeader(groupTitle, group.folded, { model.fold(group) }, first = entry.first,
                             icon = PhIcons.PushPin.takeIf { group.id == "pinned" }, counts = group.headingCounts)
                     }

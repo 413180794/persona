@@ -3,7 +3,6 @@ package imessage
 import (
 	"context"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -19,12 +18,8 @@ func TestRealMessagesCounts(t *testing.T) {
 	if home == "" {
 		t.Skip("set JARVIS_IMESSAGE_HOME to a Mac home to count its messages")
 	}
-	sqlite, err := exec.LookPath("sqlite3")
-	if err != nil {
-		t.Skip("no sqlite3")
-	}
 	ctx := context.Background()
-	r := &Reader{Home: home, SQLite: sqlite}
+	r := &Reader{Home: home, SQLite: sqlite3WithJSON(t)}
 	if st := r.Status(ctx); st.State != "ok" {
 		t.Fatalf("status %s", st.State)
 	}

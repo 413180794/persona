@@ -238,49 +238,58 @@ fun buildAgentList(
             }
         }
         AgentGrouping.Todo -> {
+            // 项目 › 待办 › Agent (#3156, web `buildTodoTree` #2698): each todo under the project its agents work in; 手动开的
+            // and 没有待办 last, each split by project too. A heading holds no rows itself (the groups under it do).
             val sessionMap = sessions.associateBy { it.session.key }
             val uncompletedTodos = todos.filter { !it.isDone }.sortedWith(
                 compareBy<Todo> { it.state { k -> sessionMap[k]?.session }.rank }
                     .thenByDescending { it.created ?: java.time.Instant.EPOCH }
                     .thenBy { it.id }
             )
+            fun counts(rows: List<AgentSession>) = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
+            fun leaf(id: String, title: CoreText, members: List<AgentSession>, under: String) {
+                val rows = ordered(members)
+                val folded = id in settings.folded
+                result += AgentListGroup(id, title, rows, if (folded) emptyList() else rows, folded, stateCounts = counts(rows), under = under)
+            }
+            fun heading(id: String, title: CoreText, members: List<AgentSession>, folded: Boolean) {
+                result += AgentListGroup(id, title, emptyList(), emptyList(), folded, stateCounts = counts(members))
+            }
+            /** By project: the one with an agent waiting for you first (then working), keeping the incoming order; 其他 last. */
+            fun <T> byProject(items: List<T>, project: (T) -> String, members: (T) -> List<AgentSession>): List<Pair<String, List<T>>> =
+                items.groupBy(project).toList().sortedWith(compareBy<Pair<String, List<T>>> { it.first.isEmpty() }
+                    .thenBy { (_, list) -> todoTreeRank(list.flatMap(members)) })
+            fun projectTitle(project: String) = repoTitle(project.ifEmpty { UnnamedRepo })
             val claimed = mutableSetOf<persona.core.contracts.SessionKey>()
-            for (todo in uncompletedTodos) {
+            val linked = uncompletedTodos.mapNotNull { todo ->
                 val linkedKeys = todo.currentAgents.map { it.key }.toSet()
                 val matched = live.filter { (it.session.todo?.id == todo.id && it.session.todo?.id?.isNotEmpty() == true) || it.session.key in linkedKeys }
-                if (matched.isNotEmpty()) {
-                    val rows = ordered(matched)
-                    val folded = "todo/${todo.id}" in settings.folded
-                    val visible = if (folded) emptyList() else rows
-                    val stateCounts = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
-                    result += AgentListGroup(
-                        id = "todo/${todo.id}",
-                        title = CoreText.plain(todo.title),
-                        rows = rows,
-                        visibleRows = visible,
-                        folded = folded,
-                        stateCounts = stateCounts
-                    )
-                    claimed.addAll(matched.map { it.session.key })
-                }
+                if (matched.isEmpty()) return@mapNotNull null
+                claimed.addAll(matched.map { it.session.key })
+                todo to matched
+            }
+            byProject(linked, { (_, rows) -> todoProjectOf(rows.map { it.session.cwd }) }, { it.second }).forEach { (project, inProject) ->
+                val id = TodoProjectPrefix + project.ifEmpty { "-" }
+                heading(id, projectTitle(project), inProject.flatMap { it.second }, id in settings.folded)
+                inProject.forEach { (todo, rows) -> leaf("todo/${todo.id}", CoreText.plain(todo.title), rows, id) }
             }
             val unlinked = live.filter { it.session.key !in claimed }
-            fun section(id: String, title: CoreText, rows: List<AgentSession>, folded: Boolean) {
-                result += AgentListGroup(
-                    id = id, title = title, rows = rows, visibleRows = if (folded) emptyList() else rows, folded = folded,
-                    stateCounts = AgentState.entries.associateWith { state -> rows.count { it.state == state } },
-                )
+            fun loose(id: String, title: CoreText, rows: List<AgentSession>, folded: Boolean) {
+                heading(id, title, rows, folded)
+                byProject(rows, { repoOf(it.session.cwd).name }, { listOf(it) }).forEach { (project, inProject) ->
+                    leaf("$TodoLoosePrefix$id/${project.ifEmpty { "-" }}", projectTitle(project), inProject, id)
+                }
             }
             // Opened by hand in herdr and on no to-do: a section of its own before 没有待办, open (web todos.ts, #2608).
             val manual = unlinked.filter { it.session.isManualHerdr }
-            if (manual.isNotEmpty()) section(TodoManualGroup, CoreText.of(Key.AgentsManual), ordered(manual), TodoManualGroup in settings.folded)
+            if (manual.isNotEmpty()) loose(TodoManualGroup, CoreText.of(Key.AgentsManual), manual, TodoManualGroup in settings.folded)
             val rest = unlinked.filterNot { it.session.isManualHerdr }
             if (rest.isNotEmpty()) {
                 // Folded under the to-dos unless something in it needs you; with no to-do above it is the whole list, so open.
                 // The user's own fold wins either way ([TodoNoneOpened] once they opened it).
-                val byDefault = result.any { it.id.startsWith("todo/") && it.id != TodoManualGroup } && rest.none { it.state == AgentState.NeedsYou }
+                val byDefault = linked.isNotEmpty() && rest.none { it.state == AgentState.NeedsYou }
                 val folded = TodoNoneGroup in settings.folded || (byDefault && TodoNoneOpened !in settings.expandedIdle)
-                section(TodoNoneGroup, CoreText.of(Key.AgentsNoTodo), ordered(rest), folded)
+                loose(TodoNoneGroup, CoreText.of(Key.AgentsNoTodo), rest, folded)
             }
         }
         AgentGrouping.Machine -> (if (latest) machines.sortedByDescending { m ->
@@ -334,6 +343,26 @@ fun buildAgentList(
 private fun repoTitle(name: String): CoreText = if (name == UnnamedRepo) CoreText.of(Key.RepoOther) else CoreText.plain(name)
 
 /** 按待办's sections that are not a to-do: agents opened by hand, then those on none. */
+/** 按待办's project headings (#3156): `todo-project/<repository name>`, `-` for 其他. */
+const val TodoProjectPrefix = "todo-project/"
+/** A project's agents under 手动开的 or 没有待办: `todo-loose/<that group's id>/<repository name>`. */
+const val TodoLoosePrefix = "todo-loose/"
+
+/**
+ * The project a todo's agents work in (web `projectOf`): the repository most of their cwds sit in (按仓库's [repoOf],
+ * merged across computers), the first by name on a tie; "" when none has a cwd.
+ */
+fun todoProjectOf(cwds: List<String>): String = cwds.map { repoOf(it).name }.filter(String::isNotEmpty)
+    .groupingBy { it }.eachCount().entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+    .firstOrNull()?.key.orEmpty()
+
+/** 等你 before 在做 before 做完 (web `TreeState`): what the most urgent agent under a branch says. */
+private fun todoTreeRank(rows: List<AgentSession>): Int = when {
+    rows.any { it.state == AgentState.NeedsYou } -> 0
+    rows.any { it.state == AgentState.Working } -> 1
+    else -> 2
+}
+
 const val TodoManualGroup = "todo/manual"
 const val TodoNoneGroup = "todo/none"
 /** In `expandedIdle` once the user opened 没有待办, which is folded by default under to-dos. */

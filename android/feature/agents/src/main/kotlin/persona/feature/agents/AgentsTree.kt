@@ -121,7 +121,12 @@ internal fun agentTreeEntries(
             group(it, space = true, depth = (if (headed) 1 else 0) + (if (it.under != null) 1 else 0), first = index == 0)
         }
     }
-    list.groups.filter { it.id != "pinned" && it.id !in treeIds }.forEach { group(it, space = false, depth = 0, first = entries.isEmpty()) }
+    // Sections outside the computer tree; one [AgentListGroup.under] another (按待办's todos under their project, #3156)
+    // sits one step in and is gone while that one is folded.
+    list.groups.filter { it.id != "pinned" && it.id !in treeIds }.forEach {
+        if (it.under != null && byId[it.under]?.folded != false) return@forEach
+        group(it, space = false, depth = if (it.under != null) 1 else 0, first = entries.isEmpty())
+    }
     return entries
 }
 

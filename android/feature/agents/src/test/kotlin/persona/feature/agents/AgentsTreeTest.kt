@@ -85,11 +85,37 @@ class AgentsTreeTest {
         val entries = agentTreeEntries(list, "")
         assertTrue(entries.none { it is TreeMachineEntry })
         val groups = entries.filterIsInstance<TreeGroupEntry>()
-        assertEquals(listOf("todo/todo_1", "todo/none"), groups.map { it.group.id })
-        assertEquals("待办一", groups[0].group.title.shown)
-        assertEquals("没有待办", groups[1].group.title.shown)
+        // 项目 › 待办 › Agent (#3156): sessions without a cwd are in the project 其他; 没有待办 is open (one there needs you)
+        assertEquals(listOf("todo-project/-", "todo/todo_1", "todo/none", "todo-loose/todo/none/-"), groups.map { it.group.id })
+        assertEquals(listOf(0, 1, 0, 1), groups.map { it.depth })
+        assertEquals("其他", groups[0].group.title.shown)
+        assertEquals("待办一", groups[1].group.title.shown)
+        assertEquals("没有待办", groups[2].group.title.shown)
         val rowsInTodo1 = entries.filterIsInstance<TreeRowEntry>().filter { it.row.session.sessionId == "a" }
         assertEquals(1, rowsInTodo1.size)
+        assertEquals(1, rowsInTodo1.single().depth)
+        assertTrue("todo rows still say where they run", rowsInTodo1.single().located)
+    }
+
+    @Test fun byTodoProjectsHoldTheirTodosAndFoldThem() {
+        fun at(id: String, cwd: String, state: String) = AgentSession(Session(machineId = "mac", sessionId = id, state = state, cwd = cwd,
+            updatedAt = "2026-01-01T00:00:00Z"))
+        val sessions = listOf(at("a", "/code/app", "working"), at("b", "/code/app/.worktrees/fix", "idle"), at("c", "/code/api", "needs_you"),
+            at("d", "/code/api", "idle"))
+        val todos = listOf(Todo(id = "t1", title = "修登录", agents = listOf(TodoAgent("mac", "a"), TodoAgent("mac", "b"))),
+            Todo(id = "t2", title = "改接口", agents = listOf(TodoAgent("mac", "c"))))
+        fun ids(folded: Set<String> = emptySet()) = agentTreeEntries(buildAgentList(sessions, machines,
+            settings = AgentListSettings(grouping = AgentGrouping.Todo, folded = folded), todos = todos), "")
+            .filterIsInstance<TreeGroupEntry>().map { it.group.id }
+        // the project with an agent waiting for you first; a worktree belongs to its repository; 没有待办 folded under to-dos
+        assertEquals(listOf("todo-project/api", "todo/t2", "todo-project/app", "todo/t1", "todo/none"), ids())
+        assertEquals(listOf("todo-project/api", "todo-project/app", "todo/t1", "todo/none"), ids(setOf("todo-project/api")))
+    }
+
+    @Test fun aTodoBelongsToTheRepositoryMostOfItsAgentsWorkIn() {
+        assertEquals("app", todoProjectOf(listOf("/code/app", "/x/api", "/code/app/.claude/worktrees/fix")))
+        assertEquals("api", todoProjectOf(listOf("/code/app", "/x/api")))
+        assertEquals("", todoProjectOf(listOf("", "")))
     }
 
     @Test fun byRepositoryTreesSitAStepInsideTheirRepositoryAndFoldWithIt() {

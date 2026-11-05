@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/connector/imessage"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -16,6 +17,24 @@ import (
 )
 
 const messagesHome = "../connector/imessage/testdata/home" // synthetic (connector/imessage/testdata/gen/make.py)
+
+// sqlite3WithJSON is the sqlite3 on PATH when it can print JSON rows: the Messages reader asks it for "-json",
+// which SQLite has since 3.33 (macOS's own from macOS 12 on). Elsewhere the test that reads Messages skips instead
+// of failing on an option it does not know.
+func sqlite3WithJSON(t *testing.T) string {
+	t.Helper()
+	sqlite, err := exec.LookPath("sqlite3")
+	if err != nil {
+		t.Skip("no sqlite3 here (macOS has one): run these on a Mac")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, sqlite, "-json", ":memory:", "SELECT 1 AS n").CombinedOutput()
+	if err != nil || !strings.Contains(string(out), `"n"`) {
+		t.Skipf("sqlite3 at %s has no -json (SQLite 3.33 or newer; macOS's own has it): %s", sqlite, strings.TrimSpace(string(out)))
+	}
+	return sqlite
+}
 
 func TestLocalConnectorsOnlyOnAMac(t *testing.T) {
 	ctx := context.Background()
@@ -66,12 +85,8 @@ func TestLocalConnectorWithoutPermission(t *testing.T) {
 }
 
 func TestLocalConnectorReadsMessages(t *testing.T) {
-	sqlite, err := exec.LookPath("sqlite3")
-	if err != nil {
-		t.Skip("no sqlite3 here (macOS has one): run on a Mac")
-	}
 	ctx := context.Background()
-	r := &imessage.Reader{Home: messagesHome, SQLite: sqlite}
+	r := &imessage.Reader{Home: messagesHome, SQLite: sqlite3WithJSON(t)}
 	res, err := serveLocalConnector(ctx, r, true, "connector.chats", json.RawMessage(`{"id":"imessage","limit":2}`))
 	if err != nil {
 		t.Fatal(err)
