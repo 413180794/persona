@@ -58,6 +58,9 @@ func (h *Hub) notifyWS(kind string, payload map[string]any, wants func(NotifyPre
 	if id, ok := payload["interaction_id"]; ok {
 		msg["interaction_id"] = id
 	}
+	if en, ok := payload["extension_notification"]; ok {
+		msg["extension_notification"] = en
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for c := range h.clients {

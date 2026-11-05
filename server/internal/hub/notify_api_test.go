@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/sdk/go/wire"
 )
 
 func TestNotifyRequestValidate(t *testing.T) {
@@ -23,6 +26,17 @@ func TestNotifyRequestValidate(t *testing.T) {
 		{"session without machine", `{"title":"t","session_id":"s"}`, "go together", ""},
 		{"title too long", `{"title":"` + long + `"}`, "too long", ""},
 		{"id too long", `{"title":"t","id":"` + strings.Repeat("x", notifyIDMost+1) + `"}`, "too long", ""},
+		{"ui too long", `{"title":"t","ui":"` + strings.Repeat("u", notifyUIMost+1) + `"}`, "ui is too long", ""},
+		{"state too long", `{"title":"t","state":"` + strings.Repeat("s", notifyStateMost+1) + `"}`, "state is too long", ""},
+		{"actions max 3", `{"title":"t","actions":[{"id":"1","title":"a"},{"id":"2","title":"b"},{"id":"3","title":"c"},{"id":"4","title":"d"}]}`, "cannot have more than 3", ""},
+		{"action id required", `{"title":"t","actions":[{"id":"","title":"a"}]}`, "action id is required", ""},
+		{"action id too long", `{"title":"t","actions":[{"id":"` + strings.Repeat("i", notifyActionIDMost+1) + `","title":"a"}]}`, "action id is too long", ""},
+		{"action id duplicate", `{"title":"t","actions":[{"id":"dup","title":"a"},{"id":"dup","title":"b"}]}`, "action ids must be unique", ""},
+		{"action title required", `{"title":"t","actions":[{"id":"1","title":"  "}]}`, "action title is required", ""},
+		{"action title too long", `{"title":"t","actions":[{"id":"1","title":"` + strings.Repeat("字", notifyActionTitleMost+1) + `"}]}`, "action title is too long", ""},
+		{"action role bad", `{"title":"t","actions":[{"id":"1","title":"a","role":"unknown"}]}`, "role must be normal or destructive", ""},
+		{"action placeholder too long", `{"title":"t","actions":[{"id":"1","title":"a","input":{"placeholder":"` + strings.Repeat("p", notifyActionInputPlaceholderMost+1) + `"}}]}`, "placeholder is too long", ""},
+		{"valid actions", `{"title":"t","actions":[{"id":"raise","title":"预算加 ¥10"},{"id":"note","title":"回复","input":{"placeholder":"说点什么"}},{"id":"stop","title":"停用","role":"destructive","foreground":true}],"ui":"usage","state":"range=1d"}`, "", levelActive},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var r notifyRequest
@@ -44,7 +58,7 @@ func TestNotifyRequestValidate(t *testing.T) {
 }
 
 func TestNotifyPayload(t *testing.T) {
-	p := notifyPayload(notifyRequest{Title: "卡住了", Body: "API 错误 30 分钟", MachineID: "m1", SessionID: "s1", Level: levelTimeSensitive}, "笔记本")
+	p := notifyPayload(notifyRequest{Title: "卡住了", Body: "API 错误 30 分钟", MachineID: "m1", SessionID: "s1", Level: levelTimeSensitive}, "笔记本", "")
 	aps := p["aps"].(map[string]any)
 	if aps["interruption-level"] != levelTimeSensitive || aps["thread-id"] != "s1" || aps["sound"] != "default" {
 		t.Fatalf("aps %v", aps)
@@ -56,8 +70,11 @@ func TestNotifyPayload(t *testing.T) {
 	if p["machine_id"] != "m1" || p["session_id"] != "s1" {
 		t.Fatalf("ids %v", p)
 	}
+	if _, ok := p["extension_notification"]; ok {
+		t.Fatalf("extension_notification for non-extension caller: %v", p)
+	}
 	// Without a session: no thread, no subtitle, nothing to open.
-	p = notifyPayload(notifyRequest{Title: "t", Level: levelActive}, "")
+	p = notifyPayload(notifyRequest{Title: "t", Level: levelActive}, "", "")
 	aps = p["aps"].(map[string]any)
 	if _, ok := aps["thread-id"]; ok {
 		t.Fatalf("thread-id without a session: %v", aps)
@@ -68,6 +85,49 @@ func TestNotifyPayload(t *testing.T) {
 	// The pair is still there, empty: Android decodes the WebSocket event's ids as non-null strings.
 	if p["machine_id"] != "" || p["session_id"] != "" {
 		t.Fatalf("ids without a session: %v", p)
+	}
+
+	// Extension caller with actions, ui, and state:
+	actions := []wire.NotifyAction{
+		{ID: "raise", Title: "预算加 ¥10"},
+		{ID: "note", Title: "回复", Input: &wire.NotifyActionInput{Placeholder: "说点什么"}},
+		{ID: "stop", Title: "停用这个 Key", Role: "destructive", Foreground: true},
+	}
+	req := notifyRequest{
+		Title:   "Example 网关面板",
+		Body:    "今天的预算用了 90%",
+		UI:      "usage",
+		State:   "range=1d",
+		Actions: actions,
+		Level:   levelActive,
+	}
+	p = notifyPayload(req, "", "example-gateway")
+	aps = p["aps"].(map[string]any)
+	if aps["thread-id"] != "extension.example-gateway" {
+		t.Fatalf("thread-id for extension: %v", aps["thread-id"])
+	}
+	expectedHash := actionIDsHash(actions)
+	if len(expectedHash) != 8 {
+		t.Fatalf("actionIDsHash length: %d, want 8", len(expectedHash))
+	}
+	if aps["category"] != "ext.example-gateway."+expectedHash {
+		t.Fatalf("category: %v, want ext.example-gateway.%s", aps["category"], expectedHash)
+	}
+	en, ok := p["extension_notification"].(map[string]any)
+	if !ok || en["extension"] != "example-gateway" || en["ui"] != "usage" || en["state"] != "range=1d" {
+		t.Fatalf("extension_notification %v", p["extension_notification"])
+	}
+	enActions, ok := en["actions"].([]wire.NotifyAction)
+	if !ok || len(enActions) != 3 || enActions[0].ID != "raise" {
+		t.Fatalf("extension actions: %v", enActions)
+	}
+
+	// Extension caller with session_id: threads by session instead of extension.<id>.
+	req.SessionID, req.MachineID = "sess-1", "m1"
+	p = notifyPayload(req, "笔记本", "example-gateway")
+	aps = p["aps"].(map[string]any)
+	if aps["thread-id"] != "sess-1" {
+		t.Fatalf("thread-id with session: %v", aps["thread-id"])
 	}
 }
 
@@ -112,6 +172,17 @@ func TestNotifyAPI(t *testing.T) {
 		t.Fatalf("bad level: %d", code)
 	}
 
+	// Non-extension caller cannot supply actions, ui, or state.
+	if code, out := post(h.cfg.Token, `{"title":"t","actions":[{"id":"1","title":"btn"}]}`); code != http.StatusBadRequest || !strings.Contains(out["error"].(string), "extension") {
+		t.Fatalf("non-extension actions allowed: %d %v", code, out)
+	}
+	if code, out := post(h.cfg.Token, `{"title":"t","ui":"usage"}`); code != http.StatusBadRequest || !strings.Contains(out["error"].(string), "extension") {
+		t.Fatalf("non-extension ui allowed: %d %v", code, out)
+	}
+	if code, out := post(h.cfg.Token, `{"title":"t","state":"foo"}`); code != http.StatusBadRequest || !strings.Contains(out["error"].(string), "extension") {
+		t.Fatalf("non-extension state allowed: %d %v", code, out)
+	}
+
 	code, out := post(h.cfg.Token, `{"title":"会话卡住了","body":"API 错误已 30 分钟","machine_id":"m1","session_id":"s1","level":"time-sensitive"}`)
 	if code != 200 || out["sent"] != true {
 		t.Fatalf("send: %d %v", code, out)
@@ -133,6 +204,31 @@ func TestNotifyAPI(t *testing.T) {
 	}
 	if code, _ := post(h.cfg.Token, `{"title":"t","machine_id":"m1","session_id":"`+strings.Repeat("s", notifyRefMost+1)+`"}`); code != http.StatusBadRequest {
 		t.Fatalf("long session id: %d", code)
+	}
+
+	// Extension with notify scope calling notify with actions / ui / state:
+	extTok := h.extTokens.issue("example-gateway", "Example Gateway", []string{extension.ScopeNotify})
+	code, out = post(extTok, `{"title":"Example 网关面板","body":"今天的预算用了 90%","ui":"usage","state":"range=1d","actions":[{"id":"raise","title":"预算加 ¥10"},{"id":"note","title":"回复","input":{"placeholder":"说点什么"}},{"id":"stop","title":"停用这个 Key","role":"destructive","foreground":true}]}`)
+	if code != 200 || out["sent"] != true {
+		t.Fatalf("extension send: %d %v", code, out)
+	}
+	m = next()
+	if m == nil || m["type"] != "notify" || m["title"] != "Example 网关面板" {
+		t.Fatalf("ws notify from extension: %v", m)
+	}
+	en, ok := m["extension_notification"].(map[string]any)
+	if !ok || en["extension"] != "example-gateway" || en["ui"] != "usage" || en["state"] != "range=1d" {
+		t.Fatalf("ws notify extension_notification: %v", en)
+	}
+	rawActions, ok := en["actions"].([]any)
+	if !ok || len(rawActions) != 3 {
+		t.Fatalf("ws notify actions: %v", rawActions)
+	}
+
+	// Extension without notify scope cannot call notify.
+	badExtTok := h.extTokens.issue("other-extension", "Other", []string{extension.ScopeMachinesRead})
+	if code, _ := post(badExtTok, `{"title":"t"}`); code != http.StatusForbidden {
+		t.Fatalf("extension without notify scope: %d", code)
 	}
 
 	// A muted session: nothing goes out, and the caller is told why.
@@ -168,17 +264,17 @@ func TestNotifyAPNs(t *testing.T) {
 	h, f := macHub(t)
 	srv := httptest.NewServer(h.routes())
 	defer srv.Close()
-	post := func(body string) {
+	post := func(token, body string) {
 		t.Helper()
 		req, _ := http.NewRequest("POST", srv.URL+"/api/v1/notify", strings.NewReader(body))
-		req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil || resp.StatusCode != 200 {
 			t.Fatalf("notify: %v %v", err, resp)
 		}
 		resp.Body.Close()
 	}
-	post(`{"title":"卡住了","body":"b","machine_id":"m1","session_id":"s1","level":"time-sensitive","id":"alert-1"}`)
+	post(h.cfg.Token, `{"title":"卡住了","body":"b","machine_id":"m1","session_id":"s1","level":"time-sensitive","id":"alert-1"}`)
 	calls := f.calls(t, 2) // the phone and the Mac
 	for _, c := range calls {
 		var body map[string]any
@@ -194,13 +290,35 @@ func TestNotifyAPNs(t *testing.T) {
 		}
 	}
 
+	// Extension notification carries aps.category, thread-id, and extension_notification:
+	extTok := h.extTokens.issue("example-gateway", "Example Gateway", []string{extension.ScopeNotify})
+	beforeExt := len(f.calls(t, 2))
+	post(extTok, `{"title":"预算超了","body":"90%","ui":"usage","state":"range=1d","actions":[{"id":"raise","title":"加预算"},{"id":"stop","title":"停用","role":"destructive"}]}`)
+	callsExt := f.calls(t, beforeExt+2)[beforeExt:]
+	for _, c := range callsExt {
+		var body map[string]any
+		_ = json.Unmarshal(c.Body, &body)
+		aps := body["aps"].(map[string]any)
+		if aps["thread-id"] != "extension.example-gateway" {
+			t.Fatalf("apns thread-id: %v", aps["thread-id"])
+		}
+		cat, ok := aps["category"].(string)
+		if !ok || !strings.HasPrefix(cat, "ext.example-gateway.") || len(cat) != len("ext.example-gateway.")+8 {
+			t.Fatalf("apns category: %v", cat)
+		}
+		en, ok := body["extension_notification"].(map[string]any)
+		if !ok || en["extension"] != "example-gateway" || en["ui"] != "usage" {
+			t.Fatalf("apns extension_notification: %v", en)
+		}
+	}
+
 	// 手机静音 with the Mac app connected: the phone gets nothing.
 	if err := h.push.setPrefs("phone", NotifyPrefs{Input: true, Done: DoneLong, MuteWhileDesktop: true}); err != nil {
 		t.Fatal(err)
 	}
 	h.push.desktopOnline = func() bool { return true }
-	before := len(f.calls(t, 2))
-	post(`{"title":"t"}`)
+	before := len(f.calls(t, 4))
+	post(h.cfg.Token, `{"title":"t"}`)
 	time.Sleep(200 * time.Millisecond)
 	for _, c := range f.calls(t, before)[before:] {
 		if c.Token == "devtok" {
@@ -208,3 +326,4 @@ func TestNotifyAPNs(t *testing.T) {
 		}
 	}
 }
+

@@ -7947,7 +7947,7 @@ _features_without_plugins = features
 
 def features():
     return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots", "plugin_auto_upgrade", "extension_ui_v3",
-                                           "extension_widgets", "extension_shortcuts"] if PLUGINS_MODE else [])
+                                           "extension_widgets", "extension_shortcuts", "extension_notify_actions"] if PLUGINS_MODE else [])
 
 
 def _plugin_needs(pl):

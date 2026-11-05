@@ -1023,7 +1023,7 @@ hub 的 `features` 有 `extension_ui_v3`；`initialize` 的 `hub.extension_point
 schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`、`DeviceWidget`、`ShortcutItem`、`ShortcutResult`、`NotifyAction`、`ExtensionNotification`），
 四端的类型由它生成。**Apple 端怎么做见 #1862**；安卓的主屏幕小组件（Glance）以后可以照同一套接口做，这次不做。
 
-`features` 里有 `extension_widgets` / `extension_shortcuts` 时才有对应的接口（`extension_notify_actions` 等通知接口合并后再报，见下面「通知按钮」）。
+`features` 里有 `extension_widgets` / `extension_shortcuts` / `extension_notify_actions` 时才有对应的能力（见下面「通知按钮」）。
 
 ### 小组件和表盘（`widget`）
 
@@ -1114,8 +1114,7 @@ schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`
   App 第一次见到一个 category 时按 `actions` 注册（`UNNotificationCategory`；`input` 是 `UNTextInputNotificationAction`）。
 - **点了按钮**：App 调 `POST /api/v1/extensions/{id}/-/ui/{ui}` `{action: <按钮 id>, state, values: {"text": <输入的字>}}`，和页面里点按钮完全一样走 `ui.action`；
   在后台做的，回答里的 `toast` 作为一条本地通知显示，`open_url` / `push` 忽略；`foreground` 的打开 App 到 `ui` 那一页再调，回答照页面的规矩处理。点通知本身打开 `ui` 那一页（带 `state`）。
-- 现在 #1576 还没合并：schema、App 的约定和样例（`scripts/mock/apns/extension-notification.apns`，`xcrun simctl push <udid> <bundle id> <文件>`）先有；hub 一侧在 #1576 合并后加，
-  到时 `features` 报 `extension_notify_actions`。
+- 服务端已在 `POST /api/v1/notify` 支持 `actions` / `ui` / `state`（范围 `notify`），`features` 报 `extension_notify_actions`；Apple 端在 #1862；样例见 `scripts/mock/apns/extension-notification.apns`。
 
 ### 假 hub
 
