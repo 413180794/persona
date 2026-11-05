@@ -138,3 +138,173 @@ func TestCodexStdioOpenRolloutStatusFollowsItsTurn(t *testing.T) {
 		})
 	}
 }
+
+// #2425: a bridge kept stdio app-servers for months, holding open the rollouts of threads they once loaded; each
+// showed 完成未看 (「app-server 正在运行」) all along and stayed after the user looked. Untouched for a day, a held
+// rollout is history again; a fresh one still follows its turn, and a codex TUI holding one is not called app-server.
+func TestCodexHeldOpenRolloutGoesOfflineWhenUntouched(t *testing.T) {
+	cases := []struct {
+		name       string
+		age        time.Duration
+		endpoint   string
+		wantStatus string
+		wantReason string
+	}{
+		{"stdio app-server, months old", 145 * 24 * time.Hour, "stdio://", proto.StatusOffline, "仅查看：未发现可共享的 app-server 入口，请在电脑上打开会话"},
+		{"stdio app-server, just written", 0, "stdio://", proto.StatusDone, "app-server 正在运行，但未提供共享入口；只能同步本地历史"},
+		{"codex TUI, just written", 0, "", proto.StatusDone, "Codex 正在运行，但未提供共享入口；只能同步本地历史"},
+		{"codex TUI, two days old", 48 * time.Hour, "", proto.StatusOffline, "仅查看：未发现可共享的 app-server 入口，请在电脑上打开会话"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			n := remoteTestNode(t)
+			home := t.TempDir()
+			dir := filepath.Join(home, "sessions", "2026", "06", "13")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			at := time.Now().Add(-c.age).UTC()
+			stamp := func(d time.Duration) string { return at.Add(d).Format(time.RFC3339) }
+			lines := []string{
+				`{"timestamp":"` + stamp(-2*time.Second) + `","type":"session_meta","payload":{"id":"` + remoteRaw + `","cwd":"/work"}}`,
+				`{"timestamp":"` + stamp(-time.Second) + `","type":"event_msg","payload":{"type":"task_started"}}`,
+				`{"timestamp":"` + stamp(0) + `","type":"event_msg","payload":{"type":"task_complete"}}`,
+			}
+			path := filepath.Join(dir, "rollout-synthetic-"+remoteRaw+".jsonl")
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chtimes(path, at, at); err != nil {
+				t.Fatal(err)
+			}
+			f, err := os.Open(path) // held open by the process
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			n.codices.scan = func() []codexProcess { return []codexProcess{{pid: os.Getpid(), home: home, endpoint: c.endpoint}} }
+			n.discoverCodex()
+			id := n.registerCodex(home, remoteRaw, path)
+			for _, s := range n.codexSessions(map[string]bool{}) {
+				if s.SessionID == id {
+					if s.Status != c.wantStatus || s.ReadOnlyReason != c.wantReason || s.Capabilities.Send {
+						t.Fatalf("status %q reason %q, want %q %q", s.Status, s.ReadOnlyReason, c.wantStatus, c.wantReason)
+					}
+					return
+				}
+			}
+			t.Fatal("held rollout omitted")
+		})
+	}
+}
+
+// #2425: the process that held a rollout open went away: the next scan puts the session back to offline.
+func TestCodexRolloutNoLongerHeldGoesOffline(t *testing.T) {
+	n := remoteTestNode(t)
+	home := t.TempDir()
+	dir := filepath.Join(home, "sessions", "2026", "11", "05")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "rollout-synthetic-"+remoteRaw+".jsonl")
+	if err := os.WriteFile(path, []byte(`{"timestamp":"2026-01-01T00:00:00Z","type":"session_meta","payload":{"id":"`+remoteRaw+`","cwd":"/work"}}`+"\n"+event("task_started")+"\n"+event("task_complete")+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	held := true
+	n.codices.scan = func() []codexProcess {
+		if !held {
+			return nil
+		}
+		return []codexProcess{{pid: os.Getpid(), home: home, endpoint: "stdio://"}}
+	}
+	status := func() string {
+		n.discoverCodex()
+		id := n.registerCodex(home, remoteRaw, path)
+		for _, s := range n.codexSessions(map[string]bool{}) {
+			if s.SessionID == id {
+				return s.Status
+			}
+		}
+		return "omitted"
+	}
+	if got := status(); got != proto.StatusDone {
+		t.Fatalf("held: %q", got)
+	}
+	held = false
+	if got := status(); got != proto.StatusOffline {
+		t.Fatalf("let go: %q", got)
+	}
+}
+
+// #2425 on a real machine: two months-old sessions said 「app-server 正在运行」 while the only app-server there was
+// another tool's, under its own CODEX_HOME, holding nothing. Their rollouts were held by two codex TUIs left open in
+// tmux, whose home is the user's, written as a symlink (/home → /data00/home). The rollout is the TUI's, not the
+// app-server's: named as Codex, and history once it has sat untouched for a day.
+func TestCodexHeldRolloutIsTheHoldersNotAnUnrelatedAppServers(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		age        time.Duration
+		wantStatus string
+		wantReason string
+	}{
+		{"just written", 0, proto.StatusDone, "Codex 正在运行，但未提供共享入口；只能同步本地历史"},
+		{"months old", 160 * 24 * time.Hour, proto.StatusOffline, "仅查看：未发现可共享的 app-server 入口，请在电脑上打开会话"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			n := remoteTestNode(t)
+			real := t.TempDir()
+			home := filepath.Join(t.TempDir(), "home")
+			if err := os.Symlink(real, home); err != nil {
+				t.Fatal(err)
+			}
+			other := t.TempDir() // the other tool's CODEX_HOME: no rollouts of the user's
+			dir := filepath.Join(real, "sessions", "2026", "05", "23")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			at := time.Now().Add(-c.age).UTC()
+			lines := []string{
+				`{"timestamp":"` + at.Add(-2*time.Second).Format(time.RFC3339) + `","type":"session_meta","payload":{"id":"` + remoteRaw + `","cwd":"/work"}}`,
+				`{"timestamp":"` + at.Add(-time.Second).Format(time.RFC3339) + `","type":"event_msg","payload":{"type":"task_started"}}`,
+				`{"timestamp":"` + at.Format(time.RFC3339) + `","type":"event_msg","payload":{"type":"task_complete"}}`,
+			}
+			path := filepath.Join(dir, "rollout-2026-05-23T13-03-27-"+remoteRaw+".jsonl")
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chtimes(path, at, at); err != nil {
+				t.Fatal(err)
+			}
+			f, err := os.Open(path) // held by the TUI (this process), opened by its real path
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			n.codices.scan = func() []codexProcess {
+				return []codexProcess{
+					{pid: os.Getppid(), home: other, endpoint: "stdio://"}, // an app-server holding none of these
+					{pid: os.Getpid(), home: home},                         // a codex TUI, its home through the symlink
+				}
+			}
+			n.discoverCodex()
+			id := n.registerCodex(home, remoteRaw, path)
+			if alias := n.registerCodex(real, remoteRaw, path); alias != id {
+				t.Fatalf("one rollout, two ids through the alias: %s %s", id, alias)
+			}
+			for _, s := range n.codexSessions(map[string]bool{}) {
+				if s.SessionID == id {
+					if s.Status != c.wantStatus || s.ReadOnlyReason != c.wantReason {
+						t.Fatalf("status %q reason %q, want %q %q", s.Status, s.ReadOnlyReason, c.wantStatus, c.wantReason)
+					}
+					return
+				}
+			}
+			t.Fatal("held rollout omitted")
+		})
+	}
+}

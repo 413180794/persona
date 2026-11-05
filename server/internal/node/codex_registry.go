@@ -20,7 +20,7 @@ type codexRegistry struct {
 	mu           sync.Mutex
 	config       proto.CodexConfig
 	claudeIDs    map[string]bool
-	liveRollouts map[string]bool
+	liveRollouts map[string]string // rollout id → what holds it open (codexHolder)
 	byPane       map[string]string
 	threads      map[string]codexSource
 	remotes      map[string]*codexRemote
@@ -211,11 +211,15 @@ func (n *Node) discoverCodex() {
 	r.mu.Unlock()
 	found := scan()
 	changed := false
-	liveRollouts := map[string]bool{}
+	liveRollouts := map[string]string{}
 	for pid, paths := range openCodexRollouts(found) {
 		for _, p := range found {
 			if p.pid != pid {
 				continue
+			}
+			holder := codexHolderCLI
+			if p.endpoint != "" {
+				holder = codexHolderAppServer
 			}
 			home := canonicalCodexHome(firstNonEmpty(p.home, n.codexHome()), n.home)
 			for _, path := range paths {
@@ -225,7 +229,7 @@ func (n *Node) discoverCodex() {
 				match := rolloutIDRe.FindStringSubmatch(path)
 				if match != nil {
 					id := n.registerCodex(home, match[1], path)
-					liveRollouts[id] = true
+					liveRollouts[id] = holder
 				}
 			}
 		}
@@ -338,6 +342,29 @@ func mapRemoteValues(m map[string]*codexRemote) func(func(*codexRemote) bool) {
 	}
 }
 
+// What holds a rollout open, as the read-only reason names it.
+const (
+	codexHolderAppServer = "app-server"
+	codexHolderCLI       = "Codex"
+)
+
+// codexHeldIdle: a rollout held open by a process node cannot join, untouched this long, is history (#2425). A bridge
+// that keeps stdio app-servers for months holds the threads they once loaded: they showed 完成未看 all along.
+const codexHeldIdle = 24 * time.Hour
+
+// heldRecently: the rollout at path was written within codexHeldIdle (its last line's time or its mtime, the later).
+func heldRecently(m quickMeta, path string) bool {
+	st, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	at := st.ModTime()
+	if m.activity.After(at) {
+		at = m.activity
+	}
+	return time.Since(at) < codexHeldIdle
+}
+
 func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 	if n.codices == nil {
 		return nil
@@ -353,7 +380,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 	for k, v := range n.codices.threads {
 		sources[k] = v
 	}
-	liveRollouts := make(map[string]bool, len(n.codices.liveRollouts))
+	liveRollouts := make(map[string]string, len(n.codices.liveRollouts))
 	for k, v := range n.codices.liveRollouts {
 		liveRollouts[k] = v
 	}
@@ -383,7 +410,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 			}
 		}
 		s.AgentName = filepath.Base(src.home)
-		if liveRollouts[id] {
+		if holder := liveRollouts[id]; holder != "" && heldRecently(m, src.path) {
 			// A stdio app-server (the Codex desktop App's own) has no way in, but the rollout it holds open says
 			// whether a turn runs; unknown put a desktop task at work under the app's quiet spaces.
 			s.Status = proto.StatusUnknown
@@ -392,7 +419,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 			} else if m.turnClosed {
 				s.Status = proto.StatusDone // as a loaded idle thread on an app-server (codex_remote.go)
 			}
-			s.ReadOnlyReason = "app-server 正在运行，但未提供共享入口；只能同步本地历史"
+			s.ReadOnlyReason = holder + " 正在运行，但未提供共享入口；只能同步本地历史"
 		}
 		if c, t, err := n.codexOwner(id); err == nil {
 			s.SourceKind, s.SourceInstanceID, s.Status, s.Attached = "codex_app_server", c.spec.ID, t.status, t.joined

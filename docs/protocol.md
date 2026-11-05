@@ -762,10 +762,11 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
 - 断线重连就是新的快照，漏掉的变化靠它补齐。
 - App（`SessionPatch`、`AppModel.applySessions`）：快照替换这台机器的列表，但留着已有的 Codex 历史；增量在原位换掉变了的、新的放在后面、删掉没了的；
   socket 连着时 `GET /api/v1/sessions` 的回答比推送旧，只从它拿 Codex 历史（历史里没了的删掉），不覆盖推送来的会话。
+  已知问题（#2425）：App 手上已有的历史留旧副本，看过、变离线不会更新到列表；网页已改成换用回答里的副本，App 待改。
 - 兼容：老 App 不带 `features`，照旧收整表（一模一样的不发）；老 hub 不认 `features`，照旧发整表，App 的 `hello.features` 里没有 `sessions_delta`，按整表处理。
   mock（`scripts/mock/mock_hub.py`）同样支持，`MOCK_WHOLE_LISTS=1` 当老 hub。
 - 回放（真实 hub 录的 19 分钟）：会话推送每分钟 2605 KB → 79 KB，连上时的快照 602 KB → 227 KB（`docs/testing.md`「推送回放」）。
-- 网页同样用它（`web/src/lib/sessions-delta.ts`，与 `SessionPatch` 同一套规则）：`wsQuery` 每次连接都带 `features=sessions_delta`，`store.ts` 按 `upsert` / `remove` 合并，`refresh()` 在连着增量 hub 时只从 `GET /api/v1/sessions` 取 Codex 历史。此前网页不带 `features`，实测每个连接每秒收约 3 MB 整表、把后面的小事件拖慢（#1707）。
+- 网页同样用它（`web/src/lib/sessions-delta.ts`，与 `SessionPatch` 同一套规则）：`wsQuery` 每次连接都带 `features=sessions_delta`，`store.ts` 按 `upsert` / `remove` 合并，`refresh()` 在连着增量 hub 时只从 `GET /api/v1/sessions` 取 Codex 历史，已有的历史换成回答里的副本（推送不带历史，看过、变离线只能从这里更新，#2425）。此前网页不带 `features`，实测每个连接每秒收约 3 MB 整表、把后面的小事件拖慢（#1707）。
 
 ### 实时状态（`session_live`，2026-11-05）
 

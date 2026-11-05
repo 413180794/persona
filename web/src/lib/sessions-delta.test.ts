@@ -58,6 +58,15 @@ describe("GET /sessions 的答案与推送的交错", () => {
     const old = s("h", { source_kind: "codex_history" });
     expect(ids(sessionRefreshed([], [s("pushed"), old], true))).toEqual(["pushed"]);
   });
+
+  it("已有的 Codex 历史换成接口给的新副本：看过、离线都跟着变（#2425）", () => {
+    const had = s("h", { source_kind: "codex_history", state: "unread", status: "done" });
+    const now = s("h", { source_kind: "codex_history", state: "offline", status: "offline" });
+    const out = sessionRefreshed([s("stale"), now], [s("pushed"), had], true);
+    expect(ids(out)).toEqual(["pushed", "h"]);
+    expect(out[1].state).toBe("offline");
+    expect(out[0]).toEqual(s("pushed"));
+  });
 });
 
 describe("Codex 历史识别", () => {

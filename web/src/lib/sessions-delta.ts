@@ -30,16 +30,22 @@ export function sessionSnapshot(list: Session[], over: Session[], deltaHub: bool
 
 /**
  * The list from GET /api/v1/sessions over what the page has. While a delta hub's socket is connected, what it pushed
- * is newer than this answer can be (the request went out before): only the Codex history comes from it. Otherwise the
- * answer is the whole truth.
+ * is newer than this answer can be (the request went out before): only the Codex history comes from it, the history
+ * the page has included. No push carries it, so this answer is the only way its state moves (seen, gone offline,
+ * #2425). Otherwise the answer is the whole truth.
  */
 export function sessionRefreshed(rest: Session[], over: Session[], connectedToDeltaHub: boolean): Session[] {
   if (!connectedToDeltaHub) return rest;
   const ids = new Set(over.map((s) => s.session_id));
-  const current = new Set(rest.filter(isCodexHistory).map((s) => s.session_id));
+  const fresh = new Map(rest.filter(isCodexHistory).map((s) => [s.session_id, s]));
   const history = rest.filter((s) => isCodexHistory(s) && !ids.has(s.session_id));
-  // History that is gone from the machine goes; the pushed sessions stay as pushed.
-  return [...over.filter((s) => !isCodexHistory(s) || current.has(s.session_id)), ...history];
+  // History that is gone from the machine goes, the rest is the hub's copy; the pushed sessions stay as pushed.
+  const kept: Session[] = [];
+  for (const s of over) {
+    if (!isCodexHistory(s)) kept.push(s);
+    else if (fresh.has(s.session_id)) kept.push(fresh.get(s.session_id)!);
+  }
+  return [...kept, ...history];
 }
 
 /** A Codex session known only from its rollout on the machine (`source_kind: codex_history`). */
