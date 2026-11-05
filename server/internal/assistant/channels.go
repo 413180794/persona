@@ -138,26 +138,62 @@ func (s *Service) channelPrefLocked(id string) *channelPrefs {
 
 // loadChannelStateLocked reads the runs once (the caller holds s.chans.mu); the runs an older hub kept in the Feishu
 // bot's state come over the first time.
+//
+// The state is decoded into a fresh value, never into c.st: runs and asks started while it could not be read are
+// already in c.st, and their watchers read them without the lock. Decoding in place would reuse those pointers and
+// write the stored runs' fields over them. They are kept next to what was stored instead.
 func (s *Service) loadChannelStateLocked(ctx context.Context) {
 	c := &s.chans
 	if c.stLoaded {
 		return
 	}
+	var stored channelsState
 	if st := s.store(); st != nil {
-		if _, err := st.Setting(ctx, channelsStateKey, &c.st); err != nil {
+		if _, err := st.Setting(ctx, channelsStateKey, &stored); err != nil {
 			s.logf("channels: load state: %v", err)
 			return
 		}
 	}
-	if c.st.Seen == nil {
-		c.st.Seen = map[string][]string{}
+	if stored.Seen == nil {
+		stored.Seen = map[string][]string{}
 	}
+	var kept int
+	stored.Runs, kept = keepLive(stored.Runs, c.st.Runs, func(r *channel.Run) string { return r.ID })
+	var asks int
+	stored.Asks, asks = keepLive(stored.Asks, c.st.Asks, func(a *channel.Ask) string { return a.ID })
+	c.st = stored
 	c.stLoaded = true
+	if kept+asks > 0 {
+		s.saveChannelStateLocked()
+		s.logf("channels: %d runs and %d asks started while the state was unreadable kept", kept, asks)
+	}
 	if old := s.takeLegacyBotRuns(ctx); len(old) > 0 {
 		c.st.Runs = append(c.st.Runs, old...)
 		s.saveChannelStateLocked()
 		s.logf("channels: %d waiting turns of the Feishu bot moved to the channels' runs", len(old))
 	}
+}
+
+// keepLive is stored with the items held in memory added: one with the id of a stored item takes its place (it is
+// the one being watched), the others are appended; n is how many came from memory.
+func keepLive[T any](stored, live []*T, id func(*T) string) (out []*T, n int) {
+	if len(live) == 0 {
+		return stored, 0
+	}
+	at := make(map[string]int, len(stored))
+	for i, x := range stored {
+		at[id(x)] = i
+	}
+	for _, x := range live {
+		if i, ok := at[id(x)]; ok {
+			stored[i] = x
+		} else {
+			at[id(x)] = len(stored)
+			stored = append(stored, x)
+		}
+		n++
+	}
+	return stored, n
 }
 
 // saveChannelStateLocked writes the runs, asks and seen messages, once they were read (the same as the settings).

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -410,6 +411,23 @@ func TestChannelsReadFailureNeverOverwrites(t *testing.T) {
 	}
 	if first, err := h.claimChannelMessage("wechat_x", "m3"); !first || err != nil {
 		t.Fatalf("a new message: first %v, err %v", first, err)
+	}
+	// The run started while unreadable is kept next to the stored one, each with its own fields (the load used to
+	// decode into the live run, under its watcher), and both are written back.
+	runs := map[string]channel.Run{}
+	for _, r := range h.channelRuns("wechat_x") {
+		runs[r.ID] = r
+	}
+	if r := runs["wechat_x_m0"]; r.Channel != "wechat_x" || r.MachineID != "" || r.SessionID != "" {
+		t.Fatalf("the stored run: %+v (runs %+v)", r, runs)
+	}
+	if r := runs["wechat_x_m2"]; r.Channel != "wechat_x" || r.MachineID != "server" || r.SessionID != "s1" {
+		t.Fatalf("the run started while unreadable: %+v (runs %+v)", r, runs)
+	}
+	var saved channelsState
+	_, _ = store.Setting(ctx, channelsStateKey, &saved)
+	if len(saved.Runs) != 2 || !slices.Contains(saved.Seen["wechat_x"], "m0") {
+		t.Fatalf("the stored state: %s", store.data[channelsStateKey])
 	}
 	var prefs map[string]*channelPrefs
 	_, _ = store.Setting(ctx, channelsKey, &prefs)
