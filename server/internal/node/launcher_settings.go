@@ -189,7 +189,7 @@ func shellPath(p, home string) string {
 			break
 		}
 	}
-	return expandHome(p, home) // claudedirs.go
+	return proto.ExpandHome(p, home)
 }
 
 // mergeClaudeSettings is the launcher's settings (theirs) with ours on top: for each hook event our hooks after its

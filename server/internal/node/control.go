@@ -184,9 +184,7 @@ func (n *Node) checkStart(cwd, launcher, resume, mode, effort string) (string, s
 	if err := validModes(mode, effort); err != nil {
 		return "", "", err
 	}
-	if strings.HasPrefix(cwd, "~/") {
-		cwd = filepath.Join(n.home, cwd[2:])
-	}
+	cwd = proto.ExpandHome(cwd, n.home)
 	if cwd == "" {
 		cwd = n.home
 	}

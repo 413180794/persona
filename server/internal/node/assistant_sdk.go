@@ -198,11 +198,11 @@ func extraArgs(args []string) map[string]any {
 			continue
 		}
 		if k, v, has := strings.Cut(name, "="); has {
-			out[k] = expandHome(v, userHome())
+			out[k] = proto.ExpandHome(v, userHome())
 			continue
 		}
 		if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-			out[name] = expandHome(args[i+1], userHome())
+			out[name] = proto.ExpandHome(args[i+1], userHome())
 			i++
 			continue
 		}
@@ -223,7 +223,7 @@ func (n *Node) sdkCommand(b sdkBridge, launcher string, s sdkStart, base []strin
 			base = append(base, k+"="+v)
 		}
 	} else if d := n.claudeStartDir.Load(); d != nil && *d != "" { // plain claude: as launcherCommand
-		base = append(base, "CLAUDE_CONFIG_DIR="+expandHome(*d, userHome()))
+		base = append(base, "CLAUDE_CONFIG_DIR="+proto.ExpandHome(*d, userHome()))
 	}
 	opts, err := s.options(b.claude)
 	if err != nil {

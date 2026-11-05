@@ -589,9 +589,7 @@ func (s *Service) botStartAgent(machine, cwd, prompt string) {
 		s.botSay(ctx, i18n.T(l, "assistant-feishu_cards.no_such_machine"))
 		return
 	}
-	if strings.HasPrefix(cwd, "~/") && d.Home != "" {
-		cwd = strings.TrimRight(d.Home, "/") + "/" + cwd[2:]
-	}
+	cwd = proto.ExpandHome(cwd, d.Home)
 	params := map[string]any{"cwd": cwd, "prompt": prompt, "tab_name": s.tabName(ctx, prompt)} // agents_start.go
 	if err := s.applyModel(ctx, "agent.new", params); err != nil {
 		s.botSay(ctx, i18n.T(l, "assistant-feishu_cards.cannot_start", i18n.Args{"error": err.Error()}))

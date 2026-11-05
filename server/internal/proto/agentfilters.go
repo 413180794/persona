@@ -34,7 +34,7 @@ func (f AgentFilter) Matches(agent string, m SessionMarks, home string) bool {
 		return true
 	}
 	for _, want := range f.AddedDirs {
-		want = filepath.Clean(expandTilde(want, home))
+		want = filepath.Clean(ExpandHome(want, home))
 		for _, d := range m.AddedDirs {
 			d = filepath.Clean(d)
 			if d == want || strings.HasPrefix(d, want+string(filepath.Separator)) {

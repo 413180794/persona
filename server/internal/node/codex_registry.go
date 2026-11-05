@@ -36,7 +36,7 @@ func newCodexRegistry() *codexRegistry {
 }
 
 func canonicalCodexHome(home, base string) string {
-	p := expandHome(home, base)
+	p := proto.ExpandHome(home, base)
 	if !filepath.IsAbs(p) {
 		return ""
 	}

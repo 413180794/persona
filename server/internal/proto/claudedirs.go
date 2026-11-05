@@ -46,9 +46,9 @@ func ClaudeDirBlockedBy(dir, home string, patterns []string) string {
 	if dir == "" || len(patterns) == 0 {
 		return ""
 	}
-	d := filepath.Clean(expandTilde(dir, home))
+	d := filepath.Clean(ExpandHome(dir, home))
 	for _, raw := range patterns {
-		p := filepath.Clean(expandTilde(raw, home))
+		p := filepath.Clean(ExpandHome(raw, home))
 		for c := d; ; {
 			if ok, _ := filepath.Match(p, c); ok {
 				return raw
@@ -64,19 +64,6 @@ func ClaudeDirBlockedBy(dir, home string, patterns []string) string {
 		}
 	}
 	return ""
-}
-
-func expandTilde(p, home string) string {
-	if home == "" {
-		return p
-	}
-	if p == "~" {
-		return home
-	}
-	if strings.HasPrefix(p, "~/") {
-		return filepath.Join(home, p[2:])
-	}
-	return p
 }
 
 func containsString(list []string, s string) bool {

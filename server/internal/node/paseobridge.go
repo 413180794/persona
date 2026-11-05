@@ -48,7 +48,7 @@ var (
 // paseoHome is the Paseo home: PASEO_HOME, else ~/.paseo (as Paseo's own CLI).
 func paseoHome() string {
 	if h := strings.TrimSpace(os.Getenv("PASEO_HOME")); h != "" {
-		return expandHome(h, userHome())
+		return proto.ExpandHome(h, userHome())
 	}
 	return filepath.Join(userHome(), ".paseo")
 }

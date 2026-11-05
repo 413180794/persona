@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path"
 	"regexp"
 	"slices"
 	"sort"
@@ -315,18 +314,14 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 	return b.String(), nil
 }
 
-// placeTask names t's machine by its id and makes ~/ in its directory that machine's home; false: no such machine.
+// placeTask names t's machine by its id and makes ~ in its directory that machine's home; false: no such machine.
 func (s *Service) placeTask(ctx context.Context, t *PlanTask) bool {
 	m, ok := s.machineByName(ctx, t.Machine)
 	if !ok {
 		return false
 	}
 	t.Machine = m.ID
-	if strings.HasPrefix(t.Cwd, "~/") {
-		if home := m.Home; home != "" {
-			t.Cwd = path.Join(home, t.Cwd[2:])
-		}
-	}
+	t.Cwd = proto.ExpandHome(t.Cwd, m.Home)
 	return true
 }
 

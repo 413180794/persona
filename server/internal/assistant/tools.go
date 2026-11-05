@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -192,11 +191,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if !ok {
 			return "", fmt.Errorf("unknown machine %q (machines: %s)", a.Machine, s.machineIDs(ctx))
 		}
-		if strings.HasPrefix(a.Cwd, "~/") {
-			if home := am.Home; home != "" {
-				a.Cwd = path.Join(home, a.Cwd[2:])
-			}
-		}
+		a.Cwd = proto.ExpandHome(a.Cwd, am.Home)
 		var res struct {
 			Session proto.Session `json:"session"`
 		}
