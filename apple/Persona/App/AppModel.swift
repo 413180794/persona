@@ -199,6 +199,8 @@ final class AppModel {
     @ObservationIgnored let outboxWriter = Debouncer(.milliseconds(300))
     /// By group and machine.
     @ObservationIgnored private(set) var launcherCache: [MachineRef: [Launcher]] = [:]
+    /// What each machine's launcher pickers run with none picked (`LauncherDefault`), loaded with `launcherCache`.
+    @ObservationIgnored private(set) var launcherDefaults: [MachineRef: LauncherDefault] = [:]
 
     /// The hub-level group's client: for pages about the hub (Persona, 收件箱, its settings). A session's, a machine's
     /// or an interaction's requests go to its own group (`api(_:)`).
@@ -1884,16 +1886,24 @@ final class AppModel {
 
     /// After a change in 设置 › 模型: the pickers read the machines' lists again, and the list of launchers reloads.
     func launchersChanged() {
-        launcherCache = [:]
         launchersRevision += 1
+        launcherDefaultsChanged()
+    }
+
+    /// After 模型配置 changed what runs by default: the pickers read the machines' lists (and their 默认) again; the
+    /// list of launchers itself did not change.
+    func launcherDefaultsChanged() {
+        launcherCache = [:]
+        launcherDefaults = [:]
     }
 
     func launchers(_ machine: MachineRef, refresh: Bool = false) async throws -> [Launcher] {
         if !refresh, let cached = launcherCache[machine] { return cached }
         guard let api = api(machine.group) else { return [] }
-        let list = try await api.launchers(machine: machine.id)
-        launcherCache[machine] = list
-        return list
+        let r = try await api.launcherList(machine: machine.id)
+        launcherCache[machine] = r.launchers
+        launcherDefaults[machine] = r.default
+        return r.launchers
     }
 
 

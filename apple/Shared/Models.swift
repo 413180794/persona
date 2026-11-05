@@ -594,6 +594,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// The last compaction the user asked for in an assistant conversation (POST …/compact, #1727): running, done or
     /// failed. Nil from hubs without `assistant_compact`, and before the first one.
     var compaction: CompactionRun? = nil
+    /// An assistant conversation set to run on the Agent SDK (#2455): `agentsdk` while it does; and why the node ran it
+    /// on the CLI instead (「找不到 Node.js 22+」). Both nil otherwise.
+    var runtime: String? = nil
+    var runtimeFallback: String? = nil
     /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
     var hubGroup: String? = nil
 
@@ -691,13 +695,16 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
-             attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction
+             attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction,
+             runtime, runtimeFallback = "runtime_fallback"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         machineID = try c.decodeIfPresent(String.self, forKey: .machineID) ?? ""
         sessionID = try c.decode(String.self, forKey: .sessionID)
+        runtime = try c.decodeIfPresent(String.self, forKey: .runtime)
+        runtimeFallback = try c.decodeIfPresent(String.self, forKey: .runtimeFallback)
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         cwd = try c.decodeIfPresent(String.self, forKey: .cwd) ?? ""
         status = try c.decodeIfPresent(SessionStatus.self, forKey: .status) ?? .unknown

@@ -42,5 +42,7 @@
   "effort": "思考强度",
   "save_note": "保存只修改配置，不会发起模型请求或打断正在运行的任务。",
   "reload_discard": "重新加载（丢弃编辑）",
-  "save_note_plugin": "保存只修改配置，不会发起模型请求或打断正在运行的任务。语音模型是 Persona 的默认选择，不改变扩展自己的供应商或凭据。"
+  "save_note_plugin": "保存只修改配置，不会发起模型请求或打断正在运行的任务。语音模型是 Persona 的默认选择，不改变扩展自己的供应商或凭据。",
+  "runtime": "运行方式",
+  "runtime_hint": "Agent SDK 需要那台电脑有 Node 22+，缺了会自动用 CLI"
 }

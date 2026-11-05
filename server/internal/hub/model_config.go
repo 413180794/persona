@@ -12,6 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // ModelBinding is a sparse, non-secret selection; missing fields inherit a declared baseline.
@@ -19,7 +20,13 @@ type ModelBinding struct {
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
 	Effort   string `json:"effort,omitempty"`
+	// Runtime is how 主对话 runs Claude (proto.AssistantRuntimeCLI or AssistantRuntimeAgentSDK; "" is the CLI). Only the
+	// assistant purpose takes it; it is the purpose's, so it stays when the provider changes.
+	Runtime string `json:"runtime,omitempty"`
 }
+
+// assistantRuntimes is what GET /model-config offers for 主对话's runtime.
+var assistantRuntimes = []string{proto.AssistantRuntimeCLI, proto.AssistantRuntimeAgentSDK}
 
 type modelRecord struct {
 	Revision int64        `json:"revision"`
@@ -60,6 +67,7 @@ type ModelPurpose struct {
 	Limit         *ai.Pause    `json:"limit,omitempty"` // the connection is held: quota used up or busy (ai/limit.go)
 	Fields        []string     `json:"fields"`
 	ProviderIDs   []string     `json:"provider_ids"`
+	Runtimes      []string     `json:"runtimes,omitempty"` // assistant only: the runtimes it can run on
 }
 
 var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage"}
@@ -67,7 +75,7 @@ var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage"}
 // modelPurposes are the uses; Name, Group and Uses hold catalog names (hub-model_config), read in a language by
 // localized.
 var modelPurposes = []ModelPurpose{
-	{ID: "assistant", Group: "group_default", Kind: "launcher", Uses: []ModelUse{{Name: "use_chat"}, {Name: "use_schedule"}}},
+	{ID: "assistant", Group: "group_default", Kind: "launcher", Runtimes: assistantRuntimes, Uses: []ModelUse{{Name: "use_chat"}, {Name: "use_schedule"}}},
 	{ID: "agent.new", Group: "group_default", Kind: "launcher", Uses: []ModelUse{{Name: "use_new_agent"}, {Name: "use_inbox_agent"}, {Name: "use_lark_agent"}}},
 	{ID: "kb", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_translate"}, {Name: "use_draft"}, {Name: "use_knowledge"}, {Name: "use_projects"}, {Name: "use_titles"}}},
 	{ID: "inbox.triage", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_triage"}, {Name: "use_importance"}, {Name: "use_reply_or_agent"}}},
@@ -325,7 +333,7 @@ func (h *Hub) fallbackAPIProvider(ctx context.Context) string {
 
 func mergeModel(base, over ModelBinding) ModelBinding {
 	if over.Provider != "" && over.Provider != base.Provider {
-		base = ModelBinding{Provider: over.Provider}
+		base = ModelBinding{Provider: over.Provider, Runtime: base.Runtime}
 	}
 	if over.Provider != "" {
 		base.Provider = over.Provider
@@ -335,6 +343,9 @@ func mergeModel(base, over ModelBinding) ModelBinding {
 	}
 	if over.Effort != "" {
 		base.Effort = over.Effort
+	}
+	if over.Runtime != "" {
+		base.Runtime = over.Runtime
 	}
 	return base
 }
@@ -457,6 +468,9 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 	p.ProviderIDs = []string{}
 	for _, v := range providers {
 		compatible := v.Kind == p.Kind
+		if p.Kind == "launcher" && v.Kind == "api" { // a direct Messages API provider starts Claude on its gateway (#2455)
+			compatible = v.API != "responses"
+		}
 		if p.Kind == "api" && v.Kind == "launcher" {
 			for _, s := range h.storedLaunchers(ctx) {
 				if v.ID == "launcher."+s.Name {
@@ -485,6 +499,9 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 	}
 	if p.Kind == "launcher" {
 		p.Fields = append(p.Fields, "effort")
+	}
+	if len(p.Runtimes) > 0 {
+		p.Fields = append(p.Fields, "runtime")
 	}
 	l := h.requestCtxLang(ctx)
 	p.Status = modelUnverified
@@ -539,6 +556,7 @@ type modelPatch struct {
 	Provider json.RawMessage `json:"provider"`
 	Model    json.RawMessage `json:"model"`
 	Effort   json.RawMessage `json:"effort"`
+	Runtime  json.RawMessage `json:"runtime"`
 }
 
 func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
@@ -556,7 +574,7 @@ func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
 	for _, f := range []struct {
 		raw json.RawMessage
 		dst *string
-	}{{in.Provider, &b.Provider}, {in.Model, &b.Model}, {in.Effort, &b.Effort}} {
+	}{{in.Provider, &b.Provider}, {in.Model, &b.Model}, {in.Effort, &b.Effort}, {in.Runtime, &b.Runtime}} {
 		if f.raw == nil {
 			continue
 		}
@@ -572,6 +590,12 @@ func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
 			return b, i18n.Err("hub-model_config.err_field_invalid")
 		}
 		*f.dst = v
+	}
+	if b.Runtime != "" && !slices.Contains(assistantRuntimes, b.Runtime) {
+		return b, i18n.Err("hub-model_config.err_runtime_invalid")
+	}
+	if b.Runtime == proto.AssistantRuntimeCLI {
+		b.Runtime = "" // the default, stored as none: an explicit cli fingerprints like no choice
 	}
 	return b, nil
 }
@@ -735,6 +759,10 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 			writeErr(w, 409, errModelConflict)
 			return
 		}
+		if in.Runtime != nil && string(in.Runtime) != "null" && len(p.Runtimes) == 0 {
+			writeErr(w, 400, i18n.Err("hub-model_config.err_runtime_assistant_only"))
+			return
+		}
 		b, err := patchModel(p.Override, in)
 		if err != nil {
 			writeErr(w, 400, err)
@@ -807,7 +835,7 @@ func (h *Hub) applyModel(ctx context.Context, id string, params map[string]any) 
 		return err
 	}
 	if name, _ := params["launcher"].(string); name != "" && launcherProvider(name) != b.Provider {
-		b = ModelBinding{Provider: launcherProvider(name)}
+		b = ModelBinding{Provider: launcherProvider(name), Runtime: b.Runtime}
 	}
 	if model, _ := params["model"].(string); model != "" {
 		b.Model = model
@@ -832,6 +860,12 @@ func (h *Hub) applyPickedModel(ctx context.Context, params map[string]any) error
 	if e, _ := params["effort"].(string); e != "" {
 		b.Effort = e
 	}
+	// A pick is a launcher and model for one message; the runtime stays 主对话's.
+	configured, err := h.resolveModel(ctx, "assistant")
+	if err != nil {
+		return err
+	}
+	b.Runtime = configured.Runtime
 	return h.finishModel(ctx, "assistant", params, b)
 }
 
@@ -846,9 +880,16 @@ func (h *Hub) finishModel(ctx context.Context, id string, params map[string]any,
 		return i18n.Err("hub-model_config.err_not_launcher")
 	}
 	for _, provider := range h.storedLaunchers(ctx) {
-		if provider.Name == name && provider.Kind == "api" {
+		// A direct API provider speaking Messages starts Claude on its gateway (node, contract #2455 §2); Responses
+		// cannot.
+		if provider.Name == name && provider.Kind == "api" && provider.API == "responses" {
 			return i18n.Err("hub-model_config.err_api_as_launcher")
 		}
+	}
+	if b.Runtime != "" {
+		params["runtime"] = b.Runtime
+	} else {
+		delete(params, "runtime") // the CLI: nothing a caller left
 	}
 	params["launcher"] = name
 	if b.Model != "" {

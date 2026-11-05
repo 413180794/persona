@@ -87,5 +87,12 @@
   "act_tool": "在调用",
   "act_tool_what": "在调用 {what}",
   "act_run": "在跑",
-  "act_run_what": "在跑 {what}"
+  "act_run_what": "在跑 {what}",
+  "fallback_shell_launcher": "启动器 {launcher} 是这台电脑上的 shell 命令，Agent SDK 用不了它的设置",
+  "fallback_read_bridge": "读不到 Agent SDK 桥：{cause}",
+  "fallback_no_bridge": "这个 personad 没有带 Agent SDK 桥",
+  "fallback_write_bridge": "写不出 Agent SDK 桥：{cause}",
+  "fallback_no_bridge_script": "Agent SDK 桥的包里没有 bridge.mjs",
+  "fallback_no_node": "没有 Node.js 22 及以上：{cause}",
+  "fallback_no_claude": "找不到 claude：{cause}"
 }

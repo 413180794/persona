@@ -127,7 +127,9 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 | `POST /api/v1/launchers/{name}/check?machine=` | 测试可用性 |
 | `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, auth?, preset?}`；`auth` 是 `api_key`（默认）或 `bearer`；带 `preset` 时没填的从预设补上（见下面「从插件添加」） |
 | `GET /api/v1/launchers/presets` | 插件提供的供应商预设（`docs/extensions.md`「模型供应商」）；旧 hub 回 404，App 当成没有 |
-| `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的 |
+| `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的。下面「供应商的模型和网关参数」里的字段不带就保留原值 |
+| `POST /api/v1/launchers/test` | 测试连接（不经 node，见下）：`{name?, base_url?, auth?, api_key?, headers?, model}` → `{ok, ms, model, error?}` |
+| `POST /api/v1/launchers/discover` | 获取模型：`{name?, base_url?, auth?, api_key?, headers?}` → `{models:[{id, name?, context_window?, efforts?, default_effort?}], error?}` |
 | `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
 | `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度（见下）：`{machine, checked_at, quota}`，查不了时 `{error, unsupported}`；hub 缓存一分钟，`refresh=1` 重读 |
@@ -135,10 +137,45 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 
 助手的模型只在「模型配置 › 主对话」里选（「设置 › 助手」不再有模型入口，#1291）；定时任务的模型入口打开统一的「模型配置」。供应商负责接入与默认值，用途负责具体选择，见 `docs/model-config.md`。
 
+## 供应商的模型和网关参数（#2455）
+
+Persona 管理的供应商照 cindy 的模型多了这些字段（`proto.ManagedLauncher`，都可选，旧数据照旧能读）。node 怎么把它们变成 env 见 `docs/claude-integration.md`。
+
+| 字段 | 含义 |
+| --- | --- |
+| `models` | 网关的模型 `[{id, name?, context_window?, efforts?, default_effort?}]`；窗口大于 200K 的以 `<id>[1m]` 运行 |
+| `opus_model` / `sonnet_model` / `haiku_model` / `fable_model` | 各档位的模型（`ANTHROPIC_DEFAULT_*_MODEL`），空就是 `model` |
+| `subagent_force` | `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` |
+| `headers` | 自定义请求头（`ANTHROPIC_CUSTOM_HEADERS`），一行一个「名字: 值」 |
+| `proxy` / `no_proxy` | 网关的 `HTTP(S)_PROXY` / `NO_PROXY`；代理要是 http(s) 或 socks5 地址 |
+| `timeout_ms` / `compact_window` / `max_context` | `API_TIMEOUT_MS` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` / `CLAUDE_CODE_MAX_CONTEXT_TOKENS`，0 是默认 |
+| `effort` | 默认思考档位 |
+
+- **请求头和 Key 一样是机密**：hub 用同一把密钥加密存成 `headers_sealed`，只在下发给 node 时解开；GET 只给 `has_headers`。
+  PUT 不带 `headers` 保留原值，带空串清掉。其他新字段也一样，不带就不变（旧版 App 改供应商不会把它们清空）。
+- **写入时校验**：Base URL 合法；思考档位只能是 low / medium / high / xhigh / max，模型的默认档位要在它的档位里；数值不能为负；模型 ID 不能为空或重复；请求头每行要有「:」。
+- 读取时 `source` 仍是 `jarvis` / `zshrc`，供应商自己的来源（`zshrc:<alias>@<机器>`、`preset:<id>`）放在 `origin`。
+- 名字 `test`、`discover`、`import`、`presets`、`claude` 留给接口，不能用。
+
+**测试连接和获取模型**由 hub 直接请求网关（照 cindy 的 `buildProbeRequest` / `provider-model-fetch`），新增供应商还没保存时也能用：
+
+- 带 `name` 时用已存的 Base URL、Key、请求头、默认模型和代理，请求里给了的覆盖已存的（`headers: ""` 就是这次不带请求头）。
+- 测试连接发一次 `POST <base>/v1/messages`（`max_tokens: 1`，内容 `ping`）；获取模型发 `GET <base>/v1/models`。Base URL 已经以 `/v1` 结尾时不重复。
+  `x-api-key` 和 `Authorization: Bearer` 两个头都带（Key 开头的 `Bearer ` 去掉），外加 `anthropic-version: 2023-06-01` 和自定义请求头。
+- 超时 30 秒。失败给一句人话（401 认证失败、403 没权限、404 地址不对、429 限流、超时、连不上），后面跟网关自己的错误信息；
+  Key 和请求头的值一律换成 `***`。这两个接口本身总是 200，结果看 `ok` / `error`。
+- 模型列表认三种形状：`{data:[…]}`、`{models:[…]}`、裸数组（元素是对象或字符串）；ID 取 `id` / `slug` / `key` / `model_name` / `model_id`，
+  名字取 `display_name` / `name`，窗口取 `context_length` / `context_window` / `max_context_length` / `max_input_tokens`。去重，保持顺序。
+- 网关没说的用**内置目录**补全：`server/internal/hub/model_catalog.json`，取自 cindy 的 `model-registry.json`（Apache-2.0，见 `THIRD_PARTY_NOTICES.md`）：
+  Claude 系列，以及 GLM、Kimi、DeepSeek V4、Qwen3、MiniMax、Seed、MiMo 等网关常见的模型，只有 id、name、context_window、efforts、default_effort。
+  查的时候不分大小写，去掉厂商前缀（`anthropic/…`）、`[1m]` 和日期后缀；目录里没有、但 ID 以 `[1m]` 结尾的记成 1M 窗口。网关自己说了的优先。
+  更新目录：照 cindy 的新版重新生成，只收 registry 里写明了的值，不猜。
+
 ## 直接 API 供应商
 
 Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧的启动器行为）和 `api`（`messages` / `responses`）字段。
-`kind: api` 由 hub 直接发请求，不下发给 node，也不会出现在新建 Agent 的启动器列表中；小模型、子 Agent 模型、自定义模型项和 CLI 额外参数不用于这类接入。
+`kind: api` 由 hub 直接发请求，不出现在新建 Agent 的启动器列表中；小模型、子 Agent 模型、自定义模型项和 CLI 额外参数不用于这类接入。
+`api` 为空或 `messages` 的也随启动器一起下发给 node（#2455），主对话可以用它的 Base URL 和 Key 起 claude；`responses` 的不下发。
 认证仍使用原有的加密 Key 存储，不需要把 API Key 放进用途配置。原有 `/launchers` 接口与供应商名称保持兼容。
 
 ## 从插件添加

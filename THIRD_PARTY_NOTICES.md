@@ -253,3 +253,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## cindy
+
+`server/internal/hub/model_catalog.json` (the built-in model catalog that fills in what a gateway lists) is taken from
+cindy's model registry (`packages/model-providers/catalog/model-registry.json`): for the Claude series and the GLM,
+Kimi, DeepSeek V4, Qwen3, MiniMax, Seed and MiMo models cindy runs on Claude Code, only the id, name, context window,
+thinking levels (low, medium, high, xhigh, max) and default level, as the registry states them, reformatted to a flat
+list. The provider settings (the add-a-provider steps, the connection test and the model list it fetches) follow
+cindy's design. No code is copied.
+
+https://github.com/makecindy/cindy
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use these files except in compliance with
+the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0. Unless required by
+applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language
+governing permissions and limitations under the License.

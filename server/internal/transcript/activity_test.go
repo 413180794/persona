@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 func TestActivitySaysWhatAToolCallDoes(t *testing.T) {
@@ -121,5 +123,35 @@ func TestLastTextSkipsTheBotmuxSentinel(t *testing.T) {
 	parse("说明里提到 BOTMUX_NOTHING_TO_SEND 这个词")
 	if m.LastText != "说明里提到 BOTMUX_NOTHING_TO_SEND 这个词" {
 		t.Fatalf("the word inside a line is the text: %q", m.LastText)
+	}
+}
+
+// A proxy's thinking-as-text block (ANSI dim italic lines between "💭 Thinking" and "💭 Thought for …") is thinking:
+// it shows as a thinking item without the styling and is not the agent's last words.
+func TestThinkingAsTextIsThinking(t *testing.T) {
+	var m Meta
+	parse := func(text string) []proto.Item {
+		t.Helper()
+		b, _ := json.Marshal(text)
+		return ParseLine(0, []byte(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":`+string(b)+`}]}}`), &m)
+	}
+	parse("先看代码")
+	at := m.LastTextAt
+	items := parse("\n\x1b[2;3m💭 Thinking\x1b[0m\n\x1b[2;3mThe tests pass, so I'll write the report.\x1b[0m\n\x1b[2;3m\x1b[0m\n\n\x1b[2;3m💭 Thought for 1s (46 tokens)\x1b[0m\n")
+	if m.LastText != "先看代码" {
+		t.Fatalf("the thinking became the last text: %q", m.LastText)
+	}
+	if !m.LastTextAt.Equal(at) {
+		t.Fatalf("the thinking moved the last text's time: %v", m.LastTextAt)
+	}
+	if len(items) != 1 || items[0].Kind != proto.KindThinking || items[0].Text != "The tests pass, so I'll write the report." {
+		t.Fatalf("the thinking item: %+v", items)
+	}
+	if items := parse("\x1b[2;3m💭 Thinking\x1b[0m\n\x1b[2;3m💭 Thought for 0s (0 tokens)\x1b[0m\n"); len(items) != 0 {
+		t.Fatalf("empty thinking shows: %+v", items)
+	}
+	parse("💭 Thinking about it, the fix is small.")
+	if m.LastText != "💭 Thinking about it, the fix is small." {
+		t.Fatalf("plain text that starts the same way is text: %q", m.LastText)
 	}
 }

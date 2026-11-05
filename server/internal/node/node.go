@@ -369,6 +369,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		AgentType        string        `json:"agent_type"`
 		Model            string        `json:"model"`
 		ModelFingerprint string        `json:"model_fingerprint"`
+		Runtime          string        `json:"runtime"`
 		Prompt           string        `json:"prompt"`
 		ResumeSessionID  string        `json:"resume_session_id"`
 		WorkspaceID      string        `json:"workspace_id"`
@@ -596,6 +597,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		agent, err := n.launcherModelCheck(ctx, p.Name, p.Model)
 		return map[string]any{"agent": agent}, err
+	case "launchers.zshrc": // the hub importing this machine's claude aliases as providers (zshrc.go)
+		return n.zshrcLaunchers()
 	case "launchers.show":
 		def, err := n.launcherDefinition(ctx, p.Name)
 		return map[string]any{"definition": def}, err
@@ -658,7 +661,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if p.ResumeOnly && !n.assistantResumable(p.SessionID) {
 			return nil, fmt.Errorf("conversation %s is gone", p.SessionID)
 		}
-		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
+		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Runtime: assistantRuntimeOf(p.Runtime)})
 		return map[string]any{"session_id": id}, err
 	case "session.modes":
 		return ok(n.setModelAndModes(ctx, p.SessionID, p.Model, p.PermissionMode, p.Effort)) // model: model_switch.go
@@ -667,7 +670,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "assistant.handoff": // what a new main conversation is told about the old one
 		return n.assistantHandoff(p.SessionID)
 	case "assistant.warm":
-		return ok(n.assistantWarm(p.Cwd, p.Launcher, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint}))
+		return ok(n.assistantWarm(p.Cwd, p.Launcher, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Runtime: assistantRuntimeOf(p.Runtime)}))
 	case "assistant.memory":
 		var a memoryOp
 		if err := json.Unmarshal(params, &a); err != nil {
@@ -685,7 +688,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			}
 			var err error
 			if n.isAssistantSession(p.SessionID) {
-				_, err = n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
+				_, err = n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "", modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Runtime: n.sessionRuntime(p.SessionID, p.Runtime, p.ModelFingerprint != "")})
 			} else {
 				err = n.send(ctx, p.SessionID, p.Text, p.Images, opts)
 			}

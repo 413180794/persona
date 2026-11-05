@@ -4,6 +4,7 @@
 !server/
 !web/
 !deploy/docker/
+!integrations/agent-sdk/
 !integrations/dsh/
 !integrations/paseo/
 !integrations/pi/

@@ -4904,6 +4904,122 @@ LAUNCHER_PRESETS = [
      "models_error": "插件读模型列表超时"},
 ]
 
+# MOCK_PROVIDERS=1 (#2455, scripts/test/web_providers_e2e.py): 设置 › 模型供应商's wizard and ~/.zshrc import. Two managed
+# providers (one with every advanced field), 测试连接 that passes or fails (a key or address with "bad" in it fails),
+# 获取模型列表 with 3 models, and an import preview of 3 providers on macbook (one merging into gw_full); studio's node is
+# too old (409 node_outdated), nas is offline (503). Keys and headers are kept only as has_key / has_headers.
+MOCK_PROVIDERS = os.environ.get("MOCK_PROVIDERS") == "1"
+PROVIDER_LOG = {"post": None, "put": None, "test": [], "discover": [], "import": None}
+PROVIDER_FIELDS = ("kind", "api", "base_url", "model", "small_model", "subagent_model", "custom_model", "custom_model_name",
+                   "custom_model_description", "args", "auth", "models", "opus_model", "sonnet_model", "haiku_model", "fable_model",
+                   "subagent_force", "proxy", "no_proxy", "timeout_ms", "compact_window", "max_context", "effort")
+PROVIDER_IMPORT = [
+    {"name": "cc_full", "base_url": "https://gw.example.com", "auth": "bearer", "has_key": True, "model": "example-opus",
+     "models": [{"id": "example-opus", "context_window": 1000000}, {"id": "example-haiku", "context_window": 200000}],
+     "aliases": ["cc_full", "cc_full_haiku"], "existing": "gw_full"},
+    {"name": "cc_glm", "base_url": "https://open.bigmodel.example.com/api/anthropic", "auth": "bearer", "has_key": True,
+     "model": "glm-5.3", "models": [{"id": "glm-5.3", "context_window": 200000}], "aliases": ["cc_glm"]},
+    {"name": "cc_kimi", "base_url": "https://api.moonshot.example.com/anthropic", "auth": "bearer", "has_key": True,
+     "model": "kimi-k3", "models": [{"id": "kimi-k3", "context_window": 256000}, {"id": "kimi-k3-turbo"}],
+     "aliases": ["cc_kimi", "cc_kimi_fast"], "has_headers": True},
+]
+PROVIDER_DISCOVERED = [{"id": "example-opus", "name": "Example Opus", "context_window": 1000000, "efforts": ["low", "medium", "high", "xhigh", "max"], "default_effort": "high"},
+                       {"id": "example-sonnet", "name": "Example Sonnet", "context_window": 200000, "efforts": ["low", "medium", "high"]},
+                       {"id": "example-haiku", "context_window": 200000}]
+if MOCK_PROVIDERS:
+    LAUNCHERS[:0] = [
+        {"name": "gw_full", "source": "jarvis", "base_url": "https://gw.example.com", "model": "example-opus", "has_key": True,
+         "auth": "bearer", "has_headers": True, "models": [{"id": "example-opus", "context_window": 1000000, "efforts": ["high", "max"], "default_effort": "high"},
+                                                           {"id": "example-sonnet", "context_window": 200000}],
+         "opus_model": "example-opus", "sonnet_model": "example-sonnet", "haiku_model": "example-haiku", "fable_model": "example-opus",
+         "small_model": "example-haiku", "subagent_model": "example-sonnet", "subagent_force": True, "proxy": "http://127.0.0.1:7890",
+         "no_proxy": "localhost,127.0.0.1", "timeout_ms": 600000, "compact_window": 400000, "max_context": 800000, "effort": "high"},
+        {"name": "anthropic_main", "source": "jarvis", "base_url": "https://api.anthropic.com", "model": "claude-sonnet-4-5", "has_key": True,
+         "auth": "api_key", "models": [{"id": "claude-sonnet-4-5", "context_window": 200000}]},
+    ]
+
+
+def _provider_redacted(b):
+    """What the e2e reads back of a request: the key and the headers only as whether they were sent."""
+    out = {k: v for k, v in b.items() if k not in ("api_key", "headers")}
+    if "api_key" in b: out["api_key"] = "<set>" if b["api_key"] else ""
+    if "headers" in b: out["headers"] = "<set>" if b["headers"] else ""
+    return out
+
+
+def _provider_apply(l, b):
+    for k in PROVIDER_FIELDS:
+        if k in b:
+            if b[k] in ("", 0, False, [], None): l.pop(k, None)
+            else: l[k] = b[k]
+    if b.get("api_key"): l["has_key"] = True
+    if "headers" in b:
+        if b["headers"]: l["has_headers"] = True
+        else: l.pop("has_headers", None)
+
+
+def providers_route(h, method, p, q, body):
+    """The provider endpoints under MOCK_PROVIDERS; True when it answered."""
+    if not MOCK_PROVIDERS: return False
+    if p == "/mock/providers/log":
+        h.send_json(PROVIDER_LOG); return True
+    b = json.loads(body or b"{}") if method != "GET" else {}
+    if p == "/api/v1/launchers/import":
+        machine = (q.get("machine") or [""])[0] if method == "GET" else b.get("machine", "")
+        if machine == "studio":
+            h.send_json({"code": "node_outdated", "error": "这台机器上的 personad 太旧，不能读取 ~/.zshrc，需要更新 node"}, 409); return True
+        if not machine_online(machine):
+            h.send_json({"code": "offline", "error": "这台机器离线，连上后再导入"}, 503); return True
+        if method == "GET":
+            h.send_json({"machine": machine, "providers": PROVIDER_IMPORT}); return True
+        PROVIDER_LOG["import"] = b
+        created, updated = [], []
+        for imp in PROVIDER_IMPORT:
+            if imp["name"] not in b.get("providers", []): continue
+            if imp.get("existing"):
+                l = next(x for x in LAUNCHERS if x["name"] == imp["existing"])
+                have = {m["id"] for m in l.get("models", [])}
+                l["models"] = l.get("models", []) + [m for m in imp["models"] if m["id"] not in have]
+                updated.append(imp["existing"])
+            else:
+                l = {k: v for k, v in imp.items() if k not in ("aliases", "existing")}
+                l.update(source="jarvis", origin="zshrc:%s@%s" % (imp["aliases"][0], machine))
+                LAUNCHERS.insert(0, l)
+                created.append(imp["name"])
+        h.send_json({"created": created, "updated": updated}); return True
+    if p == "/api/v1/launchers/test" and method == "POST":
+        PROVIDER_LOG["test"].append(_provider_redacted(b))
+        stored = next((x for x in LAUNCHERS if x["name"] == b.get("name")), None)
+        if not b.get("api_key") and not (stored and stored.get("has_key")):
+            h.send_json({"ok": False, "ms": 0, "model": b.get("model", ""), "error": "要填 API Key"}); return True
+        if "bad" in (b.get("api_key") or "") or "bad" in (b.get("base_url") or ""):
+            h.send_json({"ok": False, "ms": 233, "model": b.get("model", ""), "error": "401 认证失败：网关不认这个 Key"}); return True
+        h.send_json({"ok": True, "ms": 412, "model": b.get("model", "")}); return True
+    if p == "/api/v1/launchers/discover" and method == "POST":
+        PROVIDER_LOG["discover"].append(_provider_redacted(b))
+        if "bad" in (b.get("base_url") or ""):
+            h.send_json({"models": [], "error": "网关没有 /v1/models"}); return True
+        h.send_json({"models": PROVIDER_DISCOVERED}); return True
+    if p == "/api/v1/launchers" and method == "POST" and not b.get("preset"):
+        PROVIDER_LOG["post"] = _provider_redacted(b)
+        name = (b.get("name") or "").strip()
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*$", name):
+            h.send_json({"error": "名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）"}, 400); return True
+        if any(l["name"] == name for l in LAUNCHERS):
+            h.send_json({"error": "已经有叫 %s 的启动器了" % name}, 409); return True
+        l = {"name": name, "source": "jarvis"}
+        _provider_apply(l, b)
+        LAUNCHERS.insert(0, l)
+        h.send_json({"launcher": l}); return True
+    if p.startswith("/api/v1/launchers/") and method == "PUT":
+        PROVIDER_LOG["put"] = _provider_redacted(b)
+        l = next((x for x in LAUNCHERS if x["name"] == unquote(p.split("/")[4]) and x["source"] == "jarvis"), None)
+        if l is None:
+            h.send_json({"error": "只能改 Persona 里加的启动器；~/.zshrc 里的请在那台电脑上改"}, 404); return True
+        _provider_apply(l, b)
+        h.send_json({"launcher": l}); return True
+    return False
+
 # The 公司圈 post behind the inbox's moment item (LarkMomentsPostView reads these).
 def _ms(minutes): return int((datetime.now(timezone.utc) - timedelta(minutes=minutes)).timestamp() * 1000)
 MOMENT_POST = {"id": "mp1", "userName": "我", "userId": "me", "commentCount": 3, "reactionCount": 12, "createTime": _ms(150),
@@ -9158,6 +9274,54 @@ def voice_socket(h):
         h.close_connection = True
 
 
+# ---------- area: model defaults (#2455) ----------
+# MOCK_MODEL_DEFAULTS=1: 主对话 has a 运行方式 (runtimes cli / agentsdk, saved in its binding; "cli" is stored as none),
+# GET /api/v1/machines/{mid}/launchers carries `default` (?purpose=, 新建 Agent's agent.new when absent), and the main
+# conversation asked for the Agent SDK but runs on the CLI (runtime_fallback).
+MODEL_DEFAULTS = os.environ.get("MOCK_MODEL_DEFAULTS") == "1"
+MODEL_DEFAULTS_FALLBACK = "这台电脑没有 Node.js 22+"
+_model_configuration_without_runtime = model_configuration
+
+
+def model_configuration(include_uses=False):
+    catalog = _model_configuration_without_runtime(include_uses)
+    if not MODEL_DEFAULTS:
+        return catalog
+    for purpose in catalog["purposes"]:
+        if purpose["id"] != "assistant":
+            continue
+        for binding in (purpose["override"], purpose["effective"]):
+            if binding.get("runtime") == "cli":
+                binding.pop("runtime")
+        purpose["runtimes"] = ["cli", "agentsdk"]
+        purpose["fields"] = purpose["fields"] + ["runtime"]
+    return catalog
+
+
+def model_defaults_launchers(h, p, q):
+    """GET /api/v1/machines/{mid}/launchers with the purpose's 「默认：…」 (hub launcherDefault). False otherwise."""
+    if not MODEL_DEFAULTS or not (p.startswith("/api/v1/machines/") and p.endswith("/launchers")):
+        return False
+    pid = q.get("purpose", ["agent.new"])[0]
+    purpose = next((x for x in model_configuration()["purposes"] if x["id"] == pid), None)
+    default = None
+    if purpose and purpose["kind"] == "launcher":
+        b = purpose["effective"]
+        default = {"provider": b.get("provider", "").removeprefix("launcher."), "model": b.get("model", ""), "effort": b.get("effort", "")}
+        if purpose.get("runtimes"):
+            default["runtime"] = b.get("runtime") or "cli"
+    h.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "sonnetcc", "model": "sonnet"},
+                               {"name": "codex", "model": "gpt-5.5", "agent": "codex", "agent_type": "codex"}], "default": default})
+    return True
+
+
+if MODEL_DEFAULTS:
+    for _s in ASSISTANT:
+        if _s["session_id"] == ASSISTANT_CONFIG["main"]:
+            _s["runtime_fallback"] = MODEL_DEFAULTS_FALLBACK
+# ---------- end of area: model defaults ----------
+
+
 # ---------- HTTP ----------
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -9218,6 +9382,7 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if self.token_refused(): return
+        if providers_route(self, "GET", p, q, b""): return
         if MOCK_MESSAGING and p.startswith("/api/v1/messaging") and lark_messaging.route(self, "GET", p, q, b""): return
         if net_control(p, q): return self.send_json({"ok": True, **NET})
         if p == "/mock/fs-watch" and FS_LIVE:  # what the browsers asked to watch now
@@ -9283,6 +9448,7 @@ class H(BaseHTTPRequestHandler):
             return self.websocket()
         if plugins_route(self, p, None): return
         if voice_route(self, p, q): return
+        if model_defaults_launchers(self, p, q): return  # area: model defaults
         if pins_route(self, p): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if history_route(self, p, parse_qs(urlparse(self.path).query)): return
@@ -9875,6 +10041,7 @@ class H(BaseHTTPRequestHandler):
         if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith("/api/v1/extensions/lark-connector/-/ui/")) and \
                 lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if pins_route(self, p): return
+        if providers_route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if doctor_route(self, p, "POST"): return
         if history_route(self, p, parse_qs(urlparse(self.path).query)): return

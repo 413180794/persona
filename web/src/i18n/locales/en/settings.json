@@ -146,5 +146,18 @@
   "no_devices": "No devices yet.",
   "revoked_title": "Revoked {count}",
   "auth_api_key": "x-api-key (ANTHROPIC_API_KEY)",
-  "auth_bearer": "Bearer (ANTHROPIC_AUTH_TOKEN)"
+  "auth_bearer": "Bearer (ANTHROPIC_AUTH_TOKEN)",
+  "add_provider_short": "Add",
+  "model_list": "Models",
+  "model_count_one": "{count} model",
+  "model_count_other": "{count} models",
+  "tier_model": "{tier} tier",
+  "subagent": "Subagents",
+  "subagent_force": "Always use the subagent model",
+  "headers": "Headers",
+  "proxy": "Proxy",
+  "timeout": "Timeout",
+  "max_context": "Max context",
+  "default_effort": "Default thinking effort",
+  "from_zshrc": "Imported from ~/.zshrc"
 }

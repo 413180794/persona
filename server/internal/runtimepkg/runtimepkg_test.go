@@ -59,7 +59,8 @@ func TestGenerate(t *testing.T) {
 	cmd := map[string]string{"dsh/package.json": "{}", "dsh/lib/a.js": "a", "dsh/lib/b.txt": "no", "runtime-sdk/package.json": "{}",
 		"runtime-sdk/index.js": "i", "runtime-sdk/lib/r.js": "r", "dsh/test/t.js": "no",
 		"pi/package.json": "{}", "pi/index.js": "x", "pi/companion.mjs": "c", "pi/lib/pi.js": "p", "pi/e2e/run.mjs": "no",
-		"paseo/package.json": "{}", "paseo/bridge.mjs": "b", "paseo/lib/bridge.js": "l", "paseo/test/bridge.test.js": "no"}
+		"paseo/package.json": "{}", "paseo/bridge.mjs": "b", "paseo/lib/bridge.js": "l", "paseo/test/bridge.test.js": "no",
+		"agent-sdk/package.json": "{}", "agent-sdk/dist/bridge.mjs": "b", "agent-sdk/src/bridge.mjs": "no", "agent-sdk/build.mjs": "no"}
 	for path, data := range cmd {
 		_ = os.MkdirAll(filepath.Join(src, filepath.Dir(path)), 0o755)
 		if err := os.WriteFile(filepath.Join(src, path), []byte(data), 0o644); err != nil {
@@ -97,6 +98,13 @@ func TestGenerate(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("paseo copied %v, want %v", got, want)
 	}
+	got = got[:0]
+	for _, f := range files["jarvis-agent-sdk-runtime"] {
+		got = append(got, f.Path)
+	}
+	if want = []string{"agent-sdk/package.json", "agent-sdk/dist/bridge.mjs"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("agent-sdk copied %v, want %v", got, want)
+	}
 	_ = os.Remove(filepath.Join(src, "runtime-sdk", "index.js"))
 	if _, err := Generate(src, out); err == nil || !strings.Contains(err.Error(), "matches no file") {
 		t.Fatalf("a missing file: %v", err)
@@ -124,5 +132,30 @@ func TestPackagesMatchTheLoader(t *testing.T) {
 	}
 	if !reflect.DeepEqual(js, Packages) {
 		t.Fatalf("package.js PACKAGES %v, runtimepkg.Packages %v", js, Packages)
+	}
+}
+
+// The Agent SDK bridge as committed (integrations/agent-sdk/dist, the SDK bundled in): it generates, loads, and stays
+// under MaxSize, the bound every package is offered and fetched within.
+func TestAgentSDKPackage(t *testing.T) {
+	src := filepath.Join("..", "..", "..", "integrations")
+	if _, err := os.Stat(filepath.Join(src, "agent-sdk", "dist", "bridge.mjs")); err != nil {
+		t.Skipf("no integrations checkout beside server/: %v", err)
+	}
+	out := t.TempDir()
+	if _, err := Generate(src, out); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(OverrideEnv, out)
+	p, err := Load("jarvis-agent-sdk-runtime")
+	if err != nil || p == nil {
+		t.Fatalf("load: %v %v", p, err)
+	}
+	size := 0
+	for _, f := range p.Files {
+		size += len(f.Data)
+	}
+	if len(p.Files) != 2 || size > MaxSize || size < 100<<10 {
+		t.Fatalf("%d files, %d bytes (MaxSize %d)", len(p.Files), size, MaxSize)
 	}
 }

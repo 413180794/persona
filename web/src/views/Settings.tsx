@@ -3,7 +3,7 @@
 import { BASE, stripBase } from "../lib/base";
 import { href } from "../lib/router";
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, enc, errorText, setToken } from "../lib/api";
+import { api, enc, errorText, setToken } from "../lib/api";
 import { splitDevices } from "../lib/devices";
 import { ago } from "../lib/format";
 import { install, useInstall, type InstallState } from "../lib/pwa";
@@ -37,8 +37,9 @@ import { HubSettings } from "./settings/HubSettings";
 import { LauncherQuota } from "./settings/LauncherQuota";
 import { LauncherExtensionSections } from "./settings/ExtensionView";
 import { hubHasExt } from "../lib/extension-api";
-import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
-import { Segmented } from "./assistant/parts";
+import { hostOf, type ProviderView } from "../lib/providers";
+import { ProviderWizard } from "./settings/ProviderWizard";
+import { ProviderImport } from "./settings/ProviderImport";
 import { TerminalModeRow } from "./settings/TerminalModeSetting";
 import { FROM_LIST, LIST_GROUPS, openedFromList, settingsAt, settingsHref, TAB_INFO, TABS, type Tab } from "./settings/nav";
 import { SHEET_QUERY, useMedia } from "../ui/overlay";
@@ -60,24 +61,9 @@ interface LauncherDetail {
   error?: string;
 }
 
-interface LauncherView {
-  name: string;
+/** GET /api/v1/launchers' entry: a managed provider's fields (lib/providers.ts) plus the ~/.zshrc ones'. */
+interface LauncherView extends ProviderView {
   source: "zshrc" | "jarvis";
-  kind?: "launcher" | "api";
-  api?: "messages" | "responses";
-  base_url?: string;
-  model?: string;
-  small_model?: string;
-  /** Subagents (workflows, multi-agent runs): "" follows the model. */
-  subagent_model?: string;
-  /** An extra /model entry at the gateway. */
-  custom_model?: string;
-  custom_model_name?: string;
-  custom_model_description?: string;
-  args?: string[];
-  has_key?: boolean;
-  /** Managed: how the key goes to the gateway (x-api-key by default, or Authorization: Bearer). */
-  auth?: "api_key" | "bearer";
   machines?: string[];
   hidden?: boolean;
   definitions?: Record<string, string>;
@@ -236,13 +222,7 @@ function SettingsList({ shown, onPick }: { shown: (k: Tab) => boolean; onPick: (
   );
 }
 
-const host = (u?: string) => {
-  try {
-    return u ? new URL(u).host : "";
-  } catch {
-    return u ?? "";
-  }
-};
+const host = hostOf;
 
 // ── 通用 ────────────────────────────────────────────────
 
@@ -405,6 +385,7 @@ function Models() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<LauncherView | "new" | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = () =>
     api<{ launchers: LauncherView[] }>("/launchers")
@@ -448,8 +429,13 @@ function Models() {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("settings.search_placeholder")} className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3" aria-label={t("settings.search_providers")} />
           {query && <IconButton icon="x" label={t("settings.clear")} size={22} iconSize={12} onClick={() => setQuery("")} />}
         </label>
+        <Button tone="secondary" icon="download" onClick={() => setImporting(true)}>
+          <span className="max-sm:hidden">{t("settings-providerimport.title")}</span>
+          <span className="sm:hidden">{t("settings-providerimport.import")}</span>
+        </Button>
         <Button tone="accent" icon="plus" onClick={() => setEditing("new")}>
-          {t("settings.add_provider")}
+          <span className="max-sm:hidden">{t("settings.add_provider")}</span>
+          <span className="sm:hidden">{t("settings.add_provider_short")}</span>
         </Button>
       </div>
       {!list && !error && <Loading />}
@@ -479,7 +465,8 @@ function Models() {
           setEditing(l);
         }}
       />
-      <LauncherEditor existing={editing} onClose={() => setEditing(null)} onSaved={() => void load()} />
+      <ProviderWizard existing={editing} onClose={() => setEditing(null)} onSaved={() => void load()} />
+      <ProviderImport open={importing} onClose={() => setImporting(false)} onImported={() => void load()} />
     </>
   );
 }
@@ -651,6 +638,17 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
               <KVRow k="API Key" v={l.has_key ? t("settings.key_set_hidden") : t("settings.not_set")} />
               {l.api !== "responses" && <KVRow k={t("settings.auth")} v={l.auth === "bearer" ? "Bearer" : "x-api-key"} />}
               {l.kind !== "api" && l.args?.length ? <KVRow k={t("settings.extra_args")} v={l.args.join(" ")} mono /> : null}
+              {l.models?.length ? <KVRow k={t("settings.model_list")} v={formatList(l.models.map((m) => m.id), { type: "conjunction", style: "narrow" })} mono sub={t("settings.model_count", { count: l.models.length })} /> : null}
+              {([["opus_model", "Opus"], ["sonnet_model", "Sonnet"], ["haiku_model", "Haiku"], ["fable_model", "Fable"]] as const).map(([k, tier]) => l[k] && <KVRow key={k} k={t("settings.tier_model", { tier })} v={l[k]} mono />)}
+              {l.subagent_force && <KVRow k={t("settings.subagent")} v={t("settings.subagent_force")} />}
+              {l.has_headers && <KVRow k={t("settings.headers")} v={t("settings.key_set_hidden")} />}
+              {l.proxy && <KVRow k={t("settings.proxy")} v={l.proxy} mono />}
+              {l.no_proxy && <KVRow k="NO_PROXY" v={l.no_proxy} mono />}
+              {l.timeout_ms ? <KVRow k={t("settings.timeout")} v={`${l.timeout_ms} ms`} mono /> : null}
+              {l.compact_window ? <KVRow k={t("settings.compact_window")} v={tokens(l.compact_window)} /> : null}
+              {l.max_context ? <KVRow k={t("settings.max_context")} v={tokens(l.max_context)} /> : null}
+              {l.effort && <KVRow k={t("settings.default_effort")} v={l.effort} />}
+              {l.origin?.startsWith("zshrc:") && <KVRow k={t("settings.source")} v={l.origin.slice("zshrc:".length)} mono sub={t("settings.from_zshrc")} />}
             </KV>
           )}
 
@@ -741,247 +739,6 @@ function DetailBlock({ d, place }: { d: LauncherDetail; place?: string }) {
           ))}
         </KV>
       ) : null}
-    </>
-  );
-}
-
-function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView | "new" | null; onClose: () => void; onSaved: () => void }) {
-  const isNew = existing === "new";
-  const old = existing && existing !== "new" ? existing : null;
-  const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages", auth: "api_key" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  // 从扩展添加 (docs/extensions.md「模型供应商」): only when adding, and only when the hub's extensions offer providers.
-  const [presets, setPresets] = useState<LauncherPreset[]>([]);
-  const [source, setSource] = useState<"manual" | "extension">("manual");
-  const [pick, setPick] = useState("");
-  const [pf, setPf] = useState({ name: "", api_key: "", model: "" });
-  const preset = presets.find((p) => p.id === pick);
-  const fromExtension = isNew && source === "extension" && !!preset;
-
-  useEffect(() => {
-    if (!isNew) return;
-    setSource("manual");
-    setPf({ name: "", api_key: "", model: "" });
-    let live = true;
-    loadPresets()
-      .then((list) => {
-        if (!live) return;
-        setPresets(list);
-        setPick(list[0]?.id ?? "");
-        setPf((x) => ({ ...x, model: list[0] ? presetDefaultModel(list[0]) : "" }));
-      })
-      .catch(() => live && setPresets([]));
-    return () => void (live = false);
-  }, [existing]);
-
-  const choose = (p: LauncherPreset) => {
-    setPick(p.id);
-    setPf((x) => ({ ...x, model: presetDefaultModel(p) }));
-  };
-  const nameProblem = launcherNameProblem(pf.name);
-  const presetReady = !!preset && !!pf.name.trim() && !nameProblem && !!pf.api_key.trim();
-
-  useEffect(() => {
-    setError("");
-    setF(old ? { name: old.name, base_url: old.base_url ?? "", api_key: "", model: old.model ?? "", small_model: old.small_model ?? "", subagent_model: old.subagent_model ?? "", custom_model: old.custom_model ?? "", custom_model_name: old.custom_model_name ?? "", custom_model_description: old.custom_model_description ?? "", args: (old.args ?? []).join(" "), kind: old.kind ?? "launcher", api: old.api ?? "messages", auth: old.auth ?? "api_key" } : { name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages", auth: "api_key" });
-  }, [existing]);
-
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
-  // The Responses API always takes the key as Bearer: nothing to choose.
-  const responses = f.kind === "api" && f.api === "responses";
-  const ready = fromExtension ? presetReady : f.name.trim() && f.base_url.trim() && f.model.trim() && (!isNew || f.api_key.trim());
-  const save = async () => {
-    if (busy || !ready) return;
-    setBusy(true);
-    setError("");
-    try {
-      if (fromExtension && preset) {
-        const body = presetBody(preset, pf.name, pf.api_key, pf.model);
-        await api("/launchers", { method: "POST", json: body });
-        toast(t("settings.added", { name: body.name }), "ok");
-        onSaved();
-        onClose();
-        return;
-      }
-      const body = { name: f.name.trim(), kind: f.kind, api: f.kind === "api" ? f.api : "messages", base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.kind === "api" ? "" : f.small_model.trim(), subagent_model: f.kind === "api" ? "" : f.subagent_model.trim(), custom_model: f.kind === "api" ? "" : f.custom_model.trim(), custom_model_name: f.kind === "api" ? "" : f.custom_model_name.trim(), custom_model_description: f.kind === "api" ? "" : f.custom_model_description.trim(), args: f.kind === "api" ? [] : f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined, auth: responses ? "api_key" : f.auth };
-      await api(isNew ? "/launchers" : enLauncher(body.name), { method: isNew ? "POST" : "PUT", json: body });
-      toast(isNew ? t("settings.added", { name: body.name }) : t("settings.saved", { name: body.name }), "ok");
-      onSaved();
-      onClose();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const field = (k: keyof typeof f, label: string, opts: { placeholder?: string; hint?: string; type?: string; mono?: boolean; disabled?: boolean } = {}) => (
-    <label className="block">
-      <span className="mb-1 block text-[12px] font-medium text-ink-2">{label}</span>
-      <input
-        value={f[k]}
-        onChange={set(k)}
-        type={opts.type ?? "text"}
-        disabled={opts.disabled}
-        placeholder={opts.placeholder}
-        autoComplete="off"
-        spellCheck={false}
-        className={cx("h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60", opts.mono && "font-mono")}
-      />
-      {opts.hint && <span className="mt-1 block text-[11px] text-ink-3">{opts.hint}</span>}
-    </label>
-  );
-
-  return (
-    <Dialog
-      open={existing !== null}
-      onClose={onClose}
-      width={480}
-      title={isNew ? t("settings.add_provider") : t("settings.edit_named", { name: old?.name ?? "" })}
-      footer={
-        <>
-          <Button tone="quiet" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button tone="primary" busy={busy} disabled={!ready} onClick={() => void save()}>
-            {t("common.save")}
-          </Button>
-        </>
-      }
-    >
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (ready) void save();
-        }}
-      >
-        {isNew && presets.length > 0 && (
-          <Segmented<"manual" | "extension">
-            label={t("settings.source")}
-            value={source}
-            onChange={setSource}
-            options={[{ v: "manual", label: t("settings.source_manual") }, { v: "extension", label: t("settings.source_extension") }]}
-          />
-        )}
-        {fromExtension && preset ? (
-          <PresetFields presets={presets} preset={preset} onPick={choose} pf={pf} setPf={setPf} nameProblem={nameProblem} />
-        ) : (
-        <>
-        <label className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.access")}</span>
-          <select value={f.kind} onChange={(e) => setF((x) => ({ ...x, kind: e.target.value, api: "messages" }))} disabled={!isNew}
-            className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none disabled:opacity-60">
-            <option value="launcher">{t("settings.claude_launcher")}</option>
-            <option value="api">{t("settings.direct_api")}</option>
-          </select>
-        </label>
-        {f.kind === "api" && <label className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.api_protocol")}</span>
-          <select value={f.api} onChange={(e) => setF((x) => ({ ...x, api: e.target.value }))}
-            className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none">
-            <option value="messages">Anthropic Messages</option>
-            <option value="responses">OpenAI Responses</option>
-          </select>
-        </label>}
-        {field("name", t("settings.name"), { placeholder: t("settings.name_placeholder", { example: "jv_strong" }), hint: t("settings.name_hint"), mono: true, disabled: !isNew })}
-        {field("base_url", "Base URL", { placeholder: "https://…", hint: f.api === "responses" ? t("settings.base_url_responses") : t("settings.base_url_messages"), mono: true })}
-        {field("api_key", isNew || !old?.has_key ? "API Key" : t("settings.api_key_keep"), { type: "password", hint: t("settings.key_stored") })}
-        {!responses && <label className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.auth")}</span>
-          <select value={f.auth} onChange={(e) => setF((x) => ({ ...x, auth: e.target.value }))}
-            className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none">
-            <option value="api_key">{t("settings.auth_api_key")}</option>
-            <option value="bearer">{t("settings.auth_bearer")}</option>
-          </select>
-          <span className="mt-1 block text-[11px] text-ink-3">{t("settings.auth_hint")}</span>
-        </label>}
-        <div className={f.kind === "api" ? "" : "grid grid-cols-2 gap-3"}>
-          {field("model", t("settings.default_model"), { placeholder: t("settings.main_model"), mono: true })}
-          {f.kind !== "api" && field("small_model", t("settings.small_model_optional"), { placeholder: t("settings.same_as_model"), mono: true })}
-          {f.kind !== "api" && field("subagent_model", t("settings.subagent_model_optional"), { placeholder: t("settings.same_as_model"), mono: true, hint: t("settings.subagent_model_hint") })}
-        </div>
-        {f.kind !== "api" && (
-          <div className="grid grid-cols-2 gap-3">
-            {field("custom_model", t("settings.custom_model_optional"), { placeholder: t("settings.gateway_model_id"), mono: true })}
-            {field("custom_model_name", t("settings.display_name_optional"), {})}
-          </div>
-        )}
-        {f.kind !== "api" && field("custom_model_description", t("settings.custom_model_description_optional"), { hint: t("settings.custom_model_description_hint") })}
-        {f.kind !== "api" && field("args", t("settings.extra_args_optional"), { placeholder: "--dangerously-skip-permissions", hint: t("settings.extra_args_hint"), mono: true })}
-        </>
-        )}
-        {error && <p className="text-[12px] text-red">{error}</p>}
-        <button type="submit" hidden />
-      </form>
-    </Dialog>
-  );
-}
-
-/** 从扩展添加: pick one of the extensions' providers, then only the name, the key and maybe another of its models. */
-function PresetFields({ presets, preset, onPick, pf, setPf, nameProblem }: {
-  presets: LauncherPreset[];
-  preset: LauncherPreset;
-  onPick: (p: LauncherPreset) => void;
-  pf: { name: string; api_key: string; model: string };
-  setPf: React.Dispatch<React.SetStateAction<{ name: string; api_key: string; model: string }>>;
-  nameProblem: string;
-}) {
-  const input = "h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]";
-  const choices = presetChoices(preset);
-  return (
-    <>
-      <div>
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.provider")}</span>
-        <div role="radiogroup" aria-label={t("settings.provider")} className="overflow-hidden rounded-control bg-field shadow-inset-field">
-          {presets.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={p.id === preset.id}
-              onClick={() => onPick(p)}
-              className="flex w-full items-center gap-3 border-b border-line px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-hover"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium text-ink">{p.name}</div>
-                {p.description && <div className="line-clamp-2 text-[11.5px] text-ink-2">{p.description}</div>}
-                <div className="truncate text-[11px] text-ink-3">{presetSubtitle(p)}</div>
-              </div>
-              {p.id === preset.id && <Icon name="check" size={13} stroke={2.2} className="shrink-0 text-accent" />}
-            </button>
-          ))}
-        </div>
-        <span className="mt-1 block text-[11px] text-ink-3">{t("settings.preset_hint", { plugin: preset.plugin })}</span>
-      </div>
-      <label className="block">
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.name")}</span>
-        <input value={pf.name} onChange={(e) => setPf((x) => ({ ...x, name: e.target.value }))} placeholder={t("settings.name_placeholder", { example: "jv_team" })} autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
-        <span className={cx("mt-1 block text-[11px]", nameProblem ? "text-red" : "text-ink-3")}>{nameProblem || t("settings.name_hint")}</span>
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">API Key</span>
-        <input value={pf.api_key} onChange={(e) => setPf((x) => ({ ...x, api_key: e.target.value }))} type="password" autoComplete="off" spellCheck={false} className={input} />
-        <span className="mt-1 block text-[11px] text-ink-3">{preset.key_hint ? `${preset.key_hint} ` : ""}{t("settings.key_stored")}</span>
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings.default_model")}</span>
-        {choices.length ? (
-          <select value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} className={cx(input, "font-mono")}>
-            {choices.map((m) => (
-              <option key={m.id} value={m.id}>
-                {presetModelLabel(m)}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} placeholder={t("settings.main_model")} autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
-        )}
-        <span className="mt-1 block text-[11px] text-ink-3">
-          {preset.models_error ? t("settings.preset_models_error", { error: preset.models_error }) : t("settings.preset_models_hint")}
-        </span>
-      </label>
     </>
   );
 }

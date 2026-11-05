@@ -5,6 +5,8 @@ export interface ModelBinding {
   provider?: string;
   model?: string;
   effort?: string;
+  /** 主对话 only (#2455): how it runs Claude, "cli" or "agentsdk"; absent is the CLI. */
+  runtime?: string;
 }
 
 export interface ModelProvider {
@@ -32,6 +34,8 @@ export interface ModelPurpose {
   status?: string;
   fields?: string[];
   provider_ids?: string[];
+  /** 主对话 only: the runtimes it can run on (an older hub: none, no 运行方式 row). */
+  runtimes?: string[];
 }
 
 export interface ModelConfigurationBody {
@@ -46,20 +50,39 @@ export interface ModelDraft {
   provider: string;
   model: string;
   effort: string;
+  /** "" when the purpose has no runtime choice. */
+  runtime: string;
+}
+
+/** The runtimes this client can name, in the order 运行方式 offers them. */
+export const RUNTIMES: { id: string; label: string }[] = [
+  { id: "cli", label: "Claude Code CLI" },
+  { id: "agentsdk", label: "Agent SDK" },
+];
+
+/** A runtime's name; none is the CLI, one this client does not know shows its id. */
+export function runtimeLabel(id: string | undefined): string {
+  return RUNTIMES.find((r) => r.id === (id || "cli"))?.label ?? id!;
+}
+
+/** 运行方式's options: only the ones the hub offers for this purpose (and this client knows). */
+export function runtimeChoices(p: ModelPurpose): { id: string; label: string }[] {
+  return RUNTIMES.filter((r) => p.runtimes?.includes(r.id));
 }
 
 export const modelConfiguration = () => api<ModelConfigurationBody>("/model-config");
 export const modelPurpose = (id: string) => api<ModelPurposeBody>(`/model-config/purposes/${enc(id)}`);
 
 export function draftFor(p: ModelPurpose): ModelDraft {
-  return { provider: p.override?.provider ?? "", model: p.override?.model ?? "", effort: p.override?.effort ?? "" };
+  const runtime = runtimeChoices(p).length ? p.override?.runtime || p.effective?.runtime || "cli" : "";
+  return { provider: p.override?.provider ?? "", model: p.override?.model ?? "", effort: p.override?.effort ?? "", runtime };
 }
 
 export function chooseProvider(draft: ModelDraft, provider: string): ModelDraft {
-  return draft.provider === provider ? draft : { provider, model: "", effort: "" };
+  return draft.provider === provider ? draft : { provider, model: "", effort: "", runtime: draft.runtime };
 }
 
-export function supportsField(p: ModelPurpose, field: keyof ModelDraft): boolean {
+export function supportsField(p: ModelPurpose, field: Exclude<keyof ModelDraft, "runtime">): boolean {
   return (p.fields ?? ["provider", "model"]).includes(field);
 }
 
@@ -68,6 +91,7 @@ export function modelPatch(p: ModelPurpose, draft: ModelDraft): Record<string, s
   for (const field of ["provider", "model", "effort"] as const) {
     if (supportsField(p, field)) patch[field] = draft[field].trim() || null;
   }
+  if (runtimeChoices(p).length && draft.runtime) patch.runtime = draft.runtime;
   return patch;
 }
 
@@ -84,7 +108,14 @@ export function providersFor(p: ModelPurpose, providers: ModelProvider[]): Model
 
 export function modelSummary(p: ModelPurpose, providers: ModelProvider[] = []): string {
   const name = providers.find((v) => v.id === p.effective?.provider)?.name ?? p.effective?.provider;
-  return [name, p.effective?.model, p.effective?.effort && t("lib-model-config.effort", { effort: p.effective.effort })].filter(Boolean).join(" · ") || t("lib-model-config.not_configured");
+  const rt = p.effective?.runtime;
+  const runtime = rt && rt !== "cli" ? runtimeLabel(rt) : ""; // the CLI is the default: not worth a word
+  return [name, p.effective?.model, p.effective?.effort && t("lib-model-config.effort", { effort: p.effective.effort }), runtime].filter(Boolean).join(" · ") || t("lib-model-config.not_configured");
+}
+
+/** 主对话's note when it asked for the Agent SDK and runs on the CLI (the session's `runtime_fallback`). */
+export function runtimeFallbackText(reason: string): string {
+  return t("lib-model-config.runtime_fallback", { reason: reason.trim() });
 }
 
 export function purposeGroups(purposes: ModelPurpose[], query: string): [string, ModelPurpose[]][] {

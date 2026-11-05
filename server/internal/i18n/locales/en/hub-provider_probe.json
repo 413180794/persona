@@ -1,0 +1,15 @@
+{
+  "err_no_provider": "No provider named {name}",
+  "err_open_key": "Couldn’t read the saved API key",
+  "err_open_headers": "Couldn’t read the saved headers",
+  "err_bad_request": "Malformed request",
+  "timeout": "The gateway didn’t answer within {seconds} s",
+  "unreachable": "Can’t reach the gateway: {error}",
+  "status_401": "Authentication failed (401): the API key is wrong or expired, or this gateway wants another auth method",
+  "status_403": "Forbidden (403): this key can’t use this model or endpoint",
+  "status_404": "Not found (404): the Base URL may be wrong (it should be Anthropic Messages compatible)",
+  "status_429": "Rate limited (429): try again later, or the quota is used up",
+  "status_other": "The gateway returned {status}",
+  "said": "{head}: {said}",
+  "models_unreadable": "Couldn’t read the gateway’s model list"
+}

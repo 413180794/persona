@@ -299,6 +299,20 @@ struct AssistantTopBar: View {
         model.toast = Toast("下一条消息起使用 \(what)", style: .success)
     }
 
+    /// What the conversation runs with no pick of its own: 主对话 the launcher in 设置 › 助手, another its own.
+    private var defaultLauncher: String {
+        if let key, key != model.assistantMain, let l = session?.launcher, !l.isEmpty { return l }
+        return model.assistantConfig?.launcher ?? "claude"
+    }
+
+    private func pickDefault() {
+        guard let key else { return }
+        model.assistantLaunchers[key] = nil
+        model.assistantModels[key] = nil
+        Haptics.tap()
+        model.toast = Toast("下一条消息起使用默认的 \(defaultLauncher)", style: .success)
+    }
+
     /// Each launcher's /model list; a failure just leaves the submenu without entries.
     private func loadModelOptions() async {
         let machine = model.hubRef(machineID)
@@ -338,6 +352,12 @@ struct AssistantTopBar: View {
             }
         }
         Section(menuTitle) {
+            // The Agent SDK could not run here (#2455): it says so, and why.
+            if session?.runtimeFallback?.isEmpty == false,
+               let r = AssistantRuntime.status(runtime: session?.runtime, fallback: session?.runtimeFallback) {
+                Button { showInfo = true } label: { Label(r, systemImage: Theme.Icon.error) }
+                    .accessibilityIdentifier("assistant-runtime-fallback")
+            }
             if link != .online {
                 Button { showLink = true } label: { Label("连接详情", systemImage: Theme.Icon.offline) }
             }
@@ -365,6 +385,11 @@ struct AssistantTopBar: View {
             Section {
                 Menu {
                     Section("下一条消息起使用") {
+                        // The conversation's own launcher (for 主对话 the one in 设置 › 助手): no pick of this chat's.
+                        Button { pickDefault() } label: {
+                            if model.assistantLaunchers[key] == nil, pickedModel == nil { Label("默认：\(defaultLauncher)", systemImage: Theme.Icon.done) }
+                            else { Text("默认：\(defaultLauncher)") }
+                        }
                         ForEach(launchers) { l in
                             Menu {
                                 Button { pick(l.name, model: nil) } label: {
@@ -378,7 +403,9 @@ struct AssistantTopBar: View {
                                 }
                             } label: {
                                 let title = [l.name, Fmt.model(l.model)].compactMap { $0 }.joined(separator: " · ")
-                                if l.name == launcher { Label(title, systemImage: Theme.Icon.done) } else { Text(title) }
+                                if l.name == launcher, model.assistantLaunchers[key] != nil {
+                                    Label { Text(title); Text("仅这一次") } icon: { Image(systemName: Theme.Icon.done) }
+                                } else if l.name == launcher { Label(title, systemImage: Theme.Icon.done) } else { Text(title) }
                             }
                         }
                     }

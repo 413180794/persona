@@ -21,5 +21,20 @@
   "err_no_models": "This provider has no models to list",
   "err_api_no_models": "A direct API connection has no models to list",
   "err_no_provider": "No such provider",
-  "err_all_offline": "No computer with this launcher is online, so its models can’t be listed"
+  "err_all_offline": "No computer with this launcher is online, so its models can’t be listed",
+  "err_effort_default": "Default thinking effort {effort} isn’t supported (use {levels})",
+  "err_effort_model": "Thinking effort {effort} of model {model} isn’t supported (use {levels})",
+  "err_effort_model_default": "Default thinking effort {effort} of model {model} isn’t supported (use {levels})",
+  "err_header_line": "Header line {line} must be “Name: value”",
+  "err_model_no_id": "A model in the list has no ID",
+  "err_model_duplicate": "Model {model} is listed twice",
+  "err_model_context_negative": "The context window of model {model} can’t be negative",
+  "err_model_effort_empty": "Model {model} has an empty thinking effort",
+  "err_model_default_effort_unlisted": "The default thinking effort of model {model} isn’t one it supports",
+  "err_timeout_negative": "Timeout can’t be negative",
+  "err_compact_window_negative": "Compaction window can’t be negative",
+  "err_max_context_negative": "Max context can’t be negative",
+  "err_proxy": "Proxy must start with http(s):// or socks5://",
+  "err_proxy_credentials": "Proxy can't carry a username or password",
+  "err_tier_model_long": "A tier model name is too long"
 }

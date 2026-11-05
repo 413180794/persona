@@ -1,0 +1,396 @@
+// 设置 › 模型供应商 (#2455, docs/launchers.md): the add / edit wizard's form (cindy's AddProviderWizard: pick → connect
+// → models, the rest folded under 高级), its checks, the POST / PUT body, and 从 ~/.zshrc 导入's preview. Pure: the views
+// in views/settings/Provider*.tsx only render it.
+import { ApiError, errorText } from "./api";
+import { hostOf as urlHost } from "./hubs";
+import { launcherNameProblem } from "./launcher-presets";
+import { EFFORTS } from "./session-actions";
+import { t } from "../i18n";
+
+/** Claude Code's thinking levels (proto.EffortLevels), in order. */
+export const EFFORT_LEVELS = EFFORTS.map((e) => e.id);
+
+/** proto.ProviderModel. */
+export interface ProviderModel {
+  id: string;
+  name?: string;
+  context_window?: number;
+  efforts?: string[];
+  default_effort?: string;
+}
+
+/** GET /api/v1/launchers' managed launcher (hub LauncherView): never the key or the headers, only has_key / has_headers. */
+export interface ProviderView {
+  name: string;
+  kind?: "launcher" | "api";
+  api?: "messages" | "responses";
+  base_url?: string;
+  model?: string;
+  small_model?: string;
+  subagent_model?: string;
+  custom_model?: string;
+  custom_model_name?: string;
+  custom_model_description?: string;
+  args?: string[];
+  has_key?: boolean;
+  auth?: "api_key" | "bearer";
+  models?: ProviderModel[];
+  opus_model?: string;
+  sonnet_model?: string;
+  haiku_model?: string;
+  fable_model?: string;
+  subagent_force?: boolean;
+  has_headers?: boolean;
+  proxy?: string;
+  no_proxy?: string;
+  timeout_ms?: number;
+  compact_window?: number;
+  max_context?: number;
+  effort?: string;
+  /** ManagedLauncher.Source: "" made by hand, "zshrc:<alias>@<machine>", "preset:<id>". */
+  origin?: string;
+}
+
+/** Step 1's choice. */
+export type ProviderPreset = "official" | "custom";
+export const OFFICIAL_BASE_URL = "https://api.anthropic.com";
+
+/** One model row of step 3: numbers as typed. */
+export interface FormModel {
+  id: string;
+  name: string;
+  context_window: string;
+  efforts: string[];
+  default_effort: string;
+  checked: boolean;
+}
+
+export interface ProviderForm {
+  kind: "launcher" | "api";
+  api: "messages" | "responses";
+  name: string;
+  base_url: string;
+  auth: "bearer" | "api_key";
+  api_key: string;
+  models: FormModel[];
+  /** The default model: one of the checked models. */
+  model: string;
+  small_model: string;
+  subagent_model: string;
+  subagent_force: boolean;
+  opus_model: string;
+  sonnet_model: string;
+  haiku_model: string;
+  fable_model: string;
+  /** "Name: value" a line; only sent when touched (a stored one is never shown). */
+  headers: string;
+  headers_touched: boolean;
+  proxy: string;
+  no_proxy: string;
+  timeout_ms: string;
+  compact_window: string;
+  max_context: string;
+  effort: string;
+  custom_model: string;
+  custom_model_name: string;
+  custom_model_description: string;
+  args: string;
+}
+
+export function newForm(preset: ProviderPreset = "custom"): ProviderForm {
+  return {
+    kind: "launcher",
+    api: "messages",
+    name: "",
+    // the official API takes the key as x-api-key; gateways mostly want Bearer (ANTHROPIC_AUTH_TOKEN)
+    base_url: preset === "official" ? OFFICIAL_BASE_URL : "",
+    auth: preset === "official" ? "api_key" : "bearer",
+    api_key: "",
+    models: [],
+    model: "",
+    small_model: "",
+    subagent_model: "",
+    subagent_force: false,
+    opus_model: "",
+    sonnet_model: "",
+    haiku_model: "",
+    fable_model: "",
+    headers: "",
+    headers_touched: false,
+    proxy: "",
+    no_proxy: "",
+    timeout_ms: "",
+    compact_window: "",
+    max_context: "",
+    effort: "",
+    custom_model: "",
+    custom_model_name: "",
+    custom_model_description: "",
+    args: "",
+  };
+}
+
+const numText = (n?: number) => (n ? String(n) : "");
+
+export function formModel(m: ProviderModel, checked = true): FormModel {
+  return { id: m.id, name: m.name ?? "", context_window: numText(m.context_window), efforts: [...(m.efforts ?? [])], default_effort: m.default_effort ?? "", checked };
+}
+
+/** Which of step 1's choices a saved provider is. */
+export const presetOf = (base_url?: string): ProviderPreset => (base_url?.replace(/\/+$/, "") === OFFICIAL_BASE_URL ? "official" : "custom");
+
+/** The form an existing provider opens with: its models checked, the default among them even when not listed. */
+export function formFromView(v: ProviderView): ProviderForm {
+  const models = (v.models ?? []).map((m) => formModel(m));
+  if (v.model && !models.some((m) => m.id === v.model)) models.unshift(formModel({ id: v.model }));
+  return {
+    ...newForm(presetOf(v.base_url)),
+    kind: v.kind ?? "launcher",
+    api: v.api ?? "messages",
+    name: v.name,
+    base_url: v.base_url ?? "",
+    auth: v.auth ?? "api_key",
+    models,
+    model: v.model ?? "",
+    small_model: v.small_model ?? "",
+    subagent_model: v.subagent_model ?? "",
+    subagent_force: !!v.subagent_force,
+    opus_model: v.opus_model ?? "",
+    sonnet_model: v.sonnet_model ?? "",
+    haiku_model: v.haiku_model ?? "",
+    fable_model: v.fable_model ?? "",
+    proxy: v.proxy ?? "",
+    no_proxy: v.no_proxy ?? "",
+    timeout_ms: numText(v.timeout_ms),
+    compact_window: numText(v.compact_window),
+    max_context: numText(v.max_context),
+    effort: v.effort ?? "",
+    custom_model: v.custom_model ?? "",
+    custom_model_name: v.custom_model_name ?? "",
+    custom_model_description: v.custom_model_description ?? "",
+    args: (v.args ?? []).join(" "),
+  };
+}
+
+/** Up to this many discovered models come checked when there were none yet; a longer list is picked by hand. */
+export const AUTO_CHECK = 8;
+
+/** Discovered models merged in: new ones added unchecked (all checked when nothing was there and the list is short),
+ *  what was typed kept. */
+export function mergeDiscovered(models: FormModel[], found: ProviderModel[]): FormModel[] {
+  const out = [...models];
+  const first = models.length === 0 && found.length <= AUTO_CHECK;
+  for (const m of found) {
+    const i = out.findIndex((x) => x.id === m.id);
+    if (i < 0) out.push(formModel(m, first));
+    else if (!out[i].context_window && m.context_window) out[i] = { ...out[i], context_window: String(m.context_window), efforts: out[i].efforts.length ? out[i].efforts : [...(m.efforts ?? [])] };
+  }
+  return out;
+}
+
+const nonNegInt = (s: string) => s.trim() === "" || /^\d+$/.test(s.trim());
+
+export function gatewayProblem(raw: string): string {
+  const s = raw.trim();
+  if (!s) return t("lib-providers.url_required");
+  let u: URL;
+  try {
+    u = new URL(s);
+  } catch {
+    return t("lib-providers.url_scheme");
+  }
+  if ((u.protocol !== "http:" && u.protocol !== "https:") || !u.host) return t("lib-providers.url_scheme");
+  if (u.username || u.password || u.search || u.hash) return t("lib-providers.url_extras");
+  return "";
+}
+
+export function headersProblem(raw: string): string {
+  const lines = raw.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const at = line.indexOf(":");
+    const name = at < 0 ? "" : line.slice(0, at).trim();
+    if (!name || /\s/.test(name)) return t("lib-providers.header_line", { line: i + 1 });
+  }
+  return "";
+}
+
+export function proxyProblem(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  try {
+    const u = new URL(s);
+    if (["http:", "https:", "socks5:", "socks5h:"].includes(u.protocol) && u.host) return "";
+  } catch {
+    /* falls through */
+  }
+  return t("lib-providers.proxy_scheme");
+}
+
+/** What keeps each step from going on ("" when it can): the same rules the hub checks (launchers.go), said earlier. */
+export interface FormProblems {
+  connect: string;
+  models: string;
+  advanced: string;
+}
+
+export function formProblems(f: ProviderForm, isNew: boolean, hadKey = false): FormProblems {
+  const connect =
+    (!f.name.trim() && t("lib-providers.name_required")) || (isNew && launcherNameProblem(f.name)) || gatewayProblem(f.base_url) || (!f.api_key.trim() && (isNew || !hadKey) && t("lib-providers.key_required")) || "";
+
+  let models = "";
+  const checked = f.models.filter((m) => m.checked);
+  const ids = new Set<string>();
+  for (const m of checked) {
+    const id = m.id.trim();
+    if (!id) models = t("lib-providers.model_no_id");
+    else if (ids.has(id)) models = t("lib-providers.model_duplicate", { id });
+    else if (!nonNegInt(m.context_window)) models = t("lib-providers.model_context_int", { id });
+    else if (m.default_effort && m.efforts.length > 0 && !m.efforts.includes(m.default_effort)) models = t("lib-providers.model_effort_unsupported", { id });
+    if (models) break;
+    ids.add(id);
+  }
+  if (!models && !f.model.trim()) models = checked.length ? t("lib-providers.pick_default") : t("lib-providers.add_model");
+  else if (!models && !ids.has(f.model.trim())) models = t("lib-providers.default_unchecked");
+
+  const advanced =
+    (f.headers_touched && headersProblem(f.headers)) ||
+    proxyProblem(f.proxy) ||
+    (!nonNegInt(f.timeout_ms) && t("lib-providers.timeout_int")) ||
+    (!nonNegInt(f.compact_window) && t("lib-providers.compact_int")) ||
+    (!nonNegInt(f.max_context) && t("lib-providers.max_context_int")) ||
+    (f.kind !== "api" && f.args.split(/\s+/).some((a) => a && !a.startsWith("-")) && t("lib-providers.args_dash")) ||
+    "";
+  return { connect, models, advanced };
+}
+
+const int = (s: string) => (s.trim() ? parseInt(s.trim(), 10) : 0);
+
+function modelsOf(f: ProviderForm): ProviderModel[] {
+  return f.models
+    .filter((m) => m.checked && m.id.trim())
+    .map((m) => {
+      const out: ProviderModel = { id: m.id.trim() };
+      if (m.name.trim()) out.name = m.name.trim();
+      if (int(m.context_window)) out.context_window = int(m.context_window);
+      if (m.efforts.length) out.efforts = [...m.efforts];
+      if (m.default_effort) out.default_effort = m.default_effort;
+      return out;
+    });
+}
+
+const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** #2455's fields as the hub takes them (the pointer ones: left out keeps what is stored). */
+function extraFields(f: ProviderForm): Record<string, unknown> {
+  return {
+    models: modelsOf(f),
+    opus_model: f.opus_model.trim(),
+    sonnet_model: f.sonnet_model.trim(),
+    haiku_model: f.haiku_model.trim(),
+    fable_model: f.fable_model.trim(),
+    subagent_force: f.subagent_force,
+    proxy: f.proxy.trim(),
+    no_proxy: f.no_proxy.trim(),
+    timeout_ms: int(f.timeout_ms),
+    compact_window: int(f.compact_window),
+    max_context: int(f.max_context),
+    effort: f.effort,
+  };
+}
+
+/** POST / PUT /api/v1/launchers' body. The base fields always go (the hub replaces them); #2455's fields on a PUT only
+ *  when they changed from `old` (left out keeps what is stored), the headers only when touched ("" clears them), the key
+ *  only when typed. */
+export function providerBody(f: ProviderForm, old: ProviderView | null): Record<string, unknown> {
+  const api = f.kind === "api";
+  const responses = api && f.api === "responses";
+  const body: Record<string, unknown> = {
+    name: f.name.trim(),
+    kind: f.kind,
+    api: api ? f.api : "messages",
+    base_url: f.base_url.trim(),
+    model: f.model.trim(),
+    small_model: api ? "" : f.small_model.trim(),
+    subagent_model: api ? "" : f.subagent_model.trim(),
+    custom_model: api ? "" : f.custom_model.trim(),
+    custom_model_name: api ? "" : f.custom_model_name.trim(),
+    custom_model_description: api ? "" : f.custom_model_description.trim(),
+    args: api ? [] : f.args.split(/\s+/).filter(Boolean),
+    auth: responses ? "api_key" : f.auth,
+  };
+  if (f.api_key.trim()) body.api_key = f.api_key.trim();
+  const extra = extraFields(f);
+  const before = old && extraFields(formFromView(old));
+  for (const [k, v] of Object.entries(extra)) {
+    if (before ? !sameJSON(before[k], v) : v !== "" && v !== 0 && v !== false && !(Array.isArray(v) && v.length === 0)) body[k] = v;
+  }
+  if (f.headers_touched) body.headers = f.headers.trim();
+  return body;
+}
+
+/** POST /api/v1/launchers/test and /discover's body: by name when editing (the stored key and headers), what is typed over it. */
+export function probeBody(f: ProviderForm, stored: string | null, model?: string): Record<string, unknown> {
+  const b: Record<string, unknown> = { base_url: f.base_url.trim(), auth: f.auth };
+  if (stored) b.name = stored;
+  if (f.api_key.trim()) b.api_key = f.api_key.trim();
+  if (f.headers_touched) b.headers = f.headers.trim();
+  if (model !== undefined) b.model = model;
+  return b;
+}
+
+export interface TestResult {
+  ok: boolean;
+  ms: number;
+  model?: string;
+  error?: string;
+}
+
+export const testText = (r: TestResult) => (r.ok ? t("lib-providers.test_ok", { ms: r.ms }) : r.error || t("lib-providers.test_failed"));
+
+/** The model 测试连接 asks with: the default, else the first checked, else the first listed. */
+export const testModel = (f: ProviderForm) => f.model.trim() || f.models.find((m) => m.checked)?.id || f.models[0]?.id || "";
+
+// ── 从 ~/.zshrc 导入 ────────────────────────────────────
+
+/** GET /api/v1/launchers/import's provider (no key, no headers). */
+export interface ImportedProvider extends Omit<ProviderView, "origin"> {
+  aliases: string[];
+  existing?: string;
+  source?: string;
+}
+
+export interface ImportRow {
+  name: string;
+  host: string;
+  models: string;
+  aliases: string;
+  /** 「合并到 xx」 or 「新建」. */
+  action: string;
+  merge: boolean;
+}
+
+export const hostOf = (u?: string) => (u ? urlHost(u) : "");
+
+export function importRow(p: ImportedProvider): ImportRow {
+  const n = new Set([...(p.models ?? []).map((m) => m.id), ...(p.model ? [p.model] : [])]).size;
+  return {
+    name: p.name,
+    host: hostOf(p.base_url) || t("lib-providers.official_host"),
+    models: t("lib-providers.model_count", { count: n }),
+    aliases: (p.aliases ?? []).join(t("lib-providers.alias_separator")),
+    action: p.existing ? t("lib-providers.merge_into", { name: p.existing }) : t("lib-providers.create"),
+    merge: !!p.existing,
+  };
+}
+
+export const importSummary = (r: { created?: string[]; updated?: string[] }) =>
+  t("lib-providers.import_summary", { created: r.created?.length ?? 0, updated: r.updated?.length ?? 0 });
+
+/** What a failed import says: the two cases the hub names, otherwise its message. */
+export function importErrorText(e: unknown): string {
+  if (e instanceof ApiError && e.status === 409 && e.code === "node_outdated") return t("lib-providers.node_outdated");
+  if (e instanceof ApiError && e.status === 503 && e.code === "offline") return t("lib-providers.offline");
+  return errorText(e);
+}

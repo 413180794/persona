@@ -30,15 +30,7 @@ import Observation
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
     /// What is wrong with the name as typed, the way the hub would put it; nil while empty or fine.
-    var nameProblem: String? {
-        let n = trimmedName
-        guard !n.isEmpty else { return nil }
-        if n.range(of: "^[A-Za-z_][A-Za-z0-9_-]*$", options: .regularExpression) == nil {
-            return "名字只能用字母、数字、_ 和 -，以字母或 _ 开头"
-        }
-        if n == "claude" || n == "presets" { return "不能叫 \(n)" }
-        return nil
-    }
+    var nameProblem: String? { LauncherName.problem(name) }
 
     var canSave: Bool {
         selected != nil && !trimmedName.isEmpty && nameProblem == nil

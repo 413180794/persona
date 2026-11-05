@@ -57,6 +57,12 @@ struct NewChatView: View {
 
     /// The launcher that will run: the one picked, or 模型配置's.
     private var runLauncher: String { launcher.isEmpty && unifiedModels ? defaultLauncher : launcher }
+    /// 「默认：jv_strong · glm-5」: what runs with no pick, as the machine's launchers say (#2455), else 模型配置's.
+    private var defaultLabel: String {
+        model.launcherDefaults[ref]?.label
+            ?? LauncherDefault(provider: defaultLauncher.isEmpty ? nil : "launcher." + defaultLauncher, model: configuredModel).label
+            ?? "跟随模型配置"
+    }
 
     /// The launcher runs Codex: it starts with its first message (Codex makes the thread then) and the start waits for it.
     private var codex: Bool { launchers.first(where: { $0.name == runLauncher })?.isCodex == true }
@@ -154,12 +160,16 @@ struct NewChatView: View {
 
                 Section {
                     NavigationLink {
-                        LauncherPicker(launchers: launchers, selection: $launcher, allowDefault: unifiedModels)
+                        LauncherPicker(launchers: launchers, selection: $launcher, allowDefault: unifiedModels, defaultLabel: defaultLabel)
                     } label: {
                         HStack {
                             Image(systemName: Theme.Icon.model).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                                Text(launcher.isEmpty ? (unifiedModels ? "跟随模型配置" : "选择启动器") : launcher).font(Theme.Font.heading.monospaced()).lineLimit(1)
+                                HStack(spacing: Theme.Space.sm) {
+                                    Text(launcher.isEmpty ? (unifiedModels ? defaultLabel : "选择启动器") : launcher).font(Theme.Font.heading.monospaced()).lineLimit(1)
+                                    // A pick over the default is for this start only.
+                                    if unifiedModels, !launcher.isEmpty { Chip(text: "仅这一次") }
+                                }
                                 if let l = launchers.first(where: { $0.name == launcher }), let m = l.model, !m.isEmpty {
                                     Text(m).font(Theme.Font.label).foregroundStyle(.secondary)
                                 }
@@ -484,6 +494,8 @@ struct LauncherPicker: View {
     var launchers: [Launcher]
     @Binding var selection: String
     var allowDefault = false
+    /// The first row's words: 「默认：…」 (what runs with no pick).
+    var defaultLabel = "跟随模型配置"
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
@@ -494,8 +506,13 @@ struct LauncherPicker: View {
                     selection = ""
                     dismiss()
                 } label: {
-                    Label("跟随模型配置", systemImage: Theme.Icon.model).lineLimit(1)
+                    HStack {
+                        Label(defaultLabel, systemImage: Theme.Icon.model).lineLimit(1)
+                        Spacer()
+                        if selection.isEmpty { Image(systemName: Theme.Icon.done).foregroundStyle(Theme.accent).fontWeight(.semibold) }
+                    }
                 }
+                .accessibilityIdentifier("launcherPicker.default")
             }
             ForEach(launchers.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || ($0.model ?? "").localizedCaseInsensitiveContains(query) }) { l in
                 Button {
@@ -507,6 +524,7 @@ struct LauncherPicker: View {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text(l.name).font(Theme.Font.heading.monospaced()).foregroundStyle(.primary)
                             HStack(spacing: Theme.Space.sm) {
+                                if allowDefault, l.name == selection { Chip(text: "仅这一次", look: .tint(Theme.accent)) }
                                 if l.isCodex { Chip(text: "Codex") }
                                 if let m = l.model, !m.isEmpty { Chip(text: m) }
                                 if let host = l.baseURL.flatMap({ URL(string: $0)?.host() }) {

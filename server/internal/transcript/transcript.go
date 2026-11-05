@@ -190,6 +190,26 @@ type Meta struct {
 // through `botmux send`: a word for botmux, not the answer.
 const botmuxSentinel = "BOTMUX_NOTHING_TO_SEND"
 
+// Some Anthropic-compatible proxies have a "thinking as text" mode: the thinking block comes back as a text block whose
+// lines are each wrapped in ANSI dim italic, opening with "💭 Thinking" and closing with "💭 Thought for Ns (N tokens)",
+// so a terminal shows the reasoning inline. That is thinking, not the agent's words.
+const (
+	thinkingTextOpen = "\x1b[2;3m💭 Thinking\x1b[0m"
+	thinkingTextMark = "💭 Thought for "
+)
+
+// thinkingAsText is the reasoning in a proxy's thinking-as-text block, without its styling and marker lines; ok is
+// false when text is not such a block.
+func thinkingAsText(text string) (thinking string, ok bool) {
+	rest, ok := strings.CutPrefix(strings.TrimLeft(text, " \t\r\n"), thinkingTextOpen)
+	if !ok {
+		return "", false
+	}
+	lines := strings.Split(ansiRe.ReplaceAllString(rest, ""), "\n")
+	lines = slices.DeleteFunc(lines, func(l string) bool { return strings.HasPrefix(strings.TrimSpace(l), thinkingTextMark) })
+	return strings.TrimSpace(strings.Join(lines, "\n")), true
+}
+
 // withoutBotmuxSentinel is text without its botmux sentinel lines, "" when that is all it says (LastText then stays the
 // turn's earlier words).
 func withoutBotmuxSentinel(text string) string {
@@ -545,6 +565,14 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			switch b.Type {
 			case "text":
 				if strings.TrimSpace(b.Text) == "" {
+					continue
+				}
+				if t, ok := thinkingAsText(b.Text); ok {
+					if t != "" {
+						it := mk(i, "assistant", proto.KindThinking)
+						it.Text = clip(t)
+						out = append(out, it)
+					}
 					continue
 				}
 				it := mk(i, "assistant", proto.KindText)

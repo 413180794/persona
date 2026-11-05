@@ -57,6 +57,51 @@ func TestModelFingerprintTracksManagedProviderChanges(t *testing.T) {
 	}
 }
 
+// The runtime (#2455) and every provider field are in the fingerprint; "cli" is the CLI as "" is, and a fingerprint
+// without a runtime is what it was before.
+func TestModelFingerprintTracksRuntimeAndProviderFields(t *testing.T) {
+	n, _ := testNode(t)
+	base := proto.ManagedLauncher{Name: "p", Kind: "api", BaseURL: "https://gw.example.com", APIKey: "sk-test-k", Model: "m"}
+	opt := modelExecution{Model: "m", Fingerprint: "b"}
+	n.setManaged([]proto.ManagedLauncher{base})
+	plain := n.executionFingerprint("p", opt)
+	cli := opt
+	cli.Runtime = proto.AssistantRuntimeCLI
+	if n.executionFingerprint("p", cli) != plain {
+		t.Fatal(`"cli" differs from ""`)
+	}
+	sdk := opt
+	sdk.Runtime = proto.AssistantRuntimeAgentSDK
+	if n.executionFingerprint("p", sdk) == plain {
+		t.Fatal("runtime change reused old process")
+	}
+	if raw, _ := json.Marshal(opt); strings.Contains(string(raw), "Runtime") {
+		t.Fatalf("an empty runtime changes old fingerprints: %s", raw)
+	}
+	for name, change := range map[string]func(*proto.ManagedLauncher){
+		"models":         func(l *proto.ManagedLauncher) { l.Models = []proto.ProviderModel{{ID: "m", ContextWindow: 1000000}} },
+		"opus":           func(l *proto.ManagedLauncher) { l.OpusModel = "o" },
+		"sonnet":         func(l *proto.ManagedLauncher) { l.SonnetModel = "s" },
+		"haiku":          func(l *proto.ManagedLauncher) { l.HaikuModel = "h" },
+		"fable":          func(l *proto.ManagedLauncher) { l.FableModel = "f" },
+		"subagent force": func(l *proto.ManagedLauncher) { l.SubagentForce = true },
+		"headers":        func(l *proto.ManagedLauncher) { l.Headers = "X-Test: 1" },
+		"proxy":          func(l *proto.ManagedLauncher) { l.Proxy = "http://proxy.example.com" },
+		"no proxy":       func(l *proto.ManagedLauncher) { l.NoProxy = "localhost" },
+		"timeout":        func(l *proto.ManagedLauncher) { l.TimeoutMS = 1 },
+		"compact":        func(l *proto.ManagedLauncher) { l.CompactWindow = 1 },
+		"max context":    func(l *proto.ManagedLauncher) { l.MaxContext = 1 },
+		"effort":         func(l *proto.ManagedLauncher) { l.Effort = "high" },
+	} {
+		l := base
+		change(&l)
+		n.setManaged([]proto.ManagedLauncher{l})
+		if n.executionFingerprint("p", opt) == plain {
+			t.Errorf("%s change reused old process", name)
+		}
+	}
+}
+
 // A conversation answering or running background tasks takes a message whose model changed on what it runs: a new
 // process would kill the tasks, and refusing it left the user unable to send while it kept starting more (#1554). The
 // switch waits for the first message after it is idle.

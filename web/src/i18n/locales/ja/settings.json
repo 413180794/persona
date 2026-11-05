@@ -144,5 +144,17 @@
   "no_devices": "デバイスはまだありません。",
   "revoked_title": "取り消し済み {count}",
   "auth_api_key": "x-api-key（ANTHROPIC_API_KEY）",
-  "auth_bearer": "Bearer（ANTHROPIC_AUTH_TOKEN）"
+  "auth_bearer": "Bearer（ANTHROPIC_AUTH_TOKEN）",
+  "add_provider_short": "追加",
+  "model_list": "モデル一覧",
+  "model_count_other": "{count}件",
+  "tier_model": "{tier}ティア",
+  "subagent": "サブエージェント",
+  "subagent_force": "常にサブエージェントモデルを使用",
+  "headers": "リクエストヘッダー",
+  "proxy": "プロキシ",
+  "timeout": "タイムアウト",
+  "max_context": "最大コンテキスト",
+  "default_effort": "デフォルトの思考の強さ",
+  "from_zshrc": "~/.zshrcから読み込み"
 }

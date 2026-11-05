@@ -36,7 +36,8 @@ RUN go mod download
 COPY server/ ./
 COPY --from=web /src/web/dist/ internal/hub/webdist/
 # The runtime packages jarvisd carries and keeps its runtimes on (docs/runtimes.md「自动更新」): the DSH plugin's and
-# the pi extension's and the Paseo bridge's code.
+# the pi extension's, the Paseo bridge's and the Agent SDK bridge's code.
+COPY integrations/agent-sdk/ /src/integrations/agent-sdk/
 COPY integrations/dsh/ /src/integrations/dsh/
 COPY integrations/paseo/ /src/integrations/paseo/
 COPY integrations/pi/ /src/integrations/pi/

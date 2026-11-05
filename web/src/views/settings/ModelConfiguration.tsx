@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
 import { extRoot } from "../../lib/extension-api";
 import {
-  chooseProvider, draftFor, modelConfiguration, modelPurpose, modelSummary, providersFor, purposeGroups, saveModelPurpose, supportsField,
+  chooseProvider, draftFor, modelConfiguration, modelPurpose, modelSummary, providersFor, purposeGroups, runtimeChoices, runtimeLabel, saveModelPurpose, supportsField,
   type ModelBinding, type ModelConfigurationBody, type ModelDraft, type ModelPurposeBody,
 } from "../../lib/model-config";
 import { effortChoices, providerModels, takesEffort } from "../../lib/launcher-models";
 import { useStore } from "../../lib/store";
 import { t } from "../../i18n";
 import { Button, Dialog, IconButton, Loading, toast } from "../../ui/atoms";
+import { Segmented } from "../assistant/parts";
 import { Icon } from "../../ui/icons";
 import { ModelPicker, type ModelList } from "../../ui/ModelPicker";
 import { Group, Pill, Row } from "./SettingsParts";
@@ -63,7 +64,7 @@ const inputClass = "h-9 w-full rounded-control bg-field px-3 text-[13px] text-in
 
 function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null; sourceName: (id?: string) => string | undefined; onClose: () => void; onSaved: () => void }) {
   const [data, setData] = useState<ModelPurposeBody | null>(null);
-  const [draft, setDraft] = useState<ModelDraft>({ provider: "", model: "", effort: "" });
+  const [draft, setDraft] = useState<ModelDraft>({ provider: "", model: "", effort: "", runtime: "" });
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -126,13 +127,14 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
   const inherited: ModelBinding = !draft.provider && !p?.override?.model && p?.effective?.model ? { model: p.effective.model } : {};
   const listedEfforts = launcherList.status === "ready" && launcherList.list && takesEffort(launcherList.list.agent)
     ? effortChoices(launcherList.list, draft.model, inherited) : ["low", "medium", "high", "xhigh", "max"];
+  const runtimes = p ? runtimeChoices(p) : [];
   const listMachine = machines.find((m) => m.id === launcherList.machine)?.name ?? launcherList.machine;
   const save = async (restore = false) => {
     if (!p || busy || conflict) return;
     setBusy(true);
     setError("");
     try {
-      const r = await saveModelPurpose(p, restore ? { provider: "", model: "", effort: "" } : draft);
+      const r = await saveModelPurpose(p, restore ? { provider: "", model: "", effort: "", runtime: draft.runtime } : draft);
       setData(r);
       setDraft(draftFor(r.purpose));
       toast(restore ? t("settings-modelconfiguration.restored") : t("settings-modelconfiguration.saved"), "ok");
@@ -161,6 +163,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
         <Group title={t("settings-modelconfiguration.effective")} footer={p.inherited_from ? t("settings-modelconfiguration.inherited_from", { name: sourceName(p.inherited_from) ?? "" }) : t("settings-modelconfiguration.effective_footer")}>
           <Row label={t("settings-modelconfiguration.provider")} mono><span className="max-w-[220px] truncate">{data?.providers.find((v) => v.id === p.effective?.provider)?.name ?? p.effective?.provider ?? t("settings-modelconfiguration.not_configured")}</span></Row>
           <Row label={t("settings-modelconfiguration.model")} mono><span className="max-w-[220px] truncate">{p.effective?.model || t("settings-modelconfiguration.provider_default")}</span></Row>
+          {runtimes.length > 0 && <Row label={t("settings-modelconfiguration.runtime")}><span>{runtimeLabel(p.effective?.runtime)}</span></Row>}
           {p.status && <Row label={t("settings-modelconfiguration.status")}><Pill>{p.status}</Pill></Row>}
         </Group>
         {supportsField(p, "provider") && <label className="block">
@@ -215,6 +218,12 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
             onChange={(e) => setDraft((d) => ({ ...d, effort: e.target.value }))} />
           <datalist id="model-efforts">{listedEfforts.map((v) => <option key={v} value={v} />)}</datalist>
         </label>}
+        {runtimes.length > 0 && <div className="block">
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-modelconfiguration.runtime")}</span>
+          <Segmented label={t("settings-modelconfiguration.runtime")} value={draft.runtime} options={runtimes.map((r) => ({ v: r.id, label: r.label }))}
+            onChange={(runtime) => { if (!busy) setDraft((d) => ({ ...d, runtime })); }} />
+          <span className="mt-1 block text-[11px] text-ink-3">{t("settings-modelconfiguration.runtime_hint")}</span>
+        </div>}
         <p className="text-[11.5px] leading-relaxed text-ink-3">{p.kind === "plugin" ? t("settings-modelconfiguration.save_note_plugin") : t("settings-modelconfiguration.save_note")}</p>
       </div>}
       {error && <p role="alert" className="mt-3 text-[12px] text-red">{error}</p>}

@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // modelExecution is non-secret per-turn execution metadata supplied by the hub.
@@ -15,6 +17,9 @@ type modelExecution struct {
 	Effort      string
 	UseEffort   bool
 	Fingerprint string
+	// Runtime: the assistant's runtime, proto.AssistantRuntimeAgentSDK or "" (the CLI; "cli" reads as ""). Omitted
+	// when empty so a fingerprint from before #2455 stays the same.
+	Runtime string `json:",omitempty"`
 }
 
 func (m modelExecution) check() error {
@@ -24,8 +29,12 @@ func (m modelExecution) check() error {
 	return validModes("", m.Effort)
 }
 
-// executionFingerprint also detects a managed provider changed before the next turn.
+// executionFingerprint also detects a managed provider changed before the next turn (any of its fields, the #2455 ones
+// included), and the runtime changed: another process, resumed on the same conversation.
 func (n *Node) executionFingerprint(launcher string, m modelExecution) string {
+	if m.Runtime == proto.AssistantRuntimeCLI {
+		m.Runtime = ""
+	}
 	raw, _ := json.Marshal(m)
 	if l, ok := n.managedLauncher(launcher); ok {
 		v, _ := json.Marshal(l)
@@ -52,9 +61,10 @@ func (n *Node) assistantModel(ctx context.Context, id string) (string, modelExec
 		Model            string `json:"model"`
 		Effort           string `json:"effort"`
 		ModelFingerprint string `json:"model_fingerprint"`
+		Runtime          string `json:"runtime"`
 	}
 	if n.peer == nil || n.peer.Call(ctx, "assistant.model", map[string]any{"session_id": id}, &res) != nil {
 		return "", modelExecution{}
 	}
-	return res.Launcher, modelExecution{Model: res.Model, Effort: res.Effort, UseEffort: res.ModelFingerprint != "", Fingerprint: res.ModelFingerprint}
+	return res.Launcher, modelExecution{Model: res.Model, Effort: res.Effort, UseEffort: res.ModelFingerprint != "", Fingerprint: res.ModelFingerprint, Runtime: res.Runtime}
 }

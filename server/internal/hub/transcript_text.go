@@ -306,6 +306,7 @@ func localizeSession(l i18n.Lang, s *proto.Session) {
 		return
 	}
 	s.Activity = activityText(l, s.Activity)
+	s.RuntimeFallback = runtimeFallbackText(l, s.RuntimeFallback)
 	copied := false
 	for i, b := range s.Background {
 		if b.Description == "超时转到后台的命令" {
@@ -330,4 +331,39 @@ func localizeSession(l i18n.Lang, s *proto.Session) {
 		}
 		s.Queued[i] = tt(l, "queued_from", i18n.Args{"from": fromName(l, from)}) + body
 	}
+}
+
+// runtimeFallbacks are the node's reasons for running an Agent SDK conversation on the CLI (proto.Fallback*) and their
+// keys; the cause after one that takes it stays as it is.
+var runtimeFallbacks = []struct {
+	text, key string
+	cause     bool
+}{
+	{proto.FallbackReadBridge, "fallback_read_bridge", true},
+	{proto.FallbackNoBridge, "fallback_no_bridge", false},
+	{proto.FallbackWriteBridge, "fallback_write_bridge", true},
+	{proto.FallbackNoBridgeScript, "fallback_no_bridge_script", false},
+	{proto.FallbackNoNode, "fallback_no_node", true},
+	{proto.FallbackNoClaude, "fallback_no_claude", true},
+}
+
+// shellLauncherHead, shellLauncherTail: proto.FallbackShellLauncher around the launcher's name.
+var shellLauncherHead, shellLauncherTail, _ = strings.Cut(proto.FallbackShellLauncher, "%s")
+
+// runtimeFallbackText is the node's RuntimeFallback in l; one it does not know stays as it is.
+func runtimeFallbackText(l i18n.Lang, s string) string {
+	if s == "" {
+		return s
+	}
+	for _, f := range runtimeFallbacks {
+		if cause, ok := strings.CutPrefix(s, f.text); ok && (cause == "" || f.cause) {
+			return tt(l, f.key, i18n.Args{"cause": cause})
+		}
+	}
+	if rest, ok := strings.CutPrefix(s, shellLauncherHead); ok {
+		if name, ok := strings.CutSuffix(rest, shellLauncherTail); ok {
+			return tt(l, "fallback_shell_launcher", i18n.Args{"launcher": name})
+		}
+	}
+	return s
 }

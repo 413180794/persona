@@ -2,6 +2,7 @@ package node
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -114,6 +115,9 @@ type assistantProc struct {
 	manual      bool     // the compaction running is the user's (assistant_compact.go): its end is reported
 	requested   bool     // its first request was logged
 	stderrTail  []string // its last assistantStderrTail stderr lines (watchAssistantStderr)
+	runtime     string   // proto.AssistantRuntimeAgentSDK when it runs on the bridge (assistant_sdk.go), "" on the CLI
+	fallback    string   // why it runs on the CLI though asked to run on the Agent SDK
+	sdkVersion  string   // the bridge's SDK version (its ready line)
 
 	turnError     string // the latest turn failed on the model service (#2571)
 	turnErrorKind string // proto.TurnErrorTransient or proto.TurnErrorUser
@@ -279,7 +283,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	execution := executionOption(options)
 	if len(options) == 0 || (execution.Fingerprint == "" && execution.Model == "") {
 		if launcher == "" || launcher == st.Launcher {
-			execution = modelExecution{Model: st.Model, Effort: st.ModelEffort, UseEffort: st.ModelFingerprint != "", Fingerprint: st.ModelFingerprint}
+			execution = modelExecution{Model: st.Model, Effort: st.ModelEffort, UseEffort: st.ModelFingerprint != "", Fingerprint: st.ModelFingerprint, Runtime: st.Runtime}
 		}
 	}
 	if launcher != "" && st.Launcher != "" && launcher != st.Launcher && execution.Fingerprint == "" {
@@ -375,13 +379,13 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 			return "", err
 		}
 	}
-	if st, known := n.state.get(id); !known || st.Launcher != launcher || st.Cwd != cwd || st.Model != execution.Model || st.ModelFingerprint != execution.Fingerprint || st.ModelEffort != execution.Effort {
+	if st, known := n.state.get(id); !known || st.Launcher != launcher || st.Cwd != cwd || st.Model != execution.Model || st.ModelFingerprint != execution.Fingerprint || st.ModelEffort != execution.Effort || st.Runtime != execution.Runtime {
 		started := st.StartedAt
 		if started.IsZero() {
 			started = time.Now().UTC()
 		}
 		st.Launcher, st.Cwd, st.StartedAt = launcher, cwd, started
-		st.Model, st.ModelFingerprint, st.ModelEffort = execution.Model, execution.Fingerprint, execution.Effort
+		st.Model, st.ModelFingerprint, st.ModelEffort, st.Runtime = execution.Model, execution.Fingerprint, execution.Effort, execution.Runtime
 		n.state.put(id, st)
 	}
 
@@ -576,15 +580,8 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	} else {
 		args = append(args, "--session-id", id)
 	}
-	shell, err := interactiveShell()
-	if err != nil {
-		return nil, err
-	}
-	// An interactive shell so ~/.zshrc defines the launcher function; "$@" passes our flags through.
-	cmd := exec.Command(shell, append([]string{"-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)...)
-	cmd.Dir = cwd
 	// Persona's own tools are few and used all the time: load them up front instead of behind ToolSearch.
-	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
+	env := identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
 	gateEnv, releaseGates := n.assistantLarkEnv(cwd) // its addresses at the gate proxy go with the process
 	started := false
 	defer func() {
@@ -592,7 +589,35 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 			releaseGates()
 		}
 	}()
-	cmd.Env = identity.Environment(cmd.Env, gateEnv...)
+	env = identity.Environment(env, gateEnv...)
+	var bridge sdkBridge
+	var fallback string
+	if execution.Runtime == proto.AssistantRuntimeAgentSDK {
+		if bridge, fallback = n.sdkPrepare(context.Background(), launcher); fallback != "" {
+			n.logger.Printf("assistant %s: running on the CLI, not the Agent SDK: %s", short(id), fallback)
+		}
+	}
+	var cmd *exec.Cmd
+	var first []byte // the bridge's persona_start
+	if bridge.script != "" {
+		var mcpConfig map[string]any
+		_ = json.Unmarshal(mcp, &mcpConfig)
+		start := sdkStart{id: id, cwd: cwd, model: execution.Model, permissionMode: startMode, resume: resume, mcp: mcpConfig,
+			allowedTools: n.assistantTools(), settings: settings, plugin: hooks}
+		var err error
+		if cmd, first, err = n.sdkCommand(bridge, launcher, start, env); err != nil {
+			return nil, err
+		}
+	} else {
+		shell, err := interactiveShell()
+		if err != nil {
+			return nil, err
+		}
+		// An interactive shell so ~/.zshrc defines the launcher function; "$@" passes our flags through.
+		cmd = exec.Command(shell, append([]string{"-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)...)
+		cmd.Dir = cwd
+		cmd.Env = env
+	}
 	cmd.SysProcAttr = osproc.GroupAttr() // so stop() can kill the whole group
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -611,7 +636,17 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	}
 	started = true
 	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}), ready: make(chan struct{}),
-		stderrDone: make(chan struct{}), born: time.Now(), lastActive: time.Now(), mode: startMode, canBypass: startMode == proto.ModeBypass, model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
+		stderrDone: make(chan struct{}), born: time.Now(), lastActive: time.Now(), mode: startMode, canBypass: startMode == proto.ModeBypass, model: execution, fingerprint: n.executionFingerprint(launcher, execution),
+		fallback: fallback}
+	if first != nil {
+		p.runtime = proto.AssistantRuntimeAgentSDK
+		if err := p.write(first); err != nil {
+			_ = osproc.StopGroup(cmd.Process.Pid, true)
+			_ = cmd.Wait()
+			releaseGates() // started, but the exit watcher below never runs
+			return nil, fmt.Errorf("start the agent sdk bridge: %w", err)
+		}
+	}
 	if !spare {
 		n.mu.Lock()
 		n.procs[id] = p
@@ -692,6 +727,10 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 		n := p.ownerOr(started) // a resident node's next connection may have taken it over (assistant_keep.go)
 		line := sc.Bytes()
 		if len(line) == 0 || line[0] != '{' { // interactive zsh may print banners
+			continue
+		}
+		// The bridge's own lines: only its ready says it started (an error is the line it prints before it exits).
+		if bytes.Contains(line, []byte(`"persona_bridge"`)) && n.sdkBridgeEvent(p, line) {
 			continue
 		}
 		p.started()
@@ -1072,7 +1111,8 @@ func (n *Node) assistantSessions() []proto.Session {
 		turnError := p.turnError
 		turnErrorKind := p.turnErrorKind
 		p.mu.Unlock()
-		s := proto.Session{SessionID: p.id, Cwd: p.cwd, Status: status, Launcher: p.launcher, UpdatedAt: updated.UTC()}
+		s := proto.Session{SessionID: p.id, Cwd: p.cwd, Status: status, Launcher: p.launcher, UpdatedAt: updated.UTC(),
+			Runtime: p.runtime, RuntimeFallback: p.fallback}
 		if !busy {
 			s.TurnError = turnError
 			s.TurnErrorKind = turnErrorKind

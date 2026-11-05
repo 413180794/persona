@@ -5,8 +5,10 @@ nonisolated struct ModelBinding: Codable, Hashable, Sendable {
     var provider: String?
     var model: String?
     var effort: String?
+    /// The main conversation's runtime (`cli` | `agentsdk`, #2455); only 主对话 has it (`ModelPurpose.runtimes`).
+    var runtime: String? = nil
 
-    var isEmpty: Bool { provider == nil && model == nil && effort == nil }
+    var isEmpty: Bool { provider == nil && model == nil && effort == nil && runtime == nil }
 }
 
 nonisolated struct ModelUse: Codable, Hashable, Sendable {
@@ -31,9 +33,11 @@ nonisolated struct ModelPurpose: Codable, Hashable, Identifiable, Sendable {
     var limit: ModelLimit?
     var fields: [String]?
     var providerIDs: [String]?
+    /// The runtimes 主对话 can run on (`cli`, `agentsdk`); nil for every other use and on an older hub.
+    var runtimes: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, group, kind, parent, override, effective, revision, status, limit, fields, uses
+        case id, name, group, kind, parent, override, effective, revision, status, limit, fields, uses, runtimes
         case categoryID = "category_id"
         case machineID = "machine_id", inheritedFrom = "inherited_from", providerIDs = "provider_ids"
     }
@@ -95,15 +99,37 @@ nonisolated struct ModelConfigurationPatch: Encodable, Sendable {
     var binding: ModelBinding
     var fields: [String]
 
-    enum CodingKeys: String, CodingKey { case revision, provider, model, effort }
+    enum CodingKeys: String, CodingKey { case revision, provider, model, effort, runtime }
 
     func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(revision, forKey: .revision)
         for (field, value, key) in [("provider", binding.provider, CodingKeys.provider),
-                                    ("model", binding.model, CodingKeys.model), ("effort", binding.effort, CodingKeys.effort)] where fields.contains(field) {
+                                    ("model", binding.model, CodingKeys.model), ("effort", binding.effort, CodingKeys.effort),
+                                    ("runtime", binding.runtime, CodingKeys.runtime)] where fields.contains(field) {
             if let value { try c.encode(value, forKey: key) } else { try c.encodeNil(forKey: key) }
         }
+    }
+}
+
+/// 主对话's 运行方式 (#2455): how its Claude runs.
+nonisolated enum AssistantRuntime {
+    static let cli = "cli"
+    static let agentSDK = "agentsdk"
+
+    static func title(_ id: String) -> String {
+        switch id {
+        case cli: "Claude Code CLI"
+        case agentSDK: "Agent SDK"
+        default: id
+        }
+    }
+
+    /// What an assistant conversation runs on, for its status: 「已退回 CLI：找不到 Node.js 22+」 when the node could not
+    /// run the Agent SDK, 「Agent SDK」 while it does; nil on the CLI as set (nothing to say).
+    static func status(runtime: String?, fallback: String?) -> String? {
+        if let f = fallback?.trimmingCharacters(in: .whitespaces), !f.isEmpty { return "已退回 CLI：\(f)" }
+        return runtime == agentSDK ? title(agentSDK) : nil
     }
 }
 

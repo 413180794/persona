@@ -42,5 +42,7 @@
   "effort": "Reasoning effort",
   "save_note": "Saving only changes the configuration. It doesn't send a model request or interrupt running tasks.",
   "reload_discard": "Reload (discard edits)",
-  "save_note_plugin": "Saving only changes the configuration. It doesn't send a model request or interrupt running tasks. The voice model is Persona's default choice and doesn't change the extension's own provider or credentials."
+  "save_note_plugin": "Saving only changes the configuration. It doesn't send a model request or interrupt running tasks. The voice model is Persona's default choice and doesn't change the extension's own provider or credentials.",
+  "runtime": "Runtime",
+  "runtime_hint": "The Agent SDK needs Node 22+ on that computer; without it the CLI is used"
 }

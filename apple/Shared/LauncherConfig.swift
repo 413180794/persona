@@ -24,17 +24,63 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var definitions: [String: String]?
     /// What a ~/.zshrc launcher really sets, per machine (the node runs it with the agent stubbed out).
     var details: [String: LauncherDetail]?
+    /// A managed provider as cindy models it (#2455): its models, the model per Claude Code tier and the gateway's needs.
+    var models: [ProviderModel]?
+    var opusModel: String?
+    var sonnetModel: String?
+    var haikuModel: String?
+    var fableModel: String?
+    var subagentForce: Bool?
+    /// Custom request headers stay sealed at the hub, never sent back: only whether there are some.
+    var hasHeaders: Bool?
+    var proxy: String?
+    var noProxy: String?
+    var timeoutMS: Int?
+    var compactWindow: Int?
+    var maxContext: Int?
+    var effort: String?
+    /// Where a managed provider came from: "" by hand, "zshrc:<alias>@<machine>" imported, "preset:<id>".
+    var origin: String?
     var id: String { name }
     var managed: Bool { source == "jarvis" }
 
     enum CodingKeys: String, CodingKey {
-        case name, source, model, args, machines, hidden, definitions, details, kind, api, auth
+        case name, source, model, args, machines, hidden, definitions, details, kind, api, auth, models, proxy, effort, origin
         case baseURL = "base_url", smallModel = "small_model", hasKey = "has_key"
         case subagentModel = "subagent_model", customModel = "custom_model"
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
+        case opusModel = "opus_model", sonnetModel = "sonnet_model", haikuModel = "haiku_model", fableModel = "fable_model"
+        case subagentForce = "subagent_force", hasHeaders = "has_headers", noProxy = "no_proxy", timeoutMS = "timeout_ms"
+        case compactWindow = "compact_window", maxContext = "max_context"
     }
 
     var bearerAuth: Bool { auth == "bearer" }
+}
+
+/// One model a provider's gateway serves (proto.ProviderModel, cindy's ProviderRuntimeModelConfig).
+nonisolated struct ProviderModel: Codable, Hashable, Sendable, Identifiable {
+    var id: String
+    var name: String?
+    /// Tokens; nil or 0: unknown (Claude Code assumes 200K).
+    var contextWindow: Int?
+    /// The thinking levels it takes; nil or empty: unknown (all are offered).
+    var efforts: [String]?
+    var defaultEffort: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, efforts
+        case contextWindow = "context_window", defaultEffort = "default_effort"
+    }
+
+    init(id: String, name: String? = nil, contextWindow: Int? = nil, efforts: [String]? = nil, defaultEffort: String? = nil) {
+        self.id = id
+        self.name = name
+        self.contextWindow = contextWindow
+        self.efforts = efforts
+        self.defaultEffort = defaultEffort
+    }
+
+    var title: String { name?.isEmpty == false ? name! : id }
 }
 
 /// One model a launcher offers in its /model menu (the chat's model picker, node/launcher_models.go).
@@ -109,11 +155,115 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     /// A plugin's provider it is added from (`<plugin>/<provider>`): the hub fills in what is left empty.
     var preset: String? = nil
     var auth: String? = nil
+    /// The provider's fields (#2455). nil is left out: a form that does not set them changes nothing at the hub.
+    var models: [ProviderModel]? = nil
+    var opusModel: String? = nil
+    var sonnetModel: String? = nil
+    var haikuModel: String? = nil
+    var fableModel: String? = nil
+    var subagentForce: Bool? = nil
+    /// ANTHROPIC_CUSTOM_HEADERS: nil keeps what the hub has, "" clears it (a secret like the key).
+    var headers: String? = nil
+    var proxy: String? = nil
+    var noProxy: String? = nil
+    var timeoutMS: Int? = nil
+    var compactWindow: Int? = nil
+    var maxContext: Int? = nil
+    var effort: String? = nil
     enum CodingKeys: String, CodingKey {
-        case name, model, args, kind, api, preset, auth
+        case name, model, args, kind, api, preset, auth, models, headers, proxy, effort
         case baseURL = "base_url", smallModel = "small_model", apiKey = "api_key"
         case subagentModel = "subagent_model", customModel = "custom_model"
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
+        case opusModel = "opus_model", sonnetModel = "sonnet_model", haikuModel = "haiku_model", fableModel = "fable_model"
+        case subagentForce = "subagent_force", noProxy = "no_proxy", timeoutMS = "timeout_ms"
+        case compactWindow = "compact_window", maxContext = "max_context"
+    }
+}
+
+/// What 测试连接 and 获取模型列表 send (POST /api/v1/launchers/test, …/discover): the form as typed; with `name` the hub
+/// uses the stored key and headers where these are nil.
+nonisolated struct LauncherProbe: Encodable, Hashable, Sendable {
+    var name: String?
+    var baseURL: String?
+    var auth: String?
+    var apiKey: String?
+    var headers: String?
+    var model: String?
+    enum CodingKeys: String, CodingKey {
+        case name, auth, headers, model
+        case baseURL = "base_url", apiKey = "api_key"
+    }
+}
+
+/// 测试连接's answer: one tiny request through the gateway. A gateway's failure is `ok: false` with `error`.
+nonisolated struct LauncherProbeResult: Decodable, Hashable, Sendable {
+    var ok: Bool
+    var ms: Int?
+    var model: String?
+    var error: String?
+}
+
+/// 获取模型列表's answer: the gateway's /v1/models, filled in from the hub's catalog.
+nonisolated struct LauncherDiscovery: Decodable, Hashable, Sendable {
+    var models: [ProviderModel]?
+    var error: String?
+}
+
+/// 从 ~/.zshrc 导入's preview (GET /api/v1/launchers/import): a machine's claude aliases merged into providers by gateway
+/// and key. No key or header is in it.
+nonisolated struct LauncherImportPreview: Decodable, Hashable, Sendable {
+    var machine: String
+    var providers: [Provider]
+
+    nonisolated struct Provider: Decodable, Hashable, Sendable, Identifiable {
+        var name: String
+        var baseURL: String?
+        var auth: String?
+        var hasKey: Bool?
+        var models: [ProviderModel]?
+        var model: String?
+        var subagentModel: String?
+        var effort: String?
+        var hasHeaders: Bool?
+        var proxy: String?
+        var aliases: [String]?
+        /// The stored provider with the same gateway and key: importing merges the models into it.
+        var existing: String?
+        var id: String { name }
+
+        enum CodingKeys: String, CodingKey {
+            case name, auth, models, model, effort, proxy, aliases, existing
+            case baseURL = "base_url", hasKey = "has_key", subagentModel = "subagent_model", hasHeaders = "has_headers"
+        }
+    }
+}
+
+nonisolated struct LauncherImportResult: Decodable, Hashable, Sendable {
+    var created: [String]?
+    var updated: [String]?
+}
+
+/// What a machine's launcher picker runs with no pick (`default` of GET /api/v1/machines/{id}/launchers): 模型配置's
+/// effective value for the use.
+nonisolated struct LauncherDefault: Codable, Hashable, Sendable {
+    /// `launcher.<name>`, as in 模型配置.
+    var provider: String?
+    var model: String?
+    var effort: String?
+    var runtime: String?
+
+    /// The launcher's own name (the provider id without `launcher.`).
+    var launcher: String? {
+        guard let p = provider, !p.isEmpty else { return nil }
+        return p.hasPrefix("launcher.") ? String(p.dropFirst("launcher.".count)) : p
+    }
+
+    /// 「默认：jv_strong · glm-5」; nil when there is no default launcher.
+    var label: String? {
+        guard let l = launcher else { return nil }
+        let m = model.flatMap { $0.isEmpty ? nil : (Fmt.model($0) ?? $0) }
+        return "默认：" + [l, m].compactMap { $0 }.joined(separator: " · ")
     }
 }
 
@@ -199,6 +349,23 @@ extension APIClient {
     }
     func restoreLauncher(_ name: String) async throws {
         _ = try await request("POST", "/api/v1/launchers/\(name)/restore")
+    }
+    /// 测试连接: the hub sends one max_tokens 1 request through the gateway (30 s at most).
+    func testLauncher(_ probe: LauncherProbe) async throws -> LauncherProbeResult {
+        try await post("/api/v1/launchers/test", body: probe, timeout: 45)
+    }
+    /// 获取模型列表: the gateway's own list.
+    func discoverLauncherModels(_ probe: LauncherProbe) async throws -> LauncherDiscovery {
+        try await post("/api/v1/launchers/discover", body: probe, timeout: 45)
+    }
+    /// 从 ~/.zshrc 导入: what the machine's claude aliases come to (409 `node_outdated` from a node too old to say).
+    func launcherImportPreview(machine: String) async throws -> LauncherImportPreview {
+        try JSON.decoder.decode(LauncherImportPreview.self,
+                                from: await request("GET", "/api/v1/launchers/import", query: ["machine": machine], timeout: 45))
+    }
+    func importLaunchers(machine: String, providers: [String]) async throws -> LauncherImportResult {
+        struct Body: Encodable { var machine: String; var providers: [String] }
+        return try await post("/api/v1/launchers/import", body: Body(machine: machine, providers: providers), timeout: 45)
     }
 }
 

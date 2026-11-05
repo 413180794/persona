@@ -245,11 +245,18 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
 
 ## 模型供应商与用途配置
 
-原 `/api/v1/launchers` 保持兼容，供应商新增 `kind`（`launcher` / `api`）和 `api`（`messages` / `responses`）；API-only 不下发给 node。
+原 `/api/v1/launchers` 保持兼容，供应商新增 `kind`（`launcher` / `api`）和 `api`（`messages` / `responses`）；Messages 协议的 API 接入也能当启动器给主对话和 Agents 用（node 用它的地址和 Key 起 claude，#2455），Responses 的不行。
 
 - `GET /api/v1/model-config` → `{purposes, providers}`。
 - `GET /api/v1/model-config/purposes/{id}` → `{purpose, providers}`。
-- `PATCH /api/v1/model-config/purposes/{id}` 接收 `{revision, provider?, model?, effort?}`；缺失不改，`null` 清除覆盖，revision 冲突返回 409。成功返回同单项 GET。
+- `PATCH /api/v1/model-config/purposes/{id}` 接收 `{revision, provider?, model?, effort?, runtime?}`；缺失不改，`null` 清除覆盖，revision 冲突返回 409。成功返回同单项 GET。
+  `runtime`（`cli` / `agentsdk`）只有 `assistant` 能写，别的用途带了回 400；`assistant` 这一项的 `fields` 多一个 `runtime`，另带 `runtimes: ["cli","agentsdk"]`。换供应商不清掉 runtime。
+  hub 给 node 的 `assistant.send` / `assistant.start` / `assistant.warm`（以及经 `models.apply` / `models.apply_picked` 填好的 params）带 `runtime: "agentsdk"`；CLI（空或 `cli`）不带。`model_fingerprint` 包含 runtime：变了 node 重启进程并 `--resume` 接回。
+- `GET /api/v1/launchers/import?machine=<id>` → `{machine, providers:[{name, base_url, auth, has_key, has_headers, model, models, opus_model, sonnet_model, haiku_model, fable_model, small_model, subagent_model, subagent_force, effort, compact_window, max_context, proxy, no_proxy, timeout_ms, args, source, aliases, existing?}]}`：
+  hub 调那台机器的 `launchers.zshrc`，把调 claude 的 alias 按 `base_url + key` 合成供应商（名字取第一个 alias，不合法的字符换成 `-`；模型名的 `[1m]` 去掉、上下文窗口记 1000000；同组的各个 `ANTHROPIC_MODEL` 合进 `models`）。
+  `existing` 是已存的同 `base_url + key` 的供应商名。不返回 key 和请求头。机器离线 503 `code: "offline"`，node 太旧 409 `code: "node_outdated"`，没有这台机器 404。
+- `POST /api/v1/launchers/import` `{machine, providers:[name…]}` → `{created:[…], updated:[…]}`：再读一次 alias，key 和请求头只在 hub 里转手、加密保存，`source` 写 `zshrc:<alias>@<machine>`。
+  已存在的供应商只补 `models`（新的 id 加上，已有的只补未知的上下文窗口），别的字段不动；新建的和已有名字撞了加 `-2`、`-3`。不认识的名字 400。
   `inbox.triage` 改成调不了的、又有要它的插件开着时返回 422 `{code: "triage_model_in_use", plugins: [名字], error}`（`docs/extensions.md`「收件箱的通用规则」）。
 - 用途的 `fields`、`provider_ids` 限定可编辑参数和兼容供应商；`override` 与 `effective` 分开，`inherited_from` 标记来源，`status` 为中文状态说明。真实任务/插件使用 `task.<id>` / `plugin.<id>`。
 
@@ -492,7 +499,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | POST | `/api/v1/machines/{mid}/computer/{install\|grant\|cancel}` | 机器页的「安装 Cua Driver」「去授权」「取消」：node 在后台跑（`computer.install` / `computer.grant` / `computer.cancel`），→ 200 `Computer`，进度在它的 `job`（`{kind, state: running\|done\|failed\|cancelled, step?, error?, started}`），页面接着 GET。插件没对这台打开 404；离线、已有任务、node 太旧 409 |
 | GET / PUT | `/api/v1/machines/{mid}/browser` | 这台 Mac 的 ego lite（插件 `ego`，[plan-ego-browser.md](plan-ego-browser.md)）：GET 当场问 node 的 `browser.status` → `Browser`（`{enabled, installed, version?, set_up, imported, analytics?, ready, note?, screen_sharing, job?}`）；PUT `{"enabled": bool}` 是机器页的开关（插件的 `machines`）。插件没开、不是 Mac → 404 |
 | POST | `/api/v1/machines/{mid}/browser/{install\|open\|cancel}` | 机器页的「安装 ego lite」「打开 ego lite」「取消」：node 在后台跑，进度在 `job`。插件没对这台打开 404；离线、已有任务、node 太旧 409 |
-| GET | `/api/v1/machines/{mid}/launchers` | `{"launchers":[Launcher]}` |
+| GET | `/api/v1/machines/{mid}/launchers?purpose=` | `{"launchers":[Launcher], "default":{provider, model, effort, runtime?}}`：`default` 是「模型配置」里这个用途的生效值（`purpose` 默认 `agent.new`，主对话的选择器传 `assistant`），`provider` 是启动器名，`runtime` 只有 `assistant` 有；客户端显示「默认：…」。不是启动器类的用途 `default` 为 null |
 | GET | `/api/v1/machines/{mid}/launchers/{name}/models?refresh=1` | 这个启动器的 CLI 在 `/model` 里列的模型（新建 Agent 选模型，`docs/model-config.md`「新建 Agent 选模型」）：`{"agent","models":[{"id","name","description"?,"resolved"?,"default"?,"efforts"?,"default_effort"?}],"locked"?}`。`id` 是开始会话时 `model` 填的值；`default` 是不给模型时跑的那个（选它等于不选）；`resolved` 是别名（opus…）按这个启动器的设置对应的模型；`efforts` 是它能用的思考强度，从弱到强；`locked` 是启动器写死了自己的 `--model`、选了也不会生效的原因。没有列表可问的 Agent（TRAEX、runtime 的）回 `models: []`。node 起一次 CLI 去问（几秒），存 10 分钟，`refresh=1` 重新问；列不出来回 502 `{"error"}`；这台电脑的 node 还没有这个功能时回 404 `{"error","code":"node_outdated"}`（和旧 hub 一样，App 不显示模型行） |
 | GET | `/api/v1/model-config/providers/{id}/models?refresh=1&machine=` | 模型配置里启动器类供应商（`launcher.<名字>`）的 `/model` 列表（`docs/model-config.md`「模型配置选模型」）：同上一行的回答，多一个 `machine`（问的是哪台）。在有这个启动器的在线电脑里挑一台：`machine` 指定的、助手所在的、hub 本机、其余的。没有这个供应商、插件 / API 类供应商 404；有它的电脑都不在线 503；node 太旧 404 `node_outdated` |
 | GET | `/api/v1/todos` | 全部待办（新建的在前）：`{"todos":[Todo]}`，每个待办带 `spaces` 和 `agents`（过滤 dismissed，当前的在前按 `linked_at` 降序，然后是参与过的按 `released_at` 降序） |
@@ -1129,6 +1136,7 @@ hub → node 请求：
 | `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}`（`system` 见 Machine，node 启动时读一次；`engine` 是 node 现在用的引擎，`engines` 是它找到的，见「引擎」；旧 node 没有这两个）。连上时 `claude_version` 为空（`claude --version` 那次没跑成），hub 隔 1、2、5、10、30 分钟、之后每小时再问一次，拿到就更新机器并推给 App，连接断了就停（#542） |
 | `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent（切换前开始、切换后才回来的刷新结果作废）、结束所有终端流（每个推 `terminal.end`，error 说引擎换了）、换事件流，并推一次 `sessions.changed`。多个 `engine.use` 依次执行 |
 | `launchers.list` | → `{launchers}` |
+| `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`：这台机器 `~/.zshrc`（`$ZDOTDIR` 优先）里 `alias x="K=V … claude [args]"` 形式的行，只列 `command` 是 claude 的。`env` 带 key，只经这条 RPC 交给 hub（导入），不写日志；旧 node 回 `unknown method` |
 | `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`：同 REST 的 `…/launchers/{name}/models`；`agent_type` 是 hub 配置里这个启动器的类型（不给就按 node 自己认出的） |
 | `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
 | `dirs.list` | `{path}` → 同 REST |

@@ -225,8 +225,9 @@ func TestAllAPIModelPurposesReachTheSelectedModel(t *testing.T) {
 	if strings.Contains(listing, "private-test-key") || strings.Contains(listing, key) {
 		t.Fatal("credential returned to client")
 	}
-	if managed := h.managedForNodes(ctx); len(managed) != 0 {
-		t.Fatal("API-only provider sent to nodes")
+	// A Messages API provider also runs claude on the nodes (#2455), so it goes to them with its key.
+	if managed := h.managedForNodes(ctx); len(managed) != 1 || managed[0].APIKey != "private-test-key" {
+		t.Fatal("Messages API provider not sent to nodes")
 	}
 }
 

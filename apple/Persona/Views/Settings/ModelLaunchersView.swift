@@ -11,7 +11,8 @@ struct ModelLaunchersView: View {
     @Environment(AppModel.self) private var model
     @State private var launchers: [LauncherView]?
     @State private var error: String?
-    @State private var adding = false
+    /// The provider sheet, at its first step (新增) or at 从 ~/.zshrc 导入; nil: closed.
+    @State private var adding: ProviderWizardStep?
     @State private var query = ""
     /// 已隐藏 starts folded (2026-11-01): they are hidden for a reason. A search shows them anyway.
     @State private var showHidden = false
@@ -52,7 +53,8 @@ struct ModelLaunchersView: View {
                     // the search field took the trailing end and the + went to the window's middle, over the settings list.
                     HStack {
                         Spacer(minLength: 0)
-                        Button("新增供应商…") { adding = true }.lineLimit(1).formButton()
+                        Button("从 ~/.zshrc 导入…") { adding = .importZshrc }.lineLimit(1).formButton()
+                        Button("新增供应商…") { adding = .pick }.lineLimit(1).formButton()
                     }
                     #endif
                 } header: { header("Persona 管理", managed.count) } footer: {
@@ -102,20 +104,29 @@ struct ModelLaunchersView: View {
         #if os(iOS) || os(visionOS)
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { adding = true } label: { Image(systemName: Theme.Icon.add) }.accessibilityLabel("新增供应商")
+                Menu {
+                    Button { adding = .pick } label: { Label("新增供应商", systemImage: Theme.Icon.add) }
+                    Button { adding = .importZshrc } label: { Label("从 ~/.zshrc 导入", systemImage: Theme.Icon.terminal) }
+                } label: { Image(systemName: Theme.Icon.add) } primaryAction: { adding = .pick }
+                .accessibilityLabel("新增供应商")
+                .accessibilityIdentifier("launchers.add")
             }
         }
         #endif
-        .sheet(isPresented: $adding) {
+        .sheet(item: $adding) { step in
             // Saving moves `launchersRevision`, which reloads this list below.
-            LauncherEditor(existing: nil) {}
+            if debugOldEditor { LauncherEditor(existing: nil) {} } else { ProviderWizard(start: step) }
         }
         #if os(macOS) && DEBUG
-        .onAppear { if UserDefaults.standard.bool(forKey: "macLauncherEditor") { adding = true } } // `-macLauncherEditor YES`: 新增启动器
+        .onAppear { if UserDefaults.standard.bool(forKey: "macLauncherEditor") { adding = .pick } } // `-macLauncherEditor YES`: 新增启动器
         #endif
         #if DEBUG
-        // `-openLauncherEditor YES` opens 新增供应商, `-openLauncherEditor preset` on 从扩展添加.
-        .onAppear { if UserDefaults.standard.string(forKey: "openLauncherEditor") != nil { adding = true } }
+        // `-openLauncherEditor YES` opens the form 其他接入方式 leads to, `-openLauncherEditor preset` on 从扩展添加;
+        // `-openProviderWizard pick|connect|models|import` the provider sheet at that step.
+        .onAppear {
+            if UserDefaults.standard.string(forKey: "openLauncherEditor") != nil { adding = .pick }
+            if let s = UserDefaults.standard.string(forKey: "openProviderWizard") { adding = ProviderWizardStep(rawValue: s) ?? .pick }
+        }
         #endif
         .confirmationDialog("删除启动器「\(pendingDelete?.name ?? "")」？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible, presenting: pendingDelete) { l in
@@ -127,6 +138,15 @@ struct ModelLaunchersView: View {
         .refreshable { await load() }
         #if DEBUG
         .onAppear { if let q = UserDefaults.standard.string(forKey: "showModelSearch") { query = q } } // `-showModelSearch glm`
+        #endif
+    }
+
+    /// `-openLauncherEditor` (SecretFieldTests): straight to the older form.
+    private var debugOldEditor: Bool {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: "openLauncherEditor") != nil
+        #else
+        false
         #endif
     }
 
@@ -294,6 +314,9 @@ struct ModelLauncherDetailView: View {
                         if let n = l.customModelName, !n.isEmpty { LabeledContent("自定义模型名", value: n) }
                         if let d = l.customModelDescription, !d.isEmpty { LabeledContent("自定义模型说明", value: d) }
                     }
+                    if let o = l.origin, o.hasPrefix("zshrc:") { mono("导入自", "~/.zshrc · " + o.dropFirst("zshrc:".count)) }
+                    if let ms = l.models, ms.count > 1 { mono("可用模型", ms.map(\.id).joined(separator: "、")) }
+                    if l.hasHeaders == true { LabeledContent("请求头", value: "已设置（不显示）") }
                     if l.managed { LabeledContent("API Key", value: l.hasKey == true ? "已设置（不显示）" : "未设置") }
                     if l.managed, l.api != "responses" { LabeledContent("认证方式", value: l.bearerAuth ? "Bearer" : "x-api-key") }
                     if let a = l.args, !a.isEmpty { mono("额外参数", a.joined(separator: " ")) }
@@ -364,7 +387,12 @@ struct ModelLauncherDetailView: View {
             }
         }
         .sheet(isPresented: $editing) {
-            LauncherEditor(existing: launcher) { await load() }
+            // A Responses API keeps the older form; a Claude Code provider (or a Messages one) the wizard, at 连接.
+            if launcher?.kind == "api" && launcher?.api == "responses" {
+                LauncherEditor(existing: launcher) { await load() }
+            } else {
+                ProviderWizard(existing: launcher) { await load() }
+            }
         }
         .pluginLinks($pluginLink)
         .extensionPushes(pluginSections.map { Array($0.models.values) } ?? [])

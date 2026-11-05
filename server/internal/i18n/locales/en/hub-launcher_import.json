@@ -1,0 +1,7 @@
+{
+  "err_offline": "This computer is offline; import once it’s back",
+  "outdated": "personad on this computer is too old to read ~/.zshrc; update the node",
+  "err_nothing_named": "Nothing named {name} to import",
+  "err_machine_required": "machine is required",
+  "err_machine_providers_required": "machine and providers are required"
+}

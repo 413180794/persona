@@ -111,6 +111,7 @@ kb.read              GET /api/v1/kb/moments/{id}
 kb.read              GET /api/v1/kb/{kind}
 kb.read              GET /api/v1/kb/{kind}/{id}
 -                    GET /api/v1/launchers
+-                    GET /api/v1/launchers/import
 -                    GET /api/v1/launchers/presets
 -                    GET /api/v1/launchers/{name}
 -                    GET /api/v1/launchers/{name}/quota
@@ -255,6 +256,9 @@ inbox.write          POST /api/v1/inbox/{id}/draft
 inbox.write          POST /api/v1/inbox/{id}/reply
 agents.control       POST /api/v1/interactions/{id}/resolve
 -                    POST /api/v1/launchers
+-                    POST /api/v1/launchers/discover
+-                    POST /api/v1/launchers/import
+-                    POST /api/v1/launchers/test
 -                    POST /api/v1/launchers/{name}/check
 -                    POST /api/v1/launchers/{name}/restore
 -                    POST /api/v1/machines/{mid}/browser/cookies

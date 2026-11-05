@@ -1,0 +1,13 @@
+{
+  "title": "Import from ~/.zshrc",
+  "import_count_one": "Import {count}",
+  "import_count_other": "Import {count}",
+  "import": "Import",
+  "computer": "Computer",
+  "computer_hint": "Reads the aliases in this computer's ~/.zshrc that run claude. Aliases with the same URL and key become one provider.",
+  "offline_suffix": " (offline)",
+  "empty": "No claude aliases to import in this computer's ~/.zshrc.",
+  "list_label": "Providers to import",
+  "from_aliases": "From {aliases}",
+  "merge_note": "Merging only adds new models to the existing provider. Other settings stay the same."
+}

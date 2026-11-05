@@ -144,5 +144,17 @@
   "no_devices": "还没有设备。",
   "revoked_title": "已撤销 {count}",
   "auth_api_key": "x-api-key（ANTHROPIC_API_KEY）",
-  "auth_bearer": "Bearer（ANTHROPIC_AUTH_TOKEN）"
+  "auth_bearer": "Bearer（ANTHROPIC_AUTH_TOKEN）",
+  "add_provider_short": "新增",
+  "model_list": "模型列表",
+  "model_count_other": "{count} 个",
+  "tier_model": "{tier} 档",
+  "subagent": "子代理",
+  "subagent_force": "强制使用子代理模型",
+  "headers": "请求头",
+  "proxy": "代理",
+  "timeout": "超时",
+  "max_context": "最大上下文",
+  "default_effort": "默认思考档位",
+  "from_zshrc": "从 ~/.zshrc 导入"
 }

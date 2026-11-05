@@ -39,6 +39,7 @@ type sessionState struct {
 	Model            string    `json:"model,omitempty"`
 	ModelFingerprint string    `json:"model_fingerprint,omitempty"`
 	ModelEffort      string    `json:"model_effort,omitempty"`
+	Runtime          string    `json:"runtime,omitempty"` // the assistant runtime it was asked to run on (assistant_sdk.go)
 	Cwd              string    `json:"cwd"`
 	StartedAt        time.Time `json:"started_at"`
 	// AppMode / AppEffort: the permission mode and effort the app set on an assistant conversation (modes.go). They

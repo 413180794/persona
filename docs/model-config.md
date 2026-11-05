@@ -25,7 +25,7 @@
 | 启动器 | Claude Code / Codex 对话和 Agent | 必须在执行机器上存在，具体模型由 CLI/app-server 真正接收 |
 | 插件模型 | 已接入的语音服务 | 只能选择该插件提供的模型，不修改插件自己的供应商或凭据 |
 
-原 `/launchers` API 保留。新增接入的 `kind` 是 `launcher` 或 `api`；旧条目省略时还是启动器。API-only 接入不下发给 node，也不放进新会话启动器列表。旧 `hub.json` 的 API 连接显示为兼容来源，认证文件路径和值不返回客户端。
+原 `/launchers` API 保留。新增接入的 `kind` 是 `launcher` 或 `api`；旧条目省略时还是启动器。Messages 协议的 API 接入（`api` 为空或 `messages`）也能选给主对话和 Agents：node 用它的地址和 Key 起 claude（#2455，环境变量见 `docs/claude-integration.md`）；Responses 协议的只能直接调用，`finishModel` 拒绝把它当启动器。旧 `hub.json` 的 API 连接显示为兼容来源，认证文件路径和值不返回客户端。
 
 ## 编辑与继承
 
@@ -59,6 +59,27 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 
 管理者没连着时 hub 只在自己刚起来、它还没连上过的时候等它（最多到起来后 60 秒）；它连上过、现在不在就不等：电脑是管理者连的（`docs/machines.md`「谁连电脑」），
 没有它新建和续上都开不了，回 `503 assistant_offline`（以前 hub 自己套「模型配置 › Agents」照样开）。AI 分身执行经 `assistant.start` 开在助手那边，本来就是它解析；飞书机器人卡片上开的 Agent 也在助手那边（渠道是它的）。
+
+## 主对话的运行方式（#2455）
+
+「主对话」多一项「运行方式」：`cli`（默认，`claude -p` 流式 JSON）或 `agentsdk`（经 Agent SDK 的桥，`docs/claude-integration.md`）。只有 `assistant` 有这一项，定时任务跟着它（继承主对话）；Agents 和 API 用途不收，PATCH 带了回 400。
+
+- 存在 `model_config.assistant` 的 binding 里（`runtime`），和供应商、模型无关：换供应商、在对话菜单里临时选启动器或模型、预热另一个启动器，都还是这个运行方式。
+- `finishModel` 把它填进给 node 的 params（`runtime: "agentsdk"`；CLI 不填），并算进 `model_fingerprint`：改了 node 重启进程、`--resume` 接回原会话。显式的 `cli` 和不填算同一个指纹，不会白白重启。
+- node 跑不了 SDK（没有 Node 22+、桥或 claude）时退回 CLI，会话状态里带 `runtime_fallback`。
+
+## 从 ~/.zshrc 导入供应商（#2455）
+
+`GET /api/v1/launchers/import?machine=` 预览、`POST` 确认（接口见 `docs/protocol.md`「模型供应商与用途配置」）。hub 调那台机器 node 的 `launchers.zshrc`，拿到调 claude 的 alias 和它们的环境变量，用纯函数 `mergeZshrcAliases`（`hub/launcher_import.go`）合并：
+
+- 一组 `ANTHROPIC_BASE_URL + key`（`ANTHROPIC_AUTH_TOKEN` 优先，按 bearer；否则 `ANTHROPIC_API_KEY`）是一个供应商，名字和其余设置取第一个 alias；每个 alias 的 `ANTHROPIC_MODEL` 合进 `models`。没有网关地址的（普通 Claude Code）跳过。
+- 模型名带 `[1m]` 的去掉后缀，上下文窗口记成 1000000（node 起的时候按窗口再加回去）。
+- 预览不带 key 和请求头，只有 `has_key` / `has_headers`；确认时 hub 重新读一次，key 和请求头只在 hub 里转手，和手动添加的一样加密保存。
+- 已经有同样 `base_url + key` 的供应商（`existing`）只补模型，别的设置以 Persona 里的为准。
+
+## 启动器选择器的默认值
+
+`GET /api/v1/machines/{mid}/launchers` 带 `default: {provider, model, effort, runtime?}`，是对应用途在「模型配置」里的生效值（`?purpose=`，默认 `agent.new`；主对话的选择器传 `assistant`，多一个 `runtime`）。客户端拿它显示「默认：…」，不必再单独查模型配置。
 
 ## 新建 Agent 选模型（#794）
 
@@ -121,9 +142,12 @@ hub 直连 API 的用途（知识处理、收件箱分拣 / 判断 / 草拟、�
   "revision": 0,
   "provider": "launcher.<供应商名称>",
   "model": "<具体模型 ID>",
-  "effort": null
+  "effort": null,
+  "runtime": "agentsdk"
 }
 ```
+
+`runtime` 只有 `assistant` 能写（见「主对话的运行方式」）。
 
 「信息筛选」（`inbox.triage`）还管着插件：用收件箱又没有自带兜底的插件要它能调才能启用；有这样的插件开着时，把它改成调不了的返回 422 `triage_model_in_use`，
 列出插件名（去掉选择后退回的 hub.json 配置或自动选择仍然调得了的，照常保存；`docs/extensions.md`「收件箱的通用规则」）。

@@ -21,5 +21,20 @@
   "err_no_models": "このプロバイダーには一覧できるモデルがありません",
   "err_api_no_models": "直接API接続には一覧できるモデルがありません",
   "err_no_provider": "このプロバイダーはありません",
-  "err_all_offline": "このランチャーがあるコンピューターがすべてオフラインのため、モデルを一覧できません"
+  "err_all_offline": "このランチャーがあるコンピューターがすべてオフラインのため、モデルを一覧できません",
+  "err_effort_default": "デフォルトの思考の強さ{effort}はサポートされていません（{levels}のいずれかにしてください）",
+  "err_effort_model": "モデル{model}の思考の強さ{effort}はサポートされていません（{levels}のいずれかにしてください）",
+  "err_effort_model_default": "モデル{model}のデフォルトの思考の強さ{effort}はサポートされていません（{levels}のいずれかにしてください）",
+  "err_header_line": "リクエストヘッダーの{line}行目は「名前: 値」の形式にしてください",
+  "err_model_no_id": "モデル一覧にIDのないモデルがあります",
+  "err_model_duplicate": "モデル{model}が重複しています",
+  "err_model_context_negative": "モデル{model}のコンテキストウィンドウは負の値にできません",
+  "err_model_effort_empty": "モデル{model}に空の思考の強さがあります",
+  "err_model_default_effort_unlisted": "モデル{model}のデフォルトの思考の強さが、サポートされている値に含まれていません",
+  "err_timeout_negative": "タイムアウトは負の値にできません",
+  "err_compact_window_negative": "圧縮ウィンドウは負の値にできません",
+  "err_max_context_negative": "最大コンテキストは負の値にできません",
+  "err_proxy": "プロキシはhttp(s)://またはsocks5://で始まるアドレスにしてください",
+  "err_proxy_credentials": "プロキシにユーザー名やパスワードは含められません",
+  "err_tier_model_long": "ティアモデルの名前が長すぎます"
 }

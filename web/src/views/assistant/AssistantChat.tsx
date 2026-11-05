@@ -3,7 +3,7 @@
 // launcher chip under the composer that switches the model for the next messages (AssistantTopBar's 启动器 menu); the
 // main conversation's 压缩上下文 / 新建主对话 and the strip above the composer while it compacts (#1727).
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, enc, errorText } from "../../lib/api";
+import { api, ApiError, errorText } from "../../lib/api";
 import {
   assistantInfoText, conversationKey, effectiveLauncher, NEW_CONVERSATION, pickLauncher, pickModel, runsAssistant, shortModel, usePickedLauncher,
   usePickedModel, type AssistantLauncher,
@@ -11,7 +11,8 @@ import {
 import {
   archivedMainTitle, COMPACT_FEATURE, compactBody, compactionView, compactPath, NEW_MAIN_FEATURE, NEW_MAIN_PATH, newMainBody, type CompactionView,
 } from "../../lib/compaction";
-import { launcherModels, modelName, type AgentModel } from "../../lib/launcher-models";
+import { defaultLabel, launcherModels, machineLaunchers, modelName, oneOff, type AgentModel, type LauncherDefault } from "../../lib/launcher-models";
+import { runtimeFallbackText } from "../../lib/model-config";
 import { personaState } from "../../lib/persona";
 import { navigate } from "../../lib/router";
 import { hubHas, refreshAssistant, useStore } from "../../lib/store";
@@ -25,27 +26,31 @@ import { t } from "../../i18n";
 
 // ── launchers ───────────────────────────────────────────
 
-const cache = new Map<string, { at: number; list: AssistantLauncher[] }>();
+const cache = new Map<string, { at: number; list: AssistantLauncher[]; def?: LauncherDefault | null }>();
 
-/** The launchers the assistant's computer can run it with (Claude Code or Codex), fetched when a menu opens. */
-function useAssistantLaunchers(mid: string | undefined, wanted: boolean): { list: AssistantLauncher[] | null; error: string } {
+/** The launchers the assistant's computer can run it with (Claude Code or Codex), fetched when a menu opens, and
+ *  主对话's 「默认：…」 from 模型配置 (`?purpose=assistant`, #2455; absent from an older hub). */
+function useAssistantLaunchers(mid: string | undefined, wanted: boolean): { list: AssistantLauncher[] | null; def?: LauncherDefault | null; error: string } {
   const hit = mid ? cache.get(mid) : undefined;
   const [list, setList] = useState<AssistantLauncher[] | null>(hit?.list ?? null);
+  const [def, setDef] = useState<LauncherDefault | null | undefined>(hit?.def);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!mid || !wanted) return;
     const c = cache.get(mid);
     if (c && Date.now() - c.at < 60_000) {
       setList(c.list);
+      setDef(c.def);
       return;
     }
     let live = true;
-    api<{ launchers: AssistantLauncher[] }>(`/machines/${enc(mid)}/launchers`)
+    machineLaunchers(mid, { purpose: "assistant" })
       .then((r) => {
         const l = (r.launchers ?? []).filter(runsAssistant);
-        cache.set(mid, { at: Date.now(), list: l });
+        cache.set(mid, { at: Date.now(), list: l, def: r.default });
         if (live) {
           setList(l);
+          setDef(r.default);
           setError("");
         }
       })
@@ -54,13 +59,17 @@ function useAssistantLaunchers(mid: string | undefined, wanted: boolean): { list
       live = false;
     };
   }, [mid, wanted]);
-  return { list, error };
+  return { list, def, error };
 }
 
-function launcherItems(list: AssistantLauncher[] | null, error: string, current: string, onPick: (name: string) => void): MenuItem[] {
+/** The launchers after the menu's 「默认：…」; `picked`, the one chosen over the default, is checked and marked 「仅这一次」. */
+function launcherItems(list: AssistantLauncher[] | null, error: string, picked: string | undefined, onPick: (name: string) => void): MenuItem[] {
   if (!list) return [{ key: "loading", label: error ? t("assistant-assistantchat.launchers_failed", { error }) : t("assistant-assistantchat.launchers_loading"), disabled: true, onSelect: () => {} }];
   if (!list.length) return [{ key: "none", label: t("assistant-assistantchat.launchers_none"), disabled: true, onSelect: () => {} }];
-  return list.map((l) => ({ key: l.name, label: l.name, hint: shortModel(l.model) || undefined, checked: l.name === current, onSelect: () => onPick(l.name) }));
+  return list.map((l) => ({
+    key: l.name, label: l.name, hint: [l.name === picked && oneOff(), shortModel(l.model)].filter(Boolean).join(" · ") || undefined,
+    checked: l.name === picked, onSelect: () => onPick(l.name),
+  }));
 }
 
 /** The composer's 启动器 chip in a Persona conversation: the next message (and the ones after it) uses the pick.
@@ -73,8 +82,11 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
   const pickedM = usePickedModel(key);
   const [modelsFor, setModelsFor] = useState<{ name: string; options: AgentModel[]; loading: boolean } | null>(null);
   const [knownModels, setKnownModels] = useState<{ machine: string; name: string; options: AgentModel[] } | null>(null);
-  const current = effectiveLauncher({ isMain: assistant?.main === session.session_id, picked, session: session.launcher, config: assistant?.launcher });
-  const { list, error } = useAssistantLaunchers(session.machine_id, Boolean(menu.anchor));
+  const isMain = assistant?.main === session.session_id;
+  const current = effectiveLauncher({ isMain, picked, session: session.launcher, config: assistant?.launcher });
+  const { list, def, error } = useAssistantLaunchers(session.machine_id, Boolean(menu.anchor));
+  // With no pick 主对话 runs 模型配置's default; another conversation keeps the launcher it started with.
+  const fallback = isMain ? def ?? { provider: assistant?.launcher } : { provider: session.launcher || assistant?.launcher, model: session.launcher ? session.model : undefined };
   const modelId = pickedM ?? (picked ? list?.find((l) => l.name === picked)?.model : session.model);
   const named = knownModels?.machine === session.machine_id && knownModels.name === current ? knownModels.options.find((m) => m.id === modelId) : undefined;
   const model = named ? modelName(named) : shortModel(modelId);
@@ -110,11 +122,14 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
               onSelect: () => pick(modelsFor.name, m.default ? undefined : m.id),
             }))),
       ]
-    : launcherItems(list, error, current, openModels).map((it) => ({ ...it, submenu: true }));
+    : [
+        { key: "default", label: defaultLabel(fallback), checked: !picked, onSelect: () => pickLauncher(key, undefined) },
+        ...launcherItems(list, error, picked, openModels).map((it) => ({ ...it, submenu: true })),
+      ];
 
   return (
     <>
-      <Chip label={[current, model].filter(Boolean).join(" · ")} onClick={menu.open} active={Boolean(menu.anchor)} title={t("assistant-assistantchat.launcher_chip_title")} />
+      <Chip label={[current, picked ? oneOff() : model].filter(Boolean).join(" · ")} onClick={menu.open} active={Boolean(menu.anchor)} title={t("assistant-assistantchat.launcher_chip_title")} />
       {menu.anchor && (
         <Menu
           anchor={menu.anchor}
@@ -138,11 +153,12 @@ export function StarterLauncherChip() {
   const assistant = useStore((s) => s.assistant);
   const picked = usePickedLauncher(NEW_CONVERSATION);
   const current = effectiveLauncher({ isNew: true, picked, config: assistant?.launcher });
-  const { list, error } = useAssistantLaunchers(assistant?.machine_id, Boolean(menu.anchor));
+  const { list, def, error } = useAssistantLaunchers(assistant?.machine_id, true);
   if (!assistant) return null;
+  const label = defaultLabel(def ?? { provider: assistant.launcher });
   return (
     <>
-      <Chip label={picked ? current : t("assistant-assistantchat.default_launcher_chip", { launcher: current })} onClick={menu.open} active={Boolean(menu.anchor)} title={t("assistant-assistantchat.new_chat_launcher_title")} />
+      <Chip label={picked ? `${current} · ${oneOff()}` : label} onClick={menu.open} active={Boolean(menu.anchor)} title={t("assistant-assistantchat.new_chat_launcher_title")} />
       {menu.anchor && (
         <Menu
           anchor={menu.anchor}
@@ -151,8 +167,8 @@ export function StarterLauncherChip() {
           width={280}
           header={t("assistant-assistantchat.new_chat_uses")}
           items={[
-            { key: "default", label: t("assistant-assistantchat.default"), hint: assistant.launcher || undefined, checked: !picked, onSelect: () => pickLauncher(NEW_CONVERSATION, undefined) },
-            ...launcherItems(list, error, picked ?? "", (name) => pickLauncher(NEW_CONVERSATION, name)),
+            { key: "default", label, checked: !picked, onSelect: () => pickLauncher(NEW_CONVERSATION, undefined) },
+            ...launcherItems(list, error, picked, (name) => pickLauncher(NEW_CONVERSATION, name)),
           ]}
         />
       )}
@@ -228,9 +244,30 @@ const DONE_SHOWN_MS = 4000;
 /** How long the strip says 正在压缩 after asking, before the hub's word on it arrives. */
 const REQUEST_GRACE_MS = 15_000;
 
+/** Above the composer of an assistant conversation: its runtime fallback (#2455), then the compaction strip. */
+export function CompactionStrip({ session }: { session: Session }) {
+  return (
+    <>
+      {session.runtime_fallback && <RuntimeFallbackNote reason={session.runtime_fallback} />}
+      <Compaction session={session} />
+    </>
+  );
+}
+
+/** The conversation asked for the Agent SDK and runs on the CLI: why (no Node.js 22+, no bridge, no claude). */
+export function RuntimeFallbackNote({ reason }: { reason: string }) {
+  const text = runtimeFallbackText(reason);
+  return (
+    <div role="status" title={text} className="flex min-h-8 items-center gap-2 rounded-[12px] bg-orange-tint px-3 py-1 text-[12px] text-orange">
+      <Icon name="warning" size={12} stroke={2.2} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{text}</span>
+    </div>
+  );
+}
+
 /** Above the composer while the conversation compacts (正在压缩上下文…), briefly once it is done (已压缩上下文), and a
  *  failure until it is closed (lib/compaction.ts compactionView: only what this page saw change, or just now). */
-export function CompactionStrip({ session }: { session: Session }) {
+function Compaction({ session }: { session: Session }) {
   const mid = session.machine_id;
   const sid = session.session_id;
   const c = session.compaction;

@@ -29,6 +29,8 @@ final class DemoHub {
     private var lark: [String: [JSONValue]] = [:]
     private var tasks: [JSONValue] = []
     private var modelBindings: [String: JSONValue] = [:]
+    /// 设置 › 模型供应商's providers, the wizard's and the import's answers.
+    private let providers = DemoProviders()
     /// 设置 › Claude Code › 屏蔽的配置目录: machine id → the rules typed in the demo (it has no other directories).
     private var blockedClaudeDirs: [String: [JSONValue]] = [:]
     private var memory: [JSONValue] = []
@@ -63,6 +65,7 @@ final class DemoHub {
     func reset() {
         loaded = false
         modelBindings = [:]
+        providers.reset()
         sockets = []
     }
 
@@ -152,6 +155,7 @@ final class DemoHub {
         #if DEBUG
         if let sample = DemoKBSample.answer(p, q, kb: data["kb"]) { return sample } // knowledge-search screenshots
         #endif
+        if let answer = try providers.get(p, q) { return answer }
         switch p {
         case ["health"]: return ["ok": true, "version": "demo"]
         case ["machines"]: return ["machines": .array(machines)]
@@ -200,7 +204,7 @@ final class DemoHub {
                 return ["metrics": metrics(id, span: span, step: step), "range": .string(q["range"] ?? "1h"), "step": .number(Double(step))]
             case "launchers":
                 guard online(id) else { throw APIError(status: 503, message: "\(id): machine is offline") }
-                return ["launchers": data["launchers"] ?? .array([])]
+                return ["launchers": data["launchers"] ?? .array([]), "default": DemoProviders.launcherDefault]
             case "dirs":
                 guard online(id) else { throw APIError(status: 503, message: "\(id): machine is offline") }
                 return data["dirs"] ?? .object([:])
@@ -280,13 +284,14 @@ final class DemoHub {
             guard let purpose = catalog["purposes"]?.array?.first(where: { $0["id"]?.string == id }) else { throw notFound() }
             guard body["revision"]?.int == purpose["revision"]?.int else { throw APIError(status: 409, message: "配置已修改，请重新加载") }
             var binding = purpose["override"]?.object ?? [:]
-            for field in ["provider", "model", "effort"] {
+            for field in ["provider", "model", "effort", "runtime"] {
                 guard let value = body[field] else { continue }
                 if value == .null { binding.removeValue(forKey: field) } else { binding[field] = value }
             }
             modelBindings[id] = ["override": .object(binding), "revision": .number(Double((purpose["revision"]?.int ?? 0) + 1))]
             return try get(p, [:])
         }
+        if let answer = try providers.change(method, p, body) { return answer }
         switch p {
         case ["sessions"]:
             throw APIError(status: 403, message: "体验模式下不能新建会话：连接你自己的 hub 后再试")

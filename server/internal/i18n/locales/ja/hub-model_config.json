@@ -78,5 +78,7 @@
   "err_purpose_readonly": "この用途のモデルは読み取り専用です。所属するカテゴリのモデル設定を変更してください",
   "err_api_effort": "このAPI接続は思考レベルに対応していません",
   "err_not_launcher": "この用途はランチャーではありません",
-  "err_api_as_launcher": "この用途は直接API接続を参照しているため、ランチャーとして実行できません"
+  "err_api_as_launcher": "この用途はResponsesプロトコルの直接API接続を参照しているため、ランチャーとして実行できません",
+  "err_runtime_invalid": "実行方式はcliまたはagentsdkにしてください",
+  "err_runtime_assistant_only": "実行方式を選べるのはメインチャットだけです"
 }

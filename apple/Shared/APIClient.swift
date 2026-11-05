@@ -331,7 +331,8 @@ nonisolated struct APIClient: Sendable {
     // MARK: Endpoints
 
     struct MachinesResponse: Decodable { var machines: [Machine] }
-    struct LaunchersResponse: Decodable { var launchers: [Launcher] }
+    /// A machine's launchers and what runs with none picked (`default`, #2455; nil from an older hub).
+    struct LaunchersResponse: Decodable, Sendable { var launchers: [Launcher]; var `default`: LauncherDefault? }
     nonisolated struct SessionsResponse: Decodable, Sendable { var sessions: [Session] }
     struct SessionResponse: Decodable { var session: Session }
     struct ItemsResponse: Decodable, Sendable {
@@ -455,8 +456,8 @@ nonisolated struct APIClient: Sendable {
     func stamp(_ list: [Interaction]) -> [Interaction] { group.isEmpty ? list : list.map { var i = $0; i.group = group; return i } }
     func stamp(_ s: Session) -> Session { var s = s; s.group = group; return s }
     func stamp(_ k: SessionKey) -> SessionKey { var k = k; k.group = group; return k }
-    func launchers(machine: String) async throws -> [Launcher] {
-        try await get("/api/v1/machines/\(machine)/launchers", as: LaunchersResponse.self).launchers
+    func launcherList(machine: String) async throws -> LaunchersResponse {
+        try await get("/api/v1/machines/\(machine)/launchers", as: LaunchersResponse.self)
     }
     /// The models the launcher's agent lists in its /model menu (新建 Agent's model picker). The node starts the CLI to
     /// ask (a few seconds, kept 10 minutes); refresh asks it again.

@@ -9,7 +9,8 @@ import Observation
 
         static var live: Deps {
             let app = AppModel.shared
-            return .init(api: { app.api }, updated: { await app.refreshAssistant() })
+            // A saved use moves the pickers' 「默认：…」 too: they read the machines' launchers again.
+            return .init(api: { app.api }, updated: { app.launcherDefaultsChanged(); await app.refreshAssistant() })
         }
     }
 
@@ -33,7 +34,9 @@ import Observation
     func modelSummary(_ p: ModelPurpose) -> String {
         let model = p.effective.model ?? p.effective.provider.flatMap { id in providers.first { $0.id == id }?.name }
         let effort = p.effective.effort.map { value in SessionModes.effortLevels.first { $0.id == value }?.title ?? value }
-        let result = [model, effort].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        // 主对话 on the Agent SDK says so; the CLI is the default and goes unsaid.
+        let runtime = p.effective.runtime == AssistantRuntime.agentSDK ? AssistantRuntime.title(AssistantRuntime.agentSDK) : nil
+        let result = [model, effort, runtime].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
         return result.isEmpty ? "未配置" : result
     }
 
@@ -51,10 +54,17 @@ import Observation
         }
     }
 
+    /// 主对话's runtimes (运行方式); empty for every other use and on an older hub.
+    var runtimes: [String] {
+        guard let purpose, purpose.supports("runtime") else { return [] }
+        return purpose.runtimes ?? []
+    }
+
+    /// Another provider clears the model and the effort; the runtime is not the provider's and stays.
     func chooseProvider(_ id: String) {
         let selected = id.isEmpty ? nil : id
         guard selected != draft.provider else { return }
-        draft = ModelBinding(provider: selected)
+        draft = ModelBinding(provider: selected, runtime: draft.runtime)
     }
 
     func restoreInheritance() { draft = ModelBinding() }
@@ -99,7 +109,8 @@ import Observation
         defer { saving = false }
         do {
             guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
-            let binding = ModelBinding(provider: Self.trim(draft.provider), model: Self.trim(draft.model), effort: Self.trim(draft.effort))
+            let binding = ModelBinding(provider: Self.trim(draft.provider), model: Self.trim(draft.model), effort: Self.trim(draft.effort),
+                                       runtime: Self.trim(draft.runtime))
             let patch = ModelConfigurationPatch(revision: purpose.revision, binding: binding,
                                                 fields: purpose.fields ?? ["provider", "model"])
             let result = try await api.saveModelPurpose(purpose.id, patch: patch)

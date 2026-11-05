@@ -157,6 +157,7 @@ type ModelBinding struct {
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
 	Effort   string `json:"effort,omitempty"`
+	Runtime  string `json:"runtime,omitempty"` // 主对话 only: cli (default) or agentsdk; kept across a provider change
 }
 
 // NotifyRequest is notify.request's params.

@@ -1,0 +1,259 @@
+package node
+
+import (
+	"cmp"
+	"maps"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// legacyManagedEnv is managedEnv as it was before #2455, word for word: a launcher without the new fields must get
+// exactly this.
+func legacyManagedEnv(l proto.ManagedLauncher) []string {
+	small := l.SmallModel
+	if small == "" {
+		small = l.Model
+	}
+	env := []string{"ANTHROPIC_BASE_URL=" + l.BaseURL}
+	switch {
+	case l.APIKey == "":
+	case l.BearerAuth():
+		env = append(env, "ANTHROPIC_AUTH_TOKEN="+l.APIKey, "ANTHROPIC_API_KEY=")
+	default:
+		env = append(env, "ANTHROPIC_API_KEY="+l.APIKey, "ANTHROPIC_AUTH_TOKEN=")
+	}
+	if l.Model != "" {
+		for _, k := range []string{"ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL"} {
+			env = append(env, k+"="+l.Model)
+		}
+	}
+	if subagent := cmp.Or(l.SubagentModel, l.Model); subagent != "" {
+		env = append(env, "CLAUDE_CODE_SUBAGENT_MODEL="+subagent)
+	}
+	if l.CustomModel != "" {
+		env = append(env, "ANTHROPIC_CUSTOM_MODEL_OPTION="+l.CustomModel)
+		if l.CustomModelName != "" {
+			env = append(env, "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME="+l.CustomModelName)
+		}
+		if l.CustomModelDescription != "" {
+			env = append(env, "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION="+l.CustomModelDescription)
+		}
+	}
+	if small != "" {
+		env = append(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL="+small, "ANTHROPIC_SMALL_FAST_MODEL="+small)
+	}
+	return append(env, artifactsOff)
+}
+
+func TestManagedEnvUnchangedForOldLaunchers(t *testing.T) {
+	const gw = "https://gw.example.com"
+	for _, l := range []proto.ManagedLauncher{
+		{},
+		{Name: "a", BaseURL: gw},
+		{Name: "a", BaseURL: gw, APIKey: "sk-test-1"},
+		{Name: "a", BaseURL: gw, APIKey: "sk-test-1", Auth: "bearer"},
+		{Name: "a", BaseURL: gw, APIKey: "sk-test-1", Auth: "api_key", Model: "m1"},
+		{Name: "a", BaseURL: gw, APIKey: "sk-test-1", Model: "m1", SmallModel: "s1", SubagentModel: "sub"},
+		{Name: "a", BaseURL: gw, Model: "m1", CustomModel: "c1"},
+		{Name: "a", BaseURL: gw, Model: "m1", CustomModel: "c1", CustomModelName: "C", CustomModelDescription: "d"},
+		{Name: "a", BaseURL: gw, APIKey: "sk-test-1", Auth: "bearer", SmallModel: "s1", Args: []string{"--x"}},
+		{Name: "a", APIKey: "sk-test-1", Model: "m1"},
+	} {
+		want := legacyManagedEnv(l)
+		if got := managedEnv(l); !slices.Equal(got, want) {
+			t.Errorf("%+v:\n got  %q\n want %q", l, got, want)
+		}
+		wantMap := map[string]string{}
+		for _, kv := range want {
+			k, v, _ := strings.Cut(kv, "=")
+			wantMap[k] = v
+		}
+		if got := managedSettingsEnv(l); !maps.Equal(got, wantMap) {
+			t.Errorf("settings env %+v:\n got  %v\n want %v", l, got, wantMap)
+		}
+	}
+}
+
+func TestProviderEnv(t *testing.T) {
+	const gw = "https://gw.example.com"
+	models := []proto.ProviderModel{
+		{ID: "big", ContextWindow: 1000000, DefaultEffort: "high"},
+		{ID: "small", ContextWindow: 128000, DefaultEffort: "low"},
+		{ID: "std", ContextWindow: 200000},
+	}
+	base := proto.ManagedLauncher{Name: "p", Kind: "api", BaseURL: gw, APIKey: "sk-test-k", Model: "big", Models: models}
+	with := func(f func(*proto.ManagedLauncher)) proto.ManagedLauncher {
+		l := base
+		l.Models = slices.Clone(models)
+		f(&l)
+		return l
+	}
+	type want map[string]string // "-" is absent
+	cases := []struct {
+		name          string
+		l             proto.ManagedLauncher
+		model, effort string
+		main          bool
+		want          want
+	}{
+		{"1m added", base, "", "", false, want{"ANTHROPIC_MODEL": "big[1m]", "ANTHROPIC_DEFAULT_OPUS_MODEL": "big[1m]",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL": "big[1m]", "ANTHROPIC_DEFAULT_FABLE_MODEL": "big[1m]",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL": "big[1m]", "ANTHROPIC_SMALL_FAST_MODEL": "big[1m]",
+			"CLAUDE_CODE_SUBAGENT_MODEL": "big[1m]"}},
+		{"1m not added twice", base, "big[1m]", "", false, want{"ANTHROPIC_MODEL": "big[1m]",
+			"CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1000000"}},
+		{"unknown model as is", base, "other", "", false, want{"ANTHROPIC_MODEL": "other",
+			"CLAUDE_CODE_MAX_CONTEXT_TOKENS": "-", "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "-", "CLAUDE_CODE_EFFORT_LEVEL": "-"}},
+		{"200K is not 1m", base, "std", "", false, want{"ANTHROPIC_MODEL": "std", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "-",
+			"CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000"}},
+		{"api key", base, "", "", false, want{"ANTHROPIC_API_KEY": "sk-test-k", "ANTHROPIC_AUTH_TOKEN": ""}},
+		{"bearer", with(func(l *proto.ManagedLauncher) { l.Auth = "bearer" }), "", "", false,
+			want{"ANTHROPIC_AUTH_TOKEN": "sk-test-k", "ANTHROPIC_API_KEY": ""}},
+		{"bearer prefix dropped", with(func(l *proto.ManagedLauncher) { l.Auth = "bearer"; l.APIKey = "Bearer sk-test-k" }),
+			"", "", false, want{"ANTHROPIC_AUTH_TOKEN": "sk-test-k"}},
+		{"tiers fall back", with(func(l *proto.ManagedLauncher) { l.OpusModel = "o"; l.HaikuModel = "h"; l.SmallModel = "sf" }),
+			"", "", false, want{"ANTHROPIC_DEFAULT_OPUS_MODEL": "o", "ANTHROPIC_DEFAULT_SONNET_MODEL": "big[1m]",
+				"ANTHROPIC_DEFAULT_HAIKU_MODEL": "h", "ANTHROPIC_SMALL_FAST_MODEL": "sf", "ANTHROPIC_DEFAULT_FABLE_MODEL": "big[1m]"}},
+		{"tiers explicit", with(func(l *proto.ManagedLauncher) { l.SonnetModel = "s"; l.FableModel = "f" }), "", "", false,
+			want{"ANTHROPIC_DEFAULT_SONNET_MODEL": "s", "ANTHROPIC_DEFAULT_FABLE_MODEL": "f"}},
+		{"subagent force", with(func(l *proto.ManagedLauncher) { l.SubagentModel = "sub"; l.SubagentForce = true }), "", "", false,
+			want{"CLAUDE_CODE_SUBAGENT_MODEL": "sub", "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1"}},
+		{"no subagent force", base, "", "", false, want{"CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "-"}},
+		{"max context from window", base, "", "", false, want{"CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1000000"}},
+		{"max context set", with(func(l *proto.ManagedLauncher) { l.MaxContext = 300000 }), "small", "", false,
+			want{"CLAUDE_CODE_MAX_CONTEXT_TOKENS": "300000"}},
+		{"max context not for small", base, "small", "", false, want{"CLAUDE_CODE_MAX_CONTEXT_TOKENS": "-"}},
+		{"compact from window", base, "small", "", false, want{"CLAUDE_CODE_AUTO_COMPACT_WINDOW": "128000"}},
+		{"compact set", with(func(l *proto.ManagedLauncher) { l.CompactWindow = 150000 }), "", "", false,
+			want{"CLAUDE_CODE_AUTO_COMPACT_WINDOW": "150000"}},
+		{"compact main fixed", with(func(l *proto.ManagedLauncher) { l.CompactWindow = 150000 }), "", "", true,
+			want{"CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000"}},
+		{"effort given wins", with(func(l *proto.ManagedLauncher) { l.Effort = "medium" }), "", "max", false,
+			want{"CLAUDE_CODE_EFFORT_LEVEL": "max"}},
+		{"effort of provider", with(func(l *proto.ManagedLauncher) { l.Effort = "medium" }), "", "", false,
+			want{"CLAUDE_CODE_EFFORT_LEVEL": "medium"}},
+		{"effort of model", base, "small", "", false, want{"CLAUDE_CODE_EFFORT_LEVEL": "low"}},
+		{"headers", with(func(l *proto.ManagedLauncher) { l.Headers = "X-Test: v1" }), "", "", false,
+			want{"ANTHROPIC_CUSTOM_HEADERS": "X-Test: v1"}},
+		{"no headers", base, "", "", false, want{"ANTHROPIC_CUSTOM_HEADERS": "-"}},
+		{"proxy", with(func(l *proto.ManagedLauncher) { l.Proxy = "http://proxy.example.com:8080"; l.NoProxy = "localhost" }),
+			"", "", false, want{"HTTP_PROXY": "http://proxy.example.com:8080", "HTTPS_PROXY": "http://proxy.example.com:8080",
+				"NO_PROXY": "localhost"}},
+		{"no proxy", base, "", "", false, want{"HTTP_PROXY": "-", "HTTPS_PROXY": "-", "NO_PROXY": "-"}},
+		{"timeout default", base, "", "", false, want{"API_TIMEOUT_MS": "3000000",
+			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "ANTHROPIC_BASE_URL": gw}},
+		{"timeout set", with(func(l *proto.ManagedLauncher) { l.TimeoutMS = 60000 }), "", "", false,
+			want{"API_TIMEOUT_MS": "60000"}},
+		{"no gateway no timeout", with(func(l *proto.ManagedLauncher) { l.BaseURL = "" }), "", "", false,
+			want{"API_TIMEOUT_MS": "-", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "-"}},
+		{"artifacts off", base, "", "", false, want{"CLAUDE_CODE_DISABLE_ARTIFACT": "1"}},
+	}
+	for _, c := range cases {
+		got := providerEnv(c.l, c.model, c.effort, c.main)
+		for k, v := range c.want {
+			gv, ok := got[k]
+			if v == "-" {
+				if ok {
+					t.Errorf("%s: %s=%q, want unset", c.name, k, gv)
+				}
+				continue
+			}
+			if !ok || gv != v {
+				t.Errorf("%s: %s=%q (set %v), want %q", c.name, k, gv, ok, v)
+			}
+		}
+	}
+}
+
+func TestProviderEnvClear(t *testing.T) {
+	in := []string{"ANTHROPIC_BASE_URL=x", "ANTHROPIC_CUSTOM_HEADERS=h", "CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1",
+		"CLAUDE_CODE_EFFORT_LEVEL=max", "CLAUDE_CODE_MAX_CONTEXT_TOKENS=1", "CLAUDE_CODE_AUTO_COMPACT_WINDOW=1",
+		"API_TIMEOUT_MS=1", "HTTP_PROXY=p", "HTTPS_PROXY=p", "NO_PROXY=n", "PATH=/bin", "HOME=/h",
+		"CLAUDE_CODE_DISABLE_ARTIFACT=1", "API_TIMEOUT_MS_EXTRA=1"}
+	got := withoutProviderEnv(in)
+	if want := []string{"HTTP_PROXY=p", "HTTPS_PROXY=p", "NO_PROXY=n", "PATH=/bin", "HOME=/h", "CLAUDE_CODE_DISABLE_ARTIFACT=1",
+		"API_TIMEOUT_MS_EXTRA=1"}; !slices.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if len(in) != 14 {
+		t.Fatal("the input was changed")
+	}
+}
+
+// `jarvisd launch` drops from the shell what it always did for an old launcher (its proxy and timeout stay), and
+// everything providerEnv may set for a provider.
+func TestEnvClearFor(t *testing.T) {
+	shell := []string{"ANTHROPIC_API_KEY=x", "CLAUDE_CODE_USE_BEDROCK=1", "CLAUDE_CODE_OAUTH_TOKEN=x", "HTTPS_PROXY=p",
+		"API_TIMEOUT_MS=1", "PATH=/bin"}
+	if got := withoutEnv(shell, envClearFor(proto.ManagedLauncher{Name: "old"})); !slices.Equal(got,
+		[]string{"HTTPS_PROXY=p", "API_TIMEOUT_MS=1", "PATH=/bin"}) {
+		t.Errorf("old launcher: %q", got)
+	}
+	// A provider keeps the shell's proxy (a gateway reachable only through it) unless it has its own.
+	if got := withoutEnv(shell, envClearFor(proto.ManagedLauncher{Name: "p", Kind: "api"})); !slices.Equal(got, []string{"HTTPS_PROXY=p", "PATH=/bin"}) {
+		t.Errorf("provider: %q", got)
+	}
+	if got := withoutEnv(append(shell, "https_proxy=q"), envClearFor(proto.ManagedLauncher{Name: "p", Kind: "api", Proxy: "http://127.0.0.1:1"})); !slices.Equal(got, []string{"PATH=/bin"}) {
+		t.Errorf("provider with a proxy: %q", got)
+	}
+	n := &Node{}
+	n.setManaged([]proto.ManagedLauncher{{Name: "p", Kind: "api"}})
+	if c, _ := n.launcherEnv("p")["clear"].([]string); !slices.Equal(c, providerEnvClear) {
+		t.Errorf("launcher.env clear: %q", c)
+	}
+}
+
+func TestSetManagedKeepsMessagesProviders(t *testing.T) {
+	n := &Node{}
+	n.setManaged([]proto.ManagedLauncher{
+		{Name: "launcher"},
+		{Name: "api-default", Kind: "api"},
+		{Name: "api-messages", Kind: "api", API: "messages"},
+		{Name: "api-responses", Kind: "api", API: "responses"},
+	})
+	for name, want := range map[string]bool{"launcher": true, "api-default": true, "api-messages": true, "api-responses": false} {
+		if _, ok := n.managedLauncher(name); ok != want {
+			t.Errorf("%s managed: %v, want %v", name, ok, want)
+		}
+	}
+}
+
+func TestMainConversationKeepsItsOwnWindowAndLevel(t *testing.T) {
+	l := proto.ManagedLauncher{Name: "p", Kind: "api", BaseURL: "https://gw.example.com", APIKey: "sk-test-k", Effort: "high",
+		Models: []proto.ProviderModel{{ID: "big", ContextWindow: 1000000}}}
+	main := providerEnv(l, "big", "max", true)
+	if main["ANTHROPIC_MODEL"] != "big[1m]" || main["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] != "200000" {
+		t.Fatalf("main: %v", main)
+	}
+	// it switches its level while it runs (apply_flag_settings): an environment variable would win over that
+	if _, ok := main["CLAUDE_CODE_EFFORT_LEVEL"]; ok {
+		t.Fatalf("main conversation got a thinking level env: %v", main)
+	}
+	if agent := providerEnv(l, "big", "", false); agent["CLAUDE_CODE_EFFORT_LEVEL"] != "high" || agent["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] != "1000000" {
+		t.Fatalf("agent: %v", agent)
+	}
+	// what is pinned over the user's settings leaves the per-start decisions to the start's environment
+	pinned := pinnedEnv(providerEnv(l, "big", "", false))
+	if _, ok := pinned["CLAUDE_CODE_AUTO_COMPACT_WINDOW"]; ok || pinned["ANTHROPIC_MODEL"] != "big[1m]" || pinned["ANTHROPIC_API_KEY"] != "sk-test-k" {
+		t.Fatalf("pinned: %v", pinned)
+	}
+	if _, ok := pinned["CLAUDE_CODE_EFFORT_LEVEL"]; ok {
+		t.Fatalf("pinned has the level: %v", pinned)
+	}
+}
+
+func TestLaunchKeepsTheAssistantsOwnWindowAndLevel(t *testing.T) {
+	clear := []string{"ANTHROPIC_*", "CLAUDE_CODE_AUTO_COMPACT_WINDOW", "CLAUDE_CODE_EFFORT_LEVEL"}
+	env := []string{"ANTHROPIC_MODEL=m", "CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000", "CLAUDE_CODE_EFFORT_LEVEL=high"}
+	c, e := launchEnvFor(clear, env, true)
+	if !slices.Equal(c, []string{"ANTHROPIC_*"}) || !slices.Equal(e, []string{"ANTHROPIC_MODEL=m"}) {
+		t.Fatalf("assistant: %v %v", c, e)
+	}
+	if c, e := launchEnvFor(clear, env, false); !slices.Equal(c, clear) || !slices.Equal(e, env) {
+		t.Fatalf("agent: %v %v", c, e)
+	}
+}

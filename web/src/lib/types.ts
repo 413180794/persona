@@ -195,6 +195,10 @@ export interface Session {
   attention_reason?: string;
   /** Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开. */
   external_url?: string;
+  /** An assistant conversation's runtime as it runs ("agentsdk"; absent: the CLI, #2455). */
+  runtime?: string;
+  /** Why an assistant conversation asked to run on the Agent SDK runs on the CLI instead. */
+  runtime_fallback?: string;
   /** The last compaction the user asked for in an assistant conversation (POST …/compact, #1727). */
   compaction?: Compaction;
 }

@@ -403,7 +403,7 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 // mergeModel puts over's choices on base: another provider starts from nothing (its model and effort are its own).
 func mergeModel(base, over ModelBinding) ModelBinding {
 	if over.Provider != "" && over.Provider != base.Provider {
-		base = ModelBinding{Provider: over.Provider}
+		base = ModelBinding{Provider: over.Provider, Runtime: base.Runtime}
 	}
 	if over.Model != "" {
 		base.Model = over.Model

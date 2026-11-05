@@ -78,5 +78,7 @@
   "err_purpose_readonly": "This use’s model is read-only. Change its category’s model instead",
   "err_api_effort": "This API connection doesn’t support reasoning effort",
   "err_not_launcher": "This use isn’t a launcher",
-  "err_api_as_launcher": "This use points to a direct API connection and can’t run as a launcher"
+  "err_api_as_launcher": "This use points to a direct API connection that speaks Responses and can’t run as a launcher",
+  "err_runtime_invalid": "Runtime must be cli or agentsdk",
+  "err_runtime_assistant_only": "Only the main chat can choose a runtime"
 }

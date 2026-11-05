@@ -87,5 +87,12 @@
   "act_tool": "ツール呼び出し中",
   "act_tool_what": "{what}を呼び出し中",
   "act_run": "実行中",
-  "act_run_what": "{what}を実行中"
+  "act_run_what": "{what}を実行中",
+  "fallback_shell_launcher": "ランチャー{launcher}はこのコンピューター上のシェルコマンドのため、Agent SDKはその設定を使えません",
+  "fallback_read_bridge": "Agent SDKブリッジを読み取れません：{cause}",
+  "fallback_no_bridge": "このpersonadにはAgent SDKブリッジが含まれていません",
+  "fallback_write_bridge": "Agent SDKブリッジを書き出せません：{cause}",
+  "fallback_no_bridge_script": "Agent SDKブリッジのパッケージにbridge.mjsがありません",
+  "fallback_no_node": "Node.js 22以降がありません：{cause}",
+  "fallback_no_claude": "claudeが見つかりません：{cause}"
 }

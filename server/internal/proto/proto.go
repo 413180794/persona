@@ -513,7 +513,71 @@ type ManagedLauncher struct {
 	// Auth is how the key goes to the gateway: "api_key" (x-api-key, ANTHROPIC_API_KEY; the default) or "bearer"
 	// (Authorization: Bearer, ANTHROPIC_AUTH_TOKEN), for gateways that take only that.
 	Auth string `json:"auth,omitempty"`
+
+	// The provider as cindy models it (#2455): what is known of each model the gateway serves, the model per Claude
+	// Code tier, and the gateway's own needs. All optional; an older launcher reads as before.
+	//
+	// Models: the gateway's models with their context window and thinking levels (the first is not the default; Model
+	// is). A model whose window is over 200K runs as "<id>[1m]" (CLI and SDK), its compact window capped to it.
+	Models []ProviderModel `json:"models,omitempty"`
+	// The model of each Claude Code tier (ANTHROPIC_DEFAULT_*_MODEL); "" is Model.
+	OpusModel   string `json:"opus_model,omitempty"`
+	SonnetModel string `json:"sonnet_model,omitempty"`
+	HaikuModel  string `json:"haiku_model,omitempty"`
+	FableModel  string `json:"fable_model,omitempty"`
+	// SubagentForce: CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 (the subagent model wins over an agent's own model:).
+	SubagentForce bool `json:"subagent_force,omitempty"`
+	// Headers: ANTHROPIC_CUSTOM_HEADERS, one "Name: value" a line. A secret like the key: sealed at rest, never sent
+	// back to clients (they see HasHeaders).
+	Headers    string `json:"headers,omitempty"`
+	HasHeaders bool   `json:"has_headers,omitempty"`
+	// Proxy / NoProxy: HTTP_PROXY and HTTPS_PROXY / NO_PROXY for the gateway.
+	Proxy   string `json:"proxy,omitempty"`
+	NoProxy string `json:"no_proxy,omitempty"`
+	// TimeoutMS: API_TIMEOUT_MS; 0 is 3000000 for a gateway (BaseURL set), Claude Code's own default otherwise.
+	TimeoutMS int `json:"timeout_ms,omitempty"`
+	// CompactWindow: CLAUDE_CODE_AUTO_COMPACT_WINDOW; 0 is the default model's context window (none when unknown).
+	// The main conversation keeps its own 200000 whatever this says.
+	CompactWindow int `json:"compact_window,omitempty"`
+	// MaxContext: CLAUDE_CODE_MAX_CONTEXT_TOKENS; 0 is the default model's context window when it is over 200K.
+	MaxContext int `json:"max_context,omitempty"`
+	// Effort: the default thinking level (CLAUDE_CODE_EFFORT_LEVEL) when the caller gives none.
+	Effort string `json:"effort,omitempty"`
+	// Source: where it came from: "" (made by hand), "zshrc:<alias>@<machine id>" (imported), "preset:<id>".
+	Source string `json:"source,omitempty"`
 }
+
+// ProviderModel is one model a provider's gateway serves (cindy's ProviderRuntimeModelConfig, the Anthropic part).
+type ProviderModel struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	// ContextWindow in tokens; 0 is unknown (Claude Code then assumes 200K).
+	ContextWindow int `json:"context_window,omitempty"`
+	// Efforts: the thinking levels it takes (low, medium, high, xhigh, max); empty is unknown (all are offered).
+	Efforts       []string `json:"efforts,omitempty"`
+	DefaultEffort string   `json:"default_effort,omitempty"`
+}
+
+// The assistant's runtimes for a Claude launcher (model_config.assistant's "runtime", the assistant.send / .start /
+// .warm params' "runtime"): the Claude Code CLI in stream-json mode (the default), or the Claude Agent SDK through the
+// node's Node bridge (integrations/agent-sdk, #2455), which falls back to the CLI where no Node 22+ is found.
+const (
+	AssistantRuntimeCLI      = "cli"
+	AssistantRuntimeAgentSDK = "agentsdk"
+)
+
+// Why an assistant conversation that asked for the Agent SDK runs on the CLI (Session.RuntimeFallback), as the node
+// writes it: in Chinese, the ones ending in "：" followed by the cause, FallbackShellLauncher with the launcher's name.
+// The hub rewrites them in the app's language (hub/transcript_text.go runtimeFallbackText).
+const (
+	FallbackShellLauncher  = "启动器 %s 是这台电脑上的 shell 命令，Agent SDK 用不了它的设置"
+	FallbackReadBridge     = "读不到 Agent SDK 桥："
+	FallbackNoBridge       = "这个 personad 没有带 Agent SDK 桥"
+	FallbackWriteBridge    = "写不出 Agent SDK 桥："
+	FallbackNoBridgeScript = "Agent SDK 桥的包里没有 bridge.mjs"
+	FallbackNoNode         = "没有 Node.js 22 及以上："
+	FallbackNoClaude       = "找不到 claude："
+)
 
 // BearerAuth: the launcher's key goes as Authorization: Bearer (ANTHROPIC_AUTH_TOKEN) rather than x-api-key.
 func (l ManagedLauncher) BearerAuth() bool { return l.Auth == "bearer" }
@@ -711,6 +775,11 @@ type Session struct {
 	FailureReason string `json:"failure_reason,omitempty"`
 	// ExternalURL opens the session where it lives outside Persona (a botmux session's Feishu topic).
 	ExternalURL string `json:"external_url,omitempty"`
+	// Runtime: an assistant conversation's runtime as it actually runs ("agentsdk"; "" is the CLI, #2455).
+	Runtime string `json:"runtime,omitempty"`
+	// RuntimeFallback: why an assistant conversation asked to run on the Agent SDK runs on the CLI instead (no
+	// Node.js 22+, no bridge package, no claude); "" when it runs as asked.
+	RuntimeFallback string `json:"runtime_fallback,omitempty"`
 	// Chat, Topic, Dispatched: a botmux session's Feishu chat, its topic's root message and the topics it dispatched
 	// (`botmux dispatch`), for the todos to follow (docs/todos.md「botmux 跟随」); stripped by hub like SpawnFrom.
 	Chat       string   `json:"chat,omitempty"`

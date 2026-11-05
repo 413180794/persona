@@ -8,13 +8,15 @@ import { launchAgent, presetPrompt, type NewAgentPreset } from "../lib/new-agent
 import { AttachmentTray } from "../ui/AttachmentTray";
 import { modelPurpose, modelSummary, type ModelBinding } from "../lib/model-config";
 import {
-  effortChoices, fitEffort, followedBinding, launcherAgent, launcherModels, modelName, pickerLauncher, startPicks, takesEffort,
+  defaultLabel, effortChoices, fitEffort, followedBinding, launcherAgent, launcherModels, machineLaunchers, modelName, oneOff, pickerLauncher, startPicks,
+  takesEffort, type LauncherDefault,
 } from "../lib/launcher-models";
 import { EFFORTS, effortTitle } from "../lib/session-actions";
 import { baseName, shortPath } from "../lib/format";
 import { useStore } from "../lib/store";
 import type { Launcher } from "../lib/types";
 import { Button, cx, Dialog, Spinner, toast } from "../ui/atoms";
+import { Pill } from "./settings/SettingsParts";
 import { Icon } from "../ui/icons";
 import { ModelPicker, type ModelList } from "../ui/ModelPicker";
 import { t } from "../i18n";
@@ -35,6 +37,8 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
   const [launchers, setLaunchers] = useState<Launcher[]>([]);
   const [unified, setUnified] = useState(true);
   const [modelDefault, setModelDefault] = useState("");
+  // the hub's 「默认：…」 for 新建 Agent (#2455); undefined from an older hub
+  const [hubDefault, setHubDefault] = useState<LauncherDefault | null | undefined>(undefined);
   // 模型配置's 新建 Agent as it applies now (provider, model, effort); null: the hub has no 模型配置
   const [configured, setConfigured] = useState<ModelBinding | null>(null);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -102,10 +106,11 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     const controller = new AbortController();
     setLauncher("");
     setModelDefault("");
+    setHubDefault(undefined);
     setConfigured(null);
     setLoadingModels(true);
     Promise.all([
-      api<{ launchers: Launcher[] }>(`/machines/${enc(mid)}/launchers`, { signal: controller.signal }),
+      machineLaunchers(mid, { signal: controller.signal }),
       modelPurpose("agent.new").catch((e) => {
         if (e instanceof ApiError && e.status === 404) return null;
         throw e;
@@ -115,6 +120,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
         if (controller.signal.aborted) return;
         const ls = r.launchers ?? [];
         setLaunchers(ls);
+        setHubDefault(r.default);
         setLaunchersOf(mid);
         setUnified(config !== null);
         if (config) {
@@ -274,14 +280,19 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
         {(unified || launchers.length > 1) && (
           <Field label={unified ? t("newagent.launcher_override") : t("newagent.launcher")}>
             <div className="flex flex-wrap gap-1.5">
-              {unified && <Choice selected={launcher === ""} onClick={() => setLauncher("")} title={modelDefault}>{t("newagent.follow_model_settings")}</Choice>}
+              {unified && <Choice selected={launcher === ""} onClick={() => setLauncher("")} title={modelDefault}>{hubDefault ? defaultLabel(hubDefault) : t("newagent.follow_model_settings")}</Choice>}
               {launchers.map((l) => (
                 <Choice key={l.name} mono selected={launcher === l.name} onClick={() => setLauncher(l.name)} title={l.model}>
                   {l.name}
                 </Choice>
               ))}
             </div>
-            {unified && <p className="mt-1.5 text-[11.5px] text-ink-3">{launcher ? t("newagent.override_hint") : modelDefault || t("newagent.default_hint")}</p>}
+            {unified && (
+              <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
+                {launcher && <Pill tone="accent">{oneOff()}</Pill>}
+                <span className="min-w-0 truncate">{launcher ? t("newagent.override_hint") : modelDefault || t("newagent.default_hint")}</span>
+              </p>
+            )}
           </Field>
         )}
 

@@ -30,6 +30,38 @@ export interface LauncherModels {
   locked?: string;
 }
 
+/** What 模型配置 runs when a launcher picker is left alone (GET /machines/{mid}/launchers's `default`, #2455):
+ *  `provider` is the launcher's name. */
+export interface LauncherDefault {
+  provider?: string;
+  model?: string;
+  effort?: string;
+  /** 主对话 only: cli or agentsdk. */
+  runtime?: string;
+}
+
+export interface MachineLaunchers {
+  launchers: Launcher[];
+  /** Absent from an older hub; null when the purpose is not a launcher use. */
+  default?: LauncherDefault | null;
+}
+
+/** The launchers on `mid` with the default of `purpose` (the hub's own when absent: 新建 Agent). */
+export function machineLaunchers(mid: string, opts: { purpose?: string; signal?: AbortSignal } = {}): Promise<MachineLaunchers> {
+  const q = opts.purpose ? `?purpose=${enc(opts.purpose)}` : "";
+  return api<MachineLaunchers>(`/machines/${enc(mid)}/launchers${q}`, { signal: opts.signal });
+}
+
+/** A picker's first entry: 「默认：<供应商> · <模型>」 from the hub's default, `fallback` naming the launcher when the hub
+ *  says nothing (an older hub). */
+export function defaultLabel(d: LauncherDefault | null | undefined, fallback = ""): string {
+  const parts = [d?.provider || fallback, d?.model && modelName({ id: d.model.split("/").pop() || d.model })].filter(Boolean);
+  return parts.length ? t("lib-launcher-models.default_named", { name: parts.join(" · ") }) : t("lib-launcher-models.default");
+}
+
+/** What a launcher picked over the default is marked with: it applies to this start / conversation only. */
+export const oneOff = () => t("lib-launcher-models.one_off");
+
 /** The list for `launcher` on `mid` (seconds when the node has to start the CLI); null from an older hub (no picker). */
 export async function launcherModels(mid: string, launcher: string, opts: { refresh?: boolean; signal?: AbortSignal } = {}): Promise<LauncherModels | null> {
   try {

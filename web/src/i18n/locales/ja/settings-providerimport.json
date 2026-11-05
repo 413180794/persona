@@ -1,0 +1,12 @@
+{
+  "title": "~/.zshrcからインポート",
+  "import_count_other": "{count}件をインポート",
+  "import": "インポート",
+  "computer": "コンピューター",
+  "computer_hint": "このコンピューターの~/.zshrcにあるclaudeを呼び出すaliasを読み込みます。URLとKeyが同じものは1つのプロバイダーにまとめます。",
+  "offline_suffix": "（オフライン）",
+  "empty": "このコンピューターの~/.zshrcにインポートできるclaudeのaliasはありません。",
+  "list_label": "インポートできるプロバイダー",
+  "from_aliases": "{aliases}から",
+  "merge_note": "統合すると、新しいモデルだけが既存のプロバイダーに追加されます。ほかの設定は変わりません。"
+}

@@ -1,3 +1,5 @@
 {
-  "default": "默认"
+  "default": "默认",
+  "default_named": "默认：{name}",
+  "one_off": "仅这一次"
 }

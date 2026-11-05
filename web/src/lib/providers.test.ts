@@ -1,0 +1,163 @@
+import { describe, expect, it } from "vitest";
+import { ApiError } from "./api";
+import {
+  formFromView,
+  formModel,
+  formProblems,
+  importErrorText,
+  importRow,
+  importSummary,
+  mergeDiscovered,
+  newForm,
+  probeBody,
+  providerBody,
+  testModel,
+  testText,
+  type ProviderForm,
+  type ProviderView,
+} from "./providers";
+
+const ready = (over: Partial<ProviderForm> = {}): ProviderForm => ({
+  ...newForm("custom"),
+  name: "gw",
+  base_url: "https://gw.example.com",
+  api_key: "sk-test-1",
+  models: [formModel({ id: "m1", context_window: 200000 })],
+  model: "m1",
+  ...over,
+});
+
+const stored: ProviderView = {
+  name: "gw",
+  kind: "launcher",
+  base_url: "https://gw.example.com",
+  model: "m1",
+  auth: "bearer",
+  has_key: true,
+  has_headers: true,
+  models: [{ id: "m1", context_window: 1000000, efforts: ["high", "max"], default_effort: "high" }, { id: "m2" }],
+  opus_model: "m1",
+  subagent_force: true,
+  proxy: "http://proxy.example.com:8080",
+  timeout_ms: 600000,
+  effort: "high",
+};
+
+describe("newForm", () => {
+  it("defaults to Bearer for a gateway, x-api-key and the official address for Anthropic", () => {
+    expect(newForm("custom")).toMatchObject({ auth: "bearer", base_url: "" });
+    expect(newForm("official")).toMatchObject({ auth: "api_key", base_url: "https://api.anthropic.com" });
+  });
+});
+
+describe("formProblems", () => {
+  it("passes a ready form", () => {
+    expect(formProblems(ready(), true)).toEqual({ connect: "", models: "", advanced: "" });
+  });
+  it("checks the connection step", () => {
+    expect(formProblems(ready({ name: "" }), true).connect).toBe("要填名称");
+    expect(formProblems(ready({ name: "1bad" }), true).connect).toMatch(/名字只能/);
+    expect(formProblems(ready({ base_url: "ftp://x" }), true).connect).toMatch(/http/);
+    expect(formProblems(ready({ base_url: "https://u:p@x.example.com" }), true).connect).toMatch(/凭据/);
+    expect(formProblems(ready({ api_key: "" }), true).connect).toBe("要填 API Key");
+    // editing one that has a key: left empty keeps it
+    expect(formProblems(ready({ api_key: "" }), false, true).connect).toBe("");
+  });
+  it("checks the models step", () => {
+    expect(formProblems(ready({ model: "", models: [] }), true).models).toBe("至少勾选或添加一个模型");
+    expect(formProblems(ready({ model: "" }), true).models).toBe("选一个默认模型");
+    expect(formProblems(ready({ model: "m9" }), true).models).toBe("默认模型要在勾选的模型里");
+    expect(formProblems(ready({ models: [formModel({ id: "m1" }), formModel({ id: "m1" })] }), true).models).toMatch(/重复/);
+    expect(formProblems(ready({ models: [{ ...formModel({ id: "m1" }), context_window: "12k" }] }), true).models).toMatch(/上下文窗口/);
+    expect(formProblems(ready({ models: [formModel({ id: "m1", efforts: ["low"], default_effort: "max" })] }), true).models).toMatch(/默认思考档位/);
+    // an unchecked duplicate does not count
+    expect(formProblems(ready({ models: [formModel({ id: "m1" }), formModel({ id: "m1" }, false)] }), true).models).toBe("");
+  });
+  it("checks the advanced fields", () => {
+    expect(formProblems(ready({ headers: "no colon", headers_touched: true }), true).advanced).toMatch(/请求头第 1 行/);
+    expect(formProblems(ready({ headers: "X-A: 1\n\nX-B: 2", headers_touched: true }), true).advanced).toBe("");
+    expect(formProblems(ready({ proxy: "proxy.example.com" }), true).advanced).toMatch(/代理/);
+    expect(formProblems(ready({ proxy: "socks5://127.0.0.1:1080" }), true).advanced).toBe("");
+    expect(formProblems(ready({ timeout_ms: "-1" }), true).advanced).toMatch(/超时/);
+    expect(formProblems(ready({ max_context: "1.5" }), true).advanced).toMatch(/最大上下文/);
+    expect(formProblems(ready({ args: "--ok bad" }), true).advanced).toMatch(/额外参数/);
+  });
+});
+
+describe("providerBody", () => {
+  it("a new provider sends what is set, not the empty ones", () => {
+    const b = providerBody(ready({ timeout_ms: "30000", subagent_force: true }), null);
+    expect(b).toMatchObject({ name: "gw", base_url: "https://gw.example.com", model: "m1", auth: "bearer", api_key: "sk-test-1", timeout_ms: 30000, subagent_force: true });
+    expect(b.models).toEqual([{ id: "m1", context_window: 200000 }]);
+    for (const k of ["headers", "proxy", "opus_model", "compact_window", "effort"]) expect(b).not.toHaveProperty(k);
+  });
+  it("an unchanged PUT leaves out the #2455 fields, the key and the headers", () => {
+    const b = providerBody(formFromView(stored), stored);
+    expect(b).toMatchObject({ name: "gw", base_url: "https://gw.example.com", model: "m1", auth: "bearer" });
+    for (const k of ["models", "opus_model", "subagent_force", "proxy", "timeout_ms", "effort", "headers", "api_key"]) expect(b).not.toHaveProperty(k);
+  });
+  it("a PUT sends only what changed; cleared headers go as an empty string", () => {
+    const f = { ...formFromView(stored), proxy: "", timeout_ms: "900000", headers: "", headers_touched: true };
+    const b = providerBody(f, stored);
+    expect(b).toMatchObject({ proxy: "", timeout_ms: 900000, headers: "" });
+    expect(b).not.toHaveProperty("models");
+    expect(b).not.toHaveProperty("effort");
+  });
+  it("unchecking a model sends the new list", () => {
+    const f = formFromView(stored);
+    f.models[1] = { ...f.models[1], checked: false };
+    expect(providerBody(f, stored).models).toEqual([{ id: "m1", context_window: 1000000, efforts: ["high", "max"], default_effort: "high" }]);
+  });
+  it("direct API providers send no launcher-only fields", () => {
+    const b = providerBody(ready({ kind: "api", api: "responses", small_model: "s", args: "--x" }), null);
+    expect(b).toMatchObject({ kind: "api", api: "responses", small_model: "", args: [], auth: "api_key" });
+  });
+});
+
+describe("formFromView", () => {
+  it("brings back what was saved", () => {
+    const f = formFromView(stored);
+    expect(f).toMatchObject({ name: "gw", auth: "bearer", opus_model: "m1", subagent_force: true, proxy: "http://proxy.example.com:8080", timeout_ms: "600000", effort: "high", headers: "", headers_touched: false });
+    expect(f.models.map((m) => [m.id, m.context_window, m.checked])).toEqual([["m1", "1000000", true], ["m2", "", true]]);
+  });
+  it("keeps a default model that is not in the list", () => {
+    expect(formFromView({ name: "x", model: "solo" }).models.map((m) => m.id)).toEqual(["solo"]);
+  });
+});
+
+describe("probes", () => {
+  it("by name when editing, the typed key and touched headers over it", () => {
+    expect(probeBody(ready({ api_key: "" }), "gw", "m1")).toEqual({ base_url: "https://gw.example.com", auth: "bearer", name: "gw", model: "m1" });
+    expect(probeBody(ready({ headers: "", headers_touched: true }), null)).toEqual({ base_url: "https://gw.example.com", auth: "bearer", api_key: "sk-test-1", headers: "" });
+  });
+  it("words the test result", () => {
+    expect(testText({ ok: true, ms: 412 })).toBe("连接成功（412 ms）");
+    expect(testText({ ok: false, ms: 0, error: "401 认证失败" })).toBe("401 认证失败");
+  });
+  it("tests with the default, else the first checked model", () => {
+    expect(testModel(ready())).toBe("m1");
+    expect(testModel(ready({ model: "", models: [formModel({ id: "a" }, false), formModel({ id: "b" })] }))).toBe("b");
+  });
+  it("merges discovered models without losing what was typed", () => {
+    const first = mergeDiscovered([], [{ id: "a", context_window: 200000 }, { id: "b" }]);
+    expect(first.map((m) => [m.id, m.checked])).toEqual([["a", true], ["b", true]]);
+    const again = mergeDiscovered([{ ...first[0], context_window: "123" }], [{ id: "a", context_window: 200000 }, { id: "c" }]);
+    expect(again.map((m) => [m.id, m.context_window, m.checked])).toEqual([["a", "123", true], ["c", "", false]]);
+    const many = mergeDiscovered([], Array.from({ length: 9 }, (_, i) => ({ id: `m${i}` })));
+    expect(many.every((m) => !m.checked)).toBe(true);
+  });
+});
+
+describe("import preview", () => {
+  it("shows the host, the model count, the aliases and where it merges", () => {
+    const row = importRow({ name: "cc_glm", base_url: "https://open.example.com/api/anthropic", model: "glm-5", models: [{ id: "glm-5" }, { id: "glm-5-air" }], aliases: ["cc_glm", "cc_glm_air"], existing: "glm" });
+    expect(row).toEqual({ name: "cc_glm", host: "open.example.com", models: "2 个模型", aliases: "cc_glm、cc_glm_air", action: "合并到 glm", merge: true });
+    expect(importRow({ name: "a", model: "m", aliases: ["a"] })).toMatchObject({ host: "官方地址", models: "1 个模型", action: "新建", merge: false });
+  });
+  it("sums up and words the two errors the hub names", () => {
+    expect(importSummary({ created: ["a", "b"], updated: ["c"] })).toBe("新建 2 个，合并 1 个");
+    expect(importErrorText(new ApiError(409, "x", { code: "node_outdated" }))).toBe("这台电脑的 Persona 需要更新");
+    expect(importErrorText(new ApiError(503, "x", { code: "offline" }))).toBe("这台电脑不在线");
+    expect(importErrorText(new ApiError(502, "坏了", { code: "internal" }))).toBe("坏了");
+  });
+});

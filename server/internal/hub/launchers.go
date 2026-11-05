@@ -42,10 +42,12 @@ const (
 // storedLauncher is a managed launcher as kept in settings: the key sealed.
 type storedLauncher struct {
 	proto.ManagedLauncher
-	KeySealed string    `json:"key_sealed,omitempty"`
-	Preset    string    `json:"preset,omitempty"` // the plugin's provider it was added from
-	Created   time.Time `json:"created"`
-	Updated   time.Time `json:"updated"`
+	KeySealed string `json:"key_sealed,omitempty"`
+	// HeadersSealed: Headers (ANTHROPIC_CUSTOM_HEADERS) sealed like the key; the embedded Headers is never stored.
+	HeadersSealed string    `json:"headers_sealed,omitempty"`
+	Preset        string    `json:"preset,omitempty"` // the plugin's provider it was added from
+	Created       time.Time `json:"created"`
+	Updated       time.Time `json:"updated"`
 }
 
 // LauncherView is one launcher for the app: where it comes from, which machines have it; never the key.
@@ -66,6 +68,22 @@ type LauncherView struct {
 	Auth                   string   `json:"auth,omitempty"`     // managed: api_key (x-api-key) or bearer
 	Machines               []string `json:"machines,omitempty"` // zshrc: the machines whose ~/.zshrc defines it
 	Hidden                 bool     `json:"hidden,omitempty"`
+	// Managed only (#2455, proto.ManagedLauncher's fields): never the headers themselves, only has_headers.
+	Models        []proto.ProviderModel `json:"models,omitempty"`
+	OpusModel     string                `json:"opus_model,omitempty"`
+	SonnetModel   string                `json:"sonnet_model,omitempty"`
+	HaikuModel    string                `json:"haiku_model,omitempty"`
+	FableModel    string                `json:"fable_model,omitempty"`
+	SubagentForce bool                  `json:"subagent_force,omitempty"`
+	HasHeaders    bool                  `json:"has_headers,omitempty"`
+	Proxy         string                `json:"proxy,omitempty"`
+	NoProxy       string                `json:"no_proxy,omitempty"`
+	TimeoutMS     int                   `json:"timeout_ms,omitempty"`
+	CompactWindow int                   `json:"compact_window,omitempty"`
+	MaxContext    int                   `json:"max_context,omitempty"`
+	Effort        string                `json:"effort,omitempty"`
+	// Origin is ManagedLauncher.Source ("" made by hand, "zshrc:<alias>@<machine>", "preset:<id>"); "source" is taken.
+	Origin string `json:"origin,omitempty"`
 	// Definition per machine (zshrc launchers, detail only): the function body, secrets masked.
 	Definitions map[string]string `json:"definitions,omitempty"`
 	// Details per machine (zshrc launchers, detail only): what the launcher really sets when run (node/launcherprobe.go).
@@ -78,6 +96,9 @@ type launcherState struct {
 }
 
 var managedLauncherName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+
+// reservedLauncherNames are taken by claude itself and the /api/v1/launchers/<word> routes.
+var reservedLauncherNames = []string{"claude", "presets", "test", "discover", "import"}
 
 func (h *Hub) launcherKey() ([]byte, error) {
 	h.launchers.mu.Lock()
@@ -167,14 +188,19 @@ func (h *Hub) put(ctx context.Context, key string, v any) error {
 func (h *Hub) managedForNodes(ctx context.Context) []proto.ManagedLauncher {
 	var out []proto.ManagedLauncher
 	for _, s := range h.storedLaunchers(ctx) {
-		if s.Kind == "api" {
-			continue
+		if s.Kind == "api" && s.API == "responses" {
+			continue // a Messages gateway (launcher or kind:api) can run claude on a node; a Responses one cannot
 		}
 		l := s.ManagedLauncher
 		if k, err := h.openKey(s.KeySealed); err == nil {
 			l.APIKey = k
 		} else {
 			h.logf("launchers: open key of %s: %v", s.Name, err)
+		}
+		if hd, err := h.openKey(s.HeadersSealed); err == nil {
+			l.Headers, l.HasHeaders = hd, hd != ""
+		} else {
+			h.logf("launchers: open headers of %s: %v", s.Name, err)
 		}
 		out = append(out, l)
 	}
@@ -232,15 +258,23 @@ func (h *Hub) zshrcLaunchers(ctx context.Context) map[string][]proto.Launcher {
 	return seen
 }
 
+// view is a managed launcher for the app: never the key or the headers.
+func (s storedLauncher) view() LauncherView {
+	return LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model, SmallModel: s.SmallModel,
+		SubagentModel: s.SubagentModel, CustomModel: s.CustomModel, CustomModelName: s.CustomModelName,
+		CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != "", Auth: s.Auth,
+		Models: s.Models, OpusModel: s.OpusModel, SonnetModel: s.SonnetModel, HaikuModel: s.HaikuModel, FableModel: s.FableModel,
+		SubagentForce: s.SubagentForce, HasHeaders: s.HeadersSealed != "", Proxy: s.Proxy, NoProxy: s.NoProxy, TimeoutMS: s.TimeoutMS,
+		CompactWindow: s.CompactWindow, MaxContext: s.MaxContext, Effort: s.Effort, Origin: s.Source}
+}
+
 // launcherViews is the whole list: managed first (newest last), then ~/.zshrc ones by name; hidden ones flagged.
 func (h *Hub) launcherViews(ctx context.Context) []LauncherView {
 	var out []LauncherView
 	managed := map[string]bool{}
 	for _, s := range h.storedLaunchers(ctx) {
 		managed[s.Name] = true
-		out = append(out, LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model, SmallModel: s.SmallModel,
-			SubagentModel: s.SubagentModel, CustomModel: s.CustomModel, CustomModelName: s.CustomModelName,
-			CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != "", Auth: s.Auth})
+		out = append(out, s.view())
 	}
 	hidden := h.hiddenLaunchers(ctx)
 	byName := map[string]*LauncherView{}
@@ -335,6 +369,160 @@ type launcherInput struct {
 	Auth                   string   `json:"auth"`    // api_key (x-api-key, the default) or bearer (Authorization: Bearer)
 	// Preset is a plugin's provider it is added from (GET /api/v1/launchers/presets): what is left empty is filled in.
 	Preset string `json:"preset,omitempty"`
+
+	// #2455's fields (proto.ManagedLauncher). Each is a pointer: left out (an app from before them) keeps what is
+	// stored on an update. Headers "" clears them; like the key they are sealed and never sent back.
+	Models        *[]proto.ProviderModel `json:"models"`
+	OpusModel     *string                `json:"opus_model"`
+	SonnetModel   *string                `json:"sonnet_model"`
+	HaikuModel    *string                `json:"haiku_model"`
+	FableModel    *string                `json:"fable_model"`
+	SubagentForce *bool                  `json:"subagent_force"`
+	Headers       *string                `json:"headers"`
+	Proxy         *string                `json:"proxy"`
+	NoProxy       *string                `json:"no_proxy"`
+	TimeoutMS     *int                   `json:"timeout_ms"`
+	CompactWindow *int                   `json:"compact_window"`
+	MaxContext    *int                   `json:"max_context"`
+	Effort        *string                `json:"effort"`
+}
+
+// checkEffort: a thinking level Claude Code takes (CLAUDE_CODE_EFFORT_LEVEL), or none. whose is the error's key
+// (err_effort_<whose>: default, model, model_default), model the model it names.
+func checkEffort(whose, model, e string) error {
+	if e == "" || slices.Contains(proto.EffortLevels, e) {
+		return nil
+	}
+	return i18n.Err("hub-launchers.err_effort_"+whose, i18n.Args{"model": model, "effort": strconv.Quote(e), "levels": strings.Join(proto.EffortLevels, " / ")})
+}
+
+// checkGateway is a gateway's base URL: http(s), a host, nothing that carries a credential.
+func checkGateway(raw string) error {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return i18n.Err("hub-launchers.err_base_url")
+	}
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return i18n.Err("hub-launchers.err_base_url_parts")
+	}
+	return nil
+}
+
+// checkHeaders: one "Name: value" a line (ANTHROPIC_CUSTOM_HEADERS); the error never quotes a value.
+func checkHeaders(raw string) error {
+	for i, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		name, _, ok := strings.Cut(line, ":")
+		if !ok || strings.TrimSpace(name) == "" || strings.ContainsAny(strings.TrimSpace(name), " \t") {
+			return i18n.Err("hub-launchers.err_header_line", i18n.Args{"line": i + 1})
+		}
+	}
+	return nil
+}
+
+func (in launcherInput) checkProvider() error {
+	if in.Models != nil {
+		seen := map[string]bool{}
+		for _, m := range *in.Models {
+			id := strings.TrimSpace(m.ID)
+			if id == "" {
+				return i18n.Err("hub-launchers.err_model_no_id")
+			}
+			if seen[id] {
+				return i18n.Err("hub-launchers.err_model_duplicate", i18n.Args{"model": id})
+			}
+			seen[id] = true
+			if m.ContextWindow < 0 {
+				return i18n.Err("hub-launchers.err_model_context_negative", i18n.Args{"model": id})
+			}
+			for _, e := range m.Efforts {
+				if e == "" {
+					return i18n.Err("hub-launchers.err_model_effort_empty", i18n.Args{"model": id})
+				}
+				if err := checkEffort("model", id, e); err != nil {
+					return err
+				}
+			}
+			if err := checkEffort("model_default", id, m.DefaultEffort); err != nil {
+				return err
+			}
+			if m.DefaultEffort != "" && len(m.Efforts) > 0 && !slices.Contains(m.Efforts, m.DefaultEffort) {
+				return i18n.Err("hub-launchers.err_model_default_effort_unlisted", i18n.Args{"model": id})
+			}
+		}
+	}
+	if in.Effort != nil {
+		if err := checkEffort("default", "", *in.Effort); err != nil {
+			return err
+		}
+	}
+	for _, v := range []struct {
+		key   string
+		value *int
+	}{{"err_timeout_negative", in.TimeoutMS}, {"err_compact_window_negative", in.CompactWindow}, {"err_max_context_negative", in.MaxContext}} {
+		if v.value != nil && *v.value < 0 {
+			return i18n.Err("hub-launchers." + v.key)
+		}
+	}
+	if in.Proxy != nil && strings.TrimSpace(*in.Proxy) != "" {
+		u, err := url.Parse(strings.TrimSpace(*in.Proxy))
+		if err != nil || u.Host == "" || !slices.Contains([]string{"http", "https", "socks5", "socks5h"}, u.Scheme) {
+			return i18n.Err("hub-launchers.err_proxy")
+		}
+		// The proxy is stored and shown as is (not sealed): a password in it would go back to every client.
+		if u.User != nil {
+			return i18n.Err("hub-launchers.err_proxy_credentials")
+		}
+	}
+	if in.Headers != nil {
+		if err := checkHeaders(*in.Headers); err != nil {
+			return err
+		}
+	}
+	for _, v := range []*string{in.OpusModel, in.SonnetModel, in.HaikuModel, in.FableModel} {
+		if v != nil && len(strings.TrimSpace(*v)) > 200 {
+			return i18n.Err("hub-launchers.err_tier_model_long")
+		}
+	}
+	return nil
+}
+
+// applyProvider writes the #2455 fields given into s (headers apart: they are sealed by the caller).
+func (in launcherInput) applyProvider(s *storedLauncher) {
+	str := func(dst *string, v *string) {
+		if v != nil {
+			*dst = strings.TrimSpace(*v)
+		}
+	}
+	num := func(dst *int, v *int) {
+		if v != nil {
+			*dst = *v
+		}
+	}
+	if in.Models != nil {
+		var models []proto.ProviderModel
+		for _, m := range *in.Models {
+			m.ID, m.Name = strings.TrimSpace(m.ID), strings.TrimSpace(m.Name)
+			models = append(models, m)
+		}
+		s.Models = models
+	}
+	str(&s.OpusModel, in.OpusModel)
+	str(&s.SonnetModel, in.SonnetModel)
+	str(&s.HaikuModel, in.HaikuModel)
+	str(&s.FableModel, in.FableModel)
+	str(&s.Proxy, in.Proxy)
+	str(&s.NoProxy, in.NoProxy)
+	str(&s.Effort, in.Effort)
+	num(&s.TimeoutMS, in.TimeoutMS)
+	num(&s.CompactWindow, in.CompactWindow)
+	num(&s.MaxContext, in.MaxContext)
+	if in.SubagentForce != nil {
+		s.SubagentForce = *in.SubagentForce
+	}
 }
 
 var errNoPreset = i18n.Err("hub-launchers.err_no_preset")
@@ -363,15 +551,14 @@ func (in launcherInput) check() error {
 	if in.CustomModelName == "" && in.CustomModelDescription != "" {
 		return i18n.Err("hub-launchers.err_custom_model_name")
 	}
-	if !managedLauncherName.MatchString(in.Name) || in.Name == "claude" || in.Name == "presets" {
+	if !managedLauncherName.MatchString(in.Name) || slices.Contains(reservedLauncherNames, in.Name) {
 		return i18n.Err("hub-launchers.err_name")
 	}
-	u, err := url.Parse(strings.TrimSpace(in.BaseURL))
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return i18n.Err("hub-launchers.err_base_url")
+	if err := checkGateway(in.BaseURL); err != nil {
+		return err
 	}
-	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return i18n.Err("hub-launchers.err_base_url_parts")
+	if err := in.checkProvider(); err != nil {
+		return err
 	}
 	if strings.TrimSpace(in.Model) == "" {
 		return i18n.Err("hub-launchers.err_model_required")
@@ -387,6 +574,8 @@ func (in launcherInput) check() error {
 func (h *Hub) launcherRoutes(api *http.ServeMux) {
 	h.launcherQuotaRoutes(api)
 	h.launcherPresetRoutes(api)
+	h.providerProbeRoutes(api)
+	h.launcherImportRoutes(api)
 	api.HandleFunc("GET /api/v1/launchers", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
@@ -598,6 +787,19 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 		}
 		s.KeySealed = sealed
 	}
+	in.applyProvider(&s)
+	if in.Headers != nil { // left out keeps them, "" clears them
+		s.HeadersSealed = ""
+		if hd := strings.TrimSpace(*in.Headers); hd != "" {
+			sealed, err := h.sealKey(hd)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err)
+				return
+			}
+			s.HeadersSealed = sealed
+		}
+	}
+	s.APIKey, s.Headers, s.HasHeaders = "", "", false // only ever stored sealed
 	list := h.storedLaunchers(ctx)
 	if i := slices.IndexFunc(list, func(x storedLauncher) bool { return x.Name == s.Name }); i >= 0 {
 		list[i] = s
@@ -609,9 +811,7 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 		return
 	}
 	h.pushManaged(ctx)
-	writeJSON(w, map[string]any{"launcher": LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model,
-		SmallModel: s.SmallModel, SubagentModel: s.SubagentModel, CustomModel: s.CustomModel, CustomModelName: s.CustomModelName,
-		CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != "", Auth: s.Auth}})
+	writeJSON(w, map[string]any{"launcher": s.view()})
 }
 
 // --- the new-agent picker's launchers, with the agent each starts ---
@@ -854,5 +1054,5 @@ func (h *Hub) listLaunchers(w http.ResponseWriter, r *http.Request, m *Machine) 
 	for _, l := range ls {
 		discovered = append(discovered, sessionLauncher{Launcher: l})
 	}
-	writeJSON(w, map[string]any{"launchers": sessionLaunchers(discovered, m.cfg.Launchers)})
+	writeJSON(w, map[string]any{"launchers": sessionLaunchers(discovered, m.cfg.Launchers), "default": h.pickerDefault(ctx, r)})
 }

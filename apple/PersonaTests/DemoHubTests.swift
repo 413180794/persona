@@ -28,7 +28,7 @@ import Testing
             #expect(!page.items.isEmpty, "\(s.title ?? s.sessionID) opens empty")
         }
         _ = try await api.sessionInfo(sessions[0].key)
-        #expect(try await api.launchers(machine: "macbook").count == 2)
+        #expect(try await api.launcherList(machine: "macbook").launchers.count == 2)
         _ = try await api.dirs(machine: "macbook", path: "")
 
         #expect(try await api.metricsOverview().count == 5)

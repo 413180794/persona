@@ -193,6 +193,7 @@ struct ModelPurposeEditorView: View {
                         }
                         .lineLimit(1)
                     }
+                    if !page.runtimes.isEmpty { runtimePicker }
                 } header: {
                     Text("模型设置")
                 } footer: {
@@ -349,6 +350,16 @@ struct ModelPurposeEditorView: View {
         }
         .lineLimit(1)
         .accessibilityIdentifier("model-config-provider")
+    }
+
+    /// 主对话's 运行方式 (#2455): the Claude Code CLI or the Agent SDK; "" follows the default (the CLI).
+    private var runtimePicker: some View {
+        Picker("运行方式", selection: optional(\.runtime)) {
+            Text("跟随默认").tag("")
+            ForEach(page.runtimes, id: \.self) { Text(AssistantRuntime.title($0)).tag($0) }
+        }
+        .lineLimit(1)
+        .accessibilityIdentifier("model-config-runtime")
     }
 
     private var pluginModelPicker: some View {

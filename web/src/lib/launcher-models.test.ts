@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  customModel, defaultDetail, effortChoices, fitEffort, followedBinding, launcherAgent, launcherModels, modelDetail, modelName, modelRows, pickerLauncher,
-  providerModels, startPicks, type AgentModel, type LauncherModels,
+  customModel, defaultDetail, defaultLabel, effortChoices, fitEffort, followedBinding, launcherAgent, launcherModels, modelDetail, modelName, modelRows, pickerLauncher,
+  machineLaunchers, oneOff, providerModels, startPicks, type AgentModel, type LauncherModels,
 } from "./launcher-models";
 
 const all = ["low", "medium", "high", "xhigh", "max"];
@@ -191,5 +191,25 @@ describe("启动时发什么", () => {
     expect(startPicks({ agent: "claude", list: claude, model: "haiku", effort: "high" })).toEqual({ model: "haiku" });
     expect(startPicks({ agent: "claude", list: null, model: "", effort: "max" })).toEqual({ effort: "max" });
     expect(startPicks({ agent: "codex", list: codex, model: "gpt-5.5-codex", effort: "high" })).toEqual({ model: "gpt-5.5-codex" });
+  });
+});
+
+describe("启动器的默认值 (#2455)", () => {
+  it("names the default's provider and model", () => {
+    expect(defaultLabel({ provider: "kcc", model: "kimi-k2.6", effort: "high" })).toBe("默认：kcc · kimi-k2.6");
+    expect(defaultLabel({ provider: "kcc", model: "gateway/glm-5.3" })).toBe("默认：kcc · glm-5.3");
+    expect(defaultLabel({ provider: "kcc", model: "" })).toBe("默认：kcc");
+    expect(defaultLabel(null, "claude")).toBe("默认：claude");
+    expect(defaultLabel(undefined)).toBe("默认");
+    expect(oneOff()).toBe("仅这一次");
+  });
+  it("asks for a purpose's default", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => "mock" });
+    const body = { launchers: [{ name: "kcc" }], default: { provider: "kcc", model: "kimi-k2.6", runtime: "agentsdk" } };
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify(body) });
+    vi.stubGlobal("fetch", fetcher);
+    expect((await machineLaunchers("m1", { purpose: "assistant" })).default).toEqual(body.default);
+    await machineLaunchers("m1");
+    expect(fetcher.mock.calls.map((c) => c[0])).toEqual(["/api/v1/machines/m1/launchers?purpose=assistant", "/api/v1/machines/m1/launchers"]);
   });
 });

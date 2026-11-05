@@ -3626,6 +3626,9 @@ struct SessionInfoSheet: View {
                     Section("运行") {
                         row(Theme.Icon.model, "模型", Fmt.model(info.model) ?? info.model)
                         if let l = info.launcher ?? session?.launcher, !l.isEmpty { row("bolt", "启动器", l) }
+                        if let r = AssistantRuntime.status(runtime: session?.runtime, fallback: session?.runtimeFallback) {
+                            row(Theme.Icon.terminal, "运行方式", r)
+                        }
                         row("shippingbox", agent, info.version)
                         if let route = session?.codexRoute { routeRow(route, note: session?.codexRouteNote) }
                         row("lock.open", "权限", SessionModes.modeLabel(info.permissionMode))

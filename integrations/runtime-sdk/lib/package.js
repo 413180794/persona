@@ -16,6 +16,7 @@ export const PACKAGES = {
   'jarvis-dsh-runtime': ['dsh/package.json', 'dsh/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
   'jarvis-pi-runtime': ['pi/package.json', 'pi/index.js', 'pi/companion.mjs', 'pi/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
   'jarvis-paseo-runtime': ['paseo/package.json', 'paseo/bridge.mjs', 'paseo/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
+  'jarvis-agent-sdk-runtime': ['agent-sdk/package.json', 'agent-sdk/dist/bridge.mjs'],
 }
 
 /** A package name, as jarvisd takes it. */

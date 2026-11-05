@@ -87,5 +87,12 @@
   "act_tool": "Calling a tool",
   "act_tool_what": "Calling {what}",
   "act_run": "Running",
-  "act_run_what": "Running {what}"
+  "act_run_what": "Running {what}",
+  "fallback_shell_launcher": "Launcher {launcher} is a shell command on this computer; the Agent SDK can’t use its settings",
+  "fallback_read_bridge": "Couldn’t read the Agent SDK bridge: {cause}",
+  "fallback_no_bridge": "This personad doesn’t include the Agent SDK bridge",
+  "fallback_write_bridge": "Couldn’t write the Agent SDK bridge: {cause}",
+  "fallback_no_bridge_script": "The Agent SDK bridge package has no bridge.mjs",
+  "fallback_no_node": "No Node.js 22 or later: {cause}",
+  "fallback_no_claude": "Can’t find claude: {cause}"
 }
