@@ -33,5 +33,6 @@
   "cot_tool_done": "✓ Done",
   "cot_done": "Done",
   "cot_tools_one": "Called a tool {count} time",
-  "cot_tools_other": "Called tools {count} times"
+  "cot_tools_other": "Called tools {count} times",
+  "cot_tools_paragraph": "Tools"
 }

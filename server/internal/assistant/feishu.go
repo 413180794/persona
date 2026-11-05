@@ -81,6 +81,7 @@ type feishuBook struct {
 	status   *FeishuStatus
 	statusAt time.Time
 	now      func() time.Time // tests
+	cotOff   bool             // Feishu refused an agent message (feishu_cot.go)
 }
 
 type botCard struct {

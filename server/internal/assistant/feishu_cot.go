@@ -45,7 +45,16 @@ func (s *Service) loadCot(p *cotProgress, r *channel.Run) {
 		p.cot, p.msg, p.para = s.runExt(r, "cot"), s.runExt(r, "cot_msg"), s.runExt(r, "cot_para")
 		p.done = p.done || s.runExt(r, "cot_done") != ""
 	}
-	p.off = p.off || s.runExt(r, "cot_off") != ""
+	p.off = p.off || s.runExt(r, "cot_off") != "" || s.cotUnavailable()
+}
+
+// cotUnavailable: Feishu refused this bot an agent message since the assistant started (the app lacks the
+// permission, the tenant does not have it): turns go to the progress card from their start, words-only ones too.
+func (s *Service) cotUnavailable() bool {
+	b := &s.fbot
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.cotOff
 }
 
 // runExt is one of a run's channel values, read under the channels' lock (a held run's next turn clears them).
@@ -76,9 +85,10 @@ func cotItem(it proto.Item) bool {
 	return false
 }
 
-// progressAfter: the agent message is there as the turn starts; the card it falls back to after a few seconds.
+// progressAfter: the agent message is there as soon as the turn shows any process; the card it falls back to after a
+// few seconds.
 func (f feishuSink) progressAfter(r *channel.Run) time.Duration {
-	if _, items := f.s.runItems(r.ID); f.s.runExt(r, "cot_off") != "" || !hasProcess(items) {
+	if f.s.runExt(r, "cot_off") != "" || f.s.cotUnavailable() {
 		return channel.ProgressAfter
 	}
 	return 0
@@ -103,6 +113,9 @@ func (f feishuSink) cotStart(ctx context.Context, r *channel.Run, p *cotProgress
 		s.logf("bots: agent message unavailable (%v); the process goes into the progress card's folded panel", err)
 		s.setCotExt(r, "cot_off", "1")
 		p.off = true
+		s.fbot.mu.Lock()
+		s.fbot.cotOff = true
+		s.fbot.mu.Unlock()
 		return false
 	}
 	p.cot, p.msg = res.CotID, res.MessageID
@@ -141,8 +154,8 @@ func cotEvents(l i18n.Lang, p *cotProgress, items []proto.Item, para string, sta
 				paragraph("p-"+w.ID, strings.TrimSpace(w.Text))
 			}
 			words = nil
-			if para == "" {
-				paragraph("p-"+it.ID, i18n.T(l, "assistant-feishu.working_summary"))
+			if para == "" { // a turn that starts with a tool call: a paragraph for its calls to hang under
+				paragraph("p-"+it.ID, i18n.T(l, "assistant-feishu.cot_tools_paragraph"))
 			}
 			id := it.ToolUseID
 			if id == "" {
@@ -261,7 +274,7 @@ func (f feishuSink) cotProgressNow(ctx context.Context, r *channel.Run) bool {
 	}
 	if p.cot.cot == "" {
 		if !hasProcess(items) {
-			return false // words only so far (they may be all the answer): the card shows them, as before
+			return true // words only so far (they may be all the answer): nothing shown until a process does
 		}
 		if !f.cotStart(ctx, r, &p.cot) {
 			return !p.cot.off // not reached: nothing shown yet, the next look tries again

@@ -33,5 +33,6 @@
   "cot_tool_done": "✓ 完了",
   "cot_done": "完了",
   "cot_tools_one": "ツールを{count}回呼び出しました",
-  "cot_tools_other": "ツールを{count}回呼び出しました"
+  "cot_tools_other": "ツールを{count}回呼び出しました",
+  "cot_tools_paragraph": "ツールの呼び出し"
 }

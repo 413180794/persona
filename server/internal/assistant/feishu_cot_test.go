@@ -199,3 +199,84 @@ func TestHeldRunStartsItsNextAgentMessageAfresh(t *testing.T) {
 		t.Fatalf("next turn: %s", got)
 	}
 }
+
+// While a turn has only words (maybe all of its answer), nothing goes out: no progress card above the agent message
+// that comes with the first tool call, and the answer card after it.
+func TestFeishuNoProgressCardBeforeTheAgentMessage(t *testing.T) {
+	s, posts, calls := cotHub(t, false)
+	r, prog := cotRun(s)
+	prog.items = []proto.Item{{ID: "w", Role: "assistant", Kind: proto.KindText, Text: "我先看看"}}
+	sink := feishuSink{s}
+	if d := sink.progressAfter(r); d != 0 {
+		t.Fatalf("waits %v", d)
+	}
+	sink.progress(context.Background(), r, 10*time.Second, nil, "我先看看")
+	if len(*posts) != 0 || len(*calls) != 0 {
+		t.Fatalf("words only: posts %v, calls %v", *posts, *calls)
+	}
+	s.chans.mu.Lock()
+	prog.items = append(prog.items, proto.Item{ID: "b", Role: "assistant", Kind: proto.KindToolUse, ToolUseID: "tu1", ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"ls"}`)})
+	s.chans.mu.Unlock()
+	sink.progress(context.Background(), r, 12*time.Second, nil, "")
+	if len(*posts) != 0 || len(*calls) == 0 || (*calls)[0] != "create" {
+		t.Fatalf("first call: posts %v, calls %v", *posts, *calls)
+	}
+	s.finishChannelRun(r, &channel.Result{Answer: "结论"})
+	if len(*posts) != 1 || (*posts)[0]["update"] == true {
+		t.Fatalf("the answer is not a card of its own below the agent message: %v", *posts)
+	}
+}
+
+// A turn that starts with a tool call hangs it under a paragraph that says so (botmux's shape: a whole paragraph
+// before the call), not 「处理中…」.
+func TestCotFirstToolCallHasItsParagraph(t *testing.T) {
+	s, _, _ := cotHub(t, false)
+	r, prog := cotRun(s)
+	prog.items = prog.items[1:] // straight into the tool call
+	var events []feishubot.CotEvent
+	s.hub.(*fakeHub).answerApp(AppFeishu, FeishuCotAppend, func(p json.RawMessage) (any, error) {
+		var m struct {
+			Events []feishubot.CotEvent `json:"events"`
+		}
+		_ = json.Unmarshal(p, &m)
+		events = append(events, m.Events...)
+		return map[string]any{}, nil
+	})
+	feishuSink{s}.progress(context.Background(), r, time.Second, nil, "")
+	s.finishChannelRun(r, &channel.Result{Answer: "结论"})
+	var seq []string
+	all := ""
+	for _, e := range events {
+		seq = append(seq, e.Type)
+		all += e.Content
+	}
+	want := "RUN_STARTED REASONING_START REASONING_MESSAGE_START REASONING_MESSAGE_CONTENT REASONING_MESSAGE_END TOOL_CALL_START TOOL_CALL_END TOOL_CALL_RESULT REASONING_END RUN_FINISHED"
+	if strings.Join(seq, " ") != want || strings.Contains(all, "处理中") || !strings.Contains(all, "调用工具") {
+		t.Fatalf("events %v\n%s", seq, all)
+	}
+}
+
+// Once Feishu refused an agent message, the next turns get the progress card after a few seconds, words-only ones
+// too.
+func TestFeishuRefusedAgentMessagesGoToTheCardFromTheStart(t *testing.T) {
+	s, posts, _ := cotHub(t, true)
+	r, _ := cotRun(s)
+	sink := feishuSink{s}
+	sink.progress(context.Background(), r, time.Second, nil, "")
+	s.finishChannelRun(r, &channel.Result{Answer: "结论"})
+	r2 := &channel.Run{ID: "fb_m2", Channel: channel.Feishu, MachineID: "server", SessionID: "c1", ReplyTo: "om_m2", Started: time.Now()}
+	prog := &chanLive{mu: newChanMutex(), checking: newChanMutex(), done: make(chan struct{}),
+		items: []proto.Item{{ID: "w", Role: "assistant", Kind: proto.KindText, Text: "想想"}}}
+	s.chans.mu.Lock()
+	s.chans.st.Runs = append(s.chans.st.Runs, r2)
+	s.chans.live[r2.ID] = prog
+	s.chans.mu.Unlock()
+	if d := sink.progressAfter(r2); d != channel.ProgressAfter {
+		t.Fatalf("waits %v", d)
+	}
+	n := len(*posts)
+	sink.progress(context.Background(), r2, 6*time.Second, nil, "想想")
+	if len(*posts) != n+1 {
+		t.Fatalf("no progress card: %v", *posts)
+	}
+}
