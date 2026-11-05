@@ -24,7 +24,9 @@ func probe(t *testing.T, name string) proto.LauncherDetail {
 		t.Fatal(err)
 	}
 	cmd := exec.CommandContext(context.Background(), zsh, "-fc", string(defs)+"\n"+probeScript(name))
-	cmd.Env = append(os.Environ(), "ANTHROPIC_MODEL=from-the-shell", "USER=tester")
+	// Nothing from this machine's environment: parseProbe drops what the shell had already, so a CLAUDE_CODE_EFFORT_LEVEL
+	// or ANTHROPIC_BASE_URL exported here with a launcher's value would vanish from its probe.
+	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=/usr/bin:/bin", "USER=tester", "TERM=dumb", "ANTHROPIC_MODEL=from-the-shell"}
 	out, _ := cmd.Output()
 	p, ok := parseProbe(string(out))
 	if !ok {
