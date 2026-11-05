@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -233,6 +234,10 @@ func main() {
 			err = resetMachineUID()
 			break
 		}
+		if err = checkNodeStdioArgs(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
 		var relayed bool
 		if relayed, err = node.Relay(ctx, os.Stdin, os.Stdout); relayed {
 			if err == io.EOF {
@@ -293,6 +298,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// checkNodeStdioArgs accepts what runs the node protocol on stdin/stdout: no argument (as before) or --stdio. Anything
+// else is a mistyped subcommand, which would otherwise wait on stdin without a word.
+func checkNodeStdioArgs(args []string) error {
+	if len(args) == 0 || len(args) == 1 && args[0] == "--stdio" {
+		return nil
+	}
+	return fmt.Errorf("不认识的 node 子命令 %q：可用的有 --stdio、--attach、tailcat、doctor、reset-uid（personad 不带参数看用法）", strings.Join(args, " "))
 }
 
 // runResident is `jarvisd node --attach`: relays over ssh, and the hub over tailcat when this machine is set up for

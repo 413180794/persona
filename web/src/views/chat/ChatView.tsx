@@ -1042,7 +1042,7 @@ function ComposerFooter({ session, assistant }: { session: Session; assistant?: 
     <span className="flex min-w-0 items-center gap-2">
       {(modes || effortOnly) && <ModeChips session={session} effortOnly={effortOnly} assistant={assistant} />}
       {assistant && <AssistantLauncherChip session={session} />}
-      <span className="min-w-0 truncate" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>
+      {parts.length > 0 && <span className="min-w-0 truncate" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>}
     </span>
   );
 }

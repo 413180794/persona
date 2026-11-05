@@ -279,7 +279,9 @@ export function ModeChips({ session, effortOnly, assistant }: { session: Session
   const mode = session.permission_mode;
   const danger = mode === BYPASS_MODE;
   return (
-    <span className="flex shrink-0 items-center gap-1">
+    // A Persona conversation has its launcher chip after these and no text to give way: these keep their width up to
+    // the row less 5.5rem (the row's 0.5rem gap and 5rem of launcher chip), so that chip truncates first (#3575)
+    <span className={cx("flex shrink-0 items-center gap-1", assistant && "min-w-0 max-w-[calc(100%-5.5rem)]")}>
       {!effortOnly && <Chip label={mode ? modeTitle(mode) : t("chat-sessiondialogs.permission_default")} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : t("chat-sessiondialogs.permission_mode")} />}
       <Chip
         buttonRef={effortChip}
@@ -322,12 +324,14 @@ export function Chip({ label, onClick, active, danger, title, buttonRef }: { lab
       aria-haspopup="menu"
       onClick={onClick}
       className={cx(
-        "touch-hit flex h-5.5 items-center gap-0.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium transition-colors",
+        // min-w-0 / max-w-full: on a phone the row has less room than the labels; the label truncates and the chevron
+        // stays inside the box, clear of the send button (#3575)
+        "touch-hit flex h-5.5 min-w-0 max-w-full items-center gap-0.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium transition-colors",
         danger ? "bg-red-tint text-red" : active ? "bg-hover text-ink" : "bg-field text-ink-2 hover:bg-hover hover:text-ink",
       )}
     >
-      {label}
-      <Icon name="chevron" size={9} stroke={2.4} />
+      <span className="min-w-0 truncate">{label}</span>
+      <Icon name="chevron" size={9} stroke={2.4} className="shrink-0" />
     </button>
   );
 }

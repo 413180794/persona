@@ -172,6 +172,11 @@ func (s *Service) localFleetDeviceCall(p DeviceCall) (json.RawMessage, bool, err
 			if sess.Assistant {
 				sess.Space = identity.SpaceOf(sess.Cwd)
 			}
+			// The node fills in no unified state: the callers that ask whether it works or waits for the user
+			// (sessionBusy, waitTurnEnd, a repair's end) read the manager's, as the lists have it.
+			if d, found := s.decoratedSession(m.ID, a.SessionID); found {
+				sess.State, sess.PendingInteractions, sess.StateSince = d.State, d.PendingInteractions, d.StateSince
+			}
 		}
 		out, err := json.Marshal(map[string]any{"session": sess, "ok": ok})
 		return out, true, err
