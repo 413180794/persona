@@ -120,6 +120,21 @@
       }
     },
     {
+      "name": "followup_interval_push_asked",
+      "description": "只在它自己提醒时推送的任务：那句说明在首段，不进 detail（#2396）。",
+      "source": "server/internal/prompts/assistant/task_run.md",
+      "input": {
+        "text": "⏰ 新邮件（定时任务，每 5 分钟）\n（Persona 会按时再运行它，不用再用 schedule_followup 安排下一次。）\n（这个任务只在你用 notify_user 时才推送到手机：有用户需要知道的事就用 notify_user 推一条，没有就简短说一句，这次运行不会推送。）\n\n看看邮箱有没有新邮件，有就告诉我。"
+      },
+      "expected": {
+        "kind": "followup",
+        "state": "interval",
+        "title": "新邮件",
+        "line": "定时任务「新邮件」开始运行",
+        "detail": "看看邮箱有没有新邮件，有就告诉我。"
+      }
+    },
+    {
       "name": "followup_wake",
       "description": "叫醒等待中的 Agent。",
       "source": "server/internal/prompts/agents/wake.md",

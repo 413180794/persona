@@ -370,6 +370,38 @@ final class AgentsListTests: XCTestCase {
         return tinted * 2 > w * h
     }
 
+    /// A vertical drag over the rows that are on screen, while the search keyboard is up. Then
+    /// `collectionViews.firstMatch` is not the list: it is the keyboard's suggestion strip right above the keys (a 44 pt
+    /// collection view of its own, outside `keyboards`), so an element swipe there never moved the list. An element
+    /// swipe on the list itself starts from the middle of its whole frame, which on a small phone is about the
+    /// keyboard's edge (it did not scroll on an iPhone SE). So drag inside the part of the list that takes touches:
+    /// below the bars and the search field, above the strip, the keys and the tab bar.
+    private func dragListUp() {
+        let list = app.collectionViews.containing(.button, identifier: "agents.filter.all").firstMatch.frame
+        var top = max(list.minY, app.navigationBars.firstMatch.frame.maxY)
+        let search = app.searchFields.firstMatch
+        if search.exists && search.isHittable { top = max(top, search.frame.maxY) }
+        var bottom = list.maxY
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists { bottom = min(bottom, keyboard.frame.minY) }
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists && tabBar.isHittable { bottom = min(bottom, tabBar.frame.minY) }
+        // Strips sitting on that edge (the suggestion bar on the keys) cover the rows too.
+        for other in app.collectionViews.allElementsBoundByIndex where other.frame != list {
+            if other.frame.maxY >= bottom - 1, other.frame.minY > top { bottom = min(bottom, other.frame.minY) }
+        }
+        print("drag rows: list \(list) keyboard \(keyboard.exists ? keyboard.frame : .zero) area \(top)...\(bottom)")
+        guard list.height > 0, bottom - top >= 60 else {
+            XCTFail("no room to drag the rows: list \(list), keyboard \(keyboard.exists ? keyboard.frame : .zero), "
+                    + "search \(search.exists ? search.frame : .zero), area \(top)...\(bottom)")
+            return
+        }
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let from = origin.withOffset(CGVector(dx: list.midX, dy: top + (bottom - top) * 0.8))
+        let to = origin.withOffset(CGVector(dx: list.midX, dy: top + (bottom - top) * 0.2))
+        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .default, thenHoldForDuration: 0.1)
+    }
+
     /// Back from a chat to the list; `atTop`: the list was at its top, so its filters are on screen again.
     private func backToList(atTop: Bool = true) {
         _ = app.buttons["返回"].firstMatch.waitForExistence(timeout: 3)
@@ -441,7 +473,10 @@ final class AgentsListTests: XCTestCase {
         sleep(1)
         XCTAssertLessThan(gapAboveFilters("searching", searchShown: true), limit)
         shot("filters-searching")
-        app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        // With the keyboard up, `collectionViews.firstMatch` is the keyboard's suggestion strip, not the list, so its
+        // swipe left the first row where it was. A synthesized drag over the visible rows scrolls it away (as in
+        // ChatScrollKeyboardTests); not checked with a finger on a device.
+        dragListUp()
         filtersScrolledAway("searching-scrolled")
         shot("filters-searching-scrolled")
     }

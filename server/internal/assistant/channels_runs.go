@@ -787,7 +787,8 @@ func (s *Service) channelAnswered(ctx context.Context, machine, session string) 
 }
 
 // channelTurnEnded: a conversation finished a turn (session.turn_ended). Its runs are checked at once rather than on
-// the next tick; a turn nobody asked for in a channel is mirrored to those that sync.
+// the next tick; a turn nobody asked for in a channel is mirrored to those that sync — not a quiet task's normal finish
+// (quietTaskTurn, #2396), whose news, if any, went out with notify_user.
 func (s *Service) channelTurnEnded(ctx context.Context, machine, session string) {
 	c := &s.chans
 	c.mu.Lock()
@@ -806,7 +807,7 @@ func (s *Service) channelTurnEnded(ctx context.Context, machine, session string)
 	for _, id := range ids {
 		s.checkChannelRun(id)
 	}
-	if len(ids) == 0 && !s.channelAnswered(ctx, machine, session) {
+	if len(ids) == 0 && !s.quietTaskTurn(ctx, machine, session) && !s.channelAnswered(ctx, machine, session) {
 		s.feishuMirror(ctx, machine, session)
 		s.extensionMirror(ctx, machine, session)
 	}

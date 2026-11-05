@@ -160,6 +160,8 @@ type TaskRun struct {
 	KBHint         bool // daily runs with the knowledge base on
 	// Continued: it goes into the task's own conversation, which got the background on the first run.
 	Continued bool
+	// PushAsked: the task pushes only what the run sends with notify_user (its push "asked", #2396).
+	PushAsked bool
 }
 
 func RenderTaskRun(t TaskRun) string { return render("assistant/task_run", t) }

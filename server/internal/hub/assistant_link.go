@@ -79,6 +79,32 @@ func (h *Hub) assistantTasks() ([]assistantwire.TaskView, bool) {
 	return a.tasks, a.tasks != nil
 }
 
+// quietTaskConversation: session is the own conversation of a scheduled task that pushes only what its runs send
+// (TaskView.Push, #2396), as the assistant last reported its tasks. By the session alone: an assistant conversation's
+// id is unique, and a machine id the assistant had from an older alias would miss it.
+func (h *Hub) quietTaskConversation(session string) bool {
+	tasks, _ := h.assistantTasks()
+	for _, t := range tasks {
+		if t.Push == assistantwire.PushAsked && t.RunSessionID != "" && t.RunSessionID == session {
+			return true
+		}
+	}
+	return false
+}
+
+// quietTaskFinish: s's finished turn is not pushed: a quiet task's own conversation (quietTaskConversation) that may
+// go unpushed now (assistantwire.QuietTaskFinish: Claude Code, not the main conversation, a normal finish).
+func (h *Hub) quietTaskFinish(s proto.Session) bool {
+	a := &h.assistant
+	a.mu.RLock()
+	p := a.profile
+	a.mu.RUnlock()
+	if p == nil {
+		return false // the assistant's settings (its main conversation) not known yet: pushed as ever
+	}
+	return h.quietTaskConversation(s.SessionID) && assistantwire.QuietTaskFinish(s, p.Main)
+}
+
 // assistantReported is the last snapshot, read-locked. With none yet, or a partial one (the database did not answer
 // it), the assistant is asked for the whole of it again (manager.resync, at most every few seconds); it answers with
 // a snapshot, which pushes the lists it changes.

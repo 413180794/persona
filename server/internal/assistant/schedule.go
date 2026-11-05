@@ -48,6 +48,10 @@ type Task struct {
 	Weekdays     []int     `json:"weekdays,omitempty"` // daily: 1 = Monday … 7 = Sunday; empty = every day
 	EveryMinutes int       `json:"every_minutes,omitempty"`
 	Enabled      bool      `json:"enabled"`
+	// Push is what of a run reaches the phone (schedule_push.go): "" every run's answer, "asked" only what the run
+	// pushes itself (notify_user). Set where the request has it; a client that leaves it out keeps it (PUT, the old
+	// app's routines PUT, the tools without push).
+	Push string `json:"push,omitempty"`
 	// The conversation it came from (on MachineID), runs go into it; empty = the task's own conversation.
 	MachineID string `json:"machine_id,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
@@ -388,7 +392,7 @@ func parseWhen(s string, now time.Time, loc *time.Location) (time.Time, error) {
 
 // scheduleHeader is the first line of a run's message (taskPrompt, prompts/assistant/task_run.md) and the notes under it. A patrol told to
 // "schedule the next one with the same prompt" copies them along; they are dropped so they don't pile up.
-var scheduleHeader = regexp.MustCompile(`^(?:⏰[^\n]*（[^\n]*(?:跟进|定时任务)[^\n]*）|（本该[^\n]*）|（(?:Jarvis|Persona) 会[^\n]*）)\s*`)
+var scheduleHeader = regexp.MustCompile(`^(?:⏰[^\n]*（[^\n]*(?:跟进|定时任务)[^\n]*）|（本该[^\n]*）|（(?:Jarvis|Persona) 会[^\n]*）|（又到时间了[^\n]*）|（这个任务只在你用 notify_user[^\n]*）)\s*`)
 
 func stripScheduleHeader(p string) string {
 	p = strings.TrimSpace(p)
@@ -426,14 +430,23 @@ func sameText(a, b string) bool {
 
 func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID string, args json.RawMessage) (string, error) {
 	var a struct {
-		At              string `json:"at"`
-		Every           string `json:"every"`
-		Prompt          string `json:"prompt"`
-		Title           string `json:"title"`
-		NewConversation bool   `json:"new_conversation"`
+		At              string  `json:"at"`
+		Every           string  `json:"every"`
+		Prompt          string  `json:"prompt"`
+		Title           string  `json:"title"`
+		NewConversation bool    `json:"new_conversation"`
+		Push            *string `json:"push"` // left out: a new follow-up pushes every run, one rescheduled keeps its push
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", err
+	}
+	var push *string
+	if a.Push != nil {
+		p, err := pushArg(*a.Push)
+		if err != nil {
+			return "", err
+		}
+		push = &p
 	}
 	prompt := stripScheduleHeader(a.Prompt)
 	if prompt == "" {
@@ -463,7 +476,7 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	if at.Before(now.Add(-time.Minute)) {
 		return "", fmt.Errorf("%s is in the past", at.In(loc).Format("2006-01-02 15:04"))
 	}
-	if out, ok := s.scheduleOwn(ctx, sessionID, a.Title, prompt, a.At, at, every); ok {
+	if out, ok := s.scheduleOwn(ctx, sessionID, a.Title, prompt, a.At, at, every, push); ok {
 		return out, nil
 	}
 	t := Task{ID: "fu_" + randomHex(4), Title: strings.TrimSpace(a.Title), Prompt: prompt, Repeat: repeatOnce, At: at.UTC(), Enabled: true,
@@ -474,6 +487,13 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	if !a.NewConversation {
 		t.SessionID = sessionID
 	}
+	if push != nil {
+		t.Push = *push
+	}
+	ownConversationIfQuiet(&t)
+	if t.SessionID != "" && s.quietConversation(ctx, t.SessionID) {
+		t.SessionID = "" // asked from a quiet task's conversation: it runs in its own, where its runs are pushed (#2396)
+	}
 	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return "", err
@@ -483,10 +503,10 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	sc.mu.Unlock()
 	s.broadcastSchedule()
 	if every > 0 {
-		return fmt.Sprintf("Scheduled %s every %s, first at %s (%s). It repeats by itself: don't schedule the next run from a run.",
-			t.ID, everyText(every), at.In(loc).Format("01-02 15:04 Mon"), until(at)), nil
+		return fmt.Sprintf("Scheduled %s every %s, first at %s (%s); %s. It repeats by itself: don't schedule the next run from a run.",
+			t.ID, everyText(every), at.In(loc).Format("01-02 15:04 Mon"), until(at), pushText(t)), nil
 	}
-	return fmt.Sprintf("Scheduled %s for %s (%s).", t.ID, at.In(loc).Format("01-02 15:04 Mon"), until(at)), nil
+	return fmt.Sprintf("Scheduled %s for %s (%s); %s.", t.ID, at.In(loc).Format("01-02 15:04 Mon"), until(at), pushText(t)), nil
 }
 
 // scheduleOwn handles a run scheduling its own next run ("最后用 schedule_followup（at=30m，prompt 和本条相同）
@@ -494,7 +514,7 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 // follow-up per run. A one-off rescheduled by a relative time becomes a task every that long; one that already
 // repeats stays as it is (a changed prompt is taken). ok is false when this conversation isn't one of the task's runs
 // or the title and prompt are another task's.
-func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, prompt, atArg string, at time.Time, every int) (string, bool) {
+func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, prompt, atArg string, at time.Time, every int, push *string) (string, bool) {
 	if sessionID == "" {
 		return "", false
 	}
@@ -518,6 +538,10 @@ func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, prompt, atA
 		t.Title = title
 	}
 	t.Prompt = prompt
+	if push != nil { // left out: it keeps its push
+		t.Push = *push
+	}
+	ownConversationIfQuiet(t)
 	var out string
 	switch {
 	case t.Repeat != repeatOnce && !t.Enabled:
@@ -604,6 +628,9 @@ func (s *Service) describeSchedule(ctx context.Context) string {
 		default:
 			b.WriteString(", its own conversation starts on the next run")
 		}
+		if t.pushesOnlyAsked() {
+			b.WriteString(", " + pushText(t))
+		}
 		if t.LastStatus != "" {
 			fmt.Fprintf(&b, ", last run %s %s", t.LastRun.In(loc).Format("01-02 15:04"), t.LastStatus)
 		}
@@ -618,15 +645,24 @@ func (s *Service) describeSchedule(ctx context.Context) string {
 // toolScheduleRoutine adds a daily task from a conversation ("每天 9 点给我早报"), or changes one by id.
 func (s *Service) toolScheduleRoutine(ctx context.Context, args json.RawMessage) (string, error) {
 	var a struct {
-		ID       string `json:"id"`
-		Title    string `json:"title"`
-		Prompt   string `json:"prompt"`
-		Time     string `json:"time"`
-		Weekdays []int  `json:"weekdays"`
-		Enabled  *bool  `json:"enabled"`
+		ID       string  `json:"id"`
+		Title    string  `json:"title"`
+		Prompt   string  `json:"prompt"`
+		Time     string  `json:"time"`
+		Weekdays []int   `json:"weekdays"`
+		Enabled  *bool   `json:"enabled"`
+		Push     *string `json:"push"` // left out: a new routine pushes every run, an existing one keeps its push
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", err
+	}
+	var push *string
+	if a.Push != nil {
+		p, err := pushArg(*a.Push)
+		if err != nil {
+			return "", err
+		}
+		push = &p
 	}
 	loc := s.location(ctx)
 	sc, err := s.lockedSchedule(ctx)
@@ -662,6 +698,9 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, args json.RawMessage)
 	if a.Enabled != nil {
 		t.Enabled = *a.Enabled
 	}
+	if push != nil {
+		t.Push = *push
+	}
 	if err := checkTask(&t, time.Now()); err != nil {
 		sc.mu.Unlock()
 		return "", err
@@ -678,8 +717,8 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, args json.RawMessage)
 	if next := t.next(time.Now(), loc); !next.IsZero() {
 		state = "next run " + next.In(loc).Format("01-02 15:04 Mon") + " (" + until(next) + ")"
 	}
-	return fmt.Sprintf("Saved %s「%s」: %s, %s. Each run is a new conversation and the user gets a push with the answer; "+
-		"they see and edit it in the app (Persona › 定时任务).", t.ID, t.label(), ruleText(t, loc), state), nil
+	return fmt.Sprintf("Saved %s「%s」: %s, %s; %s. The user sees and edits it in the app (Persona › 定时任务).",
+		t.ID, t.label(), ruleText(t, loc), state, pushText(t)), nil
 }
 
 var launcherName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
@@ -732,6 +771,10 @@ func checkTask(t *Task, now time.Time) error {
 	default:
 		return fmt.Errorf("unknown repeat %q (once / daily / interval)", t.Repeat)
 	}
+	if err := checkPush(t.Push); err != nil {
+		return err
+	}
+	ownConversationIfQuiet(t)
 	if t.Launcher != "" && !launcherName.MatchString(t.Launcher) {
 		return i18n.Err("assistant-schedule.bad_launcher", i18n.Args{"launcher": strconv.Quote(t.Launcher)})
 	}
@@ -991,6 +1034,12 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 		return proto.Session{}, s.skipRun(run, errTaskBusy)
 	}
 	defer s.sched.end(t.ID)
+	if t.SessionID != "" && !t.pushesOnlyAsked() && s.quietConversation(ctx, t.SessionID) {
+		// Another task's quiet conversation (its finished turns go unpushed): this one wants its runs pushed, so it
+		// runs in its own instead (#2396).
+		s.logf("task %s: %s is a quiet task's conversation; running in its own", t.ID, short(t.SessionID))
+		t.SessionID = ""
+	}
 	if t.SessionID != "" {
 		if m, ok := s.device(ctx, t.MachineID); ok {
 			// A follow-up the assistant scheduled for itself is a turn of that conversation: it keeps the
@@ -1023,6 +1072,8 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 		switch {
 		case t.RunLauncher != launcher:
 			s.logf("task %s: launcher %s → %s, its conversation %s can't go on; starting a new one", t.ID, t.RunLauncher, launcher, short(t.RunSessionID))
+		case t.pushesOnlyAsked() && s.mayBeMain(ctx, t.RunSessionID):
+			s.logf("task %s: its conversation %s is (or may be) the main one, which is never quiet; starting a new one", t.ID, short(t.RunSessionID))
 		case t.RunMachineID != here || !ok:
 			s.logf("task %s: the assistant moved off %s, its conversation %s stays there; starting a new one", t.ID, t.RunMachineID, short(t.RunSessionID))
 		case t.Repeat != repeatOnce && s.sessionBusy(ctx, m.ID, t.RunSessionID):
@@ -1301,7 +1352,7 @@ func (s *Service) forgetConversation(ctx context.Context, id string) (Task, bool
 // runs are above instead. The task's prompt is always there: it may have been edited, or compacted away.
 func taskPrompt(t Task, due, now time.Time, loc *time.Location, manual, kb, continued bool) string {
 	r := prompts.TaskRun{Label: t.label(), Once: t.Repeat == repeatOnce, Interval: t.Repeat == repeatInterval, Due: due.In(loc),
-		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily, Continued: continued}
+		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily, Continued: continued, PushAsked: t.pushesOnlyAsked()}
 	if r.Interval {
 		r.Every = everyText(t.EveryMinutes)
 	}
@@ -1349,7 +1400,7 @@ func (s *Service) taskViews(ctx context.Context) []TaskView {
 	out := make([]TaskView, 0, len(sc.tasks))
 	for _, t := range sc.tasks {
 		out = append(out, TaskView{ID: t.ID, Label: t.label(), Repeat: t.Repeat, Enabled: t.Enabled, At: t.At, EveryMinutes: t.EveryMinutes,
-			MachineID: t.MachineID, RunMachineID: t.RunMachineID, RunSessionID: t.RunSessionID})
+			MachineID: t.MachineID, RunMachineID: t.RunMachineID, RunSessionID: t.RunSessionID, Push: t.Push})
 	}
 	return out
 }
@@ -1388,7 +1439,7 @@ func (s *Service) taskView(ctx context.Context, id string) (Task, bool) {
 }
 
 // editTask applies what the app changed (the hub's own fields and where runs go are kept; SessionID can only be
-// cleared, to run in a new conversation each time).
+// cleared, to run in a new conversation each time). Push is kept: the routes set it only when the body has it.
 func editTask(old, in Task, now time.Time) Task {
 	t := old
 	t.Title, t.Prompt, t.Repeat, t.Enabled = in.Title, in.Prompt, in.Repeat, in.Enabled
@@ -1423,14 +1474,25 @@ func (s *Service) scheduleRoutes() {
 		apierr.WriteJSON(w, map[string]any{"tasks": s.tasksView(r.Context(), nil)})
 	})
 	s.handle("POST /api/v1/assistant/tasks", func(w http.ResponseWriter, r *http.Request) {
+		var raw map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
+		push, _, err := pushIn(raw)
+		if err != nil {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
 		var in Task
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		encoded, _ := json.Marshal(raw)
+		if err := json.Unmarshal(encoded, &in); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
 		now := time.Now()
 		t := editTask(Task{ID: "task_" + randomHex(4), CreatedAt: now.UTC()}, in, now)
-		t.SessionID = ""
+		t.SessionID, t.Push = "", push
 		if err := checkTask(&t, now); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
@@ -1472,6 +1534,15 @@ func (s *Service) scheduleRoutes() {
 			return
 		}
 		t := editTask(sc.tasks[i], in, time.Now())
+		push, has, err := pushIn(raw)
+		if err != nil {
+			sc.mu.Unlock()
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
+		if has { // an app that does not know the field leaves it out: the task keeps its push
+			t.Push = push
+		}
 		if err := checkTask(&t, time.Now()); err != nil {
 			sc.mu.Unlock()
 			apierr.Write(w, http.StatusBadRequest, err)

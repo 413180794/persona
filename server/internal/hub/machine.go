@@ -596,7 +596,16 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	m.hub.mu.Unlock()
 	seen := agentState(s, m.hub.seenAt(m.cfg.ID, id)) == proto.StateIdle
 	verdict, took := m.hub.turns.settle(m.cfg.ID+"/"+id, gen, s, seen, m.hub.muted(m.cfg.ID, id), pushed, time.Now(), ncfg.backgroundHold())
-	if verdict != finishPush || m.stopDuplicate(id) {
+	if verdict != finishPush {
+		return
+	}
+	// The own conversation of a scheduled task that pushes only what its runs send, finished normally (#2396): its
+	// news, if any, went out with notify_user. Decided after settle, not as a push: a turn held for its background
+	// work stays followed, and the wake that ends it is judged on its own (an error there is pushed).
+	if m.hub.quietTaskFinish(s) {
+		return
+	}
+	if m.stopDuplicate(id) {
 		return
 	}
 	title := s.Title

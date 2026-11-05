@@ -243,6 +243,12 @@
   判断是不是真重复：看 mock `/mock/sent` 里的 `client_msg_id`，同一条消息的重发 id 相同，服务端和 mock 都按它去重。
 - 新建的测试文件要先 `xcodegen` 再跑，否则 `-only-testing:` 选中的是空集，xcodebuild 照样 `** TEST SUCCEEDED **`（`Executed 0 tests`）。
   看结果要 grep `Executed N tests`，N 不能是 0（2026-11-01，端口转发的 UI 测试第一次「通过」其实一个都没跑）。
+- **UI 测试的 App 用模拟器签名编，不加 `CODE_SIGNING_ALLOWED=NO`**（2026-11-05，#1929）：无签名的可执行文件里没有 `__TEXT,__entitlements`
+  （`keychain-access-groups`、`application-identifier`），读钥匙串一直失败，`HubStore.read()` 是 `.unreadable`。`AppModel.init` 把它当「不知道配没配对」，
+  `isPaired` 为假，`restoreSnapshot()` / `restoreOutbox()` 都不跑；`protectedDataDidBecomeAvailable` 后的 `retryRegistry()` 照样读不出。
+  于是 `ConnectionTests.testWaitingMessageAfterRelaunch` 稳定失败（重开后没有「连上后自动发送」、hub 收到 0 次），`Library/Caches/state/outbox.json`
+  里那条 `waiting` 却还在，很像发件箱恢复的 bug，先后有人当产品问题追了半天。用默认的模拟器签名（`sim.sh`，或 `xcodebuild build-for-testing` 不加签名参数）
+  在 iOS 27.2 和 26.0 上都通过。重开后配对、发件箱、对话列表都没恢复时先查构建方式：`otool -l <App>/<可执行文件> | grep __entitlements` 没有输出就是无签名。
 - 启动一律 `app.launchPinned()`（钉住风格），不是 `launchJarvis()`：`UITestStyleTests` 扫源码拦这个。
 - 在 zsh 里写 `for v in "dark shell" …; do set -- $v` 不会按空格拆开（zsh 默认不分词），`$1` 是整串、`$2` 为空：外观、布局参数全错，
   测试还是绿的。这种循环放进 `bash -c '…'` 跑。
@@ -264,6 +270,10 @@
   落在 Liquid Glass 的标签栏上就成了拖动标签栏的选中项，切到最左边的「Persona」，测试只看到「拉不出关闭按钮」。行这时照样是
   `exists` / `hittable`。同一个测试在 iPhone 18 Pro Max 上过、在 iPhone 18 Pro 上 100% 挂，一度被当成 #382 的回归（#382 之前的提交在 Pro 上一样挂）。
   对行做滑动、点按前先 `app.bringAboveTabBar(row)`（`JarvisUITests/AgentsSearch.swift`）；查「只在某个车道挂」的 UI 测试，先比一下各自模拟器的机型。
+- **键盘弹起时 `app.collectionViews.firstMatch` 不是列表**（2026-11-05，#2189）：键盘上方那条 44pt 的候选 / 输入辅助条自己就是一个 collection view，
+  排在列表前面，而且不在 `app.keyboards` 的 frame 里（SE 上键盘 frame 从 451 开始，那条在 407–451）。对它 `swipeUp` 列表纹丝不动，
+  看着像「筛选条被钉住」，一度被解释成「元素滑动被键盘挡掉」。按列表里的元素找列表（`collectionViews.containing(.button, identifier:)`）；
+  元素滑动从整个 frame 的中间开始，小屏上贴着键盘边也滑不动，要在看得见的那段行里用坐标拖（`AgentsListTests.dragListUp`）。
 - 模拟器和 Mac 共用回环：App 在模拟器里监听 `127.0.0.1:<端口>` 时，Mac 上已有程序占着这个号就会冲突（端口转发会退到随机端口，正好测到这条路径）。
 - **测试里执行的脚本会在开发机上真的跑**（2026-11-01）：`TestDeployScriptInstallsTheBinary` 执行 hub 的部署脚本，脚本最后一句
   `pkill -f '[j]arvisd node --attach'` 把跑测试的那台机器上真在服务的常驻 node 杀了：装了常驻 node 的 Mac 上每跑一次 hub 测试就掉线一次

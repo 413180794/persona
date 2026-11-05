@@ -228,6 +228,37 @@ type TaskView struct {
 	MachineID    string    `json:"machine_id,omitempty"` // of the conversation it came from
 	RunMachineID string    `json:"run_machine_id,omitempty"`
 	RunSessionID string    `json:"run_session_id,omitempty"` // its own conversation
+	// Push is what of a run reaches the phone: "" every run's answer, PushAsked only what the run sends with
+	// notify_user (#2396). Such a task always runs in its own conversation, whose finished turns are not pushed.
+	Push string `json:"push,omitempty"`
+}
+
+// PushAsked is a scheduled task's push that sends only what its runs push themselves (TaskView.Push).
+const PushAsked = "asked"
+
+// FinishedText is the words the finished push carries for s's turn, chosen as hub/machine.go notifyFinished chooses
+// them: the work line it ended on (done or stuck), else its last words; "" when it said nothing (the push then says a
+// localised 完成了, which is never a cut-off). NormalFinish judges a cut-off on them.
+func FinishedText(s proto.Session) string {
+	if w := s.Work; w != nil && w.Line != "" && (w.Phase == proto.WorkDone || w.Phase == proto.WorkBlocked) {
+		return w.Line
+	}
+	return s.LastText
+}
+
+// NormalFinish: s's turn ended normally, as the finished push would tell it: no model error, no cut-off answer, not
+// stuck on something. A quiet task's conversation (PushAsked) pushes nothing then; an error, a cut-off or a stuck
+// turn is told as ever.
+func NormalFinish(s proto.Session) bool {
+	return strings.TrimSpace(s.TurnError) == "" && !CutOff(FinishedText(s)) && !(s.Work != nil && s.Work.Phase == proto.WorkBlocked)
+}
+
+// QuietTaskFinish: s, the own conversation of a task that pushes only what its runs send, may go unpushed now. Only
+// when it runs on Claude Code (Agent ""), whose model errors land in its last words: a headless Codex's failed turn
+// is not reported on the session yet, nor is a runtime's, so theirs are pushed as ever. Never the main conversation
+// (main: its session id), which the user may have made of the task's. And only a normal finish (NormalFinish).
+func QuietTaskFinish(s proto.Session, main string) bool {
+	return s.Agent == "" && (main == "" || s.SessionID != main) && NormalFinish(s)
 }
 
 // SessionView is what the assistant reports about one of its conversations, put on the session lists the apps get.
