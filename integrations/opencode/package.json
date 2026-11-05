@@ -1,0 +1,16 @@
+{
+  "name": "persona-opencode-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persona runtime for opencode: the sessions of an opencode server in the Persona apps (built on persona-runtime-sdk).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.js",
+  "files": ["index.js", "lib/*.js"],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

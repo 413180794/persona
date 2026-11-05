@@ -251,6 +251,7 @@ runtime 可以当「Persona」tab 的助手、AI 分身、飞书 `/agent`、定�
 | --- | --- | --- |
 | DSH（`dsh`，可配置） | `integrations/dsh`：`dsh web` 的 Cordis 插件；DSH 没在运行时的伴随进程 `companion.mjs`（`dsh-files`） | `docs/dsh.md` |
 | pi（`pi-<pid>`、`pi-web`、`pi-files`） | `integrations/pi`：pi 扩展（每个 pi 进程一条连接）+ pi-web 伴随进程 | `docs/pi.md` |
+| opencode（`opencode-<pid>`） | `integrations/opencode`：opencode 插件（每个 opencode 服务进程一条连接；列表和对话读 opencode.db，实时走事件流，控制走插件接口） | `docs/opencode.md` |
 | echo（例子） | `integrations/runtime-sdk/examples/echo-runtime.mjs`（`--listen <端口>` 就是 daemon） | 本文「最小例子」、`docs/daemons.md` |
 
 两个 runtime 列出同一个会话时（pi 的伴随进程从磁盘列、pi-web 或 pi 终端正在跑它），node 让正在跑它的那个负责（列成 `offline` 的排后面），
@@ -261,6 +262,11 @@ runtime 可以当「Persona」tab 的助手、AI 分身、飞书 `/agent`、定�
 依赖 node 新能力的 runtime 用 `createRuntime(…, {requires: ['prefer_running']})`：遇到不支持的旧 node 就不连（记一行日志），
 等 socket 文件被换掉（常驻 node 重启，比如升级）或 10 分钟后再试；`rt.nodeHas(feature)` 查当前 node。由 node 启动、跑在别处的会话（pi 的伴随进程在 pi-web 里新建）报成 `offline`，
 `session.start` 返回的是正在跑它的那个 runtime 的行。
+
+**宿主里的 Agent 配一个 runtime 插件**（pi、opencode）：窗格、状态、终端归宿主（herdr），对话和控制归 runtime；runtime 的会话行带的 `session_id` 和宿主报的会话 id 一样时，
+node 把两行并成一行（`mergePiRow`、`mergeOpencodeRow`：标题、最后一句、模型、上下文用量、修订号取 runtime 的，状态取宿主的，runtime 说 `blocked` 时算「需要你」），
+没有 runtime 时这一行只有终端、对话是一条说明、发消息被拒（`terminalOnly`，`server/internal/node/opencode.go`）。herdr 报了、Persona 没有任何读法的 agent 同样列成只有终端的行。
+runtime 的 id 里不要带宿主窗格的信息：窗格在 node 一侧对上，runtime 的行里的 `pane_id` 只是可选的提示。
 
 基于 DSH 二次开发、不跑 `dsh web` 的平台（多租户、容器里跑 DSH 的那种）在平台侧实现同一协议，当 daemon 接进来（`docs/daemons.md`），
 直接复用 SDK 和 `integrations/dsh/lib/map.js`，Persona 这边不用加代码。

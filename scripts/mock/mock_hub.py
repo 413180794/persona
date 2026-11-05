@@ -752,6 +752,35 @@ if os.environ.get("MOCK_SOURCES"):
              **dict(NO_SPACE, space_kind="dsh")),
     ]
 
+# MOCK_OPENCODE=1 (#3070, docs/opencode.md): opencode in herdr panes on the server. Four are herdr sessions the Persona
+# plugin completes (working, needs you with a permission card, finished unread, idle with a long conversation), one has
+# no plugin (terminal only, with why), and gemini is an agent nothing reads (terminal only).
+OC_WORK = "ses_e5612a2ffeBQKMrUbj51TjJc"
+OC_ASK = "ses_e5611b1c4ffeKdPz7WnQo3VhLs"
+OC_DONE = "ses_e5610c9d8ffeRtYu2XaBm4NcEp"
+OC_IDLE = "ses_e560fd3e1ffeHgJk8LzCv5MdWq"
+OC_BARE = "ses_e560ee4f2ffeSbNm9QyDx6PfAr"
+GEMINI_PANE = "gemini-w9-pq"
+_OC_PLUGIN_MISSING = "这个 opencode 没有装 Persona 的插件：手机上只能看终端。把插件装进 opencode（见 docs/opencode.md）并重启 opencode 服务，就能看对话、发消息"
+if os.environ.get("MOCK_OPENCODE"):
+    _oc = dict(agent="opencode", launcher=None, can_fork=False, model="deepseek-v4-pro", context_window=200000, permission_mode=None, effort=None)
+    SESSIONS += [
+        sess("server", OC_WORK, "重构解析器的错误处理", "/home/me/code/parser", "working", "working", "parser", 7, "agent-1", 1, 1,
+             "我把错误类型拆成了 `SyntaxError` 和 `LexError`，正在补测试。", context_tokens=84000, **{**_oc}),
+        sess("server", OC_ASK, "迁移数据库脚本", "/home/me/code/parser", "blocked", "needs_you", "parser", 7, "migrate", 2, 3,
+             "要先清掉 build 目录再重新生成，等你授权。", pending=1, context_tokens=121000, **{**_oc}),
+        sess("server", OC_DONE, "整理 README 的安装说明", "/home/me/code/parser", "done", "done", "parser", 7, "docs", 3, 12,
+             "安装说明改成三步，附上了常见错误的排查表。", context_tokens=33000, **{**_oc}),
+        sess("server", OC_IDLE, "为什么 CI 里的缓存没命中", "/home/me/code/inkwell", "idle", "idle", "inkwell", 8, "agent-1", 1, 60 * 3,
+             "缓存键里带了时间戳，每次都是新的；改成 lockfile 的哈希就好了。", context_tokens=56000, **{**_oc}),
+        sess("server", OC_BARE, "一个没装插件的会话", "/home/me/code/inkwell", "idle", "idle", "inkwell", 8, "scratch", 2, 30,
+             "", agent="opencode", launcher=None, can_fork=False, permission_mode=None, effort=None, model="",
+             read_only_reason=_OC_PLUGIN_MISSING),
+        sess("server", GEMINI_PANE, "Gemini CLI", "/home/me/code/inkwell", "working", "working", "inkwell", 8, "gemini", 3, 2,
+             "", agent="gemini", launcher=None, can_fork=False, permission_mode=None, effort=None, model="",
+             read_only_reason="Persona 还不能读 gemini 的对话：手机上只能看终端、按键盘"),
+    ]
+
 # MOCK_SPLIT_TABS=1: herdr's layout for the sidebar's 按机器 tree and the chat's pane tabs (#1963): two machines (the
 # NAS offline, its agent only under 最近), workspaces whose tabs hold one pane or two (claude and codex in one slot),
 # and a botmux space without tabs.
@@ -1648,6 +1677,28 @@ ITEMS[CODEX_HISTORY] = [it("user", "text", 60 * 6, text="日志采集改成按�
     it("assistant", "text", 60 * 5, text="日志采集改成按天切分，旧文件压缩后保留 30 天。")]
 ITEMS[DSH_SESSION] = [it("user", "text", 5, text="用 finance 目录里的表格生成第三季度报表")] + [
     it("assistant", "text", 2, text="要读取 finance 目录里的表格，等你授权。")]
+if os.environ.get("MOCK_OPENCODE"):
+    ITEMS[OC_WORK] = (
+        [it("user", "text", 9, text="解析器遇到语法错误时只返回一个字符串，调用方没法区分。把错误类型拆开，带上行列号。")]
+        + [it("assistant", "thinking", 9, text="先看现在的错误是怎么抛出的，再决定要不要引入错误枚举。")]
+        + tool("Grep", {"pattern": "errors.New|fmt.Errorf", "path": "internal/parse"}, "internal/parse/lexer.go:41:\treturn nil, fmt.Errorf(\"unexpected %q\", r)\ninternal/parse/parser.go:88:\treturn nil, errors.New(\"unexpected end of input\")", 8)
+        + tool("Read", {"file_path": "/home/me/code/parser/internal/parse/parser.go", "offset": 70, "limit": 40}, "70\tfunc (p *Parser) expect(k Kind) (Token, error) {\n71\t\ttok := p.next()\n72\t\tif tok.Kind != k {\n…", 7)
+        + [it("assistant", "text", 6, text="错误分两类：词法错误（`LexError`）和语法错误（`SyntaxError`），都带 `Line` 和 `Col`。我先改 `lexer.go` 和 `parser.go`，再补测试。")]
+        + tool("Edit", {"file_path": "/home/me/code/parser/internal/parse/errors.go", "old_string": "type Error string", "new_string": "type SyntaxError struct {\n\tLine, Col int\n\tMsg       string\n}"}, "The file has been edited.", 5)
+        + tool("Bash", {"command": "go test ./internal/parse/...", "description": "run the parser tests"}, "--- FAIL: TestUnexpectedEOF (0.00s)\n    parser_test.go:57: got string error, want *SyntaxError\nFAIL\tinternal/parse\t0.012s", 3, err=True)
+        + [it("assistant", "text", 1, text="我把错误类型拆成了 `SyntaxError` 和 `LexError`，正在补测试。")]
+    )
+    ITEMS[OC_ASK] = [it("user", "text", 20, text="把迁移脚本改成幂等的，重复跑不会报错")] + tool(
+        "Read", {"file_path": "/home/me/code/parser/scripts/migrate.sh"}, "1\t#!/bin/sh\n2\tset -e\n…", 18) + [
+        it("assistant", "text", 4, text="脚本里每一步都加了存在性检查。要先清掉 build 目录再重新生成，等你授权。")]
+    ITEMS[OC_DONE] = [it("user", "text", 40, text="README 的安装说明太乱了，整理成三步")] + tool(
+        "Edit", {"file_path": "/home/me/code/parser/README.md", "old_string": "## Install", "new_string": "## Install\n\n1. Download\n2. Verify\n3. Run"}, "The file has been edited.", 14) + [
+        it("assistant", "text", 12, text="安装说明改成三步，附上了常见错误的排查表。"), it("system", "notice", 12, text="已压缩上下文")]
+    # What the node answers for a pane it cannot read: one notice saying why (server/internal/node/opencode.go).
+    ITEMS[OC_BARE] = [it("system", "notice", 1, text=_OC_PLUGIN_MISSING)]
+    ITEMS[GEMINI_PANE] = [it("system", "notice", 1, text="Persona 还不能读 gemini 的对话：手机上只能看终端、按键盘")]
+    ITEMS[OC_IDLE] = [it("user", "text", 60 * 4, text="CI 里的依赖缓存为什么一直没命中？")] + [
+        it("assistant", "text", 60 * 3, text="缓存键里带了时间戳，每次都是新的；改成 lockfile 的哈希就好了。")]
 ITEMS[RECIPE] = [it("user", "text", 60 * 27, text="菜谱网站加个搜索")] + [it("assistant", "text", 60 * 26, text="搜索做好了，支持按食材和用时筛选。")]
 
 ITEMS[ASK1] = (
@@ -2281,6 +2332,13 @@ if os.environ.get("MOCK_SOURCES"):
          "cwd": "/Users/me/code/reports", "kind": "permission", "agent": "dsh", "agent_label": "DSH",
          "created_at": ago(minutes=2), "expires_at": later(minutes=28), "tool_name": "read_file",
          "summary": "读取 finance/2026-Q3.xlsx", "tool_input": {"path": "finance/2026-Q3.xlsx"}})
+
+if os.environ.get("MOCK_OPENCODE"):
+    INTERACTIONS.append(
+        {"id": "opencode_rm_build", "machine_id": "server", "session_id": OC_ASK, "session_title": "迁移数据库脚本",
+         "cwd": "/home/me/code/parser", "kind": "permission", "agent": "opencode", "agent_label": "opencode",
+         "created_at": ago(minutes=3), "expires_at": later(minutes=27), "tool_name": "Bash", "tool_use_id": "call_rm_build",
+         "summary": "rm -rf build", "tool_input": {"command": "rm -rf build"}, "always_label": "总是允许 rm *"})
 
 # Keep the exported demo fixtures unchanged; only the HTTP mock serves the expanded request inbox.
 MOCK_INTERACTIONS = INTERACTIONS + [

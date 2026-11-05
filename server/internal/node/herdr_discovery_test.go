@@ -101,16 +101,19 @@ func TestHerdrListPlacesAgentsInSpacesAndSlots(t *testing.T) {
 		[]any{
 			claudeAgent(sidA, proto.StatusWorking, "w1:p1", "w1:t1", "w1", "/tmp/repo", "fix the build"),
 			claudeAgent(sidB, proto.StatusIdle, "w1:p2", "w1:t9", "w1", "/tmp/repo", "Claude Code"),
-			agentOf("gemini", sidC, proto.StatusIdle, "w1:p3", "w1:t2", "w1", "/tmp/repo", ""), // herdr knows it, Persona does not
+			agentOf("gemini", sidC, proto.StatusIdle, "w1:p3", "w1:t2", "w1", "/tmp/repo", ""), // herdr knows it, Persona cannot read it: terminal only (opencode.go)
 		},
 		nil))
 
 	check := func(list []proto.Session) {
 		t.Helper()
-		if got := ids(list); strings.Join(got, ",") != sidA+","+sidB {
+		if got := ids(list); strings.Join(got, ",") != sidA+","+sidB+",gemini-w1-p3" {
 			t.Fatalf("listed %v", got)
 		}
 		m := byID(list)
+		if g := m["gemini-w1-p3"]; g.Agent != "gemini" || g.PaneID != "w1:p3" || g.SlotID != "w1:t2" || g.Status != proto.StatusIdle || g.ReadOnlyReason == "" {
+			t.Errorf("gemini = %+v", g)
+		}
 		a := m[sidA]
 		if a.SpaceKind != "herdr" || a.SpaceID != "w1" || a.SpaceName != "repo" || a.SpaceIndex != 1 ||
 			a.SlotID != "w1:t1" || a.SlotName != "agent-1" || a.SlotIndex != 1 {

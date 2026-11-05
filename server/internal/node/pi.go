@@ -64,34 +64,6 @@ func (n *Node) mergePiRow(s *proto.Session) {
 
 const piNoExtension = "这个 pi 没有装 Persona 的扩展：手机上只能看终端。装上（pi install <Persona>/integrations/pi）再重开 pi，就能看对话、发消息"
 
-// piInPane: the pi pane of session id that no extension serves (runtimeFor found none).
-func (n *Node) piInPane(id string) bool {
-	a, ok := n.agent(id)
-	return ok && a.Agent == piAgent
-}
-
-// piWithoutExtension answers what only the extension could for a pi pane without one: an empty conversation saying
-// so, no sending (typing into pi's editor blind is not safe), Esc for interrupt. Terminal calls are herdr's as usual.
-func (n *Node) piWithoutExtension(ctx context.Context, method, id string) (any, error, bool) {
-	switch method {
-	case "session.items":
-		return map[string]any{"items": []proto.Item{{ID: "pi#0", Seq: 1, Role: "system", Kind: "notice", Text: piNoExtension,
-			TS: time.Now().UTC()}}, "has_more": false, "history": "pi-pane:" + id, "to_seq": 1}, nil, true
-	case "session.item", "session.image":
-		return nil, fmt.Errorf("no item"), true
-	case "session.watch", "session.unwatch":
-		return okResult(nil), nil, true
-	case "session.send":
-		return nil, refusal("pi_no_extension", piNoExtension+"。这次没有发送。", nil), true
-	case "session.interrupt":
-		a, _ := n.agent(id)
-		return okResult(n.sendKeys(ctx, a.PaneID, "escape")), nil, true
-	case "session.modes", "session.queue.edit":
-		return nil, refusal("unsupported", "pi 没有这个操作", nil), true
-	}
-	return nil, nil, false
-}
-
 // resumeInEngine resumes a session its runtime lists offline with a resume_argv (a pi that ran in herdr) in a new tab
 // of the engine, waits for the pi it starts to list the session, and sends the phone's message there. Without an engine
 // that can start it: refused, nothing sent (it is not handed to pi-web).

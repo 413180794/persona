@@ -713,6 +713,13 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		if a.Agent == piAgent {
 			n.mergePiRow(&s) // its conversation is the extension's (pi.go)
 		}
+		switch {
+		case a.Agent == opencodeAgent:
+			s.Title = opencodeTitle(a.Title)
+			n.mergeOpencodeRow(&s) // its conversation is the plugin's (opencode.go)
+		case otherAgent(a):
+			s.ReadOnlyReason = otherNoReader(a.Agent)
+		}
 		if n.codexBlocked(id) {
 			markCodexConflict(&s)
 		}
@@ -1226,7 +1233,8 @@ func (n *Node) setAgents(agents []host.Agent) {
 // setAgentsAt is setAgents for a refresh of engine epoch: false (nothing set) when the engine changed since.
 func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	m, onList := map[string]host.Agent{}, map[string]bool{}
-	var unknown, codex, pi, botmux []host.Agent
+	var unknown, codex, pi, opencode, botmux []host.Agent
+	other := map[string]host.Agent{} // terminal-only agents by their row id (opencode.go)
 	procs := n.liveClaudes()
 	parked := parkedClaudeSessions(procs)    // claudebg.go
 	botmuxThreads := n.botmuxThreads(agents) // hostbotmux.go
@@ -1259,6 +1267,10 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			pi = append(pi, a)
 			continue
 		}
+		if a.Agent == opencodeAgent { // its session: herdr's opencode plugin, or the Persona plugin in the server (opencode.go)
+			opencode = append(opencode, a)
+			continue
+		}
 		if a.Agent == traexAgent { // found by its process, which names its session (traex.go)
 			if id := a.SessionID(); id != "" {
 				m[id] = a
@@ -1266,6 +1278,12 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			continue
 		}
 		if a.Agent != "claude" {
+			// An agent nothing here reads is still an agent the user runs: listed with its terminal (opencode.go).
+			if otherAgent(a) {
+				if id := otherSession(a); id != "" {
+					other[id] = a
+				}
+			}
 			continue
 		}
 		if id := a.SessionID(); id != "" {
@@ -1298,6 +1316,22 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			if _, taken := m[id]; !taken {
 				m[id] = a
 			}
+		}
+	}
+	for _, a := range opencode {
+		id := n.opencodeSession(a)
+		if id == "" {
+			id = otherSession(a) // herdr reported no session id (an older integration): the pane is the row, terminal only
+		}
+		if id != "" {
+			if _, taken := m[id]; !taken {
+				m[id] = a
+			}
+		}
+	}
+	for id, a := range other {
+		if _, taken := m[id]; !taken {
+			m[id] = a
 		}
 	}
 	for _, a := range unknown {

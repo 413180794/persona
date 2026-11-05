@@ -309,3 +309,10 @@ Persona 只看 herdr 和 hook，于是 3 个被挡住的 Agent 显示成「完�
 原因是 node 只认 Bash / Agent 的后台任务：Workflow 的结果文案是「Workflow launched in background. Task ID: …」，它的 agent 也不在 `subagents/agent-*.meta.json`，而在 `subagents/workflows/<run>/` 下，一个都没扫到。
 Claude Code 新加的后台类工具（Workflow、Monitor）都要在 `transcript.trackBackground` 和 node 的 `bgMarkers` 里登记，否则「这一轮结束但还有后台活」就会被当成做完；`turn_duration` 的 `pending*Count` 字段可以用来发现新的种类。
 - 「没在运行」的宿主别报成看板的来源错误（2026-11-05，#3023）：Agents 列表早把 `host.ErrNotRunning` 当作「没有窗格」，`workspaces.list` 却把它写进 `errors`，工作区看板在没开 Orca 的 Linux 机器上一直显示 `orca is not running`。新加按来源列东西的 RPC，先想好「没运行」和「出错」怎么分。另外老版 botmux（如 3.13）没有 `observe`：不报错、退出码 0、在 stdout 打印帮助，按 JSON 解析只会得到 `schema 0`；输出不是 JSON 就当作没运行并提示 `botmux upgrade`。
+
+## opencode 插件：`setup` 里 await 事件循环、订阅不随清理中止、事件被每个目录的实例各收一遍（#3070）
+
+2026-11-05：opencode 的插件按项目目录各加载一次，`setup` 不返回这个目录的所有请求就 503（「Location plugins did not finish activating」）；`setup` 要返回清理函数并中止事件订阅，
+否则服务进程收到 SIGINT 后一直挂着；事件流是服务器范围的，N 个目录的实例就收到每个事件 N 遍，要按事件 id 去重、只让一个实例读流。
+列表和完整对话在插件接口里读不到，读 `opencode.db`（只读）；assistant 消息在一步里原地改写、seq 不变，而 runtime SDK 不会重推 `toSeq` 没增加的批次，所以只推定稿的消息。详见 `docs/opencode.md`。
+herdr 报的、Persona 不认识的 agent 以前被 `if a.Agent != "claude" { continue }` 悄悄丢掉（手机上看不见这个窗格），现在列成只有终端的行，新接一个 agent 时别再依赖「没人认领就消失」。

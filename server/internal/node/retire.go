@@ -28,10 +28,11 @@ func (n *Node) retire(ctx context.Context, id string) (closed bool, err error) {
 		return false, fmt.Errorf("invalid session id %q", id)
 	}
 	no := func(why string) (bool, error) { return false, refusal(notRetirable, why, nil) }
+	_, terminalOnly := n.terminalOnly(id)
 	switch h, _, known := n.runtimes.belongs(id); {
 	case n.isAssistantSession(id) || n.runtimeAssistant(id):
 		return no("assistant conversations are not closed")
-	case n.externalCodex(id) || h != nil || known || n.piInPane(id):
+	case n.externalCodex(id) || h != nil || known || terminalOnly:
 		return no("this session belongs to another tool")
 	}
 	defer n.typing.lock(id)() // not while a message is on its way in (a send may be resuming it right now)

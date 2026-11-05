@@ -464,8 +464,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if res, err, handled := n.runtimeHandle(ctx, h, method, params); handled {
 			return res, err
 		}
-	} else if n.piInPane(p.SessionID) { // a pi in herdr without the extension (pi.go)
-		if res, err, handled := n.piWithoutExtension(ctx, method, p.SessionID); handled {
+	} else if r, ok := n.terminalOnly(p.SessionID); ok { // a pi or opencode without its extension, any other agent (opencode.go)
+		if res, err, handled := n.terminalOnlyCalls(ctx, method, p.SessionID, r); handled {
 			return res, err
 		}
 	}

@@ -17,6 +17,17 @@ App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计�
 
 排序优先级：需要你 → 工作中 → 完成未看 → 已看 → 未知 → 未运行。
 
+### 非 Claude 的 herdr agent（opencode、pi、不认识的 agent）
+
+herdr 报的 agent 不是 Claude / Codex / TRAEX 时，状态**一律取 herdr 报的**（`blocked` / `working` / `done` / `idle` / `unknown`），没有 hook、transcript、屏幕上的框可以补充；
+「需要你」「完成」的判断和推送是 hub 现有的逻辑（按会话状态的变化，不看 agent 是谁）。各自的补充：
+
+- **opencode**（`docs/opencode.md`）：herdr 的 opencode 插件报 `working`（一轮开始、工具执行、权限回答之后）、`blocked`（`permission.asked`、`question.asked`、出错）、`idle`（一轮结束）。
+  装了 Persona 的插件时，插件在等一张权限卡（或一个只能在终端答的提问）时也报 `blocked`，node 把两边合起来：herdr 说什么就是什么，插件说 `blocked` 时算「需要你」。
+- **pi**（`docs/pi.md`）：同上，扩展有卡片在等手机时算「需要你」。
+- **不认识的 agent**（`gemini`、`amp`……）：以前整行丢掉，现在列成只有终端的一行（`docs/opencode.md`「其他 agent 的终端行」）；状态就是 herdr 的，所以它卡在确认框里时手机上看得见「需要你」，
+  但没有卡片可答（hub 不去解析不认识的 TUI 的屏幕），要进终端页答。
+
 ### hook 的轮次信号
 
 herdr 的状态常常不对（`done` 还在干活，#2069），标题字形和 transcript 的修改时间只是推断。Persona 启动的 Claude 会话带 Persona 的 hook，用户自己起的会话在打开 `claude_global_hooks` 后由全局只报告的 hook（`claude-integration.md`「全局只报告的 hooks」）
@@ -123,6 +134,9 @@ DSH（`docs/dsh.md`）：`space_kind` 是 `dsh`，空间是会话的目录（`sp
 
 Paseo（`docs/paseo.md`「显示哪些会话」）：`space_kind` 是 `paseo`，空间是 Paseo 的项目（`space_id` = 项目记录 id、`space_name` = 项目名），
 同一个仓库的主检出和各个 worktree 在一个空间；槽位是 Paseo 的工作区（`slot_id` = 工作区 id、`slot_name` = 工作区标题）。
+
+opencode（`docs/opencode.md`）：herdr 窗格里的是 herdr 的会话（`space_kind` 是 `herdr`）；不在 herdr 里的（网页、别的终端）是 runtime 会话，
+`space_kind` 是 `opencode`，空间是会话的目录，没有槽位，状态由插件给（在跑 → working，等权限 → blocked，其余按有没有 assistant 消息给 done / idle）。
 
 node 用 herdr 的 `session.snapshot`（一次拿到 workspace、tab、agent）填这些字段：herdr 经 `events.subscribe` 推来变化时取一次
 （列表最多每秒重建一次，进入 / 离开 blocked 的不等，见 `docs/server.md`「卡片的快车道」），

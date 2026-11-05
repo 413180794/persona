@@ -174,7 +174,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `apple/PersonaLink/` | Mac 菜单栏 App「Persona Link」（和 Mac App `PersonaMac` 是两个东西；独立的 SwiftPM 包，不在 `project.yml` 里，`scripts/app/mac-link.sh` 构建）：装着 jarvis-link（`server/cmd/jarvis-link`）和 personad，这台 Mac 的 node 服务（主动连 hub 或让 hub 来连），见 `docs/link.md` |
 | `android/` | Kotlin + Compose 多模块：`:app` 装配，`core` 承载协议 / 网络 / 存储 / 列表 / 设计系统，`feature` 承载页面，`platform` 承载通知和手机工具；部分扩展模块尚未接入 App，见 `docs/android.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
-| `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，`paseo/` 是 Paseo 引擎的桥（node 自己运行），见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md`、`docs/paseo.md` |
+| `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，`opencode/` 是 opencode 的插件，`paseo/` 是 Paseo 引擎的桥（node 自己运行），见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md`、`docs/opencode.md`、`docs/paseo.md` |
 | `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 personad（`release/publish.sh`、`deploy/install.sh`）、读配置（`persona_config.py`，旧 `jarvis_config.py` 软链兼容）、截图用的假 hub（`mock/mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
@@ -230,6 +230,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/dsh.md` | DSH（DeepSeek Harness）支持：第一个 runtime，DSH Web 插件的安装、事件映射、授权 / 提问怎么到手机、限制、端到端验证 |
 | `docs/daemons.md` | daemon：自己是常驻服务、连不上本机 runtime.sock 的 runtime（别的用户、容器、别的机器），node 按 `daemons.json` 去连它的 WebSocket 端点（token + `jarvis-runtime.v1`）：规范、配置、名字和会话 id 不撞车、隔离、SDK 的监听模式、验收 |
 | `docs/pi.md` | pi 和 pi-web 支持：herdr 里的 pi 是 herdr 会话（窗格归 herdr、内容和控制归扩展），pi-web 的走 pi-web；扩展 + 伴随进程，离线后去哪接着，安装、配置、映射、端到端验证 |
+| `docs/opencode.md` | opencode 支持：herdr 里的 opencode 是 herdr 会话（窗格和状态归 herdr、对话和控制归服务进程里的插件），按目录加载的插件怎么只连一次、读 opencode.db 的对话和为什么只推定稿的消息、权限卡和提问、其他 agent 的终端行，安装、配置、映射、踩过的坑、端到端验证 |
 | `docs/agent-states.md` | 统一的 Agent 状态（需要你 / 工作中 / 完成未看 / 已看）和 herdr 的对应，空间 / 槽位模型 |
 | `docs/agent-goal.md` | Agent 的 goal（Claude Code 的 `/goal`、Codex 的 thread goal）：两种格式、node 怎么读（跟 `/loop` 一起整份增量读）、`Session.goal`、对话页顶部的目标条和达成通知 |
 | `docs/agent-work.md` | Agent 的工作态（工作中 / 卡在具名的前置条件上 / 做完了）：一轮停下后 hub 分诊（规则 + 便宜模型），瞬时错误自动「继续」、等部署 / CI / 另一个 Agent 到点叫醒、要你决定的开卡片；安全边界（推代码、部署、发消息、碰别人 MR 只能问你）、不和手动操作打架、评估接口 |
