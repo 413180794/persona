@@ -94,6 +94,7 @@ func (b *inboxBook) applyConnector(id, name string, things []connector.InboxThin
 			if open.Last != t.Last {
 				open.Count++
 				fillConnectorItem(open, t)
+				b.offerParent(open, thingParent(t))
 				changed = append(changed, open)
 			} else if t.Tier != "" && (open.Tier != string(t.Tier) || open.Reason != t.Why) {
 				// The rules decide this one now (an item tiered before, or under other options).
@@ -119,6 +120,7 @@ func (b *inboxBook) applyConnector(id, name string, things []connector.InboxThin
 		it := &InboxItem{ID: id + ":" + hex.EncodeToString(sum[:8]), Source: id, Account: id, AccountName: name,
 			StartedAt: t.At, Count: 1}
 		fillConnectorItem(it, t)
+		b.offerParent(it, thingParent(t))
 		b.add(id, it)
 		index.note(it)
 		changed = append(changed, it)

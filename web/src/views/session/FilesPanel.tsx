@@ -3,6 +3,7 @@
 // file opens in the viewer inside the panel (back returns to the list where it was).
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
+import { entryPayload, ENTRY_DRAG_TYPE } from "../../lib/entry-drag";
 import { below, gitMark, joinPath, type FsEntry, type FsListing, type GitStatus } from "../../lib/files";
 import { ago, baseName, bytes, shortPath } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
@@ -117,7 +118,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
                 />
               )}
               {entries.map((e) => (
-                <EntryRow key={e.name} e={e} full={joinPath(dir, e.name)} mark={gitMark(git, joinPath(dir, e.name), e.dir)} onOpen={() => enter(e)} />
+                <EntryRow key={e.name} mid={mid} e={e} full={joinPath(dir, e.name)} mark={gitMark(git, joinPath(dir, e.name), e.dir)} onOpen={() => enter(e)} />
               ))}
               {here.listing.truncated && <p className="px-4 py-2 text-[11.5px] text-ink-3">文件太多，只列出了前 2000 个</p>}
             </div>
@@ -182,10 +183,18 @@ function Crumbs({ root, stack, go }: { root: string; stack: string[]; go: (level
   );
 }
 
-function EntryRow({ e, full, mark, onOpen }: { e: FsEntry; full: string; mark: string | null; onOpen: () => void }) {
+function EntryRow({ mid, e, full, mark, onOpen }: { mid: string; e: FsEntry; full: string; mark: string | null; onOpen: () => void }) {
   const hidden = e.name.startsWith(".");
   return (
-    <div className="group/row relative flex items-center transition-colors hover:bg-hover">
+    <div
+      className="group/row relative flex items-center transition-colors hover:bg-hover"
+      // dragged into a terminal or the chat box it becomes `@path ` (lib/entry-drag.ts)
+      draggable
+      onDragStart={(ev) => {
+        ev.dataTransfer.setData(ENTRY_DRAG_TYPE, entryPayload({ mid, path: full, dir: e.dir }));
+        ev.dataTransfer.effectAllowed = "copy";
+      }}
+    >
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-2 pr-2 pl-4 text-left" title={full}>
         <FileGlyph name={e.name} dir={e.dir} />
         <span className="min-w-0 flex-1">

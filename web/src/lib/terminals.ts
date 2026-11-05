@@ -59,6 +59,8 @@ export interface TermPane {
   /** The line under the title: the agent, the directory. */
   detail: string;
   agent: string;
+  /** The pane's working directory ("" when the host does not say). */
+  cwd: string;
   state: PaneState;
   /** What the filter matches: everything the row shows, and the names around it. */
   haystack: string;
@@ -142,6 +144,7 @@ export function buildTerminalTree(res: PanesResponse | undefined, sessions: read
                 id: terminalId(p),
                 ...row,
                 agent: p.agent ?? "",
+                cwd: p.cwd ?? "",
                 state: paneState(p, session),
                 haystack: [row.title, row.detail, p.cwd, label, w.label, w.branch].join(" ").toLowerCase(),
               };
@@ -180,6 +183,16 @@ export function paneTrail(spaces: readonly TermSpace[], id: string): string {
     for (const t of sp.tabs) {
       const p = t.panes.find((x) => x.id === id);
       if (p) return [sp.label, t.label === sp.label ? "" : t.label, p.title !== t.label ? p.title : ""].filter(Boolean).join(" › ");
+    }
+  return "";
+}
+
+/** The pane's working directory, "" when unknown. */
+export function paneCwd(spaces: readonly TermSpace[], id: string): string {
+  for (const sp of spaces)
+    for (const t of sp.tabs) {
+      const p = t.panes.find((x) => x.id === id);
+      if (p) return p.cwd;
     }
   return "";
 }

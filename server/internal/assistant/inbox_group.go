@@ -520,6 +520,7 @@ func (s *Service) writeGroup(ctx context.Context, c assistantwire.InboxSource, t
 			s.logf("inbox: %s: batch %s: writing %s: %v", c.ID, t.Group.Batch, orNew(a.Event), err)
 			continue
 		}
+		e.continues = a.Continues // a done event's follow-up continues it (above)
 		if it := s.putEvent(c, t.Thread, e, thing, plan.model); it != nil && !containsItem(saved, it) {
 			saved = append(saved, it)
 		}
@@ -626,6 +627,10 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 		it.Summary, it.Tier, it.Reason, it.TriagedBy = "", tier, "按规则", "rules"
 	}
 	it.TriagedAt = it.Last
+	if e.continues != "" && e.continues != it.ID {
+		b.offerParent(it, &InboxParent{Kind: ParentInbox, ID: e.continues, By: ParentByContinues})
+	}
+	b.offerParent(it, thingParent(thing))
 	if m := mutedBy(b.mutes, it); m != nil && it.open() {
 		it.done(time.Now(), "read")
 		it.Reason = "已静音：" + m.Name

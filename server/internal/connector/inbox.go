@@ -75,6 +75,16 @@ type InboxThing struct {
 	// event (its messages…), stored and handed back as it is: the hub never reads it.
 	ID   string          `json:"id,omitempty"`
 	Meta json.RawMessage `json:"meta,omitempty"`
+	// Parent is what the thing grew out of, when the connector knows (a reply to a todo's card, a thread an agent
+	// opened): the item keeps it, unless the user set another. Optional; the hub only keeps and lists it.
+	Parent *ThingParent `json:"parent,omitempty"`
+}
+
+// ThingParent is a thing's parent: kind "inbox" (an item's id), "todo" (a todo's id) or "session"
+// ("<machine>/<session>").
+type ThingParent struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id"`
 }
 
 // ThingGroup is a batch to relate: its id (the same each time the same batch is handed again) and the new messages'

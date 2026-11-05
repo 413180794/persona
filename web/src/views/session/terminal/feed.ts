@@ -42,10 +42,10 @@ import {
 } from "../../../lib/terminal";
 import { gridRow, parseAnsiRows, plainRow, type CellRow } from "../../../lib/terminal-cells";
 import { toast } from "../../../ui/atoms";
+import { dragHasEntry, dragIsDroppable, droppedEntry, terminalEntryDrop } from "../../../lib/entry-drag";
 import {
   copyNotice,
   copyWith,
-  dragHasFiles,
   osc52Text,
   pastedPaths,
   pasteVerdict,
@@ -175,6 +175,8 @@ export class TerminalFeed {
   /** Names of the files on their way to the computer (pasted or dropped), and how deep the drag is over the panel. */
   private uploads: string[] = [];
   private dragDepth = 0;
+  /** The pane's working directory when the page knows it: a dropped Files entry is named relative to it. */
+  cwd = "";
 
   constructor(
     readonly mid: string,
@@ -755,19 +757,20 @@ export class TerminalFeed {
   }
 
   private dragEnter = (e: DragEvent) => {
-    if (!dragHasFiles(e.dataTransfer)) return;
+    if (!dragIsDroppable(e.dataTransfer)) return;
     this.dragDepth++;
     if (this.driving) this.patch({ dropping: true });
   };
 
   private dragOver = (e: DragEvent) => {
-    if (!dragHasFiles(e.dataTransfer)) return;
+    if (!dragIsDroppable(e.dataTransfer)) return;
     e.preventDefault(); // without it the browser does not offer the drop (and opens the file instead)
-    if (e.dataTransfer) e.dataTransfer.dropEffect = this.driving ? "copy" : "none";
+    // a Files panel entry is accepted while watching too: the drop says why nothing was typed
+    if (e.dataTransfer) e.dataTransfer.dropEffect = this.driving || dragHasEntry(e.dataTransfer) ? "copy" : "none";
   };
 
   private dragLeave = (e: DragEvent) => {
-    if (!dragHasFiles(e.dataTransfer)) return;
+    if (!dragIsDroppable(e.dataTransfer)) return;
     this.dragDepth = Math.max(0, this.dragDepth - 1);
     if (!this.dragDepth) this.patch({ dropping: false });
   };
@@ -776,11 +779,27 @@ export class TerminalFeed {
     const files = transferFiles(e.dataTransfer);
     this.dragDepth = 0;
     this.patch({ dropping: false });
+    if (this.dropEntry(e)) return;
     if (!files.length) return;
     e.preventDefault();
     e.stopPropagation();
     void this.uploadFiles(files);
   };
+
+  /** A Files panel entry dropped on the terminal: its `@path ` is typed in, nothing is uploaded. */
+  private dropEntry(e: DragEvent): boolean {
+    const entry = droppedEntry(e.dataTransfer);
+    if (!entry) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    const drop = terminalEntryDrop(entry, { mid: this.mid, cwd: this.cwd, driving: this.driving });
+    if (drop.action === "refuse") toast(drop.toast);
+    else {
+      this.term?.paste(drop.text); // bracketed when the program asked for it
+      this.term?.focus();
+    }
+    return true;
+  }
 
   confirmPaste(ok: boolean) {
     const text = this.view.pasting;

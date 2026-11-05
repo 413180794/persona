@@ -5,6 +5,7 @@ import {
   isPaneAddress,
   keepOnlyShown,
   keepRecent,
+  paneCwd,
   paneIds,
   paneRow,
   paneState,
@@ -114,6 +115,8 @@ describe("Jump To", () => {
     expect(paneTrail(tree, "pane:w1:p2")).toBe("proj › shell › zsh");
     expect(paneTrail(tree, "sid-1")).toBe("proj › agent-1 › 修登录崩溃");
     expect(paneTrail(tree, "gone")).toBe("");
+    expect(paneCwd(tree, "pane:w1:p2")).toBe("/home/me/proj");
+    expect(paneCwd(tree, "gone")).toBe("");
   });
 });
 

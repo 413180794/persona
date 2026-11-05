@@ -32,7 +32,23 @@ function useFeed(feed: TerminalFeed | null): FeedView | null {
   return useSyncExternalStore(feed?.subscribe ?? nothing, () => feed?.snapshot() ?? null);
 }
 
-export function TerminalPanel({ mid, sid, label, onClose }: { mid: string; sid: string; label?: string; onClose: () => void }) {
+export function TerminalPanel({
+  mid,
+  sid,
+  label,
+  cwd,
+  onFiles,
+  onClose,
+}: {
+  mid: string;
+  sid: string;
+  label?: string;
+  /** The pane's working directory when the page knows it (else the session's): dropped Files entries are named relative to it. */
+  cwd?: string;
+  /** Opens the Files panel beside the terminal (the terminal page; as a side panel the Files panel would replace this one). */
+  onFiles?: () => void;
+  onClose: () => void;
+}) {
   const session = useStore(() => getSession(mid, sid));
   const machine = useStore((s) => machineWithHub(mid, s.machines));
   const canDrive = useStore((s) => s.features.includes("terminal_control"));
@@ -54,6 +70,11 @@ export function TerminalPanel({ mid, sid, label, onClose }: { mid: string; sid: 
     void f.mount(host.current!, viewport.current!);
     return () => f.dispose();
   }, [mid, sid]);
+
+  const dir = cwd || session?.cwd || "";
+  useEffect(() => {
+    if (feed) feed.cwd = dir;
+  }, [feed, dir]);
 
   const subtitle = [label ?? (session ? sessionTitle(session) : ""), machine].filter(Boolean).join(" · ");
   const streaming = v?.mode === "stream";
@@ -115,6 +136,7 @@ export function TerminalPanel({ mid, sid, label, onClose }: { mid: string; sid: 
                 onClick={() => feed.setWrap(!v.wrap)}
               />
             )}
+            {onFiles && dir && <IconButton icon="folder" label="文件" onClick={onFiles} className="max-lg:hidden" />}
             <IconButton
               icon="gear"
               label="终端设置"

@@ -6,6 +6,7 @@ import { useQuickPrompts } from "../../lib/extension-declared";
 import { promptCommands, type ComposerCommand as Command } from "../../lib/extension-prompts";
 import { LOOP_TEXT, loopHint } from "../../lib/loop-command";
 import { ApiError, errorText } from "../../lib/api";
+import { composerEntryDrop, dragHasEntry, droppedEntry } from "../../lib/entry-drag";
 import { uuid } from "../../lib/format";
 import { enterSends, hasFinePointer } from "../../lib/viewport";
 import { INPUT_MAX } from "./dock";
@@ -228,6 +229,30 @@ export function Composer({
     });
   };
 
+  // A Files panel entry dropped on the box: `@path ` at the caret, as the @ menu types it
+  const dropEntry = (e: React.DragEvent): boolean => {
+    const entry = droppedEntry(e.dataTransfer);
+    if (!entry) return false;
+    if (disabled) return true;
+    const drop = composerEntryDrop(entry, { mid: machineId, cwd: mention?.cwd });
+    if (drop.action === "refuse") {
+      toast(drop.toast);
+      return true;
+    }
+    const el = input.current;
+    const at = el ? Math.min(el.selectionStart, draft.length) : draft.length;
+    const before = draft.slice(0, at);
+    const lead = before && !/\s$/.test(before) ? " " : "";
+    setDraft(before + lead + drop.text + draft.slice(at));
+    const caret = at + lead.length + drop.text.length;
+    setCaret(caret);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(caret, caret);
+    });
+    return true;
+  };
+
   const addFiles = async (files: FileList | File[]) => {
     if (disabled) return;
     for (const f of Array.from(files)) {
@@ -306,7 +331,7 @@ export function Composer({
     <div
       className="relative"
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("Files")) {
+        if (e.dataTransfer.types.includes("Files") || dragHasEntry(e.dataTransfer)) {
           e.preventDefault();
           setDragging(true);
         }
@@ -317,6 +342,7 @@ export function Composer({
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
+        if (dropEntry(e)) return;
         void addFiles(e.dataTransfer.files);
       }}
     >

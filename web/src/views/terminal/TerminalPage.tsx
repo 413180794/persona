@@ -6,12 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { machineWithHub } from "../../lib/mesh";
 import { href, navigate, onLinkClick, type Route } from "../../lib/router";
+import { openPanel } from "../../lib/panel";
 import { useStore } from "../../lib/store";
 import {
   buildTerminalTree,
   filterTerminalTree,
   keepOnlyShown,
   keepRecent,
+  paneCwd,
   paneIds,
   paneTrail,
   sameTerminal,
@@ -140,6 +142,7 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
   };
 
   const trail = (t: OpenTerminal) => paneTrail(trees[t.mid] ?? [], t.id);
+  const cwdOf = (t: OpenTerminal) => paneCwd(trees[t.mid] ?? [], t.id);
   const listHidden = shown ? "max-lg:hidden" : "";
   const termHidden = shown ? "" : "max-lg:hidden";
   const anyPanes = flat.length > 0 || machines.some((m) => (trees[m.id] ?? []).length > 0);
@@ -203,7 +206,15 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
               // A kept terminal stays mounted under the one shown, at the same size, only unseen: its stream goes on and
               // coming back is instant. Not display:none — a hidden xterm measures its box as 100px and would resize the pane.
               <div key={`${t.mid}\n${t.id}`} inert={!on || undefined} className={cx("absolute inset-0 flex flex-col", !on && "pointer-events-none invisible")}>
-                <TerminalPanel mid={t.mid} sid={t.id} label={trail(t) || undefined} onClose={() => close(t)} />
+                <TerminalPanel
+                  mid={t.mid}
+                  sid={t.id}
+                  label={trail(t) || undefined}
+                  cwd={cwdOf(t)}
+                  // a plain shell has no session id; the Files panel only needs the folder
+                  onFiles={() => openPanel({ kind: "files", mid: t.mid, sid: t.id.startsWith("pane:") ? "" : t.id, cwd: cwdOf(t) })}
+                  onClose={() => close(t)}
+                />
               </div>
             );
           })}

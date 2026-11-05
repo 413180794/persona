@@ -92,6 +92,8 @@ type InboxItem struct {
 	// TriagedBy says who sorted an event (inbox_group.go): "model" (its title, summary and tier are the model's) or
 	// "rules" (the connector grouped it and its rule tier stands, 按规则).
 	TriagedBy string `json:"triaged_by,omitempty"`
+	// Parent is what the item grew out of: another item, a todo or an agent session (inbox_parent.go, #2128).
+	Parent *InboxParent `json:"parent,omitempty"`
 
 	// Bookkeeping: persisted, not listed (GET /api/v1/inbox/{id} returns Context).
 	Last      string `json:"last,omitempty"`       // newest message position / mail uid in the item
@@ -820,6 +822,7 @@ var errCannotReply = errors.New("this item cannot be replied to")
 
 func (s *Service) inboxRoutes() {
 	s.inboxMuteRoutes()
+	s.inboxParentRoutes()
 	s.inboxBulkRoutes()
 	s.translateRoutes()
 	// Items of connectors (GitHub…) only go to apps that draw them (?sources=all): an older app would show a PR as
