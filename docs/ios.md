@@ -461,6 +461,10 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 「模型 · 思考强度」按钮（#1091，见上面「新外壳」的输入框）。新开 Agent 的表单、助手首页的输入框上方
 也能选（不选就是「跟随启动器」）。Codex / TRAEX 的会话不显示；经 app-server 驱动的 Codex 会话（hub 给了 `efforts`，`Session.setsEffortOnly`）
 只显示思考强度，选项是它的模型的档位（`SessionModes.effortOptions`，`docs/codex.md`「思考强度」）。
+herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模型」一节（#3119，对齐网页 #2434；`SessionModes.switchesModel`）：
+默认 / Opus / Sonnet / Haiku，选了发 `POST …/modes {"model"}`，node 按发消息的防护打 `/model <id>` 并读屏确认，失败显示原因；
+工作中、等你回答、没在运行时这一节是灰的，标题写原因；标题提醒所选模型也会成为新会话的默认（Claude Code 的行为）。
+新外壳的「模型 · 思考强度」菜单仍是把 `/model <id>` 作为一条消息发出去。
 
 - 显示：transcript 每条 user 行带 `permissionMode`、每条回复带 `effort`；在 App 里改过的值在 transcript 写下更新的值之前优先
   （node/modes.go）。助手对话例外（#2416）：App 设的值存进 hub 的会话状态（`app_mode` / `app_effort`），始终胜过 transcript、node 重启不丢

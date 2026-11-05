@@ -1768,16 +1768,17 @@ final class AppModel {
         } catch { show(error) }
     }
 
-    /// Changes a session's permission mode / effort level (nil leaves one). Shown right away; the hub's next session
+    /// Changes a session's permission mode / effort level / model (nil leaves one). Shown right away; the hub's next session
     /// list confirms it. Returns whether it worked.
     @discardableResult
-    func setModes(_ key: SessionKey, permissionMode: String? = nil, effort: String? = nil) async -> Bool {
+    func setModes(_ key: SessionKey, permissionMode: String? = nil, effort: String? = nil, model claudeModel: String? = nil) async -> Bool {
         guard allowSend(key), let api = api(key.group) else { return false }
         do {
-            try await api.setModes(key, permissionMode: permissionMode, effort: effort)
+            try await api.setModes(key, permissionMode: permissionMode, effort: effort, model: claudeModel)
             if var list = sessionsByMachine[key.machineRef], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }) {
                 if let permissionMode { list[i].permissionMode = permissionMode }
                 if let effort { list[i].effort = effort }
+                if let claudeModel { list[i].model = claudeModel } // the node lists the pick too until the transcript moves on
                 sessionsByMachine[key.machineRef] = list
             }
             Haptics.success()

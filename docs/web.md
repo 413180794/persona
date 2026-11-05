@@ -265,7 +265,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     （`GET /machines/{mid}/launchers/{name}/models`，就是新建 Agent 选模型用的那份，按会话的启动器取；当前模型带「当前」）。↑↓ 选模型、←→ 选档、Enter 应用、Esc 取消、点浮层外关闭；应用先 `POST …/modes {"model"}` 再 `{"effort"}`，各自先改本地、失败恢复。
     输入框里只打 `/model` 按 Enter 不发送，改为打开这个浮层（没有模型切换的 Agent 照常发送）。node 收到 `model` 后用和发消息一样的安全路径往 Claude Code 的输入框打 `/model <id>`：先读屏，对话框开着（`dialog_open`）或输入框里有草稿（`input_draft`）就拒绝、什么都不打，
     Agent 正在工作也拒绝；打完再读屏确认出现 `Set model to`，没出现就报错而不是当成功。模型 id 只收一个词（字母数字和 `._:/@[]-`），不是命令也不是参数。注意：新版 Claude Code 的 `/model <id>` 会同时把所选模型存为新会话的默认（本机 transcript 里的输出是「Set model to `…` and saved as your default for new sessions」），没有只改这个会话的写法，浮层里也写了这句。Codex 的线程保持只有思考强度，Persona 的对话在自己的胶囊里换模型，其他 Agent 没有这个入口。
-    Codex、TRAEX、runtime 的会话和助手没有。
+    Codex、TRAEX、runtime 的会话和助手没有。iOS / Mac 旧布局的思考强度标签菜单里也能选模型，走同一个 `modes {"model"}`（#3119）。
   - 发送中的气泡把 `<jarvis-context>` 显示成引用卡片，和记录里的一样（以前会露出原始标签）。
   - 打开页面、页面回到前台时发 `seen`。
 - **Persona**：`/`（和旧的 `/j`）是主对话，`/j/new` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`；输入框能传文件到助手所在的电脑、能 @ 别的会话作为上下文，#2978，同 iOS StarterComposer），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。

@@ -777,11 +777,14 @@ nonisolated struct APIClient: Sendable {
     struct ModesBody: Encodable {
         var permissionMode: String?
         var effort: String?
-        enum CodingKeys: String, CodingKey { case effort; case permissionMode = "permission_mode" }
+        /// Claude Code's model (#3119, the web's #2434): the node types `/model <id>` through the guards of a message
+        /// and reads the screen back (node/model_switch.go).
+        var model: String? = nil
+        enum CodingKeys: String, CodingKey { case effort, model; case permissionMode = "permission_mode" }
     }
-    /// Changes a session's permission mode and / or effort level (nil leaves it); a TUI agent takes a second or two.
-    func setModes(_ k: SessionKey, permissionMode: String? = nil, effort: String? = nil) async throws {
-        try await post(sp(k) + "/modes", body: ModesBody(permissionMode: permissionMode, effort: effort), timeout: 30)
+    /// Changes a session's permission mode, effort level and / or model (nil leaves it); a TUI agent takes a second or two.
+    func setModes(_ k: SessionKey, permissionMode: String? = nil, effort: String? = nil, model: String? = nil) async throws {
+        try await post(sp(k) + "/modes", body: ModesBody(permissionMode: permissionMode, effort: effort, model: model), timeout: 30)
     }
 
     struct QueueEdit: Encodable { var keep: [Int] }

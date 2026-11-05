@@ -60,6 +60,28 @@ nonisolated enum SessionModes {
         return ids.map { id in codexEffortLevels.first { $0.id == id } ?? Option(id: id, title: id, detail: "", symbol: Theme.Icon.effort) }
     }
 
+    /// The model can be switched on the running session (#3119): Claude Code in a herdr pane, which takes `/model`.
+    /// Codex and TRAEX pick theirs in a full-screen menu the phone cannot drive; the assistant's has its own chip.
+    static func switchesModel(_ s: Session?) -> Bool {
+        guard let s else { return false }
+        return s.canSend && s.canTerminal && s.paneID != nil && s.isClaude && !s.isTraex && !s.assistant
+    }
+
+    /// Why the model cannot be switched right now (nil when it can): the node refuses the same cases.
+    static func modelBusy(_ s: Session?) -> String? {
+        switch s?.state {
+        case .working?: "工作中，停下后再切换模型"
+        case .needsYou?: "等你回答，答完后再切换模型"
+        case .offline?: "没在运行"
+        default: s?.starting == true ? "正在启动" : nil
+        }
+    }
+
+    /// What applying a model pick sends: the alias, unless the session already runs it.
+    @MainActor static func modelPatch(_ picked: String, current: String?) -> String? {
+        picked == PromptItems.claudeModelID(current) ? nil : picked
+    }
+
     static func modeTint(_ id: String?) -> Color {
         switch id {
         // Neutral: amber is the working state and would read as 等你处理. Only "allow everything" warns.
@@ -158,12 +180,29 @@ struct SessionModeBar: View {
                     }
                 }
                 .pickerStyle(.inline)
+                // The model in the same chip (#3119, the web's #2434): Claude Code takes `/model`, typed by the node.
+                if SessionModes.switchesModel(session) {
+                    let busy = SessionModes.modelBusy(session)
+                    Section("模型") {
+                        Picker("模型", selection: Binding(get: { PromptItems.claudeModelID(session?.model) }, set: { id in change(model: id) })) {
+                            ForEach(PromptItems.claudeModels, id: \.id) { m in
+                                Text(m.name).tag(m.id)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .disabled(busy != nil)
+                        // A menu draws no section footers: the note is a row of its own (not tappable).
+                        Text(busy ?? "所选模型也会成为新会话的默认")
+                    }
+                }
             } label: {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
                          text: effort.map { "思考\(SessionModes.effortLabel($0) ?? $0)" } ?? "思考强度", tint: .secondary, known: effort != nil)
             }
             .labelOnlyMenu()
-            .accessibilityLabel("思考强度：\(SessionModes.effortLabel(effort) ?? "未知")")
+            .accessibilityLabel(SessionModes.switchesModel(session)
+                ? "思考强度与模型：\(SessionModes.effortLabel(effort) ?? "未知")，\(SessionModes.modelName(session?.model) ?? "模型未知")"
+                : "思考强度：\(SessionModes.effortLabel(effort) ?? "未知")")
             if changing { ProgressView().controlSize(.mini) }
             Spacer(minLength: 0)
         }
@@ -177,11 +216,13 @@ struct SessionModeBar: View {
         return list + [SessionModes.mode(current) ?? .init(id: current, title: current, detail: "", symbol: Theme.Icon.help)]
     }
 
-    private func change(mode: String? = nil, effort: String? = nil) {
-        guard mode != session?.permissionMode || effort != session?.effort, !changing else { return }
+    private func change(mode: String? = nil, effort: String? = nil, model picked: String? = nil) {
+        let newModel = picked.flatMap { SessionModes.modelPatch($0, current: session?.model) }
+        if picked != nil, newModel == nil { return } // the model it runs already
+        guard mode != session?.permissionMode || effort != session?.effort || newModel != nil, !changing else { return }
         changing = true
         Task {
-            await model.setModes(key, permissionMode: mode, effort: effort)
+            await model.setModes(key, permissionMode: mode, effort: effort, model: newModel)
             changing = false
         }
     }
