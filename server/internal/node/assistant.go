@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -62,6 +63,11 @@ const (
 	assistantStderrTail = 5
 )
 
+// assistantStartWait: how long a send that started a fresh process waits for its first output before answering. A
+// launcher that cannot start (its node socket gone, a shell error) exits within a second or two; the message written
+// to it is lost, so the send fails with what it printed instead of leaving the message at "正在送达" for good.
+var assistantStartWait = 8 * time.Second
+
 type assistantProc struct {
 	id       string
 	agent    string // "claude" (stream-json) or "codex" (app-server, assistant_codex.go)
@@ -72,6 +78,9 @@ type assistantProc struct {
 	stdin    io.WriteCloser
 	exited   chan struct{}
 	born     time.Time
+	// ready closes at its first JSON line on stdout (claude): it started. nil for Codex.
+	ready     chan struct{}
+	readyOnce sync.Once
 
 	wmu    sync.Mutex   // one writer on stdin at a time (messages and control requests)
 	reqSeq atomic.Int64 // control request ids
@@ -91,6 +100,7 @@ type assistantProc struct {
 	compacted   bool     // compactIdle ran in this process: it is let go when idle again
 	manual      bool     // the compaction running is the user's (assistant_compact.go): its end is reported
 	requested   bool     // its first request was logged
+	stderrTail  []string // its last assistantStderrTail stderr lines (watchAssistantStderr)
 
 	// owner: the Node that took it over from an earlier connection of a resident node (assistant_keep.go); nil: the
 	// one that started it.
@@ -102,6 +112,42 @@ func (p *assistantProc) write(line []byte) error {
 	defer p.wmu.Unlock()
 	_, err := p.stdin.Write(append(line, '\n'))
 	return err
+}
+
+// started marks the process as having started: its first JSON line came out.
+func (p *assistantProc) started() {
+	if p.ready != nil {
+		p.readyOnce.Do(func() { close(p.ready) })
+	}
+}
+
+// awaitStart waits up to d for a freshly spawned process to start; one that exits first failed to start, and the
+// error says what it printed. Still starting after d counts as started (a slow SessionStart hook).
+func (p *assistantProc) awaitStart(d time.Duration) error {
+	if p.ready == nil {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-p.ready:
+		return nil
+	case <-t.C:
+		return nil
+	case <-p.exited:
+	}
+	select {
+	case <-p.ready: // it printed and then exited: it did start
+		return nil
+	default:
+	}
+	p.mu.Lock()
+	tail := strings.Join(p.stderrTail, " | ")
+	p.mu.Unlock()
+	if tail == "" {
+		tail = "没有输出"
+	}
+	return fmt.Errorf("%s 没有启动起来，消息没有送达：%s", p.launcher, tail)
 }
 
 func (p *assistantProc) alive() bool {
@@ -266,6 +312,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		}
 	}
 	n.noteModes(id, mode, effort)
+	fresh := p == nil
 	if p == nil {
 		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false, execution); err != nil {
 			return "", err
@@ -319,6 +366,12 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if err := p.write(line); err != nil {
 		n.stopAssistant(id)
 		return "", fmt.Errorf("send to claude: %w", err)
+	}
+	if fresh {
+		if err := p.awaitStart(assistantStartWait); err != nil {
+			n.stopAssistant(id)
+			return "", err
+		}
 	}
 	commit()
 	n.notifySessions()
@@ -469,14 +522,14 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
-	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
+	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}), ready: make(chan struct{}),
 		born: time.Now(), lastActive: time.Now(), mode: startMode, model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
 	if !spare {
 		n.mu.Lock()
 		n.procs[id] = p
 		n.mu.Unlock()
 	}
-	go watchAssistantStderr(n.logger, id, launcher, p.born, stderr)
+	go watchAssistantStderr(n.logger, p, stderr)
 	liveAssistants.Store(p, struct{}{})
 	go n.readAssistant(p, stdout)
 	go func() {
@@ -508,7 +561,10 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 // watchAssistantStderr logs an assistant process's error lines, and, when its stderr ends (it exited) within
 // assistantEarlyExit of born, its last lines whatever they say: it did not start. WSL's "open terminal failed: not a
 // terminal" has no "error" in it, and the assistant stayed silent with nothing in any log (#1994).
-func watchAssistantStderr(logger *log.Logger, id, launcher string, born time.Time, stderr io.Reader) {
+// The tail is kept on the process too (without blank lines and terminal colors): a send that started it reports it when
+// it exits before starting (awaitStart).
+func watchAssistantStderr(logger *log.Logger, p *assistantProc, stderr io.Reader) {
+	id, launcher, born := p.id, p.launcher, p.born
 	var tail []string
 	sc := bufio.NewScanner(stderr)
 	for sc.Scan() {
@@ -516,8 +572,13 @@ func watchAssistantStderr(logger *log.Logger, id, launcher string, born time.Tim
 		if strings.Contains(l, "rror") {
 			logger.Printf("assistant %s: %s", id[:8], l)
 		}
-		if tail = append(tail, l); len(tail) > assistantStderrTail {
-			tail = tail[1:]
+		if clean := strings.TrimSpace(ansiRe.ReplaceAllString(l, "")); clean != "" {
+			if tail = append(tail, clean); len(tail) > assistantStderrTail {
+				tail = tail[1:]
+			}
+			p.mu.Lock()
+			p.stderrTail = append([]string(nil), tail...)
+			p.mu.Unlock()
 		}
 	}
 	if lived := time.Since(born); lived < assistantEarlyExit && len(tail) > 0 {
@@ -525,6 +586,9 @@ func watchAssistantStderr(logger *log.Logger, id, launcher string, born time.Tim
 			strings.Join(tail, " | "))
 	}
 }
+
+// ansiRe: terminal color and style sequences (an interactive zsh's prompt plugins print them on stderr).
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
 // readAssistant turns the stream-json output into live deltas and turn-finished signals.
 // The structured messages themselves come from the transcript, like every other session.
@@ -538,6 +602,7 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 		if len(line) == 0 || line[0] != '{' { // interactive zsh may print banners
 			continue
 		}
+		p.started()
 		var ev struct {
 			Type    string `json:"type"`
 			Subtype string `json:"subtype"`

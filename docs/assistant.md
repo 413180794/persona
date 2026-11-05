@@ -260,6 +260,13 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
   夜里到点的跟进、Monitor 事件就停在批准那一步，推出去的只有一条「需要批准」。现在 Persona 自己的工具预先放行（见上表）。
 - **systemd 重启 hub 服务（兼容 unit `jarvisd`）会杀掉整个 cgroup**：助手的 claude 和它的后台命令、Monitor 一起没了，node 来不及做任何收尾，所以「哪些任务在跑」
   要随时落库（`node_sessions.tasks`），不能等关机时再记。
+- **起不来的进程会吞掉消息**（2026-11-05）：node 先把消息写进新进程的 stdin、马上回 hub「送出了」；启动器这时已经失败退出（例如 `jarvisd launch opus: no jarvis node`），
+  消息就丢了，App 一直停在「正在送达」，日志里只有 zsh 主题插件一行带 `error` 字样的提示。现在新起进程的那一次发送等它第一行输出（最多 `assistantStartWait` 8 秒）：
+  先退出就报错「<启动器> 没有启动起来，消息没有送达：<stderr 最后几行>」，App 显示发送失败可以重试；超过 8 秒还没输出按启动处理（慢的 SessionStart hook）。
+  stderr 的尾巴去掉颜色码和空行后记在进程上（`watchAssistantStderr`）。
+- **node 的 socket 文件被别的进程顶替**（2026-11-05）：另一个 node 在同一路径上监听过、退出时不删文件（`SetUnlinkOnClose(false)`），路径上就剩一个没人听的 socket，
+  所有 `jarvisd launch <Persona 管理的启动器>` 和 hook 都 `connection refused`。原来的看门狗只看文件在不在；现在每 15 秒还看它是不是自己那个（`os.SameFile`），
+  不是时拨一下，没人应答才重建（`sockGone`），有人应答说明是更新的 node 在用，不抢。
 - 中文环境下 `.hour(.twoDigits(amPM: .omitted))` 是 12 小时制（17:00 显示成「05:00」）：时刻一律用 `AssistantScheduleText.hm`（固定 `HH:mm`）。
 
 ## 实时快照和前缀缓存（2026-11-01）

@@ -55,7 +55,9 @@ func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
 		return nil, err
 	}
 	// A node from an earlier hub connection may still be shutting down; if its cleanup (or anything else) removes
-	// our socket file, hooks silently fall back to the terminal. Re-create it whenever it disappears.
+	// our socket file, hooks silently fall back to the terminal. Re-create it whenever it disappears, or when another
+	// file took its place that nothing answers on (a node that started, listened and exited without unlinking: every
+	// `jarvisd launch` then failed with "connection refused" and the assistant's messages stayed undelivered).
 	go func() {
 		t := time.NewTicker(15 * time.Second)
 		defer t.Stop()
@@ -65,8 +67,8 @@ func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
 				return
 			case <-t.C:
 			}
-			if _, err := os.Stat(SocketPath()); os.IsNotExist(err) {
-				n.logger.Printf("hook socket vanished, re-creating")
+			if why := n.sockGone(); why != "" {
+				n.logger.Printf("hook socket %s, re-creating", why)
 				if _, err := n.listenOnce(ctx); err != nil {
 					n.logger.Printf("hook socket: %v", err)
 				}
@@ -74,6 +76,30 @@ func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
 		}
 	}()
 	return ln, nil
+}
+
+// sockGone says why the node socket needs re-creating, "" when it does not: the file is gone, or it is another file
+// than the one this node listens on and nothing answers there. A live one is left alone: a newer node owns it.
+func (n *Node) sockGone() string {
+	fi, err := os.Stat(SocketPath())
+	if os.IsNotExist(err) {
+		return "vanished"
+	}
+	if err != nil {
+		return ""
+	}
+	n.sockMu.Lock()
+	mine := n.sock != nil && os.SameFile(fi, n.sock)
+	n.sockMu.Unlock()
+	if mine {
+		return ""
+	}
+	c, err := net.DialTimeout("unix", SocketPath(), time.Second)
+	if err != nil {
+		return "replaced by one nothing answers on"
+	}
+	c.Close()
+	return ""
 }
 
 func (n *Node) listenOnce(ctx context.Context) (net.Listener, error) {
@@ -86,6 +112,11 @@ func (n *Node) listenOnce(ctx context.Context) (net.Listener, error) {
 	// Never unlink on close: by then the path may belong to a newer node.
 	ln.(*net.UnixListener).SetUnlinkOnClose(false)
 	_ = os.Chmod(path, 0o600)
+	if fi, err := os.Stat(path); err == nil {
+		n.sockMu.Lock()
+		n.sock = fi
+		n.sockMu.Unlock()
+	}
 	go func() {
 		<-ctx.Done()
 		ln.Close()

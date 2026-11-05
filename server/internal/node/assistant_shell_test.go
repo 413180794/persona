@@ -40,21 +40,21 @@ func TestAnAssistantThatDoesNotStartSaysWhy(t *testing.T) {
 	logger := log.New(&buf, "", 0)
 	const id = "0c000000-0000-4000-8000-000000000021"
 	lines := "Welcome\nopen terminal failed: not a terminal\n"
-	watchAssistantStderr(logger, id, "claude", time.Now(), strings.NewReader(lines))
+	watchAssistantStderr(logger, &assistantProc{id: id, launcher: "claude", born: time.Now()}, strings.NewReader(lines))
 	if out := buf.String(); !strings.Contains(out, "assistant 0c000000: claude exited") || !strings.Contains(out, "Welcome | open terminal failed: not a terminal") {
 		t.Fatalf("log: %q", out)
 	}
 
 	// One that ran for a while and ended (stopped, idle) says nothing but its error lines.
 	buf.Reset()
-	watchAssistantStderr(logger, id, "claude", time.Now().Add(-time.Hour), strings.NewReader("bye\nAPI Error: overloaded\n"))
+	watchAssistantStderr(logger, &assistantProc{id: id, launcher: "claude", born: time.Now().Add(-time.Hour)}, strings.NewReader("bye\nAPI Error: overloaded\n"))
 	if out := buf.String(); out != "assistant 0c000000: API Error: overloaded\n" {
 		t.Fatalf("log: %q", out)
 	}
 
 	// And one that exits early without a word adds nothing.
 	buf.Reset()
-	watchAssistantStderr(logger, id, "claude", time.Now(), strings.NewReader(""))
+	watchAssistantStderr(logger, &assistantProc{id: id, launcher: "claude", born: time.Now()}, strings.NewReader(""))
 	if buf.Len() != 0 {
 		t.Fatalf("log: %q", buf.String())
 	}

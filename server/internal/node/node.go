@@ -37,6 +37,10 @@ type Node struct {
 	// previous herdr server, so the restart is what ended it (interrupted.go).
 	bootAt time.Time
 
+	// sock: the node socket file this node listens on (hooks.go), to tell it from one put in its place.
+	sockMu sync.Mutex
+	sock   os.FileInfo
+
 	home string
 	dir  string // ~/.jarvis
 	bin  string // absolute path of this executable
