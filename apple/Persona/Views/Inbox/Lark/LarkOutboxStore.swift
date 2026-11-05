@@ -66,11 +66,13 @@ actor LarkOutboxStore {
         return LarkOutboxSnapshot(draft: saved.draft,
             attachments: saved.attachments.map(attachment),
             items: saved.items.map { item in
-                LarkOutgoing(id: item.id, text: item.text, encrypted: item.encrypted, at: item.at,
+                var o = LarkOutgoing(id: item.id, text: item.text, encrypted: item.encrypted, at: item.at,
                              state: item.state == .sending
                                 ? (item.attempted == false ? .failed("尚未发送，点按重试") : .unconfirmed) : item.state,
                              replyTo: item.replyTo, thread: item.thread, threadRoot: item.threadRoot,
                              attachment: item.attachment.map(attachment), messageID: item.messageID, attempted: item.attempted ?? true, mentions: item.mentions ?? [])
+                o.firstAt = item.firstAt
+                return o
             })
     }
 
@@ -214,6 +216,7 @@ actor LarkOutboxStore {
         var messageID: String?
         var mentions: [LarkMention]?
         var attempted: Bool?
+        var firstAt: Date?
 
         init(_ value: LarkOutgoing) {
             encrypted = value.encrypted
@@ -222,6 +225,7 @@ actor LarkOutboxStore {
             attachment = value.attachment.map(Media.init); messageID = value.messageID
             mentions = value.mentions.isEmpty ? nil : value.mentions
             attempted = value.attempted
+            firstAt = value.firstAt
         }
     }
 }

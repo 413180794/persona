@@ -72,17 +72,43 @@ struct LarkThreadView: View {
                     if pager.hasOlder {
                         LarkLoadOlderButton(title: "加载更早的回复", loading: loadingOlder) { Task { await loadOlder() } }
                     }
-                    ForEach(Array(replies.enumerated()), id: \.element.id) { i, m in
-                        // The first loaded reply's time counts from the root's (under the 条回复 line).
-                        let prev = i > 0 ? replies[i - 1] : root
-                        let grouped = i > 0 && LarkChatLayout.continues(m, after: prev)
+                    // Mine on their way are in the same list, where they were written (LarkChatRows).
+                    // Pictures and files wait in the chat's outbox (`queued`), text here; both by when they were written.
+                    let queuedIDs = Set(queued.map(\.id))
+                    let mineOnTheWay = (outgoing + queued).sorted { $0.written < $1.written }
+                    let rows = LarkChatRows.rows(messages: replies, outgoing: mineOnTheWay, like: (replies + [root]).last(where: \.isMine))
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                        let m = row.message
+                        // The first loaded reply's time counts from the root's (under the 条回复 line); it does not
+                        // join the root, one of mine on its way can.
+                        let prev = i > 0 ? rows[i - 1].message : root
+                        let grouped = (i > 0 || row.outgoing != nil) && LarkChatLayout.continues(m, after: prev)
                         if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
-                        LarkMessageRow(message: m, grouped: grouped, isGroup: isGroup, feedID: feedID, inThread: true)
-                            .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                            .overlay { if flash?.line == m.id { QuoteFlash().id(flash?.id) } }
-                            .id(m.id)
+                        if let o = row.outgoing, queuedIDs.contains(o.id) {
+                            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
+                                            retry: { resendQueued(o.id) },
+                                            edit: { putBack(o) },
+                                            discard: { discardQueued(o.id) })
+                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                                .id(m.id)
+                        } else if let o = row.outgoing {
+                            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
+                                            retry: { resend(o.id) },
+                                            edit: {
+                                                discard(o.id)
+                                                text = text.isEmpty ? o.text : text + "\n" + o.text
+                                                mentions += o.mentions
+                                            },
+                                            discard: { discard(o.id) })
+                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                                .id(m.id)
+                        } else {
+                            LarkMessageRow(message: m, grouped: grouped, isGroup: isGroup, feedID: feedID, inThread: true)
+                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                                .overlay { if flash?.line == m.id { QuoteFlash().id(flash?.id) } }
+                                .id(m.id)
+                        }
                     }
-                    outgoingRows
                 }
                 .padding(Theme.Space.m)
             }
@@ -223,37 +249,6 @@ struct LarkThreadView: View {
     }
 
     // MARK: Sending
-
-    @ViewBuilder private var outgoingRows: some View {
-        let mine = (replies + [root]).last(where: \.isMine)
-        ForEach(Array(outgoing.enumerated()), id: \.element.id) { i, o in
-            let m = o.message(like: mine)
-            let prev = i > 0 ? outgoing[i - 1].message(like: mine) : (replies.last ?? root)
-            let grouped = LarkChatLayout.continues(m, after: prev)
-            if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
-            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
-                            retry: { resend(o.id) },
-                            edit: {
-                                discard(o.id)
-                                text = text.isEmpty ? o.text : text + "\n" + o.text
-                                mentions += o.mentions
-                            },
-                            discard: { discard(o.id) })
-                .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                .id(o.id)
-        }
-        ForEach(Array(queued.enumerated()), id: \.element.id) { i, o in
-            let m = o.message(like: mine)
-            let prev = i > 0 ? queued[i - 1].message(like: mine) : (outgoing.last?.message(like: mine) ?? replies.last ?? root)
-            let grouped = LarkChatLayout.continues(m, after: prev)
-            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
-                            retry: { resendQueued(o.id) },
-                            edit: { putBack(o) },
-                            discard: { discardQueued(o.id) })
-                .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                .id(o.id)
-        }
-    }
 
     private func send() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -69,6 +69,26 @@ import Testing
         #expect(try await store.load()?.items.first?.mentions == [])
     }
 
+    /// Where a retried message stands among the chat's messages (LarkChatRows, #921) survives a restart; files saved
+    /// before it was kept read as never retried.
+    @Test func restartKeepsWhenARetriedMessageWasWritten() async throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = LarkOutboxStore(identity: identity(), feed: "123", base: root)
+        let written = Date(timeIntervalSince1970: 1_800_000_000)
+        var outgoing = LarkOutgoing(text: "重发的", at: written)
+        outgoing.retry(at: written.addingTimeInterval(60))
+        _ = try await store.save(.init(items: [outgoing]))
+        #expect(try await store.load()?.items.first?.written == written)
+        let record = await store.directory.appending(path: "state.json")
+        var json = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: record)) as? [String: Any])
+        var rows = try #require(json["items"] as? [[String: Any]])
+        rows[0].removeValue(forKey: "firstAt")
+        json["items"] = rows
+        try JSONSerialization.data(withJSONObject: json).write(to: record)
+        #expect(try await store.load()?.items.first?.written == written.addingTimeInterval(60))
+    }
+
     @Test func interruptedSendRestoresOnceWithSameIDAndNeverResendsByItself() async throws {
         let root = try folder()
         defer { try? FileManager.default.removeItem(at: root) }

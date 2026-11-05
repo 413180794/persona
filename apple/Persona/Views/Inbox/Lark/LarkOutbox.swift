@@ -24,6 +24,10 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
     var canRetry: Bool { state != .sent && (attachment?.kind != .file || state != .unconfirmed) }
     /// Who Feishu notifies (the @ picker), kept for 重发 and 放回输入框.
     var mentions: [LarkMention] = []
+    /// When it was first written, once a 重发 has moved `at` on (nil until then).
+    var firstAt: Date? = nil
+    /// When it was written: where it stands among the chat's messages (LarkChatRows), whatever 重发 did since.
+    var written: Date { firstAt ?? at }
 
     /// What the hub gets as `client_id`: this message's id, unchanged by retries.
     var clientID: String { id.uuidString.lowercased() }
@@ -32,6 +36,7 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
     mutating func retry(at now: Date = .now) {
         state = .sending
         attempted = false
+        firstAt = written
         at = now
     }
 

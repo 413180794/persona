@@ -254,10 +254,16 @@ struct LarkChatView: View {
                     historyHeader
                 }
                 if hasContent, let line = problem?.inline { Label(line, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, Theme.Space.s) }
-                ForEach(Array(messages.enumerated()), id: \.element.id) { i, m in
-                    let prev = i > 0 ? messages[i - 1] : nil
+                // Mine on their way are in the same list, where they were written (none while newer pages are not
+                // loaded: they go under the newest message). Replies queued from a thread show in their thread
+                // (LarkThreadView), not here.
+                let rows = LarkChatRows.rows(messages: messages, outgoing: pager.hasNewer ? [] : outbox.items.filter { !$0.thread },
+                                             like: pager.messages.last(where: \.isMine))
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                    let m = row.message
+                    let prev = i > 0 ? rows[i - 1].message : nil
                     VStack(alignment: .leading, spacing: 0) {
-                        if isTopic {
+                        if isTopic && row.outgoing == nil {
                             // A topic group lists topics: each its own card with its time, never run together like a
                             // chat's messages (lark-connector's topic list); a system line stays a line.
                             Group {
@@ -269,21 +275,29 @@ struct LarkChatView: View {
                             }
                             .padding(.top, Theme.Space.m)
                         } else {
-                            if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
+                            if row.outgoing == nil,
+                               isFirstUnread(m, after: rows[..<i].last(where: { $0.outgoing == nil })?.message) { LarkNewMessagesDivider() }
                             if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
                             let grouped = LarkChatLayout.continues(m, after: prev)
-                            LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id,
-                                           readState: receiptStates[m.id])
-                                .background { if historyAnchor == m.id { historyAnchorReport(m.id) } }
-                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                            if let o = row.outgoing {
+                                LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: conversation.isGroup,
+                                                retry: { resend(o.id) }, edit: { restore(o) }, discard: { discard(o.id) })
+                                    .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                            } else {
+                                LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id,
+                                               readState: receiptStates[m.id])
+                                    .background { if historyAnchor == m.id { historyAnchorReport(m.id) } }
+                                    .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                            }
                         }
                     }
                     .background { if flash?.line == m.id { QuoteFlash().id(flash?.id).padding(.horizontal, -Theme.Space.m) } }
                     .onAppear {
+                        guard row.outgoing == nil else { return }
                         markSeen(m)
                         if !isTopic { receiptAppeared(m) } // a topic's card shows no read receipt
                     }
-                    .onDisappear { book.receipts.disappeared(m.id) }
+                    .onDisappear { if row.outgoing == nil { book.receipts.disappeared(m.id) } }
                     .id(m.id)
                 }
                 if pager.hasNewer {
@@ -295,8 +309,6 @@ struct LarkChatView: View {
                             book.newerVisible = visible
                             if visible { Task { await loadNewer() } }
                         }
-                } else {
-                    outgoingRows
                 }
             }
             .coordinateSpace(.named(LarkHistoryHold.space))
@@ -958,23 +970,6 @@ struct LarkChatView: View {
             return
         }
         if photo { showPhotos = true } else { showFiles = true }
-    }
-
-    @ViewBuilder private var outgoingRows: some View {
-        let mine = pager.messages.last(where: \.isMine)
-        // Replies queued from a thread show in their thread (LarkThreadView), not under the chat.
-        let rows = outbox.items.filter { !$0.thread }
-        ForEach(Array(rows.enumerated()), id: \.element.id) { i, o in
-            let m = o.message(like: mine)
-            let prev = i > 0 ? rows[i - 1].message(like: mine) : pager.messages.last
-            let grouped = LarkChatLayout.continues(m, after: prev)
-            if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
-            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: conversation.isGroup,
-                            retry: { resend(o.id) }, edit: { restore(o) },
-                            discard: { discard(o.id) })
-                .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                .id(o.id)
-        }
     }
 
     private func restoreDraft() async {

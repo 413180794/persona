@@ -220,6 +220,26 @@ final class LarkSendTests: XCTestCase {
         if app.buttons["删除"].waitForExistence(timeout: 3) { app.buttons["删除"].tap() }
     }
 
+    /// One that failed stays where it was written: a message sent after it goes out and its copy comes in under it,
+    /// not over it (#921).
+    @MainActor func testALaterMessageGoesUnderOneThatFailed() {
+        let app = openChat()
+        let tag = UUID().uuidString.prefix(6)
+        let failedText = "#fail 先发的 \(tag)", laterText = "后发的 \(tag)"
+        send(app, failedText)
+        XCTAssertTrue(app.buttons["lark.outgoing.failed"].waitForExistence(timeout: 15), "the first one failed")
+        send(app, laterText)
+        let later = app.staticTexts.matching(NSPredicate(format: "label == %@", laterText))
+        let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
+        XCTAssertTrue(sending.waitForNonExistence(timeout: 15), "the second one went out")
+        let settled = NSPredicate { _, _ in later.count == 1 }
+        wait(for: [XCTNSPredicateExpectation(predicate: settled, object: nil)], timeout: 25) // its copy took its place
+        let failed = app.staticTexts[failedText]
+        XCTAssertTrue(failed.exists && app.buttons["lark.outgoing.failed"].exists, "the failed one is still there")
+        XCTAssertLessThan(failed.frame.minY, later.firstMatch.frame.minY, "the later message is under the failed one")
+        shot(app, "lark-failed-then-sent")
+    }
+
     /// Long press: a bar of the quick reactions on top of the menu (six across), one tap reacts; the menu's own items
     /// are still there. The mock's quick list is THUMBSUP HEART SMILE LAUGH SURPRISED CRY OK DONE.
     @MainActor func testLongPressBarReactsInOneTap() {
