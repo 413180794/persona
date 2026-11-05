@@ -8,7 +8,7 @@ import type { Step } from "../../lib/turns";
 import { Collapse, cx, Spinner, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ActionRow } from "./ActionRow";
-import { LiveClockContext } from "./chat-context";
+import { FreshWords, LiveClockContext } from "./chat-context";
 import { inOpenedFold, openFoldRange, useExpanded } from "./expanded";
 import { useReveal } from "./search-reveal";
 import { nodeItemIds } from "../../lib/chat-search";
@@ -123,8 +123,9 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
   );
 });
 
-/** Nodes in order; tool calls next to each other sit together without a gap, like cindy's tool segments. */
-export function WorkNodes({ nodes, p, live, fresh }: { nodes: WorkNode[]; p: WorkProps; live?: boolean; fresh?: ReadonlySet<string> }) {
+/** Nodes in order; tool calls next to each other sit together without a gap, like cindy's tool segments. `fade`: the
+ *  agent's words among them that just came in fade in (FreshWords); not inside a group. */
+export function WorkNodes({ nodes, p, live, fade }: { nodes: WorkNode[]; p: WorkProps; live?: boolean; fade?: boolean }) {
   const runs: (WorkNode | ToolStep[])[] = [];
   for (const n of nodes) {
     const last = runs[runs.length - 1];
@@ -145,15 +146,21 @@ export function WorkNodes({ nodes, p, live, fresh }: { nodes: WorkNode[]; p: Wor
         ) : run.kind === "group" ? (
           <WorkGroup key={run.id} g={run} p={p} />
         ) : (
-          <StepView key={run.step.id} step={run.step} p={p} live={live} fresh={fresh} />
+          <StepView key={run.step.id} step={run.step} p={p} live={live} fade={fade} />
         ),
       )}
     </>
   );
 }
 
+/** Words that fade in if they just came in: the only reader of FreshWords, so a new reply renders these, not the chat. */
+function FreshAnswer({ item, mid, sid }: { item: Item; mid: string; sid: string }) {
+  const fresh = useContext(FreshWords);
+  return <Answer item={item} mid={mid} sid={sid} fade={fresh?.has(item.id)} />;
+}
+
 /** A step on its own: in the open, or inside an open group. */
-export function StepView({ step, p, live, fresh }: { step: Step; p: WorkProps; live?: boolean; fresh?: ReadonlySet<string> }) {
+export function StepView({ step, p, live, fade }: { step: Step; p: WorkProps; live?: boolean; fade?: boolean }) {
   switch (step.kind) {
     case "tool":
       if (isAgentStep(step)) return <SubagentCard step={step} status={p.agentStatus(step)} mid={p.mid} scope={p.scope} />;
@@ -162,7 +169,7 @@ export function StepView({ step, p, live, fresh }: { step: Step; p: WorkProps; l
     case "thinking":
       return <ThinkingCard item={step.item} durationMs={p.thinking.get(step.id)} scope={p.scope} />;
     case "text":
-      return <Answer item={step.item} mid={p.mid} sid={p.sid} fade={fresh?.has(step.id)} />;
+      return fade ? <FreshAnswer item={step.item} mid={p.mid} sid={p.sid} /> : <Answer item={step.item} mid={p.mid} sid={p.sid} />;
     case "notice":
       return <NoticeRow item={step.item} mid={p.mid} sid={p.sid} />;
     case "image":

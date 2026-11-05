@@ -32,7 +32,7 @@ import persona.core.contracts.api.MachineManagement
 import persona.core.contracts.api.SessionsRepository
 import persona.core.designsystem.JNotice
 import persona.core.designsystem.Status
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -53,7 +53,7 @@ internal fun Machine.herdrStopped(state: HerdrState?): Boolean =
 internal data class HerdrFailure(val text: AgentText, val detail: String) {
     companion object {
         fun of(error: Throwable): HerdrFailure =
-            HerdrFailure(hubMessage(error)?.let(::says) ?: AgentText.raw(failureReason(error)), failureDetail(error))
+            HerdrFailure(hubMessage(error)?.let(::says) ?: AgentText(R.string.agents_text_raw, failureReasonText(error)), failureDetail(error))
 
         /** The node's and the hub's known failures of herdr.server.start (server/internal/node/herdrstart.go) in words. */
         fun says(message: String): AgentText {
@@ -132,7 +132,7 @@ internal class HerdrStarter(
                 throw cancelled
             } catch (e: Exception) {
                 failed.update { it + (machineId to HerdrFailure.of(e)) }
-                notice(AgentText(R.string.agents_herdr_failed, failureReason(e)))
+                notice(AgentText(R.string.agents_herdr_failed, failureReasonText(e)))
             } finally {
                 pending.update { it - machineId }
             }

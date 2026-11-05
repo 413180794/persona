@@ -8,7 +8,7 @@ import persona.core.contracts.api.ExtensionMarket
 import persona.core.contracts.api.ExtensionMarkets
 import persona.core.contracts.api.ExtensionOperation
 import persona.core.contracts.api.ExtensionPreview
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -141,7 +141,7 @@ internal class CatalogModel(private val api: ExtensionMarkets, private val res: 
                 it.copy(catalog = catalog, error = null, market = keep)
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { if (mine == generation) mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReason(error))) } }
+        catch (error: Exception) { if (mine == generation) mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReasonText(error).resolve(res))) } }
         finally { if (mine == generation) mutable.update { it.copy(loading = false) } }
     }
 }
@@ -235,7 +235,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             if (state.value.consentFor == op.id) mutable.update { it.copy(preview = preview) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(consentFor = null, actionError = res.getString(R.string.settings_ext_no_package, failureReason(error))) }
+            mutable.update { it.copy(consentFor = null, actionError = res.getString(R.string.settings_ext_no_package, failureReasonText(error).resolve(res))) }
         }
     }
 
@@ -252,7 +252,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
         return try { track(api.retryOperation(op.id)); true }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_op_not_retried, failureReason(error))) }
+            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_op_not_retried, failureReasonText(error).resolve(res))) }
             false
         } finally { mutable.update { it.copy(acting = false) } }
     }
@@ -264,7 +264,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
         try { api.cancelOperation(op.id) }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            if (op.active) mutable.update { it.copy(actionError = failureReason(error)) }
+            if (op.active) mutable.update { it.copy(actionError = failureReasonText(error).resolve(res)) }
         }
     }
 
@@ -279,7 +279,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
                     marketName = catalog.markets.firstOrNull { m -> m.id == market }?.label ?: extension?.marketName)
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReasonText(error).resolve(res))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -293,7 +293,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_no_package, failureReason(error))) }
+            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_no_package, failureReasonText(error).resolve(res))) }
             false
         } finally { mutable.update { it.copy(previewing = false) } }
     }
@@ -320,7 +320,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             null
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(preview = null, consentFor = null, actionError = res.getString(if (preview.upgrade) R.string.settings_ext_not_upgraded else R.string.settings_ext_not_installed, failureReason(error))) }
+            mutable.update { it.copy(preview = null, consentFor = null, actionError = res.getString(if (preview.upgrade) R.string.settings_ext_not_upgraded else R.string.settings_ext_not_installed, failureReasonText(error).resolve(res))) }
             null
         } finally { mutable.update { it.copy(acting = false) } }
         return try {
@@ -330,7 +330,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             CatalogText.installed(res, detail, preview.upgrade)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(preview = null, actionError = res.getString(if (preview.upgrade) R.string.settings_ext_not_upgraded else R.string.settings_ext_not_installed, failureReason(error))) }
+            mutable.update { it.copy(preview = null, actionError = res.getString(if (preview.upgrade) R.string.settings_ext_not_upgraded else R.string.settings_ext_not_installed, failureReasonText(error).resolve(res))) }
             null
         } finally { mutable.update { it.copy(acting = false) } }
     }
@@ -350,7 +350,7 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_not_removed, failureReason(error))) }
+            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_not_removed, failureReasonText(error).resolve(res))) }
             false
         } finally { mutable.update { it.copy(acting = false) } }
     }
@@ -387,7 +387,7 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
             val auto = try { api.autoUpgrades() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
             mutable.update { it.copy(autoUpgrade = auto) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReasonText(error).resolve(res))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -403,7 +403,7 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_auto_upgrades_failed, failureReason(error))) }
+            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_auto_upgrades_failed, failureReasonText(error).resolve(res))) }
             false
         } finally { mutable.update { it.copy(savingAuto = false) } }
     }
@@ -422,7 +422,7 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(addError = failureReason(error)) }
+            mutable.update { it.copy(addError = failureReasonText(error).resolve(res)) }
             false
         } finally { mutable.update { it.copy(adding = false) } }
     }
@@ -447,7 +447,7 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
         return try { block(); true }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(actionError = res.getString(failed, failureReason(error))) }
+            mutable.update { it.copy(actionError = res.getString(failed, failureReasonText(error).resolve(res))) }
             false
         } finally { mutable.update { it.copy(working = null) } }
     }

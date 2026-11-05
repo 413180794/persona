@@ -3,7 +3,7 @@ package persona.feature.settings
 import android.content.res.Resources
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalResources
 import persona.core.contracts.api.ExtensionUi
 import persona.core.contracts.api.ExtensionUiContext
 import persona.core.contracts.api.ExtensionUiNotFound
@@ -21,7 +21,8 @@ import persona.core.designsystem.JChartKind
 import persona.core.designsystem.JChartSeries
 import persona.core.designsystem.JStat
 import persona.core.designsystem.Tone
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.UiText
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -299,7 +300,7 @@ internal class ExtensionViewModel(
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: ExtensionUiUnsupported) { mutable.update { it.copy(unsupported = true, error = null) } }
         catch (_: ExtensionUiNotFound) { mutable.update { it.copy(unsupported = true, error = null) } }
-        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_load_failed, failureReason(error)), failure = error) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_load_failed, failureReasonText(error)), failure = error) } }
         finally { mutable.update { it.copy(loading = false, drawnAt = now()) } }
     }
 
@@ -375,7 +376,7 @@ internal class ExtensionViewModel(
             }
             ExtensionActionOutcome(result.toast?.takeIf { it.isNotBlank() }, result.openUrl?.takeIf(opens), push = result.push, pop = result.pop)
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { ExtensionActionOutcome(error = ExtensionFailure(R.string.settings_ext_action_failed, failureReason(error))) }
+        catch (error: Exception) { ExtensionActionOutcome(error = ExtensionFailure(R.string.settings_ext_action_failed, failureReasonText(error))) }
         finally { if (loadingMore != null) mutable.update { it.copy(loadingMore = null) } }
     }
 
@@ -424,7 +425,7 @@ internal class ExtensionViewModel(
             mutable.update { it.copy(unsupported = true) }
             ExtensionActionOutcome()
         } catch (error: Exception) {
-            ExtensionActionOutcome(error = ExtensionFailure(R.string.settings_ext_action_failed, failureReason(error)))
+            ExtensionActionOutcome(error = ExtensionFailure(R.string.settings_ext_action_failed, failureReasonText(error)))
         } finally { mutable.update { it.copy(acting = null) } }
     }
 }
@@ -481,7 +482,7 @@ internal class ExtensionPlacesModel(private val api: ExtensionUi, private val pl
             val places = api.uiPlaces(placement, context?.launcher, context?.machine).filter { it.placement.isEmpty() || it.placement == placement }
             mutable.update { it.copy(places = places, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_content_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_content_failed, failureReasonText(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 }
@@ -490,12 +491,14 @@ internal class ExtensionPlacesModel(private val api: ExtensionUi, private val pl
  * Why a view could not be read or a button did not work: the sentence (a string with one `%1$s`) and the reason in it,
  * put into words where it is shown, in the language shown then.
  */
-data class ExtensionFailure(@param:StringRes val sentence: Int, val reason: String) {
-    fun text(res: Resources): String = res.getString(sentence, reason)
+data class ExtensionFailure(@param:StringRes val sentence: Int, val reason: UiText) {
+    constructor(@StringRes sentence: Int, reason: String) : this(sentence, UiText.Plain(reason))
+
+    fun text(res: Resources): String = res.getString(sentence, reason.resolve(res))
 }
 
 @Composable
-internal fun ExtensionFailure.text(): String = stringResource(sentence, reason)
+internal fun ExtensionFailure.text(): String = text(LocalResources.current)
 
 /** A tab was chosen (UI version 4): its action with `{name: value}` and the search's `q`; shown at once. */
 internal suspend fun ExtensionViewModel.tab(value: String): ExtensionActionOutcome {

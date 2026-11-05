@@ -105,7 +105,7 @@ internal class AgentsViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                _notice.value = AgentText(R.string.agents_notice_save_failed, persona.core.designsystem.failureReason(e))
+                _notice.value = AgentText(R.string.agents_notice_save_failed, persona.core.designsystem.failureReasonText(e))
             }
         }
     }
@@ -118,7 +118,7 @@ internal class AgentsViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                _notice.value = AgentText(R.string.agents_notice_save_failed, persona.core.designsystem.failureReason(e))
+                _notice.value = AgentText(R.string.agents_notice_save_failed, persona.core.designsystem.failureReasonText(e))
             }
         }
     }
@@ -131,7 +131,7 @@ internal class AgentsViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                _notice.value = AgentText(R.string.agents_notice_update_failed, persona.core.designsystem.failureReason(e))
+                _notice.value = AgentText(R.string.agents_notice_update_failed, persona.core.designsystem.failureReasonText(e))
             }
         }
     }

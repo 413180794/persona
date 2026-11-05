@@ -12,7 +12,8 @@ import { attachLive, flipPin } from "../../lib/agent-actions";
 import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
 import { getSession, getState, listenSession, markSeenLocally, refresh, refreshTodos, setMutes, useStore } from "../../lib/store";
-import { buildTaskIndex, STOP_LOOP_MESSAGE, subagentParent } from "../../lib/tasks";
+import { buildTaskIndex, STOP_LOOP_MESSAGE, subagentParent, type TaskIndex } from "../../lib/tasks";
+import { stabilizeLines, stableValue } from "../../lib/stable-lines";
 import { planProgress } from "../../lib/work-groups";
 import { echoed, taggedSeen } from "../../lib/echo";
 import { outboxKey, settleOutbox } from "../../lib/outbox";
@@ -23,8 +24,8 @@ import { LinkTodoDialog } from "../LinkTodoDialog";
 import { t as tr } from "../../i18n";
 import { rewindBlock, rewindDone, rewindSession, rewindTarget, type RewindRestore } from "../../lib/rewind";
 import { sendDraft } from "../../lib/drafts";
-import { chatLines, freshWords, openRecap, parseUserText, segments, type UserMessage } from "../../lib/turns";
-import type { Item, Session } from "../../lib/types";
+import { chatLines, freshWords, openRecap, parseUserText, segments, type ChatLine, type UserMessage } from "../../lib/turns";
+import type { Item, Session, Subagent } from "../../lib/types";
 import { anchoredScroll, followsAgain, isScrollbarPress, jumpLabel, leavesOnKey, leavesOnScrollbarDrag, leavesOnTouch, leavesOnWheel, followsAfterUnfold, UNFOLD_PAUSE, type ScrollAnchor } from "../../lib/disclosure";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, toast, useMenu, type MenuItem } from "../../ui/atoms";
 import { StatusMark } from "../../ui/StatusMark";
@@ -47,7 +48,7 @@ import { CommentMarks } from "./CommentMarks";
 import { PaneTabs } from "./PaneTabs";
 import { RunningStatusBar } from "./RunningStatusBar";
 import { latestPlan, PlanPill, usePlanOutOfView } from "./PlanCard";
-import { ChatContext, LiveClockContext, type ChatContextValue } from "./chat-context";
+import { ChatContext, FreshWords, LiveClockContext, type ChatContextValue } from "./chat-context";
 import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
 import { CloseAgentDialog, DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
@@ -80,6 +81,8 @@ const loadTerminal = () => import("../session/TerminalPanel");
 const TerminalPanel = lazy(() => loadTerminal().then((m) => ({ default: m.TerminalPanel })));
 
 const NO_FEED: FeedItem[] = [];
+// the assistant has no subagents: one array, so the chat context does not change with every render
+const NO_SUBAGENTS: Subagent[] = [];
 /** Going to a search hit: how long the rows that hold it get to open before the line it is on stands in, when to give
  *  up, and how long it stays lit (Android: 3 s). */
 const FIND_MS = 400;
@@ -585,7 +588,17 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // the hub's word on the last turn's model error, for its card (5.2 turn_error_code)
   const turnFix = assistant ? turnErrorFix(session?.turn_error_code) : null;
   const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
-  const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (readOnly || !outgoing) }), [tr.items, lastLive, readOnly, outgoing]);
+  // a line that comes out the same as last time keeps its object, so a push re-renders only the lines it changed
+  // (lib/stable-lines.ts); the task index likewise, or every row reading the context would render again
+  const lastLines = useRef<ChatLine[] | undefined>(undefined);
+  const lines = useMemo(
+    () => stabilizeLines(lastLines.current, chatLines(tr.items, { live: lastLive && (readOnly || !outgoing) })),
+    [tr.items, lastLive, readOnly, outgoing],
+  );
+  lastLines.current = lines;
+  const lastTasks = useRef<TaskIndex | undefined>(undefined);
+  const tasks = useMemo(() => stableValue(lastTasks.current, buildTaskIndex(tr.items)), [tr.items]);
+  lastTasks.current = tasks;
   // the live work lines' clocks on screen (WorkGroup's Elapsed): while one ticks, the running bar shows no time (#3534)
   const [clocks, setClocks] = useState(0);
   const countClock = useCallback((delta: 1 | -1) => setClocks((n) => n + delta), []);
@@ -593,8 +606,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const barClock = useRef(true);
   if (!outgoing) barClock.current = clocks === 0;
   const ctx = useMemo<ChatContextValue>(
-    () => ({ tasks: buildTaskIndex(tr.items), subagents: assistant ? [] : (subagents ?? []), fresh, scope: `${mid}/${sid}:` }),
-    [tr.items, subagents, assistant, fresh, mid, sid],
+    () => ({ tasks, subagents: assistant ? NO_SUBAGENTS : (subagents ?? NO_SUBAGENTS), scope: `${mid}/${sid}:` }),
+    [tasks, subagents, assistant, mid, sid],
   );
   // ── 会话内搜索 (ChatSearch.tsx, Android ChatSearchState): where the reader was when it opened, going to a hit (the
   // rows that hold it open, search-reveal.ts), lit for HIT_MS, and 返回搜索前位置 ──
@@ -844,6 +857,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
             )}
             <LiveClockContext.Provider value={countClock}>
             <ChatContext.Provider value={ctx}>
+              <FreshWords.Provider value={fresh}>
               <CardConversation.Provider value={assistant ? sid : ""}>
               {assistant
                 ? displayLines(lines, feed).map((d) =>
@@ -884,6 +898,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                 />
               ))}
               </CardConversation.Provider>
+              </FreshWords.Provider>
             </ChatContext.Provider>
             </LiveClockContext.Provider>
             {!readOnly && shownPending.map((p) => (

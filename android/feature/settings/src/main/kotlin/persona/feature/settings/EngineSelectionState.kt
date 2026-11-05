@@ -1,7 +1,7 @@
 package persona.feature.settings
 
 import persona.core.contracts.Machine
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import persona.core.domain.engines.Engines
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,7 +49,7 @@ internal class EngineSelectionModel(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            mutable.update { it.copy(error = SettingsUiText.Res(R.string.settings_engine_save_failed, listOf(failureReason(error)))) }
+            mutable.update { it.copy(error = SettingsUiText.Res(R.string.settings_engine_save_failed, listOf(failureReasonText(error)))) }
             false
         } finally {
             mutable.update { it.copy(saving = false) }

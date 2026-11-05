@@ -6,7 +6,8 @@ import androidx.lifecycle.viewModelScope
 import persona.core.contracts.api.AgentLauncher
 import persona.core.contracts.api.MachineManagement
 import persona.core.contracts.api.SessionsRepository
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.UiText
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -21,18 +22,18 @@ internal sealed interface MachineNotice {
     data object Connected : MachineNotice
     /** Still offline after the wait, with the machine's error when the hub has one. */
     data class NotYet(val reason: String?) : MachineNotice
-    data class ReconnectFailed(val reason: String) : MachineNotice
-    data class DeployFailed(val reason: String) : MachineNotice
+    data class ReconnectFailed(val reason: UiText) : MachineNotice
+    data class DeployFailed(val reason: UiText) : MachineNotice
     /** 同时显示 botmux 会话 was not saved; the switch is back where it was. */
-    data class BotmuxFailed(val reason: String) : MachineNotice
+    data class BotmuxFailed(val reason: UiText) : MachineNotice
 
     fun text(resources: Resources): String = when (this) {
         Connected -> resources.getString(R.string.machines_notice_connected)
         is NotYet -> reason?.let { resources.getString(R.string.machines_notice_not_yet_reason, it) }
             ?: resources.getString(R.string.machines_notice_not_yet)
-        is ReconnectFailed -> resources.getString(R.string.machines_notice_reconnect_failed, reason)
-        is DeployFailed -> resources.getString(R.string.machines_notice_deploy_failed, reason)
-        is BotmuxFailed -> resources.getString(R.string.machines_notice_botmux_failed, reason)
+        is ReconnectFailed -> resources.getString(R.string.machines_notice_reconnect_failed, reason.resolve(resources))
+        is DeployFailed -> resources.getString(R.string.machines_notice_deploy_failed, reason.resolve(resources))
+        is BotmuxFailed -> resources.getString(R.string.machines_notice_botmux_failed, reason.resolve(resources))
     }
 }
 
@@ -43,7 +44,7 @@ internal data class MachineActionsState(
     val launchers: List<AgentLauncher>? = null,
     val launchersLoading: Boolean = false,
     /** Why the launchers could not be read (the hub's reason), shown as 读不到启动器：… */
-    val launchersError: String? = null,
+    val launchersError: UiText? = null,
     val reconnecting: Boolean = false,
     /** Machines whose 重新部署 was sent and not answered yet; the hub's `deploying` takes over after that. */
     val deployStarting: Set<String> = emptySet(),
@@ -82,7 +83,7 @@ internal class MachineActionsViewModel(
                 mutable.update { it.copy(launchers = launchers, launchersLoading = false) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                mutable.update { it.copy(launchersLoading = false, launchersError = failureReason(error)) }
+                mutable.update { it.copy(launchersLoading = false, launchersError = failureReasonText(error)) }
             }
         }
     }
@@ -109,7 +110,7 @@ internal class MachineActionsViewModel(
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 mutable.update { it.copy(botmux = before) }
-                noticeChannel.trySend(MachineNotice.BotmuxFailed(failureReason(error)))
+                noticeChannel.trySend(MachineNotice.BotmuxFailed(failureReasonText(error)))
             } finally { mutable.update { it.copy(botmuxSaving = false) } }
         }
     }
@@ -122,7 +123,7 @@ internal class MachineActionsViewModel(
                 try { management.reconnect(machineId) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: Exception) {
-                    noticeChannel.trySend(MachineNotice.ReconnectFailed(failureReason(error)))
+                    noticeChannel.trySend(MachineNotice.ReconnectFailed(failureReasonText(error)))
                     return@launch
                 }
                 val back = withTimeoutOrNull(reconnectWaitMillis) {
@@ -153,7 +154,7 @@ internal class MachineActionsViewModel(
                 // Progress and the outcome come with the machine list (deploying, deploy_error, node_mismatch).
                 try { sessions.refresh() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { noticeChannel.trySend(MachineNotice.DeployFailed(failureReason(error))) }
+            catch (error: Exception) { noticeChannel.trySend(MachineNotice.DeployFailed(failureReasonText(error))) }
             finally { mutable.update { it.copy(deployStarting = it.deployStarting - machineId) } }
         }
     }

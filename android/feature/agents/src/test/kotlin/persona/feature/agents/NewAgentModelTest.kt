@@ -211,7 +211,7 @@ class NewAgentModelTest {
         val failed = NewAgentViewModel(failing, MemoryStore(), machines)
         try {
             advanceUntilIdle()
-            assertEquals("连不上 hub", failed.state.value.models.error)
+            assertEquals("连不上 hub", failed.state.value.models.error?.resolve(res))
             assertNull(failed.state.value.modelList)
             failed.submit()
             advanceUntilIdle()

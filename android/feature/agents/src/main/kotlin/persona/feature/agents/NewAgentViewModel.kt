@@ -5,7 +5,8 @@ import androidx.lifecycle.viewModelScope
 import persona.core.contracts.Machine
 import persona.core.contracts.Session
 import persona.core.contracts.api.*
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.UiText
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -32,7 +33,7 @@ internal sealed interface NewAgentModelConfig {
     /** New agents follow [detail] unless a launcher is picked for this start. */
     data class Follow(val detail: ModelPurposeDetail) : NewAgentModelConfig
     /** The hub has it but it could not be read: a launcher must be picked, or the options reloaded. */
-    data class Failed(val reason: String) : NewAgentModelConfig
+    data class Failed(val reason: UiText) : NewAgentModelConfig
 }
 
 /**
@@ -44,7 +45,7 @@ internal data class NewAgentModels(
     val launcher: String = "",
     val list: LauncherModels? = null,
     val loading: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 internal data class NewAgentState(
@@ -227,7 +228,7 @@ internal class NewAgentViewModel(
                 NewAgentModels(machine, launcher, list = service.launcherModels(machine, launcher, refresh))
             } catch (e: CancellationException) { throw e }
             catch (error: Exception) {
-                NewAgentModels(machine, launcher, list = state.value.models.list.takeIf { same }, error = failureReason(error))
+                NewAgentModels(machine, launcher, list = state.value.models.list.takeIf { same }, error = failureReasonText(error))
             }
             mutable.update { if (it.machineId == machine && it.modelLauncher == launcher) it.copy(models = next).settled() else it }
         }
@@ -246,7 +247,7 @@ internal class NewAgentViewModel(
     private suspend fun modelConfig(): NewAgentModelConfig = try {
         service.newAgentModel()?.let { NewAgentModelConfig.Follow(it) } ?: NewAgentModelConfig.Unsupported
     } catch (e: CancellationException) { throw e }
-    catch (error: Exception) { NewAgentModelConfig.Failed(failureReason(error)) }
+    catch (error: Exception) { NewAgentModelConfig.Failed(failureReasonText(error)) }
     fun selection(value: AgentDefaults) {
         if (state.value.locked || state.value.loading) return
         // Another launcher has its own models: back to its default, and its list.

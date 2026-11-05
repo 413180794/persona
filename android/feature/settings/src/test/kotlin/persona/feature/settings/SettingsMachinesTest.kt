@@ -270,7 +270,7 @@ class ModelConfigurationStateTest {
         failure = HubFailure(HubError.Server, "offline", 503)
         model.loadModels(refresh = true)
         assertFalse(model.state.value.picksModel)
-        assertEquals("offline", model.state.value.models.error)
+        assertEquals("offline", model.state.value.models.error?.resolve(res))
     }
 
     @Test fun aConflictKeepsTheDraftAndBlocksSavingUntilReloaded() = runBlocking {

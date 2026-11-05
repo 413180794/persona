@@ -212,7 +212,7 @@ internal fun ProviderDetailPage(providers: ProviderSetup?, name: String, machine
                         item("check-$index") {
                             val key = target ?: ""
                             JGroupItem(GroupPosition.of(index, targets.size)) {
-                                CheckRow(target?.let(label) ?: stringResource(R.string.settings_providers_check_hub), key in state.checks, state.checks[key])
+                                CheckRow(target?.let(label) ?: stringResource(R.string.settings_providers_check_hub), key in state.checks, state.checks[key], state.checkFailures[key])
                             }
                         }
                     }
@@ -277,13 +277,13 @@ private fun providerFacts(l: HubLauncher, machineName: (String) -> String): List
 
 /** One machine's 测试可用性: not run, running, or the answer (or why it failed). */
 @Composable
-private fun CheckRow(place: String, asked: Boolean, check: LauncherCheck?) {
+private fun CheckRow(place: String, asked: Boolean, check: LauncherCheck?, failure: UiText? = null) {
     val subtitle = when {
         !asked -> stringResource(R.string.settings_providers_check_hint)
         check == null -> stringResource(R.string.settings_providers_checking)
         check.ok -> listOfNotNull(check.model?.takeIf { it.isNotBlank() }, check.answer?.takeIf { it.isNotBlank() }).joinToString(" · ")
             .ifEmpty { stringResource(R.string.settings_providers_check_ok) }
-        else -> check.error?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_providers_check_failed)
+        else -> failure?.text() ?: check.error?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_providers_check_failed)
     }
     JRow(place, subtitle = subtitle, leadingIcon = PhIcons.Laptop, subtitleLines = 3, trailing = {
         when {

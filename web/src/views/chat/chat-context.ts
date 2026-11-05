@@ -9,9 +9,6 @@ export interface ChatContextValue {
   tasks: TaskIndex;
   /** The session's subagents, by the tool_use_id of the call that launched them. */
   subagents: Subagent[];
-  /** Items pushed over the WebSocket after the chat subscribed (not the first page, older pages or an unfolded
-   *  range): their words fade in once (Markdown's `fade`). */
-  fresh?: ReadonlySet<string>;
   /** Prefixes the keys of what the reader opened (expanded.ts): one chat's groups do not open another's. */
   scope: string;
 }
@@ -25,3 +22,8 @@ export const LiveClockContext = createContext<((delta: 1 | -1) => void) | null>(
 export function useChatContext() {
   return useContext(ChatContext);
 }
+
+/** Items pushed over the WebSocket after the chat subscribed (not the first page, older pages or an unfolded range):
+ *  their words fade in once (Markdown's `fade`). A context of its own, read only by the words that may fade: it
+ *  changes with each new reply, and in ChatContext it would render every exchange again. */
+export const FreshWords = createContext<ReadonlySet<string> | undefined>(undefined);

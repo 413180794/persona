@@ -59,7 +59,7 @@ internal fun InboxAiDraftRow(repository: InboxRepository, itemId: String, compos
                         val text = repository.draftReply(itemId, instruction)
                         if (composer.replaceWithAi(text)) request = "" else error = res.getString(R.string.inbox_reply_busy)
                     } catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { error = res.getString(R.string.inbox_reply_draft_failed, failureReason(e)) }
+                    catch (e: Exception) { error = res.getString(R.string.inbox_reply_draft_failed, failureReason(e).resolve(res)) }
                     finally { busy = false }
                 }
             }, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.Sparkle,

@@ -68,7 +68,7 @@ internal fun LazyListScope.machineHealth(
                 }) else null)
         }
         doctor is DoctorLoad.Failed -> item("health-failed") {
-            JInlineStatus(stringResource(R.string.machines_health_check_error, doctor.reason), tone = InlineTone.Failed, action = {
+            JInlineStatus(stringResource(R.string.machines_health_check_error, doctor.reason.text()), tone = InlineTone.Failed, action = {
                 JButton(stringResource(R.string.machines_health_recheck), onCheck, kind = JButtonKind.Secondary, size = JButtonSize.Small,
                     loading = state.checking)
             })

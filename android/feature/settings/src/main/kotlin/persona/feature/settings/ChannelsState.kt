@@ -11,7 +11,7 @@ import persona.core.contracts.api.ChannelTarget
 import persona.core.contracts.api.HubChannel
 import persona.core.contracts.parseTime
 import persona.core.designsystem.Status
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import persona.core.navigation.ExtensionRoute
 import persona.core.navigation.SettingsPage
 import persona.core.navigation.SettingsPageRoute
@@ -151,7 +151,7 @@ internal object ChannelText {
     ).joinToString(" · ").ifEmpty { null }
 
     /** How a failed change reads: what did not happen ([verb]), then the hub's words when it gave any. */
-    fun failure(error: Throwable, @StringRes verb: Int = R.string.settings_src_channel_not_changed): ResText = ResText.of(verb, failureReason(error))
+    fun failure(error: Throwable, @StringRes verb: Int = R.string.settings_src_channel_not_changed): ResText = ResText.of(verb, failureReasonText(error))
 
     private val ExtensionId = Regex("[A-Za-z0-9_-]{1,64}")
 }

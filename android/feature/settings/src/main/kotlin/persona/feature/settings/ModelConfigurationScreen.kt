@@ -141,7 +141,7 @@ fun ModelPurposePage(models: ModelConfiguration?, purposeId: String, onBack: () 
                 else -> stringResource(R.string.settings_src_model_sheet_note_default_from, provider, machine)
             },
             models = modelList.models, selected = state.draft.model, defaultDetail = state.defaultModelDetail,
-            loading = state.models.loading, error = state.models.error,
+            loading = state.models.loading, error = state.models.error?.text(),
             onPick = { model.edit(state.draft.copy(model = it)) }, onRefresh = { scope.launch { model.loadModels(refresh = true) } },
             onDismiss = { pickingModel = false }, custom = true,
         )
@@ -208,7 +208,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.form(
                 singleLine = true, enabled = editable)
             state.models.error?.takeIf { state.models.provider == state.listProvider && state.listProvider.isNotEmpty() }?.let { error ->
                 Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
-                    JInlineStatus(stringResource(R.string.settings_src_model_list_failed, error), Modifier.weight(1f), tone = InlineTone.Failed)
+                    JInlineStatus(stringResource(R.string.settings_src_model_list_failed, error.text()), Modifier.weight(1f), tone = InlineTone.Failed)
                     JButton(stringResource(R.string.settings_src_retry), onRetryModels, enabled = editable, kind = JButtonKind.Secondary, size = JButtonSize.Small)
                 }
             }

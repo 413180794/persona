@@ -37,7 +37,7 @@ internal object InboxItemPageText {
             val failure = state.failure ?: return null
             if (state.loading) return null
             return if (failure is ExtensionUiForbidden) InboxItemFallback.Quiet
-            else InboxItemFallback.Notice(res.getString(R.string.settings_ext_item_page_failed, failureReason(failure)))
+            else InboxItemFallback.Notice(res.getString(R.string.settings_ext_item_page_failed, failureReasonText(failure).resolve(res)))
         }
         return InboxItemFallback.Quiet.takeIf { view.sections.none { it.items.any(ExtensionViewText::drawable) } }
     }

@@ -3,6 +3,7 @@ package persona.feature.machines
 import androidx.lifecycle.viewModelScope
 import persona.core.contracts.*
 import persona.core.contracts.api.*
+import persona.core.designsystem.UiText
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 import kotlinx.coroutines.*
@@ -104,7 +105,7 @@ class MachineActionsTest {
             try {
                 other.reconnect("lab")
                 runCurrent()
-                assertEquals(MachineNotice.ReconnectFailed("machine is offline"), other.notices.first())
+                assertEquals(MachineNotice.ReconnectFailed(UiText.Plain("machine is offline")), other.notices.first())
             } finally { other.viewModelScope.cancel() }
         } finally { model.viewModelScope.cancel() }
     }
@@ -123,7 +124,7 @@ class MachineActionsTest {
             management.failure = HubFailure(HubError.Server, "这台电脑已经是 hub 这一版", 409)
             model.deploy("mac")
             runCurrent()
-            assertEquals(MachineNotice.DeployFailed("这台电脑已经是 hub 这一版"), model.notices.first())
+            assertEquals(MachineNotice.DeployFailed(UiText.Plain("这台电脑已经是 hub 这一版")), model.notices.first())
         } finally { model.viewModelScope.cancel() }
     }
 
@@ -142,7 +143,7 @@ class MachineActionsTest {
             management.failure = HubFailure(HubError.Server, "mac: machine is offline", 503)
             model.loadLaunchers("mac", online = true)
             runCurrent()
-            assertEquals("mac: machine is offline", model.state.value.launchersError)
+            assertEquals(UiText.Plain("mac: machine is offline"), model.state.value.launchersError)
             // What was read before stays listed.
             assertEquals(2, model.state.value.launchers?.size)
         } finally { model.viewModelScope.cancel() }
@@ -169,7 +170,7 @@ class MachineActionsTest {
             model.setBotmux("mac", true)
             runCurrent()
             assertEquals(false, model.state.value.botmux)
-            assertEquals(MachineNotice.BotmuxFailed("database is down"), model.notices.first())
+            assertEquals(MachineNotice.BotmuxFailed(UiText.Plain("database is down")), model.notices.first())
         } finally { model.viewModelScope.cancel() }
     }
 

@@ -10,7 +10,7 @@ import persona.core.contracts.api.HubConnector
 import persona.core.contracts.api.LarkStatus
 import persona.core.contracts.api.MailAccount
 import persona.core.designsystem.Status
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import android.content.res.Resources
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalResources
@@ -120,7 +120,7 @@ internal class ConnectorSignInModel(private val api: ConnectorsManagement, priva
         update { BindState() }
         null
     } catch (cancelled: CancellationException) { throw cancelled }
-    catch (error: Exception) { ResText.of(R.string.settings_src_connector_not_signed_out, failureReason(error)) }
+    catch (error: Exception) { ResText.of(R.string.settings_src_connector_not_signed_out, failureReasonText(error)) }
 
     /** The page has said that signing in finished. */
     fun signedInShown() = mutable.update { it.copy(signedInAs = null) }
@@ -140,7 +140,7 @@ internal class ConnectorSignInModel(private val api: ConnectorsManagement, priva
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            if (!quiet) update { it.copy(sending = false, error = ResText.of(R.string.settings_src_connector_not_signed_in, failureReason(error))) }
+            if (!quiet) update { it.copy(sending = false, error = ResText.of(R.string.settings_src_connector_not_signed_in, failureReasonText(error))) }
             false
         }
     }

@@ -29,7 +29,7 @@ internal fun LazyListScope.newAgentModelItems(state: NewAgentState, editable: Bo
                     subtitle = state.pickedModel.let { picked -> if (picked != null) modelDetail(picked) else defaultModelDetail(agentResources(), state) },
                     enabled = editable, onClick = onOpen, trailing = if (models.loading) ({ JSpinner() }) else null)
                 models.loading -> JRow(stringResource(R.string.agents_model_loading), subtitle = stringResource(R.string.agents_model_loading_detail, state.modelLauncher), chevron = false, trailing = { JSpinner() })
-                else -> JRow(stringResource(R.string.agents_model_failed), subtitle = stringResource(R.string.agents_model_failed_detail, models.error.orEmpty()), subtitleLines = 4, chevron = false,
+                else -> JRow(stringResource(R.string.agents_model_failed), subtitle = stringResource(R.string.agents_model_failed_detail, models.error?.text().orEmpty()), subtitleLines = 4, chevron = false,
                     trailing = { JButton(stringResource(R.string.agents_model_retry), onRetry, enabled = editable, kind = JButtonKind.Secondary, size = JButtonSize.Small) })
             }
         }
@@ -57,7 +57,7 @@ internal fun NewAgentModelSheet(
     JModelSheet(
         note = stringResource(R.string.agents_model_sheet_note, state.modelLauncher, list.agent.ifBlank { state.agentType }.agentLabel()),
         models = list.models, selected = state.model, defaultDetail = defaultModelDetail(agentResources(), state),
-        loading = state.models.loading, error = state.models.error,
+        loading = state.models.loading, error = state.models.error?.text(),
         onPick = onPick, onRefresh = onRefresh, onDismiss = onDismiss, initialQuery = initialQuery,
     )
 }

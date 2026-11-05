@@ -4,7 +4,7 @@ import android.content.res.Resources
 import persona.core.contracts.api.NewProvider
 import persona.core.contracts.api.ProviderPreset
 import persona.core.contracts.api.ProviderSetup
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -123,7 +123,7 @@ internal class NewProviderModel(private val api: ProviderSetup) {
             api.add(request)
             providerId(request.name)
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_not_saved, failureReason(error))) }; null }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_not_saved, failureReasonText(error))) }; null }
         finally { mutable.update { it.copy(busy = false) } }
     }
 }

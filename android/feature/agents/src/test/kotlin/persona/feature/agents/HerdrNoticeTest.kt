@@ -11,6 +11,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import persona.core.contracts.*
 import persona.core.contracts.api.*
+import persona.core.designsystem.UiText
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HerdrNoticeTest {
@@ -94,7 +95,7 @@ class HerdrNoticeTest {
         assertTrue(starter.starting.value.isEmpty())
         assertEquals(1, api.calls.size)
         assertEquals(R.string.agents_herdr_failed, notices.single().id)
-        assertTrue(notices.single().args.single().toString().contains("engine_missing"))
+        assertEquals(UiText.Plain("engine_missing"), notices.single().args.single())
     }
 
     @Test fun disconnectedUnknownAndGoneMachinesCannotStart() = runTest {
@@ -171,7 +172,7 @@ class HerdrNoticeTest {
         starter.start("desk"); runCurrent()
         api.answer.completeExceptionally(IllegalStateException("engine_missing")); runCurrent()
         val failure = starter.failures.value.getValue("desk")
-        assertEquals(AgentText.raw("engine_missing"), failure.text)
+        assertEquals(AgentText(R.string.agents_text_raw, UiText.Plain("engine_missing")), failure.text)
         assertEquals("engine_missing", failure.detail)
         api.status = { HerdrState(false, true, true) }
         starter.refresh()

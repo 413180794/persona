@@ -73,7 +73,7 @@ internal fun InboxHandOffSheet(
                 if (target == null) navigator?.selectTab(AppTab.Jarvis)
                 else navigator?.navigate(ChatRoute(target.machineId, target.sessionId, ConversationKind.Agent))
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = res.getString(R.string.inbox_handoff_failed, failureReason(e)) }
+            catch (e: Exception) { error = res.getString(R.string.inbox_handoff_failed, failureReason(e).resolve(res)) }
             finally { busy = false }
         }
     }

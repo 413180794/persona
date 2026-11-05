@@ -4,7 +4,7 @@ import android.content.Context
 import persona.core.contracts.Machine
 import persona.core.contracts.api.ClaudeSetting
 import persona.core.contracts.api.MachineManagement
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -90,7 +90,7 @@ internal class ClaudeSettingsModel(
             val settings = kind.read(api, machine)
             mutable.update { if (it.machineId == machine) it.copy(settings = settings, error = it.error.takeIf { keepError }) else it }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { if (it.machineId == machine) it.copy(error = ResText.of(R.string.settings_src_claude_read_failed, failureReason(error))) else it } }
+        catch (error: Exception) { mutable.update { if (it.machineId == machine) it.copy(error = ResText.of(R.string.settings_src_claude_read_failed, failureReasonText(error))) else it } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -108,7 +108,7 @@ internal class ClaudeSettingsModel(
                 val list = kind.write(api, id, key, value)
                 if (id == state.value.machineId) mutable.update { it.copy(settings = list) }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { failed += ResText.of(R.string.settings_src_name_reason, online.firstOrNull { it.id == id }?.displayName ?: id, failureReason(error)) }
+            catch (error: Exception) { failed += ResText.of(R.string.settings_src_name_reason, online.firstOrNull { it.id == id }?.displayName ?: id, failureReasonText(error)) }
         }
         if (failed.isEmpty()) {
             mutable.update { it.copy(error = null) }

@@ -14,7 +14,7 @@ import persona.core.contracts.api.QuotaWindow
 import android.content.res.Resources
 import persona.core.designsystem.LocalizedFormats
 import persona.core.designsystem.Tone
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
@@ -50,7 +50,7 @@ internal class LauncherQuotaModel(private val api: MachineManagement, private va
                     val answer = api.launcherQuota(machineId, name, fresh)
                     mutable.update { it.copy(answer = answer, failed = null) }
                 } catch (cancelled: CancellationException) { throw cancelled }
-                catch (error: Exception) { mutable.update { it.copy(failed = ResText.of(R.string.settings_src_quota_read_failed, failureReason(error))) } }
+                catch (error: Exception) { mutable.update { it.copy(failed = ResText.of(R.string.settings_src_quota_read_failed, failureReasonText(error))) } }
                 fresh = true
             } while (again)
         } finally { mutable.update { it.copy(loading = false) } }

@@ -1,10 +1,11 @@
 package persona.core.designsystem
 
 import android.content.Context
+import android.content.res.Resources
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 
 /**
  * Text that code outside composition decides on (a view model's status line, a failure's message) and the page
@@ -17,17 +18,20 @@ sealed interface UiText {
     data class Plain(val text: String) : UiText
 
     /** The text in [context]'s language, for notifications and other code outside composition. */
-    fun resolve(context: Context): String = when (this) {
-        is Res -> if (args.isEmpty()) context.getString(id) else context.getString(id, *resolved(context))
-        is Plural -> context.resources.getQuantityString(id, count, *resolved(context))
+    fun resolve(context: Context): String = resolve(context.resources)
+
+    /** The text in [resources]' language, for models that hold `Resources` rather than a `Context`. */
+    fun resolve(resources: Resources): String = when (this) {
+        is Res -> if (args.isEmpty()) resources.getString(id) else resources.getString(id, *resolved(resources))
+        is Plural -> resources.getQuantityString(id, count, *resolved(resources))
         is Plain -> text
     }
 
-    private fun resolved(context: Context): Array<Any> = when (this) {
+    private fun resolved(resources: Resources): Array<Any> = when (this) {
         is Res -> args
         is Plural -> args
         is Plain -> emptyList()
-    }.map { if (it is UiText) it.resolve(context) else it }.toTypedArray()
+    }.map { if (it is UiText) it.resolve(resources) else it }.toTypedArray()
 
     companion object {
         fun of(@StringRes id: Int, vararg args: Any): UiText = Res(id, args.toList())
@@ -36,4 +40,4 @@ sealed interface UiText {
 
 /** [UiText.resolve] in the page's language. */
 @Composable
-fun UiText.text(): String = resolve(LocalContext.current)
+fun UiText.text(): String = resolve(LocalResources.current)

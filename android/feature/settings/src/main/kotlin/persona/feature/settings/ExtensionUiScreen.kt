@@ -109,7 +109,7 @@ fun LauncherPage(machines: MachineManagement?, extensions: ExtensionManagement?,
             launcher = machines.launchers(machineId).firstOrNull { it.name == name }
             launcherError = if (launcher == null) res.getString(R.string.settings_ext_launcher_gone) else null
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { launcherError = res.getString(R.string.settings_ext_launcher_failed, failureReason(error)) }
+        catch (error: Exception) { launcherError = res.getString(R.string.settings_ext_launcher_failed, failureReasonText(error).resolve(res)) }
     }
     val quota = remember(machines, machineId, name) { machines?.let { LauncherQuotaModel(it, machineId, name) } }
     val quotaState = quota?.state?.collectAsState()?.value

@@ -12,7 +12,7 @@ import persona.core.contracts.api.ExtensionPermission
 import persona.core.contracts.api.ExtensionUpgrade
 import persona.core.contracts.api.ExtensionUpgradeNote
 import persona.core.designsystem.Status
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -308,7 +308,7 @@ internal class ExtensionListModel(private val api: ExtensionManagement, private 
             val listing = api.listing()
             mutable.update { it.copy(extensions = listing.extensions, markets = listing.markets, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReasonText(error).resolve(res))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 }
@@ -408,7 +408,7 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            val reason = (error as? ExtensionConfigRejected)?.message ?: failureReason(error)
+            val reason = (error as? ExtensionConfigRejected)?.message ?: failureReasonText(error).resolve(res)
             mutable.update { it.copy(draft = ExtensionDraft.set(it.draft, path, ExtensionDraft.value(saved, path)),
                 error = res.getString(R.string.settings_ext_not_saved, reason)) }
             false
@@ -425,7 +425,7 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(error = res.getString(R.string.settings_ext_not_removed, failureReason(error))) }
+            mutable.update { it.copy(error = res.getString(R.string.settings_ext_not_removed, failureReasonText(error).resolve(res))) }
             false
         } finally { mutable.update { it.copy(busy = false) } }
     }
@@ -465,7 +465,7 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
         }
         false
     } catch (error: Exception) {
-        mutable.update { it.copy(error = res.getString(failed ?: if (it.detail == null) R.string.settings_ext_load_failed else R.string.settings_ext_not_changed, failureReason(error))) }
+        mutable.update { it.copy(error = res.getString(failed ?: if (it.detail == null) R.string.settings_ext_load_failed else R.string.settings_ext_not_changed, failureReasonText(error).resolve(res))) }
         false
     }
 }

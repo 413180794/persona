@@ -6,7 +6,8 @@ import persona.core.contracts.MachineBrowser
 import persona.core.contracts.api.DoctorReport
 import persona.core.contracts.api.MachineManagement
 import persona.core.contracts.api.UsageAccount
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.UiText
+import persona.core.designsystem.failureReasonText
 import persona.core.designsystem.hubAnswer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -20,7 +21,7 @@ internal sealed interface DoctorLoad {
     data object Loading : DoctorLoad
     data class Report(val report: DoctorReport) : DoctorLoad
     data class Unavailable(val why: DoctorUnavailable) : DoctorLoad
-    data class Failed(val reason: String) : DoctorLoad
+    data class Failed(val reason: UiText) : DoctorLoad
 }
 
 internal data class MachineHealthState(
@@ -40,16 +41,16 @@ internal data class MachineHealthState(
 /** What the page tells after an action, in the page's language (the route resolves it). */
 internal sealed interface HealthNotice {
     data class Fixed(val count: Int) : HealthNotice
-    data class FixFailed(val reason: String) : HealthNotice
-    data class BrowserSwitchFailed(val on: Boolean, val reason: String) : HealthNotice
-    data class BrowserJobFailed(val reason: String) : HealthNotice
+    data class FixFailed(val reason: UiText) : HealthNotice
+    data class BrowserSwitchFailed(val on: Boolean, val reason: UiText) : HealthNotice
+    data class BrowserJobFailed(val reason: UiText) : HealthNotice
 
     fun text(resources: android.content.res.Resources): String = when (this) {
         is Fixed -> if (count == 0) resources.getString(R.string.machines_health_fixed_none)
             else resources.getQuantityString(R.plurals.machines_health_fixed, count, count)
-        is FixFailed -> resources.getString(R.string.machines_health_fix_failed, reason)
-        is BrowserSwitchFailed -> resources.getString(if (on) R.string.machines_browser_switch_failed_on else R.string.machines_browser_switch_failed_off, reason)
-        is BrowserJobFailed -> reason
+        is FixFailed -> resources.getString(R.string.machines_health_fix_failed, reason.resolve(resources))
+        is BrowserSwitchFailed -> resources.getString(if (on) R.string.machines_browser_switch_failed_on else R.string.machines_browser_switch_failed_off, reason.resolve(resources))
+        is BrowserJobFailed -> reason.resolve(resources)
     }
 }
 
@@ -85,7 +86,7 @@ internal class MachineHealthViewModel(private val management: MachineManagement)
                 if (mine != seq) return@launch
                 val answer = hubAnswer(error)
                 val why = DoctorUnavailable.of(answer?.status, answer?.message ?: error.message, answer?.json ?: true)
-                mutable.update { it.copy(doctor = why?.let(DoctorLoad::Unavailable) ?: DoctorLoad.Failed(failureReason(error))) }
+                mutable.update { it.copy(doctor = why?.let(DoctorLoad::Unavailable) ?: DoctorLoad.Failed(failureReasonText(error))) }
             } finally { if (mine == seq) mutable.update { it.copy(checking = false) } }
         }
     }
@@ -101,9 +102,9 @@ internal class MachineHealthViewModel(private val management: MachineManagement)
                 mutable.update { it.copy(doctor = DoctorLoad.Report(report)) }
                 // The node checks again after writing: the report is already the new one.
                 val failed = report.checks.firstOrNull { it.name == "fix" && it.status == "fail" }
-                noticeChannel.trySend(if (failed != null) HealthNotice.FixFailed(failed.detail) else HealthNotice.Fixed(report.fixed.size))
+                noticeChannel.trySend(if (failed != null) HealthNotice.FixFailed(UiText.Plain(failed.detail)) else HealthNotice.Fixed(report.fixed.size))
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { noticeChannel.trySend(HealthNotice.FixFailed(failureReason(error))) }
+            catch (error: Exception) { noticeChannel.trySend(HealthNotice.FixFailed(failureReasonText(error))) }
             finally { mutable.update { it.copy(fixing = false) } }
         }
     }
@@ -147,7 +148,7 @@ internal class MachineHealthViewModel(private val management: MachineManagement)
         viewModelScope.launch {
             try { mutable.update { it.copy(browser = management.setBrowser(machineId, on)) } }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { noticeChannel.trySend(HealthNotice.BrowserSwitchFailed(on, failureReason(error))) }
+            catch (error: Exception) { noticeChannel.trySend(HealthNotice.BrowserSwitchFailed(on, failureReasonText(error))) }
             finally { mutable.update { it.copy(browserSaving = false) } }
         }
     }
@@ -159,7 +160,7 @@ internal class MachineHealthViewModel(private val management: MachineManagement)
         viewModelScope.launch {
             try { mutable.update { it.copy(browser = management.browserJob(machineId, action)) } }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { noticeChannel.trySend(HealthNotice.BrowserJobFailed(failureReason(error))) }
+            catch (error: Exception) { noticeChannel.trySend(HealthNotice.BrowserJobFailed(failureReasonText(error))) }
             finally { mutable.update { it.copy(browserAsking = false) } }
         }
     }

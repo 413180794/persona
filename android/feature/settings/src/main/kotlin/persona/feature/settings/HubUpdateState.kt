@@ -9,7 +9,7 @@ import persona.core.contracts.api.HubUpdateStatus
 import persona.core.contracts.api.HubUpdates
 import persona.core.contracts.api.HubUpdatesUnsupported
 import persona.core.contracts.parseTime
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,7 +51,7 @@ internal class HubUpdateModel(private val api: HubUpdates) {
         } catch (_: HubUpdatesUnsupported) {
             mutable.update { it.copy(unsupported = true) }
         } catch (error: Exception) {
-            mutable.update { it.copy(error = SettingsUiText.Res(R.string.settings_hub_update_read_failed, listOf(failureReason(error)))) }
+            mutable.update { it.copy(error = SettingsUiText.Res(R.string.settings_hub_update_read_failed, listOf(failureReasonText(error)))) }
         }
     }
 
@@ -76,7 +76,7 @@ internal class HubUpdateModel(private val api: HubUpdates) {
         if (state.value.checking) return
         mutable.update { it.copy(checking = true, actionError = null) }
         try { receive(api.check()) } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(actionError = SettingsUiText.Res(R.string.settings_hub_update_check_failed, listOf(failureReason(error)))) } }
+        catch (error: Exception) { mutable.update { it.copy(actionError = SettingsUiText.Res(R.string.settings_hub_update_check_failed, listOf(failureReasonText(error)))) } }
         finally { mutable.update { it.copy(checking = false) } }
     }
 
@@ -93,7 +93,7 @@ internal class HubUpdateModel(private val api: HubUpdates) {
         if (state.value.sending) return
         mutable.update { it.copy(sending = true, actionError = null) }
         try { receive(call()) } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(actionError = SettingsUiText.Res(failed, listOf(failureReason(error)))) } }
+        catch (error: Exception) { mutable.update { it.copy(actionError = SettingsUiText.Res(failed, listOf(failureReasonText(error)))) } }
         finally { mutable.update { it.copy(sending = false) } }
     }
 }

@@ -2,7 +2,8 @@ package persona.feature.settings
 
 import android.content.res.Resources
 import persona.core.contracts.api.*
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.UiText
+import persona.core.designsystem.failureReasonText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,7 +67,7 @@ internal class ModelCatalogModel(private val api: ModelConfiguration) {
             mutable.update { it.copy(catalog = catalog, error = null, unsupported = false) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: ModelConfigurationUnsupported) { mutable.update { it.copy(unsupported = true, error = null) } }
-        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReasonText(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 }
@@ -77,7 +78,7 @@ internal data class ProviderModelsState(
     val list: ProviderModels? = null,
     val loading: Boolean = false,
     val loaded: Boolean = false,
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 internal data class ModelPurposeState(
@@ -123,7 +124,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
             val detail = api.purpose(id)
             mutable.update { it.copy(detail = detail, draft = ModelConfigurationDraft.from(detail.purpose), conflict = false) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReasonText(error))) } }
         finally { mutable.update { it.copy(busy = false) } }
     }
 
@@ -143,7 +144,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
                 s.copy(detail = detail, draft = if (usable) s.draft.choosingProvider(providerId) else s.draft)
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReasonText(error))) } }
         finally { mutable.update { it.copy(busy = false) } }
     }
 
@@ -159,7 +160,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
             mutable.update { if (it.models.provider != provider) it else it.copy(models = it.models.copy(list = list, loading = false, loaded = true, error = null)) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { if (it.models.provider != provider) it else it.copy(models = it.models.copy(loading = false, error = failureReason(error))) }
+            mutable.update { if (it.models.provider != provider) it else it.copy(models = it.models.copy(loading = false, error = failureReasonText(error))) }
         }
     }
 
@@ -181,7 +182,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
                 }
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_not_saved, failureReason(error))) }; null }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_not_saved, failureReasonText(error))) }; null }
         finally { mutable.update { it.copy(busy = false) } }
     }
 }

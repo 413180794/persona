@@ -88,7 +88,7 @@ internal fun LazyListScope.machineLaunchers(online: Boolean, state: MachineActio
     when {
         !online -> item("launchers-offline") { MachineCaption(stringResource(R.string.machines_launchers_offline), Modifier.padding(horizontal = rowPadding)) }
         state.launchersError != null && launchers.isEmpty() -> item("launchers-error") {
-            JInlineStatus(stringResource(R.string.machines_launchers_error, state.launchersError), tone = InlineTone.Failed)
+            JInlineStatus(stringResource(R.string.machines_launchers_error, state.launchersError.text()), tone = InlineTone.Failed)
         }
         state.launchersLoading && state.launchers == null -> item("launchers-loading") { JLoading() }
         state.launchers != null && launchers.isEmpty() -> item("launchers-empty") {

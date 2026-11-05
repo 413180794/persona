@@ -195,7 +195,7 @@ export const SegmentView = memo(function SegmentView({
   status?: SessionLive | null;
   expandFold: (f: Item) => Promise<void>;
 }) {
-  const { subagents, fresh, scope } = useChatContext();
+  const { subagents, scope } = useChatContext();
   const steps = useMemo(() => planSteps(exchangeSteps(seg)), [seg]);
   const turnStart = seg.user?.ts ?? seg.start;
   const thinking = useMemo(() => thinkingDurations(steps, turnStart), [steps, turnStart]);
@@ -214,11 +214,11 @@ export const SegmentView = memo(function SegmentView({
   return (
     <section className="flex flex-col gap-3" data-segment>
       {seg.user && (seg.user.injected ? <InjectedHint msg={seg.user} sid={sid} /> : seg.user.parts ? <MergedBubble msg={seg.user} mid={mid} sid={sid} /> : seg.user.from ? <PeerMessage msg={seg.user} /> : isLoopTick(seg.user) ? <LoopTick msg={seg.user} /> : <UserBubble msg={seg.user} mid={mid} sid={sid} />)}
-      <WorkNodes nodes={nodes.slice(0, cut)} p={p} live={live} fresh={fresh} />
+      <WorkNodes nodes={nodes.slice(0, cut)} p={p} live={live} fade />
       {/* working with no run of steps going (its words just came, or nothing yet): the live group still shows */}
       {working && <WorkGroup g={{ kind: "group", id: `work-live-${seg.id}`, children: [], live: true, startedAt: Date.parse(turnStart ?? "") || undefined }} p={p} />}
       {imageStrip}
-      <WorkNodes nodes={nodes.slice(cut)} p={p} fresh={fresh} />
+      <WorkNodes nodes={nodes.slice(cut)} p={p} fade />
       {streaming !== undefined && <Answer streaming={streaming} mid={mid} sid={sid} />}
     </section>
   );

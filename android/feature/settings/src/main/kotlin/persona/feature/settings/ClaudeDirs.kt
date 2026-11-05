@@ -90,7 +90,7 @@ internal class ClaudeDirsModel(private val api: MachineManagement) {
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: UnsupportedOperationException) { mutable.update { it.copy(unsupported = true) } }
         catch (error: Exception) {
-            mutable.update { if (it.machineId == machineId) it.copy(error = ResText.of(R.string.settings_claude_dirs_load_failed, failureReason(error))) else it }
+            mutable.update { if (it.machineId == machineId) it.copy(error = ResText.of(R.string.settings_claude_dirs_load_failed, failureReasonText(error))) else it }
         } finally { mutable.update { if (it.machineId == machineId) it.copy(loading = false) else it } }
     }
 
@@ -105,7 +105,7 @@ internal class ClaudeDirsModel(private val api: MachineManagement) {
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(error = ResText.of(R.string.settings_claude_dirs_save_failed, failureReason(error))) }
+            mutable.update { it.copy(error = ResText.of(R.string.settings_claude_dirs_save_failed, failureReasonText(error))) }
             false
         } finally { mutable.update { it.copy(busy = null) } }
     }

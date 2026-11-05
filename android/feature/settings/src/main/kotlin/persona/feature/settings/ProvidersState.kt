@@ -11,7 +11,8 @@ import persona.core.contracts.api.ImportedProvider
 import persona.core.contracts.api.LauncherCheck
 import persona.core.contracts.api.LauncherImportResult
 import persona.core.contracts.api.ProviderSetup
-import persona.core.designsystem.failureReason
+import persona.core.designsystem.UiText
+import persona.core.designsystem.failureReasonText
 import persona.core.hub.HubFailure
 
 /** The three groups of 设置 › 模型供应商 (iOS `ModelLaunchersView`): kept by Persona, from ~/.zshrc, hidden. */
@@ -53,7 +54,7 @@ internal class ProvidersModel(private val api: ProviderSetup) {
             val list = api.launchers()
             mutable.update { it.copy(launchers = list, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_providers_load_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_providers_load_failed, failureReasonText(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -79,7 +80,7 @@ internal class ProvidersModel(private val api: ProviderSetup) {
         return try { call(); true }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(launchers = before, notice = ResText.of(R.string.settings_providers_change_failed, launcher.name, failureReason(error))) }
+            mutable.update { it.copy(launchers = before, notice = ResText.of(R.string.settings_providers_change_failed, launcher.name, failureReasonText(error))) }
             false
         }
     }
@@ -91,6 +92,8 @@ internal data class ProviderDetailUiState(
     val busy: Boolean = false,
     /** 测试可用性 by machine id ("" for a direct API, the hub's machine when none was picked): null while it runs. */
     val checks: Map<String, LauncherCheck?> = emptyMap(),
+    /** Why a machine's check did not come back, in the page's language (keyed like [checks]). */
+    val checkFailures: Map<String, UiText> = emptyMap(),
     val notice: ResText? = null,
     /** Deleted (or hidden): the page closes. */
     val gone: Boolean = false,
@@ -104,7 +107,7 @@ internal class ProviderDetailModel(private val api: ProviderSetup, private val n
     suspend fun load() {
         try { mutable.update { it.copy(launcher = api.launcher(name), error = null) } }
         catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_providers_load_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_providers_load_failed, failureReasonText(error))) } }
     }
 
     /**
@@ -113,14 +116,16 @@ internal class ProviderDetailModel(private val api: ProviderSetup, private val n
      */
     suspend fun check(machines: List<String?>) {
         val targets = machines.ifEmpty { listOf(null) }
-        mutable.update { s -> s.copy(checks = s.checks + targets.associate { (it ?: "") to null }) }
+        mutable.update { s -> s.copy(checks = s.checks + targets.associate { (it ?: "") to null }, checkFailures = s.checkFailures - targets.map { it ?: "" }.toSet()) }
         coroutineScope {
             targets.forEach { machine ->
                 launch {
+                    var failure: UiText? = null
                     val result = try { api.check(name, machine).check }
                     catch (cancelled: CancellationException) { throw cancelled }
-                    catch (error: Exception) { LauncherCheck(ok = false, error = failureReason(error)) }
-                    mutable.update { s -> s.copy(checks = s.checks + ((machine ?: "") to result)) }
+                    catch (error: Exception) { failure = failureReasonText(error); LauncherCheck(ok = false) }
+                    val key = machine ?: ""
+                    mutable.update { s -> s.copy(checks = s.checks + (key to result), checkFailures = failure?.let { s.checkFailures + (key to it) } ?: s.checkFailures) }
                 }
             }
         }
@@ -138,7 +143,7 @@ internal class ProviderDetailModel(private val api: ProviderSetup, private val n
         mutable.update { it.copy(busy = true, notice = null) }
         try { block() }
         catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(notice = ResText.of(R.string.settings_providers_change_failed, name, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(notice = ResText.of(R.string.settings_providers_change_failed, name, failureReasonText(error))) } }
         finally { mutable.update { it.copy(busy = false) } }
     }
 }
@@ -177,7 +182,7 @@ internal class ProviderImportModel(private val api: ProviderSetup) {
             // The machine's personad is too old to read ~/.zshrc for this (iOS `outdated`): it needs deploying again.
             val failure = HubFailure.from(error)
             val message = if (failure.status == 409 && failure.code == "node_outdated") ResText.of(R.string.settings_providers_import_outdated)
-                else ResText.of(R.string.settings_providers_import_read_failed, failureReason(error))
+                else ResText.of(R.string.settings_providers_import_read_failed, failureReasonText(error))
             mutable.update { it.copy(phase = ImportPhase.Machine, error = message) }
         }
     }
@@ -192,7 +197,7 @@ internal class ProviderImportModel(private val api: ProviderSetup) {
             mutable.update { it.copy(phase = ImportPhase.Done, result = result) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            mutable.update { it.copy(phase = ImportPhase.Preview, error = ResText.of(R.string.settings_providers_import_failed, failureReason(error))) }
+            mutable.update { it.copy(phase = ImportPhase.Preview, error = ResText.of(R.string.settings_providers_import_failed, failureReasonText(error))) }
         }
     }
 

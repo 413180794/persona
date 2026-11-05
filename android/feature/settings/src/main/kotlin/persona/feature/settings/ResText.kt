@@ -10,11 +10,12 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import persona.core.designsystem.LocalizedFormats
+import persona.core.designsystem.UiText
 
 /**
  * Words a model hands its page (a failure, a notice): a string resource and its arguments, put into words in the
  * language the page is drawn in, so models stay free of `Resources` (docs/i18n.md). [count] picks the form of a
- * `<plurals>` [id]. An argument that is itself a [ResText] is put into words first; a list of them is one per line.
+ * `<plurals>` [id]. An argument that is itself a [ResText] or a [UiText] is put into words first; a list of them is one per line.
  */
 internal data class ResText(val id: Int, val args: List<Any> = emptyList(), val count: Int? = null) {
     fun resolve(res: Resources): String {
@@ -28,6 +29,7 @@ internal data class ResText(val id: Int, val args: List<Any> = emptyList(), val 
 
         private fun words(res: Resources, arg: Any): Any = when (arg) {
             is ResText -> arg.resolve(res)
+            is UiText -> arg.resolve(res)
             is List<*> -> arg.joinToString("\n") { it?.let { a -> words(res, a).toString() }.orEmpty() }
             else -> arg
         }

@@ -150,7 +150,7 @@ class ExtensionSlots internal constructor(
             val places = api.uiPlaces("").filter(ExtensionSlotText::known)
             mutable.update { it.copy(available = true, places = places, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_slots_failed, failureReason(error))) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ExtensionFailure(R.string.settings_ext_slots_failed, failureReasonText(error))) } }
         loadInboxItems()
     }
 
