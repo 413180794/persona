@@ -8,8 +8,6 @@
   "summary": "{open} open · {done} done",
   "new_todo": "New to-do",
   "search_placeholder": "Search to-dos",
-  "no_match": "No matching to-dos",
-  "empty": "No to-dos yet. Add one above.",
   "done_section": "Done · {count}",
   "pick_hint": "Pick a to-do on the left to see it",
   "delete_title": "Delete to-do",
@@ -107,5 +105,13 @@
   "preview_todo": "To-do · {title}",
   "launch_and_hand": "Start and hand over",
   "send_and_hand": "Send and hand over",
+  "empty_title": "No to-dos",
+  "empty_body": "Write down something to do, hand it to an agent and follow its progress.",
+  "no_match_title": "No to-dos found",
+  "no_match_body": "Try a different search",
+  "back_to_list": "To-dos",
+  "agent_unlinked": "Unlinked",
+  "unlink_failed": "Couldn't unlink: {error}",
+  "unlink_agent": "Unlink “{name}”",
   "kicker_elicitation": "MCP request"
 }

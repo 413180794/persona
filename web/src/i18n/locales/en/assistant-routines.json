@@ -15,6 +15,7 @@
   "scheduled_footer_local": "When it's time, Persona follows the prompt and sends the result to your phone. Times of day are in your time zone.",
   "section_follow_ups": "One-time follow-ups",
   "follow_ups_footer": "Persona schedules these for itself in chats, then wakes up on time to carry on.",
+  "follow_ups_footer_pointer": "Persona schedules these for itself in chats, then wakes up on time to carry on. Right-click one to run it now or delete it.",
   "section_upcoming": "Up next",
   "run_count_one": "{count} run",
   "run_count_other": "{count} runs",
@@ -27,5 +28,9 @@
   "push_asked": "Alerts only",
   "last_failed": "{text}: {error}",
   "turn_off": "Turn off \"{title}\"",
-  "turn_on": "Turn on \"{title}\""
+  "turn_on": "Turn on \"{title}\"",
+  "menu_run": "Run now",
+  "menu_edit": "Edit",
+  "menu_delete": "Delete",
+  "menu_delete_confirm": "Confirm delete"
 }

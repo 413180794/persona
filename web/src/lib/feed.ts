@@ -225,6 +225,31 @@ onHubEvent("task_plan", (m) => {
 
 // ── actions ──
 
+/** The fields of a plan's task 改一下 lets the user change before it starts (iOS PlanEditSheet). */
+export type PlanTaskEdit = Pick<PlanTask, "title" | "machine" | "cwd" | "model" | "permission" | "prompt">;
+
+export const PLAN_PERMISSIONS = ["default", "acceptEdits", "plan", "bypassPermissions"] as const;
+
+/** A plan's tasks as 改一下 starts them: every editable field filled in (an unset permission is 每步都问). */
+export function planEditsOf(plan: TaskPlan): PlanTaskEdit[] {
+  return plan.tasks.map((t) => ({ title: t.title, machine: t.machine, cwd: t.cwd, model: t.model ?? "", permission: t.permission || "default", prompt: t.prompt }));
+}
+
+/** Whether 改一下 changed anything (closing it then asks before throwing the changes away). */
+export function planEditsChanged(plan: TaskPlan, edits: PlanTaskEdit[]): boolean {
+  const before = planEditsOf(plan);
+  return edits.some((e, i) => (Object.keys(e) as (keyof PlanTaskEdit)[]).some((k) => (e[k] ?? "") !== (before[i]?.[k] ?? "")));
+}
+
+/** What 开始 sends from 改一下: the edited tasks, leaving out a 每步都问 the plan never set (the agent's own default). */
+export function planEditsToSend(plan: TaskPlan, edits: PlanTaskEdit[]): Partial<PlanTask>[] {
+  return edits.map((e, i) => {
+    const out: Partial<PlanTask> = { ...e };
+    if (e.permission === "default" && !plan.tasks[i]?.permission) delete out.permission;
+    return out;
+  });
+}
+
 export async function startPlan(plan: TaskPlan, remember: boolean, edits?: Partial<PlanTask>[]) {
   if (st.busy[plan.id]) return;
   set({ busy: { ...st.busy, [plan.id]: true } });

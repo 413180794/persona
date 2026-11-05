@@ -8,8 +8,6 @@
   "summary": "没完成 {open} · 已完成 {done}",
   "new_todo": "新建待办",
   "search_placeholder": "搜索待办",
-  "no_match": "没有找到符合条件的待办",
-  "empty": "暂无待办，点击上方新建",
   "done_section": "已完成 · {count}",
   "pick_hint": "选择左侧待办查看详情",
   "delete_title": "删除待办",
@@ -107,5 +105,13 @@
   "preview_todo": "待办 · {title}",
   "launch_and_hand": "启动并交给 Agent",
   "send_and_hand": "发送并交给 Agent",
+  "empty_title": "没有待办",
+  "empty_body": "记下一件要做的事，交给 Agent 执行并跟踪进度。",
+  "no_match_title": "没有找到待办",
+  "no_match_body": "换个搜索词试试",
+  "back_to_list": "待办",
+  "agent_unlinked": "已解除关联",
+  "unlink_failed": "解除关联失败：{error}",
+  "unlink_agent": "解除「{name}」的关联",
   "kicker_elicitation": "MCP 请求"
 }

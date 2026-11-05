@@ -1745,7 +1745,8 @@ if MOCK_TASKS:
         "plan_mock_4": _plan("plan_mock_4", "started", 8, [
             dict(_ptask("设置页按钮对齐", False, "weather 在 MacBook 上。", "todo_task_align"), error="rpc: connection closed")]),
         "plan_mock_3": _plan("plan_mock_3", "open", 2, [
-            _ptask("处理 PR #42 的 review 意见", False, "PR #42 在 weather 仓库；review 类的活你常用 Codex。")]),
+            # a model Persona picked: 改一下's model field says an empty one keeps it (#2975)
+            dict(_ptask("处理 PR #42 的 review 意见", False, "PR #42 在 weather 仓库；review 类的活你常用 Codex。"), model="gpt-5.5")]),
     })
 
     def _feed(fid, minutes, kind, ref, body=None):
@@ -4271,66 +4272,12 @@ def lark_pin_rows():
     return rows
 
 LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
-                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB"))}
-# MOCK_LARK_OLD_DISPLAY=1: a Feishu extension older than 0.10.0, whose settings have no [removed] switch.
-if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
+                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB""MOCK_LARK_OLD_DISPLAY"):
     del LARK_DISPLAY["brave_climb_codec"]
 
 BRAVE_CLIMB_ALPHABET = "[removed]"
 def brave_climb(text):
-    """"""
-    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
-    while True:
-        n, d = divmod(n, 34)
-        out = BRAVE_CLIMB_ALPHABET[d] + out
-        if n == 0:
-            return "**字" + out + "**"
-
-# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and 设计评审 (f2) has [removed] words: a whole message, one split over
-# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
-# the list is words too.
-if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
-    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
-    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
-    words = brave_climb("标签栏改粗一号")
-    split = _lm("211", "Lucy Wang", words, mins=39)
-    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
-    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
-    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
-    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
-    reply = _lm("214", "我", "好的", mine=True, mins=36)
-    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
-    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
-    LARK_CHATS[0]["preview"] = whole["text"]
-if os.environ.get("MOCK_LARK_TRAINER"):
-    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
-    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
-    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
-    missing.update(recalled=True, retained=False)
-    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
-    edited.update(edited=True, edit_history=[
-        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
-        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
-            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
-    ])
-    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
-    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
-    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
-    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
-    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
-    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
-    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
-
-# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
-# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
-# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
-# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose lark-connector
-# lost its Feishu session.
-LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
-_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
-                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
-# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+    """lark-connector''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}

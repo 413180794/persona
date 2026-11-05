@@ -14,6 +14,7 @@ import {
   receiptState,
   isToday,
   later,
+  planEditsToSend,
   removeTask,
   retryKey,
   retryTask,
@@ -31,7 +32,7 @@ import {
 import { runningWorkflows, workflowLine } from "../../lib/workflows";
 import { dockAgents, interruption, isRemovable, makeSessionLookup, mostUrgentAgent, runningSubagents, taskNow, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
 import { parseAPIError } from "../../lib/api-errors";
-import { navigate } from "../../lib/router";
+import { boardSections, type BoardSectionKey } from "../../lib/task-board";
 import { openPanel } from "../../lib/panel";
 import { plainMarkdown } from "../../lib/plain-markdown";
 import { Markdown } from "../../ui/Markdown";
@@ -39,12 +40,14 @@ import { LiveCard } from "../../ui/AssistantCard";
 import type { AssistantView } from "../../lib/extension-wire";
 import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
-import { Button, Collapse, cx, Menu, StatusDot, toast, useNow } from "../../ui/atoms";
+import { Button, Collapse, cx, Dialog, IconButton, Menu, StatusDot, toast, useNow } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { AnsweredCard, InteractionCard } from "../chat/Interactions";
 import { MessageActions } from "../chat/MessageActions";
 import { clock, sessionTitle, stateOf } from "../../lib/format";
 import { formatDate, t } from "../../i18n";
+import { Empty } from "./parts";
+import { PlanEditDialog } from "./PlanEdit";
 
 // ── what a task is now ──
 
@@ -175,6 +178,7 @@ const PERMISSION: Record<string, string> = { acceptEdits: t("assistant-tasks.per
 export function PlanCard({ plan }: { plan: TaskPlan }) {
   const busy = useFeed((s) => s.busy[plan.id]);
   const [remember, setRemember] = useState(false);
+  const [editing, setEditing] = useState(false);
   if (plan.state !== "open") {
     const failed = plan.tasks.filter((t) => t.error);
     return (
@@ -209,10 +213,23 @@ export function PlanCard({ plan }: { plan: TaskPlan }) {
         <Button tone="accent" busy={busy} onClick={() => run(() => startPlan(plan, remember))} className="flex-1">
           {plan.tasks.length > 1 ? t("assistant-tasks.plan_start_n", { count: plan.tasks.length }) : t("assistant-tasks.plan_start")}
         </Button>
+        <Button disabled={busy} onClick={() => setEditing(true)}>
+          {t("assistant-tasks.plan_edit")}
+        </Button>
         <Button disabled={busy} onClick={() => run(() => dismissPlan(plan))}>
           {t("assistant-tasks.plan_dismiss")}
         </Button>
       </div>
+      {editing && (
+        <PlanEditDialog
+          plan={plan}
+          onClose={() => setEditing(false)}
+          onStart={(edits) => {
+            setEditing(false);
+            void run(() => startPlan(plan, remember, planEditsToSend(plan, edits)));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -612,12 +629,13 @@ export function QuickResultCard({ result }: { result: QuickResult }) {
 
 function TodayCard({ body, conversation }: { body: TodayBody; conversation: string }) {
   const say = useSayToPersona(conversation);
+  const [board, setBoard] = useState(false);
   const rows: { icon: IconName; tint: string; title: string; detail?: string; action?: string; run?: () => void }[] = [];
   if (body.done?.length)
     rows.push({ icon: "check", tint: "bg-green-tint text-green", title: body.done.length === 1 ? t("assistant-tasks.today_done_single", { title: body.done[0].title }) : t("assistant-tasks.today_done_n", { count: body.done.length }), detail: body.done.length > 1 ? body.done.map((d) => d.title).join(t("assistant-tasks.list_separator")) : undefined, action: t("assistant-tasks.look"), run: () => openTask(body.done![0].id) });
   if (body.waiting?.length)
     rows.push({ icon: "hand", tint: "bg-red-tint text-red", title: body.waiting.length === 1 ? t("assistant-tasks.today_waiting_single", { title: body.waiting[0].title }) : t("assistant-tasks.today_waiting_n", { count: body.waiting.length }), action: t("assistant-tasks.go_look"), run: () => openTask(body.waiting![0].id) });
-  if (body.working) rows.push({ icon: "gear", tint: "bg-orange-tint text-orange", title: t("assistant-tasks.today_working", { count: body.working }), action: t("assistant-tasks.all"), run: () => navigate({ name: "todos" }) });
+  if (body.working) rows.push({ icon: "gear", tint: "bg-orange-tint text-orange", title: t("assistant-tasks.today_working", { count: body.working }), action: t("assistant-tasks.all"), run: () => setBoard(true) });
   for (const m of (body.meetings ?? []).slice(0, 3)) {
     const at = formatDate(m.start, { hour: "2-digit", minute: "2-digit" });
     rows.push({ icon: "clock", tint: "bg-accent-tint text-accent", title: t("assistant-tasks.today_meeting", { time: at, title: m.title }), action: t("assistant-tasks.prepare"), run: () => say(t("assistant-tasks.prepare_prompt", { time: at, title: m.title })) });
@@ -650,6 +668,7 @@ function TodayCard({ body, conversation }: { body: TodayBody; conversation: stri
           {r.action && r.run && <Button onClick={r.run}>{r.action}</Button>}
         </div>
       ))}
+      {board && <TaskBoard open conversation={conversation} onClose={() => setBoard(false)} />}
     </div>
   );
 }
@@ -785,6 +804,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
   const lookup = useTaskLookup();
   const plans = useFeed((s) => s.plans);
   const [menuFor, setMenuFor] = useState<{ todo: Todo; el: HTMLElement } | null>(null);
+  const [board, setBoard] = useState(false);
   const agents = useMemo(() => dockAgents(Object.values(sessions).flat(), todos, conversation, main), [sessions, todos, conversation, main]);
   const mine = todos.filter((t) => t.origin === conversation);
   if (mine.length === 0 && agents.length === 0) return null;
@@ -803,7 +823,8 @@ export function TaskDock({ conversation }: { conversation: string }) {
       <button
         type="button"
         data-testid="task-dock-board"
-        onClick={() => navigate({ name: "todos" })}
+        aria-haspopup="dialog"
+        onClick={() => setBoard(true)}
         className={cx(capsule, "bg-field font-medium text-ink-2 hover:bg-hover")}
       >
         {t("assistant-tasks.dock_all", { count: mine.length + agents.length })}
@@ -854,6 +875,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
           items={[{ key: "remove", label: t("assistant-tasks.remove_ellipsis"), icon: "trash", danger: true, onSelect: () => removeTaskNow(menuFor.todo) }]}
         />
       )}
+      {board && <TaskBoard open conversation={conversation} onClose={() => setBoard(false)} />}
     </div>
   );
 }
@@ -887,6 +909,132 @@ export function useTaskState(todo?: Todo): { status: TodoStatus; lead?: Session;
   if (!todo) return undefined;
   const status = statusOf(todo, lookup, plans);
   return { status, lead: mostUrgentAgent(todo, lookup)?.session, failure: status === "failed" ? startFailure(todo, plans) : undefined };
+}
+
+// ── 全部: the task board ──
+
+const BOARD_TITLE: Record<BoardSectionKey, string> = {
+  waiting: t("assistant-tasks.board_waiting"),
+  working: t("assistant-tasks.board_working"),
+  unread: t("assistant-tasks.board_unread"),
+  stopped: t("assistant-tasks.board_stopped"),
+  done: t("assistant-tasks.board_done"),
+  failed: t("assistant-tasks.board_failed"),
+};
+
+/** What a manual agent on the board is doing: machine · project · agent · its last words (iOS agentSubtitle). */
+function agentLine(s: Session): string {
+  const machine = getState().machines.find((m) => m.id === s.machine_id)?.name ?? s.machine_id;
+  const folder = s.cwd ? (s.cwd.split("/").filter(Boolean).at(-1) ?? s.cwd) : undefined;
+  const last = s.last_text?.trim() ? plainMarkdown(s.last_text.trim()) : undefined;
+  return [machine, folder, s.agent, last].filter(Boolean).join(" · ");
+}
+
+/**
+ * 全部 on the dock and on the 今天 card (iOS TaskBoardSheet): this conversation's tasks, and the agents its dock shows,
+ * by where they are. A row opens the task (or the agent) beside the conversation; one nothing of runs can be removed.
+ */
+// Mounted only while open (TodayCard / TaskDock render it conditionally), so the store subscriptions and the
+// session lookup below don't run for every 今天 card in the history on each session update.
+export function TaskBoard({ open, conversation, onClose }: { open: boolean; conversation: string; onClose: () => void }) {
+  const todos = useStore((s) => s.todos);
+  const sessions = useStore((s) => s.sessions);
+  const main = useStore((s) => s.assistant?.main);
+  const lookup = useTaskLookup();
+  const plans = useFeed((s) => s.plans);
+  const [menuFor, setMenuFor] = useState<{ todo: Todo; el: HTMLElement } | null>(null);
+  const sections = useMemo(() => {
+    if (!open) return [];
+    const rows = todos.filter((td) => td.origin === conversation).map((todo) => ({ todo, status: statusOf(todo, lookup, plans) }));
+    return boardSections(rows, dockAgents(Object.values(sessions).flat(), todos, conversation, main));
+  }, [open, todos, sessions, conversation, main, lookup, plans]);
+  const subtitle = (todo: Todo, status: TodoStatus) => {
+    const lead = mostUrgentAgent(todo, lookup)?.session;
+    const where = place(todo, lead);
+    const failure = status === "failed" ? startFailure(todo, plans) : undefined;
+    const now = failure ?? progressOf(lead)?.text;
+    return [where, now].filter(Boolean).join(" · ");
+  };
+  return (
+    <Dialog open={open} onClose={onClose} title={t("assistant-tasks.board_title")} width={480}>
+      {sections.length === 0 ? (
+        <Empty icon="todo" title={t("assistant-tasks.board_empty_title")}>
+          {t("assistant-tasks.board_empty_body")}
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-4" data-testid="task-board">
+          {sections.map((sec) => (
+            <section key={sec.key} aria-label={BOARD_TITLE[sec.key]}>
+              <h3 className="mb-1 px-1 text-[12px] font-medium text-ink-3">
+                {t("assistant-tasks.board_section", { title: BOARD_TITLE[sec.key], count: sec.rows.length + sec.agents.length })}
+              </h3>
+              <div className="divide-y divide-line overflow-hidden rounded-card bg-field">
+                {sec.rows.map(({ todo, status }) => (
+                  <div key={todo.id} className="flex items-center hover:bg-hover">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        openTask(todo.id);
+                      }}
+                      onContextMenu={(e) => {
+                        if (!isRemovable(status)) return;
+                        e.preventDefault();
+                        setMenuFor({ todo, el: e.currentTarget });
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left"
+                    >
+                      <span className="flex w-4 shrink-0 justify-center">
+                        <TaskMark status={status} />
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate text-[13.5px] font-medium text-ink">{todo.title}</span>
+                        <span className="truncate text-[12px] text-ink-3">{subtitle(todo, status)}</span>
+                      </span>
+                      <Icon name="chevronRight" size={13} className="shrink-0 text-ink-3" />
+                    </button>
+                    {isRemovable(status) && (
+                      <IconButton icon="trash" label={t("assistant-tasks.board_remove", { title: todo.title })} onClick={() => removeTaskNow(todo)} className="mr-1.5" />
+                    )}
+                  </div>
+                ))}
+                {sec.agents.map(({ session: s, state }) => (
+                  <button
+                    key={`${s.machine_id}/${s.session_id}`}
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      openPanel({ kind: "agent", mid: s.machine_id, sid: s.session_id });
+                    }}
+                    className="flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-left hover:bg-hover"
+                  >
+                    <span className="flex w-4 shrink-0 justify-center">
+                      <StatusDot state={state} size={8} />
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-[13.5px] font-medium text-ink">{sessionTitle(s)}</span>
+                      <span className="flex min-w-0 items-center gap-1 text-[12px] text-ink-3">
+                        <Icon name="agent" size={11} className="shrink-0" />
+                        <span className="truncate">{agentLine(s)}</span>
+                      </span>
+                    </span>
+                    <Icon name="chevronRight" size={13} className="shrink-0 text-ink-3" />
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+      {menuFor && (
+        <Menu
+          anchor={menuFor.el}
+          onClose={() => setMenuFor(null)}
+          items={[{ key: "remove", label: t("assistant-tasks.remove_ellipsis"), icon: "trash", danger: true, onSelect: () => removeTaskNow(menuFor.todo) }]}
+        />
+      )}
+    </Dialog>
+  );
 }
 
 export { TaskMark, place };

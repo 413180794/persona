@@ -35,11 +35,12 @@ import {
   taskNow,
 } from "../lib/todos";
 import type { Interaction, Launcher, Machine } from "../lib/types";
-import { Button, cx, Dialog, IconButton, Menu, StatusDot, toast, useMenu } from "../ui/atoms";
+import { Button, cx, Dialog, IconButton, Loading, Menu, StatusDot, toast, useMenu } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { t } from "../i18n";
 import { groupTodosByProject, treeStateLabel, type TodoProjectGroup, type TreeState } from "../lib/todo-tree";
 import { useFolded } from "../lib/use-folded";
+import { Empty } from "./assistant/parts";
 
 export function TodosView({
   selectedId,
@@ -49,6 +50,7 @@ export function TodosView({
   onToggleSidebar?: () => void;
 }) {
   const todos = useStore((s) => s.todos);
+  const todosLoaded = useStore((s) => s.todosLoaded);
   const machines = useStore((s) => s.machines);
   const interactions = useStore((s) => s.interactions);
   const allSessions = useAgentSessions();
@@ -111,6 +113,25 @@ export function TodosView({
     return (activeTodo?.agents ?? []).filter((a) => a.released_at);
   }, [activeTodo]);
 
+  // Narrow (< md): the list and a todo's detail take turns, as on a phone (iOS pushes TodoDetailView). The URL's ?id=
+  // says a todo was opened; back goes to the list.
+  const detailOnNarrow = Boolean(selectedId && todos.some((t) => t.id === selectedId));
+  // The id a row click in this page pushed (/todos → /todos?id=…). Back from that detail pops the entry, as iOS pops
+  // its NavigationStack, so the browser's Back does not return to the detail just left; a deep link replaces instead.
+  const pushedId = useRef<string | undefined>(undefined);
+  const openFromList = (id: string) => {
+    setActiveId(id);
+    if (id === selectedId) return; // already this entry (a deep link stays a deep link)
+    pushedId.current = id;
+    navigate(`/todos?id=${encodeURIComponent(id)}`);
+  };
+  const backToList = () => {
+    if (selectedId && pushedId.current === selectedId) {
+      pushedId.current = undefined;
+      history.back();
+    } else navigate("/todos", true);
+  };
+
   const toggleDone = async (todo: Todo) => {
     try {
       await updateTodo(todo.id, { done: !todo.done_at });
@@ -130,6 +151,9 @@ export function TodosView({
       await refresh();
       setDeleteConfirm(false);
       setActiveId(undefined);
+      pushedId.current = undefined;
+      // replace: Back must not land on ?id=<the deleted todo>
+      navigate("/todos", true);
       toast(t("todos.deleted"), "ok");
     } catch (e) {
       toast(t("todos.delete_failed", { error: errorText(e) }), "error");
@@ -157,7 +181,11 @@ export function TodosView({
       {/* Main Split Layout: Left List & Right Detail */}
       <div className="flex min-h-0 flex-1">
         {/* Left Column: Todo List */}
-        <div className="flex w-full shrink-0 flex-col border-r border-line md:w-[380px] lg:w-[400px]">
+        <div
+          data-testid="todos-list-column"
+          data-narrow-hidden={detailOnNarrow || undefined}
+          className={cx("flex w-full shrink-0 flex-col border-r border-line md:w-[380px] lg:w-[400px]", detailOnNarrow && "max-md:hidden")}
+        >
           {/* Search Bar */}
           <div className="p-3">
             <div className="flex h-8 items-center gap-2 rounded-control bg-inset px-2.5 shadow-hairline">
@@ -179,10 +207,28 @@ export function TodosView({
 
           {/* List Content */}
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-            {filteredUncompleted.length === 0 && filteredCompleted.length === 0 ? (
-              <div className="py-12 text-center text-[13px] text-ink-3">
-                {search ? t("todos.no_match") : t("todos.empty")}
+            {!todosLoaded && todos.length === 0 ? (
+              <div className="flex justify-center py-16" data-testid="todos-loading">
+                <Loading />
               </div>
+            ) : filteredUncompleted.length === 0 && filteredCompleted.length === 0 ? (
+              search.trim() ? (
+                <Empty icon="search" title={t("todos.no_match_title")}>
+                  {t("todos.no_match_body")}
+                </Empty>
+              ) : (
+                <Empty
+                  icon="todo"
+                  title={t("todos.empty_title")}
+                  action={
+                    <Button tone="accent" icon="plus" onClick={() => setNewOpen(true)}>
+                      {t("todos.new_todo")}
+                    </Button>
+                  }
+                >
+                  {t("todos.empty_body")}
+                </Empty>
+              )
             ) : (
               <div className="flex flex-col gap-1">
                 {projectGroups.map((g) => (
@@ -195,8 +241,7 @@ export function TodosView({
                         interactions={interactions}
                         selected={activeTodo?.id === todo.id}
                         onSelect={() => {
-                          setActiveId(todo.id);
-                          navigate(`/todos?id=${encodeURIComponent(todo.id)}`);
+                          openFromList(todo.id);
                         }}
                         onToggleDone={() => toggleDone(todo)}
                       />
@@ -229,8 +274,7 @@ export function TodosView({
                             interactions={interactions}
                             selected={activeTodo?.id === todo.id}
                             onSelect={() => {
-                              setActiveId(todo.id);
-                              navigate(`/todos?id=${encodeURIComponent(todo.id)}`);
+                              openFromList(todo.id);
                             }}
                             onToggleDone={() => toggleDone(todo)}
                           />
@@ -245,7 +289,18 @@ export function TodosView({
         </div>
 
         {/* Right Column: Todo Detail */}
-        <div className="hidden min-h-0 flex-1 flex-col overflow-y-auto md:flex">
+        <div
+          data-testid="todos-detail-column"
+          data-narrow-shown={detailOnNarrow || undefined}
+          className={cx("min-h-0 flex-1 flex-col overflow-y-auto md:flex", detailOnNarrow ? "flex" : "hidden")}
+        >
+          {detailOnNarrow && (
+            <div className="flex shrink-0 items-center px-2 pt-2 md:hidden" data-testid="todos-back">
+              <Button tone="quiet" icon="chevronLeft" onClick={backToList}>
+                {t("todos.back_to_list")}
+              </Button>
+            </div>
+          )}
           {activeTodo ? (
             <TodoDetail
               key={activeTodo.id}
@@ -409,7 +464,7 @@ function TodoListItem({
           <span className={cx("truncate text-[13.5px] font-semibold text-ink", todo.done_at && "line-through text-ink-3 font-normal")}>
             {todo.title}
           </span>
-          <span className="shrink-0 text-[11px] text-ink-3">{ago(todo.created_at)}</span>
+          <span className="shrink-0 text-[11px] text-ink-3">{ago(todo.updated_at || todo.created_at)}</span>
         </div>
 
         {/* Status Line */}
@@ -538,14 +593,16 @@ function TodoDetail({
     }
   };
 
-  const removeFailedAgent = async (agent: TodoAgent) => {
+  // 移除 for an agent that did not start, 解除关联 for the others (iOS: the row's swipe; Android: its ×).
+  const unlinkAgent = async (agent: TodoAgent) => {
+    const failed = Boolean(agent.start_error);
     try {
       await unlinkAgentFromTodo(todo.id, agent.machine_id, agent.session_id);
       await refreshTodos();
       await refresh();
-      toast(t("todos.failed_agent_removed"), "ok");
+      toast(failed ? t("todos.failed_agent_removed") : t("todos.agent_unlinked"), "ok");
     } catch (e) {
-      toast(t("todos.remove_failed", { error: errorText(e) }), "error");
+      toast(failed ? t("todos.remove_failed", { error: errorText(e) }) : t("todos.unlink_failed", { error: errorText(e) }), "error");
     }
   };
 
@@ -749,7 +806,7 @@ function TodoDetail({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeFailedAgent(agent);
+                            void unlinkAgent(agent);
                           }}
                           className="shrink-0 font-medium hover:underline"
                         >
@@ -765,8 +822,20 @@ function TodoDetail({
                       </div>
                     ) : null}
                   </div>
-                  <div className="shrink-0 text-[11px] text-ink-3">
-                    {ago(session?.updated_at || agent.linked_at)}
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="text-[11px] text-ink-3">{ago(session?.updated_at || agent.linked_at)}</span>
+                    {!agent.start_error && (
+                      <IconButton
+                        icon="x"
+                        label={t("todos.unlink_agent", { name: displayTitle })}
+                        size={24}
+                        iconSize={12}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void unlinkAgent(agent);
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               );

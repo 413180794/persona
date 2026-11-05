@@ -15,6 +15,7 @@
   "scheduled_footer_local": "到点时 Persona 按提示词去做，跑完推送到手机。每天几点按你所在的时区。",
   "section_follow_ups": "一次性跟进",
   "follow_ups_footer": "Persona 在对话里替自己安排的，到点自己醒来接着做。",
+  "follow_ups_footer_pointer": "Persona 在对话里替自己安排的，到点自己醒来接着做。右键可以立即运行或删除。",
   "section_upcoming": "接下来",
   "run_count_other": "{count} 次",
   "section_runs": "运行记录",
@@ -25,5 +26,9 @@
   "push_asked": "只在提醒时推送",
   "last_failed": "{text}：{error}",
   "turn_off": "关闭「{title}」",
-  "turn_on": "开启「{title}」"
+  "turn_on": "开启「{title}」",
+  "menu_run": "立即运行",
+  "menu_edit": "编辑",
+  "menu_delete": "删除",
+  "menu_delete_confirm": "确认删除"
 }

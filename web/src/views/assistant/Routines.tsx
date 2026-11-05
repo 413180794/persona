@@ -3,7 +3,7 @@
 // with its rule in words, next and last run, what it runs with and an on/off switch; what comes next and the history
 // of runs beside them. A row opens the editor; 新建 starts from a template or blank.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, enc, errorText } from "../../lib/api";
+import { api, ApiError, enc, errorText } from "../../lib/api";
 import { navigate } from "../../lib/router";
 import {
   fromTemplate, hm, blankTask, dayLabel, lastRunText, nextText, ruleText, runDays, runsWith, splitTasks, taskBody, taskTitle, TEMPLATES,
@@ -11,6 +11,9 @@ import {
 } from "../../lib/routines";
 import { onHubEvent, useStore } from "../../lib/store";
 import { Button, cx, IconButton, Loading, Menu, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
+import { contextMenuProps } from "../../ui/context-menu";
+import { NO_HOVER, useMedia } from "../../ui/media-query";
+import type { MenuAt } from "../../ui/menu-model";
 import { Icon, type IconName } from "../../ui/icons";
 import { Pill } from "../settings/SettingsParts";
 import { Empty, IconTile, SectionTitle, Switch } from "./parts";
@@ -40,7 +43,10 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Task | null>(null);
   const [allRuns, setAllRuns] = useState(false);
+  const [rowMenu, setRowMenu] = useState<{ task: Task; at: MenuAt } | null>(null);
   const menu = useMenu();
+  // A touch screen sends no right click (iOS Safari has no contextmenu on long press): the footer names it only where it exists.
+  const noHover = useMedia(NO_HOVER);
   const nowMs = useNow(30_000);
   const now = useMemo(() => new Date(nowMs), [nowMs]);
   const seq = useRef(0);
@@ -92,6 +98,34 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     void load();
   };
 
+  // A row's right click (iOS / Mac contextMenu): 立即运行 opens the run's conversation, as the editor's does.
+  const runNow = async (task: Task) => {
+    if (task.repeat === "once") setTasks((list) => list?.filter((x) => x.id !== task.id) ?? list); // a one-off runs once
+    try {
+      const r = await api<{ session_id: string }>(`/assistant/tasks/${enc(task.id)}/run`, { method: "POST", json: {} });
+      toast(t("assistant-taskeditor.run_started", { title: taskTitle(task) }), "ok");
+      navigate({ name: "jarvis", sid: r.session_id });
+    } catch (e) {
+      toast(e instanceof ApiError && e.status === 409 ? e.message || t("assistant-taskeditor.still_running") : errorText(e), "error");
+      void load();
+    }
+  };
+  const remove = async (task: Task) => {
+    try {
+      await api(`/assistant/tasks/${enc(task.id)}`, { method: "DELETE" });
+      toast(t("assistant-taskeditor.deleted", { title: taskTitle(task) }), "ok");
+      deleted(task);
+    } catch (e) {
+      toast(errorText(e), "error");
+    }
+  };
+  const rowItems = (task: Task): MenuItem[] => [
+    { key: "run", label: t("assistant-routines.menu_run"), icon: "play", onSelect: () => void runNow(task) },
+    { key: "edit", label: t("assistant-routines.menu_edit"), icon: "pencil", onSelect: () => setEditing(task) },
+    { key: "delete", label: t("assistant-routines.menu_delete"), icon: "trash", danger: true, divider: true, closes: true, confirm: t("assistant-routines.menu_delete_confirm"), onSelect: () => void remove(task) },
+  ];
+  const openRowMenu = (task: Task) => (at: MenuAt) => setRowMenu({ task, at });
+
   const items: MenuItem[] = [
     ...TEMPLATES.map((tpl) => ({ key: tpl.key, label: tpl.title, icon: taskIcon(fromTemplate(tpl)), hint: tpl.repeat === "interval" ? t("assistant-routines.every_30_min") : undefined, onSelect: () => setEditing(fromTemplate(tpl)) })),
     { key: "blank", label: t("assistant-routines.blank"), icon: "pencil" as IconName, onSelect: () => setEditing(blankTask()) },
@@ -136,7 +170,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 <SectionTitle>{t("assistant-routines.section_scheduled")}</SectionTitle>
                 <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
                   {repeating.map((task) => (
-                    <TaskRow key={task.id} task={task} now={now} onOpen={() => setEditing(task)} onToggle={(on) => void toggle(task, on)} />
+                    <TaskRow key={task.id} task={task} now={now} onOpen={() => setEditing(task)} onMenu={openRowMenu(task)} onToggle={(on) => void toggle(task, on)} />
                   ))}
                 </div>
                 <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">
@@ -153,10 +187,10 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 <SectionTitle>{t("assistant-routines.section_follow_ups")}</SectionTitle>
                 <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
                   {oneOff.map((task) => (
-                    <TaskRow key={task.id} task={task} now={now} onOpen={() => setEditing(task)} onToggle={(on) => void toggle(task, on)} />
+                    <TaskRow key={task.id} task={task} now={now} onOpen={() => setEditing(task)} onMenu={openRowMenu(task)} onToggle={(on) => void toggle(task, on)} />
                   ))}
                 </div>
-                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("assistant-routines.follow_ups_footer")}</p>
+                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{noHover ? t("assistant-routines.follow_ups_footer") : t("assistant-routines.follow_ups_footer_pointer")}</p>
               </section>
             )}
           </div>
@@ -216,6 +250,8 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         </div>
       </div>
 
+      {rowMenu && <Menu anchor={rowMenu.at.anchor ?? null} point={rowMenu.at.point} onClose={() => setRowMenu(null)} items={rowItems(rowMenu.task)} />}
+
       {editing && (
         <TaskEditor
           key={editing.id || "new"}
@@ -232,16 +268,20 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 }
 
 /** One task: its mark, title, rule in words, next and last run, what it runs with when not the default, a switch. */
-function TaskRow({ task, now, onOpen, onToggle }: { task: Task; now: Date; onOpen: () => void; onToggle: (on: boolean) => void }) {
+function TaskRow({ task, now, onOpen, onMenu, onToggle }: { task: Task; now: Date; onOpen: () => void; onMenu: (at: MenuAt) => void; onToggle: (on: boolean) => void }) {
   const with_ = runsWith(task);
   const last = lastRunText(task, now);
   const next = nextText(task, now);
+  const menu = contextMenuProps(onMenu);
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={onOpen}
+      onContextMenu={menu.onContextMenu}
       onKeyDown={(e) => {
+        menu.onKeyDown(e);
+        if (e.defaultPrevented) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onOpen();

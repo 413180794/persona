@@ -100,7 +100,7 @@ export function IconTile({ icon, tone = "accent" }: { icon: IconName; tone?: "ac
 }
 
 /** An empty page or section: an icon, a line, what to do. */
-export function Empty({ icon, title, children }: { icon: IconName; title: string; children?: React.ReactNode }) {
+export function Empty({ icon, title, children, action }: { icon: IconName; title: string; children?: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center px-6 py-14 text-center">
       <span className="mb-3 flex size-11 items-center justify-center rounded-full bg-field text-ink-3">
@@ -108,6 +108,7 @@ export function Empty({ icon, title, children }: { icon: IconName; title: string
       </span>
       <p className="text-[13.5px] font-medium text-ink">{title}</p>
       {children && <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-ink-3">{children}</p>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }

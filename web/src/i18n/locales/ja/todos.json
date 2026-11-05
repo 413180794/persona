@@ -8,8 +8,6 @@
   "summary": "未完了{open} · 完了{done}",
   "new_todo": "新規ToDo",
   "search_placeholder": "ToDoを検索",
-  "no_match": "条件に一致するToDoはありません",
-  "empty": "ToDoはまだありません。上から作成できます。",
   "done_section": "完了 · {count}",
   "pick_hint": "左のToDoを選ぶと詳細が表示されます",
   "delete_title": "ToDoを削除",
@@ -107,5 +105,13 @@
   "preview_todo": "ToDo · {title}",
   "launch_and_hand": "起動して任せる",
   "send_and_hand": "送信して任せる",
+  "empty_title": "ToDoはありません",
+  "empty_body": "やることを書き留めて、Agentに任せて進捗を追いましょう。",
+  "no_match_title": "ToDoが見つかりません",
+  "no_match_body": "別のキーワードで検索してください",
+  "back_to_list": "ToDo",
+  "agent_unlinked": "関連付けを解除しました",
+  "unlink_failed": "関連付けを解除できませんでした：{error}",
+  "unlink_agent": "「{name}」の関連付けを解除",
   "kicker_elicitation": "MCPリクエスト"
 }
