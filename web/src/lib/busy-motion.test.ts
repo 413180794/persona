@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BUSY_MOTION, BUSY_MOTION_REDUCED_SECONDS } from "./busy-motion";
+import { BUSY_MOTION, BUSY_MOTION_REDUCED_SECONDS, SPIN_TURNS, spinStyle } from "./busy-motion";
 
 const SRC = join(__dirname, "..");
 
@@ -29,7 +29,8 @@ function stripBlock(css: string): string {
 }
 
 describe("busy indicators under reduced motion", () => {
-  const block = stripBlock(readFileSync(join(SRC, "styles.css"), "utf8"));
+  // a Windows checkout's CRLF read as LF
+  const block = stripBlock(readFileSync(join(SRC, "styles.css"), "utf8").replace(/\r\n/g, "\n"));
 
   it("the strip still takes the other animations to 1ms × 1", () => {
     expect(block).toMatch(/\*, \*::before, \*::after \{[^}]*animation-duration: 1ms !important;[^}]*animation-iteration-count: 1 !important/);
@@ -39,7 +40,7 @@ describe("busy indicators under reduced motion", () => {
     expect(BUSY_MOTION).toBe("busy-motion");
     const rule = new RegExp(`\\.${BUSY_MOTION}[^{]*\\{([^}]*)\\}`).exec(block);
     expect(rule).not.toBeNull();
-    expect(rule![1]).toContain(`animation-duration: ${BUSY_MOTION_REDUCED_SECONDS}s !important`);
+    expect(rule![1]).toContain(`animation-duration: calc(${BUSY_MOTION_REDUCED_SECONDS}s * var(--busy-cycles, 1)) !important`);
     expect(rule![1]).toContain("animation-iteration-count: infinite !important");
   });
 
@@ -52,7 +53,7 @@ describe("busy indicators under reduced motion", () => {
 
   it("every looping busy animation in the source carries the class", () => {
     // a looping keyframe of the busy kind, written inline or as a Tailwind utility
-    const busy = /animation: ["`](?:spin|breathe|pixel-on|shimmer-text)\b|animate-spin|animate-pulse|animate-\[breathe_/;
+    const busy = /animation: ["`](?:spin|breathe|pixel-on|shimmer-text)\b|spinStyle\(\d|animate-spin|animate-pulse|animate-\[breathe_/;
     const missing: string[] = [];
     for (const file of sources(SRC)) {
       const lines = readFileSync(file, "utf8").split("\n");
@@ -64,5 +65,38 @@ describe("busy indicators under reduced motion", () => {
       });
     }
     expect(missing).toEqual([]);
+  });
+});
+
+// A looping CSS animation sends React's root listener an animationiteration event every cycle, and the page a style
+// recalc: spinners turn SPIN_TURNS times per cycle, at the same speed.
+describe("spinners loop rarely", () => {
+  const css = readFileSync(join(SRC, "styles.css"), "utf8").replace(/\r\n/g, "\n");
+
+  it("the keyframes turn SPIN_TURNS times, and the one-turn spin is gone", () => {
+    expect(css).toContain(`@keyframes spin-long{to{transform:rotate(${SPIN_TURNS}turn)}}`);
+    expect(css).not.toMatch(/@keyframes spin\b(?!-)/);
+    expect(css).toMatch(/@property --busy-cycles \{[^}]*inherits: false;[^}]*initial-value: 1;/);
+  });
+
+  it("the working mark turns once per --mark-spin-dur, and 2.4s under reduced motion", () => {
+    const arc = /\.status-mark\[data-shape="arc"\] \{([^}]*)\}/.exec(css)![1];
+    expect(arc).toContain(`--busy-cycles: ${SPIN_TURNS};`);
+    expect(arc).toContain(`animation: spin-long calc(var(--mark-spin-dur) * ${SPIN_TURNS}) linear infinite`);
+  });
+
+  it("spinStyle keeps the speed it is given", () => {
+    expect(spinStyle(700)).toEqual({ animation: `spin-long ${700 * SPIN_TURNS}ms linear infinite`, "--busy-cycles": SPIN_TURNS });
+  });
+
+  it("nothing in the source loops the one-turn keyframes", () => {
+    const short = /\bspin [\d.]+m?s\b|animation: spin\b(?!-)|animate-spin\b/;
+    const found: string[] = [];
+    for (const file of [...sources(SRC), join(SRC, "styles.css")]) {
+      readFileSync(file, "utf8").split("\n").forEach((line, i) => {
+        if (short.test(line) && !/^\s*(\/\/|\*|\/\*)/.test(line)) found.push(`${relative(SRC, file)}:${i + 1}`);
+      });
+    }
+    expect(found).toEqual([]);
   });
 });

@@ -14,6 +14,7 @@ import { onHubEvent } from "../../lib/store";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { MochiFace } from "./MochiFace";
+import { useReducedMotion } from "./face-motion";
 import { CircuitFace, VisorFace } from "./BuiltinFaces";
 import { personaAccent, setPersonaAccent } from "../../ui/look";
 import { currentLanguage, t } from "../../i18n";
@@ -207,18 +208,6 @@ export function BuiltinLookFace({ id, size, state = "idle", className }: { id: s
   if (id === MARK_PERSONA) return <VisorFace size={size} state={state} className={className} />;
   if (id === CIRCUIT_PERSONA) return <CircuitFace size={size} state={state} className={className} />;
   return <MochiFace size={size} state={state} className={className} />;
-}
-
-function useReducedMotion(): boolean {
-  const [reduce, setReduce] = useState(() => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
-  useEffect(() => {
-    if (typeof matchMedia !== "function") return;
-    const q = matchMedia("(prefers-reduced-motion: reduce)");
-    const on = () => setReduce(q.matches);
-    q.addEventListener("change", on);
-    return () => q.removeEventListener("change", on);
-  }, []);
-  return reduce;
 }
 
 /**

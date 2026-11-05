@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askUserAnswers, baseToolName, optionDisplay, patchDiffs, permissionDetail, pickedOption, summaryExtra, toolQuestions, typedAnswer, withoutCutMark } from "./tool-detail";
+import { askUserAnswers, baseToolName, optionDisplay, patchDiffs, permissionDetail, permissionReason, pickedOption, summaryExtra, toolQuestions, typedAnswer, withoutCutMark } from "./tool-detail";
 
 describe("patchDiffs (a Codex file change, G001)", () => {
   it("is one block per hunk, the file headers left out", () => {
@@ -109,5 +109,18 @@ describe("summaryExtra", () => {
     expect(summaryExtra("给 me@example.com 发一封邮件", cmd)).toBe("给 me@example.com 发一封邮件");
     expect(summaryExtra(undefined, cmd)).toBe("");
     expect(summaryExtra("curl -s xyz", cmd)).toBe("curl -s xyz");
+  });
+});
+
+describe("permissionReason", () => {
+  it("is another agent's sentence, trimmed", () => {
+    expect(permissionReason("codex", " Allow this command to access localhost:8080? ")).toBe("Allow this command to access localhost:8080?");
+    expect(permissionReason("traex", "需要联网")).toBe("需要联网");
+  });
+  it("is empty for Claude Code or without a reason", () => {
+    expect(permissionReason(undefined, "x")).toBe("");
+    expect(permissionReason("claude", "x")).toBe("");
+    expect(permissionReason("codex", undefined)).toBe("");
+    expect(permissionReason("codex", "  ")).toBe("");
   });
 });

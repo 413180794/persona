@@ -1002,7 +1002,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经飞书网关的
 - 按钮文字一律单行（`whitespace-nowrap`），放不下的用图标 + `title`。
 - 链接规则和 App 一样（`Links`）：裸链接在空白或非 ASCII 字符处结束，交给 Markdown 前写成 `<url>`（`src/ui/Markdown.tsx` 的 `linkify`），中文里的链接不会吞掉后半句。
 - 尊重 `prefers-reduced-motion`：所有动画缩成 1ms；**忙碌指示例外**（#3475）：转圈（`Spinner`）、工作中 / 连接中的呼吸圆点、`Loading` 的像素格和流光、骨架的脉动都带 `busy-motion` 类（`src/lib/busy-motion.ts`），
-  减弱动态时照样转，只是放慢到 2.4 秒一圈（Moshi 的做法），呼吸只剩透明度、不缩放，不然「在忙」的信号就没了。新写一个循环的忙碌动画就加这个类，`busy-motion.test.ts` 会扫源码，漏了就报错。脚本里的滚动（`scrollTo` / `scrollIntoView`）不受这条 CSS 管，一律用 `scrollBehavior()`（`src/ui/stream/motion.ts`），
+  减弱动态时照样转，只是放慢到 2.4 秒一圈（Moshi 的做法），呼吸只剩透明度、不缩放，不然「在忙」的信号就没了。新写一个循环的忙碌动画就加这个类，`busy-motion.test.ts` 会扫源码，漏了就报错。转圈一律用 `spinStyle(每圈毫秒)`（关键帧 `spin-long` 一个周期 100 圈，循环事件少 100 倍，见 `docs/lessons/web.md`「无限循环的 CSS 动画在空闲时也贵」），不写 `spin … infinite`。脚本里的滚动（`scrollTo` / `scrollIntoView`）不受这条 CSS 管，一律用 `scrollBehavior()`（`src/ui/stream/motion.ts`），
   减弱动态时直接跳到位置（回到底部、计划胶囊、文件路径栏、定时任务编辑器、外部会话的引用跳转、飞书会话的回到最新，#2664）。
 - 展开 / 折叠（#1124）一律用 `Collapse`：CSS 把 grid 的行在 `0fr` / `1fr` 之间过渡、透明度淡入淡出，箭头转 `transform`，不在 JS 里量高度、不按帧 setState。
   对话里的（工作行、工具步骤、思考、上下文、最新一步的预览）用 `lazy`：展开时内容先在 `0fr` 下排一次版、下一帧才开始过渡（长轨迹第一次排版很重，混进过渡里就一下子开到大半）；

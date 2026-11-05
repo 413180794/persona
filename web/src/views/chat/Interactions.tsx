@@ -2,7 +2,7 @@
 import { useEffect, useId, useState } from "react";
 import { ApiError, enc, errorText } from "../../lib/api";
 import { apiOp } from "../../lib/ops";
-import { BUSY_MOTION } from "../../lib/busy-motion";
+import { BUSY_MOTION, spinStyle } from "../../lib/busy-motion";
 import type { Interaction } from "../../lib/types";
 import { defaults, elicitationDraft, elicitationResolution, elicitationSource, fields, numberInputMode, saveElicitationDraft, urlHost, urlTarget, validate, type ElicitationAction, type Field, type Values } from "../../lib/elicitation";
 import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
@@ -14,7 +14,7 @@ import { dropAnswered, endInteraction, getSession, useStore, type AnsweredCard a
 import { Button, Collapse, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
-import { permissionDetail, summaryExtra } from "../../lib/tool-detail";
+import { permissionDetail, permissionReason, summaryExtra } from "../../lib/tool-detail";
 import { DIFF_TOOLS, DiffBlocks, editDiffs } from "./ActionRow";
 import { cardFold, cardLine, PLAN_MAX, showsAnswered } from "./dock";
 import { t } from "../../i18n";
@@ -325,12 +325,14 @@ function PermissionBody({ ix }: { ix: Interaction }) {
   const hasInput = Object.keys(input).length > 0;
   const detail = permissionDetail(ix.tool_name, input);
   const diffs = detail && DIFF_TOOLS.has(ix.tool_name ?? "") ? editDiffs({ id: ix.id, seq: 0, role: "assistant", kind: "tool_use", tool_name: ix.tool_name, tool_input: input }) : null;
+  const reason = permissionReason(ix.agent, ix.reason);
   const extra = detail ? summaryExtra(ix.summary, detail.fields) : "";
-  const extraShown = extra && extra !== detail?.note && !detail?.fields.some((f) => f.value === extra);
+  const extraShown = extra && extra !== detail?.note && extra !== reason && !detail?.fields.some((f) => f.value === extra);
   const lead = detail ? undefined : ix.summary?.trim();
   const [showInput, setShowInput] = useState(!detail && !lead);
   return (
     <div className="flex flex-col gap-2">
+      {reason && <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-ink-2">{reason}</p>}
       {detail?.note && <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-ink">{detail.note}</p>}
       {detail?.fields.map((f) => (
         <div key={f.label}>
@@ -426,7 +428,7 @@ function ScreenCard({ ix }: { ix: Interaction }) {
                   <OptionLabel label={o.label} />
                   {o.detail && <span className="block text-[12px] text-ink-3">{o.detail}</span>}
                 </span>
-                {busy === o.key && <span className={`ml-auto mt-1 size-3 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2 ${BUSY_MOTION}`} style={{ animation: "spin 700ms linear infinite" }} />}
+                {busy === o.key && <span className={`ml-auto mt-1 size-3 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2 ${BUSY_MOTION}`} style={spinStyle(700)} />}
               </button>
             ),
           )}

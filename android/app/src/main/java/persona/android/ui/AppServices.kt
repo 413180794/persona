@@ -163,12 +163,13 @@ class AppServices @Inject constructor(
                 try {
                     coroutineScope {
                         launch {
-                            socket.route.collect { route ->
-                                knowledgeState.value = route?.let {
-                                    HttpKnowledgeRepository(data.scope, it.endpoint.url, hub.api.token, socket.http.client,
-                                        isCurrent = { current() && socket.route.value == route })
-                                }
-                            }
+                            // A reconnect drops the route for a few seconds: the page keeps its repository (not the
+                            // unpaired empty state) and reloads when the next route comes (#4030). Without a route it
+                            // sends nothing and fails as unreachable.
+                            socket.route.followingLastRoute { route ->
+                                OnlyWithRoute(HttpKnowledgeRepository(data.scope, route.endpoint.url, hub.api.token, socket.http.client,
+                                    isCurrent = { current() && socket.route.value == route })) { socket.route.value != null }
+                            }.collect { knowledgeState.value = it }
                         }
                         launch {
                             ProcessLifecycleOwner.get().lifecycle.currentStateFlow.collect {
@@ -276,6 +277,20 @@ class AppServices @Inject constructor(
         override suspend fun keys(key: SessionKey, keys: List<String>, text: String) =
             routed(key).let { (terminal, plain) -> terminal.keys(plain, keys, text) }
     }
+}
+
+/** What was built for the last route, while the connection has none (reconnecting); a new route builds anew. */
+internal fun <R : Any> Flow<HubRoute?>.followingLastRoute(build: (HubRoute) -> R): Flow<R> = filterNotNull().map(build)
+
+/** [delegate] kept through a reconnect: while there is no route its requests fail as unreachable, nothing is sent. */
+internal class OnlyWithRoute(private val delegate: KnowledgeRepository, private val hasRoute: () -> Boolean) : KnowledgeRepository {
+    override val scope get() = delegate.scope
+    private fun <T> routed(block: () -> T): T = if (hasRoute()) block() else throw HubFailure(HubError.NoNetwork)
+    override suspend fun list(kind: KnowledgeKind, tag: String?) = routed { delegate }.list(kind, tag)
+    override suspend fun detail(kind: KnowledgeKind, id: String) = routed { delegate }.detail(kind, id)
+    override suspend fun search(query: String) = routed { delegate }.search(query)
+    override suspend fun entry(kind: KnowledgeKind, id: String) = routed { delegate }.entry(kind, id)
+    override suspend fun update(kind: KnowledgeKind, id: String, update: KnowledgeUpdate) = routed { delegate }.update(kind, id, update)
 }
 
 @Module

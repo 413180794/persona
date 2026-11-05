@@ -30,7 +30,7 @@ vi.mock("../lib/sessions", async (importOriginal) => {
 // the extensions' overview cards are not this test's
 vi.mock("./extensions/ExtensionSlots", () => ({ OverviewCards: () => null }));
 
-const { Home } = await import("./Home");
+const { Home, offlineLine } = await import("./Home");
 
 const mac: Machine = { id: "mac", name: "Mac", online: true };
 let n = 0;
@@ -131,5 +131,24 @@ describe("the overview", () => {
     const html = render([asking, agent(2, 0, "working"), agent(3, 0, "unread")], [ix]);
     expect(html).not.toContain("加载中");
     for (const group of ["需要你处理", "正在工作", "做完了，还没看", "电脑"]) expect(html).toContain(group);
+  });
+});
+
+describe("an offline computer's line on the overview (#4038)", () => {
+  const raw = "ssh: connect to host box port 22: Operation timed out";
+  it("says why in plain words and keeps the raw error in the tooltip", () => {
+    Object.assign(fake, { sessions: [], interactions: [], machines: [mac, { id: "box", name: "盒子", online: false, error: raw }] });
+    const html = renderToStaticMarkup(<Home onNewAgent={() => {}} onToggleSidebar={() => {}} />);
+    const line = html.match(/<span [^>]*data-machine-line[^>]*>([^<]*)<\/span>/g)?.find((s) => s.includes("Operation"));
+    expect(line).toContain(`title="${raw}"`);
+    expect(line).toContain(">连接超时<");
+  });
+  it("keeps the raw text when it does not say why, and 离线 without one", () => {
+    expect(offlineLine({ id: "b", name: "b", online: false, error: "something odd" })).toBe("something odd");
+    expect(offlineLine({ id: "b", name: "b", online: false })).toBe("离线");
+  });
+  it("reads it in the machines page's order: waiting to be confirmed, then the hub's error_code", () => {
+    expect(offlineLine({ id: "b", name: "b", online: false, trust: "pending", error: "ssh: connect to host b port 22: Operation timed out" } as Machine)).toBe("还没连上来过");
+    expect(offlineLine({ id: "b", name: "b", online: false, error_code: "node_service_down", error: "dial tcp: i/o timeout" } as Machine)).not.toBe("连接超时");
   });
 });

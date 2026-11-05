@@ -47,6 +47,16 @@ def fail(msg):
     raise AssertionError(msg)
 
 
+# Spinners turn this many times per cycle of their keyframes (web/src/lib/busy-motion.ts SPIN_TURNS): the cycle is this
+# many times the time one turn takes.
+SPIN_TURNS = 100
+
+
+def per_turn(duration):
+    """Seconds per turn of a spinner whose cycle is `duration` ("90s")."""
+    return float(duration.rstrip("s")) / SPIN_TURNS
+
+
 def close(a, b, tol=0.5):
     return abs(a - b) <= tol
 
@@ -111,10 +121,10 @@ def busy_signal(browser, base, token, theme, size, reduce, shots):
     page.wait_for_selector("[role=status] .busy-motion")
     spinner = anim(page, "[role=status] .busy-motion")
     if reduce:
-        assert spinner["name"] == "spin" and spinner["duration"] == "2.4s" and spinner["count"] == "infinite", spinner
+        assert spinner["name"] == "spin-long" and close(per_turn(spinner["duration"]), 2.4, 1e-6) and spinner["count"] == "infinite", spinner
     else:
-        assert spinner["name"] == "spin" and spinner["duration"] == "0.7s" and spinner["count"] == "infinite", spinner
-    ok(f"[{tag(theme, size, reduce)}] the sign-in spinner turns {spinner['duration']} x {spinner['count']}")
+        assert spinner["name"] == "spin-long" and close(per_turn(spinner["duration"]), 0.7, 1e-6) and spinner["count"] == "infinite", spinner
+    ok(f"[{tag(theme, size, reduce)}] the sign-in spinner turns once in {per_turn(spinner['duration']):g}s x {spinner['count']}")
     if shots:
         page.screenshot(path=os.path.join(shots, f"spinner-{tag(theme, size, reduce)}.png"))
     for r in held:

@@ -1,10 +1,11 @@
 // 面罩 (jarvis) and 汇流 (jarvis-circuit), the built-in looks besides 团子 (docs/persona.md「内置形象」): the same drawings as
 // the apps' PersonaFace (Android PersonaFace.kt visor / circuit, iOS Shared/Design/PersonaFace.swift), in shares of a
 // 100-unit side, painted in the page's accent (gray when offline). Each state reads from its first frame alone; the
-// blink and the needs-you ring are CSS (the --mochi-* animations) and stop with reduced motion.
+// blink and the needs-you ring are the mochi-* loops (face-motion.ts) and stop with reduced motion.
 import { useId } from "react";
 import type { PersonaState } from "../../lib/persona";
 import { cx } from "../../ui/atoms";
+import { useFaceMotion } from "./face-motion";
 
 const OFFLINE = "#9e9e9e";
 const mix = (c: string, other: string, share: number) => `color-mix(in srgb, ${c} ${Math.round((1 - share) * 100)}%, ${other})`;
@@ -34,8 +35,9 @@ export function VisorFace({ size, state = "idle", className }: { size: number; s
   const vw = 66, vh = 30, vx = (100 - vw) / 2, vy = (100 - vh) / 2 + 2;
   const eyeY = vy + vh / 2 + look[1], eyeX = 50 + look[0];
   const eye = offline ? "#808080" : mix(accent, "white", 0.55);
+  const motion = useFaceMotion<SVGSVGElement>(state);
   return (
-    <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden className={cx("shrink-0 rounded-full", className)} style={{ width: size, height: size }}>
+    <svg ref={motion} viewBox="0 0 100 100" width={size} height={size} aria-hidden className={cx("shrink-0 rounded-full", className)} style={{ width: size, height: size }}>
       <defs>
         <linearGradient id={`${id}d`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" style={{ stopColor: mix(accent, "white", 0.28) }} />
@@ -90,8 +92,9 @@ export function CircuitFace({ size, state = "idle", className }: { size: number;
   const look = state === "working" ? [-2.5, 0] : state === "thinking" ? [2, -3.5] : [0, 0];
   const ew = 4.4, eh = offline ? 2.5 : 12.5, gap = 6.4;
   const c = [CORE[0] + look[0], CORE[1] + look[1]];
+  const motion = useFaceMotion<SVGSVGElement>(state);
   return (
-    <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden className={cx("shrink-0 rounded-full", className)} style={{ width: size, height: size }}>
+    <svg ref={motion} viewBox="0 0 100 100" width={size} height={size} aria-hidden className={cx("shrink-0 rounded-full", className)} style={{ width: size, height: size }}>
       <defs>
         <linearGradient id={`${id}d`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" style={{ stopColor: mix(accent, "black", 0.76) }} />

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { glideStyle } from "../lib/glide";
 import { Button, cx, Dialog, EASE, toast } from "../ui/atoms";
-import { BUSY_MOTION } from "../lib/busy-motion";
+import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
 import { setTheme, useTheme, type Theme } from "../views/theme";
 import { adminApi, errorText } from "./api";
 import { AdminIcon, type AdminIconName } from "./icons";
@@ -311,7 +311,7 @@ function Banner({ tone, title, detail, action, icon }: { tone: "orange" | "accen
   const spin = !icon && tone === "accent"; // the restart in progress
   return (
     <div role="status" className={cx("mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card px-3.5 py-3", bg)} style={{ animation: `fade-up 300ms ${EASE} both` }}>
-      <AdminIcon name={icon ?? (spin ? "retry" : "alert")} size={16} className={cx("shrink-0 self-start", ink, spin && BUSY_MOTION)} style={spin ? { animation: "spin 1.2s linear infinite" } : undefined} />
+      <AdminIcon name={icon ?? (spin ? "retry" : "alert")} size={16} className={cx("shrink-0 self-start", ink, spin && BUSY_MOTION)} style={spin ? spinStyle(1200) : undefined} />
       <div className="min-w-[200px] flex-1">
         <div className={cx("text-[13px] font-medium", ink)}>{title}</div>
         {detail && <div className="mt-0.5 text-[12px] leading-relaxed text-ink-2">{detail}</div>}

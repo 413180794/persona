@@ -41,6 +41,8 @@ final class AssistantViewModel: ExtensionViewControlling {
     private(set) var version: Int64
     private(set) var path: [String] = []
     private(set) var pending: Confirmation?
+    /// The card changed under the last submit (409 view_changed): the next reply is confirmed natively at the new version.
+    private(set) var changed = false
     private(set) var complete: Bool
     var registered: Bool
     @ObservationIgnored private let store: AssistantViewsStore
@@ -73,9 +75,9 @@ final class AssistantViewModel: ExtensionViewControlling {
     func selected(_ action: String) -> Bool { record?.kind != "html" && record?.action == action }
     func isEnabled(_ action: ExtensionAction) -> Bool {
         let methods = [action.reply != nil, action.open != nil, action.push?.page != nil, action.pop == true].filter { $0 }.count
-        guard complete, !action.id.isEmpty, methods == 1, action.submit != true || action.reply != nil,
-              pending == nil, running == nil else { return false }
-        if action.reply != nil { return registered && record == nil && attempt == nil }
+        guard complete, !action.id.isEmpty, methods == 1, action.submit != true || action.reply != nil else { return false }
+        // Open, push and pop lock nothing: they stay available while a reply is waiting for confirmation or in flight.
+        if action.reply != nil { return registered && record == nil && attempt == nil && pending == nil && running == nil }
         return true
     }
 
@@ -94,7 +96,7 @@ final class AssistantViewModel: ExtensionViewControlling {
         var sent = action.submit == true ? submitted : [:]
         sent.merge(chosen) { _, choice in choice }
         let selection = Confirmation(action: action, page: page, values: sent, version: version)
-        if action.confirm?.isEmpty == false { pending = selection; return .init() }
+        if action.confirm?.isEmpty == false || (changed && action.reply != nil) { pending = selection; return .init() }
         return await execute(selection, confirmed: false)
     }
     func decline() { pending = nil }
@@ -195,6 +197,7 @@ final class AssistantViewModel: ExtensionViewControlling {
         do {
             let result = try await deps.send(submission)
             guard store.epoch == epoch else { return .init() }
+            changed = false
             guard result.key == key, !result.clientMsgId.isEmpty,
                   store.receive(result, conversation: scope.conversation, group: scope.group) || record != nil else {
                 store.finish(submission, scope: scope, error: "提交结果不完整，请同步状态后重试", uncertain: true)
@@ -206,12 +209,17 @@ final class AssistantViewModel: ExtensionViewControlling {
             if let api = error as? APIError, api.status == 409, api.code == "view_changed" {
                 store.finish(submission, scope: scope, error: nil, uncertain: false)
                 pending = nil
+                changed = true
                 await deps.recover()
                 guard store.epoch == epoch else { return .init() }
                 return .init(error: "卡片已更新，已保留编辑，请查看后重新确认")
             }
             if let api = error as? APIError, api.status == 409, api.code == "already_answered" {
-                await deps.recover()
+                // The 409 carries the record another device made; the feed is only needed when it does not read.
+                if let winner = Self.answered(in: api), winner.key == key {
+                    store.receive(winner, conversation: scope.conversation, group: scope.group)
+                }
+                if record == nil { await deps.recover() }
                 guard store.epoch == epoch else { return .init() }
                 store.finish(submission, scope: scope, error: record == nil ? "另一台设备已选择，正在同步结果" : nil, uncertain: record == nil)
                 return .init()
@@ -221,6 +229,12 @@ final class AssistantViewModel: ExtensionViewControlling {
             store.finish(submission, scope: scope, error: error.localizedDescription, uncertain: uncertain)
             return .init(error: uncertain ? "提交结果尚未确认。同步状态或重试原选择，不会重复发送。" : error.localizedDescription)
         }
+    }
+    /// The `action` of an already_answered body (`{"code":"already_answered","action":{…}}`), if it reads.
+    nonisolated static func answered(in error: APIError) -> ExtensionViewAction? {
+        guard case .object(let body)? = error.details, let action = body["action"],
+              let data = try? JSON.encoder.encode(action) else { return nil }
+        return try? JSON.decoder.decode(ExtensionViewAction.self, from: data)
     }
     private var submitted: [String: String] {
         var result: [String: String] = [:]

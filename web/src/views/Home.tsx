@@ -6,11 +6,14 @@ import { plainMarkdown } from "../lib/plain-markdown";
 import { homeOverview, paneRoute, type TabGroup } from "../lib/herdr-tree";
 import { agentLabel } from "../lib/mentions";
 import { hubLabel, machineWithHub } from "../lib/mesh";
+import { isPending, machineErrorText } from "../lib/add-computer";
+import { machineDeployment } from "../lib/machine-deploy";
+import { classifyConnection } from "../lib/node-health";
 import { href, onLinkClick, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { useStore } from "../lib/store";
-import { BUSY_MOTION } from "../lib/busy-motion";
-import type { AgentState, Interaction, Session } from "../lib/types";
+import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
+import type { AgentState, Interaction, Machine, Session } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, useNow } from "../ui/atoms";
 import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
@@ -149,7 +152,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
                           <span className="truncate text-[13px] font-medium text-ink">{m.name}</span>
                           {hub && <span className="shrink-0 truncate text-[11.5px] text-ink-3">{hub}</span>}
                         </span>
-                        <span className="block truncate text-[11.5px] text-ink-3">{m.online ? t("home.machine_agents", { count: mine.length }) + (m.system?.name ? ` · ${m.system.name}` : "") : m.error || t("home.offline")}</span>
+                        <span className="block truncate text-[11.5px] text-ink-3" title={!m.online && m.error && offlineLine(m) !== m.error ? m.error : undefined} data-machine-line>{m.online ? t("home.machine_agents", { count: mine.length }) + (m.system?.name ? ` · ${m.system.name}` : "") : offlineLine(m)}</span>
                       </span>
                       <span className={cx("size-2 shrink-0 rounded-full", m.online ? "bg-green" : "bg-line-strong")} title={m.online ? t("home.online") : t("home.offline")} />
                     </a>
@@ -260,7 +263,7 @@ function Badge({ state }: { state: AgentState }) {
       c = 2 * Math.PI * r;
     return (
       <span className="relative inline-flex size-6 shrink-0 items-center justify-center" aria-label={STATE_LABEL[state]}>
-        <svg width={size} height={size} className={`absolute inset-0 ${BUSY_MOTION}`} style={{ animation: "spin 1.1s linear infinite" }}>
+        <svg width={size} height={size} className={`absolute inset-0 ${BUSY_MOTION}`} style={spinStyle(1100)}>
           <circle cx={12} cy={12} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
           <circle cx={12} cy={12} r={r} fill="none" stroke="var(--orange)" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c * 0.28} ${c * 0.72}`} />
         </svg>
@@ -284,4 +287,15 @@ function Badge({ state }: { state: AgentState }) {
       <StatusMark state={state} />
     </span>
   );
+}
+
+/** An offline computer's line on the overview, read in the machines page's order (#4038): waiting to be confirmed, the
+ * hub's error_code in our words, a planned restart, then the plain reason from the error text (#3633); else the raw
+ * error or 离线. */
+export function offlineLine(m: Machine): string {
+  if (isPending(m)) return t("machines.never_connected");
+  const coded = machineErrorText(m.error_code);
+  if (coded) return coded;
+  if (machineDeployment(m).expectedDisconnect) return t("machines.waiting_node");
+  return classifyConnection(m)?.title ?? (m.error || t("home.offline"));
 }

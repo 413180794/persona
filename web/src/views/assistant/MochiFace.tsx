@@ -1,11 +1,12 @@
 // 团子, the default persona (docs/persona.md「内置形象」): the app icon's white blob waving on its paper disc (a dark
 // disc in the dark), outlined in ink, with its orange cheek. The same drawing as the app's PersonaFace (Mochi), in the
 // icon's 1024 px coordinates moved into the disc, so the two stay one picture. It keeps the icon's colors (the
-// --mochi-* tokens in styles.css), not the page's accent. Each state reads from its first frame alone; the motion is
-// CSS and stops with reduced motion.
+// --mochi-* tokens in styles.css), not the page's accent. Each state reads from its first frame alone; the motion runs
+// in face-motion.ts (Web Animations) and stops with reduced motion.
 import { useId } from "react";
 import type { PersonaState } from "../../lib/persona";
 import { cx } from "../../ui/atoms";
+import { useFaceMotion } from "./face-motion";
 
 /** Icon pixels into the disc: a little larger than the icon's square, so the body fills the circle. */
 const SCALE = 1.16;
@@ -36,8 +37,9 @@ export function MochiFace({ size, state = "idle", className }: { size: number; s
   const ring = Math.max(0.07 * 1024, (1.5 * 1024) / size);
   const look = state === "thinking" ? [22, -30] : state === "working" ? [-24, 12] : [0, 0];
   const lines = state === "idle" || state === "needs_you" ? [1, 1, 1] : state === "working" ? [1, 0.35, 0.35] : [];
+  const motion = useFaceMotion<SVGSVGElement>(`${state} ${compact}`);
   return (
-    <svg viewBox="0 0 1024 1024" width={size} height={size} aria-hidden className={cx("shrink-0 rounded-full", className)} style={{ width: size, height: size }}>
+    <svg ref={motion} viewBox="0 0 1024 1024" width={size} height={size} aria-hidden className={cx("shrink-0 rounded-full", className)} style={{ width: size, height: size }}>
       <defs>
         <linearGradient id={`${id}d`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" style={{ stopColor: "var(--mochi-disc-top)" }} />
@@ -73,7 +75,7 @@ export function MochiFace({ size, state = "idle", className }: { size: number; s
             {!compact &&
               lines.map((o, i) => (
                 <path key={i} d={LINES[i]} stroke="var(--mochi-motion)" strokeOpacity={o} strokeWidth={stroke * 0.85} strokeLinecap="round"
-                  className={state === "working" ? "mochi-pulse" : undefined} style={state === "working" ? { animationDelay: `${i * 0.25}s` } : undefined} />
+                  className={state === "working" ? "mochi-pulse" : undefined} data-loop-delay={state === "working" ? i * 250 : undefined} />
               ))}
             {offline ? (
               EYES.map(([x, y], i) => (
@@ -94,7 +96,7 @@ export function MochiFace({ size, state = "idle", className }: { size: number; s
           <g>
             <rect x={768 - 143} y={215 - 66} width="287" height="133" rx="66" fill="#fff" />
             {[691, 768, 845].map((x, i) => (
-              <circle key={x} cx={x} cy="215" r="25.6" fill="var(--mochi-cheek)" className="mochi-pulse" style={{ animationDelay: `${i * 0.4}s` }} />
+              <circle key={x} cx={x} cy="215" r="25.6" fill="var(--mochi-cheek)" className="mochi-pulse" data-loop-delay={i * 400} />
             ))}
           </g>
         )}

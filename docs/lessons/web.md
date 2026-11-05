@@ -278,6 +278,13 @@
 
 - 拼 `<jarvis-context>` / `<persona-context>` 块时，正文里的结束标签只 `replace` 一遍挡不住嵌套写法：`</jarvis-</jarvis-context>context>` 删完正好剩一个结束标签，块提前闭合，后面的外部内容（收件箱交给助手的邮件、消息）变成用户自己打的字，模型也当成用户的指示。「删到不变」能挡住，但轮数等于嵌套深度，恶意正文几百 KB 就让主线程卡几秒。网页拼块一律经 `lib/context-body.ts` 的 `contextBody`：先删一遍，删出来的再把 `<` 写成 `&lt;`（不删字符就拼不出新标签），两遍、线性；匹配口径对齐 hub 的 `closingTag`（大小写、斜杠两边和 `>` 前的空白）。回归要用 `parseUserText` 解析生成的整条消息，看块外只剩用户写的话。
 
+## 无限循环的 CSS 动画在空闲时也贵（2026-11-06，#4065）
+
+- **React 在根节点监听 `animationiteration` 等动画事件**，所以页面上每个 `infinite` 的 CSS 动画每转一圈都派发一次事件，跟着一次整页样式重算（SVG 里的还多一次布局），哪怕没人在看、元素在视口外。实测（生产构建，Chrome，空闲 30 秒）：`/` 上 6 个转圈的工作中标记 TaskDuration 0.64 s、重算 668 次；`/settings` 形象选择器的五个团子 1.68 s、重算和布局各 646 次。
+- **转圈**：关键帧 `spin-long` 一个周期转 100 圈、时长乘 100（`lib/busy-motion.ts` 的 `SPIN_TURNS` / `spinStyle(ms)`，状态标记在 `styles.css` 里同样写），看起来一样快，事件少 100 倍；减弱动态下用 `--busy-cycles`（`@property`，不继承）把 2.4 秒乘回去，仍是每圈 2.4 秒。别再写 `spin 700ms linear infinite`，`busy-motion.test.ts` 会拦。
+- **非线性的循环**（团子的眨眼、摇摆、脉冲）没法这样拉长：改用 Web Animations（`el.animate(…, { iterations: Infinity })`，`views/assistant/face-motion.ts`），它不派发 CSS 动画事件，重算和布局降到 0。关键帧的缓动要写在每个关键帧上（CSS 的 `animation-timing-function` 是逐段的，WAAPI 的整体 `easing` 不是），在 `useLayoutEffect` 里启动，首帧才和 CSS 一致。
+- 验证「看起来没变」：两边都把 `document.getAnimations()` 暂停到同一个 `currentTime` 再截图，逐字节比较；量开销用 CDP `Performance.getMetrics` 的 TaskDuration / RecalcStyleCount / LayoutCount 差值。
+
 ## 横排的一行放不下时折行，不靠横向滚动（#3594）
 
 滚动条全局隐藏，鼠标滚轮只能竖着滚：横向滚动的一行（设置的分类条）放不下时，后面的项鼠标用户既看不到也滚不到。放不下就折行（按钮文字仍单行）或收进菜单。

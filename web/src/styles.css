@@ -157,7 +157,11 @@ body {
 @keyframes eq-bounce{0%,to{transform:scaleY(.35)}50%{transform:scaleY(1)}}
 @keyframes stream-in{0%{opacity:0;filter:blur(4px)}to{opacity:1;filter:blur()}}
 @keyframes pop-in{0%{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-@keyframes spin{to{transform:rotate(1turn)}}
+/* Spinners turn 100 times per cycle (lib/busy-motion.ts SPIN_TURNS): a looping CSS animation sends React's root listener an
+   animationiteration event, and the page a style recalc, every cycle; at 100 turns that is once a minute or so, not every
+   turn. --busy-cycles tells the reduced-motion rule below how many turns one cycle is. */
+@keyframes spin-long{to{transform:rotate(100turn)}}
+@property --busy-cycles { syntax: "<number>"; inherits: false; initial-value: 1; }
 @keyframes indeterminate{0%{transform:translateX(-100%)}to{transform:translateX(300%)}}
 @keyframes pixel-on{0%,to{opacity:.15}18%,42%{opacity:1}62%{opacity:.15}}
 
@@ -210,8 +214,9 @@ button:disabled { cursor: default; }
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
   /* Busy indicators (lib/busy-motion.ts: spinners, the working dot, the loader) are the exception: frozen, "busy" would
      not show at all. They keep going at a slow 2.4s, as Moshi's loader does; the strip above still takes the movement,
-     scale and slide animations. A class beats the universal selector above, both being !important. */
-  .busy-motion, .busy-motion::before, .busy-motion::after { animation-duration: 2.4s !important; animation-iteration-count: infinite !important; }
+     scale and slide animations. A class beats the universal selector above, both being !important. A spinner's cycle
+     is --busy-cycles turns, so 2.4s each. */
+  .busy-motion, .busy-motion::before, .busy-motion::after { animation-duration: calc(2.4s * var(--busy-cycles, 1)) !important; animation-iteration-count: infinite !important; }
   /* the breathing dot pulses without shrinking */
   @keyframes breathe { 0%, to { opacity: 1; } 50% { opacity: .45; } }
 }
@@ -263,14 +268,11 @@ button:disabled { cursor: default; }
   --mochi-sleep-top: #d9d4d0; --mochi-sleep-bottom: #bdb6b1; --mochi-sleep-ink: #6e6763; --mochi-sleep-cheek: #a59d98; --mochi-needs-you: #e5484d;
 }
 .dark { --mochi-disc-top: #332a26; --mochi-disc-bottom: #1d1816; --mochi-outline: #0e0b0a; --mochi-motion: #d6d1cd; --mochi-shadow: rgb(0 0 0 / .45); --mochi-needs-you: #ff6369; }
-@keyframes mochi-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.12); } }
-@keyframes mochi-rock { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
-@keyframes mochi-pulse { 50% { opacity: .35; } }
-.mochi-blink { transform-box: fill-box; transform-origin: center; animation: mochi-blink 3.6s infinite; }
-.mochi-spin { transform-origin: 512px 512px; animation: spin 1.6s linear infinite; }
-.mochi-rock { animation: mochi-rock .9s ease-in-out infinite; }
-.mochi-pulse { animation: mochi-pulse 1.2s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .mochi-blink, .mochi-spin, .mochi-rock, .mochi-pulse { animation: none; } }
+/* The faces' loops (.mochi-blink / -spin / -rock / -pulse) run as Web Animations (views/assistant/face-motion.ts): as CSS
+   animations every cycle sent an animationiteration event to React's root listener and cost the page a style recalc and
+   a layout, five faces in the persona picker kept /settings busy while idle. Here only where they turn from. */
+.mochi-blink { transform-box: fill-box; transform-origin: center; }
+.mochi-spin { transform-origin: 512px 512px; }
 /* Extensions' charts (docs/extensions.md「UI 插槽」 chart): the series colors, in order, for series without a tone. The first
  * is the accent; the others keep clear of the role colors (green / orange / red say positive / caution / danger).
  * Checked as a set (adjacent pairs, light and dark) with the dataviz palette validator. */
@@ -317,7 +319,7 @@ button:disabled { cursor: default; }
 .status-mark[data-shape="glow"], .status-mark[data-shape="alert"] { background: var(--mark-color); box-shadow: 0 0 var(--mark-glow) color-mix(in srgb, var(--mark-color) var(--mark-glow-mix), transparent); }
 .status-mark[data-shape="alert"] { outline: 1px solid color-mix(in srgb, var(--mark-color) var(--mark-ring-mix), transparent); outline-offset: var(--mark-ring-gap); }
 .status-mark[data-shape="ring"] { box-shadow: inset 0 0 0 var(--mark-hollow) var(--mark-color); }
-.status-mark[data-shape="arc"] { width: var(--mark-spin-size); height: var(--mark-spin-size); margin: calc((var(--mark-size) - var(--mark-spin-size)) / 2); color: var(--mark-color); border-radius: 0; will-change: transform; animation: spin var(--mark-spin-dur) linear infinite; }
+.status-mark[data-shape="arc"] { width: var(--mark-spin-size); height: var(--mark-spin-size); margin: calc((var(--mark-size) - var(--mark-spin-size)) / 2); color: var(--mark-color); border-radius: 0; will-change: transform; --busy-cycles: 100; animation: spin-long calc(var(--mark-spin-dur) * 100) linear infinite; }
 /* Under reduced motion the arc carries .busy-motion (lib/busy-motion.ts): it turns at 2.4s instead of freezing. */
 /* A folded group's tally: the mark, then a monospace count (ui/StatusMark.tsx StateTally). */
 .state-tally { display: inline-flex; align-items: center; gap: 6px; }

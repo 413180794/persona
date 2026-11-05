@@ -573,13 +573,23 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		return
 	}
 	nodes := filepath.Join(staged, "nodes")
-	for _, plat := range u.nodePlatforms() {
-		f, ok := m.Files[plat]
-		if !ok {
+	own := runtime.GOOS + "-" + runtime.GOARCH
+	for _, plat := range nodePlatforms(m) {
+		u.set("downloading", plat, "")
+		if plat == own {
+			// This platform's node binary is the hub's own binary: the same file, so copy the one already here
+			// rather than fetching it twice (a machine on the hub's platform added later needs it too).
+			err := os.MkdirAll(nodes, 0o755)
+			if err == nil {
+				err = copyInto(bin, filepath.Join(nodes, "jarvisd-"+plat))
+			}
+			if err != nil {
+				fail(fmt.Errorf("the node binary for the hub's own platform: %w", err))
+				return
+			}
 			continue
 		}
-		u.set("downloading", plat, "")
-		if _, err := update.Download(ctx, u.client, u.h.build.UpdateURL, f, nodes); err != nil {
+		if _, err := update.Download(ctx, u.client, u.h.build.UpdateURL, m.Files[plat], nodes); err != nil {
 			fail(err)
 			return
 		}
@@ -689,19 +699,16 @@ func (u *updater) install(ctx context.Context, auto bool) {
 	}
 }
 
-// nodePlatforms are the os-arch of the machines the hub reaches (not its own: that one runs the hub's binary).
-func (u *updater) nodePlatforms() []string {
-	var out []string
-	for _, m := range u.h.machinesNow() {
-		m.mu.Lock()
-		plat := m.info.OS + "-" + m.info.Arch
-		local := m.cfg.Kind == "local"
-		known := m.info.OS != "" && m.info.Arch != ""
-		m.mu.Unlock()
-		if !local && known && !slices.Contains(out, plat) {
-			out = append(out, plat)
-		}
+// nodePlatforms are the platforms the release publishes a node binary for, sorted. That is every platform in the
+// manifest, not only the ones the machines the hub knows now run: a machine added later, or one that had not connected
+// when the hub updated, is deployed to from these files (internal/devices nodeBinary), and nothing else fetches its
+// platform until the next update.
+func nodePlatforms(m *update.Manifest) []string {
+	out := make([]string, 0, len(m.Files))
+	for plat := range m.Files {
+		out = append(out, plat)
 	}
+	slices.Sort(out)
 	return out
 }
 

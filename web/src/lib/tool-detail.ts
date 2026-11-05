@@ -160,3 +160,9 @@ export function summaryExtra(summary: string | undefined, fields: PermissionFiel
   // only a whole first line (or more) counts as repeating it: "curl x" does not repeat inside "curl xyz"
   return first && sum.startsWith(first) && /^\s*(\n|$)/.test(sum.slice(first.length)) ? sum.slice(first.length).trim() : sum;
 }
+
+/** Why another agent asks, shown above what it will do (iOS AgentPermissionForm, Android InteractionPanel): only a
+ *  card with another agent shows it, as on iOS and Android (a Claude Code card's hook reason stays hidden). "" when there is none. */
+export function permissionReason(agent: string | undefined, reason: string | undefined): string {
+  return agent && agent !== "claude" ? s(reason) : "";
+}

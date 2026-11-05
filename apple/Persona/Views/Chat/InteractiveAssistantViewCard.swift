@@ -88,7 +88,7 @@ struct InteractiveAssistantViewCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("assistant-view-card")
         .accessibilityValue(model.pending != nil ? "等待确认" : model.record != nil ? "已选择" : "可以操作")
-        .alert(model.pending?.action.confirm ?? "确认卡片操作", isPresented: Binding(
+        .alert(model.pending?.action.confirm ?? (model.changed ? "卡片已更新，按新内容提交？" : "确认卡片操作"), isPresented: Binding(
             get: { model.pending != nil }, set: { if !$0 { model.decline() } }), presenting: model.pending) { _ in
                 Button {
                     guard let selection = model.claimConfirmation() else { return }

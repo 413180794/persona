@@ -27,6 +27,16 @@ import urllib.request
 from playwright.sync_api import expect, sync_playwright
 
 
+# Spinners turn this many times per cycle of their keyframes (web/src/lib/busy-motion.ts SPIN_TURNS): the cycle is this
+# many times the time one turn takes.
+SPIN_TURNS = 100
+
+
+def per_turn(duration):
+    """Seconds per turn of a spinner whose cycle is `duration` ("90s")."""
+    return float(duration.rstrip("s")) / SPIN_TURNS
+
+
 def ok(msg):
     print("ok  " + msg, flush=True)
 
@@ -83,7 +93,7 @@ def check_marks(page, where, theme):
     arc = side.locator('svg.status-mark[data-state="working"]')
     assert arc.count() >= 1, "a working mark"
     s = style(arc, ["animation-name", "animation-duration", "animation-iteration-count", "animation-timing-function"])
-    assert s["animation-name"] == "spin" and s["animation-duration"] == "0.9s" and s["animation-iteration-count"] == "infinite" and s["animation-timing-function"] == "linear", s
+    assert s["animation-name"] == "spin-long" and abs(per_turn(s["animation-duration"]) - 0.9) < 1e-6 and s["animation-iteration-count"] == "infinite" and s["animation-timing-function"] == "linear", s
     a1 = angle(arc)
     page.wait_for_timeout(200)
     a2 = angle(arc)
@@ -165,7 +175,7 @@ def check_header(page, base, where, theme, shots, sess):
     expect(mark.first).to_be_visible()
     if state == "working":
         assert mark.first.evaluate("e => e.tagName.toLowerCase()") == "svg"
-        assert style(mark, ["animation-name"])["animation-name"] == "spin"
+        assert style(mark, ["animation-name"])["animation-name"] == "spin-long"
     page.wait_for_timeout(600)
     ok(f"{where} {theme}: the session header shows the {state} mark")
     if shots:
@@ -253,7 +263,7 @@ def check_reduced(browser, base, token, width, height, theme, shots):
     open_sidebar(page, width)
     arc = page.locator('aside svg.status-mark[data-state="working"]')
     s = style(arc, ["animation-duration", "animation-iteration-count"])
-    assert s["animation-duration"] == "2.4s" and s["animation-iteration-count"] == "infinite", s
+    assert abs(per_turn(s["animation-duration"]) - 2.4) < 1e-6 and s["animation-iteration-count"] == "infinite", s
     a1 = angle(arc)
     page.wait_for_timeout(400)
     assert abs(angle(arc) - a1) > 5, "the arc still turns under reduced motion"

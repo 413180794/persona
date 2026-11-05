@@ -8,7 +8,7 @@ import { StatusMark } from "./StatusMark";
 import { collapseMounted } from "../lib/disclosure";
 import { FeedbackGate, offlineNow } from "../lib/feedback";
 import { useCloseOnBack } from "../lib/back-close";
-import { BUSY_MOTION } from "../lib/busy-motion";
+import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
 import { keyboardFrame } from "../lib/viewport";
 import { prefersReducedMotion } from "./stream/motion";
 import { accelLabel, activation, edge, enabled, keyIntent, renameCommit, rowLabel, type MenuItem } from "./menu-model";
@@ -201,7 +201,7 @@ export function Spinner({ size = 12 }: { size?: number }) {
     <span
       aria-hidden
       className={`inline-block shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2 ${BUSY_MOTION}`}
-      style={{ width: size, height: size, animation: "spin 700ms linear infinite" }}
+      style={{ width: size, height: size, ...spinStyle(700) }}
     />
   );
 }

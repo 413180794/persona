@@ -21,7 +21,7 @@
 - **换默认时不动已经选过的人**：选择存在 UserDefaults `persona.id`，只有点了卡片才写。从没选过的手机没有这个键，`PersonaStore.chosenID` 落到新默认 `persona`；
   选过面罩的存的是 `jarvis`，照旧是面罩；选过汇流或形象包的同理。所以新默认换了 id，而不是把 `jarvis` 改画成团子（`PersonaTests.mochiIsTheDefaultAndAnEarlierChoiceStays`）。
 - **Android**（`core/designsystem` 的 `PersonaFace.kt`，`PersonaDesign.Mochi`）：同一份图标坐标的 Canvas 画法和五个状态，2026-11-04 起也是默认，迁移规则同上（`AppStyleStore.personaId`）。
-- **网页**（`web/src/views/assistant/MochiFace.tsx`）：同一份图标坐标画的 SVG，颜色是 `styles.css` 的 `--mochi-*`（浅色 / 深色两套），动画是 CSS、减弱动态效果时停。
+- **网页**（`web/src/views/assistant/MochiFace.tsx`）：同一份图标坐标画的 SVG，颜色是 `styles.css` 的 `--mochi-*`（浅色 / 深色两套），动画是 Web Animations（`face-motion.ts`，CSS 动画每个循环都让整页重算一次样式）、减弱动态效果时停。
   网页以前的内置形象是页面自己的标志（id `jarvis`，选它时 `localStorage` 不存值），现在默认是团子；
   因为以前选内置的人什么都没存，分不出「没选过」和「选过标志」，网页上他们都换成团子，选过形象包的不变。
   2026-11-06 起（#3200）网页的 `jarvis` 和各端一样是面罩，也能选汇流（`web/src/views/assistant/BuiltinFaces.tsx`，照安卓 `PersonaFace.kt` 的坐标画，颜色是强调色）；

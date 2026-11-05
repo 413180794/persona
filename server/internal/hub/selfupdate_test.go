@@ -31,6 +31,7 @@ type fakePublisher struct {
 	corrupt bool // serve another file than the one in the manifest
 	script  []byte
 	extra   map[string][]byte // more downloads by path (a program's)
+	asked   func(path string) // every request's path, if set (tests that count downloads)
 }
 
 func newPublisher(t *testing.T, version string, build int64) *fakePublisher {
@@ -50,6 +51,9 @@ func newPublisherWith(t *testing.T, version string, build int64, edit func(*upda
 	edit(&m)
 	data, _ := json.Marshal(m)
 	p.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p.asked != nil {
+			p.asked(r.URL.Path)
+		}
 		switch r.URL.Path {
 		case "/dl/latest.json":
 			w.Write(data)
@@ -505,6 +509,84 @@ func TestUpdateNodesBinariesInPlace(t *testing.T) {
 		t.Fatal("the download itself went in with the binaries")
 	}
 	_ = local // the manager decides what to redeploy (internal/devices TestUpdateNodesSkipsTheHubsOwn)
+}
+
+// The release publishes a node binary for every platform it has. The hub downloads all of them, not only those of the
+// machines it happens to know: a machine added later, or one that had not connected in this hub's life when it
+// updated, is deployed to from these files (internal/devices nodeBinary), and nothing else fetches its platform.
+func TestUpdateDownloadsEveryNodePlatformInTheRelease(t *testing.T) {
+	nodes := t.TempDir()
+	t.Setenv("JARVIS_NODE_BINARIES", nodes)
+	script := []byte("#!/bin/sh\necho v2\n")
+	known, unknown := "plan9-386", "plan9-arm"
+	served := map[string][]byte{} // path -> the .gz
+	p := newPublisherWith(t, "v2-202611021700", 202611021700, func(m *update.Manifest) {
+		for _, plat := range []string{known, unknown} {
+			body := gz(script)
+			sum, binSum := sha256.Sum256(body), sha256.Sum256(script)
+			name := "jarvisd-" + plat + ".gz"
+			m.Files[plat] = update.File{Name: name, Size: int64(len(body)),
+				SHA256: hex.EncodeToString(sum[:]), BinarySHA256: hex.EncodeToString(binSum[:])}
+			served["/dl/"+name] = body
+		}
+	})
+	p.extra = served
+	var mu sync.Mutex
+	asked := map[string]int{} // path -> how many times it was fetched
+	p.asked = func(path string) { mu.Lock(); asked[path]++; mu.Unlock() }
+	h, m, _, execs := updatingHub(t, p, "release")
+	m.mu.Lock()
+	m.info.OS, m.info.Arch = "plan9", "386" // a machine that has connected: the hub knows its platform
+	m.mu.Unlock()
+	// One added since, never connected: it has not reported its os and arch yet.
+	fresh := newMachine(h, MachineConfig{ID: "fresh", Name: "Fresh", Kind: "ssh"})
+	h.machines, h.byID["fresh"] = append(h.machines, fresh), fresh
+
+	if _, err := h.upd.check(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.upd.begin(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the restart", func() bool { return len(execs()) == 1 })
+
+	// The hub's own platform is here too: its binary is that platform's node binary, and a machine on the hub's
+	// platform added later is deployed to from this file.
+	own := runtime.GOOS + "-" + runtime.GOARCH
+	want := []string{known, unknown, own}
+	staged := filepath.Join(h.upd.dir, fmt.Sprint(int64(202611021700)), "nodes")
+	for _, plat := range want {
+		if _, err := os.Stat(filepath.Join(staged, "jarvisd-"+plat)); err != nil {
+			t.Fatalf("the release's node binary for %s was not downloaded: %v", plat, err)
+		}
+	}
+	// Each one is fetched once and only once: the hub's own platform comes from the binary the update already
+	// downloaded (its .gz is asked for once, for the hub itself), not from a second download of the same file.
+	mu.Lock()
+	counts := map[string]int{}
+	for path, n := range asked {
+		counts[path] = n
+	}
+	mu.Unlock()
+	for _, plat := range want {
+		if path := "/dl/jarvisd-" + plat + ".gz"; counts[path] != 1 {
+			t.Fatalf("%s was fetched %d times, want 1 (all fetches: %v)", path, counts[path], counts)
+		}
+	}
+	// And what is in nodes/ is the binary, not the .gz it was downloaded as: a machine is sent the file as it is
+	// (internal/devices), so a copy of the .gz would be a broken node binary for the hub's own platform.
+	if b, err := os.ReadFile(filepath.Join(staged, "jarvisd-"+own)); err != nil {
+		t.Fatal(err)
+	} else if !bytes.Equal(b, p.script) {
+		t.Fatalf("the node binary for %s is not the hub's binary: %d bytes, gzip %v", own, len(b), len(b) > 1 && b[0] == 0x1f && b[1] == 0x8b)
+	}
+	// What the new hub does with them: 重新部署 takes them from NodeBinaryDir (internal/devices nodeBinary).
+	h.upd.updateNodes(context.Background(), staged)
+	for _, plat := range want {
+		if _, err := os.Stat(filepath.Join(nodes, "jarvisd-"+plat)); err != nil {
+			t.Fatalf("no node binary for %s in NodeBinaryDir: %v", plat, err)
+		}
+	}
 }
 
 // A Docker hub never replaces itself, but it looks up its image's tags and says when a newer release is out, and how
