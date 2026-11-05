@@ -100,6 +100,11 @@ func TestStripInjected(t *testing.T) {
 		{`<jarvis-context kind="context" title="快照">` + "\n很长的快照被截断", ""}, // clipped inside the block
 		{`<jarvis-context kind="context">只有块</jarvis-context>`, ""},
 		{"a < b", "a < b"},
+		// The new name (#3182): with attributes, bare, clipped, and mixed with the old one.
+		{`<persona-context kind="context" title="快照">` + "\n机器：a\n</persona-context>\n现在把 hub 部署到最新 master", "现在把 hub 部署到最新 master"},
+		{"<persona-context>\n快照\n</persona-context>\n" + `<jarvis-context kind="doc" title="文档">正文</jarvis-context>` + "\n看看这个", "看看这个"},
+		{`<persona-context kind="context" title="快照">` + "\n很长的快照被截断", ""},
+		{"问题\n<persona-context>\n被截断", "问题"},
 	} {
 		if got := StripInjected(c.in); got != c.want {
 			t.Errorf("StripInjected(%q) = %q, want %q", c.in, got, c.want)

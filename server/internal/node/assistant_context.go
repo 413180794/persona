@@ -11,7 +11,7 @@ import (
 )
 
 // The assistant's live snapshot (the time, agents waiting, unread chats, today's meetings…) goes at the start of each
-// message, in a <jarvis-context> block, not into the system prompt (docs/assistant.md「实时快照」). The prompt cache
+// message, in a <persona-context> block, not into the system prompt (docs/assistant.md「实时快照」). The prompt cache
 // is a prefix: the system prompt comes before the whole conversation, so a system prompt that differs from one start
 // to the next would make every request after a restart write the entire history again. Claude Code (2.1.314) keeps a
 // resumed conversation on the system prompt it was first started with instead, so the snapshot there was the one
@@ -72,7 +72,7 @@ func contextDelta(seen map[string]string, snapshot string) (string, map[string]s
 }
 
 // turnContext is the context for conversation id's next message from the hub's answer (assistantContext): the
-// <jarvis-context> block, then the <persona-view-errors> one when its last replies drew rich views that failed their
+// <persona-context> block, then the <persona-view-errors> one when its last replies drew rich views that failed their
 // check. commit, called once the message is on its way, records the snapshot as seen and acks the view errors (the
 // hub keeps them until then: a message that fails to go out leaves them for the next one).
 func (n *Node) turnContext(id string, c contextAnswer) (block string, commit func()) {

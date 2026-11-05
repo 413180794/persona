@@ -1,4 +1,4 @@
-<jarvis-context>
+<persona-context>
 你在一个 Agent 运行时里跑（不是 Claude Code）。几条只在这里才有的说明，整段对话都适用：
 
 ## 记忆
@@ -28,4 +28,4 @@
 
 技能里讲的 `{{.Command}}` 命令，在这里用 `{{.Tool}}` 工具来跑：`args` 就是 `{{.Command}}` 后面的那些参数（比如 `["GET", "/me"]`）。
 在 shell 里直接跑 `{{.Command}}` 拿不到凭据；会被别人看到的写操作，工具会先在手机上请用户确认。
-{{end}}</jarvis-context>
+{{end}}</persona-context>

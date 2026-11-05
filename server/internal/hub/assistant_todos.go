@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -164,13 +165,19 @@ func (h *Hub) renameTodoSpace(mid, old, name string) {
 	h.asst().TodoSpaceRenamed(context.Background(), assistantwire.TodoSpaceRenamed{MachineID: mid, Old: old, New: name})
 }
 
+var (
+	contextLeadRe  = regexp.MustCompile(`^<(?:jarvis|persona)-context\b`)
+	contextOpenRe  = regexp.MustCompile(`<(?:jarvis|persona)-context\b`)
+	contextCloseRe = regexp.MustCompile(`</(?:jarvis|persona)-context>`)
+)
+
 // cleanPromptTitle is a title for an agent from the prompt it was started with: its first line past a
-// <jarvis-context>.
+// context block (<persona-context>, or <jarvis-context> as older ones were, #3182).
 func cleanPromptTitle(prompt string) string {
 	s := strings.TrimSpace(prompt)
-	if strings.HasPrefix(s, "<jarvis-context") {
-		if endIdx := strings.Index(s, "</jarvis-context>"); endIdx != -1 {
-			s = s[endIdx+len("</jarvis-context>"):]
+	if contextLeadRe.MatchString(s) {
+		if loc := contextCloseRe.FindStringIndex(s); loc != nil {
+			s = s[loc[1]:]
 		} else if endTagIdx := strings.Index(s, ">"); endTagIdx != -1 {
 			s = s[endTagIdx+1:]
 		} else {
@@ -179,7 +186,7 @@ func cleanPromptTitle(prompt string) string {
 	}
 	for _, line := range strings.Split(s, "\n") {
 		trimmed := strings.TrimSpace(line)
-		if trimmed != "" && !strings.Contains(trimmed, "<jarvis-context") {
+		if trimmed != "" && !contextOpenRe.MatchString(trimmed) {
 			return trimmed
 		}
 	}

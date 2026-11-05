@@ -381,6 +381,9 @@ func (s *Service) startRoutes() {
 			Purpose   string `json:"purpose"`
 			MachineID string `json:"machine_id"`
 			Space     string `json:"space"` // "health": a conversation of the health space (docs/health.md)
+			// ReportTasks: the tasks it opens are told back to it, as the main conversation's quiet ones are (#3192,
+			// reporters.go); a plugin's /agent hands their results on.
+			ReportTasks bool `json:"report_tasks"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&in); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
@@ -414,6 +417,9 @@ func (s *Service) startRoutes() {
 		if err != nil {
 			apierr.Call(w, err)
 			return
+		}
+		if in.ReportTasks && !in.Main {
+			s.markReporter(ctx, sess.MachineID, sess.SessionID)
 		}
 		apierr.WriteJSON(w, map[string]any{"session": sess})
 	})

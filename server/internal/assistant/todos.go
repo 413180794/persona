@@ -274,10 +274,16 @@ func (s *Service) linksChanged(ctx context.Context) {
 }
 
 // quietTask: a task opened now from conversation origin is quiet (#1731): it comes from the main conversation while
-// the user wants those told only there (its own settings: the main conversation, main_tasks_quiet). The one place this
-// is decided.
+// the user wants those told only there (its own settings: the main conversation, main_tasks_quiet), or from a
+// reporting conversation (#3192, reporters.go). The one place this is decided.
 func (s *Service) quietTask(ctx context.Context, origin string) bool {
-	return origin != "" && s.settings(ctx).Main == origin && s.mainTasksQuiet(ctx)
+	if origin == "" {
+		return false
+	}
+	if _, ok := s.reporterOf(ctx, origin); ok {
+		return true
+	}
+	return s.settings(ctx).Main == origin && s.mainTasksQuiet(ctx)
 }
 
 // createTodo makes a todo (origin and planID set when a plan from an assistant conversation opens it as a task) and

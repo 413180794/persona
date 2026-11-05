@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Context is the <jarvis-context> block a message to conversation p.SessionID starts with (the node asks on every
+// Context is the <persona-context> block a message to conversation p.SessionID starts with (the node asks on every
 // message, node/assistant_context.go): who the user is, whether this is the main conversation, and the snapshot.
 // With p.Ack it only confirms the view errors a delivered message carried (context_view_errors.go).
 func (s *Service) Context(ctx context.Context, p ContextParams) ContextResult {

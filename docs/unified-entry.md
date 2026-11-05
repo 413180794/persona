@@ -136,6 +136,8 @@
   队列里已经有同一个任务的通知就原地换成新的，不再排第二条。实现在 `server/internal/assistant/quiet.go`。
 - **`agent_start`**：从主对话调用、设置开着时，hub 给它建一个安静的待办（`origin` = 主对话，没有计划）并挂上这个 Agent，对话里插任务卡，之后和 `task_plan` 的任务一样；
   设置关着或从别的对话调用，照旧是一个单独的 Agent。
+- **会回传的对话**（#3192）：用 `report_tasks: true` 开的对话（插件的飞书 /agent）派出的任务（`task_plan`、`agent_start`）不看这个设置，一律是安静的任务，
+  通知投进**派出它的那段对话**（`Reporting` 版的说法：照这段对话一开始的说明交代出去），不进主对话。登记在 `assistant/reporters.go`（`docs/lark-agent.md`）。
 
 ## 数据和接口（hub）
 

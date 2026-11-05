@@ -44,6 +44,23 @@ class MessageContextsTest {
         assertTrue(parseContexts("<jarvis-context kind=\"context\">没写完").first.isEmpty())
     }
 
+    /** <persona-context> (#3182) reads like <jarvis-context>, alone or mixed with it. */
+    @Test fun personaContextReadsLikeJarvisContext() {
+        val (contexts, rest) = parseContexts(
+            "<persona-context kind=\"edit\" title=\"页面\" url=\"https://example.com/a\">\n选中的字\n</persona-context>\n" +
+                "<jarvis-context kind=\"context\" title=\"旧的\">旧块</jarvis-context>\n\n改一下",
+        )
+        assertEquals(listOf(MessageContext("edit", "页面", "https://example.com/a", "选中的字"), MessageContext("context", "旧的", null, "旧块")), contexts)
+        assertEquals("改一下", (rest).zhAny())
+        val bare = parseContexts("<persona-context>快照</persona-context>看看")
+        assertEquals("context", (bare.first.single().kind).zhAny())
+        assertEquals("看看", (bare.second).zhAny())
+        assertTrue(parseContexts("<persona-context kind=\"context\">没写完").first.isEmpty())
+        assertTrue(hasContextTag("x <persona-context"))
+        assertTrue(hasContextTag("x <jarvis-context"))
+        assertEquals(false, hasContextTag("x <context"))
+    }
+
     @Test fun summaries() {
         val one = MessageContext("context", "文档 · 手册", null, "")
         assertEquals("", (contextSummary(emptyList())).zhAny())

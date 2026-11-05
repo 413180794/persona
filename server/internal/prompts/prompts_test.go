@@ -114,7 +114,7 @@ func TestUnknownToolPanics(t *testing.T) {
 
 func TestTurnContext(t *testing.T) {
 	got := RenderTurnContext(TurnContext{Sections: []string{"- 现在：x"}})
-	if want := "<jarvis-context>\n实时快照里和上一份比变了的（没列出的照旧）：\n- 现在：x\n</jarvis-context>"; got != want {
+	if want := "<persona-context>\n实时快照里和上一份比变了的（没列出的照旧）：\n- 现在：x\n</persona-context>"; got != want {
 		t.Fatalf("got %q", got)
 	}
 }

@@ -77,7 +77,7 @@ func TestViewErrorsGoWithAClaudeMessageAndAreAckedAfterIt(t *testing.T) {
 			_ = json.Unmarshal([]byte(line), &msg)
 		}
 	}
-	if c := msg.Message.Content; len(c) != 2 || !strings.HasPrefix(c[0].Text, "<jarvis-context>") ||
+	if c := msg.Message.Content; len(c) != 2 || !strings.HasPrefix(c[0].Text, "<persona-context>") ||
 		!strings.HasSuffix(c[0].Text, "</persona-view-errors>") || c[1].Text != "hello" {
 		t.Fatalf("message content %+v", msg.Message.Content)
 	}

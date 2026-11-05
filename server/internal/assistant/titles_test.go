@@ -65,6 +65,9 @@ func TestMakeTitle(t *testing.T) {
 	if got := s.makeTitle(ctx, started, "<jarvis-context>\n今天\n</jarvis-context>\n**帮我** 看看明天的会议安排和要准备的材料", ""); got != "1102 | 探索 | 帮我 看看明天的会议安排和要" {
 		t.Fatalf("the fallback: %q", got)
 	}
+	if got := s.makeTitle(ctx, started, "<persona-context>\n今天\n</persona-context>\n**帮我** 看看明天的会议安排和要准备的材料", ""); got != "1102 | 探索 | 帮我 看看明天的会议安排和要" {
+		t.Fatalf("the fallback past a <persona-context>: %q", got)
+	}
 	s, f = model()
 	f.noModel = true
 	if got := s.makeTitle(ctx, started, "", ""); got != "1102 | 探索 | 新对话" {

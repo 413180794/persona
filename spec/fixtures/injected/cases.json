@@ -46,6 +46,21 @@
       }
     },
     {
+      "name": "task_done_reporting",
+      "description": "从 /agent 这类对话派出的任务做完：说法不同，也只显示一句话。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "🔔 任务「提 MR 修掉它」做完了（公司电脑）\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从这段对话派出去的，它的结果只通知到这里：手机不会为它另外推送，要靠你按这段对话一开始的说明交代出去。）\n\nAgent 最后说的：\nMR 提好了。\n\n你来决定要不要交代、怎么说：照这段对话一开始说的方式交代（比如它要你用某个工具回复，就用那个工具）。做完了就说结果（改了什么、PR / MR 链接、结论）；只交代有意义的进展和结果，不要复述这条通知，没什么值得说的就不用交代。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "done",
+        "title": "提 MR 修掉它",
+        "machine": "公司电脑",
+        "line": "任务「提 MR 修掉它」做完了"
+      }
+    },
+    {
       "name": "task_failed",
       "description": "任务没开起来，没有电脑名。",
       "source": "server/internal/prompts/assistant/task_notice.md",
@@ -166,7 +181,35 @@
       "description": "前面带着实时快照块的也认。",
       "source": "server/internal/prompts/assistant/task_notice.md",
       "input": {
+        "text": "\u003cpersona-context\u003e\n实时快照里和上一份比变了的（没列出的照旧）：\n- 现在：……\n\u003c/persona-context\u003e\n🔔 任务「跑测试」做完了\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "done",
+        "title": "跑测试",
+        "line": "任务「跑测试」做完了"
+      }
+    },
+    {
+      "name": "snapshot_before_jarvis",
+      "description": "旧名字 \u003cjarvis-context\u003e 的快照块也认（历史消息、旧 node，#3182）。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
         "text": "\u003cjarvis-context\u003e\n实时快照：……\n\u003c/jarvis-context\u003e\n🔔 任务「跑测试」做完了\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
+      },
+      "expected": {
+        "kind": "task_notice",
+        "state": "done",
+        "title": "跑测试",
+        "line": "任务「跑测试」做完了"
+      }
+    },
+    {
+      "name": "contexts_before_persona",
+      "description": "前面带着有属性的 \u003cpersona-context\u003e 块的也认。",
+      "source": "server/internal/prompts/assistant/task_notice.md",
+      "input": {
+        "text": "\u003cpersona-context kind=\"context\" title=\"引用的消息\" url=\"\"\u003e\n引用\n\u003c/persona-context\u003e\n🔔 任务「跑测试」做完了\n（这是 Persona 的任务通知，不是用户发的消息。这个任务是从主对话派出去的，用户设置了这类任务只在主对话里通知：手机不会为它另外推送，灵动岛上也没有，要靠你告诉用户。）\n\n你来决定要不要告诉用户、怎么说：一两句话说结果和接下来要用户做什么（看改动、合并、回复谁……）；没什么要用户做的就说一句做完了。你的回答会推送到用户手机上，只说用户需要知道的，不要复述这条通知。"
       },
       "expected": {
         "kind": "task_notice",

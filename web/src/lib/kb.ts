@@ -565,7 +565,7 @@ export function parseRecent(text?: string): RecentDay[] {
  */
 export function contextXml(c: { kind: string; title: string; url?: string; text: string }): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return `<jarvis-context kind="${esc(c.kind)}" title="${esc(c.title)}" url="${esc(c.url ?? "")}">\n${c.text.split("</jarvis-context>").join("")}\n</jarvis-context>`;
+  return `<jarvis-context kind="${esc(c.kind)}" title="${esc(c.title)}" url="${esc(c.url ?? "")}">\n${c.text.replace(/<\/(?:persona|jarvis)-context>/g, "")}\n</jarvis-context>`;
 }
 
 /** An entry as context: its profile, recent timeline and folder. */

@@ -4,9 +4,10 @@
 
 import { appToolName, clipInput, light, snippet } from '../../runtime-sdk/index.js'
 
-// The live snapshot the Persona assistant starts each message with (node/assistant_context.go; a bare <jarvis-context>
-// tag, unlike the phone's quoted context, which carries attributes): context for the model, not shown in the chat.
-const SNAPSHOT_RE = /<jarvis-context>[\s\S]*?<\/jarvis-context>\s*/g
+// The live snapshot the Persona assistant starts each message with (node/assistant_context.go; a bare <persona-context>
+// tag, <jarvis-context> from older nodes, unlike the phone's quoted context, which carries attributes): context for the
+// model, not shown in the chat.
+const SNAPSHOT_RE = /<(?:jarvis|persona)-context>[\s\S]*?<\/(?:jarvis|persona)-context>\s*/g
 
 /** Persona seq of a DSH event: DSH counts from 0, Persona treats 0 as "nothing yet". */
 export const jarvisSeq = (dshSeq) => dshSeq + 1

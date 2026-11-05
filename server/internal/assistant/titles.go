@@ -360,7 +360,7 @@ func parseTitleMax(out string, max int) (kind, topic string, ok bool) {
 	return kind, topic, kind != "" && n > 0 && n <= max
 }
 
-var contextBlock = regexp.MustCompile(`(?s)<jarvis-context\b[^>]*>.*?</jarvis-context>`)
+var contextBlock = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`)
 
 var titleNoise = regexp.MustCompile(`(?s)<[a-zA-Z][\w-]*[^>]*>.*?</[a-zA-Z][\w-]*>|[⏰#*>` + "`" + `]`)
 

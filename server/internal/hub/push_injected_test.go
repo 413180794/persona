@@ -43,6 +43,13 @@ func TestCleanAlertDropsEmptyLines(t *testing.T) {
 	if alertOf(t, orig)["body"] != injectedTitle {
 		t.Fatal("cleanAlert changed the caller's payload")
 	}
+	// The new name (#3182): a block, a bare snapshot, a clipped one.
+	alert = alertOf(t, cleanAlert(map[string]any{"aps": map[string]any{"alert": map[string]any{
+		"title": "<persona-context>\n快照\n</persona-context>\n约周五吃饭", "subtitle": `<persona-context kind="context" t`,
+		"body": `<persona-context kind="context" title="快照">` + "\n机器：a\n</persona-context>\n现在把 hub 部署到最新 master"}}}))
+	if _, ok := alert["subtitle"]; ok || alert["title"] != "约周五吃饭" || alert["body"] != "现在把 hub 部署到最新 master" {
+		t.Fatalf("persona-context alert = %v", alert)
+	}
 	if p := map[string]any{"aps": map[string]any{"content-state": 1}}; cleanAlert(p)["aps"] == nil {
 		t.Fatal("payload without an alert lost its aps")
 	}

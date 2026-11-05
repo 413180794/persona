@@ -365,7 +365,8 @@ export function buildTodoAgentGroups(
  */
 export function formatTodoContext(title: string, notes?: string): string {
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const body = (notes ?? "").trim();
+  // a closing tag in the notes would end the block early (either name, #3182)
+  const body = (notes ?? "").replace(/<\/(?:persona|jarvis)-context\s*>/gi, "").trim();
   return `<jarvis-context kind="context" title="${escape(t("lib-todos.context_title", { title }))}" url="">${body}</jarvis-context>`;
 }
 

@@ -55,6 +55,15 @@ func TestBotStepAndStripContext(t *testing.T) {
 	if got := stripContext(in); got != "真正的问题" {
 		t.Fatalf("strip %q", got)
 	}
+	for in, want := range map[string]string{
+		"<persona-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</persona-context>\n真正的问题": "真正的问题",
+		"<persona-context>\n快照\n</persona-context>\n<jarvis-context kind=\"doc\">文档</jarvis-context>\n问题": "问题",
+		"问题\n<persona-context kind=\"context\">\n被截断": "问题",
+	} {
+		if got := stripContext(in); got != want {
+			t.Fatalf("strip %q = %q, want %q", in, got, want)
+		}
+	}
 }
 
 // "/new <text>" goes on with just the text; a command the bot does not know goes on as it is (it may be the

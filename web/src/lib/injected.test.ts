@@ -15,6 +15,13 @@ describe("parseInjected (spec/fixtures/injected)", () => {
   }
 });
 
+describe("parseInjected lead blocks (#3182)", () => {
+  const notice = cases.find((c) => c.name === "task_done")!.input.text;
+  for (const lead of ["<persona-context>\n快照\n</persona-context>\n", '<persona-context kind="context" title="t" url="">x</persona-context>\n', "<jarvis-context>\n快照\n</jarvis-context>\n"]) {
+    it(`skips ${lead.slice(0, 24)}…`, () => expect(parseInjected(lead + notice)?.kind).toBe("task_notice"));
+  }
+});
+
 describe("injectedOf", () => {
   const notice = cases.find((c) => c.name === "task_done")!.input.text;
   const item = (extra: Partial<Item>): Item => ({ id: "x#0", seq: 1, role: "user", kind: "text", text: notice, ...extra });

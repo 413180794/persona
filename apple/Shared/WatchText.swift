@@ -1,12 +1,12 @@
 import Foundation
 
 /// A message as the watch shows it: plain text without the markup the phone and Claude Code put into messages
-/// (`<jarvis-context>` blocks fold into one mark, 〔title〕 or 〔上下文 N 项〕, ahead of what the user wrote, the note listing attached photos and Claude's `[Image #n]`
+/// (`<persona-context>` / `<jarvis-context>` blocks fold into one mark, 〔title〕 or 〔上下文 N 项〕, ahead of what the user wrote, the note listing attached photos and Claude's `[Image #n]`
 /// placeholders become one 「图片」 mark, sent videos 「视频」, pasted-content tags go) and without Markdown's marks (`##`, `**`, backticks,
 /// fences, quotes, link targets; list dashes become •): the watch draws plain text, and the marks were shown as typed.
 nonisolated enum WatchText {
     private static let context = try! NSRegularExpression(
-        pattern: #"<jarvis-context\b(?:[^>]*?title="([^"]*)")?[^>]*>[\s\S]*?</jarvis-context>\s*"#)
+        pattern: #"<(?:jarvis|persona)-context\b(?:[^>]*?title="([^"]*)")?[^>]*>[\s\S]*?</(?:jarvis|persona)-context>\s*"#)
     private static let rules: [(String, String)] = [
         (#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#, "\n〔图片〕\n"),
         // Videos sent as files (<jarvis-file kind="video" …/>, VideoAttach.swift).

@@ -14,8 +14,12 @@ data class MessageContext(val kind: String, val title: String, val url: String?,
     val label: CoreText get() = (title.takeIf(String::isNotBlank) ?: url)?.let(CoreText::plain) ?: CoreText.of(Key.ContextQuote)
 }
 
-private val contextBlock = Regex("<jarvis-context\\b([^>]*)>([\\s\\S]*?)</jarvis-context>\\s*")
+// <persona-context>, or <jarvis-context> as older hubs, nodes and apps write it (#3182).
+private val contextBlock = Regex("<(?:jarvis|persona)-context\\b([^>]*)>([\\s\\S]*?)</(?:jarvis|persona)-context>\\s*")
 private val contextAttribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
+
+/** Whether [text] has a context block's opening tag, either name. */
+fun hasContextTag(text: String): Boolean = text.contains("<jarvis-context") || text.contains("<persona-context")
 
 /**
  * The context blocks of [text] in order, and the text outside all of them (trimmed): what the user actually wrote,
@@ -23,7 +27,7 @@ private val contextAttribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)
  * read with the XML entities decoded, as iOS reads them.
  */
 fun parseContexts(text: String): Pair<List<MessageContext>, String> {
-    if (!text.contains("<jarvis-context")) return emptyList<MessageContext>() to text.trim()
+    if (!hasContextTag(text)) return emptyList<MessageContext>() to text.trim()
     val contexts = contextBlock.findAll(text).map { block ->
         val attributes = contextAttribute.findAll(block.groupValues[1]).associate {
             it.groupValues[1] to decodeXmlEntities(it.groupValues[2].ifEmpty { it.groupValues[3] })

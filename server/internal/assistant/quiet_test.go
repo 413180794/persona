@@ -244,6 +244,85 @@ func TestGoldenTaskNotice(t *testing.T) {
 		{"interrupted_after_needs", quietNotice{todo: Todo{Title: "整理材料"}, state: "interrupted", earlier: []string{"等过用户"}, text: "API Error: 529 overloaded"}},
 		{"failed", quietNotice{todo: Todo{Title: "整理材料"}, machine: "box", state: "failed", text: "box 现在离线"}},
 	} {
-		golden(t, "task_notice."+c.name, renderNotice(&c.n))
+		golden(t, "task_notice."+c.name, renderNotice(&c.n, false))
 	}
+}
+
+// A conversation started with report_tasks (a plugin's /agent, #3192) is told about the tasks it opens, as the main
+// conversation is about its quiet ones: the task is quiet, its notice goes into that conversation (not the main one)
+// and says to hand the result on as that conversation was told to; agent_start from it is a task too.
+func TestReportingConversationIsToldItsTasks(t *testing.T) {
+	s, f := newQuietService(t)
+	ctx := context.Background()
+	f.known["lark1"] = true
+	f.setSessions("server", proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle},
+		proto.Session{SessionID: "lark1", MachineID: "server", Assistant: true, Status: proto.StatusIdle})
+	s.markReporter(ctx, "server", "lark1")
+	if _, err := s.toolTaskPlan(ctx, "lark1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the link", func() bool { return len(onlyTodo(s).Agents) == 1 })
+	if todo := onlyTodo(s); !todo.Quiet || todo.Origin != "lark1" {
+		t.Fatalf("todo = %+v", todo)
+	}
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, "MR 提好了：https://example.com/mr/7", 0)
+	sentTo := func(id string) []string {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		var out []string
+		for _, a := range f.sends {
+			if a["session_id"] == id {
+				text, _ := a["text"].(string)
+				out = append(out, text)
+			}
+		}
+		return out
+	}
+	waitFor(t, "the notice", func() bool { return len(sentTo("lark1")) == 1 })
+	n := sentTo("lark1")[0]
+	for _, want := range []string{"🔔 任务「修登录崩溃」做完了（box）", "https://example.com/mr/7", "从这段对话派出去的", "照这段对话一开始说的方式交代"} {
+		if !strings.Contains(n, want) {
+			t.Errorf("notice lacks %q:\n%s", want, n)
+		}
+	}
+	if strings.Contains(n, "主对话") {
+		t.Errorf("the notice talks of the main conversation:\n%s", n)
+	}
+	if got := f.notices(); len(got) != 0 {
+		t.Fatalf("the main conversation was told too: %q", got)
+	}
+
+	s2, _ := newQuietService(t)
+	setSettings(t, s2, func(v *Settings) { v.MainTasksQuiet = new(false) }) // the main conversation's setting: not this one's
+	s2.markReporter(ctx, "server", "lark1")
+	args := json.RawMessage(`{"machine":"box","cwd":"/code/app","prompt":"提个 MR 修掉它"}`)
+	if _, err := s2.runTool(ctx, "server", "lark1", "agent_start", args); err != nil {
+		t.Fatal(err)
+	}
+	if todo := onlyTodo(s2); !todo.Quiet || todo.Origin != "lark1" || len(todo.Agents) != 1 {
+		t.Fatalf("agent_start from a reporting conversation: todo = %+v", todo)
+	}
+}
+
+// POST /api/v1/assistant/conversations with report_tasks marks the new conversation; without it, none is.
+func TestStartWithReportTasks(t *testing.T) {
+	s, _ := newQuietService(t)
+	if w := serve(s, "POST", "/api/v1/assistant/conversations", `{"prompt":"/agent 看看","report_tasks":true}`); w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if m, ok := s.reporterOf(context.Background(), "s1"); !ok || m != "server" {
+		t.Fatalf("reporter = %q, %v", m, ok)
+	}
+	if w := serve(s, "POST", "/api/v1/assistant/conversations", `{"prompt":"随便聊聊"}`); w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if _, ok := s.reporterOf(context.Background(), "s2"); ok {
+		t.Fatal("a conversation started without report_tasks reports")
+	}
+}
+
+func TestGoldenTaskNoticeReporting(t *testing.T) {
+	golden(t, "task_notice.reporting_done", renderNotice(&quietNotice{todo: Todo{Title: "提 MR"}, machine: "box", state: "done", text: "MR：https://example.com/mr/7"}, true))
+	golden(t, "task_notice.reporting_needs", renderNotice(&quietNotice{todo: Todo{Title: "提 MR"}, machine: "box", state: "needs", ask: "- 合到哪个分支？"}, true))
 }

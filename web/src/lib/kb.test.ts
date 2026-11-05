@@ -286,6 +286,7 @@ describe("detail", () => {
 
 describe("问 Persona", () => {
   it("writes the context tag the app parses (kind, title, url, in that order)", () => {
+    expect(contextXml({ kind: "context", title: "t", text: "x</persona-context>y</jarvis-context>z" })).toBe('<jarvis-context kind="context" title="t" url="">\nxyz\n</jarvis-context>');
     expect(contextXml({ kind: "context", title: 'A & "B" <c>', text: "x</jarvis-context>y" })).toBe(
       '<jarvis-context kind="context" title="A &amp; &quot;B&quot; &lt;c&gt;" url="">\nxy\n</jarvis-context>',
     );

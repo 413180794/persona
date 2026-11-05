@@ -15,8 +15,8 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/claude_md.md` | 助手目录 `~/.persona/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `assistant/start.go` `claudeMD`（照 hub 给的事实写：`devices.list`、`connectors.signed_in`；知识库目录是助手自己的） |
 | `assistant/view_repair.md` | 助手 Stop 首次发现 persona-view 格式错误时的修正反馈：补 fallback、保留已完成操作、不能代替审批 | `hub/assistant_view_check.go`（可信 node 请求；按当前 persona_view 开关） |
 | `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `assistant/context.go` |
-| `assistant/turn_context.md` | 消息开头的 `<jarvis-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
-| `assistant/view_errors.md` | 接在 `<jarvis-context>` 后的 `<persona-view-errors>`：前几条回复没通过校验的卡片和原因（已限长、去掉卡片原文），说明不是用户的要求 | `assistant/context_view_errors.go` |
+| `assistant/turn_context.md` | 消息开头的 `<persona-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
+| `assistant/view_errors.md` | 接在 `<persona-context>` 后的 `<persona-view-errors>`：前几条回复没通过校验的卡片和原因（已限长、去掉卡片原文），说明不是用户的要求 | `assistant/context_view_errors.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
 | `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `assistant/schedule.go` `taskPrompt` |
 | `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；用判断模型 `inbox.judge` | `assistant/done.go` |
@@ -25,7 +25,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/main_handoff.md` | 新建主对话后第一条消息前面的 `<jarvis-context>`：旧主对话的 id、最近一次压缩的摘要、之后的几条消息（`docs/assistant.md`「新建主对话」） | `assistant/start.go` `renderHandoff` `startMain` |
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
-| `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<jarvis-context>`：共用的记忆（目录、格式、当前索引），插件的命令闸门带运行时工具时，说明技能里的命令改用那个工具跑（`{{range .Gates}}`） | `node/assistant_runtime.go` |
+| `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<persona-context>`：共用的记忆（目录、格式、当前索引），插件的命令闸门带运行时工具时，说明技能里的命令改用那个工具跑（`{{range .Gates}}`） | `node/assistant_runtime.go` |
 | `agents/triage.md`、`triage_input.md` | Agent 一轮停下后的分诊：做完了 / 卡在什么上（等你决定、等另一个 Agent、等外部事件），抽出问题和选项、授权链接、等的事和过多久再看、产物（[agent-work.md](agent-work.md)）；用途 `agent.triage` | `assistant/agents_triage.go` |
 | `agents/wake.md` | 到点叫醒在等的 Agent：上一轮说在等什么、好了接着做、推代码 / 部署 / 发消息前先问用户 | `assistant/agents_triage.go` |
 | `agents/answer.md` | 用户在分诊开的卡片上的回答，发回给那个 Agent | `assistant/agents_triage.go` |

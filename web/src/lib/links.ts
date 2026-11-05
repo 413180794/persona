@@ -269,7 +269,7 @@ function escAttr(s: string) {
 
 /** `<jarvis-context kind="…" title="…" url="…">\ntext\n</jarvis-context>`, as the phone writes it. */
 export function contextXML(r: Pick<ContextRef, "kind" | "title" | "url" | "text">): string {
-  const body = r.text.replace(/<\/jarvis-context\s*>/gi, "");
+  const body = r.text.replace(/<\/(?:persona|jarvis)-context\s*>/gi, "");
   return `<jarvis-context kind="${escAttr(r.kind)}" title="${escAttr(r.title)}" url="${escAttr(r.url)}">\n${body}\n</jarvis-context>`;
 }
 

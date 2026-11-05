@@ -30,11 +30,12 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
                 .replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
         }
         let msgAttr = msg.isEmpty ? "" : " msg=\"\(esc(msg))\""
-        return "<jarvis-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)>\n\(text.replacingOccurrences(of: "</jarvis-context>", with: ""))\n</jarvis-context>"
+        return "<jarvis-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)>\n\(text.replacingOccurrences(of: "</jarvis-context>", with: "").replacingOccurrences(of: "</persona-context>", with: ""))\n</jarvis-context>"
     }
 
-    /// One block, its attributes in any order and any of them missing (a Feishu /agent request's context has no url).
-    private static let tagRe = try! NSRegularExpression(pattern: #"<jarvis-context\b([^>]*)>\s*([\s\S]*?)\s*</jarvis-context>\s*"#)
+    /// One block, its attributes in any order and any of them missing (a Feishu /agent request's context has no url);
+    /// `<persona-context>` or the old name `<jarvis-context>` (#3182).
+    private static let tagRe = try! NSRegularExpression(pattern: #"<(?:jarvis|persona)-context\b([^>]*)>\s*([\s\S]*?)\s*</(?:jarvis|persona)-context>\s*"#)
     private static let attrRe = try! NSRegularExpression(pattern: #"(\w+)="([^"]*)""#)
 
     /// The contexts in a message and the message without them.

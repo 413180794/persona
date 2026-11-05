@@ -31,7 +31,7 @@
 | Telegram | 装了 Telegram 扩展（扩展市场 `nwverse/persona-extensions`，#1704、#2057）才有：只读 MCP `telegram_chats` / `telegram_messages` / `telegram_search`；更灵活的读和写用扩展带的 telegram skill（Bash 里 `tg …`，即 `personad tool --cli telegram`，经 hub，写操作手机上确认），`tg` 只在 Telegram 登录着时在 PATH 上（`docs/connector-protocol.md`「命令行」） |
 | 飞书 | 开源版用飞书官方的 lark-cli（见下「飞书：lark-cli」）。装了经 lark-connector 接飞书的插件时，主要用插件给的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；MCP `lark_chats` / `lark_messages` / `lark_search` 也由插件提供（#1571 起 hub 里没有 lark-connector 客户端，`docs/plan-extensions.md`「第 3 步」）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
 | 操作 Persona 自己 | `jarvis_settings`（先 `list`，助手自己的工具，`assistant/settings_tool.go`：关于我、默认启动器、`main_tasks_quiet` 是助手自己的设置，它自己读写、自己在手机上弹确认卡片；其余是 hub 的设置，清单经 `app.call settings.list` 拿，读写经 `app.tool jarvis_settings` 交给 hub，hub 自己弹卡片）：读写分拣规则（全局的 `inbox.rules`，和设置里声明了 `triage_rules` 的插件来源各自的 `inbox.rules.<插件>`，有就代替全局的）、AI 分身规则、关于我、默认启动器、「主对话派的任务只在主对话里通知」（`assistant.main_tasks_quiet`）、各台机器屏蔽的 Claude 配置目录（`agents.blocked_claude_dirs`），以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
-| 实时快照 | 每条发给助手的消息开头一个 `<jarvis-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。Agent 和任务各带网页版的链接：hub 的 `public_url`（没写时是默认的 `http://<主机名>:18660`）加 `/s/<机器>/<会话 id>`、`/todos?id=<待办 id>`，助手提到它们时写成 Markdown 链接；hub 没答上地址时不带（#2194）。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
+| 实时快照 | 每条发给助手的消息开头一个 `<persona-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。Agent 和任务各带网页版的链接：hub 的 `public_url`（没写时是默认的 `http://<主机名>:18660`）加 `/s/<机器>/<会话 id>`、`/todos?id=<待办 id>`，助手提到它们时写成 Markdown 链接；hub 没答上地址时不带（#2194）。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，Persona 工具不再延迟加载 |
 | 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex、DSH 上时读写的也是这一份（下面「Codex」「Agent 运行时（DSH）」两节），换启动器记忆不丢。健康对话在单独的健康空间里，记忆也单独一份（`docs/health.md`） |
 | 关于我 | App 里编辑后存 settings `assistant.notes`，覆盖 hub.json 的 `assistant.notes`，进 CLAUDE.md 末尾 |
@@ -348,7 +348,7 @@ lark-connector 的 `lark-connector-agent` 带一套控制命令（上游 agent-h
 **做法**：
 
 - node 每发一条消息先问 hub 要快照（`assistant.context`，和起进程并行），按节（顶格的一行加下面缩进的几行）和这段对话上次带过的比，
-  只带变了的和时间，包成 `<jarvis-context>`（`prompts/assistant/turn_context.md`）放在消息的第一个文本块。带过什么记在 node 内存里，
+  只带变了的和时间，包成 `<persona-context>`（`prompts/assistant/turn_context.md`；旧 node 和历史消息里是 `<jarvis-context>`，读取端两个都认，#3182）放在消息的第一个文本块。带过什么记在 node 内存里，
   对话压缩（`compact_boundary`；Codex 的 `contextCompaction`）后清掉，下一条带全量；node 重启也是全量一次。App、网页、标题、知识库都从
   transcript 解析里拿掉这个块（`transcript.ContextRe`），用户看不到。定时任务、飞书 `/agent`、重启后告诉对话丢了后台任务……都走 `assistant.send`，
   一样带上。

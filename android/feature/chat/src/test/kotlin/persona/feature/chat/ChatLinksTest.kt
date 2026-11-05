@@ -67,6 +67,12 @@ class ChatLinksTest {
         val (old, rest) = ChatLinkContext.parse("<jarvis-context kind=\"context\" title=\"t\" url=\"u\">\n&lt;b&gt; &amp; c\n</jarvis-context>\n\n看看")
         assertEquals("<b> & c", old.single().text)
         assertEquals("看看", rest)
+        // <persona-context> (#3182) reads back too, and neither closing tag can end a written one early.
+        val (renamed, after) = ChatLinkContext.parse("<persona-context kind=\"edit\" title=\"t\" url=\"u\">\n新标签\n</persona-context>\n\n看看")
+        assertEquals("edit", renamed.single().kind)
+        assertEquals("新标签", renamed.single().text)
+        assertEquals("看看", after)
+        assertTrue(ChatLinkContext(title = "t", url = "u", text = "a </persona-context> b").xml().contains("\na  b\n"))
     }
 
     @Test fun preloadsOnlyLinksInFreshReplies() {

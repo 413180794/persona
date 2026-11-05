@@ -386,6 +386,11 @@ describe("格式化上下文标签 (formatTodoContext)", () => {
       '<jarvis-context kind="context" title="待办 · 天气 &quot;App&quot; &lt;1.3&gt;" url="">测试重试 & 超时\n周五前完成</jarvis-context>',
     );
   });
+  it("说明里的结束标签（新旧两个名字）不会提前闭合 (#3182)", () => {
+    expect(formatTodoContext("t", "a</persona-context>b</jarvis-context>c")).toBe(
+      '<jarvis-context kind="context" title="待办 · t" url="">abc</jarvis-context>',
+    );
+  });
 });
 
 describe("查某个项目挂在哪个待办上 (findTodoForSpace)", () => {

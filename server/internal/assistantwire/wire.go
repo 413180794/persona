@@ -313,7 +313,7 @@ type ContextParams struct {
 	Ack       []ViewErrorReceipt `json:"ack,omitempty"`
 }
 
-// ContextResult is assistant.context's answer: the <jarvis-context> text, and the <persona-view-errors> block of the
+// ContextResult is assistant.context's answer: the <persona-context> text, and the <persona-view-errors> block of the
 // conversation's rich views that failed their check and were not reported yet (docs/assistant-views.md「下一轮反馈」).
 // Reading it consumes nothing: the node acks Receipts once the message is delivered.
 type ContextResult struct {

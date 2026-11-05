@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -636,20 +637,21 @@ func (s *Service) taskOfConversation(ctx context.Context, machine, session strin
 	return ""
 }
 
-// stripContext leaves out the <jarvis-context> blocks of a message (what the user wrote is after them).
+// stripContext leaves out the context blocks of a message (what the user wrote is after them); a block left open
+// ends it.
 func stripContext(s string) string {
-	for {
-		i := strings.Index(s, "<jarvis-context")
-		if i < 0 {
-			return strings.TrimSpace(s)
-		}
-		j := strings.Index(s[i:], "</jarvis-context>")
-		if j < 0 {
-			return strings.TrimSpace(s[:i])
-		}
-		s = s[:i] + s[i+j+len("</jarvis-context>"):]
+	s = contextBlockRe.ReplaceAllString(s, "")
+	if loc := contextOpenRe.FindStringIndex(s); loc != nil {
+		s = s[:loc[0]]
 	}
+	return strings.TrimSpace(s)
 }
+
+// contextBlockRe and contextOpenRe are a <persona-context> block, or one with the old name <jarvis-context> (#3182).
+var (
+	contextBlockRe = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`)
+	contextOpenRe  = regexp.MustCompile(`<(?:jarvis|persona)-context\b`)
+)
 
 func firstNonEmpty(s ...string) string {
 	for _, x := range s {

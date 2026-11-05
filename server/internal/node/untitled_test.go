@@ -18,4 +18,16 @@ func TestUntitledSkipsContextBlocks(t *testing.T) {
 	if s.Title != "" {
 		t.Fatalf("title of a message with only a block = %q, want none (the cwd's name)", s.Title)
 	}
+	// The new name (#3182), with and without attributes, and clipped.
+	for first, want := range map[string]string{
+		`<persona-context kind="context" title="快照">` + "\n机器：a\n</persona-context>\n现在把 hub 部署到最新 master": "现在把 hub 部署到最新 master",
+		"<persona-context>\n快照\n</persona-context>\n约周五吃饭":                                                   "约周五吃饭",
+		`<persona-context kind="context" title="快照">` + "\n被截断的快照":                                              "",
+	} {
+		s = proto.Session{}
+		untitled(&s, quickMeta{first: first})
+		if s.Title != want {
+			t.Fatalf("title of %q = %q, want %q", first, s.Title, want)
+		}
+	}
 }

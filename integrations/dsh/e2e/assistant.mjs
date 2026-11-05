@@ -146,7 +146,7 @@ try {
   const shown = (await items(sid)).filter((i) => i.role === 'user' && i.kind === 'text').map((i) => i.text)
   check('the chat shows what was typed, not the snapshot', shown.length === 1 && shown[0] === 'hello assistant', JSON.stringify(shown))
   const first = userTexts(await dshEvents(sid)).join('\n')
-  check('the model got the live snapshot with the message', first.includes('JARVIS_E2E_SNAPSHOT') && first.includes('<jarvis-context>'))
+  check('the model got the live snapshot with the message', first.includes('JARVIS_E2E_SNAPSHOT') && first.includes('<persona-context>'))
   check('…and the memory directory and the lark-connector note with the first one', first.includes('MEMORY.md') && first.includes('lark-connector'))
   check('the skills are in the assistant\'s directory for DSH', existsSync(join(assistantDir, '.agents', 'skills', 'lark-connector', 'scripts', 'ol.sh')))
   await idle(sid)

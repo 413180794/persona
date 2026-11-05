@@ -11,7 +11,7 @@ import persona.core.contracts.Item
 private val noticeHead = Regex("^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$") // i18n-ignore: the injected text it reads (prompts.ParseInjected)
 private val followupHead = Regex("^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$") // i18n-ignore: the injected text it reads (prompts.ParseInjected)
 private val wakeHead = Regex("^⏰（Persona 叫醒你，第 \\d+ 次）你上一轮停下时说在等「(.*?)」") // i18n-ignore: the injected text it reads (prompts.ParseInjected)
-private val leadContext = Regex("^\\s*<jarvis-context\\b[^>]*>[\\s\\S]*?</jarvis-context>")
+private val leadContext = Regex("^\\s*<(?:jarvis|persona)-context\\b[^>]*>[\\s\\S]*?</(?:jarvis|persona)-context>")
 private const val NOTICE_MARKER = "这是 Persona 的任务通知" // i18n-ignore: the injected text it reads (prompts.ParseInjected)
 private const val LOST_TASKS_HEAD = "⚠️ 运行你的 node 刚重启过" // i18n-ignore: the injected text it reads (prompts.ParseInjected)
 private const val KB_HINT_HEAD = "（知识库" // i18n-ignore: the injected text it reads (prompts.ParseInjected)

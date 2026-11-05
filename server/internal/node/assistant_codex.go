@@ -400,7 +400,7 @@ func codexSandboxPolicy(mode, memDir string) map[string]any {
 }
 
 // deliver hands a user message to the thread: a new turn when idle, steered into the running turn otherwise. live is
-// the <jarvis-context> block it starts with ("" for none; assistant_context.go).
+// the <persona-context> block it starts with ("" for none; assistant_context.go).
 func (c *codexConn) deliver(ctx context.Context, live, text string, images []proto.Image) error {
 	n := c.n
 	input := []map[string]any{}

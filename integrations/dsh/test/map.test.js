@@ -105,6 +105,7 @@ test('the phone\'s answers become DSH answer batches', () => {
 test('the assistant\'s live snapshot is not shown; a quoted context (with attributes) is', () => {
   const ev = { type: 'user/message', seq: 3, time: 0, data: { role: 'user', source: { kind: 'user' }, content: [
     { type: 'text', text: '<jarvis-context>\n- 现在：x\n</jarvis-context>' },
+    { type: 'text', text: '<persona-context>\n- 现在：y\n</persona-context>' },
     { type: 'text', text: '<jarvis-context kind="context" title="t">quoted</jarvis-context> hi' },
   ] } }
   const items = eventItems(ev)

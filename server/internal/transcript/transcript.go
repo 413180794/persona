@@ -231,8 +231,9 @@ func withoutBotmuxSentinel(text string) string {
 var pastedRe = regexp.MustCompile(`<[\\/]*pasted_content(?:\s+id="[^"]*")?\s*>`) // also <\pasted…> / <\/pasted…> from nested pastes
 
 // ContextRe matches the live snapshot Persona starts each message to its assistant with (node/assistant_context.go):
-// context for the model, not something the user wrote.
-var ContextRe = regexp.MustCompile(`(?s)<jarvis-context>.*?</jarvis-context>\s*`)
+// context for the model, not something the user wrote. It is <persona-context>; history and older nodes have
+// <jarvis-context> (#3182).
+var ContextRe = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context>.*?</(?:jarvis|persona)-context>\s*`)
 
 var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>(.*?)</(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>`)
 

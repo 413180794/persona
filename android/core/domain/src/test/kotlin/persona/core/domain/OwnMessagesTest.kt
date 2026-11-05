@@ -23,6 +23,7 @@ class OwnMessagesTest {
     @Test fun relayedAndInjectedAreNot() {
         assertEquals(false, isOwnMessage(u("build passed", from = "build-bot")))
         assertEquals(false, isOwnMessage(u("<cross-session-message from-name=\"bot\">hi</cross-session-message>")))
+        assertEquals(false, isOwnMessage(u(relay.replace("jarvis-context", "persona-context"))))
         assertEquals(false, isOwnMessage(u(relay)))
         assertEquals(false, isOwnMessage(u(notice)))
         assertEquals(false, isOwnMessage(u("⏰ 早报（定时任务）\n\n看看今天的日程。")))

@@ -10,7 +10,8 @@ import type { Injected, Item } from "./types";
 const NOTICE_HEAD = /^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$/u; // i18n-ignore: matches the hub's injected text
 const FOLLOWUP_HEAD = /^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$/u; // i18n-ignore: matches the hub's injected text
 const WAKE_HEAD = /^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」/u; // i18n-ignore: matches the hub's injected text
-const LEAD_CONTEXT = /^\s*<jarvis-context\b[^>]*>[\s\S]*?<\/jarvis-context>/;
+// <persona-context>, or <jarvis-context> as older nodes and apps wrote it (#3182)
+const LEAD_CONTEXT = /^\s*<(?:persona|jarvis)-context\b[^>]*>[\s\S]*?<\/(?:persona|jarvis)-context>/;
 const NOTICE_MARKER = "这是 Persona 的任务通知"; // i18n-ignore: matches the hub's injected text
 const LOST_TASKS_HEAD = "⚠️ 运行你的 node 刚重启过"; // i18n-ignore: matches the hub's injected text
 const KB_HINT_HEAD = "（知识库"; // i18n-ignore: matches the hub's injected text

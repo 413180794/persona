@@ -199,7 +199,7 @@ func (s *Service) decisionsChanged(ctx context.Context, todoID string, at time.T
 	s.todosChanged(ctx)
 }
 
-// todoDecisionsContext is the <jarvis-context> of a todo's decisions in effect that goes before what is handed to an
+// todoDecisionsContext is the context block of a todo's decisions in effect that goes before what is handed to an
 // agent for it; empty when it has none or they cannot be read (the handoff goes on without them).
 func (s *Service) todoDecisionsContext(ctx context.Context, todoID string) string {
 	st := s.todoDB()
@@ -238,11 +238,11 @@ func (s *Service) todoDecisionsContext(ctx context.Context, todoID string) strin
 	return prompts.RenderTodoDecisions(d)
 }
 
-// closingTag is anything a reader of the message could take for the end of a <jarvis-context> (the apps match it
-// loosely: case, spaces).
-var closingTag = regexp.MustCompile(`(?i)<\s*/\s*jarvis-context\s*>`)
+// closingTag is anything a reader of the message could take for the end of a <jarvis-context> or <persona-context>
+// (the apps match it loosely: case, spaces; either name, #3182).
+var closingTag = regexp.MustCompile(`(?i)<\s*/\s*(?:jarvis|persona)-context\s*>`)
 
-// contextText keeps a text from closing the <jarvis-context> it is put in (also when taking one out leaves another,
+// contextText keeps a text from closing the context block it is put in (also when taking one out leaves another,
 // "</jarvis</jarvis-context>-context>"), and indents its later lines under the item, so a text cannot pass for a
 // decision of its own ("\n2. 选了：…").
 func contextText(s string) string {

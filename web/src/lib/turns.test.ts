@@ -99,6 +99,15 @@ describe("parseUserText", () => {
     expect(p.contexts).toEqual([{ kind: "edit", title: "Doc & co", url: "https://x", text: "sel" }]);
   });
 
+  it("pulls out persona-context tags, alongside older jarvis-context ones (#3182)", () => {
+    const p = parseUserText(
+      '<persona-context kind="context" title="新" url="">a</persona-context>\n<jarvis-context kind="edit" title="旧">b</jarvis-context>\n问题',
+    );
+    expect(p.text).toBe("问题");
+    expect(p.contexts.map((c) => [c.kind, c.title, c.text])).toEqual([["context", "新", "a"], ["edit", "旧", "b"]]);
+    expect(parseUserText("<persona-context>\n快照\n</persona-context>\n你好").text).toBe("你好");
+  });
+
   it("leaves only the request of a Feishu /agent prompt as the text", () => {
     const raw =
       '<jarvis-context kind="instructions" title="给 Agent 的说明">\n示例用户在飞书「发布群」里用 /agent 叫你。\n\n## 怎么做\n\n- 做完回复一次。\n</jarvis-context>\n' +

@@ -112,6 +112,7 @@ func TestHandoffReadsTheLastSummaryAndWhatCameAfter(t *testing.T) {
 		{Seq: 6, Role: "assistant", Kind: proto.KindToolUse, Text: "工具"},
 		{Seq: 7, Role: "assistant", Kind: proto.KindText, Text: strings.Repeat("长", handoffTurnMax+50)},
 		{Seq: 8, Role: "system", Kind: proto.KindNotice, Text: "提示"},
+		{Seq: 9, Role: "user", Kind: proto.KindText, Text: "<persona-context kind=\"context\" title=\"接上旧主对话\" url=\"\">\n更早的\n</persona-context>\n<persona-context>\n快照\n</persona-context>\n"},
 	}
 	got := recentTurns(items, 4)
 	if len(got) != 2 || got[0] != (HandoffTurn{Role: "user", Text: "之后的问题"}) || got[1].Role != "assistant" ||

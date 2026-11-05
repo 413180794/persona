@@ -88,7 +88,8 @@ export function mergeItems(have: Item[], batch: Item[]): Item[] {
   return sortItems(kept);
 }
 
-const CONTEXT_RE = /<jarvis-context\b([^>]*)>([\s\S]*?)<\/jarvis-context>/g;
+// <persona-context>, or <jarvis-context> as older hubs and apps wrote it (#3182)
+const CONTEXT_RE = /<(?:persona|jarvis)-context\b([^>]*)>([\s\S]*?)<\/(?:persona|jarvis)-context>/g;
 const ATTR_RE = /(\w+)="([^"]*)"/g;
 
 function unescapeAttr(s: string) {

@@ -502,5 +502,12 @@ struct TurnTests {
         let swapped = ContextRef.parse("<jarvis-context url=\"https://x\" title=\"T\" kind=\"edit\">x</jarvis-context>改短")
         #expect(swapped.refs.first?.kind == "edit" && swapped.refs.first?.title == "T" && swapped.rest == "改短")
         #expect(WatchText.shown(Self.larkAgentMessage) == "〔上下文 4 项〕\n看下构建为什么挂了")
+        // The new name, and the two mixed (#3182).
+        let renamed = Self.larkAgentMessage.replacingOccurrences(of: "jarvis-context", with: "persona-context")
+        #expect(ContextRef.parse(renamed).refs.map(\.title) == parsed.refs.map(\.title))
+        #expect(UserRowText(renamed).shown == "看下构建为什么挂了")
+        #expect(WatchText.shown(renamed) == "〔上下文 4 项〕\n看下构建为什么挂了")
+        let mixed = ContextRef.parse("<persona-context kind=\"doc\" title=\"A\">a</persona-context>\n<jarvis-context kind=\"context\" title=\"B\">b</jarvis-context>\n问题")
+        #expect(mixed.refs.map(\.title) == ["A", "B"] && mixed.rest == "问题")
     }
 }

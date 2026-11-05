@@ -194,6 +194,7 @@ describe("<jarvis-context>", () => {
 
   it("drops a closing tag inside the picked text", () => {
     expect(contextXML({ ...ref, text: "a</jarvis-context>b" })).toContain("\nab\n</jarvis-context>");
+    expect(contextXML({ ...ref, text: "a</persona-context>b</PERSONA-CONTEXT >c" })).toContain("\nabc\n</jarvis-context>");
   });
 
   it("puts the contexts before the message, with a stand-in when nothing was typed", () => {

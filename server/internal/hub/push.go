@@ -752,7 +752,7 @@ func joinPlace(parts ...string) string {
 }
 
 // cleanAlert is payload with the context blocks a session title or message can carry taken out of its alert's
-// lines (a headless conversation's title is its first message, <jarvis-context …> and all): a notification shows
+// lines (a headless conversation's title is its first message, context blocks and all): a notification shows
 // what the user wrote, and a line left empty is not shown. Every alert goes out through here (APNs, notifyMessage).
 func cleanAlert(payload map[string]any) map[string]any {
 	aps, _ := payload["aps"].(map[string]any)

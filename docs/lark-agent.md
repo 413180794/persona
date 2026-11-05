@@ -47,8 +47,16 @@
 - 和收件箱的 AI 分身一样是助手目录里的无头 Agent（`assistant.send`），所以有助手的全部工具；当前模型在 **设置 › 模型配置 › 飞书 /agent** 里统一选择（`docs/model-config.md`）。没有用途覆盖时保留 `lark_agent.launcher` 的旧默认，不写就用助手的。对话出现在「Persona」tab 的历史里，可以点进去看它查了什么；跑完不推「完成」通知（结果就是飞书里的回复）。
 - 收到请求先给那条消息点「OnIt」表情，回复后换成「DONE」。
 - Agent 用 MCP 工具 `lark_agent_reply` 交答案（只认为请求启动的那个对话），hub 用 lark-connector `POST /messages/:id/replies` 发出去
-  （`editorType: markdown`，话题里 `replyMode: thread`）。Agent 这一轮结束却没调它，hub 把它最后一段回复发出去；
-  超过 `timeout_minutes`（默认 30）没答完，回一句「这次 N 分钟内没处理完」。
+  （`editorType: markdown`，话题里 `replyMode: thread`）。Agent 第一次回复前这一轮结束却没调它，hub 把它最后一段回复发出去。
+- **长任务和后续进展（#3192）**：`lark_agent_reply` 在请求记录的保留期（3 天）里可以多次调用。第一次照上面的规则回原消息；
+  之后的每一次（进展、最终结果）都回在以请求为根的话题里（请求本来就在话题里就回在那个话题里），不在群里刷屏；
+  lark-connector 拒绝在那里开话题（`REPLY_IN_THREAD_*`）时退回引用原消息回复。过了 30 分钟还没回复，不再停掉：
+  在原消息下以话题回一句「正在工作中…」，之后的回复都进这个话题。之前「这次 N 分钟内没处理完，先停在这里」的截停去掉了。
+  第一次回复以后，一轮结束没调工具就什么都不发（要不要发、发什么由 Agent 决定）。提示词要它只发有意义的进展和结果。
+- **派出去的任务**：插件开对话时带 `report_tasks: true`。这段对话用 `task_plan` / `agent_start` 派出的任务，和主对话的
+  「安静的任务」一样（`docs/unified-entry.md`）：不另外推送，做完、在等用户、被打断、没开起来都作为任务通知（`prompts/assistant/task_notice.md`
+  的 `Reporting`）发进这段 /agent 对话（在忙就排在这一轮之后）；它再用 `lark_agent_reply` 把结果发到话题里。
+  登记存在 settings 表的 `assistant.task_reporters`（14 天），hub 重启不丢。
 - 同一个话题里再发 `/agent`，接着用上次那个对话（`--resume`），它记得之前说过什么。
 - 提示词在插件里（原来是 hub 的 prompts/lark，`chat_agent.md` / `doc_agent.md` 和对应的 `*_context.md`）；要求它**不替我做承诺**：回复是以我的名义发的，只写已经做完的事，没做的写成建议。（2026-10-31 第一次真实使用，
   它在回复里写了「我这边下掉这个旧泳道的 orchestrator」，其实没做。）
@@ -61,7 +69,6 @@
   "enabled": true,
   "launcher": "<最强的启动器>",
   "prefix": "/agent",
-  "timeout_minutes": 30,
   "context_messages": 40
 }
 ```

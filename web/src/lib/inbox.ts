@@ -506,7 +506,7 @@ function escAttr(s: string) {
 
 /** `<jarvis-context kind="…" title="…" url="…">` the way the app writes it (ContextRef.xml). */
 export function contextXML(kind: string, title: string, url: string, text: string): string {
-  return `<jarvis-context kind="${kind}" title="${escAttr(title)}" url="${escAttr(url)}">\n${text.replace(/<\/jarvis-context>/g, "")}\n</jarvis-context>`;
+  return `<jarvis-context kind="${kind}" title="${escAttr(title)}" url="${escAttr(url)}">\n${text.replace(/<\/(?:persona|jarvis)-context>/g, "")}\n</jarvis-context>`;
 }
 
 /** The item as context the chat shows as a chip, then what to do with it (InboxHandOffSheet.message). */

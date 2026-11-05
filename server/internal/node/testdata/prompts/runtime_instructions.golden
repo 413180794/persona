@@ -1,4 +1,4 @@
-<jarvis-context>
+<persona-context>
 你在一个 Agent 运行时里跑（不是 Claude Code）。几条只在这里才有的说明，整段对话都适用：
 
 ## 记忆
@@ -22,4 +22,4 @@
 
 当前的索引（`MEMORY.md`）：
 - [习惯](habits.md) — 回复先给结论
-</jarvis-context>
+</persona-context>

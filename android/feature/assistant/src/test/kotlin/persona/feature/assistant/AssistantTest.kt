@@ -61,6 +61,10 @@ class AssistantTest {
         assertEquals("交给 Persona：项目 · 一个名字很长很长很长很长很长很长的项目", untitled.conversationTitle(words))
         assertEquals("a".repeat(30), Session(machineId = "m", sessionId = "d", lastText = "a".repeat(40)).conversationTitle(words))
         assertNull(handoffTitle("早报 <jarvis-context", words))
+        // <persona-context> (#3182) names a hand-off the same way.
+        assertEquals("交给 Persona：飞书 · 发布群", handoffTitle("<persona-context kind=\"context\" title=\"飞书 · 发布群\">(feed_id=f2)", words))
+        assertEquals("交给 Persona", handoffTitle(" <persona-context kind=\"context\">", words))
+        assertNull(handoffTitle("早报 <persona-context", words))
     }
 
     @Test fun archivedConversationsLeaveTheHistory() {

@@ -8,11 +8,12 @@ import (
 )
 
 // A message can carry <jarvis-context kind="…" title="…" url="…"> blocks: context picked on the phone, or everything
-// a Feishu /agent request hands its agent (prompts/lark). The apps show only the text outside the blocks as what the
+// a Feishu /agent request hands its agent (prompts/lark). The tag is being renamed <persona-context> (#3182): readers
+// take either name. The apps show only the text outside the blocks as what the
 // user wrote and fold the blocks into one row (docs/lark-agent.md「在 App 里怎么显示」).
 
-// contextBlockRe is one attributed block (the bare <jarvis-context> snapshot, ContextRe, is dropped before this).
-var contextBlockRe = regexp.MustCompile(`(?s)(<jarvis-context\b[^>]*>)(.*?)(</jarvis-context>)`)
+// contextBlockRe is one attributed block (the bare snapshot, ContextRe, is dropped before this).
+var contextBlockRe = regexp.MustCompile(`(?s)(<(?:jarvis|persona)-context\b[^>]*>)(.*?)(</(?:jarvis|persona)-context>)`)
 
 // legacyLarkAgentRe is a Feishu /agent prompt as hub wrote it before the instructions moved into a block: an intro line,
 // then ## 请求 (what was asked), ## 上下文 (blocks, plus a loose line or two), ## 怎么做 (the rules).
@@ -29,6 +30,7 @@ func legacyLarkAgent(s string) string {
 	blocks := contextBlockRe.FindAllString(ctx, -1)
 	loose := strings.TrimSpace(contextBlockRe.ReplaceAllString(ctx, ""))
 	var b strings.Builder
+	// Still the old name until the apps that read <persona-context> are out (#3182).
 	b.WriteString(`<jarvis-context kind="instructions" title="给 Agent 的说明">` + "\n" + intro + "\n")
 	if strings.HasPrefix(task, "（") { // no request written: the note in its place is for the agent
 		b.WriteString("\n" + task + "\n")
@@ -104,15 +106,15 @@ func lightContexts(s string, limit int) (string, bool) {
 }
 
 // injectedBlockRes are the blocks Persona and Claude Code put into a user message around what the user wrote: the
-// <jarvis-context> snapshot and attributed blocks, the <persona-view-errors> feedback, <system-reminder>s.
+// <persona-context> (or <jarvis-context>) snapshot and attributed blocks, the <persona-view-errors> feedback, <system-reminder>s.
 var injectedBlockRes = []*regexp.Regexp{
-	regexp.MustCompile(`(?s)<jarvis-context\b[^>]*>.*?</jarvis-context>`),
+	regexp.MustCompile(`(?s)<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`),
 	regexp.MustCompile(`(?s)<persona-view-errors\b[^>]*>.*?</persona-view-errors>`),
 	regexp.MustCompile(`(?s)<system-reminder\b[^>]*>.*?</system-reminder>`),
 }
 
 // injectedOpenRe is one of those blocks left open: a message clipped inside it (Meta.FirstUser is) ends there.
-var injectedOpenRe = regexp.MustCompile(`<(?:jarvis-context|persona-view-errors|system-reminder)\b`)
+var injectedOpenRe = regexp.MustCompile(`<(?:jarvis-context|persona-context|persona-view-errors|system-reminder)\b`)
 
 // StripInjected is what the user wrote in a message, for a line that shows it (a title, a notification): without the
 // injected blocks, a block cut off by a clip, and the paste wrappers (what was pasted stays). "" when nothing is left.

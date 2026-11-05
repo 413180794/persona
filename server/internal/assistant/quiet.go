@@ -97,35 +97,42 @@ func (s *Service) sendQuietNotice(id string) {
 	if n.state == "needs" && !s.taskWaits(ctx, n.todo) {
 		return // answered meanwhile (on the phone, the watch, another conversation)
 	}
-	here := s.settings(ctx)
-	if here.Main == "" || here.MachineID == "" {
+	// A reporting conversation's task is told there (reporters.go); the main conversation's in the main conversation
+	// of now.
+	machine, to, reporting := "", "", false
+	if m, ok := s.reporterOf(ctx, n.todo.Origin); ok {
+		machine, to, reporting = m, n.todo.Origin, true
+	} else if here := s.settings(ctx); here.Main != "" && here.MachineID != "" {
+		machine, to = here.MachineID, here.Main
+	} else {
 		s.logf("task %s: quiet notice: no main conversation", id)
 		return
 	}
-	msg := relayMsg{From: id, FromTitle: "任务「" + n.todo.Title + "」", Tool: noticeTool, Text: renderNotice(n), At: time.Now().UTC()}
-	if s.replaceQueuedNotice(here.Main, msg) {
+	msg := relayMsg{From: id, FromTitle: "任务「" + n.todo.Title + "」", Tool: noticeTool, Text: renderNotice(n, reporting), At: time.Now().UTC()}
+	if s.replaceQueuedNotice(to, msg) {
 		s.publish(ctx)
 		return
 	}
-	c, ok := s.session(ctx, here.MachineID, here.Main)
-	if !ok || c.Status == proto.StatusWorking || c.Starting || s.queuedFor(here.Main) > 0 {
-		s.queueRelay(here.Main, msg)
+	c, ok := s.session(ctx, machine, to)
+	if !ok || c.Status == proto.StatusWorking || c.Starting || s.queuedFor(to) > 0 {
+		s.queueRelay(to, msg)
 		s.publish(ctx) // shown waiting above the composer
 		if ok && c.Status != proto.StatusWorking && !c.Starting {
-			s.drainRelays(here.MachineID, []proto.Session{c})
+			s.drainRelays(machine, []proto.Session{c})
 		}
 		return
 	}
-	if err := s.deliverRelay(ctx, here.MachineID, here.Main, msg); err != nil {
+	if err := s.deliverRelay(ctx, machine, to, msg); err != nil {
 		s.logf("task %s: quiet notice: %v; queued", id, err)
-		s.queueRelay(here.Main, msg)
+		s.queueRelay(to, msg)
 		s.publish(ctx)
 	}
 }
 
-func renderNotice(n *quietNotice) string {
+// renderNotice is n's text; reporting: for the reporting conversation that opened the task, not the main one.
+func renderNotice(n *quietNotice, reporting bool) string {
 	return prompts.RenderTaskNotice(prompts.TaskNotice{Title: n.todo.Title, Machine: n.machine, State: n.state, Earlier: n.earlier,
-		Ask: n.ask, Text: n.text})
+		Ask: n.ask, Text: n.text, Reporting: reporting})
 }
 
 // replaceQueuedNotice: a notice about the same task still waits in the queue: msg takes its place (true).
@@ -159,10 +166,14 @@ func (s *Service) taskWaits(ctx context.Context, t Todo) bool {
 }
 
 // quietAgentTask: an agent agent_start opened from the main conversation is a quiet task while the user wants those
-// told only there (quietTask): a todo is made and the agent is linked to it, so it goes like
-// a task_plan task (card, snapshot, receipt, notices). Without the setting it stays an agent of its own (false).
+// told only there (quietTask), and so is one a reporting conversation opened (reporters.go): a todo is made and the
+// agent is linked to it, so it goes like a task_plan task (card, snapshot, receipt, notices). Without the setting it
+// stays an agent of its own (false).
 func (s *Service) quietAgentTask(ctx context.Context, conversation string, m Device, cwd, prompt string, tab any, sid string) bool {
-	if sid == "" || !s.isMain(ctx, conversation) {
+	if sid == "" {
+		return false
+	}
+	if _, reports := s.reporterOf(ctx, conversation); !reports && !s.isMain(ctx, conversation) {
 		return false
 	}
 	title, _ := tab.(string)

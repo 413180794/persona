@@ -135,16 +135,17 @@ internal data class ConversationWords(val untitled: String, val handoff: String,
 internal fun conversationWords() = ConversationWords(stringResource(R.string.assistant_untitled),
     stringResource(R.string.assistant_handoff), stringResource(R.string.assistant_handoff_named))
 
-private val handoffTag = Regex("""<jarvis-context\b[^>]*?\btitle="([^"]*)"""")
+private val handoffTag = Regex("""<(?:jarvis|persona)-context\b[^>]*?\btitle="([^"]*)"""")
 
-/** 「交给 Persona：X」 for text that is a `<jarvis-context title="X">` tag (attributes decoded), null for any other text. */
+/** 「交给 Persona：X」 for text that is a `<persona-context title="X">` tag (or the older `<jarvis-context>`) (attributes decoded), null for any other text. */
 internal fun handoffTitle(text: String, words: ConversationWords): String? {
     handoffTag.find(text)?.let { match ->
         val title = match.groupValues[1].replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">")
             .replace("&amp;", "&").trim()
         return if (title.isEmpty()) words.handoff else words.handoff(title)
     }
-    return if (text.trimStart().startsWith("<jarvis-context")) words.handoff else null
+    val start = text.trimStart()
+    return if (start.startsWith("<jarvis-context") || start.startsWith("<persona-context")) words.handoff else null
 }
 
 internal fun Session.conversationStatus(): Status = when (agentState) {

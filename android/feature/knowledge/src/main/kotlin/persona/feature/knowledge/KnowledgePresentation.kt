@@ -285,6 +285,8 @@ internal fun knowledgeContext(detail: KnowledgeDetail, kindName: String): String
         append("\n\n知识库目录：").append(detail.path) // i18n-ignore: context for the model
     }.replace("</jarvis-context>", "&lt;/jarvis-context&gt;")
         .replace("<jarvis-context", "&lt;jarvis-context")
+        .replace("</persona-context>", "&lt;/persona-context&gt;")
+        .replace("<persona-context", "&lt;persona-context")
     return "<jarvis-context kind=\"context\" title=\"${attribute(title)}\" url=\"\">\n$text\n</jarvis-context>"
 }
 

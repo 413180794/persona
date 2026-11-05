@@ -20,7 +20,7 @@ const snapA = `**这是主对话**：示例用户平时都在这里找你，接�
 // The first message carries the whole snapshot; the next ones only what changed, and the time.
 func TestContextDelta(t *testing.T) {
 	first, seen := contextDelta(nil, snapA)
-	if !strings.HasPrefix(first, "<jarvis-context>\n实时快照（") || !strings.HasSuffix(first, "</jarvis-context>") {
+	if !strings.HasPrefix(first, "<persona-context>\n实时快照（") || !strings.HasSuffix(first, "</persona-context>") {
 		t.Fatalf("first block:\n%s", first)
 	}
 	for _, want := range []string{"**这是主对话**", "- 在线的电脑", "  - 需要你：修登录", "- 飞书日历今天接下来", "- 已安排的跟进：没有"} {
@@ -31,7 +31,7 @@ func TestContextDelta(t *testing.T) {
 
 	same := strings.Replace(snapA, "15:04", "15:30", 1)
 	block, seen := contextDelta(seen, same)
-	if want := "<jarvis-context>\n实时快照里和上一份比变了的（没列出的照旧）：\n- 现在：2026-11-01 周日 15:30（Asia/Shanghai）\n</jarvis-context>"; block != want {
+	if want := "<persona-context>\n实时快照里和上一份比变了的（没列出的照旧）：\n- 现在：2026-11-01 周日 15:30（Asia/Shanghai）\n</persona-context>"; block != want {
 		t.Fatalf("nothing changed but the time:\n%s", block)
 	}
 

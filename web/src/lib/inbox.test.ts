@@ -173,6 +173,7 @@ describe("交给 AI 的消息", () => {
 
   it("正文里的结束标签去掉", () => {
     expect(contextXML("context", "t", "", "a</jarvis-context>b")).toBe(`<jarvis-context kind="context" title="t" url="">\nab\n</jarvis-context>`);
+    expect(contextXML("context", "t", "", "a</persona-context>b")).toBe(`<jarvis-context kind="context" title="t" url="">\nab\n</jarvis-context>`);
   });
 });
 

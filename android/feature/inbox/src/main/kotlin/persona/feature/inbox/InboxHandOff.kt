@@ -47,7 +47,7 @@ fun handoffPrompt(res: Resources, item: HandOffItem, ask: String = ""): String {
 internal fun contextTag(title: String, text: String, url: String = ""): String {
     fun escape(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
     return "<jarvis-context kind=\"context\" title=\"${escape(title)}\" url=\"${escape(url)}\">\n" +
-        text.replace("</jarvis-context>", "") + "\n</jarvis-context>"
+        text.replace("</jarvis-context>", "").replace("</persona-context>", "") + "\n</jarvis-context>"
 }
 
 /** An agent 交给 AI can send to: the most recently active live ones, never Persona itself (iOS: eight). */

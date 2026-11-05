@@ -205,7 +205,7 @@ func RenderLostTasks(tasks []string) string {
 	return render("assistant/lost_tasks", struct{ Tasks []string }{tasks})
 }
 
-// TaskNotice tells the main conversation about one of its quiet tasks (#1731): it was done, waits for the user, was
+// TaskNotice tells the main conversation (or a reporting one) about one of its quiet tasks (#1731): it was done, waits for the user, was
 // cut off by the model service or did not start. The assistant decides what to tell the user.
 type TaskNotice struct {
 	Title, Machine string
@@ -213,6 +213,9 @@ type TaskNotice struct {
 	Earlier        []string // what else it went through since the last notice ("在等用户", "做完了"), oldest first
 	Ask            string   // needs: what it asks
 	Text           string   // what its agent said last, or why it did not start
+	// Reporting: the notice goes into the conversation that opened the task (one started with report_tasks, such as
+	// a Feishu /agent's, #3192), not the main conversation.
+	Reporting bool
 }
 
 func RenderTaskNotice(n TaskNotice) string { return render("assistant/task_notice", n) }
@@ -266,7 +269,7 @@ func RenderCodexInstructions(memory string) string {
 	return render("assistant/codex_instructions", struct{ Memory string }{memory})
 }
 
-// TurnContext is the <jarvis-context> block a message to the assistant starts with (assistant/turn_context): the
+// TurnContext is the <persona-context> block a message to the assistant starts with (assistant/turn_context): the
 // sections of the live snapshot (AssistantContext) the conversation hasn't seen yet. Full: all of them (the
 // conversation is new, was compacted, or node lost track); otherwise only those that changed, the time always.
 type TurnContext struct {

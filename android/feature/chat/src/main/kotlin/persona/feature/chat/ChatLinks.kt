@@ -144,7 +144,7 @@ internal object ChatLinks {
 /**
  * A piece of a page picked in the link sheet, carried in a message as
  * `<jarvis-context kind="context|edit|quote" title="…" url="…" msg="…">text</jarvis-context>`, written exactly as iOS's `ContextRef`
- * does: the attributes escaped, the text as it is with only `</jarvis-context>` taken out (it cannot close the tag).
+ * does: the attributes escaped, the text as it is with only `</jarvis-context>` and `</persona-context>` taken out (it cannot close the tag).
  */
 data class ChatLinkContext(
     val kind: String = "context", val title: String, val url: String, val text: String,
@@ -153,7 +153,7 @@ data class ChatLinkContext(
     val msg: String = "",
 ) {
     fun xml(): String = "<jarvis-context kind=\"${if (kind == "edit" || kind == QUOTE) kind else "context"}\" title=\"${escape(title)}\" url=\"${escape(url)}\"" +
-        (if (msg.isEmpty()) "" else " msg=\"${escape(msg)}\"") + ">\n" + text.replace("</jarvis-context>", "") + "\n</jarvis-context>"
+        (if (msg.isEmpty()) "" else " msg=\"${escape(msg)}\"") + ">\n" + text.replace("</jarvis-context>", "").replace("</persona-context>", "") + "\n</jarvis-context>"
 
     companion object {
         /**
@@ -177,7 +177,7 @@ data class ChatLinkContext(
         const val QUOTE_ME = "我"
         fun quote(text: String, from: String, msg: String) = ChatLinkContext(QUOTE, from, "", text.trim(), msg = msg)
 
-        private val tags = Regex("<jarvis-context\\b([^>]*)>([\\s\\S]*?)</jarvis-context>\\s*")
+        private val tags = Regex("<(?:jarvis|persona)-context\\b([^>]*)>([\\s\\S]*?)</(?:jarvis|persona)-context>\\s*")
         private val attributes = Regex("([a-z]+)=\"([^\"]*)\"")
         private fun escape(s: String) = s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
         private fun unescape(s: String) = s.replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")

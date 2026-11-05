@@ -1,7 +1,8 @@
 package prompts
 
 // TodoDecisions is the context a handoff to an agent carries for a todo's decisions in effect (todo/decisions,
-// #1618, docs/todos.md「决策记录」). The caller leaves out "</jarvis-context>" from the texts.
+// #1618, docs/todos.md「决策记录」). The caller leaves out the closing tags
+// ("</persona-context>", "</jarvis-context>") from the texts.
 type TodoDecisions struct {
 	Title     string
 	Decisions []TodoDecision
@@ -15,7 +16,7 @@ type TodoDecision struct {
 	When, From               string
 }
 
-// RenderTodoDecisions is the <jarvis-context> block of a todo's decisions; empty when it has none.
+// RenderTodoDecisions is the context block of a todo's decisions; empty when it has none.
 func RenderTodoDecisions(d TodoDecisions) string {
 	if len(d.Decisions) == 0 {
 		return ""

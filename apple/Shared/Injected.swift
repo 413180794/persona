@@ -59,7 +59,7 @@ nonisolated struct Injected: Codable, Hashable, Sendable {
     private static let noticeHead = try! NSRegularExpression(pattern: #"^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$"#)
     private static let followupHead = try! NSRegularExpression(pattern: #"^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$"#)
     private static let wakeHead = try! NSRegularExpression(pattern: #"^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」"#)
-    private static let leadContext = try! NSRegularExpression(pattern: #"^\s*<jarvis-context\b[^>]*>[\s\S]*?</jarvis-context>"#)
+    private static let leadContext = try! NSRegularExpression(pattern: #"^\s*<(?:jarvis|persona)-context\b[^>]*>[\s\S]*?</(?:jarvis|persona)-context>"#)
     private static let noticeMarker = "这是 Persona 的任务通知"
     private static let lostTasksHead = "⚠️ 运行你的 node 刚重启过"
     private static let kbHintHead = "（知识库"

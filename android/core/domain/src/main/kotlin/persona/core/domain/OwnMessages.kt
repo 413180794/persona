@@ -7,7 +7,7 @@ private const val RELAY_TITLE = "来自对话「" // i18n-ignore: matches the hu
 
 /** Sent by another Persona conversation (conversation_new / conversation_send), not typed by the user. */
 fun isRelayed(text: String): Boolean =
-    text.contains("<jarvis-context") && parseContexts(text).first.any { it.title.startsWith(RELAY_TITLE) }
+    hasContextTag(text) && parseContexts(text).first.any { it.title.startsWith(RELAY_TITLE) }
 
 /**
  * Typed by the user (or dictated, or a quick command expanded): the pale blue bubble (#2643). Persona's own messages

@@ -306,7 +306,7 @@ internal fun formatSharedContent(title: String, text: String, attachments: List<
             .replace("<", "&lt;").replace(">", "&gt;")
         val url = Regex("https?://[^\\s<>]+", RegexOption.IGNORE_CASE).find(text)?.value.orEmpty()
         "<jarvis-context kind=\"context\" title=\"${escape(title.ifBlank { "分享内容" })}\" url=\"${escape(url)}\">\n" +
-            content.replace("</jarvis-context>", "") + "\n</jarvis-context>"
+            content.replace("</jarvis-context>", "").replace("</persona-context>", "") + "\n</jarvis-context>"
     } else content
     return listOf(shared, note.trim()).filter { it.isNotBlank() }.joinToString("\n\n")
 }
