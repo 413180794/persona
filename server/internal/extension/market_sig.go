@@ -22,7 +22,7 @@ const SigSuffix = ".sig"
 const (
 	SigSigned     = "signed"      // the index verifies with the trusted key
 	SigUnsigned   = "unsigned"    // no signature, and no key trusted yet: read as before
-	SigInvalid    = "invalid"     // a key is trusted, and the signature does not verify or is gone
+	SigInvalid    = "invalid"     // the signature is malformed, fails verification, or a trusted market stopped signing
 	SigKeyChanged = "key_changed" // signed by another key than the trusted one
 )
 
@@ -81,11 +81,6 @@ func CheckSignature(index, sig []byte, trusted, hint string) (MarketSignature, s
 	var sf sigFile
 	if sig != nil {
 		if len(sig) > sigFileMost || json.Unmarshal(sig, &sf) != nil || sf.Alg != "ed25519" || sf.KeyID == "" {
-			if trusted == "" {
-				// Not a signature (a site answering every path with the same page): nothing to trust, read as unsigned.
-				// A market whose key is trusted gets no such pass.
-				return MarketSignature{State: SigUnsigned}, "", ""
-			}
 			return MarketSignature{State: SigInvalid}, trusted, "市场的签名文件读不出来"
 		}
 	}

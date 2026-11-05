@@ -191,4 +191,15 @@ func TestExtensionMarketUnsigned(t *testing.T) {
 	if code, out := call(t, mux, "POST", "/api/v1/extensions/-/markets", phone, fmt.Sprintf(`{"spec": %q}`, srv.URL+"/m/other/")); code != 400 {
 		t.Fatalf("added a market whose signature is not its key's: %d %v", code, out)
 	}
+
+	for _, sig := range [][]byte{[]byte("not json"), []byte(`{"market_version": 1}`), {}} {
+		files["broken/"+extension.IndexFile] = files[extension.IndexFile]
+		files["broken/"+extension.IndexFile+extension.SigSuffix] = sig
+		if code, out := call(t, mux, "POST", "/api/v1/extensions/-/markets", phone, fmt.Sprintf(`{"spec": %q}`, srv.URL+"/m/broken/")); code != 400 || !strings.Contains(fmt.Sprint(out["error"]), "签名") {
+			t.Fatalf("added a market with a malformed first signature: %d %v", code, out)
+		}
+	}
+	if _, out := call(t, mux, "GET", "/api/v1/extensions/-/markets", phone, ""); len(out["markets"].([]any)) != 1 {
+		t.Fatalf("refused markets were persisted: %v", out)
+	}
 }
