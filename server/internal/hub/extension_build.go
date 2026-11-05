@@ -304,7 +304,47 @@ func (p *devProject) build(ctx context.Context, platform string, stderr io.Write
 		}
 		return fmt.Errorf("%s 构建失败：%w", platform, err)
 	}
+	if p.kind == "ts" && platform == "darwin-arm64" && runtime.GOOS == "darwin" {
+		return signedForMac(ctx, out)
+	}
 	return nil
+}
+
+// codesign runs Apple's codesign; a variable so tests can stand in for it.
+var codesign = func(ctx context.Context, args ...string) error {
+	if _, err := exec.LookPath("codesign"); err != nil {
+		return errNoCodesign
+	}
+	b, err := exec.CommandContext(ctx, "codesign", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+var errNoCodesign = errors.New("no codesign")
+
+// errBunUnsigned: the bun here compiles Mac programs macOS will not run (signedForMac).
+var errBunUnsigned = errors.New("bun left the program unsigned")
+
+// signedForMac makes sure a program bun compiled for an Apple-silicon Mac is signed: macOS kills an unsigned arm64
+// program the moment it starts. bun signs what it compiles; some versions (1.3.12 from npm, 2026-11) leave it unsigned
+// in a form codesign cannot sign either, and the extension then dies with no word (#2555).
+func signedForMac(ctx context.Context, out string) error {
+	if err := codesign(ctx, "-v", out); err == nil || errors.Is(err, errNoCodesign) {
+		return nil
+	}
+	if err := codesign(ctx, "--force", "--sign", "-", out); err == nil {
+		if err := codesign(ctx, "-v", out); err == nil {
+			return nil
+		}
+	}
+	version := "?"
+	if b, err := exec.CommandContext(ctx, "bun", "--version").Output(); err == nil {
+		version = strings.TrimSpace(string(b))
+	}
+	return fmt.Errorf("bun %s 编出来的 %s 没有签名、也补不上签名，macOS 会在它启动时直接结束它：升级 bun（bun upgrade）后再试（%w）",
+		version, filepath.Base(out), errBunUnsigned)
 }
 
 // check holds the directory to what installing it would (the program for this machine is there, the settings'

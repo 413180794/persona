@@ -1594,6 +1594,8 @@ func main() {
 
 **打包**：`bun build --compile --minify --target=bun-<linux|darwin>-<x64|arm64> src/main.ts --outfile bin/<id>-<平台>`，四个平台都能在一台 Linux 上交叉编译，
 一个文件 60–80 MB（带着 Bun 自己）。包里只有这个可执行文件，hub 和电脑上都不需要 node / bun。
+在 Apple 芯片的 Mac 上编 `darwin-arm64` 时，`personad extension` 编完先查签名（`codesign -v`）：macOS 会直接结束没签名的 arm64 程序。
+没签名就补一个 ad-hoc 签名；补不上就报错，带上 bun 的版本，让人 `bun upgrade` 后再试（#2555：npm 包装的 bun 1.3.12 编出来的程序没有签名，也补不上，1.4.3 正常）。
 
 ### 模板
 

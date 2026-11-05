@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -54,7 +55,9 @@ func TestNewTestPackTemplates(t *testing.T) {
 			ctx := context.Background()
 			out.Reset()
 			var errs bytes.Buffer
-			if err := testExtension(ctx, dir, &out, &errs); err != nil {
+			if err := testExtension(ctx, dir, &out, &errs); errors.Is(err, errBunUnsigned) {
+				t.Skipf("the bun here cannot build for this Mac: %v", err) // the machine's bun, not the template (#2555)
+			} else if err != nil {
 				t.Fatalf("test: %v\n%s\n%s", err, out.String(), errs.String())
 			}
 			if !strings.Contains(out.String(), "✓ 协议") {
