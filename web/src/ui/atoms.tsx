@@ -10,6 +10,7 @@ import { FeedbackGate, offlineNow } from "../lib/feedback";
 import { useCloseOnBack } from "../lib/back-close";
 import { BUSY_MOTION } from "../lib/busy-motion";
 import { keyboardFrame } from "../lib/viewport";
+import { prefersReducedMotion } from "./stream/motion";
 import { accelLabel, activation, edge, enabled, keyIntent, renameCommit, rowLabel, type MenuItem } from "./menu-model";
 import { focusables, NARROW_QUERY, placeMenu, placeSubmenu, SHEET_QUERY, trapTab, useMedia, type MenuPlace } from "./overlay";
 
@@ -694,6 +695,59 @@ export function useMenu() {
   };
 }
 
+// ── overlay exits ───────────────────────────────────────
+
+/** How long an overlay takes to leave: a little quicker than the enter it undoes (the card's slide-up 220 ms, the
+ *  sheet's 300 ms, a toast's 220 ms). `glide`: a toast moving to its new place in the stack, as long as its slide-up. */
+export const EXIT_MS = { card: 160, sheet: 220, toast: 160, glide: 220 } as const;
+/** The card goes back the way it came in (slide-up's first frame, styles.css); the sheet back down. */
+export const CARD_OUT: Keyframe[] = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(12px) scale(0.985)" }];
+const SHEET_OUT: Keyframe[] = [{ transform: "none" }, { transform: "translateY(100%)" }];
+const TOAST_OUT: Keyframe[] = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(6px) scale(0.985)" }];
+
+/** Whether an exit plays: the browser has the Web Animations API (jsdom has none) and reduced motion is not asked
+ *  for. Otherwise an overlay goes at once, as it always did. */
+export function exitsPlay(): boolean {
+  return typeof Element !== "undefined" && typeof Element.prototype.animate === "function" && !prefersReducedMotion();
+}
+
+/** Calls `done` once the animations finish, or `ms` and a margin later if they never do (a hidden tab, an element
+ *  that was not there); returns the cancel, which stops them without calling `done`. */
+function afterAll(anims: (Animation | undefined)[], ms: number, done: () => void): () => void {
+  let over = false;
+  const end = () => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    done();
+  };
+  const timer = setTimeout(end, ms + 120);
+  const live = anims.filter((a): a is Animation => !!a);
+  Promise.all(live.map((a) => a.finished)).then(end, () => {}); // a cancelled one rejects: the cancel ran already
+  return () => {
+    over = true;
+    clearTimeout(timer);
+    live.forEach((a) => a.cancel());
+  };
+}
+
+/** Keeps an overlay on screen while it leaves: after `open` turns false it stays mounted (`leaving`) while `play`'s
+ *  animations run, then goes. Opened again on the way out, it stops them and is simply open. */
+export function useExit(open: boolean, ms: number, play: () => (Animation | undefined)[]) {
+  const [leaving, setLeaving] = useState(false);
+  const [was, setWas] = useState(open);
+  if (was !== open) {
+    // adjusted while rendering, like Collapse: the frame that closes it already has it leaving, not gone
+    setWas(open);
+    setLeaving(!open && exitsPlay());
+  }
+  useLayoutEffect(() => {
+    if (!leaving) return;
+    return afterAll(play(), ms, () => setLeaving(false));
+  }, [leaving]);
+  return { mounted: open || leaving, leaving };
+}
+
 // ── modal dialog ────────────────────────────────────────
 
 /** A modal. Wide: a card in the middle of the page. Phone width (max-sm): a sheet up from the bottom of what the
@@ -744,30 +798,44 @@ export function Dialog({
       if (back?.isConnected) back.focus({ preventScroll: true });
     };
   }, [open]);
-  if (!open) return null;
+  const backdrop = useRef<HTMLDivElement>(null);
+  // what it showed when last open: a caller may clear what the body reads once it is closed, while it still leaves
+  const kept = useRef({ title, children, footer });
+  if (open) kept.current = { title, children, footer };
+  const exit = useExit(open, EXIT_MS.card, () => [
+    backdrop.current?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: EXIT_MS.card, easing: "ease-out", fill: "forwards" }),
+    panel.current?.animate(sheet ? SHEET_OUT : CARD_OUT, { duration: sheet ? EXIT_MS.sheet : EXIT_MS.card, easing: EASE, fill: "forwards" }),
+  ]);
+  if (!exit.mounted) return null;
+  const shown = open ? { title, children, footer } : kept.current;
   return createPortal(
     <div
+      ref={backdrop}
+      data-closing={exit.leaving || undefined}
+      inert={exit.leaving || undefined}
       className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/25 px-4 pt-[12vh] pb-8 backdrop-blur-[2px] dark:bg-black/45 max-sm:top-(--kb-top) max-sm:bottom-auto max-sm:h-(--kb-h) max-sm:items-end max-sm:overflow-hidden max-sm:p-0"
       style={{ animation: "fade-in 140ms ease-out both" }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
+      {/* A column either way, so a tall body scrolls between the title and the footer: the card stops short of the
+          backdrop's bottom padding (12vh above it, pb-8 below), the sheet at 90% of what the keyboard leaves. */}
       <div
         ref={panel}
         role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
+        aria-modal={open || undefined}
+        aria-labelledby={shown.title ? titleId : undefined}
         tabIndex={-1}
-        className="w-full max-w-(--dialog-w) animate-[slide-up_220ms_var(--ease-out-strong)_both] overflow-hidden rounded-[14px] bg-surface shadow-overlay outline-none max-sm:flex max-sm:max-h-[calc(var(--kb-h)*0.9)] max-sm:max-w-none max-sm:animate-none max-sm:flex-col max-sm:rounded-b-none max-sm:transition-transform max-sm:duration-300 max-sm:ease-(--ease-out-strong) max-sm:starting:translate-y-full"
+        className="flex max-h-[calc(88vh-(--spacing(8)))] w-full max-w-(--dialog-w) animate-[slide-up_220ms_var(--ease-out-strong)_both] flex-col overflow-hidden rounded-[14px] bg-surface shadow-overlay outline-none max-sm:max-h-[calc(var(--kb-h)*0.9)] max-sm:max-w-none max-sm:animate-none max-sm:rounded-b-none max-sm:transition-transform max-sm:duration-300 max-sm:ease-(--ease-out-strong) max-sm:starting:translate-y-full"
         style={{ "--dialog-w": `${width}px` } as React.CSSProperties}
       >
-        {title && (
-          <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-1 max-sm:shrink-0">
-            <h2 id={titleId} className="text-[14px] font-semibold text-ink">{title}</h2>
+        {shown.title && (
+          <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-3.5 pb-1">
+            <h2 id={titleId} className="text-[14px] font-semibold text-ink">{shown.title}</h2>
             <IconButton icon="x" label={t("ui-atoms.close")} onClick={onClose} size={26} iconSize={14} />
           </div>
         )}
-        <div className={cx("px-4 pt-2 pb-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-contain", !footer && "max-sm:pb-[calc(16px+env(safe-area-inset-bottom))]")}>{children}</div>
-        {footer && <div className="flex items-center justify-end gap-2 border-t border-line bg-inset px-4 py-2.5 max-sm:shrink-0 max-sm:pb-[calc(10px+env(safe-area-inset-bottom))]">{footer}</div>}
+        <div className={cx("min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2 pb-4", !shown.footer && "max-sm:pb-[calc(16px+env(safe-area-inset-bottom))]")}>{shown.children}</div>
+        {shown.footer && <div className="flex shrink-0 items-center justify-end gap-2 border-t border-line bg-inset px-4 py-2.5 max-sm:pb-[calc(10px+env(safe-area-inset-bottom))]">{shown.footer}</div>}
       </div>
     </div>,
     document.body,
@@ -778,44 +846,140 @@ export function Dialog({
 
 /** A button on a toast (撤销): it runs, and the toast goes. */
 export type ToastAction = { label: string; run: () => void };
-type Toast = { id: number; text: string; tone: "info" | "error" | "ok"; action?: ToastAction };
+/** `leaving`: timed out or closed, playing its exit before it is gone (the stack removes it when that ends). */
+type Toast = { id: number; text: string; tone: "info" | "error" | "ok"; action?: ToastAction; leaving?: boolean };
 let toasts: Toast[] = [];
 const toastListeners = new Set<() => void>();
 let toastId = 0;
+/** Each toast's timer: what is left of its time, since when that has been running, and the pending timeout. */
+const toastTimers = new Map<number, { left: number; since: number; handle?: ReturnType<typeof setTimeout> }>();
+let toastsPaused = false;
+
+const toastsChanged = () => toastListeners.forEach((l) => l());
+
+function removeToast(id: number) {
+  if (!toasts.some((t) => t.id === id)) return;
+  toasts = toasts.filter((t) => t.id !== id);
+  toastsChanged();
+}
 
 function dropToast(id: number) {
-  toasts = toasts.filter((t) => t.id !== id);
-  toastListeners.forEach((l) => l());
+  clearTimeout(toastTimers.get(id)?.handle);
+  toastTimers.delete(id);
+  const item = toasts.find((t) => t.id === id);
+  if (!item || item.leaving) return;
+  if (!exitsPlay() || !toastListeners.size) return removeToast(id);
+  toasts = toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t));
+  toastsChanged();
+  setTimeout(() => removeToast(id), EXIT_MS.toast + 120); // the exit's end may never come (a hidden tab)
+}
+
+/** Holds every toast's time while the pointer or the focus is on one (WCAG 2.2.1), and lets it run on after. */
+function pauseToasts(on: boolean) {
+  if (toastsPaused === on) return;
+  toastsPaused = on;
+  const now = Date.now();
+  for (const [id, timer] of toastTimers) {
+    if (on) {
+      clearTimeout(timer.handle);
+      timer.handle = undefined;
+      timer.left -= now - timer.since;
+    } else {
+      timer.since = now;
+      timer.handle = setTimeout(() => dropToast(id), Math.max(0, timer.left));
+    }
+  }
 }
 
 const gate = new FeedbackGate();
 
 /** Shows a line at the bottom. While the hub is out of reach an error that is about it (lib/feedback.ts
  *  isOfflineError) is one calm "didn't go through" at most every few seconds; any other error keeps its words. The
- *  same line again within a few seconds is folded; one with a button always shows. */
+ *  same line again within a few seconds is folded; one with a button always shows. At most three at a time: a fourth
+ *  sends the oldest away. */
 export function toast(text: string, tone: Toast["tone"] = "info", action?: ToastAction) {
   const shown = action ? { text, tone } : gate.pass(text, tone, offlineNow(), Date.now());
   if (!shown) return;
   const id = ++toastId;
-  toasts = [...toasts.slice(-2), { id, text: shown.text, tone: shown.tone, action }];
-  toastListeners.forEach((l) => l());
+  toasts.filter((t) => !t.leaving).slice(0, -2).forEach((t) => dropToast(t.id));
+  toasts = [...toasts, { id, text: shown.text, tone: shown.tone, action }];
   // One with a button stays long enough to reach it.
-  setTimeout(() => dropToast(id), action ? 6000 : shown.tone === "error" ? 5200 : 2800);
+  const ms = action ? 6000 : shown.tone === "error" ? 5200 : 2800;
+  toastTimers.set(id, { left: ms, since: Date.now(), handle: toastsPaused ? undefined : setTimeout(() => dropToast(id), ms) });
+  toastsChanged();
 }
 
 export function Toasts() {
   const [, force] = useState(0);
+  const rows = useRef(new Map<number, HTMLDivElement>());
+  // where each row was on screen just before the list changed, and the glides and exits that are running
+  const before = useRef(new Map<number, number>());
+  const glides = useRef(new Map<number, Animation>());
+  const exiting = useRef(new Set<number>());
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [focused, setFocused] = useState<number | null>(null);
   useEffect(() => {
-    const l = () => force((x) => x + 1);
+    const l = () => {
+      // measured before React moves anything: the F of FLIP
+      before.current.clear();
+      if (exitsPlay()) for (const [id, el] of rows.current) before.current.set(id, el.getBoundingClientRect().top);
+      force((x) => x + 1);
+    };
     toastListeners.add(l);
     return () => {
       toastListeners.delete(l);
     };
   }, []);
+  useLayoutEffect(() => {
+    // a row the list change moved slides from where it was to its new place, by transform only
+    for (const item of toasts) {
+      const el = rows.current.get(item.id);
+      const first = before.current.get(item.id);
+      if (!el || first === undefined || item.leaving) continue;
+      glides.current.get(item.id)?.cancel();
+      const dy = first - el.getBoundingClientRect().top;
+      if (Math.abs(dy) < 0.5) continue;
+      const glide = el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: EXIT_MS.glide, easing: EASE });
+      glides.current.set(item.id, glide);
+    }
+    before.current.clear();
+    // one that is leaving plays its exit once, then goes
+    for (const item of toasts) {
+      const el = rows.current.get(item.id);
+      if (!item.leaving || !el || exiting.current.has(item.id)) continue;
+      exiting.current.add(item.id);
+      glides.current.get(item.id)?.cancel();
+      el.animate(TOAST_OUT, { duration: EXIT_MS.toast, easing: EASE, fill: "forwards" }).finished.then(() => removeToast(item.id), () => {});
+    }
+    for (const id of [...glides.current.keys(), ...exiting.current]) {
+      if (toasts.some((t) => t.id === id)) continue;
+      glides.current.delete(id);
+      exiting.current.delete(id);
+    }
+  });
+  // held while the pointer or the focus is on a toast that is still there (one that went takes its hold with it)
+  const live = (id: number | null) => id !== null && toasts.some((t) => t.id === id && !t.leaving);
+  const paused = live(hovered) || live(focused);
+  useEffect(() => pauseToasts(paused), [paused]);
+  useEffect(() => () => pauseToasts(false), []);
   return createPortal(
     <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex flex-col items-center gap-2 px-4">
       {toasts.map((item) => (
-        <div key={item.id} className="pointer-events-auto flex max-w-md items-center gap-2 rounded-[10px] border border-tooltip-border bg-tooltip-bg px-3 py-2 text-[12.5px] text-tooltip-fg shadow-overlay" style={{ animation: `slide-up 220ms ${EASE} both` }}>
+        <div
+          key={item.id}
+          ref={(el) => {
+            if (el) rows.current.set(item.id, el);
+            else rows.current.delete(item.id);
+          }}
+          data-closing={item.leaving || undefined}
+          inert={item.leaving || undefined}
+          onMouseEnter={() => setHovered(item.id)}
+          onMouseLeave={() => setHovered((h) => (h === item.id ? null : h))}
+          onFocus={() => setFocused(item.id)}
+          onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setFocused((f) => (f === item.id ? null : f))}
+          className="pointer-events-auto flex max-w-md items-center gap-2 rounded-[10px] border border-tooltip-border bg-tooltip-bg px-3 py-2 text-[12.5px] text-tooltip-fg shadow-overlay"
+          style={{ animation: `slide-up 220ms ${EASE} both` }}
+        >
           {item.tone === "error" && <Icon name="warning" size={13} stroke={2.2} className="shrink-0 text-red" />}
           {item.tone === "ok" && <Icon name="check" size={13} stroke={2.6} className="text-green" />}
           <span className="min-w-0">{item.text}</span>

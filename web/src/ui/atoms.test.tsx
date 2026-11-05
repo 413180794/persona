@@ -108,10 +108,16 @@ describe("dialog", () => {
 
   it("scrolls its body and pins the footer above the home indicator", () => {
     const html = renderDialog(<button type="button">启动</button>);
-    expect(html).toContain("max-sm:overflow-y-auto");
-    expect(html).toMatch(/max-sm:shrink-0 max-sm:pb-\[calc\(10px\+env\(safe-area-inset-bottom\)\)\]">.*启动/);
+    expect(html).toContain('class="min-h-0 flex-1 overflow-y-auto overscroll-contain');
+    expect(html).toMatch(/flex shrink-0 [^"]* max-sm:pb-\[calc\(10px\+env\(safe-area-inset-bottom\)\)\]">.*启动/);
     // without a footer the body keeps the safe area
     expect(renderDialog()).toContain("max-sm:pb-[calc(16px+env(safe-area-inset-bottom))]");
+  });
+
+  it("is a column on a wide screen too, no taller than the room under its 12vh and above the pb-8", () => {
+    const html = renderDialog(<button type="button">启动</button>);
+    expect(html).toMatch(/role="dialog"[^>]*class="flex max-h-\[calc\(88vh-\(--spacing\(8\)\)\)\] [^"]*flex-col/);
+    expect(html).toContain("pt-[12vh] pb-8");
   });
 });
 
