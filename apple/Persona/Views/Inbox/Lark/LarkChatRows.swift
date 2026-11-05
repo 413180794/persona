@@ -14,23 +14,35 @@ nonisolated enum LarkChatRows {
 
     /// `messages` in Feishu's order; `outgoing` in the order written. A message with no time stays above mine on
     /// their way, as before.
-    static func rows(messages: [LarkMessage], outgoing: [LarkOutgoing], like mine: LarkMessage?) -> [Row] {
+    ///
+    /// Feishu's copy of one of mine takes over its row: `copies` (LarkOutbox.copies: outgoing id → copy's message id)
+    /// draws the copy in place of the outgoing one under the outgoing row's id, and `adopted` (copy's message id →
+    /// row id, kept by the page for the visit) keeps that id once the outgoing one is gone. The row then only changes
+    /// what it shows: nothing is removed and inserted, the list does not move.
+    static func rows(messages: [LarkMessage], outgoing: [LarkOutgoing], like mine: LarkMessage?,
+                     copies: [UUID: String] = [:], adopted: [String: String] = [:]) -> [Row] {
+        let waitingOut = outgoing.filter { copies[$0.id] == nil }
+        let drawnOut = Set(waitingOut.map(\.rowID))
+        var rowOf = adopted.filter { !drawnOut.contains($0.value) }
+        for (o, copy) in copies { rowOf[copy] = LarkOutgoing.rowID(o) }
         var rows: [Row] = []
-        rows.reserveCapacity(messages.count + outgoing.count)
-        var waiting = outgoing[...]
+        rows.reserveCapacity(messages.count + waitingOut.count)
+        var waiting = waitingOut[...]
         for m in messages {
             while let o = waiting.first, let at = m.createdAt, at > o.written {
-                rows.append(row(o, like: mine))
+                rows.append(Row(id: o.rowID, message: o.message(like: mine), outgoing: o))
                 waiting = waiting.dropFirst()
             }
-            rows.append(Row(id: m.id, message: m, outgoing: nil))
+            rows.append(Row(id: rowOf[m.id] ?? m.id, message: m, outgoing: nil))
         }
-        rows += waiting.map { row($0, like: mine) }
+        rows += waiting.map { Row(id: $0.rowID, message: $0.message(like: mine), outgoing: $0) }
         return rows
     }
 
-    private static func row(_ o: LarkOutgoing, like mine: LarkMessage?) -> Row {
-        let m = o.message(like: mine)
-        return Row(id: m.id, message: m, outgoing: o)
+    /// What the page keeps in `adopted` once rows were drawn with these `copies` (the outgoing ones may be gone by then).
+    static func adopting(_ copies: [UUID: String], into adopted: [String: String]) -> [String: String] {
+        var next = adopted
+        for (o, copy) in copies { next[copy] = LarkOutgoing.rowID(o) }
+        return next
     }
 }

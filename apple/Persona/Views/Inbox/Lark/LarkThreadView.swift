@@ -49,6 +49,21 @@ struct LarkThreadView: View {
     @State private var flash: QuoteFlashMark?
 
     private var replies: [LarkMessage] { pager.messages }
+    /// Copies of mine that took over their outgoing rows: message id → row id, while the sheet is open (LarkChatRows).
+    @State private var adopted: [String: String] = [:]
+    /// Feishu's copies of mine on their way that it already has: outgoing id → message id (LarkOutbox.copies).
+    /// Mine on their way here, by when they were written: text replies (`outgoing`) and the queued pictures and files.
+    private var mineOnTheWay: [LarkOutgoing] { (outgoing + queued).sorted { $0.written < $1.written } }
+    private var copies: [UUID: String] { LarkOutbox.copies(mineOnTheWay, messages: pager.messages) }
+
+    private var react: (LarkMessage, String) -> Void {
+        { m, key in
+            guard let i = pager.messages.firstIndex(where: { $0.id == m.id }) else { return }
+            let (next, remove) = m.togglingReaction(key, me: "我")
+            pager.messages[i] = next
+            Task { do { try await api?.larkReact(m.id, key: key, remove: remove) } catch { model.show(error) } }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -75,8 +90,8 @@ struct LarkThreadView: View {
                     // Mine on their way are in the same list, where they were written (LarkChatRows).
                     // Pictures and files wait in the chat's outbox (`queued`), text here; both by when they were written.
                     let queuedIDs = Set(queued.map(\.id))
-                    let mineOnTheWay = (outgoing + queued).sorted { $0.written < $1.written }
-                    let rows = LarkChatRows.rows(messages: replies, outgoing: mineOnTheWay, like: (replies + [root]).last(where: \.isMine))
+                    let rows = LarkChatRows.rows(messages: replies, outgoing: mineOnTheWay, like: (replies + [root]).last(where: \.isMine),
+                                                 copies: copies, adopted: adopted)
                     ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                         let m = row.message
                         // The first loaded reply's time counts from the root's (under the 条回复 line); it does not
@@ -84,30 +99,28 @@ struct LarkThreadView: View {
                         let prev = i > 0 ? rows[i - 1].message : root
                         let grouped = (i > 0 || row.outgoing != nil) && LarkChatLayout.continues(m, after: prev)
                         if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
-                        if let o = row.outgoing, queuedIDs.contains(o.id) {
-                            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
-                                            retry: { resendQueued(o.id) },
-                                            edit: { putBack(o) },
-                                            discard: { discardQueued(o.id) })
-                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                                .id(m.id)
-                        } else if let o = row.outgoing {
-                            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
-                                            retry: { resend(o.id) },
-                                            edit: {
-                                                discard(o.id)
-                                                text = text.isEmpty ? o.text : text + "\n" + o.text
-                                                mentions += o.mentions
-                                            },
-                                            discard: { discard(o.id) })
-                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                                .id(m.id)
-                        } else {
-                            LarkMessageRow(message: m, grouped: grouped, isGroup: isGroup, feedID: feedID, inThread: true)
-                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                                .overlay { if flash?.line == m.id { QuoteFlash().id(flash?.id) } }
-                                .id(m.id)
-                        }
+                        // One view either way: when Feishu's copy takes the row over, only what it shows changes.
+                        LarkMessageRow(message: m, grouped: grouped, isGroup: isGroup, feedID: row.outgoing == nil ? feedID : nil,
+                                       inThread: true,
+                                       sending: row.outgoing.map { o in
+                                           queuedIDs.contains(o.id)
+                                               ? LarkSendMark(state: o.state, retry: { resendQueued(o.id) }, edit: { putBack(o) },
+                                                              discard: { discardQueued(o.id) },
+                                                              canRetry: o.canRetry, canRemoveSent: o.attachment != nil && o.messageID == nil)
+                                               : LarkSendMark(state: o.state, retry: { resend(o.id) },
+                                                              edit: {
+                                                                  discard(o.id)
+                                                                  text = text.isEmpty ? o.text : text + "\n" + o.text
+                                                                  mentions += o.mentions
+                                                              },
+                                                              discard: { discard(o.id) },
+                                                              canRetry: o.canRetry, canRemoveSent: o.attachment != nil && o.messageID == nil)
+                                       },
+                                       localAttachment: row.outgoing?.attachment)
+                            .environment(\.larkReact, row.outgoing == nil ? react : nil) // not in Feishu yet: nothing to react to
+                            .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                            .overlay { if flash?.line == m.id { QuoteFlash().id(flash?.id) } }
+                            .id(row.id)
                     }
                 }
                 .padding(Theme.Space.m)
@@ -142,6 +155,7 @@ struct LarkThreadView: View {
                 // The chat's own checks do not see thread replies: settle this thread's queued ones here.
                 if let chatOutbox, !queued.isEmpty { Task { try? await chatOutbox.settle(now) } }
             }
+            .onChange(of: copies) { _, now in adopted = LarkChatRows.adopting(now, into: adopted) }
             .onAppear {
                 guard text.isEmpty else { return }
                 let draft = LarkDrafts.shared[.thread(root.id)]
@@ -155,12 +169,7 @@ struct LarkThreadView: View {
             .environment(\.larkReply, LarkReplyHandler(inThread: true) { _ in boxFocused = true })
             .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
             .environment(\.larkOpenProfile, { person = $0 })
-            .environment(\.larkReact, { m, key in
-                guard let i = pager.messages.firstIndex(where: { $0.id == m.id }) else { return }
-                let (next, remove) = m.togglingReaction(key, me: "我")
-                pager.messages[i] = next
-                Task { do { try await api?.larkReact(m.id, key: key, remove: remove) } catch { model.show(error) } }
-            })
+            .environment(\.larkReact, react)
             .modifier(LarkFileOpener(request: $fileRequest))
             .sheet(item: $person) { LarkProfileView(person: $0) }
             .modifier(LarkThreadTitle(chatName: chatName))
@@ -371,6 +380,9 @@ struct LarkThreadView: View {
     }
 
     private func settleOutgoing(_ messages: [LarkMessage]) {
+        // The copies keep their outgoing rows' ids before those go (in the same update, so onChange(of: copies) may
+        // never see the pair).
+        adopted = LarkChatRows.adopting(LarkOutbox.copies(mineOnTheWay, messages: messages), into: adopted)
         let left = LarkOutbox.remaining(outgoing, messages: messages)
         if left != outgoing { outgoing = left }
     }

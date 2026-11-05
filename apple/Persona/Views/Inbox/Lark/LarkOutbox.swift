@@ -40,9 +40,13 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
         at = now
     }
 
+    /// Its row in the chat's list (LarkChatRows); Feishu's copy takes the row over under the same id.
+    var rowID: String { Self.rowID(id) }
+    static func rowID(_ id: UUID) -> String { "outgoing-\(id.uuidString)" }
+
     /// Drawn like my other messages: my name and avatar from the last one I sent here.
     func message(like mine: LarkMessage?) -> LarkMessage {
-        var message = LarkMessage(id: "outgoing-\(id.uuidString)", position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? "我",
+        var message = LarkMessage(id: rowID, position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? "我",
                     senderAvatar: mine?.senderAvatar, senderType: mine?.senderType, isMine: true, type: "TEXT", text: text,
                     createdAt: at, recalled: false, replyCount: 0, replyTo: thread ? nil : replyTo)
         if let encrypted {
@@ -77,41 +81,48 @@ enum LarkOutbox {
     }
 
     /// Confirmed IDs replace optimistic rows, including a request whose response was lost.
-    /// Only legacy text without a receipt falls back to text/time matching; media waits for its exact copy.
+    /// Only legacy text without a receipt falls back to text/time matching; media and encrypted ones wait for their exact copy.
+    /// A sent plain one with no receipt and no copy within `copyWait` goes anyway (the next refresh brings it).
     static func remaining(_ out: [LarkOutgoing], messages: [LarkMessage], now: Date = .now) -> [LarkOutgoing] {
-        var mine = messages.filter(\.isMine)
+        let found = copies(out, messages: messages, now: now)
         return out.filter { o in
-            // A push can arrive before the request finishes (or after its response was lost).
-            // A confirmed client ID is stronger evidence than a local timeout; pending copies are not.
-            if let i = mine.firstIndex(where: {
-                $0.clientID?.lowercased() == o.clientID && !$0.id.hasPrefix("local:") && $0.localState != "pending" && $0.localState != "failed"
-            }) {
-                mine.remove(at: i)
-                return false
-            }
-            guard o.state == .sent else { return true }
-            if let id = o.messageID {
-                // Media has no unique text. Keep its local row until this exact acknowledged copy is visible.
-                if let i = mine.firstIndex(where: { $0.id == id && $0.localState != "pending" && $0.localState != "failed" }) {
-                    mine.remove(at: i)
-                    return false
-                }
-                return true
-            }
-            if o.attachment != nil || o.encrypted != nil { return true }
-            if now.timeIntervalSince(o.at) > copyWait { return false }
-            let text = o.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            // One copy answers one message (the same words sent twice need two). A quoted reply's copy quotes the
-            // same message when the hub says what it quotes.
-            if let i = mine.firstIndex(where: {
-                $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == text && ($0.createdAt ?? now) >= o.at.addingTimeInterval(-60)
-                    && (o.replyTo == nil || o.thread || $0.replyTo == nil || $0.replyTo?.id == o.replyTo?.id)
-            }) {
-                mine.remove(at: i)
-                return false
-            }
+            guard found[o.id] == nil else { return false }
+            return !(o.state == .sent && o.messageID == nil && o.attachment == nil && o.encrypted == nil
+                     && now.timeIntervalSince(o.at) > copyWait)
+        }
+    }
+
+    /// Feishu's copy of each outgoing message that has one among `messages`: outgoing id → the copy's message id.
+    /// One copy answers one message (the same words sent twice need two).
+    static func copies(_ out: [LarkOutgoing], messages: [LarkMessage], now: Date = .now) -> [UUID: String] {
+        var mine = messages.filter(\.isMine)
+        var found: [UUID: String] = [:]
+        func take(_ o: LarkOutgoing, _ match: (LarkMessage) -> Bool) -> Bool {
+            guard let i = mine.firstIndex(where: match) else { return false }
+            found[o.id] = mine.remove(at: i).id
             return true
         }
+        for o in out {
+            // A push can arrive before the request finishes (or after its response was lost).
+            // A confirmed client ID is stronger evidence than a local timeout; pending copies are not.
+            if take(o, {
+                $0.clientID?.lowercased() == o.clientID && !$0.id.hasPrefix("local:") && $0.localState != "pending" && $0.localState != "failed"
+            }) { continue }
+            guard o.state == .sent else { continue }
+            if let id = o.messageID {
+                // Media has no unique text. Keep its local row until this exact acknowledged copy is visible.
+                _ = take(o) { $0.id == id && $0.localState != "pending" && $0.localState != "failed" }
+                continue
+            }
+            if o.attachment != nil || o.encrypted != nil || now.timeIntervalSince(o.at) > copyWait { continue }
+            let text = o.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            // A quoted reply's copy quotes the same message when the hub says what it quotes.
+            _ = take(o) {
+                $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == text && ($0.createdAt ?? now) >= o.at.addingTimeInterval(-60)
+                    && (o.replyTo == nil || o.thread || $0.replyTo == nil || $0.replyTo?.id == o.replyTo?.id)
+            }
+        }
+        return found
     }
 }
 
@@ -151,26 +162,6 @@ enum LarkReply {
     /// The quote an outgoing reply carries.
     static func quote(_ m: LarkMessage) -> LarkReplyTo {
         LarkReplyTo(olk: m.olk, id: m.id, senderName: m.senderName, text: summary(of: m))
-    }
-}
-
-/// An outgoing message under the chat: my bubble, and beside it a small spinner while it goes or the failed mark
-/// (LarkSendMark), like Feishu.
-struct LarkOutgoingRow: View {
-    var outgoing: LarkOutgoing
-    var message: LarkMessage
-    var grouped: Bool
-    var isGroup: Bool
-    var retry: () -> Void
-    var edit: () -> Void
-    var discard: () -> Void
-
-    var body: some View {
-        LarkMessageRow(message: message, grouped: grouped, isGroup: isGroup,
-                       sending: LarkSendMark(state: outgoing.state, retry: retry, edit: edit, discard: discard,
-                                             canRetry: outgoing.canRetry, canRemoveSent: outgoing.attachment != nil && outgoing.messageID == nil),
-                       localAttachment: outgoing.attachment)
-            .environment(\.larkReact, nil) // not in Feishu yet: nothing to react to
     }
 }
 

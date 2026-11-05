@@ -150,7 +150,25 @@ struct LarkChatView: View {
     private var pageBackground: Color { isTopic ? Theme.groupedPage : .clear }
     /// Opens at a message (first unread / a flagged message) rather than at the bottom.
     private var opensAtMessage: Bool { Self.opensAtMessage(conversation) }
-    private var visibleMessages: [LarkMessage] { pager.messages.filter { !outbox.hidesEcho($0) } }
+    /// Copies of mine that took over their outgoing rows: message id → row id, for the visit (LarkChatRows).
+    @State private var adopted: [String: String] = [:]
+    private var reactHere: (LarkMessage, String) -> Void { { m, key in react(m, key) } }
+    /// Feishu's messages to draw: not the echoes of mine still in the outbox, except a copy that takes over its
+    /// outgoing row (LarkChatRows).
+    private var visibleMessages: [LarkMessage] { visibleMessages(copies: copies) }
+    private func visibleMessages(copies: [UUID: String]) -> [LarkMessage] {
+        let taking = Set(copies.values)
+        return pager.messages.filter { taking.contains($0.id) || !outbox.hidesEcho($0) }
+    }
+    /// Feishu's copies of mine in the outbox that it already has: outgoing id → message id (LarkOutbox.copies).
+    private var copies: [UUID: String] { pager.hasNewer ? [:] : LarkOutbox.copies(outbox.items.filter { !$0.thread }, messages: pager.messages) }
+
+    /// The row a message is drawn in (what `scrollTo` finds): a copy of mine that took over its outgoing row keeps
+    /// that row's id (LarkChatRows).
+    private func rowID(of id: String) -> String {
+        if let o = copies.first(where: { $0.value == id })?.key { return LarkOutgoing.rowID(o) }
+        return adopted[id] ?? id
+    }
     private var openingAnchor: UnitPoint { Self.debugTop || opensAtMessage ? .top : .bottom }
     private static func opensAtMessage(_ c: LarkConversation) -> Bool { c.focus != nil || (c.isTopic != true && c.unread > 0) }
 
@@ -241,13 +259,15 @@ struct LarkChatView: View {
         }
         .onChange(of: anchor) { pager.seen.formUnion(book.seen) }
         .onChange(of: mention) { pager.seen.formUnion(book.seen) }
+        .onChange(of: copies) { _, now in adopted = LarkChatRows.adopting(now, into: adopted) }
         // Outermost, so the sheets above (a thread, a profile, a reaction picker) are about the same account.
         .environment(\.larkAccount, conversation.account)
         .environment(\.larkChatOutbox, outbox)
     }
 
     @ViewBuilder private var chatContent: some View {
-        let messages = visibleMessages
+        let copies = self.copies
+        let messages = visibleMessages(copies: copies)
         ScrollView {
             LarkChatStack(lazy: !isTopic) {
                 if pager.hasOlder {
@@ -258,7 +278,7 @@ struct LarkChatView: View {
                 // loaded: they go under the newest message). Replies queued from a thread show in their thread
                 // (LarkThreadView), not here.
                 let rows = LarkChatRows.rows(messages: messages, outgoing: pager.hasNewer ? [] : outbox.items.filter { !$0.thread },
-                                             like: pager.messages.last(where: \.isMine))
+                                             like: pager.messages.last(where: \.isMine), copies: copies, adopted: adopted)
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     let m = row.message
                     let prev = i > 0 ? rows[i - 1].message : nil
@@ -279,16 +299,18 @@ struct LarkChatView: View {
                                isFirstUnread(m, after: rows[..<i].last(where: { $0.outgoing == nil })?.message) { LarkNewMessagesDivider() }
                             if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
                             let grouped = LarkChatLayout.continues(m, after: prev)
-                            if let o = row.outgoing {
-                                LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: conversation.isGroup,
-                                                retry: { resend(o.id) }, edit: { restore(o) }, discard: { discard(o.id) })
-                                    .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                            } else {
-                                LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id,
-                                               readState: receiptStates[m.id])
-                                    .background { if historyAnchor == m.id { historyAnchorReport(m.id) } }
-                                    .padding(.top, LarkChatLayout.gap(grouped: grouped))
-                            }
+                            // One view either way: when Feishu's copy takes the row over, only what it shows changes.
+                            LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup,
+                                           feedID: row.outgoing == nil ? conversation.id : nil,
+                                           sending: row.outgoing.map { o in
+                                               LarkSendMark(state: o.state, retry: { resend(o.id) }, edit: { restore(o) }, discard: { discard(o.id) },
+                                                            canRetry: o.canRetry, canRemoveSent: o.attachment != nil && o.messageID == nil)
+                                           },
+                                           localAttachment: row.outgoing?.attachment,
+                                           readState: row.outgoing == nil ? receiptStates[m.id] : nil)
+                                .environment(\.larkReact, row.outgoing == nil ? reactHere : nil) // not in Feishu yet: nothing to react to
+                                .background { if historyAnchor == m.id { historyAnchorReport(m.id) } }
+                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
                         }
                     }
                     .background { if flash?.line == m.id { QuoteFlash().id(flash?.id).padding(.horizontal, -Theme.Space.m) } }
@@ -298,7 +320,7 @@ struct LarkChatView: View {
                         if !isTopic { receiptAppeared(m) } // a topic's card shows no read receipt
                     }
                     .onDisappear { if row.outgoing == nil { book.receipts.disappeared(m.id) } }
-                    .id(m.id)
+                    .id(row.id)
                 }
                 if pager.hasNewer {
                     // Loads while it is on screen; still on screen after a page (at the newest end, catching up), it asks
@@ -348,7 +370,7 @@ struct LarkChatView: View {
         .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
         .environment(\.larkRefresh, { Task { await refreshLatest() } })
         .environment(\.larkOpenProfile, { person = $0 })
-        .environment(\.larkReact, { m, key in react(m, key) })
+        .environment(\.larkReact, reactHere)
         .environment(\.larkJump, { id in jump(to: id) })
         .environment(\.larkReply, LarkReplyHandler(inTopicGroup: isTopic) { m in
             replyTo = LarkReply.quote(m)
@@ -649,7 +671,7 @@ struct LarkChatView: View {
     private func jump(to id: String) -> Bool {
         guard visibleMessages.contains(where: { $0.id == id }) else { return false }
         following = false
-        withAnimation(Theme.Motion.standard) { position.scrollTo(id: id, anchor: .center) }
+        withAnimation(Theme.Motion.standard) { position.scrollTo(id: rowID(of: id), anchor: .center) }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
             flash = QuoteFlashMark(line: id)
@@ -661,9 +683,9 @@ struct LarkChatView: View {
     private func scroll(to id: String) async {
         following = false
         try? await Task.sleep(for: .milliseconds(80))
-        position.scrollTo(id: id, anchor: .top)
+        position.scrollTo(id: rowID(of: id), anchor: .top)
         try? await Task.sleep(for: .milliseconds(250))
-        position.scrollTo(id: id, anchor: .top)
+        position.scrollTo(id: rowID(of: id), anchor: .top)
     }
 
     private func refreshDisplay() async {
@@ -837,7 +859,7 @@ struct LarkChatView: View {
     private func jump(to target: String) async {
         following = false
         if let m = pager.messages.first(where: { $0.position == target }) {
-            withAnimation(Theme.Motion.standard) { position.scrollTo(id: m.id, anchor: .top) }
+            withAnimation(Theme.Motion.standard) { position.scrollTo(id: rowID(of: m.id), anchor: .top) }
             return
         }
         guard let api = chatAPI, let r = try? await api.larkMessages(conversation.id, around: target) else { return }
@@ -1164,7 +1186,40 @@ struct LarkChatView: View {
             }
             if outbox === queue {
                 // Animated like the rows the outbox just added: the box shrinking back to a line (and the quote bar
-                // going) moves the list''s rows, laid out as they come on screen; a topic group's cards all at once. In a lazy stack with a scroll
+                // going) moves the list'' ids before the outbox lets those go (it may in the same
+    /// update, and then onChange(of: copies) never sees the pair).
+    private func adopt(_ messages: [LarkMessage]) {
+        adopted = LarkChatRows.adopting(LarkOutbox.copies(outbox.items.filter { !$0.thread }, messages: messages), into: adopted)
+    }
+
+    private func settleOutgoing(_ messages: [LarkMessage]) {
+        guard let api = chatAPI, !outbox.items.isEmpty else { return }
+        adopt(messages)
+        let queue = outbox
+        Task {
+            guard (try? await queue.checkAccount(using: api)) != nil else { return }
+            do {
+                try await queue.settle(messages)
+            }
+            catch { model.toast = Toast("发送结果尚未保存，请检查本机存储空间", style: .error) }
+        }
+    }
+
+    private func askJarvis() async {
+        guard let api = chatAPI else { return }
+        let prompt = "读取我飞书会话「\(conversation.name)」（lark-connector feedId \(conversation.id)）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。"
+        do {
+            let s = try await api.startConversation(prompt: prompt)
+            model.began(s, text: prompt)
+            model.assistantCurrent = s.key
+            model.selectedTab = .assistant
+        } catch {
+            model.show(error)
+        }
+    }
+}
+
+/// A chat's rows, laid out as they come on screen; a topic group's cards all at once. In a lazy stack with a scroll
 /// position, a topic card opened under 展开 left the app never idle again on the iPhone (#1087; likely the off-screen
 /// rows placed by estimated heights and measured again without end, docs/lessons/ios.md). A page of a topic group is
 /// 40 topics; each 加载更早的话题 adds 40 more, all laid out: accepted, a group is rarely read that far back.
@@ -1269,7 +1324,7 @@ struct LarkMessageRow: View {
     var feedID: String? = nil
     /// Inside a thread sheet the reply count is not a link to itself.
     var inThread = false
-    /// A message of mine on its way: its spinner or failed mark beside the bubble (LarkOutgoingRow).
+    /// A message of mine on its way: its spinner or failed mark beside the bubble.
     var sending: LarkSendMark? = nil
     var localAttachment: LarkAttachment?
     /// The read receipt of a message of mine (LarkReadReceipts), shown beside it once there is one.
@@ -1322,14 +1377,15 @@ struct LarkMessageRow: View {
                             }
                         }
                     }
-                    if let sending {
-                        HStack(alignment: .center, spacing: Theme.Space.s) {
-                            LarkSendMarkView(mark: sending)
-                            content
-                        }
-                    } else if side == .right, let read = LarkReadMark(state: readState, isGroup: isGroup) {
-                        HStack(alignment: .bottom, spacing: Theme.Space.s) {
-                            LarkReadMarkView(mark: read)
+                    if side == .right {
+                        // The bubble keeps its place in one stack whichever mark is beside it (the spinner while it
+                        // goes, the read receipt once Feishu has it), so a copy taking over the row only swaps the mark.
+                        HStack(alignment: sending == nil ? .bottom : .center, spacing: Theme.Space.s) {
+                            if let sending {
+                                LarkSendMarkView(mark: sending)
+                            } else if let read = LarkReadMark(state: readState, isGroup: isGroup) {
+                                LarkReadMarkView(mark: read)
+                            }
                             content
                         }
                     } else {
