@@ -16,11 +16,11 @@ vi.mock("react-dom", async (importOriginal) => ({
   createPortal: (children: React.ReactNode) => children,
 }));
 
-const fake = vi.hoisted(() => ({ sessions: [] as Session[], interactions: [] as Interaction[], machines: [] as Machine[] }));
+const fake = vi.hoisted(() => ({ loaded: true, sessions: [] as Session[], interactions: [] as Interaction[], machines: [] as Machine[] }));
 
 vi.mock("../lib/store", async (importOriginal) => {
   const real = await importOriginal<typeof import("../lib/store")>();
-  return { ...real, useStore: <T,>(select: (s: ReturnType<typeof real.getState>) => T) => select({ ...real.getState(), loaded: true, machines: fake.machines, interactions: fake.interactions }) };
+  return { ...real, useStore: <T,>(select: (s: ReturnType<typeof real.getState>) => T) => select({ ...real.getState(), loaded: fake.loaded, machines: fake.machines, interactions: fake.interactions }) };
 });
 vi.mock("../lib/sessions", async (importOriginal) => {
   const real = await importOriginal<typeof import("../lib/sessions")>();
@@ -115,5 +115,21 @@ describe("the overview", () => {
     const html = render([agent(2, 0, "needs_you")]);
     expect(html).toContain("卡住了，要你去看");
     expect(html).toContain("这些 Agent 没发来要你处理的卡片，多半是出错或卡住了");
+  });
+
+  it("before the first snapshot shows only 加载中, not the agents and cards the socket has streamed in so far", () => {
+    const asking = agent(1, 0, "needs_you");
+    const ix = { id: "i1", kind: "permission", machine_id: "mac", session_id: asking.session_id, tool_name: "Bash" } as Interaction;
+    fake.loaded = false;
+    try {
+      const early = render([asking, agent(2, 0, "working"), agent(3, 0, "unread")], [ix]);
+      expect(early).toContain("加载中");
+      for (const group of ["需要你处理", "卡住了，要你去看", "正在工作", "做完了，还没看", "电脑", "全部标为已读"]) expect(early).not.toContain(group);
+    } finally {
+      fake.loaded = true;
+    }
+    const html = render([asking, agent(2, 0, "working"), agent(3, 0, "unread")], [ix]);
+    expect(html).not.toContain("加载中");
+    for (const group of ["需要你处理", "正在工作", "做完了，还没看", "电脑"]) expect(html).toContain(group);
   });
 });

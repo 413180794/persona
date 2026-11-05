@@ -34,6 +34,7 @@ import { useFolded } from "../../lib/use-folded";
 import { NodeMenu } from "../NodeMenu";
 import { onNodeChanged, setKnownTree } from "../../lib/node-palette";
 import { Icon } from "../../ui/icons";
+import { SearchField } from "../../ui/SearchField";
 import { Empty } from "../session/files/parts";
 import { TerminalPanel } from "../session/TerminalPanel";
 import { t } from "../../i18n";
@@ -127,26 +128,24 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
       </header>
       <div className="flex min-h-0 flex-1">
         <section aria-label={t("terminal-terminalpage.panes")} className={cx("flex min-h-0 w-full flex-col lg:w-[320px] lg:shrink-0 lg:border-r lg:border-line", listHidden)}>
-          <label className="mx-3 mt-3 mb-1 flex h-8 shrink-0 items-center gap-2 rounded-control bg-inset px-2.5 shadow-hairline">
-            <Icon name="search" size={12} stroke={2} className="text-ink-3" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.nativeEvent.isComposing) return;
-                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                  e.preventDefault();
-                  if (flat.length) setActive((a) => (Math.min(a, flat.length - 1) + (e.key === "ArrowDown" ? 1 : flat.length - 1)) % flat.length);
-                } else if (e.key === "Enter" && activeItem) {
-                  e.preventDefault();
-                  navigate(terminalTarget(activeItem.mid, activeItem.id, sessions[activeItem.mid] ?? []));
-                } else if (e.key === "Escape") setQuery("");
-              }}
-              placeholder={t("terminal-terminalpage.search_placeholder")}
-              aria-label={t("terminal-terminalpage.search_label")}
-              className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3"
-            />
-          </label>
+          <SearchField
+            tone="inset"
+            className="mx-3 mt-3 mb-1 shrink-0"
+            value={query}
+            onChange={setQuery}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                if (flat.length) setActive((a) => (Math.min(a, flat.length - 1) + (e.key === "ArrowDown" ? 1 : flat.length - 1)) % flat.length);
+              } else if (e.key === "Enter" && activeItem) {
+                e.preventDefault();
+                navigate(terminalTarget(activeItem.mid, activeItem.id, sessions[activeItem.mid] ?? []));
+              } else if (e.key === "Escape") setQuery("");
+            }}
+            placeholder={t("terminal-terminalpage.search_placeholder")}
+            label={t("terminal-terminalpage.search_label")}
+          />
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6">
             {machines.length === 0 && <Empty icon="machine" title={t("terminal-terminalpage.no_computers")} detail={t("terminal-terminalpage.no_computers_detail")} />}
             {visible.map(({ mid, spaces }) => {

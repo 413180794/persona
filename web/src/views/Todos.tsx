@@ -36,6 +36,7 @@ import {
 } from "../lib/todos";
 import type { Interaction, Launcher, Machine } from "../lib/types";
 import { Button, cx, Dialog, IconButton, Loading, Menu, toast, useMenu } from "../ui/atoms";
+import { SearchField } from "../ui/SearchField";
 import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
 import { t } from "../i18n";
@@ -187,25 +188,12 @@ export function TodosView({
         <div
           data-testid="todos-list-column"
           data-narrow-hidden={detailOnNarrow || undefined}
-          className={cx("flex w-full shrink-0 flex-col border-r border-line md:w-[380px] lg:w-[400px]", detailOnNarrow && "max-md:hidden")}
+          // the edge parts the list from the detail beside it; on a phone the list is the whole page and has none
+          className={cx("flex w-full shrink-0 flex-col border-line md:w-[380px] md:border-r lg:w-[400px]", detailOnNarrow && "max-md:hidden")}
         >
           {/* Search Bar */}
           <div className="p-3">
-            <div className="flex h-8 items-center gap-2 rounded-control bg-inset px-2.5 shadow-hairline">
-              <Icon name="search" size={13} stroke={2} className="text-ink-3" />
-              <input
-                type="text"
-                placeholder={t("todos.search_placeholder")}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
-              />
-              {search && (
-                <button type="button" onClick={() => setSearch("")} className="text-ink-3 hover:text-ink">
-                  <Icon name="x" size={12} stroke={2.5} />
-                </button>
-              )}
-            </div>
+            <SearchField tone="inset" value={search} onChange={setSearch} placeholder={t("todos.search_placeholder")} />
           </div>
 
           {/* List Content */}

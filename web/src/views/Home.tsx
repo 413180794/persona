@@ -57,17 +57,19 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
               <p className="min-w-0 flex-1 text-[13.5px] text-ink-2">
                 {!loaded ? t("home.connecting") : quiet ? t("home.all_quiet") : t("home.summary", { list: [counts.needs && t("home.summary_needs", { count: counts.needs }), counts.working && t("home.summary_working", { count: counts.working }), counts.unread && t("home.summary_unread", { count: counts.unread })].filter(Boolean).join(t("home.summary_separator")) })}
               </p>
-              {markAllAt === "summary" && markAll}
+              {loaded && markAllAt === "summary" && markAll}
             </div>
           </div>
 
           {/* the extensions' cards (docs/extensions.md「UI 插槽」 overview_card), under the agents' summary */}
           <OverviewCards />
 
+          {/* Before the first snapshot the socket streams the machines' agents and cards in one by one, each moving the
+              groups already painted, and 加载中 then went from over them: until it is in only 加载中, then all at once. */}
           {!loaded && <Loading label={t("common.loading")} />}
 
           {/* the headline counts agents, this counts cards: say so when one agent has several cards waiting */}
-          {interactions.length > 0 && (
+          {loaded && interactions.length > 0 && (
             <Group title={t("home.needs_you")} count={interactions.length} hint={new Set(interactions.map((ix) => `${ix.machine_id}/${ix.session_id}`)).size < interactions.length ? t("home.needs_you_hint") : undefined}>
               {interactions.map((ix, i) => {
                 const s = sessions.find((x) => x.machine_id === ix.machine_id && x.session_id === ix.session_id);
@@ -87,7 +89,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </Group>
           )}
 
-          {groups.needs.length > 0 && (
+          {loaded && groups.needs.length > 0 && (
             <Group title={t("home.waiting_on_computer")} count={groups.needs.length} hint={t("home.waiting_on_computer_hint")}>
               {groups.needs.map((g, i) => (
                 <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill tone="red">{t("home.state_needs_you")}</Pill>} />
@@ -95,7 +97,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </Group>
           )}
 
-          {groups.working.length > 0 && (
+          {loaded && groups.working.length > 0 && (
             <Group title={t("home.working")} count={groups.working.length}>
               {groups.working.map((g, i) => (
                 <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{g.lead.state_since ? shortDuration(now - Date.parse(g.lead.state_since)) : ""}</span>} />
@@ -103,7 +105,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </Group>
           )}
 
-          {groups.unread.length > 0 && (
+          {loaded && groups.unread.length > 0 && (
             <Group
               title={t("home.unread")}
               count={groups.unread.length}
@@ -130,7 +132,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </div>
           )}
 
-          {machines.length > 0 && (
+          {loaded && machines.length > 0 && (
             <Group title={t("home.computers")} count={machines.length} right={<a href={href({ name: "machines" })} onClick={(e) => onLinkClick(e, { name: "machines" })} className="text-[12px] text-ink-3 hover:text-ink-2">{t("home.monitor")}</a>}>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {machines.map((m) => {

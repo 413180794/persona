@@ -100,6 +100,9 @@ internal object NotificationPolicy {
     fun session(event: NotifyEvent): SessionKey? =
         if (event.machineId.isBlank() || event.sessionId.isBlank()) null else SessionKey(event.machineId, event.sessionId)
 
+    /** The tags of a session's result notifications (done, assistant): put away once it is seen. Its cards stay. */
+    fun resultTags(session: SessionKey): List<String> = listOf("done", "assistant").map { "$it:${session.path}" }
+
     fun tag(event: NotifyEvent): String = if (event.kind == "alert") "alert:${UUID.randomUUID()}"
         else "${event.kind}:${SessionKey(event.machineId, event.sessionId).path}"
 }

@@ -247,6 +247,9 @@ class Notifier @Inject constructor(
             .forEach { manager.cancel(it.tag, it.id) }
     }
 
+    /** Takes away a session's 做完了 / assistant notifications once its result has been seen (#3567). */
+    fun retractSeen(session: SessionKey) = NotificationPolicy.resultTags(session).forEach { manager.cancel(it, EVENT_ID) }
+
     private fun NotificationCompat.Builder.forSession(session: SessionKey?) = apply {
         session?.let { addExtras(android.os.Bundle().apply { putString("jarvis.session", it.path) }) }
     }

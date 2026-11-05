@@ -27,6 +27,7 @@ import { href, onLinkClick } from "../../lib/router";
 import { Button, cx, EASE, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
+import { SearchField } from "../../ui/SearchField";
 import { formatDate, t } from "../../i18n";
 
 export function AgentsView({ id, onToggleSidebar }: { id?: string; onToggleSidebar: () => void }) {
@@ -57,7 +58,7 @@ function AgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <Header title={t("agents-agentsview.title")} sub={t("agents-agentsview.subtitle")} onToggleSidebar={onToggleSidebar} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[760px] px-5 py-6 sm:px-8">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("agents-agentsview.search_placeholder")} className="mb-4 h-9 w-full rounded-control bg-inset px-3 text-[13px] text-ink shadow-hairline outline-none placeholder:text-ink-3" />
+          <SearchField tone="inset" size="md" icon={false} className="mb-4" value={q} onChange={setQ} placeholder={t("agents-agentsview.search_placeholder")} />
           {!loaded && <Loading />}
           {error && <p className="text-[13px] text-red">{error}</p>}
           {loaded && !error && !groups.length && (q || !hints.length) && <p className="text-[13px] text-ink-3">{q ? t("agents-agentsview.no_match") : t("agents-agentsview.empty")}</p>}

@@ -52,6 +52,16 @@ export function contextLabel(u: ContextUsage, asUsed: boolean): string {
   return `${contextShown(u, asUsed)}%`;
 }
 
+/** The session header's label, which says what the share is (#3668): 「上下文剩 61%」 or 「上下文已用 39%」. */
+export function contextHeaderLabel(u: ContextUsage, asUsed: boolean): string {
+  return asUsed ? t("context.header_used", { percent: u.used }) : t("context.header_left", { percent: u.left });
+}
+
+/** What happens when the window fills, and what to do once it is close (#3668): the header's tooltip under the share. */
+export function contextHint(u: ContextUsage): string {
+  return contextWarn(u) ? t("context.hint_warn") : t("context.hint_ok");
+}
+
 /** The tooltip: 「还剩 61% 上下文」 or 「已用 39%」. */
 export function contextTooltip(u: ContextUsage, asUsed: boolean): string {
   return asUsed ? t("context.used", { percent: u.used }) : t("context.left", { percent: u.left });

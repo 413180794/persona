@@ -21,6 +21,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
@@ -88,6 +90,7 @@ class NotificationRuntime @Inject constructor(
     private val journal: ExitJournal,
     private val notifier: Notifier,
     private val fleet: FleetFeed,
+    private val sessions: SessionsRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var started = false
@@ -97,6 +100,16 @@ class NotificationRuntime @Inject constructor(
         started = true
         journal.capture()
         fleet.start()
+        // A result seen in the app or anywhere else no longer needs its notification (#3567).
+        // Coming back to a chat left on screen counts too, so the app being in front is part of the key.
+        scope.launch {
+            combine(Notify.visibleSession, Notify.foreground) { session, front -> session?.takeIf { front } }
+                .distinctUntilChanged().collect { it?.let(notifier::retractSeen) }
+        }
+        scope.launch {
+            val seen = SeenSessions()
+            sessions.sessions.collect { list -> seen.update(list).forEach(notifier::retractSeen) }
+        }
         scope.launch {
             pairing.isPaired.collect { paired ->
                 if (paired) {

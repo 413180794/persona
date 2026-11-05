@@ -1,0 +1,50 @@
+// The shared search box: whatever its tone and size, the control lights its edge while it has focus (待办, 终端 and
+// Agents had their own boxes that showed only a caret), names its field, and 清除 empties it.
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it } from "vitest";
+import { SEARCH_FOCUS, SearchField } from "./SearchField";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let root: Root | undefined;
+afterEach(() => {
+  if (root) act(() => root!.unmount());
+  root = undefined;
+  document.body.innerHTML = "";
+});
+
+describe("SearchField", () => {
+  it("has the focus ring in every tone and size", () => {
+    for (const tone of ["surface", "inset"] as const)
+      for (const size of ["sm", "md"] as const) {
+        const html = renderToStaticMarkup(<SearchField tone={tone} size={size} value="" onChange={() => {}} placeholder="搜索待办" />);
+        expect(html).toContain(SEARCH_FOCUS);
+        expect(html).toContain('aria-label="搜索待办"');
+      }
+  });
+
+  it("keeps the tone's own edge unfocused, and the caller's class is placement only", () => {
+    const html = renderToStaticMarkup(<SearchField tone="inset" className="mx-3" value="" onChange={() => {}} placeholder="跳转" label="跳转到窗格" />);
+    expect(html).toContain("bg-inset shadow-hairline");
+    expect(html).toContain("mx-3");
+    expect(html).toContain('aria-label="跳转到窗格"');
+    expect(renderToStaticMarkup(<SearchField icon={false} value="" onChange={() => {}} placeholder="x" />)).not.toContain("<svg");
+  });
+
+  it("offers 清除 only with something typed, and it empties the field", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    let value = "abc";
+    act(() => root!.render(<SearchField value={value} onChange={(v) => (value = v)} placeholder="搜索" />));
+    const clear = host.querySelector<HTMLButtonElement>('button[aria-label="清除"]');
+    expect(clear).not.toBeNull();
+    act(() => clear!.click());
+    expect(value).toBe("");
+    act(() => root!.render(<SearchField value="" onChange={() => {}} placeholder="搜索" />));
+    expect(host.querySelector("button")).toBeNull();
+  });
+});

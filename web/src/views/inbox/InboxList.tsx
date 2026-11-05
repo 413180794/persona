@@ -41,7 +41,10 @@ export function InboxList({ selected }: { selected?: string }) {
   const interactions = useStore((s) => s.interactions);
   const sessions = useStore((s) => s.sessions);
   const mutes = useStore((s) => s.mutes);
-  const storeLoaded = useStore((s) => s.loaded); // the waiting agents come with it and push the rows down
+  const storeLoaded = useStore((s) => s.loaded);
+  // The waiting agents come with the store, often after the items: painting the items first and then the agents over
+  // them pushed every row down (a layout shift of 600px on a phone), so the list waits for both and paints once.
+  const ready = loaded && storeLoaded;
   const [source, setSource] = useStored("inbox.source");
   const [kind, setKind] = useStored("inbox.kind");
   const [query, setQuery] = useState("");
@@ -144,9 +147,9 @@ export function InboxList({ selected }: { selected?: string }) {
         <TriageBanner triage={triage} />
         {/* never loaded (an error and no items): its own empty state with 重试, not 都处理完了 under the error (#2970);
             with agents waiting the list is not empty, so the reason stays a line over it */}
-        {failed && !empty && <p className="mt-4 text-[12.5px] text-red">{error}</p>}
-        {!loaded && <div className="mt-6 px-1"><Loading /></div>}
-        {failed && empty && (
+        {ready && failed && !empty && <p className="mt-4 text-[12.5px] text-red">{error}</p>}
+        {!ready && <div className="mt-6 px-1"><Loading /></div>}
+        {ready && failed && empty && (
           <div className="mt-10 flex flex-col items-center gap-2 text-center" role="status" data-inbox-failed>
             <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3">
               <Icon name="inbox" size={17} />
@@ -159,7 +162,7 @@ export function InboxList({ selected }: { selected?: string }) {
             </Button>
           </div>
         )}
-        {loaded && empty && !failed && (
+        {ready && empty && !failed && (
           <div className="mt-10 flex flex-col items-center gap-2 text-center">
             <span className="flex size-10 items-center justify-center rounded-full bg-green-tint text-green">
               <Icon name="check" size={17} stroke={2.6} />
@@ -169,7 +172,7 @@ export function InboxList({ selected }: { selected?: string }) {
           </div>
         )}
 
-        {TIERS.map((tier) => {
+        {ready && TIERS.map((tier) => {
           const list = s.tiers[tier.key];
           const waiting = tier.key === "action" ? agents : [];
           if (!list.length && !waiting.length) return null;
@@ -182,7 +185,7 @@ export function InboxList({ selected }: { selected?: string }) {
             </Section>
           );
         })}
-        {s.done.length > 0 && (
+        {ready && s.done.length > 0 && (
           <Section k="done" title={t("inbox-inboxlist.done")} count={sectionCount(s.done.length, 0)} open={open.has("done")} onToggle={() => toggle("done")}>
             {s.done.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={() => setEditing(it)} />)}
           </Section>

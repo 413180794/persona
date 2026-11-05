@@ -18,11 +18,12 @@ vi.mock("../../lib/api", async (orig) => ({
   },
 }));
 
-// agents waiting on you come from the store; `waiting` puts one there (a fixed array: the selector's result is stable)
-const fakeStore = vi.hoisted(() => ({ waiting: false, list: [{ id: "ix1", machine_id: "m", session_id: "s1", session_title: "改登录页", kind: "question" }] }));
+// agents waiting on you come from the store; `waiting` puts one there (a fixed array: the selector's result is stable),
+// `storeLoaded` says whether the store's first snapshot is in
+const fakeStore = vi.hoisted(() => ({ waiting: false, storeLoaded: true, list: [{ id: "ix1", machine_id: "m", session_id: "s1", session_title: "改登录页", kind: "question" }] }));
 vi.mock("../../lib/store", async (orig) => {
   const m = await orig<typeof import("../../lib/store")>();
-  return { ...m, useStore: <T,>(sel: (s: ReturnType<typeof m.getState>) => T) => m.useStore((s) => sel(fakeStore.waiting ? { ...s, interactions: fakeStore.list as never } : s)) };
+  return { ...m, useStore: <T,>(sel: (s: ReturnType<typeof m.getState>) => T) => m.useStore((s) => sel({ ...s, loaded: fakeStore.storeLoaded, ...(fakeStore.waiting ? { interactions: fakeStore.list as never } : {}) })) };
 });
 
 import { InboxList } from "./InboxList";
@@ -81,6 +82,33 @@ describe("收件箱：首次加载失败", () => {
       expect(host.textContent).not.toContain("都处理完了");
     } finally {
       fakeStore.waiting = false;
+    }
+  });
+});
+
+describe("收件箱：首屏一次画好", () => {
+  it("waits for the store as well as the inbox, so the agents waiting do not push painted rows down", async () => {
+    fail = false;
+    fakeStore.waiting = true;
+    fakeStore.storeLoaded = false;
+    try {
+      act(() => root.render(<InboxList />));
+      await flush();
+      // the inbox answered, the store has not: only 加载中, no rows and no empty state yet
+      expect(calls.some((c) => c.startsWith("/inbox"))).toBe(true);
+      expect(host.textContent).toContain("加载中");
+      expect(host.textContent).not.toContain("改登录页");
+      expect(host.textContent).not.toContain("都处理完了");
+      expect(host.querySelector("section")).toBeNull();
+
+      fakeStore.storeLoaded = true;
+      act(() => root.render(<InboxList />));
+      await flush();
+      expect(host.textContent).not.toContain("加载中");
+      expect(host.textContent).toContain("改登录页");
+    } finally {
+      fakeStore.waiting = false;
+      fakeStore.storeLoaded = true;
     }
   });
 });

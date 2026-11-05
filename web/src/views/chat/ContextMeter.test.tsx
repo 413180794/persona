@@ -56,4 +56,16 @@ describe("ContextMeter", () => {
     expect(alone).not.toContain("progressbar");
     expect(renderToStaticMarkup(<ContextMeter session={{ ...s, model: undefined, context_window: undefined }} />)).toBe("");
   });
+  it("says what the share is from lg up, keeps the bare number below, and tells what to do near full (#3668)", () => {
+    const html = renderToStaticMarkup(<ContextMeter session={s} />);
+    expect(html).toContain("上下文剩 61%");
+    expect(html).toMatch(/@min-\[1000px\]:hidden[^>]*>61%</);
+    expect(html).toContain("自动压缩");
+    expect(html).not.toContain("/compact");
+    const near = renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 170000 }} />);
+    expect(near).toContain("上下文剩 15%");
+    expect(near).toContain("/compact");
+    setContextAsUsed(true);
+    expect(renderToStaticMarkup(<ContextMeter session={s} />)).toContain("上下文已用 39%");
+  });
 });

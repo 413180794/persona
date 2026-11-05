@@ -1,8 +1,10 @@
 // The session header's model name and thin context bar (#2430): `opus 5.5 ▬▬ 61%`, the tooltip 「还剩 61% 上下文」
 // (「已用 39%」 with 设置 › 外观 › 上下文显示为已用). Always shown in a wide header, like Moshi's session header (the user asked to follow
 // Moshi); 「Agent 行显示详情」 only gates the sidebar rows' second line. Where the header is narrower than 800px (a phone, a side panel
-// open beside the chat) the header hides it so the title fits (#3532, #3670).
-import { contextLabel, contextShown, contextTier, contextTooltip, contextUsage, modelShort, useContextAsUsed, type ContextTier } from "../../lib/context-usage";
+// open beside the chat) the header hides it so the title fits (#3532, #3670). Where the header is 1000px or wider the number
+// says what it is (「上下文剩 61%」, #3668); between 800 and 1000px it stays the bare share so the title keeps its room. The tooltip
+// adds what happens when the window fills and, once close, what to do about it.
+import { contextHeaderLabel, contextHint, contextLabel, contextShown, contextTier, contextTooltip, contextUsage, modelShort, useContextAsUsed, type ContextTier } from "../../lib/context-usage";
 import { cx, EASE } from "../../ui/atoms";
 import type { Session } from "../../lib/types";
 
@@ -16,8 +18,9 @@ export function ContextMeter({ session }: { session: Session }) {
   if (!model && !usage) return null;
   const tier = usage ? contextTier(usage) : "ok";
   const tip = usage ? contextTooltip(usage, asUsed) : undefined;
+  const title = [[model, tip].filter(Boolean).join(" · "), usage ? contextHint(usage) : ""].filter(Boolean).join("\n");
   return (
-    <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11.5px] text-ink-3" title={[model, tip].filter(Boolean).join(" · ")}>
+    <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11.5px] text-ink-3" title={title}>
       {model && <span className="max-w-28 truncate">{model}</span>}
       {usage && (
         <>
@@ -31,7 +34,8 @@ export function ContextMeter({ session }: { session: Session }) {
           >
             <div className={cx("h-full rounded-full transition-[width] duration-300", TIER_BAR[tier])} style={{ width: `${contextShown(usage, asUsed)}%`, transitionTimingFunction: EASE }} />
           </div>
-          <span className={cx("tabular-nums", TIER_TEXT[tier])}>{contextLabel(usage, asUsed)}</span>
+          <span className={cx("tabular-nums @min-[1000px]:hidden", TIER_TEXT[tier])}>{contextLabel(usage, asUsed)}</span>
+          <span className={cx("hidden tabular-nums @min-[1000px]:inline", TIER_TEXT[tier])}>{contextHeaderLabel(usage, asUsed)}</span>
         </>
       )}
     </div>
