@@ -162,6 +162,48 @@ func TestTriageRules(t *testing.T) {
 	}
 }
 
+// codexFailedTurn is a Codex turn the model service failed, as the hub lists it (#2185): its last words are from before
+// the error, which the node reported with Codex's kind.
+func codexFailedTurn(id, errText, kind string) proto.Session {
+	c := stopped(id, "我先跑一下测试")
+	c.Agent, c.TurnError, c.TurnErrorKind = "codex", errText, kind
+	return c
+}
+
+// The kind the agent's record gives decides over the words: Codex says what failed (#2185).
+func TestTriageRulesCodexTurnError(t *testing.T) {
+	for _, tc := range []struct {
+		text, kind, on string
+	}{
+		{"Selected model is at capacity. Please try a different model.", proto.TurnErrorTransient, proto.WaitTransient},
+		{"unexpected status 503 Service Unavailable: upstream overloaded", proto.TurnErrorTransient, proto.WaitTransient},
+		{"stream error: upstream overloaded", proto.TurnErrorUser, proto.WaitUser},
+		{"You've hit your usage limit.", proto.TurnErrorUser, proto.WaitUser},
+		{"unexpected status 503 Service Unavailable", "", proto.WaitTransient}, // no kind: the words
+		{"unexpected status 401 Unauthorized", "", proto.WaitUser},
+	} {
+		w, by, skip := triageRules(codexFailedTurn("s1", tc.text, tc.kind), time.UTC)
+		if skip || w == nil || w.Phase != proto.WorkBlocked || w.On != tc.on || by != "rule" {
+			t.Errorf("%q (%s): %+v %s", tc.text, tc.kind, w, by)
+		}
+	}
+}
+
+// A Codex turn the model service cut off gets 继续 like Claude Code's, though its answer is no error (#2185).
+func TestCodexTurnErrorIsContinued(t *testing.T) {
+	s, f := workService(t)
+	f.setSessions("box", codexFailedTurn("s1", "unexpected status 503 Service Unavailable", proto.TurnErrorTransient))
+	triage(t, s, "s1")
+	e := entryOf(t, s, "s1")
+	if e.WakeAt == nil || e.Work.On != proto.WaitTransient || e.Work.By != "rule" {
+		t.Fatalf("entry %+v", e)
+	}
+	s.workTick(context.Background(), time.Now().Add(31*time.Second))
+	if got := f.sentToAgents(); len(got) != 1 || got[0] != "s1: 继续" {
+		t.Fatalf("sent %v", got)
+	}
+}
+
 // A 503 gets 继续 after the backoff, once; three runs of it and the user is asked.
 func TestTransientErrorIsContinued(t *testing.T) {
 	s, f := workService(t)

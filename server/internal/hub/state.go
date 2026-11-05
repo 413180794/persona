@@ -36,17 +36,21 @@ func agentState(s proto.Session, seenAt time.Time) string {
 	return proto.StateUnknown
 }
 
-// turnError is s's last words when they are a model API error and it has stopped (unread or idle): its latest turn
-// was cut off by the model service, not finished (#1516). Only an answer that starts with the error counts: a reply
-// that talks about one ("修好了 API Error: … 时的崩溃") is a reply.
-func turnError(s proto.Session) string {
+// turnError is the model API error that cut s's latest turn off, while it has stopped (unread or idle): not finished
+// (#1516), and its kind when the agent's record gives one. The node's word comes first: the agent's own record said
+// the turn failed (Codex, #2185). Otherwise s's last words when they are the error, as Claude Code writes it; only an
+// answer that starts with the error counts: a reply that talks about one ("修好了 API Error: … 时的崩溃") is a reply.
+func turnError(s proto.Session) (text, kind string) {
 	if s.State != proto.StateUnread && s.State != proto.StateIdle {
-		return ""
+		return "", ""
+	}
+	if text := strings.TrimSpace(s.TurnError); text != "" {
+		return text, s.TurnErrorKind
 	}
 	if text := strings.TrimSpace(s.LastText); cutOff(text) {
-		return text
+		return text, ""
 	}
-	return ""
+	return "", ""
 }
 
 // cutOff: an agent's answer is the model API error that ended its turn.

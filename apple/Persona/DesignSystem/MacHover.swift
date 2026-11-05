@@ -13,10 +13,11 @@ extension View {
         modifier(MacHoverFooter(actions: actions))
     }
 
-    /// `actions` at the view's top trailing corner while the pointer is over it (Mac only): on its top edge, as Slack's
-    /// and Codex's messages show theirs (`onEdge`), or inside the corner (a code block's).
-    func macHoverActions(onEdge: Bool = true, @ViewBuilder _ actions: @escaping () -> some View) -> some View {
-        modifier(MacHoverActions(onEdge: onEdge, actions: actions))
+    /// `actions` inside a code block's top trailing corner while the pointer is over it (Mac only). On the block's own
+    /// color, opaque, with a hairline: over a long line cut at the edge they hid its end instead of lying on it (the
+    /// glass let the words show through).
+    func macHoverActions(@ViewBuilder _ actions: @escaping () -> some View) -> some View {
+        modifier(MacHoverActions(actions: actions))
     }
 }
 
@@ -37,7 +38,6 @@ private struct MacHoverShade<S: Shape>: ViewModifier {
 }
 
 private struct MacHoverActions<Actions: View>: ViewModifier {
-    var onEdge: Bool
     var actions: () -> Actions
     @State private var hovering = false
 
@@ -49,9 +49,12 @@ private struct MacHoverActions<Actions: View>: ViewModifier {
                     HStack(spacing: Theme.Space.xxs) { actions() }
                         .buttonStyle(.plain)
                         .padding(.horizontal, Theme.Space.xxs)
-                        .surface(in: .capsule)
-                        .alignmentGuide(.top) { onEdge ? $0[.top] + $0.height / 2 : $0[.top] - Theme.Space.xs } // on the edge, or in
-                        .padding(.trailing, onEdge ? 0 : Theme.Space.xs)
+                        .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Theme.Radius.badge, style: .continuous)
+                                .strokeBorder(Theme.Fill.chip, lineWidth: Theme.Size.hairline)
+                        }
+                        .padding([.top, .trailing], Theme.Space.xs)
                         .transition(.opacity)
                 }
             }

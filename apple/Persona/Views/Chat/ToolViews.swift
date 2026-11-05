@@ -697,7 +697,7 @@ struct CodeBlock: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-            .macHoverActions(onEdge: false) {
+            .macHoverActions {
                 MacHoverButton(title: "拷贝", symbol: Theme.Icon.copy) { MacHover.copy(text) }
             }
             if clipped {

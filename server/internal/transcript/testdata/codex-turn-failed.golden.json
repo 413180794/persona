@@ -1,0 +1,38 @@
+{
+  "items": [
+    {
+      "id": "bab26736-6d0b-9307-f8a5-32c077babae1#0",
+      "seq": 5,
+      "ts": "2026-01-01T00:00:00.74Z",
+      "role": "user",
+      "kind": "text",
+      "text": "lim fz"
+    },
+    {
+      "id": "line6#0",
+      "seq": 6,
+      "ts": "2026-01-01T00:00:00.748Z",
+      "role": "system",
+      "kind": "turn_duration",
+      "turn_duration": {
+        "duration_ms": 25,
+        "source": "codex_task_complete",
+        "turn_id": "32f8cda0-0523-30ae-3189-12da9e0e50bd",
+        "user_item_id": "bab26736-6d0b-9307-f8a5-32c077babae1#0"
+      }
+    }
+  ],
+  "meta": {
+    "first_user": "lim fz",
+    "model": "gpt-5-codex",
+    "cwd": "/work/project/f1",
+    "permission_mode": "never",
+    "turns": 1,
+    "compactions": 0,
+    "context_tokens": 0,
+    "output_tokens": 0,
+    "turn_error": "azgqlwernr status 371 Kxngypi Qhburzbjhoj: fxibtwub yszlmfeerz, qnk: kimj://192.0.2.1:47654/o4/tljmnqhvx",
+    "turn_error_kind": "transient",
+    "last_activity": "2026-01-01T00:00:00.74Z"
+  }
+}

@@ -693,7 +693,11 @@ func (m *Machine) notifyFinished(id string, gen int) {
 			head, text = "⏳ "+title, w.Line
 		}
 	}
-	if cutOff(text) { // the model service cut the turn off: no ✅ over the error (#1516)
+	// The model service cut the turn off: no ✅ over the error (#1516). A Codex turn's error is no words of its
+	// answer: the session says it (#2185).
+	if e := strings.TrimSpace(s.TurnError); e != "" {
+		head, text = "⚠️ "+title, interruptedSummary+"："+e
+	} else if cutOff(text) {
 		head, text = "⚠️ "+title, interruptedSummary+"："+strings.TrimSpace(text)
 	}
 	long := ncfg.longTurn()

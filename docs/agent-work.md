@@ -93,9 +93,26 @@
 按顺序，命中就不调模型：
 
 1. 有待处理的交互 / 宿主 `blocked`：已经是需要你，`blocked · user`，`line` 用交互的问题。
-2. 最后一句是模型 API 错误（`turn_error`）：
+2. 这一轮被模型 API 错误打断（`turn_error`）：
+   - 哪来的：Claude Code 把错误写成最后一句（`API Error: …`），hub 从 `last_text` 的开头认；Codex 不写成回复，错误在这一轮的
+     `task_complete.error`（rollout）或 `turn/completed` 的 `status: failed` + `turn.error`（app-server），node 读出来直接报
+     `turn_error`，还按 Codex 的错误种类（`codex_error_info`）报 `turn_error_kind`（#2185，下面「Codex 的错误种类」）。
+   - 有 `turn_error_kind` 就按它；没有就按文字：
    - 瞬时的（5xx、`overloaded`、`Connection error`、`timed out`、`socket hang up`、`ECONNRESET`、`fetch failed`、`no eligible upstream`、429）→ `transient`，安排自动「继续」；
    - 其余（`Failed to authenticate`、`OAuth token has expired`、`Invalid API key`、401 / 403、选的模型不可用）→ `blocked · user`，卡片「模型服务需要你处理：<原文>」，选项「已处理，继续」「先不管」。
+
+   **Codex 的错误种类**（`transcript/codex_error.go`；rollout 里是 `server_overloaded`，app-server 里是 `serverOverloaded`，同一个东西）：
+
+   | Codex 报的 | `turn_error_kind` |
+   | --- | --- |
+   | `server_overloaded`、`internal_server_error`、`rate_limit_exceeded` | `transient` |
+   | `http_connection_failed`、`response_stream_connection_failed`、`response_stream_disconnected`、`response_too_many_failed_attempts`：没有状态码，或 408 / 429 / 5xx | `transient` |
+   | 同上，其他状态码（401、403、400…） | `user` |
+   | `usage_limit_exceeded`、`context_window_exceeded`、`unauthorized`、`model_not_found`、各种策略，以及以后新加的种类 | `user`（「继续」过不去） |
+   | `other`、没有种类 | 不报，按文字 |
+
+   用户按 Esc 停下（`turn_aborted`、`status: interrupted`）不是错误。node 对变化中的 rollout 最多每 3 秒重读一次：节流期间文件又写了，
+   缓存里的 `turn_error` 就不报（可能「继续」那一轮已经正常做完，旧错误会让它再被继续一次），宁可晚几秒。
 3. 后台命令 / 子 Agent 还在跑（`background`、`subagents` 有 running）→ `external`，「后台 N 个任务在跑」，不登记叫醒（它自己会被结果叫醒）。
 4. `/loop` 在跑（`loop`）→ `external`，「定时循环，下次 HH:MM」，不登记叫醒。
 5. 其余：模型。

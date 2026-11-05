@@ -656,7 +656,10 @@ func (s *Service) continueTask(ctx context.Context, cur Todo) (json.RawMessage, 
 		defer release()
 		ctx := context.WithoutCancel(ctx)
 		for end := time.Now().Add(continueHold); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
-			if c, ok := s.session(ctx, cut.MachineID, cut.SessionID); !ok || c.Status == proto.StatusWorking || strings.TrimSpace(c.LastText) != cut.TurnError {
+			// Still cut off by the same error: not taken up yet. The session is as the node lists it: Claude Code's error
+			// is its last words, a Codex turn's the node's own TurnError (no words of its answer, #2185).
+			c, ok := s.session(ctx, cut.MachineID, cut.SessionID)
+			if !ok || c.Status == proto.StatusWorking || (strings.TrimSpace(c.LastText) != cut.TurnError && c.TurnError != cut.TurnError) {
 				return // it took it up (or is gone): a later cut may be continued again
 			}
 		}

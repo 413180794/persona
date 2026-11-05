@@ -439,10 +439,33 @@ func TestTurnError(t *testing.T) {
 		{proto.StateWorking, "API Error: Connection lost mid-response.", false},
 		{proto.StateNeedsYou, "API Error: Connection lost mid-response.", false},
 	} {
-		got := turnError(proto.Session{State: tc.state, LastText: tc.text})
-		if (got != "") != tc.cut {
-			t.Errorf("turnError(%s, %q) = %q", tc.state, tc.text, got)
+		got, kind := turnError(proto.Session{State: tc.state, LastText: tc.text})
+		if (got != "") != tc.cut || kind != "" {
+			t.Errorf("turnError(%s, %q) = %q, %q", tc.state, tc.text, got, kind)
 		}
+	}
+}
+
+// The node's word on a failed turn comes first (a Codex turn's error is no words of its answer, #2185), and only
+// while the agent has stopped.
+func TestTurnErrorFromNode(t *testing.T) {
+	codex := proto.Session{State: proto.StateUnread, LastText: "我先跑一下测试", TurnError: "unexpected status 503 Service Unavailable",
+		TurnErrorKind: proto.TurnErrorTransient}
+	if got, kind := turnError(codex); got != codex.TurnError || kind != proto.TurnErrorTransient {
+		t.Errorf("stopped: %q, %q", got, kind)
+	}
+	codex.State = proto.StateIdle
+	if got, _ := turnError(codex); got != codex.TurnError {
+		t.Errorf("seen: %q", got)
+	}
+	codex.State = proto.StateWorking // it took the 继续 up: the old error is gone
+	if got, kind := turnError(codex); got != "" || kind != "" {
+		t.Errorf("working: %q, %q", got, kind)
+	}
+	// Without the node's word, Claude Code's answer still says it.
+	claude := proto.Session{State: proto.StateUnread, LastText: "API Error: 529 Overloaded"}
+	if got, kind := turnError(claude); got != claude.LastText || kind != "" {
+		t.Errorf("claude: %q, %q", got, kind)
 	}
 }
 

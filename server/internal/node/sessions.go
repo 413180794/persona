@@ -149,6 +149,9 @@ type quickMeta struct {
 	// turnOpen: a Codex rollout whose tail is inside a turn: the last turn it starts has not finished, or one turn
 	// fills the whole tail (a finished turn's task_complete is within a few KB of the end; real turns write MBs)
 	turnOpen bool
+	// turnError / turnErrorKind: the latest turn failed on the model service, as a Codex rollout records it
+	// (transcript.Meta.TurnError, #2185); Session.TurnError / TurnErrorKind.
+	turnError, turnErrorKind string
 }
 
 const offlineWindow = 7 * 24 * time.Hour
@@ -176,6 +179,11 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 			n.mu.Lock()
 			n.metas[path] = m
 			n.mu.Unlock()
+		}
+		if m.size != st.Size() || !m.mtime.Equal(st.ModTime()) {
+			// Written since that read: a turn error it saw may be over (a 继续 ran and ended well within the interval),
+			// and a stale one would have it continued again. None for a few seconds is the safe side (#2185).
+			m.turnError, m.turnErrorKind = "", ""
 		}
 		return m
 	}
@@ -270,6 +278,7 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	}
 	m.turnOpen = tm.Codex && (tm.TurnOpen || off > 0 && !tm.TurnClosed)
 	m.claudeTurn = !tm.Codex && tm.TurnOpen
+	m.turnError, m.turnErrorKind = tm.TurnError, tm.TurnErrorKind
 	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
 	return m
 }
@@ -643,6 +652,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					untitled(&s, m)
 				}
 				s.Model, s.LastText, s.UpdatedAt, s.Rev = m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
+				s.TurnError, s.TurnErrorKind = m.turnError, m.turnErrorKind
 				s.Activity, s.ActivityAt = m.activityOf()
 				if a.Agent != "codex" && a.Agent != traexAgent {
 					s.PermissionMode, s.Effort = n.currentModes(id, m)

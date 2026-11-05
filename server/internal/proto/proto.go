@@ -644,10 +644,15 @@ type Session struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	LastText  string    `json:"last_text,omitempty"`
 	// TurnError: the agent's latest turn ended in a model API error (the connection lost mid-response, overloaded,
-	// rate limited, the model service down…), as Claude Code writes it ("API Error: …"); set by the hub while the agent
-	// is stopped, empty while it works or when the turn ended normally. The task it works for is interrupted, not
-	// done (docs/todos.md「状态计算规则」, #1516).
+	// rate limited, the model service down…). The node sets it when the agent's own record says the turn failed
+	// (Codex: a rollout's task_complete.error, an app-server's failed turn, #2185); otherwise the hub reads it off the
+	// last words, as Claude Code writes them ("API Error: …"). The hub keeps it only while the agent is stopped: empty
+	// while it works or when the turn ended normally. The task it works for is interrupted, not done
+	// (docs/todos.md「状态计算规则」, #1516).
 	TurnError string `json:"turn_error,omitempty"`
+	// TurnErrorKind is what the agent's record says of TurnError, when it says (Codex's error kinds):
+	// TurnErrorTransient (worth a 继续) or TurnErrorUser (the user must act); empty: read off the text.
+	TurnErrorKind string `json:"turn_error_kind,omitempty"`
 	// Work is where the session stands in its work (docs/agent-work.md): working, blocked on a named precondition, or
 	// done, with a line saying what it waits for or what it concluded. Set by the hub; absent before the hub has
 	// triaged a stopped session's turn.
@@ -698,6 +703,12 @@ const (
 	WaitAgent     = "agent"     // another agent finishing: the hub wakes this one when it stops
 	WaitExternal  = "external"  // a deploy, CI, a review, a time: the hub wakes it to check
 	WaitTransient = "transient" // the model service failed for a moment: the hub sends 继续
+)
+
+// Session.TurnErrorKind values.
+const (
+	TurnErrorTransient = "transient" // the model service failed for a moment: worth a 继续
+	TurnErrorUser      = "user"      // sign-in, usage limit, context window, the model…: the user must act
 )
 
 // WorkState is a session's work state (Session.Work).

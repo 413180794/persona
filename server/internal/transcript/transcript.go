@@ -144,6 +144,11 @@ type Meta struct {
 	// turn_duration / an interrupt), no turn started after it. Unlike !TurnOpen it is false when the lines say nothing
 	// (a tail read from mid-turn).
 	TurnClosed bool
+	// TurnError / TurnErrorKind: the latest turn failed on the model service, as the agent's own record says it
+	// (Codex: task_complete's error, #2185); empty when it ended well, or when the record does not say (Claude Code
+	// writes its error as the answer: the hub reads that off LastText). Kind is proto.TurnErrorTransient / User, or
+	// "" when the record gives no kind to go by.
+	TurnError, TurnErrorKind string
 	// codexSeen: newer rollouts record an item both as event_msg/item_completed and in history_mutation.
 	codexSeen   map[string]bool
 	codexTurnID string

@@ -623,7 +623,7 @@ func triageRules(c proto.Session, loc *time.Location) (w *proto.WorkState, by st
 		return nil, "", true
 	}
 	if e := c.TurnError; e != "" {
-		if transientError(e) {
+		if turnErrorTransient(c) {
 			return &proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitTransient, Line: "模型服务暂时出错，自动重试",
 				Wait: clip(oneLine(e), 200)}, "rule", false
 		}
@@ -653,6 +653,18 @@ func runningInBackground(c proto.Session) int {
 		}
 	}
 	return n
+}
+
+// turnErrorTransient: c's turn error is worth a 继续. The agent's record says so when it gives a kind (Codex's error
+// kinds, #2185); otherwise the text does.
+func turnErrorTransient(c proto.Session) bool {
+	switch c.TurnErrorKind {
+	case proto.TurnErrorTransient:
+		return true
+	case proto.TurnErrorUser:
+		return false
+	}
+	return transientError(c.TurnError)
 }
 
 // transientError: a model API error worth a 继续 (the service failed for a moment), not one the user must fix

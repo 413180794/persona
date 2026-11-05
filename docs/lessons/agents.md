@@ -178,6 +178,11 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 - Claude Code 一轮以模型 API 错误结束（「API Error: Connection lost mid-response…」、过载、限流、登录过期）在 herdr 里和正常做完一样是 done，hub 也就算成 unread：
   task_plan 的任务曾因此显示绿色「完成」卡片、摘要就是错误原文，快照里写「做完了」（#1516）。区分它只能看最后一句：hub 在会话停着、`last_text` 以这些错误开头时填 `turn_error`（只认开头，
   回复里提到「API Error」不算），任务判「中断了」、不自动关、回执写 `interrupted`；普通 Agent 的推送也不再是 ✅。
+- **Codex 被模型服务打断时不写回复**（2026-11-05 实测 Codex 0.166，假服务回 503）：rollout 里只有这一轮的 `task_complete`，`last_agent_message`
+  是 `null`，错误在它的 `error` 里（`{"message":"unexpected status 503 …","codex_error_info":{"http_connection_failed":{"http_status_code":503}}}`）；
+  app-server 是 `turn/completed` 的 `turn.status: "failed"` + `turn.error`（驼峰：`codexErrorInfo`）。只看最后一句的 `turn_error` 对 Codex 永远是空的：
+  会话分诊不自动继续、任务不写中断回执，最后一句还是出错前那句，可能被判成做完了（#2185）。现在 node 自己报 `turn_error` 和种类，
+  见 `docs/agent-work.md`「Codex 的错误种类」。要确认 Codex 的协议，`codex app-server generate-json-schema --out <目录>` 能导出本机版本的全部类型。
 - herdr 按 `HERDR_PANE_ID` 把 SessionStart 记到窗格上，这个变量会被窗格外的进程继承：在 herdr 窗格里第一次起的 tmux 服务器（botmux 的
   `tmux new-session -d`）留着它，之后 botmux 起的每个 claude 都报进同一个窗格，main 标签显示成 botmux 的会话（2026-11-04）。
   herdr 报的会话要和窗格里 claude 进程自己的 `sessions/<pid>.json` 对一下（`docs/claude-integration.md`「会话 id 与 transcript」）。

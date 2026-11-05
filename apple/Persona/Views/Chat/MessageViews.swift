@@ -70,7 +70,7 @@ extension MarkdownUI.Theme {
                 .padding(Theme.Space.m)
         }
         .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-        .macHoverActions(onEdge: false) {
+        .macHoverActions {
             MacHoverButton(title: "拷贝代码", symbol: Theme.Icon.copy) { MacHover.copy(config.content, said: "已拷贝代码") }
         }
     }

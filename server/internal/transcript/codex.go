@@ -30,6 +30,8 @@ type codexPayload struct {
 	Type       string          `json:"type"`
 	TurnID     string          `json:"turn_id"`
 	DurationMS json.RawMessage `json:"duration_ms"`
+	// task_complete: what failed the turn, null when it ended well ({message, codex_error_info}, CodexTurnError)
+	Error json.RawMessage `json:"error"`
 	// session_meta
 	ID         string `json:"id"`
 	Cwd        string `json:"cwd"`
@@ -181,9 +183,12 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 	case "task_started":
 		meta.TurnOpen, meta.TurnClosed = true, false
 		meta.codexTurnID, meta.codexUserID = p.TurnID, ""
+		meta.TurnError, meta.TurnErrorKind = "", ""
 		return nil
 	case "task_complete":
 		meta.TurnOpen, meta.TurnClosed = false, true
+		// A turn the model service failed writes no answer: its error is here (Codex 0.166, #2185).
+		meta.TurnError, meta.TurnErrorKind = CodexTurnError(p.Error)
 		ms, ok := recordedMilliseconds(p.DurationMS)
 		if !ok || strings.TrimSpace(p.TurnID) == "" || (meta.codexTurnID != "" && meta.codexTurnID != p.TurnID) {
 			return nil
@@ -193,6 +198,7 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 		return []proto.Item{it}
 	case "turn_aborted":
 		meta.TurnOpen, meta.TurnClosed = false, true
+		meta.TurnError, meta.TurnErrorKind = "", "" // stopped by the user: no failure
 		it := mk(0, "", "system", proto.KindNotice)
 		it.Text = "已中断"
 		return []proto.Item{it}

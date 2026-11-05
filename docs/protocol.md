@@ -299,7 +299,8 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
  "agent":"claude","agent_label":"",   // agent_label 只在 App 不认识的 Agent 上有：runtime 的叫法（「DSH」，见「Runtime ↔ node」）
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
  "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字",
-     "turn_error":"API Error: Connection lost mid-response…（停着且最后一句是模型 API 错误时 hub 填，否则不带；它的任务算「中断了」，#1516）","pending_interactions":1,
+     "turn_error":"API Error: Connection lost mid-response…（停着且这一轮被模型 API 错误打断时才有，否则不带；它的任务算「中断了」，#1516。Claude Code：hub 从最后一句的开头认；Codex：node 从 task_complete.error / 失败的 turn/completed 报，#2185）",
+     "turn_error_kind":"transient（可选：agent 自己说了错误种类时才有，Codex 的 codex_error_info：transient 值得「继续」，user 要用户处理；没有就按 turn_error 的文字判，docs/agent-work.md「分诊」）","pending_interactions":1,
  "work":{"phase":"blocked","on":"external","line":"等部署跑完再跑线上测试","wait":"部署跑完","then":"跑线上测试","every_minutes":5,
          "wake_at":"...","attempts":1,"max":6,"turn_at":"...","at":"...","by":"model"},
      // 工作态（docs/agent-work.md）：phase working | blocked | done；blocked 的 on 是 user（等你决定，questions / link /

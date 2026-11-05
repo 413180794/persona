@@ -69,6 +69,8 @@ type goldenMeta struct {
 	Background     []proto.BackgroundTask `json:"background,omitempty"`
 	TurnOpen       bool                   `json:"turn_open,omitempty"`
 	LastTurnWake   bool                   `json:"last_turn_wake,omitempty"`
+	TurnError      string                 `json:"turn_error,omitempty"`
+	TurnErrorKind  string                 `json:"turn_error_kind,omitempty"`
 	LastActivity   time.Time              `json:"last_activity"`
 }
 
@@ -79,7 +81,8 @@ func snapshot(f *File) golden {
 		Title: m.Title, FirstUser: m.FirstUser, LastText: m.LastText, Model: m.Model, Cwd: m.Cwd,
 		PermissionMode: m.PermissionMode, Effort: m.Effort, Turns: m.Turns, Compactions: m.Compactions,
 		ContextTokens: m.ContextTokens, OutputTokens: m.OutputTokens, Queue: m.Queue, Background: m.Background,
-		TurnOpen: m.TurnOpen, LastTurnWake: m.LastTurnWake, LastActivity: m.LastActivity,
+		TurnOpen: m.TurnOpen, LastTurnWake: m.LastTurnWake, TurnError: m.TurnError, TurnErrorKind: m.TurnErrorKind,
+		LastActivity: m.LastActivity,
 	}}
 }
 

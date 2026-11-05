@@ -21,6 +21,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 var errCodexNoOwner = errors.New("没有可共享的 app-server 运行入口")
@@ -29,11 +30,14 @@ type remoteThread struct {
 	id, publicID, title, cwd, status, turn, parent, partial string
 	// model and effort are what the app-server says the thread is configured with (codex_effort.go); "" unknown / unset.
 	model, effort string
-	joined        bool
-	buffer        *strings.Builder
-	lastDelta     time.Time
-	revision      uint64
-	files         map[string][]string
+	// failure / failureKind: the latest turn failed, as turn/completed said it (status failed, its error, #2185);
+	// cleared when a turn starts. Session.TurnError / TurnErrorKind, before the rollout has it.
+	failure, failureKind string
+	joined               bool
+	buffer               *strings.Builder
+	lastDelta            time.Time
+	revision             uint64
+	files                map[string][]string
 }
 
 type remoteAsk struct {
@@ -405,6 +409,7 @@ func (c *codexRemote) refresh() error {
 	for raw, t := range next {
 		if old, ok := c.threads[raw]; ok && old.revision != seenRevision[raw] {
 			t.joined, t.turn, t.partial, t.files, t.status, t.revision, t.buffer, t.lastDelta = old.joined, old.turn, old.partial, old.files, old.status, old.revision, old.buffer, old.lastDelta
+			t.failure, t.failureKind = old.failure, old.failureKind
 			t.model, t.effort = old.model, old.effort // an effort just set (codex_effort.go) over a read from before it
 			next[raw] = t
 		}
@@ -689,7 +694,9 @@ func (c *codexRemote) message(m codexMessage) {
 		Delta     string          `json:"delta"`
 		RequestID json.RawMessage `json:"requestId"`
 		Turn      struct {
-			ID string `json:"id"`
+			ID     string          `json:"id"`
+			Status string          `json:"status"`
+			Error  json.RawMessage `json:"error"`
 		} `json:"turn"`
 		Item     remoteEventItem `json:"item"`
 		Settings struct {
@@ -729,6 +736,7 @@ func (c *codexRemote) message(m codexMessage) {
 	case "turn/started":
 		t.turn = ev.Turn.ID
 		t.status = proto.StatusWorking
+		t.failure, t.failureKind = "", ""
 		t.partial = ""
 		t.buffer = nil
 		emit = true
@@ -736,6 +744,12 @@ func (c *codexRemote) message(m codexMessage) {
 		if t.turn == ev.Turn.ID {
 			t.turn = ""
 			t.status = proto.StatusDone
+			t.failure, t.failureKind = "", ""
+			if ev.Turn.Status == "failed" { // interrupted is the user's Esc, no failure
+				if t.failure, t.failureKind = transcript.CodexTurnError(ev.Turn.Error); t.failure == "" {
+					t.failure = transcript.CodexTurnFailed // failed with no error to say why
+				}
+			}
 			t.partial = ""
 			t.buffer = nil
 			emit = true
