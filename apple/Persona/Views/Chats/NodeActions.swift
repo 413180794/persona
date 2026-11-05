@@ -202,6 +202,8 @@ final class NodeActions {
     var closingTab: CloseTab?
     /// The space whose 在这里运行 Agent… sheet is open.
     var runningHere: SpaceGroup?
+    /// The space whose 新建 worktree… sheet is open.
+    var newWorktree: SpaceGroup?
 
     private var model: AppModel { AppModel.shared }
 
@@ -291,6 +293,9 @@ private struct NodeActionPrompts: ViewModifier {
             .sheet(item: Binding(get: { actions.runningHere }, set: { actions.runningHere = $0 })) { g in
                 RunAgentHereSheet(group: g)
             }
+            .sheet(item: Binding(get: { actions.newWorktree }, set: { actions.newWorktree = $0 })) { g in
+                NewWorktreeSheet(group: g)
+            }
     }
 }
 
@@ -318,7 +323,9 @@ struct AgentNodeMenuItems: View {
     }
 }
 
-/// The node items of a space's ⋯ in Agents: run an agent in one of its shells, Git in its folder.
+/// The node items of a space's ⋯ in Agents: run an agent in one of its shells, a Git worktree of its repository, Git in
+/// its folder. 新建 worktree… is offered for every herdr workspace: whether the host can make one is in the panes list,
+/// which the menu does not load; the sheet says so when it cannot (an older node).
 struct SpaceNodeMenuItems: View {
     var group: SpaceGroup
 
@@ -326,6 +333,9 @@ struct SpaceNodeMenuItems: View {
         let actions = NodeActions.shared
         Button { actions.runningHere = group } label: {
             Label("在这里运行 Agent…", systemImage: Theme.Icon.run).lineLimit(1)
+        }
+        Button { actions.newWorktree = group } label: {
+            Label("新建 worktree…", systemImage: Theme.Icon.newWorktree).lineLimit(1)
         }
         Menu {
             ForEach(NodeMenu.GitOp.allCases) { op in
@@ -474,6 +484,281 @@ struct RunAgentHereSheet: View {
                 await model.refresh()
             } catch {
                 failure = "启动失败：\(error.shown ?? error.localizedDescription)"
+                Haptics.error()
+            }
+        }
+    }
+}
+
+// MARK: - 新建 worktree…
+
+/// `worktree/prepare` (`proto.WorktreePrepare`): the workspace's repository, its branch and where checkouts go.
+nonisolated struct WorktreePrepare: Decodable, Sendable, Equatable {
+    var root: String
+    var repoName: String
+    /// The branch checked out in the workspace; "" on a detached HEAD.
+    var branch: String
+    /// The directory the host puts this repository's checkouts under; a branch's checkout is `path/<slug>`.
+    var path: String
+
+    enum CodingKeys: String, CodingKey { case root, repoName, branch, path }
+
+    init(root: String = "", repoName: String, branch: String = "", path: String) {
+        self.root = root
+        self.repoName = repoName
+        self.branch = branch
+        self.path = path
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        root = try c.decodeIfPresent(String.self, forKey: .root) ?? ""
+        repoName = try c.decodeIfPresent(String.self, forKey: .repoName) ?? ""
+        branch = try c.decodeIfPresent(String.self, forKey: .branch) ?? ""
+        path = try c.decodeIfPresent(String.self, forKey: .path) ?? ""
+    }
+}
+
+/// `worktree/create` (`proto.WorktreeCreateResult`): the new workspace and its checkout.
+nonisolated struct WorktreeCreated: Decodable, Sendable, Equatable {
+    var workspaceID: String
+    var path: String
+    var branch: String
+    enum CodingKeys: String, CodingKey { case path, branch, workspaceID = "workspace_id" }
+}
+
+/// The dialog's logic, as the web's `lib/worktree.ts` (docs/terminal.md「新建 worktree…」): the path follows the branch
+/// until it is typed by hand; the computer checks everything again.
+nonisolated enum WorktreeForm: Sendable {
+    struct State: Equatable, Sendable {
+        var branch = ""
+        var path = ""
+        /// The path was typed by hand: the branch no longer moves it.
+        var pathEdited = false
+    }
+
+    /// The directory name herdr gives a branch's checkout: lower case, each run of anything but ASCII letters and digits
+    /// one "-", none at either end (`Feat/A_b.c` → `feat-a-b-c`). The node's `herdr.WorktreeSlug`.
+    static func slug(_ branch: String) -> String {
+        var out = "", dash = false
+        for ch in branch.lowercased().unicodeScalars {
+            if ("a"..."z").contains(ch) || ("0"..."9").contains(ch) {
+                if dash, !out.isEmpty { out += "-" }
+                dash = false
+                out.unicodeScalars.append(ch)
+            } else {
+                dash = true
+            }
+        }
+        return out
+    }
+
+    /// The checkout path a branch gets under `base` ("" when the branch has nothing to name a folder with).
+    static func suggestedPath(base: String, branch: String) -> String {
+        let s = slug(branch)
+        guard !base.isEmpty, !s.isEmpty else { return "" }
+        let windows = base.contains("\\") && !base.contains("/")
+        var trimmed = base
+        while let last = trimmed.last, last == "/" || last == "\\" { trimmed.removeLast() }
+        return trimmed + (windows ? "\\" : "/") + s
+    }
+
+    /// Why git would not take this as a branch name (`git check-ref-format --branch`), nil when it would.
+    static func branchProblem(_ raw: String) -> String? {
+        let b = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if b.isEmpty { return "请填写分支名" }
+        if b.hasPrefix("-") { return "分支名不能以 - 开头" }
+        let bad = CharacterSet(charactersIn: "~^:?*[\\").union(.whitespacesAndNewlines).union(.controlCharacters)
+        if b == "@" || b.unicodeScalars.contains(where: bad.contains) { return "分支名里有不能用的字符" }
+        if b.contains("..") || b.contains("@{") || b.contains("//") { return "分支名里有不能用的写法" }
+        if b.hasPrefix("/") || b.hasSuffix("/") || b.hasSuffix(".") || b.hasSuffix(".lock") { return "分支名的开头或结尾不合法" }
+        if b.split(separator: "/").contains(where: { $0.hasPrefix(".") || $0.hasSuffix(".lock") }) {
+            return "分支名的每一段都不能以 . 开头或以 .lock 结尾"
+        }
+        return nil
+    }
+
+    static func typeBranch(_ s: State, base: String, _ branch: String) -> State {
+        var s = s
+        s.branch = branch
+        if !s.pathEdited { s.path = suggestedPath(base: base, branch: branch.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        return s
+    }
+
+    /// Emptied, the path goes back to following the branch.
+    static func typePath(_ s: State, base: String, _ path: String) -> State {
+        var s = s
+        if path.isEmpty {
+            s.path = suggestedPath(base: base, branch: s.branch.trimmingCharacters(in: .whitespacesAndNewlines))
+            s.pathEdited = false
+        } else {
+            s.path = path
+            s.pathEdited = true
+        }
+        return s
+    }
+
+    /// What stops it being sent; nil when nothing does.
+    static func problem(_ s: State) -> String? {
+        branchProblem(s.branch) ?? (s.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "请填写检出路径" : nil)
+    }
+
+    static let needsUpdate = "这台电脑上的 Persona 版本太旧，更新后才能新建 worktree"
+
+    /// A hub or node without these calls answers 404 / 405 / 501 or "unknown method": told to update.
+    static func isTooOld(_ error: Error) -> Bool {
+        guard let e = error as? APIError else { return false }
+        let m = e.message.lowercased()
+        return [404, 405, 501].contains(e.status) || e.code == "unknown_method" || m.contains("unknown method") || m.hasPrefix("unsupported")
+    }
+
+    /// The error as the sheet says it.
+    static func describe(_ error: Error, what: String) -> String {
+        if isTooOld(error) { return needsUpdate }
+        let m = error.shown ?? error.localizedDescription
+        return m.isEmpty ? what : "\(what)：\(m)"
+    }
+
+    static func body(workspaceID: String, kind: String?) -> [String: String] {
+        var body = ["workspace_id": workspaceID]
+        if let kind, !kind.isEmpty { body["kind"] = kind }
+        return body
+    }
+}
+
+/// 新建 worktree… from a space's ⋯: reads the workspace's repository, takes a branch and a checkout path, and has the
+/// computer make the worktree and open it as a workspace; then offers 新建 Agent there (the phone has no terminal page
+/// to open it in, as the web does).
+struct NewWorktreeSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var group: SpaceGroup
+
+    @State private var repo: Loadable<WorktreePrepare> = .loading
+    @State private var form = WorktreeForm.State()
+    @State private var busy = false
+    @State private var failure: String?
+    @State private var created: WorktreeCreated?
+
+    private var workspaceID: String { NodeMenu.workspaceID(group) ?? "" }
+    private var base: String { repo.value?.path ?? "" }
+
+    var body: some View {
+        if let created {
+            // The new workspace: start an agent in it (it shows in Agents once one runs there).
+            NewChatView(preset: SpacePreset(machineID: group.machineRef.path, cwd: created.path, workspaceID: created.workspaceID,
+                                            spaceName: (repo.value?.repoName ?? group.name) + " · " + created.branch)) { s in
+                dismiss()
+                model.open(s.key)
+            }
+        } else {
+            NavigationStack {
+                LoadableContent(state: repo, retry: { Task { await prepare() } }) { r in
+                    content(r)
+                }
+                .themedPage()
+                .navigationTitle("新建 worktree")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { dismiss() }.lineLimit(1).disabled(busy)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        if busy {
+                            ProgressView()
+                        } else {
+                            Button("创建") { create() }
+                                .lineLimit(1)
+                                .disabled(repo.value == nil || WorktreeForm.problem(form) != nil)
+                        }
+                    }
+                }
+            }
+            .task { await prepare() }
+            .presentationDetents([.medium, .large])
+            .interactiveDismissDisabled(busy)
+        }
+    }
+
+    @ViewBuilder private func content(_ r: WorktreePrepare) -> some View {
+        Form {
+            Section {
+                Label(r.branch.isEmpty ? "\(r.repoName) · 未在任何分支上" : "\(r.repoName) · 当前分支 \(r.branch)",
+                      systemImage: Theme.Icon.gitBranch)
+                    .font(Theme.Font.secondary)
+                    .lineLimit(1)
+            }
+            Section {
+                TextField("新分支名，或已有的本地分支", text: Binding(get: { form.branch }, set: { form = WorktreeForm.typeBranch(form, base: base, $0) }))
+                    .font(Theme.Font.code)
+                    .autocorrectionDisabled()
+                    #if os(iOS) || os(visionOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .accessibilityIdentifier("worktree.branch")
+            } header: {
+                Text("分支")
+            } footer: {
+                if !form.branch.isEmpty, let problem = WorktreeForm.branchProblem(form.branch) {
+                    Text(problem).foregroundStyle(Theme.danger)
+                } else {
+                    Text("新分支从这个工作区当前的提交开始；已有的本地分支直接检出。")
+                }
+            }
+            Section {
+                TextField("检出路径", text: Binding(get: { form.path }, set: { form = WorktreeForm.typePath(form, base: base, $0.replacingOccurrences(of: "\n", with: "")) }),
+                          axis: .vertical) // a long path shows whole
+                    .font(Theme.Font.code)
+                    .autocorrectionDisabled()
+                    #if os(iOS) || os(visionOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .accessibilityIdentifier("worktree.path")
+            } header: {
+                Text("检出路径")
+            } footer: {
+                if let failure {
+                    Text(failure).foregroundStyle(Theme.danger).accessibilityIdentifier("worktree.failure")
+                } else {
+                    Text("跟着分支名走；改过之后不再跟，清空后恢复")
+                }
+            }
+        }
+        .disabled(busy)
+    }
+
+    private func prepare() async {
+        guard let api = model.api(group.group), !workspaceID.isEmpty else { repo = .failed("尚未连接 hub"); return }
+        repo = .loading
+        do {
+            let data = try await api.nodeAction(machine: group.machineID, "worktree/prepare",
+                                                WorktreeForm.body(workspaceID: workspaceID, kind: NodeMenu.kind(group)))
+            let r = try JSON.decoder.decode(WorktreePrepare.self, from: data)
+            if !form.pathEdited { form.path = WorktreeForm.suggestedPath(base: r.path, branch: form.branch) }
+            repo = .loaded(r)
+        } catch {
+            repo = .failed(WorktreeForm.describe(error, what: "没能读取这个仓库"))
+        }
+    }
+
+    private func create() {
+        guard let api = model.api(group.group), WorktreeForm.problem(form) == nil else { return }
+        busy = true
+        failure = nil
+        var body = WorktreeForm.body(workspaceID: workspaceID, kind: NodeMenu.kind(group))
+        body["branch"] = form.branch.trimmingCharacters(in: .whitespacesAndNewlines)
+        body["path"] = form.path.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            defer { busy = false }
+            do {
+                let data = try await api.nodeAction(machine: group.machineID, "worktree/create", body, timeout: 160)
+                let made = try JSON.decoder.decode(WorktreeCreated.self, from: data)
+                model.toast = Toast("已新建 worktree", style: .success)
+                Haptics.success()
+                await model.refresh()
+                created = made
+            } catch {
+                failure = WorktreeForm.describe(error, what: "没能新建 worktree")
                 Haptics.error()
             }
         }

@@ -128,4 +128,41 @@ final class NodeMenuUITests: XCTestCase {
         XCTAssertEqual(started?["pane"], "w1:p2")
         XCTAssertFalse((started?["launcher"] ?? "").isEmpty)
     }
+
+    /// 新建 worktree… (#3099): the path follows the branch, git's refusal is told in the sheet, and a made worktree is
+    /// where 新建 Agent starts.
+    @MainActor func testSpaceMakesAWorktreeAndStartsAnAgentThere() throws {
+        let app = launch()
+        let more = app.buttons["weather 的更多操作"].firstMatch
+        XCTAssertTrue(reveal(app, more), "no ⋯ on the space")
+        more.tap()
+        let item = app.buttons["新建 worktree…"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "no 新建 worktree… in the space's menu")
+        item.tap()
+
+        XCTAssertTrue(text(app, containing: "persona · 当前分支 main").waitForExistence(timeout: 10), "the repository was not read")
+        let branch = app.textFields["worktree.branch"]
+        branch.tap()
+        branch.typeText("feat/taken")
+        let path = app.textFields["worktree.path"]
+        XCTAssertEqual(path.value as? String, "/home/me/.herdr/worktrees/persona/feat-taken", "the path does not follow the branch")
+        shot(app, "worktree-form")
+        app.buttons["创建"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["worktree.failure"].waitForExistence(timeout: 10), "git's refusal is not shown")
+        XCTAssertTrue(text(app, containing: "already used by worktree").exists)
+        shot(app, "worktree-refused")
+
+        branch.tap()
+        for _ in 0..<5 { branch.typeText(XCUIKeyboardKey.delete.rawValue) }
+        branch.typeText("x")
+        XCTAssertEqual(path.value as? String, "/home/me/.herdr/worktrees/persona/feat-x")
+        app.buttons["创建"].tap()
+        XCTAssertTrue(text(app, containing: "persona · feat/x").waitForExistence(timeout: 10), "新建 Agent is not set to the new worktree")
+        shot(app, "worktree-new-agent")
+        let made = try actions().last
+        XCTAssertEqual(made?["route"], "worktree/create")
+        XCTAssertEqual(made?["workspace_id"], "w1")
+        XCTAssertEqual(made?["branch"], "feat/x")
+        XCTAssertEqual(made?["path"], "/home/me/.herdr/worktrees/persona/feat-x")
+    }
 }

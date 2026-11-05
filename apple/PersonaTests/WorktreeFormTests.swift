@@ -1,0 +1,72 @@
+import Foundation
+import Testing
+@testable import Jarvis
+
+/// 新建 worktree…'s form (`WorktreeForm`, docs/terminal.md「新建 worktree…」), the same cases as the web's worktree.test.ts.
+struct WorktreeFormTests {
+    @Test func namesTheFolderTheWayHerdrDoes() {
+        #expect(WorktreeForm.slug("Feat/A_b.c") == "feat-a-b-c")
+        #expect(WorktreeForm.slug("feat/2431-worktree") == "feat-2431-worktree")
+        #expect(WorktreeForm.slug("fix/中文") == "fix")
+        #expect(WorktreeForm.slug("  --a//b--") == "a-b")
+        #expect(WorktreeForm.slug("中文") == "")
+    }
+
+    @Test func thePathIsTheBranchsFolderUnderTheRepositorysDirectory() {
+        #expect(WorktreeForm.suggestedPath(base: "/srv/wt/proj", branch: "feat/x") == "/srv/wt/proj/feat-x")
+        #expect(WorktreeForm.suggestedPath(base: "/srv/wt/proj/", branch: "feat/x") == "/srv/wt/proj/feat-x")
+        #expect(WorktreeForm.suggestedPath(base: "C:\\wt\\proj", branch: "feat/x") == "C:\\wt\\proj\\feat-x")
+        #expect(WorktreeForm.suggestedPath(base: "/srv/wt/proj", branch: "中文") == "")
+        #expect(WorktreeForm.suggestedPath(base: "", branch: "feat/x") == "")
+    }
+
+    @Test func takesWhatGitTakes() {
+        for ok in ["feat/x", "fix-1", "release/1.2.3", "a@b", "feat/中文", "  spare  "] {
+            #expect(WorktreeForm.branchProblem(ok) == nil, "\(ok)")
+        }
+    }
+
+    @Test func tellsAnEmptyNameThenWhatGitWouldRefuse() {
+        #expect(WorktreeForm.branchProblem("  ") == "请填写分支名")
+        for bad in ["-x", "a..b", "a b", "a~b", "a^b", "a:b", "a?b", "a*b", "a[b", "a\\b", "a@{b", "@", "/a", "a/", "a//b", "a.",
+                    "a.lock", ".a", "a/.b", "a.lock/b"] {
+            #expect(WorktreeForm.branchProblem(bad) != nil, "\(bad)")
+        }
+    }
+
+    @Test func thePathFollowsTheBranchUntilEditedAndAgainWhenEmptied() {
+        let base = "/srv/wt/proj"
+        var f = WorktreeForm.typeBranch(.init(), base: base, "feat/x")
+        #expect(f == .init(branch: "feat/x", path: "/srv/wt/proj/feat-x", pathEdited: false))
+        f = WorktreeForm.typeBranch(f, base: base, "feat/xy ")
+        #expect(f.path == "/srv/wt/proj/feat-xy")
+        f = WorktreeForm.typePath(f, base: base, "/elsewhere/mine")
+        f = WorktreeForm.typeBranch(f, base: base, "feat/other")
+        #expect(f == .init(branch: "feat/other", path: "/elsewhere/mine", pathEdited: true))
+        f = WorktreeForm.typePath(f, base: base, "")
+        #expect(f == .init(branch: "feat/other", path: "/srv/wt/proj/feat-other", pathEdited: false))
+    }
+
+    @Test func isSentOnlyWithAGoodBranchAndAPath() {
+        #expect(WorktreeForm.problem(.init()) == "请填写分支名")
+        #expect(WorktreeForm.problem(.init(branch: "a..b", path: "/p", pathEdited: true)) != nil)
+        #expect(WorktreeForm.problem(.init(branch: "中文", path: "", pathEdited: false)) == "请填写检出路径")
+        #expect(WorktreeForm.problem(.init(branch: "feat/x", path: "/p/x", pathEdited: false)) == nil)
+    }
+
+    @Test func anOlderComputerIsToldToUpdate() {
+        #expect(WorktreeForm.describe(APIError(status: 404, message: "not found"), what: "没能新建 worktree") == WorktreeForm.needsUpdate)
+        #expect(WorktreeForm.describe(APIError(status: 502, message: "unknown method worktree.create"), what: "x") == WorktreeForm.needsUpdate)
+        #expect(WorktreeForm.describe(APIError(status: 502, message: "fatal: 'a' is already used by worktree"), what: "没能新建 worktree")
+            == "没能新建 worktree：fatal: 'a' is already used by worktree")
+    }
+
+    @Test func theRequestNamesTheWorkspaceAndTheHost() throws {
+        #expect(WorktreeForm.body(workspaceID: "w1", kind: "herdr") == ["workspace_id": "w1", "kind": "herdr"])
+        #expect(WorktreeForm.body(workspaceID: "w1", kind: nil) == ["workspace_id": "w1"])
+        let r = try JSON.decoder.decode(WorktreePrepare.self, from: Data(#"{"root":"/r","repoName":"persona","branch":"","path":"/wt/persona"}"#.utf8))
+        #expect(r == WorktreePrepare(root: "/r", repoName: "persona", branch: "", path: "/wt/persona"))
+        let c = try JSON.decoder.decode(WorktreeCreated.self, from: Data(#"{"workspace_id":"w3","tab_id":"w3:t1","path":"/wt/persona/feat-x","branch":"feat/x"}"#.utf8))
+        #expect(c.workspaceID == "w3" && c.path == "/wt/persona/feat-x")
+    }
+}

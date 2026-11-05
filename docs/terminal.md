@@ -687,6 +687,7 @@ Moshi 是同一个会话页，中间区域在 Term 和 Chat 之间原地切换�
   检出路径要是绝对路径（`~/` 会展开），不能是已有的文件，已有的目录必须是空的（空目录 git 会直接用），不能放进仓库的 `.git` 里。git 拒绝的（分支已在别处检出、路径不行……）原样把 `fatal:` 那一行回给用户，不会强制、不会删东西、失败不留半成品。
 - **对话框**（`views/NewWorktree.tsx`，逻辑在 `lib/worktree.ts`）：打开时先读仓库（「正在读取仓库…」）；检出路径跟着分支名走，手改之后不再跟，清空后恢复；分支名当场校验（空：「请填写分支名」）；
   创建中按钮转圈、对话框不能关；失败显示在对话框里（「没能新建 worktree：…」），旧 hub / 旧 node 没有这个接口时说「这台电脑上的 Persona 版本太旧，更新后才能新建 worktree」；成功后 toast、读一遍树、跳到新工作区的终端。
+- **iOS / Mac**（#3099）：Agents 列表空间的 ⋯「新建 worktree…」，同样的两条路由和表单规则（`WorktreeForm`）；建好后不是跳终端，而是打开预填了新工作区的「新对话」（`docs/ios.md`「新建 worktree…」）。
 - **测试**：`node/worktree_test.go`（真 git 仓库 + 假 herdr：prepare 的仓库名 / 分支 / 配置的目录 / linked worktree / 分离 HEAD / 非仓库；经 herdr 创建新分支和已有分支；各种被拒绝的路径和分支名不碰 herdr；git 的拒绝原因；退回 git 的路径和重复检出；`panes.list` 带 `worktree`）、
   `herdr/worktrees_test.go`（配置解析、slug、socket 参数和 CLI 退路）、`hub/panes_test.go`（权限、只转发点名的字段）、`web/src/lib/worktree.test.ts`、`node-actions.test.ts`、`node-palette.test.ts`、`views/NewWorktree.test.tsx`。
 
