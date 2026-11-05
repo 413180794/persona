@@ -66,7 +66,7 @@ struct MacPageRoot: View {
             .environment(\.shellOpenWindow, chrome.openWindow)
             .environment(\.scenePhase, chrome.scenePhase)
             .environment(\.tabIsActive, activity.inFront)
-            .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown), as the window's root sets
+            .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown), as the window's root sets
             .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
     }
 }

@@ -285,6 +285,7 @@ struct ThreadMediaView: View {
     var connector: String
     var media: ThreadMedia
     @State private var viewing = false
+    @Namespace private var zoom
 
     var body: some View {
         switch media.kind {
@@ -352,8 +353,9 @@ struct ThreadMediaView: View {
                 .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).strokeBorder(Color.primary.opacity(0.06)))
                 .contentShape(.rect)
+                .matchedTransitionSource(id: url, in: zoom)
                 .onTapGesture { viewing = true }
-                .fullScreenCover(isPresented: $viewing) { LarkImageGallery(urls: [url], index: 0) }
+                .fullScreenCover(isPresented: $viewing) { ImageViewer(urls: [url], index: 0).navigationTransition(.zoom(sourceID: url, in: zoom)) }
                 .accessibilityLabel("图片")
         } else {
             placeholder(Theme.Icon.photo, "图片")

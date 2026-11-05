@@ -229,7 +229,7 @@ struct LarkMomentsPostView: View {
                 comments = (try? await c) ?? []
             }
             .fullScreenCover(item: Binding(get: { gallery.map { GalleryIndex(index: $0) } }, set: { gallery = $0?.index })) { g in
-                LarkImageGallery(urls: (post?.images ?? []).compactMap(\.url), index: g.index)
+                ImageViewer(urls: (post?.images ?? []).compactMap(\.url), index: g.index)
             }
             .sheet(item: $person) { LarkProfileView(person: $0) }
     }

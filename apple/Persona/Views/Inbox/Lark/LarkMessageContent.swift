@@ -373,6 +373,7 @@ struct LarkImagePart: View {
     var part: LarkPart
     @Environment(\.larkContext) private var context
     @State private var viewing = false
+    @Namespace private var zoom
 
     var body: some View {
         let w = part.meta("width")?.double ?? 0, h = part.meta("height")?.double ?? 0
@@ -383,10 +384,12 @@ struct LarkImagePart: View {
                 .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).strokeBorder(Color.primary.opacity(0.06)))
                 .contentShape(.rect)
+                .matchedTransitionSource(id: url, in: zoom)
                 .onTapGesture { viewing = true }
                 .fullScreenCover(isPresented: $viewing) {
                     let all = context.images.isEmpty ? [url] : context.images
-                    LarkImageGallery(urls: all, index: all.firstIndex(of: url) ?? 0)
+                    ImageViewer(urls: all, index: all.firstIndex(of: url) ?? 0)
+                        .navigationTransition(.zoom(sourceID: url, in: zoom))
                 }
                 .accessibilityLabel("图片")
         } else {

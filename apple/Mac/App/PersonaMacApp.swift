@@ -15,7 +15,7 @@ struct PersonaMacApp: App {
         WindowGroup("Persona", id: "main") {
             MacRootView()
                 .environment(model)
-                .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
                 .onOpenURL { url in model.openURL(url) }
                 // A jarvis:// link goes to the window that is open: without this every link opened another main window.
@@ -42,7 +42,7 @@ struct PersonaMacApp: App {
         // An Agent's terminal on its own (Agent › 在新窗口打开终端, MacTerminalWindow).
         WindowGroup("终端", id: MacTerminalWindow.id, for: SessionKey.self) { $key in
             MacTerminalWindow(key: key).environment(model)
-                .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowMinHeight)
@@ -50,7 +50,7 @@ struct PersonaMacApp: App {
         // A conversation on its own (「在新窗口打开」, MacChatWindow).
         WindowGroup("对话", id: MacChatWindow.id, for: SessionKey.self) { $key in
             MacChatWindow(key: key).environment(model)
-                .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowHeight)
@@ -58,24 +58,24 @@ struct PersonaMacApp: App {
         // A link dragged out of the panel, an inbox item opened on its own (Mac/Link, Mac/Inbox).
         WindowGroup("网页", id: MacLinkWindow.id, for: URL.self) { $url in
             MacLinkWindow(url: url).environment(model)
-                .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macLinkPanelIdeal * 2, height: Theme.Size.macWindowHeight)
         WindowGroup("收件箱", id: MacInboxItemWindow.id, for: String.self) { $id in
             MacInboxItemWindow(itemID: id).environment(model)
-                .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowHeight)
 
         MenuBarExtra {
             MacMenuBarMenu().environment(model)
-                .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         } label: {
             MacMenuBarLabel().environment(model)
-                .markdownInlineImageProvider(MathInlineImages()) // inline formulas (MathMarkdown)
+                .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .menuBarExtraStyle(.menu)

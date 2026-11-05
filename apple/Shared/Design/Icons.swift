@@ -73,6 +73,8 @@ extension Theme {
         static let moreMenu = "ellipsis.circle"
         static let delete = "trash"
         static let edit = "pencil"
+        /// Draw on a picture (the image viewer's 标注, into the composer).
+        static let markup = "pencil.tip.crop.circle"
         static let compose = "square.and.pencil"
         /// Speech to text in the composer (a tap starts, a second one ends).
         static let dictate = "mic"
@@ -360,17 +362,7 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video's thumbnail: it plays elsewhere (the chat app).
-        static let playMedia = "play.circle.fill"
-        /// Send someone a message.
-        static let message = "bubble.left.fill"
-        static let credentials = "key"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
-        /// Feishu [removed] words: encoded for the eye, not encrypted.
-        static let braveClimb = "shield"
-        static let memory = "brain"
-        /// Search (a list's, the sidebar's).
+        /// A video''s, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

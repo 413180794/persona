@@ -178,6 +178,13 @@ nonisolated enum Theme {
         #endif
     }
 
+    /// The image viewer's backdrop (`ImageViewer`), as Photos has it: the page's own color while its bars show (white
+    /// in light mode, black in dark), black once a tap hides them.
+    enum Viewer {
+        static let canvas = systemPage
+        static let immersive = Color.black
+    }
+
     /// The type scale: every text in the app is one of these levels, all Dynamic Type text styles, so they follow the
     /// system's text size and the app's own 小 / 标准 / 大 (`TextSize`, which moves the Dynamic Type size a step).
     /// As in BeautifulUI, levels differ more by weight and color than by size: a row's title is the body's size in

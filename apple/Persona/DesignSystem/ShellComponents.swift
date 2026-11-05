@@ -309,11 +309,17 @@ private struct InboxDot: View {
 
 /// A round button's surface: glass, or in the BeautifulUI style its raised white circle.
 private struct CircleSurface: ViewModifier {
-    func body(content: Content) -> some View {
+    func body(content: Content) -> some View { content.chromeSurface(in: Circle()) }
+}
+
+extension View {
+    /// The floating chrome's button surface (the shell's round buttons, the image viewer's bars): interactive glass,
+    /// or BeautifulUI's raised button in that style.
+    @ViewBuilder func chromeSurface<S: InsettableShape>(in shape: S) -> some View {
         if AppStyle.current.usesBeautifulUI {
-            content.buiSurface(Circle(), elevation: .button)
+            buiSurface(shape, elevation: .button)
         } else {
-            content.surface(interactive: true, in: .circle)
+            surface(interactive: true, in: shape)
         }
     }
 }

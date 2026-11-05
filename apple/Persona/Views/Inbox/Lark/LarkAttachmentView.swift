@@ -57,7 +57,7 @@ struct LarkAttachmentView: View {
         }
         .quickLookPreview($preview)
         .fullScreenCover(isPresented: Binding(get: { image != nil }, set: { if !$0 { image = nil } })) {
-            if let image { ImageViewer(images: [image], index: 0) }
+            if let image { ImageViewer(items: [ViewerImage(payload: image, title: attachment.name)], index: 0) }
         }
     }
 }

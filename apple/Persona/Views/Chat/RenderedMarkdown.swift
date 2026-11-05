@@ -343,7 +343,7 @@ struct RenderedBlock<Fallback: View>: View {
                 self.error = error.localizedDescription
             }
         }
-        .fullScreenCover(item: $full) { full in ImageViewer(images: [full.payload], index: 0) }
+        .fullScreenCover(item: $full) { full in ImageViewer(items: [ViewerImage(payload: full.payload, title: "图表")], index: 0) }
     }
 
     @ViewBuilder private func picture(_ image: UIImage) -> some View {

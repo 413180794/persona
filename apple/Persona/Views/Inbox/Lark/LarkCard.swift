@@ -681,6 +681,7 @@ struct LarkCardImage: View {
     var node: LarkCardNode
     var square = false
     @State private var viewing = false
+    @Namespace private var zoom
 
     var body: some View {
         if let url = node.imageURL {
@@ -703,8 +704,9 @@ struct LarkCardImage: View {
             }
             .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
             .contentShape(.rect)
+            .matchedTransitionSource(id: url, in: zoom)
             .onTapGesture { if node.raw["preview"]?.bool != false { viewing = true } }
-            .fullScreenCover(isPresented: $viewing) { LarkImageGallery(urls: [url], index: 0) }
+            .fullScreenCover(isPresented: $viewing) { ImageViewer(urls: [url], index: 0).navigationTransition(.zoom(sourceID: url, in: zoom)) }
             .accessibilityLabel(node.text ?? "图片")
         }
     }

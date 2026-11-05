@@ -33,9 +33,18 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 - diff 只有一个 `DiffView`（Claude 的 Edit / MultiEdit / Write 给新旧文本，Codex 给 unified diff），用 Git 页的行模型（`DiffText.Line` / `parse`）：
   头部是文件名、目录、+N −N（点开文件）；只有 ± 符号和行底色上色，代码是正文色；长行横滑，右侧渐隐提示还有；超过 40 行先显示开头和「展开全部」。
   Git 页整份文件的 diff 仍用 `MonoTextView` 画（大 diff 的性能），行模型和配色一样。工具出错时「出错了」写在输出上方，不再盖住输出的第一行。
-- 图片：任何图片点开全屏查看器（`ImageViewer.swift`），左右滑浏览整个会话的所有图片（`chatImages`），顶部「n / m」和关闭，点图片或下拉退出；
-  双指 / 双击缩放。底部：保存（仅添加权限）、编辑、分享、拷贝。编辑（`ImageEditor.swift`）：框选 / 画笔、6 种颜色、撤销 / 清除，完成后「加到输入框」，
-  作为下一条消息的附件（`AppModel.composerInbox`），补一句话就能发。输入框里待发的图片点一下也能先编辑再发。
+- 图片查看器：App 里所有打开大图的地方（对话里的图片、自己发的图、这一轮看过的图、工具结果、文件页的图片、notebook 输出、Markdown 里的网页图片和图表、
+  飞书消息 / 卡片 / 公司圈 / 文档、收件箱的连接器消息、飞书附件）都走同一个 `ImageViewer`（`ImageViewer.swift`，数据是 `ViewerImage`：
+  图片字节、机器上的文件或飞书 URL），照「照片」App 的样子：
+  - 顶栏：圆形返回 · 两行标题胶囊（名字；「9 / 20 · 来源或尺寸」）· 圆形「⋯」菜单（拷贝图片、标注、拷贝路径、在文件页打开、信息）；
+    底栏：多张时缩略图条（当前那张宽一点，跟着滑动居中）；圆形分享 · 胶囊里保存（仅添加权限）/ 标注 / 信息 · 圆形拷贝。纯图标、固定 44pt，
+    字号最多到 xxxLarge，iPhone SE 也放得下。
+  - 背景跟随深浅色（`Theme.Viewer.canvas`），单击图片收起所有栏、背景变黑（`immersive`）；Mac 上单击不收（关闭按钮和 Esc 在栏里）。
+  - 手势：双指 / 双击缩放，放大后拖动，左右滑切换，适配大小时往下拖关闭：图片跟手缩小、背景渐隐，松手按距离 / 速度决定关还是弹回（`ZoomMath.pullProgress` / `pullCloses`）；
+    系统 zoom 转场的拖动关闭用 `.interactiveDismissDisabled()` 关掉，免得两个手势抢。有缩略图的入口用 zoom 转场打开。
+  - 标注（`ImageEditor.swift`）：框选 / 画笔、6 种颜色、撤销 / 清除，完成后「加到输入框」，作为下一条消息的附件（`AppModel.composerInbox`），
+    补一句话就能发；只有对话里打开时才有。输入框里待发的图片点一下也能先编辑再发。
+  - 截图：`-openFirstImage YES` / `-openViewedImage N` 打开，`-showViewerChromeHidden YES` 收起栏，`-showViewerInfo YES` 打开信息。
 - 后台同步（推拉结合，照 IM 的做法；只在 App 前台且连着 hub 时）：hub 推「哪个会话变了」，App 自己按游标拉增量。
   Agents（`AgentSync`）：会话列表 / `revs` 事件里的 `rev` 和本地记下的不同，就按 `after_seq` 拉新内容，内存里有这个对话就合并进去，
   没有就写进磁盘缓存（`ChatCache.folder`，现在是 `chats-v3`），打开时直接就是最新的；范围是活着的 Agent + 24 小时内用过的会话（最多 40 个，最近的先拉，并发 3），

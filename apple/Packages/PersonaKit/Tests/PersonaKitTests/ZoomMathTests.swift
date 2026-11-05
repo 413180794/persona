@@ -21,4 +21,16 @@ struct ZoomMathTests {
         #expect(inset == CGSize(width: 0, height: 300))
         #expect(ZoomMath.centeringInset(content: CGSize(width: 1000, height: 2000), bounds: CGSize(width: 400, height: 800)) == .zero)
     }
+
+    @Test func pullDownToClose() {
+        #expect(ZoomMath.pullProgress(translation: -50, height: 800) == 0)
+        #expect(ZoomMath.pullProgress(translation: 200, height: 800) == 0.5)
+        #expect(ZoomMath.pullProgress(translation: 2000, height: 800) == 1)
+        #expect(ZoomMath.pullProgress(translation: 100, height: 0) == 0)
+        // Far enough, or a short flick; a slow short drag springs back.
+        #expect(ZoomMath.pullCloses(translation: 150, velocity: 0))
+        #expect(ZoomMath.pullCloses(translation: 40, velocity: 1200))
+        #expect(!ZoomMath.pullCloses(translation: 40, velocity: 200))
+        #expect(!ZoomMath.pullCloses(translation: 10, velocity: 2000))
+    }
 }

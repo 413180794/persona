@@ -65,9 +65,6 @@
   "Persona\/Views\/Inbox\/Lark\/LarkInline.swift" : {
     "hexColor" : 32
   },
-  "Persona\/Views\/Inbox\/Lark\/LarkMedia.swift" : {
-    "animation" : 1
-  },
   "Persona\/Views\/Inbox\/Lark\/LarkMessageContent.swift" : {
     "hexColor" : 8
   },

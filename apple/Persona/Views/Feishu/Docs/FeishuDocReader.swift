@@ -211,7 +211,7 @@ struct FeishuDocReader: View {
                 .macSheet()
                 #endif
         }
-        .fullScreenCover(item: $gallery) { g in LarkImageGallery(urls: g.urls, index: g.index) }
+        .fullScreenCover(item: $gallery) { g in ImageViewer(urls: g.urls, index: g.index) }
     }
 
     // MARK: Header
@@ -604,7 +604,7 @@ struct FeishuDocsUnsupportedView: View {
         }
         .frame(maxWidth: .infinity)
         .modifier(LarkFileOpener(request: $request))
-        .fullScreenCover(item: $gallery) { g in LarkImageGallery(urls: g.urls, index: g.index) }
+        .fullScreenCover(item: $gallery) { g in ImageViewer(urls: g.urls, index: g.index) }
     }
 }
 

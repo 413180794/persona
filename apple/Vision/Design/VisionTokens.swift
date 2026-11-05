@@ -34,7 +34,7 @@ extension View {
             .environment(\.shellBaseTypeSize, model.textSize.applied(to: systemTypeSize))
             .buiTheme(.jarvis())
             .scrollIndicators(.hidden)
-            .markdownInlineImageProvider(MathInlineImages())
+            .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages())
             .onAppear { model.colorScheme.apply() }
     }
 }

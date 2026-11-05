@@ -166,9 +166,12 @@ struct ViewedImagesRow: View, Equatable {
         .frame(maxWidth: .infinity, alignment: .leading)
         #if DEBUG
         // Screenshots: `-openViewedImage N` opens the viewer on the strip's Nth image (1 is the first) once it shows.
+        // Once per launch: the list builds the row again as the chat updates, and a second open swapped the shown
+        // viewer for a new one mid-presentation, which closed it.
         .task {
             let n = UserDefaults.standard.integer(forKey: "openViewedImage")
-            if n > 0, images.indices.contains(n - 1) {
+            if n > 0, images.indices.contains(n - 1), !Self.debugOpened {
+                Self.debugOpened = true
                 try? await Task.sleep(for: .seconds(1))
                 open(n - 1)
             }
@@ -200,11 +203,14 @@ struct ViewedImagesRow: View, Equatable {
             }
     }
     @Namespace private var fallbackZoom
+    #if DEBUG
+    @MainActor private static var debugOpened = false
+    #endif
 
     private func open(_ index: Int) {
         Haptics.tap()
         let items = images.map { im in
-            ViewerImage(payload: im.payload, file: file(im), caption: caption(im)) as ViewerImage
+            ViewerImage(payload: im.payload, file: file(im), title: title(im), detail: machineName(im)) as ViewerImage
         }
         viewImages?(ImageViewing(images: [], index: index, conversation: [], source: "viewed-" + images[index].id, viewed: items))
     }
@@ -227,13 +233,19 @@ struct ViewedImagesRow: View, Equatable {
     /// (「屏幕截图 · Studio」「首页.png · 480×300」).
     func caption(_ im: ViewedImage) -> String {
         var parts = [title(im)]
-        if let m = im.machine {
-            parts.append(model.machines.first { $0.id == m && $0.group == (scope?.machine.group ?? $0.group) }?.name
-                         ?? model.machines.first { $0.name == m }?.name ?? m)
+        if let m = machineName(im) {
+            parts.append(m)
         } else if let w = im.payload?.width, let h = im.payload?.height {
             parts.append("\(w)×\(h)")
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// The machine a screenshot or a browser's call named, by its name here.
+    func machineName(_ im: ViewedImage) -> String? {
+        guard let m = im.machine else { return nil }
+        return model.machines.first { $0.id == m && $0.group == (scope?.machine.group ?? $0.group) }?.name
+            ?? model.machines.first { $0.name == m }?.name ?? m
     }
 
     /// An MCP tool's own name ("mcp__server__snap" → "snap").

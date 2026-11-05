@@ -258,7 +258,7 @@ struct FileViewer: View {
             case .image:
                 ScrollView {
                     meta(page).padding(.horizontal, Theme.Space.l)
-                    Base64Image(payload: ImagePayload(mime: file.mime ?? "image/png", data: file.data ?? "")).padding(Theme.Space.l)
+                    Base64Image(payload: ImagePayload(mime: file.mime ?? "image/png", data: file.data ?? ""), title: file.name).padding(Theme.Space.l)
                 }
             case .pdf:
                 if let data = file.data, let bytes = Data(base64Encoded: data), let doc = PDFDocument(data: bytes) {

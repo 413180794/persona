@@ -1018,12 +1018,15 @@ struct Base64Image: View {
     var payload: ImagePayload
     var gallery: [ImagePayload] = []
     var index = 0
+    /// The viewer's title for a picture alone (a file's name); a gallery's pictures go untitled.
+    var title: String? = nil
     @State private var image: UIImage?
     @State private var showViewer = false
-    init(payload: ImagePayload, gallery: [ImagePayload] = [], index: Int = 0) {
+    init(payload: ImagePayload, gallery: [ImagePayload] = [], index: Int = 0, title: String? = nil) {
         self.payload = payload
         self.gallery = gallery
         self.index = index
+        self.title = title
         _image = State(initialValue: ChatImageLoader.cached(payload, side: 900)) // back on screen: no placeholder flash
     }
     @Namespace private var zoom
@@ -1057,9 +1060,15 @@ struct Base64Image: View {
             }
         }
         .fullScreenCover(isPresented: $showViewer) {
-            ImageViewer(images: gallery.isEmpty ? [payload] : gallery, index: gallery.isEmpty ? 0 : index,
-                        conversation: chatImages, attach: attachImage)
-                .navigationTransition(.zoom(sourceID: "image", in: zoom))
+            Group {
+                if let title {
+                    ImageViewer(items: [ViewerImage(payload: payload, title: title)], index: 0, attach: attachImage)
+                } else {
+                    ImageViewer(images: gallery.isEmpty ? [payload] : gallery, index: gallery.isEmpty ? 0 : index,
+                                conversation: chatImages, attach: attachImage)
+                }
+            }
+            .navigationTransition(.zoom(sourceID: "image", in: zoom))
         }
         .task(id: payload.identity) {
             // Thumbnails only need ~2x their on-screen size.
@@ -1070,6 +1079,10 @@ struct Base64Image: View {
     /// In a chat the page shows the viewer (`viewImages`); elsewhere this view does.
     private func open() {
         guard let viewImages else { return showViewer = true }
+        if let title {
+            return viewImages(ImageViewing(images: [], index: 0, conversation: [], source: payload.identity,
+                                           viewed: [ViewerImage(payload: payload, title: title)]))
+        }
         viewImages(ImageViewing(images: gallery.isEmpty ? [payload] : gallery, index: gallery.isEmpty ? 0 : index,
                                 conversation: chatImages, source: payload.identity))
     }
