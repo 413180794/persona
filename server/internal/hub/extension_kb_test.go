@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/assistant"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -156,6 +157,9 @@ func kbExtensionSpec(t *testing.T, h *Hub, id string, granted extension.Permissi
 
 func TestExtensionKBRPCScopesAndAssistantBridge(t *testing.T) {
 	h := newTestHub(t)
+	// The day file's times are in the user's zone, set here: without one they would be this machine's own and the
+	// expected 20:00 (12:00 UTC) only right on a machine at UTC+8.
+	putAssistantSettings(t, h, assistant.Settings{Timezone: "Asia/Shanghai"})
 	e := withKB(t, h)
 	c := &kb.Chat{ID: "example-chat", Source: "example", Name: "Example"}
 	if err := e.Store.PutChat(c); err != nil {
