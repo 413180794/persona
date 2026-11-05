@@ -81,6 +81,21 @@ struct SessionDeltaTests {
         #expect(have.isEmpty)
     }
 
+    /// No push carries the history, so a refresh is what moves it: the app's copy becomes the hub's (#2463), in place,
+    /// while a live session the REST answer has older stays as pushed.
+    @Test func aRefreshUpdatesTheHistoryTheAppHas() throws {
+        let (_, snap) = try list(#"{"type":"sessions","machine_id":"box","sessions":[{"session_id":"s1","status":"working","last_text":"writing"}]}"#)
+        var have = SessionPatch.snapshot(snap, over: [], deltaHub: true)
+        let first = try list(#"{"type":"sessions","machine_id":"box","sessions":[{"session_id":"s1","status":"working","last_text":"reading"},{"session_id":"h1","agent":"codex","source_kind":"codex_history","status":"done"},{"session_id":"h2","agent":"codex","source_kind":"codex_history","status":"working"}]}"#).1
+        have = SessionPatch.refreshed(first, over: have, connectedToDeltaHub: true)
+        #expect(have.map(\.sessionID) == ["s1", "h1", "h2"])
+        let later = try list(#"{"type":"sessions","machine_id":"box","sessions":[{"session_id":"s1","status":"idle","last_text":"old"},{"session_id":"h1","agent":"codex","source_kind":"codex_history","status":"idle"},{"session_id":"h2","agent":"codex","source_kind":"codex_history","status":"offline"}]}"#).1
+        have = SessionPatch.refreshed(later, over: have, connectedToDeltaHub: true)
+        #expect(have.map(\.sessionID) == ["s1", "h1", "h2"])
+        #expect(have.map(\.status.rawValue) == ["working", "idle", "offline"])
+        #expect(have[0].lastText == "writing")
+    }
+
     @Test func aDeltaKeepsTheOrder() {
         func s(_ id: String, _ text: String = "") -> Session {
             var x = try! JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"\#(id)"}"#.utf8))

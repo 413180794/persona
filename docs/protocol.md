@@ -775,7 +775,7 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
 - hub 按连接记着每个 App 手里每台机器的每个会话（`client.have`），快照和增量在同一把锁里算、入队，所以增量永远对着 App 真有的东西算。
 - 断线重连就是新的快照，漏掉的变化靠它补齐。
 - App（`SessionPatch`、`AppModel.applySessions`）：快照替换这台机器的列表，但留着已有的 Codex 历史；增量在原位换掉变了的、新的放在后面、删掉没了的；
-  socket 连着时 `GET /api/v1/sessions` 的回答比推送旧，只从它拿 Codex 历史（历史里没了的删掉），不覆盖推送来的会话。
+  socket 连着时 `GET /api/v1/sessions` 的回答比推送旧，只从它拿 Codex 历史（历史里没了的删掉，已有的换成回答里的副本：推送不带历史，看过、变离线只能从这里更新，#2463），不覆盖推送来的会话。
   已知问题（#2425）：App 手上已有的历史留旧副本，看过、变离线不会更新到列表；网页已改成换用回答里的副本，App 待改。
 - 兼容：老 App 不带 `features`，照旧收整表（一模一样的不发）；老 hub 不认 `features`，照旧发整表，App 的 `hello.features` 里没有 `sessions_delta`，按整表处理。
   mock（`scripts/mock/mock_hub.py`）同样支持，`MOCK_WHOLE_LISTS=1` 当老 hub。

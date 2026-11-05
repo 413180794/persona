@@ -26,15 +26,17 @@ nonisolated enum SessionPatch {
     }
 
     /// The lists from GET /api/v1/sessions over what the app has. While a delta hub's socket is connected, what it
-    /// pushed is newer than this answer can be (the request went out before): only the Codex history comes from it.
-    /// Otherwise the answer is the whole truth.
+    /// pushed is newer than this answer can be (the request went out before): only the Codex history comes from it,
+    /// the history the app has included. No push carries it, so this answer is the only way its state moves (seen,
+    /// gone offline, #2425). Otherwise the answer is the whole truth.
     static func refreshed(_ rest: [Session], over old: [Session], connectedToDeltaHub: Bool) -> [Session] {
         guard connectedToDeltaHub else { return rest }
         let ids = Set(old.map(\.sessionID))
+        let fresh = Dictionary(rest.filter(\.isCodexHistory).map { ($0.sessionID, $0) }, uniquingKeysWith: { _, b in b })
         let history = rest.filter { $0.isCodexHistory && !ids.contains($0.sessionID) }
-        let current = Set(rest.filter(\.isCodexHistory).map(\.sessionID))
-        // History that is gone from the machine goes; the pushed sessions stay as pushed.
-        return old.filter { !$0.isCodexHistory || current.contains($0.sessionID) } + history
+        // History that is gone from the machine goes, the rest is the hub's copy; the pushed sessions stay as pushed.
+        let kept = old.compactMap { s -> Session? in s.isCodexHistory ? fresh[s.sessionID] : s }
+        return kept + history
     }
 }
 
