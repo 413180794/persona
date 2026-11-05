@@ -52,6 +52,35 @@ type pendingAutoLink struct {
 	linkedAt   time.Time
 }
 
+// undoAutoLink takes back in memory an automatic link the store did not keep (b.mu held): only while its entry is
+// still the one item made (same LinkedAt, not dismissed). Then the entry goes, also when a hand link to another todo
+// released it meanwhile (#2704), and the agent's active todo with it if that is still item's. One relinked by hand since
+// has another LinkedAt and stays, with its active todo; one the user dismissed stays too (the unlink cleared that
+// already). True when memory changed.
+func (b *todoBook) undoAutoLink(item pendingAutoLink, now time.Time) bool {
+	target, ok := b.todos[item.todoID]
+	if !ok {
+		return false
+	}
+	kept := target.Agents[:0:0]
+	for _, a := range target.Agents {
+		if a.MachineID == item.machineID && a.SessionID == item.sessionID && a.LinkedAt.Equal(item.linkedAt) && a.DismissedAt == nil {
+			continue
+		}
+		kept = append(kept, a)
+	}
+	if len(kept) == len(target.Agents) {
+		return false
+	}
+	target.Agents = kept
+	target.UpdatedAt = now
+	key := [2]string{item.machineID, item.sessionID}
+	if b.activeBySession[key] == item.todoID {
+		delete(b.activeBySession, key)
+	}
+	return true
+}
+
 // autoLinkTodos links the online agents of machine that join a todo on their own: spawned by an agent of an open todo
 // (persona_from, the session's spawn_from), or in a workspace linked to one; never one that works for another todo
 // now, or that was ever on the todo (dismissed included). Memory first, so the report says it at once; the store
@@ -127,28 +156,15 @@ func (s *Service) autoLinkTodos(machine string, sessions []proto.Session) bool {
 				defer cancel()
 				undone := false
 				for _, item := range pending {
-					inserted, _, err := st.AutoLinkTodoAgent(ctx, item.todoID, item.machineID, item.sessionID, item.title, item.cwd,
+					inserted, _, err := st.AutoLinkUnlinkedTodoAgent(ctx, item.todoID, item.machineID, item.sessionID, item.title, item.cwd,
 						item.agent, item.startError, item.source, item.via, item.linkedAt)
 					if err == nil && inserted {
 						continue
 					}
-					// The store has it otherwise (an error, or a row memory did not know of: one just dismissed).
+					// The store has it otherwise (an error, a row memory did not know of: one just dismissed, or a link by hand since).
 					s.logf("todos: auto-link %s on %s/%s not kept (rolling back): %v", item.todoID, item.machineID, item.sessionID, err)
 					s.todos.mu.Lock()
-					key := [2]string{item.machineID, item.sessionID}
-					if curTid, ok := s.todos.activeBySession[key]; ok && curTid == item.todoID {
-						delete(s.todos.activeBySession, key)
-						if target, ok := s.todos.todos[item.todoID]; ok {
-							var kept []TodoAgent
-							for _, a := range target.Agents {
-								if a.MachineID == item.machineID && a.SessionID == item.sessionID && a.LinkedAt.Equal(item.linkedAt) {
-									continue
-								}
-								kept = append(kept, a)
-							}
-							target.Agents = kept
-							target.UpdatedAt = time.Now().UTC()
-						}
+					if s.todos.undoAutoLink(item, time.Now().UTC()) {
 						undone = true
 					}
 					s.todos.mu.Unlock()

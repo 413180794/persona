@@ -376,7 +376,7 @@ func TestTodoBotmuxDispatchFollows(t *testing.T) {
 // A botmux agent with no todo joins the one most of its chat's agents work for, when that one has twice the next at
 // least; a tie or a close second, another chat bring nothing.
 func TestTodoBotmuxChatMajority(t *testing.T) {
-	todoStores(t, func(t *testing.T, e *todoEnv, _ *db.DB) {
+	todoStores(t, func(t *testing.T, e *todoEnv, database *db.DB) {
 		big, small, other := e.newTodo("三循环"), e.newTodo("工具链"), e.newTodo("别的群")
 		s := func(id, chat string) proto.Session {
 			return proto.Session{SessionID: id, Status: proto.StatusWorking, Chat: chat, Topic: "om_" + id}
@@ -395,8 +395,37 @@ func TestTodoBotmuxChatMajority(t *testing.T) {
 			t.Fatalf("new_x = %+v", a)
 		}
 		// 3 against 2: not twice.
+		// b2 joins big on its own (3 against 1); the user puts it on small while that link may still be on its way to the
+		// store (#2704): the user's link is kept, and memory ends up as the store has it.
 		e.sessions("n37", s("b2", "oc_x"))
 		e.must("PUT", "/api/v1/todos/"+small+"/agents/n37/b2", "")
+		if database != nil {
+			onBig := func() (memory, stored int) {
+				if a := agentOf(*e.get(big), "b2"); a != nil {
+					memory = 1
+				}
+				rows, err := database.ListAllTodoAgents(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, r := range rows {
+					if r.TodoID == big && r.MachineID == "n37" && r.SessionID == "b2" {
+						stored++
+					}
+				}
+				return
+			}
+			waitUntil(t, func() bool { m, st := onBig(); return m == st })
+			rows, _ := database.ListAllTodoAgents(context.Background())
+			for _, r := range rows {
+				if r.MachineID == "n37" && r.SessionID == "b2" && r.ReleasedAt == nil && r.TodoID != small {
+					t.Fatalf("stored active link %+v", r)
+				}
+			}
+		}
+		if e.todoOf("n37", "b2") != small {
+			t.Fatalf("b2 works for %q, want the user's %q", e.todoOf("n37", "b2"), small)
+		}
 		e.sessions("n37", s("b2", "oc_x"), s("late", "oc_x"))
 		if e.todoOf("n37", "late") != "" {
 			t.Fatal("joined a todo with a close second")

@@ -451,6 +451,17 @@ func lockTodoAgentMembership(ctx context.Context, tx pgx.Tx, todoID, machineID, 
 // any existing row (such as a dismissed link from an immediate unlink) is NOT overwritten.
 // Returns (inserted bool, releasedTodoIDs []string, err error).
 func (d *DB) AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) (bool, []string, error) {
+	return d.autoLinkTodoAgent(ctx, todoID, machineID, sessionID, title, cwd, agent, startError, source, via, linkedAt, false)
+}
+
+// AutoLinkUnlinkedTodoAgent is AutoLinkTodoAgent for an agent that worked for no todo when the link was decided (the
+// assistant's automatic links): it links nothing when the agent works for another todo by the time it is written, so
+// a link by hand committed in between is never moved (#2704).
+func (d *DB) AutoLinkUnlinkedTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) (bool, []string, error) {
+	return d.autoLinkTodoAgent(ctx, todoID, machineID, sessionID, title, cwd, agent, startError, source, via, linkedAt, true)
+}
+
+func (d *DB) autoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time, onlyUnlinked bool) (bool, []string, error) {
 	conn, err := d.pool.Acquire(ctx)
 	if err != nil {
 		return false, nil, err
@@ -494,6 +505,10 @@ func (d *DB) AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID
 			releasedTodoIDs = append(releasedTodoIDs, oid)
 		}
 		rows.Close()
+		if onlyUnlinked && len(releasedTodoIDs) > 0 {
+			releasedTodoIDs = nil // it works for another todo now (under the membership lock): leave it there
+			return nil
+		}
 
 		if len(releasedTodoIDs) > 0 {
 			_, err = tx.Exec(ctx, `UPDATE todo_agents SET released_at = $3 WHERE machine_id = $1 AND session_id = $2 AND released_at IS NULL AND todo_id != $4`,
