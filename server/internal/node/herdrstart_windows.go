@@ -11,3 +11,6 @@ func launchHerdrServer(context.Context, string, string) (<-chan error, error) {
 }
 
 func lockHerdrDir(string) (func(), error) { return func() {}, nil }
+
+// herdrPaneShell: herdr on Windows does not read HERDR_AGENT, so nothing types it (hostherdr.go). A var for tests.
+var herdrPaneShell = func() string { return "" }

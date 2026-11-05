@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/nwverse/persona/server/internal/osproc"
@@ -76,6 +77,11 @@ func systemdRun() (string, bool) {
 	p, err := exec.LookPath("systemd-run")
 	return p, err == nil
 }
+
+// herdrPaneShell is the shell herdr's new panes run, which reads what the node types there (typedHerdrAgent): herdr
+// opens panes with its $SHELL, userShell when the node started herdr, the user's own login shell otherwise (a
+// [terminal] default_shell in herdr's config is not looked at). A var for tests.
+var herdrPaneShell = sync.OnceValue(userShell)
 
 // userShell is the user's login shell: $SHELL, else the account's (launchd does not set SHELL), else zsh / sh.
 func userShell() string {

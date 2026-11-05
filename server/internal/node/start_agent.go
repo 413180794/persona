@@ -71,7 +71,8 @@ func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, l
 	}
 	n.mu.Unlock()
 	time.Sleep(300 * time.Millisecond) // the fresh shell loads ~/.zshrc; typed input is buffered either way
-	if err := launch.Run(ctx, created.Pane, otherAgentCommand(launcher, resume, prompt)); err != nil {
+	// A Codex wrapper is told to herdr as Codex (hostherdr.go); TRAEX is herdr's to detect.
+	if err := launch.Run(ctx, created.Pane, withHerdrAgent(typedHerdrAgent(launch, kind, paneShells(ctx)...), otherAgentCommand(launcher, resume, prompt))); err != nil {
 		return nil, fmt.Errorf("run launcher: %w", err)
 	}
 	ticker := time.NewTicker(500 * time.Millisecond)

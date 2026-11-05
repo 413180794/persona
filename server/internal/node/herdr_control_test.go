@@ -24,8 +24,10 @@ func startHerdr(f *fakeHerdr, pane, status string) {
 	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
 }
 
+// startCmd is the command a Claude start types into its herdr pane (and herdr's resume of it evals): herdr told the
+// agent is Claude (HERDR_AGENT), then the launcher with Persona's flags.
 func startCmd(launcher, args, dir string) string {
-	return launcher + " " + args + " --settings " + shellQuote(filepath.Join(dir, "claude-settings.json")) +
+	return "HERDR_AGENT=claude " + launcher + " " + args + " --settings " + shellQuote(filepath.Join(dir, "claude-settings.json")) +
 		" --mcp-config " + shellQuote(filepath.Join(dir, "mcp.json"))
 }
 
@@ -222,16 +224,16 @@ func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 		call("tab.create", map[string]any{"workspace_id": "w2", "cwd": home, "label": "a very long tab name that goes p", "focus": false}),
 		// A managed launcher's start gets Persona's settings with its gateway merged in (#1336).
 		call("pane.send_input", map[string]any{"pane_id": "w2:p5", "keys": []string{"Enter"},
-			"text": "/tmp/jarvis-test/jarvisd launch work_gw --session-id " + startID + " --settings " +
+			"text": "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --session-id " + startID + " --settings " +
 				shellQuote(filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")) +
 				" --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json"))}),
 		readVisible("w2:p5"), agentGet("w2:p5"),
 		call("agent.rename", map[string]any{"target": "w2:p5", "name": "j-0e0000"}),
 		// herdr's restore resumes it through the launcher too, not with a bare `claude --resume` (#1879).
-		resumeHeld("w2:p5", startID, "/tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
+		resumeHeld("w2:p5", startID, "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
 			filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")+
 			" --mcp-config "+filepath.Join(jarvisDir(home), "mcp.json"))[0],
-		resumeHeld("w2:p5", startID, "/tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
+		resumeHeld("w2:p5", startID, "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
 			filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")+
 			" --mcp-config "+filepath.Join(jarvisDir(home), "mcp.json"))[1],
 		call("session.snapshot", nil),

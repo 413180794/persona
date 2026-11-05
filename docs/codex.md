@@ -161,6 +161,11 @@ node 作为总线上的又一个客户端（`server/internal/node/codex_desktop.
   `jarvisd codex-start <文件>`：它读出来、删掉文件，把启动器的词（前面的 `VAR=…` 进环境）、`--`、消息作为参数数组 `exec` 出去，
   消息不经过任何 shell——引号、换行、`$`、反引号、中文、几千字都原样到 Codex（`codex_start.go`）。启动器的词也不上屏、不进 shell 历史
   （alias 里可能带着 Key）。启动器带 `--remote` 时补上 `-C <目录>`（连到别的 app-server 时 TUI 不会自己带目录）。
+- **告诉 herdr 这是 Codex**（#3454）：在 herdr 窗格里（Windows 除外），文件里还写着 `agent: "codex"`，`codex-start` 把 `HERDR_AGENT=codex` 设进它 exec 的环境，
+  替换 shell 里继承来的值（只追加的话同一个名字有两份，getenv 和 herdr 都取第一份，也就是继承来的），包装成别的名字的 codex herdr 也认得出
+  （为什么、herdr 哪个版本起认，见 `docs/launchers.md`「herdr 怎么认出启动器起的 Agent」）；接着已退出的 Codex（`resume <id>`）一样。
+  敲进窗格的只是 `'<jarvisd>' codex-start '<文件>'`，不带前缀，所以不挑 shell。启动器前面的 `VAR=…` 照旧追加在继承来的环境后面
+  （shell 里已有同名变量时生效的是 shell 里的；这些词没经过 shell 展开，`$HOME`、`~` 原样，不能拿来替换）。pi 从 herdr 恢复用的 `jarvisd tab-start` 共用这段代码，不设 `HERDR_AGENT`。
 - **对上这次请求**：新建是同步的，node 等 Codex 的 thread 出现才回答，回答里就是这个 thread 的会话，所以 App 打开的就是 Agents 里
   那一条，不会多出一条「启动中」的占位再换成另一条。认法：这个目录下、启动之后才开始（`session_meta` 的时间）、第一条用户消息和发出去的
   一字不差的 rollout。等的这段时间这个窗格不参与「同目录最新 rollout」的猜测（`codexStarting`），免得先被认成目录里旧的 thread。

@@ -139,7 +139,7 @@ func TestHerdrStartManagedWithHooksPlugin(t *testing.T) {
 	}
 	waitCalls(t, f, "pane.send_input", 1)
 	dir := jarvisDir(home)
-	want := "/tmp/jarvis-test/jarvisd launch work_gw --session-id " + startID +
+	want := "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --session-id " + startID +
 		" --settings " + shellQuote(filepath.Join(dir, "launcher-settings", "work_gw-env-settings.json")) +
 		" --mcp-config " + shellQuote(filepath.Join(dir, "mcp.json")) +
 		" --plugin-dir " + shellQuote(filepath.Join(dir, "agent-plugin")) +

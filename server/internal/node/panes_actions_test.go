@@ -142,43 +142,51 @@ func TestPaneSplitStartsInThePanesDirectory(t *testing.T) {
 	}
 }
 
-// 在这里运行 Agent: the launcher runs in the pane itself, not in a new tab.
+// 在这里运行 Agent: the launcher runs in the pane itself, not in a new tab. The pane is a herdr pane like a new tab:
+// herdr is told the agent is Claude, unless the pane's shell cannot take `VAR=val cmd` (tcsh).
 func TestRunAgentInAShellPane(t *testing.T) {
-	n, f, cwd := actionNode(t)
-	f.reply("pane.process_info", map[string]any{"process_info": map[string]any{"foreground_processes": []any{
-		map[string]any{"pid": 1, "name": "zsh", "argv0": "-zsh"}}}})
-	f.reply("agent.get", map[string]any{"agent": map[string]any{"agent": "claude", "agent_status": proto.StatusIdle, "pane_id": "w1:p2",
-		"tab_id": "w1:t2", "workspace_id": "w1"}})
-	f.screenSteps("w1:p2", isKeys(), screenFixture(t, "claude-2.1.312-trust-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.txt"))
+	for _, tc := range []struct{ shell, typed string }{
+		{"-zsh", "HERDR_AGENT=claude claude --session-id "},
+		{"-tcsh", "claude --session-id "},
+	} {
+		t.Run(tc.shell, func(t *testing.T) {
+			n, f, cwd := actionNode(t)
+			f.reply("pane.process_info", map[string]any{"process_info": map[string]any{"foreground_processes": []any{
+				map[string]any{"pid": 1, "name": strings.TrimPrefix(tc.shell, "-"), "argv0": tc.shell}}}})
+			f.reply("agent.get", map[string]any{"agent": map[string]any{"agent": "claude", "agent_status": proto.StatusIdle, "pane_id": "w1:p2",
+				"tab_id": "w1:t2", "workspace_id": "w1"}})
+			f.screenSteps("w1:p2", isKeys(), screenFixture(t, "claude-2.1.312-trust-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.txt"))
 
-	res, err := request(t, n, "panes.agent", map[string]any{"pane": "w1:p2", "launcher": "claude"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	id, _ := res["session_id"].(string)
-	if id == "" {
-		t.Fatalf("result = %v", res)
-	}
-	if got := f.trace("tab.create", "workspace.create"); len(got) != 0 {
-		t.Errorf("a tab was opened: %v", got)
-	}
-	var typed []string
-	for _, c := range f.calls() {
-		if c.Method == "pane.send_input" {
-			typed = append(typed, str(c.Params["pane_id"])+" "+str(c.Params["text"]))
-		}
-	}
-	if len(typed) != 1 || !strings.HasPrefix(typed[0], "w1:p2 claude --session-id "+id) {
-		t.Errorf("typed = %q (cwd %s)", typed, cwd)
-	}
-	if f.trace("pane.close", "tab.close") != nil {
-		t.Errorf("the pane was closed: %v", f.trace("pane.close", "tab.close"))
-	}
-	n.mu.Lock()
-	bound := n.panes["w1:p2"]
-	n.mu.Unlock()
-	if bound != id {
-		t.Errorf("the pane is bound to %q, not %q", bound, id)
+			res, err := request(t, n, "panes.agent", map[string]any{"pane": "w1:p2", "launcher": "claude"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, _ := res["session_id"].(string)
+			if id == "" {
+				t.Fatalf("result = %v", res)
+			}
+			if got := f.trace("tab.create", "workspace.create"); len(got) != 0 {
+				t.Errorf("a tab was opened: %v", got)
+			}
+			var typed []string
+			for _, c := range f.calls() {
+				if c.Method == "pane.send_input" {
+					typed = append(typed, str(c.Params["pane_id"])+" "+str(c.Params["text"]))
+				}
+			}
+			if len(typed) != 1 || !strings.HasPrefix(typed[0], "w1:p2 "+tc.typed+id) {
+				t.Errorf("typed = %q (cwd %s)", typed, cwd)
+			}
+			if f.trace("pane.close", "tab.close") != nil {
+				t.Errorf("the pane was closed: %v", f.trace("pane.close", "tab.close"))
+			}
+			n.mu.Lock()
+			bound := n.panes["w1:p2"]
+			n.mu.Unlock()
+			if bound != id {
+				t.Errorf("the pane is bound to %q, not %q", bound, id)
+			}
+		})
 	}
 }
 

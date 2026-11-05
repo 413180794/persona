@@ -336,15 +336,15 @@ func TestHerdrAtNodeStartWaitsForTheHub(t *testing.T) {
 	}
 }
 
-// The resume command herdr runs for a Persona-started Claude: the launcher and Persona's flags, quoted without
-// apostrophes (herdr refuses them), never a bare `claude --resume`.
+// The resume command herdr runs for a Persona-started Claude: herdr told it is Claude (HERDR_AGENT, as at the start),
+// the launcher and Persona's flags, quoted without apostrophes (herdr refuses them), never a bare `claude --resume`.
 func TestClaudeResumeArgv(t *testing.T) {
 	n, home := testNode(t)
 	n.dir, n.bin = filepath.Join(home, ".jarvis"), "/Users/me/.jarvis/bin/jarvisd"
 	n.setManaged([]proto.ManagedLauncher{{Name: "work_gw", BaseURL: "https://gateway.example.com", Model: "m"}})
 	argv, ok := n.claudeResumeArgv(claudeLaunch{Launcher: "work_gw", Settings: "/Users/me/.jarvis/launcher-settings/work_gw.json",
 		Model: "opus[1m]", Hooks: "/Users/me/my hooks"}, startID)
-	want := "/Users/me/.jarvis/bin/jarvisd launch work_gw --resume " + startID +
+	want := "HERDR_AGENT=claude /Users/me/.jarvis/bin/jarvisd launch work_gw --resume " + startID +
 		" --settings /Users/me/.jarvis/launcher-settings/work_gw.json --mcp-config " + filepath.Join(n.dir, "mcp.json") +
 		` --model "opus[1m]" --plugin-dir "/Users/me/my hooks"`
 	if !ok || len(argv) != 2 || argv[0] != "eval" || argv[1] != want {
@@ -367,8 +367,18 @@ func TestClaudeResumeArgv(t *testing.T) {
 	d := "~/.claude-work"
 	n.claudeStartDir.Store(&d)
 	if argv, _ := n.claudeResumeArgv(claudeLaunch{Launcher: "claude"}, startID); !strings.HasPrefix(argv[1],
-		`CLAUDE_CONFIG_DIR="$HOME"/.claude-work claude --resume `+startID) {
+		`HERDR_AGENT=claude CLAUDE_CONFIG_DIR="$HOME"/.claude-work claude --resume `+startID) {
 		t.Fatalf("argv %q", argv)
+	}
+	// A Codex's resume says it is Codex; TRAEX and pi have no name in herdr: nothing in front.
+	for _, tc := range []struct{ kind, launcher, want string }{
+		{"codex", "cx", "HERDR_AGENT=codex cx resume " + startID},
+		{traexAgent, "tx", "tx resume " + startID},
+		{piAgent, "pi", "pi resume " + startID},
+	} {
+		if argv, ok := n.agentResumeArgv(agentLaunch{Agent: tc.kind, Launcher: tc.launcher}, startID); !ok || argv[1] != tc.want {
+			t.Errorf("%s: argv %q, want eval %q", tc.kind, argv, tc.want)
+		}
 	}
 }
 
@@ -444,7 +454,7 @@ func TestRunningPersonaClaudeGetsItsResumeCommand(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	reports := f.trace("pane.report_agent_session")
 	if len(reports) != 1 || !strings.Contains(reports[0], `"pane_id":"w1:p2"`) ||
-		!strings.Contains(reports[0], `"eval","work_claude --resume `+startID) {
+		!strings.Contains(reports[0], `"eval","HERDR_AGENT=claude work_claude --resume `+startID) {
 		t.Fatalf("reports %v", reports)
 	}
 	// Once: the next refresh reports nothing again.
@@ -464,7 +474,7 @@ func TestPersonaOtherAgentsResumeWithLauncher(t *testing.T) {
 	// 1. Direct holdResume on codex
 	spec := agentLaunch{Agent: "codex", Launcher: "work_codex", ID: startID}
 	n.holdResume(context.Background(), launch, "w1:p4", startID, spec)
-	held := resumeHeldAgent("codex", "w1:p4", startID, "work_codex resume "+startID)
+	held := resumeHeldAgent("codex", "w1:p4", startID, "HERDR_AGENT=codex work_codex resume "+startID)
 	assertTrace(t, f.trace(), held[:])
 
 	// 2. Backfill for running Codex agent

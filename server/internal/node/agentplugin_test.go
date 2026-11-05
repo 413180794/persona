@@ -54,7 +54,7 @@ func TestAgentPlugin(t *testing.T) {
 		waitCalls(t, f, "pane.send_input", 1)
 		want := startCmd("claude", "--session-id "+startID, jarvisDir(home))
 		if tc.flag { // the hooks go in a plugin too, and Persona passes no --settings (hooksplugin.go)
-			want = "claude --session-id " + startID + " --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json")) +
+			want = "HERDR_AGENT=claude claude --session-id " + startID + " --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json")) +
 				" --plugin-dir " + shellQuote(plugin) +
 				" --allowedTools " + shellQuote("Bash(sh "+filepath.Join(plugin, "skills", "persona-office", "scripts", "office.sh")+" *)") +
 				" --plugin-dir " + shellQuote(filepath.Join(jarvisDir(home), "claude-hooks"))

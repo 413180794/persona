@@ -129,7 +129,8 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	// Persona's hooks: a plugin, or in --settings for a claude that loads none (hooksplugin.go).
 	settings, hooks := n.claudeStartSettings(ctx, launcher, "claude", cwd)
 	spec := claudeLaunch{Launcher: launcher, Settings: settings, Hooks: hooks, Model: execution.Model, Plugins: n.claudeLoadsPlugins(ctx)}
-	cmd := n.claudeCommandLine(spec, args+modeFlags(mode, effort), shellQuote)
+	// herdr told it is Claude (hostherdr.go): a launcher that wraps another binary is otherwise not seen as one.
+	cmd := withHerdrAgent(typedHerdrAgent(launch, "claude", paneShells(ctx)...), n.claudeCommandLine(spec, args+modeFlags(mode, effort), shellQuote))
 	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC(), Model: execution.Model, ModelFingerprint: execution.Fingerprint}
 	if prev, ok := n.state.get(id); ok && resume != "" {
 		st.StartedAt = prev.StartedAt
@@ -274,10 +275,14 @@ func startWait() time.Duration { return claudeStartWait + claudeReadyWait + 30*t
 
 // waitReady polls until claude's input box is on screen, accepting the folder-trust dialog on the way.
 // herdr reports the trust dialog as idle, so the screen is the source of truth. The wait for the input box starts
-// once claude runs in the pane: a slow shell before it is not claude being slow.
+// once claude runs in the pane: a slow shell before it is not claude being slow. A wait in a herdr pane that ends with
+// the input box on screen and herdr knowing no agent there (agent_not_found, or none named) says so: herdr does not
+// know that program as Claude (#3454).
 func (n *Node) waitReady(ctx context.Context, pane string) (*host.Agent, error) {
 	deadline := time.Now().Add(claudeStartWait)
 	running := false
+	h, _, _ := n.paneHost(pane)
+	_, onHerdr := h.(*herdrHost)
 	started := func() {
 		if !running {
 			running = true
@@ -285,6 +290,7 @@ func (n *Node) waitReady(ctx context.Context, pane string) (*host.Agent, error) 
 		}
 	}
 	readyStreak := 0
+	unrecognised := false // at the last look herdr knew no claude in the pane while its input box was on screen
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
@@ -315,9 +321,13 @@ func (n *Node) waitReady(ctx context.Context, pane string) (*host.Agent, error) 
 		}
 		a, err := n.paneAgent(ctx, pane)
 		if err != nil || a.Agent != "claude" {
+			if onHerdr && (err == nil || errors.Is(err, host.ErrNoAgent)) {
+				unrecognised = inputBoxVisible(screen)
+			}
 			readyStreak = 0
 			continue
 		}
+		unrecognised = false
 		started()
 		if a.AgentStatus == proto.StatusBlocked {
 			return a, nil // some other dialog; the phone shows it as a screen interaction
@@ -331,10 +341,37 @@ func (n *Node) waitReady(ctx context.Context, pane string) (*host.Agent, error) 
 		}
 		readyStreak = 0
 	}
+	if unrecognised {
+		wait := claudeStartWait
+		if running { // the trust dialog was answered: the wait after it
+			wait = claudeReadyWait
+		}
+		return nil, n.unrecognisedClaude(ctx, pane, wait)
+	}
 	if !running {
 		return nil, fmt.Errorf("claude did not start within %s: the tab's shell had not run it yet (is the machine busy?)", claudeStartWait)
 	}
 	return nil, fmt.Errorf("claude did not become ready within %s of starting", claudeReadyWait)
+}
+
+// unrecognisedClaude is why a start in a herdr pane failed whose claude showed its input box while herdr never
+// reported it, with the programs herdr sees in front of the pane: herdr knows Claude by the program's name or by
+// HERDR_AGENT (hostherdr.go), and a wrapper whose binary has another name gets neither when herdr does not read the
+// variable, the pane's shell is not one the node types it for, or the launcher runs another command before claude
+// (#3454).
+func (n *Node) unrecognisedClaude(ctx context.Context, pane string, wait time.Duration) error {
+	sees := ""
+	if h, ref, err := n.paneHost(pane); err == nil {
+		if f, ok := h.(host.ForegroundNamer); ok {
+			if names, err := f.PaneForeground(ctx, ref); err == nil && len(names) > 0 {
+				sees = " (herdr sees " + strings.Join(names, ", ") + " in front)"
+			}
+		}
+	}
+	return fmt.Errorf("claude's input box is on screen but herdr did not recognise the agent within %s%s: is claude a wrapper? "+
+		"herdr knows Claude by its process name, or by HERDR_AGENT=claude, which the node types in front of the launcher "+
+		"in a bash, zsh, fish, sh, dash or ksh pane; herdr on Windows and before 0.7.1 (0.7.5 on macOS) ignores it, and a "+
+		"launcher that runs another command first (an alias starting with export or cd) does not pass it on to claude", wait, sees)
 }
 
 // inputBoxVisible reports whether Claude Code's prompt footer is rendered.

@@ -147,7 +147,7 @@ func (n *Node) resumeCodex(ctx context.Context, launch host.Launcher, id string,
 	}
 	defer os.RemoveAll(dir)
 	file := filepath.Join(dir, "start.json")
-	b, _ := json.Marshal(codexStartFile{Argv: argv, Prompt: prompt})
+	b, _ := json.Marshal(codexStartFile{Argv: argv, Prompt: prompt, Agent: herdrAgentFor(launch, "codex")})
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func (n *Node) resumeCodex(ctx context.Context, launch host.Launcher, id string,
 		return err
 	}
 	pane := created.Pane.String()
-	n.bindPane(pane, id) // the pane runs this thread (kept in its state): no guessing another rollout for it
+	n.bindPane(pane, id)               // the pane runs this thread (kept in its state): no guessing another rollout for it
 	time.Sleep(300 * time.Millisecond) // the fresh shell loads ~/.zshrc; typed input is buffered either way
 	if err := launch.Run(ctx, created.Pane, shellQuote(n.bin)+" codex-start "+shellQuote(file)); err != nil {
 		return fmt.Errorf("run launcher: %w", err)

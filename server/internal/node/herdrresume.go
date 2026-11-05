@@ -69,27 +69,38 @@ func dquote(s string) string {
 	return `"` + r.Replace(s) + `"`
 }
 
-// claudeResumeArgv is the resume_argv of a Claude Persona started: eval of its start command with --resume id. ok is
-// false when the command cannot be said without an apostrophe (a path with one in it): herdr would refuse it.
+// claudeResumeArgv is the resume_argv of a Claude Persona started: eval of its start command with --resume id, herdr
+// told it is Claude as at the start (resumeHerdrAgent). ok is false when the command cannot be said without an
+// apostrophe (a path with one in it): herdr would refuse it.
 func (n *Node) claudeResumeArgv(spec claudeLaunch, id string) (argv []string, ok bool) {
-	cmd := n.claudeCommandLine(spec, "--resume "+id, dquote)
+	cmd := withHerdrAgent(resumeHerdrAgent("claude"), n.claudeCommandLine(spec, "--resume "+id, dquote))
 	if strings.Contains(cmd, "'") || !validID(id) {
 		return nil, false
 	}
 	return []string{"eval", cmd}, true
 }
 
-// agentResumeArgv is the resume_argv for an agent Persona started (Claude, Codex, TRAEX, pi).
+// agentResumeArgv is the resume_argv for an agent Persona started (Claude, Codex, TRAEX, pi); a Codex gets
+// HERDR_AGENT=codex like Claude.
 func (n *Node) agentResumeArgv(spec agentLaunch, id string) (argv []string, ok bool) {
 	kind := spec.Agent
 	if kind == "" || kind == "claude" {
 		return n.claudeResumeArgv(spec, id)
 	}
-	cmd := n.launcherCommandQ(spec.Launcher, dquote) + " resume " + id
+	cmd := withHerdrAgent(resumeHerdrAgent(kind), n.launcherCommandQ(spec.Launcher, dquote)+" resume "+id)
 	if strings.Contains(cmd, "'") || !validID(id) {
 		return nil, false
 	}
 	return []string{"eval", cmd}, true
+}
+
+// resumeHerdrAgent is the HERDR_AGENT in front of a resume_argv (hostherdr.go): herdr types the argv into the shell it
+// opens the restored pane with (herdrPaneShell), so only when that shell takes `VAR=val cmd`.
+func resumeHerdrAgent(kind string) string {
+	if !takesAssign(herdrPaneShell()) {
+		return ""
+	}
+	return herdrAgentName(kind)
 }
 
 // holdResume gives herdr the pane's resume command and remembers how the pane's Claude was started, for a later

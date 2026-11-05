@@ -189,6 +189,21 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 本身没问题。现在分两段计：shell 跑起 claude（herdr 认出 claude 或出现信任对话框）最多 3 分钟，之后等输入框最多 1 分钟；超时的报错分得出是哪一段
 （`claude did not start within 3m0s: the tab's shell had not run it yet` / `… did not become ready within 1m0s of starting`），失败时把这次开的标签页关掉，
 重试不会再留一个空等的 claude。hub 那边等启动的上限跟着放宽（任务启动 5 分钟，启动中 / 要恢复的会话的发送 5 分钟）。
+
+第一段的「herdr 认出 claude」本身也会等不到（#3454）：启动器是个包装、exec 的原生二进制叫 `claude-2.1.318` 这类名字时，Claude 的输入框已经在屏幕上，
+herdr 的 `agent.get` 却一直不报 claude，node 等满 3 分钟报「the tab's shell had not run it yet (is the machine busy?)」，把人引去查机器忙不忙。herdr 认 Agent 的规矩：
+- 按前台进程的名字，basename 只认 `claude` / `claude-code`（Codex 是 `codex`）；argv[0] 还是 `claude` 的包装本来就认得。认不出的窗格
+  `agent.get` 回 `agent_not_found` 错误（herdr 0.9.5 的源码如此），不是一个 agent 为空的结果：node 把它标成 `host.ErrNoAgent`，按「herdr 不知道这里有 Agent」处理。
+- 看名字之前先读 `HERDR_AGENT`，读的是前台进程 exec 时的环境（`/proc/<pid>/environ`，macOS `KERN_PROCARGS2`），herdr 0.7.1 / macOS 0.7.5 起；更老的和 Windows 上忽略。
+- 窗格 shell 自己环境里的 `HERDR_AGENT` 是权威的，`unset` 也去不掉，之后窗格里跑什么都算那个 Agent：所以只能放在 Agent 那条命令前面，绝不能 export 到窗格的 shell 或写进标签 / 工作区的环境。
+
+现在 node 在 herdr 窗格里起 Claude 敲 `HERDR_AGENT=claude <启动器> …`（只在认这种写法的 shell 里；Codex 由 `codex-start` 设 `HERDR_AGENT=codex`，`docs/launchers.md`「herdr 怎么认出启动器起的 Agent」）。
+还是认不出时（herdr 太老、Windows、窗格的 shell 是 tcsh 这类不敲前缀的、alias 先跑了 `export` / `cd`），等待照旧、不提前失败，但 herdr 窗格里等到最后一次看时
+输入框在屏幕上、herdr 不知道这里有 claude 的（`agent_not_found` 或 agent 为空），报错换成
+`claude's input box is on screen but herdr did not recognise the agent within 3m0s (herdr sees <前台进程名> in front): is claude a wrapper? …`，
+后面说明 herdr 靠进程名或 `HERDR_AGENT=claude` 认、哪些情况前缀到不了 claude；前台进程名来自 herdr 的 `pane.process_info`。没看到输入框的照旧报 shell 没跑；
+别的引擎（Orca）的窗格不用这句，照旧报原来的。
+
 - Claude Code 一轮以模型 API 错误结束（「API Error: Connection lost mid-response…」、过载、限流、登录过期）在 herdr 里和正常做完一样是 done，hub 也就算成 unread：
   task_plan 的任务曾因此显示绿色「完成」卡片、摘要就是错误原文，快照里写「做完了」（#1516）。区分它只能看最后一句：hub 在会话停着、`last_text` 以这些错误开头时填 `turn_error`（只认开头，
   回复里提到「API Error」不算），任务判「中断了」、不自动关、回执写 `interrupted`；普通 Agent 的推送也不再是 ✅。

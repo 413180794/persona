@@ -1,7 +1,7 @@
 # 启动器与「设置 › 模型供应商」
 
 启动器决定 claude 用哪个网关、哪个模型。以前全是各台电脑 `~/.zshrc` 里调用 claude 的函数或 alias（见下「~/.zshrc 里怎么认」，
-node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都会展开）；2026-10-31 起「设置 › 模型供应商」把它们和在 App 里加的放在一起管理。
+node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都会展开，前面带 `HERDR_AGENT=claude`，见下「herdr 怎么认出启动器起的 Agent」）；2026-10-31 起「设置 › 模型供应商」把它们和在 App 里加的放在一起管理。
 代码：`server/internal/assistant/models_launchers.go`（管理者的，hub 只转发这些路由，`docs/model-config.md`「谁管模型」）、`server/internal/node/managed.go`；App `Views/Settings/ModelLaunchersView.swift`。
 
 ## 两种来源
@@ -40,6 +40,33 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   函数写的启动器里的 `--settings` 看不到，在这种 claude 上照样会被顶掉。
 - 列模型（`node/launcher_models.go`）为了不触发 hooks 会传 `--settings '{"disableAllHooks":true}'`（alias、托管启动器的照样合并进去），函数里自带的
   `--settings` 在这里仍会被顶掉，列出来的是没有它时的模型：关掉 hooks 只能写在 `--settings` 里，要合并就得先读出函数传的那份（#1411）。
+
+## herdr 怎么认出启动器起的 Agent（`HERDR_AGENT`，#3454）
+
+herdr 按窗格前台进程的名字认 Agent（basename 是 `claude` / `claude-code`、`codex`），认不出就不报 Agent。启动器是个包装、exec 的是另一个名字的程序时
+（比如一个 Python 脚本 exec 按版本号命名的原生二进制 `claude-2.1.318`），Claude 的输入框已经在屏幕上，node 却等不到 herdr 说「这是 claude」，
+等满 3 分钟才失败。herdr 给包装的办法是 `HERDR_AGENT=<agent>`：看名字之前先读前台进程 exec 时的环境（Linux `/proc/<pid>/environ`，macOS `KERN_PROCARGS2`），
+herdr 0.7.1（Linux）/ 0.7.5（macOS）起支持，更老的 herdr 和 Windows 上忽略。
+
+- node 在 herdr 窗格里起 Claude 时敲的是 `HERDR_AGENT=claude <启动器> --session-id … --mcp-config …`（`claude_start_dir` 时是
+  `HERDR_AGENT=claude CLAUDE_CONFIG_DIR=… claude …`，Persona 管理的是 `HERDR_AGENT=claude jarvisd launch <名字> …`），「在这里运行 Agent」选的窗格也一样；
+  herdr 重启后恢复用的 `resume_argv`（`eval "… --resume <id> …"`，`node/herdrresume.go`）带同样的前缀。hub 声明跑 Codex 的启动器敲 `HERDR_AGENT=codex <启动器> …`，
+  从手机新建的 Codex 见 `docs/codex.md`「从手机新建」；TRAEX、pi 不带（herdr 没有给它们的名字）。别的引擎（Orca…）和无头运行（助手、测试可用性、列模型）不带。
+- 只敲给认 `VAR=val cmd` 的 shell：bash、zsh、fish（3.1 起）、sh、dash、ksh、mksh。读这行字的 shell，新标签页按 herdr 开窗格用的 shell 算
+  （herdr 用它自己的 `$SHELL`：node 起的 herdr 是用户的登录 shell，`node/herdrstart_unix.go` `userShell`；不看 herdr 配置里的 `[terminal] default_shell`），
+  `resume_argv` 也按它（herdr 恢复时开新窗格、把 `eval …` 敲进去）；「在这里运行 Agent」按那个窗格前台的 shell。tcsh / csh、pwsh、nu、elvish、xonsh
+  或认不出的 shell 照旧敲不带前缀的命令，herdr 认不认得出和以前一样。Windows 上 node 不敲（herdr 不读，`codex-start` 也不设）。
+- 只放在 Agent 那条命令前面：shell 只把它交给这条命令起的程序，跑完不留在 shell 里。**不要** `export` 到窗格的 shell，也不要写进 herdr 标签 / 工作区的环境：
+  shell 自己环境里的 `HERDR_AGENT` 对 herdr 是权威的（之后 `unset` 也去不掉），窗格里以后跑的任何东西都会被当成 Claude。也不用 `env HERDR_AGENT=claude <启动器>`：
+  `env` 找不到函数和 alias。
+- 带得到 claude 的（实测 bash 5.2 / 5.3、zsh 5.9、fish 4.6、dash）：PATH 上的程序、函数、alias（含前面带变量的 `alias x='A=1 claude …'`）、`eval` 同一段文字。
+  `node/herdragent_shell_test.go` 在真 shell 里跑 node 敲的命令（bash；装了 zsh、fish 时也跑），断言 claude 拿到 `HERDR_AGENT=claude` 和参数、之后 shell 里和下一个程序都没有它。
+- 带不到的（和以前一样认不出，不会更糟）：alias 展开后先跑别的命令（`alias x='export A=1; claude'`、`alias x='cd ~/w && claude'`），前缀给了 `export` / `cd`。
+  zsh 开了 `POSIX_BUILTINS`（或 bash `--posix`）时，`export` 前面的它在 shell 里留成一个没导出的变量，无害。
+- zsh 开了 `POSIX_BUILTINS` 而启动器是函数时，`HERDR_AGENT=claude` 会**留在那个窗格的 shell 里，而且是导出的**：claude 退出后在这个窗格里再跑的程序，herdr 也会当成 Claude。
+  这个选项很少开；开了的把启动器写成 alias 或脚本。
+- 包装 exec claude 时 argv[0] 仍是 `claude` 的，herdr 本来就认得，前缀不改变什么。
+- 还是认不出时 node 的报错见 `docs/lessons/agents.md`「claude did not become ready…」。
 
 ## Persona 管理的怎么跑
 

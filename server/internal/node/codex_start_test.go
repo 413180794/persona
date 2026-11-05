@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -26,8 +27,11 @@ const startThread = "01a19a00-0000-7000-8000-00000000c0de"
 
 var startFileRE = regexp.MustCompile(` codex-start '?([^' ]+?)'?$`)
 
-// ran is the launcher's words the last start's file held.
-var ran []string
+// ran is the launcher's words the last start's file held, ranAgent its HERDR_AGENT.
+var (
+	ran      []string
+	ranAgent string
+)
 
 // codexStartHerdr is a node on a fake herdr whose new tab's launcher "runs" Codex: once the command comes in, a rollout
 // for a new thread with the file's message appears in ~/.codex (after delay).
@@ -41,7 +45,7 @@ func codexStartHerdr(t *testing.T, delay time.Duration) (*Node, *fakeHerdr, stri
 	f.setScreen("w1:p2", "")
 	var mu sync.Mutex
 	var cmds []string
-	ran = nil
+	ran, ranAgent = nil, ""
 	f.after(func(c herdrCall) {
 		if c.Method != "pane.send_input" || str(c.Params["pane_id"]) != "w1:p2" {
 			return
@@ -59,7 +63,7 @@ func codexStartHerdr(t *testing.T, delay time.Duration) (*Node, *fakeHerdr, stri
 			return
 		}
 		mu.Lock()
-		ran = file.Argv
+		ran, ranAgent = file.Argv, file.Agent
 		mu.Unlock()
 		prompt := file.Prompt
 		go func() {
@@ -114,6 +118,9 @@ func TestCodexStartAnswersWithTheThread(t *testing.T) {
 	}
 	if want := []string{"OPENAI_BASE_URL=http://127.0.0.1:9", "codex", "-m", "gpt-6", "-c", "model_reasoning_effort=low"}; strings.Join(ran, "\x00") != strings.Join(want, "\x00") {
 		t.Errorf("runs %q, want %q", ran, want)
+	}
+	if ranAgent != "codex" { // herdr told it is Codex, whatever the launcher's binary is called (#3454)
+		t.Errorf("HERDR_AGENT %q", ranAgent)
 	}
 	// One session for the pane, the thread's, and it says why it is on the terminal route.
 	f.reply("session.snapshot", snapshot(nil, nil, []any{agentOf("codex", "", proto.StatusIdle, "w1:p2", "w1:t2", "w1", cwd, "")}, nil))
@@ -248,6 +255,46 @@ func TestCodexStartHelper(t *testing.T) {
 	}
 	if _, err := os.Stat(file); !os.IsNotExist(err) {
 		t.Error("the file was left behind")
+	}
+}
+
+// codex-start's environment: the file's agent replaces a HERDR_AGENT the shell had (appended, the inherited one would
+// come first, the one getenv and herdr read); no agent (tab-start) leaves HERDR_AGENT as it was. The launcher's own
+// words go in after what the shell had, as before. `env` prints the environment exactly as it was exec'd.
+func TestCodexStartReplacesAnInheritedHerdrAgent(t *testing.T) {
+	envBin, err := exec.LookPath("env")
+	if err != nil {
+		t.Skip("no env(1)")
+	}
+	for _, tc := range []struct{ name, agent, want string }{
+		{"codex", "codex", "HERDR_AGENT=codex"},
+		{"tab-start", "", "HERDR_AGENT=inherited"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "start.json")
+			b, _ := json.Marshal(codexStartFile{Argv: []string{"CODEX_MARK=launcher", envBin}, Agent: tc.agent})
+			if err := os.WriteFile(file, b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			args, _ := json.Marshal([]string{file})
+			cmd := exec.Command(os.Args[0], "-test.run=^TestCodexStartHelper$")
+			cmd.Env = append(os.Environ(), "HERDR_AGENT=inherited", "JARVIS_CODEX_START_HELPER=1", "JARVIS_CODEX_START_ARGS="+string(args))
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("%v: %s", err, out)
+			}
+			var agents []string
+			mark := false
+			for _, kv := range strings.Split(string(out), "\n") {
+				if strings.HasPrefix(kv, "HERDR_AGENT=") {
+					agents = append(agents, kv)
+				}
+				mark = mark || kv == "CODEX_MARK=launcher"
+			}
+			if !slices.Equal(agents, []string{tc.want}) || !mark {
+				t.Errorf("environment has %q (launcher's variable: %v), want %s", agents, mark, tc.want)
+			}
+		})
 	}
 }
 

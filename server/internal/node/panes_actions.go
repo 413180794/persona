@@ -185,15 +185,31 @@ func (n *Node) splitPane(ctx context.Context, pane, direction string) (proto.Pan
 
 type adoptedPaneKey struct{}
 
-// withAdoptedPane makes a start use the pane a user picked instead of opening a tab (newTab).
-func withAdoptedPane(ctx context.Context, c *host.Created) context.Context {
-	return context.WithValue(ctx, adoptedPaneKey{}, c)
+// adopted is the pane a user picked for a start, and the programs in front of it (its shell).
+type adopted struct {
+	created *host.Created
+	shells  []string
+}
+
+// withAdoptedPane makes a start use the pane a user picked instead of opening a tab (newTab); shells are the programs
+// in front of it.
+func withAdoptedPane(ctx context.Context, c *host.Created, shells []string) context.Context {
+	return context.WithValue(ctx, adoptedPaneKey{}, adopted{c, shells})
 }
 
 // adoptedPane is the pane a start was told to use, nil for a start that opens its own tab.
 func adoptedPane(ctx context.Context) *host.Created {
-	c, _ := ctx.Value(adoptedPaneKey{}).(*host.Created)
-	return c
+	a, _ := ctx.Value(adoptedPaneKey{}).(adopted)
+	return a.created
+}
+
+// paneShells are the shells that read what a start types (typedHerdrAgent): the programs in front of the pane the
+// user picked, else the shell herdr opens a tab with.
+func paneShells(ctx context.Context) []string {
+	if a, ok := ctx.Value(adoptedPaneKey{}).(adopted); ok {
+		return a.shells
+	}
+	return []string{herdrPaneShell()}
 }
 
 // runAgentInPane starts an agent of a launcher in a plain shell pane, the way 新建 Agent does in a new tab: same
@@ -244,7 +260,7 @@ func (n *Node) runAgentInPane(ctx context.Context, pane, launcher string) (*prot
 		return nil, errors.New("不知道这个窗格的目录")
 	}
 	created := &host.Created{SlotID: p.TabID, SpaceID: p.WorkspaceID, Pane: ref}
-	return n.start(withAdoptedPane(ctx, created), cwd, launcher, "", "", p.WorkspaceID, "", "", "", "", "")
+	return n.start(withAdoptedPane(ctx, created, names), cwd, launcher, "", "", p.WorkspaceID, "", "", "", "", "")
 }
 
 // ── git in a pane's or workspace's directory ─────────────

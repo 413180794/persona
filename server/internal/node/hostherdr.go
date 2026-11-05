@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +37,67 @@ var (
 
 // herdrPaneEnv is the variable herdr sets in every pane.
 const herdrPaneEnv = "HERDR_PANE_ID"
+
+// herdrAgentEnv tells herdr which agent a pane runs. herdr knows Claude and Codex by the foreground program's name
+// (basename claude / claude-code, codex), so a wrapper that execs a binary of another name ("claude-2.1.318") was never
+// seen as Claude: the start waited out claudeStartWait with Claude's input box on screen (#3454). herdr reads this
+// variable from the foreground process's environment as it was exec'd (/proc/<pid>/environ, macOS KERN_PROCARGS2)
+// before it looks at the name: herdr 0.7.1 on Linux, 0.7.5 on macOS; older ones and Windows ignore it. So the node
+// puts it on the agent's own command only, `HERDR_AGENT=claude <launcher> …` where the pane's shell takes that form
+// (typedHerdrAgent; codex-start sets it in the environment it execs): set on the pane's shell, or the tab's
+// environment, it would be authoritative for everything run there later.
+const herdrAgentEnv = "HERDR_AGENT"
+
+// herdrAgentName is what herdr calls an agent of kind, "" for one it has no integration for (TRAEX, pi: left to its
+// own detection) and on Windows, where herdr does not read HERDR_AGENT.
+func herdrAgentName(kind string) string {
+	if runtime.GOOS != "windows" && (kind == "claude" || kind == "codex") {
+		return kind
+	}
+	return ""
+}
+
+// herdrAgentFor is the HERDR_AGENT value for an agent of kind started in launch's panes: herdrAgentName on herdr, ""
+// on other hosts.
+func herdrAgentFor(launch host.Launcher, kind string) string {
+	if _, ok := launch.(*herdrHost); !ok {
+		return ""
+	}
+	return herdrAgentName(kind)
+}
+
+// typedHerdrAgent is herdrAgentFor for a command typed into a pane whose shell is shells (the programs in front of
+// it): "" unless they take `VAR=val cmd`, so csh, pwsh, nu, xonsh, elvish and a shell not known get the command as
+// before, without it.
+func typedHerdrAgent(launch host.Launcher, kind string, shells ...string) string {
+	if !takesAssign(shells...) {
+		return ""
+	}
+	return herdrAgentFor(launch, kind)
+}
+
+// takesAssign: shells (names or paths, "-zsh" for a login shell) are there and each is one of assignShells.
+func takesAssign(shells ...string) bool {
+	for _, s := range shells {
+		if !assignShells[strings.TrimPrefix(filepath.Base(s), "-")] {
+			return false
+		}
+	}
+	return len(shells) > 0
+}
+
+// assignShells are the shells whose `VAR=val cmd` runs cmd with VAR set and leaves the shell without it (fish from
+// 3.1): the ones the node types HERDR_AGENT in front for.
+var assignShells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "mksh": true, "fish": true}
+
+// withHerdrAgent is the command line cmd with HERDR_AGENT=agent in front, for the shell that runs it to put in the
+// agent's environment alone; cmd as it is when agent is "".
+func withHerdrAgent(agent, cmd string) string {
+	if agent == "" {
+		return cmd
+	}
+	return herdrAgentEnv + "=" + agent + " " + cmd
+}
 
 func (h *herdrHost) Kind() string    { return host.Herdr }
 func (h *herdrHost) PaneEnv() string { return herdrPaneEnv }
@@ -68,8 +131,13 @@ func (h *herdrHost) Agents(ctx context.Context) ([]host.Agent, error) {
 	return fromHerdrAgents(agents), err
 }
 
+// Agent is agent.get; herdr answers *_not_found for a pane where it detects no agent (a claude it does not recognise,
+// #3454), marked ErrNoAgent.
 func (h *herdrHost) Agent(ctx context.Context, pane host.PaneRef) (*host.Agent, error) {
 	a, err := h.c.AgentGet(ctx, pane.ID)
+	if herdr.IsNotFound(err) {
+		return nil, host.Mark(err, host.ErrNoAgent)
+	}
 	if err != nil {
 		return nil, err
 	}

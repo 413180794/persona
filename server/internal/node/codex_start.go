@@ -121,7 +121,7 @@ func (n *Node) startCodex(ctx context.Context, launch host.Launcher, cwd, launch
 	}
 	defer os.RemoveAll(dir) // codex-start removes the file once read; the directory goes when the start ends
 	file := filepath.Join(dir, "start.json")
-	b, _ := json.Marshal(codexStartFile{Argv: argv, Prompt: prompt})
+	b, _ := json.Marshal(codexStartFile{Argv: argv, Prompt: prompt, Agent: herdrAgentFor(launch, "codex")})
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return nil, err
 	}
@@ -285,10 +285,14 @@ const codexStartError = "jarvisd codex-start:"
 type codexStartFile struct {
 	Argv   []string `json:"argv"`
 	Prompt string   `json:"prompt"`
+	// Agent is the HERDR_AGENT the words run with (hostherdr.go): "codex" for a Codex started in a herdr pane; "" leaves
+	// the variable as it is (tab-start, other hosts).
+	Agent string `json:"agent,omitempty"`
 }
 
 // CodexStart is `jarvisd codex-start <file>`: it reads a codexStartFile (and removes it), then runs its words with the
-// message as one more argument after "--", in place of itself. No shell sees either.
+// message as one more argument after "--", in place of itself. No shell sees either. The file's agent replaces a
+// HERDR_AGENT the shell had: appended, the inherited one would come first, and that is the one getenv and herdr read.
 func CodexStart(args []string) error {
 	if len(args) != 1 {
 		return errors.New(codexStartError + " usage: jarvisd codex-start <file>")
@@ -304,6 +308,9 @@ func CodexStart(args []string) error {
 	}
 	words := f.Argv
 	env := os.Environ()
+	if f.Agent != "" {
+		env = append(withoutEnv(env, []string{herdrAgentEnv}), herdrAgentEnv+"="+f.Agent)
+	}
 	for len(words) > 0 && assignRe.MatchString(words[0]) {
 		env = append(env, words[0])
 		words = words[1:]

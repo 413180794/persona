@@ -173,7 +173,7 @@ func TestPiResumedInHerdr(t *testing.T) {
 	f.reply("session.snapshot", snapshot(nil, []any{map[string]any{"tab_id": "w1:t1", "workspace_id": "w1", "label": "agent-1"}}, nil, nil))
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 	cmdRe := regexp.MustCompile(` tab-start '?([^' ]+)'?$`)
-	started := make(chan []string, 1)
+	started := make(chan codexStartFile, 1)
 	fresh := make(chan *fakeRuntime, 1)
 	f.after(func(c herdrCall) {
 		if c.Method != "pane.send_input" {
@@ -186,7 +186,7 @@ func TestPiResumedInHerdr(t *testing.T) {
 		var sf codexStartFile
 		b, _ := os.ReadFile(m[1])
 		_ = json.Unmarshal(b, &sf)
-		started <- sf.Argv
+		started <- sf
 		// The pi it starts loads the extension, which lists the session running in that pane.
 		go func() {
 			fresh <- piExtension(t, rh, "pi-5555", map[string]any{"session_id": piSID, "status": "idle", "pane_id": "w1:p2", "cwd": cwd})
@@ -199,8 +199,9 @@ func TestPiResumedInHerdr(t *testing.T) {
 	if _, err := request(t, n, "session.send", map[string]any{"session_id": piSID, "text": "and the tests", "client_msg_id": "m-3"}); err != nil {
 		t.Fatalf("%v\nherdr: %v", err, f.trace())
 	}
-	if argv := <-started; strings.Join(argv, " ") != "pi --session "+file {
-		t.Fatalf("ran %v", argv)
+	// herdr's own pi detection, not HERDR_AGENT: tab-start runs the runtime's command as it is.
+	if sf := <-started; strings.Join(sf.Argv, " ") != "pi --session "+file || sf.Agent != "" {
+		t.Fatalf("ran %v (HERDR_AGENT %q)", sf.Argv, sf.Agent)
 	}
 	if len(files.got("session.send")) != 0 {
 		t.Fatal("sent to the runtime with the session on disk")

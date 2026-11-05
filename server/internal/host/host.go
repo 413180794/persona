@@ -41,7 +41,8 @@ type Host interface {
 	// Agents lists only the panes running an agent the host detects (a lighter call than Snapshot; herdr: hosts that
 	// cannot snapshot).
 	Agents(ctx context.Context) ([]Agent, error)
-	// Agent is one pane as an agent pane (its agent and state, which the host may not know: Agent "").
+	// Agent is one pane as an agent pane (its agent and state, which the host may not know: Agent "", or ErrNoAgent
+	// from a host that answers with an error, herdr).
 	Agent(ctx context.Context, pane PaneRef) (*Agent, error)
 	// Read reads a pane's screen.
 	Read(ctx context.Context, pane PaneRef, opts ReadOpts) (string, error)
@@ -245,7 +246,7 @@ type Redrawer interface {
 
 // Errors a host marks its own errors with (errors.Is); the error text stays the host's.
 var (
-	// ErrNoAgent: Prompt found no agent the host knows in the pane.
+	// ErrNoAgent: Prompt or Agent found no agent the host knows in the pane.
 	ErrNoAgent = errors.New("no agent in the pane")
 	// ErrAgentBlocked: Prompt refused, nothing typed, because the host takes the agent to be waiting on the user (herdr
 	// says so of a Codex with an async question open, whose input box still takes a message).

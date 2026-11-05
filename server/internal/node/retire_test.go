@@ -122,8 +122,8 @@ func TestHerdrSendResumesARetiredCodex(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	if want := []string{"codex", "--model", "gpt-7", "resume", startThread}; strings.Join(file.Argv, " ") != strings.Join(want, " ") ||
-		file.Prompt != "go on" {
-		t.Errorf("ran %q with %q", file.Argv, file.Prompt)
+		file.Prompt != "go on" || file.Agent != "codex" {
+		t.Errorf("ran %q with %q (HERDR_AGENT %q)", file.Argv, file.Prompt, file.Agent)
 	}
 	if st, _ := n.state.get(startThread); st.Pane != "w1:p2" || st.Launcher != "cx" || st.Model != "gpt-7" {
 		t.Errorf("state = %+v", st)
