@@ -1,18 +1,24 @@
 // A session's files (docs/ios.md「文件」, iOS FilesPane): from the session's folder (or `path`) folder by folder, a
 // breadcrumb back to any level; folders first with size, time and Git marks; hidden files off unless asked for. A
-// file opens in the viewer inside the panel (back returns to the list where it was).
+// file opens in the viewer inside the panel (back returns to the list where it was). On a wide screen the folders
+// open in place as a tree instead (files/FilesTree.tsx, Moshi's form; the menu switches back); either view refreshes
+// itself while shown (lib/fs-live.ts).
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
+import { t } from "../../i18n";
 import { entryPayload, ENTRY_DRAG_TYPE } from "../../lib/entry-drag";
-import { below, gitMark, joinPath, type FsEntry, type FsListing, type GitStatus } from "../../lib/files";
+import { aheadBehind, below, gitMark, joinPath, type FsEntry, type FsListing, type GitStatus } from "../../lib/files";
+import { ancestors } from "../../lib/files-tree";
 import { ago, baseName, bytes, shortPath } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
+import { useFsLive } from "../../lib/use-fs-live";
+import { NARROW, useMedia } from "../../lib/viewport";
 import { Button, copyText, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { PanelHeader } from "../SidePanel";
 import { FileView } from "./files/FileView";
+import { FilesTree } from "./files/FilesTree";
 import { Empty, FileGlyph, GitDot, GitBadge, useStoredFlag } from "./files/parts";
-import { t } from "../../i18n";
 
 type Listed = { at: string; listing?: FsListing; error?: string };
 
@@ -27,14 +33,28 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
   const dir = stack.reduce(joinPath, start.root);
 
   const [showHidden, setShowHidden] = useStoredFlag("jarvis.files.showHidden", false);
+  // The tree is the wide screens' view, the drill-in the narrow ones'; the menu's choice wins over both.
+  const narrow = useMedia(NARROW);
+  const [viewPref, setViewPref] = useState<"tree" | "drill" | null>(() => {
+    const v = localStorage.getItem("jarvis.files.view");
+    return v === "tree" || v === "drill" ? v : null;
+  });
+  const tree = (viewPref ?? (narrow ? "drill" : "tree")) === "tree";
+  const chooseView = (v: "tree" | "drill") => {
+    localStorage.setItem("jarvis.files.view", v);
+    setViewPref(v);
+  };
+  const reveal = useMemo(() => ancestors(start.root, start.stack), [start]);
   const [listed, setListed] = useState<Record<string, Listed>>({});
   const [reloads, setReloads] = useState(0);
+  const [dirTick, setDirTick] = useState(0); // the folder shown changed on the computer (drill-in view)
+  const [gitTick, setGitTick] = useState(0); // the folder's Git status did
   const [git, setGit] = useState<GitStatus | null>(null);
   const [open, setOpen] = useState<string[]>([]); // files opened from the list, newest last
   const menu = useMenu();
 
   useEffect(() => {
-    if (!dir) return;
+    if (!dir || tree) return;
     const ac = new AbortController();
     api<FsListing>(`/machines/${enc(mid)}/fs?path=${enc(dir)}&cwd=${enc(cwd)}`, { signal: ac.signal })
       .then((l) => setListed((m) => ({ ...m, [dir]: { at: dir, listing: l } })))
@@ -42,7 +62,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
         if (!isAbort(e)) setListed((m) => ({ ...m, [dir]: { at: dir, listing: m[dir]?.listing, error: errorText(e) } }));
       });
     return () => ac.abort();
-  }, [mid, cwd, dir, reloads]);
+  }, [mid, cwd, dir, reloads, dirTick, tree]);
 
   useEffect(() => {
     if (!cwd) return;
@@ -51,7 +71,13 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
       .then(setGit)
       .catch(() => {}); // marks are extra: without Git the list is the same
     return () => ac.abort();
-  }, [mid, cwd, reloads]);
+  }, [mid, cwd, reloads, gitTick]);
+
+  // The drill-in view watches the folder it shows; the tree watches the ones it has open (FilesTree). Both want Git.
+  useFsLive(mid, cwd, tree || !dir ? [] : [dir], true, (c) => {
+    if (c.git) setGitTick((n) => n + 1);
+    if (!tree && dir && c.dirs.includes(dir)) setDirTick((n) => n + 1);
+  });
 
   const go = useCallback((level: number) => setStack((s) => s.slice(0, level)), []);
   const enter = (e: FsEntry) => (e.dir ? setStack((s) => [...s, e.name]) : setOpen([joinPath(dir, e.name)]));
@@ -68,6 +94,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
   const here = listed[dir];
   const entries = (here?.listing?.entries ?? []).filter((e) => showHidden || !e.name.startsWith("."));
   const changes = git?.is_repo ? git.files.length : 0;
+  const sync = aheadBehind(git);
   const viewing = open[open.length - 1];
 
   return (
@@ -76,19 +103,20 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
         <PanelHeader
           icon="folder"
           title={t("session-filespanel.title")}
-          subtitle={shortPath(dir)}
+          subtitle={shortPath(tree ? start.root : dir)}
           onClose={onClose}
           actions={
             <>
               <button
                 type="button"
                 title="Git"
-                aria-label={changes ? t("session-filespanel.git_changes", { count: changes }) : "Git"}
+                aria-label={(changes ? t("session-filespanel.git_changes", { count: changes }) : "Git") + (sync ? ` ${sync}` : "")}
                 onClick={() => openPanel({ kind: "git", mid, sid, cwd })}
                 className="flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 transition-colors hover:bg-hover hover:text-ink"
               >
                 <Icon name="git" size={14} />
                 Git
+                {sync && <span className="text-[11px] text-ink-3 tabular-nums">{sync}</span>}
                 {changes > 0 && <span className="rounded-full bg-field px-1.5 text-[11px] text-ink-2 tabular-nums">{changes}</span>}
               </button>
               <IconButton icon="more" label={t("session-filespanel.more")} onClick={menu.open} active={Boolean(menu.anchor)} />
@@ -101,15 +129,33 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
             onClose={menu.close}
             align="right"
             items={[
+              { key: "tree", label: t("files-tree.treeView"), checked: tree, onSelect: () => chooseView(tree ? "drill" : "tree") },
               { key: "hidden", label: t("session-filespanel.show_hidden"), checked: showHidden, onSelect: () => setShowHidden(!showHidden) },
-              { key: "copy", label: t("session-filespanel.copy_path"), icon: "copy", onSelect: () => copyText(dir) },
+              { key: "copy", label: t("session-filespanel.copy_path"), icon: "copy", onSelect: () => copyText(tree ? start.root : dir) },
               { key: "reload", label: t("session-filespanel.reload"), icon: "retry", onSelect: () => setReloads((n) => n + 1) },
             ]}
           />
         )}
-        <Crumbs root={start.root} stack={stack} go={go} />
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" key={dir}>
-          {here?.listing ? (
+        {!tree && <Crumbs root={start.root} stack={stack} go={go} />}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" key={tree ? "tree" : dir}>
+          {tree ? (
+            start.root ? (
+              <FilesTree
+                mid={mid}
+                sid={sid}
+                cwd={cwd}
+                root={start.root}
+                reveal={reveal}
+                showHidden={showHidden}
+                git={git}
+                reloads={reloads}
+                onOpenFile={(p) => setOpen([p])}
+                onShowHidden={() => setShowHidden(true)}
+              />
+            ) : (
+              <Empty icon="folder" title={t("session-filespanel.no_dir")} />
+            )
+          ) : here?.listing ? (
             <div className="py-1" style={{ animation: "fade-in 160ms ease-out both" }}>
               {entries.length === 0 && (
                 <Empty
@@ -200,7 +246,7 @@ function EntryRow({ mid, e, full, mark, onOpen }: { mid: string; e: FsEntry; ful
         <FileGlyph name={e.name} dir={e.dir} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1">
-            <span className={cx("truncate text-[13px]", hidden ? "text-ink-2" : "text-ink")}>{e.name}</span>
+            <span className={cx("truncate text-[13px]", e.ignored ? "text-ink-3" : hidden ? "text-ink-2" : "text-ink")}>{e.name}</span>
             {e.symlink && <Icon name="link" size={11} className="shrink-0 text-ink-3" />}
           </span>
           <span className="flex gap-2 text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums">

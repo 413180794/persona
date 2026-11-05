@@ -1,0 +1,14 @@
+{
+  "tree": "Files",
+  "treeView": "Tree view",
+  "loading": "Loading",
+  "emptyFolder": "Empty folder",
+  "hiddenOnly": "Only hidden files",
+  "showHidden": "Show hidden files",
+  "openFailed": "Can't open this folder",
+  "openFailedInline": "Can't open: {error}",
+  "retry": "Retry",
+  "tooMany": "Too many files, only the first 2000 are listed",
+  "gitIgnored": "{path} (ignored by Git)",
+  "copyPath": "Copy path"
+}

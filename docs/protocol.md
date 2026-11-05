@@ -537,7 +537,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/machines/{mid}/git/blob?cwd=&path=&rev=` | 文件在某个版本的内容（hub 特性 `git_blob`，node `git.blob`，网页的对比用，#1437）：`rev` 是 `HEAD`、`INDEX`（暂存区）、提交哈希或「哈希^」（它的父提交），`path` 相对仓库根。回 `{"path","size"}`，`path` 是 node 缓存里按 blob id 命名的文件（带原扩展名），再用 `/file/download` 读；那个版本没有这个文件回 `{"missing":true}`。最大 200 MB，7 天清理 |
 | GET / POST / DELETE | `/api/v1/machines/{mid}/browser/cookies` | ego lite 里的登录（插件 ego，#1304，`docs/plan-ego-browser.md`「导入 cookies 做了什么」）：GET 列网站 `{"sites":[{"domain","count","expires"?}]}`（不含名字和值）；POST `{"cookies":[{name,value,domain,path?,expires?,secure?,http_only?,same_site?,host_only?}]}` 导入，回 `imported`、`skipped`；DELETE `?site=a&site=b` 或 `?all=1` 清除，回 `removed`。只认用户自己的设备 token（配对 token 等 403），hub 不保存，目标 Mac 离线 409 |
 | GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | 会话里提到的路径在这台机器上在不在：`paths` 一行一个（也收 `path=a&path=b`），最多 200 个 → `{"stats":[{"path"(原样),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`。`denied` 是 macOS 不让 personad 读的文件夹（打开时会说怎么授权）；相对路径没有 `cwd`、iCloud 里的路径、敏感文件（见下）一律 `missing`；一次最多等 3 秒，没答上的（挂住的网络盘）也是 `missing`。手机只给 file / dir / denied 的路径做可点的文件块，网页内联成链接 |
-| GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud |
+| GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime","ignored"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud；`ignored`（#2439）：Git 忽略它（node 对这一页名字跑一次 `git check-ignore`，不在仓库里或没有 git 时都不标，不出现这个字段） |
 | GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[最近 30 条]}`（只读，`GIT_OPTIONAL_LOCKS=0`） |
 | POST | `/api/v1/machines/{mid}/git/pull` | `{"cwd"}` → `{"status": GitStatus, "updated": bool}`；只允许有上游的普通分支与干净工作区，执行 `git pull --ff-only --no-rebase --no-autostash --no-recurse-submodules`。分叉、未提交改动、无上游、认证失败或超时均报错，不自动 stash / 合并 / 变基；pull 命令最多 60 秒，node 总计 75 秒、hub 90 秒。仅 full 角色可调用 |
 | GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`；未跟踪文件对 /dev/null 出 diff，最多 512 KB |
@@ -630,6 +630,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束）。约每 80 ms 一条；App 每个对话最多每秒画 5 次，停顿后的第一条立刻画、之后画最新的，空串立刻画，消息落进 transcript 或重连时丢掉还没画的（`DeltaPacer`） |
 | `live` | `machine_id`, `session_id`, `live`（`SessionLive` 或 `null`）：工作中的 Claude 的状态行，只发给订阅了该会话并声明 `session_live` 的连接，见下「实时状态」 |
 | `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（node 已不再随订阅采样屏幕：终端页自己按需读 `/screen`，旧 App 收不到这条也不影响） |
+| `fs_changed` | #2439：`machine_id`, `cwd`, `dirs`（这个页面 `fs_watch` 里变了的文件夹）, `git`（`cwd` 的 Git 状态变了）。只发给 `fs_watch` 过的页面，不进事件日志、重连不补发（页面重连后自己刷新一遍） |
 | `terminal_control` | `machine_id`, `session_id`, `state`：`active`（接管了，带 `cols`, `rows`）、`busy`（电脑上别的程序占着，问用户要不要 `takeover`；先镜像着）、`taken`（被别的设备或程序抢走）、`lost`（node 自己放手了）、`unsupported`（旧 node / herdr，只能镜像），`error` 是给人看的原因 |
 | `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
@@ -655,6 +656,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `terminal_subscribe` | `machine_id`, `session_id`, `epoch`（可选）, `after_seq`（可选）：开始收这个会话终端的实时帧（hub `features` 里有 `terminal_stream` 才发）；`control: {cols, rows}`（可选，`terminal_control`）：手机按这个尺寸接管终端，`takeover: true` 连别的程序占着的也抢 |
 | `terminal_input` | `machine_id`, `session_id`, `text`（终端字节，原样写进去）, `control: {cols, rows}`（可选，新尺寸）, `scroll`（可选，滚轮的行数，> 0 往回、< 0 往新，feature `terminal_scroll`）, `at`（可选，`[column, row]` 从 0 起，滚轮落在屏幕的哪一格：手指按下的地方；不带时 node 用屏幕正中间）, `click`（可选，`[column, row]` 从 0 起，屏幕上那一格左键单击，feature `terminal_click`）：只有正在接管的那个连接发的才转给 node |
 | `terminal_unsubscribe` | `machine_id`, `session_id` |
+| `fs_watch` | #2439（文件和 Git 的自动刷新，下面「文件自动刷新」）：`machine_id`, `cwd`（会话目录）, `paths`（这个页面打开着的文件夹，绝对路径，最多 32 个）, `git`（是否显示 `cwd` 的 Git 状态）。整份替换这个页面对这台机器、这个 `cwd` 的集合；`paths` 空且 `git` 为 false 就是释放（连接断开也释放）。只有完全权限的设备能发，答题设备（手表）忽略 |
 | `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用）；可选 `device_id`、`platform`。按设备替换注册，空工具列表只清除该设备的供给；缺少 `device_id` 时用鉴权设备 ID，再回退到 `legacy`。调用先筛选提供该工具的在线手机，再优先真机、最近活跃连接。iPhone 的 `device_id` 是推送用的设备 id（同 `POST /api/v1/devices`）：连着的这段时间 hub 不给这台设备的实时活动推 APNs，App 自己画，`docs/live-activity.md`「推送节奏」；老 App 不带。`tools` 里的 `phone_runtime_cli`（DEBUG 包打开了经 hub 的 Runtime CLI）不算手机的工具：hub 把它拿出来，不进 Agent 的工具列表、Agent 调不到，只给 `POST /api/v1/phone/runtime-cli`；只登记了它一个（脚本驱动的模拟器）时这条连接不算手机。 |
 | `register_desktop` | `device_name`：Mac App 登记成桌面端，不是手机——不接 `phone_*`，也不挡 hub 推送唤醒 iPhone（`hub/desktops.go`）；`device_id`（推送用的设备 id，同 `POST /api/v1/devices`：连着的这段时间 hub 不给这台 Mac 推「需要你处理」「Agent 做完」，它自己发本地通知；老 App 不带）。退出它就是吊销它的设备凭据（`DELETE /api/v1/auth/tokens/{id}`，hub 随即断开它的连接、删掉它登记的推送） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
@@ -1016,6 +1018,17 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
 - 手机接管（`features` 有 `terminal_control`，`docs/terminal.md` 第十一节）：订阅带 `control` 时网格是手机的尺寸，帧格式不变；
   键和新尺寸走 `terminal_input`；离开（退订 / 断开）后窗格回到电脑上的尺寸，还有别人在看就改回镜像（新 epoch）。
 
+
+## 文件自动刷新（#2439）
+
+网页的文件面板和 Git 面板开着时自动刷新（`web/src/lib/fs-live.ts`、`server/internal/hub/fswatch.go`、`server/internal/node/fswatch.go`）：
+
+- 页面发 `fs_watch`（上面的消息表），**每个会话目录一份、整份替换**；同一页面里文件面板和 Git 面板各自的需求在页面里合并，页面隐藏时发一份空的，回来时再发并刷新一遍。
+- hub 把所有页面的集合并起来，**整份替换**地调 node 的 `fs.watch`；node 重连后 hub 重发一次。页面连接断开、面板关闭、换页都会释放，最后一个页面走了 node 就停掉看的循环（不留 goroutine）。只有完全权限的设备能发 `fs_watch`。
+- node **轮询而不是 inotify / fsnotify**：`go.mod` 里没有 fsnotify，Linux 的 inotify 不能递归，各系统的行为也不同；只看页面打开着的那几个文件夹（每 2 秒一次 `ReadDir`，签名是名字 + 类型 + 大小 + 修改时间），Git 目录每 5 秒一次 `git status --porcelain=v2` 加上列出的改动文件的大小和时间（已改的文件再改一遍，`status` 文本不变，但大小和时间变了）。变了才推 `fs.changed`，没变不发任何东西。
+- 网页收到 `fs_changed` 后等 200 ms（再来就重新计时）合并成一次刷新：只重新读变了的文件夹，Git 状态和打开着的 diff 原位刷新，不闪加载动画。
+- node 先看 `fs.watch` 里的每个路径都过 `pathguard`（和 `fs.list` 同一道），被拒的路径只是读不出来、签名是 `err`，不会读它的内容。
+
 ## 引擎
 
 每台机器的 node 驱动一个「引擎」，即一组终端宿主：`herdr`（经典的 herdr 命令行，默认，原来的机器不受影响）、
@@ -1087,6 +1100,7 @@ hub → node 请求：
 | `terminal.watch` / `terminal.unwatch` | `{session_id, control?: {cols, rows, takeover}}`；watch → `{cols, rows, control}`，之后 node 推 `terminal.frame`；已经在推时 watch 会重开一条流（新 epoch、从整帧开始）。herdr 没有 observe 时报 `unsupported: …`。带 `control` 时 node 用 `herdr terminal session control` 接管（回包 `control: true`；旧 node 没有这个字段），槽位被占着又没 `takeover` 时报错 `code: attach_busy` |
 | `git.pull` | `{cwd}` → `{status, updated}`，同 REST 的安全拉取 |
 | `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |
+| `fs.watch` | #2439：`{dirs: [{path, cwd}], git: [cwd]}` → `{ok}`，**整份替换** node 要看的文件夹和 Git 目录（最多 32 个文件夹、8 个 Git 目录，空集合就停掉看的循环）；旧 node 报 unknown method，hub 只记一行日志，页面照旧手动刷新 |
 | `file.read` | `{path, cwd, offset}` → 同 REST 的 `file`（旧 node 不认 `offset`，回包也没有 `offset` / `next`） |
 | `fs.stat` | `{paths, cwd}` → `{stats}`，同 REST 的 `stat`（旧 node 报 unknown method，手机就不链接任何路径） |
 | `session.items` | `{session_id, before_seq, limit, turns, after_seq, lazy_images, fold_work, from_seq, through_seq}` → `{items, has_more, more_after, history, to_seq, from_seq}`（带 `through_seq` 时是折叠的那几行：`{items, more}`）（`from_seq` 只在 `after_seq` 请求里有；不带 `lazy_images: true` 时 node 把图片数据读回来，兼容旧 hub） |
@@ -1127,7 +1141,7 @@ hub → node 请求：
 hub → node 事件（按发出顺序处理）：`terminal.input {session_id, text}`、`terminal.resize {session_id, cols, rows}`、`terminal.scroll {session_id, lines, up, column?, row?}`（滚轮：herdr 交给接鼠标的程序，比如 Claude Code 的全屏渲染、Codex，否则滚 herdr 自己的历史；
 node 拆成 `lines` 个一行的事件，落在 `column` / `row` 那一格，没给就落在屏幕正中间，`docs/terminal.md` 第十六节）、`terminal.click {session_id, column, row}`（左键按下 + 松开）、`terminal.keepalive {session_ids}`（每 20 s，接管中的终端；node 75 s 没听到就放手）。
 
-node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`（相隔不到 30 ms 的帧由 node 合成一帧：diff 的字节接起来，整帧丢掉它前面的 diff）、`terminal.end {session_id, error, control?, taken?}`（流停了且起不来：会话不在跑、herdr 一直拒绝；`control` 时是接管结束了：`taken` 被别人抢走，否则租约到期）、
+node → hub 事件：`fs.changed {dirs?, git?}`（#2439：`fs.watch` 里的文件夹的列表内容变了（名字、大小、时间）、或 Git 目录的 `git status` 变了，hub 转成给相关页面的 `fs_changed`）、`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`（相隔不到 30 ms 的帧由 node 合成一帧：diff 的字节接起来，整帧丢掉它前面的 diff）、`terminal.end {session_id, error, control?, taken?}`（流停了且起不来：会话不在跑、herdr 一直拒绝；`control` 时是接管结束了：`taken` 被别人抢走，否则租约到期）、
 `session.items {session_id, items, history, from_seq, to_seq}`、`session.live {session_id, live}`（watch 中、工作中的 herdr Claude 的状态行，变了才发，结束补 `null`，见「实时状态」）、`session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}`（node 记下一次发送、认到它的那一行时各推一次，hub 存进 `sent_messages.echo`；已认到的不会被晚到的「还在等」盖掉）、`sessions.changed {sessions}`、
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
 `usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，

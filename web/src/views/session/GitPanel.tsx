@@ -1,7 +1,7 @@
 // A session's Git, read-only (docs/ios.md「Git」, iOS GitPane): branch, upstream ↑↓ and stashes; the changes with
 // their diffs (staged / unstaged when a file has both); the history, older pages on demand, each commit's message and
 // per-file diffs.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
 import {
   diffTotals,
@@ -12,6 +12,7 @@ import {
   isStaged,
   refNames,
   splitDiff,
+  syncBadge,
   type GitCommit,
   type GitDiff,
   type GitFile,
@@ -20,6 +21,7 @@ import {
 } from "../../lib/files";
 import { ago, shortPath } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
+import { useFsLive } from "../../lib/use-fs-live";
 import { Button, copyText, cx, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { PanelHeader } from "../SidePanel";
@@ -42,16 +44,28 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
   const [loadingMore, setLoadingMore] = useState(false);
   const [views, setViews] = useState<View[]>([]);
   const [reloads, setReloads] = useState(0);
+  const lastReload = useRef(reloads);
+  const head = useRef<string | undefined>(undefined);
+  // The status changed on the computer (lib/fs-live.ts): read it again without the panel showing a spinner.
+  const [live, setLive] = useState(0);
+
+  useFsLive(mid, cwd, [], true, (c) => c.git && setLive((n) => n + 1));
 
   useEffect(() => {
     if (!cwd) return;
     const ac = new AbortController();
-    setLoading(true);
+    const silent = live > 0 && reloads === lastReload.current;
+    lastReload.current = reloads;
+    if (!silent) setLoading(true);
     api<GitStatus>(`${base}/status?cwd=${enc(cwd)}`, { signal: ac.signal })
       .then((s) => {
         setStatus(s);
-        setOlder([]);
-        setNoMore(false);
+        // a silent read keeps the older pages the reader loaded, unless a commit moved the history under them
+        if (!silent || head.current !== s.head?.hash) {
+          setOlder([]);
+          setNoMore(false);
+        }
+        head.current = s.head?.hash;
         setError("");
       })
       .catch((e) => {
@@ -59,7 +73,7 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
       })
       .finally(() => !ac.signal.aborted && setLoading(false));
     return () => ac.abort();
-  }, [base, cwd, reloads]);
+  }, [base, cwd, reloads, live]);
 
   const loadMore = async () => {
     if (!status) return;
@@ -86,7 +100,7 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
         <PanelHeader
           icon="git"
           title="Git"
-          subtitle={status?.is_repo ? status.branch || t("session-gitpanel.detached_head") : shortPath(cwd)}
+          subtitle={status?.is_repo ? [status.branch || t("session-gitpanel.detached_head"), syncBadge(status)].filter(Boolean).join(" ") : shortPath(cwd)}
           onClose={onClose}
           actions={
             <>
@@ -132,7 +146,7 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
         </div>
       </div>
       {top?.kind === "diff" && (
-        <DiffView key={top.file.path} mid={mid} root={status?.root ?? cwd} base={base} cwd={cwd} file={top.file} staged={top.staged} onStaged={(staged) => setViews((vs) => [...vs.slice(0, -1), { ...top, staged }])} onBack={back} onClose={onClose} />
+        <DiffView key={top.file.path} mid={mid} root={status?.root ?? cwd} base={base} cwd={cwd} file={top.file} staged={top.staged} refreshed={live} onStaged={(staged) => setViews((vs) => [...vs.slice(0, -1), { ...top, staged }])} onBack={back} onClose={onClose} />
       )}
       {top?.kind === "commit" && <CommitView key={top.commit.hash} base={base} cwd={cwd} commit={top.commit} onOpen={push} onBack={back} onClose={onClose} />}
       {top?.kind === "commitFile" && (
@@ -277,6 +291,7 @@ function DiffView({
   cwd,
   file,
   staged,
+  refreshed,
   onStaged,
   onBack,
   onClose,
@@ -287,6 +302,8 @@ function DiffView({
   cwd: string;
   file: GitFile;
   staged: boolean;
+  /** Counts the Git changes seen on the computer: the diff is read again, in place, when it moves. */
+  refreshed: number;
   onStaged: (staged: boolean) => void;
   onBack: () => void;
   onClose: () => void;
@@ -294,8 +311,8 @@ function DiffView({
   const [diff, setDiff] = useState<GitDiff | null>(null);
   const [error, setError] = useState("");
   const load = useCallback(
-    (signal?: AbortSignal) => {
-      setDiff(null);
+    (signal?: AbortSignal, silent = false) => {
+      if (!silent) setDiff(null);
       setError("");
       if (compareKind(file.path)) return; // compared as versions, not as text
       api<GitDiff>(`${base}/diff?cwd=${enc(cwd)}&path=${enc(file.path)}&staged=${staged ? 1 : 0}`, { signal })
@@ -309,6 +326,14 @@ function DiffView({
     load(ac.signal);
     return () => ac.abort();
   }, [load]);
+  const seen = useRef(refreshed);
+  useEffect(() => {
+    if (seen.current === refreshed) return;
+    seen.current = refreshed;
+    const ac = new AbortController();
+    load(ac.signal, true);
+    return () => ac.abort();
+  }, [refreshed, load]);
   const both = isStaged(file) && hasUnstaged(file);
   return (
     <>

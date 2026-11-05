@@ -721,6 +721,7 @@ type client struct {
 	out            chan []byte
 	mu             sync.Mutex
 	subs           map[[2]string]bool
+	fsw            map[[2]string]fsWatchReq // {machine id, cwd} -> the folders this browser has open there (fswatch.go)
 	phone          bool
 	phoneID        string
 	phoneToolNames map[string]bool
@@ -1028,6 +1029,10 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		At     []int `json:"at"`
 		// terminal_input: a tap on a terminal the app drives, at a cell of its screen ([column, row], 0-based)
 		Click []int `json:"click"`
+		// fs_watch: the folders of machine_id this browser has open, and whether it shows cwd's Git status (fswatch.go)
+		Cwd   string   `json:"cwd"`
+		Paths []string `json:"paths"`
+		Git   bool     `json:"git"`
 	}
 	if json.Unmarshal(data, &msg) != nil {
 		return
@@ -1057,6 +1062,11 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		}
 	case "terminal_unsubscribe":
 		h.terminalUnsubscribe(c, msg.MachineID, msg.SessionID)
+	case "fs_watch": // #2439: full devices only, like listing the folders (an answer-only device cannot)
+		if c.role != roleFull {
+			return
+		}
+		h.fsWatchSet(c, msg.MachineID, cleanFsWatch(msg.Cwd, msg.Paths, msg.Git))
 	case "subscribe":
 		m := h.localMachine(msg.MachineID)
 		if m == nil {

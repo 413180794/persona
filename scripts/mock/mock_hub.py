@@ -6380,6 +6380,21 @@ MOCK_TREE = {
     "notes.txt": "Remember to water the plants.\n",
 }
 MOCK_REPO = "code/weather"
+# MOCK_FILES_LIVE=1 (#2439, the Files tree and its auto refresh): a deeper tree, folders Git ignores (the list marks them
+# `ignored`), a socket that remembers what each browser asked to watch (fs_watch, GET /mock/fs-watch) and a hook that
+# changes a folder and pushes fs_changed to the browsers watching it (GET /mock/fs-change?dir=…&add=…&git=1).
+FS_LIVE = bool(os.environ.get("MOCK_FILES_LIVE"))
+FS_WATCHES = {}  # websocket connection -> {(machine id, cwd): its last fs_watch message}
+FS_STATE = {"dirty": 0}
+FS_IGNORED = (".build", "DerivedData")
+if FS_LIVE:
+    for _k, _v in {"/DerivedData/": None, "/DerivedData/Build.log": "built\n", "/Sources/App/Models/": None,
+                   "/Sources/App/Models/Forecast.swift": "struct Forecast {\n    var hourly: [Double]\n}\n",
+                   "/Sources/App/Models/City.swift": "struct City {\n    var name: String\n}\n",
+                   "/Sources/App/Views/": None, "/Sources/App/Views/ContentView.swift": "import SwiftUI\n",
+                   "/Tests/AppTests/": None, "/Tests/AppTests/ForecastTests.swift": "import XCTest\n",
+                   "/.build/": None, "/.build/debug.yaml": "client: swift\n"}.items():
+        MOCK_TREE[MOCK_REPO + _k] = _v
 if os.environ.get("MOCK_FILE_LINKS"):
     preview = "# 文件预览链接回归\n\n" + "这段内容用于检查关闭链接后保留文件的阅读位置。\n\n" * 12
     preview += "[示例网页](https://example.com/file-preview)\n\n"
@@ -6456,6 +6471,20 @@ def mock_size(v):
 GIT_PULL_STATE = {"behind": 28, "mode": "success", "pulls": 0}
 
 
+def fs_changed(mid, dirs, git):
+    """Tell the browsers watching `dirs` (absolute) or the Git status of their folder what changed (hub/fswatch.go)."""
+    n = 0
+    with FAULT_LOCK:
+        targets = [(w["_send"], w) for ws in FS_WATCHES.values() for w in ws.values() if w.get("machine_id") == mid]
+    for send, w in targets:
+        hit = [d for d in dirs if d in (w.get("paths") or [])]
+        git_hit = bool(git and w.get("git"))
+        if hit or git_hit:
+            send({"type": "fs_changed", "machine_id": mid, "cwd": w.get("cwd"), "dirs": hit, "git": git_hit})
+            n += 1
+    return n
+
+
 def mock_files(p, q):
     """(json, status) for the files / Git endpoints, or None when p is not one of them."""
     parts = p.split("/")
@@ -6473,6 +6502,9 @@ def mock_files(p, q):
             if not is_dir: return {"error": "readdir %s: not a directory" % path}, 502
             ents = [{"name": k[len(rel):].rstrip("/"), "dir": k.endswith("/"), "size": mock_size(MOCK_TREE[k]),
                      "mtime": ago(hours=i + 1)} for i, k in enumerate(mock_children(rel))]
+            if FS_LIVE:
+                for e in ents:
+                    if rel.startswith(MOCK_REPO) and e["name"] in FS_IGNORED: e["ignored"] = True
             return {"path": path, "entries": ents, "truncated": False}, 200
         name = path.rsplit("/", 1)[-1]
         if is_dir:
@@ -6497,7 +6529,7 @@ def mock_files(p, q):
             return {"is_repo": True, "root": root, "branch": "main", "head": commits[0], "upstream": "origin/main",
                     "ahead": 0, "behind": GIT_PULL_STATE["behind"], "stashes": 1, "commits": commits, "files": files}, 200
         return {"is_repo": True, "root": root, "branch": "main", "head": MOCK_COMMITS[0], "upstream": "origin/main",
-                "ahead": 1, "behind": 0, "stashes": 1, "commits": MOCK_COMMITS[:30], "files": [
+                "ahead": 1 + FS_STATE["dirty"], "behind": FS_STATE["dirty"], "stashes": 1, "commits": MOCK_COMMITS[:30], "files": [
                     {"path": "Sources/App/main.swift", "index": "M", "worktree": "M", "added": 2, "deleted": 1, "binary": False},
                     {"path": "README.md", "index": ".", "worktree": "M", "added": 2, "deleted": 0, "binary": False},
                     {"path": "WeatherWidget/Provider.swift", "index": ".", "worktree": "M",
@@ -6505,7 +6537,9 @@ def mock_files(p, q):
                     {"path": "WeatherWidget/WidgetView.swift", "index": "A", "worktree": ".",
                      **diff_counts(MOCK_DIFFS["WeatherWidget/WidgetView.swift"]), "binary": False},
                     {"path": "docs/icon.png", "index": "?", "worktree": "?", "added": 0, "deleted": 0, "binary": True}]
-                + [{"path": rel, "index": ".", "worktree": "M", "added": 0, "deleted": 0, "binary": True} for rel in COMPARE_BLOBS]}, 200
+                + [{"path": rel, "index": ".", "worktree": "M", "added": 0, "deleted": 0, "binary": True} for rel in COMPARE_BLOBS]
+                + [{"path": "Sources/App/Models/Forecast.swift", "index": ".", "worktree": "M", "added": 3, "deleted": 0, "binary": False}
+                   for _ in range(min(FS_STATE["dirty"], 1))]}, 200
     if what == "git/diff":
         return {"path": arg("path"), "diff": MOCK_DIFFS.get(arg("path"), ""), "truncated": False}, 200
     if what == "git/log":
@@ -8748,6 +8782,19 @@ class H(BaseHTTPRequestHandler):
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if self.token_refused(): return
         if net_control(p, q): return self.send_json({"ok": True, **NET})
+        if p == "/mock/fs-watch" and FS_LIVE:  # what the browsers asked to watch now
+            with FAULT_LOCK:
+                sets = [{k: v for k, v in m.items() if k != "_send"} for ws in FS_WATCHES.values() for m in ws.values()]
+            return self.send_json({"watches": sets})
+        if p == "/mock/fs-change" and FS_LIVE:  # dir (under the machine's home) gains the file `add`; git=1: the Git status moves
+            mid = (q.get("machine") or ["macbook"])[0]
+            home, path = mock_abs(mid, (q.get("dir") or [""])[0], "")
+            add = (q.get("add") or [""])[0]
+            if add:
+                MOCK_TREE[mock_rel(home, path).rstrip("/") + "/" + add] = "added by the mock\n"
+            git = (q.get("git") or [""])[0] == "1"
+            if git: FS_STATE["dirty"] += 1
+            return self.send_json({"ok": True, "sent": fs_changed(mid, [path] if add else [], git), "path": path})
         if p == "/mock/git-pull" and os.environ.get("MOCK_GIT_PULL"):
             if "mode" in q:
                 GIT_PULL_STATE.update(behind=28, mode=q["mode"][0], pulls=0)
@@ -10620,6 +10667,13 @@ class H(BaseHTTPRequestHandler):
                         if NET["delay"] > 0: time.sleep(NET["delay"])
                         send({"type": "pong", "id": msg["id"]})
                     continue
+                if msg.get("type") == "fs_watch" and FS_LIVE:
+                    key = (msg.get("machine_id"), msg.get("cwd"))
+                    with FAULT_LOCK:
+                        sets = FS_WATCHES.setdefault(self.connection, {})
+                        if msg.get("paths") or msg.get("git"): sets[key] = {**msg, "_send": send}
+                        else: sets.pop(key, None)
+                    continue
                 if msg.get("type") == "register_phone":
                     with FAULT_LOCK:
                         PHONES[self.connection] = {"send": send, "registration": msg}
@@ -10758,6 +10812,7 @@ class H(BaseHTTPRequestHandler):
         with FAULT_LOCK:
             CLIENTS.pop(self.connection, None)
             PHONES.pop(self.connection, None)
+            FS_WATCHES.pop(self.connection, None)
         LIVE[:] = [x for x in LIVE if x[0] is not send]
         self.close_connection = True
 

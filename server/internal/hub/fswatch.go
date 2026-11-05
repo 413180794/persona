@@ -1,0 +1,212 @@
+package hub
+
+import (
+	"context"
+	"sort"
+	"time"
+)
+
+// Live Files / Git for the web panels (#2439, docs/web.md「文件与 Git 自动刷新」). A browser tells the hub, over its
+// WebSocket, which folders of one machine it has open: {type: "fs_watch", machine_id, cwd, paths, git}. Each call
+// replaces that browser's set for the machine and session folder (cwd); no paths and git false (or the socket
+// closing) releases it. The hub
+// sends the node the union of every browser's set (fs.watch, replaced as a whole) and routes the node's fs.changed
+// back as {type: "fs_changed", machine_id, cwd, dirs, git} to the browsers whose set it touches. Not in the event
+// log: a browser that was away re-lists when it comes back, so there is nothing to replay.
+//
+// Full devices only: it tells a browser what happens in a computer's folders, which an answer-only device cannot even
+// list (devicetokens.go answerReads).
+
+const (
+	maxFsWatchPaths = 32   // folders per browser and machine
+	maxFsPathLen    = 4096 // one path
+)
+
+// fsWatchReq is one browser's open folders on one machine.
+type fsWatchReq struct {
+	Cwd   string
+	Paths []string
+	Git   bool
+}
+
+func (r fsWatchReq) empty() bool { return len(r.Paths) == 0 && !r.Git }
+
+// cleanFsWatch bounds what a browser sent.
+func cleanFsWatch(cwd string, paths []string, git bool) fsWatchReq {
+	r := fsWatchReq{Cwd: cwd, Git: git}
+	if cwd == "" || len(cwd) > maxFsPathLen {
+		return fsWatchReq{}
+	}
+	seen := map[string]bool{}
+	for _, p := range paths {
+		if p == "" || len(p) > maxFsPathLen || seen[p] || len(r.Paths) >= maxFsWatchPaths {
+			continue
+		}
+		seen[p] = true
+		r.Paths = append(r.Paths, p)
+	}
+	return r
+}
+
+// fsWatchSet records a browser's open folders for a machine and brings the node's set in line.
+func (h *Hub) fsWatchSet(c *client, machineID string, req fsWatchReq) {
+	m := h.localMachine(machineID)
+	if m == nil {
+		return
+	}
+	if req.Cwd == "" { // nothing to key it by (cleanFsWatch refused it)
+		return
+	}
+	key := [2]string{machineID, req.Cwd}
+	c.mu.Lock()
+	if req.empty() {
+		delete(c.fsw, key)
+	} else {
+		if c.fsw == nil {
+			c.fsw = map[[2]string]fsWatchReq{}
+		}
+		c.fsw[key] = req
+	}
+	c.mu.Unlock()
+	h.fsWatchSync(m)
+}
+
+// fsWatchRelease drops everything a closing connection watched.
+func (h *Hub) fsWatchRelease(c *client) {
+	c.mu.Lock()
+	ids := map[string]bool{}
+	for key := range c.fsw {
+		ids[key[0]] = true
+	}
+	c.fsw = nil
+	c.mu.Unlock()
+	for id := range ids {
+		if m := h.localMachine(id); m != nil {
+			go h.fsWatchSync(m)
+		}
+	}
+}
+
+type fsWatchDirParam struct {
+	Path string `json:"path"`
+	Cwd  string `json:"cwd"`
+}
+
+type fsWatchParam struct {
+	Dirs []fsWatchDirParam `json:"dirs"`
+	Git  []string          `json:"git"`
+}
+
+// fsWatchUnion is every connected browser's folders on the machine, deduplicated.
+func (h *Hub) fsWatchUnion(machineID string) fsWatchParam {
+	var out fsWatchParam
+	dirs := map[fsWatchDirParam]bool{}
+	gits := map[string]bool{}
+	for _, c := range h.fsWatchClients() {
+		for _, r := range c.fsWatching(machineID) {
+			for _, p := range r.Paths {
+				d := fsWatchDirParam{Path: p, Cwd: r.Cwd}
+				if !dirs[d] {
+					dirs[d] = true
+					out.Dirs = append(out.Dirs, d)
+				}
+			}
+			if r.Git && !gits[r.Cwd] {
+				gits[r.Cwd] = true
+				out.Git = append(out.Git, r.Cwd)
+			}
+		}
+	}
+	sort.Slice(out.Dirs, func(i, j int) bool { return out.Dirs[i].Path < out.Dirs[j].Path })
+	sort.Strings(out.Git)
+	return out
+}
+
+// fsWatching is what the browser has open on a machine, one entry per session folder.
+func (c *client) fsWatching(machineID string) []fsWatchReq {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []fsWatchReq
+	for key, r := range c.fsw {
+		if key[0] == machineID {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func (h *Hub) fsWatchClients() []*client {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	list := make([]*client, 0, len(h.clients))
+	for c := range h.clients {
+		list = append(list, c)
+	}
+	return list
+}
+
+// fsWatchSync sends the machine's node the current union. Nothing is sent while there is nothing to watch and the
+// node was told nothing before; a node from before this (no fs.watch) answers with an error that is only logged,
+// the panels then refresh by hand as they always did.
+func (h *Hub) fsWatchSync(m *Machine) {
+	m.fswMu.Lock()
+	defer m.fswMu.Unlock()
+	p := h.fsWatchUnion(m.cfg.ID)
+	has := len(p.Dirs)+len(p.Git) > 0
+	if !has && !m.fswSent {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if p.Dirs == nil {
+		p.Dirs = []fsWatchDirParam{}
+	}
+	if err := m.call(ctx, "fs.watch", p, nil); err != nil {
+		if !m.fswWarned {
+			m.fswWarned = true
+			h.logf("[%s] fs.watch: %v", m.cfg.ID, err)
+		}
+		return
+	}
+	m.fswSent = has
+}
+
+// fsWatchReconnected runs when a node's connection is new to the hub (a reconnect, or the hub just started): the
+// node knows only what an earlier hub told it, which may be a set nobody shows any more, so it is told the union
+// again, an empty one included.
+func (h *Hub) fsWatchReconnected(m *Machine) {
+	m.fswMu.Lock()
+	m.fswSent = true
+	m.fswMu.Unlock()
+	h.fsWatchSync(m)
+}
+
+// fsChanged routes a node's fs.changed to the browsers that have the folders (or the Git directory) open.
+func (h *Hub) fsChanged(machineID string, dirs, git []string) {
+	if len(dirs)+len(git) == 0 {
+		return
+	}
+	changedDir := make(map[string]bool, len(dirs))
+	for _, d := range dirs {
+		changedDir[d] = true
+	}
+	changedGit := make(map[string]bool, len(git))
+	for _, g := range git {
+		changedGit[g] = true
+	}
+	for _, c := range h.fsWatchClients() {
+		for _, r := range c.fsWatching(machineID) {
+			hit := []string{}
+			for _, p := range r.Paths {
+				if changedDir[p] {
+					hit = append(hit, p)
+				}
+			}
+			gitHit := r.Git && changedGit[r.Cwd]
+			if len(hit) == 0 && !gitHit {
+				continue
+			}
+			c.sendJSON(map[string]any{"type": "fs_changed", "machine_id": machineID, "cwd": r.Cwd, "dirs": hit, "git": gitHit})
+		}
+	}
+}

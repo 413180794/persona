@@ -257,12 +257,15 @@ type DirEntry struct {
 	Symlink bool      `json:"symlink,omitempty"`
 	Size    int64     `json:"size"`
 	ModTime time.Time `json:"mtime"`
+	// Ignored: Git ignores it (the tree dims it); never set outside a repository or without git (fsignore.go).
+	Ignored bool `json:"ignored,omitempty"`
 }
 
 const maxDirEntries = 2000
 
-// listDir lists a directory for the file tree: directories first, then files, each by name (case-insensitive).
-func (n *Node) listDir(path, cwd string) (map[string]any, error) {
+// resolveDir turns a listing request's path (empty: cwd, ~/, relative to cwd) into the clean path shown to the app and
+// the real path behind it, refused when the path guard says so.
+func (n *Node) resolveDir(path, cwd string) (shown, real string, err error) {
 	path = strings.TrimSpace(path)
 	switch {
 	case path == "":
@@ -273,12 +276,21 @@ func (n *Node) listDir(path, cwd string) (map[string]any, error) {
 		path = filepath.Join(cwd, path)
 	}
 	if path == "" {
-		return nil, fmt.Errorf("empty path")
+		return "", "", fmt.Errorf("empty path")
 	}
 	path = filepath.Clean(path)
-	real, err := n.realPath(absPath(path))
+	real, err = n.realPath(absPath(path))
 	if err != nil {
-		return nil, explainDenied(path, n.home, err)
+		return "", "", explainDenied(path, n.home, err)
+	}
+	return path, real, nil
+}
+
+// listDir lists a directory for the file tree: directories first, then files, each by name (case-insensitive).
+func (n *Node) listDir(path, cwd string) (map[string]any, error) {
+	path, real, err := n.resolveDir(path, cwd)
+	if err != nil {
+		return nil, err
 	}
 	ents, err := os.ReadDir(real)
 	if err != nil {
@@ -306,5 +318,6 @@ func (n *Node) listDir(path, cwd string) (map[string]any, error) {
 		}
 		return strings.ToLower(list[i].Name) < strings.ToLower(list[j].Name)
 	})
+	markIgnored(real, list)
 	return map[string]any{"path": path, "entries": list, "truncated": len(ents) > maxDirEntries}, nil
 }

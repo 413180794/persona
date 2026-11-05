@@ -507,6 +507,7 @@ func (h *Hub) applyDeviceStates(st devicewire.States) {
 	type change struct {
 		m                           *Machine
 		ended, offline, missedHooks bool
+		began                       bool // the node's connection is a new one (or the hub just met it): it knows no fs.watch (fswatch.go)
 		oldMux                      *streams.Mux
 	}
 	var changes []change
@@ -540,6 +541,7 @@ func (h *Hub) applyDeviceStates(st devicewire.States) {
 		m.warmUntil = s.WarmUntil
 		c := change{m: m}
 		c.ended = wasConn && (!s.Connected || !s.ConnectedAt.Equal(wasAt))
+		c.began = s.Connected && (!wasConn || !s.ConnectedAt.Equal(wasAt))
 		if c.ended || s.Connected && !wasConn {
 			c.oldMux, m.streams = m.streams, nil
 		}
@@ -606,6 +608,9 @@ func (h *Hub) applyDeviceStates(st devicewire.States) {
 	for _, c := range changes {
 		if c.offline {
 			h.sessionsChanged(c.m)
+		}
+		if c.began {
+			go h.fsWatchReconnected(c.m) // the web panels' open folders (#2439)
 		}
 	}
 }

@@ -56,6 +56,11 @@ type Machine struct {
 	lastSeen  time.Time
 	sessions  []proto.Session
 	watchers  map[string]int // session id -> subscribed clients
+	// The web panels' open folders on this machine (fswatch.go): fswMu orders the fs.watch calls, fswSent says the
+	// node was given a non-empty set, fswWarned that a failure was logged (a node without fs.watch).
+	fswMu     sync.Mutex
+	fswSent   bool
+	fswWarned bool
 	lastSeq   map[string]int // session id -> highest item seq seen
 	hooked    map[string]bool
 	// stopSig: the signature of the reply each session's latest Stop ended its turn with; pushedSig: the one a
@@ -299,6 +304,14 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		if json.Unmarshal(params, &p) == nil {
 			m.setSessions(p.Sessions)
+		}
+	case "fs.changed": // a folder or Git directory a web panel has open changed (fswatch.go)
+		var p struct {
+			Dirs []string `json:"dirs"`
+			Git  []string `json:"git"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			m.hub.fsChanged(m.cfg.ID, p.Dirs, p.Git)
 		}
 	case "sessions.revs":
 		var p struct {

@@ -58,6 +58,7 @@ type Node struct {
 	// claudeStartDir: the CLAUDE_CONFIG_DIR plain `claude` is started with (hub.json machines[].claude_start_dir,
 	// managed.go); "" leaves claude to its default.
 	claudeStartDir atomic.Pointer[string]
+	fsw            fsWatcher // the folders the web panels have open (fswatch.go)
 
 	mu      sync.Mutex
 	state   *stateFile
@@ -246,6 +247,8 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 			n.onTerminalEvent(event, params)
 		}
 	}
+	n.fsw.start(ctx, func(c fsChanged) { _ = n.peer.Notify("fs.changed", c) })
+	defer n.fsw.close()
 	n.cdirs.report = func(dirs []string) { _ = n.peer.Notify("claude.dirs", map[string]any{"dirs": dirs}) }
 	n.codices.report = func(cfg proto.CodexConfig) { _ = n.peer.Notify("codex.inventory", cfg) }
 	go n.runCodex(ctx)
@@ -942,6 +945,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return ok(n.syncTodoTokens(ctx, in.Tokens))
 	case "fs.list":
 		return n.listDir(p.Path, p.Cwd)
+	case "fs.watch": // the folders and Git directories the web panels have open (fswatch.go)
+		return n.fsWatch(params)
 	case "git.status":
 		return n.gitStatus(ctx, p.Cwd)
 	case "git.pull":

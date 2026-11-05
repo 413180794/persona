@@ -1,0 +1,14 @@
+{
+  "tree": "ファイル",
+  "treeView": "ツリー表示",
+  "loading": "読み込み中",
+  "emptyFolder": "空のフォルダー",
+  "hiddenOnly": "隠しファイルのみ",
+  "showHidden": "隠しファイルを表示",
+  "openFailed": "このフォルダーを開けません",
+  "openFailedInline": "開けません: {error}",
+  "retry": "再試行",
+  "tooMany": "ファイルが多すぎるため、先頭の 2000 件のみ表示しています",
+  "gitIgnored": "{path}（Git で無視）",
+  "copyPath": "パスをコピー"
+}

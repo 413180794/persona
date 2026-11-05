@@ -9,6 +9,8 @@ export interface FsEntry {
   symlink?: boolean;
   size: number;
   mtime?: string;
+  /** Git ignores it (the tree dims it); only set inside a repository. */
+  ignored?: boolean;
 }
 
 export interface FsListing {
@@ -174,6 +176,22 @@ export function gitMark(status: GitStatus | null | undefined, full: string, dir:
   const r = rel.join("/");
   const f = dir ? status.files.find((x) => x.path.startsWith(r + "/")) : status.files.find((x) => x.path === r);
   return f ? gitLetter(f) : null;
+}
+
+/** The Git panel's header badge: commits ahead (↑) and behind (↓) the upstream and `*` for a dirty tree; "" when none. */
+export function syncBadge(status: GitStatus | null | undefined): string {
+  const parts = aheadBehind(status) ? [aheadBehind(status)] : [];
+  if (status?.is_repo && status.files.length > 0) parts.push("*");
+  return parts.join(" ");
+}
+
+/** "↑2 ↓1": commits ahead of and behind the upstream, "" when level (or not a repository). */
+export function aheadBehind(status: GitStatus | null | undefined): string {
+  if (!status?.is_repo) return "";
+  const parts: string[] = [];
+  if ((status.ahead ?? 0) > 0) parts.push(`↑${status.ahead}`);
+  if ((status.behind ?? 0) > 0) parts.push(`↓${status.behind}`);
+  return parts.join(" ");
 }
 
 /** Branch / tag names pointing at a commit ("HEAD -> main, origin/main" → ["main", "origin/main"]). */
