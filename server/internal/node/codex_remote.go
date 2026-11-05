@@ -313,6 +313,7 @@ type remoteThreadData struct {
 	Cwd            string          `json:"cwd"`
 	Path           string          `json:"path"`
 	ParentThreadID string          `json:"parentThreadId"`
+	Ephemeral      bool            `json:"ephemeral"`
 	Source         json.RawMessage `json:"source"`
 	Status         struct {
 		Type        string   `json:"type"`
@@ -353,7 +354,9 @@ func (c *codexRemote) refresh() error {
 			continue
 		}
 		d := reply.Thread
-		if d.ID != raw || d.Status.Type == "notLoaded" {
+		// Ephemeral threads are Codex's own background jobs (a title, say): no rollout, never resumable, and they stay
+		// loaded as "active" after they finish. Not a conversation, so not a session.
+		if d.ID != raw || d.Status.Type == "notLoaded" || d.Ephemeral {
 			continue
 		}
 		path := rolloutPath(c.spec.Home, raw)

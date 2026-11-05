@@ -92,6 +92,9 @@
   看一次输入框，还是刚发的那段（`[Image #n]` / `[Pasted text #n]` 去掉后比开头几个字）就补一次回车；框空了、或者是别的内容，什么都不按。
   只看等完以后的那一次：第一版发完马上就读、一看不对就放弃，11-01 那次就是这样漏掉的（刚粘贴完的一瞬间框里可能还不是这段）。
 - Codex app-server 接入（2026-11-02）：Unix socket 中是 WebSocket，不是 JSON-lines；外部 stdio 没有第二 attach 口。目录发现不 resume，控制只回原 loaded owner；未知/取消请求不发 error/decline，否则也可能消费桌面的审批 callback。`serverRequest/resolved` 撤卡记 dismissed，不生成批准；代际和带类型 request ID 一起去重。发送 admission 后的通用 server error 也不能当「确定未发送」自动重试，旧 outbox 的操作标识不按一天过期（`docs/codex-app-server.md`）。
+- Codex app-server 的 `thread/loaded/list` 不全是对话（2026-11-05，#2118，0.166）：TUI 在共用的 managed daemon 里起 `ephemeral: true` 的 thread 做后台小任务
+  （`threadSource: "thread_title"`，起标题），没有 `path` / rollout，跑完后仍挂在 loaded 里、状态一直 `active`。不看 `ephemeral` 就会在 Agents 页冒出一排同目录、同一秒、没标题的「工作中」Codex。
+  列会话前先跳过 `ephemeral`；它们也不支持 `includeTurns`（回 -32600）。
 - `codex app-server` 的协议以导出的为准（`codex app-server generate-ts --out <目录>`），实验接口（`thread/backgroundTerminals/*`、`process/*`）
   要加 `--experimental` 才导出来，用的时候 `initialize` 要带 `capabilities.experimentalApi: true`。Codex 助手的其他坑见 `assistant.md`。
   Codex 的 assistant rollout 开头是几十 KB 的指令（AGENTS.md、快照），第一条用户消息在 70 KB 之后：只扫开头 32 KB 找标题会找不到（`readQuickMeta`）。

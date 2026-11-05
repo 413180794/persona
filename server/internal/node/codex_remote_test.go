@@ -33,6 +33,7 @@ type remoteFixture struct {
 	drop          string
 	reject        string
 	resumeRequest bool
+	ephemeral     string
 }
 
 func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +57,7 @@ func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.got = append(f.got, m)
 		ids := append([]string(nil), f.threads...)
-		drop, reject := f.drop, f.reject
+		drop, reject, ephemeral := f.drop, f.reject, f.ephemeral
 		f.mu.Unlock()
 		if m.Method == "" {
 			f.mu.Lock()
@@ -92,6 +93,10 @@ func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
 				result = map[string]any{"data": ids}
 			}
 		case "thread/read":
+			if thread == ephemeral {
+				// What Codex 0.166's TUI leaves loaded after naming a thread.
+				d = map[string]any{"id": thread, "ephemeral": true, "path": nil, "threadSource": "thread_title", "cwd": f.home, "status": map[string]any{"type": "active", "activeFlags": []string{}}}
+			}
 			result = map[string]any{"thread": d}
 		case "thread/resume":
 			result = map[string]any{"thread": d}
@@ -402,6 +407,33 @@ func TestCodexRemotePrivateUnixWebSocket(t *testing.T) {
 		if _, _, err := validateCodexEndpoint(endpoint); err == nil {
 			t.Fatalf("accepted unsafe endpoint %q", endpoint)
 		}
+	}
+}
+
+// An ephemeral thread is Codex's own background job, not a conversation: it never becomes a session, even though the
+// app-server keeps it loaded and active.
+func TestCodexRemoteSkipsEphemeralThreads(t *testing.T) {
+	n := remoteTestNode(t)
+	home := t.TempDir()
+	f, c := connectRemoteFixture(t, n, home, "one", remoteRaw)
+	f.mu.Lock()
+	f.threads, f.ephemeral = []string{remoteRaw, remoteOther}, remoteOther
+	f.mu.Unlock()
+	if err := c.refresh(); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	_, kept := c.threads[remoteOther]
+	c.mu.Unlock()
+	if kept {
+		t.Fatal("an ephemeral thread was kept as a loaded thread")
+	}
+	var ids []string
+	for _, s := range n.codexSessions(map[string]bool{}) {
+		ids = append(ids, s.SourceThreadID)
+	}
+	if len(ids) != 1 || ids[0] != remoteRaw {
+		t.Fatalf("sessions = %v, want only %s", ids, remoteRaw)
 	}
 }
 
