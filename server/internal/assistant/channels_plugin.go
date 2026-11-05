@@ -402,7 +402,8 @@ func (s *Service) channelInteraction(ix proto.Interaction) {
 		if v.Capabilities.Asks != channel.AsksText || !featureOn(v, channel.FeatureAsks) {
 			continue
 		}
-		if !featureOn(v, channel.FeatureAllAsks) && !s.channelDrives(ctx, v.ID, ix.MachineID, ix.SessionID) {
+		// 全部提问 does not take a health conversation's: only one the channel drives itself (health.go).
+		if !s.channelDrives(ctx, v.ID, ix.MachineID, ix.SessionID) && (!featureOn(v, channel.FeatureAllAsks) || s.ixInHealth(ctx, ix)) {
 			continue
 		}
 		s.askInChannel(ctx, v.ID, ix)
@@ -571,8 +572,8 @@ func (s *Service) extensionMirror(ctx context.Context, machine, session string) 
 	if !main && task == "" {
 		return
 	}
-	if sess, ok := s.session(ctx, machine, session); !ok || sess.WokeByTask && !main {
-		return
+	if sess, ok := s.session(ctx, machine, session); !ok || sess.WokeByTask && !main || spaceOf(sess) == SpaceHealth {
+		return // a health task's runs stay off the channels (health.go)
 	}
 	asked, answer, ok := s.channelLastTurn(ctx, machine, session)
 	if !ok {

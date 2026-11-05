@@ -2,10 +2,13 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"path"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -64,3 +67,48 @@ func spaceOf(c proto.Session) string {
 
 // validSpace: "" (the assistant's own) or "health".
 func validSpace(space string) bool { return space == "" || space == SpaceHealth }
+
+// What leaves the health space (docs/health.md「外发」, #3194): the user may share their health with anyone they
+// like (a doctor, a coach, family), so nothing is refused for being health. What must not happen is it leaving without
+// them knowing: a push or a channel says only that there is news, and a hand-off to somewhere outside the space is
+// confirmed on the phone each time. The space is the conversation's (the trusted session), never a guess at the text.
+
+// inHealth: conversation self runs in the health space.
+func (s *Service) inHealth(ctx context.Context, self string) bool {
+	space, _ := s.selfSpace(ctx, self)
+	return space == SpaceHealth
+}
+
+// ixInHealth: interaction ix belongs to a health conversation (its directory, else its conversation's space).
+func (s *Service) ixInHealth(ctx context.Context, ix proto.Interaction) bool {
+	if ix.Cwd != "" {
+		return identity.SpaceOf(ix.Cwd) == SpaceHealth
+	}
+	return ix.SessionID != "" && ix.MachineID == s.settings(ctx).MachineID && s.inHealth(ctx, ix.SessionID)
+}
+
+// healthNotice is what a push or a channel says for a health conversation: that there is news, not the news.
+func healthNotice(l i18n.Lang) (title, body string) {
+	return i18n.T(l, "assistant-health.notice_title"), i18n.T(l, "assistant-health.notice_body")
+}
+
+// confirmOutbound asks the phone before health conversation self hands what (said as summary) to somewhere outside
+// the space (tool: another agent, a new one): true when the user allows it, at once when self is not in the space.
+func (s *Service) confirmOutbound(ctx context.Context, machine, self, tool, summary string, input json.RawMessage) (bool, error) {
+	if !s.inHealth(ctx, self) {
+		return true, nil
+	}
+	l := s.lang(ctx)
+	now := time.Now().UTC()
+	ix := proto.Interaction{ID: "ix_" + randomHex(6), MachineID: machine, SessionID: self, Kind: proto.IxPermission, ToolName: tool,
+		Summary: i18n.T(l, "assistant-health.outbound", i18n.Args{"what": summary}), ToolInput: input, SessionTitle: "Persona",
+		CreatedAt: now, ExpiresAt: now.Add(15 * time.Minute)}
+	if c, ok := s.session(ctx, machine, self); ok {
+		ix.Cwd = c.Cwd
+	}
+	r, err := s.ask(ctx, ix)
+	if err != nil {
+		return false, err
+	}
+	return r.Allow != nil && *r.Allow, nil
+}

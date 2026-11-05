@@ -280,7 +280,10 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 	if _, err := s.appendFeed(ctx, sessionID, feedPlan, p.ID, map[string]any{"plan": p}); err != nil {
 		s.logf("task plan %s: feed: %v", p.ID, err)
 	}
-	if !s.planStartsAtOnce(ctx, p.Tasks) {
+	// A plan from the health space hands its prompts to agents outside it: it waits for the user's 开始 on its card,
+	// whatever would start it at once, and its push names no task (health.go).
+	health := s.inHealth(ctx, sessionID)
+	if health || !s.planStartsAtOnce(ctx, p.Tasks) {
 		s.event(ctx, map[string]any{"type": "task_plan", "plan": p})
 		// A card below the answer is easy to miss: push it as well.
 		titles := make([]string, 0, len(p.Tasks))
@@ -297,7 +300,11 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		if m, ok := s.device(ctx, here); ok {
 			machineName = m.Name
 		}
-		s.push(ctx, Notification{Subtitle: machineName, DeviceID: here, SessionID: sessionID, Title: title, Body: strings.Join(titles, i18n.T(l, "assistant-tasks.list_sep"))})
+		body := strings.Join(titles, i18n.T(l, "assistant-tasks.list_sep"))
+		if health {
+			title, body = healthNotice(l)
+		}
+		s.push(ctx, Notification{Subtitle: machineName, DeviceID: here, SessionID: sessionID, Title: title, Body: body})
 		return fmt.Sprintf("Plan %s is on the user's screen as a card and pushed to their phone; nothing has started. "+
 			"Don't wait for it: carry on. When they start it, the tasks show up in the context snapshot.", p.ID), nil
 	}

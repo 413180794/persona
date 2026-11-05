@@ -1202,7 +1202,7 @@ func (h *Hub) assistantAsker(sessionID, machine string) asker {
 func (h *Hub) approve(ctx context.Context, by asker, tool, summary string, input json.RawMessage) bool {
 	ix := proto.Interaction{
 		ID: "ix_" + randomHex(6), MachineID: by.machine, SessionID: by.session, Kind: proto.IxPermission, ToolName: tool, Summary: summary,
-		ToolInput: input, SessionTitle: "Persona", CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC(),
+		ToolInput: input, SessionTitle: "Persona", Cwd: h.askerCwd(by), CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC(),
 	}
 	r, _ := h.waitInteraction(ctx, ix)
 	return r.Allow != nil && *r.Allow

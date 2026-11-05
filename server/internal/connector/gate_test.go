@@ -73,3 +73,23 @@ func TestConfirmAlwaysStillAsks(t *testing.T) {
 		t.Fatalf("the user's own write was gated: %+v, asked %d, did %v", res, asked, c.did)
 	}
 }
+
+// A call marked ConfirmEach (a health conversation's, docs/health.md「外发」) asks even where a rule allows it; a
+// deny rule still refuses without asking.
+func TestConfirmEachClampsAllow(t *testing.T) {
+	asked := 0
+	yes := func(context.Context, string, json.RawMessage) bool { asked++; return true }
+	c := guarded{&fake{id: "example", status: Status{State: StateOK}}}
+	r := NewRegistry([]Rule{{Connector: "*", Action: "example_note", Decision: Allow}, {Connector: "*", Action: "*", Decision: Deny}})
+	_ = r.Add(c)
+	each := ConfirmEach(context.Background())
+	if res := r.Call(each, "example_note", nil, yes); res.IsError || asked != 1 || len(c.did) != 1 {
+		t.Fatalf("ConfirmEach did not ask: %+v, asked %d, did %v", res, asked, c.did)
+	}
+	if res := r.Call(context.Background(), "example_note", nil, yes); res.IsError || asked != 1 || len(c.did) != 2 {
+		t.Fatalf("without ConfirmEach the allow rule asked: %+v, asked %d", res, asked)
+	}
+	if res := r.Call(each, "example_comment", nil, yes); !res.IsError || asked != 1 {
+		t.Fatalf("a deny rule asked or ran: %+v, asked %d", res, asked)
+	}
+}

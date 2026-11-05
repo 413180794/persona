@@ -17,7 +17,7 @@
 | Health 首页：最近的数据和趋势、同步的记录、推荐提问、以往的健康对话、已连接的账号（[2]） | `/health` 页：一句隐私说明、数据来源（Apple Health / Health Connect 经手机）、推荐提问、以往的健康对话、健康记忆 | 首页显示最近的趋势卡片（接 #886 的结构化卡片） |
 | Health 的记忆单独存，不会流回普通对话；用户能查看、删除（[3]） | 健康空间有自己的目录，auto memory 只属于它；网页上能看、能删；主对话的工具看不到健康对话 | 健康空间只给健康相关的工具 |
 | 在普通对话里聊健康，会建议挪到 Health（[4]） | 不做 | 主对话聊到健康时建议「去健康里继续」 |
-| 连接的数据不用于训练，有额外的加密和隔离（[5]） | 数据都在你自己的 hub 和电脑上；健康对话调 `kb_update` 被拒绝（代码拦）；不发到别的对话靠对话工具只认同一空间 | 更多数据源：病历、体检报告上传、录音里的心率 / HRV（#1950） |
+| 连接的数据不用于训练，有额外的加密和隔离（[5]） | 数据都在你自己的 hub 和电脑上；健康对话调 `kb_update` 被拒绝（代码拦）；不发到别的对话靠对话工具只认同一空间；推送不带正文，交给 Agent、发邮件和飞书每次在手机上确认（「外发」） | 更多数据源：病历、体检报告上传、录音里的心率 / HRV（#1950） |
 | 不替代医生的诊断和治疗 | CLAUDE.md 写明不诊断、不开药、不改处方，危险信号第一句就让用户就医 | |
 
 来源：
@@ -35,7 +35,7 @@
   `identity.HealthDir`、`identity.SpaceHealth`、`identity.SpaceOf` 在 `server/internal/identity/paths.go`；`IsAssistantDir` 对健康目录也成立，
   所以健康对话和助手对话一样是「助手的对话」（`assistant: true`），用同一套工具、授权和提问。
 - **CLAUDE.md**：健康空间有自己的一份 `server/internal/prompts/assistant/health_claude_md.md`（golden：`server/internal/assistant/testdata/prompts/health_claude_md.golden`）：
-  只聊健康；用 `phone_health_summary` 读数据、`phone_health_write_sample` 记数据（手机上确认）；不写知识库、不把健康内容发到别的对话；
+  只聊健康；用 `phone_health_summary` 读数据、`phone_health_write_sample` 记数据（手机上确认）；不写知识库、不把健康内容发到别的对话；用户要分享给别人（医生、教练、家人）就帮他发，发送在手机上确认；
   不诊断、不开药，危险信号先让用户就医；讲一组数字时附图表卡片。连接器和插件的 skill 和助手目录一样装进去，但插件给助手的说明（`plugins.Instructions`）不拼进健康的 CLAUDE.md：那些说明是给主对话的工作场景写的，第一版有意不带。
 - **记忆**：Claude Code 的 auto memory 按工作目录分（`~/.claude/projects/<编码后的目录>/memory/`），健康目录的记忆只有健康对话读写，主对话读不到，反过来也一样。
   记忆接口带 `?space=health` 读写的就是这一份。
@@ -69,7 +69,25 @@
 - 健康对话调 `kb_update` 直接报错：健康信息不进知识库（`assistant/tools.go` `runTool`）。知识库的读（`kb_search` 等）照常能用。
 - 健康对话里建的定时跟进、定时任务（`schedule_followup`、`schedule_routine`）记下所在空间（`Task.space`），到点要新开对话时开在健康空间。
 - 判断不出调用的对话在哪个空间时（助手的机器暂时列不出它），按主空间处理：只够得到主空间的对话，健康对话无论如何都列不出来、读不到。最坏的情况是一段健康对话暂时看到主空间的列表，不会反过来把健康内容露给别处。
-- 其余工具（手机工具、提醒、Agents……）第一版两个空间都有，缩小健康空间的工具在「之后」里。
+- `list_followups` 只列本空间的定时任务；`schedule_routine` 带 id 改、`delete_routine` / `cancel_followup` 删别的空间的任务都当作找不到。
+- 其余工具（手机工具、提醒、邮件、飞书、Agents……）两个空间都有：健康信息可以发给用户想发的人，规矩见下面「外发」。
+
+## 外发（#3194）
+
+边界不是「健康信息不能出去」，而是「不能在用户不知道的情况下出去」。用户把体检结果发邮件给医生、经飞书发给健身教练或家人都是正当的，照常能做；
+判断一律看对话所在的空间（可信的会话目录），不用模型判断「这句话算不算健康」。
+
+| 出口 | 健康对话里怎么样 | 代码 |
+| --- | --- | --- |
+| 推送：一轮结束、`notify_user`、等你开始的计划、定时任务失败 | 只说「健康空间有新消息」，不带正文，也不带对话标题、任务名 | `hub/machine.go` `doneAlert`、`assistant/tools.go`、`tasks.go`、`schedule.go` |
+| 提问 / 授权卡的推送 | 锁屏上同样只说「健康」，卡片内容在 App 里看 | `hub/push.go` `interactionPayloadIn`（看 `ix.Cwd`） |
+| 飞书机器人、插件渠道 | `notify_user` 的转发只说有新消息；定时任务那段对话的回答不镜像；「全部卡片」「全部提问」不包括健康对话的卡（渠道自己正驱动的那段对话照常） | `assistant/feishu_cards.go`、`channels_plugin.go` |
+| `agent_send` / `agent_start` | 每次先在手机上确认，卡片写明交出去以后对方那边的记录不会随健康空间删除 | `assistant/health.go` `confirmOutbound` |
+| `task_plan` | 不自动开始，一律等用户在计划卡上点开始 | `assistant/tasks.go` |
+| `mail_send` 和连接器的写操作 | 每次在手机上确认，闸门的 allow 规则不放行（deny 仍拒绝） | `connector.ConfirmEach`，`hub/connectors.go` |
+| 飞书写操作（lark-cli、命令闸门） | 每次在手机上确认，allow 规则不放行，没有「本会话总是允许」；读照常 | `node/larkgate.go` `larkCheck` |
+
+同一空间里的记忆、对话、提醒不加确认。
 
 ## 网页入口
 
@@ -95,11 +113,13 @@
 
 - 手机上的健康 tab，首页显示最近的趋势卡片（#886 的结构化卡片）。
 - 主对话聊到健康时建议「去健康里继续」。
-- 健康空间只给健康相关的工具（缩小权限）；diet-advice 的推送进健康空间。
+- diet-advice 的推送进健康空间。
+- 主对话能不能直接读健康目录的文件（Read / Bash）：要实测，目录分开不等于文件读不到。
 - 更多数据源：病历、体检报告上传、录音里的心率 / HRV（#1950）。
 
 ## 怎么验证
 
-- 服务端（在 `server/` 里）：`go test ./internal/assistant -run Health`（`server/internal/assistant/health_test.go`：开健康对话、列表分开、`main` 和不认识的 `space` 被拒、工具不跨空间、golden）、`go test ./internal/identity`（健康目录、`SpaceOf`、`IsAssistantDir`）。
+- 服务端（在 `server/` 里）：`go test ./internal/assistant -run Health`（`server/internal/assistant/health_test.go`：开健康对话、列表分开、`main` 和不认识的 `space` 被拒、工具不跨空间、外发、golden）、
+  `go test ./internal/hub -run Health`（推送不带正文）、`go test ./internal/connector -run ConfirmEach`、`go test ./internal/node -run LarkGateHealth`、`go test ./internal/identity`（健康目录、`SpaceOf`、`IsAssistantDir`）。
   改了 `health_claude_md.md` 要更新 golden 并看 diff（`docs/prompts.md`）。
 - 网页：`cd web && npm test && npm run build`。

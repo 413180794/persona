@@ -144,7 +144,7 @@ func TestScheduleToolsTakePush(t *testing.T) {
 	if _, err := tool("main", "schedule_routine", map[string]any{"id": fu.ID, "push": "asked"}); err != nil {
 		t.Fatal(err)
 	}
-	list := h.describeSchedule(ctx)
+	list := h.describeSchedule(ctx, "")
 	line := ""
 	for _, l := range strings.Split(list, "\n") {
 		if strings.Contains(l, fu.ID) {

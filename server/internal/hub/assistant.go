@@ -45,3 +45,21 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 // assistantSpace is the space of an assistant conversation working in cwd: "health" for the health space's
 // (docs/health.md), "" for the assistant's own.
 func assistantSpace(cwd string) string { return identity.SpaceOf(cwd) }
+
+// inHealth: an assistant conversation working in cwd is in the health space. What it says leaves the space only with
+// the user knowing (docs/health.md「外发」): its pushes say there is news, not the news, and its writes are confirmed
+// on the phone each time, whatever the gate rules allow.
+func inHealth(cwd string) bool { return cwd != "" && assistantSpace(cwd) == identity.SpaceHealth }
+
+// askerCwd is the directory of the conversation by is ("" when it names none or the hub does not list it).
+func (h *Hub) askerCwd(by asker) string {
+	if by.session == "" {
+		return ""
+	}
+	if m := h.machineByID(by.machine); m != nil {
+		if s, ok := m.session(by.session); ok {
+			return s.Cwd
+		}
+	}
+	return ""
+}

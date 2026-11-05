@@ -10,5 +10,7 @@
   "agent_permission": "{agent} needs permission",
   "screen_body": "Open Persona to see the screen and respond",
   "fill_in_suffix": " (open Persona to fill in)",
-  "done_body": "Done"
+  "done_body": "Done",
+  "health_title": "Health",
+  "health_body": "New in your health space. Open Persona to see it."
 }

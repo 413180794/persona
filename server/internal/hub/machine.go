@@ -733,10 +733,6 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	if m.stopDuplicate(id) {
 		return
 	}
-	title := s.Title
-	if title == "" || title == "Claude Code" {
-		title = path.Base(s.Cwd)
-	}
 	place := m.cfg.Name
 	if s.SpaceName != "" {
 		place += " · " + s.SpaceName
@@ -744,9 +740,23 @@ func (m *Machine) notifyFinished(id string, gen int) {
 			place += " › " + s.SlotName
 		}
 	}
-	head, text := "✅ "+title, s.LastText
+	head, text := doneAlert(m.hub.userLang(), s)
+	long := ncfg.longTurn()
+	m.hub.notifyDone("done", m.cfg.ID, place, id, head, text, pushWants{Kind: "done", Took: took, Long: long})
+}
+
+// doneAlert is the title and body of the push for s's finished turn, in l.
+func doneAlert(l i18n.Lang, s proto.Session) (head, text string) {
+	if inHealth(s.Cwd) { // the lock screen hears there is news, not what it is, nor the conversation's title
+		return "✅ " + i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
+	}
+	title := s.Title
+	if title == "" || title == "Claude Code" {
+		title = path.Base(s.Cwd)
+	}
+	head, text = "✅ "+title, s.LastText
 	if text == "" {
-		text = i18n.T(m.hub.userLang(), "hub-machine.done")
+		text = i18n.T(l, "hub-machine.done")
 	}
 	if w := s.Work; w != nil && w.Line != "" {
 		switch w.Phase {
@@ -763,8 +773,7 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	} else if cutOff(text) {
 		head, text = "⚠️ "+title, interruptedSummary+"："+strings.TrimSpace(text)
 	}
-	long := ncfg.longTurn()
-	m.hub.notifyDone("done", m.cfg.ID, place, id, head, text, pushWants{Kind: "done", Took: took, Long: long})
+	return head, text
 }
 
 // nodeMismatch: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>

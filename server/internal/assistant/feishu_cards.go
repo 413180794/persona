@@ -30,7 +30,8 @@ func (s *Service) feishuInteraction(ix proto.Interaction) {
 	if !ready || !f.Cards {
 		return
 	}
-	if !f.AllCards && !s.botDrives(ctx, ix.MachineID, ix.SessionID) {
+	// 全部卡片 does not take a health conversation's: only one the chat drives itself (health.go).
+	if drives := s.botDrives(ctx, ix.MachineID, ix.SessionID); !drives && (!f.AllCards || s.ixInHealth(ctx, ix)) {
 		return
 	}
 	if s.interactionEnded(ix.ID) { // ended while this looked at the bot: not asked (s.chans before s.fbot, never in it)
@@ -668,7 +669,7 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 		return // its notify_user already went to Feishu
 	}
 	sess, ok := s.session(ctx, machine, session)
-	if !ok || sess.WokeByTask && !main {
+	if !ok || sess.WokeByTask && !main || spaceOf(sess) == SpaceHealth { // a health task's runs stay off Feishu (health.go)
 		return
 	}
 	asked, answer, ok := s.channelLastTurn(ctx, machine, session)

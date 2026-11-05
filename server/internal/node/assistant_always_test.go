@@ -3,6 +3,8 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -79,5 +81,43 @@ func TestLarkGateAlwaysKeys(t *testing.T) {
 	// This node remembers too: the same route is not asked about again while it runs.
 	if d, _, _ := n.larkCheck(context.Background(), "s1", cwd, `ex POST /conversations/9/messages '{"text":"x"}'`, proto.Interaction{SessionID: "s1", ExpiresAt: time.Now().Add(time.Minute)}); d != "allow" || len(fh.interactions()) != 1 {
 		t.Fatalf("remembered route asked again: %q, %d cards", d, len(fh.interactions()))
+	}
+}
+
+// A health conversation's Feishu writes are confirmed each time (docs/health.md「外发」): a rule that allows the
+// route still asks, the card offers no 本会话总是允许, and a yes with always is not remembered. Reads still go.
+func TestLarkGateHealthAsksEachTime(t *testing.T) {
+	n := codexTestNode(t)
+	fh := withFakeHub(t, n)
+	n.mu.Lock()
+	n.larkCfg, n.larkCfgAt = olCfg(proto.LarkRule{Method: "POST", Path: "/conversations/*/messages", Action: "allow"}), time.Now().Add(time.Hour)
+	n.mu.Unlock()
+	fh.mu.Lock()
+	fh.answer = func(proto.Interaction) proto.Resolution {
+		yes := true
+		return proto.Resolution{Allow: &yes, Always: true}
+	}
+	fh.mu.Unlock()
+	health := filepath.Join(t.TempDir(), ".persona", "health")
+	if err := os.MkdirAll(health, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := `ex POST /conversations/7123/messages '{"text":"这周的体检结果"}'`
+	ix := proto.Interaction{SessionID: "h1", ExpiresAt: time.Now().Add(time.Minute)}
+	for i := 1; i <= 2; i++ {
+		if d, _, err := n.larkCheck(context.Background(), "h1", health, write, ix); err != nil || d != "allow" {
+			t.Fatalf("write %d: %q %v", i, d, err)
+		}
+		cards := fh.interactions()
+		if len(cards) != i || len(cards[i-1].AlwaysKeys) != 0 {
+			t.Fatalf("write %d: %d cards, always keys %q", i, len(cards), cards[len(cards)-1].AlwaysKeys)
+		}
+	}
+	if d, _, _ := n.larkCheck(context.Background(), "h1", health, `ex GET /conversations/7123/messages`, ix); d != "allow" || len(fh.interactions()) != 2 {
+		t.Fatalf("a read was asked about: %q, %d cards", d, len(fh.interactions()))
+	}
+	// Elsewhere the allow rule still lets the same write through unasked.
+	if d, _, _ := n.larkCheck(context.Background(), "s1", t.TempDir(), write, proto.Interaction{SessionID: "s1", ExpiresAt: time.Now().Add(time.Minute)}); d != "allow" || len(fh.interactions()) != 2 {
+		t.Fatalf("the assistant's own allowed write: %q, %d cards", d, len(fh.interactions()))
 	}
 }

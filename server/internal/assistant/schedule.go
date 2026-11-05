@@ -584,6 +584,17 @@ func until(t time.Time) string {
 	return fmt.Sprintf("in %d days", int(d.Hours()/24))
 }
 
+// taskInSpace: task id is one of space's (a missing one is too: deleting it then says there is none).
+func (s *Service) taskInSpace(ctx context.Context, id, space string) bool {
+	sc, err := s.lockedSchedule(ctx)
+	if err != nil {
+		return true // deleteTask reports it
+	}
+	defer sc.mu.Unlock()
+	i := sc.indexLocked(id)
+	return i < 0 || sc.tasks[i].Space == space
+}
+
 // deleteTask removes a task (cancel_followup, delete_routine, the app); false when there is none.
 func (s *Service) deleteTask(ctx context.Context, id string) (bool, error) {
 	sc, err := s.lockedSchedule(ctx)
@@ -602,7 +613,9 @@ func (s *Service) deleteTask(ctx context.Context, id string) (bool, error) {
 	return i >= 0, nil
 }
 
-func (s *Service) describeSchedule(ctx context.Context) string {
+// describeSchedule lists the tasks of space ("" the assistant's own, "health"): a conversation sees and changes only
+// its own space's (docs/health.md).
+func (s *Service) describeSchedule(ctx context.Context, space string) string {
 	loc := s.location(ctx)
 	now := time.Now()
 	sc, err := s.lockedSchedule(ctx)
@@ -614,7 +627,7 @@ func (s *Service) describeSchedule(ctx context.Context) string {
 	b.WriteString("Scheduled tasks (the user sees and edits them in Persona › 定时任务; launcher / permission mode are theirs to set):\n")
 	n := 0
 	for _, t := range sc.tasks {
-		if t.done() {
+		if t.done() || t.Space != space {
 			continue
 		}
 		n++
@@ -677,7 +690,7 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args jso
 	var t Task
 	i := -1
 	if a.ID != "" {
-		if i = sc.indexLocked(a.ID); i < 0 {
+		if i = sc.indexLocked(a.ID); i < 0 || sc.tasks[i].Space != space {
 			sc.mu.Unlock()
 			return "", fmt.Errorf("no task %q (list_followups lists them)", a.ID)
 		}
@@ -1169,7 +1182,11 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	text = clip(oneLine(text), 300)
 	s.logf("task %s run %s failed: %s", t.ID, run.ID, text)
 	s.updateRun(run, runFailed, text)
-	s.push(ctx, Notification{Subtitle: m.Name, DeviceID: m.ID, SessionID: run.SessionID, Title: i18n.T(s.lang(ctx), "assistant-schedule.run_failed", i18n.Args{"name": t.labelIn(s.lang(ctx))}), Body: text})
+	name := t.labelIn(s.lang(ctx))
+	if t.Space == SpaceHealth { // the lock screen does not name a health task (health.go)
+		name, _ = healthNotice(s.lang(ctx))
+	}
+	s.push(ctx, Notification{Subtitle: m.Name, DeviceID: m.ID, SessionID: run.SessionID, Title: i18n.T(s.lang(ctx), "assistant-schedule.run_failed", i18n.Args{"name": name}), Body: text})
 	if run.Retried {
 		return
 	}

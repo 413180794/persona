@@ -62,6 +62,9 @@ func (h *Hub) connectorChanged(id string, scope connector.Scope) {
 // callConnector runs a connector's tool for an agent or assistant conversation (by: none when the user acts in a
 // connector's thread); a write the gate leaves to the user is asked on the phone like mail_send, in that conversation.
 func (h *Hub) callConnector(ctx context.Context, by asker, name string, args json.RawMessage) proto.ToolResult {
+	if inHealth(h.askerCwd(by)) { // a health conversation's writes: on the phone each time (assistant.go inHealth)
+		ctx = connector.ConfirmEach(ctx)
+	}
 	return h.connectors.Call(ctx, name, args, func(ctx context.Context, summary string, input json.RawMessage) bool {
 		return h.approve(ctx, by, name, summary, input)
 	})

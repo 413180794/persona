@@ -1,0 +1,5 @@
+{
+  "notice_title": "Health",
+  "notice_body": "New in your health space. Open Persona to see it.",
+  "outbound": "Hand content from your health space to somewhere outside it (once handed over, the copy there is not deleted with the health space):\n\n{what}"
+}

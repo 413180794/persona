@@ -94,6 +94,9 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Title+a.Body) == "" {
 			return "", fmt.Errorf("title and body are required")
 		}
+		if s.inHealth(ctx, self) { // the lock screen and the channels hear there is news, not what it is (health.go)
+			a.Title, a.Body = healthNotice(s.lang(ctx))
+		}
 		// Asked for explicitly: every device, the Feishu bot too, and no separate push when this turn ends.
 		s.push(ctx, Notification{Subtitle: "Persona", DeviceID: machine, SessionID: self, Title: a.Title, Body: a.Body, Asked: true})
 		s.channelsPushed(machine, self, a.Title, a.Body) // the Feishu bot and the channels with pushes on (channels.go)
@@ -113,12 +116,17 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 	case "schedule_followup":
 		return s.toolScheduleFollowup(ctx, machine, self, args)
 	case "list_followups":
-		return s.describeSchedule(ctx), nil
+		space, _ := s.knownSpace(ctx, self)
+		return s.describeSchedule(ctx, space), nil
 	case "schedule_routine":
 		return s.toolScheduleRoutine(ctx, self, args)
 	case "delete_routine", "cancel_followup":
 		var a struct{ ID string }
 		_ = json.Unmarshal(args, &a)
+		space, _ := s.knownSpace(ctx, self)
+		if !s.taskInSpace(ctx, a.ID, space) { // another space's task is as good as none (health.go)
+			return "", fmt.Errorf("no task %q", a.ID)
+		}
 		ok, err := s.deleteTask(ctx, a.ID)
 		if err != nil {
 			return "", err
@@ -165,6 +173,11 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if strings.TrimSpace(a.Text) == "" {
 			return "", fmt.Errorf("text is empty")
 		}
+		if ok, err := s.confirmOutbound(ctx, machine, self, name, agentLabel(c)+" · "+am.Name+"\n\n"+a.Text, args); err != nil {
+			return "", err
+		} else if !ok {
+			return "The user declined on the phone: nothing was sent to that agent.", nil
+		}
 		if c.Status != proto.StatusOffline {
 			if err := s.call(ctx, am.ID, DeviceSessionSend, sendParams(c.SessionID, a.Text, a.DismissNotice), nil); err != nil {
 				return "", err
@@ -192,6 +205,11 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			return "", fmt.Errorf("unknown machine %q (machines: %s)", a.Machine, s.machineIDs(ctx))
 		}
 		a.Cwd = proto.ExpandHome(a.Cwd, am.Home)
+		if ok, err := s.confirmOutbound(ctx, machine, self, name, am.Name+" · "+a.Cwd+"\n\n"+a.Prompt, args); err != nil {
+			return "", err
+		} else if !ok {
+			return "The user declined on the phone: no agent was started.", nil
+		}
 		var res struct {
 			Session proto.Session `json:"session"`
 		}

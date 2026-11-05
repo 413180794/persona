@@ -120,6 +120,16 @@ func Decide(rules []Rule, m Manifest, id, name string, args json.RawMessage) str
 	return Confirm
 }
 
+type confirmEachKey struct{}
+
+// ConfirmEach is ctx for a call whose writes the user confirms every time, whatever a rule allows (a health
+// conversation's, docs/health.md「外发」). Deny stays Deny.
+func ConfirmEach(ctx context.Context) context.Context {
+	return context.WithValue(ctx, confirmEachKey{}, true)
+}
+
+func confirmsEach(ctx context.Context) bool { v, _ := ctx.Value(confirmEachKey{}).(bool); return v }
+
 // cardMost is the most of Describe's words the card shows (a program's could be any length): more than a Telegram
 // message or a long comment, and the card says when it was cut.
 const cardMost = 16000
@@ -137,7 +147,11 @@ func card(summary string) string {
 // card's words (Describe, and who will see it) and refuses unless they allow it, Allow says nothing. A nil result
 // means run it, with the very args the card was made from.
 func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string, args json.RawMessage, ask Ask) *proto.ToolResult {
-	switch Decide(rules, c.Manifest(), c.ID(), name, args) {
+	d := Decide(rules, c.Manifest(), c.ID(), name, args)
+	if d == Allow && confirmsEach(ctx) {
+		d = Confirm
+	}
+	switch d {
 	case Deny:
 		res := proto.TextResult("The hub's rules (connector_gate) do not allow "+name+".", true)
 		return &res

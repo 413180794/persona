@@ -10,5 +10,7 @@
   "agent_permission": "{agent} 需要你授权",
   "screen_body": "打开 Persona 查看屏幕并操作",
   "fill_in_suffix": "（打开 Persona 填写）",
-  "done_body": "已完成"
+  "done_body": "已完成",
+  "health_title": "健康",
+  "health_body": "健康空间有新消息，打开 Persona 查看"
 }

@@ -708,6 +708,10 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	case proto.IxScreen:
 		body = i18n.T(l, "push.screen_body")
 	}
+	subtitle := transcript.StripInjected(ix.SessionTitle)
+	if inHealth(ix.Cwd) { // a health conversation's card: the lock screen does not say what it is about (assistant.go)
+		subtitle, body = i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
+	}
 	category := "INTERACTION_" + strings.ToUpper(ix.Kind)
 	if len(ix.Fields) > 0 { // something to fill in first: no buttons on the notification, a tap opens the card
 		category = "INTERACTION_INPUT"
@@ -715,7 +719,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	}
 	return map[string]any{
 		"aps": map[string]any{
-			"alert":              map[string]any{"title": title, "subtitle": joinPlace(transcript.StripInjected(ix.SessionTitle), machine), "body": body},
+			"alert":              map[string]any{"title": title, "subtitle": joinPlace(subtitle, machine), "body": body},
 			"sound":              "default",
 			"thread-id":          ix.SessionID,
 			"category":           category,

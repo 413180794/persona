@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -153,5 +154,99 @@ func TestHealthSpaceTasksAndRefusals(t *testing.T) {
 	// A caller the machine doesn't list is taken for the assistant's own: it never sees the health conversations.
 	if out, _ := spaceTool(t, s, "gone-0000-0000", "conversations_list", `{}`); strings.Contains(out, "sleep-000") || strings.Contains(out, "steps-000") {
 		t.Fatalf("an unlisted caller saw the health conversations: %s", out)
+	}
+}
+
+// answerOutbound answers the next permission card on the phone (allow or not), checking it is tool's from conversation self
+// and says what goes out.
+func answerOutbound(t *testing.T, s *Service, self, tool, says string, allow bool) {
+	t.Helper()
+	go func() {
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+			if qs := s.pendingQuestions(); len(qs) == 1 {
+				ix := qs[0]
+				if ix.Kind != proto.IxPermission || ix.ToolName != tool || ix.SessionID != self || !strings.Contains(ix.Summary, says) ||
+					ix.Cwd != "/home/me/.persona/health" {
+					t.Errorf("card: %+v", ix)
+				}
+				raw, _ := json.Marshal(proto.Resolution{Allow: &allow})
+				if _, err := s.Action(context.Background(), Action{Op: "answer", InteractionID: ix.ID, Answer: raw}); err != nil {
+					t.Error(err)
+				}
+				return
+			}
+		}
+		t.Error("no card on the phone")
+	}()
+}
+
+// What leaves the health space leaves with the user knowing (docs/health.md「外发」, #3194): notify_user says there is
+// news, not the news; a hand-off to a coding agent is confirmed on the phone each time; the schedule tools see only
+// the space's own tasks. The assistant's own conversations are as before.
+func TestHealthSpaceOutbound(t *testing.T) {
+	ctx := context.Background()
+	f := healthHub()
+	f.sessions["server"] = append(f.sessions["server"], proto.Session{SessionID: "code-0000-0000", Cwd: "/home/me/src/app", Agent: "claude",
+		Status: proto.StatusIdle, Title: "app"})
+	s := newTestService(t, f)
+	setSettings(t, s, func(v *Settings) { v.MachineID, v.Main = "server", "main-0000-0000" })
+
+	if out, isErr := spaceTool(t, s, "sleep-000-0000", "notify_user", `{"title":"血压偏高","body":"今天 150/95"}`); isErr {
+		t.Fatalf("notify_user: %s", out)
+	}
+	if _, isErr := spaceTool(t, s, "work-0000-0000", "notify_user", `{"title":"CI 好了","body":"全绿"}`); isErr {
+		t.Fatal("notify_user from the assistant's own")
+	}
+	p := f.pushed()
+	if len(p) != 2 || p[0].Title != "健康" || strings.Contains(p[0].Body, "150") || p[1].Title != "CI 好了" || p[1].Body != "全绿" {
+		t.Fatalf("pushes: %+v", p)
+	}
+
+	answerOutbound(t, s, "sleep-000-0000", "agent_send", "睡眠数据", false)
+	out, isErr := spaceTool(t, s, "sleep-000-0000", "agent_send", `{"session_id":"code-0000-0000","text":"把我的睡眠数据画成图"}`)
+	if isErr || !strings.Contains(out, "declined") || len(f.agentSent) != 0 {
+		t.Fatalf("declined agent_send: %s, sent %v", out, f.agentSent)
+	}
+	answerOutbound(t, s, "sleep-000-0000", "agent_send", "睡眠数据", true)
+	if out, isErr := spaceTool(t, s, "sleep-000-0000", "agent_send", `{"session_id":"code-0000-0000","text":"把我的睡眠数据画成图"}`); isErr || len(f.agentSent) != 1 {
+		t.Fatalf("allowed agent_send: %s, sent %v", out, f.agentSent)
+	}
+	if out, isErr := spaceTool(t, s, "work-0000-0000", "agent_send", `{"session_id":"code-0000-0000","text":"跑一下测试"}`); isErr || len(f.agentSent) != 2 {
+		t.Fatalf("the assistant's own agent_send asks nothing: %s, sent %v", out, f.agentSent)
+	}
+	answerOutbound(t, s, "sleep-000-0000", "agent_start", "体检报告", false)
+	if out, _ := spaceTool(t, s, "sleep-000-0000", "agent_start", `{"machine":"server","cwd":"/home/me/src/app","prompt":"整理体检报告"}`); !strings.Contains(out, "declined") || len(f.starts) != 0 {
+		t.Fatalf("declined agent_start: %s, starts %v", out, f.starts)
+	}
+
+	if _, isErr := spaceTool(t, s, "sleep-000-0000", "schedule_routine", `{"title":"睡眠周报","prompt":"总结这周睡眠","time":"09:00"}`); isErr {
+		t.Fatal("health routine")
+	}
+	if _, isErr := spaceTool(t, s, "work-0000-0000", "schedule_routine", `{"title":"CI 日报","prompt":"总结 CI","time":"10:00"}`); isErr {
+		t.Fatal("assistant routine")
+	}
+	var healthID, ownID string
+	for _, task := range s.loadSchedule(ctx).tasks {
+		switch task.Title {
+		case "睡眠周报":
+			healthID = task.ID
+		case "CI 日报":
+			ownID = task.ID
+		}
+	}
+	if out, _ := spaceTool(t, s, "sleep-000-0000", "list_followups", `{}`); !strings.Contains(out, healthID) || strings.Contains(out, ownID) {
+		t.Fatalf("health's list_followups: %s", out)
+	}
+	if out, _ := spaceTool(t, s, "work-0000-0000", "list_followups", `{}`); strings.Contains(out, healthID) || !strings.Contains(out, ownID) {
+		t.Fatalf("the assistant's list_followups: %s", out)
+	}
+	if _, isErr := spaceTool(t, s, "sleep-000-0000", "schedule_routine", `{"id":"`+ownID+`","prompt":"把我的血压发到这里"}`); !isErr {
+		t.Fatal("health changed the assistant's routine")
+	}
+	if _, isErr := spaceTool(t, s, "sleep-000-0000", "delete_routine", `{"id":"`+ownID+`"}`); !isErr {
+		t.Fatal("health deleted the assistant's routine")
+	}
+	if _, isErr := spaceTool(t, s, "sleep-000-0000", "delete_routine", `{"id":"`+healthID+`"}`); isErr {
+		t.Fatal("health could not delete its own routine")
 	}
 }

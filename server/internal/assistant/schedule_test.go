@@ -390,7 +390,7 @@ func TestScheduleRoutineTool(t *testing.T) {
 	if _, err := h.toolScheduleRoutine(context.Background(), "", json.RawMessage(`{"title":"x","prompt":"y","time":"09:00","weekdays":[0]}`)); err == nil {
 		t.Fatal("weekday 0 is refused")
 	}
-	if !strings.Contains(h.describeSchedule(context.Background()), r.ID) {
+	if !strings.Contains(h.describeSchedule(context.Background(), ""), r.ID) {
 		t.Fatal("list_followups shows task ids")
 	}
 	if ok, err := h.deleteTask(context.Background(), r.ID); !ok || err != nil {
@@ -669,7 +669,7 @@ func TestScheduleReadFailureNeverOverwrites(t *testing.T) {
 	if _, err := h.deleteTask(ctx, "rt_mine"); !errors.Is(err, errScheduleUnavailable) {
 		t.Fatalf("delete while unreadable: %v", err)
 	}
-	if got := h.describeSchedule(ctx); got != errScheduleUnavailable.Error() {
+	if got := h.describeSchedule(ctx, ""); got != errScheduleUnavailable.Error() {
 		t.Fatalf("list_followups while unreadable: %q", got)
 	}
 	h.recordRun(ScheduleRun{Kind: "routine", RefID: "rt_mine", Status: "ok", At: time.Now().UTC()})

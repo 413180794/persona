@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantskills"
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -341,6 +342,14 @@ func larkDecision(cfg proto.AssistantLark, c larkCall) string {
 	return decideLark(cfg.Gates[c.Gate].Rules, c)
 }
 
+// larkRead: a call that only reads (lark-cli's own read risk, a GET / HEAD).
+func larkRead(c larkCall) bool {
+	if c.CLI && c.Method == "CLI" {
+		return c.Risk == "read"
+	}
+	return c.Method == "GET" || c.Method == "HEAD"
+}
+
 // decideLark: the action for a call, from the rules in order (the first match); none matching is confirmed.
 
 func decideLark(rules []proto.LarkRule, c larkCall) string {
@@ -522,16 +531,22 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		}
 		return "", "", nil
 	}
+	// A health conversation's writes are confirmed each time: no rule's allow, no 本会话总是允许 (docs/health.md「外发」).
+	health := identity.SpaceOf(cwd) == identity.SpaceHealth
 	// through: the calls to confirm; once let through here, the gate proxy lets each go once (gateproxy.go).
 	var ask, through []larkCall
 	for _, c := range v.calls {
-		switch larkDecision(cfg, c) {
+		decision := larkDecision(cfg, c)
+		if decision == "allow" && health && !larkRead(c) {
+			decision = "confirm"
+		}
+		switch decision {
 		case "deny":
 			return "deny", "这个操作按配置不允许（" + c.Method + " " + c.Path + "）。", nil
 		case "allow":
 		default:
 			through = append(through, c)
-			if !n.larkAlways(session, larkPattern(c)) {
+			if health || !n.larkAlways(session, larkPattern(c)) {
 				ask = append(ask, c)
 			}
 		}
@@ -547,11 +562,15 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 	// The routes 本会话总是允许 lets through, kept by the hub too: this node's memory of them ends when it restarts.
 	ix.AlwaysKeys = nil
 	for _, c := range ask {
-		if k := "lark:" + larkPattern(c); !slices.Contains(ix.AlwaysKeys, k) {
+		if k := "lark:" + larkPattern(c); !health && !slices.Contains(ix.AlwaysKeys, k) {
 			ix.AlwaysKeys = append(ix.AlwaysKeys, k)
 		}
 	}
-	decision, reason, err := n.confirmLark(ctx, session, ix, ask)
+	remember := ask
+	if health {
+		remember = nil // nothing for 本会话总是允许 to keep
+	}
+	decision, reason, err := n.confirmLark(ctx, session, ix, remember)
 	if decision == "allow" {
 		n.grantGateCalls(cfg, through)
 	}

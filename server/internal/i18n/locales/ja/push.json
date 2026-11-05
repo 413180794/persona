@@ -10,5 +10,7 @@
   "agent_permission": "{agent}が許可を求めています",
   "screen_body": "Personaを開いて画面を確認・操作してください",
   "fill_in_suffix": "（Personaを開いて入力）",
-  "done_body": "完了しました"
+  "done_body": "完了しました",
+  "health_title": "ヘルスケア",
+  "health_body": "ヘルスケアスペースに新着があります。Personaを開いて確認してください"
 }
