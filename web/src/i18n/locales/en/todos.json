@@ -47,6 +47,7 @@
   "auto_done_reason": "The agent stopped and judged this done, so it was marked done automatically: {reason}. If it isn't, select Reopen.",
   "notes_placeholder": "Add notes; they go along as context when you hand this to an agent…",
   "spaces_section": "Projects · {count}",
+  "agents_section": "Agents · {count}",
   "space_no_agent": "No agents now",
   "space_remove": "Remove",
   "no_agents": "Not handed to an agent yet. Use the button below to start.",

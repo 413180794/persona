@@ -96,7 +96,10 @@ class Router(
         val key: NavKey = when (parameters["target"] ?: "chat") {
             "chat", "request" -> {
                 val chat = ChatRoute(parameters["machine"] ?: return null, parameters["session"] ?: return null, kind)
-                if (parameters["target"] == "request") InteractionRoute(chat, parameters["request"] ?: return null)
+                // A notification's link without a tab (session metadata not loaded yet) still names its request.
+                val request = parameters["request"]
+                if (parameters["target"] == "request" || parameters["target"] == null && !request.isNullOrBlank())
+                    InteractionRoute(chat, request ?: return null)
                 else chat
             }
             "extension" -> ExtensionUiRoute(parameters["extension"] ?: return null, parameters["ui"] ?: return null,
@@ -151,7 +154,8 @@ fun ResolvedRoute.restore(stacks: Map<AppTab, MutableList<NavKey>>): AppTab {
         val previous = stack[existing]
         if (previous == ConnectionSettingsRoute ||
             previous is ChatRoute && key is ChatRoute && previous.kind != key.kind ||
-            previous is InteractionRoute && key is InteractionRoute && previous.chat.kind != key.chat.kind) {
+            // A notification about one request of a conversation already open: that page shows this request first.
+            key is InteractionRoute && previous != key) {
             stack[existing] = key
         }
     }
@@ -160,7 +164,9 @@ fun ResolvedRoute.restore(stacks: Map<AppTab, MutableList<NavKey>>): AppTab {
 
 private fun sameTarget(left: NavKey, right: NavKey): Boolean = when {
     left is ChatRoute && right is ChatRoute -> left.machineId == right.machineId && left.sessionId == right.sessionId
-    left is InteractionRoute && right is InteractionRoute -> left.requestId == right.requestId && sameTarget(left.chat, right.chat)
+    // One conversation is one page, whichever of its requests it was opened at.
+    left is InteractionRoute -> sameTarget(left.chat, right)
+    right is InteractionRoute -> sameTarget(left, right.chat)
     left == ConnectionSettingsRoute -> right == SettingsPageRoute(SettingsPage.Diagnostics)
     else -> left == right
 }

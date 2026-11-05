@@ -435,3 +435,56 @@ func TestCodexCardsOfJoinedThreads(t *testing.T) {
 		t.Errorf("route %q %q", route, note)
 	}
 }
+
+// A card handed back to the computer stays off the phone while Codex asks it, and the same approval asked again
+// later is a new card (#3766: the hand-back used to keep it off the phone until the node restarted).
+func TestCodexDismissedApprovalComesBack(t *testing.T) {
+	old := codexHold
+	codexHold = 150 * time.Millisecond
+	t.Cleanup(func() { codexHold = old })
+	n, f, _ := codexNode(t, proto.StatusBlocked)
+	approval := screenFixture(t, "codex-0.163.0-exec-approval-120.txt")
+	f.setScreen(cxPane, approval)
+	id := onlyCard(t, n).ix.ID
+	n.syncCodexCards(context.Background())
+	if n.cx.sent != id {
+		t.Fatalf("listed %q, want %q", n.cx.sent, id)
+	}
+	if err := n.codexAnswer(context.Background(), cxID, id, proto.Resolution{Dismiss: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Still asked on the computer for well past codexHold: each sync sees it again, so it stays the computer's.
+	for end := time.Now().Add(4 * codexHold); time.Now().Before(end); time.Sleep(codexHold / 5) {
+		n.syncCodexCards(context.Background())
+		if n.cx.sent != "" {
+			t.Fatalf("still asked on the computer but listed: %q", n.cx.sent)
+		}
+	}
+
+	// Answered at the computer (one screen read without it), then the same approval asked again at once: a new card.
+	f.setScreen(cxPane, cxEmpty)
+	n.syncCodexCards(context.Background())
+	f.setScreen(cxPane, approval)
+	n.syncCodexCards(context.Background())
+	if n.cx.sent != id {
+		t.Fatalf("the same approval asked again: listed %q, want %q", n.cx.sent, id)
+	}
+}
+
+// A screen read that fails says nothing about the dialog: a handed-back card is not forgotten for it.
+func TestCodexDismissedApprovalKeptOverAFailedRead(t *testing.T) {
+	n, f, _ := codexNode(t, proto.StatusBlocked)
+	f.setScreen(cxPane, screenFixture(t, "codex-0.163.0-exec-approval-120.txt"))
+	id := onlyCard(t, n).ix.ID
+	if err := n.codexAnswer(context.Background(), cxID, id, proto.Resolution{Dismiss: true}); err != nil {
+		t.Fatal(err)
+	}
+	n.agents[cxID] = host.Agent{Agent: "codex", PaneID: cxPane, AgentStatus: proto.StatusWorking, Cwd: "/private/tmp/project"}
+	n.syncCodexCards(context.Background()) // not blocked: the screen is not read
+	n.agents[cxID] = host.Agent{Agent: "codex", PaneID: cxPane, AgentStatus: proto.StatusBlocked, Cwd: "/private/tmp/project"}
+	n.syncCodexCards(context.Background())
+	if n.cx.sent != "" {
+		t.Fatalf("listed again without the dialog having gone: %q", n.cx.sent)
+	}
+}

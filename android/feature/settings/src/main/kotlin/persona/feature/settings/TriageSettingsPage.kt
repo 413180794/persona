@@ -28,34 +28,29 @@ internal fun TriageSettingsPage(triage: AgentTriage?, models: ModelConfiguration
     }
     val scope = rememberCoroutineScope()
     val resources = LocalContext.current.resources
-    var switches by remember { mutableStateOf<TriageSwitches?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
+    val triageModel = remember(triage) { TriageSettingsModel(triage) }
+    val state by triageModel.state.collectAsState()
     var model by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(triage) {
-        switches = try { triage.switches() } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            error = e.message ?: resources.getString(R.string.settings_triage_read_failed); null
-        }
-    }
+    LaunchedEffect(triageModel) { triageModel.load() }
     LaunchedEffect(models) {
         model = try { models?.purpose("agent.triage")?.let { d -> d.purpose.summaryParts(d.providers).joinToString(resources.getString(R.string.settings_list_separator)).ifEmpty { resources.getString(R.string.settings_not_configured) } } }
         catch (e: CancellationException) { throw e } catch (_: Exception) { null }
     }
-    fun change(next: TriageSwitches) {
-        val before = switches
-        switches = next
-        busy = true
-        scope.launch {
-            try { switches = triage.put(next); error = null }
-            catch (e: CancellationException) { throw e }
-            catch (e: Exception) { switches = before; error = resources.getString(R.string.settings_triage_save_failed, e.message ?: resources.getString(R.string.settings_triage_no_response)) }
-            finally { busy = false }
-        }
-    }
+    fun change(next: TriageSwitches) { scope.launch { triageModel.change(next) } }
+    val switches = state.switches
+    val busy = state.busy
     val sw = switches
     val on = sw?.enabled == true
     JListPage(title = stringResource(R.string.settings_triage_title), onBack = onBack) {
-        error?.let { message -> item("error") { JNotice(message, status = Status.NeedsYou) } }
+        if (switches == null && state.loading) item("loading") { JLoading() }
+        else state.readError?.takeIf { switches == null }?.let { message ->
+            item("error") {
+                JNotice(message.text(), status = Status.NeedsYou,
+                    actionLabel = if (state.unsupported) null else stringResource(R.string.settings_retry_read),
+                    onAction = if (state.unsupported) null else ({ scope.launch { triageModel.load() } }))
+            }
+        }
+        state.saveError?.let { message -> item("save-error") { JNotice(message.text(), status = Status.NeedsYou) } }
         item("enabled") {
             JGroupItem(GroupPosition.of(0, 2), Modifier.padding(top = Tokens.Space.m)) {
                 JSwitchRow(stringResource(R.string.settings_triage_title), on, { v -> sw?.let { change(it.copy(enabled = v)) } }, Modifier.testTag("triage-enabled"),

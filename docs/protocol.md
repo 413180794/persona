@@ -1101,8 +1101,8 @@ Claude Code 工作时屏幕底部的状态行（`✻ Frosting… (16m 15s · ↓
 - 类型 `proto.SessionLive`（`server/internal/proto/live.go`）：`verb`（不带省略号）、`elapsed_s`、`tokens_down`（`↓` 的输出 token；`↑` 是输入，不算）、`thinking`（`thinking…` 段）、
   `thought_s`（`thought for 3s`）、`at`（node 读到的时间，RFC 3339）；没有的字段省略。
 - node → hub 事件 `session.live {session_id, live}`，`live` 是 `SessionLive` 或 `null`。
-  - 只在这个会话被 watch（有客户端订阅）、是 herdr 里的 Claude（`agent == "claude"`，宿主 herdr；Codex、herdr-core、Orca、runtime、无头助手一律不读）、宿主报 `working` 时读：
-    约每秒一次 `pane.read --source visible --lines 60`，单次超时 3 秒，在 watch 自己的 goroutine 里，不拖慢 250 ms 一轮的 transcript 推送（`node/claudestatus.go`）。
+  - 只在这个会话被 watch（有客户端订阅）、是能读屏的宿主里的 Claude（`agent == "claude"`，宿主 herdr、herdr-core（Herdr App）或 Orca，后两种读纯文本，同样解析，#3904；Codex、botmux、runtime、无头助手不读）、宿主报 `working` 时读：
+    约每秒读一次屏（herdr 是 `pane.read --source visible --lines 60`），单次超时 3 秒，在 watch 自己的 goroutine 里，不拖慢 250 ms 一轮的 transcript 推送（`node/claudestatus.go`）。
   - 解析：从输入框的上边线（屏幕上倒数第二条横线）往上找，跳过空行和缩进的行（提示、待办、右对齐的 `/goal`），第一行顶格的行是状态行或者就没有状态行；
     所以正文、工具输出、用户消息里引用的状态行不会被当成现在的。spinner 字符不限（`· ✢ ✳ ✶ ✻ ✽`…），时长 `2s` / `1m 5s` / `1h 2m 3s`，token 单位 k / M / 无，括号里的段可缺、顺序可变，
     `esc to interrupt` 之类的提示忽略。
@@ -1509,7 +1509,7 @@ node 拆成 `lines` 个一行的事件，落在 `column` / `row` 那一格，没
 焦点联动（feature `herdr_focus`，`docs/terminal.md` 第二十八节）：hub → node 事件 `herdr.client.focus {client_id, session_id}`（页面显示了另一个窗格：node 让 herdr 聚焦它，同一视图的请求互相替换；窗格不是宿主列出的 / 视图不在就不做）；node → hub 事件 `herdr.focus.changed {workspace_id, tab_id, pane_id, session_id?, source, client_id?}`（herdr 的焦点变了：`persona` = 刚替 `client_id` 的视图要求的，`client` = 那个客户端在 1.5 s 内被真的敲过 / 点过，`other` = 其他；herdr 的事件本身不说是谁改的）。
 
 node → hub 事件：`fs.changed {dirs?, git?}`（#2439：`fs.watch` 里的文件夹的列表内容变了（名字、大小、时间）、或 Git 目录的 `git status` 变了，hub 转成给相关页面的 `fs_changed`）、`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`（相隔不到 30 ms 的帧由 node 合成一帧：diff 的字节接起来，整帧丢掉它前面的 diff）、`terminal.end {session_id, error, control?, taken?}`（流停了且起不来：会话不在跑、herdr 一直拒绝；`control` 时是接管结束了：`taken` 被别人抢走，否则租约到期）、
-`session.items {session_id, items, history, from_seq, to_seq}`、`session.live {session_id, live}`（watch 中、工作中的 herdr Claude 的状态行，变了才发，结束补 `null`，见「实时状态」）、`session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}`（node 记下一次发送、认到它的那一行时各推一次，hub 存进 `sent_messages.echo`；已认到的不会被晚到的「还在等」盖掉）、`sessions.changed {sessions}`、
+`session.items {session_id, items, history, from_seq, to_seq}`、`session.live {session_id, live}`（watch 中、工作中的 Claude 的状态行（herdr、herdr-core、Orca 这些能读屏的宿主），变了才发，结束补 `null`，见「实时状态」）、`session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}`（node 记下一次发送、认到它的那一行时各推一次，hub 存进 `sent_messages.echo`；已认到的不会被晚到的「还在等」盖掉）、`sessions.changed {sessions}`、
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
 `usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，
 连上后第一次 `full: true` 带最近 26 小时全部；`docs/live-activity.md`「用量」）、

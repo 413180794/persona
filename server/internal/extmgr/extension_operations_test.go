@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"sync/atomic"
 	"testing"
@@ -228,16 +229,29 @@ func TestMarketClientGitHubProxy(t *testing.T) {
 	h.cfg.GitHub = &github.Config{Egress: connector.Egress{Proxy: "http://127.0.0.1:3128"}}
 	h.extensions.markets.client = nil
 	tr := h.marketClient().Transport.(*http.Transport)
-	for host, want := range map[string]string{"api.github.com": "127.0.0.1:3128", "objects.githubusercontent.com": "127.0.0.1:3128",
-		"github.com": "127.0.0.1:3128", "example.com": "", "notgithub.com": ""} {
-		req, _ := http.NewRequest("GET", "https://"+host+"/x", nil)
-		u, err := tr.Proxy(req)
-		got := ""
-		if u != nil {
-			got = u.Host
+	check := func(env string) {
+		t.Helper()
+		prev := envProxy
+		t.Cleanup(func() { envProxy = prev })
+		envProxy = func(*http.Request) (*url.URL, error) {
+			if env == "" {
+				return nil, nil
+			}
+			return &url.URL{Scheme: "http", Host: env}, nil
 		}
-		if err != nil || (got != want && !(want == "" && os.Getenv("HTTPS_PROXY") != "")) {
-			t.Errorf("%s: %q %v, want %q", host, got, err, want)
+		for host, want := range map[string]string{"api.github.com": "127.0.0.1:3128", "objects.githubusercontent.com": "127.0.0.1:3128",
+			"github.com": "127.0.0.1:3128", "example.com": env, "notgithub.com": env} {
+			req, _ := http.NewRequest("GET", "https://"+host+"/x", nil)
+			u, err := tr.Proxy(req)
+			got := ""
+			if u != nil {
+				got = u.Host
+			}
+			if err != nil || got != want {
+				t.Errorf("env proxy %q, %s: %q %v, want %q", env, host, got, err, want)
+			}
 		}
 	}
+	check("")               // no proxy in the environment: only GitHub's hosts go through github.proxy
+	check("127.0.0.1:7897") // one in the environment: the others take it, GitHub's still github.proxy
 }

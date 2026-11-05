@@ -71,7 +71,7 @@ type codexCards struct {
 	tails     map[string]*codexTail     // session id → its rollout
 	sent      string                    // the card ids last listed to the hub
 	held      map[string]time.Time      // card id → answered from the phone: not listed again until then
-	dismissed map[string]bool           // card id → dismissed on the phone
+	dismissed map[string]dismissedCard  // card id → handed back to the computer from the phone
 	pagerAt   map[string]time.Time      // pane → when its transcript pager was last closed to show a dialog
 	joins     map[string]codexJoinState // session id → joining it on its app-server (codex_daemon.go)
 }
@@ -98,7 +98,12 @@ func (n *Node) syncCodexCards(ctx context.Context) {
 	var list []proto.Interaction
 	var ids []string
 	for _, c := range cards {
-		if n.cx.dismissed[c.ix.ID] || now.Before(n.cx.held[c.ix.ID]) {
+		if d, gone := n.cx.dismissed[c.ix.ID]; gone {
+			d.seen = now // still asked: still the computer's
+			n.cx.dismissed[c.ix.ID] = d
+			continue
+		}
+		if now.Before(n.cx.held[c.ix.ID]) {
 			continue
 		}
 		list = append(list, c.ix)
@@ -161,8 +166,11 @@ func (n *Node) codexCardsNow(ctx context.Context, only string) []codexCard {
 		if waiting || a.joined || a.status != proto.StatusBlocked {
 			continue
 		}
-		if d := n.codexApprovalOn(ctx, a.pane); d != nil {
+		d, read := n.codexApprovalOn(ctx, a.pane)
+		if d != nil {
 			out = append(out, codexCard{ix: approvalCard(id, a, title, d), pane: a.pane, approval: d})
+		} else if read {
+			n.cx.approvalGone(id)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ix.CreatedAt.Before(out[j].ix.CreatedAt) })
@@ -196,6 +204,31 @@ func (c *codexCards) forget(live map[string]codexAgent) {
 			delete(c.held, id)
 		}
 	}
+	// A card handed back stays the computer's while Codex asks it; once it has been off the list for codexHold (a
+	// screen read can fail now and then), the same approval asked again is a new one and goes to the phone (#3766).
+	for id, d := range c.dismissed {
+		if time.Since(d.seen) > codexHold {
+			delete(c.dismissed, id)
+		}
+	}
+}
+
+// dismissedCard is a card handed back to the computer: its session, and when it was last listed.
+type dismissedCard struct {
+	session string
+	seen    time.Time
+}
+
+// approvalGone forgets the cards handed back in a session whose screen was just read with no approval on it: the
+// dialog was answered at the computer, so the same approval asked again is a new one (#3766).
+func (c *codexCards) approvalGone(session string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for id, d := range c.dismissed {
+		if d.session == session && strings.HasPrefix(id, "cxa_") {
+			delete(c.dismissed, id)
+		}
+	}
 }
 
 func (c *codexCards) hold(id string) {
@@ -207,13 +240,13 @@ func (c *codexCards) hold(id string) {
 	c.held[id] = time.Now().Add(codexHold)
 }
 
-func (c *codexCards) dismiss(id string) {
+func (c *codexCards) dismiss(session, id string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.dismissed == nil {
-		c.dismissed = map[string]bool{}
+		c.dismissed = map[string]dismissedCard{}
 	}
-	c.dismissed[id] = true
+	c.dismissed[id] = dismissedCard{session: session, seen: time.Now()}
 }
 
 // asks reads what the session's rollout added since last time and returns its open questions.
@@ -369,13 +402,14 @@ const codexPagerGap = 10 * time.Second
 
 // codexApprovalOn reads the approval a blocked Codex shows, or nil. The 0.153 transcript pager (Ctrl+T) hides a dialog
 // that came while it was open, though Codex waits on it: the pager is read-only, so it is closed ("q", its own key)
-// to show the dialog.
-func (n *Node) codexApprovalOn(ctx context.Context, pane string) *screen.CodexApprovalDialog {
+// to show the dialog. read says whether the screen was read (no approval on a screen read is the dialog gone; a failed
+// read or a pager left open says nothing).
+func (n *Node) codexApprovalOn(ctx context.Context, pane string) (d *screen.CodexApprovalDialog, read bool) {
 	rctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	s, err := n.codexScreen(rctx, pane)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	if s.View == screen.CodexTranscript {
 		n.cx.mu.Lock()
@@ -388,25 +422,28 @@ func (n *Node) codexApprovalOn(ctx context.Context, pane string) *screen.CodexAp
 		}
 		n.cx.mu.Unlock()
 		if !due {
-			return nil
+			return nil, false
 		}
 		n.logf("codex %s: closing the transcript pager over a pending dialog", pane)
 		if n.sendKeys(rctx, pane, "q") != nil {
-			return nil
+			return nil, false
 		}
 		time.Sleep(codexStep)
 		if s, err = n.codexScreen(rctx, pane); err != nil {
-			return nil
+			return nil, false
+		}
+		if s.View == screen.CodexTranscript {
+			return nil, false // still the pager: what is under it is not known
 		}
 	}
-	return s.Approval
+	return s.Approval, true
 }
 
 // codexAnswer answers a card from the phone: only into the question or approval it was made from, as it is on screen
 // and in the rollout now. A refusal (rpc error with a code) typed nothing.
 func (n *Node) codexAnswer(ctx context.Context, session, id string, r proto.Resolution) error {
 	if r.Dismiss {
-		n.cx.dismiss(id)
+		n.cx.dismiss(session, id)
 		return nil
 	}
 	defer n.typing.lock(session)()

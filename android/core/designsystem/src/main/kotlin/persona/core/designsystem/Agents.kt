@@ -326,6 +326,8 @@ fun AgentRow(
     val start = if (board) Step * depth else (Step * depth + (Caret - mark) / 2).coerceAtLeast(None)
     val gap = Tokens.Space.s - Tokens.Space.xxs
     val click = Modifier.selectedRow(selected).onSecondaryClick(onLongClick).combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onLongClick)
+        // Compact rows drop the state line, and the mark is colour only: TalkBack still says where the agent stands (#3902).
+        .then(if (compact && statusText != null) Modifier.semantics { stateDescription = statusText } else Modifier)
     val text: @Composable ColumnScope.() -> Unit = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {

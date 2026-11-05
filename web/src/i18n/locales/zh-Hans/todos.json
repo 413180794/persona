@@ -47,6 +47,7 @@
   "auto_done_reason": "Agent 停下后判断已经做完，自动标成了完成：{reason}。没做完就点「重新打开」。",
   "notes_placeholder": "填写待办说明，交给 Agent 时作为上下文一起发出…",
   "spaces_section": "项目 · {count}",
+  "agents_section": "Agent · {count}",
   "space_no_agent": "当前没有 Agent",
   "space_remove": "移出",
   "no_agents": "还没把这件事交给 Agent 执行，点击下方按钮开始",

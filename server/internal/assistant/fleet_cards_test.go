@@ -826,3 +826,44 @@ func TestScreenCardIgnoresANumberedAnswer(t *testing.T) {
 		}
 	}
 }
+
+// The same Codex question asked again rings the phone again (#3766): after it was handed back to the computer, and
+// after it was answered at the computer and asked again a while later. A reconnect's relisting stays quiet.
+func TestCodexCardAskedAgainIsAnnounced(t *testing.T) {
+	old := codexAskedAgain
+	codexAskedAgain = 50 * time.Millisecond
+	t.Cleanup(func() { codexAskedAgain = old })
+	ft, _ := newCardFleet(t, false)
+	s := ft.s
+	a := proto.Interaction{ID: "cxa_1", SessionID: "s2", Kind: proto.IxPermission, Agent: "codex", Summary: "npm test",
+		ExpiresAt: time.Now().Add(time.Hour)}
+	listCodex(s, a)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 1, time.Second); len(got) != 1 {
+		t.Fatalf("first: pushed %d times", len(got))
+	}
+
+	// Handed back to the computer, then asked again: a push.
+	if err := s.resolve("cxa_1", proto.Resolution{Dismiss: true}); err != nil {
+		t.Fatal(err)
+	}
+	listCodex(s)
+	listCodex(s, a)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(got) != 2 {
+		t.Fatalf("after the hand-back: pushed %d times", len(got))
+	}
+
+	// Gone from the list for a moment (a failed read, a reconnect): listed again quietly.
+	listCodex(s)
+	listCodex(s, a)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 3, 200*time.Millisecond); len(got) != 2 {
+		t.Fatalf("a quick relisting pushed: %d", len(got))
+	}
+
+	// Answered at the computer, asked again a while later: a push.
+	listCodex(s)
+	time.Sleep(2 * codexAskedAgain)
+	listCodex(s, a)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 3, time.Second); len(got) != 3 {
+		t.Fatalf("asked again later: pushed %d times", len(got))
+	}
+}

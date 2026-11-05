@@ -47,6 +47,7 @@
   "auto_done_reason": "エージェントが停止し、作業が終わったと判断したため、自動で完了にしました：{reason}。まだ終わっていない場合は「再開」を押してください。",
   "notes_placeholder": "ToDoの説明を入力。エージェントに任せるときにコンテキストとして一緒に送られます…",
   "spaces_section": "プロジェクト · {count}",
+  "agents_section": "エージェント · {count}",
   "space_no_agent": "エージェントなし",
   "space_remove": "外す",
   "no_agents": "まだエージェントに任せていません。下のボタンから始めましょう",

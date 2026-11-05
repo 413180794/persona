@@ -369,9 +369,8 @@
     <string name="settings_not_configured">未設定</string>
     <string name="settings_triage_title">セッションの振り分け</string>
     <string name="settings_triage_demo">デモモードではセッションを振り分けしません。</string>
-    <string name="settings_triage_read_failed">ハブの設定を読み込めません</string>
+    <string name="settings_triage_read_failed">ハブの設定を読み込めません：%1$s</string>
     <string name="settings_triage_save_failed">変更できませんでした：%1$s</string>
-    <string name="settings_triage_no_response">ハブから応答がありません</string>
     <string name="settings_triage_model">振り分けモデル</string>
     <string name="settings_triage_about">エージェントが止まるたびに、ハブが振り分けモデルで最後の返信を読み（1ターンに1回）、終わったことや待っていることを一覧に書きます。終わったものは未確認に数えません。</string>
     <string name="settings_triage_actions_header">ハブが代わりに行うこと</string>

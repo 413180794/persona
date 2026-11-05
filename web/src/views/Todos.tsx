@@ -736,8 +736,8 @@ function TodoDetail({
 
       {/* Current Agents */}
       <div className="mt-6 flex-1">
-        <div className="mb-2 text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">
-          AGENTS · {activeAgents.length}
+        <div className="mb-2 text-[11.5px] font-medium tracking-[0.04em] text-ink-3">
+          {t("todos.agents_section", { count: activeAgents.length })}
         </div>
 
         {activeAgents.length === 0 ? (

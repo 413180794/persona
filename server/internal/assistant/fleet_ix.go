@@ -840,6 +840,11 @@ var codexAnswerTimeout = time.Minute
 // lists them again, and the phone should not ring twice for one question.
 const codexAnnouncedFor = 24 * time.Hour
 
+// codexAskedAgain: a card the node stopped listing and lists again after this long is Codex asking again (the same
+// approval in a later turn has the same id), not a reconnect or a screen read that failed once: it rings the phone
+// again (#3766).
+var codexAskedAgain = time.Minute
+
 func (s *Service) syncCodexInteractions(machine string, params json.RawMessage) {
 	var p struct {
 		Interactions []proto.Interaction `json:"interactions"`
@@ -889,13 +894,23 @@ func (s *Service) syncCodexInteractions(machine string, params json.RawMessage) 
 	if s.fleet.codexAnnounced == nil {
 		s.fleet.codexAnnounced = map[string]time.Time{}
 	}
+	if s.fleet.codexEnded == nil {
+		s.fleet.codexEnded = map[string]time.Time{}
+	}
 	for id, at := range s.fleet.codexAnnounced {
 		if now.Sub(at) > codexAnnouncedFor {
 			delete(s.fleet.codexAnnounced, id)
+			delete(s.fleet.codexEnded, id)
 		}
 	}
+	for _, id := range gone {
+		s.fleet.codexEnded[id] = now
+	}
 	for _, ix := range added {
-		if _, ok := s.fleet.codexAnnounced[ix.ID]; ok {
+		_, announced := s.fleet.codexAnnounced[ix.ID]
+		ended, wasEnded := s.fleet.codexEnded[ix.ID]
+		delete(s.fleet.codexEnded, ix.ID)
+		if announced && !(wasEnded && now.Sub(ended) >= codexAskedAgain) {
 			quiet[ix.ID] = true
 		}
 		s.fleet.codexAnnounced[ix.ID] = now
@@ -925,6 +940,12 @@ func (s *Service) syncCodexInteractions(machine string, params json.RawMessage) 
 func (s *Service) codexPending(machine string, ix proto.Interaction) *pending {
 	p := &pending{ix: ix, codex: true}
 	p.local = func(r proto.Resolution) error {
+		if r.Dismiss { // handed back to the computer: the same question asked again later is announced (#3766)
+			s.fleet.mu.Lock()
+			delete(s.fleet.codexAnnounced, ix.ID)
+			delete(s.fleet.codexEnded, ix.ID)
+			s.fleet.mu.Unlock()
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), codexAnswerTimeout)
 		defer cancel()
 		err := s.nodeCall(ctx, machine, "codex.answer", map[string]any{"session_id": ix.SessionID, "id": ix.ID, "resolution": r}, nil)

@@ -370,9 +370,8 @@
     <string name="settings_not_configured">Not set up</string>
     <string name="settings_triage_title">Session triage</string>
     <string name="settings_triage_demo">Sessions aren\'t triaged in demo mode.</string>
-    <string name="settings_triage_read_failed">Couldn\'t read the settings on the hub</string>
+    <string name="settings_triage_read_failed">Couldn\'t read the settings on the hub: %1$s</string>
     <string name="settings_triage_save_failed">Not changed: %1$s</string>
-    <string name="settings_triage_no_response">the hub didn\'t respond</string>
     <string name="settings_triage_model">Triage model</string>
     <string name="settings_triage_about">Each time an agent stops, the hub has the triage model read its last reply (once per turn) and notes in the list what it finished or what it\'s waiting for. Finished ones no longer count as Unread.</string>
     <string name="settings_triage_actions_header">The hub does for you</string>

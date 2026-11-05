@@ -250,3 +250,33 @@ func TestWatchStartsAndEndsLive(t *testing.T) {
 		t.Fatalf("unwatched: %+v, want null", l)
 	}
 }
+
+// A working Claude in the Herdr app (herdr-core, plain-text screens) gets its status line too (#3904).
+func TestWatchLiveOnHerdrCore(t *testing.T) {
+	old := liveEvery
+	liveEvery = 20 * time.Millisecond
+	t.Cleanup(func() { liveEvery = old })
+	n, _, hc, home := hcNode(t)
+	writeTranscript(t, home, hcCwd, sidA, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"x"}`)
+	writeClaudePID(t, home, 4242, sidA)
+	hc.setTerminals(hcTerminal("t1", "claude-code", "working", 4242, "claude", hcCwd, "", "", ""))
+	if m := byID(listSessions(t, n)); m[sidA].Status != proto.StatusWorking {
+		t.Fatalf("not working: %+v", m[sidA])
+	}
+	hc.setScreen("t1", boxed("✻ Frosting… (7s · ↓ 2.1k tokens · thinking)"))
+	all, pw := hubPushes(n)
+	t.Cleanup(func() { pw.Close() })
+	pushes := make(chan json.RawMessage, 64)
+	go func() {
+		for m := range all {
+			if m.Event == "session.live" {
+				pushes <- m.Params
+			}
+		}
+	}()
+	stop := startLive(t, n)
+	defer stop()
+	if l := nextLive(t, pushes); l == nil || l.Verb != "Frosting" || l.ElapsedS != 7 || l.TokensDown != 2100 || !l.Thinking {
+		t.Fatalf("herdr-core line: %+v", l)
+	}
+}

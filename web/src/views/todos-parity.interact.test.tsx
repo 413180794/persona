@@ -199,6 +199,16 @@ describe("the plan card's 改一下", () => {
   });
 });
 
+describe("a todo's sections", () => {
+  it("names its agents in the page's language, like 决策 and 项目 (#4039)", async () => {
+    seed({ todos: [todo()], todosLoaded: true, sessions: {} });
+    await render(<TodosView selectedId="t1" />);
+    const heads = [...document.querySelectorAll("div, span")].map((e) => e.textContent?.trim()).filter((s) => s && /^[^·]+ · \d+$/.test(s));
+    expect(heads).toContain("Agent · 0");
+    expect(document.body.textContent).not.toContain("AGENTS");
+  });
+});
+
 describe("待办 back on a narrow screen", () => {
   it("pops the entry a row click pushed", async () => {
     seed({ todos: [todo()], todosLoaded: true, sessions: {} });

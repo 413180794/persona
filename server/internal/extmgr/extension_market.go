@@ -334,12 +334,16 @@ func (h *Manager) marketClient() *http.Client {
 			if githubHost(r.URL.Hostname()) {
 				return gh, nil
 			}
-			return http.ProxyFromEnvironment(r)
+			return envProxy(r)
 		}
 	}
 	ms.client = &http.Client{Transport: t}
 	return ms.client
 }
+
+// envProxy is where marketClient sends hosts other than GitHub's: the environment's proxy. A variable so tests do
+// not depend on the proxy of the machine running them (http.ProxyFromEnvironment reads it once per process).
+var envProxy = http.ProxyFromEnvironment
 
 // githubHost says whether host is GitHub's: its site, API and where release assets and raw files are served from.
 func githubHost(host string) bool {

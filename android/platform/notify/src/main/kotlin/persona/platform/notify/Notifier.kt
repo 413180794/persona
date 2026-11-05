@@ -69,10 +69,11 @@ class Notifier @Inject constructor(
 
     private fun isAssistant(session: SessionKey) = sessions.sessions.value.firstOrNull { it.key == session }?.assistant
 
-    private fun open(session: SessionKey?, assistant: Boolean? = null, terminal: Boolean = false): PendingIntent {
+    /** [request]: the interaction to show first in the conversation, so a tap lands on the thing it is about. */
+    private fun open(session: SessionKey?, assistant: Boolean? = null, terminal: Boolean = false, request: String? = null): PendingIntent {
         val uri = if (terminal && session != null) Uri.parse(terminalLink(TerminalRoute(session.machineId, session.sessionId)))
         else session?.let {
-            NotificationRoute.conversation(it.machineId, it.sessionId, assistant ?: isAssistant(it))
+            NotificationRoute.conversation(it.machineId, it.sessionId, assistant ?: isAssistant(it), request)
         }?.uri() ?: NotificationRoute(AppTab.Agents).uri()
         val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(context.packageName)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -148,7 +149,8 @@ class Notifier @Inject constructor(
      */
     private fun ongoingAction(request: OngoingAction, button: OngoingButton): NotificationCompat.Action {
         val key = button.key
-            ?: return NotificationCompat.Action.Builder(0, context.getString(button.label), open(request.session)).build()
+            ?: return NotificationCompat.Action.Builder(0, context.getString(button.label),
+                open(request.session, request = request.interaction)).build()
         val intent = Intent(context, ActionReceiver::class.java).apply {
             this.action = ActionReceiver.RESOLVE
             data = Uri.Builder().scheme("jarvis-notify").authority("ongoing")
@@ -189,7 +191,7 @@ class Notifier @Inject constructor(
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setOnlyAlertOnce(true)
             .setAutoCancel(true)
-            .setContentIntent(open(ix.sessionKey))
+            .setContentIntent(open(ix.sessionKey, request = ix.id))
         ix.expiresAt?.let { deadline ->
             builder.setTimeoutAfter((Instant.parse(deadline).toEpochMilli() - System.currentTimeMillis()).coerceAtLeast(1))
         }

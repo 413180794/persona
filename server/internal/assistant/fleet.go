@@ -46,6 +46,8 @@ type fleetBook struct {
 	reportSent map[string]time.Time
 	// codexAnnounced: Codex card id -> when it was announced (fleet_ix.go)
 	codexAnnounced map[string]time.Time
+	// codexEnded: Codex card id -> when the node stopped listing it (fleet_ix.go)
+	codexEnded map[string]time.Time
 	// hooked: Persona's hooks run in the session (a hook event came since the manager started).
 	hooked map[[2]string]bool
 	// stopSig: the signature of the reply each session's latest Stop ended its turn with; pushedSig: the one a

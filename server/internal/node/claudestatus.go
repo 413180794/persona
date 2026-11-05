@@ -126,7 +126,7 @@ const liveLines = 60
 
 // watchLive pushes a watched Claude's status line as session.live until ctx ends: about once a second while the agent
 // works, only when it changed (At aside), and live: null once the turn stops, the line goes or the watch ends (when
-// something was sent). Its own goroutine, so a slow herdr never holds up the transcript (watchLoop).
+// something was sent). Its own goroutine, so a slow screen read never holds up the transcript (watchLoop).
 func (n *Node) watchLive(ctx context.Context, id string) {
 	t := time.NewTicker(liveEvery)
 	defer t.Stop()
@@ -156,12 +156,17 @@ func (n *Node) watchLive(ctx context.Context, id string) {
 	}
 }
 
-// readLive is the session's status line now: nil when it is not a working Claude in herdr or shows no line; ok is
+// liveHosts are the hosts whose screens readLive reads: each reads a pane's text (herdr-core and Orca as plain text,
+// which parseClaudeStatus takes as it is), so a Claude in the Herdr app or Orca shows its line too (#3904). botmux has
+// no screen of its own.
+var liveHosts = map[string]bool{host.Herdr: true, host.HerdrCore: true, host.Orca: true}
+
+// readLive is the session's status line now: nil when it is not a working Claude on a screen it can read or shows no line; ok is
 // false when the screen could not be read (keep what was sent; a failing read is not logged, it would be every second).
 func (n *Node) readLive(ctx context.Context, id string) (*proto.SessionLive, bool) {
 	a, found := n.agent(id)
 	if !found || a.Agent != "claude" || a.AgentStatus != proto.StatusWorking || a.PaneID == "" ||
-		n.hosts.Ref(a.PaneID).Kind != host.Herdr || n.isAssistantSession(id) {
+		!liveHosts[n.hosts.Ref(a.PaneID).Kind] || n.isAssistantSession(id) {
 		return nil, true
 	}
 	rctx, cancel := context.WithTimeout(ctx, liveReadTimeout)

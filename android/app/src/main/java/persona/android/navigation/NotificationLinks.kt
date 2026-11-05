@@ -21,7 +21,9 @@ internal fun Router.open(route: NotificationRoute): ResolvedRoute? {
     val chat = route.chat
     val tab = route.tab
     return when {
-        chat != null -> parse(RouteInput.Internal(chat.copy(kind = kind ?: chat.kind)))
+        chat != null -> chat.copy(kind = kind ?: chat.kind).let { target ->
+            parse(RouteInput.Internal(route.request?.let { InteractionRoute(target, it) } ?: target))
+        }
         tab != null -> parse(RouteInput.Internal(tabRoot(tab)))
         else -> null
     }
