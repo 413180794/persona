@@ -7,3 +7,4 @@ export { FitAddon } from "@xterm/addon-fit";
 export { ClipboardAddon } from "@xterm/addon-clipboard";
 export { WebLinksAddon } from "@xterm/addon-web-links";
 export { SearchAddon } from "@xterm/addon-search";
+export { matchHerdrWidths } from "./widths";

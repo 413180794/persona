@@ -187,7 +187,7 @@ export class FullFeed {
       return;
     }
     if (this.disposed) return;
-    const { Terminal, FitAddon, ClipboardAddon, WebLinksAddon, SearchAddon } = mod;
+    const { Terminal, FitAddon, ClipboardAddon, WebLinksAddon, SearchAddon, matchHerdrWidths } = mod;
     const size = savedFontSize();
     const family = getComputedStyle(host).fontFamily;
     await terminalFontReady(size, family);
@@ -215,6 +215,7 @@ export class FullFeed {
     // herdr's own client copies with OSC 52 (a selection, or a pane's program): a write goes to the clipboard, a read is
     // refused — nothing running on the computer gets to read what the user copied.
     term.loadAddon(new ClipboardAddon(undefined, { readText: () => "", writeText: (_selection: string, text: string) => this.programCopied(text) }));
+    matchHerdrWidths(term);
     term.open(host);
     this.term = term;
     this.fit = fit;

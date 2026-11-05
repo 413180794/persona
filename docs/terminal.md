@@ -931,3 +931,58 @@ herdr 二进制里有 `mouse_tracking_enabled`（它内部的终端），只是�
   右键 → 鼠标报告 + herdr 菜单、无 Persona 菜单、浏览器菜单被压掉（改动前这一条不过）；Shift + 右键 → Persona 菜单、herdr 收不到右键；Mac 上同样；Ctrl+B → `\x02` 给 herdr；Ctrl+K 仍开命令面板；
   滚轮只有 SGR 滚轮报告；左键拖动是报告、Shift + 拖动不发；Ctrl+Shift+V 文字、Ctrl+V 只有文字时仍是 `^V`；Ctrl+V 图片 → 上传 + 括号粘贴的路径；键栏粘贴图片 / 文字；拖入文件（高亮圈）；Files 条目；别的电脑的条目被拒；Mac 的 `paste` 事件带文件。
 - `scripts/test/web_herdr_full_conflicts_live.py`（真 herdr，临时会话 `persona-conflict-test`，测完 stop + delete）：右键出 herdr 自己的窗格菜单、没有 Persona 菜单；Shift + 右键出 Persona 菜单、herdr 的不出；Ctrl+V 粘贴图片，路径到了真 herdr 窗格的提示符后。
+
+## 二十七、字符宽度与 CJK 对齐：完整界面里中文表格的右边框歪了（2026-11-05，网页，#2751）
+
+现象（用户截图）：完整界面里 Claude 画的表格，含中文和全角标点的行右边框向右错开 1–2 格，旁边 fish 窗格的左边框成了锯齿状的 `||`。Moshi 的网页端没有这个问题，所以先看了它怎么做：
+
+- Moshi 没有注册任何 Unicode 宽度插件（xterm 默认的 Unicode 6），也没有处理 CJK 字体；它用 WebGL 渲染器（每个格子画在固定的网格位置），字体是随站点自带的 JetBrainsMono Nerd Font Mono，`document.fonts.load` 之后才打开终端。
+- Persona 完整界面用 DOM 渲染器（单窗格里的 WebGL 是设置里的可选项，默认关），字体栈是 `"JetBrains Mono", "SF Mono", ui-monospace, …`，字体和 CJK 回退（`cjk.ts`，按 `size-adjust` 缩成正好两格）早就在，`terminalFontReady` 也在打开前等字体。
+
+所以没有照搬「换 WebGL」，先在临时会话里量。
+
+### 量到了什么
+
+环境：herdr 0.9.5 的临时会话（`herdr --session <名字>`，两个并排窗格，左边 `cat` 一张含中文、全角标点、符号、日文、韩文、emoji 的框线表格），假 hub 的 `MOCK_TERMINAL_FULL_EXEC="herdr session attach <名字>"` 把真 herdr 客户端的字节转给浏览器，Chrome 156 无头，字体 JetBrainsMono Nerd Font。测完 `session stop` + `session delete`。
+
+1. **herdr 自己对每个宽字符都先移动光标再写**：抓 `herdr session attach` 的字节，`开` 是 `ESC[6;32H开`，下一格 `ESC[6;34H关`，emoji 后面也是 `ESC[14;38H`。所以 xterm 对宽度的判断**不会让缓冲区的列错位**（逐行比 xterm 缓冲区里所有 `│` 的列：每行都在 25 / 26 / 27 / 56 / 83 / 100 / 101 / 174，和 herdr 一致）。错位不是缓冲区里的，是渲染出来的。
+2. **DOM 渲染器下含全角标点的行，边框真的画歪了**：用 Range 量每个 `│` 的屏幕位置（单位：格，减去缓冲区的列）：
+
+   | 行 | 内容 | 第 56 / 83 / 100 / 174 列的边框 |
+   | --- | --- | --- |
+   | 纯 ASCII、普通汉字、日文、韩文、符号 | `Ctrl+B 是 herdr 的前缀键`… | +0.04 … +0.27（所有行都一样，是单格宽度的取整） |
+   | `「开关右侧面板」（快捷键）` | 全角括号 | **−2.84 / −3.81 / −3.78 / −3.67**（向右偏） |
+   | `、：；！？ 逗号顿号` | 全角标点 | **−0.85 / −0.84 / −0.82 / −0.70** |
+
+   逐字符看：`「` `」` `）` `，` 各占 **2.97 格**（该是 2），`（` `：` 占 1.97，汉字都是 2.00。
+3. **原因是浏览器的 `text-spacing-trim: normal`（Chrome 123+，默认就开）**：全角标点挨着别的全角标点或行首行尾时被「压成半角」。xterm 的 DOM 渲染器给每个字符补 `letter-spacing = 格宽 × 单元数 − 该字符量出来的宽度`，量的方法是把这个字符重复 32 次放进一个隐藏元素（`WidthCache._measure`）：`「「「「…` 里每个都被压成约 1 格（量出 8.03px），于是补了 +7.57px 的字距；真正渲染时 `「` 左右是汉字，没被压，是整整 2 格，加上字距成了 2.97 格。这个偏差随上下文变（挨着另一个标点就又被压），所以才是锯齿，而且偏差大小取决于一行里有多少个全角标点。把 `.xterm` 设成 `text-spacing-trim: space-all` 后，同样的两行回到 +0.04 … +0.27，和 ASCII 行一样。
+4. **字体回退不是原因**：`cjk.ts` 把系统中文字体缩成正好两格，汉字（没有标点相邻问题）一直是 2.00 格；`term.options.fontFamily` 重设（清宽度缓存）也不改变偏差。
+5. **xterm 的宽度表和 herdr 不一致，但表现不是列错位而是脏格子**：扫了 8266 个字符（Latin-1、Hangul Jamo、2000–2BFF 全部、CJK 符号 / 假名 / 兼容区、PUA 前 512 个、FE10–FE6F、FF00–FFEF、1F000–1FAFF 的已分配字符，另有 ZWJ 家庭、国旗、变体选择符、带声调的字母等三十多个序列），用 herdr 的输出（每个字符后面 `a` 的列距）得到 herdr 的宽度（窄 5268、宽 2997），再用 xterm 的各个宽度表算同一批字符：
+
+   | xterm 宽度表 | 和 herdr 不同的字符数（共 8266） |
+   | --- | --- |
+   | Unicode 6（xterm 默认） | 1283（几乎都是 herdr 2 格、xterm 1 格：😀 🚀 ✅ ⭐ ⚡ ⌚ 等 emoji） |
+   | Unicode 11（`addon-unicode11`） | 160 |
+   | Unicode 15 | 99 |
+   | Unicode 15 + 字素簇（`addon-unicode-graphemes`） | 88，其中 85 个是 Unicode 15 之后才加的（☰ 等八卦符号、2FFC–2FFF、1FA75 起的新 emoji），另有 3 个是我读字节时的误差（`ㄷ`、`💪` 单独重画一次都是 2 格，和 xterm 一致）；ZWJ 家庭、国旗、`❤️` 之类序列都一致 |
+
+   表现：herdr 以为 emoji 占 2 格，不会去写第 2 格；xterm 按 1 格，那一格保留着之前画过的东西，截图里就是 emoji 后面一块深色底（那一格的背景色是 `rgb(24, 24, 37)`，不是页面的浅色）。换成 Unicode 15 + 字素簇后那一块黑没有了。herdr 没有询问 DEC 2027（字素簇模式），所以它的输出方式不变。
+6. **WebGL 渲染器的位置是准的，但不是这里的修法**：同一页临时加载 `WebglAddon` 看了截图：边框是直的、emoji 正常，格宽被取整成 7px（DOM 渲染器是 7.8px），字更挤；没有量像素位置。DOM 渲染器改完 CSS 后位置已经对，WebGL 的外观又和默认不同，按「默认外观不变」不改默认；完整界面里也没有 WebGL 开关，没有为这件事新加。
+
+### 改了什么
+
+- `terminal.css`：`.xterm { text-spacing-trim: space-all; text-autospace: no-autospace }`。前者是量到的原因；后者（中英文之间自动加间距）在 Chrome 156 上量到的默认值已经是 `no-autospace`，没有观察到影响，写上是因为它和前者一样会改变字符宽度、不同浏览器版本默认值不同，这一条**没有在会出问题的浏览器上验证过**。两个 xterm 界面（完整界面和单窗格）共用这份样式，所以单窗格里的中文也一样受益。Safari 对 `text-spacing-trim` 的支持程度没有在真实 Mac 上测过。
+- `widths.ts`（经 `xterm.ts` 导出的 `matchHerdrWidths`）：给两个界面的 xterm 加载 `@xterm/addon-unicode-graphemes`（精确锁 0.4.0，MIT，34 KB 的 mjs，随 xterm 一起动态加载，不进主包），它激活 `15-graphemes`。
+- 没有动字体栈、行高、`document.fonts.load` 和 `cjk.ts`：量下来它们不是原因，bundled 字体和 CJK 回退也没有必要新加（Moshi 带 JetBrainsMono Nerd Font，Persona 的 `--font-mono` 在没装的机器上回退到系统等宽，字宽由 xterm 量出来的格宽决定，边框列不依赖字体）。
+
+### 没有解决 / 注意
+
+- 「格宽取整」带来的 0.04 … 0.27 格的缓慢漂移（175 列时最右边偏 0.27 格）是 xterm DOM 渲染器量格宽的取整，所有行一样，不会锯齿，没有处理。
+- 比 Unicode 15 新的字符（上面的 85 个）xterm 仍按 1 格，herdr 按 2 格，会留下脏格子；等 xterm 出新表再换。
+- `a🏿`（非 emoji 后面接肤色修饰符）herdr 给 3 格、xterm 给 2 格，没有处理。
+
+### 验证
+
+- `cd web && npm test`：新加 `widths.test.ts`（默认表里 😀 ✅ 是 1 格，加了之后 emoji / ZWJ 家庭 / 国旗 / `❤️` 是 2 格，汉字和全角标点 2 格，拉丁字母、框线、`⌘ ✓ ★ →` 1 格）。
+- `scripts/test/web_herdr_full_cjk_e2e.py`（假 hub 跑它自己当「herdr 客户端」，按真 herdr 的方式逐宽字符定位）：每一行的四条 `│` 和纯 ASCII 行的位置相差不超过 0.25 格（改动后最大 0.08；去掉 CSS 后最大 4.77），emoji 后的第二格没有上一帧的残留（去掉宽度表后出现 `Z`）；浅色、深色各一遍。
+- `scripts/test/web_herdr_full_live.py` / `web_herdr_full_conflicts_live.py` 的做法同上（真 herdr 的临时会话），本次的实测过程就是这么做的。

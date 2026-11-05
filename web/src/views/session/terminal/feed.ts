@@ -327,7 +327,7 @@ export class TerminalFeed {
       return;
     }
     if (this.disposed) return;
-    const { Terminal, FitAddon, ClipboardAddon, WebLinksAddon, SearchAddon } = mod;
+    const { Terminal, FitAddon, ClipboardAddon, WebLinksAddon, SearchAddon, matchHerdrWidths } = mod;
     const family = getComputedStyle(host).fontFamily;
     await terminalFontReady(this.view.fontSize, family); // xterm measures a cell when it opens: not before the font is there
     if (this.disposed) return;
@@ -359,6 +359,7 @@ export class TerminalFeed {
     // OSC 52 from the program (herdr's streams do not carry it, docs/terminal.md): a write goes to the clipboard, a read
     // is refused — a program must not read what the user copied, so it is told the clipboard is empty.
     term.loadAddon(new ClipboardAddon(undefined, { readText: () => "", writeText: (_selection: string, text: string) => this.programCopied(text) }));
+    matchHerdrWidths(term);
     term.open(host);
     this.term = term;
     this.fit = fit;

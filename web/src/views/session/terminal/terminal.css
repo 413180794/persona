@@ -4,3 +4,15 @@
   color: var(--ink);
   box-shadow: var(--shadow-raised);
 }
+
+/*
+ * The DOM renderer lays a row out as text and pads each character to its cell with letter-spacing, from a width it
+ * measured on that character alone. Two layout features of the browser change a character's width depending on its
+ * neighbours: text-spacing-trim halves full-width punctuation next to other full-width punctuation or a line edge (「」
+ * （）、，：；！？ measured 1 cell when alone and 2 in a row), text-autospace adds a gap between Chinese and Latin text.
+ * The padding then no longer adds up to two cells and everything after on the row is shifted. Both off: a cell is a cell.
+ */
+.xterm {
+  text-spacing-trim: space-all;
+  text-autospace: no-autospace;
+}
