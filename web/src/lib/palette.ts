@@ -188,6 +188,8 @@ export interface TerminalHit {
   /** The place and what runs: 机器 › 工作区 › 标签页. */
   trail: string;
   detail: string;
+  /** The agent in the pane ("" for a plain shell). */
+  agent: string;
   state: PaneState;
   to: Route;
   score: number;
@@ -222,6 +224,7 @@ export function terminalHits(machines: readonly MachinePanes[], query: string): 
             title: p.title,
             trail: [m.machine, sp.label, tab.label === sp.label ? "" : tab.label].filter(Boolean).join(" › "),
             detail: p.detail,
+            agent: p.agent,
             state: p.state,
             to: { name: "terminal", mid: m.mid, id: p.id },
             score: s,

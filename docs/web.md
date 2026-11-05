@@ -934,6 +934,12 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 - 品牌标志：侧边栏左上角（32 px、圆角 8）和登录页（44 px、圆角 12）是 iOS App 图标原图（`AppMark`，`public/app-icon.png` / `app-icon-dark.png`，
   从 `AppIcon.appiconset` 的 `icon.png` / `icon-dark.png` 缩出来，不重画），按页面的深浅色换；favicon 是同一份的 64 px 版，按系统深浅色换（`<link media>`），管理页也用它。
   安装成 App 用的图标见下面「安装成 App」。形象里可选的「标志」（黑底白星）是另一回事，不动。
+- Agent 标志（#3391，跟 Moshi 的网页一样一眼分出是哪个 agent；`src/ui/AgentMark.tsx`，`lib/agent-kind.ts`）：Claude Code、Codex、opencode、pi、Gemini CLI、Cursor 各有自己的标志，
+  其余（TRAEX 没有公开标志、运行时、herdr 报的别的 agent）画名字首字的方块；同样大小、同一中心（`BrandMark` 的规则：固定方框，按形状取方框的 0.88 到 1）。
+  单色标志是模板（CSS mask，`currentColor`），深浅色和选中的按钮里都跟着文字色；只有 Claude 保留自己的珊瑚色。标志挨着状态点，不替换它：
+  侧边栏 agent 行（点 › 标志 › 来源标签 › 标题，14 px）、会话页头（16 px）、`/terminal` 窗格行、⌘K 的会话和窗格结果、新建 Agent 的启动器按钮（按启动器启动的 agent）。
+  `role=img` + `aria-label`（词条 `agent-mark.*`）；没有标志的 agent 用运行时自己的名字（`agent_label`）或 herdr 报的名字。
+  来源和条款见文件头注释和 `THIRD_PARTY_NOTICES.md`；条款不清楚的 agent 先用首字，不画。检查：`scripts/test/web_agent_marks_e2e.py`（假 hub 带 `MOCK_AGENT_MARKS=1`）。
 - 按钮文字一律单行（`whitespace-nowrap`），放不下的用图标 + `title`。
 - 链接规则和 App 一样（`Links`）：裸链接在空白或非 ASCII 字符处结束，交给 Markdown 前写成 `<url>`（`src/ui/Markdown.tsx` 的 `linkify`），中文里的链接不会吞掉后半句。
 - 尊重 `prefers-reduced-motion`：所有动画缩成 1ms。脚本里的滚动（`scrollTo` / `scrollIntoView`）不受这条 CSS 管，一律用 `scrollBehavior()`（`src/ui/stream/motion.ts`），

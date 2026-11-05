@@ -17,6 +17,12 @@ redrawn.
 | `brand-google` | Google G | developers.google.com/identity/branding-guidelines, `signin-assets.zip` (the G matted from the light and dark buttons) | Google Sign-In branding guidelines |
 | `brand-gmail` | Gmail | gstatic.com Google product icon `gmail_2020q4_512dp.png` | Google brand terms |
 | `ios-app-*` | Apple 通讯录、日历、提醒事项、健康、照片、地图 app icons | App Store artwork of each app (iTunes lookup `artworkUrl512`, fetched at 240×240), shown next to the data Jarvis reads from that app | Apple trademarks; Apple's terms for its marks |
+| `web/src/ui/brands/claude.svg` | Claude (Anthropic), agent mark in the web client | Same file as `brand-claude` | Anthropic's brand guidelines |
+| `web/src/ui/brands/codex.svg` | OpenAI Blossom, the Codex agent mark in the web client | Same file as `brand-openai` | openai.com/brand |
+| `web/src/ui/brands/opencode.svg` | OpenCode, agent mark in the web client | Simple Icons 16.36.0 `opencode.svg` (CC0 for the file; viewBox cropped to the mark); upstream github.com/anomalyco/opencode `packages/identity/mark.svg` (the project is MIT) | OpenCode's trademark |
+| `web/src/ui/brands/cursor.svg` | Cursor, agent mark in the web client | Simple Icons 16.36.0 `cursor.svg` (CC0 for the file; viewBox cropped to the mark); upstream cursor.com/brand | Cursor's brand page |
+| `web/src/ui/brands/gemini.svg` | Google Gemini, agent mark in the web client | Simple Icons 16.36.0 `googlegemini.svg` (CC0 for the file); upstream gemini.google.com, no brand kit found | Google brand terms |
+| `web/src/ui/brands/pi.svg` | Pi, agent mark in the web client | Simple Icons 16.36.0 `pi.svg` (CC0 for the file); upstream pi.dev/favicon.svg, no licence text found | Pi's trademark |
 | `os-*` | Ubuntu, Debian, Fedora, Red Hat, CentOS, Rocky Linux, AlmaLinux, Arch Linux, Alpine Linux, openSUSE, NixOS, Linux (Tux) | Simple Icons (CC0 for the files) | Debian CC-BY-SA-3.0, NixOS CC-BY-4.0, Rocky Linux CC-BY-SA-4.0; the others under each project's trademark policy |
 
 ## Ovis

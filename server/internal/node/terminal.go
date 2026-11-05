@@ -172,6 +172,9 @@ type termStream struct {
 	mu    sync.Mutex
 	ctl   host.Control
 	lease time.Time
+	// leaseFor is termLease when terminalControl made the stream (0 for an observing one, which has no lease):
+	// controlLoop outlives the call that started it, so neither it nor leaseOver reads the package variable again.
+	leaseFor time.Duration
 }
 
 // termLease: a controlled terminal goes back to its own size when the hub said nothing about it for this long (it
@@ -188,7 +191,7 @@ func (s *termStream) control() host.Control {
 func (s *termStream) leaseOver() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return time.Since(s.lease) > termLease
+	return time.Since(s.lease) > s.leaseFor
 }
 
 // canObserve: whether any host can stream a terminal (herdr: one with `terminal session observe`).
@@ -290,7 +293,7 @@ func (n *Node) terminalControl(ctx context.Context, id string, ctlr host.Control
 		}
 	}
 	sctx, cancel := context.WithCancel(context.Background())
-	s := &termStream{cancel: cancel, lease: time.Now()}
+	s := &termStream{cancel: cancel, lease: time.Now(), leaseFor: termLease}
 	epoch := strconv.FormatInt(time.Now().UnixNano(), 36)
 	frames, replay := 0, 0
 	gate := &frameGate{send: func(f host.Frame) {
@@ -338,7 +341,7 @@ func (n *Node) terminalControl(ctx context.Context, id string, ctlr host.Control
 func (n *Node) controlLoop(ctx context.Context, id string, s *termStream, gate *frameGate) {
 	c := s.control()
 	defer c.Close()
-	t := time.NewTicker(termLease / 5)
+	t := time.NewTicker(s.leaseFor / 5)
 	defer t.Stop()
 	var why error
 	for why == nil {

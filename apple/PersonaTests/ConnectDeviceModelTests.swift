@@ -36,7 +36,7 @@ struct ConnectDeviceModelTests {
         let page = model(hub, clock)
         await page.make()
         let c = try #require(page.code)
-        #expect(c.token == "jp_example" && c.pairURL.hasPrefix("jarvis://pair?") && c.qr?.rows == ["10", "01"])
+        #expect(c.token == "jp_example" && c.pairLink.hasPrefix("jarvis://pair?") && c.qr?.rows == ["10", "01"])
         #expect(c.webURL == "https://fake.invalid/#token=jp_example" && c.webQR?.rows == ["11", "00"])
         #expect(page.secondsLeft == 600 && page.live && !page.expired)
         let body = try #require(hub.sent("POST", "/api/v1/auth/pair-codes").first?.body)

@@ -66,6 +66,7 @@ import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
 import { displayLines, getFeedState, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
 import { CardConversation } from "../../ui/AssistantCard";
+import { SessionMark } from "../../ui/AgentMark";
 import { DayLine, FeedLineView, QuickResultCard, RouteChip, TaskDock, TaskQuestions } from "../assistant/Tasks";
 import { t } from "../../i18n";
 
@@ -1210,6 +1211,7 @@ export function Header({
       <div className={cx("min-w-0 flex-1", Boolean(topCenter) && "max-lg:hidden")}>
         <div className="flex min-w-0 items-center gap-2">
           {session && !assistant && <StatusDot state={state} />}
+          {session && !assistant && <SessionMark s={session} size={16} />}
           {assistant && <AssistantFace session={session} last={last} />}
           {/* narrow: the dot before the title says the state; the pill would leave the title a word or two */}
           <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>

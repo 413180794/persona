@@ -105,7 +105,7 @@ struct ShellView: View {
                          openInbox: { go(.inbox) },
                          openTodos: { go(.todos) },
                          onMachines: { go(.machines) },
-                         openExtension: { go(.extensionPage($0)) },
+                         onOpenExtension: { go(.extensionPage($0)) },
                          openHealth: { go(.health) })
     }
 

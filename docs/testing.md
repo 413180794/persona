@@ -845,7 +845,7 @@ Time Profiler 能用：附加到模拟器里的进程要带 `--device <模拟器
 
 改 hub 推给 App 的东西（会话列表、实时活动的节奏）之前和之后，用同一段真实推送比：
 
-1. 在 hub 机器上录：`cd server && go run ./cmd/pushrec 20m ~/push.jsonl`。它像 App 一样连 hub（用 `~/.persona/hub.json` 的 token，不打印），
+1. 在 hub 机器上录：`cd server && go run ./cmd/pushrec 20m ~/push.jsonl`。它像 App 一样连 hub（用 `~/.persona/hub.json` 的 token，不打印；地址和 hub 一样取 `listen`，环境变量 `PERSONA_LISTEN` / `JARVIS_LISTEN` 优先），
    不注册成手机 / 桌面、不打开对话，每条消息一行 `{"t": 毫秒, "msg": 原文}`。文件里是真实的会话（标题、最后一句），0600，**只留在那台机器上**，不拷走、不进仓库。
 2. 回放：`JARVIS_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`。打印每种消息改前（录到的）和改后（这份代码会发的）
    每分钟的条数和字节；实时活动按录到的时间把每次变化喂给合并和节流，打印 App 不开时每小时推几条、灵动岛和 hub 不一致连续最长多久，超过上限就失败。

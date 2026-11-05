@@ -54,6 +54,7 @@ import { rowDetail, useAgentDetails, useContextAsUsed } from "../lib/context-usa
 import { usePanes } from "../lib/terminal-panes";
 import { buildTerminalTree, shellsOnly, type TermSpace } from "../lib/terminals";
 import { setTheme, useTheme, type Theme } from "./theme";
+import { SessionMark } from "../ui/AgentMark";
 import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
@@ -1649,6 +1650,7 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
         endRoom ? "pr-[108px] [@media(hover:none)]:pr-[120px]" : cx(onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11"))}
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
+      {showState && !s.assistant && <SessionMark s={s} size={14} />}
       {showState && !s.assistant && <SourceTag s={s} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
       {detail.length > 0 || workflow || line ? (

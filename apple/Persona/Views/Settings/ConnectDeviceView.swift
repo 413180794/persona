@@ -229,7 +229,7 @@ struct ConnectDeviceSheet: View {
 
     @ViewBuilder private func showing(_ code: APIClient.PairCode) -> some View {
         let qr = target == .app ? code.qr : code.webQR
-        let link = target == .app ? code.pairURL : code.webURL
+        let link = target == .app ? code.pairLink : code.webURL
         Section {
             VStack(spacing: Theme.Space.m) {
                 if let qr {

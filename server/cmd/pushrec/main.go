@@ -3,7 +3,8 @@
 //
 //	go run ./cmd/pushrec 20m ~/push.jsonl
 //
-// It connects like an app with the hub token from ~/.jarvis/hub.json (never printed), registers as nothing and opens
+// It connects like an app with the hub token from ~/.persona/hub.json (never printed), at the address the hub listens
+// on (hub.json's listen, PERSONA_LISTEN / JARVIS_LISTEN over it), registers as nothing and opens
 // no chat, and writes one line per message: {"t": Unix ms, "msg": the message}. The file holds real sessions (titles,
 // last lines): it is created 0600 and stays on that machine.
 package main
@@ -56,8 +57,8 @@ func parseDuration(s string) (time.Duration, error) {
 	return dur, nil
 }
 
-// hubConfig reads the port and token from dir's hub.json. Its errors never quote the token.
-func hubConfig(dir string) (port, token string, err error) {
+// hubConfig reads the hub's address and token from dir's hub.json. Its errors never quote the token.
+func hubConfig(dir string) (addr, token string, err error) {
 	path := filepath.Join(dir, "hub.json")
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -73,16 +74,34 @@ func hubConfig(dir string) (port, token string, err error) {
 	if cfg.Token == "" {
 		return "", "", fmt.Errorf("%s has no token: start the hub once so it writes one", path)
 	}
-	_, port, err = net.SplitHostPort(cfg.Listen)
-	if err != nil || port == "" {
-		return "", "", fmt.Errorf("%s has no usable listen address (%q): expected host:port, e.g. :18660", path, cfg.Listen)
+	from := path
+	// The hub takes its listen address from the environment over hub.json's (Docker, docs/docker.md): so does pushrec.
+	if v := identity.Getenv("PERSONA_LISTEN"); v != "" {
+		cfg.Listen, from = v, "PERSONA_LISTEN / JARVIS_LISTEN"
 	}
-	return port, cfg.Token, nil
+	addr, err = dialAddr(cfg.Listen)
+	if err != nil {
+		return "", "", fmt.Errorf("%s has no usable listen address (%q): expected host:port, e.g. :18660", from, cfg.Listen)
+	}
+	return addr, cfg.Token, nil
+}
+
+// dialAddr turns the hub's listen address into one to connect to on the same machine: a wildcard host (none,
+// 0.0.0.0, ::) listens on loopback too, any other host is dialed as is.
+func dialAddr(listen string) (string, error) {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil || port == "" {
+		return "", fmt.Errorf("no port in %q", listen)
+	}
+	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, port), nil
 }
 
 func record(dur time.Duration, path string) error {
 	home, _ := os.UserHomeDir()
-	port, token, err := hubConfig(identity.DataDir(home))
+	addr, token, err := hubConfig(identity.DataDir(home))
 	if err != nil {
 		return err
 	}
@@ -93,7 +112,7 @@ func record(dur time.Duration, path string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dur)
 	defer cancel()
 	start := time.Now()
-	n, size, err := capture(ctx, "ws://127.0.0.1:"+port+"/api/v1/ws", token, out)
+	n, size, err := capture(ctx, "ws://"+addr+"/api/v1/ws", token, out)
 	if cerr := out.Close(); err == nil && cerr != nil {
 		err = fmt.Errorf("write %s: %v", path, cerr)
 	}

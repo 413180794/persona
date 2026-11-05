@@ -5,6 +5,7 @@
 // The new-conversation page has its own pick under NEW_CONVERSATION, sent with POST /assistant/conversations.
 import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
+import { shellPath } from "./format";
 import { modelName } from "./launcher-models";
 
 export const NEW_CONVERSATION = "new";
@@ -47,7 +48,7 @@ export function assistantInfoText(o: { title?: string; isMain: boolean; sessionI
     t("lib-assistant-chat.info_machine", { machine }),
     t("lib-assistant-chat.info_cwd", { cwd: o.cwd }),
     o.model ? t("lib-assistant-chat.info_launcher_model", { launcher: o.launcher, model: o.model }) : t("lib-assistant-chat.info_launcher", { launcher: o.launcher }),
-    t("lib-assistant-chat.info_resume", { command: `cd ${o.cwd} && claude --resume ${o.sessionId}` }),
+    t("lib-assistant-chat.info_resume", { command: `${o.cwd ? `cd ${shellPath(o.cwd)} && ` : ""}claude --resume ${o.sessionId}` }),
   ].join("\n");
 }
 

@@ -28,25 +28,32 @@ func TestParseDuration(t *testing.T) {
 
 func TestHubConfig(t *testing.T) {
 	cases := []struct {
-		name, file, port, wantErr string
+		name, file, env, addr, wantErr string
 	}{
-		{"missing", "", "", "run pushrec on the hub's machine"},
-		{"bad json", "{", "", "not valid JSON"},
-		{"no token", `{"listen": ":18660"}`, "", "has no token"},
-		{"no listen: the hub's default", `{"token": "secret-token"}`, "18660", ""},
-		{"bad listen", `{"listen": "18660", "token": "secret-token"}`, "", "no usable listen address"},
-		{"port only", `{"listen": ":18660", "token": "secret-token"}`, "18660", ""},
-		{"host and port", `{"listen": "[::]:18661", "token": "secret-token"}`, "18661", ""},
+		{"missing", "", "", "", "run pushrec on the hub's machine"},
+		{"bad json", "{", "", "", "not valid JSON"},
+		{"no token", `{"listen": ":18660"}`, "", "", "has no token"},
+		{"no listen: the hub's default", `{"token": "secret-token"}`, "", "127.0.0.1:18660", ""},
+		{"bad listen", `{"listen": "18660", "token": "secret-token"}`, "", "", "no usable listen address"},
+		{"port only", `{"listen": ":18660", "token": "secret-token"}`, "", "127.0.0.1:18660", ""},
+		{"ipv4 wildcard", `{"listen": "0.0.0.0:18661", "token": "secret-token"}`, "", "127.0.0.1:18661", ""},
+		{"ipv6 wildcard", `{"listen": "[::]:18661", "token": "secret-token"}`, "", "127.0.0.1:18661", ""},
+		{"one address", `{"listen": "192.0.2.7:18661", "token": "secret-token"}`, "", "192.0.2.7:18661", ""},
+		{"ipv6 address", `{"listen": "[::1]:18661", "token": "secret-token"}`, "", "[::1]:18661", ""},
+		{"the environment over hub.json", `{"listen": ":18660", "token": "secret-token"}`, ":18662", "127.0.0.1:18662", ""},
+		{"bad listen in the environment", `{"token": "secret-token"}`, "18662", "", "PERSONA_LISTEN"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("JARVIS_LISTEN", "")
+			t.Setenv("PERSONA_LISTEN", c.env)
 			dir := t.TempDir()
 			if c.file != "" {
 				if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(c.file), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
-			port, token, err := hubConfig(dir)
+			addr, token, err := hubConfig(dir)
 			if c.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
 					t.Fatalf("err = %v, want %q", err, c.wantErr)
@@ -56,10 +63,24 @@ func TestHubConfig(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || port != c.port || token != "secret-token" {
-				t.Fatalf("got %q %q %v", port, token, err)
+			if err != nil || addr != c.addr || token != "secret-token" {
+				t.Fatalf("got %q %q %v", addr, token, err)
 			}
 		})
+	}
+}
+
+// The legacy JARVIS_LISTEN still counts when PERSONA_LISTEN is not set, as for the hub.
+func TestHubConfigLegacyEnv(t *testing.T) {
+	t.Setenv("PERSONA_LISTEN", "") // restored after the test
+	os.Unsetenv("PERSONA_LISTEN")
+	t.Setenv("JARVIS_LISTEN", "127.0.0.1:18663")
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(`{"token": "secret-token"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if addr, _, err := hubConfig(dir); err != nil || addr != "127.0.0.1:18663" {
+		t.Fatalf("got %q %v", addr, err)
 	}
 }
 

@@ -119,7 +119,7 @@ struct AssistantView: View {
                                 openInbox: places ? { show(.inbox) } : nil,
                                 openTodos: places ? { show(.todos) } : { drawer.close(); showTodos = true },
                                 onMachines: places ? { show(.machines) } : nil,
-                                openExtension: places ? { show(.extensionPage($0)) } : { r in drawer.close(); openedExtension = r },
+                                onOpenExtension: places ? { show(.extensionPage($0)) } : { r in drawer.close(); openedExtension = r },
                                 openHealth: places ? { show(.health) } : { drawer.close(); showHealth = true })
     }
 

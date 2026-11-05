@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MARKED_AGENTS } from "../lib/agent-kind";
+import { AgentMark, SessionMark } from "./AgentMark";
+
+const draw = (agent: string | undefined, props: Partial<Parameters<typeof AgentMark>[0]> = {}) => renderToStaticMarkup(<AgentMark agent={agent} size={14} {...props} />);
+// the image's address: an <img src> or a mask's url() (Vite inlines files this small as data URIs, so it is the whole file)
+const src = (html: string) => /(?:src="|url\(&quot;)(.+?)(?:"|&quot;)/.exec(html)?.[1];
+
+describe("AgentMark", () => {
+  it("draws each known agent's own image, no two alike", () => {
+    const sources = MARKED_AGENTS.map((a) => src(draw(a)));
+    expect(sources.every(Boolean)).toBe(true);
+    expect(new Set(sources).size).toBe(MARKED_AGENTS.length);
+    expect(draw("")).toBe(draw("claude")); // Claude Code reports nothing
+    expect(draw("gemini-cli")).toBe(draw("gemini"));
+  });
+
+  it("draws the one-color marks as templates in the text color and Claude in its own color", () => {
+    for (const a of MARKED_AGENTS.filter((x) => x !== "claude")) {
+      const html = draw(a);
+      expect(html).toContain("bg-current");
+      expect(html).toContain("mask");
+      expect(html).not.toContain("<img");
+    }
+    expect(draw("claude")).toContain("<img");
+    expect(draw("codex")).toContain("text-ink-2"); // read in light and dark: the text color, not a fixed one
+    expect(draw("codex", { className: "text-current" })).not.toContain("text-ink-2");
+  });
+
+  it("says which agent it is, in the interface language", () => {
+    expect(draw("claude")).toContain('role="img"');
+    expect(draw("claude")).toContain('aria-label="Claude Code"');
+    expect(draw("opencode")).toContain('aria-label="OpenCode"');
+    expect(draw("cursor-agent")).toContain('aria-label="Cursor"');
+  });
+
+  it("is only decoration where the text beside it names the agent", () => {
+    const html = draw("codex", { decorative: true });
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).not.toContain("aria-label");
+    expect(html).not.toContain("role=");
+  });
+
+  it("draws a letter for an agent with no mark, in the same box", () => {
+    for (const [agent, label, letter] of [["traex", undefined, "T"], ["dsh", "DSH", "D"], ["amp", undefined, "A"]] as const) {
+      const html = draw(agent, { label });
+      expect(html).toContain('data-agent-mark="letter"');
+      expect(html).toContain(`>${letter}</span>`);
+      expect(html).not.toContain("<img");
+      expect(html).toContain("width:14px;height:14px");
+    }
+    expect(draw("dsh", { label: "DSH" })).toContain('aria-label="DSH"');
+    expect(draw("traex")).toContain('aria-label="TRAEX"');
+  });
+
+  it("keeps every mark in a box of the size asked, centred, whatever its shape", () => {
+    for (const a of [...MARKED_AGENTS, "traex"]) {
+      const html = draw(a, { size: 18 });
+      expect(html).toMatch(/^<span [^>]*class="inline-flex shrink-0 items-center justify-center/);
+      expect(html).toContain("width:18px;height:18px");
+    }
+  });
+
+  it("pulls a square or tall mark in so it does not look bigger than a round one", () => {
+    const inner = (a: string) => Number(/width:(\d+)px/.exec(draw(a, { size: 32 }).replace("width:32px;height:32px", ""))?.[1]);
+    expect(MARKED_AGENTS.map((a) => inner(a === "claude" ? "codex" : a))).toEqual([32, 32, 28, 28, 32, 29]);
+  });
+});
+
+describe("SessionMark", () => {
+  it("is the mark of the session's agent", () => {
+    const html = renderToStaticMarkup(<SessionMark s={{ agent: "opencode" }} size={14} />);
+    expect(html).toBe(draw("opencode"));
+    expect(renderToStaticMarkup(<SessionMark s={{ agent: "claude", source_kind: "codex_history" }} size={14} />)).toBe(draw("codex"));
+    expect(renderToStaticMarkup(<SessionMark s={{ agent: "dsh", agent_label: "DSH" }} size={14} />)).toContain('aria-label="DSH"');
+  });
+});

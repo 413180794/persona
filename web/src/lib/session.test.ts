@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, attachSession } from "./api";
-import { resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle } from "./format";
+import { resumeCommand, sessionCan, shellPath, sessionDeletable, sessionMenuActions, sourceSubtitle } from "./format";
 import type { Session, SessionCapabilities } from "./types";
 
 const legacy: Session = { machine_id: "m", session_id: "raw-thread", title: "", cwd: "/tmp/project", status: "working" };
@@ -37,6 +37,23 @@ describe("session capability contract", () => {
     expect(sessionMenuActions({ ...live, status: "idle", capabilities: { ...live.capabilities, interrupt: true } })).toEqual(["attach"]);
     expect(sessionMenuActions(legacy)).toEqual(["stop", "resume", "close"]);
     expect(resumeCommand(live)).toBe("cd /tmp/project && codex resume real-thread");
+  });
+
+  it("quotes the folder in the resume command, and gives only the command without one", () => {
+    expect(resumeCommand({ ...legacy, cwd: "/Users/me/My Project" })).toBe("cd '/Users/me/My Project' && claude --resume raw-thread");
+    expect(resumeCommand({ ...legacy, cwd: "/tmp/it's; $(rm -rf ~) & x" })).toBe(`cd '/tmp/it'\\''s; $(rm -rf ~) & x' && claude --resume raw-thread`);
+    expect(resumeCommand({ ...legacy, cwd: "~/My Project" })).toBe("cd ~/'My Project' && claude --resume raw-thread");
+    expect(resumeCommand({ ...legacy, cwd: "" })).toBe("claude --resume raw-thread");
+    expect(resumeCommand({ ...legacy, agent: "traex", cwd: "" })).toBe("traex resume raw-thread");
+  });
+
+  it("keeps plain paths as they are and a leading ~ outside the quotes", () => {
+    expect(shellPath("/home/me/work-2/a_b.c")).toBe("/home/me/work-2/a_b.c");
+    expect(shellPath("~")).toBe("~");
+    expect(shellPath("~/.jarvis/assistant")).toBe("~/.jarvis/assistant");
+    expect(shellPath("~/项目")).toBe("~/'项目'");
+    expect(shellPath("~user/x y")).toBe("'~user/x y'");
+    expect(shellPath("a|b>c")).toBe("'a|b>c'");
   });
 
   it("names a runtime's session by its agent_label and offers only what it declared", () => {

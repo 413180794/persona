@@ -24,6 +24,7 @@ import {
   type TermTab,
 } from "../../lib/terminals";
 import type { Machine } from "../../lib/types";
+import { AgentMark } from "../../ui/AgentMark";
 import { Collapse, cx, IconButton, Loading, StatusDot, toast } from "../../ui/atoms";
 import { contextMenuProps } from "../../ui/context-menu";
 import type { MenuAt } from "../../ui/menu-model";
@@ -383,6 +384,7 @@ function TabBlock({ machine, sp, t: tab, searching, shown, activeItem, open }: {
                   <span className="flex size-4 shrink-0 items-center justify-center text-ink-3">
                     {p.state === "shell" ? <Icon name="terminal" size={13} /> : <StatusDot state={p.state} />}
                   </span>
+                  {p.state !== "shell" && p.agent && <AgentMark agent={p.agent} size={14} />}
                   <span className="min-w-0 flex-1">
                     <span className={cx("block truncate text-[12.5px]", on ? "font-medium text-ink" : "text-ink")}>{p.title}</span>
                     {p.detail && <span className="block truncate text-[11px] text-ink-3">{p.detail}</span>}

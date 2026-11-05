@@ -22,7 +22,17 @@ export function sourceSubtitle(s?: Session): string {
 export function resumeCommand(s: Session): string {
   const codex = s.agent === "codex" || s.source_kind === "codex_app_server" || s.source_kind === "codex_history";
   const command = codex ? "codex resume" : s.agent === "traex" ? "traex resume" : "claude --resume";
-  return `cd ${s.cwd} && ${command} ${s.source_thread_id || s.session_id}`;
+  const resume = `${command} ${s.source_thread_id || s.session_id}`;
+  // Without a folder `cd  && …` would resume in the home folder instead.
+  return s.cwd ? `cd ${shellPath(s.cwd)} && ${resume}` : resume;
+}
+
+/** A path as one shell word: as is when it is plain, else single-quoted (as the Mac's resumeLine does), so a space,
+ * `;` or `$(…)` in it stays part of the path. A leading `~` / `~/` stays outside the quotes so it still expands. */
+export function shellPath(path: string): string {
+  const home = path === "~" ? "~" : path.startsWith("~/") ? "~/" : "";
+  const rest = path.slice(home.length);
+  return !rest || /^[\w@%+=:,./-]+$/.test(rest) ? path : `${home}'${rest.replace(/'/g, `'\\''`)}'`;
 }
 
 export function sessionMenuActions(s: Session): string[] {

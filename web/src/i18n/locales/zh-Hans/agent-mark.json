@@ -1,0 +1,10 @@
+{
+  "claude": "Claude Code",
+  "codex": "Codex",
+  "opencode": "OpenCode",
+  "pi": "Pi",
+  "gemini": "Gemini CLI",
+  "cursor": "Cursor",
+  "traex": "TRAEX",
+  "unknown": "Agent"
+}

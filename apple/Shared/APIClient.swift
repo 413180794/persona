@@ -697,14 +697,15 @@ nonisolated struct APIClient: Sendable {
     struct PairCode: Decodable, Hashable, Sendable {
         var token: String
         var expiresAt: Date
-        var pairURL: String
-        /// The QR code of `pairURL`; an older hub leaves it out.
+        // Not `pairURL` (a DEBUG launch switch): property names stay in the Release binary, which release.sh checks.
+        var pairLink: String
+        /// The QR code of `pairLink`; an older hub leaves it out.
         var qr: QRRows?
         /// `<page>#token=…`, asked for with `web`: opening it signs a browser in.
         var webURL: String?
         var webQR: QRRows?
         enum CodingKeys: String, CodingKey {
-            case token, qr, expiresAt = "expires_at", pairURL = "pair_url", webURL = "web_url", webQR = "web_qr"
+            case token, qr, expiresAt = "expires_at", pairLink = "pair_url", webURL = "web_url", webQR = "web_qr"
         }
     }
     /// 设置 › 设备 › 连接新设备: a signed-in full device asks the hub for a pairing code; `web` is the page address the

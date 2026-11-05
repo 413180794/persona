@@ -66,7 +66,7 @@
   "tab_agents_named_one": "{label}の{count}個のエージェント",
   "tab_agents_named_other": "{label}の{count}個のエージェント",
   "tab_expand": "このタブのエージェントを表示",
-  "launcher": "起点",
+  "launcher": "起動元",
   "child_count_one": "{count}件の子スペース",
   "child_count_other": "{count}件の子スペース",
   "children_title": "子スペース：{list}",

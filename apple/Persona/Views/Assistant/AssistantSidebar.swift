@@ -695,7 +695,8 @@ struct AssistantSidebar: View {
     var onMachines: (() -> Void)? = nil
     /// Opens an extension's main-navigation page (nav_page, #2961): listed after the places to go, with its badge.
     /// nil where they are listed elsewhere (the Mac's sections column).
-    var openExtension: ((ExtensionNavRoute) -> Void)? = nil
+    // Not `openExtension`: Swift keeps property names in the binary, and that is a DEBUG switch release.sh rejects.
+    var onOpenExtension: ((ExtensionNavRoute) -> Void)? = nil
     /// 健康: the health space's page (docs/health.md); nil leaves the row out.
     var openHealth: (() -> Void)? = nil
     private var isShell: Bool { openInbox != nil }
@@ -940,9 +941,9 @@ struct AssistantSidebar: View {
     /// The extensions' pages on the main navigation (nav_page, docs/extensions.md「UI 插槽」): one row each, its icon,
     /// title and badge, in the hub's order. Nothing with a hub without slots.
     @ViewBuilder private var extensionRows: some View {
-        if let openExtension, ExtensionSlots.shared.available {
+        if let onOpenExtension, ExtensionSlots.shared.available {
             ForEach(ExtensionSlots.shared.pages) { p in
-                extensionRow(p) { openExtension(ExtensionNavRoute(p)) }
+                extensionRow(p) { onOpenExtension(ExtensionNavRoute(p)) }
             }
         }
     }
@@ -1391,7 +1392,7 @@ struct AssistantSidebar: View {
                 .surface(interactive: true, in: .circle)
                 // The plugins' entries are in 设置 (docs/extensions.md「UI 插槽」角标): their badges add up here, unless the
                 // sidebar lists the entries itself.
-                .overlay(alignment: .topTrailing) { if openExtension == nil { ExtensionSettingsBadge() } }
+                .overlay(alignment: .topTrailing) { if onOpenExtension == nil { ExtensionSettingsBadge() } }
                 .accessibilityLabel("设置")
                 .accessibilityIdentifier("sidebar-settings")
             }

@@ -816,6 +816,27 @@ if os.environ.get("MOCK_OPENCODE"):
              read_only_reason="Persona 还不能读 gemini 的对话：手机上只能看终端、按键盘"),
     ]
 
+# MOCK_AGENT_MARKS=1 (#3391): one agent of each kind the web draws a mark for, on the server: Claude Code, Codex, opencode, pi,
+# gemini, cursor, and two with none of their own (TRAEX, amp: the lettered fallback). Their panes are in the terminal tree too.
+MARKS_SPACE = "marks"
+MARKS_AGENTS = []  # (session id, agent, title, status, state, minutes ago)
+if os.environ.get("MOCK_AGENT_MARKS"):
+    _nr = dict(launcher=None, can_fork=False, permission_mode=None, effort=None, model="")
+    MARKS_AGENTS = [
+        ("marks-claude", "claude", "整理发布说明", "working", "working", 1),
+        ("marks-codex", "codex", "修复订单列表的 N+1 查询", "done", "done", 4),
+        ("marks-opencode", "opencode", "重构解析器的错误处理", "blocked", "needs_you", 6),
+        ("marks-pi", "pi", "给导出脚本加上进度条", "idle", "idle", 30),
+        ("marks-gemini", "gemini", "Gemini CLI", "working", "working", 2),
+        ("marks-cursor", "cursor", "补全设置页的单元测试", "idle", "idle", 50),
+        ("marks-traex", "traex", "TRAEX 的一个会话", "done", "done", 9),
+        ("marks-amp", "amp", "amp 的一个会话", "idle", "idle", 70),
+    ]
+    for i, (sid, agent, title, status, state, mins) in enumerate(MARKS_AGENTS, 1):
+        extra = {} if agent in ("claude", "codex") else dict(_nr)
+        SESSIONS.append(sess("server", sid, title, "/home/me/code/marks", status, state, MARKS_SPACE, 12, f"agent-{i}", i, mins,
+                             "好的，我先看一下。", agent=agent, **extra))
+
 # MOCK_SPLIT_TABS=1: herdr's layout for the sidebar's 按机器 tree and the chat's pane tabs (#1963): two machines (the
 # NAS offline, its agent only under 最近), workspaces whose tabs hold one pane or two (claude and codex in one slot),
 # and a botmux space without tabs.
@@ -2740,6 +2761,12 @@ def mock_panes(mid):
         panes.append(pane)
     panes = [p for p in panes if p["pane"] not in CLOSED_PANES and p["tab_id"] not in CLOSED_TABS]
     tabs = [dict(t, label=TAB_NAMES.get(t["id"], t["label"])) for t in tabs if t["id"] not in CLOSED_TABS]
+    if MARKS_AGENTS and mid == "server":  # MOCK_AGENT_MARKS: a workspace of its own, one tab per agent
+        ws.append({"id": "w12", "label": MARKS_SPACE, "number": 12, "cwd": "/home/me/code/marks"})
+        for i, (sid, agent, title, status, state, mins) in enumerate(MARKS_AGENTS, 1):
+            tabs.append({"id": f"w12:t{i}", "workspace_id": "w12", "label": f"agent-{i}", "number": i})
+            panes.append({"pane": f"w12:p{i}", "terminal": f"pane:w12:p{i}", "tab_id": f"w12:t{i}", "workspace_id": "w12", "agent": agent,
+                          "status": status, "title": title, "cwd": "/home/me/code/marks", "session_id": sid})
     return {"hosts": [{"kind": "herdr", "stream": True, "control": True, "new_tab": True, "worktree": True, "workspaces": ws, "tabs": tabs, "panes": panes}]}
 
 

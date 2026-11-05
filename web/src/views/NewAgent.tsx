@@ -15,6 +15,7 @@ import { BYPASS_MODE, BYPASS_WARNING, EFFORTS, effortTitle, PERMISSION_MODES } f
 import { baseName, shortPath } from "../lib/format";
 import { useStore } from "../lib/store";
 import type { Launcher } from "../lib/types";
+import { AgentMark } from "../ui/AgentMark";
 import { Button, cx, Dialog, Spinner, toast } from "../ui/atoms";
 import { Pill } from "./settings/SettingsParts";
 import { Icon } from "../ui/icons";
@@ -292,7 +293,10 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
               {unified && <Choice selected={launcher === ""} onClick={() => setLauncher("")} title={modelDefault}>{hubDefault ? defaultLabel(hubDefault) : t("newagent.follow_model_settings")}</Choice>}
               {launchers.map((l) => (
                 <Choice key={l.name} mono selected={launcher === l.name} onClick={() => setLauncher(l.name)} title={l.model}>
-                  {l.name}
+                  <span className="flex items-center gap-1.5">
+                    <AgentMark agent={l.agent_type || l.agent} size={13} className="text-current" />
+                    {l.name}
+                  </span>
                 </Choice>
               ))}
             </div>

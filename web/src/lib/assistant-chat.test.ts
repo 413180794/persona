@@ -60,5 +60,7 @@ describe("拷贝信息", () => {
     const plain = assistantInfoText({ isMain: false, sessionId: "s2", machine: "srv", machineId: "srv", cwd: "/a", launcher: "codex" });
     expect(plain.split("\n").slice(0, 3)).toEqual(["Persona 助手的对话", "会话 ID：s2", "所在机器：srv"]);
     expect(plain).toContain("启动器：codex\n");
+    const spaced = assistantInfoText({ isMain: false, sessionId: "s3", machine: "srv", machineId: "srv", cwd: "/Users/me/My Assistant; x", launcher: "claude" });
+    expect(spaced.split("\n").pop()).toBe("在那台机器上接着聊：cd '/Users/me/My Assistant; x' && claude --resume s3");
   });
 });
