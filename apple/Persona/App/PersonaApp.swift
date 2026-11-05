@@ -23,6 +23,7 @@ struct PersonaApp: App {
                         return
                     }
                     #endif
+                    if let link = ExtensionSystemLink(url: url) { model.openExtension(link); return }
                     guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
                     Task {
                         do { try await model.pair(cfg); model.toast = Toast("已连接到 \(cfg.url.host() ?? "服务器")", style: .success) }
@@ -62,7 +63,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         _ = KeyboardState.shared // watches the keyboard from the start: a card may come while it is already up
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().setNotificationCategories(NotificationActions.categories)
+        Task { await ExtensionNotificationActions.preserveAndRegister { NotificationActions.categories } }
         #if os(iOS)
         QuickAction.publish()
         #endif
@@ -154,6 +155,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // after the app goes to the background, so the UI test can exercise the notification buttons without APNs.
         if let kind = d.string(forKey: "showTestNotification").flatMap(InteractionKind.init(rawValue:)) {
             Task { await AppDelegate.postTestNotification(kind) }
+        } else if let sample = d.string(forKey: "showTestNotification"),
+                  ["extension-background", "extension-foreground", "extension-tap"].contains(sample) {
+            Task { await AppDelegate.postExtensionTestNotification(sample) }
         }
         // `-showPushKey YES`: asks for notifications and writes this phone's push public key to Caches/push-key.txt, so
         // scripts/test/relay_sim_e2e.sh can seal a push to it and send it through a local relay (docs/push-relay.md).
@@ -230,14 +234,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         let ref = Self.sessionRef(notification.request.content.userInfo)
+        nonisolated(unsafe) let content = notification.request.content.copy() as! UNNotificationContent
         nonisolated(unsafe) let done = completionHandler
-        DispatchQueue.main.async {
-            let (key, visible, quiet) = MainActor.assumeIsolated {
-                let key = ref.flatMap(Self.sessionKey)
-                // A quiet task's agent (#1731) is the main conversation's to tell; a hub that knows sends no push for it.
-                return (key, AppModel.shared.visibleSession, key.map(AppModel.shared.isQuiet) ?? false)
+        Task { @Sendable in
+            await ExtensionNotificationActions.register(content: content)
+            DispatchQueue.main.async {
+                let (key, visible, quiet) = MainActor.assumeIsolated {
+                    let key = ref.flatMap(Self.sessionKey)
+                    // A quiet task's agent (#1731) is the main conversation's to tell; a hub that knows sends no push for it.
+                    return (key, AppModel.shared.visibleSession, key.map(AppModel.shared.isQuiet) ?? false)
+                }
+                done(key != nil && (key == visible || quiet) ? [] : [.banner, .sound, .list])
             }
-            done(key != nil && (key == visible || quiet) ? [] : [.banner, .sound, .list])
         }
     }
 
@@ -248,9 +256,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let action = response.actionIdentifier
         let text = (response as? UNTextInputNotificationResponse)?.userText
         let ixID = info["interaction_id"] as? String
+        let extensionNotice = info["extension_notification"] != nil
+        let event = ExtensionNotificationEvent(id: response.notification.request.identifier, info: info,
+                                              category: response.notification.request.content.categoryIdentifier,
+                                              actionID: action, text: text)
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
+                if extensionNotice {
+                    if let event { ExtensionNotificationDelivery.run(event, done: done) }
+                    else { done() }
+                    return
+                }
                 // The group the push came from (docs/multi-hub.md「推送」): its hub settles the button, its session opens.
                 let key = ref.flatMap(Self.sessionKey)
                 if let ixID, let resolution = NotificationActions.resolution(action: action, text: text) {
@@ -304,6 +321,31 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         content.userInfo = ["interaction_id": "ix_test_\(kind.rawValue)", "machine_id": "test", "session_id": "test"]
         try? await center.add(UNNotificationRequest(identifier: "test-\(kind.rawValue)", content: content,
                                                      trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)))
+    }
+    static func postExtensionTestNotification(_ sample: String) async {
+        let center = UNUserNotificationCenter.current()
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        for _ in 0..<60 where await center.notificationSettings().authorizationStatus != .authorized {
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "扩展通知测试"
+        content.body = "示例扩展请求处理一条通知"
+        content.categoryIdentifier = "ext.notice-demo." + UUID().uuidString
+        content.userInfo = ["extension_notification": ["extension": "notice-demo", "ui": "home", "state": "notice-state",
+            "actions": [["id": "reply", "title": "回复", "input": ["placeholder": "输入回复"]],
+                        ["id": "open", "title": "打开处理", "foreground": true],
+                        ["id": "stop", "title": "停用示例", "role": "destructive"]]]]
+        // simctl push 不执行 NSE。此处只复用其交付前的注册逻辑，不能据此声称真机 APNs 首条已验证。
+        nonisolated(unsafe) let ready = content.copy() as! UNNotificationContent
+        await ExtensionNotificationActions.register(content: ready)
+        var background = NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification).makeAsyncIterator()
+        if let api = AppModel.shared.api, ["127.0.0.1", "localhost"].contains(api.config.url.host() ?? "") {
+            _ = try? await api.request("POST", "/mock/extension-notifications/ready")
+        }
+        _ = await background.next()
+        try? await center.add(UNNotificationRequest(identifier: "extension-test-" + sample, content: content,
+                                                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)))
     }
     #endif
 

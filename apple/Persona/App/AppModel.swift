@@ -126,6 +126,8 @@ final class AppModel {
     /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
     /// iPhone's shell in a window of its own, `ToastWindow`, docs/shell.md「连接状态和 toast」).
     var toast: Toast?
+    /// 通知、小组件和快捷指令打开的扩展页面，不写入 UserDefaults。
+    var extensionOpen: ExtensionSystemOpen?
     /// A Mac whose live screen is up (`ScreenDrawer`, RootView presents it; #1343): opened from the chat's running
     /// work, its ··· menu, the machine page or a tool's details.
     /// The live screen asked for (VNC); a window of its own shows it, over whatever is presented (#1604).

@@ -8,6 +8,8 @@ import { defaults, elicitationDraft, elicitationResolution, elicitationSource, f
 import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
 import { sessionCan } from "../../lib/format";
 import { mcpServerLabel, toolDisplayName } from "../../lib/turns";
+import { optionDisplay } from "../../lib/tool-detail";
+import { RecommendedTag } from "../../ui/RecommendedTag";
 import { dropAnswered, endInteraction, getSession, useStore, type AnsweredCard as Answered } from "../../lib/store";
 import { Button, Collapse, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -69,7 +71,19 @@ function Card({ title, kicker, onDismiss, children, footer }: { title: string; k
   );
 }
 
+/** A terminal dialog's option: its words without the "(Recommended)" suffix, the 推荐 tag instead. */
+function OptionLabel({ label }: { label: string }) {
+  const shown = optionDisplay(label);
+  return (
+    <span className="block text-[13px] text-ink">
+      {shown.text}
+      {shown.recommended && <RecommendedTag />}
+    </span>
+  );
+}
+
 function Choice({ on, multi, label, desc, onClick }: { on: boolean; multi?: boolean; label: string; desc?: string; onClick: () => void }) {
+  const shown = optionDisplay(label);
   return (
     <button type="button" aria-pressed={on} onClick={onClick} className="touch-hit -mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors duration-100 hover:bg-hover">
       <span
@@ -82,7 +96,10 @@ function Choice({ on, multi, label, desc, onClick }: { on: boolean; multi?: bool
         {multi ? <Icon name="check" size={11} stroke={3} /> : <span className="size-1.5 rounded-full bg-canvas transition-transform duration-200" style={{ transform: on ? "scale(1)" : "scale(0)" }} />}
       </span>
       <span className="min-w-0">
-        <span className={cx("block text-[13px] transition-colors", on ? "text-ink" : "text-ink-2")}>{label}</span>
+        <span className={cx("block text-[13px] transition-colors", on ? "text-ink" : "text-ink-2")}>
+          {shown.text}
+          {shown.recommended && <RecommendedTag />}
+        </span>
         {desc && <span className="block text-[12px] leading-snug text-ink-3">{desc}</span>}
       </span>
     </button>
@@ -361,7 +378,7 @@ function ScreenCard({ ix }: { ix: Interaction }) {
               >
                 <span className="mt-[1px] flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-[5px] bg-field px-1 font-mono text-[10.5px] text-ink-2 shadow-hairline">{o.key}</span>
                 <span className="min-w-0">
-                  <span className="block text-[13px] text-ink">{o.label}</span>
+                  <OptionLabel label={o.label} />
                   {o.detail && <span className="block text-[12px] text-ink-3">{o.detail}</span>}
                 </span>
                 {busy === o.key && <span className={`ml-auto mt-1 size-3 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2 ${BUSY_MOTION}`} style={{ animation: "spin 700ms linear infinite" }} />}
@@ -437,7 +454,7 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
               {picked.has(o.key) ? "✓" : o.key}
             </span>
             <span className="min-w-0">
-              <span className="block text-[13px] text-ink">{o.label}</span>
+              <OptionLabel label={o.label} />
               {o.detail && <span className="block text-[12px] text-ink-3">{o.detail}</span>}
             </span>
           </button>

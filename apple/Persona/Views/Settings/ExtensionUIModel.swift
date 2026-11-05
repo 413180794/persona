@@ -23,34 +23,6 @@ nonisolated extension ExtensionUIPlace: Identifiable {
     var isExtensionPage: Bool { placement.isEmpty || placement == "plugin_page" || placement == "extension_page" }
 }
 
-nonisolated extension ExtensionUIContext {
-    /// Where and for whom an extension's View is drawn (docs/extensions.md「UI 插槽」上下文), with the app's time zone,
-    /// language, platform and UI version.
-    static func here(launcher: String? = nil, machine: String? = nil, item: String? = nil, size: String? = nil) -> Self {
-        Self(launcher: launcher, machine: machine, item: item, size: size, tz: TimeZone.current.identifier, locale: appLocale,
-             platform: platform, uiVersion: version)
-    }
-
-    /// The UI version this app draws: 3 has markdown, table, empty, loading, rows' icons, search, filter, more, push / pop
-    /// and ui.invalidate (#1850).
-    static let version = 3
-
-    static var platform: String {
-        #if os(macOS)
-        "mac"
-        #else
-        "ios"
-        #endif
-    }
-
-    /// The app's language as a BCP 47 tag ("zh-Hans-CN"): the language the app is shown in, with the region.
-    static var appLocale: String {
-        let lang = Bundle.main.preferredLocalizations.first ?? Locale.current.language.languageCode?.identifier ?? "zh-Hans"
-        guard let region = Locale.current.region?.identifier, !lang.contains("-\(region)") else { return lang }
-        return lang + "-" + region
-    }
-}
-
 nonisolated extension ExtensionChoice: Identifiable {
     var id: String { value }
     var label: String { title?.isEmpty == false ? title! : value }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askUserAnswers, baseToolName, patchDiffs, pickedOption, toolQuestions, typedAnswer, withoutCutMark } from "./tool-detail";
+import { askUserAnswers, baseToolName, optionDisplay, patchDiffs, pickedOption, toolQuestions, typedAnswer, withoutCutMark } from "./tool-detail";
 
 describe("patchDiffs (a Codex file change, G001)", () => {
   it("is one block per hunk, the file headers left out", () => {
@@ -64,5 +64,20 @@ describe("withoutCutMark (G002)", () => {
   it("drops the note the hub adds where it cut", () => {
     expect(withoutCutMark("开头\n…（已截断，点开看全文，共 90000 字节）")).toBe("开头");
     expect(withoutCutMark("完整的")).toBe("完整的");
+  });
+});
+
+describe("optionDisplay (iOS QuestionOption.display)", () => {
+  it("drops Claude's recommended suffix and says it was there", () => {
+    expect(optionDisplay("Swift Testing (Recommended)")).toEqual({ text: "Swift Testing", recommended: true });
+    expect(optionDisplay("取最长的那段(Recommended)")).toEqual({ text: "取最长的那段", recommended: true });
+    expect(optionDisplay("JPEG（推荐）")).toEqual({ text: "JPEG", recommended: true });
+    expect(optionDisplay("PNG (推荐) ")).toEqual({ text: "PNG", recommended: true });
+  });
+
+  it("leaves other labels alone, and a label that is only the suffix", () => {
+    expect(optionDisplay("XCTest")).toEqual({ text: "XCTest", recommended: false });
+    expect(optionDisplay("Recommended settings")).toEqual({ text: "Recommended settings", recommended: false });
+    expect(optionDisplay("(Recommended)")).toEqual({ text: "(Recommended)", recommended: false });
   });
 });

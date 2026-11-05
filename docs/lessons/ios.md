@@ -496,6 +496,15 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
 - WatchConnectivity 在 activate 完成前 updateApplicationContext 会被丢弃：配对信息要在 activationDidComplete 后再推。
 - `UNUserNotificationCenterDelegate` 不要用 async 版本的 didReceive / willPresent：返回时在后台执行器上，UIKit 收到非主线程的完成回调，
   点通知进 App 会崩。用 completion handler 版本，`DispatchQueue.main.async` 里处理完再调 completion。
+- 动态通知类别不能在 App 启动时被 `setNotificationCategories(静态集合)` 覆盖。NSE 交付前和 App 前台展示前先注册，静态类别与已注册的扩展类别按 identifier 合并。
+  异步注册前将通知内容复制成只读快照；SDK 的通知中心只在注册 actor 内取得，静态类别用 Sendable 工厂在 actor 内创建，不能把非 Sendable 的中心或类别集合从调用方直接传进去。
+  NSE 的正常结束和到期回调用锁领取同一个 completion，避免重复交付（#1862）。
+- 通知中的动作不能先渲染页面再执行：渲染可能返回新的 `state`，覆盖原通知的状态。系统入口在 AppModel 中保存领取标志，先用原始状态执行一次，再画结果或只读加载；去重键区分 hub、通知 id 和可空的按钮 id，默认点按不等于名为 `open` 的按钮。
+  根视图临时显示完整扩展页面，避免与设置 sheet 争夺呈现。`simctl push` 不运行 NSE，本地通知测试不等于真机 APNs 首条送达验证（#1862）。
+- 本地通知 UI 夹具先在前台完成动态类别注册、装好后台监听，再向专用 mock 报准备就绪；测试等就绪后才按 Home。不能让测试猜异步注册什么时候完成，或者在 App 已进入后台后还依赖长时间的初始化。
+  SpringBoard 通知的无障碍标签可能把标题和正文合在一起，按标题匹配用 `CONTAINS`，不要求整个 label 等于标题。
+  系统回复栏在新版本上是 `TextView`，并且通知正文也有 `TextView`；等「发送」出现后选择最下方的编辑器，不能固定按 `TextField` 查找（#1862）。
+- 根视图临时换成完整扩展页面时，Shell 的 `ShellWindowHooks` 会拆除并关闭独立的 toast 窗口；RootView 必须在系统扩展页面打开时启用 `ToastOverlay`。只把结果写进 `AppModel.toast` 不足以证明用户能看见，前台动作的 UI 回归要断言 toast 实际出现（#1862）。
 - DEBUG 启动参数的名字不能和任何 Swift 标识符同名：枚举 case 名会以反射元数据进 Release 二进制，`release.sh` 的 `strings` 检查会误报
   （`Tab.workbench` 撞了 `-workbench`，已改名 `-openWorkbench`）。新开关用 `open…` / `show…` 这类不会是类型成员的名字，并加进 release.sh 的列表。
   存储属性名也一样（2026-10-31：`AgentsListMenu.Actions` 的 `openMonitor` 属性撞了 `-openMonitor`，TestFlight 50 停在这一步）。改了带新属性的代码，

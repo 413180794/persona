@@ -12962,6 +12962,16 @@ if os.environ.get("MOCK_EXTENSION_MANAGEMENT") == "1" and EXTENSIONS_API:
         return _plugins_route_without_management(handler, p, body)
 
 
+if os.environ.get("MOCK_EXTENSION_NOTIFICATIONS") == "1" and EXTENSIONS_API:
+    from extension_notifications import ExtensionNotificationMock
+    _extension_notifications = ExtensionNotificationMock()
+    _plugins_route_without_notifications = plugins_route
+
+    def plugins_route(handler, p, body):
+        if _extension_notifications.route(handler, p, body): return True
+        return _plugins_route_without_notifications(handler, p, body)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")
     parser.add_argument("--tls-port", type=int, help="额外的 TLS 监听端口；0 表示自动分配")

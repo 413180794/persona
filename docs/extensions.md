@@ -1436,7 +1436,13 @@ schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`
   有扩展按钮的直连 APNs 同时带 `aps.mutable-content: 1`，让 Notification Service Extension 在交付通知前按 `actions` 注册 category（`UNNotificationCategory`；`input` 是 `UNTextInputNotificationAction`），覆盖 App 在后台首次收到新按钮的情况。relay 继续用已有的密文封装和 `mutable-content`；普通通知及没有按钮的扩展通知不因此启用服务扩展，现有静态交互类别保持原行为。
 - **点了按钮**：App 调 `POST /api/v1/extensions/{id}/-/ui/{ui}` `{action: <按钮 id>, state, values: {"text": <输入的字>}}`，和页面里点按钮完全一样走 `ui.action`；
   在后台做的，回答里的 `toast` 作为一条本地通知显示，`open_url` / `push` 忽略；`foreground` 的打开 App 到 `ui` 那一页再调，回答照页面的规矩处理。点通知本身打开 `ui` 那一页（带 `state`）。
-- 服务端已在 `POST /api/v1/notify` 支持 `actions` / `ui` / `state`（范围 `notify`），`features` 报 `extension_notify_actions`；Apple 端在 #1862；样例见 `scripts/mock/apns/extension-notification.apns`。
+- 服务端已在 `POST /api/v1/notify` 支持 `actions` / `ui` / `state`（范围 `notify`），`features` 报 `extension_notify_actions`；样例见 `scripts/mock/apns/extension-notification.apns`。
+- **Apple 通知接入（#1862 的一部分）**：iOS / macOS 的通知服务扩展在交付前注册动态类别，App 启动时合并静态类别而不覆盖扩展按钮。前台通知也先注册，再决定是否展示。
+  来源明确时只用 `hub_id` 或解密密钥指定的组；来源未知或互相冲突时不执行，也不退回当前 hub。未标来源的旧通知只有一组 hub 时才可路由。
+- 前台动作由 AppModel 持有的系统入口先领取，再用通知中的原始 `state` 执行，之后共用普通扩展页面。先执行而不是先渲染，避免渲染返回的新 state 替换通知 state；外观或页面重建不重放动作。
+  系统入口临时显示完整页面，不与已打开的设置 sheet 争夺模态呈现；「完成」后回到原有主页面。后台按钮只显示 `toast`，不处理页面、链接或导航结果；到期时取消请求并完成一次通知代理回调。
+- **验证边界**：`simctl push` 不执行 Notification Service Extension。专用本地通知可验证按钮、输入和 App 回调，共用注册逻辑的单测可验证类别合并，但不能据此声称真机 APNs 首条后台通知已验证。
+  主屏幕小组件、Watch 表盘组件和 App Intents 的完整接线仍是 #1862 的后续范围，不能从通知接入推导为已支持。
 
 ### 假 hub
 

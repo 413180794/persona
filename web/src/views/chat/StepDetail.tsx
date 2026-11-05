@@ -2,12 +2,13 @@
 // AskUserDetail; Android PlanDetail, QuestionsDetail): the plan as Markdown; the questions with their options; for the
 // assistant's ask_user also what the user picked, ticked (its card is gone once answered, so the conversation keeps
 // what was asked and what came back here).
-import { askUserAnswers, baseToolName, pickedOption, toolQuestions, typedAnswer, type ToolQuestion } from "../../lib/tool-detail";
+import { askUserAnswers, baseToolName, optionDisplay, pickedOption, toolQuestions, typedAnswer, type ToolQuestion } from "../../lib/tool-detail";
 import type { Item } from "../../lib/types";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { t } from "../../i18n";
+import { RecommendedTag } from "../../ui/RecommendedTag";
 
 const STRUCTURED = new Set(["ExitPlanMode", "AskUserQuestion", "ask_user"]);
 
@@ -67,7 +68,7 @@ function Question({ q, n, answer }: { q: ToolQuestion; n?: number; answer?: stri
         {q.question.trim()}
       </span>
       {q.options.map((o) => (
-        <Choice key={o.label} label={o.label} description={o.description} picked={ticks ? pickedOption(o.label, answer ?? undefined, q.multiSelect) : undefined} />
+        <Choice key={o.label} label={o.label} option description={o.description} picked={ticks ? pickedOption(o.label, answer ?? undefined, q.multiSelect) : undefined} />
       ))}
       {typed && <Choice label={typed} picked />}
     </div>
@@ -79,7 +80,9 @@ function Tag({ children }: { children: string }) {
 }
 
 /** An option: a dot, or (ask_user) a ring ticked when picked. */
-function Choice({ label, description, picked }: { label: string; description?: string; picked?: boolean }) {
+function Choice({ label, option, description, picked }: { label: string; option?: boolean; description?: string; picked?: boolean }) {
+  // only an option carries Claude's suffix; a typed answer is shown as written
+  const shown = option ? optionDisplay(label.trim()) : { text: label.trim(), recommended: false };
   return (
     <span className="flex min-w-0 items-baseline gap-2 text-[12.5px] leading-[1.5]" data-picked={picked || undefined}>
       {picked === undefined ? (
@@ -91,7 +94,8 @@ function Choice({ label, description, picked }: { label: string; description?: s
       )}
       <span className={cx("min-w-0 [overflow-wrap:anywhere]", picked === false ? "text-ink-3" : "text-ink-2", picked && "text-ink")}>
         {picked && <span className="sr-only">{t("chat-stepdetail.picked")}</span>}
-        {label.trim()}
+        {shown.text}
+        {shown.recommended && <RecommendedTag />}
         {description && <span className="text-ink-3">{t("chat-stepdetail.description", { text: description })}</span>}
       </span>
     </span>

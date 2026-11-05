@@ -54,6 +54,7 @@ struct RootView: View {
             await InboxItemSlots.shared.reload(for: hub)
         }
         .extensionThemes()
+        .extensionSystemPresentation()
         // A new style, 主题色 or persona rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
         .id(model.look)
         #if DEBUG
@@ -76,7 +77,7 @@ struct RootView: View {
         .scrollIndicators(.hidden)
         .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas in every Markdown (MathMarkdown)
         // The shell shows the toasts in a window of its own, over its sheets too (`ToastWindow`).
-        .overlay(alignment: .top) { if !usesShell { ToastOverlay() } }
+        .overlay(alignment: .top) { if !usesShell || model.extensionOpen != nil { ToastOverlay() } }
         #if os(iOS) || os(visionOS)
         // 设置 › 外观 › 深浅色 on this scene's window (and any other open one) as it first shows.
         .onAppear { model.colorScheme.apply() }

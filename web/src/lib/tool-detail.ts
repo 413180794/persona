@@ -70,6 +70,20 @@ export function askUserAnswers(result: string, questions: ToolQuestion[]): Recor
   return out;
 }
 
+// i18n-ignore-start: the suffixes Claude writes after an option, matched as written
+const RECOMMENDED_SUFFIXES = [" (Recommended)", "(Recommended)", "（推荐）", "(推荐)"];
+// i18n-ignore-end
+
+/** An option's words without Claude's "(Recommended)" suffix, and whether it had one (iOS QuestionOption.display).
+ *  Only for showing it: the answer sent back keeps the whole label. */
+export function optionDisplay(label: string): { text: string; recommended: boolean } {
+  const trimmed = label.trimEnd();
+  for (const suffix of RECOMMENDED_SUFFIXES) {
+    if (trimmed.endsWith(suffix) && trimmed.length > suffix.length) return { text: trimmed.slice(0, -suffix.length).trim(), recommended: true };
+  }
+  return { text: label, recommended: false };
+}
+
 /** Whether an option is among what was picked (a multi-select answer joins its picks with ", "). */
 export function pickedOption(label: string, answer: string | undefined, multiSelect: boolean): boolean {
   if (answer === undefined) return false;

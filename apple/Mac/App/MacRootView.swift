@@ -117,6 +117,7 @@ struct MacRootView: View {
             }
         }
         .frame(minWidth: Theme.Size.macWindowMinWidth, minHeight: Theme.Size.macWindowMinHeight)
+        .extensionSystemPresentation()
         .macLook(model)
         .loadsChannels() // the names under a message that came in from a channel (「来自 微信」)
         .overlay(alignment: .top) { ToastOverlay() }

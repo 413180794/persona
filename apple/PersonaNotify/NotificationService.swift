@@ -1,17 +1,21 @@
 import os
+import Foundation
 import UserNotifications
 
 /// Opens pushes that came through the relay (docs/push-relay.md): the relay only saw 「有新消息」 and a sealed payload; here
 /// the phone decrypts it and shows the real title, text and buttons. Not opened in time, no key yet (the phone has not
 /// been unlocked since it started), or a payload that does not open: the fallback stays, never anything in the clear.
-final class NotificationService: UNNotificationServiceExtension {
+final class NotificationService: UNNotificationServiceExtension, @unchecked Sendable {
     private static let log = Logger(subsystem: "jarvis", category: "notify")
+    private let completionLock = NSLock()
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var fallback: UNNotificationContent?
 
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
-        self.contentHandler = contentHandler
-        fallback = request.content
+        completionLock.withLock {
+            self.contentHandler = contentHandler
+            fallback = request.content
+        }
         // Every group of hubs seals to its own key (docs/multi-hub.md「推送」): the one that opens it names the group.
         let (content, outcome) = PushCrypto.service(request.content, keys: PushCrypto.allKeys)
         // Why a push stayed 「有新消息」 is the first question when one does (no content in the log).
@@ -21,16 +25,25 @@ final class NotificationService: UNNotificationServiceExtension {
         case .unopened: Self.log.error("sealed push: did not open, or too old")
         case .opened: Self.log.notice("sealed push opened")
         }
-        finish(content)
+        // 解密可能返回可变内容，先复制成只读快照；异步注册不共享任何可变内容。
+        nonisolated(unsafe) let ready = content.copy() as! UNNotificationContent
+        Task { @Sendable [self] in
+            await ExtensionNotificationActions.register(content: ready)
+            finish(ready)
+        }
     }
 
     override func serviceExtensionTimeWillExpire() {
-        if let fallback { finish(fallback) }
+        if let fallback = completionLock.withLock({ fallback }) { finish(fallback) }
     }
 
     private func finish(_ content: UNNotificationContent) {
-        guard let handler = contentHandler else { return }
-        contentHandler = nil
-        handler(content)
+        let handler = completionLock.withLock {
+            let handler = contentHandler
+            contentHandler = nil
+            fallback = nil
+            return handler
+        }
+        handler?(content)
     }
 }

@@ -393,14 +393,16 @@ struct ExtensionPageView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var app
     var title: String
+    var initial: ExtensionSystemOpen?
 
     init(plugin: String, ui: String, title: String, state: String? = nil, depth: Int = 1,
-         group: String? = nil, context: ExtensionUIContext = .here()) {
+         group: String? = nil, context: ExtensionUIContext = .here(), initial: ExtensionSystemOpen? = nil) {
         let deps: ExtensionViewModel.Deps = group.map { group in
             .init(api: { AppModel.shared.api(group) })
         } ?? .live
         _page = State(initialValue: ExtensionViewModel(plugin: plugin, ui: ui, context: context, state: state, depth: depth, deps: deps))
         self.title = title
+        self.initial = initial
     }
 
     var body: some View {
@@ -428,8 +430,19 @@ struct ExtensionPageView: View {
         .extensionSearch(page)
         .pluginLinks($link)
         .extensionPushes([page])
-        .onChange(of: page.popped) { _, popped in if popped && page.depth > 1 { dismiss() } }
-        .task { await page.load() }
+        .onChange(of: page.popped) { _, popped in
+            guard popped else { return }
+            if page.depth > 1 { dismiss() }
+            else if let initial, app.extensionOpen?.id == initial.id { app.extensionOpen = nil }
+        }
+        .task {
+            if let initial {
+                let outcome = await initial.start(page)
+                if let error = outcome.error { app.toast = Toast(error, style: .error) }
+                else if let toast = outcome.toast { app.toast = Toast(toast) }
+                if let url = outcome.url { link = LinkTarget(url: url) }
+            } else { await page.load() }
+        }
         .pluginRefresh(page)
         .refreshable { await page.load() }
     }

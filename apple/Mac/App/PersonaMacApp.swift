@@ -94,6 +94,7 @@ extension AppModel {
             }
         }
         #endif
+        if let link = ExtensionSystemLink(url: url) { openExtension(link); return }
         switch MacOpenURL.route(url) {
         case .session(let key): MacShellState.shared.open(resolve(path: key.path) ?? key, self)
         case .pair: openPairing(url)
@@ -177,7 +178,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().setNotificationCategories(NotificationActions.categories)
+        Task { await ExtensionNotificationActions.preserveAndRegister { NotificationActions.categories } }
         #if DEBUG
         MacLaunchArguments.apply()
         #endif
@@ -219,10 +220,14 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         let ref = PushRef(notification.request.content.userInfo)
+        nonisolated(unsafe) let content = notification.request.content.copy() as! UNNotificationContent
         nonisolated(unsafe) let done = completionHandler
-        DispatchQueue.main.async {
-            let (key, visible) = MainActor.assumeIsolated { (ref?.key(AppModel.shared), AppModel.shared.visibleSession) }
-            done(key != nil && key == visible ? [] : [.banner, .sound, .list])
+        Task { @Sendable in
+            await ExtensionNotificationActions.register(content: content)
+            DispatchQueue.main.async {
+                let (key, visible) = MainActor.assumeIsolated { (ref?.key(AppModel.shared), AppModel.shared.visibleSession) }
+                done(key != nil && key == visible ? [] : [.banner, .sound, .list])
+            }
         }
     }
 
@@ -233,9 +238,25 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         let action = response.actionIdentifier
         let text = (response as? UNTextInputNotificationResponse)?.userText
         let ixID = info["interaction_id"] as? String
+        let extensionNotice = info["extension_notification"] != nil
+        let event = ExtensionNotificationEvent(id: response.notification.request.identifier, info: info,
+                                              category: response.notification.request.content.categoryIdentifier,
+                                              actionID: action, text: text)
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
+                if extensionNotice {
+                    if let event {
+                        Task {
+                            if !event.dismissed, event.valid, event.action == nil || event.action?.foreground == true {
+                                MacShellState.shared.showMain()
+                            }
+                            await ExtensionNotificationHandler.handle(event, deps: ExtensionNotificationHandler.live(AppModel.shared))
+                            done()
+                        }
+                    } else { done() }
+                    return
+                }
                 // The group the push came from (docs/multi-hub.md「推送」).
                 let key = ref?.key(AppModel.shared)
                 if let ixID, let resolution = NotificationActions.resolution(action: action, text: text) {

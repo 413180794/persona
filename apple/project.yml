@@ -386,6 +386,9 @@ targets:
       - path: PersonaNotify
         excludes: ["*.plist", "*.entitlements"]
       - path: Shared/PushCrypto.swift
+      - path: Shared/Generated/ExtensionWire.swift
+      - path: Shared/JSONValue.swift
+      - path: Shared/ExtensionNotificationActions.swift
     entitlements:
       path: PersonaNotify/PersonaNotify.entitlements
       properties:
@@ -412,6 +415,9 @@ targets:
       - path: PersonaNotify
         excludes: ["*.plist", "*.entitlements"]
       - path: Shared/PushCrypto.swift
+      - path: Shared/Generated/ExtensionWire.swift
+      - path: Shared/JSONValue.swift
+      - path: Shared/ExtensionNotificationActions.swift
     entitlements:
       path: PersonaNotify/PersonaMacNotify.entitlements
       properties:
