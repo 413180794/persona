@@ -47,7 +47,7 @@ import { CommentMarks } from "./CommentMarks";
 import { PaneTabs } from "./PaneTabs";
 import { RunningStatusBar } from "./RunningStatusBar";
 import { latestPlan, PlanPill, usePlanOutOfView } from "./PlanCard";
-import { ChatContext, type ChatContextValue } from "./chat-context";
+import { ChatContext, LiveClockContext, type ChatContextValue } from "./chat-context";
 import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
 import { CloseAgentDialog, DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
@@ -561,6 +561,12 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const isMain = Boolean(assistant && sid === mainConversation);
   const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
   const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (readOnly || !outgoing) }), [tr.items, lastLive, readOnly, outgoing]);
+  // the live work lines' clocks on screen (WorkGroup's Elapsed): while one ticks, the running bar shows no time (#3534)
+  const [clocks, setClocks] = useState(0);
+  const countClock = useCallback((delta: 1 | -1) => setClocks((n) => n + delta), []);
+  // while a message of yours is on its way the live line steps aside (lastLive needs !outgoing): the time stays where it was
+  const barClock = useRef(true);
+  if (!outgoing) barClock.current = clocks === 0;
   const ctx = useMemo<ChatContextValue>(
     () => ({ tasks: buildTaskIndex(tr.items), subagents: assistant ? [] : (subagents ?? []), fresh, scope: `${mid}/${sid}:` }),
     [tr.items, subagents, assistant, fresh, mid, sid],
@@ -747,7 +753,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     <PlanPill todos={plan.todos} onClick={() => scroller.current?.querySelector(`[data-plan-id="${CSS.escape(plan.id)}"]`)?.scrollIntoView({ block: "center", behavior: scrollBehavior() })} />
   ) : null;
   // Persona's own chats too (#3654), and from the moment the message is in, not from the hub's next push
-  const running = session ? <RunningStatusBar mid={mid} sid={sid} working={state === "working" || awaiting} startedAt={runStart} /> : null;
+  const running = session ? <RunningStatusBar mid={mid} sid={sid} working={state === "working" || awaiting} startedAt={runStart} clock={barClock.current} /> : null;
   const queue = session && queued.length > 0 ? <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} compact={short} /> : null;
   // with the plan's pill showing, 跳到底部 goes beside it (over the chat, they hid each other)
   const jumpInDock = Boolean(planPill) && !readOnly;
@@ -811,6 +817,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                 </Button>
               </div>
             )}
+            <LiveClockContext.Provider value={countClock}>
             <ChatContext.Provider value={ctx}>
               <CardConversation.Provider value={assistant ? sid : ""}>
               {assistant
@@ -850,6 +857,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
               ))}
               </CardConversation.Provider>
             </ChatContext.Provider>
+            </LiveClockContext.Provider>
             {!readOnly && shownPending.map((p) => (
               <div key={p.id} className="flex flex-col gap-3">
                 <UserBubble msg={p.msg} mid={mid} sid={sid} pending />

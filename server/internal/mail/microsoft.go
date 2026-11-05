@@ -49,11 +49,16 @@ var outlookServers = AddAccountRequest{
 
 // userError is a mistake the user fixes (a client ID, a setting in Entra or Exchange), told in words for people:
 // HTTP 400.
-type userError struct{ msg string }
+type userError struct {
+	msg   string
+	cause error // the server's own answer, if any: kept so isConnError still sees a protocol reply
+}
 
 func (e userError) Error() string { return e.msg }
 
-func userErr(msg string) error { return userError{msg} }
+func (e userError) Unwrap() error { return e.cause }
+
+func userErr(msg string) error { return userError{msg: msg} }
 
 // settingRecords is where the hub keeps small settings (Postgres); the mail package encrypts before it.
 type settingRecords interface {

@@ -307,7 +307,7 @@ func (s *Service) checkSMTP(ctx context.Context, a *MailAccount) error {
 		return err
 	}
 	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("auth: %w", err)
+		return smtpLoginErr(a, err)
 	}
 	return client.Quit()
 }

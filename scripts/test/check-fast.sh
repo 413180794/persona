@@ -18,7 +18,10 @@
 #   .github/**                 scripts/test/pr_needs_issue_test.mjs
 #   schema/**                  the extension-schema py, the sdk bundle py, and sdk/go go test (mirrors CI's job)
 #   scripts/**                 privacy/PR/extension/refs/bundle/i18n checks picked by path; PR+extension when
-#                              ambiguous (a case "*" matches slashes, so scripts/* covers nested paths too)
+#                              ambiguous (a case "*" matches slashes, so scripts/* covers nested paths too); plus
+#                              each changed scripts/<dir>/test_*.py and the test_<name>.py of each changed script
+#                              <name>.py / <name>.sh (- read as _; db.sh's is test_db_sh.py), run from its
+#                              directory as CI does (#3968)
 #   docs/** or markdown only   no code checks; the privacy gate still runs
 # scripts/privacy_check.py runs on every invocation that has changes (it is a seconds-long local scan, no network).
 #
@@ -262,6 +265,13 @@ job_sdk_bundle() {
     python3 -B scripts/test/test_sdk_bundle.py || return $?
 }
 
+job_scripts_test() {  # $1 = scripts/<dir>/test_<name>.py, run from its directory the way CI's Scripts tests job does
+  [ "$HAVE_PY" -eq 1 ] || skip "python3 not found"
+  local _dir _module
+  _dir=$(dirname "$1"); _module=$(basename "$1" .py)
+  in_dir "$_dir" step "$TIMEOUT_OTHER" "$1" python3 -B -m unittest -q "$_module"
+}
+
 job_pr_needs_issue() {
   if ! node_ok; then skip "node >= 22 not found (found: $(node -v 2>/dev/null || echo none))"; fi
   step "$TIMEOUT_OTHER" "node scripts/test/pr_needs_issue_test.mjs" node scripts/test/pr_needs_issue_test.mjs || return $?
@@ -280,7 +290,7 @@ CORE_FAIL=0
 CHANGED=""
 WEB=0; SDKTS=0; ANDROID=0; PRNEEDS=0; EXTSCHEMA=0; SERVER_BUILD=0; APPLE=0; DOCS=0; UNMAPPED=0
 SITE=0; SDKGO=0; EXTREFS=0; SDKBUNDLE=0
-INTEG=(); GO_GROUPS=(); UNMAPPED_FILES=()
+INTEG=(); GO_GROUPS=(); UNMAPPED_FILES=(); SCRIPT_TESTS=()
 CORE_MISSING=()
 
 core_missing() {  # --all treats a missing core toolchain as a failure; diff mode records a skip.
@@ -377,6 +387,33 @@ if [ "$ALL" -eq 0 ]; then
   done <<< "$CHANGED"
 fi
 
+# script_test_add adds a scripts/<dir>/test_*.py that exists (a deleted one is not run) and that no dedicated job above
+# already runs (refs, bundle, extension schema, the android checkers).
+script_test_add() {
+  case "$1" in
+    scripts/test/test_external_service_refs.py|scripts/test/test_sdk_bundle.py|scripts/test/test_extension_schema.py) return 0 ;;
+    scripts/app/test_android_*) return 0 ;;
+  esac
+  [ -f "$1" ] || return 0
+  arr_has "$1" "${SCRIPT_TESTS[@]:-}" || SCRIPT_TESTS+=("$1")
+}
+
+# The scripts/ unittests a change needs (#3968): each changed scripts/<dir>/test_*.py, and for each changed script
+# <name>.py / <name>.sh anywhere under scripts/, every scripts/<dir>/test_<name>.py, and test_<name>_sh.py for a .sh
+# (CI's Scripts tests job runs scripts/*/test_*.py; sim-boot.sh is tested by test_sim_boot.py, db.sh by test_db_sh.py).
+if [ "$ALL" -eq 0 ]; then
+  while IFS= read -r f; do
+    case "$f" in
+      scripts/*/test_*.py) script_test_add "$f" ;;
+      scripts/*.py|scripts/*.sh)
+        _name=$(basename "$f"); _name=${_name%.*}
+        _name=$(printf '%s' "$_name" | tr '-' '_')
+        for _t in scripts/*/"test_$_name.py"; do script_test_add "$_t"; done
+        case "$f" in *.sh) for _t in scripts/*/"test_${_name}_sh.py"; do script_test_add "$_t"; done ;; esac ;;
+    esac
+  done <<< "$CHANGED"
+fi
+
 echo "check-fast: logs in $WORK"
 
 # All jobs, privacy included, launch together in launch_all below; privacy is scheduled first so it is the first
@@ -420,6 +457,13 @@ if [ "$SITE" -eq 1 ]; then
   fi
 fi
 [ "$EXTREFS" -eq 1 ] && schedule "external service refs" job_external_refs ""
+if [ "${#SCRIPT_TESTS[@]}" -gt 0 ]; then
+  if [ "$HAVE_PY" -eq 1 ]; then
+    for _t in "${SCRIPT_TESTS[@]}"; do schedule "$_t" job_scripts_test "$_t"; done
+  else
+    INFO+=("SKIP  scripts unittests (${SCRIPT_TESTS[*]}): python3 not found")
+  fi
+fi
 [ "$SDKBUNDLE" -eq 1 ] && schedule "sdk bundle snapshot" job_sdk_bundle ""
 if [ "$SDKGO" -eq 1 ]; then
   if [ "$HAVE_GO" -eq 1 ]; then

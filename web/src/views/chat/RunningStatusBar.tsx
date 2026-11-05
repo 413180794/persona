@@ -1,7 +1,8 @@
 // The bar above the composer while an Agent works (cindy's RunningStatusBar, #1963): what its status line says (the
 // spinner's verb, or 思考中), how long the turn has run and the tokens it has written so far. It breathes once each
 // time the count moves (output, not just time passing); when the turn ends it stays a second, then fades out. Without
-// a status line (another agent, an older hub) it says 运行中 and counts from when the turn started.
+// a status line (another agent, an older hub) it says 运行中 and counts from when the turn started. While the chat's live
+// work line (正在工作…) ticks, the bar leaves the time to it (#3534: the same clock twice; iOS shows it there only).
 import { useEffect, useRef, useState } from "react";
 import { duration } from "../../lib/format";
 import { useSessionLive } from "../../lib/live";
@@ -28,20 +29,25 @@ export function statusText(live: SessionLive | null): string {
   return live.verb ? `${live.verb}…` : t("chat-runningstatusbar.running");
 }
 
-export function RunningStatusBar({ mid, sid, working, startedAt }: { mid: string; sid: string; working: boolean; startedAt?: string }) {
+export function RunningStatusBar({ mid, sid, working, startedAt, clock }: { mid: string; sid: string; working: boolean; startedAt?: string; clock?: boolean }) {
   const live = useSessionLive(mid, sid);
-  return <RunningStatusView live={live} working={working} startedAt={startedAt} />;
+  return <RunningStatusView live={live} working={working} startedAt={startedAt} clock={clock} />;
 }
 
 type Phase = "on" | "linger" | "fading" | "off";
 
-/** The bar for a given status line (RunningStatusBar subscribes; tests render this). */
-export function RunningStatusView({ live, working, startedAt }: { live: SessionLive | null; working: boolean; startedAt?: string }) {
+/** The bar for a given status line (RunningStatusBar subscribes; tests render this). `clock: false`: no time, the
+ *  chat's live work line shows it. */
+export function RunningStatusView({ live, working, startedAt, clock = true }: { live: SessionLive | null; working: boolean; startedAt?: string; clock?: boolean }) {
   const phase = usePhase(working);
   // after the turn: what it last said, while it lingers and fades
   const last = useRef(live);
   if (working) last.current = live;
   const shown = working ? live : last.current;
+  // and whether it had the time: the work line's clock goes with the turn, the bar does not take it up as it fades
+  const hadClock = useRef(clock);
+  if (working) hadClock.current = clock;
+  const showClock = working ? clock : hadClock.current;
   const now = useNow(1000, phase === "on");
   const elapsed = useElapsed(shown, startedAt, now);
   const tokens = useTween(shown?.tokens_down ?? 0, TWEEN_MS);
@@ -60,10 +66,10 @@ export function RunningStatusView({ live, working, startedAt }: { live: SessionL
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-ink-3 tabular-nums">
-        <span data-running-elapsed>{duration(elapsed * 1000)}</span>
+        {showClock && <span data-running-elapsed>{duration(elapsed * 1000)}</span>}
         {shown?.tokens_down !== undefined && (
           <>
-            <span aria-hidden>·</span>
+            {showClock && <span aria-hidden>·</span>}
             <span data-running-tokens>↓ {tokenCount(tokens)} tokens</span>
           </>
         )}

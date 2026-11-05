@@ -47,6 +47,15 @@ describe("RunningStatusView", () => {
     expect(html).not.toContain("tokens");
   });
 
+  it("leaves the time to the chat's live work line when it has one (#3534)", () => {
+    const html = render({ live: { verb: "Frosting", elapsed_s: 975, tokens_down: 22_800 }, working: true, clock: false });
+    expect(html).toContain("Frosting…");
+    expect(html).not.toContain("data-running-elapsed");
+    expect(html).not.toContain("16 分 15 秒");
+    expect(html).not.toContain("·");
+    expect(html).toContain("↓ 22.8k tokens");
+  });
+
   it("is not there while nothing works", () => {
     expect(render({ live: null, working: false })).toBe("");
   });

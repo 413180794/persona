@@ -1,13 +1,14 @@
 // An exchange's work as lib/work-groups.ts groups it (cindy's WorkGroupBlock): 「正在工作…」 with a clock and its
 // newest steps peeking out while it runs, 「已工作 Xs」 once done; open, every step on a 2 px rail. A finished
 // exchange's outer group is a timeline: the agent's words between inner groups that stay folded.
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { Item, SessionLive } from "../../lib/types";
 import { groupOpens, groupTitle, isAgentStep, isPlanStep, isRowStep, planTodos, previewSteps, workDuration, type AgentStatus, type ToolStep, type WorkGroupNode, type WorkNode } from "../../lib/work-groups";
 import type { Step } from "../../lib/turns";
 import { Collapse, cx, Spinner, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ActionRow } from "./ActionRow";
+import { LiveClockContext } from "./chat-context";
 import { inOpenedFold, openFoldRange, useExpanded } from "./expanded";
 import { useReveal } from "./search-reveal";
 import { nodeItemIds } from "../../lib/chat-search";
@@ -179,8 +180,15 @@ export function StepView({ step, p, live, fresh }: { step: Step; p: WorkProps; l
   }
 }
 
-/** A live group's clock, every 500 ms; its own leaf, so the ticking redraws nothing else. */
+/** A live group's clock, every 500 ms; its own leaf, so the ticking redraws nothing else. While it shows, the running
+ *  bar shows no time of its own (#3534). */
 function Elapsed({ since }: { since: number }) {
   const now = useNow(500);
+  const count = useContext(LiveClockContext);
+  // before paint: the bar's time goes in the same frame this one comes in
+  useLayoutEffect(() => {
+    count?.(1);
+    return () => count?.(-1);
+  }, [count]);
   return <span className="shrink-0 font-mono text-[12px] text-tool-ink tabular-nums">{workDuration(Math.max(0, now - since))}</span>;
 }

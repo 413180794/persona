@@ -18,6 +18,10 @@ export interface ChatContextValue {
 
 export const ChatContext = createContext<ChatContextValue>({ tasks: emptyTaskIndex(), subagents: [], scope: "" });
 
+/** Counts the live work lines' clocks on screen (+1 shown, -1 gone): while one ticks, the running bar above the
+ *  composer leaves the time to it (#3534). Null outside a chat with that bar. */
+export const LiveClockContext = createContext<((delta: 1 | -1) => void) | null>(null);
+
 export function useChatContext() {
   return useContext(ChatContext);
 }

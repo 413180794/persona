@@ -43,7 +43,7 @@ for f in scripts/*/test_*.py; do (cd "$(dirname "$f")" && python3 -B -m unittest
 | `.github/**` | `scripts/test/pr_needs_issue_test.mjs` |
 | `schema/**` | `scripts/test/test_extension_schema.py`、`scripts/test/test_sdk_bundle.py`，并在 sdk/go 模块 `go test ./...`（对齐 CI 的 Extension schema job 三件套） |
 | `scripts/test/test_external_service_refs.py`、`scripts/{gen,test}/sdk_bundle*` | 对应脚本本身的测试 |
-| `scripts/**` | 按改动路径选 privacy / PR / schema / refs / bundle / i18n 秒级检查；拿不准就 PR 和 schema 都跑 |
+| `scripts/**` | 按改动路径选 privacy / PR / schema / refs / bundle / i18n 秒级检查；拿不准就 PR 和 schema 都跑；另外跑改到的 `scripts/<子目录>/test_*.py`，以及改到的脚本 `<名字>.py` / `<名字>.sh` 对应的 `test_<名字>.py`（`-` 换成 `_`；`.sh` 也找 `test_<名字>_sh.py`），和 CI 一样在测试所在目录跑（#3968） |
 | 只改 `docs/**`、markdown | 无代码检查，明确提示「无相关检查」；其他未映射路径会逐文件列出 |
 
 只要有改动就始终先跑 `scripts/privacy_check.py`：纯本地扫描、不联网、约几秒。每个检查都有超时（npm ci 600 s、vitest 300 s、单组 go test 300 s、其他 120 s，可用 `CHECK_FAST_TIMEOUT_NPM_CI` / `CHECK_FAST_TIMEOUT_WEB_TEST` / `CHECK_FAST_TIMEOUT_GO_TEST` / `CHECK_FAST_TIMEOUT_OTHER` 环境变量覆盖），成功、失败、超时都各打印一行结论和耗时，结尾汇总通过 / 跳过（含原因）/ 失败 / 超时清单和日志目录。退出码：全过（或无需检查）为 0；有检查失败为 1；没有失败但有超时为 124（超时不当成功，需进一步跑全套确认）。工具链缺失时，默认模式只跳过相关检查并说明，`--all` 模式下缺少核心工具（node ≥ 22、go、python3）则判失败；bun 始终可选。需要 GNU `timeout`（macOS 装 coreutils）。

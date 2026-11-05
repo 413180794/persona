@@ -343,6 +343,9 @@ func (s *Service) testAccount(ctx context.Context, a *MailAccount) error {
 
 	c, err := s.dialIMAP(ctx, a)
 	if err != nil {
+		if _, ok := errors.AsType[userError](err); ok {
+			return err // already says what to fix; no protocol prefix in front of it
+		}
 		return fmt.Errorf("imap: %w", err)
 	}
 	c.Close()
@@ -352,6 +355,9 @@ func (s *Service) testAccount(ctx context.Context, a *MailAccount) error {
 		return s.gmailAPICheck(ctx, a)
 	}
 	if err := s.checkSMTP(ctx, a); err != nil {
+		if _, ok := errors.AsType[userError](err); ok {
+			return err
+		}
 		return fmt.Errorf("smtp: %w", err)
 	}
 	return nil
