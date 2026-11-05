@@ -339,7 +339,7 @@ private struct AgentsList: View {
     @StoredValue("dev.machineFilter") private var machineFilter = ""
     /// Several groups of hubs: the one the list shows ("" = all; `HubFilter`).
     @StoredValue(HubFilter.key) private var hubFilter = ""
-    @StoredValue("dev.grouping") private var storedGrouping: DevGrouping = .space
+    @StoredValue("dev.grouping") private var storedGrouping: DevGrouping = .todo // by todo first (#1836)
     /// The grouping in use (`DevGrouping.resolved`).
     private var grouping: DevGrouping { DevGrouping.resolved(storedGrouping, supportsTodos: TodoStore.shared.isSupported) }
     /// 细列表: one line per agent.
@@ -413,9 +413,13 @@ private struct AgentsList: View {
     /// only their header, and the agent searched for was not there to open; quiet spaces and idle rows already open).
     /// Sections that start folded: 按状态's 已看 is the long tail. For them the saved list holds "!<id>" once opened.
     private static let foldedByDefault: Set<String> = ["state/idle"]
+    /// Sections whose default depends on what they hold (未归属, `TodoAgentGroup.folded`): the saved list holds "<id>"
+    /// or "!<id>" once the user chose, nothing until then (#1836).
+    private static let foldedByChoice: Set<String> = ["todo:none"]
 
-    private func isFolded(_ id: String) -> Bool {
+    private func isFolded(_ id: String, otherwise fallback: Bool = false) -> Bool {
         guard query.isEmpty else { return false }
+        if Self.foldedByChoice.contains(id) { return folded.contains(id) || (fallback && !folded.contains("!" + id)) }
         return Self.foldedByDefault.contains(id) ? !folded.contains("!" + id) : folded.contains(id)
     }
 
@@ -425,6 +429,12 @@ private struct AgentsList: View {
     private func folding(_ ids: some Sequence<String>, _ fold: Bool, in f: Set<String>) -> Set<String> {
         var f = f
         for id in ids {
+            if Self.foldedByChoice.contains(id) {
+                f.remove(id)
+                f.remove("!" + id)
+                f.insert(fold ? id : "!" + id)
+                continue
+            }
             let key = Self.foldedByDefault.contains(id) ? "!" + id : id
             let marks = Self.foldedByDefault.contains(id) ? !fold : fold // a default-folded section marks being open
             if marks { f.insert(key) } else { f.remove(key) }
@@ -432,9 +442,11 @@ private struct AgentsList: View {
         return f
     }
 
-    private func toggleFold(_ id: String) {
+    /// `shown`: whether it is folded on screen when that is not `isFolded(id)` alone (未归属's own default), so a
+    /// tap always flips what is seen.
+    private func toggleFold(_ id: String, shown: Bool? = nil) {
         Haptics.tap()
-        let f = folding([id], !isFolded(id), in: folded)
+        let f = folding([id], !(shown ?? isFolded(id)), in: folded)
         withAnimation(Theme.Motion.standard) { setFolded(f) }
     }
 
@@ -480,7 +492,7 @@ private struct AgentsList: View {
         }()
         let _ = menuActions.update(sections: sectionsForMenu,
                                    foldAll: { setFolded(folding($0, true, in: folded)); expandedQuiet = [] },
-                                   unfoldAll: { setFolded(Set(Self.foldedByDefault.map { "!" + $0 })) },
+                                   unfoldAll: { setFolded(Set(Self.foldedByDefault.union(Self.foldedByChoice).map { "!" + $0 })) },
                                    onMachines: { openFromList(MachineListRoute()) })
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 }, linkTodo: { linkingSession = $0 },
                                   delete: { deletingSession = $0 })
@@ -779,23 +791,25 @@ private struct AgentsList: View {
     }
 
     /// The row follows its own agent (`AgentsFeed.Row`): what only it shows changes it, not the list.
-    @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil) -> some View {
+    @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil, showHost: Bool = false) -> some View {
         if feed.following {
             FeedRow(row: feed.row(s), reader: feed.reader) { live, time in
-                slotRowDrawn(live, time: time, context: context, inStateSection: inStateSection, cardLast: cardLast)
+                slotRowDrawn(live, time: time, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
             }
         } else {
-            slotRowDrawn(s, time: nil, context: context, inStateSection: inStateSection, cardLast: cardLast)
+            slotRowDrawn(s, time: nil, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
         }
     }
 
-    @ViewBuilder private func slotRowDrawn(_ s: Session, time: AgentTime?, context: Bool, inStateSection: Bool, cardLast: Bool?) -> some View {
+    @ViewBuilder private func slotRowDrawn(_ s: Session, time: AgentTime?, context: Bool, inStateSection: Bool, cardLast: Bool?, showHost: Bool = false) -> some View {
+        // herdr is where most agents run: only the others name their host
+        let host = showHost ? s.hostKind.flatMap { $0 == "herdr" ? nil : $0 } : nil
         if compact {
-            CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil, time: time)
+            CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil, host: host, time: time)
                 .equatable()
         } else {
             SlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil,
-                    machine: context && grouping != .machine && machineFilter.isEmpty ? machine(s.machineRef)?.title : nil,
+                    machine: context && grouping != .machine && machineFilter.isEmpty ? machine(s.machineRef)?.title : nil, host: host,
                     hideState: inStateSection, surface: cardLast.map { .cardRow(last: $0) } ?? .capsule, time: time)
                 .equatable()
         }
@@ -910,18 +924,21 @@ private struct AgentsList: View {
         }
     }
 
-    /// One section per todo, its agents ordered; unassigned agents go into "没有待办".
+    /// One section per todo, its agents ordered; unassigned agents go into "未归属" (folded by default, open while one
+    /// of them needs you or nothing is above it: `TodoAgentGroup.folded`).
     @ViewBuilder private func todoSections(_ live: [Session]) -> some View {
         let todoGroups = TodosLogic.buildTodoAgentGroups(sessions: live, todos: TodoStore.shared.todos, isMuted: model.isMuted)
+        let mixedHosts = Set(live.compactMap(\.hostKind)).count > 1
         ForEach(todoGroups) { g in
             let id = g.key
+            let folded = g.todoID == nil ? isFolded(id, otherwise: g.folded) : isFolded(id)
             if !g.sessions.isEmpty {
                 listSection {
-                    if !isFolded(id) {
-                        ForEach(g.sessions) { s in slotRow(s, context: true) }
+                    if !folded {
+                        ForEach(g.sessions) { s in slotRow(s, context: true, showHost: mixedHosts) }
                     }
                 } header: {
-                    FoldButton(title: g.name, folded: isFolded(id), detail: "\(g.sessions.count) 个") { toggleFold(id) } label: {
+                    FoldButton(title: g.name, folded: folded, detail: "\(g.sessions.count) 个") { toggleFold(id, shown: folded) } label: {
                         HStack(spacing: Theme.Space.sm) {
                             if compact {
                                 Text(g.name).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
@@ -950,7 +967,7 @@ private struct AgentsList: View {
                         }
                     }
                 }
-                .listSectionSpacing(isFolded(id) ? .custom(0) : .default)
+                .listSectionSpacing(folded ? .custom(0) : .default)
             }
         }
     }
@@ -1097,14 +1114,14 @@ private struct AgentsList: View {
 
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
     /// `cardLast`: a row of a quiet space's card (`quietSpaceCard`), and whether it ends the card.
-    private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil) -> some View {
+    private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil, showHost: Bool = false) -> some View {
         Group {
             if searching {
                 // A search result is a button, not a link: a link pushed at once, the push was refused (the search has
                 // to close first) and slid back, and the push made after it was lost (2026-10-31).
                 Button { openFromSearch(s.key) } label: {
                     HStack(spacing: Theme.Space.s) {
-                        slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast)
+                        slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
                         // 胶囊 draws its own chevron; 列表 and Persona' own rows get the one a link would show.
                         if !capsules { Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary) }
                     }
@@ -1112,7 +1129,7 @@ private struct AgentsList: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink(value: s.key) { slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast) }
+                NavigationLink(value: s.key) { slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost) }
             }
         }
             .accessibilityIdentifier(compact ? "agents.compactRow" : "agents.row")
@@ -1722,6 +1739,8 @@ nonisolated struct SlotRow: View, Equatable {
     /// Named when the list is grouped by state or machine (otherwise the section is the space).
     var space: String? = nil
     var machine: String? = nil
+    /// The host it runs in (botmux…), named when the list mixes hosts (by todo, #1836).
+    var host: String? = nil
     /// The section already says the state (grouped by state): no state word on the row.
     var hideState = false
     /// The state dot; off where something beside the row already shows the state in its color (SessionRow's avatar).
@@ -1823,6 +1842,7 @@ nonisolated struct SlotRow: View, Equatable {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
         }
         parts.append(Text(session.sourceSubtitle ?? session.agentLabel))
+        if let host { parts.append(Text(host)) }
         let slot = session.slotLabel
         if let space, !space.isEmpty {
             parts.append(Text(slot.map { space + " › " + $0 } ?? space))
@@ -1836,6 +1856,7 @@ nonisolated struct SlotRow: View, Equatable {
     /// "Claude · app › tests · MacBook": the end gives way when the line is short.
     @MainActor private var meta: String {
         var parts = [session.sourceSubtitle ?? session.agentLabel]
+        if let host { parts.append(host) }
         let slot = session.slotLabel
         if let space, !space.isEmpty {
             parts.append(slot.map { space + " › " + $0 } ?? space)
@@ -1880,6 +1901,8 @@ nonisolated struct CompactSlotRow: View, Equatable {
     var session: Session
     var muted = false
     var space: String? = nil
+    /// As SlotRow's `host`.
+    var host: String? = nil
     var time: AgentTime? = nil
 
     @MainActor
@@ -1918,7 +1941,7 @@ nonisolated struct CompactSlotRow: View, Equatable {
     @MainActor private var place: String? {
         let slot = session.slotLabel
         let location = space.flatMap { $0.isEmpty ? nil : $0 }.map { name in slot.map { name + " › " + $0 } ?? name } ?? slot
-        let parts = [session.sourceSubtitle, location].compactMap { $0 }
+        let parts = [session.sourceSubtitle, host, location].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

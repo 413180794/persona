@@ -67,6 +67,8 @@ nonisolated struct TodoAgentGroup: Identifiable, Sendable {
     var sessions: [Session]
     var todoID: String?
     var todoStatus: TaskState?
+    /// Starts folded (未归属 below todos with nothing in it waiting for you, #1836).
+    var folded = false
 
     var id: String { key }
 }
@@ -265,7 +267,8 @@ nonisolated enum TodosLogic {
     /**
      * Pure grouping for the Agents sidebar, by todo:
      * - one section per open todo with attached agents; the header shows the todo title and status, and tapping it opens the todo
-     * - agents with no todo go into the last section, "没有待办"
+     * - agents with no todo go into the last section, "未归属": folded below todos unless one of them needs you
+     *   (unread alone stays folded, many lists always have some); with no todo above it is the whole list, open (#1836)
      * - pinning, muting and the "最近（未运行）" rules match the "按状态" grouping
      */
     public static func buildTodoAgentGroups(
@@ -336,10 +339,11 @@ nonisolated enum TodosLogic {
             }
             groups.append(TodoAgentGroup(
                 key: "todo:none",
-                name: "没有待办",
+                name: "未归属",
                 sessions: sortedUnassigned,
                 todoID: nil,
-                todoStatus: nil
+                todoStatus: nil,
+                folded: !groups.isEmpty && !sortedUnassigned.contains { $0.state == .needsYou }
             ))
         }
 

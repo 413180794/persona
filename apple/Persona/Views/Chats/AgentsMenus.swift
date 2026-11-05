@@ -54,7 +54,10 @@ struct AgentsListMenu: View {
 
     @StoredValue("dev.machineFilter") private var machineFilter = ""
     @StoredValue(HubFilter.key) private var hubFilter = ""
-    @StoredValue("dev.grouping") private var grouping: DevGrouping = .space
+    @StoredValue("dev.grouping") private var grouping: DevGrouping = .todo
+    /// The grouping the list shows: a stored 按待办 is 按项目 on a hub without todos (`DevGrouping.resolved`).
+    private var shownGrouping: DevGrouping { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) }
+    private var groupingChoice: Binding<DevGrouping> { Binding(get: { shownGrouping }, set: { grouping = $0 }) }
     @StoredValue("dev.compact") private var compact = false
 
     /// The shell (docs/ios.md「新外壳」) shows these inside its 工作 switch's menu: the items, without a button of their own.
@@ -70,7 +73,7 @@ struct AgentsListMenu: View {
         } else {
             Menu { items(machines) } label: { label(chosen, hub: hub) }
                 .accessibilityLabel((hub.map { "当前 hub：\($0)，" } ?? "") + (chosen.map { "当前机器：\($0.name)，" } ?? "")
-                                    + "分组：" + grouping.title)
+                                    + "分组：" + shownGrouping.title)
         }
     }
 
@@ -78,7 +81,7 @@ struct AgentsListMenu: View {
             #if DEBUG || PERF_SIGNPOST
             let _ = PerfTrace.body("ListMenu.content")
             #endif
-            Picker("分组", selection: $grouping) {
+            Picker("分组", selection: groupingChoice) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { g in Label(g.title, systemImage: g.symbol).tag(g) }
             }
             Picker("显示", selection: $compact) {
@@ -134,7 +137,7 @@ struct AgentsListMenu: View {
                 .font(Theme.Font.secondaryStrong)
                 .fixedSize()
             } else {
-                Image(systemName: grouping == .space ? "line.3.horizontal.decrease" : grouping.symbol)
+                Image(systemName: shownGrouping == .space ? "line.3.horizontal.decrease" : shownGrouping.symbol)
             }
     }
 }

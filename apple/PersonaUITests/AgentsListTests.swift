@@ -32,7 +32,7 @@ final class AgentsListTests: XCTestCase {
     private func launch(fresh: Bool = true, chat: String = "") {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev"] + (fresh ? ["-openAgentsFresh", "YES"] : [])
+        app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev"] + (fresh ? ["-openAgentsFresh", "YES", "-dev.grouping", "space"] : [])
         app.launchPinned()
         if chat.isEmpty { see(filter("all"), "the quick filters", timeout: 15) }
     }

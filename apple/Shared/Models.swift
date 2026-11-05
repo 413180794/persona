@@ -635,6 +635,15 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         return canSend ? label : label + " · 仅查看：" + (readOnlyReason.flatMap { $0.isEmpty ? nil : $0 } ?? "此来源尚未允许发送")
     }
 
+    /// The host tool it lives in, from its pane ref: `botmux:…`, `orca:…`, `herdr-core:…`; any other pane is herdr's
+    /// (its ids go bare and may hold a colon); nil without a pane. Keep the kinds in step with Kinds in
+    /// server/internal/host/host.go.
+    var hostKind: String? {
+        guard let paneID, !paneID.isEmpty else { return nil }
+        let kind = paneID.firstIndex(of: ":").map { String(paneID[..<$0]) } ?? ""
+        return ["orca", "herdr-core", "botmux"].contains(kind) ? kind : "herdr"
+    }
+
     var isCodex: Bool { agent == "codex" || sourceKind == "codex_app_server" || sourceKind == "codex_history" }
     var isTraex: Bool { agent == "traex" }
     /// Claude Code (or an older hub that does not name the agent): what the Claude-only controls (modes, /clear,

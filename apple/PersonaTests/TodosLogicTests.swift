@@ -92,8 +92,25 @@ struct TodosLogicTests {
         #expect(groups[0].sessions.map(\.sessionID) == ["s1", "s2"])
 
         #expect(groups[1].key == "todo:none")
-        #expect(groups[1].name == "没有待办")
+        #expect(groups[1].name == "未归属")
+        #expect(groups[1].folded)
         #expect(groups[1].sessions.map(\.sessionID) == ["s_unassigned"])
+    }
+
+    /// The host from the pane ref, as the hub's host.ParsePane: herdr's ids go bare and may hold a colon (#1836).
+    @Test func hostKindFromPaneRef() throws {
+        func host(_ pane: String?) throws -> String? {
+            let field = pane.map { ",\"pane_id\":\"\($0)\"" } ?? ""
+            let json = #"{"machine_id":"m","session_id":"s","title":"t","cwd":"/tmp","status":"idle","state":"idle"\#(field)}"#
+            return try JSON.decoder.decode(Session.self, from: Data(json.utf8)).hostKind
+        }
+        #expect(try host("botmux:abc") == "botmux")
+        #expect(try host("orca:t1:l2") == "orca")
+        #expect(try host("w1:p1") == "herdr")
+        #expect(try host("p1") == "herdr")
+        #expect(try host("herdr:p1") == "herdr")
+        #expect(try host(":botmux:x") == "herdr")
+        #expect(try host(nil) == nil)
     }
 
     @Test func formatTodoContextOutput() {

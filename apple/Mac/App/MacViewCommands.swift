@@ -38,7 +38,7 @@ enum MacViewCommands {
 struct MacViewMenu: Commands {
     let model: AppModel
     // The same settings as the Agents list's ⋯ menu (AgentsListMenu).
-    @StoredValue("dev.grouping") private var grouping: DevGrouping = .space
+    @StoredValue("dev.grouping") private var grouping: DevGrouping = .todo
     @StoredValue("dev.compact") private var compact = false
     @StoredValue(MacSection.sidebarHiddenKey) private var sidebarHidden = false
 
@@ -66,7 +66,9 @@ struct MacViewMenu: Commands {
             .disabled(!model.isPaired)
             Divider()
             Toggle("紧凑列表", isOn: $compact)
-            Picker("分组方式", selection: $grouping) {
+            // the grouping in use: a stored 按待办 is 按项目 on a hub without todos
+            Picker("分组方式", selection: Binding(get: { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) },
+                                                set: { grouping = $0 })) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { Text($0.title).tag($0) }
             }
             Button("全部折叠") { MacShellState.shared.agentsList?.collapse() }
