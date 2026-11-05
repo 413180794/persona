@@ -55,13 +55,12 @@ struct RFBClientTests {
         let zr1 = [UInt8](Data(base64Encoded: "AAAAOnicYtTQOMH0v4GBgeG/xeM+MDouUwhGo/yRxWcBpgFgSrA5IfLr1y8BEEgAgQ0gcAAESBEDAAAA//8=")!), zr2 = [UInt8](Data(base64Encoded: "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")!)
         func u16(_ v: Int) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xff)] }
         func rect(_ x: Int, _ y: Int, _ w: Int, _ h: Int, _ e: Int32) -> [UInt8] { u16(x) + u16(y) + u16(w) + u16(h) + RFBAuth.be32(UInt32(bitPattern: e)) }
-        let script: [[UInt8]] = [
-            Array("RFB 003.889\n".utf8), [1, 19], [0, 2], [0], [1] + RFBAuth.be32(256), RFBAuth.be32(0),
-            u16(130) + u16(72) + [UInt8](repeating: 0, count: 16) + RFBAuth.be32(8) + Array("Mock Mac".utf8),
-            [0, 0] + u16(2) + rect(0, 0, 130, 64, 16) + zr1 + rect(0, 64, 130, 72 - 64, 16) + zr2,
-            [0, 0] + u16(2) + rect(130 - 1, 72 - 1, 1, 1, 1) + u16(0) + u16(0) + rect(1, 0, 1, 1, 0) + [9, 8, 7, 0],
-            [3, 0, 0, 0] + RFBAuth.be32(5) + Array("hello".utf8),
-        ]
+        var s0: [UInt8] = u16(130) + u16(72); s0 += [UInt8](repeating: 0, count: 16); s0 += RFBAuth.be32(8); s0 += Array("Mock Mac".utf8)
+        var s1: [UInt8] = [0, 0] + u16(2); s1 += rect(0, 0, 130, 64, 16); s1 += zr1; s1 += rect(0, 64, 130, 72 - 64, 16); s1 += zr2
+        var s2: [UInt8] = [0, 0] + u16(2); s2 += rect(130 - 1, 72 - 1, 1, 1, 1); s2 += u16(0) + u16(0); s2 += rect(1, 0, 1, 1, 0); s2 += [9, 8, 7, 0]
+        var s3: [UInt8] = [3, 0, 0, 0]; s3 += RFBAuth.be32(5); s3 += Array("hello".utf8)
+        let a1: [UInt8] = [1] + RFBAuth.be32(256)
+        let script: [[UInt8]] = [Array("RFB 003.889\n".utf8), [1, 19], [0, 2], [0], a1, RFBAuth.be32(0), s0, s1, s2, s3]
         let t = ScriptedTransport(script)
         let seen = Seen()
         let client = RFBClient(transport: t) { await seen.asked(); return .init(account: "me", password: "mock-pass") }
@@ -73,11 +72,13 @@ struct RFBClientTests {
 
         let sent = t.sent
         #expect(sent[0] == Array("RFB 003.008\n".utf8) && sent[1] == [19] && sent[2] == [0, 2] && sent[3] == RFBAuth.be32(256))
-        #expect(sent[4] == RFBAuth.be32(2) + RFBAuth.be32(9) + Array("me".utf8) + Array("mock-pass".utf8), "Plain: the account and password")
+        var plain: [UInt8] = RFBAuth.be32(2); plain += RFBAuth.be32(9); plain += Array("me".utf8); plain += Array("mock-pass".utf8)
+        #expect(sent[4] == plain, "Plain: the account and password")
         #expect(sent[5] == [1], "shared")
         #expect(sent[6] == [0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0], "32-bit BGRA")
         #expect(sent[7].prefix(4) == [2, 0, 0, 6] && sent[7].count == 4 + 6 * 4)
-        #expect(sent[8] == [3, 0, 0, 0, 0, 0] + u16(130) + u16(72), "the whole screen first")
+        var whole: [UInt8] = [3, 0, 0, 0, 0, 0]; whole += u16(130); whole += u16(72)
+        #expect(sent[8] == whole, "the whole screen first")
         #expect(sent[9][1] == 1 && sent[10][1] == 1, "then what changed")
         let s = await seen.snapshot
         #expect(s.asked == 1)
