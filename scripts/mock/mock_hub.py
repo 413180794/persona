@@ -2965,6 +2965,17 @@ elif os.environ.get("MOCK_BOT") == "off":
 # hub does when Claude calls it; GET /mock/phone shows the registrations and results.
 PHONES = {}  # socket -> {"send", "registration"}
 TOOL_RESULTS = []
+MOCK_PAIR_TOKEN = os.environ.get("MOCK_PAIR_TOKEN", "")
+MOCK_PAIR_GRACE = float(os.environ.get("MOCK_PAIR_GRACE", "10"))
+# MOCK_PAIR_TRADE_DELAY=<s>: the trade answers that late; MOCK_PAIR_DROP=<s>: the first socket on the pairing token is
+# dropped once that long after it opened (a network change during the trade): with a mesh center at another address
+# (MOCK_HUB_NAME + MOCK_MESH_PEERS) the app comes back there, not at the address it paired (#2766).
+MOCK_PAIR_TRADE_DELAY = float(os.environ.get("MOCK_PAIR_TRADE_DELAY", "0"))
+MOCK_PAIR_DROP = float(os.environ.get("MOCK_PAIR_DROP", "0"))
+PAIR_DROPPED = [False]
+PAIR_TRADED = [None]  # when the pairing token was traded (MOCK_PAIR_TOKEN)
+PAIR_DEVICE_TOKENS = set()
+
 TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
     {"id": "dev_phone", "name": "我的 iPhone", "kind": "phone", "role": "full", "created_at": ago(days=12), "last_seen": ago()},
     {"id": "dev_watch", "name": "Apple Watch", "kind": "watch", "role": "answer", "created_at": ago(days=12), "last_seen": ago(hours=3)},
@@ -9444,9 +9455,19 @@ class H(BaseHTTPRequestHandler):
 
     def token_refused(self):
         """MOCK_DEVICE_TOKEN=<token>: /api/ takes only that token, in Authorization or ?token=, and answers anything else
-        401 invalid token as the hub does (#1498: the live screen's page got the app's token encoded twice)."""
-        want = os.environ.get("MOCK_DEVICE_TOKEN")
+        401 invalid token as the hub does (#1498: the live screen's page got the app's token encoded twice).
+        MOCK_PAIR_TOKEN=<jp_…>: a temporary pairing code as `personad hub pair` makes (docs/protocol.md「临时配对」):
+        it opens everything until traded once on POST /api/v1/auth/tokens, then for MOCK_PAIR_GRACE seconds (default 10,
+        the hub's 2 minutes made short); the device tokens it was traded for keep working (#2766)."""
         u = urlparse(self.path)
+        if MOCK_PAIR_TOKEN and u.path.startswith("/api/") and u.path != "/api/v1/health":
+            got = self.headers.get("Authorization", "").removeprefix("Bearer ").strip() or (parse_qs(u.query).get("token") or [""])[0]
+            ok = got in PAIR_DEVICE_TOKENS or (got == MOCK_PAIR_TOKEN and (PAIR_TRADED[0] is None or time.time() < PAIR_TRADED[0] + MOCK_PAIR_GRACE))
+            if ok: return False
+            print("mock: 401 %s %s (%s)" % (self.command, u.path, "pairing token" if got == MOCK_PAIR_TOKEN else "unknown token"), flush=True)
+            self.send_json({"error": "invalid token"}, 401)
+            return True
+        want = os.environ.get("MOCK_DEVICE_TOKEN")
         if not want or not u.path.startswith("/api/"): return False
         got = self.headers.get("Authorization", "").removeprefix("Bearer ").strip() or (parse_qs(u.query).get("token") or [""])[0]
         if got == want: return False
@@ -10209,6 +10230,20 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(LARK_DISPLAY)
         if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades its token for a device token
             req = json.loads(self.last_body or b"{}")
+            if MOCK_PAIR_TOKEN:
+                got = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+                if got == MOCK_PAIR_TOKEN:
+                    if PAIR_TRADED[0] is not None:  # traded once already
+                        print("mock: 401 second trade of the pairing token", flush=True)
+                        return self.send_json({"error": "invalid token"}, 401)
+                    if MOCK_PAIR_TRADE_DELAY: time.sleep(MOCK_PAIR_TRADE_DELAY)
+                    PAIR_TRADED[0] = time.time()
+                device = "jd_mock_%d" % (len(PAIR_DEVICE_TOKENS) + 1)
+                PAIR_DEVICE_TOKENS.add(device)
+                print("mock: traded for %s" % device, flush=True)
+                kind = req.get("kind") if req.get("kind") in ("phone", "watch") else "other"
+                return self.send_json({"id": "dev_" + device, "token": device, "role": "answer" if kind == "watch" else "full",
+                                       "name": req.get("name") or "设备"})
             kind = req.get("kind") if req.get("kind") in ("phone", "watch") else "other"
             t = {"id": "dev_mock_%d" % (len(TOKENS) + 1), "name": req.get("name") or "设备", "kind": kind,
                  "role": "answer" if kind == "watch" else "full", "created_at": ago(), "last_seen": ago()}
@@ -11388,6 +11423,26 @@ class H(BaseHTTPRequestHandler):
             self.connection.shutdown(socket.SHUT_RDWR)
 
         client = {"send": send, "features": set(), "close": close_going_away}
+        ws_token = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if MOCK_PAIR_TOKEN: print("mock: ws open host=%s token=%s" % (self.headers.get("Host"), ws_token[:9]), flush=True)
+        if MOCK_PAIR_TOKEN and ws_token == MOCK_PAIR_TOKEN:
+            def cut_after_grace():  # the hub cancels the pairing token's sockets once its grace is over
+                while True:
+                    time.sleep(1)
+                    if PAIR_TRADED[0] is not None and time.time() >= PAIR_TRADED[0] + MOCK_PAIR_GRACE:
+                        print("mock: cut the pairing token's socket", flush=True)
+                        try: close_going_away(b"credential expired")
+                        except Exception: pass
+                        return
+            threading.Thread(target=cut_after_grace, daemon=True).start()
+            if MOCK_PAIR_DROP and not PAIR_DROPPED[0]:
+                PAIR_DROPPED[0] = True
+                def drop_once():
+                    time.sleep(MOCK_PAIR_DROP)
+                    print("mock: dropped the first pairing-token socket (%s)" % self.headers.get("Host"), flush=True)
+                    try: close_going_away(b"network change")
+                    except Exception: pass
+                threading.Thread(target=drop_once, daemon=True).start()
         heartbeat = {"interval": 20, "pong_timeout": 15}
         hb_condition = threading.Condition()
         hb_state = {"next": None, "pending": None, "sent": 0, "closed": False}

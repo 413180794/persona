@@ -71,6 +71,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             AppModel.shared.adopt([cfg] + more)
         }
         let d = UserDefaults.standard
+        // `-openPairLink <persona://pair?…>`: pairs as a scanned link does (`pair`, then the device token trade), unlike
+        // `-pairURL`; `-openPairLinkTimes 2` handles the same link again a few seconds later (#2766).
+        if let s = d.string(forKey: "openPairLink"), let cfg = ServerConfig(pairURL: s) {
+            let times = max(1, d.integer(forKey: "openPairLinkTimes"))
+            Task { @MainActor in
+                for i in 0..<times {
+                    if i > 0 { try? await Task.sleep(for: .seconds(3)) }
+                    do { try await AppModel.shared.pair(cfg) } catch { AppModel.shared.show(error) }
+                }
+            }
+        }
         PopFrames.startIfAsked()
         // `-openChatsFresh YES`: no chat kept on disk from an earlier run (LiveUpdateTests: churned steps piled up).
         if d.bool(forKey: "openChatsFresh") { ChatCache.removeAll() }

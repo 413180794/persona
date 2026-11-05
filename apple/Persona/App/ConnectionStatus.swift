@@ -14,6 +14,9 @@ final class ConnectionStatus {
         case connecting
         /// Connected again and fetching what was missed (interactions, the open chats' backlog).
         case updating
+        /// The hub answers but turns this device's credential down (401, LiveConnection.rejected): revoked, or a
+        /// pairing that never got its own token. Only pairing again fixes it, so the titles say so instead of 连接中….
+        case rejected
 
         var title: String {
             switch self {
@@ -21,6 +24,7 @@ final class ConnectionStatus {
             case .waitingForNetwork: "等待网络"
             case .connecting: "连接中…"
             case .updating: "更新中…"
+            case .rejected: "配对已失效"
             }
         }
     }
@@ -53,11 +57,12 @@ final class ConnectionStatus {
     @ObservationIgnored private var awaiting: [String: Set<String>] = [:]
     @ObservationIgnored private var catchUpIDs: [String: Int] = [:]
     #if DEBUG
-    /// `-showConnection waiting|connecting|updating`: the titles show that state (screenshots).
+    /// `-showConnection waiting|connecting|updating|rejected`: the titles show that state (screenshots).
     @ObservationIgnored private let forced: Phase? = switch UserDefaults.standard.string(forKey: "showConnection") {
     case "waiting": .waitingForNetwork
     case "connecting": .connecting
     case "updating": .updating
+    case "rejected": .rejected
     default: nil
     }
     /// `-showConnectionCycle <waiting|connecting|updating>:<off>:<on>`: the link is fine for `off` seconds, then in that
@@ -101,8 +106,16 @@ final class ConnectionStatus {
 
     /// The state the links are in right now, before the delay.
     var phase: Phase {
-        Self.phase(network: networkUp, links: lives().map { ($0.inGrace ? .connected : $0.state, $0.inGrace ? false : $0.stalled) },
-                   catchingUp: catchingUp)
+        let lives = lives()
+        let p = Self.phase(network: networkUp, links: lives.map { ($0.inGrace ? .connected : $0.state, $0.inGrace ? false : $0.stalled) },
+                           catchingUp: catchingUp)
+        return Self.refined(p, rejected: lives.filter { $0.state != .idle }.map(\.rejected))
+    }
+
+    /// 连接中… because every group's hub turned its credential down: 配对已失效. One group refused while another is
+    /// still trying stays 连接中… (the hub list says which).
+    static func refined(_ phase: Phase, rejected: [Bool]) -> Phase {
+        phase == .connecting && !rejected.isEmpty && rejected.allSatisfy { $0 } ? .rejected : phase
     }
 
     /// How long a phase must last before the titles show it: none after a drop's grace ran out (it waited already).

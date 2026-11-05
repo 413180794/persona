@@ -1,3 +1,4 @@
+import CryptoKit
 import SwiftUI
 #if canImport(WatchConnectivity)
 import WatchConnectivity
@@ -46,15 +47,7 @@ extension AppModel {
         for paired in registry.hubs where paired.deviceID == nil {
             let old = paired.config
             guard let t = try? await APIClient(config: old).createToken(name: UIDevice.current.name, kind: Self.credentialKind) else { continue }
-            var cfg = old
-            cfg.token = t.token
-            updateHub(paired.id) { $0.config = cfg; $0.deviceID = t.id }
-            buildLinks()
-            // The group's socket goes on with the new credential if it was on this hub.
-            if let link = link(paired.group), link.live.currentConfig == old || link.live.currentConfig == nil {
-                link.live.disconnect()
-                link.live.connect(cfg)
-            }
+            adoptDeviceToken(hub: paired.id, old: old.token, token: t.token, deviceID: t.id)
         }
         #if canImport(WatchConnectivity)
         if WatchSync.shared.watchAppInstalled {
@@ -68,12 +61,63 @@ extension AppModel {
         pushWatchConfigs()
     }
 
+    /// Hub `id` traded the pairing token `old` for this device's own. The registry keeps the new one, and every socket
+    /// still on the old token goes on with it at once: whatever address or route it took (a candidate address, a mesh
+    /// peer, the SSH tunnel), whichever group the hub is in by now (a hello may regroup it while the trade is out).
+    /// Comparing whole configs missed those, and the socket stayed on the pairing token until the hub dropped it after
+    /// its grace (docs/protocol.md「临时配对」): 401 on every attempt, 连接中… for good (#2766).
+    func adoptDeviceToken(hub id: String, old: String, token: String, deviceID: String) {
+        tradedTokens[old] = token
+        // nil: paired again with another link meanwhile; that pairing trades its own.
+        if let r = DeviceCredentialTrade.registry(registry, hub: id, old: old, token: token, deviceID: deviceID) {
+            registry = r
+            saveRegistry(r)
+            buildLinks()
+        }
+        for link in links where !link.isDemo { link.live.renewCredential(from: old, to: token) }
+    }
+
     /// Nothing kept about this device's credentials outside the registry any more (the registry goes with `unpair`).
     func forgetDeviceCredentials() {
         UserDefaults.standard.removeObject(forKey: HubStore.legacyDeviceIDKey)
     }
 }
 
+/// Trading a pairing token for the device's own (pure, for the tests).
+nonisolated enum DeviceCredentialTrade {
+    /// The registry once hub `id` has `token` (and `deviceID`) in place of `old`; nil when the hub is gone or no longer
+    /// on `old` (paired again with another link while the trade was out).
+    static func registry(_ r: HubRegistry, hub id: String, old: String, token: String, deviceID: String) -> HubRegistry? {
+        guard let i = r.hubs.firstIndex(where: { $0.id == id }), r.hubs[i].config.token == old else { return nil }
+        var out = r
+        out.hubs[i].config.token = token
+        out.hubs[i].deviceID = deviceID
+        out.hubs[i].tradedPairing = fingerprint(old)
+        return out
+    }
+
+    /// What the registry keeps of a traded pairing token: its SHA-256, never the token.
+    static func fingerprint(_ token: String) -> String {
+        SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The credential a request or socket on `config` goes with: a traded pairing token comes back as the device's
+    /// token, at the same address.
+    static func current(_ config: ServerConfig, traded: [String: String]) -> ServerConfig {
+        guard let token = traded[config.token], token != config.token else { return config }
+        var c = config
+        c.token = token
+        return c
+    }
+
+    /// A pairing link whose token was already traded for `hub`'s own credential (the same link handled twice): the hub
+    /// keeps the device token instead of going back to the pairing one.
+    static func keepsDevice(_ hub: PairedHub, pairing: ServerConfig, traded: [String: String]) -> Bool {
+        guard hub.deviceID != nil, pairing.token != hub.config.token else { return false }
+        if let token = traded[pairing.token] { return hub.config.token == token }
+        return hub.tradedPairing == fingerprint(pairing.token) // traded at an earlier launch
+    }
+}
 
 /// 设置 › 设备: every device with its own credential, revocable one by one.
 struct DevicesView: View {

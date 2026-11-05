@@ -81,6 +81,9 @@ nonisolated struct PairedHub: Codable, Hashable, Sendable, Identifiable {
     var addedAt: Date = .now
     /// Its SSH tunnel, when the user set one up (docs/network.md「经 SSH 隧道连 hub」).
     var ssh: SSHRoute?
+    /// SHA-256 (hex) of the pairing token `deviceID`'s token was traded for: the same pairing link handled again (scanned
+    /// twice, opened from the camera too) keeps the device's token instead of going back to one the hub drops (#2766).
+    var tradedPairing: String?
 
     init(id: String = PairedHub.newID(), config: ServerConfig, group: String = "", hubID: String? = nil, hubName: String? = nil,
          deviceID: String? = nil, watch: ServerConfig? = nil, mesh: [MeshHub]? = nil, addedAt: Date = .now) {

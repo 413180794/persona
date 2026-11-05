@@ -38,7 +38,14 @@ struct ConnectionLabel: View {
 
     var body: some View {
         HStack(spacing: compact ? 5 : 7) {
-            ProgressView().controlSize(compact ? .mini : .small)
+            if phase == .rejected {
+                // Not trying anything the user can wait out: no spinner.
+                Image(systemName: Theme.Icon.error)
+                    .font(compact ? Theme.Font.label : Theme.Font.heading)
+                    .foregroundStyle(Theme.caution)
+            } else {
+                ProgressView().controlSize(compact ? .mini : .small)
+            }
             // The hub restarting into a new version: the connection going away is expected (docs/hub-update.md).
             Text(phase == .connecting && model.hubUpdate?.restarting == true ? "hub 正在更新…" : phase.title)
                 .font(compact ? Theme.Font.label : Theme.Font.heading)
@@ -61,6 +68,7 @@ extension View {
 /// Why the title says what it says, since when, and 立即重试: what used to be a banner over the list.
 struct ConnectionDetails: View {
     @Environment(AppModel.self) private var model
+    @State private var pairing = false
 
     var body: some View {
         let status = model.connection
@@ -89,6 +97,17 @@ struct ConnectionDetails: View {
                     .font(Theme.Font.caption)
                     .foregroundStyle(.secondary)
                 }
+                if phase == .rejected {
+                    Button {
+                        Haptics.tap()
+                        pairing = true
+                    } label: {
+                        Text("重新配对").lineLimit(1).frame(maxWidth: .infinity)
+                    }
+                    .themedButton(prominent: true)
+                    .padding(.top, Theme.Space.xxs)
+                    .accessibilityIdentifier("connection.repair")
+                }
                 if phase != .online {
                     Button {
                         Haptics.tap()
@@ -97,13 +116,14 @@ struct ConnectionDetails: View {
                     } label: {
                         Text("立即重试").lineLimit(1).frame(maxWidth: .infinity)
                     }
-                    .themedButton(prominent: true)
+                    .themedButton(prominent: phase != .rejected)
                     .padding(.top, Theme.Space.xxs)
                 }
             }
             .padding(Theme.Space.l)
             .scaledFrame(width: Theme.Size.box300, alignment: .leading)
         }
+        .sheet(isPresented: $pairing) { PairView() }
     }
 
     /// The hub-level group's SSH tunnel, when its hub has one.
@@ -126,6 +146,11 @@ struct ConnectionDetails: View {
             stalled ? "网络很慢：hub 好几秒没有回应了，正在等它。"
                 : "有网络，但连不上 hub（它所在的机器可能关机、休眠或断网）。会一直自动重试。"
         case .updating: "已经连上，正在补上断开期间的消息和待处理的请求。"
+        #if os(macOS)
+        case .rejected: "hub 不再认这台 Mac 的凭据：它可能在「设置 › 设备」里被撤销了，或者上次配对没有完成。重新粘贴配对链接就能恢复。"
+        #else
+        case .rejected: "hub 不再认这台设备的凭据：它可能在「设置 › 设备」里被撤销了，或者上次配对没有完成。在 hub 所在的机器上生成新的配对码，重新扫码就能恢复。"
+        #endif
         }
     }
 
@@ -146,8 +171,8 @@ struct ConnectionDetails: View {
             out.append(ssh.routed ? "线路：经 SSH 隧道（\(ssh.server)）" : "线路：直连")
             if phase != .online, let why = ssh.problem { out.append("SSH 隧道：\(why)") }
         }
-        if phase == .connecting, case .failed(let why) = link { out.append("上次失败：\(why)") }
-        if phase == .connecting, let nextTry {
+        if phase == .connecting || phase == .rejected, case .failed(let why) = link { out.append("上次失败：\(why)") }
+        if phase == .connecting || phase == .rejected, let nextTry {
             let s = Int(ceil(nextTry.timeIntervalSince(now)))
             out.append(s > 0 ? "\(s) 秒后重试" : "正在重试…")
         }

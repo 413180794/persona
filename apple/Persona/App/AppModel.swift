@@ -20,6 +20,9 @@ final class AppModel {
     @ObservationIgnored private(set) var registryUnreadable = false
     /// The credentials upgrade in flight (upgradeCredentials).
     @ObservationIgnored var credentialsUpgrade: Task<Void, Never>?
+    /// Pairing tokens this launch traded for the device's own, to that token (DeviceCredentialTrade): a socket or a
+    /// pairing link still on one goes on with the device's.
+    @ObservationIgnored var tradedTokens: [String: String] = [:]
     /// One per group, in the registry's order; the demo's alone in 体验模式.
     private(set) var links: [HubLink] = []
     /// The group hub-level pages show (`selectHub`); the first group when it is not one of them.
@@ -353,6 +356,7 @@ final class AppModel {
         link.live.prepareEvent = { Self.prepare($0) }
         link.live.onConnected = { [weak self] in self?.didConnect(group) }
         link.live.onChange = { [weak self] in self?.connection.update() }
+        link.live.credential = { [weak self] config in DeviceCredentialTrade.current(config, traded: self?.tradedTokens ?? [:]) }
         return link
     }
 
@@ -428,10 +432,17 @@ final class AppModel {
             if let id = identity?.hubID, !id.isEmpty, let had = h.hubID { return had == id }
             return h.config.url == new.url // a hub that does not say who it is: the same address
         }
-        if let i = same {
+        if let i = same, DeviceCredentialTrade.keepsDevice(r.hubs[i], pairing: new, traded: tradedTokens) {
+            // The same pairing link again (scanned twice, opened from the camera as well): it was traded for this
+            // device's own token already. Writing it back would leave the app on a token the hub drops in minutes.
+            if let ssh { r.hubs[i].ssh = ssh }
+            group = r.hubs[i].group
+            tunnels.adopt(SSHTunnels.pairingID, as: r.hubs[i].id)
+        } else if let i = same {
             // The same hub paired again (a new pairing link): its new credential replaces the old one.
             r.hubs[i].config = new
             r.hubs[i].deviceID = nil
+            r.hubs[i].tradedPairing = nil
             r.hubs[i].watch = nil
             if let ssh { r.hubs[i].ssh = ssh }
             group = r.hubs[i].group

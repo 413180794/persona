@@ -569,6 +569,17 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
   以前 `Keychain.load` 把它和 `errSecItemNotFound` 一样当 nil。存配对这类丢了就要重新扫码的东西，要分开「没有」和「读不出」，读不出时别写回、
   更别因为「空」去删；迁移旧项先写新的、读回确认再删旧的（`HubStore`，`HubStoreTests` 用假钥匙串测写失败和读出错）。
 
+## 临时码配对后一会儿就一直「连接中」（2026-11-05，#2766）
+
+- 配对后换设备 token：以前只在 socket 的 `currentConfig` 和配对的 config **整个相等**、按兑换前记下的组找得到 link 时才换。
+  socket 连在候选地址、mesh 里另一台、SSH 隧道上，或者兑换期间 hello 把 hub 重新分了组，socket 就一直用临时 token；hub 兑换后 2 分钟断掉它，
+  之后每次重连都 401，界面无限「连接中…」。现在按 **token** 换：`adoptDeviceToken` 记下「临时 token → 设备 token」，所有还用旧 token 的 socket
+  `renewCredential` 原地址换 token；`LiveConnection.credential` 在每次握手前再换一次，选路读到的旧配置也带不回旧 token。
+- 同一个配对链接处理两次（扫码 + 系统相机打开链接、扫码回调连发）：第二次 `pair()` 会把已经兑换过的临时 token 写回注册表，再兑换又是 401。
+  兑换过的链接再来时保留设备 token（`DeviceCredentialTrade.keepsDevice`）。
+- 握手 401（`URLSessionWebSocketTask.response` 的状态码）不是「连不上」：`LiveConnection.rejected`，标题显示「配对已失效」、详情里「重新配对」，重试放慢到 60 秒（公网会按地址数失败次数封禁）。
+- 复现：`MOCK_PAIR_TOKEN=jp_…` 起假 hub，`-openWelcome YES -openPairLink <链接> -openPairLinkTimes 2`；走另一个地址的那条见 `docs/testing.md`「临时码配对」。
+
 ## 会话格子显示用，发送别用（2026-11-03，#624）
 
 `model.session(key)`（会话格子）为了少重画，故意不跟 `rev`、`updated_at`、最后一句（`docs/ios-state.md`「第 3 步」）：

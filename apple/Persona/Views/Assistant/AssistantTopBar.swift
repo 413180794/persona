@@ -496,7 +496,7 @@ extension AppModel {
         #endif
         // 更新中… is the hub answering again: not 离线.
         let link = connection.shown
-        if link == .waitingForNetwork || link == .connecting || machine(hubRef(machineID), inFront: inFront)?.online == false { return .offline }
+        if link == .waitingForNetwork || link == .connecting || link == .rejected || machine(hubRef(machineID), inFront: inFront)?.online == false { return .offline }
         guard let key, let session = session(key) else { return .idle }
         if session.state == .needsYou || !interactions(for: key).isEmpty { return .needsYou }
         guard session.state == .working else { return .idle }

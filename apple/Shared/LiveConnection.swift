@@ -279,6 +279,11 @@ final class LiveConnection {
     private(set) var stalled = false { didSet { if stalled != oldValue { onChange?() } } }
     /// Round trip of the last answered ping.
     private(set) var rtt: TimeInterval?
+    /// The hub turned the socket's credential down (401 on the handshake): a revoked device, or a pairing token past its
+    /// grace (docs/protocol.md「临时配对」). Retrying alone will not fix it; the app says 配对已失效 (ConnectionStatus) and
+    /// tries again only slowly (`rejectedRetry`). Cleared once a socket opens, and by `connect` (paired again).
+    private(set) var rejected = false { didSet { if rejected != oldValue { onChange?() } } }
+    static let rejectedRetry: TimeInterval = 60
     /// When the next attempt starts while the hub is out of reach.
     private(set) var nextTry: Date?
     /// The socket went while connected and is not back yet (docs/hub-restart.md): nil once it is, or after
@@ -307,6 +312,9 @@ final class LiveConnection {
     /// Picks where each attempt goes when a group has several hubs (HubRoute, docs/multi-hub.md「选路」): asked before
     /// every attempt; nil keeps the config given to `connect`.
     @ObservationIgnored var route: (@MainActor () async -> ServerConfig?)?
+    /// The credential each attempt goes with (AppModel.currentCredential): a pairing token this device already traded
+    /// for its own comes back as the device token, whatever address or route the attempt takes. nil: as given.
+    @ObservationIgnored var credential: ((ServerConfig) -> ServerConfig)?
 
     @ObservationIgnored private var config: ServerConfig?
     /// Where the socket goes (or went last): the config given to `connect`, or the one `route` picked.
@@ -343,7 +351,23 @@ final class LiveConnection {
         if config != self.config { cursor = EventCursor() } // another hub or pairing: its stream is not ours
         self.config = config
         backoff = 1
+        rejected = false
         open()
+    }
+
+    /// The device traded the token this socket uses (`old`, its pairing token) for its own (docs/protocol.md「临时配对」):
+    /// the same address or route goes on with `new`, at once while it is up (the hub cuts the old one's sockets after a
+    /// short grace). The broadcast stream stays ours: it is the same hub. False when the socket is not on `old`.
+    @discardableResult
+    func renewCredential(from old: String, to new: String) -> Bool {
+        guard var c = config, c.token == old, old != new else { return false }
+        c.token = new
+        config = c
+        rejected = false
+        if state == .idle { return true } // closed on purpose (the background): it opens with the new one later
+        backoff = 1
+        open()
+        return true
     }
 
     func disconnect() {
@@ -422,7 +446,9 @@ final class LiveConnection {
     /// The hub `route` picked for the next attempt.
     @ObservationIgnored var onRoute: ((ServerConfig) -> Void)?
 
-    private func openSocket(_ config: ServerConfig, _ gen: Int) {
+    private func openSocket(_ given: ServerConfig, _ gen: Int) {
+        let config = credential?(given) ?? given
+        if config != given { self.config = config }
         var comps = URLComponents(url: config.url.appending(path: "/api/v1/ws"), resolvingAgainstBaseURL: false)!
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
         comps.queryItems = Self.queryItems(cursor)
@@ -509,6 +535,7 @@ final class LiveConnection {
                     if first {
                         self.state = .connected
                         self.backoff = 1
+                        self.rejected = false
                         self.onConnected?()
                     }
                     if let event { self.onEvent?(event) }
@@ -516,7 +543,10 @@ final class LiveConnection {
                 case .failure(let err):
                     let planned = self.restartNotice || (!self.closedQuiet && t.closeCode == .goingAway)
                     self.dropped(restart: planned)
-                    self.state = .failed(err.localizedDescription)
+                    // The handshake's answer: 401 is the hub refusing this credential, not the hub being away.
+                    let refused = (t.response as? HTTPURLResponse)?.statusCode == 401
+                    if refused != self.rejected { self.rejected = refused }
+                    self.state = .failed(refused ? "hub 不认这台设备的凭据（401）" : err.localizedDescription)
                     self.stalled = false
                     self.scheduleReconnect(gen)
                 }
@@ -597,7 +627,7 @@ final class LiveConnection {
     }
 
     private func scheduleReconnect(_ gen: Int) {
-        let delay: TimeInterval
+        var delay: TimeInterval
         if let drop {
             let since = Date.now.timeIntervalSince(drop.at)
             let fast = drop.restart && since < LinkDrop.restartFast
@@ -608,9 +638,12 @@ final class LiveConnection {
             delay = backoff
             backoff = min(backoff * 2, 20)
         }
-        nextTry = .now + delay
+        // A refused credential: slowly (a public address counts failed logins and blocks the address, docs/protocol.md).
+        if rejected { delay = max(delay, Self.rejectedRetry) }
+        let wait = delay
+        nextTry = .now + wait
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(delay))
+            try? await Task.sleep(for: .seconds(wait))
             guard gen == self.generation else { return }
             self.open()
         }
