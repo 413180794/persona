@@ -59,7 +59,14 @@ func runTestPlugin(mode string) {
 // pluginTestNode is a node with its own directory, its events kept.
 func pluginTestNode(t *testing.T) (*Node, *[]string) {
 	t.Helper()
-	n := &Node{home: t.TempDir(), logger: log.New(os.Stderr, "", 0)}
+	// Not t.TempDir(): a program's socket, <home>/.persona/node-plugins/<id>/run.sock, must fit sun_path, which is
+	// 104 bytes on macOS, where $TMPDIR alone is about 49 and t.TempDir() adds the test's name (#2278).
+	home, err := os.MkdirTemp("/tmp", "np")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(home) })
+	n := &Node{home: home, logger: log.New(os.Stderr, "", 0)}
 	n.dir = filepath.Join(n.home, ".persona")
 	var events []string
 	ph := n.plugins()

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -34,6 +35,8 @@ func TestMain(m *testing.M) {
 			return extension.InitializeResult{Protocol: 9, ID: "demo", Version: "1.0.0"}, nil
 		}
 		_ = peer.Serve(context.Background(), os.Stdin)
+	case "quit": // a program that ends by itself as soon as it starts
+		os.Exit(3)
 	case "http":
 		ln, err := net.Listen("unix", os.Getenv("PERSONA_PLUGIN_SOCKET"))
 		if err != nil {
@@ -292,6 +295,43 @@ func TestHTTPOnly(t *testing.T) {
 	p.Stop()
 	if st, _ := p.Status(); st != StateStopped {
 		t.Fatal(st)
+	}
+}
+
+// A program that ends by itself is an error and is started again, and Stop still returns (#2277). The run used to
+// take the program's exit and then wait for it a second time while ending the run, so the host hung for good.
+func TestAProgramThatQuitsIsStartedAgainAndStops(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hst") // a unix socket path stays short
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	o := &observed{}
+	s := spec(t, "quit")
+	s.RPC, s.HTTP, s.Socket, s.Startup, s.Observe = false, true, filepath.Join(dir, "demo.sock"), true, o
+	p := Start(context.Background(), s)
+	defer func() { // on its own goroutine, so that a Stop that hangs fails this test instead of the whole run
+		stopped := make(chan struct{})
+		go func() { p.Stop(); close(stopped) }()
+		select {
+		case <-stopped:
+			if st, _ := p.Status(); st != StateStopped {
+				t.Errorf("state %s after Stop", st)
+			}
+		case <-time.After(10 * time.Second):
+			t.Error("Stop did not return")
+		}
+	}()
+	startedAgain := func() bool {
+		_, runs, _ := o.snapshot()
+		i := slices.Index(runs, "exit exit status 3")
+		return i >= 0 && slices.Contains(runs[i:], RunStart)
+	}
+	for deadline := time.Now().Add(10 * time.Second); !startedAgain(); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			_, runs, _ := o.snapshot()
+			t.Fatalf("runs %q: the program's exit was not seen, or it was not started again", runs)
+		}
 	}
 }
 

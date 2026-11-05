@@ -266,6 +266,79 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 	t.Fatal("the failed run was not recorded")
 }
 
+// The failure push sends the user to the task's page. A task switched off or deleted while the retry waited must not
+// run again: the retry used the copy the run started with, so it went anyway, with the old prompt, and silently (a
+// retry that fails is not pushed).
+func TestTaskSwitchedOffOrDeletedAfterFailureIsNotRetried(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		undo func(t *testing.T, h *Service)
+	}{
+		{"switched off", func(t *testing.T, h *Service) {
+			sc := h.loadSchedule(context.Background())
+			sc.mu.Lock()
+			defer sc.mu.Unlock()
+			i := sc.indexLocked("p")
+			if i < 0 {
+				t.Fatal("no task p")
+			}
+			sc.tasks[i].Enabled = false
+		}},
+		{"deleted", func(t *testing.T, h *Service) {
+			if ok, err := h.deleteTask(context.Background(), "p"); err != nil || !ok {
+				t.Fatalf("delete: %v %v", ok, err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := newFakeHub().withMachine()
+			h := newStorelessService(t, n)
+			old := runRetryDelay
+			runRetryDelay = 50 * time.Millisecond
+			t.Cleanup(func() { runRetryDelay = old })
+			n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "API Error: 503 upstream attempt budget is exhausted"}}
+			setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
+			n.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
+				Cwd: "/home/me/.jarvis/assistant"})
+			if _, err := runNow(t, h, "p"); err != nil {
+				t.Fatal(err)
+			}
+			tc.undo(t, h) // while the turn still runs: before the watcher can retry
+			// The turn ends: the watcher sees working, then idle.
+			time.Sleep(3 * time.Second)
+			n.mu.Lock()
+			for i := range n.sessions["server"] {
+				n.sessions["server"][i].Status, n.sessions["server"][i].State = proto.StatusOffline, proto.StateIdle
+			}
+			n.mu.Unlock()
+
+			// The failure is still recorded and pushed ...
+			deadline := time.Now().Add(15 * time.Second)
+			for len(n.pushed()) == 0 {
+				if !time.Now().Before(deadline) {
+					t.Fatal("the failed run was not pushed")
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			if p := n.pushed(); p[0].Title != "定时任务失败：值守" {
+				t.Fatalf("the failure is pushed: %+v", p)
+			}
+			// ... and the retry does not go.
+			time.Sleep(20 * runRetryDelay)
+			if got := n.sent(); got != 1 {
+				t.Fatalf("sent %d times, want the first run only", got)
+			}
+			sc := h.loadSchedule(context.Background())
+			sc.mu.Lock()
+			retried := slices.ContainsFunc(sc.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Retried })
+			sc.mu.Unlock()
+			if retried {
+				t.Fatal("a retry was recorded")
+			}
+		})
+	}
+}
+
 // A model error can end the turn before the first poll sees it working (a vanished model fails immediately): the
 // changed last item alone must still end the watch, or the run stays "ok" for the whole timeout.
 func TestTaskFailingBeforeTheWatcherSeesItWorking(t *testing.T) {

@@ -526,10 +526,13 @@ func (p *Proc) waitWanted(ctx context.Context) bool {
 
 // child is a run's program, or a remote plugin's connection.
 type child struct {
-	cmd    *exec.Cmd
-	stdin  io.Closer
-	conn   net.Conn
-	exited chan error
+	cmd   *exec.Cmd
+	stdin io.Closer
+	conn  net.Conn
+	// exited is closed once the program has ended, with why in waitErr (never, for a plugin elsewhere). Closed, not
+	// sent on: the run and then end both wait for it, and a value taken by the first left end waiting forever (#2277).
+	exited  chan struct{}
+	waitErr error
 }
 
 // runOnce runs the plugin once: nil when it was stopped because nothing needed it, the reason otherwise.
@@ -589,11 +592,11 @@ func (p *Proc) runOnce(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case err := <-ch.exited:
-			if err == nil {
-				err = errors.New("exited")
+		case <-ch.exited:
+			if ch.waitErr == nil {
+				return errors.New("exited")
 			}
-			return err
+			return ch.waitErr
 		case <-peerDone:
 			return fmt.Errorf("the connection closed: %v", s.peer.Err())
 		case <-killed:
@@ -709,7 +712,7 @@ func (p *Proc) initialize(ctx context.Context, s *session) error {
 // spawn starts the program (or connects to the plugin elsewhere): what to write to and read from.
 func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	if p.spec.Command == "" {
-		ch := &child{exited: make(chan error, 1)}
+		ch := &child{exited: make(chan struct{})}
 		if !p.spec.RPC {
 			return ch, nil, nil
 		}
@@ -753,7 +756,7 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	env = append(slices.Clone(env), wrapEnv...)
 	cmd.Env = identity.Environment(base, env...)
 	cmd.SysProcAttr = osproc.GroupAttr() // so stopping it takes its children too
-	ch := &child{cmd: cmd, exited: make(chan error, 1)}
+	ch := &child{cmd: cmd, exited: make(chan struct{})}
 	var out io.Reader
 	if p.spec.RPC {
 		stdin, err := cmd.StdinPipe()
@@ -781,7 +784,10 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, nil, fmt.Errorf("%s 的程序起不来：%v", p.spec.Name, err)
 	}
-	go func() { ch.exited <- cmd.Wait() }()
+	go func() {
+		ch.waitErr = cmd.Wait()
+		close(ch.exited)
+	}()
 	return ch, out, nil
 }
 

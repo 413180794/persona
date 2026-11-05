@@ -181,6 +181,46 @@ func TestJSONMaxDoesNotRetryAWholeReplyWithoutJSON(t *testing.T) {
 	}
 }
 
+func TestJSONMaxTakesAQuoteEscapedAsInJavaScript(t *testing.T) {
+	c, seen := truncatingServer(t, map[string]any{"text": `{"summary":"it\'s done"}`, "stop": "end_turn"})
+	var out struct{ Summary string }
+	if err := c.JSONMax(context.Background(), "sys", "user", 100, &out); err != nil || out.Summary != "it's done" {
+		t.Fatalf("out = %+v, %v", out, err)
+	}
+	if len(*seen) != 1 {
+		t.Errorf("requests = %v, want one", *seen)
+	}
+}
+
+func TestUnmarshalReplyRepairsOnlyWhatJSONLacks(t *testing.T) {
+	cases := map[string]string{
+		`{"s":"it\'s"}`:                        "it's",
+		`{"s":"C:\Users\me"}`:                  `C:\Users\me`,
+		`{"s":"tab\tquote\"slash\/\u00e9\\n"}`: "tab\tquote\"slash/é\\n",
+		`{"s":"mixed \' and \"real\" and \d"}`: `mixed ' and "real" and \d`,
+	}
+	for in, want := range cases {
+		var out struct{ S string }
+		if err := unmarshalReply([]byte(in), &out); err != nil || out.S != want {
+			t.Errorf("unmarshalReply(%s) = %q, %v; want %q", in, out.S, err, want)
+		}
+	}
+}
+
+func TestUnmarshalReplyKeepsTheFirstErrorWhenTheRepairDoesNotHelp(t *testing.T) {
+	var out struct{ S string }
+	err := unmarshalReply([]byte(`{"s":"it\'s",}`), &out) // the trailing comma is still wrong after the repair
+	var syntax *json.SyntaxError
+	if !errors.As(err, &syntax) || !strings.Contains(err.Error(), `\'`) {
+		t.Fatalf("err = %v, want the syntax error about \\'", err)
+	}
+	if err := unmarshalReply([]byte(`{"s":1}`), &out); err == nil {
+		t.Fatal("a type error is not repaired: want it back")
+	} else if errors.As(err, &syntax) {
+		t.Fatalf("err = %v, want the type error", err)
+	}
+}
+
 func TestCompleteReturnsACutOffReplyAsFarAsItGot(t *testing.T) {
 	c, _ := truncatingServer(t, map[string]any{"text": "a long answer that st", "stop": "max_tokens"})
 	text, err := c.Complete(context.Background(), "sys", "user", 10)

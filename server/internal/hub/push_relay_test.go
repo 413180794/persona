@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -60,6 +61,12 @@ func (f *relayAPNs) wait(t *testing.T, n int) []apns.Request {
 // relayHub: a hub without apns.json and a phone registered with a relay (as the app does: its grant, its key).
 func relayHub(t *testing.T) (*Hub, *relayAPNs, *ecdh.PrivateKey) {
 	t.Helper()
+	return relayHubVia(t, nil)
+}
+
+// relayHubVia is relayHub with the relay's handler behind front (nil: none).
+func relayHubVia(t *testing.T, front func(http.Handler) http.Handler) (*Hub, *relayAPNs, *ecdh.PrivateKey) {
+	t.Helper()
 	h := newTestHub(t)
 	if h.push.direct != nil {
 		t.Fatal("test hub has an APNs key")
@@ -69,7 +76,11 @@ func relayHub(t *testing.T) (*Hub, *relayAPNs, *ecdh.PrivateKey) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(rs.Handler())
+	var handler http.Handler = rs.Handler()
+	if front != nil {
+		handler = front(handler)
+	}
+	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	// The phone registers with the relay itself.
 	resp, err := srv.Client().Post(srv.URL+"/relay/v1/register", "application/json",
@@ -181,6 +192,128 @@ func TestRelayGoneForgetsDevice(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("device kept after the relay said its token is gone")
+}
+
+// flakyRelay stands in front of the relay and fails the first pushes as told: 0 drops the connection unanswered (what a
+// TLS handshake or connection that timed out comes to), any other value answers with that status. Later pushes go
+// through to the relay.
+type flakyRelay struct {
+	fail []int
+
+	mu    sync.Mutex
+	tries int
+	logs  []string
+}
+
+func (f *flakyRelay) front(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/v1/push") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		f.mu.Lock()
+		f.tries++
+		n := f.tries
+		f.mu.Unlock()
+		if n > len(f.fail) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if code := f.fail[n-1]; code != 0 {
+			w.WriteHeader(code)
+			_, _ = w.Write([]byte(`{"error":"failed on purpose"}`))
+			return
+		}
+		if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+			_ = conn.Close()
+		}
+	})
+}
+
+// hub makes the relay hub behind f, with short waits between tries and the pusher's log kept.
+func (f *flakyRelay) hub(t *testing.T) (*Hub, *relayAPNs, *ecdh.PrivateKey) {
+	t.Helper()
+	h, apns, priv := relayHubVia(t, f.front)
+	h.push.retryWaits = []time.Duration{time.Millisecond, time.Millisecond}
+	h.push.logf = func(format string, a ...any) {
+		f.mu.Lock()
+		f.logs = append(f.logs, fmt.Sprintf(format, a...))
+		f.mu.Unlock()
+	}
+	return h, apns, priv
+}
+
+func (f *flakyRelay) seen() (int, []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.tries, append([]string(nil), f.logs...)
+}
+
+// waitLog waits for a pusher log line that contains want and returns the log so far.
+func (f *flakyRelay) waitLog(t *testing.T, want string) []string {
+	t.Helper()
+	for range 300 {
+		if _, logs := f.seen(); strings.Contains(strings.Join(logs, "\n"), want) {
+			return logs
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	_, logs := f.seen()
+	t.Fatalf("no log line with %q in %q", want, logs)
+	return nil
+}
+
+// A dropped connection to the relay used to lose the push (#2150): it is tried again and arrives.
+func TestRelayTriesAPushAgainAfterTheNetworkDroppedIt(t *testing.T) {
+	fr := &flakyRelay{fail: []int{0, 0}}
+	h, f, priv := fr.hub(t)
+	h.push.notifyDone("m1", "笔记本", "s1", "✅ 重构支付", "改好了", nil)
+	if p := opened(t, priv, f.wait(t, 1)[0]); p["aps"].(map[string]any)["alert"].(map[string]any)["body"] != "改好了" {
+		t.Fatalf("opened %v", p)
+	}
+	fr.waitLog(t, "alert push went through on try 3")
+	if tries, _ := fr.seen(); tries != 3 {
+		t.Fatalf("tries = %d, want 3", tries)
+	}
+}
+
+func TestRelayTriesALiveActivityAgainWhenTheRelayIsBusy(t *testing.T) {
+	fr := &flakyRelay{fail: []int{http.StatusServiceUnavailable}}
+	h, f, _ := fr.hub(t)
+	h.live.update("phone", func(v *db.LiveActivity) { v.PushToStartToken = "abcdef0123456789abcdef0123456789" })
+	h.live.flush(FleetState{Phase: "working", Working: 1, Items: []FleetItem{{ID: "m/a", Title: "api", Kind: "working"}}}, false, false)
+	if r := f.wait(t, 1)[0]; r.PushType != "liveactivity" {
+		t.Fatalf("push %+v", r)
+	}
+	if tries, _ := fr.seen(); tries != 2 {
+		t.Fatalf("tries = %d, want 2", tries)
+	}
+}
+
+// Every try failing, the push is given up after the waits, and the log says how many tries it had.
+func TestRelayGivesUpAfterItsTries(t *testing.T) {
+	fr := &flakyRelay{fail: []int{0, 0, 0}}
+	h, f, _ := fr.hub(t)
+	h.push.notifyDone("m1", "笔记本", "s1", "t", "x", nil)
+	fr.waitLog(t, "(3 tries)")
+	f.mu.Lock()
+	pushes := len(f.got)
+	f.mu.Unlock()
+	if tries, _ := fr.seen(); tries != 3 || pushes != 0 {
+		t.Fatalf("tries = %d, pushes = %d; want 3 and none", tries, pushes)
+	}
+}
+
+// A refusal is the relay's answer: tried once, not again.
+func TestRelayDoesNotTryARefusalAgain(t *testing.T) {
+	fr := &flakyRelay{fail: []int{http.StatusBadRequest}}
+	h, _, _ := fr.hub(t)
+	h.push.notifyDone("m1", "笔记本", "s1", "t", "x", nil)
+	logs := fr.waitLog(t, "relay phone: 400")
+	time.Sleep(20 * time.Millisecond) // a retry would come after a millisecond
+	if tries, _ := fr.seen(); tries != 1 || strings.Contains(strings.Join(logs, "\n"), "tries") {
+		t.Fatalf("tries = %d, log %q; want one try", tries, logs)
+	}
 }
 
 // Without the phone's key there is nothing to seal to: no push, never one in the clear.

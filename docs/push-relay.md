@@ -92,6 +92,10 @@ hub：`POST /api/v1/devices` 多三个字段 `push_key`（手机公钥，X9.63 �
 
 hub 选路（`push.go`）：有 `apns.json` → 直连（和以前一模一样）；没有 → 设备带了 `relay_url` + `relay_grant` + `push_key` 就走中继；都没有就不推。
 
+hub 到中继失败时重试（#2150）：网络错误（TLS 握手 / 连接超时、连接被断）和中继回 5xx / 429 的，隔 1 秒、4 秒各再试一次，
+三次都不行才放弃，日志写明试了几次；中继别的回答（4xx、410）不重试，401 照旧先换凭据。以前只试一次，hub 到中继的网络一抖，
+提醒和 Live Activity 的更新就丢了。Live Activity 的推送带 `aps.timestamp`，重试晚到的旧状态 iOS 会丢掉，不会盖掉新的。
+
 ## App
 
 - 构建配置 `app.push_relay`（`config.json`，比如 `https://<中继域名>/relay`）进 Info.plist 的 `JarvisPushRelay`；为空就不登记中继。

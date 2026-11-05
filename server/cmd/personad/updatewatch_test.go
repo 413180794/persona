@@ -41,7 +41,9 @@ func TestRestartHubWithoutAServiceManager(t *testing.T) {
 		hub.Process.Signal(syscall.SIGKILL)
 		t.Fatal("the hub that would not come up was not stopped")
 	}
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+	// Only a guard against a hang: on macOS the first run of a freshly written script waits for the system's checks,
+	// up to 10 s while go test ./... links its test binaries (#2307).
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 		if b, err := os.ReadFile(started); err == nil {
 			if string(b) != "hub run\n" {
 				t.Fatalf("started with %q", b)

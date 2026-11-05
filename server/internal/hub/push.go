@@ -45,7 +45,10 @@ type Pusher struct {
 	// direct: the hub's own APNs key. Set, every push goes straight to APNs as before; nil, through the relay.
 	direct *apns.Client
 	relay  *http.Client
-	now    func() time.Time
+	// retryWaits: how long a push the relay did not take for a reason that may pass waits before each further try
+	// (postRelayRetrying); tests shorten them.
+	retryWaits []time.Duration
+	now        func() time.Time
 	// desktopOnline: a desktop app is connected (Hub.desktopOnline), for 手机静音.
 	desktopOnline func() bool
 	// hubID is this hub's hub_id: every push says which hub sent it, so the app knows the group (plan 2.6「推送」).
@@ -63,7 +66,8 @@ type Pusher struct {
 }
 
 func newPusher(dir string, store Store, logf func(string, ...any)) *Pusher {
-	p := &Pusher{dir: dir, store: store, logf: logf, devices: map[string]Device{}, replaced: map[string]string{}, relay: &http.Client{Timeout: 20 * time.Second}, now: time.Now}
+	p := &Pusher{dir: dir, store: store, logf: logf, devices: map[string]Device{}, replaced: map[string]string{}, relay: &http.Client{Timeout: 20 * time.Second},
+		retryWaits: []time.Duration{time.Second, 4 * time.Second}, now: time.Now}
 	if store != nil {
 		if list, err := store.Devices(context.Background()); err == nil {
 			for _, d := range list {
@@ -252,9 +256,10 @@ func (p *Pusher) sendLiveActivity(d Device, token string, payload map[string]any
 type relayResult struct{ gone bool }
 
 // postRelay hands one push to the device's relay (relayproto.PushRequest, docs/push-relay.md「接口」). A grant the relay
-// no longer takes (its secret was replaced) is renewed once with the device's token, which the hub already has.
+// no longer takes (its secret was replaced) is renewed once with the device's token, which the hub already has. A
+// failure that may pass is tried again (postRelayRetrying): one dropped connection used to lose the push (#2150).
 func (p *Pusher) postRelay(d Device, req relayproto.PushRequest) (relayResult, error) {
-	res, status, err := p.postRelayOnce(d, req)
+	res, status, err := p.postRelayRetrying(d, req)
 	if status != http.StatusUnauthorized {
 		return res, err
 	}
@@ -262,15 +267,45 @@ func (p *Pusher) postRelay(d Device, req relayproto.PushRequest) (relayResult, e
 	if rerr != nil {
 		return res, fmt.Errorf("%w; renewing the grant: %v", err, rerr)
 	}
-	res, _, err = p.postRelayOnce(d, req)
+	res, _, err = p.postRelayRetrying(d, req)
 	return res, err
+}
+
+// postRelayRetrying is postRelayOnce, tried again after each of p.retryWaits while the failure is one that may pass
+// (relayRetryable). Its callers each run in their own goroutine, so the waits hold up nothing else; a Live Activity
+// update that lands late is harmless, as its aps.timestamp makes iOS drop it behind a newer one.
+func (p *Pusher) postRelayRetrying(d Device, req relayproto.PushRequest) (relayResult, int, error) {
+	res, status, err := p.postRelayOnce(d, req)
+	tries, first := 1, err
+	for _, wait := range p.retryWaits {
+		if err == nil || !relayRetryable(status) {
+			break
+		}
+		time.Sleep(wait)
+		res, status, err = p.postRelayOnce(d, req)
+		tries++
+	}
+	switch {
+	case tries == 1:
+	case err == nil:
+		p.logf("relay %s: %s push went through on try %d, after %v", d.Name, req.Type, tries, first)
+	default:
+		err = fmt.Errorf("%w (%d tries)", err, tries)
+	}
+	return res, status, err
+}
+
+// relayRetryable: a failure worth another try. That is the network's (no status: a TLS handshake or connection that
+// timed out, a reset) or the relay's 5xx and 429; any other status is the relay's answer and stands.
+func relayRetryable(status int) bool {
+	return status == 0 || status == http.StatusTooManyRequests || status >= 500
 }
 
 func (p *Pusher) postRelayOnce(d Device, req relayproto.PushRequest) (relayResult, int, error) {
 	body, _ := json.Marshal(req)
 	hr, err := http.NewRequest("POST", d.RelayURL+"/v1/push", bytes.NewReader(body))
 	if err != nil {
-		return relayResult{}, 0, err
+		return relayResult{}, -1, err // not a status: a request that cannot be made is not tried again
 	}
 	hr.Header.Set("Authorization", "Bearer "+d.RelayGrant)
 	hr.Header.Set("Content-Type", "application/json")

@@ -42,7 +42,9 @@ func TestCodexShellZsh(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(bin, "codex"), []byte(fake), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// Only a guard against a hang: on macOS the first run of the fresh fake codex waits for the system's checks,
+			// up to 10 s while go test ./... links its test binaries (#2307).
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			args := []string{"-c", "model_provider=\"test provider\"", ""}
 			cmd := exec.CommandContext(ctx, zsh, append([]string{"-ic", codexShell(tt.launcher), "jarvis"}, args...)...)

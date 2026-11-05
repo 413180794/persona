@@ -74,7 +74,13 @@ func newScriptHub(t *testing.T, create func(ctx context.Context, ix proto.Intera
 	go func() { _ = n.peer.Serve(ctx, h2nR) }()
 	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
 
-	h.sock = filepath.Join(t.TempDir(), "s")
+	// Not t.TempDir(): with a subtest's long name the socket path passes sun_path, 104 bytes on macOS (#2278).
+	dir, err := os.MkdirTemp("/tmp", "sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	h.sock = filepath.Join(dir, "s")
 	ln, err := net.Listen("unix", h.sock)
 	if err != nil {
 		t.Fatal(err)

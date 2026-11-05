@@ -271,7 +271,7 @@ func (h *Hub) routes() http.Handler {
 	h.busRoutes(mux)
 	mux.Handle("/api/", appAPI)
 	mux.Handle("/", h.adminRoutes(mux, appAPI, webApp(filepath.Join(h.cfg.dir, "web"))))
-	return logRequests(h, jsonRouteErrors(mux))
+	return gzipResponses(logRequests(h, jsonRouteErrors(mux)))
 }
 
 func (h *Hub) auth(next http.Handler) http.Handler {

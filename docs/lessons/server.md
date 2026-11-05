@@ -118,6 +118,7 @@
 - Linux 的 `setsid` 只能脱离进程组，不能脱离 systemd 的服务 cgroup：node 启动失败时，服务管理器会一起清理同 cgroup 的回滚进程（#1158）。恢复进程必须用独立的 transient 用户服务运行，准备成功才替换程序；就绪握手要在进入更新目录锁之前完成，否则父进程持锁等就绪、恢复进程等锁，双方死等。测试使用假的 `systemd-run`，不能在开发机真的安装恢复服务。
 - macOS 上对已执行过的带签名 Mach-O 暂存文件再以 `O_RDWR` 打开，后续自检重试可能被系统 `SIGKILL`（#1158）。校验完成后的 `fsync` 用只读句柄，不为同步再声明写权限；已取消的提交在执行自检前返回。更新器的忙碌 / 取消重试连续验证五次，避免只测首次执行。
 - macOS 的 UNIX socket 路径长度很短；测试用例名和默认长 `TMPDIR` 相加可能超限（#1158）。套接字夹具用短的独立 `/tmp` 根，或在隔离环境用 `TMPDIR=/tmp`；不要把这种失败当作更新器本身失败或去改生产 socket。
+  新测试最容易在这里再踩：`t.TempDir()` 带着测试名（子测试再加上子测试名），socket 放在它下面几层就超了（#2257、#2278）。Linux 的上限是 108 字节、`TMPDIR` 又短，只在 Linux 上跑过发现不了。
 - **launchd 的 label 不跟着 HOME 走**：测 `jarvis-link node install` 时换了临时 HOME 也没用，`launchctl bootout gui/<uid>/com.jarvis.node` 停的就是这台 Mac
   上真实在用的常驻 node。Mac 上的服务安装只在假命令（`env.command`）里测，绝不在开发机上真的跑；要真跑就换一个 label。
 - Docker 容器里的 `eth0` 在 sysfs 里是 `/sys/devices/virtual/net/eth0`，netaddr 把它当虚拟网卡：按「不要虚拟网卡」挑配对链接里的地址，容器里一个都挑不出来，
@@ -165,6 +166,9 @@
   `kb.project` 原来的 4000 常被截断，回复是一段思考加半个 JSON，以前报成「unterminated JSON object」、项目每 2 分钟重试一次。
   Messages 的回复要看 `stop_reason`：`ai.JSONMax` 拿不到完整对象且是 `max_tokens` 停的，上限加倍再问一次，还截断就报 `ai.ErrTruncated`。
   给 JSON 任务定上限时按「正文 + 思考」留余量。
+- 模型回的 JSON 会带 JSON 没有的转义（2026-11-05，#2151）：单引号写成 JavaScript / Python 的 `\'`，或者 Windows 路径里一个反斜杠，
+  `json.Unmarshal` 就报 ``invalid escape sequence `\'` in string``，这一次的结果整个丢掉。`ai.JSONMax` 第一次解析报语法错误时修正字符串里的非法转义
+  （`\'` 改成引号，其他非法的 `\x` 当字面的反斜杠）再解析一次，合法的 JSON 走不到这一步。新加解析模型 JSON 的地方用 `ai.JSONMax`，别自己 `json.Unmarshal`。
 
 ## 时区
 
@@ -232,6 +236,14 @@
 - **明文端口别对回环开**：`hub pair`、`hub admin`、插件都经回环连明文端口、不带头，`from` 含回环时 `listeners` 里有 `http` 就拒绝启动。
 - **测试里别假设 Accept 到的是自己的连接**：开发机上有别的进程扫回环端口（测试里 Accept 到过一条以 `GET` 开头的陌生连接，偶发失败），
   按 socket 的对端地址挑出自己拨的那条。
+
+## hub 的 HTTP 响应以前从不压缩（2026-11-05，#2149）
+
+- WebSocket 一直是压缩的（`CompressionContextTakeover`），普通 HTTP 响应却没有压缩：一个飞书会话的消息 2.9 MB（gzip 后 70 KB），手机上经 VPN 打开要好几秒，hub 本机取只要 0.5–1 秒。
+  看接口慢先分清时间花在哪：hub 本机 `curl` 一次比较耗时和字节数，再看 `Content-Encoding`。
+- 给所有响应加一层包装（`gzipResponses`）时，要放在 `logRequests` 外面：`securityError` 靠类型断言找到请求日志的 `statusWriter` 标记鉴权失败，
+  包在里面会让每个 401 被请求日志再记一遍。包装要实现 `Flush`（流式接口），还要实现 `Unwrap`，让 `http.ResponseController` 能拿到底下的连接做 deadline 和 hijack。
+  WebSocket 升级、`longLived` 的路径不进这一层。
 
 ## hub 互联（docs/mesh.md，2026-11-02）
 
@@ -381,6 +393,13 @@ PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。�
 - `node.Node` 是一条连接一个（hub 重连就新建一个），`nodeupdate.Manager` 才是进程级的。插件在电脑上的程序要在 hub 重连时接着跑（租约），
   所以放在按 node 目录区分的进程级表里（`node/plugins.go` 的 `pluginHosts`），事件发给最近一条连接的 peer。
 - 只在这条连接真有 peer 时才换事件的去处：每个 `plugin.node.*` 请求都会取一次这张表，没有 peer 的调用（测试、本地命令）把去处换成空的，事件就丢了。
+
+## 只发一次值的 channel 不能有两处等（2026-11-05，#2277）
+
+- 扩展宿主（`extension/host`）原来用 `go func() { ch.exited <- cmd.Wait() }()` 往容量 1 的 channel 里放一个值。`runOnce` 的主循环先取走了它，返回时 defer 的 `end()` 再等就永远等不到：
+  程序自己退出（崩溃、listen 失败）后不再重启，`Stop()` 也不返回。只走 HTTP 的程序必现，走 RPC 的看 `select` 先选中哪个。
+- 一件事要被多处、多次等到时，用关闭 channel 表示「已经发生」，结果另存字段（`close` 之前写好，等到关闭后再读）。
+- 测试里可能卡住的等待（`Stop()` 之类）放到单独的 goroutine 里并加超时：卡住时只让这一个测试失败，不把整个包拖到 `go test` 的超时（#2278 在 macOS 上就拖了 10 分钟）。
 
 
 ## 知识库更正与扩展权限（#1908）

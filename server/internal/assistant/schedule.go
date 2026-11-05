@@ -1076,7 +1076,8 @@ var runRetryDelay = 3 * time.Minute
 
 // startRun records a sent run and follows its turn. The node accepts `assistant.send` before the model answers, so a
 // run whose turn ends in an API error (quota, no such model, upstream 503) used to stay "ok" and the user was never
-// told; the watcher records it as failed, pushes it, and retries once. m is the machine the run went to (nil: none).
+// told; the watcher records it as failed, pushes it, and retries once (the task as it is then, see watchScheduledRun).
+// m is the machine the run went to (nil: none).
 func (s *Service) startScheduledRun(run ScheduleRun, t Task, m *Device) {
 	run.ID = s.recordRun(run)
 	if m == nil || run.ID == "" {
@@ -1107,9 +1108,38 @@ func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 		return
 	case <-time.After(runRetryDelay):
 	}
-	if _, err := s.runTask(t, time.Now(), time.Now(), false, true); err != nil {
+	// The failure push sends the user to the task's page; by now they may have switched it off, deleted it or changed
+	// its prompt. The retry goes by what the schedule holds now, not by the copy the run started with: that copy ran
+	// again regardless, with the old prompt, and silently (a retry that fails is not pushed).
+	cur, ok, err := s.currentTask(ctx, t.ID)
+	switch {
+	case err != nil:
+		s.logf("task %s retry: %v", t.ID, err)
+		return
+	case !ok:
+		s.logf("task %s: deleted since its run failed; not retried", t.ID)
+		return
+	case cur.Repeat != repeatOnce && !cur.Enabled: // a one-off is off as soon as it is due: its retry is still its run
+		s.logf("task %s: switched off since its run failed; not retried", t.ID)
+		return
+	}
+	if _, err := s.runTask(cur, time.Now(), time.Now(), false, true); err != nil {
 		s.logf("task %s retry: %v", t.ID, err)
 	}
+}
+
+// currentTask is the task as the schedule holds it now: false when it is gone, an error while the schedule cannot be
+// read (nothing is known then, see lockedSchedule).
+func (s *Service) currentTask(ctx context.Context, id string) (Task, bool, error) {
+	sc, err := s.lockedSchedule(ctx)
+	if err != nil {
+		return Task{}, false, err
+	}
+	defer sc.mu.Unlock()
+	if i := sc.indexLocked(id); i >= 0 {
+		return sc.tasks[i], true, nil
+	}
+	return Task{}, false, nil
 }
 
 // waitTurnEnd waits until the sent turn is over; false when ctx ended. An immediate failure (a bad model) is idle

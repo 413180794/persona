@@ -280,7 +280,7 @@ func (c *Client) JSONMax(ctx context.Context, system, user string, maxTokens int
 		}
 		obj, err := FirstObject(text)
 		if err == nil {
-			return json.Unmarshal([]byte(obj), out)
+			return unmarshalReply([]byte(obj), out)
 		}
 		if !truncated {
 			return err
@@ -322,4 +322,54 @@ func FirstObject(s string) (string, error) {
 		}
 	}
 	return "", errors.New("ai: unterminated JSON object in reply")
+}
+
+// unmarshalReply is json.Unmarshal for a model's object, which may escape what JSON does not (#2151): \' as
+// JavaScript and Python write a quote, or a lone backslash as in a Windows path. Those are repaired only when the
+// object does not parse as it is, so valid JSON is never touched; when the repair does not help, the first error
+// stands, as it is the one that says what the model wrote.
+func unmarshalReply(data []byte, out any) error {
+	err := json.Unmarshal(data, out)
+	var syntax *json.SyntaxError
+	if err == nil || !errors.As(err, &syntax) {
+		return err
+	}
+	if fixed, changed := fixEscapes(data); changed && json.Unmarshal(fixed, out) == nil {
+		return nil
+	}
+	return err
+}
+
+// fixEscapes rewrites, inside strings, the escapes JSON does not have: \' becomes a quote, any other unknown \x a
+// literal backslash followed by x. The escapes JSON has are kept as they are.
+func fixEscapes(data []byte) ([]byte, bool) {
+	var b bytes.Buffer
+	b.Grow(len(data) + 8)
+	changed, inStr := false, false
+	for i := 0; i < len(data); i++ {
+		ch := data[i]
+		switch {
+		case !inStr:
+			inStr = ch == '"'
+		case ch == '"':
+			inStr = false
+		case ch == '\\' && i+1 < len(data):
+			switch next := data[i+1]; next {
+			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u':
+				b.WriteByte(ch)
+				b.WriteByte(next)
+				i++
+			case '\'':
+				b.WriteByte(next)
+				i++
+				changed = true
+			default:
+				b.WriteString(`\\`)
+				changed = true
+			}
+			continue
+		}
+		b.WriteByte(ch)
+	}
+	return b.Bytes(), changed
 }

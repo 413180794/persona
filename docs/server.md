@@ -528,5 +528,9 @@ App 开着时连着 hub 的 WebSocket，hub 把各种变化广播给它；真实
 - 请求 ID：每个响应带 `X-Request-Id`（App 发了 `X-Client-Request-Id` 就沿用它）。hub 只记失败（≥400）和慢（>2 秒）的请求，
   一行 `[<id>] 方法 路径 -> 状态码 (耗时)`，不记 query、body、token。App 的 5xx 错误提示后面带「（请求 <id>）」，拿它在
   `journalctl --user -u jarvisd` 里搜那一行。
+- 响应压缩（#2149，`gzip.go`）：客户端带 `Accept-Encoding: gzip` 时，1 KB 以上的 JSON、JS、CSS、HTML、SVG、纯文本按 gzip 发
+  （一个飞书会话的消息 2.9 MB → 70 KB）。App、网页、Go 的客户端都自己解压。WebSocket 升级、长连接、`Range`、HEAD、event-stream、
+  图片和二进制、自带编码或设了 cookie 的响应原样发；管理界面（`/admin`、`/api/v1/admin/`）不压缩，避免压缩后的大小泄露它的 cookie 和 CSRF token（BREACH）。
+  这一层在 `logRequests` 外面，处理函数拿到的仍是请求日志的 `statusWriter`。排查时用 `curl --compressed` 或带 `-H 'Accept-Encoding: gzip'` 看 `Content-Encoding`。
 - herdr 连不上（socket 没了、herdr 重启）：node 每 30 秒最多记一行 `herdr: … failed`（带这段时间失败了几次），恢复时记一行
   `reachable again`，经 ssh 的 stderr 进 hub 日志。
