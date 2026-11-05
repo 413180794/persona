@@ -24,6 +24,7 @@ import type { Session } from "../../lib/types";
 import { t } from "../../i18n";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { scrollBehavior } from "../../ui/stream/motion";
 import { Monogram } from "./InboxParts";
 import { LarkEditHistoryDialog } from "./LarkEditHistory";
 import { LarkComposer, type LarkComposerHandle, type LarkReplyTarget } from "./LarkComposer";
@@ -276,7 +277,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     const el = scroller.current;
     if (!p || !el) return;
     if (!p.has_newer) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior() });
       return;
     }
     const gen = ++windowGen.current;

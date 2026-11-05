@@ -27,6 +27,9 @@ export function setReplyMotionEnabled(on: boolean): void {
 
 export const prefersReducedMotion = () => typeof matchMedia === "function" && matchMedia(REDUCE).matches;
 
+/** How a scripted scroll moves: animated, or straight there under reduced motion (the CSS rule cannot reach scrollTo). */
+export const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? "auto" : "smooth");
+
 function subscribe(l: () => void) {
   listeners.add(l);
   const q = typeof matchMedia === "function" ? matchMedia(REDUCE) : null;

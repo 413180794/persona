@@ -253,3 +253,8 @@
 ## 输入框的回车先让给输入法（2026-11-05，#2733）
 
 - **每个 `onKeyDown` 里处理回车 / Esc 的输入框，开头都要先 `if (composing(e.nativeEvent)) return;`**（`lib/send-history.ts`，判断 `isComposing || keyCode === 229`）。日文变换、拼音上屏英文时按的回车，浏览器也会照常发给页面，不判断的话就会拿还没上屏的半截字去新建待办、保存标题、添加列表项。Esc 也一样：取消组字的同时把整行关掉了。jsdom 里用 `new KeyboardEvent("keydown", { key: "Enter", isComposing: true })` 就能测（`views/ime-enter.test.tsx`）。
+
+## 脚本滚动不看减弱动态效果（2026-11-05，#2664）
+
+- `styles.css` 里 `prefers-reduced-motion` 的全局规则只把 CSS 动画、过渡压到 1 ms，管不到 JS 里显式传的 `scrollTo({ behavior: "smooth" })` / `scrollIntoView({ behavior: "smooth" })`，照样动画滚过去。
+  脚本滚动一律传 `scrollBehavior()`（`src/ui/stream/motion.ts`，复用 `prefersReducedMotion`），别再各写一遍 `matchMedia` 字符串。

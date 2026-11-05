@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { replyMotion, replyMotionEnabled, setReplyMotionEnabled } from "./motion";
+import { replyMotion, replyMotionEnabled, scrollBehavior, setReplyMotionEnabled } from "./motion";
 
 function stub(reduce: boolean) {
   const store = new Map<string, string>();
@@ -29,5 +29,19 @@ describe("回复动效", () => {
     stub(true);
     expect(replyMotionEnabled()).toBe(true);
     expect(replyMotion()).toBe(false);
+  });
+});
+
+describe("scrollBehavior", () => {
+  it("animates unless the system asks for reduced motion", () => {
+    stub(false);
+    expect(scrollBehavior()).toBe("smooth");
+    stub(true);
+    expect(scrollBehavior()).toBe("auto");
+  });
+
+  it("animates where matchMedia is missing", () => {
+    vi.stubGlobal("matchMedia", undefined);
+    expect(scrollBehavior()).toBe("smooth");
   });
 });

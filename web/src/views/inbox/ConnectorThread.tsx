@@ -15,6 +15,7 @@ import { t } from "../../i18n";
 import { Button, cx, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
+import { scrollBehavior } from "../../ui/stream/motion";
 import { Monogram } from "./InboxParts";
 
 /** A link the system handles (sms:, tg://) goes to it; a web page opens in a tab. */
@@ -249,8 +250,7 @@ function ChatThread({ id, page, older, onOlder, onReach, onSend }: {
   useEffect(() => {
     if (!flash) return;
     const row = [...(scroller.current?.querySelectorAll<HTMLElement>("[data-mid]") ?? [])].find((el) => el.dataset.mid === flash.id);
-    const still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    row?.scrollIntoView?.({ block: "center", behavior: still ? "auto" : "smooth" });
+    row?.scrollIntoView?.({ block: "center", behavior: scrollBehavior() });
     const off = setTimeout(() => setFlash(null), 1600);
     return () => clearTimeout(off);
   }, [flash]);

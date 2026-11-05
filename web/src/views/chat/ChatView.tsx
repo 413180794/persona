@@ -28,6 +28,7 @@ import type { Item, Session } from "../../lib/types";
 import { anchoredScroll, followsAgain, isScrollbarPress, jumpLabel, leavesOnKey, leavesOnScrollbarDrag, leavesOnTouch, leavesOnWheel, followsAfterUnfold, UNFOLD_PAUSE, type ScrollAnchor } from "../../lib/disclosure";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { scrollBehavior } from "../../ui/stream/motion";
 import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
 import { agentCommands } from "../../lib/composer-commands";
 import { PendingCards } from "./Interactions";
@@ -402,7 +403,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     const el = scroller.current;
     if (!el) return;
     follow(true);
-    el.scrollTo({ top: el.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior() });
   };
 
   // ── sending ──
@@ -560,7 +561,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     return (live?.kind === "segment" ? turnStart(live.seg) : undefined) ?? stateSince;
   }, [lines, stateSince]);
   const planPill = plan && planOut && (lastLive || !planProgress(plan.todos).allDone) ? (
-    <PlanPill todos={plan.todos} onClick={() => scroller.current?.querySelector(`[data-plan-id="${CSS.escape(plan.id)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" })} />
+    <PlanPill todos={plan.todos} onClick={() => scroller.current?.querySelector(`[data-plan-id="${CSS.escape(plan.id)}"]`)?.scrollIntoView({ block: "center", behavior: scrollBehavior() })} />
   ) : null;
   const running = session && !assistant ? <RunningStatusBar mid={mid} sid={sid} working={state === "working"} startedAt={runStart} /> : null;
   const queue = session && queued.length > 0 ? <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} compact={short} /> : null;

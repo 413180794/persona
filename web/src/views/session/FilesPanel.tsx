@@ -15,6 +15,7 @@ import { useFsLive } from "../../lib/use-fs-live";
 import { NARROW, useMedia } from "../../lib/viewport";
 import { Button, copyText, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { scrollBehavior } from "../../ui/stream/motion";
 import { PanelHeader } from "../SidePanel";
 import { FileView } from "./files/FileView";
 import { FilesTree } from "./files/FilesTree";
@@ -198,7 +199,7 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
 function Crumbs({ root, stack, go }: { root: string; stack: string[]; go: (level: number) => void }) {
   const bar = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    bar.current?.scrollTo({ left: bar.current.scrollWidth, behavior: "smooth" });
+    bar.current?.scrollTo({ left: bar.current.scrollWidth, behavior: scrollBehavior() });
   }, [stack.length]);
   const names = [baseName(root) || "/", ...stack];
   return (

@@ -2,6 +2,7 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { PRELOAD_LANGS, preloadScript } from "./src/startup-preload";
 
 // `npm run dev` talks to a hub through Vite's proxy: JARVIS_HUB_URL (eval "$(python3 ../scripts/jarvis_config.py env)").
 const environment = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
@@ -30,8 +31,57 @@ const adminFallback: Plugin = {
   },
 };
 
+// Build only: main.tsx loads the language catalog, then React, then App, each a dynamic import that starts only when
+// the one before is in, so a cold first load waits for them one after another. This lets the client page's <head>
+// start fetching all of them at once (modulepreload fetches and parses, it does not run them: App still runs after
+// the catalog is set). The catalog is the preferred language's, picked like i18n/index.ts preferredLanguage (the
+// script is src/startup-preload.ts, tested against it); the live screen (/screen/<machine>, screen/screen.ts) never
+// loads App, so it gets only the catalog.
+const startupPreload: Plugin = {
+  name: "startup-preload",
+  apply: "build",
+  transformIndexHtml: {
+    order: "post",
+    handler(html, ctx) {
+      if (!ctx.bundle || ctx.chunk?.name !== "main") return html; // not admin/index.html
+      const chunks = Object.values(ctx.bundle).filter((c) => c.type === "chunk");
+      // react-dom/client shares a chunk with other modules (no facade): look a module up by the chunk holding it.
+      const byModule = (path: string) => chunks.find((c) => c.moduleIds.some((id) => id.split("?")[0].endsWith(path)));
+      const find = (path: string) => {
+        const chunk = byModule(path);
+        if (!chunk) throw new Error(`startup-preload: no chunk holds ${path}`);
+        return chunk;
+      };
+      // Each group: the chunks of its roots and everything they import statically, the JS and the CSS, minus the
+      // files the page already loads (main and its static imports have their tags; a page group skips the shared one).
+      const group = (roots: string[], loaded: Set<string>) => {
+        const files: string[] = [];
+        const visit = (chunk: (typeof chunks)[number]) => {
+          if (loaded.has(chunk.fileName)) return;
+          loaded.add(chunk.fileName);
+          files.push(chunk.fileName, ...(chunk.viteMetadata?.importedCss ?? []));
+          for (const name of chunk.imports) visit(chunks.find((c) => c.fileName === name)!);
+        };
+        roots.forEach((r) => visit(find(r)));
+        return files;
+      };
+      const main = new Set([ctx.chunk.fileName, ...ctx.chunk.imports]);
+      const shared = group(["/react-dom/client.js", "/src/lib/pwa.ts"], main);
+      const page = (roots: string[]) => group(roots, new Set([...main, ...shared]));
+      const files = {
+        shared,
+        app: page(["/src/ui/ExtensionThemePicker.tsx", "/src/App.tsx"]),
+        screen: page(["/src/screen/ScreenView.tsx"]),
+        catalogs: Object.fromEntries(PRELOAD_LANGS.map((lang) => [lang, find(`/src/i18n/locales/${lang}/index.ts`).fileName])),
+      };
+      const script = preloadScript(files);
+      return { html, tags: [{ tag: "script", children: script, injectTo: "head" }] };
+    },
+  },
+};
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), adminFallback],
+  plugins: [react(), tailwindcss(), adminFallback, startupPreload],
   server: {
     host: "127.0.0.1",
     proxy: { "/api": { target: hub, changeOrigin: true, ws: true } },

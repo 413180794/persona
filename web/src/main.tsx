@@ -4,8 +4,13 @@ import { initI18n } from "./i18n";
 import "./styles.css";
 
 // The language's catalog loads before the rest of the app: their modules call t() as they load (docs/web.md「国际化」).
-await initI18n();
-const [{ StrictMode, createElement }, { createRoot }, { startPWA }] = await Promise.all([import("react"), import("react-dom/client"), import("./lib/pwa")]);
+// React and the PWA helper say no t(), so they load alongside it rather than after it.
+const [, { StrictMode, createElement }, { createRoot }, { startPWA }] = await Promise.all([
+  initI18n(),
+  import("react"),
+  import("react-dom/client"),
+  import("./lib/pwa"),
+]);
 
 startPWA();
 

@@ -1,0 +1,41 @@
+// The inline <head> script vite.config.ts's startup-preload plugin writes into index.html. It lives here, with no
+// imports, so the config can load it and a test can check it against src/i18n/index.ts: the languages it has catalogs
+// for (LANGS) and how it picks one (preferredLanguage) must stay the same as the client's.
+
+/** The languages the plugin looks up a catalog chunk for; startup-preload.test.ts keeps this equal to i18n LANGS. */
+export const PRELOAD_LANGS = ["zh-Hans", "en", "ja"] as const;
+
+export interface PreloadFiles {
+  shared: string[];
+  app: string[];
+  screen: string[];
+  catalogs: Record<string, string>;
+}
+
+/** The script: it adds a modulepreload (or style preload) link for the preferred language's catalog and the page's files. */
+export function preloadScript(files: PreloadFiles): string {
+  return `(function () {
+  var files = ${JSON.stringify(files)};
+  function add(href) {
+    var l = document.createElement("link");
+    if (/\\.css$/.test(href)) {
+      l.rel = "preload";
+      l.as = "style";
+    } else l.rel = "modulepreload";
+    l.crossOrigin = "";
+    l.href = "./" + href;
+    document.head.appendChild(l);
+  }
+  var lang = null;
+  try { lang = localStorage.getItem("persona.language"); } catch (e) {}
+  if (!Object.prototype.hasOwnProperty.call(files.catalogs, lang)) {
+    var tag = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+    var primary = tag.trim().replace(/_/g, "-").split("-")[0].toLowerCase();
+    lang = primary === "zh" ? "zh-Hans" : primary === "ja" ? "ja" : "en";
+  }
+  var base = new URL(document.baseURI).pathname;
+  var path = location.pathname.indexOf(base) === 0 ? location.pathname.slice(base.length - 1) : location.pathname;
+  var screen = /^\\/screen\\/[^/]/.test(path);
+  [files.catalogs[lang]].concat(files.shared, screen ? files.screen : files.app).forEach(add);
+})();`;
+}

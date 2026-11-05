@@ -13,11 +13,12 @@ import {
 import { hubHas, useStore } from "../../lib/store";
 import { Button, cx, Dialog, Spinner, toast, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { scrollBehavior } from "../../ui/stream/motion";
 import { Field, inputClass, Segmented, SectionTitle, Switch, textareaClass } from "./parts";
 import { t } from "../../i18n";
 
 /** Brings an inline confirmation into view once, when it appears (stable, so not on every render). */
-const reveal = (el: HTMLElement | null) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+const reveal = (el: HTMLElement | null) => el?.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
 
 const everyOk = (m?: number) => Number.isInteger(m) && (m ?? 0) >= MIN_EVERY && (m ?? 0) <= MAX_EVERY;
 

@@ -1,21 +1,26 @@
 // The right-hand panel next to the page (docs/web.md「侧边面板」): one at a time, chosen in lib/panel.ts. (A session's
 // terminal is not one: it is the agent page's own view, lib/session-view.ts.)
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { directoryPanelKey, closePanel, usePanel, type Panel } from "../lib/panel";
 import { useLayout } from "../lib/layout";
-import { cx, EASE, IconButton } from "../ui/atoms";
+import { cx, EASE, IconButton, Loading } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
-import { FilesPanel } from "./session/FilesPanel";
-import { FileViewerPanel } from "./session/FileViewer";
-import { GitPanel } from "./session/GitPanel";
-import { LinkPanel } from "./link/LinkPanel";
 import { AgentPanel, TaskPanel } from "./assistant/TaskPanel";
 import { SubagentPanel } from "./chat/SubagentPanel";
 import { subagentParent } from "../lib/tasks";
 import { useCloseOnBack } from "../lib/back-close";
 import { NARROW, useMedia } from "../lib/viewport";
 import { t } from "../i18n";
+import { PageBoundary } from "./PageBoundary";
+
+// Files, Git, the file viewer and a link load when one is first opened (#2673): with their viewers (sheets, Office,
+// compare, documents) they are a large part of the main bundle no first screen needs. The assistant's task / agent
+// panels stay static: small, and part of the assistant flow.
+const FilesPanel = lazy(() => import("./session/FilesPanel").then((m) => ({ default: m.FilesPanel })));
+const FileViewerPanel = lazy(() => import("./session/FileViewer").then((m) => ({ default: m.FileViewerPanel })));
+const GitPanel = lazy(() => import("./session/GitPanel").then((m) => ({ default: m.GitPanel })));
+const LinkPanel = lazy(() => import("./link/LinkPanel").then((m) => ({ default: m.LinkPanel })));
 
 const WIDTH_KEY = "jarvis.panelWidth";
 const MIN = 360;
@@ -81,7 +86,12 @@ export function SidePanel() {
         }}
         className="absolute inset-y-0 -left-1 z-10 hidden w-2 cursor-col-resize lg:block"
       />
-      <div className="flex min-h-0 flex-1 flex-col">{body(panel)}</div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* a chunk gone after a hub redeploy reloads once, else shows a retry; never a blank panel */}
+        <PageBoundary page={JSON.stringify(panel)}>
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Loading /></div>}>{body(panel)}</Suspense>
+        </PageBoundary>
+      </div>
     </aside>
   );
 }

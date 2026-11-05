@@ -831,6 +831,10 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 约定（语言、回退、术语表）见 [i18n.md](i18n.md)。网页的做法：
 
 - **加载**：`main.tsx` / `admin/main.tsx` 先 `await initI18n()` 载入当前语言的词条，再动态 import 其余模块，所以 `t()` 在模块顶层也能用。
+  `main.tsx` 里 React、`react-dom/client`、`lib/pwa` 不调 `t()`，和词条并行加载；App 仍在词条就绪后才执行。
+  构建时 `vite.config.ts` 的 `startup-preload` 插件往客户端的 `index.html`（不含 `admin/index.html`）`<head>` 里加一段内联脚本，
+  一打开就对当前语言的词条（与 `preferredLanguage` 同规则）、React 和 App（实时画面 `/screen/<机器>` 换成 `ScreenView`）及其静态依赖发 `modulepreload`（只下载不执行），
+  冷启动不用等前一个 import 下载完才开始下一个（150 ms RTT、1.6 Mbps、gzip 实测登录页出现从约 4.0 s 到约 3.6 s）。
   语言在页面的整个生命周期里不变；设置 › 通用 › 外观 › 语言改了就 `location.reload()`（选择存在 `localStorage` 的 `persona.language`，没有就跟随系统）。每种语言单独一个 chunk，只下载用到的那种。
   客户端的词条（`locales/<语言>/index.ts`）不含管理后台的 `admin-*` 命名空间；它们在 `locales/<语言>/admin.ts`，只有 `admin/main.tsx` 经 `admin/catalog.ts` 叠加载入
   （`initI18n(undefined, adminCatalog)`，管理后台也用 `common.*` 和共享组件的词条），构建时和管理后台代码一起进 `admin/assets/`。
@@ -856,7 +860,8 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
   安装成 App 用的图标见下面「安装成 App」。形象里可选的「标志」（黑底白星）是另一回事，不动。
 - 按钮文字一律单行（`whitespace-nowrap`），放不下的用图标 + `title`。
 - 链接规则和 App 一样（`Links`）：裸链接在空白或非 ASCII 字符处结束，交给 Markdown 前写成 `<url>`（`src/ui/Markdown.tsx` 的 `linkify`），中文里的链接不会吞掉后半句。
-- 尊重 `prefers-reduced-motion`：所有动画缩成 1ms。
+- 尊重 `prefers-reduced-motion`：所有动画缩成 1ms。脚本里的滚动（`scrollTo` / `scrollIntoView`）不受这条 CSS 管，一律用 `scrollBehavior()`（`src/ui/stream/motion.ts`），
+  减弱动态时直接跳到位置（回到底部、计划胶囊、文件路径栏、定时任务编辑器、外部会话的引用跳转、飞书会话的回到最新，#2664）。
 - 展开 / 折叠（#1124）一律用 `Collapse`：CSS 把 grid 的行在 `0fr` / `1fr` 之间过渡、透明度淡入淡出，箭头转 `transform`，不在 JS 里量高度、不按帧 setState。
   对话里的（工作行、工具步骤、思考、上下文、最新一步的预览）用 `lazy`：展开时内容先在 `0fr` 下排一次版、下一帧才开始过渡（长轨迹第一次排版很重，混进过渡里就一下子开到大半）；
   折叠时内容留到过渡结束再卸载（跟着高度收起，不是直接消失），合上之后才 `inert`。
