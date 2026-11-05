@@ -42,6 +42,7 @@ var _ peerStore = (*meshStore)(nil)
 func (s *meshStore) CreateLockTest(context.Context, db.LockTest) error              { return nil }
 func (s *meshStore) LockTest(context.Context, string, string) (*db.LockTest, error) { return nil, nil }
 func (s *meshStore) DueLockTests(context.Context, time.Time) ([]db.LockTest, error) { return nil, nil }
+func (s *meshStore) NextLockTestDue(context.Context) (*time.Time, error)            { return nil, nil }
 func (s *meshStore) AttemptLockTest(context.Context, string, int64, time.Time) (bool, error) {
 	return false, nil
 }

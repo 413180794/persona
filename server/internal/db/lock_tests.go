@@ -62,6 +62,13 @@ func (d *DB) DueLockTests(ctx context.Context, at time.Time) ([]LockTest, error)
 	return out, rows.Err()
 }
 
+// NextLockTestDue returns the earliest due time of a scheduled test, or nil when nothing is scheduled.
+func (d *DB) NextLockTestDue(ctx context.Context) (*time.Time, error) {
+	var next *time.Time
+	err := d.pool.QueryRow(ctx, `SELECT min(due_at) FROM lock_tests WHERE status = 'scheduled'`).Scan(&next)
+	return next, err
+}
+
 // AttemptLockTest claims a single delivery attempt before enqueueing it. Only a receipt proves delivery.
 // A zero session means that no capable connection was available at the scheduled time.
 func (d *DB) AttemptLockTest(ctx context.Context, testID string, sessionID int64, at time.Time) (bool, error) {

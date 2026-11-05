@@ -55,6 +55,7 @@ type Hub struct {
 	store       Store      // nil in unit tests: nothing is persisted
 	workspaceMu sync.Mutex // serializes read-only workspace discovery and snapshot commits
 	agents      *agents.Service
+	lockTests   lockTestWake // wakes the lock test dispatcher when a test is scheduled (locktest.go)
 
 	terms terminals  // the terminal tab's live streams (terminal.go)
 	fulls fullRelays // the web's full herdr views (herdrclient.go)
@@ -161,6 +162,7 @@ type Store interface {
 	CreateLockTest(ctx context.Context, t db.LockTest) error
 	LockTest(ctx context.Context, deviceID, testID string) (*db.LockTest, error)
 	DueLockTests(ctx context.Context, at time.Time) ([]db.LockTest, error)
+	NextLockTestDue(ctx context.Context) (*time.Time, error)
 	AttemptLockTest(ctx context.Context, testID string, sessionID int64, at time.Time) (bool, error)
 	ReceiveLockTest(ctx context.Context, deviceID, testID string, shown *bool, at time.Time) (*db.LockTest, error)
 	RecoverLockTests(ctx context.Context, at time.Time) error

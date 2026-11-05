@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
@@ -63,6 +64,7 @@ func (h *Hub) serveLockTest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	h.lockTests.wake()
 	writeJSON(w, test)
 }
 
@@ -119,6 +121,59 @@ func (h *Hub) dispatchLockTests(ctx context.Context, now time.Time) error {
 	return nil
 }
 
+const (
+	// lockTestRecheck bounds every sleep, so a wall clock jump or a test written by another process is picked up.
+	lockTestRecheck = time.Minute
+	// lockTestRetry spaces out checks while due tests remain, e.g. a batch over the limit or a lost claim.
+	lockTestRetry = time.Second
+)
+
+// lockTestWake lets a new test re-arm the dispatcher's timer without waiting for the next recheck.
+type lockTestWake struct {
+	once sync.Once
+	ch   chan struct{}
+}
+
+func (w *lockTestWake) channel() chan struct{} {
+	w.once.Do(func() { w.ch = make(chan struct{}, 1) })
+	return w.ch
+}
+
+// wake never blocks: one pending wake is enough because the dispatcher rereads the earliest due time.
+func (w *lockTestWake) wake() {
+	select {
+	case w.channel() <- struct{}{}:
+	default:
+	}
+}
+
+// lockTestWait returns how long the dispatcher may sleep, and whether a test is due when it wakes;
+// a wake that is only the periodic recheck reads the next due time again instead of querying for due tests.
+func (h *Hub) lockTestWait(ctx context.Context, afterDispatch bool) (time.Duration, bool) {
+	callCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+	defer stop()
+	next, err := h.store.NextLockTestDue(callCtx)
+	if err != nil {
+		if ctx.Err() == nil {
+			h.logf("next lock test: %v", err)
+		}
+		return lockTestRetry, true
+	}
+	if next == nil {
+		return lockTestRecheck, false
+	}
+	wait := time.Until(*next)
+	if wait <= 0 && afterDispatch {
+		return lockTestRetry, true
+	}
+	if wait > lockTestRecheck {
+		return lockTestRecheck, false
+	}
+	return max(wait, 0), true
+}
+
+// startLockTests sleeps until the earliest scheduled test is due instead of polling the store,
+// and re-arms after each dispatch and whenever serveLockTest schedules a test.
 func (h *Hub) startLockTests(ctx context.Context) (func(), error) {
 	if h.store == nil {
 		return func() {}, nil
@@ -128,20 +183,30 @@ func (h *Hub) startLockTests(ctx context.Context) (func(), error) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
+	wake := h.lockTests.channel()
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
+		timer := time.NewTimer(time.Hour)
+		defer timer.Stop()
+		dispatched := false
 		for {
+			wait, due := h.lockTestWait(ctx, dispatched)
+			timer.Reset(wait)
+			dispatched = false
 			select {
 			case <-ctx.Done():
 				return
-			case now := <-ticker.C:
+			case <-wake:
+			case now := <-timer.C:
+				if !due {
+					continue
+				}
 				callCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 				if err := h.dispatchLockTests(callCtx, now); err != nil && ctx.Err() == nil {
 					h.logf("dispatch lock tests: %v", err)
 				}
 				stop()
+				dispatched = true
 			}
 		}
 	}()

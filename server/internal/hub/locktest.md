@@ -33,6 +33,8 @@
 | `unavailable` | 到期时没有符合条件的连接，不再补发 |
 | `interrupted` | hub 启动时预约已经过期，测试被中断，不补发 |
 
+hub 不按秒轮询数据库：派发器睡到最早一条 `scheduled` 测试的 `due_at`，预约新测试时立即重新定时；每次最多睡一分钟就复查，防止系统时钟跳变或别的进程写入的测试被漏掉（#2944）。
+
 `device_session_id` 关联实际发送所选的 `device_sessions` 记录；未发送时省略。`sent_at`、`received_at`、`notification_shown` 未知时省略。hub 重启后保留未来预约；发送尝试与 WS 写入无法原子完成，因此 `sent` 但没有回报也可能是中断或写入失败，hub 不重发。记录保留 14 天，连接记录先被清理时关联字段置空。
 
 连接汇总复用 `GET /api/v1/devices/{id}/sessions?since=<RFC3339>`，默认统计最近 24 小时：`summary.disconnects` 为窗口内非 `hub_stopped` 的连接断开记录数，`summary.longest_gap_seconds` 为连接区间合并后的最长离线时间，含截至查询时仍未恢复的时段。并行连接可能各记一次断开，但连接重叠不会制造离线时段；hub 重启造成的离线时段不计入最长值。
