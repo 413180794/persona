@@ -429,6 +429,7 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
 - 装它 = 一次装好一组：预览的 `bundle` 是没装的（或版本不够的）成员和它们的依赖，各自的权限都列出来，一次确认（同上，带 `bundle`）。`market` 写市场的地址（`github:owner/repo`），
   不写就是合集自己的市场、再按 id 找别的。合集本身作为一个已安装的扩展列出（`kind` 是 `extension_pack`，状态「启动」）。
 - 卸载：`DELETE …/-/?members=1`（管理界面 `{"members": true}`）连同装着的成员一起卸，回 `removed_members`；不带就只卸合集，成员留着。成员被合集外的扩展依赖时也先回 409 列出完整依赖链，确认 `cascade` 后只停用外部依赖者；任何只读依赖者会在写入前阻止操作。
+- 合集卸载先卸成员，全部成功才卸合集。成员或合集本身删除失败时回 409 `{ok:false, code:"partial_uninstall", removed_members:[id], failed_members:[{id,error}], remaining_members:[id], error}`：合集保留，重试只处理仍安装的成员；已经卸载的包/数据不假装回滚。普通网页和管理界面都显示同一 `error`（已卸载 / 未卸载 / 可重试）。市场合集不能让普通设备绕过本地包的卸载权限：有非市场安装的成员时，先拒绝整个操作，去 hub 机器或管理界面处理。
 - 命令行：`personad extension install …` 打印要用的依赖、一起装的和找不到的，确认后一起装；`disable <id> --cascade`、`uninstall <id> [--cascade] [--members]`。
 
 **兼容**：这三个字段是新的，老 hub（#1854 之前）严格读清单，有它们的扩展装不上、市场里的条目被丢掉并给一条警告；用它们的扩展在 `engines.persona` 写上带 #1854 的 hub 构建号。

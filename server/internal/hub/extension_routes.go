@@ -341,24 +341,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		id, q, who := r.PathValue("id"), r.URL.Query(), actorOr(r, "personad extension")
 		// cascade=1: the extensions that depend on it are switched off (else 409 has_dependents); members=1: a pack's
 		// members go with it.
-		var members []string
-		if p := ps().reg.Get(id); p != nil && q.Get("members") == "1" {
-			members = ps().packMembers(p)
-		}
-		if !h.takeDependentsOf(w, r, append([]string{id}, members...), q.Get("cascade") == "1") {
-			return
-		}
-		if err := ps().reg.Uninstall(r.Context(), id, q.Get("keep_data") == "1", who); err != nil {
-			writeErrCode(w, http.StatusBadRequest, "uninstall_failed", err)
-			return
-		}
-		var removed []string
-		for _, m := range members {
-			if err := ps().reg.Uninstall(r.Context(), m, q.Get("keep_data") == "1", who); err == nil {
-				removed = append(removed, m)
-			}
-		}
-		writeJSON(w, map[string]any{"ok": true, "removed_members": removed})
+		h.uninstallPack(w, r, id, uninstallOptions{keepData: q.Get("keep_data") == "1", members: q.Get("members") == "1", cascade: q.Get("cascade") == "1", owner: h.fromThisMachine(r), failureStatus: http.StatusBadRequest, actor: who})
 	})
 
 	// A plugin's program on a computer: the app's requests to it (extension_nodes.go).

@@ -272,24 +272,6 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 		if !readAdminJSON(w, r, &in) {
 			return
 		}
-		var members []string
-		if in.Members {
-			members = ps.packMembers(p)
-		}
-		if !h.takeDependentsOf(w, r, append([]string{p.Record.ID}, members...), in.Cascade) {
-			return
-		}
-		if err := ps.reg.Uninstall(r.Context(), p.Record.ID, in.KeepData, adminActor); err != nil {
-			writeErrCode(w, http.StatusConflict, "uninstall_failed", err)
-			return
-		}
-		var removed []string
-		for _, m := range members {
-			if err := ps.reg.Uninstall(r.Context(), m, in.KeepData, adminActor); err == nil {
-				removed = append(removed, m)
-			}
-		}
-		h.logf("admin: uninstalled plugin %s (keep data: %v)", p.Record.ID, in.KeepData)
-		writeJSON(w, map[string]any{"ok": true, "removed_members": removed})
+		h.uninstallPack(w, r, p.Record.ID, uninstallOptions{keepData: in.KeepData, members: in.Members, cascade: in.Cascade, owner: true, failureStatus: http.StatusConflict, actor: adminActor})
 	}))
 }

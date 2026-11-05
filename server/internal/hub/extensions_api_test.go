@@ -1,9 +1,9 @@
 package hub
 
 import (
-	"errors"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -58,12 +58,13 @@ func serveConnectorExtensionForTest() {
 // pluginStore is a hub store that keeps plugins too (the database's tables, in memory).
 type extensionStore struct {
 	*keepStore
-	mu      sync.Mutex
-	rows    map[string]extension.Record
-	secrets map[string]map[string]string
-	audit   []string
-	markets map[string]extension.MarketRecord
-	failPut bool // every PutExtension fails (a database that cannot be written)
+	mu         sync.Mutex
+	rows       map[string]extension.Record
+	secrets    map[string]map[string]string
+	audit      []string
+	markets    map[string]extension.MarketRecord
+	failDelete string // only this extension's delete fails
+	failPut    bool   // every PutExtension fails (a database that cannot be written)
 }
 
 func (s *extensionStore) Extensions(context.Context) ([]extension.Record, error) {
@@ -87,6 +88,9 @@ func (s *extensionStore) PutExtension(_ context.Context, r extension.Record) err
 func (s *extensionStore) DeleteExtension(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.failDelete == id {
+		return errors.New("the database cannot delete this extension")
+	}
 	delete(s.rows, id)
 	delete(s.secrets, id)
 	return nil
