@@ -104,6 +104,7 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
     private val mutableEvents = MutableSharedFlow<ServerEvent>()
     /** Every group's events, its machine ids as the merged lists show them. */
     override val events = mutableEvents.asSharedFlow()
+    override val lastHello: Hello? get() = selected.value?.hello?.value
     private var started = false
     private var startup: Job? = null
     @Volatile private var foreground = false

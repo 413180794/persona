@@ -81,12 +81,9 @@ internal class AgentsViewModel(
         connection.state,
         _hubNoticeDismissed
     ) { update, hello, connState, dismissed ->
-        val compat = HubCompat.of(
-            protocolVersion = hello?.protocol,
-            minAppBuild = hello?.minAppBuild,
-            appBuild = appBuild,
-            connected = connState == ConnectionState.Online && hello != null,
-        )
+        // The selected hub's hello as its connection kept it: the events carry every paired hub's, the last one is not
+        // necessarily the hub this page shows (#2157). Before any hello there is nothing to say (HubCompat.of).
+        val compat = HubCompat.of(connection.lastHello ?: hello, appBuild, connected = connState == ConnectionState.Online)
         HubNotice.of(update, compat, dismissed)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

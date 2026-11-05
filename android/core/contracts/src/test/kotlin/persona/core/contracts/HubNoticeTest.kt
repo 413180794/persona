@@ -23,6 +23,15 @@ class HubNoticeTest {
         assertEquals(HubCompat.HubTooOld, HubCompat.of(protocolVersion = null, minAppBuild = 0, appBuild = 10, connected = true))
     }
 
+    // A hub's hello decides; before any hello (it went by before the page was there) nothing is said (#2157).
+    @Test
+    fun compatFromTheHello() {
+        assertEquals(HubCompat.Ok, HubCompat.of(hello = null, appBuild = 10, connected = true))
+        assertEquals(HubCompat.Ok, HubCompat.of(Hello(protocol = 1, minAppBuild = 0), appBuild = 10))
+        assertEquals(HubCompat.HubTooOld, HubCompat.of(Hello(protocol = null), appBuild = 10))
+        assertEquals(HubCompat.AppTooOld, HubCompat.of(Hello(protocol = 1, minAppBuild = 20), appBuild = 10))
+    }
+
     @Test
     fun priorityAndCandidateOrder() {
         val base = HubUpdateStatus(version = "1.0.0", build = 100, canUpdate = true)

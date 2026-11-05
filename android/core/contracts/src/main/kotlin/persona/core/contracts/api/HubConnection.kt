@@ -1,5 +1,6 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.Hello
 import persona.core.contracts.ServerEvent
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,12 @@ interface HubConnection {
      * hubs that do not resume.
      */
     val resumed: Boolean get() = false
+
+    /**
+     * The hello the selected hub sent when this connection last opened (its build, protocol, the app build it needs),
+     * kept for pages built after it went by on [events]. Null before any, and for connections that do not keep it.
+     */
+    val lastHello: Hello? get() = null
 
     fun reconnect()
 

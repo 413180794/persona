@@ -11,6 +11,10 @@ enum class HubCompat {
     companion object {
         const val MinHubProtocol = 1
 
+        /** What a hub's hello says; no hello yet (it went by before the page was there, or none came) says nothing. */
+        fun of(hello: persona.core.contracts.Hello?, appBuild: Long, connected: Boolean = true): HubCompat =
+            if (hello == null) Ok else of(hello.protocol, hello.minAppBuild, appBuild, connected)
+
         fun of(protocolVersion: Int?, minAppBuild: Int?, appBuild: Long, connected: Boolean = true): HubCompat {
             if (!connected) return Ok
             if (minAppBuild != null && minAppBuild > 0 && appBuild > 0 && appBuild < minAppBuild) {
