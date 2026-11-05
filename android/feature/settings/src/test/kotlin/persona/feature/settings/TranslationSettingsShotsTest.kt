@@ -162,7 +162,7 @@ class TranslationSettingsShotsTest {
         assertEquals(listOf("x", "a", "b"), rows.map { it.id })
         assertEquals("旧会话", rows[0].name)
         assertEquals(listOf("a"), TranslationText.pickerRows(emptyList(), listOf(LarkChatChoice("a", "Tokyo Office"), LarkChatChoice("b", "产品周会")), " tokyo ").map { it.id })
-        assertEquals("不翻译", TranslationText.chats(0))
-        assertEquals("3 个会话", TranslationText.chats(3))
+        assertEquals("不翻译", TranslationText.chats(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources, 0))
+        assertEquals("3 个会话", TranslationText.chats(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources, 3))
     }
 }

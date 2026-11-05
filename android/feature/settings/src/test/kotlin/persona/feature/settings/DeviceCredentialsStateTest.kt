@@ -30,10 +30,10 @@ class DeviceCredentialsStateTest {
         api.failure = DeviceCredentialsUnavailable("这个 hub 版本还不支持设备凭据。")
         val unsupported = DeviceSettingsState(api) {}
         unsupported.loadDevices()
-        assertEquals("这个 hub 版本还不支持设备凭据。", unsupported.state.value.message)
+        assertEquals(SettingsUiText.Raw("这个 hub 版本还不支持设备凭据。"), unsupported.state.value.message)
         assertNull(unsupported.state.value.devices)
         api.failure = IllegalStateException("boom")
         unsupported.loadDevices()
-        assertEquals("设备列表读取失败，请重试。", unsupported.state.value.message)
+        assertEquals(SettingsUiText.Res(R.string.settings_devices_load_failed), unsupported.state.value.message)
     }
 }

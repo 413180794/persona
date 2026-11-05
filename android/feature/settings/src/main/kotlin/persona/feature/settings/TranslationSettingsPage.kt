@@ -7,7 +7,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -36,68 +40,69 @@ internal fun TranslationSettingsPage(
 ) {
     BackHandler(onBack = onBack)
     if (translation == null) {
-        JListPage(title = "翻译", onBack = onBack) { item { JNotice("体验模式不翻译内容。") } }
+        JListPage(title = stringResource(R.string.settings_translation_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_translation_demo)) } }
         return
     }
     val prefs by translation.prefs.collectAsState()
     // Feishu comes from the lark-connector extension: without it on the hub there are no chats to pick (picked ones stay kept).
     val lark = LocalLarkFeatures.current.chats
+    val resources = LocalContext.current.resources
     var model by remember { mutableStateOf<String?>(null) }
     var choosingTarget by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(pickingAtStart) }
     LaunchedEffect(models) {
-        model = try { models?.purpose("translate")?.let { d -> d.purpose.summaryParts(d.providers).joinToString("，").ifEmpty { "未配置" } } }
+        model = try { models?.purpose("translate")?.let { d -> d.purpose.summaryParts(d.providers).joinToString(resources.getString(R.string.settings_list_separator)).ifEmpty { resources.getString(R.string.settings_not_configured) } } }
         catch (error: CancellationException) { throw error } catch (_: Exception) { null }
     }
-    JListPage(title = "翻译", onBack = onBack) {
+    JListPage(title = stringResource(R.string.settings_translation_title), onBack = onBack) {
         item("enabled") {
             JGroupItem(GroupPosition.of(0, 2), Modifier.padding(top = Tokens.Space.m)) {
-                JSwitchRow("自动翻译", prefs.enabled, { on -> translation.update { it.copy(enabled = on) } },
+                JSwitchRow(stringResource(R.string.settings_translation_auto), prefs.enabled, { on -> translation.update { it.copy(enabled = on) } },
                     Modifier.testTag("translate-enabled"), leadingIcon = PhIcons.Translate)
             }
         }
         item("model") {
             JGroupItem(GroupPosition.of(1, 2)) {
-                JRow("翻译模型", leadingIcon = PhIcons.Brain, subtitle = model, subtitleLines = 1, onClick = onModel)
+                JRow(stringResource(R.string.settings_translation_model), leadingIcon = PhIcons.Brain, subtitle = model, subtitleLines = 1, onClick = onModel)
             }
         }
         item("about") {
-            SettingsCaption("内容不是目标语言时自动翻译，原文随时可以切回来。翻译由「模型配置」中的翻译模型处理。",
+            SettingsCaption(stringResource(R.string.settings_translation_about),
                 Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s))
         }
         if (prefs.enabled) {
             item("target") {
                 JGroupItem(GroupPosition.Single) {
-                    JRow("目标语言", leadingIcon = PhIcons.GlobeSimple, value = TranslationPrefs.languageName(prefs.target),
+                    JRow(stringResource(R.string.settings_translation_target), leadingIcon = PhIcons.GlobeSimple, value = TranslationPrefs.languageName(prefs.target),
                         onClick = { choosingTarget = true })
                 }
             }
-            item("scope-header") { JSectionHeader("翻译范围") }
+            item("scope-header") { JSectionHeader(stringResource(R.string.settings_translation_scope)) }
             item("mail") {
                 JGroupItem(GroupPosition.of(0, if (lark) 2 else 1)) {
-                    JSwitchRow("邮件", prefs.mail, { on -> translation.update { it.copy(mail = on) } },
+                    JSwitchRow(stringResource(R.string.settings_translation_mail), prefs.mail, { on -> translation.update { it.copy(mail = on) } },
                         Modifier.testTag("translate-mail"), leadingIcon = PhIcons.EnvelopeSimple)
                 }
             }
             if (lark) {
                 item("lark") {
                     JGroupItem(GroupPosition.of(1, 2)) {
-                        JRow("飞书会话", leadingIcon = PhIcons.ChatCircleDots,
+                        JRow(stringResource(R.string.settings_translation_lark), leadingIcon = PhIcons.ChatCircleDots,
                             value = TranslationText.chats(prefs.chats.size), onClick = { picking = true })
                     }
                 }
                 item("lark-about") {
-                    SettingsCaption("飞书消息很多，默认不翻译；只翻译这里选中的会话里别人发的消息。",
+                    SettingsCaption(stringResource(R.string.settings_translation_lark_about),
                         Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s))
                 }
             }
             if (lark && prefs.chats.isNotEmpty()) {
-                item("chats-header") { JSectionHeader("要翻译的飞书会话", count = prefs.chats.size) }
+                item("chats-header") { JSectionHeader(stringResource(R.string.settings_translation_lark_chats), count = prefs.chats.size) }
                 itemsIndexed(prefs.chats, key = { _, c -> "chat-${c.id}" }) { index, chat ->
                     JGroupItem(GroupPosition.of(index, prefs.chats.size)) {
                         JRow(chat.name, leading = { JAvatar(chat.name, icon = PhIcons.ChatsCircle) },
                             trailing = {
-                                JIconButton(PhIcons.X, "不再翻译「${chat.name}」",
+                                JIconButton(PhIcons.X, stringResource(R.string.settings_translation_remove_chat, chat.name),
                                     { translation.update { p -> p.copy(chats = p.chats.filterNot { it.id == chat.id }) } })
                             })
                     }
@@ -105,7 +110,7 @@ internal fun TranslationSettingsPage(
             }
         }
         item("note") {
-            SettingsCaption("这些设置存在这台手机上，并会发给 hub：hub 按它提前翻好新邮件，打开时直接显示译文。",
+            SettingsCaption(stringResource(R.string.settings_translation_note),
                 Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.l))
         }
     }
@@ -116,7 +121,7 @@ internal fun TranslationSettingsPage(
                 choosingTarget = false
             }
         },
-        onDismiss = { choosingTarget = false }, title = "目标语言",
+        onDismiss = { choosingTarget = false }, title = stringResource(R.string.settings_translation_target),
     )
     if (picking) TranslationChatPicker(connectors, prefs.chats, onDismiss = { picking = false }) { chats ->
         translation.update { it.copy(chats = chats) }
@@ -139,19 +144,20 @@ private fun TranslationChatPicker(
     var choices by remember { mutableStateOf<List<LarkChatChoice>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
+    val resources = LocalContext.current.resources
     LaunchedEffect(connectors) {
         choices = try { connectors?.larkChatChoices().orEmpty() }
         catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error = e.message?.takeIf(String::isNotBlank) ?: "读不到飞书会话"; emptyList() }
+        catch (e: Exception) { error = e.message?.takeIf(String::isNotBlank) ?: resources.getString(R.string.settings_translation_lark_read_failed); emptyList() }
     }
     // Scrolls as a whole: the pinned and recent chats are at most a few dozen.
-    JSheet(onDismiss, title = "要翻译的会话", scrollable = true) {
+    JSheet(onDismiss, title = stringResource(R.string.settings_translation_picker_title), scrollable = true) {
         TranslationChatPickerContent(selected, choices, error, query, { query = it }, picked) { chat ->
             picked = if (picked.any { it.id == chat.id }) picked.filterNot { it.id == chat.id } else picked + chat
         }
         Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.m), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s, Alignment.End)) {
-            JButton("取消", onDismiss, kind = JButtonKind.Secondary)
-            JButton("完成", { onSave(picked) }, Modifier.testTag("translate-chats-done"))
+            JButton(stringResource(R.string.settings_cancel), onDismiss, kind = JButtonKind.Secondary)
+            JButton(stringResource(R.string.settings_done), { onSave(picked) }, Modifier.testTag("translate-chats-done"))
         }
     }
 }
@@ -169,22 +175,24 @@ internal fun TranslationChatPickerContent(
 ) {
     val rows = remember(selected, choices, query) { TranslationText.pickerRows(selected, choices.orEmpty(), query) }
     Column(Modifier.fillMaxWidth()) {
-        JSearchField(query, onQuery, "搜索会话")
+        JSearchField(query, onQuery, stringResource(R.string.settings_translation_search))
         error?.let { JNotice(it, Modifier.padding(top = Tokens.Space.s), status = Status.NeedsYou) }
         Column(Modifier.fillMaxWidth().padding(top = Tokens.Space.s)) {
             when {
-                choices == null && selected.isEmpty() -> JLoading(text = "正在读飞书会话")
-                rows.isEmpty() -> JEmptyState(if (query.isBlank()) "没有飞书会话" else "没有匹配的会话", "置顶和最近的飞书会话会列在这里。",
+                choices == null && selected.isEmpty() -> JLoading(text = stringResource(R.string.settings_translation_loading))
+                rows.isEmpty() -> JEmptyState(stringResource(if (query.isBlank()) R.string.settings_translation_no_chats else R.string.settings_translation_no_match), stringResource(R.string.settings_translation_no_chats_detail),
                     icon = PhIcons.ChatCircleDots)
                 else -> rows.forEachIndexed { index, chat ->
                     key(chat.id) {
                         val on = picked.any { it.id == chat.id }
                         val choice = choices?.firstOrNull { it.id == chat.id }
+                        val pickedText = stringResource(R.string.settings_translation_picked)
+                        val unpickedText = stringResource(R.string.settings_translation_unpicked)
                         JGroupItem(GroupPosition.of(index, rows.size)) {
                             JRow(
                                 Modifier.semantics {
                                     role = Role.Checkbox
-                                    stateDescription = if (on) "已选" else "未选"
+                                    stateDescription = if (on) pickedText else unpickedText
                                 },
                                 trailing = { JCheckbox(on, null) },
                                 onClick = { onToggle(chat) },
@@ -200,7 +208,7 @@ internal fun TranslationChatPickerContent(
                 }
             }
             // The picked ones show at once; the hub's list is still on its way.
-            if (choices == null && selected.isNotEmpty()) JLoading(text = "正在读飞书会话")
+            if (choices == null && selected.isNotEmpty()) JLoading(text = stringResource(R.string.settings_translation_loading))
         }
     }
 }
@@ -212,7 +220,11 @@ object TranslationPreview {
 }
 
 internal object TranslationText {
-    fun chats(count: Int): String = if (count == 0) "不翻译" else "$count 个会话"
+    fun chats(resources: Resources, count: Int): String = if (count == 0) resources.getString(R.string.settings_translation_chats_none)
+        else resources.getQuantityString(R.plurals.settings_translation_chats, count, count)
+
+    @Composable fun chats(count: Int): String = if (count == 0) stringResource(R.string.settings_translation_chats_none)
+        else pluralStringResource(R.plurals.settings_translation_chats, count, count)
 
     /** The picked chats first (under the names kept for them), then the others offered, filtered by name. */
     fun pickerRows(selected: List<TranslateChat>, choices: List<LarkChatChoice>, query: String): List<TranslateChat> {

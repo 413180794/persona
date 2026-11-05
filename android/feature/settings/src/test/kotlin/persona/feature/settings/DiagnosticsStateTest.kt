@@ -8,8 +8,15 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.core.app.ApplicationProvider
 
+@RunWith(AndroidJUnit4::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class DiagnosticsStateTest {
+    private val resources get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+
     @Test fun observesLiveChangesAndReprobesTheRunningConnection() = runBlocking {
         val connection = LiveConnection()
         val pairing = object : SettingsDiagnostics {
@@ -48,10 +55,10 @@ class DiagnosticsStateTest {
         controller.refresh(reprobe = true)
         assertEquals(1, connection.reconnections)
         val candidate = ConnectionCandidate("https://example.com", "name", "未实测")
-        assertEquals("未实测", candidate.probeMeasurement())
-        assertEquals("未实测", candidate.copy(probeDurationMillis = 12).probeMeasurement())
-        assertEquals("未实测", candidate.copy(probeDurationMillis = -1, sampleCount = 1).probeMeasurement())
-        assertEquals("12 毫秒（样本数 1），不作为性能基线", candidate.copy(probeDurationMillis = 12, sampleCount = 1).probeMeasurement())
+        assertEquals("未实测", candidate.probeMeasurement(resources))
+        assertEquals("未实测", candidate.copy(probeDurationMillis = 12).probeMeasurement(resources))
+        assertEquals("未实测", candidate.copy(probeDurationMillis = -1, sampleCount = 1).probeMeasurement(resources))
+        assertEquals("12 毫秒（样本数 1），不作为性能基线", candidate.copy(probeDurationMillis = 12, sampleCount = 1).probeMeasurement(resources))
     }
 
     @Test fun aFailedPairingShowsWithoutARunningConnection() = runBlocking {
@@ -77,11 +84,11 @@ class DiagnosticsStateTest {
         // The text names the failure, never the pairing code.
         assertTrue(attempt.error!!.contains("PKIX path building failed"))
         assertFalse(attempt.error!!.contains("secret-code"))
-        assertEquals(listOf("地址", "结果", "错误", "时间"), attempt.rows().map { it.first })
-        assertEquals("失败，停在「TLS 证书」", attempt.rows()[1].second)
+        assertEquals(listOf("地址", "结果", "错误", "时间"), attempt.rows(resources).map { it.first })
+        assertEquals("失败，停在「TLS 证书」", attempt.rows(resources)[1].second)
         attempts.record(pairingAttempt(request, null))
         assertFalse(controller.pairing.value!!.failed)
-        assertEquals("成功", controller.pairing.value!!.rows()[1].second)
+        assertEquals("成功", controller.pairing.value!!.rows(resources)[1].second)
     }
 
     @Test fun pairingStepsNameWhereItStopped() {

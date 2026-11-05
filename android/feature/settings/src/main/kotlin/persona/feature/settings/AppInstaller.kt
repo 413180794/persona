@@ -72,15 +72,15 @@ class InstallResultActivity : Activity() {
             @Suppress("DEPRECATION")
             val confirmation = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
             if (confirmation != null) {
-                try { startActivity(confirmation) } catch (_: Exception) { show("无法打开安装确认页，请回到更新页面重试。") }
-            } else show("安装器没有提供确认页面，请重试。")
+                try { startActivity(confirmation) } catch (_: Exception) { show(getString(R.string.settings_install_confirm_failed)) }
+            } else show(getString(R.string.settings_install_no_confirm))
         } else {
             val raw = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
             val text = when {
-                status == PackageInstaller.STATUS_SUCCESS -> "更新已安装"
-                raw.contains("INSTALL_FAILED_ABORTED") -> "系统中止了安装，请检查安装权限和系统安全设置。"
-                status == PackageInstaller.STATUS_FAILURE_ABORTED -> "安装已取消或被系统中止，可以稍后重试。"
-                else -> "安装未完成，请检查签名、存储空间和系统安装权限。"
+                status == PackageInstaller.STATUS_SUCCESS -> getString(R.string.settings_install_done)
+                raw.contains("INSTALL_FAILED_ABORTED") -> getString(R.string.settings_install_aborted_by_system)
+                status == PackageInstaller.STATUS_FAILURE_ABORTED -> getString(R.string.settings_install_cancelled)
+                else -> getString(R.string.settings_install_failed)
             }
             getSharedPreferences("settings-update", MODE_PRIVATE).edit().putString("result", text).apply()
             show(text)

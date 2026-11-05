@@ -1,6 +1,8 @@
 package persona.feature.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import persona.core.contracts.api.FloatingCapsuleSettings
@@ -8,8 +10,13 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 internal object CapsuleSettingsText {
-    val modes = listOf("off" to "关闭", "active" to "有任务时显示", "always" to "一直显示")
-    fun label(mode: String) = modes.firstOrNull { it.first == mode }?.second.orEmpty()
+    val modes = listOf(
+        "off" to R.string.settings_capsule_mode_off,
+        "active" to R.string.settings_capsule_mode_active,
+        "always" to R.string.settings_capsule_mode_always,
+    )
+    @StringRes fun labelRes(mode: String): Int? = modes.firstOrNull { it.first == mode }?.second
+    @Composable fun label(mode: String): String = labelRes(mode)?.let { stringResource(it) }.orEmpty()
 }
 
 @Composable
@@ -17,22 +24,22 @@ internal fun CapsuleSettingsPage(settings: FloatingCapsuleSettings?, onBack: () 
     val mode = settings?.mode?.collectAsState()?.value ?: "off"
     val permitted = settings?.permissionGranted?.collectAsState()?.value == true
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { settings?.refreshPermission() }
-    JListPage(title = "悬浮胶囊", onBack = onBack) {
-        item { JNotice("在其他 App 中显示 Persona。拖动可贴边，点开查看任务、继续对话；回到 Persona 时自动隐藏。") }
-        item { JSectionHeader("显示方式") }
+    JListPage(title = stringResource(R.string.settings_capsule_title), onBack = onBack) {
+        item { JNotice(stringResource(R.string.settings_capsule_notice)) }
+        item { JSectionHeader(stringResource(R.string.settings_capsule_display_header)) }
         CapsuleSettingsText.modes.forEachIndexed { index, (key, title) ->
             item { JGroupItem(GroupPosition.of(index, CapsuleSettingsText.modes.size)) {
-                JRow(title, value = if (key == mode) "已选择" else null, enabled = settings != null,
+                JRow(stringResource(title), value = if (key == mode) stringResource(R.string.settings_capsule_selected) else null, enabled = settings != null,
                     onClick = { settings?.setMode(key) })
             } }
         }
-        item { JSectionHeader("系统权限") }
+        item { JSectionHeader(stringResource(R.string.settings_capsule_permission_header)) }
         item { JGroupItem(GroupPosition.Single) {
-            JRow("显示在其他应用上层", leadingIcon = PhIcons.SquaresFour,
-                value = if (permitted) "已允许" else "尚未允许", onClick = { settings?.requestPermission() })
+            JRow(stringResource(R.string.settings_capsule_overlay), leadingIcon = PhIcons.SquaresFour,
+                value = stringResource(if (permitted) R.string.settings_capsule_allowed else R.string.settings_capsule_not_allowed), onClick = { settings?.requestPermission() })
         } }
         if (mode != "off" && !permitted) item {
-            JNotice("开启悬浮权限后胶囊才会显示。", actionLabel = "去允许", onAction = { settings?.requestPermission() })
+            JNotice(stringResource(R.string.settings_capsule_needs_permission), actionLabel = stringResource(R.string.settings_capsule_allow), onAction = { settings?.requestPermission() })
         }
     }
 }

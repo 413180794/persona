@@ -20,6 +20,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +51,7 @@ fun AppearanceSettings(modifier: Modifier = Modifier) {
     val glass by store.glass.collectAsState()
     val palette = PersonaTheme.palette
     Column(modifier.fillMaxWidth()) {
-        Text("选一种你喜欢的样子，马上生效。深浅色仍然跟随系统。", style = PersonaTheme.type.callout, color = palette.ink2)
+        Text(stringResource(R.string.settings_style_intro), style = PersonaTheme.type.callout, color = palette.ink2)
         Spacer(Modifier.height(16.dp))
         AppStyle.entries.forEach { style ->
             StyleOption(style, selected = style == current) { store.setStyle(style) }
@@ -57,14 +59,14 @@ fun AppearanceSettings(modifier: Modifier = Modifier) {
         }
         ExtensionThemeOptions()
         if (current == AppStyle.Glass) {
-            JSectionHeader("透明效果")
+            JSectionHeader(stringResource(R.string.settings_style_transparency))
             JSegmented(GlassPreference.entries.map { JSegment(it.label) }, GlassPreference.entries.indexOf(glass), { store.setGlass(GlassPreference.entries[it]) })
             Spacer(Modifier.height(10.dp))
             Text(
-                when (glass) {
-                    GlassPreference.Auto -> "Android 13 以上用折射玻璃，更早的系统用模糊玻璃；省电模式下，或者滑动明显掉帧时，自动换成不透明的面板。"
-                    GlassPreference.Reduced -> "所有浮层都用不透明的面板，最省电，文字也最清楚。"
-                },
+                stringResource(when (glass) {
+                    GlassPreference.Auto -> R.string.settings_style_glass_auto
+                    GlassPreference.Reduced -> R.string.settings_style_glass_reduced
+                }),
                 style = PersonaTheme.type.caption, color = palette.ink3,
             )
         }
@@ -83,7 +85,7 @@ private fun StyleOption(style: AppStyle, selected: Boolean, onClick: () -> Unit)
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(style.label, style = PersonaTheme.type.title, color = palette.ink)
-                if (style == AppStyle.Default) { Spacer(Modifier.width(8.dp)); JTag("默认") }
+                if (style == AppStyle.Default) { Spacer(Modifier.width(8.dp)); JTag(stringResource(R.string.settings_default)) }
             }
             Spacer(Modifier.height(4.dp))
             Text(style.summary, style = PersonaTheme.type.callout, color = palette.ink2)
@@ -105,21 +107,22 @@ private fun Modifier.option(selected: Boolean, onClick: () -> Unit): Modifier {
 }
 
 /** The app's four tabs, as the shell shows them, for the previews' navigation. */
-private val PreviewTabs = listOf(
+@Composable
+private fun previewTabs() = listOf(
     NavItem("Persona", "Persona", PhIcons.Sparkle),
     NavItem("Agents", "Agents", PhIcons.SquaresFour),
-    NavItem("Inbox", "收件箱", PhIcons.Tray),
-    NavItem("Settings", "设置", PhIcons.GearSix),
+    NavItem("Inbox", stringResource(R.string.settings_preview_tab_inbox), PhIcons.Tray),
+    NavItem("Settings", stringResource(R.string.settings_title), PhIcons.GearSix),
 )
 
 /** The sessions of the previewed space, as the list shows them (a finished, seen one has no state text). */
 private val PreviewRows = listOf(
-    PreviewRow("补齐网络层的单元测试", Status.NeedsYou, "网络层的测试用哪个框架？", "2 分钟前"),
-    PreviewRow("给天气 App 加小组件", Status.Working, "正在跑测试，确认降雨概率的格式", "刚刚"),
-    PreviewRow("菜谱网站加搜索", Status.Idle, "可以按食材和用时筛选了", "25 分钟前"),
+    PreviewRow(R.string.settings_preview_row1_title, Status.NeedsYou, R.string.settings_preview_row1_preview, R.string.settings_preview_row1_time),
+    PreviewRow(R.string.settings_preview_row2_title, Status.Working, R.string.settings_preview_row2_preview, R.string.settings_preview_row2_time),
+    PreviewRow(R.string.settings_preview_row3_title, Status.Idle, R.string.settings_preview_row3_preview, R.string.settings_preview_row3_time),
 )
 
-private data class PreviewRow(val title: String, val status: Status, val preview: String, val time: String)
+private data class PreviewRow(@StringRes val title: Int, val status: Status, @StringRes val preview: Int, @StringRes val time: Int)
 
 /** What the previewed computer and space count: one session needs you, one works. */
 private val PreviewCounts = listOf(Status.NeedsYou to 1, Status.Working to 1)
@@ -145,17 +148,17 @@ private fun StylePreview(style: AppStyle) {
                             Text("Agents", style = PersonaTheme.type.largeTitle, color = palette.ink, maxLines = 1)
                             AgentTreeHeader(
                                 "MacBook", folded = false, onToggle = {}, first = true, icon = PhIcons.Laptop, online = true,
-                                detail = "1 个空间，3 个会话", counts = PreviewCounts, onMonitor = {},
+                                detail = stringResource(R.string.settings_preview_detail), counts = PreviewCounts, onMonitor = {},
                             )
                             AgentSpaceHeader("weather", folded = false, onToggle = {}, first = true, counts = PreviewCounts)
                             PreviewRows.forEachIndexed { index, row ->
                                 AgentRow(
-                                    row.title, row.status, onClick = {}, depth = 1, position = GroupPosition.of(index, PreviewRows.size),
-                                    preview = row.preview, time = row.time, statusText = row.status.label.takeIf { row.status != Status.Idle },
+                                    stringResource(row.title), row.status, onClick = {}, depth = 1, position = GroupPosition.of(index, PreviewRows.size),
+                                    preview = stringResource(row.preview), time = stringResource(row.time), statusText = row.status.label.takeIf { row.status != Status.Idle },
                                 )
                             }
                         }
-                        AppNavigation(PreviewTabs, "Agents", {}, Modifier.align(Alignment.BottomCenter))
+                        AppNavigation(previewTabs(), "Agents", {}, Modifier.align(Alignment.BottomCenter))
                     }
                 }
             }
@@ -186,11 +189,11 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
     val design = PersonaDesign.fromId(chosen)
     val palette = PersonaTheme.palette
     Column(modifier.fillMaxWidth()) {
-        Text(if (demo) "体验模式只有默认形象。" else "顶栏和对话列表里 Persona 的名字和脸。颜色跟着界面风格走，不另外改 App 的颜色。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到手机。",
+        Text(stringResource(if (demo) R.string.settings_avatar_demo else R.string.settings_avatar_intro),
             style = PersonaTheme.type.callout, color = palette.ink2)
         Spacer(Modifier.height(Tokens.Space.l))
         (if (demo) listOf(PersonaDesign.Default) else PersonaDesign.entries).forEach { d ->
-            PersonaOption(d.title, d.summary, selected = d.id == chosen, tag = "默认".takeIf { d == PersonaDesign.Default },
+            PersonaOption(d.title, d.summary, selected = d.id == chosen, tag = stringResource(R.string.settings_default).takeIf { d == PersonaDesign.Default },
                 onClick = { if (!demo) packs?.choose(d) ?: appearance.setFace(d) }) {
                 PersonaFace(PersonaState.Idle, size = Tokens.Space.xxxl * 2, design = d, pack = null)
             }
@@ -198,7 +201,7 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
         }
         if (packs != null) offered.forEach { p ->
             val busy = p.id in downloading || p.id == asked
-            PersonaOption(p.manifest.name, p.manifest.about ?: p.manifest.subtitle ?: if (packs.onPhone(p)) "hub 上的形象" else "选中后下载", selected = p.id == chosen,
+            PersonaOption(p.manifest.name, p.manifest.about ?: p.manifest.subtitle ?: stringResource(if (packs.onPhone(p)) R.string.settings_avatar_on_hub else R.string.settings_avatar_download), selected = p.id == chosen,
                 onClick = { if (!busy) scope.launch { asked = p.id; try { packs.choose(p) } finally { if (asked == p.id) asked = null } } }) {
                 Box(contentAlignment = Alignment.Center) {
                     PackAvatar(packs, p, Tokens.Space.xxxl * 2)
@@ -208,7 +211,7 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(Tokens.Space.m))
         }
         error?.let { JNotice(it, status = Status.NeedsYou); Spacer(Modifier.height(Tokens.Space.m)) }
-        JSectionHeader("${pack?.manifest?.name ?: design.title}的五种状态")
+        JSectionHeader(stringResource(R.string.settings_avatar_states, pack?.manifest?.name ?: design.title))
         Row(
             Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(palette.surface).padding(vertical = Tokens.Space.m)
                 .semantics(mergeDescendants = true) {},

@@ -12,9 +12,8 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.contracts.api.*
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 
 @Composable
 internal fun DevicesPage(
@@ -27,35 +26,36 @@ internal fun DevicesPage(
     val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf<PairedDevice?>(null) }
     LaunchedEffect(controller) { if (available) controller.loadDevices() }
-    JListPage(title = "设备", onBack = onBack) {
-        if (!available) item { JEmptyState("设备管理暂不可用", "请检查配对和 hub 版本。") }
+    JListPage(title = stringResource(R.string.settings_devices_title), onBack = onBack) {
+        if (!available) item { JEmptyState(stringResource(R.string.settings_devices_unavailable), stringResource(R.string.settings_check_pairing_and_hub)) }
         else {
-            if (state.devices == null && state.busy) item { JLoading(text = "正在读取设备…") }
-            if (state.devices?.devices?.isEmpty() == true) item { JEmptyState("暂无已配对设备", "配对后可在这里查看和撤销设备。") }
+            if (state.devices == null && state.busy) item { JLoading(text = stringResource(R.string.settings_devices_loading)) }
+            if (state.devices?.devices?.isEmpty() == true) item { JEmptyState(stringResource(R.string.settings_devices_empty), stringResource(R.string.settings_devices_empty_detail)) }
             items(state.devices?.devices.orEmpty(), key = { it.id }) { device ->
                 val current = device.id == state.devices?.currentId
                 JGroupItem(GroupPosition.Single, Modifier.padding(bottom = Tokens.Space.m)) {
-                    JRow(device.name.ifBlank { "未命名设备" }, leadingIcon = PhIcons.DeviceMobile,
-                        value = if (current) "本机" else null,
-                        subtitle = "${device.platformLabel(current)}，${when (device.role) { "full" -> "完整权限"; "answer" -> "只能回答"; else -> "角色未提供" }}")
-                    SettingsCaption(if (device.lastSeen.isNullOrBlank() && !device.createdAt.isNullOrBlank()) "添加于：${lastUsed(device.createdAt)}"
-                        else "最近使用：${lastUsed(device.lastSeen)}", Modifier.padding(horizontal = Tokens.Space.m))
-                    JButton(if (current) "撤销本机" else "撤销", { pending = device }, Modifier.padding(Tokens.Space.m),
+                    JRow(device.name.ifBlank { stringResource(R.string.settings_devices_unnamed) }, leadingIcon = PhIcons.DeviceMobile,
+                        value = if (current) stringResource(R.string.settings_devices_this) else null,
+                        subtitle = stringResource(R.string.settings_devices_platform_role, device.platformLabel(current),
+                            stringResource(when (device.role) { "full" -> R.string.settings_devices_role_full; "answer" -> R.string.settings_devices_role_answer; else -> R.string.settings_devices_role_unknown })))
+                    SettingsCaption(if (device.lastSeen.isNullOrBlank() && !device.createdAt.isNullOrBlank()) stringResource(R.string.settings_devices_added, lastUsed(device.createdAt))
+                        else stringResource(R.string.settings_devices_last_used, lastUsed(device.lastSeen)), Modifier.padding(horizontal = Tokens.Space.m))
+                    JButton(stringResource(if (current) R.string.settings_devices_revoke_this else R.string.settings_devices_revoke), { pending = device }, Modifier.padding(Tokens.Space.m),
                         kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = !state.busy && !state.needsCleanup)
                 }
             }
-            item { Action(if (state.busy) "正在处理" else "刷新设备", enabled = !state.busy && !state.needsCleanup) { scope.launch { controller.loadDevices() } } }
+            item { Action(stringResource(if (state.busy) R.string.settings_devices_working else R.string.settings_devices_refresh), enabled = !state.busy && !state.needsCleanup) { scope.launch { controller.loadDevices() } } }
             // Revoked credentials stay listed, greyed, for reference; they cannot connect or be revoked again.
             val revoked = state.devices?.revoked.orEmpty()
-            if (revoked.isNotEmpty()) item("revoked-title") { JSectionHeader("已撤销", count = revoked.size) }
+            if (revoked.isNotEmpty()) item("revoked-title") { JSectionHeader(stringResource(R.string.settings_devices_revoked), count = revoked.size) }
             itemsIndexed(revoked, key = { _, device -> "revoked-${device.id}" }) { index, device ->
                 JGroupItem(GroupPosition.of(index, revoked.size)) {
-                    JRow(device.name.ifBlank { "未命名设备" }, leadingIcon = PhIcons.DeviceMobile, enabled = false,
-                        subtitle = "撤销于 ${lastUsed(device.revokedAt)}")
+                    JRow(device.name.ifBlank { stringResource(R.string.settings_devices_unnamed) }, leadingIcon = PhIcons.DeviceMobile, enabled = false,
+                        subtitle = stringResource(R.string.settings_devices_revoked_at, lastUsed(device.revokedAt)))
                 }
             }
             if (state.devices != null) item("credentials-note") {
-                SettingsCaption("每台设备有自己的凭据，丢了哪台就撤销哪台，其他设备不受影响。手表只能看和回答，不能改设置、开关 Agent。",
+                SettingsCaption(stringResource(R.string.settings_devices_note),
                     Modifier.padding(vertical = Tokens.Space.m))
             }
         }
@@ -63,10 +63,10 @@ internal fun DevicesPage(
     }
     pending?.let { device ->
         val current = device.id == state.devices?.currentId
-        JDialog(onDismiss = { pending = null }, title = if (current) "撤销本机？" else "撤销这台设备？",
-            text = if (current) "本机将退出配对，并清除这个 hub 的本地数据。再次使用需要重新配对。" else "撤销后，这台设备会断开连接，再次使用需要重新配对。",
+        JDialog(onDismiss = { pending = null }, title = stringResource(if (current) R.string.settings_devices_revoke_this_title else R.string.settings_devices_revoke_title),
+            text = stringResource(if (current) R.string.settings_devices_revoke_this_text else R.string.settings_devices_revoke_text),
             destructive = true, confirmEnabled = !state.busy,
-            confirm = "撤销" to { pending = null; scope.launch { controller.revoke(device) }; Unit })
+            confirm = stringResource(R.string.settings_devices_revoke) to { pending = null; scope.launch { controller.revoke(device) }; Unit })
     }
 }
 
@@ -78,20 +78,20 @@ internal fun NotificationPreferences(controller: DeviceSettingsState, available:
     val prefs = state.preferences?.takeIf { available }
     val enabled = !state.busy && !state.needsCleanup
     return {
-        item { JSectionHeader("这台设备的通知偏好") }
-        if (!available) item { JEmptyState("通知偏好暂不可用", "请检查配对和 hub 版本。") }
+        item { JSectionHeader(stringResource(R.string.settings_notify_prefs_header)) }
+        if (!available) item { JEmptyState(stringResource(R.string.settings_notify_prefs_unavailable), stringResource(R.string.settings_check_pairing_and_hub)) }
         if (prefs != null) {
             item {
                 JGroupItem(GroupPosition.Single) {
-                    JSwitchRow("需要你处理时", prefs.input, { scope.launch { controller.savePreferences(prefs.copy(input = it)) } },
+                    JSwitchRow(stringResource(R.string.settings_notify_needs_you), prefs.input, { scope.launch { controller.savePreferences(prefs.copy(input = it)) } },
                         leadingIcon = PhIcons.BellSimple, enabled = enabled)
                 }
             }
-            item { JSectionHeader("Agent 做完时") }
+            item { JSectionHeader(stringResource(R.string.settings_notify_done_header)) }
             DoneNotification.entries.forEachIndexed { index, mode ->
                 item {
                     JGroupItem(GroupPosition.of(index, DoneNotification.entries.size)) {
-                        JRow(when (mode) { DoneNotification.Off -> "不通知"; DoneNotification.Long -> "只通知长任务"; DoneNotification.Always -> "每次都通知" },
+                        JRow(stringResource(when (mode) { DoneNotification.Off -> R.string.settings_notify_done_off; DoneNotification.Long -> R.string.settings_notify_done_long; DoneNotification.Always -> R.string.settings_notify_done_always }),
                             enabled = enabled, chevron = false,
                             onClick = { scope.launch { controller.savePreferences(prefs.copy(done = mode)) } },
                             trailing = { JRadio(selected = prefs.done == mode, onClick = null, enabled = enabled) })
@@ -100,29 +100,29 @@ internal fun NotificationPreferences(controller: DeviceSettingsState, available:
             }
             item {
                 Column(Modifier.padding(vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                    SettingsCaption("在电脑上看过的任务不通知。")
-                    prefs.longTurnSeconds?.let { SettingsCaption("hub 配置的长任务门槛：$it 秒") }
-                    prefs.doneDelaySeconds?.let { SettingsCaption("hub 配置的完成通知等待时间：$it 秒（实际送达时间未实测）") }
+                    SettingsCaption(stringResource(R.string.settings_notify_seen_note))
+                    prefs.longTurnSeconds?.let { SettingsCaption(pluralStringResource(R.plurals.settings_notify_long_turn, it, it)) }
+                    prefs.doneDelaySeconds?.let { SettingsCaption(pluralStringResource(R.plurals.settings_notify_done_delay, it, it)) }
                 }
             }
             item {
                 JGroupItem(GroupPosition.of(0, 2)) {
-                    JSwitchRow("锁屏实时状态", prefs.liveActivity, { scope.launch { controller.savePreferences(prefs.copy(liveActivity = it)) } }, enabled = enabled)
-                    SettingsCaption("默认开启。Android 16 及以上可在锁屏和状态栏胶囊显示状态计数；关闭或系统不支持时保留普通常驻通知。",
+                    JSwitchRow(stringResource(R.string.settings_notify_live), prefs.liveActivity, { scope.launch { controller.savePreferences(prefs.copy(liveActivity = it)) } }, enabled = enabled)
+                    SettingsCaption(stringResource(R.string.settings_notify_live_about),
                         Modifier.padding(horizontal = Tokens.Space.m).padding(bottom = Tokens.Space.m))
                 }
             }
             item {
                 JGroupItem(GroupPosition.of(1, 2)) {
-                    JSwitchRow("锁屏显示详情", prefs.lockDetails, { scope.launch { controller.savePreferences(prefs.copy(lockDetails = it)) } }, enabled = enabled)
-                    SettingsCaption("关闭后，常驻通知一律不显示 Agent 名字和请求内容。", Modifier.padding(horizontal = Tokens.Space.m).padding(bottom = Tokens.Space.m))
+                    JSwitchRow(stringResource(R.string.settings_notify_lock_details), prefs.lockDetails, { scope.launch { controller.savePreferences(prefs.copy(lockDetails = it)) } }, enabled = enabled)
+                    SettingsCaption(stringResource(R.string.settings_notify_lock_details_about), Modifier.padding(horizontal = Tokens.Space.m).padding(bottom = Tokens.Space.m))
                 }
             }
         }
         if (available && state.preferences == null) item {
-            Action(if (state.busy) "正在读取" else "重试读取", enabled = !state.busy) { scope.launch { controller.loadPreferences() } }
+            Action(stringResource(if (state.busy) R.string.settings_reading else R.string.settings_retry_read), enabled = !state.busy) { scope.launch { controller.loadPreferences() } }
         }
-        if (state.busy && state.preferences != null) item { SettingsCaption("正在保存…") }
+        if (state.busy && state.preferences != null) item { SettingsCaption(stringResource(R.string.settings_saving)) }
     }
 }
 
@@ -130,22 +130,24 @@ internal fun NotificationPreferences(controller: DeviceSettingsState, available:
 internal fun AboutSettingsPage() {
     val context = LocalContext.current
     val info = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
-    JGroupItem(GroupPosition.of(0, 2)) { JRow("版本", value = info.versionName ?: "未提供") }
-    JGroupItem(GroupPosition.of(1, 2)) { JRow("构建号", trailing = { Text("${info.longVersionCode}", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }) }
+    JGroupItem(GroupPosition.of(0, 2)) { JRow(stringResource(R.string.settings_about_version), value = info.versionName ?: stringResource(R.string.settings_not_provided)) }
+    JGroupItem(GroupPosition.of(1, 2)) { JRow(stringResource(R.string.settings_about_build), trailing = { Text("${info.longVersionCode}", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }) }
 }
 
+@Composable
 private fun PairedDevice.platformLabel(current: Boolean): String = when {
     current -> "Android"
     platform == "android" || kind == "android" -> "Android"
     platform == "ios" || platform == "iphone" || kind == "iphone" -> "iPhone"
-    platform == "watchos" || kind == "watch" -> "手表"
-    kind == "phone" -> "手机（平台未提供）"
-    else -> "平台未提供"
+    platform == "watchos" || kind == "watch" -> stringResource(R.string.settings_devices_watch)
+    kind == "phone" -> stringResource(R.string.settings_devices_phone_unknown)
+    else -> stringResource(R.string.settings_devices_platform_unknown)
 }
 
+@Composable
 private fun lastUsed(value: String?): String {
-    if (value.isNullOrBlank()) return "尚无记录"
+    if (value.isNullOrBlank()) return stringResource(R.string.settings_devices_no_record)
     // parseTime also reads offsets (+08:00), which Instant.parse rejects on Android 12 and 13.
-    return persona.core.contracts.parseTime(value)?.let { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(it) }
-        ?: "时间未提供"
+    return persona.core.contracts.parseTime(value)?.let { LocalizedFormats.format(it, LocalizedFormats.DATE_TIME, currentLocale) }
+        ?: stringResource(R.string.settings_devices_no_time)
 }

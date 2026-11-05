@@ -23,11 +23,13 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
+import android.content.res.Resources
+import androidx.compose.ui.res.stringResource
 
 @Composable
 internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)? = null, footer: @Composable () -> Unit = {}) {
     val context = LocalContext.current
+    val resources = context.resources
     val scope = rememberCoroutineScope()
     val controller = remember(services) {
         DiagnosticsState(services.connection, services.liveDiagnostics, services.diagnostics, services.pairingAttempts)
@@ -47,63 +49,70 @@ internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)?
         scope.launch { controller.refresh() }
         scope.launch { controller.refreshSummary() }
     }
-    JListPage(title = "连接诊断", onBack = onBack, state = list) {
+        val summaryText = summary?.let { disconnectSummaryText(it) }
+    JListPage(title = stringResource(R.string.settings_diag_title), onBack = onBack, state = list) {
         item { ConnectionStatus(state) }
         // A failed pairing comes first: before a pairing works there is no connection to show anything about.
-        pairing?.takeIf { it.failed }?.let { pairingAttempt(it) }
+        pairing?.takeIf { it.failed }?.let { pairingAttempt(it, resources) }
         if (endpoints != null) editableCurrentConnection(endpoints, data, state)
-        else diagnosticGroup("当前连接", listOf(
-            "当前路径" to data.currentPath?.let { path ->
+        else diagnosticGroup(resources.getString(R.string.settings_diag_current), listOf(
+            resources.getString(R.string.settings_diag_current_path) to data.currentPath?.let { path ->
                 val parts = path.split(" · ", limit = 2)
-                listOf(routeKind(parts.first())).plus(parts.drop(1)).joinToString("，")
+                listOf(routeKind(parts.first(), resources)).plus(parts.drop(1)).joinToString(resources.getString(R.string.settings_list_separator))
             },
-            "最后收包" to localTime(data.lastReceivedAt), "最近断线原因" to data.lastDisconnectReason,
+            resources.getString(R.string.settings_diag_last_received) to localTime(data.lastReceivedAt),
+            resources.getString(R.string.settings_diag_last_disconnect) to data.lastDisconnectReason,
         ))
-        if (data.legacyHub) item { JNotice("hub 版本太旧，不能公网直连。", status = Status.NeedsYou) }
+        if (data.legacyHub) item { JNotice(stringResource(R.string.settings_diag_legacy_hub), status = Status.NeedsYou) }
         if (endpoints != null) editableCandidates(endpoints, scope)
         else {
-            item { JSectionHeader("候选地址", count = data.candidates.size) }
-            if (data.candidates.isEmpty()) item { JEmptyState("等待探测结果", "运行连接尚无候选探测结果。") }
+            item { JSectionHeader(stringResource(R.string.settings_diag_candidates), count = data.candidates.size) }
+            if (data.candidates.isEmpty()) item { JEmptyState(stringResource(R.string.settings_diag_waiting), stringResource(R.string.settings_diag_waiting_detail)) }
             data.candidates.forEach { candidate ->
-                diagnosticGroup(routeKind(candidate.kind), listOf(
-                    "地址" to candidate.url, "最近探测结果" to candidate.result.takeUnless { it.isBlank() },
-                    "探测耗时" to candidate.probeMeasurement(), "探测时间" to localTime(candidate.checkedAt),
+                diagnosticGroup(routeKind(candidate.kind, resources), listOf(
+                    resources.getString(R.string.settings_diag_address) to candidate.url,
+                    resources.getString(R.string.settings_diag_last_probe) to candidate.result.takeUnless { it.isBlank() },
+                    resources.getString(R.string.settings_diag_probe_time) to candidate.probeMeasurement(resources),
+                    resources.getString(R.string.settings_diag_probed_at) to localTime(candidate.checkedAt),
                 ))
             }
         }
-        diagnosticGroup("这台手机", listOf("当前网络" to network,
-            "证书公钥指纹" to data.fingerprint?.takeIf(String::isNotBlank)?.let { if (fingerprintExpanded) it else it.take(16) }))
+        diagnosticGroup(resources.getString(R.string.settings_diag_phone), listOf(resources.getString(R.string.settings_diag_network) to network,
+            resources.getString(R.string.settings_diag_fingerprint) to data.fingerprint?.takeIf(String::isNotBlank)?.let { if (fingerprintExpanded) it else it.take(16) }))
         if (!data.fingerprint.isNullOrBlank()) item {
-            Action(if (fingerprintExpanded) "收起指纹" else "查看完整指纹") { fingerprintExpanded = !fingerprintExpanded }
+            Action(stringResource(if (fingerprintExpanded) R.string.settings_diag_fingerprint_less else R.string.settings_diag_fingerprint_more)) { fingerprintExpanded = !fingerprintExpanded }
         }
-        diagnosticGroup("协商心跳", listOf(
-            "当前间隔" to data.heartbeatSeconds?.let { "$it 秒" },
-            "前台间隔" to data.foregroundHeartbeatSeconds?.let { "$it 秒" },
-            "后台间隔" to data.backgroundHeartbeatSeconds?.let { "$it 秒" },
-            "等待 pong 超时" to data.pongTimeoutSeconds?.let { "$it 秒" },
-        ), note = "以下是 hub 确认的配置，实际收包频率未实测。")
+        fun seconds(value: Int?) = value?.let { resources.getQuantityString(R.plurals.settings_seconds, it, it) }
+        diagnosticGroup(resources.getString(R.string.settings_diag_heartbeat), listOf(
+            resources.getString(R.string.settings_diag_heartbeat_current) to seconds(data.heartbeatSeconds),
+            resources.getString(R.string.settings_diag_heartbeat_foreground) to seconds(data.foregroundHeartbeatSeconds),
+            resources.getString(R.string.settings_diag_heartbeat_background) to seconds(data.backgroundHeartbeatSeconds),
+            resources.getString(R.string.settings_diag_pong_timeout) to seconds(data.pongTimeoutSeconds),
+        ), note = resources.getString(R.string.settings_diag_heartbeat_note))
         item {
-            JSectionHeader("连接记录")
-            SettingsCaption(summary?.let { "hub 记录：过去 24 小时断开 ${it.disconnects} 次，最长离线 ${String.format(Locale.ROOT, "%.0f", it.longestGapSeconds)} 秒。" }
-                ?: "尚未取得 hub 的断线汇总")
-            if (summary != null) SettingsCaption("并行连接分别计数，hub 重启造成的离线时段不计入最长值。")
+            JSectionHeader(stringResource(R.string.settings_diag_records))
+            SettingsCaption(summaryText ?: stringResource(R.string.settings_diag_no_summary))
+            if (summary != null) SettingsCaption(stringResource(R.string.settings_disconnects_note))
         }
-        if (data.sessions.isEmpty()) item { JEmptyState("暂无记录", "尚无 hub 连接时段记录。") }
+        if (data.sessions.isEmpty()) item { JEmptyState(stringResource(R.string.settings_diag_no_records), stringResource(R.string.settings_diag_no_records_detail)) }
         data.sessions.forEach { session ->
-            diagnosticGroup("连接时段", listOf("连接时间" to localTime(session.connectedAt),
-                "断开时间" to (localTime(session.disconnectedAt) ?: "仍在连接"), "断线原因" to session.reason))
+            diagnosticGroup(resources.getString(R.string.settings_diag_session), listOf(
+                resources.getString(R.string.settings_diag_connected_at) to localTime(session.connectedAt),
+                resources.getString(R.string.settings_diag_disconnected_at) to (localTime(session.disconnectedAt) ?: resources.getString(R.string.settings_diag_still_connected)),
+                resources.getString(R.string.settings_diag_disconnect_reason) to session.reason))
         }
-        pairing?.takeUnless { it.failed }?.let { pairingAttempt(it) }
-        diagnosticGroup("蜂窝网络测试", listOf("测试结果" to context.getSharedPreferences("settings-readiness", 0).getString("cellular-test", null)))
+        pairing?.takeUnless { it.failed }?.let { pairingAttempt(it, resources) }
+        diagnosticGroup(resources.getString(R.string.settings_diag_cellular), listOf(resources.getString(R.string.settings_diag_cellular_result) to
+            CellularTest.text(resources, context.getSharedPreferences("settings-readiness", 0).getString("cellular-test", null))))
         item {
             Column(Modifier.padding(vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                SettingsCaption("家宽地址变化后，在外面可能找不回 hub。建议给 hub 配一个 DDNS 名字；没有域名时，可以回家连内网重试。")
-                message?.let { JNotice(it, status = Status.NeedsYou) }
-                JButton("重新探测", {
+                SettingsCaption(stringResource(R.string.settings_diag_ddns))
+                message?.let { JNotice(stringResource(it), status = Status.NeedsYou) }
+                JButton(stringResource(R.string.settings_diag_reprobe), {
                     network = PhoneReadiness.network(context)
                     scope.launch { controller.refresh(reprobe = true) }
                     scope.launch { controller.refreshSummary() }
-                }, Modifier.fillMaxWidth(), loading = busy, loadingText = "正在读取…")
+                }, Modifier.fillMaxWidth(), loading = busy, loadingText = stringResource(R.string.settings_reading_ellipsis))
                 footer()
             }
         }
@@ -120,12 +129,15 @@ internal fun localTime(value: String?, zone: ZoneId = ZoneId.systemDefault(), to
     return DateTimeFormatter.ofPattern(if (time.toLocalDate() == today) "HH:mm:ss" else "MM-dd HH:mm:ss").format(time)
 }
 
-private fun LazyListScope.pairingAttempt(attempt: PairingAttempt) {
-    diagnosticGroup("最近一次配对", attempt.rows().map { (label, value) -> label to if (label == "时间") localTime(value) else value })
+private fun LazyListScope.pairingAttempt(attempt: PairingAttempt, resources: Resources) {
+    val time = resources.getString(R.string.settings_diag_time)
+    diagnosticGroup(resources.getString(R.string.settings_diag_last_pairing),
+        attempt.rows(resources).map { (label, value) -> label to if (label == time) localTime(value) else value })
     attempt.candidates.forEach { candidate ->
-        diagnosticGroup("配对时探测 · ${routeKind(candidate.kind)}", listOf(
-            "地址" to candidate.url, "探测结果" to candidate.result.takeUnless { it.isBlank() },
-            "探测时间" to localTime(candidate.checkedAt),
+        diagnosticGroup(resources.getString(R.string.settings_diag_pairing_probe, routeKind(candidate.kind, resources)), listOf(
+            resources.getString(R.string.settings_diag_address) to candidate.url,
+            resources.getString(R.string.settings_diag_probe_result) to candidate.result.takeUnless { it.isBlank() },
+            resources.getString(R.string.settings_diag_probed_at) to localTime(candidate.checkedAt),
         ))
     }
 }
@@ -140,7 +152,7 @@ private fun LazyListScope.diagnosticGroup(title: String, values: List<Pair<Strin
 
 @Composable
 internal fun DiagnosticValue(label: String, value: String?) {
-    val shown = value?.takeIf(String::isNotBlank) ?: "暂无观测数据"
+    val shown = value?.takeIf(String::isNotBlank) ?: stringResource(R.string.settings_diag_no_data)
     if (shown.length > 36) {
         JRow(label)
         SelectionContainer {
@@ -166,16 +178,27 @@ internal fun ConnectionStatus(state: ConnectionState, paired: Boolean = true) {
     }
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
         JStatusDot(status)
-        StatusLabel(status, text = if (paired) state.label() else "未连接")
+        StatusLabel(status, text = if (paired) state.label() else stringResource(R.string.settings_connection_not_connected))
     }
 }
 
-internal fun ConnectionState.label(): String = when (this) {
-    ConnectionState.Online -> "已连接"
-    ConnectionState.Connecting -> "连接中…"
-    ConnectionState.Updating -> "更新中…"
-    ConnectionState.WaitingForNetwork -> "等待网络"
-    ConnectionState.NeedsLocalNetworkPermission -> "需要本地网络权限"
-    ConnectionState.CertificateMismatch -> "hub 的证书变了"
-    ConnectionState.Revoked -> "配对已失效"
+@Composable
+internal fun ConnectionState.label(): String = stringResource(when (this) {
+    ConnectionState.Online -> R.string.settings_connection_online
+    ConnectionState.Connecting -> R.string.settings_connection_connecting
+    ConnectionState.Updating -> R.string.settings_connection_updating
+    ConnectionState.WaitingForNetwork -> R.string.settings_connection_waiting_network
+    ConnectionState.NeedsLocalNetworkPermission -> R.string.settings_connection_needs_local_network
+    ConnectionState.CertificateMismatch -> R.string.settings_connection_certificate_changed
+    ConnectionState.Revoked -> R.string.settings_connection_revoked
+})
+
+/** The result of 准备清单's cellular test, kept as a code (older builds kept the sentence itself). */
+internal object CellularTest {
+    const val Confirmed = "confirmed"
+
+    fun text(resources: Resources, value: String?): String? = when (value) {
+        Confirmed -> resources.getString(R.string.settings_ready_cellular_confirmed)
+        else -> value
+    }
 }

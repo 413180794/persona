@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import androidx.compose.foundation.lazy.LazyListScope
@@ -78,7 +80,7 @@ private fun SettingsContent(
     val deviceState by deviceController.state.collectAsState()
     var confirmDisconnect by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<AppUpdate?>(null) }
-    var updateMessage by remember { mutableStateOf<String?>(null) }
+    var updateMessage by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
     fun checkUpdate() {
@@ -89,9 +91,9 @@ private fun SettingsContent(
                 val latest = services.updates.check()
                 val installed = context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode
                 update = latest?.takeIf { it.versionCode > installed }
-                updateMessage = if (update == null) "暂未发现可用更新。" else null
+                updateMessage = if (update == null) R.string.settings_update_none else null
             } catch (error: CancellationException) { throw error }
-            catch (_: Exception) { updateMessage = "检查更新失败，请稍后重试。" }
+            catch (_: Exception) { updateMessage = R.string.settings_update_check_failed }
             finally { busy = false }
         }
     }
@@ -107,7 +109,7 @@ private fun SettingsContent(
     val translationValue = when {
         services.demo || translationPrefs == null -> null
         translationPrefs.enabled -> TranslationPrefs.languageName(translationPrefs.target)
-        else -> "关闭"
+        else -> stringResource(R.string.settings_off)
     }
     var hubConnectors by remember { mutableStateOf<List<HubConnector>>(emptyList()) }
     val phoneOn = remember(page) {
@@ -169,15 +171,15 @@ private fun SettingsContent(
         if (onOpen != null) onOpen(destination) else page = destination.toInitialPage()
     }
     val deviceFeedback: @Composable () -> Unit = {
-        deviceState.message?.let { JNotice(it, status = Status.NeedsYou) }
-        if (deviceState.needsCleanup) Action("重试清理", enabled = !deviceState.busy) {
+        deviceState.message?.let { JNotice(it.text(), status = Status.NeedsYou) }
+        if (deviceState.needsCleanup) Action(stringResource(R.string.settings_retry_cleanup), enabled = !deviceState.busy) {
             scope.launch { deviceController.disconnect() }
         }
     }
     when (page) {
         "pair" -> PairingScreen(services.pairing, services.sessions, onReady = back,
             onDiagnostics = { open(SettingsPage.Diagnostics) }, diagnostics = services.diagnostics, onBack = back,
-            footer = { onDemo?.let { Action("没有 hub？先体验一下", onClick = it) }; deviceFeedback() },
+            footer = { onDemo?.let { Action(stringResource(R.string.settings_try_demo), onClick = it) }; deviceFeedback() },
             machines = services.machines.takeUnless { services.demo }, attempts = services.pairingAttempts)
         "capsule" -> CapsuleSettingsPage(services.capsule, back)
         "claude" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back)
@@ -210,23 +212,23 @@ private fun SettingsContent(
             onReady = { page = "hubs" }, onDiagnostics = { open(SettingsPage.Diagnostics) }, diagnostics = services.diagnostics,
             onBack = { page = "hubs" }, skipWelcome = true, attempts = services.pairingAttempts)
         "diag" -> DiagnosticsScreen(services, onBack = back, footer = deviceFeedback)
-        "style" -> JListPage(title = "界面风格", onBack = back) {
+        "style" -> JListPage(title = stringResource(R.string.settings_style_title), onBack = back) {
             item { AppearanceSettings() }
             item { deviceFeedback() }
         }
         "language" -> LanguagePage(onBack = back, footer = deviceFeedback)
-        "persona" -> JListPage(title = "形象", onBack = back) {
+        "persona" -> JListPage(title = stringResource(R.string.settings_avatar_title), onBack = back) {
             item { PersonaSettings(demo = services.demo) }
             item { deviceFeedback() }
         }
-        "about" -> JListPage(title = "关于 Persona", onBack = back) {
+        "about" -> JListPage(title = stringResource(R.string.settings_about_persona), onBack = back) {
             item { AboutSettingsPage() }
             item { deviceFeedback() }
         }
-        "phone" -> JListPage(title = "手机数据", onBack = back) {
-            item { JNotice("通讯录、日历、照片和位置由手机工具在使用时申请权限。你可以随时到应用权限里关闭。") }
-            item { SettingsCaption("剪贴板只能在 App 打开时读取。Android 不提供提醒事项数据源。", Modifier.padding(vertical = Tokens.Space.m)) }
-            item { Action("管理权限") { PhoneReadiness.open(context, listOf(appDetails)) } }
+        "phone" -> JListPage(title = stringResource(R.string.settings_phone_data_title), onBack = back) {
+            item { JNotice(stringResource(R.string.settings_phone_data_notice)) }
+            item { SettingsCaption(stringResource(R.string.settings_phone_data_caption), Modifier.padding(vertical = Tokens.Space.m)) }
+            item { Action(stringResource(R.string.settings_phone_data_manage)) { PhoneReadiness.open(context, listOf(appDetails)) } }
             item { deviceFeedback() }
         }
         "translate" -> TranslationSettingsPage(services.translation.takeUnless { services.demo }, services.models.takeUnless { services.demo },
@@ -241,11 +243,11 @@ private fun SettingsContent(
         })
         else -> if (page.startsWith("connector/")) {
             HubConnectorPage(connectorsService, connectorId = page.removePrefix("connector/"), onBack = back)
-        } else JListPage(title = "设置") {
+        } else JListPage(title = stringResource(R.string.settings_title)) {
             if (services.demo) {
-                item { JNotice("示例数据，不会连接 hub 或安装更新", title = "体验模式") }
+                item { JNotice(stringResource(R.string.settings_demo_notice), title = stringResource(R.string.settings_demo_mode)) }
                 onExitDemo?.let { exit ->
-                    item { JButton("连接我的 hub", exit, Modifier.fillMaxWidth().padding(top = Tokens.Space.m)) }
+                    item { JButton(stringResource(R.string.settings_demo_connect), exit, Modifier.fillMaxWidth().padding(top = Tokens.Space.m)) }
                 }
             }
             // The extensions' cards and nav pages head the list; they open by key, so only with a navigation host.
@@ -254,57 +256,60 @@ private fun SettingsContent(
                 onOpen = { place -> onNavigate(persona.core.navigation.ExtensionUiRoute(place.extension, place.id, place.title.ifBlank { place.id })) })
             item {
                 HubCard(name = "Persona hub", connected = paired && connection == ConnectionState.Online,
-                    statusText = if (paired) connection.label() else "尚未配对",
-                    facts = if (paired) listOf("电脑在线" to "${machines.count { it.online }} 台", "hub 地址" to (services.hubAddress ?: "未提供")) else emptyList(),
+                    statusText = if (paired) connection.label() else stringResource(R.string.settings_not_paired),
+                    facts = if (paired) machines.count { it.online }.let { online ->
+                        listOf(stringResource(R.string.settings_hub_computers_online) to pluralStringResource(R.plurals.settings_hub_computers_count, online, online),
+                            stringResource(R.string.settings_hub_address) to (services.hubAddress ?: stringResource(R.string.settings_not_provided)))
+                    } else emptyList(),
                     busy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
                     modifier = Modifier.padding(top = Tokens.Space.m), onClick = { open(SettingsPage.Diagnostics) })
             }
-            item { JSectionHeader("连接") }
+            item { JSectionHeader(stringResource(R.string.settings_section_connection)) }
             // The hub list is the one row a single hub group adds to settings (docs/android.md「多 hub」).
             // hub 版本 (docs/hub-update.md「App 里」) follows it while there is a real hub (not 体验模式).
             val hubRows = (if (services.hubs != null) 1 else 0) + (if (hubUpdates != null) 1 else 0)
-            if (services.hubs != null) item { JGroupItem(GroupPosition.of(0, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Hubs), title = "hub", leadingIcon = PhIcons.HardDrives, subtitle = "添加、改名和断开 hub", onClick = { open(SettingsPage.Hubs) }) } }
-            if (hubUpdates != null) item { JGroupItem(GroupPosition.of(hubRows - 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.HubUpdate), title = "hub 版本", leadingIcon = PhIcons.ArrowsClockwise, subtitle = "版本、检查和安装更新、自动更新", value = HubUpdateText.summary(hubUpdateStatus), onClick = { open(SettingsPage.HubUpdate) }) } }
-            item { JGroupItem(GroupPosition.of(hubRows, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Pairing), title = "配对", leadingIcon = PhIcons.QrCode, subtitle = "扫码、粘贴链接或手动输入", onClick = { open(SettingsPage.Pairing) }) } }
-            item { JGroupItem(GroupPosition.of(hubRows + 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Devices), title = "设备", leadingIcon = PhIcons.DeviceMobile, subtitle = "已配对设备和访问权限", onClick = { open(SettingsPage.Devices) }) } }
-            item { JGroupItem(GroupPosition.of(hubRows + 2, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Diagnostics), title = "连接诊断", leadingIcon = PhIcons.Gauge, subtitle = "连接路径、探测结果和记录", onClick = { open(SettingsPage.Diagnostics) }) } }
-            item { JSectionHeader("通知与后台") }
+            if (services.hubs != null) item { JGroupItem(GroupPosition.of(0, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Hubs), title = stringResource(R.string.settings_row_hubs), leadingIcon = PhIcons.HardDrives, subtitle = stringResource(R.string.settings_row_hubs_subtitle), onClick = { open(SettingsPage.Hubs) }) } }
+            if (hubUpdates != null) item { JGroupItem(GroupPosition.of(hubRows - 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.HubUpdate), title = stringResource(R.string.settings_row_hub_update), leadingIcon = PhIcons.ArrowsClockwise, subtitle = stringResource(R.string.settings_row_hub_update_subtitle), value = HubUpdateText.summary(hubUpdateStatus), onClick = { open(SettingsPage.HubUpdate) }) } }
+            item { JGroupItem(GroupPosition.of(hubRows, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Pairing), title = stringResource(R.string.settings_row_pairing), leadingIcon = PhIcons.QrCode, subtitle = stringResource(R.string.settings_row_pairing_subtitle), onClick = { open(SettingsPage.Pairing) }) } }
+            item { JGroupItem(GroupPosition.of(hubRows + 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Devices), title = stringResource(R.string.settings_devices_title), leadingIcon = PhIcons.DeviceMobile, subtitle = stringResource(R.string.settings_row_devices_subtitle), onClick = { open(SettingsPage.Devices) }) } }
+            item { JGroupItem(GroupPosition.of(hubRows + 2, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Diagnostics), title = stringResource(R.string.settings_diag_title), leadingIcon = PhIcons.Gauge, subtitle = stringResource(R.string.settings_row_diag_subtitle), onClick = { open(SettingsPage.Diagnostics) }) } }
+            item { JSectionHeader(stringResource(R.string.settings_section_notifications)) }
             if (services.capsule != null) item { JGroupItem(GroupPosition.Single) {
                 val mode by services.capsule.mode.collectAsState()
-                JRow(title = "悬浮胶囊", leadingIcon = PhIcons.ChatCircle, value = CapsuleSettingsText.label(mode),
-                    subtitle = "在其他 App 中查看任务、继续对话", selected = detailKey == SettingsPageRoute(SettingsPage.Capsule),
+                JRow(title = stringResource(R.string.settings_capsule_title), leadingIcon = PhIcons.ChatCircle, value = CapsuleSettingsText.label(mode),
+                    subtitle = stringResource(R.string.settings_row_capsule_subtitle), selected = detailKey == SettingsPageRoute(SettingsPage.Capsule),
                     onClick = { open(SettingsPage.Capsule) })
             } }
-            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = "通知", leadingIcon = PhIcons.BellSimple, subtitle = "需要你、做完了和系统通知渠道", onClick = { open(SettingsPage.Notifications) }) } }
-            item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = "后台保活", leadingIcon = PhIcons.BatteryCharging, subtitle = "通知、电池和系统后台设置", onClick = { open(SettingsPage.Readiness) }) } }
+            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = stringResource(R.string.settings_ready_notifications), leadingIcon = PhIcons.BellSimple, subtitle = stringResource(R.string.settings_row_notifications_subtitle), onClick = { open(SettingsPage.Notifications) }) } }
+            item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = stringResource(R.string.settings_row_background), leadingIcon = PhIcons.BatteryCharging, subtitle = stringResource(R.string.settings_row_background_subtitle), onClick = { open(SettingsPage.Readiness) }) } }
             item { JSectionHeader("AI") }
-            item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = "模型配置", leadingIcon = PhIcons.Brain, subtitle = "对话、分拣、翻译和各项 AI 功能统一选择模型", onClick = { open(SettingsPage.ModelConfig) }) } }
-            item { JGroupItem(GroupPosition.of(1, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Translation), title = "翻译", leadingIcon = PhIcons.Translate, subtitle = "邮件和选中的飞书会话自动翻译", value = translationValue, onClick = { open(SettingsPage.Translation) }) } }
-            item { JGroupItem(GroupPosition.of(2, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Triage), title = "会话分诊", leadingIcon = PhIcons.ListChecks, subtitle = "Agent 停下后判断做完没、在等什么", onClick = { open(SettingsPage.Triage) }) } }
+            item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = stringResource(R.string.settings_row_models), leadingIcon = PhIcons.Brain, subtitle = stringResource(R.string.settings_row_models_subtitle), onClick = { open(SettingsPage.ModelConfig) }) } }
+            item { JGroupItem(GroupPosition.of(1, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Translation), title = stringResource(R.string.settings_translation_title), leadingIcon = PhIcons.Translate, subtitle = stringResource(R.string.settings_row_translation_subtitle), value = translationValue, onClick = { open(SettingsPage.Translation) }) } }
+            item { JGroupItem(GroupPosition.of(2, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Triage), title = stringResource(R.string.settings_triage_title), leadingIcon = PhIcons.ListChecks, subtitle = stringResource(R.string.settings_row_triage_subtitle), onClick = { open(SettingsPage.Triage) }) } }
             // Extension management and conversation channels are independent hub capabilities.
             if (extensionsAvailable) {
-                item { JSectionHeader("扩展") }
-                item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Extensions), title = "扩展", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = extensionSummary, onClick = { open(SettingsPage.Extensions) }) } }
+                item { JSectionHeader(stringResource(R.string.settings_section_extensions)) }
+                item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Extensions), title = stringResource(R.string.settings_section_extensions), leadingIcon = PhIcons.PuzzlePiece, subtitle = stringResource(R.string.settings_row_extensions_subtitle), value = extensionSummary, onClick = { open(SettingsPage.Extensions) }) } }
             }
-            item { JSectionHeader("电脑") }
-            item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = "Claude Code 设置", leadingIcon = PhIcons.TerminalWindow, subtitle = "各台电脑上的常用选项，可以一起改", onClick = { open(SettingsPage.ClaudeCode) }) } }
+            item { JSectionHeader(stringResource(R.string.settings_section_computers)) }
+            item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = stringResource(R.string.settings_row_claude), leadingIcon = PhIcons.TerminalWindow, subtitle = stringResource(R.string.settings_row_claude_subtitle), onClick = { open(SettingsPage.ClaudeCode) }) } }
             if (channelsAvailable) {
-                item { JSectionHeader("渠道") }
+                item { JSectionHeader(stringResource(R.string.settings_section_channels)) }
                 item {
                     ChannelsSettingsRow(channelList, GroupPosition.Single,
                         selected = detailKey == SettingsPageRoute(SettingsPage.Channels), onClick = { open(SettingsPage.Channels) })
                 }
             }
-            item { JSectionHeader("连接器") }
+            item { JSectionHeader(stringResource(R.string.settings_section_connectors)) }
             val connectorRows = connectorRows(hubConnectors, lark = larkChats)
             fun connectorPosition(row: ConnectorRow) = GroupPosition.of(connectorRows.indexOf(row), connectorRows.size)
             item {
                 JGroupItem(connectorPosition(ConnectorRow.Phone)) {
                     JRow(
                         selected = detailKey == SettingsPageRoute(SettingsPage.PhoneData),
-                        title = "这台手机",
+                        title = stringResource(R.string.settings_diag_phone),
                         leadingIcon = PhIcons.DeviceMobile,
-                        subtitle = "通讯录、日历、照片、位置和剪贴板",
+                        subtitle = stringResource(R.string.settings_row_phone_subtitle),
                         value = ConnectorText.device(phoneOn),
                         onClick = { if (onOpen == null && onPhoneData != null) onPhoneData() else open(SettingsPage.PhoneData) },
                     )
@@ -314,9 +319,9 @@ private fun SettingsContent(
                 JGroupItem(connectorPosition(ConnectorRow.Mail)) {
                     JRow(
                         selected = detailKey == SettingsPageRoute(SettingsPage.Mail),
-                        title = "邮箱",
+                        title = stringResource(R.string.settings_row_mail),
                         leadingIcon = PhIcons.EnvelopeSimple,
-                        subtitle = "Gmail、飞书邮箱和其他 IMAP",
+                        subtitle = stringResource(R.string.settings_row_mail_subtitle),
                         value = ConnectorText.mail(mailAccounts),
                         onClick = { open(SettingsPage.Mail) },
                     )
@@ -326,9 +331,9 @@ private fun SettingsContent(
                 JGroupItem(connectorPosition(ConnectorRow.Lark)) {
                     JRow(
                         selected = detailKey == SettingsPageRoute(SettingsPage.Feishu),
-                        title = "飞书",
+                        title = stringResource(R.string.settings_row_lark),
                         leadingIcon = PhIcons.ChatCircleDots,
-                        subtitle = "lark-connector 连接状态与账号",
+                        subtitle = stringResource(R.string.settings_row_lark_subtitle),
                         value = ConnectorText.lark(larkStatus),
                         onClick = { open(SettingsPage.Feishu) },
                     )
@@ -350,47 +355,53 @@ private fun SettingsContent(
             }
             item {
                 SettingsCaption(
-                    "Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。",
+                    stringResource(R.string.settings_connectors_caption),
                     Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s),
                 )
             }
-            item { JSectionHeader("外观") }
-            item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Persona), title = "形象", leadingIcon = PhIcons.Robot, value = LocalPersonaDesign.current.title, onClick = { open(SettingsPage.Persona) }) } }
-            item { JGroupItem(GroupPosition.of(1, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Appearance), title = "界面风格", leadingIcon = PhIcons.SquaresFour, value = PersonaTheme.style.label, onClick = { open(SettingsPage.Appearance) }) } }
+            item { JSectionHeader(stringResource(R.string.settings_section_appearance)) }
+            item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Persona), title = stringResource(R.string.settings_avatar_title), leadingIcon = PhIcons.Robot, value = LocalPersonaDesign.current.title, onClick = { open(SettingsPage.Persona) }) } }
+            item { JGroupItem(GroupPosition.of(1, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Appearance), title = stringResource(R.string.settings_style_title), leadingIcon = PhIcons.SquaresFour, value = PersonaTheme.style.label, onClick = { open(SettingsPage.Appearance) }) } }
             item { JGroupItem(GroupPosition.of(2, 3)) { LanguageRow(selected = detailKey == SettingsPageRoute(SettingsPage.Language), onClick = { open(SettingsPage.Language) }) } }
-            item { JSectionHeader("关于") }
-            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.About), title = "关于", leadingIcon = PhIcons.Info, subtitle = "当前版本和构建号", onClick = { open(SettingsPage.About) }) } }
+            item { JSectionHeader(stringResource(R.string.settings_section_about)) }
+            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.About), title = stringResource(R.string.settings_section_about), leadingIcon = PhIcons.Info, subtitle = stringResource(R.string.settings_row_about_subtitle), onClick = { open(SettingsPage.About) }) } }
             item { JGroupItem(GroupPosition.of(1, 2)) {
-                JRow("检查更新", value = when { busy -> "正在检查"; installing -> "正在安装"; update != null -> "发现新版本"; services.demo -> "体验模式"; else -> updateMessage?.removeSuffix("。") ?: "检查可用版本" },
+                JRow(stringResource(R.string.settings_update_check), value = when {
+                    busy -> stringResource(R.string.settings_update_checking)
+                    installing -> stringResource(R.string.settings_update_installing)
+                    update != null -> stringResource(R.string.settings_update_found)
+                    services.demo -> stringResource(R.string.settings_demo_mode)
+                    else -> updateMessage?.let { stringResource(it).trimEnd('。', '.') } ?: stringResource(R.string.settings_update_check_hint)
+                },
                     enabled = !services.demo && !busy && !installing, onClick = ::checkUpdate)
             } }
             if (update != null || updateMessage != null) item {
                 JCard(Modifier.padding(top = Tokens.Space.m)) {
                     Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                         update?.let { latest ->
-                            Text("有新版本 ${latest.versionName}", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+                            Text(stringResource(R.string.settings_update_new_version, latest.versionName), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
                             if (latest.releaseNotes.isNotBlank()) Text(latest.releaseNotes, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-                            JButton(if (installing) "正在下载和校验" else "下载并安装", enabled = !installing, onClick = {
+                            JButton(stringResource(if (installing) R.string.settings_update_downloading else R.string.settings_update_install), enabled = !installing, onClick = {
                                 if (!context.packageManager.canRequestPackageInstalls()) {
                                     PhoneReadiness.open(context, listOf(SettingsTarget(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, packageUri = true)))
-                                    updateMessage = "请允许安装未知应用，返回后再次点“下载并安装”。"
+                                    updateMessage = R.string.settings_update_allow_unknown
                                 } else scope.launch {
                                     installing = true
                                     try {
                                         AppInstaller.install(context, services.updates, latest)
-                                        updateMessage = "下载和校验完成，请在系统页面确认安装。"
+                                        updateMessage = R.string.settings_update_verified
                                     } catch (error: CancellationException) { throw error }
-                                    catch (_: Exception) { updateMessage = "更新未完成。请检查下载连接、校验信息和安装权限后重试。" }
+                                    catch (_: Exception) { updateMessage = R.string.settings_update_failed }
                                     finally { installing = false }
                                 }
                             })
                         }
-                        updateMessage?.let { SettingsCaption(it) }
+                        updateMessage?.let { SettingsCaption(stringResource(it)) }
                     }
                 }
             }
             if (paired) item {
-                JButton("断开并忘记服务器", { confirmDisconnect = true },
+                JButton(stringResource(R.string.settings_disconnect_forget), { confirmDisconnect = true },
                     Modifier.fillMaxWidth().padding(top = Tokens.Space.xl), kind = JButtonKind.Destructive, enabled = !deviceState.busy)
             }
             item { deviceFeedback() }
@@ -404,10 +415,10 @@ private fun SettingsContent(
     BackHandler(page == "channels" && channel != null) { channel = null }
     BackHandler(page == "hubs-add") { page = "hubs" }
     if (confirmDisconnect) JDialog(
-        onDismiss = { confirmDisconnect = false }, title = "断开配对？",
-        text = "将断开与 hub 的连接，清除本机凭据和这个 hub 的本地数据。再次使用需要重新配对。",
+        onDismiss = { confirmDisconnect = false }, title = stringResource(R.string.settings_disconnect_title),
+        text = stringResource(R.string.settings_disconnect_text),
         destructive = true, confirmEnabled = !deviceState.busy,
-        confirm = "断开" to { confirmDisconnect = false; scope.launch { deviceController.disconnect() }; Unit },
+        confirm = stringResource(R.string.settings_disconnect) to { confirmDisconnect = false; scope.launch { deviceController.disconnect() }; Unit },
     )
 }
 
@@ -430,13 +441,13 @@ fun ReadinessScreen(
     var system by remember { mutableStateOf<SystemKind?>(null) }
     var items by remember { mutableStateOf(emptyList<ReadyItem>()) }
     var revision by remember { mutableIntStateOf(0) }
-    var testMessage by remember { mutableStateOf<String?>(null) }
+    var testMessage by remember { mutableStateOf<Int?>(null) }
     val machines by sessions.machines.collectAsState()
     fun refresh() { scope.launch {
         val detected = system ?: withContext(Dispatchers.IO) { PhoneReadiness.system() }
         system = detected
         items = PhoneReadiness.items(context, detected)
-        if (detected.name == "澎湃 OS") { delay(1_000); items = PhoneReadiness.items(context, detected) }
+        if (detected.name == PhoneReadiness.HyperOS) { delay(1_000); items = PhoneReadiness.items(context, detected) }
     } }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
     val localNetwork = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
@@ -462,13 +473,14 @@ fun ReadinessScreen(
         }
         onDone()
     }
-    JListPage(title = if (notificationsOnly) "通知" else "准备清单", onBack = onBack, largeTitle = showTitle && onBack == null) {
+    JListPage(title = stringResource(if (notificationsOnly) R.string.settings_ready_notifications else R.string.settings_ready_title), onBack = onBack, largeTitle = showTitle && onBack == null) {
         header()
-        if (notificationsOnly) item { JSectionHeader("系统通知渠道") }
+        if (notificationsOnly) item { JSectionHeader(stringResource(R.string.settings_ready_channels_header)) }
         item {
             Column(Modifier.padding(vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                SettingsCaption(system?.let { "${it.name} ${it.version}" } ?: "正在识别系统")
-                SettingsCaption("能检查的项目显示当前状态。系统不允许查询的项目，需要你设置后确认。")
+                SettingsCaption(system?.let { stringResource(R.string.settings_ready_system, PhoneReadiness.systemName(context, it.name), it.version) }
+                    ?: stringResource(R.string.settings_ready_detecting))
+                SettingsCaption(stringResource(R.string.settings_ready_about))
             }
         }
         items(items.filter { !notificationsOnly || it.id == "notifications" || it.id.startsWith("channel") }, key = { it.id }) { item ->
@@ -478,11 +490,15 @@ fun ReadinessScreen(
             JCard(Modifier.padding(bottom = Tokens.Space.m), status = status) {
                 Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                     Text(item.title, style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
-                    StatusLabel(status, text = when (item.satisfied) { true -> "已满足"; false -> "需要设置"; null -> if (confirmed) "你已确认完成，系统无法核验" else "需要手动确认" })
-                    if (skipped && item.satisfied != true && !confirmed) SettingsCaption("已跳过，可随时回来设置")
+                    StatusLabel(status, text = stringResource(when (item.satisfied) {
+                        true -> R.string.settings_ready_satisfied
+                        false -> R.string.settings_ready_needs_setup
+                        null -> if (confirmed) R.string.settings_ready_confirmed else R.string.settings_ready_needs_confirm
+                    }))
+                    if (skipped && item.satisfied != true && !confirmed) SettingsCaption(stringResource(R.string.settings_ready_skipped_note))
                     SettingsCaption(item.detail)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                        Action("去设置") {
+                        Action(stringResource(R.string.settings_ready_open)) {
                             when {
                                 item.id == "notifications" && Build.VERSION.SDK_INT >= 33 &&
                                     !preferences.getBoolean("notification-requested", false) -> {
@@ -495,15 +511,15 @@ fun ReadinessScreen(
                                     localNetwork.launch(PairingLocalNetwork.Permission)
                                 }
                                 else -> if (!PhoneReadiness.open(context, item.targets)) {
-                                    testMessage = "系统设置打不开，请从手机设置进入 Persona 应用详情。"
+                                    testMessage = R.string.settings_ready_open_failed
                                 }
                             }
                         }
-                        if (item.satisfied == null) Action(if (confirmed) "撤销确认" else "已完成") {
+                        if (item.satisfied == null) Action(stringResource(if (confirmed) R.string.settings_ready_undo_confirm else R.string.settings_ready_mark_done)) {
                             preferences.edit().putBoolean(item.id, !confirmed).apply()
                             records.record(item.id, if (confirmed) "pending" else "confirmed"); revision++
                         }
-                        if (item.satisfied != true && !confirmed) Action(if (skipped) "取消跳过" else "跳过") {
+                        if (item.satisfied != true && !confirmed) Action(stringResource(if (skipped) R.string.settings_ready_unskip else R.string.settings_ready_skip)) {
                             records.record(item.id, if (skipped) "pending" else "skipped"); revision++
                         }
                     }
@@ -511,45 +527,46 @@ fun ReadinessScreen(
             }
         }
         if (!notificationsOnly) {
-            item { JSectionHeader("电脑", count = machines.size) }
-            if (machines.isEmpty()) item { JEmptyState("还没有机器信息", "可稍后在 Agents 中检查。") }
+            item { JSectionHeader(stringResource(R.string.settings_section_computers), count = machines.size) }
+            if (machines.isEmpty()) item { JEmptyState(stringResource(R.string.settings_ready_no_machines), stringResource(R.string.settings_ready_no_machines_detail)) }
             itemsIndexed(machines) { index, machine ->
                 JGroupItem(GroupPosition.of(index, machines.size)) {
-                    JRow(machine.displayName, value = if (machine.online) "在线" else "离线")
-                    JRow("node", value = machine.nodeVersion ?: "未提供")
-                    JRow("herdr", value = machine.herdrVersion ?: "未提供")
-                    JRow("Claude", value = machine.claudeVersion ?: "未提供")
-                    if (machine.nodeMismatch == true) SettingsCaption("node 与 hub 部署版本不一致", Modifier.padding(Tokens.Space.m))
+                    val missing = stringResource(R.string.settings_not_provided)
+                    JRow(machine.displayName, value = stringResource(if (machine.online) R.string.settings_online else R.string.settings_offline))
+                    JRow("node", value = machine.nodeVersion ?: missing)
+                    JRow("herdr", value = machine.herdrVersion ?: missing)
+                    JRow("Claude", value = machine.claudeVersion ?: missing)
+                    if (machine.nodeMismatch == true) SettingsCaption(stringResource(R.string.settings_ready_node_mismatch), Modifier.padding(Tokens.Space.m))
                 }
             }
-            item { Action("跳过电脑检查") { records.record("machines", "skipped"); revision++; testMessage = "已跳过电脑检查，稍后可在 Agents 查看在线状态和版本。" } }
+            item { Action(stringResource(R.string.settings_ready_skip_machines)) { records.record("machines", "skipped"); revision++; testMessage = R.string.settings_ready_skipped_machines } }
             item { LockScreenTestSection(diagnostics, onCheckSettings = ::refresh) }
-            item { Action("跳过锁屏测试") { records.record("lock-test", "skipped"); revision++; testMessage = "已跳过锁屏测试，暂时无法确认锁屏通知是否正常。" } }
+            item { Action(stringResource(R.string.settings_ready_skip_lock)) { records.record("lock-test", "skipped"); revision++; testMessage = R.string.settings_ready_skipped_lock } }
             item {
                 JCard(Modifier.padding(vertical = Tokens.Space.m), status = Status.Unknown) {
                     Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                        Text("蜂窝网络", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
-                        SettingsCaption("关掉 Wi-Fi，用蜂窝网络再试一次，确认在外面也能连上。")
+                        Text(stringResource(R.string.settings_ready_cellular), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+                        SettingsCaption(stringResource(R.string.settings_ready_cellular_about))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                            Action("已试通") { records.record("cellular-test", "confirmed"); revision++; preferences.edit().putString("cellular-test", "用户确认已试通").apply(); testMessage = "已记录到连接诊断。" }
-                            Action("跳过") { records.record("cellular-test", "skipped"); revision++; testMessage = "已跳过蜂窝测试，暂时无法确认外出时能否连接。" }
+                            Action(stringResource(R.string.settings_ready_cellular_works)) { records.record("cellular-test", "confirmed"); revision++; preferences.edit().putString("cellular-test", CellularTest.Confirmed).apply(); testMessage = R.string.settings_ready_cellular_recorded }
+                            Action(stringResource(R.string.settings_ready_skip)) { records.record("cellular-test", "skipped"); revision++; testMessage = R.string.settings_ready_skipped_cellular }
                         }
                     }
                 }
             }
-            items(listOf("machines" to "电脑检查", "lock-test" to "锁屏测试", "cellular-test" to "蜂窝测试")) { (id, title) ->
+            items(listOf("machines" to R.string.settings_ready_machines_check, "lock-test" to R.string.settings_lock_test_title, "cellular-test" to R.string.settings_ready_cellular_test)) { (id, title) ->
                 val skipped = remember(id, revision) { records.skipped(id) }
-                if (skipped) SettingsCaption("$title：已跳过")
+                if (skipped) SettingsCaption(stringResource(R.string.settings_ready_skipped_item, stringResource(title)))
             }
-            item { Action("连接诊断", onClick = onDiagnostics) }
+            item { Action(stringResource(R.string.settings_diag_title), onClick = onDiagnostics) }
         }
         item {
             Column(Modifier.padding(vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                testMessage?.let { JNotice(it) }
-                SettingsCaption("可以先跳过。未设置的项目可能影响锁屏后的通知和后台连接，之后可回到这里补。")
+                testMessage?.let { JNotice(stringResource(it)) }
+                SettingsCaption(stringResource(R.string.settings_ready_skip_note))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                    Action("跳过未完成项", enabled = items.isNotEmpty(), onClick = ::finish)
-                    JButton("完成", ::finish, size = JButtonSize.Small, enabled = items.isNotEmpty())
+                    Action(stringResource(R.string.settings_ready_skip_rest), enabled = items.isNotEmpty(), onClick = ::finish)
+                    JButton(stringResource(R.string.settings_done), ::finish, size = JButtonSize.Small, enabled = items.isNotEmpty())
                 }
                 footer()
             }

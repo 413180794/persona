@@ -14,7 +14,10 @@ import persona.core.contracts.api.SettingsDiagnostics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.Locale
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import kotlin.math.roundToLong
 
 @Composable
 internal fun LockScreenTestSection(diagnostics: SettingsDiagnostics?, onCheckSettings: () -> Unit) {
@@ -22,7 +25,7 @@ internal fun LockScreenTestSection(diagnostics: SettingsDiagnostics?, onCheckSet
     val preferences = LocalContext.current.getSharedPreferences("settings-readiness", 0)
     var test by remember { mutableStateOf<LockScreenTest?>(null) }
     var summary by remember { mutableStateOf<DeviceDisconnectSummary?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf(false) }
     var resumed by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<String?>(null) }
@@ -33,7 +36,7 @@ internal fun LockScreenTestSection(diagnostics: SettingsDiagnostics?, onCheckSet
             summary = diagnostics?.disconnectSummary()
             message = null
         } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { message = "测试记录暂时读不到，恢复连接后可重试。" }
+        catch (_: Exception) { message = R.string.settings_lock_test_read_failed }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumed = true; scope.launch { refresh() } }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { resumed = false }
@@ -47,59 +50,78 @@ internal fun LockScreenTestSection(diagnostics: SettingsDiagnostics?, onCheckSet
         else -> Status.NeedsYou
     }) {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-            Text("锁屏测试", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
-            Action(if (busy) "正在预约" else "开始锁屏测试", enabled = diagnostics != null && !busy && test?.status != "scheduled") {
+            Text(stringResource(R.string.settings_lock_test_title), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+            Action(stringResource(if (busy) R.string.settings_lock_test_scheduling else R.string.settings_lock_test_start), enabled = diagnostics != null && !busy && test?.status != "scheduled") {
                 scope.launch {
                     busy = true
                     try {
                         checkNotNull(diagnostics).scheduleLockScreenTest()
                         refresh()
-                        message = "已预约，请现在锁屏。hub 会按预约发送测试通知，回来后查看结果。"
+                        message = R.string.settings_lock_test_scheduled
                     } catch (error: CancellationException) { throw error }
-                    catch (_: Exception) { message = "预约未确认，请先刷新记录；若仍无记录，请检查连接、hub 版本和本机配对凭据。" }
+                    catch (_: Exception) { message = R.string.settings_lock_test_schedule_failed }
                     finally { busy = false }
                 }
             }
             test?.let { record ->
                 if (record.status == "sent") PendingBadge(PendingStatus.Unconfirmed)
-                Text(lockTestStatus(record), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-                SettingsCaption("预约时间：${localTime(record.dueAt)}")
-                record.sentAt?.let { SettingsCaption("hub 尝试发送：${localTime(it)}") }
-                record.receivedAt?.let { SettingsCaption("hub 收到回报：${localTime(it)}") }
-                if (record.status == "received") SettingsCaption(when (record.notificationShown) {
-                    true -> "App 已提交系统通知，是否响铃、亮屏仍需你确认。"
-                    false -> "App 收到了测试事件，但通知未能展示。请检查通知权限和渠道。"
-                    null -> "通知展示结果未知，请按实际情况确认。"
-                })
+                Text(stringResource(lockTestStatus(record)), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+                SettingsCaption(stringResource(R.string.settings_lock_test_due, localTime(record.dueAt).orEmpty()))
+                record.sentAt?.let { SettingsCaption(stringResource(R.string.settings_lock_test_sent, localTime(it).orEmpty())) }
+                record.receivedAt?.let { SettingsCaption(stringResource(R.string.settings_lock_test_received, localTime(it).orEmpty())) }
+                if (record.status == "received") SettingsCaption(stringResource(when (record.notificationShown) {
+                    true -> R.string.settings_lock_test_shown
+                    false -> R.string.settings_lock_test_not_shown
+                    null -> R.string.settings_lock_test_shown_unknown
+                }))
                 if (record.status != "scheduled") {
-                    Action("响了，也亮屏了") {
-                        feedback = "你已确认响铃并亮屏"
+                    Action(stringResource(R.string.settings_lock_test_worked)) {
+                        feedback = LockTestFeedback.Worked
                         preferences.edit().putString("lock-test-${record.id}", feedback).apply()
                     }
-                    Action("没响或没亮屏") {
-                        feedback = "请检查通知权限、锁屏通知和后台设置，再测试一次。"
+                    Action(stringResource(R.string.settings_lock_test_failed)) {
+                        feedback = LockTestFeedback.Failed
                         preferences.edit().putString("lock-test-${record.id}", feedback).apply()
                         onCheckSettings()
                     }
                 }
             }
-            if (test == null) JEmptyState("未实测", "预约锁屏测试后，在这里查看设备回报。")
-            feedback?.let { SettingsCaption(it) }
+            if (test == null) JEmptyState(stringResource(R.string.settings_lock_test_none), stringResource(R.string.settings_lock_test_none_detail))
+            feedback?.let { SettingsCaption(LockTestFeedback.text(it)) }
             summary?.let {
-                SettingsCaption("hub 记录：过去 24 小时断开 ${it.disconnects} 次，最长离线 ${String.format(Locale.ROOT, "%.0f", it.longestGapSeconds)} 秒。")
-                SettingsCaption("并行连接分别计数，hub 重启造成的离线时段不计入最长值。")
+                SettingsCaption(disconnectSummaryText(it))
+                SettingsCaption(stringResource(R.string.settings_disconnects_note))
             }
-            message?.let { JNotice(it) }
-            Action("刷新测试结果", enabled = !busy) { scope.launch { refresh() } }
+            message?.let { JNotice(stringResource(it)) }
+            Action(stringResource(R.string.settings_lock_test_refresh), enabled = !busy) { scope.launch { refresh() } }
         }
     }
 }
 
-internal fun lockTestStatus(test: LockScreenTest) = when (test.status) {
-    "scheduled" -> "等待预约到期"
-    "sent" -> "hub 已尝试发送，尚未收到设备回报，不能确认送达。"
-    "received" -> "设备已回报收到测试事件"
-    "unavailable" -> "到期时没有可用连接，请检查后台设置后重新测试。"
-    "interrupted" -> "测试被 hub 重启中断，请重新预约。"
-    else -> "测试状态未知，请刷新或更新 hub。"
+@StringRes internal fun lockTestStatus(test: LockScreenTest): Int = when (test.status) {
+    "scheduled" -> R.string.settings_lock_test_status_scheduled
+    "sent" -> R.string.settings_lock_test_status_sent
+    "received" -> R.string.settings_lock_test_status_received
+    "unavailable" -> R.string.settings_lock_test_status_unavailable
+    "interrupted" -> R.string.settings_lock_test_status_interrupted
+    else -> R.string.settings_lock_test_status_unknown
+}
+
+/** What the user said about a lock screen test, kept per test as a code (older builds kept the sentence itself). */
+internal object LockTestFeedback {
+    const val Worked = "worked"
+    const val Failed = "failed"
+
+    @Composable fun text(value: String): String = when (value) {
+        Worked -> stringResource(R.string.settings_lock_test_feedback_worked)
+        Failed -> stringResource(R.string.settings_lock_test_feedback_failed)
+        else -> value
+    }
+}
+
+/** The hub's 24-hour disconnect summary, as 准备清单 and 连接诊断 show it. */
+@Composable
+internal fun disconnectSummaryText(summary: DeviceDisconnectSummary): String {
+    val seconds = LocalizedFormats.number(summary.longestGapSeconds.roundToLong(), currentLocale)
+    return pluralStringResource(R.plurals.settings_disconnects_summary, summary.disconnects, summary.disconnects, seconds)
 }

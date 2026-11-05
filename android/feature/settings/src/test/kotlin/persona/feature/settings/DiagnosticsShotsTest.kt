@@ -46,7 +46,7 @@ class DiagnosticsShotsTest {
         attempts.record(pairingAttempt(PairingRequest("https://hub.example.com/jarvis", "code"),
             PairingException(PairingFailure.Certificate).apply { initCause(handshake) }, PairingStage.Probe,
             listOf(ConnectionCandidate("https://hub.example.com/jarvis", "name", "证书指纹不符", java.time.Instant.now().toString()))))
-        val unpaired = demoSettingsServices().let { demo ->
+        val unpaired = demoSettingsServices(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().resources).let { demo ->
             demo.copy(connection = object : HubConnection by demo.connection {
                 override val state = MutableStateFlow(ConnectionState.Connecting)
             }, diagnostics = null, demo = false, pairingAttempts = attempts)

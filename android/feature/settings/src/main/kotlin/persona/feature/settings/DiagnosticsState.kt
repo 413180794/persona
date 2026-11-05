@@ -1,5 +1,9 @@
 package persona.feature.settings
 
+import android.content.res.Resources
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import persona.core.contracts.api.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +22,8 @@ internal class DiagnosticsState(
     val data: StateFlow<ConnectionDiagnostics> = source?.diagnostics ?: MutableStateFlow(ConnectionDiagnostics())
     val pairing: StateFlow<PairingAttempt?> = attempts?.last ?: MutableStateFlow(null)
     val busy = MutableStateFlow(false)
-    val message = MutableStateFlow<String?>(null)
+    /** A string resource: why the observations are missing or stale. */
+    val message = MutableStateFlow<Int?>(null)
     val summary = MutableStateFlow<DeviceDisconnectSummary?>(null)
 
     suspend fun refresh(reprobe: Boolean = false) {
@@ -28,9 +33,9 @@ internal class DiagnosticsState(
             if (reprobe) connection.reconnect()
             // Reconnection publishes probe results asynchronously through the source.
             if (!reprobe) source?.readDiagnostics()
-            if (source == null) message.value = "运行连接尚未提供诊断数据，以下项目未实测。"
+            if (source == null) message.value = R.string.settings_diag_no_source
         } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { message.value = "连接记录暂时读不到，已保留运行连接的观测数据。" }
+        catch (_: Exception) { message.value = R.string.settings_diag_history_failed }
         finally { busy.value = false }
     }
 
@@ -41,22 +46,42 @@ internal class DiagnosticsState(
     }
 }
 
-internal fun ConnectionCandidate.probeMeasurement(): String {
-    val duration = probeDurationMillis?.takeIf { it >= 0 && sampleCount > 0 } ?: return "未实测"
-    return "$duration 毫秒（样本数 $sampleCount）" + if (sampleCount < 10) "，不作为性能基线" else ""
+internal fun ConnectionCandidate.probeMeasurement(resources: Resources): String {
+    val duration = probeDurationMillis?.takeIf { it >= 0 && sampleCount > 0 }?.toInt()
+        ?: return resources.getString(R.string.settings_diag_unmeasured)
+    return resources.getString(if (sampleCount < 10) R.string.settings_diag_probe_few else R.string.settings_diag_probe,
+        resources.getQuantityString(R.plurals.settings_diag_millis, duration, duration),
+        resources.getQuantityString(R.plurals.settings_diag_samples, sampleCount, sampleCount))
 }
 
+/** A route's kind (`ipv6`, `name`…) as a page names it; null for a kind this app does not know. */
+@StringRes internal fun routeKindRes(kind: String): Int? = when (kind) {
+    "ipv6" -> R.string.settings_route_ipv6
+    "name" -> R.string.settings_route_name
+    "lan" -> R.string.settings_route_lan
+    "ipv4" -> R.string.settings_route_ipv4
+    "unknown" -> R.string.settings_route_unknown
+    else -> null
+}
+
+internal fun routeKind(kind: String, resources: Resources): String = routeKindRes(kind)?.let(resources::getString) ?: kind
+
+@Composable internal fun routeKindText(kind: String): String = routeKindRes(kind)?.let { stringResource(it) } ?: kind
+
+/** Chinese only, for the callers not moved to [routeKindRes] yet (#2453); use [routeKind] with resources instead. */
+@Deprecated("Use routeKindRes, routeKind(kind, resources) or routeKindText")
 internal fun routeKind(kind: String): String = when (kind) {
-    "ipv6" -> "公网 IPv6"
-    "name" -> "域名"
-    "lan" -> "内网"
-    "ipv4" -> "公网 IPv4"
-    "unknown" -> "未知类型"
+    "ipv6" -> "公网 IPv6" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
+    "name" -> "域名" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
+    "lan" -> "内网" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
+    "ipv4" -> "公网 IPv4" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
+    "unknown" -> "未知类型" // i18n-ignore: legacy shim for the Endpoint* callers until they take resources (#2453)
     else -> kind
 }
 
-/** The rows 连接诊断 shows for the last pairing attempt. */
-internal fun PairingAttempt.rows(): List<Pair<String, String?>> = listOf(
-    "地址" to address,
-    "结果" to (step?.let { "失败，停在「${it.label()}」" } ?: "成功"),
-) + listOfNotNull(error?.let { "错误" to it }) + listOf("时间" to at)
+/** The rows 连接诊断 shows for the last pairing attempt: a label and its value; [stepLabel] names where it stopped. */
+internal fun PairingAttempt.rows(resources: Resources, stepLabel: String? = step?.label()): List<Pair<String, String?>> = listOf(
+    resources.getString(R.string.settings_diag_address) to address,
+    resources.getString(R.string.settings_diag_result) to (step?.let { resources.getString(R.string.settings_diag_failed_at, stepLabel.orEmpty()) }
+        ?: resources.getString(R.string.settings_diag_succeeded)),
+) + listOfNotNull(error?.let { resources.getString(R.string.settings_diag_error) to it }) + listOf(resources.getString(R.string.settings_diag_time) to at)
