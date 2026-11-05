@@ -70,5 +70,6 @@
   "close_failed": "关闭失败：{error}",
   "close_agent_title": "关闭这个 Agent？",
   "close_agent": "关闭 Agent",
-  "close_agent_detail": "会退出 {machine} 上「{where}」里的 Claude 并关掉这个标签页。对话记录还在，之后可以从「最近」里恢复。"
+  "close_agent_detail": "会退出 {machine} 上「{where}」里的 Claude 并关掉这个标签页。对话记录还在，之后可以从「最近」里恢复。",
+  "route_no_images": "直接发给任务暂不支持图片，请移除图片后重试"
 }

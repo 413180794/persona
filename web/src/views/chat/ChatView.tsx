@@ -63,7 +63,7 @@ import { TerminalPanel } from "../session/TerminalPanel";
 import { ViewLayer } from "../session/ViewLayer";
 import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
-import { displayLines, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
+import { displayLines, getFeedState, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
 import { CardConversation } from "../../ui/AssistantCard";
 import { DayLine, FeedLineView, QuickResultCard, RouteChip, TaskDock, TaskQuestions } from "../assistant/Tasks";
 import { t } from "../../i18n";
@@ -461,6 +461,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 
   const onSend = async (out: Outgoing): Promise<boolean> => {
     // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
+    if (assistant && out.images.length && getFeedState().routes[sid]) {
+      toast(t("chat-chatview.route_no_images"), "error");
+      return false;
+    }
     if (assistant && !out.images.length && out.text.trim()) {
       try {
         if (await sendRouted(sid, out.text)) return true;

@@ -1,0 +1,109 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Outgoing } from "./Composer";
+import type { Session } from "../../lib/types";
+import { getFeedState, setRoute } from "../../lib/feed";
+import { toast } from "../../ui/atoms";
+import { t } from "../../i18n";
+import { ChatView } from "./ChatView";
+
+const captured = vi.hoisted(() => ({
+  onSend: undefined as ((out: Outgoing) => Promise<boolean>) | undefined,
+  session: { machine_id: "hub", session_id: "c1", title: "Conversation", cwd: "/code", status: "idle" } as Session,
+}));
+
+vi.mock("./Composer", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./Composer")>(),
+  Composer: ({ onSend }: { onSend: (out: Outgoing) => Promise<boolean> }) => {
+    captured.onSend = onSend;
+    return null;
+  },
+}));
+vi.mock("./useTranscript", () => ({
+  useTranscript: () => ({ items: [], loading: false, error: "", hasMore: false, streaming: "" }),
+}));
+vi.mock("../../lib/store", async (importOriginal) => {
+  const store = await importOriginal<typeof import("../../lib/store")>();
+  return {
+    ...store,
+    getSession: () => captured.session,
+    useStore: <T,>(select: (s: ReturnType<typeof store.getState>) => T) => select({ ...store.getState(), sessions: { hub: [captured.session] } }),
+  };
+});
+vi.mock("../../lib/panel", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../lib/panel")>(),
+  usePanel: () => null,
+}));
+vi.mock("../../ui/atoms", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../ui/atoms")>(),
+  toast: vi.fn(),
+}));
+vi.mock("../../lib/router", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../lib/router")>(),
+  useRoute: () => ({ name: "session", mid: "hub", id: "c1" }),
+}));
+vi.mock("../assistant/Persona", () => ({ usePersona: () => ({ name: "Persona" }) }));
+vi.mock("../assistant/AssistantChat", () => ({
+  AssistantFace: () => null,
+  AssistantLauncherChip: () => null,
+  CompactionStrip: () => null,
+  useAssistantMenu: () => ({ items: [], dialogs: null }),
+}));
+vi.mock("../assistant/Tasks", () => ({
+  DayLine: () => null,
+  FeedLineView: () => null,
+  QuickResultCard: () => null,
+  RouteChip: () => null,
+  TaskDock: () => null,
+  TaskQuestions: () => null,
+}));
+
+function sender(assistant = true) {
+  renderToStaticMarkup(<ChatView mid="hub" sid="c1" assistant={assistant} />);
+  expect(captured.onSend).toBeTypeOf("function");
+  return captured.onSend!;
+}
+
+const image = { mime: "image/png", data: "aW1hZ2U=" };
+let fetcher: ReturnType<typeof vi.fn>;
+beforeEach(() => {
+  setRoute("c1", null);
+  captured.onSend = undefined;
+  vi.mocked(toast).mockClear();
+  vi.stubGlobal("localStorage", { getItem: () => "", setItem: vi.fn(), removeItem: vi.fn() });
+  fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => "{}" });
+  vi.stubGlobal("fetch", fetcher);
+});
+afterEach(() => {
+  setRoute("c1", null);
+  vi.unstubAllGlobals();
+});
+
+describe("ChatView composer task routing", () => {
+  it.each(["Look at this", ""])("rejects a routed image with text %j without delivering to Persona or dropping the route", async (text) => {
+    setRoute("c1", "task1");
+    const out = { text, images: [image] };
+    expect(await sender()(out)).toBe(false);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(getFeedState().routes.c1).toBe("task1");
+    expect(out).toEqual({ text, images: [image] });
+    expect(toast).toHaveBeenCalledWith(t("chat-chatview.route_no_images"), "error");
+  });
+
+  it("sends a text-only message to the selected task", async () => {
+    setRoute("c1", "task1");
+    expect(await sender()({ text: "Continue", images: [] })).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toBe("/api/v1/assistant/conversations/c1/route");
+    expect(JSON.parse(init.body)).toEqual({ todo_id: "task1", text: "Continue" });
+  });
+
+  it.each([true, false])("still delivers an unrouted image to its conversation (assistant=%j)", async (assistant) => {
+    expect(await sender(assistant)({ text: "Look at this", images: [image] })).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toBe("/api/v1/sessions/hub/c1/messages");
+    expect(JSON.parse(init.body)).toMatchObject({ text: "Look at this", images: [image] });
+  });
+});
