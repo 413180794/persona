@@ -15,8 +15,8 @@ import (
 )
 
 // The agent_sources extension point (docs/extensions.md「个人 Agent 来源」): a plugin's contribution is a source of
-// personal agents' sessions in the Agents tab, next to lark-connector's. The hub calls agentsrc.<method> on the plugin for
-// what the apps ask (the same shapes as the removedbridge source), and the plugin's agentsrc.updated event re-pulls
+// personal agents' sessions in the Agents tab (the hub has none of its own). The hub calls agentsrc.<method> on the
+// plugin for what the apps ask (the shapes of agents/wire.go), and the plugin's agentsrc.updated event re-pulls
 // sessions in the apps at once, so a plugin with a live connection to its agents needs no polling.
 
 // pluginAgentSource is one agent_sources contribution of a running plugin, as an agents.Source.
@@ -161,7 +161,7 @@ func (s *extensionAgentSource) MarkRead(ctx context.Context, key string) error {
 }
 
 // addAgentSources registers a running plugin's agent_sources with the agents service; a contribution whose id the
-// hub already has (another plugin's) is skipped and logged. The hub's own removedbridge steps aside for a plugin's.
+// hub already has (another plugin's) is skipped and logged.
 func (ps *extensions) addAgentSources(id string, m *extension.Manifest, hp *hubExtension) {
 	if ps.h == nil || ps.h.agents == nil || hp.proc == nil {
 		return
@@ -194,8 +194,8 @@ func (ps *extensions) removeAgentSources(hp *hubExtension) {
 	}
 }
 
-// yieldOwnAgentSource takes the hub's own source id out for a plugin's of the same id (a migratable one only: Open
-// Lark's agent-bridge); the session ids stay, so the apps' sessions, unread counts and caches go on.
+// yieldOwnAgentSource takes a non-plugin source of a migratable id (agents.MigratableSources) out for a plugin's of the
+// same id, keeping the session ids. The hub registers no source of its own today, so this finds nothing to yield.
 func (ps *extensions) yieldOwnAgentSource(id string) {
 	if !slices.Contains(agents.MigratableSources, id) {
 		return
@@ -212,7 +212,7 @@ func (ps *extensions) yieldOwnAgentSource(id string) {
 	ps.logf("agent source %s: a plugin takes it over", id)
 }
 
-// restoreOwnAgentSource puts the hub's own source back once the plugin's is gone.
+// restoreOwnAgentSource puts a source yieldOwnAgentSource took out back once the plugin's is gone.
 func (ps *extensions) restoreOwnAgentSource(id string) {
 	v, ok := ps.h.migrated.LoadAndDelete("agentsrc:" + id)
 	if !ok || ps.h.agents.Get(id) != nil {

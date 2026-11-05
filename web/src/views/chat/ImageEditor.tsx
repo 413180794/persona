@@ -7,6 +7,7 @@ import type { DraftImage } from "../../lib/drafts";
 import { boxRect, burnWidth, fitRect, keepMark, toImage, toScreen, type Mark, type MarkTool, type Rect } from "../../lib/image-edit";
 import { cx, Spinner, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { useModalFocus } from "../../ui/overlay";
 import { t } from "../../i18n";
 
 const COLORS = ["red", "yellow", "green", "blue", "white", "black"] as const;
@@ -48,6 +49,9 @@ export function ImageEditor({ src, doneTitle = t("chat-imageeditor.done"), onDon
   const [busy, setBusy] = useState(false);
   const area = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  // focus in, Tab kept in, back to the button that opened it (the viewer's 编辑, the composer's) on close
+  useModalFocus(root);
 
   useEffect(() => {
     let live = true;
@@ -158,7 +162,7 @@ export function ImageEditor({ src, doneTitle = t("chat-imageeditor.done"), onDon
   };
 
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label={t("chat-imageeditor.title")} className="fixed inset-0 z-[60] flex flex-col bg-black text-white" style={{ animation: "fade-in 150ms ease-out both" }}>
+    <div ref={root} role="dialog" aria-modal="true" aria-label={t("chat-imageeditor.title")} tabIndex={-1} className="fixed inset-0 z-[60] flex flex-col bg-black text-white outline-none" style={{ animation: "fade-in 150ms ease-out both" }}>
       <div className="flex h-14 shrink-0 items-center gap-2 px-3">
         <button type="button" onClick={onCancel} className="h-9 rounded-full px-3 text-[13.5px] whitespace-nowrap text-white/85 transition-colors hover:bg-white/15 hover:text-white">
           {t("common.cancel")}

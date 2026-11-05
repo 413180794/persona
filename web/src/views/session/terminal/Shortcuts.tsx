@@ -131,6 +131,7 @@ export function ShortcutsEditor({ open, onClose }: { open: boolean; onClose: () 
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={t("session-terminal-shortcuts.new_placeholder")}
+            aria-label={t("session-terminal-shortcuts.new_placeholder")}
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}

@@ -57,13 +57,13 @@
 | 日程、会议、文档标题（`calendar/week`、`meetings`、`documents/read`） | `calendar +agenda`、`vc +search`、`minutes +search`、`docs +fetch` | 能做 |
 | 公司圈 | 无 | 不做 |
 
-### 实时事件（`hub/lark_events.go`）
+### 实时事件（原 hub 的 lark_events.go，现由接飞书的插件提供）
 
 | 现在 | lark-cli | 降级 |
 | --- | --- | --- |
 | `/events` WebSocket 踢收件箱、知识库、`/agent`，给 App 推 `lark` | 无 | 轮询：收件箱、归档 2 分钟（和现在的兜底间隔一样），`/agent` 20 秒；App 收不到 `lark` 推送，打开页面时自己拉 |
 
-### 飞书里的 `/agent`（`hub/lark_agent*.go`）
+### 飞书里的 `/agent`（原 hub 的 lark_agent*.go，现由接飞书的插件提供）
 
 | 现在 | lark-cli | 降级 |
 | --- | --- | --- |
@@ -83,7 +83,7 @@
 | `lark_messages`、`lark_search`（消息、文档、人、日程、妙记、待办、邮件） | `+chat-messages-list`；`+messages-search`、`drive +search`、`contact`、`calendar`、`minutes`、`task`、`mail` | 能做 |
 | 快照：收件箱会话、本周日程 | 最近的 @我 / 私聊 + `calendar +agenda` | 没有未读数 |
 
-### App 的飞书路由（`hub/lark.go`）
+### App 的飞书路由（原 hub 的 lark.go，现由接飞书的插件提供）
 
 | 现在 | lark-cli | 降级 |
 | --- | --- | --- |

@@ -778,7 +778,7 @@ type Session struct {
 	// ready. StartError: the start failed (shown in the chat for a while).
 	Starting   bool   `json:"starting,omitempty"`
 	StartError string `json:"start_error,omitempty"`
-	// Todo is the active (uncompleted, unreleased) todo this session is linked to (hub/todos.go).
+	// Todo is the active (uncompleted, unreleased) todo this session is linked to (assistant/todos.go).
 	Todo *TodoRef `json:"todo,omitempty"`
 	// Quiet: the agent works (or worked) for a quiet task, one the main conversation opened while the user wanted
 	// those told only there (#1731): set by the hub, also once the task is done. Clients leave it out of task

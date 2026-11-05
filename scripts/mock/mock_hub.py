@@ -10955,7 +10955,7 @@ class H(BaseHTTPRequestHandler):
             session = assistant_sess(sid, "", 0, "")  # what the hub returns: no title, model or transcript rev yet
             for k in ("model", "rev", "seen_at", "agent"): session.pop(k)  # the hub sends agent only when not Claude Code
             # On the machine the assistant runs on (设置 › 助手 can move it), and a main one becomes the hub's main
-            # conversation (hub/assistant_main.go startMain).
+            # conversation (assistant/start.go startMain).
             mid = body.get("machine_id") or ASSISTANT_CONFIG["machine_id"]
             home = next((m.get("home") for m in MACHINES if m["id"] == mid), None)
             session.update(machine_id=mid, **({"cwd": home + "/.jarvis/assistant"} if home and mid != "server" else {}))

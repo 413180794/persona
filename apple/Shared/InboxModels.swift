@@ -273,7 +273,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
 }
 
 /// How triage stands (GET /api/v1/inbox `triage`, #1644): new items the hub holds back because the model could not
-/// sort them yet, and why. `ok` when none wait; older hubs leave it out. Mirrors hub/inbox_admit.go `InboxTriage`.
+/// sort them yet, and why. `ok` when none wait; older hubs leave it out. Mirrors assistant/inbox_admit.go `InboxTriage`.
 nonisolated struct InboxTriageStatus: Codable, Hashable, Sendable {
     /// ok | unconfigured | paused | error | timeout | behind (the most telling of the sources').
     var state: String

@@ -154,7 +154,7 @@ main 的 `codex-rs/rollout/src/writer_lock.rs:19–87` 明确在 `<CODEX_HOME>/t
 
 | 环节 | 建议落点 | 必须一起处理的边界 |
 | --- | --- | --- |
-| 多目录 / 多 server 发现 | 在 node 增加 Codex 专用 registry / discovery，借鉴 `claudedirs.go`；`hub/config.go`、`hub/claudedirs.go` 的配置下发 / settings 记忆模式 | server inventory 不受终端引擎选择影响；home 可以没有 endpoint；权限不够只标不可访问 |
+| 多目录 / 多 server 发现 | 在 node 增加 Codex 专用 registry / discovery，借鉴 `claudedirs.go`；`hub/config.go`、`devices/claudedirs.go` 的配置下发 / settings 记忆模式 | server inventory 不受终端引擎选择影响；home 可以没有 endpoint；权限不够只标不可访问 |
 | 连接与 thread 分离 | 从 `node/assistant_codex.go` 抽出 transport、RPC pending、per-thread state 和审批路由；自有助手继续走原入口 | 自有进程和外部进程的 ownership 不共用 stop / reap；未接入的外部 stdio 不能自动起替代进程 |
 | 列表与控制 | `node/sessions.go` 增加 app-server 来源；`server/internal/node/control.go:307` 在找 pane 之前根据来源路由 | 不让 app-server 会话落进 Claude resume 兜底；没有 pane 时不显示终端相关动作 |
 | 持久化与协议 | `proto/proto.go`、DB `node_sessions` / settings；hub HTTP/WS 与 Agent MCP 工具 | 同源 / 跨源身份、重启恢复、会话路由、客户端兼容；新增迁移前按车道检查号码 |

@@ -32,7 +32,7 @@
 | botmux | node 的宿主（`docs/engines.md`「botmux」） | 飞书话题 ↔ 某台电脑上的 Claude Code | botmux 自己 | botmux 自己 | 不是 Persona 的渠道：那是 Agent 自己的入口，Agents 页照常显示 |
 | 插件的 `assistant`、`api`、`events`、`hub_api` | `docs/extensions.md` | —— | —— | —— | 不是渠道，是拼出渠道的零件；微信第一版就是用 `connectors` + `hub_api` + `events` 拼的 |
 
-结论：**真正「外面的消息进对话、答案发回去」的有三份实现**——飞书机器人（hub 里，`bots_runs.go`）、微信机器人（插件里，`wechat/turns.go`，
+结论：**真正「外面的消息进对话、答案发回去」的有三份实现**——飞书机器人（当时在 hub 里，bots_runs.go）、微信机器人（当时在插件里，wechat/turns.go，
 注释里写着规则照飞书机器人）、Siri（App 里）。`/agent` 和语音的形状不一样（一个以我的名义回复、每次新对话；一个自己就是模型），
 列进渠道表，但不进统一管线。
 

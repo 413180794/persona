@@ -1,5 +1,5 @@
-// Package agents is Persona' single view of the agents it can reach: lark-connector's paired personal agents
-// (agent-bridge, source "removedbridge") now; Persona' own /agent and OLAP may join as further Sources.
+// Package agents is Persona' single view of the agents it can reach. The hub has no Source of its own: every one is
+// a running plugin's agent_sources contribution (hub/extension_agents.go), e.g. the Feishu plugin's "removedbridge".
 // A session's public id is "<source>:<sessionKey>" (lark-connector's own keys already start with "agent:").
 package agents
 

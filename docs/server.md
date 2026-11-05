@@ -358,7 +358,7 @@ claude（`apiKeyHelper` 用 `security find-generic-password` 取）在助手里�
   DSH 插件这类 runtime 不用等 hub；hub 换连接时它们不断开，新的连接一上来就列出它们的会话（`docs/protocol.md`「Runtime ↔ node」）。
 - `scripts/deploy/node-launchd.sh uninstall` 回到 ssh 起 node。日志：`~/.persona/node-attach.log`。
 
-## tailcat 打洞（`internal/tunnel`，`hub/tailcat.go`）
+## tailcat 打洞（`internal/tunnel`，`devices/tailcat.go`）
 
 hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）经 [tailcat](https://github.com/tailscale/tailcat) 接入：Tailscale 的数据面
 （WireGuard + DERP 中继 + 打洞），不用它的控制面，不需要 Tailscale 账号、root、TUN 或开端口，全在 personad 进程里（用户态 netstack）。

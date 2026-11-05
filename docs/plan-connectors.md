@@ -246,7 +246,7 @@ Registry ──┬─ ChatSources / Streams / Backfiller / Attachments → kb.En
 ### 第三种：node 当本地连接器（Mac 上的数据）
 
 有些数据只在某台电脑上（iMessage 的 `chat.db`、以后的本地备忘录、照片……），hub 读不到。node 本来就经 ssh 连着 hub、有双向 RPC，
-所以由 node 读本机数据、hub 一侧注册成连接器（`connector/remote.go`：一个把调用转成 RPC 的适配器）。
+所以由 node 读本机数据、hub 一侧注册成连接器（`connector/imessage/remote.go`：一个把调用转成 RPC 的适配器）。
 
 hub → node 新方法（旧 node 回 `unknown method`，hub 当它没有本地连接器）：
 

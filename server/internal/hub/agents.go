@@ -35,7 +35,7 @@ func (h *Hub) agentsLoop(ctx context.Context) { h.agents.Poll(ctx, agentsPollFal
 
 func agentsErr(w http.ResponseWriter, err error) { writeErr(w, agents.HTTPStatus(err), err) }
 
-// agentRoutes serve /api/v1/agents/*: every agent Persona can reach (lark-connector's personal agents for now). A session
+// agentRoutes serve /api/v1/agents/*: every agent Persona can reach (the running plugins' agent sources). A session
 // id is "<source>:<sessionKey>" and must be percent-encoded in paths (bridge keys contain "/").
 func (h *Hub) agentRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/agents", func(w http.ResponseWriter, r *http.Request) {

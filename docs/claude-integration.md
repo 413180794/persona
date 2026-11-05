@@ -98,7 +98,7 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
 - node（`node/claudedirs.go`）：`node.configure` 带 `claude_dirs_blocked`。`claudeConfigDirs()` 跳过匹配的目录（原路径和真实路径都比），
   所有按目录找东西的地方（离线会话列表、按 id 找 transcript、用量、记忆、设置页）都经过它，所以屏蔽的目录不会被读；扫描到的目录照样记在内存里（取消屏蔽立刻生效），
   但**不上报**；取消屏蔽时把之前压着的目录补报一次。node 自己的默认目录（`$CLAUDE_CONFIG_DIR` 或 `~/.claude`）永远不屏蔽：Persona 启动的会话在那里。
-- hub（`hub/claudedirs.go`）：发给 node 的 `claude_dirs`（hub.json 配的 + 记住的）先去掉屏蔽的；`claude.dirs` 上报里屏蔽的不记（旧 node 照样会报）；
+- hub（`devices/claudedirs.go`）：发给 node 的 `claude_dirs`（hub.json 配的 + 记住的）先去掉屏蔽的；`claude.dirs` 上报里屏蔽的不记（旧 node 照样会报）；
   改规则时删掉记录里被屏蔽的，再对在线的 node 重新 `node.configure` 并拉一次 `sessions.list`，App 随会话列表的广播更新。不在线就等下次连上时的 configure。
 - 只是不显示，**不删文件**。取消屏蔽后会话按原来的规则（最近 7 天、最多 80 个离线会话）回到列表。
 - 局限：herdr 窗格里正在跑的 claude 即使配置目录被屏蔽，窗格本身照样在列表里（那是你正在用的终端）；旧版 node 不认 `claude_dirs_blocked`，

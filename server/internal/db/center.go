@@ -122,7 +122,7 @@ func (d *DB) ApplyRevokedTokens(ctx context.Context, list []ExportedToken) ([]st
 	return ids, err
 }
 
-// ConnectorCredential is what pairing with a computer's connector left (kind service, hub/service.go).
+// ConnectorCredential is what pairing with a computer's connector left (kind service, devices/service.go).
 type ConnectorCredential struct {
 	MachineID string
 	FP        string // the connector's TLS key pin

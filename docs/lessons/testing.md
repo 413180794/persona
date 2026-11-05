@@ -290,7 +290,7 @@
   `pkill -f '[j]arvisd node --attach'` 把跑测试的那台机器上真在服务的常驻 node 杀了：装了常驻 node 的 Mac 上每跑一次 hub 测试就掉线一次
   （launchd 约 10 秒拉起、hub 经 tailcat 重连几十秒、DSH 插件再重连，合计约一分半，期间打开会话报 transcript not found）。
   以前没人在装了常驻 node 的机器上跑测试，一直没暴露。脚本里会碰进程或服务的命令（`pkill`、`launchctl`、`systemctl`…）在测试里一律用
-  PATH 最前面的假命令替掉，只记参数、再断言参数（`hub/deploy_test.go` 的 `fakePkill`）；验证时先记下真进程的 pid，跑完核对没变。
+  PATH 最前面的假命令替掉，只记参数、再断言参数（`devices/deploy_test.go` 的 `fakePkill`）；验证时先记下真进程的 pid，跑完核对没变。
 - 新外壳里「从左边缘往右拖」不等于「返回」：Agents 页没开对话时它翻到助手页，在助手页上它拉出抽屉。随机操作的测试拿它当返回，
   最后停在抽屉上，Agents 列表看不见、按设计扣着更新，像是「收敛失败」（2026-11-02，`ScreenTruthTests` seed 42）。回列表用界面上的控件：
   对话的返回按钮、抽屉的关闭、助手页往左拖（`ScreenTruthTests.backToList`）；判断「在列表上」别只看筛选条，它随列表滚走，看有没有点得到的行。

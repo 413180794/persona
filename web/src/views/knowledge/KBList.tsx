@@ -396,7 +396,7 @@ export function ErrorBox({ text, onRetry }: { text: string; onRetry?: () => void
 }
 
 /** The filter icon and its popover: every tag of this kind as a chip (a menu ran off the screen with thirty). */
-function TagFilter({ tags, value, onChange }: { tags: string[]; value?: string; onChange: (t?: string) => void }) {
+export function TagFilter({ tags, value, onChange }: { tags: string[]; value?: string; onChange: (t?: string) => void }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return (
     <>
@@ -423,10 +423,29 @@ function TagFilter({ tags, value, onChange }: { tags: string[]; value?: string; 
 function TagPopover({ anchor, tags, value, onPick, onClose }: { anchor: HTMLElement; tags: string[]; value?: string; onPick: (t?: string) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" });
+  const focused = useRef(false);
   useLayoutEffect(() => {
     const r = anchor.getBoundingClientRect();
     const width = Math.min(300, innerWidth - 16);
     setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.right - width, innerWidth - width - 8)), width });
+  }, [anchor]);
+  // The popover is portalled to the end of <body>, so Tab from the trigger would walk the rest of the page: once it is
+  // placed (a hidden element cannot take focus), move focus to the current chip.
+  useLayoutEffect(() => {
+    if (focused.current || pos.visibility === "hidden") return;
+    focused.current = true;
+    const chips = chipButtons(ref.current);
+    (chips.find((b) => b.getAttribute("aria-pressed") === "true") ?? chips[0])?.focus({ preventScroll: true });
+  }, [pos]);
+  // On close (Esc, a pick, the trigger again or a click outside) hand focus back to the trigger when it was in here or
+  // dropped to <body>; a click outside then moves it on to what was clicked as usual. A layout cleanup runs before the
+  // portal leaves the DOM, while the focused chip is still inside it.
+  useLayoutEffect(() => {
+    const node = ref.current;
+    return () => {
+      const active = document.activeElement;
+      if (anchor.isConnected && (!active || active === document.body || node?.contains(active))) anchor.focus({ preventScroll: true });
+    };
   }, [anchor]);
   useEffect(() => {
     const down = (e: MouseEvent) => {
@@ -454,7 +473,7 @@ function TagPopover({ anchor, tags, value, onPick, onClose }: { anchor: HTMLElem
     </button>
   );
   return createPortal(
-    <div ref={ref} role="dialog" aria-label={t("knowledge-kblist.filter")} className="fixed z-50 rounded-[12px] bg-surface p-2.5 shadow-overlay" style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: "top right" }}>
+    <div ref={ref} role="dialog" aria-label={t("knowledge-kblist.filter")} onKeyDown={(e) => moveAmongChips(e, ref.current)} className="fixed z-50 rounded-[12px] bg-surface p-2.5 shadow-overlay" style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: "top right" }}>
       <div className="mb-2 flex items-center px-0.5">
         <span className="flex-1 text-[11.5px] font-medium text-ink-3">{t("knowledge-kblist.common_tags")}</span>
         {value && (
@@ -463,7 +482,7 @@ function TagPopover({ anchor, tags, value, onPick, onClose }: { anchor: HTMLElem
           </button>
         )}
       </div>
-      <div className="flex max-h-[min(55vh,340px)] flex-wrap gap-1.5 overflow-y-auto">
+      <div data-chips className="flex max-h-[min(55vh,340px)] flex-wrap gap-1.5 overflow-y-auto">
         {chip(t("knowledge-kblist.all"), !value, () => onPick(undefined))}
         {tags.map((t) => chip(`#${t}`, value === t, () => onPick(t)))}
         {!tags.length && <p className="w-full px-0.5 py-2 text-[12px] text-ink-3">{t("knowledge-kblist.no_tags")}</p>}
@@ -471,4 +490,18 @@ function TagPopover({ anchor, tags, value, onPick, onClose }: { anchor: HTMLElem
     </div>,
     document.body,
   );
+}
+
+const chipButtons = (root: HTMLElement | null) => [...(root?.querySelectorAll<HTMLButtonElement>("[data-chips] > button") ?? [])];
+
+/** Arrow keys, Home and End move between the chips (they wrap), so a long list does not take a Tab per tag. */
+function moveAmongChips(e: React.KeyboardEvent, root: HTMLElement | null) {
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+  if (step === undefined && e.key !== "Home" && e.key !== "End") return;
+  const chips = chipButtons(root);
+  const at = chips.indexOf(document.activeElement as HTMLButtonElement);
+  if (at < 0 || !chips.length) return;
+  e.preventDefault();
+  const next = e.key === "Home" ? 0 : e.key === "End" ? chips.length - 1 : (at + step! + chips.length) % chips.length;
+  chips[next].focus({ preventScroll: true });
 }

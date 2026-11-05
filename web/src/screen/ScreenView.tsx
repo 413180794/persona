@@ -273,11 +273,16 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
                     {canKeep && remember ? t("screen-screenview.signin_hint_kept", { name }) : t("screen-screenview.signin_hint", { name })}
                   </p>
                 </div>
-                {phase.failed && <p className="text-[12.5px] text-red">{phase.failed}</p>}
+                {phase.failed && (
+                  <p role="alert" className="text-[12.5px] text-red">
+                    {phase.failed}
+                  </p>
+                )}
                 <input
                   value={account}
                   onChange={(e) => setAccount(e.target.value)}
                   placeholder={t("screen-screenview.account")}
+                  aria-label={t("screen-screenview.account")}
                   autoComplete="username"
                   autoCapitalize="none"
                   className="h-9 rounded-control bg-field px-3 text-[13px] outline-none focus:ring-2 focus:ring-accent/40"
@@ -286,6 +291,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t("screen-screenview.password")}
+                  aria-label={t("screen-screenview.password")}
                   type="password"
                   autoComplete="current-password"
                   className="h-9 rounded-control bg-field px-3 text-[13px] outline-none focus:ring-2 focus:ring-accent/40"

@@ -14,6 +14,7 @@ import type { Item } from "../../lib/types";
 import { cx, EASE, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { NARROW, useMedia } from "../../ui/media-query";
+import { useModalFocus } from "../../ui/overlay";
 import { useChatActions } from "./chat-actions";
 import { ImageEditor } from "./ImageEditor";
 import { t } from "../../i18n";
@@ -183,9 +184,8 @@ export function ImageViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, images.length, onClose]);
 
-  useEffect(() => {
-    box.current?.focus();
-  }, []);
+  // focus in, Tab kept in, back to what opened it on close; the editor on top (portaled beside the viewer) has its own
+  useModalFocus(box);
 
   const copy = async () => {
     try {

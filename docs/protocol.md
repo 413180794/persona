@@ -1780,19 +1780,19 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 
 ## 飞书 API（lark-connector）
 
-hub 经 hub 机器上 lark-connector 的 agent 接口（`/agent/v1`，token 从容器环境变量读）代理飞书数据，见 `server/internal/lark`。
+这些路由不是 hub 自己的代码：#1571（3c）删掉了 hub 直连 lark-connector 的那条路，`server/internal/lark` 现在只剩 hub.json 的 `lark` 配置。`/api/v1/lark/…` 由飞书插件的 `api` 贡献提供，`lark` 是正在迁出 hub 的前缀（`migratablePrefixes`，`server/internal/hub/extension_api.go`），插件提供的优先。hub 先鉴权，去掉 `Authorization` 和 `token`，带上 `X-Persona-Device` / `X-Persona-Role`，再原样转给插件，插件再去问 lark-connector（[extensions.md](extensions.md)「App 接口」）。没有插件提供时这些路由 404。下面写的是插件要守的接口约定，文中的「hub」多指 hub 转给的插件；插件声明的 `receipts` 由 hub 套上发送回执。
 
-下面的路由都认查询参数 `ol_account=<lark-connector 账号编号>`：这次请求是哪个飞书账号的（不合法回 400）；不带就是 hub.json 的 `lark.account`（`docs/feishu.md`「多账号」）。hub 交出的别的账号的媒体 URL 已经带着它。
+下面的路由都认查询参数 `ol_account=<lark-connector 账号编号>`：这次请求是哪个飞书账号的（不合法回 400）；不带时是插件的默认账号，由插件按自己的 lark-connector 配置决定：hub 不把 hub.json 的 `lark.account` 交给插件，它只给助手的收件箱用（`server/internal/lark/config.go`，`docs/feishu.md`「多账号」）。交出的别的账号的媒体 URL 已经带着它。
 
-lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 自己丢了飞书登录（`AUTH_*`，`lark.ErrNotLoggedIn`）的，回 `{"error","code":"lark_not_logged_in"}`，App 据此提示去 lark-connector 重新登录飞书。`/raw/…` 例外，原样转发 lark-connector 自己的回答。
+lark-connector 出错时插件回 502 `{"error"}`；其中 lark-connector 自己丢了飞书登录（`AUTH_*`）的，回 `{"error","code":"lark_not_logged_in"}`，App 据此提示去 lark-connector 重新登录飞书。`/raw/…` 例外，原样转发 lark-connector 自己的回答。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/lark/accounts` | `{"accounts":[{"id","name"?,"avatar"?,"tenant"?,"user_id"?,"signed_in","primary"?,"unread","quarantined"?}],"default"}`：lark-connector 上登录的飞书账号（按 lark-connector 的顺序，`signed_in` 对被隔离的账号为 false）和默认账号的编号。没有账号列表的旧 lark-connector 只回默认账号；旧 hub 没有这条路由（404），App 不显示账号切换 |
-| GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured = hub.json 有 lark；connected 每次现问 lark-connector 的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
+| GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured 由插件按自己的 lark-connector 配置给出（3c 以前是「hub.json 有 lark」）；connected 每次现问 lark-connector 的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
 | GET | `/api/v1/lark/message-display` | `{"account_id","anti_recall","show_edit_history"}`：当前选中飞书账号的展示设置；只返回这两个开关和实际用户 ID，不返回脚本/自动发送配置 |
 | POST | `/api/v1/lark/message-display` | `{"account_id","key","value","expected"}`：key 为 `anti_recall` 或 `show_edit_history`，value/expected 为布尔值；完整设备权限，body ≤1 KiB，未知字段拒绝；通过 lark-connector 受限 PATCH 保留其他字段。账号/旧值冲突 409，未授权 403，旧服务无接口 404；登录失效 502 + `lark_not_logged_in`。成功返回与 GET 相同结构并推送带 `settings_changed=true` 的 `lark` 事件，不自动重试未知结果 |
-| GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store`。Hub 声明 `lark_native_encryption`；上游缺少原生接口返回 426 + `lark_lark-connector_upgrade_required`，独立授权缺失返回 403 + `OLK_VAULT_NATIVE_NOT_AUTHORIZED` |
+| GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store`。插件在 `api` 的 `features` 里声明 `lark_native_encryption`，hub 并进自己的 features；上游缺少原生接口返回 426 + `lark_lark-connector_upgrade_required`，独立授权缺失返回 403 + `OLK_VAULT_NATIVE_NOT_AUTHORIZED` |
 | POST | `/api/v1/lark/encryption/unlock` | `{account_id,password}` → 同上。只允许完整写权限；按实际飞书账号校验，共享网页的密码尝试限制；密码不存储 |
 | POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`；候选历史外显复用 lark-connector 网页规则 |
 | POST | `/api/v1/lark/conversations/{id}/encryption/prepare` | `{account_id,text,cover}` → `{accountId,feedId,messages:[{text}]}`。只生成带外显的密文，不发送；身份不一致、未授权、未解锁或无收件公钥时拒绝 |
@@ -1860,7 +1860,7 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
  "text","url","refId","metadata":{…}}   // 卡片的整棵元素树在 metadata.body / header；富文本块祖先在 metadata.blocks
 ```
 
-附件发送要求完整设备权限（answer-only 不可用），共用 Hub 绑定的 lark-connector 账号；不接受调用方覆盖账号。Hub 在 hello/health 中声明 `lark_attachments`。
+附件发送要求完整设备权限（answer-only 不可用），共用插件绑定的 lark-connector 账号；不接受调用方覆盖账号。插件声明 `lark_attachments`，hub 并进 hello/health 的 features。
 `client_id` 必须为 UUID，同一消息重试保持不变；消息读取额外保留可选 `client_id`、`local_state`，用于消除发送超时后的迟到回显。`local:` 和 pending/failed 副本不算发送确认。
 
 媒体改写规则：parts JSON 里所有 `"/api/media/` → `"/api/v1/lark/media/`，`"/api/messages/` → `"/api/v1/lark/messages/`
@@ -1870,11 +1870,13 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 
 ## 个人 Agent 来源状态
 
-未配置 lark-connector（包括仅配置飞书 CLI）时，`GET /api/v1/agents` 返回 `{"sources":[]}`，`GET /api/v1/agents/sessions` 返回 `{"sessions":[]}`，均为 HTTP 200。
-配置了 lark-connector 时，`GET /api/v1/agents` 返回 `{"sources":[{"source":"removedbridge","enabled","error?","setup?","providers":[…],"accounts":[…]}]}`。
+hub 自己没有个人 Agent 来源，来源全部来自在跑的扩展的 `agent_sources`（`docs/extensions.md`「个人 Agent 来源」）。
+没有这样的扩展在跑时，`GET /api/v1/agents` 返回 `{"sources":[]}`，`GET /api/v1/agents/sessions` 返回 `{"sessions":[]}`，均为 HTTP 200。
+有来源时 `GET /api/v1/agents` 每个来源一项：`{"sources":[{"source":"<贡献 id>","enabled","error?","setup?","providers":[…],"accounts":[…]}]}`；
+飞书插件的来源 id 是 `removedbridge`（沿用 hub 以前那个来源的名字，会话 id 不变）。
 `setup` 说明来源能连上、但还没有可列的东西的原因，客户端在会话列表为空时把它换成一句提示：
-`missing`（lark-connector 版本没有 agent-bridge，hub 不再把 404 当错误，会话列表返回空）、`disabled`（没设置 `lark-connector_AGENT_BRIDGE=true`）、
-`no_accounts`（开了但还没连接账号）。lark-connector 连不上之类的其他失败仍然放在 `error` 里，会话接口照常报错。
+`missing`（后端不支持个人 Agent，如没有 agent-bridge 的 lark-connector）、`disabled`（支持但没打开，如 lark-connector 没设置 `lark-connector_AGENT_BRIDGE=true`）、
+`no_accounts`（开了但还没连接账号）；这几种时这个来源没有会话。其他失败（连不上之类）放在 `error` 里，会话接口照常报错（有几个来源、又没指定 `source` 时跳过出错的那个）。
 
 ## 个人 Agent 列表偏好
 

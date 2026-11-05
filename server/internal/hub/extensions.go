@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/agents"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/proc"
@@ -310,12 +309,7 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 		}
 	}
 	reg.Reserve("connectors", own...)
-	// The hub's own personal agents sources, but those a plugin may take over (extension_agents.go).
-	for _, id := range []string{agents.OLKBridge} {
-		if !slices.Contains(agents.MigratableSources, id) {
-			reg.Reserve("agent_sources", id)
-		}
-	}
+	// No agent_sources id is reserved: the hub has no personal agents source of its own (extension_agents.go).
 	if path := siblingProgram(wechat.Program); path != "" {
 		if err := reg.AddBuiltin(wechatManifest(h, path), filepath.Dir(path), true); err != nil {
 			h.logf("plugin wechat: %v", err)

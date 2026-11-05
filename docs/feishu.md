@@ -20,7 +20,7 @@
 | 飞书消息 | 「收件箱」（`docs/inbox.md`）及可选的「消息」页 | 未读 / @我 / 私聊和邮件混在一个列表，按件聚合，AI 分拣；点开是这段对话（`LarkChatView`） |
 | 飞书文档链接 | `FeishuDocReader`（`Views/Feishu/Docs/`） | 任何地方点飞书文档链接都在 App 内原生渲染（链接卡片 `LinkSheet`、飞书消息里的链接）。插件声明 `lark_doc_comments` 时，评论页能回复线程、评论全文、标为已解决 / 重新打开、@ 人（#1290，`FeishuDocsComments.swift`；网页同样，见 `docs/web.md`「飞书文档的评论」；接口见 `docs/protocol.md` 飞书 API） |
 | 公司圈链接 | `LarkMomentsCard` / `LarkMomentsPostView` | 消息里的分享显示预览卡，点开看单条帖子和评论；没有 feed，不能刷 |
-| 公司圈里和我有关的 | 收件箱（`hub/inbox_moments.go`）、知识库 | 评论我的帖子、回复我、@ 我：一个帖子一件事，AI 分拣、起草评论，点发送评论回去（`docs/inbox.md`「公司圈」） |
+| 公司圈里和我有关的 | 收件箱（接飞书的插件提供，原 hub 的 inbox_moments.go）、知识库 | 评论我的帖子、回复我、@ 我：一个帖子一件事，AI 分拣、起草评论，点发送评论回去（`docs/inbox.md`「公司圈」） |
 | 其他飞书链接 | `LinkSheet` 的 WebView | 妙记、日程、任务、审批等链接在 App 内的网页卡片里打开 |
 | AI 的飞书能力 | hub（`server/internal/lark`、助手的 `lark_api` 工具） | 搜索 / 读取消息、文档、公司圈、日程、妙记…… 全部只读，作为 AI 的上下文 |
 | 在飞书里找 Persona | 飞书机器人（`docs/bots.md`） | 私聊自建应用的机器人 = 和主对话说话；不是飞书功能的搬运，是 Persona 多一个入口 |
@@ -59,7 +59,7 @@ hub 从容器环境读 `lark-connector_AGENT_TOKEN`；容器重建换了 token�
 
 401 有两种，要分开（2026-10-31 踩过）：lark-connector 自己掉了飞书登录时回 401 + `AUTH_SESSION_EXPIRED` 等 `AUTH_*` 错误码，
 token 是好的；以前 hub 把所有 401 都当 token 错，丢掉配置里的 token 去 `docker inspect` 一个默认容器，之后所有飞书请求和实时事件
-一直失败到 personad 重启。现在 `AUTH_*` 报「lark-connector 未登录飞书」（`lark.ErrNotLoggedIn`，日志、收件箱和 App 的报错里都能看到），
+一直失败到 personad 重启。现在 `AUTH_*` 报「lark-connector 未登录飞书」（接口回 502 + `lark_not_logged_in`，日志、收件箱和 App 的报错里都能看到；这段逻辑现在在接飞书的插件里），
 配置的 token 永远不丢，实时事件按退避（最长 1 分钟）重连、同一个错误只记一次日志，用户重新登录后自己恢复。
 
 ## 多账号
@@ -68,11 +68,10 @@ lark-connector 一个实例里可以登录多个飞书账号（它的 x-multi-ac
 头或 `ol_account` 参数选账号，账号编号是 `/accounts` 的 `id`，不是飞书用户 ID；添加账号的账号的资源 URL 自带 `ol_account`）。
 Persona 都读（#1321，之前只读 `lark.account` 一个）：
 
-- **默认账号** = `hub.json` 的 `lark.account`（省略是主账号 1）。不带 `ol_account` 的 `/api/v1/lark/*` 请求是它的，旧客户端（Android、网页）
-  照旧只看到它。助手（`lark_*` 工具、`ol`）、知识库、`/agent`、风灵月影设置、文档阅读也只用它；助手的 `lark_messages` 可传 `account`
+- **默认账号**：不带 `ol_account` 的 `/api/v1/lark/*` 请求由插件按自己的 lark-connector 配置选默认账号（hub 不把 `hub.json` 的 `lark.account` 交给插件；这个字段现在只给助手的收件箱用，省略是主账号 1）。旧客户端（Android、网页）
+  不带 `ol_account`，照旧只看到默认账号。助手（`lark_*` 工具、`ol`）、知识库、`/agent`、风灵月影设置、文档阅读也只用它；助手的 `lark_messages` 可传 `account`
   读别的账号的会话，`ol` 前加 `lark-connector_ACCOUNT=<编号>`。
-- **按请求选账号**：`/api/v1/lark/*` 全部认 `ol_account=<编号>`（`hub/lark_accounts.go` 的 `larkMux`，每个账号一个 `lark.Client`，
-  `Client.ForAccount`）；编号不合法回 400，不存在由 lark-connector 拒绝，不会落回默认账号。媒体 URL 里带的 `ol_account` 原样带回来就对了。
+- **按请求选账号**：`/api/v1/lark/*` 全部认 `ol_account=<编号>`（接飞书的插件提供，原来是 hub 的 lark_accounts.go，每个账号一个 lark-connector 客户端）；编号不合法回 400，不存在由 lark-connector 拒绝，不会落回默认账号。媒体 URL 里带的 `ol_account` 原样带回来就对了。
   raw 代理把查询原样转给 lark-connector，客户端的 `x-lark-connector-account` 头不透传。不要把查询串塞进 `base_url`。
 - **账号列表** `GET /api/v1/lark/accounts`：每分钟最多读一次 lark-connector，用来决定收件箱和实时事件读哪些账号（已登录、没被隔离的）。
   没有 `/accounts` 的旧 lark-connector 当作只有默认账号。

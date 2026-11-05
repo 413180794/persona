@@ -83,9 +83,9 @@
   TCC 的权限算在负责进程头上：经 ssh 起的进程（node 和它的子进程）一律算 `sshd-keygen-wrapper`，给 jarvisd 二进制本身授权没用（而且每次部署换二进制、授权就掉）。
   给了它 = 任何 ssh 登录都有完全磁盘访问权限（能读 `~/Library/Messages/chat.db` 等）。只想给一个程序，就让 launchd 起它（LaunchAgent），见 `docs/plan-connectors.md`。
 - 机器的 node 不是 hub 这一版（`node_mismatch`）时，App 的「重新部署」让 hub 自己装：`deploy.sh` 部署 hub 时把各平台的 node 二进制留在 hub 机器的
-  `~/.jarvis/bin/nodes/`，hub 经 ssh 装进去、杀掉常驻 node 让 launchd 重启、重新连接（`hub/deploy.go`）。只部署了某一台、没部署 hub 时那里还是旧版，按钮会装回旧版本。
+  `~/.jarvis/bin/nodes/`，hub 经 ssh 装进去、杀掉常驻 node 让 launchd 重启、重新连接（`devices/deploy.go`）。只部署了某一台、没部署 hub 时那里还是旧版，按钮会装回旧版本。
 - ssh 的远程命令由目标机器的**登录 shell** 解析，不一定是 POSIX shell（2026-11-04，#1770）：登录 shell 是 fish 的电脑上，部署脚本第一句 `b=…` 就报
-  `Unsupported use of '='`，后面什么都没执行。要跑 sh 脚本就包成 `sh -c <脚本>`（`hub/deploy.go` 的 `posixCommand`），外层引用用 `anyShellQuote`：
+  `Unsupported use of '='`，后面什么都没执行。要跑 sh 脚本就包成 `sh -c <脚本>`（`devices/deploy.go` 的 `posixCommand`），外层引用用 `anyShellQuote`：
   fish 在单引号里仍把 `\\`、`\'` 当转义，csh 在单引号里仍做 `!` 历史展开（`'a!b'` 报 `Event not found`），所以引号、反斜杠和 `!` 都放到引号外面、用反斜杠转义，sh / bash / zsh / fish / csh 读出来一样；不能有换行（csh 不认）。
   只是一个命令加参数（`jarvisd node --stdio`、`true`）各种 shell 都一样，不用包。`deploy_test.go` 在本机找得到的每种 shell 下把部署命令、引用和起 node 的命令各跑一遍（装了 fish 才测得到 fish）。
 - 从 Mac 用 tar 往 hub 传文件，macOS 的 tar 会把每个文件的扩展属性带上（2026-11-03，#665 / #884）：构建产物都有 `com.apple.provenance`，
@@ -116,7 +116,7 @@
 - hub 关停别指望 `http.Server.Shutdown` 收尾 WebSocket：它不等已经 hijack 的连接，而 `pgxpool.Close` 会一直等所有借出的连接归还、没有上限。2026-10-31 一次 NAS 升级，旧 hub 收到 SIGTERM 后卡到被 SIGKILL，停机约 46 秒（平时约 1 秒）。现在先关监听、给 WebSocket 发 1001 并限时排空，每一步有超时、整个关停有总预算（`shutdown_timeout_seconds`，默认 8 秒），见 `docs/server.md`「关停」；外部的 `docker stop -t` 要比总预算长。
 - coder/websocket 的读、写、ping 只要用的 context 结束，就直接关掉整条连接（`context.AfterFunc`），不发关闭帧。
   要带关闭码收尾的连接（jarvis-link 被顶掉 4001、撤销 4002），别用会先被取消的 context 去写或读：hub 的链路先 cancel 自己的 ctx 再 Close，
-  正在写的一条消息就把连接掐了，客户端收到 -1 而不是 4002（`hub/link.go` 的 `send`、`keepAlive`，`TestLinkReplacedAndRevoked`）。
+  正在写的一条消息就把连接掐了，客户端收到 -1 而不是 4002（`devices/link.go` 的 `send`、`close`，回归 `hub/link_test.go` 的 `TestLinkReplacedAndRevoked`）。
 - coder/websocket 的 `Conn.Close` 是一次握手：写锁被占着时先等着发关闭帧（最多 5 秒），再等对方回关闭帧（最多 5 秒）。对一个不再读的客户端，回帧永远不来，它通常要等满 5 秒，最多约 10 秒。所以别在 `h.mu` 这类共享锁里同步 Close：`sendJSON` 以前在 `notifyWS` 持锁时这样关慢客户端，整个 hub 跟着卡住；要关就 `go conn.Close(...)`（`client.queue`）或 `CloseNow`，回归 `TestWSNotifyDropsASlowClientWithoutHoldingTheHub`。
 
 ## jarvis-link 在 Linux 上（docs/link.md「Linux（headless）」，2026-11-02）

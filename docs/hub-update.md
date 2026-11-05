@@ -31,7 +31,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - Docker 镜像：推 `v*` tag 时由 CI 构建，版本就是 tag 去掉 `v`。
 - hub：
   - `GET /api/v1/health` 返回 `{ok, version, features}`，WebSocket 的 `hello` 带 `server_version`；
-  - node 版本和 hub 不同时机器列表标出来，可以「重新部署」（`hub/deploy.go`，用 hub 机器上 `~/.persona/bin/nodes/` 里的二进制）。
+  - node 版本和 hub 不同时机器列表标出来，可以「重新部署」（`devices/deploy.go`，用 hub 机器上 `~/.persona/bin/nodes/` 里的二进制）。
 - 完整版和公开版**唯一的区别**是 `-tags public`：
   - 完整版用 `go:embed` 把 lark-connector skill 编进二进制（`internal/assistantskills`，从上游拷来，不能再分发）；
   - node 起助手进程时把它装到助手目录的 `.claude/skills/`，并把 `ol` 放进 PATH（`node/larkgate.go`）；

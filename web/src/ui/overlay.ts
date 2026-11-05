@@ -1,4 +1,5 @@
 // The pure parts of the overlays in atoms.tsx (#1996): where Tab goes in a dialog, where a menu sits on screen.
+import { useEffect, type RefObject } from "react";
 import { NARROW, PHONE, useMedia } from "../lib/viewport";
 
 /** A phone-width screen: Dialog is a bottom sheet, 设置 a list of categories (Tailwind's max-sm). */
@@ -22,6 +23,36 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([t
 /** The controls Tab can reach in `root`, in document order (shown and not inert). */
 export function focusables(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0 && !el.closest("[inert]"));
+}
+
+/** While `open`, `ref`'s element is a modal for the keyboard, as Dialog in atoms.tsx does it: focus moves into it (the
+ *  element itself, which needs tabIndex={-1}, unless something inside has it already), Tab and Shift+Tab wrap among its
+ *  controls, and on close the focus goes back to where it was before (the button that opened it), unless the close moved it
+ *  somewhere else on purpose. */
+export function useModalFocus(ref: RefObject<HTMLElement | null>, open = true): void {
+  useEffect(() => {
+    const el = ref.current;
+    if (!open || !el) return;
+    const back = document.activeElement as HTMLElement | null;
+    if (!el.contains(document.activeElement)) el.focus({ preventScroll: true });
+    const tab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const list = focusables(el);
+      const i = trapTab(list.length, list.indexOf(document.activeElement as HTMLElement), e.shiftKey);
+      if (i === null) return;
+      e.preventDefault();
+      (list[i] ?? el).focus();
+    };
+    el.addEventListener("keydown", tab);
+    return () => {
+      el.removeEventListener("keydown", tab);
+      // Only give focus back when it is still ours: inside the panel, or lost to body when the panel left the DOM.
+      // A close that moved focus on purpose (attaching an image focuses the composer) keeps it there.
+      const active = document.activeElement;
+      const ours = !active || active === document.body || el.contains(active);
+      if (ours && back?.isConnected) back.focus({ preventScroll: true });
+    };
+  }, [ref, open]);
 }
 
 export interface MenuPlace {
