@@ -799,7 +799,7 @@ Apple 端不把它们画成用户气泡，也不显示给模型的说明：
 - **文件块**：内联了的路径不再在消息下面重复显示胶囊；没内联的（只在代码块里、超出数量的）照旧是胶囊；文档卡片、图片 / 视频 / 音频的胶囊照旧。
 - **还没做**：长按单个路径的菜单（拷贝路径 / 在文件页打开）和 Mac 悬停显示「路径 · 第 N 行」：SwiftUI 的 `Text` 里的链接没有单独的长按和悬停，消息的长按是整条消息的操作条；拷贝路径在文件查看器的 ⋯ 菜单里。
 
-**公式和图**（#1295，`Code/MathMarkdown.swift`、`Views/Chat/RenderedMarkdown.swift`）：对话、计划、文件页的 Markdown、知识库的人物页都画公式（KaTeX 0.16.22）和 Mermaid 图（12.3.0），两个都是 MIT，随 App 打包在 `Resources/Render/`（连同各自的 LICENSE），不联网。
+**公式和图**（#1295，`apple/Packages/PersonaKit/Sources/PersonaKit/MathMarkdown.swift`、`Views/Chat/RenderedMarkdown.swift`）：对话、计划、文件页的 Markdown、知识库的人物页都画公式（KaTeX 0.16.22）和 Mermaid 图（12.3.0），两个都是 MIT，随 App 打包在 `Resources/Render/`（连同各自的 LICENSE），不联网。
 - **认哪些**：```math（也认 latex / tex / katex）和 ```mermaid 代码块；`$$…$$`、`\[…\]` 独占几行或一行只有一个公式时当独立公式；行内的 `$…$`、`\(…\)` 是行内公式。`$` 后面紧跟空格不算开始、前面是空格或后面紧跟数字不算结束（pandoc 的规矩），中间有中文、日文的不算（`\text{…}` 除外），`\$` 是美元符号，所以「$5 到 $10」照旧是文字。代码块、行内代码、缩进代码不动。
 - **怎么画**：一个藏起来的 WKWebView 加载打包的 `render.html`（内容安全策略只放行包里的脚本、样式、字体，另有一张规则表挡掉所有网络请求），一次画一个，截成图；要画的东西作为参数交给 `renderMath` / `renderMermaid`，不拼进页面。图按（种类, 源码, 深浅色, 字号）存在内存和缓存目录。公式画成黑色、当模板图用，跟着文字颜色走，深浅色共用一张；图按深浅色各画一张（Mermaid 自己的 default / dark 主题）。行内公式经 MarkdownUI 的行内图片（`![…](persona-math:…)`，`MathInlineImages` 挂在根视图上），独立公式和图替换代码块。
 - **画不出来时**：独立公式和图退回代码块，下面写 KaTeX / Mermaid 的原话；行内公式显示成等宽的原文。图点开全屏看（`ImageViewer`）。
@@ -837,13 +837,13 @@ Apple 端不把它们画成用户气泡，也不显示给模型的说明：
 
 **二进制文件只取描述**：hub 有 `file_stream` 时，文件页用 `stream=1` 读，二进制文件只回大小、类型和 revision；图片、PDF 再从 `…/file/download` 整份取回（不再停在 2 MB），QuickLook 和视频照旧下载到临时文件。旧 hub 照旧整份 base64。
 
-**对比**（#1299，`Code/DocumentText.swift`、`Views/Session/CompareView.swift`）：Git 页里改动的 PDF、docx、pptx、xlsx 和图片不再是「没有文本改动」，而是对比两个版本，和网页（#1452）一样：
+**对比**（#1299，`apple/Packages/PersonaKit/Sources/PersonaKit/DocumentText.swift`、`Views/Session/CompareView.swift`）：Git 页里改动的 PDF、docx、pptx、xlsx 和图片不再是「没有文本改动」，而是对比两个版本，和网页（#1452）一样：
 - **哪两个版本**：未暂存的改动是暂存区（INDEX）对工作区的文件，已暂存的是 HEAD 对暂存区，提交里的文件是「哈希^」对「哈希」。旧版本经 `GET …/git/blob`（hub 特性 `git_blob`）在 node 的缓存里写一份，再用 `/file/download` 读；工作区的直接读。新加的文件没有旧版、删掉的没有新版。hub 没有这个特性时照旧显示文本 diff。
 - **文档**：抽出文字按单元切开（PDF 按页、Word 按分页符、幻灯片一张一个连同备注、表格一个工作表一个），逐行比较（`CollectionDifference`），每处改动写在它的页 / 幻灯片 / 工作表下面，前后各留两行，没变的折叠成「… N 行没变」；文字一样时说明改的可能是格式或图片。每个版本最多比 2 万行。
 - **图片**：并排，或者新版压在旧版上、拖滑块看分界。
 - 底下「打开旧版 / 打开新版」用文件页打开那个版本（QuickLook、表格、PDF……）。
 
-**表格**（#1294，`Code/TableParsing.swift`、`Views/Chat/TableFileView.swift`）：
+**表格**（#1294，`apple/Packages/PersonaKit/Sources/PersonaKit/TableParsing.swift`、`Views/Chat/TableFileView.swift`）：
 - **读**：CSV / TSV 按 RFC 4180 解析（引号里的分隔符、换行、`""`），文件页的分页照旧，一页一页喂给解析器，被页尾切开的行由下一页接上；表格滑到离末尾 60 行时读下一页。`.csv` 第一行分号比逗号多就按分号分（逗号当小数点的地区）。xlsx 整份经 `…/file/download` 取回，自己读 zip（Compression 解 deflate）和 OOXML：共享字符串、内联字符串、数字（去掉浮点尾巴）、TRUE / FALSE、错误值，日期格式（内置 14–22、45–47 和带 y/m/d/h/s 的自定义格式）显示成 `yyyy-MM-dd [HH:mm]`。不引第三方库。旧 .xls、Numbers 仍走 QuickLook。每个工作表最多 20 万行。
 - **看**：第一行冻结在顶上（当表头），左边的行号冻结（Excel 的行号，表头是第 1 行），只画屏幕上的列。列宽按前 300 行最宽的内容估（CJK 算两格），在 56–240 pt 之间，拖表头右边缘可以改。数字右对齐。点一个单元格，底下显示它的位置（B12）和完整内容（可选中），能拷贝；长按有「拷贝单元格 / 拷贝整行」（整行是制表符分隔，粘到表格里还是一格一格）。多个工作表时顶上一排切换。
 

@@ -1,5 +1,6 @@
 import BeautifulUI
 import MarkdownUI
+import PersonaKit
 import SwiftUI
 
 // 设置 › 助手: what the assistant does on its own (routines, follow-ups it scheduled), what it remembers, and what it

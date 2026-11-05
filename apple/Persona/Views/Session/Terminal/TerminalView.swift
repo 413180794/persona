@@ -1,4 +1,5 @@
 import CoreText
+import PersonaKit
 import SwiftUI
 #if canImport(UIKit)
 import UIKit

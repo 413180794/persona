@@ -24,7 +24,7 @@ struct InboxActionBar: View {
                     action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
                 } else if let open = item.connector?.openURL, let url = Self.systemURL(open, draft: item.agentDraft) {
                     // Answered in the source's own app (在信息里回复: Messages with the number, and the AI 分身's draft;
-                    // 在 Telegram 里回复: the conversation in Telegram).
+                    // 在 Telegram 里回复: the conversation in Telegram; else 打开).
                     let sms = url.scheme == "sms"
                     action(Self.openTitle(item, sms: sms), symbol: sms ? Theme.Icon.messagesApp : Theme.Icon.openExternal, prominent: true) {
                         openURL(url)
@@ -42,7 +42,7 @@ struct InboxActionBar: View {
     /// What the button that opens the item's `open_url` says: where the user answers it, else just 打开.
     nonisolated static func openTitle(_ item: InboxItem, sms: Bool) -> String {
         if sms { return "在信息里回复" }
-        if item.source == "telegram" { return "在 Telegram 里回复" }
+        if let app = ConnectorText.profile(item.source).app { return "在 \(app) 里回复" }
         return "打开"
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 struct MathMarkdownTests {
     @Test func displayBlocksBecomeMathFences() {
@@ -40,19 +40,4 @@ struct MathMarkdownTests {
         #expect(MathMarkdown.rewrite("$$\na + b\n还没写完") == "$$\na + b\n还没写完")
     }
 
-    @Test func fencesDrawnAsPictures() {
-        #expect(RenderedFence.kind("math") == .displayMath)
-        #expect(RenderedFence.kind("LaTeX") == .displayMath)
-        #expect(RenderedFence.kind("mermaid") == .mermaid)
-        #expect(RenderedFence.kind("swift") == nil)
-        #expect(RenderedFence.kind(nil) == nil)
-    }
-
-    @Test func pictureKeys() {
-        let a = MarkdownRenderer.key(.mermaid, "graph TD; A-->B", dark: true, points: 17)
-        #expect(a != MarkdownRenderer.key(.mermaid, "graph TD; A-->B", dark: false, points: 17))
-        // A formula is a template image: one picture for both appearances.
-        #expect(MarkdownRenderer.key(.displayMath, "x", dark: true, points: 17) == MarkdownRenderer.key(.displayMath, "x", dark: false, points: 17))
-        #expect(MarkdownRenderer.key(.displayMath, "x", dark: false, points: 17) != MarkdownRenderer.key(.inlineMath, "x", dark: false, points: 17))
-    }
 }

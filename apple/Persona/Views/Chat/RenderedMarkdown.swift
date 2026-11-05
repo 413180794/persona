@@ -1,6 +1,7 @@
 import CryptoKit
 import ImageIO
 import MarkdownUI
+import PersonaKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit

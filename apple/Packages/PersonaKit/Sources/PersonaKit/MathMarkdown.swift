@@ -7,11 +7,11 @@ import Foundation
 /// Code spans, fences and indented code are left alone. A `$` opens only before a non-space and closes only after one
 /// and not before a digit (pandoc's rule), so "$5 and $10" stays text; `\$` is a dollar. A span with CJK words in it
 /// is prose, not a formula.
-nonisolated enum MathMarkdown {
-    static let scheme = "persona-math"
-    static let fence = "math"
+public nonisolated enum MathMarkdown {
+    public static let scheme = "persona-math"
+    public static let fence = "math"
 
-    static func rewrite(_ md: String) -> String {
+    public static func rewrite(_ md: String) -> String {
         guard md.contains("$") || md.contains("\\(") || md.contains("\\[") else { return md }
         var out: [String] = []
         var fence: String?
@@ -59,7 +59,7 @@ nonisolated enum MathMarkdown {
     }
 
     /// A line that is one formula: `$$x$$`, `\[x\]`, or `$x$` alone.
-    static func display(_ t: String) -> String? {
+    public static func display(_ t: String) -> String? {
         for (open, close) in [("$$", "$$"), ("\\[", "\\]")] where t.count > open.count + close.count && t.hasPrefix(open) && t.hasSuffix(close) {
             let tex = String(t.dropFirst(open.count).dropLast(close.count))
             if !tex.contains(close), !tex.trimmingCharacters(in: .whitespaces).isEmpty { return tex.trimmingCharacters(in: .whitespaces) }
@@ -69,13 +69,13 @@ nonisolated enum MathMarkdown {
         return nil
     }
 
-    struct Span: Equatable {
-        var range: Range<Int>
-        var tex: String
+    public struct Span: Equatable {
+        public var range: Range<Int>
+        public var tex: String
     }
 
     /// The inline formulas of a line, outside code spans.
-    static func inlineSpans(_ c: [Character]) -> [Span] {
+    public static func inlineSpans(_ c: [Character]) -> [Span] {
         var spans: [Span] = []
         var i = 0
         var tick = 0 // inside a code span of this many backticks
@@ -156,12 +156,12 @@ nonisolated enum MathMarkdown {
         tex.replacingOccurrences(of: "[", with: "(").replacingOccurrences(of: "]", with: ")").replacingOccurrences(of: "\n", with: " ")
     }
 
-    static func url(_ tex: String) -> String {
+    public static func url(_ tex: String) -> String {
         scheme + ":" + (tex.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")
     }
 
     /// The TeX of a `persona-math:` URL.
-    static func tex(_ url: URL) -> String? {
+    public static func tex(_ url: URL) -> String? {
         guard url.scheme == scheme else { return nil }
         let raw = url.absoluteString.dropFirst(scheme.count + 1)
         return String(raw).removingPercentEncoding

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 struct DocumentCompareTests {
     private typealias U = DocumentText.Unit

@@ -8,6 +8,8 @@ import SwiftUI
 
 struct ConnectorThreadView: View {
     var model: ConnectorThreadModel
+    /// The connector's name (the inbox item's), for 在 <name> 里打开.
+    var source: String
     @State private var position = ScrollPosition(idType: String.self)
     @State private var flash: QuoteFlashMark?
     @State private var replyTo: ThreadMessage?
@@ -34,6 +36,7 @@ struct ConnectorThreadView: View {
                     ConnectorThreadRow(connector: model.connector, message: m, grouped: grouped,
                                        endsRun: ThreadLayout.endsRun(m, before: next), isGroup: isGroup,
                                        canReply: model.chat?.reply != nil, bubbleMax: width * ThreadLayout.bubbleShare,
+                                       openTitle: ConnectorText.openInTitle(model.connector, name: source),
                                        reply: { answer($0) }, jump: { await jump(to: $0) })
                         .padding(.top, grouped ? LarkChatLayout.groupedGap : Theme.Space.s)
                         .overlay {
@@ -179,6 +182,8 @@ struct ConnectorThreadRow: View {
     var canReply: Bool
     /// The widest a bubble gets (ThreadLayout.bubbleShare of the page), the same for mine and others'.
     var bubbleMax: CGFloat
+    /// The menu's 在 Telegram 里打开.
+    var openTitle: String
     var reply: (ThreadMessage) -> Void
     var jump: (String) async -> Bool
     @Environment(\.openURL) private var openURL
@@ -269,7 +274,7 @@ struct ConnectorThreadRow: View {
             } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
         }
         if let s = m.url, let u = URL(string: s) {
-            Button { openURL(u) } label: { Label("在 Telegram 里打开", systemImage: Theme.Icon.openExternal) }
+            Button { openURL(u) } label: { Label(openTitle, systemImage: Theme.Icon.openExternal) }
         }
     }
 }

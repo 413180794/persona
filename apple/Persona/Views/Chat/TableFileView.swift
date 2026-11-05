@@ -1,3 +1,4 @@
+import PersonaKit
 import SwiftUI
 
 /// What the table viewer knows how to open (docs/ios.md「表格」): CSV / TSV as text, xlsx as a workbook. Old .xls and

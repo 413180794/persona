@@ -1,4 +1,5 @@
 import MarkdownUI
+import PersonaKit
 import SwiftUI
 
 /// What a message renderer needs from the chat around it.

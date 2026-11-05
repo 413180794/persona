@@ -24,7 +24,7 @@ struct InboxConnectorDetailView: View {
                 .navigationTitle(item.accountName)
                 .navigationBarTitleDisplayMode(.inline)
         } else {
-            ConnectorThreadView(model: thread)
+            ConnectorThreadView(model: thread, source: item.accountName)
                 .navigationTitle(thread.chat?.name ?? item.title)
                 .navigationSubtitle(ThreadLayout.subtitle(thread.chat, source: item.accountName))
                 .navigationBarTitleDisplayMode(.inline)
@@ -72,7 +72,8 @@ struct InboxConnectorTextView: View {
                     Text("回复会" + to + "。")
                 }
             }
-            if let problem, !problem.isEmpty, item.source == "telegram" {
+            // Why its conversation page could not be read (a rate limit); an item without one (a CI run) has nothing to say.
+            if let problem, !problem.isEmpty, connector?.thread.isEmpty == false {
                 Section {
                     Label(problem, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(.secondary)
                 }

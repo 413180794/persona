@@ -973,5 +973,7 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   - App 用到的类型、成员都要 `public`，`private(set)` 写成 `public private(set)`，App 里构造的结构体补 `public init`。不然 App 编不过，而包自己的 `swift test` 照样全过，因为测试是 `@testable import`。所以每挪一批都要编一遍三个 App。
   - 一个测试文件里混着 App 层的断言（视图、`FilePaths`）时，拆开：纯逻辑的进包，App 层的留在 `PersonaTests`，加 `import PersonaKit`。
   - 包的默认隔离是 nonisolated，App 是 MainActor：原来就标了 `nonisolated` 的值类型直接挪，不用改。
+  - 挪 `apple/Shared` 里的文件（第 2 批的 `Links`）之前，先查手表、小组件、通知扩展有没有用它（`grep -rn '\bLinks\b' Shared PersonaWatch PersonaWidgets LiveActivity`）：它们不依赖这个包，用了就编不过。
+  - 给 App 文件补 `import PersonaKit` 时按名字 grep，会把只在注释里提到它的文件也算进去；只给代码里真用到的加（第 2 批多加了 8 个，又删掉了）。
   - `swift test` 把编译产物写在包目录下的 `.build/`，仓库根的 `.gitignore` 要盖住它（`/apple/Packages/*/.build/`）。第一次提交时 `git add -A` 把 1,500 多个产物带了进去，里面有本机的路径；推到远端后发现，删了分支。提交前看一眼 `git diff --stat` 的文件数。
 

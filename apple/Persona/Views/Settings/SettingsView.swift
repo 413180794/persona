@@ -314,6 +314,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
         else if d.bool(forKey: "openConnectorGitHub") { p.append(SettingsPage.connector("github")) }
         else if d.bool(forKey: "openConnectorTelegram") { p.append(SettingsPage.connector("telegram")) }
+        else if d.bool(forKey: "openConnectorwechat-connector") { p.append(SettingsPage.connector("wechat-connector")) } // MOCK_CONNECTOR_PLUGIN=wechat-connector
         else if d.bool(forKey: "openConnectorMessages") || d.string(forKey: "openMessagesChat") != nil { // 信息 (› 会话 › one)
             p.append(SettingsPage.connector("imessage"))
             if d.bool(forKey: "openMessagesChats") || d.string(forKey: "openMessagesChat") != nil { p.append(MessagesChatsRoute()) }

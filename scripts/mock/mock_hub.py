@@ -3391,32 +3391,63 @@ if os.environ.get("MOCK_TELEGRAM_INBOX"):
 
 # MOCK_CONNECTOR_PLUGIN=1: a plugin's connector the apps know nothing about (the generic page: switch, a one-step
 # sign-in with a token, 进收件箱, sign-out, delete). The token is example-token; all made up.
-PLUGIN_CONNECTOR = {"id": "example-notes", "name": "示例笔记", "status": "not_signed_in", "enabled": True, "inbox": True,
-                    "error": "还没登录示例笔记", "capabilities": ["status", "tools", "inbox", "login"]} if os.environ.get("MOCK_CONNECTOR_PLUGIN") else None
+# MOCK_CONNECTOR_PLUGIN=wechat-connector: shaped like the wechat-connector plugin (#1420): 微信, with no mark of its own, a sign-in with
+# its server's address and an app key, 进知识库 / 进收件箱, and a private chat that opens as a conversation page (#1426).
+# The address is https://wechat-connector.example.com, the key example-key; the account wxid_example_a.
+PLUGIN_WECHAT = os.environ.get("MOCK_CONNECTOR_PLUGIN") == "wechat-connector"
+if PLUGIN_WECHAT:
+    PLUGIN_CONNECTOR = {"id": "wechat-connector", "name": "微信", "status": "not_signed_in", "enabled": True, "inbox": True, "archive": False,
+                        "error": "还没登录微信", "capabilities": ["status", "tools", "inbox", "archive", "login", "threads"]}
+    PLUGIN_ACCOUNT, PLUGIN_SECRET, PLUGIN_STEP = "wxid_example_a", "example-key", "app_key"
+    PLUGIN_PROMPT = {"step": "app_key", "fields": [
+        {"name": "base_url", "label": "服务器地址", "placeholder": "https://wechat-connector.example.com"},
+        {"name": "app_key", "label": "应用密钥", "secret": True, "placeholder": "在 wechat-connector 的开发者设置里生成"}],
+        "hint": "在 wechat-connector 的开发者设置里给 Persona 建一个只读的应用密钥（read、events），连同服务器地址填到这里。"}
+else:
+    PLUGIN_CONNECTOR = {"id": "example-notes", "name": "示例笔记", "status": "not_signed_in", "enabled": True, "inbox": True,
+                        "error": "还没登录示例笔记", "capabilities": ["status", "tools", "inbox", "login"]} if os.environ.get("MOCK_CONNECTOR_PLUGIN") else None
+    PLUGIN_ACCOUNT, PLUGIN_SECRET, PLUGIN_STEP = "示例账号", "example-token", "token"
+    PLUGIN_PROMPT = {"step": "token", "fields": [{"name": "token", "label": "访问令牌", "secret": True, "placeholder": "在示例笔记的设置里生成"}],
+                     "hint": "在示例笔记的「设置 › 开发者」里生成一个访问令牌，粘贴到这里。"}
+
+
+def plugin_wechat_thread(thread):
+    if thread != "wxid_example_b":
+        return None
+    now = datetime.now(timezone.utc)
+    def at(m): return (now - timedelta(minutes=m)).isoformat().replace("+00:00", "Z")
+    you = {"id": "wxid_example_b", "name": "示例好友"}
+    return {"chat": {"id": thread, "name": "示例好友", "kind": "dm", "reply": "wechat-connector_send"}, "messages": [
+        {"id": "1", "at": at(50), "sender": you, "text": "明天的示例会议改到下午了", "url": "https://wechat-connector.example.com/m/1"},
+        {"id": "2", "at": at(48), "sender": {"name": "我"}, "mine": True, "text": "好的，几点？"},
+        {"id": "3", "at": at(15), "sender": you, "text": "三点，地点不变", "url": "https://wechat-connector.example.com/m/3"},
+    ]}
 
 
 def plugin_connector_area(h, method, p, raw):
     """MOCK_CONNECTOR_PLUGIN's routes; True when it answered."""
     c = PLUGIN_CONNECTOR
-    if not c or not p.startswith("/api/v1/connectors/example-notes/"):
+    if not c or not p.startswith("/api/v1/connectors/%s/" % c["id"]):
         return False
     what, body = p.rsplit("/", 1)[1], json.loads(raw or b"{}")
+    if what == "thread" and method == "GET" and PLUGIN_WECHAT:
+        page = plugin_wechat_thread(parse_qs(urlparse(h.path).query).get("thread", [""])[0])
+        return (h.send_json(page) if page else h.send_json({"error": "没有这个会话"}, 502)) or True
     if what == "login" and method == "POST":
-        if body.get("step") == "token" and (body.get("values") or {}).get("token") == "example-token":
-            c.update(status="ok", account="示例账号")
+        if body.get("step") == PLUGIN_STEP and (body.get("values") or {}).get(PLUGIN_STEP) == PLUGIN_SECRET:
+            c.update(status="ok", account=PLUGIN_ACCOUNT)
             c.pop("error", None)
-            return h.send_json({"done": True, "account": "示例账号"}) or True
-        prompt = {"step": "token", "fields": [{"name": "token", "label": "访问令牌", "secret": True, "placeholder": "在示例笔记的设置里生成"}],
-                  "hint": "在示例笔记的「设置 › 开发者」里生成一个访问令牌，粘贴到这里。"}
-        if body.get("step") == "token":
-            prompt["error"] = "令牌不对"
+            return h.send_json({"done": True, "account": PLUGIN_ACCOUNT}) or True
+        prompt = dict(PLUGIN_PROMPT)
+        if body.get("step") == PLUGIN_STEP:
+            prompt["error"] = "密钥不对" if PLUGIN_WECHAT else "令牌不对"
         return h.send_json(prompt) or True
     if what == "logout" and method == "POST":
-        c.update(status="not_signed_in", error="还没登录示例笔记")
+        c.update(status="not_signed_in", error="还没登录" + c["name"])
         c.pop("account", None)
         return h.send_json({"ok": True}) or True
     if what == "settings" and method == "PUT":
-        for k in ("enabled", "inbox"):
+        for k in ("enabled", "inbox", "archive"):
             if k in body: c[k] = bool(body[k])
         c["status"] = "disabled" if not c["enabled"] else ("ok" if c.get("account") else "not_signed_in")
         return h.send_json(c) or True
@@ -3424,6 +3455,20 @@ def plugin_connector_area(h, method, p, raw):
         c.update(enabled=False, status="disabled")
         return h.send_json({"chats": 0, "people": 0, "inbox": 2}) or True
     return False
+
+
+if PLUGIN_WECHAT and os.environ.get("MOCK_CONNECTOR_PLUGIN_SIGNED_IN"):
+    PLUGIN_CONNECTOR.update(status="ok", account=PLUGIN_ACCOUNT)
+    PLUGIN_CONNECTOR.pop("error", None)
+if PLUGIN_WECHAT:
+    INBOX[1:1] = [
+        {"id": "wechat-connector:wxid_example_b", "source": "wechat-connector", "kind": "dm", "account": "wechat-connector", "account_name": "微信",
+         "title": "示例好友", "sender": "示例好友", "preview": "三点，地点不变", "count": 1,
+         "started_at": ago(minutes=15), "updated_at": ago(minutes=15), "tier": "action",
+         "summary": "示例好友说明天的会议改到下午三点", "reason": "等你回复", "read": False,
+         "context": "示例好友（微信私聊）\n今天 示例好友：明天的示例会议改到下午了\n今天 示例好友：三点，地点不变",
+         "connector": {"thread": "wxid_example_b", "label": "私聊", "open_url": "https://wechat-connector.example.com/c/wxid_example_b"}},
+    ]
 
 # 信息 (GET /api/v1/imessage…, docs/plan-connectors.md「五」): one Mac's Messages, read for the user's own eyes. Every
 # name, number (+1 555 01xx) and text is made up. MOCK_IMESSAGE=denied: that Mac's node has no Full Disk Access.
@@ -3596,13 +3641,84 @@ def _lm(pos, who, text, mine=False, mins=60):
 LARK_MESSAGES = {"f2": [
     _lm("200", "Lucy Wang", "The new icon set is in the shared folder. Could you take a look before the review this afternoon?", mins=58),
     _lm("201", "李雷", "我先看了一下，标签栏的图标偏细", mins=57),
-    _lm("202", "Lucy Wang", "Agreed. I''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
+    _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
+    _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
+]}
+LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {"copy": True}, "content": {"type": "doc", "content": [
+    {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "新版图标评审"}]},
+    {"type": "paragraph", "content": [{"type": "text", "text": "这一版统一了圆角和描边，深色模式单独调了对比度。"}]},
+    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "待确认"}]},
+    {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
+    {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
+]}}
+
+LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
+
+# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
+if os.environ.get("MOCK_LARK_OLK"):
+    def _olk(pos, state, body, cover, handout=False):
+        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
+        m["parts"] = [{"kind": "text", "text": m["text"]}]
+        m["olk"] = {"version": 1, "state": state,
+                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
+        if state == "decrypted":
+            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
+        return m
+    LARK_MESSAGES["f2"] = [
+        _olk(200, "decrypted", "", "稍等", True),
+        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
+        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
+        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
+        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
+    ]
+    LARK_MESSAGES["f2"][2]["reply_to"] = {
+        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
+        "olk": LARK_MESSAGES["f2"][1]["olk"],
+    }
+    LARK_MESSAGES["f2"][4]["reply_to"] = {
+        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
+        "olk": LARK_MESSAGES["f2"][3]["olk"],
+    }
+
+LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
+# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
+LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
+def lark_pin_rows():
+    rows = [dict(c) for c in LARK_CHATS]
+    for i in range(1, 81):
+        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
+                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
+                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
+    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
+    if LARK_PIN_FIXTURE["newest"]:
+        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
+        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
+    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
+        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
+    return rows
+
+LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
+                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB"))}
+# MOCK_LARK_OLD_DISPLAY=1: a Feishu extension older than 0.10.0, whose settings have no [removed] switch.
+if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
+    del LARK_DISPLAY["brave_climb_codec"]
+
+BRAVE_CLIMB_ALPHABET = "[removed]"
+def brave_climb(text):
+    """"""
     n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
     while True:
         n, d = divmod(n, 34)
         out = BRAVE_CLIMB_ALPHABET[d] + out
         if n == 0:
-            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
+            return "**字" + out + "**"
+
+# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and 设计评审 (f2) has [removed] words: a whole message, one split over
+# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
+# the list is words too.
+if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
     whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
     whole["parts"] = [{"kind": "text", "text": whole["text"]}]
     words = brave_climb("标签栏改粗一号")
@@ -3610,7 +3726,7 @@ LARK_MESSAGES = {"f2": [
     split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
     inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
     inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
     legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
     reply = _lm("214", "我", "好的", mine=True, mins=36)
     reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
@@ -8862,6 +8978,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
         if telegram_area(self, "GET", p, b""): return
+        if plugin_connector_area(self, "GET", p, b""): return
         if triage_route(self, "GET", p, b""): return
         if wechat_area(self, "GET", p, b""): return
         if github_thread_area(self, "GET", p, b""): return

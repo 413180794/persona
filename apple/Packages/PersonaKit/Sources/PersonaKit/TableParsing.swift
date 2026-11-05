@@ -2,17 +2,24 @@ import Compression
 import Foundation
 
 /// One sheet of a table file (docs/ios.md「表格」): its cells as text, row by row; rows can be shorter than `columns`.
-nonisolated struct TableSheet: Sendable, Equatable {
-    var name: String
-    var rows: [[String]] = []
-    var columns = 0
+public nonisolated struct TableSheet: Sendable, Equatable {
+    public var name: String
+    public var rows: [[String]] = []
+    public var columns = 0
     /// Rows past the cap were left out.
-    var capped = false
+    public var capped = false
+
+    public init(name: String, rows: [[String]] = [], columns: Int = 0, capped: Bool = false) {
+        self.name = name
+        self.rows = rows
+        self.columns = columns
+        self.capped = capped
+    }
 
     /// More rows than this are not kept (a sheet this long is not read on a phone).
-    static let maxRows = 200_000
+    public static let maxRows = 200_000
 
-    mutating func append(_ more: [[String]]) {
+    public mutating func append(_ more: [[String]]) {
         let room = Self.maxRows - rows.count
         if more.count > room { capped = true }
         for row in more.prefix(max(0, room)) {
@@ -21,13 +28,13 @@ nonisolated struct TableSheet: Sendable, Equatable {
         }
     }
 
-    subscript(row: Int, column: Int) -> String {
+    public subscript(row: Int, column: Int) -> String {
         guard row < rows.count, column < rows[row].count else { return "" }
         return rows[row][column]
     }
 
     /// The spreadsheet name of a column: A … Z, AA …
-    static func columnName(_ index: Int) -> String {
+    public static func columnName(_ index: Int) -> String {
         var n = index + 1
         var name = ""
         while n > 0 {
@@ -41,19 +48,19 @@ nonisolated struct TableSheet: Sendable, Equatable {
 
 /// CSV / TSV (RFC 4180: quoted fields with "" for a quote, separators and line breaks inside quotes), fed a page at a
 /// time: a row cut by the end of a page is finished by the next one. Blank lines are skipped, a lone CR is ignored.
-nonisolated struct DelimitedParser: Sendable {
-    let separator: UInt8
+public nonisolated struct DelimitedParser: Sendable {
+    public let separator: UInt8
     private var field: [UInt8] = []
     private var row: [String] = []
     private var inQuotes = false
     private var quotePending = false
     private var quoted = false // the current field started with a quote
 
-    init(separator: UInt8) { self.separator = separator }
+    public init(separator: UInt8) { self.separator = separator }
 
     /// The separator for a file: tab for .tsv / .tab, else comma, or semicolon when the first line has more of them
     /// (what spreadsheets write where the comma is the decimal mark).
-    static func separator(name: String, firstLine: String) -> UInt8 {
+    public static func separator(name: String, firstLine: String) -> UInt8 {
         switch (name as NSString).pathExtension.lowercased() {
         case "tsv", "tab": return UInt8(ascii: "\t")
         default:
@@ -64,7 +71,7 @@ nonisolated struct DelimitedParser: Sendable {
     }
 
     /// The rows finished by this page; `final`: the file ends here.
-    mutating func feed(_ text: String, final: Bool) -> [[String]] {
+    public mutating func feed(_ text: String, final: Bool) -> [[String]] {
         var out: [[String]] = []
         let quote = UInt8(ascii: "\""), lf = UInt8(ascii: "\n"), cr = UInt8(ascii: "\r")
         for b in text.utf8 {
@@ -125,18 +132,18 @@ nonisolated struct DelimitedParser: Sendable {
 // MARK: - xlsx
 
 /// The files in a zip archive (an xlsx is one), read whole from memory: stored and deflated entries, no zip64.
-nonisolated struct ZipArchive: Sendable {
-    struct Entry: Sendable {
-        var name: String
-        var method: UInt16
-        var compressed: Int
-        var size: Int
-        var offset: Int
+public nonisolated struct ZipArchive: Sendable {
+    public struct Entry: Sendable {
+        public var name: String
+        public var method: UInt16
+        public var compressed: Int
+        public var size: Int
+        public var offset: Int
     }
 
-    enum Failure: Error, LocalizedError {
+    public enum Failure: Error, LocalizedError {
         case notZip, unsupported(String), corrupt(String)
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .notZip: "不是有效的 xlsx 文件（不是 zip）"
             case .unsupported(let what): "不支持的 xlsx 文件：\(what)"
@@ -145,10 +152,10 @@ nonisolated struct ZipArchive: Sendable {
         }
     }
 
-    let data: Data
+    public let data: Data
     private(set) var entries: [String: Entry] = [:]
 
-    init(_ data: Data) throws {
+    public init(_ data: Data) throws {
         self.data = data
         let bytes = [UInt8](data)
         guard bytes.count >= 22 else { throw Failure.notZip }
@@ -178,7 +185,7 @@ nonisolated struct ZipArchive: Sendable {
     }
 
     /// An entry's bytes, or nil when there is no such entry.
-    func file(_ name: String) throws -> Data? {
+    public func file(_ name: String) throws -> Data? {
         guard let e = entries[name] else { return nil }
         let bytes = data
         let h = e.offset
@@ -220,8 +227,8 @@ nonisolated struct ZipArchive: Sendable {
 
 /// An Excel workbook (.xlsx, Office Open XML): each sheet's cells as the text Excel would show for the plain cases:
 /// shared and inline strings, numbers without float noise, TRUE / FALSE, errors, and dates for the date formats.
-nonisolated enum XLSXReader {
-    static func read(_ data: Data) throws -> [TableSheet] {
+public nonisolated enum XLSXReader {
+    public static func read(_ data: Data) throws -> [TableSheet] {
         let zip = try ZipArchive(data)
         guard let workbook = try zip.file("xl/workbook.xml") else { throw ZipArchive.Failure.corrupt("没有 workbook.xml") }
         let sheets = XMLCollector.elements(workbook, named: ["sheet"])
@@ -245,7 +252,7 @@ nonisolated enum XLSXReader {
     }
 
     /// A number as Excel shows it in a General cell: integers without ".0", others to 15 significant digits.
-    static func number(_ raw: String) -> String {
+    public static func number(_ raw: String) -> String {
         guard let v = Double(raw), v.isFinite else { return raw }
         if v == v.rounded(), abs(v) < 1e15 { return String(Int64(v)) }
         var s = String(format: "%.15g", v)
@@ -255,7 +262,7 @@ nonisolated enum XLSXReader {
     }
 
     /// An Excel date serial (days since 1899-12-30, the 1900 system) as yyyy-MM-dd, with the time when it has one.
-    static func date(_ raw: String) -> String {
+    public static func date(_ raw: String) -> String {
         guard let v = Double(raw), v.isFinite, v > -1, v < 2_958_466 else { return raw }
         let seconds = (v * 86_400).rounded()
         var calendar = Calendar(identifier: .gregorian)

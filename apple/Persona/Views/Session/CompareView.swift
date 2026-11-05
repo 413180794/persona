@@ -1,3 +1,4 @@
+import PersonaKit
 import SwiftUI
 
 /// A file at a version, as the node keeps it for comparing (`GET …/git/blob`, hub feature `git_blob`,

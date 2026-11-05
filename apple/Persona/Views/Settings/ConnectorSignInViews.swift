@@ -174,8 +174,7 @@ struct ConnectorSignInSections: View {
         if connector.isEnabled && !connector.isSignedIn {
             if connector.signsInHere {
                 ConnectorSignInSteps(name: connector.name, model: model, reload: reload,
-                                     footer: connector.id == "telegram" ? "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。"
-                                         : "登录状态加密存在 hub 上，退出登录时删掉。")
+                                     footer: ConnectorText.signInFooter(connector))
             } else {
                 // Just switched on: its program has not started yet (the page asks again every second).
                 Section {
@@ -221,8 +220,7 @@ struct ConnectorSwitchSection: View {
         case (true, true): "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。"
         case (true, false): "关掉后 \(connector.name) 停下来；登录状态留着。"
         case (false, false): "打开后才能登录。"
-        case (false, true) where connector.id == "telegram": "打开后才能登录，登录后它的私聊和群进知识库和收件箱，助手也能查。"
-        case (false, true): "打开后才能登录，登录后它的内容进知识库和收件箱，助手也能查。"
+        case (false, true): "打开后才能登录，登录后\(ConnectorText.profile(connector.id).reads ?? "它的内容")进知识库和收件箱，助手也能查。"
         }
     }
 }
@@ -332,8 +330,7 @@ struct ConnectorDataSection: View {
                 }
             }
         } message: {
-            Text(connector.storesData ? "hub 上存的 API 凭据和登录状态都会删掉，\(connector.name) 那边这个设备会话也会结束。再用要重新登录。"
-                 : "hub 上存的登录状态会删掉，再用要重新登录。")
+            Text(ConnectorText.logoutMessage(connector))
         }
         .confirmationDialog("删除 \(connector.name) 存下的数据？", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) {
@@ -574,6 +571,7 @@ struct ConnectorSignInSteps: View {
         switch name {
         case "phone": .phonePad
         case "code", "api_id": .numberPad
+        case "base_url": .URL
         default: .asciiCapable
         }
     }

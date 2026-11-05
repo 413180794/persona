@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import CoreText
+import PersonaKit
 import SwiftUI
 
 /// The terminal tab's screen on a Mac: the same grid the phone draws (`LineRender`, `CellMetrics`), in an

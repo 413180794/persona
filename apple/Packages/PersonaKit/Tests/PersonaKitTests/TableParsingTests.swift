@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import PersonaKit
 
 struct TableParsingTests {
     private func parse(_ text: String, separator: Character = ",", pages: Int = 1) -> [[String]] {
@@ -87,9 +87,4 @@ struct TableParsingTests {
         #expect(XLSXReader.date("0.25") == "06:00")
     }
 
-    @Test func cellWidths() {
-        #expect(TableFileModel.cells("abc") == 3)
-        #expect(TableFileModel.cells("上海") == 4)
-        #expect(TableFileModel.cells("") == 0)
-    }
 }

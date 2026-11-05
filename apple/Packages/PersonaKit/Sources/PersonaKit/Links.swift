@@ -9,9 +9,9 @@ import Foundation
 ///
 /// GFM's autolink (MarkdownUI uses cmark-gfm) only stops at whitespace: in Chinese prose a link took the rest of the
 /// paragraph, and NSDataDetector disagreed with both (2026-10-30).
-nonisolated enum Links {
+public nonisolated enum Links {
     /// Where the links are, in UTF-16 offsets (NSRange), with their URLs.
-    static func scan(_ text: String) -> [(range: NSRange, url: URL)] {
+    public static func scan(_ text: String) -> [(range: NSRange, url: URL)] {
         let u = Array(text.utf16)
         var out: [(NSRange, URL)] = []
         var i = 0
@@ -32,11 +32,11 @@ nonisolated enum Links {
         return out
     }
 
-    static func find(in text: String) -> [URL] { scan(text).map(\.url) }
+    public static func find(in text: String) -> [URL] { scan(text).map(\.url) }
 
     /// Markdown with its bare links made explicit (`<url>`, `[www.x](http://www.x)`), so cmark-gfm's autolink never
     /// gets to extend them. Code (fenced blocks, indented lines, `spans`) and links already written are left alone.
-    static func markdown(_ md: String) -> String {
+    public static func markdown(_ md: String) -> String {
         guard md.contains("://") || md.contains("www.") else { return md }
         var out: [String] = []
         var fence: String?

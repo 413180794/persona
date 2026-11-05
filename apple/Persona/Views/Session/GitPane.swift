@@ -1,3 +1,4 @@
+import PersonaKit
 import SwiftUI
 
 /// The Git tab of a session: branch and sync state, working-tree changes with their diffs, and the history.

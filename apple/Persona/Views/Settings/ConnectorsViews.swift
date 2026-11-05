@@ -71,13 +71,53 @@ enum ConnectorText {
     }
 
     /// The connector's own mark (`Theme.Brand`), nil for one the app has none for.
-    static func brand(_ id: String) -> String? {
+    nonisolated static func brand(_ id: String) -> String? { profile(id).brand }
+
+    /// What this app knows about a connector by its id; one not listed (any plugin's) gets the generic icon and the
+    /// generic wording, built from its own name. The web keeps the same table (web/src/lib/connectors.ts `PROFILES`).
+    nonisolated static func profile(_ id: String) -> ConnectorProfile {
         switch id {
-        case "github": Theme.Brand.github
-        case "telegram": Theme.Brand.telegram
-        default: nil
+        case "github": ConnectorProfile(brand: Theme.Brand.github)
+        case "telegram": ConnectorProfile(brand: Theme.Brand.telegram, app: "Telegram", reads: "它的私聊和群",
+                                          signInFooter: "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。",
+                                          logoutEndsRemoteSession: true)
+        // No mark yet: 微信's and its terms of use are undecided, so it draws the generic icon until they are.
+        case "wechat-connector": ConnectorProfile(signInFooter: "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。")
+        default: ConnectorProfile()
         }
     }
+
+    /// The sign-in step's footer: where the credentials live.
+    nonisolated static func signInFooter(_ c: HubConnector) -> String {
+        profile(c.id).signInFooter ?? "登录状态加密存在 hub 上，退出登录时删掉。"
+    }
+
+    /// The sign-out confirmation. Only a connector known to end the session at the service says so; signing out of any
+    /// other (GitHub's device token, a plugin's key) only has the hub forget its copy, and the authorization stays there.
+    nonisolated static func logoutMessage(_ c: HubConnector) -> String {
+        profile(c.id).logoutEndsRemoteSession
+            ? "hub 上存的 API 凭据和登录状态都会删掉，\(c.name) 那边这个设备会话也会结束。再用要重新登录。"
+            : "hub 上存的凭据和登录状态会删掉，再用要重新登录。对方服务里的授权不会自动撤销，需要的话到那边撤销。"
+    }
+
+    /// A conversation's message opened where it came from: 在 Telegram 里打开; a connector without an app of its own
+    /// says its name.
+    nonisolated static func openInTitle(_ id: String, name: String) -> String {
+        "在 \(profile(id).app ?? name) 里打开"
+    }
+}
+
+/// See `ConnectorText.profile`. Every part is optional.
+nonisolated struct ConnectorProfile: Equatable, Sendable {
+    /// Its mark (`Theme.Brand`).
+    var brand: String?
+    /// The app its items are answered in, for 在 Telegram 里回复 and 在 Telegram 里打开.
+    var app: String?
+    /// What switching it on brings in, in the switch's footer; the default is 它的内容.
+    var reads: String?
+    var signInFooter: String?
+    /// Signing out also ends the session at the service (Telegram's log-out call).
+    var logoutEndsRemoteSession = false
 }
 
 /// GET /api/v1/lark/status.

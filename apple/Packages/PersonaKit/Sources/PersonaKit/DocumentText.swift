@@ -4,15 +4,15 @@ import PDFKit
 /// The text of a document, cut into the units a person thinks of it in (docs/ios.md「对比」): PDF pages, a Word
 /// document's pages (split at its page breaks), slides with their notes, a workbook's sheets. Two versions are
 /// compared line by line on this (`TextCompare`), as the web's comparison does.
-nonisolated enum DocumentText {
-    struct Unit: Sendable, Equatable {
-        var label: String
-        var lines: [String]
+public nonisolated enum DocumentText {
+    public struct Unit: Sendable, Equatable {
+        public var label: String
+        public var lines: [String]
     }
 
-    enum Kind: Sendable, Equatable { case pdf, docx, pptx, xlsx, image }
+    public enum Kind: Sendable, Equatable { case pdf, docx, pptx, xlsx, image }
 
-    static func kind(_ name: String) -> Kind? {
+    public static func kind(_ name: String) -> Kind? {
         switch (name as NSString).pathExtension.lowercased() {
         case "pdf": .pdf
         case "docx", "docm": .docx
@@ -23,7 +23,7 @@ nonisolated enum DocumentText {
         }
     }
 
-    static func units(_ data: Data, kind: Kind) throws -> [Unit] {
+    public static func units(_ data: Data, kind: Kind) throws -> [Unit] {
         switch kind {
         case .pdf:
             guard let doc = PDFDocument(data: data) else { throw ZipArchive.Failure.corrupt("PDF") }
@@ -35,7 +35,7 @@ nonisolated enum DocumentText {
         }
     }
 
-    static func lines(_ text: String) -> [String] {
+    public static func lines(_ text: String) -> [String] {
         text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
     }
@@ -181,8 +181,8 @@ nonisolated enum DocumentText {
 
 /// Two versions' units compared line by line (`CollectionDifference`, a Myers diff), shown as the changes with a few
 /// lines around each and the rest folded, each change under its unit's label.
-nonisolated enum TextCompare {
-    enum Row: Sendable, Equatable {
+public nonisolated enum TextCompare {
+    public enum Row: Sendable, Equatable {
         case unit(String)
         case same(String)
         case added(String)
@@ -192,18 +192,18 @@ nonisolated enum TextCompare {
     }
 
     /// Lines shown around a change.
-    static let context = 2
+    public static let context = 2
     /// Lines per version compared at most (beyond that, a note).
-    static let maxLines = 20_000
+    public static let maxLines = 20_000
 
-    struct Result: Sendable, Equatable {
-        var rows: [Row]
-        var added = 0
-        var removed = 0
-        var capped = false
+    public struct Result: Sendable, Equatable {
+        public var rows: [Row]
+        public var added = 0
+        public var removed = 0
+        public var capped = false
     }
 
-    static func compare(_ old: [DocumentText.Unit], _ new: [DocumentText.Unit]) -> Result {
+    public static func compare(_ old: [DocumentText.Unit], _ new: [DocumentText.Unit]) -> Result {
         // Each line is tagged with its unit, so a change says where it is; the unit lines themselves never differ.
         func flatten(_ units: [DocumentText.Unit]) -> [(unit: String, text: String)] {
             units.flatMap { u in u.lines.map { (u.label, $0) } }

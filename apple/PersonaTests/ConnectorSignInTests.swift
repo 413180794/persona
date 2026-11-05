@@ -151,5 +151,35 @@ struct ConnectorSignInTests {
         #expect(InboxActionBar.openTitle(try item("telegram", "tg://resolve?domain=example"), sms: false) == "在 Telegram 里回复")
         #expect(InboxActionBar.openTitle(try item("imessage", "sms:+15550100"), sms: true) == "在信息里回复")
         #expect(InboxActionBar.openTitle(try item("github", "https://example.com/run/1"), sms: false) == "打开")
+        // A plugin's connector (wechat-connector's) is not answered in Telegram.
+        #expect(InboxActionBar.openTitle(try item("wechat-connector", "https://wechat-connector.example.com/c/1"), sms: false) == "打开")
+    }
+
+    /// Brand and wording come from the table by id (#1426): Telegram's stay as they were; a connector not in it (any
+    /// plugin's) gets the generic icon and wording built from its own name, never Telegram's.
+    @Test func wordingByConnector() throws {
+        func c(_ id: String, _ name: String) throws -> HubConnector {
+            try JSON.decoder.decode(HubConnector.self, from: Data(#"{"id":"\#(id)","name":"\#(name)","status":"not_signed_in"}"#.utf8))
+        }
+        #expect(ConnectorText.brand("github") == Theme.Brand.github)
+        #expect(ConnectorText.brand("wechat-connector") == nil) // no mark yet: the generic icon
+        #expect(ConnectorText.brand("example-notes") == nil)
+
+        let tg = try c("telegram", "Telegram"), wx = try c("wechat-connector", "微信"), other = try c("example-notes", "示例笔记")
+        #expect(ConnectorText.signInFooter(tg) == "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。")
+        #expect(ConnectorText.signInFooter(wx) == "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。")
+        #expect(ConnectorText.signInFooter(other) == "登录状态加密存在 hub 上，退出登录时删掉。")
+
+        // Only Telegram's sign-out ends the session over there; the others' authorization stays and says so.
+        #expect(ConnectorText.logoutMessage(tg) == "hub 上存的 API 凭据和登录状态都会删掉，Telegram 那边这个设备会话也会结束。再用要重新登录。")
+        for c in [wx, other, try c("github", "GitHub")] {
+            #expect(ConnectorText.logoutMessage(c).contains("授权不会自动撤销"))
+            #expect(!ConnectorText.logoutMessage(c).contains("Telegram"))
+        }
+
+        #expect(ConnectorText.profile("telegram").reads == "它的私聊和群")
+        #expect(ConnectorText.profile("wechat-connector").reads == nil)
+        #expect(ConnectorText.openInTitle("telegram", name: "Telegram") == "在 Telegram 里打开")
+        #expect(ConnectorText.openInTitle("wechat-connector", name: "微信") == "在 微信 里打开")
     }
 }

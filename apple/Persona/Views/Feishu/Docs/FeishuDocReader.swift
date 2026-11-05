@@ -1,4 +1,5 @@
 import MarkdownUI
+import PersonaKit
 import SwiftUI
 
 // The native document reader: Markdown export first (fast, faithful tables and lists); when the owner forbids export,
