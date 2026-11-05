@@ -1,0 +1,15 @@
+{
+  "state_checking": "Checking…",
+  "state_unreadable": "Couldn't read the status",
+  "state_off": "Off",
+  "state_no_credentials": "App credentials not set",
+  "state_error": "Can't connect: {error}",
+  "state_connecting": "Connecting…",
+  "state_connected": "Connected",
+  "state_connected_unpaired": "Connected, waiting for you to pair",
+  "summary_off": "Off",
+  "summary_disconnected": "Can't connect",
+  "summary_connected": "Connected",
+  "summary_unpaired": "Not paired",
+  "pairing_left": "Valid for {minutes}m {seconds}s"
+}

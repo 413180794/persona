@@ -1,5 +1,6 @@
 import { api, enc } from "./api";
 import { uuid } from "./format";
+import { t } from "../i18n";
 
 export const MAX_IMAGE = 8 * 1024 * 1024;
 export const MAX_FILE = 200 * 1024 * 1024;
@@ -15,7 +16,7 @@ export interface LocalAttachment {
 export function pickAttachment(file: File): LocalAttachment {
   const image = file.type.startsWith("image/");
   if (file.size > (image ? MAX_IMAGE : MAX_FILE)) {
-    throw new Error(`${file.name} 太大了（${image ? "图片最多 8 MB" : "文件最多 200 MB"}）`);
+    throw new Error(t(image ? "lib-attachments.too_big_image" : "lib-attachments.too_big_file", { name: file.name }));
   }
   return { id: uuid(), name: file.name || "image.png", mime: file.type || "application/octet-stream", file, url: image ? URL.createObjectURL(file) : undefined };
 }

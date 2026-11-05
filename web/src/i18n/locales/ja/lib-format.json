@@ -1,0 +1,22 @@
+{
+  "source_codex_live": "Codex ライブ",
+  "source_codex_history": "Codex 履歴",
+  "source_identity_conflict": "ID の競合",
+  "source_claude_background": "Claude バックグラウンド",
+  "read_only": "{source} · 閲覧のみ：{reason}",
+  "read_only_default_reason": "このソースからはまだ送信できません",
+  "state_needs_you": "要対応",
+  "state_working": "作業中",
+  "state_unread": "未確認",
+  "state_idle": "確認済み",
+  "state_offline": "停止中",
+  "state_unknown": "不明",
+  "untitled_session": "無題のセッション",
+  "just_now": "たった今",
+  "seconds": "{s}秒",
+  "minutes_seconds": "{m}分{s}秒",
+  "minutes": "{m}分",
+  "hours_minutes": "{h}時間{m}分",
+  "hours": "{h}時間",
+  "date_time": "{date} {time}"
+}

@@ -3,6 +3,7 @@
 // the quick results. A task is a todo whose `origin` is the conversation; its state is the todo's (lib/todos.ts).
 import { useSyncExternalStore } from "react";
 import { api, enc } from "./api";
+import { formatDate, t } from "../i18n";
 import { parseAPIError } from "./api-errors";
 import { onHubEvent, putTodo, refreshTodos } from "./store";
 import { deleteTodo, type Todo } from "./todos";
@@ -275,7 +276,7 @@ export function startFailure(todo: Todo, plans: Record<string, TaskPlan>): strin
  * whether it went.
  */
 export async function removeTask(todo: Todo, ask: (message: string) => boolean = (m) => confirm(m)): Promise<boolean> {
-  if ((todo.agents ?? []).length > 0 && !ask(`移除「${todo.title}」？\n任务从这段对话里拿掉；它的 Agent 和对话记录还在 Agents 页。`)) return false;
+  if ((todo.agents ?? []).length > 0 && !ask(t("lib-feed.remove_confirm", { title: todo.title }))) return false;
   await deleteTodo(todo.id);
   const routes = { ...st.routes };
   for (const [c, id] of Object.entries(routes)) if (id === todo.id) delete routes[c];
@@ -313,7 +314,7 @@ export async function sendMessage(card: FeedItem, text: string) {
   const latest = () => st.feeds[card.conversation]?.find((i) => i.id === card.id) ?? card;
   if (!itemId || st.busy[card.id] || cardSent(latest())) return;
   const blank = draftPlaceholder(text);
-  if (blank) throw new Error(`草稿里还有没填的「${blank}」`);
+  if (blank) throw new Error(t("lib-feed.draft_blank", { blank }));
   set({ busy: { ...st.busy, [card.id]: true } });
   try {
     await api(`${itemPath(itemId)}/reply`, { method: "POST", json: { text, card: card.id } });
@@ -435,13 +436,13 @@ export function withDays(lines: DisplayLine[], now = Date.now()): DisplayLine[] 
 
 /** 今天 · 11月3日 周二, 昨天 · …, or the date. */
 export function dayLabel(date: Date, now = new Date()): string {
-  const day = date.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" });
+  const day = formatDate(date, { month: "long", day: "numeric", weekday: "short" });
   const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-  if (same(date, now)) return `今天 · ${day}`;
+  if (same(date, now)) return t("lib-feed.today", { day });
   const y = new Date(now);
   y.setDate(now.getDate() - 1);
-  if (same(date, y)) return `昨天 · ${day}`;
-  if (date.getFullYear() !== now.getFullYear()) return date.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+  if (same(date, y)) return t("lib-feed.yesterday", { day });
+  if (date.getFullYear() !== now.getFullYear()) return formatDate(date, { year: "numeric", month: "long", day: "numeric", weekday: "short" });
   return day;
 }
 

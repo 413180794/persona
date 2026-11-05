@@ -1,5 +1,6 @@
 // Compacting the assistant's context and starting a new main conversation (#1727), and how a compaction reads in the
 // chat: the transcript's notices of one compaction fold into one divider.
+import { currentLanguage, formatDate, formatNumber, t } from "../i18n";
 import { enc } from "./api";
 import type { Compaction, Item } from "./types";
 
@@ -28,7 +29,7 @@ export function newMainBody(carry: boolean, expect: string): { carry: "summary" 
 
 /** The title the hub gives the archived main conversation: 旧主对话 · 至 11月4日. */
 export function archivedMainTitle(now: Date = new Date()): string {
-  return `旧主对话 · 至 ${now.getMonth() + 1}月${now.getDate()}日`;
+  return t("lib-compaction.archived_title", { date: formatDate(now, { month: "short", day: "numeric" }) });
 }
 
 // ── the conversation's compaction state ─────────────────
@@ -57,7 +58,7 @@ export function compactionView(c: Compaction | undefined, prev: Compaction["stat
   if (c.state === "done") return seen || age <= DONE_RECENT_MS ? { kind: "done", key } : null;
   if (c.state === "failed") {
     if (dismissed === key) return null;
-    return seen || age <= FAILED_RECENT_MS ? { kind: "failed", key, error: c.error?.trim() || "未知错误" } : null;
+    return seen || age <= FAILED_RECENT_MS ? { kind: "failed", key, error: c.error?.trim() || t("lib-compaction.unknown_error") } : null;
   }
   return null;
 }
@@ -65,10 +66,13 @@ export function compactionView(c: Compaction | undefined, prev: Compaction["stat
 // ── the divider in the chat ─────────────────────────────
 
 /** The boundary Claude Code writes (the hub's text for it, Codex's too). */
+// i18n-ignore: matches the hub's notice text in the transcript
 export const COMPACTED_TEXT = "上下文已压缩";
 /** The summary it carries on with. */
+// i18n-ignore: matches the hub's notice text in the transcript
 export const CONTINUED_TEXT = "已从压缩的上下文继续";
 /** A /compact sent to it (the hub's text for the command). */
+// i18n-ignore: matches the hub's text for the /compact command
 export const COMMAND_TEXT = "压缩上下文";
 
 function isNotice(it: Item, text: string): boolean {
@@ -148,19 +152,21 @@ export function foldCompactions(items: Item[]): Item[] {
   return out;
 }
 
-const TRIGGERS: Record<string, string> = { manual: "手动", auto: "自动", idle: "空闲时" };
+const TRIGGERS: Record<string, string> = { manual: t("lib-compaction.trigger_manual"), auto: t("lib-compaction.trigger_auto"), idle: t("lib-compaction.trigger_idle") };
 
 /** 18.1 万, 8,500 */
 export function formatTokens(n: number): string {
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1).replace(/\.0$/, "")} 万`;
+  // Chinese keeps its 万 with a space (Intl's compact zh output has none); other languages use Intl's compact form
+  if (currentLanguage() !== "zh-Hans") return formatNumber(n, n >= 10_000 ? { notation: "compact", maximumFractionDigits: 1 } : {});
+  if (n >= 10_000) return t("lib-compaction.tokens_wan", { n: (n / 10_000).toFixed(1).replace(/\.0$/, "") });
   return n.toLocaleString("en-US");
 }
 
 /** The divider's words: 以上内容已压缩 · 手动 · 压缩前 18.1 万 token (the parts that are known). */
 export function compactionLabel(c: Item["compact"]): string {
-  const parts = ["以上内容已压缩"];
+  const parts = [t("lib-compaction.compacted_above")];
   const trigger = c?.trigger ? TRIGGERS[c.trigger] : undefined;
   if (trigger) parts.push(trigger);
-  if (c?.pre_tokens && c.pre_tokens > 0) parts.push(`压缩前 ${formatTokens(c.pre_tokens)} token`);
+  if (c?.pre_tokens && c.pre_tokens > 0) parts.push(t("lib-compaction.tokens_before", { tokens: formatTokens(c.pre_tokens) }));
   return parts.join(" · ");
 }

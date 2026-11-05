@@ -1,0 +1,12 @@
+{
+  "save_failed": "Couldn't save: {error}",
+  "pinned": "Pinned",
+  "unpinned": "Unpinned",
+  "space_pinned": "Space pinned",
+  "space_unpinned": "Space unpinned",
+  "muted": "Notifications muted",
+  "unmuted": "Notifications on",
+  "space_muted": "Space muted",
+  "space_unmuted": "Space notifications on",
+  "send_failed": "Couldn't send: {error}"
+}

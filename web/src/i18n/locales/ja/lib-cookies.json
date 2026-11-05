@@ -1,0 +1,6 @@
+{
+  "unreadable": "このファイルを読み込めません。cookies.txtでもJSONでもありません",
+  "json_no_list": "JSONにCookieのリストがありません",
+  "json_empty": "JSONにCookieがありません",
+  "txt_empty": "ファイルにCookieがありません（cookies.txt形式：1行にタブ区切りの7列が必要です）"
+}

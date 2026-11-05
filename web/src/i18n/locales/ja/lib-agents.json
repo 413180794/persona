@@ -1,0 +1,21 @@
+{
+  "setup_missing": "このバージョンの lark-connector には個人エージェントがありません。lark-connector をアップデートしてから再度お試しください。",
+  "setup_disabled": "lark-connector で個人エージェントが有効になっていません。デプロイで lark-connector_AGENT_BRIDGE=true を設定して再起動してください",
+  "setup_no_accounts": "個人エージェントのアカウントが未接続です。lark-connector の設定で Cue か Grok Bot を追加してください",
+  "other": "その他",
+  "group_date": "日付",
+  "group_provider": "ソース",
+  "group_none": "グループなし",
+  "sort_updated": "最近の更新",
+  "sort_unread": "未読数",
+  "sort_name": "名前",
+  "show_all": "すべて",
+  "show_unread": "未読のみ",
+  "show_sendable": "送信可能のみ",
+  "date_today": "今日",
+  "date_yesterday": "昨日",
+  "date_week": "過去7日間",
+  "date_month": "過去30日間",
+  "date_older": "それ以前",
+  "pinned": "ピン留め"
+}

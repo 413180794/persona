@@ -1,6 +1,6 @@
 // REST client for the hub. The page is served by the hub itself (same origin), so every path is relative.
 
-import { currentLanguage } from "../i18n";
+import { currentLanguage, t } from "../i18n";
 
 const TOKEN_KEY = "jarvis.token";
 
@@ -94,6 +94,6 @@ export function isAbort(e: unknown) {
 
 export function errorText(e: unknown): string {
   if (e instanceof ApiError) return e.message;
-  if (e instanceof TypeError) return "连不上 hub";
+  if (e instanceof TypeError) return t("lib-api.cant_reach_hub");
   return e instanceof Error ? e.message : String(e);
 }

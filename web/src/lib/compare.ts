@@ -3,6 +3,7 @@
 // passed in or imported lazily by the caller; tested in compare.test.ts.
 import type JSZip from "jszip";
 import type { WorkBook } from "xlsx";
+import { t } from "../i18n";
 import { readPptx } from "./pptx";
 
 /** One page / slide / sheet: what it is called and its lines of text. */
@@ -169,9 +170,9 @@ type ParseXML = (s: string) => Document;
 /** A Word document's paragraphs (tables' cells one per line), split into pages where the document breaks them. */
 export async function docxUnits(zip: JSZip, parse: ParseXML): Promise<Unit[]> {
   const f = zip.file("word/document.xml");
-  if (!f) throw new Error("不是有效的 Word 文件");
+  if (!f) throw new Error(t("lib-compare.invalid_docx"));
   const doc = parse(await f.async("string"));
-  const units: Unit[] = [{ label: "第 1 页", lines: [] }];
+  const units: Unit[] = [{ label: t("lib-compare.page", { n: 1 }), lines: [] }];
   const walk = (el: Element) => {
     for (let c = el.firstChild; c; c = c.nextSibling) {
       if (c.nodeType !== 1) continue;
@@ -183,7 +184,7 @@ export async function docxUnits(zip: JSZip, parse: ParseXML): Promise<Unit[]> {
             .filter((tc) => tc.parentNode === tr)
             .map((tc) =>
               [...tc.getElementsByTagName("w:t")]
-                .map((t) => t.textContent ?? "")
+                .map((w) => w.textContent ?? "")
                 .join("")
                 .trim(),
             );
@@ -204,7 +205,7 @@ export async function docxUnits(zip: JSZip, parse: ParseXML): Promise<Unit[]> {
           }
         };
         collect(e);
-        if (pageBreak) units.push({ label: `第 ${units.length + 1} 页`, lines: [] });
+        if (pageBreak) units.push({ label: t("lib-compare.page", { n: units.length + 1 }), lines: [] });
         if (text.trim()) units[units.length - 1].lines.push(text.replace(/\s+$/, ""));
       } else walk(e);
     }
@@ -221,20 +222,20 @@ export async function pptxUnits(zip: JSZip, parse: ParseXML): Promise<Unit[]> {
     const lines: string[] = [];
     for (const sh of s.shapes) {
       for (const p of sh.paras ?? []) {
-        const t = p.runs.map((r) => (r.br ? "\n" : r.text)).join("");
-        lines.push(...linesOf(t).map((l) => "  ".repeat(p.level) + l));
+        const para = p.runs.map((r) => (r.br ? "\n" : r.text)).join("");
+        lines.push(...linesOf(para).map((l) => "  ".repeat(p.level) + l));
       }
       for (const row of sh.table?.rows ?? []) lines.push(row.cells.filter((c) => !c.hidden).map((c) => c.paras.map((p) => p.runs.map((r) => r.text).join("")).join(" ")).join(" | "));
-      if (sh.chart) lines.push(`[图表${sh.chart.title ? `：${sh.chart.title}` : ""}] ${sh.chart.series.map((x) => `${x.name} = ${x.values.map((v) => v ?? "").join(", ")}`).join("；")}`);
+      if (sh.chart) lines.push(`[${sh.chart.title ? t("lib-compare.chart_titled", { title: sh.chart.title }) : t("lib-compare.chart")}] ${sh.chart.series.map((x) => `${x.name} = ${x.values.map((v) => v ?? "").join(", ")}`).join(t("lib-compare.series_separator"))}`);
     }
-    if (s.notes) lines.push("备注：", ...linesOf(s.notes));
-    return { label: `第 ${i + 1} 张幻灯片`, lines };
+    if (s.notes) lines.push(t("lib-compare.notes"), ...linesOf(s.notes));
+    return { label: t("lib-compare.slide", { n: i + 1 }), lines };
   });
 }
 
 /** A workbook's sheets as rows of tab-separated cells. */
 export function workbookUnits(XLSX: typeof import("xlsx"), wb: WorkBook): Unit[] {
-  return wb.SheetNames.map((name) => ({ label: `工作表「${name}」`, lines: linesOf(XLSX.utils.sheet_to_csv(wb.Sheets[name], { FS: "\t", blankrows: false })) }));
+  return wb.SheetNames.map((name) => ({ label: t("lib-compare.sheet", { name }), lines: linesOf(XLSX.utils.sheet_to_csv(wb.Sheets[name], { FS: "\t", blankrows: false })) }));
 }
 
 /** A PDF's text page by page, lines as pdf.js sees them end. */
@@ -250,7 +251,7 @@ export async function pdfUnits(data: ArrayBuffer): Promise<Unit[]> {
     const content = await page.getTextContent();
     let text = "";
     for (const it of content.items) if ("str" in it) text += it.str + (it.hasEOL ? "\n" : "");
-    units.push({ label: `第 ${i} 页`, lines: linesOf(text) });
+    units.push({ label: t("lib-compare.page", { n: i }), lines: linesOf(text) });
   }
   await task.destroy();
   return units;

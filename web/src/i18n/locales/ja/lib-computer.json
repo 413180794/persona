@@ -1,0 +1,14 @@
+{
+  "permission_accessibility": "アクセシビリティ",
+  "permission_screen_recording": "画面収録",
+  "grant_hint": "そのMacに許可を求めるダイアログが表示されています。画面上で「許可」をクリックしてください",
+  "no_screen_sharing": "そのMacの「システム設定 › 一般 › 共有」で「画面共有」をオンにすると、ここで画面を見て、リモートで「許可」をクリックできます。",
+  "installing": "インストール中",
+  "install_failed": "インストールできませんでした：{error}",
+  "installer_error": "インストーラーでエラーが発生しました",
+  "not_installed": "このMacにはまだCua Driverがインストールされていません",
+  "missing_permissions": "Cua Driverにはまだ{permissions}の権限がありません",
+  "ready": "操作できます",
+  "ready_version": "操作できます · Cua Driver {version}",
+  "unknown": "操作できるかどうかまだわかりません"
+}

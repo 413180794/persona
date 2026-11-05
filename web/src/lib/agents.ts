@@ -1,6 +1,7 @@
 // 个人 Agent: lark-connector's paired personal agents through the hub's /api/v1/agents (docs/protocol.md). A session id is
 // "<source>:<sessionKey>" and bridge keys contain "/", so the whole id is percent-encoded in paths.
 import { useSyncExternalStore } from "react";
+import { t } from "../i18n";
 import { api } from "./api";
 
 export interface AgentSession {
@@ -67,9 +68,9 @@ export interface AgentSourceStatus {
 }
 
 const SETUP_HINTS: Record<string, string> = {
-  missing: "lark-connector 的版本还没有个人 Agent，升级 lark-connector 后再试",
-  disabled: "lark-connector 没有开启个人 Agent：在它的部署里设置 lark-connector_AGENT_BRIDGE=true 后重启",
-  no_accounts: "还没有连接个人 Agent 账号：在 lark-connector 的设置里添加 Cue 或 Grok Bot",
+  missing: t("lib-agents.setup_missing"),
+  disabled: t("lib-agents.setup_disabled"),
+  no_accounts: t("lib-agents.setup_no_accounts"),
 };
 
 /** What to do so the sources list agents, one line per source that is not set up. */
@@ -97,7 +98,7 @@ export function markRead(id: string) {
 
 const PROVIDER_LABEL: Record<string, string> = { grok_bot: "Grok Bot", muse: "Muse", cue: "Cue", dots: "Dots", claude_duet: "Claude Duet" };
 export function providerLabel(p: string): string {
-  return PROVIDER_LABEL[p] ?? (p || "其他");
+  return PROVIDER_LABEL[p] ?? (p || t("lib-agents.other"));
 }
 
 export interface ProviderGroup {
@@ -254,9 +255,9 @@ export const isDefaultView = (p: AgentPrefs) => {
   return v.group === DEFAULT_VIEW.group && v.sort === DEFAULT_VIEW.sort && v.show === DEFAULT_VIEW.show && !v.providers.length;
 };
 
-export const GROUP_LABEL: Record<GroupBy, string> = { date: "日期", provider: "来源", none: "不分组" };
-export const SORT_LABEL: Record<SortBy, string> = { updated: "最近更新", unread: "未读数", name: "名称" };
-export const SHOW_LABEL: Record<ShowMode, string> = { all: "全部", unread: "仅未读", sendable: "仅可发送" };
+export const GROUP_LABEL: Record<GroupBy, string> = { date: t("lib-agents.group_date"), provider: t("lib-agents.group_provider"), none: t("lib-agents.group_none") };
+export const SORT_LABEL: Record<SortBy, string> = { updated: t("lib-agents.sort_updated"), unread: t("lib-agents.sort_unread"), name: t("lib-agents.sort_name") };
+export const SHOW_LABEL: Record<ShowMode, string> = { all: t("lib-agents.show_all"), unread: t("lib-agents.show_unread"), sendable: t("lib-agents.show_sendable") };
 
 export interface SessionGroup {
   key: string; // "pinned", "sec:<id>", "p:<provider>", "d:<bucket>", "all"
@@ -269,11 +270,11 @@ const DAY = 86_400_000;
 export function dateBucket(ms: number, now = Date.now()): { key: string; label: string; order: number } {
   const d = new Date(now);
   const today = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  if (ms >= today) return { key: "today", label: "今天", order: 0 };
-  if (ms >= today - DAY) return { key: "yesterday", label: "昨天", order: 1 };
-  if (ms >= today - 7 * DAY) return { key: "week", label: "近 7 天", order: 2 };
-  if (ms >= today - 30 * DAY) return { key: "month", label: "近 30 天", order: 3 };
-  return { key: "older", label: "更早", order: 4 };
+  if (ms >= today) return { key: "today", label: t("lib-agents.date_today"), order: 0 };
+  if (ms >= today - DAY) return { key: "yesterday", label: t("lib-agents.date_yesterday"), order: 1 };
+  if (ms >= today - 7 * DAY) return { key: "week", label: t("lib-agents.date_week"), order: 2 };
+  if (ms >= today - 30 * DAY) return { key: "month", label: t("lib-agents.date_month"), order: 3 };
+  return { key: "older", label: t("lib-agents.date_older"), order: 4 };
 }
 
 export function matchesQuery(s: AgentSession, q: string) {
@@ -299,7 +300,7 @@ export function arrangeSessions(list: AgentSession[], prefs: AgentPrefs, q = "",
   const out: SessionGroup[] = [];
   const pinned = prefs.pins.map((id) => byId.get(id)).filter((s): s is AgentSession => !!s);
   const used = new Set(pinned.map((s) => s.id));
-  if (pinned.length) out.push(mk("pinned", "已置顶", pinned));
+  if (pinned.length) out.push(mk("pinned", t("lib-agents.pinned"), pinned));
   const cmp = sorter(v.sort);
   for (const sec of prefs.sections) {
     const ss = keep.filter((s) => !used.has(s.id) && prefs.assign[s.id] === sec.id).sort(cmp);
@@ -308,7 +309,7 @@ export function arrangeSessions(list: AgentSession[], prefs: AgentPrefs, q = "",
   }
   const rest = keep.filter((s) => !used.has(s.id)).sort(cmp);
   if (v.group === "none") {
-    if (rest.length) out.push(mk("all", out.length ? "其他" : "", rest));
+    if (rest.length) out.push(mk("all", out.length ? t("lib-agents.other") : "", rest));
   } else if (v.group === "provider") {
     const by = new Map<string, AgentSession[]>();
     for (const s of rest) (by.get(s.provider) ?? by.set(s.provider, []).get(s.provider)!).push(s);

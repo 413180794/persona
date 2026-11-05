@@ -1,0 +1,21 @@
+{
+  "setup_missing": "lark-connector 的版本还没有个人 Agent，升级 lark-connector 后再试",
+  "setup_disabled": "lark-connector 没有开启个人 Agent：在它的部署里设置 lark-connector_AGENT_BRIDGE=true 后重启",
+  "setup_no_accounts": "还没有连接个人 Agent 账号：在 lark-connector 的设置里添加 Cue 或 Grok Bot",
+  "other": "其他",
+  "group_date": "日期",
+  "group_provider": "来源",
+  "group_none": "不分组",
+  "sort_updated": "最近更新",
+  "sort_unread": "未读数",
+  "sort_name": "名称",
+  "show_all": "全部",
+  "show_unread": "仅未读",
+  "show_sendable": "仅可发送",
+  "date_today": "今天",
+  "date_yesterday": "昨天",
+  "date_week": "近 7 天",
+  "date_month": "近 30 天",
+  "date_older": "更早",
+  "pinned": "已置顶"
+}

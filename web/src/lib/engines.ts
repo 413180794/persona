@@ -1,15 +1,16 @@
 // 引擎 on a machine's page (docs/engines.md, iOS EngineSelectionModel / EngineSelectionView): which terminal engine the
 // computer's sessions come from. The hub keeps one per machine (herdr when never chosen) and takes a new one with
 // PUT /api/v1/machines/{mid}/engine, also while the machine is offline (applied when it connects).
+import { t } from "../i18n";
 import type { DetectedEngine, Machine } from "./types";
 
 /** The engines this client knows (the hub's proto.EngineNames), in the order they are listed when the node reports none. */
 export const KNOWN_ENGINES: { id: string; name: string; detail: string }[] = [
-  { id: "herdr", name: "herdr", detail: "终端里的 herdr" },
-  { id: "herdr-core", name: "Herdr App", detail: "桌面 App 里开的终端" },
-  { id: "herdr-both", name: "herdr + Herdr App", detail: "终端和桌面 App 的会话都显示" },
-  { id: "orca", name: "Orca", detail: "Orca 里的终端" },
-  { id: "paseo", name: "Paseo", detail: "Paseo 里的 Agent" },
+  { id: "herdr", name: "herdr", detail: t("lib-engines.detail_herdr") },
+  { id: "herdr-core", name: "Herdr App", detail: t("lib-engines.detail_herdr_core") },
+  { id: "herdr-both", name: "herdr + Herdr App", detail: t("lib-engines.detail_herdr_both") },
+  { id: "orca", name: "Orca", detail: t("lib-engines.detail_orca") },
+  { id: "paseo", name: "Paseo", detail: t("lib-engines.detail_paseo") },
 ];
 
 const known = (id: string) => KNOWN_ENGINES.find((e) => e.id === id);
@@ -46,18 +47,18 @@ export function canSelectEngine(id: string, m: Pick<Machine, "engines">): boolea
 
 /** What the node found of the engine: 检测到可用 (with its version) / 没检测到; nothing to say while offline. */
 export function detectionText(id: string, m: EngineMachine): string {
-  if (!m.online) return "离线，暂无检测信息";
+  if (!m.online) return t("lib-engines.detection_offline");
   const found = m.engines?.find((e) => e.id === id);
-  if (!found) return "暂无检测信息";
-  if (!found.available) return "没检测到";
-  return found.version ? `检测到可用 · ${found.version}` : "检测到可用";
+  if (!found) return t("lib-engines.detection_none");
+  if (!found.available) return t("lib-engines.detection_not_found");
+  return found.version ? t("lib-engines.detection_available_version", { version: found.version }) : t("lib-engines.detection_available");
 }
 
 /** The line under the list: what the choice decides, and when it applies. */
 export function engineFooter(selected: string, online: boolean): string {
   if (selected === "herdr-both")
-    return online ? "同时显示 herdr 和 Herdr App 里的会话；从网页新建的会话仍开在 herdr 里。" : "机器离线，选择会在连接后生效。同时显示两个引擎里的会话。";
-  return online ? "只显示所选引擎里的会话。" : "机器离线，选择会在连接后生效。只显示所选引擎里的会话。";
+    return online ? t("lib-engines.footer_both") : t("lib-engines.footer_both_offline");
+  return online ? t("lib-engines.footer_single") : t("lib-engines.footer_one_offline");
 }
 
 /** Whether 保存 is offered: a change the hub can take. */
@@ -66,5 +67,5 @@ export function canSaveEngine(selected: string, m: Pick<Machine, "engine" | "eng
 }
 
 export function engineSaveError(message: string): string {
-  return `保存失败：${message}`;
+  return t("lib-engines.save_failed", { message });
 }

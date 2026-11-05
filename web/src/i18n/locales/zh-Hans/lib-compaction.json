@@ -1,0 +1,10 @@
+{
+  "archived_title": "旧主对话 · 至 {date}",
+  "unknown_error": "未知错误",
+  "trigger_manual": "手动",
+  "trigger_auto": "自动",
+  "trigger_idle": "空闲时",
+  "tokens_wan": "{n} 万",
+  "compacted_above": "以上内容已压缩",
+  "tokens_before": "压缩前 {tokens} token"
+}

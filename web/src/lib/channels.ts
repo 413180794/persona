@@ -6,6 +6,7 @@
 // The pure parts (state words, sections, the source of a message, the bind steps) are plain functions for the tests.
 
 import { useEffect, useState } from "react";
+import { formatList, t } from "../i18n";
 import { api, enc } from "./api";
 import type { ConnectorPrompt } from "./connectors";
 import { useStore } from "./store";
@@ -109,15 +110,15 @@ export type ChannelTone = "green" | "red" | "idle";
 export function channelStateText(c: Channel): string {
   switch (c.state) {
     case "connected":
-      return "已连接";
+      return t("lib-channels.state_connected");
     case "error":
-      return "出错了";
+      return t("lib-channels.state_error");
     case "disabled":
-      return "已停用";
+      return t("lib-channels.state_disabled");
     case "not_installed":
-      return "没安装";
+      return t("lib-channels.state_not_installed");
   }
-  return "未连接";
+  return t("lib-channels.state_not_connected");
 }
 
 export function channelTone(c: Channel): ChannelTone {
@@ -140,9 +141,9 @@ export function channelSections(list: Channel[]): { title: string; footer?: stri
   const installed = list.filter((c) => c.kind !== "app" && c.source !== "market");
   const market = list.filter((c) => c.source === "market");
   return [
-    { title: "Persona", footer: "在 Persona 的哪一端说都进同一段对话，提问和批准在卡片上原地作答。", channels: apps },
-    { title: "已接入", footer: "这些地方发给机器人的消息会交给 Persona，回答和 Agent 的提问发回原处。只认绑定的那一个人。", channels: installed },
-    { title: "可以安装", footer: "扩展市场里提供渠道的扩展：装好后在这里绑定。", channels: market },
+    { title: "Persona", footer: t("lib-channels.section_apps_footer"), channels: apps },
+    { title: t("lib-channels.section_installed"), footer: t("lib-channels.section_installed_footer"), channels: installed },
+    { title: t("lib-channels.section_market"), footer: t("lib-channels.section_market_footer"), channels: market },
   ].filter((s) => s.channels.length > 0);
 }
 
@@ -150,43 +151,43 @@ export function channelSections(list: Channel[]): { title: string; footer?: stri
 export function channelsSummary(list: Channel[]): string {
   const on = list.filter((c) => c.kind !== "app" && c.state === "connected").length;
   const bad = list.filter((c) => c.state === "error").length;
-  return bad > 0 ? `${on} 个已连接 · ${bad} 个出错` : `${on} 个已连接`;
+  return bad > 0 ? t("lib-channels.summary_with_errors", { on, bad }) : t("lib-channels.summary", { count: on });
 }
 
-export function targetText(t?: ChannelTarget): string {
-  switch (t?.kind) {
+export function targetText(target?: ChannelTarget): string {
+  switch (target?.kind) {
     case "new":
-      return "新对话（下一条消息开）";
+      return t("lib-channels.target_new");
     case "conversation":
-      return t.title || "一段对话";
+      return target.title || t("lib-channels.target_conversation");
     case "agent":
-      return t.title ? `Agent · ${t.title}` : "一个 Agent";
+      return target.title ? t("lib-channels.target_agent_titled", { title: target.title }) : t("lib-channels.target_agent");
   }
-  return "主对话";
+  return t("lib-channels.target_main");
 }
 
 /** What the channel can do, in a few words for its page. */
 export function capabilityText(c: ChannelCapabilities): string[] {
   const out: string[] = [];
-  const takes = ["文字", c.images_in && "图片", c.files_in && "文件", c.voice_in && "语音"].filter(Boolean);
-  out.push(`收${takes.join("、")}`);
-  out.push(c.format === "plain" ? "回答是纯文字" : "回答带格式（Markdown）");
-  if (c.max_text) out.push(`一条最多 ${c.max_text} 字，长的拆开发`);
-  if (c.asks === "text") out.push("提问和批准回复序号或文字");
-  else if (c.asks === "buttons") out.push("提问和批准点按钮");
-  if (c.typing) out.push("处理时显示「正在输入」");
-  if (c.progress) out.push("处理时显示进度");
+  const takes = [t("lib-channels.takes_text"), c.images_in && t("lib-channels.takes_images"), c.files_in && t("lib-channels.takes_files"), c.voice_in && t("lib-channels.takes_voice")].filter((x): x is string => !!x);
+  out.push(t("lib-channels.takes", { kinds: formatList(takes, { type: "conjunction", style: "narrow" }) }));
+  out.push(c.format === "plain" ? t("lib-channels.format_plain") : t("lib-channels.format_markdown"));
+  if (c.max_text) out.push(t("lib-channels.max_text", { count: c.max_text }));
+  if (c.asks === "text") out.push(t("lib-channels.asks_text"));
+  else if (c.asks === "buttons") out.push(t("lib-channels.asks_buttons"));
+  if (c.typing) out.push(t("lib-channels.typing"));
+  if (c.progress) out.push(t("lib-channels.progress"));
   return out;
 }
 
 export function bindTitle(c: Channel): string {
   switch (c.bind) {
     case "qr":
-      return "扫码绑定";
+      return t("lib-channels.bind_qr");
     case "code":
-      return "配对";
+      return t("lib-channels.bind_code");
   }
-  return "绑定";
+  return t("lib-channels.bind");
 }
 
 export function isBound(c: Channel): boolean {

@@ -1,0 +1,17 @@
+{
+  "detail_herdr": "herdr in a terminal",
+  "detail_herdr_core": "Terminals in the desktop app",
+  "detail_herdr_both": "Sessions from both the terminal and the desktop app",
+  "detail_orca": "Terminals in Orca",
+  "detail_paseo": "Agents in Paseo",
+  "detection_offline": "Offline, nothing detected yet",
+  "detection_none": "Nothing detected yet",
+  "detection_not_found": "Not detected",
+  "detection_available": "Available",
+  "detection_available_version": "Available · {version}",
+  "footer_both": "Shows sessions from both herdr and Herdr App. New sessions from the web still open in herdr.",
+  "footer_both_offline": "The machine is offline. Your choice applies once it connects. Shows sessions from both engines.",
+  "footer_single": "Shows only sessions from the selected engine.",
+  "footer_one_offline": "The machine is offline. Your choice applies once it connects. Shows only sessions from the selected engine.",
+  "save_failed": "Couldn't save: {message}"
+}

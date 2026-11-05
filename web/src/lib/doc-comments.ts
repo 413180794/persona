@@ -6,6 +6,7 @@
 
 import { ApiError, api, enc, getToken } from "./api";
 import type { LarkPerson } from "./lark-people";
+import { t } from "../i18n";
 
 export interface DocSegment {
   kind: string; // text | mention | link…
@@ -54,18 +55,18 @@ export function parseThreads(raw: unknown): DocThread[] {
   const list = (raw as { threads?: unknown } | null)?.threads;
   if (!Array.isArray(list)) return [];
   const out: DocThread[] = [];
-  for (const t of list as Record<string, unknown>[]) {
-    if (!t || typeof t !== "object" || typeof t.id !== "string") continue;
+  for (const th of list as Record<string, unknown>[]) {
+    if (!th || typeof th !== "object" || typeof th.id !== "string") continue;
     const replies: DocReply[] = [];
-    for (const r of Array.isArray(t.replies) ? (t.replies as Record<string, unknown>[]) : []) {
+    for (const r of Array.isArray(th.replies) ? (th.replies as Record<string, unknown>[]) : []) {
       if (!r || typeof r !== "object" || typeof r.id !== "string") continue;
       const a = (r.author ?? {}) as Record<string, unknown>;
       const content = (Array.isArray(r.content) ? (r.content as Record<string, unknown>[]) : [])
         .filter((s) => s && typeof s.text === "string")
         .map((s) => ({ kind: str(s.kind) ?? "text", text: s.text as string, href: str(s.href) }));
-      replies.push({ id: r.id, author: { id: str(a.id), name: str(a.name) || "飞书用户" }, content, createdAt: str(r.createdAt), edited: r.edited === true, imageCount: typeof r.imageCount === "number" ? r.imageCount : undefined });
+      replies.push({ id: r.id, author: { id: str(a.id), name: str(a.name) || t("lib-doc-comments.lark_user") }, content, createdAt: str(r.createdAt), edited: r.edited === true, imageCount: typeof r.imageCount === "number" ? r.imageCount : undefined });
     }
-    out.push({ id: t.id, whole: t.whole === true, resolved: t.resolved === true, quote: str(t.quote) ?? "", anchorBlockId: str(t.anchorBlockId), createdAt: str(t.createdAt), replies });
+    out.push({ id: th.id, whole: th.whole === true, resolved: th.resolved === true, quote: str(th.quote) ?? "", anchorBlockId: str(th.anchorBlockId), createdAt: str(th.createdAt), replies });
   }
   return out;
 }
@@ -103,10 +104,10 @@ function newId(): string {
 /** The hub's words for a failed write (the plugin's: 「lark-connector 未登录飞书」…), else what went wrong. */
 export function writeErrorText(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.code === "comment_unsupported") return "这种文档不能这样评论";
+    if (e.code === "comment_unsupported") return t("lib-doc-comments.comment_unsupported");
     return e.message;
   }
-  if (e instanceof TypeError) return "连不上 hub";
+  if (e instanceof TypeError) return t("lib-api.cant_reach_hub");
   return e instanceof Error ? e.message : String(e);
 }
 

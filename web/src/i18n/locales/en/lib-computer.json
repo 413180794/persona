@@ -1,0 +1,14 @@
+{
+  "permission_accessibility": "Accessibility",
+  "permission_screen_recording": "Screen Recording",
+  "grant_hint": "A permission prompt is open on that Mac. Click Allow on its screen",
+  "no_screen_sharing": "Turn on Screen Sharing in System Settings › General › Sharing on that Mac to see its screen here and click Allow remotely.",
+  "installing": "Installing",
+  "install_failed": "Couldn't install: {error}",
+  "installer_error": "the installer failed",
+  "not_installed": "Cua Driver isn't installed on this Mac yet",
+  "missing_permissions": "Cua Driver still needs {permissions} permission",
+  "ready": "Ready to control",
+  "ready_version": "Ready to control · Cua Driver {version}",
+  "unknown": "Not sure yet whether it can be controlled"
+}

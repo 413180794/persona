@@ -1,0 +1,6 @@
+{
+  "remove_confirm": "「{title}」を削除しますか？\nタスクはこのチャットから外れます。エージェントとチャット履歴はAgentsページに残ります。",
+  "draft_blank": "下書きにまだ入力していない「{blank}」があります",
+  "today": "今日 · {day}",
+  "yesterday": "昨日 · {day}"
+}

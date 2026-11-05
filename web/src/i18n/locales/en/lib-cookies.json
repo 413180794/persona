@@ -1,0 +1,6 @@
+{
+  "unreadable": "Can't read this file: it's neither cookies.txt nor JSON",
+  "json_no_list": "No cookie list in the JSON",
+  "json_empty": "No cookies in the JSON",
+  "txt_empty": "No cookies in the file (expected cookies.txt: 7 tab-separated columns per line)"
+}

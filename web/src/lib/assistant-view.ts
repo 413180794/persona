@@ -4,6 +4,7 @@
 // schema/extension/examples/persona-card/ hold every app to the same), so both look the same here as on every other app.
 // In the assistant nothing acts: buttons, fields and segmented are left out, the search box and 加载更多 never show; links
 // still open.
+import { t } from "../i18n";
 import { readView, type ChartSeries, type UIItem, type UISection, type UIView } from "./extension-ui";
 
 /** What a fenced block in an assistant's reply draws as: a view, or nothing (it stays a code block). */
@@ -120,13 +121,13 @@ export function cardView(raw: unknown): UIView | null {
   switch (raw.type) {
     case "stat":
       delete s.title;
-      s.items.push({ type: "metric", label: title || "数值", value: amount(value!, unit), ...(note ? { detail: note } : {}) });
+      s.items.push({ type: "metric", label: title || t("lib-assistant-view.value"), value: amount(value!, unit), ...(note ? { detail: note } : {}) });
       break;
     case "stacked_bar": {
       const total = isObject(raw.total) ? num(raw.total.value) : undefined;
       const u = isObject(raw.total) ? str(raw.total.unit) || unit : unit;
-      s.items.push({ type: "metric", label: "合计", value: amount(total ?? sum, u), ...(note ? { detail: note } : {}) });
-      const label = title || "合计";
+      s.items.push({ type: "metric", label: t("lib-assistant-view.total"), value: amount(total ?? sum, u), ...(note ? { detail: note } : {}) });
+      const label = title || t("lib-assistant-view.total");
       const shown = all.length > 4 ? all.slice(0, 3) : all;
       const series: ChartSeries[] = shown.map((p, i) => ({
         name: p.label,
@@ -135,14 +136,14 @@ export function cardView(raw: unknown): UIView | null {
       }));
       if (all.length > 4) {
         const other = all.slice(3).reduce((x, p) => x + p.value, 0);
-        series.push({ name: "其他", tone: "neutral", points: [{ label, value: other, display: amount(other, u) }] });
+        series.push({ name: t("lib-assistant-view.other"), tone: "neutral", points: [{ label, value: other, display: amount(other, u) }] });
       }
       s.items.push({ type: "chart", kind: "bar", series, ...(u ? { unit: u } : {}), stacked: true });
       for (const p of all) s.items.push({ type: "row", value: amount(p.value, u), title: p.label, ...(p.note ? { subtitle: p.note } : {}) });
       break;
     }
     default: {
-      if (value !== undefined) s.items.push({ type: "metric", label: "当前", value: amount(value, unit) });
+      if (value !== undefined) s.items.push({ type: "metric", label: t("lib-assistant-view.current"), value: amount(value, unit) });
       const pts = points.slice(-120).map((p) => ({ label: p.label, value: p.value, display: amount(p.value, unit) }));
       const item: UIItem = { type: "chart", kind: raw.type === "bar" ? "bar" : "line", series: [{ points: pts }] };
       if (unit) item.unit = unit;

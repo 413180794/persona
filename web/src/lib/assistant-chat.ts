@@ -4,6 +4,7 @@
 // like the app's `assistantLaunchers`: after a reload the conversation's own launcher (the one the hub ran it on) shows.
 // The new-conversation page has its own pick under NEW_CONVERSATION, sent with POST /assistant/conversations.
 import { useSyncExternalStore } from "react";
+import { t } from "../i18n";
 import { modelName } from "./launcher-models";
 
 export const NEW_CONVERSATION = "new";
@@ -38,14 +39,15 @@ export function shortModel(model?: string): string {
 
 /** What 拷贝信息 copies (AssistantCopyText.info): enough for another agent, or a terminal, to find the conversation. */
 export function assistantInfoText(o: { title?: string; isMain: boolean; sessionId: string; machine: string; machineId: string; cwd: string; launcher: string; model?: string }): string {
-  const name = [o.isMain ? "主对话" : "", o.title ? `「${o.title}」` : ""].filter(Boolean).join(" ");
+  const name = [o.isMain ? t("lib-assistant-chat.main_chat") : "", o.title ? t("lib-assistant-chat.quoted_title", { title: o.title }) : ""].filter(Boolean).join(" ");
+  const machine = o.machine && o.machine !== o.machineId ? t("lib-assistant-chat.machine_with_id", { machine: o.machine, id: o.machineId }) : o.machineId;
   return [
-    `Persona 助手的对话${name ? ` ${name}` : ""}`,
-    `会话 ID：${o.sessionId}`,
-    `所在机器：${o.machine && o.machine !== o.machineId ? `${o.machine}（${o.machineId}）` : o.machineId}`,
-    `工作目录：${o.cwd}`,
-    `启动器：${o.launcher}${o.model ? ` · 模型：${o.model}` : ""}`,
-    `在那台机器上接着聊：cd ${o.cwd} && claude --resume ${o.sessionId}`,
+    name ? t("lib-assistant-chat.info_title_named", { name }) : t("lib-assistant-chat.info_title"),
+    t("lib-assistant-chat.info_session", { id: o.sessionId }),
+    t("lib-assistant-chat.info_machine", { machine }),
+    t("lib-assistant-chat.info_cwd", { cwd: o.cwd }),
+    o.model ? t("lib-assistant-chat.info_launcher_model", { launcher: o.launcher, model: o.model }) : t("lib-assistant-chat.info_launcher", { launcher: o.launcher }),
+    t("lib-assistant-chat.info_resume", { command: `cd ${o.cwd} && claude --resume ${o.sessionId}` }),
   ].join("\n");
 }
 

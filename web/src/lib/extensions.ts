@@ -8,6 +8,7 @@ import { extRoot, listOf } from "./extension-api";
 import { refreshExtensionPlaces } from "./extension-slots";
 import { EXTENSIONS_CHANGED } from "./extension-prompts";
 import type { Contribution, DependencyState, PackMember } from "./extension-model";
+import { t } from "../i18n";
 
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
 export type JsonObject = { [k: string]: Json };
@@ -192,19 +193,19 @@ export function configError(e: unknown): { field: string; message: string } | nu
 
 // Running or idle (stopped: started again when something needs it) is all one to the user: it is on.
 const STATES: Record<string, string> = {
-  running: "启动",
-  stopped: "启动",
-  starting: "正在启动",
-  needs_setup: "需要设置",
-  disabled: "停用",
-  incompatible: "这台 hub 用不了",
-  error: "出错了",
+  running: t("lib-extensions.state_on"),
+  stopped: t("lib-extensions.state_on"),
+  starting: t("lib-extensions.state_starting"),
+  needs_setup: t("lib-extensions.state_needs_setup"),
+  disabled: t("lib-extensions.state_disabled"),
+  incompatible: t("lib-extensions.state_incompatible"),
+  error: t("lib-extensions.state_error"),
 };
 
-export const extensionState = (p: HubExtension) => STATES[p.status] ?? "状态未知";
+export const extensionState = (p: HubExtension) => STATES[p.status] ?? t("lib-extensions.state_unknown");
 
 /** Whether an enabled extension's program runs right now (the detail page's small print); "" for any other state. */
-export const runNote = (p: HubExtension) => (p.status === "running" ? "正在运行" : p.status === "stopped" ? "暂未运行，用到时自动启动" : "");
+export const runNote = (p: HubExtension) => (p.status === "running" ? t("lib-extensions.running") : p.status === "stopped" ? t("lib-extensions.idle_note") : "");
 
 export const isProblem = (p: HubExtension) => p.status === "error" || p.status === "incompatible";
 
@@ -217,47 +218,48 @@ export function extensionTone(p?: HubExtension | null): "red" | "orange" | "gree
 }
 
 export function sourceText(s?: string): string | undefined {
-  return s === "builtin" ? "内置" : s === "hub.json" ? "hub.json" : s === "installed" ? "已安装" : undefined;
+  return s === "builtin" ? t("lib-extensions.source_builtin") : s === "hub.json" ? "hub.json" : s === "installed" ? t("lib-extensions.source_installed") : undefined;
 }
 
 export function pointText(name: string): string {
-  return name === "connectors" ? "连接器" : name === "voice" ? "语音对话" : name;
+  return name === "connectors" ? t("lib-extensions.point_connectors") : name === "voice" ? t("lib-extensions.point_voice") : name;
 }
 
 /** The detail's line under the name: state · version · source. */
 /** The 升级 group's line for a newer version: what happens to it (the App's ExtensionText.upgradeDetail). */
 export function upgradeDetail(u: ExtensionUpgrade): string {
-  const why = u.detail ? "：" + u.detail : "";
   switch (u.state) {
     case "needs_permission": return morePermissions(u.added_permissions ?? []);
-    case "waiting_idle": return "扩展空闲时自动升级";
-    case "available": return "稍后自动升级";
-    case "off": return "自动升级关着";
-    case "skipped": return `上次升级后起不来，已回到 ${u.from}，不再自动升级到这个版本`;
-    case "failed": return "没装上" + why;
-    case "incompatible": return "这台 hub 装不了" + why;
+    case "waiting_idle": return t("lib-extensions.upgrade_waiting_idle");
+    case "available": return t("lib-extensions.upgrade_available");
+    case "off": return t("lib-extensions.upgrade_off");
+    case "skipped": return t("lib-extensions.upgrade_skipped", { from: u.from ?? "" });
+    case "failed": return u.detail ? t("lib-extensions.upgrade_failed_detail", { detail: u.detail }) : t("lib-extensions.upgrade_failed");
+    case "incompatible": return u.detail ? t("lib-extensions.upgrade_incompatible_detail", { detail: u.detail }) : t("lib-extensions.upgrade_incompatible");
     default: return "";
   }
 }
 
 /** When the line asks something of the user, what its button says (it opens the upgrade in the market). */
 export function upgradeAction(u: ExtensionUpgrade): string | null {
-  if (u.state === "needs_permission") return "去确认";
-  return ["off", "skipped", "failed"].includes(u.state) ? "去升级" : null;
+  if (u.state === "needs_permission") return t("lib-extensions.action_review");
+  return ["off", "skipped", "failed"].includes(u.state) ? t("lib-extensions.action_upgrade") : null;
 }
 
 /** What a newer version asks for more, as the hub says it in its notice. */
 export function morePermissions(added: ExtensionPermission[]): string {
-  if (!added.length) return "要的权限有变化";
-  const count = ["", "一", "两", "三", "四", "五"];
-  const lines = added.map((p) => p.title + (p.detail ? `（${p.detail}）` : ""));
-  return (added.length < count.length ? `要多${count[added.length]}项权限：` : `要多 ${added.length} 项权限：`) + lines.join("、");
+  if (!added.length) return t("lib-extensions.permissions_changed");
+  // small counts in words where the language writes them so (两项, not 2 项)
+  const words = t("lib-extensions.small_counts").split(",");
+  const list = added.map((p) => (p.detail ? t("lib-extensions.permission_detail", { title: p.title, detail: p.detail }) : p.title)).join(t("lib-extensions.list_separator"));
+  const count = added.length;
+  return count <= words.length ? t("lib-extensions.more_permissions_small", { count, n: words[count - 1], list }) : t("lib-extensions.more_permissions", { count, list });
 }
 
 /** The last upgrade, when it is news of its own (asking and failing are the newer version's line). */
 export function upgradeNote(n: ExtensionUpgradeNote): string | null {
-  if (n.kind === "upgraded") return `已自动升级到 ${n.to}（原来是 ${n.from}）`;
-  if (n.kind === "rolled_back") return `${n.to} 起不来，已回到 ${n.from}`;
+  if (n.kind === "upgraded") return t("lib-extensions.upgraded", { to: n.to, from: n.from });
+  if (n.kind === "rolled_back") return t("lib-extensions.rolled_back", { to: n.to, from: n.from });
   return null;
 }
 
@@ -266,15 +268,15 @@ export const stateLine = (p: HubExtension) => [extensionState(p), p.version, sou
 /** How many, and how many need the user. */
 export function listSummary(list?: HubExtension[] | null): string {
   if (!list) return "";
-  if (!list.length) return "没有";
+  if (!list.length) return t("lib-extensions.none");
   const attention = list.filter((p) => p.status === "needs_setup" || isProblem(p)).length;
-  return attention ? `${list.length} 个 · ${attention} 个要处理` : `${list.length} 个`;
+  return attention ? t("lib-extensions.count_attention", { count: list.length, attention }) : t("lib-extensions.count", { count: list.length });
 }
 
 export const fieldLabel = (f: ExtensionField) => f.title || f.name;
 
 /** The title with 「（必填）」 when it has to be filled in and has no default to fall back to. */
-export const fieldTitle = (f: ExtensionField) => fieldLabel(f) + (f.required && f.default === undefined ? "（必填）" : "");
+export const fieldTitle = (f: ExtensionField) => (f.required && f.default === undefined ? t("lib-extensions.field_required", { label: fieldLabel(f) }) : fieldLabel(f));
 
 export const choiceLabel = (c: ExtensionChoice) => c.title || (typeof c.value === "string" ? c.value : JSON.stringify(c.value));
 
@@ -283,12 +285,12 @@ export function placeholder(f: ExtensionField): string {
   if (f.default !== undefined && f.default !== null) {
     const choice = f.enum?.find((c) => same(c.value, f.default!));
     const text = choice ? choiceLabel(choice) : typeof f.default === "object" ? "" : String(f.default);
-    if (text) return `默认：${text}`;
+    if (text) return t("lib-extensions.default_value", { value: text });
   }
-  return "未设置";
+  return t("lib-extensions.not_set");
 }
 
-export const secretState = (s: ExtensionSecret) => (s.set ? "已设置" : s.required ? "未设置（必填）" : "未设置");
+export const secretState = (s: ExtensionSecret) => (s.set ? t("lib-extensions.is_set") : s.required ? t("lib-extensions.not_set_required") : t("lib-extensions.not_set"));
 
 // ── the draft, by path ──────────────────────────────────
 
@@ -346,11 +348,11 @@ export function compact(obj: JsonObject): JsonObject {
 
 /** A number field as typed: the value it reads as (undefined: empty, not set), or why it doesn't read as one. */
 export function readNumber(text: string, integer: boolean): { value?: number; error?: string } {
-  const t = text.trim();
-  if (!t) return {};
-  const n = Number(t);
-  if (!Number.isFinite(n)) return { error: "要是一个数" };
-  if (integer && !Number.isInteger(n)) return { error: "要是一个整数" };
+  const s = text.trim();
+  if (!s) return {};
+  const n = Number(s);
+  if (!Number.isFinite(n)) return { error: t("lib-extensions.not_a_number") };
+  if (integer && !Number.isInteger(n)) return { error: t("lib-extensions.not_an_integer") };
   return { value: n };
 }
 
@@ -376,51 +378,51 @@ export function listItems(draft: JsonObject, path: string[], f: ExtensionField):
 /** A machine on an extension's machine list (format machine): online or not, and for an extension that operates computers how
  *  Cua Driver is there (known once it is turned on). */
 export function machineStatus(m: Machine, computers: boolean): string {
-  const parts = [m.online ? "在线" : "离线"];
+  const parts = [m.online ? t("lib-extensions.online") : t("lib-extensions.offline")];
   const c = m.computer;
   // Every Mac's while the extension is on, once its node has said (a never-asked one has neither a verdict nor a note).
   if (computers && m.online && c && (c.ready || c.note)) {
     const missing = c.accessibility === "missing" || c.screen_recording === "missing";
-    parts.push(!c.installed ? "Cua 没装" : !c.daemon ? "Cua 没在运行" : missing ? "Cua 缺权限" : c.desktop === "locked" ? "锁屏了" : c.ready ? "Cua 可以用" : "Cua 已装");
+    parts.push(!c.installed ? t("lib-extensions.cua_missing") : !c.daemon ? t("lib-extensions.cua_not_running") : missing ? t("lib-extensions.cua_no_permission") : c.desktop === "locked" ? t("lib-extensions.screen_locked") : c.ready ? t("lib-extensions.cua_ready") : t("lib-extensions.cua_installed"));
   }
   return parts.join(" · ");
 }
 
 /** How a plugin's program is on a machine switched on for it, for the machine's row: what the user can make of it. */
 export function nodeProgramStatus(s: ExtensionNodeState | undefined): string {
-  if (!s) return "等 hub 把程序发过去";
+  if (!s) return t("lib-extensions.program_waiting");
   const error = s.error && exitText(s.error);
   switch (s.state) {
     case "running":
-      return `程序在运行${s.version ? ` · ${s.version}` : ""}`;
+      return s.version ? t("lib-extensions.program_running_version", { version: s.version }) : t("lib-extensions.program_running");
     case "starting":
-      return "程序正在启动";
+      return t("lib-extensions.program_starting");
     case "missing":
-      return "正在把程序发过去";
+      return t("lib-extensions.program_sending");
     case "offline":
-      return "离线：连上后会启动";
+      return t("lib-extensions.program_offline");
     case "lease_expired":
-      return "和 hub 断开太久，程序已停，连上后会再启动";
+      return t("lib-extensions.program_lease_expired");
     case "outdated":
-      return "这台电脑上的 personad 太旧，更新后才能运行";
+      return t("lib-extensions.program_outdated");
     case "error":
-      return error ? `程序出错：${error}` : "程序出错";
+      return error ? t("lib-extensions.program_error_detail", { error }) : t("lib-extensions.program_error");
     default:
-      return error ? `${s.state}：${error}` : s.state;
+      return error ? t("lib-extensions.state_detail", { state: s.state, error }) : s.state;
   }
 }
 
 /** Go's words for how a program ended (exec.ExitError), in the apps' words: exit status 3 → 退出码 3. */
 export function exitText(error: string): string {
-  return error.replace(/\bexit status (-?\d+)/g, "退出码 $1").replace(/\bsignal: ([a-z ]+)/g, "被信号结束（$1）");
+  return error.replace(/\bexit status (-?\d+)/g, t("lib-extensions.exit_code", { code: "$1" })).replace(/\bsignal: ([a-z ]+)/g, t("lib-extensions.killed_by_signal", { signal: "$1" }));
 }
 
 /** Under the form: which switches take effect at once (lists of machines) and that the rest waits for 保存. Nothing
  *  when there is only such switches: the fields say so themselves, nothing waits for 保存. */
 export function saveFooter(fields: ExtensionField[]): string | undefined {
   const all = fields.flatMap((f) => (f.type === "object" ? (f.fields ?? []) : [f]));
-  const now = all.filter((f) => f.items?.format === "machine").map((f) => `「${f.title || f.name}」`);
-  if (!now.length) return "改完点「保存」；保存后扩展会重新启动。留空的项用扩展的默认值。";
+  const now = all.filter((f) => f.items?.format === "machine").map((f) => t("lib-extensions.quoted", { name: f.title || f.name }));
+  if (!now.length) return t("lib-extensions.save_footer");
   if (now.length === all.length) return undefined;
-  return `${now.join("、")}的开关即时生效；其他项改完点「保存」，保存后扩展会重新启动。留空的项用扩展的默认值。`;
+  return t("lib-extensions.save_footer_switches", { names: now.join(t("lib-extensions.list_separator")) });
 }

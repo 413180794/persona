@@ -1,0 +1,6 @@
+{
+  "remove_confirm": "移除「{title}」？\n任务从这段对话里拿掉；它的 Agent 和对话记录还在 Agents 页。",
+  "draft_blank": "草稿里还有没填的「{blank}」",
+  "today": "今天 · {day}",
+  "yesterday": "昨天 · {day}"
+}

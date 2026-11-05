@@ -1,0 +1,4 @@
+{
+  "too_big_image": "{name} is too big (images up to 8 MB)",
+  "too_big_file": "{name} is too big (files up to 200 MB)"
+}

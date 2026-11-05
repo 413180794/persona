@@ -1,0 +1,10 @@
+{
+  "invalid_docx": "有効な Word ファイルではありません",
+  "page": "{n}ページ",
+  "slide": "スライド{n}",
+  "sheet": "シート「{name}」",
+  "chart": "グラフ",
+  "chart_titled": "グラフ：{title}",
+  "series_separator": "、",
+  "notes": "メモ："
+}

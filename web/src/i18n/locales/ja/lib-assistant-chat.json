@@ -1,0 +1,13 @@
+{
+  "main_chat": "メインチャット",
+  "quoted_title": "「{title}」",
+  "machine_with_id": "{machine}（{id}）",
+  "info_title": "Persona アシスタントのチャット",
+  "info_title_named": "Persona アシスタントのチャット {name}",
+  "info_session": "セッション ID：{id}",
+  "info_machine": "マシン：{machine}",
+  "info_cwd": "作業ディレクトリ：{cwd}",
+  "info_launcher": "ランチャー：{launcher}",
+  "info_launcher_model": "ランチャー：{launcher} · モデル：{model}",
+  "info_resume": "そのマシンで続けるには：{command}"
+}

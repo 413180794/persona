@@ -1,0 +1,6 @@
+{
+  "remove_confirm": "Remove “{title}”?\nThe task leaves this chat; its agents and their chats stay on the Agents page.",
+  "draft_blank": "The draft still has a blank to fill in: {blank}",
+  "today": "Today · {day}",
+  "yesterday": "Yesterday · {day}"
+}

@@ -2,6 +2,8 @@
 // ("API Error: 502 …", an answer) or from the hub's notice ("API 错误：Overloaded（重试 10 次后放弃）"). What a person
 // needs first is in front: why, in words, the status code, and whether it is likely to pass by itself.
 
+import { t } from "../i18n";
+
 export interface APIErrorInfo {
   status?: number;
   /** One line, in words. */
@@ -27,6 +29,7 @@ export function parseAPIError(text?: string): APIErrorInfo | null {
   const t = (text ?? "").trim();
   let body: string;
   if (t.startsWith("API Error:")) body = t.slice("API Error:".length);
+  // i18n-ignore: the hub's notice for a model API error starts with these words
   else if (t.startsWith("API 错误：")) body = t.slice("API 错误：".length);
   else return null;
   const m = STATUS_RE.exec(body);
@@ -43,18 +46,18 @@ export function parseAPIError(text?: string): APIErrorInfo | null {
 }
 
 function explain(s: string, status?: number): [string, boolean | undefined] {
-  if (s.includes("no available gpu")) return ["推理服务暂时没有可用的 GPU", true];
-  if (s.includes("overloaded") || status === 529) return ["模型服务太忙，过载了", true];
+  if (s.includes("no available gpu")) return [t("lib-api-errors.no_gpu"), true];
+  if (s.includes("overloaded") || status === 529) return [t("lib-api-errors.overloaded"), true];
   if (status === 401 || status === 403 || s.includes("authentication") || s.includes("/login") || s.includes("login expire")) {
-    return ["登录过期了，要在电脑上重新 /login", false];
+    return [t("lib-api-errors.login_expired"), false];
   }
-  if (status === 429 || s.includes("rate limit") || s.includes("rate_limit")) return ["请求太多，被限流了", true];
-  if (s.includes("timed out") || s.includes("timeout")) return ["请求超时了", true];
-  if (s.includes("connection")) return ["连不上模型服务", true];
-  if (status === 400) return ["请求被拒绝：参数或上下文有问题", false];
-  if (status !== undefined && status >= 500 && status < 600) return ["模型服务暂时不可用", true];
+  if (status === 429 || s.includes("rate limit") || s.includes("rate_limit")) return [t("lib-api-errors.rate_limited"), true];
+  if (s.includes("timed out") || s.includes("timeout")) return [t("lib-api-errors.timeout"), true];
+  if (s.includes("connection")) return [t("lib-api-errors.no_connection"), true];
+  if (status === 400) return [t("lib-api-errors.bad_request"), false];
+  if (status !== undefined && status >= 500 && status < 600) return [t("lib-api-errors.unavailable"), true];
   const temporary = s.includes("temporary") || s.includes("try again");
-  return ["模型请求失败", temporary ? true : undefined];
+  return [t("lib-api-errors.failed"), temporary ? true : undefined];
 }
 
 /** Whether the card's 重试 can help: a login or a bad request is not fixed by trying again. */
@@ -62,6 +65,7 @@ export function retryable(e: APIErrorInfo): boolean {
   return e.transient !== false;
 }
 
+// i18n-ignore: what a person types to ask for a retry, in any language
 const RETRIES = new Set(["继续", "重试", "再试一次", "continue", "retry", "go on"]);
 
 /** A message that only asks to try again ("继续"): between two of the same error it folds into the card. */

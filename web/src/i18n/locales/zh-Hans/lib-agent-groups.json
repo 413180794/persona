@@ -1,0 +1,13 @@
+{
+  "by_machine": "按机器",
+  "by_repo": "按仓库",
+  "by_project": "按项目",
+  "by_state": "按状态",
+  "by_todo": "按待办",
+  "state_needs_you": "需要你",
+  "state_unread": "完成未看",
+  "state_working": "工作中",
+  "state_waiting": "待唤醒",
+  "state_muted": "已屏蔽",
+  "state_idle": "已看"
+}

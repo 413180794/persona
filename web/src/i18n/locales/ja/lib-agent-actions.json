@@ -1,0 +1,12 @@
+{
+  "save_failed": "変更できませんでした：{error}",
+  "pinned": "ピン留めしました",
+  "unpinned": "ピン留めを外しました",
+  "space_pinned": "スペースをピン留めしました",
+  "space_unpinned": "スペースのピン留めを外しました",
+  "muted": "通知をミュートしました",
+  "unmuted": "通知を再開しました",
+  "space_muted": "このスペースをミュートしました",
+  "space_unmuted": "このスペースの通知を再開しました",
+  "send_failed": "送信できませんでした：{error}"
+}

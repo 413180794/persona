@@ -1,0 +1,15 @@
+{
+  "state_checking": "確認中…",
+  "state_unreadable": "状態を取得できません",
+  "state_off": "オフ",
+  "state_no_credentials": "アプリの認証情報が未入力です",
+  "state_error": "接続できません：{error}",
+  "state_connecting": "接続中…",
+  "state_connected": "接続済み",
+  "state_connected_unpaired": "接続済み、ペアリング待ち",
+  "summary_off": "オフ",
+  "summary_disconnected": "接続できません",
+  "summary_connected": "接続済み",
+  "summary_unpaired": "ペアリング待ち",
+  "pairing_left": "有効期限：あと{minutes}分{seconds}秒"
+}

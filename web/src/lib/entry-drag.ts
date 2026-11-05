@@ -4,6 +4,7 @@
 // terminal's side is in views/session/terminal/feed.ts, the composer's in views/chat/Composer.tsx.
 import { dragHasFiles, escapePastePath } from "./terminal-clipboard";
 import { below } from "./files";
+import { t } from "../i18n";
 
 /** The drag type of a Files panel entry (Moshi's is `application/x-moshi-file`). */
 export const ENTRY_DRAG_TYPE = "application/x-persona-file";
@@ -68,13 +69,13 @@ export type EntryDrop = { action: "paste"; text: string } | { action: "refuse"; 
  * The path is escaped as a shell word, the way pasted files are.
  */
 export function terminalEntryDrop(entry: DraggedEntry, target: { mid: string; cwd: string; driving: boolean }): EntryDrop {
-  if (!target.driving) return { action: "refuse", toast: "接管终端后才能粘贴文件" };
-  if (entry.mid !== target.mid) return { action: "refuse", toast: "这个文件在另一台电脑上，不能拖进这个终端" };
+  if (!target.driving) return { action: "refuse", toast: t("lib-entry-drag.drive_first") };
+  if (entry.mid !== target.mid) return { action: "refuse", toast: t("lib-entry-drag.other_computer_terminal") };
   return { action: "paste", text: `@${escapePastePath(entryPath(entry, target.cwd))} ` };
 }
 
 /** A drop on the chat composer: the same `@path ` the composer's @ menu types (relative to the session's folder, as is). */
 export function composerEntryDrop(entry: DraggedEntry, target: { mid?: string; cwd?: string }): EntryDrop {
-  if (entry.mid !== target.mid) return { action: "refuse", toast: "这个文件在另一台电脑上，不能引用到这个会话" };
+  if (entry.mid !== target.mid) return { action: "refuse", toast: t("lib-entry-drag.other_computer_session") };
   return { action: "paste", text: `@${entryPath(entry, target.cwd ?? "")} ` };
 }

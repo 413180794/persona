@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { byAttention, stateOf } from "./format";
 import { hubWaits } from "./work";
 import type { AgentState, Machine, Session } from "./types";
@@ -6,11 +7,11 @@ export type AgentGrouping = "repo" | "space" | "state" | "machine" | "todo";
 // 按机器 is herdr's own layout (machine → workspace → tab, lib/herdr-tree.ts) and the default for a browser that never
 // picked one; a grouping picked before stays.
 export const AGENT_GROUPINGS: { key: AgentGrouping; label: string }[] = [
-  { key: "machine", label: "按机器" },
-  { key: "repo", label: "按仓库" },
-  { key: "space", label: "按项目" },
-  { key: "state", label: "按状态" },
-  { key: "todo", label: "按待办" },
+  { key: "machine", label: t("lib-agent-groups.by_machine") },
+  { key: "repo", label: t("lib-agent-groups.by_repo") },
+  { key: "space", label: t("lib-agent-groups.by_project") },
+  { key: "state", label: t("lib-agent-groups.by_state") },
+  { key: "todo", label: t("lib-agent-groups.by_todo") },
 ];
 
 // the grouping this browser chose last (jarvis.agentGrouping), by todo included (#1836); by machine until it chooses (#1990)
@@ -113,12 +114,12 @@ function byDate(a: Session, b: Session): number {
 export function buildAgentGroups(all: Session[], machines: Machine[], _grouping: "state", mutes: AgentMutes = { spaces: [], sessions: [] }): AgentGroup[] {
   const { live } = splitAgentSessions(all, machines);
   const groups: AgentGroup[] = [
-    { key: "state:needs", name: "需要你", state: "needs_you", sessions: [] },
-    { key: "state:unread", name: "完成未看", state: "unread", sessions: [] },
-    { key: "state:working", name: "工作中", state: "working", sessions: [] },
-    { key: "state:waiting", name: "待唤醒", sessions: [] },
-    { key: "state:muted", name: "已屏蔽", sessions: [] },
-    { key: "state:idle", name: "已看", state: "idle", sessions: [], folded: true },
+    { key: "state:needs", name: t("lib-agent-groups.state_needs_you"), state: "needs_you", sessions: [] },
+    { key: "state:unread", name: t("lib-agent-groups.state_unread"), state: "unread", sessions: [] },
+    { key: "state:working", name: t("lib-agent-groups.state_working"), state: "working", sessions: [] },
+    { key: "state:waiting", name: t("lib-agent-groups.state_waiting"), sessions: [] },
+    { key: "state:muted", name: t("lib-agent-groups.state_muted"), sessions: [] },
+    { key: "state:idle", name: t("lib-agent-groups.state_idle"), state: "idle", sessions: [], folded: true },
   ];
   for (const s of live) {
     const state = stateOf(s);

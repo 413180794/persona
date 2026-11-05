@@ -1,0 +1,8 @@
+{
+  "not_installed": "未インストール",
+  "enable_first": "先に有効化",
+  "needs_version": "{version}が必要（現在は{installed}）",
+  "newer_version": "新しいバージョン",
+  "older_version": "古いバージョン",
+  "satisfied": "条件を満たしています"
+}

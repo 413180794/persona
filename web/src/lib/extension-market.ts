@@ -7,6 +7,7 @@ import { api, enc } from "./api";
 import { extRoot, listOf } from "./extension-api";
 import { changed, type HubExtensionDetail, type ExtensionPermission } from "./extensions";
 import { previewConsent, type DependencyState, type PackMember } from "./extension-model";
+import { t } from "../i18n";
 
 /** One market the hub reads (its token, if any, is never sent back). */
 export interface Market {
@@ -150,24 +151,23 @@ export const isGitMarket = (spec: string) => /^(git:|git@|ssh:\/\/)/.test(spec.t
 export const marketKind = (spec: string): "github" | "git" | "web" => (spec.startsWith("github:") ? "github" : isGitMarket(spec) ? "git" : "web");
 
 /** The words under the add form's address field, and its placeholder: the three ways to write one. */
-export const MARKET_SPEC_PLACEHOLDER = "https://…、github:owner/repo 或 git:…";
-export const MARKET_SPEC_HINT =
-  "三种写法：https 地址（网站上的目录读其中的 persona-extensions.json，或索引文件本身）；github:owner/repo[@分支]（经 GitHub API 读，私有仓库填 token）；git:<地址>[#分支]（git@host:path.git、ssh://…、https://…，前面的 git: 对 git@ 的可以省略，用 hub 机器自己的 SSH 凭据，不收 token）。地址原样交给 hub，读不到时 hub 说原因。";
+export const MARKET_SPEC_PLACEHOLDER = t("lib-extension-market.spec_placeholder");
+export const MARKET_SPEC_HINT = t("lib-extension-market.spec_hint");
 
 export type ItemState = { kind: "install" | "upgrade" | "installed" | "problem" | "elsewhere"; label: string; tone: "accent" | "green" | "orange" | "red" | "gray" };
 
 /** Where a catalog extension stands on this hub, and what the button does. */
 export function itemState(it: CatalogItem): ItemState {
   if (it.installed && it.upgradable) {
-    if (it.problem) return { kind: "problem", label: `已装 ${it.installed}`, tone: "gray" };
-    return { kind: "upgrade", label: `可升级到 ${it.version}`, tone: "accent" };
+    if (it.problem) return { kind: "problem", label: t("lib-extension-market.installed_version", { version: it.installed }), tone: "gray" };
+    return { kind: "upgrade", label: t("lib-extension-market.upgrade_to", { version: it.version }), tone: "accent" };
   }
   if (it.installed) {
-    if (it.installed_source && it.installed_source !== "installed") return { kind: "elsewhere", label: it.installed_source === "builtin" ? "hub 自带" : "写在 hub.json 里", tone: "gray" };
-    return { kind: "installed", label: `已装 ${it.installed}`, tone: "green" };
+    if (it.installed_source && it.installed_source !== "installed") return { kind: "elsewhere", label: it.installed_source === "builtin" ? t("lib-extension-market.builtin") : t("lib-extension-market.in_hub_json"), tone: "gray" };
+    return { kind: "installed", label: t("lib-extension-market.installed_version", { version: it.installed }), tone: "green" };
   }
-  if (it.problem) return { kind: "problem", label: "装不了", tone: "orange" };
-  return { kind: "install", label: "未安装", tone: "gray" };
+  if (it.problem) return { kind: "problem", label: t("lib-extension-market.cant_install"), tone: "orange" };
+  return { kind: "install", label: t("lib-extension-market.not_installed"), tone: "gray" };
 }
 
 /** Uninstalling from here: only an extension this market installed. */
@@ -175,24 +175,24 @@ export const canUninstall = (it: CatalogItem) => Boolean(it.installed && it.from
 
 /** A market's line under its name: how many extensions, when it was read, whether it has a token. */
 export function marketLine(m: Market, ago: (iso?: string) => string): string {
-  return [`${m.extensions} 个扩展`, m.fetched_at ? `${ago(m.fetched_at)}读过` : "还没读过", m.has_token ? "有 token" : "", signatureText(m.signature)]
+  return [t("lib-extension-market.extensions_count", { count: m.extensions }), m.fetched_at ? t("lib-extension-market.read_ago", { ago: ago(m.fetched_at) }) : t("lib-extension-market.never_read"), m.has_token ? t("lib-extension-market.has_token") : "", signatureText(m.signature)]
     .filter(Boolean)
     .join(" · ");
 }
 
 const SIGNATURES: Record<string, string> = {
-  verified: "签名已验证",
-  signed: "签名已验证",
-  unsigned: "未签名",
-  invalid: "签名对不上",
-  missing: "签名不见了",
-  key_changed: "签名的 key 换了",
+  verified: t("lib-extension-market.sig_verified"),
+  signed: t("lib-extension-market.sig_verified"),
+  unsigned: t("lib-extension-market.sig_unsigned"),
+  invalid: t("lib-extension-market.sig_invalid"),
+  missing: t("lib-extension-market.sig_missing"),
+  key_changed: t("lib-extension-market.sig_key_changed"),
 };
 
 /** How the market's index is signed (#1848); "" from a hub that does not say. */
 export function signatureText(s?: MarketSignature): string {
   if (!s?.state) return "";
-  return SIGNATURES[s.state] ?? `签名：${s.state}`;
+  return SIGNATURES[s.state] ?? t("lib-extension-market.sig_state", { state: s.state });
 }
 
 /** A market's address as people read it. */
@@ -214,7 +214,7 @@ export const itemLine = (it: CatalogItem) => [it.version, it.publisher, it.marke
 export const previewVersion = (pv: MarketPreview) => (pv.upgrade && pv.from ? `${pv.from} → ${pv.manifest.version}` : pv.manifest.version);
 
 /** The button that agrees: install, upgrade, or upgrade with more permissions. */
-export const agreeLabel = (pv: MarketPreview) => (pv.upgrade ? (pv.more_permissions ? "同意新权限并升级" : "升级") : "同意并安装");
+export const agreeLabel = (pv: MarketPreview) => (pv.upgrade ? (pv.more_permissions ? t("lib-extension-market.agree_upgrade_more") : t("lib-extension-market.upgrade")) : t("lib-extension-market.agree_install"));
 
 // ── the settings route (?tab=extensions&extension=…) ──────────
 

@@ -1,0 +1,13 @@
+{
+  "main_chat": "主对话",
+  "quoted_title": "「{title}」",
+  "machine_with_id": "{machine}（{id}）",
+  "info_title": "Persona 助手的对话",
+  "info_title_named": "Persona 助手的对话 {name}",
+  "info_session": "会话 ID：{id}",
+  "info_machine": "所在机器：{machine}",
+  "info_cwd": "工作目录：{cwd}",
+  "info_launcher": "启动器：{launcher}",
+  "info_launcher_model": "启动器：{launcher} · 模型：{model}",
+  "info_resume": "在那台机器上接着聊：{command}"
+}

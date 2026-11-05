@@ -1,0 +1,13 @@
+{
+  "by_machine": "By machine",
+  "by_repo": "By repo",
+  "by_project": "By project",
+  "by_state": "By status",
+  "by_todo": "By to-do",
+  "state_needs_you": "Needs you",
+  "state_unread": "Unread",
+  "state_working": "Working",
+  "state_waiting": "Waiting",
+  "state_muted": "Muted",
+  "state_idle": "Seen"
+}

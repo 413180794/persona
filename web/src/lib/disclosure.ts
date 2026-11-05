@@ -6,6 +6,8 @@
 // would push the clicked row off the top, or move it more than `FOLLOW_STEP` in one frame (a folded trace's steps
 // arriving at once), where it stops following and the row stays put.
 
+import { t } from "../i18n";
+
 export interface ScrollAnchor {
   /** Which edge of the element is held: a header's top, or a work row's bottom when it folds from its 收起 button. */
   edge: "top" | "bottom";
@@ -112,7 +114,7 @@ export function followsAgain(m: { gap: number; delta: number }): boolean {
 
 /** The pill while away from the end: 有新消息 when something came in since leaving it, else 跳到底部. */
 export function jumpLabel(newSince: boolean): string {
-  return newSince ? "有新消息" : "跳到底部";
+  return newSince ? t("lib-disclosure.new_messages") : t("lib-disclosure.jump_to_bottom");
 }
 
 /** After the pause an unfolded card holds following for: pick it up again only when the view was following, the

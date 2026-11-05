@@ -1,6 +1,7 @@
 // Cookies the user picked in a file, for importing into ego lite on a Mac (#1304, docs/plan-ego-browser.md「导入
 // cookies」): parsed here in the page, grouped by site for the user to tick, and sent straight to the hub, which passes
 // them to the Mac and keeps nothing. Nothing here stores, logs or shows a value. Pure; tested in cookies.test.ts.
+import { t } from "../i18n";
 
 export interface Cookie {
   name: string;
@@ -78,10 +79,10 @@ function json(text: string): ParsedCookies {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error("读不懂这个文件：既不是 cookies.txt，也不是 JSON");
+    throw new Error(t("lib-cookies.unreadable"));
   }
   const list = Array.isArray(data) ? data : data && typeof data === "object" && Array.isArray((data as { cookies?: unknown }).cookies) ? (data as { cookies: unknown[] }).cookies : null;
-  if (!list) throw new Error("JSON 里没有 cookie 列表");
+  if (!list) throw new Error(t("lib-cookies.json_no_list"));
   const cookies: Cookie[] = [];
   let bad = 0;
   for (const raw of list) {
@@ -110,9 +111,9 @@ function json(text: string): ParsedCookies {
 
 /** A cookie file the user picked: JSON when it looks like JSON, else cookies.txt. Throws with a reason when it is neither. */
 export function parseCookies(text: string): ParsedCookies {
-  const t = text.replace(/^﻿/, "").trim();
-  const out = t.startsWith("[") || t.startsWith("{") ? json(t) : netscape(t);
-  if (!out.cookies.length) throw new Error(out.format === "json" ? "JSON 里没有 cookie" : "文件里没有 cookie（应是 cookies.txt：每行用制表符分隔的 7 列）");
+  const body = text.replace(/^﻿/, "").trim();
+  const out = body.startsWith("[") || body.startsWith("{") ? json(body) : netscape(body);
+  if (!out.cookies.length) throw new Error(out.format === "json" ? t("lib-cookies.json_empty") : t("lib-cookies.txt_empty"));
   return out;
 }
 

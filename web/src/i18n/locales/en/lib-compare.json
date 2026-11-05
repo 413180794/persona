@@ -1,0 +1,10 @@
+{
+  "invalid_docx": "Not a valid Word file",
+  "page": "Page {n}",
+  "slide": "Slide {n}",
+  "sheet": "Sheet “{name}”",
+  "chart": "Chart",
+  "chart_titled": "Chart: {title}",
+  "series_separator": "; ",
+  "notes": "Notes:"
+}

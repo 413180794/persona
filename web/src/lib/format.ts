@@ -1,4 +1,5 @@
 import type { AgentState, Session, SessionCapabilities } from "./types";
+import { formatDate, formatRelative, t } from "../i18n";
 import { workLine } from "./work";
 
 // Missing session metadata is not permission to write; legacy sources retain their existing behavior.
@@ -10,12 +11,12 @@ export function sessionCan(s: Session | undefined, operation: keyof SessionCapab
 
 export function sourceSubtitle(s?: Session): string {
   if (!s?.source_kind) return "";
-  const label = s.source_kind === "codex_app_server" ? "Codex 实时" : s.source_kind === "codex_history" ? "Codex 历史" : s.source_kind === "identity_conflict" ? "身份冲突"
-    : s.source_kind === "claude_bg" ? "Claude 后台"
+  const label = s.source_kind === "codex_app_server" ? t("lib-format.source_codex_live") : s.source_kind === "codex_history" ? t("lib-format.source_codex_history") : s.source_kind === "identity_conflict" ? t("lib-format.source_identity_conflict")
+    : s.source_kind === "claude_bg" ? t("lib-format.source_claude_background")
     : s.source_kind === "runtime" ? s.agent_label || s.agent || "runtime" // an agent runtime's session (docs/runtimes.md): its own name
     : s.source_kind;
   const detail = s.source_kind !== "identity_conflict" && s.agent_name ? ` · ${s.agent_name}` : "";
-  return sessionCan(s, "send") ? label + detail : `${label}${detail} · 仅查看：${s.read_only_reason || "此来源尚未允许发送"}`;
+  return sessionCan(s, "send") ? label + detail : t("lib-format.read_only", { source: label + detail, reason: s.read_only_reason || t("lib-format.read_only_default_reason") });
 }
 
 export function resumeCommand(s: Session): string {
@@ -39,12 +40,12 @@ export function sessionDeletable(s: Session): boolean {
 }
 
 export const STATE_LABEL: Record<AgentState, string> = {
-  needs_you: "需要你",
-  working: "工作中",
-  unread: "完成未看",
-  idle: "已看",
-  offline: "未运行",
-  unknown: "未知",
+  needs_you: t("lib-format.state_needs_you"),
+  working: t("lib-format.state_working"),
+  unread: t("lib-format.state_unread"),
+  idle: t("lib-format.state_idle"),
+  offline: t("lib-format.state_offline"),
+  unknown: t("lib-format.state_unknown"),
 };
 
 // docs/agent-states.md: needs you → unread → working → idle → unknown → offline
@@ -110,7 +111,7 @@ export function externalLink(s?: Pick<Session, "external_url">): string | undefi
 }
 
 export function sessionTitle(s: Pick<Session, "title" | "cwd">): string {
-  return s.title?.trim() || baseName(s.cwd) || "未命名会话";
+  return s.title?.trim() || baseName(s.cwd) || t("lib-format.untitled_session");
 }
 
 export function baseName(p?: string): string {
@@ -130,36 +131,35 @@ export function shortPath(p?: string): string {
   return p.replace(/^\/(Users|home|data\d*\/home)\/[^/]+/, "~");
 }
 
-const rtf = new Intl.RelativeTimeFormat("zh-CN", { numeric: "auto" });
-
 export function ago(iso?: string, now = Date.now()): string {
   if (!iso) return "";
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t) || t < 86400_000) return "";
-  const s = Math.round((now - t) / 1000);
-  if (s < 45) return "刚刚";
-  if (s < 3600) return rtf.format(-Math.round(s / 60), "minute");
-  if (s < 86400) return rtf.format(-Math.round(s / 3600), "hour");
-  if (s < 86400 * 7) return rtf.format(-Math.round(s / 86400), "day");
-  return new Date(t).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts) || ts < 86400_000) return "";
+  const s = Math.round((now - ts) / 1000);
+  // 「刚刚」 rather than Intl's 「现在」 for under a minute
+  if (s < 45) return t("lib-format.just_now");
+  if (s < 3600) return formatRelative(-Math.round(s / 60), "minute");
+  if (s < 86400) return formatRelative(-Math.round(s / 3600), "hour");
+  if (s < 86400 * 7) return formatRelative(-Math.round(s / 86400), "day");
+  return formatDate(ts, { month: "numeric", day: "numeric" });
 }
 
 export function duration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s} 秒`;
+  if (s < 60) return t("lib-format.seconds", { s });
   const m = Math.floor(s / 60);
-  if (m < 60) return s % 60 ? `${m} 分 ${s % 60} 秒` : `${m} 分钟`;
+  if (m < 60) return s % 60 ? t("lib-format.minutes_seconds", { m, s: s % 60 }) : t("lib-format.minutes", { m });
   const h = Math.floor(m / 60);
-  return m % 60 ? `${h} 小时 ${m % 60} 分` : `${h} 小时`;
+  return m % 60 ? t("lib-format.hours_minutes", { h, m: m % 60 }) : t("lib-format.hours", { h });
 }
 
 // For a running timer in a list: minutes are enough once past one.
 export function shortDuration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s} 秒`;
+  if (s < 60) return t("lib-format.seconds", { s });
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} 分钟`;
-  return m % 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分` : `${m / 60} 小时`;
+  if (m < 60) return t("lib-format.minutes", { m });
+  return m % 60 ? t("lib-format.hours_minutes", { h: Math.floor(m / 60), m: m % 60 }) : t("lib-format.hours", { h: m / 60 });
 }
 
 export function clock(iso?: string): string {
@@ -169,7 +169,7 @@ export function clock(iso?: string): string {
   const today = new Date();
   const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   if (d.toDateString() === today.toDateString()) return hm;
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+  return t("lib-format.date_time", { date: formatDate(d, { month: "short", day: "numeric" }), time: hm });
 }
 
 export function bytes(n?: number): string {

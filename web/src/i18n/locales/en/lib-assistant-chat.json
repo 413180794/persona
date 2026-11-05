@@ -1,0 +1,13 @@
+{
+  "main_chat": "main chat",
+  "quoted_title": "“{title}”",
+  "machine_with_id": "{machine} ({id})",
+  "info_title": "Persona assistant chat",
+  "info_title_named": "Persona assistant chat {name}",
+  "info_session": "Session ID: {id}",
+  "info_machine": "Machine: {machine}",
+  "info_cwd": "Working directory: {cwd}",
+  "info_launcher": "Launcher: {launcher}",
+  "info_launcher_model": "Launcher: {launcher} · Model: {model}",
+  "info_resume": "Continue on that machine: {command}"
+}

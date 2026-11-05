@@ -1,0 +1,10 @@
+{
+  "archived_title": "旧メインチャット · {date}まで",
+  "unknown_error": "不明なエラー",
+  "trigger_manual": "手動",
+  "trigger_auto": "自動",
+  "trigger_idle": "アイドル時",
+  "tokens_wan": "{n}万",
+  "compacted_above": "ここまでの内容を圧縮しました",
+  "tokens_before": "圧縮前 {tokens}トークン"
+}

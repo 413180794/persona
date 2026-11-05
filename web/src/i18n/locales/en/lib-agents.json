@@ -1,0 +1,21 @@
+{
+  "setup_missing": "This version of lark-connector has no personal agents. Update lark-connector and try again.",
+  "setup_disabled": "Personal agents are off in lark-connector: set lark-connector_AGENT_BRIDGE=true in its deployment and restart it",
+  "setup_no_accounts": "No personal agent accounts connected yet: add Cue or Grok Bot in lark-connector's settings",
+  "other": "Other",
+  "group_date": "Date",
+  "group_provider": "Source",
+  "group_none": "No grouping",
+  "sort_updated": "Recently updated",
+  "sort_unread": "Unread count",
+  "sort_name": "Name",
+  "show_all": "All",
+  "show_unread": "Unread only",
+  "show_sendable": "Can send only",
+  "date_today": "Today",
+  "date_yesterday": "Yesterday",
+  "date_week": "Last 7 days",
+  "date_month": "Last 30 days",
+  "date_older": "Older",
+  "pinned": "Pinned"
+}

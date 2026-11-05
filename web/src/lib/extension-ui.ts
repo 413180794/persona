@@ -7,6 +7,7 @@
 // inbox_item (docs/extensions.md「收件箱条目」) draws the body of an inbox item from the extension's own connector.
 import { api, ApiError, enc } from "./api";
 import { extRoot } from "./extension-api";
+import { t } from "../i18n";
 
 /** The UI version the web draws (context.ui_version). */
 export const UI_VERSION = 3;
@@ -301,8 +302,8 @@ export function submitValues(view: UIView | null | undefined, values: Record<str
 
 /** A number field typed into that does not read as a number. */
 export function numberProblem(text: string): string {
-  const t = text.trim();
-  return t && !Number.isFinite(Number(t)) ? "要是一个数" : "";
+  const s = text.trim();
+  return s && !Number.isFinite(Number(s)) ? t("lib-extension-ui.not_a_number") : "";
 }
 
 /** How a section lays out: metrics side by side, buttons in one row, everything else on its own line. */
@@ -441,7 +442,7 @@ function drawable(it: unknown): it is UIItem {
  * stays), like the hub does for an older app. Only a view that does not read at all is an error.
  */
 export function readView(raw: unknown): UIView {
-  if (!isObject(raw) || !Array.isArray(raw.sections)) throw new Error("扩展画的界面读不出来");
+  if (!isObject(raw) || !Array.isArray(raw.sections)) throw new Error(t("lib-extension-ui.unreadable_view"));
   const sections: UISection[] = [];
   for (const s of raw.sections) {
     if (!isObject(s)) continue;

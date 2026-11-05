@@ -1,0 +1,22 @@
+{
+  "source_codex_live": "Codex live",
+  "source_codex_history": "Codex history",
+  "source_identity_conflict": "Identity conflict",
+  "source_claude_background": "Claude background",
+  "read_only": "{source} · View only: {reason}",
+  "read_only_default_reason": "This source doesn't allow sending yet",
+  "state_needs_you": "Needs you",
+  "state_working": "Working",
+  "state_unread": "Unread",
+  "state_idle": "Seen",
+  "state_offline": "Not running",
+  "state_unknown": "Unknown",
+  "untitled_session": "Untitled session",
+  "just_now": "Just now",
+  "seconds": "{s} sec",
+  "minutes_seconds": "{m} min {s} sec",
+  "minutes": "{m} min",
+  "hours_minutes": "{h} hr {m} min",
+  "hours": "{h} hr",
+  "date_time": "{date}, {time}"
+}

@@ -1,0 +1,11 @@
+{
+  "no_gpu": "The inference service has no free GPU right now",
+  "overloaded": "The model service is overloaded",
+  "login_expired": "Login expired: run /login again on the computer",
+  "rate_limited": "Too many requests, rate limited",
+  "timeout": "The request timed out",
+  "no_connection": "Can't reach the model service",
+  "bad_request": "Request rejected: something is wrong with the parameters or context",
+  "unavailable": "The model service is unavailable for now",
+  "failed": "The model request failed"
+}

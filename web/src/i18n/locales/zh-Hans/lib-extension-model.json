@@ -1,0 +1,8 @@
+{
+  "not_installed": "还没安装",
+  "enable_first": "先启用",
+  "needs_version": "要 {version}，现在是 {installed}",
+  "newer_version": "更新版本",
+  "older_version": "旧版本",
+  "satisfied": "已满足"
+}

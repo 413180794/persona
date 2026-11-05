@@ -1,5 +1,6 @@
 // 设置 › 连接器 › 飞书机器人 (docs/bots.md, the app's FeishuBotModel): GET / PUT /api/v1/bots/feishu, pairing with a
 // code sent to the bot from Feishu, and what the bot may do. Pure helpers here; the page is views/settings/FeishuBot.tsx.
+import { t } from "../i18n";
 import { api } from "./api";
 
 export interface BotFeatures {
@@ -87,11 +88,11 @@ export function withFeature(f: BotFeatures, key: keyof BotFeatures, on: boolean)
 
 /** What the status line says. */
 export function botStateText(st: FeishuBotStatus | null, loading = false): string {
-  if (!st) return loading ? "正在检查…" : "读不到状态";
-  if (!st.enabled) return "未打开";
-  if (!st.has_secret) return "还没填应用凭证";
-  if (!st.connected) return st.error ? `连不上：${st.error}` : "正在连接…";
-  return st.owner ? "已连接" : "已连接，等你配对";
+  if (!st) return loading ? t("lib-feishu-bot.state_checking") : t("lib-feishu-bot.state_unreadable");
+  if (!st.enabled) return t("lib-feishu-bot.state_off");
+  if (!st.has_secret) return t("lib-feishu-bot.state_no_credentials");
+  if (!st.connected) return st.error ? t("lib-feishu-bot.state_error", { error: st.error }) : t("lib-feishu-bot.state_connecting");
+  return st.owner ? t("lib-feishu-bot.state_connected") : t("lib-feishu-bot.state_connected_unpaired");
 }
 
 /** The status dot's tone (none: off or unknown). */
@@ -104,9 +105,9 @@ export function botTone(st: FeishuBotStatus | null): "green" | "red" | "orange" 
 /** The connectors list's one-word summary. */
 export function botSummary(st: FeishuBotStatus | null): string {
   if (!st) return "";
-  if (!st.enabled) return "未打开";
-  if (!st.connected) return "连不上";
-  return st.owner ? "已连接" : "待配对";
+  if (!st.enabled) return t("lib-feishu-bot.summary_off");
+  if (!st.connected) return t("lib-feishu-bot.summary_disconnected");
+  return st.owner ? t("lib-feishu-bot.summary_connected") : t("lib-feishu-bot.summary_unpaired");
 }
 
 /** A pairing code still valid at `now` (ms). */
@@ -118,5 +119,5 @@ export function livePairing(st: FeishuBotStatus | null, now = Date.now()) {
 /** 「9 分 3 秒内有效」. */
 export function pairingLeft(expiresAt: number, now = Date.now()): string {
   const left = Math.max(0, Math.floor(expiresAt - now / 1000));
-  return `${Math.floor(left / 60)} 分 ${left % 60} 秒内有效`;
+  return t("lib-feishu-bot.pairing_left", { minutes: Math.floor(left / 60), seconds: left % 60 });
 }

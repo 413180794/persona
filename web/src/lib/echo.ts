@@ -10,6 +10,7 @@ import type { Item } from "./types";
 export const CLOCK_SLACK_MS = 120_000;
 
 /** The words the hub adds where it cut a long text for the page (`…（已截断，共 N 字节）`). */
+// i18n-ignore: matches the words the hub writes into the text it cut
 const CUT_MARK = "\n…（已截断";
 
 /** Comparable form: the phone's image note, pasted wrappers and Claude's "[Image #21]" placeholders removed, no whitespace. */

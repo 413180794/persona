@@ -6,6 +6,7 @@
 //
 // The pure parts (state words, rows, sign-in checks, footers, thread pages) are plain functions for the tests.
 
+import { formatList, t } from "../i18n";
 import { api, enc } from "./api";
 
 // ── wire types ───────────────────────────────────────────
@@ -106,21 +107,21 @@ export interface GitHubInboxOptions {
 export function connectorState(c: HubConnector): string {
   switch (c.status) {
     case "ok":
-      return "已连接";
+      return t("lib-connectors.state_ok");
     case "not_configured":
-      return "未配置";
+      return t("lib-connectors.state_not_configured");
     case "not_signed_in":
-      return "未登录";
+      return t("lib-connectors.state_not_signed_in");
     case "no_permission":
-      return "没有权限";
+      return t("lib-connectors.state_no_permission");
     case "rate_limited":
-      return "请求太多，暂停中";
+      return t("lib-connectors.state_rate_limited");
     case "disabled":
-      return "已关闭";
+      return t("lib-connectors.state_disabled");
     case "error":
-      return "出错了";
+      return t("lib-connectors.state_error");
     default:
-      return "状态未知";
+      return t("lib-connectors.state_unknown");
   }
 }
 
@@ -171,7 +172,7 @@ export function storesData(c: HubConnector): boolean {
 
 /** The connector's switch: 同步 X for one that brings data in, 启用 X for one that does not. */
 export function switchLabel(c: HubConnector): string {
-  return `${storesData(c) ? "同步" : "启用"} ${c.name}`;
+  return storesData(c) ? t("lib-connectors.switch_sync", { name: c.name }) : t("lib-connectors.switch_enable", { name: c.name });
 }
 
 export function isSignedIn(c: HubConnector): boolean {
@@ -217,14 +218,14 @@ const PROFILES = new Map<string, ConnectorProfile>([
     "telegram",
     {
       brand: "telegram",
-      openTitle: "在 Telegram 里回复",
-      reads: "它的私聊和群",
-      signInFooter: "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。",
+      openTitle: t("lib-connectors.telegram_open_title"),
+      reads: t("lib-connectors.telegram_reads"),
+      signInFooter: t("lib-connectors.telegram_sign_in_footer"),
       logoutEndsRemoteSession: true,
     },
   ],
   // No brand yet: the mark and its terms of use are undecided, so 微信 draws the generic icon until they are.
-  ["wechat-connector", { signInFooter: "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。" }],
+  ["wechat-connector", { signInFooter: t("lib-connectors.wechat-connector_sign_in_footer") }],
 ]);
 
 /** Which mark a connector has of its own; others draw the generic one. */
@@ -240,34 +241,34 @@ export function connectorOpenTitle(id: string): string | undefined {
 // ── its page ─────────────────────────────────────────────
 
 export function switchFooter(c: HubConnector): string {
-  if (!storesData(c)) return isEnabled(c) ? `关掉后 ${c.name} 停下来；登录状态留着。` : "打开后才能登录。";
-  if (isEnabled(c)) return `关掉后不再读 ${c.name}；登录状态和已经存下的数据都留着。`;
-  return `打开后才能登录，登录后${PROFILES.get(c.id)?.reads ?? "它的内容"}进知识库和收件箱，助手也能查。`;
+  if (!storesData(c)) return isEnabled(c) ? t("lib-connectors.switch_footer_bot_on", { name: c.name }) : t("lib-connectors.switch_footer_bot_off");
+  if (isEnabled(c)) return t("lib-connectors.switch_footer_on", { name: c.name });
+  return t("lib-connectors.switch_footer_off", { reads: PROFILES.get(c.id)?.reads ?? t("lib-connectors.reads_default") });
 }
 
 export function signInFooter(c: HubConnector): string {
-  return PROFILES.get(c.id)?.signInFooter ?? "登录状态加密存在 hub 上，退出登录时删掉。";
+  return PROFILES.get(c.id)?.signInFooter ?? t("lib-connectors.sign_in_footer");
 }
 
 /** The sign-out confirmation. Only a connector known to end the remote session says so; every other one (GitHub's device
  * token, an extension's key such as wechat-connector's) only has the hub forget its copy, so it says the authorization stays. */
 export function logoutMessage(c: HubConnector): string {
-  if (PROFILES.get(c.id)?.logoutEndsRemoteSession) return `hub 上存的 API 凭据和登录状态都会删掉，${c.name} 那边这个设备会话也会结束。再用要重新登录。`;
-  return "hub 上存的凭据和登录状态会删掉，再用要重新登录。对方服务里的授权不会自动撤销，需要的话到那边撤销。";
+  if (PROFILES.get(c.id)?.logoutEndsRemoteSession) return t("lib-connectors.logout_remote", { name: c.name });
+  return t("lib-connectors.logout");
 }
 
 export function feedsFooter(c: HubConnector): string {
   const lines: string[] = [];
   if (c.archive !== undefined) {
-    lines.push(c.archive ? `进知识库：${c.name} 的内容存进知识库，助手和 AI 分身都能查。关掉后不再存新的，已存的留着。` : `不进知识库：不再存新的内容。收件箱和助手查 ${c.name} 照常。`);
+    lines.push(c.archive ? t("lib-connectors.feeds_archive_on", { name: c.name }) : t("lib-connectors.feeds_archive_off", { name: c.name }));
   }
-  if (c.inbox === false) lines.push("不进收件箱：不再收新的，已有的条目留着。");
+  if (c.inbox === false) lines.push(t("lib-connectors.feeds_inbox_off"));
   return lines.join("\n");
 }
 
 export function deletedLine(r: ConnectorDeleted, withInbox = true): string {
-  const kb = `知识库里 ${r.chats ?? 0} 个会话、${r.people ?? 0} 个人`;
-  return withInbox ? `已删除：${kb}，收件箱里 ${r.inbox ?? 0} 条。` : `已删除：${kb}。`;
+  const vars = { chats: r.chats ?? 0, people: r.people ?? 0, inbox: r.inbox ?? 0 };
+  return withInbox ? t("lib-connectors.deleted_with_inbox", vars) : t("lib-connectors.deleted", vars);
 }
 
 /** Every field of the step on screen is filled in. */
@@ -318,26 +319,26 @@ export function fieldInput(f: PromptField): { type: string; inputMode?: "numeric
 // ── GitHub ───────────────────────────────────────────────
 
 export function scopeNames(missing: GitHubMissing[]): string {
-  return missing.map((m) => m.scope).join("、");
+  return formatList(missing.map((m) => m.scope), { type: "conjunction", style: "narrow" });
 }
 
 /** A computer's gh login, in a line. */
 export function githubMachineLine(m: GitHubMachine): string {
   switch (m.state) {
     case "signed_in": {
-      const who = `gh 已登录${m.account ? ` · ${m.account}` : ""}`;
-      return m.missing?.length ? `${who} · 少 ${scopeNames(m.missing)} 权限` : who;
+      const who = m.account ? t("lib-connectors.gh_signed_in_account", { account: m.account }) : t("lib-connectors.gh_signed_in");
+      return m.missing?.length ? t("lib-connectors.gh_missing_scopes", { who, scopes: scopeNames(m.missing) }) : who;
     }
     case "not_signed_in":
-      return "gh 没有登录";
+      return t("lib-connectors.gh_not_signed_in");
     case "no_gh":
-      return "没装 gh";
+      return t("lib-connectors.gh_not_installed");
     case "too_old":
-      return "personad 太旧，读不了 gh 的登录";
+      return t("lib-connectors.gh_too_old");
     case "offline":
-      return "离线";
+      return t("lib-connectors.gh_offline");
     default:
-      return `读不了 gh 的登录${m.error ? `：${m.error}` : ""}`;
+      return m.error ? t("lib-connectors.gh_unreadable_error", { error: m.error }) : t("lib-connectors.gh_unreadable");
   }
 }
 
@@ -348,9 +349,9 @@ export function githubMachineWarns(m: GitHubMachine): boolean {
 /** What to do about the scopes the token in use lacks. */
 export function githubScopeAdvice(auth: GitHubAuth, missing: GitHubMissing[]): string {
   const names = scopeNames(missing);
-  if (auth.source === "device") return `设备码登录少了 ${names} 权限：先换成别的登录方式，再用设备码重新登录一次。`;
-  const machine = auth.machines.find((m) => m.id === auth.machine)?.name ?? "这台电脑";
-  return `${machine} 的 gh 少了 ${names} 权限：在那台电脑上运行 gh auth refresh -s ${missing.map((m) => m.scope).join(",")}，或者改用设备码登录。`;
+  if (auth.source === "device") return t("lib-connectors.scope_advice_device", { scopes: names });
+  const machine = auth.machines.find((m) => m.id === auth.machine)?.name ?? t("lib-connectors.this_computer");
+  return t("lib-connectors.scope_advice_gh", { machine, scopes: names, command: `gh auth refresh -s ${missing.map((m) => m.scope).join(",")}` });
 }
 
 /** GitHub's inbox options as the hub gives them, or null when it gives none (or not that shape). */
@@ -364,21 +365,20 @@ export function githubOptions(raw: unknown): GitHubInboxOptions | null {
 
 /** The CI choices, most quiet first. */
 export const CI_MODES: { value: string; label: string }[] = [
-  { value: "off", label: "关闭" },
-  { value: "default_branch", label: "只看默认分支" },
-  { value: "mine", label: "加上我的 PR" },
-  { value: "all", label: "全部" },
+  { value: "off", label: t("lib-connectors.ci_mode_off") },
+  { value: "default_branch", label: t("lib-connectors.ci_mode_default_branch") },
+  { value: "mine", label: t("lib-connectors.ci_mode_mine") },
+  { value: "all", label: t("lib-connectors.ci_mode_all") },
 ];
 
 export function githubInboxFooter(o: GitHubInboxOptions): string {
   const ci =
-    o.ci === "off" ? "CI 失败不进收件箱。"
-      : o.ci === "default_branch" ? "只有默认分支的 CI 失败进收件箱，算「需要你」。"
-        : o.ci === "all" ? "所有分支的 CI 失败都算「需要你」。"
-          : "默认分支和你自己开着的 PR 的 CI 失败算「需要你」，其他分支的算「知悉即可」。";
-  const auto = (o.ignore_branches ?? ["train/*"]).join("、");
-  return `${ci}同一个分支的失败合成一件，重跑也算同一件；后来跑成功、分支删了或 PR 合了就自动处理掉。自动分支（${auto}）不提醒。`
-    + "真人的 @、请你 review、要求修改算「需要你」，机器人发的算「知悉即可」。静音的仓库什么都不进收件箱，已有的也会处理掉。";
+    o.ci === "off" ? t("lib-connectors.ci_off")
+      : o.ci === "default_branch" ? t("lib-connectors.ci_default_branch")
+        : o.ci === "all" ? t("lib-connectors.ci_all")
+          : t("lib-connectors.ci_mine");
+  const auto = formatList(o.ignore_branches ?? ["train/*"], { type: "conjunction", style: "narrow" });
+  return t("lib-connectors.inbox_footer", { ci, auto });
 }
 
 /** A repository to mute: owner/name, not one already muted. */
@@ -537,23 +537,23 @@ export function startsGroup(m: ThreadMessage, prev?: ThreadMessage): boolean {
 /** A file / voice message described: 示例.pdf · 278 KB, 语音 0:12. */
 export function mediaLine(m: ThreadMedia): string {
   const dur = m.duration ? `${Math.floor(m.duration / 60)}:${String(m.duration % 60).padStart(2, "0")}` : "";
-  if (m.kind === "voice") return ["语音", dur].filter(Boolean).join(" ");
-  if (m.kind === "video") return ["视频", dur].filter(Boolean).join(" ");
+  if (m.kind === "voice") return [t("lib-connectors.media_voice"), dur].filter(Boolean).join(" ");
+  if (m.kind === "video") return [t("lib-connectors.media_video"), dur].filter(Boolean).join(" ");
   const size = m.size ? (m.size >= 1 << 20 ? `${(m.size / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(m.size / 1024))} KB`) : "";
-  return [m.name || "文件", size].filter(Boolean).join(" · ");
+  return [m.name || t("lib-connectors.media_file"), size].filter(Boolean).join(" · ");
 }
 
 /** GitHub's state of a pull request / issue in a word. */
 export function githubStateLabel(state?: string, kind?: string): string {
   switch (state) {
     case "open":
-      return "开着";
+      return t("lib-connectors.gh_state_open");
     case "merged":
-      return "已合并";
+      return t("lib-connectors.gh_state_merged");
     case "closed":
-      return kind === "issue" ? "已关闭" : "已关闭（未合并）";
+      return kind === "issue" ? t("lib-connectors.gh_state_closed") : t("lib-connectors.gh_state_closed_unmerged");
     case "draft":
-      return "草稿";
+      return t("lib-connectors.gh_state_draft");
     default:
       return state ?? "";
   }
@@ -562,28 +562,28 @@ export function githubStateLabel(state?: string, kind?: string): string {
 export function reviewLabel(review?: string): string {
   switch (review) {
     case "approved":
-      return "批准了";
+      return t("lib-connectors.review_approved");
     case "changes_requested":
-      return "要求修改";
+      return t("lib-connectors.review_changes_requested");
     case "dismissed":
-      return "review 被撤回";
+      return t("lib-connectors.review_dismissed");
     default:
-      return "review 了";
+      return t("lib-connectors.review_commented");
   }
 }
 
 export function checkLabel(state: string): string {
   switch (state) {
     case "success":
-      return "通过";
+      return t("lib-connectors.check_success");
     case "failure":
-      return "失败";
+      return t("lib-connectors.check_failure");
     case "pending":
-      return "进行中";
+      return t("lib-connectors.check_pending");
     case "skipped":
-      return "跳过";
+      return t("lib-connectors.check_skipped");
     case "cancelled":
-      return "已取消";
+      return t("lib-connectors.check_cancelled");
     default:
       return state;
   }

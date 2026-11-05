@@ -1,0 +1,10 @@
+{
+  "archived_title": "Old main chat · to {date}",
+  "unknown_error": "Unknown error",
+  "trigger_manual": "Manual",
+  "trigger_auto": "Auto",
+  "trigger_idle": "While idle",
+  "tokens_wan": "{n} × 10,000",
+  "compacted_above": "Context above compacted",
+  "tokens_before": "{tokens} tokens before"
+}

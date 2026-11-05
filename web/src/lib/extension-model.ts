@@ -1,4 +1,6 @@
 // The extension model shared by the web app and admin: a confirmation covers every preview in order.
+
+import { t } from "../i18n";
 export interface Contribution {
   point: string;
   id: string;
@@ -48,9 +50,9 @@ export function dependentError(e: unknown): Dependent[] | null {
 
 export function dependencyText(d: DependencyState): string {
   switch (d.state) {
-    case "missing": return "还没安装";
-    case "disabled": return "先启用";
-    case "old": return `要 ${d.version || "更新版本"}，现在是 ${d.installed || "旧版本"}`;
-    default: return ["已满足", d.installed].filter(Boolean).join(" · ");
+    case "missing": return t("lib-extension-model.not_installed");
+    case "disabled": return t("lib-extension-model.enable_first");
+    case "old": return t("lib-extension-model.needs_version", { version: d.version || t("lib-extension-model.newer_version"), installed: d.installed || t("lib-extension-model.older_version") });
+    default: return [t("lib-extension-model.satisfied"), d.installed].filter(Boolean).join(" · ");
   }
 }

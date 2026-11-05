@@ -1,0 +1,10 @@
+{
+  "invalid_docx": "不是有效的 Word 文件",
+  "page": "第 {n} 页",
+  "slide": "第 {n} 张幻灯片",
+  "sheet": "工作表「{name}」",
+  "chart": "图表",
+  "chart_titled": "图表：{title}",
+  "series_separator": "；",
+  "notes": "备注："
+}

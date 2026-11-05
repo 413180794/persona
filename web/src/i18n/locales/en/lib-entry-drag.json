@@ -1,0 +1,5 @@
+{
+  "drive_first": "Take over the terminal to paste files",
+  "other_computer_terminal": "This file is on another computer, so it can't go into this terminal",
+  "other_computer_session": "This file is on another computer, so this session can't reference it"
+}

@@ -1,0 +1,4 @@
+{
+  "too_big_image": "{name}は大きすぎます（画像は8MBまで）",
+  "too_big_file": "{name}は大きすぎます（ファイルは200MBまで）"
+}

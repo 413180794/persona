@@ -1,6 +1,7 @@
 // The Agents list's quick filters (iOS AgentFilter / QuickFilterBar): 全部 / 需要你 / 未读 / 工作中, stacked on any
 // grouping. Under a filter the agents it showed when it was chosen stay (`kept`): one opened from 未读 is seen now but
 // keeps its place, so the next one is still right below it.
+import { t } from "../i18n";
 import type { AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
 import { agentKey, isSpacePinned, type AgentPins } from "./pins";
@@ -10,10 +11,10 @@ import type { AgentState, Session } from "./types";
 export type AgentFilter = "all" | "needs" | "unread" | "working";
 
 export const AGENT_FILTERS: { key: AgentFilter; label: string; state?: AgentState }[] = [
-  { key: "all", label: "全部" },
-  { key: "needs", label: "需要你", state: "needs_you" },
-  { key: "unread", label: "未读", state: "unread" },
-  { key: "working", label: "工作中", state: "working" },
+  { key: "all", label: t("lib-agent-filter.all") },
+  { key: "needs", label: t("lib-agent-filter.needs_you"), state: "needs_you" },
+  { key: "unread", label: t("lib-agent-filter.unread"), state: "unread" },
+  { key: "working", label: t("lib-agent-filter.working"), state: "working" },
 ];
 
 export function agentFilter(value: string | null): AgentFilter {

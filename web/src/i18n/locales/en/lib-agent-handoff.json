@@ -1,0 +1,5 @@
+{
+  "context": "Machine: {machine} ({machine_id})\nSession: {session}\nDirectory: {cwd}\nStatus: {state}",
+  "last_said": "Last said: {text}",
+  "ask": "Take a look at this agent (agent_read): what it's doing, how far it's got, and whether it's waiting on me. Log its progress in the project it belongs to (kb_update, and register its dirs if they aren't yet). List what needs my decision, and move forward whatever you can on my behalf."
+}

@@ -1,10 +1,16 @@
 import { api, setToken } from "./api";
+import { t } from "../i18n";
 
 function browserName() {
   const ua = navigator.userAgent;
-  const b = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "浏览器";
+  const b = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : t("lib-auth.browser");
   const os = /Mac OS X/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "";
   return [b, os].filter(Boolean).join(" · ");
+}
+
+/** The name this browser's device token goes by on the hub. */
+function deviceName() {
+  return t("lib-auth.device_name", { browser: browserName() });
 }
 
 // pairToken turns what was pasted on the login page into the token to try: a bare token (the hub's, `jp_…`, `jd_…`)
@@ -35,7 +41,7 @@ export async function pair(input: string): Promise<void> {
   let use = t;
   if (!t.startsWith("jd_")) {
     try {
-      const r = await api<{ token: string; id: string }>("/auth/tokens", { method: "POST", json: { name: `网页（${browserName()}）`, kind: "web" }, token: t });
+      const r = await api<{ token: string; id: string }>("/auth/tokens", { method: "POST", json: { name: deviceName(), kind: "web" }, token: t });
       use = r.token;
       localStorage.setItem("jarvis.tokenId", r.id);
     } catch {
