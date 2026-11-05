@@ -268,6 +268,7 @@ func TestAnswerRoleOnlyWhatTheWatchDoes(t *testing.T) {
 		{"GET", "/api/v1/machines/m/file", false},
 		{"GET", "/api/v1/machines/m/file/download", false},
 		{"GET", "/api/v1/machines/m/fs", false},
+		{"GET", "/api/v1/machines/m/fs/find", false},
 		{"GET", "/api/v1/machines/m/stat", false},
 		{"GET", "/api/v1/machines/m/dirs", false},
 		{"GET", "/api/v1/machines/m/git/status", false},

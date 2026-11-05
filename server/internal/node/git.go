@@ -66,13 +66,19 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 	return gitTimed(ctx, dir, 15*time.Second, args...)
 }
 
-func gitTimed(ctx context.Context, dir string, timeout time.Duration, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+// gitCmd is a git command in dir that never prompts and never takes a lock (the status panels poll it).
+func gitCmd(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir, "-c", "core.quotepath=off", "--no-pager"}, args...)...)
 	cmd.Env = append(cmd.Environ(), "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C",
 		"GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=/usr/bin/false", "SSH_ASKPASS=/usr/bin/false", "GCM_INTERACTIVE=never")
 	cmd.WaitDelay = time.Second
+	return cmd
+}
+
+func gitTimed(ctx context.Context, dir string, timeout time.Duration, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cmd := gitCmd(ctx, dir, args...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {

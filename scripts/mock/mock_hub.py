@@ -6658,6 +6658,13 @@ if os.environ.get("MOCK_FILE_LINKS"):
     MOCK_TREE[MOCK_REPO + "/README.md"] = preview + MOCK_TREE[MOCK_REPO + "/README.md"]
     if os.environ.get("MOCK_FILES"):
         FILES[ROOT + "/README.md"] = preview + FILES[ROOT + "/README.md"]
+if os.environ.get("MOCK_FILE_FIND"):  # #2438: enough files for the palette's file search to have something to rank
+    for _dir in ("Sources/App/Views/", "Sources/App/Models/", "WeatherWidget/", "Tests/AppTests/", "docs/"):
+        MOCK_TREE.setdefault(MOCK_REPO + "/" + _dir, None)
+    for _name in ("Sources/App/Views/ForecastView.swift", "Sources/App/Views/HourlyChart.swift", "Sources/App/Views/SettingsView.swift",
+                  "Sources/App/Models/ForecastViewModel.swift", "Sources/App/Models/City.swift", "WeatherWidget/Provider.swift",
+                  "WeatherWidget/WidgetView.swift", "Tests/AppTests/ForecastViewModelTests.swift", "docs/architecture.md", "docs/widget-notes.md"):
+        MOCK_TREE.setdefault(MOCK_REPO + "/" + _name, "// " + _name.rsplit("/", 1)[-1] + "\nimport Foundation\n")
 MOCK_COMMITS = [{"hash": "%040x" % (0xa1b2c3d0 + i), "short": "%07x" % (0xa1b2c3d0 + i),
                  "subject": s, "author": "Sample Dev", "date": ago(hours=3 * i + 1),
                  **({"refs": "HEAD -> main, origin/main"} if i == 0 else {})}
@@ -6745,9 +6752,16 @@ def mock_files(p, q):
     parts = p.split("/")
     if not (p.startswith("/api/v1/machines/") and len(parts) >= 6): return None
     mid, what = parts[4], "/".join(parts[5:])
-    if what not in ("file", "fs", "git/status", "git/diff", "git/show", "git/log"): return None
+    if what not in ("file", "fs", "fs/find", "git/status", "git/diff", "git/show", "git/log"): return None
     if not machine_online(mid): return {"error": "%s: machine is offline" % mid}, 503
     arg = lambda k: (q.get(k) or [""])[0]
+    if what == "fs/find":  # #2438: every file under cwd, shallow first (the node's walk / git ls-files)
+        home, path = mock_abs(mid, "", arg("cwd"))
+        rel = mock_rel(home, path)
+        if rel is None or not (rel == "" or rel.endswith("/")): return {"error": "not a directory: %s" % path}, 502
+        files = sorted((k[len(rel):] for k, v in MOCK_TREE.items() if k.startswith(rel) and not k.endswith("/")),
+                       key=lambda f: (f.count("/"), f))
+        return {"cwd": path, "files": files, "truncated": False, "source": "git"}, 200
     if what in ("file", "fs"):
         home, path = mock_abs(mid, arg("path"), arg("cwd"))
         rel = mock_rel(home, path)

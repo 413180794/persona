@@ -982,6 +982,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return ok(n.syncTodoTokens(ctx, in.Tokens))
 	case "fs.list":
 		return n.listDir(p.Path, p.Cwd)
+	case "fs.find": // every file under cwd, for the web palette's file search (files_find.go)
+		return n.findFiles(ctx, p.Cwd, p.Limit)
 	case "fs.watch": // the folders and Git directories the web panels have open (fswatch.go)
 		return n.fsWatch(params)
 	case "git.status":

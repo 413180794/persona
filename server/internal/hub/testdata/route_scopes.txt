@@ -128,6 +128,7 @@ machines.read        GET /api/v1/machines/{id}/metrics
 -                    GET /api/v1/machines/{mid}/file/download
 -                    GET /api/v1/machines/{mid}/file/thumb
 -                    GET /api/v1/machines/{mid}/fs
+-                    GET /api/v1/machines/{mid}/fs/find
 -                    GET /api/v1/machines/{mid}/git/blob
 -                    GET /api/v1/machines/{mid}/git/diff
 -                    GET /api/v1/machines/{mid}/git/log

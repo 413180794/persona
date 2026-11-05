@@ -9,12 +9,13 @@ import { ago, sessionTitle, shortPath, stateOf, STATE_LABEL, tabLabel } from "..
 import { appCommands, commandKeys, contextCommands, filterCommands, parseQuery, setPaletteQuery, terminalHits, usePalette, type MachinePanes, type PaletteCommand, type TerminalHit } from "../lib/palette";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions } from "../lib/sessions";
-import { handlerOf, runShortcut, SCOPE_LABEL, useBindings } from "../lib/shortcuts";
+import { chordParts, handlerOf, runShortcut, SCOPE_LABEL, useBindings } from "../lib/shortcuts";
 import { useStore } from "../lib/store";
 import { buildTerminalTree, type PanesResponse } from "../lib/terminals";
 import type { Session } from "../lib/types";
 import { EASE, Kbd, StatusDot, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { copyFileMention, FilesHeading, FilesNotice, FileResultRow, openFileHit, usePaletteFiles, type FileRow } from "./palette/FilesSection";
 import { t } from "../i18n";
 
 interface Hit {
@@ -25,8 +26,8 @@ interface Hit {
   score: number;
 }
 
-/** One selectable row of the list: a conversation, a terminal pane, or (command mode) a command. */
-type Row = { kind: "session"; key: string; hit: Hit } | { kind: "pane"; key: string; hit: TerminalHit } | { kind: "command"; key: string; cmd: PaletteCommand };
+/** One selectable row of the list: a conversation, a terminal pane, a file (views/palette/FilesSection.tsx), or (command mode) a command. */
+type Row = { kind: "session"; key: string; hit: Hit } | { kind: "pane"; key: string; hit: TerminalHit } | { kind: "command"; key: string; cmd: PaletteCommand } | FileRow;
 
 function score(s: Session, q: string, machine: string): number {
   if (!q) return 1;
@@ -118,7 +119,9 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
     return filterCommands(all, text).map((cmd) => ({ kind: "command" as const, key: cmd.id, cmd }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `route` is parsed anew each render; its path says it all
   }, [open, mode, text, bindings, machines, pane?.mid, pane?.sid, href(route), onNewAgent]);
-  const shown = mode === "command" ? commands : hits;
+  // the files under the directory of the page (#2438): listed after the conversations and panes
+  const files = usePaletteFiles({ open, jump: mode === "jump", text, route, pane, machinePanes });
+  const shown = useMemo(() => (mode === "command" ? commands : [...hits, ...files.rows]), [mode, commands, hits, files.rows]);
 
   useEffect(() => setActive(0), [q]);
   useLayoutEffect(() => {
@@ -131,6 +134,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
   const pick = (r: Row) => {
     onClose();
     if (r.kind === "command") r.cmd.run();
+    else if (r.kind === "file") openFileHit(r);
     else navigate(r.hit.to);
   };
   const command = mode === "command";
@@ -151,10 +155,14 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 if (shown.length) setActive((a) => (a + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length);
               } else if (e.key === "Enter") {
                 e.preventDefault();
-                if (shown[active]) pick(shown[active]);
+                const row = shown[active];
+                if (row?.kind === "file" && (e.metaKey || e.ctrlKey)) {
+                  onClose();
+                  void copyFileMention(row);
+                } else if (row) pick(row);
               } else if (e.key === "Escape") onClose();
             }}
-            placeholder={command ? t("palette.command_placeholder") : t("palette.search_placeholder")}
+            placeholder={command ? t("palette.command_placeholder") : files.ctx ? t("files-find.searching_placeholder") : t("palette.search_placeholder")}
             className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-3"
           />
           {/* the key hints are for a keyboard: a touch screen has none (#1996) */}
@@ -186,6 +194,15 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                       </span>
                     )}
                   </button>
+                </div>
+              );
+            }
+            if (r.kind === "file") {
+              const first = (shown[i - 1] as Row | undefined)?.kind !== "file";
+              return (
+                <div key={r.key}>
+                  {first && <FilesHeading />}
+                  <FileResultRow ref={ref} row={r} className={rowClass} onMouseMove={() => setActive(i)} onClick={() => pick(r)} />
                 </div>
               );
             }
@@ -222,7 +239,8 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
               <p className="mt-0.5 text-[12px] text-ink-3">{t("palette.no_commands_hint")}</p>
             </div>
           )}
-          {shown.length === 0 && !command && (
+          {!command && <FilesNotice status={files.status} text={text} count={files.rows.length} />}
+          {shown.length === 0 && !command && files.status !== "loading" && (
             <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
               <span className="flex size-9 items-center justify-center rounded-full bg-field text-ink-3 shadow-hairline">
                 <Icon name="search" size={15} />
@@ -252,6 +270,12 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
           <span className="flex items-center gap-1">
             <Kbd>↵</Kbd> {command ? t("palette.run") : t("palette.open")}
           </span>
+          {shown[active]?.kind === "file" && (
+            <span className="flex items-center gap-1">
+              <Kbd>{chordParts("Mod+Enter")[0]}</Kbd>
+              <Kbd>↵</Kbd> {t("files-find.copy_mention")}
+            </span>
+          )}
           {!command && (
             <span className="flex items-center gap-1">
               <Kbd>&gt;</Kbd> {t("palette.commands")}

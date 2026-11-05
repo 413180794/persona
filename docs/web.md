@@ -536,12 +536,17 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
   有对话框（`Dialog`）或面板开着时，只有跳转 / 命令面板 / 帮助三个还能用，其余暂停；某项当前用不了（比如没有对话时的 Mod+J）返回 `false`，键原样放行。
 - **命令面板**（`views/Palette.tsx`、`lib/palette.ts`）：Mod+K 的搜索框里先输入 `>`（或 Mod+Shift+P）进入命令模式，列出登记了处理函数的命令，按「全局 / 会话页 / 侧边栏」分组、右边是当前的键，再加「新建 Agent」「新对话」，过滤按标题 / 分组 / 关键词；第 1–9 台电脑展开成每台一条。
   Mod+K 的搜索也找终端窗格（用终端页的数据：每台在线电脑的 `GET /machines/{mid}/panes` + `buildTerminalTree`，面板打开时读一次；有会话的 Agent 窗格不重复列），点开是 `/terminal/<机器>/<id>`；什么都没输入时只列前 8 个窗格，排在会话后面。
+- **文件搜索**（#2438，`views/palette/FilesSection.tsx`、`lib/file-find.ts`；Palette.tsx 只多几行把这一节的行接进列表）：Mod+K 在会话页（会话 / 标签页的 pane）按会话的 `cwd`、在 `/terminal` 页按打开的窗格的 `cwd` 多出一节「文件」，别的页没有（搜索框的提示语也只在有这一节时多一个「文件」）。
+  面板一打开就读 `GET /machines/{mid}/fs/find?cwd=` 建索引（一次请求拿到整个目录的相对路径，30 秒超时；网页里同一目录 20 秒内复用，node 里 10 秒），第一次打字时还没回来就显示「正在建立索引…」；老 node（`unknown method`）或老 hub（404）退回按 `GET /machines/{mid}/fs` 一层层广度优先走（最多 300 个文件夹、2 万个文件，跳过 `.git`、`node_modules` 等缓存目录）。
+  匹配是纯函数（`createFileSearch`）：每个词都得匹配（空格 = AND），不分大小写；词首（`/ . - _` 之后）、驼峰的大写字母、连续命中、文件名里的命中加分，文件名完全相同 / 以它开头再加分，路径短的在前；最多列 50 个，命中的字符加粗成强调色；新的查询是上一次的延长时只在上一次的命中里找。
+  点开（或 Enter）在右侧面板里预览（`openPanel({ kind: "file" })`，和对话里的路径链接一样走 `/file`），Mod+Enter 复制 `@相对路径`。
 - **给别的模块的钩子**：`registerContextCommands(provider)`（`lib/palette.ts`）。provider 在每次列命令时被调用，参数是 `{ route, pane }`（当前页和页面上的对话），返回 `PaletteCommand[]`（`id`、`title`、`section`、`icon`、`chord`、`keywords`、`danger`、`run`）；抛错的 provider 被跳过，重复 id 取第一个，返回值是取消登记的函数。
   这些命令排在命令模式的最前面，用自己的 `section` 当分组标题。用法：`useEffect(() => registerContextCommands((ctx) => ctx.pane ? nodeActions(ctx.pane) : []), [])`。每个节点的操作（重命名、复制路径、置顶、关闭……）由节点菜单那条线提供，合并后在这里接上，不需要改面板。
 - **侧边栏的小接口**（`lib/sidebar-api.ts`，`Sidebar.tsx` 只多几行订阅）：`setAllFolded`（`useFolded` 订阅，折叠 / 展开写进同一个 `fold:*` 键）、`cycleGrouping`（写同一个 `jarvis.agentGrouping`，`AgentsBlock` 订阅）、`stepSidebarRow`（在带 `data-sidebar-rows` 的列表里找看得见的行，点它）。
   布局状态（`lib/layout.ts`）：侧边栏收成图标栏记在这个浏览器（`localStorage` 的 `persona.sidebarCollapsed`，刷新后保持，别的标签页跟着变）；
   图标栏上一直有展开按钮，不会因为忘了键而找不到侧边栏。最大化只在当前页面里，刷新就回来。
-- 测试：`lib/shortcuts.test.ts`（解析 / 格式化 / 冲突 / 保留 / 事件转键 / 分发 / 终端放行）、`lib/palette.test.ts`、`lib/shortcut-nav.test.ts`、`lib/sidebar-api.test.ts`、`views/Palette.test.tsx`。
+- 测试：`lib/shortcuts.test.ts`（解析 / 格式化 / 冲突 / 保留 / 事件转键 / 分发 / 终端放行）、`lib/palette.test.ts`、`lib/shortcut-nav.test.ts`、`lib/sidebar-api.test.ts`、`views/Palette.test.tsx`、`lib/file-find.test.ts`（匹配 / 缩小 / 索引缓存 / 老 node 的遍历）、`views/palette/FilesSection.test.tsx`。
+  浏览器里用假 hub（`MOCK_FILES=1 MOCK_FILE_FIND=1`，多几个文件给搜索排名）看：`PORT=<端口> MOCK_FILES=1 MOCK_FILE_FIND=1 python3 scripts/mock/mock_hub.py`。
 
 ### 节点菜单（#2329）
 
