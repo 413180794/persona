@@ -12,6 +12,7 @@ import { keyedRefs } from "../lib/keyed-refs";
 import { buildMachineTree, paneRoute, resolveTab, tabRowKeys, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, setToken } from "../lib/api";
+import { TOKEN_ID_KEY } from "../lib/auth";
 import { useInboxBadge } from "../lib/inbox";
 import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
@@ -729,9 +730,9 @@ function AccountRow({ phase, online, total }: { phase: ConnPhase; online: number
     { k: "dark", label: t("sidebar.theme_dark"), icon: "moon" },
   ];
   const logout = async () => {
-    const id = localStorage.getItem("jarvis.tokenId");
+    const id = localStorage.getItem(TOKEN_ID_KEY);
     if (id) await api(`/auth/tokens/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
-    localStorage.removeItem("jarvis.tokenId");
+    localStorage.removeItem(TOKEN_ID_KEY);
     setToken("");
     reset();
     location.href = BASE + "/";

@@ -145,7 +145,7 @@ export function machineStatus(m: AdminMachine): { tone: "green" | "red" | "orang
 }
 
 export function deviceKindLabel(kind: string): string {
-  return ({ phone: t("admin-logic.device_phone"), watch: t("admin-logic.device_watch"), link: "Persona Link", other: t("admin-logic.device_web") } as Record<string, string>)[kind] ?? kind;
+  return ({ phone: t("admin-logic.device_phone"), watch: t("admin-logic.device_watch"), link: "Persona Link", web: t("admin-logic.device_web"), other: t("admin-logic.device_web") } as Record<string, string>)[kind] ?? kind;
 }
 
 export function roleLabel(role: string): string {

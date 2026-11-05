@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -293,12 +294,15 @@ func (h *Hub) picksFreeText(id string, r proto.Resolution) bool {
 
 func (h *Hub) tokenRoutes(api *http.ServeMux) {
 	// Trade the caller's credential for a device token. kind "watch" gets an answer-only one; kind "link" a
-	// jarvis-link credential for the link machine named in "machine" (link.go).
+	// jarvis-link credential for the link machine named in "machine" (link.go). A browser signing in again names its
+	// earlier credential in "replaces", and that one is revoked once the new one is made, when it is a web one: a
+	// browser keeps one device instead of a row of them with the same name (docs/protocol.md「鉴权」).
 	api.HandleFunc("POST /api/v1/auth/tokens", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Name    string `json:"name"`
-			Kind    string `json:"kind"`
-			Machine string `json:"machine"`
+			Name     string `json:"name"`
+			Kind     string `json:"kind"`
+			Machine  string `json:"machine"`
+			Replaces string `json:"replaces"`
 		}
 		if err := decodeJSONBody(w, r, &req, 4<<10); err != nil {
 			writeBodyErr(w, err, err)
@@ -330,7 +334,7 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 			}
 		case "watch":
 			role = roleAnswer
-		case "phone":
+		case "phone", "web":
 		default:
 			kind = "other"
 		}
@@ -366,8 +370,24 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 			return
 		}
 		h.logf("device token %s for %q (%s, %s)", dt.ID, name, kind, role)
-		h.notifyPairing(name)
-		writeJSON(w, map[string]any{"id": dt.ID, "token": tok, "role": role, "name": name, "machine": machine})
+		replaced := ""
+		if old := strings.TrimSpace(req.Replaces); kind == "web" && old != "" && old != dt.ID {
+			// Only a web credential: an id a browser kept cannot take a phone, a watch or a computer's link off.
+			if ok, err := h.revokeWebToken(r.Context(), old); err != nil {
+				h.logf("device token %s: replacing %s: %v", dt.ID, old, err)
+			} else if ok {
+				replaced = old
+				h.revoked(old)
+				h.sendRevocations(newlyReachable(nil, h.meshView()))
+				h.logf("device token %s replaces %s", dt.ID, old)
+			}
+		}
+		h.notifyPairing(name) // also when it replaced one: a credential was still made
+		resp := map[string]any{"id": dt.ID, "token": tok, "role": role, "name": name, "machine": machine}
+		if replaced != "" {
+			resp["replaced"] = replaced
+		}
+		writeJSON(w, resp)
 	})
 	api.HandleFunc("GET /api/v1/auth/tokens", func(w http.ResponseWriter, r *http.Request) {
 		list := []db.DeviceToken{}
@@ -399,6 +419,19 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 		h.sendRevocations(newlyReachable(nil, h.meshView()))
 		writeJSON(w, map[string]any{"ok": true})
 	})
+}
+
+// revokeWebToken revokes a live credential only when a browser made it (kind "web"), and says whether it did.
+func (h *Hub) revokeWebToken(ctx context.Context, id string) (bool, error) {
+	list, err := h.store.DeviceTokens(ctx)
+	if err != nil {
+		return false, err
+	}
+	i := slices.IndexFunc(list, func(t db.DeviceToken) bool { return t.ID == id })
+	if i < 0 || list[i].Kind != "web" || list[i].RevokedAt != nil {
+		return false, nil
+	}
+	return h.store.RevokeDeviceToken(ctx, id)
 }
 
 // revoked forgets a device's cached lookups, closes its live connections and stops its pushes.

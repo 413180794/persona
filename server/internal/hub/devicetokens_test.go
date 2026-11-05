@@ -429,3 +429,50 @@ func TestAnswerRoleCannotPickTheFreeTextField(t *testing.T) {
 		t.Errorf("a full device writes its own answer: %d", code)
 	}
 }
+
+// A browser signing in again names its earlier credential and the hub takes that one off, so the browser stays one
+// device; an id that is not a web credential (a phone's) is left alone, and an old client without "replaces" still
+// just gets a new one.
+func TestWebSignInReplacesItsEarlierDevice(t *testing.T) {
+	h := newTestHub(t)
+	h.store = &tokenStore{memStore: *newMemStore(), rows: map[string]db.DeviceToken{}, rev: map[string]bool{}}
+	mux := h.routes()
+	master := h.cfg.Token
+
+	_, phone := call(t, mux, "POST", "/api/v1/auth/tokens", master, `{"name":"iPhone","kind":"phone"}`)
+	code, first := call(t, mux, "POST", "/api/v1/auth/tokens", master, `{"name":"网页（Chrome · Mac · 11月6日）","kind":"web"}`)
+	if code != 200 || first["replaced"] != nil {
+		t.Fatalf("first sign-in: %d %v", code, first)
+	}
+	firstTok := first["token"].(string)
+
+	code, second := call(t, mux, "POST", "/api/v1/auth/tokens", master,
+		`{"name":"网页（Chrome · Mac · 11月6日）","kind":"web","replaces":"`+first["id"].(string)+`"}`)
+	if code != 200 || second["replaced"] != first["id"] || second["id"] == first["id"] {
+		t.Fatalf("signing in again: %d %v", code, second)
+	}
+	if code, _ := call(t, mux, "GET", "/api/v1/interactions", firstTok, ""); code != http.StatusUnauthorized {
+		t.Fatalf("the replaced credential still works: %d", code)
+	}
+	if code, _ := call(t, mux, "GET", "/api/v1/machines", second["token"].(string), ""); code != 200 {
+		t.Fatalf("the new credential: %d", code)
+	}
+
+	// A phone's id is not the browser's to take off.
+	code, third := call(t, mux, "POST", "/api/v1/auth/tokens", master, `{"name":"网页","kind":"web","replaces":"`+phone["id"].(string)+`"}`)
+	if code != 200 || third["replaced"] != nil {
+		t.Fatalf("replacing a phone: %d %v", code, third)
+	}
+	if code, _ := call(t, mux, "GET", "/api/v1/machines", phone["token"].(string), ""); code != 200 {
+		t.Fatalf("the phone was taken off: %d", code)
+	}
+
+	code, list := call(t, mux, "GET", "/api/v1/auth/tokens", master, "")
+	kinds := map[string]int{}
+	for _, it := range list["tokens"].([]any) {
+		kinds[it.(map[string]any)["kind"].(string)]++
+	}
+	if code != 200 || kinds["web"] != 3 || kinds["phone"] != 1 {
+		t.Fatalf("kinds %v", kinds)
+	}
+}

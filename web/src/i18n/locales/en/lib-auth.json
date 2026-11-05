@@ -1,4 +1,4 @@
 {
   "browser": "Browser",
-  "device_name": "Web ({browser})"
+  "device_name_dated": "Web ({browser} · {date})"
 }

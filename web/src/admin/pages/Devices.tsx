@@ -13,7 +13,7 @@ import { devDialog } from "../router";
 import { useShared } from "../store";
 import { Card, ConfirmButton, CopyValue, EmptyState, ErrorBox, Loader, PageHeader, Qr, Tag, useLoad } from "../parts";
 
-const KIND_ICON: Record<string, AdminIconName> = { phone: "phone", watch: "pulse", link: "link", other: "web" };
+const KIND_ICON: Record<string, AdminIconName> = { phone: "phone", watch: "pulse", link: "link", web: "web", other: "web" };
 
 export function Devices() {
   const { data, error, loading, reload, set } = useLoad(async () => activeDevices((await adminApi<{ devices: Device[] }>("/devices")).devices));

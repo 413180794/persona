@@ -95,8 +95,18 @@ location /persona/ {
 
 ## 登录
 
-第一次打开要贴 hub 的 token（`personad hub pair` 打印的那个）。网页先用它换一个自己的设备 token（`POST /api/v1/auth/tokens`，`kind: web`，
-hub 存为 `other`，角色 full），之后只用自己的，配对 token 不留在浏览器里；手机「设置 › 设备」能单独撤销。也可以直接贴一个 `jd_` 设备 token。
+登录页不教命令行（#3356，`docs/onboarding.md` 4.2）：首选「用已登录的手机扫码登录」，说明在已登录的设备上打开「设置 › 设备 › 连接新设备 › 浏览器」，
+手机 / 平板用相机扫码直接登录，电脑上点「拷贝登录链接」再打开或贴进来；其次是「粘贴登录链接或配对链接」的框。
+贴 hub 主 token 的框和 `personad hub pair --legacy`、`jq` 的写法收在默认折叠的「高级：用 hub 的总钥匙登录」里，写明「这是 hub 的总钥匙」。
+「还没有 hub？」展开是一段页内说明（hub 是什么、自己装的怎么办、别人装的找谁），不跳到 GitHub 文档：构建配置里的官网地址（`publish.site_url`）网页拿不到。
+
+网页拿到的配对 token 先换一个自己的设备 token（`POST /api/v1/auth/tokens`，`kind: web`，角色 full；旧 hub 存为 `other`），之后只用自己的，
+配对 token 不留在浏览器里；「设置 › 设备」能单独撤销。也可以直接贴一个 `jd_` 设备 token。
+**一个浏览器一台设备**：设备名带登录那天的日期（「网页（Chrome · Mac · 11月6日）」），这个浏览器上次那台设备的 id 留在 `localStorage` 的
+`jarvis.tokenId`（hub 回 401 清掉 token 时不清它），换 token 时作为 `replaces` 带上，hub 撤销那台（只撤 `kind: web` 的），设备列表里不再累积同名的设备；
+「断开这个浏览器」本来就撤销并清掉它。清了站点数据的浏览器无从认出，照样新建一台，靠日期区分。
+升级前登录的浏览器，hub 存的是 `other`（和 Mac 桌面端的凭据同一类，无从分辨），第一次重新登录时不替换；以前累积的同名设备要在「设置 › 设备」里手动撤销。
+登录页第一步让用户去已登录设备的「设置 › 设备 › 连接新设备 › 浏览器」：网页、iOS 有这个入口，Android 由 onboarding 的 Android 连接新设备 PR 补上（`docs/onboarding.md` 第 7 节第 16 步），在那之前只有 Android 的用户要走「高级」。
 **链接直接登录**（2026-10-31）：打开 `<hub 地址>/?token=<hub token>`（任意页面路径都行，也认 `#token=`，后者不会发到服务器）就直接进，不用贴。
 页面一加载先把 token 从地址栏抹掉（`history.replaceState`，在 React 渲染之前），浏览历史、书签、复制出去的链接里都没有它；然后照常换成这个浏览器自己的
 设备 token。这个浏览器已经登录过（链接再打开一次）就沿用已有的，不再多建一个设备 token。token 不对时停在登录页并提示。

@@ -4,6 +4,7 @@ import { BASE, stripBase } from "../lib/base";
 import { href } from "../lib/router";
 import { useEffect, useMemo, useState } from "react";
 import { api, enc, errorText, setToken } from "../lib/api";
+import { TOKEN_ID_KEY } from "../lib/auth";
 import { splitDevices } from "../lib/devices";
 import { ago } from "../lib/format";
 import { install, useInstall, type InstallState } from "../lib/pwa";
@@ -323,9 +324,9 @@ function About() {
   const mesh = useStore((s) => s.mesh);
   const others = mesh.filter((h) => !h.self);
   const logout = async () => {
-    const id = localStorage.getItem("jarvis.tokenId");
+    const id = localStorage.getItem(TOKEN_ID_KEY);
     if (id) await api(`/auth/tokens/${enc(id)}`, { method: "DELETE" }).catch(() => {});
-    localStorage.removeItem("jarvis.tokenId");
+    localStorage.removeItem(TOKEN_ID_KEY);
     setToken("");
     reset();
     location.href = BASE + "/";

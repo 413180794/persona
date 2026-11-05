@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const calls = vi.hoisted(() => ({ list: [] as { path: string; token?: string }[], good: "" }));
+const calls = vi.hoisted(() => ({ list: [] as { path: string; token?: string; json?: Record<string, string> }[], good: "" }));
 vi.mock("./api", () => ({
-  api: vi.fn(async (path: string, init?: { token?: string }) => {
-    calls.list.push({ path, token: init?.token });
+  api: vi.fn(async (path: string, init?: { token?: string; json?: Record<string, string> }) => {
+    calls.list.push({ path, token: init?.token, json: init?.json });
     if (init?.token !== calls.good) throw new Error("invalid token");
     return path === "/auth/tokens" ? { token: "jd_browser", id: "dev1" } : { machines: [] };
   }),
@@ -11,7 +11,7 @@ vi.mock("./api", () => ({
 }));
 
 import { setToken } from "./api";
-import { pair, pairToken, takeToken } from "./auth";
+import { deviceName, pair, pairToken, takeToken } from "./auth";
 
 describe("pairToken", () => {
   it("keeps bare tokens as they are", () => {
@@ -35,11 +35,28 @@ describe("pairToken", () => {
 });
 
 describe("pair", () => {
+  let stored: Record<string, string>;
   beforeEach(() => {
     calls.list = [];
+    stored = {};
     vi.mocked(setToken).mockClear();
-    vi.stubGlobal("localStorage", { setItem: vi.fn() });
+    vi.stubGlobal("localStorage", { getItem: (k: string) => stored[k] ?? null, setItem: (k: string, v: string) => void (stored[k] = v) });
     vi.stubGlobal("navigator", { userAgent: "" });
+  });
+  it("asks for a web device and keeps its id", async () => {
+    calls.good = "jp_example";
+    await pair("jp_example");
+    const trade = calls.list.find((c) => c.path === "/auth/tokens");
+    expect(trade?.json?.kind).toBe("web");
+    expect(trade?.json).not.toHaveProperty("replaces");
+    expect(stored["jarvis.tokenId"]).toBe("dev1");
+  });
+  it("has the hub replace the device this browser had before", async () => {
+    calls.good = "jp_example";
+    stored["jarvis.tokenId"] = "dev_old";
+    await pair("jp_example");
+    expect(calls.list.find((c) => c.path === "/auth/tokens")?.json?.replaces).toBe("dev_old");
+    expect(stored["jarvis.tokenId"]).toBe("dev1");
   });
   it("checks and trades the token from a pasted pairing link", async () => {
     calls.good = "jp_example";
@@ -60,6 +77,15 @@ describe("pair", () => {
     calls.good = "jp_example";
     await expect(pair("jarvis://pair?url=http%3A%2F%2Fhub.example")).rejects.toThrow("invalid token");
     expect(setToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("deviceName", () => {
+  it("names the browser and the day it signed in", () => {
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/130.0 Safari/537.36" });
+    const name = deviceName(new Date(2026, 10, 6));
+    expect(name).toContain("Chrome · Mac");
+    expect(name).toMatch(/6/);
   });
 });
 
