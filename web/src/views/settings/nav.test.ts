@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FROM_LIST, LIST_GROUPS, openedFromList, settingsAt, settingsHref, TABS } from "./nav";
+import { FROM_LIST, LIST_GROUPS, openedFromList, settingsAt, settingsHref, TAB_INFO, TABS } from "./nav";
 
 describe("settings location", () => {
   it("names no category on plain /settings: the phone's list (通用 on a wide screen)", () => {
@@ -43,5 +43,9 @@ describe("settings location", () => {
     expect(TABS[TABS.indexOf("connectors") - 1]).toBe("channels");
     const listed = LIST_GROUPS.flatMap((g) => g.tabs);
     expect(listed[listed.indexOf("connectors") - 1]).toBe("channels");
+  });
+  it("gives every category a one-line hint, and no group shares a name with one of its rows (#3636)", () => {
+    for (const k of TABS) expect(TAB_INFO[k].hint.trim()).not.toBe("");
+    for (const g of LIST_GROUPS) for (const k of g.tabs) expect(TAB_INFO[k].label).not.toBe(g.title);
   });
 });

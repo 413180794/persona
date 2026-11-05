@@ -10,7 +10,21 @@
   "tab_translate": "Translation",
   "tab_shortcuts": "Shortcuts",
   "tab_devices": "Devices",
-  "group_general": "General",
+  "group_general": "Basics",
   "group_models": "Models and agents",
-  "group_connections": "Connections"
+  "group_connections": "Connections",
+  "hint_general": "Appearance, persona, this browser",
+  "hint_notifications": "When to notify and play a sound",
+  "hint_assistant": "Main chat, routines, proactive work",
+  "hint_translate": "Auto-translate mail and Feishu",
+  "hint_shortcuts": "Keyboard shortcuts",
+  "hint_models": "Accounts and keys for models",
+  "hint_model_config": "Which model each feature uses",
+  "hint_claude": "Claude Code on each computer",
+  "hint_codex": "Codex on each computer",
+  "hint_channels": "Talk to Persona in WeChat, Feishu",
+  "hint_connectors": "Let Persona read mail, Feishu, GitHub",
+  "hint_extensions": "Add abilities: connectors, channels, voice",
+  "hint_devices": "Signed-in phones and browsers",
+  "hint_hub": "hub version and updates"
 }

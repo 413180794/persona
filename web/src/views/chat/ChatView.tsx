@@ -190,8 +190,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const segs = useMemo(() => segments(tr.items), [tr.items]);
   const lastSeg = segs[segs.length - 1];
   const [awaitNow, setAwaitNow] = useState(() => Date.now());
-  const failure = session?.failure_reason ? { since: session.state_since } : undefined;
-  const awaiting = !readOnly && awaitingTurn(lastSeg, state, awaitNow, failure);
+  const turnFailure = session?.failure_reason ? { since: session.state_since } : undefined;
+  const awaiting = !readOnly && awaitingTurn(lastSeg, state, awaitNow, turnFailure);
   const lastAnswered = Boolean(lastSeg?.steps.length || lastSeg?.answer);
   useEffect(() => {
     // draw again when the wait runs out, so a message nobody picks up stops looking worked on; once something answers

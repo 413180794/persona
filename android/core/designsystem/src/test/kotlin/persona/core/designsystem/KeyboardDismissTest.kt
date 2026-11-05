@@ -15,13 +15,19 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -56,6 +62,7 @@ class KeyboardDismissTest {
     private var clicks = 0
     private var linkClicks = 0
     private var longPresses = 0
+    private var blankTaps = 0
     private var style by mutableStateOf(AppStyle.Glass)
     private lateinit var listState: LazyListState
 
@@ -65,10 +72,12 @@ class KeyboardDismissTest {
                 var text by remember { mutableStateOf("") }
                 val state = rememberLazyListState()
                 listState = state
+                val fieldFocus = remember { FocusRequester() }
                 val page: @Composable () -> Unit = {
                     JPage("对话", bottomBar = {
-                        ComposerFrame(Modifier.testTag("composer")) {
-                            BasicTextField(text, { text = it }, Modifier.fillMaxWidth().testTag("field").onFocusChanged { focused = it.isFocused })
+                        ComposerFrame(Modifier.testTag("composer"), onBlankTap = { blankTaps++; fieldFocus.requestFocus() }) {
+                            BasicTextField(text, { text = it }, Modifier.fillMaxWidth().testTag("field").focusRequester(fieldFocus)
+                                .onFocusChanged { focused = it.isFocused })
                         }
                     }) { padding ->
                         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -129,6 +138,30 @@ class KeyboardDismissTest {
         }
     }
 
+    @Test fun blankTapOnTheComposerFocusesTheField() {
+        setPage()
+        // #894: the composer's padding, not only the text line, puts the caret in the field.
+        for (each in AppStyle.entries) {
+            style = each
+            rule.waitForIdle()
+            rule.onNodeWithTag("blank").performTouchInput { click(center) }
+            rule.waitForIdle()
+            assertFalse(focused)
+            val before = blankTaps
+            rule.onNodeWithTag("composer").performTouchInput { click(centerLeft.copy(x = 20f)) }
+            rule.waitForIdle()
+            assertEquals("one blank tap in $style", before + 1, blankTaps)
+            assertTrue("composer padding focuses the field in $style", focused)
+        }
+    }
+
+    @Test fun tapOnTheFieldIsNotABlankTap() {
+        setPage()
+        rule.onNodeWithTag("field").performTouchInput { click() }
+        rule.waitForIdle()
+        assertEquals(0, blankTaps)
+    }
+
     @Test fun buttonStillClicksAndKeepsFocus() {
         setPage()
         rule.onNodeWithTag("button").performTouchInput { click() }
@@ -172,6 +205,32 @@ class KeyboardDismissTest {
         rule.waitForIdle()
         assertTrue("the list actually scrolled", listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)
         assertTrue(focused)
+    }
+
+    // #894: tabs stay composed when hidden; switching must let go of the field the old tab had focused. A fake focus
+    // manager: in Robolectric (not in touch mode) a cleared focus goes straight back to the only field on screen, which
+    // a hidden tab's unplaced field cannot do on a phone.
+    @Test fun changingTheKeyReleasesTheFieldButTheFirstValueDoesNot() {
+        var tab by mutableStateOf("persona")
+        val forcedClears = mutableListOf<Boolean>()
+        val focusManager = object : FocusManager {
+            override fun clearFocus(force: Boolean) { forcedClears += force }
+            override fun moveFocus(focusDirection: FocusDirection) = false
+        }
+        rule.setContent {
+            CompositionLocalProvider(LocalFocusManager provides focusManager) { ReleaseTextInputOnChange(tab) }
+        }
+        rule.waitForIdle()
+        assertEquals("the first value is not a switch", emptyList<Boolean>(), forcedClears)
+        tab = "inbox"
+        rule.waitForIdle()
+        assertEquals("a switch clears the focus, forced", listOf(true), forcedClears)
+        tab = "inbox"
+        rule.waitForIdle()
+        assertEquals("the same tab again is not a switch", listOf(true), forcedClears)
+        tab = "persona"
+        rule.waitForIdle()
+        assertEquals(listOf(true, true), forcedClears)
     }
 
     private fun setSheet() {

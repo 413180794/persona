@@ -18,6 +18,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -84,6 +85,7 @@ fun ChatComposer(
     var confirmClear by remember { mutableStateOf(false) }
     var cameraDenied by remember { mutableStateOf(false) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     // A photo in the draft being marked up (iOS editingIndex); [editOpening] while it is read for the editor.
     var editing by remember { mutableStateOf<ComposerPhotoEdit?>(null) }
     var editOpening by remember { mutableStateOf(false) }
@@ -278,6 +280,8 @@ fun ChatComposer(
     }
 
     ComposerFrame(
+        // Blank space around the field (its padding, beside the buttons) types too: one tap, not a hunt for the line.
+        onBlankTap = { if (enabled) { focusRequester.requestFocus(); keyboard?.show() } },
         leading = {
             JIconButton(PhIcons.Plus, stringResource(R.string.chat_composer_add), { menu = true }, enabled = !sending && enabled)
             if (mentions != null) JIconButton(PhIcons.At, stringResource(R.string.chat_mention), {

@@ -19,6 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -396,11 +397,15 @@ fun ComposerFrame(
     leading: (@Composable RowScope.() -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null,
     accessory: (@Composable ColumnScope.() -> Unit)? = null,
+    // A tap on the frame's blank space that nothing inside handled (around the field, beside the buttons).
+    onBlankTap: (() -> Unit)? = null,
     field: @Composable BoxScope.() -> Unit,
 ) {
     val palette = PersonaTheme.palette
+    val blankTap by rememberUpdatedState(onBlankTap)
+    val keepsKeyboard = Modifier.keepsKeyboardOnTap { blankTap?.invoke() }
     when (PersonaTheme.style) {
-        AppStyle.Glass -> Column(modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).floatingSurface(RoundedCornerShape(28.dp)).keepsKeyboardOnTap().padding(6.dp)) {
+        AppStyle.Glass -> Column(modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).floatingSurface(RoundedCornerShape(28.dp)).then(keepsKeyboard).padding(6.dp)) {
             accessory?.let { Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 2.dp), content = it) }
             Row(verticalAlignment = Alignment.Bottom) {
                 leading?.invoke(this)
@@ -408,7 +413,7 @@ fun ComposerFrame(
                 trailing?.invoke(this)
             }
         }
-        AppStyle.Brief -> Column(modifier.fillMaxWidth().background(palette.background).keepsKeyboardOnTap().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        AppStyle.Brief -> Column(modifier.fillMaxWidth().background(palette.background).then(keepsKeyboard).padding(horizontal = 12.dp, vertical = 8.dp)) {
             accessory?.let { Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 6.dp), content = it) }
             Row(verticalAlignment = Alignment.Bottom) {
                 leading?.let { Row(Modifier.padding(bottom = 2.dp)) { it() }; Spacer(Modifier.width(4.dp)) }
@@ -422,7 +427,7 @@ fun ComposerFrame(
             }
         }
         // The board's grey under a rule, the field a white ticket on it: no white plate across the bottom.
-        AppStyle.Board -> Column(modifier.fillMaxWidth().background(palette.background).drawBehind { drawLine(palette.line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.keepsKeyboardOnTap().padding(10.dp)) {
+        AppStyle.Board -> Column(modifier.fillMaxWidth().background(palette.background).drawBehind { drawLine(palette.line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.then(keepsKeyboard).padding(10.dp)) {
             accessory?.let { Column(Modifier.padding(bottom = 8.dp), content = it) }
             Row(verticalAlignment = Alignment.Bottom) {
                 leading?.invoke(this)

@@ -231,7 +231,7 @@ function SettingsList({ shown, onPick }: { shown: (k: Tab) => boolean; onPick: (
         return (
           <Group key={g.title} title={g.title}>
             {tabs.map((k) => (
-              <Row key={k} icon={TAB_INFO[k].icon} label={TAB_INFO[k].label} onClick={() => onPick(k)} />
+              <Row key={k} icon={TAB_INFO[k].icon} label={TAB_INFO[k].label} hint={TAB_INFO[k].hint} onClick={() => onPick(k)} />
             ))}
           </Group>
         );

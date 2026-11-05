@@ -572,6 +572,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         // flashed empty and loading states). A hidden tab is measured but never placed or drawn, and cannot take back.
         val visited = remember { mutableStateListOf<AppTab>() }
         LaunchedEffect(selected) { if (selected !in visited) visited += selected }
+        // The tab left behind stays composed: it must not keep the field's focus, the keyboard or a paste menu (#894).
+        ReleaseTextInputOnChange(selected)
         // Back on the first page of Agents, 收件箱 or 设置 goes to Persona; back on the Persona home leaves the app
         // (2026-11-01, the user's call; it used to go back through the tabs shown before).
         BackHandler(selected != AppTab.Jarvis && stacks.getValue(selected).size <= 1) { navigator.selectTab(AppTab.Jarvis) }

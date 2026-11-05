@@ -10,21 +10,22 @@ export const TABS: Tab[] = ["general", "notifications", "assistant", "models", "
 // The tab whose page opens one of its items, and the query parameter that names it.
 const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", channels: "channel", extensions: "extension", connectors: "connector" };
 
-export const TAB_INFO: Record<Tab, { label: string; icon: IconName }> = {
-  general: { label: t("settings-nav.tab_general"), icon: "gear" },
-  notifications: { label: t("settings-nav.tab_notifications"), icon: "bell" },
-  assistant: { label: t("settings-nav.tab_assistant"), icon: "spark" },
-  models: { label: t("settings-nav.tab_models"), icon: "layers" },
-  "model-config": { label: t("settings-nav.tab_model_config"), icon: "gear" },
-  claude: { label: "Claude Code", icon: "terminal" },
-  codex: { label: "Codex", icon: "terminal" },
-  channels: { label: t("settings-nav.tab_channels"), icon: "chat" },
-  connectors: { label: t("settings-nav.tab_connectors"), icon: "link" },
-  extensions: { label: t("settings-nav.tab_extensions"), icon: "extension" },
-  translate: { label: t("settings-nav.tab_translate"), icon: "translate" },
-  shortcuts: { label: t("settings-nav.tab_shortcuts"), icon: "keyboard" },
-  devices: { label: t("settings-nav.tab_devices"), icon: "key" },
-  hub: { label: "hub", icon: "hub" },
+// `hint`: one short line under the category on the phone's list (#3636), so what it holds is clear without opening it.
+export const TAB_INFO: Record<Tab, { label: string; icon: IconName; hint: string }> = {
+  general: { label: t("settings-nav.tab_general"), icon: "gear", hint: t("settings-nav.hint_general") },
+  notifications: { label: t("settings-nav.tab_notifications"), icon: "bell", hint: t("settings-nav.hint_notifications") },
+  assistant: { label: t("settings-nav.tab_assistant"), icon: "spark", hint: t("settings-nav.hint_assistant") },
+  models: { label: t("settings-nav.tab_models"), icon: "layers", hint: t("settings-nav.hint_models") },
+  "model-config": { label: t("settings-nav.tab_model_config"), icon: "gear", hint: t("settings-nav.hint_model_config") },
+  claude: { label: "Claude Code", icon: "terminal", hint: t("settings-nav.hint_claude") },
+  codex: { label: "Codex", icon: "terminal", hint: t("settings-nav.hint_codex") },
+  channels: { label: t("settings-nav.tab_channels"), icon: "chat", hint: t("settings-nav.hint_channels") },
+  connectors: { label: t("settings-nav.tab_connectors"), icon: "link", hint: t("settings-nav.hint_connectors") },
+  extensions: { label: t("settings-nav.tab_extensions"), icon: "extension", hint: t("settings-nav.hint_extensions") },
+  translate: { label: t("settings-nav.tab_translate"), icon: "translate", hint: t("settings-nav.hint_translate") },
+  shortcuts: { label: t("settings-nav.tab_shortcuts"), icon: "keyboard", hint: t("settings-nav.hint_shortcuts") },
+  devices: { label: t("settings-nav.tab_devices"), icon: "key", hint: t("settings-nav.hint_devices") },
+  hub: { label: "hub", icon: "hub", hint: t("settings-nav.hint_hub") },
 };
 
 /** The phone's list: groups of categories, in the tab bar's order. */
