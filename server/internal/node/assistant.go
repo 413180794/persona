@@ -542,6 +542,25 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool, opti
 	return n.spawnClaude(id, cwd, launcher, resume, spare, options...)
 }
 
+func (n *Node) claudeAssistantMCPAndTools(id string) (mcpJSON string, toolFlags []string) {
+	// Per-process MCP config: the assistant-only tools (ask_user, agents_*, lark_*…) and the conversation they act for.
+	servers := map[string]any{"jarvis": map[string]any{
+		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
+	}}
+	// lark-connector's agent hub control tools, when its CLI with `--control` is on this machine (lark-connector.go).
+	olBin := lark-connectorAgentBin()
+	if olBin != "" {
+		servers[lark-connectorServer] = lark-connectorMCP(olBin)
+	}
+	allowed, disallowed := assistantToolFlags(n.assistantTools(), olBin != "")
+	mcp, _ := json.Marshal(map[string]any{"mcpServers": servers})
+	toolFlags = []string{"--mcp-config", string(mcp), "--allowedTools", allowed}
+	if disallowed != "" {
+		toolFlags = append(toolFlags, "--disallowedTools", disallowed)
+	}
+	return string(mcp), toolFlags
+}
+
 func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options ...modelExecution) (*assistantProc, error) {
 	execution := executionOption(options)
 	if err := execution.check(); err != nil {
@@ -550,10 +569,6 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if err := os.MkdirAll(cwd, 0o700); err != nil {
 		return nil, err
 	}
-	// Per-process MCP config: the assistant-only tools (ask_user, agents_*, lark_*…) and the conversation they act for.
-	mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{
-		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
-	}}})
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--include-partial-messages"}
 	// Persona's hooks: a plugin, or in --settings for a claude that loads none (hooksplugin.go).
@@ -564,7 +579,8 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if hooks != "" {
 		args = append(args, "--plugin-dir", hooks)
 	}
-	args = append(args, "--mcp-config", string(mcp), "--allowedTools", n.assistantTools())
+	_, toolFlags := n.claudeAssistantMCPAndTools(id)
+	args = append(args, toolFlags...)
 	if execution.Model != "" {
 		args = append(args, "--model", execution.Model)
 	}
@@ -601,8 +617,11 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	var cmd *exec.Cmd
 	var first []byte // the bridge's persona_start
 	if bridge.script != "" {
-		var mcpConfig map[string]any
-		_ = json.Unmarshal(mcp, &mcpConfig)
+		// The Agent SDK runtime gets only Persona's own MCP server: it has no --disallowedTools, so lark-connector's
+		// control tools (whose approval_decide must stay off) are not mounted here.
+		mcpConfig := map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{
+			"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
+		}}}
 		start := sdkStart{id: id, cwd: cwd, model: execution.Model, permissionMode: startMode, resume: resume, mcp: mcpConfig,
 			allowedTools: n.assistantTools(), settings: settings, plugin: hooks}
 		var err error

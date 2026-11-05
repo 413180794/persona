@@ -305,7 +305,8 @@ func (n *Node) runCodex(ctx context.Context) {
 	defer tick.Stop()
 	scanAt := time.Time{}
 	for {
-		if time.Since(scanAt) >= 30*time.Second {
+		// Also scan right after the Claude scan took a newer process snapshot, so both share one walk of /proc.
+		if time.Since(scanAt) >= 30*time.Second || procSnapshotAfter(scanAt) {
 			n.discoverCodex()
 			scanAt = time.Now()
 		}

@@ -373,25 +373,20 @@ func parseProcEnv(env string) procEnv {
 }
 
 // scanClaudeProcesses maps this user's running claude processes to the variables procEnv keeps from their
-// environment (processes with none of them are left out: default directory, default endpoint). Linux reads /proc;
-// macOS asks ps once for all; Windows reads the process table (scanClaudeProcessesOS).
+// environment (processes with none of them are left out: default directory, default endpoint). Linux reads the
+// environ of the claudes in the shared walk of this user's /proc entries (userProcesses); macOS asks ps once for all;
+// Windows reads the process table (scanClaudeProcessesOS).
 func scanClaudeProcesses() map[int]procEnv {
 	out := map[int]procEnv{}
 	if runtime.GOOS == "windows" {
 		return scanClaudeProcessesOS()
 	}
 	if runtime.GOOS == "linux" {
-		entries, _ := os.ReadDir("/proc")
-		for _, e := range entries {
-			pid, err := strconv.Atoi(e.Name())
-			if err != nil {
+		for pid, argv := range userProcesses() {
+			if !isClaudeCmd(argv) {
 				continue
 			}
-			cmd, err := os.ReadFile("/proc/" + e.Name() + "/cmdline")
-			if err != nil || !isClaudeCmd(strings.Split(string(cmd), "\x00")) {
-				continue
-			}
-			env, _ := os.ReadFile("/proc/" + e.Name() + "/environ")
+			env, _ := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
 			if pe := parseProcEnv(string(env)); pe != (procEnv{}) {
 				out[pid] = pe
 			}

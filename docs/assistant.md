@@ -237,6 +237,21 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
     `{"method":"CLI","path":"/im/+messages-send","action":"allow"}` 也行）。
 - **还没做**：runtime 助手（DSH、pi）的提示词和 `lark-connector` 工具还只认 lark-connector；设置页的 lark-cli 状态、缺的权限（L2）。
 
+## lark-connector agent hub：带领个人 Agent 与查看审批（2026-11-01，仅限 Claude 助手）
+
+lark-connector 的 `lark-connector-agent` 带一套控制命令（上游 agent-hub 的 control CLI，JSON 输出）：看 lark-connector hub 认识的 Agent、
+等人处理的车道、待审批的请求，读写个人 Agent（Muse、Dots、Grok Bot…）的会话。
+助手所在的机器上有支持 `mcp-server --control` 的这个 CLI 时，node 起 **Claude 助手**时把它作为第二个 MCP 服务器挂上（`lark-connector-agent mcp-server --control`，
+工具名 `mcp__lark-connector__*`，`node/lark-connector.go`；仅限 Claude 助手，Codex 和 runtime 助手不挂），助手就能调度这些个人 Agent 并查看待办审批。
+
+- **找 CLI 与开关**：环境变量 `PERSONA_lark-connector_AGENT` 优先（兼容 `JARVIS_lark-connector_AGENT`）指定路径；设为空字符串 `""`、`0` 或 `off` 可显式禁用；未设置时依次找 `PATH`、`~/bin/lark-connector-agent`。挂载前会探测一次 `lark-connector-agent --help`，确认输出包含 `mcp-server` 与 `--control` 才启用（普通未带 `--control` 的 `lark-connector-agent` 不会误挂）；都没有或不支持就不挂，助手没有这组工具。
+- **凭据隔离**：配置和 token 全在 CLI 自己的 `~/.config/lark-connector-agent/config.json`（0600）或它的 `lark-connector_*` 环境变量里，Persona 不读、不传、不记日志。
+- **只读工具直接放行**：`hub_agents`、`hub_attention`、`approvals_list`、`agent_sessions`、`agent_search`、`agent_messages` 放进 `--allowedTools`，不用每次在手机上批准。
+- **发消息走会话权限模式**：`agent_send`（给个人 Agent 发消息，CLI 自动加 `[jarvis] ` 前缀）走会话的权限模式——默认模式下先在手机上询问，而在 `bypassPermissions` 模式下会直接执行、不再弹手机确认。
+- **禁用重叠的 Herdr / Orca 工具**：Herdr 窗格和 Orca 终端统一由 Persona 自己的 `mcp__jarvis__agents_*` 工具管理（带 hub 的安全检查与状态同步），因此 `lark-connector` MCP 上的 `herdr_prompt` / `herdr_rename` / `herdr_answer`、`orca_read` / `orca_history` / `orca_wait` / `orca_send` 一律通过 `--disallowedTools` 禁用。
+- **审批只转给用户，从不代批**：`approval_decide` 始终用 `--disallowedTools` 禁掉（不管 CLI 的 `approvals.enabled` 怎么设）；
+  助手只用 `approvals_list` 看有什么在等，再告诉用户去处理。配对、解绑、凭据这类操作 CLI 本身就不提供。
+
 ## 本会话总是允许（2026-11-05，#2202）
 
 助手对话里的授权卡点了「本会话总是允许」，这段对话里就一直有效，进程换了也一样。以前只靠 Agent 自己记：Claude 是 PermissionRequest hook 回的

@@ -2,11 +2,13 @@ package node
 
 import (
 	"context"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -71,22 +73,15 @@ func codexProcessArgs(pid int, args []string, env string) (codexProcess, bool) {
 func scanCodexProcesses() []codexProcess {
 	var out []codexProcess
 	if runtime.GOOS == "linux" {
-		entries, _ := os.ReadDir("/proc")
-		for _, e := range entries {
-			pid, err := strconv.Atoi(e.Name())
-			if err != nil {
-				continue
-			}
-			b, err := os.ReadFile("/proc/" + e.Name() + "/cmdline")
-			if err != nil {
-				continue
-			}
-			args := strings.Split(strings.TrimRight(string(b), "\x00"), "\x00")
+		// The shared walk of this user's /proc entries (userProcesses), as macOS's ps -U below.
+		procs := userProcesses()
+		for _, pid := range slices.Sorted(maps.Keys(procs)) {
+			args := procs[pid]
 			// Read no environments of unrelated processes.
 			if _, ok := codexProcessArgs(pid, args, ""); !ok {
 				continue
 			}
-			env, err := os.ReadFile("/proc/" + e.Name() + "/environ")
+			env, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
 			if err != nil {
 				continue
 			}

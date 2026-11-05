@@ -32,7 +32,7 @@ node 的 `session.start`：
 
 Persona 启动的会话，启动器记在 node 状态里。在电脑上手动用启动器函数开的 claude 没有这条记录，启动器靠推断
 （`server/internal/node/sessions.go` 的 `matchLauncher`）：node 每 30 秒扫描一次运行中 claude 的环境变量（同一次扫描还读 `CLAUDE_CONFIG_DIR`，
-见 `claudedirs.go`），记下 `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL`，再用 `sessions/<pid>.json` 对到会话。匹配启动器列表（`_claude_launchers` 的函数和调用 claude 的 alias）：
+见 `claudedirs.go`；只看 node 自己用户的进程，Linux 上和 Codex 的发现共用一次 `/proc` 遍历，见 `userprocs.go`），记下 `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL`，再用 `sessions/<pid>.json` 对到会话。匹配启动器列表（`_claude_launchers` 的函数和调用 claude 的 alias）：
 base URL 和模型都相同的启动器只有一个就是它；否则如果这个 base URL 只有一个启动器（模型是运行时选的、显示成 `(claude-choose)` 的那种）也算它；
 其余情况（多个启动器共用 base URL 又对不上模型、没设 base URL）留空，不在候选之间猜。列会话不等启动器列表（它要跑登录 shell）：用缓存，过期就后台刷新，
 所以 node 刚启动时第一次列表可能还没有推断出的启动器。
