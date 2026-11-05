@@ -1,5 +1,6 @@
 // 设置 (docs/web.md): appearance, where the assistant runs, 模型 (every launcher: ~/.zshrc ones synced, Persona ones
 // kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
+import { t as tr } from "../i18n";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, enc, errorText, setToken } from "../lib/api";
 import { splitDevices } from "../lib/devices";
@@ -296,11 +297,11 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
         <Row label="侧边栏显示终端" hint="在 Agent 按机器分组里，每台电脑的 Agent 下面列出它终端里的普通 shell，点开就是「终端」页。默认关；只对这个浏览器生效。">
           <Switch on={sidebarTerminals} onChange={setSidebarTerminals} label="侧边栏显示终端" />
         </Row>
-        <Row label="Agent 行显示详情" hint="Agent 行多一行：模型、上下文、多久没动、目录；会话顶栏显示模型和上下文条。默认关。">
-          <Switch on={agentDetails} onChange={setAgentDetails} label="Agent 行显示详情" />
+        <Row label={tr("context.details")} hint={tr("context.details_hint")}>
+          <Switch on={agentDetails} onChange={setAgentDetails} label={tr("context.details")} />
         </Row>
-        <Row label="上下文显示为已用" hint="上下文写已用多少（已用 39%），不写还剩多少（还剩 61%）；用到 80% 起变警告色。默认关。">
-          <Switch on={contextAsUsed} onChange={setContextAsUsed} label="上下文显示为已用" />
+        <Row label={tr("context.as_used")} hint={tr("context.as_used_hint")}>
+          <Switch on={contextAsUsed} onChange={setContextAsUsed} label={tr("context.as_used")} />
         </Row>
       </Group>
 

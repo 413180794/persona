@@ -3,6 +3,7 @@
 // agent rows and as a thin bar in the session header. Two settings, both kept by this browser and off by default
 // (設置 › 外观): 「Agent 行显示详情」 turns the extra line and the header bar on, 「上下文显示为已用」 flips remaining → used.
 import { useSyncExternalStore } from "react";
+import { t } from "../i18n";
 import { ago, baseName } from "./format";
 import type { Session } from "./types";
 
@@ -43,7 +44,7 @@ export function contextLabel(u: ContextUsage, asUsed: boolean): string {
 
 /** The tooltip: 「还剩 61% 上下文」 or 「已用 39%」. */
 export function contextTooltip(u: ContextUsage, asUsed: boolean): string {
-  return asUsed ? `已用 ${u.used}%` : `还剩 ${u.left}% 上下文`;
+  return asUsed ? t("context.used", { percent: u.used }) : t("context.left", { percent: u.left });
 }
 
 /** The model as a row has room for it: "claude-opus-5-5" → "opus 5.5", "claude-sonnet-4-5-20250929" → "sonnet 4.5",
