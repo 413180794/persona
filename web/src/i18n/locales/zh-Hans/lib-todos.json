@@ -18,5 +18,6 @@
   "with_project": "随项目",
   "spawned_by": "由 {title} 派出",
   "spawned": "派生",
-  "subtask": "子任务"
+  "subtask": "子任务",
+  "same_chat": "同群"
 }

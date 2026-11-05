@@ -18,5 +18,6 @@
   "with_project": "プロジェクトに連動",
   "spawned_by": "{title}から派生",
   "spawned": "派生",
-  "subtask": "サブタスク"
+  "subtask": "サブタスク",
+  "same_chat": "同じグループ"
 }

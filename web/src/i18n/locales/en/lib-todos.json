@@ -18,5 +18,6 @@
   "with_project": "With project",
   "spawned_by": "Spawned by {title}",
   "spawned": "Spawned",
-  "subtask": "Subtask"
+  "subtask": "Subtask",
+  "same_chat": "Same chat"
 }

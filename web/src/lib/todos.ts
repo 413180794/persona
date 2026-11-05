@@ -578,7 +578,7 @@ export function formatAgentSource(
     return t("lib-todos.spawned");
   }
 
-  if (agent.source === "chat") return "同群";
+  if (agent.source === "chat") return t("lib-todos.same_chat");
 
   return undefined;
 }

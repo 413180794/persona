@@ -166,6 +166,8 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 type="button"
                 onClick={() => pick(it.k)}
                 aria-current={tab === it.k ? "page" : undefined}
+                // the bar scrolls when the labels don't fit (English, Japanese): keep the open category in view
+                ref={tab === it.k ? (el) => el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }) : undefined}
                 className={cx(
                   "flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 text-[12.5px] transition-[background-color,color] duration-150",
                   tab === it.k ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
