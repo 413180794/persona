@@ -1,0 +1,3 @@
+{
+  "database_url": "postgres://jarvis:secret@127.0.0.1:18661/jarvis?sslmode=disable"
+}

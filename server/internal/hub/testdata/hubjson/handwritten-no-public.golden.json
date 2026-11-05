@@ -1,0 +1,66 @@
+// the config the hub runs with
+{
+  "listen": ":18660",
+  "token": "handwritten-token",
+  "public_url": "http://hub.example.com:18660",
+  "hook_timeout_minutes": 30,
+  "database_url": "postgres://jarvis:secret@127.0.0.1:18661/jarvis?sslmode=disable",
+  "ai": {
+    "api": "",
+    "base_url": "",
+    "api_key_file": "",
+    "model": "",
+    "reasoning_effort": ""
+  },
+  "lark": {},
+  "google": {
+    "client_id": ""
+  },
+  "microsoft": {},
+  "machines": [
+    {
+      "id": "box",
+      "name": "box",
+      "kind": "local",
+      "icon": "server"
+    },
+    {
+      "id": "laptop",
+      "name": "Laptop",
+      "kind": "link"
+    }
+  ],
+  "assistant": {},
+  "inbox": {
+    "agent": {
+      "enabled": false
+    }
+  },
+  "notify": {},
+  "kb": {},
+  "public": {},
+  "security": {},
+  "admin": {
+    "access": "lan"
+  },
+  "tailcat": {},
+  "bots": {
+    "feishu": {}
+  },
+  "mesh": {},
+  "personas": {},
+  "usage": {}
+}
+// hub.json after loading
+{
+  "listen": ":18660",
+  "token": "handwritten-token",
+  "public_url": "http://hub.example.com:18660",
+  "database_url": "postgres://jarvis:secret@127.0.0.1:18661/jarvis?sslmode=disable",
+  "machines": [
+    {"id": "box", "name": "box", "kind": "local", "icon": "server"},
+    {"id": "laptop", "name": "Laptop", "kind": "link"}
+  ],
+  "admin": {"access": "lan"}
+}
+

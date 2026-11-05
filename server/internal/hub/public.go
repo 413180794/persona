@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/netaddr"
@@ -77,16 +79,34 @@ func (h *Hub) startPublic(ctx context.Context) error {
 			h.logf("hub: security.proxy_protocol is for the TLS listener, and public.tls_listen is not set: no header is read")
 		}
 	}
+	var ln net.Listener
+	var activated bool
 	if h.cfg.Public.TLSListen != "" {
 		if err := h.refreshTLS(time.Now()); err != nil {
 			return err
 		}
-		ln, activated, err := listenTCP(h.cfg.Public.TLSListen)
+		ln, activated, err = listenTCP(h.cfg.Public.TLSListen)
+		if err != nil && tlsAddressGone(h.cfg.Public.TLSListen, err) {
+			// A new install binds TLS to the LAN address only (docs/onboarding.md 4.1), and DHCP may have moved it:
+			// start without TLS rather than not at all; the plaintext port still works on the LAN.
+			h.logf("hub TLS: %s is not an address of this machine now (has the LAN address changed?): TLS is off; "+
+				"set public.tls_listen to this machine's LAN address, or \":%s\" (every address), and restart",
+				h.cfg.Public.TLSListen, portOf(h.cfg.Public.TLSListen))
+			ln, err = nil, nil
+		}
 		if err != nil {
 			return fmt.Errorf("listen TLS: %w", err)
 		}
+	}
+	if h.cfg.Public.TLSListen != "" && ln != nil {
 		if activated {
 			h.logf("hub TLS: listening on the socket systemd passed (%s)", ln.Addr())
+			// jarvisd.socket binds with FreeBind, so a LAN address DHCP has moved still "listens", reaching nobody.
+			if host, ok := addressNotLocal(h.cfg.Public.TLSListen, net.InterfaceAddrs); ok {
+				h.logf("hub TLS: %s is not an address of this machine now (has the LAN address changed?): TLS cannot be "+
+					"reached; set public.tls_listen to this machine's LAN address, or \":%s\" (every address), and rerun "+
+					"personad hub setup", host, portOf(h.cfg.Public.TLSListen))
+			}
 		}
 		// The PROXY header comes before the TLS handshake: the TLS server reads through it.
 		ln = h.proxyListener(ln, func(p *proxyPolicy) bool { return p.tls })
@@ -349,4 +369,34 @@ func (n *handshakeNoise) Write(p []byte) (int, error) {
 		n.logf("tls: %d failed handshakes since %s (scanners, or a client with an old pin)", count, since.Format(time.TimeOnly))
 	}
 	return len(p), nil
+}
+
+// tlsAddressGone: listening on a given host failed because the machine no longer has that address (EADDRNOTAVAIL).
+func tlsAddressGone(addr string, err error) bool {
+	host, _, splitErr := net.SplitHostPort(addr)
+	return splitErr == nil && host != "" && errors.Is(err, syscall.EADDRNOTAVAIL)
+}
+
+func portOf(addr string) string {
+	_, port, _ := net.SplitHostPort(addr)
+	return port
+}
+
+// addressNotLocal: addr names a host (not every address) that none of the machine's interfaces has now.
+func addressNotLocal(addr string, interfaceAddrs func() ([]net.Addr, error)) (string, bool) {
+	host, _, err := net.SplitHostPort(addr)
+	ip := net.ParseIP(host)
+	if err != nil || ip == nil || ip.IsUnspecified() || ip.IsLoopback() {
+		return "", false
+	}
+	addrs, err := interfaceAddrs()
+	if err != nil {
+		return "", false
+	}
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip) {
+			return "", false
+		}
+	}
+	return host, true
 }

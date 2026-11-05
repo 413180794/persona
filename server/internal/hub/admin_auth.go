@@ -267,7 +267,7 @@ func (h *Hub) adminStateView(r *http.Request, store adminStore, s *db.AdminSessi
 		return adminStateView{}, err
 	}
 	v := adminStateView{PasswordSet: hash != "", CanSetup: hash == "" && h.adminCanSetup(r), HubName: h.hubName(), Version: h.version}
-	v.SetupCodeRequired = v.CanSetup && setupCodeRequired(r)
+	v.SetupCodeRequired = v.CanSetup && h.setupCodeRequired(r)
 	if s != nil && hash != "" {
 		v.LoggedIn, v.CSRF = true, s.CSRF
 		at := s.ExpiresAt
@@ -317,13 +317,13 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 				errors.New("set the first password from the hub's own network, or run jarvisd hub admin reset-password on the hub's machine"))
 			return
 		}
-		if setupCodeRequired(r) {
+		if h.setupCodeRequired(r) {
 			if h.adminRateLimited(w, r) {
 				return
 			}
 			if strings.TrimSpace(in.SetupCode) == "" {
 				writeErrCode(w, http.StatusForbidden, "setup_code_required",
-					errors.New("from this machine the first password needs the setup code: hub log, or jarvisd hub admin setup-code"))
+					errors.New("the first password needs the setup code: the admin link personad hub setup printed, the hub log, or jarvisd hub admin setup-code"))
 				return
 			}
 			if problem := adminPasswordProblem(in.Password); problem != nil { // before spending the code

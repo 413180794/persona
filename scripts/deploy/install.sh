@@ -407,7 +407,10 @@ elif (: </dev/tty) 2>/dev/null; then
 	printf '这台电脑要跑 hub 吗？[y/N] ' >/dev/tty
 	read -r is_hub </dev/tty || is_hub=
 	case "$is_hub" in
-	y | Y | yes) if ask_admin_access; then set_admin_access; else admin_access_reminder; fi ;;
+	y | Y | yes)
+		ROLE=hub
+		if ask_admin_access; then set_admin_access; else admin_access_reminder; fi
+		;;
 	*)
 		printf '装成 node 服务、连到你的 hub？[Y/n] ' >/dev/tty
 		read -r as_node </dev/tty || as_node=
@@ -418,6 +421,22 @@ else
 	admin_access_reminder if-hub
 fi
 
-echo "On the machine that runs the hub: jarvisd hub run (the first run writes ~/.jarvis/hub.json), then jarvisd hub pair."
-echo "(With JARVIS_WITH=wechat there it also installs the WeChat bot.)"
-echo "Other computers: the node service, sh -s -- --node --pair '<jarvisd hub pair --machine <id> link>' (or --listen: the hub dials in)."
+# The machine that runs the hub: personad hub setup does the rest (hub.json, the database, the service, the phone's
+# QR code and the admin URL, docs/onboarding.md 4.1). Running it again is safe, so an upgrade with --hub runs it too.
+if [ "$ROLE" = hub ]; then
+	echo ""
+	echo "接着把这台电脑设成 hub（$DEST/personad hub setup）："
+	if "$DEST/personad" hub setup; then
+		exit 0
+	fi
+	echo "hub 还没装好：按上面的「下一步」处理后，运行 $DEST/personad hub setup 接着装（已经做好的不会重做）。" >&2
+	exit 1
+fi
+# A hub that has run has a token in hub.json; set_admin_access above may have written one with admin.access only.
+if [ -f "$STATE/hub.json" ] && grep -Eq '"token"[[:space:]]*:[[:space:]]*"[^"]' "$STATE/hub.json"; then
+	echo "这台已经是 hub，personad 升级好了；重启 hub 后用上新版本（Linux：systemctl --user restart jarvisd）。要检查一遍：$DEST/personad hub setup"
+	exit 0
+fi
+echo "要让这台电脑跑 hub：运行 $DEST/personad hub setup（或重跑安装命令并加 --hub）。全家只要一台 hub。"
+echo "（跑 hub 的那台加 JARVIS_WITH=wechat 会一起装微信机器人。）"
+echo "其他电脑装 node 服务：安装命令加 --node --pair '<personad hub pair --machine <id> 打印的链接>'（或 --listen：让 hub 来连）。"

@@ -72,6 +72,9 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
   `docker compose logs hub`），过期了以后有人从回环打开设置页时再打一个新的；也可以在 hub 机器上 `personad hub admin setup-code` 现取
   （经回环 + 主 token 向运行中的 hub 要）。码是 8 个字符（不含 0 / O / 1 / I，约 40 位随机），10 分钟有效，用一次就失效，只在 hub 内存里
   （重启后作废，启动时会打新的）；填错计入登录限流。局域网来源照旧不用码；设过密码以后登录不受影响。
+- **新安装的局域网来源也要设置码**：`personad hub setup` 新写的 hub.json 带 `admin.first_setup: "code"`，这时任何来源设第一个密码都要码
+  （共享的局域网里别人能抢先设）。安装器经回环 + 主 token 取一个码，打印成 `http://<局域网 IP>:<端口>/admin#setup=<设置码>`；
+  `#setup=` 是片段，不发到服务器、不进日志，设置页读到后预填，再从地址栏里去掉。老 hub.json 没有这个字段，行为不变。
 - **密码**：至少 8 个字符、最多 256 字节；存 argon2id 哈希（m=19 MiB、t=2、p=1，PHC 格式）到 Postgres 的 `admin_credentials`，
   明文不落盘、不进日志。同时最多算 2 个哈希，多出来的排队（防止用登录请求把内存打满）。
 - **会话 cookie**：`jarvis_admin`，32 字节随机值，库里只存 SHA-256；`HttpOnly`、`SameSite=Strict`、`Path=/api/v1/admin/`，

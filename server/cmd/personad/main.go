@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -58,6 +59,8 @@ func buildInfo() update.Build {
 const usage = `usage:
   personad launch <name> …   run claude with a launcher kept in 设置 › 模型 (from the local node)
   personad hub [run]        run the hub (config ~/.persona/hub.json)
+  personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-service] [--json]
+                                           set this machine up as the hub: hub.json, database, service, pairing (docs/onboarding.md)
   personad hub pair [--legacy] [--android] print a pairing QR code and optional Android download link
   personad hub pair --machine <id>          print a pairing link for that link machine's jarvis-link (docs/link.md)
   personad hub pair --peer  print a code another hub pairs with this one by (hub mesh, docs/mesh.md)
@@ -177,6 +180,10 @@ func main() {
 				default:
 					err = hub.Pair(*legacy, *android)
 				}
+			}
+		case "setup": // docs/onboarding.md 4.1
+			if err = hub.SetupCommand(ctx, os.Args[3:], os.Stdout, os.Stderr); errors.Is(err, hub.ErrSetupStopped) {
+				os.Exit(1) // the step that stopped said why
 			}
 		case "admin":
 			err = hub.AdminCommand(ctx, os.Args[3:], os.Stdin, os.Stdout, os.Stderr)

@@ -99,6 +99,11 @@ Orca 没开时立刻答「没有终端」，不记日志。映射和第一期不
 hub 有两种部署方式，功能一样：**原生二进制**（下面，`systemd --user` 服务 + Postgres 容器）和 **Docker**（hub + Postgres 两个容器，
 适合 NAS 或只当 hub 的机器，`docs/docker.md`）。各台电脑上的 node 不管 hub 怎么部署，都是 `~/.persona/bin/personad`。
 
+没有仓库的新用户：`curl -fsSL <官网>/install.sh | sh -s -- --hub`，装完二进制接着跑 `personad hub setup`（[onboarding.md](onboarding.md) 4.1）：
+写 hub.json（新文件才带新安装的默认值）、照 `db.sh` 建同名同卷的 Postgres 容器（或用 hub.json 里已有的库）、装和 `hub-systemd.sh`
+同一套 socket activation 单元（Mac 写 LaunchAgent `com.jarvis.hub`）、等 hub 起来、只打有问题的自检项，最后打印手机扫的二维码和带
+`#setup=` 的管理界面地址。重跑是安全的：已有的值不改，没变的服务不重启。`--json` 一行一步，给 Persona Link 调用。
+
 ```sh
 ./scripts/deploy/deploy.sh                    # 编译 linux/amd64 + darwin/arm64，装到所有机器，重启 hub
 ./scripts/deploy/deploy.sh <机器 id> <机器 id> # 只装部分机器

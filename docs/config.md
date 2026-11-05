@@ -214,7 +214,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   不写时用 hub 机器主机名的短名；主机名是 Docker 容器 id 或者 `JARVIS_LOCAL_NODE=0` 时用 `hub-<hub_id 前 6 位>`。手改文件要重启 hub；
   在管理界面「概览」里改的立刻生效（[admin.md](admin.md)）。
 - `admin`（可选）：hub 管理界面（`<hub 地址>/admin`，[admin.md](admin.md)）。`access` 是谁能打开：`loopback` / `lan`（默认）/ `cidrs` / `any`
-  （必须 TLS）；`cidrs` 是 `access: cidrs` 时放进来的网段；`session_hours` 是登录多久过期（默认 12）。放宽只能在 hub 机器上
+  （必须 TLS）；`cidrs` 是 `access: cidrs` 时放进来的网段；`session_hours` 是登录多久过期（默认 12）；`first_setup: "code"`（`personad hub setup` 新装时写）让局域网来源设第一个密码也要设置码，不写时只有回环要。放宽只能在 hub 机器上
   `personad hub admin access <范围>`（或部署脚本），网页里只能收窄；环境变量 `JARVIS_ADMIN_ACCESS` / `JARVIS_ADMIN_CIDRS` 优先于它。
   管理界面改 hub.json 时原子写、保留不认识的字段（[admin.md](admin.md)「改 hub.json」）。
 - `mesh`（可选，hub 互联，[mesh.md](mesh.md)）：`discovery`（默认 true：在局域网里用 mDNS 广播自己、列出发现的 hub；Docker 桥接网络里收不到）、

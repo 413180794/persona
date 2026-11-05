@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   canChoose,
+  setupCodeFromHash,
+  withoutSetupCode,
   canRollBack,
   canUpgrade,
   extensionRunNote,
@@ -326,5 +328,16 @@ describe("extensions", () => {
     expect(canRollBack({ ...base, source: "installed", previous_version: "1.0.0", origin: "dir:/p" })).toBe(true);
     expect(canRollBack({ ...base, source: "installed", previous_version: "1.0.0", origin: "remote:rpc=/s" })).toBe(false);
     expect(canRollBack({ ...base, source: "installed" })).toBe(false);
+  });
+});
+
+describe("setup code from the installer's admin URL", () => {
+  it("reads #setup= and takes it back off", () => {
+    expect(setupCodeFromHash("#setup=ABCD-EFGH")).toBe("ABCD-EFGH");
+    expect(setupCodeFromHash("#x=1&setup=abcd-efgh")).toBe("ABCD-EFGH");
+    expect(setupCodeFromHash("")).toBe("");
+    expect(setupCodeFromHash("#setup=<script>")).toBe("");
+    expect(withoutSetupCode("#setup=ABCD-EFGH")).toBe("");
+    expect(withoutSetupCode("#x=1&setup=ABCD-EFGH")).toBe("#x=1");
   });
 });

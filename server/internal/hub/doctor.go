@@ -29,26 +29,7 @@ func Doctor(ctx context.Context, out io.Writer) error {
 	if cfg != nil {
 		endpoints = d.running(ctx, cfg)
 	}
-	addrs, err := netaddr.List()
-	if err != nil {
-		d.problem("本机 IPv6", "无法读取地址；请检查本机网卡状态")
-	} else {
-		stable := 0
-		for _, a := range addrs {
-			if !a.IP.Is6() {
-				continue
-			}
-			if netaddr.Stable(a) {
-				stable++
-				d.ok("本机 IPv6", fmt.Sprintf("%s（%s，Stable）", a.IP, a.Interface))
-			} else {
-				fmt.Fprintf(out, "  已排除 %s（%s）：%s\n", a.IP, a.Interface, doctorAddressReason(a))
-			}
-		}
-		if stable == 0 {
-			d.problem("本机 IPv6", "没有可确认稳定的全局 IPv6；请检查运营商 IPv6 和网卡地址，非 Linux 系统无法确认地址标志")
-		}
-	}
+	addrs := d.ipv6()
 	d.system(ctx)
 	port := "<TLS 端口>"
 	if cfg != nil {
@@ -89,6 +70,48 @@ func Doctor(ctx context.Context, out io.Writer) error {
 type doctorReport struct {
 	out  io.Writer
 	next []string
+	// problems are the "有问题" lines, as "item：action" (`personad hub setup` prints only these).
+	problems []string
+}
+
+// ipv6 checks this machine's global IPv6 addresses (for reaching the hub from outside) and returns every address.
+func (d *doctorReport) ipv6() []netaddr.Addr {
+	addrs, err := netaddr.List()
+	if err != nil {
+		d.problem("本机 IPv6", "无法读取地址；请检查本机网卡状态")
+	} else {
+		stable := 0
+		for _, a := range addrs {
+			if !a.IP.Is6() {
+				continue
+			}
+			if netaddr.Stable(a) {
+				stable++
+				d.ok("本机 IPv6", fmt.Sprintf("%s（%s，Stable）", a.IP, a.Interface))
+			} else {
+				fmt.Fprintf(d.out, "  已排除 %s（%s）：%s\n", a.IP, a.Interface, doctorAddressReason(a))
+			}
+		}
+		if stable == 0 {
+			d.problem("本机 IPv6", "没有可确认稳定的全局 IPv6；请检查运营商 IPv6 和网卡地址，非 Linux 系统无法确认地址标志")
+		}
+	}
+	return addrs
+}
+
+// setupDoctor is the check at the end of `personad hub setup` (docs/onboarding.md 4.1): only what is wrong, none of
+// the excluded addresses or the routes and firewall, which are about reaching the hub from outside (outside: asked
+// for with --outside, then those too).
+func setupDoctor(ctx context.Context, dir string, outside bool) []string {
+	d := &doctorReport{out: io.Discard}
+	if cfg := d.config(dir); cfg != nil {
+		d.running(ctx, cfg)
+	}
+	if outside {
+		d.ipv6()
+		d.system(ctx)
+	}
+	return d.problems
 }
 
 func (d *doctorReport) ok(item, detail string) {
@@ -98,6 +121,7 @@ func (d *doctorReport) ok(item, detail string) {
 func (d *doctorReport) problem(item, action string) {
 	fmt.Fprintf(d.out, "有问题｜%s：%s\n", item, action)
 	d.next = append(d.next, action)
+	d.problems = append(d.problems, item+"："+action)
 }
 
 func (d *doctorReport) config(dir string) *Config {

@@ -14,7 +14,9 @@ import (
 // the internet through a reverse proxy on this machine that adds no forwarding header (nginx's proxy_pass by
 // default): both look the same. So setting the first password from loopback takes a one-time code that only someone
 // who can work on the hub's machine sees: the hub logs one when it starts without a password, and
-// `jarvisd hub admin setup-code` gets a fresh one. LAN sources do not need it.
+// `jarvisd hub admin setup-code` gets a fresh one. LAN sources do not need it, unless hub.json says admin.first_setup
+// "code" (new installs from `personad hub setup`: on a shared LAN anyone could otherwise set the password first);
+// the installer prints the admin URL with the code in its fragment (#setup=…), which the page reads.
 
 const (
 	setupCodeLifetime = 10 * time.Minute
@@ -48,8 +50,11 @@ func normalizeSetupCode(s string) string {
 	return strings.ToUpper(strings.NewReplacer("-", "", " ", "").Replace(strings.TrimSpace(s)))
 }
 
-// setupCodeRequired: setting the first password from loopback (the connection's own address, whatever headers say).
-func setupCodeRequired(r *http.Request) bool { return remoteIP(r).IsLoopback() }
+// setupCodeRequired: setting the first password from loopback (the connection's own address, whatever headers say),
+// or from anywhere when admin.first_setup is "code".
+func (h *Hub) setupCodeRequired(r *http.Request) bool {
+	return remoteIP(r).IsLoopback() || h.cfg.Admin.FirstSetup == firstSetupCode
+}
 
 // useSetupCode checks a code and spends it when it is right.
 func (h *Hub) useSetupCode(code string) bool {
@@ -74,8 +79,12 @@ func (h *Hub) setupCodeLive() bool {
 }
 
 func (h *Hub) logSetupCode(code string, expires time.Time) {
-	h.logf("admin: first-run setup code %s (10 minutes, until %s): needed to set the admin password from this machine "+
-		"(loopback); jarvisd hub admin setup-code prints a new one", code, expires.UTC().Format(time.RFC3339))
+	where := "from this machine (loopback)"
+	if h.cfg.Admin.FirstSetup == firstSetupCode {
+		where = "(admin.first_setup is \"code\": from any source)"
+	}
+	h.logf("admin: first-run setup code %s (10 minutes, until %s): needed to set the admin password %s; "+
+		"jarvisd hub admin setup-code prints a new one", code, expires.UTC().Format(time.RFC3339), where)
 }
 
 // adminStartup logs a setup code when the hub starts without an administrator password.

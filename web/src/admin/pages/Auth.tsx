@@ -1,10 +1,10 @@
 // First visit (set the admin password) and sign-in (docs/admin.md「管理员密码和会话」).
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, EASE } from "../../ui/atoms";
 import { adminApi, AdminError, errorText, setCsrf } from "../api";
-import { setupRequest } from "../logic";
+import { setupCodeFromHash, setupRequest, withoutSetupCode } from "../logic";
 import { AdminIcon } from "../icons";
 import type { AdminState } from "../types";
 import { Field } from "../parts";
@@ -34,10 +34,18 @@ const CMD = "jarvisd hub admin reset-password";
 export function Setup({ state, onDone }: { state: AdminState; onDone: (s: AdminState) => void }) {
   const [pw, setPw] = useState("");
   const [again, setAgain] = useState("");
-  const [code, setCode] = useState("");
+  // The installer's admin URL carries the code in its fragment (/admin#setup=…): filled in, then taken off the URL.
+  const [fromLink] = useState(() => setupCodeFromHash(window.location.hash));
+  const [code, setCode] = useState(fromLink);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const needCode = Boolean(state.setup_code_required);
+  useEffect(() => {
+    if (!fromLink) return;
+    const { pathname, search, hash } = window.location;
+    window.history.replaceState(window.history.state, "", pathname + search + withoutSetupCode(hash));
+  }, [fromLink]);
+  const prefilled = Boolean(fromLink) && code === fromLink;
 
   if (!state.can_setup)
     return (
@@ -75,23 +83,28 @@ export function Setup({ state, onDone }: { state: AdminState; onDone: (s: AdminS
       <form onSubmit={submit} className="rounded-card bg-surface p-4 shadow-card">
         {needCode && (
           <div className="mb-4 border-b border-line pb-4">
-            <div className="mb-3 rounded-control bg-inset px-3 py-2.5 text-[12px] leading-relaxed text-ink-2 shadow-hairline">
-              <p>{t("admin-pages-auth.code_intro")}</p>
-              <ul className="mt-1.5 list-disc space-y-1 pl-4 marker:text-ink-3">
-                <li>
-                  {tRich("admin-pages-auth.code_from_logs", {
-                    systemd: <span className="whitespace-nowrap font-mono text-[11.5px]">journalctl --user -u jarvisd</span>,
-                    docker: <span className="whitespace-nowrap font-mono text-[11.5px]">docker compose logs hub</span>,
-                  })}
-                </li>
-                <li>{tRich("admin-pages-auth.code_from_command", { command: <span className="whitespace-nowrap font-mono text-[11.5px]">jarvisd hub admin setup-code</span> })}</li>
-              </ul>
-            </div>
-            <Field label={t("admin-pages-auth.setup_code")} value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="ABCD-EFGH" mono autoFocus autoComplete="one-time-code" autoCapitalize="characters" maxLength={32} />
+            {prefilled ? (
+              <p className="mb-3 rounded-control bg-inset px-3 py-2.5 text-[12px] leading-relaxed text-ink-2 shadow-hairline">{t("admin-pages-auth.code_prefilled")}</p>
+            ) : (
+              <div className="mb-3 rounded-control bg-inset px-3 py-2.5 text-[12px] leading-relaxed text-ink-2 shadow-hairline">
+                <p>{t("admin-pages-auth.code_intro")}</p>
+                <ul className="mt-1.5 list-disc space-y-1 pl-4 marker:text-ink-3">
+                  <li>
+                    {tRich("admin-pages-auth.code_from_logs", {
+                      systemd: <span className="whitespace-nowrap font-mono text-[11.5px]">journalctl --user -u jarvisd</span>,
+                      docker: <span className="whitespace-nowrap font-mono text-[11.5px]">docker compose logs hub</span>,
+                    })}
+                  </li>
+                  <li>{tRich("admin-pages-auth.code_from_setup", { command: <span className="whitespace-nowrap font-mono text-[11.5px]">personad hub setup</span> })}</li>
+                  <li>{tRich("admin-pages-auth.code_from_command", { command: <span className="whitespace-nowrap font-mono text-[11.5px]">jarvisd hub admin setup-code</span> })}</li>
+                </ul>
+              </div>
+            )}
+            <Field label={t("admin-pages-auth.setup_code")} value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="ABCD-EFGH" mono autoFocus={!prefilled} autoComplete="one-time-code" autoCapitalize="characters" maxLength={32} />
           </div>
         )}
         <div className="space-y-3">
-          <Field label={t("admin-pages-auth.password")} type="password" value={pw} onChange={setPw} autoFocus={!needCode} autoComplete="new-password" error={short ? t("admin-pages-auth.too_short") : undefined} />
+          <Field label={t("admin-pages-auth.password")} type="password" value={pw} onChange={setPw} autoFocus={!needCode || prefilled} autoComplete="new-password" error={short ? t("admin-pages-auth.too_short") : undefined} />
           <Field label={t("admin-pages-auth.again")} type="password" value={again} onChange={setAgain} autoComplete="new-password" error={mismatch ? t("admin-pages-auth.mismatch") : undefined} />
         </div>
         <Button type="submit" tone="primary" busy={busy} disabled={!pw || short || mismatch || again !== pw || (needCode && !code.trim())} className="mt-4 h-9 w-full">

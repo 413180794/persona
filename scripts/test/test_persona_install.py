@@ -20,7 +20,7 @@ class PersonaInstallTests(unittest.TestCase):
         name = 'jarvisd-' + target
         with tempfile.TemporaryDirectory() as directory:
             downloads = Path(directory)
-            data = gzip.compress(b'#!/bin/sh\nif [ "$1" = version ]; then printf "fixture-version\\n"; fi\n', mtime=0)
+            data = gzip.compress(b'#!/bin/sh\necho "$*" >> "$HOME/jarvisd-calls"\nif [ "$1" = version ]; then printf "fixture-version\\n"; fi\n', mtime=0)
             (downloads / (name + '.gz')).write_bytes(data)
             digest = '0' * 64 if corrupt else hashlib.sha256(data).hexdigest()
             sums = digest + '  ' + name + '.gz\n'
@@ -59,6 +59,8 @@ class PersonaInstallTests(unittest.TestCase):
                 self.assertFalse((home / '.jarvis').is_symlink())
                 self.assertEqual((home / '.persona').resolve(), (home / '.jarvis').resolve())
                 self.assertEqual((home / '.persona/bin/personad').resolve(), (home / '.jarvis/bin/jarvisd').resolve())
+            # The hub role ends with personad hub setup (docs/onboarding.md 4.1), every time: it is safe to repeat.
+            self.assertEqual((home / 'jarvisd-calls').read_text().count('hub setup\n'), 2)
 
     def test_node_install_adds_persona_link_and_runs_the_real_connector(self):
         # #1159: persona-link is an alias of the jarvis-link file; the installer runs the real file (the service and

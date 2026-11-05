@@ -57,6 +57,21 @@ export function setupRequest(password: string, code: string, codeRequired: boole
   return codeRequired ? { password, setup_code: code.trim() } : { password };
 }
 
+// setupCodeFromHash reads the first-run setup code `personad hub setup` puts in the admin URL's fragment
+// (/admin#setup=ABCD-EFGH, docs/onboarding.md 4.1): a fragment never reaches the server or its logs.
+export function setupCodeFromHash(hash: string): string {
+  const code = new URLSearchParams(hash.replace(/^#/, "")).get("setup") ?? "";
+  return /^[A-Za-z0-9 -]{1,32}$/.test(code.trim()) ? code.trim().toUpperCase() : "";
+}
+
+// withoutSetupCode is the fragment with the setup code taken out (the code is spent once used).
+export function withoutSetupCode(hash: string): string {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  params.delete("setup");
+  const rest = params.toString();
+  return rest ? "#" + rest : "";
+}
+
 // ── QR code ──────────────────────────────────────────────
 
 // qrPath turns the hub's rows of "0" / "1" into one SVG path (runs of dark modules as rectangles), offset by margin.

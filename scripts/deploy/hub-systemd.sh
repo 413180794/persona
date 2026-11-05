@@ -1,6 +1,7 @@
 #!/bin/bash
 # Install the existing hub unit using the same resolved root as the deployed binary (Linux: systemd user service;
-# Mac: restart the launchd agent that already runs it).
+# Mac: restart the launchd agent that already runs it). personad hub setup (server/internal/hub/setup_service.go)
+# writes the same units: keep the two in step.
 set -euo pipefail
 ROOT="${_PERSONA_STATE_DIR:-$(python3 "$(dirname "${BASH_SOURCE[0]}")/../persona_identity.py" --service hub --prepare)}"
 export PERSONA_HOME="$ROOT" JARVIS_HOME="$ROOT"
@@ -74,7 +75,10 @@ if use_socket:
     socket.write_text('\n'.join([
         '[Unit]', "Description=Persona hub's listening sockets (docs/hub-restart.md)", '', '[Socket]',
         *['ListenStream=' + stream(a) for a in listens],
-        'Backlog=4096', 'NoDelay=true', 'Service=jarvisd.service', '',
+        # An address-bound listener (personad hub setup binds TLS to the LAN address) comes up even while that
+        # address is gone (DHCP) instead of failing the socket and the plaintext port with it. Same as hub/setup_service.go.
+        'Backlog=4096', 'NoDelay=true', *(['FreeBind=true'] if any(not a.startswith(':') for a in listens) else []),
+        'Service=jarvisd.service', '',
         '[Install]', 'WantedBy=sockets.target', '',
     ]))
 elif socket.exists():

@@ -124,6 +124,8 @@ personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-se
 | `admin.first_setup` | `"code"`：局域网来源设第一个管理员密码也要设置码 | 今天只有回环要码（`admin_setupcode.go:52`），共享局域网里别人能抢先设密码。老 hub.json 没这个字段，行为不变 |
 | `machines` | 有 herdr 或 claude 时保留本机 `kind: local`；Docker 里照旧为空 | 和现在一致 |
 
+实现（#3349）：`server/internal/hub/setup.go`、`setup_service.go`。新默认值只由 `hub setup` 写（`LoadConfig` 首次运行写的仍是 `defaultConfig()`，Docker 镜像首启不受影响）；「新文件」指还没有 `token` 的 hub.json（不存在，或 `db.sh` / `hub admin access` 先写的），缺的字段按 `newInstallConfig()` 补上、已有的不动；`--outside` 是唯一会改已有值的（`public.tls_listen` 改成 `:端口`）。没有 Docker 时看 5432 端口上有没有 Postgres，有就提示把地址写进 `database_url`（只看端口；像 #321 那样连本机 Postgres、建 jarvis 用户和库留到后续）。默认端口被占时新装改用 +100 的一对（18760 / 18762）。`tls_listen` 绑的局域网地址不在了时 hub 不开 TLS 照常启动并记一行日志，socket 单元带 `FreeBind=true`（`hub-systemd.sh` 同步），所以 socket activation 下监听照样起来，hub 发现这个地址不是本机的就记一行日志（App 里的提示留到后续）。Mac 的 LaunchAgent 是 `com.jarvis.hub`，已有别的 agent 在跑 `<root>/bin/jarvisd hub` 时用那个（和 `hub-systemd.sh` 一样按 `ProgramArguments` 解析软链和 `~` 比较，`~/.jarvis` 指向 `~/.persona` 时也认得）；没有 agent 而 hub 已经在跑（比如开在终端里）时不再装一个抢不到端口的 agent，提示先停掉。`bin/jarvisd` 和上次起服务时不一样（`install.sh --hub` 升级换了它，记在 `bin/.jarvisd.setup-sha256`）时重启 hub（Linux `restart jarvisd`，端口在 socket 上无感；Mac `launchctl kickstart -k`）。
+
 **Docker / NAS**：不走 `hub setup`。compose 照旧，另一个小 PR 让入口脚本首次生成 `.env` 缺的值（随机库密码、PUID / PGID），`compose.yaml` 映射 TLS 端口（镜像现在只 `EXPOSE 18660`，`Dockerfile:83`）。NAS 的说明里直说「还要再加一台电脑」。
 
 **Mac 一体化**（拍板 1、2 之后）：Persona Link 加「把这台 Mac 设成 hub」，内部调 `personad hub setup`，装好后本机是 `kind: local`，窗口里直接显示 `pair-codes` 返回的 `qr.rows`。和 Mac App `PersonaMac` 合不合成一个下载另行拍板（拍板 3）。

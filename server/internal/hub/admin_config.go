@@ -22,7 +22,13 @@ type AdminConfig struct {
 	CIDRs []string `json:"cidrs,omitempty"`
 	// SessionHours is how long a sign-in lasts (default 12), counted from signing in.
 	SessionHours int `json:"session_hours,omitempty"`
+	// FirstSetup "code": setting the first password takes the one-time setup code from every source, not only from
+	// loopback (admin_setupcode.go). `personad hub setup` writes it into new hub.json files (docs/onboarding.md 4.1);
+	// files without it keep the old rule: only loopback needs the code.
+	FirstSetup string `json:"first_setup,omitempty"`
 }
+
+const firstSetupCode = "code"
 
 const (
 	accessLoopback = "loopback"
