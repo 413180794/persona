@@ -1539,6 +1539,8 @@ final class AppModel {
         guard allowSend(key), let api = api(key.group), let queue = session(key)?.queued, queue.indices.contains(index) else { return }
         do {
             let pulled = try await api.editQueue(key, keep: queue.indices.filter { $0 != index })
+            // The one taken out will not reach the transcript: its sent bubble goes now, not when the turn ends.
+            if pulled.indices.contains(index), chat(key).pulledBack(pulled[index]) { saveOutbox() }
             if !delete, pulled.indices.contains(index) {
                 let current = drafts[key] ?? ""
                 drafts[key] = current.isEmpty ? pulled[index] : current + "\n" + pulled[index]

@@ -53,6 +53,27 @@ struct PendingArrivalTests {
         #expect(s.pending.count == 1)
     }
 
+    // 撤回编辑 / 删除 takes a queued message back out of the agent, so no copy ever arrives. Its sent bubble, hidden
+    // while it was queued, came back at the end of the chat and stayed while the agent worked: the message looked sent
+    // again (2026-11-05).
+    @Test func aQueuedMessageTakenBackLeavesNoBubble() {
+        let s = store()
+        var first = PendingMessage(text: "提交前先看看之前那几个 PR 的写法", images: [])
+        first.state = .sent
+        var other = PendingMessage(text: "顺便看看日志里有没有报错", images: [])
+        other.state = .sent
+        var unsent = PendingMessage(text: "提交前先看看之前那几个 PR 的写法", images: [])
+        unsent.state = .waiting
+        s.pending = [first, other, unsent]
+        // the queue keeps the words without the phone's spacing
+        #expect(s.pulledBack("提交前先看看之前那几个PR的写法"))
+        #expect(s.pending.map(\.id) == [other.id, unsent.id])
+        // one not sent yet was never queued; nothing else matches
+        #expect(!s.pulledBack("提交前先看看之前那几个 PR 的写法"))
+        #expect(!s.pulledBack("没发过的话"))
+        #expect(s.pending.map(\.id) == [other.id, unsent.id])
+    }
+
     // Two 「好」 sent one after the other: the first copy takes one bubble.
     @Test func oneCopyTakesOneBubble() {
         let s = store()

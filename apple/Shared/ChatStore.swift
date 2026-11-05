@@ -399,6 +399,14 @@ final class ChatStore {
     var pending: [PendingMessage] = []
     /// A pending message's real copy arrived and its bubble went (the app saves its outbox).
     @ObservationIgnored var onArrived: (() -> Void)?
+    /// A queued message taken back out of the agent (撤回编辑, 删除) never reaches the transcript. Its sent bubble, hidden
+    /// while the queue strip showed it, came back at the end of the chat as if it had gone out again, and stayed while
+    /// the agent worked. Drops that bubble: the oldest sent one with those words. Returns whether one went.
+    @discardableResult func pulledBack(_ text: String) -> Bool {
+        guard let i = pending.firstIndex(where: { $0.state == .sent && PendingMessage.same(text, $0.text) }) else { return false }
+        pending.remove(at: i)
+        return true
+    }
     /// Sent messages whose transcript copy has arrived (gone from `pending`) while the rows with that copy are still
     /// being built: still drawn as they were until those rows are in, the same pass. Dropped at once, the message was
     /// off the screen for a pass, the first one of a new conversation with it (#1911).
