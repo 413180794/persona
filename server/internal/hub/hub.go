@@ -47,7 +47,8 @@ type Hub struct {
 	byID        map[string]*Machine
 	mail        Mail
 	push        *Pusher
-	work        workBook   // where each agent stands in its work (work.go)
+	agentWork   agentWork  // where each agent stands in its work, as the manager reports it (agents_link.go)
+	undelivered heldActs   // answers to the manager's cards given while it was away (agents_link.go)
 	store       Store      // nil in unit tests: nothing is persisted
 	workspaceMu sync.Mutex // serializes read-only workspace discovery and snapshot commits
 	modelMu     sync.Mutex // serializes legacy writes and test stores without a database CAS
@@ -365,7 +366,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.superviseAssistant(ctx) // the assistant, its own process on the bus (assistant_process.go)
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
-	go h.workLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
 	go h.noLockLoop(ctx)         // 「扩展开着时不自动锁屏」 said again to its Macs (computer_nolock.go)
@@ -403,7 +403,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	list := m.sessionList()
 	h.mu.Lock()
 	counts := map[string]int{}
-	asking := map[string]proto.Interaction{} // a session's card: its own before the hub's (work.go)
+	asking := map[string]proto.Interaction{} // a session's card: its own before the manager's (agents_link.go)
 	for _, p := range h.interactions {
 		if p.ix.MachineID == m.cfg.ID {
 			counts[p.ix.SessionID]++
@@ -444,10 +444,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		list[i].SeenAt = seen[list[i].SessionID]
 		list[i].State = agentState(list[i], list[i].SeenAt)
 		list[i].TurnError = turnError(list[i])
-		if h.workOn() {
-			list[i].Work = h.workOf(m.cfg.ID, list[i], asking)
-			list[i].State = workState(list[i].State, list[i].Work)
-		}
+		h.decorateWork(m.cfg.ID, &list[i], asking) // the manager's work report (agents_link.go)
 	}
 	h.decorateTodos(m.cfg.ID, list) // the todos the assistant reported (assistant_todos.go)
 	for i := range list {

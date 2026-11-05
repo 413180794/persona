@@ -1,0 +1,107 @@
+package assistantwire
+
+import (
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// ---- the Agents business: the manager's (docs/agent-work.md「谁管什么」) ----
+//
+// The manager triages an agent's turn once it ends (rules first, then a model), sends 继续 after a transient model
+// error, wakes an agent when what it waits for should be over, and opens a card for what the user is to decide; it
+// names the tabs of new agents and says what a new or resumed agent runs on (模型配置 › Agents, a model picked for one
+// start). The hub only carries it: it tells the manager what happened (session.turn_started / turn_ended,
+// session.seen), shows what the manager reports (Snapshot.Work on the session lists, the cards among
+// Snapshot.Interactions) and asks it to fill in a start (agents.start_params, agents.resume_params, agents.tab_name).
+
+// AgentsConfig is hub.json "agents" (Hello.Agents): what the manager does about agents' turns by default.
+type AgentsConfig struct {
+	Triage TriageConfig `json:"triage,omitzero"`
+}
+
+// TriageConfig is hub.json agents.triage: the limits, and the switches a hub whose user never saved them starts with
+// (unset: off).
+type TriageConfig struct {
+	Enabled      *bool `json:"enabled,omitempty"`
+	AutoContinue *bool `json:"auto_continue,omitempty"`
+	Wake         *bool `json:"wake,omitempty"`
+	Decide       *bool `json:"decide,omitempty"`
+	// MaxRetries: 继续 sent for one run of transient errors before asking the user. Default 3.
+	MaxRetries int `json:"max_retries,omitempty"`
+	// MaxWakes: wakes for one wait before asking the user. Default 6.
+	MaxWakes int `json:"max_wakes,omitempty"`
+	// SettleSeconds: how long a stopped session stays stopped before its turn is triaged. Default 15.
+	SettleSeconds int `json:"settle_seconds,omitempty"`
+}
+
+// WorkReport is the snapshot's work (Snapshot.Work): where each agent stands after its latest turn, as the manager
+// found it. The hub puts a session's on the lists while the session is still stopped on that turn (Work.TurnAt), and
+// none at all while On is false; what an agent shows while it works or asks on its own card is the hub's to say.
+type WorkReport struct {
+	On       bool          `json:"on"` // 设置 › 会话分诊 is on
+	Sessions []SessionWork `json:"sessions"`
+}
+
+// SessionWork is one session's work state in the report; Work.TurnAt is the end of the turn it is about.
+type SessionWork struct {
+	MachineID string          `json:"machine_id"`
+	SessionID string          `json:"session_id"`
+	Work      proto.WorkState `json:"work"`
+}
+
+// CodeGone is manager.action's refusal of an answer whose question or card is not there any more (answered, withdrawn,
+// expired): final, the hub does not keep the answer to try again (any other error it does).
+const CodeGone = "gone"
+
+// WorkCardTool is the tool_name of the manager's cards about an agent's turn (among Snapshot.Interactions, answered
+// like its other questions with manager.action): the lists put an agent's own question before one of these.
+const WorkCardTool = "persona_triage"
+
+const (
+	// MethodAgentStartParams: AgentStartParams → {params}: an Agent the app starts (POST /api/v1/sessions), with what
+	// it runs on filled in and its tab named. An error with CodeBadRequest is the app's to see (400); while the manager
+	// is not connected the hub starts it as the app asked.
+	MethodAgentStartParams = "agents.start_params"
+	// MethodAgentResumeParams: AgentResumeParams → {params}: a message that resumes an Agent nothing says the launcher
+	// of (started outside Persona), with the launcher and model it is to run on.
+	MethodAgentResumeParams = "agents.resume_params"
+	// MethodAgentTabName: {prompt} → {name}: a herdr tab's name for an Agent started with prompt ("" when none).
+	MethodAgentTabName = "agents.tab_name"
+	// EventSessionSeen: SessionSeen, one way: the user looked at a session in an app.
+	EventSessionSeen = "session.seen"
+)
+
+// AgentStartParams is agents.start_params's params: Params are POST /api/v1/sessions's (the node's session.start);
+// NameFrom is what the tab is named from now ("": not now: it has a name, resumes a session, or is named later).
+type AgentStartParams struct {
+	MachineID string         `json:"machine_id"`
+	Params    map[string]any `json:"params"`
+	NameFrom  string         `json:"name_from,omitempty"`
+}
+
+// AgentResumeParams is agents.resume_params's params: Params are the message's (the node's session.send; the hub
+// sends none and puts the answer's over its own: a message may carry pictures).
+type AgentResumeParams struct {
+	MachineID string         `json:"machine_id"`
+	SessionID string         `json:"session_id"`
+	Params    map[string]any `json:"params"`
+}
+
+// SessionSeen is session.seen's params.
+type SessionSeen struct {
+	MachineID string    `json:"machine_id"`
+	SessionID string    `json:"session_id"`
+	At        time.Time `json:"at"`
+}
+
+// agentRoutes are the Agents business's routes the manager answers (agents_routes.go there): its switches, its
+// numbers, renaming the tabs nobody named.
+var agentRoutes = []string{
+	"GET /api/v1/agents/triage",
+	"PUT /api/v1/agents/triage",
+	"GET /api/v1/agents/work/stats",
+	"POST /api/v1/tabs/autoname",
+}
+
+func init() { Routes = append(Routes, agentRoutes...) }

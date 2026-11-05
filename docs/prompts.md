@@ -24,9 +24,9 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
 | `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<jarvis-context>`：共用的记忆（目录、格式、当前索引），有 lark-connector skill 时说明飞书走 `lark-connector` 工具 | `node/assistant_runtime.go` |
-| `agents/triage.md`、`triage_input.md` | Agent 一轮停下后的分诊：做完了 / 卡在什么上（等你决定、等另一个 Agent、等外部事件），抽出问题和选项、授权链接、等的事和过多久再看、产物（[agent-work.md](agent-work.md)）；用途 `agent.triage` | `hub/work_model.go` |
-| `agents/wake.md` | 到点叫醒在等的 Agent：上一轮说在等什么、好了接着做、推代码 / 部署 / 发消息前先问用户 | `hub/work.go` |
-| `agents/answer.md` | 用户在 hub 开的卡片上的回答，发回给那个 Agent | `hub/work.go` |
+| `agents/triage.md`、`triage_input.md` | Agent 一轮停下后的分诊：做完了 / 卡在什么上（等你决定、等另一个 Agent、等外部事件），抽出问题和选项、授权链接、等的事和过多久再看、产物（[agent-work.md](agent-work.md)）；用途 `agent.triage` | `assistant/agents_triage.go` |
+| `agents/wake.md` | 到点叫醒在等的 Agent：上一轮说在等什么、好了接着做、推代码 / 部署 / 发消息前先问用户 | `assistant/agents_triage.go` |
+| `agents/answer.md` | 用户在分诊开的卡片上的回答，发回给那个 Agent | `assistant/agents_triage.go` |
 | `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Persona 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `hub/bots_chat.go` `botSend`（`docs/bots.md`） |
 | `lark/chat_agent.md`、`doc_agent.md` | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | `hub/lark_agent.go`、`lark_agent_docs.go` |
 | `lark/chat_context.md`、`doc_context.md`、`line.md` | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
@@ -45,7 +45,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `kb/moments_link.md`、`moments_link_input.md` | 关键词搜到的公司圈帖子里哪些在说这个项目 | `kb/moments_link.go` |
 | `kb/digest.md` | 快照里的知识库重点（`Engine.Prompt`） | `kb/items.go` |
 | `kb/readme.md` | 知识库目录的 README.md（给读这个目录的 AI 看） | `kb/store.go` |
-| `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `hub/tabname.go` |
+| `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `assistant/agents_start.go` |
 | `tools/translate*.md` | 翻译短文本 / 一封邮件 | `hub/translate.go` |
 | `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
 | `todo/decisions.md` | 交给 Agent 时消息前面的 `<jarvis-context>`：这个待办上现在生效的决策（`docs/todos.md`「决策记录」） | `assistant/todo_decisions.go` |

@@ -203,15 +203,6 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 	return "", fmt.Errorf("unknown tool %s", name)
 }
 
-// tabName is a herdr tab's name for an agent started with prompt ("" when the model gives none).
-func (s *Service) tabName(ctx context.Context, prompt string) string {
-	var res struct {
-		Name string `json:"name"`
-	}
-	_ = s.appCall(ctx, AppModels, ModelsTabName, map[string]any{"prompt": prompt}, &res)
-	return res.Name
-}
-
 // ---- ask_user ----
 
 // question is an ask_user waiting for the user: the card the hub shows, and where the answer goes.
@@ -305,8 +296,9 @@ func (s *Service) pendingQuestions() []proto.Interaction {
 	return out
 }
 
-// Action takes the user's answer to one of the questions out (op answer, the answer a proto.Resolution).
-func (s *Service) Action(_ context.Context, a Action) (ActionResult, error) {
+// Action takes the user's answer to one of the questions out, or to a card about an agent's turn (agents_work.go)
+// (op answer, the answer a proto.Resolution).
+func (s *Service) Action(ctx context.Context, a Action) (ActionResult, error) {
 	if a.Op != "answer" {
 		return ActionResult{}, fmt.Errorf("unknown op %q", a.Op)
 	}
@@ -316,11 +308,14 @@ func (s *Service) Action(_ context.Context, a Action) (ActionResult, error) {
 			return ActionResult{}, err
 		}
 	}
+	if mine, err := s.workAnswer(ctx, a.InteractionID, r); mine {
+		return ActionResult{OK: err == nil}, err
+	}
 	s.questions.mu.Lock()
 	q := s.questions.m[a.InteractionID]
 	s.questions.mu.Unlock()
 	if q == nil {
-		return ActionResult{}, fmt.Errorf("no question %s", a.InteractionID)
+		return ActionResult{}, errGone(a.InteractionID)
 	}
 	select {
 	case q.answer <- r:

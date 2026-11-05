@@ -125,6 +125,7 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	svc, ctx := b.svc, b.ctx
 	b.mu.Unlock()
 	if svc != nil {
+		svc.workReconnected() // turns that ended while it was away are looked for at the next tick (agents_work.go)
 		go svc.Resync(context.WithoutCancel(ctx))
 		go svc.channelsReconnected(context.WithoutCancel(ctx)) // the conversations the channels follow (channels.go)
 		// Turns the hub sent as it connected can be taken before this answer is kept (events come on their own
@@ -348,6 +349,8 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 			return nil, err
 		}
 		return s.Rename(ctx, p)
+	case assistantwire.MethodAgentStartParams, assistantwire.MethodAgentResumeParams, assistantwire.MethodAgentTabName:
+		return b.agentRequest(ctx, s, method, decode) // agents_bus.go
 	// The channels' (channels.go, feishu.go).
 	case assistantwire.MethodChannelReceive:
 		var p ChannelReceive
@@ -503,6 +506,12 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 		s.Resync(ctx)         // and the hub gets the profile in effect now (the default machine may be another)
 	case assistantwire.EventResync:
 		go s.Resync(ctx)
+	case assistantwire.EventSessionSeen:
+		var p SessionSeen
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.SessionSeen(ctx, p)
 	case assistantwire.EventTodoSpaceRenamed:
 		var p TodoSpaceRenamed
 		if err := decode(&p); err != nil {

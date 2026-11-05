@@ -61,6 +61,17 @@ type fakeHub struct {
 	// The hub's other apps as a test answers them (answerApp), and the calls they got.
 	apps     map[string]appAnswer
 	appCalls []AppCall
+
+	// The Agents business's models (agents_*.go): the triage's answer ("": it fails) and the tab names', what they
+	// were asked; the sessions whose pushes are off, by machine.
+	triage      string
+	triageAsked []modelCall
+	tabReply    string
+	tabAsked    []string
+	muted       map[string][]string
+	hubCards    []proto.Interaction                // interactions.list: what the hub has up
+	failSend    error                              // session.send fails with it
+	onSend      func(f *fakeHub, p map[string]any) // runs (under the fake's lock) after each session.send
 }
 
 type modelCall struct{ System, User string }
@@ -105,6 +116,9 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 		}
 		return json.Marshal(map[string]any{"devices": devices})
 	}
+	if p.Device == DeviceAll && p.Method == DeviceInteractionsList {
+		return json.Marshal(map[string]any{"interactions": f.hubCards})
+	}
 	list, ok := f.sessions[p.Device]
 	if !ok {
 		return nil, fmt.Errorf("%w %q", ErrNoDevice, p.Device)
@@ -113,7 +127,7 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 	_ = json.Unmarshal(p.Params, &a)
 	switch p.Method {
 	case DeviceSessionsList:
-		return json.Marshal(map[string]any{"sessions": list})
+		return json.Marshal(map[string]any{"sessions": list, "muted": f.muted[p.Device]})
 	case DeviceSessionGet:
 		for _, s := range list {
 			if s.SessionID == a["session_id"] {
@@ -149,7 +163,13 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 		f.agents++
 		return json.Marshal(map[string]any{"session": proto.Session{SessionID: fmt.Sprintf("s%d", f.agents), Cwd: a["cwd"].(string), Agent: "claude"}})
 	case DeviceSessionSend:
+		if f.failSend != nil {
+			return nil, f.failSend
+		}
 		f.agentSent = append(f.agentSent, a)
+		if f.onSend != nil {
+			f.onSend(f, a)
+		}
 		return json.RawMessage(`{}`), nil
 	case deviceSessionRetire:
 		if f.retireErr != nil {
@@ -199,14 +219,19 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 	defer f.mu.Unlock()
 	switch p.AppID + " " + p.Method {
 	case AppModels + " " + ModelsComplete:
+		var a struct {
+			Purpose string `json:"purpose"`
+			System  string `json:"system"`
+			Input   string `json:"input"`
+		}
+		_ = json.Unmarshal(p.Params, &a)
+		if a.Purpose == "agent.title" { // a tab's name (agents_start.go)
+			f.tabAsked = append(f.tabAsked, a.System+"\n---\n"+a.Input)
+			return json.Marshal(map[string]any{"text": f.tabReply})
+		}
 		if f.noModel {
 			return nil, errors.New("no model")
 		}
-		var a struct {
-			System string `json:"system"`
-			Input  string `json:"input"`
-		}
-		_ = json.Unmarshal(p.Params, &a)
 		f.asked = append(f.asked, modelCall{a.System, a.Input})
 		reply := f.replies[min(len(f.asked), len(f.replies))-1]
 		return json.Marshal(map[string]any{"text": reply})
@@ -261,9 +286,20 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 		return json.Marshal(proto.TextResult("the hub's: "+string(p.Params), false))
 	case AppInbox + " " + InboxReplied:
 		return json.Marshal(map[string]any{"replied": map[string]any{}})
-	case AppModels + " " + ModelsTabName:
-		return json.Marshal(map[string]any{"name": ""})
 	case AppModels + " " + ModelsJSON:
+		var a struct {
+			Purpose string `json:"purpose"`
+			System  string `json:"system"`
+			Input   string `json:"input"`
+		}
+		_ = json.Unmarshal(p.Params, &a)
+		if a.Purpose == "agent.triage" { // the triage (agents_triage.go)
+			f.triageAsked = append(f.triageAsked, modelCall{a.System, a.Input})
+			if f.triage == "" {
+				return nil, errors.New("no model")
+			}
+			return json.RawMessage(f.triage), nil
+		}
 		f.judged++
 		if f.judge == "" {
 			return nil, errors.New("no model")

@@ -154,7 +154,6 @@ const (
 	ModelsApply              = assistantwire.ModelsApply
 	ModelsResolve            = assistantwire.ModelsResolve
 	ModelsJSON               = assistantwire.ModelsJSON
-	ModelsTabName            = assistantwire.ModelsTabName
 	ModelsRecord             = assistantwire.ModelsRecord
 	ModelsSave               = assistantwire.ModelsSave
 	ModelsApplyPicked        = assistantwire.ModelsApplyPicked

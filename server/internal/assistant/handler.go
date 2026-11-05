@@ -70,6 +70,13 @@ type Handler interface {
 	// TodoSpaceRenamed is todos.space_renamed: the hub renamed a workspace.
 	TodoSpaceRenamed(ctx context.Context, r TodoSpaceRenamed)
 
+	// The Agents business (agents_*.go).
+	// AgentStartParams is agents.start_params: an Agent the app starts, with what it runs on and its tab's name.
+	AgentStartParams(ctx context.Context, p AgentStartParams) (map[string]any, error)
+	// AgentResumeParams is agents.resume_params: a message resuming an Agent started outside Persona, with what it runs on.
+	AgentResumeParams(ctx context.Context, p AgentResumeParams) (map[string]any, error)
+	// SessionSeen is session.seen: the user looked at a session in an app.
+	SessionSeen(ctx context.Context, p SessionSeen)
 	// The channels (channels.go, feishu.go): the hub hands over what comes in from the chat apps.
 	// ChannelReceive is channels.receive: the owner's message from a plugin's channel.
 	ChannelReceive(ctx context.Context, p ChannelReceive) error

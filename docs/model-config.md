@@ -50,6 +50,16 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 
 任务的新建、普通修改不接受独立模型设置，返回任务视图不展示旧模型字段；定时任务（用途 `schedule`、`task.<任务 id>`）归「主对话」分类（#1544，用户 2026-11-04 拍板；#697 时归 Agents）：它跑在助手的工作目录里，用的是助手的说明、记忆和工具，本来就是助手的对话，不是新建的 Agent；归 Agents 时没配置就是默认的 Claude Code，在没登录它的 hub 机器上「早报」每次都报 `Not logged in`。任务新建运行、续自己的对话两条路径解析主对话分类，不能让任务字段后置覆盖；用户在任务自己的对话里发消息、跟进发回这段对话时，也和主对话一样每条都按「主对话」，不沿用它上一轮在跑的启动器。发回来源对话（助手用 `schedule_followup` 给自己定的跟进）是那段助手对话的一轮，和手机上发的消息走同一套规则：主对话和定时任务自己的对话按「主对话」分类，助手的其他对话沿用自己在跑的启动器和模型（#1518：原来按 Agents 分类，默认的 Claude Code 在 hub 机器上没登录，一条跟进就把主对话切了过去，之后每条消息都报 `Not logged in`）。任务权限、运行历史、会话关联保持不变。旧用途 GET 返回只读信息；旧用途 PATCH 拒绝。Apple 的旧用途编辑链接会打开所属分类编辑页，并明确说明分类内统一生效。四类目录尚未支持的旧 hub 会提示更新，而不是把不同生效模型伪装成四类默认。
 
+## 谁来解析 Agents 分类（2026-11-04）
+
+新建 Agent 跑在哪个启动器和模型上是 Agents 这件事的一部分，归**管理者**（助手进程，`docs/agent-work.md`「谁管什么」）：`POST /api/v1/sessions` 之前 hub 问它
+`agents.start_params`，给一个不知道启动器的停着的会话发消息之前问 `agents.resume_params`；助手自己派的 Agent（`agents_start`、任务）本来就在它那里。
+它照旧用 hub 的模型配置算（`app.call models.apply agent.new`：分类的选择、这一次选的启动器 / 模型 / 思考强度盖在上面、执行指纹），所以 App 看到的生效结果、保存和继承都不变；
+模型配置这一块挪进管理者之前，解析本身还是 hub 的代码。标签名（用途 `agent.title`）、会话分诊（`agent.triage`）也由管理者经 `models.complete` / `models.json` 调。
+
+管理者没连着时 hub 先等它一会儿（hub 刚起来时最多到起来后 60 秒，它刚断开时 10 秒），等不到就自己套「模型配置 › Agents」（`applyModel`，结果和管理者算的一样，只是不起标签名）；
+续上的会话也一样。AI 分身执行经 `assistant.start` 开在助手那边，本来就是它解析；飞书机器人卡片上开的 Agent（`hub/bots_cards.go`）现在还是 hub 自己按 `agent.new` 解析、经 `agents.tab_name` 要标签名（渠道挪进管理者时一起挪）。
+
 ## 新建 Agent 选模型（#794）
 
 新建 Agent 选好启动器之后，可以在「模型」里从列表选这一次用哪个模型；列表就是这台电脑上这个启动器跑 Claude Code / Codex 时，在终端里输入 `/model` 看到的那份。
@@ -57,7 +67,7 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 - **列表从 CLI 要，不读配置文件**：settings.json、config.toml、启动器的环境变量里只有默认模型和网关地址，列表是 CLI 把自己的别名和网关 `/models` 的回答拼出来的，自己解析配置会漏掉 ~/.zshrc 启动器设的变量和别名映射。node 按启动器原样起一次 CLI（`node/launcher_models.go`）：Claude Code 用无界面的流式 JSON 模式发 `initialize` 控制请求，回包里的 `models` 就是 `/model` 菜单（default / opus / sonnet / haiku 按这个启动器的设置解析成实际模型，加上网关的全部模型）；Codex 用 `codex app-server` 的 `model/list`（翻页，`hidden` 的不列）。拿到就杀掉整个进程组，不发任何消息、不调模型；Claude 这次带 `disableAllHooks`（和启动器自己的 `--settings` 合并），Persona 和用户的 hook 都不会以为有会话开始。
 - **缓存**：node 按「启动器 + 托管启动器的设置」存 10 分钟，同时来的几个请求只起一次 CLI；`?refresh=1`（App 里下拉刷新、出错重试）重新问。实测 Claude Code 约 4 秒、Codex 不到 1 秒。
 - **选了能不能生效**：同时用 `launcherModelCheck`（`model_probe.go`）看启动器会不会把 `--model` 原样转给 CLI；自己写死 `--model` 的启动器回 `locked`，App 把模型行画成锁住并说明原因，不发模型（发了 node 也会拒绝启动）。
-- **只是这一次**：选中的模型随 `POST /api/v1/sessions` 的 `model` 走，`applyModel` 把它盖在「模型配置 › Agents」上，node 启动时给 CLI 加 `--model`（Claude Code、Codex 都是）。不记住、不改全局默认；换机器或启动器就回到「默认模型」。「默认」就是不发模型：跑启动器自己的默认，启动器正是「模型配置」里那个时跑配置的模型（App 第二行写「模型配置：…」）。
+- **只是这一次**：选中的模型随 `POST /api/v1/sessions` 的 `model` 走，盖在「模型配置 › Agents」上（`applyModel`），node 启动时给 CLI 加 `--model`（Claude Code、Codex 都是）。不记住、不改全局默认；换机器或启动器就回到「默认模型」。「默认」就是不发模型：跑启动器自己的默认，启动器正是「模型配置」里那个时跑配置的模型（App 第二行写「模型配置：…」）。
 - **思考强度跟着模型**：Claude 的每个模型带它支持的档位（只留 node 认的 low…max），App 的思考强度只列这些，当前的不在里面就回到「跟随启动器」；没有档位的模型不能选思考强度（这一项变灰或写明不支持）。没选模型时按会跑的那个：「模型配置」的模型（列表里按 id 找不到就当作不知道，各档都列），否则默认模型。Codex 新建不带思考强度（上面「生效边界」）。
 - **没有列表的**：TRAEX、runtime 的启动器（DSH…）回 `models: []`，App 不显示模型行；旧 hub 回 404，同样不显示；hub 新、这台电脑的 node 旧时 hub 也回 404（`code: node_outdated`），不给一个永远失败的重试。列不出来（CLI 不在、没登录、超时）时模型行显示原因和重试，「默认模型」照样能开始。
 

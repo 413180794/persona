@@ -394,16 +394,6 @@ func TestGoldenInboxAgentPrompt(t *testing.T) {
 	golden(t, "inbox_agent.mail_kb", inboxAgentPrompt(&it, "", h.kbContextFor(&it)))
 }
 
-func TestGoldenTabName(t *testing.T) {
-	h := newTestHub(t)
-	model, calls := captureModel(t, "fix-login")
-	h.ai = model
-	if got := h.autoTabName(context.Background(), "  修一下登录页的报错  "); got != "fix-login" {
-		t.Fatalf("%q", got)
-	}
-	goldenCall(t, "tab_name", onlyCall(t, calls()))
-}
-
 func TestGoldenTranslateTexts(t *testing.T) {
 	h := newTestHub(t)
 	model, calls := captureModel(t, `{"texts":["你好","明天见"]}`)

@@ -561,11 +561,7 @@ func (s *Service) botStartAgent(machine, cwd, prompt string) {
 	if strings.HasPrefix(cwd, "~/") && d.Home != "" {
 		cwd = strings.TrimRight(d.Home, "/") + "/" + cwd[2:]
 	}
-	var tab struct {
-		Name string `json:"name"`
-	}
-	_ = s.appCall(ctx, AppModels, ModelsTabName, map[string]any{"prompt": prompt}, &tab)
-	params := map[string]any{"cwd": cwd, "prompt": prompt, "tab_name": tab.Name}
+	params := map[string]any{"cwd": cwd, "prompt": prompt, "tab_name": s.tabName(ctx, prompt)} // agents_start.go
 	if err := s.applyModel(ctx, "agent.new", params); err != nil {
 		s.botSay(ctx, "开不了："+err.Error())
 		return

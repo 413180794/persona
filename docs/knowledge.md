@@ -18,7 +18,7 @@ Persona 和 AI 分身要「代替我上班」，前提是它们知道的和我�
   **游标是管理者的**（`cursors/<连接器>.json`，和以前同一个文件），只在写进去之后才往前走。插件程序交来的公司圈帖子（`posts.*`、`archive.chats`）hub 先看
   「进知识库」开没开，再原样转给管理者（`kb.posts_put`、`kb.posts_comments`、`kb.posts_pending`、`kb.archived_chats`）。
 - **hub 自己的功能要读知识库**时经总线问管理者，都走 hub 的一个函数 `kbAsk`（`hub/kb.go`；那几个功能也在挪进管理者，挪过去以后就是本地调用）：
-  收件箱 AI 分身的会话上下文（`kb.context`）、Agent 一轮停下后分诊时它目录所属的项目（`kb.projects`）、删除一个来源的数据（`kb.forget`）。
+  收件箱 AI 分身的会话上下文（`kb.context`）、删除一个来源的数据（`kb.forget`）。Agent 一轮停下后的分诊也挪进了助手（`docs/agent-work.md`「谁管什么」），它目录所属的项目直接在助手里读，不再经 `kb.projects`。
   hub 看到的事是单向事件：来源有新东西（连接器的实时事件、打开了「进知识库」、「信息」的「交给 Persona」打开，`kb.kick`），
   一个 Agent 一轮做完（推送判定之前，`kb.agent_turn`，项目时间线那一行）。
 - **模型**：知识库照旧用 hub 的模型配置（`kb.compress`、`kb.project`、`kb.items`、`kb.dedupe`、`kb.moments` 几个用途，`kb.ai` 是它们的默认），

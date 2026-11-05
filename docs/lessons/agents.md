@@ -68,7 +68,7 @@
   想留作解析样本的会话要及时脱敏存成 fixture（`server/internal/transcript/testdata/README.md`）。脱敏只能白名单式，
   「短数字原样保留」这种放行会把 IP 的每一段都放过去（踩过）。
 - 新开的 herdr 标签页名字（2026-10-31 用户要求）：以前往已有空间里加的标签页一律写死叫 `jarvis`。现在新对话表单可填「标签名」，
-  不填就由 hub 按第一条消息起短英文名（`hub/tabname.go`）。gpt-6.1-terra 这类推理模型先花隐藏的思考 token：`max_tokens` 给 20 时回的 content 是空的
+  不填就由管理者按第一条消息起短英文名（`assistant/agents_start.go`，2026-11-04 前在 hub 的 `tabname.go`）。gpt-6.1-terra 这类推理模型先花隐藏的思考 token：`max_tokens` 给 20 时回的 content 是空的
   （`stop_reason: max_tokens`），给 200 才有名字；小任务里给模型的 token 上限别卡太紧。
 - herdr 会把早就结束的 Codex 会话报成 working（2026-10-30：两天前结束的一轮显示「正在工作 45 小时」八分钟，rollout 没动过；App 的计时从那一轮的用户消息算起）。
   node 以 rollout 为准：结尾是 task_complete / turn_aborted、30 秒没写过，就当 done（`codexTurnOver`）。

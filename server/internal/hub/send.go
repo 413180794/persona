@@ -151,7 +151,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			return
 		}
 	} else if l, _ := p["launcher"].(string); l == "" && known && resumesWithoutLauncher(s) {
-		h.applyResumeLauncher(r.Context(), sid, p)
+		h.applyResumeLauncher(r.Context(), m, sid, p) // the manager's (agents_link.go)
 	}
 	// The send carries on when the phone stops waiting (backgrounded, network gone): it may be typing already, and
 	// its outcome is what the retry gets. Resuming an offline session can take a while (shell + claude startup).
@@ -335,19 +335,4 @@ func writeRaw(w http.ResponseWriter, status int, body []byte) {
 func resumesWithoutLauncher(s proto.Session) bool {
 	return s.Status == proto.StatusOffline && s.Launcher == "" && !s.Assistant && s.SourceKind == "" &&
 		(s.Agent == "" || s.Agent == "claude")
-}
-
-// applyResumeLauncher adds 新建 Agent's launcher and model to the send: the ones the user picked for agents. When
-// the purpose cannot run as a launcher the send goes as before (plain claude).
-func (h *Hub) applyResumeLauncher(ctx context.Context, sid string, p map[string]any) {
-	q := map[string]any{}
-	if err := h.applyModel(ctx, "agent.new", q); err != nil {
-		h.logf("resume %s: 新建 Agent's launcher not applied: %v", sid, err)
-		return
-	}
-	for _, k := range []string{"launcher", "model", "effort", "model_fingerprint"} {
-		if v, ok := q[k]; ok {
-			p[k] = v
-		}
-	}
 }

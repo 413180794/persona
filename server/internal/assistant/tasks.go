@@ -786,7 +786,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 			return
 		}
 		if w := c.Work; w != nil && w.Phase == proto.WorkBlocked && w.On == proto.WaitTransient && w.WakeAt != nil {
-			return // the hub sends 继续 itself (docs/agent-work.md): the receipt waits for how that ends
+			return // 继续 goes by itself (agents_work.go): the receipt waits for how that ends
 		}
 		if c.UpdatedAt.After(last.UpdatedAt) {
 			last = c

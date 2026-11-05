@@ -27,6 +27,8 @@ type Hello struct {
 	DoneDelayMS int64 `json:"done_delay_ms"`
 	// PersonaView is hub.json's assistant.persona_view: teach ```persona-view rather than ```persona-card (#1850).
 	PersonaView bool `json:"persona_view,omitempty"`
+	// Agents is hub.json's agents section: the triage's limits and default switches (agents.go).
+	Agents AgentsConfig `json:"agents,omitzero"`
 	// KB is hub.json's kb section: the knowledge base the assistant keeps (kb.go).
 	KB *KBSettings `json:"kb,omitempty"`
 }
@@ -114,8 +116,6 @@ const (
 	// ModelsJSON: {purpose, system, input, max_tokens?} → the JSON object the model answered (max_tokens: the room
 	// for the answer, asked once more with twice that when it is cut off; the knowledge base's calls give it).
 	ModelsJSON = "models.json"
-	// ModelsTabName: {prompt} → {name}, a herdr tab's name for an agent started with prompt ("" when none).
-	ModelsTabName = "models.tab_name"
 
 	// AppConnectors is the hub's connectors (docs/connectors.md).
 	AppConnectors = "connectors"
@@ -202,8 +202,9 @@ type Snapshot struct {
 	Partial bool `json:"partial,omitempty"`
 	// Sessions are the assistant's conversations it has something to say about.
 	Sessions []SessionView `json:"sessions"`
-	// Interactions are the questions it asks on the phone (ask_user: headless Claude has no AskUserQuestion). The hub
-	// shows each like any agent's and sends the answer back (Handler.Action); one that leaves the list is withdrawn.
+	// Interactions are the questions it asks on the phone (ask_user: headless Claude has no AskUserQuestion), and its
+	// cards about agents' turns (WorkCardTool). The hub shows each like any agent's and sends the answer back
+	// (Handler.Action); one that leaves the list is withdrawn.
 	Interactions []proto.Interaction `json:"interactions"`
 	// Tasks are its scheduled tasks, as the hub's other parts need them (the model configuration's 「定时任务」); null
 	// while they could not be read.
@@ -212,6 +213,8 @@ type Snapshot struct {
 	Todos *TodoReport `json:"todos"`
 	// Profile is its settings as the hub's own features need them; null while they could not be read.
 	Profile *Profile `json:"profile"`
+	// Work is where the agents stand after their turns (agents.go); null while it could not be read.
+	Work *WorkReport `json:"work"`
 	// Channels is what the hub shows of the channels (ChannelsReport); null while it could not be read.
 	Channels *ChannelsReport `json:"channels"`
 }

@@ -52,6 +52,7 @@ type Service struct {
 	questions questions    // tools.go (ask_user)
 	live      contextState // context.go
 	todos     todoBook     // todos.go
+	work      workBook     // agents_work.go: the Agents business
 	chans     channelsBook // channels.go
 	fbot      feishuBook   // feishu.go
 	kb        kbState      // kb.go
@@ -75,6 +76,7 @@ func New(o Options) *Service {
 	s.taskRoutes()
 	s.todayRoutes()
 	s.todoRoutes()
+	s.agentRoutes()
 	s.channelRoutes()
 	s.kbInit(o.KB)
 	s.kbRoutes()
@@ -291,7 +293,9 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	if p := snap.Profile; p != nil && p.Main != "" {
 		view(p.Main, p.MachineID).Title = mainTitle // never its first message, a model's name or a rename (#1313)
 	}
-	snap.Interactions = s.pendingQuestions()
+	snap.Work = s.workReport(ctx) // before the cards: they are read back with it
+	snap.Partial = snap.Partial || snap.Work == nil
+	snap.Interactions = append(s.pendingQuestions(), s.workCards()...)
 	snap.Sessions = make([]SessionView, 0, len(views))
 	for _, v := range views {
 		snap.Sessions = append(snap.Sessions, *v)
@@ -309,15 +313,17 @@ func (s *Service) UserSpoke(_ context.Context, r SessionRef) {
 	s.userSpoke(r.SessionID)
 }
 
-// TurnStarted: one of a task's agents is working.
+// TurnStarted: one of a task's agents is working; what was going to be done about an agent's last turn is off.
 func (s *Service) TurnStarted(ctx context.Context, r SessionRef) {
 	s.taskWorking(ctx, r.MachineID, r.SessionID)
+	s.workStarted(ctx, r.MachineID, r.SessionID, time.Now())
 }
 
-// TurnEnded: a task's agent may be done (in the background: it waits for the agents to settle); a new conversation is
-// named after its first turn.
+// TurnEnded: a task's agent may be done (in the background: it waits for the agents to settle), an agent's turn is
+// triaged; a new conversation is named after its first turn.
 func (s *Service) TurnEnded(ctx context.Context, r SessionRef) {
 	go s.taskTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID)
+	go s.workTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID) // the turn's triage (agents_work.go)
 	go s.channelTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID) // a channel's answer, the sync mirror
 	s.titleAfterTurn(ctx, r.MachineID, r.SessionID)
 }

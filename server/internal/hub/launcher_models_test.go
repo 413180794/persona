@@ -113,6 +113,7 @@ func TestSessionStartTakesPickedModel(t *testing.T) {
 		}
 		return map[string]any{}, nil
 	})
+	connectAssistant(t, h) // what a new Agent runs on is the manager's to fill in (agents.start_params)
 	w := modelsRequest(h, "POST", "/api/v1/sessions", `{"machine_id":"box","cwd":"/code","launcher":"claude","model":"gateway/model-a","effort":"high"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)

@@ -281,7 +281,8 @@ func (s *newAgentStore) Setting(_ context.Context, key string, out any) (bool, e
 
 // A message to a session that is not running and whose launcher nobody knows (started outside Jarvis) carries 新建
 // Agent's launcher and model, so the node resumes it on them instead of plain claude; a known launcher, a running
-// session and a launcher the app picked are left alone.
+// session and a launcher the app picked are left alone. Which launcher and model that is is the manager's to say
+// (agents.resume_params); while it is not connected the hub applies 模型配置 › Agents itself.
 func TestOfflineSessionWithoutLauncherResumesOnNewAgents(t *testing.T) {
 	h := newTestHub(t)
 	h.store = &newAgentStore{memStore: newMemStore(), b: ModelBinding{Provider: "launcher.work", Model: "m-1"}}
@@ -317,6 +318,21 @@ func TestOfflineSessionWithoutLauncherResumesOnNewAgents(t *testing.T) {
 	m.mu.Unlock()
 
 	mux := h.routes()
+	send := func(sid, body string) (string, string) {
+		t.Helper()
+		if code, out := call(t, mux, "POST", "/api/v1/sessions/box/"+sid+"/messages", h.cfg.Token, body); code != 200 {
+			t.Fatalf("%s: %d %v", sid, code, out)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		l, _ := got["launcher"].(string)
+		model, _ := got["model"].(string)
+		return l, model
+	}
+	if l, model := send("gone-1", `{"text":"hi"}`); l != "work" || model != "m-1" {
+		t.Errorf("without the manager: launcher %q model %q, want 模型配置 › Agents as the hub has it", l, model)
+	}
+	connectAssistant(t, h)
 	for _, c := range []struct{ sid, body, launcher, model string }{
 		{"gone-1", `{"text":"hi"}`, "work", "m-1"},
 		{"gone-1", `{"text":"hi","launcher":"other"}`, "other", ""},
@@ -324,14 +340,7 @@ func TestOfflineSessionWithoutLauncherResumesOnNewAgents(t *testing.T) {
 		{"live-3", `{"text":"hi"}`, "", ""},
 		{"codex-4", `{"text":"hi"}`, "", ""},
 	} {
-		if code, out := call(t, mux, "POST", "/api/v1/sessions/box/"+c.sid+"/messages", h.cfg.Token, c.body); code != 200 {
-			t.Fatalf("%s: %d %v", c.sid, code, out)
-		}
-		mu.Lock()
-		l, _ := got["launcher"].(string)
-		model, _ := got["model"].(string)
-		mu.Unlock()
-		if l != c.launcher || model != c.model {
+		if l, model := send(c.sid, c.body); l != c.launcher || model != c.model {
 			t.Errorf("%s %s: launcher %q model %q, want %q %q", c.sid, c.body, l, model, c.launcher, c.model)
 		}
 	}

@@ -300,9 +300,10 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "work":{"phase":"blocked","on":"external","line":"等部署跑完再跑线上测试","wait":"部署跑完","then":"跑线上测试","every_minutes":5,
          "wake_at":"...","attempts":1,"max":6,"turn_at":"...","at":"...","by":"model"},
      // 工作态（docs/agent-work.md）：phase working | blocked | done；blocked 的 on 是 user（等你决定，questions / link /
-     // interaction_id 是 hub 替它开的卡片）| agent（等另一个 Agent，agent:{machine_id,session_id,label}）| external（等部署、CI、时间点，
-     // 到 wake_at hub 叫醒它）| transient（模型服务暂时出错，到 wake_at hub 发「继续」）；done 带 artifacts:[{kind:pr|commit|doc|build|url,ref}]。
-     // 工作中只有 {"phase":"working"}；一轮停下后 hub 还没分诊（或看不出来）时不带。做完的、在等 hub 叫醒的，state 是 idle 不是 unread
+     // interaction_id 是 Persona 替它开的卡片）| agent（等另一个 Agent，agent:{machine_id,session_id,label}）| external（等部署、CI、时间点，
+     // 到 wake_at Persona 叫醒它）| transient（模型服务暂时出错，到 wake_at Persona 发「继续」）；done 带 artifacts:[{kind:pr|commit|doc|build|url,ref}]。
+     // 工作中只有 {"phase":"working"}；一轮停下后还没分诊（或看不出来）时不带。做完的、在等 Persona 叫醒的，state 是 idle 不是 unread。
+     // 分诊是管理者（助手进程）做的，hub 照它在快照里报的填（只对还停在那一轮上的会话），见下「总线」的「Agents」
  "activity":"在跑测试","activity_at":"...",   // 最近一步是工具调用、之后还没有新文字时才有：这一步在做什么（node 从 transcript 概括，40 字以内）和开始的时间；写出新文字或开始新一轮就没了
  "queued":["工作中输入、还没被取走的消息"],
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
@@ -483,8 +484,8 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 移出 Agent（软移出：置 `released_at` 和 `dismissed_at`，接口不再返回该行且不再自动挂回） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
-| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","agent_type"?,"model"?,"prompt"?,"resume_session_id"?,"workspace_id"?,"permission_mode"?,"effort"?,"tab_name"?,"async"?,"name_hint"?,"todo_id"?}` → `{"session":Session}`。可选 `X-Jarvis-Op-Id` 接入 `start` 持久回执。`model` 可选：新建 Agent 里选的模型（上面 `…/launchers/{name}/models` 的 `id`），只管这一次，盖在「模型配置 › Agents」上（`hub.applyModel`）。`todo_id` 可选：新建成功后在同一请求内挂上（不存在 404、已完成 409、只读设备 403）。`tab_name` 是 herdr 标签页的名字；不给时 hub 用小任务模型按 `prompt` 起一个短英文名（`hub/tabname.go`，约 2 秒，失败就不起），node 再兜底成 `agent-<n>`，同一空间里重名加 `-2`、`-3`（`node.tabLabel`）。新建空间时它的第一个标签页也用这个名字。助手的 `agent_start` 同样自动起名。`"async": true`（App 都带）：立刻回会话（新会话 id、目录、启动器，`starting: true`），开标签页、等 Claude 就绪在后台做，见下面「新建会话」；这时 hub 不等起名，标签页先叫 `agent-<n>`，名字出来后再 `session.rename`。`name_hint`：App 把第一条消息当普通消息发（马上上屏）时，用它起名、不进 `prompt` |
-| POST | `/api/v1/tabs/autoname` | `{"dry_run"?,"all"?}` → `{"tabs":[{machine_id,session_id,space,title,from,to,error?}]}`：把在跑的 Agent 里「没人起过名」的标签页（`jarvis`、`jarvis-N`、herdr 的数字、`agent-N`）按会话标题改成短英文名，规则同新建；`dry_run` 只列出会改成什么，`all` 连用户起过名的也改。模型偶尔回空，会再问一次，仍没有就留原名（`error`）。2026-10-31 在两台机器上跑过一次：61 个标签页里改了 39 个，用户自己起的 21 个没动 |
+| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","agent_type"?,"model"?,"prompt"?,"resume_session_id"?,"workspace_id"?,"permission_mode"?,"effort"?,"tab_name"?,"async"?,"name_hint"?,"todo_id"?}` → `{"session":Session}`。可选 `X-Jarvis-Op-Id` 接入 `start` 持久回执。`model` 可选：新建 Agent 里选的模型（上面 `…/launchers/{name}/models` 的 `id`），只管这一次，盖在「模型配置 › Agents」上（管理者的 `agents.start_params`，见「总线」的「Agents」；它没连着时 hub 等它一会儿，等不到自己套「模型配置 › Agents」，不起标签名）。`todo_id` 可选：新建成功后在同一请求内挂上（不存在 404、已完成 409、只读设备 403）。`tab_name` 是 herdr 标签页的名字；不给时管理者用小任务模型按 `prompt` 起一个短英文名（`assistant/agents_start.go`，约 2 秒，失败或管理者没连着就不起），node 再兜底成 `agent-<n>`，同一空间里重名加 `-2`、`-3`（`node.tabLabel`）。新建空间时它的第一个标签页也用这个名字。助手的 `agent_start` 同样自动起名。`"async": true`（App 都带）：立刻回会话（新会话 id、目录、启动器，`starting: true`），开标签页、等 Claude 就绪在后台做，见下面「新建会话」；这时 hub 不等起名，标签页先叫 `agent-<n>`，名字出来后再 `session.rename`。`name_hint`：App 把第一条消息当普通消息发（马上上屏）时，用它起名、不进 `prompt` |
+| POST | `/api/v1/tabs/autoname` | `{"dry_run"?,"all"?}` → `{"tabs":[{machine_id,session_id,space,title,from,to,error?}]}`：把在跑的 Agent 里「没人起过名」的标签页（`jarvis`、`jarvis-N`、herdr 的数字、`agent-N`）按会话标题改成短英文名，规则同新建；`dry_run` 只列出会改成什么，`all` 连用户起过名的也改。模型偶尔回空，会再问一次，仍没有就留原名（`error`）。2026-10-31 在两台机器上跑过一次：61 个标签页里改了 39 个，用户自己起的 21 个没动。管理者答（hub 转），它没连着时 503 `assistant_offline` |
 | GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条；一轮特别长、往前要解析几十 MB 时这一页会短一些，`has_more: true`，再往前翻接着取；但只要前面还有内容，一页至少带一条，空页加 `has_more: true` 会让 App 没有 seq 可以接着往前取）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的新内容（后台同步用，约 500 条一页，从不切开同一行的多个 item；`more_after: true` 表示后面还有，接着用最后一条的 seq 再取，或改取最新一页）。带 `fold_work=1` 时从末尾往前的页把工作折叠起来；带 `from_seq=&through_seq=` 时返回这几行的 items（展开折叠用，约 1000 条一页，`more: true` 表示还没到 `through_seq`）。见「折叠的工作」 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | 一条 item 的图片原始字节（Content-Type 为图片类型，可永久缓存）；item id 含 `#`，要百分号编码 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/full` | 一条 item 的全文（`Item`，不带图片、没有 `full_size`；最多 1 MB）：App 点「看全文」时取。node 重新读那一行解析 |
@@ -1219,6 +1220,17 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 - hub → 助手，单向事件（`conversation.started`、`conversation.renamed` 2026-11-04 去掉：开对话、改名都是助手自己做的）：`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed {machine_id, sessions, connected}`（node 报的那份会话列表，带 `spawn_from`：待办的随项目自动挂、派生跟随、herdr 标记都从它来；`connected` 是 node 这条连接开始的时间，变了说明 node 重连过，助手把 herdr 标记全发一次）、`interaction.resolved`（也用来记待办的决策）、`interaction.raised`（安静的任务的 Agent 在问，#1731）、`inbox.message`、`todos.space_renamed {machine_id,old,new}`（经 hub 改了工作区的名字）、
   `manager.updated`（上面的握手）、`manager.resync {}`（hub 还没有它的快照或只有不完整的一份，要它报整份：最多 5 秒一次）、
   `kb.kick {}`（知识库的来源有新东西）、`kb.agent_turn {machine_id,session_id,cwd,title?,line}`（一个 Agent 一轮做完，进它目录所属项目的时间线）。助手按到达的顺序一条一条处理，`session.turn_ended` 另起（要问模型、等任务的 Agent 停下）。
+- **Agents**（2026-11-04 从 hub 挪进管理者，`docs/agent-work.md`「谁管什么」，类型在 `assistantwire/agents.go`）：
+  握手的回答多 `agents`（hub.json 的 `agents` 一节：分诊的上限、开关的初始值）；快照多 `work {on, sessions:[{machine_id, session_id, work}]}`（每个 Agent 最新一轮的工作态，
+  `work.turn_at` 是那一轮的结束；`null` 时 hub 留着上一份），`interactions` 里多分诊的卡片（`tool_name: persona_triage`，问的是那个 Agent 的会话，答案照样是 `manager.action`）；
+  `device.call sessions.list` 的回答多 `muted`（推送关了的会话 id）；分诊看的项目是助手自己知识库里的（`docs/knowledge.md`）；去掉 `app.call models.tab_name`（标签名是管理者自己起的）。
+  hub → 助手的调用：`agents.start_params {machine_id, params, name_from?}` → `{params}`（`POST /api/v1/sessions` 之前：按「模型配置 › Agents」和这一次选的填启动器、模型、指纹，`name_from` 不空时起标签名；
+  回 `bad_request` 时 hub 回 App 400，没连着时 hub 照 App 给的开始）、`agents.resume_params {machine_id, session_id, params}` → `{params}`（续上不知道启动器的会话之前；hub 不带 params，把回答里的盖到消息上）、
+  `agents.tab_name {prompt}` → `{name}`（后台开始的 Agent、飞书卡片开的）；单向事件 `session.seen {machine_id, session_id, at}`（用户在 App 里看了一个会话）。
+  分诊用的 `session.turn_started`、`session.turn_ended` 原来就发。用户答了它的提问或卡片而它没收下（没连着，或回了 `gone` 以外的错误），hub 记下答案，
+  它下次报快照之后再发 `manager.action`（没连着时马上、它回了错误的过 10 秒），直到它收下、回 `gone`（这张卡片 / 这个提问已经没了：答了、撤了、过期了，不用再给）或卡片本该过期。
+  `agents.start_params` / `agents.resume_params` 之前 hub 等它连上（hub 起来后到 60 秒、它断开后 10 秒），等不到 hub 自己套「模型配置 › Agents」。
+  它握手时报的版本和 hub 的不一样（开发版不算），hub 在日志里说一句：两边对分诊归谁的理解可能不一样。
 - 助手没连着时：转发的接口回 `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}`，助手的工具同样失败（`is_error`，同一句话），`assistant.context` 也失败（node 那条消息不带实时快照）；
   给它的事件不发（它连上后报整份快照，要的东西现问），只有 `kb.agent_turn` hub 排着（每个 Agent 最新的一条），连上就发。hub 留着它最后报的快照，会话列表照常显示标题和归档。
   知识库的 `kb.*` 调用同样回 `assistant_offline`：删除来源数据的接口回 503（收件箱的条目照删），收件箱 AI 分身的上下文、分诊的项目名就不带；
@@ -1226,7 +1238,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 
 **转发 App 的请求**：App 打到助手接口的请求（鉴权之后）由 hub 作为 `http.request` 交给助手，它的回答原样写回。助手接口是 `assistantwire.Routes`（助手那边有一个测试保证它服务的正是这些）：
 `POST /api/v1/assistant/conversations/{id}/archive`、`…/unarchive`、`…/route`、`…/today`、`…/compact`，`GET …/{id}/feed`，`/api/v1/assistant/tasks…`、`/api/v1/assistant/runs`、`/api/v1/assistant/routines…`、
-`/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`/api/v1/todos…`（待办的全部接口，含 `done-check`、`retry`、决策），以及（2026-11-04 起）`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/warm`、
+`/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`/api/v1/todos…`（待办的全部接口，含 `done-check`、`retry`、决策），`GET/PUT /api/v1/agents/triage`、`GET /api/v1/agents/work/stats`、`POST /api/v1/tabs/autoname`（2026-11-04，Agents），以及（2026-11-04 起）`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/warm`、
 `GET /api/v1/assistant/memory`、`PUT/DELETE /api/v1/assistant/memory/{name}`、`POST /api/v1/assistant/conversations`、`POST /api/v1/assistant/main/new`，以及知识库的全部接口（2026-11-04 起，下面「知识库 API」）。`/api/v1/skills` 还是 hub 自己的。
 
 ```jsonc

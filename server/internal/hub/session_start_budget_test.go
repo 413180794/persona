@@ -12,22 +12,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-type startBudgetStore struct {
-	*memStore
-	remaining time.Duration
-}
-
-func (s *startBudgetStore) Setting(ctx context.Context, key string, out any) (bool, error) {
-	if key == modelKey("agent.new") {
-		if deadline, ok := ctx.Deadline(); ok {
-			s.remaining = time.Until(deadline)
-		}
-	}
-	return s.memStore.Setting(ctx, key, out)
-}
-
-// Codex and TRAEX return their session only after startup even when a client asks for async.
-// Observe the operation context on the actual HTTP/model/RPC path without waiting for a timeout.
+// Codex and TRAEX return their session only after startup even when a client asks for async: the node gets the agent
+// type the launcher resolves to, and the start's budget (startBudget) follows it. What the start runs on is the
+// manager's (agents.start_params), whose calls carry no deadline over the bus: the budget is checked on the decision.
 func TestSessionStartBudgetMatchesNodeStartup(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -46,8 +33,6 @@ func TestSessionStartBudgetMatchesNodeStartup(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newTestHub(t)
-			store := &startBudgetStore{memStore: newMemStore()}
-			h.store = store
 			startReceiptNode(t, h, func(_ context.Context, params json.RawMessage) (any, error) {
 				var in struct {
 					AgentType string `json:"agent_type"`
@@ -78,12 +63,17 @@ func TestSessionStartBudgetMatchesNodeStartup(t *testing.T) {
 			if w.Code != http.StatusOK {
 				t.Fatalf("start = %d %s", w.Code, w.Body)
 			}
+			want := tc.agentType
+			if want == "" {
+				want = tc.configured
+			}
+			budget := startBudget(startsAsync(tc.async, "", want))
 			min, max := 60*time.Second, 101*time.Second
 			if tc.short {
 				min, max = 10*time.Second, 16*time.Second
 			}
-			if store.remaining < min || store.remaining > max {
-				t.Fatalf("operation budget = %s, want between %s and %s", store.remaining, min, max)
+			if budget < min || budget > max {
+				t.Fatalf("operation budget = %s, want between %s and %s", budget, min, max)
 			}
 		})
 	}

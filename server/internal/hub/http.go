@@ -132,17 +132,6 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.withClientOp("rename", h.withMachine(h.renameSession)))
 	api.HandleFunc("DELETE /api/v1/sessions/{mid}/{sid}", h.withMachine(h.deleteSession))
-	// {"dry_run": true, "all": false}: rename the tabs of running agents nobody named after their task (tabname.go).
-	api.HandleFunc("POST /api/v1/tabs/autoname", func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			DryRun bool `json:"dry_run"`
-			All    bool `json:"all"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&in)
-		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
-		defer cancel()
-		writeJSON(w, map[string]any{"tabs": h.autonameTabs(ctx, in.DryRun, in.All)})
-	})
 	// {"permission_mode": …, "effort": …}: either may be left out (node/modes.go).
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/modes", h.withClientOp("modes", h.proxyBody("session.modes")))
 	api.HandleFunc("POST /api/v1/machines/{mid}/spaces/{wid}/rename", h.withMachine(h.renameSpace))
@@ -200,7 +189,6 @@ func (h *Hub) routes() http.Handler {
 	h.live.routes(api)
 	h.usageRoutes(api)
 	h.metricsRoutes(api)
-	h.workStatsRoutes(api)
 	api.HandleFunc("GET /api/v1/devices/{id}/sessions", h.serveDeviceSessions)
 	h.lockTestRoutes(api)
 	// Which pushes this device wants (notify.go NotifyPrefs); the app's 设置 › 通知.
@@ -625,32 +613,29 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		// The decisions go to the agent, not into its tab's name (nameFrom is taken before).
 		p.Prompt = h.withTodoDecisions(r.Context(), p.TodoID, p.Prompt)
 	}
-	// Match the node: only Claude can acknowledge startup before the session is ready.
-	async := p.Async && p.ResumeSessionID == "" && (p.AgentType == "" || p.AgentType == "claude")
+	async := startsAsync(p.Async, p.ResumeSessionID, p.AgentType)
 	parent := r.Context()
 	if r.Header.Get("X-Jarvis-Op-Id") != "" {
 		// Finish an accepted start even if its HTTP response is lost; client_ops records the outcome.
 		parent = context.WithoutCancel(parent)
 	}
-	ctx, cancel := context.WithTimeout(parent, 100*time.Second)
+	ctx, cancel := context.WithTimeout(parent, startBudget(async))
 	defer cancel()
-	if async {
-		ctx, cancel = context.WithTimeout(parent, 15*time.Second)
-		defer cancel()
-	} else if p.TabName == "" && p.ResumeSessionID == "" {
-		p.TabName = h.autoTabName(ctx, nameFrom)
-	}
 	var res struct {
 		Session proto.Session `json:"session"`
 	}
 	raw, _ := json.Marshal(p)
 	params := map[string]any{}
 	_ = json.Unmarshal(raw, &params)
-	if p.ResumeSessionID == "" {
-		if err := h.applyModel(ctx, "agent.new", params); err != nil {
-			writeErr(w, 400, err)
-			return
-		}
+	name := "" // a tab named now, before it opens; one started in the background is renamed when its name comes (below)
+	if !async && p.TabName == "" && p.ResumeSessionID == "" {
+		name = nameFrom
+	}
+	// The manager says what it runs on (模型配置 › Agents, a model picked for this start) and names its tab
+	// (agents_link.go).
+	if err := h.agentStartParams(ctx, m, params, name); err != nil {
+		writeErr(w, 400, err)
+		return
 	}
 	if err := m.call(ctx, "session.start", params, &res); err != nil {
 		callErr(w, err)
@@ -685,6 +670,21 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 			}
 		}(res.Session.SessionID)
 	}
+}
+
+// startsAsync: a start the app asked to have answered at once is, when the node can acknowledge it before the session
+// is ready (only Claude can, and not a resume).
+func startsAsync(asked bool, resume, agentType string) bool {
+	return asked && resume == "" && (agentType == "" || agentType == "claude")
+}
+
+// startBudget is how long a start may take: one acknowledged before the session is ready a moment, one answered only
+// after startup (a sync one, Codex, TRAEX) as long as a busy machine needs.
+func startBudget(async bool) time.Duration {
+	if async {
+		return 15 * time.Second
+	}
+	return 100 * time.Second
 }
 
 // ---- WebSocket ----

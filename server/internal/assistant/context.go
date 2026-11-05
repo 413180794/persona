@@ -122,7 +122,7 @@ func (s *Service) ProfileChanged(context.Context) {
 	s.prefs.mu.Unlock()
 }
 
-// snapshotAgents sorts the agents by what they need: the hub's work state (docs/agent-work.md) says what a stopped one
+// snapshotAgents sorts the agents by what they need: the work state (agents_work.go, docs/agent-work.md) says what a stopped one
 // waits for or concluded.
 func (s *Service) snapshotAgents(ctx context.Context, devices []Device) (needs, unread, waiting, done []prompts.SnapshotAgent, working []string) {
 	for _, m := range devices {

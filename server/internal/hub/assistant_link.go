@@ -48,7 +48,7 @@ type assistantState struct {
 	updating  atomic.Bool // a manager.updated check is on its way
 
 	askMu sync.Mutex
-	asked map[string]context.CancelFunc // the questions it asks on the phone, shown now (by interaction id)
+	asked map[string]*askedOne // the questions and cards it has on the phone (by interaction id)
 
 	cardSends sync.Map // a message card's id → the lock its 发送 holds (sendFromCard)
 }
@@ -112,6 +112,7 @@ func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	out.Assistant.Machines = h.machineIDs()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
 	out.PersonaView = h.cfg.Assistant.PersonaView
+	out.Agents = h.cfg.Agents // the Agents business's defaults (agents_link.go)
 	return out, nil
 }
 
@@ -142,7 +143,8 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 	}
 	switch p.Method {
 	case assistantwire.DeviceSessionsList:
-		return json.Marshal(map[string]any{"sessions": h.decorated(m)})
+		list := h.decorated(m)
+		return json.Marshal(map[string]any{"sessions": list, "muted": h.mutedSessions(m.cfg.ID, list)})
 	case assistantwire.DeviceSessionGet:
 		var a struct {
 			SessionID string `json:"session_id"`
@@ -235,14 +237,6 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 			return nil, err
 		}
 		return out, nil
-	case assistantwire.AppModels + " " + assistantwire.ModelsTabName:
-		var a struct {
-			Prompt string `json:"prompt"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		return json.Marshal(map[string]any{"name": h.autoTabName(ctx, a.Prompt)})
 	case assistantwire.AppConnectors + " " + assistantwire.ConnectorsSnapshots:
 		var a struct {
 			TZ string `json:"tz"`
@@ -369,6 +363,11 @@ func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (as
 			machines = append(machines, mid)
 		}
 	}
+	for _, mid := range h.takeWorkReport(s.Work) { // the agents' work (agents_link.go)
+		if !slices.Contains(machines, mid) {
+			machines = append(machines, mid)
+		}
+	}
 	for _, mid := range h.takeChannelsReport(s.Channels) { // the channels' (assistant_channels.go)
 		if !slices.Contains(machines, mid) {
 			machines = append(machines, mid)
@@ -379,6 +378,7 @@ func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (as
 			h.sessionsChanged(m)
 		}
 	}
+	go h.deliverAnswers() // answers kept for it: it is there, with its state read back (agents_link.go)
 	return assistantwire.SnapshotResult{OK: true, Seq: s.Seq}, nil
 }
 
@@ -407,43 +407,64 @@ func changedMachines(old, now map[string]assistantwire.SessionView) []string {
 	return out
 }
 
-// askOnPhone shows the questions the assistant asks (its snapshot's interactions) like any agent's card: recorded,
-// announced, pushed, expired by the hub (waitInteraction); the answer goes back to the assistant (manager.action).
-// A question that left the snapshot is withdrawn, as a hook's that went away.
+// askOnPhone shows the questions the assistant asks and its cards about agents' turns (its snapshot's interactions)
+// like any agent's card: recorded, announced, pushed, expired by the hub (waitInteraction); the answer goes back to
+// the assistant (manager.action), or waits for it when it cannot take it (keepAnswer). A question that left the
+// snapshot is withdrawn, as a hook's that went away, and nothing is said about it. One it still reports a while after
+// its answer went, with no answer waiting for it, is shown again: the answer did not take.
 func (h *Hub) askOnPhone(list []proto.Interaction) {
 	a := &h.assistant
 	a.askMu.Lock()
 	defer a.askMu.Unlock()
 	if a.asked == nil {
-		a.asked = map[string]context.CancelFunc{}
+		a.asked = map[string]*askedOne{}
 	}
 	now := map[string]bool{}
 	for _, ix := range list {
 		now[ix.ID] = true
-		if a.asked[ix.ID] != nil {
-			continue
+		if q := a.asked[ix.ID]; q != nil {
+			if q.ended.IsZero() || time.Since(q.ended) < askAgainAfter || h.answerKept(ix.ID) {
+				continue
+			}
+			q.cancel()
 		}
 		ctx, cancel := context.WithCancel(context.Background())
-		a.asked[ix.ID] = cancel
+		q := &askedOne{cancel: cancel}
+		a.asked[ix.ID] = q
 		go func(ix proto.Interaction) {
 			r, err := h.waitInteraction(ctx, ix)
-			if err != nil {
-				return // withdrawn
+			if err != nil || r.Dismiss && ctx.Err() != nil {
+				return // withdrawn: it knows
 			}
 			answer, _ := json.Marshal(r)
-			if _, err := h.asst().Action(context.Background(), assistantwire.Action{ActionID: "act_" + randomHex(6), SessionID: ix.SessionID,
-				Op: "answer", InteractionID: ix.ID, InteractionVersion: 1, Answer: answer}); err != nil {
+			act := assistantwire.Action{ActionID: "act_" + randomHex(6), SessionID: ix.SessionID, Op: "answer", InteractionID: ix.ID,
+				InteractionVersion: 1, Answer: answer}
+			// Not taken (not connected, not ready): it gets the answer later (agents_link.go).
+			if _, err := h.asst().Action(context.Background(), act); err != nil && !h.keepAnswer(act, err, ix.ExpiresAt) {
 				h.logf("assistant: answer %s: %v", ix.ID, err)
 			}
+			a.askMu.Lock()
+			q.ended = time.Now()
+			a.askMu.Unlock()
 		}(ix)
 	}
-	for id, cancel := range a.asked {
+	for id, q := range a.asked {
 		if !now[id] {
-			cancel()
+			q.cancel()
 			delete(a.asked, id)
 		}
 	}
 }
+
+// askedOne is a question or card of the assistant's on the phone: cancel withdraws it; ended is when its answer (or
+// its expiry) went to the assistant.
+type askedOne struct {
+	cancel context.CancelFunc
+	ended  time.Time
+}
+
+// askAgainAfter is how long a question the assistant still reports after its answer went may stay off the phone.
+var askAgainAfter = 30 * time.Second
 
 // ---- on the bus: what the assistant calls ----
 
@@ -545,6 +566,7 @@ func (h *Hub) assistantConnected() {
 	var res struct {
 		Tools []proto.Tool `json:"tools"`
 	}
+	h.managerConnected() // agents_link.go
 	if err := h.callBus(ctx, assistantwire.AssistantID, assistantwire.MethodTools, nil, &res); err != nil {
 		h.logf("assistant: tools: %v", err)
 		return
