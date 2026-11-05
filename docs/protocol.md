@@ -1114,6 +1114,8 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
 双向都能发请求：`{"id":"h12","method":"…","params":{}}` → `{"id":"h12","result":{}}` / `{"id":"h12","error":{"message":"…"}}`；
 单向事件 `{"event":"…","params":{}}`。hub 发的 id 以 `h` 开头，node 发的以 `n` 开头。stderr 是 node 日志。
 
+取消（#2597）：调用方不再等某个请求时，发 `{"event":"rpc.cancel","params":{"id":"n12"}}`，对端取消那次请求的处理。目前只有 node 对 `mcp.call` 发：MCP 进程或 hook 断开（助手这一轮被停了）时，hub 端的 `approve` 随之结束，卡记成 cancelled 并撤下，之后再回答是 410，不会去执行一个没人在等的写操作（比如发出一条过时的消息）。不认识这个事件的旧版本忽略它，处理照常跑完。扩展、连接器的连接不发这个事件。
+
 hub → node 请求：
 
 | method | params → result |

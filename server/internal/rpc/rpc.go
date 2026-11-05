@@ -5,6 +5,7 @@
 //	{"id":"h1","method":"m","params":{}}      request
 //	{"id":"h1","result":{}} / {"id":"h1","error":{"message":"…"}}   response
 //	{"event":"e","params":{}}                 one-way event
+//	{"event":"rpc.cancel","params":{"id":"h1"}}   the caller no longer waits for request h1 (Peer.Cancels)
 package rpc
 
 import (
@@ -68,11 +69,22 @@ type Peer struct {
 
 	OnRequest Handler
 	OnEvent   EventHandler
+	// Cancels: the methods whose calls tell the other side when their ctx ends first (cancelEvent), which cancels
+	// that request's ctx. None by default: extensions and connectors speak this protocol too and need not know the
+	// event, and most calls are meant to finish on the other side anyway. A peer that does not know the event ignores
+	// it, as before: its handler runs on.
+	Cancels map[string]bool
+
+	running map[string]context.CancelFunc // requests being handled, by id: what a cancelEvent ends
 }
+
+// cancelEvent is sent for a request the caller no longer waits for: an approval the hub asks for on the phone stays
+// pending otherwise, and allowing it later runs a tool call nobody is waiting on (a stale message sent, #2597).
+const cancelEvent = "rpc.cancel"
 
 // New creates a peer. prefix distinguishes request ids by side ("h" for hub, "n" for node).
 func New(prefix string, w io.Writer) *Peer {
-	return &Peer{prefix: prefix, w: w, pending: map[string]chan message{}, closed: make(chan struct{})}
+	return &Peer{prefix: prefix, w: w, pending: map[string]chan message{}, running: map[string]context.CancelFunc{}, closed: make(chan struct{})}
 }
 
 // Serve reads messages until r fails; it returns the read error.
@@ -86,7 +98,23 @@ func (p *Peer) Serve(ctx context.Context, r io.Reader) error {
 		}
 		switch {
 		case m.Method != "":
-			go p.handle(ctx, m)
+			// Registered before the handler starts: a cancel right behind the request finds it.
+			hctx, cancel := context.WithCancel(ctx)
+			p.mu.Lock()
+			p.running[m.ID] = cancel
+			p.mu.Unlock()
+			go p.handle(hctx, m)
+		case m.Event == cancelEvent:
+			var c struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(m.Params, &c)
+			p.mu.Lock()
+			cancel := p.running[c.ID]
+			p.mu.Unlock()
+			if cancel != nil {
+				cancel()
+			}
 		case m.Event != "":
 			if p.OnEvent != nil {
 				p.OnEvent(m.Event, m.Params)
@@ -110,6 +138,15 @@ func (p *Peer) Serve(ctx context.Context, r io.Reader) error {
 }
 
 func (p *Peer) handle(ctx context.Context, m message) {
+	defer func() {
+		p.mu.Lock()
+		cancel := p.running[m.ID]
+		delete(p.running, m.ID)
+		p.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+	}()
 	var res any
 	var err error
 	if p.OnRequest == nil {
@@ -191,6 +228,10 @@ func (p *Peer) Call(ctx context.Context, method string, params any, out any) err
 		}
 		return nil
 	case <-ctx.Done():
+		if p.Cancels[method] {
+			params, _ := json.Marshal(map[string]string{"id": id})
+			_ = p.write(message{Event: cancelEvent, Params: params})
+		}
 		return ctx.Err()
 	case <-p.closed:
 		return ErrDropped

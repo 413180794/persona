@@ -733,9 +733,16 @@ hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](ad
   | `rules` | `[{method, path, body?, action}]`：`path` 里 `*` 一段、`**` 剩下的全部，`body` 比对顶层字段；第一条命中的算，`allow` / `confirm` / `deny`，都不命中就在手机上确认 |
   | `actions?` | `[{pattern, what}]`：卡片上「做什么」，`pattern` 是对「METHOD /path」的正则 |
   | `tool?` | `{name, description}`：给没有 Bash 的运行时的工具（参数 `{args: [命令后面的词]}`），同样过闸门 |
+  | `auth?` | 凭据怎么加到请求上（#1317）：`{header, value}`，`value` 里的 `${名字}` 换成 `env` 里那个凭据，如 `{"header": "X-Api-Key", "value": "${FEED_TOKEN}"}`；不写时只有一个 `secret`（且在 `env` 里）、有 `base_env` 的闸门按 `Authorization: Bearer ${<secret>}`。`{"env": true}`：脚本自己要用凭据，照旧放进助手的环境（助手读得到，不推荐）。header 不能是 `Host`、`Content-Type`、`Origin`、`Cookie` 这类由代理或传输层管的 |
 
-  - **凭据**：hub 只给跑助手的那台 node（`assistant.lark`，node 一分钟最多问一次），调扩展的 `assistant.credentials {contribution}` → `{env}`，只留 `env` 里声明的名字；
-    node 把它们放进助手进程的环境，命令包装（`~/.persona/assistant-bin/<命令>`，跑技能目录里的脚本）从那里拿，不落盘、不进日志。扩展停用后命令和凭据都没了。
+  - **凭据**：hub 只给跑助手的那台 node（`assistant.lark`，node 一分钟最多问一次），调扩展的 `assistant.credentials {contribution}` → `{env}`，只留 `env` 里声明的名字，不落盘、不进日志。
+    **凭据不进助手的进程**（#1317，`node/gateproxy.go`）：node 在本机起一个只听回环的代理，给每个助手进程一个自己的地址（`http://127.0.0.1:<端口>/<随机串>`，进程结束就失效），
+    放进 `base_env`；`secret` 和 `auth` 用到的变量都不给，`env` 里其余的照给。命令包装（`~/.persona/assistant-bin/<命令>`，跑技能目录里的脚本）照常请求 `$<base_env><路径>`，
+    代理把路径接到真的接口地址后面、按 `auth` 加上凭据，只转发脚本常用的头（`Accept`、`Content-Type`、`headers` 里的……；请求自带的 `Authorization`、`Cookie` 去掉），`Origin` 换成接口自己的。
+    代理按同一份 `rules` 检查每个实际请求，不管是命令、curl 还是脚本发的：`allow` 放行、`deny` 拒绝；`confirm` 的只放行闸门刚在手机上确认过（或「本会话总是允许」覆盖）的那一次调用，
+    同样的方法、路径，正文是确认过的那份（JSON 等价；正文里有 `$`、`@file` 被截断、上传文件时不比正文），10 分钟内用一次；其余回 403 和原因（JSON），模型照着改。
+    所以闸门读不懂的命令（循环、脚本、`$(…)`）里有写时直接拒绝，提示单独一条发。常驻 node 的代理是整个进程的：hub 重连后留下来的对话还用原来的地址，新连接放行的调用照样能过。
+    扩展停用后命令和凭据都没了。没有 `auth` 也不满足默认条件的闸门（几个 secret、没有 `base_env`）照旧把凭据放进助手的环境，老 hub（#1317 之前）给的闸门也是。
   - **卡片**：确认卡片的标题是 `title`；扩展可以回答 `assistant.summary {contribution, summary}` → `{summary}`，把卡片里的 id 换成名字（读不到就原样）。
   - 闸门文件按严格模式读，装的时候查（脚本要在技能里）；凭据不能是 `PERSONA_` / `JARVIS_` 开头或 `PATH`。
 

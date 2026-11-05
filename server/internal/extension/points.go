@@ -226,12 +226,43 @@ type GateFile struct {
 	Rules      []proto.LarkRule   `json:"rules,omitempty"`
 	Actions    []proto.GateAction `json:"actions,omitempty"`
 	Tool       *proto.GateTool    `json:"tool,omitempty"`
+	// Auth is how the node's proxy puts the credentials on a request (#1317); without it ProxyAuth decides.
+	Auth *GateFileAuth `json:"auth,omitempty"`
+}
+
+// GateFileAuth is a gate file's auth: the header and its value (${NAME} for one of env), or env: the script needs its
+// secret itself, so the credentials go into the assistant's environment, where the assistant can read them too.
+type GateFileAuth struct {
+	Header string `json:"header,omitempty"`
+	Value  string `json:"value,omitempty"`
+	Env    bool   `json:"env,omitempty"`
 }
 
 var (
 	gateCommand = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 	gateEnv     = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	gateHeader  = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
+	gateAuthRef = regexp.MustCompile(`\$\{([A-Z_][A-Z0-9_]*)\}`)
+	// gateHeldHeaders are the proxy's, or the transport's, to set: an auth header cannot be one of them.
+	gateHeldHeaders = []string{"host", "content-length", "content-type", "transfer-encoding", "connection", "upgrade", "te",
+		"trailer", "keep-alive", "origin", "cookie", "proxy-authorization"}
 )
+
+// ProxyAuth is how the node's proxy adds the gate's credentials, so that they never enter the assistant's process
+// (#1317): the declared auth, or for a gate with a base_env and one secret among its env, Authorization: Bearer
+// ${<secret>}. Nil, the credentials going into the assistant's environment: auth env, or a gate the proxy cannot
+// stand in for (no base_env; no or several secrets and no auth saying how they go).
+func (g *GateFile) ProxyAuth() *proto.GateAuth {
+	switch {
+	case g.BaseEnv == "" || g.Auth != nil && g.Auth.Env:
+		return nil
+	case g.Auth != nil:
+		return &proto.GateAuth{Header: g.Auth.Header, Value: g.Auth.Value}
+	case len(g.Secret) == 1 && slices.Contains(g.Env, g.Secret[0]):
+		return &proto.GateAuth{Header: "Authorization", Value: "Bearer ${" + g.Secret[0] + "}"}
+	}
+	return nil
+}
 
 // ParseGate reads a gate file strictly and checks it.
 func ParseGate(raw []byte) (*GateFile, error) {
@@ -255,6 +286,26 @@ func ParseGate(raw []byte) (*GateFile, error) {
 	}
 	if g.BaseEnv != "" && !slices.Contains(g.Env, g.BaseEnv) {
 		return nil, errors.New("gate base_env is not one of env")
+	}
+	if a := g.Auth; a != nil {
+		switch {
+		case a.Env:
+			if a.Header != "" || a.Value != "" {
+				return nil, errors.New("gate auth: env, or a header and its value, not both")
+			}
+		case !gateHeader.MatchString(a.Header) || a.Value == "":
+			return nil, errors.New("gate auth: a header and its value")
+		case slices.Contains(gateHeldHeaders, strings.ToLower(a.Header)):
+			return nil, fmt.Errorf("gate auth header %q is not one to set", a.Header)
+		case g.BaseEnv == "":
+			return nil, errors.New("gate auth: needs base_env, the API the proxy stands in for")
+		default:
+			for _, m := range gateAuthRef.FindAllStringSubmatch(a.Value, -1) {
+				if !slices.Contains(g.Env, m[1]) {
+					return nil, fmt.Errorf("gate auth value: ${%s} is not one of env", m[1])
+				}
+			}
+		}
 	}
 	for _, r := range g.Rules {
 		if r.Action != "allow" && r.Action != "confirm" && r.Action != "deny" || r.Path == "" || r.Method == "" {

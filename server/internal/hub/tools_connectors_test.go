@@ -100,3 +100,50 @@ func TestConnectorCardsBelongToTheCallingConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// The caller of a connector's write going away (the assistant's turn stopped: the node cancels the call, #2597)
+// withdraws its card: allowing it afterwards must not run the write.
+func TestAConnectorCardEndsWithItsCall(t *testing.T) {
+	h := newTestHub(t)
+	m := &replyMail{}
+	h.mail = m
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors()
+	box := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
+	args := json.RawMessage(`{"account_id":"acc1","to":[{"email":"someone@example.com"}],"subject":"s","text":"t"}`)
+	params, _ := json.Marshal(map[string]any{"name": "mail_send", "args": args, "assistant": true, "session_id": "conv1"})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan proto.ToolResult, 1)
+	go func() {
+		out, _ := box.onRequest(ctx, "mcp.call", params)
+		done <- out.(proto.ToolResult)
+	}()
+	var ix []proto.Interaction
+	for i := 0; i < 500 && len(ix) == 0; i++ {
+		time.Sleep(5 * time.Millisecond)
+		ix = h.pendingInteractions()
+	}
+	if len(ix) != 1 {
+		t.Fatalf("cards %+v", ix)
+	}
+	cancel()
+	select {
+	case r := <-done:
+		if !r.IsError {
+			t.Fatalf("a call nobody waits for went through: %+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the call did not end with its caller")
+	}
+	if left := h.pendingInteractions(); len(left) != 0 {
+		t.Fatalf("the card stayed: %+v", left)
+	}
+	allow := true
+	if err := h.resolve(ix[0].ID, proto.Resolution{Allow: &allow}); err == nil {
+		t.Fatal("the withdrawn card could still be allowed")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if len(m.sent) != 0 {
+		t.Fatalf("sent after its caller went away: %v", m.sent)
+	}
+}

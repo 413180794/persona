@@ -10,7 +10,7 @@ import tempfile
 import time
 import unittest
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 # LarkConversation's non-optional properties (apple/Persona/Views/Inbox/Lark/LarkModels.swift), by their JSON keys.
 REQUIRED = {"id", "name", "is_group", "unread", "at_me", "muted", "preview", "is_mine"}
@@ -148,6 +148,18 @@ class LarkMeasuringTests(unittest.TestCase):
         self.assertEqual(hub.get("/mock/lark_churned")["rounds"], 3)
         after = hub.get("/api/v1/lark/conversations/f3/messages")["messages"][-1]["position"]
         self.assertEqual(int(after), int(before) + 3)
+
+    def test_a_test_can_change_how_long_a_send_takes(self):
+        hub = MockHub(MOCK_LARK_SEND_SECONDS="3")
+        self.addCleanup(hub.stop)
+        self.assertEqual(hub.get("/mock/lark_send_delay?s=0.1"), {"seconds": 0.1})
+        start = time.monotonic()
+        request = Request(hub.url("/api/v1/lark/conversations/f3/messages"), data=json.dumps({"text": "快"}).encode(),
+                          headers={"Content-Type": "application/json", "Authorization": "Bearer mock"})
+        with urlopen(request, timeout=3) as response:
+            self.assertTrue(json.load(response)["message_id"])
+        self.assertLess(time.monotonic() - start, 2)
+        self.assertEqual(hub.get("/mock/lark_send_delay"), {"seconds": 3.0}, "no s puts the start value back")
 
 
 if __name__ == "__main__":

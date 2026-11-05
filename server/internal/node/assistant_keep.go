@@ -43,6 +43,8 @@ func (k *assistantKeeper) stopAll() {
 type assistantKeeper struct {
 	mu    sync.Mutex
 	procs map[string]*assistantProc
+	// gp is the process's gate proxy: the conversations kept hold their addresses at it (Node.gates, gateproxy.go).
+	gp *gateProxy
 }
 
 func newAssistantKeeper() *assistantKeeper {

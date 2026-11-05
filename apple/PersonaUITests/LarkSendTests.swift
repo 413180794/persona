@@ -4,9 +4,10 @@ import XCTest
 /// with a spinner beside it, Feishu's own copy takes its place, and one that did not go out has a failed mark that offers
 /// 重发; replies (quoted in the chat, or in a thread sheet) go the same way. The marks are found by their identifiers
 /// (lark.outgoing.sending / .failed), not their wording. Against scripts/mock/mock_hub.py
-/// (JARVIS_MOCK_HUB), whose Feishu send takes 2 seconds and fails for a text with "#fail".
+/// (JARVIS_MOCK_HUB), whose Feishu send takes 2 seconds (longer where a case asks it to) and fails for a text with "#fail".
 final class LarkSendTests: XCTestCase {
     private var hub: String!
+    private var slowedSend = false
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -22,11 +23,26 @@ final class LarkSendTests: XCTestCase {
     static let fresh = ["-lark-connectorSendFresh", "YES"]
 
     override func tearDown() {
+        if slowedSend { _ = try? mockSendDelay(nil) } // the cases after this one see the mock's own 2 s
         if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"], (testRun?.totalFailureCount ?? 0) > 0 {
             let name = name.components(separatedBy: " ").last?.trimmingCharacters(in: CharacterSet(charactersIn: "]")) ?? "test"
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("failed-\(name).png"))
         }
         super.tearDown()
+    }
+
+    /// GET /mock/lark_send_delay?s=… sets how long the mock's Feishu send takes from now on; no s puts its start value back.
+    private func mockSendDelay(_ seconds: Double?) throws {
+        let data = try Data(contentsOf: URL(string: hub + "/mock/lark_send_delay" + (seconds.map { "?s=\($0)" } ?? ""))!)
+        let state = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertNotNil(state?["seconds"], "no /mock/lark_send_delay in this mock (an older scripts/mock/mock_hub.py?)")
+    }
+
+    /// For a case that has to see the sending spinner: after a tap XCTest waits for the app to settle, which on a busy
+    /// machine took more than the mock's 2 s, and the send was done before the first look (#2578).
+    private func slowSend() throws {
+        try mockSendDelay(8)
+        slowedSend = true
     }
 
     @MainActor private func openChat() -> XCUIApplication {
@@ -112,7 +128,8 @@ final class LarkSendTests: XCTestCase {
         }
     }
 
-    @MainActor func testMessageShowsAtOnceThenItsCopyTakesOver() {
+    @MainActor func testMessageShowsAtOnceThenItsCopyTakesOver() throws {
+        try slowSend()
         let app = openChat()
         let text = "下午三点前我看一下 " + UUID().uuidString.prefix(8)
         send(app, text)
@@ -200,7 +217,7 @@ final class LarkSendTests: XCTestCase {
 
     /// The send marks sit beside the bubble, like Feishu: the failed mark left of the failed message on its line, and
     /// spinners while later ones go. Two more messages push the failed one up out from under the box for the shot.
-    @MainActor func testSendMarksSitBesideTheBubble() {
+    @MainActor func testSendMarksSitBesideTheBubble() throws {
         let app = openChat()
         let failedText = "#fail 旁边是标记 " + UUID().uuidString.prefix(6)
         send(app, failedText)
@@ -209,6 +226,7 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(bubble.exists)
         XCTAssertLessThanOrEqual(failed.frame.maxX, bubble.frame.minX, "the mark is left of the bubble")
         XCTAssertLessThan(abs(failed.frame.midY - bubble.frame.midY), 12, "on the bubble's line, not under it")
+        try slowSend() // after the failed one: it only has to fail
         send(app, "第二条 " + UUID().uuidString.prefix(6))
         send(app, "第三条 " + UUID().uuidString.prefix(6))
         let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending")

@@ -153,8 +153,10 @@ func (ps *extensions) assistantGates(ctx context.Context, userRules func(connect
 				ps.logf("plugin %s: gate %s: %v", p.Record.ID, a.Gate, err)
 				continue
 			}
+			// Auth: the node keeps the credentials out of the assistant's process and adds them at its proxy (#1317).
 			g := proto.CommandGate{Plugin: p.Record.ID, Command: gf.Command, Script: gf.Script, Title: gf.Title, BaseEnv: gf.BaseEnv,
-				Secret: gf.Secret, AllowedEnv: gf.AllowedEnv, Headers: gf.Headers, PathPrefix: gf.PathPrefix, Actions: gf.Actions, Tool: gf.Tool}
+				Secret: gf.Secret, AllowedEnv: gf.AllowedEnv, Headers: gf.Headers, PathPrefix: gf.PathPrefix, Actions: gf.Actions, Tool: gf.Tool,
+				Auth: gf.ProxyAuth()}
 			if gf.Connector != "" && userRules != nil {
 				g.Rules = append(g.Rules, userRules(gf.Connector)...)
 			}

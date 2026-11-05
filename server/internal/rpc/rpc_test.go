@@ -382,3 +382,36 @@ func TestCallCanceledBeforeWriterAvailableDoesNotSend(t *testing.T) {
 		t.Fatalf("queued canceled request reached wire: %s", wire.String())
 	}
 }
+
+// A call the caller gives up on ends on the other side too, for the methods in Cancels (#2597); the others run on
+// there, as they always did.
+func TestCancelReachesTheHandler(t *testing.T) {
+	hub, node := pair(t)
+	node.Cancels = map[string]bool{"wait": true}
+	ended := make(chan string, 2)
+	hub.OnRequest = func(ctx context.Context, method string, _ json.RawMessage) (any, error) {
+		select {
+		case <-ctx.Done():
+			ended <- method + " cancelled"
+		case <-time.After(300 * time.Millisecond):
+			ended <- method + " ran on"
+		}
+		return nil, nil
+	}
+	for _, method := range []string{"wait", "other"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		if err := node.Call(ctx, method, nil, nil); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("%s: %v", method, err)
+		}
+		cancel()
+		select {
+		case got := <-ended:
+			want := map[string]string{"wait": "wait cancelled", "other": "other ran on"}[method]
+			if got != want {
+				t.Fatalf("got %q, want %q", got, want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: the handler never ended", method)
+		}
+	}
+}

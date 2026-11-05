@@ -585,7 +585,14 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	cmd.Dir = cwd
 	// Persona's own tools are few and used all the time: load them up front instead of behind ToolSearch.
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
-	cmd.Env = identity.Environment(cmd.Env, n.assistantLarkEnv(cwd)...)
+	gateEnv, releaseGates := n.assistantLarkEnv(cwd) // its addresses at the gate proxy go with the process
+	started := false
+	defer func() {
+		if !started {
+			releaseGates()
+		}
+	}()
+	cmd.Env = identity.Environment(cmd.Env, gateEnv...)
 	cmd.SysProcAttr = osproc.GroupAttr() // so stop() can kill the whole group
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -602,6 +609,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
+	started = true
 	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}), ready: make(chan struct{}),
 		stderrDone: make(chan struct{}), born: time.Now(), lastActive: time.Now(), mode: startMode, canBypass: startMode == proto.ModeBypass, model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
 	if !spare {
@@ -614,6 +622,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	go n.readAssistant(p, stdout)
 	go func() {
 		_ = cmd.Wait()
+		releaseGates()
 		liveAssistants.Delete(p)
 		close(p.exited)
 		if n.keeper != nil {

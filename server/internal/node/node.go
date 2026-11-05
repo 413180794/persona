@@ -157,6 +157,8 @@ type Node struct {
 	larkCfg     proto.AssistantLark
 	larkCfgAt   time.Time
 	larkAllowed map[string]bool
+	// gp is the proxy that adds the gates' credentials, made at its first use (gateproxy.go, #1317).
+	gp *gateProxy
 	// lark-cli (larkcligate.go): each command's risk level as lark-cli reported it, and where the binary is.
 	larkRisks    map[string]string
 	larkCLIPaths map[string]string
@@ -248,6 +250,9 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		w = &updateResponseWriter{Writer: w, responseWritten: n.updater.ResponseWritten}
 	}
 	n.peer = rpc.New("n", w)
+	// A tool call whose caller went away (the assistant's turn stopped, a hook killed) ends on the hub too: an
+	// approval it was waiting on is withdrawn, not left to run the call when allowed later (#2597).
+	n.peer.Cancels = map[string]bool{"mcp.call": true}
 	n.peer.OnRequest = n.handle
 	n.streams = streams.New(n.peer.Notify)
 	defer n.streams.CloseAll()

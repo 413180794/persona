@@ -5,9 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // exampleManifest is the plan's example (docs/plan-extensions.md「三」), a made-up notes service.
@@ -671,9 +674,44 @@ func TestParseGate(t *testing.T) {
 		"action regex": `{"command": "f", "script": "f/x.sh", "title": "x", "actions": [{"pattern": "(", "what": "x"}]}`,
 		"tool":         `{"command": "f", "script": "f/x.sh", "title": "x", "tool": {"name": "Bad"}}`,
 		"unknown":      `{"command": "f", "script": "f/x.sh", "title": "x", "extra": 1}`,
+		"auth no value": `{"command": "f", "script": "f/x.sh", "title": "x", "env": ["B", "T"], "base_env": "B",
+			"auth": {"header": "X-Key"}}`,
+		"auth unknown name": `{"command": "f", "script": "f/x.sh", "title": "x", "env": ["B", "T"], "base_env": "B",
+			"auth": {"header": "X-Key", "value": "${OTHER}"}}`,
+		"auth both": `{"command": "f", "script": "f/x.sh", "title": "x", "env": ["B", "T"], "base_env": "B",
+			"auth": {"header": "X-Key", "value": "${T}", "env": true}}`,
+		"auth held header": `{"command": "f", "script": "f/x.sh", "title": "x", "env": ["B", "T"], "base_env": "B",
+			"auth": {"header": "Host", "value": "${T}"}}`,
+		"auth no base": `{"command": "f", "script": "f/x.sh", "title": "x", "env": ["T"], "auth": {"header": "X-Key", "value": "${T}"}}`,
 	} {
 		if _, err := ParseGate([]byte(bad)); err == nil {
 			t.Errorf("%s: parsed", name)
+		}
+	}
+}
+
+// How the node's proxy adds a gate's credentials (#1317): as the file says, or Authorization: Bearer for its one
+// secret; none (the old way, in the assistant's environment) when it says env or cannot tell.
+func TestGateProxyAuth(t *testing.T) {
+	const head = `{"command": "f", "script": "f/x.sh", "title": "x", `
+	for name, tc := range map[string]struct {
+		file string
+		want *proto.GateAuth
+	}{
+		"one secret": {`"env": ["B", "T"], "base_env": "B", "secret": ["T"]}`, &proto.GateAuth{Header: "Authorization", Value: "Bearer ${T}"}},
+		"declared": {`"env": ["B", "K", "T"], "base_env": "B", "secret": ["K", "T"], "auth": {"header": "X-Api-Key", "value": "${K}:${T}"}}`,
+			&proto.GateAuth{Header: "X-Api-Key", Value: "${K}:${T}"}},
+		"env":              {`"env": ["B", "T"], "base_env": "B", "secret": ["T"], "auth": {"env": true}}`, nil},
+		"two secrets":      {`"env": ["B", "K", "T"], "base_env": "B", "secret": ["K", "T"]}`, nil},
+		"no base":          {`"env": ["T"], "secret": ["T"]}`, nil},
+		"secret not given": {`"env": ["B"], "base_env": "B", "secret": ["T"]}`, nil},
+	} {
+		g, err := ParseGate([]byte(head + tc.file))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := g.ProxyAuth(); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %+v, want %+v", name, got, tc.want)
 		}
 	}
 }
@@ -725,18 +763,18 @@ func TestParseNodeProgram(t *testing.T) {
 
 func TestParseRefusesNodeProgram(t *testing.T) {
 	cases := map[string]func(node, machines map[string]any){
-		"one path for every platform": func(n, _ map[string]any) { n["command"] = "node/helper" },
+		"one path for every platform":   func(n, _ map[string]any) { n["command"] = "node/helper" },
 		"built in (only the hub's own)": func(n, _ map[string]any) { n["command"] = "builtin" },
-		"no platform":                 func(n, _ map[string]any) { n["command"] = map[string]any{} },
-		"windows":                     func(n, _ map[string]any) { n["command"] = map[string]any{"windows-amd64": "node/x.exe"} },
-		"outside the package":         func(n, _ map[string]any) { n["command"] = map[string]any{"darwin-arm64": "../x"} },
-		"the hub's binary":            func(n, _ map[string]any) { n["command"] = map[string]any{"darwin-arm64": "personad"} },
-		"rpc value":                   func(n, _ map[string]any) { n["rpc"] = "tcp" },
-		"no way to talk":              func(n, _ map[string]any) { n["rpc"] = "none" },
-		"keep_running":                func(n, _ map[string]any) { n["keep_running"] = "forever" },
-		"hub's env":                   func(n, _ map[string]any) { n["env"] = map[string]any{"PERSONA_HUB_TOKEN": "x"} },
-		"unknown secret":              func(n, _ map[string]any) { n["secrets"] = []any{"password"} },
-		"secret twice":                func(n, _ map[string]any) { n["secrets"] = []any{"api_key", "api_key"} },
+		"no platform":                   func(n, _ map[string]any) { n["command"] = map[string]any{} },
+		"windows":                       func(n, _ map[string]any) { n["command"] = map[string]any{"windows-amd64": "node/x.exe"} },
+		"outside the package":           func(n, _ map[string]any) { n["command"] = map[string]any{"darwin-arm64": "../x"} },
+		"the hub's binary":              func(n, _ map[string]any) { n["command"] = map[string]any{"darwin-arm64": "personad"} },
+		"rpc value":                     func(n, _ map[string]any) { n["rpc"] = "tcp" },
+		"no way to talk":                func(n, _ map[string]any) { n["rpc"] = "none" },
+		"keep_running":                  func(n, _ map[string]any) { n["keep_running"] = "forever" },
+		"hub's env":                     func(n, _ map[string]any) { n["env"] = map[string]any{"PERSONA_HUB_TOKEN": "x"} },
+		"unknown secret":                func(n, _ map[string]any) { n["secrets"] = []any{"password"} },
+		"secret twice":                  func(n, _ map[string]any) { n["secrets"] = []any{"api_key", "api_key"} },
 		"host": func(n, _ map[string]any) {
 			n["permissions"] = map[string]any{"network": []any{"https://x.example.com"}}
 		},

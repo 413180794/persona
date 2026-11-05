@@ -164,7 +164,8 @@ func codexArgs(bin, key string) []string {
 		"-c", fmt.Sprintf("mcp_servers.jarvis.tool_timeout_sec=%d", codexToolTimeout),
 		"-c", "mcp_servers.jarvis.startup_timeout_sec=30",
 		// Commands get the process's environment like Claude's Bash does: the default excludes (*KEY*, *TOKEN*…)
-		// would strip lark-connector_AGENT_TOKEN, and ol would fail.
+		// would strip the credentials of a gate that still puts them there (auth env, gateproxy.go), and its command
+		// would fail.
 		"-c", "shell_environment_policy.inherit=" + q("all"),
 		"-c", "shell_environment_policy.ignore_default_excludes=true",
 		// The assistant's memory is the one the app's 记忆 page shows, shared with Claude (codexMemoryPrompt); Codex's
@@ -202,7 +203,14 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "jarvis"}, codexArgs(n.bin, key)...)...)
 	cmd.Dir = root
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1")
-	cmd.Env = identity.Environment(cmd.Env, n.assistantLarkEnv(cwd)...)
+	gateEnv, releaseGates := n.assistantLarkEnv(cwd) // its addresses at the gate proxy go with the process
+	started := false
+	defer func() {
+		if !started {
+			releaseGates()
+		}
+	}()
+	cmd.Env = identity.Environment(cmd.Env, gateEnv...)
 	cmd.SysProcAttr = osproc.GroupAttr()
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -219,6 +227,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
+	started = true
 	p := &assistantProc{id: id, agent: "codex", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
 		born: time.Now(), lastActive: time.Now(), model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
 	c := &codexConn{n: n, p: p, key: key, memDir: memDir, pending: map[int64]chan codexReply{}, asks: map[string]context.CancelFunc{}, files: map[string][]string{}}
@@ -238,6 +247,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	go c.read(stdout)
 	go func() {
 		_ = cmd.Wait()
+		releaseGates()
 		c.mu.Lock()
 		c.closed = true
 		for _, cancel := range c.asks {

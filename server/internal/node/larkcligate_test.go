@@ -224,7 +224,8 @@ func TestAssistantLarkEnvLarkCLI(t *testing.T) {
 	_ = os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755)
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0),
 		larkCfg: proto.AssistantLark{CLI: &proto.LarkCLI{Bin: bin}}}
-	env := strings.Join(n.assistantLarkEnv(t.TempDir()), "\n")
+	vars, _ := n.assistantLarkEnv(t.TempDir())
+	env := strings.Join(vars, "\n")
 	if strings.Contains(env, "lark-connector_AGENT_TOKEN") {
 		t.Fatal("lark-cli only: no lark-connector token")
 	}

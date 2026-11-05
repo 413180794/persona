@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -492,11 +492,22 @@ func (n *Node) larkGate(ctx context.Context, in hookInput, ix proto.Interaction)
 // the app-server's command approvals (assistant_codex.go).
 func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix proto.Interaction) (string, string, error) {
 	cfg := n.assistantLark(ctx)
+	if slices.ContainsFunc(cfg.Gates, func(g proto.CommandGate) bool { return g.Auth != nil }) {
+		n.gates() // the proxy goes by this Node's config from now on (a resident node's next connection)
+	}
 	v := classifyLark(command, cfg.Gates, cwd, n.larkCLIRisk(cfg))
 	if v.deny != "" {
 		return "deny", v.deny, nil
 	}
 	if v.other {
+		// A write through a gate whose credentials are at the proxy goes there only as a call read off the command and
+		// let through here: in a command the gate cannot follow it would be refused after the phone said yes.
+		for _, g := range cfg.Gates {
+			if _, write := gateWrite([]proto.CommandGate{g}, command); write && g.Auth != nil {
+				return "deny", "写操作要单独一条 `" + g.Command + " METHOD PATH [BODY]` 发：不放进循环、脚本或 $(…) 里，输出可以接 jq / head / grep，" +
+					"或者用 -o 写到 /tmp。这样手机上能逐条确认，确认过的才发得出去。", nil
+			}
+		}
 		// A command the gate cannot follow (loops, $(…), scripts) that still calls a gated command with a write: the
 		// phone confirms it here, whole, whatever the permission mode (bypassPermissions would otherwise run it unasked).
 		g, write := gateWrite(cfg.Gates, command)
@@ -511,19 +522,22 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		}
 		return "", "", nil
 	}
-	var ask []larkCall
+	// through: the calls to confirm; once let through here, the gate proxy lets each go once (gateproxy.go).
+	var ask, through []larkCall
 	for _, c := range v.calls {
 		switch larkDecision(cfg, c) {
 		case "deny":
 			return "deny", "这个操作按配置不允许（" + c.Method + " " + c.Path + "）。", nil
 		case "allow":
 		default:
+			through = append(through, c)
 			if !n.larkAlways(session, larkPattern(c)) {
 				ask = append(ask, c)
 			}
 		}
 	}
 	if len(ask) == 0 {
+		n.grantGateCalls(cfg, through) // 本会话总是允许 covers them
 		if v.unsure {
 			return "", "", nil // reads, but $(…) could run anything: the usual flow asks about the whole command
 		}
@@ -537,7 +551,21 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 			ix.AlwaysKeys = append(ix.AlwaysKeys, k)
 		}
 	}
-	return n.confirmLark(ctx, session, ix, ask)
+	decision, reason, err := n.confirmLark(ctx, session, ix, ask)
+	if decision == "allow" {
+		n.grantGateCalls(cfg, through)
+	}
+	return decision, reason, err
+}
+
+// grantGateCalls lets calls larkCheck let through go once through the gate proxy: those of gates with Auth (lark-cli
+// and the others carry their own credentials).
+func (n *Node) grantGateCalls(cfg proto.AssistantLark, calls []larkCall) {
+	for _, c := range calls {
+		if !c.CLI && c.Gate >= 0 && c.Gate < len(cfg.Gates) && cfg.Gates[c.Gate].Auth != nil {
+			n.gates().grant(cfg.Gates[c.Gate].Command, c)
+		}
+	}
 }
 
 // gateWrite: a gated command (or its script) called with a method that is not a read, anywhere in a command.
@@ -644,16 +672,24 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 
 // assistantLarkEnv puts the skills in the assistant's directory (the user's from ~/.jarvis/skills, linked, the
 // built-in ones and the plugins', assistantskills) and gives its process what its gated commands need: each gate's
-// command on PATH (a wrapper running the skill's script, when the skill is there) and its credentials, only in this
-// process's environment. Without a config from the hub the commands say their API is not reachable.
-func (n *Node) assistantLarkEnv(cwd string) []string {
+// command on PATH (a wrapper running the skill's script, when the skill is there) and its env. A gate with Auth keeps
+// its credentials in the node: its BaseEnv is this process's own address at the gate proxy, and neither its Secret
+// nor what Auth puts on the requests is given (gateproxy.go, #1317); release takes the addresses back once the
+// process is gone. Without a config from the hub the commands say their API is not reachable.
+func (n *Node) assistantLarkEnv(cwd string) (env []string, release func()) {
+	var released []func()
+	release = func() {
+		for _, f := range released {
+			f()
+		}
+	}
 	skills := filepath.Join(cwd, ".claude", "skills")
 	if err := assistantskills.Sync(skills, assistantskills.UserDir(), n.signedInConnectors(), n.logger.Printf); err != nil {
 		n.logger.Printf("assistant: skills: %v", err)
 	}
 	bin := filepath.Join(n.dir, "assistant-bin")
 	_ = os.MkdirAll(bin, 0o755)
-	env := []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "JARVIS_ASSISTANT_BIN=" + bin}
+	env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "JARVIS_ASSISTANT_BIN=" + bin}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cfg := n.assistantLark(ctx)
@@ -669,15 +705,38 @@ func (n *Node) assistantLarkEnv(cwd string) []string {
 		wrapper := "#!/bin/sh\n" + gateWrapperMark + " (" + g.Title + ", node/larkgate.go)\nexec bash " + shellQuote(script) + " \"$@\"\n"
 		_ = os.WriteFile(filepath.Join(bin, g.Command), []byte(wrapper), 0o755)
 		wrote[g.Command] = true
+		held := map[string]bool{} // credentials the proxy adds: not for the assistant's process
+		base := ""
+		if g.Auth != nil && g.BaseEnv != "" {
+			for _, s := range g.Secret {
+				held[s] = true
+			}
+			for _, m := range gateAuthRef.FindAllStringSubmatch(g.Auth.Value, -1) {
+				held[m[1]] = true
+			}
+			b, done, err := n.gates().open(g.Command)
+			if err != nil {
+				// Its credentials stay out all the same: without the base too, the command fails plainly.
+				n.logger.Printf("assistant: %s: gate proxy: %v", g.Command, err)
+				held[g.BaseEnv] = true
+			} else {
+				base, released = b, append(released, done)
+			}
+		}
 		keys := make([]string, 0, len(g.Env))
 		for k := range g.Env {
 			keys = append(keys, k)
 		}
 		slices.Sort(keys)
 		for _, k := range keys {
-			if envName.MatchString(k) && !strings.HasPrefix(k, "PERSONA_") && !strings.HasPrefix(k, "JARVIS_") && k != "PATH" {
-				env = append(env, k+"="+g.Env[k])
+			if held[k] || !envName.MatchString(k) || strings.HasPrefix(k, "PERSONA_") || strings.HasPrefix(k, "JARVIS_") || k == "PATH" {
+				continue
 			}
+			v := g.Env[k]
+			if k == g.BaseEnv && base != "" {
+				v = base
+			}
+			env = append(env, k+"="+v)
 		}
 	}
 	// A gate gone (the plugin switched off, the skill removed): its command goes too.
@@ -693,7 +752,7 @@ func (n *Node) assistantLarkEnv(cwd string) []string {
 		}
 	}
 	n.writeLarkCLIWrapper(bin, cfg.CLI) // lark-cli, when hub.json has lark.cli (larkcligate.go)
-	return env
+	return env, release
 }
 
 const gateWrapperMark = "# a skill's gated command"

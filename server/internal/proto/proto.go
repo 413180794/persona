@@ -1265,8 +1265,9 @@ type AssistantLark struct {
 
 // CommandGate is one skill command that calls an HTTP API as the user (`<command> METHOD PATH [BODY] [curl flags]`),
 // as the assistant's machine gates it (node/larkgate.go): the command on the assistant's PATH runs the skill's
-// script with Env (the credentials, only in the assistant's process); every Bash call of it is read, and its calls
-// go by Rules (the first match; none matching is confirmed on the phone).
+// script with Env; every Bash call of it is read, and its calls go by Rules (the first match; none matching is
+// confirmed on the phone). With Auth the credentials stay in the node: BaseEnv points at its proxy, which adds them
+// and holds every request to Rules (node/gateproxy.go, #1317).
 type CommandGate struct {
 	Plugin  string `json:"plugin,omitempty"`
 	Command string `json:"command"` // the name on the assistant's PATH
@@ -1287,6 +1288,16 @@ type CommandGate struct {
 	Actions []GateAction `json:"actions,omitempty"`
 	// Tool is the command as a tool for an assistant on a runtime without Bash ({args: [words after the command]}).
 	Tool *GateTool `json:"tool,omitempty"`
+	// Auth is how the node's proxy puts the credentials on a request; nil: Env goes into the assistant's process
+	// whole, Secret included (a gate whose script needs its secret itself, or a hub from before #1317).
+	Auth *GateAuth `json:"auth,omitempty"`
+}
+
+// GateAuth is a command gate's credentials as its API takes them: the header Header set to Value, each ${NAME} in it
+// replaced by that one of the gate's Env.
+type GateAuth struct {
+	Header string `json:"header"`
+	Value  string `json:"value"`
 }
 
 // GateAction names a kind of call for the phone card.

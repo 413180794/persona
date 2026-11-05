@@ -24,13 +24,17 @@ func olCfg(user ...proto.LarkRule) proto.AssistantLark {
 func TestAssistantLarkAccountEnvironment(t *testing.T) {
 	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0), larkCfg: proto.AssistantLark{
-		Gates: []proto.CommandGate{func() proto.CommandGate { g := exampleGate("http://127.0.0.1:18000"); g.Env["EXAMPLE_ACCOUNT"] = "2"; return g }()},
+		Gates: []proto.CommandGate{func() proto.CommandGate {
+			g := exampleGate("http://127.0.0.1:18000")
+			g.Env["EXAMPLE_ACCOUNT"] = "2"
+			return g
+		}()},
 	}}
 	cwd := t.TempDir()
 	skill := filepath.Join(cwd, ".claude", "skills", "example", "scripts")
 	_ = os.MkdirAll(skill, 0o755)
 	_ = os.WriteFile(filepath.Join(skill, "ex.sh"), []byte("#!/bin/bash\n"), 0o755)
-	env := n.assistantLarkEnv(cwd)
+	env, _ := n.assistantLarkEnv(cwd)
 	if !strings.Contains(strings.Join(env, "\n"), "EXAMPLE_ACCOUNT=2") {
 		t.Fatal("assistant did not inherit the configured account")
 	}
@@ -188,7 +192,7 @@ func TestGatedWriteInComplexCommands(t *testing.T) {
 	for cmd, want := range map[string]bool{
 		`for i in 1 2; do ex POST /messages/$i/recall; done`:               true,
 		`X=$(date); ex post /conversations/1/messages "{\"text\":\"$X\"}"`: true,
-		`bash ~/.claude/skills/example/scripts/ex.sh DELETE /x`:          true,
+		`bash ~/.claude/skills/example/scripts/ex.sh DELETE /x`:            true,
 		`M=POST; ex "$M" /x`:                         true,
 		`for i in 1 2; do ex GET /messages/$i; done`: false,
 		`echo hello`:                                 false,

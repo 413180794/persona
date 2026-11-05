@@ -175,6 +175,11 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 > node 里不再有 lark-connector 的默认规则；装了经 lark-connector 接飞书的插件时 `ol` 的闸门和凭据来自插件，没装时 hub 自己的 lark-connector 合成同样的闸门（3c 删掉）。
 > 下面说的行为（读放行、别人看得到的写在手机上确认、拒绝 token / 直接 curl）不变。3c（#1520）之后 hub 不再合成这个闸门，lark-connector 技能、
 > 闸门规则和凭据只来自插件；仓库里的 `skills/lark-connector` 副本和同步脚本已删。
+>
+> **2026-11-05 起（#1317）**：token 不再进助手的进程。`lark-connector_AGENT_BASE` 是 node 本机代理上这个进程自己的地址，没有 `lark-connector_AGENT_TOKEN`；
+> ol.sh 没有 token 就不带 `Authorization`，代理替它加上，并按闸门的规则检查每个实际请求（`docs/extensions.md`「助手」的「凭据」）。
+> 所以下面「token」一条的「只放进这个进程的环境变量」不再成立；`env`、`printenv` 打出来的只是一个只能本机用、写操作照样要确认的地址。
+> 闸门读不懂的命令里有 `ol` 的写时，从「整条命令弹卡片」改成直接拒绝，提示单独一条发（下面「别的命令」一条）。
 
 用户要求：「lark-connector 自带 skill……现在只走我们的 MCP lark_* 工具，自由度低」「skill 弄一个副本就行，不搞整个 lark-connector 仓库丢进去」。
 
@@ -196,7 +201,8 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
     会话名（hub 查）、method、路径和要发的 body（`@file` 会读出来）。拒绝时把用户的话作为原因还给助手；「本会话总是允许」记住这类路由（id 抹掉）。
   - 碰 `lark-connector_AGENT_TOKEN`、`/proc/*/environ`、直接 curl lark-connector、给 ol 加 `-v` / `--trace` / `-w` 这类会把请求头打出来的参数：直接拒绝。
   - 别的命令（接 python、写到 /tmp 以外、`$(…)`）：闸门不管，按权限模式走普通的 Bash 批准；但只要里面有 `ol` 的写（`ol POST …`），
-    不管权限模式（包括 bypass）都弹「飞书」卡片，整条命令给他看。
+    不管权限模式（包括 bypass）都弹「飞书」卡片，整条命令给他看。#1317 之后（凭据在代理）改成直接拒绝、提示单独一条 `ol` 发：
+    代理只放行闸门读出来、确认过的那一次调用，整条命令确认了也发不出去。
   - 规则是配置：写在 hub.json `connector_gate`，和其他连接器的写操作一个写法，`connector` 写 `lark`，`action` 写「方法 路径」（path 里 `*` 一段、`**` 剩下的全部，
     `"*"` 是任何调用），`match` 按 body 的顶层字段，`decision` 是 `allow|confirm|deny`；排在内置规则前面，第一条匹配的说了算。
     比如以后想让发消息不再确认：`{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`。
