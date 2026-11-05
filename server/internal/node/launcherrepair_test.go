@@ -7,6 +7,10 @@ import (
 
 // The node's launcher repair runs only its fixed update, and says so for a launcher or an action it does not cover.
 func TestLauncherRepair(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("ZDOTDIR", home)
 	n := &Node{dir: t.TempDir()}
 	old := claudeUpdateScript
 	t.Cleanup(func() { claudeUpdateScript = old })
