@@ -398,6 +398,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			return
 		}
 		defer end()
+		h.setCallerHeaders(r) // who is calling, as the hub found it (extension_caller.go)
 		hp.serveExtensionHTTP(w, r)
 	})
 }

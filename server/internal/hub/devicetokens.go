@@ -441,7 +441,8 @@ func (h *Hub) revokeWebToken(ctx context.Context, id string) (bool, error) {
 	return h.store.RevokeDeviceToken(ctx, id)
 }
 
-// revoked forgets a device's cached lookups, closes its live connections and stops its pushes.
+// revoked forgets a device's cached lookups, closes its live connections (what it relays to the manager too) and stops
+// its pushes.
 func (h *Hub) revoked(id string) {
 	t := &h.devtok
 	t.mu.Lock()
@@ -482,6 +483,8 @@ func (h *Hub) revoked(id string) {
 		c.conn.CloseNow()
 	}
 	links := h.closeLinks(id) + h.closePeerLinksOf(id)
+	// What it has open through the manager: an extension's WebSocket (a voice call) among others (extension_calls.go).
+	links += h.dropRelayed(id)
 	if hub := h.peerForCredential(id); hub != "" { // a peer's credential: that pairing ends
 		go func() {
 			if _, err := h.unpairPeer(context.Background(), hub, true); err != nil {

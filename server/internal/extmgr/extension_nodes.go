@@ -484,6 +484,7 @@ func (h *Manager) serveNodeExtensionHTTP(w http.ResponseWriter, r *http.Request)
 		},
 	}
 	w.Header().Del("Cache-Control")
+	h.setCallerHeaders(r) // who is calling, as for the extension on the hub's machine (extension_caller.go)
 	proxy.ServeHTTP(w, r)
 }
 

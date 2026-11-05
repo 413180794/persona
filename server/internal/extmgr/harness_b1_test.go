@@ -63,6 +63,9 @@ func b1DevServer(t *testing.T) (*httptest.Server, int) {
 		}
 		fmt.Fprint(w, "hello "+c.Value)
 	})
+	mux.HandleFunc("/caller", func(w http.ResponseWriter, r *http.Request) { // who is calling (extension_caller.go)
+		_ = json.NewEncoder(w).Encode(personaHeaders(r))
+	})
 	mux.HandleFunc("/hmr", func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 		if err != nil {

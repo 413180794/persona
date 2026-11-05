@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -179,12 +180,34 @@ func (h *Manager) Accept(ctx context.Context, id string) error {
 	conn.SetReadLimit(64 << 20)
 	go func() {
 		cctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		nc := websocket.NetConn(cctx, conn, websocket.MessageBinary)
+		// The server reads from a pipe spliced to the relay, not from the relay itself: when a handler takes the
+		// connection over (an extension's WebSocket, which the proxy switches to) the server stops its background read
+		// with a read deadline in the past, and on a websocket.NetConn that cancels the read for good and closes the
+		// relay, so every WebSocket ended right after its 101.
+		mine, theirs := net.Pipe()
+		go func() {
+			splice(theirs, nc)
+			// Only now, not when Serve returns: the server's last write to the pipe returns once the splice has read
+			// it, before the splice has written it to the relay, and ending nc's context mid-write closes the relay
+			// there, losing the answer's tail.
+			cancel()
+		}()
 		srv := &http.Server{Handler: h, ReadHeaderTimeout: 30 * time.Second}
-		_ = srv.Serve(&oneConn{c: nc, done: make(chan struct{})})
+		_ = srv.Serve(&oneConn{c: mine, done: make(chan struct{})})
 	}()
 	return nil
+}
+
+// splice copies a to b and b to a until either ends, then closes both.
+func splice(a, b net.Conn) {
+	done := make(chan struct{}, 2)
+	go func() { _, _ = io.Copy(a, b); done <- struct{}{} }()
+	go func() { _, _ = io.Copy(b, a); done <- struct{}{} }()
+	<-done
+	_ = a.Close()
+	_ = b.Close()
+	<-done
 }
 
 // oneConn is a listener of one connection: Accept gives it, then waits until it is closed.

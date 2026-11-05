@@ -762,7 +762,26 @@ hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](ad
 | `POST /api/v1/extensions/{id}/-/rollback` | 同上 | |
 | `DELETE /api/v1/extensions/{id}/-/` `?keep_data=1` | 同上 | |
 | `/api/v1/admin/extensions…` | 管理界面的会话 | 同样的预览 / 安装 / 升级 / 回滚 / 卸载 / 开关，外加浏览器上传；见 [admin.md](admin.md)「接口」 |
-| 任意 `/api/v1/extensions/{id}/{path…}` | 完整权限的设备 | 转发给扩展的 HTTP（WebSocket 也是），去掉 App 的 `Authorization` 和 `token`；按需起的扩展先起好 |
+| 任意 `/api/v1/extensions/{id}/{path…}` | 完整权限的设备 | 转发给扩展的 HTTP（WebSocket 也是），去掉 App 的 `Authorization` 和 `token`，带上调用方是谁（见下）；按需起的扩展先起好 |
+
+### 转发时的调用方（#3498）
+
+请求到扩展自己的 HTTP（上表最后一行，WebSocket 也是；电脑上程序的 `…/-/machines/{机器 id}/…` 同样）时，管理者先删掉所有 `X-Persona-*`
+（客户端带的 hub 已经删了；hub 转给管理者的那些，比如范围、地址、是不是主人，也不给扩展），再带上：
+
+| 头 | 值 |
+| --- | --- |
+| `X-Persona-Device` | 调用方凭据的 id：设备 id；配对 token 是 `pair_<哈希>`；别的扩展是 `extension:<扩展 id>`；主 token 为空 |
+| `X-Persona-Role` | `full`（完整权限的设备，含配对 token 和主 token）、`extension`（别的扩展，要有 `extensions.call:<id>`）。只读设备（`answer`）转发前就 403，到不了扩展 |
+| `X-Persona-Lang` | hub 回这个请求用的语言（`zh-Hans` / `en` / `ja`）：请求的 `Accept-Language`，没有就是用户的语言 |
+
+- 扩展按这几个头决定给调用方开放什么（语音扩展按 `X-Persona-Role` 收权）。旧版本转来的请求没有这几个头，扩展自己决定怎么对待。
+- 主 token（hub 自己的命令行，或还在用主 token 的客户端）和以前一样是 `full`，`X-Persona-Device` 为空；要区分它就看这个头是不是空的。
+- hub 转给管理者的每个请求（扩展的 WebSocket、长连接的流也在里面）按调用方的凭据登记：设备被吊销（`DELETE /api/v1/auth/tokens/{id}`、管理界面、互联的 `creds.revoked`）时
+  hub 当场断开这条转发，管理者那头跟着断开扩展那头，不等手机自己挂断。配对 token 开的转发在配对 token 失效时断开（过期，或用它配好的设备的宽限期到了；
+  吊销那台设备会让它立刻失效，最多 15 秒后断开），和它开的 `/api/v1/ws` 一样。主 token 和管理界面的会话不登记（不会被吊销）。
+- `api` 贡献（「App 接口」）和 `messaging` 只带 `X-Persona-Device`、`X-Persona-Role`，取值同上。
+- 管理者怎么在转发流上跑 HTTP（管道、什么时候结束转发流的 context）见 [lessons/server.md](lessons/server.md)「别让 `http.Server` 直接读 `websocket.NetConn`」。
 
 ## App 接口
 
@@ -1831,7 +1850,8 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
 - **租约**：hub 每 10 分钟续一次（`plugin.node.renew`，30 分钟）；超过 30 分钟没续，node 停掉 `keep_running: "lease"` 的程序（状态 `lease_expired`），
   hub 回来再起；`always` 的不停。node 进程退出时程序都跟着退（`always` 也是，重启后等 hub 连上再起：密钥在 hub）。
 - **HTTP**：`node.http` 的程序在 `PERSONA_EXTENSION_SOCKET` 上开 HTTP，App 经 hub 访问 `/api/v1/extensions/{id}/-/machines/{机器 id}/{path…}`（WebSocket 也行）：
-  hub 每个请求开一条流（`plugin.node.dial`，同端口转发的 `internal/streams`）到那台电脑上程序的 socket，转发给程序的 `/{path…}`，去掉 `Authorization` 和 `token`；
+  hub 每个请求开一条流（`plugin.node.dial`，同端口转发的 `internal/streams`）到那台电脑上程序的 socket，转发给程序的 `/{path…}`，去掉 `Authorization` 和 `token`，
+  带上调用方是谁（「hub 的接口」「转发时的调用方」）；
   只给完整权限的设备，只到扩展开着的机器上；没这个扩展或这台没开 404，机器离线 409，程序没在跑 / 不应答 502。
 - **调用和事件**：hub 上的程序调 `nodes.call {machine, method, params}`，转给那台电脑上程序的扩展协议方法（只能调开着的机器上的）；
   电脑上的程序发的事件，hub 以 `node.event {machine_id, event, params}` 转给 hub 上的程序。电脑上的程序调 hub 的方法一律 `unknown_method`。

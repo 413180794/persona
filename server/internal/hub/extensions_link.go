@@ -41,6 +41,8 @@ type extLink struct {
 	report atomic.Pointer[extwire.Report]
 	keptMu sync.Mutex
 	kept   map[string]keptAnswer // GET path?query → its last answer
+	// calls are the requests being relayed, by caller, so a revoked device's end (extension_calls.go).
+	calls relayedCalls
 }
 
 type keptAnswer struct {
@@ -303,6 +305,9 @@ func (h *Hub) relayToManager(w http.ResponseWriter, r *http.Request, admin bool)
 	if admin {
 		set(extwire.HeaderAdmin, "1")
 	}
+	// Kept under its caller's credential: revoking a device ends its WebSockets and streams (extension_calls.go).
+	r, done := h.trackRelayed(r)
+	defer done()
 	var rec *keptRecorder
 	if keep {
 		rec = &keptRecorder{ResponseWriter: w, status: http.StatusOK}

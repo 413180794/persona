@@ -17,6 +17,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/streams"
@@ -292,6 +293,27 @@ func TestAppsRequestsReachTheProgramOnAComputer(t *testing.T) {
 	}
 	if len(*asked) == 0 || (*asked)[0] != "example-helper" {
 		t.Fatalf("the node was asked for %v", *asked)
+	}
+	// The program is told who is calling, as an extension on the hub's machine is (extension_caller.go): the credential,
+	// its role and language, nothing else the hub passed on (name, address, owner) or the client sent.
+	phone := deviceToken("dev_phone", roleFull)
+	for _, c := range []struct{ name, token, device string }{{"the master token", "test-token", ""}, {"a phone", phone, "dev_phone"}} {
+		req, _ := http.NewRequest("GET", base+"box/caller", nil)
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		req.Header.Set("Accept-Language", "ja")
+		req.Header.Set("X-Persona-Device", "someone-else")
+		req.Header.Set("X-Persona-Forged", "1")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]string{}
+		_ = json.NewDecoder(res.Body).Decode(&got)
+		res.Body.Close()
+		if res.StatusCode != 200 || len(got) != 3 || got[extwire.HeaderDevice] != c.device || got[extwire.HeaderRole] != roleFull ||
+			got[extwire.HeaderLang] != "ja" {
+			t.Fatalf("%s: %d %v", c.name, res.StatusCode, got)
+		}
 	}
 
 	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)

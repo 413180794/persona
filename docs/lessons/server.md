@@ -574,3 +574,16 @@ hub 到一台电脑只有约 30 KB/s 时，那台的链路反复以「no pong wi
   一下就进了内核的发送缓冲，锁马上放开，ping 只是在 TCP 里排队，超时调长就够；一条大到发送缓冲一次装不下的消息还在写时，ping 或 pong 过 5 秒照样失败，链路或流照样断。
   要根治得把大消息拆成小帧写（`Writer` 分段），或者只在连接闲着时 ping。
 - hub 转发 Persona Link 的消息时一条最多写 1 分钟（`spliceWS`），比约 17 KB/s 还慢的链路上 1 MiB 一块照样超时；要么分块更小，要么按链路速度定这个时限。
+
+## 别让 `http.Server` 直接读 `websocket.NetConn`（2026-11-06，#3498）
+
+#3630 把扩展挪到管理者后，hub 经转发流把请求交给管理者，管理者在流上跑 `http.Server`，流本身是 `websocket.NetConn`。普通请求和 SSE 都好，扩展的
+WebSocket 却总是刚回 101 就断（语音页就是这样连扩展的）：处理器接管连接（`ReverseProxy` 切协议、`websocket.Accept`）时，`http.Server` 用一个过去的读超时
+叫停自己的后台读；coder/websocket 的 `NetConn` 遇到正在读时到期，是永久取消读的 context，整条连接跟着关，回的错也不是 `Timeout()`，服务端还会取消请求的 ctx。
+`http.Server` 要的是正常的 `net.Conn` 超时：给它 `net.Pipe()` 的一端，另一端和 `NetConn` 双向拷贝（`extmgr/serve.go` 的 `splice`），回归
+`TestRelayedExtensionWebSocket`。hub 侧做客户端（`http.Transport`）不设读超时，没有这个问题；以后在 `NetConn` 上跑 `http.Server` 都要这样接。
+
+接上管道后又踩了一个：`NetConn` 的 context 原来在 `Serve` 返回时取消（`defer cancel()`）。`net.Pipe` 是同步的，服务端最后一次写只等拷贝那头读走就返回，
+这时拷贝还在往 `NetConn` 写；服务端随即关连接、`Serve` 返回、context 取消，正在写的那次被打断，coder/websocket 直接关掉连接，hub 收到的回答缺了尾巴
+（小回答整个正文都没了，大回答丢最后一帧，扩展自己的 HTTP 之外，转给管理者的普通请求也一样）。`NetConn` 的 context 只能在拷贝结束后取消；
+回归 `TestRelayedAnswersArriveWhole`（并发的小回答、慢读的大回答、SSE，逐字节比对）。只测 WebSocket、只直接调 mux，或用自己另写一份 splice 的假管理者都测不出来。
