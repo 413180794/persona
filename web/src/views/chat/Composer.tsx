@@ -2,6 +2,8 @@
 // (paste, drop, pick; click one to mark it up), files uploaded to the session's machine, send — and stop while the
 // agent works and nothing is typed. Quotes, edits and edited images from the chat arrive as draft events (drafts.ts).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useQuickPrompts } from "../../lib/extension-declared";
+import { promptCommands, type ComposerCommand as Command } from "../../lib/extension-prompts";
 import { LOOP_TEXT, loopHint } from "../../lib/loop-command";
 import { ApiError, errorText } from "../../lib/api";
 import { uuid } from "../../lib/format";
@@ -29,13 +31,6 @@ export interface Attachment {
 export interface Outgoing {
   text: string;
   images: { mime: string; data: string }[];
-}
-
-interface Command {
-  word: string;
-  desc: string;
-  text: string;
-  confirm?: string;
 }
 
 export const AGENT_COMMANDS: Command[] = [
@@ -174,10 +169,12 @@ export function Composer({
     el.style.height = `${Math.max(h, 24)}px`;
   }, [draft]);
 
+  const quickPrompts = useQuickPrompts();
+  const allCommands = useMemo(() => [...commands, ...promptCommands(quickPrompts)], [commands, quickPrompts]);
   const query = dismissed ? null : parseSlash(draft);
   // A /loop draft gets a line under the box saying what it will do (only where the menu offers /loop: Claude agents).
   const loop = commands.some((c) => c.text === LOOP_TEXT) ? loopHint(draft) : null;
-  const rows = useMemo(() => (query === null ? [] : commands.filter((c) => c.word.slice(1).toLowerCase().startsWith(query) || c.desc.includes(query))), [query, commands]);
+  const rows = useMemo(() => (query === null ? [] : allCommands.filter((c) => c.word.slice(1).toLowerCase().startsWith(query) || c.desc.includes(query))), [query, allCommands]);
   useEffect(() => setActive(0), [query]);
   useLayoutEffect(() => {
     const el = rowRefs.current[active];
@@ -329,7 +326,7 @@ export function Composer({
             <span aria-hidden className="pointer-events-none absolute inset-x-0 rounded-[6px] bg-hover" style={{ top: rowBox?.top ?? 0, height: rowBox?.height ?? 0, opacity: rowBox ? 1 : 0, transition: `top 200ms ${EASE}, height 200ms ${EASE}` }} />
             {rows.map((c, i) => (
               <button
-                key={c.word}
+                key={c.key ?? c.word}
                 ref={(el) => {
                   rowRefs.current[i] = el;
                 }}
@@ -339,7 +336,7 @@ export function Composer({
                 onClick={() => pick(c)}
                 className="relative z-10 flex h-9 w-full items-center gap-2.5 rounded-[6px] px-2 text-left"
               >
-                <span className="shrink-0 font-mono text-[12.5px] font-medium text-ink">{c.word}</span>
+                <span className={cx("shrink-0 font-mono text-[12.5px] font-medium text-ink", c.key && "max-w-[45%] truncate")}>{c.word}</span>
                 <span className="min-w-0 flex-1 truncate text-[12px] text-ink-3">{c.desc}</span>
                 {c.text.startsWith("/") ? null : <span className="max-w-[45%] shrink truncate text-[11px] text-ink-3">「{c.text}」</span>}
               </button>
@@ -482,7 +479,7 @@ export function Composer({
               <Icon name="at" size={15} />
             </button>
           )}
-          {commands.length > 0 && (
+          {allCommands.length > 0 && (
           <button
             type="button"
             aria-label="命令"

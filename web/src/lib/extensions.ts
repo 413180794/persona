@@ -6,6 +6,7 @@ import type { Machine } from "./types";
 import { placeOf, type UIPlace } from "./extension-ui";
 import { extRoot, listOf } from "./extension-api";
 import { refreshExtensionPlaces } from "./extension-slots";
+import { EXTENSIONS_CHANGED } from "./extension-prompts";
 import type { Contribution, DependencyState, PackMember } from "./extension-model";
 
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
@@ -157,7 +158,11 @@ export const listExtensionsInfo = () =>
 export const detailOf = (d: HubExtensionDetail): HubExtensionDetail => (d.ui ? { ...d, ui: d.ui.map(placeOf) } : d);
 export const extensionDetail = (id: string) => api<HubExtensionDetail>(`${base(id)}/`).then(detailOf);
 /** After a change that can start, stop or reconfigure an extension: its entries, cards and sections are asked for again. */
-export const changed = <T>(r: T): T => (refreshExtensionPlaces(), r);
+export const changed = <T>(r: T): T => {
+  refreshExtensionPlaces();
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(EXTENSIONS_CHANGED));
+  return r;
+};
 export const setExtensionEnabled = (id: string, enabled: boolean, cascade = false) =>
   api<HubExtensionDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled, ...(cascade ? { cascade } : {}) } }).then(detailOf).then(changed);
 export const setContribution = (id: string, point: string, cid: string, enabled: boolean) =>
