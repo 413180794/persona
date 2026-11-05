@@ -1,6 +1,7 @@
 import { t } from "../i18n";
 import type { Supervision } from "./supervision";
 import { api, ApiError, enc } from "./api";
+import { contextBody } from "./context-body";
 import { parseAPIError, retryable } from "./api-errors";
 import { stateOf } from "./format";
 import { splitAgentSessions, type AgentGroup, type AgentMutes } from "./agent-groups";
@@ -381,7 +382,7 @@ export function buildTodoAgentGroups(
 export function formatTodoContext(title: string, notes?: string): string {
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // a closing tag in the notes would end the block early (either name, #3182)
-  const body = (notes ?? "").replace(/<\/(?:persona|jarvis)-context\s*>/gi, "").trim();
+  const body = contextBody(notes ?? "").trim();
   return `<jarvis-context kind="context" title="${escape(t("lib-todos.context_title", { title }))}" url="">${body}</jarvis-context>`;
 }
 

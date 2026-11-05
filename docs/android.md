@@ -1,9 +1,9 @@
 # Android App
 
 `android/`：Kotlin + Jetpack Compose 的 Android 客户端，连同一个 hub，接口和 iOS 一样（`docs/protocol.md`），服务端不用改。
-minSdk 30（Android 11），compileSdk 37，targetSdk 36。界面中文。
+minSdk 30（Android 11），compileSdk 37，targetSdk 37。界面有简体中文、English、日本語三种语言，默认跟随系统，也能在设置里选，见「国际化」。
 
-一句话描述：在 Android 手机上看各台电脑终端引擎（herdr、Herdr App 或 Orca，每台电脑选一个，`docs/engines.md`）里的 Agent、发消息、回答提问 / 审批计划 / 授权、按终端对话框的选项，
+一句话描述：在 Android 手机上看各台电脑的引擎（herdr、Herdr App、Orca 或 Paseo，每台电脑选一个，`docs/engines.md`）里的 Agent、发消息、回答提问 / 审批计划 / 授权、按终端对话框的选项，
 不需要任何推送账号。
 
 ## 当前实现
@@ -18,9 +18,9 @@ minSdk 30（Android 11），compileSdk 37，targetSdk 36。界面中文。
 | Persona | 首页、主对话、历史抽屉和共用对话页；主对话首句可先进入持久 outbox，恢复连接后解析目标；助手身份确定后保留在 Persona tab。抽屉的「最近」只列用户自己开的对话，hub 自己开的收在「自动对话」一行（默认收起、按本机记住；收起时显示等你的个数和在跑的点，展开后按来源的 chip 筛，搜索照旧搜全部；#3264，`docs/protocol.md`「助手对话的来源」） |
 | Agents | 页面最上面是搜索框，下面一排电脑芯片（全部机器 + 每台电脑，带在线状态和计数，可横滑），再下面是快速筛选；没选过分组时默认「按仓库」（#2252；iOS #2161 也以它为默认，网页 #1671 提供这种分组但默认按机器）：电脑 → 仓库 → 工作树 → 会话，仓库只从会话的 cwd 推断（`core:domain` 的 `repoOf` / `agentRepos`，规则同网页 `web/src/lib/agent-repos.ts`：`/.worktrees/`、`/.claude/worktrees/`、`/.herdr/worktrees/` 下的目录归到标记前的仓库，`~/.worktrees/<仓库>/<工作树>` 归到 `<仓库>`，其余目录就是自己仓库的主工作树；没有 cwd 的归到「其他」），仓库按名字排（自然顺序，repo2 在 repo10 前面，同 iOS），工作树主工作树在前、其余按名字；和网页不同，离线电脑上的会话也留在树里，电脑栏头标「离线」，同按电脑和空间；只有主工作树的仓库直接列会话，不画工作树一层；没有动静的仓库排在有动静的后面、默认收起、标出会话数，展开后直接列出全部会话；没有动静的工作树也默认收起，但位置不变；仓库的会话都在同一个 herdr 空间时，仓库栏头带这个空间的置顶 / 屏蔽标记和 `⋯` 菜单；电脑栏头写「N 个仓库，M 个会话」。列表设置里还能选「按电脑和空间」（电脑 → 空间（herdr workspace）→ 会话三层树）、按状态、按待办，选过的一直保留（存过的旧值都按「按电脑和空间」）。树靠缩进、字号字重和细线分层，不给每层垫底板（`docs/android-design.md` 2.4 节），每一层都能折叠、栏头带计数；按电脑和空间时，全是已看会话的空闲空间留在所属电脑下面、排在有动静的空间后面，默认收起、样式弱一点，收起时标出会话数；置顶 / 屏蔽、请求卡和作答；会话重命名（标签名走 herdr，会话名走 Claude 的 /rename，入口在会话行菜单、空间页和对话页菜单）和空间重命名（空间栏头菜单）发出后列表、空间页、对话页标题立即更新，失败回滚；置顶、屏蔽、重命名、关闭由 App 的 `AgentsWiringModule` 接到 hub |
 | 对话 | 连续性补洞、历史分页、实时 delta、折叠工作过程、Markdown、diff、待办、图片缓存、阅读锚点、待发气泡及人工核对；输入框见「输入框」，会话控制、来源和能力见「会话控制、会话来源和能力」 |
-| 收件箱 | 飞书和邮件事项统一列表、筛选持久化、AI 操作、回复日志；飞书有窗口缓存、事件刷新、可见已读和基础消息渲染；邮件正文页已有，但 MailTransport 尚未接到 App |
-| 设置 | 配对、准备清单、后台引导、关于和更新；连接诊断里可以手动添加 / 编辑 / 删除 hub 地址、停用候选、拖动排序（列表顺序就是尝试顺序）、逐条测试（见「连接地址」）；设备管理与通知偏好页已有，但 DeviceSettings 尚未注入 |
-| 扩展模块 | 终端、文件、机器监控、知识库、手机工具和体验模式已接入 App，入口见「外壳」一节；体验模式没有示例数据的页面显示说明，不连真实 hub |
+| 收件箱 | 飞书和邮件事项统一列表、筛选持久化、AI 操作、回复日志；飞书有窗口缓存、事件刷新、可见已读和基础消息渲染；邮件正文页和邮件的读写由 App 的 `InboxModule` 接到 hub（`HttpMailTransport`） |
+| 设置 | 配对、准备清单、后台引导、关于和更新；连接诊断里可以手动添加 / 编辑 / 删除 hub 地址、停用候选、拖动排序（列表顺序就是尝试顺序）、逐条测试（见「连接地址」）；设备管理与通知偏好页由 App 的 `DeviceSettingsModule` 接到 hub |
+| 扩展模块 | 终端、文件、机器监控、知识库、手机工具、语音对话（见「语音对话」）、跨 App 悬浮胶囊（见「跨 App 悬浮胶囊」）和体验模式已接入 App，入口见「外壳」一节；体验模式没有示例数据的页面显示说明，不连真实 hub |
 | 界面 | 三套界面风格：玻璃（默认）、晨报、看板，在设置 › 界面风格切换，立刻生效并存在本机；同一页还有主题色（跟随界面风格（默认）/ 跟随形象 / 五个内置配色）和深浅色（跟随系统（默认）/ 浅色 / 深色），见「外观：主题色和深浅色」。设计规范、组件和写页面的规矩见 [Android 界面风格与设计系统](android-design.md) |
 
 ## Agents 列表和机器页的对齐（#3038）
@@ -237,7 +237,7 @@ plan 第 4 节「会话键要能区分组」的 Android 做法（主持人 2026-
 - 脚本会检查启动 JVM；`JAVA_HOME` 指向 JDK 8 等旧版本时，回退到 Android Studio 的 JBR。`gradle/gradle-daemon-jvm.properties` 另将 daemon 固定在 JDK 21，IDE 也应选同一版本。
 - `test` 用 Gradle 的任务选择器执行各模块单测；`lint` 只跑 Android lint，尚未引入 ktlint / detekt。构建缓存和配置缓存已开启。
 - `app/lint-baseline.xml` 只记录两处原有的通知权限误报：调用前已有 `allowed()` 检查，调用本身在 `runCatching` 内。保留原通知代码，其余错误仍阻断构建，已有 warning 继续显示。
-- target 暂停在 36，本轮不申请 Android 17 的本地网络权限；配对与连接流程补齐权限处理后再升到 37。
+- target 是 37：manifest 声明 Android 17 的本地网络权限 `ACCESS_LOCAL_NETWORK`，配对和连接前检查、没给时说明并引导去授权（`app/.../platform/LocalNetworkPermission.kt`、`feature/settings/.../PairingLocalNetwork.kt`）。
 - Application ID 走配置：`~/.config/persona/config.json` 的 `android.application_id`，没写就用 `app.bundle_id`，再没有就是 `com.example.jarvis`。
 - 同一台手机上并排装两个版本（比如主线和新版对比）：直接调 Gradle，给不同的 `-PjarvisApplicationId` 和应用名 `-PjarvisAppLabel`（默认「Persona」），例如 `./gradlew -PjarvisApplicationId=<包名>.next -PjarvisAppLabel="Persona 新版" :app:assembleDebug`。两个版本都注册 `persona://` 和 `jarvis://` 的 `pair` / `open` 深链，扫配对码时系统会问用哪个 App 打开。配对的深链、扫码、「粘贴链接」和手动输入框都同时接受 `persona://pair` 和 `jarvis://pair`（判断统一走 `Pairing.isLink`），hub 生成的链接仍是 `jarvis://`（见 [rename.md](rename.md)）。85 MB 左右的 debug 包经 USB 流式安装时，个别手机会中途断开 adb，重装一次即可。
 - 明文 HTTP 仅用于本地或受信任网络；公网使用 HTTPS / WSS 和配对指纹钉扎（没有指纹的配对按系统 CA 校验，hub 可以在反向代理的子路径下），优先 IPv6。实际目标由 `HubHttpClient` 校验，见 [network.md](network.md)。
@@ -305,7 +305,7 @@ python3 scripts/app/test_android_token_baseline.py
 
 | 模块 | 职责 | 直接依赖 |
 | --- | --- | --- |
-| `:app` | 应用入口、四 tab、Hilt 装配、配对生命周期、作用域桥接、系统分享和锁屏测试 | `:core:contracts`、`:core:domain`、`:core:terminal`、`:core:navigation`、`:core:hub`、`:core:data`、`:core:chatlist`、`:core:designsystem`、`:core:demo`、`:feature:chat`、`:feature:agents`、`:feature:assistant`、`:feature:inbox`、`:feature:settings`、`:feature:terminal`、`:feature:machines`、`:feature:files`、`:feature:knowledge`、`:platform:notify`、`:platform:phonetools`、`:platform:shortcuts` |
+| `:app` | 应用入口、四 tab、Hilt 装配、配对生命周期、作用域桥接、系统分享和锁屏测试 | `:core:contracts`、`:core:domain`、`:core:terminal`、`:core:navigation`、`:core:hub`、`:core:data`、`:core:chatlist`、`:core:designsystem`、`:core:demo`、`:feature:chat`、`:feature:agents`、`:feature:assistant`、`:feature:inbox`、`:feature:settings`、`:feature:terminal`、`:feature:machines`、`:feature:files`、`:feature:knowledge`、`:feature:voice`、`:platform:notify`、`:platform:phonetools`、`:platform:shortcuts`、`:platform:capsule` |
 | `:core:chatlist` | 倒置聊天列表、冻结、回最新、阅读锚点及分页效果；当前主要由 Agent / 助手对话消费 | 无仓库内模块依赖 |
 | `:core:contracts` | 纯 JVM：线上模型、事件解码、HubScope、仓储和传输接口 | 无仓库内模块依赖 |
 | `:core:data` | Room items / outbox / 草稿、DataStore / Tink 凭据、作用域、缓存及真实仓储 | `:core:contracts`、`:core:domain`、`:feature:inbox` |
@@ -315,24 +315,26 @@ python3 scripts/app/test_android_token_baseline.py
 | `:core:hub` | 纯 JVM：OkHttp HTTP / WS、TLS 钉扎、选路、心跳、配对及各业务传输实现 | `:core:contracts` |
 | `:core:navigation` | Navigation 3 路由类型、Navigator、通知和机器页面路由 | 无仓库内模块依赖 |
 | `:core:terminal` | 纯 JVM：VT 网格、Unicode 宽度、折行和终端输入编码 | 无仓库内模块依赖 |
-| `:feature:agents` | 电脑 → 空间 → 会话的列表、请求卡、新建与关闭确认、空间页、会话和空间的重命名（本地立即生效） | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
-| `:feature:assistant` | 首页、历史抽屉、主对话发送、资料与定时任务页；管理服务和专用聊天样式仍待装配 | `:core:contracts`、`:core:data`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
-| `:feature:chat` | 共用对话、Markdown、工具 / diff / 待办、照片和文件标签、长按菜单、报错卡、看图和标注、交互面板、附件组件和应用内链接阅读 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:chatlist`、`:core:navigation` |
+| `:feature:agents` | 电脑 → 空间 → 会话的列表、请求卡、新建与关闭确认、空间页、会话和空间的重命名（本地立即生效） | `:core:contracts`、`:feature:chat`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
+| `:feature:assistant` | 首页、历史抽屉、主对话发送、资料与定时任务页；管理服务由 App 的 `ChatWiringModule` 装配，专用聊天样式仍待装配 | `:core:contracts`、`:core:data`、`:core:domain`、`:core:designsystem`、`:core:navigation`、`:feature:chat` |
+| `:feature:chat` | 共用对话、Markdown、工具 / diff / 待办、照片和文件标签、长按菜单、报错卡、看图和标注、交互面板、附件组件和应用内链接阅读 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:chatlist`、`:core:navigation`、`:feature:inbox` |
 | `:feature:files` | 文件树、文本 / 图片 / Markdown / PDF 预览、Git 和提交详情、路径插入；从 Agent 对话 ⋯ 菜单和消息里的文件标签进入 | `:core:contracts`、`:core:hub`、`:core:designsystem`、`:core:navigation` |
-| `:feature:inbox` | 统一收件箱、飞书会话、邮件详情、AI 操作和回复组件；邮件传输仍待装配 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
+| `:feature:inbox` | 统一收件箱、飞书会话、邮件详情、AI 操作和回复组件 | `:core:chatlist`、`:core:contracts`、`:core:hub`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
 | `:feature:knowledge` | 知识库列表、阅读和导航；从 Persona 抽屉进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
-| `:feature:machines` | 机器 Dashboard、详情和指标图；从 Agents 机器菜单进入 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
-| `:feature:settings` | 配对、准备清单、诊断、设备与通知偏好、关于和 APK 安装；设备设置服务仍待装配 | `:core:contracts`、`:core:domain`、`:core:hub`、`:core:designsystem`、`:core:navigation` |
+| `:feature:machines` | 机器 Dashboard、详情和指标图；从 Agents 机器菜单进入 | `:core:contracts`、`:core:designsystem`、`:core:domain`、`:core:navigation` |
+| `:feature:settings` | 配对、准备清单、诊断、设备与通知偏好、关于和 APK 安装 | `:core:contracts`、`:core:domain`、`:core:hub`、`:core:designsystem`、`:core:navigation` |
 | `:feature:terminal` | 终端 Canvas、流式帧消费、接管和输入；从对话页和通知的终端兜底进入 | `:core:contracts`、`:core:terminal`、`:core:designsystem`、`:core:navigation` |
+| `:feature:voice` | 和 hub 语音扩展的全双工语音对话页，见「语音对话」 | `:core:contracts`、`:core:designsystem`、`:core:navigation` |
 | `:platform:notify` | 前台服务、常驻汇总通知（`FleetFeed`）、通知策略和按钮、操作日志、开机接收与连接保活 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation` |
 | `:platform:phonetools` | 手机工具目录、注册、权限与写入确认，通讯录 / 日历 / 照片 / 位置等实现；设置 › 手机数据进入 | `:core:contracts`、`:core:navigation`、`:core:designsystem` |
 | `:platform:shortcuts` | 主屏小组件（Glance）、快速设置磁贴、长按图标快捷方式和「批准待处理」对话框，见「常驻通知和桌面入口」 | `:core:contracts`、`:core:domain`、`:core:designsystem`、`:core:navigation`、`:core:hub`、`:platform:notify` |
+| `:platform:capsule` | 跨 App 悬浮胶囊（`TYPE_APPLICATION_OVERLAY` 浮层），见「跨 App 悬浮胶囊」 | `:core:contracts`、`:core:designsystem` |
 
-依赖的主要方向为 `:app → feature / platform / core`，功能层通过 `:core:contracts` 使用接口，由 App 的 Hilt 模块装配真实实现。当前仍有两处跨层依赖：`:core:data → :feature:inbox`、`:feature:assistant → :core:data`，这是现有构建图，尚未完全符合设计中的单向分层。`:core:domain → :core:contracts`，`:core:hub → :core:contracts`；`:core:terminal` 不依赖其他项目模块。
+依赖的主要方向为 `:app → feature / platform / core`，功能层通过 `:core:contracts` 使用接口，由 App 的 Hilt 模块装配真实实现。当前仍有跨层依赖：`:core:data → :feature:inbox`、`:feature:assistant → :core:data`，以及功能模块之间的 `:feature:agents → :feature:chat`、`:feature:assistant → :feature:chat`、`:feature:chat → :feature:inbox`，`:feature:files`、`:feature:inbox`、`:feature:settings` 也直接用 `:core:hub`，这是现有构建图，尚未完全符合设计中的单向分层。`:core:domain → :core:contracts`，`:core:hub → :core:contracts`；`:core:terminal` 不依赖其他项目模块。
 
 `build-logic/convention` 通过 `includeBuild("build-logic")` 引入，不是应用模块。它提供 application、library、JVM、Compose、Hilt 约定插件；Hilt 已接入，Room / KSP、DataStore 和 Tink 在 data 模块。版本见 `gradle/libs.versions.toml`。
 
-`app/di/ConnectionRuntime.kt` 持有连接与配对作用域；`ChatDataModule`、`InboxModule` 装配真实仓储。HTTP 与 WS 共用当前候选和凭据，重配时整体切换 `HubScope(hub_id, pairingGeneration)`，关闭旧协程并删除旧作用域数据。普通与助手输入框尚未接上 `DraftStore`，不能把存储类存在写成草稿已持久化。
+`app/di/ConnectionRuntime.kt` 持有连接与配对作用域；`ChatDataModule`、`InboxModule` 装配真实仓储。HTTP 与 WS 共用当前候选和凭据，重配时整体切换 `HubScope(hub_id, pairingGeneration)`，关闭旧协程并删除旧作用域数据。Agent 对话和助手的输入框草稿存进当前配对的 `DraftStore`（`ChatWiringModule` 把 `data.drafts` 交给两边）。
 
 ### 构建、测试和截图
 

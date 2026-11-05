@@ -3,6 +3,7 @@
 // the timeline, the profile without what the header shows, and the message 问 Persona sends. The iOS app is the
 // reference (apple/Persona/Views/Knowledge/KnowledgeView.swift, apple/Shared/Knowledge.swift).
 import { formatDate, t } from "../i18n";
+import { contextBody } from "./context-body";
 import type { Session } from "./types";
 
 export const KB_KINDS = ["projects", "chats", "people", "docs", "meetings", "events", "recordings"] as const;
@@ -636,7 +637,7 @@ export function parseRecent(text?: string): RecentDay[] {
  */
 export function contextXml(c: { kind: string; title: string; url?: string; text: string }): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return `<jarvis-context kind="${esc(c.kind)}" title="${esc(c.title)}" url="${esc(c.url ?? "")}">\n${c.text.replace(/<\/(?:persona|jarvis)-context>/g, "")}\n</jarvis-context>`;
+  return `<jarvis-context kind="${esc(c.kind)}" title="${esc(c.title)}" url="${esc(c.url ?? "")}">\n${contextBody(c.text)}\n</jarvis-context>`;
 }
 
 /** An entry as context: its profile, recent timeline and folder. */

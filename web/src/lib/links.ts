@@ -16,6 +16,7 @@ import { uuid } from "./format";
 import { openPanel } from "./panel";
 import { navigate } from "./router";
 import { BASE, stripBase } from "./base";
+import { contextBody } from "./context-body";
 import { larkOn, onHubEvent } from "./store";
 import { mediaMatches, NARROW } from "./viewport";
 
@@ -269,7 +270,7 @@ function escAttr(s: string) {
 
 /** `<jarvis-context kind="…" title="…" url="…">\ntext\n</jarvis-context>`, as the phone writes it. */
 export function contextXML(r: Pick<ContextRef, "kind" | "title" | "url" | "text">): string {
-  const body = r.text.replace(/<\/(?:persona|jarvis)-context\s*>/gi, "");
+  const body = contextBody(r.text);
   return `<jarvis-context kind="${escAttr(r.kind)}" title="${escAttr(r.title)}" url="${escAttr(r.url)}">\n${body}\n</jarvis-context>`;
 }
 

@@ -12,6 +12,7 @@ import { api, ApiError, enc, errorText, getToken } from "./api";
 import { BASE } from "./base";
 import type { AgentMutes } from "./agent-groups";
 import { connectorOpenTitle } from "./connectors";
+import { contextBody } from "./context-body";
 import { larkPath } from "./lark-accounts";
 import { baseName } from "./format";
 import type { Route } from "./router";
@@ -507,7 +508,7 @@ function escAttr(s: string) {
 
 /** `<jarvis-context kind="…" title="…" url="…">` the way the app writes it (ContextRef.xml). */
 export function contextXML(kind: string, title: string, url: string, text: string): string {
-  return `<jarvis-context kind="${kind}" title="${escAttr(title)}" url="${escAttr(url)}">\n${text.replace(/<\/(?:persona|jarvis)-context>/g, "")}\n</jarvis-context>`;
+  return `<jarvis-context kind="${kind}" title="${escAttr(title)}" url="${escAttr(url)}">\n${contextBody(text)}\n</jarvis-context>`;
 }
 
 /** The item as context the chat shows as a chip, then what to do with it (InboxHandOffSheet.message). */

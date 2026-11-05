@@ -45,7 +45,7 @@ internal class TerminalCanvasView(context: Context, terminalText: Int, terminalB
     var onCell: (TerminalCellPosition) -> Unit = {}
     /** A tap on an OSC 8 link: the URL, opened in the app (iOS); the tap is not also a click in the program. */
     var onLink: (String) -> Unit = {}
-    private val composition = TerminalComposition({ onText(it) }, { onMarked(it); invalidate() })
+    private val composition = TerminalComposition({ onText(it) }, { onMarked(it); invalidate() }, { onKey(it) })
     // Not named `editable`: inside the input connection that name is its own getEditable(), which then called itself
     // until the stack overflowed as soon as an input method connected (2026-11-02).
     private val buffer = SpannableStringBuilder()

@@ -42,17 +42,30 @@ internal class TerminalFrames {
 }
 
 /** Composition stays local until committed; finish without a following commit still sends exactly once. */
-internal class TerminalComposition(private val send: (String) -> Unit, private val changed: (String) -> Unit) {
+internal class TerminalComposition(private val send: (String) -> Unit, private val changed: (String) -> Unit, private val key: (String) -> Unit) {
     var marked = ""
         private set
     fun compose(text: String) { marked = text; changed(text) }
-    fun commit(text: String) { marked = ""; changed(""); if (text.isNotEmpty()) send(text) }
+    fun commit(text: String) { marked = ""; changed(""); emit(text) }
     fun finish() { val text = marked; commit(text) }
     fun delete(count: Int): Boolean {
         if (marked.isEmpty()) return false
         marked = marked.dropLast(count.coerceAtMost(marked.length)); changed(marked); return true
     }
     fun clear() { marked = ""; changed("") }
+    /** Enter and tab from the soft keyboard go out as keys (as on iOS); text would arrive as a bracketed paste. */
+    private fun emit(text: String) {
+        var start = 0; var i = 0
+        while (i < text.length) {
+            val name = when (text[i]) { '\n', '\r' -> "enter"; '\t' -> "tab"; else -> null }
+            if (name == null) { i++; continue }
+            if (i > start) send(text.substring(start, i))
+            key(name)
+            i += if (text.startsWith("\r\n", i)) 2 else 1
+            start = i
+        }
+        if (start < text.length) send(text.substring(start))
+    }
 }
 
 /** One wheel message per cell crossed, always anchored at the initial touch cell. */

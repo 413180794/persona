@@ -64,7 +64,7 @@ class TerminalCriticalPathTest {
     @Test fun compositionCommitsOnceAndModifiersCoverTapLockAndHold() {
         val sent = mutableListOf<String>()
         val marked = mutableListOf<String>()
-        val input = TerminalComposition(sent::add, marked::add)
+        val input = TerminalComposition(sent::add, marked::add) {}
         input.compose("zhong"); input.compose("zhongwen")
         assertTrue(sent.isEmpty())
         input.commit("中文"); input.finish()
@@ -72,6 +72,12 @@ class TerminalCriticalPathTest {
         input.compose("ni"); input.delete(1); assertEquals("n", input.marked)
         input.compose("你"); input.finish(); assertEquals(listOf("中文", "你"), sent)
         input.compose("不得发送"); input.clear(); input.finish(); assertEquals(2, sent.size)
+        val out = mutableListOf<String>()
+        val keyed = TerminalComposition({ out += "text:$it" }, {}, { out += "key:$it" })
+        keyed.commit("ls"); keyed.commit("\n")
+        assertEquals(listOf("text:ls", "key:enter"), out); out.clear()
+        keyed.commit("a\tb"); assertEquals(listOf("text:a", "key:tab", "text:b"), out); out.clear()
+        keyed.commit("x\r\ny"); assertEquals(listOf("text:x", "key:enter", "text:y"), out)
         val modifiers = TerminalModifiers()
         val ctrl = TerminalModifiers.Key.CTRL
         modifiers.tap(ctrl); assertEquals("ctrl+c", modifiers.apply("c"))
