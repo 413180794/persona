@@ -71,7 +71,7 @@ final class TaskDockAgentTests: XCTestCase {
         }
         try shot(app, "dock-scrolled")
         first.tap()
-        XCTAssertTrue(app.staticTexts["Agent · 不是从对话开的"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.buttons.matching(identifier: "chat.title").firstMatch.waitForExistence(timeout: 5), app.debugDescription)
         sleep(2)
         try shot(app, "sheet")
 
@@ -81,7 +81,7 @@ final class TaskDockAgentTests: XCTestCase {
         XCTAssertTrue(expand.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertEqual(expand.label, "全屏查看")
         expand.tap()
-        XCTAssertTrue(app.staticTexts["Agent · 不是从对话开的"].waitForNonExistence(timeout: 5), "the sheet stayed up")
+        XCTAssertTrue(app.buttons["关闭"].waitForNonExistence(timeout: 5), "the sheet stayed up")
         XCTAssertFalse(expand.exists, "the full page still has the sheet's 全屏查看")
         sleep(2)
         try shot(app, "fullscreen")
@@ -90,7 +90,7 @@ final class TaskDockAgentTests: XCTestCase {
         edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)))
         XCTAssertTrue(board.waitForExistence(timeout: 5) && board.isHittable, "back did not come to the conversation:\n\(app.debugDescription)")
         sleep(1)
-        XCTAssertFalse(app.staticTexts["Agent · 不是从对话开的"].exists, "the sheet rose again after back")
+        XCTAssertFalse(app.buttons["关闭"].exists, "the sheet rose again after back")
         try shot(app, "back")
     }
 }

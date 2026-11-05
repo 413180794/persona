@@ -123,6 +123,8 @@ struct ChatView: View {
     /// The turn whose "后台任务完成" drawer is open.
     @State private var wakeDrawer: String?
     @Environment(\.dismiss) private var dismissChat
+    /// Hosted by a page about something else (a task's sheet, `HostedChat`): its header is the page's only one.
+    @Environment(\.hostedChat) private var host
     /// In the detail column of a split (iPhone Duo open): the list is beside the chat, the tab bar stays.
     @Environment(\.splitDetail) private var split
     /// The Persona conversation in the shell (docs/ios.md「新外壳」).
@@ -291,13 +293,24 @@ struct ChatView: View {
         HStack(spacing: Theme.Space.s) {
             if macShowsBack {
                 Button { back() } label: {
-                    Image(systemName: Theme.Icon.back).font(Theme.Font.heading)
+                    Image(systemName: backSymbol).font(Theme.Font.heading)
                         .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon).contentShape(.rect)
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help(pane == .git || pane == .files ? "回到对话" : "返回")
-                .accessibilityLabel("返回")
+                .help(pane == .git || pane == .files ? "回到对话" : backLabel)
+                .accessibilityLabel(backLabel)
+            }
+            if pane == .chat, let expand = host?.expand {
+                Button { expand(key) } label: {
+                    Image(systemName: Theme.Icon.enlarge).font(Theme.Font.heading)
+                        .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon).contentShape(.rect)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("全屏查看")
+                .accessibilityLabel("全屏查看")
+                .accessibilityIdentifier("task-detail.fullscreen")
             }
             Button {
                 if model.connection.shown != .online { showLink = true } else { showInfo.toggle() }
@@ -363,7 +376,26 @@ struct ChatView: View {
 
     @ViewBuilder private var macTitleButtons: some View {
         let siblings = model.siblings(of: key)
-        if siblings.count > 1 {
+        if let host {
+            // Hosted (a task's sheet, #3255): one agent's page; a task's several agents are its switch instead.
+            if host.agents.count > 1 {
+                Menu {
+                    ForEach(host.agents) { s in
+                        Button { if s.key != key { host.select(s.key) } } label: {
+                            if s.key == key { Label(s.displayTitle, systemImage: Theme.Icon.success) } else { Text("\(s.displayTitle) · \(s.state.label)") }
+                        }
+                    }
+                } label: {
+                    Image(systemName: Theme.Icon.space).font(Theme.Font.heading).foregroundStyle(Color.primary)
+                        .scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.avatarL)
+                        .surface(interactive: true, in: .circle)
+                }
+                .labelOnlyMenu()
+                .fixedSize()
+                .help("这个任务的 \(host.agents.count) 个 Agent")
+                .accessibilityLabel("切换 Agent")
+            }
+        } else if siblings.count > 1 {
             Menu {
                 // A tab's agents under its name, in the order of their panes, the 发起者 marked (#2320).
                 ForEach(TabPanes.entries(siblings)) { e in
@@ -2181,10 +2213,10 @@ struct ChatView: View {
     private var compactChrome: some View {
         HStack(spacing: 0) {
             Button { back() } label: {
-                Image(systemName: Theme.Icon.back).font(Theme.Font.secondaryStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
+                Image(systemName: backSymbol).font(Theme.Font.secondaryStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("返回")
+            .accessibilityLabel(backLabel)
             .noBackWhen(hidesBack)
             Spacer(minLength: 0)
             Button { Haptics.tap(); showChrome() } label: {
@@ -2210,6 +2242,15 @@ struct ChatView: View {
                                 : "\(compactPlace)，显示标题和标签")
             Spacer(minLength: 0)
             // A goal, a loop or background work: a small mark each. Files, the terminal and Git are in the ··· menu (a tap opens the header).
+            hostedMarks
+                .scaledFrame(minWidth: Theme.Size.tapTarget)
+        }
+        .padding(.horizontal, Theme.Space.xs)
+        .frame(height: ChatChrome.compactHeight)
+    }
+
+    /// A goal, a loop or background work: a small mark each (the folded bar's, and a hosted header's, #3255).
+    private var hostedMarks: some View {
             HStack(spacing: 0) {
                 if let goal = session?.goal {
                     Button { Haptics.tap(); showGoal = true } label: {
@@ -2230,10 +2271,6 @@ struct ChatView: View {
                         .accessibilityLabel("循环与后台任务，点按查看")
                 }
             }
-            .scaledFrame(minWidth: Theme.Size.tapTarget)
-        }
-        .padding(.horizontal, Theme.Space.xs)
-        .frame(height: ChatChrome.compactHeight)
     }
 
     /// The folded header's sign of a loop / background tasks: a gear with the count, or the loop arrows (still: only
@@ -2252,6 +2289,7 @@ struct ChatView: View {
 
     /// The "…" menu, in the custom header (Agents) or the system bar (assistant).
     @ViewBuilder private var moreMenuItems: some View {
+            if style == .dev, let host { hostedMenuItems(host) }
             if let s = session, let todo = s.todo,
                 TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
                 Button {
@@ -2296,7 +2334,7 @@ struct ChatView: View {
                     }
                 }
                 Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
-                if let space = s.spaceKey, let openSpace {
+                if host == nil, let space = s.spaceKey, let openSpace {
                     Button { openSpace(space) } label: { Label("空间里的所有 Agent", systemImage: Theme.Icon.space) }
                 }
                 if s.status.isLive && s.canTerminal {
@@ -2315,7 +2353,69 @@ struct ChatView: View {
     /// A custom title: tapping it toggles the developer info card (instead of the system scroll-to-top).
     /// While the hub is out of reach the subtitle turns into a spinner and 连接中… (Telegram keeps the name and
     /// swaps the "online" line the same way); a tap then explains the link instead of opening the session info.
-    private var titleButton: some View {
+    @ViewBuilder private var titleButton: some View {
+        // Hosted for several agents (a task's): the title's ⌄ switches between them, and has the session's info too.
+        // The switch stays while the hub is out of reach (its line then says so, and the menu explains the link).
+        if style == .dev, let host, host.agents.count > 1 {
+            Menu {
+                Section("切换 Agent") {
+                    ForEach(host.agents) { s in
+                        Button { if s.key != key { host.select(s.key) } } label: {
+                            if s.key == key {
+                                Label(s.displayTitle, systemImage: Theme.Icon.success)
+                            } else {
+                                Text("\(s.displayTitle) · \(s.state.label)")
+                            }
+                        }
+                    }
+                }
+                if model.connection.shown != .online {
+                    Button { showLink = true } label: { Label("连接详情", systemImage: Theme.Icon.info) }
+                } else {
+                    Button { showInfo = true } label: { Label("会话信息", systemImage: Theme.Icon.info) }
+                }
+            } label: {
+                titleLabel(chevron: true)
+            }
+            .labelOnlyMenu()
+            .tint(Color.primary) // a title, not a button: the menu's accent tint would color it blue
+            .accessibilityLabel("\(title)，\(host.agents.count) 个 Agent，点按切换")
+            .accessibilityIdentifier("chat.title")
+            .connectionDetails($showLink)
+        } else {
+            infoTitleButton
+        }
+    }
+
+    /// The title over its second line; `chevron` adds the ⌄ of a title that switches agents.
+    private func titleLabel(chevron: Bool) -> some View {
+        let link = model.connection.shown
+        return VStack(spacing: Theme.Space.xxs) {
+            HStack(spacing: Theme.Space.xs) {
+                Text(title).font(Theme.Font.heading).lineLimit(1)
+                if chevron {
+                    Image(systemName: Theme.Icon.expand).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
+                }
+            }
+            ZStack {
+                if link != .online {
+                    ConnectionLabel(phase: link, compact: true).transition(.opacity)
+                } else {
+                    HStack(spacing: Theme.Space.xs) {
+                        if style == .dev, let s = session { devSubtitle(s) } else { Text(subtitle).lineLimit(1) }
+                    }
+                    .font(Theme.Font.label)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+                }
+            }
+            .animation(Theme.Motion.standard, value: link)
+        }
+        .scaledFrame(maxWidth: Theme.Size.box260)
+        .contentShape(.rect)
+    }
+
+    private var infoTitleButton: some View {
         let link = model.connection.shown
         return Button {
             Haptics.tap()
@@ -2325,28 +2425,32 @@ struct ChatView: View {
             if link != .online { showLink = true } else { showInfo = true }
             #endif
         } label: {
-            VStack(spacing: Theme.Space.xxs) {
-                Text(title).font(Theme.Font.heading).lineLimit(1)
-                ZStack {
-                    if link != .online {
-                        ConnectionLabel(phase: link, compact: true).transition(.opacity)
-                    } else {
-                        HStack(spacing: Theme.Space.xs) {
-                            if style == .dev, let s = session { devSubtitle(s) } else { Text(subtitle).lineLimit(1) }
-                        }
-                        .font(Theme.Font.label)
-                        .foregroundStyle(.secondary)
-                        .transition(.opacity)
-                    }
-                }
-                .animation(Theme.Motion.standard, value: link)
-            }
-            .scaledFrame(maxWidth: Theme.Size.box260)
-            .contentShape(.rect)
+            titleLabel(chevron: false)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(link != .online ? "\(title)，\(link.title)，查看连接详情" : "\(title)，查看会话信息")
+        .accessibilityIdentifier("chat.title")
         .connectionDetails($showLink)
+    }
+
+    /// A hosting page's part of ⋯ (#3255): what it is about (the session's own title when the page's differs, the
+    /// page's note), its own actions, and the agent in the Agents page, where its space's other agents are.
+    @ViewBuilder private func hostedMenuItems(_ host: HostedChat) -> some View {
+        let own = session?.displayTitle ?? ""
+        let header = [own != title ? own : nil, host.note].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        if header.isEmpty {
+            hostedMenuActions(host)
+        } else {
+            Section(header) { hostedMenuActions(host) }
+        }
+        Divider()
+    }
+
+    @ViewBuilder private func hostedMenuActions(_ host: HostedChat) -> some View {
+        host.menu
+        Button { host.openInAgents(key) } label: {
+            Label("在 Agents 里打开", systemImage: Theme.Icon.agents).lineLimit(1)
+        }
     }
 
     /// Agents: the title's second line — the state (and for how long it has worked this turn), then where it runs.
@@ -2356,7 +2460,8 @@ struct ChatView: View {
     private func devSubtitle(_ s: Session) -> some View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             let words = stateWords(s, now: ctx.date)
-            let tabShown = !model.siblings(of: key).isEmpty
+            // Hosted (one agent's page, #3255) the line is 状态 · 机器 · 项目: the tab's name would crowd the machine out.
+            let tabShown = host != nil || !model.siblings(of: key).isEmpty
             let place = [s.spaceName, tabShown ? nil : s.slotLabel].compactMap { $0 }.joined(separator: " › ")
             let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
             HStack(spacing: Theme.Space.xs) {
@@ -2417,9 +2522,13 @@ struct ChatView: View {
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: Theme.Space.s) {
                         headerBack
+                        if pane == .chat, let expand = host?.expand { hostedExpandButton(expand) }
                         Spacer(minLength: 0)
                         titleButton
                         Spacer(minLength: 0)
+                        // Hosted, the goal and a /loop or background work are small marks here, as in the folded bar:
+                        // the header stays one row (#3255).
+                        if host != nil { hostedMarks }
                         // Files (a swipe to the left now quotes a message, #1058), the terminal (it comes up from the
                         // bottom, TerminalCover) and Git are in ···: one button there (#1205).
                         Menu { moreMenuItems } label: {
@@ -2432,26 +2541,29 @@ struct ChatView: View {
                     }
                 }
                 .padding(.horizontal, Theme.Space.l)
-                .padding(.top, Theme.Space.xxs)
+                // A hosting sheet's grabber is over the row (#3255): it starts below it.
+                .padding(.top, host?.closes == true ? Theme.Space.m : Theme.Space.xxs)
                 .padding(.bottom, Theme.Space.sm)
                 // Row two, only when there is something for it: the space's other agents and a /loop or background
                 // work (small chips; a tap opens them). Files and Git are in the ··· menu.
-                let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
-                if session?.spaceKey != nil || hasActivity {
+                // Hosted (a task's sheet, #3255) it is one agent's page: no strip of the space's tabs.
+                let hasActivity = host == nil && (session?.loop != nil || !(session?.background ?? []).isEmpty)
+                let tabs = host == nil && session?.spaceKey != nil
+                if tabs || hasActivity {
                     HStack(spacing: Theme.Space.s) {
                         // The tabs take the width there is; without them the activity chips sit on the left.
-                        SiblingTabs(current: key, select: switchTo, closed: closedAgent)
+                        if tabs { SiblingTabs(current: key, select: switchTo, closed: closedAgent) }
                         if hasActivity {
                             ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
                                 .fixedSize()
                         }
-                        if model.siblings(of: key).count < 2 { Spacer(minLength: 0) }
+                        if !tabs || model.siblings(of: key).count < 2 { Spacer(minLength: 0) }
                     }
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.bottom, Theme.Space.s)
                 }
                 // The goal it works toward (docs/agent-goal.md): a tap shows all of it.
-                if let goal = session?.goal {
+                if host == nil, let goal = session?.goal {
                     GoalBar(goal: goal)
                         .padding(.horizontal, Theme.Space.l)
                         .padding(.bottom, Theme.Space.s)
@@ -2557,9 +2669,10 @@ struct ChatView: View {
     @ViewBuilder private var sideHeaderRows: some View {
         titleButton
         let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
-        if session?.spaceKey != nil || hasActivity {
+        let tabs = host == nil && session?.spaceKey != nil
+        if tabs || hasActivity {
             HStack(spacing: Theme.Space.s) {
-                SiblingTabs(current: key, select: switchTo, closed: closedAgent)
+                if tabs { SiblingTabs(current: key, select: switchTo, closed: closedAgent) }
                 if hasActivity {
                     ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
                         .fixedSize()
@@ -2577,7 +2690,11 @@ struct ChatView: View {
     }
 
     /// The first page of a split's detail column, on the chat: nothing to go back to (the list is beside it).
-    private var hidesBack: Bool { split?.isFirstPage == true && pane == .chat }
+    private var hidesBack: Bool { host == nil && split?.isFirstPage == true && pane == .chat }
+
+    /// The header's leading button: back to the chat from files / Git; on the chat ‹, or a hosting page's ✕ / ‹.
+    private var backSymbol: String { pane == .git || pane == .files ? Theme.Icon.back : host?.leaveSymbol ?? Theme.Icon.back }
+    private var backLabel: String { pane == .git || pane == .files ? String(localized: "返回") : host?.leaveLabel ?? String(localized: "返回") }
 
     /// The open header's ‹. Inside the row's glass container `noBackWhen` does not hide it: the container draws the
     /// button's glass and symbol itself, so a disabled ‹ that did nothing showed on every chat on the Mac, where the
@@ -2597,19 +2714,32 @@ struct ChatView: View {
 
     private var headerBackButton: some View {
         Button { back() } label: {
-            Image(systemName: Theme.Icon.back).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+            Image(systemName: backSymbol).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
         .surface(interactive: true, in: .circle)
-        .accessibilityLabel("返回")
+        .accessibilityLabel(backLabel)
+    }
+
+    /// A hosting sheet's 全屏查看 beside its ✕ (#3743): the agent's full page instead of the sheet.
+    private func hostedExpandButton(_ expand: @escaping (SessionKey) -> Void) -> some View {
+        Button { expand(key) } label: {
+            Image(systemName: Theme.Icon.enlarge).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .surface(interactive: true, in: .circle)
+        .accessibilityLabel("全屏查看")
+        .accessibilityIdentifier("task-detail.fullscreen")
     }
 
     private func back() {
         #if os(macOS)
-        if pane == .git || pane == .files { withAnimation(Theme.Motion.standard) { pane = .chat } } else { dismissChat() }
+        if pane == .git || pane == .files { withAnimation(Theme.Motion.standard) { pane = .chat } } else if let host { host.leave() } else { dismissChat() }
         #else
-        if pane != .chat { withAnimation(Theme.Motion.standard) { pane = .chat } } else { dismissChat() }
+        if pane != .chat { withAnimation(Theme.Motion.standard) { pane = .chat } } else if let host { host.leave() } else { dismissChat() }
         #endif
     }
 
@@ -2992,6 +3122,8 @@ struct ChatView: View {
 
     private func closedAgent(_ closed: SessionKey, order: [SessionKey]) {
         guard closed == key else { return }
+        // Hosted, it was this one agent's page: it goes, rather than turning into a tab mate's.
+        if host != nil { pane = .chat; return back() }
         if let next = AgentCloseRules.next(after: closed, in: order, available: model.siblings(of: key).map(\.key)) {
             switchTo(next)
         } else {
@@ -3031,6 +3163,7 @@ struct ChatView: View {
     }
 
     private var title: String {
+        if style == .dev, let t = host?.title, !t.isEmpty { return t }
         let t = session?.title ?? ""
         if style == .assistant { return t.isEmpty || t == "Claude Code" ? "Persona" : t }
         return t.isEmpty ? String(localized: "对话") : t

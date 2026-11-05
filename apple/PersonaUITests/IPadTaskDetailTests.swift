@@ -66,7 +66,7 @@ final class IPadTaskDetailTests: XCTestCase {
         XCTAssertTrue(tasks.firstMatch.isHittable, "back did not come back to the conversation")
         sleep(1)
 
-        // An agent of its own: the same page, under its own header.
+        // An agent of its own: the same page, under its own title (its chat's header, #3255).
         let agent = agents.firstMatch
         XCTAssertTrue(agent.waitForExistence(timeout: 5), app.debugDescription)
         for _ in 0..<3 where !agent.isHittable { // the dock is wider than the column: scroll it from a task
@@ -74,7 +74,7 @@ final class IPadTaskDetailTests: XCTestCase {
             sleep(1)
         }
         agent.tap()
-        XCTAssertTrue(app.staticTexts["Agent · 不是从对话开的"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.buttons.matching(identifier: "chat.title").firstMatch.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(app.buttons["返回"].firstMatch.exists, "no ‹ on the agent's page")
         XCTAssertFalse(app.buttons["关闭"].exists, "the agent rose as a sheet")
         sleep(2)

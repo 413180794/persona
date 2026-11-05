@@ -103,6 +103,7 @@ struct SiblingTabs: View {
         }
         .accessibilityLabel(String(localized: "\(label)\(launcher ? String(localized: "（发起者）") : "")，\(s.stateLabel)"))
         .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityIdentifier("chat.sibling")
         .contextMenu {
             if s.canTerminal {
                 Button(role: .destructive) { requestClose(s) } label: {

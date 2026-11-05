@@ -2,9 +2,11 @@ import SwiftUI
 
 /// A task's detail, risen from the bottom like a link (docs/unified-entry.md「任务详情」): opens full, pulled down to
 /// 0.6 the conversation behind stays usable. Its agent's page is the Agents page's own chat (`ChatView(style: .dev)`),
-/// so everything that page does works here; a task with several agents switches between them at the top. An agent no
-/// task stands for (the main conversation's dock, #1113) opens in the same sheet, its page under its own header. In
-/// regular width (iPad) the same page is pushed into the detail column instead (`detailPresentation`, #2816).
+/// so everything that page does works here. That chat's header is the sheet's only one (`HostedChat`, #3255): ✕, the
+/// task's title over the agent's state and place, and ⋯ with the task's own actions; no strip of the space's other
+/// agents (「在 Agents 里打开」 in ⋯ has them). A task with several agents switches between them from the title's ⌄.
+/// An agent no task stands for (the main conversation's dock, #1113) opens in the same sheet under its own title. In
+/// regular width (iPad) the same page is pushed into the detail column instead (`detailPresentation`, #2816), its ✕ a ‹.
 struct TaskDetailSheet: View {
     private var todoID: String?
     private var agentKey: SessionKey?
@@ -19,6 +21,9 @@ struct TaskDetailSheet: View {
     init(todoID: String) { self.todoID = todoID }
     init(agent: SessionKey) { agentKey = agent }
 
+    /// What an agent no task stands for says about itself (in ⋯, and the header while it has no page).
+    static var agentNote: String { String(localized: "Agent · 不是从对话开的") }
+
     var body: some View {
         DetailStack {
             Group {
@@ -30,7 +35,7 @@ struct TaskDetailSheet: View {
                     EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "没有这个任务了"), message: String(localized: "它可能被删了。"))
                 }
             }
-            // The agent's page hides the bar (it draws its own header): the sheet's close is in the task's header.
+            // The agent's page hides the bar (it draws its own header), and so does the page while it has none.
             .toolbarVisibility(.hidden, for: .navigationBar)
         }
         .confirmTaskRemoval($removing)
@@ -42,71 +47,58 @@ struct TaskDetailSheet: View {
     @ViewBuilder private func content(_ todo: TodoItem) -> some View {
         let sessions = store.sessions(todo)
         let key = picked.flatMap { p in sessions.first { $0.key == p }?.key } ?? store.leadSession(todo)?.key
+        let state = store.state(todo)
         // Top-aligned: when the agent's page asks for more than the sheet has (several tall cards waiting), what gives
-        // is its bottom, never the task's header with its close.
+        // is its bottom, never the header with its close.
         GeometryReader { geo in
         VStack(spacing: 0) {
-            header(todo, sessions: sessions, selected: key)
-            Divider()
-            Group {
-                if let key {
-                    agentPage(key)
-                } else if let failure = store.startFailure(todo) ?? todo.agents.first?.startError {
-                    EmptyStateView(symbol: Theme.Icon.errorFilled, title: String(localized: "Agent 没开起来"), message: failure,
-                                   action: (title: String(localized: "移除任务"), run: { store.askRemove(todo, pending: $removing) }))
-                } else {
-                    EmptyStateView(symbol: Theme.Icon.working, title: String(localized: "正在开 Agent"), message: String(localized: "开好以后这里就是它的对话。"))
+            if let key {
+                agentPage(key, host: hosted(title: todo.title, note: nil, agents: sessions, menu: state.isRemovable ? AnyView(
+                    TaskRemoveMenuItem(todo: todo, state: state, pending: $removing)) : nil))
+            } else {
+                // No agent yet (opening, or it did not start): the task's own header over why.
+                header(title: todo.title, line: nil, showsMenu: state.isRemovable) { TaskMark(state: state).scaledFrame(width: Theme.Size.markM) } menu: {
+                    TaskRemoveMenuItem(todo: todo, state: state, pending: $removing)
                 }
+                Divider()
+                Group {
+                    if let failure = store.startFailure(todo) ?? todo.agents.first?.startError {
+                        EmptyStateView(symbol: Theme.Icon.errorFilled, title: String(localized: "Agent 没开起来"), message: failure,
+                                       action: (title: String(localized: "移除任务"), run: { store.askRemove(todo, pending: $removing) }))
+                    } else {
+                        EmptyStateView(symbol: Theme.Icon.working, title: String(localized: "正在开 Agent"), message: String(localized: "开好以后这里就是它的对话。"))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: geo.size.width, height: geo.size.height, alignment: .top) // the sheet's height, not the page's wish
         .clipped()
         }
     }
 
-    private func header(_ todo: TodoItem, sessions: [Session], selected: SessionKey?) -> some View {
-        let state = store.state(todo)
-        return VStack(alignment: .leading, spacing: Theme.Space.s) {
-            HStack(spacing: Theme.Space.s) {
-                if pushed { closeButton }
-                TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
-                Text(todo.title).font(Theme.Font.heading).lineLimit(2)
-                Spacer(minLength: Theme.Space.s)
-                if state.isRemovable {
-                    Menu {
-                        TaskRemoveMenuItem(todo: todo, state: state, pending: $removing)
-                    } label: {
-                        Image(systemName: Theme.Icon.more).font(Theme.Font.secondaryStrong)
-                            .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
-                    }
-                    .themedButton()
-                    .clipShape(.circle)
-                    .accessibilityLabel("更多")
-                }
-                if !pushed, let selected { expandButton(selected) }
-                if !pushed { closeButton }
+    /// The page's header while it has no agent's page under it: ✕ (‹ pushed), a mark, the title (and a line), ⋯.
+    private func header<Mark: View, Items: View>(title: String, line: String?, showsMenu: Bool = false,
+                                                 @ViewBuilder mark: () -> Mark,
+                                                 @ViewBuilder menu: () -> Items) -> some View {
+        HStack(spacing: Theme.Space.s) {
+            if pushed { closeButton }
+            mark()
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(title).font(Theme.Font.heading).lineLimit(2)
+                if let line { AgentMarkLine(text: line) }
             }
-            if sessions.count > 1 {
-                ScrollView(.horizontal) {
-                    HStack(spacing: Theme.Space.s) {
-                        ForEach(sessions) { s in
-                            Button { picked = s.key } label: {
-                                HStack(spacing: Theme.Space.xs) {
-                                    StatusDot(state: s.state, size: Theme.Size.dotS)
-                                    Text(s.title.isEmpty ? s.agentLabel : s.title).lineLimit(1)
-                                }
-                                .font(Theme.Font.captionStrong)
-                                .padding(.horizontal, Theme.Space.m)
-                                .padding(.vertical, Theme.Space.sm)
-                                .background(s.key == selected ? Theme.accent.opacity(0.16) : Theme.Fill.chip, in: .capsule)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+            Spacer(minLength: Theme.Space.s)
+            if showsMenu {
+                Menu { menu() } label: {
+                    Image(systemName: Theme.Icon.more).font(Theme.Font.secondaryStrong)
+                        .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
                 }
-                .scrollIndicators(.hidden)
+                .themedButton()
+                .clipShape(.circle)
+                .accessibilityLabel("更多")
             }
+            if !pushed { closeButton }
         }
         .padding(.horizontal, Theme.Space.page)
         .padding(.top, Theme.Space.l) // below the sheet's grabber
@@ -116,63 +108,49 @@ struct TaskDetailSheet: View {
 }
 
 extension TaskDetailSheet {
-    /// The agent's page under a header like a task's: its state, its title, and that it is an agent of its own.
+    /// The agent's page under its own title, said in ⋯ to be an agent of its own.
     @ViewBuilder private func agentContent(_ key: SessionKey) -> some View {
         let session = AppModel.shared.session(key)
         GeometryReader { geo in
         VStack(spacing: 0) {
-            HStack(spacing: Theme.Space.s) {
-                if pushed { closeButton }
-                if let session { StatusDot(state: session.state, size: Theme.Size.dotL).scaledFrame(width: Theme.Size.markM) }
-                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(session?.displayTitle ?? "Agent").font(Theme.Font.heading).lineLimit(2)
-                    AgentMarkLine(text: String(localized: "Agent · 不是从对话开的"))
-                }
-                Spacer(minLength: Theme.Space.s)
-                if !pushed, session != nil { expandButton(key) }
-                if !pushed { closeButton }
+            if session != nil {
+                agentPage(key, host: hosted(title: nil, note: Self.agentNote, agents: [], menu: nil))
+            } else {
+                header(title: String(localized: "Agent"), line: Self.agentNote) { EmptyView() } menu: { EmptyView() }
+                Divider()
+                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有这个 Agent 了"), message: String(localized: "它可能已经关掉了。"))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, Theme.Space.page)
-            .padding(.top, Theme.Space.l) // below the sheet's grabber
-            .padding(.bottom, Theme.Space.m)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Divider()
-            Group {
-                if session != nil {
-                    agentPage(key)
-                } else {
-                    EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有这个 Agent 了"), message: String(localized: "它可能已经关掉了。"))
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         .clipped()
         }
     }
 
-    /// The agent's own page (the Agents page's chat). Pushed, it is the detail column's page as it is beside the
-    /// Agents list (`SplitDetail`): the tab bar stays and its ‹ gives way to the task header's.
-    @ViewBuilder private func agentPage(_ key: SessionKey) -> some View {
+    /// What the agent's page takes from the sheet for its header (`HostedChat`).
+    private func hosted(title: String?, note: String?, agents: [Session], menu: AnyView?) -> HostedChat {
+        HostedChat(title: title, note: note, closes: !pushed, leave: { dismiss() }, agents: agents,
+                   select: { picked = $0 }, menu: menu,
+                   openInAgents: { key in
+                       // The sheet (or the pushed page) goes, and the Agents page opens on the agent.
+                       store.detailTask = nil
+                       store.detailAgent = nil
+                       AppModel.shared.open(key)
+                   },
+                   expand: pushed ? nil : { store.expand($0) })
+    }
+
+    /// The agent's own page (the Agents page's chat), its header the sheet's. Pushed, it is the detail column's page
+    /// as it is beside the Agents list (`SplitDetail`): the tab bar stays, and its leading button goes back.
+    @ViewBuilder private func agentPage(_ key: SessionKey, host: HostedChat) -> some View {
         if pushed {
             ChatView(key: key, style: .dev).id(key)
                 .environment(\.splitDetail, SplitDetail(isFirstPage: true))
+                .environment(\.hostedChat, host)
         } else {
             ChatView(key: key, style: .dev).id(key)
+                .environment(\.hostedChat, host)
         }
-    }
-
-    /// 全屏查看, before the sheet's ✕: the sheet goes down and the agent's page is pushed onto the assistant page, the
-    /// same page the Agents tab pushes (`TasksStore.expand`). Not when pushed: there it already fills the column.
-    private func expandButton(_ key: SessionKey) -> some View {
-        Button { store.expand(key) } label: {
-            Image(systemName: Theme.Icon.enlarge).font(Theme.Font.secondaryStrong)
-                .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
-        }
-        .themedButton()
-        .clipShape(.circle)
-        .accessibilityLabel("全屏查看")
-        .accessibilityIdentifier("task-detail.fullscreen")
     }
 
     /// ✕ at the sheet's trailing edge; ‹ at the pushed page's leading one.

@@ -1946,6 +1946,13 @@ if MOCK_TASKS:
         TODOS_INIT[:] = [t for t in TODOS_INIT if t.get("origin") != ASK1 or t["id"] == "todo_task_widget"]
         for _s in SESSIONS:
             if _s["session_id"] in (ORDERS, TESTS): _s.update(state="idle", status="idle", pending_interactions=0)
+    elif _dock == "multi":
+        # One task with two agents (the widget fix and, beside it, the unit tests' agent): its sheet's title switches
+        # between them (#3255).
+        TODOS_INIT[:] = [t for t in TODOS_INIT if t.get("origin") != ASK1 or t["id"] in ("todo_task_widget",)]
+        for _t in TODOS_INIT:
+            if _t["id"] == "todo_task_widget":
+                _t["agents"].append(dict(_t["agents"][0], session_id=TESTS, title="补齐网络层的单元测试"))
     elif _dock == "many":
         TODOS_INIT += [
             _task_todo("todo_task_orders", "排查 /orders 接口变慢", "", "server", ORDERS, "/home/me/code/shop-api", 20, "plan_mock_2"),

@@ -4,6 +4,7 @@ import { api, enc, errorText } from "../lib/api";
 import { ago, clock, shortPath, stateOf, tabLabel, uuid } from "../lib/format";
 import { launchAgent } from "../lib/new-agent";
 import { navigate } from "../lib/router";
+import { interactionAsk } from "../lib/inbox";
 import { plainMarkdown } from "../lib/plain-markdown";
 import { composing } from "../lib/send-history";
 import { useAgentSessions } from "../lib/sessions";
@@ -412,6 +413,8 @@ function TodoListItem({
   const urgentIx = urgent
     ? interactions.find((i) => i.machine_id === urgent.agent.machine_id && i.session_id === urgent.agent.session_id)
     : undefined;
+  // what it waits on, from its card (#4111): the question, the command; not its last words
+  const urgentAsk = urgent?.status === "needs_you" ? askText(urgentIx) : "";
   const urgentKicker = urgentIx?.kind === "plan" ? t("todos.kicker_plan") : urgentIx?.kind === "permission" ? t("todos.kicker_permission") : urgentIx?.kind === "screen" ? t("todos.kicker_screen") : urgentIx?.kind === "elicitation" ? t("todos.kicker_elicitation") : t("todos.kicker_question");
 
   return (
@@ -480,19 +483,25 @@ function TodoListItem({
         )}
 
         {/* Most Urgent Agent Line */}
-        {!todo.done_at && urgent?.session && urgentNow && (
+        {!todo.done_at && urgent?.session && (urgentAsk || urgentNow) && (
           <div className="mt-1 truncate text-[11.5px] text-ink-3">
             {urgent.status === "needs_you" && (
               <span className="font-medium text-red">
                 {t("todos.urgent_line", { name: urgent.agent.title || urgent.session.title || "Agent", kicker: urgentKicker })}
               </span>
             )}
-            {urgentNow.kind === "words" ? plainMarkdown(urgentNow.text) : urgentNow.text}
+            {urgentAsk || (urgentNow && (urgentNow.kind === "words" ? plainMarkdown(urgentNow.text) : urgentNow.text))}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+/** What a waiting agent's card asks, as one line of plain text; empty for a plan (its kicker says it) or no card. */
+function askText(ix: Interaction | undefined): string {
+  if (!ix || ix.kind === "plan") return "";
+  return plainMarkdown(interactionAsk(ix)).replace(/\s+/g, " ").trim();
 }
 
 // ── Todo Detail ──────────────────────────────────────────────
@@ -817,12 +826,12 @@ function TodoDetail({
                           {t("todos.remove")}
                         </button>
                       </div>
-                    ) : now ? (
+                    ) : now || (st === "needs_you" && askText(ix)) ? (
                       <div className="mt-1 line-clamp-2 text-[12.5px] text-ink-2">
                         {st === "needs_you" && (
                           <span className="font-medium text-red">{t("todos.kicker_line", { kicker })}</span>
                         )}
-                        {now.kind === "words" ? plainMarkdown(now.text) : now.text}
+                        {(st === "needs_you" && askText(ix)) || (now && (now.kind === "words" ? plainMarkdown(now.text) : now.text))}
                       </div>
                     ) : null}
                   </div>

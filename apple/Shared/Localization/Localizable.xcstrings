@@ -2644,6 +2644,28 @@
         }
       }
     },
+    "%@，%lld 个 Agent，点按切换": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$lld agents, tap to switch"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@、エージェント%2$lld個、タップで切り替え"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@，%2$lld 个 Agent，点按切换"
+          }
+        }
+      }
+    },
     "%@，%lld 分钟后重试": {
       "localizations": {
         "zh-Hans": {
@@ -22051,6 +22073,18 @@
     },
     "全屏查看": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full Screen"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全画面表示"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
@@ -25185,6 +25219,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "切到前台"
+          }
+        }
+      }
+    },
+    "切换 Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch Agent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エージェントを切り替え"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换 Agent"
           }
         }
       }
@@ -33751,6 +33807,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "在 /model 里多一个可选项，模型 ID 以网关为准。"
+          }
+        }
+      }
+    },
+    "在 Agents 里打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Agents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エージェントで開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Agents 里打开"
           }
         }
       }
@@ -86327,6 +86405,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个 hub 还没有监控数据：部署新版本的 hub 和这台电脑上的 node 后再看。"
+          }
+        }
+      }
+    },
+    "这个任务的 %lld 个 Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This task's %lld agents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このタスクのエージェント%lld個"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个任务的 %lld 个 Agent"
           }
         }
       }
