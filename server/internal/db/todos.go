@@ -554,6 +554,18 @@ func (d *DB) LinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, ti
 
 // LinkTodoAgentWithSource links an agent with a specific source ("manual", "space", "spawned") and via.
 func (d *DB) LinkTodoAgentWithSource(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) ([]string, error) {
+	return d.linkTodoAgentWithSource(ctx, todoID, machineID, sessionID, title, cwd, agent, startError, source, via, false, linkedAt)
+}
+
+// LinkTodoAgentOfDoneTask links an agent to a todo that is already done (see linkTodoAgentWithSource's allowDone):
+// the agent of a task the user finished while it was still starting. Linking by hand stays refused (#2954).
+func (d *DB) LinkTodoAgentOfDoneTask(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) ([]string, error) {
+	return d.linkTodoAgentWithSource(ctx, todoID, machineID, sessionID, title, cwd, agent, startError, source, via, true, linkedAt)
+}
+
+// linkTodoAgentWithSource links an agent to a todo, refusing a todo that is done (ErrTodoCompleted) unless allowDone:
+// a done todo keeps the agents started for it (tasks_close.go retires them), it just gets no new ones by hand.
+func (d *DB) linkTodoAgentWithSource(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, allowDone bool, linkedAt time.Time) ([]string, error) {
 	conn, err := d.pool.Acquire(ctx)
 	if err != nil {
 		return nil, err
@@ -566,7 +578,7 @@ func (d *DB) LinkTodoAgentWithSource(ctx context.Context, todoID, machineID, ses
 		if err != nil {
 			return err
 		}
-		if targetDoneAt != nil {
+		if targetDoneAt != nil && !allowDone {
 			return ErrTodoCompleted
 		}
 

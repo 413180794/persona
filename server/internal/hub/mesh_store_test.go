@@ -530,6 +530,9 @@ func (s *meshStore) LinkTodoAgent(context.Context, string, string, string, strin
 func (s *meshStore) LinkTodoAgentWithSource(context.Context, string, string, string, string, string, string, string, string, string, time.Time) ([]string, error) {
 	return nil, nil
 }
+func (s *meshStore) LinkTodoAgentOfDoneTask(context.Context, string, string, string, string, string, string, string, string, string, time.Time) ([]string, error) {
+	return nil, nil
+}
 func (s *meshStore) AutoLinkTodoAgent(context.Context, string, string, string, string, string, string, string, string, string, time.Time) (bool, []string, error) {
 	return true, nil, nil
 }

@@ -94,6 +94,11 @@ struct SettingsView: View {
                         }
                         .settingsListRow(SettingsPage.assistant)
                         .accessibilityIdentifier("settings-assistant")
+                        NavigationLink(value: SettingsPage.triage) {
+                            SettingsRow(title: "会话分诊", symbol: Theme.Icon.triage, tint: Theme.ai)
+                        }
+                        .settingsListRow(SettingsPage.triage)
+                        .accessibilityIdentifier("settings-triage")
                         NavigationLink(value: SettingsPage.claude) {
                             SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)
                         }
@@ -340,6 +345,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorBot") { p.append(SettingsPage.feishuBot) }
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
+        else if d.bool(forKey: "openTriageSettings") { p.append(SettingsPage.triage) }
         else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | icon | layout | scheme
             p.append(a == "color" ? SettingsPage.themeColor : a == "style" ? SettingsPage.style
                      : a == "icon" ? SettingsPage.appIcon : a == "layout" ? SettingsPage.layout
@@ -403,6 +409,8 @@ struct SettingsView: View {
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
     case persona, themeColor, style, appIcon, layout, colorScheme, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
+    /// 设置 › 会话分诊 (docs/agent-work.md「开关」).
+    case triage
     /// 设置 › hub: the hubs paired, by group (docs/multi-hub.md).
     case hubs
     case hub, skills
@@ -471,6 +479,7 @@ private struct SettingsDestinations: ViewModifier {
         case .notifications: NotificationSettingsView()
         case .storage: StorageView()
         case .translation: TranslationSettingsView()
+        case .triage: TriageSettingsView()
         case .modelConfiguration: ModelConfigurationView()
         case .hubs: HubsView()
         case .sshTunnel(let id): HubSSHTunnelPage(hubID: id)

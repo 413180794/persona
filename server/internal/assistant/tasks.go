@@ -470,14 +470,16 @@ func applyPlanEdit(t *PlanTask, e PlanTask) {
 // (node's claudeStartWait, #1396).
 const taskStartTimeout = 5 * time.Minute
 
-// startPlanTask starts one task's agent and links it to the task's todo. A failure ends the task: the todo is done
-// with why (so nothing shows it as going on, #1077), the plan keeps the error, and the conversation gets a receipt —
-// one per task: a retry that fails again (retry) updates the error the receipt shows (clients read it off the todo).
+// startPlanTask starts one task's agent and links it to the task's todo. A failed start ends the task: the todo is
+// done with why (so nothing shows it as going on, #1077), the plan keeps the error, and the conversation gets a
+// receipt — one per task: a retry that fails again (retry) updates the error the receipt shows (clients read it off
+// the todo). A task the user finished while its agent was still starting (#2954) is not a failed start: the agent
+// that did start stays in the task and the close loop retires it (tasks_close.go).
 func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, retry bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), taskStartTimeout)
 	defer cancel()
 	placed := t.Machine
-	sid, err := s.startTaskAgent(ctx, &t)
+	mid, sid, err := s.startTaskAgent(ctx, &t)
 	if err != nil && ctx.Err() == nil {
 		// The machine's link dropped (a node restarting, a tunnel blinking): try once more after a moment. Any other
 		// failure now counts against the launcher there, so the retry goes to a machine where it works, if one has it.
@@ -489,7 +491,7 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 			s.logf("task %s: start: %v; retrying", t.TodoID, err)
 			select {
 			case <-time.After(taskStartRetryDelay):
-				sid, err = s.startTaskAgent(ctx, &t)
+				mid, sid, err = s.startTaskAgent(ctx, &t)
 			case <-ctx.Done():
 			}
 		}
@@ -498,8 +500,15 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 		s.updatePlanTask(ctx, planID, i, t)
 	}
 	if err == nil {
-		m, _ := s.machineByName(ctx, t.Machine)
-		err = s.linkTodoAgent(ctx, t.TodoID, m.ID, sid, t.Title, t.Cwd, "")
+		err = s.linkTodoAgent(ctx, t.TodoID, mid, sid, t.Title, t.Cwd, "")
+		if errors.Is(err, db.ErrTodoCompleted) {
+			// The user tapped 完成 while the agent was starting (a busy machine takes minutes, #1396). The task stays
+			// done and its agent stays in it: nothing reads failed, and the close loop still finds the agent to retire.
+			err = s.linkTodoAgentOfDoneTask(ctx, t.TodoID, mid, sid, t.Title, t.Cwd, "")
+			if err != nil {
+				s.logf("task %s: link to the finished task: %v", t.TodoID, err)
+			}
+		}
 	}
 	if err == nil {
 		return
@@ -723,12 +732,13 @@ func (s *Service) healthyPlace(ctx context.Context, t *PlanTask) bool {
 }
 
 // startTaskAgent starts the agent for t on its machine (another when its launcher does not work there: t says which)
-// and answers its session id. A failed start counts against the launcher there.
-func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (string, error) {
+// and answers the machine's id and the session's: the machine it reached is the one the agent is linked to (looking it
+// up again after the start could find another, or none). A failed start counts against the launcher there.
+func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (mid, sid string, err error) {
 	s.healthyPlace(ctx, t)
 	m, ok := s.machineByName(ctx, t.Machine)
 	if !ok {
-		return "", fmt.Errorf("unknown machine %q", t.Machine)
+		return "", "", fmt.Errorf("unknown machine %q", t.Machine)
 	}
 	params := map[string]any{"cwd": t.Cwd, "launcher": t.Launcher, "prompt": t.Prompt, "tab_name": s.tabName(ctx, t.Title)}
 	if t.Model != "" {
@@ -738,7 +748,7 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (string, erro
 		params["permission_mode"] = t.Permission
 	}
 	if err := s.applyModel(ctx, "agent.new", params); err != nil {
-		return "", err
+		return "", "", err
 	}
 	var res struct {
 		Session proto.Session `json:"session"`
@@ -746,9 +756,9 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (string, erro
 	if err := s.call(ctx, m.ID, DeviceSessionStart, params, &res); err != nil {
 		picked, _ := params["launcher"].(string)
 		s.recordStartFailure(ctx, m.ID, s.startLauncher(ctx, picked), err)
-		return "", err
+		return "", "", err
 	}
-	return res.Session.SessionID, nil
+	return m.ID, res.Session.SessionID, nil
 }
 
 // updatePlanTask keeps the machine, directory and why task i of started plan planID runs with now.

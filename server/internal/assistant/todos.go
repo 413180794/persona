@@ -84,6 +84,7 @@ type todoStore interface {
 	UnlinkTodoSpace(ctx context.Context, todoID, machineID, space string) error
 	RenameTodoSpace(ctx context.Context, machineID, oldSpace, newSpace string) (bool, error)
 	LinkTodoAgentWithSource(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) ([]string, error)
+	LinkTodoAgentOfDoneTask(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) ([]string, error)
 	AutoLinkUnlinkedTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) (bool, []string, error)
 	UnlinkTodoAgent(ctx context.Context, todoID, machineID, sessionID string) error
 	UpdateTodoAgentSnapshot(ctx context.Context, machineID, sessionID, title, startError string) error
@@ -1070,15 +1071,32 @@ func (s *Service) linkTodoAgent(ctx context.Context, todoID, mid, sid, title, cw
 	return s.linkTodoAgentWithSource(ctx, todoID, mid, sid, title, cwd, agent, "", "manual", "")
 }
 
+// linkTodoAgentOfDoneTask links the agent of a task that started while the user finished it, to that done todo: the
+// task keeps the agent (and shows it) instead of the start reading as failed, and the close loop (tasks_close.go)
+// retires it. Unlike linkTodoAgent, a finished todo is not refused.
+func (s *Service) linkTodoAgentOfDoneTask(ctx context.Context, todoID, mid, sid, title, cwd, agent string) error {
+	return s.linkTodoAgentWithSourceAllowingDone(ctx, todoID, mid, sid, title, cwd, agent, "", "manual", "", true)
+}
+
 // linkTodoAgentWithSource links an agent with a specific source ("manual", "space", "spawned") and via.
 func (s *Service) linkTodoAgentWithSource(ctx context.Context, todoID, mid, sid, title, cwd, agent, startError, source, via string) error {
+	return s.linkTodoAgentWithSourceAllowingDone(ctx, todoID, mid, sid, title, cwd, agent, startError, source, via, false)
+}
+
+// linkTodoAgentWithSourceAllowingDone links the agent, refusing a todo that is done (db.ErrTodoCompleted) unless
+// allowDone: agents of done tasks stay linked (tasks_close.go retires them), new ones are not attached by hand.
+func (s *Service) linkTodoAgentWithSourceAllowingDone(ctx context.Context, todoID, mid, sid, title, cwd, agent, startError, source, via string, allowDone bool) error {
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
 
 	if st := s.todoDB(); st != nil {
-		if _, err := st.LinkTodoAgentWithSource(ctx, todoID, mid, sid, title, cwd, agent, startError, source, via, now); err != nil {
+		link := st.LinkTodoAgentWithSource
+		if allowDone {
+			link = st.LinkTodoAgentOfDoneTask
+		}
+		if _, err := link(ctx, todoID, mid, sid, title, cwd, agent, startError, source, via, now); err != nil {
 			return err
 		}
 	} else {
@@ -1086,7 +1104,7 @@ func (s *Service) linkTodoAgentWithSource(ctx context.Context, todoID, mid, sid,
 		if !ok {
 			return db.ErrTodoNotFound
 		}
-		if t.DoneAt != nil {
+		if t.DoneAt != nil && !allowDone {
 			return db.ErrTodoCompleted
 		}
 	}
@@ -1134,7 +1152,9 @@ func (s *Service) linkTodoAgentWithSource(ctx context.Context, todoID, mid, sid,
 				Agent: agent, StartError: startError, Source: source, Via: via})
 		}
 		target.UpdatedAt = now
-		s.todos.activeBySession[[2]string{mid, sid}] = todoID
+		if target.DoneAt == nil { // as loadTodosLocked has it: only an open todo's agents work for it
+			s.todos.activeBySession[[2]string{mid, sid}] = todoID
+		}
 	}
 	s.todos.mu.Unlock()
 

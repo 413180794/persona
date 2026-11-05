@@ -385,6 +385,13 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(State.self, from: await request("PUT", "/api/v1/machines/\(machine)/botmux", body: Body(on: on))).on
     }
 
+    /// 设置 › 会话分诊 (docs/agent-work.md「开关」): the four switches, all off until the user turns them on. 404 on a hub
+    /// without the triage, 503 while its assistant is not connected.
+    func agentTriage() async throws -> TriageSwitches { try await get("/api/v1/agents/triage", as: TriageSwitches.self) }
+    func setAgentTriage(_ switches: TriageSwitches) async throws -> TriageSwitches {
+        try JSON.decoder.decode(TriageSwitches.self, from: await request("PUT", "/api/v1/agents/triage", body: switches))
+    }
+
     /// What the machine has of Cua Driver now (its node is asked); 404 while the hub's plugin cua is off.
     func computer(machine: String) async throws -> MachineComputer {
         try JSON.decoder.decode(MachineComputer.self, from: await request("GET", "/api/v1/machines/\(machine)/computer"))

@@ -475,6 +475,12 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   续上；正在回答或有后台任务就等这一轮之后的第一条消息再换进程。
 - 选择器开着时 herdr 把 Agent 报成 blocked，hub 1.5 秒后会把它当成要处理的终端对话框推给手机：node 操作期间不报 blocked。
 
+## 会话分诊（设置 › 会话分诊，#3078）
+
+在「助手」下面，和网页、安卓一样四个开关（`GET / PUT /api/v1/agents/triage`，存在 hub，各端一致，默认全关；含义和花谁的 token 见 `docs/agent-work.md`「开关」）：
+总开关和「分诊模型」（打开模型配置的 `agent.triage`），下面一段是要你决定的开卡片、出错自动继续、到点叫醒，总开关关着时不能改。
+改了立刻存，没改成退回原值并在页顶说原因；老 hub（404）只说不支持。`TriageSettingsModel` / `TriageSettingsView`，Mac 共用。
+
 ## 翻译（设置 › 翻译，2026-10-31）
 
 开了「自动翻译」以后，内容不是目标语言（默认简体中文）就自动翻译，随时可以切回原文。

@@ -409,3 +409,37 @@ func TestRenameTodoSpaceConflictVoidsOldLink(t *testing.T) {
 		}
 	}
 }
+
+// An agent linked to a todo the user already finished stays linked (#2954): that is what a task's start does when the
+// user taps 完成 while the agent is still starting, so the task keeps the agent and the close loop retires it.
+// Linking one to a done todo by hand stays refused.
+func TestLinkTodoAgentOfDoneTask(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	now := time.Now().Truncate(time.Millisecond)
+	if err := d.CreateTodo(ctx, TodoRow{ID: "td1", Title: "Todo 1", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	done := true
+	if _, err := d.UpdateTodo(ctx, "td1", nil, nil, &done, now); err != nil {
+		t.Fatalf("UpdateTodo done: %v", err)
+	}
+	if _, err := d.LinkTodoAgent(ctx, "td1", "macbook", "s1", "Agent 1", "/cwd", "claude", "", now); err != ErrTodoCompleted {
+		t.Fatalf("expected ErrTodoCompleted linking by hand, got %v", err)
+	}
+	if _, err := d.LinkTodoAgentOfDoneTask(ctx, "td1", "macbook", "s1", "Agent 1", "/cwd", "claude", "", "manual", "", now); err != nil {
+		t.Fatalf("LinkTodoAgentOfDoneTask: %v", err)
+	}
+	agents, err := d.ListAllTodoAgents(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 1 || agents[0].TodoID != "td1" || agents[0].SessionID != "s1" || agents[0].ReleasedAt != nil {
+		t.Fatalf("the done todo's agent: %+v", agents)
+	}
+	if row, err := d.GetTodo(ctx, "td1"); err != nil || row.DoneAt == nil || row.StartError != "" {
+		t.Fatalf("the done todo changed: %+v %v", row, err)
+	}
+	if _, err := d.LinkTodoAgentOfDoneTask(ctx, "nope", "macbook", "s2", "Agent 2", "/cwd", "claude", "", "manual", "", now); err != ErrTodoNotFound {
+		t.Fatalf("expected ErrTodoNotFound for a missing todo, got %v", err)
+	}
+}

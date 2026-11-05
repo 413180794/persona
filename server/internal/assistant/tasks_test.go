@@ -433,3 +433,62 @@ func TestTaskPlanStartsWhatTheUserAskedFor(t *testing.T) {
 		t.Fatalf("%d agents started without the user", len(f2.starts))
 	}
 }
+
+// A task the user finishes while its agent is still starting (a busy machine takes minutes, #1396) stays done: no
+// start error over it, the agent that did start stays in the task — so the close loop (tasks_close.go) retires it
+// instead of it working for no task at all (#2954).
+func TestTaskFinishedWhileItsAgentStarts(t *testing.T) {
+	ctx := context.Background()
+	s, f := newTaskService(t)
+	todo, err := s.createTodo(ctx, "修登录崩溃", "修好并补测试", "conv1", "plan_x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 完成, tapped while the start is on its way: PATCH /api/v1/todos/{id} {"done":true}.
+	done := time.Now().UTC()
+	if _, ok := s.applyTodoRow(ctx, todo.ID, db.TodoRow{ID: todo.ID, Title: todo.Title, Notes: todo.Notes,
+		CreatedAt: todo.CreatedAt, UpdatedAt: done, DoneAt: &done}, nil); !ok {
+		t.Fatal("applyTodoRow")
+	}
+	// ... and the start finishes after it.
+	s.startPlanTask("plan_x", "conv1", 0, PlanTask{Title: todo.Title, Prompt: "修好并补测试", Machine: "box",
+		Cwd: "/code/app", TodoID: todo.ID}, false)
+
+	f.mu.Lock()
+	starts := len(f.starts)
+	f.mu.Unlock()
+	if starts != 1 {
+		t.Fatalf("session.start calls = %d", starts)
+	}
+	got := todoNow(s, todo.ID)
+	if got.DoneAt == nil || !got.DoneAt.Equal(done) {
+		t.Fatalf("the task the user finished is not done any more: %v", got.DoneAt)
+	}
+	if got.StartError != "" {
+		t.Fatalf("the task the user finished shows a start error: %q", got.StartError)
+	}
+	if st := taskState(got, nil); st != "done" {
+		t.Fatalf("the task the user finished reads as %q", st)
+	}
+	if len(got.Agents) != 1 || got.Agents[0].SessionID != "s1" || got.Agents[0].MachineID != "box" || got.Agents[0].ReleasedAt != nil {
+		t.Fatalf("the agent that started is not kept in the task: %+v", got.Agents)
+	}
+
+	// 重试 would reopen the task the user finished: it is not a failed start, so it is refused.
+	if _, err := s.retryTask(ctx, todo.ID); !errors.Is(err, errTaskNotRetryable) {
+		t.Fatalf("retry answered %v", err)
+	}
+	if got := todoNow(s, todo.ID); got.DoneAt == nil {
+		t.Fatalf("retry reopened the task the user finished")
+	}
+
+	// The agent that started is a done task's agent: once still, the close loop retires it.
+	old := taskCloseIdle
+	taskCloseIdle = 0
+	t.Cleanup(func() { taskCloseIdle = old })
+	f.setSessions("box", idleAgent(time.Now().Add(-time.Hour)))
+	s.closeDoneTaskAgents(ctx, taskCloseRefused{})
+	if got := f.retires(); len(got) != 1 || got[0] != "s1" {
+		t.Fatalf("the agent that started is not retired: %v", got)
+	}
+}

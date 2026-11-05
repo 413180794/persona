@@ -46,6 +46,8 @@ extension Theme {
         static let goal = "target"
         static let recurring = "repeat"
         static let schedule = "alarm"
+        /// The session triage: a stopped agent read to say whether it is done or what it waits for (设置 › 会话分诊).
+        static let triage = "text.badge.checkmark"
         /// Persona woke a waiting agent up (a message it typed in for the model, `Injected`).
         static let wakeUp = "bell.and.waves.left.and.right"
         /// A task that waits for the user's answer (its notice in the main conversation, `Injected`).

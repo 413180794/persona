@@ -807,6 +807,38 @@ nonisolated struct WorkState: Codable, Hashable, Sendable {
     }
 }
 
+/// The session triage's switches (`GET / PUT /api/v1/agents/triage`, docs/agent-work.md「开关」): the triage itself, then
+/// what it may do, each only while it is on. A switch the hub leaves out is off.
+nonisolated struct TriageSwitches: Codable, Hashable, Sendable {
+    var enabled = false
+    /// Waits for the user's decision become 需要你 cards.
+    var decide = false
+    /// 继续 after a passing model API error.
+    var autoContinue = false
+    /// Wakes the agent to check on a deploy, CI or another agent.
+    var wake = false
+
+    enum CodingKeys: String, CodingKey {
+        case enabled, decide, wake
+        case autoContinue = "auto_continue"
+    }
+
+    init(enabled: Bool = false, decide: Bool = false, autoContinue: Bool = false, wake: Bool = false) {
+        self.enabled = enabled
+        self.decide = decide
+        self.autoContinue = autoContinue
+        self.wake = wake
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        decide = try c.decodeIfPresent(Bool.self, forKey: .decide) ?? false
+        autoContinue = try c.decodeIfPresent(Bool.self, forKey: .autoContinue) ?? false
+        wake = try c.decodeIfPresent(Bool.self, forKey: .wake) ?? false
+    }
+}
+
 /// The agent a blocked session waits for (`work.agent`).
 nonisolated struct WorkAgent: Codable, Hashable, Sendable {
     var machineID: String
