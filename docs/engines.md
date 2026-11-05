@@ -87,7 +87,7 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
   会话按线程 id 列、对话记录按 rollout 读（`docs/codex.md`），标题优先用线程名、没有就用 botmux 的话题标题（`botmuxThreads`）。
   找不到 rollout 的不列：刚开、第一条提示还没写进 rollout 的（下一次刷新就有），以及 botmux 给 bot 单独设了 `CODEX_HOME` / `TRAE_HOME`、node 不认识的目录里的
   （Codex 读 node 已知的各个 Codex home，TRAEX 只读 `~/.trae/cli`）。`codex-app`（botmux 走 app-server 驱动 Codex，提示里不带会话 id）和其他 CLI 不列。
-  空间是工作目录（和 Herdr App 没放进空间的终端一样），名字是 botmux 的会话标题。
+  空间是工作目录（和 Herdr App 没放进空间的终端一样；去掉结尾的 `/`，同一目录不拆成两个），名字是目录最后一段；和上一级目录同名（不分大小写）时带上上一级（`Botmux/botmux`，#1836），只看自己的路径，不随别的会话在不在列变化，置顶、屏蔽、整组挂按名字认的不会来回失效。
 - **发消息**：三家一样，交给 botmux 投递（它的 dashboard 的 `POST /api/trigger`，目标是这个会话），不往终端里打字：会话忙时 botmux 排队，
   挂起的会话 botmux 自己续上（不会在 herdr 里另起一个 `claude --resume`；挂起超过 7 天、不在列表里的也一样），回答照常发回飞书话题。
   dashboard 的 token 由 node 跑 `botmux dashboard current` 取，只存在内存里，只连本机 127.0.0.1。消息在 Claude 那边带着 botmux 的任务标签和一段「外部事件」说明。

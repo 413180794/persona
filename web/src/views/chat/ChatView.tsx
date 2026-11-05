@@ -883,7 +883,19 @@ export function Header({
           <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>
           {session && !assistant && state !== "idle" && <span className="hidden sm:contents"><StatePill state={state} /></span>}
         </div>
-        {sub && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
+        {sub && !(session?.todo && !assistant) && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
+        {/* the todo it works for, up top (#1836): opens the todo, 改挂 picks another */}
+        {session?.todo && !assistant && (
+          <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
+            <button type="button" onClick={() => navigate(`/todos?id=${encodeURIComponent(session.todo!.id)}`)} title={`待办：${session.todo.title}`}
+              className="flex min-w-0 items-center gap-1 whitespace-nowrap rounded px-1 text-ink-2 hover:bg-hover hover:text-ink">
+              <Icon name="todo" size={11} stroke={2} className="shrink-0" />
+              <span className="truncate">{session.todo.title}</span>
+            </button>
+            <button type="button" onClick={() => setLinkTodoOpen(true)} className="shrink-0 whitespace-nowrap rounded px-1 hover:bg-hover hover:text-ink">改挂</button>
+            {sub && <span title={sub} className="min-w-0 truncate">· {sub}</span>}
+          </div>
+        )}
       </div>
       {topCenter && <div className="flex min-w-0 flex-1 justify-center lg:hidden">{topCenter}</div>}
       <div className={headerSlot(Boolean(topCenter), "end")}>

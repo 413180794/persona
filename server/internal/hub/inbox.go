@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -417,18 +418,40 @@ func positionAfter(a, b string) bool {
 	return x > y
 }
 
-// openFor finds the open item of a Feishu chat / mail thread (one this round started too); done is the newest done one.
-func (b *inbox) openFor(match func(*InboxItem) bool) (open, done *InboxItem) {
-	b.each(func(it *InboxItem) {
-		if !match(it) {
-			return
+// threadIndex is the items (and the running round's) by thread, for a collection that looks up one thread per
+// thing: openFor on each scanned the whole inbox, a week of chats for each of Feishu's few hundred unread ones.
+// key is the item's thread among the ones looked up, false for an item of another source. Under b.mu.
+type threadIndex struct {
+	key func(*InboxItem) (string, bool)
+	by  map[string][]*InboxItem
+}
+
+func (b *inbox) threads(key func(*InboxItem) (string, bool)) *threadIndex {
+	x := &threadIndex{key: key, by: map[string][]*InboxItem{}}
+	b.each(x.note)
+	return x
+}
+
+// note files it under its thread: an item added, or one whose thread may have changed. An entry under a thread it
+// has left is skipped by the lookups.
+func (x *threadIndex) note(it *InboxItem) {
+	if k, ok := x.key(it); ok && !slices.Contains(x.by[k], it) {
+		x.by[k] = append(x.by[k], it)
+	}
+}
+
+// openFor finds the open item of a thread (one this round started too); done is the newest done one.
+func (x *threadIndex) openFor(thread string) (open, done *InboxItem) {
+	for _, it := range x.by[thread] {
+		if k, ok := x.key(it); !ok || k != thread {
+			continue
 		}
 		if it.open() {
 			open = it
 		} else if done == nil || it.UpdatedAt.After(done.UpdatedAt) {
 			done = it
 		}
-	})
+	}
 	return open, done
 }
 
@@ -578,6 +601,12 @@ func (b *inbox) applyMail(a mail.MailAccount, msgs []mail.MailSummary, now time.
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var changed []*InboxItem
+	index := b.threads(func(it *InboxItem) (string, bool) {
+		if it.Mail == nil || it.Mail.AccountID != a.ID {
+			return "", false
+		}
+		return it.Mail.Thread, true
+	})
 	for _, t := range order {
 		list := threads[t]
 		sort.Slice(list, func(i, j int) bool { return list[i].UID < list[j].UID })
@@ -588,9 +617,7 @@ func (b *inbox) applyMail(a mail.MailAccount, msgs []mail.MailSummary, now time.
 				unseen = append(unseen, m)
 			}
 		}
-		open, done := b.openFor(func(it *InboxItem) bool {
-			return it.Mail != nil && it.Mail.AccountID == a.ID && it.Mail.Thread == t
-		})
+		open, done := index.openFor(t)
 		if open == nil && done != nil {
 			last, _ := strconv.ParseUint(done.Last, 10, 32)
 			var fresh []mail.MailSummary
@@ -622,6 +649,7 @@ func (b *inbox) applyMail(a mail.MailAccount, msgs []mail.MailSummary, now time.
 				Account: a.ID, Mail: &InboxMail{AccountID: a.ID, Mailbox: newest.Mailbox, Thread: t}}
 			it.StartedAt, _ = time.Parse(time.RFC3339, unseen[0].Date)
 			b.add("mail", it)
+			index.note(it)
 		}
 		it.AccountName = a.Email
 		it.Title = newest.Subject

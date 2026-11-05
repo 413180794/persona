@@ -278,7 +278,7 @@ func (r botmuxRow) agent() (host.Agent, bool) {
 		return host.Agent{}, false
 	}
 	a := host.Agent{
-		Agent: kind, Name: botmuxTitle(r.Raw.Title), Cwd: r.WorkingDirectory, WorkspaceID: dirSpace + r.WorkingDirectory,
+		Agent: kind, Name: botmuxTitle(r.Raw.Title), Cwd: botmuxDir(r.WorkingDirectory), WorkspaceID: dirSpace + botmuxDir(r.WorkingDirectory),
 		PaneID: host.PaneRef{Kind: host.Botmux, ID: r.Identity.SessionID}.String(),
 	}
 	if kind == "claude" {
@@ -385,7 +385,27 @@ func (h *botmuxHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 			l.Spaces = append(l.Spaces, host.Space{ID: a.WorkspaceID, Label: filepath.Base(a.Cwd), Number: len(l.Spaces) + 1, Cwd: a.Cwd})
 		}
 	}
+	botmuxSpaceLabels(l.Spaces)
 	return l, nil
+}
+
+// botmuxDir is a working directory as one space: botmux keeps it as typed, with or without the trailing slash (#1836).
+func botmuxDir(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	return filepath.Clean(dir)
+}
+
+// botmuxSpaceLabels names a space whose directory reads like its parent's, ignoring case ("Botmux/botmux"), by both:
+// next to the parent's own space the two looked like one listed twice (#1836). The label hangs on the space's own path
+// only, never on which other spaces are listed now, so pins, mutes and todos keyed by it stay put.
+func botmuxSpaceLabels(spaces []host.Space) {
+	for i, sp := range spaces {
+		if parent := filepath.Base(filepath.Dir(sp.Cwd)); strings.EqualFold(parent, sp.Label) {
+			spaces[i].Label = parent + "/" + sp.Label
+		}
+	}
 }
 
 // row is a session's row by id, listed or parked for longer (paneFor finds it to reply to).

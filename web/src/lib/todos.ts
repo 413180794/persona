@@ -251,7 +251,7 @@ function sessionRank(s: Session, mutes: AgentMutes): number {
 /**
  * Agents 侧边栏「按待办」分组纯函数：
  * - 每个有挂着 Agent 的未完成待办一段，段头是待办标题和状态，点段头进待办
- * - 没挂待办的 Agent 放最后「没有待办」一段
+ * - 没挂待办的 Agent 放最后「未归属」一段，默认折叠（#1836）
  * - 置顶、屏蔽、「最近（未运行）」的规则和「按状态」一致
  */
 export function buildTodoAgentGroups(
@@ -318,7 +318,7 @@ export function buildTodoAgentGroups(
     }
   }
 
-  // 没挂待办的放最后「没有待办」一段
+  // 没挂待办的放最后「未归属」一段，默认折叠
   const unassigned = live.filter((s) => !assignedSessionKeys.has(`${s.machine_id}/${s.session_id}`));
   if (unassigned.length > 0) {
     unassigned.sort((a, b) => {
@@ -329,8 +329,11 @@ export function buildTodoAgentGroups(
     });
     groups.push({
       key: "todo:none",
-      name: "没有待办",
+      name: "未归属",
       sessions: unassigned,
+      // folded below todos, unless something in it needs you (unread alone stays folded: many lists always have some);
+      // with no todo above it is the whole list, so open
+      folded: groups.length > 0 && !unassigned.some((s) => stateOf(s) === "needs_you"),
     });
   }
 

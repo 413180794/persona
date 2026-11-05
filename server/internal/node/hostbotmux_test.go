@@ -1001,3 +1001,28 @@ func TestBotmuxFailureNoticeAndStaleAttention(t *testing.T) {
 		}
 	}
 }
+
+// One directory with or without its trailing slash is one space; a directory named like its parent, ignoring case,
+// carries the parent in its label, whatever else is listed (#1836).
+func TestBotmuxSpacesByCleanDirectoryAndDistinctLabels(t *testing.T) {
+	if got := botmuxDir("/work/Botmux/"); got != "/work/Botmux" {
+		t.Fatalf("botmuxDir = %q", got)
+	}
+	spaces := []host.Space{
+		{ID: dirSpace + "/work/Botmux", Label: "Botmux", Cwd: "/work/Botmux"},
+		{ID: dirSpace + "/work/Botmux/botmux", Label: "botmux", Cwd: "/work/Botmux/botmux"},
+		{ID: dirSpace + "/work/app", Label: "app", Cwd: "/work/app"},
+	}
+	botmuxSpaceLabels(spaces)
+	var got []string
+	for _, sp := range spaces {
+		got = append(got, sp.Label)
+	}
+	if want := []string{"Botmux", "Botmux/botmux", "app"}; !slices.Equal(got, want) {
+		t.Fatalf("labels = %v, want %v", got, want)
+	}
+	alone := []host.Space{{ID: dirSpace + "/work/Botmux/botmux", Label: "botmux", Cwd: "/work/Botmux/botmux"}}
+	if botmuxSpaceLabels(alone); alone[0].Label != "Botmux/botmux" {
+		t.Fatalf("alone label = %q, want the same as beside its parent", alone[0].Label)
+	}
+}

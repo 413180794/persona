@@ -141,10 +141,14 @@ func (h *Hub) settleConnector(ctx context.Context, id string, s connector.InboxS
 // moves until it is done; a move after that starts a new item; a thing that is over closes its open item.
 func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, now time.Time) []*InboxItem {
 	var changed []*InboxItem
+	index := b.threads(func(it *InboxItem) (string, bool) {
+		if it.Source != id || it.Connector == nil {
+			return "", false
+		}
+		return it.Connector.Thread, true
+	})
 	for _, t := range things {
-		open, done := b.openFor(func(it *InboxItem) bool {
-			return it.Source == id && it.Connector != nil && it.Connector.Thread == t.Thread
-		})
+		open, done := index.openFor(t.Thread)
 		if t.Done != "" {
 			if open != nil {
 				open.done(now, t.Done)
@@ -185,6 +189,7 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 			StartedAt: t.At, Count: 1}
 		fillConnectorItem(it, t)
 		b.add(id, it)
+		index.note(it)
 		changed = append(changed, it)
 	}
 	return changed

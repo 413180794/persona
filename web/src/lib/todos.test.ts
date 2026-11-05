@@ -266,7 +266,7 @@ describe("最要紧的 Agent (mostUrgentAgent)", () => {
 describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
   const mutes: AgentMutes = { spaces: [], sessions: ["mac-1/muted-work"] };
 
-  it("每个挂了 live agent 的未完成待办一段，没挂待办的放最后「没有待办」", () => {
+  it("每个挂了 live agent 的未完成待办一段，没挂待办的放最后「未归属」，默认折叠", () => {
     const sWeatherTests = mockSession("mac-1", "weather-tests", "needs_you", { todo: { id: "todo-weather", title: "天气 App" } });
     const sWeatherWidget = mockSession("mac-1", "weather-widget", "working", { todo: { id: "todo-weather", title: "天气 App" } });
     const sBlog = mockSession("mac-1", "blog-migrate", "unread", { todo: { id: "todo-blog", title: "博客迁移" } });
@@ -295,7 +295,8 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
     ];
 
     const groups = buildTodoAgentGroups(all, machines, todos, mutes);
-    expect(groups.map((g) => g.name)).toEqual(["天气 App 发 1.3 版", "博客迁移到 Astro", "没有待办"]);
+    expect(groups.map((g) => g.name)).toEqual(["天气 App 发 1.3 版", "博客迁移到 Astro", "未归属"]);
+    expect(groups[groups.length - 1].folded).toBe(true);
     expect(groups[0].todoStatus).toBe("needs_you");
     expect(groups[0].sessions.map((s) => s.session_id)).toEqual(["weather-tests", "weather-widget"]);
     expect(groups[1].todoStatus).toBe("unread");
@@ -317,8 +318,10 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
     ];
 
     const groups = buildTodoAgentGroups([sDoneTask], machines, todos, mutes);
-    // 因为 todo-done 已完成，不作为未完成待办生成段，该 session 归入「没有待办」
-    expect(groups.map((g) => g.name)).toEqual(["没有待办"]);
+    // 因为 todo-done 已完成，不作为未完成待办生成段，该 session 归入「未归属」
+    expect(groups.map((g) => g.name)).toEqual(["未归属"]);
+    // nothing above it: the whole list, open
+    expect(groups[0].folded).toBe(false);
     expect(groups[0].sessions.map((s) => s.session_id)).toEqual(["done-task"]);
   });
 

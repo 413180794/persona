@@ -13,8 +13,24 @@ export const AGENT_GROUPINGS: { key: AgentGrouping; label: string }[] = [
   { key: "todo", label: "按待办" },
 ];
 
+// the grouping this browser chose last (jarvis.agentGrouping), by todo included (#1836); by machine until it chooses (#1990)
 export function agentGrouping(value: string | null): AgentGrouping {
   return AGENT_GROUPINGS.find((g) => g.key === value)?.key ?? "machine";
+}
+
+// the host kinds a pane ref may be prefixed with (keep in step with Kinds in server/internal/host/host.go); herdr's ids go bare and may hold a colon
+const HOST_KINDS = ["orca", "herdr-core", "botmux"];
+
+/** The host tool a session lives in, from its pane ref (`botmux:…`, `orca:…`; anything else is herdr's); "" for none. */
+export function sessionHost(s: Session): string {
+  if (!s.pane_id) return "";
+  const kind = s.pane_id.slice(0, s.pane_id.indexOf(":"));
+  return HOST_KINDS.includes(kind) ? kind : "herdr";
+}
+
+/** The hosts a list's sessions run in, so a row names its host only when there is more than one. */
+export function hostsOf(sessions: Session[]): Set<string> {
+  return new Set(sessions.map(sessionHost).filter(Boolean));
 }
 
 export interface AgentMutes {

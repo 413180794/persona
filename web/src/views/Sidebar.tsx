@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
-import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
+import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { buildMachineTree, resolveTab, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
@@ -252,7 +252,9 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
     if (todosSupported === false) return AGENT_GROUPINGS.filter((g) => g.key !== "todo");
     return AGENT_GROUPINGS;
   }, [todosSupported]);
-  const groupingLabel = (availableGroupings.find((g) => g.key === grouping) ?? availableGroupings[0]).label;
+  // a hub without todos shows by machine, a by-todo choice kept for when it has them
+  const shownGrouping = todosSupported === false && grouping === "todo" ? "machine" : grouping;
+  const groupingLabel = (availableGroupings.find((g) => g.key === shownGrouping) ?? availableGroupings[0]).label;
   // the quick filter (全部 / 需要你 / 未读 / 工作中), stacked on any grouping; what it showed when chosen stays (`kept`)
   const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("jarvis.agentFilter")));
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
@@ -276,12 +278,14 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const recent = useMemo(() => (filtered ? [] : offline.filter((s) => !pinnedAgents.some((p) => agentKey(p) === agentKey(s)))), [filtered, offline, pinnedAgents]);
   const { spaces, loose } = useMemo(() => buildSpaces(unpinned, machines), [unpinned, machines]);
   const groups = useMemo(() => {
-    if (grouping === "space" || grouping === "repo" || grouping === "machine") return [];
-    if (grouping === "todo") return buildTodoAgentGroups(unpinned, machines, todos, mutes);
+    if (shownGrouping === "space" || shownGrouping === "repo" || shownGrouping === "machine") return [];
+    if (shownGrouping === "todo") return buildTodoAgentGroups(unpinned, machines, todos, mutes);
     return buildAgentGroups(unpinned, machines, "state", mutes);
-  }, [unpinned, machines, grouping, mutes, todos]);
-  const repoMachines = useMemo(() => (grouping === "repo" ? buildRepoMachineTree(unpinned, machines) : []), [unpinned, machines, grouping]);
-  const machineTree = useMemo(() => (grouping === "machine" ? buildMachineTree(machines, unpinned, { pins, hideEmpty: filtered }) : []), [grouping, machines, unpinned, pins, filtered]);
+  }, [unpinned, machines, shownGrouping, mutes, todos]);
+  const repoMachines = useMemo(() => (shownGrouping === "repo" ? buildRepoMachineTree(unpinned, machines) : []), [unpinned, machines, shownGrouping]);
+  const machineTree = useMemo(() => (shownGrouping === "machine" ? buildMachineTree(machines, unpinned, { pins, hideEmpty: filtered }) : []), [shownGrouping, machines, unpinned, pins, filtered]);
+  // by todo a group mixes hosts (herdr, botmux…): when the list has more than one, rows outside herdr name theirs (#1836)
+  const mixedHosts = useMemo(() => shownGrouping === "todo" && hostsOf(live).size > 1, [shownGrouping, live]);
   const unreadShown = filter === "unread" ? unreadOf(shown) : [];
   const choose = (f: AgentFilter) => {
     localStorage.setItem("jarvis.agentFilter", f);
@@ -324,7 +328,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       </div>
       {groupingMenu.anchor && (
         <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header="Agent 分组" items={availableGroupings.map((g) => ({
-          key: g.key, label: g.label, icon: g.key === "space" ? "folder" : g.key === "machine" ? "machine" : g.key === "todo" ? "todo" : "layers", checked: grouping === g.key,
+          key: g.key, label: g.label, icon: g.key === "space" ? "folder" : g.key === "machine" ? "machine" : g.key === "todo" ? "todo" : "layers", checked: shownGrouping === g.key,
           onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); hover(null); },
         }))} />
       )}
@@ -359,7 +363,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
         {launches.map((launch) => <NavRow key={launch.id} k={`s:${launch.machineId}/${launch.id}`} reg={reg} hover={hover} active={activeKey === `s:${launch.machineId}/${launch.id}`} to={{ name: "session", mid: launch.machineId, sid: launch.id }} go={go} icon={launch.phase === "failed" ? "retry" : "agent"} label={launch.text || baseName(launch.cwd) || "新 Agent"} hint={launch.phase === "failed" ? "启动失败" : "后台启动中"} />)}
       </Section>}
 
-      {grouping === "space" ? <>
+      {shownGrouping === "space" ? <>
       {active.map((sp) => (
         <SpaceSection key={sp.key} sp={sp} machineName={machines.length > 1 ? machineWithHub(sp.machineId, machines) : undefined} reg={reg} hover={hover} activeKey={activeKey} go={go} pinned={isSpacePinned(sp.machineId, sp.name, pins)} muted={isSpaceMuted(sp, mutes)} onMenu={onSpaceMenu} onRowMenu={onRowMenu} onNavigate={onNavigate} />
       ))}
@@ -376,14 +380,14 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
 
       {loose.length > 0 && <LooseSection sessions={loose} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />}
 
-      </> : grouping === "machine" ? machineTree.map((m) => (
+      </> : shownGrouping === "machine" ? machineTree.map((m) => (
         <MachineSection key={m.key} m={m} {...tree} />
-      )) : grouping === "repo" ? (
+      )) : shownGrouping === "repo" ? (
         repoMachines.map((m) => (
           <RepoMachineSection key={m.key} m={m} flat={repoMachines.length <= 1} machines={machines} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />
         ))
       ) : groups.map((group) => (
-        <AgentSection key={group.key} group={group} machines={machines} byTodo={grouping === "todo"} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onNavigate={onNavigate} />
+        <AgentSection key={group.key} group={group} machines={machines} byTodo={shownGrouping === "todo"} showHost={mixedHosts} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onNavigate={onNavigate} />
       ))}
 
       {recent.length > 0 && (
@@ -522,12 +526,14 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
   );
 }
 
-function AgentSection({ group, machines, byTodo, reg, hover, activeKey, go, onRowMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
-  const [folded, toggle] = useFolded(group.key, group.folded);
+function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey, go, onRowMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byTodo?: boolean; showHost?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
+  const [storedFold, toggle] = useFolded(group.key, group.folded);
+  // folded by default (未归属) but holding the agent open now: open, so its row shows
+  const folded = storedFold && !group.sessions.some((s) => activeKey === `s:${s.machine_id}/${s.session_id}`);
   const row = (s: Session) => {
     const key = `s:${s.machine_id}/${s.session_id}`;
     const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
-    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} showTodoTag={!byTodo} onMenu={onRowMenu} />;
+    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} host={showHost && sessionHost(s) !== "herdr" ? sessionHost(s) : undefined} showTodoTag={!byTodo} onMenu={onRowMenu} />;
   };
 
   const statusInfo = group.todoStatus ? TODO_STATUS_INFO[group.todoStatus as TodoStatus] : undefined;
@@ -984,7 +990,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
-function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, showState = true, showTodoTag, onMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn }) {
+function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, host, showState = true, showTodoTag, onMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; host?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn }) {
   const st = stateOf(s);
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
@@ -1016,6 +1022,7 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint
       <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
         {label ?? sessionTitle(s)}
       </span>
+      {host && <span className="shrink-0 rounded bg-hover px-1 text-[10px] leading-4 text-ink-3 group-hover/row:invisible">{host}</span>}
       {showTodoTag && s.todo && (
         <span
           className="flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3 group-hover/row:invisible"

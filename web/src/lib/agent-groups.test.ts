@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentGrouping, buildAgentGroups, isQuiet, splitAgentSessions, type AgentMutes } from "./agent-groups";
+import { agentGrouping, type AgentMutes, buildAgentGroups, hostsOf, isQuiet, sessionHost, splitAgentSessions } from "./agent-groups";
 import { byAttention } from "./format";
 import type { AgentState, Machine, Session } from "./types";
 
@@ -16,7 +16,7 @@ const ids = (sessions: Session[]) => sessions.map((s) => s.session_id);
 const mutes: AgentMutes = { spaces: ["machine-a/项目"], sessions: ["machine-a/muted-working", "machine-a/muted-needs", "machine-a/muted-idle", "machine-a/muted-waiting"], allowed: ["machine-a/allowed"] };
 
 describe("Agent 分组偏好", () => {
-  it("没选过的默认按机器，选过的保持原样，并兼容未知的偏好", () => {
+  it("没选过的默认按机器，选过的（包括按待办）保持原样，并兼容未知的偏好", () => {
     expect(agentGrouping(null)).toBe("machine");
     expect(agentGrouping("invalid")).toBe("machine");
     for (const value of ["repo", "space", "state", "machine", "todo"]) expect(agentGrouping(value)).toBe(value);
@@ -92,5 +92,17 @@ describe("所有分组共用 live 与最近的边界", () => {
     expect(recent).toHaveLength(40);
     expect(recent[0].updated_at).toBe(date(23));
     expect(ids(all)).toEqual(before);
+  });
+});
+
+describe("sessionHost", () => {
+  it("names the host from the pane ref; a bare id is herdr's", () => {
+    const s = (pane_id?: string) => ({ machine_id: "m", session_id: "s", status: "idle", pane_id }) as never;
+    expect(sessionHost(s("w1:p2"))).toBe("herdr");
+    expect(sessionHost(s("orca:t1:l2"))).toBe("orca");
+    expect(sessionHost(s("p2"))).toBe("herdr");
+    expect(sessionHost(s("botmux:abc"))).toBe("botmux");
+    expect(sessionHost(s())).toBe("");
+    expect([...hostsOf([s("p1"), s("botmux:a"), s("botmux:b"), s()])].sort()).toEqual(["botmux", "herdr"]);
   });
 });

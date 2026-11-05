@@ -39,14 +39,18 @@ func migratedThread(it *InboxItem) string {
 // applyMigrated is applyConnector for the things with Extra of a migrated connector, under b.mu.
 func (b *inbox) applyMigrated(id string, things []connector.InboxThing, now time.Time) []*InboxItem {
 	var changed []*InboxItem
+	index := b.threads(func(it *InboxItem) (string, bool) {
+		if it.Connector != nil {
+			return "", false
+		}
+		return it.Source + "\x00" + migratedThread(it), true
+	})
 	for _, t := range things {
 		source := id
 		if t.Extra.Source != "" {
 			source = t.Extra.Source
 		}
-		open, done := b.openFor(func(it *InboxItem) bool {
-			return it.Source == source && it.Connector == nil && migratedThread(it) == t.Thread
-		})
+		open, done := index.openFor(source + "\x00" + t.Thread)
 		if t.Done != "" {
 			if open != nil {
 				open.done(now, t.Done)
@@ -68,6 +72,7 @@ func (b *inbox) applyMigrated(id string, things []connector.InboxThing, now time
 				setBlocks(open, t.Extra)
 				changed = append(changed, open)
 			}
+			index.note(open) // its blocks may be another thread's now
 			if t.Read && !open.Read {
 				open.Read, open.Count = true, t.Extra.Count
 				if open.Tier != "" && open.Tier != TierAction { // untriaged ones are settled by triage
@@ -93,6 +98,7 @@ func (b *inbox) applyMigrated(id string, things []connector.InboxThing, now time
 		}
 		fillMigrated(it, t)
 		b.add(id, it)
+		index.note(it)
 		changed = append(changed, it)
 	}
 	return changed
