@@ -357,6 +357,75 @@ export function toolDisplayName(name?: string): string {
   return tool ? `${mcpServerLabel(server)} · ${tool}` : mcpServerLabel(server);
 }
 
+/** The MCP server ids that are Persona itself (`jarvis` today, `persona` if it is ever renamed; plugin_ dropped). */
+const PERSONA_SERVERS = new Set(["jarvis", "persona"]);
+
+/** Whether a tool is one of Persona's own MCP tools (mcp__jarvis__agent_read…). */
+export function isPersonaTool(name?: string): boolean {
+  const server = mcpServer(name);
+  return server !== null && PERSONA_SERVERS.has(server.replace(/^plugin_/, "")) && name!.length > 5 + server.length + 2;
+}
+
+/** Persona's tools with a verb of their own, by their bare name (iOS PersonaToolNames + ToolPresentation.verb). */
+const PERSONA_VERB_KEY: Record<string, string> = {
+  // Agents on the user's computers (docs/assistant.md「Agents 与飞书工具」)
+  agent_read: "persona_agent_read",
+  agent_send: "persona_agent_send",
+  send_to_agent: "persona_agent_send",
+  agents_list: "persona_agents_list",
+  list_agents: "persona_agents_list",
+  agent_start: "persona_agent_start",
+  task_plan: "persona_agent_start",
+  interaction_answer: "persona_interaction_answer",
+  ask_jarvis: "persona_ask_persona",
+  // the knowledge base (docs/knowledge.md)
+  kb_get: "persona_kb_search",
+  kb_list: "persona_kb_search",
+  kb_search: "persona_kb_search",
+  search_knowledge: "persona_kb_search",
+  kb_update: "persona_kb_update",
+  // talking to the user
+  ask_user: "persona_ask_user",
+  notify_user: "persona_notify_user",
+  schedule_followup: "persona_schedule_followup",
+  list_followups: "persona_list_followups",
+  cancel_followup: "persona_cancel_followup",
+  schedule_routine: "persona_schedule_routine",
+  delete_routine: "persona_delete_routine",
+  inbox_draft: "persona_inbox_draft",
+  jarvis_settings: "persona_settings",
+  // live cards (docs/assistant-views.md)
+  view_show: "persona_view_show",
+  view_get: "persona_view_get",
+  view_update: "persona_view_update",
+  // its own conversations (docs/assistant.md「管理自己的对话」)
+  conversations_list: "persona_conversations_list",
+  conversation_read: "persona_conversation_read",
+  conversation_rename: "persona_conversation_rename",
+  conversation_archive: "persona_conversation_archive",
+  conversation_unarchive: "persona_conversation_unarchive",
+  conversation_new: "persona_conversation_new",
+  conversation_send: "persona_conversation_send",
+  // a Mac through Cua Driver (docs/computer-use.md)
+  computer_state: "persona_computer_state",
+  computer_run: "persona_computer_run",
+  browser_run: "persona_browser_run",
+  browser_look: "persona_browser_look",
+};
+
+/** How one of Persona's own tools reads in a step: a verb ("读 Agent 对话"), or for the phone and mail families the
+ *  family and what it did ("iPhone" + "contacts search"); null for every other tool and the Persona tools without one
+ *  (they keep 「Persona · agent read」). Display only: the server stays `jarvis` on the wire. */
+export function personaToolVerb(name?: string): { verb: string; what?: string } | null {
+  if (!isPersonaTool(name)) return null;
+  const base = name!.slice(name!.lastIndexOf("__") + 2);
+  const key = PERSONA_VERB_KEY[base];
+  if (key) return { verb: t(`lib-turns.${key}`) };
+  const family = /^(phone|mail)_(.+)$/.exec(base);
+  if (family) return { verb: t(family[1] === "phone" ? "lib-turns.persona_phone" : "lib-turns.persona_mail"), what: family[2].replace(/_/g, " ") };
+  return null;
+}
+
 // ── exchanges and lines (iOS ChatBlock.build + ChatLines) ──────────────────────────
 // Items group into exchanges (`Turn`): what you said (messages typed while the agent worked join the exchange they were
 // sent during), everything the agent did, and its answer; recaps stand between them. A background task that wakes the

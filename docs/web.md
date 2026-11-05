@@ -183,7 +183,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **对话页**（#1963 对齐 cindy 的展示，代码 `src/lib/turns.ts`、`src/lib/work-groups.ts`、`views/chat/`）：每条你的消息一段。段里的工具、思考、中间的话按 cindy 的规则分组：
   进行中的是「正在工作…」+ 计时，露出最近 5 条（不超过 5 条时标题不能点）；一轮做完，最后一段回复留在外面，前面的过程收进「已工作 Xs」（默认收起，全是读和搜的追加「· 读取 N 个文件 · 搜索 N 次」）。
   交付型正文（600 字以上，或有标题、表格、3 项以上列表、图片）和运行中的子 Agent 卡不收进去。请求带 `fold_work`，展开时按 `from_seq` / `through_seq` 取回折叠的部分。
-  - **工具行**（`ActionRow`）：`[状态][动词][参数][+N −N][›]`，动词是 编辑 / 创建 / 运行 / 读取 / 搜索 / 访问 / 调用，Bash 有 description 时整句用它，文件参数是只写文件名的小块；命令类就地展开（输入、分隔线、输出，不截断），Edit / Write / MultiEdit 打开 diff 浮层。
+  - **工具行**（`ActionRow`）：`[状态][动词][参数][+N −N][›]`，动词是 编辑 / 创建 / 运行 / 读取 / 搜索 / 访问 / 调用；Persona 自己的 MCP 工具（`mcp__jarvis__*`，#2896，和 iOS 的 `PersonaToolNames` 同一张表，`lib/turns.ts` 的 `personaToolVerb`）用自己的动词（读 Agent 对话、查知识库、提醒、操控电脑……，`phone_*` / `mail_*` 是「iPhone」/「邮件」+ 做了什么），没配到的照旧「调用 Persona · <工具名>」，Bash 有 description 时整句用它，文件参数是只写文件名的小块；命令类就地展开（输入、分隔线、输出，不截断），Edit / Write / MultiEdit 打开 diff 浮层。
   - **思考**（`ThinkingCard`）：「思考 Ns」，有正文才能展开（Claude Code 的思考大多没有正文）；正在思考时末尾临时一行「Thinking」+ 跳动的圆点 + 计时（来自实时状态）。
   - **计划**（`PlanCard`，TodoWrite）：默认展开，头部「完成/总数 · 当前步骤」；卡片滚出视口时输入框上方出现「Step N / M」。
   - **子 Agent**（`SubagentCard`）：Task / Agent 调用就在消息流里画成卡片（类型、时长、状态），不再是标题下和主 Agent 平级的标签；展开看 prompt、结果、最近几步和它再起的子 Agent，「查看完整过程」在侧边面板只读打开 `<父>@<子>`，主对话不动。

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatLines, freshWords, isLoopTick, mergeItems, parseUserText, segments, openRecap, toolChip, toolDisplayName, toolLabel, wakeDrawer, workSegment, formatDuration } from "./turns";
+import { chatLines, freshWords, isLoopTick, mergeItems, parseUserText, segments, openRecap, personaToolVerb, toolChip, toolDisplayName, toolLabel, wakeDrawer, workSegment, formatDuration } from "./turns";
 import type { Item } from "./types";
 
 const u = (seq: number, text: string, extra: Partial<Item> = {}): Item => ({ id: `u${seq}#0`, seq, role: "user", kind: "text", text, ...extra });
@@ -298,4 +298,23 @@ describe("Persona's messages for the model (lib/injected.ts)", () => {
   it("a message the app sent stays a bubble", () => {
     expect(segments([u(1, notice, { client_msg_id: "c1" })])[0].user?.injected).toBeUndefined();
   });
+});
+
+it("personaToolVerb names Persona's own tools by what they do, and nothing else", () => {
+  expect(personaToolVerb("mcp__jarvis__agent_read")).toEqual({ verb: "读 Agent 对话" });
+  expect(personaToolVerb("mcp__plugin_jarvis__kb_update")).toEqual({ verb: "更新知识库" });
+  expect(personaToolVerb("mcp__persona__ask_user")).toEqual({ verb: "问你" });
+  expect(personaToolVerb("mcp__jarvis__send_to_agent")).toEqual({ verb: "给 Agent 发消息" });
+  expect(personaToolVerb("mcp__jarvis__conversation_new")).toEqual({ verb: "新开对话" });
+  expect(personaToolVerb("mcp__jarvis__computer_run")).toEqual({ verb: "操控电脑" });
+  expect(personaToolVerb("mcp__jarvis__phone_contacts_search")).toEqual({ verb: "iPhone", what: "contacts search" });
+  expect(personaToolVerb("mcp__jarvis__mail_send")).toEqual({ verb: "邮件", what: "send" });
+  // no verb of its own: keeps 「调用 Persona · …」
+  expect(personaToolVerb("mcp__jarvis__something_new")).toBeNull();
+  // other servers, and the bare server
+  expect(personaToolVerb("mcp__github__agent_read")).toBeNull();
+  expect(personaToolVerb("mcp__jarvis_extra__agent_read")).toBeNull();
+  expect(personaToolVerb("mcp__jarvis")).toBeNull();
+  expect(personaToolVerb("agent_read")).toBeNull();
+  expect(personaToolVerb(undefined)).toBeNull();
 });

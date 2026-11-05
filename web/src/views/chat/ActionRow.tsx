@@ -9,7 +9,7 @@ import { fileName, toolFile } from "../../lib/files";
 import { openPanel } from "../../lib/panel";
 import { getSession } from "../../lib/store";
 import { taskBadge } from "../../lib/tasks";
-import { toolChip, toolDisplayName, toolLabel } from "../../lib/turns";
+import { personaToolVerb, toolChip, toolDisplayName, toolLabel } from "../../lib/turns";
 import type { Item } from "../../lib/types";
 import type { ToolStep } from "../../lib/work-groups";
 import { cx, Dialog, EASE, IconButton, Spinner } from "../../ui/atoms";
@@ -88,6 +88,12 @@ export function presentAction(use: Item): ActionPresentation {
   if (name === "WebSearch") return { verb: VERB[name], param: { text: truncateParam(str(inp.query)) } };
   if (name === "LS") return { verb: VERB[name], param: { text: truncateParam(str(inp.path)) } };
   if (name.startsWith("mcp__")) {
+    // Persona's own tools read as what they do (「读 Agent 对话」), then what they were given
+    const own = personaToolVerb(name);
+    if (own) {
+      const what = [own.what, toolChip(use)].filter(Boolean).join(" · ");
+      return { verb: own.verb, ...(what ? { param: { text: truncateParam(what), title: name } } : {}) };
+    }
     return { verb: t("chat-actionrow.verb_call"), param: { text: truncateParam(toolDisplayName(name)), title: name } };
   }
   const chip = toolChip(use);
