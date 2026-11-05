@@ -3,6 +3,7 @@
 // (关于我 = `notes`, saved on 保存 or when leaving; 记忆 = its memory files: read, edit the whole file, delete), and where
 // it runs (read-only here). Its model is 设置 › 模型配置 › 主对话, not here (#1291).
 import { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "../../i18n";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { MEMORY_INDEX, memoryEntries, memoryTypeLabel, memoryTypeTone, parseMemory, type MemoryEntry, type MemoryFile } from "../../lib/memory";
@@ -48,7 +49,7 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
       setInfo((i) => (i ? { ...i, main_tasks_quiet: r.main_tasks_quiet ?? on } : i));
     } catch (e) {
       setInfo((i) => (i ? { ...i, main_tasks_quiet: !on } : i));
-      toast(`没改成：${errorText(e)}`, "error");
+      toast(t("settings-assistantsettings.save_failed", { error: errorText(e) }), "error");
     } finally {
       setQuietBusy(false);
     }
@@ -75,7 +76,7 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
   const machineName = machine?.name ?? info?.machine_id;
   const entries = useMemo(() => memoryEntries(files ?? []), [files]);
   const index = files?.find((f) => f.name === MEMORY_INDEX);
-  const on = tasks?.filter((t) => t.enabled).length ?? 0;
+  const on = tasks?.filter((task) => task.enabled).length ?? 0;
   const next = tasks ? upcoming(tasks, 1)[0] : undefined;
 
   if (!info && !error) return <Loading />;
@@ -93,40 +94,40 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
         />
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold text-ink">{persona.name}</div>
-          <div className="truncate text-[12px] text-ink-3">你的私人助手{machineName ? ` · 运行在 ${machineName}` : ""}</div>
+          <div className="truncate text-[12px] text-ink-3">{machineName ? t("settings-assistantsettings.subtitle_on", { machine: machineName }) : t("settings-assistantsettings.subtitle")}</div>
         </div>
-        {machine && <Pill tone={machine.online ? "green" : undefined}>{machine.online ? "在线" : "离线"}</Pill>}
+        {machine && <Pill tone={machine.online ? "green" : undefined}>{machine.online ? t("settings-assistantsettings.online") : t("settings-assistantsettings.offline")}</Pill>}
       </div>}
       {error && <p role="alert" className="mb-4 text-[13px] text-red">{error}</p>}
 
-      <Group title="主动做事" footer="到点自己开始工作、跟进答应你的事，跑完推送到手机。在对话里说「每天 9 点给我早报」「一小时后提醒我」就会加到这里。">
+      <Group title={t("settings-assistantsettings.proactive_title")} footer={t("settings-assistantsettings.proactive_footer")}>
         <Row
-          label="定时任务和运行记录"
-          hint={tasks === null ? undefined : next ? `下一件：${momentLabel(next.at, new Date())} ${next.title}` : "现在没有要做的"}
+          label={t("settings-assistantsettings.routines")}
+          hint={tasks === null ? undefined : next ? t("settings-assistantsettings.next_task", { when: momentLabel(next.at, new Date()), title: next.title }) : t("settings-assistantsettings.nothing_scheduled")}
           onClick={() => navigate({ name: "routines" })}
         >
-          {tasks !== null && <span>{on === 0 ? "未开启" : `${on} 个开启`}</span>}
+          {tasks !== null && <span>{on === 0 ? t("settings-assistantsettings.routines_off") : t("settings-assistantsettings.routines_on", { count: on })}</span>}
         </Row>
       </Group>
 
-      <Group title="通知" footer="开着时，从主对话派出去的任务不单独推送，也不进灵动岛和任务角标；做完、等你回答或出错时，Persona 在主对话里告诉你。只影响之后派的任务。">
-        <Row label="主对话派的任务只在主对话里通知">
-          <Switch on={info?.main_tasks_quiet ?? true} onChange={(on) => void setQuiet(on)} disabled={!info || quietBusy} label="主对话派的任务只在主对话里通知" />
+      <Group title={t("settings-assistantsettings.notifications_title")} footer={t("settings-assistantsettings.notifications_footer")}>
+        <Row label={t("settings-assistantsettings.quiet_tasks")}>
+          <Switch on={info?.main_tasks_quiet ?? true} onChange={(on) => void setQuiet(on)} disabled={!info || quietBusy} label={t("settings-assistantsettings.quiet_tasks")} />
         </Row>
       </Group>
 
-      <Group title="了解你" footer="「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。">
+      <Group title={t("settings-assistantsettings.knows_title")} footer={t("settings-assistantsettings.knows_footer")}>
         {info && <AboutMe info={info} onSaved={(notes) => setInfo((i) => (i ? { ...i, notes, notes_effective: notes.trim() } : i))} />}
         <div className="flex items-center gap-2 px-4 pt-3 pb-1.5">
-          <span className="flex-1 text-[13px] font-medium text-ink">记忆</span>
-          {files && entries.length > 0 && <span className="text-[11.5px] text-ink-3 tabular-nums">{entries.length} 条</span>}
+          <span className="flex-1 text-[13px] font-medium text-ink">{t("settings-assistantsettings.memory")}</span>
+          {files && entries.length > 0 && <span className="text-[11.5px] text-ink-3 tabular-nums">{t("settings-assistantsettings.memory_count", { count: entries.length })}</span>}
         </div>
         {files === null ? (
           <div className="px-4 py-4">
             <Loading />
           </div>
         ) : entries.length === 0 ? (
-          <p className="px-4 py-4 text-[12.5px] leading-relaxed text-ink-3">{memoryError ? `读不到记忆：${memoryError}` : "还没有记忆。Persona 会把你的偏好、纠正过它的地方记在这里。"}</p>
+          <p className="px-4 py-4 text-[12.5px] leading-relaxed text-ink-3">{memoryError ? t("settings-assistantsettings.memory_load_failed", { error: memoryError }) : t("settings-assistantsettings.memory_empty")}</p>
         ) : (
           entries.map((e) => <MemoryRow key={e.file.name} e={e} onOpen={() => setOpen({ file: e.file })} />)
         )}
@@ -134,8 +135,8 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
           <button type="button" onClick={() => setOpen({ file: index, index: true })} className="flex w-full items-center gap-3 whitespace-nowrap px-4 py-2.5 text-left transition-colors hover:bg-hover">
             <Icon name="list" size={14} className="shrink-0 text-ink-3" />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] text-ink">索引</span>
-              <span className="block truncate text-[11.5px] text-ink-3">MEMORY.md：Persona 自己维护的目录，删除记忆时会一起更新。只读</span>
+              <span className="block truncate text-[13px] text-ink">{t("settings-assistantsettings.index")}</span>
+              <span className="block truncate text-[11.5px] text-ink-3">{t("settings-assistantsettings.index_hint")}</span>
             </span>
             <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
           </button>
@@ -145,23 +146,23 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
       <SkillsGroup />
 
       <Group
-        title="运行在"
-        footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的这个目录里后台运行，不进 herdr。会话记录和记忆在这台机器上；关于我、定时任务和设置在 hub。用哪个模型在「模型配置 › 主对话」里选。`}
+        title={t("settings-assistantsettings.runs_on_title")}
+        footer={t("settings-assistantsettings.runs_on_footer", { machine: machineName ?? t("settings-assistantsettings.hub_machine") })}
       >
-        <Row label="机器">
+        <Row label={t("settings-assistantsettings.machine")}>
           <span className="max-w-[220px] truncate">{machineName ?? "—"}</span>
         </Row>
-        <Row label="工作目录" mono>
+        <Row label={t("settings-assistantsettings.cwd")} mono>
           <span className="max-w-[300px] truncate" title={info?.cwd}>{info?.cwd || "~/.jarvis/assistant"}</span>
         </Row>
-        {info?.timezone && <Row label="时区">{info.timezone}</Row>}
+        {info?.timezone && <Row label={t("settings-assistantsettings.timezone")}>{info.timezone}</Row>}
       </Group>
 
       {open && (
         <MemoryDialog
           key={open.file.name}
           file={open.file}
-          title={open.index ? "索引" : entries.find((e) => e.file.name === open.file.name)?.title ?? open.file.name}
+          title={open.index ? t("settings-assistantsettings.index") : entries.find((e) => e.file.name === open.file.name)?.title ?? open.file.name}
           readOnly={open.index}
           onClose={() => setOpen(null)}
           onChanged={() => void loadMemory()}
@@ -189,9 +190,9 @@ function AboutMe({ info, onSaved }: { info: AssistantState; onSaved: (notes: str
       setBase(value);
       onSaved(value);
       void refreshAssistant().catch(() => {});
-      if (!quiet) toast("已保存，新对话生效", "ok");
+      if (!quiet) toast(t("settings-assistantsettings.saved_new_chats"), "ok");
     } catch (e) {
-      toast(`关于我没有保存：${errorText(e)}`, "error");
+      toast(t("settings-assistantsettings.about_save_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy(false);
     }
@@ -200,11 +201,11 @@ function AboutMe({ info, onSaved }: { info: AssistantState; onSaved: (notes: str
   // leaving the page (another settings tab, another page) keeps what was typed
   useEffect(
     () => () => {
-      const { text: t, changed: c } = latest.current;
+      const { text: value, changed: c } = latest.current;
       if (c) {
-        api("/assistant", { method: "PUT", json: { notes: t } }).then(
-          () => toast("关于我已保存，新对话生效", "ok"),
-          (e) => toast(`关于我没有保存：${errorText(e)}`, "error"),
+        api("/assistant", { method: "PUT", json: { notes: value } }).then(
+          () => toast(t("settings-assistantsettings.about_saved"), "ok"),
+          (e) => toast(t("settings-assistantsettings.about_save_failed", { error: errorText(e) }), "error"),
         );
       }
     },
@@ -214,24 +215,24 @@ function AboutMe({ info, onSaved }: { info: AssistantState; onSaved: (notes: str
   return (
     <div className="px-4 py-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className="flex-1 text-[13px] font-medium text-ink">关于我</span>
-        {info.notes === undefined && original && <span className="text-[11px] text-ink-3">来自 hub 的配置</span>}
+        <span className="flex-1 text-[13px] font-medium text-ink">{t("settings-assistantsettings.about_me")}</span>
+        {info.notes === undefined && original && <span className="text-[11px] text-ink-3">{t("settings-assistantsettings.from_hub")}</span>}
       </div>
       <textarea
         className={cx(textareaClass, "min-h-[132px]")}
         rows={6}
         value={text}
-        aria-label="关于我"
-        placeholder="比如：代码放在哪、常用哪些 skills、哪些机器或目录别碰、你习惯的汇报方式"
+        aria-label={t("settings-assistantsettings.about_me")}
+        placeholder={t("settings-assistantsettings.about_placeholder")}
         onChange={(e) => setText(e.target.value)}
       />
       <div className="mt-2 flex items-start gap-3">
         <p className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-ink-3">
-          这些内容会附在 Persona 的说明最后；改了以后新对话生效。
-          {info.notes === undefined && original ? "现在用的是 hub 配置里的内容，在这里保存后以这里为准。" : ""}
+          {t("settings-assistantsettings.about_note")}
+          {info.notes === undefined && original ? t("settings-assistantsettings.about_note_hub") : ""}
         </p>
-        {changed && <Button tone="quiet" disabled={busy} onClick={() => setText(base)}>还原</Button>}
-        <Button tone="primary" busy={busy} disabled={!changed} onClick={() => void save()}>保存</Button>
+        {changed && <Button tone="quiet" disabled={busy} onClick={() => setText(base)}>{t("settings-assistantsettings.revert")}</Button>}
+        <Button tone="primary" busy={busy} disabled={!changed} onClick={() => void save()}>{t("common.save")}</Button>
       </div>
     </div>
   );
@@ -272,7 +273,7 @@ function MemoryDialog({ file, title, readOnly, onClose, onChanged }: { file: Mem
       setContent(editing);
       setUpdated(new Date().toISOString());
       setEditing(null);
-      toast("记忆已保存", "ok");
+      toast(t("settings-assistantsettings.memory_saved"), "ok");
       onChanged();
     } catch (e) {
       toast(errorText(e), "error");
@@ -285,7 +286,7 @@ function MemoryDialog({ file, title, readOnly, onClose, onChanged }: { file: Mem
     setBusy(true);
     try {
       await api(`/assistant/memory/${enc(file.name)}`, { method: "DELETE" });
-      toast(`已删除「${title}」`, "ok");
+      toast(t("settings-assistantsettings.deleted", { title }), "ok");
       onChanged();
       onClose();
     } catch (e) {
@@ -295,24 +296,24 @@ function MemoryDialog({ file, title, readOnly, onClose, onChanged }: { file: Mem
   };
 
   const footer = readOnly ? (
-    <Button tone="quiet" onClick={onClose}>关闭</Button>
+    <Button tone="quiet" onClick={onClose}>{t("settings-assistantsettings.close")}</Button>
   ) : editing !== null ? (
     <>
       <span className="mr-auto min-w-0 truncate font-mono text-[11px] text-ink-3">{file.name}</span>
-      <Button tone="quiet" disabled={busy} onClick={() => setEditing(null)}>取消</Button>
-      <Button tone="primary" busy={busy} disabled={editing === content} onClick={() => void save()}>保存</Button>
+      <Button tone="quiet" disabled={busy} onClick={() => setEditing(null)}>{t("common.cancel")}</Button>
+      <Button tone="primary" busy={busy} disabled={editing === content} onClick={() => void save()}>{t("common.save")}</Button>
     </>
   ) : confirm ? (
     <>
-      <span className="mr-auto min-w-0 text-[12px] text-ink-2">Persona 以后不再记得「{title}」。</span>
-      <Button tone="quiet" disabled={busy} onClick={() => setConfirm(false)}>取消</Button>
-      <Button tone="danger" busy={busy} onClick={() => void remove()}>删除</Button>
+      <span className="mr-auto min-w-0 text-[12px] text-ink-2">{t("settings-assistantsettings.delete_confirm", { title })}</span>
+      <Button tone="quiet" disabled={busy} onClick={() => setConfirm(false)}>{t("common.cancel")}</Button>
+      <Button tone="danger" busy={busy} onClick={() => void remove()}>{t("settings-assistantsettings.delete")}</Button>
     </>
   ) : (
     <>
-      <Button tone="quiet" icon="trash" className="text-red enabled:hover:text-red" onClick={() => setConfirm(true)}>删除</Button>
+      <Button tone="quiet" icon="trash" className="text-red enabled:hover:text-red" onClick={() => setConfirm(true)}>{t("settings-assistantsettings.delete")}</Button>
       <span className="flex-1" />
-      <Button tone="secondary" icon="pencil" onClick={() => setEditing(content)}>编辑</Button>
+      <Button tone="secondary" icon="pencil" onClick={() => setEditing(content)}>{t("settings-assistantsettings.edit")}</Button>
     </>
   );
 
@@ -324,7 +325,7 @@ function MemoryDialog({ file, title, readOnly, onClose, onChanged }: { file: Mem
           value={editing}
           autoFocus
           spellCheck={false}
-          aria-label={`编辑 ${file.name}`}
+          aria-label={t("settings-assistantsettings.edit_label", { name: file.name })}
           onChange={(e) => setEditing(e.target.value)}
         />
       ) : (
@@ -333,12 +334,12 @@ function MemoryDialog({ file, title, readOnly, onClose, onChanged }: { file: Mem
             <div className="mb-3 border-b border-line pb-3">
               <div className="flex flex-wrap items-center gap-2">
                 {type && <Tag tone={memoryTypeTone(parsed.type)}>{type}</Tag>}
-                {updated && <span className="text-[11.5px] text-ink-3">更新于 {ago(updated)}</span>}
+                {updated && <span className="text-[11.5px] text-ink-3">{t("settings-assistantsettings.updated", { when: ago(updated) })}</span>}
               </div>
               {parsed.description && <p className="mt-1.5 text-[12.5px] text-ink-2">{parsed.description}</p>}
             </div>
           )}
-          <Markdown text={(readOnly ? content : parsed.body) || "（空）"} />
+          <Markdown text={(readOnly ? content : parsed.body) || t("settings-assistantsettings.empty_body")} />
           {!readOnly && <p className="mt-3 font-mono text-[11px] text-ink-3">{file.name}</p>}
         </div>
       )}

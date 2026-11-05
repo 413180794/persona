@@ -1,0 +1,17 @@
+{
+  "footer": "Blocked directories aren't scanned or remembered, and their sessions leave Agents (the files stay put). Unblock to bring them back. Handy for automation that runs claude with its own CLAUDE_CONFIG_DIR. The default directory can't be blocked.",
+  "save_failed": "Couldn't save: {error}",
+  "unblocked": "Unblocked {name}",
+  "blocked": "Blocked {name}",
+  "rule_deleted": "Deleted rule {rule}",
+  "title": "Blocked config directories · {name}",
+  "load_failed": "Couldn't read this computer's config directories: {error}",
+  "retry": "Retry",
+  "unblock": "Unblock",
+  "block": "Block",
+  "rule": "Rule",
+  "delete": "Delete",
+  "input_placeholder": "~/.automation/* or a path",
+  "input_label": "Directory or pattern to block",
+  "offline_note": "This computer is offline or its node is old, so these are the directories the hub remembers. They'll all show once it connects."
+}

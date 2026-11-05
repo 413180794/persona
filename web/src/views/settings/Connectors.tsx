@@ -5,6 +5,7 @@
 // phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone.
 import { useEffect, useState } from "react";
 import { EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailErrors, mailRequest, mailSummary, type MailAccount, type MailForm } from "../../lib/agent-settings";
+import { t } from "../../i18n";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { accountTitle, type LarkAccount, type LarkAccountList } from "../../lib/lark-accounts";
@@ -35,8 +36,7 @@ export function Connectors({ open, onOpen, onChannel }: { open: string | null; o
   return (
     <>
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
-        Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。
-        手机上的「这台 iPhone」（通讯录、日历、提醒、照片、健康、位置）只在手机 App 里打开，网页上没有。
+        {t("settings-connectors.intro")}
       </p>
       <Mail />
       {lark && <Feishu />}
@@ -65,11 +65,11 @@ function Mail() {
     setDeleting(a.id);
     try {
       await api(`/mail/accounts/${enc(a.id)}`, { method: "DELETE" });
-      toast(`已删除 ${a.email}`, "ok");
+      toast(t("settings-connectors.mail_deleted", { email: a.email }), "ok");
       setConfirm(null);
       await load();
     } catch (e) {
-      toast(`删除失败：${errorText(e)}`, "error");
+      toast(t("settings-connectors.delete_failed", { error: errorText(e) }), "error");
     } finally {
       setDeleting(null);
     }
@@ -80,24 +80,24 @@ function Mail() {
       <Group
         title={
           <span className="flex items-center gap-2">
-            邮箱
+            {t("settings-connectors.mail")}
             {accounts && <span className="font-normal">{mailSummary(accounts)}</span>}
           </span>
         }
         right={
           <Button tone="quiet" icon="plus" onClick={() => setAdding(true)} className="-mb-1 h-7">
-            添加邮箱
+            {t("settings-connectors.add_mail")}
           </Button>
         }
-        footer="账号存在 hub 上，密码加密保存、不会再返回；收件箱、助手和 AI 分身共用。也可以直接在 Persona 里说「帮我添加邮箱」。"
+        footer={t("settings-connectors.mail_footer")}
       >
         {!accounts && !error && (
           <div className="px-4 py-3">
             <Loading />
           </div>
         )}
-        {error && <p className="px-4 py-3 text-[12.5px] text-red">读不到邮箱：{error}</p>}
-        {accounts?.length === 0 && <p className="px-4 py-3 text-[12.5px] text-ink-3">还没有邮箱。</p>}
+        {error && <p className="px-4 py-3 text-[12.5px] text-red">{t("settings-connectors.mail_load_failed", { error })}</p>}
+        {accounts?.length === 0 && <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings-connectors.mail_empty")}</p>}
         {accounts?.map((a) => (
           <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
             <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-[8px]", a.status === "error" ? "bg-red-tint text-red" : "bg-accent-tint text-accent-ink")}>
@@ -107,8 +107,8 @@ function Mail() {
               <div className="flex min-w-0 items-center gap-2">
                 <span className="truncate text-[13px] text-ink">{a.email}</span>
                 {a.provider === "gmail" && <Pill>Gmail</Pill>}
-                {a.provider === "feishu" && <Pill>飞书</Pill>}
-                {a.status === "error" && <Pill tone="red">有错误</Pill>}
+                {a.provider === "feishu" && <Pill>{t("settings-connectors.lark")}</Pill>}
+                {a.status === "error" && <Pill tone="red">{t("settings-connectors.has_error")}</Pill>}
               </div>
               <div className={cx("mt-0.5 truncate text-[11.5px]", a.status === "error" ? "text-red" : "text-ink-3")} title={mailAccountLine(a)}>
                 {mailAccountLine(a)}
@@ -116,11 +116,11 @@ function Mail() {
             </div>
             <RowConfirm
               open={confirm === a.id}
-              confirm="确认删除"
+              confirm={t("settings-connectors.confirm_delete")}
               busy={deleting === a.id}
               onCancel={() => setConfirm(null)}
               onConfirm={() => void remove(a)}
-              trigger={<IconButton icon="trash" label={`删除 ${a.email}`} onClick={() => setConfirm(a.id)} />}
+              trigger={<IconButton icon="trash" label={t("settings-connectors.delete_account", { email: a.email })} onClick={() => setConfirm(a.id)} />}
             />
           </div>
         ))}
@@ -130,7 +130,7 @@ function Mail() {
         onClose={() => setAdding(false)}
         onAdded={(email) => {
           setAdding(false);
-          toast(`已添加 ${email}`, "ok");
+          toast(t("settings-connectors.mail_added", { email }), "ok");
           void load();
         }}
       />
@@ -198,22 +198,22 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
       open={open}
       onClose={() => !busy && onClose()}
       width={460}
-      title="添加邮箱"
+      title={t("settings-connectors.add_mail_title")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose} disabled={busy}>
-            取消
+            {t("common.cancel")}
           </Button>
           {f.kind !== "gmail" && (
             <Button tone="primary" busy={busy} onClick={() => void save()}>
-              {busy ? "正在连接" : "连接"}
+              {busy ? t("settings-connectors.connecting") : t("settings-connectors.connect")}
             </Button>
           )}
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="flex gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline" role="radiogroup" aria-label="邮箱类型">
+        <div className="flex gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline" role="radiogroup" aria-label={t("settings-connectors.mail_kind")}>
           {MAIL_KINDS.map((k) => (
             <button
               key={k.k}
@@ -236,10 +236,9 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
           <div className="flex gap-3 rounded-[10px] bg-inset px-3.5 py-3 shadow-hairline">
             <Icon name="info" size={15} className="mt-0.5 shrink-0 text-ink-3" />
             <div className="text-[12.5px] leading-relaxed text-ink-2">
-              <p className="font-medium text-ink">在手机上添加 Gmail</p>
+              <p className="font-medium text-ink">{t("settings-connectors.gmail_title")}</p>
               <p className="mt-1">
-                Gmail 用「使用 Google 账号登录」，不填密码。Google 授权完会跳回 iPhone 上的 Persona App，网页接不到这一步。
-                在手机上打开 设置 › 连接器 › 邮箱 › 添加邮箱 › Gmail；加好后这里和收件箱都能看到。
+                {t("settings-connectors.gmail_body")}
               </p>
             </div>
           </div>
@@ -251,27 +250,27 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
               void save();
             }}
           >
-            {field("email", "邮箱地址", { placeholder: "me@example.com", type: "email", auto: "email" })}
-            {field("password", f.kind === "feishu" ? "密码（第三方客户端登录密码）" : "密码 / 授权码", { type: "password", auto: "new-password" })}
+            {field("email", t("settings-connectors.email"), { placeholder: "me@example.com", type: "email", auto: "email" })}
+            {field("password", f.kind === "feishu" ? t("settings-connectors.password_lark") : t("settings-connectors.password"), { type: "password", auto: "new-password" })}
             <p className="text-[11.5px] leading-relaxed text-ink-3">
               {f.kind === "feishu"
-                ? "飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。"
-                : "QQ / 163 / Outlook / iCloud 等会按域名自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。"}
+                ? t("settings-connectors.lark_hint")
+                : t("settings-connectors.imap_hint")}
             </p>
             {f.kind === "imap" && (
               <fieldset className="flex flex-col gap-3 rounded-[10px] bg-inset p-3 shadow-hairline">
-                <legend className="sr-only">服务器</legend>
-                <p className="text-[12px] font-medium text-ink-2">服务器（可留空自动识别）</p>
+                <legend className="sr-only">{t("settings-connectors.servers")}</legend>
+                <p className="text-[12px] font-medium text-ink-2">{t("settings-connectors.servers_optional")}</p>
                 <div className="grid grid-cols-[1fr_88px] gap-2">
-                  {field("imapHost", "IMAP 服务器", { placeholder: "imap.example.com", mono: true })}
-                  {field("imapPort", "端口", { placeholder: "993", mono: true })}
-                  {field("smtpHost", "SMTP 服务器", { placeholder: "smtp.example.com", mono: true })}
-                  {field("smtpPort", "端口", { placeholder: "465", mono: true })}
+                  {field("imapHost", t("settings-connectors.imap_server"), { placeholder: "imap.example.com", mono: true })}
+                  {field("imapPort", t("settings-connectors.port"), { placeholder: "993", mono: true })}
+                  {field("smtpHost", t("settings-connectors.smtp_server"), { placeholder: "smtp.example.com", mono: true })}
+                  {field("smtpPort", t("settings-connectors.port"), { placeholder: "465", mono: true })}
                 </div>
-                <p className="text-[11px] text-ink-3">SMTP 用 587 时走 STARTTLS，其他端口走 SSL。</p>
+                <p className="text-[11px] text-ink-3">{t("settings-connectors.smtp_tls")}</p>
               </fieldset>
             )}
-            {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">没有加上：{error}</p>}
+            {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">{t("settings-connectors.add_failed", { error })}</p>}
             <button type="submit" hidden />
           </form>
         )}
@@ -283,14 +282,14 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
 // ── 飞书 ────────────────────────────────────────────────
 
 const USES: { icon: IconName; title: string; detail: string }[] = [
-  { icon: "inbox", title: "收件箱", detail: "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复" },
-  { icon: "book", title: "知识库", detail: "会话、人、群、项目归档下来，给助手和 AI 分身做上下文" },
-  { icon: "spark", title: "助手", detail: "Persona 能搜消息、读文档；发消息等写操作先在手机上问你" },
-  { icon: "agent", title: "/agent", detail: "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复" },
+  { icon: "inbox", title: t("settings-connectors.use_inbox"), detail: t("settings-connectors.use_inbox_detail") },
+  { icon: "book", title: t("settings-connectors.use_knowledge"), detail: t("settings-connectors.use_knowledge_detail") },
+  { icon: "spark", title: t("settings-connectors.use_assistant"), detail: t("settings-connectors.use_assistant_detail") },
+  { icon: "agent", title: "/agent", detail: t("settings-connectors.use_agent_detail") },
 ];
 
 function LarkAccountRow({ a, isDefault }: { a: LarkAccount; isDefault: boolean }) {
-  const detail = a.quarantined ? "无法打开，请在 lark-connector 里重试或移除" : !a.signed_in ? "未登录" : a.tenant || "已登录";
+  const detail = a.quarantined ? t("settings-connectors.account_quarantined") : !a.signed_in ? t("settings-connectors.signed_out") : a.tenant || t("settings-connectors.signed_in");
   return (
     <div data-account={a.id} className="flex items-center gap-3 px-4 py-2.5">
       <Monogram name={accountTitle(a)} size={30} src={a.avatar} />
@@ -298,7 +297,7 @@ function LarkAccountRow({ a, isDefault }: { a: LarkAccount; isDefault: boolean }
         <div className="truncate text-[13px] text-ink">{accountTitle(a)}</div>
         <div className={cx("mt-0.5 truncate text-[11.5px]", a.signed_in ? "text-ink-3" : "text-red")}>{detail}</div>
       </div>
-      {isDefault && <Pill>默认</Pill>}
+      {isDefault && <Pill>{t("settings-connectors.default")}</Pill>}
       {a.signed_in && a.unread > 0 && <Count n={a.unread} />}
     </div>
   );
@@ -320,44 +319,44 @@ function Feishu() {
   };
   useEffect(load, []);
 
-  const state = !st ? (loading ? "正在检查…" : "读不到状态") : !st.configured ? "未配置" : st.connected ? "已连接" : "连不上 lark-connector";
+  const state = !st ? (loading ? t("settings-connectors.checking") : t("settings-connectors.status_unknown")) : !st.configured ? t("settings-connectors.not_configured") : st.connected ? t("settings-connectors.connected") : t("settings-connectors.unreachable");
   const dot = !st ? "bg-line-strong" : st.connected ? "bg-green" : st.configured ? "bg-red" : "bg-line-strong";
   const last = st?.last_event_at ? ago(new Date(st.last_event_at * 1000).toISOString()) : "";
 
   return (
     <Group
-      title="飞书"
-      footer={st?.configured === false ? "hub 还没接飞书：在 hub 所在的机器上运行 lark-connector，并在 hub.json 的 lark 里填上它（docs/feishu.md）。" : "飞书账号在 hub 所在机器的 lark-connector 里登录，这里只看连接状态。"}
+      title={t("settings-connectors.lark")}
+      footer={st?.configured === false ? t("settings-connectors.lark_footer_unconfigured") : t("settings-connectors.lark_footer")}
     >
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-accent-tint text-accent-ink">
           <Icon name="chat" size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13.5px] font-medium text-ink">{st?.name || "飞书"}</div>
+          <div className="truncate text-[13.5px] font-medium text-ink">{st?.name || t("settings-connectors.lark")}</div>
           <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-ink-3">
             <span className={cx("size-1.5 shrink-0 rounded-full", dot)} />
             <span className="truncate">{state}</span>
           </div>
         </div>
-        <IconButton icon="retry" label="重新检查" onClick={load} disabled={loading} />
+        <IconButton icon="retry" label={t("settings-connectors.recheck")} onClick={load} disabled={loading} />
       </div>
       {last && (
         <div className="flex items-center gap-3 px-4 py-2.5">
-          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">最近一条实时消息</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("settings-connectors.last_event")}</span>
           <span className="shrink-0 text-[12.5px] text-ink-2">{last}</span>
         </div>
       )}
-      {(st?.error || error) && <p className="px-4 py-2.5 text-[12px] break-words text-red">{st?.error || `读不到飞书的状态：${error}`}</p>}
+      {(st?.error || error) && <p className="px-4 py-2.5 text-[12px] break-words text-red">{st?.error || t("settings-connectors.lark_status_failed", { error })}</p>}
       {accounts && accounts.accounts.length > 1 && (
         <>
-          <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">账号</div>
+          <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">{t("settings-connectors.accounts")}</div>
           {accounts.accounts.map((a) => <LarkAccountRow key={a.id} a={a} isDefault={a.id === accounts.default} />)}
-          <p className="px-4 pt-1 pb-2.5 text-[11.5px] leading-snug text-ink-3">已登录的账号都会收进收件箱，「消息」页可以切换账号。/agent、助手和知识库使用默认账号；在 lark-connector 里添加或退出账号。</p>
+          <p className="px-4 pt-1 pb-2.5 text-[11.5px] leading-snug text-ink-3">{t("settings-connectors.accounts_note")}</p>
         </>
       )}
       <LarkHomeSwitch />
-      <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">Persona 用飞书做什么</div>
+      <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">{t("settings-connectors.lark_uses")}</div>
       {USES.map((u) => (
         <div key={u.title} className="flex items-start gap-3 px-4 py-2.5">
           <Icon name={u.icon} size={15} className="mt-0.5 shrink-0 text-accent" />

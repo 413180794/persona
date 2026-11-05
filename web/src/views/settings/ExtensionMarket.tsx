@@ -3,6 +3,7 @@
 // the markets themselves (add with an optional write-only token, remove, read again, change the token). Logic in
 // lib/extension-market.ts.
 import { useEffect, useRef, useState } from "react";
+import { t } from "../../i18n";
 import { errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import {
@@ -36,7 +37,7 @@ function Problem({ text, onRetry, busy }: { text: string; onRetry: () => void; b
     <div className="flex items-center gap-3 px-4 py-3">
       <p className="min-w-0 flex-1 text-[12.5px] break-words text-red">{text}</p>
       <Button tone="secondary" icon="retry" onClick={onRetry} busy={busy}>
-        重试
+        {t("settings-extensionmarket.retry")}
       </Button>
     </div>
   );
@@ -63,8 +64,8 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
   };
   // typing waits a moment; picking a market reads at once
   useEffect(() => {
-    const t = setTimeout(() => load(), q ? 250 : 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => load(), q ? 250 : 0);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, market]);
 
@@ -73,36 +74,36 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
   return (
     <>
       <Back
-        label="扩展"
+        label={t("settings-extensionmarket.extensions")}
         onBack={onBack}
         right={
           <>
-            <IconButton icon="retry" label="重新读取所有市场" onClick={() => load(true)} disabled={loading} />
+            <IconButton icon="retry" label={t("settings-extensionmarket.reload_all")} onClick={() => load(true)} disabled={loading} />
             <Button tone="secondary" icon="gear" onClick={onMarkets}>
-              管理市场
+              {t("settings-extensionmarket.manage_markets")}
             </Button>
           </>
         }
       />
-      <h2 className="mb-1 px-1 text-[15px] font-semibold text-ink">扩展市场</h2>
-      <p className="mb-4 px-1 text-[12.5px] leading-relaxed text-ink-3">这台 hub 登记的市场里的扩展。装之前先看它能做什么，同意了才装；包按市场写的 sha256 校验。</p>
+      <h2 className="mb-1 px-1 text-[15px] font-semibold text-ink">{t("settings-extensionmarket.market_title")}</h2>
+      <p className="mb-4 px-1 text-[12.5px] leading-relaxed text-ink-3">{t("settings-extensionmarket.market_intro")}</p>
 
       <div className="mb-3 flex items-center gap-2 rounded-control bg-surface px-2.5 shadow-card">
         <Icon name="search" size={14} className="shrink-0 text-ink-3" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="搜索名字、说明、发布者、标签"
-          aria-label="搜索扩展"
+          placeholder={t("settings-extensionmarket.search_placeholder")}
+          aria-label={t("settings-extensionmarket.search_label")}
           spellCheck={false}
           className="h-9 min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
         />
         {loading && data && <Spinner />}
-        {q && <IconButton icon="x" label="清除搜索" onClick={() => setQ("")} size={24} iconSize={12} />}
+        {q && <IconButton icon="x" label={t("settings-extensionmarket.clear_search")} onClick={() => setQ("")} size={24} iconSize={12} />}
       </div>
       {markets.length > 1 && (
-        <div role="radiogroup" aria-label="按市场筛选" className="mb-4 flex flex-wrap gap-1.5">
-          {[{ id: "", name: "全部" }, ...markets].map((m) => {
+        <div role="radiogroup" aria-label={t("settings-extensionmarket.filter_market")} className="mb-4 flex flex-wrap gap-1.5">
+          {[{ id: "", name: t("settings-extensionmarket.all") }, ...markets].map((m) => {
             const on = market === m.id;
             return (
               <button
@@ -125,31 +126,31 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
       {broken.map((m) => (
         <p key={m.id} className="mb-3 flex items-start gap-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">
           <Icon name="info" size={13} className="mt-0.5 shrink-0" />
-          读不到「{m.name}」：{m.error}
+          {t("settings-extensionmarket.market_unreadable", { name: m.name, error: m.error ?? "" })}
         </p>
       ))}
 
-      <Group title={data ? `${data.extensions.length} 个扩展` : "扩展"}>
+      <Group title={data ? t("settings-extensionmarket.extension_count", { count: data.extensions.length }) : t("settings-extensionmarket.extensions")}>
         {!data && !error && (
           <div className="px-4 py-3">
             <Loading />
           </div>
         )}
-        {error && <Problem text={`读不到扩展市场：${error}`} onRetry={() => load()} busy={loading} />}
+        {error && <Problem text={t("settings-extensionmarket.catalog_failed", { error })} onRetry={() => load()} busy={loading} />}
         {data && markets.length === 0 && (
           <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
             <span className="flex size-10 items-center justify-center rounded-[10px] bg-inset text-ink-3 shadow-hairline">
               <Icon name="extension" size={18} />
             </span>
-            <p className="text-[13px] font-medium text-ink">还没有市场</p>
-            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">市场是一个网站或 GitHub 仓库发布的扩展索引（persona-extensions.json）。添加一个，就能在这里浏览和安装它的扩展。</p>
+            <p className="text-[13px] font-medium text-ink">{t("settings-extensionmarket.no_markets")}</p>
+            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">{t("settings-extensionmarket.no_markets_body")}</p>
             <Button tone="primary" icon="plus" onClick={onMarkets}>
-              添加市场
+              {t("settings-extensionmarket.add_market")}
             </Button>
           </div>
         )}
         {data && markets.length > 0 && data.extensions.length === 0 && (
-          <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q ? `没有找到「${q.trim()}」` : "这个市场还没有扩展"}</p>
+          <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q ? t("settings-extensionmarket.not_found", { query: q.trim() }) : t("settings-extensionmarket.market_empty")}</p>
         )}
         {data?.extensions.map((it, i) => {
           const st = itemState(it);
@@ -172,8 +173,8 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
                 {it.description && <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{it.description}</div>}
                 <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
                   <span className="mr-1 truncate text-[11px] text-ink-3">{it.market_name}</span>
-                  {(it.tags ?? []).map((t) => (
-                    <Pill key={t}>{t}</Pill>
+                  {(it.tags ?? []).map((tag) => (
+                    <Pill key={tag}>{tag}</Pill>
                   ))}
                 </div>
               </div>
@@ -205,7 +206,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
       .then((c) => {
         const found = c.extensions.find((x) => x.id === id) ?? null;
         setIt(found);
-        setError(found ? "" : "这个市场里没有这个扩展了");
+        setError(found ? "" : t("settings-extensionmarket.gone"));
       })
       .catch((e) => setError(errorText(e)))
       .finally(() => setLoading(false));
@@ -217,7 +218,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
     try {
       setPreview(await previewFromMarket(market, id));
     } catch (e) {
-      toast(`看不了：${errorText(e)}`, "error");
+      toast(t("settings-extensionmarket.preview_failed", { error: errorText(e) }), "error");
     } finally {
       setPreviewing(false);
     }
@@ -233,7 +234,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
 
   return (
     <>
-      <Back label="扩展市场" onBack={onBack} right={<IconButton icon="retry" label="重新读取" onClick={load} disabled={loading} />} />
+      <Back label={t("settings-extensionmarket.market_title")} onBack={onBack} right={<IconButton icon="retry" label={t("settings-extensionmarket.reload")} onClick={load} disabled={loading} />} />
       <section className="mb-6 overflow-hidden rounded-card bg-surface shadow-card">
         <div className="flex items-center gap-3 px-4 py-3.5">
           <span className={cx("flex size-11 shrink-0 items-center justify-center rounded-[11px]", it?.installed ? "bg-accent-tint text-accent-ink" : "bg-inset text-ink-3 shadow-hairline")}>
@@ -241,7 +242,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[15px] font-semibold text-ink">{it?.name ?? id}</h2>
-            <div className="mt-0.5 truncate text-[12px] text-ink-3">{it ? itemLine(it) : loading ? "正在读取…" : ""}</div>
+            <div className="mt-0.5 truncate text-[12px] text-ink-3">{it ? itemLine(it) : loading ? t("settings-extensionmarket.reading") : ""}</div>
           </div>
           {loading && !it && <Spinner />}
           {st && <Pill tone={STATE_TONE[st.tone]}>{st.label}</Pill>}
@@ -251,12 +252,12 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
             {it?.description && <p className="text-[12.5px] leading-relaxed text-ink-2">{it.description}</p>}
             {!!it?.tags?.length && (
               <div className="flex flex-wrap gap-1">
-                {it.tags.map((t) => (
-                  <Pill key={t}>{t}</Pill>
+                {it.tags.map((tag) => (
+                  <Pill key={tag}>{tag}</Pill>
                 ))}
               </div>
             )}
-            {it?.problem && <p className="text-[12px] text-orange">装不了：{it.problem}</p>}
+            {it?.problem && <p className="text-[12px] text-orange">{t("settings-extensionmarket.cant_install", { problem: it.problem })}</p>}
             {error && <p className="text-[12px] break-words text-red">{error}</p>}
           </div>
         )}
@@ -264,13 +265,13 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
           <div className="flex flex-wrap items-center gap-2 border-t border-line bg-inset px-4 py-2.5">
             {canUninstall(it) && (
               <Button tone="quiet" icon="trash" onClick={() => setRemoving(true)} className="text-red enabled:hover:text-red">
-                卸载
+                {t("settings-extensionmarket.uninstall")}
               </Button>
             )}
             <span className="flex-1" />
             {(st.kind === "install" || st.kind === "upgrade") && (
               <Button tone="primary" icon={st.kind === "upgrade" ? "up" : "download"} busy={previewing} onClick={() => void look()}>
-                {st.kind === "upgrade" ? `升级到 ${it.version}` : "安装"}
+                {st.kind === "upgrade" ? t("settings-extensionmarket.upgrade_to", { version: it.version }) : t("settings-extensionmarket.install")}
               </Button>
             )}
           </div>
@@ -279,39 +280,39 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
 
       {it && (
         <>
-          <Group title="它可以" footer="装之前还会把这几项再列一遍，点「同意并安装」才装；以后的版本要得更多时，升级前会再问一次。">
+          <Group title={t("settings-extensionmarket.can_title")} footer={t("settings-extensionmarket.can_footer")}>
             {(it.permissions ?? []).length ? (
               (it.permissions ?? []).map((p) => <PermissionRow key={p.key + p.title} p={p} />)
             ) : (
-              <p className="px-4 py-2.5 text-[12.5px] text-ink-2">它只有清单，不运行程序、不要任何权限。</p>
+              <p className="px-4 py-2.5 text-[12.5px] text-ink-2">{t("settings-extensionmarket.no_permissions")}</p>
             )}
           </Group>
           {contributes.length > 0 && (
-            <Group title="提供">
+            <Group title={t("settings-extensionmarket.provides")}>
               {contributes.map(([point, ids]) => (
                 <Row key={point} label={pointText(point)} mono>
-                  <span className="truncate">{ids.join("、")}</span>
+                  <span className="truncate">{ids.join(t("settings-extensionmarket.list_separator"))}</span>
                 </Row>
               ))}
             </Group>
           )}
-          <Group title="关于">
-            <Row label="版本" mono>
+          <Group title={t("settings-extensionmarket.about")}>
+            <Row label={t("settings-extensionmarket.version")} mono>
               {it.version}
             </Row>
             {it.installed && (
-              <Row label="已装的版本" mono>
+              <Row label={t("settings-extensionmarket.installed_version")} mono>
                 {it.installed}
               </Row>
             )}
-            {it.publisher && <Row label="发布者">{it.publisher}</Row>}
-            <Row label="市场">{it.market_name}</Row>
+            {it.publisher && <Row label={t("settings-extensionmarket.publisher")}>{it.publisher}</Row>}
+            <Row label={t("settings-extensionmarket.market")}>{it.market_name}</Row>
             <Row label="id" mono>
               {it.id}
             </Row>
             {home && (
               <a href={home} target="_blank" rel="noreferrer noopener" className="flex items-center gap-3 px-4 py-2.5 whitespace-nowrap transition-colors hover:bg-hover">
-                <span className="min-w-0 flex-1 truncate text-[13px] text-ink">主页</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("settings-extensionmarket.homepage")}</span>
                 <span className="min-w-0 truncate text-[12.5px] text-ink-3">{new URL(home).host}</span>
                 <Icon name="external" size={12} className="shrink-0 text-ink-3" />
               </a>
@@ -326,7 +327,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
           onClose={() => setPreview(null)}
           onAgree={async () => {
             const d = preview.upgrade ? await upgradePreview(it.id, preview) : await installPreview(preview);
-            toast(preview.upgrade ? `「${d.name}」已升级到 ${d.version}` : `已安装「${d.name}」`, "ok");
+            toast(preview.upgrade ? t("settings-extensionmarket.upgraded", { name: d.name, version: d.version ?? "" }) : t("settings-extensionmarket.installed", { name: d.name }), "ok");
             setPreview(null);
             onInstalled(d.id);
           }}
@@ -383,11 +384,11 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
       open
       onClose={() => !busy && onClose()}
       width={520}
-      title={pv.upgrade ? `升级「${m.name}」` : `安装「${m.name}」`}
+      title={pv.upgrade ? t("settings-extensionmarket.upgrade_title", { name: m.name }) : t("settings-extensionmarket.install_title", { name: m.name })}
       footer={
         <>
           <Button tone="quiet" onClick={onClose} disabled={busy}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone={pv.more_permissions ? "danger" : "primary"} busy={busy} disabled={previewBlocked(pv, now)} onClick={() => void agree()}>
             {agreeLabel(pv)}
@@ -413,11 +414,11 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
           </div>
         </div>
         {pv.upgrade && pv.more_permissions && (
-          <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed text-red">新版本要的权限变多了：它比你当初同意的能做更多的事。看清新增的几项再决定；不同意就不升级，旧版本照常用。</p>
+          <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed text-red">{t("settings-extensionmarket.more_permissions")}</p>
         )}
         {pv.upgrade && !!pv.added_permissions?.length && (
           <div>
-            <div className="mb-1 px-1 text-[11.5px] font-medium text-orange">新增</div>
+            <div className="mb-1 px-1 text-[11.5px] font-medium text-orange">{t("settings-extensionmarket.added")}</div>
             <div className="divide-y divide-line overflow-hidden rounded-control bg-orange-tint shadow-hairline">
               {pv.added_permissions.map((p) => (
                 <PermissionRow key={p.key + p.title} p={p} tone="orange" />
@@ -426,25 +427,25 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
           </div>
         )}
         <div>
-          <div className="mb-1 px-1 text-[11.5px] font-medium text-ink-3">{pv.upgrade ? "新版本可以" : "它可以"}</div>
+          <div className="mb-1 px-1 text-[11.5px] font-medium text-ink-3">{pv.upgrade ? t("settings-extensionmarket.new_version_can") : t("settings-extensionmarket.can_title")}</div>
           <div className="divide-y divide-line overflow-hidden rounded-control bg-inset shadow-hairline">
-            {pv.permissions.length ? pv.permissions.map((p) => <PermissionRow key={p.key + p.title} p={p} />) : <p className="px-4 py-2.5 text-[12.5px] text-ink-2">它只有清单，不运行程序、不要任何权限。</p>}
+            {pv.permissions.length ? pv.permissions.map((p) => <PermissionRow key={p.key + p.title} p={p} />) : <p className="px-4 py-2.5 text-[12.5px] text-ink-2">{t("settings-extensionmarket.no_permissions")}</p>}
           </div>
         </div>
-        {!!pv.depends?.length && <Group title="依赖">{pv.depends.map((d) => <Row key={d.id} label={d.name || d.id} hint={d.version}>{dependencyText(d)}</Row>)}</Group>}
-        {!!m.extension_pack?.length && <Group title="合集成员">{m.extension_pack.map((p) => <Row key={p.id} label={p.id} hint={p.market}>{p.version || ""}</Row>)}</Group>}
+        {!!pv.depends?.length && <Group title={t("settings-extensionmarket.depends")}>{pv.depends.map((d) => <Row key={d.id} label={d.name || d.id} hint={d.version}>{dependencyText(d)}</Row>)}</Group>}
+        {!!m.extension_pack?.length && <Group title={t("settings-extensionmarket.pack_members")}>{m.extension_pack.map((p) => <Row key={p.id} label={p.id} hint={p.market}>{p.version || ""}</Row>)}</Group>}
         {!!pv.bundle?.length && (
-          <Group title="一起安装" footer="同意后按顺序安装这些扩展；确认包括每一个扩展的权限。已有且满足版本的成员不会重复安装。">
+          <Group title={t("settings-extensionmarket.bundle")} footer={t("settings-extensionmarket.bundle_footer")}>
             {pv.bundle.map((b) => (
               <div key={b.preview_id}>
                 <Row label={b.manifest.name} hint={b.manifest.id} mono>{previewVersion(b)}</Row>
-                {b.permissions.length ? b.permissions.map((p) => <PermissionRow key={p.key + p.title} p={p} />) : <p className="px-4 py-2.5 text-ink-3">不运行程序、不要权限。</p>}
+                {b.permissions.length ? b.permissions.map((p) => <PermissionRow key={p.key + p.title} p={p} />) : <p className="px-4 py-2.5 text-ink-3">{t("settings-extensionmarket.bundle_no_permissions")}</p>}
                 {b.warnings?.map((w) => <p key={w} className="px-4 py-2.5 text-orange">{w}</p>)}
               </div>
             ))}
           </Group>
         )}
-        {!!pv.unresolved?.length && <p role="alert" className="text-red">还不能安装：{pv.unresolved.join("、")}。补齐后重新预览。</p>}
+        {!!pv.unresolved?.length && <p role="alert" className="text-red">{t("settings-extensionmarket.unresolved", { items: pv.unresolved.join(t("settings-extensionmarket.list_separator")) })}</p>}
         {pv.warnings?.map((w) => (
           <p key={w} className="flex items-start gap-1.5 text-[12px] leading-relaxed text-orange">
             <Icon name="info" size={13} className="mt-0.5 shrink-0" />
@@ -452,9 +453,9 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
           </p>
         ))}
         <p className="text-[11.5px] leading-relaxed text-ink-3">
-          {expired ? "这份预览过期了，关掉再点一次安装。" : `这份预览 ${Math.ceil(left / 60000)} 分钟内有效；装的就是你看到的这一份（按权限摘要核对）。`}
+          {expired ? t("settings-extensionmarket.preview_expired") : t("settings-extensionmarket.preview_valid", { count: Math.ceil(left / 60000) })}
         </p>
-        {error && <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">没有完成：{error}</p>}
+        {error && <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">{t("settings-extensionmarket.not_done", { error })}</p>}
       </div>
     </Dialog>
   );
@@ -475,7 +476,7 @@ export function UninstallDialog({ id, name, pack, onClose, onDone }: { id: strin
     setError("");
     try {
       await uninstallExtension(id, keep, cascade, members);
-      toast(`已卸载「${name}」`, "ok");
+      toast(t("settings-extensionmarket.uninstalled", { name }), "ok");
       onDone();
     } catch (e) {
       const deps = dependentError(e);
@@ -490,29 +491,29 @@ export function UninstallDialog({ id, name, pack, onClose, onDone }: { id: strin
       open
       onClose={() => !busy && onClose()}
       width={440}
-      title={`卸载「${name}」`}
+      title={t("settings-extensionmarket.uninstall_title", { name })}
       footer={
         <>
           <Button tone="quiet" onClick={onClose} disabled={busy}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="danger" busy={busy} disabled={!!dependents && !cascade} onClick={() => void go()}>
-            卸载
+            {t("settings-extensionmarket.uninstall")}
           </Button>
         </>
       }
     >
-      <p className="text-[12.5px] leading-relaxed text-ink-2">停掉它的程序，删掉它的包、配置和密钥；它提供的连接器等一起拿掉。要再用得从市场重新安装。</p>
+      <p className="text-[12.5px] leading-relaxed text-ink-2">{t("settings-extensionmarket.uninstall_body")}</p>
       <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-control bg-inset px-3 py-2.5 shadow-hairline">
         <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} className="mt-0.5 size-3.5 shrink-0 accent-[var(--accent)]" />
         <span className="min-w-0">
-          <span className="block text-[12.5px] font-medium text-ink">保留它的数据</span>
-          <span className="mt-0.5 block text-[11.5px] leading-relaxed text-ink-3">以后重装能接着用。</span>
+          <span className="block text-[12.5px] font-medium text-ink">{t("settings-extensionmarket.keep_data")}</span>
+          <span className="mt-0.5 block text-[11.5px] leading-relaxed text-ink-3">{t("settings-extensionmarket.keep_data_hint")}</span>
         </span>
       </label>
-      {dependents && <label className="mt-3 flex items-start gap-2.5 text-ink-2"><input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} />同时停用依赖它的扩展：{dependents.map((d) => d.name).join("、")}（不卸载）</label>}
-      {!!packMembers?.length && <label className="mt-3 flex items-start gap-2.5 text-ink-2"><input type="checkbox" checked={members} onChange={(e) => { setMembers(e.target.checked); setCascade(false); setDependents(null); }} />连合集成员一起卸载：{packMembers.map((p) => p.id).join("、")}</label>}
-      {error && <p className="mt-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">没有卸载：{error}</p>}
+      {dependents && <label className="mt-3 flex items-start gap-2.5 text-ink-2"><input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} />{t("settings-extensionmarket.disable_dependents", { names: dependents.map((d) => d.name).join(t("settings-extensionmarket.list_separator")) })}</label>}
+      {!!packMembers?.length && <label className="mt-3 flex items-start gap-2.5 text-ink-2"><input type="checkbox" checked={members} onChange={(e) => { setMembers(e.target.checked); setCascade(false); setDependents(null); }} />{t("settings-extensionmarket.uninstall_members", { names: packMembers.map((p) => p.id).join(t("settings-extensionmarket.list_separator")) })}</label>}
+      {error && <p className="mt-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">{t("settings-extensionmarket.not_uninstalled", { error })}</p>}
     </Dialog>
   );
 }
@@ -535,9 +536,9 @@ export function Markets({ onBack }: { onBack: () => void }) {
     setSavingAuto(true);
     try {
       setAuto(await setExtensionUpgrades(on));
-      toast(on ? "已打开扩展自动升级" : "已关掉扩展自动升级", "ok");
+      toast(on ? t("settings-extensionmarket.auto_on") : t("settings-extensionmarket.auto_off"), "ok");
     } catch (e) {
-      toast(`没有改：${errorText(e)}`, "error");
+      toast(t("settings-extensionmarket.auto_failed", { error: errorText(e) }), "error");
     } finally {
       setSavingAuto(false);
     }
@@ -556,14 +557,14 @@ export function Markets({ onBack }: { onBack: () => void }) {
     try {
       if (kind === "refresh") {
         put(await refreshMarket(m.id));
-        toast(`已重新读取「${m.name}」`, "ok");
+        toast(t("settings-extensionmarket.reloaded", { name: m.name }), "ok");
       } else {
         await removeMarket(m.id);
         setList((l) => (l ?? []).filter((x) => x.id !== m.id));
-        toast(`已删除「${m.name}」，从它装的扩展留着`, "ok");
+        toast(t("settings-extensionmarket.market_removed", { name: m.name }), "ok");
       }
     } catch (e) {
-      toast(`${kind === "refresh" ? "读不到" : "没有删除"}「${m.name}」：${errorText(e)}`, "error");
+      toast(t(kind === "refresh" ? "settings-extensionmarket.refresh_failed" : "settings-extensionmarket.remove_failed", { name: m.name, error: errorText(e) }), "error");
       if (kind === "refresh") load();
     } finally {
       setBusy(({ [m.id]: _, ...rest }) => rest);
@@ -574,41 +575,41 @@ export function Markets({ onBack }: { onBack: () => void }) {
   return (
     <>
       <Back
-        label="扩展市场"
+        label={t("settings-extensionmarket.market_title")}
         onBack={onBack}
         right={
           <Button tone="primary" icon="plus" onClick={() => setAdding(true)}>
-            添加市场
+            {t("settings-extensionmarket.add_market")}
           </Button>
         }
       />
-      <h2 className="mb-1 px-1 text-[15px] font-semibold text-ink">管理市场</h2>
+      <h2 className="mb-1 px-1 text-[15px] font-semibold text-ink">{t("settings-extensionmarket.manage_markets")}</h2>
       <p className="mb-4 px-1 text-[12.5px] leading-relaxed text-ink-3">
-        hub 读这些市场的索引（persona-extensions.json）。私有的 https / GitHub 市场填一个只读 token：加密存在 hub 上，只发给这个市场自己，填了以后不再显示；git: 的市场用 hub 机器自己的 SSH 凭据。
+        {t("settings-extensionmarket.markets_intro")}
       </p>
       {auto !== null && !!list?.length && (
         <Group
           footer={
             auto
-              ? "从这些市场装的扩展出了新版本，扩展空闲时 hub 自动装上；要的权限变多时先问你。每个扩展也可以在自己的页面里单独关掉。"
-              : "关着：有新版本时只在扩展的页面里提示，你自己去升级。"
+              ? t("settings-extensionmarket.auto_footer_on")
+              : t("settings-extensionmarket.auto_footer_off")
           }
         >
           <div className="flex items-center gap-3 px-4 py-2.5">
-            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">自动升级扩展</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("settings-extensionmarket.auto_upgrade")}</span>
             {savingAuto && <Spinner />}
-            <Switch on={auto} onChange={(on) => void flipAuto(on)} disabled={savingAuto} label="自动升级扩展" />
+            <Switch on={auto} onChange={(on) => void flipAuto(on)} disabled={savingAuto} label={t("settings-extensionmarket.auto_upgrade")} />
           </div>
         </Group>
       )}
-      <Group title={list ? `${list.length} 个市场` : "市场"} right={<IconButton icon="retry" label="刷新" onClick={load} disabled={loading} size={24} iconSize={13} className="-mb-1" />}>
+      <Group title={list ? t("settings-extensionmarket.market_count", { count: list.length }) : t("settings-extensionmarket.markets")} right={<IconButton icon="retry" label={t("settings-extensionmarket.refresh")} onClick={load} disabled={loading} size={24} iconSize={13} className="-mb-1" />}>
         {!list && !error && (
           <div className="px-4 py-3">
             <Loading />
           </div>
         )}
-        {error && <Problem text={`读不到市场：${error}`} onRetry={load} busy={loading} />}
-        {list?.length === 0 && <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">还没有市场。点右上角「添加市场」，填 https 地址、github:owner/repo 或 git:…。</p>}
+        {error && <Problem text={t("settings-extensionmarket.markets_failed", { error })} onRetry={load} busy={loading} />}
+        {list?.length === 0 && <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{t("settings-extensionmarket.markets_empty")}</p>}
         {list?.map((m) => (
           <div key={m.id} className="px-4 py-3">
             <div className="flex items-start gap-3">
@@ -618,7 +619,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-[13px] font-medium text-ink">{m.name}</span>
-                  {m.official && <Pill tone="accent">官方</Pill>}
+                  {m.official && <Pill tone="accent">{t("settings-extensionmarket.official")}</Pill>}
                   {m.has_token && (
                     <Pill>
                       <Icon name="lock" size={10} className="mr-0.5" />
@@ -631,7 +632,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
                 </div>
                 <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{marketLine(m, (iso) => ago(iso))}</div>
                 {m.description && <p className="mt-1 text-[12px] leading-relaxed text-ink-2">{m.description}</p>}
-                {m.error && <p className="mt-1 text-[12px] leading-relaxed break-words text-red">读不到：{m.error}</p>}
+                {m.error && <p className="mt-1 text-[12px] leading-relaxed break-words text-red">{t("settings-extensionmarket.market_error", { error: m.error })}</p>}
                 {(m.warnings ?? []).map((w) => (
                   <p key={w} className="mt-1 flex items-start gap-1.5 text-[11.5px] leading-snug break-words text-orange">
                     <Icon name="info" size={12} className="mt-0.5 shrink-0" />
@@ -642,26 +643,26 @@ export function Markets({ onBack }: { onBack: () => void }) {
             </div>
             <div className="mt-2 ml-12 flex flex-wrap items-center gap-1.5">
               <Button tone="secondary" icon="retry" busy={busy[m.id] === "refresh"} disabled={!!busy[m.id]} onClick={() => void work(m, "refresh")}>
-                重新读取
+                {t("settings-extensionmarket.reload")}
               </Button>
               {!isGitMarket(m.spec) && (
                 <Button tone="secondary" icon="key" disabled={!!busy[m.id]} onClick={() => setTokenFor(m)}>
-                  {m.has_token ? "换 token" : "填 token"}
+                  {m.has_token ? t("settings-extensionmarket.change_token") : t("settings-extensionmarket.set_token")}
                 </Button>
               )}
               <span className="flex-1" />
               {confirm === m.id ? (
                 <span className="flex items-center gap-1" style={{ animation: `pop-in 160ms ${EASE} both` }}>
                   <Button tone="quiet" onClick={() => setConfirm("")}>
-                    取消
+                    {t("common.cancel")}
                   </Button>
                   <Button tone="danger" busy={busy[m.id] === "remove"} onClick={() => void work(m, "remove")}>
-                    确认删除
+                    {t("settings-extensionmarket.confirm_delete")}
                   </Button>
                 </span>
               ) : (
                 <Button tone="quiet" icon="trash" disabled={!!busy[m.id]} onClick={() => setConfirm(m.id)} className="text-red enabled:hover:text-red">
-                  删除
+                  {t("settings-extensionmarket.delete")}
                 </Button>
               )}
             </div>
@@ -674,7 +675,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
           onAdded={(m) => {
             setList((l) => [...(l ?? []).filter((x) => x.id !== m.id), m]);
             setAdding(false);
-            toast(`已添加「${m.name}」`, "ok");
+            toast(t("settings-extensionmarket.market_added", { name: m.name }), "ok");
           }}
         />
       )}
@@ -715,14 +716,14 @@ function AddMarketDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (
       open
       onClose={() => !busy && onClose()}
       width={480}
-      title="添加市场"
+      title={t("settings-extensionmarket.add_market")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose} disabled={busy}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={busy} disabled={!spec.trim()} onClick={() => void go()}>
-            添加
+            {t("settings-extensionmarket.add")}
           </Button>
         </>
       }
@@ -735,7 +736,7 @@ function AddMarketDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (
         }}
       >
         <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-2">地址</span>
+          <span className="mb-1.5 block text-[12px] font-medium text-ink-2">{t("settings-extensionmarket.address")}</span>
           <input
             value={spec}
             onChange={(e) => setSpec(e.target.value)}
@@ -750,23 +751,23 @@ function AddMarketDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (
           <span className="mt-1 block text-[11.5px] leading-relaxed text-ink-3">{MARKET_SPEC_HINT}</span>
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-ink-2">token（可选）</span>
+          <span className="mb-1.5 block text-[12px] font-medium text-ink-2">{t("settings-extensionmarket.token_optional")}</span>
           <input
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder={git ? "git: 的市场不用 token" : "私有的市场才要"}
+            placeholder={git ? t("settings-extensionmarket.token_placeholder_git") : t("settings-extensionmarket.token_placeholder")}
             spellCheck={false}
             autoComplete="new-password"
             disabled={busy || git}
             className={cx(inputClass, "h-9 font-mono")}
           />
           <span className="mt-1 block text-[11.5px] leading-relaxed text-ink-3">
-            {git ? "git: 的市场用 hub 机器自己的 SSH 凭据读，不收 token。" : "GitHub 用只读的 fine-grained token（这个仓库的 Contents 读权限）。加密存在 hub 上，填了以后不再显示。"}
+            {git ? t("settings-extensionmarket.token_hint_git") : t("settings-extensionmarket.token_hint")}
           </span>
         </label>
-        {busy && <p className="text-[12px] text-ink-3">正在读一次它的索引，读到了才登记…</p>}
-        {error && <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">没有添加：{error}</p>}
+        {busy && <p className="text-[12px] text-ink-3">{t("settings-extensionmarket.adding")}</p>}
+        {error && <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">{t("settings-extensionmarket.not_added", { error })}</p>}
         <button type="submit" hidden />
       </form>
     </Dialog>
@@ -783,7 +784,7 @@ function TokenDialog({ market, onClose, onDone }: { market: Market; onClose: () 
     setError("");
     try {
       const m = await setMarketToken(market.id, kind === "save" ? token.trim() : "");
-      toast(kind === "save" ? `已换上新的 token，重新读了「${m.name}」` : `已去掉「${m.name}」的 token`, "ok");
+      toast(kind === "save" ? t("settings-extensionmarket.token_replaced", { name: m.name }) : t("settings-extensionmarket.token_removed", { name: m.name }), "ok");
       onDone(m);
     } catch (e) {
       setError(errorText(e));
@@ -796,21 +797,21 @@ function TokenDialog({ market, onClose, onDone }: { market: Market; onClose: () 
       open
       onClose={() => !busy && onClose()}
       width={440}
-      title={`「${market.name}」的 token`}
+      title={t("settings-extensionmarket.token_title", { name: market.name })}
       footer={
         <>
           {market.has_token && (
             <span className="mr-auto">
               <Button tone="quiet" icon="trash" busy={busy === "clear"} disabled={!!busy} onClick={() => void run("clear")} className="text-red enabled:hover:text-red">
-                去掉 token
+                {t("settings-extensionmarket.remove_token")}
               </Button>
             </span>
           )}
           <Button tone="quiet" onClick={onClose} disabled={!!busy}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={busy === "save"} disabled={!token.trim() || !!busy} onClick={() => void run("save")}>
-            保存
+            {t("common.save")}
           </Button>
         </>
       }
@@ -824,7 +825,7 @@ function TokenDialog({ market, onClose, onDone }: { market: Market; onClose: () 
       >
         <div className="flex items-center gap-2 text-[12px] text-ink-3">
           <Icon name="lock" size={13} className="shrink-0" />
-          {market.has_token ? "已设置（不显示）" : "未设置"}
+          {market.has_token ? t("settings-extensionmarket.token_set") : t("settings-extensionmarket.token_unset")}
         </div>
         <input
           type="password"
@@ -833,13 +834,13 @@ function TokenDialog({ market, onClose, onDone }: { market: Market; onClose: () 
           autoFocus
           autoComplete="new-password"
           spellCheck={false}
-          placeholder={market.has_token ? "输入新的 token 替换" : "输入 token"}
+          placeholder={market.has_token ? t("settings-extensionmarket.token_input_replace") : t("settings-extensionmarket.token_input")}
           aria-label="token"
           disabled={!!busy}
           className={cx(inputClass, "h-9 font-mono")}
         />
-        <p className="text-[11.5px] leading-relaxed text-ink-3">保存后 hub 用它重新读一次索引。</p>
-        {error && <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">没有保存：{error}</p>}
+        <p className="text-[11.5px] leading-relaxed text-ink-3">{t("settings-extensionmarket.token_reload_note")}</p>
+        {error && <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">{t("settings-extensionmarket.not_saved", { error })}</p>}
         <button type="submit" hidden />
       </form>
     </Dialog>

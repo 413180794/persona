@@ -18,6 +18,7 @@ import {
   type SettingValue,
 } from "../../lib/agent-settings";
 import { api, enc, errorText } from "../../lib/api";
+import { t } from "../../i18n";
 import { machineWithHub } from "../../lib/mesh";
 import { useStore } from "../../lib/store";
 import { Button, cx, EASE, IconButton, Loading, Menu, Spinner, toast, useMenu } from "../../ui/atoms";
@@ -93,13 +94,13 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
     );
     setBusy(null);
     const sum = applySummary(results);
-    toast(sum.ok ? `${s.title}：${valueText(value)} · ${sum.text}` : `${s.title}：${sum.text}`, sum.ok ? "ok" : "error");
+    toast(sum.ok ? t("settings-agentsettings.toast_value", { title: s.title, value: valueText(value), summary: sum.text }) : t("settings-agentsettings.toast_failed", { title: s.title, summary: sum.text }), sum.ok ? "ok" : "error");
   };
 
   // ⋯ › 应用到所有在线机器: this computer's value (unset = the default) on every other online one.
   const pushToAll = async (s: AgentSetting) => {
     const others = online.filter((m) => m.id !== shown);
-    if (!others.length) return toast("没有别的在线机器", "info");
+    if (!others.length) return toast(t("settings-agentsettings.no_other_online"), "info");
     setBusy(s.key);
     const results: ApplyResult[] = await Promise.all(
       others.map((m) =>
@@ -111,23 +112,23 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
     );
     setBusy(null);
     const sum = applySummary(results);
-    toast(sum.ok ? `${s.title}：${valueText(s.value ?? null)} · 已应用到另外 ${results.length} 台机器` : `${s.title}：${sum.text}`, sum.ok ? "ok" : "error");
+    toast(sum.ok ? t("settings-agentsettings.pushed_to_others", { title: s.title, value: valueText(s.value ?? null), count: results.length }) : t("settings-agentsettings.toast_failed", { title: s.title, summary: sum.text }), sum.ok ? "ok" : "error");
   };
 
   if (!online.length) {
     return (
-      <Group title="机器" footer={text.footer}>
-        <p className="px-4 py-3 text-[12.5px] text-ink-3">没有在线的机器：这些设置存在各台电脑上，连上后再改。</p>
+      <Group title={t("settings-agentsettings.machines")} footer={text.footer}>
+        <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings-agentsettings.none_online")}</p>
       </Group>
     );
   }
 
   return (
     <>
-      <Group title="机器" footer={text.footer}>
+      <Group title={t("settings-agentsettings.machines")} footer={text.footer}>
         <div className="flex items-center gap-3 px-4 py-2.5">
-          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">改哪台电脑</span>
-          <select value={shown} onChange={(e) => choose(e.target.value)} className={cx(controlClass, "max-w-[60%] min-w-[140px]")} aria-label="改哪台电脑">
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("settings-agentsettings.which_computer")}</span>
+          <select value={shown} onChange={(e) => choose(e.target.value)} className={cx(controlClass, "max-w-[60%] min-w-[140px]")} aria-label={t("settings-agentsettings.which_computer")}>
             {online.map((m) => (
               <option key={m.id} value={m.id}>
                 {name(m.id)}
@@ -137,19 +138,19 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
         </div>
         <div className="flex items-center gap-3 px-4 py-2.5">
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] text-ink">同时改所有在线机器</div>
-            <div className="mt-0.5 text-[11.5px] text-ink-3">{applyAll ? `改一项会写到这 ${online.length} 台在线的电脑` : "只改上面选的这一台"}</div>
+            <div className="truncate text-[13px] text-ink">{t("settings-agentsettings.apply_all")}</div>
+            <div className="mt-0.5 text-[11.5px] text-ink-3">{applyAll ? t("settings-agentsettings.apply_all_on", { count: online.length }) : t("settings-agentsettings.apply_all_off")}</div>
           </div>
-          <Switch on={applyAll} onChange={toggleAll} label="同时改所有在线机器" />
+          <Switch on={applyAll} onChange={toggleAll} label={t("settings-agentsettings.apply_all")} />
         </div>
       </Group>
 
-      <Group title={`${text.name} 设置 · ${name(shown)}`}>
+      <Group title={t("settings-agentsettings.settings_title", { agent: text.name, machine: name(shown) })}>
         {error ? (
           <div className="flex items-center gap-3 px-4 py-3">
-            <p className="min-w-0 flex-1 text-[12.5px] text-red">读不到这台电脑的设置：{error}</p>
+            <p className="min-w-0 flex-1 text-[12.5px] text-red">{t("settings-agentsettings.load_failed", { error })}</p>
             <Button tone="secondary" icon="retry" onClick={() => setReload((n) => n + 1)}>
-              重试
+              {t("settings-agentsettings.retry")}
             </Button>
           </div>
         ) : !settings ? (
@@ -157,7 +158,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
             <Loading />
           </div>
         ) : settings.length === 0 ? (
-          <p className="px-4 py-3 text-[12.5px] text-ink-3">这台电脑上没有能改的设置。</p>
+          <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings-agentsettings.empty")}</p>
         ) : (
           settings.map((s, i) => (
             <SettingRow key={`${shown}/${s.key}`} s={s} i={i} busy={busy === s.key} others={online.length - 1} onChange={(v) => void change(s, v)} onPushAll={() => void pushToAll(s)} />
@@ -178,7 +179,7 @@ function SettingRow({ s, i, busy, others, onChange, onPushAll }: { s: AgentSetti
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-[13px] text-ink">{s.title}</span>
-          {unset && <span className="shrink-0 text-[11px] text-ink-3">默认</span>}
+          {unset && <span className="shrink-0 text-[11px] text-ink-3">{t("settings-agentsettings.default")}</span>}
           <span className="hidden truncate font-mono text-[10.5px] text-ink-3 sm:inline">{s.key}</span>
         </div>
         {s.detail && <div className="mt-0.5 text-[11.5px] leading-snug text-ink-3">{s.detail}</div>}
@@ -189,17 +190,17 @@ function SettingRow({ s, i, busy, others, onChange, onPushAll }: { s: AgentSetti
           <Switch on={v === true} onChange={(on) => onChange(on)} disabled={busy} label={s.title} />
         ) : s.type === "enum" ? (
           <select value={typeof v === "string" ? v : ""} disabled={busy} onChange={(e) => onChange(e.target.value)} className={cx(controlClass, "max-w-[180px]")} aria-label={s.title}>
-            {typeof v !== "string" && <option value="">（未设置）</option>}
+            {typeof v !== "string" && <option value="">{t("settings-agentsettings.unset_option")}</option>}
             {(s.options ?? []).map((o) => (
               <option key={o} value={o}>
-                {o === s.default ? `${o}（默认）` : o}
+                {o === s.default ? t("settings-agentsettings.option_default", { option: o }) : o}
               </option>
             ))}
           </select>
         ) : (
           <TextSetting s={s} disabled={busy} onSave={onChange} />
         )}
-        <IconButton icon="more" label={`${s.title}：更多`} onClick={menu.open} active={!!menu.anchor} />
+        <IconButton icon="more" label={t("settings-agentsettings.more", { title: s.title })} onClick={menu.open} active={!!menu.anchor} />
         {menu.anchor && (
           <Menu
             anchor={menu.anchor}
@@ -207,8 +208,8 @@ function SettingRow({ s, i, busy, others, onChange, onPushAll }: { s: AgentSetti
             align="right"
             width={220}
             items={[
-              { key: "reset", label: "恢复默认", hint: s.default !== undefined && s.default !== "" ? valueText(s.default ?? null) : undefined, icon: "retry", disabled: unset || busy, onSelect: () => onChange(null) },
-              { key: "all", label: "应用到所有在线机器", hint: others > 0 ? `另外 ${others} 台` : "没有别的", icon: "machine", disabled: others < 1 || busy, onSelect: onPushAll },
+              { key: "reset", label: t("settings-agentsettings.reset"), hint: s.default !== undefined && s.default !== "" ? valueText(s.default ?? null) : undefined, icon: "retry", disabled: unset || busy, onSelect: () => onChange(null) },
+              { key: "all", label: t("settings-agentsettings.push_all"), hint: others > 0 ? t("settings-agentsettings.others_hint", { count: others }) : t("settings-agentsettings.no_others"), icon: "machine", disabled: others < 1 || busy, onSelect: onPushAll },
             ]}
           />
         )}
@@ -235,7 +236,7 @@ function TextSetting({ s, disabled, onSave }: { s: AgentSetting; disabled: boole
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         else if (e.key === "Escape") setText(saved);
       }}
-      placeholder={typeof s.default === "string" && s.default ? s.default : "未设置"}
+      placeholder={typeof s.default === "string" && s.default ? s.default : t("settings-agentsettings.unset")}
       spellCheck={false}
       autoComplete="off"
       aria-label={s.title}

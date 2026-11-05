@@ -3,6 +3,7 @@
 // bot, credentials), where its messages go, what it does, a test message to the owner — and, for a market's, the way
 // to install it. Read-only ones (the apps, /agent, voice) say where they are set up.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { t } from "../../i18n";
 import { errorText } from "../../lib/api";
 import {
   bindChannel, bindTitle, useChannels, canBind, capabilityText, channelDetail, channelSections, channelStateText, channelSubtitle,
@@ -40,12 +41,12 @@ export function ChannelLink({ id, onOpen }: { id: string; onOpen: (id: string) =
   const c = list.find((x) => x.id === id);
   if (!has || !c) return null;
   return (
-    <Group footer={`${c.name}也是一个和 Persona 对话的渠道：消息发到哪段对话、提问和推送在渠道里设置。`}>
+    <Group footer={t("settings-channels.link_footer", { name: c.name })}>
       <Row
         label={
           <span className="flex items-center gap-2">
             <ChannelMark c={c} size={18} />
-            在 设置 › 渠道 里设置{c.name}
+            {t("settings-channels.link_label", { name: c.name })}
           </span>
         }
         onClick={() => onOpen(id)}
@@ -74,11 +75,11 @@ export function ChannelList({ onOpen, onMarketItem }: { onOpen: (id: string) => 
     <>
       <div className="mb-3 flex items-center gap-2">
         <span className="flex-1" />
-        <IconButton icon="retry" label="刷新渠道" onClick={load} disabled={loading} />
+        <IconButton icon="retry" label={t("settings-channels.refresh_channels")} onClick={load} disabled={loading} />
       </div>
-      <h1 className="mb-1 px-1 text-[17px] font-semibold text-ink">渠道</h1>
+      <h1 className="mb-1 px-1 text-[17px] font-semibold text-ink">{t("settings-channels.title")}</h1>
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
-        在哪里都能和 Persona 说话：消息进主对话（或你选的对话），这一轮的回答发回原处，Agent 要你回答或批准的也发过去，在别处答过就不再等。
+        {t("settings-channels.intro")}
       </p>
       {!list && !error && (
         <Group>
@@ -90,8 +91,8 @@ export function ChannelList({ onOpen, onMarketItem }: { onOpen: (id: string) => 
       {error && (
         <Group>
           <div className="flex items-center gap-3 px-4 py-3">
-            <p className="min-w-0 flex-1 text-[12.5px] break-words text-red">读不到渠道：{error}</p>
-            <Button tone="secondary" icon="retry" onClick={load} busy={loading}>重试</Button>
+            <p className="min-w-0 flex-1 text-[12.5px] break-words text-red">{t("settings-channels.load_failed", { error })}</p>
+            <Button tone="secondary" icon="retry" onClick={load} busy={loading}>{t("settings-channels.retry")}</Button>
           </div>
         </Group>
       )}
@@ -109,14 +110,14 @@ export function ChannelList({ onOpen, onMarketItem }: { onOpen: (id: string) => 
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-[13px] text-ink">{c.name}</span>
-                  {c.source === "plugin" && c.kind === "im" && <Pill>扩展</Pill>}
+                  {c.source === "plugin" && c.kind === "im" && <Pill>{t("settings-channels.extension")}</Pill>}
                 </div>
                 {channelSubtitle(c) && (
                   <div className={cx("mt-0.5 truncate text-[11.5px]", c.state === "error" ? "text-red" : "text-ink-3")}>{channelSubtitle(c)}</div>
                 )}
               </div>
               {c.source === "market" ? (
-                <span className="shrink-0 whitespace-nowrap text-[12px] text-accent-ink">去安装</span>
+                <span className="shrink-0 whitespace-nowrap text-[12px] text-accent-ink">{t("settings-channels.install")}</span>
               ) : (
                 c.kind !== "app" && <StateLabel c={c} />
               )}
@@ -161,9 +162,9 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
 
   const head = (
     <div className="mb-3 flex items-center gap-2">
-      <Button tone="quiet" icon="chevronLeft" onClick={onBack} className="-ml-2">渠道</Button>
+      <Button tone="quiet" icon="chevronLeft" onClick={onBack} className="-ml-2">{t("settings-channels.title")}</Button>
       <span className="flex-1" />
-      <IconButton icon="retry" label="刷新" onClick={() => void load()} />
+      <IconButton icon="retry" label={t("settings-channels.refresh")} onClick={() => void load()} />
     </div>
   );
   if (!d) {
@@ -171,7 +172,7 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
       <>
         {head}
         <Group>
-          <div className="px-4 py-3">{error ? <p className="text-[12.5px] text-red">读不到这个渠道：{error}</p> : <Loading />}</div>
+          <div className="px-4 py-3">{error ? <p className="text-[12.5px] text-red">{t("settings-channels.channel_load_failed", { error })}</p> : <Loading />}</div>
         </Group>
       </>
     );
@@ -187,7 +188,7 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
           <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] text-ink-3">
             {d.kind !== "app" && <StateLabel c={d} />}
             {d.account?.name && <span className="truncate">{d.account.name}</span>}
-            {d.last_event_at && <span className="shrink-0">· 最近一条 {ago(d.last_event_at)}</span>}
+            {d.last_event_at && <span className="shrink-0">{t("settings-channels.last_event", { when: ago(d.last_event_at) })}</span>}
           </div>
         </div>
       </div>
@@ -200,33 +201,33 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
       )}
 
       {editable && (
-        <Group footer={d.source === "plugin" ? "关掉后它不再收消息；绑定和设置留着。" : undefined}>
-          <Row label={`启用 ${d.name}`}>
-            <Switch on={d.enabled} onChange={(on) => void change("enabled", { enabled: on })} disabled={busy === "enabled"} label={`启用 ${d.name}`} />
+        <Group footer={d.source === "plugin" ? t("settings-channels.disable_footer") : undefined}>
+          <Row label={t("settings-channels.enable", { name: d.name })}>
+            <Switch on={d.enabled} onChange={(on) => void change("enabled", { enabled: on })} disabled={busy === "enabled"} label={t("settings-channels.enable", { name: d.name })} />
           </Row>
         </Group>
       )}
 
       {editable && canBind(d) && <BindSteps c={d} onDone={load} />}
       {editable && isBound(d) && (
-        <Group title="绑定" footer="只有绑定的这个人发的消息会交给 Persona，别人发来只回一句「只为绑定它的人服务」。">
-          <Row label="绑定的账号">{d.account?.name ?? "已绑定"}</Row>
+        <Group title={t("settings-channels.binding")} footer={t("settings-channels.binding_footer")}>
+          <Row label={t("settings-channels.bound_account")}>{d.account?.name ?? t("settings-channels.bound")}</Row>
           <div className="px-4 py-2.5">
-            <Button tone="quiet" icon="logout" onClick={() => setUnbinding(true)} className="-ml-2 text-red">解除绑定</Button>
+            <Button tone="quiet" icon="logout" onClick={() => setUnbinding(true)} className="-ml-2 text-red">{t("settings-channels.unbind")}</Button>
           </div>
         </Group>
       )}
 
       {editable && d.target && (
-        <Group title="消息发到" footer="在聊天里发 /new 开新对话、/main 回到主对话，也会改这里。">
-          <Row label="发到" onClick={() => setPicking(true)}>
+        <Group title={t("settings-channels.target_title")} footer={t("settings-channels.target_footer")}>
+          <Row label={t("settings-channels.target_row")} onClick={() => setPicking(true)}>
             <span className="max-w-[220px] truncate">{targetText(d.target)}</span>
           </Row>
         </Group>
       )}
 
       {editable && (d.features?.length ?? 0) > 0 && (
-        <Group title="功能">
+        <Group title={t("settings-channels.features")}>
           {d.features!.map((f) => (
             <Row key={f.id} label={f.title} hint={f.description}>
               <Switch on={f.on} onChange={(on) => void change("f:" + f.id, { features: { [f.id]: on } })} disabled={busy === "f:" + f.id} label={f.title} />
@@ -236,30 +237,30 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
       )}
 
       {(d.waiting.answers > 0 || d.waiting.asks > 0 || (d.conversations?.length ?? 0) > 0) && (
-        <Group title="最近">
+        <Group title={t("settings-channels.recent")}>
           {(d.waiting.answers > 0 || d.waiting.asks > 0) && (
-            <Row label="在等">
-              {[d.waiting.answers > 0 && `${d.waiting.answers} 个回答`, d.waiting.asks > 0 && `${d.waiting.asks} 个提问`].filter(Boolean).join(" · ")}
+            <Row label={t("settings-channels.waiting")}>
+              {[d.waiting.answers > 0 && t("settings-channels.waiting_answers", { count: d.waiting.answers }), d.waiting.asks > 0 && t("settings-channels.waiting_asks", { count: d.waiting.asks })].filter(Boolean).join(" · ")}
             </Row>
           )}
           {d.conversations?.map((cv) => (
-            <Row key={cv.session_id} label={cv.title || "一段对话"} hint={`消息进过这段对话 · ${ago(cv.at)}`} />
+            <Row key={cv.session_id} label={cv.title || t("settings-channels.a_chat")} hint={t("settings-channels.chat_hint", { when: ago(cv.at) })} />
           ))}
         </Group>
       )}
 
-      <Group title="它能做什么">
-        {capabilityText(d.capabilities).map((t) => (
-          <div key={t} className="flex items-center gap-2 px-4 py-2 text-[12.5px] text-ink-2">
+      <Group title={t("settings-channels.capabilities")}>
+        {capabilityText(d.capabilities).map((cap) => (
+          <div key={cap} className="flex items-center gap-2 px-4 py-2 text-[12.5px] text-ink-2">
             <Icon name="check" size={12} stroke={2.2} className="shrink-0 text-ink-3" />
-            {t}
+            {cap}
           </div>
         ))}
-        {d.surfaces && d.surfaces.length > 0 && <Row label="可以在这些地方用">{d.surfaces.join("、")}</Row>}
+        {d.surfaces && d.surfaces.length > 0 && <Row label={t("settings-channels.surfaces")}>{d.surfaces.join(t("settings-channels.list_separator"))}</Row>}
       </Group>
 
       {editable && d.state === "connected" && (
-        <Group footer="只发给绑定的你自己。">
+        <Group footer={t("settings-channels.test_footer")}>
           <div className="px-4 py-2.5">
             <Button
               tone="secondary"
@@ -269,7 +270,7 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
                 setBusy("test");
                 try {
                   await testChannel(id);
-                  toast(`测试消息发到 ${d.name} 了`, "ok");
+                  toast(t("settings-channels.test_sent", { name: d.name }), "ok");
                 } catch (e) {
                   toast(errorText(e), "error");
                 } finally {
@@ -277,26 +278,26 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
                 }
               }}
             >
-              发一条测试消息
+              {t("settings-channels.send_test")}
             </Button>
           </div>
         </Group>
       )}
 
       {d.settings_url && (
-        <Group footer={d.read_only ? "这个渠道的设置在别处。" : undefined}>
-          <Row label="更多设置" onClick={() => onSettings(d.settings_url!)} />
+        <Group footer={d.read_only ? t("settings-channels.settings_elsewhere") : undefined}>
+          <Row label={t("settings-channels.more_settings")} onClick={() => onSettings(d.settings_url!)} />
         </Group>
       )}
 
-      <TargetPicker open={picking} current={d.target} onClose={() => setPicking(false)} onPick={(t) => (setPicking(false), void change("target", { target: t }))} />
+      <TargetPicker open={picking} current={d.target} onClose={() => setPicking(false)} onPick={(target) => (setPicking(false), void change("target", { target }))} />
       <Dialog
         open={unbinding}
         onClose={() => setUnbinding(false)}
-        title={`解除和${d.name}的绑定？`}
+        title={t("settings-channels.unbind_title", { name: d.name })}
         footer={
           <>
-            <Button tone="quiet" onClick={() => setUnbinding(false)}>取消</Button>
+            <Button tone="quiet" onClick={() => setUnbinding(false)}>{t("common.cancel")}</Button>
             <Button
               tone="danger"
               busy={busy === "unbind"}
@@ -306,7 +307,7 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
                   setD(await unbindChannel(id));
                   forgetChannels();
                   setUnbinding(false);
-                  toast("已解除绑定", "ok");
+                  toast(t("settings-channels.unbound"), "ok");
                 } catch (e) {
                   toast(errorText(e), "error");
                 } finally {
@@ -314,12 +315,12 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
                 }
               }}
             >
-              解除绑定
+              {t("settings-channels.unbind")}
             </Button>
           </>
         }
       >
-        <p className="px-5 py-4 text-[13px] leading-relaxed text-ink-2">之后{d.name}里发给机器人的消息不再交给 Persona，在等的回答和提问也不再发过去。想再用要重新绑定。</p>
+        <p className="px-5 py-4 text-[13px] leading-relaxed text-ink-2">{t("settings-channels.unbind_body", { name: d.name })}</p>
       </Dialog>
     </>
   );
@@ -337,8 +338,8 @@ function TargetPicker({ open, current, onClose, onPick }: { open: boolean; curre
         .slice(0, 12),
     [sessions],
   );
-  const option = (key: string, label: string, hint: string | undefined, on: boolean, t: ChannelTarget) => (
-    <button key={key} type="button" onClick={() => onPick(t)} className="flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-hover">
+  const option = (key: string, label: string, hint: string | undefined, on: boolean, target: ChannelTarget) => (
+    <button key={key} type="button" onClick={() => onPick(target)} className="flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-hover">
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] text-ink">{label}</div>
         {hint && <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{hint}</div>}
@@ -347,12 +348,12 @@ function TargetPicker({ open, current, onClose, onPick }: { open: boolean; curre
     </button>
   );
   return (
-    <Dialog open={open} onClose={onClose} title="消息发到">
+    <Dialog open={open} onClose={onClose} title={t("settings-channels.target_title")}>
       <div className="max-h-[60vh] divide-y divide-line overflow-y-auto">
-        {option("main", "主对话", "接着之前在主对话里聊的", current?.kind === "main", { kind: "main" })}
-        {option("new", "新对话", "下一条消息开一段新的，之后都发给它", current?.kind === "new", { kind: "new" })}
+        {option("main", t("settings-channels.main_chat"), t("settings-channels.main_chat_hint"), current?.kind === "main", { kind: "main" })}
+        {option("new", t("settings-channels.new_chat"), t("settings-channels.new_chat_hint"), current?.kind === "new", { kind: "new" })}
         {conversations.map((s) =>
-          option(s.session_id, s.title || "一段对话", s.last_text, current?.kind === "conversation" && current.session_id === s.session_id, {
+          option(s.session_id, s.title || t("settings-channels.a_chat"), s.last_text, current?.kind === "conversation" && current.session_id === s.session_id, {
             kind: "conversation",
             machine_id: s.machine_id,
             session_id: s.session_id,
@@ -385,7 +386,7 @@ function BindSteps({ c, onDone }: { c: Channel; onDone: () => Promise<void> }) {
         setPrompt(null);
         setValues({});
         forgetChannels();
-        toast(p.account ? `已绑定 ${p.account}` : `已绑定${c.name}`, "ok");
+        toast(p.account ? t("settings-channels.bound_account_toast", { account: p.account }) : t("settings-channels.bound_channel_toast", { name: c.name }), "ok");
         await onDone();
         return true;
       }
@@ -404,10 +405,10 @@ function BindSteps({ c, onDone }: { c: Channel; onDone: () => Promise<void> }) {
   // A QR code or a code on screen: ask again every interval until it is scanned / sent.
   useStepPolling(isPolled(prompt) ? prompt : null, (step) => send(step, {}, true), 3);
 
-  const footer = c.bind === "qr" ? "用手机上的" + c.name + "扫码，确认后这里自动继续。" : undefined;
+  const footer = c.bind === "qr" ? t("settings-channels.qr_footer", { name: c.name }) : undefined;
   if (!prompt) {
     return (
-      <Group title="绑定" footer={footer ?? "绑定以后，只有你发给机器人的消息会交给 Persona。"}>
+      <Group title={t("settings-channels.binding")} footer={footer ?? t("settings-channels.bind_footer")}>
         <div className="px-4 py-3">
           <Button tone="accent" icon={c.bind === "qr" ? "image" : "link"} busy={busy} onClick={() => void send("", {})}>
             {bindTitle(c)}
@@ -426,23 +427,23 @@ function BindSteps({ c, onDone }: { c: Channel; onDone: () => Promise<void> }) {
         </div>
       )}
       {prompt.kind === "qr" && prompt.qr ? (
-        <QRStep rows={prompt.qr.rows} app={c.name} label="绑定用的二维码" onCancel={() => setPrompt(null)} />
+        <QRStep rows={prompt.qr.rows} app={c.name} label={t("settings-channels.qr_label")} onCancel={() => setPrompt(null)} />
       ) : prompt.kind === "pair_code" || prompt.kind === "device_code" ? (
         <div className="flex flex-col gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="min-w-0 flex-1 truncate font-mono text-[28px] font-semibold tracking-[0.18em] text-ink select-all">{prompt.user_code}</span>
             <IconButton
               icon="copy"
-              label="复制配对码"
-              onClick={() => void navigator.clipboard?.writeText(prompt.user_code ?? "").then(() => toast("已复制", "ok"), () => toast("没复制上", "error"))}
+              label={t("settings-channels.copy_code")}
+              onClick={() => void navigator.clipboard?.writeText(prompt.user_code ?? "").then(() => toast(t("settings-channels.copied"), "ok"), () => toast(t("settings-channels.copy_failed"), "error"))}
             />
           </div>
           <p className="flex items-center gap-2 text-[12.5px] text-ink-3">
             <Spinner size={11} />
-            {prompt.kind === "pair_code" ? `等你在${c.name}里发给机器人…` : "等你授权…"}
+            {prompt.kind === "pair_code" ? t("settings-channels.waiting_pair", { name: c.name }) : t("settings-channels.waiting_auth")}
           </p>
           <div>
-            <Button tone="quiet" onClick={() => setPrompt(null)} className="-ml-2">取消</Button>
+            <Button tone="quiet" onClick={() => setPrompt(null)} className="-ml-2">{t("common.cancel")}</Button>
           </div>
         </div>
       ) : (
@@ -474,8 +475,8 @@ function BindSteps({ c, onDone }: { c: Channel; onDone: () => Promise<void> }) {
             );
           })}
           <div className="flex items-center gap-2 px-4 py-2.5">
-            <Button type="submit" tone="accent" disabled={!canSend} busy={busy}>{busy ? "正在验证…" : "下一步"}</Button>
-            <Button tone="quiet" onClick={() => (setPrompt(null), setValues({}))} disabled={busy}>取消</Button>
+            <Button type="submit" tone="accent" disabled={!canSend} busy={busy}>{busy ? t("settings-channels.verifying") : t("settings-channels.next")}</Button>
+            <Button tone="quiet" onClick={() => (setPrompt(null), setValues({}))} disabled={busy}>{t("common.cancel")}</Button>
           </div>
         </form>
       )}

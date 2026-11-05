@@ -14,11 +14,11 @@ import {
   type ClaudeDirsState,
 } from "../../lib/agent-settings";
 import { api, enc, errorText } from "../../lib/api";
+import { t } from "../../i18n";
 import { Button, cx, EASE, Loading, toast } from "../../ui/atoms";
 import { Group } from "./SettingsParts";
 
-const FOOTER =
-  "被屏蔽的目录不再扫描、不再记住，里面的会话不出现在 Agents（文件不动）；取消屏蔽后恢复。适合用单独 CLAUDE_CONFIG_DIR 跑 claude 的自动化脚本。默认目录不能屏蔽。";
+const FOOTER = t("settings-claudedirs.footer");
 
 export function ClaudeDirs({ mid, name }: { mid: string; name: string }) {
   const [state, setState] = useState<ClaudeDirsState | null>(null);
@@ -47,7 +47,7 @@ export function ClaudeDirs({ mid, name }: { mid: string; name: string }) {
       toast(done, "ok");
       return true;
     } catch (e) {
-      toast(`没有改成：${errorText(e)}`, "error");
+      toast(t("settings-claudedirs.save_failed", { error: errorText(e) }), "error");
       return false;
     } finally {
       setBusy("");
@@ -57,22 +57,22 @@ export function ClaudeDirs({ mid, name }: { mid: string; name: string }) {
   const toggle = (d: ClaudeDir) => {
     if (!state) return;
     const label = shortPath(d.path, state.home);
-    void save(toggledPatterns(state, d), d.path, d.blocked ? `已取消屏蔽 ${d.blocked_by ?? label}` : `已屏蔽 ${label}`);
+    void save(toggledPatterns(state, d), d.path, d.blocked ? t("settings-claudedirs.unblocked", { name: d.blocked_by ?? label }) : t("settings-claudedirs.blocked", { name: label }));
   };
 
   const typed = state ? patternError(input, state.blocked) : "";
   const add = async () => {
     if (!state || typed) return;
-    if (await save(withPattern(state.blocked, input), "+", `已屏蔽 ${input.trim()}`)) setInput("");
+    if (await save(withPattern(state.blocked, input), "+", t("settings-claudedirs.blocked", { name: input.trim() }))) setInput("");
   };
 
   return (
-    <Group title={`屏蔽的配置目录 · ${name}`} footer={FOOTER}>
+    <Group title={t("settings-claudedirs.title", { name })} footer={FOOTER}>
       {error ? (
         <div className="flex items-center gap-3 px-4 py-3">
-          <p className="min-w-0 flex-1 text-[12.5px] text-red">读不到这台电脑的配置目录：{error}</p>
+          <p className="min-w-0 flex-1 text-[12.5px] text-red">{t("settings-claudedirs.load_failed", { error })}</p>
           <Button tone="secondary" icon="retry" onClick={() => setReload((n) => n + 1)}>
-            重试
+            {t("settings-claudedirs.retry")}
           </Button>
         </div>
       ) : !state ? (
@@ -85,15 +85,15 @@ export function ClaudeDirs({ mid, name }: { mid: string; name: string }) {
             <Row key={d.path} i={i} title={shortPath(d.path, state.home)} meta={dirMeta(d, state.home)} dim={!!d.blocked}>
               {!d.default && (
                 <Button tone={d.blocked ? "secondary" : "quiet"} busy={busy === d.path} disabled={!!busy} onClick={() => toggle(d)}>
-                  {d.blocked ? "取消屏蔽" : "屏蔽"}
+                  {d.blocked ? t("settings-claudedirs.unblock") : t("settings-claudedirs.block")}
                 </Button>
               )}
             </Row>
           ))}
           {looseRules(state).map((p, i) => (
-            <Row key={`rule:${p}`} i={state.dirs.length + i} title={p} meta="规则" dim>
-              <Button tone="secondary" busy={busy === p} disabled={!!busy} onClick={() => void save(state.blocked.filter((x) => x !== p), p, `已删除规则 ${p}`)}>
-                删除
+            <Row key={`rule:${p}`} i={state.dirs.length + i} title={p} meta={t("settings-claudedirs.rule")} dim>
+              <Button tone="secondary" busy={busy === p} disabled={!!busy} onClick={() => void save(state.blocked.filter((x) => x !== p), p, t("settings-claudedirs.rule_deleted", { rule: p }))}>
+                {t("settings-claudedirs.delete")}
               </Button>
             </Row>
           ))}
@@ -103,19 +103,19 @@ export function ClaudeDirs({ mid, name }: { mid: string; name: string }) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void add()}
-                placeholder="~/.automation/* 或具体路径"
+                placeholder={t("settings-claudedirs.input_placeholder")}
                 spellCheck={false}
                 autoComplete="off"
-                aria-label="屏蔽目录或通配"
+                aria-label={t("settings-claudedirs.input_label")}
                 className="h-8 w-full rounded-control bg-field px-2.5 font-mono text-[12px] text-ink shadow-inset-field outline-none placeholder:font-sans placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]"
               />
               {input && typed && <p className="mt-1 text-[11.5px] text-ink-3">{typed}</p>}
             </div>
             <Button tone="secondary" icon="plus" busy={busy === "+"} disabled={!input || !!typed || !!busy} onClick={() => void add()}>
-              屏蔽
+              {t("settings-claudedirs.block")}
             </Button>
           </div>
-          {!state.live && <p className="px-4 py-2 text-[11.5px] text-ink-3">这台电脑不在线或 node 较旧：列的是 hub 记下的目录，连上后会列出全部。</p>}
+          {!state.live && <p className="px-4 py-2 text-[11.5px] text-ink-3">{t("settings-claudedirs.offline_note")}</p>}
         </>
       )}
     </Group>

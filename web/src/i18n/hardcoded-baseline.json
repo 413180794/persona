@@ -16,7 +16,6 @@
   "admin/pages/Overview.tsx": 54,
   "admin/pages/Peers.tsx": 84,
   "admin/parts.tsx": 6,
-  "lib/context-usage.ts": 3,
   "lib/drafts.ts": 4,
   "lib/herdr-tree.ts": 1,
   "lib/hub-update.ts": 30,
@@ -91,7 +90,7 @@
   "views/PageBoundary.tsx": 5,
   "views/Palette.tsx": 20,
   "views/PersonaAssistant.tsx": 14,
-  "views/Settings.tsx": 183,
+  "views/Settings.tsx": 177,
   "views/ShellSwitch.tsx": 5,
   "views/ShortcutHelp.tsx": 4,
   "views/SidePanel.tsx": 7,
@@ -186,11 +185,5 @@
   "views/session/terminal/cjk.ts": 1,
   "views/session/terminal/clipboard.ts": 8,
   "views/session/terminal/feed.ts": 21,
-  "views/settings/AgentSettings.tsx": 31,
-  "views/settings/AssistantSettings.tsx": 59,
-  "views/settings/Channels.tsx": 70,
-  "views/settings/ClaudeDirs.tsx": 17,
-  "views/settings/Connectors.tsx": 59,
-  "views/settings/ExtensionMarket.tsx": 143,
   "views/terminal/TerminalPage.tsx": 28
 }
