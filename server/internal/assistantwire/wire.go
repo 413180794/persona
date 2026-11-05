@@ -534,6 +534,7 @@ var Routes = []string{
 	"GET /api/v1/channels/{id}",
 	"PUT /api/v1/channels/{id}",
 	"DELETE /api/v1/channels/{id}/binding",
+	"POST /api/v1/assistant/conversations/{id}/views/{key}/actions",
 	"POST /api/v1/channels/{id}/test",
 	// The knowledge base (the assistant's kb_routes.go, docs/knowledge.md「App 接口」).
 	"GET /api/v1/kb/{kind}",

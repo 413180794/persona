@@ -200,6 +200,7 @@ assistant.ask        POST /api/v1/assistant/conversations
 -                    POST /api/v1/assistant/conversations/{id}/route
 -                    POST /api/v1/assistant/conversations/{id}/today
 -                    POST /api/v1/assistant/conversations/{id}/unarchive
+-                    POST /api/v1/assistant/conversations/{id}/views/{key}/actions
 -                    POST /api/v1/assistant/followups/{id}/run
 -                    POST /api/v1/assistant/main/new
 -                    POST /api/v1/assistant/routines/{id}/run

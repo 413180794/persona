@@ -110,7 +110,20 @@ func (s *Service) toolView(ctx context.Context, machine, conversation, name stri
 		if err != nil {
 			return "", err
 		}
-		return viewToolJSON(out)
+		actions := []wire.ViewAction{}
+		if actionStore, ok := st.(viewActionStore); ok {
+			a, err := actionStore.AssistantViewAction(ctx, conversation, in.ID)
+			if err != nil {
+				return "", err
+			}
+			if a != nil {
+				actions = append(actions, wireViewAction(*a))
+			}
+		}
+		return viewToolJSON(struct {
+			wire.AssistantView
+			Actions []wire.ViewAction `json:"actions"`
+		}{AssistantView: out, Actions: actions})
 	}
 	v, err := wire.ParseAssistantView(in.View)
 	if err != nil {

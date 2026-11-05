@@ -75,6 +75,7 @@ func New(o Options) *Service {
 	s.startRoutes()
 	s.scheduleRoutes()
 	s.taskRoutes()
+	s.viewActionRoutes()
 	s.todayRoutes()
 	s.todoRoutes()
 	s.agentRoutes()

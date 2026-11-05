@@ -934,6 +934,9 @@ type ViewAction struct {
 	Values      map[string]string `json:"values,omitempty"`
 	ClientMsgID string            `json:"client_msg_id"`
 	Status      string            `json:"status"`
+	Revision    int64             `json:"revision,omitempty"`
+	Error       string            `json:"error,omitempty"`
+	UpdatedAt   time.Time         `json:"updated_at,omitzero"`
 	At          time.Time         `json:"at"`
 }
 

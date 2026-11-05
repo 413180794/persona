@@ -1374,6 +1374,9 @@ data class ExtensionViewAction(
     val values: Map<String, String>? = null,
     @SerialName("client_msg_id") val clientMsgId: String = "",
     val status: String = "",
+    val revision: Long? = null,
+    val error: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
     val at: String = "",
 )
 

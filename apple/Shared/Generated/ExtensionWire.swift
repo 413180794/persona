@@ -3120,15 +3120,21 @@ nonisolated struct ExtensionViewAction: Codable, Equatable, Sendable {
     var values: [String: String]?
     var clientMsgId: String
     var status: String
+    var revision: Int64?
+    var error: String?
+    var updatedAt: String?
     var at: String
 
-    init(key: String = "", action: String = "", page: String? = nil, values: [String: String]? = nil, clientMsgId: String = "", status: String = "", at: String = "") {
+    init(key: String = "", action: String = "", page: String? = nil, values: [String: String]? = nil, clientMsgId: String = "", status: String = "", revision: Int64? = nil, error: String? = nil, updatedAt: String? = nil, at: String = "") {
         self.key = key
         self.action = action
         self.page = page
         self.values = values
         self.clientMsgId = clientMsgId
         self.status = status
+        self.revision = revision
+        self.error = error
+        self.updatedAt = updatedAt
         self.at = at
     }
 
@@ -3139,6 +3145,9 @@ nonisolated struct ExtensionViewAction: Codable, Equatable, Sendable {
         case values
         case clientMsgId = "client_msg_id"
         case status
+        case revision
+        case error
+        case updatedAt = "updated_at"
         case at
     }
 
@@ -3150,6 +3159,9 @@ nonisolated struct ExtensionViewAction: Codable, Equatable, Sendable {
         self.values = try? c.decodeIfPresent([String: String].self, forKey: .values)
         self.clientMsgId = (try? c.decodeIfPresent(String.self, forKey: .clientMsgId)) ?? ""
         self.status = (try? c.decodeIfPresent(String.self, forKey: .status)) ?? ""
+        self.revision = try? c.decodeIfPresent(Int64.self, forKey: .revision)
+        self.error = try? c.decodeIfPresent(String.self, forKey: .error)
+        self.updatedAt = try? c.decodeIfPresent(String.self, forKey: .updatedAt)
         self.at = (try? c.decodeIfPresent(String.self, forKey: .at)) ?? ""
     }
 }

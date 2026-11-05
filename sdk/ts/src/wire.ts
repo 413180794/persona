@@ -1014,6 +1014,9 @@ export interface ViewAction {
   values?: Record<string, string>;
   client_msg_id: string;
   status: ViewActionStatus;
+  revision?: number;
+  error?: string;
+  updated_at?: string;
   at: string;
 }
 
