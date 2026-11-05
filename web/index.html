@@ -35,6 +35,9 @@
             m.media = m.dataset.scheme === t ? "all" : "not all";
           });
         }
+        // 字号 (src/ui/look.ts) too, so the first paint is at its size.
+        var size = localStorage.getItem("persona.text-size");
+        if (size === "small" || size === "large") document.documentElement.dataset.textSize = size;
       } catch (e) {}
     </script>
   </head>

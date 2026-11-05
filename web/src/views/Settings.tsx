@@ -14,6 +14,7 @@ import { ExtensionThemePicker } from "../ui/ExtensionThemePicker";
 import { setTheme, useTheme, type Theme } from "./theme";
 import { Group, Row, Pill, RowConfirm, Switch } from "./settings/SettingsParts";
 import { LanguageRow } from "./settings/LanguageRow";
+import { TextSizeRow, ThemeColorPicker } from "./settings/LookSettings";
 import { setReplyMotionEnabled, useReplyMotionSetting } from "../ui/stream/motion";
 import { setSidebarTerminals, useSidebarTerminals } from "../lib/sidebar-terminals";
 import { setAgentDetails, setContextAsUsed, useAgentDetails, useContextAsUsed } from "../lib/context-usage";
@@ -275,7 +276,9 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
             </button>
           ))}
         </div>
+        <ThemeColorPicker />
         <ExtensionThemePicker />
+        <TextSizeRow />
         <LanguageRow />
         <Row label={t("settings.reply_motion")} hint={t("settings.reply_motion_hint")}>
           <Switch on={replyMotion} onChange={setReplyMotionEnabled} label={t("settings.reply_motion")} />

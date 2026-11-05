@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useStat
 import { useDeclaredResult } from "../lib/extension-declared";
 import { t } from "../i18n";
 import { allowedTheme, extensionThemeTokens, themeKey, type ExtensionTheme } from "./extension-theme";
+import { setExtensionThemeActive } from "./look";
 
 const KEY = "persona.extension-theme";
 const AVAILABILITY_CHECK_MS = 30_000;
@@ -34,9 +35,10 @@ export function ExtensionThemeProvider({ children }: { children: ReactNode }) {
       root.dataset.extensionTheme = themeKey(current);
     };
     apply();
+    setExtensionThemeActive(true);
     const observer = new MutationObserver(apply);
     observer.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => { observer.disconnect(); restore(); delete root.dataset.extensionTheme; };
+    return () => { observer.disconnect(); restore(); delete root.dataset.extensionTheme; setExtensionThemeActive(false); };
   }, [current]);
   return <PaletteContext.Provider value={{ available, selected, select }}>{children}</PaletteContext.Provider>;
 }
@@ -51,4 +53,10 @@ export function ExtensionThemePicker() {
       {available.map((th) => <option key={themeKey(th)} value={themeKey(th)}>{th.name} · {th.extension_name}</option>)}
     </select>
   </div>;
+}
+
+/** The extension theme painting over the page now, if any (主题色 says so: its colors are under it, ui/look.ts). */
+export function useActiveExtensionTheme(): ExtensionTheme | undefined {
+  const { available, selected } = useContext(PaletteContext);
+  return selected ? available.find((th) => themeKey(th) === selected) : undefined;
 }

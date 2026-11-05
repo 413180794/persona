@@ -1,0 +1,110 @@
+// @vitest-environment jsdom
+/// <reference types="node" />
+import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("../styles.css?raw", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  return { default: readFileSync(join(__dirname, "../styles.css"), "utf8") };
+});
+import { contrast, pageToken } from "./extension-theme";
+import {
+  ACCENT_PRESETS, accentChoice, accentCSS, accentTokens, applyLook, personaAccent, PRESET_COLORS, savedPersonaAccent, setAccentChoice,
+  setExtensionThemeActive, setPersonaAccent, setTextSize, textSize,
+} from "./look";
+
+const BACKGROUNDS = ["page", "canvas", "surface", "inset", "hover", "hover-2", "field"];
+
+beforeEach(() => {
+  localStorage.clear();
+  applyLook();
+});
+
+describe("主题色", () => {
+  it("adds nothing to the page by default", () => {
+    expect(accentChoice()).toBe("default");
+    expect(accentCSS("default", null)).toBe("");
+    expect(document.documentElement.dataset.accent).toBeUndefined();
+    expect(document.getElementById("persona-accent")).toBeNull();
+  });
+
+  it("gives every fixed color an accent that reads as a control, and words that read as text, on every background", () => {
+    for (const p of ACCENT_PRESETS) {
+      for (const scheme of ["light", "dark"] as const) {
+        const tk = accentTokens(PRESET_COLORS[p].accent)[scheme];
+        for (const bg of BACKGROUNDS.map((b) => pageToken(b, scheme))) {
+          expect(bg).toMatch(/^#/);
+          expect(contrast(tk["--accent"], bg)).toBeGreaterThanOrEqual(3);
+          expect(contrast(tk["--accent-ink"], bg)).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
+  it("keeps the app's accents as they are where they already meet the floor", () => {
+    expect(accentTokens(PRESET_COLORS.lavender.accent).light["--accent"]).toBe("#7a5af8");
+    expect(accentTokens(PRESET_COLORS.teal.accent).dark["--accent"]).toBe("#2a9798");
+    // 珊瑚橙 is a hair short of 3:1 on the hover background in light: one step darker
+    expect(accentTokens(PRESET_COLORS.coral.accent).light["--accent"]).toBe("#d2673e");
+  });
+
+  it("puts the choice on the page and takes it off again", () => {
+    setAccentChoice("coral");
+    expect(localStorage.getItem("persona.accent")).toBe("coral");
+    expect(document.documentElement.dataset.accent).toBe("coral");
+    const css = document.getElementById("persona-accent")!.textContent!;
+    expect(css).toContain(":root[data-accent] { --accent: #d2673e;");
+    expect(css).toContain(":root.dark[data-accent] { --accent: #cd6e45;");
+    setAccentChoice("default");
+    expect(localStorage.getItem("persona.accent")).toBeNull();
+    expect(document.documentElement.dataset.accent).toBeUndefined();
+    expect(document.getElementById("persona-accent")).toBeNull();
+  });
+
+  it("leaves my bubble to an extension theme laid over a fixed color", () => {
+    expect(accentCSS("coral", null)).toContain("--user-bubble");
+    expect(accentCSS("coral", null, true)).not.toContain("--user-bubble");
+    expect(accentCSS("coral", null, true)).toContain("--accent: #d2673e;");
+    setAccentChoice("coral");
+    setExtensionThemeActive(true);
+    expect(document.getElementById("persona-accent")!.textContent).not.toContain("--user-bubble");
+    setExtensionThemeActive(false);
+    expect(document.getElementById("persona-accent")!.textContent).toContain("--user-bubble");
+  });
+
+  it("follows the persona's accent, and is the default while the persona brings none", () => {
+    setAccentChoice("persona");
+    expect(document.documentElement.dataset.accent).toBeUndefined();
+    setPersonaAccent(personaAccent({ light: { accent: "#94600A" }, dark: { accent: "#B47A0C" } }));
+    expect(savedPersonaAccent()).toEqual({ light: "#94600a", dark: "#b47a0c" });
+    expect(document.documentElement.dataset.accent).toBe("persona");
+    expect(document.getElementById("persona-accent")!.textContent).toContain("--accent: #94600a;");
+    setPersonaAccent(null);
+    expect(document.documentElement.dataset.accent).toBeUndefined();
+  });
+
+  it("raises a persona's accent that would not read to the floor", () => {
+    const tk = accentTokens({ light: "#f2c230", dark: "#1a1a1a" });
+    expect(contrast(tk.light["--accent"], pageToken("page", "light"))).toBeGreaterThanOrEqual(3);
+    expect(contrast(tk.dark["--accent"], pageToken("surface", "dark"))).toBeGreaterThanOrEqual(3);
+  });
+
+  it("reads a persona's colors: one scheme stands in for the other, anything but #RRGGBB is none", () => {
+    expect(personaAccent({ light: { accent: "#112233" } })).toEqual({ light: "#112233", dark: "#112233" });
+    expect(personaAccent({ light: { primary: "#112233" } })).toBeNull();
+    expect(personaAccent({ light: { accent: "red" } })).toBeNull();
+    expect(personaAccent(undefined)).toBeNull();
+  });
+});
+
+describe("字号", () => {
+  it("is 标准 with nothing set, and marks the page for 小 and 大", () => {
+    expect(textSize()).toBe("standard");
+    expect(document.documentElement.dataset.textSize).toBeUndefined();
+    setTextSize("large");
+    expect(localStorage.getItem("persona.text-size")).toBe("large");
+    expect(document.documentElement.dataset.textSize).toBe("large");
+    setTextSize("standard");
+    expect(localStorage.getItem("persona.text-size")).toBeNull();
+    expect(document.documentElement.dataset.textSize).toBeUndefined();
+  });
+});

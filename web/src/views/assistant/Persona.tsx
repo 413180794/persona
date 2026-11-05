@@ -13,6 +13,7 @@ import { onHubEvent } from "../../lib/store";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { MochiFace } from "./MochiFace";
+import { personaAccent, setPersonaAccent } from "../../ui/look";
 import { t } from "../../i18n";
 
 const CHOSEN_KEY = "jarvis.persona";
@@ -38,6 +39,11 @@ function readChosen() {
 
 function setPS(patch: Partial<PersonaStoreState>) {
   ps = { ...ps, ...patch };
+  // 主题色「跟随形象」(ui/look.ts) keeps the chosen persona's accent, from the last list the hub gave; while there is no
+  // list yet (or the last load failed) and the chosen one is not in it, the saved accent stays.
+  const shown = ps.list.find((p) => p.id === ps.chosen);
+  if (isBuiltinPersona(ps.chosen)) setPersonaAccent(null);
+  else if (shown || (ps.loaded && !ps.error)) setPersonaAccent(personaAccent(shown?.manifest.colors));
   listeners.forEach((l) => l());
 }
 
@@ -238,7 +244,7 @@ function Swatches({ p }: { p: PersonaInfo }) {
 
 /**
  * 形象 (设置 › 通用 and the profile page; the app's 设置 › 外观 › 形象): 团子 (the default), the page's mark, then the hub's
- * packages, and the chosen one's dot in each state. `builtin` is the mark's face. Choosing changes the name, face and dot in this browser; the page's colors stay.
+ * packages, and the chosen one's dot in each state. `builtin` is the mark's face. Choosing changes the name, face and dot in this browser; the page's colors follow it only with 主题色「跟随形象」 (ui/look.ts).
  */
 export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
   const s = usePersonaStore();

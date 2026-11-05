@@ -186,6 +186,9 @@ body {
 @media (prefers-reduced-motion: reduce) { [data-search-hit] { animation: none; outline-color: var(--accent); } }
 
 html, body, #root { height: 100%; }
+/* 字号 (ui/look.ts, src/lib/text-scale.ts): 小 / 大 as the Mac app's 12 / 14 pt against its 13; 标准 sets nothing. */
+:root[data-text-size="small"] { --text-scale: calc(12 / 13); }
+:root[data-text-size="large"] { --text-scale: calc(14 / 13); }
 /* Installed on a phone (PWA, docs/web.md「安装成 App」): the page runs under the home indicator and, in landscape, the
    notch (viewport-fit=cover); the status bar keeps its own strip (apple-mobile-web-app-status-bar-style: default). */
 #root { padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }

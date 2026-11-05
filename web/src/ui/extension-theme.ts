@@ -11,13 +11,17 @@ export interface ExtensionTheme {
 }
 const ROLES = { accent: "accent", positive: "green", caution: "orange", danger: "red", ai: "ai" } as const;
 const BACKGROUNDS = ["page", "canvas", "surface", "inset", "hover", "hover-2", "field"];
-const MIN_ROLE_CONTRAST = 3;
-const MIN_TEXT_CONTRAST = 4.5;
+export const MIN_ROLE_CONTRAST = 3;
+export const MIN_TEXT_CONTRAST = 4.5;
 const TINT = { light: 10, dark: 16 };
 
-function backgroundColors(scheme: "light" | "dark"): string[] {
+/** A color token's value in styles.css's first :root / .dark block ("" when it is not a hex there). */
+export function pageToken(role: string, scheme: "light" | "dark"): string {
   const block = (scheme === "light" ? /:root\s*\{([^}]+)\}/ : /\.dark\s*\{([^}]+)\}/).exec(css)?.[1] ?? "";
-  return BACKGROUNDS.map((role) => new RegExp(`--${role}:\\s*(#[0-9a-f]+)`, "i").exec(block)?.[1] ?? "");
+  return new RegExp(`--${role}:\\s*(#[0-9a-f]+)`, "i").exec(block)?.[1] ?? "";
+}
+function backgroundColors(scheme: "light" | "dark"): string[] {
+  return BACKGROUNDS.map((role) => pageToken(role, scheme));
 }
 function rgb(hex: string): number[] {
   const s = hex.length === 4 ? hex.slice(1).split("").map((x) => x + x).join("") : hex.slice(1);
@@ -41,15 +45,17 @@ export function allowedTheme(t: ExtensionTheme): boolean {
       role in ROLES && /^#[0-9a-f]{6}$/i.test(color) && backgrounds.every((b) => /^#[0-9a-f]{3,6}$/i.test(b) && contrast(color, b) >= (role === "accent" ? MIN_ROLE_CONTRAST : MIN_TEXT_CONTRAST)));
   });
 }
-function readableAccent(color: string, scheme: "light" | "dark"): string {
+/** The color moved toward black (light) or white (dark) until it reads at `min`:1 on every page background. */
+export function meetContrast(color: string, scheme: "light" | "dark", min: number): string {
   const backgrounds = backgroundColors(scheme);
   const base = rgb(color), end = scheme === "light" ? 0 : 255;
   for (let step = 0; step <= 100; step++) {
     const hex = "#" + base.map((c) => Math.round(c + (end - c) * step / 100).toString(16).padStart(2, "0")).join("");
-    if (backgrounds.every((b) => contrast(hex, b) >= MIN_TEXT_CONTRAST)) return hex;
+    if (backgrounds.every((b) => contrast(hex, b) >= min)) return hex;
   }
   return color;
 }
+const readableAccent = (color: string, scheme: "light" | "dark") => meetContrast(color, scheme, MIN_TEXT_CONTRAST);
 
 // Only role tokens are overridden; page/background/layout tokens remain untouched.
 export function extensionThemeTokens(t: ExtensionTheme, scheme: "light" | "dark"): Record<string, string> {

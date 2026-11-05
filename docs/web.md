@@ -355,7 +355,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   ![网页版侧边栏的个人 Agent：按来源分组，带头像、未读数、搜索和筛选按钮](screenshots/web-personal-agents.png)
 
 - **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：分类是否显示按 hub 能力决定，和 App 的设置同一套接口。渠道是独立分类，紧挨在连接器前（#2196）；设置没有「认识 Persona」入口，资料页仍从对话菜单打开。
-  「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Persona 助手的运行位置（模型在「模型配置」tab，#1291）、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
+  「通用」是外观（跟随系统 / 浅色 / 深色、主题色、字号，见下面「主题色和字号」）、形象、Persona 助手的运行位置（模型在「模型配置」tab，#1291）、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
   「助手」（`settings/AssistantSettings.tsx`）：主动做事（进定时任务）、关于我（`PUT /assistant {notes}`，点保存或离开时存）、
   记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、Skills（`GET /skills`，跑助手那台电脑上的 skill，只读，`settings/Skills.tsx`）、运行在哪（只读；没有模型入口，模型在「模型配置 › 主对话」）；
   「Claude Code」「Codex」（`settings/AgentSettings.tsx`）：选一台在线电脑，白名单设置（开关 / 下拉 / 文字）改了立即 `PUT`，「同时改所有在线机器」默认开，
@@ -910,6 +910,23 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
   滚轮、触摸、按键都会放开；滚动视图本身仍是 `overflow-anchor: none`（浏览器自己挑的锚点可能在展开的行下面，反而把被点的行推走）。
 - `useStore(selector)` 的结果按浅比较复用：选择器可以返回新数组，没变就不重渲染（否则 `useSyncExternalStore` 会无限循环）。
 
+## 主题色和字号
+
+设置 › 通用 › 外观（#2980，对齐 iOS 的设置 › 外观 › 主题色和界面风格 › 字号；`src/ui/look.ts`、`src/views/settings/LookSettings.tsx`），两项都只存在这个浏览器里。
+默认值什么都不往页面上加（没有属性、没有样式表），所以默认外观和以前一像素不差。
+
+- **主题色**（`persona.accent`）：默认（网页自己的蓝）、跟随形象（当前形象带 `colors.accent` 时才出现）、五个固定配色，取值照 iOS 的 `ColorSpec`。
+  选了之后往 `<html>` 加 `data-accent`，再插一段 `<style id="persona-accent">`，只覆盖 `--accent`、`--accent-ink`、`--accent-tint`、`--user-bubble` 四个 token。
+  强调色要在每个页面背景上 ≥ 3:1，文字色要 ≥ 4.5:1，不够就往黑（浅色）或往白（深色）调到够为止，和扩展主题用同一个函数（`meetContrast`）；珊瑚橙浅色因此深了一点点。
+  系统蓝和飞书蓝用 iOS 的浅色气泡；其余几个在 iOS 上是白字彩色气泡，网页气泡上是深色字，所以改用强调色调出来的淡色气泡。
+  跟随形象：`Persona.tsx` 每次拿到形象列表或换形象，就把当前形象的主色记进 `persona.accent.persona`，页面打开时直接用记下的，不等 hub。形象没带配色时就等于默认。
+  扩展主题（`ExtensionThemePicker`，标签改成「扩展主题」）的 token 写在 `<html>` 的 inline style 上，优先级更高，所以它照样叠在主题色上面；这时主题色不再设自己发的气泡（`--user-bubble`），强调色这一组全归扩展主题，和 iOS 上扩展主题是单独一个主题色一样。选了扩展主题时，主题色下面会提示这一点。
+- **字号**（`persona.text-size`）：小 / 标准 / 大，比例照 Mac App 的 12 / 13 / 14 pt（12/13、1、14/13）。网页的字号是写在 Tailwind 类里的 px（`text-[12.5px]`），散在上百个文件里，
+  所以构建时由 PostCSS 插件（`src/lib/text-scale.ts`，挂在 `vite.config.ts` 的 `css.postcss`）把每个 `font-size`（px、rem、token）和固定长度的 `line-height`（px，以及 Tailwind 的 `leading-4` / `leading-5` 编出来的 `calc(var(--spacing) * N)`）改写成 `calc(值 * var(--text-scale, 1))`；
+  `--text-scale` 只在 `html[data-text-size]` 上有值（`styles.css`），`index.html` 在首屏前就设好。em、%、无单位行高跟着父元素走，不改。
+  没用 CSS `zoom` 缩放整页：zoom 下 `getBoundingClientRect` 和 `left` / `top` 不在同一个坐标里，所有按元素位置摆的浮层都会偏，`100vh` 也会超出屏幕。
+  写在 JS 里的字号（inline `fontSize`、终端、Mermaid）不跟着变；图标和间距也不变（iOS 的 `scaledFrame` 会跟）。
+
 ## 和手机端的差距（#297、#433，2026-11-03）
 
 以 iOS 为准、Android 参考，逐项对照。#297 做了第一轮，#433 把那一轮标为「不做」的补上。「网页」：有 / 部分 / 没有 / 另有 PR / 不适用（手机专属或浏览器里没有意义）；「轮次」是哪一轮做的。
@@ -975,7 +992,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 记忆、关于我 | 有 | #297 | 设置 › 助手 |
 | 知识库（类型、标签、搜索、条目、打标、问 Persona） | 有 | #297 | |
 | 知识库条目的「开 Agent」 | 有 | #433 | 项目条目；比 iOS 多一步：项目有代码目录、那台电脑在线时把电脑和目录也填好。首条消息是原样的 `<jarvis-context>`（同 iOS） |
-| 形象（名字、头像、状态动画）、资料页 | 有 | #433 | `/assistant`；默认形象是和 iOS 同一份图标坐标画的团子（`MochiFace`），原来的星形标志留作可选项「标志」；iOS 的面罩、汇流没移植；形象的配色不进网页的颜色（网页没有主题色）；侧边栏没有资料卡 |
+| 形象（名字、头像、状态动画）、资料页 | 有 | #433 | `/assistant`；默认形象是和 iOS 同一份图标坐标画的团子（`MochiFace`），原来的星形标志留作可选项「标志」；iOS 的面罩、汇流没移植；形象的配色只在主题色选「跟随形象」时进网页的颜色（#2980）；侧边栏没有资料卡 |
 | 「问 Persona」后在对话里看到发送中的气泡 | 有 | #433 | 跨页的待发消息（store `outbox`），收件箱「交给 AI」、Agents「交给 Persona」、新对话页同样 |
 
 ### 收件箱
@@ -1018,7 +1035,8 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 机器详情的「引擎」（node 检测到的引擎、版本和说明，离线也能选，保存失败可重试） | 有 | #2071 | 在机器页里直接选，不像 iOS 另开一页 |
 | Orca 启动器、在 Orca 里新建 Agent | 没有 | — | #254（服务端在 #924 / #929） |
 | 外观：跟随系统 / 浅色 / 深色 | 有 | — | |
-| 界面风格、主题色、布局 | 不适用 | — | 网页只有 Beautiful UI 一套；新风格按 CLAUDE.md 做成新选项 |
+| 主题色（默认、跟随形象、系统蓝 / 珊瑚橙 / 薰衣草紫 / 青 / 飞书蓝）、字号（小 / 标准 / 大） | 有 | #2980 | 设置 › 通用 › 外观；只换强调色和自己的气泡，「跟随界面风格」就是「默认」；字号只缩放文字，图标和间距不跟；Mac 的 ⌘+ / ⌘- 用浏览器自己的缩放 |
+| 界面风格、布局 | 不适用 | — | 网页只有 Beautiful UI 一套；新风格按 CLAUDE.md 做成新选项 |
 | 形象 | 有 | #433 | 设置 › 通用、资料页 |
 | 模型供应商、模型配置 | 有 | — | |
 | 模型供应商的「额度」 | 有 | #1326 | 供应商弹窗里，「可用性」上面 |

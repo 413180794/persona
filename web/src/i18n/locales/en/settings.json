@@ -13,7 +13,7 @@
   "sidebar_terminals": "Show terminals in sidebar",
   "sidebar_terminals_hint": "When agents are grouped by machine, each computer lists the plain shells in its terminal under its agents; click one to open its Terminal page. Off by default; applies to this browser only.",
   "avatar": "Avatar",
-  "avatar_footer": "Persona's name, picture and the animated status in chats apply to this browser only; the page's colors stay the same. Avatar packs live on the hub machine.",
+  "avatar_footer": "Persona's name, picture and the animated status in chats apply to this browser only; with the theme color set to Avatar, the page's colors follow it too. Avatar packs live on the hub machine.",
   "assistant": "Persona assistant",
   "assistant_footer": "Each chat runs in the background in {cwd} on {machine}. Pick models and launchers in Model settings; manage connections and credentials in Model providers.",
   "hub_machine": "the hub machine",

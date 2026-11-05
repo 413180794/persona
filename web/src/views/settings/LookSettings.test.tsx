@@ -1,0 +1,118 @@
+// @vitest-environment jsdom
+/// <reference types="node" />
+// 主题色「跟随形象」(ui/look.ts): the persona store keeps the chosen persona's accent (views/assistant/Persona.tsx setPS),
+// and the picker offers 跟随形象 only while that accent is there or it is already the choice.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("../../styles.css?raw", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  return { default: readFileSync(join(__dirname, "../../styles.css"), "utf8") };
+});
+const hub = vi.hoisted(() => ({ result: null as unknown, fail: false }));
+vi.mock("../../lib/api", async (orig) => {
+  const real = await orig<typeof import("../../lib/api")>();
+  return {
+    ...real,
+    getToken: () => "",
+    api: vi.fn(() => (hub.fail ? Promise.reject(new Error("offline")) : Promise.resolve(hub.result))),
+  };
+});
+import { BUILTIN_PERSONA, type PersonaInfo } from "../../lib/persona";
+import { savedPersonaAccent, setAccentChoice, setPersonaAccent } from "../../ui/look";
+import { choosePersona, refreshPersonas } from "../assistant/Persona";
+import { ThemeColorPicker } from "./LookSettings";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// preload() waits on <img> loads, which jsdom never fires
+vi.stubGlobal("Image", class { onload: (() => void) | null = null; onerror: (() => void) | null = null; set src(_: string) { queueMicrotask(() => this.onload?.()); } });
+
+const pack = (rev: string, accent?: string): PersonaInfo => ({
+  id: "frog",
+  rev,
+  manifest: {
+    format: 1, id: "frog", name: "奶蛙",
+    avatar: { sizes: { "128": "avatar.png" } },
+    dot: { states: { idle: { file: "idle.png" } } },
+    ...(accent ? { colors: { light: { accent } } } : {}),
+  },
+});
+const list = (...p: PersonaInfo[]) => ({ personas: p });
+
+describe("the persona store keeps 跟随形象's accent", () => {
+  beforeEach(() => {
+    hub.fail = false;
+  });
+
+  it("saves the chosen pack's accent, keeps it through a failed load, and clears it for a built-in or a pack gone", async () => {
+    hub.result = list(pack("1", "#94600A"));
+    choosePersona("frog");
+    await refreshPersonas();
+    expect(savedPersonaAccent()).toEqual({ light: "#94600a", dark: "#94600a" });
+
+    // new colors in the list: the accent follows
+    hub.result = list(pack("2", "#27747F"));
+    await refreshPersonas();
+    expect(savedPersonaAccent()).toEqual({ light: "#27747f", dark: "#27747f" });
+
+    // the hub out of reach: the last accent stays
+    hub.fail = true;
+    await refreshPersonas();
+    expect(savedPersonaAccent()).toEqual({ light: "#27747f", dark: "#27747f" });
+    hub.fail = false;
+
+    // a built-in has no accent
+    choosePersona(BUILTIN_PERSONA);
+    expect(savedPersonaAccent()).toBeNull();
+    choosePersona("frog");
+    expect(savedPersonaAccent()).toEqual({ light: "#27747f", dark: "#27747f" });
+
+    // the pack is gone from the hub's list
+    hub.result = list();
+    await refreshPersonas();
+    expect(savedPersonaAccent()).toBeNull();
+  });
+});
+
+describe("主题色's options", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  const draw = async () => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => root.render(<ThemeColorPicker />));
+    return [...host.querySelectorAll('[role="radio"]')];
+  };
+  beforeEach(() => {
+    localStorage.clear();
+    setPersonaAccent(null);
+    setAccentChoice("default");
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("has no 跟随形象 while the persona brings no colors", async () => {
+    const radios = await draw();
+    expect(radios).toHaveLength(6);
+    expect(radios.some((r) => r.getAttribute("aria-label")?.startsWith("跟随形象"))).toBe(false);
+  });
+
+  it("offers 跟随形象 when the persona brings an accent", async () => {
+    setPersonaAccent({ light: "#94600a", dark: "#b47a0c" });
+    const radios = await draw();
+    expect(radios).toHaveLength(7);
+    expect(radios[1]!.getAttribute("aria-label")).toMatch(/^跟随形象/);
+  });
+
+  it("keeps 跟随形象 in sight once chosen, saying this persona has none", async () => {
+    setAccentChoice("persona");
+    const radios = await draw();
+    expect(radios).toHaveLength(7);
+    expect(radios[1]!.getAttribute("aria-checked")).toBe("true");
+    expect(radios[1]!.getAttribute("aria-label")).toBe("跟随形象，这个形象没带");
+  });
+});

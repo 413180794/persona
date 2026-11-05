@@ -2,6 +2,10 @@
 import { screen } from "./screen/take";
 import { initI18n } from "./i18n";
 import "./styles.css";
+import { applyLook } from "./ui/look";
+
+// 主题色 and 字号 (docs/web.md「外观」) before anything draws.
+applyLook();
 
 // The language's catalog loads before the rest of the app: their modules call t() as they load (docs/web.md「国际化」).
 // React and the PWA helper say no t(), so they load alongside it rather than after it.
