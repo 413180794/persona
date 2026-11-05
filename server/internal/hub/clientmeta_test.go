@@ -192,7 +192,7 @@ func TestHeartbeatKeepAlive(t *testing.T) {
 }
 
 func TestWSFeatures(t *testing.T) {
-	b, _ := json.Marshal((&Hub{}).hello())
+	b, _ := json.Marshal(newTestHub(t).hello())
 	for _, feature := range []string{"client_hello", "heartbeat", "app_ping"} {
 		if !strings.Contains(string(b), `"`+feature+`"`) {
 			t.Fatalf("missing feature %s", feature)
