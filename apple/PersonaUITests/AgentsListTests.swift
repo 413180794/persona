@@ -510,6 +510,8 @@ final class AgentsListTests: XCTestCase {
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "展开 ")).firstMatch.exists,
                        "a 还有 N 个空闲 row inside 已看")
         shot("agents-state-seen-open")
+        // The swipe may have taken the header off the top: back to it before folding.
+        for _ in 0..<5 where !(header("已看").exists && header("已看").isHittable) { app.swipeDown(velocity: .slow) }
         header("已看").tap()
         wait("已看 folds again") { self.header("已看").label.contains("已折叠") }
     }

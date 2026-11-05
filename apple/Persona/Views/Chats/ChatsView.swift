@@ -450,6 +450,7 @@ private struct AgentsList: View {
     /// tap always flips what is seen.
     private func toggleFold(_ id: String, shown: Bool? = nil) {
         Haptics.tap()
+        feed.reader.keep(id)
         let f = folding([id], !(shown ?? isFolded(id)), in: folded)
         withAnimation(Theme.Motion.standard) { setFolded(f) }
     }
@@ -1084,6 +1085,7 @@ private struct AgentsList: View {
                     FoldButton(title: b.title, folded: isFolded(id), detail: "\(rows.count) 个") { toggleFold(id) } label: {
                         SectionHeader(title: b.title, count: rows.count, tone: b.tint)
                     }
+                    .modifier(FoldAnchor(id: id, reader: feed.reader))
                 }
                 .listSectionSpacing(isFolded(id) ? .custom(0) : .default)
             }
@@ -1379,6 +1381,20 @@ private struct FeedRow<Content: View>: View {
     }
 }
 
+/// A fold's header in the Agents list: tells `reader` where it is (as a row does, `FeedRow`) and is a target for its
+/// `reveal`, so the header tapped stays put while its section opens or folds (`ReaderAnchor.keep`).
+private struct FoldAnchor: ViewModifier {
+    let id: String
+    let reader: ReaderAnchor
+
+    func body(content: Content) -> some View {
+        content
+            .id(id)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { reader.row(id, top: $0) }
+            .onDisappear { reader.gone(id) }
+    }
+}
+
 /// Keeps the row the reader is on where it is on screen when the Agents list's structure lands at rest (#339): a space
 /// moving up above it, a card put in at the top. The list keeps its offset, so without this everything below the
 /// change slid by its height, and the reader's row went off and another space took its place.
@@ -1436,6 +1452,16 @@ private struct FeedRow<Content: View>: View {
         reading = id
         let at = (top - band.lowerBound) / (band.upperBound - band.lowerBound)
         kept = (id, top, at, .now + 1) // laid out on the next frames; a later move is not this change's
+    }
+
+    /// A fold's header was tapped: it stays where it is while its section opens or folds under it. Opening 已看 at the
+    /// bottom of 按状态 (59 rows) made the list measure the rows above anew, and the header went ~3000 pt off the top
+    /// (#2062).
+    func keep(_ id: String) {
+        kept = nil
+        guard let top = tops[id], let (band, _) = shown(), band.contains(top) else { return }
+        reading = id
+        kept = (id, top, (top - band.lowerBound) / (band.upperBound - band.lowerBound), .now + 1)
     }
 
     /// A finger or a glide took over: what moves now is theirs, and what is read afterwards is wherever it stops.
