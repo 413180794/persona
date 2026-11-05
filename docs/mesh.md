@@ -17,9 +17,8 @@
 ```
 
 代码在 `server/internal/hub/`：`mesh.go`（记录、视图循环）、`mesh_view.go`（记录和路由）、`mesh_group.go`（中心、任期、角色）、
-`mesh_paths.go`（多条路、去重、选路）、`machine_conn.go`（一台电脑的连接：建、用、换）、`service.go`（kind service：拨连接器）、
 `peer_*.go`（配对、链路、拨号、转发、node 流、管理接口、命令行）；数据库在 `internal/db/peers.go`（迁移 0151）和 `internal/db/center.go`（迁移 0191）；
-发现在 `internal/mdns/`。
+多条路、去重、选路在 `internal/devices/paths.go`，一台电脑的连接（建、用、换）在 `internal/devices/conn.go`，kind service（拨连接器）在 `internal/devices/service.go`；发现在 `internal/mdns/`。
 
 第一版（#394，对等互联：每台电脑有归属 hub、hub 之间泛洪事件和订阅、凭据组内通用）已经整个换掉，见文末「第一版」。
 

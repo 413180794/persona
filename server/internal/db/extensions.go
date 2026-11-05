@@ -3,7 +3,13 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"slices"
+	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
@@ -44,6 +50,45 @@ func (d *DB) Extensions(ctx context.Context) ([]extension.Record, error) {
 
 // PutPlugin writes a plugin's row.
 func (d *DB) PutExtension(ctx context.Context, r extension.Record) error {
+	return putExtension(ctx, d.pool, r)
+}
+
+type extensionExecutor interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+// PutExtensionPlan changes all records atomically, without deleting or rewriting any existing secrets.
+func (d *DB) PutExtensionPlan(ctx context.Context, records []extension.Record) error {
+	ordered := slices.Clone(records)
+	slices.SortFunc(ordered, func(a, b extension.Record) int { return strings.Compare(a.ID, b.ID) })
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
+	for _, record := range ordered {
+		if err = putExtension(ctx, tx, record); err != nil {
+			return err
+		}
+	}
+	err = tx.Commit(ctx)
+	if err == nil {
+		return nil
+	}
+	var pgError *pgconn.PgError
+	definite := errors.As(err, &pgError) && (strings.HasPrefix(pgError.Code, "23") ||
+		strings.HasPrefix(pgError.Code, "40") && pgError.Code != "40003" || pgError.Code == "P0001" || pgError.Code == "25P02")
+	if errors.Is(err, pgx.ErrTxCommitRollback) || definite || pgconn.SafeToRetry(err) {
+		return err
+	}
+	return &extension.CommitUnknownError{Err: err}
+}
+
+func putExtension(ctx context.Context, executor extensionExecutor, r extension.Record) error {
 	granted, err := json.Marshal(r.Granted)
 	if err != nil {
 		return err
@@ -66,7 +111,7 @@ func (d *DB) PutExtension(ctx context.Context, r extension.Record) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.pool.Exec(ctx, `INSERT INTO plugins (id, source, origin, version, previous_version, manifest, granted, granted_digest, enabled,
+	_, err = executor.Exec(ctx, `INSERT INTO plugins (id, source, origin, version, previous_version, manifest, granted, granted_digest, enabled,
 		config, remote, installed_at, updated_at, disabled_contributions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT (id) DO UPDATE SET source = $2, origin = $3, version = $4, previous_version = $5, manifest = $6, granted = $7,
 		granted_digest = $8, enabled = $9, config = $10, remote = $11, updated_at = $13, disabled_contributions = $14`,
@@ -120,6 +165,7 @@ func (d *DB) AddExtensionAudit(ctx context.Context, id, action, actor string, de
 }
 
 var _ extension.Store = (*DB)(nil)
+var _ extension.PlanStore = (*DB)(nil)
 
 // ---- plugin markets (docs/extensions.md「扩展市场」) ----
 

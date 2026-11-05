@@ -1,4 +1,5 @@
 {
+  "bundle_confirmation": "Dependencies or pack members changed and need confirmation together",
   "busy_extension": "The extension is in use",
   "busy_assistant": "The assistant is working",
   "no_package": "No package for this hub ({platform})",

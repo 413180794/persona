@@ -283,11 +283,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, ofMarket) {
 			return
 		}
-		if err := h.installBundle(r.Context(), ps().reg.PreviewOf(in.PreviewID), in.Digest, in.Bundle, actorOr(r, "personad extension")); err != nil {
-			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
-			return
-		}
-		p, err := ps().reg.Install(r.Context(), in.PreviewID, in.Digest, actorOr(r, "personad extension"))
+		p, err := h.installExtensionPlan(r.Context(), "", in.PreviewID, in.Digest, in.Bundle, actorOr(r, "personad extension"))
 		if err != nil {
 			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
 			return
@@ -300,18 +296,17 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 			Digest    string      `json:"permissions_digest"`
 			Bundle    []bundleRef `json:"bundle,omitempty"`
 		}
-		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool { return ps().reg.PreviewMarketOf(in.PreviewID) != "" }) {
+		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool {
+			for _, member := range in.Bundle {
+				if ps().reg.PreviewMarketOf(member.PreviewID) == "" {
+					return false
+				}
+			}
+			return ps().reg.PreviewMarketOf(in.PreviewID) != ""
+		}) {
 			return
 		}
-		if pv := ps().reg.PreviewOf(in.PreviewID); pv != nil && len(pv.Bundle) > 0 {
-			// A newer version needing what is not installed yet: those first (the upgrade's digest is optional, so the
-			// bundle is held to its own).
-			if err := h.installBundle(r.Context(), pv, pv.Digest, in.Bundle, actorOr(r, "personad extension")); err != nil {
-				writeExtensionErr(w, http.StatusBadRequest, "upgrade_failed", err)
-				return
-			}
-		}
-		p, err := ps().reg.Upgrade(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, actorOr(r, "personad extension"))
+		p, err := h.installExtensionPlan(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, in.Bundle, actorOr(r, "personad extension"))
 		if err != nil {
 			writeExtensionErr(w, http.StatusBadRequest, "upgrade_failed", err)
 			return

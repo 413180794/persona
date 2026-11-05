@@ -48,7 +48,7 @@
 - ExitPlanMode：走 PermissionRequest（不走 PreToolUse）。`allow` 必须带 `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
   才生效，单纯 `{behavior:allow}` 仍会弹 TUI 对话框；`deny` + `message` 会把反馈作为 tool_result 交给模型。
 - `herdr` 中批准计划后，`PermissionRequest` hook 不一定及时退出，`interaction.cancel` 也可能没有到 hub（2026-11-01：transcript 已有成功的 `ExitPlanMode` tool_result，会话 working，手机仍停在 needs_you）。hub 对待处理计划在 sessions / revs 变化时读有限的 transcript 分页，按对应 tool_use_id 的 tool_result 收尾；旧 hook 没传 id 时，只接受创建前 30 秒内唯一的 ExitPlanMode 调用，且结果不能早于卡片创建。匹配不明、节点离线、只有「working」或模型文字都不清除。30 秒定时兜底覆盖丢事件，单卡限频和单飞避免重复读盘。
-  收尾只移除过期卡片、广播 `interaction_resolved`，历史记 dismissed，不伪造手机批准、权限模式或回答；还在等的 hook 仅收到 Dismiss，不返回 allow。新计划、提问 / 工具批准不受旧计划的结果影响。回归见 `hub/plan_sync_test.go`（遗漏 tool_use_id、跨页、本地拒绝 / 中断、伪批准文字、新旧卡片竞态、App 推送和持久化）。
+  收尾只移除过期卡片、广播 `interaction_resolved`，历史记 dismissed，不伪造手机批准、权限模式或回答；还在等的 hook 仅收到 Dismiss，不返回 allow。新计划、提问 / 工具批准不受旧计划的结果影响。回归见 `assistant/fleet_cards_test.go`（遗漏 tool_use_id、跨页、本地拒绝 / 中断、伪批准文字、新旧卡片竞态、App 推送和持久化）。
 - `--settings <file>` 里的 hooks 只在启动时读取，改 matcher 要重启 claude；hook 脚本本身每次执行都重新读。
 - `herdr agent wait` 可能在 herdr 识别出 agent 之前就返回 agent_not_found：启动后要轮询 `agent get`。
 - 没装 herdr claude integration 的机器，`agent list` 不带 session id（见 `docs/claude-integration.md` 的兜底）。

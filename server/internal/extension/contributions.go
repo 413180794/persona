@@ -162,6 +162,11 @@ func (m *Manifest) SwitchedByConfig(point, id string) (string, bool) {
 // SetContribution switches one contribution of extension id on or off; the extension restarts with it taken out
 // (Change kind contributions). hub.json's are changed there only.
 func (r *Registry) SetContribution(ctx context.Context, id, point, cid string, on bool, actor string) error {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	p, err := r.editable(id)
 	if err != nil {
 		return err
@@ -196,6 +201,7 @@ func (r *Registry) SetContribution(ctx context.Context, id, point, cid string, o
 	p.Record.DisabledContributions = off
 	p.Manifest = p.Full.Without(off)
 	r.mu.Unlock()
+	unlock()
 	r.audit(ctx, id, "contribution", actor, map[string]any{"contribution": key, "enabled": on})
 	r.changed(Change{ID: id, Kind: "contributions"})
 	return nil

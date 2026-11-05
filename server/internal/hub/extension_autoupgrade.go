@@ -265,6 +265,16 @@ func (u *extensionUpgrades) candidate(p *extension.Extension) (up ExtensionUpgra
 	m := e.Parsed
 	id := p.Record.ID
 	up = ExtensionUpgrade{ID: id, Name: p.Manifest.Name, Market: mid, From: p.Record.Version, To: m.Version}
+	bundleConsent := false
+	if len(m.Depends) > 0 || len(m.ExtensionPack) > 0 {
+		choices, unresolved := u.h.chooseBundle(context.Background(), m, mid)
+		bundleConsent = len(unresolved) > 0
+		for child, choice := range choices {
+			if child != id && !choice.installed {
+				bundleConsent = true
+			}
+		}
+	}
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	s := u.settings
@@ -277,6 +287,8 @@ func (u *extensionUpgrades) candidate(p *extension.Extension) (up ExtensionUpgra
 		up.State, up.Detail = upgradeSkipped, i18n.T(u.h.userLang(), "hub-extension_autoupgrade.skipped")
 	case extension.MorePermissions(p, m) || extension.Digest(m) != granted(p):
 		up.State, up.AddedPermissions = upgradeNeedsConsent, extension.Added(p.Manifest, m)
+	case bundleConsent:
+		up.State, up.Detail = upgradeNeedsConsent, i18n.T(u.h.userLang(), "hub-extension_autoupgrade.bundle_confirmation")
 	case (s.Auto != nil && !*s.Auto) || slices.Contains(s.Off, id):
 		up.State = upgradeOff
 	case u.failed[id] == m.Version:
@@ -313,7 +325,7 @@ func (u *extensionUpgrades) upgrade(ctx context.Context) {
 			told := u.settings.Notified[id] == up.To
 			u.mu.Unlock()
 			if !told {
-				n := ExtensionUpgradeNote{Kind: upgradeNeedsConsent, From: up.From, To: up.To, Detail: morePermissionsText(h.userLang(), up.AddedPermissions), At: time.Now()}
+				n := ExtensionUpgradeNote{Kind: upgradeNeedsConsent, From: up.From, To: up.To, Detail: upgradeConsentText(h.userLang(), up), At: time.Now()}
 				_ = u.change(ctx, func(s *extensionUpgradeSettings) {
 					if s.Notified == nil {
 						s.Notified = map[string]string{}
@@ -322,7 +334,7 @@ func (u *extensionUpgrades) upgrade(ctx context.Context) {
 					s.note(id, n)
 				})
 				u.tell(id, n, "consent", func(l i18n.Lang) i18n.Args {
-					return i18n.Args{"name": up.Name, "version": up.To, "detail": morePermissionsText(l, up.AddedPermissions)}
+					return i18n.Args{"name": up.Name, "version": up.To, "detail": upgradeConsentText(l, up)}
 				})
 			}
 		case upgradeAvailable, upgradeWaitingIdle:
@@ -345,6 +357,13 @@ func (u *extensionUpgrades) upgrade(ctx context.Context) {
 }
 
 // morePermissionsText says what a newer version asks for more, in l.
+func upgradeConsentText(l i18n.Lang, up ExtensionUpgrade) string {
+	if up.Detail != "" {
+		return i18n.T(l, "hub-extension_autoupgrade.bundle_confirmation")
+	}
+	return morePermissionsText(l, up.AddedPermissions)
+}
+
 func morePermissionsText(l i18n.Lang, added []extension.PermissionLine) string {
 	const ns = "hub-extension_autoupgrade."
 	if len(added) == 0 {
@@ -387,7 +406,7 @@ func (u *extensionUpgrades) install(ctx context.Context, p *extension.Extension,
 		}
 		u.inflight[id] = up.To
 		u.mu.Unlock()
-		if _, err = reg.Upgrade(ctx, id, pv.ID, "", extensionUpgradeActor); err != nil {
+		if _, err = reg.UpgradePlan(ctx, id, pv.ID, "", nil, extensionUpgradeActor); err != nil {
 			u.mu.Lock()
 			delete(u.inflight, id)
 			u.mu.Unlock()

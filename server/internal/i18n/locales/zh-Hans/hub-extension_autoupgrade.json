@@ -1,4 +1,5 @@
 {
+  "bundle_confirmation": "依赖或合集成员有变化，需要一起确认",
   "busy_extension": "扩展正在用",
   "busy_assistant": "助手正在工作",
   "no_package": "没有这台 hub（{platform}）能用的包",

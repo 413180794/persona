@@ -123,12 +123,17 @@ type Registry struct {
 	// switched on, installed (on at once) or upgraded while on. A rollback is not asked (it goes back to a version
 	// that ran; the hub rolls back a broken upgrade itself).
 	CanEnable func(ctx context.Context, source string, m *Manifest) error
+	// PlanCandidates 为主预览提供联合升级图，PlanGuard 保持提交期间的市场信任不变。
+	PlanCandidates func(context.Context, *Manifest, string) []*Manifest
+	PlanGuard      func(context.Context, []*Preview) (func(), error)
 
-	mu         sync.Mutex
-	extensions map[string]*Extension
-	reserved   map[string]map[string]string // point → contribution id → who has it (the hub's own)
-	previews   map[string]*Preview
-	now        func() time.Time
+	operationMu sync.Mutex // serializes package/record changes, including plan recovery and cleanup
+	planProblem error      // 提交确认或包恢复未确定时，禁止新的写操作，等待重新加载。
+	mu          sync.Mutex
+	extensions  map[string]*Extension
+	reserved    map[string]map[string]string // point → contribution id → who has it (the hub's own)
+	previews    map[string]*Preview
+	now         func() time.Time
 	// yields: built-in plugins an installed one of the same id takes the place of (Yields); yielded: those put aside.
 	yields  map[string]bool
 	yielded map[string]*Extension
@@ -214,6 +219,11 @@ func (r *Registry) AddBuiltin(m *Manifest, dir string, enabled bool) error {
 // Load reads the rows: installed plugins, and the switches and settings of built-in ones. A row whose package is gone
 // or that this hub cannot run is kept and listed with its problem.
 func (r *Registry) Load(ctx context.Context) error {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	if r.store == nil {
 		return nil
 	}
@@ -371,10 +381,15 @@ type Preview struct {
 	// Unresolved are the dependencies or members no registered market has (it does not install while one is missing).
 	Unresolved []string `json:"unresolved,omitempty"`
 
-	source  Source
-	root    string // the staged package
-	staging string
+	source                Source
+	marketSpec, marketKey string
+	fingerprint           string // all staged package bytes/modes as approved at preview
+	root                  string // the staged package
+	staging               string
 }
+
+// MarketTrust 是预览时绑定的市场地址和信任公钥，不增加协议字段。
+func (pv *Preview) MarketTrust() (string, string) { return pv.marketSpec, pv.marketKey }
 
 func newID() string {
 	var b [12]byte
@@ -397,7 +412,7 @@ func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Previe
 
 // PreviewMarket is Preview for a plugin of a market: its package for this hub's platform, downloaded and checked
 // against the index's sha256, must be the plugin the index says (id, version, permissions).
-func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID string, e *MarketEntry, upgrade string) (*Preview, error) {
+func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID string, e *MarketEntry, upgrade string, candidates ...*Manifest) (*Preview, error) {
 	if r.store == nil {
 		return nil, errors.New("没有数据库：装不了扩展")
 	}
@@ -417,17 +432,17 @@ func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID strin
 		}
 		_ = os.Remove(file)
 		return packageRoot(out)
-	})
+	}, candidates...)
 	if err != nil {
 		return nil, err
 	}
-	if m := pv.Manifest; m.ID != e.Parsed.ID || m.Version != e.Parsed.Version || Digest(m) != Digest(e.Parsed) {
+	if m := pv.Manifest; !ManifestsEqual(m, e.Parsed) {
 		if pv, _ := r.take(pv.ID); pv != nil {
 			r.dropStaging(pv)
 		}
-		return nil, fmt.Errorf("下载的包（%s %s）和市场索引里写的（%s %s）不一致", m.ID, m.Version, e.Parsed.ID, e.Parsed.Version)
+		return nil, fmt.Errorf("下载的包（%s %s）的完整清单和市场索引（%s %s）不一致", m.ID, m.Version, e.Parsed.ID, e.Parsed.Version)
 	}
-	pv.Market = marketID
+	pv.Market, pv.marketSpec, pv.marketKey = marketID, mk.Spec.String(), mk.TrustedKey
 	return pv, nil
 }
 
@@ -473,7 +488,7 @@ func (r *Registry) PreviewUpload(ctx context.Context, name string, body io.Reade
 }
 
 // preview checks what stage put into a fresh staging directory (or what a remote plugin says of itself).
-func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stage func(dir string) (string, error)) (*Preview, error) {
+func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stage func(dir string) (string, error), candidates ...*Manifest) (*Preview, error) {
 	r.expire()
 	pv := &Preview{ID: newID(), source: src, ExpiresAt: r.now().Add(previewFor)}
 	var m *Manifest
@@ -530,6 +545,16 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	if w != "" {
 		pv.Warnings = append(pv.Warnings, w)
 	}
+	if src.Kind != "remote" {
+		pv.fingerprint, err = packageFingerprint(pv.root)
+		if err != nil {
+			return fail(err)
+		}
+	}
+	var joint []*Manifest
+	if len(candidates) == 0 && r.PlanCandidates != nil {
+		joint = r.PlanCandidates(ctx, m, FromMarket(src.String()))
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cur := r.extensions[m.ID]
@@ -543,10 +568,14 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	case upgrade != "" && !NewerVersion(m.Version, cur.Record.Version):
 		return fail(fmt.Errorf("%s 不比已装的 %s 新", m.Version, cur.Record.Version))
 	}
-	if err := r.conflicts(m); err != nil {
+	if len(candidates) == 0 && (r.conflicts(m) != nil || r.checkDependencyGraph(m) != nil) {
+		candidates = joint
+	}
+	candidates = previewCandidates(m, candidates)
+	if err := r.conflictsCandidates(m, candidates); err != nil {
 		return fail(err)
 	}
-	if err := r.checkDependencyGraph(m); err != nil {
+	if err := r.checkDependencyGraph(candidates...); err != nil {
 		return fail(err)
 	}
 	if upgrade != "" {
@@ -639,20 +668,42 @@ func checkProgram(root, at, cmd string) error {
 
 // conflicts says which contribution of m another plugin or the hub has already. Called with r.mu held.
 func (r *Registry) conflicts(m *Manifest) error {
+	return r.conflictsCandidates(m, nil)
+}
+
+func (r *Registry) conflictsCandidates(m *Manifest, candidates []*Manifest) error {
+	owners := make(map[string]*Manifest, len(r.extensions)+len(candidates))
+	for id, other := range r.extensions {
+		owners[id] = other.Full
+	}
+	for _, candidate := range candidates {
+		owners[candidate.ID] = candidate
+	}
 	var errs []error
 	for point, ids := range m.Contributions() {
 		for _, id := range ids {
 			if who, ok := r.reserved[point][id]; ok {
 				errs = append(errs, fmt.Errorf("%s 里的 %q 已经是 %s 的", point, id, who))
 			}
-			for _, other := range r.extensions {
-				if other.Record.ID != m.ID && slices.Contains(other.Full.Items(point), id) {
-					errs = append(errs, fmt.Errorf("%s 里的 %q 已经是扩展 %s 的", point, id, other.Record.ID))
+			for otherID, other := range owners {
+				if otherID != m.ID && slices.Contains(other.Items(point), id) {
+					errs = append(errs, fmt.Errorf("%s 里的 %q 已经是扩展 %s 的", point, id, otherID))
 				}
 			}
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// 包中实际读出的清单覆盖同 ID 的规划清单，不能用市场描述掩盖下载内容。
+func previewCandidates(m *Manifest, candidates []*Manifest) []*Manifest {
+	out := make([]*Manifest, 0, len(candidates)+1)
+	for _, candidate := range candidates {
+		if candidate != nil && candidate.ID != m.ID {
+			out = append(out, candidate)
+		}
+	}
+	return append(out, m)
 }
 
 // expire drops previews past their time.
@@ -701,79 +752,11 @@ func (r *Registry) take(previewID string) (*Preview, error) {
 // Install installs a previewed package, digest being the one the user was shown. It is on at once, so CanEnable is
 // asked first (a refusal keeps the preview).
 func (r *Registry) Install(ctx context.Context, previewID, digest, actor string) (*Extension, error) {
-	if pv := r.peek(previewID); pv != nil && !pv.Upgrade {
-		if err := r.canEnable(ctx, SourceInstalled, pv.Manifest); err != nil {
-			return nil, err
-		}
-	}
-	pv, err := r.take(previewID)
-	if err != nil {
-		return nil, err
-	}
-	defer r.dropStaging(pv)
-	if pv.Upgrade {
-		return nil, errors.New("这是升级的预览")
-	}
-	if digest != pv.Digest {
-		return nil, errors.New("权限摘要对不上：装的不是你看过的那一份")
-	}
-	m := pv.Manifest
-	now := r.now()
-	row := Record{ID: m.ID, Source: SourceInstalled, Origin: pv.source.String(), Version: m.Version, Granted: m.Permissions,
-		GrantedDigest: pv.Digest, Enabled: true, Config: json.RawMessage(`{}`), InstalledAt: now, UpdatedAt: now}
-	row.DisabledContributions = m.StartsOff(nil, nil)
-	row.Manifest, _ = json.Marshal(m)
-	if pv.source.Kind == "remote" {
-		row.Remote = &Remote{RPCSocket: pv.source.RPCSocket, HTTPSocket: pv.source.HTTPSocket}
-	}
-	var p, builtin *Extension
-	// Keep the graph check and record publication in one critical section, so concurrent installs cannot close a cycle.
-	err = func() error {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		builtin = r.extensions[m.ID]
-		if builtin != nil && !r.yielding(builtin) {
-			return fmt.Errorf("已经有一个叫 %s 的扩展", m.ID)
-		}
-		if err := r.conflicts(m); err != nil {
-			return err
-		}
-		if err := r.checkDependencyGraph(m); err != nil {
-			return err
-		}
-		if row.Remote == nil {
-			if err := r.place(pv, m); err != nil {
-				return err
-			}
-		}
-		if err := r.store.PutExtension(ctx, row); err != nil {
-			return err
-		}
-		p = r.fromRow(row)
-		if builtin != nil {
-			r.yielded[m.ID] = builtin
-		}
-		r.extensions[m.ID] = p
-		return nil
-	}()
-	if err != nil {
-		return nil, err
-	}
-	r.audit(ctx, m.ID, "install", actor, map[string]any{"version": m.Version, "origin": row.Origin, "permissions": m.Permissions})
-	r.changed(Change{ID: m.ID, Kind: "installed", Old: builtin}) // the hub stops what ran of id first (the built-in)
-	return p, nil
-}
-
-// place moves a staged package to installed/<id>/<version>.
-func (r *Registry) place(pv *Preview, m *Manifest) error {
-	to := r.installedDir(m.ID, m.Version)
-	if err := os.RemoveAll(to); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
-		return err
-	}
-	return os.Rename(pv.root, to)
+	p, err := r.applyPlan(ctx, "", previewID, digest, nil, actor, false)
+	if errors.Is(err, errPlanDigest) {
+		r.Discard(previewID)
+	} // legacy single-package consent consumes the refused preview
+	return p, err
 }
 
 func (r *Registry) dropStaging(pv *Preview) {
@@ -785,66 +768,11 @@ func (r *Registry) dropStaging(pv *Preview) {
 // Upgrade installs a previewed newer version of id. The digest is needed when it asks for more than was granted. A
 // plugin that is on stays on, so CanEnable is asked about the new version first (a refusal keeps the preview).
 func (r *Registry) Upgrade(ctx context.Context, id, previewID, digest, actor string) (*Extension, error) {
-	if pv, cur := r.peek(previewID), r.Get(id); pv != nil && pv.Upgrade && pv.Manifest.ID == id && cur != nil && cur.Record.Enabled {
-		if err := r.canEnable(ctx, cur.Record.Source, pv.Manifest); err != nil {
-			return nil, err
-		}
+	p, err := r.applyPlan(ctx, id, previewID, digest, nil, actor, false)
+	if errors.Is(err, errPlanDigest) {
+		r.Discard(previewID)
 	}
-	pv, err := r.take(previewID)
-	if err != nil {
-		return nil, err
-	}
-	defer r.dropStaging(pv)
-	m := pv.Manifest
-	if !pv.Upgrade || m.ID != id {
-		return nil, fmt.Errorf("这不是 %s 的升级预览", id)
-	}
-	if (pv.MorePermissions || digest != "") && digest != pv.Digest {
-		return nil, errors.New("新版本要的权限变多了：确认新的权限后再升级")
-	}
-	var old, p *Extension
-	var row Record
-	err = func() error {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		old = snapshotExtension(r.extensions[id])
-		if old == nil || old.Record.Version != pv.From {
-			return errors.New("扩展在预览之后变了，重新预览一次")
-		}
-		if err := r.conflicts(m); err != nil {
-			return err
-		}
-		if err := r.checkDependencyGraph(m); err != nil {
-			return err
-		}
-		row = old.Record
-		row.DisabledContributions = m.StartsOff(old.Full, row.DisabledContributions)
-		row.PreviousVersion, row.Version, row.UpdatedAt = row.Version, m.Version, r.now()
-		row.Manifest, _ = json.Marshal(m)
-		row.Granted, row.GrantedDigest = m.Permissions, pv.Digest
-		row.Origin = pv.source.String()
-		if pv.source.Kind == "remote" {
-			row.Remote = &Remote{RPCSocket: pv.source.RPCSocket, HTTPSocket: pv.source.HTTPSocket}
-		} else {
-			row.Remote = nil
-			if err := r.place(pv, m); err != nil {
-				return err
-			}
-		}
-		if err := r.store.PutExtension(ctx, row); err != nil {
-			return err
-		}
-		p = r.fromRow(row)
-		r.extensions[id] = p
-		r.prune(id, row.Version, row.PreviousVersion)
-		return nil
-	}()
-	if err != nil {
-		return nil, err
-	}
-	r.audit(ctx, id, "upgrade", actor, map[string]any{"from": row.PreviousVersion, "to": row.Version, "permissions": m.Permissions})
-	r.changed(Change{ID: id, Kind: "upgraded", Old: old})
-	return p, nil
+	return p, err
 }
 
 // prune deletes the package directories of id other than keep.
@@ -859,6 +787,11 @@ func (r *Registry) prune(id string, keep ...string) {
 
 // Rollback goes back to the version installed before the last upgrade.
 func (r *Registry) Rollback(ctx context.Context, id, actor string) (*Extension, error) {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	old := r.Snapshot(id)
 	if old == nil || old.Record.Source != SourceInstalled {
 		return nil, fmt.Errorf("没有装过扩展 %s", id)
@@ -904,6 +837,7 @@ func (r *Registry) Rollback(ctx context.Context, id, actor string) (*Extension, 
 	if err != nil {
 		return nil, err
 	}
+	unlock()
 	r.audit(ctx, id, "rollback", actor, map[string]any{"from": old.Record.Version, "to": prev})
 	r.changed(Change{ID: id, Kind: "rolled_back", Old: old})
 	return p, nil
@@ -911,17 +845,23 @@ func (r *Registry) Rollback(ctx context.Context, id, actor string) (*Extension, 
 
 // Uninstall removes an installed plugin: its row and secrets, its packages and (unless keepData) its data.
 func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, actor string) error {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	old := r.Get(id)
 	if old == nil {
 		return fmt.Errorf("没有扩展 %s", id)
 	}
 	if old.Record.Source == SourceDev {
+		unlock()
 		return r.RemoveDev(id)
 	}
 	if old.Record.Source != SourceInstalled {
 		return fmt.Errorf("%s 是%s的扩展，只能停用", id, map[string]string{SourceBuiltin: "内置", SourceHubJSON: " hub.json 里"}[old.Record.Source])
 	}
-	err := func() error {
+	err = func() error {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		cur := r.extensions[id]
@@ -947,6 +887,7 @@ func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, acto
 	if err != nil {
 		return err
 	}
+	unlock()
 	r.audit(ctx, id, "uninstall", actor, map[string]any{"version": old.Record.Version, "keep_data": keepData})
 	r.changed(Change{ID: id, Kind: "removed", Old: old})
 	return nil
@@ -981,6 +922,11 @@ func (r *Registry) put(ctx context.Context, row Record) error {
 
 // SetEnabled switches a plugin on or off; on only when CanEnable lets it.
 func (r *Registry) SetEnabled(ctx context.Context, id string, on bool, actor string) error {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	p, err := r.editable(id)
 	if err != nil {
 		return err
@@ -1001,6 +947,7 @@ func (r *Registry) SetEnabled(ctx context.Context, id string, on bool, actor str
 	p.Record.Enabled = on
 	r.mu.Unlock()
 	kind := map[bool]string{true: "enabled", false: "disabled"}[on]
+	unlock()
 	r.audit(ctx, id, kind, actor, nil)
 	r.changed(Change{ID: id, Kind: kind})
 	return nil
@@ -1008,6 +955,11 @@ func (r *Registry) SetEnabled(ctx context.Context, id string, on bool, actor str
 
 // SetConfig replaces a plugin's configuration, held to its schema first.
 func (r *Registry) SetConfig(ctx context.Context, id string, raw json.RawMessage, actor string) error {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	p, err := r.editable(id)
 	if err != nil {
 		return err
@@ -1030,6 +982,7 @@ func (r *Registry) SetConfig(ctx context.Context, id string, raw json.RawMessage
 	r.mu.Lock()
 	p.Record.Config = compact
 	r.mu.Unlock()
+	unlock()
 	r.audit(ctx, id, "config", actor, nil) // not the values: they may be personal
 	r.changed(Change{ID: id, Kind: "config"})
 	return nil
@@ -1052,6 +1005,11 @@ func (r *Registry) secretSpec(p *Extension, name string) error {
 
 // SetSecret keeps one of a plugin's declared secrets, sealed. The value never goes to a log or back to anyone.
 func (r *Registry) SetSecret(ctx context.Context, id, name, value, actor string) error {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	p, err := r.editable(id)
 	if err != nil {
 		return err
@@ -1075,6 +1033,7 @@ func (r *Registry) SetSecret(ctx context.Context, id, name, value, actor string)
 	if err := r.store.PutExtensionSecret(ctx, id, name, sealed); err != nil {
 		return err
 	}
+	unlock()
 	r.audit(ctx, id, "secret_set", actor, map[string]any{"name": name})
 	r.changed(Change{ID: id, Kind: "secret"})
 	return nil
@@ -1082,6 +1041,11 @@ func (r *Registry) SetSecret(ctx context.Context, id, name, value, actor string)
 
 // DeleteSecret forgets one of a plugin's secrets.
 func (r *Registry) DeleteSecret(ctx context.Context, id, name, actor string) error {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	p, err := r.editable(id)
 	if err != nil {
 		return err
@@ -1095,6 +1059,7 @@ func (r *Registry) DeleteSecret(ctx context.Context, id, name, actor string) err
 	if err := r.store.DeleteExtensionSecret(ctx, id, name); err != nil {
 		return err
 	}
+	unlock()
 	r.audit(ctx, id, "secret_delete", actor, map[string]any{"name": name})
 	r.changed(Change{ID: id, Kind: "secret"})
 	return nil

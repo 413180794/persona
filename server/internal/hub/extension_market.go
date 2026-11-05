@@ -211,7 +211,7 @@ func (h *Hub) market(rec extension.MarketRecord) (*extension.Market, error) {
 	if err != nil {
 		return nil, err
 	}
-	mk := &extension.Market{Spec: spec, Client: h.extensions.markets.client, GitHubAPI: h.extensions.markets.githubAPI, Dir: h.marketsDir()}
+	mk := &extension.Market{Spec: spec, TrustedKey: rec.SigningKey, Client: h.extensions.markets.client, GitHubAPI: h.extensions.markets.githubAPI, Dir: h.marketsDir()}
 	if rec.TokenSealed != "" {
 		if mk.Token, err = (hubSealer{h}).Open(rec.TokenSealed); err != nil {
 			return nil, i18n.Err("hub-extension_market.token_unreadable")
@@ -572,6 +572,10 @@ func (h *Hub) marketEntry(market, id string) (extension.MarketRecord, *extension
 	ms := h.marketsState()
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
+	return marketEntryLocked(ms, market, id)
+}
+
+func marketEntryLocked(ms *markets, market, id string) (extension.MarketRecord, *extension.MarketEntry, error) {
 	s := ms.byID[market]
 	if s == nil {
 		return extension.MarketRecord{}, nil, errNoMarket

@@ -1,4 +1,10 @@
 {
+  "conflicting_markets": "同じ拡張機能に異なる取得元マーケットが指定されています",
+  "root_version_constraint": "メインパッケージのバージョンが依存条件を満たしていません",
+  "unstable_plan": "依存関係の計画が収束しません。バージョン条件を確認してください",
+  "all_version_constraints": "{ranges} のすべてを満たすバージョンがマーケットにありません",
+  "market_trust_changed": "プレビュー後にマーケットのアドレスまたは信頼する公開鍵が変わりました。再度プレビューしてください",
+  "download_plan_mismatch": "ダウンロードしたマニフェストが計画全体と一致しません",
   "market_not_registered": "マーケット {spec} は登録されていません",
   "not_in_markets": "登録済みのどのマーケットにもありません",
   "unresolved": "{id}（{why}）",

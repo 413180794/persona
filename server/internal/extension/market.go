@@ -273,6 +273,8 @@ func (e *MarketEntry) PackageFor(platform string) *MarketPackage {
 // Market is a registered market with what reading it needs.
 type Market struct {
 	Spec MarketSpec
+	// TrustedKey 由 hub 提供，用于绑定预览时的市场信任，不是下载凭据。
+	TrustedKey string
 	// Token, when set, is sent to the market's own origin only (a private repository or site).
 	Token string
 	// Client and GitHubAPI: tests replace them.

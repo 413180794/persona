@@ -1,4 +1,10 @@
 {
+  "conflicting_markets": "同一扩展要求不同来源市场",
+  "root_version_constraint": "候选主包版本不满足依赖约束",
+  "unstable_plan": "依赖计划无法稳定，请检查版本约束",
+  "all_version_constraints": "市场里没有同时满足 {ranges} 的版本",
+  "market_trust_changed": "预览后市场地址或信任公钥变了，请重新预览",
+  "download_plan_mismatch": "下载清单与完整计划不一致",
   "market_not_registered": "没有登记市场 {spec}",
   "not_in_markets": "登记的市场里都没有",
   "unresolved": "{id}（{why}）",

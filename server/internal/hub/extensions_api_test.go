@@ -65,6 +65,7 @@ type extensionStore struct {
 	markets    map[string]extension.MarketRecord
 	failDelete string // only this extension's delete fails
 	failPut    bool   // every PutExtension fails (a database that cannot be written)
+	failPutID  string // a selected member or main record fails before its write
 }
 
 func (s *extensionStore) Extensions(context.Context) ([]extension.Record, error) {
@@ -79,12 +80,26 @@ func (s *extensionStore) Extensions(context.Context) ([]extension.Record, error)
 func (s *extensionStore) PutExtension(_ context.Context, r extension.Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.failPut {
+	if s.failPut || s.failPutID == r.ID {
 		return errors.New("the database cannot be written")
 	}
 	s.rows[r.ID] = r
 	return nil
 }
+func (s *extensionStore) PutExtensionPlan(_ context.Context, records []extension.Record) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, record := range records {
+		if s.failPut || s.failPutID == record.ID {
+			return errors.New("the database cannot be written")
+		}
+	}
+	for _, record := range records {
+		s.rows[record.ID] = record
+	}
+	return nil
+}
+
 func (s *extensionStore) DeleteExtension(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

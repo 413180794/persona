@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
@@ -19,124 +18,12 @@ import (
 // bundleDepth is how deep dependencies of dependencies are followed.
 const bundleDepth = 4
 
-// findInMarkets is extension id in a market: the one at spec (an address as registered) when given, else prefer's,
-// else the first registered market (by id) that has it.
-func (h *Hub) findInMarkets(id, spec, prefer string) (extension.MarketRecord, *extension.MarketEntry, error) {
-	ms := h.marketsState()
-	ms.mu.Lock()
-	var order []string
-	if spec != "" {
-		if parsed, err := extension.ParseMarket(spec); err == nil {
-			if s := ms.withSpec(parsed.String()); s != nil {
-				order = append(order, s.rec.ID)
-			}
-		}
-		if len(order) == 0 {
-			ms.mu.Unlock()
-			return extension.MarketRecord{}, nil, i18n.Err("hub-extension_model.market_not_registered", i18n.Args{"spec": spec})
-		}
-	} else {
-		if prefer != "" && ms.byID[prefer] != nil {
-			order = append(order, prefer)
-		}
-		var rest []string
-		for mid := range ms.byID {
-			if mid != prefer {
-				rest = append(rest, mid)
-			}
-		}
-		sort.Strings(rest)
-		order = append(order, rest...)
-	}
-	ms.mu.Unlock()
-	var last error = i18n.Err("hub-extension_model.not_in_markets")
-	for _, mid := range order {
-		rec, e, err := h.marketEntry(mid, id)
-		if err == nil {
-			return rec, e, nil
-		}
-		last = err
-	}
-	return extension.MarketRecord{}, nil, last
-}
-
-// resolveBundle fills pv's Bundle with the previews of what installs with it from the markets: its dependencies that
-// are missing or too old, a pack's members not installed (or too old), and theirs in turn; Unresolved says what no
-// market has. market is the market pv comes from ("" for one from elsewhere).
+// resolveBundle 在下载前汇总完整图中的约束，再按依赖顺序生成确认预览。
 func (h *Hub) resolveBundle(ctx context.Context, pv *extension.Preview, market string) {
 	if h.extensions == nil || h.marketStore() == nil {
 		return
 	}
-	reg := h.extensions.reg
-	l := h.contextLang(ctx)
-	unresolved := func(id string, why string) string {
-		return i18n.T(l, "hub-extension_model.unresolved", i18n.Args{"id": id, "why": why})
-	}
-	seen := map[string]bool{pv.Manifest.ID: true}
-	type want struct{ id, spec, version string }
-	var walk func(m *extension.Manifest, market string, depth int)
-	walk = func(m *extension.Manifest, market string, depth int) {
-		var wants []want
-		for _, d := range reg.DependenciesContext(ctx, m) {
-			if d.State == extension.DepMissing || d.State == extension.DepOld {
-				wants = append(wants, want{d.ID, "", d.Version})
-			} else if d.State == extension.DepNotReady && !seen[d.ID] {
-				seen[d.ID] = true
-				if cur := reg.Snapshot(d.ID); cur != nil {
-					walk(cur.Full, extension.FromMarket(cur.Record.Origin), depth+1)
-				}
-			}
-		}
-		for _, pm := range m.ExtensionPack {
-			cur := reg.Get(pm.ID)
-			if cur == nil || cur.Record.Source == extension.SourceInstalled && !(extension.Dependency{ID: pm.ID, Version: pm.Version}).Allows(cur.Record.Version) {
-				wants = append(wants, want{pm.ID, pm.Market, pm.Version})
-			}
-		}
-		for _, w := range wants {
-			if seen[w.id] {
-				continue
-			}
-			seen[w.id] = true
-			if depth > bundleDepth {
-				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.T(l, "hub-extension_model.too_deep")))
-				continue
-			}
-			rec, e, err := h.findInMarkets(w.id, w.spec, market)
-			if err != nil {
-				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.Localize(err, l)))
-				continue
-			}
-			if !(extension.Dependency{ID: w.id, Version: w.version}).Allows(e.Parsed.Version) {
-				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.T(l, "hub-extension_model.version_mismatch", i18n.Args{"want": w.version, "have": e.Parsed.Version})))
-				continue
-			}
-			mk, err := h.market(rec)
-			if err != nil {
-				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.Localize(err, l)))
-				continue
-			}
-			upgrade := ""
-			if cur := reg.Get(w.id); cur != nil && cur.Record.Source == extension.SourceInstalled {
-				upgrade = w.id
-			}
-			sub, err := reg.PreviewMarket(ctx, mk, rec.ID, e, upgrade)
-			if err != nil {
-				pv.Unresolved = append(pv.Unresolved, unresolved(w.id, i18n.Localize(err, l)))
-				continue
-			}
-			walk(sub.Manifest, rec.ID, depth+1) // what it needs installs before it
-			pv.Bundle = append(pv.Bundle, sub)
-		}
-	}
-	walk(pv.Manifest, market, 1)
-	candidates := []*extension.Manifest{pv.Manifest}
-	for _, member := range pv.Bundle {
-		candidates = append(candidates, member.Manifest)
-	}
-	if err := reg.ValidateDependencyGraph(candidates...); err != nil {
-		pv.Unresolved = append(pv.Unresolved, err.Error())
-	}
+	h.stageBundle(ctx, pv, market)
 }
 
 // bundleRef is one preview of a bundle as the install request sends it back.
@@ -145,52 +32,17 @@ type bundleRef struct {
 	Digest    string `json:"permissions_digest"`
 }
 
-// installBundle installs (or upgrades) what main's preview bundles, in order, after checking the request names every
-// one with the digest the user saw. Nothing is installed when one does not match.
-func (h *Hub) installBundle(ctx context.Context, main *extension.Preview, digest string, refs []bundleRef, actor string) error {
-	if main == nil || main.Digest != digest {
-		return nil // expired, used or not what the user saw: Install says so, before anything installs
+// installExtensionPlan validates and commits the members and main package together; no caller installs the main
+// package as a separate operation afterward. Existing consent fields and permission checks are unchanged.
+func (h *Hub) installExtensionPlan(ctx context.Context, id, previewID, digest string, refs []bundleRef, actor string) (*extension.Extension, error) {
+	consent := make([]extension.PreviewRef, 0, len(refs))
+	for _, ref := range refs {
+		consent = append(consent, extension.PreviewRef{PreviewID: ref.PreviewID, Digest: ref.Digest})
 	}
-	if len(main.Unresolved) > 0 {
-		l := h.contextLang(ctx)
-		return i18n.Err("hub-extension_model.unresolved_missing", i18n.Args{"list": strings.Join(main.Unresolved, i18n.T(l, "hub-extension_model.list_separator"))})
+	if id == "" {
+		return h.extensions.reg.InstallPlan(ctx, previewID, digest, consent, actor)
 	}
-	bundled := func(id string) bool {
-		return slices.ContainsFunc(main.Bundle, func(b *extension.Preview) bool { return b.Manifest.ID == id })
-	}
-	for _, d := range h.extensions.reg.DependenciesContext(ctx, main.Manifest) {
-		if d.State == extension.DepMissing && !bundled(d.ID) {
-			return i18n.Err("hub-extension_model.install_dependency", i18n.Args{"id": d.ID})
-		}
-	}
-	if len(refs) != len(main.Bundle) {
-		return i18n.Err("hub-extension_model.bundle_required", i18n.Args{"count": len(main.Bundle)})
-	}
-	for i, b := range main.Bundle {
-		if refs[i].PreviewID != b.ID || refs[i].Digest != b.Digest {
-			return i18n.Err("hub-extension_model.bundle_mismatch", i18n.Args{"id": b.Manifest.ID})
-		}
-	}
-	reg := h.extensions.reg
-	candidates := []*extension.Manifest{main.Manifest}
-	for _, member := range main.Bundle {
-		candidates = append(candidates, member.Manifest)
-	}
-	if err := reg.ValidateDependencyGraph(candidates...); err != nil {
-		return err
-	}
-	for _, b := range main.Bundle {
-		var err error
-		if b.Upgrade {
-			_, err = reg.Upgrade(ctx, b.Manifest.ID, b.ID, b.Digest, actor)
-		} else {
-			_, err = reg.Install(ctx, b.ID, b.Digest, actor)
-		}
-		if err != nil {
-			return localizedKind(err, "hub-extension_model.bundle_member_failed", i18n.Args{"id": b.Manifest.ID, "err": i18n.Localize(err, h.contextLang(ctx))})
-		}
-	}
-	return nil
+	return h.extensions.reg.UpgradePlan(ctx, id, previewID, digest, consent, actor)
 }
 
 // DependentView is an extension that needs another, for the refusal of switching that one off.

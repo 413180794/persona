@@ -15,6 +15,11 @@ const SourceDev = "dev"
 // AddDev registers (or replaces) the extension being written in dir, with these settings and secrets. Its package is
 // checked as an install's is (its program for this platform is in dir); its id may not be another source's.
 func (r *Registry) AddDev(dir string, config json.RawMessage, secrets map[string]string) (*Extension, error) {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	data, err := os.ReadFile(ManifestPath(dir))
 	if err != nil {
 		return nil, fmt.Errorf("没有清单：%w", err)
@@ -72,6 +77,7 @@ func (r *Registry) AddDev(dir string, config json.RawMessage, secrets map[string
 	if cur != nil {
 		kind = "upgraded"
 	}
+	unlock()
 	r.changed(Change{ID: m.ID, Kind: kind, Old: cur})
 	return p, nil
 }
@@ -87,6 +93,11 @@ func (r *Registry) RestartDev(id string) error {
 
 // RemoveDev takes the extension being written away.
 func (r *Registry) RemoveDev(id string) error {
+	unlock, err := r.beginOperation()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	r.mu.Lock()
 	p := r.extensions[id]
 	if p == nil || p.Record.Source != SourceDev {
@@ -96,6 +107,7 @@ func (r *Registry) RemoveDev(id string) error {
 	delete(r.extensions, id)
 	delete(r.devSecrets, id)
 	r.mu.Unlock()
+	unlock()
 	r.changed(Change{ID: id, Kind: "removed", Old: p})
 	return nil
 }

@@ -1216,7 +1216,7 @@ hub 会替它等的（`WorkState.hubWaits`）排进「待唤醒」。开关在�
 
 和 iOS（`docs/ios.md`「翻译」）、网页（`docs/web.md`）同一套：开了「自动翻译」以后，不是目标语言（默认简体中文）的内容由 hub 的翻译模型（模型配置的 `translate` 用途）翻译。范围是邮件（默认开）和设置里选中的飞书会话（默认一个都不翻，只翻别人发的）。
 
-- 设置存在这台手机上，不跟 hub 走，重新配对也留着：`core:contracts` 的 `TranslationSettings` / `TranslationPrefs`（目标语言的列表同 hub `translate.go` 的 `languageNames`，不认识的目标回到默认值），`app` 的 `StoredTranslationSettings`（SharedPreferences `persona-translate`，键名同 iOS 的 `translate.*`；选中的会话连名字一起存成 JSON，读不懂就当没有）。
+- 设置存在这台手机上，不跟 hub 走，重新配对也留着：`core:contracts` 的 `TranslationSettings` / `TranslationPrefs`（目标语言的列表同 `assistantwire/inbox.go` 的 `TranslateLanguages`，不认识的目标回到默认值），`app` 的 `StoredTranslationSettings`（SharedPreferences `persona-translate`，键名同 iOS 的 `translate.*`；选中的会话连名字一起存成 JSON，读不懂就当没有）。
 - 同步到 hub：`WiredDeviceSettings` 每次连上时读设备偏好（`GET /api/v1/devices/{id}/prefs` 的 `translate`），和本机的 `enabled / target / mail` 不同就 `PUT {"translate":{…}}`（三个字段都写，false 也写），之后每次改设置再发；读不到 hub 已有的就当它没有、照样发；发失败了等下次改或下次连上再发（`syncTranslation`）。hub 按它收信时提前翻好新邮件（收件箱是管理者的：`assistant/inbox_translate.go`），存在收件箱条目的 `translations[目标语言]` 里。选中的飞书会话只留在手机上。
 - 页面：`feature:settings` 的 `TranslationSettingsPage`（设置首页「AI」一节，在「模型配置」下面，右边写目标语言或「关闭」）：自动翻译开关、翻译模型（读 `translate` 用途的摘要，点进它的模型配置页）；开着时目标语言（底部面板选）、翻译范围（邮件开关、飞书会话「N 个会话 / 不翻译」）、选中会话的列表（右边 ✕ 移除）。选会话是底部面板：先列已选的（不在最近里也能取消），再列置顶和最近的会话（`ConnectorsManagement.larkChatChoices`：`/api/v1/lark/pinned`，老 hub 没有就跳过，再 `/api/v1/lark/conversations?scope=chats&limit=60`），可按名字搜。hub 没有飞书扩展（`LocalLarkFeatures.chats` 为假）时不显示飞书会话这部分。体验模式只显示一句说明。
 - 收件箱里显示译文（#1745）：

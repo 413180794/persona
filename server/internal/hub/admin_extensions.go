@@ -206,11 +206,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			writeErrCode(w, http.StatusBadRequest, "confirm_required", i18n.Err("hub-admin_extensions.confirm_required"))
 			return
 		}
-		if err := h.installBundle(r.Context(), s.reg.PreviewOf(in.PreviewID), in.Digest, in.Bundle, adminActor); err != nil {
-			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
-			return
-		}
-		p, err := s.reg.Install(r.Context(), in.PreviewID, in.Digest, adminActor)
+		p, err := h.installExtensionPlan(r.Context(), "", in.PreviewID, in.Digest, in.Bundle, adminActor)
 		if err != nil {
 			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
 			return
@@ -220,13 +216,14 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST /api/v1/admin/extensions/{id}/upgrade", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		var in struct {
-			PreviewID string `json:"preview_id"`
-			Digest    string `json:"permissions_digest"`
+			PreviewID string      `json:"preview_id"`
+			Digest    string      `json:"permissions_digest"`
+			Bundle    []bundleRef `json:"bundle,omitempty"`
 		}
 		if !readAdminJSON(w, r, &in) {
 			return
 		}
-		np, err := ps.reg.Upgrade(r.Context(), p.Record.ID, in.PreviewID, in.Digest, adminActor)
+		np, err := h.installExtensionPlan(r.Context(), p.Record.ID, in.PreviewID, in.Digest, in.Bundle, adminActor)
 		if err != nil {
 			writeExtensionErr(w, http.StatusBadRequest, "upgrade_failed", err)
 			return

@@ -851,7 +851,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
   - 正在看的那个会话（当前页是它的对话）且窗口在前台（可见且有焦点）时不响；窗口在后台或在看别的会话照响。
   - 限频：3 秒内最多一声（被拦下的不排队、不顺延）；同一批里需要你优先于完成。
   - 刚打开页面时第一次拿到的状态只作基线，不响。
-- **「完成」怎么判**（照 hub 的完成推送，`server/internal/hub/machine.go` 的 `notifyFinished`、`notify.go` 的 `settle`，见 `docs/agent-states.md`）：一个会话从 `working` 变成 `unread`（完成未看），且没屏蔽通知、不是安静任务。
+- **「完成」怎么判**（照 hub 的完成推送，`server/internal/assistant/fleet_push.go` 的 `notifyFinished` 和 `settle`，见 `docs/agent-states.md`）：一个会话从 `working` 变成 `unread`（完成未看），且没屏蔽通知、不是安静任务。
   变成 `idle`（已看，或 hub 分诊为「做完了」）不响，和 hub 一样：它看 `seen` 就不推。后台命令 / 子 Agent 还在跑的会话 hub 本来就算工作中（`backgroundState`），所以也不会提前响。
   与 hub 的差别：① hub 等 `done_delay` 再复核，网页在 1.5 秒后看它是不是还停着（状态在 working → done → working 间抖动时不响）；② hub 丢掉「后台任务汇报唤醒的一轮」（`WokeByTask`）和「助手刚推过」的，网页看不到这两个信息，照响；
   ③ 每台设备的「完成」偏好和轮次时长网页也看了（见下面「通知设置」），但轮次是网页自己按状态变化记的（`trackTurns`：从 hub 的 `state_since` 算起，1.5 秒内又开始干活算同一轮），不是 hub 的 `turnTracker`；④ 同一轮回复的去重（`stopDuplicate`）在 hub 里，网页只靠 1.5 秒的复核和限频。

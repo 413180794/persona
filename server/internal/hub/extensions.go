@@ -302,6 +302,8 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 	}
 	reg.RemoteManifest = ps.remoteManifest
 	reg.CanEnable = h.canEnableExtension // the inbox's rules (extension_inbox.go)
+	reg.PlanCandidates = h.extensionPlanCandidates
+	reg.PlanGuard = h.guardExtensionPlan
 	var own []string
 	for _, c := range h.connectors.All() {
 		if !slices.Contains(connector.MigratableConnectors, c.ID()) { // a plugin may take these over (connectors_migrate.go)

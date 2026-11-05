@@ -1,4 +1,5 @@
 {
+  "bundle_confirmation": "依存関係またはパックのメンバーが変わったため、まとめて確認してください",
   "busy_extension": "拡張機能が使用中です",
   "busy_assistant": "アシスタントが作業中です",
   "no_package": "このハブ（{platform}）で使えるパッケージがありません",

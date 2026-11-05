@@ -353,6 +353,32 @@ func (s *Schema) Check(raw json.RawMessage) error {
 	return checkObject(fields, raw, "")
 }
 
+// CheckSaved 校验已有值，但允许新版本新增的必填项暂缺，交给 needs_setup。
+func (s *Schema) CheckSaved(raw json.RawMessage) error {
+	if s == nil {
+		return s.Check(raw)
+	}
+	copy := *s
+	var optional func(Field) Field
+	optional = func(f Field) Field {
+		f.Required = false
+		f.Fields = slices.Clone(f.Fields)
+		for i := range f.Fields {
+			f.Fields[i] = optional(f.Fields[i])
+		}
+		if f.Items != nil {
+			item := optional(*f.Items)
+			f.Items = &item
+		}
+		return f
+	}
+	copy.Fields = slices.Clone(s.Fields)
+	for i := range copy.Fields {
+		copy.Fields[i] = optional(copy.Fields[i])
+	}
+	return copy.Check(raw)
+}
+
 func checkObject(fields []Field, raw json.RawMessage, at string) error {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &m); err != nil || m == nil {
