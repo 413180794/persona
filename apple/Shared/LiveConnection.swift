@@ -56,6 +56,7 @@ nonisolated enum ServerEvent: Sendable {
     case personas
     case assistantFeed(FeedItem)
     case assistantView(ExtensionAssistantView)
+    case assistantViewAction(conversation: String, action: ExtensionViewAction)
     case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
     /// A plugin changed the badge on one of its main-navigation entries (docs/extensions.md「UI 插槽」角标): nil clears it.
@@ -117,6 +118,8 @@ nonisolated enum ServerEvent: Sendable {
         var mesh: MeshField?
         var item: FeedItem?
         var view: ExtensionAssistantView?
+        /// Keep this raw so another event's optional action string cannot break its envelope decoding.
+        var action: JSONValue?
         var conversation: String?
         var plan: TaskPlan?
         var plugin: String?
@@ -127,7 +130,7 @@ nonisolated enum ServerEvent: Sendable {
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
-            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, conversation, plan
+            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, conversation, plan
             case plugin, badge, invalidate
             case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build"
@@ -196,6 +199,13 @@ nonisolated enum ServerEvent: Sendable {
             guard let view = e.view, !view.id.isEmpty, view.version > 0,
                   !view.conversation.isEmpty, view.conversation == e.conversation else { return nil }
             return .assistantView(view)
+        case "assistant_view_action":
+            guard let conversation = e.conversation, !conversation.isEmpty,
+                  let raw = e.action, let data = try? JSON.encoder.encode(raw),
+                  let action = try? JSON.decoder.decode(ExtensionViewAction.self, from: data),
+                  !action.key.isEmpty, !action.action.isEmpty, !action.clientMsgId.isEmpty, !action.status.isEmpty,
+                  action.revision.map({ $0 > 0 }) ?? true else { return nil }
+            return .assistantViewAction(conversation: conversation, action: action)
         case "task_plan": return e.plan.map { .taskPlan($0) }
         case "fleet": return e.fleet.map { .fleet($0) }
         case "desktops": return .desktops(e.desktops ?? [])
@@ -239,7 +249,7 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .personas, .assistantFeed, .assistantView, .taskPlan, .pluginBadge, .extensionInvalidate: return self
+             .personas, .assistantFeed, .assistantView, .assistantViewAction, .taskPlan, .pluginBadge, .extensionInvalidate: return self
         }
     }
 }

@@ -1334,6 +1334,8 @@ final class AppModel {
             if isHub { TasksStore.shared.received(item, group: group) }
         case .assistantView(let view):
             AssistantViewsStore.shared.receive(view, conversation: view.conversation, group: group)
+        case .assistantViewAction(let conversation, let action):
+            AssistantViewsStore.shared.receive(action, conversation: conversation, group: group)
         case .taskPlan(let plan):
             if isHub { TasksStore.shared.received(plan) }
         case .fleet(let state):
@@ -1416,6 +1418,7 @@ final class AppModel {
         case .personas: "personas"
         case .assistantFeed: "assistant_feed"
         case .assistantView: "assistant_view"
+        case .assistantViewAction: "assistant_view_action"
         case .taskPlan: "task_plan"
         case .fleet: "fleet"
         case .hubUpdate: "hub_update"

@@ -445,6 +445,7 @@ fixture 读取 `schema/extension/examples/assistant/progress.json` 和 `progress
 `POST /mock/views/stale` 再推 version 1，但不改服务端最新快照。测试在实际 App 中检查进度文字就地更新、只有一条 feed 行，旧版本不能覆盖新版本；深浅色各跑一次并看截图。
 
 状态层单元测试 `AssistantViewsStoreTests` 检查 hub 组／对话隔离、版本单调、创建事件与快照乱序、无效归属、重连恢复、切换后旧请求不能回填，以及旧 hub 无 views 字段的兼容。
+`AssistantViewActionStateTests` 检查 `view_actions` 快照和 `assistant_view_action` 的 revision 顺序、已选内容不能被替换、View 更新不清除已答、旧格式和其他事件的 action 字段兼容，以及重连后恢复发送状态。
 当前没有接统一组件时只显示 fallback；这组通过不代表交互动作、HTML 或完整共享组件已验收。
 
 ### 助手的 HTML 卡片（`HTMLCardTests`、`AssistantHTMLCardTests`，#2025）

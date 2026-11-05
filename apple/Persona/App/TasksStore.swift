@@ -78,6 +78,7 @@ final class TasksStore {
             guard let res = try? await api.feed(conversation: conversation, since: since),
                   !Task.isCancelled, generation == ticket else { return }
             viewStore.receive(res.views ?? [:], conversation: conversation, group: api.group)
+            viewStore.receiveActions(res.viewActions ?? [:], conversation: conversation, group: api.group)
             let items = res.items.filter { $0.conversation == conversation }
             for item in items { viewStore.receive(item, group: api.group) }
             for (id, plan) in res.plans ?? [:] where plan.conversation == conversation && plans[id] != plan { plans[id] = plan }

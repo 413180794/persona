@@ -14,6 +14,12 @@ final class AssistantViewsStore {
     static let shared = AssistantViewsStore()
 
     private(set) var snapshots: [AssistantViewScope: [String: ExtensionAssistantView]] = [:]
+    /// Reply records survive a card update. Keys are opaque: neither slashes nor prefixes are interpreted here.
+    private(set) var actions: [AssistantViewScope: [String: ExtensionViewAction]] = [:]
+
+    func action(_ key: String, conversation: String, group: String) -> ExtensionViewAction? {
+        actions[AssistantViewScope(group: group, conversation: conversation)]?[key]
+    }
 
     func view(_ id: String, conversation: String, group: String) -> ExtensionAssistantView? {
         snapshots[AssistantViewScope(group: group, conversation: conversation)]?[id]
@@ -40,5 +46,26 @@ final class AssistantViewsStore {
         receive(view, conversation: item.conversation, group: group)
     }
 
-    func forget() { snapshots = [:] }
+    /// Pending/sent/failed are ordered by the server revision, not by arrival time or by a status ranking.
+    /// A legacy record without a revision may establish a lock, but cannot overwrite an already cached record.
+    @discardableResult
+    func receive(_ action: ExtensionViewAction, conversation: String, group: String) -> Bool {
+        guard !conversation.isEmpty, !action.key.isEmpty, !action.action.isEmpty,
+              !action.clientMsgId.isEmpty, !action.status.isEmpty,
+              action.revision.map({ $0 > 0 }) ?? true else { return false }
+        let scope = AssistantViewScope(group: group, conversation: conversation)
+        if let current = actions[scope]?[action.key] {
+            guard current.clientMsgId == action.clientMsgId, current.action == action.action,
+                  (current.page ?? "") == (action.page ?? ""), (current.values ?? [:]) == (action.values ?? [:]),
+                  (current.revision ?? 0) < (action.revision ?? 0) else { return false }
+        }
+        actions[scope, default: [:]][action.key] = action
+        return true
+    }
+
+    func receiveActions(_ records: [String: ExtensionViewAction], conversation: String, group: String) {
+        for (key, record) in records where key == record.key { receive(record, conversation: conversation, group: group) }
+    }
+
+    func forget() { snapshots = [:]; actions = [:] }
 }
