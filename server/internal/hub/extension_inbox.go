@@ -13,7 +13,7 @@ import (
 
 // The inbox's common rules for plugins (#1730, docs/extensions.md「收件箱的通用规则」). A plugin connector with an inbox and
 // no fallback of its own (capability fallback) leaves sorting to the hub's model (inbox.triage, 信息筛选): its new
-// items without a tier are not let in while the model cannot sort them (inbox_admit.go). So such a plugin is not
+// items without a tier are not let in while the model cannot sort them (the manager's inbox_admit.go). So such a plugin is not
 // switched on while that model cannot be called, and the model is not cleared while one is on. A hub.json plugin
 // cannot be switched: it runs, but its inbox is not collected until the model is there.
 

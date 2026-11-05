@@ -1,75 +1,72 @@
-package hub
+package assistant
 
 import (
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/assistant"
-	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
+// The message cards of the AI 分身's drafts about a task (docs/unified-entry.md「消息卡关联任务」): the card is in the
+// task's conversation, and its 发送 is the inbox's reply, once per card.
+
 // cardHub has a task in conv1 and an inbox item about it (a GitHub-like review thread) whose agent is drafting.
-func cardHub(t *testing.T) (*Hub, *replierConnector, *InboxItem) {
+func cardHub(t *testing.T) (*inboxHub, *replierConnector, *InboxItem) {
 	t.Helper()
-	h := agentHub(t)
-	h.connectors = connector.NewRegistry(nil)
-	h.registerConnectors()
+	s, f := newTaskService(t)
+	in := newFakeInbox()
+	f.inbox, in.svc = in, s
+	h := &inboxHub{Service: s, f: f, in: in}
+	h.inboxReady(context.Background())
 	rc := &replierConnector{}
-	if err := h.addConnector(rc); err != nil {
-		t.Fatal(err)
-	}
-	connectAssistant(t, h) // the cards are the assistant's, in conv1's feed
-	todo := taskIn(t, h, "conv1")
+	h.addConnector(rc, false)
+	todo := startedTask(t, s, f)
 	it := &InboxItem{ID: "example:1", Source: "example", Last: "m1", UpdatedAt: time.Now(),
 		Connector: &InboxConnector{Thread: "example-org/example-repo#12", CanReply: true},
 		Agent:     &InboxAgent{State: AgentRunning, SessionID: "s1", TodoID: todo.ID}}
+	h.inbox.mu.Lock()
 	h.inbox.items[it.ID] = it
+	h.inbox.mu.Unlock()
 	return h, rc, it
 }
 
 // cards are the message cards of conv1's feed after since, as the app reads it (not its task's plan and card).
-func cards(t *testing.T, h *Hub, since time.Time) []assistant.FeedItem {
+func cards(t *testing.T, h *inboxHub, since time.Time) []FeedItem {
 	t.Helper()
 	path := "/api/v1/assistant/conversations/conv1/feed"
 	if !since.IsZero() {
 		path += "?since=" + url.QueryEscape(since.Format(time.RFC3339Nano))
 	}
-	var got struct{ Items []assistant.FeedItem }
-	if code := assistantGet(h, path, &got); code != http.StatusOK {
+	code, out := inboxCall(t, h.Service, "GET", path, "")
+	if code != http.StatusOK {
 		t.Fatalf("feed: %d", code)
 	}
-	var out []assistant.FeedItem
-	for _, it := range got.Items {
-		if it.Kind == "message" {
-			out = append(out, it)
+	raw, _ := json.Marshal(out["items"])
+	var items []FeedItem
+	_ = json.Unmarshal(raw, &items)
+	var cards []FeedItem
+	for _, it := range items {
+		if it.Kind == feedMessage {
+			cards = append(cards, it)
 		}
 	}
-	return out
+	return cards
 }
 
-func cardBody(t *testing.T, it assistant.FeedItem) assistantwire.MessageCard {
+func cardBody(t *testing.T, it FeedItem) MessageCard {
 	t.Helper()
-	var b assistantwire.MessageCard
+	var b MessageCard
 	if err := json.Unmarshal(it.Body, &b); err != nil {
 		t.Fatal(err)
 	}
 	return b
-}
-
-// cardSentAt is when a message card's reply went out; nil while it has not.
-func cardSentAt(it assistant.FeedItem) *time.Time {
-	var b struct {
-		SentAt *time.Time `json:"sent_at"`
-	}
-	_ = json.Unmarshal(it.Body, &b)
-	return b.SentAt
 }
 
 // 发送 on a card: the reply goes out once, the card says so for good — on a reload, after the item opens again and
@@ -85,12 +82,9 @@ func TestMessageCardStaysSent(t *testing.T) {
 	card := list[0]
 	loaded := card.At
 
-	app := &client{out: make(chan []byte, 64)}
-	h.mu.Lock()
-	h.clients[app] = struct{}{}
-	h.mu.Unlock()
+	eventsBefore := len(strings.Fields(h.f.eventTypes()))
 	body, _ := json.Marshal(map[string]string{"text": "确实是 bug，谢谢指出（改过）", "card": card.ID})
-	if code, out := call(t, mux, "POST", "/api/v1/inbox/example:1/reply", h.cfg.Token, string(body)); code != 200 || out["done_by"] != "replied" {
+	if code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/example:1/reply", string(body)); code != 200 || out["done_by"] != "replied" {
 		t.Fatalf("reply: %d %v", code, out)
 	}
 	if len(rc.got) != 1 || rc.got[0].Text != "确实是 bug，谢谢指出（改过）" {
@@ -98,12 +92,7 @@ func TestMessageCardStaysSent(t *testing.T) {
 	}
 	// The clients hear the card changed; a reload draws it sent, with what went out; so does a client that has it
 	// already and asks for what came since.
-	heard := false
-	for len(app.out) > 0 {
-		ev := string(<-app.out)
-		heard = heard || strings.Contains(ev, `"assistant_feed"`) && strings.Contains(ev, card.ID) && strings.Contains(ev, "sent_at")
-	}
-	if !heard {
+	if !slices.Contains(strings.Fields(h.f.eventTypes())[eventsBefore:], "assistant_feed") {
 		t.Fatal("the clients were not told the card was sent")
 	}
 	for _, since := range []time.Time{{}, loaded} {
@@ -114,11 +103,11 @@ func TestMessageCardStaysSent(t *testing.T) {
 	}
 
 	// Tapped again, from another device or after a reload with the old page: nothing more goes out.
-	if code, _ := call(t, mux, "POST", "/api/v1/inbox/example:1/reply", h.cfg.Token, string(body)); code != 200 || len(rc.got) != 1 {
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/example:1/reply", string(body)); code != 200 || len(rc.got) != 1 {
 		t.Fatalf("sent again: %d %+v", code, rc.got)
 	}
 	other, _ := json.Marshal(map[string]string{"text": "再说一遍", "card": card.ID})
-	if code, _ := call(t, mux, "POST", "/api/v1/inbox/example:1/reply", h.cfg.Token, string(other)); code != 200 || len(rc.got) != 1 {
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/example:1/reply", string(other)); code != 200 || len(rc.got) != 1 {
 		t.Fatalf("sent again with other text: %d %+v", code, rc.got)
 	}
 
@@ -154,7 +143,7 @@ func TestMessageCardSendsOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			codes[i], _ = call(t, mux, "POST", "/api/v1/inbox/example:1/reply", h.cfg.Token, string(body))
+			codes[i], _ = inboxCall(t, mux, "POST", "/api/v1/inbox/example:1/reply", string(body))
 		}()
 	}
 	wg.Wait()
@@ -207,10 +196,8 @@ func TestMessageCardSentBeforeTheRecord(t *testing.T) {
 // rule, assistant.TestInboxDraftRules), and nothing changes on the item.
 func TestInboxDraftRefusesPlaceholders(t *testing.T) {
 	h, _, it := cardHub(t)
-	r := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: "inbox_draft", Arguments: json.RawMessage(`{"text":"修好了，【预计今晚 / 几点前】合进去"}`),
-		SessionID: "s1"})
-	if !r.IsError || !strings.Contains(textOf(r), "fill in") {
-		t.Fatalf("a draft with a blank: %s", textOf(r))
+	if _, err := runTool(h.Service, "s1", "inbox_draft", map[string]any{"text": "修好了，【预计今晚 / 几点前】合进去"}); err == nil || !strings.Contains(err.Error(), "fill in") {
+		t.Fatalf("a draft with a blank: %v", err)
 	}
 	if it.Agent.State != AgentRunning || it.Agent.Draft != "" || len(cards(t, h, time.Time{})) != 0 {
 		t.Fatalf("a draft with a blank was taken: %+v", it.Agent)
@@ -218,12 +205,29 @@ func TestInboxDraftRefusesPlaceholders(t *testing.T) {
 	draft(t, h, "修好了，合进去了")
 }
 
-// draft is the AI 分身 in conversation s1 handing in its draft (inbox_draft, through the assistant).
-func draft(t *testing.T, h *Hub, text string) {
+// draft is the AI 分身 in conversation s1 handing in its draft (inbox_draft).
+func draft(t *testing.T, h *inboxHub, text string) {
 	t.Helper()
-	args, _ := json.Marshal(map[string]string{"text": text})
-	r := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: "inbox_draft", Arguments: args, SessionID: "s1"})
-	if r.IsError {
-		t.Fatalf("inbox_draft: %s", textOf(r))
+	if _, err := runTool(h.Service, "s1", "inbox_draft", map[string]any{"text": text}); err != nil {
+		t.Fatalf("inbox_draft: %v", err)
 	}
+}
+
+// replierConnector records the replies it gets.
+type replierConnector struct {
+	mu  sync.Mutex
+	got []connector.InboxReply
+}
+
+func (*replierConnector) ID() string                                              { return "example" }
+func (*replierConnector) Name() string                                            { return "Example" }
+func (*replierConnector) Collect(context.Context) ([]connector.InboxThing, error) { return nil, nil }
+func (*replierConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox}}
+}
+func (c *replierConnector) Reply(_ context.Context, r connector.InboxReply) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.got = append(c.got, r)
+	return nil
 }

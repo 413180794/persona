@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
@@ -20,7 +21,7 @@ func TestApplyFindsThreads(t *testing.T) {
 	}
 
 	t.Run("connector", func(t *testing.T) {
-		b := &inbox{}
+		b := &inboxBook{}
 		b.init()
 		b.items["other"] = &InboxItem{ID: "other", Source: "other", UpdatedAt: now, Last: "m0",
 			Connector: &InboxConnector{Thread: "t1"}}
@@ -44,7 +45,7 @@ func TestApplyFindsThreads(t *testing.T) {
 	})
 
 	t.Run("feishu", func(t *testing.T) {
-		b := &inbox{}
+		b := &inboxBook{}
 		b.init()
 		done := now.Add(-time.Minute)
 		b.items["a1"] = &InboxItem{ID: "a1", Source: "lark", UpdatedAt: now, Last: "m1",
@@ -75,8 +76,39 @@ func TestApplyFindsThreads(t *testing.T) {
 		}
 	})
 
+	t.Run("mail", func(t *testing.T) { // the applyMail side (the hub's test had none): one account's threads only
+		b := &inboxBook{}
+		b.init()
+		other := &InboxItem{ID: "mail:a2:x", Source: "mail", Kind: KindMail, UpdatedAt: now, Last: "1",
+			Mail: &InboxMail{AccountID: "a2", Mailbox: "INBOX", Thread: mailThread("周报"), UIDs: []uint32{1}}}
+		b.items[other.ID] = other
+		at := now.UTC().Format(time.RFC3339)
+		b.applyMail(assistantwire.InboxMailAccount{ID: "a1", Email: "me@example.com"}, []assistantwire.InboxMailSummary{
+			{Mailbox: "INBOX", UID: 3, Subject: "周报", Date: at},
+			{Mailbox: "INBOX", UID: 5, Subject: "Re: 周报", Date: at},
+		}, now)
+		var a1 []*InboxItem
+		for _, it := range b.items {
+			if it.Mail != nil && it.Mail.AccountID == "a1" {
+				a1 = append(a1, it)
+			}
+		}
+		if len(a1) != 1 || a1[0].Last != "5" || len(a1[0].Mail.UIDs) != 2 || other.Last != "1" || len(b.items) != 2 {
+			t.Fatalf("a1's items %+v, the other account's at %q, %d items", a1, other.Last, len(b.items))
+		}
+		// The next listing has one more: the open item gathers it.
+		b.applyMail(assistantwire.InboxMailAccount{ID: "a1", Email: "me@example.com"}, []assistantwire.InboxMailSummary{
+			{Mailbox: "INBOX", UID: 3, Subject: "周报", Date: at},
+			{Mailbox: "INBOX", UID: 5, Subject: "Re: 周报", Date: at},
+			{Mailbox: "INBOX", UID: 7, Subject: "Re: 周报", Date: at},
+		}, now)
+		if len(b.items) != 2 || a1[0].Last != "7" {
+			t.Fatalf("%d items, a1's at %q", len(b.items), a1[0].Last)
+		}
+	})
+
 	t.Run("moved blocks", func(t *testing.T) {
-		b := &inbox{}
+		b := &inboxBook{}
 		b.init()
 		b.items["x"] = &InboxItem{ID: "x", Source: "lark", UpdatedAt: now, Last: "m1",
 			Lark: &InboxLark{AccountID: 1, FeedID: "old"}}

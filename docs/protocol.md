@@ -559,7 +559,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| 无, points: [MetricPoint]}], "step": 60}`：App「机器」页每张卡片上的现在值和走势，按配置顺序的每台机器，`points` 是最近 1 小时、每分钟一个点；`latest` 只在 30 秒内收到过样本时有（`docs/machines.md`） |
 | GET | `/api/v1/machines/{id}/metrics?range=1h\|6h\|24h` | `{"metrics": {同上一台}, "range", "step"}`：机器详情的曲线，步长 10 / 60 / 240 秒（约 360 个点）；没有这台机器 404，range 不对 400 |
 | GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, machines:[{id, tpm, tokens, load}]}}`：所有机器的 token 用量（今天按手机时区算，`load` 是 1 分钟负载 / 核数），见 `docs/live-activity.md`「用量」 |
-| GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，另有 `translate`（设置 › 翻译：`{enabled,target,mail}`，hub 据此提前翻译新邮件）、`live_activity`（默认 true）、`lock_details`（锁屏显示详情，默认 false）、`island`（灵动岛两侧：`{"preset":"a|b|c|custom","left","right","machine"}`，默认 `a`）、`mute_while_desktop`（手机静音，默认 false：有桌面端连着时不给这台设备推「需要你处理」「Agent 做完」；助手按你的要求发的提醒照推）；`look`（这台手机的实时活动画哪个形象：`{"design","light","dark","package"?}`，App 换形象时单独 PUT，hub 原样放进这台设备推送的 content-state，见 `docs/live-activity.md`「形象」；design 超过 32 字节或 package 超过 160 字节的不存）；PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
+| GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，另有 `translate`（设置 › 翻译：`{enabled,target,mail}`，收件箱（助手）据此提前翻译新邮件）、`live_activity`（默认 true）、`lock_details`（锁屏显示详情，默认 false）、`island`（灵动岛两侧：`{"preset":"a|b|c|custom","left","right","machine"}`，默认 `a`）、`mute_while_desktop`（手机静音，默认 false：有桌面端连着时不给这台设备推「需要你处理」「Agent 做完」；助手按你的要求发的提醒照推）；`look`（这台手机的实时活动画哪个形象：`{"design","light","dark","package"?}`，App 换形象时单独 PUT，hub 原样放进这台设备推送的 content-state，见 `docs/live-activity.md`「形象」；design 超过 32 字节或 package 超过 160 字节的不存）；PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
 | PUT | `/api/v1/devices/{id}/widgets` | 这台设备屏幕上有哪些扩展的小组件 `{"widgets":[{extension,id,family}]}`（整份替换，最多 64 个）：扩展发 `ui.invalidate` 时 hub 给有这个小组件的设备发后台推送 `extension_widget`（每台每个 15 分钟最多一条），见 `docs/extensions.md`「系统级位置」 |
 | POST | `/api/v1/notify` | 给各台设备发一条提醒（给扩展用，见 `docs/extensions.md`「发通知」）：`{"title","body","machine_id"?,"session_id"?,"level"?:"active\|time-sensitive","id"?,"actions"?,"ui"?,"state"?}`，标题和正文至少一个（标题最多 120 字、正文 1000 字），`machine_id` 和 `session_id` 要么都给要么都不给，`level` 默认 `active`，同一个 `id` 在手机上替换上一条（apns-collapse-id，最长 64 字节）。扩展凭据可带最多 3 个 `actions`、`ui` 与 `state`（通知按钮规格见 `docs/extensions.md`「通知按钮」）。带会话时点开进那个会话；会话被屏蔽回 `{"sent":false,"reason":"muted"}`，不发。按设备的 `input` 开关（关掉「需要你」就不收），也照「手机静音」和桌面端在线的规则；常驻连接里是 `notify` 事件，`kind` 为 `alert`（没有会话时 `machine_id`、`session_id` 是空字符串）；推送的 collapse id 是 `notify:<id>`，不会和 hub 自己的推送撞。payload 编码后超过 3500 字节、`machine_id` / `session_id` 超过 128 字节回 400。完整权限的凭据与具有 `notify` 范围的扩展凭据可调用，非扩展凭据带 `actions`/`ui`/`state` 回 400。回 `{"sent":true}` 只表示交给了推送，不保证送到 |
 | GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，hub 机器 `~/.persona/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。没有目录时是空列表 |
@@ -1201,7 +1201,8 @@ hub 在内存里记着每个身份当前的连接（握手成功的那一条）�
 hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assistant_link.go`）用 hub 自己的函数回答助手的调用，同一个文件里用 `handleBusCall` 登记的处理函数只做编解码
 （参数解成那个方法自己的类型，解不了回 `invalid_params`），不另写一份逻辑。hub 不跑助手的代码（`go list -deps ./internal/hub` 里没有 `internal/assistant`），
 两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`），以及写字用的几个小函数（`server/internal/textfmt`）。方法和参数的意思见 `docs/assistant.md`「和 hub 的边界」；
-`app.call` 的交互队列、收件箱的方法（`interactions.answer`、`inbox.draft`…）只收发数据，用它们的工具（`interaction_answer`、`inbox_draft`）的规则和文字在助手。
+`app.call` 的交互队列的方法（`interactions.answer`…）只收发数据，用它们的工具（`interaction_answer`）的规则和文字在助手。
+收件箱是助手的（2026-11-04，`docs/inbox.md`「谁管什么」），hub 只管它的来源，消息的形状在 `assistantwire/inbox.go`。
 知识库 2026-11-04 起是助手的（`docs/knowledge.md`「谁管什么」）：hub 只给来源（`app.call connectors.*`），它自己的功能要读知识库时问助手（`kb.*`）。
 扩展也可经自己的 RPC 调用六个公开知识库方法（#1908）：hub 先检查实际获准的 `kb.read` / `kb.write`，再代问助手，
 并不是恢复助手旧的 `app.call kb.*` 工具链。字段、分页和权限见 [扩展文档](extensions.md#知识库-rpc1908)。
@@ -1215,19 +1216,24 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   同一天知识库挪进助手（`assistantwire/kb.go`）：去掉 `app.call` 的 `kb.status`、`kb.prompt`、`kb.dirs`、`kb.search`、`kb.list`、`kb.get`、`kb.update`；加上知识库的来源
   `connectors.archives {}` → `{archives:[{id,poll_ms?,sources?,media?}],items:[id]}`、`connectors.changes {id,cursor,limit}` → `{batches,next,more?}`、
   `connectors.archive_media {id,ref}` → `{media:{mime,data}}`、`connectors.items {id}` → `{items}`、`connectors.doc_title {id,url}` → `{title}`；`models.json` 多一个可选的 `max_tokens`。
+  同一天收件箱挪进助手：去掉 `app.call` 的 `inbox.replied`、`inbox.draft`；加上收件箱的来源 `inbox.collect {round}`（hub 马上读一轮、交过来再回答：下拉刷新）、`inbox.kick`、`inbox.config`（多了 `extensions`：插件提供的连接器）、
+  `inbox.translate_fingerprint {}` → `{fingerprint}`、`inbox.mail_body {account_id,uid,mailbox,readable?}`、`inbox.reply_mail {account_id,uid,mailbox,text,send_id}` → `{already?}`、`inbox.reply {source,reply,send_id}` → `{already?}`
+  （同一个 `send_id` hub 只发一次，留一天：再问回 `already`，上次发到一半断了的回 `assistant_in_doubt`、不再发）、`inbox.settle`、`inbox.group_tool`、`inbox.group_fallback`、`inbox.group_append {source,append,append_id}`（同一个 `append_id` 再问用插件上次的回答）；
+  单向事件 `inbox.changed {items:[{id,source,kind,title}]}`（hub 在读循环外给插件发 `inbox.changed`、给 App 推 `{"type":"inbox"}`）；快照的 `inbox: {agents:[{machine_id,session_id}]}`（AI 分身的对话：跑完不推「完成」，`null` 时 hub 留着上一份）。
   快照的 `todos` 是待办的报告（`assistantwire.TodoReport`，待办归助手，`docs/todos.md`「谁管什么」）：`{links:[{machine_id,session_id,todo_id,title,task?}],quiet:[{machine_id,session_id}]}`，
   `links` 是未完成的待办上活跃的 Agent（`task`：从对话派出去的任务），`quiet` 是安静的任务的 Agent（未完成或完成不到 7 天的）；hub 照它给会话填 `todo`、`quiet`，给卡片填 `task_title`，挡住安静的推送，哪台机器的这几样变了就推那台的会话列表；`null`（读不出来）时留着上一份。
-  hub 的错误带码回去，助手按码认回原来的错误：`no_device`（没有这台机器）、`machine_offline`、`node_closed`（node 的连接断了）、`stale_snapshot`、`model_paused`；node 自己回的 `rpc.Error` 原样。
+  hub 的错误带码回去，助手按码认回原来的错误：`no_device`（没有这台机器）、`machine_offline`、`node_closed`（node 的连接断了）、`stale_snapshot`、`model_paused`（`data` 是暂停的 `{reason, until}`：额度用完 `quota` 还是并发满 `busy`）、`model_unconfigured`（这个用途没配模型）、`assistant_in_doubt`（收件箱的回复上次发到一半断了，可能已经发出去）；node 自己回的 `rpc.Error` 原样。
 - hub → 助手，调用：`http.request`（下面的转发）、`manager.action`（App 回答了它的提问）、`assistant.tools {}` → `{tools:[…]}`（hub 在它每次连上时要一次、记着，断开后也留着）、
-  `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`、`assistant.context {session_id}` → `{text,…}`（node 每条消息前要）、`assistant.tasks {}` → `{tasks:[…]}`、
-  `assistant.card_sent {card_id,item_id}` → `{sent}`（收件箱从消息卡片「发送」前问：发过的不再发）、`assistant.cards_sent {item_id,at,text?}` → `{}`（这个条目的回复发出去了，它的卡片记下、告诉 App）、
+  `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`、`assistant.context {session_id}` → `{text,…}`（node 每条消息前要）、
   `assistant.todo_handoff {todo_id,text?}` → `{found,title?,done_at?,text?}`（`POST /api/v1/sessions`、`…/messages` 带 `todo_id`：待办在不在、完成没有，`text` 前面拼上生效的决策）、`assistant.todo_link {todo_id,machine_id,session_id,title?,cwd?,agent?}` → `{}`（交出去以后挂上；待办没了、完成了回错误）。
-  `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}`（收件箱的 AI 分身开对话；飞书机器人和渠道 2026-11-04 起由助手自己开）、
+  `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}`（hub 的功能开对话；收件箱的 AI 分身、飞书机器人和渠道 2026-11-04 起都由助手自己开，hub 现在不用它）、
   `assistant.send_params {machine_id,session_id,params}` → `{params}`（发给它某段对话的消息跑在哪个启动器和模型上、新主对话第一条前面带的背景）、
   `assistant.rename {machine_id,session_id,params}` → node 的回答（App 给它的对话改名）；这几个请求本身不对时回 `bad_request`，hub 回 App 400。
   知识库（2026-11-04）：`kb.context {chat_id}` → `{context}`（收件箱 AI 分身）、`kb.projects {machine_id,cwd}` → `{projects:[{slug,name}]}`（分诊）、`kb.forget {source}` → `{chats,people}`（删除来源的数据）、
   插件程序交来的帖子 `kb.posts_put {connector,sources,posts}` → `{statuses}`、`kb.posts_comments {connector,id,count,comments}` → `{}`、`kb.posts_pending {connector,limit}` → `{posts}`、`kb.archived_chats {connector,sources,source}` → `{chats}`。
-- hub → 助手，单向事件（`conversation.started`、`conversation.renamed` 2026-11-04 去掉：开对话、改名都是助手自己做的）：`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed {machine_id, sessions, connected}`（node 报的那份会话列表，带 `spawn_from`：待办的随项目自动挂、派生跟随、herdr 标记都从它来；`connected` 是 node 这条连接开始的时间，变了说明 node 重连过，助手把 herdr 标记全发一次）、`interaction.resolved`（也用来记待办的决策）、`interaction.raised`（安静的任务的 Agent 在问，#1731）、`inbox.message`、`todos.space_renamed {machine_id,old,new}`（经 hub 改了工作区的名字）、
+  收件箱的：`inbox.collected {epoch,seq,round,sources,mail?,names}` → `{}`（hub 读完一轮来源交过来，助手合成条目后回答；同一个 `epoch` 里 `seq` 不比用过的大的丢掉；读不出存着的收件箱时回 `inbox_unavailable`，hub 留着下一轮再交）、
+  `inbox.item {id}` → `{item,ok}`、`inbox.forget {source}` → `{deleted}`、`inbox.repo_mutes {source,set?,add?,repos?}` → `{repos}`（2026-11-04 去掉 `assistant.tasks`、`assistant.card_sent`、`assistant.cards_sent`：都在助手里了）。
+- hub → 助手，单向事件（`conversation.started`、`conversation.renamed` 2026-11-04 去掉：开对话、改名都是助手自己做的）：`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed {machine_id, sessions, connected}`（node 报的那份会话列表，带 `spawn_from`：待办的随项目自动挂、派生跟随、herdr 标记都从它来；`connected` 是 node 这条连接开始的时间，变了说明 node 重连过，助手把 herdr 标记全发一次）、`interaction.resolved`（也用来记待办的决策）、`interaction.raised`（安静的任务的 Agent 在问，#1731）、`todos.space_renamed {machine_id,old,new}`（经 hub 改了工作区的名字）、
   `manager.updated`（上面的握手）、`manager.resync {}`（hub 还没有它的快照或只有不完整的一份，要它报整份：最多 5 秒一次）、
   `kb.kick {}`（知识库的来源有新东西）、`kb.agent_turn {machine_id,session_id,cwd,title?,line}`（一个 Agent 一轮做完，进它目录所属项目的时间线）。助手按到达的顺序一条一条处理，`session.turn_ended` 另起（要问模型、等任务的 Agent 停下）。
 - **Agents**（2026-11-04 从 hub 挪进管理者，`docs/agent-work.md`「谁管什么」，类型在 `assistantwire/agents.go`）：
@@ -1245,11 +1251,14 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   给它的事件不发（它连上后报整份快照，要的东西现问），只有 `kb.agent_turn` hub 排着（每个 Agent 最新的一条），连上就发。hub 留着它最后报的快照，会话列表照常显示标题和归档。
   知识库的 `kb.*` 调用同样回 `assistant_offline`：删除来源数据的接口回 503（收件箱的条目照删），收件箱 AI 分身的上下文、分诊的项目名就不带；
   插件交帖子的调用先等助手最多 30 秒。助手连着、知识库还没打开时（时区读不出、数据目录在别的进程手里）回 `kb_unavailable`，hub 同样当 503。
+  收件箱的来源 hub 照常读，读到的攒着（合并、有上限）等助手连上一起交；收件箱回复在路上断了（连接断了、超时）回 `502 {"code":"assistant_in_doubt","delivered":"unknown","retryable":false}`：可能已经发出去，再发同一条不会发两次（上面的 `send_id`）。
+  助手连着、收件箱读不出存着的东西（数据库没答）时，收件箱的接口回 `503 inbox_unavailable`，在读出来之前它什么都不收、不写。
 
 **转发 App 的请求**：App 打到助手接口的请求（鉴权之后）由 hub 作为 `http.request` 交给助手，它的回答原样写回。助手接口是 `assistantwire.Routes`（助手那边有一个测试保证它服务的正是这些）：
 `POST /api/v1/assistant/conversations/{id}/archive`、`…/unarchive`、`…/route`、`…/today`、`…/compact`，`GET …/{id}/feed`，`/api/v1/assistant/tasks…`、`/api/v1/assistant/runs`、`/api/v1/assistant/routines…`、
 `/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`/api/v1/todos…`（待办的全部接口，含 `done-check`、`retry`、决策），`GET/PUT /api/v1/agents/triage`、`GET /api/v1/agents/work/stats`、`POST /api/v1/tabs/autoname`（2026-11-04，Agents），以及（2026-11-04 起）`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/warm`、
-`GET /api/v1/assistant/memory`、`PUT/DELETE /api/v1/assistant/memory/{name}`、`POST /api/v1/assistant/conversations`、`POST /api/v1/assistant/main/new`，以及知识库的全部接口（2026-11-04 起，下面「知识库 API」）。`/api/v1/skills` 还是 hub 自己的。
+`GET /api/v1/assistant/memory`、`PUT/DELETE /api/v1/assistant/memory/{name}`、`POST /api/v1/assistant/conversations`、`POST /api/v1/assistant/main/new`，以及知识库的全部接口（2026-11-04 起，下面「知识库 API」），
+以及收件箱和翻译的全部接口（2026-11-04，`assistantwire.InboxRoutes`）：`GET /api/v1/inbox`、`GET /api/v1/inbox/{id}`、`POST /api/v1/inbox/{id}/done`、`…/draft`、`…/reply`（hub 照旧在前面记回执；助手没连着时直接回 503，不记；在路上断了回 `assistant_in_doubt`，也不记，再发能到助手）、`…/doc/status`、`POST /api/v1/inbox/refresh`、`POST /api/v1/inbox/done`、`GET/POST /api/v1/inbox/mutes`、`DELETE /api/v1/inbox/mutes/{id}`、`POST /api/v1/translate`、`POST /api/v1/translate/mail`。`/api/v1/skills` 还是 hub 自己的。
 
 ```jsonc
 // hub → 助手
@@ -1518,7 +1527,7 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 
 ## 收件箱 API
 
-hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server/internal/hub/inbox.go`）。
+hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）聚合成「件」（`docs/inbox.md`「谁管什么」：条目在 `server/internal/assistant/inbox.go`，来源在 `server/internal/hub/inbox.go`），这些接口经 hub 转给它，管理者没连着时回 `503 assistant_offline`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -1530,11 +1539,11 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 | POST | `/api/v1/inbox/mutes` | `{item_id, tag}` → `{mute, settled}`：静音这件事在 `tag` 下的值（hub 从这件事上读），同一来源里被覆盖的打开条目收掉（`settled` 件），以后的进来就收掉；同一个静音只有一份 |
 | DELETE | `/api/v1/inbox/mutes/{id}` | 取消静音：以后的照常进来，已经收掉的不回来 |
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
-| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。提供 `client_id` 时保存回执，飞书原样透传为上游 `clientId`；不提供时 `clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
+| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}`（发到一半和助手断了：502 `assistant_in_doubt`、`delivered:"unknown"`，可能已经发出去，同一条再发不会发两次）：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。提供 `client_id` 时保存回执，飞书原样透传为上游 `clientId`；不提供时 `clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
 | POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
 | POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表和 `triage`（`?sources=all` 同上）；插件连接器的新条目在后台分拣完才进列表，不等它 |
-| POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`，顺序不变，模型没给的是空串；target 是 BCP 47（zh-Hans、en、ja…，`docs/ios.md`「翻译」） |
-| POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?}`：hub 读这封信自己翻，正文最多 12000 字 |
+| POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`，顺序不变，模型没给的是空串；target 是 BCP 47（zh-Hans、en、ja…，`docs/ios.md`「翻译」）。和收件箱一样是助手的（经 hub 转），用模型配置的「翻译」用途 |
+| POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?, model_fingerprint?}`：助手请 hub 读这封信（只有 HTML 的转成保留段落和链接的文字），自己翻；收件箱已经用同一个模型翻好的直接给；正文最多 12000 字 |
 
 邮件回复可带详情返回的 `expected_uid` 和／或 `expected_version`。版本绑定账号、邮箱、线程中的 UID、消息标识及发件人；目标变化返回 HTTP 409，`code=mail_reply_target_changed`、`delivered=none`、`retryable=false`，此次没有发送。App 保留草稿，加载最新邮件并让用户确认新收件人后，用新的 `client_id` 发起新请求。网络结果不明时沿用原请求、原目标和原 `client_id` 核对回执。省略校验字段时沿用旧行为，现有 iOS 无需修改；持久回执规则不变。
 

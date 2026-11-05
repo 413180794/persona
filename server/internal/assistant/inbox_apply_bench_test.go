@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"encoding/json"
@@ -11,8 +11,8 @@ import (
 
 // benchInbox is a busy week's inbox: n Feishu chat items of two accounts (one in four still open, the rest done
 // within inboxForget) and as many items of a plugin connector.
-func benchInbox(n int, now time.Time) *inbox {
-	b := &inbox{}
+func benchInbox(n int, now time.Time) *inboxBook {
+	b := &inboxBook{}
 	b.init()
 	done := now.Add(-time.Hour)
 	for i := range n {

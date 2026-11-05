@@ -13,6 +13,7 @@ What it answers, by the system prompt (server/internal/prompts/inbox/):
   else fyi. With MOCK_MODEL_GROUP_TOOL=1 it first asks messages_before for the first message (once per batch).
 - triage (triage.md, "替用户分拣"): action when the item has a question mark or 「@我」, else fyi.
 - the judge (judge.md, "AI 分身的调度员"): never hands over.
+- translation (tools/translate_texts.md, translate_mail.md): each text, the subject and the body with 「【译】」 in front.
 - anything else: "ok".
 
 Control (for a test): POST /_mode {"mode": "ok" | "fail" | "quota" | "bad"} — fail answers HTTP 500, quota a 429
@@ -36,6 +37,8 @@ def kind_of(system):
         return "triage"
     if "AI 分身的调度员" in system:
         return "judge"
+    if "你是翻译" in system:
+        return "translate_mail" if "「主题：…」" in system else "translate_texts"
     return "other"
 
 
@@ -75,6 +78,15 @@ def answer(kind, user, mode):
         return {"tier": tier, "summary": "模拟的摘要", "reason": "模拟"}
     if kind == "judge":
         return {"handle": False, "reason": "模拟", "task": "", "task_id": ""}
+    if kind == "translate_texts":
+        try:
+            texts = json.loads(user).get("texts") or []
+        except ValueError:
+            texts = []
+        return {"texts": ["【译】" + t for t in texts]}
+    if kind == "translate_mail":
+        head, _, body = user.partition("\n\n")
+        return {"subject": "【译】" + head.removeprefix("主题："), "text": "【译】" + body}
     return None
 
 

@@ -12,7 +12,7 @@
 | 只有 done_at 非空才是已处理，read、done_by 或 AI 处理状态都不能替代它。 | InboxModels 的 `isDone`；InboxView 的 `list` | `read_and_agent_do_not_change_tier`、`untriaged_and_done_test_assertions` |
 | 非空分段固定按需要你、知悉即可、已折叠、已处理排列。 | InboxView 的 `list`；InboxModels 的 `Tier.allCases` | `tiers_and_done_sections`、`empty_inbox` |
 | 默认展开 action 和 fyi，折叠后仍保留成员及标题计数。 | InboxView 的 `expanded`、`sectionHeader` | `tiers_and_done_sections`、`expanded_noise_and_done` |
-| hub 输出先按 updated_at 倒序，分拣档位不改变它的排序。 | `server/internal/hub/inbox.go` 的 `Hub.inboxList` | `hub_orders_by_update`、`hub_order_reversed_input`、`hub_order_empty` |
+| hub 输出先按 updated_at 倒序，分拣档位不改变它的排序。 | `server/internal/assistant/inbox.go` 的 `Service.inboxList`（收件箱是管理者的，hub 原样转发） | `hub_orders_by_update`、`hub_order_reversed_input`、`hub_order_empty` |
 | iOS 未处理事项在段内保持输入顺序，不自行重排 updated_at。 | InboxStore 的 `apply`；InboxView 的 `list` | `input_order_is_authoritative` |
 | iOS 已处理事项按 done_at 倒序展示。 | InboxView 的 `shownDone` | `tiers_and_done_sections`、`expanded_noise_and_done` |
 | 来源筛选比较 account，飞书的筛选值为 feishu，邮箱的筛选值为账号 id。 | InboxView 的 `matches`、`filters` | `inbox_filter_feishu`、`inbox_filter_mail_account`、`source_filter_compares_account` |
@@ -77,7 +77,7 @@ Android 的目标断言应读取 expected，以后 iOS 跟进时补上比较键�
 - 交互只建已列字段的投影，使用 AppModel.pendingInteractions 的原比较表达式排序；不运行真实字典枚举或交互标题生成逻辑。
 - 原文沿用 list 的 partition、byTier、doneItems 和 doneAt 比较表达式；按 Tier.allCases 生成段，action 先输出 waitingAgents，再输出事项，最后输出 done 段；expanded 只控制 visible_rows。
 - 解码各 case，结构化比较 expected；若有 ios_expected，则对照该字段，不能用目标排序替换 iOS 比较器后再声称一致。
-- Go 临时 `package hub` 测试读取 hub_order.json，逐用例创建空 Hub 并调用 inbox.init，把 input.items 放入 inbox.items，直接调用 inboxList，将返回 id 数组与 expected.ids 比较；无数据库或网络请求。
+- Go 临时 `package assistant` 测试（收件箱 2026-11-04 起是管理者的）读取 hub_order.json，逐用例创建 Service 并调用 inbox.init，把 input.items 放入 inbox.items，直接调用 inboxList，将返回 id 数组与 expected.ids 比较；无数据库或网络请求。
 
 本次 Swift 客户端对照及 Go overlay 测试全部通过。SwiftUI 屏幕、真实 AppModel 字典同时间枚举次序未测试；排序、匹配和状态方法在 `/tmp` 编译执行，页面条件由数组适配层验证。这一验证层级与真实 App UI 测试分开记录。
 

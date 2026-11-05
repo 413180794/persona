@@ -439,12 +439,13 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   而且只翻别人发的。设置存在本机（`@AppStorage` 的 `translate.*`，`TranslationPrefs`）。
 - 要不要翻在手机上判断（NaturalLanguage 的 `NLLanguageRecognizer`，取前 1500 字；字母少于 6 个不判；简繁中文算同一种语言，短文本里它分不清）。
   结果按文本记在 `Translator` 里，行的 body 里不跑识别。
-- 翻译在 hub（`server/internal/hub/translate.go`），用处理小任务的模型 `inbox.triage_ai`（用户定的：不需要强模型，现在是 gpt-6.1-terra，两句话约 2 秒）。
-  邮件按引用翻（`POST /api/v1/translate/mail {account_id, uid, mailbox, target}`，hub 自己读信，HTML 信用 `mail.ReadableText` 转成保留段落的文本，
+- 翻译在管理者（助手进程，`server/internal/assistant/inbox_translate.go`，2026-11-04 和收件箱一起从 hub 挪过去，接口经 hub 转，助手不在时 503），
+  用模型配置的「文本与邮件翻译」用途（用户定的：不需要强模型，现在是 gpt-6.1-terra，两句话约 2 秒）。
+  邮件按引用翻（`POST /api/v1/translate/mail {account_id, uid, mailbox, target}`，管理者请 hub 读信，HTML 信用 `mail.ReadableText` 转成保留段落的文本，
   正文最多 12000 字，超出的标 `clipped`）；飞书消息批量翻（`POST /api/v1/translate {texts≤30, target}`，App 把 300 ms 内出现的行攒成一批）。
-  hub 在内存里按内容缓存，App 在本次运行里缓存。
+  管理者在内存里按模型和内容缓存（换了模型重新翻），App 在本次运行里缓存。
 - **邮件来了就翻，不等打开**（2026-11-01 用户要求）：App 把 设置 › 翻译 随设备偏好发给 hub（`PUT /api/v1/devices/{id}/prefs {"translate":{enabled,target,mail}}`，
-  连上时和改设置时，`Translator.syncPrefs`）。hub 每次收完邮件，对没处理的邮件里文字和目标语言不是同一种文字的（`inbox_translate.go` 的 `foreignScript`：
+  连上时和改设置时，`Translator.syncPrefs`）。管理者每次收完邮件，对没处理的邮件里文字和目标语言不是同一种文字的（管理者的 `assistant/inbox_translate.go` 的 `foreignScript`：
   按文字体系判断，中文目标时汉字少于两成或有假名算外文；拉丁字母的语言之间分不出，英文目标不翻法文），在后台逐封翻译，存在收件箱条目的
   `translations[目标语言]` 里（库里也有，重启不丢）。列表直接显示译后的标题和摘要（标题旁一个翻译小图标），打开邮件时 `translate/mail` 先取这份，立刻出来。
   只有某台设备打开了「翻译 › 邮件」才翻；关掉后不再翻新的。

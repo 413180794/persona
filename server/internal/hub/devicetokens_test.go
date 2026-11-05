@@ -241,6 +241,7 @@ func TestAnswerRoleAnswersCardsWithoutTyping(t *testing.T) {
 	if code, _ := call(t, mux, "POST", "/api/v1/interactions/ix_x/resolve", phone["token"].(string), `{"text":"t","keys":["ctrl+c"]}`); code != gone {
 		t.Errorf("a full device types: %d", code)
 	}
+	connectAssistant(t, h) // a reply's role check is the inbox's (the manager's), on the role the hub relays
 	if code, _ := call(t, mux, "POST", "/api/v1/inbox/ix_x/reply", watchTok, `{"text":"t","changes":[{"status":"x"}]}`); code != http.StatusForbidden {
 		t.Errorf("an answer-only device moves a document's status: %d", code)
 	}

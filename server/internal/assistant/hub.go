@@ -33,6 +33,8 @@ type Hub interface {
 	Broadcast(ctx context.Context, b Broadcast)
 	// Snapshot is manager.snapshot: what the assistant reports for the apps. The hub caches the latest and shows it.
 	Snapshot(ctx context.Context, s Snapshot) (SnapshotResult, error)
+	// InboxChanged is inbox.changed: inbox items changed (inbox.go); the hub tells the extensions and the apps. One way.
+	InboxChanged(ctx context.Context, c assistantwire.InboxChanged)
 }
 
 // What crosses the bus is assistantwire's; these names keep the package's code as it was.
@@ -58,10 +60,7 @@ type (
 	ActionResult        = assistantwire.ActionResult
 	InteractionResolved = assistantwire.InteractionResolved
 	InteractionRaised   = assistantwire.InteractionRaised
-	InboxMessage        = assistantwire.InboxMessage
 	MessageCard         = assistantwire.MessageCard
-	CardSentParams      = assistantwire.CardSentParams
-	CardsSentParams     = assistantwire.CardsSentParams
 	DeviceSessions      = assistantwire.DeviceSessions
 	HTTPRequest         = assistantwire.HTTPRequest
 	HTTPResponse        = assistantwire.HTTPResponse
@@ -168,7 +167,6 @@ const (
 	ConnectorsSnapshots      = assistantwire.ConnectorsSnapshots
 	AppInbox                 = assistantwire.AppInbox
 	AppInteractions          = assistantwire.AppInteractions
-	InboxReplied             = assistantwire.InboxReplied
 	AppSettings              = assistantwire.AppSettings
 	AppTool                  = assistantwire.AppTool
 	MethodHello              = assistantwire.MethodHello
@@ -182,7 +180,6 @@ const (
 	MethodTool               = assistantwire.MethodTool
 	MethodContext            = assistantwire.MethodContext
 	MethodAction             = assistantwire.MethodAction
-	MethodTasks              = assistantwire.MethodTasks
 	MethodStart              = assistantwire.MethodStart
 	MethodSendParams         = assistantwire.MethodSendParams
 	MethodRename             = assistantwire.MethodRename
@@ -193,7 +190,6 @@ const (
 	EventSessionsChanged     = assistantwire.EventSessionsChanged
 	EventInteractionResolved = assistantwire.EventInteractionResolved
 	EventInteractionRaised   = assistantwire.EventInteractionRaised
-	EventInboxMessage        = assistantwire.EventInboxMessage
 	EventUpdated             = assistantwire.EventUpdated
 	EventResync              = assistantwire.EventResync
 	CodeNoDevice             = assistantwire.CodeNoDevice

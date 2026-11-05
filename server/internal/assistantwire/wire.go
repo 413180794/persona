@@ -126,19 +126,18 @@ const (
 	// AppInteractions is the hub's interaction queue (InteractionsGet, InteractionsAnswer).
 	AppInteractions = "interactions"
 
-	// AppInbox is the hub's inbox (docs/inbox.md); AppSettings is Persona's own settings (jarvis_settings).
+	// AppInbox is the hub's side of the inbox, its sources (inbox.go); AppSettings is Persona's own settings
+	// (jarvis_settings).
 	AppInbox    = "inbox"
 	AppSettings = "settings"
-	// InboxReplied: {ids} → {replied: {id: time}}, when those of the items the user replied to were replied to.
-	InboxReplied = "inbox.replied"
 
 	// AppTool: {name, arguments, machine_id, session_id} → proto.ToolResult, one of the assistant's tools that is the
 	// app's to run (jarvis_settings).
 	AppTool = "app.tool"
 )
 
-// What the interaction queue and the inbox offer the assistant: data in, data out. The tools on them
-// (interaction_answer, inbox_draft) are the assistant's, with their rules and wording.
+// What the interaction queue offers the assistant: data in, data out. The tools on it (interaction_answer) are the
+// assistant's, with their rules and wording.
 const (
 	// InteractionsGet: {interaction_id} → {interaction, ok}, the interaction while it is pending; when it is not (ok
 	// false), status says how it ended (resolved, dismissed, expired, cancelled; "" when there is no such interaction).
@@ -148,12 +147,6 @@ const (
 	// InteractionsGet's) when it is no longer pending. An interaction that is not a question, or not that session's,
 	// is an error.
 	InteractionsAnswer = "interactions.answer"
-
-	// InboxDraft: {session_id, text, note, changes: [{ref, field, value}]} → {item_id, refused?}: the draft (and the
-	// moves of a document's rows it proposes) on the item whose AI 分身 runs in that conversation. item_id is "" when
-	// there is none; refused is the first change the item does not offer (a row it lists, one of the column's values),
-	// and then nothing is kept.
-	InboxDraft = "inbox.draft"
 )
 
 // ModelBinding is what a purpose runs on: a provider (launcher.<name> for a launcher) with a model and effort.
@@ -217,6 +210,8 @@ type Snapshot struct {
 	Work *WorkReport `json:"work"`
 	// Channels is what the hub shows of the channels (ChannelsReport); null while it could not be read.
 	Channels *ChannelsReport `json:"channels"`
+	// Inbox is what the hub shows of the inbox (InboxReport, inbox.go); null while it could not be read.
+	Inbox *InboxReport `json:"inbox,omitempty"`
 }
 
 // TaskView is one scheduled task in the snapshot.
@@ -311,12 +306,6 @@ type InteractionRaised struct {
 	Interaction proto.Interaction `json:"interaction"`
 }
 
-// InboxMessage is inbox.message's params: the inbox item and its card in the task's conversation.
-type InboxMessage struct {
-	ItemID  string      `json:"item_id"`
-	Message MessageCard `json:"message"`
-}
-
 // MessageCard is a message the inbox's AI 分身 drafted a reply to, about one of the user's tasks: what the card in the
 // task's conversation shows until the item is sent or done (the app sends the draft through the inbox, by the item's
 // id).
@@ -329,24 +318,10 @@ type MessageCard struct {
 	Text    string `json:"text"` // the message, clipped
 	Draft   string `json:"draft"`
 	// SentAt: the reply to the item went out (from this card or from the inbox, on any device) and Sent is what it
-	// said; set by the assistant when the hub says so (assistant.cards_sent), never cleared, so the card stays sent
+	// said; set when the inbox sent the reply (the inbox is the assistant's too), never cleared, so the card stays sent
 	// when the item opens again. A card sent before that was recorded has no Sent (the draft is what went out).
 	SentAt *time.Time `json:"sent_at,omitempty"`
 	Sent   string     `json:"sent,omitempty"`
-}
-
-// CardSentParams is assistant.card_sent's params.
-type CardSentParams struct {
-	CardID string `json:"card_id"`
-	ItemID string `json:"item_id"`
-}
-
-// CardsSentParams is assistant.cards_sent's params: the reply to inbox item ItemID went out at At, saying Text ("":
-// not known).
-type CardsSentParams struct {
-	ItemID string    `json:"item_id"`
-	At     time.Time `json:"at"`
-	Text   string    `json:"text,omitempty"`
 }
 
 // APIErrorMarkers start what Claude Code answers when the model call itself failed (an error card in the app). Both
@@ -465,11 +440,6 @@ const (
 	MethodTool    = "assistant.tool"
 	MethodContext = "assistant.context"
 	MethodAction  = "manager.action"
-	MethodTasks   = "assistant.tasks" // {} → {tasks: [prompts.InboxTask]}
-	// MethodCardSent: CardSentParams → {sent}: the message card says its reply went out (发送 on it sends once).
-	MethodCardSent = "assistant.card_sent"
-	// MethodCardsSent: CardsSentParams → {}: the reply to an inbox item went out; its cards are marked sent.
-	MethodCardsSent = "assistant.cards_sent"
 
 	// The hub tells the assistant (one way).
 	EventUserSpoke           = "session.user_spoke"
@@ -478,7 +448,6 @@ const (
 	EventSessionsChanged     = "sessions.changed"
 	EventInteractionResolved = "interaction.resolved"
 	EventInteractionRaised   = "interaction.raised"
-	EventInboxMessage        = "inbox.message"
 	EventUpdated             = "manager.updated" // Hello again: hub.json's assistant section or the machines changed
 	EventResync              = "manager.resync"  // {}: report the whole snapshot again
 )

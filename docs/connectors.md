@@ -87,8 +87,9 @@ hub 收到不认识的档就丢掉、交给模型分拣。
 ### 进收件箱
 
 连接器给 `InboxThing`（一件事：`Thread` 是它的键，`Kind` 是它自己的种类，`Tier` / `Why` 是它的规则定的档，`Done` 是它看到这件事结束了）；
-hub（`hub/inbox_connectors.go` 的 `applyConnector`）把同一个 `Thread` 的后续动作并进一个打开的条目，之后的分拣、AI 分身、处理完、保留多久都是 hub 的，
-所有来源一样。条目用一个通用块（`InboxConnector`），App 不用认识来源就能画。
+hub 每轮把连接器给的候选交给管理者（总线上的 `inbox.collected`，`docs/inbox.md`「谁管什么」），管理者（`assistant/inbox_connectors.go` 的 `applyConnector`）
+把同一个 `Thread` 的后续动作并进一个打开的条目，之后的分拣、AI 分身、处理完、保留多久都是管理者的，所有来源一样；回复、`Settle`、事件合成的工具
+仍由 hub 调连接器（管理者经 `app.call inbox.*` 请它调）。条目用一个通用块（`InboxConnector`），App 不用认识来源就能画。
 
 ### 进知识库
 

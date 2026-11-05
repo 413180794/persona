@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"bytes"
@@ -7,17 +7,20 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// The inbox of a connector a plugin took over from the hub (connectors_migrate.go): its things carry the items' own
-// blocks (connector.ThingExtra), so the items keep the shape the apps know (Feishu's lark / doc / moment block, no
-// generic connector block), and the items the hub made itself before the move go on as the same items: a thread is
-// found by the block (migratedThread), the same key the plugin uses.
+// The inbox of a connector a plugin took over from the hub (the hub's connectors_migrate.go): its things carry the
+// items' own blocks (connector.ThingExtra), so the items keep the shape the apps know (Feishu's lark / doc / moment
+// block, no generic connector block), and the items the hub made itself before the move go on as the same items: a
+// thread is found by the block (migratedThread), the same key the plugin uses.
+
+// migratedConnectorID is the connector a migrated item's reply goes through: the plugin's that took Feishu over
+// (the hub answers that it cannot be replied to while none did).
+const migratedConnectorID = "lark"
 
 // migratedThread is the thread of a Feishu item by its block: "chat:<feed>" ("chat:<account>:<feed>" for an account
 // other than the primary one), "doc:<notice>", "moment:<post>"; "" for anything else.
@@ -37,7 +40,7 @@ func migratedThread(it *InboxItem) string {
 }
 
 // applyMigrated is applyConnector for the things with Extra of a migrated connector, under b.mu.
-func (b *inbox) applyMigrated(id string, things []connector.InboxThing, now time.Time) []*InboxItem {
+func (b *inboxBook) applyMigrated(id string, things []connector.InboxThing, now time.Time) []*InboxItem {
 	var changed []*InboxItem
 	index := b.threads(func(it *InboxItem) (string, bool) {
 		if it.Connector != nil {
@@ -141,28 +144,20 @@ func blocksDiffer(it *InboxItem, x *connector.ThingExtra) bool {
 	return !bytes.Equal(enc(it), enc(&c))
 }
 
-// migratedConnector is the plugin's inbox for a Feishu item, when a plugin took Feishu over (nil otherwise).
-func (h *Hub) migratedConnector(it *InboxItem) connector.Inbox {
-	if it.Connector != nil || migratedThread(it) == "" || !h.larkByExtension() {
-		return nil
-	}
-	in, _ := connector.As[connector.Inbox](h.connectors.Get("lark"))
-	return in
-}
-
 // replyMigrated sends the reply (and a document's status moves) of a Feishu item through the plugin. The client id
 // is the one the hub would have used itself, so a retry across the move is still dropped by lark-connector.
-func (h *Hub) replyMigrated(ctx context.Context, in connector.Inbox, r inboxReplyReq) (bool, error) {
+func (s *Service) replyMigrated(ctx context.Context, r inboxReplyReq) (bool, error) {
 	it := r.item
+	b := &s.inbox
 	clientID := ""
 	if it.Lark != nil {
 		clientID = r.clientID
 		if !validClientID(clientID) {
 			clientID = namedClientID(r.id + "\n" + r.text)
 		}
-		h.inbox.mu.Lock()
+		b.mu.Lock()
 		sent := r.once.repeated(r.live, clientID)
-		h.inbox.mu.Unlock()
+		b.mu.Unlock()
 		if sent {
 			return true, nil
 		}
@@ -174,8 +169,8 @@ func (h *Hub) replyMigrated(ctx context.Context, in connector.Inbox, r inboxRepl
 	if len(changes) > 0 && it.Doc == nil {
 		return false, fmt.Errorf("only document items have a status to change")
 	}
-	if err := in.Reply(ctx, connector.InboxReply{Thread: migratedThread(&it), ItemID: it.ID, Last: it.Last, Text: r.text,
-		ClientID: clientID, Changes: changes}); err != nil {
+	if err := s.connectorReply(ctx, migratedConnectorID, connector.InboxReply{Thread: migratedThread(&it), ItemID: it.ID, Last: it.Last,
+		Text: r.text, ClientID: clientID, Changes: changes}, r.sendID); err != nil {
 		return false, err
 	}
 	if clientID != "" {
@@ -185,21 +180,20 @@ func (h *Hub) replyMigrated(ctx context.Context, in connector.Inbox, r inboxRepl
 }
 
 // migratedDocStatus moves a document row's status through the plugin; the item's rows come back with its next things.
-func (h *Hub) migratedDocStatus(ctx context.Context, in connector.Inbox, it *InboxItem, ch DocChange) (InboxItem, error) {
-	h.inbox.mu.Lock()
+func (s *Service) migratedDocStatus(ctx context.Context, it *InboxItem, ch DocChange) (InboxItem, error) {
+	b := &s.inbox
+	b.mu.Lock()
 	thread, itemID, last := migratedThread(it), it.ID, it.Last
-	h.inbox.mu.Unlock()
-	if err := in.Reply(ctx, connector.InboxReply{Thread: thread, ItemID: itemID, Last: last,
-		Changes: []connector.StatusChange{{Ref: ch.Ref, Field: ch.Field, Value: ch.Value}}}); err != nil {
+	b.mu.Unlock()
+	if err := s.connectorReply(ctx, migratedConnectorID, connector.InboxReply{Thread: thread, ItemID: itemID, Last: last,
+		Changes: []connector.StatusChange{{Ref: ch.Ref, Field: ch.Field, Value: ch.Value}}}, ""); err != nil {
 		return InboxItem{}, err
 	}
-	h.inbox.mu.Lock()
+	b.mu.Lock()
 	out := it.listed()
-	h.inbox.mu.Unlock()
+	b.mu.Unlock()
 	return out, nil
 }
-
-func isMigrated(id string) bool { return slices.Contains(connector.MigratableConnectors, id) }
 
 // The client ids a Feishu reply goes with (the same the plugin, and the hub before it, derive): lark-connector drops a
 // repeat with the same id.
@@ -208,7 +202,7 @@ func isMigrated(id string) bool { return slices.Contains(connector.MigratableCon
 var clientIDNamespace = [16]byte{0xa5, 0x1e, 0x3f, 0x21, 0xe1, 0xd7, 0x4c, 0xcd, 0x89, 0xbf, 0xcb, 0x02, 0x7f, 0x8c, 0xb8, 0xdc}
 
 // namedClientID is a UUIDv5 clientId derived from name: the same name always gives the same id, so the same
-// message sent again (after a timeout, from another device, after a hub restart) posts once.
+// message sent again (after a timeout, from another device, after a restart) posts once.
 func namedClientID(name string) string {
 	h := sha1.New()
 	h.Write(clientIDNamespace[:])
@@ -218,7 +212,6 @@ func namedClientID(name string) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// validClientID reports whether s is a UUID lark-connector accepts as a clientId (version 1-8, RFC variant, any case).
 // validClientID reports whether s is a UUID lark-connector accepts as a clientId (version 1-8, RFC variant, any case).
 func validClientID(s string) bool {
 	if len(s) != 36 {

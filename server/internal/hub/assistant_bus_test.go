@@ -163,7 +163,7 @@ func settleAssistant(h *Hub) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_ = h.callBus(ctx, assistantwire.AssistantID, assistantwire.MethodTasks, nil, nil)
+	_ = h.callBus(ctx, assistantwire.AssistantID, assistantwire.MethodTools, nil, nil)
 	v.(*testAssistant).bh.Settle()
 }
 

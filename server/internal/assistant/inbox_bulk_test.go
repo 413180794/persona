@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -17,7 +17,7 @@ func bulkBody(done bool, targets ...inboxBulkTarget) string {
 	return fmt.Sprintf(`{"done":%t,"items":[%s]}`, done, strings.Join(parts, ","))
 }
 
-func listedVersion(h *Hub, id string) string {
+func listedVersion(h *inboxHub, id string) string {
 	h.inbox.mu.Lock()
 	defer h.inbox.mu.Unlock()
 	return h.inbox.items[id].listed().Version
@@ -48,7 +48,7 @@ func TestInboxBulkDone(t *testing.T) {
 	earlier := time.Now().Add(-time.Hour)
 	h.inbox.items["d"].done(earlier, "read")
 
-	_, out := call(t, mux, "GET", "/api/v1/inbox", h.cfg.Token, "")
+	_, out := inboxCall(t, mux, "GET", "/api/v1/inbox", "")
 	if !strings.Contains(fmt.Sprint(out["items"]), "version:"+listedVersion(h, "a")) {
 		t.Fatalf("listed items carry no version: %v", out["items"])
 	}
@@ -57,7 +57,7 @@ func TestInboxBulkDone(t *testing.T) {
 
 	body := bulkBody(true, inboxBulkTarget{"a", listedVersion(h, "a")}, inboxBulkTarget{"b", stale},
 		inboxBulkTarget{"d", listedVersion(h, "d")}, inboxBulkTarget{"x", "v"}, inboxBulkTarget{"a", ""})
-	code, out := call(t, mux, "POST", "/api/v1/inbox/done", h.cfg.Token, body)
+	code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/done", body)
 	if code != 200 {
 		t.Fatalf("bulk done: %d %v", code, out)
 	}
@@ -80,13 +80,13 @@ func TestInboxBulkDone(t *testing.T) {
 
 	// The same request again (a retry, another device): nothing moves, a keeps when it was filed.
 	at := *h.inbox.items["a"].DoneAt
-	_, out = call(t, mux, "POST", "/api/v1/inbox/done", h.cfg.Token, body)
+	_, out = inboxCall(t, mux, "POST", "/api/v1/inbox/done", body)
 	if len(out["changed"].([]any)) != 0 || fmt.Sprint(bulkIDs(out["unchanged"].([]any))) != "[a d]" || !h.inbox.items["a"].DoneAt.Equal(at) {
 		t.Fatalf("a repeat changed something: %v", out)
 	}
 
 	// 撤销: what was filed comes back.
-	_, out = call(t, mux, "POST", "/api/v1/inbox/done", h.cfg.Token, bulkBody(false, inboxBulkTarget{"a", ""}))
+	_, out = inboxCall(t, mux, "POST", "/api/v1/inbox/done", bulkBody(false, inboxBulkTarget{"a", ""}))
 	if len(out["changed"].([]any)) != 1 || !h.inbox.items["a"].open() || h.inbox.items["a"].DoneBy != "" {
 		t.Fatalf("undo: %v", out)
 	}
@@ -95,17 +95,17 @@ func TestInboxBulkDone(t *testing.T) {
 func TestInboxBulkDoneBadRequests(t *testing.T) {
 	h := muteHub(t)
 	mux := h.routes()
-	if code, _ := call(t, mux, "POST", "/api/v1/inbox/done", h.cfg.Token, `{"items":[{"id":"a"}]}`); code != 400 {
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/done", `{"items":[{"id":"a"}]}`); code != 400 {
 		t.Fatalf("no done: %d", code)
 	}
 	var many []inboxBulkTarget
 	for i := 0; i <= inboxBulkMax; i++ {
 		many = append(many, inboxBulkTarget{ID: fmt.Sprint(i)})
 	}
-	if code, _ := call(t, mux, "POST", "/api/v1/inbox/done", h.cfg.Token, bulkBody(true, many...)); code != 413 {
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/done", bulkBody(true, many...)); code != 413 {
 		t.Fatalf("too many: %d", code)
 	}
-	if code, out := call(t, mux, "POST", "/api/v1/inbox/done", h.cfg.Token, `{"done":true,"items":[]}`); code != 200 || len(out["changed"].([]any)) != 0 {
+	if code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/done", `{"done":true,"items":[]}`); code != 200 || len(out["changed"].([]any)) != 0 {
 		t.Fatalf("nothing to do: %d %v", code, out)
 	}
 }

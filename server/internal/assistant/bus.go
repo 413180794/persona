@@ -233,7 +233,9 @@ func busError(err error) error {
 	case assistantwire.CodeStaleSnapshot:
 		kind = ErrStaleSnapshot
 	case assistantwire.CodeModelPaused:
-		kind = &ai.PausedError{}
+		p := &ai.PausedError{}
+		_ = json.Unmarshal(re.Data, &p.Pause) // its reason and until, when the hub sent them
+		kind = p
 	default:
 		return err
 	}
@@ -295,22 +297,6 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 			return nil, err
 		}
 		return s.Action(ctx, p)
-	case assistantwire.MethodTasks:
-		return map[string]any{"tasks": s.ActiveTasks(ctx)}, nil
-	case assistantwire.MethodCardSent:
-		var p CardSentParams
-		if err := decode(&p); err != nil {
-			return nil, err
-		}
-		sent, err := s.CardSent(ctx, p)
-		return map[string]any{"sent": sent}, err
-	case assistantwire.MethodCardsSent:
-		var p CardsSentParams
-		if err := decode(&p); err != nil {
-			return nil, err
-		}
-		s.CardsSent(ctx, p)
-		return map[string]any{}, nil
 	case assistantwire.MethodTodoHandoff:
 		var p TodoHandoff
 		if err := decode(&p); err != nil {
@@ -374,6 +360,9 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		return s.FeishuView(ctx), nil
 	}
 	if out, ok, err := s.kbRequest(ctx, method, params); ok { // the knowledge base's (kb_bus.go)
+		return out, err
+	}
+	if out, ok, err := inboxRequest(ctx, s, method, decode); ok { // the inbox's (inbox_bus.go)
 		return out, err
 	}
 	return nil, &rpc.Error{Code: bus.CodeUnknownMethod, Message: "unknown method " + method}
@@ -490,12 +479,6 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		s.InteractionRaised(ctx, p)
-	case assistantwire.EventInboxMessage:
-		var p InboxMessage
-		if err := decode(&p); err != nil {
-			return err
-		}
-		s.InboxMessage(ctx, p)
 	case assistantwire.EventUpdated:
 		var h Hello
 		if err := decode(&h); err != nil {

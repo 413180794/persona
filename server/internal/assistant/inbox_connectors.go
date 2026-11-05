@@ -1,12 +1,9 @@
-package hub
+package assistant
 
 import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
-	"slices"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
@@ -29,106 +26,40 @@ type InboxConnector struct {
 	Tags []connector.Tag `json:"tags,omitempty"`
 }
 
-// collectConnectors applies the things of every signed-in connector with an inbox, unless the user turned its 进收件箱
-// off: then its items stay as they are and nothing new comes.
-func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
-	var changed []*InboxItem
-	for _, c := range h.connectors.All() {
-		in, ok := connector.As[connector.Inbox](c)
-		if !ok {
-			continue
-		}
-		if !h.connectors.Feeds(c.ID(), connector.FeedInbox) ||
-			connector.StatusOf(ctx, c).State != connector.StateOK && connector.StatusOf(ctx, c).State != connector.StateRateLimited ||
-			h.waitsForTriageModel(ctx, c) { // a hub.json plugin's that needs the triage model (plugin_inbox.go)
-			h.inbox.readSource(c.ID(), c.Name()) // nothing of it comes in now: nothing of it waits either
-			continue
-		}
-		things, err := in.Collect(ctx)
-		if err != nil {
-			h.logf("inbox: %s: %v", c.ID(), err)
-			continue
-		}
-		h.inbox.readSource(c.ID(), c.Name())
-		h.vetThings(c, things)
-		// Batches of new messages go to the model, not the list.
-		things = h.relateBatches(ctx, c, things)
-		var own []connector.InboxThing // a migrated connector's things that keep the hub's own item shape
-		if isMigrated(c.ID()) {
-			generic := things[:0:0]
-			for _, t := range things {
-				if t.Extra != nil {
-					own = append(own, t)
-				} else {
-					generic = append(generic, t)
-				}
-			}
-			things = generic
-		}
-		h.inbox.mu.Lock()
-		changed = append(changed, h.inbox.applyConnector(c.ID(), c.Name(), things, time.Now())...)
-		changed = append(changed, h.inbox.applyMigrated(c.ID(), own, time.Now())...)
-		h.inbox.mu.Unlock()
-		if s, ok := connector.As[connector.InboxSettler](c); ok {
-			changed = append(changed, h.settleConnector(ctx, c.ID(), s)...)
-		}
-	}
-	return changed
-}
-
-// thingRulesMost is the most of a thing's rules the model gets (runes; the rest is cut): what the convention's
-// triage_rules setting allows (docs/extensions.md「约定的设置项」).
-const thingRulesMost = 4000
-
-// vetThings holds a connector's things to its manifest: a tier the inbox does not know is dropped (the model
-// decides), a kind it did not declare is logged once (prompts/inbox/kinds/<id>.md may not say what it means); rules
-// are cut to thingRulesMost.
-func (h *Hub) vetThings(c connector.Connector, things []connector.InboxThing) {
-	kinds := c.Manifest().Kinds
-	for i := range things {
-		t := &things[i]
-		t.Rules = clip(strings.TrimSpace(t.Rules), thingRulesMost)
-		if t.Tier != "" && !t.Tier.Known() {
-			h.logf("inbox: %s: unknown tier %q", c.ID(), t.Tier)
-			t.Tier = ""
-		}
-		if t.Kind != "" && !slices.Contains(kinds, t.Kind) {
-			if _, logged := undeclaredKinds.LoadOrStore(c.ID()+"\x00"+t.Kind, true); !logged {
-				h.logf("inbox: %s: kind %q is not in its manifest", c.ID(), t.Kind)
-			}
-		}
-	}
-}
-
-var undeclaredKinds sync.Map
-
 // settleConnector files the connector's open items its rules now leave out (made under older rules, a muted
-// source…) as done, with why; nothing is deleted.
-func (h *Hub) settleConnector(ctx context.Context, id string, s connector.InboxSettler) []*InboxItem {
-	h.inbox.mu.Lock()
+// source…) as done, with why; nothing is deleted. The hub asks the connector (inbox.settle).
+func (s *Service) settleConnector(ctx context.Context, id string) []*InboxItem {
+	b := &s.inbox
+	b.mu.Lock()
 	var threads []string
-	for _, it := range h.inbox.items {
+	for _, it := range b.items {
 		if it.Source == id && it.Connector != nil && it.open() {
 			threads = append(threads, it.Connector.Thread)
 		}
 	}
-	h.inbox.mu.Unlock()
+	b.mu.Unlock()
 	if len(threads) == 0 {
 		return nil
 	}
-	over := s.Settle(ctx, threads)
-	if len(over) == 0 {
+	var res struct {
+		Over map[string]string `json:"over"`
+	}
+	if err := s.appCall(ctx, AppInbox, inboxSettle, map[string]any{"source": id, "threads": threads}, &res); err != nil {
+		s.logf("inbox: %s: settle: %v", id, err)
+		return nil
+	}
+	if len(res.Over) == 0 {
 		return nil
 	}
 	now := time.Now()
 	var changed []*InboxItem
-	h.inbox.mu.Lock()
-	defer h.inbox.mu.Unlock()
-	for _, it := range h.inbox.items {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, it := range b.items {
 		if it.Source != id || it.Connector == nil || !it.open() {
 			continue
 		}
-		if why, ok := over[it.Connector.Thread]; ok {
+		if why, ok := res.Over[it.Connector.Thread]; ok {
 			it.done(now, "read")
 			it.Reason = why
 			changed = append(changed, it)
@@ -139,7 +70,7 @@ func (h *Hub) settleConnector(ctx context.Context, id string, s connector.InboxS
 
 // applyConnector turns a connector's things into items, under b.mu: one open item per thread gathers its later
 // moves until it is done; a move after that starts a new item; a thing that is over closes its open item.
-func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, now time.Time) []*InboxItem {
+func (b *inboxBook) applyConnector(id, name string, things []connector.InboxThing, now time.Time) []*InboxItem {
 	var changed []*InboxItem
 	index := b.threads(func(it *InboxItem) (string, bool) {
 		if it.Source != id || it.Connector == nil {
@@ -226,22 +157,21 @@ func containsItem(list []*InboxItem, it *InboxItem) bool {
 	return false
 }
 
-// replyConnectorItem sends the user's reply to a connector's item, to its thread through the connector; the same
-// text on an item already replied to went out already.
-func (h *Hub) replyConnectorItem(ctx context.Context, r inboxReplyReq) (already bool, err error) {
+// replyConnectorItem sends the user's reply to a connector's item, to its thread through the connector (the hub's);
+// the same text on an item already replied to went out already.
+func (s *Service) replyConnectorItem(ctx context.Context, r inboxReplyReq) (already bool, err error) {
 	c := r.item
-	h.inbox.mu.Lock()
+	b := &s.inbox
+	b.mu.Lock()
 	sent := r.once.repeated(r.live, r.text)
-	h.inbox.mu.Unlock()
+	b.mu.Unlock()
 	if sent {
 		return true, nil
 	}
-	conn := h.connectors.Get(c.Source)
-	in, ok := connector.As[connector.Inbox](conn)
-	if !ok || !c.Connector.CanReply {
+	if !c.Connector.CanReply {
 		return false, errCannotReply
 	}
-	if err = in.Reply(ctx, connector.InboxReply{Thread: c.Connector.Thread, ItemID: c.ID, Last: c.Last, Text: r.text}); err != nil {
+	if err = s.connectorReply(ctx, c.Source, connector.InboxReply{Thread: c.Connector.Thread, ItemID: c.ID, Last: c.Last, Text: r.text}, r.sendID); err != nil {
 		return false, err
 	}
 	r.once.clientID = r.text

@@ -54,7 +54,7 @@ Mac 上的 ssh 机器离线 2–8 s，列表里它的会话先消失再出现。
 
 ### hub 里正在进行的工作
 
-- 助手（Persona tab 主对话、副对话、定时任务、AI 分身、飞书 /agent、机器人、频道插件，`hub/assistant*.go`、`inbox_agent.go:246`、`lark_agent.go:283`、
+- 助手（Persona tab 主对话、副对话、定时任务、AI 分身、飞书 /agent、机器人、频道插件，`hub/assistant*.go`、AI 分身是管理者的 `assistant/inbox_agent.go`、`lark_agent.go:283`、
   `bots_chat.go:416`、`channels_extension.go:371`）都走 `assistant.send`，由**助手所在机器的 node** 起无头 claude：
   `zsh -ic "<启动器> \"$@\"" … -p --input-format stream-json --output-format stream-json --include-partial-messages`（`node/assistant.go:394-490`），
   独立进程组（`Setpgid`），stdin / stdout 是管道。

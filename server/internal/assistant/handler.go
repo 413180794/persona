@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/feishubot"
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -29,13 +29,7 @@ type Handler interface {
 	Context(ctx context.Context, p ContextParams) ContextResult
 	// Action is manager.action: the user answered one of the questions the assistant asked (Snapshot.Interactions).
 	Action(ctx context.Context, a Action) (ActionResult, error)
-	// ActiveTasks is assistant.tasks: the tasks going on, for the inbox's judge and AI 分身 to link messages to.
-	ActiveTasks(ctx context.Context) []prompts.InboxTask
-	// CardSent is assistant.card_sent: a message card says its reply went out (the inbox's 发送 on a card sends once).
-	CardSent(ctx context.Context, p CardSentParams) (bool, error)
-	// CardsSent is assistant.cards_sent: the reply to an inbox item went out; the cards about it say so from now on.
-	CardsSent(ctx context.Context, p CardsSentParams)
-	// Start is assistant.start: one of the hub's features starts a conversation (the inbox's AI 分身).
+	// Start is assistant.start: one of the hub's features starts a conversation of the assistant's.
 	Start(ctx context.Context, p StartParams) (proto.Session, error)
 	// SendParams is assistant.send_params: what a message for one of its conversations runs on, and its text.
 	SendParams(ctx context.Context, p SendParams) (map[string]any, error)
@@ -51,8 +45,6 @@ type Handler interface {
 	InteractionResolved(ctx context.Context, r InteractionResolved)
 	// InteractionRaised is interaction.raised: an agent of a quiet task asks the user something (#1731).
 	InteractionRaised(ctx context.Context, r InteractionRaised)
-	// InboxMessage is inbox.message: the inbox's AI 分身 drafted a reply to a message about one of the user's tasks.
-	InboxMessage(ctx context.Context, m InboxMessage)
 	// ProfileChanged is manager.updated: hub.json's assistant section or the machines changed: what was read with the old
 	// ones goes, and the hub gets the profile again.
 	ProfileChanged(ctx context.Context)
@@ -97,6 +89,15 @@ type Handler interface {
 	SessionDelta(ctx context.Context, p SessionDelta)
 	// ChannelNoted is channels.noted: a channel's message went in through the apps' routes.
 	ChannelNoted(ctx context.Context, p ChannelNoted)
+	// The inbox (inbox.go).
+	// InboxCollected is inbox.collected: what one collection of the sources read.
+	InboxCollected(ctx context.Context, r assistantwire.InboxRound) error
+	// InboxItemJSON is inbox.item: one item as it is stored.
+	InboxItemJSON(ctx context.Context, id string) (json.RawMessage, bool)
+	// InboxForget is inbox.forget: a source's data was deleted; its items go.
+	InboxForget(ctx context.Context, source string) (int, error)
+	// InboxRepoMutes is inbox.repo_mutes: a source's muted repositories (set first when asked).
+	InboxRepoMutes(ctx context.Context, p assistantwire.InboxRepoMutes) ([]string, error)
 }
 
 // roleFull is a device that may do everything (an answer-only watch may not).

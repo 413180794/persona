@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
@@ -14,7 +15,7 @@ import (
 
 // The hub relays assistantwire.Routes (it does not run this package): they are exactly the ones the assistant serves.
 func TestRoutesAreTheWireOnes(t *testing.T) {
-	got, want := newTestService(t, newFakeHub()).Routes(), slices.Clone(assistantwire.Routes)
+	got, want := newTestService(t, newFakeHub()).Routes(), slices.Concat(assistantwire.Routes, assistantwire.InboxRoutes)
 	slices.Sort(got)
 	slices.Sort(want)
 	if !slices.Equal(got, want) {
@@ -36,6 +37,14 @@ func TestBusErrorKinds(t *testing.T) {
 		if !is(err) || err.Error() != "说明" {
 			t.Errorf("%s: %v (%T)", code, err, err)
 		}
+	}
+	// A paused model's reason comes with it (the inbox tells a used-up quota from a busy model).
+	if paused, quota := modelPaused(busError(&rpc.Error{Code: assistantwire.CodeModelPaused, Message: "额度用完",
+		Data: json.RawMessage(`{"reason":"quota"}`)})); !paused || !quota {
+		t.Errorf("a paused model's reason: paused %v quota %v", paused, quota)
+	}
+	if !modelUnconfigured(busError(&rpc.Error{Code: assistantwire.CodeModelUnconfigured, Message: "没有模型"})) {
+		t.Error("an unconfigured model is not told")
 	}
 	var re *rpc.Error
 	if err := busError(&rpc.Error{Code: "permission_denied", Message: "不行"}); !errors.As(err, &re) || re.Code != "permission_denied" {

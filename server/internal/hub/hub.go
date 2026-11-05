@@ -53,10 +53,10 @@ type Hub struct {
 	workspaceMu sync.Mutex // serializes read-only workspace discovery and snapshot commits
 	modelMu     sync.Mutex // serializes legacy writes and test stores without a database CAS
 	ai          *ai.Client
-	// The inbox's own models (inbox_agent.go): 1 triages, 2 decides what the agent (3) should take on.
+	// The inbox's own models (hub.json inbox.triage_ai / judge_ai, the manager's inbox asks for them by purpose): 1 triages,
+	// 2 decides what the agent (3) should take on.
 	triageAI, judgeAI *ai.Client
-	translations      translateCache // translate.go
-	quotas            quotaCache     // launcherquota.go
+	quotas            quotaCache // launcherquota.go
 	agents            *agents.Service
 
 	terms terminals // the terminal tab's live streams (terminal.go)
@@ -101,9 +101,9 @@ type Hub struct {
 	assistant assistantState
 	// keepMu: one node.configure keep_sessions at a time (keepChanged, assistant_profile.go).
 	keepMu  sync.Mutex
-	deleted deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
-	inbox   inbox       // the unified inbox (inbox.go)
-	kb      kbLink      // what the hub keeps for the knowledge base, the assistant's (kb.go)
+	deleted deletedBook  // conversations taken out of the apps' lists (deleted_sessions.go)
+	inbox   inboxSources // the inbox's sources and wake-ups; the inbox itself is the manager's (inbox.go)
+	kb      kbLink       // what the hub keeps for the knowledge base, the assistant's (kb.go)
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots     botHub
 	channels channelsHub
@@ -207,8 +207,6 @@ type Store interface {
 	CreatePairToken(ctx context.Context, hash string, expiresAt time.Time, machine string) error
 	PairTokenByHash(ctx context.Context, hash string) (*db.PairToken, error)
 	RedeemPairToken(ctx context.Context, pairHash string, device db.DeviceToken, tokenHash string) (bool, error)
-	PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error
-	InboxItems(ctx context.Context, doneSince time.Time) ([][]byte, error)
 	CreateTaskPlan(ctx context.Context, p db.TaskPlanRow) error
 	TaskPlan(ctx context.Context, id string) (*db.TaskPlanRow, error)
 	TaskPlans(ctx context.Context, conversation string) ([]db.TaskPlanRow, error)
@@ -339,7 +337,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	if c := cfg.Inbox.JudgeAI; c != nil {
 		h.judgeAI = ai.New(c.Over(cfg.AI))
 	}
-	h.inbox.larkAccount = cfg.Lark.Account // the lark-connector account the Feishu items of a plugin came to (older configs)
 	if cfg.Lark.lark-connectorConfigured() {
 		h.logf("hub.json lark.container / token / base_url are not read any more: Feishu through lark-connector is a plugin's now; set them in its settings (docs/feishu.md)")
 	}

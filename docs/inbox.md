@@ -3,6 +3,51 @@
 「收件箱」tab 是 Persona 的信息入口：飞书消息和各个邮箱的邮件在**一个列表**里，按「件」聚合，AI 先分拣，人只看结论。
 （2026-10-27 用户定的方向：不按群浏览、不做第二个飞书，见 `docs/feishu.md`。）
 
+## 谁管什么：收件箱归管理者（2026-11-04）
+
+收件箱是**管理者**（助手进程 `personad assistant`，`docs/assistant.md`「和 hub 的边界」）的：条目和它们的状态（进收件箱前的分拣、
+每个来源的规则和兜底档、分拣状态 `triage`、事件合成、静音、已处理、批量）、AI 分身（判断、开它的对话、草稿、消息卡）、条目的翻译和
+App 用的通用翻译（`docs/ios.md`「翻译」），以及 `/api/v1/inbox…`、`/api/v1/translate`、`/api/v1/translate/mail` 的全部接口
+（hub 原样转给它，`assistantwire.InboxRoutes`，字段和以前一样）。代码在 `server/internal/assistant/inbox*.go`。
+表 `inbox_items`、设置 `inbox_mutes` 不变、不迁数据，只有管理者读写。模型（分拣、判断、代写、翻译）都是管理者叫的，
+经 hub 的模型配置（`app.call models.*`，管理者那边只有 `assistant/inbox_hub.go` 一处）：每次调用都带期限（`timeout_ms`），
+管理者不等了 hub 也停，不留排着的请求。收件箱和翻译在 hub 里不再用模型。
+
+**hub 只管来源**（`server/internal/hub/inbox.go`）：连接器和插件怎么采（`inbox.collect`）、什么时候采（2 分钟一轮、连接器的
+`changed`、飞书事件、邮件 3 分钟一次），采到的原样交给管理者（总线调用 `inbox.collected`，一轮一次：每个来源读到的条目、它能做什么、
+邮件每个账号最新一页；每轮带 hub 这次运行的 `epoch` 和轮次 `seq`，路上耽搁了、比用过的旧的一轮管理者丢掉）；管理者要对来源做的事经
+`app.call inbox.*` 请 hub 做：读一封邮件的全文（翻译要的是保留段落和链接的文字）、发回复（邮件或经连接器 / 接飞书的插件）、
+`settle`、事件合成的 `group.tool` / `group.fallback` / `group.append`、读 hub 的分拣规则、AI 分身配置和插件提供了哪些连接器
+（`inbox.config`）、翻译模型现在是哪个（`inbox.translate_fingerprint`）。条目变了管理者发 `inbox.changed`，hub 在总线的读循环外
+给插件发 `inbox.changed` 事件、给 App 推 `{"type":"inbox"}`（一个插件读得慢不挡住别的）。插件详情页插槽 `inbox_item` 要的条目、
+删一个来源的数据时它的条目、GitHub 设置页的「静音的仓库」，hub 都问管理者（`inbox.item`、`inbox.forget`、`inbox.repo_mutes`）。
+hub 照旧自己守着的边界：只能回答的设备（手表）回复只能是文字，不改文档状态、不发 `/agent …`（以用户身份发出去会开一个 Agent），
+hub 在转给管理者之前就拦下（403，管理者那边也查）；连接器的设置（含凭据）还是 hub 的接口，只有静音的仓库交给管理者。
+
+**发出去的只发一次**：回复（邮件、经连接器、接飞书的插件）带管理者算的 `send_id`（App 给了 `client_id` 就用它，否则是这件、文字和改动，
+和飞书的 `clientId` 一样不含 `last`），hub 记在 `sent_messages`（和 App 发消息同一张表，留一天）：同一个再问回 `already`、不再发（答案在路上丢了、
+管理者重启了重试都安全）；上次发到一半断了的（hub 停了、超时）回 `assistant_in_doubt`，也不再发。事件合成的 `group.append` 同理带
+`append_id`：插件写过的，hub 记着它的回答，重试拿到同一个事件，不会写两遍。
+
+**管理者没连着时**（助手重启那几秒、崩了还没被拉起）：
+
+- `/api/v1/inbox…` 和翻译都回 `503 assistant_offline`「助手暂时连不上，稍后再试」（下拉刷新、回复、标处理、静音也是）；回复这样被拒时
+  不写进回执（`reply_receipts.go`），管理者回来后同样的回复照常能发。
+- 回复交给管理者以后连接断了、超时了：可能已经发出去了，回 `502 assistant_in_doubt`、`delivered: "unknown"`（App 提示先看看再决定，
+  不说「没发出去」）；也不写回执，同一条再发能到管理者，`send_id` 一样，hub 发过的不再发。
+- **采集不丢东西**（hub 刚起来、管理者还没连上的那几秒也一样）：hub 照常按时读来源，读到的替管理者攒着（`held`：每个线程 / 事件 / 邮件留最新读到的那份，窗口里滑出去的也留着；
+  一个来源最多 2000 件、一个邮箱最多 500 封，只在内存里，hub 重启就没了，那时管理者会跟着重连、马上采一轮）；读到时关掉了的来源不留。
+  管理者一连上 hub 马上来一轮完整的（含邮件），连同攒着的一起交，邮件最新 40 封、iMessage 最新 30 条这种窗口里中间滑出去的也进来。
+  这一轮没交成功（管理者没回、读不出库）就接着攒，下一轮再交。事件合成的一批没写完时插件下一轮再交。
+- 插件详情页插槽画不出（App 照旧画原来的正文）；GitHub 的收件箱设置（CI、静音的仓库、忽略的分支）整块不显示：hub 不给缺了静音仓库的设置
+  （显示成一个都没静音，再一保存就全清掉了）；保存设置时没带 `muted_repos`（或是 `null`）的，静音照旧不动，只有带了列表（哪怕是空的）才改；
+  删连接器的数据时知识库那部分照删、收件箱那部分报错，再删一次就删掉。
+- 管理者的条目在库里：它重启、hub 重启都从 `inbox_items` 读回来；hub 重启时会重新起它，连上就来一轮完整的。
+- 管理者连着、但读不出存着的条目和静音（数据库没答）：收件箱的接口回 `503 inbox_unavailable`，交来的一轮不收（hub 留着再交）、
+  什么都不写，免得拿内存里不全的那份盖掉库里的；下次用到时再读。
+- 管理者刚重启、还没有一轮列出来源时，插件提供的连接器它也知道（`inbox.config` 的 `extensions`）：它们的条目照旧没有兜底档、只能等模型；
+  不认识的来源也一样，不会默认成「不重要」。
+
 ## 一件事 = 一行
 
 | 来源 | 一件事是 | id |
@@ -47,7 +92,7 @@
 
 ## AI 分拣
 
-`server/internal/hub/inbox_triage.go`：每件新事（或有新消息的事）交给 hub 的小任务模型（`hub.json` 的 `ai`，默认 DeepSeek flash）分成三档，
+`server/internal/assistant/inbox_triage.go`（管理者的）：每件新事（或有新消息的事）交给小任务模型（模型配置的 `inbox.triage`，没配时是 `hub.json` 的 `ai`，默认 DeepSeek flash）分成三档，
 附一句不超过 40 字的摘要和一个很短的理由：
 
 | tier | 界面 | 是什么 |
@@ -67,7 +112,7 @@
   **插件提供的连接器没有兜底**：算成噪音等于悄悄藏掉，用户会漏事（见下）。
 - **范围（2026-11-04 用户定）**：下面「先分拣、再进收件箱」和「没有兜底的不进来」**只管插件提供的连接器**（装的插件或 hub.json 里的插件，不是 personad 自带的；
   现在就是飞书插件 lark-connector）。邮件、GitHub、Telegram、信息这些 hub 自己的来源一切照旧：新条目马上列出来、之后后台分拣，时机和兜底（没有规则档的算噪音）都和以前一样。
-  判断按「是不是插件提供的」（`pluginConnectors`，hub 起插件的连接器时记下），不认名字。
+  判断按「是不是插件提供的」（`extensionConnectors`，hub 起插件的连接器时记下，每轮交给管理者时带上：`InboxSource.extension`），不认名字。
 - **先分拣、再进收件箱（#1644）**：插件的连接器一轮新起的条目先放在一边（`inbox_admit.go`），这一轮采完后在后台分拣，分完才写库、列出来：
   - 模型分了：用模型的档和摘要；
   - 模型分不了、有兜底：按兜底进来，「按规则」，**这一版就定了**，模型恢复后也不再分这一版（有新动静时才重新分）；
@@ -100,7 +145,7 @@
 ## 事件合成（2026-11-04，#1680）
 
 一个会话一行太粗：一个群里同时在聊好几件事，有的要我、有的不要，混成一行既分不准级，也看不出在说什么。声明了 `group` 的连接器（飞书插件）
-把一个会话的新消息交成**待关联的一批**，hub 的模型判断每条新消息属于哪件事，**一件事（事件）是收件箱里的一行**（`server/internal/hub/inbox_group.go`，
+把一个会话的新消息交成**待关联的一批**，管理者让模型判断每条新消息属于哪件事，**一件事（事件）是收件箱里的一行**（`server/internal/assistant/inbox_group.go`，
 协议见 `docs/connector-protocol.md`「事件合成」）。
 
 - **一本账**：哪条消息属于哪件事只记在这一行的 `meta` 里。声明了 `meta` 的连接器，meta 由它的程序写（`group.append`：一次一件事，交 meta 加几条消息、回追加后的 meta）；
@@ -147,7 +192,7 @@
 ## 连接器：GitHub（2026-11-02）
 
 连接器（`docs/plan-connectors.md`）的「需要我」的事也进收件箱：连接器实现 `connector.Inbox`，给出候选（一个线程一个，`InboxThing`），
-hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞书会话一样：一个线程同时只有一件没处理的，后来的动静并进去（`count` 加一）；
+管理者合成条目（`server/internal/assistant/inbox_connectors.go`；hub 每轮把连接器给的候选交过去），规则和飞书会话一样：一个线程同时只有一件没处理的，后来的动静并进去（`count` 加一）；
 处理过以后再来的另开一件；连接器说这件事结束了（合了、关了、自己回了）就自动处理掉（`done_by` = read / replied）；在别处读过、又不是「需要你」的，算 `read`。
 分拣、代写、AI 分身、已处理、保留时间都是 hub 通用的。
 
@@ -192,21 +237,22 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 点了以后这件事和同一来源里它覆盖的其他打开的事都收进已处理（原因「已静音：<名字>」），toast 说「已静音「…」，以后不再进收件箱」。
 收件箱右上角「更多」里的「已静音」列出所有静音（名字、来源 · 仓库 / 会话 / 发件人），左滑或长按「取消静音」；取消后以后的才会进来，已经收掉的不回来。
 
-- **hub**（`hub/inbox_mutes.go`）：静音存在设置 `inbox_mutes`（来源 + 标签 + 值 + 名字）。每次收集收件箱都把被覆盖的打开条目收掉，所以以后来的
+- **管理者**（`assistant/inbox_mutes.go`）：静音存在设置 `inbox_mutes`（来源 + 标签 + 值 + 名字）。每次收集收件箱都把被覆盖的打开条目收掉，所以以后来的
   新消息进来就直接是已处理。条目能按什么静音（`mutes`）：连接器条目来自它的 `InboxThing.Tags`（`repo`、`chat`、`sender`），飞书的是会话（`lark.feed_id`）
   和群里最新发言的人（`lark.sender_id`），邮件的是发件人地址（小写）；飞书的云文档和公司圈条目没有。
-- **GitHub 的「静音的仓库」**：原来存在 GitHub 连接器的设置里（`muted_repos`），现在就是来源 `github`、标签 `repo` 的静音。hub 启动时把旧的搬过来、
-  从 GitHub 的设置里清掉；设置 › 连接器 › GitHub 的列表（和旧 App）照旧读写 `muted_repos`，hub 在中间换成静音，所以两处看到的是同一份。
+- **GitHub 的「静音的仓库」**：原来存在 GitHub 连接器的设置里（`muted_repos`），现在就是来源 `github`、标签 `repo` 的静音。管理者连上 hub 时
+  hub 把旧的搬过去（`inbox.repo_mutes` 加上）、从 GitHub 的设置里清掉；设置 › 连接器 › GitHub 的列表（和旧 App）照旧读写 `muted_repos`，
+  hub 在中间问管理者、换成静音，所以两处看到的是同一份。
 
 ## AI 分身（自动处理 + 草拟回复）
 
-三个模型串起来（2026-10-29），全在 hub 后台跑，**只起草、不发送**：
+三个模型串起来（2026-10-29），全在管理者后台跑（2026-11-04 起；以前在 hub），**只起草、不发送**：
 
 | 步骤 | 模型 | 做什么 | 代码 |
 | --- | --- | --- | --- |
 | 1 收集 | `inbox.triage_ai`（小模型） | 上面的分拣：每件新事分 action / fyi / noise 并写摘要 | `inbox_triage.go` |
 | 2 判断 | `inbox.judge_ai`（小模型） | 只看「需要你」、内容已分拣过的事：要不要交给 Agent（`handle`）、交给它做什么（`task`，一两句指令） | `inbox_agent.go` `judgeOne` |
-| 3 处理 | `inbox.agent.launcher`（Claude Code 启动器） | 无头 claude，在助手目录里跑（所以有助手的全部工具：飞书、邮件、Agents、读代码、上网），查清楚后调 MCP `inbox_draft` 交草稿和依据 | `startInboxAgent`（经总线请助手开这段对话：`assistant.start`，不起标题）；`inbox_draft` 是助手的工具（`assistant/tools_apps.go` `toolInboxDraft`：要有正文、不许留【…】、裁剪），经总线的 `inbox.draft` 交给 hub 记到这件事上（`inboxDraft`：认对话、核对 `changes`、发消息卡片） |
+| 3 处理 | `inbox.agent.launcher`（Claude Code 启动器） | 无头 claude，在助手目录里跑（所以有助手的全部工具：飞书、邮件、Agents、读代码、上网），查清楚后调 MCP `inbox_draft` 交草稿和依据 | `startInboxAgent`（管理者自己开这段对话，不起标题；快照的 `inbox.agents` 告诉 hub 这些对话跑完不推「完成」）；`inbox_draft` 是助手的工具（`assistant/tools_apps.go` `toolInboxDraft`：要有正文、不许留【…】、裁剪），直接记到这件事上（`inboxDraft`：认对话、核对 `changes`、发消息卡片） |
 
 - 状态记在条目的 `agent` 里：`skipped`（模型 2 不交）→ `queued` → `running` → `drafted` / `failed`。
   每件只在内容变了（`last` 变了）时重新判断，新消息来了旧草稿作废、重新走一遍。
@@ -223,11 +269,11 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
   上方是 Agent 的依据和「查看 AI 分身的处理过程」）。处理中的行显示「AI 分身正在处理：<task>」。详情页操作条的按钮变成「查看草稿」。
   手表打开这件事时直接显示草稿和「发送」。
 - 本地验证模型 1、2：`JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}'` 跑 `TestInboxModelsLive`
-  （经 `GOCMD=… ./scripts/test/test-server.sh ./internal/hub` 在 hub 机器上跑，key 文件在那台机器上）。
+  （在管理者的包里：`go test -run InboxModelsLive ./internal/assistant`，在 hub 机器上跑，key 文件在那台机器上）。
 
 ## 生命周期
 
-- hub 后台采集（`server/internal/hub/inbox.go`）：飞书实时事件来了 3 秒后采一次，这一轮只读飞书会话；每 2 分钟一轮再读文档通知、
+- hub 后台采集（`server/internal/hub/inbox.go`，采到的交给管理者合成条目）：飞书实时事件来了 3 秒后采一次，这一轮只读飞书会话；每 2 分钟一轮再读文档通知、
   公司圈和其它连接器（连接器自己的事件、改设置也触发这种轮）；邮件每 3 分钟。以前每个飞书事件都把这些全读一遍（#674）。下拉刷新
   （`POST /api/v1/inbox/refresh`）立刻采全部。有变化就存库（`inbox_items`）并推 `{"type":"inbox"}`，App 再拉列表；插件连接器新起的条目分拣完才存、才推（「AI 分拣」）。
 - **已处理**只记在 Persona（`done_at`，`done_by=user`），不回写飞书已读、不改邮件的已读。已处理的保留 3 天（列表底部可移回），
@@ -280,14 +326,15 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 
 ## 对一件事能做什么（`Persona/Views/Inbox/InboxActions.swift`）
 
-- **AI 草拟回复**：`POST /api/v1/inbox/{id}/draft {instruction}`，hub 用小任务模型按用户口吻起草（飞书口语、短；邮件按来信的语言和正式程度；
+- **AI 草拟回复**：`POST /api/v1/inbox/{id}/draft {instruction}`，管理者用「草拟回复」的模型按用户口吻起草（飞书口语、短；邮件按来信的语言和正式程度；
   不知道的事实不编，也不留【】之类的占位符让用户补，不知道就不写；`assistant.notes` 作为「关于用户」附上）。浮层里可以直接改，也可以输入「让 AI 改：…」再重写。
-  「发送」走 `POST /api/v1/inbox/{id}/reply {text}`：hub 在原会话发飞书消息，或按回复发邮件（Re: 主题、In-Reply-To / References、
+  「发送」走 `POST /api/v1/inbox/{id}/reply {text}`：管理者请 hub 在原会话发飞书消息（经接飞书的插件），或按回复发邮件（Re: 主题、In-Reply-To / References、
   引用原文前 40 行，用收到它的账号），然后标为已处理（`done_by=replied`）。手机和手表都用这一个接口。
   回复只回答发送时这件事里有的消息：发送期间又进来新消息（采集同时在跑，`last` 变了），这件事保持未处理，新消息不跟着归档（#1828）。
   飞书的回复只发一次：手机、手表各点一次或超时重试，同样的文字只发一条（按件排队，`clientId` = UUIDv5(件 id + 文字)）；
   上面那种留着没归档的，同样的文字重试也不再发。带了 `client_id` 的请求按各自的 id 算，换一个 id 就是另一条回复；网页和 Apple 还没传，
-  对刚进来的新消息回一模一样的文字会被当成重试。
+  对刚进来的新消息回一模一样的文字会被当成重试。管理者给 hub 的发送编号（`send_id`，上面「发出去的只发一次」）也是这样算的
+  （有 `client_id` 用它，没有就是件 id + 文字 + 改动，不含 `last`），所以管理者重启以后的重试 hub 同样不再发。
   飞书的回复发到对方看得到的地方（按 `lark.reply_to` / `lark.thread_kind`，采集时记下最后一条别人发的消息和它在不在话题里）：
   私聊照旧发进会话；话题里的事（话题群的话题、普通群里的话题回复）回复那一条并落进它的话题（`replyMode:"thread"`）；
   群里 @我 的事（不在话题里）引用那一条回复；其它群里的事照旧发进会话（不知道在回哪一条，引用反而奇怪）；旧数据没有 `reply_to` 也照旧发进会话。

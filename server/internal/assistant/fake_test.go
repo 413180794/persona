@@ -62,6 +62,7 @@ type fakeHub struct {
 	apps     map[string]appAnswer
 	appCalls []AppCall
 
+	inbox *fakeInbox // the inbox's sources (inbox_fake_test.go); nil: the hub has none
 	// The Agents business's models (agents_*.go): the triage's answer ("": it fails) and the tab names', what they
 	// were asked; the sessions whose pushes are off, by machine.
 	triage      string
@@ -201,6 +202,11 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 }
 
 func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, error) {
+	if f.inbox != nil { // outside the lock: a round calls back into the assistant
+		if out, ok, err := f.inbox.answer(ctx, p); ok {
+			return out, err
+		}
+	}
 	if p.AppID == AppConnectors && p.Method == ConnectorsSnapshots {
 		f.mu.Lock()
 		slow := f.slowSnapshots
@@ -284,8 +290,6 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 			Value: "a string", Actions: []string{"get", "set"}}}})
 	case AppSettings + " " + AppTool:
 		return json.Marshal(proto.TextResult("the hub's: "+string(p.Params), false))
-	case AppInbox + " " + InboxReplied:
-		return json.Marshal(map[string]any{"replied": map[string]any{}})
 	case AppModels + " " + ModelsJSON:
 		var a struct {
 			Purpose string `json:"purpose"`
@@ -335,6 +339,17 @@ func (f *fakeHub) Broadcast(_ context.Context, b Broadcast) {
 	}
 	_ = json.Unmarshal(b.Message, &ev)
 	f.events = append(f.events, ev.Type)
+}
+
+func (f *fakeHub) InboxChanged(_ context.Context, c assistantwire.InboxChanged) {
+	if in := f.inbox; in != nil {
+		in.mu.Lock()
+		in.changed = append(in.changed, c)
+		in.mu.Unlock()
+	}
+	f.mu.Lock()
+	f.events = append(f.events, "inbox")
+	f.mu.Unlock()
 }
 
 func (f *fakeHub) Snapshot(_ context.Context, s Snapshot) (SnapshotResult, error) {

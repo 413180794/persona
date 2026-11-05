@@ -11,7 +11,9 @@ import (
 // The user's choice of GitHub's source is kept and applied again at the next start; a machine the hub does not
 // know is refused.
 func TestGitHubSourceChoice(t *testing.T) {
-	h := muteHub(t)
+	h := newTestHub(t)
+	h.store = newKeepStore()
+	h.connectors = connector.NewRegistry(nil)
 	gh := github.New(github.Config{Auth: github.AuthConfig{FromMachine: "mac"}}, "示例 Mac", func(context.Context, string) (string, error) {
 		return "", github.ErrOffline
 	})

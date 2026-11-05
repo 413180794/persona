@@ -190,6 +190,7 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	if err := h.addConnector(imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil)); err != nil {
 		t.Fatal(err)
 	}
+	connectFakeManager(t, h) // GitHub's options come with the inbox's muted repositories, the manager's
 	var got []string
 	for _, info := range h.listedConnectors(context.Background(), true) {
 		got = append(got, fmt.Sprintf("%s %s hosts=%v options=%v", info.ID, strings.Join(info.Capabilities, ","), info.Hosts, info.Options != nil))

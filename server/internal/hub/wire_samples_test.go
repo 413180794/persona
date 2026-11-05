@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistant"
-	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/screen"
@@ -133,7 +132,7 @@ func wireDecodeGo(t *testing.T, c wireSample) {
 		}{}
 	case "inbox":
 		target = &struct {
-			Items []InboxItem `json:"items"`
+			Items []assistant.InboxItem `json:"items"`
 		}{}
 	case "event":
 		target = &struct {
@@ -374,9 +373,9 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	add("fleet", "fleet_snapshot", "Fleet 使用驼峰字段和 Unix 秒时间。", "fleet", httpJSON(map[string]any{"fleet": fleet}), map[string]any{"/fleet/phase": "needsYou", "/fleet/needsYou": 1, "/fleet/working": 1, "/fleet/unread": 1, "/fleet/workingSince": now.Unix()}, "server/internal/hub/liveactivity.go: buildFleet, FleetState", "apple/Shared/FleetState.swift: FleetState")
 	add("fleet", "fleet_event", "Fleet 事件沿用快照结构。", "event", ws(map[string]any{"type": "fleet", "fleet": fleet}), map[string]any{"/type": "fleet", "/fleet/items/0/kind": "question", "/fleet/items/0/interaction": "ix_question"}, "server/internal/hub/liveactivity.go: liveActivities", "apple/Shared/LiveConnection.swift: ServerEvent.decode")
 
-	inboxLark := InboxItem{ID: "lark:feed_example:10", Source: "lark", Kind: KindMention, Account: "feishu", AccountName: "飞书", Title: "示例讨论", Sender: "小王", Preview: "请确认示例。", Count: 1, StartedAt: now, UpdatedAt: now, Tier: TierAction, Lark: &InboxLark{FeedID: "feed_example", IsGroup: true, StartPosition: "10", MentionPosition: "10"}, Context: "仅详情展示的示例内容", Last: "10", TriagedAt: "10", Agent: &InboxAgent{State: "drafted", MachineID: "m1", SessionID: "s1", Draft: "已收到示例。"}}
-	inboxMail := InboxItem{ID: "mail:account_example:thread_example:11", Source: "mail", Kind: KindMail, Account: "account_example", AccountName: "user@example.com", Title: "示例邮件", Preview: "示例已确认。", Count: 1, StartedAt: now, UpdatedAt: now, DoneAt: &now, DoneBy: "user", Read: true, Mail: &InboxMail{AccountID: "account_example", Mailbox: "INBOX", UIDs: []uint32{11}, MessageID: "message_example", From: mail.Address{Name: "小王", Email: "sender@example.com"}, Thread: "thread_example", Direct: true}}
-	add("inbox", "inbox_list", "收件箱列表包含飞书和邮件条目，并移除内部上下文。", "inbox", httpJSON(map[string]any{"items": []InboxItem{inboxLark.listed(), inboxMail.listed()}}), map[string]any{"/items/0/source": "lark", "/items/0/context": nil, "/items/0/agent/draft": "已收到示例。", "/items/1/source": "mail", "/items/1/mail/uids/0": 11, "/items/1/done_by": "user"}, "server/internal/hub/inbox.go: InboxItem.listed, Hub.inboxRoutes", "apple/Shared/InboxModels.swift: InboxItem")
+	inboxLark := assistant.InboxItem{ID: "lark:feed_example:10", Source: "lark", Kind: assistant.KindMention, Account: "feishu", AccountName: "飞书", Title: "示例讨论", Sender: "小王", Preview: "请确认示例。", Count: 1, StartedAt: now, UpdatedAt: now, Tier: assistant.TierAction, Lark: &assistant.InboxLark{FeedID: "feed_example", IsGroup: true, StartPosition: "10", MentionPosition: "10"}, Context: "仅详情展示的示例内容", Last: "10", TriagedAt: "10", Agent: &assistant.InboxAgent{State: "drafted", MachineID: "m1", SessionID: "s1", Draft: "已收到示例。"}}
+	inboxMail := assistant.InboxItem{ID: "mail:account_example:thread_example:11", Source: "mail", Kind: assistant.KindMail, Account: "account_example", AccountName: "user@example.com", Title: "示例邮件", Preview: "示例已确认。", Count: 1, StartedAt: now, UpdatedAt: now, DoneAt: &now, DoneBy: "user", Read: true, Mail: &assistant.InboxMail{AccountID: "account_example", Mailbox: "INBOX", UIDs: []uint32{11}, MessageID: "message_example", From: assistant.MailAddress{Name: "小王", Email: "sender@example.com"}, Thread: "thread_example", Direct: true}}
+	add("inbox", "inbox_list", "收件箱列表包含飞书和邮件条目，并移除内部上下文。", "inbox", httpJSON(map[string]any{"items": []assistant.InboxItem{inboxLark.Listed(), inboxMail.Listed()}}), map[string]any{"/items/0/source": "lark", "/items/0/context": nil, "/items/0/agent/draft": "已收到示例。", "/items/1/source": "mail", "/items/1/mail/uids/0": 11, "/items/1/done_by": "user"}, "server/internal/assistant/inbox.go: InboxItem.listed, Service.inboxRoutes", "apple/Shared/InboxModels.swift: InboxItem")
 	wireFeed(t, add, httpJSON, now)
 	wireErrors(t, add)
 	wireCompatibility(t, files, add, ws, httpJSON, now)

@@ -30,12 +30,12 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Persona 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `hub/bots_chat.go` `botSend`（`docs/bots.md`） |
 | `lark/chat_agent.md`、`doc_agent.md` | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | `hub/lark_agent.go`、`lark_agent_docs.go` |
 | `lark/chat_context.md`、`doc_context.md`、`line.md` | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
-| `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `hub/inbox_triage.go` |
+| `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `assistant/inbox_triage.go` |
 | `inbox/tiers.md` | 三档的判断标准，分拣和事件合成共用 | 同上 |
-| `inbox/group.md`、`group_input.md` | 事件合成：一个会话的一批新消息各归哪件事，给动到的事写标题、总结、分级；输入里带着这个会话的事和已经调过的工具（`docs/inbox.md`「事件合成」） | `hub/inbox_group.go` |
+| `inbox/group.md`、`group_input.md` | 事件合成：一个会话的一批新消息各归哪件事，给动到的事写标题、总结、分级；输入里带着这个会话的事和已经调过的工具（`docs/inbox.md`「事件合成」） | `assistant/inbox_group.go` |
 | `inbox/item.md` | 一件事给模型看的样子（类型行 + 内容），分拣、代写、判断、AI 分身共用 | 同上 |
 | `inbox/draft.md`、`draft_input.md` | 代写回复 | 同上 |
-| `inbox/judge.md`、`judge_input.md` | 要不要交给 AI 分身 | `hub/inbox_agent.go` |
+| `inbox/judge.md`、`judge_input.md` | 要不要交给 AI 分身 | `assistant/inbox_agent.go` |
 | `inbox/agent.md`、`agent_title.md`、`agent_ref.md` | AI 分身的第一条消息（来源相关的说明、知识库背景） | 同上 |
 | `kb/compress.md`、`compress_input.md` | 会话压缩 + 打标 | `kb/compress.go` |
 | `kb/project.md`、`project_input.md` | 重写项目档案 | 同上 |
@@ -46,7 +46,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `kb/digest.md` | 快照里的知识库重点（`Engine.Prompt`） | `kb/items.go` |
 | `kb/readme.md` | 知识库目录的 README.md（给读这个目录的 AI 看） | `kb/store.go` |
 | `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `assistant/agents_start.go` |
-| `tools/translate*.md` | 翻译短文本 / 一封邮件 | `hub/translate.go` |
+| `tools/translate*.md` | 翻译短文本 / 一封邮件 | `assistant/inbox_translate.go` |
 | `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
 | `todo/decisions.md` | 交给 Agent 时消息前面的 `<jarvis-context>`：这个待办上现在生效的决策（`docs/todos.md`「决策记录」） | `assistant/todo_decisions.go` |
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
@@ -121,4 +121,4 @@ MCP 工具的 golden 是 `hub/mcp_tools_golden_test.go`（助手有 / 没有飞�
 `hub/prompts_golden_test.go`、`assistant/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的 lark-connector、假的模型记下收到的
 system / user、临时目录的知识库），所以数据转换也一起测到。快照里「现在」那行的时钟换成占位后再比。
 2026-11-01 搬家前先用原来的代码生成了这些 golden，搬完后同样的输入逐字节一致。
-2026-11-04 助手的业务逻辑搬进 `server/internal/assistant`（`docs/assistant.md`「和 hub 的边界」）时，它写的提示词的 golden 跟着搬到 `assistant/testdata/prompts/`，文件原样挪过去，没有重新生成。同一天助手的设置、主对话和开对话也搬过去后，`assistant_claude_md.*`、`main_handoff*` 的 golden 也原样挪到 `assistant/testdata/prompts/`（`assistant/claude_md_test.go`），逐字节一致。
+2026-11-04 助手的业务逻辑搬进 `server/internal/assistant`（`docs/assistant.md`「和 hub 的边界」）时，它写的提示词的 golden 跟着搬到 `assistant/testdata/prompts/`，文件原样挪过去，没有重新生成。同一天助手的设置、主对话和开对话也搬过去后，`assistant_claude_md.*`、`main_handoff*` 的 golden 也原样挪到 `assistant/testdata/prompts/`（`assistant/claude_md_test.go`），逐字节一致。同一天收件箱挪到管理者后，`inbox_triage.*`、`inbox_draft.*`、`inbox_judge*`、`inbox_agent.*`、`inbox_group.*` 的 golden 也原样挪到 `assistant/testdata/prompts/`（`assistant/inbox_golden_test.go`），没有重新生成，逐字节一致；翻译跟着挪过去后 `translate_*` 也原样挪到那里（`assistant/inbox_translate_test.go`），同样逐字节一致。

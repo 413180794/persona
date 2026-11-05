@@ -167,6 +167,11 @@ type apnsCall struct {
 }
 
 func (f *fakeAPNs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Only pushes count: a node on the test machine probing local ports sends GET / here too (docs/lessons/testing.md).
+	if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, "/3/device/") {
+		http.NotFound(w, r)
+		return
+	}
 	b, _ := io.ReadAll(r.Body)
 	var body struct {
 		APS struct {

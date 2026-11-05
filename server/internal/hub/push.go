@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/apns"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/pushcrypto"
@@ -437,7 +438,7 @@ func (p *Pusher) mailTargets() []string {
 	var out []string
 	for _, d := range p.devices {
 		t := devicePrefs(d.Prefs).Translate
-		if t.Enabled && t.Mail && languageNames[t.Target] != "" && !seen[t.Target] {
+		if t.Enabled && t.Mail && assistantwire.TranslateLanguages[t.Target] != "" && !seen[t.Target] {
 			seen[t.Target] = true
 			out = append(out, t.Target)
 		}

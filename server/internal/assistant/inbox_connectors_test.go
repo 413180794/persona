@@ -1,9 +1,7 @@
-package hub
+package assistant
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -36,7 +34,7 @@ func thing(last string, at time.Time) connector.InboxThing {
 		URL: "https://github.com/example-org/example-repo/pull/12", ReplyTo: "评论到 example-org/example-repo#12", CanReply: true, Tier: TierAction}
 }
 
-func openItems(h *Hub) []*InboxItem {
+func openItems(h *inboxHub) []*InboxItem {
 	var out []*InboxItem
 	for _, it := range h.inbox.items {
 		if it.open() {
@@ -49,8 +47,7 @@ func openItems(h *Hub) []*InboxItem {
 // One open item per thread gathers its moves; done, a later move starts a new item, the same one does not; a thing
 // that is over closes the open item.
 func TestConnectorThingsBecomeItems(t *testing.T) {
-	h := newTestHub(t)
-	h.inbox.init()
+	h := newInboxHub(t)
 	now := time.Now()
 	apply := func(things ...connector.InboxThing) []*InboxItem {
 		h.inbox.mu.Lock()
@@ -65,8 +62,8 @@ func TestConnectorThingsBecomeItems(t *testing.T) {
 	if it.Source != "example" || it.AccountName != "Example" || it.Connector.Label != "请你 review" || !it.Connector.CanReply || it.Count != 1 {
 		t.Fatalf("%+v %+v", it, it.Connector)
 	}
-	if ruleTier(it) != TierAction {
-		t.Fatalf("rule tier %s", ruleTier(it))
+	if h.inbox.ruleTier(it) != TierAction {
+		t.Fatalf("rule tier %s", h.inbox.ruleTier(it))
 	}
 	if ch := apply(thing("a", now.Add(-time.Hour))); len(ch) != 0 {
 		t.Fatal("the same move changed the item")
@@ -105,8 +102,7 @@ func TestConnectorThingsBecomeItems(t *testing.T) {
 
 // Read elsewhere: an item that does not need the user is done; one that does stays.
 func TestConnectorThingReadElsewhere(t *testing.T) {
-	h := newTestHub(t)
-	h.inbox.init()
+	h := newInboxHub(t)
 	now := time.Now()
 	h.inbox.mu.Lock()
 	fyi := thing("a", now)
@@ -125,22 +121,20 @@ func TestConnectorThingReadElsewhere(t *testing.T) {
 // Old apps never see a connector's items (they would draw a PR as a mail); new ones ask for them. Reply goes to the
 // connector once, and files the item as replied.
 func TestConnectorItemsListAndReply(t *testing.T) {
-	h := newTestHub(t)
-	h.inbox.init()
-	h.connectors = connector.NewRegistry(nil)
+	h := newInboxHub(t)
 	c := &inboxConnector{things: []connector.InboxThing{thing("a", time.Now())}}
-	if err := h.addConnector(c); err != nil {
-		t.Fatal(err)
-	}
+	h.addConnector(c, false)
+	h.inboxReady(context.Background())
 	h.inbox.mu.Lock()
 	h.inbox.items["mail:1"] = &InboxItem{ID: "mail:1", Source: "mail", Kind: KindMail, UpdatedAt: time.Now()}
 	h.inbox.mu.Unlock()
-	if ch := h.collectConnectors(context.Background()); len(ch) != 1 {
-		t.Fatalf("collected %d", len(ch))
+	h.collectInbox(context.Background(), roundPoll)
+	if n := len(openItems(h)); n != 2 {
+		t.Fatalf("collected %d", n-1)
 	}
 	mux := h.routes()
-	_, old := call(t, mux, "GET", "/api/v1/inbox", h.cfg.Token, "")
-	_, all := call(t, mux, "GET", "/api/v1/inbox?sources=all", h.cfg.Token, "")
+	_, old := inboxCall(t, mux, "GET", "/api/v1/inbox", "")
+	_, all := inboxCall(t, mux, "GET", "/api/v1/inbox?sources=all", "")
 	if len(old["items"].([]any)) != 1 || len(all["items"].([]any)) != 2 {
 		t.Fatalf("old %v\nall %v", old, all)
 	}
@@ -151,7 +145,7 @@ func TestConnectorItemsListAndReply(t *testing.T) {
 		}
 	}
 	for range 2 { // pressed twice (phone and watch): sent once
-		code, out := call(t, mux, "POST", "/api/v1/inbox/"+id+"/reply", h.cfg.Token, `{"text":"看过了"}`)
+		code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/"+id+"/reply", `{"text":"看过了"}`)
 		if code != 200 || out["done_by"] != "replied" {
 			t.Fatalf("%d %v", code, out)
 		}
@@ -161,14 +155,13 @@ func TestConnectorItemsListAndReply(t *testing.T) {
 	}
 }
 
-// settlingConnector settles every "old:" thread and keeps options.
+// settlingConnector settles every "old:" thread.
 type settlingConnector struct {
 	inboxConnector
-	opts json.RawMessage
 }
 
 func (*settlingConnector) Manifest() connector.Manifest {
-	return connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox, connector.CapSettle, connector.CapOptions},
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox, connector.CapSettle},
 		Kinds: []string{"review_requested"}}
 }
 
@@ -181,26 +174,14 @@ func (*settlingConnector) Settle(_ context.Context, threads []string) map[string
 	}
 	return out
 }
-func (c *settlingConnector) Options() json.RawMessage { return c.opts }
-func (c *settlingConnector) SetOptions(raw json.RawMessage) error {
-	if !json.Valid(raw) || strings.Contains(string(raw), "bad") {
-		return errors.New("bad options")
-	}
-	c.opts = raw
-	return nil
-}
 
 // Items made under older rules are filed as done with why (not deleted); a rule's tier wins over the model's, also
-// for an item already open; options go to the connector and come back in the list.
+// for an item already open.
 func TestConnectorRulesSettleAndTier(t *testing.T) {
-	h := newTestHub(t)
-	h.inbox.init()
-	h.connectors = connector.NewRegistry(nil)
+	h := newInboxHub(t)
 	now := time.Now()
-	c := &settlingConnector{opts: json.RawMessage(`{"ci":"mine"}`)}
-	if err := h.addConnector(c); err != nil {
-		t.Fatal(err)
-	}
+	c := &settlingConnector{}
+	h.addConnector(c, false)
 	old := thing("a", now)
 	old.Thread, old.Tier = "old:1", ""
 	h.inbox.mu.Lock()
@@ -211,7 +192,7 @@ func TestConnectorRulesSettleAndTier(t *testing.T) {
 
 	c.things = []connector.InboxThing{thing("b", now)}
 	c.things[0].Tier, c.things[0].Why = TierFYI, "示例规则：知悉即可"
-	h.collectConnectors(context.Background())
+	h.collectInbox(context.Background(), roundPoll)
 	if modelTiered.open() || modelTiered.DoneBy != "read" || modelTiered.Reason != "示例：按新规则合并" {
 		t.Fatalf("old item: %+v", modelTiered)
 	}
@@ -227,17 +208,9 @@ func TestConnectorRulesSettleAndTier(t *testing.T) {
 	}
 	// Same move, the rule now says otherwise (other options): the open item follows.
 	c.things[0].Tier, c.things[0].Why = TierAction, "示例规则：需要你"
-	h.collectConnectors(context.Background())
+	h.collectInbox(context.Background(), roundPoll)
 	if fresh.Tier != TierAction || fresh.Reason != "示例规则：需要你" {
 		t.Fatalf("re-tiered: %+v", fresh)
 	}
 
-	mux := h.routes()
-	if code, _ := call(t, mux, "PUT", "/api/v1/connectors/example/settings", h.cfg.Token, `{"options":{"ci":"bad"}}`); code != 400 {
-		t.Fatalf("bad options: %d", code)
-	}
-	code, out := call(t, mux, "PUT", "/api/v1/connectors/example/settings", h.cfg.Token, `{"options":{"ci":"all"}}`)
-	if code != 200 || out["options"].(map[string]any)["ci"] != "all" {
-		t.Fatalf("%d %v", code, out)
-	}
 }

@@ -705,7 +705,7 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 			return
 		}
 		effective := mergeModel(base, b)
-		if body := h.triageInUse(ctx, id, effective); body != nil { // plugins that need it are on (plugin_inbox.go)
+		if body := h.triageInUse(ctx, id, effective); body != nil { // plugins that need it are on (extension_inbox.go)
 			writeErrorBody(w, http.StatusUnprocessableEntity, body)
 			return
 		}

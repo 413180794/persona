@@ -232,7 +232,7 @@ func TestInstalledConnectorExtension(t *testing.T) {
 	if st := connector.StatusOf(context.Background(), h.connectors.Get("examplenotes")); st.Account != "key k3…" {
 		t.Fatal(st)
 	}
-	if !fromExtension("examplenotes") { // its new inbox items are triaged before they enter (inbox_admit.go)
+	if !fromExtension("examplenotes") { // its new inbox items are triaged before they enter (the manager's inbox_admit.go)
 		t.Fatal("an installed plugin's connector is not taken as a plugin's")
 	}
 	// A capability this hub does not have (a plugin made for a newer one) is left out, not a reason to refuse it.

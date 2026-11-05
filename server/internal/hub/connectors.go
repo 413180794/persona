@@ -209,9 +209,9 @@ type sourceForgotten struct {
 }
 
 // forgetSource removes what the hub kept of a source (a connector's id): the knowledge base's chats and people (and
-// their index rows, their places in projects, the cursor) and the inbox's items. The caller stops the source first.
-// The inbox's items go whatever the knowledge base answers (the assistant away, a reply that came too late): asked
-// again, the deletion finishes what is left.
+// their index rows, their places in projects, the cursor), and has the manager remove the inbox's items. The caller
+// stops the source first. The inbox's items go whatever the knowledge base answers, and either part fails while the
+// assistant (the manager) is away: asked again, the deletion finishes what is left.
 func (h *Hub) forgetSource(ctx context.Context, source string) (sourceForgotten, error) {
 	var out sourceForgotten
 	var kerr, ierr error
@@ -252,31 +252,6 @@ func writeForgetErr(w http.ResponseWriter, err error) {
 	default:
 		writeErr(w, http.StatusInternalServerError, err)
 	}
-}
-
-// forgetInbox removes a source's inbox items; it says how many went.
-func (h *Hub) forgetInbox(ctx context.Context, source string) (int, error) {
-	h.inbox.mu.Lock()
-	var ids []string
-	for id, it := range h.inbox.items {
-		if it.Source == source {
-			ids = append(ids, id)
-			delete(h.inbox.items, id)
-			h.inbox.replies.Delete(id)
-		}
-	}
-	h.inbox.mu.Unlock()
-	if del, ok := h.store.(interface {
-		DeleteInboxItems(ctx context.Context, ids []string) error
-	}); ok && len(ids) > 0 {
-		if err := del.DeleteInboxItems(ctx, ids); err != nil {
-			return 0, err
-		}
-	}
-	if len(ids) > 0 {
-		h.broadcast(map[string]any{"type": "inbox"})
-	}
-	return len(ids), nil
 }
 
 // withQR draws a QR step's code for the app (whatever the connector sent as QR is replaced: the code is always URL's).
@@ -332,7 +307,7 @@ func (cs *connectorSettings) feeds(f connector.Feed) *map[string]bool {
 }
 
 // setConnectorOptions gives a connector the user's settings and keeps them for the next start; the inbox is
-// collected again under them. GitHub's muted repositories go to the inbox's mutes (inbox_mutes.go).
+// collected again under them. GitHub's muted repositories go to the inbox's mutes (the manager's, inbox.go).
 func (h *Hub) setConnectorOptions(ctx context.Context, id string, raw json.RawMessage) error {
 	if id == "github" {
 		var err error
@@ -528,8 +503,7 @@ func (h *Hub) startConnectors(ctx context.Context) {
 	h.attachExtensions(ctx) // the plugins' connectors, after the hub's own: those ids are taken
 	h.restoreConnectorSwitches(ctx)
 	h.restoreGitHubSource(ctx)
-	h.githubMutes(ctx)
-	h.connectors.Start(ctx, h.connectorChanged, h.logf)
+	h.connectors.Start(ctx, h.connectorChanged, h.logf) // GitHub's old muted repositories move when the manager connects
 }
 
 // registerConnectors registers the connectors hub.json sets up.

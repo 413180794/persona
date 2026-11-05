@@ -109,16 +109,13 @@ func (ps *extensions) servesConnector(hp *hubExtension, id string) bool {
 }
 
 // uiItem is inbox item id as an inbox_item is drawn for it, and the connector it came from (its source). The item is
-// read as its JSON, not its fields: meta and the source blocks go to the plugin as they are stored.
+// read as its JSON (the manager's, inbox.item), not its fields: meta and the source blocks go to the plugin as they
+// are stored. False while the manager can't say: the app draws its own body.
 func (h *Hub) uiItem(id string) (*extension.UIInboxItem, string, bool) {
-	h.inbox.mu.Lock()
-	it := h.inbox.items[id]
-	var raw []byte
-	if it != nil {
-		raw, _ = json.Marshal(it)
-	}
-	h.inbox.mu.Unlock()
-	if it == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	raw, ok := h.inboxItemRaw(ctx, id)
+	if !ok {
 		return nil, "", false
 	}
 	return uiItemOf(raw)
@@ -135,7 +132,7 @@ func uiItemOf(raw []byte) (*extension.UIInboxItem, string, bool) {
 		Reason  string          `json:"reason"`
 		DoneAt  json.RawMessage `json:"done_at"`
 		Meta    json.RawMessage `json:"meta"`
-		// Count and StartedAt: for an event, the hub keeps both itself (inbox_group.go).
+		// Count and StartedAt: for an event, the inbox keeps both itself (the manager's inbox_group.go).
 		Count     int       `json:"count"`
 		StartedAt time.Time `json:"started_at"`
 	}

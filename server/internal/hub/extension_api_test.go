@@ -256,15 +256,6 @@ func callReq(t *testing.T, h http.Handler, req *http.Request, token string) (int
 	return w.Code, out
 }
 
-// A plugin connector's kinds reach the models in its own words.
-func TestExtensionKindDescriptions(t *testing.T) {
-	extensionKinds.Store("examplenotes/shared", "Example Notes 里有人共享了一篇笔记给用户")
-	defer extensionKinds.Delete("examplenotes/shared")
-	it := &InboxItem{Source: "examplenotes", Kind: "shared", Context: "（正文）", Connector: &InboxConnector{}}
-	if got := triageInput(it); !strings.HasPrefix(got, "类型：Example Notes 里有人共享了一篇笔记给用户\n") {
-		t.Fatalf("%q", got)
-	}
-}
 
 // opsStore adds client-op receipts to a test store.
 type opsStore struct {

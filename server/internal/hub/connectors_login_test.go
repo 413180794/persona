@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -244,16 +245,14 @@ func TestConnectorDataDelete(t *testing.T) {
 	st := newKeepStore()
 	h.store = st
 	h.connectors = connector.NewRegistry(nil)
-	h.inbox.init()
 	_ = h.addConnector(&exampleConnector{})
 	mux := h.routes()
-	kst := withKB(t, h).Store // the assistant's: the hub asks it to delete (kb.forget)
+	kst := withKB(t, h).Store // the assistant's: the hub asks it to delete (kb.forget), and the inbox's items (inbox.forget)
 	connectAssistant(t, h)
+	seedInbox(t, h, "example", "lark")
 	_ = kst.PutChat(&kb.Chat{ID: "example-c1", Source: "example", Name: "示例群"})
 	_ = kst.PutChat(&kb.Chat{ID: "lark-f1", Source: "lark", Name: "需求群"})
 	_ = kst.PutPerson(&kb.Person{ID: "example-p1", Source: "example", Name: "示例用户"})
-	h.inbox.items["example:c1"] = &InboxItem{ID: "example:c1", Source: "example", Title: "示例群"}
-	h.inbox.items["lark:f1:1"] = &InboxItem{ID: "lark:f1:1", Source: "lark", Title: "需求群"}
 
 	if code, _ := call(t, mux, "DELETE", "/api/v1/connectors/nope/data", h.cfg.Token, ""); code != 404 {
 		t.Fatalf("an unknown connector: %d", code)
@@ -271,15 +270,12 @@ func TestConnectorDataDelete(t *testing.T) {
 	if _, ok := kst.Chat("lark-f1"); !ok {
 		t.Error("Feishu's chat is gone")
 	}
-	if _, ok := h.inbox.items["example:c1"]; ok {
-		t.Error("the inbox item is still there")
-	}
-	if _, ok := h.inbox.items["lark:f1:1"]; !ok {
-		t.Error("Feishu's inbox item is gone")
+	if got := inboxSourcesListed(t, h); !slices.Equal(got, []string{"lark"}) { // the source's items went, the others stay
+		t.Errorf("the inbox has %v", got)
 	}
 
-	// The assistant away: the inbox's items go all the same; the knowledge base's part waits (503, asked again).
-	h.inbox.items["example:c2"] = &InboxItem{ID: "example:c2", Source: "example", Title: "示例群二"}
+	// The assistant away (the knowledge base and the inbox are its): nothing goes, the app is told to try again (503).
+	seedInbox(t, h, "example")
 	_ = kst.PutChat(&kb.Chat{ID: "example-c2", Source: "example", Name: "示例群二"})
 	a := assistantOf(t, h)
 	a.stop()
@@ -288,11 +284,13 @@ func TestConnectorDataDelete(t *testing.T) {
 	if code, out := call(t, mux, "DELETE", "/api/v1/connectors/example/data", h.cfg.Token, ""); code != 503 || out["code"] != assistantwire.CodeAssistantOffline {
 		t.Fatalf("with the assistant away: %d %v", code, out)
 	}
-	if _, ok := h.inbox.items["example:c2"]; ok {
-		t.Error("the inbox item waited for the knowledge base")
-	}
 	if _, ok := kst.Chat("example-c2"); !ok {
 		t.Error("the chat went with the assistant away")
+	}
+	// Back: asked again, what is left goes.
+	connectAssistant(t, h)
+	if code, out := call(t, mux, "DELETE", "/api/v1/connectors/example/data", h.cfg.Token, ""); code != 200 || out["chats"] != 1.0 {
+		t.Fatalf("asked again: %d %v", code, out)
 	}
 }
 

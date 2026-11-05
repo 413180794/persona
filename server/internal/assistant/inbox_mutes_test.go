@@ -1,38 +1,27 @@
-package hub
+package assistant
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/connector/github"
-	"github.com/nwverse/persona/server/internal/mail"
 )
 
-// muteStore keeps settings in memory and takes inbox items without keeping them.
-type muteStore struct{ *keepStore }
-
-func (muteStore) PutInboxItem(context.Context, string, []byte, time.Time, *time.Time) error {
-	return nil
-}
-
-func muteHub(t *testing.T) *Hub {
+func muteHub(t *testing.T) *inboxHub {
 	t.Helper()
-	h := newTestHub(t)
-	h.store = muteStore{newKeepStore()}
-	h.connectors = connector.NewRegistry(nil)
-	h.inbox.init()
+	h := newInboxHub(t)
+	h.inboxReady(context.Background())
 	return h
 }
 
 func mailItem(id, from, name string) *InboxItem {
 	return &InboxItem{ID: id, Source: "mail", Kind: "mail", Title: "示例订单", UpdatedAt: time.Now(),
-		Mail: &InboxMail{AccountID: "acc1", From: mail.Address{Name: name, Email: from}}}
+		Mail: &InboxMail{AccountID: "acc1", From: MailAddress{Name: name, Email: from}}}
 }
 
 // What an item can be muted by, for each kind of source.
@@ -66,14 +55,14 @@ func TestMuteFromAnItem(t *testing.T) {
 	h.inbox.items["c"] = mailItem("c", "lucy@example.com", "Lucy")
 	mux := h.routes()
 
-	_, out := call(t, mux, "GET", "/api/v1/inbox", h.cfg.Token, "")
+	_, out := inboxCall(t, mux, "GET", "/api/v1/inbox", "")
 	if !strings.Contains(fmt.Sprint(out["items"]), "mutes:[map[name:示例商城 tag:sender value:shop@example.com]]") {
 		t.Fatalf("items do not say what mutes them: %v", out["items"])
 	}
-	if code, _ := call(t, mux, "POST", "/api/v1/inbox/mutes", h.cfg.Token, `{"item_id":"a","tag":"repo"}`); code != 400 {
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/mutes", `{"item_id":"a","tag":"repo"}`); code != 400 {
 		t.Fatalf("a mail muted by repository: %d", code)
 	}
-	code, out := call(t, mux, "POST", "/api/v1/inbox/mutes", h.cfg.Token, `{"item_id":"a","tag":"sender"}`)
+	code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/mutes", `{"item_id":"a","tag":"sender"}`)
 	if code != 200 || out["settled"] != float64(2) {
 		t.Fatalf("mute: %d %v", code, out)
 	}
@@ -83,24 +72,22 @@ func TestMuteFromAnItem(t *testing.T) {
 			t.Errorf("%s: done %v, reason %q", id, it.DoneAt, it.Reason)
 		}
 	}
-	_, out = call(t, mux, "GET", "/api/v1/inbox/mutes", h.cfg.Token, "")
+	_, out = inboxCall(t, mux, "GET", "/api/v1/inbox/mutes", "")
 	list := out["mutes"].([]any)
 	if len(list) != 1 || list[0].(map[string]any)["source_name"] != "邮件" || list[0].(map[string]any)["value"] != "shop@example.com" {
 		t.Fatalf("mutes %v", out)
 	}
 	// Muting it again is the same mute.
-	if _, out := call(t, mux, "POST", "/api/v1/inbox/mutes", h.cfg.Token, `{"item_id":"b","tag":"sender"}`); out["settled"] != float64(0) {
+	if _, out := inboxCall(t, mux, "POST", "/api/v1/inbox/mutes", `{"item_id":"b","tag":"sender"}`); out["settled"] != float64(0) {
 		t.Fatalf("again: %v", out)
 	}
 	if len(h.listedMutes()) != 1 {
 		t.Fatal("muted twice")
 	}
 
-	// Kept: a hub started again has it, and a later mail of the sender is filed at the next collection.
-	h2 := newTestHub(t)
-	h2.store, h2.connectors = h.store, connector.NewRegistry(nil)
-	h2.inbox.init()
-	h2.loadInboxMutes(ctx)
+	// Kept: the manager started again has it, and a later mail of the sender is filed at the next collection.
+	h2 := New(Options{Hub: h.f, Store: func() Store { return h.st }, Logf: t.Logf})
+	h2.inboxReady(ctx)
 	h2.inbox.items["d"] = mailItem("d", "shop@example.com", "示例商城")
 	h2.inbox.mu.Lock()
 	h2.inbox.applyMutes(time.Now()) // as each collection does
@@ -110,7 +97,7 @@ func TestMuteFromAnItem(t *testing.T) {
 	}
 
 	id := list[0].(map[string]any)["id"].(string)
-	if code, _ := call(t, mux, "DELETE", "/api/v1/inbox/mutes/"+id, h.cfg.Token, ""); code != 200 || len(h.listedMutes()) != 0 {
+	if code, _ := inboxCall(t, mux, "DELETE", "/api/v1/inbox/mutes/"+id, ""); code != 200 || len(h.listedMutes()) != 0 {
 		t.Fatalf("unmute: %d %v", code, h.listedMutes())
 	}
 	if h.inbox.items["a"].open() {
@@ -118,62 +105,32 @@ func TestMuteFromAnItem(t *testing.T) {
 	}
 }
 
-// GitHub's muted repositories: the ones its options kept are moved into the mutes; its settings list them from the
-// mutes and set them into the mutes (older apps and GitHub's page work as before).
-func TestGitHubMutedReposAreMutes(t *testing.T) {
+// A source's muted repositories (GitHub's page lists and sets them as its muted_repos): set replaces them (the others
+// unmuted), add only adds (the ones its options kept before, moved over), a repository needs its owner.
+func TestInboxRepoMutes(t *testing.T) {
 	h := muteHub(t)
 	ctx := context.Background()
-	gh := github.New(github.Config{Inbox: github.InboxOptions{MutedRepos: []string{"Example-Org/Old-Site"}}}, "Mac", nil)
-	if err := h.addConnector(gh); err != nil {
-		t.Fatal(err)
+	h.inbox.srcMu.Lock()
+	h.inbox.names["github"] = "GitHub"
+	h.inbox.srcMu.Unlock()
+	if repos, err := h.InboxRepoMutes(ctx, assistantwire.InboxRepoMutes{Source: "github", Set: true, Add: true, Repos: []string{"Example-Org/Old-Site"}}); err != nil ||
+		!slices.Equal(repos, []string{"Example-Org/Old-Site"}) {
+		t.Fatalf("moved: %v %v", repos, err)
 	}
-	h.loadInboxMutes(ctx)
-	h.githubMutes(ctx)
-	if got := h.listedMutes(); len(got) != 1 || got[0].Value != "example-org/old-site" || got[0].Name != "Example-Org/Old-Site" || got[0].SourceName != "GitHub" {
-		t.Fatalf("not moved: %+v", got)
+	if got := h.listedMutes(); len(got) != 1 || got[0].Value != "example-org/old-site" || got[0].SourceName != "GitHub" || got[0].Tag != connector.TagRepo {
+		t.Fatalf("mutes %+v", got)
 	}
-	var kept struct {
-		MutedRepos []string `json:"muted_repos"`
+	if repos, _ := h.InboxRepoMutes(ctx, assistantwire.InboxRepoMutes{Source: "github", Set: true, Add: true, Repos: []string{"example-org/old-site"}}); len(repos) != 1 {
+		t.Fatalf("moved again: %v", repos)
 	}
-	_ = json.Unmarshal(gh.Options(), &kept)
-	if len(kept.MutedRepos) != 0 {
-		t.Fatalf("still in GitHub's options: %v", kept.MutedRepos)
+	if repos, err := h.InboxRepoMutes(ctx, assistantwire.InboxRepoMutes{Source: "github", Set: true, Repos: []string{"example-org/new"}}); err != nil ||
+		!slices.Equal(repos, []string{"example-org/new"}) {
+		t.Fatalf("set: %v %v", repos, err)
 	}
-	listed := func() []string {
-		for _, info := range h.listedConnectors(ctx, true) {
-			if info.ID == "github" {
-				var o struct {
-					MutedRepos []string `json:"muted_repos"`
-				}
-				_ = json.Unmarshal(info.Options, &o)
-				return o.MutedRepos
-			}
-		}
-		return nil
-	}
-	if got := listed(); !slices.Equal(got, []string{"Example-Org/Old-Site"}) {
-		t.Fatalf("GitHub's page lists %v", got)
-	}
-	// The page sets the list: one added, the old one removed; the CI choice goes to GitHub.
-	if err := h.setConnectorOptions(ctx, "github", json.RawMessage(`{"ci":"all","muted_repos":["example-org/new"],"ignore_branches":["train/*"]}`)); err != nil {
-		t.Fatal(err)
-	}
-	if got := listed(); !slices.Equal(got, []string{"example-org/new"}) {
-		t.Fatalf("after setting: %v", got)
-	}
-	var o struct {
-		CI string `json:"ci"`
-	}
-	_ = json.Unmarshal(gh.Options(), &o)
-	if o.CI != "all" {
-		t.Fatalf("the CI choice did not reach GitHub: %s", gh.Options())
-	}
-	if err := h.setConnectorOptions(ctx, "github", json.RawMessage(`{"muted_repos":["nope"]}`)); err == nil {
+	if _, err := h.InboxRepoMutes(ctx, assistantwire.InboxRepoMutes{Source: "github", Set: true, Repos: []string{"nope"}}); err == nil {
 		t.Fatal("a repository without its owner was taken")
 	}
-	// Moving again (the next start) changes nothing.
-	h.githubMutes(ctx)
-	if len(h.listedMutes()) != 1 {
-		t.Fatalf("mutes %+v", h.listedMutes())
+	if repos, _ := h.InboxRepoMutes(ctx, assistantwire.InboxRepoMutes{Source: "github"}); !slices.Equal(repos, []string{"example-org/new"}) {
+		t.Fatalf("listed: %v", repos)
 	}
 }

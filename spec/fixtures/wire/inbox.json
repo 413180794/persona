@@ -3,7 +3,7 @@
     "name": "inbox_list",
     "description": "收件箱列表包含飞书和邮件条目，并移除内部上下文。",
     "source": [
-      "server/internal/hub/inbox.go: InboxItem.listed, Hub.inboxRoutes",
+      "server/internal/assistant/inbox.go: InboxItem.listed, Service.inboxRoutes",
       "apple/Shared/InboxModels.swift: InboxItem"
     ],
     "derived": true,

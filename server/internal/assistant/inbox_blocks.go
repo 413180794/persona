@@ -1,15 +1,14 @@
-package hub
+package assistant
 
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 )
 
 // The blocks of inbox items a connector moving out of the hub hands over in its things' extra (connector.MigratableConnectors,
 // docs/connector-protocol.md「迁出 hub 的连接器」): the apps draw a document item's rows and a feed post's notices from
-// them, and a document item's status changes go back to the connector (inbox.reply's changes).
+// them, and a document item's status changes go back to the connector (inbox.reply's changes, through the hub).
 
 // InboxDoc is a document item: which document, what happened, the rows about me and where a reply goes.
 type InboxDoc struct {
@@ -109,31 +108,24 @@ func docOffers(d InboxDoc, ch DocChange) bool {
 var errNoDocRow = errors.New("this row or status column is not in the item")
 
 // setDocStatus moves one row's status of a document item (the user's tap): the item's connector does it
-// (inbox.reply's changes) and reads the document again.
-func (h *Hub) setDocStatus(ctx context.Context, id string, ch DocChange) (InboxItem, error) {
-	h.inbox.mu.Lock()
-	it, ok := h.inbox.items[id]
+// (inbox.reply's changes, through the hub) and reads the document again.
+func (s *Service) setDocStatus(ctx context.Context, id string, ch DocChange) (InboxItem, error) {
+	b := &s.inbox
+	b.mu.Lock()
+	it, ok := b.items[id]
 	var d InboxDoc
 	if ok && it.Doc != nil {
 		d = *it.Doc
 	}
-	h.inbox.mu.Unlock()
+	b.mu.Unlock()
 	if !ok || d.NoticeID == "" {
 		return InboxItem{}, errNoInboxItem
 	}
-	in := h.migratedConnector(it)
-	if in == nil {
-		return InboxItem{}, errCannotReply // its connector is not here (the plugin switched off)
+	if it.Connector != nil || migratedThread(it) == "" {
+		return InboxItem{}, errCannotReply
 	}
 	if !docOffers(d, ch) {
 		return InboxItem{}, errNoDocRow
 	}
-	return h.migratedDocStatus(ctx, in, it, ch)
-}
-
-// asksAgent: text posted as the user would come back as their request to start an agent (a plugin's /agent:
-// "/agent", then nothing, a space or a colon; any case).
-func asksAgent(text string) bool {
-	rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), "/agent")
-	return ok && (rest == "" || strings.HasPrefix(rest, " ") || strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, "：") || strings.HasPrefix(rest, "\n"))
+	return s.migratedDocStatus(ctx, it, ch)
 }

@@ -296,7 +296,7 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 		_ = reg.AddHubJSON(p.Manifest, p.Legacy, p.Record.Enabled)
 	}
 	reg.RemoteManifest = ps.remoteManifest
-	reg.CanEnable = h.canEnableExtension // the inbox's rules (plugin_inbox.go)
+	reg.CanEnable = h.canEnableExtension // the inbox's rules (extension_inbox.go)
 	var own []string
 	for _, c := range h.connectors.All() {
 		if !slices.Contains(connector.MigratableConnectors, c.ID()) { // a plugin may take these over (connectors_migrate.go)
@@ -864,7 +864,8 @@ var unknownCapabilities sync.Map
 var extensionKinds sync.Map
 
 // pluginConnectors are the connectors a plugin provides (installed, or from hub.json), not a built-in plugin's: their
-// new inbox items are triaged before they enter (inbox_admit.go). Connector id → the plugin's
+// new inbox items are triaged before they enter (the manager's inbox_admit.go; a round says it: InboxSource.Extension).
+// Connector id → the plugin's
 // source (plugin.SourceInstalled, plugin.SourceHubJSON).
 var extensionConnectors sync.Map
 

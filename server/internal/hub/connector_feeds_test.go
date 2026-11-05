@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +51,6 @@ func TestConnectorFeedsTurnedOff(t *testing.T) {
 	st := newKeepStore()
 	h.store = st
 	h.connectors = connector.NewRegistry(nil)
-	h.inbox.init()
 	f := &feedConnector{}
 	if err := h.addConnector(f); err != nil {
 		t.Fatal(err)
@@ -72,20 +72,17 @@ func TestConnectorFeedsTurnedOff(t *testing.T) {
 		Params: json.RawMessage(`{"id":"example"}`)}); err == nil || f.changes != 0 {
 		t.Fatalf("asked for changes %d time(s) with 进知识库 off (%v)", f.changes, err)
 	}
-	h.collectConnectors(ctx)
-	if f.collects != 1 || len(openItems(h)) != 1 {
-		t.Fatalf("the inbox stopped with the archive: %d collect(s), %d item(s)", f.collects, len(openItems(h)))
+	if src := h.readConnectors(ctx); f.collects != 1 || len(src) != 1 || len(src[0].Things) != 1 {
+		t.Fatalf("the inbox stopped with the archive: %d collect(s), %+v", f.collects, src)
 	}
 
 	if code, out := call(t, mux, "PUT", "/api/v1/connectors/example/settings", h.cfg.Token, `{"inbox":false}`); code != 200 || out["inbox"] != false {
 		t.Fatalf("inbox off: %d %v", code, out)
 	}
-	h.collectConnectors(ctx)
-	if f.collects != 1 {
-		t.Fatalf("collected %d time(s) with 进收件箱 off", f.collects)
-	}
-	if len(openItems(h)) != 1 {
-		t.Fatal("what came before 进收件箱 was turned off went away")
+	// Read with nothing: nothing new comes, and what came stays (the manager's inbox leaves a source read with nothing
+	// as it was).
+	if src := h.readConnectors(ctx); f.collects != 1 || len(src) != 1 || len(src[0].Things) != 0 {
+		t.Fatalf("collected %d time(s) with 进收件箱 off: %+v", f.collects, src)
 	}
 
 	next := newTestHub(t)
@@ -133,15 +130,14 @@ func TestConnectorArchiveDelete(t *testing.T) {
 	st := newKeepStore()
 	h.store = st
 	h.connectors = connector.NewRegistry(nil)
-	h.inbox.init()
 	_ = h.addConnector(&feedConnector{})
 	mux := h.routes()
 	kst := withKB(t, h).Store // the assistant's: the hub asks it to delete (kb.forget)
 	connectAssistant(t, h)
+	seedInbox(t, h, "example")
 	_ = kst.PutChat(&kb.Chat{ID: "example-c1", Source: "example", Name: "示例群"})
 	_ = kst.PutChat(&kb.Chat{ID: "lark-f1", Source: "lark", Name: "需求群"})
 	_ = kst.PutPerson(&kb.Person{ID: "example-p1", Source: "example", Name: "示例用户"})
-	h.inbox.items["example:c1"] = &InboxItem{ID: "example:c1", Source: "example", Title: "示例群"}
 
 	if code, _ := call(t, mux, "DELETE", "/api/v1/connectors/nope/archive", h.cfg.Token, ""); code != 404 {
 		t.Fatalf("an unknown connector: %d", code)
@@ -155,6 +151,9 @@ func TestConnectorArchiveDelete(t *testing.T) {
 	}
 	if !h.connectors.Enabled("example") || !h.connectors.Feeds("example", connector.FeedInbox) {
 		t.Fatal("the connector or its inbox was switched off")
+	}
+	if got := inboxSourcesListed(t, h); !slices.Equal(got, []string{"example"}) { // the archive only: the inbox's items stay
+		t.Errorf("the inbox has %v", got)
 	}
 	// The assistant away: nothing is deleted, the app is told to try again (503 assistant_offline).
 	_ = kst.PutChat(&kb.Chat{ID: "example-c2", Source: "example", Name: "示例群二"})
@@ -176,9 +175,6 @@ func TestConnectorArchiveDelete(t *testing.T) {
 	}
 	if _, ok := kst.Chat("lark-f1"); !ok {
 		t.Error("Feishu's chat is gone")
-	}
-	if _, ok := h.inbox.items["example:c1"]; !ok {
-		t.Error("the inbox item is gone")
 	}
 
 	other := newTestHub(t)

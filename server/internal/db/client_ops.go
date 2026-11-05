@@ -52,6 +52,12 @@ func (d *DB) FinishClientOp(ctx context.Context, id, state string, result json.R
 	return err
 }
 
+// ForgetClientOp drops an operation claimed and not finished, which did nothing: its retry runs it again.
+func (d *DB) ForgetClientOp(ctx context.Context, id string) error {
+	_, err := d.pool.Exec(ctx, `DELETE FROM client_ops WHERE id = $1 AND state = 'pending'`, id)
+	return err
+}
+
 // RecoverClientOps never retries operations whose executor disappeared during a restart.
 func (d *DB) RecoverClientOps(ctx context.Context) error {
 	_, err := d.pool.Exec(ctx, `UPDATE client_ops SET state = 'unknown', updated_at = now() WHERE state = 'pending'`)

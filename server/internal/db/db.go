@@ -724,7 +724,7 @@ func (d *DB) KBEntities(ctx context.Context, kind, tag string, limit int) ([]KBE
 
 // ---- inbox ----
 
-// PutInboxItem stores one inbox item (hub/inbox.go owns the JSON).
+// PutInboxItem stores one inbox item (the manager's inbox, assistant/inbox.go, owns the JSON).
 func (d *DB) PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error {
 	_, err := d.pool.Exec(ctx, `INSERT INTO inbox_items (id, data, updated_at, done_at) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (id) DO UPDATE SET data = $2, updated_at = $3, done_at = $4`, id, data, updatedAt, doneAt)

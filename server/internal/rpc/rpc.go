@@ -46,6 +46,15 @@ func (e *Error) WireError() (string, json.RawMessage) { return e.Code, e.Data }
 
 var ErrClosed = errors.New("rpc: connection closed")
 
+// ErrDropped is what Call answers when the connection closed after the request went out: the other side may have done
+// it. It is ErrClosed too (errors.Is), with the same words (a relay further on passes them as they are).
+var ErrDropped error = droppedError{}
+
+type droppedError struct{}
+
+func (droppedError) Error() string        { return ErrClosed.Error() }
+func (droppedError) Is(target error) bool { return target == ErrClosed }
+
 type Peer struct {
 	prefix  string
 	w       io.Writer
@@ -184,7 +193,7 @@ func (p *Peer) Call(ctx context.Context, method string, params any, out any) err
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-p.closed:
-		return ErrClosed
+		return ErrDropped
 	}
 }
 

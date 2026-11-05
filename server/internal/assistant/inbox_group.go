@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -20,7 +20,7 @@ import (
 // Inbox events (#1680, docs/inbox.md「事件合成」). A connector that declares group hands a conversation's new messages
 // over as a batch (InboxThing.Group) instead of an item. The hub asks the model which events — inbox items of that
 // conversation — the messages belong to: it reads the events (the events tool, its own) and the conversation (the
-// connector's tools, group.tool), at most groupCalls calls, and answers with a title, a summary and a tier for every
+// connector's tools, group.tool through the hub), at most groupCalls calls, and answers with a title, a summary and a tier for every
 // event it touches. The connector writes each event (group.append: one event a call, its meta in and out; the hub never
 // reads meta) and the hub stores what comes back with the model's words, triaged_by "model". When the model can't (not
 // set up, held, failing, too slow, or an answer that does not hold up) the connector groups the batch by structure
@@ -32,7 +32,6 @@ const (
 	groupEventsMax   = 10                 // events the events tool lists
 	groupDoneFor     = 3 * 24 * time.Hour // how long a done event is still listed
 	groupConcurrency = 4                  // batches related at once (the others wait for the next round)
-	groupToolMost    = 8 << 10            // bytes of a tool's answer the model reads
 	groupAttempts    = 3                  // tries of one event's append
 )
 
@@ -64,7 +63,7 @@ var undeclaredGroups sync.Map
 // relateBatches starts relating c's batches (things with Group) in the background and returns its other things.
 // Batches past groupConcurrency, and those of a conversation being related, wait for the next round: the connector
 // hands them again until each of their messages is in an event.
-func (h *Hub) relateBatches(ctx context.Context, c connector.Connector, things []connector.InboxThing) []connector.InboxThing {
+func (s *Service) relateBatches(ctx context.Context, c assistantwire.InboxSource, things []connector.InboxThing) []connector.InboxThing {
 	rest := things[:0:0]
 	var batches []connector.InboxThing
 	for _, t := range things {
@@ -77,20 +76,19 @@ func (h *Hub) relateBatches(ctx context.Context, c connector.Connector, things [
 	if len(batches) == 0 {
 		return rest
 	}
-	g, ok := connector.As[connector.Grouper](c)
-	if !ok {
-		if _, logged := undeclaredGroups.LoadOrStore(c.ID(), true); !logged {
-			h.logf("inbox: %s: hands batches to relate but does not declare group: they are dropped", c.ID())
+	if !c.Group {
+		if _, logged := undeclaredGroups.LoadOrStore(c.ID, true); !logged {
+			s.logf("inbox: %s: hands batches to relate but does not declare group: they are dropped", c.ID)
 		}
 		return rest
 	}
 	ctx = context.WithoutCancel(ctx) // the round (a pull to refresh) does not wait for them
-	gr := &h.inbox.grouping
+	gr := &s.inbox.grouping
 	for _, t := range batches {
 		if t.Thread == "" || t.Group.Batch == "" || len(t.Group.New) == 0 {
 			continue
 		}
-		key := c.ID() + "\x00" + t.Thread
+		key := c.ID + "\x00" + t.Thread
 		gr.mu.Lock()
 		if gr.running == nil {
 			gr.running = map[string]string{}
@@ -109,8 +107,7 @@ func (h *Hub) relateBatches(ctx context.Context, c connector.Connector, things [
 				gr.mu.Unlock()
 				gr.wg.Done()
 			}()
-			w, _ := connector.As[connector.EventWriter](c) // nil: the hub writes the events itself
-			h.relateBatch(ctx, c, g, w, t)
+			s.relateBatch(ctx, c, t)
 		}()
 	}
 	return rest
@@ -143,22 +140,22 @@ type plannedEvent struct {
 }
 
 // relateBatch relates one batch: by the model, else by the connector's fallback; then has each event written.
-func (h *Hub) relateBatch(ctx context.Context, c connector.Connector, g connector.Grouper, w connector.EventWriter, t connector.InboxThing) {
-	events := h.groupEvents(c.ID(), t.Thread, "")
-	plan, why := h.askGroup(ctx, c, g, t, events)
+func (s *Service) relateBatch(ctx context.Context, c assistantwire.InboxSource, t connector.InboxThing) {
+	events := s.groupEvents(c.ID, t.Thread, "")
+	plan, why := s.askGroup(ctx, c, t, events)
 	if plan == nil {
 		var err error
-		if plan, err = h.fallbackGroup(ctx, g, t, events); err != nil {
+		if plan, err = s.fallbackGroup(ctx, c, t, events); err != nil {
 			if errors.Is(err, errNoFallback) { // the batch waits for the model, as an inbox item without a fallback does
-				h.noteGroupWhy(c.ID(), why+"; no fallback: waiting for the model")
+				s.noteGroupWhy(c.ID, why+"; no fallback: waiting for the model")
 				return
 			}
-			h.logf("inbox: %s: batch %s: not related (%s), and its fallback failed: %v", c.ID(), t.Group.Batch, why, err)
+			s.logf("inbox: %s: batch %s: not related (%s), and its fallback failed: %v", c.ID, t.Group.Batch, why, err)
 			return
 		}
 	}
-	h.noteGroupWhy(c.ID(), why)
-	h.writeGroup(ctx, c, w, t, plan)
+	s.noteGroupWhy(c.ID, why)
+	s.writeGroup(ctx, c, t, plan)
 }
 
 // errNoFallback: the connector has no group.fallback (it answered an unknown method).
@@ -177,8 +174,8 @@ func unsupported(err error) bool {
 }
 
 // noteGroupWhy logs when a connector's batches start going by rules (or why changes), and when the model is back.
-func (h *Hub) noteGroupWhy(id, why string) {
-	gr := &h.inbox.grouping
+func (s *Service) noteGroupWhy(id, why string) {
+	gr := &s.inbox.grouping
 	gr.mu.Lock()
 	if gr.why == nil {
 		gr.why = map[string]string{}
@@ -188,21 +185,22 @@ func (h *Hub) noteGroupWhy(id, why string) {
 	gr.mu.Unlock()
 	switch {
 	case why != "" && why != prev:
-		h.logf("inbox: %s: relating by the connector's rules: %s", id, why)
+		s.logf("inbox: %s: relating by the connector's rules: %s", id, why)
 	case why == "" && seen && prev != "":
-		h.logf("inbox: %s: relating by the model again", id)
+		s.logf("inbox: %s: relating by the model again", id)
 	}
 }
 
 // groupEvents are the events of a conversation as the events tool answers: the open ones, then those done within
 // groupDoneFor, newest first, at most groupEventsMax; query keeps those whose title, summary or meta has it.
-func (h *Hub) groupEvents(connectorID, thread, query string) []groupEvent {
-	h.inbox.mu.Lock()
-	defer h.inbox.mu.Unlock()
+func (s *Service) groupEvents(connectorID, thread, query string) []groupEvent {
+	b := &s.inbox
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	cutoff := time.Now().Add(-groupDoneFor)
 	q := strings.ToLower(strings.TrimSpace(query))
 	var list []*InboxItem
-	for _, it := range h.inbox.items {
+	for _, it := range b.items {
 		if it.Group == nil || it.Group.Connector != connectorID || !sameConversation(it.Group.Thread, thread) ||
 			!it.open() && it.DoneAt.Before(cutoff) {
 			continue
@@ -259,14 +257,14 @@ type groupAnswer struct {
 
 // askGroup has the model relate the batch, calling tools at most groupCalls times, within groupTimeout. nil and why
 // when the model can't or its answer does not hold up (the fallback then groups it).
-func (h *Hub) askGroup(ctx context.Context, c connector.Connector, g connector.Grouper, t connector.InboxThing, events []groupEvent) (*groupPlan, string) {
+func (s *Service) askGroup(ctx context.Context, c assistantwire.InboxSource, t connector.InboxThing, events []groupEvent) (*groupPlan, string) {
 	ctx, cancel := context.WithTimeout(ctx, groupTimeout)
 	defer cancel()
 	rules := strings.TrimSpace(t.Rules)
 	if rules == "" {
-		rules = h.inboxRules(ctx)
+		rules = s.inboxConfig(ctx).Rules
 	}
-	system := prompts.RenderInboxGroup(prompts.InboxGroup{Owner: h.cfg.Assistant.Owner, MetaDescription: strings.TrimSpace(c.Manifest().MetaDescription),
+	system := prompts.RenderInboxGroup(prompts.InboxGroup{Owner: s.hello(ctx).Owner, MetaDescription: strings.TrimSpace(c.MetaDescription),
 		Rules: rules, MaxCalls: groupCalls, NewMax: groupNewMax})
 	seen := map[string]groupEvent{} // every event the model was shown: the only ones its answer may name
 	for _, e := range events {
@@ -277,12 +275,13 @@ func (h *Hub) askGroup(ctx context.Context, c connector.Connector, g connector.G
 		in.Left = groupCalls - len(in.Calls)
 		var out groupAnswer
 		sctx, scancel := context.WithTimeout(ctx, groupStepTimeout)
-		err := h.triageModel().JSON(sctx, system, prompts.RenderInboxGroupInput(in), &out)
+		err := s.inboxModelJSON(sctx, purposeTriage, system, prompts.RenderInboxGroupInput(in), 0, &out)
 		scancel()
+		paused, _ := modelPaused(err)
 		switch {
-		case ai.IsNotConfigured(err):
+		case modelUnconfigured(err):
 			return nil, "没有配置分拣模型"
-		case ai.IsPaused(err):
+		case paused:
 			return nil, "模型暂时不可用：" + err.Error()
 		case err != nil:
 			return nil, "模型出错：" + err.Error()
@@ -295,21 +294,21 @@ func (h *Hub) askGroup(ctx context.Context, c connector.Connector, g connector.G
 		case in.Left == 0:
 			return nil, fmt.Sprintf("模型查了 %d 次还要查", groupCalls)
 		}
-		result := h.groupTool(ctx, c.ID(), g, t.Thread, out.Tool, out.Args, seen)
+		result := s.groupTool(ctx, c.ID, t.Thread, out.Tool, out.Args, seen)
 		in.Calls = append(in.Calls, prompts.InboxGroupCall{Tool: out.Tool, Args: argsText(out.Args), Result: result})
 	}
 }
 
-// groupTool runs one tool for the model: events here, the conversation's through the connector. A failure is the
-// tool's answer ({"error": …}), the call counted.
-func (h *Hub) groupTool(ctx context.Context, connectorID string, g connector.Grouper, thread, name string, args json.RawMessage, seen map[string]groupEvent) string {
+// groupTool runs one tool for the model: events here, the conversation's through the connector (at the hub). A
+// failure is the tool's answer ({"error": …}), the call counted.
+func (s *Service) groupTool(ctx context.Context, connectorID, thread, name string, args json.RawMessage, seen map[string]groupEvent) string {
 	switch name {
 	case "events":
 		var a struct {
 			Query string `json:"query"`
 		}
 		_ = json.Unmarshal(args, &a)
-		events := h.groupEvents(connectorID, thread, a.Query)
+		events := s.groupEvents(connectorID, thread, a.Query)
 		for _, e := range events {
 			seen[e.ID] = e
 		}
@@ -320,14 +319,18 @@ func (h *Hub) groupTool(ctx context.Context, connectorID string, g connector.Gro
 		}
 		cctx, cancel := context.WithTimeout(ctx, groupCallTimeout)
 		defer cancel()
-		raw, err := g.GroupTool(cctx, connector.GroupToolCall{Thread: thread, Name: name, Args: args})
+		var res struct {
+			Result string `json:"result"`
+		}
+		err := s.appCall(cctx, AppInbox, inboxGroupTool, map[string]any{"source": connectorID,
+			"call": connector.GroupToolCall{Thread: thread, Name: name, Args: args}}, &res)
 		if unsupported(err) {
 			return jsonText(map[string]string{"error": "这个工具用不了：连接器没有它，别再调，用已有的信息判断"})
 		}
 		if err != nil {
 			return jsonText(map[string]string{"error": err.Error()})
 		}
-		return compactJSON(raw, groupToolMost)
+		return res.Result
 	}
 	return jsonText(map[string]string{"error": "没有这个工具：" + name})
 }
@@ -421,7 +424,7 @@ func isNewEvent(ev string) bool {
 
 // fallbackGroup has the connector group the batch by structure, with the same events the model would have seen,
 // and holds its answer to the same rules (each new message once; an existing event a listed one, not done).
-func (h *Hub) fallbackGroup(ctx context.Context, g connector.Grouper, t connector.InboxThing, events []groupEvent) (*groupPlan, error) {
+func (s *Service) fallbackGroup(ctx context.Context, c assistantwire.InboxSource, t connector.InboxThing, events []groupEvent) (*groupPlan, error) {
 	listed := map[string]bool{}
 	in := connector.GroupFallback{Thread: t.Thread, Batch: t.Group.Batch, Events: []connector.GroupEvent{}}
 	for _, e := range events {
@@ -430,7 +433,8 @@ func (h *Hub) fallbackGroup(ctx context.Context, g connector.Grouper, t connecto
 	}
 	cctx, cancel := context.WithTimeout(ctx, groupCallTimeout)
 	defer cancel()
-	res, err := g.GroupFallback(cctx, in)
+	var res connector.GroupFallbackResult
+	err := s.appCall(cctx, AppInbox, inboxGroupFallback, map[string]any{"source": c.ID, "fallback": in}, &res)
 	if unsupported(err) {
 		return nil, errNoFallback
 	}
@@ -491,37 +495,38 @@ func (h *Hub) fallbackGroup(ctx context.Context, g connector.Grouper, t connecto
 // writeGroup writes each event of the plan and keeps it: through the connector when it keeps the events' meta (w; an
 // event that failed is tried again, alone), else composed here from the batch, without meta. An existing event done
 // meanwhile (the user filed it) gets a new one that continues it instead.
-func (h *Hub) writeGroup(ctx context.Context, c connector.Connector, w connector.EventWriter, t connector.InboxThing, plan *groupPlan) {
+func (s *Service) writeGroup(ctx context.Context, c assistantwire.InboxSource, t connector.InboxThing, plan *groupPlan) {
+	b := &s.inbox
 	var saved []*InboxItem
 	for _, e := range plan.events {
 		a := connector.GroupAppend{Thread: t.Thread, Messages: e.messages, Continues: e.continues}
 		if e.existing != "" {
-			h.inbox.mu.Lock()
-			if cur := h.inbox.items[e.existing]; cur != nil && cur.open() {
+			b.mu.Lock()
+			if cur := b.items[e.existing]; cur != nil && cur.open() {
 				a.Event, a.Meta = cur.ID, cur.Meta
 			} else {
 				a.Continues = e.existing
 			}
-			h.inbox.mu.Unlock()
+			b.mu.Unlock()
 		}
 		var thing connector.InboxThing
 		var err error
-		if w != nil {
-			thing, err = h.appendEvent(ctx, w, a)
+		if c.Meta {
+			thing, err = s.appendEvent(ctx, c.ID, a)
 		} else {
-			thing = h.composeEvent(c, t, a)
+			thing = s.composeEvent(c.ID, t, a)
 		}
 		if err != nil {
-			h.logf("inbox: %s: batch %s: writing %s: %v", c.ID(), t.Group.Batch, orNew(a.Event), err)
+			s.logf("inbox: %s: batch %s: writing %s: %v", c.ID, t.Group.Batch, orNew(a.Event), err)
 			continue
 		}
-		if it := h.putEvent(c, t.Thread, e, thing, plan.model); it != nil && !containsItem(saved, it) {
+		if it := s.putEvent(c, t.Thread, e, thing, plan.model); it != nil && !containsItem(saved, it) {
 			saved = append(saved, it)
 		}
 	}
-	h.saveInbox(ctx, saved)
+	s.saveInbox(ctx, saved)
 	if len(saved) > 0 {
-		h.handInbox(ctx) // a new 需要你 may be the AI 分身's
+		s.handInbox(ctx) // a new 需要你 may be the AI 分身's
 	}
 }
 
@@ -532,8 +537,12 @@ func orNew(event string) string {
 	return event
 }
 
-// appendEvent is one group.append, tried groupAttempts times; an answer without an id is a failure.
-func (h *Hub) appendEvent(ctx context.Context, g connector.EventWriter, a connector.GroupAppend) (connector.InboxThing, error) {
+// appendEvent is one group.append (at the hub), tried groupAttempts times; an answer without an id is a failure. The
+// tries carry one append id: one whose answer was lost on the way (the plugin wrote it) is answered by the hub from
+// what the plugin said, not written again.
+func (s *Service) appendEvent(ctx context.Context, source string, a connector.GroupAppend) (connector.InboxThing, error) {
+	raw, _ := json.Marshal(a)
+	appendID := namedClientID("append\n" + source + "\n" + string(raw))
 	var err error
 	wait := groupRetryWait
 	for try := range groupAttempts {
@@ -546,9 +555,12 @@ func (h *Hub) appendEvent(ctx context.Context, g connector.EventWriter, a connec
 			wait *= 2
 		}
 		cctx, cancel := context.WithTimeout(ctx, groupCallTimeout)
-		var thing connector.InboxThing
-		thing, err = g.GroupAppend(cctx, a)
+		var res struct {
+			Thing connector.InboxThing `json:"thing"`
+		}
+		err = s.appCall(cctx, AppInbox, inboxGroupAppend, map[string]any{"source": source, "append": a, "append_id": appendID}, &res)
 		cancel()
+		thing := res.Thing
 		if err == nil && thing.ID == "" {
 			err = errors.New("the answer has no id")
 		}
@@ -563,15 +575,16 @@ func (h *Hub) appendEvent(ctx context.Context, g connector.EventWriter, a connec
 // and tier, or under the fallback its rule tier with 按规则; triaged at this version either way. Its count is the
 // hub's (the messages it put in it; extra.count is not read for an event) and its start is set when it is made. An answer at the version the item has
 // already is a repeat: nothing is stored or announced again (nil).
-func (h *Hub) putEvent(c connector.Connector, thread string, e plannedEvent, thing connector.InboxThing, byModel bool) *InboxItem {
-	h.inbox.mu.Lock()
-	defer h.inbox.mu.Unlock()
-	it := h.inbox.items[thing.ID]
+func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e plannedEvent, thing connector.InboxThing, byModel bool) *InboxItem {
+	b := &s.inbox
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	it := b.items[thing.ID]
 	if it != nil && it.Last == thing.Last {
 		return nil
 	}
 	if it == nil {
-		it = &InboxItem{ID: thing.ID, Source: c.ID(), Account: c.ID(), AccountName: c.Name(), StartedAt: thing.At}
+		it = &InboxItem{ID: thing.ID, Source: c.ID, Account: c.ID, AccountName: c.Name, StartedAt: thing.At}
 		if x := thing.Extra; x != nil {
 			if x.Source != "" {
 				it.Source = x.Source
@@ -592,7 +605,7 @@ func (h *Hub) putEvent(c connector.Connector, thread string, e plannedEvent, thi
 	// The hub assigns the messages, so it keeps the count (the connector's meta may hold only the newest ones): the
 	// event had count, it takes these. Its start is set once, when it is made.
 	it.Count, it.StartedAt = count+len(e.messages), started
-	it.Meta, it.Group, it.Read = thing.Meta, &InboxGroup{Connector: c.ID(), Thread: thread}, false
+	it.Meta, it.Group, it.Read = thing.Meta, &InboxGroup{Connector: c.ID, Thread: thread}, false
 	if byModel {
 		it.Title, it.Summary, it.Tier, it.Reason, it.TriagedBy = clip(oneLine(e.title), 40), clip(oneLine(e.summary), 80), e.tier,
 			clip(oneLine(e.reason), 30), "model"
@@ -602,7 +615,7 @@ func (h *Hub) putEvent(c connector.Connector, thread string, e plannedEvent, thi
 			tier = eventRuleTier(thing)
 		}
 		if tier == "" {
-			tier = ruleTier(it)
+			tier = b.ruleTier(it)
 		}
 		if tier == "" { // nothing says: the user looks (拿不准时选 action)
 			tier = TierAction
@@ -613,11 +626,11 @@ func (h *Hub) putEvent(c connector.Connector, thread string, e plannedEvent, thi
 		it.Summary, it.Tier, it.Reason, it.TriagedBy = "", tier, "按规则", "rules"
 	}
 	it.TriagedAt = it.Last
-	if m := mutedBy(h.inbox.mutes, it); m != nil && it.open() {
+	if m := mutedBy(b.mutes, it); m != nil && it.open() {
 		it.done(time.Now(), "read")
 		it.Reason = "已静音：" + m.Name
 	}
-	h.inbox.items[it.ID] = it
+	b.items[it.ID] = it
 	return it
 }
 

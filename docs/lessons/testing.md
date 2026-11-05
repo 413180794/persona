@@ -376,6 +376,20 @@
 - **端到端里用 `dir:` 装的假扩展默认跑在沙箱里**（bwrap，只能写自己的数据目录和运行目录）：假的渠道插件往测试目录写收到的消息，写不了就抛异常退出，hub 把它再起起来、
   它从头重放输入，前面那条消息被去重吞掉，看起来像「消息丢了」。假扩展把文件放在 `initialize` 给的 `extension.data_dir` 里（测试去 `~/.persona/extensions/data/<id>/` 读），沙箱照开。
 
+## 测试里的假模型服务器被本机的端口探测打到（2026-11-04）
+
+`TestInboxTriageWaitsOutAnExhaustedQuota` 偶尔报「20 件用了 21 次请求」：多出来的一次是 `GET /`、`User-Agent: jarvis-ports`，
+是这台开发机上跑着的 node 在找 Agent 监听的端口（`docs/ports.md`），探到了 `httptest` 起的本机端口。数请求次数的假服务器只数
+自己的接口（`POST /v1/messages`），别的路径回 404 不计数（`assistant/inbox_limit_test.go`）；同类的假服务器照这样写，否则在有 node 的机器上会时好时坏。
+`TestOpenMacLeavesAgentAlertsToTheApp` 也因为同一个原因偶尔多出一条 token 为 `/` 的「推送」：假 APNs 只数 `POST /3/device/…`（`hub/liveactivity_test.go`）。
+
+## 假模型服务器还会收到 hub 自己的模型调用（2026-11-04）
+
+`TestModelCallStopsWhenTheManagerStopsWaiting` 第一次跑时测试的请求一直没到假服务器：连上助手后 hub 自己的功能（Agent 的阶段判断等）
+也用同一个模型配置发请求，被假服务器挂住，同一地址和 Key 的请求共用一道闸（`ai/limit.go`），测试那次在闸前排到超时、根本没发出去；
+挂住的那个请求又让 `srv.Close()` 一直等，整个包跑满 10 分钟超时。假服务器先按请求体认出测试自己的那次（输入里带一句独有的话），
+别的立刻回一个合法的答案；要挂住的请求也加一个上限（这里 10 秒），收尾不会卡死（`hub/inbox_test.go`）。
+
 ## 同一组 UI 测试连跑时互相看见对方留下的东西（2026-11-05，#1961）
 
 - App 的状态在模拟器上跨用例保留（飞书发件箱、草稿、对话缓存……），前面的用例在同一个会话里留下的「失败 / 结果未知」气泡，后面的用例用同样的标识去点，

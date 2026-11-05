@@ -183,6 +183,27 @@ func TestCallAfterPeerClosedReturnsErrClosed(t *testing.T) {
 	}
 }
 
+// A call refused before its request went out is ErrClosed; one whose connection closed while it was out is
+// ErrDropped (the other side may have done it), which is ErrClosed too.
+func TestCallDroppedWhileOutIsErrDropped(t *testing.T) {
+	closed := New("h", io.Discard)
+	closed.Close(io.EOF)
+	if err := closed.Call(context.Background(), "x", nil, nil); errors.Is(err, ErrDropped) {
+		t.Fatalf("not sent, yet dropped: %v", err)
+	}
+	out := New("h", io.Discard)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		out.Close(io.EOF)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := out.Call(ctx, "x", nil, nil)
+	if !errors.Is(err, ErrDropped) || !errors.Is(err, ErrClosed) || err.Error() != ErrClosed.Error() {
+		t.Fatalf("want ErrDropped (as ErrClosed), got %v", err)
+	}
+}
+
 func TestServeReturnsOnEOF(t *testing.T) {
 	r, w := io.Pipe()
 	p := New("h", io.Discard)

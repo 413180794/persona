@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -16,6 +16,25 @@ import (
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/connector"
 )
+
+// extensionLark is the plugin that took Feishu over (connector lark), on made-up things.
+type extensionLark struct {
+	things []connector.InboxThing
+	got    []connector.InboxReply
+}
+
+func (*extensionLark) ID() string   { return "lark" }
+func (*extensionLark) Name() string { return "飞书" }
+func (*extensionLark) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox}, Kinds: []string{KindDM, KindDoc}}
+}
+func (c *extensionLark) Collect(context.Context) ([]connector.InboxThing, error) {
+	return c.things, nil
+}
+func (c *extensionLark) Reply(_ context.Context, r connector.InboxReply) error {
+	c.got = append(c.got, r)
+	return nil
+}
 
 // triageModelStub is a triage model whose answer the test switches: ok (reply), fail (HTTP 500), quota (429, quota
 // used up, back after a second), slow (answers after delay). It keeps the triage requests (not the judge's).
@@ -78,60 +97,23 @@ func (m *triageModelStub) asked() []capturedCall {
 	return append([]capturedCall(nil), m.calls...)
 }
 
-// savedStore is the model configuration's store that also keeps which inbox items were written.
-type savedStore struct {
-	*modelTestStore
-	mu  sync.Mutex
-	ids map[string]int
-}
-
-func (s *savedStore) PutInboxItem(_ context.Context, id string, _ []byte, _ time.Time, _ *time.Time) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.ids[id]++
-	return nil
-}
-
-func (s *savedStore) saved(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.ids[id] > 0
-}
-
-// admitHub is a hub with an inbox, a store that records writes, a triage model and the given connectors.
-func admitHub(t *testing.T, model *ai.Client, cs ...connector.Connector) (*Hub, *savedStore) {
+// admitHub is an assistant with an inbox, a store that records writes, a triage model and the given connectors (a
+// plugin's each).
+func admitHub(t *testing.T, model *ai.Client, cs ...connector.Connector) (*inboxHub, *inboxMemStore) {
 	t.Helper()
-	h := newTestHub(t)
-	st := &savedStore{modelTestStore: &modelTestStore{values: map[string]json.RawMessage{}}, ids: map[string]int{}}
-	h.store = st
-	h.inbox.init()
-	h.triageAI = model
-	h.connectors = connector.NewRegistry(nil)
+	h := newInboxHub(t)
+	h.in.model = model
 	for _, c := range cs {
-		if err := h.addConnector(c); err != nil {
-			t.Fatal(err)
-		}
-		asExtension(t, c.ID())
+		h.addConnector(c, true)
 	}
-	return h, st
-}
-
-// asPlugin makes a connector one a plugin provides, for the test.
-func asExtension(t *testing.T, id string) {
-	_, was := extensionConnectors.Load(id)
-	extensionConnectors.Store(id, true)
-	t.Cleanup(func() {
-		if !was {
-			extensionConnectors.Delete(id)
-		}
-	})
+	return h, h.st
 }
 
 // collectAndAdmit is one round, and the triage of its new plugin items (in the background) done.
-func collectAndAdmit(h *Hub) {
+func collectAndAdmit(h *inboxHub) {
 	h.collectInbox(context.Background(), roundPoll)
 	h.inbox.admitting.Lock()
-	h.inbox.admitting.Unlock()
+	h.inbox.admitting.Unlock() //nolint:staticcheck // waiting for the admission
 }
 
 // genericThing is a connector's thing its rules leave to the model (no tier: no fallback).
@@ -140,7 +122,7 @@ func genericThing(thread, last, text string) connector.InboxThing {
 		Context: text, At: time.Now().Add(-time.Minute), Last: last}
 }
 
-func itemOf(h *Hub, source, thread string) *InboxItem {
+func itemOf(h *inboxHub, source, thread string) *InboxItem {
 	h.inbox.mu.Lock()
 	defer h.inbox.mu.Unlock()
 	for _, it := range h.inbox.items {
@@ -152,9 +134,9 @@ func itemOf(h *Hub, source, thread string) *InboxItem {
 }
 
 // inboxTriageOf is GET /api/v1/inbox?sources=all: the items and the triage status.
-func inboxTriageOf(t *testing.T, h *Hub) ([]any, InboxTriage) {
+func inboxTriageOf(t *testing.T, h *inboxHub) ([]any, InboxTriage) {
 	t.Helper()
-	code, out := call(t, h.routes(), "GET", "/api/v1/inbox?sources=all", h.cfg.Token, "")
+	code, out := inboxCall(t, h.routes(), "GET", "/api/v1/inbox?sources=all", "")
 	if code != 200 {
 		t.Fatalf("GET /api/v1/inbox: %d", code)
 	}
@@ -258,7 +240,7 @@ func TestInboxFallbackIsFinal(t *testing.T) {
 func TestInboxConnectorItemIsNotSilentlyNoise(t *testing.T) {
 	model, client := newTriageModel(t, "fail", `{"tier":"fyi","summary":"示例","reason":"示例"}`)
 	h, _ := admitHub(t, client)
-	asExtension(t, "example")
+	h.asExtension("example", true)
 	it := &InboxItem{ID: "example:1", Source: "example", Kind: "review_requested", Tier: TierAction, Reason: "示例", Last: "b", TriagedAt: "a",
 		Context: "示例：新评论", UpdatedAt: time.Now(), Connector: &InboxConnector{Thread: "example-org/example-repo#5"}}
 	h.inbox.items[it.ID] = it
@@ -281,20 +263,8 @@ func TestInboxTriageUnconfigured(t *testing.T) {
 	}
 }
 
-// inboxPushes counts the {"type":"inbox"} messages the apps were sent.
-func inboxPushes(h *Hub) int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	n := 0
-	if h.events != nil {
-		for _, e := range h.events.events {
-			if strings.Contains(string(e.Body), `"type":"inbox"`) {
-				n++
-			}
-		}
-	}
-	return n
-}
+// inboxPushes counts the {"type":"inbox"} messages the apps were sent (one for each inbox.changed the hub was told).
+func inboxPushes(h *inboxHub) int { return h.in.pushes() }
 
 // The apps are told when the triage status moves even though no item came in (their banner follows it, #1773), and
 // not again while it stays the same.
@@ -346,9 +316,7 @@ func TestInboxAdmitWindow(t *testing.T) {
 	if _, status := inboxTriageOf(t, h); in != triageConcurrency || status.State != triageBehind || status.Waiting != len(things)-in {
 		t.Fatalf("%d in, triage %+v", in, status)
 	}
-	select {
-	case <-h.inbox.kick:
-	default:
+	if h.in.kicks == 0 {
 		t.Fatal("the next round was not asked for")
 	}
 }
@@ -361,7 +329,7 @@ func TestInboxBuiltinSourcesAsBefore(t *testing.T) {
 	th := genericThing("example-org/example-repo#7", "a", "示例：一条评论")
 	c := &inboxConnector{things: []connector.InboxThing{th}}
 	h, st := admitHub(t, client, c)
-	extensionConnectors.Delete(c.ID())
+	h.asExtension(c.ID(), false)
 	h.collectInbox(context.Background(), roundPoll)
 	it := itemOf(h, "example", th.Thread)
 	if it == nil || !st.saved(it.ID) {

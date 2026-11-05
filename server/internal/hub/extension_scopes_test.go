@@ -221,7 +221,7 @@ func routePatterns(t *testing.T) []string {
 			return true
 		})
 	}
-	for _, p := range assistantwire.Routes {
+	for _, p := range slices.Concat(assistantwire.Routes, assistantwire.InboxRoutes) { // the manager's, relayed
 		seen[p] = true
 	}
 	return slices.Sorted(func(yield func(string) bool) {

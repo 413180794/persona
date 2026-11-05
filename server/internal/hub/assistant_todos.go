@@ -112,15 +112,6 @@ func (h *Hub) withTask(ix proto.Interaction) proto.Interaction {
 	return ix
 }
 
-// messageCardOf is the card for an item whose draft is about a task; nil when it is about none. The inbox is locked.
-func messageCardOf(it *InboxItem) *assistantwire.MessageCard {
-	if it.Agent == nil || it.Agent.TodoID == "" || it.Agent.Draft == "" {
-		return nil
-	}
-	return &assistantwire.MessageCard{TodoID: it.Agent.TodoID, Source: it.Source, Account: it.AccountName, Chat: it.Title, Sender: it.Sender,
-		Text: clip(strings.TrimSpace(it.Preview), 400), Draft: it.Agent.Draft}
-}
-
 // ---- handing an agent work for a todo (POST /api/v1/sessions, …/messages with todo_id) ----
 
 // TodoLinkInfo is the todo an agent is about to be handed work for.

@@ -890,7 +890,8 @@ App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub �
   没注册上、或注册的不是这个扩展的，列表里不出现，画的时候回 404 `unsupported`。
 - **列出**：`GET /api/v1/extensions/-/ui?placement=inbox_item` → `{ui: [{extension, extension_name, id, title, placement: "inbox_item", size: "full", connector}]}`；
   不带 `placement` 的列表里也有（不认识 `inbox_item` 的老 App 按规矩忽略）。App 缓存这个列表（和别的插槽一起拿，见「兼容」），打开一件事时按条目的 `source` 找 `connector` 对得上的那一项，不用每次问 hub。
-- **画**：`POST /api/v1/extensions/{id}/-/ui/{ui}` `{context: {item: "<条目 id>", …}}`。hub 在收件箱里找到这一条，核对它的来源（`source`）就是这个界面的 `connector`，
+- **画**：`POST /api/v1/extensions/{id}/-/ui/{ui}` `{context: {item: "<条目 id>", …}}`。hub 向收件箱（管理者的，总线上的 `inbox.item`，`docs/inbox.md`「谁管什么」）要这一条，核对它的来源（`source`）就是这个界面的 `connector`
+  （管理者没连着时要不到，回 404 `not_found`，App 照旧画原来的正文），
   然后在 `ui.render` / `ui.action` 里带上 `item`：
 
   | 字段 | 说明 |

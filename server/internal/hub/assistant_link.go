@@ -15,7 +15,6 @@ import (
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -173,6 +172,9 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 	if out, ok, err := h.kbSourcesCall(ctx, p); ok { // the knowledge base's sources (kb_sources.go)
 		return out, err
 	}
+	if out, ok, err := h.inboxAppCall(ctx, p); ok { // the inbox's sources (inbox.go)
+		return out, err
+	}
 	switch p.AppID + " " + p.Method {
 	case assistantwire.AppModels + " " + assistantwire.ModelsComplete:
 		var a struct {
@@ -245,20 +247,6 @@ func (l assistantLink) AppCall(ctx context.Context, p assistantwire.AppCall) (js
 			return nil, err
 		}
 		return json.Marshal(map[string]any{"snapshots": h.connectorSnapshots(ctx, a.TZ)})
-	case assistantwire.AppInbox + " " + assistantwire.InboxReplied:
-		var a struct {
-			IDs []string `json:"ids"`
-		}
-		if err := json.Unmarshal(p.Params, &a); err != nil {
-			return nil, err
-		}
-		return json.Marshal(map[string]any{"replied": h.inboxRepliedAt(a.IDs)})
-	case assistantwire.AppInbox + " " + assistantwire.InboxDraft:
-		out, err := h.inboxDraftCall(ctx, p.Params)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(out)
 	case assistantwire.AppInteractions + " " + assistantwire.InteractionsGet,
 		assistantwire.AppInteractions + " " + assistantwire.InteractionsAnswer:
 		out, err := h.interactionsCall(ctx, p.Method, p.Params)
@@ -356,6 +344,7 @@ func (l assistantLink) Snapshot(_ context.Context, s assistantwire.Snapshot) (as
 		h.keepAssistantProfile(context.Background(), s.Profile)
 	}
 	h.keepChanged(oldProfile, s.Profile)
+	h.takeInboxReport(s.Inbox) // inbox.go
 	h.askOnPhone(s.Interactions)
 	machines := changedMachines(old, views)
 	for _, mid := range h.takeTodoReport(s.Todos) { // the todos' (assistant_todos.go)
@@ -512,7 +501,12 @@ func busCodedError(err error) error {
 	case errors.Is(err, assistantwire.ErrStaleSnapshot):
 		return &rpc.Error{Code: assistantwire.CodeStaleSnapshot, Message: err.Error()}
 	case ai.IsPaused(err):
-		return &rpc.Error{Code: assistantwire.CodeModelPaused, Message: err.Error()}
+		var p *ai.PausedError
+		errors.As(err, &p)
+		data, _ := json.Marshal(p.Pause) // its reason (quota or busy) and until
+		return &rpc.Error{Code: assistantwire.CodeModelPaused, Message: err.Error(), Data: data}
+	case ai.IsNotConfigured(err):
+		return &rpc.Error{Code: assistantwire.CodeModelUnconfigured, Message: err.Error()}
 	}
 	return err
 }
@@ -560,6 +554,7 @@ func (h *Hub) assistantUpdated() {
 // may have others) and kept for when it is not connected (its tools then answer assistant_offline); what waited for it
 // goes.
 func (h *Hub) assistantConnected() {
+	go h.inboxManagerConnected() // its inbox gets a full round (inbox.go)
 	h.kbFlush() // the agents' turns that waited for it (kb.go)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -657,30 +652,6 @@ func (a assistantRemote) Action(ctx context.Context, act assistantwire.Action) (
 	return res, err
 }
 
-// CardSent: the assistant's message card cardID about inbox item itemID says its reply went out.
-func (a assistantRemote) CardSent(ctx context.Context, p assistantwire.CardSentParams) (bool, error) {
-	var res struct {
-		Sent bool `json:"sent"`
-	}
-	err := a.call(ctx, assistantwire.MethodCardSent, p, &res)
-	return res.Sent, err
-}
-
-// CardsSent tells the assistant the reply to an inbox item went out: its cards say so (and the apps are told).
-func (a assistantRemote) CardsSent(ctx context.Context, p assistantwire.CardsSentParams) error {
-	return a.call(ctx, assistantwire.MethodCardsSent, p, nil)
-}
-
-func (a assistantRemote) ActiveTasks(ctx context.Context) []prompts.InboxTask {
-	var res struct {
-		Tasks []prompts.InboxTask `json:"tasks"`
-	}
-	if err := a.call(ctx, assistantwire.MethodTasks, nil, &res); err != nil {
-		return nil
-	}
-	return res.Tasks
-}
-
 func (a assistantRemote) UserSpoke(_ context.Context, r assistantwire.SessionRef) {
 	a.notify(assistantwire.EventUserSpoke, r)
 }
@@ -703,10 +674,6 @@ func (a assistantRemote) InteractionResolved(_ context.Context, r assistantwire.
 
 func (a assistantRemote) InteractionRaised(_ context.Context, r assistantwire.InteractionRaised) {
 	a.notify(assistantwire.EventInteractionRaised, r)
-}
-
-func (a assistantRemote) InboxMessage(_ context.Context, m assistantwire.InboxMessage) {
-	a.notify(assistantwire.EventInboxMessage, m)
 }
 
 // The todos' (assistant_todos.go).
@@ -754,9 +721,6 @@ func (h *Hub) quietInteraction(ix proto.Interaction) {
 	h.asst().InteractionRaised(context.Background(), assistantwire.InteractionRaised{Interaction: h.withTask(ix)})
 }
 
-// inboxTasks are the tasks going on, as the inbox's judge and AI 分身 see them (assistant.tasks).
-func (h *Hub) inboxTasks() []prompts.InboxTask { return h.asst().ActiveTasks(context.Background()) }
-
 // ---- what the hub answers the assistant from its other parts ----
 
 // connectorSnapshots are the live states of the signed-in connectors that keep one (connector.Snapshot: a chat service
@@ -793,49 +757,4 @@ func (h *Hub) connectorSnapshots(ctx context.Context, tz string) []connector.Sna
 	}
 	wg.Wait()
 	return out
-}
-
-// inboxRepliedAt is when those of the inbox items ids the user replied to were replied to (inbox.replied).
-func (h *Hub) inboxRepliedAt(ids []string) map[string]time.Time {
-	out := map[string]time.Time{}
-	h.inbox.mu.Lock()
-	defer h.inbox.mu.Unlock()
-	for _, id := range ids {
-		if ib := h.inbox.items[id]; ib != nil && ib.DoneBy == "replied" && ib.DoneAt != nil {
-			out[id] = *ib.DoneAt
-		}
-	}
-	return out
-}
-
-// sendFromCard is 发送 on a message card (POST /api/v1/inbox/{id}/reply with card): the reply goes out once per
-// card however many taps, devices or retries ask — a card already sent (the assistant's, assistant.card_sent)
-// answers with the item as it is (already).
-func (h *Hub) sendFromCard(ctx context.Context, cardID, itemID string, send func() (InboxItem, error)) (it InboxItem, already bool, err error) {
-	l, _ := h.assistant.cardSends.LoadOrStore(cardID, &sync.Mutex{})
-	mu := l.(*sync.Mutex)
-	mu.Lock()
-	defer mu.Unlock()
-	sent, err := h.asst().CardSent(ctx, assistantwire.CardSentParams{CardID: cardID, ItemID: itemID})
-	if err != nil {
-		return InboxItem{}, false, err
-	}
-	if sent {
-		h.inbox.mu.Lock()
-		if ib := h.inbox.items[itemID]; ib != nil {
-			it = ib.listed()
-		}
-		h.inbox.mu.Unlock()
-		return it, true, nil
-	}
-	it, err = send()
-	return it, false, err
-}
-
-// markCardsSent tells the assistant the reply to inbox item itemID went out at at, saying text: its message cards
-// about the item show it sent.
-func (h *Hub) markCardsSent(ctx context.Context, itemID string, at time.Time, text string) {
-	if err := h.asst().CardsSent(ctx, assistantwire.CardsSentParams{ItemID: itemID, At: at, Text: text}); err != nil {
-		h.logf("inbox %s: mark the cards sent: %v", itemID, err)
-	}
 }

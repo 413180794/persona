@@ -90,6 +90,10 @@ const busAssistant = assistantwire.AssistantID
 
 var errBusOffline = errors.New("not connected to the bus")
 
+// errBusDropped is errBusOffline for a call whose request had gone out when the connection dropped (rpc.ErrDropped):
+// the other side may have done it.
+var errBusDropped = fmt.Errorf("dropped while the call was out: %w", errBusOffline)
+
 // busState is the live connections and the roster (memory only: a service says its handshake again after a hub
 // restart).
 type busState struct {
@@ -433,7 +437,8 @@ func (h *Hub) busRosterChanged(ctx context.Context, except *busConn) {
 }
 
 // callBus calls method on service id's current connection: errBusOffline while it has none, or when it drops
-// meanwhile. Without a deadline on ctx it gives up after two minutes.
+// meanwhile (errBusDropped, which is errBusOffline too, when the request had gone out). Without a deadline on ctx it
+// gives up after two minutes.
 func (h *Hub) callBus(ctx context.Context, id, method string, params, out any) error {
 	c := h.busConnOf(id)
 	if c == nil {
@@ -448,7 +453,10 @@ func (h *Hub) callBus(ctx context.Context, id, method string, params, out any) e
 		params = map[string]any{}
 	}
 	err := c.peer.Call(ctx, method, params, out)
-	if errors.Is(err, rpc.ErrClosed) {
+	switch {
+	case errors.Is(err, rpc.ErrDropped):
+		return fmt.Errorf("%s: %w", id, errBusDropped)
+	case errors.Is(err, rpc.ErrClosed):
 		return fmt.Errorf("%s: %w", id, errBusOffline)
 	}
 	return err

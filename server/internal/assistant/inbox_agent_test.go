@@ -1,38 +1,21 @@
-package hub
+package assistant
 
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
-	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
-	"github.com/nwverse/persona/server/internal/assistant"
-	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// fakeModel answers every Messages API call with reply.
-func fakeModel(t *testing.T, reply string) *ai.Client {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": reply}}})
-	}))
-	t.Cleanup(srv.Close)
-	key := filepath.Join(t.TempDir(), "key")
-	_ = os.WriteFile(key, []byte("k"), 0o600)
-	return ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"})
-}
-
-func agentHub(t *testing.T) *Hub {
-	h := newTestHub(t)
-	h.inbox.init()
+func agentHub(t *testing.T) *inboxHub {
+	h := newInboxHub(t)
+	h.inboxReady(context.Background())
 	return h
 }
 
@@ -47,7 +30,7 @@ func TestInboxJudgeQueuesOrSkips(t *testing.T) {
 	it := actionItem("lark:f1:11", now)
 	h.inbox.items[it.ID] = it
 
-	h.triageAI = fakeModel(t, `{"handle":true,"task":"查 1013 是否合入","reason":"可查"}`)
+	h.in.model = fakeModel(t, `{"handle":true,"task":"查 1013 是否合入","reason":"可查"}`)
 	if got := h.inbox.toJudge(now.Add(-time.Hour)); len(got) != 1 {
 		t.Fatalf("toJudge = %d", len(got))
 	}
@@ -61,7 +44,7 @@ func TestInboxJudgeQueuesOrSkips(t *testing.T) {
 
 	// New messages: judged again, and the old work is replaced.
 	it.Last, it.TriagedAt = "13", "13"
-	h.triageAI = fakeModel(t, "```json\n{\"handle\":false,\"reason\":\"只是通知\"}\n```")
+	h.in.model = fakeModel(t, "```json\n{\"handle\":false,\"reason\":\"只是通知\"}\n```")
 	if !h.judgeOne(context.Background(), it) || it.Agent.State != AgentSkipped || it.Agent.Reason != "只是通知" {
 		t.Fatalf("agent = %+v", it.Agent)
 	}
@@ -84,7 +67,7 @@ func TestInboxJudgeModelFailureRetries(t *testing.T) {
 	h := agentHub(t)
 	it := actionItem("x", time.Now())
 	h.inbox.items[it.ID] = it
-	h.triageAI = fakeModel(t, "no json here")
+	h.in.model = fakeModel(t, "no json here")
 	if h.judgeOne(context.Background(), it) || it.JudgedAt != "" || it.Agent != nil {
 		t.Fatalf("judged on a failed call: %+v", it.Agent)
 	}
@@ -114,31 +97,34 @@ func TestInboxDraftBeforeTheStartReturned(t *testing.T) {
 	t.Cleanup(func() { inboxDraftWait = old })
 	other := actionItem("y", time.Now())
 	other.Agent = &InboxAgent{State: AgentRunning}
+	h.inbox.mu.Lock()
 	h.inbox.items[other.ID] = other
+	h.inbox.mu.Unlock()
 	if id, _ := h.inboxDraft(context.Background(), "session-nobody", "hi", "", nil); id != "" {
 		t.Fatal("a conversation no item gets drafted")
 	}
 }
 
-// inbox.draft (the assistant's inbox_draft, whose rules are the assistant's): the draft goes on the item whose agent
-// runs in the conversation, with the moves of a document's rows the item offers.
+// The draft (inbox_draft) goes on the item whose agent runs in the conversation, with the moves of a document's rows
+// the item offers; the hub is told which conversations are the AI 分身's (no finished push for them).
 func TestInboxDraft(t *testing.T) {
 	h := agentHub(t)
+	ctx := context.Background()
 	it := actionItem("x", time.Now())
-	it.Agent = &InboxAgent{State: AgentRunning, SessionID: "s1", Task: "t"}
+	it.Agent = &InboxAgent{State: AgentRunning, SessionID: "s1", MachineID: "server", Task: "t"}
 	h.inbox.items[it.ID] = it
 
-	if out := inboxDraftCall(t, h, map[string]any{"session_id": "other", "text": "hi"}); out["item_id"] != "" {
-		t.Fatalf("drafted from a conversation that is not an inbox agent: %v", out)
+	if id, _ := h.inboxDraft(ctx, "other", "hi", "", nil); id != "" {
+		t.Fatalf("drafted from a conversation that is not an inbox agent: %q", id)
 	}
 	// A change the item does not list is refused, and nothing is kept.
-	change := map[string]any{"ref": "r1", "field": "状态", "value": "完成"}
-	if out := inboxDraftCall(t, h, map[string]any{"session_id": "s1", "text": "好了", "changes": []any{change}}); out["item_id"] != it.ID ||
-		!reflect.DeepEqual(out["refused"], change) || it.Agent.State != AgentRunning || it.Agent.Draft != "" {
-		t.Fatalf("a change the item does not offer: %v, agent %+v", out, it.Agent)
+	change := DocChange{Ref: "r1", Field: "状态", Value: "完成"}
+	if id, refused := h.inboxDraft(ctx, "s1", "好了", "", []DocChange{change}); id != it.ID || refused == nil || *refused != change ||
+		it.Agent.State != AgentRunning || it.Agent.Draft != "" {
+		t.Fatalf("a change the item does not offer: %q %v, agent %+v", id, refused, it.Agent)
 	}
-	if out := inboxDraftCall(t, h, map[string]any{"session_id": "s1", "text": "合了，MR 已经进主干", "note": "agent_read 看到已合入"}); out["item_id"] != it.ID || out["refused"] != nil {
-		t.Fatalf("draft: %v", out)
+	if id, refused := h.inboxDraft(ctx, "s1", "合了，MR 已经进主干", "agent_read 看到已合入", nil); id != it.ID || refused != nil {
+		t.Fatalf("draft: %q %v", id, refused)
 	}
 	if a := it.Agent; a.State != AgentDrafted || a.Draft != "合了，MR 已经进主干" || a.Note != "agent_read 看到已合入" || a.DraftedAt == nil {
 		t.Fatalf("agent = %+v", a)
@@ -147,15 +133,18 @@ func TestInboxDraft(t *testing.T) {
 	doc := actionItem("doc", time.Now())
 	doc.Doc = &InboxDoc{Rows: []DocRow{{Ref: "r1", Status: []DocStatus{{Field: "状态", Options: []DocOption{{Name: "完成"}}}}}}}
 	doc.Agent = &InboxAgent{State: AgentRunning, SessionID: "s2", Task: "t"}
+	h.inbox.mu.Lock()
 	h.inbox.items[doc.ID] = doc
-	if out := inboxDraftCall(t, h, map[string]any{"session_id": "s2", "text": "好了", "changes": []any{change}}); out["item_id"] != doc.ID || out["refused"] != nil {
-		t.Fatalf("a change the item offers: %v", out)
+	h.inbox.mu.Unlock()
+	if id, refused := h.inboxDraft(ctx, "s2", "好了", "", []DocChange{change}); id != doc.ID || refused != nil {
+		t.Fatalf("a change the item offers: %q %v", id, refused)
 	}
-	if a := doc.Agent; a.State != AgentDrafted || len(a.Changes) != 1 || a.Changes[0] != (DocChange{Ref: "r1", Field: "状态", Value: "完成"}) {
+	if a := doc.Agent; a.State != AgentDrafted || len(a.Changes) != 1 || a.Changes[0] != change {
 		t.Fatalf("doc agent = %+v", a)
 	}
-	if !h.isInboxAgent("s1") || h.isInboxAgent("s3") {
-		t.Fatal("isInboxAgent")
+	r := h.inboxReport(ctx)
+	if r == nil || len(r.Agents) != 2 || r.Agents[0] != (SessionRef{MachineID: "server", SessionID: "s1"}) || r.Agents[1].SessionID != "s2" {
+		t.Fatalf("the agents the hub is told: %+v", r)
 	}
 	// The list carries the draft but none of the bookkeeping.
 	it.JudgedAt = "12"
@@ -177,8 +166,26 @@ func TestInboxAgentTimesOut(t *testing.T) {
 	}
 }
 
+// An agent that ended its turn without a draft fails (after its first minute).
+func TestInboxAgentDoneWithoutADraft(t *testing.T) {
+	h := agentHub(t)
+	started := time.Now().Add(-2 * time.Minute)
+	it := actionItem("x", time.Now())
+	it.Agent = &InboxAgent{State: AgentRunning, SessionID: "s1", MachineID: "server", StartedAt: &started}
+	h.inbox.items[it.ID] = it
+	h.f.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusIdle})
+	h.sweepInboxAgents(context.Background(), InboxAgentConfig{}, time.Now())
+	if it.Agent.State != AgentFailed || it.Agent.Error != "做完了但没有给出草稿" {
+		t.Fatalf("agent = %+v", it.Agent)
+	}
+}
+
 func TestInboxAgentNoMachineFails(t *testing.T) {
 	h := agentHub(t)
+	h.f.mu.Lock()
+	h.f.hello.Assistant.MachineID = ""
+	delete(h.f.sessions, "server")
+	h.f.mu.Unlock()
 	it := actionItem("x", time.Now())
 	it.Agent = &InboxAgent{State: AgentQueued, Task: "t"}
 	h.inbox.items[it.ID] = it
@@ -188,11 +195,38 @@ func TestInboxAgentNoMachineFails(t *testing.T) {
 	}
 }
 
+// A queued item's agent is the assistant's own conversation, untitled, on the inbox agent's model and the
+// assistant's machine; the hub learns it is the AI 分身's from the next snapshot.
+func TestInboxAgentStarts(t *testing.T) {
+	h := agentHub(t)
+	it := actionItem("x", time.Now())
+	it.Agent = &InboxAgent{State: AgentQueued, Task: "查 1013 是否合入"}
+	h.inbox.items[it.ID] = it
+	h.startInboxAgents(context.Background(), InboxAgentConfig{Enabled: true})
+	if it.Agent.State != AgentRunning || it.Agent.MachineID != "server" || it.Agent.SessionID == "" {
+		t.Fatalf("agent = %+v", it.Agent)
+	}
+	send := h.f.lastSend(t)
+	if !strings.Contains(send["text"].(string), "查 1013 是否合入") {
+		t.Fatalf("the first message: %v", send)
+	}
+	snap := h.f.lastSnapshot()
+	if snap.Inbox == nil || len(snap.Inbox.Agents) != 1 || snap.Inbox.Agents[0].SessionID != it.Agent.SessionID {
+		t.Fatalf("the snapshot's inbox: %+v", snap.Inbox)
+	}
+	h.titles.mu.Lock()
+	_, titled := h.titles.m[it.Agent.SessionID]
+	h.titles.mu.Unlock()
+	if titled {
+		t.Fatal("the AI 分身's conversation is named like the assistant's")
+	}
+}
+
 func TestInboxAgentPrompt(t *testing.T) {
 	it := actionItem("x", time.Now())
 	it.Title = `群 "A" <b>`
 	it.Agent = &InboxAgent{Task: "查 1013 是否合入"}
-	p := inboxAgentPrompt(it, "小明", nil)
+	p := newInbox().inboxAgentPrompt(it, "小明", nil)
 	for _, want := range []string{`title="飞书 · 群 &quot;A&quot; &lt;b&gt;"`, "飞书会话 id：f1", "查 1013 是否合入",
 		"inbox_draft", "张三：1013 合了吗？", "小明"} {
 		if !strings.Contains(p, want) {
@@ -201,16 +235,8 @@ func TestInboxAgentPrompt(t *testing.T) {
 	}
 }
 
-func TestAIConfigOver(t *testing.T) {
-	base := ai.Config{BaseURL: "http://gw", APIKeyFile: "~/k", Model: "base"}
-	got := ai.Config{Model: "other"}.Over(base)
-	if got.BaseURL != "http://gw" || got.APIKeyFile != "~/k" || got.Model != "other" {
-		t.Fatalf("over = %+v", got)
-	}
-}
-
 // TestInboxModelsLive runs models 1 and 2 on a sample item against a real gateway:
-// JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}' go test -run InboxModelsLive -v ./internal/hub
+// JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}' go test -run InboxModelsLive -v ./internal/assistant
 func TestInboxModelsLive(t *testing.T) {
 	raw := os.Getenv("JARVIS_LIVE_AI")
 	if raw == "" {
@@ -221,7 +247,7 @@ func TestInboxModelsLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := agentHub(t)
-	h.triageAI, h.triageAI = ai.New(cfg), ai.New(cfg)
+	h.in.model = ai.New(cfg)
 	it := &InboxItem{ID: "x", Kind: KindDM, Last: "12", UpdatedAt: time.Now(), Lark: &InboxLark{FeedID: "f1"},
 		Context: "张三（10:02）：你那边 codex 的改动合进 1013 分支了吗？今天下午要封版，合了的话把 MR 发我一下"}
 	h.inbox.items[it.ID] = it
@@ -247,11 +273,14 @@ func TestInboxModelsLive(t *testing.T) {
 // 分身 is told the task's progress; its draft puts a card into the task's conversation.
 func TestInboxItemAboutATask(t *testing.T) {
 	ctx := context.Background()
-	h := agentHub(t)
-	connectAssistant(t, h) // the judge sees the tasks it is working on (assistant.tasks)
-	todo := taskIn(t, h, "conv1")
+	s, f := newTaskService(t)
+	in := newFakeInbox()
+	f.inbox, in.svc = in, s
+	h := &inboxHub{Service: s, f: f, in: in}
+	h.inboxReady(ctx)
+	todo := startedTask(t, s, f)
 	model, calls := captureModel(t, `{"handle":true,"task":"回复修复进度","reason":"问进度","task_id":"`+todo.ID+`"}`)
-	h.triageAI = model
+	in.model = model
 	it := actionItem("lark:f1:12", time.Now())
 	it.Title, it.Sender, it.Preview, it.Source, it.AccountName = "客户端发版群", "陈晓", "登录那个崩溃今天能修好吗？", "lark", "飞书"
 	h.inbox.items[it.ID] = it
@@ -265,15 +294,17 @@ func TestInboxItemAboutATask(t *testing.T) {
 		t.Fatalf("agent = %+v", it.Agent)
 	}
 	linked := &prompts.InboxTask{ID: todo.ID, Title: "修登录崩溃", State: "在做", Last: "测试通过"}
-	if p := inboxAgentPromptFor(it, "示例用户", nil, linked, 1); !strings.Contains(p, "正在做的任务「修登录崩溃」") || !strings.Contains(p, "测试通过") {
+	if p := h.inbox.inboxAgentPromptFor(it, "示例用户", nil, linked, 1); !strings.Contains(p, "正在做的任务「修登录崩溃」") || !strings.Contains(p, "测试通过") {
 		t.Fatalf("the agent is not told the task:\n%s", p)
 	}
 
 	// A task id it was not shown is not taken.
 	model2, _ := captureModel(t, `{"handle":true,"task":"x","reason":"r","task_id":"todo_made_up"}`)
-	h.triageAI = model2
+	in.model = model2
 	other := actionItem("lark:f2:12", time.Now())
+	h.inbox.mu.Lock()
 	h.inbox.items[other.ID] = other
+	h.inbox.mu.Unlock()
 	h.judgeOne(ctx, other)
 	if other.Agent == nil || other.Agent.TodoID != "" {
 		t.Fatalf("made-up task linked: %+v", other.Agent)
@@ -281,38 +312,23 @@ func TestInboxItemAboutATask(t *testing.T) {
 
 	// The draft: the card goes into the task's conversation.
 	it.Agent.State, it.Agent.SessionID = AgentRunning, "s_agent"
-	if out := textOf(h.asst().Tool(ctx, assistantwire.ToolCall{Name: "inbox_draft", Arguments: json.RawMessage(`{"text":"测试已经过了，十点前提 PR"}`),
-		SessionID: "s_agent"})); !strings.Contains(out, "in the user's inbox") {
-		t.Fatalf("inbox_draft: %s", out)
+	if out, err := runTool(s, "s_agent", "inbox_draft", map[string]any{"text": "测试已经过了，十点前提 PR"}); err != nil || !strings.Contains(out, "in the user's inbox") {
+		t.Fatalf("inbox_draft: %s %v", out, err)
 	}
-	var items []assistant.FeedItem // its messages (the task's plan and card are there too)
-	all, _ := feed(h, "conv1")
-	for _, f := range all {
-		if f.Kind == "message" {
-			items = append(items, f)
+	var cards []FeedItem // its messages (the task's plan and card are there too)
+	s.tasks.mu.Lock()
+	for _, fi := range s.tasks.feed["conv1"] {
+		if fi.Kind == feedMessage {
+			cards = append(cards, fi)
 		}
 	}
-	if len(items) != 1 || items[0].Ref != it.ID {
-		t.Fatalf("feed = %+v", all)
+	s.tasks.mu.Unlock()
+	if len(cards) != 1 || cards[0].Ref != it.ID {
+		t.Fatalf("cards = %+v", cards)
 	}
-	var mb assistant.MessageCard
-	_ = json.Unmarshal(items[0].Body, &mb)
+	var mb MessageCard
+	_ = json.Unmarshal(cards[0].Body, &mb)
 	if mb.TodoID != todo.ID || mb.Draft != "测试已经过了，十点前提 PR" || mb.Sender != "陈晓" || mb.Chat != "客户端发版群" {
 		t.Fatalf("card = %+v", mb)
 	}
-}
-
-// inboxDraftCall is app.call inbox.draft as the assistant makes it.
-func inboxDraftCall(t *testing.T, h *Hub, params map[string]any) map[string]any {
-	t.Helper()
-	raw, _ := json.Marshal(params)
-	res, err := assistantLink{h}.AppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppInbox, Method: assistantwire.InboxDraft, Params: raw})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out map[string]any
-	if err := json.Unmarshal(res, &out); err != nil {
-		t.Fatal(err)
-	}
-	return out
 }

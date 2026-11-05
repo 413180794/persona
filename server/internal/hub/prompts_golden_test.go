@@ -24,7 +24,6 @@ import (
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -271,159 +270,6 @@ func contextOf(t *testing.T, res any) string {
 	return out.Text
 }
 
-func goldenItems(t *testing.T) map[string]*InboxItem {
-	t.Helper()
-	// Telegram's kinds come in its extension's own words (kind_descriptions, #1704): the hub's template had the same.
-	for kind, d := range map[string]string{"dm": "Telegram 里有人私聊用户，还没读", "mention": "Telegram 群里 @ 了用户，或回复了用户的消息"} {
-		extensionKinds.Store("telegram/"+kind, d)
-		t.Cleanup(func() { extensionKinds.Delete("telegram/" + kind) })
-	}
-	at := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
-	agent := &InboxAgent{State: AgentQueued, Task: "查清楚构建为什么挂了，回复对方结论"}
-	return map[string]*InboxItem{
-		"dm": {ID: "lark:f2:1", Kind: KindDM, Title: "张三", Context: "张三：1013 合了吗？", Summary: "张三问 1013 是否合入", UpdatedAt: at,
-			Lark: &InboxLark{FeedID: "f2"}, Agent: agent},
-		"mention": {ID: "lark:f1:1", Kind: KindMention, Title: "发布群", Context: "张三：@我 周五灰度能提前吗", UpdatedAt: at,
-			Lark: &InboxLark{FeedID: "f1", IsGroup: true}, Agent: agent},
-		"group": {ID: "lark:f3:1", Kind: KindGroup, Title: "闲聊群", Context: "李四：午饭吃啥", UpdatedAt: at, Lark: &InboxLark{FeedID: "f3"}},
-		"bot":   {ID: "lark:f9:1", Kind: KindBot, Title: "告警机器人", Context: "告警：示例服务 5xx 升高", UpdatedAt: at, Lark: &InboxLark{FeedID: "f9"}},
-		"doc_rows": {ID: "doc:1", Kind: KindDoc, Title: "排期表", Context: "表格「排期表」第 3 行 @我：状态 进行中", UpdatedAt: at,
-			Doc: &InboxDoc{URL: "https://example.feishu.cn/sheets/AbC", Rows: []DocRow{{}}}, Agent: agent},
-		"doc_plain": {ID: "doc:2", Kind: KindDoc, Title: "设计文档", Context: "评论：这里要改吗", UpdatedAt: at,
-			Doc: &InboxDoc{URL: "https://example.feishu.cn/docx/AbC"}, Agent: agent},
-		"moment": {ID: "moment:1", Kind: KindMoment, Title: "我的帖子", Context: "王五评论：写得好", UpdatedAt: at,
-			Moment: &InboxMoment{PostID: "p1", Notice: "comment"}, Agent: agent},
-		"mail_direct": {ID: "mail:1", Kind: KindMail, Title: "季度汇报", Context: "来信：请周五前提交", UpdatedAt: at,
-			Mail: &InboxMail{AccountID: "acc1", Mailbox: "INBOX", UIDs: []uint32{7, 9}, Direct: true, From: mail.Address{Email: "Sender@Example.com"}}, Agent: agent},
-		"mail_cc": {ID: "mail:2", Kind: KindMail, Title: "周报", Context: "抄送：本周进展", UpdatedAt: at,
-			Mail: &InboxMail{AccountID: "acc1", Mailbox: "INBOX"}},
-		"github_review": {ID: "github:1", Source: "github", Kind: "review_requested", Title: "Add the example",
-			Context: "GitHub PR example-org/example-repo#12：Add the example\n状态：open · 作者 alice · 等这些人 review：me", UpdatedAt: at,
-			Connector: &InboxConnector{Thread: "example-org/example-repo#12", Label: "请你 review", URL: "https://github.com/example-org/example-repo/pull/12",
-				ReplyTo: "评论到 example-org/example-repo#12（仓库可见的人都能看到）", CanReply: true, RuleTier: TierAction}, Agent: agent},
-		"imessage_dm": {ID: "imessage:1", Source: "imessage", Kind: "dm", Title: "张三", UpdatedAt: at,
-			Context: "我（10-30 07:58）：在吗\n张三（10-30 07:59）：示例：周五下午三点见，地方你定",
-			Connector: &InboxConnector{Thread: "imessage-0123456789ab", OpenURL: "sms:+15550100", ReplyTo: "在「信息」里回复（Persona 不替你发）",
-				RuleTier: TierAction}, Agent: agent},
-		"imessage_group": {ID: "imessage:2", Source: "imessage", Kind: "group", Title: "周末徒步", UpdatedAt: at,
-			Context: "李四（10-30 08:01）：示例：明天十点出发", Connector: &InboxConnector{Thread: "imessage-ba9876543210", Label: "群聊", RuleTier: TierFYI}},
-		"telegram_dm": {ID: "telegram:u1", Source: "telegram", Kind: "dm", Title: "示例用户", UpdatedAt: at,
-			Context:   "示例用户（Telegram 私聊）\n2026-10-30 07:58 我：在吗\n2026-10-30 07:59 示例用户：示例：周五下午三点见",
-			Connector: &InboxConnector{Thread: "u1", Label: "私聊", OpenURL: "tg://resolve?domain=example", RuleTier: TierAction}, Agent: agent},
-		"telegram_mention": {ID: "telegram:c2", Source: "telegram", Kind: "mention", Title: "示例群", UpdatedAt: at,
-			Context:   "示例群（Telegram 群）\n2026-10-30 08:01 另一个示例用户：@example 示例方案你怎么看？",
-			Connector: &InboxConnector{Thread: "c2", Label: "@你", OpenURL: "https://t.me/c/2/12", RuleTier: TierAction}},
-	}
-}
-
-func TestGoldenInboxTriage(t *testing.T) {
-	ctx := context.Background()
-	for name, it := range goldenItems(t) {
-		h := agentHub(t)
-		model, calls := captureModel(t, `{"tier":"action","summary":"s","reason":"r"}`)
-		h.triageAI = model
-		if name == "dm" {
-			h.cfg.Assistant.Owner = "示例用户"
-			h.cfg.Inbox.Rules = "  老板的消息一律需要我  "
-		}
-		h.inbox.items[it.ID] = it
-		h.triageOne(ctx, it)
-		goldenCall(t, "inbox_triage."+name, onlyCall(t, calls()))
-	}
-}
-
-func TestGoldenInboxDraft(t *testing.T) {
-	ctx := context.Background()
-	items := goldenItems(t)
-	for _, c := range []struct {
-		name, item, owner, notes, instruction string
-	}{
-		{"plain", "dm", "", "", ""},
-		{"owner_notes_instruction", "mail_direct", "示例用户", " 我在示例公司做后端 ", " 说周四给 "},
-	} {
-		h := agentHub(t)
-		model, calls := captureModel(t, "好的")
-		h.ai = model
-		h.cfg.Assistant.Owner, h.cfg.Assistant.Notes = c.owner, c.notes
-		it := items[c.item]
-		h.inbox.items[it.ID] = it
-		if _, err := h.draftReply(ctx, it.ID, c.instruction); err != nil {
-			t.Fatal(err)
-		}
-		goldenCall(t, "inbox_draft."+c.name, onlyCall(t, calls()))
-	}
-}
-
-func TestGoldenInboxJudge(t *testing.T) {
-	ctx := context.Background()
-	items := goldenItems(t)
-	for _, c := range []struct{ name, item, owner, rules string }{
-		{"summary_rules", "dm", "示例用户", " 告警都不用交 "},
-		{"plain", "bot", "", ""},
-	} {
-		h := agentHub(t)
-		model, calls := captureModel(t, `{"handle":false,"reason":"r"}`)
-		h.triageAI = model
-		h.cfg.Assistant.Owner, h.cfg.Inbox.Agent.Rules = c.owner, c.rules
-		it := *items[c.item]
-		h.inbox.items[it.ID] = &it
-		h.judgeOne(ctx, &it)
-		goldenCall(t, "inbox_judge."+c.name, onlyCall(t, calls()))
-	}
-}
-
-func TestGoldenInboxAgentPrompt(t *testing.T) {
-	items := goldenItems(t)
-	for _, name := range []string{"dm", "doc_rows", "doc_plain", "moment", "mail_direct", "github_review"} {
-		h := agentHub(t)
-		h.cfg.Assistant.Owner = "示例用户"
-		golden(t, "inbox_agent."+name, inboxAgentPrompt(items[name], h.ownerName(), h.kbContextFor(items[name])))
-	}
-	// With the knowledge base: the chat's summary and projects follow.
-	h := agentHub(t)
-	goldenKB(t, h)
-	connectAssistant(t, h) // the knowledge base is the assistant's: the hub asks it (kb.context)
-	it := *items["mention"]
-	golden(t, "inbox_agent.mention_kb", inboxAgentPrompt(&it, h.ownerName(), h.kbContextFor(&it)))
-	// A chat in another Feishu account than lark.account: the prompt names it for lark_messages.
-	it = *items["dm"]
-	it.Lark = &InboxLark{AccountID: 2, FeedID: "f2"}
-	golden(t, "inbox_agent.dm_second_account", inboxAgentPromptFor(&it, "示例用户", nil, nil, 1))
-	it = *items["mail_direct"]
-	it.Mail = &InboxMail{AccountID: "acc1", Mailbox: "INBOX", UIDs: []uint32{3}, From: mail.Address{Email: "Sender@Example.com"}}
-	golden(t, "inbox_agent.mail_kb", inboxAgentPrompt(&it, "", h.kbContextFor(&it)))
-}
-
-func TestGoldenTranslateTexts(t *testing.T) {
-	h := newTestHub(t)
-	model, calls := captureModel(t, `{"texts":["你好","明天见"]}`)
-	h.triageAI = model
-	if _, err := h.translateTexts(context.Background(), []string{"Hello", "", "See you tomorrow"}, "zh-Hans"); err != nil {
-		t.Fatal(err)
-	}
-	goldenCall(t, "translate_texts", onlyCall(t, calls()))
-}
-
-type goldenMail struct {
-	Mail
-	msg *mail.MailMessage
-}
-
-func (g goldenMail) GetMessage(ctx context.Context, accountID string, uid uint32, mailbox string) (*mail.MailMessage, error) {
-	return g.msg, nil
-}
-
-func TestGoldenTranslateMail(t *testing.T) {
-	h := newTestHub(t)
-	model, calls := captureModel(t, `{"subject":"季度汇报","text":"请在周五前提交。"}`)
-	h.triageAI = model
-	h.mail = goldenMail{msg: &mail.MailMessage{MailSummary: mail.MailSummary{Subject: "Quarterly report"}, Text: "  Please submit it by Friday.  "}}
-	if _, err := h.translateMail(context.Background(), "acc1", 7, "INBOX", "zh-Hans"); err != nil {
-		t.Fatal(err)
-	}
-	goldenCall(t, "translate_mail", onlyCall(t, calls()))
-}
-
 func TestGoldenBotMessage(t *testing.T) {
 	golden(t, "bot_message.jarvis", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Owner: "示例用户", Text: "今天有什么会？",
 		Quote: &prompts.BotQuote{Who: "Persona", Text: "上午 10 点有周会。"}}))
@@ -443,15 +289,6 @@ func TestGoldenChannelMessage(t *testing.T) {
 		Text: "看下这个日志", Forward: "11-02 10:00 张三：构建挂了", Files: []string{"/tmp/jarvis-uploads/build.log"}}))
 	golden(t, "channel_message.only_unsupported", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "微信", Plain: true,
 		Asks: true, Unsupported: []string{"一段没有转写的语音"}}))
-}
-
-// An item about one of the user's tasks: the judge's input lists the tasks, the AI 分身 is told the linked one.
-func TestGoldenInboxTask(t *testing.T) {
-	items := goldenItems(t)
-	task := prompts.InboxTask{ID: "todo_1", Title: "修登录崩溃", State: "在做", Last: "测试通过 42/42"}
-	golden(t, "inbox_judge_input.with_task", prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: "张三问修复进度",
-		Item: promptItem(items["dm"]), Tasks: []prompts.InboxTask{task}}))
-	golden(t, "inbox_agent.with_task", inboxAgentPromptFor(items["dm"], "示例用户", nil, &task, 1))
 }
 
 // Closing a finished task (docs/todos.md「自动完成」): the judge's system prompt and its input, with and without hints.
@@ -479,21 +316,4 @@ func TestTodoDecisionsGolden(t *testing.T) {
 		{N: 1, Question: "先发哪个平台？", Choice: "安卓", Reason: "iOS 审核卡住了", When: "11-04 10:02"},
 		{N: 2, Question: "用哪个迁移号？", Choice: "0311", When: "11-04 11:30", From: "在「发版 Agent」的提问里答的"},
 	}}))
-}
-
-// Relating a batch to events: the first call (rules, the connector's meta description, the events) and the call after
-// one tool call.
-func TestGoldenInboxGroup(t *testing.T) {
-	g := &groupLark{batch: groupBatch(), placed: map[string]bool{}}
-	model, client := newGroupModel(t, `{"tool":"messages_before","args":{"message":"m1060","n":5}}`, groupAnswerOK)
-	h, _ := groupHub(t, g, client)
-	h.cfg.Assistant.Owner = "示例用户"
-	h.collectInbox(context.Background(), roundPoll)
-	h.waitGrouping()
-	calls := model.asked()
-	if len(calls) != 2 {
-		t.Fatalf("%d calls", len(calls))
-	}
-	goldenCall(t, "inbox_group.first", calls[0])
-	golden(t, "inbox_group.after_tool.user", calls[1].User)
 }

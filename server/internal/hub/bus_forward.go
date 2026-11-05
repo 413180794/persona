@@ -34,6 +34,20 @@ var hopHeaders = map[string]bool{"Connection": true, "Keep-Alive": true, "Te": t
 
 // forwardHTTP passes r on to manager id as http.request and writes its answer.
 func (h *Hub) forwardHTTP(w http.ResponseWriter, r *http.Request, id string) {
+	h.relayHTTP(w, r, id, false)
+}
+
+// forwardSend is forwardHTTP for a request that sends something on (an inbox reply). When the link drops or the time
+// runs out while the request is with the manager, it may have been done: 502 assistant_in_doubt, delivered "unknown"
+// (assistant_offline says nothing went, which only a request that never reached it can say).
+func (h *Hub) forwardSend(w http.ResponseWriter, r *http.Request, id string) {
+	h.relayHTTP(w, r, id, true)
+}
+
+// errSendInDoubt is what forwardSend answers when it can't tell whether the request was done.
+var errSendInDoubt = errors.New("和助手的连接在发送途中断了，可能已经发出去了：先看看再决定要不要重发")
+
+func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send bool) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, busHTTPLimit))
 	if err != nil {
 		writeErr(w, http.StatusRequestEntityTooLarge, err)
@@ -56,6 +70,10 @@ func (h *Hub) forwardHTTP(w http.ResponseWriter, r *http.Request, id string) {
 	if err := h.callBus(ctx, id, assistantwire.MethodHTTP, req, &res); err != nil {
 		var coded *rpc.Error
 		switch {
+		case send && (errors.Is(err, errBusDropped) || errors.Is(err, context.DeadlineExceeded)):
+			body := errorBody(http.StatusBadGateway, assistantwire.CodeAssistantInDoubt, errSendInDoubt)
+			body["delivered"], body["retryable"] = "unknown", false
+			writeErrorBody(w, http.StatusBadGateway, body)
 		case errors.Is(err, errBusOffline):
 			writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
 		case errors.As(err, &coded):

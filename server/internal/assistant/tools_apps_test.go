@@ -316,13 +316,21 @@ func TestInteractionAnswerKeepsToItsTarget(t *testing.T) {
 
 // ---- inbox_draft ----
 
-// inbox_draft's rules: a draft with text and no blank left to fill in, trimmed, the note clipped; the hub says whose
-// item it is and which change it does not offer.
+// inbox_draft's rules: a draft with text and no blank left to fill in, trimmed, the note clipped; it goes on the item
+// whose AI 分身 runs in the conversation, and a change the item does not offer is refused.
 func TestInboxDraftRules(t *testing.T) {
-	f := newFakeHub()
-	answer := map[string]any{"item_id": "lark:f1:1"}
-	f.answerApp(AppInbox, assistantwire.InboxDraft, func(json.RawMessage) (any, error) { return answer, nil })
-	s := newTestService(t, f)
+	h := newInboxHub(t)
+	old := inboxDraftWait
+	inboxDraftWait = 50 * time.Millisecond
+	t.Cleanup(func() { inboxDraftWait = old })
+	doc := &InboxItem{ID: "doc:1", Source: "lark", Kind: KindDoc, Last: "1", UpdatedAt: time.Now(),
+		Doc:   &InboxDoc{NoticeID: "n1", Rows: []DocRow{{Ref: "r1", Status: []DocStatus{{Field: "状态", Options: []DocOption{{Name: "完成"}}}}}}},
+		Agent: &InboxAgent{State: AgentRunning, SessionID: "s1"}}
+	h.inboxReady(context.Background())
+	h.inbox.mu.Lock()
+	h.inbox.items[doc.ID] = doc
+	h.inbox.mu.Unlock()
+	s := h.Service
 
 	for _, args := range []map[string]any{{"text": "  "}, {"note": "n"}, {"text": "hi", "changes": "x"}} {
 		if _, err := runTool(s, "s1", "inbox_draft", args); err == nil || err.Error() != "text is required" {
@@ -334,8 +342,8 @@ func TestInboxDraftRules(t *testing.T) {
 			t.Fatalf("%q: %v", text, err)
 		}
 	}
-	if n := len(f.appParams(AppInbox, assistantwire.InboxDraft)); n != 0 {
-		t.Fatalf("%d refused drafts went to the inbox", n)
+	if doc.Agent.State != AgentRunning || doc.Agent.Draft != "" {
+		t.Fatalf("a refused draft went to the inbox: %+v", doc.Agent)
 	}
 	if draftPlaceholder("【通知】 不算吗") == "" || draftPlaceholder("周五前给你") != "" {
 		t.Fatal("draftPlaceholder")
@@ -347,22 +355,17 @@ func TestInboxDraftRules(t *testing.T) {
 	if err != nil || out != "The draft is in the user's inbox; they will send it. You're done." {
 		t.Fatalf("draft: %q %v", out, err)
 	}
-	p := f.appParams(AppInbox, assistantwire.InboxDraft)
-	if len(p) != 1 || p[0]["session_id"] != "s1" || p[0]["text"] != "合了，MR 已经进主干" || p[0]["note"] != strings.Repeat("查", 600)+"…" {
-		t.Fatalf("draft params: %v", p)
-	}
-	if ch, _ := p[0]["changes"].([]any); len(ch) != 1 || ch[0].(map[string]any)["ref"] != "r1" {
-		t.Fatalf("changes: %v", p[0]["changes"])
+	if a := doc.Agent; a.State != AgentDrafted || a.Draft != "合了，MR 已经进主干" || a.Note != strings.Repeat("查", 600)+"…" ||
+		len(a.Changes) != 1 || a.Changes[0].Ref != "r1" {
+		t.Fatalf("the draft on the item: %+v", a)
 	}
 
-	answer = map[string]any{"item_id": ""}
 	if _, err := runTool(s, "s9", "inbox_draft", map[string]any{"text": "hi"}); err == nil ||
 		err.Error() != "this conversation was not started for an inbox item" {
 		t.Fatalf("not an inbox agent: %v", err)
 	}
-	answer = map[string]any{"item_id": "doc:1", "refused": map[string]string{"ref": "r1", "field": "状态", "value": "完成"}}
-	if _, err := runTool(s, "s1", "inbox_draft", map[string]any{"text": "hi"}); err == nil ||
-		err.Error() != "change {Ref:r1 Field:状态 Value:完成} is not one the item lists (ref, field and one of its values)" {
+	if _, err := runTool(s, "s1", "inbox_draft", map[string]any{"text": "hi", "changes": []map[string]string{{"ref": "r1", "field": "状态", "value": "作废"}}}); err == nil ||
+		err.Error() != "change {Ref:r1 Field:状态 Value:作废} is not one the item lists (ref, field and one of its values)" {
 		t.Fatalf("a change the item does not offer: %v", err)
 	}
 }

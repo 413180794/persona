@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"cmp"
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -167,10 +168,10 @@ func (m *groupModel) asked() []capturedCall {
 
 // groupHub is a hub with the connector and model, an open event of chat F1 (lark:F1:1051) and one done yesterday
 // (lark:F1:900).
-func groupHub(t *testing.T, g *groupLark, model *ai.Client) (*Hub, *savedStore) {
+func groupHub(t *testing.T, g *groupLark, model *ai.Client) (*inboxHub, *inboxMemStore) {
 	t.Helper()
 	h, st := admitHub(t, model, g)
-	h.cfg.Inbox.Rules = "示例全局规则"
+	h.setConfig(func(c *assistantwire.InboxConfig) { c.Rules = "示例全局规则" })
 	now := time.Now()
 	yesterday := now.Add(-24 * time.Hour)
 	for _, it := range []*InboxItem{
@@ -187,7 +188,7 @@ func groupHub(t *testing.T, g *groupLark, model *ai.Client) (*Hub, *savedStore) 
 	return h, st
 }
 
-func (h *Hub) waitGrouping() { h.inbox.grouping.wg.Wait() }
+func (h *inboxHub) waitGrouping() { h.inbox.grouping.wg.Wait() }
 
 const groupAnswerOK = `{"assign":[{"message":"m1060","event":"lark:F1:1051"},{"message":"m1061","event":"new:1"}],
 	"events":[{"event":"lark:F1:1051","title":"示例 A 方案周四下午评审","summary":"丙说周四下午可以，等你确认","tier":"action","reason":"等你确认"},
@@ -326,7 +327,7 @@ func TestInboxGroupBatchOnce(t *testing.T) {
 	model, client := newGroupModel(t, groupAnswerOK)
 	h, _ := groupHub(t, g, client)
 	twice := []connector.InboxThing{*groupBatch(), *groupBatch()}
-	if rest := h.relateBatches(context.Background(), g, twice); len(rest) != 0 {
+	if rest := h.relateBatches(context.Background(), sourceOf(g), twice); len(rest) != 0 {
 		t.Fatalf("batches left as things: %+v", rest)
 	}
 	h.collectInbox(context.Background(), roundPoll) // still writing the first: not again
@@ -503,7 +504,7 @@ func chatBatch() *connector.InboxThing {
 }
 
 // chatHub is a hub with a connector that keeps no meta and one open event the hub wrote for it before.
-func chatHub(t *testing.T, g *groupChat, model *ai.Client) *Hub {
+func chatHub(t *testing.T, g *groupChat, model *ai.Client) *inboxHub {
 	t.Helper()
 	h, _ := admitHub(t, model, g)
 	it := &InboxItem{ID: "examplechat:chat:C1#m1", Source: "examplechat", Kind: KindGroup, Title: "示例 A 方案评审", Tier: TierAction,

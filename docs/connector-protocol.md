@@ -94,7 +94,10 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（那个块，没有通用的 `connector` 块），App 照旧打开飞书聊天、文档的行、帖子；thread 由块算出
 （`chat:<feed>`，非主账号 `chat:<账号>:<feed>`；`doc:<notice>`；`moment:<post>`），所以迁出之前 hub 自己做的条目接着用、不重复出一条；新条目的 id
 用 `legacy_id`。同一步（`last` 没变）块变了（读到的位置、文档重读后的行）也更新条目。这些条目的回复和改状态经 `inbox.reply` 交给连接器，
-`client_id` 和 hub 原来自己发时用的一样（`hub/inbox_migrate.go`）。
+`client_id` 和 hub 原来自己发时用的一样（管理者的 `assistant/inbox_migrate.go`）。
+
+2026-11-04 起收件箱的条目由管理者（助手进程）合成、分拣（`docs/inbox.md`「谁管什么」）：连接器照旧只和 hub 说话，hub 把 `inbox.collect` 的结果原样转交，
+管理者要调的 `inbox.reply`、`inbox.settle`、`group.*` 也由 hub 代调，**协议本身不变**。
 
 `messages` 里每条：`id`、`position`、`sender_id`、`sender_name`、`mine`、`type`、`text`、`at`、`media`、
 `sender_handles: [{kind, value}]`（身份线索，原值；hub 只存它的 HMAC，`docs/knowledge.md`「身份线索」）。

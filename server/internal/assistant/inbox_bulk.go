@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/apierr"
 )
 
 // Marking many items done (or back) in one request: 全部标为已处理 over what the list shows, 全部看过 / 全部清除 on a
@@ -53,17 +55,18 @@ func inboxVersion(it *InboxItem) string {
 // Filing is idempotent (an item already done keeps when and why it was done) and checks the version: an item that
 // took new messages since the user's list stays open, so what came in meanwhile is not filed unseen. Bringing back
 // does not check it (an item done meanwhile by a reply elsewhere comes back too, as with 移回 on one item).
-func (h *Hub) setInboxDoneBulk(ctx context.Context, targets []inboxBulkTarget, done bool, now time.Time) inboxBulkResult {
+func (s *Service) setInboxDoneBulk(ctx context.Context, targets []inboxBulkTarget, done bool, now time.Time) inboxBulkResult {
 	res := inboxBulkResult{Changed: []InboxItem{}, Unchanged: []string{}, Skipped: []inboxBulkSkip{}}
 	var changed []*InboxItem
 	seen := map[string]bool{}
-	h.inbox.mu.Lock()
+	b := &s.inbox
+	b.mu.Lock()
 	for _, t := range targets {
 		if seen[t.ID] {
 			continue
 		}
 		seen[t.ID] = true
-		it, ok := h.inbox.items[t.ID]
+		it, ok := b.items[t.ID]
 		switch {
 		case !ok:
 			res.Skipped = append(res.Skipped, inboxBulkSkip{t.ID, bulkSkipMissing})
@@ -81,28 +84,31 @@ func (h *Hub) setInboxDoneBulk(ctx context.Context, targets []inboxBulkTarget, d
 			res.Changed = append(res.Changed, it.listed())
 		}
 	}
-	h.inbox.mu.Unlock()
-	h.saveInbox(ctx, changed)
+	b.mu.Unlock()
+	s.saveInbox(ctx, changed)
 	return res
 }
 
 var errBulkTooMany = errors.New("too many items in one request")
 
-func (h *Hub) inboxBulkRoutes(api *http.ServeMux) {
+func (s *Service) inboxBulkRoutes() {
 	// Many items at once: {"done": true|false, "items": [{"id", "version"}]}.
-	api.HandleFunc("POST /api/v1/inbox/done", func(w http.ResponseWriter, r *http.Request) {
+	s.handle("POST /api/v1/inbox/done", func(w http.ResponseWriter, r *http.Request) {
+		if !s.inboxUp(w, r) {
+			return
+		}
 		var in struct {
 			Done  *bool             `json:"done"`
 			Items []inboxBulkTarget `json:"items"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Done == nil {
-			writeErr(w, http.StatusBadRequest, errors.New("done and items are required"))
+			apierr.Write(w, http.StatusBadRequest, errors.New("done and items are required"))
 			return
 		}
 		if len(in.Items) > inboxBulkMax {
-			writeErr(w, http.StatusRequestEntityTooLarge, errBulkTooMany)
+			apierr.Write(w, http.StatusRequestEntityTooLarge, errBulkTooMany)
 			return
 		}
-		writeJSON(w, h.setInboxDoneBulk(r.Context(), in.Items, *in.Done, time.Now()))
+		apierr.WriteJSON(w, s.setInboxDoneBulk(r.Context(), in.Items, *in.Done, time.Now()))
 	})
 }

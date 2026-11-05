@@ -244,9 +244,8 @@ func (h *Hub) routes() http.Handler {
 	h.personaRoutes(api)
 	h.botRoutes(api) // the channels' routes are the assistant's (assistantwire.Routes)
 	h.agentRoutes(api)
-	h.inboxRoutes(api)
+	h.inboxRoutesRelayed(api)
 	h.connectorRoutes(api)
-	h.translateRoutes(api)
 	h.extensionRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)
 	if h.mail != nil {

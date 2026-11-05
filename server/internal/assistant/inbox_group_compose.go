@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"strings"
@@ -6,26 +6,27 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// Events of a connector that groups but keeps no meta (capability group without meta): the hub writes them itself,
+// Events of a connector that groups but keeps no meta (capability group without meta): the inbox writes them itself,
 // from the batch, with no call to the connector and no meta.
 
 // composeEvent is one event of the plan as the hub writes it. A new one gets an id of its own, stable for it (the
 // connector, the conversation, its first message), and the text of its messages; an existing one keeps its id and
 // title and takes its new messages' text after what it had. Thread, kind, label, sender, preview, last, rules and
 // extra come from the batch; title, summary and tier are set by putEvent (the model's, or the rules').
-func (h *Hub) composeEvent(c connector.Connector, t connector.InboxThing, a connector.GroupAppend) connector.InboxThing {
+func (s *Service) composeEvent(connectorID string, t connector.InboxThing, a connector.GroupAppend) connector.InboxThing {
 	thing := t
 	thing.Group, thing.Meta = nil, nil
 	if a.Event == "" {
-		thing.ID = c.ID() + ":" + t.Thread + "#" + a.Messages[0]
+		thing.ID = connectorID + ":" + t.Thread + "#" + a.Messages[0]
 		thing.Context = eventText(t.Context, t.Group.New, a.Messages, true)
 	} else {
-		h.inbox.mu.Lock()
-		if cur := h.inbox.items[a.Event]; cur != nil {
+		b := &s.inbox
+		b.mu.Lock()
+		if cur := b.items[a.Event]; cur != nil {
 			thing.ID, thing.Title = cur.ID, cur.Title
 			thing.Context = strings.TrimSpace(cur.Context + "\n" + eventText(t.Context, t.Group.New, a.Messages, false))
 		}
-		h.inbox.mu.Unlock()
+		b.mu.Unlock()
 	}
 	return thing
 }

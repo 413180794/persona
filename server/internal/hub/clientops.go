@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
 )
 
@@ -80,7 +81,7 @@ func (h *Hub) withClientOp(kind string, next http.HandlerFunc) http.HandlerFunc 
 			h.waitClientOp(w, r, op)
 			return
 		}
-		h.executeClientOp(w, r, id, next)
+		h.executeClientOp(w, r, kind, id, next)
 	}
 }
 
@@ -115,7 +116,26 @@ func (w *clientOpWriter) Write(b []byte) (int, error) {
 	return w.body.Write(b)
 }
 
-func (h *Hub) executeClientOp(w http.ResponseWriter, r *http.Request, id string, next http.HandlerFunc) {
+// clientOpForgetter drops a receipt claimed for nothing (db.DB): the operation's retry runs it again.
+type clientOpForgetter interface {
+	ForgetClientOp(ctx context.Context, id string) error
+}
+
+// clientOpRetry: an inbox reply the manager never got (assistant_offline) or that was cut off on the way to it
+// (assistant_in_doubt) keeps no receipt: the same reply asked again goes to the manager, whose send id has the hub
+// send it once (inbox.go sendInboxOnce), instead of the stored refusal coming back for good.
+func clientOpRetry(kind string, body []byte) bool {
+	if kind != "inbox_reply" {
+		return false
+	}
+	var res struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(body, &res)
+	return res.Code == assistantwire.CodeAssistantOffline || res.Code == assistantwire.CodeAssistantInDoubt
+}
+
+func (h *Hub) executeClientOp(w http.ResponseWriter, r *http.Request, kind, id string, next http.HandlerFunc) {
 	state := "unknown"
 	var result json.RawMessage
 	finished := false
@@ -136,7 +156,17 @@ func (h *Hub) executeClientOp(w http.ResponseWriter, r *http.Request, id string,
 	state = clientOpState(capture.status, capture.body.Bytes())
 	saved := clientOpResult{Status: capture.status, Body: capture.body.Bytes(), ContentType: capture.header.Get("Content-Type")}
 	result, _ = json.Marshal(saved)
-	err := persist()
+	var err error
+	if f, ok := h.store.(clientOpForgetter); ok && clientOpRetry(kind, saved.Body) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err = f.ForgetClientOp(ctx, id)
+		cancel()
+		if err != nil { // kept, then: the stored answer comes back
+			err = persist()
+		}
+	} else {
+		err = persist()
+	}
 	finished = true
 	if err != nil {
 		writeErrorBody(w, http.StatusServiceUnavailable, map[string]any{"state": "unknown"})

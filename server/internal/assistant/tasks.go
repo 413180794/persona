@@ -906,8 +906,8 @@ func (s *Service) messageCard(ctx context.Context, itemID string, body MessageCa
 }
 
 // markCardsSent records on the cards about an inbox item put in by at that its reply went out (text: what it said;
-// empty: not known) and tells the clients (tell), which draw them sent; the cards it changed. The hub says when a
-// reply went out (assistant.cards_sent).
+// empty: not known) and tells the clients (tell), which draw them sent; the cards it changed. The inbox says when a
+// reply went out (replyInboxAs).
 func (s *Service) markCardsSent(ctx context.Context, itemID string, at time.Time, text string, tell bool) []FeedItem {
 	at = at.UTC()
 	patch, _ := json.Marshal(struct {
@@ -965,8 +965,8 @@ func cardSentAt(it FeedItem) *time.Time {
 }
 
 // settleCards fills in the cards among items whose item was replied to after they were put in but which do not say
-// so: cards from before the hub recorded it on them (the reply went out, the card still offered 发送). When the items
-// were replied to is the inbox's (app.call inbox.replied).
+// so: cards from before it was recorded on them (the reply went out, the card still offered 发送). When the items
+// were replied to is the inbox's (inboxRepliedAt).
 func (s *Service) settleCards(ctx context.Context, items []FeedItem) {
 	var ids []string
 	for _, it := range items {
@@ -977,18 +977,12 @@ func (s *Service) settleCards(ctx context.Context, items []FeedItem) {
 	if len(ids) == 0 {
 		return
 	}
-	var replied struct {
-		Replied map[string]time.Time `json:"replied"`
-	}
-	if err := s.appCall(ctx, AppInbox, InboxReplied, map[string]any{"ids": ids}, &replied); err != nil {
-		s.logf("inbox: replied: %v", err)
-		return
-	}
+	replied := s.inboxRepliedAt(ctx, ids)
 	for _, it := range items {
 		if it.Kind != feedMessage || cardSentAt(it) != nil {
 			continue
 		}
-		at, ok := replied.Replied[it.Ref]
+		at, ok := replied[it.Ref]
 		if !ok || at.Before(it.At) {
 			continue
 		}
@@ -1002,8 +996,8 @@ func (s *Service) settleCards(ctx context.Context, items []FeedItem) {
 	}
 }
 
-// cardSent is assistant.card_sent: whether card cardID, about inbox item itemID, says its reply went out (the hub's
-// 发送 on the card sends once per card).
+// cardSent is whether card cardID, about inbox item itemID, says its reply went out (发送 on the card sends once per
+// card: sendFromCard).
 func (s *Service) cardSent(ctx context.Context, cardID, itemID string) (bool, error) {
 	card, err := s.feedItem(ctx, cardID)
 	if err != nil {

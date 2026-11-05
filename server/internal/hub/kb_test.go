@@ -92,15 +92,6 @@ func TestKBToolsAndTheHubsReads(t *testing.T) {
 		t.Fatalf("search: %q", out)
 	}
 
-	// The inbox agent gets the chat's and its project's context.
-	it := &InboxItem{Lark: &InboxLark{FeedID: "f1"}, Agent: &InboxAgent{}}
-	prompt := inboxAgentPrompt(it, "我", h.kbContextFor(it))
-	if !strings.Contains(prompt, "会话档案 · 发布群") || !strings.Contains(prompt, "项目 · Jarvis 发布") || !strings.Contains(prompt, "kb_update") {
-		t.Fatalf("inbox context: %s", prompt)
-	}
-	if h.kbContextFor(&InboxItem{Lark: &InboxLark{FeedID: "nope"}}) != nil {
-		t.Fatal("context for an unknown chat")
-	}
 	// The triage's projects of a directory: that machine's only.
 	if got := h.kbProjectNames(context.Background(), "server", "/code/jarvis/server"); len(got) != 1 || got[0] != "Jarvis 发布" {
 		t.Fatalf("dir match: %v", got)

@@ -10,8 +10,6 @@ import (
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistantwire"
-	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -92,37 +90,6 @@ func (h *Hub) kbKick() {
 	if !h.kbOff() {
 		_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventKBKick, map[string]any{})
 	}
-}
-
-// kbContextFor is what the knowledge base knows about an inbox item's chat and its projects, for the inbox agent
-// (AI 分身): the compressed context makes the draft sound like the owner, and the agent writes conclusions back. nil
-// without one (or while the assistant is not connected).
-func (h *Hub) kbContextFor(it *InboxItem) *prompts.KBContext { return h.kbChatContext(kbChatOf(it)) }
-
-// kbChatOf is the knowledge base's chat of an inbox item ("" for none).
-func kbChatOf(it *InboxItem) string {
-	switch {
-	case it.Lark != nil:
-		return kb.ChatID("lark", it.Lark.FeedID)
-	case it.Mail != nil:
-		return kb.ChatID("mail", it.Mail.AccountID+"-"+strings.ToLower(it.Mail.From.Email))
-	}
-	return ""
-}
-
-// kbChatContext is what the knowledge base knows about chat id and its projects (kb.context); nil without one.
-func (h *Hub) kbChatContext(id string) *prompts.KBContext {
-	if id == "" || h.kbOff() {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	var res assistantwire.KBContextResult
-	if err := h.kbAsk(ctx, assistantwire.MethodKBContext, map[string]any{"chat_id": id}, &res); err != nil {
-		h.logf("kb: context of %s: %v", id, err)
-		return nil
-	}
-	return res.Context
 }
 
 // kbProjectNames are the names of the projects whose code directories hold cwd on machine (none when the knowledge

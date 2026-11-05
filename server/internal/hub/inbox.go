@@ -1,216 +1,92 @@
 package hub
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha1"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The unified inbox (docs/inbox.md): Feishu messages and mail in one list, one row per "thing" — the new messages
-// in a chat, a mail thread — not per message and not per chat. The hub collects them in the background, keeps them
-// in Postgres with their AI triage (inbox_triage.go) and whether the user has dealt with them, and tells the apps
-// {"type":"inbox"} when the list changes.
+// The unified inbox (docs/inbox.md) is the manager's (internal/assistant's inbox*.go): the items and their state,
+// triage, events, mutes, the AI 分身, translations and the /api/v1/inbox… routes, which the hub relays. The hub keeps
+// the sources: it reads them when a round is due — its poll, a connector's changed, a pull to refresh the manager asks
+// for (inbox.collect) — and hands what it read to the manager (inbox.collected); it runs what the inbox asks of the
+// sources and of its other parts (app.call inbox.*: inboxAppCall), and tells the extensions and the apps when items
+// changed (inbox.changed). It keeps no inbox state of its own: while the manager is not connected the sources are
+// still read on schedule and what they had is kept for it (merged, bounded, in memory: heldThingsMost, heldMailMost),
+// so what leaves a source's window meanwhile (mail's newest 40, iMessage's newest 30) is not lost; the routes answer
+// 503 assistant_offline, and a full round with what was kept goes as soon as the manager is back.
 
 const (
-	inboxWindow   = 7 * 24 * time.Hour // older unread chats / mail are history, not inbox
-	inboxKeepDone = 3 * 24 * time.Hour // done items stay listed (for undo) this long
-	inboxForget   = 8 * 24 * time.Hour // and are remembered (so old unread messages don't come back) this long
-	inboxPoll     = 2 * time.Minute    // fallback when no Feishu event arrives
-	inboxMailPoll = 3 * time.Minute    // IMAP is slow; Gmail goes through a proxy
-	inboxDebounce = 3 * time.Second    // a burst of Feishu events collects once
-	inboxMessages = 20                 // newest messages of a chat read into an item
-	inboxText     = 600                // characters of one message kept for triage
+	inboxPoll     = 2 * time.Minute // fallback when no Feishu event arrives
+	inboxMailPoll = 3 * time.Minute // IMAP is slow; Gmail goes through a proxy
+	inboxDebounce = 3 * time.Second // a burst of Feishu events collects once
+	// inboxRoundWait bounds handing a round over (the manager reads the new mail's text before it answers).
+	inboxRoundWait = 5 * time.Minute
 )
 
-// Item kinds.
-const (
-	KindDM      = "dm"      // a person wrote to me
-	KindMention = "mention" // @me / @all in a group
-	KindGroup   = "group"   // new messages in a group I follow (not muted)
-	KindBot     = "bot"     // a bot or app chat
-	KindMail    = "mail"
-)
-
-// Triage tiers (inbox_triage.go).
-const (
-	TierAction = "action" // 需要你
-	TierFYI    = "fyi"    // 知悉即可
-	TierNoise  = "noise"  // 噪音
-)
-
-type InboxItem struct {
-	ID          string     `json:"id"`
-	Source      string     `json:"source"` // lark | mail
-	Kind        string     `json:"kind"`
-	Account     string     `json:"account"`      // "feishu" or a mail account id
-	AccountName string     `json:"account_name"` // 飞书 / the mail address
-	Title       string     `json:"title"`        // chat name / mail subject
-	Sender      string     `json:"sender,omitempty"`
-	Avatar      string     `json:"avatar,omitempty"`
-	Preview     string     `json:"preview"`
-	Count       int        `json:"count"`
-	StartedAt   time.Time  `json:"started_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	Tier        string     `json:"tier,omitempty"` // empty until triaged
-	Summary     string     `json:"summary,omitempty"`
-	Reason      string     `json:"reason,omitempty"`
-	Read        bool       `json:"read,omitempty"` // read somewhere else (Feishu, another mail client)
-	DoneAt      *time.Time `json:"done_at,omitempty"`
-	DoneBy      string     `json:"done_by,omitempty"` // user | read | replied
-	Lark        *InboxLark `json:"lark,omitempty"`
-	Mail        *InboxMail `json:"mail,omitempty"`
-	Doc         *InboxDoc  `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_docs.go)
-	// Translations by target language: new foreign mail, translated before it is opened (inbox_translate.go).
-	Translations map[string]*InboxTranslation `json:"translations,omitempty"`
-	Moment       *InboxMoment                 `json:"moment,omitempty"` // a 公司圈 post's comments / @me (inbox_moments.go)
-	// Connector: a thread of a connector's (GitHub…), Source being its id (inbox_connectors.go).
-	Connector *InboxConnector `json:"connector,omitempty"`
-	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
-	Agent *InboxAgent `json:"agent,omitempty"`
-	// Mutes are what it can be muted by (listed only; inbox_mutes.go).
-	Mutes []MuteOption `json:"mutes,omitempty"`
-	// Version names what the item holds now (listed only): a bulk 已处理 sends it back, so an item that took new
-	// messages since the list was drawn is not filed with them (inbox_bulk.go).
-	Version string `json:"version,omitempty"`
-	// TriagedBy says who sorted an event (inbox_group.go): "model" (its title, summary and tier are the model's) or
-	// "rules" (the connector grouped it and its rule tier stands, 按规则).
-	TriagedBy string `json:"triaged_by,omitempty"`
-
-	// Bookkeeping: persisted, not listed (GET /api/v1/inbox/{id} returns Context).
-	Last      string `json:"last,omitempty"`       // newest message position / mail uid in the item
-	Context   string `json:"context,omitempty"`    // the conversation as text, for triage and 交给 AI
-	TriagedAt string `json:"triaged_at,omitempty"` // Last when it was triaged
-	BodyOf    string `json:"body_of,omitempty"`
-	JudgedAt  string `json:"judged_at,omitempty"` // Last when model 2 looked at it    // mail: Last when the full text was read into Preview / Context
-	// Rules are the item's own triage rules, from its connector (InboxThing.Rules): they replace inbox.rules for it.
+// InboxConfig tunes the inbox (hub.json "inbox").
+type InboxConfig struct {
+	// Rules is extra guidance for triage, in the user's words ("anything from my manager needs me", "alerts from
+	// group X are noise"…), appended to the prompt.
 	Rules string `json:"rules,omitempty"`
-	// Meta is an event's meta as its connector wrote it (which messages are in it…): kept and handed back as it is,
-	// never read here. Group is the event's conversation (inbox_group.go).
-	Meta  json.RawMessage `json:"meta,omitempty"`
-	Group *InboxGroup     `json:"group,omitempty"`
+	// TriageAI (model 1) sorts and summarizes new items; JudgeAI (model 2) decides which ones the agent handles.
+	// Empty fields fall back to hub.json's "ai"; without them both use "ai".
+	TriageAI *ai.Config `json:"triage_ai,omitempty"`
+	JudgeAI  *ai.Config `json:"judge_ai,omitempty"`
+	// Agent (model 3) works on the items the judge hands over and drafts the reply (the manager's inbox_agent.go).
+	Agent InboxAgentConfig `json:"agent,omitempty"`
 }
 
-type InboxLark struct {
-	AccountID int `json:"account_id,omitempty"` // zero in legacy rows means primary account 1
-	// OLAccount is what the apps pass as ol_account to the /api/v1/lark routes about this item: AccountID when that
-	// is not lark.account, else zero (larkRequestAccount).
-	OLAccount       int    `json:"ol_account,omitempty"`
-	FeedID          string `json:"feed_id"`
-	IsGroup         bool   `json:"is_group"`
-	IsTopic         bool   `json:"is_topic,omitempty"`
-	StartPosition   string `json:"start_position,omitempty"`   // the first new message (open the chat there)
-	ReadPosition    string `json:"read_position,omitempty"`    // the chat's read position in Feishu, as of the last collection
-	MentionPosition string `json:"mention_position,omitempty"` // the unread @me
-	AtAll           bool   `json:"at_all,omitempty"`
-	AtMe            bool   `json:"at_me,omitempty"` // an unread @me (not only @all): kept while the item is open
-	// ReplyTo is the newest message from someone else; ThreadKind says where it sits: "" in the chat, "topic" in a
-	// topic group's topic, "thread" in a thread of a normal group. A reply from the inbox goes there (replyInbox).
-	ReplyTo    string `json:"reply_to,omitempty"`
-	ThreadKind string `json:"thread_kind,omitempty"`
-	// SenderID is who sent the newest message from someone else (a group's sender, to mute them).
-	SenderID string `json:"sender_id,omitempty"`
+// InboxAgentConfig is hub.json's inbox.agent, handed to the manager as it is.
+type InboxAgentConfig = assistantwire.InboxAgentConfig
+
+// inboxSources is the hub's part of the inbox: the wake-ups, one collection at a time, and what the manager reported.
+type inboxSources struct {
+	once    sync.Once
+	kick    chan struct{}
+	wide    atomic.Bool   // a kick asked for more than the Feishu chats (kickInbox)
+	owed    atomic.Bool   // the manager missed a round (it was not connected): the next one is a full one
+	running chan struct{} // one collection at a time (held while the manager applies it; lock, unlock)
+	told    atomic.Bool   // "the manager is not connected" was logged (until a round goes through again)
+	// held is what was read and not handed over (the manager was away, or did not take it), merged, under running:
+	// it goes with the next round. epoch and seq stamp the rounds (InboxRound.Epoch, Seq).
+	held  *assistantwire.InboxRound
+	epoch string
+	seq   atomic.Uint64
+
+	tellOnce sync.Once
+	changed  chan assistantwire.InboxChanged // inbox.changed waiting for tellInboxChanged
+
+	// The events plugins wrote lately, by append id (groupAppendOnce).
+	appendMu    sync.Mutex
+	appended    map[string]connector.InboxThing
+	appendLocks sync.Map // append id → *sync.Mutex, while it is written
+
+	agentsMu sync.RWMutex
+	agents   map[string]bool // the AI 分身's conversations (the snapshot's inbox)
 }
 
-// Values of InboxLark.ThreadKind.
-const (
-	LarkThreadTopic  = "topic"
-	LarkThreadThread = "thread"
-)
-
-type InboxMail struct {
-	AccountID string       `json:"account_id"`
-	Mailbox   string       `json:"mailbox"`
-	UIDs      []uint32     `json:"uids"` // oldest first
-	MessageID string       `json:"message_id"`
-	From      mail.Address `json:"from"`
-	Direct    bool         `json:"direct,omitempty"` // to me, not cc / a list
-	Thread    string       `json:"thread"`           // normalized subject: replies join the same item
-}
-
-func (it *InboxItem) open() bool { return it.DoneAt == nil }
-
-// listed is the item as the list shows it (no context).
-func (it *InboxItem) listed() InboxItem {
-	c := *it
-	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt, c.Rules = "", "", "", "", "", ""
-	c.Meta, c.Group = nil, nil
-	c.Mutes = mutesOf(it)
-	c.Version = inboxVersion(it)
-	if it.Agent != nil { // the copy is encoded after the lock is released
-		a := *it.Agent
-		c.Agent = &a
-	}
-	if it.Mail != nil {
-		m := *it.Mail
-		m.UIDs = append([]uint32(nil), m.UIDs...)
-		c.Mail = &m
-	}
-	if it.Doc != nil {
-		d := *it.Doc
-		c.Doc = &d
-	}
-	if len(it.Translations) > 0 { // the list shows subject and preview; the body is fetched when the mail opens
-		c.Translations = map[string]*InboxTranslation{}
-		for k, t := range it.Translations {
-			if t != nil && t.Of == it.Last {
-				c.Translations[k] = &InboxTranslation{Subject: t.Subject, Preview: t.Preview, Clipped: t.Clipped}
-			}
-		}
-	}
-	if it.Moment != nil {
-		m := *it.Moment
-		m.Notices = append([]string(nil), it.Moment.Notices...)
-		c.Moment = &m
-	}
-	if it.Connector != nil {
-		k := *it.Connector
-		c.Connector = &k
-	}
-	return c
-}
-
-type inbox struct {
-	larkAccount int // lark.account, set once at startup; zero is primary account 1 (tests)
-	mu          sync.Mutex
-	items       map[string]*InboxItem
-	kick        chan struct{}
-	wide        atomic.Bool // a kick asked for more than the Feishu chats (kickInbox)
-	once        sync.Once
-	running     sync.Mutex  // one collection at a time
-	triaging    sync.Mutex  // one triage pass at a time (inbox_triage.go)
-	handing     sync.Mutex  // one judge / agent pass at a time (inbox_agent.go)
-	translating sync.Mutex  // one translation pass at a time (inbox_translate.go)
-	replies     sync.Map    // item id -> *inboxReply: Feishu replies to one item, one at a time (inbox_triage.go)
-	mutes       []InboxMute // what the user muted (inbox_mutes.go)
-	mutesMu     sync.Mutex  // one read-change-save of the kept mutes at a time
-
-	// admitting is one triage of a round's new plugin items at a time (admitInbox): a round meanwhile does not start
-	// them again.
-	admitting sync.Mutex
-	batch     *inboxBatch          // while a collection runs: the items it starts, which enter once triaged
-	held      map[string]inboxHeld // by source: the new items its last collection held back (inbox_admit.go)
-	grouping  inboxGrouping        // the batches being related to events (inbox_group.go)
-}
-
-func (b *inbox) init() {
+func (b *inboxSources) init() {
 	b.once.Do(func() {
-		b.items = map[string]*InboxItem{}
 		b.kick = make(chan struct{}, 1)
+		b.running = make(chan struct{}, 1)
+		b.epoch = strconv.FormatInt(time.Now().UnixNano(), 36)
 	})
 }
 
@@ -223,8 +99,18 @@ const (
 	// busy group (#674).
 	roundChats inboxRound = iota
 	roundPoll             // every inboxPoll and on a connector's kick: every source but the slow ones
-	roundFull             // at start, every inboxMailPoll and on a refresh: mail too
+	roundFull             // every inboxMailPoll, when the manager connects and on a refresh: mail too
 )
+
+func (r inboxRound) wire() string {
+	switch r {
+	case roundChats:
+		return assistantwire.RoundChats
+	case roundFull:
+		return assistantwire.RoundFull
+	}
+	return assistantwire.RoundPoll
+}
 
 // kickInbox asks for a collection of every source soon (a connector's realtime event, its settings changed).
 func (h *Hub) kickInbox() {
@@ -240,26 +126,37 @@ func (h *Hub) kickLarkChats() {
 }
 
 // kickedRound is the round a kick asks for: the Feishu chats, unless something else asked for every source too.
-func (b *inbox) kickedRound() inboxRound {
+func (b *inboxSources) kickedRound() inboxRound {
 	if b.wide.Swap(false) {
 		return roundPoll
 	}
 	return roundChats
 }
 
-func (b *inbox) signal() {
+// lock waits for the collection before to end, or for ctx: a caller that stops waiting (a refresh the manager gave up
+// on) does not stay queued behind a round that is with the manager.
+func (b *inboxSources) lock(ctx context.Context) error {
+	select {
+	case b.running <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (b *inboxSources) unlock() { <-b.running }
+
+func (b *inboxSources) signal() {
 	select {
 	case b.kick <- struct{}{}:
 	default:
 	}
 }
 
+// inboxLoop is the inbox's wake-ups: every inboxPoll, a kick (debounced), mail every inboxMailPoll. The first round is
+// a full one when the manager connects (inboxManagerConnected).
 func (h *Hub) inboxLoop(ctx context.Context) {
 	h.inbox.init()
-	h.loadInbox(ctx)
-	if !h.isMember() {
-		h.collectInbox(ctx, roundFull)
-	}
 	lastMail := time.Now()
 	t := time.NewTicker(inboxPoll)
 	defer t.Stop()
@@ -280,621 +177,809 @@ func (h *Hub) inboxLoop(ctx context.Context) {
 		if h.isMember() { // the center keeps the group's inbox; this one's stays as it was (mesh_group.go)
 			continue
 		}
-		if time.Since(lastMail) >= inboxMailPoll {
+		// A round the manager missed is made up with a full one once it is back, not while it is away (mail keeps
+		// its own pace then).
+		if time.Since(lastMail) >= inboxMailPoll || h.inbox.owed.Load() && h.busConnOf(assistantwire.AssistantID) != nil {
 			lastMail = time.Now()
 			round = roundFull
 		}
-		h.collectInbox(ctx, round)
+		_ = h.collectInbox(ctx, round)
 	}
 }
 
-func (h *Hub) loadInbox(ctx context.Context) {
-	h.loadInboxMutes(ctx)
-	if h.store == nil {
-		return
+// inboxManagerConnected: the manager's handshake went through: a full round goes to it now (the first after the hub
+// started, or the one it missed), and GitHub's muted repositories kept in its options move to its mutes.
+func (h *Hub) inboxManagerConnected() {
+	h.inbox.init()
+	h.inbox.owed.Store(true)
+	h.inbox.wide.Store(true)
+	h.inbox.signal()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	h.githubMutes(ctx)
+}
+
+// collectInbox reads the sources of one round and hands them, with what was kept from before, to the manager
+// (inbox.collected), which applies them before it answers. Not connected, or not taken, what was read is kept for the
+// next round (and that is a full one).
+func (h *Hub) collectInbox(ctx context.Context, round inboxRound) error {
+	h.inbox.init()
+	if err := h.inbox.lock(ctx); err != nil {
+		return err
 	}
-	rows, err := h.store.InboxItems(ctx, time.Now().Add(-inboxForget))
-	if err != nil {
-		h.logf("inbox: load: %v", err)
-		return
+	defer h.inbox.unlock()
+	r := h.readInbox(ctx, round)
+	if h.inbox.held != nil {
+		r = mergeRounds(*h.inbox.held, r)
 	}
-	h.inbox.mu.Lock()
-	defer h.inbox.mu.Unlock()
-	for _, raw := range rows {
-		var it InboxItem
-		if json.Unmarshal(raw, &it) == nil && it.ID != "" {
-			h.inbox.larkRequestAccount(&it)
-			h.inbox.items[it.ID] = &it
+	if h.busConnOf(assistantwire.AssistantID) == nil {
+		h.inbox.held = &r
+		h.inbox.owed.Store(true)
+		if !h.inbox.told.Swap(true) {
+			h.logf("inbox: the manager is not connected: what the sources have is kept for it")
+		}
+		return errAssistantOffline
+	}
+	r.Epoch, r.Seq = h.inbox.epoch, h.inbox.seq.Add(1)
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), inboxRoundWait)
+	defer cancel()
+	if err := h.asst().call(cctx, assistantwire.MethodInboxCollected, r, nil); err != nil {
+		h.inbox.held = &r
+		h.inbox.owed.Store(true) // read again, whole, when it is back
+		h.logf("inbox: hand the round to the manager: %v", err)
+		return err
+	}
+	h.inbox.held = nil
+	h.inbox.told.Store(false)
+	if r.Round == assistantwire.RoundFull { // what was kept went with it
+		h.inbox.owed.Store(false)
+	}
+	return nil
+}
+
+// What is kept for the manager while it is away, at most: things of one source, messages of one mail account (the
+// newest).
+const (
+	heldThingsMost = 2000
+	heldMailMost   = 500
+)
+
+// mergeRounds is old with the newer round n over it: what n read replaces what old had of the same thing (a thread,
+// an event, a batch, a mail), what only old has stays (it left the source's window meanwhile) within heldThingsMost
+// and heldMailMost; a source n read as off, or one the hub no longer has, keeps nothing.
+func mergeRounds(old, n assistantwire.InboxRound) assistantwire.InboxRound {
+	out := n
+	if old.Round == assistantwire.RoundFull || n.Round == assistantwire.RoundFull {
+		out.Round = assistantwire.RoundFull
+	} else if old.Round == assistantwire.RoundPoll {
+		out.Round = assistantwire.RoundPoll
+	}
+	out.Sources = slices.Clone(n.Sources)
+	at := map[string]int{}
+	for i, s := range out.Sources {
+		at[s.ID] = i
+	}
+	for _, o := range old.Sources {
+		i, ok := at[o.ID]
+		switch {
+		case !ok:
+			if _, have := n.Names[o.ID]; have {
+				out.Sources = append(out.Sources, o) // not read this time: what it had
+			}
+		case !out.Sources[i].Off:
+			out.Sources[i].Things = mergeHeld(o.Things, out.Sources[i].Things, heldThingsMost, func(t connector.InboxThing) string {
+				key := t.Thread + "\x00" + t.ID
+				if t.Group != nil {
+					key += "\x00" + t.Group.Batch
+				}
+				return key
+			})
 		}
 	}
+	switch {
+	case n.Mail == nil:
+		out.Mail = old.Mail
+	case old.Mail != nil:
+		m := &assistantwire.InboxMailRead{Accounts: slices.Clone(n.Mail.Accounts)}
+		got := map[string]int{}
+		for i, a := range m.Accounts {
+			got[a.ID] = i
+		}
+		for _, a := range old.Mail.Accounts {
+			i, ok := got[a.ID]
+			if !ok {
+				m.Accounts = append(m.Accounts, a) // not read this time
+				continue
+			}
+			m.Accounts[i].Messages = mergeHeld(a.Messages, m.Accounts[i].Messages, heldMailMost, func(s assistantwire.InboxMailSummary) string {
+				return s.Mailbox + "\x00" + strconv.FormatUint(uint64(s.UID), 10)
+			})
+		}
+		out.Mail = m
+	}
+	return out
 }
 
-// larkRequestAccount sets a Feishu item's OLAccount for the lark.account the hub runs with now.
-func (b *inbox) larkRequestAccount(it *InboxItem) {
-	if it.Lark == nil {
-		return
+// mergeHeld is what only old has, then n, the newest most of them.
+func mergeHeld[T any](old, n []T, most int, key func(T) string) []T {
+	have := map[string]bool{}
+	for _, v := range n {
+		have[key(v)] = true
 	}
-	it.Lark.OLAccount = 0
-	if a := larkItemAccount(it); a != max(b.larkAccount, 1) {
-		it.Lark.OLAccount = a
+	out := make([]T, 0, len(old)+len(n))
+	for _, v := range old {
+		if !have[key(v)] {
+			out = append(out, v)
+		}
 	}
+	out = append(out, n...)
+	if len(out) > most {
+		out = out[len(out)-most:]
+	}
+	return out
 }
 
-// larkItemAccount is the lark-connector account a Feishu item came from; zero in rows from before accounts were recorded
-// is account 1.
-func larkItemAccount(it *InboxItem) int {
-	if it.Lark == nil {
-		return 0
+// readInbox reads one round's sources: mail on a full round, the connectors but on a round of Feishu chats.
+func (h *Hub) readInbox(ctx context.Context, round inboxRound) assistantwire.InboxRound {
+	r := assistantwire.InboxRound{Round: round.wire(), Sources: []assistantwire.InboxSource{}, Names: map[string]string{}}
+	if h.connectors == nil {
+		return r
 	}
-	return max(it.Lark.AccountID, 1)
-}
-
-// collectInbox reads the sources of one round once and applies what changed. The items a plugin's connector starts
-// enter the list once triaged (admitInbox, in the background): until then nothing lists, stores or works on them.
-func (h *Hub) collectInbox(ctx context.Context, round inboxRound) {
-	h.inbox.running.Lock()
-	defer h.inbox.running.Unlock()
-	h.inbox.mu.Lock()
-	h.inbox.batch = newInboxBatch()
-	h.inbox.mu.Unlock()
-	var changed []*InboxItem
-	// The hub's own connectors (Feishu, then mail) in the order registered, then the others' generic things.
 	for _, c := range h.connectors.All() {
-		if own, ok := c.(ownInbox); ok {
-			changed = append(changed, own.collectInbox(ctx, round)...)
-		}
+		r.Names[c.ID()] = c.Name()
+	}
+	if round == roundFull {
+		r.Mail = h.readMail(ctx)
 	}
 	if round != roundChats {
-		changed = append(changed, h.collectConnectors(ctx)...)
+		r.Sources = h.readConnectors(ctx)
 	}
-	h.inbox.mu.Lock()
-	batch := h.inbox.batch
-	h.inbox.batch = nil
-	for id, it := range h.inbox.items {
-		if it.DoneAt != nil && time.Since(*it.DoneAt) > inboxForget {
-			delete(h.inbox.items, id)
-			h.inbox.replies.Delete(id)
-		}
-	}
-	now := time.Now()
-	changed = append(changed, h.inbox.applyMutes(now)...)
-	changed, todo := h.inbox.sortBatch(batch, changed, now)
-	h.inbox.mu.Unlock()
-	h.saveInbox(ctx, changed)
-	h.triageInbox(ctx)
-	h.translateInbox(ctx)
-	h.admitInbox(ctx, batch, todo)
+	return r
 }
 
-// saveInbox persists changed items and tells the apps.
-func (h *Hub) saveInbox(ctx context.Context, changed []*InboxItem) {
-	if len(changed) == 0 {
-		return
+// readMail is each mail account's latest inbox page (an account that can't be read is left out); nil without mail or
+// when the accounts can't be listed.
+func (h *Hub) readMail(ctx context.Context) *assistantwire.InboxMailRead {
+	if h.mail == nil || h.connectors.Get("mail") == nil {
+		return nil
 	}
-	for i, it := range changed {
-		if i == 50 {
-			break // a first round's hundreds: the plugin reads the inbox if it wants them all
-		}
-		h.extensions.emit("inbox.changed", map[string]any{"id": it.ID, "source": it.Source, "kind": it.Kind, "title": it.Title})
-	}
-	h.inbox.mu.Lock()
-	type row struct {
-		id      string
-		data    []byte
-		updated time.Time
-		done    *time.Time
-	}
-	rows := make([]row, 0, len(changed))
-	for _, it := range changed {
-		raw, _ := json.Marshal(it)
-		rows = append(rows, row{it.ID, raw, it.UpdatedAt, it.DoneAt})
-	}
-	h.inbox.mu.Unlock()
-	if h.store != nil {
-		for _, r := range rows {
-			if err := h.store.PutInboxItem(ctx, r.id, r.data, r.updated, r.done); err != nil {
-				h.logf("inbox: save %s: %v", r.id, err)
-			}
-		}
-	}
-	h.broadcast(map[string]any{"type": "inbox"})
-}
-
-// ---- helpers ----
-
-// larkInboxAccount is the account a round of Feishu chats is read from and the source line of its items.
-type larkInboxAccount struct {
-	ID    int
-	Label string
-}
-
-// positionAfter reports whether position a comes after b (positions are numbers as strings).
-func positionAfter(a, b string) bool {
-	x, err1 := strconv.ParseInt(a, 10, 64)
-	y, err2 := strconv.ParseInt(b, 10, 64)
-	if err1 != nil || err2 != nil {
-		return a > b
-	}
-	return x > y
-}
-
-// threadIndex is the items (and the running round's) by thread, for a collection that looks up one thread per
-// thing: openFor on each scanned the whole inbox, a week of chats for each of Feishu's few hundred unread ones.
-// key is the item's thread among the ones looked up, false for an item of another source. Under b.mu.
-type threadIndex struct {
-	key func(*InboxItem) (string, bool)
-	by  map[string][]*InboxItem
-}
-
-func (b *inbox) threads(key func(*InboxItem) (string, bool)) *threadIndex {
-	x := &threadIndex{key: key, by: map[string][]*InboxItem{}}
-	b.each(x.note)
-	return x
-}
-
-// note files it under its thread: an item added, or one whose thread may have changed. An entry under a thread it
-// has left is skipped by the lookups.
-func (x *threadIndex) note(it *InboxItem) {
-	if k, ok := x.key(it); ok && !slices.Contains(x.by[k], it) {
-		x.by[k] = append(x.by[k], it)
-	}
-}
-
-// openFor finds the open item of a thread (one this round started too); done is the newest done one.
-func (x *threadIndex) openFor(thread string) (open, done *InboxItem) {
-	for _, it := range x.by[thread] {
-		if k, ok := x.key(it); !ok || k != thread {
-			continue
-		}
-		if it.open() {
-			open = it
-		} else if done == nil || it.UpdatedAt.After(done.UpdatedAt) {
-			done = it
-		}
-	}
-	return open, done
-}
-
-// each calls f for every item, and every item the running round started, under b.mu.
-func (b *inbox) each(f func(*InboxItem)) {
-	for _, it := range b.items {
-		f(it)
-	}
-	if b.batch != nil {
-		for _, it := range b.batch.items {
-			f(it)
-		}
-	}
-}
-
-// has says whether an item (or one the running round started) has id, under b.mu.
-func (b *inbox) has(id string) bool {
-	_, ok := b.items[id]
-	return ok || b.batch != nil && b.batch.items[id] != nil
-}
-
-// add keeps an item a collection starts (from: the source it came from), under b.mu. A plugin connector's, while a
-// round runs, goes to the round's batch and enters the list once triaged (admitInbox); any other straight in.
-func (b *inbox) add(from string, it *InboxItem) {
-	if b.batch == nil || !fromExtension(from) {
-		b.items[it.ID] = it
-		return
-	}
-	b.batch.items[it.ID] = it
-	b.batch.from[it.ID] = from
-}
-
-// readSource notes that the running round read a source: its held-back count is recomputed after the round.
-func (b *inbox) readSource(id, name string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.batch != nil {
-		b.batch.read[id] = name
-	}
-}
-
-// retier: the item's tier came from the rules (no model answer) and the rules now give it another one.
-func retier(it *InboxItem) bool {
-	return it.Reason == "按规则" && it.Tier != "" && ruleTier(it) != it.Tier
-}
-
-func (it *InboxItem) done(at time.Time, by string) {
-	t := at
-	it.DoneAt, it.DoneBy = &t, by
-}
-
-// ---- mail ----
-
-func (h *Hub) collectMail(ctx context.Context) []*InboxItem {
 	accounts, err := h.mail.ListAccounts()
 	if err != nil {
 		h.logf("inbox: mail accounts: %v", err)
 		return nil
 	}
-	h.inbox.readSource("mail", "邮箱")
-	var changed []*InboxItem
+	out := &assistantwire.InboxMailRead{Accounts: []assistantwire.InboxMailAccount{}}
 	for _, a := range accounts {
 		res, err := h.mail.ListMessages(ctx, mail.ListOptions{AccountID: a.ID, Limit: 40})
 		if err != nil {
 			h.logf("inbox: mail %s: %v", a.Email, err)
 			continue
 		}
-		changed = append(changed, h.inbox.applyMail(a, res.Messages, time.Now())...)
-		// New mail (the round's new items too: they are triaged on the full text), and items collected before their
-		// text was read.
-		h.inbox.mu.Lock()
-		var unread []*InboxItem
-		h.inbox.each(func(it *InboxItem) {
-			if it.Mail != nil && it.Mail.AccountID == a.ID && it.open() && !it.Read && it.BodyOf != it.Last {
-				unread = append(unread, it)
-			}
-		})
-		h.inbox.mu.Unlock()
-		for _, it := range unread {
-			if h.readMailBody(ctx, a, it) {
-				changed = append(changed, it)
-			}
+		acc := assistantwire.InboxMailAccount{ID: a.ID, Email: a.Email, Messages: []assistantwire.InboxMailSummary{}}
+		for _, m := range res.Messages {
+			acc.Messages = append(acc.Messages, assistantwire.InboxMailSummary{Mailbox: m.Mailbox, UID: m.UID, MessageID: m.MessageID,
+				Subject: m.Subject, From: mailAddress(m.From), To: mailAddresses(m.To), Date: m.Date, Snippet: m.Snippet, Seen: m.Seen})
 		}
+		out.Accounts = append(out.Accounts, acc)
 	}
-	return changed
-}
-
-// readMailBody replaces the list's 2 KB snippet with the newest message's text (HTML-only newsletters have nothing
-// but CSS in their first bytes). The read peeks: the mail stays unread.
-func (h *Hub) readMailBody(ctx context.Context, a mail.MailAccount, it *InboxItem) bool {
-	h.inbox.mu.Lock()
-	if it.Mail == nil || len(it.Mail.UIDs) == 0 {
-		h.inbox.mu.Unlock()
-		return false
-	}
-	uid, mailbox, last := it.Mail.UIDs[len(it.Mail.UIDs)-1], it.Mail.Mailbox, it.Last
-	h.inbox.mu.Unlock()
-	m, err := h.mail.GetMessage(ctx, a.ID, uid, mailbox)
-	if err != nil {
-		h.logf("inbox: read mail %s/%d: %v", a.Email, uid, err)
-		return false
-	}
-	text := strings.TrimSpace(m.Text)
-	if text == "" {
-		text = strings.TrimSpace(mail.PlainText(m.HTML))
-	}
-	h.inbox.mu.Lock()
-	defer h.inbox.mu.Unlock()
-	it.BodyOf = last
-	if text == "" {
-		return true
-	}
-	it.Preview = clip(oneLine(text), 200)
-	var to []string
-	for _, t := range m.To {
-		to = append(to, t.Email)
-	}
-	var cc []string
-	for _, t := range m.Cc {
-		cc = append(cc, t.Email)
-	}
-	it.Context = fmt.Sprintf("邮箱 %s 收到的未读邮件（共 %d 封，下面是最新一封）：\n发件人：%s <%s>\n收件人：%s\n抄送：%s\n时间：%s\n主题：%s\n\n%s",
-		a.Email, len(it.Mail.UIDs), m.From.Name, m.From.Email, strings.Join(to, ", "), strings.Join(cc, ", "), m.Date, m.Subject, clip(text, 3000))
-	return true
-}
-
-var replyPrefix = regexp.MustCompile(`(?i)^\s*((re|fw|fwd|aw|回复|答复|转发)\s*[:：]\s*|\[[^\]]{1,30}\]\s*)+`)
-
-// mailThread is what keeps replies in one item: the subject without Re: / Fwd: / [list] prefixes.
-func mailThread(subject string) string {
-	s := strings.ToLower(strings.Join(strings.Fields(replyPrefix.ReplaceAllString(subject, "")), " "))
-	sum := sha1.Sum([]byte(s))
-	return hex.EncodeToString(sum[:6])
-}
-
-// applyMail turns one account's latest inbox page into items: unseen messages grouped by thread.
-func (b *inbox) applyMail(a mail.MailAccount, msgs []mail.MailSummary, now time.Time) []*InboxItem {
-	threads := map[string][]mail.MailSummary{}
-	var order []string
-	for _, m := range msgs {
-		t := mailThread(m.Subject)
-		if _, ok := threads[t]; !ok {
-			order = append(order, t)
-		}
-		threads[t] = append(threads[t], m)
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	var changed []*InboxItem
-	index := b.threads(func(it *InboxItem) (string, bool) {
-		if it.Mail == nil || it.Mail.AccountID != a.ID {
-			return "", false
-		}
-		return it.Mail.Thread, true
-	})
-	for _, t := range order {
-		list := threads[t]
-		sort.Slice(list, func(i, j int) bool { return list[i].UID < list[j].UID })
-		var unseen []mail.MailSummary
-		for _, m := range list {
-			d, _ := time.Parse(time.RFC3339, m.Date)
-			if !m.Seen && now.Sub(d) <= inboxWindow {
-				unseen = append(unseen, m)
-			}
-		}
-		open, done := index.openFor(t)
-		if open == nil && done != nil {
-			last, _ := strconv.ParseUint(done.Last, 10, 32)
-			var fresh []mail.MailSummary
-			for _, m := range unseen {
-				if uint64(m.UID) > last {
-					fresh = append(fresh, m)
-				}
-			}
-			unseen = fresh
-		}
-		if len(unseen) == 0 {
-			// Read in another client: done unless it needs the user.
-			if open != nil && !open.Read {
-				open.Read = true
-				if open.Tier != TierAction && open.Tier != "" {
-					open.done(now, "read")
-				}
-				changed = append(changed, open)
-			}
-			continue
-		}
-		newest := unseen[len(unseen)-1]
-		if open != nil && open.Last == strconv.FormatUint(uint64(newest.UID), 10) && len(open.Mail.UIDs) == len(unseen) {
-			continue
-		}
-		it := open
-		if it == nil {
-			it = &InboxItem{ID: fmt.Sprintf("mail:%s:%s:%d", a.ID, t, unseen[0].UID), Source: "mail", Kind: KindMail,
-				Account: a.ID, Mail: &InboxMail{AccountID: a.ID, Mailbox: newest.Mailbox, Thread: t}}
-			it.StartedAt, _ = time.Parse(time.RFC3339, unseen[0].Date)
-			b.add("mail", it)
-			index.note(it)
-		}
-		it.AccountName = a.Email
-		it.Title = newest.Subject
-		if it.Title == "" {
-			it.Title = "（无主题）"
-		}
-		it.Sender = newest.From.Name
-		if it.Sender == "" {
-			it.Sender = newest.From.Email
-		}
-		it.Preview = clip(oneLine(newest.Snippet), 200)
-		it.Count = len(unseen)
-		it.UpdatedAt, _ = time.Parse(time.RFC3339, newest.Date)
-		it.Read = false
-		it.Last = strconv.FormatUint(uint64(newest.UID), 10)
-		it.Mail.UIDs = it.Mail.UIDs[:0]
-		for _, m := range unseen {
-			it.Mail.UIDs = append(it.Mail.UIDs, m.UID)
-		}
-		it.Mail.MessageID, it.Mail.From = newest.MessageID, newest.From
-		it.Mail.Direct = false
-		for _, to := range newest.To {
-			if strings.EqualFold(to.Email, a.Email) {
-				it.Mail.Direct = true
-			}
-		}
-		it.Context = mailContext(a, unseen)
-		changed = append(changed, it)
-	}
-	return changed
-}
-
-func mailContext(a mail.MailAccount, msgs []mail.MailSummary) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "邮箱 %s 收到的未读邮件：\n", a.Email)
-	for _, m := range msgs {
-		var to []string
-		for _, t := range m.To {
-			to = append(to, t.Email)
-		}
-		fmt.Fprintf(&b, "---\n发件人：%s <%s>\n收件人：%s\n时间：%s\n主题：%s\n%s\n", m.From.Name, m.From.Email, strings.Join(to, ", "),
-			m.Date, m.Subject, clip(oneLine(m.Snippet), inboxText))
-	}
-	return strings.TrimSpace(b.String())
-}
-
-// ---- API ----
-
-var errNoInboxItem = errors.New("no such inbox item")
-
-var errCannotReply = errors.New("this item cannot be replied to")
-
-func (h *Hub) inboxRoutes(api *http.ServeMux) {
-	h.inbox.init()
-	h.inboxMuteRoutes(api)
-	h.inboxBulkRoutes(api)
-	// Items of connectors (GitHub…) only go to apps that draw them (?sources=all): an older app would show a PR as
-	// a mail and send a reply as one. triage says how many new items wait for the model, and why (inbox_admit.go).
-	api.HandleFunc("GET /api/v1/inbox", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all"), "triage": h.inboxTriage()})
-	})
-	api.HandleFunc("GET /api/v1/inbox/{id}", func(w http.ResponseWriter, r *http.Request) {
-		h.inbox.mu.Lock()
-		it, ok := h.inbox.items[r.PathValue("id")]
-		var c InboxItem
-		if ok {
-			c = it.listed()
-			c.Context = it.Context
-		}
-		h.inbox.mu.Unlock()
-		if !ok {
-			writeErr(w, http.StatusNotFound, errNoInboxItem)
-			return
-		}
-		writeJSON(w, struct {
-			InboxItem
-			ReplyTarget *inboxMailTarget `json:"reply_target,omitempty"`
-		}{c, mailTarget(c)})
-	})
-	api.HandleFunc("POST /api/v1/inbox/{id}/done", func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			Done bool `json:"done"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
-			return
-		}
-		it, err := h.setInboxDone(r.Context(), r.PathValue("id"), in.Done)
-		if err != nil {
-			writeErr(w, http.StatusNotFound, err)
-			return
-		}
-		writeJSON(w, it)
-	})
-	api.HandleFunc("POST /api/v1/inbox/{id}/draft", func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			Instruction string `json:"instruction"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&in)
-		text, err := h.draftReply(r.Context(), r.PathValue("id"), in.Instruction)
-		switch {
-		case errors.Is(err, errNoInboxItem):
-			writeErr(w, http.StatusNotFound, err)
-		case err != nil:
-			writeErr(w, http.StatusBadGateway, err)
-		default:
-			writeJSON(w, map[string]any{"text": text})
-		}
-	})
-	api.HandleFunc("POST /api/v1/inbox/{id}/reply", h.withReplyReceipt("inbox_reply", func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			Text            string      `json:"text"`
-			Changes         []DocChange `json:"changes"` // documents: status moves to make with the reply
-			ClientID        string      `json:"client_id"`
-			ExpectedUID     *uint32     `json:"expected_uid"`
-			ExpectedVersion *string     `json:"expected_version"`
-			Card            string      `json:"card"` // the message card it is sent from (sendFromCard)
-		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" && len(in.Changes) == 0 {
-			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
-			return
-		}
-		if principalOf(r.Context()).Role != roleFull {
-			// Posted as the user, a "/agent …" comes back as their request and starts an agent (docs/lark-agent.md).
-			if len(in.Changes) > 0 || asksAgent(in.Text) {
-				writeErr(w, http.StatusForbidden, errors.New("this device can only reply with text"))
-				return
-			}
-		}
-		send := func() (InboxItem, error) {
-			return h.replyInboxChecked(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.ClientID, in.ExpectedUID, in.ExpectedVersion, in.Changes...)
-		}
-		var it InboxItem
-		var err error
-		if in.Card != "" {
-			it, _, err = h.sendFromCard(r.Context(), in.Card, r.PathValue("id"), send)
-		} else {
-			it, err = send()
-		}
-		switch {
-		case errors.Is(err, errMailReplyTargetChanged):
-			writeErrorBody(w, http.StatusConflict, map[string]any{"code": "mail_reply_target_changed", "error": "邮件回复对象已变化，请查看最新邮件后确认发送", "retryable": false, "delivered": "none"})
-		case errors.Is(err, errNoInboxItem):
-			writeErr(w, http.StatusNotFound, err)
-		case err != nil:
-			writeErr(w, http.StatusBadGateway, err)
-		default:
-			writeJSON(w, it)
-		}
-	}))
-	api.HandleFunc("POST /api/v1/inbox/{id}/doc/status", func(w http.ResponseWriter, r *http.Request) {
-		var in DocChange
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Ref == "" || in.Field == "" || in.Value == "" {
-			writeErr(w, http.StatusBadRequest, errors.New("ref, field and value are required"))
-			return
-		}
-		it, err := h.setDocStatus(r.Context(), r.PathValue("id"), in)
-		switch {
-		case errors.Is(err, errNoInboxItem):
-			writeErr(w, http.StatusNotFound, err)
-		case errors.Is(err, errNoDocRow):
-			writeErr(w, http.StatusBadRequest, err)
-		case err != nil:
-			writeErr(w, http.StatusBadGateway, err)
-		default:
-			writeJSON(w, it)
-		}
-	})
-	api.HandleFunc("POST /api/v1/inbox/refresh", func(w http.ResponseWriter, r *http.Request) {
-		h.collectInbox(r.Context(), roundFull)
-		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all"), "triage": h.inboxTriage()})
-	})
-}
-
-type inboxMailTarget struct {
-	UID     uint32 `json:"uid"`
-	Version string `json:"version"`
-}
-
-var errMailReplyTargetChanged = errors.New("mail reply target changed")
-
-func mailTarget(it InboxItem) *inboxMailTarget {
-	if it.Mail == nil || len(it.Mail.UIDs) == 0 {
-		return nil
-	}
-	// Bind the version to the account, mailbox, message and recipient, not read/triage state.
-	raw, _ := json.Marshal(it.Mail)
-	sum := sha256.Sum256(raw)
-	return &inboxMailTarget{UID: it.Mail.UIDs[len(it.Mail.UIDs)-1], Version: hex.EncodeToString(sum[:])}
-}
-
-func (h *Hub) replyInboxChecked(ctx context.Context, id, text, clientID string, uid *uint32, version *string, changes ...DocChange) (InboxItem, error) {
-	if uid == nil && version == nil {
-		return h.replyInboxAs(ctx, id, text, clientID, changes...)
-	}
-	// Collection and checked sends must not change the target between validation and sending.
-	h.inbox.running.Lock()
-	defer h.inbox.running.Unlock()
-	h.inbox.mu.Lock()
-	it := h.inbox.items[id]
-	var target *inboxMailTarget
-	if it != nil {
-		target = mailTarget(*it)
-	}
-	h.inbox.mu.Unlock()
-	if it == nil {
-		return InboxItem{}, errNoInboxItem
-	}
-	if target == nil || uid != nil && *uid != target.UID || version != nil && *version != target.Version {
-		return InboxItem{}, errMailReplyTargetChanged
-	}
-	return h.replyInboxAs(ctx, id, text, clientID, changes...)
-}
-
-// inboxList is every open item and the recently done ones, newest first; connectors' only when all (rows stored
-// before Source was set have none, so it is the connector block that tells).
-func (h *Hub) inboxList(all bool) []InboxItem {
-	h.inbox.mu.Lock()
-	defer h.inbox.mu.Unlock()
-	cutoff := time.Now().Add(-inboxKeepDone)
-	out := make([]InboxItem, 0, len(h.inbox.items))
-	for _, it := range h.inbox.items {
-		if it.DoneAt != nil && it.DoneAt.Before(cutoff) || !all && it.Connector != nil {
-			continue
-		}
-		out = append(out, it.listed())
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	return out
 }
 
-func (h *Hub) setInboxDone(ctx context.Context, id string, done bool) (InboxItem, error) {
-	h.inbox.mu.Lock()
-	it, ok := h.inbox.items[id]
+func mailAddress(a mail.Address) assistantwire.MailAddress {
+	return assistantwire.MailAddress{Name: a.Name, Email: a.Email}
+}
+
+func mailAddresses(list []mail.Address) []assistantwire.MailAddress {
+	out := []assistantwire.MailAddress{}
+	for _, a := range list {
+		out = append(out, mailAddress(a))
+	}
+	return out
+}
+
+// readConnectors reads every connector with an inbox: its things and what it can do with them. One the user turned
+// 进收件箱 off for, not signed in, or a hub.json plugin's waiting for the triage model is read with nothing (nothing
+// of it waits); one whose Collect failed is left out (it keeps what it had).
+func (h *Hub) readConnectors(ctx context.Context) []assistantwire.InboxSource {
+	out := []assistantwire.InboxSource{}
+	for _, c := range h.connectors.All() {
+		in, ok := connector.As[connector.Inbox](c)
+		if !ok {
+			continue
+		}
+		src := assistantwire.InboxSource{ID: c.ID(), Name: c.Name(), Extension: fromExtension(c.ID()), Migrated: isMigrated(c.ID()),
+			Things: []connector.InboxThing{}}
+		state := connector.StatusOf(ctx, c).State
+		if !h.connectors.Feeds(c.ID(), connector.FeedInbox) || state != connector.StateOK && state != connector.StateRateLimited ||
+			h.waitsForTriageModel(ctx, c) { // a hub.json plugin's that needs the triage model (extension_inbox.go)
+			src.Off = true
+			out = append(out, src)
+			continue
+		}
+		things, err := in.Collect(ctx)
+		if err != nil {
+			h.logf("inbox: %s: %v", c.ID(), err)
+			continue
+		}
+		h.vetThings(c, things)
+		src.Things = things
+		_, src.Group = connector.As[connector.Grouper](c)
+		_, src.Meta = connector.As[connector.EventWriter](c)
+		src.MetaDescription = strings.TrimSpace(c.Manifest().MetaDescription)
+		_, src.Settles = connector.As[connector.InboxSettler](c)
+		for _, kind := range c.Manifest().Kinds {
+			if d, ok := extensionKinds.Load(c.ID() + "/" + kind); ok {
+				if src.Kinds == nil {
+					src.Kinds = map[string]string{}
+				}
+				src.Kinds[kind] = d.(string)
+			}
+		}
+		out = append(out, src)
+	}
+	return out
+}
+
+func isMigrated(id string) bool { return slices.Contains(connector.MigratableConnectors, id) }
+
+// thingRulesMost is the most of a thing's rules the model gets (runes; the rest is cut): what the convention's
+// triage_rules setting allows (docs/extensions.md「约定的设置项」).
+const thingRulesMost = 4000
+
+// vetThings holds a connector's things to its manifest: a tier the inbox does not know is dropped (the model
+// decides), a kind it did not declare is logged once (prompts/inbox/kinds/<id>.md may not say what it means); rules
+// are cut to thingRulesMost.
+func (h *Hub) vetThings(c connector.Connector, things []connector.InboxThing) {
+	kinds := c.Manifest().Kinds
+	for i := range things {
+		t := &things[i]
+		t.Rules = clip(strings.TrimSpace(t.Rules), thingRulesMost)
+		if t.Tier != "" && !t.Tier.Known() {
+			h.logf("inbox: %s: unknown tier %q", c.ID(), t.Tier)
+			t.Tier = ""
+		}
+		if t.Kind != "" && !slices.Contains(kinds, t.Kind) {
+			if _, logged := undeclaredKinds.LoadOrStore(c.ID()+"\x00"+t.Kind, true); !logged {
+				h.logf("inbox: %s: kind %q is not in its manifest", c.ID(), t.Kind)
+			}
+		}
+	}
+}
+
+var undeclaredKinds sync.Map
+
+// ---- the routes: the manager's ----
+
+// inboxRoutesRelayed relays the apps' requests on the inbox's routes to the manager (http.request); while it is not
+// connected they are answered 503 assistant_offline. A reply keeps its durable receipt (reply_receipts.go), except
+// one refused for that (nothing went out: the same reply may go once the manager is back) or cut off on the way
+// (assistant_in_doubt: it may have gone out; asked again, the manager's send id has the hub send it once:
+// sendInboxOnce).
+func (h *Hub) inboxRoutesRelayed(api *http.ServeMux) {
+	h.inbox.init()
+	relay := func(w http.ResponseWriter, r *http.Request) { h.forwardHTTP(w, r, assistantwire.AssistantID) }
+	for _, pattern := range assistantwire.InboxRoutes {
+		if pattern == "POST /api/v1/inbox/{id}/reply" {
+			receipt := h.withReplyReceipt("inbox_reply", func(w http.ResponseWriter, r *http.Request) {
+				h.forwardSend(w, r, assistantwire.AssistantID)
+			})
+			api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+				if answerOnly(r) && !answerMayReply(w, r) {
+					return
+				}
+				if h.busConnOf(assistantwire.AssistantID) == nil {
+					writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
+					return
+				}
+				receipt(w, r)
+			})
+			continue
+		}
+		api.HandleFunc(pattern, relay)
+	}
+}
+
+// answerMayReply holds an answer-only device (the watch) to replying with text, here at the hub as before the inbox
+// moved (the manager checks it too): no documents' status moves, no "/agent …" (posted as the user it would start an
+// agent). False when it answered 403.
+func answerMayReply(w http.ResponseWriter, r *http.Request) bool {
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	_ = r.Body.Close()
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return false
+	}
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	var in struct {
+		Text    string            `json:"text"`
+		Changes []json.RawMessage `json:"changes"`
+	}
+	_ = json.Unmarshal(raw, &in)
+	if len(in.Changes) > 0 || assistantwire.AsksAgent(in.Text) {
+		writeErr(w, http.StatusForbidden, errors.New("this device can only reply with text"))
+		return false
+	}
+	return true
+}
+
+// ---- what the manager tells the hub ----
+
+func init() { handleBusEvent(assistantwire.EventInboxChanged, (*Hub).busInboxChanged) }
+
+// busInboxChanged is inbox.changed: the extensions hear of the items (inbox.changed), the apps get {"type":"inbox"}.
+// It is told by one worker (tellInboxChanged), off the bus's read loop: an extension slow to take its event (its pipe
+// full) must not hold up the manager's other calls and events. A backlog past inboxChangedQueue is not told to the
+// extensions; the apps still hear of it.
+func (h *Hub) busInboxChanged(c *busConn, params json.RawMessage) {
+	var p assistantwire.InboxChanged
+	if err := json.Unmarshal(params, &p); err != nil {
+		h.logf("bus: [%s] inbox.changed: %v", c.ident.ID, err)
+		return
+	}
+	h.inbox.tellOnce.Do(func() {
+		h.inbox.changed = make(chan assistantwire.InboxChanged, inboxChangedQueue)
+		go h.tellInboxChanged()
+	})
+	select {
+	case h.inbox.changed <- p:
+	default:
+		h.logf("inbox: the extensions are behind: %d changed items not told to them", len(p.Items))
+		h.broadcast(map[string]any{"type": "inbox"})
+	}
+}
+
+// inboxChangedQueue is how many inbox.changed wait for the worker at most.
+const inboxChangedQueue = 256
+
+// tellInboxChanged tells the extensions of the changed items (inbox.changed) and the apps {"type":"inbox"}.
+func (h *Hub) tellInboxChanged() {
+	for p := range h.inbox.changed {
+		for _, it := range p.Items {
+			h.extensions.emit("inbox.changed", map[string]any{"id": it.ID, "source": it.Source, "kind": it.Kind, "title": it.Title})
+		}
+		h.broadcast(map[string]any{"type": "inbox"})
+	}
+}
+
+// takeInboxReport keeps what the snapshot says of the inbox (nil: it could not be read, the last one stays).
+func (h *Hub) takeInboxReport(r *assistantwire.InboxReport) {
+	if r == nil {
+		return
+	}
+	agents := map[string]bool{}
+	for _, a := range r.Agents {
+		agents[a.SessionID] = true
+	}
+	h.inbox.agentsMu.Lock()
+	h.inbox.agents = agents
+	h.inbox.agentsMu.Unlock()
+}
+
+// isInboxAgent: the conversation is an inbox agent's (no "finished" push for it: the draft in the inbox is the result).
+func (h *Hub) isInboxAgent(sessionID string) bool {
+	h.inbox.agentsMu.RLock()
+	defer h.inbox.agentsMu.RUnlock()
+	return h.inbox.agents[sessionID]
+}
+
+// ---- what the hub asks the manager about the inbox ----
+
+// inboxItemRaw is an item as the manager stores it (an extension's inbox_item slot); false when there is none, or
+// the manager can't say.
+func (h *Hub) inboxItemRaw(ctx context.Context, id string) ([]byte, bool) {
+	var res assistantwire.InboxItemResult
+	if err := h.asst().call(ctx, assistantwire.MethodInboxItem, map[string]any{"id": id}, &res); err != nil || !res.OK {
+		return nil, false
+	}
+	return res.Item, true
+}
+
+// forgetInbox removes a source's inbox items (the manager's); it says how many went.
+func (h *Hub) forgetInbox(ctx context.Context, source string) (int, error) {
+	var res struct {
+		Deleted int `json:"deleted"`
+	}
+	err := h.asst().call(ctx, assistantwire.MethodInboxForget, map[string]any{"source": source}, &res)
+	return res.Deleted, err
+}
+
+// ---- what the manager asks of the inbox's sources (app.call inbox.*) ----
+
+var errCannotReply = errors.New("this item cannot be replied to")
+
+// inboxAppCall answers the manager's calls about the inbox's sources; ok false for one that is not theirs.
+func (h *Hub) inboxAppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, bool, error) {
+	var out any
+	var err error
+	switch p.AppID + " " + p.Method {
+	case assistantwire.AppInbox + " " + assistantwire.InboxCollect:
+		var a struct {
+			Round string `json:"round"`
+		}
+		if err = json.Unmarshal(p.Params, &a); err == nil {
+			round := roundFull
+			switch a.Round {
+			case assistantwire.RoundPoll:
+				round = roundPoll
+			case assistantwire.RoundChats:
+				round = roundChats
+			}
+			err = h.collectInbox(ctx, round)
+			out = map[string]any{}
+		}
+	case assistantwire.AppInbox + " " + assistantwire.InboxKick:
+		h.kickInbox()
+		out = map[string]any{}
+	case assistantwire.AppInbox + " " + assistantwire.InboxConfigMethod:
+		out = h.inboxConfigView(ctx)
+	case assistantwire.AppInbox + " " + assistantwire.InboxTranslateFingerprint:
+		var fp string
+		if fp, err = h.modelFingerprint(ctx, "translate"); err == nil {
+			out = map[string]any{"fingerprint": fp}
+		}
+	case assistantwire.AppInbox + " " + assistantwire.InboxMailBody:
+		var ref assistantwire.InboxMailRef
+		if err = json.Unmarshal(p.Params, &ref); err == nil {
+			out, err = h.inboxMailBody(ctx, ref)
+		}
+	case assistantwire.AppInbox + " " + assistantwire.InboxReplyMail:
+		var a struct {
+			assistantwire.InboxMailRef
+			Text   string `json:"text"`
+			SendID string `json:"send_id"`
+		}
+		if err = json.Unmarshal(p.Params, &a); err == nil {
+			var sent assistantwire.InboxSent
+			sent.Already, err = h.sendInboxOnce(ctx, a.SendID, "mail", func(ctx context.Context) error { return h.replyMail(ctx, a.InboxMailRef, a.Text) })
+			out = sent
+		}
+	case assistantwire.AppInbox + " " + assistantwire.InboxReply:
+		var a struct {
+			Source string               `json:"source"`
+			Reply  connector.InboxReply `json:"reply"`
+			SendID string               `json:"send_id"`
+		}
+		if err = json.Unmarshal(p.Params, &a); err == nil {
+			in, ok := connector.As[connector.Inbox](h.connectorOf(a.Source))
+			if !ok {
+				return nil, true, errCannotReply // its connector is not here (the plugin switched off)
+			}
+			var sent assistantwire.InboxSent
+			sent.Already, err = h.sendInboxOnce(ctx, a.SendID, a.Source, func(ctx context.Context) error { return in.Reply(ctx, a.Reply) })
+			out = sent
+		}
+	case assistantwire.AppInbox + " " + assistantwire.InboxSettle:
+		var a struct {
+			Source  string   `json:"source"`
+			Threads []string `json:"threads"`
+		}
+		if err = json.Unmarshal(p.Params, &a); err == nil {
+			over := map[string]string{}
+			if s, ok := connector.As[connector.InboxSettler](h.connectorOf(a.Source)); ok {
+				over = s.Settle(ctx, a.Threads)
+			}
+			out = map[string]any{"over": over}
+		}
+	case assistantwire.AppInbox + " " + assistantwire.InboxGroupTool:
+		var a struct {
+			Source string                  `json:"source"`
+			Call   connector.GroupToolCall `json:"call"`
+		}
+		if err = json.Unmarshal(p.Params, &a); err == nil {
+			g, ok := connector.As[connector.Grouper](h.connectorOf(a.Source))
+			if !ok {
+				return nil, true, fmt.Errorf("%s does not relate batches", a.Source)
+			}
+			var raw json.RawMessage
+			if raw, err = g.GroupTool(ctx, a.Call); err == nil {
+				out = map[string]any{"result": compactJSON(raw, groupToolMost)}
+			}
+		}
+	case assistantwire.AppInbox + " " + assistantwire.InboxGroupFallback:
+		var a struct {
+			Source   string                  `json:"source"`
+			Fallback connector.GroupFallback `json:"fallback"`
+		}
+		if err = json.Unmarshal(p.Params, &a); err == nil {
+			g, ok := connector.As[connector.Grouper](h.connectorOf(a.Source))
+			if !ok {
+				return nil, true, fmt.Errorf("%s does not relate batches", a.Source)
+			}
+			out, err = g.GroupFallback(ctx, a.Fallback)
+		}
+	case assistantwire.AppInbox + " " + assistantwire.InboxGroupAppend:
+		var a struct {
+			Source   string                `json:"source"`
+			Append   connector.GroupAppend `json:"append"`
+			AppendID string                `json:"append_id"`
+		}
+		if err = json.Unmarshal(p.Params, &a); err == nil {
+			w, ok := connector.As[connector.EventWriter](h.connectorOf(a.Source))
+			if !ok {
+				return nil, true, fmt.Errorf("%s does not write events", a.Source)
+			}
+			if string(a.Append.Meta) == "null" { // a new event: no meta yet
+				a.Append.Meta = nil
+			}
+			var thing connector.InboxThing
+			if thing, err = h.groupAppendOnce(ctx, w, a.AppendID, a.Append); err == nil {
+				out = map[string]any{"thing": thing}
+			}
+		}
+	default:
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, true, err
+	}
+	raw, err := json.Marshal(out)
+	return raw, true, err
+}
+
+// groupAppendWait bounds one group.append at the plugin. It runs to the end however long the manager waits: what it
+// wrote is kept for the manager's retry (groupAppendOnce).
+const groupAppendWait = time.Minute
+
+// groupAppendsKept is how many plugins' answers to group.append are kept for a retry at most.
+const groupAppendsKept = 1000
+
+// groupAppendOnce has the plugin write one event once per append id: the same id again (the answer was lost on the
+// way to the manager, or it stopped waiting) is answered with what the plugin said, not written twice. Without an id
+// it is just written.
+func (h *Hub) groupAppendOnce(ctx context.Context, w connector.EventWriter, appendID string, a connector.GroupAppend) (connector.InboxThing, error) {
+	if appendID == "" {
+		return w.GroupAppend(ctx, a)
+	}
+	b := &h.inbox
+	l, _ := b.appendLocks.LoadOrStore(appendID, &sync.Mutex{})
+	mu := l.(*sync.Mutex)
+	defer b.appendLocks.Delete(appendID) // after the unlock: one who comes later finds the answer kept
+	mu.Lock()
+	defer mu.Unlock()
+	b.appendMu.Lock()
+	thing, ok := b.appended[appendID]
+	b.appendMu.Unlock()
+	if ok {
+		return thing, nil
+	}
+	actx, cancel := context.WithTimeout(context.WithoutCancel(ctx), groupAppendWait)
+	defer cancel()
+	thing, err := w.GroupAppend(actx, a)
+	if err != nil {
+		return thing, err
+	}
+	b.appendMu.Lock()
+	if b.appended == nil || len(b.appended) >= groupAppendsKept {
+		b.appended = map[string]connector.InboxThing{} // crude, but retries come within minutes
+	}
+	b.appended[appendID] = thing
+	b.appendMu.Unlock()
+	return thing, nil
+}
+
+// groupToolMost is the bytes of a connector tool's answer the model reads.
+const groupToolMost = 8 << 10
+
+// connectorOf is the connector registered as id; nil when there is none.
+func (h *Hub) connectorOf(id string) connector.Connector {
+	if h.connectors == nil || id == "" {
+		return nil
+	}
+	return h.connectors.Get(id)
+}
+
+// inboxConfigView is what the inbox goes by of the hub's: the triage rules and the AI 分身's (settings over hub.json),
+// hub.json's inbox.agent and lark.account, the plugins' connectors, and the languages the devices want mail translated
+// into.
+func (h *Hub) inboxConfigView(ctx context.Context) assistantwire.InboxConfig {
+	out := assistantwire.InboxConfig{Rules: h.inboxRules(ctx), AgentRules: h.inboxAgentRules(ctx)}
+	extensionConnectors.Range(func(id, _ any) bool { // the plugins' connectors, before a round lists them
+		out.Extensions = append(out.Extensions, id.(string))
+		return true
+	})
+	slices.Sort(out.Extensions)
+	if h.cfg != nil {
+		out.Agent, out.LarkAccount = h.cfg.Inbox.Agent, h.cfg.Lark.Account
+	}
+	if h.push != nil && h.mail != nil {
+		if out.Translate = h.push.mailTargets(); len(out.Translate) > 0 {
+			if fp, err := h.modelFingerprint(ctx, "translate"); err == nil {
+				out.TranslateFingerprint = fp
+			}
+		}
+	}
+	return out
+}
+
+// inboxMailBody is one mail read in full, peeking (it stays unread): its text part, else its HTML as plain text
+// (readable text, paragraphs and links kept, when the ref asks: translation).
+func (h *Hub) inboxMailBody(ctx context.Context, ref assistantwire.InboxMailRef) (assistantwire.InboxMailMessage, error) {
+	if h.mail == nil {
+		return assistantwire.InboxMailMessage{}, errors.New("mail is not set up")
+	}
+	m, err := h.mail.GetMessage(ctx, ref.AccountID, ref.UID, ref.Mailbox)
+	if err != nil {
+		return assistantwire.InboxMailMessage{}, err
+	}
+	text := strings.TrimSpace(m.Text)
+	switch {
+	case text != "":
+	case ref.Readable:
+		text = strings.TrimSpace(mail.ReadableText(m.HTML))
+	default:
+		text = strings.TrimSpace(mail.PlainText(m.HTML))
+	}
+	return assistantwire.InboxMailMessage{From: mailAddress(m.From), To: mailAddresses(m.To), Cc: mailAddresses(m.Cc), Date: m.Date,
+		Subject: m.Subject, Text: text}, nil
+}
+
+// inboxSendWait bounds one reply's send at the hub.
+const inboxSendWait = 2 * time.Minute
+
+// errReplyInDoubt: a send under this id was cut off before (the hub went away during it, or it ran out of time): it
+// may have gone out, so it is not sent again.
+var errReplyInDoubt = &rpc.Error{Code: assistantwire.CodeAssistantInDoubt, Message: "这条回复上次发送时中断了，可能已经发出去了：先看看再决定要不要重发"}
+
+// sendInboxOnce sends one of the manager's replies at most once per send id, with the guard the apps' messages have
+// (sent_messages, a day): the same id after it went out is already sent (nothing goes again), after a send that was
+// cut off it is in doubt (errReplyInDoubt). A send that failed is forgotten: asked again, it is sent. A send once
+// begun runs to its end (inboxSendWait) even when the manager stops waiting or drops: what it did is recorded for the
+// retry. Without an id or the database it is just sent.
+func (h *Hub) sendInboxOnce(ctx context.Context, sendID, source string, send func(context.Context) error) (already bool, err error) {
+	if sendID == "" || h.store == nil {
+		return false, send(ctx)
+	}
+	id := "inbox:" + sendID
+	state, err := h.store.ClaimSend(ctx, id, "inbox", source)
+	switch {
+	case err != nil:
+		return false, err
+	case state == sendDelivered:
+		return true, nil
+	case state != "":
+		return false, errReplyInDoubt
+	}
+	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), inboxSendWait)
+	defer cancel()
+	err = send(sctx)
+	outcome := inboxSendOutcome(err)
+	if serr := h.store.SettleSend(context.WithoutCancel(ctx), id, outcome); serr != nil {
+		h.logf("inbox: settle reply %s: %v", sendID, serr)
+	}
+	if outcome == sendUnknown {
+		return false, &rpc.Error{Code: assistantwire.CodeAssistantInDoubt, Message: err.Error()}
+	}
+	return false, err
+}
+
+// inboxSendOutcome is what a reply's error says of it (sent_messages' state): cut off (the time ran out, a link on the
+// way dropped) it may have gone out; refused it did not ("": forgotten).
+func inboxSendOutcome(err error) string {
+	switch {
+	case err == nil:
+		return sendDelivered
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled), errors.Is(err, rpc.ErrDropped):
+		return sendUnknown
+	}
+	return ""
+}
+
+// replyMail answers a mail from the account that received it.
+func (h *Hub) replyMail(ctx context.Context, ref assistantwire.InboxMailRef, text string) error {
+	if h.mail == nil {
+		return errCannotReply
+	}
+	orig, err := h.mail.GetMessage(ctx, ref.AccountID, ref.UID, ref.Mailbox)
+	if err != nil {
+		return err
+	}
+	return h.mail.Send(ctx, mailReply(ref.AccountID, orig, text))
+}
+
+// mailReply is a reply to orig: Re: subject, threading headers, the original quoted below.
+func mailReply(accountID string, orig *mail.MailMessage, text string) mail.SendRequest {
+	subject := orig.Subject
+	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
+		subject = "Re: " + subject
+	}
+	refs := append(append([]string{}, orig.References...), orig.MessageID)
+	var quoted []string
+	for i, l := range strings.Split(orig.Text, "\n") {
+		if i >= 40 {
+			break
+		}
+		quoted = append(quoted, "> "+l)
+	}
+	from := orig.From.Name
+	if from == "" {
+		from = orig.From.Email
+	}
+	body := text + "\n\n" + orig.Date + "，" + from + " 写道：\n" + strings.Join(quoted, "\n")
+	return mail.SendRequest{AccountID: accountID, To: []mail.Address{orig.From}, Subject: subject, Text: body,
+		InReplyTo: orig.MessageID, References: mail.MessageIDs(strings.Join(refs, " "))}
+}
+
+// ---- GitHub's muted repositories ----
+//
+// GitHub's settings page (and older apps) keep muted repositories in its options ("muted_repos"). They are the
+// inbox's mutes of source github, tag repo (the manager's): listed in its options from there, set through them into
+// there, and the ones kept in its options before are moved over once (githubMutes, when the manager connects).
+
+const githubMutedRepos = "muted_repos"
+
+// githubMutes moves the repositories GitHub's options still mute into the inbox's mutes and empties them there.
+func (h *Hub) githubMutes(ctx context.Context) {
+	o, ok := connector.As[connector.Options](h.connectorOf("github"))
 	if !ok {
-		h.inbox.mu.Unlock()
-		return InboxItem{}, errNoInboxItem
+		return
 	}
-	if done {
-		it.done(time.Now(), "user")
-	} else {
-		it.DoneAt, it.DoneBy = nil, ""
+	var opts map[string]json.RawMessage
+	var repos []string
+	if json.Unmarshal(o.Options(), &opts) != nil || json.Unmarshal(opts[githubMutedRepos], &repos) != nil || len(repos) == 0 {
+		return
 	}
-	out := it.listed()
-	h.inbox.mu.Unlock()
-	h.saveInbox(ctx, []*InboxItem{it})
+	if err := h.asst().call(ctx, assistantwire.MethodInboxRepoMutes, assistantwire.InboxRepoMutes{Source: "github", Set: true, Add: true,
+		Repos: repos}, nil); err != nil {
+		h.logf("inbox: github's muted repositories: %v", err)
+		return
+	}
+	opts[githubMutedRepos] = json.RawMessage(`[]`)
+	raw, _ := json.Marshal(opts)
+	if err := h.applyConnectorOptions(ctx, "github", raw); err != nil {
+		h.logf("inbox: github's muted repositories moved, its options kept them: %v", err)
+	}
+}
+
+// withGitHubMutes is GitHub's options as listed: the muted repositories are the inbox's mutes. While the manager
+// can't say there are none (nil: the apps draw no inbox section for GitHub): options without the mutes would show
+// nothing muted, and saving them (another setting changed) would unmute every repository.
+func (h *Hub) withGitHubMutes(ctx context.Context, raw json.RawMessage) json.RawMessage {
+	var opts map[string]json.RawMessage
+	if json.Unmarshal(raw, &opts) != nil {
+		return raw
+	}
+	var res struct {
+		Repos []string `json:"repos"`
+	}
+	if err := h.asst().call(ctx, assistantwire.MethodInboxRepoMutes, assistantwire.InboxRepoMutes{Source: "github"}, &res); err != nil {
+		h.logf("inbox: github's muted repositories: %v", err)
+		return nil
+	}
+	if res.Repos == nil {
+		res.Repos = []string{}
+	}
+	opts[githubMutedRepos], _ = json.Marshal(res.Repos)
+	out, _ := json.Marshal(opts)
+	return out
+}
+
+// setGitHubMutes takes the muted repositories out of options GitHub's page sets: they become the inbox's mutes (the
+// ones not listed any more are unmuted). It returns the options without them. Options that do not list them (no
+// muted_repos, or null) leave the mutes as they are, the inbox's and those still in GitHub's options: only a list,
+// even an empty one, sets them.
+func (h *Hub) setGitHubMutes(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
+	var opts map[string]json.RawMessage
+	if json.Unmarshal(raw, &opts) != nil {
+		return raw, nil // the connector says what is wrong
+	}
+	field, ok := opts[githubMutedRepos]
+	var repos []string
+	if !ok || json.Unmarshal(field, &repos) != nil || repos == nil {
+		delete(opts, githubMutedRepos)
+		if o, ok := connector.As[connector.Options](h.connectorOf("github")); ok {
+			var cur map[string]json.RawMessage
+			if json.Unmarshal(o.Options(), &cur) == nil && cur[githubMutedRepos] != nil {
+				opts[githubMutedRepos] = cur[githubMutedRepos] // not moved to the inbox yet
+			}
+		}
+		out, _ := json.Marshal(opts)
+		return out, nil
+	}
+	if err := h.asst().call(ctx, assistantwire.MethodInboxRepoMutes, assistantwire.InboxRepoMutes{Source: "github", Set: true,
+		Repos: repos}, nil); err != nil {
+		return nil, err
+	}
+	opts[githubMutedRepos] = json.RawMessage(`[]`)
+	out, _ := json.Marshal(opts)
 	return out, nil
 }

@@ -179,12 +179,12 @@ func TestHubJSONInboxExtensionWaitsForTheModel(t *testing.T) {
 		v := h.extensions.view(context.Background(), h.extensions.reg.Get("example-chat"))
 		return v.Status, strings.Join(v.NeedsSetup, "、")
 	}
-	h.collectConnectors(context.Background())
+	h.readConnectors(context.Background())
 	if st, needs := status(); c.n.Load() != 0 || st != extensionNeedsSetup || needs != needsTriageModelSetup {
 		t.Fatalf("collected %d time(s), status %s %q", c.n.Load(), st, needs)
 	}
 	withTriageModel(t, h, true)
-	h.collectConnectors(context.Background())
+	h.readConnectors(context.Background())
 	if _, needs := status(); c.n.Load() != 1 || strings.Contains(needs, needsTriageModelSetup) {
 		t.Fatalf("with the model: collected %d time(s), needs %q", c.n.Load(), needs)
 	}
@@ -232,22 +232,5 @@ func addInbox(m map[string]any, rules bool) {
 			m["configuration"] = conf
 		}
 		conf["properties"].(map[string]any)[extension.TriageRulesField] = map[string]any{"type": "string"}
-	}
-}
-
-// A plugin connector's thing with its own fallback (extra.rule_tier, capability fallback) and no tier is still sorted
-// by the model; when the model cannot, it comes in with that fallback (按规则) instead of being held back.
-func TestExtensionThingFallbackTier(t *testing.T) {
-	_, client := newTriageModel(t, "fail", `{"tier":"action","summary":"示例","reason":"示例"}`)
-	th := genericThing("example-org/example-repo#8", "a", "示例：一条评论")
-	th.Extra = &connector.ThingExtra{RuleTier: TierFYI}
-	h, st := admitHub(t, client, &inboxConnector{things: []connector.InboxThing{th}})
-	collectAndAdmit(h)
-	it := itemOf(h, "example", th.Thread)
-	if it == nil || it.Tier != TierFYI || it.Reason != "按规则" || it.TriagedAt != it.Last || !st.saved(it.ID) {
-		t.Fatalf("item %+v", it)
-	}
-	if _, status := inboxTriageOf(t, h); status.Waiting != 0 {
-		t.Fatalf("held back: %+v", status)
 	}
 }

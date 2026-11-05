@@ -315,19 +315,12 @@ func draftPlaceholder(text string) string {
 	return placeholderRE.FindString(text)
 }
 
-// docChange moves one row's status of a document item (the inbox's DocChange): the AI 分身's proposal.
-type docChange struct {
-	Ref   string `json:"ref"`
-	Field string `json:"field"`
-	Value string `json:"value"`
-}
-
-// toolInboxDraft gives the inbox the draft of the AI 分身 working in conversation self (docs/inbox.md): it waits on
-// the item for the user to send.
+// toolInboxDraft gives the inbox the draft of the AI 分身 working in conversation self (docs/inbox.md, inboxDraft):
+// it waits on the item for the user to send.
 func (s *Service) toolInboxDraft(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
 		Text, Note string
-		Changes    []docChange
+		Changes    []DocChange
 	}
 	if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Text) == "" {
 		return "", errors.New("text is required")
@@ -336,20 +329,13 @@ func (s *Service) toolInboxDraft(ctx context.Context, self string, args json.Raw
 	if p := draftPlaceholder(a.Text); p != "" {
 		return "", fmt.Errorf("the draft leaves %s to fill in, and it goes out as it is: leave out what you could not find (say so in note) and submit again", p)
 	}
-	var res struct {
-		ItemID  string     `json:"item_id"`
-		Refused *docChange `json:"refused"`
-	}
-	if err := s.appCall(ctx, AppInbox, assistantwire.InboxDraft, map[string]any{"session_id": self, "text": strings.TrimSpace(a.Text),
-		"note": clip(strings.TrimSpace(a.Note), 600), "changes": a.Changes}, &res); err != nil {
-		return "", err
-	}
-	if res.ItemID == "" {
+	itemID, refused := s.inboxDraft(ctx, self, strings.TrimSpace(a.Text), clip(strings.TrimSpace(a.Note), 600), a.Changes)
+	if itemID == "" {
 		return "", errors.New("this conversation was not started for an inbox item")
 	}
 	// Only moves the item offers (a row it lists, one of the column's values).
-	if res.Refused != nil {
-		return "", fmt.Errorf("change %+v is not one the item lists (ref, field and one of its values)", *res.Refused)
+	if refused != nil {
+		return "", fmt.Errorf("change %+v is not one the item lists (ref, field and one of its values)", *refused)
 	}
 	return "The draft is in the user's inbox; they will send it. You're done.", nil
 }

@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -273,7 +274,6 @@ func TestIMessageDelete(t *testing.T) {
 	h, _ := modelTestHub(t)
 	h.store = inboxTestStore{h.store.(*modelTestStore)}
 	h.connectors = connector.NewRegistry(nil)
-	h.inbox.init()
 	mux := h.routes()
 	imessageNode(t, h, func(method string, _ json.RawMessage) (any, error) {
 		return json.RawMessage(`{"connectors":[{"id":"imessage","status":"ok"}]}`), nil
@@ -281,13 +281,12 @@ func TestIMessageDelete(t *testing.T) {
 	if err := h.addIMessage(imessage.Config{Machine: "mac"}); err != nil {
 		t.Fatal(err)
 	}
-	st := withKB(t, h).Store // the assistant's: the hub asks it to delete (kb.forget)
+	st := withKB(t, h).Store // the assistant's: the hub asks it to delete (kb.forget), and the inbox's items (inbox.forget)
 	connectAssistant(t, h)
+	seedInbox(t, h, "imessage", "lark")
 	_ = st.PutChat(&kb.Chat{ID: "imessage-0123456789ab", Source: "imessage", Name: "张三"})
 	_ = st.PutChat(&kb.Chat{ID: "lark-f1", Source: "lark", Name: "需求群"})
 	_ = st.PutPerson(&kb.Person{ID: "imessage-a1b2c3d4e5f6", Source: "imessage", Name: "张三"})
-	h.inbox.items["imessage:1"] = &InboxItem{ID: "imessage:1", Source: "imessage", Title: "张三"}
-	h.inbox.items["lark:f1:1"] = &InboxItem{ID: "lark:f1:1", Source: "lark", Title: "需求群"}
 
 	if code, out := call(t, mux, "DELETE", "/api/v1/imessage/data", h.cfg.Token, ""); code != 409 || out["code"] != "ai_on" {
 		t.Fatalf("while on: %d %v", code, out)
@@ -306,10 +305,7 @@ func TestIMessageDelete(t *testing.T) {
 	if _, ok := st.Chat("lark-f1"); !ok {
 		t.Error("Feishu's chat is gone")
 	}
-	if _, ok := h.inbox.items["imessage:1"]; ok {
-		t.Error("the inbox item is still there")
-	}
-	if _, ok := h.inbox.items["lark:f1:1"]; !ok {
-		t.Error("Feishu's inbox item is gone")
+	if got := inboxSourcesListed(t, h); !slices.Equal(got, []string{"lark"}) { // the source's items went, the others stay
+		t.Errorf("the inbox has %v", got)
 	}
 }

@@ -50,7 +50,7 @@ func (h *Hub) removeExtensionConnector(id string) {
 }
 
 // larkByPlugin: a plugin serves Feishu (its connector "lark" is registered): Feishu items keep their blocks and go
-// back to it (inbox_migrate.go).
+// back to it (the manager's inbox_migrate.go; their replies come here as inbox.reply).
 func (h *Hub) larkByExtension() bool {
 	if h.connectors == nil {
 		return false

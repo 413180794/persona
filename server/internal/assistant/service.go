@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -56,6 +55,7 @@ type Service struct {
 	chans     channelsBook // channels.go
 	fbot      feishuBook   // feishu.go
 	kb        kbState      // kb.go
+	inbox     inboxBook    // inbox.go
 }
 
 var _ Handler = (*Service)(nil)
@@ -80,6 +80,7 @@ func New(o Options) *Service {
 	s.channelRoutes()
 	s.kbInit(o.KB)
 	s.kbRoutes()
+	s.inboxRoutes()
 	return s
 }
 
@@ -293,6 +294,8 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	if p := snap.Profile; p != nil && p.Main != "" {
 		view(p.Main, p.MachineID).Title = mainTitle // never its first message, a model's name or a rename (#1313)
 	}
+	snap.Inbox = s.inboxReport(ctx)
+	snap.Partial = snap.Partial || snap.Inbox == nil
 	snap.Work = s.workReport(ctx) // before the cards: they are read back with it
 	snap.Partial = snap.Partial || snap.Work == nil
 	snap.Interactions = append(s.pendingQuestions(), s.workCards()...)
@@ -323,7 +326,7 @@ func (s *Service) TurnStarted(ctx context.Context, r SessionRef) {
 // triaged; a new conversation is named after its first turn.
 func (s *Service) TurnEnded(ctx context.Context, r SessionRef) {
 	go s.taskTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID)
-	go s.workTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID) // the turn's triage (agents_work.go)
+	go s.workTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID)    // the turn's triage (agents_work.go)
 	go s.channelTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID) // a channel's answer, the sync mirror
 	s.titleAfterTurn(ctx, r.MachineID, r.SessionID)
 }
@@ -333,22 +336,6 @@ func (s *Service) TurnEnded(ctx context.Context, r SessionRef) {
 func (s *Service) InteractionResolved(ctx context.Context, r InteractionResolved) {
 	s.taskAnswered(ctx, r.Interaction, r.Resolution, r.Status)
 	s.cardDecisions(ctx, r.Interaction, r.Resolution, r.Status)
-}
-
-// InboxMessage: a message about a task, with the reply the inbox drafted, goes into the task's conversation.
-func (s *Service) InboxMessage(ctx context.Context, m InboxMessage) {
-	s.messageCard(ctx, m.ItemID, m.Message)
-}
-
-// ActiveTasks are the tasks going on (assistant.tasks).
-func (s *Service) ActiveTasks(ctx context.Context) []prompts.InboxTask { return s.activeTasks(ctx) }
-
-func (s *Service) CardSent(ctx context.Context, p CardSentParams) (bool, error) {
-	return s.cardSent(ctx, p.CardID, p.ItemID)
-}
-
-func (s *Service) CardsSent(ctx context.Context, p CardsSentParams) {
-	s.markCardsSent(ctx, p.ItemID, p.At, p.Text, true)
 }
 
 // SessionsChanged: messages from other conversations go to those no longer running; the todos follow the list

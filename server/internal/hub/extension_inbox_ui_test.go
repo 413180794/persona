@@ -84,10 +84,9 @@ func inboxUIPackage(t *testing.T) string {
 }
 
 // An inbox item's page drawn by the plugin whose connector brought the item in: listed with its connector, drawn
-// from the item the hub keeps (its triage, whether it is done, its source block), for that connector's items only.
+// from the item the manager keeps (its triage, whether it is done, its source block), for that connector's items only.
 func TestExtensionInboxItemUI(t *testing.T) {
 	h, _ := extensionTestHub(t)
-	h.inbox.init()
 	mux := h.routes()
 	master := h.cfg.Token
 	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/preview", master, `{"source": "dir:`+inboxUIPackage(t)+`"}`)
@@ -113,14 +112,16 @@ func TestExtensionInboxItemUI(t *testing.T) {
 		t.Fatalf("and among every slot's: %v", all)
 	}
 
-	done := time.Now()
-	h.inbox.mu.Lock()
-	h.inbox.items["examplechat:1"] = &InboxItem{ID: "examplechat:1", Source: "examplechat", Kind: "dm", Title: "周会", Summary: "周四下午开会",
-		Tier: TierAction, Reason: "要你确认时间", Context: "（会话）", Connector: &InboxConnector{Thread: "chat:1", Label: "私聊"}}
-	h.inbox.items["examplechat:2"] = &InboxItem{ID: "examplechat:2", Source: "examplechat", Title: "旧的", DoneAt: &done, DoneBy: "user"}
-	h.inbox.items["mail:1"] = &InboxItem{ID: "mail:1", Source: "mail", Kind: KindMail, Title: "别人的", Mail: &InboxMail{AccountID: "a1"}}
-	h.inbox.items["examplechat:doc"] = &InboxItem{ID: "examplechat:doc", Source: "examplechat", Title: "文档", Doc: &InboxDoc{NoticeID: "n1"}}
-	h.inbox.mu.Unlock()
+	// The items as the manager keeps them (inbox.item answers them).
+	fm, _ := connectFakeManager(t, h)
+	done, _ := json.Marshal(time.Now())
+	fm.mu.Lock()
+	fm.items["examplechat:1"] = json.RawMessage(`{"id":"examplechat:1","source":"examplechat","kind":"dm","title":"周会","summary":"周四下午开会",
+		"tier":"action","reason":"要你确认时间","context":"（会话）","connector":{"thread":"chat:1","label":"私聊"}}`)
+	fm.items["examplechat:2"] = json.RawMessage(`{"id":"examplechat:2","source":"examplechat","title":"旧的","done_at":` + string(done) + `,"done_by":"user"}`)
+	fm.items["mail:1"] = json.RawMessage(`{"id":"mail:1","source":"mail","kind":"mail","title":"别人的","mail":{"account_id":"a1"}}`)
+	fm.items["examplechat:doc"] = json.RawMessage(`{"id":"examplechat:doc","source":"examplechat","title":"文档","doc":{"notice_id":"n1"}}`)
+	fm.mu.Unlock()
 
 	code, out := call(t, mux, "POST", "/api/v1/plugins/example-chat/-/ui/event", master, `{"context": {"item": "examplechat:1", "ui_version": 2}}`)
 	view := fmt.Sprint(out["view"])

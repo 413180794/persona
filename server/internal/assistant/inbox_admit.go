@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 // (inboxBatch), and after the round the model is asked about a plugin connector's ones, in the background; only the
 // ones that have a tier are listed and stored — the model's, or their fallback tier when the model can't sort them.
 // One with no fallback is not written at all (no hidden rows): its connector answers Collect from its memory and
-// hands it back next round, so it comes in once the model works again. Meanwhile GET /api/v1/inbox says how many wait
-// and why (triage). The hub's own sources (mail, its connectors, a built-in plugin's) go in at once, as they always
-// did, and are triaged afterwards (triageInbox).
+// the hub hands it back next round, so it comes in once the model works again. Meanwhile GET /api/v1/inbox says how
+// many wait and why (triage). The hub's own sources (mail, its connectors, a built-in plugin's) go in at once, as they
+// always did, and are triaged afterwards (triageInbox).
 
 // Bounds of one admission: new items start within admitWindow, each gets admitTimeout; the ones not started by then
 // wait for the next round (asked for right away when this one got anywhere). Variables for tests.
@@ -24,11 +24,13 @@ var (
 )
 
 // inboxBatch is what one collection starts of plugin connectors: the new items by id and the source each came from,
-// and the sources it read (with their names), whose held-back counts it recomputes.
+// the sources it read (with their names), whose held-back counts it recomputes, and the connectors the hub had then
+// (nil: not said, every source kept).
 type inboxBatch struct {
-	items map[string]*InboxItem
-	from  map[string]string
-	read  map[string]string
+	items      map[string]*InboxItem
+	from       map[string]string
+	read       map[string]string
+	registered map[string]string
 }
 
 func newInboxBatch() *inboxBatch {
@@ -38,7 +40,7 @@ func newInboxBatch() *inboxBatch {
 // sortBatch files a round's new plugin items, under b.mu: muted ones (done at once) and ones with nothing to triage (a
 // connector's rule decided, or no text to read) enter the list now; the others, newest first, wait for the model
 // (todo) and leave changed.
-func (b *inbox) sortBatch(batch *inboxBatch, changed []*InboxItem, now time.Time) (kept, todo []*InboxItem) {
+func (b *inboxBook) sortBatch(batch *inboxBatch, changed []*InboxItem, now time.Time) (kept, todo []*InboxItem) {
 	for _, it := range changed {
 		if _, fresh := batch.items[it.ID]; !fresh {
 			kept = append(kept, it)
@@ -61,31 +63,33 @@ func (b *inbox) sortBatch(batch *inboxBatch, changed []*InboxItem, now time.Time
 
 // admitInbox triages a round's new plugin items in the background, one admission at a time: a round that comes
 // while one runs drops its own (they come back next round) and leaves the held-back counts as they are.
-func (h *Hub) admitInbox(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
-	if !h.inbox.admitting.TryLock() {
+func (s *Service) admitInbox(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
+	b := &s.inbox
+	if !b.admitting.TryLock() {
 		return
 	}
 	if len(todo) == 0 {
-		h.inbox.mu.Lock()
-		changed := h.recordHeld(batch, nil)
-		h.inbox.mu.Unlock()
-		h.inbox.admitting.Unlock()
+		b.mu.Lock()
+		changed := s.recordHeld(batch, nil)
+		b.mu.Unlock()
+		b.admitting.Unlock()
 		if changed {
-			h.broadcast(map[string]any{"type": "inbox"}) // the triage status moved: the apps' banner follows
+			s.inboxChanged(ctx, nil) // the triage status moved: the apps' banner follows
 		}
 		return
 	}
 	ctx = context.WithoutCancel(ctx) // the round (a pull to refresh) does not wait for it
 	go func() {
-		defer h.inbox.admitting.Unlock()
-		h.admit(ctx, batch, todo)
+		defer b.admitting.Unlock()
+		s.admit(ctx, batch, todo)
 	}()
 }
 
 // admit lets in the items that got a tier: the model's, or — when the model can't (not set up, held, failing, too
 // slow) — their fallback tier with 「按规则」, for good (this version is not asked again when the model is back). The
 // rest are dropped this round and counted as held back.
-func (h *Hub) admit(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
+func (s *Service) admit(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
+	b := &s.inbox
 	verdicts := make([]triageVerdict, len(todo))
 	window, stop := context.WithTimeout(context.Background(), admitWindow)
 	defer stop()
@@ -106,7 +110,7 @@ func (h *Hub) admit(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			_, verdicts[i] = h.askTriage(ctx, it, admitTimeout)
+			_, verdicts[i] = s.askTriage(ctx, it, admitTimeout)
 		}()
 	}
 	wg.Wait()
@@ -114,10 +118,10 @@ func (h *Hub) admit(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
 	var in []*InboxItem
 	held := map[string]inboxHeld{}
 	behind := false
-	h.inbox.mu.Lock()
+	b.mu.Lock()
 	for i, it := range todo {
 		v := verdicts[i]
-		fallback := ruleTier(it)
+		fallback := b.ruleTier(it)
 		switch {
 		case v.state == "":
 			it.Tier, it.Summary, it.Reason = v.tier, v.summary, v.reason
@@ -135,20 +139,23 @@ func (h *Hub) admit(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
 			continue
 		}
 		it.TriagedAt = it.Last
-		h.inbox.items[it.ID] = it
+		b.items[it.ID] = it
 		in = append(in, it)
 	}
-	changed := h.recordHeld(batch, held)
-	h.inbox.mu.Unlock()
-	h.saveInbox(ctx, in)
+	changed := s.recordHeld(batch, held)
+	b.mu.Unlock()
+	s.saveInbox(ctx, in)
 	if changed && len(in) == 0 {
-		h.broadcast(map[string]any{"type": "inbox"}) // nothing came in, but the triage status moved (saveInbox tells otherwise)
+		s.inboxChanged(ctx, nil) // nothing came in, but the triage status moved (saveInbox tells otherwise)
 	}
 	if len(in) > 0 {
-		h.handInbox(ctx) // a new 需要你 may be the AI 分身's
+		s.handInbox(ctx) // a new 需要你 may be the AI 分身's
 	}
 	if behind && len(in) > 0 {
-		h.kickInbox() // more to sort, and the model is getting through them: the next round comes now
+		// More to sort, and the model is getting through them: the next round comes now.
+		if err := s.appCall(ctx, AppInbox, inboxKick, map[string]any{}, nil); err != nil {
+			s.logf("inbox: ask for the next round: %v", err)
+		}
 	}
 }
 
@@ -161,33 +168,37 @@ type inboxHeld struct {
 	err     error
 }
 
-// recordHeld keeps a round's held-back counts, under h.inbox.mu: the sources it read get theirs (none: nothing
-// waits); the others keep their last ones while they are still registered. A source's first hold (or a new reason)
-// is logged once. It says whether the status the apps see (GET /api/v1/inbox triage) changed.
-func (h *Hub) recordHeld(batch *inboxBatch, held map[string]inboxHeld) bool {
+// recordHeld keeps a round's held-back counts, under b.mu: the sources it read get theirs (none: nothing waits);
+// the others keep their last ones while the hub still has them. A source's first hold (or a new reason) is logged
+// once. It says whether the status the apps see (GET /api/v1/inbox triage) changed.
+func (s *Service) recordHeld(batch *inboxBatch, held map[string]inboxHeld) bool {
+	b := &s.inbox
 	next := map[string]inboxHeld{}
-	for src, x := range h.inbox.held {
-		if _, again := batch.read[src]; !again && h.connectors.Get(src) != nil {
+	for src, x := range b.held {
+		if _, again := batch.read[src]; again {
+			continue
+		}
+		if _, there := batch.registered[src]; batch.registered == nil || there {
 			next[src] = x
 		}
 	}
 	for src, x := range held {
 		x.Name = batch.read[src]
-		if prev, ok := h.inbox.held[src]; !ok || prev.State != x.State {
+		if prev, ok := b.held[src]; !ok || prev.State != x.State {
 			why := x.Reason
 			if x.err != nil {
 				why += ": " + x.err.Error()
 			}
-			h.logf("inbox: %s: %d new item(s) held back, not triaged (%s)", src, x.Waiting, why)
+			s.logf("inbox: %s: %d new item(s) held back, not triaged (%s)", src, x.Waiting, why)
 		}
 		next[src] = x
 	}
-	changed := len(next) != len(h.inbox.held)
+	changed := len(next) != len(b.held)
 	for src, x := range next {
-		prev, ok := h.inbox.held[src]
+		prev, ok := b.held[src]
 		changed = changed || !ok || prev.Name != x.Name || prev.State != x.State || prev.Reason != x.Reason || prev.Waiting != x.Waiting
 	}
-	h.inbox.held = next
+	b.held = next
 	return changed
 }
 
@@ -210,11 +221,12 @@ type InboxTriageSource struct {
 	Waiting int    `json:"waiting"`
 }
 
-func (h *Hub) inboxTriage() InboxTriage {
-	h.inbox.mu.Lock()
-	defer h.inbox.mu.Unlock()
+func (s *Service) inboxTriage() InboxTriage {
+	b := &s.inbox
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	out := InboxTriage{State: "ok"}
-	for src, x := range h.inbox.held {
+	for src, x := range b.held {
 		out.Waiting += x.Waiting
 		out.Sources = append(out.Sources, InboxTriageSource{Source: src, Name: x.Name, State: x.State, Reason: x.Reason, Waiting: x.Waiting})
 		if out.State == "ok" || slices.Index(triageStates, x.State) < slices.Index(triageStates, out.State) {

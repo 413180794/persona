@@ -210,7 +210,7 @@ func failedStart(t *testing.T, h *Hub, want string) Todo {
 	if line := taskLine(h, todo); !strings.HasSuffix(line, "：没开起来") {
 		t.Fatalf("the live context = %q", line)
 	}
-	if got := h.inboxTasks(); len(got) != 0 {
+	if got := inboxTasks(t, h); len(got) != 0 {
 		t.Fatalf("the inbox still sees a failed task: %+v", got)
 	}
 	waitFor(t, "the receipt", func() bool { return strings.Contains(strings.Join(feedKinds(h, "conv1"), ","), "receipt") })

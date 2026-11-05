@@ -101,7 +101,7 @@ func TestTaskAutoDone(t *testing.T) {
 	if line := taskLine(h, todo); !strings.Contains(line, "）：已完成（hub 判断做完了，自动关的）") {
 		t.Fatalf("the live context = %q", line)
 	}
-	for _, it := range h.inboxTasks() {
+	for _, it := range inboxTasks(t, h) {
 		if it.ID == todo.ID {
 			t.Fatal("the inbox still links messages to a done task")
 		}
@@ -319,7 +319,7 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 		t.Fatalf("snapshot state = %q", line)
 	}
 	inbox := false
-	for _, it := range h.inboxTasks() {
+	for _, it := range inboxTasks(t, h) {
 		inbox = inbox || it.ID == todo.ID
 	}
 	if !inbox {

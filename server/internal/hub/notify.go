@@ -74,7 +74,7 @@ type NotifyPrefs struct {
 // TranslatePrefs mirrors 设置 › 翻译 on a device.
 type TranslatePrefs struct {
 	Enabled bool   `json:"enabled"`
-	Target  string `json:"target,omitempty"` // BCP 47, one of languageNames
+	Target  string `json:"target,omitempty"` // BCP 47, one of assistantwire.TranslateLanguages
 	Mail    bool   `json:"mail"`
 }
 
