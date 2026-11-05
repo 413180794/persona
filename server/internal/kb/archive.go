@@ -78,6 +78,8 @@ type Engine struct {
 	TextDays int
 
 	failed int // attachment downloads that failed this run (logged once per chat)
+
+	find findCache // what Find read last time, kept while the files are unchanged (find.go)
 }
 
 func (e *Engine) modelFor(id string) Model {

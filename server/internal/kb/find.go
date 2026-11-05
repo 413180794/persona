@@ -4,9 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -94,13 +96,68 @@ func (e *Engine) Find(query string, limit int) []Result {
 	if match == nil {
 		return nil
 	}
-	known := map[string]Entry{}
-	for _, k := range []string{KindProject, KindChat, KindPerson, KindDoc, KindMeeting, KindEvent} {
-		for _, en := range e.List(k, "") {
-			known[k+"/"+en.ID] = en
+	ws := words(query)
+	// Files are looked at in parallel (the archive is ~25 MB); what each found is added in file order, so the lines
+	// kept for an entry are its profile's first, then the newest days'. The app searches as the user types, so a
+	// file unchanged since the last search is not read again (findCache): one stat each instead of read + lowercase.
+	files, days := e.files()
+	all := append(append(make([]string, 0, len(files)+len(days)), files...), days...)
+	type fileHits struct {
+		key   string
+		stat  fileStat
+		found []Found
+	}
+	per := make([]fileHits, len(all))
+	gen := e.find.begin()
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range max(1, min(8, runtime.NumCPU())) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(all) {
+					return
+				}
+				p := all[i]
+				rel, _ := filepath.Rel(e.Store.Dir, p)
+				kind, id, ok := entryOf(rel)
+				if !ok {
+					continue
+				}
+				fh := fileHits{key: kind + "/" + id}
+				c, st, ok := e.find.text(p, gen)
+				fh.stat = st
+				if ok && hasAll(c.lower, ws) {
+					for n, l := range strings.Split(c.raw, "\n") {
+						if t := strings.TrimSpace(l); t != "" && !strings.HasPrefix(t, "# ") && match(t) {
+							fh.found = append(fh.found, Found{Path: filepath.ToSlash(rel), Line: clip(t, 300), N: n + 1})
+						}
+					}
+				}
+				per[i] = fh
+			}
+		}()
+	}
+	wg.Wait()
+	e.find.prune(gen)
+	// The entries the lists show depend only on the JSON files (meta.json, docs/<id>.json): kept while none changed.
+	var metas []fileStat
+	for i, fh := range per {
+		if fh.key != "" && strings.HasSuffix(all[i], ".json") {
+			metas = append(metas, fh.stat)
 		}
 	}
-	ws := words(query)
+	known := e.find.entries(metas, func() map[string]Entry {
+		known := map[string]Entry{}
+		for _, k := range []string{KindProject, KindChat, KindPerson, KindDoc, KindMeeting, KindEvent} {
+			for _, en := range e.List(k, "") {
+				known[k+"/"+en.ID] = en
+			}
+		}
+		return known
+	})
 	by := map[string]*Result{}
 	add := func(key string, f Found) {
 		r := by[key]
@@ -115,52 +172,10 @@ func (e *Engine) Find(query string, limit int) []Result {
 			r.Hits = append(r.Hits, f)
 		}
 	}
-	// Files are read in parallel (the archive is ~25 MB); what each found is added in file order, so the lines kept
-	// for an entry are its profile's first, then the newest days'.
-	files, days := e.files()
-	all := append(files, days...)
-	type fileHits struct {
-		key   string
-		found []Found
-	}
-	per := make([]fileHits, len(all))
-	jobs := make(chan int)
-	var wg sync.WaitGroup
-	for range max(1, min(8, runtime.NumCPU())) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := range jobs {
-				p := all[i]
-				rel, _ := filepath.Rel(e.Store.Dir, p)
-				kind, id, ok := entryOf(rel)
-				if !ok {
-					continue
-				}
-				key := kind + "/" + id
-				if _, ok := known[key]; !ok {
-					continue // an entry the lists do not show (a doc without a title yet): nothing to open
-				}
-				raw, err := os.ReadFile(p)
-				if err != nil || !hasAll(strings.ToLower(string(raw)), ws) {
-					continue
-				}
-				fh := fileHits{key: key}
-				for n, l := range strings.Split(string(raw), "\n") {
-					if t := strings.TrimSpace(l); t != "" && !strings.HasPrefix(t, "# ") && match(t) {
-						fh.found = append(fh.found, Found{Path: filepath.ToSlash(rel), Line: clip(t, 300), N: n + 1})
-					}
-				}
-				per[i] = fh
-			}
-		}()
-	}
-	for i := range all {
-		jobs <- i
-	}
-	close(jobs)
-	wg.Wait()
 	for _, fh := range per {
+		if _, ok := known[fh.key]; !ok {
+			continue // an entry the lists do not show (a doc without a title yet): nothing to open
+		}
 		for _, f := range fh.found {
 			add(fh.key, f)
 		}
@@ -210,28 +225,45 @@ func (e *Engine) Find(query string, limit int) []Result {
 	return out
 }
 
-// files lists the profile files (summaries, metadata, timelines) and the message days, newest day first.
+// files lists the profile files (summaries, metadata, timelines) and the message days, newest day first. The
+// slices are shared with findCache: callers only read them.
 func (e *Engine) files() (files, days []string) {
+	c := &e.find
+	c.walkMu.Lock()
+	defer c.walkMu.Unlock()
+	c.walkGen++
+	changed := false
 	sep := string(filepath.Separator)
-	_ = filepath.WalkDir(e.Store.Dir, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if d.Name() == "attachments" {
-				return filepath.SkipDir
+	var walk func(dir string)
+	walk = func(dir string) {
+		ents, fresh := c.listDir(dir)
+		changed = changed || fresh
+		for _, d := range ents {
+			p := filepath.Join(dir, d.name)
+			switch {
+			case d.dir:
+				if d.name != "attachments" {
+					walk(p)
+				}
+			case strings.Contains(p, sep+"messages"+sep):
+				days = append(days, p)
+			case strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".json"):
+				files = append(files, p)
 			}
-			return nil
 		}
-		switch {
-		case strings.Contains(p, sep+"messages"+sep):
-			days = append(days, p)
-		case strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".json"):
-			files = append(files, p)
+	}
+	walk(e.Store.Dir)
+	for d, l := range c.dirs {
+		if l.gen != c.walkGen {
+			delete(c.dirs, d)
+			changed = true
 		}
-		return nil
-	})
+	}
+	if !changed && c.walked {
+		return c.files, c.days
+	}
 	sort.SliceStable(days, func(i, j int) bool { return filepath.Base(days[i]) > filepath.Base(days[j]) })
+	c.files, c.days, c.walked = files, days, !changed
 	return files, days
 }
 
@@ -383,4 +415,176 @@ func (e *Engine) Day(chatID, day string) (msgs []DayMessage, prev, next string, 
 		}
 	}
 	return msgs, prev, next, nil
+}
+
+// findCacheBytes bounds what findCache keeps of the files' text (raw and lowercased); files beyond it are read every
+// time, as without the cache.
+const findCacheBytes = 64 << 20
+
+// findSettle: a file changed this recently is not kept. A write within the same mtime tick and of the same size
+// would otherwise go unseen; once the mtime is this old, any later write gives a newer one.
+const findSettle = 2 * time.Second
+
+// fileStat is what tells a file changed.
+type fileStat struct {
+	path string
+	mod  int64 // UnixNano
+	size int64
+}
+
+func settling(st fileStat) bool { return time.Since(time.Unix(0, st.mod)) < findSettle }
+
+type findText struct {
+	stat  fileStat
+	raw   string
+	lower string
+	gen   uint64 // the last search that saw the file (prune drops the ones no search saw since)
+}
+
+// findCache is what Find keeps between searches: each file's text, and the entries of the lists while no JSON file
+// changed. Everything is checked against a fresh stat on every search, so results are those of reading every file.
+type findCache struct {
+	mu    sync.Mutex
+	gen   uint64
+	texts map[string]*findText
+	bytes int
+	// metas: the stats of the JSON files known was built from (sorted by path as files lists them).
+	metas []fileStat
+	known map[string]Entry
+
+	// The walk (files): each directory's listing while its mtime holds (adding, removing or renaming an entry
+	// changes it), and the sorted result while no listing changed.
+	walkMu      sync.Mutex
+	walkGen     uint64
+	dirs        map[string]*dirListing
+	walked      bool
+	files, days []string
+}
+
+type dirListing struct {
+	stat fileStat
+	ents []dirEnt
+	gen  uint64
+}
+
+type dirEnt struct {
+	name string
+	dir  bool
+}
+
+// listDir returns a directory's entries sorted by name, and whether they were read now rather than kept. Called
+// with walkMu held.
+func (c *findCache) listDir(dir string) ([]dirEnt, bool) {
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return nil, true
+	}
+	st := fileStat{path: dir, mod: fi.ModTime().UnixNano(), size: fi.Size()}
+	if l := c.dirs[dir]; l != nil && l.stat == st {
+		l.gen = c.walkGen
+		return l.ents, false
+	}
+	des, err := os.ReadDir(dir)
+	ents := make([]dirEnt, len(des))
+	for i, d := range des {
+		ents[i] = dirEnt{name: d.Name(), dir: d.IsDir()}
+	}
+	delete(c.dirs, dir)
+	if err == nil && !settling(st) {
+		if c.dirs == nil {
+			c.dirs = map[string]*dirListing{}
+		}
+		c.dirs[dir] = &dirListing{stat: st, ents: ents, gen: c.walkGen}
+	}
+	return ents, true
+}
+
+func (c *findCache) begin() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.gen++
+	return c.gen
+}
+
+// text returns a file's text and its stat, from the cache while the file is unchanged.
+func (c *findCache) text(p string, gen uint64) (*findText, fileStat, bool) {
+	fi, err := os.Stat(p)
+	if err != nil {
+		return nil, fileStat{}, false
+	}
+	st := fileStat{path: p, mod: fi.ModTime().UnixNano(), size: fi.Size()}
+	c.mu.Lock()
+	t := c.texts[p]
+	if t != nil && t.stat == st {
+		t.gen = gen
+		c.mu.Unlock()
+		return t, st, true
+	}
+	c.mu.Unlock()
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		return nil, st, false
+	}
+	s := string(raw)
+	t = &findText{stat: st, raw: s, lower: strings.ToLower(s), gen: gen}
+	if int64(len(raw)) != st.size || settling(st) {
+		return t, st, true // changing while read, or just now: used once, not kept
+	}
+	n := t.cost()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if old := c.texts[p]; old != nil {
+		c.bytes -= old.cost()
+		delete(c.texts, p)
+	}
+	if c.bytes+n <= findCacheBytes {
+		if c.texts == nil {
+			c.texts = map[string]*findText{}
+		}
+		c.texts[p] = t
+		c.bytes += n
+	}
+	return t, st, true
+}
+
+// cost is the bytes a cached text holds (lowercasing returns the same string when nothing changes).
+func (t *findText) cost() int {
+	if t.lower == t.raw {
+		return len(t.raw)
+	}
+	return len(t.raw) + len(t.lower)
+}
+
+// prune drops the files the search gen and those after it did not see (deleted, or no longer searched).
+func (c *findCache) prune(gen uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for p, t := range c.texts {
+		if t.gen < gen {
+			c.bytes -= t.cost()
+			delete(c.texts, p)
+		}
+	}
+}
+
+// entries returns the lists' entries, built again by list unless metas (the JSON files' stats now) are those they
+// were built from. The map is shared: callers only read it.
+func (c *findCache) entries(metas []fileStat, list func() map[string]Entry) map[string]Entry {
+	c.mu.Lock()
+	if c.known != nil && slices.Equal(c.metas, metas) {
+		known := c.known
+		c.mu.Unlock()
+		return known
+	}
+	c.mu.Unlock()
+	known := list()
+	for _, m := range metas {
+		if settling(m) {
+			return known // a file just written: build again next time
+		}
+	}
+	c.mu.Lock()
+	c.metas, c.known = metas, known
+	c.mu.Unlock()
+	return known
 }
