@@ -139,7 +139,7 @@ func (c *catalog) providerModels(ctx context.Context, p *Provider) (providerMode
 // models is GET /models: every provider's models as "<provider>/<model>". A provider whose list cannot be read is
 // left out (and logged) rather than failing the others.
 func (c *catalog) models(ctx context.Context, logf func(string, ...any)) ([]ModelChoice, string, error) {
-	var out []ModelChoice
+	out := []ModelChoice{} // none while no upstream is set up: an empty list, not null
 	var firstErr error
 	def := ""
 	several := len(c.cfg.Providers) > 1
@@ -175,6 +175,9 @@ func (c *catalog) models(ctx context.Context, logf func(string, ...any)) ([]Mode
 
 // resolve turns the app's model ("<provider>/<model>", or empty for the default) into a provider and its model.
 func (c *catalog) resolve(ctx context.Context, id string) (*Provider, string, error) {
+	if len(c.cfg.Providers) == 0 {
+		return nil, "", errNoUpstream
+	}
 	if id == "" {
 		id = c.cfg.Default
 	}

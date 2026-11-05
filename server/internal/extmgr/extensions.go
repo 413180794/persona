@@ -158,6 +158,10 @@ type extensions struct {
 	nodes extensionNodes
 	// sandboxes are the owner's sandbox choices and the egress proxy (extension_sandbox.go).
 	sandboxes extensionSandboxes
+	// voice is the hub.json entry the built-in voice extension took over (nil without one); voiceID the built-in's id
+	// once registered, "" when there is none (voice_extension.go).
+	voice   *ExtensionConfig
+	voiceID string
 }
 
 // newPlugins is the registry with hub.json's plugins: a bad entry is logged and skipped. Built-in and installed ones
@@ -179,12 +183,26 @@ func newExtensions(dir string, cfgs []ExtensionConfig, logf func(string, ...any)
 		if c.Name == "" {
 			c.Name = c.ID
 		}
-		if err := ps.reg.AddHubJSON(legacyManifest(c), c, !c.Disabled); err != nil {
+		socket, kind := ps.legacySocket(c), c.Kind
+		switch {
+		case ps.reg.Get(c.ID) != nil || ps.voice != nil && ps.voice.ID == c.ID:
 			logf("plugin %q: skipped (duplicate id)", c.ID)
 			continue
+		case ps.voice == nil && takesOverVoice(c):
+			// `personad voice`: the built-in voice extension under this id (attachExtensions, voice_extension.go).
+			taken := c
+			ps.voice, socket, kind = &taken, filepath.Join(ps.root, c.ID+".sock"), "voice"
+			if c.Socket != "" {
+				logf("plugin %q: socket is not used: the built-in voice extension serves on %s", c.ID, socket)
+			}
+		default:
+			if err := ps.reg.AddHubJSON(legacyManifest(c), c, !c.Disabled); err != nil {
+				logf("plugin %q: skipped (duplicate id)", c.ID)
+				continue
+			}
 		}
 		// Known before it runs: its socket (the model settings ask a voice plugin for its models through it).
-		hp := &hubExtension{id: c.ID, kind: c.Kind, socket: ps.legacySocket(c), status: host.StateStarting, pending: true, stats: ps.stats.of(c.ID)}
+		hp := &hubExtension{id: c.ID, kind: kind, socket: socket, status: host.StateStarting, pending: true, stats: ps.stats.of(c.ID)}
 		if c.Disabled {
 			hp.status = extensionDisabled
 		}
@@ -259,6 +277,9 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 		v.Status, v.NeedsSetup = extensionNeedsSetup, append(v.NeedsSetup, needsTriageModelSetup(ps.h.contextLang(ctx)))
 	}
 	if ps.h != nil {
+		ps.voiceView(ctx, p, &v) // runs, but no conversation starts without an upstream (voice_extension.go)
+	}
+	if ps.h != nil {
 		ps.h.extensionUpgrades().decorate(ctx, &v, p)
 	}
 	if m.NodeProgram() != nil {
@@ -307,6 +328,8 @@ func (h *Manager) attachExtensions(ctx context.Context) {
 	reg.CanEnable = h.canEnableExtension // the inbox's rules (extension_inbox.go)
 	reg.PlanCandidates = h.extensionPlanCandidates
 	reg.PlanGuard = h.guardExtensionPlan
+	// The voice extension's key goes with its address (voice_extension.go).
+	reg.BoundSecrets, reg.SecretNeeds = ps.voiceKeyFollowsURL, ps.voiceKeyNeedsURL
 	var own []string
 	for _, c := range h.connectors.All() {
 		if !slices.Contains(connector.MigratableConnectors, c.ID()) { // a plugin may take these over (connectors_migrate.go)
@@ -332,6 +355,7 @@ func (h *Manager) attachExtensions(ctx context.Context) {
 	if err := reg.AddBuiltin(imessageManifest(h), "", false); err != nil { // which Mac's Messages (imessage_extension.go)
 		h.logf("plugin imessage: %v", err)
 	}
+	h.addVoiceExtension(ctx, reg, store) // `personad voice`, taking hub.json's entry of it over (voice_extension.go)
 	if err := reg.Load(ctx); err != nil {
 		h.logf("plugins: %v", err)
 	}
@@ -721,6 +745,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			b, _ := json.Marshal(secrets)
 			s.Env = append(s.Env, "PERSONA_PLUGIN_CONFIG="+string(ps.reg.Config(p)), "PERSONA_PLUGIN_SECRETS="+string(b))
 		}
+		ps.voiceSpec(p, &s) // what the hub.json entry it took over had (voice_extension.go)
 	}
 	builtin := p.Record.Source == extension.SourceBuiltin
 	s.Init = func(ctx context.Context) (extension.InitializeParams, error) {

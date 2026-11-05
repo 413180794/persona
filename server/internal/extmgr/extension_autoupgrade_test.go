@@ -340,7 +340,7 @@ func TestExtensionAutoUpgradeOnlyMarketExtensions(t *testing.T) {
 	if code, _ := call(t, mux, "PUT", "/api/v1/plugins/example-ui/-/auto-upgrade", phone, `{"auto": true}`); code != 400 {
 		t.Fatalf("switched a directory's plugin: %d", code)
 	}
-	if code, _ := call(t, mux, "PUT", "/api/v1/plugins/voice/-/auto-upgrade", phone, `{"auto": true}`); code != 404 {
+	if code, _ := call(t, mux, "PUT", "/api/v1/plugins/no-such-extension/-/auto-upgrade", phone, `{"auto": true}`); code != 404 {
 		t.Fatalf("%d", code)
 	}
 }

@@ -7,14 +7,17 @@
 package voice
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // Dialects of the GPT-Live wire.
@@ -29,7 +32,8 @@ const (
 	DialectCodex = "codex"
 )
 
-// Config is the plugin's configuration: hub.json's plugin entry `config`, handed over as JARVIS_PLUGIN_CONFIG.
+// Config is the plugin's configuration: the upstreams of the hub.json entry the hub took over and of the settings
+// form, merged (Merge, docs/voice.md「可配置的 GPT-Live 上游」); a hand-run plugin's is given whole (the old format).
 type Config struct {
 	Providers []Provider `json:"providers"`
 	// Default is the model a conversation uses when the app names none ("<provider>/<model>"); empty: the first
@@ -38,6 +42,124 @@ type Config struct {
 	// Owner is how the voice model calls the user; Notes is appended to its instructions.
 	Owner string `json:"owner,omitempty"`
 	Notes string `json:"notes,omitempty"`
+
+	// Setup is what is missing before a conversation can start when no upstream is usable (SetupURLAndKey, SetupKey,
+	// SetupURL); "" when one is. The plugin runs either way.
+	Setup string `json:"-"`
+	// Warnings are settings that were not taken (WarnFormIDTaken, WarnFormNoKey, WarnDefaultUnknown).
+	Warnings []string `json:"-"`
+}
+
+// What a configuration without a usable upstream lacks (Config.Setup).
+const (
+	SetupURLAndKey = "url_and_key" // the form has neither the service's address nor its key
+	SetupKey       = "key"         // the form has the address, not its key
+	SetupURL       = "url"         // the form has a key but no address
+)
+
+// Settings that were not taken (Config.Warnings).
+const (
+	WarnFormIDTaken    = "form_id_taken"   // hub.json has an upstream of id custom: the form's is left out
+	WarnFormNoKey      = "form_no_key"     // the form has an address without its key while hub.json's upstreams serve
+	WarnDefaultUnknown = "default_unknown" // hub.json's default names no upstream: the first upstream's default instead
+)
+
+// FormProvider is the id of the settings form's upstream: its models are "custom/<model>".
+const FormProvider = "custom"
+
+// Form is the built-in extension's settings form (its manifest's configuration, extmgr/voice_extension.go): one upstream
+// and how the model talks; the upstream's key is the extension's secret "key".
+type Form struct {
+	URL          string   `json:"url"`
+	Name         string   `json:"name"`
+	Dialect      string   `json:"dialect"`
+	Models       []string `json:"models"`
+	DefaultModel string   `json:"default_model"`
+	InputRate    int      `json:"input_rate"`
+	Owner        string   `json:"owner"`
+	Notes        string   `json:"notes"`
+}
+
+// Sources are where the built-in extension's settings come from (docs/voice.md「扩展怎么拿到配置」).
+type Sources struct {
+	// Form is the settings form (PERSONA_EXTENSION_CONFIG), Key its secret key (PERSONA_EXTENSION_SECRETS).
+	Form json.RawMessage
+	Key  string
+	// HubJSON is the config of the hub.json entry the hub took over (PERSONA_VOICE_HUB_CONFIG): providers, default,
+	// owner, notes.
+	HubJSON json.RawMessage
+}
+
+// Merge makes one configuration of the sources: hub.json's upstreams first, then the form's (id custom) once it has
+// an address and a key; the form's owner and notes over hub.json's. A form holding providers is the old format (a
+// plugin run by hand, or hub.json's config given as the plugin's own): taken whole. No usable upstream is not an
+// error: Setup says what is missing.
+func Merge(s Sources) (Config, error) {
+	var c Config
+	form := bytes.TrimSpace(s.Form)
+	if len(form) > 0 {
+		var keys map[string]json.RawMessage
+		if err := json.Unmarshal(form, &keys); err != nil {
+			return Config{}, fmt.Errorf("config: %w", err)
+		}
+		if _, old := keys["providers"]; old {
+			if err := json.Unmarshal(form, &c); err != nil {
+				return Config{}, fmt.Errorf("config: %w", err)
+			}
+			return c, c.validate()
+		}
+	}
+	if raw := bytes.TrimSpace(s.HubJSON); len(raw) > 0 {
+		if err := json.Unmarshal(raw, &c); err != nil {
+			return Config{}, fmt.Errorf("hub.json config: %w", err)
+		}
+		if err := c.validateProviders(); err != nil {
+			return Config{}, fmt.Errorf("hub.json %w", err)
+		}
+	}
+	var f Form
+	if len(form) > 0 {
+		if err := json.Unmarshal(form, &f); err != nil {
+			return Config{}, fmt.Errorf("config: %w", err)
+		}
+	}
+	c.Owner, c.Notes = firstNonEmpty(f.Owner, c.Owner), firstNonEmpty(f.Notes, c.Notes)
+	fromHubJSON := len(c.Providers) > 0
+	switch {
+	case f.URL == "":
+	case slices.ContainsFunc(c.Providers, func(p Provider) bool { return p.ID == FormProvider }):
+		c.Warnings = append(c.Warnings, WarnFormIDTaken)
+	case s.Key == "":
+		if fromHubJSON {
+			c.Warnings = append(c.Warnings, WarnFormNoKey)
+		}
+	default:
+		p := Provider{ID: FormProvider, Name: f.Name, URL: f.URL, Dialect: f.Dialect, Key: s.Key, Models: f.Models,
+			DefaultModel: f.DefaultModel, InputRate: f.InputRate}
+		if err := p.validate(); err != nil {
+			return Config{}, fmt.Errorf("settings form: %w", err)
+		}
+		c.Providers = append(c.Providers, p)
+	}
+	if c.Default != "" {
+		if id, _, ok := splitModel(c.Default); !ok || !slices.ContainsFunc(c.Providers, func(p Provider) bool { return p.ID == id }) {
+			c.Default = ""
+			if len(c.Providers) > 0 {
+				c.Warnings = append(c.Warnings, WarnDefaultUnknown)
+			}
+		}
+	}
+	if len(c.Providers) == 0 {
+		switch {
+		case f.URL == "" && s.Key != "":
+			c.Setup = SetupURL
+		case f.URL != "":
+			c.Setup = SetupKey
+		default:
+			c.Setup = SetupURLAndKey
+		}
+	}
+	return c, nil
 }
 
 // Provider is one upstream realtime service.
@@ -71,49 +193,72 @@ var (
 	voicePattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 )
 
-// LoadConfig reads JARVIS_PLUGIN_CONFIG.
+// LoadConfig reads the settings the hub hands the plugin (docs/voice.md「扩展怎么拿到配置」): the settings form in
+// PERSONA_EXTENSION_CONFIG, its key in PERSONA_EXTENSION_SECRETS, the config of the hub.json entry the hub took over
+// in PERSONA_VOICE_HUB_CONFIG. The old names (PERSONA_PLUGIN_*, JARVIS_PLUGIN_*) are read too.
 func LoadConfig() (Config, error) {
-	raw := strings.TrimSpace(identity.Getenv("JARVIS_PLUGIN_CONFIG"))
-	if raw == "" {
-		return Config{}, errors.New("JARVIS_PLUGIN_CONFIG is empty: give the plugin entry in hub.json a config with providers (docs/extensions.md)")
+	var secrets map[string]string
+	if raw := strings.TrimSpace(extensionEnv("SECRETS")); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &secrets); err != nil {
+			return Config{}, errors.New("PERSONA_EXTENSION_SECRETS is not a JSON object of strings")
+		}
 	}
-	var c Config
-	if err := json.Unmarshal([]byte(raw), &c); err != nil {
-		return Config{}, fmt.Errorf("JARVIS_PLUGIN_CONFIG: %w", err)
-	}
-	return c, c.validate()
+	return Merge(Sources{Form: json.RawMessage(extensionEnv("CONFIG")), Key: secrets["key"],
+		HubJSON: json.RawMessage(identity.Getenv("PERSONA_VOICE_HUB_CONFIG"))})
 }
 
+// extensionEnv is PERSONA_EXTENSION_<name>, else its old names PERSONA_PLUGIN_<name> and JARVIS_PLUGIN_<name>.
+func extensionEnv(name string) string {
+	if v, ok := identity.LookupEnv("PERSONA_EXTENSION_" + name); ok {
+		return v
+	}
+	return identity.Getenv("PERSONA_PLUGIN_" + name)
+}
+
+// validate holds a whole configuration (the old format) to having an upstream, each of them sound.
 func (c *Config) validate() error {
 	if len(c.Providers) == 0 {
 		return errors.New("config: no providers")
 	}
+	return c.validateProviders()
+}
+
+// validateProviders checks each upstream and that no two share an id.
+func (c *Config) validateProviders() error {
 	seen := map[string]bool{}
 	for i := range c.Providers {
 		p := &c.Providers[i]
-		if !providerIDPattern.MatchString(p.ID) {
-			return fmt.Errorf("config: provider id %q: a-z0-9_-, at most 32", p.ID)
+		if err := p.validate(); err != nil {
+			return err
 		}
 		if seen[p.ID] {
 			return fmt.Errorf("config: provider %s twice", p.ID)
 		}
 		seen[p.ID] = true
-		if p.Dialect == "" {
-			p.Dialect = DialectLive
-		}
-		if p.Dialect != DialectLive && p.Dialect != DialectCodex {
-			return fmt.Errorf("config: provider %s: dialect %q (live or codex)", p.ID, p.Dialect)
-		}
-		if !strings.HasPrefix(p.URL, "wss://") && !strings.HasPrefix(p.URL, "ws://") {
-			return fmt.Errorf("config: provider %s: url must be ws:// or wss://", p.ID)
-		}
-		if p.InputRate != 0 && p.InputRate != 16000 && p.InputRate != 24000 {
-			return fmt.Errorf("config: provider %s: input_rate is 16000 or 24000", p.ID)
-		}
-		for _, m := range append(p.Models, p.DefaultModel) {
-			if m != "" && !modelPattern.MatchString(m) {
-				return fmt.Errorf("config: provider %s: model %q", p.ID, m)
-			}
+	}
+	return nil
+}
+
+// validate checks one upstream and fills in its dialect.
+func (p *Provider) validate() error {
+	if !providerIDPattern.MatchString(p.ID) {
+		return fmt.Errorf("config: provider id %q: a-z0-9_-, at most 32", p.ID)
+	}
+	if p.Dialect == "" {
+		p.Dialect = DialectLive
+	}
+	if p.Dialect != DialectLive && p.Dialect != DialectCodex {
+		return fmt.Errorf("config: provider %s: dialect %q (live or codex)", p.ID, p.Dialect)
+	}
+	if !strings.HasPrefix(p.URL, "wss://") && !strings.HasPrefix(p.URL, "ws://") {
+		return fmt.Errorf("config: provider %s: url must be ws:// or wss://", p.ID)
+	}
+	if p.InputRate != 0 && p.InputRate != 16000 && p.InputRate != 24000 {
+		return fmt.Errorf("config: provider %s: input_rate is 16000 or 24000", p.ID)
+	}
+	for _, m := range append(slices.Clone(p.Models), p.DefaultModel) {
+		if m != "" && !modelPattern.MatchString(m) {
+			return fmt.Errorf("config: provider %s: model %q", p.ID, m)
 		}
 	}
 	return nil

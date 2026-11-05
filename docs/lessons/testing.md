@@ -530,3 +530,9 @@ node 跑启动器的命令用的是交互式登录 shell（`zsh -ic`），原来
 - 扩展默认在沙箱里，出网只能连清单里的 host（经 hub 的出网代理），连不到本机的 `127.0.0.1:<端口>` 代理：GitHub 扩展的「代理」设置指向本机代理时，测试 hub 上要 `personad extension sandbox github off`。
 - 扩展仓库的打包脚本（package.sh）打的包在 `dist/`；内网扩展仓库的 `packages/` 是已发布的包，别装成那个（版本号相同时 hub 也不会重装）。
 - SDK 的 `ext.Page.Action` 回空结果会被当成「重画整页」：UI 版本 5 的 `lines` / `items` 已经算回答；什么都不用画（标了已看）就回非 nil 的空 `Items`。
+
+## 带程序的内置扩展在测试里跑的是测试二进制本身（2026-11-06，#3500）
+
+内置扩展的 `runtime.command` 是 `personad` 时，manager 用 `os.Executable()` 加清单的 `args` 起它；在 `go test` 里这就是测试二进制（`extmgr.test voice`）。
+测试二进制不认识 `voice` 这个参数，会把整个包的测试再跑一遍，套娃到超时。所以 `extmgr` 的 `TestMain` 先看 `os.Args[1]`：是 `voice` 就当 `personad voice` 跑
+（`voice.Run`）。以后再加带程序的内置扩展（不只是声明），同样要在 `TestMain` 里分派，测试里才能真的把它跑起来、经 hub 的转发调它。

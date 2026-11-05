@@ -121,7 +121,7 @@
   "gateway_model_id": "ゲートウェイ上のモデル ID",
   "display_name_optional": "表示名（任意）",
   "custom_model_description_optional": "カスタムモデルの説明（任意）",
-  "custom_model_description_hint": "/model に選択肢を1つ追加します。説明には名前が必要です。",
+  "custom_model_description_hint": "/modelに選択肢が1つ追加されます。説明を付けるには名前も入力してください。",
   "extra_args_optional": "追加の引数（任意）",
   "extra_args_hint": "claude の後ろに付けます。スペース区切りで、それぞれ-で始めます。",
   "provider": "プロバイダー",

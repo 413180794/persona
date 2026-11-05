@@ -82,22 +82,7 @@ const usage = `usage:
   personad hub assistant-token  print a new bus token for an assistant run elsewhere (hub.json assistant.external)
   personad assistant        the assistant (the Persona tab's) as its own process on the hub's bus; the hub starts it
                            unless hub.json says assistant.external (token: stdin or PERSONA_ASSISTANT_TOKEN)
-  personad node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
-                           node running on this machine, relay to it instead
-  personad node --attach    resident node (launchd, in the login session): serves what --stdio relays, so what it
-                           starts can use the login keychain (docs/server.md「常驻 node」); set up for tailcat,
-                           also reachable by the hub over tailcat
-  personad node tailcat init --hub <key> [--derp-map-url <url>]
-                           let the hub reach this machine over tailcat when it cannot ssh here; prints the address
-                           for hub.json (docs/server.md「tailcat 打洞」)
-  personad node tailcat addr
-                           print this machine's tailcat address again
-  personad node doctor [--json] [--fix]
-                           read-only check of this machine's node: node.sock / runtime.sock answer, the generated hook,
-                           MCP and plugin files match this binary, the programs they run exist, claude's version;
-                           --fix rewrites Persona's own generated files only (docs/claude-integration.md「node doctor」)
-  personad node reset-uid   give this computer a new machine uid (~/.persona/machine-uid): for a virtual machine cloned
-                           with another's home directory, which hubs would take for that one (docs/mesh.md)
+` + nodeUsage + `
   personad hook             Claude Code hook entry (reads hook JSON on stdin)
   personad mcp              Claude Code MCP server (stdio)
   personad ask "question" [--options a,b,c] [--timeout 10m] [--require-remote]
@@ -124,6 +109,24 @@ const usage = `usage:
   personad update-watch <pending>
                            the watchdog the hub starts over its own update (docs/hub-update.md「回滚」)
   personad version [-v]     the version; -v adds the channel and build number`
+
+// nodeUsage is the node part of usage, also what `personad node -h` prints.
+const nodeUsage = `  personad node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
+                           node running on this machine, relay to it instead
+  personad node --attach    resident node (launchd, in the login session): serves what --stdio relays, so what it
+                           starts can use the login keychain (docs/server.md「常驻 node」); set up for tailcat,
+                           also reachable by the hub over tailcat
+  personad node tailcat init --hub <key> [--derp-map-url <url>]
+                           let the hub reach this machine over tailcat when it cannot ssh here; prints the address
+                           for hub.json (docs/server.md「tailcat 打洞」)
+  personad node tailcat addr
+                           print this machine's tailcat address again
+  personad node doctor [--json] [--fix]
+                           read-only check of this machine's node: node.sock / runtime.sock answer, the generated hook,
+                           MCP and plugin files match this binary, the programs they run exist, claude's version;
+                           --fix rewrites Persona's own generated files only (docs/claude-integration.md「node doctor」)
+  personad node reset-uid   give this computer a new machine uid (~/.persona/machine-uid): for a virtual machine cloned
+                           with another's home directory, which hubs would take for that one (docs/mesh.md)`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -223,6 +226,10 @@ func main() {
 	case "assistant": // the assistant as its own process on the hub's bus (the hub starts it, docs/assistant.md)
 		err = assistant.Main(ctx, buildInfo(), os.Stdin)
 	case "node":
+		if len(os.Args) == 3 && isHelpArg(os.Args[2]) {
+			fmt.Println(nodeUsage)
+			break
+		}
 		if len(os.Args) > 2 && os.Args[2] == "--attach" {
 			err = runResident(ctx)
 			break
@@ -239,12 +246,14 @@ func main() {
 			break
 		}
 		if len(os.Args) > 2 && os.Args[2] == "reset-uid" {
+			if err = noExtraArgs("reset-uid", os.Args[3:]); err != nil {
+				exitNodeUsage(err)
+			}
 			err = resetMachineUID()
 			break
 		}
 		if err = checkNodeStdioArgs(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
+			exitNodeUsage(err)
 		}
 		var relayed bool
 		if relayed, err = node.Relay(ctx, os.Stdin, os.Stdout); relayed {
@@ -314,7 +323,25 @@ func checkNodeStdioArgs(args []string) error {
 	if len(args) == 0 || len(args) == 1 && args[0] == "--stdio" {
 		return nil
 	}
-	return fmt.Errorf("不认识的 node 子命令 %q：可用的有 --stdio、--attach、tailcat、doctor、reset-uid（personad 不带参数看用法）", strings.Join(args, " "))
+	return fmt.Errorf("不认识的 node 子命令 %q：可用的有 --stdio、--attach、tailcat、doctor、reset-uid（personad node -h 看用法）", strings.Join(args, " "))
+}
+
+func isHelpArg(a string) bool { return a == "-h" || a == "--help" }
+
+// noExtraArgs refuses arguments after a node subcommand that takes none: reset-uid cannot be undone, so a mistyped
+// flag after it must not go ahead as if it were not there.
+func noExtraArgs(cmd string, rest []string) error {
+	if len(rest) == 0 {
+		return nil
+	}
+	return fmt.Errorf("node %s 不带参数，多了 %q（personad node -h 看用法）", cmd, strings.Join(rest, " "))
+}
+
+// exitNodeUsage is a usage mistake under `personad node`: the error, the node usage, exit 2.
+func exitNodeUsage(err error) {
+	fmt.Fprintln(os.Stderr, err)
+	fmt.Fprintln(os.Stderr, nodeUsage)
+	os.Exit(2)
 }
 
 // runResident is `jarvisd node --attach`: relays over ssh, and the hub over tailcat when this machine is set up for
@@ -388,10 +415,13 @@ func runResident(ctx context.Context) error {
 // runNodeTailcat is `jarvisd node tailcat init|addr`.
 func runNodeTailcat(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: jarvisd node tailcat init --hub <key> [--derp-map-url <url>] | addr")
+		exitNodeUsage(fmt.Errorf("node tailcat 要跟 init 或 addr（personad node -h 看用法）"))
 	}
 	switch args[0] {
 	case "addr":
+		if err := noExtraArgs("tailcat addr", args[1:]); err != nil {
+			exitNodeUsage(err)
+		}
 		addr, err := node.TailcatAddr()
 		if err != nil {
 			return err
@@ -404,6 +434,9 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 		derpMap := fs.String("derp-map-url", "", "a DERP map of your own relays instead of Tailscale's public ones")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
+		}
+		if fs.NArg() > 0 {
+			exitNodeUsage(fmt.Errorf("node tailcat init 只认 --hub 和 --derp-map-url，多了 %q（personad node -h 看用法）", strings.Join(fs.Args(), " ")))
 		}
 		if *hubKey == "" {
 			return fmt.Errorf("--hub is required: run `jarvisd hub tailcat-key` on the hub's machine")
@@ -420,7 +453,8 @@ func runNodeTailcat(ctx context.Context, args []string) error {
 		fmt.Println(k.Addr())
 		return nil
 	}
-	return fmt.Errorf("unknown tailcat command %q", args[0])
+	exitNodeUsage(fmt.Errorf("不认识的 node tailcat 子命令 %q：可用的有 init、addr（personad node -h 看用法）", args[0]))
+	return nil
 }
 
 // runHook forwards a Claude Code hook event to the local node. Any failure exits 0 silently so claude carries on as usual.

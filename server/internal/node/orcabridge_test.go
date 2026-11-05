@@ -23,6 +23,7 @@ type orcaChats struct {
 	f        *orcarttest.Fake
 	mu       sync.Mutex
 	state    string
+	main     string // the main agent's own state when it differs from the row's ("": the row's)
 	requests string // the pending requests' JSON
 }
 
@@ -58,12 +59,15 @@ func newOrcaChats(t *testing.T) *orcaChats {
 
 func (o *orcaChats) trees() {
 	o.mu.Lock()
-	state := o.state
+	state, main := o.state, o.main
 	o.mu.Unlock()
+	if main == "" {
+		main = state
+	}
 	o.f.SetWorktrees(map[string]any{"worktreeId": "repo::/w/app", "path": "/w/app", "branch": "refs/heads/feat",
 		"hostId": "local", "parentWorktreeId": "repo::/w/main", "agents": []any{
 			map[string]any{"paneKey": "structured-agent-session-" + orcaChatID + ":aa", "agentType": "claude", "state": state,
-				"mainAgent": map[string]any{"state": state}, "conversationName": "Refactor the parser",
+				"mainAgent": map[string]any{"state": main}, "conversationName": "Refactor the parser",
 				"lastAssistantMessage": "Done: tests pass.", "updatedAt": 1793850000000},
 			map[string]any{"paneKey": "structured-agent-session-codex_1234abcd:bb", "agentType": "codex", "state": "done"},
 			map[string]any{"paneKey": "tab-1:leaf-1", "agentType": "claude", "state": "done"},
@@ -202,6 +206,31 @@ func TestOrcaBridgeApprovalCard(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	if n := len(o.writes("agentSession.respondToApproval")); n != 1 {
 		t.Errorf("answered %d times", n)
+	}
+}
+
+// #3828: a subagent's approval blocks the row while the main agent works on (waiting for the subagent): the chat is
+// blocked and the approval reaches the phone as a card of that subagent.
+func TestOrcaBridgeSubagentApprovalCard(t *testing.T) {
+	n, hub, o := orcaBridgeNode(t)
+	release := make(chan struct{})
+	hub.mu.Lock()
+	hub.resolve = func(proto.Interaction) proto.Resolution { <-release; return proto.Resolution{Dismiss: true} }
+	hub.mu.Unlock()
+	defer close(release)
+	o.mu.Lock()
+	o.main = "working"
+	o.mu.Unlock()
+	o.set("blocked", strings.Replace(orcaApproval, `"revision":2,`, `"revision":2,"agentId":"sub-1",`, 1))
+	waitFor(t, "the subagent's card", func() bool { hub.mu.Lock(); defer hub.mu.Unlock(); return len(hub.asked) > 0 })
+	hub.mu.Lock()
+	ix := hub.asked[0]
+	hub.mu.Unlock()
+	if ix.AgentID != "sub-1" || ix.SessionID != orcaChatUUID || ix.Kind != proto.IxPermission {
+		t.Fatalf("card %+v", ix)
+	}
+	if s := listed(t, n)[orcaChatUUID]; s.Status != proto.StatusBlocked {
+		t.Fatalf("status %s, want blocked", s.Status)
 	}
 }
 

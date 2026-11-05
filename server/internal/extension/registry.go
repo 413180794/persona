@@ -126,6 +126,14 @@ type Registry struct {
 	// PlanCandidates 为主预览提供联合升级图，PlanGuard 保持提交期间的市场信任不变。
 	PlanCandidates func(context.Context, *Manifest, string) []*Manifest
 	PlanGuard      func(context.Context, []*Preview) (func(), error)
+	// BoundSecrets names the secrets of p that hold only for its configuration old, so changing it to next deletes
+	// them (the built-in voice extension's key goes with its service's address, docs/extensions.md「内置语音扩展」).
+	// Both are the configurations with the schema's defaults. SetConfig deletes them before it saves next, in the same
+	// operation SetSecret runs in, so a secret never pairs with a configuration it was not set for. Nil: none.
+	BoundSecrets func(p *Extension, old, next json.RawMessage) []string
+	// SecretNeeds says why secret name of p may not be set under its configuration config (with the defaults), nil
+	// when it may: SetSecret asks it in the same operation SetConfig runs in. Nil: any may.
+	SecretNeeds func(p *Extension, name string, config json.RawMessage) error
 
 	operationMu sync.Mutex // serializes package/record changes, including plan recovery and cleanup
 	planProblem error      // 提交确认或包恢复未确定时，禁止新的写操作，等待重新加载。
@@ -139,6 +147,15 @@ type Registry struct {
 	yielded map[string]*Extension
 	// devSecrets are the secrets of the extensions being written (SourceDev), in memory only.
 	devSecrets map[string]map[string]string
+	// keptOff are built-in extensions held off whatever their rows say (KeepOff).
+	keptOff map[string]*keptOff
+}
+
+// keptOff is a built-in held off (KeepOff): what switching it on answers, and its row's own switch. The hold is not
+// the owner's choice, so it never reaches the database: a row written meanwhile keeps the switch it had (put).
+type keptOff struct {
+	why error
+	row bool // the row's switch; the default AddBuiltin was given while there is no row
 }
 
 // NewRegistry is a registry for the hub of build, keeping packages under dir.
@@ -216,6 +233,24 @@ func (r *Registry) AddBuiltin(m *Manifest, dir string, enabled bool) error {
 	return nil
 }
 
+// KeepOff holds the built-in extension id (registered, before Load) switched off whatever its row says; switching it
+// on answers why. For a built-in that took over a hub.json entry written disabled (docs/extensions.md「内置语音扩展」):
+// hub.json has the last word on it, its settings and secrets stay editable, and its row keeps its own switch for when
+// hub.json lets it run.
+func (r *Registry) KeepOff(id string, why error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.extensions[id]
+	if p == nil || p.Record.Source != SourceBuiltin {
+		return
+	}
+	if r.keptOff == nil {
+		r.keptOff = map[string]*keptOff{}
+	}
+	r.keptOff[id] = &keptOff{why: why, row: p.Record.Enabled}
+	p.Record.Enabled = false
+}
+
 // Load reads the rows: installed plugins, and the switches and settings of built-in ones. A row whose package is gone
 // or that this hub cannot run is kept and listed with its problem.
 func (r *Registry) Load(ctx context.Context) error {
@@ -238,6 +273,9 @@ func (r *Registry) Load(ctx context.Context) error {
 		switch {
 		case row.Source == SourceBuiltin && cur != nil && cur.Record.Source == SourceBuiltin:
 			cur.Record.Enabled, cur.Record.Config = row.Enabled, row.Config
+			if k := r.keptOff[row.ID]; k != nil {
+				k.row, cur.Record.Enabled = row.Enabled, false
+			}
 			cur.Record.DisabledContributions = row.DisabledContributions
 			cur.Manifest = cur.Full.Without(row.DisabledContributions)
 			cur.Record.InstalledAt, cur.Record.UpdatedAt = row.InstalledAt, row.UpdatedAt
@@ -928,8 +966,19 @@ func (r *Registry) editable(id string) (*Extension, error) {
 	return p, nil
 }
 
-// put keeps p's row (a built-in one gets its first row here).
+// put keeps p's row (a built-in one gets its first row here). A built-in held off (KeepOff) is written with its
+// row's own switch, not the hold.
 func (r *Registry) put(ctx context.Context, row Record) error {
+	r.mu.Lock()
+	if k := r.keptOff[row.ID]; k != nil {
+		row.Enabled = k.row
+	}
+	r.mu.Unlock()
+	return r.write(ctx, row)
+}
+
+// write keeps row as it is.
+func (r *Registry) write(ctx context.Context, row Record) error {
 	if r.store == nil {
 		return nil // no database: the choice lasts until the hub restarts
 	}
@@ -951,6 +1000,12 @@ func (r *Registry) SetEnabled(ctx context.Context, id string, on bool, actor str
 	if err != nil {
 		return err
 	}
+	r.mu.Lock()
+	held := r.keptOff[id]
+	r.mu.Unlock()
+	if on && held != nil {
+		return held.why
+	}
 	if on && !p.Record.Enabled {
 		if err := r.canEnable(ctx, p.Record.Source, p.Manifest); err != nil {
 			return err
@@ -960,11 +1015,14 @@ func (r *Registry) SetEnabled(ctx context.Context, id string, on bool, actor str
 	row := p.Record
 	row.Enabled = on
 	r.mu.Unlock()
-	if err := r.put(ctx, row); err != nil {
+	if err := r.write(ctx, row); err != nil { // the owner's choice, held off or not
 		return err
 	}
 	r.mu.Lock()
 	p.Record.Enabled = on
+	if held != nil {
+		held.row = on
+	}
 	r.mu.Unlock()
 	kind := map[bool]string{true: "enabled", false: "disabled"}[on]
 	unlock()
@@ -975,37 +1033,84 @@ func (r *Registry) SetEnabled(ctx context.Context, id string, on bool, actor str
 
 // SetConfig replaces a plugin's configuration, held to its schema first.
 func (r *Registry) SetConfig(ctx context.Context, id string, raw json.RawMessage, actor string) error {
+	_, err := r.SetConfigClearing(ctx, id, raw, actor)
+	return err
+}
+
+// ErrSecretNotCleared: a secret the new configuration unbinds (BoundSecrets) could not be deleted, so the
+// configuration was not saved.
+var ErrSecretNotCleared = errors.New("密钥删不掉，设置没有保存")
+
+// SetConfigClearing is SetConfig saying which secrets the change deleted (BoundSecrets): those that had a value, or
+// may have had (they could not be read). They go first, fail closed: one that cannot be deleted saves nothing
+// (ErrSecretNotCleared); a configuration that then cannot be saved answers its error with the ones already gone.
+func (r *Registry) SetConfigClearing(ctx context.Context, id string, raw json.RawMessage, actor string) (cleared []string, err error) {
 	unlock, err := r.beginOperation()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer unlock()
 	p, err := r.editable(id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := p.Schema.Check(raw); err != nil {
-		return err
+		return nil, err
 	}
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return err
+		return nil, err
 	}
 	compact, _ := json.Marshal(v)
-	r.mu.Lock()
-	row := p.Record
-	row.Config = compact
-	r.mu.Unlock()
-	if err := r.put(ctx, row); err != nil {
-		return err
+	cleared, err = r.clearBound(ctx, p, compact)
+	if err == nil {
+		r.mu.Lock()
+		row := p.Record
+		row.Config = compact
+		r.mu.Unlock()
+		err = r.put(ctx, row)
 	}
-	r.mu.Lock()
-	p.Record.Config = compact
-	r.mu.Unlock()
+	if err == nil {
+		r.mu.Lock()
+		p.Record.Config = compact
+		r.mu.Unlock()
+	}
 	unlock()
+	for _, name := range cleared {
+		r.audit(ctx, id, "secret_delete", actor, map[string]any{"name": name, "why": "config"})
+	}
+	if err != nil {
+		if len(cleared) > 0 { // the program runs again without them, on the configuration it had
+			r.changed(Change{ID: id, Kind: "secret"})
+		}
+		return cleared, err
+	}
 	r.audit(ctx, id, "config", actor, nil) // not the values: they may be personal
 	r.changed(Change{ID: id, Kind: "config"})
-	return nil
+	return cleared, nil
+}
+
+// clearBound deletes the secrets of p that configuration next unbinds (BoundSecrets), whether or not they are
+// known to have a value (a failed read must not keep one), and says which went. Called in an operation.
+func (r *Registry) clearBound(ctx context.Context, p *Extension, next json.RawMessage) ([]string, error) {
+	if r.BoundSecrets == nil || r.store == nil {
+		return nil, nil
+	}
+	names := r.BoundSecrets(p, r.Config(p), p.Schema.Effective(next))
+	if len(names) == 0 {
+		return nil, nil
+	}
+	had, readErr := r.store.ExtensionSecrets(ctx, p.Record.ID) // only to say which went
+	var cleared []string
+	for _, name := range names {
+		if err := r.store.DeleteExtensionSecret(ctx, p.Record.ID, name); err != nil {
+			return cleared, fmt.Errorf("%w（%s：%v）", ErrSecretNotCleared, name, err)
+		}
+		if _, ok := had[name]; ok || readErr != nil {
+			cleared = append(cleared, name)
+		}
+	}
+	return cleared, nil
 }
 
 // Config is what the plugin gets: its configuration with the schema's defaults.
@@ -1036,6 +1141,11 @@ func (r *Registry) SetSecret(ctx context.Context, id, name, value, actor string)
 	}
 	if err := r.secretSpec(p, name); err != nil {
 		return err
+	}
+	if r.SecretNeeds != nil {
+		if err := r.SecretNeeds(p, name, r.Config(p)); err != nil {
+			return err
+		}
 	}
 	if value == "" || len(value) > SecretMost {
 		return fmt.Errorf("密钥要有内容，最多 %d KB", SecretMost>>10)

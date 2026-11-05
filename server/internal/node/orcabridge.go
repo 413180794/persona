@@ -309,9 +309,10 @@ func orcaRow(w orcart.Worktree, a orcart.AgentRow, h *orcaHead) map[string]any {
 	return row
 }
 
-// orcaChatStatus is a chat's status from its row: its main agent's own state (the row's folds in its subagents).
+// orcaChatStatus is a chat's status from its row (AgentRow.PaneState): its main agent's own state (the row's folds in
+// its subagents), blocked while one of its subagents waits on the user.
 func orcaChatStatus(a orcart.AgentRow) string {
-	switch a.OwnState() {
+	switch a.PaneState() {
 	case "working":
 		return proto.StatusWorking
 	case "blocked", "waiting":

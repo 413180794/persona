@@ -40,6 +40,10 @@ type ExtensionDetail struct {
 	// NodeMachines is the field of Form that picks the computers its program runs on (an extension with one,
 	// docs/extensions.md「在电脑上运行的程序」): the apps show that program's state on each (Nodes) in the field's rows.
 	NodeMachines string `json:"node_machines,omitempty"`
+	// SecretsCleared are the secrets this change deleted (PUT …/-/config of the voice extension moving its address to
+	// another host deletes its key, docs/extensions.md「内置语音扩展」; a line in Warnings says so too). An error answer
+	// carries it too when they went before the configuration could not be saved.
+	SecretsCleared []string `json:"secrets_cleared,omitempty"`
 }
 
 // PluginSecretView is a declared secret and whether it has a value (never the value).
@@ -213,7 +217,10 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		if err := ps().reg.SetConfig(r.Context(), p.Record.ID, in.Config, actor(r)); err != nil {
+		// Secrets bound to the old configuration go first (the voice extension's key, moved to another host:
+		// voice_extension.go); said in the answer, an error's too.
+		cleared, err := ps().reg.SetConfigClearing(r.Context(), p.Record.ID, in.Config, actor(r))
+		if err != nil {
 			var fe *extension.FieldError
 			if errors.As(err, &fe) {
 				w.Header().Set("Content-Type", "application/json")
@@ -221,10 +228,25 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": fe.Error(), "code": "invalid_config", "field": fe.Path, "message": fe.Message})
 				return
 			}
-			writeErrCode(w, http.StatusConflict, "read_only", err)
+			status, code := http.StatusConflict, "read_only"
+			if errors.Is(err, extension.ErrSecretNotCleared) {
+				status, code = http.StatusInternalServerError, "secret_not_cleared"
+			}
+			if len(cleared) == 0 {
+				writeErrCode(w, status, code, err)
+				return
+			}
+			writeCode(w, status, code, i18n.Localize(err, h.contextLang(r.Context())), map[string]any{"secrets_cleared": cleared})
 			return
 		}
-		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
+		d := ps().detail(r.Context(), ps().reg.Get(p.Record.ID))
+		if len(cleared) > 0 {
+			d.SecretsCleared = cleared
+			if ps().isVoice(p) {
+				d.Warnings = append(slices.Clone(d.Warnings), i18n.T(h.contextLang(r.Context()), "hub-voice_extension.key_cleared"))
+			}
+		}
+		writeJSON(w, detailOut(r, d))
 	}))
 	api.HandleFunc("PUT /api/v1/extensions/{id}/-/secrets/{name}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		var in struct {
@@ -234,7 +256,11 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			return
 		}
 		if err := ps().reg.SetSecret(r.Context(), p.Record.ID, r.PathValue("name"), in.Value, actor(r)); err != nil {
-			writeErrCode(w, http.StatusBadRequest, "invalid_secret", err)
+			code := "invalid_secret"
+			if errors.As(err, new(keyNeedsURLError)) { // the voice extension's key is for an address (voice_extension.go)
+				code = "needs_url"
+			}
+			writeErrCode(w, http.StatusBadRequest, code, err)
 			return
 		}
 		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))

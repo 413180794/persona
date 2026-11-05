@@ -48,7 +48,7 @@ describe("Header", () => {
 
   it("leaves the title room on a phone: no state pill, 同空间 only from ⋯ (#3576)", () => {
     const html = header();
-    expect(html).toMatch(/<span class="hidden sm:contents"><span[^>]*>.*?需要你/);
+    expect(html).toMatch(/<span class="hidden @min-\[800px\]:contents"><span[^>]*>.*?需要你/);
     // the 同空间 button is there from sm up, gone below
     expect(html).toMatch(/<button[^>]*aria-label="同空间 1"[^>]*class="[^"]*\bmax-sm:hidden\b/);
     expect(html).toContain("<span>同空间</span>");

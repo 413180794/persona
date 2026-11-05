@@ -143,13 +143,16 @@ func (h *Manager) feishuChannel(ctx context.Context) channel.View {
 	return out
 }
 
-// voiceChannel is the first voice plugin, as a channel (it talks with its own model, so it does not use the hub's
-// pipeline: listed, set up on its plugin's page).
+// voiceChannel is the first voice plugin, a switched-on one first, as a channel (it talks with its own model, so it
+// does not use the hub's pipeline: listed, set up on its plugin's page).
 func (h *Manager) voiceChannel(ctx context.Context) (channel.View, bool) {
 	if h.extensions == nil {
 		return channel.View{}, false
 	}
-	for _, p := range h.extensions.reg.List() {
+	list := h.extensions.reg.List()
+	// The built-in voice is there, off, on every hub: one that is on goes first.
+	on := slices.DeleteFunc(slices.Clone(list), func(p *extension.Extension) bool { return !p.Record.Enabled })
+	for _, p := range append(on, list...) {
 		v := h.extensions.view(ctx, p)
 		if v.Kind != "voice" {
 			continue
@@ -161,6 +164,8 @@ func (h *Manager) voiceChannel(ctx context.Context) (channel.View, bool) {
 		switch v.Status {
 		case extensionDisabled:
 			out.State = channel.StateDisabled
+		case extensionNeedsSetup: // no realtime service set up yet (voice_extension.go)
+			out.State = channel.StateNotConnected
 		case host.StateRunning, host.StateStopped, host.StateStarting:
 			out.State = channel.StateConnected
 		default:

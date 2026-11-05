@@ -12,7 +12,7 @@
   "err_from_env": "ここでは変更できません。デプロイ時の環境変数（JARVIS_ADMIN_ACCESS / JARVIS_PUBLIC_URL）で決まる項目です",
   "err_would_lock_you_out": "この変更を行うとアクセスできなくなります",
   "err_invalid_cidr": "アドレス範囲の形式が正しくありません（例：192.0.2.0/24）",
-  "err_invalid_id": "IDには小文字、数字、- _ .が使え、英字か数字で始めてください",
+  "err_invalid_id": "IDに使えるのは英小文字、数字、- _ . です。先頭は英字か数字にしてください",
   "err_invalid_ssh_host": "SSHホストのエイリアスが正しくありません",
   "err_invalid_name": "名前は40文字以内で、改行は使えません",
   "err_invalid_proxy": "プロキシはsocks5://ホスト:ポートの形式で入力してください",

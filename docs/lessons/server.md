@@ -552,3 +552,11 @@ Windows 上 `git archive` 会按 `core.autocrlf` 导出 CRLF，传到 Linux 的�
 同一个包经代理稳定 1.6 秒。改成：市场读 GitHub 走 `github.proxy`；下载 30 秒没有新数据就停（`download_stalled`），不再等 5 分钟；
 下过的包按 sha256 缓存（重试、重装不再下载）；合集的成员并行预览。还有两个坑：HTTP/2 下卡住的那条连接取消了请求也不断，留在连接池里，下一次下载（重试）复用它照样卡，所以卡住后要 `CloseIdleConnections`；别图省事改成只用 HTTP/1.1，Go 的 HTTP/1.1 经这台机器的 SG 代理连 GitHub 直接 EOF（curl 的 HTTP/1.1 却正常），实测过。查这类问题先看 hub 日志里每个请求的耗时，再在测试 hub 上按步骤计时（`extension_operation` 里每步的 `started_at` / `ended_at`）。
 
+
+## 和密钥绑定的检查要放进注册表的操作里，并且失败时宁可删（2026-11-06，#3500）
+
+语音扩展的 Key 要跟着服务地址（换了主机就删）。第一版写在 `PUT …/-/config` 的处理器里：先 `SecretsSet` 看有没有 Key，有才删，再 `SetConfig`。评审指出三个洞：
+`Registry.SecretsSet` 读库出错时吞掉错误、回空 map，于是一次读失败就跳过删除，新地址带着旧 Key 存下（正是绑定要防的）；检查、删除、存配置是三次独立的注册表操作，
+和并发的「设 Key」交错时 Key 会配上它没设给的地址；而且只有这个接口管，别处调 `SetConfig`（助手改设置）绕得过去。改成注册表的钩子（`BoundSecrets` / `SecretNeeds`），
+在 `SetConfig` / `SetSecret` 同一把操作锁里判断和删除；地址变了就无条件删（删是幂等的），`SecretsSet` 只用来决定回应里说不说。
+以后凡是「为了安全要删 / 拒绝」的判断，别用吞错误的只读接口做依据，也别拆成处理器里的先查后写。

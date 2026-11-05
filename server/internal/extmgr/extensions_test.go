@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db/dbtest"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
+	"github.com/nwverse/persona/server/internal/voice"
 )
 
 // TestMain doubles as a plugin: re-run with JARVIS_TEST_PLUGIN=1 the test binary serves on JARVIS_PLUGIN_SOCKET.
@@ -26,6 +29,14 @@ import (
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == sandbox.RunCommand { // a sandbox's first process (extension_sandbox_test.go)
 		os.Exit(sandbox.Run(os.Args[2:], os.Stderr))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "voice" { // the built-in voice extension run by the hub (voice_extension_test.go)
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := voice.Run(ctx); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "boxed" {
 		serveBoxedExtensionForTest()

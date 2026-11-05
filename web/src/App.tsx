@@ -366,9 +366,10 @@ function Shell() {
         onClick={close}
       />
       <main ref={mainBox} inert={a11y.modal || undefined} className="relative min-w-0 flex-1">
-        {/* dropped after loading: which phase, and a click explains with 立即重试 (views/ConnectionPill.tsx) */}
+        {/* dropped after loading: which phase, and a click explains with 立即重试 (views/ConnectionPill.tsx); under the page's
+            header, which a page taller than 56px reports as --page-header (Settings, #3594) */}
         {conn !== "online" && loaded && !offline && (
-          <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-4 pt-2" style={{ animation: `slide-up 220ms ${EASE} both` }}>
+          <div className="pointer-events-none absolute inset-x-0 top-[var(--page-header,3.5rem)] z-10 flex justify-center px-4 pt-2" style={{ animation: `slide-up 220ms ${EASE} both` }}>
             <ConnectionPill />
           </div>
         )}

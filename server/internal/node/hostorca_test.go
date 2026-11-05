@@ -968,3 +968,30 @@ func TestOrcaChildWorktreeNamesItsParent(t *testing.T) {
 		}
 	}
 }
+
+// #3828: a row blocked by a subagent waiting on the user is blocked, though its main agent works on (it waits for the
+// subagent) or has settled: the pane needs the user. A row working only because of its background subagents is not.
+func TestOrcaSubagentWaitingNeedsYou(t *testing.T) {
+	term := orcart.Terminal{Handle: "h", TabID: "t", LeafID: "a", AgentIdentity: "claude"}
+	for _, c := range []struct{ row, main, want string }{
+		{"blocked", "working", proto.StatusBlocked},
+		{"waiting", "done", proto.StatusBlocked},
+		{"working", "done", proto.StatusDone},
+		{"blocked", "", proto.StatusBlocked},
+	} {
+		row := orcart.AgentRow{AgentType: "claude", State: c.row}
+		if c.main != "" {
+			row.MainAgent = &struct {
+				State string `json:"state"`
+			}{State: c.main}
+		}
+		v := &orcaView{procsKnown: true, procs: map[string][]orcaProc{"t:a": {{pid: 1, agent: "claude"}}},
+			rows: map[string]orcart.AgentRow{"t:a": row}}
+		if a := v.agent(term); a.AgentStatus != c.want {
+			t.Errorf("row %s, main %s: %s, want %s", c.row, c.main, a.AgentStatus, c.want)
+		}
+		if got := orcaChatStatus(row); got != c.want {
+			t.Errorf("chat: row %s, main %s: %s, want %s", c.row, c.main, got, c.want)
+		}
+	}
+}

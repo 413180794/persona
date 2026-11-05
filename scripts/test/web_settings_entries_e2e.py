@@ -29,6 +29,10 @@ def check(browser, base, width, theme, shots):
         labels = [label.strip() for label in labels]
         assert labels.index("渠道") + 1 == labels.index("连接器"), labels
         expect(main.get_by_text("认识 Persona", exact=True)).to_have_count(0)
+        if width >= 640:
+            # the bar wraps instead of hiding categories past the right edge (#3594)
+            assert nav.evaluate("e => e.scrollWidth <= e.clientWidth"), "settings categories overflow"
+            expect(nav.get_by_role("button").last).to_be_in_viewport()
         if shots:
             page.wait_for_timeout(400)
             main.screenshot(path=os.path.join(shots, f"settings-{width}-{theme}.png"))

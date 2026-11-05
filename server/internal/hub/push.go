@@ -434,19 +434,32 @@ func (p *Pusher) sealFor(d Device, payload map[string]any) (string, error) {
 		stamped[k] = v
 	}
 	stamped["iat"] = p.now().Unix()
-	plain, _ := json.Marshal(stamped)
-	for limit := 1000; len(plain) > maxPlain; limit /= 2 {
-		if limit < 20 {
-			return "", fmt.Errorf("payload of %d bytes does not fit", len(plain))
-		}
-		stamped["aps"] = shortenAlert(stamped["aps"], limit)
-		plain, _ = json.Marshal(stamped)
+	plain, err := fitAlert(stamped, maxPlain)
+	if err != nil {
+		return "", err
 	}
 	sealed, err := pushcrypto.Seal(pub, plain)
 	if err != nil {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+// apnsMaxAlert is APNs' limit for an alert push's body (bytes); a bigger one is refused with 413 PayloadTooLarge.
+const apnsMaxAlert = 4096
+
+// fitAlert is payload as JSON of at most most bytes: its alert texts are shortened (1000 characters, then half that…)
+// until it fits; the full text is in the app. payload's "aps" is replaced in place by a shortened copy.
+func fitAlert(payload map[string]any, most int) ([]byte, error) {
+	b, _ := json.Marshal(payload)
+	for limit := 1000; len(b) > most; limit /= 2 {
+		if limit < 20 {
+			return nil, fmt.Errorf("payload of %d bytes does not fit", len(b))
+		}
+		payload["aps"] = shortenAlert(payload["aps"], limit)
+		b, _ = json.Marshal(payload)
+	}
+	return b, nil
 }
 
 // shortenAlert returns a copy of aps whose alert texts have at most n characters (the original is shared by all devices).
@@ -638,6 +651,13 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 				b.payload["hub_id"] = p.hubID()
 			}
 			b.body, _ = json.Marshal(b.payload)
+			if p.direct != nil && len(b.body) > apnsMaxAlert {
+				// A long card summary or answer would be refused whole (413): sent shortened, as the relay's are (#3809).
+				fitted := maps.Clone(b.payload)
+				if body, err := fitAlert(fitted, apnsMaxAlert); err == nil {
+					b.body = body
+				}
+			}
 			byLang[lang] = b
 		}
 		payload, body := b.payload, b.body

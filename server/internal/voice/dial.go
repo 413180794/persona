@@ -150,3 +150,6 @@ func (t *tailBuffer) String() string {
 }
 
 var errNoProvider = errors.New("no such provider")
+
+// errNoUpstream: no upstream is set up yet (Config.Setup says what is missing).
+var errNoUpstream = errors.New("no realtime voice service is set up")

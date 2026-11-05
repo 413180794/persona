@@ -389,7 +389,8 @@ var orcaStatus = map[string]string{
 // when the processes could not be listed do the row and the identity decide (for listing; writes are refused then).
 //
 // Its state is the row's main agent's own (a claude whose turn ended while its background subagents run is done, as
-// herdr would say), when the row is of that agent and not older than its process; else terminal.agentStatus's.
+// herdr would say), except that a row blocked by a subagent waiting on the user is blocked (AgentRow.PaneState), when
+// the row is of that agent and not older than its process; else terminal.agentStatus's.
 func (v *orcaView) agent(t orcart.Terminal) host.Agent {
 	key := t.PaneKey()
 	a := host.Agent{
@@ -411,7 +412,7 @@ func (v *orcaView) agent(t orcart.Terminal) host.Agent {
 	a.AgentStatus = proto.StatusUnknown
 	current := hasRow && orcaAgents[row.AgentType] == a.Agent &&
 		(started.IsZero() || row.UpdatedAt == 0 || time.UnixMilli(row.UpdatedAt).After(started.Add(-orcaRowSlack)))
-	if s := orcaStatus[row.OwnState()]; current && s != "" {
+	if s := orcaStatus[row.PaneState()]; current && s != "" {
 		a.AgentStatus = s
 	} else if s := v.fallback[key]; s != "" {
 		a.AgentStatus = s

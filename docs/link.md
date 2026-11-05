@@ -41,7 +41,7 @@ curl -fsSL <站点>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 
 - 发布：`scripts/publish.sh` 在 personad 旁边多编四个 `jarvis-link-<os>-<arch>.gz`，进同一份 `SHA256SUMS`。
 
 **Mac**：装菜单栏 App「Persona Link」（`./scripts/app/mac-link.sh install`，给别人看的一步步指南在 [persona-link-install.md](persona-link-install.md)）。App 里带着 personad（`Contents/Helpers/jarvisd`），**第一次运行**就用
-`jarvis-link node install --jarvisd <App 里的>` 装好常驻 node 的 LaunchAgent `com.jarvis.node`：没有 `~/.persona/bin/personad` 时先复制过去，
+`jarvis-link node install --jarvisd <App 里的>` 装好常驻 node 的 LaunchAgent `com.jarvis.node`：没有 `~/.persona/bin/jarvisd` 时先复制过去（node 服务跑的文件叫 `jarvisd`，`personad` 是安装脚本在旁边建的别名，Mac App 不建），
 已经装了的（比如以前跑过 `scripts/deploy/node-launchd.sh install`）保持原样。之后只在菜单里提供「安装本机 node 服务」，用户删掉的不会自己装回来。
 App 更新不替换已安装的常驻 node。支持更新协议的 node 可以由 hub 经现有连接远程更新，含备份、回滚和上线确认；旧 node 首次本机升级、进度和安装边界见 [node-update.md](node-update.md)（#1158）。
 
@@ -341,7 +341,8 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 **helper**
 - App 用 `jarvis-link run --parent` 启动它。
 - 标准输出一行一个 JSON 状态，App 读最新一行。
-- 标准错误追加到 `~/.persona/link.log`，超过 1 MB 就清掉重来。
+- 标准错误追加到 `~/.persona/link.log`，超过 1 MB 就在下次启动 helper 时清掉重来。
+- 数据目录和常驻 node 用同一个：App 自己的环境里没有 `PERSONA_HOME` / `JARVIS_HOME` 时，读 `~/Library/LaunchAgents/com.jarvis.node.plist` 里写的那个交给 helper；都没有就按 `~/.persona`（用过旧版的机器上是 `~/.jarvis`）（`LinkStatePaths.swift`）。
 - `--parent` 让 helper 在标准输入关掉时退出，所以 App 不管怎么退出（包括崩溃），helper 都跟着退出。
 - helper 退出了，App 会重启它：1 秒起翻倍，最长 30 秒；跑满 1 分钟后从 1 秒重新算。
 
@@ -409,7 +410,7 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
   `amd64`、`arm64`、32 位树莓派（`GOARCH=arm GOARM=7`）都能编；Windows 也能编（文件锁、信号按平台分文件），还没有托盘程序（#299）。
 - `personad` 也能为 Windows 编译（`GOOS=windows go build ./...`；进程组、信号、文件锁、CPU 时间按平台分文件，在 `internal/osproc` 和各包的 `_windows.go` 里），
   Windows 上的常驻 node 配 Orca 引擎能用；`jarvis-link install` 在 Windows 上装的是登录时启动的计划任务（下面「装 node 服务」的 Windows 一段），见 [windows.md](windows.md)。
-- 常驻 node 用同一个提交编的 `jarvisd`（`~/.persona/bin/personad`）；`scripts/deploy/node-launchd.sh install` 在 Linux 上把它装成 systemd 用户服务 `jarvisd-node`。
+- 常驻 node 用同一个提交编的 `jarvisd`（`~/.persona/bin/jarvisd`，安装脚本另建别名 `personad`）；`scripts/deploy/node-launchd.sh install` 在 Linux 上把它装成 systemd 用户服务 `jarvisd-node`。
 
 **一条命令装好**
 
@@ -424,7 +425,7 @@ personad hub pair --machine nas --add             # 在 hub 机器上；没有�
 1. 带 `--pair` 时先配对（同 `jarvis-link pair`；`--pair` 后面不跟链接或跟 `-` 时从标准输入读）。带 `--listen` 时改成被动模式，还没配对过就生成配对链接
    （同 `pair --listen`）；已经配对过就保持原样。两个不能一起给。
 2. 把自己复制到 `~/.persona/bin/jarvis-link`；已经是它就不复制。拿新版本再跑一次 `install` 就是升级。
-3. 常驻 node 的服务（systemd 用户服务 `jarvisd-node`，内容同 `scripts/deploy/node-launchd.sh`）还没有就装上并启动：要有 `~/.persona/bin/personad`（安装脚本会先放好），
+3. 常驻 node 的服务（systemd 用户服务 `jarvisd-node`，内容同 `scripts/deploy/node-launchd.sh`）还没有就装上并启动：要有 `~/.persona/bin/jarvisd`（安装脚本会先放好），
    没有时用 `--jarvisd <路径>` 给一个复制过去；已经装了的保持原样；`--no-node` 不管它。
 4. 写 `~/.config/systemd/user/jarvis-link.service`（有 `XDG_CONFIG_HOME` 时在它下面），`daemon-reload`、`enable`、`restart`。
 5. 没开 linger 时提示 `sudo loginctl enable-linger <用户>`：不开的话没人登录时用户实例不在，退出登录服务就停，开机也不会起来。
@@ -438,8 +439,13 @@ personad hub pair --machine nas --add             # 在 hub 机器上；没有�
 写出的 unit：
 
 ```ini
+[Unit]
+Description=Persona link: keeps this computer reachable from the Persona hub
+
 [Service]
-ExecStart="/home/<用户>/.jarvis/bin/jarvis-link" run --log "/home/<用户>/.jarvis/link.log"
+ExecStart="/home/<用户>/.persona/bin/jarvis-link" run --log "/home/<用户>/.persona/link.log"
+Environment="PERSONA_HOME=/home/<用户>/.persona"
+Environment="JARVIS_HOME=/home/<用户>/.persona"
 Restart=always
 RestartSec=5
 StandardOutput=null
@@ -448,12 +454,13 @@ StandardOutput=null
 WantedBy=default.target
 ```
 
+- 路径是这台的数据目录（新装是 `~/.persona`，用过旧版的机器上是 `~/.jarvis`，设了 `PERSONA_HOME` 就是它，见 [rename.md](rename.md)）；两行 `Environment` 把同一个目录交给服务，免得服务里算出另一个。
 - 不等 `network-online.target`：用户实例里没有这个 target，jarvis-link 自己会一直重试。
 - 状态行是给菜单栏 App 的，不进 journal；日志写 `~/.persona/link.log`（`run --log`，满 1 MB 挪到 `link.log.1` 重新开始，这是配置值）。
   journal 不持久的机器上普通用户 `journalctl --user` 看不到用户服务的日志，所以日志不靠它。
 - `su`、`sudo -u`、`docker exec` 进来的会话没有 `XDG_RUNTIME_DIR`，`systemctl --user` 找不到用户实例：install / status / uninstall
   在它没设时自己补上 `/run/user/<uid>`（存在才补）。用户实例本身不在（没开 linger、也没人登录）时补了也没用，提示开 linger 或者 ssh 登录这个用户再装。
-- 用 root 装会提示：服务以 root 跑、用 `/root/.jarvis`，常驻 node 也要在 root 下。
+- 用 root 装会提示：服务以 root 跑、用 root 的数据目录，常驻 node 也要在 root 下（提示文字里写死的是 `/root/.jarvis`，实际用的是按上面规则算出的 root 的数据目录）。
 
 **没有 systemd**（容器、部分 NAS）
 
@@ -464,22 +471,26 @@ WantedBy=default.target
 - 容器：让 `jarvis-link run --log …` 当主进程、重启策略 `unless-stopped`、`~/.persona` 挂成卷，常驻 node 在同一个容器里；
 - supervisord、runit、s6、OpenRC：前台跑 `jarvis-link run --log …`，退出就重启。
 
-常驻 node 同理：`nohup ~/.persona/bin/personad node --attach >> ~/.persona/node-attach.log 2>&1 &`。
+常驻 node 同理：`nohup ~/.persona/bin/jarvisd node --attach >> ~/.persona/node-attach.log 2>&1 &`。
 
 **状态、日志、卸载**
 
 | 命令 | 做什么 |
 | --- | --- |
 | `jarvis-link status` | 模式、链路（哪条地址、连了多久；没连上时每个候选为什么失败）、hub 的名字和互联组台数、本机 node、机器 id、候选地址、systemd 服务（active / enabled / linger）、pid 和版本、日志在哪。被动模式换成：监听地址、在监听还是 hub 连着、配对的 hub 和什么时候配的、上一次 hub 什么时候从哪连进来、连接器指纹、hub 可以用的本机地址。连着（被动模式：在监听也算）时退出码 0，否则 1 |
-| `jarvis-link status --json` | 同上给脚本用：`running`、`mode`、`paired`、`machine`、`hub_id`、`hub_name`、`endpoints`、`trust`（`pin` / `system`）、`link`（最后报的状态）、`passive`（`listen`、`paired`、`hub_id`、`hub_name`、`machine`、`paired_at`、`code_expires`、`fp`）、`service`、`config`、`log`；不含凭据和它的 hash |
-| `jarvis-link logs [-f] [-n 行数]` | `~/.persona/link.log` 的最后 100 行（`-n` 改），`-f` 一直跟着，日志换文件也跟得上；没有日志文件、装了服务时看 journal |
-| `jarvis-link uninstall` | 停掉、禁用、删掉 systemd 用户服务，凭据留着 |
-| `jarvis-link uninstall --purge` | 再删凭据、状态、日志和 `~/.persona/bin/jarvis-link`；还有别的 jarvis-link 在跑（菜单栏 App、手动起的）时拒绝。hub 那边的凭据去 App「设置 › 设备」撤销 |
-| `jarvis-link pair` | 不给链接或给 `-` 时从标准输入读；在终端里提示粘贴，回车就读那一行 |
-| `jarvis-link pair --listen [<监听地址>] [--addr <地址>]…` | 被动模式的配对链接（标准输出只有链接，方便管道） |
-| `jarvis-link mode [active\|passive] [--listen <地址>]` | 看 / 换模式，两种模式的配对都留着 |
-| `jarvis-link node install [--jarvisd <路径>]` / `node status [--json]` / `node uninstall` | 常驻 node 的服务（Linux systemd `jarvisd-node`，Mac launchd `com.jarvis.node`）；已经有的不动；`uninstall` 不删 personad。Windows 上 node 在 jarvis-link 的计划任务里，只有 `node status` |
-| `jarvis-link discover [--wait <秒>] [--json]` | 局域网里听到的 hub（mDNS），只看不配对；听到了退出码 0 |
+| `jarvis-link status --json` | 同上给脚本用：`running`、`mode`、`paired`、`machine`、`hub_id`、`hub_name`、`endpoints`、`trust`（`pin` / `system`）、`link`（最后报的状态）、`passive`（`listen`、`paired`、`hub_id`、`hub_name`、`machine`、`paired_at`、`code_expires`、`fp`）、`service`、`config`、`log`，link.json 读不了时有 `error`；不含凭据和它的 hash |
+| `jarvis-link logs [-f] [-n 行数]` | `~/.persona/link.log` 的最后 100 行（`-n` / `--lines` 改），`-f` / `--follow` 一直跟着，日志换文件也跟得上；没有日志文件、装了服务时看 journal。`log` 是同一个命令 |
+| `jarvis-link uninstall` | 停掉、禁用、删掉 systemd 用户服务（Windows：计划任务），凭据留着。Linux、Mac 上常驻 node 的服务留着（`node uninstall` 删）；Windows 上 node 在同一个计划任务里，跟着一起停，`jarvisd.exe` 留着 |
+| `jarvis-link uninstall --purge` | 再删凭据（link.json 和它的 `.lock` / `.run`）、状态、日志（连 `link.log.1`）、被动模式的 TLS 身份 `link-tls/`、`~/.persona/bin/jarvis-link`，以及安装脚本建的 `persona-link` 别名（只删确实是别名的那个）；还有别的 jarvis-link 在跑（菜单栏 App、手动起的）时拒绝。hub 那边的凭据去 App「设置 › 设备」撤销 |
+| `jarvis-link pair [--machine <id>] [<链接>\|-]` | 主动模式配对，凭据写进 `~/.persona/link.json`。不给链接或给 `-` 时从标准输入读；在终端里提示粘贴，回车就读那一行。链接里没带机器 id（App 用的普通配对码）时用 `--machine` 指定 |
+| `jarvis-link pair --listen [<监听地址>] [--addr <地址>]…` | 被动模式的配对链接（标准输出只有链接，方便管道）；监听地址默认 `:18663`；不能和配对链接、`--machine` 一起给 |
+| `jarvis-link mode [active\|passive] [--listen <地址>]` | 什么都不带时只显示现在的模式（被动模式带监听地址）；带了就换，两种模式的配对都留着；只给 `--listen` 时不换模式、只改被动模式的监听地址 |
+| `jarvis-link node install [--jarvisd <路径>]` / `node status [--json]` / `node uninstall` | 常驻 node 的服务（Linux systemd `jarvisd-node`，Mac launchd `com.jarvis.node`）；已经有的不动；`uninstall` 不删 `~/.persona/bin/jarvisd`。Windows 上 node 在 jarvis-link 的计划任务里，只有 `node status` |
+| `jarvis-link discover [--wait <秒>] [--json]` | 局域网里听到的 hub（mDNS），只看不配对；默认听 3 秒，`--wait` 可以是小数、最多 60；听到了退出码 0，否则 1 |
+| `jarvis-link run [--parent] [--log <文件>]` | 在前台保持链路，状态一行一个 JSON 打到标准输出（见「状态行」）；`--parent` 标准输入关掉就退出（菜单栏 App 这样起它）；`--log` 日志写进这个文件（满 1 MB 挪到 `<文件>.1`），不写标准错误。systemd 服务和「没有 systemd」的做法跑的都是它 |
+| `jarvis-link address add <地址>` / `address remove <地址>` | 手动加 / 去掉一个 hub 的候选地址（`https://域名:端口`，或只写域名），写进 link.json；要先配对过才能加。`remove` 去掉写的那一条，不管是手动加的还是 hub 下发的（hub 下发的下次连上可能又发回来） |
+| `jarvis-link version` | 打印版本（`--version`、`-v` 一样） |
+| `jarvis-link help` | 打印用法（`--help`、`-h` 一样）；不认识的命令或参数也打印用法，退出码 2 |
 
 `status` 的依据：
 - 在不在跑：`~/.persona/link.json.run` 的文件锁有没有人拿着（谁起的都算：systemd、菜单栏 App、手动）。它要拿一下锁才知道，

@@ -36,13 +36,13 @@ export function ActivityChips({ session, onStopLoop }: { session: Session; onSto
         {loop && (
           <span className="flex h-5.5 items-center gap-1 rounded-full bg-accent-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-accent-ink">
             <Icon name="loop" size={12} stroke={2.2} />
-            <span className="hidden sm:inline">{loopShortLabel(loop, now)}</span>
+            <span className="hidden @min-[640px]:inline">{loopShortLabel(loop, now)}</span>
           </span>
         )}
         {hasBg && (
-          <span className={cx("flex h-5.5 items-center gap-1 rounded-full bg-orange-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-orange", loop && "max-sm:hidden")}>
+          <span className={cx("flex h-5.5 items-center gap-1 rounded-full bg-orange-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-orange", loop && "@max-[640px]:hidden")}>
             <Icon name={runs.some((w) => w.running) ? "layers" : "gear"} size={12} stroke={2.2} />
-            <span className="hidden sm:inline">{t("chat-activity.background_chip")}</span> {count > 0 && count}
+            <span className="hidden @min-[640px]:inline">{t("chat-activity.background_chip")}</span> {count > 0 && count}
           </span>
         )}
       </button>
@@ -188,8 +188,8 @@ export function GoalChip({ goal }: { goal: GoalInfo }) {
         className="touch-hit flex h-7 min-w-0 shrink items-center rounded-[8px] px-1 transition-colors hover:bg-hover">
         <span className={cx("flex h-5.5 min-w-0 items-center gap-1 rounded-full px-2 text-[11.5px] font-medium whitespace-nowrap", tone)}>
           <Icon name="target" size={12} stroke={2.2} className="shrink-0" />
-          <span className="hidden max-w-[220px] truncate lg:inline">{headline}</span>
-          <span className="shrink-0 max-sm:hidden lg:before:content-['·_']">{status}</span>
+          <span className="hidden max-w-[220px] truncate @min-[800px]:inline">{headline}</span>
+          <span className="shrink-0 @max-[640px]:hidden @min-[800px]:before:content-['·_']">{status}</span>
         </span>
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} title={t("agent-goal.title")} width={520}>

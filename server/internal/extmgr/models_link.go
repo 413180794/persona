@@ -32,7 +32,7 @@ func (h *Manager) modelsAppCall(ctx context.Context, p assistantwire.AppCall) (j
 		list := []assistantwire.VoicePlugin{}
 		if h.extensions != nil {
 			for _, x := range h.extensions.list() {
-				if x.Kind != "voice" {
+				if x.Kind != "voice" || !x.Enabled { // a switched-off one has no models to pick (the built-in is off until set up)
 					continue
 				}
 				models, err := h.extensionModelChoices(ctx, "plugin."+x.ID)

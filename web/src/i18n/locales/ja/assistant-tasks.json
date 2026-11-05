@@ -46,7 +46,7 @@
   "interrupted_title": "{title}が中断しました",
   "look": "表示",
   "receipt_restarting": "「{title}」を再起動中",
-  "receipt_restarted": "「{title}」は再試行で開始しました",
+  "receipt_restarted": "「{title}」を再試行して開始しました",
   "outcome_failed": "{title}を開始できませんでした",
   "outcome_done": "{title}が完了",
   "reminder_added": "リマインダーを追加しました",

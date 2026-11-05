@@ -95,7 +95,7 @@ git pull && ./scripts/app/mac-link.sh install
 1. 不想要常驻 node 了，先停掉、删掉它的服务（要在删 App 之前跑）：`"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node uninstall`。
 2. 菜单 › 退出 Persona Link；系统设置 › 通用 › 登录项 里有它的话去掉。
 3. 删 App：`rm -rf "/Applications/Jarvis Link.app"`。
-4. 配对凭据在 `~/.persona/link.json`，日志在 `~/.persona/link.log`，personad 在 `~/.persona/bin/`，不要了就删。hub 那边在管理界面 › 电脑 里把这台删掉。
+4. 配对凭据在 `~/.persona/link.json`，状态在 `~/.persona/link.status.json`，被动模式的 TLS 身份在 `~/.persona/link-tls/`，日志在 `~/.persona/link.log`，常驻 node 的程序在 `~/.persona/bin/jarvisd`（这台也跑过安装脚本的话，`~/.persona/bin/` 里还有 `jarvis-link` 和别名 `personad`、`persona-link`），不要了就删。hub 那边在管理界面 › 电脑 里把这台删掉。
 
 ## 常见问题
 
@@ -114,4 +114,4 @@ launchd 有没有加载它；日志在 `~/.persona/node-attach.log`。没装就�
 
 **菜单栏面板是直角、带一圈细边框的老样子**：App 是用旧脚本编的。拉最新代码重新 `install`（原因见 [lessons/macos.md](lessons/macos.md)「Persona Link 的面板是老样子」）。
 
-**看日志**：`tail -f ~/.persona/link.log`。用过旧版（Jarvis）的机器上，这些文件可能还在 `~/.jarvis/` 下（[config.md](config.md)「命名与兼容」）。
+**看日志**：`tail -f ~/.persona/link.log`，或者 `"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" logs -f`。用过旧版（Jarvis）的机器上，这些文件可能还在 `~/.jarvis/` 下（[config.md](config.md)「命名与兼容」）。

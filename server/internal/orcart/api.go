@@ -166,6 +166,16 @@ func (a AgentRow) OwnState() string {
 	return a.State
 }
 
+// PaneState is the state the pane's row is listed with: blocked (or waiting) when the row's state says so, as one of
+// its agents — the main one or a subagent — waits on the user then; else the main agent's own (OwnState), so a settled
+// agent whose background subagents still run reads done, not working.
+func (a AgentRow) PaneState() string {
+	if a.State == "blocked" || a.State == "waiting" {
+		return a.State
+	}
+	return a.OwnState()
+}
+
 // Worktrees is worktree.ps. after is the snapshot id of the last answer ("" for none): when nothing changed since,
 // Orca says so (unchanged true, no worktrees) instead of sending them all again. snapshot is the id to pass next time
 // ("" from hosts without snapshots).

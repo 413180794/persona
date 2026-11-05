@@ -1,0 +1,11 @@
+{
+  "disabled_in_hub_json": "hub.json 里停用了实时语音：去掉那一项的 disabled 再打开",
+  "key_cleared": "地址换了，Key 已清除，请重新填写",
+  "key_needs_url": "先填服务地址，再设置 Key：Key 只发给这个地址",
+  "setup_key": "实时语音服务的 Key",
+  "setup_url": "实时语音服务的地址",
+  "setup_url_and_key": "实时语音服务的地址和 Key",
+  "warn_default_unknown": "hub.json 的 default 不是哪个上游的模型，改用第一个上游的默认模型",
+  "warn_form_id_taken": "hub.json 里已经有 id 为 custom 的上游，设置里填的服务没有用上",
+  "warn_form_no_key": "设置里填的服务还没有 Key，没有用上"
+}

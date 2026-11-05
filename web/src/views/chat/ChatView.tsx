@@ -1248,7 +1248,7 @@ export function Header({
   const items: MenuItem[] = panelItems.length > 0 && own.length > 0 ? [...panelItems, { ...own[0], divider: true }, ...own.slice(1)] : [...panelItems, ...own];
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-page/85 px-3 backdrop-blur-md sm:px-4">
+    <header className="@container flex h-14 shrink-0 items-center gap-2 border-b border-line bg-page/85 px-3 backdrop-blur-md sm:px-4">
       <div className={headerSlot(Boolean(topCenter), "start")}>
         {onToggleSidebar && <IconButton icon="sidebar" label={t("chat-chatview.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />}
       </div>
@@ -1263,9 +1263,11 @@ export function Header({
             <IconButton icon="chevron" label={t("chat-chatview.switch_agent")} onClick={pick.open} active={Boolean(pick.anchor)} className="-ml-1.5 shrink-0" />
           )}
           {/* a panel is a phone's width: the dot says the state there too */}
-          {session && !assistant && !chrome && state !== "idle" && <span className="hidden sm:contents"><StatePill state={state} /></span>}
-          {/* narrow: the context bar gives way to the title too (#3532); 会话信息 still has the token count */}
-          {session && !assistant && <span className="hidden sm:contents"><ContextMeter session={session} /></span>}
+          {session && !assistant && !chrome && state !== "idle" && <span className="hidden @min-[800px]:contents"><StatePill state={state} /></span>}
+          {/* narrow: the context bar gives way to the title too (#3532); 会话信息 still has the token count. The header's own
+              width decides (a container), so a side panel beside the chat narrows it as a phone does; the pill and the
+              bar go below 800px, the chips' words below 640px, so the title keeps room in between (#3670) */}
+          {session && !assistant && <span className="hidden @min-[800px]:contents"><ContextMeter session={session} /></span>}
         </div>
         {sub && !todoLine && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
         {/* the todo it works for, up top (#1836): opens the todo, 换个待办… picks another */}

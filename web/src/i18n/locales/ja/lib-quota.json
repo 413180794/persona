@@ -9,8 +9,8 @@
   "reset_done": "リセット済み",
   "resets_at": "{time}にリセット",
   "footer_key": "ゲートウェイ上のキー名：{key}",
-  "footer_machine": "{machine}が読み取り（キーはそのコンピューターから出ません）",
-  "footer_when": "{when}に読み取り。1分以内に開き直すとこの結果を使います",
+  "footer_machine": "{machine}で取得（キーはそのコンピューターの外には送信されません）",
+  "footer_when": "{when}に取得。1分以内に開き直すと、この結果を表示します",
   "footer_separator": "。",
   "footer_end": "。"
 }

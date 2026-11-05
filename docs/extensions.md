@@ -508,31 +508,41 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
 
 ### 命令行
 
+只在 hub 机器上用：读状态目录（默认 `~/.persona`，见「命名和兼容」）里 hub.json 的主 token 和 `listen` 端口（没写就是 18660，环境变量 `PERSONA_LISTEN` 覆盖，旧名 `JARVIS_LISTEN` 也认），经 `127.0.0.1` 调「hub 的接口」。
+这台机器上没有 hub.json 就报错，不往别处连。`personad ext …`、`personad plugin …`（#1844 以前的名字）是同一个命令。`help` 把用法打到标准输出；不带子命令时用法当错误打到标准错误，退出码 1；`contributions` / `contribution` 只在打错子命令时一起列出来。
+下面 `new`、`test`、`pack` 不需要 hub，其余都要 hub 在跑。
+
 ```text
-personad extension list
-personad extension show <id>
-personad extension install <source> [--yes]          先打印它能做什么，确认后才装
-personad extension upgrade <id> <source> [--yes]
-personad extension rollback <id>
+personad extension list                              每行：id、版本、来源、状态、名字；出错的带错误，需要设置的带「还缺：…」
+personad extension show <id>                         详情的 JSON：权限、设置、密钥设没设
+personad extension install <source> [--yes]          先打印它能做什么、要用的依赖、一起装的、找不到的，问「继续吗？[y/N]」，
+                                                     回 y / yes 才装；--yes 不问。装完打印「<id> <版本>：<状态>」，缺设置时打印还缺什么
+personad extension upgrade <id> <source> [--yes]     同 install，只是升级已装的 <id>
+personad extension rollback <id>                     回到上一次升级前的版本
 personad extension enable <id> | disable <id> [--cascade]   --cascade：依赖它的扩展一起停用
-personad extension sandbox <id> on|off|default  在沙箱里跑不跑（default：受信任市场的不开，别的开），见「沙箱」
-personad extension contributions <id>                 每个贡献和它的开关
+personad extension sandbox <id> on|off|default       在沙箱里跑不跑（default：受信任市场的不开，别的开），见「沙箱」
+personad extension contributions <id>                每个贡献和它的开关
 personad extension contribution <id> <point>/<cid> on|off   单独开关一个贡献（连接器的就是连接器的开关）
 personad extension config <id> key=value …           值能解析成 JSON 就按 JSON，否则当文字；key= 删掉这一项
-personad extension secret <id> <name> [--delete]     值从标准输入读（终端里不回显），不进命令行参数
+personad extension secret <id> <name> [--delete]     值从标准输入读（终端里不回显，管道读第一行），不进命令行参数
 personad extension uninstall <id> [--keep-data] [--cascade] [--members]   --members：合集的成员一起卸
-personad extension market list | add <spec> [--token] | remove <id> | refresh <id>
-personad extension market trust <id>                  市场换了签名的 key（或不再签名）：和发布方确认过再接受，见「扩展市场」「签名」
-personad extension search [关键词]
+personad extension market list                       登记的市场：id、名字、扩展数、签名、地址（官方的标「官方」）
+personad extension market add <spec> [--token | --token-from=<市场 id>]
+                                                     --token：token 从标准输入读；--token-from：用已登记的那个市场的 token（不显示）
+personad extension market set-spec <id> <spec>       市场搬了地址（仓库改名）：id 不变，从它装的还算它的，见「命名和兼容」
+personad extension market remove <id> | refresh <id>
+personad extension market trust <id>                 市场换了签名的 key（或不再签名）：和发布方确认过再接受，见「扩展市场」「签名」
+personad extension search [关键词]                   每条打印成 market:<市场 id>/<扩展 id>，带已装 / 可升级
 personad extension install market:<市场 id>/<扩展 id>  从市场装；已装的就是升级
 personad extension auto-upgrade on|off [<id>]        市场扩展自动升级的总开关，带 id 是这一个扩展的开关
 personad extension upgrades                          有新版本的市场扩展：可升级 / 等你确认 / 已跳过
 
-# 写扩展（见「写扩展：SDK、模板和命令行」）
-personad extension new <id> [--template go|ts] [--name <名字>] [--dir <目录>]
-personad extension dev [<目录>]                      挂到这台 hub 上试，改了自动重建、重启
-personad extension test [<目录>]                     构建后用 hub 的检查跑一遍
-personad extension pack [<目录>] [--platforms …] [--out dist] [--split]
+# 写扩展（见「写扩展：SDK、模板和命令行」）；不写 <目录> 就是当前目录
+personad extension new <id> [--template go|ts] [--name <名字>] [--dir <目录>]   默认 go 模板，名字和目录都默认是 id
+personad extension dev [<目录>]                      挂到这台 hub 上试，改了自动重建、重启；要 hub 在跑
+personad extension test [<目录>]                     给这台机器构建，用 hub 的检查跑一遍
+personad extension pack [<目录>] [--platforms linux-amd64,…] [--out <目录>] [--split]
+                                                     --platforms 默认是清单里有程序的平台（清单没写就是这台机器的），--out 默认是 <目录>/dist
 ```
 
 ## 扩展市场
@@ -1922,7 +1932,7 @@ View 发给老 App 时，带 `push` 的动作换成 SDK 自己的 id（`ext.push
 | --- | --- |
 | `new <id> [--template go\|ts] [--name <名字>] [--dir <目录>]` | 从模板写一个扩展（模板和 SDK 编在 personad 里：`sdk/go` 的 `sdk.Go`、`sdk.Bundle`），SDK 拷一份到 `<目录>/sdk/go` 或 `sdk/ts`，Go 的 `go.mod` 用 `replace` 指向它；目录里已经有东西就不写。不需要 hub |
 | `test [<目录>]` | 给这台机器构建，按装的时候那样查清单和包（程序在不在、配置的 schema、收件箱的分拣规则），再起程序跑 hub 的一致性检查（`extension/conformance`，和 hub 收 View 时同一套）。不需要 hub |
-| `pack [<目录>] [--platforms …] [--out dist] [--split]` | 清单里每个平台都构建（Go：`CGO_ENABLED=0 go build -buildvcs=false -trimpath`；TS：`bun build --compile`），打一个 `<id>-<版本>.tar.gz`（`--split` 每个平台一个），里面只有清单（去掉 `tags`，同一份写成 `persona-extension.json` 和给改名前 hub 的 `persona-plugin.json`）、各平台的程序、`skills/`、`assistant/`、`assets/`、README、LICENSE，没有源码和 SDK；打印 sha256 和可以贴进市场索引的 `packages` |
+| `pack [<目录>] [--platforms …] [--out <目录>] [--split]` | 清单里每个平台都构建（Go：`CGO_ENABLED=0 go build -buildvcs=false -trimpath`；TS：`bun build --compile`），打一个 `<id>-<版本>.tar.gz`（`--split` 每个平台一个），里面只有清单（去掉 `tags`，同一份写成 `persona-extension.json` 和给改名前 hub 的 `persona-plugin.json`）、各平台的程序、`skills/`、`assistant/`、`assets/`、README、LICENSE，没有源码和 SDK；打印 sha256 和可以贴进市场索引的 `packages`。`--platforms` 用逗号分隔，默认是清单里有程序的平台（清单没写就是这台机器的）；包写到 `--out`，默认是扩展目录下的 `dist` |
 | `dev [<目录>]` | 构建后挂到这台机器的 hub 上（下面），每秒看一次文件，改了就重建、让 hub 重启它（清单变了就重新挂）；扩展的 stderr、hub 对它的每次调用（方法、耗时、错误）打到终端；Ctrl-C 拿掉 |
 
 **dev**：只在 hub 机器上、主 token 经回环（和安装一样）。hub 把它当来源 `dev` 的扩展：直接从那个目录跑（不拷贝、不进数据库，hub 重启就没了），开着，
@@ -1988,7 +1998,7 @@ GitHub 连接器在搬进官方扩展仓库 `nwverse/persona-extensions` 的扩�
 
 ## hub.json 里的扩展
 
-`~/.persona/hub.json` 里手写的扩展（语音扩展就是这样配的），注册表替每一项合成一份清单：只说 HTTP、`on_startup`、接受了 `hub_api`、贡献它的 `kind`。行为和底座之前一样，
+`~/.persona/hub.json` 里手写的扩展（node 写的语音扩展就是这样配的；`personad voice` 的条目由内置语音扩展接管，见「内置语音扩展」），注册表替每一项合成一份清单：只说 HTTP、`on_startup`、接受了 `hub_api`、贡献它的 `kind`。行为和底座之前一样，
 只是退避上限从 60 秒变成了 5 分钟。
 
 ```json
@@ -2012,8 +2022,8 @@ GitHub 连接器在搬进官方扩展仓库 `nwverse/persona-extensions` 的扩�
 - `command` / `args` / `dir`：`~/` 是 hub 机器的家目录（`command` 和 `dir` 会展开，`args` 原样传，扩展自己展开）。
   personad 的 systemd unit 的 PATH 很短，`command` 写绝对路径。
 - `disabled: true` 停用但保留配置。
-- `config`：扩展自己的设置（任意 JSON），原样放进环境变量 `PERSONA_EXTENSION_CONFIG` 交给扩展。内置语音扩展的上游就写在这里；它不进注册表的配置和表单（对象数组超出了表单的子集），
-  也不经接口返回（里面可能有凭据）。
+- `config`：扩展自己的设置（任意 JSON），原样放进环境变量 `PERSONA_EXTENSION_CONFIG` 交给扩展。它不进注册表的配置和表单，也不经接口返回（里面可能有凭据）。
+  被内置语音扩展接管的条目例外：它的 `config`（上游）改放进 `PERSONA_VOICE_HUB_CONFIG`，`PERSONA_EXTENSION_CONFIG` 是设置页表单的值（见「内置语音扩展」）。
 - 内置扩展仍可用兼容配置值 `"command": "jarvisd"`（不带路径）指向 hub 自己这个二进制，换了安装位置、升级以后也不用改。`personad` 同样可以。
 - 只写 `socket`、不写 `command`：扩展跑在别处，hub 只连这个 socket（健康检查、转发），不启动、不重启它。
   用于 hub 机器访问不到扩展依赖的服务时：扩展跑在能访问的机器上，用 `ssh -R <hub 上的 socket>:<本机 socket> <hub 机器>` 把 socket 转过来；
@@ -2067,7 +2077,7 @@ App → 扩展：
 | `{"type":"clear"}` | 丢掉还没播的声音（用户插话打断了，或者回答被取消） |
 | `{"type":"transcript","id":"…","role":"user"\|"assistant","text":"…","final":false}` | 字幕：同一个 `id` 每次给**到目前为止的全文**，App 直接替换；`final` 后这条不再变 |
 | `{"type":"tool","id":"…","label":"查知识库","done":false}` | 正在用工具（App 显示一行状态）；可以同时开着几个（比如交给主对话的事在后台跑），按 `id` 收，显示最新的那个 |
-| `{"type":"error","message":"…","fatal":true}` | `fatal` 时扩展随后关闭连接 |
+| `{"type":"error","message":"…","fatal":true,"code":"…"}` | `fatal` 时扩展随后关闭连接。`code` 可省；内置语音扩展有 `no_upstream`（致命：还没配上游）、`model_unavailable`（不致命：选的模型所在的上游没了，这次用默认模型），App 按 `code` 显示自己的文案，`message` 当详情 |
 
 关闭 WebSocket 就结束这次对话。
 
@@ -2080,9 +2090,11 @@ App → 扩展：
 ## 内置语音扩展（`personad voice`）
 
 personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协议**的实时服务（代码在 `server/internal/voice`，提示词在
-`server/internal/prompts/voice/`、工具说明在 `prompts/mcp/voice/`）。不用另装 node 和 SDK；可选：hub.json 里没有这个条目就没有它。
+`server/internal/prompts/voice/`、工具说明在 `prompts/mcp/voice/`）。不用另装 node 和 SDK。
 
 语音模式（按一轮跟踪委派、绑定所在的对话、在 App 里配上游并把 Key 加密存在 hub、接管 hub.json 条目）的设计见 `docs/voice.md`；下面 hub.json 的写法照常可用。
+
+它是内置扩展：没有 hub.json 条目也在设置 › 扩展里（默认关着；hub.json 里配了别的语音程序时除外），上游可以在 App 里配，见下面「在 App 里配上游」。
 
 ```json
 {
@@ -2119,6 +2131,57 @@ personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协�
 | `tools` | live 方言：在 `session.start` 里声明 Persona 的函数工具（查知识库、看 Agents、发给 Agent、交给主对话）。公开的 GPT-Live API 不收 `session.tools`，只有自己部署、支持它的服务才开 |
 | `input_rate` | 麦克风采样率 16000 / 24000；默认 live 16000、codex 24000 |
 
+### 在 App 里配上游（#3500）
+
+内置清单（`server/internal/extmgr/voice_extension.go`）带配置表单和密钥，所以 iOS / Mac、Android、网页的「设置 › 扩展 › 实时语音」通用详情页
+就能填地址、设 Key、开关，管理界面也有开关：
+
+| 表单字段 | 说明 |
+| --- | --- |
+| `url` | 服务地址 `wss://<主机>/v1/live`（`^wss?://`）；`ws://` 只用于内网，Key 会明文传输 |
+| `name` | 名字，默认 `GPT-Live`；几个上游时显示在模型名后面 |
+| `dialect` | `live`（默认）/ `codex` |
+| `models`、`default_model` | 同上表；不填时 live 方言读服务的模型列表 |
+| `input_rate` | 16000 / 24000 |
+| `owner`、`notes` | 怎么称呼你、给语音助手的补充说明；填了就盖过 hub.json 的 |
+| 密钥 `key` | API Key，作为 `Authorization: Bearer` 发给服务；用 `secret.key` 加密存在 `plugin_secrets`，只能写，接口只回「已设置」 |
+
+`ssh`、`key_file`、`key_command`、`tools`、更多上游只能写在 hub.json（`key_command` 会在 hub 机器上执行命令，表单的子集也没有对象数组）。
+
+- **合并**（`voice.Merge`）：hub.json 的上游排在前面，表单里有地址**和** Key 的上游追加在后面，id 固定是 `custom`（模型 id `custom/<model>`）。
+  hub.json 里已经有 id 为 `custom` 的上游时以 hub.json 为准，表单的那个不用，扩展页的 `warnings` 和 `GET /info` 的 `warnings` 里说一声；
+  hub.json 的 `default` 指向不存在的上游时也一样（改用第一个上游的默认模型）。表单有 `providers` 时按旧格式整份读（手动跑 `personad voice`）。
+- **没有可用上游也照常起来**：没有 hub.json 上游，表单又缺地址或 Key 时，扩展照常运行，`GET /health` 回 200，`GET /info` 的 `setup` 写缺什么
+  （`url_and_key` / `key` / `url`），`/ws` 回 `error{code: "no_upstream", fatal: true}`。hub 那边扩展的状态是 `needs_setup`，
+  `needs_setup` 里是「实时语音服务的地址和 Key」这样的一句（和 `hubJSONWaitsForTriageModel` 一样：在运行，但要设置）；App 只认 `running` 的语音扩展，所以这时不出语音入口。
+- **Key 只发给设它时的地址**：设置把 `url` 改到另一个 origin（scheme + 主机 + 端口；大小写、默认端口、路径不算）时，
+  hub **先删掉 Key 再存配置**，回应带 `secrets_cleared: ["key"]`，`warnings` 里加一句「地址换了，Key 已清除，请重新填写」；清空地址也算换了。
+  地址为空时 `PUT …/-/secrets/key` 回 400 `needs_url`。这样别人不能把地址改成自己的主机、等 Key 作为 Bearer 发过去。
+  - 做在注册表里（`Registry.BoundSecrets` / `SecretNeeds`，钩子由 `voice_extension.go` 给）：不只是这个接口，谁调 `SetConfig`（助手改设置等）都一样；
+    判断、删 Key、存配置和设 Key 在注册表的同一个操作锁里，两个请求交错也不会让 Key 配上它没设给的地址。
+  - **失败时宁可删**：不管读不读得到「有没有设 Key」都删（删是幂等的），读不到时回应照样带 `secrets_cleared`；删不掉就什么都不存，回 500 `secret_not_cleared`；
+    Key 删了之后配置没存上（数据库写失败，409）时，错误回应也带 `secrets_cleared`，地址还是原来的。配置不合表单（400）时什么都不改，Key 也留着。
+- **模型回退**：App 选的模型所在的上游没了（地址清掉了、hub.json 改了），不再报错断开：改用默认模型、默认音色，连上后发一个不致命的 `error{code: "model_unavailable"}`。
+- **`GET /info`**：`{"protocol": 1, "features": [], "setup"?: "…", "warnings"?: ["…"]}`，不带 Key，也不带上游列表。`protocol` 是这个扩展说的语音帧版本（这一节是 1）。
+- **扩展拿到的环境变量**：`PERSONA_EXTENSION_CONFIG`（表单的值，带默认值）、`PERSONA_EXTENSION_SECRETS`（`{"key": "…"}`，解密后只在进程环境里）、
+  `PERSONA_VOICE_HUB_CONFIG`（被接管条目原来的 `config`）、条目的 `env`，以及 `JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN`（清单里 `hub_api`，和以前一样）；
+  旧名字 `PERSONA_PLUGIN_*` 同样给，扩展也认。
+
+### 接管 hub.json 条目
+
+- hub.json 里**第一个** `kind` 为空或 `voice`、`command` 是 `personad` / `jarvisd`（不带路径）、`args[0]` 是 `voice` 的条目不再按 hub.json 扩展跑，
+  而是注册成同 id 的内置扩展：**id 不变**（模型配置的用途 `plugin.<id>`、选过的模型、App 记的音色都还在），socket 仍是 `~/.persona/extensions/<id>.sock`，
+  `dir`、`env`、`config` 照旧交给它（上面的环境变量）。条目的 `socket` 不用，后面再有同样的条目照旧按 hub.json 扩展跑。
+- **开关**：条目写了 `disabled: true` 就一直关着（数据库里那一行说开也不算，在 App 里打开回 409 并说原因，设置照样能改）；
+  否则以数据库那一行为准，没有行时开着，所以已有条目的 hub 升级后无感。`disabled` 只是 hub.json 压着它（`Registry.KeepOff`），不写进那一行：
+  这期间改设置、设 Key 时那一行的开关保持原样（没有行时写默认的「开」），去掉 `disabled` 重启后照那一行；这期间在 App 里把它关掉才算主人的选择，记下来。
+- **没有条目**：注册 id 为 `voice` 的内置扩展，默认关着（和 `cua` 一样），在设置 › 扩展里打开、填地址和 Key。hub.json 里有别的程序（node 脚本）的语音扩展时不注册，
+  那个照旧按 hub.json 扩展跑；之前装过 id 为 `voice` 的扩展包时也不注册，包留着这个 id（读不了数据库、不知道有没有这样的包时同样不注册）。
+  内置的在时**不让出 id**（不用 `Yields`）：再装 id 为 `voice` 的包会被当成同 id 拒绝，免得别的程序拿到这里设的 Key（`plugin_secrets` 按 id 存，装包不清）。
+  关着的语音扩展不进模型配置的用途列表；渠道列表的「语音」先取开着的语音扩展。
+- **回滚到旧 personad**：旧版本只认 hub.json 条目，忽略内置 voice 的数据库行，条目照旧可用；`plugin_secrets` 里的 Key 和表单留着，再升级时还在。
+- 「被同 id 内置扩展接管」只有语音这一处，通用的做法（以及让 Key 绑定地址的清单字段 `bound_to`）放以后。
+
 ### 两种方言
 
 | | live（公开 GPT-Live） | codex（`gpt-live-1-codex`） |
@@ -2142,7 +2205,9 @@ App 那边这期间显示「Persona 主对话处理中」。开了 `tools` 的�
 ### 部署
 
 `scripts/deploy.sh` 照常部署 personad 就带上了这个扩展；hub.json 里写上上面的条目，`systemctl --user restart jarvisd`（改了 `extensions` 要重启 hub）。
-本地试：`PERSONA_EXTENSION_SOCKET=/tmp/v.sock PERSONA_EXTENSION_CONFIG='{"providers":[…]}' personad voice`，然后对着这个 socket 发 `GET /models`、开 `/ws`。
+本地试：`PERSONA_EXTENSION_SOCKET=/tmp/v.sock PERSONA_EXTENSION_CONFIG='{"providers":[…]}' personad voice`（旧格式），
+或者 `PERSONA_EXTENSION_CONFIG='{"url":"wss://<实时服务>/v1/live"}' PERSONA_EXTENSION_SECRETS='{"key":"<Key>"}'`（表单的格式），然后对着这个 socket 发 `GET /info`、`GET /models`、开 `/ws`。
+在 App 里配的上游不用重启 hub：改了设置和 Key，扩展自己重启（正在进行的通话会断）。
 
 ### 验证（2026-11-03）
 

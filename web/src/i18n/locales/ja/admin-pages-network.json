@@ -27,7 +27,7 @@
   "cidr_invalid": "「{value}」はネットワークの形式ではありません",
   "you_from": "現在{address}からアクセスしています",
   "you_from_tls": "現在{address}（TLS）からアクセスしています",
-  "you_locked_out": "。「{scope}」にすると、あなたはアクセスできなくなります",
+  "you_locked_out": "。「{scope}」にすると、このページにアクセスできなくなります",
   "apply": "適用",
   "lockout_title": "変更するとアクセスできなくなります",
   "lockout_confirm": "変更する",

@@ -39,6 +39,7 @@ func (pl *Plugin) Handler() http.Handler {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeHTTPJSON(w, http.StatusOK, map[string]any{"ok": true, "conversations": pl.active.Load()})
 	})
+	mux.HandleFunc("GET /info", pl.serveInfo)
 	mux.HandleFunc("GET /models", func(w http.ResponseWriter, r *http.Request) {
 		models, def, err := pl.cat.models(r.Context(), pl.logf)
 		if err != nil {
@@ -57,11 +58,14 @@ func (pl *Plugin) Handler() http.Handler {
 		}
 		v, err := pl.cat.voices(r.Context(), model)
 		if err != nil {
-			status := http.StatusBadGateway
-			if errors.Is(err, errNoProvider) {
+			status, out := http.StatusBadGateway, map[string]any{"error": err.Error()}
+			switch {
+			case errors.Is(err, errNoProvider):
 				status = http.StatusNotFound
+			case errors.Is(err, errNoUpstream):
+				status, out["code"] = http.StatusServiceUnavailable, codeNoUpstream
 			}
-			writeHTTPJSON(w, status, map[string]any{"error": err.Error()})
+			writeHTTPJSON(w, status, out)
 			return
 		}
 		writeHTTPJSON(w, http.StatusOK, v)
@@ -85,12 +89,12 @@ func writeHTTPJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// Run is `jarvisd voice`: serve on JARVIS_PLUGIN_SOCKET until ctx ends.
+// Run is `personad voice`: serve on PERSONA_EXTENSION_SOCKET (or its old names) until ctx ends.
 func Run(ctx context.Context) error {
 	logger := log.New(os.Stderr, "", 0)
-	socket := identity.Getenv("JARVIS_PLUGIN_SOCKET")
+	socket := extensionEnv("SOCKET")
 	if socket == "" {
-		return errors.New("JARVIS_PLUGIN_SOCKET is not set: this runs under the Persona hub (plugins in ~/.jarvis/hub.json, docs/extensions.md)")
+		return errors.New("PERSONA_EXTENSION_SOCKET is not set: this runs under the Persona hub as its built-in voice extension (docs/extensions.md「内置语音扩展」)")
 	}
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -115,6 +119,13 @@ func Run(ctx context.Context) error {
 			via = " via " + p.SSH
 		}
 		logger.Printf("provider %s: %s dialect%s", p.ID, p.Dialect, via)
+	}
+	if cfg.Setup != "" {
+		// It runs all the same: the hub shows it needs setting up, a conversation is refused with no_upstream.
+		logger.Printf("no realtime voice service yet (missing: %s): set its address and key in the extension's settings", cfg.Setup)
+	}
+	for _, w := range cfg.Warnings {
+		logger.Printf("config: %s", w)
 	}
 	logger.Printf("listening on %s", socket)
 	srv := &http.Server{Handler: pl.Handler(), ReadHeaderTimeout: 10 * time.Second}

@@ -98,6 +98,10 @@ func (pl *Plugin) converse(ctx context.Context, app *websocket.Conn) {
 	}()
 	if err := c.begin(); err != nil {
 		pl.logf("start failed: %v", err)
+		if errors.Is(err, errNoUpstream) {
+			c.failCode(codeNoUpstream, "还没配实时语音服务：在 设置 › 扩展 › 实时语音 里填服务地址和 Key", true)
+			return
+		}
 		c.fail("语音会话没能建立："+err.Error(), true)
 		return
 	}
@@ -141,8 +145,15 @@ func (c *conversation) sendApp(v any) {
 	}
 }
 
-func (c *conversation) fail(msg string, fatal bool) {
-	c.sendApp(map[string]any{"type": "error", "message": msg, "fatal": fatal})
+func (c *conversation) fail(msg string, fatal bool) { c.failCode("", msg, fatal) }
+
+// failCode is fail with the error's code (docs/voice.md「扩展 → App」), none when code is "".
+func (c *conversation) failCode(code, msg string, fatal bool) {
+	f := map[string]any{"type": "error", "message": msg, "fatal": fatal}
+	if code != "" {
+		f["code"] = code
+	}
+	c.sendApp(f)
 	if fatal {
 		code := websocket.StatusInternalError
 		select {
@@ -169,17 +180,30 @@ func (c *conversation) begin() error {
 		return errors.New("the first frame must be start")
 	}
 	p, model, err := c.pl.cat.resolve(c.ctx, start.Model)
+	gone := errors.Is(err, errNoProvider)
+	if gone {
+		// The app's model is of an upstream no longer configured (its address cleared, hub.json changed): the default
+		// one, rather than no conversation.
+		p, model, err = c.pl.cat.resolve(c.ctx, "")
+	}
 	if err != nil {
 		return err
 	}
 	c.mu.Lock()
 	c.p, c.w, c.model, c.modelID = p, newWire(p.Dialect), model, p.ID+"/"+model
-	if voicePattern.MatchString(start.Voice) {
+	if voicePattern.MatchString(start.Voice) && !gone { // a voice of the other upstream's may not exist here
 		c.voice = start.Voice
 	}
 	c.mu.Unlock()
 	c.pl.logf("conversation: %s, voice %q", c.modelID, c.voice)
-	return c.connect()
+	if err := c.connect(); err != nil {
+		return err
+	}
+	if gone {
+		c.pl.logf("model %q is gone: %s instead", start.Model, c.modelID)
+		c.failCode(codeModelUnavailable, "选的模型 "+start.Model+" 已经不在了，这次用默认模型 "+c.modelID, false)
+	}
+	return nil
 }
 
 // connect opens an upstream session and waits for it to start; the first one answers the app's start with ready.

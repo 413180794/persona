@@ -23,8 +23,8 @@
   "first_message": "最初のメッセージ",
   "prompt_placeholder": "何をさせますか…（⌘↵で起動）",
   "add_files": "画像またはファイルを追加",
-  "attach_hint": "画像やファイルを貼り付け・ドロップ・起動後にバックグラウンドで送信",
+  "attach_hint": "画像やファイルは貼り付けかドロップで追加 · 起動後にバックグラウンドで送信",
   "open_folder": "{name}を開く",
   "permission_mode": "権限モード",
-  "permission_mode_hint": "モードは会話の中でも変えられます。すべて許可は新規作成時だけ選べます。"
+  "permission_mode_hint": "権限モードはチャット中にも変更できます。「すべて許可」は新規作成時にのみ選べます。"
 }

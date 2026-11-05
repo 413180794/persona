@@ -2,7 +2,7 @@
 // kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
 import { BASE, stripBase } from "../lib/base";
 import { href } from "../lib/router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, handleUnauthorized, setToken } from "../lib/api";
 import { TOKEN_ID_KEY } from "../lib/auth";
 import { splitDevices } from "../lib/devices";
@@ -105,6 +105,20 @@ export function tokens(n: number): string {
 
 export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const phone = useMedia(SHEET_QUERY);
+  // the category bar can wrap, so the header can be taller than the usual 56px: tell <main> its height, which the
+  // connection pill (App.tsx) sits under instead of over the second row (#3594)
+  const header = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = header.current;
+    const box = el?.closest("main");
+    if (!el || !box || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => box.style.setProperty("--page-header", `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      box.style.removeProperty("--page-header");
+    };
+  }, []);
   // The category (null: none named, the phone's list) and the purpose (模型配置) or extension (扩展) it has open.
   const [at, setAt] = useState(() => settingsAt(location.search));
   // Back from a category opened from the list: the URL went back, the page follows it.
@@ -139,7 +153,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   };
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
+      <header ref={header} className="flex min-h-14 shrink-0 items-center gap-2 border-b border-line px-3 py-2 sm:px-4">
         {phone && at.tab ? (
           <>
             <IconButton icon="chevronLeft" label={t("settings.back")} onClick={toList} />
@@ -152,15 +166,15 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           </>
         )}
         {!phone && (
-          <nav className="ml-1 flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline sm:ml-3" aria-label={t("settings.categories")}>
+          // when the labels don't fit (narrow desktop, English, Japanese) the bar wraps instead of hiding categories past the
+          // right edge: scrollbars are hidden and a mouse wheel cannot scroll it sideways (#3594)
+          <nav className="ml-1 flex min-w-0 flex-wrap items-center gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline sm:ml-3" aria-label={t("settings.categories")}>
             {tabs.map((it) => (
               <button
                 key={it.k}
                 type="button"
                 onClick={() => pick(it.k)}
                 aria-current={tab === it.k ? "page" : undefined}
-                // the bar scrolls when the labels don't fit (English, Japanese): keep the open category in view
-                ref={tab === it.k ? (el) => el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }) : undefined}
                 className={cx(
                   "flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 text-[12.5px] transition-[background-color,color] duration-150",
                   tab === it.k ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
