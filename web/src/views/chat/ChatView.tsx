@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
 import { ago, attentionReason, externalLink, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
-import { navigate } from "../../lib/router";
+import { navigate, type SessionView } from "../../lib/router";
+import { canShowTerminal, otherView, useSessionView } from "../../lib/session-view";
 import { openLink } from "../../lib/links";
 import { togglePanel, usePanel } from "../../lib/panel";
 import { machineWithHub } from "../../lib/mesh";
@@ -47,6 +48,9 @@ import { chatFiles } from "../../lib/mentions";
 import { sameMessage } from "../../lib/queue";
 import { OutboxBubbles } from "./OutboxBubbles";
 import { AssistantFace, AssistantLauncherChip, CompactionStrip, useAssistantMenu } from "../assistant/AssistantChat";
+import { Segmented } from "../assistant/parts";
+import { TerminalPanel } from "../session/TerminalPanel";
+import { ViewLayer } from "../session/ViewLayer";
 import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
 import { displayLines, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
@@ -75,7 +79,7 @@ async function forkAt(mid: string, sid: string, itemId: string, assistant: boole
 
 /** `readOnly`: a subagent's conversation (`<parent>@<agent>`) in the side panel (SubagentPanel): the transcript only,
  *  no header, no composer. */
-export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter }: {
+export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter, inPage }: {
   mid: string;
   sid: string;
   assistant?: boolean;
@@ -84,6 +88,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   readOnly?: boolean;
   /** On a narrow screen, in the header's middle in place of the title (the shell's 助手 | Agents switch). */
   topCenter?: React.ReactNode;
+  /** The agent's own page (`/s/…`, `/t/…`): its terminal is a view of the middle, switched in place with the header's
+   *  终端 | 对话 and ⌘J (docs/web.md「终端 ⇄ 对话」). Elsewhere (a task's panel) the chat is all there is. */
+  inPage?: boolean;
 }) {
   const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid) ?? s.assistant?.conversations.find((c) => c.session_id === sid));
   // a subagent's own launches are listed on the session that launched it
@@ -117,6 +124,23 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const working = state === "working" || Boolean(tr.streaming) || outgoing > 0;
   // still starting only until the conversation has anything in it: the flag the caller passes may outlive the start
   const starting = Boolean(launching) && !tr.items.length && !tr.streaming && state !== "working";
+
+  // ── the middle of an agent's page: its conversation, or its terminal in place (lib/session-view.ts) ──
+  const switchable = Boolean(inPage && !assistant && !readOnly && canShowTerminal(session));
+  const openFiles = () => session && togglePanel({ kind: "files", mid, sid, cwd: session.cwd });
+  const [view, setView] = useSessionView(mid, sid, switchable);
+  // The terminal connects when first shown and stays connected while the page is on screen (the chat is hidden under it,
+  // not gone: coming back is instant). In the background, or when the agent stops being reachable, it lets the pane go.
+  const [termKept, setTermKept] = useState(false);
+  if (switchable && view === "term" && !termKept) setTermKept(true);
+  if (!switchable && termKept) setTermKept(false);
+  const viewNow = useRef(view);
+  viewNow.current = view;
+  useEffect(() => {
+    const hide = () => document.visibilityState === "hidden" && viewNow.current !== "term" && setTermKept(false);
+    document.addEventListener("visibilitychange", hide);
+    return () => document.removeEventListener("visibilitychange", hide);
+  }, []);
 
   const segs = useMemo(() => segments(tr.items), [tr.items]);
   // finished exchanges of several messages the user split open (iOS openWork on a merged exchange)
@@ -432,7 +456,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && state === "working" && !document.querySelector("[role=dialog],[role=menu]")) {
+      // in the terminal view Esc belongs to the program in the terminal
+      if (e.key === "Escape" && state === "working" && view !== "term" && !document.querySelector("[role=dialog],[role=menu]")) {
         e.preventDefault();
         void interrupt();
       }
@@ -440,7 +465,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     addEventListener("keydown", key);
     return () => removeEventListener("keydown", key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, session]);
+  }, [state, session, view]);
 
   const lastLive = (readOnly ? Boolean(viewed?.running) : working) && !tr.loading;
   // The main conversation is always Persona (#1313): not its first message, the node's title for it.
@@ -481,6 +506,19 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const fine = useFinePointer();
   const keyboard = typing && !fine;
   const composerBox = useRef<HTMLDivElement>(null);
+  // after a switch the keyboard goes to what is now shown (not on a touch screen: that would raise the keyboard)
+  const termLayer = useRef<HTMLDivElement>(null);
+  const shown = useRef(view);
+  useEffect(() => {
+    if (shown.current === view) return;
+    shown.current = view;
+    if (!fine) return;
+    const frame = requestAnimationFrame(() => {
+      const box = view === "term" ? termLayer.current : composerBox.current;
+      box?.querySelector("textarea")?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [view, fine]);
   // the run's time counts from the turn's start, as its 正在工作… does (not from the session's last state change)
   const stateSince = session?.state_since;
   const runStart = useMemo(() => {
@@ -516,10 +554,16 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           onStopLoop={() => void deliver({ text: STOP_LOOP_MESSAGE, images: [] }, uuid())}
           last={assistant ? tr.items[tr.items.length - 1] : undefined}
           topCenter={topCenter}
+          view={switchable ? view : undefined}
+          onView={switchable ? setView : undefined}
+          viewDot={view === "term" && (interactions.length > 0 || state === "needs_you")}
         />
       )}
       {session && panes.length > 1 && <PaneTabs sessions={panes} current={sid} onSelect={(s) => navigate(paneRoute(s), true)} />}
 
+      {/* the page's middle: the chat and (once shown) the terminal stacked in one box; without a terminal to show it adds no box */}
+      <div className={switchable ? "relative min-h-0 flex-1" : "contents"}>
+      <ViewLayer bare={!switchable} on={view === "chat"} from="start">
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} data-chat-scroll className="h-full overflow-y-auto [overflow-anchor:none]">
           <ChatActionsContext.Provider value={actions}>
@@ -665,6 +709,14 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         </div>
       </div>
       )}
+      </ViewLayer>
+      {switchable && termKept && (
+        <ViewLayer on={view === "term"} from="end" enter layerRef={termLayer}>
+          {/* Files opens beside it (the Files panel, as on the 终端 page); × goes back to the conversation */}
+          <TerminalPanel mid={mid} sid={sid} onFiles={session?.cwd ? openFiles : undefined} onClose={() => setView("chat")} />
+        </ViewLayer>
+      )}
+      </div>
 
       <Dialog
         open={Boolean(draftRefusal)}
@@ -761,6 +813,9 @@ export function Header({
   onStopLoop,
   last,
   topCenter,
+  view,
+  onView,
+  viewDot,
 }: {
   session?: Session;
   title: string;
@@ -774,6 +829,11 @@ export function Header({
   onStopLoop: () => void;
   last?: Item;
   topCenter?: React.ReactNode;
+  /** On an agent's page with a terminal to show: the view in the middle, and how to change it (the 终端 | 对话 switch). */
+  view?: SessionView;
+  onView?: (view: SessionView) => void;
+  /** The conversation has something that wants an answer while the terminal is shown. */
+  viewDot?: boolean;
 }) {
   const menu = useMenu();
   const tabs = useMenu();
@@ -814,11 +874,12 @@ export function Header({
     } catch (e) { toast(`接入失败：${errorText(e)}`, "error"); }
   };
   const others = siblings.filter((s) => s.session_id !== session?.session_id);
-  // the session's terminal, files and Git open in the side panel (docs/web.md「侧边面板」); the assistant has none
+  // the session's files and Git open in the side panel (docs/web.md「侧边面板」); the assistant has none. Its terminal is
+  // the page's other view, switched in place (view / onView)
   const here = (p: typeof panel, kind: string) => Boolean(p && p.kind === kind && "sid" in p && session && p.mid === session.machine_id && p.sid === session.session_id);
-  const showTerminal = Boolean(session && !assistant && sessionCan(session, "terminal") && stateOf(session) !== "offline");
+  const showTerminal = Boolean(view && onView);
   const showFiles = Boolean(session && !assistant && session.cwd);
-  const openTerminal = () => session && togglePanel({ kind: "terminal", mid: session.machine_id, sid: session.session_id });
+  const flipView = () => view && onView?.(otherView(view));
   const openFiles = () => session && togglePanel({ kind: "files", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
   const openGit = () => session && togglePanel({ kind: "git", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
   const othersNeed = others.some((s) => stateOf(s) === "needs_you");
@@ -869,7 +930,7 @@ export function Header({
               ]
             : []),
         ...(allowed.includes("attach") ? [{ key: "attach", label: "实时接入", icon: "link" as const, onSelect: () => void attach() }] : []),
-        ...(showTerminal ? [{ key: "terminal", label: "终端", icon: "terminal" as const, checked: here(panel, "terminal"), onSelect: openTerminal }] : []),
+        ...(showTerminal ? [{ key: "terminal", label: "终端", icon: "terminal" as const, checked: view === "term", onSelect: flipView }] : []),
         ...(showFiles ? [{ key: "files", label: "文件", icon: "folder" as const, checked: here(panel, "files"), onSelect: openFiles }, { key: "git", label: "Git", icon: "git" as const, checked: here(panel, "git"), onSelect: openGit }] : []),
         ...(allowed.includes("stop") ? [{ key: "stop", label: "中断", icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
         ...(feishu ? [{ key: "feishu", label: "在飞书打开", icon: "external" as const, onSelect: () => openLink(feishu) }] : []),
@@ -949,7 +1010,18 @@ export function Header({
         />
       )}
       {showFiles && <IconButton icon="folder" label="文件" onClick={openFiles} active={here(panel, "files") || here(panel, "git")} className="hidden sm:flex" />}
-      {showTerminal && <IconButton icon="terminal" label="终端" onClick={openTerminal} active={here(panel, "terminal")} className="hidden sm:flex" />}
+      {view && onView && (
+        <Segmented
+          label="终端或对话"
+          value={view}
+          onChange={onView}
+          compact
+          options={[
+            { v: "term", label: "终端" },
+            { v: "chat", label: "对话", dot: viewDot },
+          ]}
+        />
+      )}
       {items.length > 0 && <IconButton icon="more" label="更多" onClick={menu.open} active={Boolean(menu.anchor)} />}
       </div>
       {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" items={items} />}

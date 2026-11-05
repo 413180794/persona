@@ -9,9 +9,10 @@ import { toggleMaximized, toggleSidebarColumn } from "./layout";
 import { togglePalette } from "./palette";
 import { closePanel, getPanel, openPanel, type Panel } from "./panel";
 import { navigate, type Route } from "./router";
+import { canShowTerminal, readView, resolveView } from "./session-view";
 import { cycleGrouping, groupingLabel, setAllFolded, stepSidebarRow } from "./sidebar-api";
 import { dispatchKey, registerShortcut } from "./shortcuts";
-import { getState } from "./store";
+import { getSession, getState } from "./store";
 
 export interface ShortcutContext {
   route: Route;
@@ -64,15 +65,18 @@ export function useShortcuts(ctx: ShortcutContext) {
       }),
       registerShortcut("maximize", () => (at.current.narrow ? false : void toggleMaximized())),
       registerShortcut("terminal-chat", () => {
-        const to = terminalChat(at.current.route, getPanel(), at.current.pane);
+        const { route, pane } = at.current;
+        const can = Boolean(pane) && canShowTerminal(getSession(pane!.mid, pane!.sid));
+        const url = route.name === "session" || route.name === "tab" ? route.view : undefined;
+        const to = terminalChat(route, pane ? resolveView(url, readView(pane.mid, pane.sid), can) : "chat", can);
         if (!to) return false;
-        if ("go" in to) navigate(to.go);
-        else if ("open" in to) openPanel(to.open);
-        else closePanel();
+        // on an agent's page the view changes in place: Back leaves the page, it does not undo each ⌘J
+        navigate(to.go, route.name === "session" || route.name === "tab");
       }),
       registerShortcut("right-panel", () => {
         const current = getPanel();
-        const to = panelToggle(current, lastPanel, at.current.pane);
+        const pane = at.current.pane;
+        const to = panelToggle(current, lastPanel, pane, pane ? getSession(pane.mid, pane.sid)?.cwd : undefined);
         if (!to) return false;
         if ("close" in to) {
           lastPanel = current;

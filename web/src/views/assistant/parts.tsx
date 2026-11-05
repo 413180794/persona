@@ -37,8 +37,8 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
   );
 }
 
-/** A row of mutually exclusive choices (一次 / 每天 / 每隔). */
-export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void; label: string }) {
+/** A row of mutually exclusive choices (一次 / 每天 / 每隔). `compact`: tighter segments for a crowded bar; `dot` on an option: something there wants a look. */
+export function Segmented<T extends string>({ value, options, onChange, label, compact }: { value: T; options: { v: T; label: string; dot?: boolean }[]; onChange: (v: T) => void; label: string; compact?: boolean }) {
   return (
     <div role="radiogroup" aria-label={label} className="flex gap-0.5 rounded-control bg-inset p-0.5 shadow-hairline">
       {options.map((o) => (
@@ -49,11 +49,13 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
           aria-checked={value === o.v}
           onClick={() => onChange(o.v)}
           className={cx(
-            "h-7 flex-1 whitespace-nowrap rounded-[7px] px-3 text-[12.5px] transition-[background-color,color] duration-150",
+            "relative h-7 flex-1 whitespace-nowrap rounded-[7px] text-[12.5px] transition-[background-color,color] duration-150",
+            compact ? "px-2.5" : "px-3",
             value === o.v ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
           )}
         >
           {o.label}
+          {o.dot && <span aria-hidden className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-red" />}
         </button>
       ))}
     </div>

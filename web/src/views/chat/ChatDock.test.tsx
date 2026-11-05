@@ -54,6 +54,25 @@ describe("Header", () => {
   });
 });
 
+describe("Header, the 终端 | 对话 switch (#2419)", () => {
+  it("has the two views in that order, the one showing checked", () => {
+    const html = header({ view: "chat", onView: () => {} });
+    expect(html).toMatch(/role="radiogroup" aria-label="终端或对话"/);
+    expect(html.indexOf("终端</button>")).toBeLessThan(html.indexOf("对话</button>"));
+    expect(html).toMatch(/aria-checked="true"[^>]*>对话</);
+    expect(html).toMatch(/aria-checked="false"[^>]*>终端</);
+    expect(header({ view: "term", onView: () => {} })).toMatch(/aria-checked="true"[^>]*>终端</);
+  });
+  it("is not there without a terminal to switch to, and the old terminal button is gone", () => {
+    expect(header()).not.toContain("终端或对话");
+    expect(header({ view: "chat", onView: () => {} })).not.toContain('aria-label="终端"');
+  });
+  it("marks 对话 when the terminal shows and something wants an answer", () => {
+    expect(header({ view: "term", onView: () => {}, viewDot: true })).toMatch(/对话<span aria-hidden="true" class="absolute/);
+    expect(header({ view: "term", onView: () => {} })).not.toMatch(/对话<span/);
+  });
+});
+
 const ix = (id: string, kind: Interaction["kind"], extra: Partial<Interaction> = {}) =>
   ({ id, machine_id: "m", session_id: "s", kind, tool_name: "Bash", ...extra }) as Interaction;
 const three = [ix("a", "plan", { plan: "## 计划" }), ix("b", "question", { questions: [{ question: "用哪个框架？", options: [{ label: "A" }] }] as Interaction["questions"] }), ix("c", "permission")];

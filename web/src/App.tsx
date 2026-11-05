@@ -245,7 +245,7 @@ function Shell() {
     case "tab":
       main = !pane ? (loaded ? <TabGone onToggleSidebar={toggle} /> : <Loading />)
         : launch ? <StartingAgent launch={launch} onToggleSidebar={toggle} />
-        : <ChatView key={`${pane.mid}/${pane.sid}`} mid={pane.mid} sid={pane.sid} starting={starting} onToggleSidebar={toggle} />;
+        : <ChatView key={`${pane.mid}/${pane.sid}`} mid={pane.mid} sid={pane.sid} starting={starting} onToggleSidebar={toggle} inPage />;
       break;
     case "jarvis":
       main = <PersonaAssistant sid={route.sid} onToggleSidebar={toggle} />;

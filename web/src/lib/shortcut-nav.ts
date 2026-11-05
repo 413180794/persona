@@ -2,7 +2,8 @@
 // tab next to this one. Pure, so it is tested without a DOM.
 import { buildMachineTree, paneRoute, type HerdrMachine, type HerdrSpace } from "./herdr-tree";
 import type { Panel } from "./panel";
-import type { Route } from "./router";
+import type { Route, SessionView } from "./router";
+import { otherView } from "./session-view";
 import { isPaneAddress } from "./terminals";
 import type { Machine, Session } from "./types";
 
@@ -12,33 +13,33 @@ export interface PaneRef {
   sid: string;
 }
 
-/** A panel that belongs to a conversation (terminal / files / Git) is only meant for that one; the others (a link, a task…) go anywhere. */
+/** A panel that belongs to a conversation (files / Git) is only meant for that one; the others (a link, a task…) go anywhere. */
 function fits(panel: Panel, pane: PaneRef | undefined): boolean {
-  if (panel.kind === "terminal" || panel.kind === "files" || panel.kind === "git") return Boolean(pane && panel.mid === pane.mid && panel.sid === pane.sid);
+  if (panel.kind === "files" || panel.kind === "git") return Boolean(pane && panel.mid === pane.mid && panel.sid === pane.sid);
   return true;
 }
 
 /**
  * ⌘B: an open panel closes (and is remembered); with none open, the one just closed comes back if it still fits the
- * page, else the conversation's terminal. null: nothing to open.
+ * page, else the conversation's files (`cwd`: its directory; the terminal is the page's own view now, ⌘J). null: nothing to open.
  */
-export function panelToggle(current: Panel | null, last: Panel | null, pane: PaneRef | undefined): { close: true } | { open: Panel } | null {
+export function panelToggle(current: Panel | null, last: Panel | null, pane: PaneRef | undefined, cwd?: string): { close: true } | { open: Panel } | null {
   if (current) return { close: true };
   if (last && fits(last, pane)) return { open: last };
-  return pane ? { open: { kind: "terminal", mid: pane.mid, sid: pane.sid } } : null;
+  return pane && cwd ? { open: { kind: "files", mid: pane.mid, sid: pane.sid, cwd } } : null;
 }
 
 /**
- * ⌘J, 终端 ⇄ 对话. On a conversation: its terminal opens beside it, or closes when it is already open. On the terminal
- * page: the agent's conversation, when the terminal is an agent's (a plain shell has no chat). null: not here.
+ * ⌘J, 终端 ⇄ 对话. On an agent's page the middle switches in place to the other view (`view`: the one showing; null
+ * when the agent has no terminal to show). On the terminal page: the agent's conversation, when the terminal is an
+ * agent's (a plain shell has no chat). null: not here.
  */
-export function terminalChat(route: Route, current: Panel | null, pane: PaneRef | undefined): { go: Route } | { open: Panel } | { close: true } | null {
+export function terminalChat(route: Route, view: SessionView, canTerminal: boolean): { go: Route } | null {
   if (route.name === "terminal") {
-    return route.mid && route.id && !isPaneAddress(route.id) ? { go: { name: "session", mid: route.mid, sid: route.id } } : null;
+    return route.mid && route.id && !isPaneAddress(route.id) ? { go: { name: "session", mid: route.mid, sid: route.id, view: "chat" } } : null;
   }
-  if (!pane) return null;
-  if (current?.kind === "terminal" && current.mid === pane.mid && current.sid === pane.sid) return { close: true };
-  return { open: { kind: "terminal", mid: pane.mid, sid: pane.sid } };
+  if ((route.name === "session" || route.name === "tab") && canTerminal) return { go: { ...route, view: otherView(view) } };
+  return null;
 }
 
 /** The pages of a machine's tabs in the sidebar's order: each tab, then what has no tab (loose agents, 其他). */

@@ -7,7 +7,7 @@
 import { splitAgentSessions } from "./agent-groups";
 import { stateOf, tabLabel } from "./format";
 import { isSpacePinned, type AgentPins } from "./pins";
-import type { Route } from "./router";
+import type { Route, SessionView } from "./router";
 import type { AgentState, Machine, Session } from "./types";
 
 // docs/agent-states.md「排序优先级」: what a folded row shows for everything under it, and which pane a tab opens on.
@@ -54,10 +54,10 @@ export function paneRoute(s: Session): Route {
 }
 
 /** The `/t/…` an old `/s/<mid>/<sid>` link stands for: its pane's tab, when the session is known and has one (#1996). */
-export function tabOfSessionLink(all: Session[], r: { mid: string; sid: string }): Route | undefined {
+export function tabOfSessionLink(all: Session[], r: { mid: string; sid: string; view?: SessionView }): Route | undefined {
   const s = all.find((x) => x.machine_id === r.mid && x.session_id === r.sid);
   const to = s && paneRoute(s);
-  return to?.name === "tab" ? to : undefined;
+  return to?.name === "tab" ? { ...to, ...(r.view && { view: r.view }) } : undefined;
 }
 
 /** What `/t/<mid>/<space>/<slot>[/<sid>]` opens: the asked-for pane when the tab has it, else the session `sid` (the

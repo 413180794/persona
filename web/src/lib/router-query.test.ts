@@ -50,6 +50,25 @@ describe("useRoute", () => {
     expect(useRoute()).toEqual({ name: "todos", id: "B" });
   });
 
+  it("sees the view of an agent's page in the query, and a change of it alone is a change of route", () => {
+    fakeLocation("/s/m1/a1?view=term");
+    expect(useRoute()).toEqual({ name: "session", mid: "m1", sid: "a1", view: "term" });
+    const before = snapshot!();
+    navigate({ name: "session", mid: "m1", sid: "a1", view: "chat" }, true);
+    expect(location.pathname + location.search).toBe("/s/m1/a1?view=chat");
+    expect(Object.is(snapshot!(), before)).toBe(false);
+    expect(useRoute()).toEqual({ name: "session", mid: "m1", sid: "a1", view: "chat" });
+  });
+
+  it("leaves a view switch where it was when the address is already that", () => {
+    fakeLocation("/s/m1/a1?view=term");
+    const push = vi.spyOn(history, "pushState");
+    navigate({ name: "session", mid: "m1", sid: "a1", view: "term" });
+    expect(push).not.toHaveBeenCalled();
+    navigate({ name: "session", mid: "m1", sid: "a1" }); // without a view is another address
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
   it("still parses the path alone", () => {
     fakeLocation("/s/m1/a1");
     expect(useRoute()).toEqual(parse("/s/m1/a1"));

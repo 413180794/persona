@@ -23,3 +23,26 @@ describe("tab route (/t/<mid>/<space>/<slot>[/<sid>])", () => {
     expect(href({ name: "session", mid: "macbook", sid: "a1f3" })).toBe("/s/macbook/a1f3");
   });
 });
+
+describe("?view= of an agent's page", () => {
+  it("is part of the route, for /s/ and /t/", () => {
+    expect(parse("/s/m/a", "?view=term")).toEqual({ name: "session", mid: "m", sid: "a", view: "term" });
+    expect(parse("/t/m/w1/w1%3At2/a", "?view=chat")).toEqual({ name: "tab", mid: "m", space: "w1", slot: "w1:t2", sid: "a", view: "chat" });
+  });
+  it("is absent without it, or with a value that is neither", () => {
+    expect(parse("/s/m/a")).toEqual({ name: "session", mid: "m", sid: "a" });
+    expect(parse("/s/m/a", "?view=shell")).toEqual({ name: "session", mid: "m", sid: "a" });
+    expect(parse("/s/m/a", "?x=1&view=term")).toMatchObject({ view: "term" });
+  });
+  it("round-trips through href", () => {
+    const routes: Route[] = [
+      { name: "session", mid: "m", sid: "a", view: "term" },
+      { name: "tab", mid: "m", space: "w1", slot: "w1:t1", sid: "a", view: "chat" },
+    ];
+    for (const r of routes) {
+      const [path, query] = href(r).split("?");
+      expect(parse(path!, `?${query}`)).toEqual(r);
+    }
+    expect(href({ name: "session", mid: "m", sid: "a" })).toBe("/s/m/a");
+  });
+});

@@ -5,13 +5,17 @@ import { takeOverlayEntry } from "./back-close";
 // Persona's main conversation is the front door (like the app, which opens on 助手): `/` and `/j` open it, `/j/<id>` is
 // one conversation, `/j/new` starts a one-off one, and 总览 lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
 // (docs/extensions.md「UI 插槽」 nav_page).
+/** What the middle of an agent's page shows (docs/web.md「终端 ⇄ 对话」): its conversation, or its terminal in place. */
+export type SessionView = "chat" | "term";
+
 export type Route =
   | { name: "home" }
   | { name: "workspace-board" }
   | { name: "persona-new" }
-  | { name: "session"; mid: string; sid: string }
+  // `view` is the page's `?view=chat|term`; without it the page shows what it showed last (lib/session-view.ts)
+  | { name: "session"; mid: string; sid: string; view?: SessionView }
   // one herdr tab (a slot) of a workspace; `sid` picks its pane (lib/herdr-tree.ts resolveTab)
-  | { name: "tab"; mid: string; space: string; slot: string; sid?: string }
+  | { name: "tab"; mid: string; space: string; slot: string; sid?: string; view?: SessionView }
   | { name: "jarvis"; sid?: string }
   | { name: "history" }
   | { name: "profile" }
@@ -31,10 +35,17 @@ export type Route =
   | { name: "todos"; id?: string }
   | { name: "extension"; extension: string; ui: string };
 
-export function parse(path: string): Route {
+/** `?view=term|chat` of an agent page's address; anything else is no choice. */
+export function parseView(search: string): SessionView | undefined {
+  const v = new URLSearchParams(search).get("view");
+  return v === "term" || v === "chat" ? v : undefined;
+}
+
+export function parse(path: string, search = ""): Route {
   const p = path.split("/").filter(Boolean).map(decodeURIComponent);
-  if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2] };
-  if (p[0] === "t" && p[1] && p[2] && p[3]) return { name: "tab", mid: p[1], space: p[2], slot: p[3], sid: p[4] || undefined };
+  const view = parseView(search);
+  if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2], ...(view && { view }) };
+  if (p[0] === "t" && p[1] && p[2] && p[3]) return { name: "tab", mid: p[1], space: p[2], slot: p[3], sid: p[4] || undefined, ...(view && { view }) };
   if (!p.length) return { name: "jarvis" };
   if (p[0] === "j" || p[0] === "persona") return p[1] === "new" && !p[2] ? { name: "persona-new" } : { name: "jarvis", sid: p[1] };
   if (p[0] === "workspace-board") return { name: "workspace-board" };
@@ -62,9 +73,9 @@ export function parse(path: string): Route {
 export function href(r: Route): string {
   switch (r.name) {
     case "session":
-      return `/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}`;
+      return `/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}${viewQuery(r.view)}`;
     case "tab":
-      return ["/t", r.mid, r.space, r.slot, ...(r.sid ? [r.sid] : [])].map((x, i) => (i ? encodeURIComponent(x) : x)).join("/");
+      return ["/t", r.mid, r.space, r.slot, ...(r.sid ? [r.sid] : [])].map((x, i) => (i ? encodeURIComponent(x) : x)).join("/") + viewQuery(r.view);
     case "jarvis":
       return r.sid ? `/j/${encodeURIComponent(r.sid)}` : "/";
     case "persona-new":
@@ -104,6 +115,8 @@ export function href(r: Route): string {
   }
 }
 
+const viewQuery = (view?: SessionView) => (view ? `?view=${view}` : "");
+
 const listeners = new Set<() => void>();
 if (typeof addEventListener !== "undefined") {
   addEventListener("popstate", () => listeners.forEach((l) => l()));
@@ -111,7 +124,8 @@ if (typeof addEventListener !== "undefined") {
 
 export function navigate(r: Route | string, replace = false) {
   const to = typeof r === "string" ? r : href(r);
-  if (to === location.pathname) return;
+  // the query is part of the address (/s/…?view=term): the same page with another view is somewhere else
+  if (to === location.pathname + location.search) return;
   // From inside an open overlay (a drawer's link, a sheet's action): the new page takes the overlay's entry, so Back
   // from it goes to the page under the overlay, not to a dead copy of it (#1996). A replace keeps the entry's state:
   // an overlay open over the page keeps its marker.
@@ -130,7 +144,8 @@ export function useRoute(): Route {
     },
     () => location.pathname + location.search,
   );
-  return parse(at.split("?")[0]);
+  const [path, ...query] = at.split("?");
+  return parse(path!, query.join("?"));
 }
 
 // <a> that navigates in-app on a plain click and still opens a new tab with ⌘ / middle click.

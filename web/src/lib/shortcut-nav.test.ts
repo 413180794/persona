@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { adjacentTab, machineAt, panelToggle, terminalChat } from "./shortcut-nav";
 import type { Panel } from "./panel";
+import type { Route } from "./router";
 import type { AgentState, Machine, Session } from "./types";
 
 const here = { mid: "m1", sid: "s1" };
-const term: Panel = { kind: "terminal", mid: "m1", sid: "s1" };
 const files: Panel = { kind: "files", mid: "m1", sid: "s1", cwd: "/code" };
 const link: Panel = { kind: "link", url: "https://example.com" };
 
 describe("⌘B, the right panel", () => {
   it("closes an open one", () => {
-    expect(panelToggle(term, null, here)).toEqual({ close: true });
+    expect(panelToggle(files, null, here)).toEqual({ close: true });
     expect(panelToggle(link, null, undefined)).toEqual({ close: true });
   });
   it("brings the one just closed back", () => {
@@ -18,31 +18,35 @@ describe("⌘B, the right panel", () => {
     expect(panelToggle(null, link, undefined)).toEqual({ open: link });
   });
   it("does not bring back a conversation's panel on another conversation", () => {
-    expect(panelToggle(null, files, { mid: "m1", sid: "s2" })).toEqual({ open: { kind: "terminal", mid: "m1", sid: "s2" } });
+    expect(panelToggle(null, files, { mid: "m1", sid: "s2" }, "/other")).toEqual({ open: { kind: "files", mid: "m1", sid: "s2", cwd: "/other" } });
     expect(panelToggle(null, files, undefined)).toBeNull();
   });
-  it("opens the conversation's terminal when there was none", () => {
-    expect(panelToggle(null, null, here)).toEqual({ open: term });
-    expect(panelToggle(null, null, undefined)).toBeNull();
+  it("opens the conversation's files when there was none (its terminal is the page's view, not a panel)", () => {
+    expect(panelToggle(null, null, here, "/code")).toEqual({ open: files });
+    expect(panelToggle(null, null, here)).toBeNull();
+    expect(panelToggle(null, null, undefined, "/code")).toBeNull();
   });
 });
 
 describe("⌘J, terminal ⇄ chat", () => {
-  it("opens the terminal beside a conversation, closes it when open", () => {
-    expect(terminalChat({ name: "session", mid: "m1", sid: "s1" }, null, here)).toEqual({ open: term });
-    expect(terminalChat({ name: "session", mid: "m1", sid: "s1" }, term, here)).toEqual({ close: true });
+  const page: Route = { name: "session", mid: "m1", sid: "s1" };
+  const tab: Route = { name: "tab", mid: "m1", space: "w1", slot: "w1:t1", sid: "s1" };
+  it("switches an agent's page to the other view, in place", () => {
+    expect(terminalChat(page, "chat", true)).toEqual({ go: { ...page, view: "term" } });
+    expect(terminalChat(page, "term", true)).toEqual({ go: { ...page, view: "chat" } });
+    expect(terminalChat(tab, "chat", true)).toEqual({ go: { ...tab, view: "term" } });
+    expect(terminalChat(tab, "term", true)).toEqual({ go: { ...tab, view: "chat" } });
   });
-  it("replaces another panel with the terminal", () => {
-    expect(terminalChat({ name: "session", mid: "m1", sid: "s1" }, files, here)).toEqual({ open: term });
-    expect(terminalChat({ name: "session", mid: "m1", sid: "s1" }, { ...term, sid: "other" }, here)).toEqual({ open: term });
+  it("does nothing on an agent without a terminal to show", () => {
+    expect(terminalChat(page, "chat", false)).toBeNull();
   });
   it("goes from an agent's terminal page to its conversation", () => {
-    expect(terminalChat({ name: "terminal", mid: "m1", id: "agent-1" }, null, undefined)).toEqual({ go: { name: "session", mid: "m1", sid: "agent-1" } });
+    expect(terminalChat({ name: "terminal", mid: "m1", id: "agent-1" }, "chat", false)).toEqual({ go: { name: "session", mid: "m1", sid: "agent-1", view: "chat" } });
   });
   it("has no conversation for a plain shell, and nothing on other pages", () => {
-    expect(terminalChat({ name: "terminal", mid: "m1", id: "pane:w1:p2" }, null, undefined)).toBeNull();
-    expect(terminalChat({ name: "terminal" }, null, undefined)).toBeNull();
-    expect(terminalChat({ name: "settings" }, null, undefined)).toBeNull();
+    expect(terminalChat({ name: "terminal", mid: "m1", id: "pane:w1:p2" }, "chat", false)).toBeNull();
+    expect(terminalChat({ name: "terminal" }, "chat", false)).toBeNull();
+    expect(terminalChat({ name: "settings" }, "chat", false)).toBeNull();
   });
 });
 

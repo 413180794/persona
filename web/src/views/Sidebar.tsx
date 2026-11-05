@@ -19,6 +19,7 @@ import { toneOf } from "../lib/extension-ui";
 import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
 import { href, navigate, useRoute, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
+import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
 import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
 import type { AgentState, Machine, Session } from "../lib/types";
@@ -967,6 +968,7 @@ function TabRow({ t, reg, hover, activeKey, go, onRowMenu, onNodeMenu, machines 
 function ShellTree({ mid, online, spaces, reg, hover, go, activeKey, onNodeMenu }: { mid: string; online: boolean; spaces: TermSpace[] } & TreeProps) {
   const route = useRoute();
   const shown = route.name === "terminal" && route.mid === mid ? route.id : undefined;
+  const sessions = useStore((s) => s.sessions[mid]);
   const count = spaces.reduce((n, sp) => n + sp.tabs.reduce((m, t) => m + t.panes.length, 0), 0);
   return (
     <TreeBlock foldKey={`term:${mid}`} sessions={[]} activeKey={activeKey} title={<span className="min-w-0 truncate font-medium">终端</span>} right={() => <span className="text-[10.5px] text-ink-3 tabular-nums">{count}</span>}>
@@ -991,7 +993,7 @@ function ShellTree({ mid, online, spaces, reg, hover, go, activeKey, onNodeMenu 
                   reg={reg}
                   hover={hover}
                   active={shown === p.id}
-                  to={{ name: "terminal", mid, id: p.id }}
+                  to={terminalTarget(mid, p.id, sessions ?? [])}
                   go={go}
                   icon="terminal"
                   label={t.panes.length > 1 ? `${t.label} · ${p.title}` : p.title}

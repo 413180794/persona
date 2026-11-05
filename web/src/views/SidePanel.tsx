@@ -1,4 +1,5 @@
-// The right-hand panel next to the page (docs/web.md「侧边面板」): one at a time, chosen in lib/panel.ts.
+// The right-hand panel next to the page (docs/web.md「侧边面板」): one at a time, chosen in lib/panel.ts. (A session's
+// terminal is not one: it is the agent page's own view, lib/session-view.ts.)
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
 import { useEffect, useRef, useState } from "react";
 import { directoryPanelKey, closePanel, usePanel, type Panel } from "../lib/panel";
@@ -8,7 +9,6 @@ import { Icon, type IconName } from "../ui/icons";
 import { FilesPanel } from "./session/FilesPanel";
 import { FileViewerPanel } from "./session/FileViewer";
 import { GitPanel } from "./session/GitPanel";
-import { TerminalPanel } from "./session/TerminalPanel";
 import { LinkPanel } from "./link/LinkPanel";
 import { AgentPanel, TaskPanel } from "./assistant/TaskPanel";
 import { SubagentPanel } from "./chat/SubagentPanel";
@@ -86,13 +86,11 @@ export function SidePanel() {
 }
 
 function panelLabel(p: Panel) {
-  return p.kind === "terminal" ? "终端" : p.kind === "files" ? "文件" : p.kind === "git" ? "Git" : p.kind === "file" ? "文件" : p.kind === "task" ? "任务" : p.kind === "agent" ? "Agent" : "链接";
+  return p.kind === "files" ? "文件" : p.kind === "git" ? "Git" : p.kind === "file" ? "文件" : p.kind === "task" ? "任务" : p.kind === "agent" ? "Agent" : "链接";
 }
 
 function body(p: Panel) {
   switch (p.kind) {
-    case "terminal":
-      return <TerminalPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
     case "files":
       return <FilesPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} path={p.path} onClose={closePanel} />;
     case "git":

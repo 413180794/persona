@@ -8,6 +8,7 @@ import { usePanes, type Listing } from "../../lib/terminal-panes";
 import { machineWithHub } from "../../lib/mesh";
 import { href, navigate, onLinkClick, type Route } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
+import { terminalTarget } from "../../lib/session-view";
 import { refresh as refreshSessions, useStore } from "../../lib/store";
 import {
   buildTerminalTree,
@@ -135,7 +136,7 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
                   if (flat.length) setActive((a) => (Math.min(a, flat.length - 1) + (e.key === "ArrowDown" ? 1 : flat.length - 1)) % flat.length);
                 } else if (e.key === "Enter" && activeItem) {
                   e.preventDefault();
-                  navigate({ name: "terminal", ...activeItem });
+                  navigate(terminalTarget(activeItem.mid, activeItem.id, sessions[activeItem.mid] ?? []));
                 } else if (e.key === "Escape") setQuery("");
               }}
               placeholder="跳转到窗格：标题、目录、分支、机器…"
@@ -342,6 +343,7 @@ function SpaceBlock({ machine, sp, searching, shown, activeItem, onOpenShell, op
 
 function TabBlock({ machine, sp, t, searching, shown, activeItem, open }: { machine: Machine; sp: TermSpace; t: TermTab; searching: boolean; shown?: OpenTerminal; activeItem?: OpenTerminal } & Menus) {
   const mid = machine.id;
+  const mySessions = useStore((s) => s.sessions[mid]);
   const labelled = sp.tabs.length > 1 || t.panes.length > 1; // the tab's name is shown (and folds) when it tells tabs or panes apart
   const [folded, toggle] = useFolded(`term:t:${mid}/${sp.host}:${sp.label}/${t.label}`);
   const hide = labelled && folded && !searching;
@@ -361,7 +363,8 @@ function TabBlock({ machine, sp, t, searching, shown, activeItem, open }: { mach
       <Collapse open={!hide}>
         <div inert={hide || undefined}>
           {t.panes.map((p) => {
-            const to: Route = { name: "terminal", mid, id: p.id };
+            // an agent's pane opens on its own page, in the terminal view; a plain shell here (it has no conversation)
+            const to: Route = terminalTarget(mid, p.id, mySessions ?? []);
             const on = sameTerminal(shown, { mid, id: p.id });
             const hot = sameTerminal(activeItem, { mid, id: p.id });
             // a tab with one pane is that pane: its menu has the tab's rename and close too

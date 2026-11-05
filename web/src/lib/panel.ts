@@ -1,10 +1,10 @@
-// The page's right-hand panel: a session's terminal / files / Git, or a link opened in the page (docs/web.md「侧边面板」).
+// The page's right-hand panel: a session's files / Git, or a link opened in the page (docs/web.md「侧边面板」). A
+// session's terminal is the page's own view now (lib/session-view.ts), not a panel.
 // One panel at a time; opening another replaces it. Session panels close when the page moves to another conversation;
 // a link stays until closed (it is not tied to the conversation it came from).
 import { useSyncExternalStore } from "react";
 
 export type Panel =
-  | { kind: "terminal"; mid: string; sid: string }
   | { kind: "files"; mid: string; sid: string; cwd: string; path?: string }
   | { kind: "git"; mid: string; sid: string; cwd: string }
   | { kind: "file"; mid: string; path: string; cwd?: string; line?: number }

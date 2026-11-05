@@ -638,3 +638,13 @@ node 里对应 `panes.close` / `panes.split` / `panes.agent` / `panes.git` / `ta
 - **实测**（herdr 0.9.5，本机一个临时标签页）：`go test -tags herdrlive -run TestLiveMenuActions ./internal/herdr/`（`HERDR_LIVE_WORKSPACE=<工作区 id>`）建标签页、改名、拆分两次、关窗格、关标签页，结果和 node 单测里的假 herdr 一致。
 - **测试**：`node/panes_actions_test.go`（假 herdr：关 / 改名 / 拆分的调用、被拒绝时不碰 herdr、shell 窗格里运行、拒绝和失败不关窗格；真 git 仓库：fetch / pull / push、强推的配置不起作用、非仓库 / 脏工作区 / 分离 HEAD 拒绝）、
   `hub/panes_test.go`（每条路由 `answer` / 扩展令牌被拒、node 没听到；只转发点名的字段；不在 `answer` 的允许列表、route scopes 里是 `-`）。
+
+## 二十二、网页版：终端和对话在会话页里原地切换（2026-11-05，#2419）
+
+用户反馈网页版「终端和聊天的切换感觉还是怪怪的 … moshi 的交互形态好一些」。以前终端是对话页右边的侧边面板（`togglePanel({kind:"terminal"})`），或单独的 `/terminal` 页，⌘J 在开 / 关面板和两个页面之间来回。
+Moshi 是同一个会话页，中间区域在 Term 和 Chat 之间原地切换（顶栏的分段控件和切换键，地址里 `?view=chat|term`，每个节点记住上次的视图，从侧边栏打开 Agent 窗格进这个页面）。网页版照这个改（细节、地址、记忆、保活见 `docs/web.md`「终端 ⇄ 对话」）：
+
+- 终端还是同一个 `TerminalPanel`（props 不变：`mid`、`sid`、`onClose`、`label`、`cwd`、`onFiles`），不是第二个终端；会话页第一次切到终端才挂上它。
+- 切到对话时终端**不卸载**：盒子大小不变、只是看不见（`invisible` + `inert`，不用 `display:none`），所以窗格不会被缩成 100px 的盒子的列数、流不断、切回来不重新订阅（`terminal_subscribe` 只有第一次）。离开会话页或标签页进后台且在看对话时才 `dispose`、放手窗格。
+- 接管的尺寸就是会话页中间区域的大小；右边开着文件 / Git 面板时中间变窄，终端按新的宽度防抖后重发尺寸（和以前侧边面板被拖窄一样）。
+- 验证：假 hub（`MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1`）上数 WebSocket 里发出的 `terminal_subscribe` / `terminal_unsubscribe`：开页面 0 条，切到终端 1 条，来回切 ⌘J 和分段控件仍是 1 条、没有 unsubscribe，换页后有 unsubscribe。
