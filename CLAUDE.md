@@ -237,6 +237,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 文档 | 内容 |
 | --- | --- |
 | `docs/assistant.md` | 「Persona」tab 的助手（主对话、知识库工具）：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
+| `docs/assistant-views.md` | 主对话富 UI（#2017）：统一 View、fallback、动作和活卡片，HTML 沙箱的安全边界、校验、自修复与分阶段验收 |
 | `docs/unified-entry.md` | 主对话统一入口（#930）：在助手里派发、盯住、回答所有任务；三层结构（对话流 / 任务坞 / 需要你）、计划卡和三档自动开始、任务 = 待办、对话动态、钩子、分步；原型 `docs/assets/unified-entry-prototype.html`。Agents 页不动 |
 | `docs/todos.md` | 待办：记下要做的事并分工给多个 Agent，在待办中看各 Agent 进展，Agents 页按待办分组；整组挂、派生跟随、herdr 标记、状态派生与接口；做完的任务关掉 Agent、下一条消息恢复会话 |
 | `docs/knowledge.md` | 知识库 `~/.persona/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Persona / AI 分身 / Agents 怎么共用 |
