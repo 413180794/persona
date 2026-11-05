@@ -1,5 +1,6 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreText
 import persona.core.contracts.Session
 import persona.core.contracts.SessionInfo
 
@@ -18,7 +19,7 @@ sealed interface ChatAction {
 sealed interface ChatActionResult {
     data object Done : ChatActionResult
     data object Unknown : ChatActionResult
-    data class Failed(val reason: String, val cause: Throwable? = null) : ChatActionResult
+    data class Failed(val reason: CoreText, val cause: Throwable? = null) : ChatActionResult
 }
 
 /** Scope one instance to the paired hub. Unknown operations must be verified before another of the same kind. */
@@ -33,8 +34,8 @@ interface ChatActions {
      * not deduplicated by the hub: a failure is reported, never retried.
      */
     suspend fun editQueue(session: Session, keep: List<Int>): List<String> =
-        throw UnsupportedOperationException("排队消息管理尚未接入")
+        throw UnsupportedOperationException("Queued message management unavailable")
 
     /** What the node reads from the session's transcript (GET …/info). */
-    suspend fun info(session: Session): SessionInfo = throw UnsupportedOperationException("会话信息尚未接入")
+    suspend fun info(session: Session): SessionInfo = throw UnsupportedOperationException("Session info unavailable")
 }

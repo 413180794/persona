@@ -11,6 +11,8 @@ android {
     }
     // Robolectric tests run in Simplified Chinese unless they say otherwise (build-logic/robolectric).
     sourceSets.getByName("test").resources.srcDir(rootProject.file("build-logic/robolectric"))
+    // The core modules' words in Simplified Chinese for code with no resources at hand (CoreTextFallback).
+    sourceSets.getByName("test").resources.srcDir(rootProject.file("core/designsystem/src/main/res/values-zh"))
     compileOptions {
         sourceCompatibility = JavaVersion.toVersion(libs.findVersion("jvm").get().requiredVersion)
         targetCompatibility = JavaVersion.toVersion(libs.findVersion("jvm").get().requiredVersion)

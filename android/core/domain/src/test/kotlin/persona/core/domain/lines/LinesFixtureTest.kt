@@ -1,5 +1,6 @@
 package persona.core.domain.lines
 
+import persona.core.domain.zh
 import persona.core.contracts.Item
 import persona.core.contracts.JsonCodec
 import persona.core.domain.FixtureReader
@@ -159,7 +160,7 @@ private class Projection(val tasks: TaskIndex, val menu: List<String?>, val now:
             is ChatLine.UserImages -> obj("type" to "user_images", "item_ids" to line.images.map { it.id })
             is ChatLine.Work -> obj("type" to "work", "live" to line.live, "open" to line.open,
                 "start" to line.start, "end" to line.end, "elapsed_seconds" to line.elapsedSeconds(now),
-                "duration_text" to line.durationText(now), "tools" to line.tools, "thoughts" to line.thoughts,
+                "duration_text" to line.durationText(now)?.zh().orEmpty(), "tools" to line.tools, "thoughts" to line.thoughts,
                 "known_failed_tools" to line.knownFailedTools, "unresolved_tools" to line.unresolvedTools,
                 "contains_fold" to line.containsFold, "summary_full" to line.summary.full,
                 "summary_short" to line.summary.short, "steps" to line.steps.map(::step))
@@ -210,6 +211,7 @@ private fun obj(vararg fields: Pair<String, Any?>): JsonObject = JsonObject(fiel
 private fun json(value: Any?): JsonElement = when (value) {
     null -> JsonNull
     is JsonElement -> value
+    is persona.core.contracts.CoreText -> JsonPrimitive(value.zh())
     is String -> JsonPrimitive(value)
     is Boolean -> JsonPrimitive(value)
     is Number -> JsonPrimitive(value)

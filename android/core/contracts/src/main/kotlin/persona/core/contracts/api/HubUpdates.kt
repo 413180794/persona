@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.serialization.SerialName
@@ -31,7 +34,7 @@ interface HubUpdates {
 }
 
 /** The hub has no `/api/v1/hub/update` (404): it predates updates in the app. */
-class HubUpdatesUnsupported : Exception("这个 hub 的版本太旧，不支持在 App 里查看和更新版本")
+class HubUpdatesUnsupported : CoreTextException(CoreText.of(Key.HubUpdatesUnsupported))
 
 /** GET /api/v1/hub/update and the `hub_update` event's `update`. */
 @Serializable

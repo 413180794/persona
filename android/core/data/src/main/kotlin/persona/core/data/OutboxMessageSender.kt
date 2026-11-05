@@ -323,7 +323,7 @@ class OutboxMessageSender(
                 if (entry.state !in dispatchable) continue
                 val target = resolveMain() ?: run {
                     store.transition(entry.clientMessageId, dispatchable, OutboxState.WaitingForNetwork,
-                        "主对话尚未就绪，输入已保存")
+                        "main_not_ready")
                     return
                 }
                 entry = entry.copy(session = target)

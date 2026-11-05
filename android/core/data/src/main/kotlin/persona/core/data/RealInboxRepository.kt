@@ -1,5 +1,7 @@
 package persona.core.data
 
+import persona.core.contracts.CoreText
+import persona.core.contracts.CoreText.Key
 import persona.core.contracts.InboxEvent
 import persona.core.contracts.LarkEvent
 import persona.core.contracts.api.*
@@ -139,7 +141,7 @@ class RealInboxRepository(
             combine(sessions.sessions, interactions.pending) { agents, waiting ->
                 agents.map { AgentSession(it) } to waiting.map {
                     InboxInteraction(it.id, it.machineId, it.sessionId, it.createdAt,
-                        agents.firstOrNull { agent -> agent.key == it.sessionKey }?.displayTitle.orEmpty(), it.summary, it.headline)
+                        agents.firstOrNull { agent -> agent.key == it.sessionKey }?.displayTitle.orEmpty(), it.summary, it.headline.shown)
                 }
             }.collect { (agents, waiting) -> current.update { it.copy(sessions = agents, interactions = waiting) } }
         }
@@ -224,7 +226,7 @@ class RealInboxRepository(
             }
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) {
-            if (owns(transport)) current.update { it.copy(loading = false, error = "收件箱刷新失败，请重试") }
+            if (owns(transport)) current.update { it.copy(loading = false, error = DataText.of(Key.InboxRefreshFailed)) }
             throw e
         }
     }
@@ -310,7 +312,7 @@ class RealInboxRepository(
 
     override suspend fun draftReply(itemId: String, instruction: String): String {
         val transport = requireTransport()
-        val text = checkNotNull(actions) { "这个连接不能草拟回复" }.draft(itemId, instruction)
+        val text = checkNotNull(actions) { CoreText.of(Key.InboxCannotDraft).shown }.draft(itemId, instruction)
         if (!owns(transport)) throw CancellationException("Pairing changed")
         return text
     }
@@ -321,9 +323,9 @@ class RealInboxRepository(
         val machine = request.machineId
         val session = request.sessionId
         // Both outboxes commit before returning and deduplicate by the operation ID, so a retry is not queued twice.
-        if (machine.isNullOrBlank() || session.isNullOrBlank()) checkNotNull(mainConversationSender) { "主对话发送服务尚未接入" }
+        if (machine.isNullOrBlank() || session.isNullOrBlank()) checkNotNull(mainConversationSender) { "main chat sender not wired" }
             .sendToMain(request.text, request.operationId)
-        else checkNotNull(messageSender) { "Agent 消息发送服务尚未接入" }
+        else checkNotNull(messageSender) { "agent message sender not wired" }
             .send(persona.core.contracts.SessionKey(machine, session), request.text, request.operationId)
     }
 
@@ -332,7 +334,7 @@ class RealInboxRepository(
         val transport = requireTransport()
         val previous = journal.read(transport.scope).outbox.firstOrNull { it.request.clientId == request.clientId }
         require(previous == null || previous.request == request && (previous.target == target ||
-            target is ReplyTarget.Lark && previous.feedId == target.feedId)) { "回复标识已被使用" }
+            target is ReplyTarget.Lark && previous.feedId == target.feedId)) { "reply id already used" }
         val actualTarget = previous?.target ?: target
         if (previous?.state == "sent") return@withLock
         val feed = previous?.feedId ?: when (actualTarget) {
@@ -362,7 +364,7 @@ class RealInboxRepository(
         if (!owns(transport)) throw CancellationException("Pairing changed")
         publishLocal(saved)
         if (saved.outbox.any { it.request.clientId == request.clientId && it.state == "sent" }) return@withLock
-        if (!online()) throw IOException("连上后自动发送")
+        if (!online()) throw IOException("sends once connected")
         try {
             val mailTarget = request.mailTarget
             val response = if (actualTarget is ReplyTarget.Lark && actualTarget.feedId.startsWith("thread:"))
@@ -408,7 +410,7 @@ class RealInboxRepository(
 
     fun larkOutbox(feedId: String): Flow<List<LarkMessage>> = outbox.map { pending ->
         pending.filter { it.feedId == feedId }.map { local ->
-            LarkMessage(local.serverId ?: "local:${local.request.clientId}", "", "我", mine = true,
+            LarkMessage(local.serverId ?: "local:${local.request.clientId}", "", DataText.of(Key.Me), mine = true,
                 parts = listOf(LarkPart.Text(local.request.text)), clientId = local.request.clientId,
                 delivery = when (local.outboxState) {
                     OutboxState.Sent, OutboxState.Shown -> LarkDelivery.Sent
@@ -431,7 +433,7 @@ class RealInboxRepository(
 
     override fun conversation(feedId: String, startPosition: Long?): Flow<LarkConversation> =
         connection.current.flatMapLatest { transport ->
-            if (transport == null) flowOf(LarkConversation(error = "请先配对 hub"))
+            if (transport == null) flowOf(LarkConversation(error = DataText.of(Key.PairHubFirst)))
             else {
                 val window = synchronized(windowsLock) {
                     windows[feedId]?.takeIf { it.transport === transport && it.around == startPosition }
@@ -454,7 +456,7 @@ class RealInboxRepository(
                         val locals = if (window.tail) pending.filter { it.feedId == feedId }.filterNot { local ->
                             state.messages.any { it.clientId == local.request.clientId || local.serverId != null && it.id == local.serverId }
                         }.map { local ->
-                            LarkMessage(local.serverId ?: "local:${local.request.clientId}", "", "我", mine = true,
+                            LarkMessage(local.serverId ?: "local:${local.request.clientId}", "", DataText.of(Key.Me), mine = true,
                                 parts = listOf(LarkPart.Text(local.request.text)), clientId = local.request.clientId,
                                 delivery = when (local.outboxState) { OutboxState.Sent -> LarkDelivery.Sent; OutboxState.Sending -> LarkDelivery.Sending; OutboxState.WaitingForNetwork -> LarkDelivery.WaitingForNetwork; else -> LarkDelivery.Failed }, pendingDelivery = local.outboxState.delivery)
                         } else emptyList()
@@ -716,15 +718,15 @@ class RealInboxRepository(
             catch (_: Exception) {
                 sync.update { it + (window.feedId to LarkWindowSyncState.Incomplete) }
                 window.state.update { it.copy(loading = false, loadingOlder = false,
-                loadingNewer = false, verified = false, error = "消息记录尚未同步完整") } }
+                loadingNewer = false, verified = false, error = DataText.of(Key.LarkIncomplete)) } }
         } catch (_: IncompleteWindow) {
             sync.update { it + (window.feedId to LarkWindowSyncState.Incomplete) }
             window.state.update { it.copy(loading = false, loadingOlder = false, loadingNewer = false,
-                verified = false, error = "消息记录尚未同步完整") }
+                verified = false, error = DataText.of(Key.LarkIncomplete)) }
         } catch (e: Exception) {
             sync.update { it + (window.feedId to LarkWindowSyncState.Failed) }
             window.state.update { it.copy(loading = false, loadingOlder = false, loadingNewer = false,
-                verified = false, error = "消息加载失败，请重试") }
+                verified = false, error = DataText.of(Key.LarkLoadFailed)) }
             throw e
         }
     }
@@ -761,12 +763,12 @@ class RealInboxRepository(
         window.tail = !hasNewer
         window.initialized = true
         window.state.update { it.copy(
-            title = current.value.records.firstOrNull { record -> record.feedId == window.feedId }?.item?.title ?: "飞书会话",
+            title = current.value.records.firstOrNull { record -> record.feedId == window.feedId }?.item?.title ?: DataText.of(Key.LarkChat),
             messages = window.raw.map { row -> message(row, window) }, loading = false, loadingOlder = false, loadingNewer = false,
             hasOlder = hasOlder, hasNewer = hasNewer, verified = generation == window.generation &&
                 (online() || reconciling && hubConnection?.state?.value == ConnectionState.Updating),
             windowRevision = it.windowRevision + if (replaced) 1 else 0,
-            error = if (replaced) "有更多新消息，已切换到最新消息" else null) }
+            error = if (replaced) DataText.of(Key.LarkJumpedToLatest) else null) }
         sync.update { it + (window.feedId to if (window.state.value.verified) LarkWindowSyncState.Complete else LarkWindowSyncState.Cached) }
         if (!window.state.value.verified) return
         val start = window.around?.let { anchor -> window.raw.indexOfFirst { (it.number("position") ?: Long.MAX_VALUE) >= anchor } }
@@ -788,24 +790,24 @@ class RealInboxRepository(
     override suspend fun askPersona(request: InboxPersonaRequest) = personaLock.withLock {
         scope.coroutineContext.ensureActive()
         require(request.itemId.isNotBlank() && request.operationId.isNotBlank())
-        val sender = checkNotNull(mainConversationSender) { "主对话发送服务尚未接入" }
+        val sender = checkNotNull(mainConversationSender) { "main chat sender not wired" }
         val text = sender.outbox.value.firstOrNull { it.clientMessageId == request.operationId }?.text
             ?: personaRequests.getOrPut(request.operationId) {
                 val record = current.value.records.firstOrNull { it.item.id == request.itemId }
-                require(record != null || !request.context.isNullOrBlank()) { "事项尚未加载，请先刷新" }
+                require(record != null || !request.context.isNullOrBlank()) { CoreText.of(Key.InboxItemNotLoaded).shown }
                 val messages = synchronized(windowsLock) { record?.feedId?.let { windows[it]?.state?.value?.messages } }.orEmpty()
                 val loaded = messages.joinToString("\n") { message ->
                     val body = message.parts.joinToString("\n") { part -> when (part) {
                         is LarkPart.Text -> part.text
                         is LarkPart.Card -> part.content.summary
-                        is LarkPart.File -> "附件：${part.name}（${part.mimeType}）"
+                        is LarkPart.File -> "附件：${part.name}（${part.mimeType}）" // i18n-ignore: the chat handed to the model
                         is LarkPart.Image -> part.description
                         is LarkPart.External -> "${part.title}\n${part.larkUrl}"
-                        is LarkPart.Code -> "代码：\n${part.code}"
-                        is LarkPart.Audio -> "语音（${part.durationMs / 1000} 秒）"
-                        is LarkPart.Video -> "视频（${part.durationMs / 1000} 秒）"
+                        is LarkPart.Code -> "代码：\n${part.code}" // i18n-ignore: the chat handed to the model
+                        is LarkPart.Audio -> "语音（${part.durationMs / 1000} 秒）" // i18n-ignore: the chat handed to the model
+                        is LarkPart.Video -> "视频（${part.durationMs / 1000} 秒）" // i18n-ignore: the chat handed to the model
                         is LarkPart.Sticker -> part.description
-                        is LarkPart.MergeForward -> "聊天记录：${part.title}（${part.messages.size} 条）"
+                        is LarkPart.MergeForward -> "聊天记录：${part.title}（${part.messages.size} 条）" // i18n-ignore: the chat handed to the model
                     } }
                     "${message.senderName} ${message.time}\n$body"
                 }
@@ -813,7 +815,7 @@ class RealInboxRepository(
             }
         sender.sendToMain(text, request.operationId)
     }
-    private fun requireTransport() = requireNotNull(connection.current.value) { "请先配对 hub" }
+    private fun requireTransport() = requireNotNull(connection.current.value) { CoreText.of(Key.PairHubFirst).shown }
     private fun owns(transport: InboxAssistantTransport) = connection.current.value === transport
     private fun replaceRecord(record: InboxRecord) {
         current.update { it.copy(records = it.records.map { old -> if (old.item.id == record.item.id) record else old }) }
@@ -829,14 +831,14 @@ class RealInboxRepository(
         }
         val draft = saved.drafts[target.storageKey()]?.takeIf { it.text.isNotBlank() }
         val status = when {
-            pending?.state == "sending" -> "发送中"
-            pending?.outboxState == OutboxState.WaitingForNetwork -> "连上后自动发送"
-            pending?.state == "unknown" -> "结果待确认"
-            pending?.state == "verifying" -> "正在核对"
-            pending?.state == "refused" -> "没有发出"
-            pending != null -> "发送失败"
+            pending?.state == "sending" -> DataText.of(Key.ReplySending)
+            pending?.outboxState == OutboxState.WaitingForNetwork -> DataText.of(Key.ReplyWaiting)
+            pending?.state == "unknown" -> DataText.of(Key.ReplyUnknown)
+            pending?.state == "verifying" -> DataText.of(Key.ReplyVerifying)
+            pending?.state == "refused" -> DataText.of(Key.ReplyRefused)
+            pending != null -> DataText.of(Key.ReplyFailed)
             // An AI draft shows as its card; only the user's own words read 「草稿 · …」.
-            draft != null && !draft.ai -> "草稿 · ${draft.text}"
+            draft != null && !draft.ai -> DataText.of(Key.ReplyDraft, draft.text)
             else -> null
         }
         return record.copy(localStatus = status, localDelivery = pending?.outboxState?.delivery, aiDraft = draft?.ai == true)
@@ -851,7 +853,7 @@ class RealInboxRepository(
                 data.optional("sender"), data.string("preview"), data.optional("summary"), data.optional("tier"),
                 data.optional("updated_at"), data.optional("done_at"), data.optional("version"),
                 notice = moment?.optional("notice")),
-            sourceLabel = data.optional("account_name") ?: if (data.string("source") == "lark") "飞书" else "邮件",
+            sourceLabel = data.optional("account_name") ?: DataText.of(if (data.string("source") == "lark") Key.SourceLark else Key.SourceMail),
             feedId = lark?.optional("feed_id"), startPosition = lark?.number("start_position"), count = data.number("count")?.toInt() ?: 0,
             agent = agent?.let { InboxAgent(it.string("state"), it.string("draft"), it.optional("note") ?: it.string("reason"),
                 it.string("task"), it.optional("machine_id"), it.optional("session_id")) },
@@ -909,7 +911,7 @@ class RealInboxRepository(
         val source = LarkContentSource(window.transport)
         val id = data.string("id")
         val external = "https://applink.feishu.cn/client/chat/open?chatId=${java.net.URLEncoder.encode(window.feedId, "UTF-8")}&messageId=${java.net.URLEncoder.encode(id, "UTF-8")}"
-        val parts = if (data.flag("recalled")) listOf(LarkPart.Text("消息已撤回")) else data.array("parts").map { element ->
+        val parts = if (data.flag("recalled")) listOf(LarkPart.Text(DataText.of(Key.LarkRecalled))) else data.array("parts").map { element ->
             val part = element.jsonObject
             val metadata = part.obj("metadata") ?: JsonObject(emptyMap())
             val text = part.optional("text") ?: data.string("text")
@@ -920,7 +922,7 @@ class RealInboxRepository(
                         width = metadata.number("width")?.toInt()?.coerceAtLeast(1) ?: 1,
                         height = metadata.number("height")?.toInt()?.coerceAtLeast(1) ?: 1)
                 }
-                "file" -> LarkPart.File(part.string("url"), metadata.optional("name") ?: text.ifBlank { "文件" },
+                "file" -> LarkPart.File(part.string("url"), metadata.optional("name") ?: text.ifBlank { DataText.of(Key.LarkFile) },
                     metadata.optional("mimeType") ?: "application/octet-stream")
                 "text", "at", "code" -> LarkPart.Text(text, source)
                 "card", "interactive" -> larkInteractivePart(metadata, text, window.transport)

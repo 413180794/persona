@@ -1,5 +1,6 @@
 package persona.android
 
+import persona.core.designsystem.resolve
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
 import android.os.Build
@@ -58,6 +59,8 @@ class PersonaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // The core modules' words (errors, the data repositories' state) in the shown language (docs/i18n.md).
+        persona.core.contracts.CoreText.words = { it.resolve(this) }
         pairings = PairingStore(this)
         Notify.install(this, connection.events)
         runtime.start()

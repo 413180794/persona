@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.Session
 import persona.core.contracts.api.*
@@ -83,7 +85,7 @@ class HttpAgentCreationService(
         val body = JsonCodec.parseToJsonElement(String(Base64.getDecoder().decode(encoded), Charsets.UTF_8)).jsonObject
         return when (state) {
             "done" -> outcome(body)
-            "failed" -> AgentStartResult.Rejected(body["error"]?.jsonPrimitive?.content ?: "启动被拒绝，请检查选择")
+            "failed" -> AgentStartResult.Rejected(body["error"]?.jsonPrimitive?.content?.let(CoreText::plain) ?: CoreText.of(Key.StartRejected))
             else -> AgentStartResult.Unknown
         }
     }

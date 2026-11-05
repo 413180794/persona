@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.text
 import android.graphics.Bitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +41,7 @@ class DeleteSessionShotsTest {
         var dark by mutableStateOf(false)
         rule.setContent {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
-                JDialog(onDismiss = {}, title = confirmation.title, text = confirmation.message, confirm = "删除" to {}, destructive = true)
+                JDialog(onDismiss = {}, title = confirmation.title.text(), text = confirmation.message.text(), confirm = "删除" to {}, destructive = true)
             }
         }
         rule.onNodeWithText("删除这个对话？").assertExists()

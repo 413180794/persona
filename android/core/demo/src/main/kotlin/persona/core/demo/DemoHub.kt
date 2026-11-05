@@ -14,10 +14,28 @@ import java.time.Instant
 import java.util.Base64
 import java.util.UUID
 
-object DemoText {
-    const val notSent = "体验模式下不会真的发送"
-    const val missing = "体验模式里没有这项数据"
-    const val reply = "这是体验模式：消息没有真的发到电脑上，这里的 Agent 也只是演示数据。连接你自己的 hub 后，就可以让 Agent 接着做。"
+/**
+ * What the demo hub says, in the app's language ([DemoText.from] reads the module's strings; the defaults are the
+ * English ones, for tests without resources).
+ */
+data class DemoText(
+    val notSent: String = "Nothing is really sent in demo mode",
+    val missing: String = "Demo mode doesn’t have this data",
+    val reply: String = "This is demo mode: the message didn’t really go to a computer, and the agents here are demo data. " +
+        "Connect your own hub to let agents carry on.",
+    val scopeChanged: String = "The connection changed",
+    val emptyMessage: String = "The message can’t be empty",
+    val idUsed: String = "This message id is already used",
+    val newChat: String = "New chat",
+) {
+    companion object {
+        fun from(resources: android.content.res.Resources) = DemoText(
+            resources.getString(R.string.demo_not_sent), resources.getString(R.string.demo_missing),
+            resources.getString(R.string.demo_reply), resources.getString(R.string.demo_scope_changed),
+            resources.getString(R.string.demo_empty_message), resources.getString(R.string.demo_id_used),
+            resources.getString(R.string.demo_new_chat),
+        )
+    }
 }
 
 /** Local transports only: no URL, credentials, HTTP client or real transport can be supplied. */
@@ -26,6 +44,7 @@ class DemoHub(
     parentScope: CoroutineScope,
     private val now: () -> Instant = Instant::now,
     val hubScope: HubScope = HubScope("demo", UUID.randomUUID().toString()),
+    private val words: DemoText = DemoText(),
 ) : ChatTransport, MessageTransport, InboxAssistantTransport, HubConnection, AutoCloseable {
     companion object {
         private const val pageSize = 80
@@ -70,13 +89,13 @@ class DemoHub(
     private fun checkOpen() { if (!job.isActive) throw CancellationException("Demo closed") }
     private suspend fun <T> locked(block: suspend () -> T): T = lock.withLock { checkOpen(); block() }
     private fun missing(): Nothing = throw HubFailure(
-        HubError.Server, DemoText.missing, status = 404, code = "demo_missing", retryable = false, delivered = "no",
+        HubError.Server, words.missing, status = 404, code = "demo_missing", retryable = false, delivered = "no",
     )
-    private fun notice() { noticeQueue.trySend(DemoText.notSent) }
+    private fun notice() { noticeQueue.trySend(words.notSent) }
     private fun refuse(): Nothing {
         checkOpen()
         notice()
-        throw HubFailure(HubError.Server, DemoText.notSent, code = "demo", retryable = false, delivered = "no")
+        throw HubFailure(HubError.Server, words.notSent, code = "demo", retryable = false, delivered = "no")
     }
     private fun session(key: SessionKey): Session = sessionList.firstOrNull { it.key == key } ?: missing()
     private fun list(key: SessionKey): List<Item> {
@@ -132,16 +151,16 @@ class DemoHub(
 
     override suspend fun send(request: MessageRequest): MessageTransportResult = locked {
         if (request.scope != hubScope) return@locked MessageTransportResult.HubError(
-            code = "scope_changed", delivered = "no", error = "连接已切换",
+            code = "scope_changed", delivered = "no", error = words.scopeChanged,
         )
         if (request.text.isBlank() || request.clientMessageId.isBlank()) return@locked MessageTransportResult.HubError(
-            code = "invalid_request", delivered = "no", error = "消息不能为空",
+            code = "invalid_request", delivered = "no", error = words.emptyMessage,
         )
         val previous = accepted[request.clientMessageId]
         if (previous != null) return@locked if (previous == request) MessageTransportResult.Accepted else
-            MessageTransportResult.HubError(code = "op_conflict", delivered = "no", error = "消息标识已被使用")
+            MessageTransportResult.HubError(code = "op_conflict", delivered = "no", error = words.idUsed)
         if (sessionList.none { it.key == request.session }) return@locked MessageTransportResult.HubError(
-            code = "demo_missing", delivered = "no", error = DemoText.missing,
+            code = "demo_missing", delivered = "no", error = words.missing,
         )
         notice()
         append(request.session, request.text, request.clientMessageId)
@@ -159,14 +178,14 @@ class DemoHub(
         val timestamp = now().toString()
         val newItems = buildList {
             if (text != null) add(Item(id ?: UUID.randomUUID().toString(), previousSeq + 1, timestamp, "user", "text", text))
-            add(Item(UUID.randomUUID().toString(), previousSeq + size + 1, timestamp, "assistant", "text", DemoText.reply))
+            add(Item(UUID.randomUUID().toString(), previousSeq + size + 1, timestamp, "assistant", "text", words.reply))
         }
         itemLists[key.sessionId] = old + newItems
         sessionList = sessionList.map {
             if (it.key != key) it else {
                 val waiting = pending.count { interaction -> interaction.sessionKey == key }
                 it.copy(status = if (waiting > 0) "blocked" else "done", state = if (waiting > 0) "needs_you" else "unread",
-                    updatedAt = timestamp, stateSince = timestamp, lastText = DemoText.reply,
+                    updatedAt = timestamp, stateSince = timestamp, lastText = words.reply,
                     pendingInteractions = waiting, rev = (it.rev ?: 0) + newItems.size,
                     queued = emptyList(), background = emptyList(), loop = null)
             }
@@ -206,7 +225,7 @@ class DemoHub(
 
     override suspend fun createConversation(main: Boolean): JsonObject = locked {
         val machine = data.getValue("assistant").jsonObject.text("machine_id")
-        val newSession = Session(machineId = machine, sessionId = "demo-${UUID.randomUUID()}", title = "新对话",
+        val newSession = Session(machineId = machine, sessionId = "demo-${UUID.randomUUID()}", title = words.newChat,
             status = "idle", state = "idle", assistant = true, agent = "claude", launcher = "claude",
             updatedAt = now().toString(), startedByPersona = true, rev = 0)
         sessionList = listOf(newSession) + sessionList
@@ -246,7 +265,7 @@ class DemoHub(
             (key.machineId.isBlank() || key.sessionId.isBlank())) return false
         worker.launch { locked {
             if (type in setOf("subscribe", "unsubscribe", "seen") && sessionList.none { it.key == key }) {
-                noticeQueue.trySend(DemoText.missing)
+                noticeQueue.trySend(words.missing)
                 return@locked
             }
             when (type) {

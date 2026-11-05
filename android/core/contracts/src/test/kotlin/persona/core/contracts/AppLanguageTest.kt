@@ -35,11 +35,11 @@ class AppLanguageTest {
     @Test fun theHubIsToldTheShownLanguage() {
         try {
             ClientLanguage.current = AppLanguage.Ja
-            assertEquals("ja", ClientLanguage.tag)
+            assertEquals("ja", (ClientLanguage.tag).zhAny())
             ClientLanguage.current = AppLanguage.ZhHans
-            assertEquals("zh-Hans", ClientLanguage.tag)
+            assertEquals("zh-Hans", (ClientLanguage.tag).zhAny())
             ClientLanguage.current = AppLanguage.System
-            assertEquals("en", ClientLanguage.tag)
+            assertEquals("en", (ClientLanguage.tag).zhAny())
         } finally { ClientLanguage.current = AppLanguage.En }
     }
 }

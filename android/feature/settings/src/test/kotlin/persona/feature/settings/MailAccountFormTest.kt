@@ -60,11 +60,11 @@ class MailAccountFormTest {
             MailAccount.serializer(),
             """{"id":"a1","name":"x","email":"me@example.com","provider":"gmail","auth":"oauth2","username":"","imap_host":"imap.gmail.com","imap_port":993,"smtp_host":"","smtp_port":0,"smtp_security":"","status":"ok","error":"","extra":1}""",
         )
-        assertEquals("Gmail · Google 账号登录", a.detail)
+        assertEquals("Gmail · Google 账号登录", a.detail.shown)
         val bad = a.copy(status = "error", error = "Google authorization expired or was revoked")
-        assertEquals("Google authorization expired or was revoked", bad.detail)
-        assertEquals("飞书邮箱", a.copy(auth = "password", provider = "feishu").detail)
-        assertEquals("Outlook · Microsoft 账号登录", a.copy(auth = "oauth2", provider = "outlook").detail)
+        assertEquals("Google authorization expired or was revoked", bad.detail.shown)
+        assertEquals("飞书邮箱", a.copy(auth = "password", provider = "feishu").detail.shown)
+        assertEquals("Outlook · Microsoft 账号登录", a.copy(auth = "oauth2", provider = "outlook").detail.shown)
     }
 
     @Test fun connectorText() {

@@ -34,13 +34,13 @@ class HttpExtensionModelTest {
             assertFalse(detail.extension.sandbox!!.active)
             assertEquals(2L, detail.extension.sandbox!!.egress!!.denied)
             server.takeRequest().let {
-                assertEquals("/api/v1/$root/example/-/contributions/ui/notes", it.path)
-                assertEquals("PUT", it.method)
-                assertEquals("""{"enabled":false}""", it.body.readUtf8())
+                assertEquals("/api/v1/$root/example/-/contributions/ui/notes", (it.path).zhAny())
+                assertEquals("PUT", (it.method).zhAny())
+                assertEquals("""{"enabled":false}""", (it.body.readUtf8()).zhAny())
             }
             server.enqueue(MockResponse().setBody("""{"id":"example"}"""))
             api.setContribution("example", "example-export.notes", "new", true)
-            assertEquals("/api/v1/$root/example/-/contributions/example-export.notes/new", server.takeRequest().path)
+            assertEquals("/api/v1/$root/example/-/contributions/example-export.notes/new", (server.takeRequest().path).zhAny())
             try { api.setContribution("example", "../notes", "new", false); fail() } catch (_: IllegalArgumentException) { }
         }
     }
@@ -55,8 +55,8 @@ class HttpExtensionModelTest {
         server.enqueue(MockResponse().setBody("""{"id":"pack"}"""))
         api.install(preview)
         val body = JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
-        assertEquals(listOf("dep", "member"), body["bundle"]!!.jsonArray.map { it.jsonObject["preview_id"]!!.jsonPrimitive.content })
-        assertEquals(listOf("d-dep", "d-member"), body["bundle"]!!.jsonArray.map { it.jsonObject["permissions_digest"]!!.jsonPrimitive.content })
+        assertEquals(listOf("dep", "member"), (body["bundle"]!!.jsonArray.map { it.jsonObject["preview_id"]!!.jsonPrimitive.content }).zhAny())
+        assertEquals(listOf("d-dep", "d-member"), (body["bundle"]!!.jsonArray.map { it.jsonObject["permissions_digest"]!!.jsonPrimitive.content }).zhAny())
         server.enqueue(MockResponse().setBody("""{"id":"pack"}"""))
         api.upgrade("pack", ExtensionPreview(previewId = "old", permissionsDigest = "digest"))
         assertFalse("bundle" in JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject)
@@ -64,14 +64,14 @@ class HttpExtensionModelTest {
 
     @Test fun declarationsReadAndOldHub404MeansNoneNotSuccessOnOtherFailures() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"prompts":[{"extension":"example","extension_name":"示例","id":"today","title":"今天","text":"总结今天"}]}"""))
-        assertEquals("总结今天", api.quickPrompts().single().text)
-        assertEquals("/api/v1/extensions/-/prompts", server.takeRequest().path)
+        assertEquals("总结今天", (api.quickPrompts().single().text).zhAny())
+        assertEquals("/api/v1/extensions/-/prompts", (server.takeRequest().path).zhAny())
         server.enqueue(MockResponse().setBody("""{"themes":[{"extension":"example","id":"ocean","name":"海蓝","light":{"accent":"#0059A6"},"dark":{"accent":"#8BC4FF"}}]}"""))
-        assertEquals("example/ocean", api.themes().single().key)
-        assertEquals("/api/v1/extensions/-/themes", server.takeRequest().path)
+        assertEquals("example/ocean", (api.themes().single().key).zhAny())
+        assertEquals("/api/v1/extensions/-/themes", (server.takeRequest().path).zhAny())
         server.enqueue(MockResponse().setBody("""{"templates":[{"extension":"example","id":"quiet","title":"安静","text":"只看提到我的"}]}"""))
-        assertEquals("只看提到我的", api.triageTemplates().single().text)
-        assertEquals("/api/v1/extensions/-/triage-templates", server.takeRequest().path)
+        assertEquals("只看提到我的", (api.triageTemplates().single().text).zhAny())
+        assertEquals("/api/v1/extensions/-/triage-templates", (server.takeRequest().path).zhAny())
         repeat(3) { server.enqueue(MockResponse().setResponseCode(404)) }
         assertTrue(api.quickPrompts().isEmpty()); assertTrue(api.themes().isEmpty()); assertTrue(api.triageTemplates().isEmpty())
         repeat(3) { server.takeRequest() }

@@ -197,7 +197,7 @@ class AppServices @Inject constructor(
         val job = SupervisorJob(app.scope.coroutineContext[Job])
         demoJob = job
         val scope = CoroutineScope(app.scope.coroutineContext + job)
-        val demo = persona.core.demo.DemoHub.fromAssets(app.assets, scope)
+        val demo = persona.core.demo.DemoHub.fromAssets(app, scope)
         val localPreferences = object : HubPreferences {
             override val preferences = MutableStateFlow(HubPreferencesSnapshot())
             override suspend fun refresh() = Unit

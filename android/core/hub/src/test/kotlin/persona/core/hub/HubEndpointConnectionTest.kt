@@ -32,7 +32,7 @@ class HubEndpointConnectionTest {
                 connection.awaitOnline()
                 assertEquals(listOf(hub.url, dead.url), connection.candidates().map { it.url })
                 val reported = connection.diagnostics.value.candidates.single { it.url == hub.url }
-                assertEquals("已通过身份校验", reported.result)
+                assertEquals("已通过身份校验", (reported.result).zhAny())
             }
         }
     }
@@ -222,7 +222,7 @@ class HubEndpointConnectionTest {
                     assertSame(initial, connection.route.value)
                     assertEquals(listOf(0, 1), listOf(slow.sockets.get(), fast.sockets.get()))
                     val reported = connection.diagnostics.value.candidates.single { it.url == slow.paired }
-                    assertEquals("连接超时", reported.result)
+                    assertEquals("连接超时", (reported.result).zhAny())
                 }
             }
         }

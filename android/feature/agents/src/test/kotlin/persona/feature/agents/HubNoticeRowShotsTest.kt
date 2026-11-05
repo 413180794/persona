@@ -54,7 +54,7 @@ class HubNoticeRowShotsTest {
                         .background(PersonaTheme.palette.background).padding(Tokens.Space.l),
                     verticalArrangement = Arrangement.spacedBy(Tokens.Space.m),
                 ) {
-                    for (notice in listOf(HubNotice.Updating("正在下载"), HubNotice.AutoOn, HubNotice.Available("1.5.0", 150))) {
+                    for (notice in listOf(HubNotice.Updating(persona.core.contracts.CoreText.plain("正在下载")), HubNotice.AutoOn, HubNotice.Available("1.5.0", 150))) {
                         HubNoticeRow(notice, {}, {}, {}, {}, {})
                     }
                 }

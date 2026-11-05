@@ -1,5 +1,7 @@
 package persona.core.domain.lines
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.Injected
 import persona.core.contracts.Item
 import persona.core.domain.injectedOf
@@ -141,7 +143,7 @@ sealed interface ChatLine {
         fun elapsedSeconds(now: Instant): Long? = start?.let {
             Duration.between(it, if (live) now else end ?: now).seconds.coerceAtLeast(0)
         }
-        fun durationText(now: Instant): String = elapsedSeconds(now)?.let(::workDuration).orEmpty()
+        fun durationText(now: Instant): CoreText? = elapsedSeconds(now)?.let(::workDuration)
     }
     data class Step(val groupId: String, val step: WorkItem, val first: Boolean) : ChatLine {
         override val id get() = "$groupId/${step.id}"
@@ -170,27 +172,27 @@ sealed interface ChatLine {
     data class Extra(override val id: String, val payload: Any) : ChatLine
 }
 
-data class WorkSummary(val full: List<String>, val short: List<String>) {
+data class WorkSummary(val full: List<CoreText>, val short: List<CoreText>) {
     constructor(steps: List<WorkItem>) : this(summary(steps, false), summary(steps, true))
 }
 
-private fun summary(steps: List<WorkItem>, short: Boolean): List<String> {
+private fun summary(steps: List<WorkItem>, short: Boolean): List<CoreText> {
     val calls = steps.sumOf { it.tools } + steps.count { it is WorkItem.Thought && it.item.item.wake == true }
     val thoughts = steps.sumOf { it.thoughts }
     val texts = steps.count { it is WorkItem.Narration }
     val notices = steps.count { it is WorkItem.Thought && it.item.kind == "notice" && it.item.item.wake != true }
     return buildList {
-        if (calls > 0) add("工具 $calls")
-        if (!short && thoughts > 0) add("思考 $thoughts")
-        if (!short && texts > 0) add("回复 $texts")
-        if (isEmpty() && notices > 0) add("后台通知 $notices")
+        if (calls > 0) add(CoreText.of(Key.WorkTools, calls))
+        if (!short && thoughts > 0) add(CoreText.of(Key.WorkThoughts, thoughts))
+        if (!short && texts > 0) add(CoreText.of(Key.WorkReplies, texts))
+        if (isEmpty() && notices > 0) add(CoreText.of(Key.WorkNotices, notices))
     }
 }
 
-private fun workDuration(s: Long): String = when {
-    s < 60 -> "$s 秒"
-    s < 3600 -> if (s % 60 == 0L) "${s / 60} 分" else "${s / 60} 分 ${s % 60} 秒"
-    else -> "${s / 3600} 小时 ${s % 3600 / 60} 分"
+private fun workDuration(s: Long): CoreText = when {
+    s < 60 -> CoreText.of(Key.DurationSeconds, s)
+    s < 3600 -> if (s % 60 == 0L) CoreText.of(Key.DurationMinutes, s / 60) else CoreText.of(Key.DurationMinutesSeconds, s / 60, s % 60)
+    else -> CoreText.of(Key.DurationHoursMinutes, s / 3600, s % 3600 / 60)
 }
 
 data class Frozen(val seq: Int, val part: Int, val liveTurnId: String? = null)

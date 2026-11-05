@@ -21,9 +21,9 @@ class AgentCreationModelTest {
             val created = (result as AgentStartResult.Created).session
             assertTrue(created.starting)
             val body = JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
-            assertEquals("", body.getValue("launcher").jsonPrimitive.content)
+            assertEquals("", (body.getValue("launcher").jsonPrimitive.content).zhAny())
             assertEquals(true, body.getValue("async").jsonPrimitive.boolean)
-            assertEquals("看下首页", body.getValue("name_hint").jsonPrimitive.content)
+            assertEquals("看下首页", (body.getValue("name_hint").jsonPrimitive.content).zhAny())
             assertFalse(body.containsKey("prompt"))
         }
     }
@@ -35,10 +35,10 @@ class AgentCreationModelTest {
                 "effective":{"provider":"launcher.claude","model":"model-chat"},"revision":1},
                 "providers":[{"id":"launcher.claude","name":"claude"}]}"""))
             val detail = requireNotNull(service.newAgentModel())
-            assertEquals(listOf("claude", "model-chat"), detail.purpose.summaryParts(detail.providers))
+            assertEquals(listOf("claude", "model-chat"), (detail.purpose.summaryParts(detail.providers)).zhAny())
             val request = server.takeRequest()
-            assertEquals("/api/v1/model-config/purposes/agent.new", request.path)
-            assertEquals("Bearer test-token", request.getHeader("Authorization"))
+            assertEquals("/api/v1/model-config/purposes/agent.new", (request.path).zhAny())
+            assertEquals("Bearer test-token", (request.getHeader("Authorization")).zhAny())
             server.enqueue(MockResponse().setResponseCode(404).setBody("404 page not found"))
             assertNull(service.newAgentModel())
             server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"bad gateway"}"""))
@@ -55,24 +55,24 @@ class AgentCreationModelTest {
                 {"id":"haiku","name":"Haiku 5.5","resolved":"claude-haiku-5-5"},
                 {"id":"gateway/glm-5.3","name":"glm-5.3","description":"From gateway","efforts":["low","medium","high"],"future":1}]}"""))
             val list = requireNotNull(service.launcherModels("machine/one", "my launcher"))
-            assertEquals("claude", list.agent)
+            assertEquals("claude", (list.agent).zhAny())
             assertNull(list.locked)
-            assertEquals(listOf("default", "haiku", "gateway/glm-5.3"), list.models.map { it.id })
+            assertEquals(listOf("default", "haiku", "gateway/glm-5.3"), (list.models.map { it.id }).zhAny())
             assertEquals(listOf(true, false, false), list.models.map { it.isDefault })
-            assertEquals("claude-opus-5-5", list.models[0].resolved)
-            assertEquals(emptyList<String>(), list.models[1].efforts)
-            assertEquals(listOf("low", "medium", "high"), list.models[2].efforts)
+            assertEquals("claude-opus-5-5", (list.models[0].resolved).zhAny())
+            assertEquals(emptyList<String>(), (list.models[1].efforts).zhAny())
+            assertEquals(listOf("low", "medium", "high"), (list.models[2].efforts).zhAny())
             val first = server.takeRequest()
-            assertEquals("/api/v1/machines/machine%2Fone/launchers/my%20launcher/models", first.requestUrl?.encodedPath)
+            assertEquals("/api/v1/machines/machine%2Fone/launchers/my%20launcher/models", (first.requestUrl?.encodedPath).zhAny())
             assertNull(first.requestUrl?.queryParameter("refresh"))
-            assertEquals("Bearer test-token", first.getHeader("Authorization"))
+            assertEquals("Bearer test-token", (first.getHeader("Authorization")).zhAny())
 
             server.enqueue(MockResponse().setBody("""{"agent":"codex","locked":"启动器固定了模型参数，不能覆盖具体模型","models":[
                 {"id":"gpt-5.5","name":"GPT-5.5","default":true,"efforts":["low","medium"],"default_effort":"medium"}]}"""))
             val codex = requireNotNull(service.launcherModels("mac", "codex", refresh = true))
-            assertEquals("启动器固定了模型参数，不能覆盖具体模型", codex.locked)
-            assertEquals("medium", codex.models.single().defaultEffort)
-            assertEquals("1", server.takeRequest().requestUrl?.queryParameter("refresh"))
+            assertEquals("启动器固定了模型参数，不能覆盖具体模型", (codex.locked).zhAny())
+            assertEquals("medium", (codex.models.single().defaultEffort).zhAny())
+            assertEquals("1", (server.takeRequest().requestUrl?.queryParameter("refresh")).zhAny())
 
             // An agent without a list, a hub without the endpoint, and a CLI that did not answer.
             server.enqueue(MockResponse().setBody("""{"agent":"traex","models":[]}"""))
@@ -82,7 +82,7 @@ class AgentCreationModelTest {
             server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"claude: command not found"}"""))
             val failure = runCatching { service.launcherModels("mac", "claude") }.exceptionOrNull() as HubFailure
             assertEquals(502, failure.status)
-            assertEquals("claude: command not found", failure.message)
+            assertEquals("claude: command not found", (failure.message).zhAny())
         }
     }
 
@@ -91,14 +91,14 @@ class AgentCreationModelTest {
             val service = HttpAgentCreationService("hub/pairing", server.url("/").toString(), "test-token", OkHttpClient())
             server.enqueue(MockResponse().setBody("""{"agent":"codex","models":[{"id":"gpt-6.1-sol","name":"GPT-6.1-sol"}]}"""))
             val model = requireNotNull(service.launcherModels("box", "test-launcher")).models.single()
-            assertEquals("6.1 Sol", model.label)
+            assertEquals("6.1 Sol", (model.label).zhAny())
             server.takeRequest()
             server.enqueue(MockResponse().setBody("""{"session":{"machine_id":"box","session_id":"gpt"}}"""))
             service.start(AgentStartRequest("box", "/srv/app", "test-launcher", model = model.id),
                 "00000000-0000-4000-8000-000000000006")
             val body = JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
-            assertEquals("gpt-6.1-sol", body.getValue("model").jsonPrimitive.content)
-            assertEquals("test-launcher", body.getValue("launcher").jsonPrimitive.content)
+            assertEquals("gpt-6.1-sol", (body.getValue("model").jsonPrimitive.content).zhAny())
+            assertEquals("test-launcher", (body.getValue("launcher").jsonPrimitive.content).zhAny())
         }
     }
 
@@ -108,7 +108,7 @@ class AgentCreationModelTest {
             server.enqueue(MockResponse().setBody("""{"session":{"machine_id":"mac","session_id":"a"}}"""))
             service.start(AgentStartRequest("mac", "/code", "claude", model = "gateway/glm-5.3"), "00000000-0000-4000-8000-000000000004")
             val picked = JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
-            assertEquals("gateway/glm-5.3", picked.getValue("model").jsonPrimitive.content)
+            assertEquals("gateway/glm-5.3", (picked.getValue("model").jsonPrimitive.content).zhAny())
             server.enqueue(MockResponse().setBody("""{"session":{"machine_id":"mac","session_id":"b"}}"""))
             service.start(AgentStartRequest("mac", "/code", "claude"), "00000000-0000-4000-8000-000000000005")
             assertFalse(JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject.containsKey("model"))

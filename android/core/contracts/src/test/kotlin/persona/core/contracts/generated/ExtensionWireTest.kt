@@ -1,5 +1,7 @@
 package persona.core.contracts.generated
 
+import persona.core.contracts.zhAny
+
 import java.io.File
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -68,9 +70,9 @@ class ExtensionWireTest {
             {"type":"chart","kind":"bar","series":"not a list"}]}]}""")
         val items = view.sections.single().items
         assertEquals(ExtensionComponent.Unknown("hologram", items[0].let { (it as ExtensionComponent.Unknown).raw }), items[0])
-        assertEquals("sparkly", (items[1] as ExtensionMetricComponent).tone)
+        assertEquals("sparkly", ((items[1] as ExtensionMetricComponent).tone).zhAny())
         assertTrue(items[2] is ExtensionComponent.Unknown)
-        assertEquals("chart", items[2].type)
+        assertEquals("chart", (items[2].type).zhAny())
         // An unknown component writes back what it was.
         val out = json.encodeToJsonElement(ExtensionView.serializer(), view) as JsonObject
         assertTrue(out.toString().contains("hologram"))

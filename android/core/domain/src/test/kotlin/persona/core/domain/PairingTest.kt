@@ -43,12 +43,12 @@ class PairingTest {
             "&hub=example-hub&fp=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&tls=18661" +
             "&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D%3A18661" +
             "&alt=https%3A%2F%2Fhub.example.com%3A18661")!!
-        assertEquals("example-hub", pairing.hub)
-        assertEquals("A".repeat(43), pairing.fp)
+        assertEquals("example-hub", (pairing.hub).zhAny())
+        assertEquals("A".repeat(43), (pairing.fp).zhAny())
         assertEquals(18661, pairing.tls)
-        assertEquals(listOf("https://[2001:db8::1]:18661", "https://hub.example.com:18661"), pairing.alt)
-        assertEquals("http://192.0.2.1", pairing.url)
-        assertEquals("mock", pairing.token)
+        assertEquals(listOf("https://[2001:db8::1]:18661", "https://hub.example.com:18661"), (pairing.alt).zhAny())
+        assertEquals("http://192.0.2.1", (pairing.url).zhAny())
+        assertEquals("mock", (pairing.token).zhAny())
     }
 
     @Test fun unknownOrMalformedOptionalFieldsDoNotBreakLegacyPairing() {

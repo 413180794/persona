@@ -1,5 +1,7 @@
 package persona.core.domain.tasks
 
+import persona.core.domain.zhAny
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -36,7 +38,7 @@ class TaskNowTest {
             Subagent("a3", description = "做完的", running = false),
         ))
         assertEquals(TaskNow.Step("在搜 Shutdown", null), TaskNow.of(s, working = true))
-        assertEquals(listOf("Hub children lifecycle survey", "Explore"), TaskNow.subagents(s))
-        assertEquals(emptyList<String>(), TaskNow.subagents(base))
+        assertEquals(listOf("Hub children lifecycle survey", "Explore"), (TaskNow.subagents(s)).zhAny())
+        assertEquals(emptyList<String>(), (TaskNow.subagents(base)).zhAny())
     }
 }

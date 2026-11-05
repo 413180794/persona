@@ -1,5 +1,7 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -25,12 +27,12 @@ data class MailAccount(
     val isError: Boolean get() = status == "error"
 
     /** The line under the address in 邮箱 (iOS `MailAccountsView`). */
-    val detail: String
+    val detail: CoreText
         get() = when {
-            isError -> error?.takeIf { it.isNotBlank() } ?: "错误"
-            auth == "oauth2" -> if (provider == "outlook") "Outlook · Microsoft 账号登录" else "Gmail · Google 账号登录"
-            provider == "feishu" -> "飞书邮箱"
-            else -> imapHost.orEmpty()
+            isError -> error?.takeIf { it.isNotBlank() }?.let(CoreText::plain) ?: CoreText.of(Key.MailError)
+            auth == "oauth2" -> CoreText.of(if (provider == "outlook") Key.MailOutlook else Key.MailGmail)
+            provider == "feishu" -> CoreText.of(Key.MailLark)
+            else -> CoreText.plain(imapHost.orEmpty())
         }
 }
 

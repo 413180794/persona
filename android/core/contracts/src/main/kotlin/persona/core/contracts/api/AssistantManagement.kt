@@ -10,17 +10,17 @@ import kotlinx.serialization.Serializable
 interface AssistantManagement {
     suspend fun warm()
     // Where the assistant runs (设置 › 助手). Defaults keep transports and fakes written before the page compiling.
-    suspend fun config(): AssistantConfig = throw UnsupportedOperationException("助手设置尚未接入")
-    suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig = throw UnsupportedOperationException("助手设置尚未接入")
+    suspend fun config(): AssistantConfig = throw UnsupportedOperationException("Assistant settings unavailable")
+    suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig = throw UnsupportedOperationException("Assistant settings unavailable")
     /** The launchers a machine offers (GET /api/v1/machines/{id}/launchers). */
-    suspend fun launchers(machineId: String): List<AgentLauncher> = throw UnsupportedOperationException("助手设置尚未接入")
+    suspend fun launchers(machineId: String): List<AgentLauncher> = throw UnsupportedOperationException("Assistant settings unavailable")
     suspend fun endConversation(session: SessionKey)
     /**
      * Compacts an assistant conversation's context now (POST /api/v1/assistant/conversations/{id}/compact, hub feature
      * `assistant_compact`); its progress comes back on the session's `compaction`. A hub that refuses (409: `busy`,
      * `compacting`, `gone`, `unsupported`) throws [AssistantRefused] with its own words.
      */
-    suspend fun compactConversation(session: SessionKey): Unit = throw UnsupportedOperationException("压缩上下文尚未接入")
+    suspend fun compactConversation(session: SessionKey): Unit = throw UnsupportedOperationException("Compact context unavailable")
     /**
      * Puts the main conversation away for a new one (POST /api/v1/assistant/main/new, hub feature `assistant_main_new`):
      * it is renamed and archived, and the next message to the main conversation starts a new one. [carrySummary] brings
@@ -28,7 +28,7 @@ interface AssistantManagement {
      * refuses with `main_changed`, as [AssistantRefused]; `busy` while it answers or compacts).
      */
     suspend fun newMainConversation(carrySummary: Boolean, expect: String?): NewMainResult =
-        throw UnsupportedOperationException("新建主对话尚未接入")
+        throw UnsupportedOperationException("New main chat unavailable")
     suspend fun routines(): List<Routine>
     suspend fun setRoutines(list: List<Routine>): List<Routine>
     suspend fun runRoutine(id: String): SessionKey

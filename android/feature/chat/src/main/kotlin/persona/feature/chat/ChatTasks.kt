@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
@@ -144,7 +145,7 @@ private fun TaskProgressRow(task: TaskProgressItem, onRecord: () -> Unit) {
         TaskProgressStatus.Completed -> R.string.chat_tasks_completed
         TaskProgressStatus.Unknown -> R.string.chat_tasks_unknown
     })
-    JRow(task.subject, subtitle = task.description?.takeIf(String::isNotBlank),
+    JRow(task.subject.text(), subtitle = task.description?.takeIf(String::isNotBlank),
         leading = { JStatusMark(status) }, value = label, subtitleLines = Int.MAX_VALUE)
     JTextButton(stringResource(R.string.chat_tasks_view_record), onRecord, Modifier.padding(horizontal = Tokens.Space.s))
 }

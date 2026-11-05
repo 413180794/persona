@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextFailure
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.OutputStream
@@ -40,7 +43,10 @@ data class MailInboxItem(val id: String, val mail: MailReference? = null,
 @Serializable
 data class MailReplyTarget(val uid: Long, val version: String)
 
-class MailReplyTargetChanged : java.io.IOException("邮件回复对象已变化，请查看最新邮件后确认发送")
+class MailReplyTargetChanged : java.io.IOException(CoreText.of(Key.MailReplyTargetChanged).english()), CoreTextFailure {
+    override val text: CoreText get() = CoreText.of(Key.MailReplyTargetChanged)
+    override val message: String get() = CoreText.words(text)
+}
 
 @Serializable
 data class SendMailRequest(

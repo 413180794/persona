@@ -1,5 +1,8 @@
 package persona.core.domain.engines
 
+import persona.core.domain.zhAny
+
+import persona.core.domain.zh
 import persona.core.contracts.DetectedEngine
 import persona.core.contracts.Machine
 import org.junit.Assert.*
@@ -21,10 +24,10 @@ class EnginesTest {
     @Test fun pairingAsksAboutTheLocalMachineElseTheFirstAndOnlyWhenEnginesAreReported() {
         val a = machine(id = "a")
         val local = machine(id = "b", kind = "local", engines = listOf(herdr))
-        assertEquals("b", Engines.pairingMachine(listOf(a, local))?.id)
-        assertEquals("a", Engines.pairingMachine(listOf(a, machine(id = "c")))?.id)
+        assertEquals("b", (Engines.pairingMachine(listOf(a, local))?.id).zhAny())
+        assertEquals("a", (Engines.pairingMachine(listOf(a, machine(id = "c")))?.id).zhAny())
         assertNull(Engines.pairingMachine(emptyList()))
-        assertEquals("b", Engines.pairingStep(listOf(a, local))?.id)
+        assertEquals("b", (Engines.pairingStep(listOf(a, local))?.id).zhAny())
         // An older hub reports no engines: no step that could not be saved.
         assertNull(Engines.pairingStep(listOf(a, local.copy(engines = emptyList()))))
         assertNull(Engines.pairingStep(emptyList()))
@@ -32,18 +35,18 @@ class EnginesTest {
 
     @Test fun pickerStartsOnTheCurrentEngineHerdrByDefault() {
         // Never chosen: herdr, even when only another engine is detected.
-        assertEquals("herdr", Engines.initialChoice(machine(engines = listOf(herdr.copy(available = false), core.copy(available = true), orca))))
-        assertEquals("herdr", Engines.initialChoice(machine(engine = "")))
-        assertEquals("orca", Engines.initialChoice(machine(engine = "orca", engines = listOf(herdr, core.copy(available = true), orca))))
-        assertEquals("herdr-core", Engines.initialChoice(machine(engine = "herdr-core", engines = listOf(herdr.copy(available = false)))))
+        assertEquals("herdr", (Engines.initialChoice(machine(engines = listOf(herdr.copy(available = false), core.copy(available = true), orca)))).zhAny())
+        assertEquals("herdr", (Engines.initialChoice(machine(engine = ""))).zhAny())
+        assertEquals("orca", (Engines.initialChoice(machine(engine = "orca", engines = listOf(herdr, core.copy(available = true), orca)))).zhAny())
+        assertEquals("herdr-core", (Engines.initialChoice(machine(engine = "herdr-core", engines = listOf(herdr.copy(available = false))))).zhAny())
     }
 
     @Test fun optionsAreTheHubsListElseTheKnownEngines() {
         val future = DetectedEngine("future", "Future", available = true)
-        assertEquals(listOf("herdr", "future"), Engines.options(machine(engines = listOf(herdr, future))).map { it.id })
+        assertEquals(listOf("herdr", "future"), (Engines.options(machine(engines = listOf(herdr, future))).map { it.id }).zhAny())
         val fallback = Engines.options(machine())
-        assertEquals(listOf("herdr", "herdr-core", "orca", "paseo"), fallback.map { it.id })
-        assertEquals(listOf("herdr", "Herdr App", "Orca", "Paseo"), fallback.map { it.name })
+        assertEquals(listOf("herdr", "herdr-core", "orca", "paseo"), (fallback.map { it.id }).zhAny())
+        assertEquals(listOf("herdr", "Herdr App", "Orca", "Paseo"), (fallback.map { it.name }).zhAny())
         assertTrue(fallback.none { it.available })
     }
 
@@ -55,23 +58,23 @@ class EnginesTest {
         // Known engines stay selectable offline and without detection (applied on connect).
         assertTrue(Engines.canSelect("orca", machine(online = false)))
         assertTrue(Engines.canSelect("paseo", machine(online = false)))
-        assertEquals("Paseo 里的 Agent", Engines.detail("paseo"))
+        assertEquals("Paseo 里的 Agent", (Engines.detail("paseo")).zhAny())
     }
 
     @Test fun detectionNamesAndNotes() {
         val m = machine(engines = listOf(herdr, core))
-        assertEquals("检测到可用，版本 0.9.3", Engines.detection("herdr", m))
-        assertEquals("没检测到", Engines.detection("herdr-core", m))
-        assertEquals("暂无检测信息", Engines.detection("orca", m))
-        assertEquals("离线，暂无检测信息", Engines.detection("herdr", machine(online = false, engines = listOf(herdr))))
-        assertEquals("Herdr App", Engines.currentName(machine(engine = "herdr-core")))
-        assertEquals("Mine", Engines.currentName(machine(engine = "x", engines = listOf(DetectedEngine("x", "Mine")))))
-        assertEquals("x", Engines.currentName(machine(engine = "x")))
-        assertEquals("桌面 App 里开的终端", Engines.detail("herdr-core"))
+        assertEquals("检测到可用，版本 0.9.3", (Engines.detection("herdr", m)).zhAny())
+        assertEquals("没检测到", (Engines.detection("herdr-core", m)).zhAny())
+        assertEquals("暂无检测信息", (Engines.detection("orca", m)).zhAny())
+        assertEquals("离线，暂无检测信息", (Engines.detection("herdr", machine(online = false, engines = listOf(herdr)))).zhAny())
+        assertEquals("Herdr App", (Engines.currentName(machine(engine = "herdr-core"))).zhAny())
+        assertEquals("Mine", (Engines.currentName(machine(engine = "x", engines = listOf(DetectedEngine("x", "Mine"))))).zhAny())
+        assertEquals("x", (Engines.currentName(machine(engine = "x"))).zhAny())
+        assertEquals("桌面 App 里开的终端", (Engines.detail("herdr-core")?.zh()).zhAny())
         assertNull(Engines.detail("x"))
-        assertTrue(Engines.footer(machine(online = false)).startsWith("机器离线，选择会在连接后生效"))
-        assertTrue(Engines.footer(machine()).startsWith("只显示所选引擎里的会话"))
-        assertEquals("已切换引擎", Engines.saved(machine()))
-        assertEquals("已保存，连上后生效", Engines.saved(machine(online = false)))
+        assertTrue(Engines.footer(machine(online = false)).zh().startsWith("机器离线，选择会在连接后生效"))
+        assertTrue(Engines.footer(machine()).zh().startsWith("只显示所选引擎里的会话"))
+        assertEquals("已切换引擎", (Engines.saved(machine()).zh()).zhAny())
+        assertEquals("已保存，连上后生效", (Engines.saved(machine(online = false)).zh()).zhAny())
     }
 }

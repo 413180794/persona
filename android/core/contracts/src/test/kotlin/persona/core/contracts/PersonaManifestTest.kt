@@ -18,9 +18,9 @@ class PersonaManifestTest {
             "avatar":{"sizes":{"64":"avatar/64.png"},"safe":1.0},"dot":{"size":144,"states":{"idle":{"file":"dot/idle.png","fps":8,"frames":24}}},
             "colors":{"light":{"primary":"#F2C230"}}}}]}"""
         val p = JsonCodec.decodeFromString<PersonaListing>(body).personas.single()
-        assertEquals("小薄荷", p.manifest.name)
+        assertEquals("小薄荷", (p.manifest.name).zhAny())
         assertNull(p.manifest.problem)
-        assertEquals(listOf("avatar/64.png", "dot/idle.png"), p.manifest.files)
+        assertEquals(listOf("avatar/64.png", "dot/idle.png"), (p.manifest.files).zhAny())
         assertEquals(false, p.usable) // "r1" is not a hub rev
         assertEquals(true, p.copy(rev = "0123456789abcdef").usable)
         assertEquals(false, p.copy(rev = "../../shared_prefs").usable)
@@ -33,25 +33,25 @@ class PersonaManifestTest {
             "avatar":{"sizes":{"64":"tiers/tadpole/avatar/64.png"}},"dot":{"size":144,"states":{"idle":{"file":"tiers/tadpole/dot/idle.png"}}}}"""
         val m = JsonCodec.decodeFromString<PersonaManifest>(body)
         assertNull(m.problem)
-        assertEquals("NWVERSE 等级", m.about)
-        assertEquals(listOf("tiers/tadpole/avatar/64.png", "tiers/tadpole/dot/idle.png"), m.files)
+        assertEquals("NWVERSE 等级", (m.about).zhAny())
+        assertEquals(listOf("tiers/tadpole/avatar/64.png", "tiers/tadpole/dot/idle.png"), (m.files).zhAny())
         assertNull(manifest().about)
     }
 
     @Test fun refusesWhatTheHubWouldLeaveOut() {
         assertNull(manifest().problem)
-        assertEquals("id jarvis-circuit", manifest(id = "jarvis-circuit").problem)
-        assertEquals("id persona", manifest(id = "persona").problem)
-        assertEquals("id Bad_Id", manifest(id = "Bad_Id").problem)
-        assertEquals("no idle dot", manifest(idle = false).problem)
-        assertEquals("file ../x.png", manifest(file = "../x.png").problem)
-        assertEquals("file dot/.hidden.png", manifest(file = "dot/.hidden.png").problem)
+        assertEquals("id jarvis-circuit", (manifest(id = "jarvis-circuit").problem).zhAny())
+        assertEquals("id persona", (manifest(id = "persona").problem).zhAny())
+        assertEquals("id Bad_Id", (manifest(id = "Bad_Id").problem).zhAny())
+        assertEquals("no idle dot", (manifest(idle = false).problem).zhAny())
+        assertEquals("file ../x.png", (manifest(file = "../x.png").problem).zhAny())
+        assertEquals("file dot/.hidden.png", (manifest(file = "dot/.hidden.png").problem).zhAny())
     }
 
     @Test fun picksTheSmallestAvatarBigEnoughAndFallsBackToIdle() {
-        assertEquals("avatar/256.png", manifest().avatarFile(192))
-        assertEquals("avatar/64.png", manifest().avatarFile(48))
-        assertEquals("avatar/256.png", manifest().avatarFile(1024))
-        assertEquals("dot/idle.png", manifest().dotState("working")?.file)
+        assertEquals("avatar/256.png", (manifest().avatarFile(192)).zhAny())
+        assertEquals("avatar/64.png", (manifest().avatarFile(48)).zhAny())
+        assertEquals("avatar/256.png", (manifest().avatarFile(1024)).zhAny())
+        assertEquals("dot/idle.png", (manifest().dotState("working")?.file).zhAny())
     }
 }

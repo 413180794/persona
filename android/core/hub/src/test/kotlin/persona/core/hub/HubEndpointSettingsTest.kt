@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText
+
 import persona.core.contracts.Endpoint
 import persona.core.contracts.api.*
 import java.net.InetAddress
@@ -64,7 +66,7 @@ class HubEndpointSettingsTest {
             block()
             fail("Expected 「$message」")
         } catch (error: EndpointEditException) {
-            assertEquals(message, error.message)
+            assertEquals(message, error.text.zh())
         }
     }
 
@@ -90,7 +92,7 @@ class HubEndpointSettingsTest {
     @Test fun addValidatesAndSavesTheCanonicalUrl() = runBlocking<Unit> {
         Fixture(listOf(pairingName, pairingLan), pin, EndpointOverrides(disabled = setOf("https://hub.example.org:18662"))).use { fixture ->
             val settings = fixture.settings
-            assertEquals("https://hub.example.org:18662", settings.add("HUB.example.org:18662/"))
+            assertEquals("https://hub.example.org:18662", (settings.add("HUB.example.org:18662/")).zhAny())
             // A stale disabled key of the same address does not disable the new candidate.
             assertEquals(EndpointOverrides(manual = listOf("https://hub.example.org:18662")), fixture.stored.value)
             assertEquals(fixture.stored.value, fixture.connection.overrides.value)
@@ -112,8 +114,8 @@ class HubEndpointSettingsTest {
         Fixture(listOf(pairingLan), fingerprint = null).use { fixture ->
             // Without a fingerprint, https addresses are checked against the system CAs (a hub behind a reverse proxy).
             assertTrue(fixture.settings.state.value.pinned)
-            assertEquals("https://hub.example.org:18662", fixture.settings.add("https://hub.example.org:18662"))
-            assertEquals("http://127.0.0.1:18660", fixture.settings.add("http://127.0.0.1:18660"))
+            assertEquals("https://hub.example.org:18662", (fixture.settings.add("https://hub.example.org:18662")).zhAny())
+            assertEquals("http://127.0.0.1:18660", (fixture.settings.add("http://127.0.0.1:18660")).zhAny())
         }
     }
 
@@ -128,21 +130,21 @@ class HubEndpointSettingsTest {
             val saves = fixture.saves
             assertEquals(old, settings.replace(old, "HUB.EXAMPLE.ORG:18662"))
             assertEquals(saves, fixture.saves)
-            assertEquals("https://hub.example.info:18662", settings.replace(old, "hub.example.info:18662"))
+            assertEquals("https://hub.example.info:18662", (settings.replace(old, "hub.example.info:18662")).zhAny())
             assertEquals(EndpointOverrides(manual = listOf("https://hub.example.info:18662", other),
                 disabled = setOf("https://hub.example.info:18662")), fixture.stored.value)
             // In the user's order the new address takes the old one's place.
             settings.reorder(listOf(other, pairingName.url))
             assertEquals(listOf(other, endpointKey(pairingName.url), "https://hub.example.info:18662"), fixture.stored.value.order)
-            assertEquals("https://hub.example.com:18663", settings.replace(other, "hub.example.com:18663"))
+            assertEquals("https://hub.example.com:18663", (settings.replace(other, "hub.example.com:18663")).zhAny())
             assertEquals(listOf("https://hub.example.com:18663", endpointKey(pairingName.url), "https://hub.example.info:18662"),
-                fixture.stored.value.order)
+                (fixture.stored.value.order).zhAny())
             assertEquals(listOf("https://hub.example.com:18663", pairingName.url, "https://hub.example.info:18662"),
-                fixture.awaitState { it.entries.first().url == "https://hub.example.com:18663" }.entries.map { it.url })
+                (fixture.awaitState { it.entries.first().url == "https://hub.example.com:18663" }.entries.map { it.url }).zhAny())
             // Replacing with 10 manual candidates is still allowed.
             repeat(8) { settings.add("https://hub$it.example.net:18662") }
-            assertEquals("https://hub.example.com:18664", settings.replace("https://hub.example.com:18663", "hub.example.com:18664"))
-            assertEquals("https://hub.example.com:18664", fixture.stored.value.order!!.first())
+            assertEquals("https://hub.example.com:18664", (settings.replace("https://hub.example.com:18663", "hub.example.com:18664")).zhAny())
+            assertEquals("https://hub.example.com:18664", (fixture.stored.value.order!!.first()).zhAny())
         }
     }
 
@@ -389,18 +391,18 @@ class HubEndpointSettingsTest {
             Fixture(listOf(Endpoint(tls, "lan")), fingerprint(certificate), EndpointOverrides(manual = listOf(closed))).use { fixture ->
                 val settings = fixture.settings
                 val passed = settings.test(tls)
-                assertEquals(EndpointTestResult(tls, true, "已通过身份校验", 42, "2026-11-02T00:00:00Z"), passed)
+                assertEquals(EndpointTestResult(tls, true, CoreText.of(CoreText.Key.EndpointVerified), 42, "2026-11-02T00:00:00Z"), passed)
                 settings.test(tls)
                 assertEquals(listOf(0, 0), synchronized(connections) { connections.toList() })
                 val refusedPort = settings.test(closed)
                 assertFalse(refusedPort.passed)
-                assertEquals("连接被拒绝", refusedPort.result)
+                assertEquals("连接被拒绝", (refusedPort.result).zhAny())
                 // Disabled candidates can be tested too.
                 settings.setEnabled(closed, false)
-                assertEquals("连接被拒绝", settings.test(closed).result)
+                assertEquals("连接被拒绝", (settings.test(closed).result).zhAny())
                 val state = fixture.awaitState { it.tests.size == 2 && it.testing.isEmpty() }
                 assertEquals(setOf(tls, closed), state.tests.keys)
-                assertEquals("连接被拒绝", state.tests.getValue(closed).result)
+                assertEquals("连接被拒绝", (state.tests.getValue(closed).result).zhAny())
                 refused("列表里没有这个地址") { settings.test("https://hub.example.info:18662") }
                 // Removing a candidate drops its result.
                 settings.setEnabled(closed, true)
@@ -409,7 +411,7 @@ class HubEndpointSettingsTest {
             }
             Fixture(listOf(Endpoint(tls, "lan")), fingerprint(HeldCertificate.Builder().build())).use { fixture ->
                 val mismatch = fixture.settings.test(tls)
-                assertEquals(EndpointTestResult(tls, false, "证书指纹不符", 42, "2026-11-02T00:00:00Z"), mismatch)
+                assertEquals(EndpointTestResult(tls, false, CoreText.of(CoreText.Key.EndpointCertificateMismatch), 42, "2026-11-02T00:00:00Z"), mismatch)
             }
         }
     }
@@ -437,7 +439,7 @@ class HubEndpointSettingsTest {
                 fixture.connection.updateNetwork(HubNetwork("network"))
                 val state = fixture.awaitState { it.activeUrl != null && it.entries.any { entry -> entry.source == EndpointSource.Hub } }
                 // The disabled manual one keeps its default place (names before lan addresses).
-                assertEquals(listOf("https://[2001:db8::1]:18662", manual, hub), state.entries.map { it.url })
+                assertEquals(listOf("https://[2001:db8::1]:18662", manual, hub), (state.entries.map { it.url }).zhAny())
                 assertEquals(listOf(EndpointSource.Hub, EndpointSource.Manual, EndpointSource.Hub), state.entries.map { it.source })
                 assertEquals(listOf(true, false, true), state.entries.map { it.enabled })
                 assertEquals(listOf(false, false, true), state.entries.map { it.active })

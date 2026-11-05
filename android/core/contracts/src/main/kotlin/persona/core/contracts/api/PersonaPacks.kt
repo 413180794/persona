@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.serialization.Serializable
 
 /**
@@ -13,7 +16,7 @@ interface PersonaPacks {
 }
 
 /** The hub predates persona packages (404 on the list). */
-class PersonaPacksUnsupported : Exception("这个 hub 还不能放形象：更新 hub 后再看")
+class PersonaPacksUnsupported : CoreTextException(CoreText.of(Key.PersonaPacksUnsupported))
 
 /** The body of GET /api/v1/personas. */
 @Serializable

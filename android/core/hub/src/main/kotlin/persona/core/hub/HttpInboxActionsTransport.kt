@@ -62,7 +62,7 @@ class HttpInboxActionsTransport(
             buildJsonObject { put("instruction", instruction) })
         val result = JsonCodec.parseToJsonElement(call(draftHttp, url, body)).jsonObject
         return result["text"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
-            ?: throw HubFailure(HubError.Protocol, "草稿是空的")
+            ?: throw HubFailure(HubError.Protocol, "draft is empty")
     }
 
     companion object {

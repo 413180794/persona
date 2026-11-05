@@ -171,6 +171,6 @@ class HttpVoiceExtensions(
 
     private companion object {
         val ExtensionId = Regex("[A-Za-z0-9_-]{1,64}")
-        const val Unverified = "未验证"
+        const val Unverified = "未验证" // i18n-ignore: the hub's status token
     }
 }

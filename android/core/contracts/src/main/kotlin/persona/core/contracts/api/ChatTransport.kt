@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.*
 
 /** HTTP operations for one paired hub; WebSocket ownership stays with HubConnection. */
@@ -28,4 +31,4 @@ data class ItemsQuery(
 }
 
 /** A request already handled elsewhere must disappear from the pending list. */
-class InteractionGoneException : Exception("请求已在别处处理")
+class InteractionGoneException : CoreTextException(CoreText.of(Key.InteractionGone))

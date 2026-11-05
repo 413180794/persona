@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
+
 /**
  * Whether this app and the hub go together (docs/hub-update.md「兼容」, iOS `HubCompat`).
  */
@@ -35,7 +38,7 @@ enum class HubCompat {
 sealed interface HubNotice {
     data object AppTooOld : HubNotice
     data object HubTooOld : HubNotice
-    data class Updating(val what: String) : HubNotice
+    data class Updating(val what: CoreText) : HubNotice
     data class RolledBack(val why: String, val build: Long) : HubNotice
     data object AutoOn : HubNotice
     data class Available(val version: String, val build: Long) : HubNotice
@@ -72,11 +75,11 @@ sealed interface HubNotice {
 
             if (status.working) {
                 val what = when (status.state) {
-                    "downloading" -> "正在下载"
-                    "waiting_idle" -> if (status.busy.isEmpty()) "等助手和 Agent 空闲" else "等 ${status.busy.size} 个在忙的结束"
-                    "restarting" -> "正在重启，会断开一会儿"
-                    "confirming" -> "新版本正在确认"
-                    else -> status.state
+                    "downloading" -> CoreText.of(Key.HubDownloading)
+                    "waiting_idle" -> if (status.busy.isEmpty()) CoreText.of(Key.HubWaitingIdle) else CoreText.of(Key.HubWaitingBusy, status.busy.size)
+                    "restarting" -> CoreText.of(Key.HubRestarting)
+                    "confirming" -> CoreText.of(Key.HubConfirming)
+                    else -> CoreText.plain(status.state)
                 }
                 out.add(Updating(what))
             }
@@ -97,14 +100,14 @@ sealed interface HubNotice {
             return out
         }
 
-        fun text(notice: HubNotice): String = when (notice) {
-            AppTooOld -> "App 版本太旧，配不上这个 hub：请到 TestFlight 更新"
-            HubTooOld -> "hub 版本太旧，部分功能用不了"
-            is Updating -> "hub 正在更新：${notice.what}"
-            is RolledBack -> notice.why
-            AutoOn -> "hub 会在空闲时自动更新"
-            is Available -> "hub 有新版本 ${notice.version}"
-            is NewImage -> "hub 有新镜像 ${notice.version}"
+        fun text(notice: HubNotice): CoreText = when (notice) {
+            AppTooOld -> CoreText.of(Key.HubAppTooOld)
+            HubTooOld -> CoreText.of(Key.HubTooOld)
+            is Updating -> CoreText.of(Key.HubUpdating, notice.what)
+            is RolledBack -> CoreText.plain(notice.why)
+            AutoOn -> CoreText.of(Key.HubAutoOn)
+            is Available -> CoreText.of(Key.HubAvailable, notice.version)
+            is NewImage -> CoreText.of(Key.HubNewImage, notice.version)
         }
     }
 }

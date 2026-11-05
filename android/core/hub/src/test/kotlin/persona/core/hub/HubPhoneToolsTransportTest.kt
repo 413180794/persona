@@ -33,7 +33,7 @@ class HubPhoneToolsTransportTest {
         assertEquals(PhoneToolCall("null", "phone_device_info", JsonObject(emptyMap())), transport.calls.first())
         assertTrue(transport.accept(call("array", JsonArray(emptyList()))))
         val refusal = socket.sent.single()
-        assertEquals("array", refusal.getValue("call_id").jsonPrimitive.content)
+        assertEquals("array", (refusal.getValue("call_id").jsonPrimitive.content).zhAny())
         assertTrue(refusal.getValue("is_error").jsonPrimitive.boolean)
         assertFalse(transport.accept(buildJsonObject { put("type", "sessions") }))
     }

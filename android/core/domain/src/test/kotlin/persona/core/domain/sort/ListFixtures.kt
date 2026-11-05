@@ -1,5 +1,6 @@
 package persona.core.domain.sort
 
+import persona.core.domain.zh
 import java.io.File
 import persona.core.contracts.JsonCodec
 import kotlinx.serialization.json.*
@@ -37,6 +38,7 @@ internal fun JsonObject.sessions() = objects("sessions").map(AgentSession::fromJ
 internal fun json(value: Any?): JsonElement = when (value) {
     null -> JsonNull
     is JsonElement -> value
+    is persona.core.contracts.CoreText -> JsonPrimitive(value.zh())
     is String -> JsonPrimitive(value)
     is Number -> JsonPrimitive(value)
     is Boolean -> JsonPrimitive(value)

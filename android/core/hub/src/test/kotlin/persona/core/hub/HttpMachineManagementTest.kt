@@ -26,8 +26,8 @@ class HttpMachineManagementTest {
         server.enqueue(MockResponse().setBody("""{"autostart":true,"running":false,"known":true}"""))
         assertEquals(HerdrState(true, false, true), machines.herdr("desk"))
         server.takeRequest().let {
-            assertEquals("/api/v1/machines/desk/herdr", it.path)
-            assertEquals("GET", it.method)
+            assertEquals("/api/v1/machines/desk/herdr", (it.path).zhAny())
+            assertEquals("GET", (it.method).zhAny())
         }
     }
 
@@ -35,9 +35,9 @@ class HttpMachineManagementTest {
         server.enqueue(MockResponse().setBody("""{"autostart":false,"running":true,"known":true}"""))
         assertEquals(HerdrState(false, true, true), machines.startHerdr("desk/name"))
         server.takeRequest().let {
-            assertEquals("/api/v1/machines/desk%2Fname/herdr/start", it.path)
-            assertEquals("POST", it.method)
-            assertEquals("{}", it.body.readUtf8())
+            assertEquals("/api/v1/machines/desk%2Fname/herdr/start", (it.path).zhAny())
+            assertEquals("POST", (it.method).zhAny())
+            assertEquals("{}", (it.body.readUtf8()).zhAny())
         }
         server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"engine_missing: herdr failed to start"}"""))
         val failed = runCatching { machines.startHerdr("desk") }.exceptionOrNull() as HubFailure
@@ -61,20 +61,20 @@ class HttpMachineManagementTest {
     @Test fun launchersReconnectAndDeployGoToTheMachine() = withHub { server, machines ->
         server.enqueue(MockResponse().setBody("""{"launchers":[{"name":"claude","model":"opus"},{"name":"codex","agent_type":"codex"}]}"""))
         val launchers = machines.launchers("mac/one")
-        assertEquals(listOf("claude", "codex"), launchers.map { it.name })
-        assertEquals("opus", launchers[0].model)
-        assertEquals(listOf("claude", "codex"), launchers.map { it.agentType })
-        assertEquals("/api/v1/machines/mac%2Fone/launchers", server.takeRequest().path)
+        assertEquals(listOf("claude", "codex"), (launchers.map { it.name }).zhAny())
+        assertEquals("opus", (launchers[0].model).zhAny())
+        assertEquals(listOf("claude", "codex"), (launchers.map { it.agentType }).zhAny())
+        assertEquals("/api/v1/machines/mac%2Fone/launchers", (server.takeRequest().path).zhAny())
 
         server.enqueue(MockResponse().setBody("""{"ok":true}"""))
         machines.reconnect("mac")
-        server.takeRequest().let { assertEquals("POST", it.method); assertEquals("/api/v1/machines/mac/reconnect", it.path) }
+        server.takeRequest().let { assertEquals("POST", (it.method).zhAny()); assertEquals("/api/v1/machines/mac/reconnect", (it.path).zhAny()) }
 
         server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"这台电脑已经是 hub 这一版"}"""))
         val refused = runCatching { machines.deploy("mac") }.exceptionOrNull() as HubFailure
         assertEquals(409, refused.status)
-        assertEquals("这台电脑已经是 hub 这一版", refused.message)
-        server.takeRequest().let { assertEquals("POST", it.method); assertEquals("/api/v1/machines/mac/deploy", it.path) }
+        assertEquals("这台电脑已经是 hub 这一版", (refused.message).zhAny())
+        server.takeRequest().let { assertEquals("POST", (it.method).zhAny()); assertEquals("/api/v1/machines/mac/deploy", (it.path).zhAny()) }
     }
 
     @Test fun readsALaunchersQuotaOnTheMachine() = withHub { server, machines ->
@@ -84,19 +84,19 @@ class HttpMachineManagementTest {
             "used_ratio":1,"exhausted":true}],"models":[{"model":"example-flash","windows":[{"label":"TPM","used_ratio":0.02}]}]}],
             "usage":[{"label":"今日","requests":287,"tokens":210552323,"cost_usd":123.12}],"a_newer_field":1}}"""))
         val answer = machines.launcherQuota("mac", "cc main")
-        assertEquals("/api/v1/launchers/cc%20main/quota?machine=mac", server.takeRequest().path)
-        assertEquals("mac", answer.machine)
+        assertEquals("/api/v1/launchers/cc%20main/quota?machine=mac", (server.takeRequest().path).zhAny())
+        assertEquals("mac", (answer.machine).zhAny())
         val q = answer.quota!!
-        assertEquals("示例网关", q.gatewayName)
+        assertEquals("示例网关", (q.gatewayName).zhAny())
         assertEquals(800.0, q.budget.single().limit!!, 0.0)
         assertTrue(q.pools.single().windows.single().exhausted)
-        assertEquals("example-flash", q.pools.single().models.single().model)
+        assertEquals("example-flash", (q.pools.single().models.single().model).zhAny())
         assertEquals(210552323L, q.usage.single().tokens)
 
         // ↻ reads again; nothing to read is an answer, not a failure
         server.enqueue(MockResponse().setBody("""{"machine":"mac","checked_at":"2026-11-04T06:00:00Z","error":"这个网关没有能查的额度：没有装能读它的额度扩展","unsupported":true}"""))
         val none = machines.launcherQuota("mac", "plain", refresh = true)
-        assertEquals("/api/v1/launchers/plain/quota?machine=mac&refresh=1", server.takeRequest().path)
+        assertEquals("/api/v1/launchers/plain/quota?machine=mac&refresh=1", (server.takeRequest().path).zhAny())
         assertTrue(none.unsupported)
         assertNull(none.quota)
     }
@@ -105,16 +105,16 @@ class HttpMachineManagementTest {
         server.enqueue(MockResponse().setBody("""{"id":"m1","engine":"orca","engines":[{"id":"orca","name":"Orca","available":true}]}"""))
         val saved = machines.setEngine("m1", "orca")
         val put = server.takeRequest()
-        assertEquals("PUT", put.method)
-        assertEquals("/api/v1/machines/m1/engine", put.path)
-        assertEquals("""{"engine":"orca"}""", put.body.readUtf8())
-        assertEquals("orca", saved.engine)
+        assertEquals("PUT", (put.method).zhAny())
+        assertEquals("/api/v1/machines/m1/engine", (put.path).zhAny())
+        assertEquals("""{"engine":"orca"}""", (put.body.readUtf8()).zhAny())
+        assertEquals("orca", (saved.engine).zhAny())
         assertTrue(saved.engines.single().available)
 
         server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"unknown engine"}"""))
         val unknown = runCatching { machines.setEngine("m1", "nope") }.exceptionOrNull() as HubFailure
         assertEquals(400, unknown.status)
-        assertEquals("unknown engine", unknown.message)
+        assertEquals("unknown engine", (unknown.message).zhAny())
         server.takeRequest()
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"no such machine"}"""))
         assertEquals(404, (runCatching { machines.setEngine("x", "herdr") }.exceptionOrNull() as HubFailure).status)
@@ -127,18 +127,18 @@ class HttpMachineManagementTest {
     @Test fun claudeSettingsWriteOneKeyAndClearingSendsJsonNull() = withHub { server, machines ->
         val table = """{"settings":[{"key":"language","title":"回复语言","type":"string","default":"","value":"中文"}]}"""
         server.enqueue(MockResponse().setBody(table))
-        assertEquals("中文", machines.claudeSettings("mac").single().stringValue)
-        assertEquals("/api/v1/machines/mac/claude-settings", server.takeRequest().path)
+        assertEquals("中文", (machines.claudeSettings("mac").single().stringValue).zhAny())
+        assertEquals("/api/v1/machines/mac/claude-settings", (server.takeRequest().path).zhAny())
 
         server.enqueue(MockResponse().setBody(table))
         machines.setClaudeSetting("mac", "language", JsonPrimitive("English"))
         server.takeRequest().let {
-            assertEquals("PUT", it.method)
-            assertEquals("""{"key":"language","value":"English"}""", it.body.readUtf8())
+            assertEquals("PUT", (it.method).zhAny())
+            assertEquals("""{"key":"language","value":"English"}""", (it.body.readUtf8()).zhAny())
         }
         server.enqueue(MockResponse().setBody("""{"settings":[{"key":"language","type":"string","value":null}]}"""))
         val cleared = machines.setClaudeSetting("mac", "language", JsonNull)
-        assertEquals("""{"key":"language","value":null}""", server.takeRequest().body.readUtf8())
+        assertEquals("""{"key":"language","value":null}""", (server.takeRequest().body.readUtf8()).zhAny())
         assertTrue(cleared.single().isDefault)
     }
 }
@@ -159,38 +159,38 @@ class HttpModelConfigurationTest {
     @Test fun loadsAndPatchesOnePurposeWithNullAndRevision() = withHub { server, models ->
         server.enqueue(MockResponse().setBody("""{"purposes":[],"providers":[]}"""))
         assertTrue(models.catalog().purposes.isEmpty())
-        assertEquals("/api/v1/model-config", server.takeRequest().path)
+        assertEquals("/api/v1/model-config", (server.takeRequest().path).zhAny())
         server.enqueue(MockResponse().setBody(detail))
         val purpose = models.purpose("lark.agent").purpose
-        assertEquals("/api/v1/model-config/purposes/lark.agent", server.takeRequest().path)
+        assertEquals("/api/v1/model-config/purposes/lark.agent", (server.takeRequest().path).zhAny())
 
         server.enqueue(MockResponse().setBody(detail))
         assertTrue(models.save(purpose, ModelConfigurationDraft()) is ModelPurposeSave.Saved)
         val patch = server.takeRequest()
-        assertEquals("PATCH", patch.method)
+        assertEquals("PATCH", (patch.method).zhAny())
         val body = JsonCodec.parseToJsonElement(patch.body.readUtf8()).jsonObject
         assertEquals(setOf("revision", "provider", "model", "effort"), body.keys)
-        assertEquals("4", body.getValue("revision").jsonPrimitive.content)
+        assertEquals("4", (body.getValue("revision").jsonPrimitive.content).zhAny())
         assertEquals(JsonNull, body["provider"])
 
         server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"revision conflict"}"""))
         assertEquals(ModelPurposeSave.Conflict, models.save(purpose, ModelConfigurationDraft(model = "next")))
-        assertEquals("next", JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject["model"]?.jsonPrimitive?.content)
+        assertEquals("next", (JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject["model"]?.jsonPrimitive?.content).zhAny())
     }
 
     @Test fun providerModelsAskTheHubAndOlderHubsHaveNone() = withHub { server, models ->
         server.enqueue(MockResponse().setBody("""{"agent":"claude","machine":"desk","models":[{"id":"opus","name":"Opus","default":true}]}"""))
         val list = models.providerModels("launcher.work", refresh = true)
-        assertEquals("/api/v1/model-config/providers/launcher.work/models?refresh=1", server.takeRequest().path)
-        assertEquals("desk", list?.machine)
-        assertEquals(listOf("opus"), list?.models?.map { it.id })
+        assertEquals("/api/v1/model-config/providers/launcher.work/models?refresh=1", (server.takeRequest().path).zhAny())
+        assertEquals("desk", (list?.machine).zhAny())
+        assertEquals(listOf("opus"), (list?.models?.map { it.id }).zhAny())
         assertTrue(list?.models?.single()?.isDefault == true)
         server.enqueue(MockResponse().setResponseCode(404).setBody("404 page not found"))
         assertNull(models.providerModels("launcher.work"))
-        assertEquals("/api/v1/model-config/providers/launcher.work/models", server.takeRequest().path)
+        assertEquals("/api/v1/model-config/providers/launcher.work/models", (server.takeRequest().path).zhAny())
         server.enqueue(MockResponse().setBody("""{"agent":"claude","machine":"lab","models":[]}"""))
-        assertEquals("lab", models.providerModels("launcher.work", machine = "lab")?.machine)
-        assertEquals("/api/v1/model-config/providers/launcher.work/models?machine=lab", server.takeRequest().path)
+        assertEquals("lab", (models.providerModels("launcher.work", machine = "lab")?.machine).zhAny())
+        assertEquals("/api/v1/model-config/providers/launcher.work/models?machine=lab", (server.takeRequest().path).zhAny())
         server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"有这个启动器的电脑都不在线，列不出模型"}"""))
         assertEquals(503, (runCatching { models.providerModels("launcher.work") }.exceptionOrNull() as HubFailure).status)
     }
@@ -205,7 +205,7 @@ class HttpModelConfigurationTest {
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"模型用途不存在"}"""))
         val missing = runCatching { models.purpose("task.gone") }.exceptionOrNull()
         assertTrue(missing is ModelPurposeNotFound)
-        assertEquals("模型用途不存在", missing?.message)
+        assertEquals("模型用途不存在", (missing?.message).zhAny())
         server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"boom"}"""))
         assertEquals(500, (runCatching { models.catalog() }.exceptionOrNull() as HubFailure).status)
     }

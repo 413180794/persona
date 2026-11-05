@@ -1,5 +1,7 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.HubScope
 import persona.core.contracts.Session
 import kotlinx.coroutines.flow.StateFlow
@@ -9,13 +11,13 @@ import kotlinx.serialization.json.JsonObject
 
 /** The kinds of the knowledge base, in the order the list offers them (docs/knowledge.md). */
 @Serializable
-enum class KnowledgeKind(val title: String) {
-    @SerialName("projects") Projects("项目"),
-    @SerialName("chats") Chats("会话"),
-    @SerialName("people") People("人"),
-    @SerialName("docs") Docs("文档"),
-    @SerialName("meetings") Meetings("会议"),
-    @SerialName("events") Events("日程");
+enum class KnowledgeKind(val title: CoreText) {
+    @SerialName("projects") Projects(CoreText.of(Key.KnowledgeProjects)),
+    @SerialName("chats") Chats(CoreText.of(Key.KnowledgeChats)),
+    @SerialName("people") People(CoreText.of(Key.KnowledgePeople)),
+    @SerialName("docs") Docs(CoreText.of(Key.KnowledgeDocs)),
+    @SerialName("meetings") Meetings(CoreText.of(Key.KnowledgeMeetings)),
+    @SerialName("events") Events(CoreText.of(Key.KnowledgeEvents));
 
     val wire: String get() = name.lowercase()
     companion object {

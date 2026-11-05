@@ -1,0 +1,354 @@
+package persona.core.designsystem
+
+import android.content.Context
+import android.content.res.Resources
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.platform.LocalResources
+import persona.core.contracts.CoreText
+import persona.core.contracts.CoreTextFailure
+import persona.core.domain.lines.compactUnits
+
+/**
+ * [CoreText] (the words of the pure-JVM core modules) in the language of [resources]. The strings live in
+ * `strings_core.xml` in `res/values`, `values-zh` and `values-ja`; a plural key's count is its first argument.
+ */
+fun CoreText.resolve(resources: Resources): String {
+    when (key) {
+        CoreText.Key.Verbatim -> return args.first().toString()
+        CoreText.Key.Joined -> {
+            val separator = args.first().let { if (it is CoreText) it.resolve(resources) else it.toString() }
+            return args.drop(1).map { (it as CoreText).resolve(resources) }.filter(String::isNotEmpty).joinToString(separator)
+        }
+        CoreText.Key.CompactCount -> {
+            val count = (args.first() as Number).toLong()
+            val unit = resources.getString(R.string.designsystem_core_compact_unit).toLong()
+            return if (count < unit) count.toString()
+                else resources.getString(R.string.designsystem_core_compact_count, compactUnits(count, unit))
+        }
+        else -> Unit
+    }
+    val values = args.map { if (it is CoreText) it.resolve(resources) else it }.toTypedArray()
+    val id = resourceOf(key)
+    return when {
+        id < 0 -> resources.getQuantityString(-id, (values.first() as Number).toInt(), *values)
+        values.isEmpty() -> resources.getString(id)
+        else -> resources.getString(id, *values)
+    }
+}
+
+fun CoreText.resolve(context: Context): String = resolve(context.resources)
+
+/** [resolve] in the page's language. */
+@Composable
+@ReadOnlyComposable
+fun CoreText.text(): String = resolve(LocalResources.current)
+
+/** The words a failure from the core modules carries, if it is one ([CoreTextFailure]). */
+val Throwable.coreText: CoreText? get() = (this as? CoreTextFailure)?.text
+
+/** String ids are positive; plural ids are negated so one `when` covers both. */
+private fun resourceOf(key: CoreText.Key): Int = when (key) {
+    CoreText.Key.FleetNeedsYou -> -R.plurals.designsystem_core_fleet_needs_you
+    CoreText.Key.FleetWorking -> -R.plurals.designsystem_core_fleet_working
+    CoreText.Key.FleetDone -> -R.plurals.designsystem_core_fleet_done
+    CoreText.Key.FleetAllDone -> R.string.designsystem_core_fleet_all_done
+    CoreText.Key.FleetPermissionWaiting -> R.string.designsystem_core_fleet_permission_waiting
+    CoreText.Key.FleetPermissionDetail -> R.string.designsystem_core_fleet_permission_detail
+    CoreText.Key.FleetPlanWaiting -> R.string.designsystem_core_fleet_plan_waiting
+    CoreText.Key.FleetPlanDetail -> R.string.designsystem_core_fleet_plan_detail
+    CoreText.Key.FleetQuestionWaiting -> R.string.designsystem_core_fleet_question_waiting
+    CoreText.Key.FleetItemWorking -> R.string.designsystem_core_fleet_item_working
+    CoreText.Key.FleetItemDone -> R.string.designsystem_core_fleet_item_done
+    CoreText.Key.FleetScreenWaiting -> R.string.designsystem_core_fleet_screen_waiting
+    CoreText.Key.Parenthesized -> R.string.designsystem_core_parenthesized
+    CoreText.Key.FleetOnePermission -> R.string.designsystem_core_fleet_one_permission
+    CoreText.Key.FleetPermissions -> -R.plurals.designsystem_core_fleet_permissions
+    CoreText.Key.FleetOnePlan -> R.string.designsystem_core_fleet_one_plan
+    CoreText.Key.FleetPlans -> -R.plurals.designsystem_core_fleet_plans
+    CoreText.Key.FleetOneQuestion -> R.string.designsystem_core_fleet_one_question
+    CoreText.Key.FleetQuestions -> -R.plurals.designsystem_core_fleet_questions
+    CoreText.Key.FleetOneScreen -> R.string.designsystem_core_fleet_one_screen
+    CoreText.Key.FleetScreens -> -R.plurals.designsystem_core_fleet_screens
+    CoreText.Key.FleetMore -> -R.plurals.designsystem_core_fleet_more
+    CoreText.Key.RequestExpired -> R.string.designsystem_core_request_expired
+    CoreText.Key.OpenTerminal -> R.string.designsystem_core_open_terminal
+    CoreText.Key.ExpiresSoon -> R.string.designsystem_core_expires_soon
+    CoreText.Key.ExpiresInMinutes -> -R.plurals.designsystem_core_expires_in_minutes
+    CoreText.Key.ExpiresInHours -> -R.plurals.designsystem_core_expires_in_hours
+    CoreText.Key.ExpiresInDays -> -R.plurals.designsystem_core_expires_in_days
+    CoreText.Key.RequestFromSubagent -> R.string.designsystem_core_request_from_subagent
+    CoreText.Key.RequestFromMcp -> R.string.designsystem_core_request_from_mcp
+    CoreText.Key.RequestFromMcpConfigured -> R.string.designsystem_core_request_from_mcp_configured
+    CoreText.Key.RequestFromTerminal -> R.string.designsystem_core_request_from_terminal
+    CoreText.Key.AlwaysAllowSession -> R.string.designsystem_core_always_allow_session
+    CoreText.Key.AlwaysAgree -> R.string.designsystem_core_always_agree
+    CoreText.Key.FieldRequired -> R.string.designsystem_core_field_required
+    CoreText.Key.FieldInvalid -> R.string.designsystem_core_field_invalid
+    CoreText.Key.ComputerFallback -> R.string.designsystem_core_computer_fallback
+    CoreText.Key.CloseAgentTitle -> R.string.designsystem_core_close_agent_title
+    CoreText.Key.CloseAgentMessageTab -> R.string.designsystem_core_close_agent_message_tab
+    CoreText.Key.CloseAgentMessagePane -> R.string.designsystem_core_close_agent_message_pane
+    CoreText.Key.DeleteSessionTitle -> R.string.designsystem_core_delete_session_title
+    CoreText.Key.DeleteSessionOnMachineCommand -> R.string.designsystem_core_delete_session_on_machine_command
+    CoreText.Key.DeleteSessionOnMachine -> R.string.designsystem_core_delete_session_on_machine
+    CoreText.Key.DeleteSessionCommand -> R.string.designsystem_core_delete_session_command
+    CoreText.Key.DeleteSession -> R.string.designsystem_core_delete_session
+    CoreText.Key.ApiNoGpu -> R.string.designsystem_core_api_no_gpu
+    CoreText.Key.ApiOverloaded -> R.string.designsystem_core_api_overloaded
+    CoreText.Key.ApiLogin -> R.string.designsystem_core_api_login
+    CoreText.Key.ApiRateLimited -> R.string.designsystem_core_api_rate_limited
+    CoreText.Key.ApiTimeout -> R.string.designsystem_core_api_timeout
+    CoreText.Key.ApiConnection -> R.string.designsystem_core_api_connection
+    CoreText.Key.ApiBadRequest -> R.string.designsystem_core_api_bad_request
+    CoreText.Key.ApiUnavailable -> R.string.designsystem_core_api_unavailable
+    CoreText.Key.ApiFailed -> R.string.designsystem_core_api_failed
+    CoreText.Key.TaskNeedsYou -> R.string.designsystem_core_task_needs_you
+    CoreText.Key.TaskInterrupted -> R.string.designsystem_core_task_interrupted
+    CoreText.Key.TaskWorking -> R.string.designsystem_core_task_working
+    CoreText.Key.TaskStarting -> R.string.designsystem_core_task_starting
+    CoreText.Key.TaskUnread -> R.string.designsystem_core_task_unread
+    CoreText.Key.TaskStopped -> R.string.designsystem_core_task_stopped
+    CoreText.Key.TaskDone -> R.string.designsystem_core_task_done
+    CoreText.Key.TaskFailed -> R.string.designsystem_core_task_failed
+    CoreText.Key.Subtask -> R.string.designsystem_core_subtask
+    CoreText.Key.DraftPlaceholderLeft -> R.string.designsystem_core_draft_placeholder_left
+    CoreText.Key.AgentsPinned -> R.string.designsystem_core_agents_pinned
+    CoreText.Key.StateNeedsYou -> R.string.designsystem_core_state_needs_you
+    CoreText.Key.StateUnread -> R.string.designsystem_core_state_unread
+    CoreText.Key.StateWorking -> R.string.designsystem_core_state_working
+    CoreText.Key.StateWaiting -> R.string.designsystem_core_state_waiting
+    CoreText.Key.StateMuted -> R.string.designsystem_core_state_muted
+    CoreText.Key.StateIdle -> R.string.designsystem_core_state_idle
+    CoreText.Key.AgentsNoTodo -> R.string.designsystem_core_agents_no_todo
+    CoreText.Key.AgentsQuietSpaces -> R.string.designsystem_core_agents_quiet_spaces
+    CoreText.Key.CountNeedsYou -> -R.plurals.designsystem_core_count_needs_you
+    CoreText.Key.CountWorking -> -R.plurals.designsystem_core_count_working
+    CoreText.Key.CountUnread -> -R.plurals.designsystem_core_count_unread
+    CoreText.Key.CountIdle -> -R.plurals.designsystem_core_count_idle
+    CoreText.Key.ListSeparator -> R.string.designsystem_core_list_separator
+    CoreText.Key.RepoOther -> R.string.designsystem_core_repo_other
+    CoreText.Key.InboxAction -> R.string.designsystem_core_inbox_action
+    CoreText.Key.InboxFyi -> R.string.designsystem_core_inbox_fyi
+    CoreText.Key.InboxNoise -> R.string.designsystem_core_inbox_noise
+    CoreText.Key.InboxDone -> R.string.designsystem_core_inbox_done
+    CoreText.Key.CompactedAbove -> R.string.designsystem_core_compacted_above
+    CoreText.Key.CompactManual -> R.string.designsystem_core_compact_manual
+    CoreText.Key.CompactAuto -> R.string.designsystem_core_compact_auto
+    CoreText.Key.CompactIdle -> R.string.designsystem_core_compact_idle
+    CoreText.Key.CompactBefore -> R.string.designsystem_core_compact_before
+    CoreText.Key.CompactUnit -> R.string.designsystem_core_compact_unit
+    CoreText.Key.CompactCount -> R.string.designsystem_core_compact_count
+    CoreText.Key.WorkTools -> -R.plurals.designsystem_core_work_tools
+    CoreText.Key.WorkThoughts -> -R.plurals.designsystem_core_work_thoughts
+    CoreText.Key.WorkReplies -> -R.plurals.designsystem_core_work_replies
+    CoreText.Key.WorkNotices -> -R.plurals.designsystem_core_work_notices
+    CoreText.Key.DurationSeconds -> R.string.designsystem_core_duration_seconds
+    CoreText.Key.DurationMinutes -> R.string.designsystem_core_duration_minutes
+    CoreText.Key.DurationMinutesSeconds -> R.string.designsystem_core_duration_minutes_seconds
+    CoreText.Key.DurationHours -> R.string.designsystem_core_duration_hours
+    CoreText.Key.DurationHoursMinutes -> R.string.designsystem_core_duration_hours_minutes
+    CoreText.Key.TaskShell -> R.string.designsystem_core_task_shell
+    CoreText.Key.TaskMonitorEvent -> R.string.designsystem_core_task_monitor_event
+    CoreText.Key.TaskMonitorEnded -> R.string.designsystem_core_task_monitor_ended
+    CoreText.Key.TaskSubagent -> R.string.designsystem_core_task_subagent
+    CoreText.Key.TaskBackground -> R.string.designsystem_core_task_background
+    CoreText.Key.TaskExitCode -> R.string.designsystem_core_task_exit_code
+    CoreText.Key.TaskStoppedState -> R.string.designsystem_core_task_stopped_state
+    CoreText.Key.TaskWaitingState -> R.string.designsystem_core_task_waiting_state
+    CoreText.Key.TaskFailedState -> R.string.designsystem_core_task_failed_state
+    CoreText.Key.TaskEndedState -> R.string.designsystem_core_task_ended_state
+    CoreText.Key.TaskCompletedState -> R.string.designsystem_core_task_completed_state
+    CoreText.Key.BadgeRunning -> R.string.designsystem_core_badge_running
+    CoreText.Key.BadgeEvents -> -R.plurals.designsystem_core_badge_events
+    CoreText.Key.BadgeState -> R.string.designsystem_core_badge_state
+    CoreText.Key.BadgeStateEvents -> -R.plurals.designsystem_core_badge_state_events
+    CoreText.Key.TaskNumber -> R.string.designsystem_core_task_number
+    CoreText.Key.WorkLineDone -> R.string.designsystem_core_work_line_done
+    CoreText.Key.RetryNow -> R.string.designsystem_core_retry_now
+    CoreText.Key.RetryInMinutes -> -R.plurals.designsystem_core_retry_in_minutes
+    CoreText.Key.RetryInHours -> -R.plurals.designsystem_core_retry_in_hours
+    CoreText.Key.RetryInHoursMinutes -> R.string.designsystem_core_retry_in_hours_minutes
+    CoreText.Key.WakeNow -> R.string.designsystem_core_wake_now
+    CoreText.Key.WakeInMinutes -> -R.plurals.designsystem_core_wake_in_minutes
+    CoreText.Key.WakeInHours -> -R.plurals.designsystem_core_wake_in_hours
+    CoreText.Key.WakeInHoursMinutes -> R.string.designsystem_core_wake_in_hours_minutes
+    CoreText.Key.SourceCodexLive -> R.string.designsystem_core_source_codex_live
+    CoreText.Key.SourceCodexHistory -> R.string.designsystem_core_source_codex_history
+    CoreText.Key.SourceIdentityConflict -> R.string.designsystem_core_source_identity_conflict
+    CoreText.Key.SourceClaudeBackground -> R.string.designsystem_core_source_claude_background
+    CoreText.Key.SourceNoSend -> R.string.designsystem_core_source_no_send
+    CoreText.Key.ReadOnlyBecause -> R.string.designsystem_core_read_only_because
+    CoreText.Key.SessionReadOnly -> R.string.designsystem_core_session_read_only
+    CoreText.Key.EngineHerdr -> R.string.designsystem_core_engine_herdr
+    CoreText.Key.EngineHerdrApp -> R.string.designsystem_core_engine_herdr_app
+    CoreText.Key.EngineOrca -> R.string.designsystem_core_engine_orca
+    CoreText.Key.EnginePaseo -> R.string.designsystem_core_engine_paseo
+    CoreText.Key.EngineOffline -> R.string.designsystem_core_engine_offline
+    CoreText.Key.EngineUnknown -> R.string.designsystem_core_engine_unknown
+    CoreText.Key.EngineFound -> R.string.designsystem_core_engine_found
+    CoreText.Key.EngineFoundVersion -> R.string.designsystem_core_engine_found_version
+    CoreText.Key.EngineMissing -> R.string.designsystem_core_engine_missing
+    CoreText.Key.EngineFooter -> R.string.designsystem_core_engine_footer
+    CoreText.Key.EngineFooterOffline -> R.string.designsystem_core_engine_footer_offline
+    CoreText.Key.EngineSwitched -> R.string.designsystem_core_engine_switched
+    CoreText.Key.EngineSavedOffline -> R.string.designsystem_core_engine_saved_offline
+    CoreText.Key.ToolRun -> R.string.designsystem_core_tool_run
+    CoreText.Key.ToolRead -> R.string.designsystem_core_tool_read
+    CoreText.Key.ToolEdit -> R.string.designsystem_core_tool_edit
+    CoreText.Key.ToolWrite -> R.string.designsystem_core_tool_write
+    CoreText.Key.ToolSearch -> R.string.designsystem_core_tool_search
+    CoreText.Key.ToolFind -> R.string.designsystem_core_tool_find
+    CoreText.Key.ToolWebFetch -> R.string.designsystem_core_tool_web_fetch
+    CoreText.Key.ToolWebSearch -> R.string.designsystem_core_tool_web_search
+    CoreText.Key.ToolTodos -> R.string.designsystem_core_tool_todos
+    CoreText.Key.ToolAsk -> R.string.designsystem_core_tool_ask
+    CoreText.Key.ToolSubmitPlan -> R.string.designsystem_core_tool_submit_plan
+    CoreText.Key.ToolEnterPlan -> R.string.designsystem_core_tool_enter_plan
+    CoreText.Key.ToolLoadTools -> R.string.designsystem_core_tool_load_tools
+    CoreText.Key.ToolSkill -> R.string.designsystem_core_tool_skill
+    CoreText.Key.ToolGeneric -> R.string.designsystem_core_tool_generic
+    CoreText.Key.ToolWithSubject -> R.string.designsystem_core_tool_with_subject
+    CoreText.Key.ContextQuote -> R.string.designsystem_core_context_quote
+    CoreText.Key.ContextOne -> R.string.designsystem_core_context_one
+    CoreText.Key.ContextEditOne -> R.string.designsystem_core_context_edit_one
+    CoreText.Key.ContextMany -> -R.plurals.designsystem_core_context_many
+    CoreText.Key.TriageUnsupported -> R.string.designsystem_core_triage_unsupported
+    CoreText.Key.ChannelsUnsupported -> R.string.designsystem_core_channels_unsupported
+    CoreText.Key.ChannelNotFound -> R.string.designsystem_core_channel_not_found
+    CoreText.Key.InteractionGone -> R.string.designsystem_core_interaction_gone
+    CoreText.Key.PersonaPacksUnsupported -> R.string.designsystem_core_persona_packs_unsupported
+    CoreText.Key.ModelConfigurationUnsupported -> R.string.designsystem_core_model_configuration_unsupported
+    CoreText.Key.HubUpdatesUnsupported -> R.string.designsystem_core_hub_updates_unsupported
+    CoreText.Key.ScreenChanged -> R.string.designsystem_core_screen_changed
+    CoreText.Key.MailReplyTargetChanged -> R.string.designsystem_core_mail_reply_target_changed
+    CoreText.Key.PortGone -> R.string.designsystem_core_port_gone
+    CoreText.Key.LockTestTitle -> R.string.designsystem_core_lock_test_title
+    CoreText.Key.LockTestBody -> R.string.designsystem_core_lock_test_body
+    CoreText.Key.UnknownError -> R.string.designsystem_core_unknown_error
+    CoreText.Key.ModelEffort -> R.string.designsystem_core_model_effort
+    CoreText.Key.NotSet -> R.string.designsystem_core_not_set
+    CoreText.Key.KnowledgeProjects -> R.string.designsystem_core_knowledge_projects
+    CoreText.Key.KnowledgeChats -> R.string.designsystem_core_knowledge_chats
+    CoreText.Key.KnowledgePeople -> R.string.designsystem_core_knowledge_people
+    CoreText.Key.KnowledgeDocs -> R.string.designsystem_core_knowledge_docs
+    CoreText.Key.KnowledgeMeetings -> R.string.designsystem_core_knowledge_meetings
+    CoreText.Key.KnowledgeEvents -> R.string.designsystem_core_knowledge_events
+    CoreText.Key.MailError -> R.string.designsystem_core_mail_error
+    CoreText.Key.MailOutlook -> R.string.designsystem_core_mail_outlook
+    CoreText.Key.MailGmail -> R.string.designsystem_core_mail_gmail
+    CoreText.Key.MailLark -> R.string.designsystem_core_mail_lark
+    CoreText.Key.HeadlineQuestion -> R.string.designsystem_core_headline_question
+    CoreText.Key.HeadlineElicitation -> R.string.designsystem_core_headline_elicitation
+    CoreText.Key.HeadlinePermission -> R.string.designsystem_core_headline_permission
+    CoreText.Key.HeadlinePermissionDetail -> R.string.designsystem_core_headline_permission_detail
+    CoreText.Key.HeadlineAgentPermission -> R.string.designsystem_core_headline_agent_permission
+    CoreText.Key.HeadlineAgentPermissionDetail -> R.string.designsystem_core_headline_agent_permission_detail
+    CoreText.Key.HeadlineScreen -> R.string.designsystem_core_headline_screen
+    CoreText.Key.HeadlineNeedsYou -> R.string.designsystem_core_headline_needs_you
+    CoreText.Key.TodoDone -> R.string.designsystem_core_todo_done
+    CoreText.Key.TodoUnread -> R.string.designsystem_core_todo_unread
+    CoreText.Key.TodoWorking -> R.string.designsystem_core_todo_working
+    CoreText.Key.TodoFollowUp -> R.string.designsystem_core_todo_follow_up
+    CoreText.Key.TodoNotStarted -> R.string.designsystem_core_todo_not_started
+    CoreText.Key.HubDownloading -> R.string.designsystem_core_hub_downloading
+    CoreText.Key.HubWaitingIdle -> R.string.designsystem_core_hub_waiting_idle
+    CoreText.Key.HubWaitingBusy -> -R.plurals.designsystem_core_hub_waiting_busy
+    CoreText.Key.HubRestarting -> R.string.designsystem_core_hub_restarting
+    CoreText.Key.HubConfirming -> R.string.designsystem_core_hub_confirming
+    CoreText.Key.HubAppTooOld -> R.string.designsystem_core_hub_app_too_old
+    CoreText.Key.HubTooOld -> R.string.designsystem_core_hub_too_old
+    CoreText.Key.HubUpdating -> R.string.designsystem_core_hub_updating
+    CoreText.Key.HubAutoOn -> R.string.designsystem_core_hub_auto_on
+    CoreText.Key.HubAvailable -> R.string.designsystem_core_hub_available
+    CoreText.Key.HubNewImage -> R.string.designsystem_core_hub_new_image
+    CoreText.Key.NotMeasured -> R.string.designsystem_core_not_measured
+    CoreText.Key.EndpointVerified -> R.string.designsystem_core_endpoint_verified
+    CoreText.Key.EndpointAddressNotFound -> R.string.designsystem_core_endpoint_address_not_found
+    CoreText.Key.EndpointRefused -> R.string.designsystem_core_endpoint_refused
+    CoreText.Key.EndpointUnreachable -> R.string.designsystem_core_endpoint_unreachable
+    CoreText.Key.EndpointTimeout -> R.string.designsystem_core_endpoint_timeout
+    CoreText.Key.EndpointCertificateMismatch -> R.string.designsystem_core_endpoint_certificate_mismatch
+    CoreText.Key.EndpointHubMismatch -> R.string.designsystem_core_endpoint_hub_mismatch
+    CoreText.Key.EndpointTlsRequired -> R.string.designsystem_core_endpoint_tls_required
+    CoreText.Key.EndpointNoNetwork -> R.string.designsystem_core_endpoint_no_network
+    CoreText.Key.EndpointServer -> R.string.designsystem_core_endpoint_server
+    CoreText.Key.EndpointProtocol -> R.string.designsystem_core_endpoint_protocol
+    CoreText.Key.EndpointRejected -> R.string.designsystem_core_endpoint_rejected
+    CoreText.Key.EndpointRateLimited -> R.string.designsystem_core_endpoint_rate_limited
+    CoreText.Key.EndpointFailed -> R.string.designsystem_core_endpoint_failed
+    CoreText.Key.AddressEmpty -> R.string.designsystem_core_address_empty
+    CoreText.Key.AddressSpaces -> R.string.designsystem_core_address_spaces
+    CoreText.Key.AddressScheme -> R.string.designsystem_core_address_scheme
+    CoreText.Key.AddressUserInfo -> R.string.designsystem_core_address_user_info
+    CoreText.Key.AddressPath -> R.string.designsystem_core_address_path
+    CoreText.Key.AddressMissingPort -> R.string.designsystem_core_address_missing_port
+    CoreText.Key.AddressIpv6Bracket -> R.string.designsystem_core_address_ipv6_bracket
+    CoreText.Key.AddressMissingHost -> R.string.designsystem_core_address_missing_host
+    CoreText.Key.AddressLinkLocal -> R.string.designsystem_core_address_link_local
+    CoreText.Key.AddressIpv6Invalid -> R.string.designsystem_core_address_ipv6_invalid
+    CoreText.Key.AddressIpv6NeedsBrackets -> R.string.designsystem_core_address_ipv6_needs_brackets
+    CoreText.Key.AddressIpv4Invalid -> R.string.designsystem_core_address_ipv4_invalid
+    CoreText.Key.AddressHostInvalid -> R.string.designsystem_core_address_host_invalid
+    CoreText.Key.AddressPortRange -> R.string.designsystem_core_address_port_range
+    CoreText.Key.AddressNotConnectable -> R.string.designsystem_core_address_not_connectable
+    CoreText.Key.AddressNoFingerprint -> R.string.designsystem_core_address_no_fingerprint
+    CoreText.Key.AddressHttpPublic -> R.string.designsystem_core_address_http_public
+    CoreText.Key.AddressDuplicate -> R.string.designsystem_core_address_duplicate
+    CoreText.Key.AddressTooMany -> -R.plurals.designsystem_core_address_too_many
+    CoreText.Key.ProbeNotYet -> R.string.designsystem_core_probe_not_yet
+    CoreText.Key.Probing -> R.string.designsystem_core_probing
+    CoreText.Key.ProbeStopped -> R.string.designsystem_core_probe_stopped
+    CoreText.Key.SingleProbe -> R.string.designsystem_core_single_probe
+    CoreText.Key.ComposerCheckTerminal -> R.string.designsystem_core_composer_check_terminal
+    CoreText.Key.ComposerUnconfirmed -> R.string.designsystem_core_composer_unconfirmed
+    CoreText.Key.ComposerDraftInTerminal -> R.string.designsystem_core_composer_draft_in_terminal
+    CoreText.Key.ComposerOffline -> R.string.designsystem_core_composer_offline
+    CoreText.Key.ComposerUploadOffline -> R.string.designsystem_core_composer_upload_offline
+    CoreText.Key.ComposerFileTooLarge -> R.string.designsystem_core_composer_file_too_large
+    CoreText.Key.UploadHubUnsupported -> R.string.designsystem_core_upload_hub_unsupported
+    CoreText.Key.UploadNodeOutdated -> R.string.designsystem_core_upload_node_outdated
+    CoreText.Key.UploadTooLarge -> R.string.designsystem_core_upload_too_large
+    CoreText.Key.UploadFailed -> R.string.designsystem_core_upload_failed
+    CoreText.Key.ComposerInterruptOffline -> R.string.designsystem_core_composer_interrupt_offline
+    CoreText.Key.ComposerInterruptUnconfirmed -> R.string.designsystem_core_composer_interrupt_unconfirmed
+    CoreText.Key.EndpointNotListed -> R.string.designsystem_core_endpoint_not_listed
+    CoreText.Key.EndpointSaveFailed -> R.string.designsystem_core_endpoint_save_failed
+    CoreText.Key.EndpointOnlyManual -> R.string.designsystem_core_endpoint_only_manual
+    CoreText.Key.EndpointKeepOne -> R.string.designsystem_core_endpoint_keep_one
+    CoreText.Key.RecoveryMissing -> R.string.designsystem_core_recovery_missing
+    CoreText.Key.RecoveryFailed -> R.string.designsystem_core_recovery_failed
+    CoreText.Key.ReconnectFailed -> R.string.designsystem_core_reconnect_failed
+    CoreText.Key.DeviceCredentialsUnsupported -> R.string.designsystem_core_device_credentials_unsupported
+    CoreText.Key.DeviceCredentialsNoDatabase -> R.string.designsystem_core_device_credentials_no_database
+    CoreText.Key.PairingExpired -> R.string.designsystem_core_pairing_expired
+    CoreText.Key.ActionNotDone -> R.string.designsystem_core_action_not_done
+    CoreText.Key.StartRejected -> R.string.designsystem_core_start_rejected
+    CoreText.Key.InboxRefreshFailed -> R.string.designsystem_core_inbox_refresh_failed
+    CoreText.Key.InboxCannotDraft -> R.string.designsystem_core_inbox_cannot_draft
+    CoreText.Key.Me -> R.string.designsystem_core_me
+    CoreText.Key.PairHubFirst -> R.string.designsystem_core_pair_hub_first
+    CoreText.Key.ConnectionSwitched -> R.string.designsystem_core_connection_switched
+    CoreText.Key.LarkIncomplete -> R.string.designsystem_core_lark_incomplete
+    CoreText.Key.LarkLoadFailed -> R.string.designsystem_core_lark_load_failed
+    CoreText.Key.LarkChat -> R.string.designsystem_core_lark_chat
+    CoreText.Key.LarkJumpedToLatest -> R.string.designsystem_core_lark_jumped_to_latest
+    CoreText.Key.InboxItemNotLoaded -> R.string.designsystem_core_inbox_item_not_loaded
+    CoreText.Key.ReplySending -> R.string.designsystem_core_reply_sending
+    CoreText.Key.ReplyWaiting -> R.string.designsystem_core_reply_waiting
+    CoreText.Key.ReplyUnknown -> R.string.designsystem_core_reply_unknown
+    CoreText.Key.ReplyVerifying -> R.string.designsystem_core_reply_verifying
+    CoreText.Key.ReplyRefused -> R.string.designsystem_core_reply_refused
+    CoreText.Key.ReplyFailed -> R.string.designsystem_core_reply_failed
+    CoreText.Key.ReplyDraft -> R.string.designsystem_core_reply_draft
+    CoreText.Key.SourceLark -> R.string.designsystem_core_source_lark
+    CoreText.Key.SourceMail -> R.string.designsystem_core_source_mail
+    CoreText.Key.LarkRecalled -> R.string.designsystem_core_lark_recalled
+    CoreText.Key.LarkFile -> R.string.designsystem_core_lark_file
+    CoreText.Key.ChatHistoryFailed -> R.string.designsystem_core_chat_history_failed
+    CoreText.Key.ChatSyncFailed -> R.string.designsystem_core_chat_sync_failed
+    CoreText.Key.CloseUnconfirmed -> R.string.designsystem_core_close_unconfirmed
+    CoreText.Key.DayToday -> R.string.designsystem_core_day_today
+    CoreText.Key.DayYesterday -> R.string.designsystem_core_day_yesterday
+    CoreText.Key.Verbatim, CoreText.Key.Joined -> error("no resource")
+}

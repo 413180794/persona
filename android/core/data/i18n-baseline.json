@@ -1,9 +1,0 @@
-{
-  "core/data/src/main/kotlin/persona/core/data/CacheBudget.kt": 3,
-  "core/data/src/main/kotlin/persona/core/data/HubChatRepository.kt": 3,
-  "core/data/src/main/kotlin/persona/core/data/InboxMedia.kt": 3,
-  "core/data/src/main/kotlin/persona/core/data/OutboxMessageSender.kt": 1,
-  "core/data/src/main/kotlin/persona/core/data/PersistentOneShotOperations.kt": 1,
-  "core/data/src/main/kotlin/persona/core/data/RealAssistantRepository.kt": 3,
-  "core/data/src/main/kotlin/persona/core/data/RealInboxRepository.kt": 32
-}

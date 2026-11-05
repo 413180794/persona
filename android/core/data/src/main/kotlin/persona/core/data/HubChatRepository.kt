@@ -1,5 +1,6 @@
 package persona.core.data
 
+import persona.core.contracts.CoreText.Key
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import persona.core.domain.ContinuityReducer
@@ -105,7 +106,7 @@ class HubChatRepository(
                         }
                         requestSync(entry.key)
                     }
-                    is ErrorEvent -> event.sessionKey?.let { key -> update(key) { it.eventError = event.error } }
+                    is ErrorEvent -> event.sessionKey?.let { key -> update(key) { it.eventError = event.error.ifBlank { DataText.of(Key.UnknownError) } } }
                     is SessionsEvent -> retainedEntries().filter { it.key.machineId == event.machineId }.forEach { entry ->
                         entry.lock.withLock {
                             if (sessions !is HubSessionsRepository && connection.state.value == ConnectionState.Online)
@@ -274,7 +275,7 @@ class HubChatRepository(
                 }
                 persist(entry)
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { entry.lock.withLock { entry.state.update { it.copy(error = "历史消息载入失败") } } }
+            catch (_: Exception) { entry.lock.withLock { entry.state.update { it.copy(error = DataText.of(Key.ChatHistoryFailed)) } } }
             finally { withContext(NonCancellable) { entry.lock.withLock {
                 entry.sync.finishOlder()
                 entry.state.update { it.copy(loadingOlder = false) }
@@ -435,7 +436,7 @@ class HubChatRepository(
             persist(entry)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { entry.lock.withLock {
-            entry.state.update { it.copy(loading = false, error = "消息同步失败", verified = false) }
+            entry.state.update { it.copy(loading = false, error = DataText.of(Key.ChatSyncFailed), verified = false) }
         } }
         finally { withContext(NonCancellable) { entry.lock.withLock { entry.sync.finishFill() } } }
     }
@@ -479,7 +480,7 @@ class HubChatRepository(
             persist(entry)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { entry.lock.withLock {
-            entry.state.update { it.copy(error = "消息同步失败", verified = false) }
+            entry.state.update { it.copy(error = DataText.of(Key.ChatSyncFailed), verified = false) }
         } }
         finally { withContext(NonCancellable) { entry.lock.withLock { entry.sync.finishFill() } } }
     }

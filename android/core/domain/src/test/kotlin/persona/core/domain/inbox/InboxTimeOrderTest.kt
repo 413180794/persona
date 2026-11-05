@@ -1,5 +1,7 @@
 package persona.core.domain.inbox
 
+import persona.core.domain.zhAny
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -13,7 +15,7 @@ class InboxTimeOrderTest {
             InboxItem("b", updatedAt = null), InboxItem("c", updatedAt = earlier),
             InboxItem("a", updatedAt = null), InboxItem("d", updatedAt = later),
         )
-        assertEquals(listOf("d", "c", "a", "b"), orderHubInbox(items).map { it.id })
+        assertEquals(listOf("d", "c", "a", "b"), (orderHubInbox(items).map { it.id }).zhAny())
     }
 
     @Test fun doneNewestFirstAndWaitingOldestFirst() {
@@ -29,7 +31,7 @@ class InboxTimeOrderTest {
             ),
             settings = InboxListSettings(expanded = setOf("done", "action")),
         )
-        assertEquals(listOf("new", "old", "unset"), result.groups.single { it.id == "done" }.rows.map { it.id })
-        assertEquals(listOf("none", "early", "late"), result.groups.single { it.id == "action" }.rows.map { it.id })
+        assertEquals(listOf("new", "old", "unset"), (result.groups.single { it.id == "done" }.rows.map { it.id }).zhAny())
+        assertEquals(listOf("none", "early", "late"), (result.groups.single { it.id == "action" }.rows.map { it.id }).zhAny())
     }
 }

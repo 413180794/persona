@@ -2,6 +2,9 @@
 
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.WireSerializer
 import kotlinx.serialization.KeepGeneratedSerializer
 import kotlinx.serialization.SerialName
@@ -45,7 +48,7 @@ data class ProviderModels(
 )
 
 /** The hub predates unified model configuration (its routes answer 404 without an error body). */
-class ModelConfigurationUnsupported : Exception("这个 hub 还不支持统一模型配置，请先更新服务器。")
+class ModelConfigurationUnsupported : CoreTextException(CoreText.of(Key.ModelConfigurationUnsupported))
 
 /** The hub has model configuration but not this purpose (a task that was deleted, an extension that went away). */
 class ModelPurposeNotFound(message: String) : Exception(message)
@@ -107,10 +110,10 @@ data class ModelPurpose(
     fun supports(field: String): Boolean = field in (fields ?: listOf("provider", "model"))
 
     /** What is in effect, piece by piece: the provider's name, the model, the effort. Empty when nothing is configured. */
-    fun summaryParts(providers: List<ModelProvider> = emptyList()): List<String> = listOfNotNull(
-        effective.provider?.takeIf { it.isNotBlank() }?.let { id -> providers.firstOrNull { it.id == id }?.displayName ?: id },
-        effective.model?.takeIf { it.isNotBlank() },
-        effective.effort?.takeIf { it.isNotBlank() }?.let { "思考 $it" },
+    fun summaryParts(providers: List<ModelProvider> = emptyList()): List<CoreText> = listOfNotNull(
+        effective.provider?.takeIf { it.isNotBlank() }?.let { id -> CoreText.plain(providers.firstOrNull { it.id == id }?.displayName ?: id) },
+        effective.model?.takeIf { it.isNotBlank() }?.let(CoreText::plain),
+        effective.effort?.takeIf { it.isNotBlank() }?.let { CoreText.of(Key.ModelEffort, it) },
     )
 
     /** The providers to offer: the hub's list (or the same kind), hidden ones only while this purpose refers to them. */

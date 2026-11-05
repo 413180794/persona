@@ -19,10 +19,10 @@ private val imagePlaceholders = Regex("\\[Image #\\d+]\\s*")
 /** `<attached_images>` and the plain-text notes older builds appended (iOS `UserBubble.notePatterns`). */
 private val imageNotes = listOf(
     Regex("\\s*<attached_images>[\\s\\S]*?</attached_images>\\s*"),
-    Regex("(?:\\A|\\n)\\s*相关图片：[^\\n]*\\z"),
-    Regex("\\s*（我从手机发来了图片，请用 Read 查看：[^）]*）\\s*\\z"),
+    Regex("(?:\\A|\\n)\\s*相关图片：[^\\n]*\\z"), // i18n-ignore: the hub's photo note it strips
+    Regex("\\s*（我从手机发来了图片，请用 Read 查看：[^）]*）\\s*\\z"), // i18n-ignore: the hub's photo note it strips
 )
-private val noteWords = listOf("<attached_images>", "</attached_images>", "相关图片：", "（我从手机发来了图片，请用 Read 查看：", "）")
+private val noteWords = listOf("<attached_images>", "</attached_images>", "相关图片：", "（我从手机发来了图片，请用 Read 查看：", "）") // i18n-ignore: the hub's photo note it strips
 
 /**
  * [raw] as its row shows it. The photos a phone sends ride along as `<attached_images>` paths (what the composer

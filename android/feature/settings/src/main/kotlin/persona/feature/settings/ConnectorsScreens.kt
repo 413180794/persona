@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import persona.core.designsystem.text
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
@@ -89,7 +90,7 @@ internal fun MailAccountsPage(
                     JGroupItem(GroupPosition.of(index, list.size)) {
                         JRow(
                             title = a.email,
-                            subtitle = a.detail,
+                            subtitle = a.detail.text(),
                             subtitleLines = 2,
                             leadingIcon = PhIcons.EnvelopeSimple,
                             onClick = { actionAccount = a },

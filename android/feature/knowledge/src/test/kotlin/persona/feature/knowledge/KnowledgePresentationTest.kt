@@ -41,7 +41,7 @@ class KnowledgePresentationTest {
     }
 
     @Test fun allSixKindsAndEveryConversationAreShown() {
-        assertEquals(listOf("项目", "会话", "人", "文档", "会议", "日程"), KnowledgeKind.entries.map { it.title })
+        assertEquals(listOf("项目", "会话", "人", "文档", "会议", "日程"), KnowledgeKind.entries.map { it.title.shown })
         assertEquals(listOf("projects", "chats", "people", "docs", "meetings", "events"), KnowledgeKind.entries.map { it.wire })
         assertTrue(KnowledgeEntry("chats", "dm", "私聊", extra = "dm").inScope())
         assertTrue(KnowledgeEntry("events", "e", "日程").inScope())

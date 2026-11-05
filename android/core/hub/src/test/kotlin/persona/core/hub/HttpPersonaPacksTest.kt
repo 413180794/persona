@@ -25,8 +25,8 @@ class HttpPersonaPacksTest {
     @Test fun filesAreFetchedByEncodedPath() = runBlocking {
         val asked = mutableListOf<String>()
         val packs = HttpPersonaPacks { path -> asked += path; ok(path, if (path.endsWith("personas")) """{"personas":[]}""" else "png") }
-        assertEquals(emptyList<Any>(), packs.list())
-        assertEquals("png", packs.file("doudou", "dot/idle.png").decodeToString())
-        assertEquals(listOf("/api/v1/personas", "/api/v1/personas/doudou/dot/idle.png"), asked)
+        assertEquals(emptyList<Any>(), (packs.list()).zhAny())
+        assertEquals("png", (packs.file("doudou", "dot/idle.png").decodeToString()).zhAny())
+        assertEquals(listOf("/api/v1/personas", "/api/v1/personas/doudou/dot/idle.png"), (asked).zhAny())
     }
 }

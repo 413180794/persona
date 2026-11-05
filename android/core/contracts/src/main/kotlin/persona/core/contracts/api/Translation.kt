@@ -34,8 +34,8 @@ data class TranslationPrefs(
 
         /** The targets the hub knows (translate.go `languageNames`), in the order the other apps list them. */
         val languages: List<TranslateLanguage> = listOf(
-            TranslateLanguage("zh-Hans", "简体中文"), TranslateLanguage("zh-Hant", "繁體中文"), TranslateLanguage("en", "English"),
-            TranslateLanguage("ja", "日本語"), TranslateLanguage("ko", "한국어"), TranslateLanguage("fr", "Français"),
+            TranslateLanguage("zh-Hans", "简体中文"), TranslateLanguage("zh-Hant", "繁體中文"), TranslateLanguage("en", "English"), // i18n-ignore: language autonyms
+            TranslateLanguage("ja", "日本語"), TranslateLanguage("ko", "한국어"), TranslateLanguage("fr", "Français"), // i18n-ignore: language autonyms
             TranslateLanguage("de", "Deutsch"), TranslateLanguage("es", "Español"), TranslateLanguage("ru", "Русский"),
             TranslateLanguage("pt", "Português"),
         )

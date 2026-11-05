@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
@@ -87,7 +88,7 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
                             if (value != setting.stringValue) set(setting.key, if (value.isEmpty()) JsonNull else JsonPrimitive(value))
                         }
                         JTextField(drafts[setting.key] ?: setting.stringValue, { drafts[setting.key] = it }, Modifier.fillMaxWidth(),
-                            placeholder = setting.placeholder, singleLine = true,
+                            placeholder = setting.placeholder.text(), singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { commit() }))
                     }
                 }

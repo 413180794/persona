@@ -1,5 +1,7 @@
 package persona.core.data
 
+import persona.core.contracts.CoreText
+import persona.core.contracts.CoreText.Key
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
@@ -70,7 +72,7 @@ class RealAssistantRepository(
     }
 
     override suspend fun refresh() = lock.withLock {
-        val transport = requireNotNull(connection.current.value) { "请先配对 hub" }
+        val transport = requireNotNull(connection.current.value) { CoreText.of(Key.PairHubFirst).shown }
         restore(transport)
         val data = transport.assistant()
         val pins = if (preferences != null) preferences.preferences.value.pins.sessions.mapNotNull(::sessionPath).toSet()
@@ -82,13 +84,13 @@ class RealAssistantRepository(
     }
 
     override suspend fun startConversation(): SessionKey = lock.withLock {
-        val transport = requireNotNull(connection.current.value) { "请先配对 hub" }
+        val transport = requireNotNull(connection.current.value) { CoreText.of(Key.PairHubFirst).shown }
         // Refresh the main pointer before deciding whether this is the first conversation.
         val config = transport.assistant()
         val isMain = config.string("main").isEmpty()
         val result = transport.createConversation(isMain)
         val session = JsonCodec.decodeFromJsonElement<Session>(result.getValue("session"))
-        check(connection.current.value === transport) { "连接已切换" }
+        check(connection.current.value === transport) { CoreText.of(Key.ConnectionSwitched).shown }
         current.update {
             it.copy(mainSession = if (isMain) session.key else it.mainSession,
                 conversations = (listOf(session) + it.conversations).distinctBy { conversation -> conversation.key })

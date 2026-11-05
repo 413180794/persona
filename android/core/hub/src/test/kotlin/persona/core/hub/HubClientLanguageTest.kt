@@ -31,10 +31,10 @@ class HubClientLanguageTest {
                 try {
                     ClientLanguage.current = AppLanguage.Ja
                     client.health(endpoint)
-                    assertEquals("ja", server.takeRequest().getHeader("Accept-Language"))
+                    assertEquals("ja", (server.takeRequest().getHeader("Accept-Language")).zhAny())
                     ClientLanguage.current = AppLanguage.En
                     client.health(endpoint)
-                    assertEquals("en", server.takeRequest().getHeader("Accept-Language"))
+                    assertEquals("en", (server.takeRequest().getHeader("Accept-Language")).zhAny())
                 } finally { ClientLanguage.current = AppLanguage.En }
             }
         }

@@ -19,11 +19,11 @@ class HubSessionFilesTest {
             Response.Builder().request(Request.Builder().url("https://example.com$path").build())
                 .protocol(Protocol.HTTP_1_1).code(status).message("response").body(body.toResponseBody()).build()
         })
-        assertEquals("val a = 1", api.file("machine/segment", "/workspace/中文 &", "/workspace/a b#%.kt").text)
+        assertEquals("val a = 1", (api.file("machine/segment", "/workspace/中文 &", "/workspace/a b#%.kt").text).zhAny())
         val url = ("https://example.com" + requests.last()).toHttpUrl()
-        assertEquals("/api/v1/machines/machine%2Fsegment/file", url.encodedPath)
-        assertEquals("/workspace/中文 &", url.queryParameter("cwd"))
-        assertEquals("/workspace/a b#%.kt", url.queryParameter("path"))
+        assertEquals("/api/v1/machines/machine%2Fsegment/file", (url.encodedPath).zhAny())
+        assertEquals("/workspace/中文 &", (url.queryParameter("cwd")).zhAny())
+        assertEquals("/workspace/a b#%.kt", (url.queryParameter("path")).zhAny())
 
         body = """{"is_repo":true,"files":null,"commits":null}"""
         assertTrue(api.status("machine", "/workspace").files.isEmpty())
@@ -31,20 +31,20 @@ class HubSessionFilesTest {
         assertTrue(api.directory("machine", "/workspace", "/workspace").truncated)
         body = """{"path":"a.kt","diff":"+new","truncated":true}"""
         assertTrue(api.diff("machine", "/workspace", "a.kt", true).truncated)
-        assertEquals("1", ("https://example.com" + requests.last()).toHttpUrl().queryParameter("staged"))
+        assertEquals("1", (("https://example.com" + requests.last()).toHttpUrl().queryParameter("staged")).zhAny())
         body = """{"commits":null}"""
         assertTrue(api.log("machine", "/workspace", 30).commits.isEmpty())
-        assertEquals("30", ("https://example.com" + requests.last()).toHttpUrl().queryParameter("skip"))
+        assertEquals("30", (("https://example.com" + requests.last()).toHttpUrl().queryParameter("skip")).zhAny())
         body = """{"commit":{"hash":"abc"},"files":null,"diff":""}"""
-        assertEquals("abc", api.show("machine", "/workspace", "abc").commit.hash)
+        assertEquals("abc", (api.show("machine", "/workspace", "abc").commit.hash).zhAny())
         body = """{"stats":[{"path":"src/a.kt","kind":"file","size":12},{"path":"~/x y/","kind":"dir"},{"path":"/gone/a.md"}]}"""
         val stats = api.stat("machine", "/workspace", listOf("src/a.kt", "~/x y/", "/gone/a.md")).stats
-        assertEquals(listOf("file", "dir", "missing"), stats.map { it.kind })
+        assertEquals(listOf("file", "dir", "missing"), (stats.map { it.kind }).zhAny())
         assertEquals(12L, stats.first().size)
         val statUrl = ("https://example.com" + requests.last()).toHttpUrl()
-        assertEquals("/api/v1/machines/machine/stat", statUrl.encodedPath)
-        assertEquals("src/a.kt\n~/x y/\n/gone/a.md", statUrl.queryParameter("paths"))
-        assertEquals("/workspace", statUrl.queryParameter("cwd"))
+        assertEquals("/api/v1/machines/machine/stat", (statUrl.encodedPath).zhAny())
+        assertEquals("src/a.kt\n~/x y/\n/gone/a.md", (statUrl.queryParameter("paths")).zhAny())
+        assertEquals("/workspace", (statUrl.queryParameter("cwd")).zhAny())
         status = 404
         body = """{"error":"not found","code":"not_found"}"""
         try { api.file("machine", "/workspace", "missing"); fail("Expected HTTP failure") }
@@ -66,16 +66,16 @@ class HubSessionFilesTest {
         assertEquals(300_000L, api.download("m", "/w", "music/song a.mp3", into))
         assertArrayEquals(bytes, into.readBytes())
         val url = ("https://example.com" + requests.last()).toHttpUrl()
-        assertEquals("/api/v1/machines/m/file/download", url.encodedPath)
-        assertEquals("music/song a.mp3", url.queryParameter("path"))
-        assertEquals("/w", url.queryParameter("cwd"))
+        assertEquals("/api/v1/machines/m/file/download", (url.encodedPath).zhAny())
+        assertEquals("music/song a.mp3", (url.queryParameter("path")).zhAny())
+        assertEquals("/w", (url.queryParameter("cwd")).zhAny())
 
         status = 404
         val missing = java.io.File(dir, "missing.mp3")
         try { api.download("m", "/w", "missing.mp3", missing); fail("Expected HTTP failure") }
         catch (failure: HubFailure) { assertEquals(404, failure.status) }
         assertFalse(missing.exists())
-        assertEquals(listOf("song.mp3"), java.io.File(dir, "a").list()!!.toList())
+        assertEquals(listOf("song.mp3"), (java.io.File(dir, "a").list()!!.toList()).zhAny())
         dir.deleteRecursively()
     }
 }

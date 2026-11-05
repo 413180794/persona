@@ -176,7 +176,7 @@ class EndpointEditorStateTest {
         assertEquals("没有改成，请重试。", editor.ui.value.message?.resolve(res))
         endpoints.failure = null
 
-        endpoints.testFailure = EndpointEditException("这个地址已经不在列表里")
+        endpoints.testFailure = EndpointEditException(persona.core.contracts.CoreText.plain("这个地址已经不在列表里"))
         editor.test(manual.url)
         assertEquals("这个地址已经不在列表里", editor.ui.value.message?.resolve(res))
         endpoints.testFailure = IllegalStateException("socket closed")
@@ -441,7 +441,7 @@ class EndpointEditorStateTest {
         override fun check(address: String, replacing: String?): EndpointCheck {
             checks += address to replacing
             return if (address.startsWith("https://", ignoreCase = true) || address.startsWith("http://", ignoreCase = true))
-                EndpointCheck.Valid(canonical(address), "name") else EndpointCheck.Invalid("地址要以 https:// 或 http:// 开头")
+                EndpointCheck.Valid(canonical(address), "name") else EndpointCheck.Invalid(persona.core.contracts.CoreText.plain("地址要以 https:// 或 http:// 开头"))
         }
 
         override suspend fun add(address: String): String {
@@ -500,13 +500,13 @@ class EndpointEditorStateTest {
             tested += url
             testFailure?.let { throw it }
             testGate?.await()
-            val result = EndpointTestResult(url, passed = true, result = "已通过身份校验", elapsedMillis = 85, testedAt = "2026-11-01T02:03:04Z")
+            val result = EndpointTestResult(url, passed = true, result = persona.core.contracts.CoreText.plain("已通过身份校验"), elapsedMillis = 85, testedAt = "2026-11-01T02:03:04Z")
             state.update { it.copy(tests = it.tests + (url to result)) }
             return result
         }
 
         private fun refuse() {
-            refusal?.let { throw EndpointEditException(it) }
+            refusal?.let { throw EndpointEditException(persona.core.contracts.CoreText.plain(it)) }
             failure?.let { throw it }
         }
 
@@ -524,21 +524,21 @@ class EndpointTextTest {
     private val url = "https://[2001:db8::1]:18662"
 
     @Test fun aTestIsLabelledAsASingleSampleWithItsElapsedTime() {
-        val passed = EndpointTestResult(url, passed = true, result = "已通过身份校验", elapsedMillis = 85, testedAt = "2026-11-01T02:03:04Z")
+        val passed = EndpointTestResult(url, passed = true, result = persona.core.contracts.CoreText.plain("已通过身份校验"), elapsedMillis = 85, testedAt = "2026-11-01T02:03:04Z")
         assertEquals(EndpointOutcome("已通过身份校验，85\u00A0毫秒（单次）", failed = false, label = "测试 10:03:04"), endpointOutcome(res, passed, null, zone, today))
-        val timedOut = passed.copy(passed = false, result = "连接超时", elapsedMillis = 8003, testedAt = "2026-10-31T01:00:00Z")
+        val timedOut = passed.copy(passed = false, result = persona.core.contracts.CoreText.plain("连接超时"), elapsedMillis = 8003, testedAt = "2026-10-31T01:00:00Z")
         assertEquals(EndpointOutcome("连接超时，8003\u00A0毫秒（单次）", failed = true, label = "测试 10-31 09:00:00"), endpointOutcome(res, timedOut, null, zone, today))
     }
 
     @Test fun theNewerOfTestAndAutomaticProbeIsShown() {
-        val probe = ConnectionCandidate(url, "ipv6", "已通过身份校验", "2026-11-01T02:00:00Z", probeDurationMillis = 40, sampleCount = 1)
+        val probe = ConnectionCandidate(url, "ipv6", persona.core.contracts.CoreText.plain("已通过身份校验"), "2026-11-01T02:00:00Z", probeDurationMillis = 40, sampleCount = 1)
         assertEquals(EndpointOutcome("已通过身份校验，40\u00A0毫秒（单次）", failed = false, label = "自动探测 10:00:00"), endpointOutcome(res, null, probe, zone, today))
-        val test = EndpointTestResult(url, passed = false, result = "连接超时", elapsedMillis = 5000, testedAt = "2026-11-01T02:03:04Z")
+        val test = EndpointTestResult(url, passed = false, result = persona.core.contracts.CoreText.plain("连接超时"), elapsedMillis = 5000, testedAt = "2026-11-01T02:03:04Z")
         assertEquals("测试 10:03:04", endpointOutcome(res, test, probe, zone, today)!!.label)
-        val later = probe.copy(result = "Timeout", checkedAt = "2026-11-01T02:05:00Z", probeDurationMillis = 5001)
+        val later = probe.copy(result = persona.core.contracts.CoreText.plain("Timeout"), checkedAt = "2026-11-01T02:05:00Z", probeDurationMillis = 5001)
         assertEquals(EndpointOutcome("Timeout，5001\u00A0毫秒（单次）", failed = true, label = "自动探测 10:05:00"), endpointOutcome(res, test, later, zone, today))
         assertEquals("A test wins when the probe time is unreadable", "测试", endpointOutcome(res, test, later.copy(checkedAt = "刚才"), zone, today)!!.label.take(2))
-        assertNull("Never probed", endpointOutcome(res, null, ConnectionCandidate(url, "ipv6", "未实测"), zone, today))
+        assertNull("Never probed", endpointOutcome(res, null, ConnectionCandidate(url, "ipv6", persona.core.contracts.CoreText.plain("未实测")), zone, today))
         assertEquals("已通过身份校验，40\u00A0毫秒（样本数\u00A012）",
             endpointOutcome(res, null, probe.copy(sampleCount = 12), zone, today)!!.text)
         assertEquals("已通过身份校验",
@@ -561,7 +561,7 @@ class EndpointTextTest {
         val ipv4 = EndpointEntry("https://192.0.2.10:18662", "ipv4", EndpointSource.Manual, enabled = false)
         val routes = ConnectionEndpointsState(
             entries = listOf(name, ipv6, ipv4), activeUrl = name.url, pinned = true,
-            tests = mapOf(ipv6.url to EndpointTestResult(ipv6.url, false, "连接超时", 5000, "2026-11-01T02:03:04Z")),
+            tests = mapOf(ipv6.url to EndpointTestResult(ipv6.url, false, persona.core.contracts.CoreText.plain("连接超时"), 5000, "2026-11-01T02:03:04Z")),
             testing = setOf(ipv4.url),
         )
         val rows = endpointRows(res, routes, emptyList(), zone = zone, today = today)
@@ -577,7 +577,7 @@ class EndpointTextTest {
         assertFalse(rows[1].testing)
         assertTrue("A test started here counts before the connection reports it",
             endpointRows(res, routes, emptyList(), testing = setOf(ipv6.url), zone = zone, today = today)[1].testing)
-        val probed = endpointRows(res, routes.copy(tests = emptyMap()), listOf(ConnectionCandidate(ipv6.url, "ipv6", "Timeout", "2026-11-01T02:00:00Z", 5000, 1)), zone = zone, today = today)
+        val probed = endpointRows(res, routes.copy(tests = emptyMap()), listOf(ConnectionCandidate(ipv6.url, "ipv6", persona.core.contracts.CoreText.plain("Timeout"), "2026-11-01T02:00:00Z", 5000, 1)), zone = zone, today = today)
         assertEquals(Status.NeedsYou, probed[1].status)
         assertNull(probed[0].outcome)
     }

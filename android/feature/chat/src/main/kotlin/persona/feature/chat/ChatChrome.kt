@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -141,12 +142,12 @@ internal fun ChatHeader(
         // The same words as the Agents list's long press and swipe (core:domain closeConfirmation).
         "close" -> session?.let { target ->
             val confirmation = target.closeConfirmation(machine?.displayName)
-            JDialog(onDismiss = { dialog = null }, title = confirmation.title, text = confirmation.message,
+            JDialog(onDismiss = { dialog = null }, title = confirmation.title.text(), text = confirmation.message.text(),
                 confirm = stringResource(R.string.chat_chrome_close_agent) to { dialog = null; state.run(target, ChatAction.Close) }, destructive = true, confirmEnabled = canAct)
         }
         "delete" -> session?.let { target ->
             val confirmation = target.deleteConfirmation(machine?.displayName)
-            JDialog(onDismiss = { dialog = null }, title = confirmation.title, text = confirmation.message,
+            JDialog(onDismiss = { dialog = null }, title = confirmation.title.text(), text = confirmation.message.text(),
                 confirm = stringResource(R.string.chat_chrome_delete) to { dialog = null; state.run(target, ChatAction.Delete) }, destructive = true, confirmEnabled = canAct)
         }
         "info" -> session?.let { target -> ChatSessionInfoSheet(target, machine, state, onOpenTodo = onOpenTodo, onDismiss = { dialog = null }) }

@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.AgentState
 import persona.core.contracts.Session
 import persona.core.contracts.WorkState
@@ -18,20 +20,20 @@ val WorkState.hubWaits: Boolean
  * The row's line for a stopped session the hub triaged: 「✓ 结论」 when done, what it waits for when blocked (with when the
  * hub acts next); null while it works or before the hub triaged its turn.
  */
-fun Session.workLine(now: Instant): String? {
+fun Session.workLine(now: Instant): CoreText? {
     val w = work ?: return null
     val line = w.line?.takeIf(String::isNotBlank) ?: return null
     if (w.phase == "working" || agentState == AgentState.Working) return null
-    if (w.phase == "done") return "✓ $line"
-    val wake = parseTime(w.wakeAt) ?: return line
-    val verb = if (w.on == "transient") "重试" else "叫醒"
+    if (w.phase == "done") return CoreText.of(Key.WorkLineDone, line)
+    val wake = parseTime(w.wakeAt) ?: return CoreText.plain(line)
+    val retry = w.on == "transient"
     val left = Duration.between(now, wake)
     val minutes = Math.round(left.seconds / 60.0)
     val whenText = when {
-        left.seconds < 60 -> "马上$verb"
-        minutes < 60 -> "$minutes 分钟后$verb"
-        minutes % 60 == 0L -> "${minutes / 60} 小时后$verb"
-        else -> "${minutes / 60} 小时 ${minutes % 60} 分后$verb"
+        left.seconds < 60 -> CoreText.of(if (retry) Key.RetryNow else Key.WakeNow)
+        minutes < 60 -> CoreText.of(if (retry) Key.RetryInMinutes else Key.WakeInMinutes, minutes.toInt())
+        minutes % 60 == 0L -> CoreText.of(if (retry) Key.RetryInHours else Key.WakeInHours, (minutes / 60).toInt())
+        else -> CoreText.of(if (retry) Key.RetryInHoursMinutes else Key.WakeInHoursMinutes, minutes / 60, minutes % 60)
     }
-    return "$line（$whenText）"
+    return CoreText.of(Key.Parenthesized, line, whenText)
 }

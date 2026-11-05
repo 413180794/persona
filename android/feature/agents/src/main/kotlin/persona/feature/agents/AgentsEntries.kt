@@ -109,7 +109,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
             val requests by dependencies.interactions().pending.collectAsStateWithLifecycle()
             val suppliedMetadata = LocalAgentsMetadata.current
             val metadata = suppliedMetadata.withOutbox(outbox).copy(requestSources = suppliedMetadata.requestSources +
-                requests.mapNotNull { request -> request.requestSourceLabel()?.let { request.id to it } }.toMap())
+                requests.mapNotNull { request -> request.requestSourceLabel()?.let { request.id to it.shown } }.toMap())
             val rows = metadata.rows.toMutableMap()
             drafts.forEach { (key, draft) ->
                 val row = rows[key] ?: AgentRowMetadata()

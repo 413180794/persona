@@ -15,9 +15,9 @@ class ChannelSourcesTest {
     )
 
     @Test fun aMessageFromAChannelIsKnownByItsPrefix() {
-        assertEquals("微信", ChannelSources.of("wechat-msg-17", channels)?.name)
-        assertEquals("飞书机器人", ChannelSources.of("feishu-om_1", channels)?.name)
-        assertEquals("lark_agent", ChannelSources.of("lark_agent-x", channels)?.id)
+        assertEquals("微信", (ChannelSources.of("wechat-msg-17", channels)?.name).zhAny())
+        assertEquals("飞书机器人", (ChannelSources.of("feishu-om_1", channels)?.name).zhAny())
+        assertEquals("lark_agent", (ChannelSources.of("lark_agent-x", channels)?.id).zhAny())
     }
 
     @Test fun theAppsOwnMessagesAndUnknownOnesAreNotMarked() {
@@ -32,7 +32,7 @@ class ChannelSourcesTest {
     }
 
     @Test fun aConversationShowsItsLatestChannel() {
-        assertEquals("feishu", ChannelSources.latest(listOf("feishu", "wechat"), channels)?.id)
+        assertEquals("feishu", (ChannelSources.latest(listOf("feishu", "wechat"), channels)?.id).zhAny())
         assertNull(ChannelSources.latest(emptyList(), channels))
         assertNull(ChannelSources.latest(listOf("app"), channels))
         // Not in the list (yet, or any more): no mark rather than a guess.
@@ -41,13 +41,13 @@ class ChannelSourcesTest {
 
     @Test fun severalHubsListsMergeByIdTheFirstWinning() {
         val merged = ChannelSources.merge(listOf(channels, listOf(HubChannel(id = "wechat", name = "别的"), HubChannel(id = "voice", name = "语音"))))
-        assertEquals(listOf("app", "wechat", "feishu", "lark_agent", "voice"), merged.map { it.id })
-        assertEquals("微信", merged[1].name)
+        assertEquals(listOf("app", "wechat", "feishu", "lark_agent", "voice"), (merged.map { it.id }).zhAny())
+        assertEquals("微信", (merged[1].name).zhAny())
     }
 
     @Test fun sessionsCarryTheirChannelsAndOlderHubsSendNone() {
         val session = JsonCodec.decodeFromString<Session>("""{"session_id":"s1","channels":["wechat","feishu"]}""")
-        assertEquals(listOf("wechat", "feishu"), session.channels)
+        assertEquals(listOf("wechat", "feishu"), (session.channels).zhAny())
         assertTrue(JsonCodec.decodeFromString<Session>("""{"session_id":"s1"}""").channels.isEmpty())
         // A wrong shape is dropped like any other optional field, not the whole session.
         assertTrue(JsonCodec.decodeFromString<Session>("""{"session_id":"s1","channels":"wechat"}""").channels.isEmpty())

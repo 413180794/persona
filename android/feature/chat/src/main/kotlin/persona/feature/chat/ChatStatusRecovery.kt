@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.resolve
 import android.content.res.Resources
 import androidx.compose.runtime.*
 import persona.core.contracts.Session
@@ -37,7 +38,7 @@ internal class ChatStatusRecovery(
                         refreshSafely()
                     }
                     ChatRecoveryResult.Unknown -> unknownResume()
-                    is ChatRecoveryResult.Failed -> { resumeUnknown = false; notice = result.reason }
+                    is ChatRecoveryResult.Failed -> { resumeUnknown = false; notice = result.reason.shown }
                 }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { unknownResume() }
@@ -59,7 +60,7 @@ internal class ChatStatusRecovery(
                     when (val result = source.reconnect(machineId)) {
                         ChatActionResult.Done -> notice = res.getString(R.string.chat_recovery_reconnect_requested)
                         ChatActionResult.Unknown -> notice = res.getString(R.string.chat_recovery_reconnect_unknown)
-                        is ChatActionResult.Failed -> { reconnectRequested = false; notice = result.reason }
+                        is ChatActionResult.Failed -> { reconnectRequested = false; notice = result.reason.resolve(res) }
                     }
                     refreshSafely()
                 }

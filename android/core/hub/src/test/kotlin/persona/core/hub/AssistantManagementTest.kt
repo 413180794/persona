@@ -22,11 +22,11 @@ class AssistantManagementTest {
             server.enqueue(MockResponse().setBody("""{"routines":[{"id":"routine","time":"09:00","enabled":true,"next_run":"2026-11-02T09:00:00+08:00"}]}"""))
             val saved = api.setRoutines(listOf(Routine(id = "routine", title = "早报", prompt = "整理安排", nextRun = "server-owned")))
             val put = server.takeRequest()
-            assertEquals("PUT", put.method)
-            assertEquals("/api/v1/assistant/routines", put.path)
-            assertEquals("Bearer test-token", put.getHeader("Authorization"))
+            assertEquals("PUT", (put.method).zhAny())
+            assertEquals("/api/v1/assistant/routines", (put.path).zhAny())
+            assertEquals("Bearer test-token", (put.getHeader("Authorization")).zhAny())
             val routine = JsonCodec.parseToJsonElement(put.body.readUtf8()).jsonObject.getValue("routines").jsonArray.single().jsonObject
-            assertEquals("09:00", routine.getValue("time").jsonPrimitive.content)
+            assertEquals("09:00", (routine.getValue("time").jsonPrimitive.content).zhAny())
             assertTrue(routine.getValue("enabled").jsonPrimitive.boolean)
             assertEquals(JsonArray(emptyList()), routine["weekdays"])
             assertFalse(routine.containsKey("next_run"))
@@ -34,24 +34,24 @@ class AssistantManagementTest {
 
             server.enqueue(MockResponse().setBody("{\"routines\":[]}"))
             api.setRoutines(emptyList())
-            assertEquals("{\"routines\":[]}", server.takeRequest().body.readUtf8())
+            assertEquals("{\"routines\":[]}", (server.takeRequest().body.readUtf8()).zhAny())
             server.enqueue(MockResponse().setBody("{}"))
             api.endConversation(SessionKey("demo", "branch/one"))
             val close = server.takeRequest()
-            assertEquals("POST", close.method)
-            assertEquals("/api/v1/sessions/demo/branch%2Fone/close", close.path)
+            assertEquals("POST", (close.method).zhAny())
+            assertEquals("/api/v1/sessions/demo/branch%2Fone/close", (close.path).zhAny())
 
             server.enqueue(MockResponse().setBody("""{"machine_id":"demo","session_id":"started"}"""))
             assertEquals(SessionKey("demo", "started"), api.runRoutine("routine"))
-            assertEquals("/api/v1/assistant/routines/routine/run", server.takeRequest().path)
+            assertEquals("/api/v1/assistant/routines/routine/run", (server.takeRequest().path).zhAny())
             server.enqueue(MockResponse().setBody("{}"))
             api.setNotes("")
-            assertEquals("{\"notes\":\"\"}", server.takeRequest().body.readUtf8())
+            assertEquals("{\"notes\":\"\"}", (server.takeRequest().body.readUtf8()).zhAny())
             server.enqueue(MockResponse().setBody("{}"))
             api.saveMemory("example.md", "")
             val memory = server.takeRequest()
-            assertEquals("/api/v1/assistant/memory/example.md", memory.path)
-            assertEquals("{\"content\":\"\"}", memory.body.readUtf8())
+            assertEquals("/api/v1/assistant/memory/example.md", (memory.path).zhAny())
+            assertEquals("{\"content\":\"\"}", (memory.body.readUtf8()).zhAny())
 
             current = false
             try { api.warm(); fail("Stale pairings must not send requests") }
@@ -66,31 +66,31 @@ class AssistantManagementTest {
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))
             api.compactConversation(SessionKey("demo", "main-1"))
             val compact = server.takeRequest()
-            assertEquals("POST", compact.method)
-            assertEquals("/api/v1/assistant/conversations/main-1/compact", compact.path)
-            assertEquals("""{"machine_id":"demo"}""", compact.body.readUtf8())
+            assertEquals("POST", (compact.method).zhAny())
+            assertEquals("/api/v1/assistant/conversations/main-1/compact", (compact.path).zhAny())
+            assertEquals("""{"machine_id":"demo"}""", (compact.body.readUtf8()).zhAny())
 
             server.enqueue(MockResponse().setResponseCode(409).setBody("""{"code":"busy","error":"正在回答，等这一轮结束再压缩"}"""))
             try { api.compactConversation(SessionKey("demo", "main-1")); fail("A refusal must throw") }
             catch (refused: AssistantRefused) {
-                assertEquals("busy", refused.code)
-                assertEquals("正在回答，等这一轮结束再压缩", refused.message)
+                assertEquals("busy", (refused.code).zhAny())
+                assertEquals("正在回答，等这一轮结束再压缩", (refused.message).zhAny())
             }
             server.takeRequest()
 
             server.enqueue(MockResponse().setBody("""{"ok":true,"archived":"main-1","carried":true}"""))
             assertEquals(NewMainResult("main-1", true), api.newMainConversation(true, "main-1"))
             val created = server.takeRequest()
-            assertEquals("/api/v1/assistant/main/new", created.path)
-            assertEquals("""{"carry":"summary","expect":"main-1"}""", created.body.readUtf8())
+            assertEquals("/api/v1/assistant/main/new", (created.path).zhAny())
+            assertEquals("""{"carry":"summary","expect":"main-1"}""", (created.body.readUtf8()).zhAny())
 
             server.enqueue(MockResponse().setBody("""{"ok":true,"archived":"","carried":false}"""))
             assertEquals(NewMainResult(), api.newMainConversation(false, null))
-            assertEquals("""{"carry":"none"}""", server.takeRequest().body.readUtf8())
+            assertEquals("""{"carry":"none"}""", (server.takeRequest().body.readUtf8()).zhAny())
 
             server.enqueue(MockResponse().setResponseCode(409).setBody("""{"code":"main_changed","error":"主对话已经换过了，刷新后再试"}"""))
             try { api.newMainConversation(true, "main-1"); fail("A refusal must throw") }
-            catch (refused: AssistantRefused) { assertEquals("main_changed", refused.code) }
+            catch (refused: AssistantRefused) { assertEquals("main_changed", (refused.code).zhAny()) }
             server.takeRequest()
 
             // Anything else stays the hub failure it is.

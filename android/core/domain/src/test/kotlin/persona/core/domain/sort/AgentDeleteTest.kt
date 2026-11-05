@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.domain.zhAny
+
 import persona.core.contracts.Session
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,11 +22,11 @@ class AgentDeleteTest {
     @Test fun theConfirmationSaysTheRecordStays() {
         val session = Session(machineId = "box", sessionId = "s", title = "修登录", cwd = "/srv/app", status = "offline")
         val confirmation = session.deleteConfirmation("工作站")
-        assertEquals("删除这个对话？", confirmation.title)
+        assertEquals("删除这个对话？", (confirmation.title).zhAny())
         assertEquals("「修登录」会从各端的列表里移除。工作站 上的对话记录不会删除，之后在电脑上用 claude --resume 继续，它会重新出现。",
-            confirmation.message)
+            (confirmation.message).zhAny())
         val codex = Session(machineId = "box", sessionId = "s", title = "修登录", agent = "codex", status = "offline")
         assertEquals("「修登录」会从各端的列表里移除。电脑上的对话记录不会删除，之后在电脑上用 codex resume 继续，它会重新出现。",
-            codex.deleteConfirmation(null).message)
+            (codex.deleteConfirmation(null).message).zhAny())
     }
 }

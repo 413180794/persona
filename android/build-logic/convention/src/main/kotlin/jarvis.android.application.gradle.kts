@@ -10,6 +10,8 @@ android {
         minSdk = libs.findVersion("minSdk").get().requiredVersion.toInt()
         targetSdk = libs.findVersion("targetSdk").get().requiredVersion.toInt()
     }
+    // The core modules' words in Simplified Chinese for code with no resources at hand (CoreTextFallback).
+    sourceSets.getByName("test").resources.srcDir(rootProject.file("core/designsystem/src/main/res/values-zh"))
     compileOptions {
         sourceCompatibility = JavaVersion.toVersion(libs.findVersion("jvm").get().requiredVersion)
         targetCompatibility = JavaVersion.toVersion(libs.findVersion("jvm").get().requiredVersion)

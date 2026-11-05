@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English is the fallback (docs/i18n.md); values-zh and values-ja hold the same keys. What the demo hub says. -->
+<resources>
+    <string name="demo_not_sent">Nothing is really sent in demo mode</string>
+    <string name="demo_missing">Demo mode doesn’t have this data</string>
+    <string name="demo_reply">This is demo mode: the message didn’t really go to a computer, and the agents here are demo data. Connect your own hub to let agents carry on.</string>
+    <string name="demo_scope_changed">The connection changed</string>
+    <string name="demo_empty_message">The message can’t be empty</string>
+    <string name="demo_id_used">This message id is already used</string>
+    <string name="demo_new_chat">New chat</string>
+</resources>

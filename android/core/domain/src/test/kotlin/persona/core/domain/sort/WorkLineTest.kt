@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.domain.zhAny
+
 import persona.core.contracts.Session
 import persona.core.contracts.WorkAgent
 import persona.core.contracts.WorkState
@@ -17,16 +19,16 @@ class WorkLineTest {
         Session(machineId = "m", sessionId = "s", status = status, state = state, work = work)
 
     @Test fun doneSaysTheConclusion() {
-        assertEquals("✓ 已合并 PR #12", session(WorkState("done", line = "已合并 PR #12")).workLine(now))
+        assertEquals("✓ 已合并 PR #12", (session(WorkState("done", line = "已合并 PR #12")).workLine(now)).zhAny())
     }
 
     @Test fun blockedSaysWhatItWaitsForAndWhenTheHubActs() {
-        assertEquals("等你选 D2 / D4", session(WorkState("blocked", on = "user", line = "等你选 D2 / D4")).workLine(now))
+        assertEquals("等你选 D2 / D4", (session(WorkState("blocked", on = "user", line = "等你选 D2 / D4")).workLine(now)).zhAny())
         assertEquals("等部署跑完（12 分钟后叫醒）",
-            session(WorkState("blocked", on = "external", line = "等部署跑完", wait = "部署", wakeAt = at(12))).workLine(now))
+            (session(WorkState("blocked", on = "external", line = "等部署跑完", wait = "部署", wakeAt = at(12))).workLine(now)).zhAny())
         assertEquals("模型服务暂时出错（马上重试）",
-            session(WorkState("blocked", on = "transient", line = "模型服务暂时出错", wakeAt = now.plusSeconds(20).toString())).workLine(now))
-        assertEquals("等（1 小时 5 分后叫醒）", session(WorkState("blocked", on = "external", line = "等", wakeAt = at(65))).workLine(now))
+            (session(WorkState("blocked", on = "transient", line = "模型服务暂时出错", wakeAt = now.plusSeconds(20).toString())).workLine(now)).zhAny())
+        assertEquals("等（1 小时 5 分后叫醒）", (session(WorkState("blocked", on = "external", line = "等", wakeAt = at(65))).workLine(now)).zhAny())
     }
 
     @Test fun nothingWhileItWorksOrBeforeTheHubTriagedIt() {

@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.Session
 
 /**
@@ -7,8 +9,14 @@ import persona.core.contracts.Session
  * DeleteSessionText): it only leaves every app's list; the record on the computer stays and brings it back once used.
  */
 fun Session.deleteConfirmation(machineName: String?): CloseConfirmation {
-    val place = machineName?.takeIf(String::isNotBlank)?.let { "$it 上的" } ?: "电脑上的"
+    val machine = machineName?.takeIf(String::isNotBlank)
     // The command alone ("claude --resume"), without the directory and id.
-    val back = resumeCommand(cwd = "")?.substringBeforeLast(' ')?.let { "之后在电脑上用 $it 继续，它会重新出现。" } ?: "之后再用到它，它会重新出现。"
-    return CloseConfirmation("删除这个对话？", "「$displayTitle」会从各端的列表里移除。${place}对话记录不会删除，$back")
+    val command = resumeCommand(cwd = "")?.substringBeforeLast(' ')
+    val message = when {
+        machine != null && command != null -> CoreText.of(Key.DeleteSessionOnMachineCommand, displayTitle, machine, command)
+        machine != null -> CoreText.of(Key.DeleteSessionOnMachine, displayTitle, machine)
+        command != null -> CoreText.of(Key.DeleteSessionCommand, displayTitle, command)
+        else -> CoreText.of(Key.DeleteSession, displayTitle)
+    }
+    return CloseConfirmation(CoreText.of(Key.DeleteSessionTitle), message)
 }

@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -64,7 +65,7 @@ internal fun ApiErrorLine(line: ChatLine.ApiError) {
     }
     val retry = actions?.takeIf { it.retryLineId == line.id }?.onRetry
     ErrorCard(
-        info.reason, apiErrorTags(info, line.count, resources), open, { open = !open },
+        info.reason.text(), apiErrorTags(info, line.count, resources), open, { open = !open },
         action = if (retry != null) ({ JButton(stringResource(R.string.chat_api_error_retry), retry, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowClockwise) }) else null,
     ) {
         info.requestId?.let { id -> DetailField(stringResource(R.string.chat_api_error_request_id), id) { JIconButton(PhIcons.Copy, stringResource(R.string.chat_api_error_copy_request_id), { copy(id) }) } }

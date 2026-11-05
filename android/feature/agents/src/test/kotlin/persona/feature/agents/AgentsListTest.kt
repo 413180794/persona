@@ -114,7 +114,7 @@ class AgentsListTest {
         assertNull(request.copy(secret = true).quickQuestion())
         assertEquals("即将过期", countdown(request.expiresAt, Instant.parse("2026-01-01T00:00:30Z")))
         assertTrue(request.expired(Instant.parse("2026-01-01T00:01:00Z")))
-        assertEquals(RequestExpiry.expiredLabel, countdown(request.expiresAt, Instant.parse("2026-01-01T00:01:01Z")))
+        assertEquals(RequestExpiry.expiredLabel.shown, countdown(request.expiresAt, Instant.parse("2026-01-01T00:01:01Z")))
         assertTrue(request.copy(expiresAt = "invalid").expired(Instant.parse("2026-01-01T00:00:30Z")))
         assertTrue(AgentRowMetadata(hasAttachments = true).hasDraft)
         assertFalse(AgentRowMetadata().hasDraft)

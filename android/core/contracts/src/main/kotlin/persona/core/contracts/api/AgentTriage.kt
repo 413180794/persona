@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -21,4 +24,4 @@ interface AgentTriage {
     suspend fun put(value: TriageSwitches): TriageSwitches
 }
 
-class TriageUnsupported : Exception("这台 hub 还不支持会话分诊，先更新 hub")
+class TriageUnsupported : CoreTextException(CoreText.of(Key.TriageUnsupported))

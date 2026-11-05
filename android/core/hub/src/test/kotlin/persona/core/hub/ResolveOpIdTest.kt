@@ -40,12 +40,12 @@ class ResolveOpIdTest {
         assertEquals(4, sent.size)
         assertEquals(setOf("op-1"), sent.map { it.opId }.toSet())
         assertEquals(1, sent.map { it.body }.toSet().size)
-        assertEquals("/api/v1/interactions/ix/resolve", sent.first().path)
+        assertEquals("/api/v1/interactions/ix/resolve", (sent.first().path).zhAny())
         assertEquals(3, waits)
 
         // The next answer is another operation.
         transport.resolve("ix2", Resolution(allow = false))
-        assertEquals("op-2", sent.last().opId)
+        assertEquals("op-2", (sent.last().opId).zhAny())
     }
 
     @Test fun retriesStopAfterTheBoundAndOtherFailuresAreNotRetried() = runTest {

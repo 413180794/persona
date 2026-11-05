@@ -13,7 +13,7 @@ class CompactionContractTest {
                "compaction":{"state":"running","started_at":"2026-11-04T08:30:00+08:00"}}""",
         ).compaction!!
         assertTrue(running.running)
-        assertEquals("2026-11-04T00:30:00Z", running.startedAt)
+        assertEquals("2026-11-04T00:30:00Z", (running.startedAt).zhAny())
         assertNull(running.finishedAt)
 
         val failed = JsonCodec.decodeFromString<Session>(
@@ -21,12 +21,12 @@ class CompactionContractTest {
                "started_at":"2026-11-04T00:30:00Z","finished_at":"2026-11-04T00:31:00Z"}}""",
         ).compaction!!
         assertTrue(failed.failed)
-        assertEquals("Not enough messages to compact", failed.error)
-        assertEquals("2026-11-04T00:31:00Z", failed.finishedAt)
+        assertEquals("Not enough messages to compact", (failed.error).zhAny())
+        assertEquals("2026-11-04T00:31:00Z", (failed.finishedAt).zhAny())
 
         // A state this app does not know, and an older hub without the field.
-        assertEquals("unknown", JsonCodec.decodeFromString<Session>(
-            """{"session_id":"s","compaction":{"state":"queued","started_at":"2026-11-04T00:30:00Z"}}""").compaction?.state)
+        assertEquals("unknown", (JsonCodec.decodeFromString<Session>(
+            """{"session_id":"s","compaction":{"state":"queued","started_at":"2026-11-04T00:30:00Z"}}""").compaction?.state).zhAny())
         assertNull(JsonCodec.decodeFromString<Session>("""{"session_id":"s"}""").compaction)
     }
 

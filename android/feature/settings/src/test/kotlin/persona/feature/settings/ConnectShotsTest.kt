@@ -115,7 +115,7 @@ class ConnectShotsTest {
                 EndpointEntry("http://127.0.0.1:18660", "lan", EndpointSource.Pairing, enabled = false),
             ),
             activeUrl = v6, pinned = true, customOrder = true,
-            tests = mapOf("https://hub.example.com:18662" to EndpointTestResult("https://hub.example.com:18662", false, "Timeout", 5000, ago(3))),
+            tests = mapOf("https://hub.example.com:18662" to EndpointTestResult("https://hub.example.com:18662", false, persona.core.contracts.CoreText.plain("Timeout"), 5000, ago(3))),
         ))
         override fun check(address: String, replacing: String?) = EndpointCheck.Valid(address, "name")
         override suspend fun add(address: String) = address
@@ -124,7 +124,7 @@ class ConnectShotsTest {
         override suspend fun setEnabled(url: String, enabled: Boolean) = Unit
         override suspend fun reorder(urls: List<String>) = Unit
         override suspend fun resetOrder() = Unit
-        override suspend fun test(url: String) = EndpointTestResult(url, true, "OK", 40, ago(0))
+        override suspend fun test(url: String) = EndpointTestResult(url, true, persona.core.contracts.CoreText.plain("OK"), 40, ago(0))
     }
     private val link = "persona://pair?url=https%3A%2F%2Fhub.example.com%3A18662&token=example-token&hub=example-hub" +
         "&fp=AB%3ACD%3AEF&alt=https%3A%2F%2F%5B2001%3Adb8%3A%3A1%5D%3A18662"

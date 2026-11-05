@@ -42,7 +42,7 @@ interface ExtensionManagement : ExtensionUi, ExtensionMarkets {
     suspend fun setEnabled(id: String, enabled: Boolean): ExtensionDetail
 
     suspend fun setContribution(id: String, point: String, contribution: String, enabled: Boolean): ExtensionDetail =
-        throw UnsupportedOperationException("当前 hub 不支持贡献开关")
+        throw UnsupportedOperationException("Contribution switches unsupported by this hub")
 
     val changes: Flow<Unit> get() = kotlinx.coroutines.flow.emptyFlow()
     suspend fun quickPrompts(): List<ExtensionQuickPrompt> = emptyList()

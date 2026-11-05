@@ -1,5 +1,7 @@
 package persona.core.domain.lines
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -10,22 +12,28 @@ import java.math.RoundingMode
  */
 data class Compaction(val trigger: String? = null, val preTokens: Long? = null, val notes: List<String> = emptyList()) {
     /** 「以上内容已压缩 · 手动 · 压缩前 18.1 万 token」, leaving out what is not known. */
-    val label: String get() = listOfNotNull(
-        "以上内容已压缩",
-        when (trigger) { "manual" -> "手动"; "auto" -> "自动"; "idle" -> "空闲时"; else -> null },
-        preTokens?.takeIf { it > 0 }?.let { "压缩前 ${tokenCount(it)} token" },
-    ).joinToString(" · ")
+    val label: CoreText get() = CoreText.joined(" · ", listOfNotNull(
+        CoreText.of(Key.CompactedAbove),
+        when (trigger) { "manual" -> Key.CompactManual; "auto" -> Key.CompactAuto; "idle" -> Key.CompactIdle; else -> null }?.let(CoreText::of),
+        preTokens?.takeIf { it > 0 }?.let { CoreText.of(Key.CompactBefore, tokenCount(it)) },
+    ))
 }
 
 /** What the hub writes for a compaction boundary without its own `compact` (Codex), and for the summary after it. */
-const val CompactedNotice = "上下文已压缩"
-const val ContinuedNotice = "已从压缩的上下文继续"
+const val CompactedNotice = "上下文已压缩" // i18n-ignore: the hub's notice it matches
+const val ContinuedNotice = "已从压缩的上下文继续" // i18n-ignore: the hub's notice it matches
 /** A /compact sent without instructions (the app's 压缩上下文, the node's idle compaction): a notice, not a message. */
-const val CompactCommandNotice = "压缩上下文"
+const val CompactCommandNotice = "压缩上下文" // i18n-ignore: the node's notice it matches
 
-/** 181000 → 「18.1 万」, 150000 → 「15 万」; under ten thousand the number itself. */
-fun tokenCount(tokens: Long): String = if (tokens < 10_000) tokens.toString()
-    else BigDecimal(tokens).divide(BigDecimal(10_000)).setScale(1, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + " 万"
+/**
+ * 181000 → 「18.1 万」 (181K), 150000 → 「15 万」; under the language's unit the number itself. The unit (ten thousand
+ * in Chinese and Japanese, a thousand in English) is the language's: [CoreText.Key.CompactCount] carries the count.
+ */
+fun tokenCount(tokens: Long): CoreText = CoreText.of(Key.CompactCount, tokens)
+
+/** [tokens] in units of [unit], one decimal at most: 181000 / 10000 → 「18.1」. */
+fun compactUnits(tokens: Long, unit: Long): String =
+    BigDecimal(tokens).divide(BigDecimal(unit)).setScale(1, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
 
 private fun LineItem.isNotice(text: String) =
     kind == "notice" && task == null && item.task == null && item.wake != true && this.text == text

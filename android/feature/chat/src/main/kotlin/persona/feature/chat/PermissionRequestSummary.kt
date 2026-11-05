@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,7 +16,8 @@ import persona.core.domain.answer.permissionSummary
 @Composable
 fun PermissionRequestSummary(request: Interaction, maxLines: Int = Int.MAX_VALUE, linkify: Boolean = true) {
     val summary = remember(request) { request.permissionSummary() }
-    Text(if (summary.monospace || !linkify) AnnotatedString(summary.text) else chatLinkAnnotations(summary.text),
+    val text = summary.text.text()
+    Text(if (summary.monospace || !linkify) AnnotatedString(text) else chatLinkAnnotations(text),
         style = PersonaTypography.cardBody,
         fontFamily = if (summary.monospace) FontFamily.Monospace else null,
         maxLines = if (summary.monospace) 2 else maxLines, overflow = TextOverflow.Ellipsis)

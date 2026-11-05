@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.Session
 
 /*
@@ -31,10 +33,10 @@ val Session.canTypeClaudeCommands: Boolean get() = canChangeModes && !assistant 
 
 /** A session's source as the app names it: its label, the agent's name there, and why it is read-only. */
 data class SessionSourceInfo(
-    val label: String,
+    val label: CoreText,
     val agentName: String? = null,
     /** Set only when the phone cannot send: the source's reason, or a generic one. */
-    val readOnlyReason: String? = null,
+    val readOnlyReason: CoreText? = null,
 ) {
     val readOnly: Boolean get() = readOnlyReason != null
 }
@@ -42,30 +44,30 @@ data class SessionSourceInfo(
 val Session.source: SessionSourceInfo?
     get() {
         val label = when (sourceKind) {
-            "codex_app_server" -> "Codex 实时"
-            "codex_history" -> "Codex 历史"
-            "identity_conflict" -> "身份冲突"
-            "claude_bg" -> "Claude 后台"
+            "codex_app_server" -> CoreText.of(Key.SourceCodexLive)
+            "codex_history" -> CoreText.of(Key.SourceCodexHistory)
+            "identity_conflict" -> CoreText.of(Key.SourceIdentityConflict)
+            "claude_bg" -> CoreText.of(Key.SourceClaudeBackground)
             // An agent runtime's session (docs/runtimes.md): its own name, "DSH".
-            "runtime" -> agentLabel
-            else -> sourceKind?.takeIf(String::isNotEmpty)
+            "runtime" -> CoreText.plain(agentLabel)
+            else -> sourceKind?.takeIf(String::isNotEmpty)?.let(CoreText::plain)
         } ?: return null
         // The node writes some reasons with their own "仅查看：", which the subtitle adds already.
         val reason = readOnlyReason?.removePrefix(READ_ONLY_PREFIX)?.trim()?.takeIf(String::isNotEmpty)
         return SessionSourceInfo(label,
             agentName.takeIf { sourceKind != "identity_conflict" }?.takeIf(String::isNotEmpty),
-            if (canSend) null else reason ?: NO_SEND_REASON)
+            if (canSend) null else reason?.let(CoreText::plain) ?: CoreText.of(Key.SourceNoSend))
     }
 
 /** "Codex 历史 · <agent> · 仅查看：<reason>", as iOS writes it, for notices that are one line of text. */
-val Session.sourceSubtitle: String?
+val Session.sourceSubtitle: CoreText?
     get() = source?.let { source ->
-        val named = listOfNotNull(source.label, source.agentName).joinToString(" · ")
-        source.readOnlyReason?.let { "$named · $READ_ONLY_PREFIX$it" } ?: named
+        val named = CoreText.joined(" · ", listOfNotNull(source.label, source.agentName?.let(CoreText::plain)))
+        source.readOnlyReason?.let { CoreText.joined(" · ", listOf(named, CoreText.of(Key.ReadOnlyBecause, it))) } ?: named
     }
 
 /** Why nothing can be typed: what the composer and refused operations say. */
-val Session.readOnlyNotice: String get() = sourceSubtitle?.takeIf { !canSend } ?: READ_ONLY
+val Session.readOnlyNotice: CoreText get() = sourceSubtitle?.takeIf { !canSend } ?: READ_ONLY
 
 /**
  * What picks the conversation up again in a terminal on that computer, or null where there is no terminal (an agent
@@ -82,6 +84,5 @@ fun Session.resumeCommand(cwd: String = this.cwd, id: String = sourceThreadId?.t
     return (cwd.takeIf(String::isNotBlank)?.let { "cd -- ${quote(it)} && " } ?: "") + "$command ${quote(id)}"
 }
 
-const val READ_ONLY = "此会话仅可查看"
-private const val READ_ONLY_PREFIX = "仅查看："
-private const val NO_SEND_REASON = "此来源尚未允许发送"
+val READ_ONLY = CoreText.of(Key.SessionReadOnly)
+private const val READ_ONLY_PREFIX = "仅查看：" // i18n-ignore: the node's prefix it strips

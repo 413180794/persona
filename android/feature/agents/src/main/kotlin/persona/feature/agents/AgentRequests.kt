@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -50,9 +51,10 @@ internal fun RequestCard(
                             JCodeBlock(command, maxLines = 6)
                             val purpose = (input?.get("description") as? JsonPrimitive)?.takeIf { it.isString }?.content
                             purpose?.takeIf { it.isNotBlank() }?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2) }
-                            if (summary.text != command && summary.text != purpose) Text(summary.text, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
+                            val text = summary.text.text()
+                            if (text != command && text != purpose) Text(text, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
                         } else {
-                            Text(summary.text, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                            Text(summary.text.text(), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 4, overflow = TextOverflow.Ellipsis)
                             summary.description?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
                         }
                     }
@@ -79,7 +81,7 @@ internal fun RequestCard(
                 "permission" -> DecisionButtons(
                     primary = JAction(stringResource(R.string.agents_request_allow), enabled = enabled, onClick = { answer(AnswerAction.Allow) }),
                     secondary = JAction(stringResource(R.string.agents_request_deny), enabled = enabled, onClick = { answer(AnswerAction.Deny) }),
-                    more = if (request.offersAlways) listOf(JAction(request.alwaysActionLabel,
+                    more = if (request.offersAlways) listOf(JAction(request.alwaysActionLabel.text(),
                         enabled = enabled && request.sessionId.isNotEmpty(), onClick = { answer(AnswerAction.Always) })) else emptyList())
                 // The full editor owns feedback, draft persistence and the plan-read gate.
                 "plan" -> DecisionButtons(JAction(stringResource(R.string.agents_request_review_plan), enabled = enabled, onClick = onOpen),
@@ -156,7 +158,7 @@ internal fun RequestDetail(
                 onEdit = { _, _ -> feedback?.notice(openForEdit) },
                 onVisibilityChanged = { linkVisible = it }) { inset ->
                 Column(Modifier.fillMaxSize().padding(bottom = inset).imePadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    JRow(request.headline, subtitle = request.sessionTitle, leadingIcon = request.decisionKind.icon)
+                    JRow(request.headline.text(), subtitle = request.sessionTitle, leadingIcon = request.decisionKind.icon)
                     delivery?.let { RequestDeliveryStatus(it) }
                     if (!online && !readOnly) Text(stringResource(R.string.agents_request_offline), style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText)
                     Box(Modifier.weight(1f)) {

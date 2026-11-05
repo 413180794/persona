@@ -145,7 +145,7 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         override val state = settings.flatMapLatest { it?.state ?: flowOf(ConnectionEndpointsState()) }
             .stateIn(scope, SharingStarted.Eagerly, ConnectionEndpointsState())
         override fun check(address: String, replacing: String?) =
-            settings.value?.check(address, replacing) ?: EndpointCheck.Invalid(AppText.get(R.string.app_error_pair_first))
+            settings.value?.check(address, replacing) ?: EndpointCheck.Invalid(persona.core.contracts.CoreText.of(persona.core.contracts.CoreText.Key.PairHubFirst))
         override suspend fun add(address: String) = controller().add(address)
         override suspend fun replace(url: String, address: String) = controller().replace(url, address)
         override suspend fun remove(url: String) = controller().remove(url)
@@ -153,7 +153,7 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         override suspend fun reorder(urls: List<String>) = controller().reorder(urls)
         override suspend fun resetOrder() = controller().resetOrder()
         override suspend fun test(url: String) = controller().test(url)
-        private fun controller() = settings.value ?: throw EndpointEditException(AppText.get(R.string.app_error_pair_first))
+        private fun controller() = settings.value ?: throw EndpointEditException(persona.core.contracts.CoreText.of(persona.core.contracts.CoreText.Key.PairHubFirst))
     }
 
     /** Every group's outbox in one list; a message goes to the group its session belongs to. */

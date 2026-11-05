@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import persona.core.designsystem.resolve
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -71,7 +72,7 @@ internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)?
             data.candidates.forEach { candidate ->
                 diagnosticGroup(routeKind(candidate.kind, resources), listOf(
                     resources.getString(R.string.settings_diag_address) to candidate.url,
-                    resources.getString(R.string.settings_diag_last_probe) to candidate.result.takeUnless { it.isBlank() },
+                    resources.getString(R.string.settings_diag_last_probe) to candidate.result.resolve(resources).takeUnless { it.isBlank() },
                     resources.getString(R.string.settings_diag_probe_time) to candidate.probeMeasurement(resources),
                     resources.getString(R.string.settings_diag_probed_at) to localTime(candidate.checkedAt),
                 ))
@@ -136,7 +137,7 @@ private fun LazyListScope.pairingAttempt(attempt: PairingAttempt, resources: Res
     attempt.candidates.forEach { candidate ->
         diagnosticGroup(resources.getString(R.string.settings_diag_pairing_probe, routeKind(candidate.kind, resources)), listOf(
             resources.getString(R.string.settings_diag_address) to candidate.url,
-            resources.getString(R.string.settings_diag_probe_result) to candidate.result.takeUnless { it.isBlank() },
+            resources.getString(R.string.settings_diag_probe_result) to candidate.result.resolve(resources).takeUnless { it.isBlank() },
             resources.getString(R.string.settings_diag_probed_at) to localTime(candidate.checkedAt),
         ))
     }

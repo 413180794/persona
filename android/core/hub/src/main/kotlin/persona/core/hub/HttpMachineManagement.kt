@@ -53,7 +53,7 @@ class HttpMachineManagement internal constructor(
         val machine = JsonCodec.decodeFromJsonElement<Machine>(
             call(api("machines", machineId, "engine"), "PUT", buildJsonObject { put("engine", engine) }))
         // An answer for another machine is not this machine's state.
-        if (machine.id != machineId) throw HubFailure(HubError.Protocol, "hub 返回了另一台机器", retryable = false)
+        if (machine.id != machineId) throw HubFailure(HubError.Protocol, "hub answered for another machine", retryable = false)
         return machine
     }
 

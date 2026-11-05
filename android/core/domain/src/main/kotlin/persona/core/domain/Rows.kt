@@ -1,5 +1,7 @@
 package persona.core.domain
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -19,13 +21,13 @@ sealed interface Row {
 }
 
 /** Tool uses and results share tool_use_id: merge them into one row (as the iOS chat does). */
-fun buildRows(items: List<Item>): List<Row> {
+fun buildRows(items: List<Item>, photo: String): List<Row> {
     val results = items.filter { it.kind == "tool_result" && it.toolUseId != null }.associateBy { it.toolUseId!! }
     val rows = mutableListOf<Row>()
     for (it in items) {
         when (it.kind) {
             "text" -> {
-                val t = cleanText(it.text.orEmpty())
+                val t = cleanText(it.text.orEmpty(), photo)
                 if (t.isBlank()) continue
                 rows += if (it.role == "user") Row.User(it.id, t, it.queued == true, it.from) else Row.Assistant(it.id, t)
             }
@@ -45,38 +47,41 @@ fun buildRows(items: List<Item>): List<Row> {
  * ([parseContexts]); a message of nothing but blocks previews as empty. A conversation row draws photos as thumbnails
  * instead ([messageText]) and folds the blocks into one row.
  */
-fun cleanText(s: String): String {
+fun cleanText(s: String, photo: String): String {
     val shown = messageText(parseContexts(s).second
         .replace(Regex("<cross-session-message[^>]*>([\\s\\S]*?)</cross-session-message>"), "$1"), files = false)
-    return if (shown.images.isEmpty()) shown.text else ("[图片]\n" + shown.text).trim()
+    return if (shown.images.isEmpty()) shown.text else ("$photo\n" + shown.text).trim()
 }
 
-fun toolVerb(name: String?): String = when (name) {
-    "Bash" -> "运行"
-    "Read" -> "读取"
-    "Edit", "MultiEdit" -> "编辑"
-    "Write" -> "写入"
-    "Grep" -> "搜索"
-    "Glob", "LS" -> "查找"
-    "WebFetch" -> "打开网页"
-    "WebSearch" -> "网页搜索"
-    "Task", "Agent" -> "子任务"
-    "TodoWrite" -> "更新待办"
-    "AskUserQuestion" -> "提问"
-    "ExitPlanMode" -> "提交计划"
-    "EnterPlanMode" -> "进入计划模式"
-    "ToolSearch" -> "加载工具"
-    "Skill" -> "使用技能"
-    null -> "工具"
-    else -> if (name.startsWith("mcp__")) name.substringAfterLast("__") else name
+fun toolVerb(name: String?): CoreText = when (name) {
+    "Bash" -> CoreText.of(Key.ToolRun)
+    "Read" -> CoreText.of(Key.ToolRead)
+    "Edit", "MultiEdit" -> CoreText.of(Key.ToolEdit)
+    "Write" -> CoreText.of(Key.ToolWrite)
+    "Grep" -> CoreText.of(Key.ToolSearch)
+    "Glob", "LS" -> CoreText.of(Key.ToolFind)
+    "WebFetch" -> CoreText.of(Key.ToolWebFetch)
+    "WebSearch" -> CoreText.of(Key.ToolWebSearch)
+    "Task", "Agent" -> CoreText.of(Key.Subtask)
+    "TodoWrite" -> CoreText.of(Key.ToolTodos)
+    "AskUserQuestion" -> CoreText.of(Key.ToolAsk)
+    "ExitPlanMode" -> CoreText.of(Key.ToolSubmitPlan)
+    "EnterPlanMode" -> CoreText.of(Key.ToolEnterPlan)
+    "ToolSearch" -> CoreText.of(Key.ToolLoadTools)
+    "Skill" -> CoreText.of(Key.ToolSkill)
+    null -> CoreText.of(Key.ToolGeneric)
+    else -> CoreText.plain(if (name.startsWith("mcp__")) name.substringAfterLast("__") else name)
 }
 
 /** The MCP server's name as shown: Persona's own server keeps its old id `jarvis` (allow lists and hooks match it). */
 fun mcpServerLabel(server: String): String = server.removePrefix("plugin_").let { if (it == "jarvis") "Persona" else it }
 
-/** A tool's name for a sentence (a permission card): an MCP tool as 「Persona · mail send」, others as written. */
-fun toolDisplayName(name: String?): String {
-    if (name.isNullOrEmpty()) return "工具"
+/**
+ * A tool's name for a sentence (a permission card): an MCP tool as 「Persona · mail send」, others as written; null
+ * without a name (the card says 工具, [CoreText.Key.ToolGeneric]).
+ */
+fun toolDisplayName(name: String?): String? {
+    if (name.isNullOrEmpty()) return null
     if (!name.startsWith("mcp__")) return name
     val rest = name.removePrefix("mcp__")
     val i = rest.lastIndexOf("__")

@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -37,8 +40,8 @@ data class EndpointEntry(
 data class EndpointTestResult(
     val url: String,
     val passed: Boolean,
-    /** Shown as is, in Chinese (「已通过身份校验」「连接超时」…). */
-    val result: String,
+    /** What it found (「已通过身份校验」「连接超时」…). */
+    val result: CoreText,
     val elapsedMillis: Long,
     /** ISO-8601 UTC. */
     val testedAt: String,
@@ -69,11 +72,11 @@ sealed interface EndpointCheck {
     /** [url] is the canonical form that will be saved. */
     data class Valid(val url: String, val kind: String) : EndpointCheck
     /** [message] is shown to the user as is, in Chinese. */
-    data class Invalid(val message: String) : EndpointCheck
+    data class Invalid(val message: CoreText) : EndpointCheck
 }
 
 /** A refused change. [message] is shown to the user as is, in Chinese. */
-class EndpointEditException(override val message: String) : Exception(message)
+class EndpointEditException(text: CoreText) : CoreTextException(text)
 
 /** Manual candidates, disabling, the order to try and tests for the active pairing. */
 interface ConnectionEndpoints {

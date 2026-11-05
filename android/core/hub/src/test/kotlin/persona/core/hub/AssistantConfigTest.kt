@@ -18,16 +18,16 @@ class AssistantConfigTest {
                 "conversations":[{"machine_id":"laptop","session_id":"main-id","assistant":true}]}"""))
             val config = api.config()
             val get = server.takeRequest()
-            assertEquals("GET", get.method)
-            assertEquals("/api/v1/assistant", get.path)
-            assertEquals("Bearer test-token", get.getHeader("Authorization"))
-            assertEquals("laptop", config.machineId)
-            assertEquals("claude", config.launcher)
-            assertEquals("/home/me/.jarvis/assistant", config.cwd)
-            assertEquals("Asia/Shanghai", config.timezone)
+            assertEquals("GET", (get.method).zhAny())
+            assertEquals("/api/v1/assistant", (get.path).zhAny())
+            assertEquals("Bearer test-token", (get.getHeader("Authorization")).zhAny())
+            assertEquals("laptop", (config.machineId).zhAny())
+            assertEquals("claude", (config.launcher).zhAny())
+            assertEquals("/home/me/.jarvis/assistant", (config.cwd).zhAny())
+            assertEquals("Asia/Shanghai", (config.timezone).zhAny())
             assertNull("never edited in the app", config.notes)
-            assertEquals("from hub.json", config.notesEffective)
-            assertEquals("main-id", config.main)
+            assertEquals("from hub.json", (config.notesEffective).zhAny())
+            assertEquals("main-id", (config.main).zhAny())
         }
     }
 
@@ -40,19 +40,19 @@ class AssistantConfigTest {
             // Moving machines also drops the main conversation: it stays on the machine it ran on.
             val moved = api.updateConfig(AssistantConfigUpdate(machineId = "server", main = AssistantConfigUpdate.CLEAR_MAIN))
             val move = server.takeRequest()
-            assertEquals("PUT", move.method)
-            assertEquals("/api/v1/assistant", move.path)
-            assertEquals("""{"machine_id":"server","main":"-"}""", move.body.readUtf8())
-            assertEquals("server", moved.machineId)
-            assertEquals("", moved.notes)
+            assertEquals("PUT", (move.method).zhAny())
+            assertEquals("/api/v1/assistant", (move.path).zhAny())
+            assertEquals("""{"machine_id":"server","main":"-"}""", (move.body.readUtf8()).zhAny())
+            assertEquals("server", (moved.machineId).zhAny())
+            assertEquals("", (moved.notes).zhAny())
 
             api.updateConfig(AssistantConfigUpdate(launcher = "example_launcher"))
-            assertEquals("""{"launcher":"example_launcher"}""", server.takeRequest().body.readUtf8())
+            assertEquals("""{"launcher":"example_launcher"}""", (server.takeRequest().body.readUtf8()).zhAny())
             api.updateConfig(AssistantConfigUpdate(timezone = "Europe/Paris"))
-            assertEquals("""{"timezone":"Europe/Paris"}""", server.takeRequest().body.readUtf8())
+            assertEquals("""{"timezone":"Europe/Paris"}""", (server.takeRequest().body.readUtf8()).zhAny())
             // An empty 关于我 is a choice (tell the assistant nothing), not a missing field.
             api.updateConfig(AssistantConfigUpdate(notes = ""))
-            assertEquals("""{"notes":""}""", server.takeRequest().body.readUtf8())
+            assertEquals("""{"notes":""}""", (server.takeRequest().body.readUtf8()).zhAny())
         }
     }
 
@@ -62,10 +62,10 @@ class AssistantConfigTest {
             server.enqueue(MockResponse().setBody("""{"launchers":[{"name":"claude","model":"opus"},
                 {"name":"example_wrapper","agent_type":"codex"}]}"""))
             val launchers = api.launchers("laptop")
-            assertEquals("/api/v1/machines/laptop/launchers", server.takeRequest().path)
-            assertEquals(listOf("claude", "example_wrapper"), launchers.map { it.name })
-            assertEquals("claude", launchers.first().agentType)
-            assertEquals("codex", launchers.last().agentType)
+            assertEquals("/api/v1/machines/laptop/launchers", (server.takeRequest().path).zhAny())
+            assertEquals(listOf("claude", "example_wrapper"), (launchers.map { it.name }).zhAny())
+            assertEquals("claude", (launchers.first().agentType).zhAny())
+            assertEquals("codex", (launchers.last().agentType).zhAny())
 
             server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"laptop: machine is offline"}"""))
             val failure = runCatching { api.launchers("laptop") }.exceptionOrNull()

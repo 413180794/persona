@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.AgentState
 import persona.core.contracts.Machine
 import persona.core.contracts.Todo
@@ -43,13 +45,13 @@ enum class AgentQuickFilter(val state: AgentState?) {
 
 data class AgentListGroup(
     val id: String,
-    val title: String,
+    val title: CoreText,
     val rows: List<AgentSession>,
     val visibleRows: List<AgentSession>,
     val folded: Boolean = false,
     val parent: String? = null,
     val stateCounts: Map<AgentState, Int>? = null,
-    val spoken: String? = null,
+    val spoken: CoreText? = null,
     /** 按仓库: the repository or working tree this group is. */
     val repo: RepoLevel? = null,
     /** The group this one sits in: a working tree's repository, whose own [rows] are then empty (its trees hold them). */
@@ -60,7 +62,7 @@ data class AgentListResult(
     val counts: Map<AgentQuickFilter, Int>,
     val groups: List<AgentListGroup>,
     val unreadShown: List<String>,
-    val quietTitle: String? = null,
+    val quietTitle: CoreText? = null,
     val machines: List<AgentMachineGroup> = emptyList(),
 )
 
@@ -111,14 +113,14 @@ fun buildAgentList(
     fun ordered(rows: List<AgentSession>) = rows.sortedWith(comparator)
     fun stays(row: AgentSession) = !row.isQuiet || row.isWaiting
     fun showIdle(key: String) = key in settings.expandedIdle || settings.query.isNotEmpty()
-    fun group(id: String, title: String, rows: List<AgentSession>, visible: List<AgentSession>): AgentListGroup {
+    fun group(id: String, title: CoreText, rows: List<AgentSession>, visible: List<AgentSession>): AgentListGroup {
         val folded = id in settings.folded
         return AgentListGroup(id, title, rows, if (folded) emptyList() else visible, folded)
     }
     val result = mutableListOf<AgentListGroup>()
     if (pinned.isNotEmpty()) result += if (settings.grouping == AgentGrouping.MachineSpace || settings.grouping == AgentGrouping.Repo)
-        group("pinned", "置顶", pinned, pinned) else AgentListGroup("pinned", "置顶", pinned, pinned)
-    var quietTitle: String? = null
+        group("pinned", CoreText.of(Key.AgentsPinned), pinned, pinned) else AgentListGroup("pinned", CoreText.of(Key.AgentsPinned), pinned, pinned)
+    var quietTitle: CoreText? = null
     fun stateCounts(rows: List<AgentSession>) = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
     when (settings.grouping) {
         AgentGrouping.Repo -> {
@@ -126,7 +128,7 @@ fun buildAgentList(
             // A repository with nothing going on is quiet: folded, after the busy ones, like a quiet space; a quiet working
             // tree is folded too but keeps its place (main checkout first, then by name, as on iOS).
             fun quiet(members: List<AgentSession>) = !quick && members.none(::stays)
-            fun section(id: String, title: String, members: List<AgentSession>, level: RepoLevel, under: String?, machineFolded: Boolean): AgentListGroup {
+            fun section(id: String, title: CoreText, members: List<AgentSession>, level: RepoLevel, under: String?, machineFolded: Boolean): AgentListGroup {
                 val isQuiet = quiet(members)
                 val rows = ordered(members)
                 val folded = if (isQuiet) id !in settings.expandedQuiet && settings.query.isEmpty() else id in settings.folded
@@ -138,7 +140,7 @@ fun buildAgentList(
                 return AgentListGroup(id, title, rows, visible, folded, if (isQuiet) "quiet" else null, stateCounts(rows), repo = level, under = under)
             }
             val known = machines + live.map { it.session.machineId }.distinct()
-                .filter { id -> machines.none { it.id == id } }.map { Machine(it, "机器信息待更新") }
+                .filter { id -> machines.none { it.id == id } }.map { Machine(it, "") }
             val machineGroups = known.sortedBy { !it.online }.mapNotNull { machine ->
                 val members = live.filter { it.session.machineId == machine.id }
                 if (members.isEmpty()) return@mapNotNull null
@@ -148,12 +150,12 @@ fun buildAgentList(
                     // A quiet repository opens to all its sessions in one list, as iOS's 空闲的仓库 does. A repository with only
                     // its main checkout is drawn as one level but keeps the checkout's id, so a session opened under a quick
                     // filter stays in the same group when a second working tree appears or goes (retainOpenedRows).
-                    if (repo.flat) listOf(section(repo.worktrees[0].id, repo.name, repo.members, RepoLevel.Repository, null, machineFolded))
-                    else if (quiet(repo.members)) listOf(section(repo.id, repo.name, repo.members, RepoLevel.Repository, null, machineFolded))
-                    else listOf(AgentListGroup(repo.id, repo.name, emptyList(), emptyList(), repo.id in settings.folded,
+                    if (repo.flat) listOf(section(repo.worktrees[0].id, repoTitle(repo.name), repo.members, RepoLevel.Repository, null, machineFolded))
+                    else if (quiet(repo.members)) listOf(section(repo.id, repoTitle(repo.name), repo.members, RepoLevel.Repository, null, machineFolded))
+                    else listOf(AgentListGroup(repo.id, repoTitle(repo.name), emptyList(), emptyList(), repo.id in settings.folded,
                         stateCounts = stateCounts(repo.members), repo = RepoLevel.Repository)) +
                         repo.worktrees.map { tree ->
-                            section(tree.id, tree.name, tree.members, if (tree.main) RepoLevel.MainCheckout else RepoLevel.Worktree, repo.id, machineFolded)
+                            section(tree.id, repoTitle(tree.name), tree.members, if (tree.main) RepoLevel.MainCheckout else RepoLevel.Worktree, repo.id, machineFolded)
                         }
                 }
                 result += groups
@@ -167,7 +169,7 @@ fun buildAgentList(
             // Keep each session in a single leaf group; machine headers only reference those leaves.
             val treeRows = filtered.filter { it.isLive }
             val known = machines + treeRows.map { it.session.machineId }.distinct()
-                .filter { id -> machines.none { it.id == id } }.map { Machine(it, "机器信息待更新") }
+                .filter { id -> machines.none { it.id == id } }.map { Machine(it, "") }
             val machineGroups = known.sortedBy { !it.online }.mapNotNull { machine ->
                 val members = treeRows.filter { it.session.machineId == machine.id }
                 if (members.isEmpty()) return@mapNotNull null
@@ -187,8 +189,8 @@ fun buildAgentList(
                 machines = machineGroups)
         }
         AgentGrouping.State -> {
-            val titles = listOf("needs" to "需要你", "unread" to "完成未看", "working" to "工作中",
-                "waiting" to "待唤醒", "muted" to "已屏蔽", "idle" to "已看")
+            val titles = listOf("needs" to Key.StateNeedsYou, "unread" to Key.StateUnread, "working" to Key.StateWorking,
+                "waiting" to Key.StateWaiting, "muted" to Key.StateMuted, "idle" to Key.StateIdle).map { (key, title) -> key to CoreText.of(title) }
             val byRank = live.groupBy { agentRank(it, mutes) }
             titles.forEachIndexed { rank, (key, title) ->
                 val rows = ordered(byRank[rank].orEmpty())
@@ -214,7 +216,7 @@ fun buildAgentList(
                     val stateCounts = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
                     result += AgentListGroup(
                         id = "todo/${todo.id}",
-                        title = todo.title,
+                        title = CoreText.plain(todo.title),
                         rows = rows,
                         visibleRows = visible,
                         folded = folded,
@@ -231,7 +233,7 @@ fun buildAgentList(
                 val stateCounts = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
                 result += AgentListGroup(
                     id = "todo/none",
-                    title = "没有待办",
+                    title = CoreText.of(Key.AgentsNoTodo),
                     rows = rows,
                     visibleRows = visible,
                     folded = folded,
@@ -241,7 +243,7 @@ fun buildAgentList(
         }
         AgentGrouping.Machine -> machines.forEach { machine ->
             val rows = ordered(live.filter { it.session.machineId == machine.id })
-            if (rows.isNotEmpty()) result += group("machine/${machine.id}", machine.name, rows,
+            if (rows.isNotEmpty()) result += group("machine/${machine.id}", CoreText.plain(machine.name), rows,
                 if (quick || showIdle("machine-${machine.id}")) rows else rows.filter(::stays))
         }
         AgentGrouping.Space -> {
@@ -256,7 +258,7 @@ fun buildAgentList(
                     spaces.filter { !it.quiet && mutedSpace(it) }
             }
             val quiet = if (quick) emptyList() else spaces.filter { it.quiet && !leading(it) }
-            if (quiet.isNotEmpty()) quietTitle = "空闲的空间"
+            if (quiet.isNotEmpty()) quietTitle = CoreText.of(Key.AgentsQuietSpaces)
             fun spaceGroup(space: AgentSpace, isQuiet: Boolean): AgentListGroup {
                 val rows = if (isQuiet) space.members else ordered(space.members)
                 val folded = if (isQuiet) space.id !in settings.expandedQuiet && settings.query.isEmpty()
@@ -268,12 +270,12 @@ fun buildAgentList(
                 }
                 val states = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread, AgentState.Idle, AgentState.Unknown)
                 val stateCounts = states.associateWith { state -> rows.count { it.state == state } }
-                val labels = listOf(AgentState.NeedsYou to "需要你", AgentState.Working to "工作中", AgentState.Unread to "完成未看")
-                val spoken = labels.mapNotNull { (state, label) -> stateCounts.getValue(state).takeIf { it > 0 }?.let { "$it 个$label" } } +
+                val labels = listOf(AgentState.NeedsYou to Key.CountNeedsYou, AgentState.Working to Key.CountWorking, AgentState.Unread to Key.CountUnread)
+                val spoken = labels.mapNotNull { (state, label) -> stateCounts.getValue(state).takeIf { it > 0 }?.let { CoreText.of(label, it) } } +
                     (stateCounts.getValue(AgentState.Idle) + stateCounts.getValue(AgentState.Unknown))
-                        .takeIf { it > 0 }?.let { listOf("$it 个空闲") }.orEmpty()
-                return AgentListGroup(space.id, space.name, rows, visible, folded,
-                    if (isQuiet) "quiet" else null, stateCounts, spoken.joinToString("，"))
+                        .takeIf { it > 0 }?.let { listOf(CoreText.of(Key.CountIdle, it)) }.orEmpty()
+                return AgentListGroup(space.id, CoreText.plain(space.name), rows, visible, folded,
+                    if (isQuiet) "quiet" else null, stateCounts, CoreText.joined(CoreText.of(Key.ListSeparator), spoken))
             }
             result += active.map { spaceGroup(it, false) }
             result += quiet.map { spaceGroup(it, true) }
@@ -281,3 +283,6 @@ fun buildAgentList(
     }
     return AgentListResult(counts, result, filtered.filter { it.state == AgentState.Unread }.map { it.id }, quietTitle)
 }
+
+/** A repository's or working tree's heading: its name, 「其他」 for sessions without a cwd ([UnnamedRepo]). */
+private fun repoTitle(name: String): CoreText = if (name == UnnamedRepo) CoreText.of(Key.RepoOther) else CoreText.plain(name)

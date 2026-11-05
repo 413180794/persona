@@ -33,7 +33,7 @@ class HubHttpClientCloseTest {
             val sockets = GuardedSockets()
             val client = HubHttpClient("test-hub", fingerprint(certificate), "test", socketFactory = sockets)
             val endpoint = Endpoint(server.url("/").newBuilder().host(InetAddress.getLoopbackAddress().hostAddress!!).build().toString(), "lan")
-            assertEquals("test-hub", client.health(endpoint).hubId) // leaves the TLS connection in the pool
+            assertEquals("test-hub", (client.health(endpoint).hubId).zhAny()) // leaves the TLS connection in the pool
 
             sockets.forbidden = Thread.currentThread()
             client.close() // must not throw, as on Android's main thread

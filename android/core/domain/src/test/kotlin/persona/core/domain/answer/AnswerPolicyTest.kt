@@ -1,5 +1,7 @@
 package persona.core.domain.answer
 
+import persona.core.domain.zhAny
+
 import persona.core.contracts.DialogOption
 import persona.core.contracts.Interaction
 import persona.core.contracts.Question
@@ -16,7 +18,7 @@ class AnswerPolicyTest {
             val all = AnswerBuilder.build(plan, AnswerAction.ApproveAll, context = unlocked)
             assertEquals(entry.name, entry == AnswerEntry.Conversation, all.allowed)
             val edits = AnswerBuilder.build(plan, AnswerAction.ApproveEdits, context = unlocked)
-            assertEquals("acceptEdits", edits.resolution?.mode)
+            assertEquals("acceptEdits", (edits.resolution?.mode).zhAny())
             assertFalse(AnswerBuilder.build(plan, AnswerAction.ApproveEdits, context = unlocked.copy(locked = true)).allowed)
             assertFalse(AnswerBuilder.build(plan, AnswerAction.ApproveEdits,
                 AnswerDraft(feedback = "先补测试"), unlocked).allowed)
@@ -27,7 +29,7 @@ class AnswerPolicyTest {
         val permission = Interaction("request", kind = "permission")
         val denial = AnswerBuilder.build(permission, AnswerAction.Deny,
             AnswerDraft(message = "请检查"), lockedNotification)
-        assertEquals("请检查", denial.resolution?.message)
+        assertEquals("请检查", (denial.resolution?.message).zhAny())
         val question = Interaction("request", kind = "question", questions = listOf(
             Question("选择？", options = (1..4).map { QuestionOption("选项 $it") })))
         assertFalse(AnswerBuilder.build(question, AnswerAction.PickOption, context = lockedNotification).allowed)
@@ -63,7 +65,7 @@ class AnswerPolicyTest {
         val multi = interaction.copy(questions = listOf(first.copy(multiSelect = true)))
         val picked = AnswerBuilder.build(multi, AnswerAction.PickOption,
             AnswerDraft(other = mapOf(first.question to "  自填  ")))
-        assertEquals("自填", AnswerBuilder.build(multi, AnswerAction.Submit, picked.draft).resolution?.answers?.get(first.question))
+        assertEquals("自填", (AnswerBuilder.build(multi, AnswerAction.Submit, picked.draft).resolution?.answers?.get(first.question)).zhAny())
         assertFalse(AnswerTransport.begin(submitted.resolution!!, true, true, "unknown").allowed)
     }
 }

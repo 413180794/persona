@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.HubScope
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.SessionKey
@@ -116,12 +118,12 @@ class HttpChatComposerService internal constructor(
     }
 
     override suspend fun retryRefused(clientMessageId: String, clearDraft: Boolean): ComposerDelivery = sending.withLock {
-        val original = refused[clientMessageId] ?: throw ComposerOperationException("请先查看终端，确认消息没有发出")
+        val original = refused[clientMessageId] ?: throw ComposerOperationException(CoreText.of(Key.ComposerCheckTerminal))
         val refusal = deliveries.value[clientMessageId]?.refusal
-            ?: throw ComposerOperationException("发送结果待确认，请先查看终端")
+            ?: throw ComposerOperationException(CoreText.of(Key.ComposerUnconfirmed))
         val clearable = if (clearDraft) refusal.clearable?.takeIf { it.isNotEmpty() }
-            ?: throw ComposerOperationException("这份电脑草稿需要在终端里处理") else null
-        if (!readyToSend.value) throw ComposerOperationException("连接恢复后再试，输入已保留")
+            ?: throw ComposerOperationException(CoreText.of(Key.ComposerDraftInTerminal)) else null
+        if (!readyToSend.value) throw ComposerOperationException(CoreText.of(Key.ComposerOffline))
         onRetryDelivery(clientMessageId, ComposerDelivery(DeliveryState.Sending))
         record(original, ComposerDelivery(DeliveryState.Sending))
         val result = try { sendLocked(original.copy(clearDraft = clearable)) }
@@ -136,20 +138,20 @@ class HttpChatComposerService internal constructor(
     }
 
     override suspend fun upload(session: SessionKey, name: String, file: File): String {
-        if (!readyToSend.value) throw ComposerOperationException("连接恢复后重试上传，输入已保留")
-        if (file.length() > 200L * 1024 * 1024) throw ComposerOperationException("文件不能超过 200 MB")
+        if (!readyToSend.value) throw ComposerOperationException(CoreText.of(Key.ComposerUploadOffline))
+        if (file.length() > 200L * 1024 * 1024) throw ComposerOperationException(CoreText.of(Key.ComposerFileTooLarge, 200))
         val url = path("machines", session.machineId, "files").addQueryParameter("name", name).build()
         return request(url.encodedPath + "?" + url.encodedQuery,
             file.asRequestBody("application/octet-stream".toMediaType()), emptyMap()).use { response ->
             if (!response.isSuccessful) {
                 val failure = HubFailure.from(response)
                 if (failure.kind == HubError.PairingExpired) onPairingExpired()
-                throw ComposerOperationException(when {
-                    response.code == 404 -> "hub 不支持上传，请更新 hub"
-                    failure.code == "node_outdated" -> "这台电脑不支持上传，请更新电脑上的服务"
-                    response.code == 413 -> "文件过大，请选择较小的文件"
-                    else -> "上传失败，请重试；输入已保留"
-                })
+                throw ComposerOperationException(CoreText.of(when {
+                    response.code == 404 -> Key.UploadHubUnsupported
+                    failure.code == "node_outdated" -> Key.UploadNodeOutdated
+                    response.code == 413 -> Key.UploadTooLarge
+                    else -> Key.UploadFailed
+                }))
             }
             JsonCodec.parseToJsonElement(response.body!!.string()).jsonObject["path"]!!.jsonPrimitive.content.also {
                 require(it.startsWith('/') && !it.contains('\n') && !it.contains('\r'))
@@ -158,11 +160,11 @@ class HttpChatComposerService internal constructor(
     }
 
     override suspend fun interrupt(session: SessionKey) {
-        if (!readyToSend.value) throw ComposerOperationException("连接恢复后再中断")
+        if (!readyToSend.value) throw ComposerOperationException(CoreText.of(Key.ComposerInterruptOffline))
         request(api("sessions", session.machineId, session.sessionId, "interrupt"), "{}".toRequestBody(jsonType), emptyMap()).use {
             if (!it.isSuccessful) {
                 if (it.code in setOf(401, 403)) onPairingExpired()
-                throw ComposerOperationException("中断未能确认，请查看终端")
+                throw ComposerOperationException(CoreText.of(Key.ComposerInterruptUnconfirmed))
             }
         }
     }

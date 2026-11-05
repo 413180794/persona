@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.resolve
 import android.content.res.Resources
 import androidx.annotation.StringRes
 import persona.core.contracts.Item
@@ -356,7 +357,7 @@ internal fun workSummary(res: Resources, line: ChatLine.Work, recordedDuration: 
             else -> working
         }
         val running = if (count > 0) res.getString(R.string.chat_work_step, action, count) else action
-        val elapsed = now?.let { line.durationText(it) }.orEmpty()
+        val elapsed = now?.let { line.durationText(it)?.resolve(res) }.orEmpty()
         return if (elapsed.isEmpty()) running else res.getString(R.string.chat_work_elapsed, running, elapsed)
     }
     val seconds = recordedDuration?.takeIf { it >= 0 }

@@ -40,13 +40,13 @@ class ExtensionUiContractTest {
               {"type":"row","title":"周报","key":"n1","icon":"doc","avatar":{"text":"周"},"action":{"id":"open","push":{"state":"note=n1","title":"周报"}}},
               {"type":"table","columns":[{"title":"名称"},{"title":"大小","align":"end"}],"rows":[["a","1 KB"]],"caption":"共 1 个"},
               {"type":"markdown","text":"**粗**"},{"type":"empty","title":"没有了","icon":"list"},{"type":"loading"}]}]}""")
-        assertEquals("周", view.search!!.value)
-        assertEquals("folder", view.filter!!.name)
-        assertEquals("more", view.sections[0].more!!.action.id)
+        assertEquals("周", (view.search!!.value).zhAny())
+        assertEquals("folder", (view.filter!!.name).zhAny())
+        assertEquals("more", (view.sections[0].more!!.action.id).zhAny())
         val row = view.sections[0].items[0]
-        assertEquals("n1", row.key)
-        assertEquals("note=n1", row.action!!.push!!.state)
-        assertEquals("end", view.sections[0].items[1].columns!![1].align)
+        assertEquals("n1", (row.key).zhAny())
+        assertEquals("note=n1", (row.action!!.push!!.state).zhAny())
+        assertEquals("end", (view.sections[0].items[1].columns!![1].align).zhAny())
         assertEquals(listOf(listOf("a", "1 KB")), view.sections[0].items[1].rows)
         val back = json.decodeFromString(persona.core.contracts.api.ExtensionUiResult.serializer(), """{"pop":true,"toast":"已保存"}""")
         assertTrue(back.pop)
@@ -73,8 +73,8 @@ class ExtensionUiContractTest {
             """{"extension":"removed","extension_name":"removed","id":"usage","title":"用量","placement":"nav_page"}""")
         val legacy = json.decodeFromString(ExtensionUiPlace.serializer(),
             """{"plugin":"removed","plugin_name":"removed","id":"usage","title":"用量","placement":"nav_page"}""")
-        assertEquals("removed", current.extension)
-        assertEquals("removed", current.extensionName)
+        assertEquals("removed", (current.extension).zhAny())
+        assertEquals("removed", (current.extensionName).zhAny())
         assertEquals(current, legacy)
         assertEquals(3, json.decodeFromString(ExtensionMarket.serializer(), """{"id":"m","extensions":3}""").extensions)
         assertEquals(3, json.decodeFromString(ExtensionMarket.serializer(), """{"id":"m","plugins":3}""").extensions)

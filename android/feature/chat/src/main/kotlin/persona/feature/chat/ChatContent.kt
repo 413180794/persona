@@ -225,7 +225,7 @@ internal fun ChatLineContent(
             "thinking" -> if (!style.hideThoughts) ThoughtContent(line.row.item?.text.orEmpty(), line.id, style.collapseThoughts)
             "image" -> line.row.item?.item?.let { ChatPicture(session, it, loader) }
             "recap" -> line.row.item?.item?.let { RecapLine(listOf(it)) }
-            else -> line.row.item?.compaction?.let { TimelineMark(it.label) }
+            else -> line.row.item?.compaction?.let { TimelineMark(it.label.text()) }
                 ?: ChatSystemLine(line.row.item?.text.orEmpty(), line.row.item?.task?.failed == true)
         }
         is ChatLine.Recaps -> RecapLine(line.items.map { it.item })
@@ -335,7 +335,7 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
         is WorkItem.Thought -> if (step.item.kind == "thinking") {
             if (!style.hideThoughts) ThoughtContent(textUpdates[step.item.id]?.text ?: step.item.text.orEmpty(), step.item.id, style.collapseThoughts, last)
         }
-        else step.item.compaction?.let { TimelineMark(it.label) }
+        else step.item.compaction?.let { TimelineMark(it.label.text()) }
             ?: ChatSystemLine(step.item.task?.detail ?: step.item.text.orEmpty(), step.item.task?.failed == true)
     }
 }
@@ -358,7 +358,7 @@ private fun PlanStep(plan: LinePlan, running: Boolean, nested: Boolean = false) 
 @Composable
 private fun WorkClock(line: ChatLine.Work) {
     val now by rememberNow(1_000)
-    Text(line.durationText(now))
+    Text(line.durationText(now)?.text().orEmpty())
 }
 
 /** The pictures shown inside a user bubble, or null when there are none (a message of only contexts has no bubble). */

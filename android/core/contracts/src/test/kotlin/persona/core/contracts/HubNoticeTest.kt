@@ -45,19 +45,19 @@ class HubNoticeTest {
         // 2. Hub too old: first candidate is HubTooOld
         val hubOldCandidates = HubNotice.candidates(base.copy(state = "downloading"), HubCompat.HubTooOld)
         assertEquals(HubNotice.HubTooOld, hubOldCandidates.first())
-        assertEquals("hubTooOld", HubNotice.HubTooOld.dismissKey)
+        assertEquals("hubTooOld", (HubNotice.HubTooOld.dismissKey).zhAny())
 
         // 3. Updating: stateTitle mapping
         val updating = base.copy(state = "waiting_idle", busy = listOf(HubUpdateBusy(), HubUpdateBusy()))
         val noticeUpdating = HubNotice.of(updating)
-        assertEquals(HubNotice.Updating("等 2 个在忙的结束"), noticeUpdating)
+        assertEquals("等 2 个在忙的结束", ((noticeUpdating as HubNotice.Updating).what.zh()).zhAny())
         assertNull(noticeUpdating?.dismissKey)
 
         // 4. Rolled back: needs error and latest.build
         val rolledBack = base.copy(state = "rolled_back", error = "起不来", latest = newer)
         val noticeRolledBack = HubNotice.of(rolledBack)
         assertEquals(HubNotice.RolledBack("起不来", 110), noticeRolledBack)
-        assertEquals("rolledBack:110", noticeRolledBack?.dismissKey)
+        assertEquals("rolledBack:110", (noticeRolledBack?.dismissKey).zhAny())
 
         // 5. AutoOn notice
         val autoNotice = base.copy(autoNotice = true)
@@ -69,12 +69,12 @@ class HubNoticeTest {
         val releaseAvailable = base.copy(auto = false, latest = newer)
         val noticeAvailable = HubNotice.of(releaseAvailable)
         assertEquals(HubNotice.Available("1.1.0", 110), noticeAvailable)
-        assertEquals("build:110", noticeAvailable?.dismissKey)
+        assertEquals("build:110", (noticeAvailable?.dismissKey).zhAny())
 
         val dockerAvailable = base.copy(channel = "docker", latest = newer)
         val noticeDocker = HubNotice.of(dockerAvailable)
         assertEquals(HubNotice.NewImage("1.1.0"), noticeDocker)
-        assertEquals("image:1.1.0", noticeDocker?.dismissKey)
+        assertEquals("image:1.1.0", (noticeDocker?.dismissKey).zhAny())
     }
 
     @Test

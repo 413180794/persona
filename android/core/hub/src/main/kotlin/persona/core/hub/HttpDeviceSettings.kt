@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.*
 import kotlinx.coroutines.CancellationException
@@ -40,8 +42,8 @@ class HttpDeviceSettings(
     override suspend fun devices(): PairedDevices {
         val data = try { request("auth", "tokens") } catch (failure: HubFailure) {
             throw when (failure.status) {
-                404 -> DeviceCredentialsUnavailable("这个 hub 版本还不支持设备凭据。")
-                503 -> DeviceCredentialsUnavailable("hub 没有数据库，不支持设备凭据。")
+                404 -> DeviceCredentialsUnavailable(CoreText.of(Key.DeviceCredentialsUnsupported))
+                503 -> DeviceCredentialsUnavailable(CoreText.of(Key.DeviceCredentialsNoDatabase))
                 else -> failure
             }
         }

@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import persona.core.designsystem.resolve
 import android.content.res.Resources
 import persona.core.designsystem.PendingStatus
 import androidx.datastore.core.DataStore
@@ -153,9 +154,9 @@ internal fun Interaction.quickQuestion(): Question? = questions?.singleOrNull()?
 }
 
 internal fun Interaction.sourceLabel(res: Resources, metadata: AgentsMetadata): String? =
-    (if (kind == "screen") res.getString(R.string.agents_source_terminal) else requestSourceLabel()) ?: metadata.requestSources[id]?.trim()?.takeIf(String::isNotEmpty)
+    (if (kind == "screen") res.getString(R.string.agents_source_terminal) else requestSourceLabel()?.resolve(res)) ?: metadata.requestSources[id]?.trim()?.takeIf(String::isNotEmpty)
 
-internal fun countdown(expiresAt: String?, now: Instant): String? = RequestExpiry.label(expiresAt, now)
+internal fun countdown(expiresAt: String?, now: Instant): String? = RequestExpiry.label(expiresAt, now)?.shown
 internal fun Interaction.expired(now: Instant): Boolean = RequestExpiry.expired(expiresAt, now)
 internal fun relativeTime(res: Resources, time: Instant?, now: Instant): String {
     time ?: return ""

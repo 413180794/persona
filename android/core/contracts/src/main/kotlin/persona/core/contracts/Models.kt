@@ -2,6 +2,8 @@
 
 package persona.core.contracts
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.KeepGeneratedSerializer
@@ -461,15 +463,24 @@ data class Interaction(
         }
 
     /** One line for a notification or a list row. */
-    val headline: String
+    val headline: CoreText
         get() = when (kind) {
-            "question" -> questions?.firstOrNull()?.question ?: "${agentDisplayName ?: "Claude"} 有问题问你"
-            "elicitation" -> "MCP 表单等你填写"
-            "plan" -> "计划等你批准"
-            "permission" -> (agentDisplayName?.let { "$it " }.orEmpty()) + "请求使用 ${toolName ?: "工具"}" +
-                (summary?.takeIf { it.isNotBlank() }?.let { "：$it" } ?: "")
-            "screen" -> dialog?.question?.takeIf { it.isNotBlank() } ?: "终端里有对话框等你处理"
-            else -> "需要你处理"
+            "question" -> questions?.firstOrNull()?.question?.let(CoreText::plain) ?: CoreText.of(Key.HeadlineQuestion, agentDisplayName ?: "Claude")
+            "elicitation" -> CoreText.of(Key.HeadlineElicitation)
+            "plan" -> CoreText.of(Key.FleetPlanWaiting)
+            "permission" -> {
+                val tool: Any = toolName ?: CoreText.of(Key.ToolGeneric)
+                val detail = summary?.takeIf { it.isNotBlank() }
+                val agent = agentDisplayName
+                when {
+                    agent != null && detail != null -> CoreText.of(Key.HeadlineAgentPermissionDetail, agent, tool, detail)
+                    agent != null -> CoreText.of(Key.HeadlineAgentPermission, agent, tool)
+                    detail != null -> CoreText.of(Key.HeadlinePermissionDetail, tool, detail)
+                    else -> CoreText.of(Key.HeadlinePermission, tool)
+                }
+            }
+            "screen" -> dialog?.question?.takeIf { it.isNotBlank() }?.let(CoreText::plain) ?: CoreText.of(Key.HeadlineScreen)
+            else -> CoreText.of(Key.HeadlineNeedsYou)
         }
 }
 

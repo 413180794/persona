@@ -1,5 +1,7 @@
 package persona.core.domain.inbox
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import java.time.Instant
 import persona.core.contracts.parseTime
 import persona.core.domain.sort.AgentPreferences
@@ -26,8 +28,8 @@ data class InboxItem(
     val isDone: Boolean get() = doneAt != null
 }
 
-enum class InboxTier(val wire: String, val title: String) {
-    Action("action", "需要你"), Fyi("fyi", "知悉即可"), Noise("noise", "已折叠")
+enum class InboxTier(val wire: String, val title: CoreText) {
+    Action("action", CoreText.of(Key.InboxAction)), Fyi("fyi", CoreText.of(Key.InboxFyi)), Noise("noise", CoreText.of(Key.InboxNoise))
 }
 
 data class InboxInteraction(
@@ -53,7 +55,7 @@ enum class InboxRowType { Item, Interaction }
 data class InboxRow(val type: InboxRowType, val id: String)
 data class InboxGroup(
     val id: String,
-    val title: String,
+    val title: CoreText,
     val rows: List<InboxRow>,
     val visibleRows: List<InboxRow>,
     val folded: Boolean,
@@ -109,7 +111,7 @@ fun buildInboxList(
         }.byTime(newestFirst = false, { it.createdAt }, { it.id })
     } else emptyList()
     val groups = mutableListOf<InboxGroup>()
-    fun addGroup(id: String, title: String, rows: List<InboxRow>) {
+    fun addGroup(id: String, title: CoreText, rows: List<InboxRow>) {
         if (rows.isEmpty()) return
         val folded = id !in settings.expanded
         groups += InboxGroup(id, title, rows, if (folded) emptyList() else rows, folded)
@@ -123,6 +125,6 @@ fun buildInboxList(
     val done = shown.filter { it.isDone }
         .byTime(newestFirst = true, { it.doneAt }, { it.id })
         .map { InboxRow(InboxRowType.Item, it.id) }
-    addGroup("done", "已处理", done)
+    addGroup("done", CoreText.of(Key.InboxDone), done)
     return InboxListResult(groups, items.count { !it.isDone && it.triage == InboxTier.Action })
 }

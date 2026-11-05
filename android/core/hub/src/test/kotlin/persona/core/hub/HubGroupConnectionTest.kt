@@ -57,10 +57,10 @@ class HubGroupConnectionTest {
                     connection.updateNetwork(HubNetwork("network"))
                     connection.awaitRoute(other.url)
                     connection.awaitOnline()
-                    assertEquals("b-token", connection.token)
+                    assertEquals("b-token", (connection.token).zhAny())
                     connection.request("/api/v1/ping").close()
-                    assertEquals(listOf("Bearer b-token"), other.socketAuthorizations())
-                    assertEquals("Bearer b-token", other.authorizations.last { it.first == "/api/v1/ping" }.second)
+                    assertEquals(listOf("Bearer b-token"), (other.socketAuthorizations()).zhAny())
+                    assertEquals("Bearer b-token", (other.authorizations.last { it.first == "/api/v1/ping" }.second).zhAny())
                     // The home hub's health was asked first (it failed); it never saw a credential.
                     assertTrue(home.probes.get() > 0)
                     assertTrue(home.authorizations.all { it.second == null })
@@ -78,7 +78,7 @@ class HubGroupConnectionTest {
                     connection.updateNetwork(HubNetwork("network"))
                     connection.awaitOnline()
                     assertEquals(homeToken, connection.token)
-                    assertEquals(listOf("Bearer $homeToken"), other.socketAuthorizations())
+                    assertEquals(listOf("Bearer $homeToken"), (other.socketAuthorizations()).zhAny())
                 }
             }
         }
@@ -95,7 +95,7 @@ class HubGroupConnectionTest {
                     eventually { home.opened.get() > 0 }
                     connection.awaitOnline()
                     assertEquals(homeToken, connection.token)
-                    assertEquals(listOf("Bearer $homeToken"), home.socketAuthorizations())
+                    assertEquals(listOf("Bearer $homeToken"), (home.socketAuthorizations()).zhAny())
                 }
             }
         }
@@ -108,7 +108,7 @@ class HubGroupConnectionTest {
                     connection.updateNetwork(HubNetwork("network"))
                     connection.awaitRoute(centerHub.url)
                     connection.awaitOnline()
-                    assertEquals("b-token", connection.token)
+                    assertEquals("b-token", (connection.token).zhAny())
                     assertFalse(connection.onMember())
                 }
             }
@@ -129,7 +129,7 @@ class HubGroupConnectionTest {
                     connection.awaitRoute(centerHub.url)
                     eventually { centerHub.opened.get() > 0 }
                     connection.awaitOnline()
-                    assertEquals("b-token", connection.token)
+                    assertEquals("b-token", (connection.token).zhAny())
                     assertFalse(connection.onMember())
                 }
             }
@@ -144,7 +144,7 @@ class HubGroupConnectionTest {
                     connection.updateNetwork(HubNetwork("network"))
                     connection.awaitRoute(centerHub.url)
                     connection.awaitOnline()
-                    assertEquals("b-token", connection.token)
+                    assertEquals("b-token", (connection.token).zhAny())
                     assertFalse(connection.onMember())
                 }
             }
@@ -166,7 +166,7 @@ class HubGroupConnectionTest {
                     val failure = runCatching { connection.request("/api/v1/ping") }.exceptionOrNull()
                     assertEquals(HubError.PairingExpired, (failure as HubFailure).kind)
                     eventually { revoked.isNotEmpty() }
-                    assertEquals(listOf("hub-b" to true), revoked.toList())
+                    assertEquals(listOf("hub-b" to true), (revoked.toList()).zhAny())
                     val sockets = other.sockets.get()
                     home.healthy = true
                     connection.awaitRoute(home.url)
@@ -190,7 +190,7 @@ class HubGroupConnectionTest {
                     group(home.endpoint("lan"), home.hubId, member(other, "b-token"), member(third, null), revoked = revoked).use { connection ->
                         connection.updateNetwork(HubNetwork("network"))
                         withTimeout(10_000) { connection.state.first { it == ConnectionState.Revoked } }
-                        assertEquals(listOf("hub-a" to true, "hub-b" to true, "hub-c" to false), revoked.toList())
+                        assertEquals(listOf("hub-a" to true, "hub-b" to true, "hub-c" to false), (revoked.toList()).zhAny())
                         assertEquals(HubError.PairingExpired, connection.failure.value?.kind)
                         // Revoked is final: nothing is tried again.
                         val sockets = listOf(home, other, third).sumOf { it.sockets.get() }
@@ -218,7 +218,7 @@ class HubGroupConnectionTest {
                     connection.updateMembers(listOf(member(other, "new-token")))
                     connection.awaitRoute(other.url)
                     connection.awaitOnline()
-                    assertEquals("new-token", connection.token)
+                    assertEquals("new-token", (connection.token).zhAny())
                 }
             }
         }
@@ -231,8 +231,8 @@ class HubGroupConnectionTest {
                 group(home.endpoint("lan"), home.hubId, listedAsB).use { connection ->
                     connection.updateNetwork(HubNetwork("network"))
                     fun reported() = connection.diagnostics.value.candidates.firstOrNull { endpointKey(it.url) == stranger.url }?.result
-                    eventually { reported().let { it != null && it != "未实测" } }
-                    assertEquals("不是配对的那台 hub", reported())
+                    eventually { reported().let { it != null && it.zh() != "未实测" } }
+                    assertEquals("不是配对的那台 hub", (reported()).zhAny())
                     assertEquals(0, stranger.sockets.get())
                     // An identity mismatch stops the attempts as it does for a single hub, until the next reconnect.
                     home.healthy = true
@@ -281,7 +281,7 @@ class HubGroupConnectionTest {
                     connection.awaitRoute(endpoint(real).url)
                     connection.awaitOnline()
                     assertEquals("证书指纹不符",
-                        connection.diagnostics.value.candidates.single { endpointKey(it.url) == endpointKey(endpoint(impostor).url) }.result)
+                        (connection.diagnostics.value.candidates.single { endpointKey(it.url) == endpointKey(endpoint(impostor).url) }.result).zhAny())
                     assertEquals(fingerprint(otherCertificate), connection.diagnostics.value.fingerprint)
                     assertEquals(0, impostor.requests.count { it.path == "/api/v1/ws" })
                     // Without the group, the other hub's pin is not trusted at all.

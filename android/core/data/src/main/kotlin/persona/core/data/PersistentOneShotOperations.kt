@@ -1,5 +1,8 @@
 package persona.core.data
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText
+import persona.core.contracts.CoreText.Key
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.*
@@ -52,7 +55,7 @@ class PersistentAgentOperations(
                     transport.sessions().none { it.key == key && it.isLive }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { false }
-            if (!confirmed) throw AgentOperationFailure(true, IllegalStateException("关闭结果待确认，只会核对，不会重复关闭"))
+            if (!confirmed) throw AgentOperationFailure(true, CoreTextException(CoreText.of(Key.CloseUnconfirmed)))
             journal.forget(claim.operation)
             return@withLock
         }

@@ -1,12 +1,14 @@
 package persona.core.domain.lines
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.serialization.json.*
 
 enum class TaskProgressStatus { Pending, InProgress, Completed, Unknown }
 
 data class TaskProgressItem(
     val id: String,
-    val subject: String,
+    val subject: CoreText,
     val description: String?,
     val status: TaskProgressStatus,
     val sourceItemId: String,
@@ -31,7 +33,7 @@ internal fun rebuildTaskProgress(items: List<LineItem>): List<TaskProgressItem> 
                     if (entry.status == "deleted") { tasks.remove(entry.id); continue }
                     val previous = tasks[entry.id]
                     tasks[entry.id] = TaskProgressItem(entry.id,
-                        entry.subject ?: previous?.subject ?: "任务 #${entry.id.removePrefix("task:")}",
+                        entry.subject?.let(CoreText::plain) ?: previous?.subject ?: CoreText.of(Key.TaskNumber, entry.id.removePrefix("task:")),
                         entry.description ?: previous?.description,
                         entry.status?.let(::progressStatus) ?: previous?.status ?: progressStatus(snapshot.fallbackStatus),
                         snapshot.sourceItemId, snapshot.sourceSeq)
@@ -53,7 +55,7 @@ internal fun rebuildTaskProgress(items: List<LineItem>): List<TaskProgressItem> 
             if (fields.string("status") == "deleted") { tasks.remove(key); return }
             val previous = tasks[key]
             tasks[key] = TaskProgressItem(key,
-                fields.string("subject") ?: previous?.subject ?: "任务 #$id",
+                fields.string("subject")?.let(CoreText::plain) ?: previous?.subject ?: CoreText.of(Key.TaskNumber, id),
                 fields.string("description") ?: previous?.description,
                 fields.string("status")?.let(::progressStatus) ?: previous?.status ?: fallbackStatus,
                 use.id, use.seq)
@@ -64,7 +66,7 @@ internal fun rebuildTaskProgress(items: List<LineItem>): List<TaskProgressItem> 
                 val parsed = todos.mapIndexed { index, raw ->
                     val todo = raw as? JsonObject ?: return@mapIndexed null
                     val subject = todo.string("content")?.takeIf(String::isNotBlank) ?: return@mapIndexed null
-                    TaskProgressItem("todo:$index", subject, todo.string("activeForm"),
+                    TaskProgressItem("todo:$index", CoreText.plain(subject), todo.string("activeForm"),
                         progressStatus(todo.string("status")), use.id, use.seq)
                 }
                 // A malformed snapshot must not erase previously confirmed tasks.

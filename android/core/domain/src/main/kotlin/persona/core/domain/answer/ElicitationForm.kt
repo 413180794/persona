@@ -1,5 +1,7 @@
 package persona.core.domain.answer
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.serialization.json.*
 import java.math.BigDecimal
 import java.net.URI
@@ -18,7 +20,7 @@ object ElicitationForm {
         val choiceLabels: List<String> get() = ((if (type == "array") schema["items"] as? JsonObject else schema)
             ?.get("enumNames") as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
     }
-    data class Validation(val content: JsonObject, val errors: Map<String, String>, val supported: Boolean) {
+    data class Validation(val content: JsonObject, val errors: Map<String, CoreText>, val supported: Boolean) {
         val valid get() = supported && errors.isEmpty()
     }
     fun fields(schema: JsonObject?): List<Field> {
@@ -38,15 +40,15 @@ object ElicitationForm {
             (schema["properties"] as JsonObject).size == fields.size &&
             (schema["required"] as? JsonArray).orEmpty().all { item -> fields.any { JsonPrimitive(it.key) == item } } &&
             fields.all { supported(it.schema) }
-        val errors = linkedMapOf<String, String>()
+        val errors = linkedMapOf<String, CoreText>()
         val result = linkedMapOf<String, JsonElement>()
         fields.forEach { field ->
             val value = values[field.key]
             if (value == null) {
-                if (field.required) errors[field.key] = "请填写这一项"
+                if (field.required) errors[field.key] = CoreText.of(Key.FieldRequired)
             } else {
                 val converted = convert(field, value)
-                if (converted == null) errors[field.key] = "请检查填写内容和格式"
+                if (converted == null) errors[field.key] = CoreText.of(Key.FieldInvalid)
                 else result[field.key] = converted
             }
         }

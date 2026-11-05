@@ -1,5 +1,7 @@
 package persona.core.domain.engines
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.DetectedEngine
 import persona.core.contracts.Machine
 
@@ -12,16 +14,16 @@ object Engines {
     const val DEFAULT = "herdr"
 
     /** An engine this build knows: its id, a fallback name, and where its sessions live. */
-    data class Known(val id: String, val name: String, val detail: String)
+    data class Known(val id: String, val name: String, val detail: CoreText)
 
     val known = listOf(
-        Known("herdr", "herdr", "终端里的 herdr"),
-        Known("herdr-core", "Herdr App", "桌面 App 里开的终端"),
-        Known("orca", "Orca", "Orca 里的终端"),
-        Known("paseo", "Paseo", "Paseo 里的 Agent"),
+        Known("herdr", "herdr", CoreText.of(Key.EngineHerdr)),
+        Known("herdr-core", "Herdr App", CoreText.of(Key.EngineHerdrApp)),
+        Known("orca", "Orca", CoreText.of(Key.EngineOrca)),
+        Known("paseo", "Paseo", CoreText.of(Key.EnginePaseo)),
     )
 
-    fun detail(id: String): String? = known.firstOrNull { it.id == id }?.detail
+    fun detail(id: String): CoreText? = known.firstOrNull { it.id == id }?.detail
 
     /** The chosen engine; herdr when the hub sent none. */
     fun current(machine: Machine): String = machine.engine.ifBlank { DEFAULT }
@@ -53,18 +55,19 @@ object Engines {
         known.any { it.id == id } || machine.engines.any { it.id == id && it.available }
 
     /** The detection line under an option; missing detection is not reported as 没检测到. */
-    fun detection(id: String, machine: Machine): String {
-        if (!machine.online) return "离线，暂无检测信息"
-        val found = machine.engines.firstOrNull { it.id == id } ?: return "暂无检测信息"
-        val status = if (found.available) "检测到可用" else "没检测到"
-        return if (found.available && !found.version.isNullOrBlank()) "$status，版本 ${found.version}" else status
+    fun detection(id: String, machine: Machine): CoreText {
+        if (!machine.online) return CoreText.of(Key.EngineOffline)
+        val found = machine.engines.firstOrNull { it.id == id } ?: return CoreText.of(Key.EngineUnknown)
+        return when {
+            !found.available -> CoreText.of(Key.EngineMissing)
+            !found.version.isNullOrBlank() -> CoreText.of(Key.EngineFoundVersion, found.version.orEmpty())
+            else -> CoreText.of(Key.EngineFound)
+        }
     }
 
     /** The note under the options. */
-    fun footer(machine: Machine): String =
-        if (machine.online) "只显示所选引擎里的会话，随时可在 Agents 的机器监控里修改。"
-        else "机器离线，选择会在连接后生效。只显示所选引擎里的会话。"
+    fun footer(machine: Machine): CoreText = CoreText.of(if (machine.online) Key.EngineFooter else Key.EngineFooterOffline)
 
     /** What 保存 says once the hub took the choice. */
-    fun saved(machine: Machine): String = if (machine.online) "已切换引擎" else "已保存，连上后生效"
+    fun saved(machine: Machine): CoreText = CoreText.of(if (machine.online) Key.EngineSwitched else Key.EngineSavedOffline)
 }

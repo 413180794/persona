@@ -60,8 +60,8 @@ class MessageEchoTest {
 
     @Test fun decodesTheTag() {
         val item = JsonCodec.decodeFromString<Item>("""{"id":"i1","role":"user","kind":"image","client_msg_id":"m1"}""")
-        assertEquals("m1", item.clientMsgId)
+        assertEquals("m1", (item.clientMsgId).zhAny())
         assertEquals(null, JsonCodec.decodeFromString<Item>("""{"id":"i2"}""").clientMsgId)
-        assertEquals("m1", JsonCodec.decodeFromString<Item>(JsonCodec.encodeToString(item)).clientMsgId)
+        assertEquals("m1", (JsonCodec.decodeFromString<Item>(JsonCodec.encodeToString(item)).clientMsgId).zhAny())
     }
 }

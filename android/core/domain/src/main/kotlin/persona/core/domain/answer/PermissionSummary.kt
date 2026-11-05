@@ -1,5 +1,7 @@
 package persona.core.domain.answer
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.Interaction
 import persona.core.contracts.Item
 import persona.core.domain.toolSubject
@@ -7,22 +9,22 @@ import persona.core.domain.toolVerb
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-data class PermissionSummary(val text: String, val description: String? = null, val monospace: Boolean = false)
+data class PermissionSummary(val text: CoreText, val description: String? = null, val monospace: Boolean = false)
 
 /** Keep hub summaries intact and prefer useful tool fields over raw input. */
 fun Interaction.permissionSummary(): PermissionSummary {
-    summary?.takeIf(String::isNotBlank)?.let { return PermissionSummary(it) }
+    summary?.takeIf(String::isNotBlank)?.let { return PermissionSummary(CoreText.plain(it)) }
     val input = toolInput as? JsonObject
     fun field(key: String) = (input?.get(key) as? JsonPrimitive)?.takeIf { it.isString }
         ?.content?.takeIf(String::isNotBlank)
     val description = field("description")
     if (toolName == "Bash") {
-        field("command")?.let { return PermissionSummary(it, description, monospace = true) }
-        if (description != null) return PermissionSummary(description)
+        field("command")?.let { return PermissionSummary(CoreText.plain(it), description, monospace = true) }
+        if (description != null) return PermissionSummary(CoreText.plain(description))
     }
     val subject = toolSubject(Item(id = id, toolName = toolName, toolInput = toolInput)).takeIf(String::isNotBlank)
-    if (subject != null) return PermissionSummary("${toolVerb(toolName)} $subject")
-    if (description != null) return PermissionSummary(description)
+    if (subject != null) return PermissionSummary(CoreText.of(Key.ToolWithSubject, toolVerb(toolName), subject))
+    if (description != null) return PermissionSummary(CoreText.plain(description))
     val raw = toolInput?.toString().orEmpty()
-    return PermissionSummary(if (raw.isBlank()) toolVerb(toolName) else raw.take(240) + if (raw.length > 240) "…" else "")
+    return PermissionSummary(if (raw.isBlank()) toolVerb(toolName) else CoreText.plain(raw.take(240) + if (raw.length > 240) "…" else ""))
 }

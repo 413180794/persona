@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import persona.core.contracts.*
@@ -174,14 +176,15 @@ class OkHttpHubConnection(
         _diagnostics.update { previous ->
             val value = change(previous)
             value.copy(unmeasuredFields = buildMap {
-                if (value.currentPath == null) put("currentPath", "未实测")
-                if (value.fingerprint == null) put("fingerprint", "未实测")
-                if (value.heartbeatSeconds == null) put("heartbeatSeconds", "未实测")
-                if (value.foregroundHeartbeatSeconds == null) put("foregroundHeartbeatSeconds", "未实测")
-                if (value.backgroundHeartbeatSeconds == null) put("backgroundHeartbeatSeconds", "未实测")
-                if (value.pongTimeoutSeconds == null) put("pongTimeoutSeconds", "未实测")
-                if (value.lastReceivedAt == null) put("lastReceivedAt", "未实测")
-                if (value.lastDisconnectReason == null) put("lastDisconnectReason", "未实测")
+                val unmeasured = CoreText.of(Key.NotMeasured)
+                if (value.currentPath == null) put("currentPath", unmeasured)
+                if (value.fingerprint == null) put("fingerprint", unmeasured)
+                if (value.heartbeatSeconds == null) put("heartbeatSeconds", unmeasured)
+                if (value.foregroundHeartbeatSeconds == null) put("foregroundHeartbeatSeconds", unmeasured)
+                if (value.backgroundHeartbeatSeconds == null) put("backgroundHeartbeatSeconds", unmeasured)
+                if (value.pongTimeoutSeconds == null) put("pongTimeoutSeconds", unmeasured)
+                if (value.lastReceivedAt == null) put("lastReceivedAt", unmeasured)
+                if (value.lastDisconnectReason == null) put("lastDisconnectReason", unmeasured)
             })
         }
     }
@@ -196,7 +199,7 @@ class OkHttpHubConnection(
         val candidates = usableEndpoints()
         syncPins()
         updateDiagnostics { it.copy(candidates = candidates.map { endpoint ->
-            ConnectionCandidate(endpoint.url, endpoint.kind, "未实测")
+            ConnectionCandidate(endpoint.url, endpoint.kind, CoreText.of(Key.NotMeasured))
         }) }
         val centerEndpoints = routes().filter { it.second.center }.map { endpointKey(it.first.url) }.toSet()
         return probeRoutes(candidates, centerEndpoints = centerEndpoints)
@@ -213,7 +216,7 @@ class OkHttpHubConnection(
                 if (candidate.url != endpoint.url) candidate else candidate.copy(
                     result = endpointResultLabel(result.exceptionOrNull()?.let { HubFailure.from(it).kind }),
                     checkedAt = Instant.now().toString(), probeDurationMillis = elapsed,
-                    sampleCount = 1, measurementNote = "单次探测（样本数 1），不作为性能基线",
+                    sampleCount = 1, measurementNote = CoreText.of(Key.SingleProbe),
                 )
             }) }
         })

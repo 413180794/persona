@@ -1,5 +1,8 @@
 package persona.core.domain
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
+
 /**
  * One `<jarvis-context kind="…" title="…" url="…">body</jarvis-context>` block of a message: a piece of a page picked on
  * the phone, or part of what a Feishu `/agent` request hands its agent (instructions, where it was asked, the chat
@@ -8,7 +11,7 @@ package persona.core.domain
  */
 data class MessageContext(val kind: String, val title: String, val url: String?, val body: String) {
     /** What a row calls it: the title, else the link, else 「引用」. */
-    val label: String get() = title.ifBlank { url ?: "引用" }
+    val label: CoreText get() = (title.takeIf(String::isNotBlank) ?: url)?.let(CoreText::plain) ?: CoreText.of(Key.ContextQuote)
 }
 
 private val contextBlock = Regex("<jarvis-context\\b([^>]*)>([\\s\\S]*?)</jarvis-context>\\s*")
@@ -44,8 +47,8 @@ fun decodeXmlEntities(value: String): String = value
  * What a folded context row says: 「上下文 · N 项」 for several, 「上下文 · 标题」 for one (「要改的内容 · 标题」 when it
  * is a selection to edit).
  */
-fun contextSummary(contexts: List<MessageContext>): String = when (contexts.size) {
-    0 -> ""
-    1 -> (if (contexts[0].kind == "edit") "要改的内容 · " else "上下文 · ") + contexts[0].label
-    else -> "上下文 · ${contexts.size} 项"
+fun contextSummary(contexts: List<MessageContext>): CoreText = when (contexts.size) {
+    0 -> CoreText.plain("")
+    1 -> CoreText.of(if (contexts[0].kind == "edit") Key.ContextEditOne else Key.ContextOne, contexts[0].label)
+    else -> CoreText.of(Key.ContextMany, contexts.size)
 }

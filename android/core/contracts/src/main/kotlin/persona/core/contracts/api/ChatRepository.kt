@@ -28,10 +28,10 @@ interface ChatRepository {
 
     /** Implementations fetch authenticated bytes; presentation owns decoding and caching. */
     suspend fun loadImage(session: SessionKey, itemId: String): ByteArray =
-        throw UnsupportedOperationException("图片暂不可用")
+        throw UnsupportedOperationException("Image unavailable")
 
     suspend fun fullText(session: SessionKey, itemId: String): String =
-        throw UnsupportedOperationException("全文暂不可用")
+        throw UnsupportedOperationException("Full text unavailable")
 
     /** Called only after foreground, visibility and verified-window gates pass. */
     suspend fun markSeen(session: SessionKey, itemId: String) = Unit

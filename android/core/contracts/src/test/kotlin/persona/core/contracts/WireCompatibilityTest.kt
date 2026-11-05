@@ -10,10 +10,10 @@ class WireCompatibilityTest {
     @Test fun extensionAlertsPreserveTheirKindWithAndWithoutASession() {
         for ((machine, session) in listOf("machine" to "session", "" to "")) {
             val event = ServerEvent.decode("""{"type":"notify","kind":"alert","machine_id":"$machine","session_id":"$session","title":"任务提醒","body":"任务需要查看"}""") as NotifyEvent
-            assertEquals("alert", event.kind)
+            assertEquals("alert", (event.kind).zhAny())
             assertEquals(machine, event.machineId)
             assertEquals(session, event.sessionId)
-            assertEquals("任务提醒", event.title)
+            assertEquals("任务提醒", (event.title).zhAny())
             assertEquals(event, ServerEvent.decode(JsonCodec.encodeToString<ServerEvent>(event)))
         }
     }
@@ -21,14 +21,14 @@ class WireCompatibilityTest {
     @Test fun connectionEventsAndOptionalFieldsFollowD5() {
         val endpoint = """{"url":"https://example.com:443","kind":"name","port":443,"scheme":"https","seen_at":"2026-01-02T03:04:05Z"}"""
         val hello = ServerEvent.decode("""{"type":"hello","server_version":"example","client_id":"c1","hub_id":"hub_example","tls_port":443,"fp":"example","endpoints":[$endpoint],"features":["endpoints"]}""") as Hello
-        assertEquals("hub_example", hello.hubId)
-        assertEquals("example", hello.serverVersion)
-        assertEquals("c1", hello.clientId)
-        assertEquals("example", hello.fp)
+        assertEquals("hub_example", (hello.hubId).zhAny())
+        assertEquals("example", (hello.serverVersion).zhAny())
+        assertEquals("c1", (hello.clientId).zhAny())
+        assertEquals("example", (hello.fp).zhAny())
         assertEquals(443, hello.tlsPort)
-        assertEquals(listOf("endpoints"), hello.features)
-        assertEquals("name", hello.endpoints.single().kind)
-        assertEquals("2026-01-02T03:04:05Z", hello.endpoints.single().seenAt)
+        assertEquals(listOf("endpoints"), (hello.features).zhAny())
+        assertEquals("name", (hello.endpoints.single().kind).zhAny())
+        assertEquals("2026-01-02T03:04:05Z", (hello.endpoints.single().seenAt).zhAny())
         val endpoints = JsonCodec.decodeFromString<EndpointsResponse>("""{"hub_id":"hub_example","tls_port":443,"fp":"example","endpoints":[$endpoint]}""")
         assertEquals(hello.endpoints, endpoints.endpoints)
         assertEquals(hello.hubId, endpoints.hubId)
@@ -45,18 +45,18 @@ class WireCompatibilityTest {
         val ack = ServerEvent.decode("""{"type":"client_hello_ack","heartbeat":{"interval":240,"pong_timeout":15}}""") as ClientHelloAck
         assertEquals(240, ack.heartbeat.interval)
         assertEquals(15, ack.heartbeat.pongTimeout)
-        assertEquals("", (ServerEvent.decode("""{"type":"pong","id":""}""") as Pong).id)
+        assertEquals("", ((ServerEvent.decode("""{"type":"pong","id":""}""") as Pong).id).zhAny())
         assertNull(ServerEvent.decode("""{"type":"pong","id":1}"""))
         assertNull(ServerEvent.decode("""{"type":"pong"}"""))
         assertNull(ServerEvent.decode("""{"type":"future","items":false}"""))
         val notify = ServerEvent.decode("""{"type":"notify","kind":"interaction","machine_id":"m1","session_id":"s1","title":"通知","subtitle":"示例任务","body":"待确认","interaction_id":"ix_example"}""") as NotifyEvent
-        assertEquals("interaction", notify.kind)
-        assertEquals("m1", notify.machineId)
-        assertEquals("s1", notify.sessionId)
-        assertEquals("通知", notify.title)
-        assertEquals("示例任务", notify.subtitle)
-        assertEquals("待确认", notify.body)
-        assertEquals("ix_example", notify.interactionId)
+        assertEquals("interaction", (notify.kind).zhAny())
+        assertEquals("m1", (notify.machineId).zhAny())
+        assertEquals("s1", (notify.sessionId).zhAny())
+        assertEquals("通知", (notify.title).zhAny())
+        assertEquals("示例任务", (notify.subtitle).zhAny())
+        assertEquals("待确认", (notify.body).zhAny())
+        assertEquals("ix_example", (notify.interactionId).zhAny())
         assertEquals(notify, ServerEvent.decode(JsonCodec.encodeToString<ServerEvent>(notify)))
         for (kind in listOf("done", "assistant")) {
             val event = ServerEvent.decode("""{"type":"notify","kind":"$kind","machine_id":"m1","session_id":"s1","body":"示例"}""") as NotifyEvent
@@ -66,8 +66,8 @@ class WireCompatibilityTest {
 
         val session = JsonCodec.decodeFromString<Session>("""{"session_id":"s1","title":"保留","status":"working","background":[{"id":false}],"loop":{"ticks":"bad","prompt":"保留"},"updated_at":"1999-12-31T23:59:59Z","rev":42}""")
         // An optional nested field is dropped at its own boundary, without deleting its valid siblings.
-        assertEquals("保留", session.title)
-        assertEquals("保留", session.loop?.prompt)
+        assertEquals("保留", (session.title).zhAny())
+        assertEquals("保留", (session.loop?.prompt).zhAny())
         assertNull(session.loop?.ticks)
         assertEquals(42L, session.rev)
         assertNull(session.updatedAt)
@@ -81,17 +81,17 @@ class WireCompatibilityTest {
         assertNull(parseTime("1999-12-31T23:59:59.999Z"))
         assertNull(parseTime("invalid"))
         val item = JsonCodec.decodeFromString<Item>("""{"id":"i1","kind":"future","image":false,"tool_input":{"custom_Key":{"keep_snake_case":true}}}""")
-        assertEquals("unknown", item.kind)
+        assertEquals("unknown", (item.kind).zhAny())
         assertNull(item.image)
         assertEquals(JsonPrimitive(true), item.toolInput?.jsonObject?.get("custom_Key")?.jsonObject?.get("keep_snake_case"))
         val sessions = ServerEvent.decode("""{"type":"sessions","machine_id":"m1","sessions":[{"machine_id":"wrong","session_id":"s1"}]}""") as SessionsEvent
-        assertEquals("m1", sessions.sessions.single().machineId)
+        assertEquals("m1", (sessions.sessions.single().machineId).zhAny())
         val error = JsonCodec.decodeFromString<ErrorBody>("""{"error":"示例","code":"future_code","delivered":"future","retryable":false,"draft":"保留","clearable":"保留"}""")
-        assertEquals("future_code", error.code)
-        assertEquals("unknown", error.delivered)
+        assertEquals("future_code", (error.code).zhAny())
+        assertEquals("unknown", (error.delivered).zhAny())
         assertEquals(false, error.retryable)
-        assertEquals("保留", error.draft)
-        assertEquals("保留", error.clearable)
+        assertEquals("保留", (error.draft).zhAny())
+        assertEquals("保留", (error.clearable).zhAny())
         val legacyError = JsonCodec.decodeFromString<ErrorBody>("""{"error":"示例"}""")
         assertNull(legacyError.delivered)
         assertNull(legacyError.retryable)

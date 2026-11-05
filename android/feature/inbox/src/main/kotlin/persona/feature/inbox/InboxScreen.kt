@@ -1,5 +1,6 @@
 package persona.feature.inbox
 
+import persona.core.designsystem.text
 import androidx.compose.ui.platform.LocalResources
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
@@ -83,7 +84,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     }
     val displayGroups = buildList {
         triageGroups.firstOrNull { it.id == "action" }?.let { add(it) }
-        if (workingRows.isNotEmpty()) add(InboxGroup("working", res.getString(R.string.inbox_group_working), workingRows, workingRows, false))
+        if (workingRows.isNotEmpty()) add(InboxGroup("working", persona.core.contracts.CoreText.plain(res.getString(R.string.inbox_group_working)), workingRows, workingRows, false))
         addAll(triageGroups.filter { it.id != "action" })
     }
     val groups = displayGroups.filter { section.isEmpty() || it.id == section }
@@ -329,7 +330,7 @@ private fun inboxGroupTitle(group: InboxGroup): String = when (group.id) {
     "fyi" -> stringResource(R.string.inbox_group_fyi)
     "noise" -> stringResource(R.string.inbox_section_folded)
     "done" -> stringResource(R.string.inbox_done)
-    else -> group.title
+    else -> group.title.text()
 }
 
 /** A tier's name, as the item's header tags it. */

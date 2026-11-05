@@ -1,5 +1,9 @@
 package persona.core.domain.sort
 
+import persona.core.domain.zhAny
+
+import persona.core.domain.zh
+import persona.core.contracts.CoreText
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.Session
 import persona.core.contracts.SessionCapabilities
@@ -30,17 +34,17 @@ class SessionSourceTest {
         )
         assertTrue(history.canRead)
         assertFalse(history.canSend || history.canInterrupt || history.canApprove || history.canTerminal || history.canAttach)
-        assertEquals("Codex 历史 · 仅查看：外部进程正在使用此会话", history.sourceSubtitle)
-        assertEquals(SessionSourceInfo("Codex 历史", readOnlyReason = "外部进程正在使用此会话"), history.source)
-        assertEquals("Codex 历史 · 仅查看：外部进程正在使用此会话", history.readOnlyNotice)
-        assertEquals("Codex", history.agentLabel)
+        assertEquals("Codex 历史 · 仅查看：外部进程正在使用此会话", (history.sourceSubtitle?.zh()).zhAny())
+        assertEquals(SessionSourceInfo(CoreText.of(CoreText.Key.SourceCodexHistory), readOnlyReason = CoreText.plain("外部进程正在使用此会话")), history.source)
+        assertEquals("Codex 历史 · 仅查看：外部进程正在使用此会话", (history.readOnlyNotice.zh()).zhAny())
+        assertEquals("Codex", (history.agentLabel).zhAny())
         // A reason the node already starts with "仅查看：" is not prefixed twice.
         assertEquals("Codex 历史 · 仅查看：未发现可共享的 app-server 入口",
-            history.copy(readOnlyReason = "仅查看：未发现可共享的 app-server 入口").sourceSubtitle)
+            (history.copy(readOnlyReason = "仅查看：未发现可共享的 app-server 入口").sourceSubtitle).zhAny())
         // Only a session in a terminal can be resumed there.
         assertNull(history.resumeCommand())
         val terminal = history.copy(capabilities = SessionCapabilities(read = true, terminal = true))
-        assertEquals("cd -- '/tmp/project' && codex resume 'thread'", terminal.resumeCommand())
+        assertEquals("cd -- '/tmp/project' && codex resume 'thread'", (terminal.resumeCommand()).zhAny())
     }
 
     @Test fun liveMenusRequireExplicitCapabilities() {
@@ -52,8 +56,8 @@ class SessionSourceTest {
         assertFalse(live.canTerminal || live.canInterrupt || live.canApprove)
         assertFalse(live.copy(attached = true).canAttach)
         assertTrue(live.copy(capabilities = live.capabilities!!.copy(interrupt = true)).canInterrupt)
-        assertEquals("Codex 实时 · j-3f2a", live.sourceSubtitle)
-        assertEquals("Claude 后台 · 仅查看：此来源尚未允许发送", live.copy(sourceKind = "claude_bg", agentName = null, capabilities = SessionCapabilities(read = true)).sourceSubtitle)
+        assertEquals("Codex 实时 · j-3f2a", (live.sourceSubtitle).zhAny())
+        assertEquals("Claude 后台 · 仅查看：此来源尚未允许发送", (live.copy(sourceKind = "claude_bg", agentName = null, capabilities = SessionCapabilities(read = true)).sourceSubtitle).zhAny())
         // Codex is not Claude: no modes, no /model or /clear even when it can send.
         assertFalse(live.canChangeModes || live.canTypeClaudeCommands)
     }
@@ -63,16 +67,16 @@ class SessionSourceTest {
             """{"session_id":"session-1","agent":"dsh","agent_label":"DSH","source_kind":"runtime","agent_name":"dsh-web",""" +
                 """"capabilities":{"read":true,"approve":true}}""",
         )
-        assertEquals("DSH", dsh.agentLabel)
-        assertEquals("DSH · dsh-web · 仅查看：此来源尚未允许发送", dsh.sourceSubtitle)
+        assertEquals("DSH", (dsh.agentLabel).zhAny())
+        assertEquals("DSH · dsh-web · 仅查看：此来源尚未允许发送", (dsh.sourceSubtitle).zhAny())
         assertTrue(dsh.canApprove)
         assertFalse(dsh.canTerminal || dsh.canAttach)
         val writable = dsh.copy(capabilities = SessionCapabilities(read = true, send = true))
-        assertEquals("DSH · dsh-web", writable.sourceSubtitle)
+        assertEquals("DSH · dsh-web", (writable.sourceSubtitle).zhAny())
         assertEquals(READ_ONLY, writable.readOnlyNotice)
         // An identity conflict does not name the agent it cannot tell apart.
         val conflict = writable.copy(sourceKind = "identity_conflict")
-        assertEquals("身份冲突", conflict.sourceSubtitle)
+        assertEquals("身份冲突", (conflict.sourceSubtitle).zhAny())
     }
 
     @Test fun claudeOnlyControlsArePositive() {
@@ -93,7 +97,7 @@ class SessionSourceTest {
             """{"session_id":"opaque","source_kind":"codex_app_server","agent":"codex","status":"idle","effort":"high",""" +
                 """"efforts":["low","high","ultra"],"capabilities":{"read":true,"send":true}}""",
         )
-        assertEquals(listOf("low", "high", "ultra"), live.efforts)
+        assertEquals(listOf("low", "high", "ultra"), (live.efforts).zhAny())
         assertTrue(live.canChangeEffortOnly)
         assertFalse(live.canChangeModes || live.canTypeClaudeCommands)
         // A herdr pane joined on its app-server: no source, the levels the hub lists say so.
@@ -108,8 +112,8 @@ class SessionSourceTest {
 
     @Test fun resumeCommandsQuoteWhatTheyCarry() {
         val claude = session("""{"session_id":"s'1","cwd":"/tmp/my dir"}""")
-        assertEquals("cd -- '/tmp/my dir' && claude --resume 's'\"'\"'1'", claude.resumeCommand())
-        assertEquals("traex resume 'abc'", claude.copy(agent = "traex", cwd = "").resumeCommand(id = "abc"))
-        assertEquals("cd -- '/x' && codex resume 's'\"'\"'1'", claude.copy(agent = "codex").resumeCommand(cwd = "/x"))
+        assertEquals("cd -- '/tmp/my dir' && claude --resume 's'\"'\"'1'", (claude.resumeCommand()).zhAny())
+        assertEquals("traex resume 'abc'", (claude.copy(agent = "traex", cwd = "").resumeCommand(id = "abc")).zhAny())
+        assertEquals("cd -- '/x' && codex resume 's'\"'\"'1'", (claude.copy(agent = "codex").resumeCommand(cwd = "/x")).zhAny())
     }
 }

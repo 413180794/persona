@@ -32,20 +32,20 @@ class ChatComposerServiceTest {
             body.writeTo(buffer)
             val (code, response) = if (path.contains("/files?")) {
                 assertEquals(3L, body.contentLength())
-                assertEquals("abc", buffer.readUtf8())
+                assertEquals("abc", (buffer.readUtf8()).zhAny())
                 assertTrue(path.contains("name="))
                 200 to """{"path":"/tmp/test.txt"}"""
             } else {
                 val fields = JsonCodec.parseToJsonElement(buffer.readUtf8()).jsonObject
-                assertEquals("operation", headers["X-Jarvis-Op-Id"])
-                assertEquals("operation", fields["client_msg_id"]!!.jsonPrimitive.content)
-                assertEquals("消息", fields["text"]!!.jsonPrimitive.content)
+                assertEquals("operation", (headers["X-Jarvis-Op-Id"]).zhAny())
+                assertEquals("operation", (fields["client_msg_id"]!!.jsonPrimitive.content).zhAny())
+                assertEquals("消息", (fields["text"]!!.jsonPrimitive.content).zhAny())
                 attempts++
                 if (attempts == 1) {
                     assertNull(fields["clear_draft"])
                     409 to """{"error":"电脑上有草稿","code":"input_draft","delivered":"none","draft":"电脑草稿","clearable":"电脑草稿"}"""
                 } else {
-                    assertEquals("电脑草稿", fields["clear_draft"]!!.jsonPrimitive.content)
+                    assertEquals("电脑草稿", (fields["clear_draft"]!!.jsonPrimitive.content).zhAny())
                     200 to "{}"
                 }
             }
@@ -55,10 +55,10 @@ class ChatComposerServiceTest {
         val file = File.createTempFile("composer-test-", ".txt")
         try {
             file.writeText("abc")
-            assertEquals("/tmp/test.txt", service.upload(session, "test.txt", file))
+            assertEquals("/tmp/test.txt", (service.upload(session, "test.txt", file)).zhAny())
         } finally { file.delete() }
         service.send(MessageRequest(scope, session, "消息", "operation"))
-        assertEquals("电脑草稿", service.deliveries.value["operation"]!!.refusal!!.draft)
+        assertEquals("电脑草稿", (service.deliveries.value["operation"]!!.refusal!!.draft).zhAny())
         assertEquals(DeliveryState.Sent, service.retryRefused("operation", true).state)
         try {
             service.retryRefused("operation", true)

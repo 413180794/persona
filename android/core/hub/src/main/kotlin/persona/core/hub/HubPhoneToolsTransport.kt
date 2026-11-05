@@ -21,9 +21,9 @@ class HubPhoneToolsTransport(private val connection: HubConnection) : PhoneTools
             else -> raw as? JsonObject
         }
         if (name.isNullOrBlank() || args == null) {
-            result(id, PhoneToolResult.text("参数错误 / Invalid argument: the arguments are not a JSON object.", true))
+            result(id, PhoneToolResult.text("参数错误 / Invalid argument: the arguments are not a JSON object.", true)) // i18n-ignore: a tool result for the model
         } else if (!queue.trySend(PhoneToolCall(id, name, args)).isSuccess) {
-            result(id, PhoneToolResult.text("手机工具正在忙，请稍后重试。", true))
+            result(id, PhoneToolResult.text("手机工具正在忙，请稍后重试。", true)) // i18n-ignore: a tool result for the model
         }
         return true
     }

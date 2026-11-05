@@ -1,5 +1,9 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
+
 data class PairedDevice(
     val id: String,
     val name: String,
@@ -16,7 +20,7 @@ data class PairedDevice(
 data class PairedDevices(val devices: List<PairedDevice>, val currentId: String?, val revoked: List<PairedDevice> = emptyList())
 
 /** The hub cannot list device credentials: too old a version (404), or no database (503). [message] says which. */
-class DeviceCredentialsUnavailable(message: String) : Exception(message)
+class DeviceCredentialsUnavailable(text: CoreText) : CoreTextException(text)
 
 enum class DoneNotification(val wire: String) { Off("off"), Long("long"), Always("always") }
 

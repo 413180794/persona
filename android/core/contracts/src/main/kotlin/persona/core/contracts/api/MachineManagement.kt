@@ -2,6 +2,8 @@
 
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.Machine
 import persona.core.contracts.WireSerializer
 import kotlinx.serialization.KeepGeneratedSerializer
@@ -70,8 +72,9 @@ data class ClaudeSetting(
     val stringValue: String get() = (effective as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull.orEmpty()
 
     /** The text field's placeholder: the default when it has one. */
-    val placeholder: String
-        get() = (default as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.takeIf { it.isNotEmpty() } ?: "未设置"
+    val placeholder: CoreText
+        get() = (default as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.takeIf { it.isNotEmpty() }?.let(CoreText::plain)
+            ?: CoreText.of(Key.NotSet)
 }
 
 object ClaudeSettingSerializer : WireSerializer<ClaudeSetting>(ClaudeSetting.generatedSerializer())

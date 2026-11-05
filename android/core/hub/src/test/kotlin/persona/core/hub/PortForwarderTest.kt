@@ -38,12 +38,12 @@ class PortForwarderTest {
                 browser.soTimeout = 5000
                 browser.getOutputStream().apply { write("GET / HTTP/1.1\r\nHost: localhost:5173\r\n\r\n".toByteArray()); flush() }
                 val answer = browser.getInputStream().readBytes().decodeToString()
-                assertEquals("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", answer)
+                assertEquals("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", (answer).zhAny())
             }
-            assertEquals("GET / HTTP/1.1\r\nHost: localhost:5173\r\n\r\n", received.poll(5, TimeUnit.SECONDS))
+            assertEquals("GET / HTTP/1.1\r\nHost: localhost:5173\r\n\r\n", (received.poll(5, TimeUnit.SECONDS)).zhAny())
             val upgrade = hub.takeRequest()
-            assertEquals("/api/v1/machines/mac/ports/5173/connect", upgrade.path)
-            assertEquals("Bearer device-token", upgrade.getHeader("Authorization"))
+            assertEquals("/api/v1/machines/mac/ports/5173/connect", (upgrade.path).zhAny())
+            assertEquals("Bearer device-token", (upgrade.getHeader("Authorization")).zhAny())
             assertEquals(PortForwarder.Key("mac", 5173), forwarder.keyOf(port))
             forwarder.close()
         }

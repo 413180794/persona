@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import kotlinx.coroutines.CancellationException
@@ -23,7 +25,7 @@ class HttpChatRecoveryService internal constructor(
     override suspend fun resume(session: Session): ChatRecoveryResult = lock.withLock {
         if (session.key in attempted) return@withLock verify(session.key)
         if (session.cwd.isBlank() || session.launcher.isNullOrBlank() || session.assistant)
-            return@withLock ChatRecoveryResult.Failed("缺少恢复所需的目录或启动器，请到电脑上恢复会话。")
+            return@withLock ChatRecoveryResult.Failed(CoreText.of(Key.RecoveryMissing))
         val body = buildJsonObject {
             put("machine_id", session.machineId)
             put("cwd", session.cwd)
@@ -42,7 +44,7 @@ class HttpChatRecoveryService internal constructor(
         catch (error: Exception) {
             if (error.definitelyRejected()) {
                 attempted -= session.key
-                ChatRecoveryResult.Failed("未能恢复会话，请检查连接和启动器后重试。")
+                ChatRecoveryResult.Failed(CoreText.of(Key.RecoveryFailed))
             } else ChatRecoveryResult.Unknown
         }
     }
@@ -62,7 +64,7 @@ class HttpChatRecoveryService internal constructor(
             ChatActionResult.Done
         } catch (error: CancellationException) { throw error }
         catch (error: Exception) {
-            if (error.definitelyRejected()) ChatActionResult.Failed("未能请求重连，请检查 hub 连接后重试。")
+            if (error.definitelyRejected()) ChatActionResult.Failed(CoreText.of(Key.ReconnectFailed))
             else ChatActionResult.Unknown
         }
     }

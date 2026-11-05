@@ -54,7 +54,7 @@ class DiagnosticsStateTest {
         assertNotNull(controller.message.value)
         controller.refresh(reprobe = true)
         assertEquals(1, connection.reconnections)
-        val candidate = ConnectionCandidate("https://example.com", "name", "未实测")
+        val candidate = ConnectionCandidate("https://example.com", "name", persona.core.contracts.CoreText.plain("未实测"))
         assertEquals("未实测", candidate.probeMeasurement(resources))
         assertEquals("未实测", candidate.copy(probeDurationMillis = 12).probeMeasurement(resources))
         assertEquals("未实测", candidate.copy(probeDurationMillis = -1, sampleCount = 1).probeMeasurement(resources))
@@ -73,7 +73,7 @@ class DiagnosticsStateTest {
         val error = PairingException(PairingFailure.Certificate).apply {
             initCause(persona.core.hub.HubFailure(persona.core.hub.HubError.CertificateMismatch, cause = handshake))
         }
-        val candidates = listOf(ConnectionCandidate("https://hub.example.com/jarvis", "name", "证书指纹不符"))
+        val candidates = listOf(ConnectionCandidate("https://hub.example.com/jarvis", "name", persona.core.contracts.CoreText.plain("证书指纹不符")))
         attempts.record(pairingAttempt(request, error, PairingStage.Probe, candidates, java.time.Instant.parse("2026-11-05T01:02:03Z")))
         val attempt = requireNotNull(controller.pairing.value)
         assertTrue(attempt.failed)

@@ -18,9 +18,9 @@ class MultiHubTests {
         val memberC = HubMember(hubId = "C", fingerprint = null, token = null, endpoints = cEndpoints, center = true)
         val config = HubConnectionConfig(hubId = "B", fingerprint = null, token = "t", endpoints = bEndpoints, version = "test", members = listOf(memberC))
         OkHttpHubConnection(config, HubNetwork("test", available = false)).use { connection ->
-            assertEquals("C", connection.centerId)
+            assertEquals("C", (connection.centerId).zhAny())
             val c = connection.routeCandidates()
-            assertEquals(listOf("http://127.0.0.1:18762", "http://127.0.0.1:18761"), c.map { it.endpoint.url })
+            assertEquals(listOf("http://127.0.0.1:18762", "http://127.0.0.1:18761"), (c.map { it.endpoint.url }).zhAny())
             assertEquals(listOf(true, false), c.map { it.center })
         }
 
@@ -29,7 +29,7 @@ class MultiHubTests {
         val bothConfig = config.copy(members = listOf(pairedC))
         OkHttpHubConnection(bothConfig, HubNetwork("test", available = false)).use { bothConnection ->
             val both = bothConnection.routeCandidates()
-            assertEquals("C", both.first().hub)
+            assertEquals("C", (both.first().hub).zhAny())
             assertTrue(both.first().center)
             assertEquals(1, both.count { it.center })
         }
@@ -40,7 +40,7 @@ class MultiHubTests {
         val oldConfig = HubConnectionConfig(hubId = "B", fingerprint = null, token = "t", endpoints = bEndpoints, version = "test", members = listOf(memberD))
         OkHttpHubConnection(oldConfig, HubNetwork("test", available = false)).use { plainConnection ->
             val plain = plainConnection.routeCandidates()
-            assertEquals(listOf("B", "D"), plain.map { it.hub })
+            assertEquals(listOf("B", "D"), (plain.map { it.hub }).zhAny())
             assertFalse(plain.any { it.center })
         }
     }

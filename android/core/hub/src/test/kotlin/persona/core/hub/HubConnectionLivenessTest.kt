@@ -36,11 +36,11 @@ class HubConnectionLivenessTest {
             assertTrue(socket.cancelled)
             assertEquals(ConnectionState.Connecting, fixture.connection.state.value)
             assertNull(fixture.connection.route.value)
-            assertEquals("Timeout", fixture.connection.diagnostics.value.lastDisconnectReason)
+            assertEquals("Timeout", (fixture.connection.diagnostics.value.lastDisconnectReason).zhAny())
             fixture.advance(1000)
             fixture.awaitSocket(2)
             assertEquals(ConnectionState.Online, fixture.connection.state.value)
-            assertEquals("Timeout", fixture.connection.diagnostics.value.lastDisconnectReason)
+            assertEquals("Timeout", (fixture.connection.diagnostics.value.lastDisconnectReason).zhAny())
         }
     }
 
@@ -51,13 +51,13 @@ class HubConnectionLivenessTest {
             Fixture(appPing = true).use { fixture ->
                 val socket = fixture.start()
                 fun hellos() = socket.sent.filter { it["type"]?.jsonPrimitive?.content == "client_hello" }
-                assertEquals("ja", hellos().last()["locale"]?.jsonPrimitive?.content)
+                assertEquals("ja", (hellos().last()["locale"]?.jsonPrimitive?.content).zhAny())
                 val before = hellos().size
                 persona.core.contracts.ClientLanguage.current = persona.core.contracts.AppLanguage.ZhHans
                 fixture.scheduler.runCurrent()
                 assertEquals(before + 1, hellos().size)
-                assertEquals("zh-Hans", hellos().last()["locale"]?.jsonPrimitive?.content)
-                assertEquals("test-device", hellos().last()["device_id"]?.jsonPrimitive?.content)
+                assertEquals("zh-Hans", (hellos().last()["locale"]?.jsonPrimitive?.content).zhAny())
+                assertEquals("test-device", (hellos().last()["device_id"]?.jsonPrimitive?.content).zhAny())
             }
         } finally { persona.core.contracts.ClientLanguage.current = persona.core.contracts.AppLanguage.En }
     }
@@ -66,9 +66,9 @@ class HubConnectionLivenessTest {
         Fixture(appPing = true).use { fixture ->
             val socket = fixture.start()
             val hello = socket.sent.first { it["type"]?.jsonPrimitive?.content == "client_hello" }
-            assertEquals("test-device", hello["device_id"]?.jsonPrimitive?.content)
+            assertEquals("test-device", (hello["device_id"]?.jsonPrimitive?.content).zhAny())
             assertEquals(JsonPrimitive(7), hello["build"])
-            assertEquals("Android", hello["os"]?.jsonObject?.get("name")?.jsonPrimitive?.content)
+            assertEquals("Android", (hello["os"]?.jsonObject?.get("name")?.jsonPrimitive?.content).zhAny())
             fixture.connection.setForeground(false)
             fixture.scheduler.runCurrent()
             assertEquals(240, socket.sent.last { it["type"]?.jsonPrimitive?.content == "client_hello" }
@@ -82,12 +82,12 @@ class HubConnectionLivenessTest {
             assertEquals(1, diagnostics.candidates.single().sampleCount)
             assertNotNull(diagnostics.candidates.single().probeDurationMillis)
             assertTrue("fingerprint" in diagnostics.unmeasuredFields)
-            assertEquals("未实测", diagnostics.unmeasuredFields["fingerprint"])
-            assertTrue(diagnostics.candidates.single().measurementNote.contains("样本数 1"))
+            assertEquals("未实测", (diagnostics.unmeasuredFields["fingerprint"]).zhAny())
+            assertTrue(diagnostics.candidates.single().measurementNote.zh().contains("样本数 1"))
 
             fixture.advance(80_000)
             assertEquals(ConnectionState.Online, fixture.connection.state.value)
-            assertEquals("ping", socket.sent.last()["type"]?.jsonPrimitive?.content)
+            assertEquals("ping", (socket.sent.last()["type"]?.jsonPrimitive?.content).zhAny())
             socket.receive(buildJsonObject { put("type", "pong"); put("id", socket.sent.last().getValue("id")) }.toString())
             fixture.scheduler.runCurrent()
             fixture.advance(80_000)

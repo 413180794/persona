@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.domain.zhAny
+
 import persona.core.contracts.Session
 import org.junit.Assert.*
 import org.junit.Test
@@ -16,8 +18,8 @@ class SessionRenameTest {
         assertFalse(SessionRename.changes(session.copy(paneId = null, tabId = "tab"), "", "新标签").changed)
         assertFalse(SessionRename.changes(session.copy(paneId = " "), "", "新标签").changed)
         val edit = SessionRename.changes(session, " 新会话 ", " 新标签 ")
-        assertEquals("新会话", edit.apply(session).displayTitle)
-        assertEquals("新标签", edit.apply(session).slotName)
+        assertEquals("新会话", (edit.apply(session).displayTitle).zhAny())
+        assertEquals("新标签", (edit.apply(session).slotName).zhAny())
         assertTrue(edit.matches(edit.apply(session)))
         assertFalse(edit.matches(session))
     }

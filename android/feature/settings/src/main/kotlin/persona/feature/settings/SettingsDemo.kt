@@ -24,7 +24,7 @@ fun demoSettingsServices(resources: Resources): SettingsServices {
         override suspend fun pair(request: PairingRequest, progress: (PairingProgress) -> Unit) {
             PairingStage.entries.filter { it != PairingStage.Complete }.forEach {
                 progress(PairingProgress(it, candidates = if (it == PairingStage.Probe) listOf(
-                    ConnectionCandidate("https://example.com", "name", t(R.string.settings_demo_identity_ok)),
+                    ConnectionCandidate("https://example.com", "name", persona.core.contracts.CoreText.plain(t(R.string.settings_demo_identity_ok))),
                 ) else emptyList()))
             }
             isPaired.value = true
@@ -40,8 +40,8 @@ fun demoSettingsServices(resources: Resources): SettingsServices {
         override suspend fun read() = ConnectionDiagnostics(
             currentPath = "name · " + t(R.string.settings_demo_path),
             candidates = listOf(
-                ConnectionCandidate("https://example.com", "name", t(R.string.settings_demo_identity_passed)),
-                ConnectionCandidate("https://[2001:db8::1]", "ipv6", t(R.string.settings_demo_unreachable)),
+                ConnectionCandidate("https://example.com", "name", persona.core.contracts.CoreText.plain(t(R.string.settings_demo_identity_passed))),
+                ConnectionCandidate("https://[2001:db8::1]", "ipv6", persona.core.contracts.CoreText.plain(t(R.string.settings_demo_unreachable))),
             ),
             lastDisconnectReason = t(R.string.settings_demo_disconnect_reason),
             sessions = listOf(DeviceConnectionSession(t(R.string.settings_demo_connected_at), t(R.string.settings_demo_disconnected_at), t(R.string.settings_demo_peer_closed))),

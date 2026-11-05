@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -72,14 +73,14 @@ internal fun InteractionPanel(
             "screen" -> DecisionKind.Screen
             else -> DecisionKind.Other
         },
-        headline = request.headline, expires = RequestExpiry.label(request.expiresAt, now),
+        headline = request.headline.text(), expires = RequestExpiry.label(request.expiresAt, now)?.text(),
         modifier = Modifier.heightIn(max = maxHeight), position = index + 1 to requests.size,
         onPrevious = { selected = index - 1 }, onNext = { selected = index + 1 }, onList = { all = true },
         collapsed = collapsed, onCollapsedChange = onCollapsedChange, onExpand = { full = true },
     ) {
         if (!full && !all) body(false)
     }
-    if (full) JSheet(onDismiss = { full = false }, title = request.headline) {
+    if (full) JSheet(onDismiss = { full = false }, title = request.headline.text()) {
         Column(Modifier.fillMaxHeight().imePadding()) {
             JTextButton(stringResource(R.string.chat_request_collapse_full), { full = false })
             body(true)
@@ -88,7 +89,7 @@ internal fun InteractionPanel(
     if (all) JSheet(onDismiss = { all = false }, title = stringResource(R.string.chat_request_list_title)) {
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = maxHeight), contentPadding = PaddingValues(bottom = 16.dp)) {
             itemsIndexed(requests, key = { _, interaction -> interaction.id }) { i, interaction ->
-                JRow(interaction.headline, value = "${i + 1}", onClick = { selected = i; all = false; full = true })
+                JRow(interaction.headline.text(), value = "${i + 1}", onClick = { selected = i; all = false; full = true })
             }
         }
     }
@@ -165,7 +166,7 @@ internal fun InteractionForm(
                 DecisionButtons(
                     primary = JAction(stringResource(R.string.chat_request_allow), enabled = enabled(AnswerAction.Allow)) { act(AnswerAction.Allow) },
                     secondary = JAction(stringResource(R.string.chat_request_deny), enabled = enabled(AnswerAction.Deny)) { act(AnswerAction.Deny) },
-                    more = if (interaction.offersAlways) listOf(JAction(interaction.alwaysActionLabel,
+                    more = if (interaction.offersAlways) listOf(JAction(interaction.alwaysActionLabel.text(),
                         enabled = enabled(AnswerAction.Always)) { act(AnswerAction.Always) }) else emptyList(),
                 )
                 interaction.alwaysLabel?.takeIf { interaction.agentDisplayName != null && it.isNotBlank() }?.let {
@@ -211,14 +212,14 @@ internal fun InteractionForm(
     val content: @Composable () -> Unit = {
         // In the conversation's dock the session is the page itself and the countdown is in the dock's header.
         if (full) Text(interactionSource(interaction, machine), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-        interaction.requestSourceLabel()?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
+        interaction.requestSourceLabel()?.let { Text(it.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
         blockedReason?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.cautionText) }
         if (uncertain) PendingBadge(PendingStatus.Unconfirmed)
         if (full || readOnly || uncertain || busy) Text(when {
             readOnly -> stringResource(R.string.chat_request_read_only)
             uncertain -> stringResource(R.string.chat_request_uncertain)
             busy -> stringResource(R.string.chat_request_busy)
-            else -> RequestExpiry.label(interaction.expiresAt, now) ?: stringResource(R.string.chat_request_waiting)
+            else -> RequestExpiry.label(interaction.expiresAt, now)?.text() ?: stringResource(R.string.chat_request_waiting)
         }, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         Spacer(Modifier.height(Tokens.Space.s))
         when (interaction.kind) {
@@ -285,7 +286,7 @@ internal fun InteractionForm(
                 Text(stringResource(R.string.chat_screen_password_note), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             } else {
                 interaction.dialog?.header?.takeIf(String::isNotBlank)?.let { JTag(it) }
-                ChatLinkText(interaction.dialog?.question ?: fallback?.question ?: interaction.headline)
+                ChatLinkText(interaction.dialog?.question ?: fallback?.question ?: interaction.headline.text())
                 val command = interaction.requestCommand(items)
                 if (command != null) {
                     Text(stringResource(R.string.chat_screen_full_command), style = PersonaTheme.type.headline)
@@ -300,7 +301,7 @@ internal fun InteractionForm(
             else -> Text(stringResource(R.string.chat_request_unsupported))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            if (onTerminal != null || showTerminalHelp) JTextButton(if (onTerminal != null) RequestExpiry.terminalLabel else stringResource(R.string.chat_request_terminal_help),
+            if (onTerminal != null || showTerminalHelp) JTextButton(if (onTerminal != null) RequestExpiry.terminalLabel.text() else stringResource(R.string.chat_request_terminal_help),
                 { password = ""; if (onTerminal != null) onTerminal() else terminalHelp = true })
             if (ApprovalPolicy.actions(AnswerEntry.Conversation, interaction.kind, false).any { it.id == ApprovalAction.Dismiss }) {
                 JTextButton(stringResource(R.string.chat_request_dismiss), { act(AnswerAction.Dismiss) }, enabled = enabled(AnswerAction.Dismiss))

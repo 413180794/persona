@@ -22,15 +22,15 @@ class ModelNameTest {
             assertEquals(expected, AgentModel(id).label)
             assertEquals(expected, AgentModel(id, id).label)
         }
-        assertEquals("6.1 Sol", AgentModel("GPT-6.1-SOL", "gpt-6.1-sol").label)
+        assertEquals("6.1 Sol", (AgentModel("GPT-6.1-SOL", "gpt-6.1-sol").label).zhAny())
     }
 
     @Test fun explicitAliasesTakePrecedenceEvenWhenTheyLookLikeGptIds() {
-        assertEquals("我的主力模型", AgentModel("gpt-6.1-sol", "我的主力模型").label)
-        assertEquals("GPT-6.1 Pro", AgentModel("gpt-6.1-sol", "GPT-6.1 Pro").label)
-        assertEquals("gpt-6.1", AgentModel("gpt-6.1-sol", "gpt-6.1").label)
-        assertEquals(" GPT-6.1-sol ", AgentModel("gpt-6.1-sol", " GPT-6.1-sol ").label)
-        assertEquals("Sol", AgentModel("gpt-6.1-sol", "Sol", resolved = "gpt-6.1-sol").label)
+        assertEquals("我的主力模型", (AgentModel("gpt-6.1-sol", "我的主力模型").label).zhAny())
+        assertEquals("GPT-6.1 Pro", (AgentModel("gpt-6.1-sol", "GPT-6.1 Pro").label).zhAny())
+        assertEquals("gpt-6.1", (AgentModel("gpt-6.1-sol", "gpt-6.1").label).zhAny())
+        assertEquals(" GPT-6.1-sol ", (AgentModel("gpt-6.1-sol", " GPT-6.1-sol ").label).zhAny())
+        assertEquals("Sol", (AgentModel("gpt-6.1-sol", "Sol", resolved = "gpt-6.1-sol").label).zhAny())
     }
 
     @Test fun nonGptUnknownAndEmptyNamesKeepTheirFallbacks() {
@@ -38,23 +38,23 @@ class ModelNameTest {
             assertEquals(id, modelName(id))
             assertEquals(id, AgentModel(id).label)
         }
-        assertEquals("Claude Opus", AgentModel("claude-opus-5-5", "Claude Opus").label)
-        assertEquals("", modelName(null))
-        assertEquals("", modelName(""))
-        assertEquals("", AgentModel("").label)
-        assertEquals("6.1 Sol", AgentModel("gpt-6.1-sol", " \t").label)
-        assertEquals(" \t", modelName(" \t"))
+        assertEquals("Claude Opus", (AgentModel("claude-opus-5-5", "Claude Opus").label).zhAny())
+        assertEquals("", (modelName(null)).zhAny())
+        assertEquals("", (modelName("")).zhAny())
+        assertEquals("", (AgentModel("").label).zhAny())
+        assertEquals("6.1 Sol", (AgentModel("gpt-6.1-sol", " \t").label).zhAny())
+        assertEquals(" \t", (modelName(" \t")).zhAny())
     }
 
     @Test fun labelsNeverChangeModelIdsOrSerializedRequests() {
         val model = JsonCodec.decodeFromString<AgentModel>("""{"id":"gpt-6.1-sol","name":"GPT-6.1-sol"}""")
         val encoded = JsonCodec.encodeToString(model)
-        assertEquals("6.1 Sol", model.label)
-        assertEquals("gpt-6.1-sol", model.id)
-        assertEquals("GPT-6.1-sol", model.name)
+        assertEquals("6.1 Sol", (model.label).zhAny())
+        assertEquals("gpt-6.1-sol", (model.id).zhAny())
+        assertEquals("GPT-6.1-sol", (model.name).zhAny())
         assertEquals(model, JsonCodec.decodeFromString<AgentModel>(encoded))
         assertEquals(encoded, JsonCodec.encodeToString(model))
         val request = AgentStartRequest("box", "/srv/app", "test-launcher", model = model.id)
-        assertEquals("gpt-6.1-sol", JsonCodec.decodeFromString<AgentStartRequest>(JsonCodec.encodeToString(request)).model)
+        assertEquals("gpt-6.1-sol", (JsonCodec.decodeFromString<AgentStartRequest>(JsonCodec.encodeToString(request)).model).zhAny())
     }
 }

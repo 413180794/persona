@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.Session
 import kotlinx.coroutines.flow.Flow
@@ -49,10 +52,10 @@ interface ChannelDirectory {
 }
 
 /** The hub has no channels (404 on the list: a hub from before them). */
-class ChannelsUnsupported : Exception("这台 hub 还不支持渠道，请先更新 hub")
+class ChannelsUnsupported : CoreTextException(CoreText.of(Key.ChannelsUnsupported))
 
 /** The hub has no channel of that id (404 `not_found`): gone with its extension. */
-class ChannelNotFound : Exception("这台 hub 上没有这个渠道了")
+class ChannelNotFound : CoreTextException(CoreText.of(Key.ChannelNotFound))
 
 /** The hub refused the change (400 `invalid`): [message] says why, for people. */
 class ChannelRejected(message: String) : Exception(message)

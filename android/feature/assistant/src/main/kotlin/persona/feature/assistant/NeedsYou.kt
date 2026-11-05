@@ -90,7 +90,7 @@ fun needsYou(
         !isAssistant(request.sessionKey) && session?.assistant != true && !mutes.mutes(request.sessionKey.path, space)
     }.map { request ->
         NeedsYouLine.Agent(request.sessionKey, request.id, request.kind, request.toolName,
-            who = agentName(request, bySession[request.sessionKey]), what = oneLine(request.headline))
+            who = agentName(request, bySession[request.sessionKey]), what = oneLine(request.headline.shown))
     }
     val lark = messages.filter { it.lark }.map { it.item.id }.toSet()
     val inbox = orderHubInbox(messages.map { it.item }.distinctBy { it.id }.filter { !it.isDone && it.triage == InboxTier.Action })

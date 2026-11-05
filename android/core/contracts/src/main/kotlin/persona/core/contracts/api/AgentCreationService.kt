@@ -1,5 +1,6 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreText
 import persona.core.contracts.Session
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -115,5 +116,5 @@ sealed interface AgentStartResult {
     data object Pending : AgentStartResult
     data object Unknown : AgentStartResult
     /** Only an authoritative failed receipt permits editing and a new operation. */
-    data class Rejected(val message: String) : AgentStartResult
+    data class Rejected(val message: CoreText) : AgentStartResult
 }

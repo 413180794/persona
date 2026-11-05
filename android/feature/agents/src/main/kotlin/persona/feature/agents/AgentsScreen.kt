@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -274,7 +275,7 @@ internal fun AgentsScreen(
                         val group = entry.group
                         val space = spacesById[group.id]
                         // A history group of a session without a directory has no title of its own (AgentHistory.kt).
-                        val groupTitle = group.title.ifBlank { stringResource(R.string.agents_history_unknown_folder) }
+                        val groupTitle = group.title.text().ifBlank { stringResource(R.string.agents_history_unknown_folder) }
                         if (entry.space) AgentSpaceHeader(groupTitle, group.folded, { model.fold(group) }, depth = entry.depth, first = entry.first,
                             quiet = entry.quiet, sessions = group.rows.size, counts = group.headingCounts,
                             flags = buildList {
@@ -332,7 +333,7 @@ internal fun AgentsScreen(
                         creation?.error?.let { Text(it.resolve(), style = PersonaTheme.type.caption) }
                         // A Codex history thread or a runtime's session is not resumed in a terminal from the phone.
                         val sourced = target?.takeIf { it.hasSource }
-                        if (sourced != null) Text(sourced.readOnlyNotice, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+                        if (sourced != null) Text(sourced.readOnlyNotice.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                         else JButton(stringResource(if (creation?.pending?.request?.resumeSessionId == historySession) R.string.agents_history_check_resume else R.string.agents_history_resume),
                             loading = creation?.starting == true,
                             enabled = creationModel != null && creation?.initialized == true && creation.starting != true &&
@@ -431,7 +432,7 @@ internal fun SlotRow(
         onClick = onOpen, onLongClick = { menu = true }, compact = compact, muted = muted,
         selected = isSessionSelected(LocalDetailKey.current, session.key),
         // Where its work stands once the hub triaged its turn (docs/agent-work.md), else its last words.
-        preview = session.workLine(now) ?: session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(agentResources(), row.updatedAt, now),
+        preview = session.workLine(now)?.text() ?: session.lastText?.takeIf { it.isNotBlank() }, time = relativeTime(agentResources(), row.updatedAt, now),
         // Codex, TRAEX or what the hub calls a runtime's agent ("DSH"); a session with a source names it in its facts instead.
         agent = session.agentLabel.takeIf { !session.isClaude && source == null },
         statusText = row.state.takeIf { it != AgentState.Idle && it != AgentState.Unknown }?.label,

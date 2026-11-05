@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.domain.zhAny
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -87,7 +89,7 @@ class TodoDataTest {
 
         val sorted = listOf(t1, t7, t6, t5, t4, t2, t3).ordered(lookup)
         // 顺序应为: 等你(新->旧) -> 待查看 -> 进行中 -> 待跟进 -> 未开始 -> 已完成
-        assertEquals(listOf("needs_new", "needs_old", "unread", "working", "followup", "not_started", "done"), sorted.map { it.id })
+        assertEquals(listOf("needs_new", "needs_old", "unread", "working", "followup", "not_started", "done"), (sorted.map { it.id }).zhAny())
     }
 
     @Test
@@ -124,18 +126,18 @@ class TodoDataTest {
 
         // t1 (包含 a1 idle) vs t2 (包含 a2 unread, mute1 working)
         // Todo 状态 Unread 排在 FollowUp 前面，所以 t2 段在前，t1 在后
-        assertEquals("todo/t2", nonPinnedGroups[0].id)
-        assertEquals("todo/t1", nonPinnedGroups[1].id)
-        assertEquals("todo/none", nonPinnedGroups[2].id)
+        assertEquals("todo/t2", (nonPinnedGroups[0].id).zhAny())
+        assertEquals("todo/t1", (nonPinnedGroups[1].id).zhAny())
+        assertEquals("todo/none", (nonPinnedGroups[2].id).zhAny())
 
         // 在 t2 段中: a2 (unread) vs mute1 (muted working). Rank: Unread < Muted -> a2 在前
-        assertEquals(listOf("a2", "mute1"), nonPinnedGroups[0].rows.map { it.session.sessionId })
+        assertEquals(listOf("a2", "mute1"), (nonPinnedGroups[0].rows.map { it.session.sessionId }).zhAny())
 
         // 在 t1 段中: a1 (idle) -> sPin1 在 pinned 组
-        assertEquals(listOf("a1"), nonPinnedGroups[1].rows.map { it.session.sessionId })
+        assertEquals(listOf("a1"), (nonPinnedGroups[1].rows.map { it.session.sessionId }).zhAny())
 
         // 在「没有待办」段中: sFree (needs_you) vs sDone (seen). NeedsYou < Seen -> free 在前
-        assertEquals(listOf("free", "a_done"), nonPinnedGroups[2].rows.map { it.session.sessionId })
+        assertEquals(listOf("free", "a_done"), (nonPinnedGroups[2].rows.map { it.session.sessionId }).zhAny())
     }
 
     @Test
@@ -156,9 +158,9 @@ class TodoDataTest {
 
         val obj = JsonCodec.parseToJsonElement(createOrPatchResp) as kotlinx.serialization.json.JsonObject
         val parsed = JsonCodec.decodeFromJsonElement(Todo.serializer(), obj["todo"]!!)
-        assertEquals("todo_created_123", parsed.id)
-        assertEquals("测试新建待办", parsed.title)
-        assertEquals("这是说明内容", parsed.notes)
+        assertEquals("todo_created_123", (parsed.id).zhAny())
+        assertEquals("测试新建待办", (parsed.title).zhAny())
+        assertEquals("这是说明内容", (parsed.notes).zhAny())
         assertFalse(parsed.isDone)
 
         val listResp = """
@@ -178,6 +180,6 @@ class TodoDataTest {
 
         val listParsed = JsonCodec.decodeFromString<TodosResponse>(listResp).todos
         assertEquals(2, listParsed.size)
-        assertEquals(listOf("t1", "t2"), listParsed.map { it.id })
+        assertEquals(listOf("t1", "t2"), (listParsed.map { it.id }).zhAny())
     }
 }

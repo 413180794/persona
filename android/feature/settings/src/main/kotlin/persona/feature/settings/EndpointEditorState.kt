@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import persona.core.designsystem.resolve
 import android.content.res.Resources
 import androidx.annotation.StringRes
 import persona.core.contracts.api.*
@@ -36,7 +37,7 @@ internal data class EndpointSheet(
     /** The line under the field: what is wrong, or the url that will be saved. */
     fun hint(resources: Resources): String? = when (val result = check) {
         null -> null
-        is EndpointCheck.Invalid -> result.message
+        is EndpointCheck.Invalid -> result.message.resolve(resources)
         is EndpointCheck.Valid -> if (unchanged) resources.getString(R.string.settings_endpoint_hint_unchanged)
             else resources.getString(R.string.settings_endpoint_hint_will_save, result.url, routeKind(result.kind, resources))
     }
@@ -424,7 +425,7 @@ internal fun endpointRows(
 }
 
 /** What the connection's own probe reports for a candidate that answered (`OkHttpHubConnection`); any other measured result failed. */
-private const val ProbePassed = "已通过身份校验" // i18n-ignore: the connection's probe result this matches
+private val ProbePassed = persona.core.hub.endpointResultLabel(null)
 
 /**
  * The newer of a test started here and the connection's automatic probe of the same url (the test wins a tie or an
@@ -439,13 +440,13 @@ internal fun endpointOutcome(
 ): EndpointOutcome? {
     val measured = probe?.takeIf { it.sampleCount > 0 || !it.checkedAt.isNullOrBlank() }
     if (test != null && (measured == null || !isAfter(measured.checkedAt, test.testedAt))) {
-        return EndpointOutcome(measuredText(resources, test.result, test.elapsedMillis, 1), !test.passed,
+        return EndpointOutcome(measuredText(resources, test.result.resolve(resources), test.elapsedMillis, 1), !test.passed,
             measuredLabel(resources, R.string.settings_endpoint_label_test, R.string.settings_endpoint_label_test_at, localTime(test.testedAt, zone, today)))
     }
     if (measured == null) return null
     val millis = measured.probeDurationMillis?.takeIf { measured.sampleCount > 0 }
-    val result = measured.result.ifBlank { resources.getString(R.string.settings_endpoint_no_result) }
-    return EndpointOutcome(measuredText(resources, result, millis, measured.sampleCount), result != ProbePassed,
+    val result = measured.result.resolve(resources).ifBlank { resources.getString(R.string.settings_endpoint_no_result) }
+    return EndpointOutcome(measuredText(resources, result, millis, measured.sampleCount), result != ProbePassed.resolve(resources),
         measuredLabel(resources, R.string.settings_endpoint_label_probe, R.string.settings_endpoint_label_probe_at, localTime(measured.checkedAt, zone, today)))
 }
 

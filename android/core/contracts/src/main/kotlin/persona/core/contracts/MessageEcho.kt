@@ -20,7 +20,7 @@ object MessageEcho {
     )
 
     /** The words the hub adds where it cut a long text for the page (`…（已截断，共 N 字节）`). */
-    private const val CUT_MARK = "\n…（已截断"
+    private const val CUT_MARK = "\n…（已截断" // i18n-ignore: the hub's cut mark it strips
 
     /** Comparable form: the phone's image note, pasted wrappers and Claude's "[Image #21]" placeholders removed, no whitespace. */
     fun normalize(text: String): String = dropped.fold(text) { t, pattern -> pattern.replace(t, "") }

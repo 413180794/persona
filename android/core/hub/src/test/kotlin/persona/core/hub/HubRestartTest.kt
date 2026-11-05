@@ -31,9 +31,9 @@ class HubRestartTest {
     @Test fun theSocketUrlCarriesTheResumePoint() {
         Fixture().use { fixture ->
             val base = "https://hub.example:8443/".toHttpUrl()
-            assertEquals("https://hub.example:8443/api/v1/ws", fixture.connection.socketUrl(base, null).toString())
+            assertEquals("https://hub.example:8443/api/v1/ws", (fixture.connection.socketUrl(base, null).toString()).zhAny())
             assertEquals("https://hub.example:8443/api/v1/ws?event_stream=s%201&event_seq=42",
-                fixture.connection.socketUrl(base, "s 1" to 42L).toString())
+                (fixture.connection.socketUrl(base, "s 1" to 42L).toString()).zhAny())
         }
     }
 
@@ -43,35 +43,35 @@ class HubRestartTest {
             val first = fixture.start()
             assertNull(first.request.url.queryParameter("event_stream"))
             assertFalse(fixture.connection.resumed)
-            assertEquals("s1" to 5L, fixture.connection.resumePoint)
+            assertEquals("s1" to 5L, (fixture.connection.resumePoint).zhAny())
             first.receive("""{"event_seq":6,"type":"todos"}""")
             first.receive("""{"event_seq":7,"type":"agents"}""")
             first.receive("""{"type":"items","machine_id":"m","session_id":"s","items":[]}""")
             fixture.scheduler.runCurrent()
-            assertEquals("s1" to 7L, fixture.connection.resumePoint)
+            assertEquals("s1" to 7L, (fixture.connection.resumePoint).zhAny())
 
             fixture.hello = { """{"type":"hello","hub_id":"test-hub","event_stream":"s1","event_seq":9,"resumed":true}""" }
             first.fail()
             fixture.advance(1000)
             val second = fixture.awaitSocket(2)
-            assertEquals("s1", second.request.url.queryParameter("event_stream"))
-            assertEquals("7", second.request.url.queryParameter("event_seq"))
+            assertEquals("s1", (second.request.url.queryParameter("event_stream")).zhAny())
+            assertEquals("7", (second.request.url.queryParameter("event_seq")).zhAny())
             assertTrue(fixture.connection.resumed)
             // Resumed: the replay, not the hello, moves the point, so a drop mid-replay loses nothing.
-            assertEquals("s1" to 7L, fixture.connection.resumePoint)
+            assertEquals("s1" to 7L, (fixture.connection.resumePoint).zhAny())
             second.receive("""{"event_seq":8,"type":"todos"}""")
             second.receive("""{"event_seq":9,"type":"inbox"}""")
             fixture.scheduler.runCurrent()
-            assertEquals("s1" to 9L, fixture.connection.resumePoint)
+            assertEquals("s1" to 9L, (fixture.connection.resumePoint).zhAny())
 
             // A hub that lost the stream starts a new one; the app starts over from its hello.
             fixture.hello = { """{"type":"hello","hub_id":"test-hub","event_stream":"s2","event_seq":3,"resumed":false}""" }
             second.fail()
             fixture.advance(1000)
             val third = fixture.awaitSocket(3)
-            assertEquals("s1", third.request.url.queryParameter("event_stream"))
+            assertEquals("s1", (third.request.url.queryParameter("event_stream")).zhAny())
             assertFalse(fixture.connection.resumed)
-            assertEquals("s2" to 3L, fixture.connection.resumePoint)
+            assertEquals("s2" to 3L, (fixture.connection.resumePoint).zhAny())
         }
     }
 

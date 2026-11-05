@@ -1,5 +1,7 @@
 package persona.core.domain.lines
 
+import persona.core.domain.zhAny
+
 import persona.core.contracts.Item
 import persona.core.contracts.JsonCodec
 import kotlinx.serialization.decodeFromString
@@ -38,7 +40,7 @@ class TaskProgressTest {
         call("TaskCreate", """{"subject":"更新文档"}""", """{"task":{"id":"8","status":"pending"}}""")
         val list = call("TaskList", "{}", "#7 [completed] 补充验证\n#8 [pending] 更新文档")
         assertEquals(listOf(TaskProgressStatus.Completed, TaskProgressStatus.Pending), tasks().map { it.status })
-        assertEquals("覆盖空输入", tasks().first().description)
+        assertEquals("覆盖空输入", (tasks().first().description).zhAny())
         assertTrue(tasks().all { it.sourceItemId == list })
         call("TaskList", "{}", "malformed result")
         assertEquals(2, tasks().size)
@@ -76,10 +78,10 @@ class TaskProgressTest {
         val progress = TaskIndex.build(collapsed.reversed()).progress
         assertEquals(TaskIndex.build(earlier + todo + update + listed).progress, progress)
         assertEquals(2, progress.size)
-        assertEquals("覆盖空输入", progress.first().description)
-        assertEquals("list", progress.first().sourceItemId)
+        assertEquals("覆盖空输入", (progress.first().description).zhAny())
+        assertEquals("list", (progress.first().sourceItemId).zhAny())
         val later = call("later", 10, "TodoWrite", """{"todos":[{"content":"检查表单","status":"completed"}]}""", "OK")
-        assertEquals("later", TaskIndex.build(collapsed + later).progress.last().sourceItemId)
+        assertEquals("later", (TaskIndex.build(collapsed + later).progress.last().sourceItemId).zhAny())
         assertTrue(TaskIndex.build(collapsed + later).progress.all { it.status == TaskProgressStatus.Completed })
         val clear = folded.copy(seq = 12, fold = folded.fold!!.copy(tasks = listOf(
             persona.core.contracts.FoldTaskSnapshot(replace = "todo", entries = emptyList(),

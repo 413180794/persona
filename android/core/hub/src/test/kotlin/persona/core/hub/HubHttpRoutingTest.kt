@@ -80,15 +80,15 @@ class HubHttpRoutingTest {
                                 assertEquals(update, settings.checkUpdate("stale-token"))
                                 val apk = ByteArrayOutputStream()
                                 settings.download("stale-token", update, apk)
-                                assertEquals("apk", apk.toString())
+                                assertEquals("apk", (apk.toString()).zhAny())
                                 assertEquals(MessageTransportResult.Accepted, sender.send(message()))
                                 val received = withTimeout(5000) { List(11) { requests.receive() } }
                                 assertTrue(received.all { it.getHeader("Authorization") == "Bearer test-token" })
-                                assertEquals("/api/v1/sessions/machine/session%2Fencoded/items?lazy_images=1&after_seq=2", received[0].path)
-                                assertEquals("/api/v1/inbox/item%2Fencoded/reply", received[3].path)
-                                assertEquals("/api/v1/lark/conversations/feed%2Fencoded/messages?around=3", received[4].path)
-                                assertEquals("/api/v1/lark/media/image?size=120", received[6].path)
-                                assertEquals("stable-id", received.last().getHeader("X-Jarvis-Op-Id"))
+                                assertEquals("/api/v1/sessions/machine/session%2Fencoded/items?lazy_images=1&after_seq=2", (received[0].path).zhAny())
+                                assertEquals("/api/v1/inbox/item%2Fencoded/reply", (received[3].path).zhAny())
+                                assertEquals("/api/v1/lark/conversations/feed%2Fencoded/messages?around=3", (received[4].path).zhAny())
+                                assertEquals("/api/v1/lark/media/image?size=120", (received[6].path).zhAny())
+                                assertEquals("stable-id", (received.last().getHeader("X-Jarvis-Op-Id")).zhAny())
                             }
 
                             verify(firstEndpoint, firstRequests)
@@ -136,7 +136,7 @@ class HubHttpRoutingTest {
                                     "download" -> settings.download("stale-token", update, ByteArrayOutputStream())
                                     "message" -> {
                                         val result = sender.send(message()) as MessageTransportResult.HubError
-                                        assertEquals("invalid_token", result.code)
+                                        assertEquals("invalid_token", (result.code).zhAny())
                                         assertFalse(result.retryable)
                                         assertTrue(expired.get())
                                     }

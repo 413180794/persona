@@ -29,25 +29,25 @@ class HttpExtensionManagementTest {
         server.enqueue(MockResponse().setBody("""{"extensions":[{"id":"removed","name":"removed","kind":"ui","status":"running"}],
             "can_install":true,"markets":true}"""))
         val listing = api.listing()
-        assertEquals("/api/v1/extensions", server.takeRequest().path)
-        assertEquals(listOf("removed"), listing.extensions.map { it.id })
+        assertEquals("/api/v1/extensions", (server.takeRequest().path).zhAny())
+        assertEquals(listOf("removed"), (listing.extensions.map { it.id }).zhAny())
         assertTrue(listing.canInstall && listing.markets)
 
         server.enqueue(MockResponse().setBody("""{"ui":[{"extension":"removed","extension_name":"removed","id":"usage","title":"用量",
             "placement":"nav_page"}]}"""))
         val place = api.uiPlaces("").single()
-        assertEquals("/api/v1/extensions/-/ui", server.takeRequest().path)
-        assertEquals("removed", place.extension)
-        assertEquals("removed", place.extensionName)
+        assertEquals("/api/v1/extensions/-/ui", (server.takeRequest().path).zhAny())
+        assertEquals("removed", (place.extension).zhAny())
+        assertEquals("removed", (place.extensionName).zhAny())
 
         server.enqueue(MockResponse().setBody(detail))
         api.extension("example-notes")
-        assertEquals("/api/v1/extensions/example-notes/-/", server.takeRequest().path)
+        assertEquals("/api/v1/extensions/example-notes/-/", (server.takeRequest().path).zhAny())
 
         server.enqueue(MockResponse().setBody("""{"markets":[{"id":"m1","spec":"github:example/team","name":"团队","extensions":3,
             "signature":{"state":"verified","key_id":"32ed46cdbe349656"}}]}"""))
         val market = api.markets().single()
-        assertEquals("/api/v1/extensions/-/markets", server.takeRequest().path)
+        assertEquals("/api/v1/extensions/-/markets", (server.takeRequest().path).zhAny())
         assertEquals(3, market.extensions)
         assertTrue(market.signature!!.verified)
         assertFalse(market.official)
@@ -57,19 +57,19 @@ class HttpExtensionManagementTest {
             {"id":"m1","spec":"github:example/team","name":"团队","extensions":3}]}"""))
         val ordered = api.markets()
         server.takeRequest()
-        assertEquals(listOf("o1", "m1"), ordered.map { it.id })
+        assertEquals(listOf("o1", "m1"), (ordered.map { it.id }).zhAny())
         assertTrue(ordered[0].official)
         assertFalse(ordered[1].official)
 
         server.enqueue(MockResponse().setBody("""{"markets":[],"extensions":[{"market":"m1","id":"linuxdo","name":"LINUX DO","version":"0.1.0"}]}"""))
-        assertEquals(listOf("linuxdo"), api.catalog("").extensions.map { it.id })
-        assertEquals("/api/v1/extensions/-/catalog", server.takeRequest().path)
+        assertEquals(listOf("linuxdo"), (api.catalog("").extensions.map { it.id }).zhAny())
+        assertEquals("/api/v1/extensions/-/catalog", (server.takeRequest().path).zhAny())
 
         server.enqueue(MockResponse().setBody("""{"preview_id":"pv1","permissions_digest":"d1","market":"m1"}"""))
         api.previewFromMarket("m1", "linuxdo")
         server.takeRequest().let {
-            assertEquals("/api/v1/extensions/-/catalog/preview", it.path)
-            assertEquals("""{"market":"m1","extension":"linuxdo"}""", it.body.readUtf8())
+            assertEquals("/api/v1/extensions/-/catalog/preview", (it.path).zhAny())
+            assertEquals("""{"market":"m1","extension":"linuxdo"}""", (it.body.readUtf8()).zhAny())
         }
     }
 
@@ -97,31 +97,31 @@ class HttpExtensionManagementTest {
              "enabled":true,"needs_setup":["密钥「API Key」"],"contributes":{"connectors":["examplenotes"]},"warnings":["w"]}],
             "can_install":true}"""))
         val list = api.extensions()
-        assertEquals("/api/v1/plugins", server.takeRequest().path)
-        assertEquals(listOf("voice", "example-notes"), list.map { it.id })
+        assertEquals("/api/v1/plugins", (server.takeRequest().path).zhAny())
+        assertEquals(listOf("voice", "example-notes"), (list.map { it.id }).zhAny())
         assertNull(list[0].source)
-        assertEquals("installed", list[1].source)
-        assertEquals(listOf("密钥「API Key」"), list[1].needsSetup)
+        assertEquals("installed", (list[1].source).zhAny())
+        assertEquals(listOf("密钥「API Key」"), (list[1].needsSetup).zhAny())
         assertEquals(mapOf("connectors" to listOf("examplenotes")), list[1].contributes)
-        assertEquals(listOf("w"), list[1].warnings)
+        assertEquals(listOf("w"), (list[1].warnings).zhAny())
     }
 
     @Test fun decodesTheDetailFromOneObject() = withHub { server, api ->
         server.enqueue(MockResponse().setBody(detail))
         val d = api.extension("example-notes")
-        assertEquals("/api/v1/plugins/example-notes/-/", server.takeRequest().path)
-        assertEquals("Example Notes", d.extension.name)
-        assertEquals("1.1.0", d.previousVersion)
+        assertEquals("/api/v1/plugins/example-notes/-/", (server.takeRequest().path).zhAny())
+        assertEquals("Example Notes", (d.extension.name).zhAny())
+        assertEquals("1.1.0", (d.previousVersion).zhAny())
         assertFalse(d.readOnly)
-        assertEquals(listOf("base_url", "mode", "tags", "proxy"), d.form.map { it.name })
+        assertEquals(listOf("base_url", "mode", "tags", "proxy"), (d.form.map { it.name }).zhAny())
         assertEquals(JsonPrimitive("https://notes.example.com"), d.form[0].fallback)
-        assertEquals(listOf("只要新的", "safe"), d.form[1].enum!!.map { it.label })
-        assertEquals("甲", d.form[2].items!!.enum!!.single().label)
+        assertEquals(listOf("只要新的", "safe"), (d.form[1].enum!!.map { it.label }).zhAny())
+        assertEquals("甲", (d.form[2].items!!.enum!!.single().label).zhAny())
         assertEquals(1, d.form[2].minItems)
         assertEquals(JsonPrimitive(8080), d.form[3].fields!!.single().fallback)
         assertEquals(buildJsonObject { putJsonArray("folders") { add("工作") } }, d.config)
         assertFalse(d.secrets.single().set)
-        assertEquals("runs_code", d.permissions.single().key)
+        assertEquals("runs_code", (d.permissions.single().key).zhAny())
     }
 
     @Test fun aHubJsonExtensionHasNoConfigOrSecrets() = withHub { server, api ->
@@ -135,21 +135,21 @@ class HttpExtensionManagementTest {
         repeat(4) { server.enqueue(MockResponse().setBody(detail)) }
         api.setEnabled("example-notes", false)
         server.takeRequest().let {
-            assertEquals("PUT", it.method); assertEquals("/api/v1/plugins/example-notes/-/enabled", it.path)
-            assertEquals("""{"enabled":false}""", it.body.readUtf8())
+            assertEquals("PUT", (it.method).zhAny()); assertEquals("/api/v1/plugins/example-notes/-/enabled", (it.path).zhAny())
+            assertEquals("""{"enabled":false}""", (it.body.readUtf8()).zhAny())
         }
         api.setConfig("example-notes", buildJsonObject { put("base_url", "https://x.example.com") })
         server.takeRequest().let {
-            assertEquals("PUT", it.method); assertEquals("/api/v1/plugins/example-notes/-/config", it.path)
-            assertEquals("""{"config":{"base_url":"https://x.example.com"}}""", it.body.readUtf8())
+            assertEquals("PUT", (it.method).zhAny()); assertEquals("/api/v1/plugins/example-notes/-/config", (it.path).zhAny())
+            assertEquals("""{"config":{"base_url":"https://x.example.com"}}""", (it.body.readUtf8()).zhAny())
         }
         api.setSecret("example-notes", "api_key", "s3cret")
         server.takeRequest().let {
-            assertEquals("PUT", it.method); assertEquals("/api/v1/plugins/example-notes/-/secrets/api_key", it.path)
-            assertEquals("""{"value":"s3cret"}""", it.body.readUtf8())
+            assertEquals("PUT", (it.method).zhAny()); assertEquals("/api/v1/plugins/example-notes/-/secrets/api_key", (it.path).zhAny())
+            assertEquals("""{"value":"s3cret"}""", (it.body.readUtf8()).zhAny())
         }
         api.clearSecret("example-notes", "api_key")
-        server.takeRequest().let { assertEquals("DELETE", it.method); assertEquals("/api/v1/plugins/example-notes/-/secrets/api_key", it.path) }
+        server.takeRequest().let { assertEquals("DELETE", (it.method).zhAny()); assertEquals("/api/v1/plugins/example-notes/-/secrets/api_key", (it.path).zhAny()) }
     }
 
     @Test fun aRefusedFieldComesBackAsItsPathAndReason() = withHub { server, api ->
@@ -157,15 +157,15 @@ class HttpExtensionManagementTest {
             """{"error":"proxy.host: 要是主机名","code":"invalid_config","field":"proxy.host","message":"要是主机名"}"""))
         val refused = runCatching { api.setConfig("example-notes", JsonObject(emptyMap())) }.exceptionOrNull()
         assertTrue(refused is ExtensionConfigRejected)
-        assertEquals("proxy.host", (refused as ExtensionConfigRejected).field)
-        assertEquals("要是主机名", refused.message)
+        assertEquals("proxy.host", ((refused as ExtensionConfigRejected).field).zhAny())
+        assertEquals("要是主机名", (refused.message).zhAny())
         server.takeRequest()
 
         // Another 400 is the hub's error as usual.
         server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"bad json"}"""))
         val other = runCatching { api.setConfig("example-notes", JsonObject(emptyMap())) }.exceptionOrNull() as HubFailure
         assertEquals(400, other.status)
-        assertEquals("bad json", other.message)
+        assertEquals("bad json", (other.message).zhAny())
     }
 
     // OkHttpHubConnection.request throws the hub's error itself instead of returning the response (found on the
@@ -181,8 +181,8 @@ class HttpExtensionManagementTest {
             server.enqueue(MockResponse().setResponseCode(400).setBody(
                 """{"error":"base_url: 要是一个网址","code":"invalid_config","field":"base_url","message":"要是一个网址"}"""))
             val refused = runCatching { api.setConfig("example-notes", JsonObject(emptyMap())) }.exceptionOrNull() as ExtensionConfigRejected
-            assertEquals("base_url", refused.field)
-            assertEquals("要是一个网址", refused.message)
+            assertEquals("base_url", (refused.field).zhAny())
+            assertEquals("要是一个网址", (refused.message).zhAny())
         }
     }
 
@@ -216,15 +216,15 @@ class HttpExtensionManagementTest {
                   {"plugin":"example-gateway","id":"usage","title":"用量","placement":"nav_page","icon":"chart"},
                   {"plugin":"example-gateway","id":"today","title":"今天","placement":"overview_card","opens":"usage"}]}"""))
         val d = api.extension("example-gateway")
-        assertEquals(listOf("home", "usage"), d.ui.map { it.id })
+        assertEquals(listOf("home", "usage"), (d.ui.map { it.id }).zhAny())
         assertTrue(d.fromMarket)
     }
 
     @Test fun asksWhereExtensionsDrawAndDrawsWithTheContext() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"ui":[{"plugin":"example-gateway","id":"panel","title":"Example 网关","placement":"launcher_section"}]}"""))
         val places = api.uiPlaces("launcher_section", "work key", "workstation")
-        assertEquals("/api/v1/plugins/-/ui?placement=launcher_section&launcher=work%20key&machine=workstation", server.takeRequest().path)
-        assertEquals("panel", places.single().id)
+        assertEquals("/api/v1/plugins/-/ui?placement=launcher_section&launcher=work%20key&machine=workstation", (server.takeRequest().path).zhAny())
+        assertEquals("panel", (places.single().id).zhAny())
 
         server.enqueue(MockResponse().setBody("""{"view":{"title":"T","state":"s1","sections":[{"title":"概况","items":[
             {"type":"metric","label":"余额","value":"¥ 1","tone":"positive"},
@@ -236,26 +236,26 @@ class HttpExtensionManagementTest {
             {"type":"newer_kind","whatever":1}]}]}}"""))
         val view = api.renderUi("example-gateway", "panel", ExtensionUiContext("work", "workstation"), state = null)
         server.takeRequest().let {
-            assertEquals("POST", it.method)
-            assertEquals("/api/v1/plugins/example-gateway/-/ui/panel", it.path)
-            assertEquals("""{"context":{"launcher":"work","machine":"workstation",$deviceJson}}""", it.body.readUtf8())
+            assertEquals("POST", (it.method).zhAny())
+            assertEquals("/api/v1/plugins/example-gateway/-/ui/panel", (it.path).zhAny())
+            assertEquals("""{"context":{"launcher":"work","machine":"workstation",$deviceJson}}""", (it.body.readUtf8()).zhAny())
         }
         val items = view.sections.single().items
-        assertEquals("s1", view.state)
+        assertEquals("s1", (view.state).zhAny())
         assertEquals(0.72, items[1].ratio!!, 0.0)
-        assertEquals("有效", items[2].badge!!.text)
-        assertEquals("确定？", items[3].action!!.confirm)
-        assertEquals(listOf("个人", "team"), items[4].choices!!.map { it.label })
-        assertEquals("newer_kind", items.last().type)
+        assertEquals("有效", (items[2].badge!!.text).zhAny())
+        assertEquals("确定？", (items[3].action!!.confirm).zhAny())
+        assertEquals(listOf("个人", "team"), (items[4].choices!!.map { it.label }).zhAny())
+        assertEquals("newer_kind", (items.last().type).zhAny())
     }
 
     @Test fun pressesAButtonWithTheStateAndValues() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"toast":"已保存","open_url":"https://example.com/k"}"""))
         val result = api.uiAction("example-gateway", "home", "save", state = "tab=overview", values = mapOf("note" to "hi", "auto" to "true"))
         assertEquals("""{"context":{$deviceJson},"state":"tab=overview","action":"save","values":{"note":"hi","auto":"true"}}""",
-            server.takeRequest().body.readUtf8())
-        assertEquals("已保存", result.toast)
-        assertEquals("https://example.com/k", result.openUrl)
+            (server.takeRequest().body.readUtf8()).zhAny())
+        assertEquals("已保存", (result.toast).zhAny())
+        assertEquals("https://example.com/k", (result.openUrl).zhAny())
         assertNull(result.view)
     }
 
@@ -267,14 +267,14 @@ class HttpExtensionManagementTest {
             {"plugin":"example-gateway","id":"today","title":"今天的用量","placement":"overview_card","size":"compact","opens":"usage"},
             {"plugin":"example-gateway","id":"gpu","title":"网关调用","placement":"machine_section","later":{"x":1}}]}"""))
         val places = api.uiPlaces("")
-        assertEquals("/api/v1/plugins/-/ui", server.takeRequest().path)
-        assertEquals(listOf("nav_page", "overview_card", "machine_section"), places.map { it.placement })
-        assertEquals("Example 网关面板", places[0].extensionName)
-        assertEquals("chart", places[0].icon)
-        assertEquals("3", places[0].badge?.text)
-        assertEquals("danger", places[0].badge?.tone)
-        assertEquals("compact", places[1].size)
-        assertEquals("usage", places[1].opens)
+        assertEquals("/api/v1/plugins/-/ui", (server.takeRequest().path).zhAny())
+        assertEquals(listOf("nav_page", "overview_card", "machine_section"), (places.map { it.placement }).zhAny())
+        assertEquals("Example 网关面板", (places[0].extensionName).zhAny())
+        assertEquals("chart", (places[0].icon).zhAny())
+        assertEquals("3", (places[0].badge?.text).zhAny())
+        assertEquals("danger", (places[0].badge?.tone).zhAny())
+        assertEquals("compact", (places[1].size).zhAny())
+        assertEquals("usage", (places[1].opens).zhAny())
         assertNull(places[2].badge)
     }
 
@@ -282,15 +282,15 @@ class HttpExtensionManagementTest {
     @Test fun drawsASlotWithItsContext() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"view":{"sections":[],"refresh_after":300}}"""))
         val view = api.renderUi("example-gateway", "today", ExtensionUiContext(size = "compact"))
-        assertEquals("""{"context":{"size":"compact",$deviceJson}}""", server.takeRequest().body.readUtf8())
+        assertEquals("""{"context":{"size":"compact",$deviceJson}}""", (server.takeRequest().body.readUtf8()).zhAny())
         assertEquals(300, view.refreshAfter)
         server.enqueue(MockResponse().setBody("""{"view":{"sections":[]}}"""))
         api.renderUi("example-gateway", "gpu", ExtensionUiContext(machine = "workstation"), state = "range=7d")
-        assertEquals("""{"context":{"machine":"workstation",$deviceJson},"state":"range=7d"}""", server.takeRequest().body.readUtf8())
+        assertEquals("""{"context":{"machine":"workstation",$deviceJson},"state":"range=7d"}""", (server.takeRequest().body.readUtf8()).zhAny())
         // A segmented choice: the action with {name: value}.
         server.enqueue(MockResponse().setBody("""{}"""))
         api.uiAction("example-gateway", "usage", "range", ExtensionUiContext(size = "full"), values = mapOf("range" to "30d"))
-        assertEquals("""{"context":{"size":"full",$deviceJson},"action":"range","values":{"range":"30d"}}""", server.takeRequest().body.readUtf8())
+        assertEquals("""{"context":{"size":"full",$deviceJson},"action":"range","values":{"range":"30d"}}""", (server.takeRequest().body.readUtf8()).zhAny())
     }
 
     // An inbox item's page (`inbox_item`, #1683): listed by its placement with the connector it draws for, drawn and
@@ -299,23 +299,23 @@ class HttpExtensionManagementTest {
         server.enqueue(MockResponse().setBody("""{"ui":[{"plugin":"lark-connector","plugin_name":"飞书","id":"event","title":"事件",
             "placement":"inbox_item","size":"full","connector":"lark"}]}"""))
         val places = api.uiPlaces("inbox_item")
-        assertEquals("/api/v1/plugins/-/ui?placement=inbox_item", server.takeRequest().path)
-        assertEquals("lark", places.single().connector)
-        assertEquals("event", places.single().id)
+        assertEquals("/api/v1/plugins/-/ui?placement=inbox_item", (server.takeRequest().path).zhAny())
+        assertEquals("lark", (places.single().connector).zhAny())
+        assertEquals("event", (places.single().id).zhAny())
 
         server.enqueue(MockResponse().setBody("""{"view":{"title":"周四的评审","sections":[{"items":[{"type":"text","text":"x"}]}],"state":"s"}}"""))
         val view = api.renderUi("lark-connector", "event", ExtensionUiContext(item = "lark:F1:1051"))
         server.takeRequest().let {
-            assertEquals("/api/v1/plugins/lark-connector/-/ui/event", it.path)
-            assertEquals("""{"context":{"item":"lark:F1:1051",$deviceJson}}""", it.body.readUtf8())
+            assertEquals("/api/v1/plugins/lark-connector/-/ui/event", (it.path).zhAny())
+            assertEquals("""{"context":{"item":"lark:F1:1051",$deviceJson}}""", (it.body.readUtf8()).zhAny())
         }
-        assertEquals("周四的评审", view.title)
+        assertEquals("周四的评审", (view.title).zhAny())
 
         // 在会话里看: the item's source, the one app link the hub lets this slot answer.
         server.enqueue(MockResponse().setBody("""{"open_url":"persona://inbox/lark:F1:1051/source"}"""))
         assertEquals("persona://inbox/lark:F1:1051/source",
-            api.uiAction("lark-connector", "event", "open_chat", ExtensionUiContext(item = "lark:F1:1051"), state = "s").openUrl)
-        assertEquals("""{"context":{"item":"lark:F1:1051",$deviceJson},"state":"s","action":"open_chat"}""", server.takeRequest().body.readUtf8())
+            (api.uiAction("lark-connector", "event", "open_chat", ExtensionUiContext(item = "lark:F1:1051"), state = "s").openUrl).zhAny())
+        assertEquals("""{"context":{"item":"lark:F1:1051",$deviceJson},"state":"s","action":"open_chat"}""", (server.takeRequest().body.readUtf8()).zhAny())
 
         server.enqueue(MockResponse().setBody("""{"ui":[]}"""))
         assertTrue(api.uiPlaces("inbox_item").isEmpty())
@@ -324,12 +324,12 @@ class HttpExtensionManagementTest {
         server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error":"this device can only read and answer"}"""))
         val refused = runCatching { api.renderUi("lark-connector", "event", ExtensionUiContext(item = "lark:F1:1051")) }.exceptionOrNull()
         assertTrue(refused is persona.core.contracts.api.ExtensionUiForbidden)
-        assertEquals("this device can only read and answer", refused?.message)
+        assertEquals("this device can only read and answer", (refused?.message).zhAny())
     }
 
     @Test fun theDeviceContextIsThePhones() {
         val context = HttpExtensionManagement.deviceContext()
-        assertEquals("android", context.platform)
+        assertEquals("android", (context.platform).zhAny())
         assertEquals(3, context.uiVersion)
         assertEquals(java.util.TimeZone.getDefault().id, context.tz)
         assertFalse(context.locale.isNullOrEmpty())
@@ -350,16 +350,16 @@ class HttpExtensionManagementTest {
             {"type":"text","text":"still here"}]}]}}"""))
         val view = api.renderUi("example-gateway", "usage")
         val items = view.sections.single().items
-        assertEquals(listOf("segmented", "stat_grid", "chart", "text"), items.map { it.type })
+        assertEquals(listOf("segmented", "stat_grid", "chart", "text"), (items.map { it.type }).zhAny())
         assertEquals(600, view.refreshAfter)
-        assertEquals(listOf("今天", "7d"), items[0].choices!!.map { it.label })
-        assertEquals("caution", items[1].stats!![0].tone)
+        assertEquals(listOf("今天", "7d"), (items[0].choices!!.map { it.label }).zhAny())
+        assertEquals("caution", (items[1].stats!![0].tone).zhAny())
         val chart = items[2]
         assertEquals(true, chart.stacked)
-        assertEquals("tokens", chart.unit)
+        assertEquals("tokens", (chart.unit).zhAny())
         assertEquals(-3.5, chart.series!![0].points[1].value, 0.0)
-        assertEquals("1.2M", chart.series!![0].points[0].display)
-        assertEquals("positive", chart.series!![1].tone)
+        assertEquals("1.2M", (chart.series!![0].points[0].display).zhAny())
+        assertEquals("positive", (chart.series!![1].tone).zhAny())
     }
 
     // #1339: an extension that says the launcher's gateway is not its own answers 404 unsupported; any other 404 is an error.
@@ -376,41 +376,41 @@ class HttpExtensionManagementTest {
         assertTrue(runCatching { api.renderUi("example-gateway", "gpu", ExtensionUiContext(machine = "elsewhere")) }.exceptionOrNull()
             is persona.core.contracts.api.ExtensionUiNotFound)
         server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"扩展画的界面这个 hub 画不了","code":"plugin_failed"}"""))
-        assertEquals("扩展画的界面这个 hub 画不了", (runCatching { api.renderUi("x", "home") }.exceptionOrNull() as HubFailure).message)
+        assertEquals("扩展画的界面这个 hub 画不了", ((runCatching { api.renderUi("x", "home") }.exceptionOrNull() as HubFailure).message).zhAny())
     }
 
     @Test fun marketsAndTheirTokens() = withHub { server, api ->
         val market = """{"id":"3f2a9c1d0b","spec":"github:example/team","name":"团队","has_token":true,"plugins":2,"warnings":["w"],"added_at":"2026-11-02T08:00:00Z"}"""
         server.enqueue(MockResponse().setBody("""{"markets":[$market]}"""))
         val list = api.markets()
-        assertEquals("/api/v1/plugins/-/markets", server.takeRequest().path)
+        assertEquals("/api/v1/plugins/-/markets", (server.takeRequest().path).zhAny())
         assertTrue(list.single().hasToken)
-        assertEquals(listOf("w"), list.single().warnings)
+        assertEquals(listOf("w"), (list.single().warnings).zhAny())
 
         server.enqueue(MockResponse().setBody(market))
         api.addMarket("github:example/team", "tok")
         server.takeRequest().let {
-            assertEquals("POST", it.method); assertEquals("/api/v1/plugins/-/markets", it.path)
-            assertEquals("""{"spec":"github:example/team","token":"tok"}""", it.body.readUtf8())
+            assertEquals("POST", (it.method).zhAny()); assertEquals("/api/v1/plugins/-/markets", (it.path).zhAny())
+            assertEquals("""{"spec":"github:example/team","token":"tok"}""", (it.body.readUtf8()).zhAny())
         }
         server.enqueue(MockResponse().setBody(market))
         api.addMarket("https://example.com/p/", "")
-        assertEquals("""{"spec":"https://example.com/p/"}""", server.takeRequest().body.readUtf8())
+        assertEquals("""{"spec":"https://example.com/p/"}""", (server.takeRequest().body.readUtf8()).zhAny())
         server.enqueue(MockResponse().setBody(market))
         api.refreshMarket("3f2a9c1d0b")
-        server.takeRequest().let { assertEquals("POST", it.method); assertEquals("/api/v1/plugins/-/markets/3f2a9c1d0b/refresh", it.path) }
+        server.takeRequest().let { assertEquals("POST", (it.method).zhAny()); assertEquals("/api/v1/plugins/-/markets/3f2a9c1d0b/refresh", (it.path).zhAny()) }
         server.enqueue(MockResponse().setBody(market))
         api.setMarketToken("3f2a9c1d0b", "")
         server.takeRequest().let {
-            assertEquals("PUT", it.method); assertEquals("/api/v1/plugins/-/markets/3f2a9c1d0b/token", it.path)
-            assertEquals("""{"token":""}""", it.body.readUtf8())
+            assertEquals("PUT", (it.method).zhAny()); assertEquals("/api/v1/plugins/-/markets/3f2a9c1d0b/token", (it.path).zhAny())
+            assertEquals("""{"token":""}""", (it.body.readUtf8()).zhAny())
         }
         server.enqueue(MockResponse().setBody("""{"ok":true}"""))
         api.removeMarket("3f2a9c1d0b")
-        server.takeRequest().let { assertEquals("DELETE", it.method); assertEquals("/api/v1/plugins/-/markets/3f2a9c1d0b", it.path) }
+        server.takeRequest().let { assertEquals("DELETE", (it.method).zhAny()); assertEquals("/api/v1/plugins/-/markets/3f2a9c1d0b", (it.path).zhAny()) }
 
         server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"读不到：私有的，要填 token","code":"market_failed"}"""))
-        assertEquals("读不到：私有的，要填 token", (runCatching { api.addMarket("github:example/private") }.exceptionOrNull() as HubFailure).message)
+        assertEquals("读不到：私有的，要填 token", ((runCatching { api.addMarket("github:example/private") }.exceptionOrNull() as HubFailure).message).zhAny())
         assertTrue(runCatching { api.removeMarket("../x") }.exceptionOrNull() is IllegalArgumentException)
     }
 
@@ -421,40 +421,40 @@ class HttpExtensionManagementTest {
              "installed_source":"installed","from_this_market":true,"upgradable":true},
             {"market":"m1","id":"w","name":"W","version":"0.2.0","tags":[],"contributes":{},"permissions":[],"problem":"没有包"}]}"""))
         val catalog = api.catalog("网关 面板", "m1", refresh = true)
-        assertEquals("/api/v1/plugins/-/catalog?q=%E7%BD%91%E5%85%B3%20%E9%9D%A2%E6%9D%BF&market=m1&refresh=1", server.takeRequest().path)
-        assertEquals("linux-amd64", catalog.platform)
+        assertEquals("/api/v1/plugins/-/catalog?q=%E7%BD%91%E5%85%B3%20%E9%9D%A2%E6%9D%BF&market=m1&refresh=1", (server.takeRequest().path).zhAny())
+        assertEquals("linux-amd64", (catalog.platform).zhAny())
         assertTrue(catalog.extensions[0].upgradable && catalog.extensions[0].fromThisMarket)
-        assertEquals("没有包", catalog.extensions[1].problem)
+        assertEquals("没有包", (catalog.extensions[1].problem).zhAny())
         server.enqueue(MockResponse().setBody("""{"markets":[],"plugins":[]}"""))
         api.catalog()
-        assertEquals("/api/v1/plugins/-/catalog", server.takeRequest().path)
+        assertEquals("/api/v1/plugins/-/catalog", (server.takeRequest().path).zhAny())
 
         server.enqueue(MockResponse().setBody("""{"preview_id":"pv1","manifest":{"id":"example-gateway","name":"网关","version":"1.1.0","contributes":{}},
             "permissions":[{"key":"runs_code","title":"运行程序"}],"permissions_digest":"d1","expires_at":"2026-11-04T07:10:00Z",
             "upgrade":true,"from":"1.0.0","more_permissions":true,"added_permissions":[{"key":"hub_api","title":"完整使用 hub"}],"market":"m1"}"""))
         val preview = api.previewFromMarket("m1", "example-gateway")
-        assertEquals("""{"market":"m1","plugin":"example-gateway"}""", server.takeRequest().body.readUtf8())
+        assertEquals("""{"market":"m1","plugin":"example-gateway"}""", (server.takeRequest().body.readUtf8()).zhAny())
         assertTrue(preview.upgrade && preview.morePermissions)
-        assertEquals("hub_api", preview.addedPermissions!!.single().key)
-        assertEquals("1.1.0", preview.manifest!!.version)
+        assertEquals("hub_api", (preview.addedPermissions!!.single().key).zhAny())
+        assertEquals("1.1.0", (preview.manifest!!.version).zhAny())
 
         server.enqueue(MockResponse().setBody(detail))
         api.upgrade("example-gateway", preview)
         server.takeRequest().let {
-            assertEquals("/api/v1/plugins/example-gateway/-/upgrade", it.path)
-            assertEquals("""{"preview_id":"pv1","permissions_digest":"d1"}""", it.body.readUtf8())
+            assertEquals("/api/v1/plugins/example-gateway/-/upgrade", (it.path).zhAny())
+            assertEquals("""{"preview_id":"pv1","permissions_digest":"d1"}""", (it.body.readUtf8()).zhAny())
         }
         server.enqueue(MockResponse().setBody(detail))
         api.install(ExtensionPreview("pv2", permissionsDigest = "d2"))
         server.takeRequest().let {
-            assertEquals("/api/v1/plugins/-/install", it.path)
-            assertEquals("""{"preview_id":"pv2","permissions_digest":"d2"}""", it.body.readUtf8())
+            assertEquals("/api/v1/plugins/-/install", (it.path).zhAny())
+            assertEquals("""{"preview_id":"pv2","permissions_digest":"d2"}""", (it.body.readUtf8()).zhAny())
         }
         server.enqueue(MockResponse().setBody("""{"ok":true}"""))
         api.uninstall("example-gateway", keepData = true)
-        server.takeRequest().let { assertEquals("DELETE", it.method); assertEquals("/api/v1/plugins/example-gateway/-/?keep_data=1", it.path) }
+        server.takeRequest().let { assertEquals("DELETE", (it.method).zhAny()); assertEquals("/api/v1/plugins/example-gateway/-/?keep_data=1", (it.path).zhAny()) }
         server.enqueue(MockResponse().setBody("""{"ok":true}"""))
         api.uninstall("example-gateway")
-        assertEquals("/api/v1/plugins/example-gateway/-/", server.takeRequest().path)
+        assertEquals("/api/v1/plugins/example-gateway/-/", (server.takeRequest().path).zhAny())
     }
 }

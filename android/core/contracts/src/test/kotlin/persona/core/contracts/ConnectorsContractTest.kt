@@ -24,7 +24,7 @@ class ConnectorsContractTest {
         val decoded = JsonCodec.decodeFromString(MailAccount.serializer(), json)
         assertEquals(original, decoded)
         assertFalse(decoded.isError)
-        assertEquals("Gmail · Google 账号登录", decoded.detail)
+        assertEquals("Gmail · Google 账号登录", (decoded.detail).zhAny())
     }
 
     @Test

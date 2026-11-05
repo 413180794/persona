@@ -68,23 +68,23 @@ internal data class OngoingStatus(
             val unread = fleet.unread.coerceAtLeast(0)
             val shown = fleet.items.take(MAX_ITEMS)
             val first = shown.firstOrNull()
-            val firstRequest = shown.firstOrNull(FleetSummary::needsYou)?.let(FleetText::anonymous)
+            val firstRequest = shown.firstOrNull(FleetSummary::needsYou)?.let(FleetText::anonymous)?.shown
             val text: String?
             val lines: String?
             if (details) {
                 val hidden = FleetSummary.hidden(fleet, shown.size)
-                text = first?.let(FleetText::row) ?: FleetText.headline(fleet)
-                lines = (shown.map(FleetText::rowWithPlace) + listOfNotNull(hidden.takeIf { it > 0 }?.let(FleetText::more)))
+                text = (first?.let(FleetText::row) ?: FleetText.headline(fleet)).shown
+                lines = (shown.map(FleetText::rowWithPlace) + listOfNotNull(hidden.takeIf { it > 0 }?.let(FleetText::more))).map { it.shown }
                     .joinToString("\n").ifEmpty { null }
             } else {
                 // The counts of working and finished agents are the subtext already; only requests get lines of their own.
                 val requests = shown.filter(FleetSummary::needsYou)
                 text = firstRequest
                 lines = (FleetText.anonymousRequests(requests) +
-                    listOfNotNull((needsYou - requests.size).takeIf { it > 0 }?.let(FleetText::more)))
+                    listOfNotNull((needsYou - requests.size).takeIf { it > 0 }?.let(FleetText::more))).map { it.shown }
                     .joinToString("\n").ifEmpty { null }?.takeIf { it != text }
             }
-            val publicText = listOf(firstRequest.orEmpty(), FleetText.rest(fleet))
+            val publicText = listOf(firstRequest.orEmpty(), FleetText.rest(fleet).shown)
                 .filter(String::isNotEmpty).joinToString(" · ").ifEmpty { null }
             val critical = when {
                 needsYou > 0 -> "💬${compact(needsYou)}"
@@ -93,8 +93,8 @@ internal data class OngoingStatus(
                 else -> null
             }
             return OngoingStatus(
-                title = FleetText.headline(fleet), text = text,
-                subText = FleetText.rest(fleet).ifEmpty { null }, lines = lines, publicText = publicText,
+                title = FleetText.headline(fleet).shown, text = text,
+                subText = FleetText.rest(fleet).shown.ifEmpty { null }, lines = lines, publicText = publicText,
                 criticalText = critical, needsYou = needsYou, working = working, unread = unread,
                 workingSince = fleet.workingSince?.takeIf { FleetSummary.phase(fleet) == FleetSummary.WORKING && it > 0 }
                     ?.let { (it * 1000).toLong() },

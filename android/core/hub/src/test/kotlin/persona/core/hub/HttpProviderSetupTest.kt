@@ -29,29 +29,29 @@ class HttpProviderSetupTest {
             "key_hint":"以 eg- 开头","unknown":1},{"id":"example-gateway/api","kind":"api","api":"responses","base_url":"https://api.example.com/v1",
             "models":[{"id":"m1"}],"models_error":"超时"}]}"""))
         val presets = providers.presets()
-        assertEquals("/api/v1/launchers/presets", server.takeRequest().path)
-        assertEquals(listOf("example-gateway/team", "example-gateway/api"), presets.map { it.id })
-        assertEquals("example-pro", presets[0].defaultModel)
-        assertEquals(listOf("example-pro", "example-mini"), presets[0].choices.map { it.id })
-        assertEquals(listOf("example-pro", "Example Mini"), presets[0].choices.map { it.label })
-        assertEquals("以 eg- 开头", presets[0].keyHint)
-        assertEquals("m1", presets[1].defaultModel)
-        assertEquals("超时", presets[1].modelsError)
+        assertEquals("/api/v1/launchers/presets", (server.takeRequest().path).zhAny())
+        assertEquals(listOf("example-gateway/team", "example-gateway/api"), (presets.map { it.id }).zhAny())
+        assertEquals("example-pro", (presets[0].defaultModel).zhAny())
+        assertEquals(listOf("example-pro", "example-mini"), (presets[0].choices.map { it.id }).zhAny())
+        assertEquals(listOf("example-pro", "Example Mini"), (presets[0].choices.map { it.label }).zhAny())
+        assertEquals("以 eg- 开头", (presets[0].keyHint).zhAny())
+        assertEquals("m1", (presets[1].defaultModel).zhAny())
+        assertEquals("超时", (presets[1].modelsError).zhAny())
 
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"没有这个启动器"}"""))
         assertTrue(providers.presets().isEmpty())
-        assertEquals("/api/v1/launchers/presets", server.takeRequest().path)
+        assertEquals("/api/v1/launchers/presets", (server.takeRequest().path).zhAny())
     }
 
     @Test fun addingSendsOnlyWhatWasFilledIn() = withHub { server, providers ->
         server.enqueue(MockResponse().setBody("""{"ok":true}"""))
         providers.add(NewProvider("jv_team", "eg-secret", preset = "example-gateway/team"))
         val request = server.takeRequest()
-        assertEquals("POST", request.method)
-        assertEquals("/api/v1/launchers", request.path)
+        assertEquals("POST", (request.method).zhAny())
+        assertEquals("/api/v1/launchers", (request.path).zhAny())
         val body = JsonCodec.parseToJsonElement(request.body.readUtf8()).jsonObject
         assertEquals(setOf("name", "api_key", "preset"), body.keys)
-        assertEquals("example-gateway/team", body["preset"]!!.jsonPrimitive.content)
+        assertEquals("example-gateway/team", (body["preset"]!!.jsonPrimitive.content).zhAny())
 
         server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"没有这个供应商预设（提供它的扩展停用或卸载了？）"}"""))
         val refused = runCatching { providers.add(NewProvider("jv_team", "k", preset = "gone/x")) }.exceptionOrNull() as HubFailure

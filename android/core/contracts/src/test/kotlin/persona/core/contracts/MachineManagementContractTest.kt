@@ -12,12 +12,12 @@ import org.junit.Test
 class MachineManagementContractTest {
     @Test fun missingEngineFieldsMeanHerdrAndNothingDetected() {
         val m = JsonCodec.decodeFromString<Machine>("""{"id":"m1","online":true}""")
-        assertEquals("herdr", m.engine)
+        assertEquals("herdr", (m.engine).zhAny())
         assertTrue(m.engines.isEmpty())
         assertFalse(m.deploying)
         assertNull(m.deployError)
         val n = JsonCodec.decodeFromString<Machine>("""{"id":"m1","engine":null,"engines":null,"deploying":null}""")
-        assertEquals("herdr", n.engine)
+        assertEquals("herdr", (n.engine).zhAny())
         assertTrue(n.engines.isEmpty())
         assertFalse(n.deploying)
     }
@@ -39,18 +39,18 @@ class MachineManagementContractTest {
               {"id":"bare"}
             ],"surprise":{"a":1}}""",
         )
-        assertEquals("orca", m.engine)
-        assertEquals(listOf("herdr", "orca", "future", "bare"), m.engines.map { it.id })
-        assertEquals("0.9.3", m.engines[0].version)
-        assertEquals("这个版本的 Orca 和 Persona 不兼容", m.engines[1].note)
+        assertEquals("orca", (m.engine).zhAny())
+        assertEquals(listOf("herdr", "orca", "future", "bare"), (m.engines.map { it.id }).zhAny())
+        assertEquals("0.9.3", (m.engines[0].version).zhAny())
+        assertEquals("这个版本的 Orca 和 Persona 不兼容", (m.engines[1].note).zhAny())
         assertFalse(m.engines[2].available)
-        assertEquals("", m.engines[3].name)
+        assertEquals("", (m.engines[3].name).zhAny())
     }
 
     @Test fun deployProgressAndItsErrorDecode() {
         val m = JsonCodec.decodeFromString<Machine>("""{"id":"m1","node_mismatch":true,"deploying":true,"deploy_error":"ssh: timeout"}""")
         assertTrue(m.deploying)
-        assertEquals("ssh: timeout", m.deployError)
+        assertEquals("ssh: timeout", (m.deployError).zhAny())
         assertEquals(true, m.nodeMismatch)
     }
 
@@ -60,14 +60,14 @@ class MachineManagementContractTest {
         assertNull(s.startError)
         val f = JsonCodec.decodeFromString<Session>(
             """{"machine_id":"mac","session_id":"s1","status":"offline","start_error":"claude did not become ready"}""")
-        assertEquals("claude did not become ready", f.startError)
+        assertEquals("claude did not become ready", (f.startError).zhAny())
         assertFalse(f.starting)
     }
 
     @Test fun asyncStartsSendNameHintsAndOmitWhatIsUnset() {
         val request = AgentStartRequest("mac", "/code", "", async = true, nameHint = "看下首页")
         val body = JsonCodec.encodeToString(request)
-        assertEquals("""{"machine_id":"mac","cwd":"/code","launcher":"","async":true,"name_hint":"看下首页"}""", body)
+        assertEquals("""{"machine_id":"mac","cwd":"/code","launcher":"","async":true,"name_hint":"看下首页"}""", (body).zhAny())
     }
 
     @Test fun claudeSettingsKnowTheirDefaultAndEffectiveValue() {
@@ -79,11 +79,11 @@ class MachineManagementContractTest {
         )
         assertTrue(list[0].isDefault)
         assertFalse(list[0].boolValue)
-        assertEquals("high", list[1].stringValue)
+        assertEquals("high", (list[1].stringValue).zhAny())
         assertFalse(list[1].isDefault)
-        assertEquals("中文", list[2].placeholder)
-        assertEquals("中文", list[2].stringValue)
-        assertEquals("未设置", list[3].placeholder)
+        assertEquals("中文", (list[2].placeholder).zhAny())
+        assertEquals("中文", (list[2].stringValue).zhAny())
+        assertEquals("未设置", (list[3].placeholder).zhAny())
     }
 
     private val purpose = ModelPurpose(
@@ -94,8 +94,8 @@ class MachineManagementContractTest {
 
     @Test fun emptyFieldsRestoreInheritanceAndUnsupportedFieldsStayAbsent() {
         val patch = ModelConfigurationDraft(provider = " other ").patch(purpose)
-        assertEquals("4", patch.getValue("revision").jsonPrimitive.content)
-        assertEquals("other", patch.getValue("provider").jsonPrimitive.content)
+        assertEquals("4", (patch.getValue("revision").jsonPrimitive.content).zhAny())
+        assertEquals("other", (patch.getValue("provider").jsonPrimitive.content).zhAny())
         assertEquals(JsonNull, patch["model"])
         assertEquals(JsonNull, patch["effort"])
         val modelOnly = ModelConfigurationDraft(model = "next").patch(purpose.copy(fields = listOf("model")))
@@ -117,11 +117,11 @@ class MachineManagementContractTest {
             ModelProvider("strong", "常用", hidden = true), ModelProvider("other", "其他"),
             ModelProvider("hidden", "隐藏", hidden = true), ModelProvider("api", "API", kind = "api"),
         )
-        assertEquals(listOf("strong", "other"), purpose.providersFrom(providers).map { it.id })
-        assertEquals(listOf("api"), purpose.copy(providerIds = listOf("api")).providersFrom(providers).map { it.id })
+        assertEquals(listOf("strong", "other"), (purpose.providersFrom(providers).map { it.id }).zhAny())
+        assertEquals(listOf("api"), (purpose.copy(providerIds = listOf("api")).providersFrom(providers).map { it.id }).zhAny())
         assertTrue(purpose.copy(providerIds = emptyList()).providersFrom(providers).isEmpty())
-        assertEquals(listOf("常用", "main", "思考 high"), purpose.summaryParts(providers))
-        assertEquals(listOf("strong", "main", "思考 high"), purpose.summaryParts())
+        assertEquals(listOf("常用", "main", "思考 high"), (purpose.summaryParts(providers)).zhAny())
+        assertEquals(listOf("strong", "main", "思考 high"), (purpose.summaryParts()).zhAny())
         assertTrue(purpose.copy(effective = ModelBinding()).summaryParts(providers).isEmpty())
     }
 
@@ -132,14 +132,14 @@ class MachineManagementContractTest {
                "providers":[{"id":"launcher.claude","name":"claude","has_key":false,"kind":"launcher"}]}""",
         )
         val voice = catalog.purposes.single()
-        assertEquals("plugin", voice.kind)
-        assertEquals("voice-next", voice.effective.model)
+        assertEquals("plugin", (voice.kind).zhAny())
+        assertEquals("voice-next", (voice.effective.model).zhAny())
         assertEquals(2L, voice.revision)
         assertTrue(voice.supports("model"))
         assertFalse(voice.supports("provider"))
-        assertEquals("claude", catalog.providers.single().displayName)
+        assertEquals("claude", (catalog.providers.single().displayName).zhAny())
         val detail = JsonCodec.decodeFromString<ModelPurposeDetail>("""{"purpose":{"id":"agent.new","effective":{}}}""")
-        assertEquals("agent.new", detail.purpose.displayName)
+        assertEquals("agent.new", (detail.purpose.displayName).zhAny())
         assertTrue(detail.providers.isEmpty())
     }
 }

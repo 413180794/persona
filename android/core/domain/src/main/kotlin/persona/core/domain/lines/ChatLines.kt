@@ -172,7 +172,7 @@ private fun buildBlocks(rows: List<ChatRow>): List<Block> {
                     current!!.ordered += row
                 } else if (current == null) {
                     current = RawTurn(row.id).also { it.process += row; it.ordered += row }
-                } else if (item.task == null && item.text.orEmpty().contains("中断")) {
+                } else if (item.task == null && item.text.orEmpty().contains("中断")) { // i18n-ignore: the hub's interrupt notice
                     current!!.trailing += row
                 } else {
                     current!!.process += row

@@ -1,5 +1,7 @@
 package persona.core.domain.translate
 
+import persona.core.domain.zhAny
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -8,13 +10,13 @@ import org.junit.Test
 
 class LanguageGuessTest {
     @Test fun scripts() {
-        assertEquals("zh", LanguageGuess.detect("明天下午三点开设计评审会议"))
-        assertEquals("ja", LanguageGuess.detect("明日の会議は午後三時からです"))
-        assertEquals("ko", LanguageGuess.detect("내일 회의는 오후 세 시입니다"))
-        assertEquals("ru", LanguageGuess.detect("Встреча завтра в три часа"))
-        assertEquals("en", LanguageGuess.detect("Thanks for the update, please send the slides when you can"))
-        assertEquals("fr", LanguageGuess.detect("Merci pour la réunion, nous sommes prêts"))
-        assertEquals("de", LanguageGuess.detect("Danke für das Update, wir sind bereit"))
+        assertEquals("zh", (LanguageGuess.detect("明天下午三点开设计评审会议")).zhAny())
+        assertEquals("ja", (LanguageGuess.detect("明日の会議は午後三時からです")).zhAny())
+        assertEquals("ko", (LanguageGuess.detect("내일 회의는 오후 세 시입니다")).zhAny())
+        assertEquals("ru", (LanguageGuess.detect("Встреча завтра в три часа")).zhAny())
+        assertEquals("en", (LanguageGuess.detect("Thanks for the update, please send the slides when you can")).zhAny())
+        assertEquals("fr", (LanguageGuess.detect("Merci pour la réunion, nous sommes prêts")).zhAny())
+        assertEquals("de", (LanguageGuess.detect("Danke für das Update, wir sind bereit")).zhAny())
     }
 
     @Test fun tooLittleToTell() {

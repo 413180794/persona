@@ -95,7 +95,7 @@ internal fun chatStatusState(
     unconfirmed = operationUnknown || messages.any { it.state.resultUnknown },
     pendingRequests = requests.size,
     blocked = session?.status == "blocked",
-    requestSummary = requests.singleOrNull()?.headline,
+    requestSummary = requests.singleOrNull()?.headline?.shown,
     stopping = snapshot.stopping,
     working = session?.status == "working",
     waiting = session?.loop != null || !session?.background.isNullOrEmpty(),
@@ -136,5 +136,5 @@ internal fun interactionSource(interaction: Interaction, machine: Machine?): Str
     interactionSource(androidx.compose.ui.platform.LocalResources.current, interaction, machine)
 
 internal fun interactionDeadline(expires: java.time.Instant, now: java.time.Instant): String {
-    return requireNotNull(persona.core.domain.answer.RequestExpiry.label(expires.toString(), now))
+    return requireNotNull(persona.core.domain.answer.RequestExpiry.label(expires.toString(), now)).shown
 }

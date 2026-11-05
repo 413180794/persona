@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import persona.core.designsystem.text
 import persona.core.designsystem.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,7 +30,7 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
         is AgentOperationDialog.Close -> {
             val confirmation = session.closeConfirmation(machineName)
             JDialog(
-                onDismiss = dismiss, title = confirmation.title, destructive = true, text = confirmation.message,
+                onDismiss = dismiss, title = confirmation.title.text(), destructive = true, text = confirmation.message.text(),
                 confirm = stringResource(R.string.agents_action_close_agent) to {
                     // It may have been closed elsewhere since the dialog opened: then there is nothing left to do.
                     if (model.closable(session)) model.close(session)
@@ -41,7 +42,7 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
         is AgentOperationDialog.Delete -> {
             val confirmation = session.deleteConfirmation(machineName)
             JDialog(
-                onDismiss = dismiss, title = confirmation.title, destructive = true, text = confirmation.message,
+                onDismiss = dismiss, title = confirmation.title.text(), destructive = true, text = confirmation.message.text(),
                 confirm = stringResource(R.string.agents_dialog_delete) to {
                     // It may have started again since the dialog opened: then the hub would refuse it.
                     if (model.deletable(session)) model.delete(session)

@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.Endpoint
 import persona.core.contracts.api.EndpointCheck
 import persona.core.contracts.api.EndpointOverrides
@@ -109,23 +111,23 @@ private fun kindRank(kind: String) = when (kind) {
     else -> 4
 }
 
-/** What a probe or a settings test found, in Chinese; null is a candidate that passed the identity check. */
-fun endpointResultLabel(error: HubError?): String = when (error) {
-    null -> "已通过身份校验"
-    HubError.AddressNotFound -> "找不到地址"
-    HubError.ConnectionRefused -> "连接被拒绝"
-    HubError.Unreachable -> "无法到达"
-    HubError.Timeout -> "连接超时"
-    HubError.CertificateMismatch -> "证书指纹不符"
-    HubError.HubMismatch -> "不是配对的那台 hub"
-    HubError.TlsRequired -> "HTTP 只能连内网地址"
-    HubError.NoNetwork -> "没有网络"
-    HubError.Server -> "hub 返回错误"
-    HubError.Protocol -> "响应格式不对"
-    HubError.PairingExpired -> "hub 拒绝了请求"
-    HubError.RateLimited -> "请求太频繁，稍后再试"
-    else -> "连接失败"
-}
+/** What a probe or a settings test found; null is a candidate that passed the identity check. */
+fun endpointResultLabel(error: HubError?): CoreText = CoreText.of(when (error) {
+    null -> Key.EndpointVerified
+    HubError.AddressNotFound -> Key.EndpointAddressNotFound
+    HubError.ConnectionRefused -> Key.EndpointRefused
+    HubError.Unreachable -> Key.EndpointUnreachable
+    HubError.Timeout -> Key.EndpointTimeout
+    HubError.CertificateMismatch -> Key.EndpointCertificateMismatch
+    HubError.HubMismatch -> Key.EndpointHubMismatch
+    HubError.TlsRequired -> Key.EndpointTlsRequired
+    HubError.NoNetwork -> Key.EndpointNoNetwork
+    HubError.Server -> Key.EndpointServer
+    HubError.Protocol -> Key.EndpointProtocol
+    HubError.PairingExpired -> Key.EndpointRejected
+    HubError.RateLimited -> Key.EndpointRateLimited
+    else -> Key.EndpointFailed
+})
 
 /**
  * Validates an address typed in settings without DNS or network. [taken] holds the keys of every current candidate
@@ -135,62 +137,62 @@ fun checkEndpoint(
     input: String, pinned: Boolean, policy: LocalAddressPolicy, taken: Set<String>, manualCount: Int,
     replacingKey: String? = null,
 ): EndpointCheck {
-    fun invalid(message: String) = EndpointCheck.Invalid(message)
-    if (input.isBlank()) return invalid("请输入地址")
+    fun invalid(key: Key, vararg args: Any) = EndpointCheck.Invalid(CoreText(key, args.toList()))
+    if (input.isBlank()) return invalid(Key.AddressEmpty)
     val text = input.trim()
-    if (text.any { it.isWhitespace() }) return invalid("地址里不能有空格")
+    if (text.any { it.isWhitespace() }) return invalid(Key.AddressSpaces)
     val separator = text.indexOf("://")
     val scheme = if (separator < 0) "https" else text.substring(0, separator).lowercase()
-    if (scheme != "https" && scheme != "http") return invalid("只支持 https:// 或 http:// 开头的地址")
+    if (scheme != "https" && scheme != "http") return invalid(Key.AddressScheme)
     val rest = if (separator < 0) text else text.substring(separator + 3)
     val end = rest.indexOfFirst { it == '/' || it == '?' || it == '#' || it == '\\' }.let { if (it < 0) rest.length else it }
     val authority = rest.substring(0, end)
-    if ('@' in authority) return invalid("地址里不能带用户名或密码")
-    if (rest.substring(end).let { it.isNotEmpty() && it != "/" }) return invalid("只写到端口为止，不要带路径、? 或 #")
+    if ('@' in authority) return invalid(Key.AddressUserInfo)
+    if (rest.substring(end).let { it.isNotEmpty() && it != "/" }) return invalid(Key.AddressPath)
 
-    val missingPort = "缺少端口，写成 https://地址:端口"
+    val missingPort = Key.AddressMissingPort
     val host: String
     val port: String?
     if (authority.startsWith("[")) {
         val close = authority.indexOf(']')
-        if (close < 0) return invalid("IPv6 地址少了右方括号")
+        if (close < 0) return invalid(Key.AddressIpv6Bracket)
         host = authority.substring(1, close)
         val after = authority.substring(close + 1)
         port = if (after.isEmpty()) null else if (after.startsWith(":")) after.substring(1) else return invalid(missingPort)
-        if (host.isEmpty()) return invalid("缺少主机名或 IP")
-        if ('%' in host) return invalid("不支持带 % 的链路本地地址")
-        if (':' !in host || literalAddress(host) == null) return invalid("IPv6 地址不对")
+        if (host.isEmpty()) return invalid(Key.AddressMissingHost)
+        if ('%' in host) return invalid(Key.AddressLinkLocal)
+        if (':' !in host || literalAddress(host) == null) return invalid(Key.AddressIpv6Invalid)
     } else {
-        if (authority.count { it == ':' } > 1) return invalid("IPv6 地址要加方括号，例如 https://[2001:db8::1]:18662")
+        if (authority.count { it == ':' } > 1) return invalid(Key.AddressIpv6NeedsBrackets)
         val colon = authority.indexOf(':')
         host = if (colon < 0) authority else authority.substring(0, colon)
         port = if (colon < 0) null else authority.substring(colon + 1)
-        if (host.isEmpty()) return invalid("缺少主机名或 IP")
-        if (host.all { it in '0'..'9' || it == '.' } && dottedQuad(host) == null) return invalid("IPv4 地址不对")
+        if (host.isEmpty()) return invalid(Key.AddressMissingHost)
+        if (host.all { it in '0'..'9' || it == '.' } && dottedQuad(host) == null) return invalid(Key.AddressIpv4Invalid)
         // No percent-escapes: OkHttp would decode them into a different host than the one shown.
-        if ('%' in host || "http://$host/".toHttpUrlOrNull() == null) return invalid("主机名不对")
+        if ('%' in host || "http://$host/".toHttpUrlOrNull() == null) return invalid(Key.AddressHostInvalid)
     }
     if (port.isNullOrEmpty()) return invalid(missingPort)
     val number = port.takeIf { it.all { char -> char in '0'..'9' } }?.toIntOrNull()?.takeIf { it in 1..65535 }
-        ?: return invalid("端口要在 1–65535 之间")
+        ?: return invalid(Key.AddressPortRange)
 
     // Runs on every keystroke: never throw, whatever was typed.
     val url = runCatching { HttpUrl.Builder().scheme(scheme).host(host).port(number).build() }.getOrNull()
-        ?: return invalid("主机名不对")
+        ?: return invalid(Key.AddressHostInvalid)
     val literal = literalAddress(url.host)
     if (literal != null && (literal.isAnyLocalAddress || literal.isMulticastAddress ||
             literal.address.size == 4 && literal.address.all { it == 0xff.toByte() })) {
-        return invalid("这不是能连接的地址")
+        return invalid(Key.AddressNotConnectable)
     }
     if (scheme == "https" && !pinned) {
-        return invalid("这次配对没有 hub 的证书指纹，无法校验 HTTPS 地址。请在 hub 开启 TLS 后重新配对。")
+        return invalid(Key.AddressNoFingerprint)
     }
     // The same rule as HubHttpClient's guard, which still checks the resolved peer at runtime.
     if (scheme == "http" && !(literal?.let(policy::allows) ?: (url.host == "localhost" || url.host.endsWith(".local")))) {
-        return invalid("HTTP 不加密，只能用内网地址（如 192.168.x.x、10.x.x.x、fd00::/8 或 .local 名字）。公网地址请用 https://")
+        return invalid(Key.AddressHttpPublic)
     }
     val key = url.key()
-    if (key in taken && key != replacingKey) return invalid("列表里已经有这个地址了")
-    if (replacingKey == null && manualCount >= MAX_MANUAL_ENDPOINTS) return invalid("最多手动添加 $MAX_MANUAL_ENDPOINTS 条地址")
+    if (key in taken && key != replacingKey) return invalid(Key.AddressDuplicate)
+    if (replacingKey == null && manualCount >= MAX_MANUAL_ENDPOINTS) return invalid(Key.AddressTooMany, MAX_MANUAL_ENDPOINTS)
     return EndpointCheck.Valid(key, endpointKind(key, policy))
 }

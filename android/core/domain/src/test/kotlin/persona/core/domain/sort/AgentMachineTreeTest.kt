@@ -1,5 +1,7 @@
 package persona.core.domain.sort
 
+import persona.core.domain.zhAny
+
 import persona.core.contracts.AgentState
 import persona.core.contracts.Machine
 import persona.core.contracts.Session
@@ -19,10 +21,10 @@ class AgentMachineTreeTest {
             Machine("first", online = true), Machine("empty", online = true))
         val rows = listOf(row("first", "space", "one"), row("offline", "space", "two"), row("second", "space", "three"))
         val tree = buildAgentList(rows, machines, settings = MachineSpaceTree)
-        assertEquals(listOf("second", "first", "offline"), tree.machines.map { it.machine.id })
-        assertEquals(listOf("second/space", "first/space", "offline/space"), tree.groups.map { it.id })
+        assertEquals(listOf("second", "first", "offline"), (tree.machines.map { it.machine.id }).zhAny())
+        assertEquals(listOf("second/space", "first/space", "offline/space"), (tree.groups.map { it.id }).zhAny())
         assertEquals(listOf(1, 1, 1), tree.machines.map { it.sessionCount })
-        assertEquals("unknown", buildAgentList(listOf(row("unknown", "space", "four")), settings = MachineSpaceTree).machines.single().machine.id)
+        assertEquals("unknown", (buildAgentList(listOf(row("unknown", "space", "four")), settings = MachineSpaceTree).machines.single().machine.id).zhAny())
     }
 
     @Test fun spacesKeepPinsThenActiveThenMutedThenTheirOwnQuietTail() {
@@ -32,9 +34,9 @@ class AgentMachineTreeTest {
         val pins = AgentPreferences(spaces = listOf("one/pinned"), sessions = listOf("one/session-pin"))
         val mutes = AgentPreferences(spaces = listOf("one/muted"))
         val tree = buildAgentList(rows, listOf(Machine("one", online = true), Machine("two", online = true)), pins, mutes, settings = MachineSpaceTree)
-        assertEquals(listOf("pinned", "one/pinned", "one/active", "one/muted", "one/quiet", "two/quiet"), tree.groups.map { it.id })
-        assertEquals(listOf("one/session-pin"), tree.groups.first().rows.map { it.id })
-        assertEquals(listOf("quiet", "quiet"), tree.groups.filter { it.parent == "quiet" }.map { it.title })
+        assertEquals(listOf("pinned", "one/pinned", "one/active", "one/muted", "one/quiet", "two/quiet"), (tree.groups.map { it.id }).zhAny())
+        assertEquals(listOf("one/session-pin"), (tree.groups.first().rows.map { it.id }).zhAny())
+        assertEquals(listOf("quiet", "quiet"), (tree.groups.filter { it.parent == "quiet" }.map { it.title }).zhAny())
         assertTrue(tree.groups.filter { it.parent == "quiet" }.all { it.folded && it.visibleRows.isEmpty() })
         assertEquals(5, tree.machines.first().sessionCount)
         assertEquals(4, tree.machines.first().spaceCount)
@@ -42,7 +44,7 @@ class AgentMachineTreeTest {
         assertEquals(6, tree.groups.sumOf { it.rows.size })
         val expanded = buildAgentList(rows, pins = pins, mutes = mutes,
             settings = AgentListSettings(grouping = AgentGrouping.MachineSpace, expandedQuiet = setOf("one/quiet")))
-        assertEquals(listOf("quiet"), expanded.groups.single { it.id == "one/quiet" }.visibleRows.map { it.session.sessionId })
+        assertEquals(listOf("quiet"), (expanded.groups.single { it.id == "one/quiet" }.visibleRows.map { it.session.sessionId }).zhAny())
         assertTrue(expanded.groups.single { it.id == "two/quiet" }.folded)
     }
 
@@ -57,7 +59,7 @@ class AgentMachineTreeTest {
         val idle = buildAgentList(rows, settings = AgentListSettings(grouping = AgentGrouping.MachineSpace, expandedIdle = setOf("one/active")))
         assertEquals(2, idle.groups.single { it.id == "one/active" }.visibleRows.size)
         val searched = buildAgentList(rows, settings = AgentListSettings(grouping = AgentGrouping.MachineSpace, query = "quiet"))
-        assertEquals(listOf("one/quiet"), searched.groups.flatMap { it.visibleRows }.map { it.id })
+        assertEquals(listOf("one/quiet"), (searched.groups.flatMap { it.visibleRows }.map { it.id }).zhAny())
         assertEquals(1, searched.machines.single().sessionCount)
         assertEquals(0, searched.counts[AgentQuickFilter.Working])
     }
@@ -75,7 +77,7 @@ class AgentMachineTreeTest {
         val kept = buildAgentList(rows, settings = settings.copy(kept = setOf("one/match-work")))
         assertEquals(2, kept.machines.single().sessionCount)
         assertEquals(1, kept.machines.single().stateCounts[AgentState.Working])
-        assertEquals(listOf("one/match-unread"), kept.unreadShown)
+        assertEquals(listOf("one/match-unread"), (kept.unreadShown).zhAny())
         assertTrue(buildAgentList(rows, settings = settings.copy(query = "absent")).machines.isEmpty())
     }
 
@@ -83,11 +85,11 @@ class AgentMachineTreeTest {
         val rows = listOf(row("one", "space", "work-new", date = 3), row("one", "space", "unread", "unread"),
             row("one", "space", "needs", "needs_you"), row("one", "space", "work-old"))
         val tree = buildAgentList(rows, settings = MachineSpaceTree)
-        assertEquals(listOf("needs", "unread", "work-new", "work-old"), tree.groups.single().visibleRows.map { it.session.sessionId })
+        assertEquals(listOf("needs", "unread", "work-new", "work-old"), (tree.groups.single().visibleRows.map { it.session.sessionId }).zhAny())
         assertEquals(tree, buildAgentList(rows.reversed(), settings = MachineSpaceTree))
         val state = buildAgentList(rows, settings = AgentListSettings(grouping = AgentGrouping.State))
         assertTrue(state.machines.isEmpty())
-        assertEquals(listOf("state/needs", "state/unread", "state/working"), state.groups.map { it.id })
+        assertEquals(listOf("state/needs", "state/unread", "state/working"), (state.groups.map { it.id }).zhAny())
     }
 
     @Test fun oldAndUnknownPreferenceValuesFallBackToTheTree() {
@@ -112,10 +114,10 @@ class AgentMachineTreeTest {
         assertTrue(folded.machines.single().folded)
         val reopened = buildAgentList(rows, pins = pins, settings = settings.copy(
             folded = settings.folded - setOf("machine/one", "one/quiet"), expandedQuiet = setOf("one/quiet")))
-        assertEquals(listOf("one/idle"), reopened.groups.flatMap { it.visibleRows }.map { it.id })
+        assertEquals(listOf("one/idle"), (reopened.groups.flatMap { it.visibleRows }.map { it.id }).zhAny())
         val pinnedOnly = buildAgentList(rows.take(1), pins = pins, settings = MachineSpaceTree)
         assertEquals(1, pinnedOnly.machines.single().sessionCount)
         assertEquals(1, pinnedOnly.machines.single().spaceCount)
-        assertEquals(listOf("pinned"), pinnedOnly.groups.map { it.id })
+        assertEquals(listOf("pinned"), (pinnedOnly.groups.map { it.id }).zhAny())
     }
 }

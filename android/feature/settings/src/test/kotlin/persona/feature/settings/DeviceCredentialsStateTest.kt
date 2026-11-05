@@ -27,7 +27,7 @@ class DeviceCredentialsStateTest {
         assertEquals(listOf("watch", "old"), devices.revoked.map { it.id })
         assertNotNull(devices.revoked.first().revokedAt)
 
-        api.failure = DeviceCredentialsUnavailable("这个 hub 版本还不支持设备凭据。")
+        api.failure = DeviceCredentialsUnavailable(persona.core.contracts.CoreText.plain("这个 hub 版本还不支持设备凭据。"))
         val unsupported = DeviceSettingsState(api) {}
         unsupported.loadDevices()
         assertEquals(SettingsUiText.Raw("这个 hub 版本还不支持设备凭据。"), unsupported.state.value.message)

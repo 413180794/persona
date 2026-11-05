@@ -1,5 +1,7 @@
 package persona.core.domain.ports
 
+import persona.core.domain.zhAny
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -29,7 +31,7 @@ class PortLinksTest {
     @Test fun findsThemInTextIncludingBareOnes() {
         val text = "Local:   http://localhost:5173/\n  Network: http://192.0.2.5:5173/\nAPI at 127.0.0.1:8000/docs, and http://localhost:5173/ again."
         assertEquals(listOf(PortLink(5173, "/", false), PortLink(8000, "/docs", false)), PortLinks.find(text))
-        assertEquals(emptyList<PortLink>(), PortLinks.find("no links here"))
+        assertEquals(emptyList<PortLink>(), (PortLinks.find("no links here")).zhAny())
         // A bare host inside a longer URL is not another link.
         assertEquals(listOf(PortLink(3000, "/x", false)), PortLinks.find("see http://localhost:3000/x."))
     }

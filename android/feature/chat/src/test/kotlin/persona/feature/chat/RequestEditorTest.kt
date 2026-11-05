@@ -60,7 +60,7 @@ class RequestEditorTest {
         val unsupported = request.copy(elicitation = request.elicitation!!.copy(requestedSchema = JsonObject(
             request.elicitation!!.requestedSchema!! + ("oneOf" to JsonArray(emptyList())))))
         assertFalse(AnswerBuilder.build(unsupported, AnswerAction.SubmitElicitation, draft).allowed)
-        assertEquals("来自子 Agent · Explore\n来自 MCP 服务器 example-service", request.requestSourceLabel())
+        assertEquals("来自子 Agent · Explore\n来自 MCP 服务器 example-service", request.requestSourceLabel()?.shown)
         assertNull(Interaction("unknown", toolName = "mcp__untrusted__tool").requestSourceLabel())
         val screen = Interaction("screen-request", kind = "screen", toolUseId = "tool-id")
         val tool = Item("item", kind = "tool_use", toolUseId = "tool-id", toolInput = buildJsonObject { put("command", "printf '完整命令\\n'\nprintf '第二行'") })

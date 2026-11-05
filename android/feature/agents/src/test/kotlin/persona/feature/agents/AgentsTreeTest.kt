@@ -24,7 +24,7 @@ class AgentsTreeTest {
         val entries = agentTreeEntries(buildAgentList(rows, machines, settings = MachineSpaceTree), "")
         assertEquals(listOf("machine-header:machine/mac", "group:mac/app", "session:mac/a", "idle:mac/app", "group:mac/notes",
             "machine-header:machine/box", "group:box/api", "session:box/e"), entries.map { it.key })
-        val notes = entries.filterIsInstance<TreeGroupEntry>().single { it.group.title == "notes" }
+        val notes = entries.filterIsInstance<TreeGroupEntry>().single { it.group.title.shown == "notes" }
         assertTrue(notes.quiet)
         assertTrue("quiet spaces start folded", notes.group.folded)
         assertEquals(2, notes.group.rows.size)
@@ -86,8 +86,8 @@ class AgentsTreeTest {
         assertTrue(entries.none { it is TreeMachineEntry })
         val groups = entries.filterIsInstance<TreeGroupEntry>()
         assertEquals(listOf("todo/todo_1", "todo/none"), groups.map { it.group.id })
-        assertEquals("待办一", groups[0].group.title)
-        assertEquals("没有待办", groups[1].group.title)
+        assertEquals("待办一", groups[0].group.title.shown)
+        assertEquals("没有待办", groups[1].group.title.shown)
         val rowsInTodo1 = entries.filterIsInstance<TreeRowEntry>().filter { it.row.session.sessionId == "a" }
         assertEquals(1, rowsInTodo1.size)
     }

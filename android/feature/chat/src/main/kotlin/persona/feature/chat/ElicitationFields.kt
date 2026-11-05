@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
@@ -74,7 +75,7 @@ internal fun ElicitationFields(request: Interaction, draft: AnswerDraft, update:
                     }, autoCorrectEnabled = !field.secret), isError = value != null && field.key in validation.errors)
             }
             if (!field.required && value != null) JTextButton(stringResource(R.string.chat_elicit_clear), { set(null) }, enabled = enabled)
-            validation.errors[field.key]?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.danger.text) }
+            validation.errors[field.key]?.let { Text(it.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.danger.text) }
             if (field.secret) Text(stringResource(R.string.chat_elicit_secret_note), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
         }
     }

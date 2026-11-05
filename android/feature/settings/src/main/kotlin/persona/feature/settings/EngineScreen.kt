@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import persona.core.designsystem.text
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -58,7 +59,7 @@ fun EngineSelectionScreen(
                 val target = machine ?: return@JButton
                 scope.launch {
                     if (model?.save(target.id) == true) {
-                        if (!pairing) feedback?.notice(Engines.saved(target))
+                        if (!pairing) feedback?.notice(Engines.saved(target).shown)
                         onDone()
                     }
                 }
@@ -94,7 +95,7 @@ fun EngineSelectionScreen(
                     enabled = !state.saving && Engines.canSelect(found.id, machine)) { model.choose(found.id) }
             }
         }
-        item("footer") { SettingsCaption(Engines.footer(machine), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
+        item("footer") { SettingsCaption(Engines.footer(machine).text(), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
         state.error?.let { error ->
             item("error") {
                 Column(Modifier.padding(top = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -114,8 +115,8 @@ private fun EngineOption(found: DetectedEngine, machine: Machine, selected: Bool
         Spacer(Modifier.width(Tokens.Space.m))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
             Text(found.name.ifBlank { found.id }, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Engines.detail(found.id)?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            Text(Engines.detection(found.id, machine), style = PersonaTheme.type.caption,
+            Engines.detail(found.id)?.let { Text(it.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Text(Engines.detection(found.id, machine).text(), style = PersonaTheme.type.caption,
                 color = if (found.available && machine.online) PersonaTheme.palette.positive else PersonaTheme.palette.ink3, maxLines = 1)
             found.note?.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText, maxLines = 2, overflow = TextOverflow.Ellipsis)

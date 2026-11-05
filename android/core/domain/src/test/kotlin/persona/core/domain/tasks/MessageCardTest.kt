@@ -1,5 +1,7 @@
 package persona.core.domain.tasks
 
+import persona.core.domain.zhAny
+
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,8 +34,8 @@ class MessageCardTest {
 
     @Test fun sentIsReadFromTheCard() {
         assertNull(card().sent)
-        assertEquals("修好了", card(extra = mapOf("sent_at" to "2026-11-04T10:23:00Z", "sent" to "修好了")).sent?.text)
-        assertEquals("在修了", card(extra = mapOf("sent_at" to "2026-11-04T10:23:00Z")).sent?.text) // from before the record
+        assertEquals("修好了", (card(extra = mapOf("sent_at" to "2026-11-04T10:23:00Z", "sent" to "修好了")).sent?.text).zhAny())
+        assertEquals("在修了", (card(extra = mapOf("sent_at" to "2026-11-04T10:23:00Z")).sent?.text).zhAny()) // from before the record
     }
 
     @Test fun aCardSentElsewhereTakesItsNewBody() {
@@ -44,8 +46,8 @@ class MessageCardTest {
     }
 
     @Test fun findsABlankLeftToFillIn() {
-        assertEquals("【预计今晚 / 几点前】", draftPlaceholder("确实是 bug，【预计今晚 / 几点前】修好"))
-        assertEquals("{{链接}}", draftPlaceholder("MR 在 {{链接}}"))
+        assertEquals("【预计今晚 / 几点前】", (draftPlaceholder("确实是 bug，【预计今晚 / 几点前】修好")).zhAny())
+        assertEquals("{{链接}}", (draftPlaceholder("MR 在 {{链接}}")).zhAny())
         assertNull(draftPlaceholder("确实是 bug，修好了告诉你"))
     }
 
@@ -84,7 +86,7 @@ class MessageCardTest {
         assertTrue("m1" in store.busy.value)
         gate.complete(Unit)
         assertEquals(listOf(Triple("example:1", "修好了", "m1")), api.replies)
-        assertEquals("修好了", store.feeds.value["c1"]?.single()?.sent?.text)
+        assertEquals("修好了", (store.feeds.value["c1"]?.single()?.sent?.text).zhAny())
         assertTrue("m1" !in store.busy.value)
         store.sendMessage(card(), "修好了") { errors += it } // a stale copy: already sent
         assertEquals(1, api.replies.size)

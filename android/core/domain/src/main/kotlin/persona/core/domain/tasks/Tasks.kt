@@ -1,5 +1,8 @@
 package persona.core.domain.tasks
 
+import persona.core.contracts.CoreTextFailure
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -34,14 +37,26 @@ import persona.core.domain.lines.WorkItem
 // Tasks dispatched from an assistant conversation (docs/unified-entry.md; iOS TasksStore / Shared/Tasks.swift, web
 // lib/feed.ts): the todos that are tasks, the plans, each conversation's feed, and where those go among the chat's lines.
 
+/** A day divider among the chat's lines: [date], and whether it is today, yesterday, or which year it is in. */
+data class DayLabel(val date: LocalDate, val kind: Kind) {
+    enum class Kind { Today, Yesterday, ThisYear, OtherYear }
+}
+
+/** A draft still holding a blank to fill in ([placeholder], 「【对方姓名】」) is not sent. */
+class DraftPlaceholderLeft(val placeholder: String) : IllegalStateException("draft still has a blank: $placeholder"), CoreTextFailure {
+    override val text: CoreText get() = CoreText.of(Key.DraftPlaceholderLeft, placeholder)
+    override val message: String get() = CoreText.words(text)
+}
+
 /** Where a task is, from its todo and its agents' states (docs/todos.md「状态计算规则」). */
-enum class TaskState(val label: String, val rank: Int) {
-    NeedsYou("等你", 0),
+enum class TaskState(val label: CoreText, val rank: Int) {
+    NeedsYou(CoreText.of(Key.TaskNeedsYou), 0),
     /** An agent's turn was cut off by the model service (#1516): not done; 继续 tells it to go on. */
-    Interrupted("中断了", 0),
-    Working("在做", 1), NotStarted("正在开", 1), Unread("做完了", 2), Followup("停着", 3), Done("完成", 4),
+    Interrupted(CoreText.of(Key.TaskInterrupted), 0),
+    Working(CoreText.of(Key.TaskWorking), 1), NotStarted(CoreText.of(Key.TaskStarting), 1), Unread(CoreText.of(Key.TaskUnread), 2),
+    Followup(CoreText.of(Key.TaskStopped), 3), Done(CoreText.of(Key.TaskDone), 4),
     /** Its agent did not start (#1077): the hub ended it with why; 重试 starts it again (#1396). */
-    Failed("没开起来", 4);
+    Failed(CoreText.of(Key.TaskFailed), 4);
 
     companion object {
         /** [interrupted]: one of its agents stopped on a model API error (`Session.interrupted`). */
@@ -66,12 +81,12 @@ fun receiptState(item: FeedItem): String = when (val st = item.field("state")) {
 }
 
 /** Why the model service cut the agent off (#1516), in words, and whether 继续 can help; null when it was not. */
-data class Interruption(val reason: String, val canContinue: Boolean) {
+data class Interruption(val reason: CoreText, val canContinue: Boolean) {
     companion object {
         fun of(s: Session?): Interruption? {
             if (s?.interrupted != true) return null
             val info = ApiErrorInfo.parse(s.turnError)
-            return Interruption(info?.reason ?: "模型请求失败", info?.needsAction != true)
+            return Interruption(info?.reason ?: CoreText.of(Key.ApiFailed), info?.needsAction != true)
         }
     }
 }
@@ -98,8 +113,10 @@ sealed interface TaskNow {
         }
 
         /** What each of an agent's running subagents is for: shown under its own progress, never instead of it. */
-        fun subagents(s: Session?): List<String> =
-            s?.subagents.orEmpty().filter { it.running }.map { it.description?.trim()?.takeIf(String::isNotEmpty) ?: it.type.ifEmpty { "子任务" } }
+        fun subagents(s: Session?): List<CoreText> = s?.subagents.orEmpty().filter { it.running }.map {
+            (it.description?.trim()?.takeIf(String::isNotEmpty) ?: it.type.takeIf(String::isNotEmpty))?.let(CoreText::plain)
+                ?: CoreText.of(Key.Subtask)
+        }
     }
 }
 
@@ -206,16 +223,12 @@ object AssistantLines {
 
     fun time(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
-    /** 今天 · 11月3日 周二, 昨天 · …, or the date. */
-    fun dayLabel(date: LocalDate, today: LocalDate = LocalDate.now()): String {
-        val week = "日一二三四五六"[date.dayOfWeek.value % 7]
-        val day = "${date.monthValue}月${date.dayOfMonth}日 周$week"
-        return when (date) {
-            today -> "今天 · $day"
-            today.minusDays(1) -> "昨天 · $day"
-            else -> if (date.year == today.year) day else "${date.year}年$day"
-        }
-    }
+    /** 今天 · 11月3日 周二, 昨天 · …, or the date: which one, and whether the year shows (the app words it). */
+    fun dayLabel(date: LocalDate, today: LocalDate = LocalDate.now()): DayLabel = DayLabel(date, when (date) {
+        today -> DayLabel.Kind.Today
+        today.minusDays(1) -> DayLabel.Kind.Yesterday
+        else -> if (date.year == today.year) DayLabel.Kind.ThisYear else DayLabel.Kind.OtherYear
+    })
 }
 
 /**
@@ -423,7 +436,7 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
         val itemId = card.ref ?: return
         val latest = { _feeds.value[card.conversation]?.firstOrNull { it.id == card.id } ?: card }
         if (latest().sent != null) return
-        draftPlaceholder(text)?.let { onError(IllegalStateException("草稿里还有没填的「$it」")); return }
+        draftPlaceholder(text)?.let { onError(DraftPlaceholderLeft(it)); return }
         act(card.id, onError) {
             api.inboxReply(itemId, text, card.id)
             val now = latest()

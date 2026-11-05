@@ -101,7 +101,8 @@ data class TerminalControlEvent(
 data class ErrorEvent(
     @SerialName("machine_id") val machineId: String? = null,
     @SerialName("session_id") val sessionId: String? = null,
-    val error: String = "未知错误",
+    /** The hub's words; empty when it sent none (the app says 未知错误). */
+    val error: String = "",
     val code: String? = null,
     val retryable: Boolean? = null,
     @WireEnum("none", "unknown", "yes") val delivered: String? = null,

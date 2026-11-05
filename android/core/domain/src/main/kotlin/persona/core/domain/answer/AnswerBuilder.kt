@@ -48,7 +48,7 @@ data class OptionDisplay(val text: String, val recommended: Boolean)
 
 object AnswerBuilder {
     fun display(label: String): OptionDisplay {
-        val suffix = listOf("(Recommended)", "（推荐）", "(推荐)").firstOrNull(label::endsWith)
+        val suffix = listOf("(Recommended)", "（推荐）", "(推荐)").firstOrNull(label::endsWith) // i18n-ignore: marks the agent writes on its options
         return if (suffix == null) OptionDisplay(label, false)
         else OptionDisplay(label.dropLast(suffix.length).trim(), true)
     }

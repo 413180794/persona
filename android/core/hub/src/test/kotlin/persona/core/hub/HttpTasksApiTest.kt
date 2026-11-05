@@ -28,9 +28,9 @@ class HttpTasksApiTest {
             server.enqueue(MockResponse().setBody("""{"todo":{"id":"todo_1","title":"设置页按钮对齐","origin":"c","plan_id":"p","agents":[]}}"""))
             val todo = api(server).retryTask("todo_1")
             val req = server.takeRequest()
-            assertEquals("POST", req.method)
-            assertEquals("/api/v1/todos/todo_1/retry", req.path)
-            assertEquals("todo_1", todo.id)
+            assertEquals("POST", (req.method).zhAny())
+            assertEquals("/api/v1/todos/todo_1/retry", (req.path).zhAny())
+            assertEquals("todo_1", (todo.id).zhAny())
             assertNull(todo.doneAt)
             assertNull(todo.startError)
         }
@@ -54,9 +54,9 @@ class HttpTasksApiTest {
             server.enqueue(MockResponse().setBody("""{"id":"example:1","done_by":"replied"}"""))
             api(server).inboxReply("example:1", "修好了", "feed_1")
             val req = server.takeRequest()
-            assertEquals("POST", req.method)
+            assertEquals("POST", (req.method).zhAny())
             assertTrue(req.path.orEmpty(), req.path.orEmpty().endsWith("/reply"))
-            assertEquals("""{"text":"修好了","card":"feed_1"}""", req.body.readUtf8())
+            assertEquals("""{"text":"修好了","card":"feed_1"}""", (req.body.readUtf8()).zhAny())
         }
     }
 
@@ -65,8 +65,8 @@ class HttpTasksApiTest {
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))
             api(server).removeTask("todo_1")
             val req = server.takeRequest()
-            assertEquals("DELETE", req.method)
-            assertEquals("/api/v1/todos/todo_1", req.path)
+            assertEquals("DELETE", (req.method).zhAny())
+            assertEquals("/api/v1/todos/todo_1", (req.path).zhAny())
         }
     }
 
@@ -75,37 +75,37 @@ class HttpTasksApiTest {
             server.enqueue(MockResponse().setBody("""{"todo":{"id":"todo_new","title":"测试待办","notes":"说明","agents":[]}}"""))
             val created = api(server).createTodo("测试待办", "说明")
             val createReq = server.takeRequest()
-            assertEquals("POST", createReq.method)
-            assertEquals("/api/v1/todos", createReq.path)
-            assertEquals("todo_new", created.id)
-            assertEquals("测试待办", created.title)
-            assertEquals("说明", created.notes)
+            assertEquals("POST", (createReq.method).zhAny())
+            assertEquals("/api/v1/todos", (createReq.path).zhAny())
+            assertEquals("todo_new", (created.id).zhAny())
+            assertEquals("测试待办", (created.title).zhAny())
+            assertEquals("说明", (created.notes).zhAny())
 
             server.enqueue(MockResponse().setBody("""{"todo":{"id":"todo_new","title":"新标题","done_at":"2026-11-04T10:00:00Z","agents":[]}}"""))
             val patched = api(server).patchTodo("todo_new", title = "新标题", done = true)
             val patchReq = server.takeRequest()
-            assertEquals("PATCH", patchReq.method)
-            assertEquals("/api/v1/todos/todo_new", patchReq.path)
-            assertEquals("新标题", patched.title)
+            assertEquals("PATCH", (patchReq.method).zhAny())
+            assertEquals("/api/v1/todos/todo_new", (patchReq.path).zhAny())
+            assertEquals("新标题", (patched.title).zhAny())
             assertTrue(patched.isDone)
 
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))
             api(server).linkTodoAgent("todo_new", "m1", "s1")
             val linkReq = server.takeRequest()
-            assertEquals("PUT", linkReq.method)
-            assertEquals("/api/v1/todos/todo_new/agents/m1/s1", linkReq.path)
+            assertEquals("PUT", (linkReq.method).zhAny())
+            assertEquals("/api/v1/todos/todo_new/agents/m1/s1", (linkReq.path).zhAny())
 
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))
             api(server).unlinkTodoAgent("todo_new", "m1", "s1")
             val unlinkReq = server.takeRequest()
-            assertEquals("DELETE", unlinkReq.method)
-            assertEquals("/api/v1/todos/todo_new/agents/m1/s1", unlinkReq.path)
+            assertEquals("DELETE", (unlinkReq.method).zhAny())
+            assertEquals("/api/v1/todos/todo_new/agents/m1/s1", (unlinkReq.path).zhAny())
 
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))
             api(server).deleteTodo("todo_new")
             val deleteReq = server.takeRequest()
-            assertEquals("DELETE", deleteReq.method)
-            assertEquals("/api/v1/todos/todo_new", deleteReq.path)
+            assertEquals("DELETE", (deleteReq.method).zhAny())
+            assertEquals("/api/v1/todos/todo_new", (deleteReq.path).zhAny())
         }
     }
 }

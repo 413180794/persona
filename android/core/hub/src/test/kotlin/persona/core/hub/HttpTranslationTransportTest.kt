@@ -25,24 +25,24 @@ class HttpTranslationTransportTest {
 
     @Test fun textsInOrderAndBlankWhereTheModelGaveNothing() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"texts":["你好","",null]}"""))
-        assertEquals(listOf("你好", "", ""), api.translate(listOf("Hello", "?", "x"), "zh-Hans"))
+        assertEquals(listOf("你好", "", ""), (api.translate(listOf("Hello", "?", "x"), "zh-Hans")).zhAny())
         val req = server.takeRequest()
-        assertEquals("POST", req.method)
-        assertEquals("/api/v1/translate", req.path)
+        assertEquals("POST", (req.method).zhAny())
+        assertEquals("/api/v1/translate", (req.path).zhAny())
         val body = JsonCodec.parseToJsonElement(req.body.readUtf8()).jsonObject
-        assertEquals(listOf("Hello", "?", "x"), body.getValue("texts").jsonArray.map { it.jsonPrimitive.content })
-        assertEquals("zh-Hans", body.getValue("target").jsonPrimitive.content)
+        assertEquals(listOf("Hello", "?", "x"), (body.getValue("texts").jsonArray.map { it.jsonPrimitive.content }).zhAny())
+        assertEquals("zh-Hans", (body.getValue("target").jsonPrimitive.content).zhAny())
     }
 
     @Test fun aMailByReference() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"subject":"季度回顾","text":"正文","clipped":true}"""))
         val t = api.translateMail("acc1", 504, "INBOX", "zh-Hans")
-        assertEquals("季度回顾", t.subject)
+        assertEquals("季度回顾", (t.subject).zhAny())
         assertTrue(t.clipped)
         val body = JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
-        assertEquals("acc1", body.getValue("account_id").jsonPrimitive.content)
+        assertEquals("acc1", (body.getValue("account_id").jsonPrimitive.content).zhAny())
         assertEquals(504L, body.getValue("uid").jsonPrimitive.long)
-        assertEquals("INBOX", body.getValue("mailbox").jsonPrimitive.content)
+        assertEquals("INBOX", (body.getValue("mailbox").jsonPrimitive.content).zhAny())
     }
 
     @Test fun failuresAndUnreadableAnswers() = withHub { server, api ->

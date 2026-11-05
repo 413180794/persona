@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="demo_not_sent">体験モードでは実際には送信されません</string>
+    <string name="demo_missing">体験モードにはこのデータがありません</string>
+    <string name="demo_reply">これは体験モードです。メッセージは実際にはコンピューターに届いておらず、ここのエージェントもデモ用のデータです。ご自身のハブに接続すると、エージェントに作業を続けさせられます。</string>
+    <string name="demo_scope_changed">接続が切り替わりました</string>
+    <string name="demo_empty_message">メッセージを入力してください</string>
+    <string name="demo_id_used">このメッセージIDはすでに使われています</string>
+    <string name="demo_new_chat">新しいチャット</string>
+</resources>

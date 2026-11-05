@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import persona.core.designsystem.text
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -61,7 +62,7 @@ class AgentRepoTreeShotsTest {
                             is TreeMachineEntry -> AgentTreeHeader(entry.machine.machine.displayName, entry.machine.folded, {}, first = entry.first,
                                 icon = entry.machine.machine.deviceIcon, online = entry.machine.machine.online,
                                 detail = "${entry.machine.repoCount} 个仓库，${entry.machine.sessionCount} 个会话", counts = entry.machine.headingCounts)
-                            is TreeGroupEntry -> AgentSpaceHeader(entry.group.title, entry.group.folded, {}, depth = entry.depth, first = entry.first,
+                            is TreeGroupEntry -> AgentSpaceHeader(entry.group.title.text(), entry.group.folded, {}, depth = entry.depth, first = entry.first,
                                 quiet = entry.quiet, sessions = entry.group.rows.size, counts = entry.group.headingCounts, icon = entry.group.repo?.icon,
                                 kind = entry.group.repo?.kind ?: "空间")
                             is TreeRowEntry -> AgentRow(entry.row.session.displayTitle, entry.row.state.designStatus, {}, depth = entry.depth,

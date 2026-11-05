@@ -377,7 +377,7 @@ internal class NewAgentViewModel(
             }
             is AgentStartResult.Rejected -> {
                 store.pending(service.scope, null)
-                mutable.update { it.copy(pending = null, error = AgentText.raw(result.message)) }
+                mutable.update { it.copy(pending = null, error = AgentText.raw(result.message.shown)) }
             }
             AgentStartResult.Pending -> mutable.update { it.copy(error = AgentText(R.string.agents_new_error_starting)) }
             AgentStartResult.Unknown -> mutable.update { it.copy(error = AgentText(R.string.agents_new_error_unknown)) }

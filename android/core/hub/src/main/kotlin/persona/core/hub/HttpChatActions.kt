@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import kotlinx.coroutines.CancellationException
@@ -68,7 +70,7 @@ class HttpChatActions internal constructor(
             val rejected = !sent || failure?.delivered == "none" ||
                 (failure?.status in listOf(400, 401, 403, 404, 409, 410, 422, 429) && failure?.delivered != "unknown") ||
                 failure?.kind in listOf(HubError.NoNetwork, HubError.PairingExpired)
-            if (rejected) ChatActionResult.Failed(if (failure?.kind == HubError.PairingExpired) "配对已失效，请重新扫码" else "操作未完成，请检查连接或会话状态后重试", cause = error)
+            if (rejected) ChatActionResult.Failed(CoreText.of(if (failure?.kind == HubError.PairingExpired) Key.PairingExpired else Key.ActionNotDone), cause = error)
             else { uncertain[key] = action; ChatActionResult.Unknown }
         }
     }

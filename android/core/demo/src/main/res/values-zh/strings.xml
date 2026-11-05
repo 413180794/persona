@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="demo_not_sent">体验模式下不会真的发送</string>
+    <string name="demo_missing">体验模式里没有这项数据</string>
+    <string name="demo_reply">这是体验模式：消息没有真的发到电脑上，这里的 Agent 也只是演示数据。连接你自己的 hub 后，就可以让 Agent 接着做。</string>
+    <string name="demo_scope_changed">连接已切换</string>
+    <string name="demo_empty_message">消息不能为空</string>
+    <string name="demo_id_used">消息标识已被使用</string>
+    <string name="demo_new_chat">新对话</string>
+</resources>

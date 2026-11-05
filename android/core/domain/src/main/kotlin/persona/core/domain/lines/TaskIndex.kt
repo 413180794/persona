@@ -1,12 +1,14 @@
 package persona.core.domain.lines
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import java.time.Duration
 import java.time.Instant
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-data class TaskBadge(val text: String, val failed: Boolean)
-data class TaskNoteText(val label: String, val subject: String, val outcome: String?, val failed: Boolean, val callId: String?)
+data class TaskBadge(val text: CoreText, val failed: Boolean)
+data class TaskNoteText(val label: CoreText, val subject: String, val outcome: CoreText?, val failed: Boolean, val callId: String?)
 
 data class TaskIndex(
     val notes: Map<String, List<TaskNote>> = emptyMap(),
@@ -20,34 +22,34 @@ data class TaskIndex(
         val note = requireNotNull(item.task)
         val call = calls[item.id]
         val label = when (note.kind) {
-            "shell" -> "后台命令"
-            "monitor" -> if (note.status == "event") "Monitor 事件" else "Monitor 结束"
-            "agent" -> "子 Agent"
-            else -> "后台任务"
-        }
+            "shell" -> Key.TaskShell
+            "monitor" -> if (note.status == "event") Key.TaskMonitorEvent else Key.TaskMonitorEnded
+            "agent" -> Key.TaskSubagent
+            else -> Key.TaskBackground
+        }.let(CoreText::of)
         val subject = (if (note.kind == "monitor" && note.status == "event")
             note.detail?.lineSequence()?.map { it.trim() }?.firstOrNull { it.isNotEmpty() } else null)
             ?: descriptions[call]?.takeIf { it.isNotEmpty() } ?: note.title
         val outcome = buildList {
             when (note.status) {
-                "completed", "ended" -> add("✓")
-                "failed" -> add(note.exitCode?.let { "✗ 退出码 $it" } ?: "✗")
-                "killed", "stopped" -> add("已停止")
-                "waiting" -> add("等待中")
-                else -> note.exitCode?.takeIf { it != 0 }?.let { add("✗ 退出码 $it") }
+                "completed", "ended" -> add(CoreText.plain("✓"))
+                "failed" -> add(note.exitCode?.let { CoreText.of(Key.TaskExitCode, it) } ?: CoreText.plain("✗"))
+                "killed", "stopped" -> add(CoreText.of(Key.TaskStoppedState))
+                "waiting" -> add(CoreText.of(Key.TaskWaitingState))
+                else -> note.exitCode?.takeIf { it != 0 }?.let { add(CoreText.of(Key.TaskExitCode, it)) }
             }
             val start = startedAt[call]
             val end = item.time
             if (note.status != "event" && start != null && end != null && end > start) {
                 val s = Duration.between(start, end).seconds
                 add(when {
-                    s < 60 -> "$s 秒"
-                    s < 3600 -> "${s / 60} 分"
-                    s % 3600 / 60 == 0L -> "${s / 3600} 小时"
-                    else -> "${s / 3600} 小时 ${s % 3600 / 60} 分"
+                    s < 60 -> CoreText.of(Key.DurationSeconds, s)
+                    s < 3600 -> CoreText.of(Key.DurationMinutes, s / 60)
+                    s % 3600 / 60 == 0L -> CoreText.of(Key.DurationHours, s / 3600)
+                    else -> CoreText.of(Key.DurationHoursMinutes, s / 3600, s % 3600 / 60)
                 })
             }
-        }.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+        }.takeIf { it.isNotEmpty() }?.let { CoreText.joined(" · ", it) }
         return TaskNoteText(label, subject, outcome, note.failed, call)
     }
 
@@ -56,15 +58,15 @@ data class TaskIndex(
         val notes = notes[callId].orEmpty()
         val events = notes.count { it.status == "event" }
         val last = notes.lastOrNull { it.status != "event" }
-            ?: return TaskBadge(if (events > 0) "后台 · $events 个事件" else "后台 · 运行中", false)
+            ?: return TaskBadge(if (events > 0) CoreText.of(Key.BadgeEvents, events) else CoreText.of(Key.BadgeRunning), false)
         val state = when (last.status) {
-            "failed" -> "失败"
-            "killed", "stopped" -> "已停止"
-            "waiting" -> "等待中"
-            "ended" -> "已结束"
-            else -> "已完成"
-        }
-        return TaskBadge("后台 · $state" + if (events > 0) " · $events 个事件" else "", last.failed)
+            "failed" -> Key.TaskFailedState
+            "killed", "stopped" -> Key.TaskStoppedState
+            "waiting" -> Key.TaskWaitingState
+            "ended" -> Key.TaskEndedState
+            else -> Key.TaskCompletedState
+        }.let(CoreText::of)
+        return TaskBadge(if (events > 0) CoreText.of(Key.BadgeStateEvents, events, state) else CoreText.of(Key.BadgeState, state), last.failed)
     }
 
     companion object {

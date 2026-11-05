@@ -1,5 +1,8 @@
 package persona.core.domain.lines
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
+
 /**
  * A model API error in a chat (iOS `APIErrorInfo`), read from the text Claude Code writes when it gives up
  * ("API Error: 502 …", an answer) or from the hub's notice for a retry ("API 错误：Overloaded（正在重试）"): why, in
@@ -8,7 +11,7 @@ package persona.core.domain.lines
 data class ApiErrorInfo(
     val status: Int?,
     /** One line, in words. */
-    val reason: String,
+    val reason: CoreText,
     /**
      * Likely to pass if tried again (5xx, rate limits, timeouts); false when someone has to act (login, a bad
      * request); null when the text does not say.
@@ -19,7 +22,7 @@ data class ApiErrorInfo(
     val raw: String,
 ) {
     /** Two errors are "the same" for folding when these match. */
-    val signature: String get() = "${status ?: 0}|$reason"
+    val signature: String get() = "${status ?: 0}|${reason.key}"
 
     /** Someone has to act (a login, a bad request): sending 继续 again would not help. */
     val needsAction: Boolean get() = transient == false
@@ -36,7 +39,7 @@ data class ApiErrorInfo(
             val trimmed = text?.trim() ?: return null
             val body = when {
                 trimmed.startsWith("API Error:") -> trimmed.removePrefix("API Error:")
-                trimmed.startsWith("API 错误：") -> trimmed.removePrefix("API 错误：")
+                trimmed.startsWith("API 错误：") -> trimmed.removePrefix("API 错误：") // i18n-ignore: the hub's retry notice it reads
                 // Claude Code leads with a sentence for some: "Failed to authenticate. API Error: 401 …".
                 else -> lead.find(trimmed)?.let { trimmed.substring(it.range.last + 1) } ?: return null
             }
@@ -47,22 +50,22 @@ data class ApiErrorInfo(
         }
 
         /** What went wrong, as a person would say it, and whether it is likely to pass (the iOS wording). */
-        private fun explain(s: String, status: Int?): Pair<String, Boolean?> = when {
-            "no available gpu" in s -> "推理服务暂时没有可用的 GPU" to true
-            "overloaded" in s || status == 529 -> "模型服务太忙，过载了" to true
+        private fun explain(s: String, status: Int?): Pair<CoreText, Boolean?> = when {
+            "no available gpu" in s -> CoreText.of(Key.ApiNoGpu) to true
+            "overloaded" in s || status == 529 -> CoreText.of(Key.ApiOverloaded) to true
             status == 401 || status == 403 || "authentication" in s || "/login" in s || "login expire" in s ->
-                "登录过期了，要在电脑上重新 /login" to false
-            status == 429 || "rate limit" in s || "rate_limit" in s -> "请求太多，被限流了" to true
-            "timed out" in s || "timeout" in s -> "请求超时了" to true
-            "connection" in s -> "连不上模型服务" to true
-            status == 400 -> "请求被拒绝：参数或上下文有问题" to false
-            status != null && status in 500..599 -> "模型服务暂时不可用" to true
-            else -> "模型请求失败" to (if ("temporary" in s || "try again" in s) true else null)
+                CoreText.of(Key.ApiLogin) to false
+            status == 429 || "rate limit" in s || "rate_limit" in s -> CoreText.of(Key.ApiRateLimited) to true
+            "timed out" in s || "timeout" in s -> CoreText.of(Key.ApiTimeout) to true
+            "connection" in s -> CoreText.of(Key.ApiConnection) to true
+            status == 400 -> CoreText.of(Key.ApiBadRequest) to false
+            status != null && status in 500..599 -> CoreText.of(Key.ApiUnavailable) to true
+            else -> CoreText.of(Key.ApiFailed) to (if ("temporary" in s || "try again" in s) true else null)
         }
     }
 }
 
-private val retryWords = setOf("继续", "重试", "再试一次", "continue", "retry", "go on")
+private val retryWords = setOf("继续", "重试", "再试一次", "continue", "retry", "go on") // i18n-ignore: what a user types to retry
 
 /** A bare 「继续」 between two of the same error: the user retrying, folded into the error's count. */
 internal fun isRetry(line: ChatLine): Boolean {

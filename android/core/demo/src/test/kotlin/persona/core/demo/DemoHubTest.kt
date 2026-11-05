@@ -59,7 +59,7 @@ class DemoHubTest {
         val request = MessageRequest(hub.hubScope, key, "试一下本地对话", "demo-message")
         assertEquals(MessageTransportResult.Accepted, hub.send(request))
         assertEquals(MessageTransportResult.Accepted, hub.send(request))
-        assertEquals(listOf(request.text, DemoText.reply), hub.items(key, ItemsQuery()).items.map { it.text })
+        assertEquals(listOf(request.text, DemoText().reply), hub.items(key, ItemsQuery()).items.map { it.text })
         // The chat hides the outbox copy by this id.
         assertEquals(request.clientMessageId, hub.items(key, ItemsQuery()).items.first().id)
         assertTrue(events.filterIsInstance<ItemsEvent>().any { !it.backlog && it.items.size == 2 })
@@ -69,7 +69,7 @@ class DemoHubTest {
         hub.resolve(interaction.id, Resolution(approve = true))
         assertFalse(hub.interactions().any { it.id == interaction.id })
         assertTrue(events.any { it == InteractionResolvedEvent(interaction.id) })
-        assertTrue(notices.all { it == DemoText.notSent })
+        assertTrue(notices.all { it == DemoText().notSent })
         assertEquals(2, notices.size)
         hub.send(buildJsonObject { envelope("subscribe", key).forEach { (k, v) -> put(k, v) }; put("since_seq", 1) })
         runCurrent()
@@ -123,7 +123,7 @@ class DemoHubTest {
             assertEquals("demo", error!!.code)
             assertEquals("no", error.delivered)
             assertFalse(error.retryable)
-            assertEquals(DemoText.notSent, error.message)
+            assertEquals(DemoText().notSent, error.message)
         }
         listOf("terminal_input", "register_phone", "future_write").forEach { type ->
             assertFalse(hub.send(envelope(type, session.key)))
@@ -136,7 +136,7 @@ class DemoHubTest {
         ).forEach { read ->
             val error = try { read(); fail("Expected a local 404"); null } catch (error: HubFailure) { error }
             assertEquals(404, error!!.status)
-            assertEquals(DemoText.missing, error.message)
+            assertEquals(DemoText().missing, error.message)
         }
         hub.close()
     }

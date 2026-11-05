@@ -50,7 +50,7 @@ data class TaskPlan(
 data class SentReply(val at: String, val text: String)
 
 /** A blank a draft leaves to fill in (【预计几点前】, {{链接}}): it would go out as it is. Null when it has none. */
-fun draftPlaceholder(text: String): String? = Regex("【[^】\n]*】|\\{\\{[^}\n]*\\}\\}").find(text)?.value
+fun draftPlaceholder(text: String): String? = Regex("【[^】\n]*】|\\{\\{[^}\n]*\\}\\}").find(text)?.value // i18n-ignore: the blank marks drafts use
 
 /** An item the hub inserted into an assistant conversation, drawn among the transcript's lines by [at]. */
 @KeepGeneratedSerializer
@@ -158,13 +158,13 @@ data class Todo(
  * Todo states in order of rank (umbrella.final.md / docs/todos.md「状态计算规则」):
  * 已完成 -> 等你 -> 待查看 -> 进行中 -> 待跟进 -> 未开始
  */
-enum class TodoState(val title: String, val rank: Int) {
-    Done("已完成", 0),
-    NeedsYou("等你", 1),
-    Unread("待查看", 2),
-    Working("进行中", 3),
-    FollowUp("待跟进", 4),
-    NotStarted("未开始", 5);
+enum class TodoState(val title: CoreText, val rank: Int) {
+    Done(CoreText.of(CoreText.Key.TodoDone), 0),
+    NeedsYou(CoreText.of(CoreText.Key.TaskNeedsYou), 1),
+    Unread(CoreText.of(CoreText.Key.TodoUnread), 2),
+    Working(CoreText.of(CoreText.Key.TodoWorking), 3),
+    FollowUp(CoreText.of(CoreText.Key.TodoFollowUp), 4),
+    NotStarted(CoreText.of(CoreText.Key.TodoNotStarted), 5);
 }
 
 /**
@@ -208,7 +208,7 @@ fun List<Todo>.ordered(sessionLookup: (SessionKey) -> Session?): List<Todo> {
  * Formats the todo context tag as in protocol.md and docs/todos.md.
  */
 fun todoContextXml(title: String, notes: String): String =
-    """<jarvis-context kind="context" title="待办 · $title" url="">$notes</jarvis-context>"""
+    """<jarvis-context kind="context" title="待办 · $title" url="">$notes</jarvis-context>""" // i18n-ignore: the tag docs/todos.md specifies for the agent
 
 /**
  * The prompt to send when handing off a todo to an agent.

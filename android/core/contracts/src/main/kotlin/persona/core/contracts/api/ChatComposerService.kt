@@ -1,5 +1,8 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreTextException
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.SessionKey
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
@@ -23,4 +26,4 @@ interface ChatComposerService {
     suspend fun retryRefused(clientMessageId: String, clearDraft: Boolean): ComposerDelivery
 }
 
-class ComposerOperationException(message: String) : Exception(message)
+class ComposerOperationException(text: CoreText) : CoreTextException(text)

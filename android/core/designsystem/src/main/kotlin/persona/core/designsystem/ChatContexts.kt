@@ -61,7 +61,7 @@ fun MessageContextGroup(
     val style = PersonaTheme.style
     var open by rememberSaveable(id) { mutableStateOf(false) }
     val one = contexts.singleOrNull()
-    val summary = contextSummary(contexts)
+    val summary = contextSummary(contexts).text()
     Column(
         modifier.fillMaxWidth().padding(vertical = Tokens.Space.xxs).animateContentSize(PersonaTheme.motion.size()),
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
@@ -104,7 +104,8 @@ private fun ContextEntry(context: MessageContext, id: String, onOpen: (String) -
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     var open by rememberSaveable(id) { mutableStateOf(false) }
-    val spoken = stringResource(R.string.designsystem_with_state, context.label, stringResource(if (open) R.string.designsystem_expanded else R.string.designsystem_collapsed))
+    val label = context.label.text()
+    val spoken = stringResource(R.string.designsystem_with_state, label, stringResource(if (open) R.string.designsystem_expanded else R.string.designsystem_collapsed))
     Column {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button) { open = !open }
@@ -114,7 +115,7 @@ private fun ContextEntry(context: MessageContext, id: String, onOpen: (String) -
         ) {
             JIcon(contextIcon(context.kind), null, size = 14.dp, tint = palette.ink3)
             Spacer(Modifier.width(Tokens.Space.s))
-            Text(context.label, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = 1,
+            Text(label, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (context.body.isEmpty()) {
                 Spacer(Modifier.width(Tokens.Space.s))

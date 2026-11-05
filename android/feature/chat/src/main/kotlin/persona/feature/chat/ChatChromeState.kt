@@ -101,7 +101,7 @@ internal class ChatChromeState(
                     is ChatActionResult.Failed -> {
                         val feedback = result.cause?.let { operationFeedback(it) }
                         pending = action.takeIf { feedback?.action == FailureAction.Verify }
-                        notice = feedback?.message ?: result.reason
+                        notice = feedback?.message ?: result.reason.shown
                     }
                 }
             } catch (error: CancellationException) { throw error }

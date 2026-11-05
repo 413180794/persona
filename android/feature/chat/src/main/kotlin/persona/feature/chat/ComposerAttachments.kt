@@ -101,11 +101,11 @@ internal fun stageAttachment(context: Context, attachment: ComposerAttachment): 
                         val read = input.read(buffer)
                         if (read < 0) break
                         total += read
-                        if (total > MAX_COMPOSER_FILE_BYTES) throw ComposerOperationException(oversizeReason(attachment.name, total, context.resources)!!)
+                        if (total > MAX_COMPOSER_FILE_BYTES) throw ComposerOperationException(persona.core.contracts.CoreText.plain(oversizeReason(attachment.name, total, context.resources)!!))
                         output.write(buffer, 0, read)
                     }
                 }
-            } ?: throw ComposerOperationException(context.getString(R.string.chat_attach_unreadable))
+            } ?: throw ComposerOperationException(persona.core.contracts.CoreText.plain(context.getString(R.string.chat_attach_unreadable)))
         }
         return file
     } catch (error: Throwable) { file.delete(); throw error }

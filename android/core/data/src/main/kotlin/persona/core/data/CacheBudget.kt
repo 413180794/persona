@@ -140,15 +140,15 @@ internal class BudgetFileCache(
 
     fun trim(keep: File? = null) = synchronized(CacheFiles.lock) {
         evictionCandidates(entries(), limit) { it == keep || isProtected(it) }.forEach {
-            if (!it.delete() && it.exists()) throw IOException("无法清理本机缓存")
+            if (!it.delete() && it.exists()) throw IOException("could not clear the local cache")
         }
     }
 
     private fun isProtected(file: File) = CacheFiles.pinned(file) || protected(file)
     private fun checkBudget(file: File, bytes: Long) {
-        if (bytes > limit) throw IOException("文件超过本机缓存预算")
+        if (bytes > limit) throw IOException("file exceeds the local cache budget")
         val protectedBytes = entries().filter { it.key != file && isProtected(it.key) }.sumOf { it.bytes }
-        if (protectedBytes > limit - bytes) throw IOException("正在使用的文件已占满本机缓存预算")
+        if (protectedBytes > limit - bytes) throw IOException("files in use fill the local cache budget")
     }
     private fun entries() = directory.walkTopDown().filter { it.isFile }.map {
         BudgetEntry(it, it.length(), it.lastModified())

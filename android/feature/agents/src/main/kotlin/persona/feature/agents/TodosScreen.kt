@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import persona.core.designsystem.text
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable

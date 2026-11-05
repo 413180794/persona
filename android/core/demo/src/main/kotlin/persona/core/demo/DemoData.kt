@@ -1,6 +1,6 @@
 package persona.core.demo
 
-import android.content.res.AssetManager
+import android.content.Context
 import persona.core.contracts.JsonCodec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,11 +25,20 @@ internal object DemoData {
     }
 }
 
-/** Read and decode away from the UI thread; each entry creates an independent demo. */
+/**
+ * Read and decode away from the UI thread; each entry creates an independent demo, in the language [context]'s text
+ * is in (Demo.json is the Chinese data, Demo.en.json and Demo.ja.json the same data translated).
+ */
 suspend fun DemoHub.Companion.fromAssets(
-    assets: AssetManager,
+    context: Context,
     parentScope: kotlinx.coroutines.CoroutineScope,
     now: () -> Instant = Instant::now,
 ): DemoHub = withContext(Dispatchers.IO) {
-    DemoHub(assets.open("demo/Demo.json").bufferedReader().use { it.readText() }, parentScope, now)
+    val asset = when (context.resources.configuration.locales[0].language) {
+        "zh" -> "demo/Demo.json"
+        "ja" -> "demo/Demo.ja.json"
+        else -> "demo/Demo.en.json"
+    }
+    DemoHub(context.assets.open(asset).bufferedReader().use { it.readText() }, parentScope, now,
+        words = DemoText.from(context.resources))
 }

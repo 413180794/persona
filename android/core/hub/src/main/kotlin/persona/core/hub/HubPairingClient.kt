@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import java.io.OutputStream
@@ -45,12 +47,12 @@ class HubPairingClient private constructor(
     private var endpoints = addresses.distinct().map(::endpoint)
     private var pairedAddress: String = endpoints.first().url
     val address: String get() = connection?.activeRoute()?.endpoint?.url ?: pairedAddress
-    private var candidates = endpoints.map { ConnectionCandidate(it.url, it.kind, "尚未探测") }
+    private var candidates = endpoints.map { ConnectionCandidate(it.url, it.kind, CoreText.of(Key.ProbeNotYet)) }
     private var lastFailure: String? = null
 
     suspend fun probe(progress: (PairingProgress) -> Unit = {}): HubRoute {
         if (connection != null) return connection.activeRoute()
-        candidates = endpoints.map { ConnectionCandidate(it.url, it.kind, "探测中") }
+        candidates = endpoints.map { ConnectionCandidate(it.url, it.kind, Probing) }
         progress(PairingProgress(PairingStage.Probe, candidates = candidates))
         try {
             val route = selector.select(orderEndpoints(endpoints)) { target, result ->
@@ -63,12 +65,12 @@ class HubPairingClient private constructor(
                 progress(PairingProgress(PairingStage.Probe, candidates = candidates))
             }
             pairedAddress = route.endpoint.url
-            candidates = candidates.map { if (it.result == "探测中") it.copy(result = "已停止探测") else it }
+            candidates = candidates.map { if (it.result == Probing) it.copy(result = CoreText.of(Key.ProbeStopped)) else it }
             lastFailure = null
             return route
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            lastFailure = endpointResultLabel(HubFailure.from(error).kind)
+            lastFailure = endpointResultLabel(HubFailure.from(error).kind).english()
             throw error
         }
     }
@@ -108,7 +110,7 @@ class HubPairingClient private constructor(
         val discovered = metadata.endpoints.mapNotNull { runCatching { endpoint(it.url) }.getOrNull() }
         endpoints = (endpoints + discovered).distinctBy { endpointKey(it.url) }
         candidates = endpoints.map { item -> candidates.firstOrNull { it.url == item.url }
-            ?: ConnectionCandidate(item.url, item.kind, "尚未探测") }
+            ?: ConnectionCandidate(item.url, item.kind, CoreText.of(Key.ProbeNotYet)) }
     }
 
     suspend fun diagnostics(token: String, deviceId: String?): ConnectionDiagnostics {
@@ -231,3 +233,5 @@ class HubPairingClient private constructor(
         private fun JsonObject.text(key: String) = this[key]?.jsonPrimitive?.contentOrNull
     }
 }
+
+private val Probing = CoreText.of(Key.Probing)

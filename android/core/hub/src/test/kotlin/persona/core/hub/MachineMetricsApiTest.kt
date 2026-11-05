@@ -20,15 +20,15 @@ class MachineMetricsApiTest {
             assertNull(dashboard.machines.single().latest?.cpu)
             assertNull(dashboard.machines.single().latest?.netRx)
             assertEquals(80L, dashboard.machines.single().latest?.memUsed)
-            assertEquals("/api/v1/metrics", server.takeRequest().path)
+            assertEquals("/api/v1/metrics", (server.takeRequest().path).zhAny())
             server.enqueue(MockResponse().setBody("""{"metrics":{"machine_id":"machine/part","points":[{"t":100,"cpu":0},{"t":110,"gap":true}]},"range":"24h","step":240}"""))
             val history = api.history("machine/part", MetricRange.Day)
             assertTrue(history.metrics.points.last().gap)
             assertEquals(0.0, history.metrics.points.first().cpu!!, 0.0)
             assertEquals(240, history.step)
             val request = server.takeRequest()
-            assertEquals("/api/v1/machines/machine%2Fpart/metrics?range=24h", request.path)
-            assertEquals("Bearer fixture-token", request.getHeader("Authorization"))
+            assertEquals("/api/v1/machines/machine%2Fpart/metrics?range=24h", (request.path).zhAny())
+            assertEquals("Bearer fixture-token", (request.getHeader("Authorization")).zhAny())
             server.enqueue(MockResponse().setResponseCode(404))
             try { api.dashboard(); fail("Old hub must be distinguishable") } catch (_: MetricsUnavailable) { }
             current = false

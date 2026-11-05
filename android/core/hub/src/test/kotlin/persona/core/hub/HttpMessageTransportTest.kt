@@ -77,7 +77,7 @@ class HttpMessageTransportTest {
                     responses.send(MockResponse().setBody("""{"state":"done","result":{"status":200,"body":"$storedBody"}}"""))
                     responses.send(MockResponse().setBody("""{"items":[{"id":"stable-id","role":"user","kind":"text","text":"hello"}]}"""))
                     assertEquals(MessageEvidence.Shown, transport.reconcile(message, 0))
-                    assertEquals("/api/v1/ops/stable-id", withTimeout(5000) { requests.receive() }.path)
+                    assertEquals("/api/v1/ops/stable-id", (withTimeout(5000) { requests.receive() }.path).zhAny())
                     assertTrue(withTimeout(5000) { requests.receive() }.path!!.startsWith(
                         "/api/v1/sessions/machine/session%2Fencoded/items?"))
                     // Claude Code keeps its own id for the message: the transcript's copy is found by its words (#895).
@@ -110,12 +110,12 @@ class HttpMessageTransportTest {
                         responses.send(response)
                         assertEquals(expected, transport.send(message))
                         val sent = withTimeout(5000) { requests.receive() }
-                        assertEquals("/api/v1/sessions/machine/session%2Fencoded/messages", sent.path)
-                        assertEquals("Bearer test-token", sent.getHeader("Authorization"))
-                        assertEquals("stable-id", sent.getHeader("X-Jarvis-Op-Id"))
+                        assertEquals("/api/v1/sessions/machine/session%2Fencoded/messages", (sent.path).zhAny())
+                        assertEquals("Bearer test-token", (sent.getHeader("Authorization")).zhAny())
+                        assertEquals("stable-id", (sent.getHeader("X-Jarvis-Op-Id")).zhAny())
                         val body = JsonCodec.parseToJsonElement(sent.body.readUtf8()).jsonObject
-                        assertEquals("stable-id", body["client_msg_id"]?.jsonPrimitive?.content)
-                        assertEquals("draft", body["clear_draft"]?.jsonPrimitive?.content)
+                        assertEquals("stable-id", (body["client_msg_id"]?.jsonPrimitive?.content).zhAny())
+                        assertEquals("draft", (body["clear_draft"]?.jsonPrimitive?.content).zhAny())
                     }
                     responses.send(MockResponse().setResponseCode(401).setBody("""{"error":"expired","code":"invalid_token"}"""))
                     assertTrue(transport.send(message) is MessageTransportResult.HubError)

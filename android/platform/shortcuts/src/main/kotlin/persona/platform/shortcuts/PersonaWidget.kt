@@ -1,5 +1,6 @@
 package persona.platform.shortcuts
 
+import persona.core.designsystem.resolve
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -107,9 +108,9 @@ class PersonaWidget : GlanceAppWidget() {
                     Dot(look.phase(FleetSummary.phase(fleet)), look.dotSize)
                     Spacer(GlanceModifier.width(Tokens.Space.s))
                 }
-                Text(FleetText.headline(fleet), style = look.headline, maxLines = 1)
+                Text(FleetText.headline(fleet).resolve(context), style = look.headline, maxLines = 1)
             }
-            val rest = FleetText.rest(fleet)
+            val rest = FleetText.rest(fleet).resolve(context)
             if (rest.isNotEmpty()) Text(rest, style = look.caption, maxLines = 1)
             if (FleetSummary.isEmpty(fleet)) {
                 Text(context.getString(R.string.shortcuts_widget_nobody), style = look.caption, maxLines = 1)
@@ -120,7 +121,7 @@ class PersonaWidget : GlanceAppWidget() {
             Spacer(GlanceModifier.height(Tokens.Space.xs))
             shown.forEach { Item(context, look, it, assistant) }
             val hidden = FleetSummary.hidden(fleet, shown.size)
-            if (hidden > 0) Text(FleetText.more(hidden), style = look.micro, maxLines = 1)
+            if (hidden > 0) Text(FleetText.more(hidden).resolve(context), style = look.micro, maxLines = 1)
         }
     }
 
@@ -136,7 +137,7 @@ class PersonaWidget : GlanceAppWidget() {
             Column(GlanceModifier.defaultWeight()) {
                 Text(item.title, style = look.itemTitle, maxLines = 1)
                 // What it is doing, then which computer it runs on (「工作中 · MacBook · weather」).
-                Text(listOf(FleetText.line(item), item.place).filter { it.isNotEmpty() }.joinToString(" · "),
+                Text(listOf(FleetText.line(item).resolve(context), item.place).filter { it.isNotEmpty() }.joinToString(" · "),
                     style = look.micro, maxLines = 1)
             }
         }

@@ -1,5 +1,7 @@
 package persona.feature.chat
 
+import persona.core.designsystem.resolve
+import persona.core.designsystem.text
 import androidx.compose.ui.platform.LocalResources
 import android.content.res.Resources
 import androidx.compose.foundation.layout.*
@@ -23,7 +25,7 @@ internal fun approvalBlockedReason(res: Resources, session: Session?): String =
 
 /** What the read-only note says after the source's name: the source's reason, or that the session can only be read. */
 internal fun readOnlyNote(res: Resources, session: Session): String =
-    session.source?.readOnlyReason?.let { res.getString(R.string.chat_source_read_only_reason, it) } ?: READ_ONLY
+    session.source?.readOnlyReason?.let { res.getString(R.string.chat_source_read_only_reason, it.resolve(res)) } ?: READ_ONLY.resolve(res)
 
 /**
  * In place of what would be typed, for a session whose source only lets the phone read it (a Codex history thread, a
@@ -34,7 +36,7 @@ internal fun ChatSourceNote(session: Session, modifier: Modifier = Modifier) {
     val source = session.source
     Row(modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.xs),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-        source?.let { JTag(it.label) }
+        source?.let { JTag(it.label.text()) }
         Text(readOnlyNote(LocalResources.current, session), Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
     }

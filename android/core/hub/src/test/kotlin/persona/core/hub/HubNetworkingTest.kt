@@ -72,7 +72,7 @@ class HubNetworkingTest {
             }
             val endpoint = endpoint(server, "lan")
             HubHttpClient("test-hub", fingerprint(certificate), "test").use { pinned ->
-                assertEquals("test-hub", pinned.health(endpoint).hubId)
+                assertEquals("test-hub", (pinned.health(endpoint).hubId).zhAny())
             }
             val other = HeldCertificate.Builder().commonName("example.com").build()
             HubHttpClient("test-hub", fingerprint(other), "test").use { wrongPin ->
@@ -88,7 +88,7 @@ class HubNetworkingTest {
             val config = HubConnectionConfig("test-hub", fingerprint(certificate), UUID.randomUUID().toString(), listOf(endpoint), "test")
             OkHttpHubConnection(config, HubNetwork("first")).use { connection ->
                 val first = withTimeout(5000) { hellos.receive() }
-                assertEquals("android", first.getValue("platform").jsonPrimitive.content)
+                assertEquals("android", (first.getValue("platform").jsonPrimitive.content).zhAny())
                 assertEquals(setOf("endpoints", "ws_notify", "app_ping", "elicitation"),
                     first.getValue("features").jsonArray.map { it.jsonPrimitive.content }.toSet())
                 assertEquals(20, first.getValue("heartbeat").jsonObject.getValue("interval").jsonPrimitive.int)

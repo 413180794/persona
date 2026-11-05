@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import persona.core.designsystem.text
 import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
@@ -417,7 +418,7 @@ private fun LazyListScope.pairingProgress(progress: List<PairingProgress>, runni
         itemsIndexed(reported?.candidates.orEmpty()) { candidateIndex, candidate ->
             JGroupItem(GroupPosition.of(candidateIndex, reported?.candidates.orEmpty().size)) {
                 PairingDetail(candidate.kind, candidate.url)
-                SettingsCaption(candidate.result, Modifier.padding(horizontal = Tokens.Space.m).padding(bottom = Tokens.Space.m))
+                SettingsCaption(candidate.result.text(), Modifier.padding(horizontal = Tokens.Space.m).padding(bottom = Tokens.Space.m))
             }
         }
     }

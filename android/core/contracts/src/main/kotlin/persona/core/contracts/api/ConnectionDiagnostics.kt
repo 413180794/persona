@@ -1,12 +1,13 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.CoreText
 import kotlinx.coroutines.flow.StateFlow
 
 data class ConnectionCandidate(
-    val url: String, val kind: String, val result: String, val checkedAt: String? = null,
+    val url: String, val kind: String, val result: CoreText, val checkedAt: String? = null,
     val probeDurationMillis: Long? = null,
     val sampleCount: Int = 0,
-    val measurementNote: String = "未实测",
+    val measurementNote: CoreText = CoreText.of(CoreText.Key.NotMeasured),
 )
 data class DeviceConnectionSession(val connectedAt: String, val disconnectedAt: String? = null, val reason: String? = null)
 data class ConnectionDiagnostics(
@@ -21,7 +22,7 @@ data class ConnectionDiagnostics(
     val heartbeatSeconds: Int? = null,
     val pongTimeoutSeconds: Int? = null,
     val lastReceivedAt: String? = null,
-    val unmeasuredFields: Map<String, String> = emptyMap(),
+    val unmeasuredFields: Map<String, CoreText> = emptyMap(),
 )
 
 /** Live transport observations; null observations are reported in unmeasuredFields. */

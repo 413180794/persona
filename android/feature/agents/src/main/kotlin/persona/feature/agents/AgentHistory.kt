@@ -25,7 +25,7 @@ internal fun scopedAgentList(
         val id = "history/${project.first}/${project.second}"
         val ordered = members.sortedWith(compareByDescending<AgentSession> { it.updatedAt }.thenBy { it.id })
         val folded = id in settings.folded
-        AgentListGroup(id, project.second, ordered, if (folded) emptyList() else ordered, folded)
+        AgentListGroup(id, persona.core.contracts.CoreText.plain(project.second), ordered, if (folded) emptyList() else ordered, folded)
     }.sortedWith(compareByDescending<AgentListGroup> { it.rows.first().updatedAt }.thenBy { it.id })
     val running = if (preferences.range == AgentRange.All)
         buildAgentList(rows.filter { it.session.isLive }, machines, preferences.pins, preferences.mutes, settings, todos)

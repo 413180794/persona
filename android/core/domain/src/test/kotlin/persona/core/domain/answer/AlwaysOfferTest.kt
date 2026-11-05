@@ -1,5 +1,7 @@
 package persona.core.domain.answer
 
+import persona.core.domain.zhAny
+
 import persona.core.contracts.Interaction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,7 +15,7 @@ class AlwaysOfferTest {
     @Test fun claudesCardsOfferItUnderTheirOwnName() {
         assertTrue(card.offersAlways)
         assertTrue(card.copy(agent = "claude").offersAlways)
-        assertEquals("本会话总是允许", card.alwaysActionLabel)
+        assertEquals("本会话总是允许", (card.alwaysActionLabel).zhAny())
     }
 
     @Test fun otherAgentsNeedTheirTuiToNameWhatItAllows() {
@@ -22,7 +24,7 @@ class AlwaysOfferTest {
         assertFalse(card.copy(agent = "dsh", agentLabelHint = "DSH").offersAlways)
         val labelled = card.copy(agent = "codex", alwaysLabel = "以后不再问以 curl -s 开头的命令")
         assertTrue(labelled.offersAlways)
-        assertEquals("总是同意", labelled.alwaysActionLabel)
+        assertEquals("总是同意", (labelled.alwaysActionLabel).zhAny())
         val always = ApprovalPolicy.actions(AnswerEntry.Conversation, "permission", false).single { it.id == ApprovalAction.Always }
         assertTrue(AnswerRequirement.AlwaysOffered in always.requirements)
         assertFalse(AnswerBuilder.build(card.copy(agent = "codex"), AnswerAction.Always).allowed)

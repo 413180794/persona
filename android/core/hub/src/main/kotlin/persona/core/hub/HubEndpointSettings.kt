@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.CoreText.Key
+import persona.core.contracts.CoreText
 import persona.core.contracts.Endpoint
 import persona.core.contracts.api.ConnectionEndpoints
 import persona.core.contracts.api.ConnectionEndpointsState
@@ -163,7 +165,7 @@ class HubEndpointSettings(
     override suspend fun test(url: String): EndpointTestResult {
         val key = endpointKey(url)
         val endpoint = connection.candidates().firstOrNull { endpointKey(it.url) == key }
-            ?: throw EndpointEditException("列表里没有这个地址")
+            ?: throw EndpointEditException(CoreText.of(Key.EndpointNotListed))
         running.update { it + (key to (it[key] ?: 0) + 1) }
         try {
             val started = monotonicMillis()
@@ -190,7 +192,7 @@ class HubEndpointSettings(
     /** Validates [change] against the current choices first (a no-op saves nothing), then applies the saved value. */
     private suspend fun edit(change: (EndpointOverrides) -> EndpointOverrides): Unit = edits.withLock {
         if (change(stored.value) == stored.value) return@withLock
-        val saved = try { save(change) } catch (failure: IOException) { throw EndpointEditException("没有保存成功，请重试") }
+        val saved = try { save(change) } catch (failure: IOException) { throw EndpointEditException(CoreText.of(Key.EndpointSaveFailed)) }
         connection.updateOverrides(saved)
     }
 
@@ -201,17 +203,17 @@ class HubEndpointSettings(
         }
 
     private fun requireEntry(current: EndpointOverrides, key: String): Endpoint =
-        connection.candidates(current).firstOrNull { endpointKey(it.url) == key } ?: throw EndpointEditException("列表里没有这个地址")
+        connection.candidates(current).firstOrNull { endpointKey(it.url) == key } ?: throw EndpointEditException(CoreText.of(Key.EndpointNotListed))
 
     private fun requireManual(current: EndpointOverrides, key: String) {
         requireEntry(current, key)
-        if (current.manual.none { endpointKey(it) == key }) throw EndpointEditException("只能修改手动添加的地址")
+        if (current.manual.none { endpointKey(it) == key }) throw EndpointEditException(CoreText.of(Key.EndpointOnlyManual))
     }
 
     /** Refuses a change that would leave no enabled candidate when [key] was one. */
     private fun keepOneEnabled(current: EndpointOverrides, next: EndpointOverrides, key: String) {
         fun enabled(overrides: EndpointOverrides) = connection.candidates(overrides).map { endpointKey(it.url) }
             .filter { it !in overrides.disabled }
-        if (key in enabled(current) && enabled(next).isEmpty()) throw EndpointEditException("至少要留一条启用的地址")
+        if (key in enabled(current) && enabled(next).isEmpty()) throw EndpointEditException(CoreText.of(Key.EndpointKeepOne))
     }
 }

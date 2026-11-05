@@ -9,8 +9,8 @@ class HubUpdateContractTest {
         val event = ServerEvent.decode("""{"type":"hub_update","update":{"version":"1.42.0","build":420,"channel":"release",
             "can_update":true,"state":"downloading","progress":"12/40 MB","busy":[],"auto":false,"auto_notice":true,"confirmed":true}}""")
         val update = (event as HubUpdateEvent).update
-        assertEquals("downloading", update.state)
-        assertEquals("12/40 MB", update.progress)
+        assertEquals("downloading", (update.state).zhAny())
+        assertEquals("12/40 MB", (update.progress).zhAny())
         assertTrue(update.working && update.autoNotice)
     }
 
@@ -26,7 +26,7 @@ class HubUpdateContractTest {
     @Test fun helloDecodesUpdateCompatFields() {
         val event = ServerEvent.decode("""{"type":"hello","features":["x"],"channel":"release","build":202611021500,"protocol":1,"min_app_build":95}""")
         val hello = event as Hello
-        assertEquals("release", hello.channel)
+        assertEquals("release", (hello.channel).zhAny())
         assertEquals(202611021500L, hello.build)
         assertEquals(1, hello.protocol)
         assertEquals(95, hello.minAppBuild)

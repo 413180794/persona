@@ -32,18 +32,18 @@ class HubPairingClientTest {
                         MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
                     }
                     "/api/v1/auth/tokens" -> {
-                        assertEquals("Bearer pairing-code", request.getHeader("Authorization"))
+                        assertEquals("Bearer pairing-code", (request.getHeader("Authorization")).zhAny())
                         assertTrue(request.body.readUtf8().contains("phone"))
                         MockResponse().setBody("""{"id":"device-id","token":"device-token"}""")
                     }
                     "/api/v1/machines" -> {
-                        assertEquals("Bearer device-token", request.getHeader("Authorization"))
+                        assertEquals("Bearer device-token", (request.getHeader("Authorization")).zhAny())
                         MockResponse().setBody("""{"machines":[]}""")
                     }
                     "/api/v1/app/android/latest" -> MockResponse().setBody(
                         """{"version_code":2,"version_name":"test","sha256":"$checksum"}""")
                     "/api/v1/app/android/apk" -> {
-                        assertEquals("Bearer device-token", request.getHeader("Authorization"))
+                        assertEquals("Bearer device-token", (request.getHeader("Authorization")).zhAny())
                         MockResponse().setBody(String(apk))
                     }
                     else -> MockResponse().setResponseCode(404)
@@ -53,11 +53,11 @@ class HubPairingClientTest {
             val stages = mutableListOf<PairingStage>()
             HubPairingClient("test-hub", fingerprint, listOf(address), "test").use { client ->
                 val paired = client.pair("pairing-code", "Test device") { stages += it.stage }
-                assertEquals("device-token", paired.token)
-                assertEquals("device-id", paired.deviceId)
-                assertEquals("test-hub", paired.hubId)
+                assertEquals("device-token", (paired.token).zhAny())
+                assertEquals("device-id", (paired.deviceId).zhAny())
+                assertEquals("test-hub", (paired.hubId).zhAny())
                 assertTrue(stages.indexOf(PairingStage.VerifyIdentity) < stages.indexOf(PairingStage.ExchangeCredentials))
-                assertTrue(client.diagnostics(paired.token, paired.deviceId).candidates.any { it.result == "已通过身份校验" })
+                assertTrue(client.diagnostics(paired.token, paired.deviceId).candidates.any { it.result.zh() == "已通过身份校验" })
                 val update = requireNotNull(client.checkUpdate(paired.token))
                 val destination = ByteArrayOutputStream()
                 client.download(paired.token, update, destination)
@@ -94,7 +94,7 @@ class HubPairingClientTest {
             }
             HubPairingClient(null, null, listOf(server.url("/").toString()), "test").use { client ->
                 val paired = client.pair("legacy-token", "Test device") {}
-                assertEquals("legacy-token", paired.token)
+                assertEquals("legacy-token", (paired.token).zhAny())
                 assertTrue(paired.hubId.startsWith("legacy-"))
                 exchangeStatus = 401
                 try { client.pair("expired-code", "Test device") {}; fail("Expired codes must fail") }

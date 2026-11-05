@@ -28,14 +28,14 @@ class RealtimeContractTest {
 
     @Test fun decodesRealtimeSamplesAndSharedWirePayloads() {
         val events = sample("realtime")
-        assertEquals("示例回复", (events[0] as DeltaEvent).text)
+        assertEquals("示例回复", ((events[0] as DeltaEvent).text).zhAny())
         assertFalse((events[0] as DeltaEvent).turnFinished)
         assertTrue((events[1] as DeltaEvent).turnFinished)
-        assertEquals("working", (events[2] as ScreenEvent).status)
+        assertEquals("working", ((events[2] as ScreenEvent).status).zhAny())
         assertEquals(JsonPrimitive(true), (events[3] as ToolCallEvent).args.jsonObject
             .getValue("custom_Key").jsonObject["keep_snake_case"])
-        assertEquals("Stop", (events[4] as HookEvent).event)
-        assertEquals(listOf("feed_example"), (events[5] as LarkEvent).feedIds)
+        assertEquals("Stop", ((events[4] as HookEvent).event).zhAny())
+        assertEquals(listOf("feed_example"), ((events[5] as LarkEvent).feedIds).zhAny())
         assertTrue(events[6] is InboxEvent)
         assertEquals(SessionKey("m1", "s1"), (events[7] as ErrorEvent).sessionKey)
         assertEquals(DeliveryOutcome.Unknown, (events[7] as ErrorEvent).body.deliveryOutcome)
@@ -44,8 +44,8 @@ class RealtimeContractTest {
         val terminal = sample("terminal")
         assertArrayEquals(byteArrayOf(27, 91, 50, 74, 79, 75), (terminal[0] as TerminalEvent).frameBytes)
         assertFalse((terminal[0] as TerminalEvent).streamEnded)
-        assertEquals("active", (terminal[1] as TerminalControlEvent).state)
-        assertEquals("taken", (terminal[2] as TerminalControlEvent).state)
+        assertEquals("active", ((terminal[1] as TerminalControlEvent).state).zhAny())
+        assertEquals("taken", ((terminal[2] as TerminalControlEvent).state).zhAny())
         assertTrue((terminal[3] as TerminalEvent).streamEnded)
         assertTrue((terminal[3] as TerminalEvent).unsupported)
 
@@ -67,11 +67,11 @@ class RealtimeContractTest {
         assertNull(ServerEvent.decode("""{"type":"delta","text":"missing identity"}"""))
         assertNull(ServerEvent.decode("""{"type":"tool_call","call_id":false,"name":"example"}"""))
         assertNull(ServerEvent.decode("""{"type":"terminal","machine_id":"m1","session_id":"s1","epoch":"e","seq":1,"data":"!"}"""))
-        assertEquals("unknown", (ServerEvent.decode("""{"type":"terminal_control","machine_id":"m1","session_id":"s1","state":"future"}""") as TerminalControlEvent).state)
+        assertEquals("unknown", ((ServerEvent.decode("""{"type":"terminal_control","machine_id":"m1","session_id":"s1","state":"future"}""") as TerminalControlEvent).state).zhAny())
         val screen = ServerEvent.decode("""{"type":"screen","machine_id":"m1","session_id":"s1","status":"future","ts":false,"text":"保留"}""") as ScreenEvent
-        assertEquals("unknown", screen.status)
+        assertEquals("unknown", (screen.status).zhAny())
         assertNull(screen.ts)
-        assertEquals("保留", screen.text)
+        assertEquals("保留", (screen.text).zhAny())
     }
 
     @Test fun mapsLifecycleAndUnknownResultsWithoutGuessingFromOfflineOrTimestamps() {

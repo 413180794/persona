@@ -138,13 +138,13 @@ class HubNoticeRowTest {
 
     @Test
     fun textMappingMatchesCopy() {
-        assertEquals("App 版本太旧，配不上这个 hub：请到 TestFlight 更新", HubNotice.text(HubNotice.AppTooOld))
-        assertEquals("hub 版本太旧，部分功能用不了", HubNotice.text(HubNotice.HubTooOld))
-        assertEquals("hub 正在更新：正在下载", HubNotice.text(HubNotice.Updating("正在下载")))
-        assertEquals("起不来", HubNotice.text(HubNotice.RolledBack("起不来", 123)))
-        assertEquals("hub 会在空闲时自动更新", HubNotice.text(HubNotice.AutoOn))
-        assertEquals("hub 有新版本 1.5.0", HubNotice.text(HubNotice.Available("1.5.0", 150)))
-        assertEquals("hub 有新镜像 1.5.0", HubNotice.text(HubNotice.NewImage("1.5.0")))
+        assertEquals("App 版本太旧，配不上这个 hub：请到 TestFlight 更新", HubNotice.text(HubNotice.AppTooOld).shown)
+        assertEquals("hub 版本太旧，部分功能用不了", HubNotice.text(HubNotice.HubTooOld).shown)
+        assertEquals("hub 正在更新：正在下载", HubNotice.text(HubNotice.Updating(persona.core.contracts.CoreText.of(persona.core.contracts.CoreText.Key.HubDownloading))).shown)
+        assertEquals("起不来", HubNotice.text(HubNotice.RolledBack("起不来", 123)).shown)
+        assertEquals("hub 会在空闲时自动更新", HubNotice.text(HubNotice.AutoOn).shown)
+        assertEquals("hub 有新版本 1.5.0", HubNotice.text(HubNotice.Available("1.5.0", 150)).shown)
+        assertEquals("hub 有新镜像 1.5.0", HubNotice.text(HubNotice.NewImage("1.5.0")).shown)
     }
 
     @Test fun theMostPressingComesFirstAndAClosedOneStaysClosed() {
@@ -153,7 +153,7 @@ class HubNoticeRowTest {
         val available = HubNotice.of(status.copy(autoNotice = false))
         assertEquals(HubNotice.Available("1.1.0", 110), available)
         assertNull(HubNotice.of(status.copy(autoNotice = false), dismissed = setOf(available!!.dismissKey!!)))
-        assertEquals(HubNotice.Updating("正在下载"), HubNotice.of(status.copy(state = "downloading")))
+        assertEquals(HubNotice.Updating(persona.core.contracts.CoreText.of(persona.core.contracts.CoreText.Key.HubDownloading)), HubNotice.of(status.copy(state = "downloading")))
     }
 
     @Test fun anAppTooOldPreemptsTheRest() {
@@ -193,7 +193,7 @@ class HubNoticeRowTest {
 
             updates.eventFlow.emit(HubUpdateStatus(version = "1.0.0", build = 100, state = "downloading"))
             runCurrent()
-            assertEquals(HubNotice.Updating("正在下载"), model.hubNotice.value)
+            assertEquals(HubNotice.Updating(persona.core.contracts.CoreText.of(persona.core.contracts.CoreText.Key.HubDownloading)), model.hubNotice.value)
         }
     }
 
@@ -209,13 +209,13 @@ class HubNoticeRowTest {
     @Test
     fun onlineWithoutHelloDoesNotInventALegacyHub() = runTest {
         withModel(HubUpdateStatus(state = "downloading"), deliverHello = false) { model, _, connection ->
-            assertEquals(HubNotice.Updating("正在下载"), model.hubNotice.value)
+            assertEquals(HubNotice.Updating(persona.core.contracts.CoreText.of(persona.core.contracts.CoreText.Key.HubDownloading)), model.hubNotice.value)
             connection.eventFlow.emit(Hello(serverVersion = "legacy", protocol = 0))
             runCurrent()
             assertEquals(HubNotice.HubTooOld, model.hubNotice.value)
             connection.eventFlow.emit(Hello(serverVersion = "1.0.0", protocol = 1))
             runCurrent()
-            assertEquals(HubNotice.Updating("正在下载"), model.hubNotice.value)
+            assertEquals(HubNotice.Updating(persona.core.contracts.CoreText.of(persona.core.contracts.CoreText.Key.HubDownloading)), model.hubNotice.value)
         }
     }
 

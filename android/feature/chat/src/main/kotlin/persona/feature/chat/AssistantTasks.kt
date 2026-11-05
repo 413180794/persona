@@ -1,5 +1,6 @@
 package persona.feature.chat
 
+import persona.core.designsystem.text
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -145,7 +146,7 @@ internal fun openTask(host: AssistantTaskHost, todo: Todo) {
 internal fun AssistantExtraLine(payload: Any, host: AssistantTaskHost?) {
     if (host == null) return
     when (payload) {
-        is AssistantExtra.Day -> Text(AssistantLines.dayLabel(payload.date), Modifier.fillMaxWidth().padding(vertical = Tokens.Space.xs),
+        is AssistantExtra.Day -> Text(AssistantLines.dayLabel(payload.date).text(), Modifier.fillMaxWidth().padding(vertical = Tokens.Space.xs),
             style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         is AssistantExtra.Quick -> QuickResultCard(payload.result)
         is AssistantExtra.Feed -> FeedLine(payload.item, host)
@@ -322,7 +323,7 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
                     color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (state != TaskState.Done) Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(state.label, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text)
+                Text(state.label.text(), Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text)
                 if (state == TaskState.Failed) {
                     // Nothing to say a word to: the ways out are on the card — start it again as it was, or let it go.
                     JButton(stringResource(R.string.chat_tasks_retry), { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
@@ -350,7 +351,7 @@ private fun TaskLine(todo: Todo, host: AssistantTaskHost) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         TaskMark(state)
         Text(todo.title, Modifier.weight(1f), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(state.label, style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text, maxLines = 1)
+        Text(state.label.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text, maxLines = 1)
     }
 }
 
@@ -554,7 +555,7 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
                     TaskMark(state)
                     Text(todo.title, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 1)
                     val lead = host.tasks.lead(todo, host.sessions)
-                    Text(TaskNow.of(lead, lead?.agentState == AgentState.Working)?.text ?: state.label, Modifier.weight(1f), style = PersonaTheme.type.caption,
+                    Text(TaskNow.of(lead, lead?.agentState == AgentState.Working)?.text ?: state.label.text(), Modifier.weight(1f), style = PersonaTheme.type.caption,
                         color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }

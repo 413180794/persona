@@ -37,8 +37,11 @@ data class AgentRepo(val id: String, val machineId: String, val name: String, va
     val flat: Boolean get() = worktrees.size == 1 && worktrees[0].main
 }
 
-/** What a repository is called when its sessions have no cwd (iOS `RepoTree.unnamed`). */
-const val UnnamedRepo = "其他"
+/**
+ * What a repository is called when its sessions have no cwd (iOS `RepoTree.unnamed`): sorts after every name; the
+ * heading says 「其他」 (repoTitle).
+ */
+const val UnnamedRepo = "\uFFFF"
 
 private val Chunks = Regex("\\d+|\\D+")
 

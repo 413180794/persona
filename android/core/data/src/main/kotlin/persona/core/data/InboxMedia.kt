@@ -17,16 +17,16 @@ import java.io.FileNotFoundException
 
 class InboxFileProvider : FileProvider() {
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
-        if (mode != "r") throw FileNotFoundException("只允许读取缓存文件")
+        if (mode != "r") throw FileNotFoundException("read-only cache")
         val context = requireNotNull(context)
         val segments = uri.pathSegments
         val directory = when (segments.firstOrNull()) {
             "inbox_files" -> File(context.cacheDir, "inbox-downloads")
             "scoped_inbox_files" -> File(context.cacheDir, "hub-data")
-            else -> throw FileNotFoundException("未知的媒体目录")
+            else -> throw FileNotFoundException("unknown media directory")
         }.canonicalFile
         val file = File(directory, segments.drop(1).joinToString("/")).canonicalFile
-        if (!file.toPath().startsWith(directory.toPath()) || file == directory) throw FileNotFoundException("无效的媒体路径")
+        if (!file.toPath().startsWith(directory.toPath()) || file == directory) throw FileNotFoundException("invalid media path")
         return synchronized(CacheFiles.lock) {
             val lease = CacheFiles.retain(file)
             try {

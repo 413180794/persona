@@ -29,11 +29,11 @@ class InjectedMessagesTest {
 
     @Test fun hubMarkFirst() {
         val mark = Injected("task_notice", "done", "x", todoId = "td_1", line = "任务「x」做完了")
-        assertEquals("td_1", injectedOf(Item("1", role = "user", kind = "text", text = notice, injected = mark))?.todoId)
+        assertEquals("td_1", (injectedOf(Item("1", role = "user", kind = "text", text = notice, injected = mark))?.todoId).zhAny())
     }
 
     @Test fun olderHubReadOffTheText() {
-        assertEquals("任务「跑测试」做完了", injectedOf(Item("1", role = "user", kind = "text", text = notice))?.line)
+        assertEquals("任务「跑测试」做完了", (injectedOf(Item("1", role = "user", kind = "text", text = notice))?.line).zhAny())
     }
 
     @Test fun sentFromAnAppStaysTheUsers() {
@@ -44,7 +44,7 @@ class InjectedMessagesTest {
     @Test fun decodesTheWireField() {
         val item = JsonCodec.decodeFromString(Item.serializer(),
             """{"id":"1","role":"user","kind":"text","text":"x","injected":{"kind":"followup","state":"daily","title":"早报","line":"定时任务「早报」开始运行"}}""")
-        assertEquals("daily", item.injected?.state)
+        assertEquals("daily", (item.injected?.state).zhAny())
     }
 }
 
@@ -53,11 +53,11 @@ class InjectedTaskTest {
         persona.core.contracts.Todo(id = id, title = "跑测试", origin = origin, createdAt = at)
     private val n = Injected("task_notice", "done", "跑测试", line = "任务「跑测试」做完了")
 
-    @Test fun hubIdFirst() = assertEquals("td_9", taskOfInjected(n.copy(todoId = "td_9"), emptyList(), "main"))
+    @Test fun hubIdFirst() = assertEquals("td_9", (taskOfInjected(n.copy(todoId = "td_9"), emptyList(), "main")).zhAny())
 
     @Test fun newestOfThatTitleFromThisConversation() {
         val list = listOf(todo("a", "main", "2026-11-01T00:00:00Z"), todo("b", "main", "2026-11-04T00:00:00Z"), todo("c", "other", "2026-11-05T00:00:00Z"))
-        assertEquals("b", taskOfInjected(n, list, "main"))
+        assertEquals("b", (taskOfInjected(n, list, "main")).zhAny())
         assertNull(taskOfInjected(n, list, "none"))
     }
 }

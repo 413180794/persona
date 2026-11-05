@@ -1,5 +1,6 @@
 package persona.platform.shortcuts
 
+import persona.core.designsystem.resolve
 import android.content.res.Resources
 import persona.core.contracts.FleetState
 import persona.core.contracts.Interaction
@@ -117,7 +118,7 @@ object ShortcutText {
     fun tileSubtitle(res: Resources, paired: Boolean, fleet: FleetState): String = when {
         !paired -> res.getString(R.string.shortcuts_not_paired_short)
         FleetSummary.isEmpty(fleet) -> res.getString(R.string.shortcuts_all_done)
-        else -> FleetText.headline(fleet)
+        else -> FleetText.headline(fleet).resolve(res)
     }
 }
 
