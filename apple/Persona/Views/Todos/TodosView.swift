@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-public struct TodoDetailRoute: Hashable, Sendable {
+public struct TodoDetailRoute: Hashable, Sendable, Identifiable {
     public var id: String
     public init(id: String) { self.id = id }
 }

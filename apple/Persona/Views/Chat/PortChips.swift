@@ -16,7 +16,9 @@ struct PortChips: View {
 
     var body: some View {
         if let scope, let openPort {
-            let links = PortLinks.find(in: text, hostnames: model.hostnames(of: scope.machine))
+            let names = model.hostnames(of: scope.machine)
+            // Not the hub's own pages (#2696): those open natively, a hub on the agent's machine is no dev server.
+            let links = PortLinks.find(in: text, hostnames: names).filter { !model.isHubPage($0, hostnames: names) }
             if !links.isEmpty {
                 PortBadgeRow(links: links, machine: scope.machine, open: openPort)
             }

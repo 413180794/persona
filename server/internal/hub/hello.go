@@ -2,6 +2,7 @@ package hub
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -27,7 +28,7 @@ func (h *Hub) healthWithSource(w http.ResponseWriter, r *http.Request, sourceOf 
 // different type (its LiveConnection Envelope), or the whole hello is dropped there (hub-changes.md 1.2).
 func (h *Hub) hello() map[string]any {
 	port, fp := h.tlsPin()
-	return map[string]any{
+	m := map[string]any{
 		"type": "hello", "server_version": h.version, "client_id": randomHex(6), "features": h.features(),
 		"channel": h.build.Channel, "build": h.build.Number, "protocol": proto.Protocol, "min_app_build": proto.MinAppBuild,
 		"hub_id": h.hubID(), "hub_name": h.hubName(), "endpoints": h.endpointList(), "tls_port": port, "fp": fp,
@@ -36,4 +37,10 @@ func (h *Hub) hello() map[string]any {
 		// the user's language (feature locale, locale.go)
 		"locale": string(h.userLang()),
 	}
+	// The address the hub's own links use (hub.json public_url; the assistant's /s/…, /j/…, /todos links, #2194): the
+	// apps tell those links from other sites by it even when they reach the hub at another address (#2696). Only when set.
+	if u := strings.TrimRight(strings.TrimSpace(h.cfg.PublicURL), "/"); u != "" {
+		m["public_url"] = u
+	}
+	return m
 }

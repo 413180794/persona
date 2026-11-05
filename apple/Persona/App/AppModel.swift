@@ -130,6 +130,8 @@ final class AppModel {
     /// "完成" notification. From the background the session list is stale (the agent still reads as working until the
     /// hub's next list), so the chat cannot tell by itself that this turn finished unseen (2026-10-31).
     var latestAnswerFor: SessionKey?
+    /// A hub link's message to land on once its chat shows (HubPageRouting, #2696); taken by that chat.
+    var messageJump: MessageJump?
     var pendingConfirmation: PhoneConfirmation?
     /// Remembered across launches together with the open dev chat (restoreChat), so a relaunch lands where you were.
     var selectedTab: AppTab = .assistant {

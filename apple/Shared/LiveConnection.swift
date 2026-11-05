@@ -104,6 +104,7 @@ nonisolated enum ServerEvent: Sendable {
         var build: Int64?
         var protocolVersion: Int?
         var minAppBuild: Int?
+        var publicURL: String?
         var update: HubUpdateStatus?
         var epoch: String?
         var seq: Int?
@@ -133,7 +134,7 @@ nonisolated enum ServerEvent: Sendable {
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, conversation, plan
             case plugin, badge, invalidate
             case extensionID = "extension"
-            case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build"
+            case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build", publicURL = "public_url"
             case settingsChanged = "settings_changed", olAccount = "ol_account"
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
@@ -156,7 +157,7 @@ nonisolated enum ServerEvent: Sendable {
         switch e.type {
         case "hello": return .hello(HubHello(features: e.features ?? [], hubID: e.hubID, hubName: e.hubName, mesh: e.mesh?.hubs,
                                              channel: e.channel, build: e.build, protocolVersion: e.protocolVersion,
-                                             minAppBuild: e.minAppBuild))
+                                             minAppBuild: e.minAppBuild, publicURL: e.publicURL.flatMap { URL(string: $0) }))
         case "hub_update": return e.update.map { .hubUpdate($0) }
         case "machines": return e.machines.map { .machines($0) }
         case "sessions":

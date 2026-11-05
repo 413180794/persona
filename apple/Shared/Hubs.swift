@@ -58,6 +58,8 @@ nonisolated struct HubHello: Hashable, Sendable {
     var build: Int64?
     var protocolVersion: Int?
     var minAppBuild: Int?
+    /// The address the hub's own links use (hub.json `public_url`, #2696); nil when not set or from an older hub.
+    var publicURL: URL?
 }
 
 /// One hub this device paired with: its address, this device's credential there, and what the app learned about it.

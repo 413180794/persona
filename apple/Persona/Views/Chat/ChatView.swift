@@ -44,6 +44,8 @@ struct ChatView: View {
     #endif
     @State private var showInfo = false
     @State private var showTodoDetail = false
+    /// A task a hub link in this chat opened (`/todos?id=…`, #2696): its detail rises like a link.
+    @State private var linkedTodo: TodoDetailRoute?
     @State private var showLink = false
     /// The Mac's chat column has room for its title in the title bar's row (`macTitleRow`).
     @State private var macWide = true
@@ -88,7 +90,7 @@ struct ChatView: View {
     @State private var appearCount = 0
     #endif
     /// Where to land on entry, once the lines are there: the start of the latest answer (finished, unread) or where
-    /// you left off (finished, read).
+    /// you left off (finished, read), or the message a hub link named (`?at=`, #2696).
     @State private var entry: Entry?
     /// Lines on screen (for remembering where you were).
     /// Bookkeeping written while scrolling (visible rows, finger down) and the cached lines: kept out of SwiftUI's
@@ -103,7 +105,7 @@ struct ChatView: View {
     /// The calls of a run of chips folding away before it closes (the rest of its work line stays).
     @State private var concealingCalls: Set<String> = []
 
-    private enum Entry: Equatable { case latestAnswer, line(String) }
+    private enum Entry: Equatable { case latestAnswer, line(String), message(String) }
     /// The line being landed on, measured while landing (only that one row watches its frame).
     @State private var landing: String?
 
@@ -492,6 +494,14 @@ struct ChatView: View {
             }
         }
         #endif
+        .sheet(item: $linkedTodo) { r in
+            NavigationStack {
+                TodoDetailView(todoID: r.id).macSheetDone { linkedTodo = nil }
+            }
+            #if os(macOS)
+            .macSheet()
+            #endif
+        }
         .sheet(isPresented: $showTodoDetail) {
             if let s = session, let todoID = s.todo?.id,
                 TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
@@ -542,6 +552,11 @@ struct ChatView: View {
         .onChange(of: model.latestAnswerFor) { _, k in
             guard style == .dev, k == key, entered, takeLatestAnswer() else { return }
             entry = .latestAnswer
+            landEntry(currentLines())
+        }
+        // A hub link to a message of this chat, while it is open (#2696).
+        .onChange(of: model.messageJump) { _, _ in
+            guard entered, takeMessageJump() else { return }
             landEntry(currentLines())
         }
         // Going to the background is the last chance before iOS may end the app: a cold relaunch (the dev chat is
@@ -751,6 +766,41 @@ struct ChatView: View {
 
     /// Opens a port of this conversation's machine: the phone listens for it and the sheet loads it from there; a
     /// port nothing listens on any more says so (its badge turns gray).
+    /// A link to a page of a paired hub the app has itself (HubPageLink, #2696: the assistant's links to an agent, a
+    /// conversation, a task, maybe one of its messages) opens that page here, not the web page. False: not one, or
+    /// one the app cannot place (a conversation of a group whose assistant it does not know, another hub's task);
+    /// the link opens as before.
+    private func openHubPage(_ url: URL) -> Bool {
+        guard let (group, page) = model.hubPage(url, preferring: key.group) else { return false }
+        let target: SessionKey
+        let item: String?
+        switch page {
+        case .todo(let id):
+            guard TodosLogic.isOnTodosHub(sessionGroup: group, hubGroup: model.hub?.group) else { return false }
+            Haptics.tap()
+            linkedTodo = TodoDetailRoute(id: id)
+            return true
+        case .agent(let machine, let session, let at):
+            target = model.linkedSession(group, machine: machine, session: session)
+            item = at
+        case .conversation(let id, let at):
+            guard let k = model.linkedConversation(group, id: id) else { return false }
+            target = k
+            item = at
+        }
+        Haptics.tap()
+        if target == key || target == shownKey { // this chat: only to the message
+            if let item {
+                entry = .message(item)
+                scratch.entryPages = 0
+                landEntry(currentLines())
+            }
+            return true
+        }
+        model.openLinked(target, item: item)
+        return true
+    }
+
     private func openPort(_ l: PortLink) {
         let machine = key.machineRef
         Task {
@@ -772,7 +822,9 @@ struct ChatView: View {
                 file = FileRef(group: key.group, machineID: key.machineID, path: path, cwd: session?.cwd, line: line)
             },
             // A link to this machine's localhost is one of its ports, opened through the hub (docs/ports.md).
+            // The hub's own pages first: a hub on the agent's machine (or the phone's localhost, a mock) would read as a port.
             openLink: { [model, key] url in
+                if openHubPage(url) { return }
                 if let l = PortLinks.link(url, hostnames: model.hostnames(of: key.machineRef)) { openPort(l) } else { link = LinkTarget(url: url) }
             },
             openPort: { openPort($0) },
@@ -1037,6 +1089,15 @@ struct ChatView: View {
         case .latestAnswer:
             // The line right after the last input: the start of what the agent did and said for it.
             if let i = lines.lastIndex(where: \.isInput), i + 1 < lines.count { id = lines[i + 1].id }
+        case .message(let item):
+            // A hub link's message: brought to the middle and lit up, as a quote's is; further up than what is
+            // loaded, older pages the same way as for a saved place; not found, the chat stays at the newest.
+            if jumpToQuoted(ContextRef(kind: "quote", title: "", url: "", text: "", msg: item)) {
+                entry = nil
+            } else if store.backlogBuilt {
+                if store.hasMore, scratch.entryPages < Self.entryPageLimit { searchOlderForEntry() } else { entry = nil }
+            }
+            return
         case .line(let saved):
             if lines.contains(where: { $0.id == saved }) {
                 id = saved
@@ -2435,6 +2496,15 @@ struct ChatView: View {
         return (place.isEmpty ? title : place) + " · " + pane.title
     }
 
+    /// A hub link asked for one of this chat's messages (AppModel.messageJump): the entry target from now; taken once.
+    private func takeMessageJump() -> Bool {
+        guard let j = model.messageJump, j.key == key else { return false }
+        model.messageJump = nil
+        entry = .message(j.item)
+        scratch.entryPages = 0
+        return true
+    }
+
     /// A "完成" notification for this chat asked for its latest answer (AppModel.latestAnswerFor); taken once.
     private func takeLatestAnswer() -> Bool {
         guard model.latestAnswerFor == key else { return false }
@@ -2452,7 +2522,9 @@ struct ChatView: View {
             bindMenu()
             if !entered { // only on entry: coming back from a full-screen cover must not move what you were reading
                 entered = true
-                if style == .dev, session?.state == .unread || takeLatestAnswer() || Self.debugAsUnread {
+                if takeMessageJump() {
+                    // opened from a hub link to one of its messages (#2696): that message, not the newest
+                } else if style == .dev, session?.state == .unread || takeLatestAnswer() || Self.debugAsUnread {
                     entry = .latestAnswer // finished, not seen (or opened from its notification): the latest answer from its start
                 } else if style == .dev, let saved = UserDefaults.standard.string(forKey: readKey) {
                     entry = .line(saved) // where you left off
@@ -2770,6 +2842,7 @@ struct ChatView: View {
         key = next
         entry = nil // a saved place not reached in the last chat is not looked for in this one
         scratch.entryPages = 0
+        _ = takeMessageJump() // switched to by a hub link to one of its messages
         userScrolled = false
         settled = false
         setFollow { $0.follow() }

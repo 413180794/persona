@@ -67,9 +67,20 @@ func TestHelloCompatibility(t *testing.T) {
 	if hello["hub_id"] != h.hubID() || hello["tls_port"] != 19443 || hello["fp"] != "test-pin" || len(hello["endpoints"].([]Endpoint)) != 1 {
 		t.Fatal("missing public connection metadata")
 	}
+	if hello["public_url"] != "http://example.com:18660" {
+		t.Fatalf("public_url = %v", hello["public_url"])
+	}
+	h.cfg.PublicURL = " https://hub.example.com:18660/ "
+	if got := h.hello()["public_url"]; got != "https://hub.example.com:18660" {
+		t.Fatalf("public_url = %v", got)
+	}
+	h.cfg.PublicURL = ""
+	if _, ok := h.hello()["public_url"]; ok {
+		t.Fatal("public_url without one configured")
+	}
 	// The existing iOS Envelope must not see a new value under an already typed key.
 	known := strings.Fields("type machine_id session_id machines sessions items backlog has_more more_after history from_seq to_seq text status interaction id call_id name args event message last_assistant_message error revs feed_ids fleet features epoch seq full cols rows data unsupported state")
-	for _, key := range []string{"hub_id", "endpoints", "tls_port", "fp"} {
+	for _, key := range []string{"hub_id", "endpoints", "tls_port", "fp", "public_url"} {
 		if slices.Contains(known, key) {
 			t.Fatalf("new hello field collides with iOS Envelope: %s", key)
 		}

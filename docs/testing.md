@@ -145,7 +145,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 这一轮看过的图片（网页 #1540）：mock 加 `MOCK_TURN_IMAGES_WEB=1`：「检查 PR #42」最后一轮折起来的工作里有 9 张（Read、截图、网页截图、MCP、Codex view_image），「整理发布说明」最后一轮 1 张（卡片），widget 对话正在工作的一轮 2 张。
 - 文件预览里的链接（`FilePreviewLinkTests`）：`MOCK_FILES=1 MOCK_FILE_LINKS=1 MOCK_PORTS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_FILE_LINK_HUB=http://127.0.0.1:<端口>`。从旧布局的会话文件块（固定 `-ui.oldLayout YES -tab dev`，避免隐藏助手响应全局 DEBUG 参数）与默认新外壳的「文件」页打开 README，链接必须在关闭文件前立即可点；关闭后返回原文件位置，重复打开同一链接正常，关闭文件后不补弹旧链接。开发预览还要实际读到经 hub 转发的网页文字。
   两种风格分别切实际 light / dark 外观运行；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，`TEST_RUNNER_JARVIS_FILE_LINK_APPEARANCE` 仅负责文件命名。
-- 视频预览：合成一个大于 2 MiB 的 H.264/AAC MP4（例如 `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 12 -c:v libx264 -b:v 3M -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/preview.mp4`）。mock 加 `MOCK_FILES=1 MOCK_VIDEO_FILE=/tmp/preview.mp4`，`VideoFileUITests` 检查原生播放器打开和重开（`TEST_RUNNER_JARVIS_VIDEO_HUB` 可单独指定视频 mock，避免新增视频回复改变原文件回归的可见区域）；用 `-openFilePath /Users/me/code/weather/media/preview.mp4` 单独检查两种风格的深浅色截图。用 `xcrun simctl ui <udid> appearance light|dark` 真正切换模拟器外观，再分别跑视频 UI 测试；`TEST_RUNNER_JARVIS_VIDEO_APPEARANCE` 只给截图命名，不改变外观，不能用 iOS 不生效的 `AppleInterfaceStyle` 启动默认值冒充切换。单测环境加 `TEST_RUNNER_JARVIS_VIDEO_FIXTURE=/tmp/preview.mp4`，`VideoFileTests/nativeVideoPlaysSeeksAndCleansUp` 验证完整字节、播放时钟推进、跳到 8 秒和临时文件清理；不传文件时该集成用例跳过，其他类型、下载及失败测试照常跑。node/hub 的 `TestDownload*` 验证大文件有界读取、Range、旧 node、无效范围、文件变化和取消。
+- 视频预览：合成一个 120 秒、大于 2 MiB 的 H.264/AAC MP4（例如 `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 120 -c:v libx264 -b:v 3M -g 30 -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/preview.mp4`）；再用 `ffmpeg -i /tmp/preview.mp4 -c copy /tmp/preview-tail.mp4` 生成索引在尾部的版本。mock 加 `MOCK_FILES=1 MOCK_VIDEO_FILE=/tmp/preview.mp4`，可加 `MOCK_VIDEO_DELAY=0.01` 延迟每个 32 KiB 网络片段。`GET /mock/video-reads` 返回 Range 的起止、实际发送量和 active/cancelled，`?reset=1` 清空统计。mock 正确返回 206、Content-Range、ETag 与 If-Match 412，不把整文件响应当成 Range 成功。
+  `VideoFileUITests` 检查从对话文件块打开、关闭、同进程重开；`TEST_RUNNER_JARVIS_VIDEO_HUB` 指定独立视频 mock。用 `xcrun simctl ui <udid> appearance light|dark` 真正切换模拟器外观，两种风格深浅色各跑一遍并实际检查截图；`TEST_RUNNER_JARVIS_VIDEO_APPEARANCE` 仅命名截图。单测加 `TEST_RUNNER_JARVIS_VIDEO_FIXTURE=/tmp/preview.mp4`，`VideoFileTests/nativeVideoPlaysSeeksAndCleansUp` 验证首播未下载完整、seek 到 90 秒后继续播放、只读取后段必要区间和临时缓存清理；再对尾部索引版本重跑。可用 `ffprobe -select_streams v:0 -show_packets -show_entries packet=pts_time,pos,flags -of json` 找到 90 秒关键帧的 `pos`，传 `TEST_RUNNER_JARVIS_VIDEO_SEEK_BYTE` 验证新 Range 覆盖精确字节位置。不传 fixture 时该集成用例跳过，不能报成已通过。`VideoFileResourceTests` 覆盖中间/尾部直接读取、分片复用、边界、版本/长度错误和取消清理；`VideoFileHTTPTests` 覆盖鉴权头、Range、忽略范围、短片段、旧 node 错误；加 `TEST_RUNNER_JARVIS_VIDEO_HUB` 后还有真实 HTTP 中间/尾部/412 回归。node/hub 的 `TestDownload*` 验证大文件有界读取、Range、旧 node、无效范围、文件变化和取消。
 - 发送视频（#981，docs/protocol.md「发送视频」）：用 AVAssetWriter 合成一段 6 秒的 H.264 MOV（没有 ffmpeg 时也行，画面是渐变加一道扫过的竖条，不用真实视频），`xcrun simctl addmedia <udid> <文件>` 放进模拟器图库，
   另一段给 mock 的 `MOCK_SENT_VIDEO=<文件>`（对话里多一条「别的设备发的」视频卡片，文件只在电脑上）；mock 收到的视频上传会留在它的文件里，可以再下载。
   `VideoSendTests` 走真实的 PHPicker：Agents 对话和助手新对话各选一次视频、看上传进度和传完的卡片、发送后查 `/mock/sent` 里的 `<jarvis-file>` 标签、点消息里的卡片打开系统播放器；
@@ -259,6 +260,11 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `…/ports/{port}/connect` 加载 mock 自己起的页面（`GET /mock/ports` 看连接记录），点灰的提示「已经没有在监听」：
 `MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`；
 深浅色 × 新外壳 / 旧布局用 `TEST_RUNNER_JARVIS_LAYOUT`、`TEST_RUNNER_SHOT_SUFFIX` 各跑一遍，截图在 `/tmp/jarvis-ports-*`。
+
+本 hub 的链接在 App 内打开（`HubPageLinkUITests`，#2696）：回答里指向 mock 自己的 `/s/…?at=…` 打开那个 Agent 的对话、那条消息在屏幕上，`/todos?id=…` 浮起待办详情，
+外部链接照旧是网页卡片：`MOCK_HUB_LINKS=1 PORT=18796 python3 scripts/mock/mock_hub.py &`，
+`TEST_RUNNER_JARVIS_HUB_LINKS_HUB=http://127.0.0.1:18796 xcodebuild test … -only-testing:PersonaUITests/HubPageLinkUITests`；
+`TEST_RUNNER_JARVIS_SHOTS=<目录>`、`TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` 写截图。URL 解析的单测是 `PersonaTests/HubPageLinkTests`。
 
 Telegram 会话页的回复框（`ConnectorThreadReplyTests`，#1190）：发出去马上出现在页面里，页面上没有「确认卡片」的提示、也没有「允许」：
 `MOCK_TELEGRAM=signed_in MOCK_TELEGRAM_INBOX=1 PORT=18857 python3 scripts/mock/mock_hub.py &`，

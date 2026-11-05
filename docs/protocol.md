@@ -35,7 +35,7 @@
 
 内网 / 回环等受信任来源另外返回 `version` 和 `features`。来源按连接地址判断，与是否带 token 无关；公网 HTTPS health 也会裁剪。所有来源都不返回候选地址。未启用 TLS 时 `tls_port` 为 `0`，`fp` 为空字符串。
 
-受信任来源的健康检查还返回 `channel`（`release` / `docker` / `dev`）、`build`（UTC `YYYYMMDDHHMM`，没有是 0）、`protocol`（App ↔ hub 的大版本号）、`min_app_build`（它能配的最老的 App，`docs/hub-update.md`「兼容」），以及 `update.confirmed`（进程是否已确认完一次更新：没有更新要确认时为真，看门狗等它）。`channel` 和 `build` 说明这个 hub 怎么构建、能不能自己更新；WS `hello` 带同样的字段。
+受信任来源的健康检查还返回 `channel`（`release` / `docker` / `dev`）、`build`（UTC `YYYYMMDDHHMM`，没有是 0）、`protocol`（App ↔ hub 的大版本号）、`min_app_build`（它能配的最老的 App，`docs/hub-update.md`「兼容」），以及 `update.confirmed`（进程是否已确认完一次更新：没有更新要确认时为真，看门狗等它）。`channel` 和 `build` 说明这个 hub 怎么构建、能不能自己更新；WS `hello` 带同样的字段。WS `hello`（认证后）另带 `public_url`（hub.json 的 `public_url`，去掉末尾的 `/`；没有时不带）：助手回答里的 hub 链接都用它拼，App 靠它认出「本 hub 的链接」，手机经别的地址连 hub 时也认得出（#2696）。
 
 `hub_name` 是这台 hub 给人看的名字（hub.json 的 `name`，[config.md](config.md)）。`hub_id` 是持久化在数据库 `settings` 的 UUID。客户端用它区分 hub，并核对切换候选后仍连接到同一实例；`fp` 必须来自可信扫码或已鉴权的可信通道，不能信任任意公网 health 回包来建立钉扎。
 

@@ -49,40 +49,78 @@ struct VideoFileTests {
         let bytes = try Data(contentsOf: URL(fileURLWithPath: fixture))
         #expect(bytes.count > 2 << 20)
         let hub = FakeHub()
-        hub.on("GET", "/api/v1/machines/box/file/download") { _ in bytes }
+        let reads = VideoReadLog()
+        let source = VideoFileSource(read: { range, revision in
+            #expect(revision == nil || revision == "\"fixture\"")
+            if revision != nil { try await Task.sleep(for: .milliseconds(40)) }
+            reads.append(range)
+            let end = min(range.upperBound, Int64(bytes.count))
+            return VideoFileRange(range: range.lowerBound..<end, total: Int64(bytes.count), revision: "\"fixture\"",
+                                  mime: "video/mp4", data: bytes.subdata(in: Int(range.lowerBound)..<Int(end)))
+        })
         let file = FileContent(path: "/work/preview.mp4", name: "preview.mp4", size: Int64(bytes.count), mime: "video/mp4", truncated: true, isDir: false)
-        let model = VideoFileModel(ref: FileRef(machineID: "box", path: "preview.mp4", cwd: "/work"), file: file, api: hub.client)
+        let model = VideoFileModel(ref: FileRef(machineID: "box", path: "preview.mp4", cwd: "/work"), file: file, api: hub.client, source: source)
         await model.load()
         defer { model.stop() }
         #expect(model.error == nil)
         let player = try #require(model.player)
-        let local = try #require(model.localURL)
-        #expect(try Data(contentsOf: local) == bytes)
+        let local = try #require(model.cacheURL)
+        #expect(player.currentItem?.asset is AVURLAsset)
+        let asset = try #require(player.currentItem?.asset as? AVURLAsset)
+        #expect(asset.url.scheme == "persona-video")
+        #expect(asset.url.query == nil && !asset.url.absoluteString.contains("fake.invalid"))
         let deadline = Date.now.addingTimeInterval(8)
         while player.currentTime().seconds < 0.3, Date.now < deadline {
             try await Task.sleep(for: .milliseconds(100))
         }
         #expect(player.currentTime().seconds >= 0.3, "视频时钟没有推进")
+        #expect(model.received < Int64(bytes.count), "首播前已经下载了完整视频")
+        let before = reads.ranges
         player.pause()
-        let sought = await player.seek(to: CMTime(seconds: 8, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        let duration = try await asset.load(.duration).seconds
+        let target = duration > 60 ? 90.0 : 8.0
+        let sought = await player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         #expect(sought)
-        #expect(abs(player.currentTime().seconds - 8) < 0.2)
+        #expect(abs(player.currentTime().seconds - target) < 0.2)
+        player.play()
+        let resumedDeadline = Date.now.addingTimeInterval(8)
+        while player.currentTime().seconds < target + 0.3, Date.now < resumedDeadline {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(player.currentTime().seconds >= target + 0.3, "seek 后视频时钟没有继续推进")
+        let after = Array(reads.ranges.dropFirst(before.count))
+        if let offset = ProcessInfo.processInfo.environment["JARVIS_VIDEO_SEEK_BYTE"].flatMap(Int64.init) {
+            #expect(after.contains { $0.contains(offset) }, "seek 没有读取目标关键帧的字节区间：\(after)")
+        }
+        if duration > 60 {
+            #expect(after.contains { $0.lowerBound > Int64(bytes.count) / 2 })
+            #expect(model.received < Int64(bytes.count) / 2, "拖动到后段时不应该先下载前半段")
+        }
         model.stop()
-        #expect(model.player == nil && model.localURL == nil)
+        #expect(model.player == nil && model.cacheURL == nil)
         #expect(!FileManager.default.fileExists(atPath: local.path))
+        let closedReads = reads.ranges.count
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(reads.ranges.count == closedReads, "关闭后仍在读取视频")
+        await model.load()
+        #expect(model.player != nil && model.error == nil, "同一个 model 重开没有恢复播放器")
+        let reopenedCache = try #require(model.cacheURL)
+        #expect(reopenedCache != local)
+        model.stop()
+        #expect(!FileManager.default.fileExists(atPath: reopenedCache.path))
     }
 
     @Test func videoDownloadFailureIsShownAndLeavesNoPlayer() async throws {
         let hub = FakeHub()
-        hub.on("GET", "/api/v1/machines/box/file/download") { _ in
+        let source = VideoFileSource(read: { _, _ in
             throw APIError(status: 409, message: "需要重新部署")
-        }
+        })
         let file = FileContent(path: "/work/preview.mp4", name: "preview.mp4", size: 9, mime: "video/mp4", truncated: false, isDir: false)
-        let model = VideoFileModel(ref: FileRef(machineID: "box", path: "preview.mp4", cwd: "/work"), file: file, api: hub.client)
+        let model = VideoFileModel(ref: FileRef(machineID: "box", path: "preview.mp4", cwd: "/work"), file: file, api: hub.client, source: source)
         await model.load()
         #expect(model.error?.contains("需要重新部署") == true)
-        #expect(model.localURL == nil && model.player == nil)
+        #expect(model.cacheURL == nil && model.player == nil)
         model.stop()
-        #expect(model.localURL == nil && model.player == nil)
+        #expect(model.cacheURL == nil && model.player == nil)
     }
 }

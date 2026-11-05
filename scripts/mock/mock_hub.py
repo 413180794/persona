@@ -5780,6 +5780,31 @@ header{padding:56px 24px 24px}h1{font-size:34px;margin:0 0 8px}p{color:var(--mut
                           "落地页起好了：http://localhost:%d/ ，改动会热更新。\n\n"
                           "之前那版预览（http://127.0.0.1:%d/preview）已经停掉了。" % (DEV_PORT, GONE_PORT)))]
 
+# MOCK_HUB_LINKS=1: an agent's reply linking this hub's own pages (#2696): another agent's chat at one of its early
+# messages, a task, and an outside page. The app opens the first two natively (HubPageLinkTests), the third as a web page.
+HUBLINK_SOURCE = "a1f3c2d4-0000-4000-8000-00000000001a"
+HUBLINK_TARGET = "a1f3c2d4-0000-4000-8000-00000000001b"
+if os.environ.get("MOCK_HUB_LINKS") == "1":
+    _base = "http://127.0.0.1:%d" % PORT
+    _target = [it("user", "text", 90, text="把发布说明的草稿写一下")]
+    _marked = it("assistant", "text", 89, text="发布说明草稿：主屏幕小组件、网络层补测试。这一条是链接要找的消息。")
+    _target.append(_marked)
+    for _i in range(24):  # enough newer turns that the linked message is well above the newest screen
+        _target.append(it("user", "text", 80 - _i * 3, text="第 %d 轮：再改改措辞" % (_i + 1)))
+        _target.append(it("assistant", "text", 79 - _i * 3, text="第 %d 轮改好了。\n\n" % (_i + 1) + "措辞调整了一遍，语气更直接。" * 6))
+    SESSIONS.insert(0, sess("macbook", HUBLINK_TARGET, "发布说明", "/Users/me/code/weather-site", "idle", "seen", "weather", 1,
+                            "notes", 7, 5, "第 24 轮改好了。"))
+    ITEMS[HUBLINK_TARGET] = _target
+    SESSIONS.insert(0, sess("macbook", HUBLINK_SOURCE, "链接汇总", "/Users/me/code/weather-site", "idle", "unread", "weather", 1,
+                            "links", 8, 1, "相关的几处都在这里。"))
+    ITEMS[HUBLINK_SOURCE] = [it("user", "text", 3, text="发布相关的东西在哪"),
+                             it("assistant", "text", 2, text=(
+                                 "相关的几处都在这里：\n\n"
+                                 "- [发布说明的草稿](%s/s/macbook/%s?at=%s)\n"
+                                 "- [待办：天气 App 发 1.3 版](%s/todos?id=todo_weather)\n"
+                                 "- [外部的发布指南](https://example.com/release-guide)"
+                                 % (_base, HUBLINK_TARGET, __import__("urllib.parse").parse.quote(_marked["id"], safe=""), _base)))]
+
 
 def port_listening(port):
     import socket
@@ -5988,6 +6013,8 @@ GAP = os.environ.get("MOCK_GAP") == "1"
 # one small file per language for screenshots, and a last message in the widget conversation that names some of them
 # and two that are not there (another machine's path, a deleted file).
 FILES = {}
+VIDEO_READS = []
+VIDEO_READ_LOCK = threading.Lock()
 FILE_PAGE = 2 << 20
 ROOT_MEDIA = "/Users/me/code/weather/media/"
 
@@ -9638,14 +9665,47 @@ class H(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if p == "/mock/video-reads":
+            with VIDEO_READ_LOCK:
+                if "reset" in q: VIDEO_READS.clear()
+                return self.send_json({"reads": copy.deepcopy(VIDEO_READS)})
         if p.startswith("/api/v1/machines/") and p.endswith("/file/download"):
+            # Every file the browser and the app download (#1293); byte ranges and If-Match for the video player (#706).
             value, mime = mock_file_bytes(p.split("/")[4], q, text=True)
             if value is None: return self.send_json({"error": "no such file"}, 404)
-            self.send_response(200)
+            revision = '"file-%s"' % hashlib.sha256(value).hexdigest()
+            if self.headers.get("If-Match") not in (None, revision):
+                return self.send_json({"error": "file changed"}, 412)
+            header = self.headers.get("Range", "")
+            start, end = 0, len(value)
+            if header:
+                match = re.fullmatch(r"bytes=(\d+)-(\d*)", header)
+                if not match or int(match[1]) >= len(value):
+                    return self.send_json({"error": "invalid range"}, 416)
+                start = int(match[1])
+                end = min(int(match[2]) + 1 if match[2] else len(value), len(value))
+                if end <= start: return self.send_json({"error": "invalid range"}, 416)
+            read = {"start": start, "end": end, "sent": 0, "active": True, "cancelled": False}
+            with VIDEO_READ_LOCK: VIDEO_READS.append(read)
+            self.send_response(206 if header else 200)
             self.send_header("Content-Type", mime)
-            self.send_header("Content-Length", str(len(value)))
+            self.send_header("Content-Length", str(end - start))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("ETag", revision)
+            if header: self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end - 1, len(value)))
             self.end_headers()
-            self.wfile.write(value)
+            try:
+                for offset in range(start, end, 32 << 10):
+                    part = value[offset:min(offset + (32 << 10), end)]
+                    self.wfile.write(part)
+                    self.wfile.flush()
+                    with VIDEO_READ_LOCK: read["sent"] += len(part)
+                    delay = float(os.environ.get("MOCK_VIDEO_DELAY", "0"))
+                    if delay: time.sleep(delay)
+            except (BrokenPipeError, ConnectionResetError):
+                with VIDEO_READ_LOCK: read["cancelled"] = True
+            finally:
+                with VIDEO_READ_LOCK: read["active"] = False
             return
         if p.startswith("/api/v1/machines/") and p.endswith("/file") and FILES:
             f = file_read(q.get("path", [""])[0], q.get("cwd", [""])[0], int(q.get("offset", ["0"])[0] or 0), q.get("stream", [""])[0] == "1")

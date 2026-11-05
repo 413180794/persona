@@ -9,10 +9,14 @@ final class VideoFileUITests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let appearance = ProcessInfo.processInfo.environment["JARVIS_VIDEO_APPEARANCE"] ?? "system"
+        defer { app.terminate() }
         for pass in 0..<2 {
-            app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000001",
-                                   "-openAgentsFresh", "YES", "-openChatsFresh", "YES", "-ui.oldLayout", "NO"]
-            app.launchPinned()
+            if pass == 0 {
+                // Keep playback acceptance separate from the shell's cold-start file-scope race.
+                app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000001",
+                                       "-openAgentsFresh", "YES", "-openChatsFresh", "YES", "-ui.oldLayout", "YES"]
+                app.launchPinned()
+            }
             let chip = app.buttons["file-chip-/Users/me/code/weather/media/preview.mp4"].firstMatch
             XCTAssertTrue(chip.waitForExistence(timeout: 30), "生成的视频没有文件入口：\(app.debugDescription)")
             chip.tap()
@@ -25,7 +29,6 @@ final class VideoFileUITests: XCTestCase {
             add(shot)
             app.buttons["完成"].firstMatch.tap()
             XCTAssertTrue(player.waitForNonExistence(timeout: 5), "关闭后播放器仍在页面上")
-            app.terminate()
         }
     }
 }

@@ -55,6 +55,11 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   请求用 `returnCacheDataElseLoad`，打开时直接拿已加载好的视图。网页里选中文字，系统菜单多「AI 修改」（填修改要求后立即发给 Agent）和
   「作为上下文」（输入框上方出现引用条，随下一条消息发送）；原生飞书文档用标题栏的「作为上下文」带整篇。上下文在消息里是
   `<jarvis-context kind="context|edit" title="…" url="…">选中文字</jarvis-context>`，原始标签不显示。
+- 本 hub 的链接（#2696，`Shared/HubPageLink.swift`、`App/HubPageRouting.swift`）：助手回答里指向本 hub 网页的链接（#2194）不开网页卡片，直接进 App 里的页面：
+  `/s/<机器>/<会话>`、`/t/<机器>/<空间>/<槽位>/<会话>` 打开那个 Agent 的对话，`/j/<id>`、`/persona/<id>` 打开那个 Persona 对话，`?at=<条目 id>` 再滚到那条消息并闪一下
+  （和点引用回到原消息同一套，不在已加载的里就往前翻几页，找不到停在最新）；`/todos?id=<id>`、`/todos/<id>` 浮起待办详情。会话 id 可以是唯一的前缀（同网页，#2464）。
+  「本 hub」按 host + 端口（不看 http / https）对：这一组配对的地址、socket 当前用的地址、mesh 的 endpoints、hello 的 `public_url`；hub 在反向代理子路径下时路径要在那个前缀里。
+  别的站点、`/todos` 看板、`/inbox`、`/machines` 等 App 没对应页面的路径，以及别组 hub 的待办、不知道在哪台机器上的 Persona 对话，照旧在网页卡片里打开。手表的消息不渲染链接，不涉及。
 - 引用（#986，2026-11-03 用户要求，参考 Telegram 的回复；组件在 `DesignSystem/QuoteViews.swift`）：
   - **左滑引用**（#1058，Agents 对话）：按住一条消息往左拖，我的消息和 Agent 的文字回复都行，工作行不行。
     - 气泡跟着手指走，右边露出回复图标；拖过阈值（`MessageSwipe.threshold`）轻震一下，图标填上强调色；再往后只跟一小部分（橡皮筋）。
@@ -825,16 +830,16 @@ Apple 端不把它们画成用户气泡，也不显示给模型的说明：
 | JSON | 先显示源码；整个文件读完（最多 24 MB）并解析后，换成可折叠的层级视图（键的顺序不变），见下 |
 | Markdown | 默认渲染，用的是对话里的那套（`.jarvis` 主题、`FittedTable`、`Links`），代码块按语言上色。菜单里能「查看源文件」 |
 | 图片、PDF、目录 | 和以前一样 |
-| 视频 | `video/*` 或常见视频扩展名进入原生播放器；完整下载到本次预览的临时文件后播放，可以暂停和拖动进度。下载中显示进度，失败或编码不受系统支持时说明原因；关闭预览暂停播放器并清理临时文件 |
-| 音频 | mp3、m4a、aac、wav、flac、aiff、caf 等系统能放的音频（`audio/*` 或扩展名，#1298），和视频一样下载到本次预览的临时文件后播放（`AudioFileView`）：文件名、播放 / 暂停、前进后退 15 秒、可拖的进度和剩余时间、0.75–2 倍速；格式放不了的说明原因。关闭预览停止并清理临时文件 |
+| 视频 | `video/*` 或常见视频扩展名进入原生播放器；先缓冲索引和首播所需片段，边读边播，可以暂停和拖动进度。拖动到未缓存位置时直接读取目标关键帧附近的片段；失败或编码不受系统支持时说明原因，关闭预览暂停播放器、取消读取并清理临时缓存 |
+| 音频 | mp3、m4a、aac、wav、flac、aiff、caf 等系统能放的音频（`audio/*` 或扩展名，#1298），下载到本次预览的临时文件后播放（`AudioFileView`）：文件名、播放 / 暂停、前进后退 15 秒、可拖的进度和剩余时间、0.75–2 倍速；格式放不了的说明原因。关闭预览停止并清理临时文件 |
 | HTML | .html / .htm 默认隔离预览（`HTMLFileView`，#1297）：单独的 WKWebView，不留网站数据，**脚本关、网络关**（规则表挡掉除页面本身和 data: 以外的所有加载），页面不能自己跳转，点链接走 App 的链接卡片；顶上一行写着现在开了什么。菜单里能「允许运行脚本」「允许联网」（只对这次预览，改了重新加载）和「查看源文件」。页面引用的同目录文件（图片、样式表和其中的 url() / @import、字体、脚本）先经 hub 从那台电脑读来，换成 data: 放进页面（`HTMLResources`，最多 64 个、单个 8 MB、合计 24 MB），网络照旧关着；顶上那行写着读到几个。本机 dev server 的站点预览走端口转发，不在这里 |
 | Jupyter 笔记本 | .ipynb（nbformat 4，#1296）读完整个文件后按单元显示（`NotebookFileView`）：Markdown 单元用对话的 Markdown 样式，代码单元按笔记本的语言显示并标「In [n]」，下面是输出：stdout / stderr（stderr 橙色）、结果文本、图片、错误（名字、信息和去掉颜色码的回溯）；HTML 结果（pandas 表格）放进和 HTML 预览同样的隔离 WKWebView 渲染（禁脚本和网络，按内容定高，`HTMLSnippetView`），下面能切「显示文本版」，加载失败时自动用文本版。超过 60 行的输出先折叠。菜单里能「查看源文件」；读不了的（nbformat 3、坏 JSON）按文本显示并说明 |
 | 表格 | CSV、TSV、xlsx 用原生表格（`TableFileView`，#1294），见下面「表格」；菜单里 CSV 能「查看源文件」，xlsx 能「用快速查看打开」 |
-| Office、iWork、RTF | docx、doc、xlsx、xls、pptx、ppt、pages、numbers、key、rtf 交给系统的 QuickLook（#1293）：和视频一样经 `…/file/download` 下载到本次预览的临时文件，再嵌在页面里显示（iOS `QLPreviewController`，Mac `QLPreviewView`），不另弹一层；菜单里能「分享」这个文件（用别的 App 打开、存到文件）。关闭预览清理临时文件。以文本发来的 `.key`（PEM 私钥）照旧按代码显示；iWork 存成文件夹（包）的文档仍按目录列出 |
+| Office、iWork、RTF | docx、doc、xlsx、xls、pptx、ppt、pages、numbers、key、rtf 交给系统的 QuickLook（#1293）：经 `…/file/download` 下载到本次预览的临时文件，再嵌在页面里显示（iOS `QLPreviewController`，Mac `QLPreviewView`），不另弹一层；菜单里能「分享」这个文件（用别的 App 打开、存到文件）。关闭预览清理临时文件。以文本发来的 `.key`（PEM 私钥）照旧按代码显示；iWork 存成文件夹（包）的文档仍按目录列出 |
 
 **「文件」页的缩略图**（#1293）：图片、PDF、视频和上面这些文档，行出现时向文件所在的机器要缩略图（`GET …/file/thumb`，hub 特性 `file_thumb`，`docs/protocol.md`「文件预览」），尺寸按行里的格子乘屏幕倍数，同时最多三个（`FileThumbnails`）。结果按（hub 组, 机器, 路径, 大小, 修改时间）存在内存和缓存目录：文件变了键就变、重新要，没变就不再问。机器画不了（`no_thumbnail`：Linux 上的 Office、没装工具的）、旧 hub 没这个特性的，照旧显示图标，这次启动内不再问。代码、文本不要缩略图。文档的缩略图是一页深色的就不用，显示图标（Mac 深色模式下 Quick Look 给 RTF、文本画的是深底，列表里是个黑方块）。只知道路径的（对话里的文件卡片，`FileThumbnailIcon` 传大小 0、不传时间）按路径存，旁边记着 node 回的 ETag，每次启动后第一次出现时带 `If-None-Match` 问一次：304 用旧图，同一路径重新生成的文件拿到新图。卡片的格子用 `width` / `height` 调大，图按比例放进去。
 
-**二进制文件只取描述**：hub 有 `file_stream` 时，文件页用 `stream=1` 读，二进制文件只回大小、类型和 revision；图片、PDF 再从 `…/file/download` 整份取回（不再停在 2 MB），QuickLook 和视频照旧下载到临时文件。旧 hub 照旧整份 base64。
+**二进制文件只取描述**：hub 有 `file_stream` 时，文件页用 `stream=1` 读，二进制文件只回大小、类型和 revision；图片、PDF 再从 `…/file/download` 整份取回（不再停在 2 MB），QuickLook 照旧下载到临时文件；视频按需分段读取（#706，见上面「视频」）。旧 hub 照旧整份 base64。
 
 **对比**（#1299，`apple/Packages/PersonaKit/Sources/PersonaKit/DocumentText.swift`、`Views/Session/CompareView.swift`）：Git 页里改动的 PDF、docx、pptx、xlsx 和图片不再是「没有文本改动」，而是对比两个版本，和网页（#1452）一样：
 - **哪两个版本**：未暂存的改动是暂存区（INDEX）对工作区的文件，已暂存的是 HEAD 对暂存区，提交里的文件是「哈希^」对「哈希」。旧版本经 `GET …/git/blob`（hub 特性 `git_blob`）在 node 的缓存里写一份，再用 `/file/download` 读；工作区的直接读。新加的文件没有旧版、删掉的没有新版。hub 没有这个特性时照旧显示文本 diff。
@@ -846,7 +851,9 @@ Apple 端不把它们画成用户气泡，也不显示给模型的说明：
 - **读**：CSV / TSV 按 RFC 4180 解析（引号里的分隔符、换行、`""`），文件页的分页照旧，一页一页喂给解析器，被页尾切开的行由下一页接上；表格滑到离末尾 60 行时读下一页。`.csv` 第一行分号比逗号多就按分号分（逗号当小数点的地区）。xlsx 整份经 `…/file/download` 取回，自己读 zip（Compression 解 deflate）和 OOXML：共享字符串、内联字符串、数字（去掉浮点尾巴）、TRUE / FALSE、错误值，日期格式（内置 14–22、45–47 和带 y/m/d/h/s 的自定义格式）显示成 `yyyy-MM-dd [HH:mm]`。不引第三方库。旧 .xls、Numbers 仍走 QuickLook。每个工作表最多 20 万行。
 - **看**：第一行冻结在顶上（当表头），左边的行号冻结（Excel 的行号，表头是第 1 行），只画屏幕上的列。列宽按前 300 行最宽的内容估（CJK 算两格），在 56–240 pt 之间，拖表头右边缘可以改。数字右对齐。点一个单元格，底下显示它的位置（B12）和完整内容（可选中），能拷贝；长按有「拷贝单元格 / 拷贝整行」（整行是制表符分隔，粘到表格里还是一格一格）。多个工作表时顶上一排切换。
 
-视频不使用旧接口返回的前 2 MiB 二进制片段。`VideoFileModel` 通过 `GET …/file/download` 下载到磁盘，鉴权放在请求头；不把完整视频塞进 JSON 或 App 的内存，也不把 hub 凭据交给播放 URL。客户端关闭页面时取消下载，完成后仍检查任务和预览代次，避免迟到的结果重新挂上播放器。支持的实际编码由系统决定，推荐 H.264 / HEVC 的 MP4；不会自动改写或转码电脑上的源文件。hub 和视频所在机器的 node 都需支持 `file_download`。
+视频不使用旧接口返回的前 2 MiB 二进制片段。`VideoFileModel` 用 `GET …/file/download` 的两字节 Range 发现文件长度和版本，再通过 `VideoFileResource`（`AVAssetResourceLoaderDelegate`）读取播放器请求的区间。`VideoFileCache` 按 256 KiB 对齐分片，将已读取区间写到本次预览的稀疏临时文件；只把有记录的已缓存区间交给播放器，文件逻辑长度不代表下载完成。MP4 索引在尾部时可直接请求尾部，不下载中间的全部内容；seek 按索引跳到目标附近关键帧，不按时间比例猜字节位置。播放器控制预读，前向缓冲偏好为 3 秒，没有另一个从头下载完整文件的任务。
+
+鉴权只放在 HTTP 请求头；播放 URL 是本地自定义 scheme，只含随机标识和文件名，不含 hub 地址、远端路径或凭据。后续请求带 `If-Match`，每片还校验 `Content-Range`、长度与 ETag；文件改变、范围被忽略、片段不完整和旧 node 都报错，不静默退回整文件传输，也不允许鉴权请求跟随重定向。关闭页面时取消所有资源请求和网络任务、释放播放器、删除稀疏缓存，并检查任务与预览代次，避免迟到结果复活。支持的实际编码由系统决定，推荐 H.264 / HEVC 的 MP4；不会改写、转码或额外生成 HLS 文件。hub 和视频所在机器的 node 都需支持 `file_download`。
 
 **JSON 层级视图**
 - 格式化后显示，键是绿色，字符串、数字、常量各有颜色。

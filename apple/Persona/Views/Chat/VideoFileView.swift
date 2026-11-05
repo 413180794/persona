@@ -14,18 +14,26 @@ final class VideoFileModel {
     let ref: FileRef
     let file: FileContent
     @ObservationIgnored private let api: APIClient?
+    @ObservationIgnored private let source: VideoFileSource?
+    @ObservationIgnored private var resource: VideoFileResource?
+    @ObservationIgnored private var pendingSource: VideoFileSource?
     private(set) var player: AVPlayer?
-    private(set) var localURL: URL?
+    /// A sparse cache, not a complete video suitable for local playback.
+    private(set) var cacheURL: URL?
+    /// The whole file once every byte is cached (the ⋯ menu shares it, `FileViewerPage.localFile`); a partly cached file
+    /// has holes, so nothing until then.
+    var localURL: URL? { total > 0 && received >= total ? cacheURL : nil }
     private(set) var error: String?
     private(set) var received: Int64 = 0
     private(set) var total: Int64 = 0
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
 
-    init(ref: FileRef, file: FileContent, api: APIClient?) {
+    init(ref: FileRef, file: FileContent, api: APIClient?, source: VideoFileSource? = nil) {
         self.ref = ref
         self.file = file
         self.api = api
+        self.source = source
         total = file.size
     }
 
@@ -38,40 +46,69 @@ final class VideoFileModel {
             return
         }
         let mine = generation
-        var url: URL?
+        let source = source ?? VideoFileSource(api: api, ref: ref, file: file)
+        pendingSource = source
+        var opened: VideoFileResource?
         var kept = false
-        defer { if !kept { MachineFileDownload.remove(url) } }
-        do {
-            let fetched = try await MachineFileDownload.fetch(ref, file: file, api: api, prefix: "jarvis-video-") { [weak self] received, total in
-                guard let self, self.generation == mine else { return }
-                self.received = received
-                if total > 0 { self.total = total }
+        defer {
+            if !kept {
+                opened?.close()
+                source.close()
+                if generation == mine {
+                    pendingSource = nil
+                    resource = nil
+                    cacheURL = nil
+                }
             }
-            url = fetched
+        }
+        do {
+            // Discover the real length and revision with two bytes, independent of the legacy preview.
+            let info = try await source.read(0..<2, nil)
+            try Task.checkCancellation()
             guard generation == mine else { return }
-            let asset = AVURLAsset(url: fetched)
-            guard try await asset.load(.isPlayable) else {
+            let cache = try VideoFileCache(source: source, info: info, name: file.name) { [weak self] received, total in
+                Task { @MainActor in
+                    guard let self, self.generation == mine else { return }
+                    self.received = received
+                    self.total = total
+                }
+            }
+            let resource = VideoFileResource(cache: cache, name: file.name) { [weak self] message in
+                Task { @MainActor in
+                    guard let self, self.generation == mine else { return }
+                    self.error = message
+                    self.player?.pause()
+                    self.resource?.close()
+                }
+            }
+            opened = resource
+            self.resource = resource
+            pendingSource = nil
+            cacheURL = cache.url
+            total = info.total
+            guard try await resource.asset.load(.isPlayable) else {
                 throw APIError(status: 0, message: "这个视频的格式或编码无法在当前设备播放，请导出为 H.264 或 HEVC 的 MP4 视频")
             }
             try Task.checkCancellation()
             guard generation == mine else { return }
-            let item = AVPlayerItem(asset: asset)
+            let item = AVPlayerItem(asset: resource.asset)
+            item.preferredForwardBufferDuration = 3
+            item.canUseNetworkResourcesForLiveStreamingWhilePaused = false
             statusObserver = item.observe(\.status, options: [.new]) { @Sendable [weak self] item, _ in
                 guard item.status == .failed else { return }
                 let message = item.error?.localizedDescription ?? "视频无法播放，请检查文件或重新导出"
                 Task { @MainActor in
                     guard let self, self.generation == mine else { return }
-                    self.error = message
+                    if self.error == nil { self.error = message }
                     self.player?.pause()
                 }
             }
-            localURL = fetched
             kept = true
             player = AVPlayer(playerItem: item)
             player?.play()
         } catch {
             guard generation == mine, !Task.isCancelled else { return }
-            self.error = error.shown
+            if self.error == nil { self.error = error.shown }
         }
     }
 
@@ -82,8 +119,11 @@ final class VideoFileModel {
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
-        MachineFileDownload.remove(localURL)
-        localURL = nil
+        pendingSource?.close()
+        pendingSource = nil
+        resource?.close()
+        resource = nil
+        cacheURL = nil
     }
 }
 
@@ -100,7 +140,7 @@ struct VideoFileView: View {
             } else {
                 VStack(spacing: Theme.Space.m) {
                     ProgressView(value: Double(model.received), total: Double(max(model.total, 1)))
-                    Text("正在下载视频…")
+                    Text("正在缓冲视频…")
                         .font(Theme.Font.body)
                     Text(ByteCountFormatter.string(fromByteCount: model.received, countStyle: .file) + " / " +
                          ByteCountFormatter.string(fromByteCount: model.total, countStyle: .file))
