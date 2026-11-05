@@ -21,6 +21,7 @@ describe("persona packages", () => {
     expect(personaProblem(pack({ format: 2 }))).toBe("format 2");
     expect(personaProblem(pack({}, "jarvis"))).toMatch(/^id/);
     expect(personaProblem(pack({}, "jarvis-circuit"))).toMatch(/^id/);
+    expect(personaProblem(pack({}, "jarvis-pixel"))).toMatch(/^id/);
     expect(personaProblem(pack({}, "persona"))).toMatch(/^id/);
     expect(isBuiltinPersona("persona") && isBuiltinPersona("jarvis") && !isBuiltinPersona("doudou")).toBe(true);
     expect(personaProblem({ ...pack(), id: "other" })).toMatch(/^id/);

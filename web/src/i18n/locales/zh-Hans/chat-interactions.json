@@ -43,7 +43,7 @@
   "collapse": "收起",
   "more_pending_other": "还有 {count} 件",
   "pending_other": "{count} 件待处理",
-  "first_only": "只看第一件",
+  "first_only": "收起其余",
   "form_kicker": "MCP 表单",
   "url_kicker": "MCP 链接",
   "form_title": "MCP 表单等你填写",

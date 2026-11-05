@@ -1,6 +1,6 @@
 # 形象（persona）
 
-这里的 `persona` 仍指形象（名字 / 头像 / 状态圆点），不因产品改名 Persona 而重命名。内置形象 ID `persona`（默认的团子）/ `jarvis`（面罩）/ `jarvis-circuit`、`persona.json`、协议字段和缓存身份保持兼容；新默认包目录 `~/.persona/personas`，旧 `~/.jarvis/personas` 继续兼容，见 [命名与兼容](config.md#命名与兼容)。
+这里的 `persona` 仍指形象（名字 / 头像 / 状态圆点），不因产品改名 Persona 而重命名。内置形象 ID `persona`（默认的团子）/ `jarvis`（面罩）/ `jarvis-circuit`（汇流）/ `jarvis-pixel`（像素）/ `jarvis-facet`（晶面）/ `jarvis-blob`（软糖）、`persona.json`、协议字段和缓存身份保持兼容；新默认包目录 `~/.persona/personas`，旧 `~/.jarvis/personas` 继续兼容，见 [命名与兼容](config.md#命名与兼容)。
 
 一个形象 = Persona 的**名字**、**头像**、Persona 顶栏里**会动的状态圆点**、**App 图标**（App 里的标志和主屏图标），可以再带一套**配色**。
 设置 › 外观 › 形象里选，选了以后这几样一起换：顶栏的脸和名字（新外壳里只有脸，在左上角）、侧边栏的卡片、资料页、输入框的「问 xxx…」、
@@ -16,6 +16,8 @@
     小于 36 pt 时去掉动作线和高光、放大眼睛和腮红，列表里的小头像也认得出。卡片上写「团子 · App 图标的配色」。
   - **面罩**（id `jarvis`，2026-11-03 之前的默认，现在是可选项）：画成当前主题色。卡片上写「面罩」。
   - **汇流**（id `jarvis-circuit`，2026-11-01 用户定为可选项、不当默认）：三条走线汇进一个带两只眼的核心，画成当前主题色。选它不用下载，卡片上写「汇流」。
+  - **像素 / 晶面 / 软糖**（id `jarvis-pixel` / `jarvis-facet` / `jarvis-blob`，#350，用户从一组风格候选里选的）：排在汇流后面，同样画成当前主题色、选了不用下载、五个状态都会动，灵动岛 / 锁屏用各状态的静止帧。
+    像素是深底上 8 × 8 格的小脸，眼睛一格一格地移，工作时嘴上的四格依次亮起像加载条；晶面是从中心扇开的九块折面、斜眼，工作时明暗像光扫过一样转；软糖是浅底上的一团果冻，大眼睛加腮红，工作时压扁回弹、边缘轻轻晃。
 - **换默认时不动已经选过的人**：选择存在 UserDefaults `persona.id`，只有点了卡片才写。从没选过的手机没有这个键，`PersonaStore.chosenID` 落到新默认 `persona`；
   选过面罩的存的是 `jarvis`，照旧是面罩；选过汇流或形象包的同理。所以新默认换了 id，而不是把 `jarvis` 改画成团子（`PersonaTests.mochiIsTheDefaultAndAnEarlierChoiceStays`）。
 - **Android**（`core/designsystem` 的 `PersonaFace.kt`，`PersonaDesign.Mochi`）：同一份图标坐标的 Canvas 画法和五个状态，2026-11-04 起也是默认，迁移规则同上（`AppStyleStore.personaId`）。
@@ -85,7 +87,7 @@
 | 字段 | 说明 |
 | --- | --- |
 | `format` | 1。hub 和 App 都不认别的值（以后不兼容地改格式就加一，旧 App 自然看不到新包） |
-| `id` | `a-z0-9-`，最多 32 个字符，必须和目录同名；`persona`、`jarvis`、`jarvis-circuit` 留给内置形象（hub、手机、网页都不收；2026-11-03 之前的 hub 只拦 `jarvis`） |
+| `id` | `a-z0-9-`，最多 32 个字符，必须和目录同名；`persona`、`jarvis`、`jarvis-circuit`、`jarvis-pixel`、`jarvis-facet`、`jarvis-blob` 留给内置形象（hub、手机、网页都不收；2026-11-03 之前的 hub 只拦 `jarvis`） |
 | `name` / `subtitle` | 顶栏、侧边栏、资料页、输入框里用 `name`；`subtitle` 只在设置里 |
 | `avatar.sizes` | 边长（像素）→ 文件，正方形 PNG。App 按「显示点数 × 屏幕倍数」挑最小的够大的那张，裁成圆形显示。`safe` 是重要内容所在的圆占内切圆的比例（1 = 整个内切圆都安全；脚本出的图本身就是圆的） |
 | `dot.size` | 帧的边长（像素）。顶栏显示 46 pt，144 px 正好是 48 pt @3x |
@@ -111,8 +113,9 @@
 现在只有形象一个选择，App 图标跟着它，没有自己的设置页。
 
 - **每个内置形象一张打包的图标**（`AppIconChoice`，按形象 id 对应，`Persona.appIcon`）：团子 = 主图标 `AppIcon`（纸色，还跟着 设置 › 外观 › 深浅色，
-  见 `docs/ios.md`「深浅色」）；面罩 = `AppIcon-Visor`（系统蓝的面罩脸，浅色底是淡蓝、深色底是近黑）；汇流 = `AppIcon-Circuit`（青色的汇流脸，雾青底 / 近黑底）。
-  面罩、汇流的图是 App 自己的 `PersonaFace` 画的（`scripts/assets/make_alt_icons.py` 编一个 Mac 小程序 `scripts/assets/persona_face/` 渲染），所以和 App 里的脸是同一张；
+  见 `docs/ios.md`「深浅色」）；面罩 = `AppIcon-Visor`（系统蓝的面罩脸，浅色底是淡蓝、深色底是近黑）；汇流 = `AppIcon-Circuit`（青色的汇流脸，雾青底 / 近黑底）；
+  像素 = `AppIcon-Pixel`（靛蓝）、晶面 = `AppIcon-Facet`（紫）、软糖 = `AppIcon-Blob`（橙），同样是浅色底淡色、深色底近黑（#350）。
+  这几张图是 App 自己的 `PersonaFace` 画的（`scripts/assets/make_alt_icons.py` 编一个 Mac 小程序 `scripts/assets/persona_face/` 渲染），所以和 App 里的脸是同一张；
   图标不能跟主题色，各自定了一个颜色。加一个内置形象时没有图标就是默认的（`AppIconChoice(lookID:)`），补图标 = 脚本里加一项、`AppIconChoice` 加一个 case、`project.yml` 的备用图标列表加一个名字（`AppIconChoiceTests` 查三者一致、每个内置形象都有自己的图标）。
 - **App 里的标志**（`AppGlyph`：侧边栏主对话那一行、设置页顶部、欢迎 / 配对页）：内置形象画它的图标，形象包画包自己的头像（裁成图标的圆角方形）。
 - **主屏图标**（`AppIconModel.follow`）：选形象、换深浅色、App 每次回到前台时核对一次，不对就 `setAlternateIconName`，系统弹一次「已更改图标」（绕不过）；对上了什么都不做、不弹。
@@ -206,7 +209,7 @@ server/internal/hub/personas/nwverse/
 
 一个状态 144 px × 24 帧，解码后约 2 MB；整个包约 1–2 MB。
 
-内置形象（团子、面罩、汇流）不走位图，用 `AssistantAvatar` 画同样的五个状态：
+内置形象（团子、面罩、汇流、像素、晶面、软糖）不走位图，用 `AssistantAvatar` 画同样的五个状态：
 
 - 空闲每 3.6 秒眨一次眼：用 periodic 的 TimelineView 加一个短的 phase 动画，两次眨眼之间不重画。
 - 思考、工作、等你处理三个状态以 15 fps 动。

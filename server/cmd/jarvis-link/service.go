@@ -149,7 +149,7 @@ func install(e *env, args []string) error {
 	switch e.goos {
 	case "linux", "windows":
 	case "darwin":
-		return errors.New("Mac 上不用 install：装菜单栏 App「Persona Link」（scripts/mac-link.sh install），它带着 jarvis-link 和 jarvisd、" +
+		return errors.New("Mac 上不用 install：装菜单栏 App「Persona Link」（scripts/app/mac-link.sh install），它带着 jarvis-link 和 jarvisd、" +
 			"管着它们，登录时启动在它的菜单里勾")
 	default:
 		return fmt.Errorf("%s 上 install 还装不了后台服务：先在前台运行 jarvis-link run，交给这台的进程管理", e.goos)

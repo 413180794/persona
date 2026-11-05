@@ -156,7 +156,8 @@ nonisolated struct AppearanceChoice: Equatable, Sendable {
 
     static let styleKey = "ui.style"
     static let colorKey = "ui.color"
-    /// `PersonaStore.chosenKey`; the built-ins' ids are "persona" (the default), "jarvis" and "jarvis-circuit".
+    /// `PersonaStore.chosenKey`; the built-ins' ids are "persona" (the default), "jarvis", "jarvis-circuit", "jarvis-pixel",
+    /// "jarvis-facet" and "jarvis-blob".
     static let personaKey = "persona.id"
 
     static func resolve(style: String?, color: String?, persona: String?) -> AppearanceChoice {
@@ -165,7 +166,7 @@ nonisolated struct AppearanceChoice: Equatable, Sendable {
         if let c = color.flatMap(ThemeColor.init(rawValue:)) {
             return AppearanceChoice(style: s, color: wasClaude && c == .style ? .coral : c)
         }
-        let personaChosen = persona.map { !$0.isEmpty && !["jarvis", "jarvis-circuit", "persona"].contains($0) } ?? false
+        let personaChosen = persona.map { !$0.isEmpty && !["jarvis", "jarvis-circuit", "jarvis-pixel", "jarvis-facet", "jarvis-blob", "persona"].contains($0) } ?? false
         return AppearanceChoice(style: s, color: personaChosen ? .persona : wasClaude ? .coral : .style)
     }
 

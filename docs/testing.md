@@ -5,7 +5,7 @@
 ```sh
 cd server && go test ./... && go vet ./...                    # 服务端
 SIM=$(scripts/app/sim-boot.sh "Persona Tests <issue 号>")              # 自己的模拟器，瘦身启动（「模拟器」）
-cd apple && xcodegen generate -q && ~/.local/bin/xcode-slot xcodebuild -project Persona.xcodeproj -scheme Persona \
+cd apple && xcodegen generate -q && xcodebuild -project Persona.xcodeproj -scheme Persona \
   -destination "id=$SIM" test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
 ./scripts/app/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
 cd apple/Packages/PersonaKit && swift test                             # PersonaKit 的单测：在 Mac 上直接跑，不编 App、不开模拟器
@@ -323,8 +323,6 @@ mock 第六次问时确认，页面自己变成已连接。mock 的登录状态�
 主对话第一条下面的「来自 微信」。mock 的绑定状态留在进程里，换深色再跑先重启 mock；`-openChannels YES` / `-openChannel <id>` 直接打开列表 / 某个渠道。
 
 浏览器登录（#1304）：`MOCK_BROWSER=ready PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `BrowserLoginsTests`：机器页列网站、选一个 cookies.txt（`-openCookieFile <路径>` 代替系统的文件选择器）后默认一个不勾、过期的勾不了、导入、清除；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存截图。
-
-已知会挂、修好之前不进验收的 UI 测试先跳过，`TEST_RUNNER_JARVIS_KNOWN_ISSUES=1` 才跑，跳过的说明里写 issue 号；现在没有（`ShellRoomScrollTests` 在 #413 修好后改成常驻）。
 
 发消息和终端对话框的安全检查（`SendSafetyTests`）也连 mock：
 `PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock/mock_hub.py &`，再

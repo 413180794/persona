@@ -3,7 +3,7 @@
   "pulled_back": "已撤回到输入框，改好再发送",
   "failed": "没改成：{error}",
   "summary_other": "排队中 {count} 条 · {agent} 忙完会依次处理",
-  "pull_back": "撤回编辑",
+  "pull_back": "撤回到输入框",
   "copy": "拷贝",
   "delete": "删除",
   "row_label": "排队的第 {n} 条：{text}"

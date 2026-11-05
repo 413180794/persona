@@ -5,8 +5,8 @@ import UIKit
 
 // The home screen icon is the 形象's (docs/persona.md「App 图标」, #3203): there is no setting of its own. Each built-in
 // 形象 has an icon in the asset catalog: 团子, the default, is the app's own `AppIcon` (纸色, the hand-drawn helper on
-// paper, #709); 面罩 and 汇流 are alternate icon sets (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`) of their faces,
-// drawn by scripts/assets/make_alt_icons.py. iOS switches only to icons the app ships, so a 形象 from the hub or an
+// paper, #709); 面罩, 汇流, 像素, 晶面 and 软糖 are alternate icon sets (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`) of
+// their faces, drawn by scripts/assets/make_alt_icons.py. iOS switches only to icons the app ships, so a 形象 from the hub or an
 // extension puts on the built-in one it names (`Persona.appIcon`). The system remembers the icon itself, so there is
 // nothing to store: what is set now is `alternateIconName`. iPhone and iPad only: the watch and the Mac keep their one icon.
 
@@ -15,6 +15,9 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     case standard
     case visor
     case circuit
+    case pixel
+    case facet
+    case blob
 
     var id: String { rawValue }
 
@@ -24,6 +27,9 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
         case .standard: nil
         case .visor: "AppIcon-Visor"
         case .circuit: "AppIcon-Circuit"
+        case .pixel: "AppIcon-Pixel"
+        case .facet: "AppIcon-Facet"
+        case .blob: "AppIcon-Blob"
         }
     }
 
@@ -34,6 +40,9 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
         case .standard: "app-icon-default"
         case .visor: "app-icon-visor"
         case .circuit: "app-icon-circuit"
+        case .pixel: "app-icon-pixel"
+        case .facet: "app-icon-facet"
+        case .blob: "app-icon-blob"
         }
     }
 
@@ -43,6 +52,9 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
         case .standard: Persona.builtinID
         case .visor: Persona.visor.id
         case .circuit: Persona.circuit.id
+        case .pixel: Persona.pixel.id
+        case .facet: Persona.facet.id
+        case .blob: Persona.blob.id
         }
     }
 
@@ -58,7 +70,7 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     private var fixedLooks: (light: String, dark: String)? {
         switch self {
         case .standard: ("AppIcon-PaperLight", "AppIcon-PaperDark")
-        case .visor, .circuit: nil
+        case .visor, .circuit, .pixel, .facet, .blob: nil
         }
     }
 

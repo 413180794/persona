@@ -17,8 +17,15 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     /// 汇流 (three traces running into a core with two eyes), a choice next to the default; still named Persona.
     static let circuit = Persona(id: "jarvis-circuit", name: "Persona", subtitle: "汇流，颜色随主题色", rev: "", manifest: nil,
                                  design: "circuit", title: "汇流")
+    /// 像素, 晶面 and 软糖 (#350, from the style candidates the user picked): after 汇流, in the accent, still named Persona.
+    static let pixel = Persona(id: "jarvis-pixel", name: "Persona", subtitle: "像素，颜色随主题色", rev: "", manifest: nil,
+                               design: "pixel", title: "像素")
+    static let facet = Persona(id: "jarvis-facet", name: "Persona", subtitle: "晶面，颜色随主题色", rev: "", manifest: nil,
+                               design: "facet", title: "晶面")
+    static let blob = Persona(id: "jarvis-blob", name: "Persona", subtitle: "软糖，颜色随主题色", rev: "", manifest: nil,
+                              design: "blob", title: "软糖")
     /// What 设置 › 外观 › 形象 offers before the hub's packages, the default first.
-    static let builtins = [builtin, visor, circuit]
+    static let builtins = [builtin, visor, circuit, pixel, facet, blob]
 
     var id: String
     var name: String

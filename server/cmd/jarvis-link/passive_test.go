@@ -227,7 +227,7 @@ func TestNodeServiceLinux(t *testing.T) {
 	if strings.Join(f.calls, "\n") != "systemctl --user show-environment\nsystemctl --user daemon-reload\nsystemctl --user enable --now jarvisd-node.service" {
 		t.Fatalf("calls %q", f.calls)
 	}
-	// There already (installed by hand, by scripts/node-launchd.sh): left as it is.
+	// There already (installed by hand, by scripts/deploy/node-launchd.sh): left as it is.
 	_ = os.WriteFile(f.nodeUnitPath(), []byte("mine"), 0o644)
 	f.calls = nil
 	f.out.Reset()

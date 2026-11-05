@@ -1240,7 +1240,7 @@ export function Header({
           {session && !assistant && <span className="hidden sm:contents"><ContextMeter session={session} /></span>}
         </div>
         {sub && !todoLine && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
-        {/* the todo it works for, up top (#1836): opens the todo, 改挂 picks another */}
+        {/* the todo it works for, up top (#1836): opens the todo, 换个待办… picks another */}
         {todoLine && session?.todo && (
           <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-ink-3">
             <button type="button" onClick={() => navigate(`/todos?id=${encodeURIComponent(session.todo!.id)}`)} title={t("chat-chatview.todo_label", { title: session.todo.title })}

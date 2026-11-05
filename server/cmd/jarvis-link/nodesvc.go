@@ -16,11 +16,11 @@ import (
 
 // The resident node (`jarvisd node --attach`, docs/server.md「常驻 node」) is what the connector forwards to. Setting
 // it up here is packaging only, so that one command (Linux: `jarvis-link install`) or one app (the Mac menu bar app)
-// sets a computer up as the node service: it writes the same service scripts/node-launchd.sh does, and leaves one
+// sets a computer up as the node service: it writes the same service scripts/deploy/node-launchd.sh does, and leaves one
 // that is already there as it is. What the node does stays in jarvisd.
 
 const (
-	nodeUnitName = "jarvisd-node.service" // systemd user unit (Linux), as scripts/node-launchd.sh names it
+	nodeUnitName = "jarvisd-node.service" // systemd user unit (Linux), as scripts/deploy/node-launchd.sh names it
 	nodeLabel    = "com.jarvis.node"      // launchd agent (Mac), likewise
 )
 
@@ -45,7 +45,7 @@ func (e *env) nodeServiceFile() string {
 	return ""
 }
 
-// nodeUnitFile is the resident node's systemd user unit: scripts/node-launchd.sh's, without network-online.target
+// nodeUnitFile is the resident node's systemd user unit: scripts/deploy/node-launchd.sh's, without network-online.target
 // (a user instance has none, docs/lessons/server.md).
 func nodeUnitFile(bin, logPath string) string {
 	return `# Written by jarvis-link (docs/link.md); jarvis-link node uninstall removes it.
@@ -63,7 +63,7 @@ WantedBy=default.target
 `
 }
 
-// nodePlist is the resident node's launchd agent: scripts/node-launchd.sh's.
+// nodePlist is the resident node's launchd agent: scripts/deploy/node-launchd.sh's.
 func nodePlist(bin, logPath string) string {
 	x := html.EscapeString
 	return `<?xml version="1.0" encoding="UTF-8"?>

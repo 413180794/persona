@@ -263,7 +263,7 @@ func TestInstallWithoutSystemd(t *testing.T) {
 func TestInstallElsewhere(t *testing.T) {
 	f := newFakeEnv(t)
 	f.goos = "darwin"
-	if err := install(f.env, nil); err == nil || !strings.Contains(err.Error(), "菜单栏 App") {
+	if err := install(f.env, nil); err == nil || !strings.Contains(err.Error(), "菜单栏 App") || !strings.Contains(err.Error(), "scripts/app/mac-link.sh install") {
 		t.Fatalf("mac: %v", err)
 	}
 	f.goos = "freebsd" // Windows has its scheduled task (winservice_test.go)

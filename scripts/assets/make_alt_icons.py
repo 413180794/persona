@@ -3,7 +3,7 @@
 draws them with in its own pages.
 
 The 形象 decides the icon (AppIconChoice): 团子, the default, is the app's own `AppIcon` (make_icon.py), with a set
-for each fixed look (`AppIcon-PaperLight` / `…Dark`, for 设置 › 外观 › 深浅色); 面罩 and 汇流 are their faces drawn by
+for each fixed look (`AppIcon-PaperLight` / `…Dark`, for 设置 › 外观 › 深浅色); 面罩, 汇流, 像素, 晶面 and 软糖 are their faces drawn by
 the app's own PersonaFace (rendered on this Mac by persona_face/main.swift, so the icon is the face the app shows)
 on a square ground. Each set has any / dark / tinted (iOS 18 home screen looks); the previews are image sets
 (any + dark) of every icon, the default one included, read from its own icon set. Rerun after changing a drawing:
@@ -28,11 +28,15 @@ FACE_SOURCE = os.path.join(ROOT, "apple/Shared/Design/PersonaFace.swift")
 # The face's share of the icon's side: the disc sits inside the home screen's squircle with room around it.
 FACE_SHARE = 0.80
 
-# 面罩 in the default style's accent (system blue), 汇流 in teal: the icon cannot follow 主题色, so each has its own.
+# 面罩 in the default style's accent (system blue), 汇流 in teal, 像素 in indigo, 晶面 in purple, 软糖 in orange: the
+# icon cannot follow 主题色, so each has its own.
 # Ground: the light icon's pale wash of the accent, the dark one's near-black of it.
 FACES = {
     "AppIcon-Visor": ("visor", (0, 122, 255), (232, 241, 255), (9, 16, 30)),
     "AppIcon-Circuit": ("circuit", (42, 160, 168), (228, 242, 240), (6, 18, 19)),
+    "AppIcon-Pixel": ("pixel", (88, 86, 214), (236, 236, 252), (13, 12, 30)),
+    "AppIcon-Facet": ("facet", (175, 82, 222), (245, 235, 251), (22, 10, 30)),
+    "AppIcon-Blob": ("blob", (255, 149, 0), (255, 243, 226), (30, 18, 4)),
 }
 
 
@@ -82,7 +86,8 @@ def kept(name):
 FIXED_LOOKS = {"AppIcon-Paper": "AppIcon"}
 
 # Preview image set: the icon set it shows. The default's is read from the app icon (scripts/assets/make_icon.py).
-PREVIEW_OF = {"app-icon-default": "AppIcon", "app-icon-visor": "AppIcon-Visor", "app-icon-circuit": "AppIcon-Circuit"}
+PREVIEW_OF = {"app-icon-default": "AppIcon", "app-icon-visor": "AppIcon-Visor", "app-icon-circuit": "AppIcon-Circuit",
+              "app-icon-pixel": "AppIcon-Pixel", "app-icon-facet": "AppIcon-Facet", "app-icon-blob": "AppIcon-Blob"}
 
 
 def write_json(path, data):

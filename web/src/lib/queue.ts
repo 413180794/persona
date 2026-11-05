@@ -1,4 +1,4 @@
-// Messages typed while the agent works and not yet taken (Session.queued): 撤回编辑 pulls them all back out of
+// Messages typed while the agent works and not yet taken (Session.queued): 撤回到输入框 pulls them all back out of
 // Claude and re-queues the others, in order (POST …/queue {keep}, node editQueue; iOS QueueStrip / editQueued).
 
 /** The indexes to re-queue when message `index` is taken out: every other one, in their order. */

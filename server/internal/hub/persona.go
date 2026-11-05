@@ -46,7 +46,7 @@ var builtinPersonas embed.FS
 var personaIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
 
 // personaBuiltins are the looks the apps draw themselves (团子, the default; 面罩; 汇流): a package may not take their ids.
-var personaBuiltins = map[string]bool{"persona": true, "jarvis": true, "jarvis-circuit": true}
+var personaBuiltins = map[string]bool{"persona": true, "jarvis": true, "jarvis-circuit": true, "jarvis-pixel": true, "jarvis-facet": true, "jarvis-blob": true}
 
 // personaStates are the dot's states; idle is the one a package must have (the app shows it for any it lacks).
 var personaStates = []string{"idle", "thinking", "working", "needs_you", "offline"}

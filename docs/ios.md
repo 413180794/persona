@@ -684,7 +684,7 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
   就是素材，`scripts/assets/make_icon.py` 从它们算出 `icon-tinted.png`（灰度、四周的底拉到纯黑）、手表的图标（浅色那张，系统裁成圆）、
   Mac 的各个尺寸和 `docs/icon-preview.png`；换图标就覆盖这两张再跑它和 `make_alt_icons.py`（设置页的预览）。
 - **App 图标跟着形象**（2026-11-05 合成一个「形象」，#3203，做法和迁移见 `docs/persona.md`「App 图标」；iPhone / iPad，手表和 Mac 只有一个图标）：
-  - 每个内置形象一张：团子 = 纸色（主图标，上面这个），面罩 = `AppIcon-Visor`，汇流 = `AppIcon-Circuit`；hub / 扩展的形象用它 `app_icon_fallback` 指定的那张，没有就默认。
+  - 每个内置形象一张：团子 = 纸色（主图标，上面这个），面罩 = `AppIcon-Visor`，汇流 = `AppIcon-Circuit`，像素 = `AppIcon-Pixel`，晶面 = `AppIcon-Facet`，软糖 = `AppIcon-Blob`；hub / 扩展的形象用它 `app_icon_fallback` 指定的那张，没有就默认。
   - 2026-11-03 去掉了「余烬」「薄荷」「石墨」，2026-11-05 去掉了「蜜桃」「p.」「气场」（不对应任何形象）。选过它们的人，系统找不到那个图标集，
     主屏回到默认图标；`AppIconChoice(iconName:)` 把认不出的名字读成默认。
   - 资源：`scripts/assets/make_alt_icons.py` 用 App 的 `PersonaFace` 画出 `AppIcon-Visor`、`AppIcon-Circuit`（any / dark / tinted），写纸色的 `…Light` / `…Dark`，

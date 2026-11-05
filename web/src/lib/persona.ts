@@ -13,7 +13,7 @@ export const MARK_PERSONA = "jarvis";
 /** 汇流. */
 export const CIRCUIT_PERSONA = "jarvis-circuit";
 /** The built-ins every app draws: a package may not take their ids. */
-const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA];
+const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA, "jarvis-pixel", "jarvis-facet", "jarvis-blob"];
 
 /** Whether a choice is drawn by the page rather than a package. */
 export function isBuiltinPersona(id: string): boolean {

@@ -83,6 +83,7 @@ func TestPersonasListOnlyWholePackages(t *testing.T) {
 	writePersona(t, dir, "jarvis", personaManifestJSON("jarvis"), personaFilesOK())
 	writePersona(t, dir, "persona", personaManifestJSON("persona"), personaFilesOK())
 	writePersona(t, dir, "jarvis-circuit", personaManifestJSON("jarvis-circuit"), personaFilesOK())
+	writePersona(t, dir, "jarvis-facet", personaManifestJSON("jarvis-facet"), personaFilesOK())
 	writePersona(t, dir, "noidle", strings.Replace(personaManifestJSON("noidle"), `"idle"`, `"thinking"`, 1), personaFilesOK())
 	writePersona(t, dir, "escape", strings.Replace(personaManifestJSON("escape"), "avatar/128.png", "../doudou/avatar/128.png", 1), personaFilesOK())
 	writePersona(t, dir, "future", strings.Replace(personaManifestJSON("future"), `"format":1`, `"format":2`, 1), personaFilesOK())

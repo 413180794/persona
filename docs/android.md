@@ -1275,7 +1275,7 @@ adb -s <模拟器> shell am start -n <包名>/persona.android.debug.DebugEntryAc
 
 ## 大屏两栏：可拖的分隔条、空间页、横放的左右留白
 
-2026-11-01 用户要求「两栏中间能拖、右栏别太小」「别只针对我的机型」，旧 App 做过（`ui/shell/Fold.kt`、`Panes.kt`）；2026-11-02 移植到新外壳。
+2026-11-01 用户要求「两栏中间能拖、右栏别太小」「别只针对我的机型」，旧 App 做过（ui/shell/Fold.kt、Panes.kt，#632 已删）；2026-11-02 移植到新外壳。
 
 - 接法：material3-adaptive 1.3.0 的 Navigation 3 list-detail 场景（`rememberListDetailSceneStrategy`）带 `paneExpansionState` 和 `paneExpansionDragHandle` 两个参数，每个 tab 一份（`app/…/ui/PaneDividers.kt` 的 `rememberShellListDetail`）。库自带的 `paneExpansionDraggable` 松手时只会吸到锚点（有锚点就一定吸到最近的一个），做不到「离折痕 28dp 以内才吸，否则停在松手处」，所以拖动是自己写的：把手的 `draggable` 每一帧直接写 `PaneExpansionState.setFirstPaneWidth`，只重排两栏、不重组页面。
 - 规则（纯函数在 `app/…/navigation/PaneSplit.kt`，单测 `PaneSplitTest`，数值照旧 App）：最窄左栏 280dp、右栏 320dp；没拖过时左栏约 38%，夹在 320～420dp，右栏能留 400dp 就留（771dp 的内屏是 320 / 451，平板横放 1280dp 是 420 / 860；原来是 Material 的固定宽度）；拖的时候左栏跟手，经过平放的折痕轻震一下，松手时离平放折痕 28dp 以内吸上去，否则停在松手处；位置按「占宽度的比例」每个 tab 存一份（SharedPreferences `jarvis-panes` 的 `split.<tab>`，存在本机、不跟配对走，和界面风格一样），窗口宽度变了按比例换算再夹回最窄宽度。

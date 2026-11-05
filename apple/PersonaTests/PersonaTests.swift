@@ -57,6 +57,7 @@ struct PersonaTests {
         #expect(try problem(#""id":"doudou""#, #""id":"jarvis""#) != nil) // the built-ins' ids
         #expect(try problem(#""id":"doudou""#, #""id":"persona""#) != nil)
         #expect(try problem(#""id":"doudou""#, #""id":"jarvis-circuit""#) != nil)
+        #expect(try problem(#""id":"doudou""#, #""id":"jarvis-blob""#) != nil)
         #expect(try problem(#""id":"doudou""#, #""id":"Dou Dou""#) != nil)
         #expect(try problem(#""format":1"#, #""format":2"#) != nil)
         #expect(try problem(#""idle":"#, #""thinking":"#) != nil)
@@ -127,7 +128,7 @@ struct PersonaTests {
         for f in try Self.decode().files { hub.on("GET", "/api/v1/personas/doudou/\(f)", json: "png:\(f)") }
         let (s, root, defaults) = store()
         await s.refresh(hub.client)
-        #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.visor.id, Persona.circuit.id, "doudou"])
+        #expect(s.offered.map(\.id) == Persona.builtins.map(\.id) + ["doudou"])
         #expect(s.current.isBuiltin) // offered, not chosen
         let p = try #require(s.offered.last)
         #expect(!s.isOnPhone(p))
@@ -188,13 +189,30 @@ struct PersonaTests {
         #expect(PersonaStore(root: fresh.root, defaults: freshDefaults).current.id == Persona.builtinID)
     }
 
+    /// 像素, 晶面 and 软糖 (#350) come after 汇流, are drawn by the app (no download), keep their own card titles, and
+    /// their ids are taken from hub packages.
+    @Test func pixelFacetAndBlobAreBuiltInChoices() async throws {
+        let (s, _, defaults) = store()
+        #expect(Persona.builtins.map(\.id).suffix(4) == [Persona.circuit.id, "jarvis-pixel", "jarvis-facet", "jarvis-blob"])
+        for (p, title, design) in [(Persona.pixel, "像素", AssistantAvatar.Design.pixel), (Persona.facet, "晶面", .facet), (Persona.blob, "软糖", .blob)] {
+            #expect(p.isBuiltin && s.isOnPhone(p))
+            #expect(p.name == "Persona" && p.cardTitle == title && p.avatarDesign == design)
+            #expect(PersonaFace.Design(rawValue: p.design ?? "") != nil, "the Live Activity can draw it")
+        }
+        await s.choose(Persona.blob, api: nil)
+        #expect(defaults.string(forKey: PersonaStore.chosenKey) == "jarvis-blob")
+        #expect(PersonaStore(root: s.root, defaults: defaults).current.id == "jarvis-blob")
+        // The accent is still the style's: a built-in is not 跟随形象.
+        #expect(AppearanceChoice.resolve(style: nil, color: nil, persona: "jarvis-blob").color == .style)
+    }
+
     /// 汇流 is offered next to the default before the hub answers (or with no hub at all), is chosen without a
     /// download, and stays chosen across launches; it is still called Persona, with its own card title.
     @Test func circuitIsABuiltInChoice() async throws {
         let (s, _, defaults) = store()
-        #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.visor.id, Persona.circuit.id])
+        #expect(s.offered.map(\.id) == Persona.builtins.map(\.id))
         #expect(s.current.id == Persona.builtinID) // the default stays 团子
-        let circuit = try #require(s.offered.last)
+        let circuit = try #require(s.offered.first { $0.id == Persona.circuit.id })
         #expect(circuit.isBuiltin && s.isOnPhone(circuit))
         #expect(circuit.name == "Persona" && circuit.cardTitle == "汇流")
         #expect(circuit.avatarDesign == .circuit && Persona.builtin.avatarDesign == .mochi && Persona.visor.avatarDesign == .visor)

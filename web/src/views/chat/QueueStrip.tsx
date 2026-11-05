@@ -1,5 +1,5 @@
 // Messages typed while the agent works and not yet taken (Session.queued), above the composer instead of in the
-// chat (iOS QueueStrip). 撤回编辑 pulls them back out of Claude (like ↑ in the terminal), puts that one in the
+// chat (iOS QueueStrip). 撤回到输入框 pulls them back out of Claude (like ↑ in the terminal), puts that one in the
 // composer and re-queues the others in order; 删除 drops it the same way.
 import { useState } from "react";
 import { api, errorText, sessionPath } from "../../lib/api";

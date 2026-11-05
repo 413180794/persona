@@ -8,13 +8,16 @@ struct AssistantAvatar: View {
     /// The designs that were tried (docs/assistant.md「头像」): `.mochi` is the default persona's (the app icon's
     /// character), `.visor` the built-in 面罩's (`Persona.visor`, the default until 2026-11-03), `.circuit` 汇流's.
     enum Design: String, CaseIterable, Identifiable {
-        case mochi, visor, circuit, spark, halo
+        case mochi, visor, circuit, pixel, facet, blob, spark, halo
         var id: String { rawValue }
         var title: String {
             switch self {
             case .mochi: "团子"
             case .circuit: "汇流"
             case .visor: "面罩"
+            case .pixel: "像素"
+            case .facet: "晶面"
+            case .blob: "软糖"
             case .spark: "火花"
             case .halo: "光环"
             }
@@ -52,6 +55,9 @@ struct AssistantAvatar: View {
             case .mochi: face(.mochi)
             case .circuit: face(.circuit)
             case .visor: face(.visor)
+            case .pixel: face(.pixel)
+            case .facet: face(.facet)
+            case .blob: face(.blob)
             case .spark: spark
             case .halo: halo
             }
@@ -60,7 +66,7 @@ struct AssistantAvatar: View {
         .accessibilityHidden(true)
     }
 
-    // MARK: 团子, 汇流 and 面罩: PersonaFace (shared with the Live Activity), on a clock while moving.
+    // MARK: 团子, 面罩, 汇流, 像素, 晶面 and 软糖: PersonaFace (shared with the Live Activity), on a clock while moving.
 
     private func face(_ d: PersonaFace.Design) -> some View {
         TimelineView(.animation(minimumInterval: 1 / 15, paused: !moving)) { tl in

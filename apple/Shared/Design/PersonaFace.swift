@@ -18,7 +18,7 @@ nonisolated enum PersonaState: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The built-in personas' faces (团子, 面罩, 汇流) at one moment: everything JarvisAvatar draws for them, without the clock.
+/// The built-in personas' faces (团子, 面罩, 汇流, 像素, 晶面, 软糖) at one moment: everything JarvisAvatar draws for them, without the clock.
 /// Shared with the widget extension, which draws the Live Activity (docs/live-activity.md「形象」) and cannot run
 /// timelines: it passes `moving: false` and gets each state's still frame (the same one Reduce Motion shows). The app
 /// wraps it in a TimelineView and passes the time (JarvisAvatar). Reads no app-only token: the tint, the brand mark and
@@ -28,6 +28,8 @@ struct PersonaFace: View {
         /// 团子, the default: the app icon's character in the icon's own colors (not the tint).
         case mochi
         case visor, circuit
+        /// 像素, 晶面, 软糖 (#350): an 8-bit face, a low-poly folded head, a jelly; in the accent like 面罩 and 汇流.
+        case pixel, facet, blob
     }
 
     var size: CGFloat
@@ -60,6 +62,9 @@ struct PersonaFace: View {
         case .mochi: mochi
         case .circuit: circuit
         case .visor: visor
+        case .pixel: pixel
+        case .facet: facet
+        case .blob: blob
         }
     }
 
@@ -254,6 +259,237 @@ struct PersonaFace: View {
             .fill(state == .offline ? Color(white: 0.5) : accent.blended(with: .white, by: 0.55))
             .frame(width: size * 0.085, height: state == .offline ? size * 0.03 : size * 0.13)
             .shadow(color: state == .offline ? .clear : accent.opacity(0.9), radius: size * 0.05)
+    }
+
+    // MARK: 像素: an 8-bit face on a dark disc of the accent. The eyes step a cell at a time; while working the mouth's
+    // cells light up in turn like a loading bar.
+
+    private var pixel: some View {
+        let t = time
+        let lit = accent.blended(with: .white, by: 0.35)
+        let dim = accent.blended(with: .black, by: 0.55)
+        return ZStack {
+            Circle().fill(LinearGradient(colors: [accent.blended(with: .black, by: 0.78), accent.blended(with: .black, by: 0.9)],
+                                         startPoint: .top, endPoint: .bottom))
+            Canvas { ctx, box in
+                let cell = box.width * Pixel.cell
+                let origin = (box.width - cell * 8) / 2
+                func square(_ col: Int, _ row: Int, _ color: Color) {
+                    ctx.fill(Path(CGRect(x: origin + CGFloat(col) * cell, y: origin + CGFloat(row) * cell, width: cell * 0.9, height: cell * 0.9)),
+                             with: .color(color))
+                }
+                for (col, row) in Pixel.frame { square(col, row, dim) }
+                let mouth = pixelMouth(t)
+                for (i, col) in Pixel.mouth.enumerated() { square(col, 6, mouth[i] ? lit : dim) }
+            }
+            pixelEyes(t, color: lit)
+            if state == .thinking {
+                bubble(t, lit: accent).offset(x: size * 0.25, y: -size * 0.3)
+            }
+        }
+        .overlay(Circle().strokeBorder(accent.opacity(0.35), lineWidth: max(0.5, size * 0.02)))
+        .overlay { needsYouRing(t) }
+    }
+
+    /// Which of the mouth's four cells are lit: the middle two at rest, one more each beat while working, none when
+    /// offline.
+    private func pixelMouth(_ t: TimeInterval) -> [Bool] {
+        switch state {
+        case .working:
+            let n = moving ? Int(t * 5) % 5 : 4
+            return (0..<4).map { $0 < n }
+        case .offline: return [false, false, false, false]
+        default: return [false, true, true, false]
+        }
+    }
+
+    /// The eyes, two by two cells (one row when offline): a cell to the side and back while working, up and to the
+    /// right while thinking, a blink when idle.
+    private func pixelEyes(_ t: TimeInterval, color: Color) -> some View {
+        let cell = size * Pixel.cell
+        let step: CGFloat = switch state {
+        case .working: moving ? CGFloat([0, 1, 0, -1][Int(t * 2.5) % 4]) : 0
+        case .thinking: 1
+        default: 0
+        }
+        let up: CGFloat = state == .thinking ? -1 : 0
+        let tall = state == .offline ? 0.45 : 1.9
+        return HStack(spacing: cell * 2) {
+            ForEach(0..<2, id: \.self) { _ in
+                Rectangle().fill(color).frame(width: cell * 1.9, height: cell * tall)
+            }
+        }
+        .offset(x: step * cell * 0.5, y: (Pixel.eyeRow - 3.5 + up * 0.5) * cell + (state == .offline ? cell * 0.7 : 0))
+        .modifier(Blink(animation: state == .idle ? blink : nil))
+    }
+
+    // MARK: 晶面: a low-poly head folded from facets of the accent, slanted eyes. While working the facets' shading moves
+    // round like light sweeping over it.
+
+    private var facet: some View {
+        let t = time
+        return ZStack {
+            Circle().fill(accent.blended(with: .black, by: 0.35))
+            Canvas { ctx, box in
+                let w = box.width
+                let c = CGPoint(x: Facet.center.x * w, y: Facet.center.y * w)
+                let n = Facet.rim.count
+                for i in 0..<n {
+                    let a = Facet.rim[i], b = Facet.rim[(i + 1) % n]
+                    var tri = Path()
+                    tri.move(to: c)
+                    tri.addLine(to: CGPoint(x: a.x * w, y: a.y * w))
+                    tri.addLine(to: CGPoint(x: b.x * w, y: b.y * w))
+                    tri.closeSubpath()
+                    ctx.fill(tri, with: .color(facetShade(i, of: n, t)))
+                    ctx.stroke(tri, with: .color(.white.opacity(0.12)), lineWidth: max(0.5, w * 0.006))
+                }
+            }
+            facetEyes(t)
+            if state == .thinking {
+                bubble(t, lit: accent).offset(x: size * 0.27, y: -size * 0.31)
+            }
+        }
+        .clipShape(.circle)
+        .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: max(0.5, size * 0.015)))
+        .overlay { needsYouRing(t) }
+    }
+
+    /// A facet's color: lighter toward the top left as if lit from there; while working the light goes round.
+    private func facetShade(_ i: Int, of n: Int, _ t: TimeInterval) -> Color {
+        let angle = Double(i) / Double(n) * 2 * .pi
+        let sweep = state == .working && moving ? t * 2.4 : 0
+        let light = cos(angle - 3.9 - sweep) // 3.9 rad: the top left
+        let k = 0.18 * light
+        return k >= 0 ? accent.blended(with: .white, by: k) : accent.blended(with: .black, by: -k)
+    }
+
+    /// Two slanted eyes in the dark: they blink when idle, look up while thinking, glance aside while working, and are
+    /// thin lines when offline.
+    private func facetEyes(_ t: TimeInterval) -> some View {
+        let look: CGSize = switch state {
+        case .working: CGSize(width: moving ? sin(t * 1.6) * size * 0.03 : 0, height: 0)
+        case .thinking: CGSize(width: size * 0.03, height: -size * 0.04)
+        default: .zero
+        }
+        let tall = state == .offline ? 0.025 : 0.1
+        return HStack(spacing: size * 0.14) {
+            ForEach(0..<2, id: \.self) { i in
+                FacetEye(slant: i == 0 ? 1 : -1)
+                    .fill(Color(white: 0.08).opacity(state == .offline ? 0.6 : 0.9))
+                    .frame(width: size * 0.13, height: size * tall)
+            }
+        }
+        .offset(x: look.width, y: size * 0.02 + look.height)
+        .modifier(Blink(animation: state == .idle ? blink : nil))
+    }
+
+    /// An eye as a parallelogram leaning toward the nose.
+    nonisolated private struct FacetEye: Shape {
+        var slant: CGFloat
+        func path(in r: CGRect) -> Path {
+            let lean = r.height * 0.6 * slant
+            var p = Path()
+            p.move(to: CGPoint(x: r.minX + max(0, lean), y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX + min(0, lean), y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX - max(0, lean), y: r.maxY))
+            p.addLine(to: CGPoint(x: r.minX - min(0, lean), y: r.maxY))
+            p.closeSubpath()
+            return p
+        }
+    }
+
+    // MARK: 软糖: a soft jelly of the accent on a pale disc, big eyes and pink cheeks. While working it squashes and
+    // springs back, its edge wobbling.
+
+    private var blob: some View {
+        let t = time
+        let squash = state == .working && moving ? CGFloat(max(0, sin(t * 5))) * 0.09 : 0
+        let wobble: CGFloat = (state == .working || state == .needsYou) && moving ? 0.035 : 0
+        return ZStack {
+            Circle().fill(LinearGradient(colors: scheme == .dark
+                                         ? [accent.blended(with: .black, by: 0.7), accent.blended(with: .black, by: 0.82)]
+                                         : [accent.blended(with: .white, by: 0.86), accent.blended(with: .white, by: 0.74)],
+                                         startPoint: .top, endPoint: .bottom))
+            ZStack {
+                BlobBody(phase: t * 4, wobble: wobble)
+                    .fill(LinearGradient(colors: [accent.blended(with: .white, by: 0.3), accent, accent.blended(with: .black, by: 0.15)],
+                                         startPoint: .topLeading, endPoint: .bottom))
+                    .overlay(alignment: .topLeading) {
+                        Capsule().fill(.white.opacity(0.45))
+                            .frame(width: size * 0.12, height: size * 0.06)
+                            .rotationEffect(.degrees(-30))
+                            .offset(x: size * 0.18, y: size * 0.24)
+                    }
+                blobFace(t)
+            }
+            .scaleEffect(x: 1 + squash, y: 1 - squash, anchor: .bottom)
+            if state == .thinking {
+                bubble(t, lit: accent).offset(x: size * 0.26, y: -size * 0.32)
+            }
+        }
+        .clipShape(.circle)
+        .overlay { needsYouRing(t) }
+    }
+
+    /// Big round eyes with pupils (closed curves when offline) and the cheeks.
+    private func blobFace(_ t: TimeInterval) -> some View {
+        let look: CGSize = switch state {
+        case .working: CGSize(width: moving ? sin(t * 1.8) * size * 0.02 : 0, height: size * 0.01)
+        case .thinking: CGSize(width: size * 0.018, height: -size * 0.025)
+        default: .zero
+        }
+        let eye = size * 0.15
+        return ZStack {
+            HStack(spacing: size * 0.09) {
+                ForEach(0..<2, id: \.self) { _ in
+                    if state == .offline {
+                        Capsule().fill(Color(white: 0.2)).frame(width: eye * 0.8, height: max(1, size * 0.02))
+                    } else {
+                        Circle().fill(.white)
+                            .frame(width: eye, height: eye)
+                            .overlay {
+                                Circle().fill(Color(white: 0.1)).frame(width: eye * 0.55, height: eye * 0.55)
+                                    .overlay(alignment: .topTrailing) {
+                                        Circle().fill(.white).frame(width: eye * 0.18, height: eye * 0.18).offset(x: -eye * 0.06, y: eye * 0.06)
+                                    }
+                                    .offset(look)
+                            }
+                    }
+                }
+            }
+            .modifier(Blink(animation: state == .idle ? blink : nil))
+            .offset(y: size * 0.04)
+            HStack(spacing: size * 0.3) {
+                ForEach(0..<2, id: \.self) { _ in
+                    Ellipse().fill(Color(hex: 0xFF8FA3).opacity(state == .offline ? 0.3 : 0.75))
+                        .frame(width: size * 0.09, height: size * 0.05)
+                }
+            }
+            .offset(y: size * 0.16)
+        }
+    }
+
+    /// The jelly's outline: a rounded dome with a flat-ish bottom, its edge rippling by `wobble` of the side.
+    nonisolated private struct BlobBody: Shape {
+        var phase: Double
+        var wobble: CGFloat
+        func path(in r: CGRect) -> Path {
+            let c = CGPoint(x: r.midX, y: r.midY + r.height * 0.06)
+            let rx = r.width * 0.36, ry = r.height * 0.32
+            var p = Path()
+            let steps = 48
+            for i in 0...steps {
+                let a = Double(i) / Double(steps) * 2 * .pi
+                let ripple = 1 + wobble * CGFloat(sin(a * 3 + phase))
+                // flatter below: the bottom half is squeezed toward the base line
+                let y = sin(a) > 0 ? CGFloat(sin(a)) * ry * 0.82 : CGFloat(sin(a)) * ry
+                let pt = CGPoint(x: c.x + CGFloat(cos(a)) * rx * ripple, y: c.y + y * ripple)
+                if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+            }
+            p.closeSubpath()
+            return p
+        }
     }
 
     /// 需要你's red ring, breathing while moving.
@@ -461,6 +697,29 @@ nonisolated private enum Circuit {
     /// A circle around a unit point, in a box of side w.
     static func circle(_ c: CGPoint, _ r: CGFloat, _ w: CGFloat) -> CGRect {
         CGRect(x: (c.x - r) * w, y: (c.y - r) * w, width: r * 2 * w, height: r * 2 * w)
+    }
+}
+
+/// 像素's grid: 8 × 8 cells of this share of the side, centred; the face's frame cells, the eyes' row, the mouth's columns.
+nonisolated private enum Pixel {
+    static let cell: CGFloat = 0.075
+    static let eyeRow: CGFloat = 2.5
+    static let mouth = [2, 3, 4, 5]
+    /// A rounded square of cells: the face's edge.
+    static let frame: [(Int, Int)] = {
+        var cells: [(Int, Int)] = []
+        for i in 1...6 { cells += [(i, 0), (i, 7), (0, i), (7, i)] }
+        return cells
+    }()
+}
+
+/// 晶面's facets: triangles fanned from a point a little above the middle to these rim points, 0…1 from the top left.
+nonisolated private enum Facet {
+    static let center = CGPoint(x: 0.5, y: 0.46)
+    static let rim: [CGPoint] = (0..<9).map { i in
+        let a = Double(i) / 9 * 2 * .pi - .pi / 2
+        let r = i % 2 == 0 ? 0.56 : 0.5
+        return CGPoint(x: 0.5 + cos(a) * r, y: 0.5 + sin(a) * r)
     }
 }
 

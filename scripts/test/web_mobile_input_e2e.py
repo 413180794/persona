@@ -153,7 +153,7 @@ def run(base, shots):
             fail(f"opened, the dock is {dock['height']:.0f} px")
         on_screen(page, SEND, "opened")
         ok(f"还有 2 件 opens the others in a box of their own (scrolls {cards[0]} in {cards[1]} px), the dock still capped")
-        page.get_by_role("button", name="只看第一件").click()
+        page.get_by_role("button", name="收起其余").click()
         expect(page.locator("[data-chat-cards-fold]").get_by_text("还有 2 件")).to_be_visible()
 
         # 2. Typing (the keyboard up): the cards fold into one line; tapping it puts the keyboard away.
