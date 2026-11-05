@@ -20,6 +20,8 @@ export type Route =
   | { name: "tab"; mid: string; space: string; slot: string; sid?: string; view?: SessionView }
   | { name: "jarvis"; sid?: string }
   | { name: "history" }
+  // the health space (docs/health.md): its home, or one of its conversations
+  | { name: "health"; sid?: string }
   | { name: "profile" }
   | { name: "inbox"; id?: string }
   | { name: "messages"; id?: string }
@@ -54,6 +56,7 @@ export function parse(path: string, search = ""): Route {
   if (p[0] === "workspace-board") return { name: "workspace-board" };
   if (p[0] === "overview") return { name: "home" };
   if (p[0] === "history") return { name: "history" };
+  if (p[0] === "health") return { name: "health", sid: p[1] || undefined };
   if (p[0] === "assistant") return { name: "profile" };
   if (p[0] === "inbox") return { name: "inbox", id: p[1] };
   if (p[0] === "messages") return { name: "messages", id: p[1] };
@@ -91,6 +94,8 @@ export function routePath(r: Route): string {
       return "/j/new";
     case "history":
       return "/history";
+    case "health":
+      return r.sid ? `/health/${encodeURIComponent(r.sid)}` : "/health";
     case "profile":
       return "/assistant";
     case "inbox":

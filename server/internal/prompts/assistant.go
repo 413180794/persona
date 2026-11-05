@@ -32,6 +32,18 @@ type AssistantClaudeMD struct {
 
 func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assistant/claude_md", d) }
 
+// AssistantHealthClaudeMD is the health space's CLAUDE.md (docs/health.md).
+type AssistantHealthClaudeMD struct {
+	Owner    string // "" is 用户
+	Notes    string // 设置 › 助手 › 关于我, trimmed
+	StateDir string
+	Language string
+}
+
+func RenderAssistantHealthClaudeMD(d AssistantHealthClaudeMD) string {
+	return render("assistant/health_claude_md", d)
+}
+
 type AssistantViewRepair struct {
 	Errors []string
 }

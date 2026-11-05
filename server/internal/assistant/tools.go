@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -71,6 +72,11 @@ func (s *Service) appTool(ctx context.Context, app string, call ToolCall, args j
 }
 
 func (s *Service) runTool(ctx context.Context, machine, self, name string, args json.RawMessage) (string, error) {
+	if name == "kb_update" { // health stays in the health space (docs/health.md「隔离」)
+		if space, _ := s.selfSpace(ctx, self); space == SpaceHealth {
+			return "", errors.New("the health space doesn't write the knowledge base: health information stays in its conversations and memory")
+		}
+	}
 	switch name {
 	case "ask_user":
 		return s.toolAskUser(ctx, machine, self, args)
@@ -96,7 +102,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 	case "conversations_list":
 		return s.toolConversationsList(ctx, self, args)
 	case "conversation_read":
-		return s.toolConversationRead(ctx, args)
+		return s.toolConversationRead(ctx, self, args)
 	case "conversation_rename":
 		return s.toolConversationRename(ctx, self, args)
 	case "conversation_archive", "conversation_unarchive":
@@ -110,7 +116,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 	case "list_followups":
 		return s.describeSchedule(ctx), nil
 	case "schedule_routine":
-		return s.toolScheduleRoutine(ctx, args)
+		return s.toolScheduleRoutine(ctx, self, args)
 	case "delete_routine", "cancel_followup":
 		var a struct{ ID string }
 		_ = json.Unmarshal(args, &a)

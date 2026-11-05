@@ -441,6 +441,9 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		list[i].MachineID = m.cfg.ID
 		list[i].PendingInteractions = counts[list[i].SessionID]
 		list[i].Assistant = isAssistant(list[i], dir)
+		if list[i].Assistant {
+			list[i].Space = assistantSpace(list[i].Cwd)
+		}
 		if t := shown[list[i].SessionID].Title; t != "" && list[i].Assistant {
 			list[i].Title = t // 「MMDD | 类型 | 主题」, the user's own, 「Persona」 for the main one (assistant/titles.go)
 		}

@@ -64,6 +64,12 @@ func (s *Service) claudeMD(ctx context.Context, here string, larkCLI bool) strin
 // (assistantskills.Requires) or takes out, and whose command lines it puts on the assistant's PATH (personad tool --cli <id>).
 // A plugin skill the node says it does not have goes with its files next time.
 func (s *Service) prepare(ctx context.Context, machine string) (string, error) {
+	return s.prepareSpace(ctx, machine, "")
+}
+
+// prepareSpace is prepare for one of the assistant's spaces: "health" is the health space's directory with its own
+// CLAUDE.md (docs/health.md); the connectors and plugin skills go there as to the assistant's own.
+func (s *Service) prepareSpace(ctx context.Context, machine, space string) (string, error) {
 	var conns struct {
 		Connectors []string          `json:"connectors"`
 		CLIs       map[string]string `json:"clis"`
@@ -82,7 +88,11 @@ func (s *Service) prepare(ctx context.Context, machine string) (string, error) {
 	if len(plugins.Skills) == 0 {
 		plugins.Skills = json.RawMessage("null")
 	}
-	params := map[string]any{"dir": assistantDir, "claude_md": s.claudeMD(ctx, machine, conns.LarkCLI) + plugins.Instructions,
+	dir, md := assistantDir, s.claudeMD(ctx, machine, conns.LarkCLI)+plugins.Instructions
+	if space == SpaceHealth {
+		dir, md = healthDir, s.healthClaudeMD(ctx, machine)
+	}
+	params := map[string]any{"dir": dir, "claude_md": md,
 		"connectors": conns.Connectors, "clis": conns.CLIs, "plugin_skills": plugins.Skills}
 	var prep struct {
 		Cwd  string   `json:"cwd"`
@@ -102,7 +112,10 @@ func (s *Service) prepare(ctx context.Context, machine string) (string, error) {
 // startOn starts a new conversation on machine: the directory prepared, the model configuration of p.Purpose ("" is
 // 主对话's) applied, then the node's assistant.send (headless: no herdr tab, streamed tokens, any launcher per message).
 func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (proto.Session, error) {
-	cwd, err := s.prepare(ctx, machine)
+	if p.Space != "" && p.Space != SpaceHealth {
+		return proto.Session{}, badRequest(fmt.Errorf("space %q: health or none", p.Space))
+	}
+	cwd, err := s.prepareSpace(ctx, machine, p.Space)
 	if err != nil {
 		return proto.Session{}, err
 	}
@@ -124,12 +137,15 @@ func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (p
 	}
 	sess := proto.Session{SessionID: res.SessionID, Cwd: cwd, Status: proto.StatusWorking, Launcher: used, PermissionMode: p.PermissionMode,
 		Effort: p.Effort, StartedByJarvis: true, UpdatedAt: time.Now().UTC()}
-	sess.MachineID, sess.Assistant, sess.State = machine, true, proto.StateWorking
+	sess.MachineID, sess.Assistant, sess.State, sess.Space = machine, true, proto.StateWorking, p.Space
 	return sess, nil
 }
 
 // start starts a conversation: on p.MachineID ("" the assistant's machine), or the main conversation.
 func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, error) {
+	if p.Main && p.Space != "" {
+		return proto.Session{}, badRequest(errors.New("the health space has no main conversation"))
+	}
 	if p.Main {
 		return s.startMain(ctx, p)
 	}
@@ -146,7 +162,7 @@ func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, erro
 
 // startConversation starts a new conversation of the assistant's own (a scheduled task's, conversation_new's).
 func (s *Service) startConversation(ctx context.Context, p startParams) (proto.Session, error) {
-	return s.start(ctx, StartParams{Text: p.Text, PermissionMode: p.PermissionMode, Purpose: p.Purpose})
+	return s.start(ctx, StartParams{Text: p.Text, PermissionMode: p.PermissionMode, Purpose: p.Purpose, Space: p.Space})
 }
 
 // Start is assistant.start: a conversation one of the hub's features starts (the inbox's AI 分身), or the channels'
@@ -364,6 +380,7 @@ func (s *Service) startRoutes() {
 			// MachineID one of the hub's machines instead of the assistant's (docs/protocol.md「助手」).
 			Purpose   string `json:"purpose"`
 			MachineID string `json:"machine_id"`
+			Space     string `json:"space"` // "health": a conversation of the health space (docs/health.md)
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&in); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
@@ -377,6 +394,14 @@ func (s *Service) startRoutes() {
 				return
 			}
 		}
+		if in.Space != "" && in.Space != SpaceHealth {
+			apierr.Write(w, http.StatusBadRequest, fmt.Errorf("space %q: health or none", in.Space))
+			return
+		}
+		if in.Space != "" && in.Main {
+			apierr.Write(w, http.StatusBadRequest, errors.New("the health space has no main conversation"))
+			return
+		}
 		if in.MachineID != "" {
 			if _, ok := s.device(ctx, in.MachineID); !ok {
 				apierr.Write(w, http.StatusBadRequest, fmt.Errorf("no machine %q", in.MachineID))
@@ -385,7 +410,7 @@ func (s *Service) startRoutes() {
 		}
 		// The main conversation is the assistant's, on its machine.
 		sess, err := s.Start(ctx, StartParams{Text: in.Prompt, Images: in.Images, Launcher: in.Launcher, PermissionMode: in.PermissionMode,
-			Effort: in.Effort, Purpose: in.Purpose, MachineID: in.MachineID, Main: in.Main})
+			Effort: in.Effort, Purpose: in.Purpose, MachineID: in.MachineID, Main: in.Main, Space: in.Space})
 		if err != nil {
 			apierr.Call(w, err)
 			return

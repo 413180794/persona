@@ -112,5 +112,6 @@
   "delete_group_confirm": "Delete the group \"{name}\"? Its chats go back where they were.",
   "personal_actions": "Personal agent actions",
   "collapse": "Collapse sidebar",
-  "expand": "Expand sidebar"
+  "expand": "Expand sidebar",
+  "nav_health": "Health"
 }

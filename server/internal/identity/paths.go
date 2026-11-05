@@ -180,16 +180,39 @@ func AssistantDir(home string) string {
 	return filepath.Join(DataDir(home), "assistant")
 }
 
+// HealthDir is the health space's directory (docs/health.md): the assistant's conversations about health run there,
+// next to its own directory, so their memory and instructions are their own.
+func HealthDir(home string) string {
+	return filepath.Join(DataDir(home), SpaceHealth)
+}
+
+// SpaceHealth is the health space's name: its directory's and Session.Space.
+const SpaceHealth = "health"
+
+// IsAssistantDir: path is one of the assistant's directories, its own or the health space's.
 func IsAssistantDir(path string) bool {
+	return isStateDir(path, "assistant") || isStateDir(path, SpaceHealth)
+}
+
+// SpaceOf is the space of an assistant directory: SpaceHealth for the health space's, "" for the assistant's own.
+func SpaceOf(path string) string {
+	if isStateDir(path, SpaceHealth) {
+		return SpaceHealth
+	}
+	return ""
+}
+
+// isStateDir: path is the directory name in the state directory (~/.persona, ~/.jarvis or PERSONA_HOME's).
+func isStateDir(path, name string) bool {
 	path = filepath.Clean(path)
-	if filepath.Base(path) != "assistant" {
+	if filepath.Base(path) != name {
 		return false
 	}
 	parent := filepath.Base(filepath.Dir(path))
 	if parent == ".jarvis" || parent == ".persona" {
 		return true
 	}
-	expected := filepath.Join(HomeDir(), "assistant")
+	expected := filepath.Join(HomeDir(), name)
 	if path == expected {
 		return true
 	}

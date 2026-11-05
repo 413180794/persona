@@ -641,6 +641,9 @@ type StartParams struct {
 	Effort         string        `json:"effort,omitempty"`
 	Purpose        string        `json:"purpose,omitempty"`    // the model configuration's purpose; "" is 主对话's
 	MachineID      string        `json:"machine_id,omitempty"` // "" is the assistant's machine
+	// Space: "health" starts it in the health space (its own directory, instructions and memory, docs/health.md);
+	// "" is the assistant's own.
+	Space string `json:"space,omitempty"`
 	// Main: it becomes the main conversation (what the old one left goes before Text).
 	Main bool `json:"main,omitempty"`
 	// Untitled: not one of the conversations it names and lists as its own (the inbox's AI 分身: its result is the

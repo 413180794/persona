@@ -146,6 +146,8 @@ export interface Session {
   /** The levels `effort` may be set to when they are not Claude Code's: a Codex thread driven through its app-server (only its effort changes; docs/protocol.md). */
   efforts?: string[];
   assistant?: boolean;
+  /** The assistant's space it runs in: "health" for the health space's (docs/health.md). */
+  space?: string;
   started_by_jarvis?: boolean;
   space_id?: string;
   space_name?: string;

@@ -12,6 +12,8 @@ export function sidebarActiveKey(route: Route, main?: string): string {
       return !route.sid || route.sid === main ? "persona" : `j:${route.sid}`;
     case "persona-new":
       return "j:new";
+    case "health":
+      return "health";
     case "machine":
       return "machines";
     case "agents":
@@ -42,4 +44,4 @@ export function firstAndCurrent<T>(list: readonly T[], n: number, isCurrent: (x:
 
 /** The page entries under Persona, in the sidebar's order (the app's 助手 first, then the rest of its drawer). 消息 shows
  * only in a browser that turned on 首页显示消息 (lark-chats.ts), on a hub with feature `lark`. The extensions' pages (nav_page) go right before 设置. */
-export const NAV_PAGES = ["home", "inbox", "messages", "workspace-board", "todos", "routines", "kb", "machines", "terminal", "settings"] as const;
+export const NAV_PAGES = ["home", "inbox", "health", "messages", "workspace-board", "todos", "routines", "kb", "machines", "terminal", "settings"] as const;

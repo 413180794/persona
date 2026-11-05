@@ -41,3 +41,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/skills", h.serveSkills)
 	h.assistantRoutesRelayed(api)
 }
+
+// assistantSpace is the space of an assistant conversation working in cwd: "health" for the health space's
+// (docs/health.md), "" for the assistant's own.
+func assistantSpace(cwd string) string { return identity.SpaceOf(cwd) }

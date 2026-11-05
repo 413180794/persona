@@ -207,6 +207,7 @@ type startParams struct {
 	Text           string `json:"text"`
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Purpose        string `json:"purpose,omitempty"` // the model configuration's purpose; "" is the assistant's
+	Space          string `json:"space,omitempty"`   // "health" starts it in the health space (docs/health.md)
 }
 
 // applyModel fills params (a node call's) with what purpose runs on (ModelsApply).

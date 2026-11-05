@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"path"
 	"slices"
@@ -259,17 +260,23 @@ type assistantView struct {
 	StartRequestedTasks bool `json:"start_requested_tasks"`
 }
 
-// view is GET /api/v1/assistant; withArchived lists archived conversations too (flagged `archived`).
-func (s *Service) view(ctx context.Context, withArchived bool) assistantView {
+// view is GET /api/v1/assistant; withArchived lists archived conversations too (flagged `archived`). It lists the
+// assistant's own conversations; space "health" lists the health space's instead (docs/health.md), with that
+// space's directory as Cwd.
+func (s *Service) view(ctx context.Context, withArchived bool, space ...string) assistantView {
+	sp := ""
+	if len(space) > 0 {
+		sp = space[0]
+	}
 	v := s.settings(ctx)
 	v.Launcher = s.launcherNow(ctx)
 	out := assistantView{Settings: v, Conversations: []proto.Session{}, NotesEffective: s.notes(ctx), MainTasksQuiet: quietOn(v.MainTasksQuiet),
 		StartRequestedTasks: quietOn(v.StartRequestedTasks)}
 	if d, ok := s.device(ctx, v.MachineID); ok {
-		out.Cwd = assistantCwd(d)
+		out.Cwd = spaceCwd(d, sp)
 		list, _ := s.sessions(ctx, d.ID)
 		for _, c := range list {
-			if c.Assistant && (withArchived || !c.Archived) {
+			if c.Assistant && spaceOf(c) == sp && (withArchived || !c.Archived) {
 				out.Conversations = append(out.Conversations, c)
 			}
 		}
@@ -280,7 +287,12 @@ func (s *Service) view(ctx context.Context, withArchived bool) assistantView {
 func (s *Service) profileRoutes() {
 	s.handle("GET /api/v1/assistant", func(w http.ResponseWriter, r *http.Request) {
 		archived := r.URL.Query().Get("archived")
-		apierr.WriteJSON(w, s.view(r.Context(), archived == "1" || archived == "true"))
+		space := r.URL.Query().Get("space")
+		if !validSpace(space) {
+			apierr.Write(w, http.StatusBadRequest, fmt.Errorf("space %q: health or none", space))
+			return
+		}
+		apierr.WriteJSON(w, s.view(r.Context(), archived == "1" || archived == "true", space))
 	})
 	s.handle("PUT /api/v1/assistant", s.putSettings)
 	// warm: the app opened the 对话 tab; get a process ready so the first message skips claude's startup.
@@ -294,7 +306,7 @@ func (s *Service) profileRoutes() {
 	})
 	s.handle("GET /api/v1/assistant/memory", func(w http.ResponseWriter, r *http.Request) {
 		var res json.RawMessage
-		if err := s.memory(r.Context(), map[string]any{"op": "list"}, &res); err != nil {
+		if err := s.memory(r.Context(), map[string]any{"op": "list", "space": r.URL.Query().Get("space")}, &res); err != nil {
 			apierr.Call(w, err)
 			return
 		}
@@ -309,14 +321,14 @@ func (s *Service) profileRoutes() {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := s.memory(r.Context(), map[string]any{"op": "write", "name": r.PathValue("name"), "content": in.Content}, nil); err != nil {
+		if err := s.memory(r.Context(), map[string]any{"op": "write", "name": r.PathValue("name"), "content": in.Content, "space": r.URL.Query().Get("space")}, nil); err != nil {
 			apierr.Call(w, err)
 			return
 		}
 		apierr.WriteJSON(w, map[string]any{"ok": true})
 	})
 	s.handle("DELETE /api/v1/assistant/memory/{name}", func(w http.ResponseWriter, r *http.Request) {
-		if err := s.memory(r.Context(), map[string]any{"op": "delete", "name": r.PathValue("name")}, nil); err != nil {
+		if err := s.memory(r.Context(), map[string]any{"op": "delete", "name": r.PathValue("name"), "space": r.URL.Query().Get("space")}, nil); err != nil {
 			apierr.Call(w, err)
 			return
 		}
@@ -482,7 +494,12 @@ func (s *Service) memory(ctx context.Context, op map[string]any, out any) error 
 	if !ok {
 		return errors.New("assistant machine is not configured")
 	}
-	cwd := assistantCwd(d)
+	space, _ := op["space"].(string)
+	delete(op, "space")
+	if !validSpace(space) {
+		return badRequest(fmt.Errorf("space %q: health or none", space))
+	}
+	cwd := spaceCwd(d, space) // the health space keeps a memory of its own (docs/health.md)
 	if cwd == "" {
 		return errors.New("assistant machine is offline")
 	}

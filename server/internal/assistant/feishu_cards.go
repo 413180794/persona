@@ -795,7 +795,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 
 // conversationsCard lists recent Persona conversations with a button to switch to each.
 func (s *Service) conversationsCard(ctx context.Context) *feishubot.Card {
-	list, main := s.conversations(ctx, false)
+	list, main := s.conversations(ctx, false, "")
 	sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt.After(list[j].UpdatedAt) })
 	l := s.botLang(ctx)
 	c := feishubot.NewCard(i18n.T(l, "assistant-feishu_cards.recent_chats"), feishubot.Blue, i18n.T(l, "assistant-feishu_cards.recent_chats"))

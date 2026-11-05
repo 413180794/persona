@@ -246,6 +246,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/assistant-views.md` | 主对话富 UI（#2017）：统一 View、fallback、动作和活卡片，HTML 沙箱的安全边界、校验、自修复与分阶段验收 |
 | `docs/unified-entry.md` | 主对话统一入口（#930）：在助手里派发、盯住、回答所有任务；三层结构（对话流 / 任务坞 / 需要你）、计划卡和三档自动开始、任务 = 待办、对话动态、钩子、分步；原型 `docs/assets/unified-entry-prototype.html`。Agents 页不动 |
 | `docs/todos.md` | 待办：记下要做的事并分工给多个 Agent，在待办中看各 Agent 进展，Agents 页按待办分组；整组挂、派生跟随、herdr 标记、状态派生与接口；做完的任务关掉 Agent、下一条消息恢复会话 |
+| `docs/health.md` | 健康空间（仿 ChatGPT Health，#2691）：健康对话单独的目录 `~/.persona/health`、自己的 CLAUDE.md 和记忆，`space: "health"` 的接口，对话工具不跨空间，网页「健康」页，第一版不做的和之后 |
 | `docs/knowledge.md` | 知识库 `~/.persona/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Persona / AI 分身 / Agents 怎么共用 |
 | `docs/connectors.md` | 连接器：现在的结构（接口、三种跑法、闸门、收件箱、知识库、设置页、怎么加一个），v2 设计（能力清单、统一的增量、有版本号的协议、收件箱的结构化属性、身份线索、网页授权登录、写操作只走工具和闸门）、迁移顺序 V1–V7（V2、V7 不做）和拍板结果 |
 | `docs/connector-protocol.md` | 连接器协议 v2：子进程 / 第三方连接器和 hub 之间的一行一条 JSON：握手和清单、每个方法的参数和结果、程序调 hub 的 `secrets.*` 和 `changed`、错误码、硬性规定、版本规则、一致性测试 |

@@ -1531,8 +1531,17 @@ func (n *Node) assistantProject() string {
 // isAssistantProject: base is the name of the projects directory Claude Code keeps for the assistant's directory
 // (own: this node's, assistantProject). The assistant may have run under ~/.persona or ~/.jarvis, through a symlinked
 // home, so the name is matched by its end as well.
+// The health space's directory (docs/health.md) sits next to it and counts as the assistant's too.
 func isAssistantProject(base, own string) bool {
-	return base == own || strings.HasSuffix(base, "--persona-assistant") || strings.HasSuffix(base, "--jarvis-assistant")
+	if base == own || base == strings.TrimSuffix(own, "-assistant")+"-health" {
+		return true
+	}
+	for _, suffix := range []string{"--persona-assistant", "--jarvis-assistant", "--persona-health", "--jarvis-health"} {
+		if strings.HasSuffix(base, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // guessSession picks a transcript for an agent herdr could not identify. Claude sets the terminal title to the

@@ -679,6 +679,9 @@ type Session struct {
 	Efforts         []string `json:"efforts,omitempty"`
 	StartedByJarvis bool     `json:"started_by_jarvis"`
 	Assistant       bool     `json:"assistant"` // runs in the assistant directory (the app's 对话 tab)
+	// Space is the assistant's space it runs in: "health" for the health space's (docs/health.md), "" for the
+	// assistant's own. Set by the hub on the assistant's conversations.
+	Space string `json:"space,omitempty"`
 	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under 已归档; hub
 	// assistant_conversations.go).
 	Archived bool `json:"archived,omitempty"`

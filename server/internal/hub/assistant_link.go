@@ -179,6 +179,9 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 		s, ok := m.session(a.SessionID)
 		if ok {
 			s.Assistant = isAssistant(s, m.assistantCwd())
+			if s.Assistant {
+				s.Space = assistantSpace(s.Cwd)
+			}
 		}
 		return json.Marshal(map[string]any{"session": s, "ok": ok})
 	}

@@ -441,6 +441,12 @@ func (s *Service) drainRelays(machine string, list []proto.Session) {
 
 // assistantConversation finds an assistant conversation by full id or prefix on the assistant's machine.
 func (s *Service) assistantConversation(ctx context.Context, id string) (proto.Session, error) {
+	return s.spaceConversation(ctx, id, nil)
+}
+
+// spaceConversation is assistantConversation among the conversations of one space only (in == nil: any): a
+// conversation's tools reach only the conversations of its own space (docs/health.md「隔离」).
+func (s *Service) spaceConversation(ctx context.Context, id string, in *string) (proto.Session, error) {
 	list, err := s.sessions(ctx, s.settings(ctx).MachineID)
 	if errors.Is(err, ErrNoDevice) {
 		return proto.Session{}, errors.New("the assistant's machine is not configured")
@@ -454,7 +460,7 @@ func (s *Service) assistantConversation(ctx context.Context, id string) (proto.S
 	}
 	var found []proto.Session
 	for _, c := range list {
-		if !c.Assistant {
+		if !c.Assistant || in != nil && spaceOf(c) != *in {
 			continue
 		}
 		if c.SessionID == id {
@@ -473,12 +479,13 @@ func (s *Service) assistantConversation(ctx context.Context, id string) (proto.S
 	return proto.Session{}, fmt.Errorf("%q is the start of %d conversations: give more of the id", id, len(found))
 }
 
-// conversations are the assistant's conversations on its machine (archived ones too when asked) and the main one.
-func (s *Service) conversations(ctx context.Context, withArchived bool) (list []proto.Session, main string) {
+// conversations are the assistant's conversations of space ("" its own) on its machine (archived ones too when
+// asked) and the main one.
+func (s *Service) conversations(ctx context.Context, withArchived bool, space string) (list []proto.Session, main string) {
 	here := s.settings(ctx)
 	all, _ := s.sessions(ctx, here.MachineID) // none on no machine
 	for _, c := range all {
-		if c.Assistant && (withArchived || !c.Archived) {
+		if c.Assistant && spaceOf(c) == space && (withArchived || !c.Archived) {
 			list = append(list, c)
 		}
 	}
@@ -508,7 +515,11 @@ func (s *Service) toolConversationsList(ctx context.Context, self string, args j
 		a.Limit = 30
 	}
 	a.Limit = min(a.Limit, 100)
-	list, main := s.conversations(ctx, a.IncludeArchived)
+	space, err := s.knownSpace(ctx, self)
+	if err != nil {
+		return "", err
+	}
+	list, main := s.conversations(ctx, a.IncludeArchived, space)
 	sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt.After(list[j].UpdatedAt) })
 	q := strings.ToLower(strings.TrimSpace(a.Query))
 	loc := s.location(ctx)
@@ -568,13 +579,13 @@ func (s *Service) toolConversationsList(ctx context.Context, self string, args j
 	return head + ":\n" + b.String(), nil
 }
 
-func (s *Service) toolConversationRead(ctx context.Context, args json.RawMessage) (string, error) {
+func (s *Service) toolConversationRead(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
 		ID    string `json:"id"`
 		Turns int    `json:"turns"`
 	}
 	_ = json.Unmarshal(args, &a)
-	c, err := s.assistantConversation(ctx, a.ID)
+	c, err := s.ownSpaceConversation(ctx, self, a.ID)
 	if err != nil {
 		return "", err
 	}
@@ -599,7 +610,7 @@ func (s *Service) toolConversationRename(ctx context.Context, self string, args 
 		UserAsked bool   `json:"user_asked"`
 	}
 	_ = json.Unmarshal(args, &a)
-	c, err := s.assistantConversation(ctx, a.ID)
+	c, err := s.ownSpaceConversation(ctx, self, a.ID)
 	if err != nil {
 		return "", err
 	}
@@ -639,7 +650,7 @@ func (s *Service) toolConversationArchive(ctx context.Context, self string, args
 		ID string `json:"id"`
 	}
 	_ = json.Unmarshal(args, &a)
-	c, err := s.assistantConversation(ctx, a.ID)
+	c, err := s.ownSpaceConversation(ctx, self, a.ID)
 	if err != nil {
 		if !on { // an archived conversation may be long out of the node's list: the id alone will do
 			if id := strings.TrimSpace(a.ID); s.isArchived(id) {
@@ -688,7 +699,11 @@ func (s *Service) toolConversationNew(ctx context.Context, self string, args jso
 	msg := relayMsg{From: self, FromTitle: from, Tool: "conversation_new", Text: a.Text, Hop: hop, At: time.Now().UTC()}
 	sctx, cancel := context.WithTimeout(ctx, 100*time.Second)
 	defer cancel()
-	c, err := s.startConversation(sctx, startParams{Text: relayText(msg)})
+	space, err := s.knownSpace(ctx, self)
+	if err != nil {
+		return "", err
+	}
+	c, err := s.startConversation(sctx, startParams{Text: relayText(msg), Space: space})
 	if err != nil {
 		return "", err
 	}
@@ -712,7 +727,7 @@ func (s *Service) toolConversationSend(ctx context.Context, self string, args js
 	if strings.TrimSpace(a.Text) == "" {
 		return "", errors.New("text is empty")
 	}
-	c, err := s.assistantConversation(ctx, a.ID)
+	c, err := s.ownSpaceConversation(ctx, self, a.ID)
 	if err != nil {
 		return "", err
 	}
@@ -763,4 +778,35 @@ func (s *Service) queuedFor(id string) int {
 		return 0
 	}
 	return len(b.st.Queue[id])
+}
+
+// selfSpace is the space of conversation self ("" the assistant's own, and for a caller that is no conversation), and
+// whether it could be told (the assistant's machine lists it).
+func (s *Service) selfSpace(ctx context.Context, self string) (string, bool) {
+	if self == "" {
+		return "", true
+	}
+	c, ok := s.session(ctx, s.settings(ctx).MachineID, self)
+	if !ok {
+		return "", false
+	}
+	return spaceOf(c), true
+}
+
+// knownSpace is selfSpace for the tools that reach other conversations. One that can't be told is taken for the
+// assistant's own: those tools then reach the assistant's conversations only, never the health space's, so health
+// conversations stay out of reach either way (the worst case is a health conversation seeing the assistant's list).
+func (s *Service) knownSpace(ctx context.Context, self string) (string, error) {
+	space, _ := s.selfSpace(ctx, self)
+	return space, nil
+}
+
+// ownSpaceConversation finds conversation id among those of self's space: the health space's conversations and the
+// assistant's own don't read, rename, archive or message each other.
+func (s *Service) ownSpaceConversation(ctx context.Context, self, id string) (proto.Session, error) {
+	space, err := s.knownSpace(ctx, self)
+	if err != nil {
+		return proto.Session{}, err
+	}
+	return s.spaceConversation(ctx, id, &space)
 }

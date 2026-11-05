@@ -112,5 +112,6 @@
   "delete_group_confirm": "グループ「{name}」を削除しますか？チャットは元の場所に戻ります。",
   "personal_actions": "個人エージェントの操作",
   "collapse": "サイドバーを折りたたむ",
-  "expand": "サイドバーを展開"
+  "expand": "サイドバーを展開",
+  "nav_health": "ヘルスケア"
 }

@@ -866,6 +866,25 @@ ASSISTANT = [
     assistant_sess(ASK4, "整理这个季度的读书笔记", 60 * 50, "第 30 本整理好了。"),
 ]
 
+# The health space (docs/health.md): its conversations run in a directory of their own and carry space "health"; they
+# are listed by GET /api/v1/assistant?space=health only, and its memory is its own (?space=health).
+def health_sess(sid, title, minutes, last):
+    return {**assistant_sess(sid, title, minutes, last), "cwd": "/home/me/.jarvis/health", "space": "health"}
+
+
+ASSISTANT += [
+    health_sess("hlth0001-0000-4000-8000-000000000001", "这周的睡眠", 40, "这周平均每晚睡 6 小时 42 分，比上周少 18 分钟。"),
+    health_sess("hlth0002-0000-4000-8000-000000000002", "体检报告：血脂", 60 * 26, "LDL 3.6 mmol/L，略高于参考范围，建议三个月后复查。"),
+    health_sess("hlth0003-0000-4000-8000-000000000003", "步数目标", 60 * 70, "最近 7 天平均 7,860 步，离每天 8,000 步差一点。"),
+]
+HEALTH_MEMORY = [
+    {"name": "MEMORY.md", "content": "- [步数目标](step-goal.md) — 每天 8000 步", "updated_at": ago(days=2)},
+    {"name": "step-goal.md", "content": "---\nname: step-goal\ndescription: 每天 8000 步\nmetadata:\n  type: user\n---\n\n用户的目标是每天 8000 步。",
+     "updated_at": ago(days=2)},
+    {"name": "allergy.md", "content": "---\nname: allergy\ndescription: 对青霉素过敏\nmetadata:\n  type: user\n---\n\n用户对青霉素过敏。",
+     "updated_at": ago(days=6)},
+]
+
 # ---------- the assistant's schedule (设置 › 助手 › 主动做事; Jarvis › 资料 › 定时任务) ----------
 # One list, like the hub's (assistant_schedule.go): every day at a time, every N minutes, or once. GET
 # /api/v1/assistant/tasks serves it whole; the routines (the daily tasks) and follow-ups (the enabled once / interval
@@ -1053,14 +1072,15 @@ ASSISTANT_CONFIG = {"machine_id": "server", "launcher": "claude", "timezone": "A
                     "main_tasks_quiet": True}  # 主对话派的任务只在主对话里通知 (#1731), on by default
 
 
-def assistant_state():
-    """GET /api/v1/assistant: the conversations are the ones on the machine the assistant runs on."""
+def assistant_state(space=""):
+    """GET /api/v1/assistant: the conversations are the ones on the machine the assistant runs on, of one space
+    ("" the assistant's own, "health" the health space's)."""
     cfg = ASSISTANT_CONFIG
     home = next((m.get("home") for m in MACHINES if m["id"] == cfg["machine_id"]), None)
     notes = cfg["notes"] if cfg["notes"] is not None else ASSISTANT_HUB_NOTES
-    out = {"machine_id": cfg["machine_id"], "launcher": cfg["launcher"], "cwd": home + "/.jarvis/assistant" if home else "",
+    out = {"machine_id": cfg["machine_id"], "launcher": cfg["launcher"], "cwd": home + "/.jarvis/" + (space or "assistant") if home else "",
            "timezone": cfg["timezone"], "notes_effective": notes.strip(), "main_tasks_quiet": cfg["main_tasks_quiet"],
-           "conversations": [s for s in ASSISTANT if s["machine_id"] == cfg["machine_id"]]}
+           "conversations": [s for s in ASSISTANT if s["machine_id"] == cfg["machine_id"] and s.get("space", "") == space]}
     if cfg["notes"] is not None:
         out["notes"] = cfg["notes"]
     if cfg["main"]:
@@ -9635,7 +9655,7 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p == "/api/v1/pins": return self.send_json(PINS)
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": TREE_MUTED, "allowed": []})
-        if p == "/api/v1/assistant": return self.send_json(assistant_state())
+        if p == "/api/v1/assistant": return self.send_json(assistant_state(parse_qs(urlparse(self.path).query).get("space", [""])[0]))
         if p == "/api/v1/model-config": return self.send_json(model_configuration())
         if p.startswith("/api/v1/model-config/purposes/"):
             catalog = model_configuration(include_uses=True)
@@ -9732,7 +9752,10 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/assistant/runs":
             ref = parse_qs(urlparse(self.path).query).get("ref", [""])[0]
             return self.send_json({"runs": [r for r in RUNS if not ref or r["ref_id"] == ref]})
-        if p == "/api/v1/assistant/memory": return self.send_json({"files": MEMORY, "dir": "/home/me/.jarvis/assistant/memory"})
+        if p == "/api/v1/assistant/memory":
+            if parse_qs(urlparse(self.path).query).get("space", [""])[0] == "health":
+                return self.send_json({"files": HEALTH_MEMORY, "dir": "/home/me/.jarvis/health/memory"})
+            return self.send_json({"files": MEMORY, "dir": "/home/me/.jarvis/assistant/memory"})
         if p == "/mock/schedule": return self.send_json({"ran": SCHEDULE_RAN})
         if p == "/mock/schedule/reset":  # back to the starting schedule (captures that ran or cancelled something)
             start = copy.deepcopy(SCHEDULE_START)
@@ -10687,6 +10710,8 @@ class H(BaseHTTPRequestHandler):
             session.update(status="working", state="working", updated_at=now, launcher=body.get("launcher") or "claude",
                            permission_mode=body.get("permission_mode") or "", effort=body.get("effort") or "")
             session["main"] = bool(body.get("main"))
+            if body.get("space") == "health":
+                session.update(cwd="/home/me/.jarvis/health", space="health")
             if session["main"]:
                 ASSISTANT_CONFIG["main"] = sid
             ASSISTANT.append(session)
@@ -11012,12 +11037,13 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(assistant_state())
         if p.startswith("/api/v1/assistant/memory/") and self.command in ("PUT", "DELETE"):
             name = unquote(p.rsplit("/", 1)[1])
+            files = HEALTH_MEMORY if parse_qs(urlparse(self.path).query).get("space", [""])[0] == "health" else MEMORY
             if self.command == "PUT":
                 content = json.loads(self.last_body or b"{}").get("content", "")
-                MEMORY[:] = [f for f in MEMORY if f["name"] != name] + [{"name": name, "content": content, "updated_at": ago()}]
+                files[:] = [f for f in files if f["name"] != name] + [{"name": name, "content": content, "updated_at": ago()}]
             else:  # like the hub, deleting a memory also drops its line from the index
-                MEMORY[:] = [f for f in MEMORY if f["name"] != name]
-                for f in MEMORY:
+                files[:] = [f for f in files if f["name"] != name]
+                for f in files:
                     if f["name"] == "MEMORY.md":
                         f["content"] = "\n".join(line for line in f["content"].split("\n") if "(%s)" % name not in line)
             return self.send_json({"ok": True})

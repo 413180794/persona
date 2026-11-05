@@ -69,6 +69,9 @@ type Task struct {
 	ModelRevision  int64  `json:"model_revision,omitempty"`
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Effort         string `json:"effort,omitempty"`
+	// Space is the space of the conversation that set it up ("health", docs/health.md): a run that starts a conversation
+	// starts it there. "" is the assistant's own.
+	Space string `json:"space,omitempty"`
 	// CreatedBy is "assistant" for tasks Persona set up from a conversation.
 	CreatedBy string    `json:"created_by,omitempty"`
 	CreatedAt time.Time `json:"created_at,omitempty"`
@@ -479,8 +482,9 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	if out, ok := s.scheduleOwn(ctx, sessionID, a.Title, prompt, a.At, at, every, push); ok {
 		return out, nil
 	}
+	space, _ := s.selfSpace(ctx, sessionID) // not listed: the assistant's own, as before the health space
 	t := Task{ID: "fu_" + randomHex(4), Title: strings.TrimSpace(a.Title), Prompt: prompt, Repeat: repeatOnce, At: at.UTC(), Enabled: true,
-		MachineID: machine, CreatedBy: "assistant", CreatedAt: now.UTC()}
+		MachineID: machine, Space: space, CreatedBy: "assistant", CreatedAt: now.UTC()}
 	if every > 0 {
 		t.Repeat, t.EveryMinutes = repeatInterval, every
 	}
@@ -643,7 +647,7 @@ func (s *Service) describeSchedule(ctx context.Context) string {
 }
 
 // toolScheduleRoutine adds a daily task from a conversation ("每天 9 点给我早报"), or changes one by id.
-func (s *Service) toolScheduleRoutine(ctx context.Context, args json.RawMessage) (string, error) {
+func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
 		ID       string  `json:"id"`
 		Title    string  `json:"title"`
@@ -656,6 +660,7 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, args json.RawMessage)
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", err
 	}
+	space, _ := s.selfSpace(ctx, self) // a new routine runs in the space it was asked from (docs/health.md)
 	var push *string
 	if a.Push != nil {
 		p, err := pushArg(*a.Push)
@@ -678,7 +683,7 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, args json.RawMessage)
 		}
 		t = sc.tasks[i]
 	} else {
-		t = Task{ID: "rt_" + randomHex(4), Repeat: repeatDaily, Enabled: true, CreatedBy: "assistant", CreatedAt: time.Now().UTC()}
+		t = Task{ID: "rt_" + randomHex(4), Repeat: repeatDaily, Enabled: true, Space: space, CreatedBy: "assistant", CreatedAt: time.Now().UTC()}
 	}
 	if a.Title != "" {
 		t.Title = strings.TrimSpace(a.Title)
@@ -1096,7 +1101,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 		}
 	}
 	sess, err := s.startConversation(ctx, startParams{Text: taskPrompt(t, due, now, loc, manual, kb, false), PermissionMode: t.PermissionMode,
-		Purpose: "task." + t.ID})
+		Purpose: "task." + t.ID, Space: t.Space})
 	if err != nil {
 		s.logf("task %s: %v", t.ID, err)
 		run.Status, run.Error = runFailed, err.Error()

@@ -229,7 +229,8 @@ func (n *Node) isAssistantSession(id string) bool {
 	if st, ok := n.state.get(id); ok && identity.IsAssistantDir(st.Cwd) {
 		return true
 	}
-	if p := n.transcriptPath(id); p != "" && strings.Contains(filepath.Base(filepath.Dir(p)), "-jarvis-assistant") {
+	if p := n.transcriptPath(id); p != "" && (strings.Contains(filepath.Base(filepath.Dir(p)), "-jarvis-assistant") ||
+		isAssistantProject(filepath.Base(filepath.Dir(p)), n.assistantProject())) {
 		return true
 	}
 	// A conversation an agent runtime runs (assistant_runtime.go), listed before this node kept its state.
